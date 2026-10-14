@@ -180,7 +180,7 @@ if op=='stats':
   bands=[(76,100),(61,75),(41,60),(0,40)]
   distribution={'active':active,'withScore':len(scored),'avgScore':int(sum(scored)/len(scored)+0.5) if scored else None,'buckets':[{'min':lo,'max':hi,'count':sum(1 for value in scored if lo<=value<=hi)} for lo,hi in bands]}
   sources=[{'source':row[0] if row[0] is not None else 'sconosciuta','count':row[1]} for row in db.execute('SELECT source,COUNT(*) AS n FROM positions p WHERE '+live+' GROUP BY source ORDER BY n DESC LIMIT 8')]
-  types=[{'role_family':row[0],'count':row[1]} for row in db.execute('SELECT role_family,COUNT(*) AS n FROM positions p WHERE '+live+' GROUP BY role_family ORDER BY n DESC LIMIT 40')]
+  types=[{'role_family':trunc(row[0],60),'count':row[1]} for row in db.execute('SELECT role_family,COUNT(*) AS n FROM positions p WHERE '+live+' GROUP BY role_family ORDER BY n DESC LIMIT 40')]
   rows=dash_rows('SELECT p.* FROM positions p WHERE '+live+' ORDER BY p.found_at DESC,p.id ASC LIMIT '+str(POINTS))
   scols=columns('scores')
   recent=dash_rows('SELECT p.* FROM positions p JOIN scores s ON s.position_id=p.id WHERE '+live+' AND s.total_score IS NOT NULL AND s.scored_at IS NOT NULL ORDER BY s.scored_at DESC,p.id ASC LIMIT 8') if 'scored_at' in scols else []
@@ -188,7 +188,21 @@ if op=='stats':
   if 'applied_at' in acols:
    events=[{'appliedAt':row['applied_at'],'response':row['response'] if 'response' in acols else None,'responseAt':row['response_at'] if 'response_at' in acols else None} for row in many('SELECT * FROM applications WHERE applied_at IS NOT NULL ORDER BY applied_at ASC,id ASC')]
  except sqlite3.Error: fail('positions_unavailable')
- emit({'ok':True,'data':{'stats':stats,'distribution':distribution,'sources':sources,'types':types,'recent':recent,'points':{'rows':rows,'included':len(rows),'of':active},'events':{'rows':events[-EVENTS:],'included':min(len(events),EVENTS),'of':len(events)}}})
+ data={'stats':stats,'distribution':distribution,'sources':sources,'types':types,'recent':recent,'points':{'rows':rows,'included':len(rows),'of':active},'events':{'rows':events[-EVENTS:],'included':min(len(events),EVENTS),'of':len(events)}}
+ # The core throws away a reply over 2 MiB, and the bytes of a row depend on its text (a non-ASCII
+ # character is six bytes once serialized): the reply is cut to a byte budget, newest rows kept, and
+ # `included` says how many are left. The totals are exact whatever is cut.
+ BUDGET=1363148
+ def size(): return len(json.dumps({'ok':True,'data':data},separators=(',',':')))
+ def weight(part): return len(json.dumps(data[part]['rows'],separators=(',',':')))
+ while size()>BUDGET:
+  part='points' if weight('points')>=weight('events') else 'events'
+  rows_=data[part]['rows']
+  if not rows_: break
+  kept=int(len(rows_)*0.9)
+  data[part]['rows']=rows_[-kept:] if part=='events' and kept else rows_[:kept]
+  data[part]['included']=kept
+ emit({'ok':True,'data':data})
 if op=='facets':
  rows=[]
  try:
@@ -1208,6 +1222,8 @@ mod tests {
             "'data':{'items':rows}",
             // the ID column sorts by what the table shows: a row without a legacy id by its own id
             "return legacy if legacy is not None else (int(item['id'])",
+            // `stats` is cut to a byte budget, whatever the text of the rows weighs once serialized
+            "BUDGET=1363148",
             // the list is a light projection with the matching total, so a page of it
             // stays far under the 2 MiB the core accepts back
             "'data':{'items':[light(item) for item in window],'total':len(rows)}",

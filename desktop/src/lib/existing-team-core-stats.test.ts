@@ -34,6 +34,15 @@ type Seed = {
   salary_min?: number | null;
   est_min?: number | null;
   currency?: string | null;
+  // text a row can carry, to make it as heavy as the bytes allow
+  company?: string;
+  location?: string;
+  remote?: string;
+  found_by?: string;
+  loc_country?: string | null;
+  loc_city?: string | null;
+  jd_text?: string;
+  verdict?: string;
 };
 
 const SETUP = `
@@ -51,14 +60,16 @@ create table applications(id integer primary key, position_id integer, critic_sc
 """)
 for r in json.load(open(sys.argv[2])):
     db.execute("insert into positions values(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)", (
-        r["id"], None, r["title"], "Synthetic Co", None, None, "remote", r["status"], r["source"], r["role_family"],
-        "AA" if r["id"] % 3 else None, "Alpha" if r["id"] % 2 else None, r["found_at"], "scout-1", None,
+        r["id"], None, r["title"], r.get("company", "Synthetic Co"), None, r.get("location"), r.get("remote", "remote"),
+        r["status"], r["source"], r["role_family"],
+        r["loc_country"] if "loc_country" in r else ("AA" if r["id"] % 3 else None),
+        r["loc_city"] if "loc_city" in r else ("Alpha" if r["id"] % 2 else None), r["found_at"], r.get("found_by", "scout-1"), None,
         r["write_requested"], r.get("jd_text"), r.get("salary_min"), None, r.get("currency"), r.get("est_min"), None, "EUR"))
     if r["score"] != "none":
         db.execute("insert into scores values(?,?,?,?,?)", (r["id"], r["id"], r["score"], r.get("scored_at"), "scorer-1"))
     if r.get("critic") is not None or r.get("applied_at"):
         db.execute("insert into applications values(?,?,?,?,?,?,?,?,?)", (
-            r["id"], r["id"], r.get("critic"), "PASS" if r.get("critic") is not None else None, None, "writer-1",
+            r["id"], r["id"], r.get("critic"), r.get("verdict", "PASS") if r.get("critic") is not None else None, None, "writer-1",
             r.get("applied_at"), r.get("response"), r.get("response_at")))
 db.commit()
 `;
@@ -250,6 +261,73 @@ describe.skipIf(!available)("the core's `stats` op against its 2 MiB cap", () =>
     expect(data.stats.total).toBe(3500);
     expect(data.distribution.active).toBe(active);
   }, 60_000);
+
+  // Every text field at its longest, in the scripts that weigh most once serialized as ASCII:
+  // Cyrillic and CJK characters are six bytes each, and the core refuses a reply over 2 MiB.
+  const CYRILLIC = "Ж".repeat(400);
+  const CJK = "漢".repeat(400);
+  const longest = (index: number): Seed => ({
+    id: 1 + index,
+    status: "scored",
+    source: (index % 2 ? CYRILLIC : CJK).slice(0, 200),
+    role_family: (index % 2 ? CJK : CYRILLIC).slice(0, 200),
+    title: (index % 2 ? CYRILLIC : CJK).repeat(2),
+    company: CJK,
+    location: CYRILLIC,
+    remote: CJK,
+    found_by: CYRILLIC,
+    loc_country: CJK.slice(0, 100),
+    loc_city: CYRILLIC.slice(0, 200),
+    jd_text: CJK,
+    found_at: day(index),
+    write_requested: 0,
+    score: 40 + (index % 60),
+    scored_at: day(index),
+    critic: 5,
+    verdict: CJK,
+    applied_at: day(index),
+    response: CYRILLIC,
+    response_at: day(index + 1),
+    salary_min: 50_000,
+    currency: "EUR",
+  });
+
+  it("cuts the reply to a byte budget whatever the rows weigh: every field at its longest, in Cyrillic and CJK", () => {
+    const many = Array.from({ length: 3200 }, (_unused, index) => longest(index));
+    const { bytes, data } = stats(makeReader(many));
+    expect(bytes).toBeLessThan(1_400_000); // the budget with its envelope, far under the 2 MiB cap
+    expect(bytes).toBeLessThan(CORE_REPLY_CAP);
+    // the rows are cut, and the reply says how many are left of how many there are
+    expect(data.points.included).toBeGreaterThan(0);
+    expect(data.points.included).toBeLessThan(2000);
+    expect(data.points.rows).toHaveLength(data.points.included);
+    expect(data.points.of).toBe(3200);
+    // the newest are the ones kept
+    expect(data.points.rows[0].id).toBe(data.points.rows.reduce((a: any, b: any) => (a.found_at >= b.found_at ? a : b)).id);
+    // the totals are exact whatever was cut
+    expect(data.stats.total).toBe(3200);
+    expect(data.distribution.active).toBe(3200);
+    expect(data.events.of).toBe(3200);
+    expect(data.recent).toHaveLength(8);
+  }, 120_000);
+
+  it("cuts heavy events to the budget too, oldest first, and keeps the count", () => {
+    const rows = Array.from({ length: 6 }, (_unused, index) => longest(index));
+    const events = Array.from({ length: 3000 }, (_unused, index) => ({
+      ...longest(10 + index),
+      applied_at: `2026-04-01T${String(Math.floor(index / 3600)).padStart(2, "0")}:${String(Math.floor(index / 60) % 60).padStart(2, "0")}:${String(index % 60).padStart(2, "0")}Z`,
+    }));
+    const { bytes, data } = stats(makeReader([...rows, ...events]));
+    expect(bytes).toBeLessThan(1_400_000);
+    expect(data.events.of).toBe(3006);
+    expect(data.events.included).toBeGreaterThan(0);
+    expect(data.events.included).toBeLessThan(3000);
+    expect(data.events.rows).toHaveLength(data.events.included);
+    // what is left are the newest submissions
+    const appliedAt = data.events.rows.map((event: any) => event.appliedAt);
+    expect(appliedAt).toEqual([...appliedAt].sort());
+    expect(appliedAt.at(-1)).toBe(events.at(-1)!.applied_at);
+  }, 120_000);
 
   it("keeps only the newest events when there are more than it sends, and says so", () => {
     const rows: Seed[] = Array.from({ length: 3200 }, (_unused, index) => ({

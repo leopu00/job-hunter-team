@@ -20,6 +20,7 @@ export default function ExistingTeamSummary({
     info.chartsIncluded < info.chartsOf && fill(t.chartsPartial, { n: info.chartsIncluded, of: info.chartsOf }),
     info.eventsIncluded < info.eventsOf && fill(t.eventsPartial, { n: info.eventsIncluded, of: info.eventsOf }),
     !info.ratesAvailable && info.salaryUnconverted > 0 && fill(t.ratesUnavailable, { n: info.salaryUnconverted }),
+    !info.ratesAvailable && t.eurOnly,
     t.seenLocal,
   ].filter((note): note is string => typeof note === "string");
 

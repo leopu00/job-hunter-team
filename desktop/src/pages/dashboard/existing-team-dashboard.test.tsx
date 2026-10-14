@@ -141,6 +141,44 @@ describe("Dashboard on an existing team read only", () => {
     expect(notes).toHaveTextContent(TEXT.seenLocal);
   });
 
+  it("offers only the euro, and ignores a saved currency, when there are no exchange rates", async () => {
+    ratesReachable = false;
+    // the person's saved choice (the web's cookie), a currency the team's euro amounts must not be shown in
+    document.cookie = "jht_display_currency=USD; path=/";
+    const rows = [
+      fixturePosition(1, { id: "3001", salary_min: 50_000, salary_max: 70_000, salary_currency: "EUR", status: "scored" }),
+      fixturePosition(2, { id: "3002", salary_min: 60_000, salary_max: 80_000, salary_currency: "EUR", status: "scored" }),
+    ];
+    reply = () => ({ ok: true, data: syntheticStats({ points: { rows, included: 2, of: 2 } }) });
+    navigate("/dashboard", { replace: true });
+    try {
+      render(<Shell />);
+      const notes = await screen.findByTestId("existing-team-summary-notes");
+      expect(notes).toHaveTextContent(TEXT.eurOnly);
+      // the selector has the euro and nothing else
+      const salary = screen.getByRole("button", { name: "EUR" }).parentElement as HTMLElement;
+      expect(within(salary).getAllByRole("button").map((button) => button.textContent)).toEqual(["EUR"]);
+      // and nothing is drawn with another currency's symbol
+      expect(screen.queryByRole("button", { name: "USD" })).not.toBeInTheDocument();
+      expect(document.body.textContent).not.toContain("$");
+    } finally {
+      document.cookie = "jht_display_currency=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
+    }
+  });
+
+  it("keeps the currencies the web offers when the rates are live", async () => {
+    document.cookie = "jht_display_currency=USD; path=/";
+    try {
+      navigate("/dashboard", { replace: true });
+      render(<Shell />);
+      await screen.findByTestId("existing-team-summary-notes");
+      expect(screen.getByRole("button", { name: "USD" })).toBeInTheDocument();
+      expect(screen.getByTestId("existing-team-summary-notes")).not.toHaveTextContent(TEXT.eurOnly);
+    } finally {
+      document.cookie = "jht_display_currency=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
+    }
+  });
+
   it("draws no note about a block that is complete", async () => {
     navigate("/dashboard", { replace: true });
     render(<Shell />);

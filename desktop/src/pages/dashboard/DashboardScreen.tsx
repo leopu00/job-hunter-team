@@ -92,7 +92,9 @@ export default function DashboardScreen({
             <DashboardLinkedCharts
               positions={positions}
               rates={rates}
-              currencies={displayCurrencies()}
+              // Without live rates only the euro is offered: a chosen currency would be
+              // shown on euro amounts, which are not converted (and the saved choice is ignored).
+              currencies={data.existingTeam && !data.existingTeam.ratesAvailable ? ["EUR"] : displayCurrencies()}
               labels={{
                 types: t.position_types,
                 countries: t.position_countries,
