@@ -883,7 +883,7 @@ mod tests {
         let command = command(&target(), "true").unwrap();
         assert!(command.contains("JHT_IMAGE='sha256:"));
         assert!(command.contains("JHT_PLATFORM_IMAGE='sha256:"));
-        assert!(command.contains("ImageManifestDescriptor.Digest"));
+        assert!(command.contains(r#"index .ImageManifestDescriptor "digest""#));
         assert!(command.contains("--platform \"$JHT_PLATFORM\""));
         assert!(!command.contains("docker exec jht"));
         assert!(!command.contains("docker inspect jht"));
