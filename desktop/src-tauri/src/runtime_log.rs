@@ -27,6 +27,16 @@ pub(crate) struct RuntimeLog {
     cause: std::sync::Arc<std::sync::Mutex<Option<String>>>,
 }
 
+#[derive(Clone, Copy)]
+pub(crate) enum ExistingTeamPhase {
+    Scope,
+    ValidateHost,
+    Candidate,
+    Ssh,
+    Activation,
+    Final,
+}
+
 impl RuntimeLog {
     pub(crate) fn new(app: &tauri::AppHandle) -> Option<Self> {
         app.path().app_local_data_dir().ok().map(|root| Self::in_dir(&root.join("logs")))
@@ -41,6 +51,39 @@ impl RuntimeLog {
 
     pub(crate) fn path(&self) -> &Path {
         &self.path
+    }
+
+    /// Status only: no command, stream, connection, or account value is accepted.
+    pub(crate) fn record_existing_team_status(&self, phase: ExistingTeamPhase, result: Result<i32, &str>) {
+        let phase = match phase {
+            ExistingTeamPhase::Scope => "scope",
+            ExistingTeamPhase::ValidateHost => "validate_host",
+            ExistingTeamPhase::Candidate => "candidate",
+            ExistingTeamPhase::Ssh => "ssh",
+            ExistingTeamPhase::Activation => "activation",
+            ExistingTeamPhase::Final => "final",
+        };
+        let ended = match result {
+            Ok(code) => format!("exit {code}"),
+            Err(code) => match code {
+                "account_scope_unavailable" | "account_scope_changed" | "account_team_mismatch"
+                | "operation_in_progress" | "existing_team_vps_required" | "invalid_team_id"
+                | "existing_team_runtime_candidate_required" | "existing_team_runtime_candidate_invalid"
+                | "existing_team_runtime_candidate_mismatch" | "existing_team_runtime_target_changed"
+                | "existing_team_runtime_unavailable" | "existing_team_runtime_already_selected"
+                | "existing_team_runtime_selection_required" | "existing_team_runtime_selection_invalid"
+                | "existing_team_unavailable" | "existing_team_identity_mismatch" | "existing_team_not_active"
+                | "invalid_host" | "invalid_user" | "invalid_port" | "invalid_key_path"
+                | "invalid_key" | "key_unavailable" | "not_vps" | "permissions_failed"
+                | "host_key_unavailable" | "host_key_missing" | "host_key_changed" | "host_key_mismatch"
+                | "host_key_confirmation_invalid" | "host_key_unwritable"
+                | "ssh_unavailable" | "ssh_auth_failed" | "process_start_failed" | "process_timeout"
+                | "process_write_failed" | "process_wait_failed" | "process_output_unavailable" => code,
+                _ => "io_error_other",
+            }.to_owned(),
+        };
+        let entry = format!("=== {} existing_team.{phase}: {ended}\n", utc(SystemTime::now()));
+        let _ = append(&self.path, &entry, LOG_MAX_BYTES);
     }
 
     /// One step: its name, how it ended, its output. A log that cannot be
@@ -258,6 +301,32 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("jht-runtime-log-{name}-{}", std::process::id()));
         let _ = fs::remove_dir_all(&dir);
         dir
+    }
+
+    #[test]
+    fn existing_team_status_is_private_allowlisted_and_best_effort() {
+        let root = dir("existing-team-status");
+        let log = RuntimeLog::in_dir(&root.join("logs"));
+        log.record_existing_team_status(super::ExistingTeamPhase::Ssh, Ok(73));
+        log.record_existing_team_status(super::ExistingTeamPhase::Final, Err("existing_team_not_active"));
+        log.record_existing_team_status(super::ExistingTeamPhase::Candidate, Err("synthetic-private-account-key-token"));
+        let text = fs::read_to_string(log.path()).unwrap();
+        assert_eq!(text.lines().count(), 3);
+        assert!(text.contains(" existing_team.ssh: exit 73\n"));
+        assert!(text.contains(" existing_team.final: existing_team_not_active\n"));
+        assert!(text.contains(" existing_team.candidate: io_error_other\n"));
+        assert!(!text.contains("synthetic-private") && !text.contains("stdout") && !text.contains("stderr"));
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            assert_eq!(fs::metadata(log.path()).unwrap().permissions().mode() & 0o777, 0o600);
+            assert_eq!(fs::metadata(root.join("logs")).unwrap().permissions().mode() & 0o777, 0o700);
+        }
+        fs::write(root.join("not-a-directory"), b"preserve").unwrap();
+        let blocked = RuntimeLog::in_dir(&root.join("not-a-directory"));
+        blocked.record_existing_team_status(super::ExistingTeamPhase::Final, Ok(0));
+        assert_eq!(fs::read(root.join("not-a-directory")).unwrap(), b"preserve");
+        let _ = fs::remove_dir_all(root);
     }
 
     #[test]

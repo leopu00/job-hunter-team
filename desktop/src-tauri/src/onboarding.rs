@@ -1,7 +1,7 @@
 use crate::account_scope::{AccountScope, AccountScopeState};
 use crate::release_channel;
 use crate::windows_runtime::exit_failure;
-use crate::runtime_log::RuntimeLog;
+use crate::runtime_log::{ExistingTeamPhase, RuntimeLog};
 use crate::runtime_host::{
     run_program, run_program_keeping_stderr, run_ssh, run_ssh_command, set_private_dir_permissions, set_private_permissions, ssh_base_args,
     validate_host, ExecutionHost, ProcessResult, ValidatedHost,
@@ -2582,7 +2582,13 @@ pub(crate) async fn onboarding_existing_team_connect(
     request: ExistingTeamConnectRequest,
     on_progress: Channel<OnboardingProgress>,
 ) -> Result<OnboardingSnapshot, OnboardingError> {
-    let expected = scopes.active().map_err(failure)?;
+    let diagnostic = RuntimeLog::new(&app);
+    let result: Result<OnboardingSnapshot, OnboardingError> = async {
+    let expected = scopes.active().map_err(|code| {
+        if let Some(log) = &diagnostic { log.record_existing_team_status(ExistingTeamPhase::Scope, Err(code)); }
+        failure(code)
+    })?;
+    if let Some(log) = &diagnostic { log.record_existing_team_status(ExistingTeamPhase::Scope, Ok(0)); }
     if !matches!(&request.host, ExecutionHost::Vps { .. }) {
         return Err(failure("existing_team_vps_required"));
     }
@@ -2598,10 +2604,14 @@ pub(crate) async fn onboarding_existing_team_connect(
     }
     let scope_state = scopes.inner().clone();
     let worker_expected = expected.clone();
+    let worker_diagnostic = diagnostic.clone();
     let result = tauri::async_runtime::spawn_blocking(move || {
         let _scope = scope_state
             .lock_expected(&worker_expected)
-            .map_err(failure)?;
+            .map_err(|code| {
+                if let Some(log) = &worker_diagnostic { log.record_existing_team_status(ExistingTeamPhase::Scope, Err(code)); }
+                failure(code)
+            })?;
         let reporter = ProgressReporter::new(on_progress);
         let validated = reporter.run(
             OnboardingProgressStage::Runtime,
@@ -2609,8 +2619,12 @@ pub(crate) async fn onboarding_existing_team_connect(
             "ui_existing_runtime_progress",
             "ui_existing_runtime_done",
             || crate::runtime_host::validate_host_for_scope(&app, &request.host, &worker_expected).map_err(failure),
-        )?;
-        let target = crate::existing_team_runtime::candidate_for_request(&app, &worker_expected, &request.host, &request.team_id).map_err(failure)?;
+        );
+        if let Some(log) = &worker_diagnostic { log.record_existing_team_status(ExistingTeamPhase::ValidateHost, validated.as_ref().map(|_| 0).map_err(|error| error.code)); }
+        let validated = validated?;
+        let target = crate::existing_team_runtime::candidate_for_request(&app, &worker_expected, &request.host, &request.team_id).map_err(failure);
+        if let Some(log) = &worker_diagnostic { log.record_existing_team_status(ExistingTeamPhase::Candidate, target.as_ref().map(|_| 0).map_err(|error| error.code)); }
+        let target = target?;
         let probe_command = crate::existing_team_runtime::team_probe_command(&target.runtime).map_err(failure)?;
         let snapshot = reporter.run(
             OnboardingProgressStage::Container,
@@ -2619,17 +2633,19 @@ pub(crate) async fn onboarding_existing_team_connect(
             "ui_existing_container_done",
             || {
                 existing_team_probe_with(&request.team_id, |input| {
-                    run_ssh_command(
+                    let result = run_ssh_command(
                         &validated,
                         &probe_command,
                         Some(input),
                         SNAPSHOT_TIMEOUT,
                         None,
-                    )
+                    );
+                    if let Some(log) = &worker_diagnostic { log.record_existing_team_status(ExistingTeamPhase::Ssh, result.as_ref().map(|value| value.code).map_err(|code| *code)); }
+                    result
                 })
             },
         )?;
-        reporter.run(
+        let activated = reporter.run(
             OnboardingProgressStage::Team,
             "ui_existing_team_start",
             "ui_existing_team_progress",
@@ -2643,12 +2659,17 @@ pub(crate) async fn onboarding_existing_team_connect(
                     .map_err(failure)?;
                 Ok(snapshot)
             },
-        )
+        );
+        if let Some(log) = &worker_diagnostic { log.record_existing_team_status(ExistingTeamPhase::Activation, activated.as_ref().map(|_| 0).map_err(|error| error.code)); }
+        activated
     })
     .await
     .unwrap_or_else(|_| Err(failure("existing_team_unavailable")));
     state.preparing.store(false, Ordering::Release);
     let _scope = scopes.lock_expected(&expected).map_err(failure)?;
+    result
+    }.await;
+    if let Some(log) = &diagnostic { log.record_existing_team_status(ExistingTeamPhase::Final, result.as_ref().map(|_| 0).map_err(|error| error.code)); }
     result
 }
 
