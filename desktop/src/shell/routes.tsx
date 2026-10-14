@@ -1,5 +1,6 @@
 import type { ComponentType } from "react";
 import AgentsPage from "../pages/agents";
+import ExistingTeamStatusPage from "../pages/existing-team";
 import DashboardPage from "../pages/dashboard";
 import MailPage from "../pages/mail";
 import ComputerPage from "../pages/computer";
@@ -65,12 +66,15 @@ export const ROUTES: Route[] = [
   { path: "/computer", page: ComputerPage },
 ];
 
-export const READ_ONLY_ROUTES: Route[] = ROUTES.filter((route) =>
-  ["/dashboard", "/positions", "/positions/:id"].includes(route.path),
-);
+export const READ_ONLY_ROUTES: Route[] = [
+  ...ROUTES.filter((route) => ["/dashboard", "/positions", "/positions/:id"].includes(route.path)),
+  // Not the web's cloud Team page: the state the existing team's VPS reports about itself.
+  { path: "/team", page: ExistingTeamStatusPage },
+];
 
 /** The navigation of that view, in the order of the web's own bar. */
 export const READ_ONLY_NAV = [
   { href: "/dashboard", label: "nav_dashboard" },
   { href: "/positions", label: "nav_positions" },
+  { href: "/team", label: "own:team" },
 ] as const;
