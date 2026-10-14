@@ -53,6 +53,43 @@ describe("existing team native bridge", () => {
     });
   });
 
+  it("discovers, registers and reads the saved target through three separate commands", async () => {
+    vi.mocked(invoke).mockResolvedValueOnce({ candidateSha256: "a".repeat(64) });
+    vi.mocked(invoke).mockResolvedValueOnce({ outcome: "registered" });
+    vi.mocked(invoke).mockResolvedValueOnce(null);
+
+    await existingTeamBridge.discover({ teamId: "team-opaque-0001", host: HOST });
+    await existingTeamBridge.register("a".repeat(64));
+    expect(await existingTeamBridge.candidate()).toBeNull();
+
+    expect(invoke).toHaveBeenNthCalledWith(1, "onboarding_existing_team_discover", {
+      request: { teamId: "team-opaque-0001", host: HOST },
+    });
+    // the renderer sends the hash it was shown and the confirmation, never a host or a team
+    expect(invoke).toHaveBeenNthCalledWith(2, "onboarding_existing_team_register", {
+      request: { candidateSha256: "a".repeat(64), confirmed: true },
+    });
+    expect(invoke).toHaveBeenNthCalledWith(3, "existing_team_candidate_summary");
+  });
+
+  it("knows the new refusals and treats the ones a retry cannot fix as terminal", () => {
+    for (const code of [
+      "existing_team_runtime_candidate_exists", "existing_team_runtime_candidate_conflict",
+      "existing_team_runtime_already_selected", "existing_team_container_not_found", "existing_team_not_found",
+      "existing_team_ambiguous", "existing_team_image_unattested", "existing_team_too_many_containers",
+      "existing_team_discovery_timeout", "existing_team_target_changed", "existing_team_receipt_required",
+      "existing_team_register_not_confirmed",
+    ]) {
+      expect(existingTeamErrorCode({ code })).toBe(code);
+    }
+    for (const code of ["existing_team_ambiguous", "existing_team_image_unattested", "existing_team_too_many_containers"]) {
+      expect(isTerminalExistingTeamError(code)).toBe(true);
+    }
+    for (const code of ["existing_team_discovery_timeout", "existing_team_target_changed", "existing_team_not_found"]) {
+      expect(isTerminalExistingTeamError(code)).toBe(false);
+    }
+  });
+
   it("allowlists errors without exposing native details", () => {
     expect(existingTeamErrorCode({ code: "host_key_mismatch", message: "/private/key" })).toBe("host_key_mismatch");
     expect(existingTeamErrorCode({ code: "existing_team_runtime_candidate_required" })).toBe("existing_team_runtime_candidate_required");

@@ -1,10 +1,11 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import type {
   ExistingTeamBridge,
   ExistingTeamConnectionResult,
   ExistingTeamReadOnlyConnectionResult,
+  ExistingTeamReceipt,
   SshHostKeyProbe,
 } from "../lib/existing-team";
 import ExistingTeamConnectModal from "./ExistingTeamConnectModal";
@@ -34,6 +35,22 @@ const READONLY_RESULT: ExistingTeamReadOnlyConnectionResult = {
   },
 };
 
+const RECEIPT: ExistingTeamReceipt = {
+  teamId: "team-opaque-0001",
+  hostAddress: "host.example.invalid",
+  hostPort: 22,
+  sshFingerprint: "SHA256:synthetic-fingerprint",
+  containerId: "c0a1".repeat(16),
+  imageId: `sha256:${"1a2b".repeat(16)}`,
+  platformImageId: `sha256:${"de3f".repeat(16)}`,
+  ociRevision: "7071".repeat(10),
+  digest: `sha256:${"9d4c".repeat(16)}`,
+  candidateSha256: "ab12".repeat(16),
+  readiness: false,
+};
+
+const CANDIDATE_REQUIRED = { code: "existing_team_runtime_candidate_required" };
+
 const RESULT: ExistingTeamConnectionResult = {
   runtimeInstalled: true,
   containerRunning: true,
@@ -52,6 +69,9 @@ function bridge(overrides: Partial<ExistingTeamBridge> = {}): ExistingTeamBridge
     confirm: vi.fn().mockResolvedValue(undefined),
     connect: vi.fn().mockResolvedValue(RESULT),
     connectReadOnly: vi.fn().mockResolvedValue(READONLY_RESULT),
+    discover: vi.fn().mockResolvedValue(RECEIPT),
+    register: vi.fn().mockResolvedValue({ outcome: "registered" }),
+    candidate: vi.fn().mockResolvedValue(null),
     ...overrides,
   };
 }
@@ -74,6 +94,9 @@ describe("ExistingTeamConnectModal", () => {
     expect(native.probe).not.toHaveBeenCalled();
     expect(native.confirm).not.toHaveBeenCalled();
     expect(native.connect).not.toHaveBeenCalled();
+    expect(native.discover).not.toHaveBeenCalled();
+    expect(native.register).not.toHaveBeenCalled();
+    expect(native.candidate).not.toHaveBeenCalled();
   });
 
   it("probes first, shows only the fingerprint and attaches after explicit confirmation", async () => {
@@ -230,6 +253,157 @@ describe("ExistingTeamConnectModal", () => {
     await waitFor(() => expect(onReadOnlyConnected).toHaveBeenCalledOnce());
     expect(connectReadOnly).toHaveBeenCalledTimes(2);
     expect(native.connect).not.toHaveBeenCalled();
+  });
+
+  async function toReadOnlyClick(user: ReturnType<typeof userEvent.setup>) {
+    await fillHost(user);
+    await user.click(screen.getByRole("button", { name: /verifica vps/i }));
+    await user.click(await screen.findByRole("button", { name: /visualizza annunci in sola lettura/i }));
+  }
+
+  it("with a saved target the read-only connection needs no discovery and registers nothing", async () => {
+    const user = userEvent.setup();
+    const native = bridge();
+    const onReadOnlyConnected = vi.fn();
+    render(<ExistingTeamConnectModal teamId="team-opaque-0001" bridge={native} onCancel={vi.fn()} onConnected={vi.fn()} onReadOnlyConnected={onReadOnlyConnected} />);
+    await toReadOnlyClick(user);
+    await waitFor(() => expect(onReadOnlyConnected).toHaveBeenCalledOnce());
+    expect(native.discover).not.toHaveBeenCalled();
+    expect(native.register).not.toHaveBeenCalled();
+    expect(native.candidate).not.toHaveBeenCalled();
+  });
+
+  it("without a saved target it reads what the server declares, saves nothing until confirmed, then opens read only", async () => {
+    const user = userEvent.setup();
+    const connectReadOnly = vi.fn().mockRejectedValueOnce(CANDIDATE_REQUIRED).mockResolvedValueOnce(READONLY_RESULT);
+    const native = bridge({ connectReadOnly });
+    const onReadOnlyConnected = vi.fn();
+    const onConnected = vi.fn();
+    render(<ExistingTeamConnectModal teamId="team-opaque-0001" bridge={native} onCancel={vi.fn()} onConnected={onConnected} onReadOnlyConnected={onReadOnlyConnected} />);
+    await toReadOnlyClick(user);
+
+    const receipt = await screen.findByText(/ciò che il server dichiara/i, { selector: "p" });
+    const section = receipt.closest("section") as HTMLElement;
+    expect(within(section).getByText("team-opaque-0001")).toBeInTheDocument();
+    expect(within(section).getByText("host.example.invalid:22")).toBeInTheDocument();
+    expect(within(section).getByText("SHA256:synthetic-fingerprint")).toBeInTheDocument();
+    expect(within(section).getByText("c0a1c0a1c0a1")).toBeInTheDocument();
+    expect(within(section).getByText("non attivo")).toBeInTheDocument();
+    // the server's word, never "verified" or "safe"
+    expect(section.textContent).not.toMatch(/verificat|sicur/i);
+    expect(native.discover).toHaveBeenCalledOnce();
+    expect(native.discover).toHaveBeenCalledWith(expect.objectContaining({ teamId: "team-opaque-0001" }));
+    expect(native.register).not.toHaveBeenCalled();
+    expect(onReadOnlyConnected).not.toHaveBeenCalled();
+
+    await user.click(within(section).getByRole("button", { name: /conferma e apri in sola lettura/i }));
+    await waitFor(() => expect(onReadOnlyConnected).toHaveBeenCalledOnce());
+    expect(native.register).toHaveBeenCalledOnce();
+    expect(native.register).toHaveBeenCalledWith(RECEIPT.candidateSha256);
+    expect(connectReadOnly).toHaveBeenCalledTimes(2);
+    expect(native.connect).not.toHaveBeenCalled();
+    expect(onConnected).not.toHaveBeenCalled();
+  });
+
+  it("Annulla on the receipt sends nothing and returns to the fields", async () => {
+    const user = userEvent.setup();
+    const native = bridge({ connectReadOnly: vi.fn().mockRejectedValue(CANDIDATE_REQUIRED) });
+    render(<ExistingTeamConnectModal teamId="team-opaque-0001" bridge={native} onCancel={vi.fn()} onConnected={vi.fn()} onReadOnlyConnected={vi.fn()} />);
+    await toReadOnlyClick(user);
+    await screen.findByText(/ciò che il server dichiara/i, { selector: "p" });
+    await user.click(screen.getByRole("button", { name: /^annulla$/i }));
+    expect(screen.getByLabelText(/host o indirizzo ip/i)).toHaveValue("host.example.invalid");
+    expect(native.register).not.toHaveBeenCalled();
+    expect(native.connect).not.toHaveBeenCalled();
+    expect(native.connectReadOnly).toHaveBeenCalledOnce();
+  });
+
+  it("Escape on the receipt also sends nothing", async () => {
+    const user = userEvent.setup();
+    const native = bridge({ connectReadOnly: vi.fn().mockRejectedValue(CANDIDATE_REQUIRED) });
+    render(<ExistingTeamConnectModal teamId="team-opaque-0001" bridge={native} onCancel={vi.fn()} onConnected={vi.fn()} onReadOnlyConnected={vi.fn()} />);
+    await toReadOnlyClick(user);
+    await screen.findByText(/ciò che il server dichiara/i, { selector: "p" });
+    await user.keyboard("{Escape}");
+    expect(screen.getByLabelText(/host o indirizzo ip/i)).toBeInTheDocument();
+    expect(native.register).not.toHaveBeenCalled();
+  });
+
+  it("registers once per confirmation even if the button is pressed twice", async () => {
+    const user = userEvent.setup();
+    let release: (value: { outcome: "registered" }) => void = () => {};
+    const register = vi.fn().mockReturnValue(new Promise((resolve) => { release = resolve; }));
+    const connectReadOnly = vi.fn().mockRejectedValueOnce(CANDIDATE_REQUIRED).mockResolvedValue(READONLY_RESULT);
+    const native = bridge({ connectReadOnly, register });
+    const onReadOnlyConnected = vi.fn();
+    render(<ExistingTeamConnectModal teamId="team-opaque-0001" bridge={native} onCancel={vi.fn()} onConnected={vi.fn()} onReadOnlyConnected={onReadOnlyConnected} />);
+    await toReadOnlyClick(user);
+    const confirm = await screen.findByRole("button", { name: /conferma e apri in sola lettura/i });
+    fireEvent.click(confirm);
+    fireEvent.click(confirm);
+    expect(register).toHaveBeenCalledTimes(1);
+    release({ outcome: "registered" });
+    await waitFor(() => expect(onReadOnlyConnected).toHaveBeenCalledOnce());
+    expect(register).toHaveBeenCalledTimes(1);
+  });
+
+  it("when a target was saved in the meantime it opens THAT target, with its host and team, and replaces nothing", async () => {
+    for (const where of ["discover", "register"] as const) {
+      const user = userEvent.setup();
+      const saved = {
+        teamId: "saved-team-opaque-0009",
+        host: { kind: "vps" as const, address: "saved.example.invalid", user: "jht", port: 2222, keyPath: "/synthetic/saved/key" },
+      };
+      const exists = { code: "existing_team_runtime_candidate_exists" };
+      const connectReadOnly = vi.fn().mockRejectedValueOnce(CANDIDATE_REQUIRED).mockResolvedValue(READONLY_RESULT);
+      const native = bridge({
+        connectReadOnly,
+        candidate: vi.fn().mockResolvedValue(saved),
+        ...(where === "discover" ? { discover: vi.fn().mockRejectedValue(exists) } : { register: vi.fn().mockRejectedValue({ code: "existing_team_runtime_candidate_conflict" }) }),
+      });
+      const onReadOnlyConnected = vi.fn();
+      const view = render(<ExistingTeamConnectModal teamId="team-opaque-0001" bridge={native} onCancel={vi.fn()} onConnected={vi.fn()} onReadOnlyConnected={onReadOnlyConnected} />);
+      await toReadOnlyClick(user);
+      if (where === "register") await user.click(await screen.findByRole("button", { name: /conferma e apri in sola lettura/i }));
+      await waitFor(() => expect(onReadOnlyConnected).toHaveBeenCalledOnce());
+      expect(native.candidate).toHaveBeenCalledOnce();
+      expect(connectReadOnly).toHaveBeenLastCalledWith({ teamId: saved.teamId, host: saved.host });
+      expect(native.connect).not.toHaveBeenCalled();
+      view.unmount();
+    }
+  });
+
+  it("tells a refusal of the discovery with the catalog's words and never registers", async () => {
+    const user = userEvent.setup();
+    const native = bridge({
+      connectReadOnly: vi.fn().mockRejectedValue(CANDIDATE_REQUIRED),
+      discover: vi.fn().mockRejectedValue({ code: "existing_team_ambiguous", message: "raw docker output" }),
+    });
+    render(<ExistingTeamConnectModal teamId="team-opaque-0001" bridge={native} onCancel={vi.fn()} onConnected={vi.fn()} onReadOnlyConnected={vi.fn()} />);
+    await toReadOnlyClick(user);
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent(ERROR_CATALOG.existing_team_ambiguous.text.it);
+    expect(alert).toHaveTextContent(ERROR_CATALOG.existing_team_ambiguous.action.it);
+    expect(screen.queryByText(/raw docker output/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /riprova/i })).not.toBeInTheDocument();
+    expect(native.register).not.toHaveBeenCalled();
+  });
+
+  it("after a registration that worked but a connection that did not, Riprova connects again and never registers twice", async () => {
+    const user = userEvent.setup();
+    const connectReadOnly = vi.fn()
+      .mockRejectedValueOnce(CANDIDATE_REQUIRED)
+      .mockRejectedValueOnce({ code: "existing_team_unavailable" })
+      .mockResolvedValueOnce(READONLY_RESULT);
+    const native = bridge({ connectReadOnly });
+    const onReadOnlyConnected = vi.fn();
+    render(<ExistingTeamConnectModal teamId="team-opaque-0001" bridge={native} onCancel={vi.fn()} onConnected={vi.fn()} onReadOnlyConnected={onReadOnlyConnected} />);
+    await toReadOnlyClick(user);
+    await user.click(await screen.findByRole("button", { name: /conferma e apri in sola lettura/i }));
+    await user.click(await screen.findByRole("button", { name: /riprova/i }));
+    await waitFor(() => expect(onReadOnlyConnected).toHaveBeenCalledOnce());
+    expect(native.register).toHaveBeenCalledOnce();
+    expect(native.discover).toHaveBeenCalledOnce();
   });
 
 });

@@ -47,6 +47,9 @@ const NOT_ERRORS: Record<string, string> = {
   not_a_mapping: "profile file parse state",
   // The outcome of «Attiva assistente» when the assistant was already running: a result, not an error.
   already_active: "assistant start outcome",
+  // The outcome of the in-app registration of a team's target: a result, not an error.
+  registered: "target registration outcome",
+  already_registered: "target registration outcome",
   target_role: "profile field",
   target_role_category_id: "profile field",
   target_specialty: "profile field",
@@ -133,7 +136,8 @@ function compiledRustModules(): string[] {
   const lines = lib.split("\n");
   lines.forEach((line, index) => {
     const match = /^mod (\w+);$/.exec(line.trim());
-    if (match && lines[index - 1]?.trim() !== "#[cfg(test)]") modules.push(match[1]);
+    // A module behind any `#[cfg(...test...)]` (`test`, `all(test, unix)`) is test code.
+    if (match && !/^#\[cfg\(.*\btest\b.*\)\]$/.test(lines[index - 1]?.trim() ?? "")) modules.push(match[1]);
   });
   return modules;
 }
