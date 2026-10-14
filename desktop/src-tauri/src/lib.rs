@@ -82,6 +82,7 @@ pub fn run() {
             mail::mail_save_password,
             mail::mail_status,
             onboarding::onboarding_assistant_open,
+            onboarding::existing_team_assistant_start,
             onboarding::onboarding_existing_team_connect,
             onboarding::onboarding_existing_team_readonly_connect,
             onboarding::onboarding_podman_machine_recreate,

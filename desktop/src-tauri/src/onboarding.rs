@@ -2683,6 +2683,147 @@ pub(crate) async fn onboarding_existing_team_readonly_connect(
     result
 }
 
+/// What the person asked for, and nothing else: the confirmation is made by the person in the
+/// app after reading what starting the assistant costs. A request without it is refused here,
+/// whatever the renderer does.
+#[derive(Clone, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub(crate) struct ExistingTeamAssistantStartRequest {
+    confirmed: bool,
+}
+
+/// `started`: the session was not there, the start command ran and a new probe saw it.
+/// `already_active`: the first probe saw it and no start command ran. Anything else is an error
+/// with its code: a timeout or a failure never carries a readiness.
+#[derive(Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct ExistingTeamAssistantStartReply {
+    outcome: &'static str,
+    captain_running: bool,
+    assistant_running: bool,
+}
+
+/// One start at a time, whatever the number of clicks: the second caller is refused, not queued.
+struct ExistingTeamStartGate<'a>(&'a AtomicBool);
+
+impl<'a> ExistingTeamStartGate<'a> {
+    fn acquire(flag: &'a AtomicBool) -> Option<Self> {
+        flag.compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+            .ok()
+            .map(|_| Self(flag))
+    }
+}
+
+impl Drop for ExistingTeamStartGate<'_> {
+    fn drop(&mut self) {
+        self.0.store(false, Ordering::Release);
+    }
+}
+
+const ASSISTANT_START_TIMEOUT: Duration = Duration::from_secs(180);
+const ASSISTANT_VERIFY_POLLS: usize = 20;
+const ASSISTANT_VERIFY_INTERVAL: Duration = Duration::from_secs(3);
+
+/// Starts the ASSISTENTE session of an existing team, on the pinned target and nowhere else.
+///
+/// `pinned` is the team id and runtime target the account's verified selection holds (None when
+/// there is none: nothing runs, no default container is tried). Order, each step a remote command
+/// through `run`:
+/// 1. the readiness is probed with the team's identity check; an assistant already running ends
+///    here, with no start command;
+/// 2. the start command runs once; a non-zero exit or a timeout is an error;
+/// 3. the readiness is probed again, up to a bounded number of times; only a probe that sees the
+///    assistant promotes the outcome. A probe that fails ends with its error, and running out of
+///    tries is `assistant_verify_timeout`: neither carries a readiness, and no earlier snapshot
+///    is reused.
+fn existing_team_assistant_start_with(
+    confirmed: bool,
+    pinned: Option<(&str, &crate::existing_team_runtime::RuntimeTarget)>,
+    run: &mut dyn FnMut(&str, Option<&[u8]>, Duration) -> Result<ProcessResult, &'static str>,
+    sleep: &mut dyn FnMut(Duration),
+) -> Result<ExistingTeamAssistantStartReply, OnboardingError> {
+    if !confirmed {
+        return Err(failure("assistant_start_not_confirmed"));
+    }
+    let Some((team_id, runtime)) = pinned else {
+        return Err(failure("existing_team_runtime_required"));
+    };
+    let probe = crate::existing_team_runtime::team_probe_command(runtime).map_err(failure)?;
+    let start = crate::existing_team_runtime::assistant_start_command(runtime).map_err(failure)?;
+    let probe_now = |run: &mut dyn FnMut(&str, Option<&[u8]>, Duration) -> Result<ProcessResult, &'static str>| {
+        existing_team_readonly_probe_with(team_id, |input| run(&probe, Some(input), SNAPSHOT_TIMEOUT))
+    };
+    let first = probe_now(&mut *run)?;
+    if first.readiness {
+        return Ok(ExistingTeamAssistantStartReply {
+            outcome: "already_active",
+            captain_running: first.snapshot.captain_running,
+            assistant_running: true,
+        });
+    }
+    match run(&start, None, ASSISTANT_START_TIMEOUT) {
+        Ok(result) if result.success() => {}
+        Err("process_timeout") => return Err(failure("timeout")),
+        _ => return Err(failure("assistant_start_failed")),
+    }
+    for attempt in 0..ASSISTANT_VERIFY_POLLS {
+        if attempt > 0 {
+            sleep(ASSISTANT_VERIFY_INTERVAL);
+        }
+        let seen = probe_now(&mut *run)?;
+        if seen.readiness {
+            return Ok(ExistingTeamAssistantStartReply {
+                outcome: "started",
+                captain_running: seen.snapshot.captain_running,
+                assistant_running: true,
+            });
+        }
+    }
+    Err(failure("assistant_verify_timeout"))
+}
+
+/// «Attiva assistente» on an existing VPS team: only on the person's explicit, confirmed request.
+/// The host is the account's persisted one and the target the verified selection (the same
+/// binding the reads use); there is no fallback to another container, and nothing here runs at
+/// connect, refresh or retry. It starts the one session and probes again; it stops nothing.
+#[tauri::command]
+pub(crate) async fn existing_team_assistant_start(
+    app: tauri::AppHandle,
+    state: State<'_, OnboardingNativeState>,
+    scopes: State<'_, AccountScopeState>,
+    request: ExistingTeamAssistantStartRequest,
+) -> Result<ExistingTeamAssistantStartReply, OnboardingError> {
+    if !request.confirmed {
+        return Err(failure("assistant_start_not_confirmed"));
+    }
+    let expected = scopes.active().map_err(failure)?;
+    let Some(_gate) = ExistingTeamStartGate::acquire(&state.preparing) else {
+        return Err(failure("operation_in_progress"));
+    };
+    let scope_state = scopes.inner().clone();
+    let worker_expected = expected.clone();
+    let result = tauri::async_runtime::spawn_blocking(move || {
+        let _scope = scope_state.lock_expected(&worker_expected).map_err(failure)?;
+        let host = crate::direct_chat::load_persisted_host(&app, &worker_expected).map_err(failure)?;
+        if !matches!(host, ExecutionHost::Vps { .. }) {
+            return Err(failure("existing_team_vps_required"));
+        }
+        let validated =
+            crate::runtime_host::validate_host_for_scope(&app, &host, &worker_expected).map_err(failure)?;
+        let target = crate::existing_team_runtime::selected(&app, &worker_expected, &host).map_err(failure)?;
+        existing_team_assistant_start_with(
+            true,
+            target.as_ref().map(|target| (target.team_id.as_str(), &target.runtime)),
+            &mut |command, input, timeout| run_ssh_command(&validated, command, input, timeout, None),
+            &mut |interval| thread::sleep(interval),
+        )
+    })
+    .await
+    .unwrap_or_else(|_| Err(failure("assistant_start_failed")));
+    let _scope = scopes.lock_expected(&expected).map_err(failure)?;
+    result
+}
+
 #[tauri::command]
 pub(crate) async fn onboarding_existing_team_connect(
     app: tauri::AppHandle,
@@ -6138,5 +6279,307 @@ exit 0
         assert!(valid_pairing_token("YWJjZGVmZ2hpamtsbW5vcA=="));
         assert!(!valid_pairing_token("too-short"));
         assert!(!valid_pairing_token("YWJjZGVmZ2hpamts;rm"));
+    }
+}
+
+/// «Attiva assistente» for an existing team, with a stand-in for the remote commands: no VM, no
+/// engine, no SSH. The runner records every command it is given and answers from a script, so a
+/// test sees exactly what would have been sent.
+#[cfg(test)]
+mod existing_team_assistant_tests {
+    use super::*;
+    use crate::existing_team_runtime::RuntimeTarget;
+    use std::cell::RefCell;
+    use std::collections::VecDeque;
+    use std::sync::atomic::AtomicUsize;
+
+    const TEAM: &str = "synthetic-team-id-0001";
+
+    fn runtime() -> RuntimeTarget {
+        RuntimeTarget {
+            container_id: "a".repeat(64),
+            image_id: format!("sha256:{}", "b".repeat(64)),
+            platform_image_id: format!("sha256:{}", "c".repeat(64)),
+            oci_revision: "d".repeat(40),
+            digest: format!("sha256:{}", "e".repeat(64)),
+            os: "linux".into(),
+            architecture: "amd64".into(),
+        }
+    }
+
+    fn probe_reply(captain: bool, assistant: bool) -> Result<ProcessResult, &'static str> {
+        Ok(ProcessResult {
+            code: 0,
+            stdout: format!(
+                "runtimeInstalled=1\ncontainerRunning=1\nproviderConfigured=1\nproviderAuthenticated=1\nprofileReady=1\nassistantWelcomed=0\ncaptainRunning={}\nassistantRunning={}\n",
+                u8::from(captain),
+                u8::from(assistant)
+            )
+            .into_bytes(),
+        })
+    }
+
+    fn exit(code: i32) -> Result<ProcessResult, &'static str> {
+        Ok(ProcessResult { code, stdout: Vec::new() })
+    }
+
+    #[derive(Debug, Clone, PartialEq, Eq)]
+    struct Call {
+        command: String,
+        input: Option<Vec<u8>>,
+        timeout: Duration,
+    }
+
+    impl Call {
+        fn is_start(&self) -> bool {
+            self.command.contains("start-agent.sh")
+        }
+        fn is_probe(&self) -> bool {
+            self.command.contains("tmux has-session")
+        }
+    }
+
+    /// Answers the probes from `probes` in order (the last one repeats) and the start from `start`.
+    struct Script {
+        calls: RefCell<Vec<Call>>,
+        sleeps: RefCell<Vec<Duration>>,
+        probes: RefCell<VecDeque<Result<ProcessResult, &'static str>>>,
+        start: Result<ProcessResult, &'static str>,
+    }
+
+    impl Script {
+        fn new(probes: Vec<Result<ProcessResult, &'static str>>, start: Result<ProcessResult, &'static str>) -> Self {
+            Self { calls: RefCell::new(Vec::new()), sleeps: RefCell::new(Vec::new()), probes: RefCell::new(probes.into()), start }
+        }
+
+        fn run(&self, confirmed: bool, pinned: bool) -> Result<ExistingTeamAssistantStartReply, OnboardingError> {
+            let target = runtime();
+            existing_team_assistant_start_with(
+                confirmed,
+                pinned.then_some((TEAM, &target)),
+                &mut |command, input, timeout| {
+                    let call = Call { command: command.to_owned(), input: input.map(<[u8]>::to_vec), timeout };
+                    let start = call.is_start();
+                    self.calls.borrow_mut().push(call);
+                    if start {
+                        return match &self.start {
+                            Ok(result) => Ok(ProcessResult { code: result.code, stdout: result.stdout.clone() }),
+                            Err(error) => Err(*error),
+                        };
+                    }
+                    let mut probes = self.probes.borrow_mut();
+                    let next = if probes.len() > 1 { probes.pop_front().unwrap() } else { match probes.front() {
+                        Some(Ok(result)) => Ok(ProcessResult { code: result.code, stdout: result.stdout.clone() }),
+                        Some(Err(error)) => Err(*error),
+                        None => Err("process_failed"),
+                    } };
+                    next
+                },
+                &mut |interval| self.sleeps.borrow_mut().push(interval),
+            )
+        }
+
+        fn starts(&self) -> usize {
+            self.calls.borrow().iter().filter(|call| call.is_start()).count()
+        }
+    }
+
+    fn code(result: Result<ExistingTeamAssistantStartReply, OnboardingError>) -> &'static str {
+        result.expect_err("an error").code
+    }
+
+    #[test]
+    fn nothing_runs_without_the_persons_confirmation() {
+        let script = Script::new(vec![probe_reply(true, false)], exit(0));
+        assert_eq!(code(script.run(false, true)), "assistant_start_not_confirmed");
+        assert!(script.calls.borrow().is_empty());
+        // the request itself is closed: the confirmation is a field, nothing else is accepted
+        assert!(serde_json::from_str::<ExistingTeamAssistantStartRequest>(r#"{"confirmed":true}"#).is_ok());
+        for bad in [r#"{}"#, r#"{"confirmed":"yes"}"#, r#"{"confirmed":true,"container":"jht"}"#, r#"{"confirmed":true,"host":{}}"#] {
+            assert!(serde_json::from_str::<ExistingTeamAssistantStartRequest>(bad).is_err(), "{bad}");
+        }
+    }
+
+    #[test]
+    fn without_a_verified_target_nothing_runs_and_no_default_container_is_tried() {
+        let script = Script::new(vec![probe_reply(true, false)], exit(0));
+        assert_eq!(code(script.run(true, false)), "existing_team_runtime_required");
+        assert!(script.calls.borrow().is_empty());
+    }
+
+    #[test]
+    fn an_assistant_already_running_sends_no_start_command() {
+        let script = Script::new(vec![probe_reply(true, true)], exit(0));
+        let reply = script.run(true, true).expect("already active");
+        assert_eq!(reply, ExistingTeamAssistantStartReply { outcome: "already_active", captain_running: true, assistant_running: true });
+        let calls = script.calls.borrow();
+        assert_eq!(calls.len(), 1);
+        assert!(calls[0].is_probe());
+        assert_eq!(script.starts(), 0);
+    }
+
+    #[test]
+    fn a_missing_assistant_is_started_once_on_the_pinned_container_and_probed_again() {
+        let script = Script::new(vec![probe_reply(true, false), probe_reply(true, true)], exit(0));
+        let reply = script.run(true, true).expect("started");
+        assert_eq!(reply, ExistingTeamAssistantStartReply { outcome: "started", captain_running: true, assistant_running: true });
+        let calls = script.calls.borrow();
+        assert_eq!(calls.iter().map(|call| (call.is_probe(), call.is_start())).collect::<Vec<_>>(), [(true, false), (false, true), (true, false)]);
+        let cid = "a".repeat(64);
+        for call in calls.iter() {
+            // every command is the pinned one: it names the container id and checks it before it acts
+            assert!(call.command.contains(&format!("JHT_CID='{cid}'")), "{}", call.command);
+            assert!(call.command.contains("|| exit 70"), "the pin is checked first");
+            assert!(!call.command.contains("docker exec jht"), "the default container is never named");
+        }
+        assert_eq!(calls[0].input.as_deref(), Some(format!("{TEAM}\n").as_bytes()));
+        assert_eq!(calls[2].input.as_deref(), Some(format!("{TEAM}\n").as_bytes()));
+        assert_eq!(calls[1].input, None);
+        assert!(calls[1].command.contains("\"$JHT_CID\" bash /app/.launcher/start-agent.sh assistente"));
+        assert!(calls[1].command.contains("JHT_SPAWN_SRC=desktop-existing-team"));
+    }
+
+    #[test]
+    fn a_target_that_is_not_the_pinned_one_or_not_the_team_is_refused_before_any_start() {
+        // exit 70 is the shell's own pin check (container, image, platform, digest); 72 the team identity
+        for (code_out, expected) in [(70, "existing_team_unavailable"), (72, "existing_team_identity_mismatch"), (64, "invalid_team_id")] {
+            let script = Script::new(vec![exit(code_out)], exit(0));
+            assert_eq!(code(script.run(true, true)), expected);
+            assert_eq!(script.calls.borrow().len(), 1);
+            assert_eq!(script.starts(), 0);
+        }
+        // a team with no captain is not one this action starts anything on
+        let script = Script::new(vec![probe_reply(false, false)], exit(0));
+        assert_eq!(code(script.run(true, true)), "existing_team_not_active");
+        assert_eq!(script.starts(), 0);
+    }
+
+    #[test]
+    fn a_start_that_fails_or_times_out_is_an_error_and_is_not_probed_into_a_readiness() {
+        let script = Script::new(vec![probe_reply(true, false), probe_reply(true, true)], exit(1));
+        assert_eq!(code(script.run(true, true)), "assistant_start_failed");
+        assert_eq!(script.calls.borrow().len(), 2, "probe and start, then nothing");
+        let script = Script::new(vec![probe_reply(true, false), probe_reply(true, true)], Err("process_timeout"));
+        assert_eq!(code(script.run(true, true)), "timeout");
+        assert_eq!(script.calls.borrow().len(), 2);
+        let script = Script::new(vec![probe_reply(true, false), probe_reply(true, true)], Err("process_failed"));
+        assert_eq!(code(script.run(true, true)), "assistant_start_failed");
+    }
+
+    #[test]
+    fn a_verification_that_never_sees_the_assistant_times_out_and_promotes_nothing() {
+        let script = Script::new(vec![probe_reply(true, false)], exit(0));
+        assert_eq!(code(script.run(true, true)), "assistant_verify_timeout");
+        assert_eq!(script.starts(), 1, "one start, however long the wait");
+        assert_eq!(script.calls.borrow().iter().filter(|call| call.is_probe()).count(), 1 + ASSISTANT_VERIFY_POLLS);
+        assert_eq!(script.sleeps.borrow().len(), ASSISTANT_VERIFY_POLLS - 1);
+        assert!(script.sleeps.borrow().iter().all(|interval| *interval == ASSISTANT_VERIFY_INTERVAL));
+    }
+
+    #[test]
+    fn a_verification_that_fails_ends_with_its_error_and_no_second_start() {
+        for (probe, expected) in [(Err("process_timeout"), "existing_team_unavailable"), (exit(72), "existing_team_identity_mismatch"), (exit(1), "existing_team_unavailable")] {
+            let script = Script::new(vec![probe_reply(true, false), probe], exit(0));
+            assert_eq!(code(script.run(true, true)), expected);
+            assert_eq!(script.starts(), 1);
+        }
+        // a readiness read before the start is not reused: the probe after it is a new command
+        let script = Script::new(vec![probe_reply(true, false), probe_reply(true, false), probe_reply(true, true)], exit(0));
+        assert_eq!(script.run(true, true).expect("started").outcome, "started");
+        assert_eq!(script.calls.borrow().iter().filter(|call| call.is_probe()).count(), 3);
+    }
+
+    #[test]
+    fn many_clicks_at_once_send_one_start_command() {
+        let flag = AtomicBool::new(false);
+        let refused = AtomicUsize::new(0);
+        let starts = AtomicUsize::new(0);
+        let clicks = 6;
+        let barrier = std::sync::Barrier::new(clicks);
+        let outcomes: Vec<Result<Option<ExistingTeamAssistantStartReply>, &'static str>> = thread::scope(|scope| {
+            (0..clicks)
+                .map(|_| {
+                    scope.spawn(|| {
+                        barrier.wait();
+                        let Some(_gate) = ExistingTeamStartGate::acquire(&flag) else {
+                            refused.fetch_add(1, Ordering::SeqCst);
+                            return Ok(None);
+                        };
+                        let target = runtime();
+                        existing_team_assistant_start_with(
+                            true,
+                            Some((TEAM, &target)),
+                            &mut |command, _input, _timeout| {
+                                if command.contains("start-agent.sh") {
+                                    starts.fetch_add(1, Ordering::SeqCst);
+                                    // hold the gate until every other click has been refused
+                                    let deadline = Instant::now() + Duration::from_secs(10);
+                                    while refused.load(Ordering::SeqCst) < clicks - 1 && Instant::now() < deadline {
+                                        thread::yield_now();
+                                    }
+                                    return exit(0);
+                                }
+                                probe_reply(true, starts.load(Ordering::SeqCst) > 0)
+                            },
+                            &mut |_| {},
+                        )
+                        .map(Some)
+                        .map_err(|error| error.code)
+                    })
+                })
+                .collect::<Vec<_>>()
+                .into_iter()
+                .map(|handle| handle.join().unwrap())
+                .collect()
+        });
+        assert_eq!(starts.load(Ordering::SeqCst), 1);
+        assert_eq!(refused.load(Ordering::SeqCst), clicks - 1);
+        assert_eq!(outcomes.iter().filter(|outcome| matches!(outcome, Ok(Some(reply)) if reply.outcome == "started")).count(), 1);
+        // the gate is released when the start ends: the next click is a new operation
+        assert!(ExistingTeamStartGate::acquire(&flag).is_some());
+    }
+
+    #[test]
+    fn the_gate_is_released_on_error_and_is_exclusive_while_held() {
+        let flag = AtomicBool::new(false);
+        {
+            let held = ExistingTeamStartGate::acquire(&flag).expect("first");
+            assert!(ExistingTeamStartGate::acquire(&flag).is_none());
+            drop(held);
+        }
+        assert!(ExistingTeamStartGate::acquire(&flag).is_some());
+    }
+
+    #[test]
+    fn only_the_explicit_action_can_start_the_assistant() {
+        // the start command is built in one place and used by the one function behind the one
+        // command; connect, refresh, resume and the reads never name it, and neither does any
+        // other module
+        for (name, source) in [
+            ("cli_adapter", include_str!("cli_adapter.rs")),
+            ("direct_chat", include_str!("direct_chat.rs")),
+            ("runtime_host", include_str!("runtime_host.rs")),
+            ("lib", include_str!("lib.rs").split("generate_handler").next().unwrap()),
+        ] {
+            assert!(!source.contains("assistant_start_command"), "{name}");
+            assert!(!source.contains("existing_team_assistant_start_with"), "{name}");
+        }
+        let onboarding = include_str!("onboarding.rs").split("mod existing_team_assistant_tests").next().unwrap();
+        assert_eq!(onboarding.matches("assistant_start_command(").count(), 1);
+        assert_eq!(onboarding.matches("existing_team_assistant_start_with(").count(), 2, "its definition and the one command");
+        let function = onboarding
+            .split("fn existing_team_assistant_start_with(")
+            .nth(1)
+            .and_then(|rest| rest.split("pub(crate) async fn existing_team_assistant_start(").next())
+            .expect("the function");
+        assert!(function.contains("assistant_start_command("));
+        for (name, next) in [
+            ("pub(crate) async fn onboarding_existing_team_readonly_connect", "pub(crate) struct ExistingTeamAssistantStartRequest"),
+            ("pub(crate) async fn onboarding_resume_snapshot", "struct ExistingTeamReadiness"),
+            ("pub(crate) async fn onboarding_existing_team_connect", "#[tauri::command]"),
+        ] {
+            let body = onboarding.split(name).nth(1).and_then(|rest| rest.split(next).next()).expect(name);
+            assert!(!body.contains("assistant_start"), "{name}");
+        }
     }
 }

@@ -908,6 +908,19 @@ printf 'captainRunning=%s\nassistantRunning=%s\n' "$JHT_CAPTAIN" "$JHT_ASSISTANT
     )
 }
 
+/// Starts the ASSISTENTE session inside the pinned container. It is the script the CLI's
+/// `jht team start assistente` runs in a container (`/app/.launcher/start-agent.sh assistente`),
+/// reached through `command`, so the container, image, platform and digest are verified first
+/// (exit 70 otherwise) and the default container is never named. The script is idempotent
+/// (a lock per session, an exact `tmux has-session`), opens the team's provider and injects the
+/// one-shot welcome message, which spends the provider account's tokens.
+pub(crate) fn assistant_start_command(target: &RuntimeTarget) -> Result<String, &'static str> {
+    command(
+        target,
+        "docker exec -e JHT_SPAWN_SRC=desktop-existing-team \"$JHT_CID\" bash /app/.launcher/start-agent.sh assistente </dev/null",
+    )
+}
+
 pub(crate) fn python_command(target: &RuntimeTarget) -> Result<String, &'static str> {
     command(target, "exec docker exec -i \"$JHT_CID\" python3 -c 'import sys;exec(bytes.fromhex(sys.stdin.buffer.readline().decode()).decode())'")
 }
@@ -1170,6 +1183,31 @@ pub(crate) async fn existing_team_positions_read(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn assistant_start_runs_the_launcher_script_in_the_pinned_container_after_its_checks() {
+        let runtime = RuntimeTarget {
+            container_id: "a".repeat(64),
+            image_id: format!("sha256:{}", "b".repeat(64)),
+            platform_image_id: format!("sha256:{}", "c".repeat(64)),
+            oci_revision: "d".repeat(40),
+            digest: format!("sha256:{}", "e".repeat(64)),
+            os: "linux".into(),
+            architecture: "amd64".into(),
+        };
+        let command = assistant_start_command(&runtime).expect("a valid target");
+        let checks = command.find("exit 70").expect("the pin is checked");
+        let script = command.find("bash /app/.launcher/start-agent.sh assistente").expect("the one script");
+        assert!(checks < script, "the container is verified before anything runs in it");
+        assert!(command.contains("docker exec -e JHT_SPAWN_SRC=desktop-existing-team \"$JHT_CID\" bash"));
+        assert!(command.contains(&format!("JHT_CID='{}'", runtime.container_id)));
+        assert!(!command.contains("docker exec jht"));
+        assert_eq!(command.matches("start-agent.sh").count(), 1);
+        // a target that is not a whole, pinned one builds nothing
+        let mut broken = runtime.clone();
+        broken.platform_image_id = broken.image_id.clone();
+        assert_eq!(assistant_start_command(&broken), Err("existing_team_runtime_candidate_invalid"));
+    }
 
     #[test]
     fn profile_request_is_closed_and_the_reader_opens_only_the_two_profile_paths() {
