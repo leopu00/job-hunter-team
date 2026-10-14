@@ -549,6 +549,24 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
     "The registered team is not running on the VPS.",
     "Start the team on the VPS and try again.",
   ),
+  existing_team_runtime_candidate_required: copy(
+    "Manca la configurazione verificata della squadra esistente.",
+    "Chiedi a chi gestisce la VPS di completare il collegamento, poi riprova.",
+    "The verified configuration for the existing team is missing.",
+    "Ask whoever manages the VPS to complete the connection, then try again.",
+  ),
+  existing_team_runtime_candidate_invalid: copy(
+    "La configurazione verificata della squadra esistente non è valida.",
+    "Chiedi a chi gestisce la VPS di verificare il collegamento, poi riprova.",
+    "The verified configuration for the existing team is not valid.",
+    "Ask whoever manages the VPS to check the connection, then try again.",
+  ),
+  existing_team_runtime_candidate_mismatch: copy(
+    "La configurazione verificata non corrisponde alla VPS o alla squadra scelta.",
+    "Controlla la VPS e l’identificativo della squadra, poi riprova.",
+    "The verified configuration does not match the selected VPS or team.",
+    "Check the VPS and team identifier, then try again.",
+  ),
   existing_team_unavailable: TEAM_UNREACHABLE,
   ssh_unavailable: copy(
     "La VPS non è raggiungibile tramite SSH.",

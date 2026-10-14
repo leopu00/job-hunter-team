@@ -138,6 +138,18 @@ describe("ExistingTeamConnectModal", () => {
     expect(native.connect).not.toHaveBeenCalled();
   });
 
+  it("explains when the verified existing-team configuration is missing", async () => {
+    const user = userEvent.setup();
+    const native = bridge({ connect: vi.fn().mockRejectedValue({ code: "existing_team_runtime_candidate_required" }) });
+    render(<ExistingTeamConnectModal teamId="team-opaque-0001" bridge={native} onCancel={vi.fn()} onConnected={vi.fn()} />);
+    await fillHost(user);
+    await user.click(screen.getByRole("button", { name: /verifica vps/i }));
+    await user.click(await screen.findByRole("button", { name: /conferma e collega/i }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(ERROR_CATALOG.existing_team_runtime_candidate_required.text.it);
+    expect(screen.getByRole("alert")).toHaveTextContent(ERROR_CATALOG.existing_team_runtime_candidate_required.action.it);
+  });
+
   it("never renders the full key path and keeps cancel explicit", async () => {
     const user = userEvent.setup();
     const onCancel = vi.fn();
