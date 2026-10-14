@@ -152,6 +152,7 @@ export const syntheticFacets = [
     critic_score: 8,
     loc_country: "AA",
     loc_city: "Alpha",
+    source: "synthetic",
   },
   {
     id: "102",
@@ -163,5 +164,6 @@ export const syntheticFacets = [
     critic_score: 5,
     loc_country: "BB",
     loc_city: "Beta",
+    source: "board-b",
   },
 ] satisfies PositionFacet[];

@@ -735,6 +735,21 @@ export async function getSourceDistribution(): Promise<
 > {
   const dp = await activeDemoPersona();
   if (dp) return demo.demoSourceDistribution(dp);
+  const desktop = await readDesktopVpsPositionFacets();
+  if (desktop.source === "vps") {
+    const counts: Record<string, number> = {};
+    for (const row of desktop.data) {
+      if (row.status === "excluded") continue;
+      const s = row.source ?? "sconosciuta";
+      counts[s] = (counts[s] ?? 0) + 1;
+    }
+    return Object.entries(counts)
+      .map(([source, count]) => ({ source, count }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 8);
+  }
+  // Same rule as getPositions: no valid target must not show another dataset.
+  if (desktop.source === "unavailable") return [];
   const w = await ws();
   if (w) {
     try {
@@ -781,6 +796,8 @@ export type PositionFacet = {
   status: string;
   title: string | null;
   company: string | null;
+  /** Only the existing team's VPS reader sends it (the sidebar's source list). */
+  source?: string | null;
 };
 
 export async function getPositionFacets(): Promise<PositionFacet[]> {

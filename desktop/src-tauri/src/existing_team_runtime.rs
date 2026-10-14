@@ -144,8 +144,8 @@ if op=='detail': emit({'ok':True,'data':position_detail(int(req['id']))})
 if op=='facets':
  rows=[]
  try:
-  for row in db.execute('SELECT p.id,p.status,p.title,p.company,p.role_family,p.loc_country,p.loc_city,s.total_score,a.critic_score FROM positions p LEFT JOIN scores s ON s.position_id=p.id LEFT JOIN applications a ON a.position_id=p.id ORDER BY p.id'):
-   rows.append({'id':sid(row[0]),'status':row[1],'title':row[2],'company':row[3],'role_family':row[4],'loc_country':row[5],'loc_city':row[6],'score':row[7],'critic_score':row[8]})
+  for row in db.execute('SELECT p.id,p.status,p.title,p.company,p.role_family,p.loc_country,p.loc_city,s.total_score,a.critic_score,p.source FROM positions p LEFT JOIN scores s ON s.position_id=p.id LEFT JOIN applications a ON a.position_id=p.id ORDER BY p.id'):
+   rows.append({'id':sid(row[0]),'status':row[1],'title':row[2],'company':row[3],'role_family':row[4],'loc_country':row[5],'loc_city':row[6],'score':row[7],'critic_score':row[8],'source':row[9]})
  except sqlite3.Error: fail('positions_unavailable')
  emit({'ok':True,'data':{'items':rows}})
 filters=req.get('filters') or {}; allowed={'statuses','remoteTypes','sources','verdicts','families','countries','cities','scoreBands','unscored','criticBands','criticUnscored','writeRequested','q','limit','offset','sort','dir'}
@@ -1074,6 +1074,8 @@ mod tests {
             "'userNote':note",
             "'exclusionEventAt':excluded.get('ts') if excluded else None",
             "'data':{'items':rows}",
+            // the sidebar's source list is counted from the facets, one light reply
+            "'critic_score':row[8],'source':row[9]}",
         ] {
             assert!(POSITIONS_READ_PY.contains(field), "missing {field}");
         }

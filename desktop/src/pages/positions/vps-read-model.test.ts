@@ -64,13 +64,33 @@ describe("existing VPS team data for position pages", () => {
     expect(fake.current!.calls).toEqual([]);
   });
 
+  it("counts the sidebar's sources from the validated facets, without the excluded", async () => {
+    const items = [
+      ...syntheticFacets,
+      { ...syntheticFacets[0], id: "103", status: "excluded", source: "board-c" },
+      { ...syntheticFacets[0], id: "104", source: "synthetic" },
+      { ...syntheticFacets[0], id: "105", source: null },
+    ];
+    native.invoke.mockResolvedValue({ ok: true, data: { items } });
+    const { getSourceDistribution } = await import("@/lib/queries");
+
+    await expect(getSourceDistribution()).resolves.toEqual([
+      { source: "synthetic", count: 2 },
+      { source: "board-b", count: 1 },
+      { source: "sconosciuta", count: 1 },
+    ]);
+    expect(native.invoke).toHaveBeenCalledWith("existing_team_positions_read", { request: { op: "facets" } });
+    expect(fake.current!.calls).toEqual([]);
+  });
+
   it("does not substitute cloud rows when the validated runtime is unavailable", async () => {
     native.invoke.mockResolvedValue({ ok: false, error: "runtime_target_mismatch" });
-    const { getPositions, getPositionById, getPositionFacets } = await import("@/lib/queries");
+    const { getPositions, getPositionById, getPositionFacets, getSourceDistribution } = await import("@/lib/queries");
 
     await expect(getPositions()).resolves.toEqual([]);
     await expect(getPositionById("42")).resolves.toBeNull();
     await expect(getPositionFacets()).resolves.toEqual([]);
+    await expect(getSourceDistribution()).resolves.toEqual([]);
     expect(fake.current!.calls).toEqual([]);
   });
 });
