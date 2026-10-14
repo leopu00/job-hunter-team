@@ -10,7 +10,7 @@ use crate::{
         register_with, Budget, ExistingTeamRegisterRequest, Found, Receipt, DISCOVERY_SCRIPT,
     },
     existing_team_runtime::{self as runtime, CandidateWrite, RuntimeTarget},
-    onboarding::{existing_team_readonly_connect_with, OnboardingNativeState, SNAPSHOT_TIMEOUT},
+    onboarding::{existing_team_readonly_connect_with, existing_team_reopen_with, OnboardingNativeState, SNAPSHOT_TIMEOUT},
     runtime_host::{ExecutionHost, ProcessResult, ValidatedHost},
 };
 use std::{
@@ -1373,4 +1373,97 @@ fn t12_a_candidate_larger_than_every_read_accepts_is_refused_before_it_is_publis
         Some("existing_team_runtime_candidate_invalid")
     );
     assert!(runtime::candidate_bytes(&host(), TEAM, &target_of(&world, 1)).is_ok());
+}
+
+// ---- reopening a saved team after a restart
+
+/// A profile that connected once: pin, candidate and selection, the assistant down.
+fn connected_once(sandbox: &Sandbox) -> (World, Server) {
+    write_pin(sandbox);
+    let world = team_world();
+    let server = Server::new(&world).probe(1, probe_ok(true, false));
+    let found = discover(sandbox, &server, Duration::from_secs(40)).expect("found");
+    register(sandbox, &server, &receipt_of(sandbox, &found)).expect("registered");
+    existing_team_readonly_connect_with(
+        &sandbox.root, &sandbox.scope, &host(), TEAM,
+        &mut || Ok(validated(sandbox)), &mut || Ok(()),
+        &mut |_, c, i, t| server.answer(c, i, t),
+    )
+    .expect("connected");
+    assert!(sandbox.selection().exists());
+    let fresh = Server::new(&world).probe(1, probe_ok(true, false));
+    (world, fresh)
+}
+
+fn reopen(sandbox: &Sandbox, server: &Server, persisted: &Cell<u32>) -> Result<crate::onboarding::ExistingTeamReadiness, crate::onboarding::OnboardingError> {
+    existing_team_reopen_with(
+        &sandbox.root, &sandbox.scope,
+        &mut |_| Ok(validated(sandbox)),
+        &mut |_| {
+            persisted.set(persisted.get() + 1);
+            Ok(())
+        },
+        &mut |_, c, i, t| server.answer(c, i, t),
+    )
+}
+
+#[test]
+fn t15_a_saved_team_with_the_assistant_down_reopens_read_only_and_starts_nothing() {
+    let sandbox = Sandbox::new();
+    let (world, server) = connected_once(&sandbox);
+    let candidate_before = fs::read(sandbox.candidate()).unwrap();
+    let selection_before = fs::read(sandbox.selection()).unwrap();
+    let persisted = Cell::new(0);
+    let readiness = reopen(&sandbox, &server, &persisted).expect("reopened");
+    assert!(!readiness.readiness, "the assistant is down and that is only reported");
+    assert_eq!(persisted.get(), 1);
+    // the pin and the identity are checked again, by the one probe of the saved target, and nothing else runs
+    assert_eq!(server.commands(), vec![runtime::team_probe_command(&target_of(&world, 1)).unwrap()]);
+    for command in server.commands() {
+        assert!(!command.contains("start-agent") && !command.contains("jht-tmux-send") && !command.contains(" docker start"));
+    }
+    assert_eq!(fs::read(sandbox.candidate()).unwrap(), candidate_before, "the candidate is not touched");
+    assert_eq!(fs::read(sandbox.selection()).unwrap(), selection_before, "the selection is not touched");
+}
+
+#[test]
+fn t15_without_a_saved_team_or_a_selection_it_refuses_before_any_call() {
+    // nothing saved
+    let sandbox = Sandbox::new();
+    write_pin(&sandbox);
+    let server = Server::new(&team_world());
+    let persisted = Cell::new(0);
+    assert_eq!(reopen(&sandbox, &server, &persisted).expect_err("nothing").code, "existing_team_runtime_candidate_required");
+    assert_eq!(server.count(), 0);
+    assert_eq!(persisted.get(), 0);
+    // a candidate with no selection is not activated by a restart
+    let world = team_world();
+    let server = team_server(&world);
+    let found = discover(&sandbox, &server, Duration::from_secs(40)).expect("found");
+    register(&sandbox, &server, &receipt_of(&sandbox, &found)).expect("registered");
+    let server = team_server(&world);
+    assert_eq!(reopen(&sandbox, &server, &persisted).expect_err("no selection").code, "existing_team_runtime_selection_required");
+    assert_eq!(server.count(), 0);
+    assert!(!sandbox.selection().exists(), "no selection is created by reopening");
+    assert_eq!(persisted.get(), 0);
+}
+
+#[test]
+fn t15_a_replaced_team_or_a_missing_pin_is_an_error_not_a_start() {
+    let sandbox = Sandbox::new();
+    let (world, _) = connected_once(&sandbox);
+    // another team answers on the saved container
+    let server = Server::new(&world).probe(1, exit(72));
+    let persisted = Cell::new(0);
+    assert_eq!(reopen(&sandbox, &server, &persisted).expect_err("identity").code, "existing_team_identity_mismatch");
+    assert_eq!(persisted.get(), 0);
+    // the pin is gone
+    let server = Server::new(&world).probe(1, probe_ok(true, false));
+    let result = existing_team_reopen_with(
+        &sandbox.root, &sandbox.scope,
+        &mut |_| Err("host_key_missing"), &mut |_| Ok(()),
+        &mut |_, c, i, t| server.answer(c, i, t),
+    );
+    assert_eq!(result.expect_err("pin").code, "host_key_missing");
+    assert_eq!(server.count(), 0);
 }

@@ -709,6 +709,16 @@ pub(crate) fn candidate_for_request_at(
     })
 }
 
+/// The host and team of the candidate this scope has, for the backend's own use
+/// (reopening a saved team). It never leaves the backend: no command returns it.
+pub(crate) fn candidate_identity_at(
+    root: &Path,
+    scope: &AccountScope,
+) -> Result<(ExecutionHost, String), &'static str> {
+    let (candidate, _) = read_candidate_at(root, scope)?;
+    Ok((candidate.host, candidate.team_id))
+}
+
 /// Gets the custodial host only after binding it to the explicit team id.
 /// The CLI companion never accepts a host, target or pin from stdin.
 pub(crate) fn candidate_host_for_team(

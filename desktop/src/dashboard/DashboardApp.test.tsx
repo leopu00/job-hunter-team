@@ -49,6 +49,7 @@ import {
 import { DASHBOARD_PAGE, goTo, LOGIN_PAGE } from "../lib/pages";
 import { useSession } from "../lib/supabase";
 import { navigate } from "../shell/router";
+import { existingTeamBridge } from "../lib/existing-team";
 import DashboardApp from "./DashboardApp";
 
 vi.mock("../lib/supabase", () => ({
@@ -84,6 +85,10 @@ vi.mock("../lib/onboarding-runtime", () => ({
   startOnboardingProviderLogin: vi.fn(),
   startOnboardingTeam: vi.fn(),
 }));
+vi.mock("../lib/existing-team", async (importOriginal) => {
+  const original = await importOriginal<typeof import("../lib/existing-team")>();
+  return { ...original, existingTeamBridge: { ...original.existingTeamBridge, reopen: vi.fn() } };
+});
 vi.mock("../lib/direct-chat", () => ({
   connectDirectChat: vi.fn(),
   directChatStatus: vi.fn(),
@@ -280,6 +285,8 @@ describe("DashboardApp onboarding router", () => {
     vi.mocked(directChatStatus).mockResolvedValue({ state: "ready" });
     vi.mocked(reconnectDirectChat).mockResolvedValue({ state: "ready" });
     vi.mocked(resumeOnboardingTeamStart).mockResolvedValue(TEAM_READY);
+    // no saved existing team unless a test says so: the usual resume
+    vi.mocked(existingTeamBridge.reopen).mockRejectedValue({ code: "existing_team_runtime_candidate_required" });
     vi.mocked(activateDesktopAccountScope).mockResolvedValue();
     vi.mocked(activateDesktopLocalScope).mockResolvedValue();
     vi.mocked(clearDesktopAccountScope).mockResolvedValue();
@@ -1352,6 +1359,63 @@ describe("DashboardApp onboarding router", () => {
     expect(startOnboardingProviderLogin).not.toHaveBeenCalled();
     expect(startOnboardingTeam).not.toHaveBeenCalled();
     expect(openOnboardingAssistant).not.toHaveBeenCalled();
+  });
+
+  describe("a restart with a saved existing team (host, candidate and selection) whose assistant is down", () => {
+    function startedLocalProfile() {
+      vi.mocked(useSession).mockReturnValue({ session: null, loading: false });
+      vi.mocked(localIdentitySelected).mockReturnValue(true);
+      vi.mocked(readLocalProfile).mockReturnValue({ profileId: "opaque-local-saved-team", displayName: "Ada Locale" });
+      localStorage.setItem("jht.desktop.onboarding.local:opaque-local-saved-team", "subscription-v1-started");
+      vi.mocked(resumeOnboardingSnapshot).mockResolvedValue({ ...TEAM_READY, assistantRunning: false });
+    }
+
+    it("reopens the read-only view and never offers to start the team", async () => {
+      startedLocalProfile();
+      vi.mocked(existingTeamBridge.reopen).mockResolvedValue({
+        readiness: false,
+        snapshot: { ...TEAM_READY, assistantRunning: false },
+      });
+
+      render(<DashboardApp />);
+
+      expect(await screen.findByTestId("shell")).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "close-read-only" })).toBeInTheDocument();
+      expect(screen.queryByTestId("onboarding")).not.toBeInTheDocument();
+      expect(screen.queryByText("action-required:team-start")).not.toBeInTheDocument();
+      expect(existingTeamBridge.reopen).toHaveBeenCalledOnce();
+      expect(resumeOnboardingSnapshot).not.toHaveBeenCalled();
+      for (const started of [resumeOnboardingTeamStart, startOnboardingTeam, prepareOnboardingRuntime, startOnboardingProviderLogin, openOnboardingAssistant, reconnectDirectChat]) {
+        expect(started).not.toHaveBeenCalled();
+      }
+      expect(markOnboardingStarted).not.toHaveBeenCalled();
+
+      // leaving the read-only view goes back to the setup's host step, never to a spinner or to «Start the team»
+      await userEvent.setup().click(screen.getByRole("button", { name: "close-read-only" }));
+      expect(await screen.findByText("collecting:host")).toBeInTheDocument();
+      expect(screen.queryByText("action-required:team-start")).not.toBeInTheDocument();
+    });
+
+    it("without a saved existing team keeps the usual probe-only resume", async () => {
+      startedLocalProfile();
+      render(<DashboardApp />);
+      expect(await screen.findByText("action-required:team-start")).toBeInTheDocument();
+      expect(existingTeamBridge.reopen).toHaveBeenCalledOnce();
+      expect(resumeOnboardingSnapshot).toHaveBeenCalledOnce();
+      expect(resumeOnboardingTeamStart).not.toHaveBeenCalled();
+      expect(screen.queryByTestId("shell")).not.toBeInTheDocument();
+    });
+
+    it("if the saved team cannot be reopened it falls back to the usual resume, which starts nothing by itself", async () => {
+      startedLocalProfile();
+      vi.mocked(existingTeamBridge.reopen).mockRejectedValue({ code: "existing_team_unavailable" });
+      render(<DashboardApp />);
+      expect(await screen.findByText("action-required:team-start")).toBeInTheDocument();
+      expect(resumeOnboardingSnapshot).toHaveBeenCalledOnce();
+      for (const started of [resumeOnboardingTeamStart, startOnboardingTeam, prepareOnboardingRuntime, openOnboardingAssistant]) {
+        expect(started).not.toHaveBeenCalled();
+      }
+    });
   });
 
   it("fails closed on a Podman snapshot error without exposing backend text or auto-starting", async () => {

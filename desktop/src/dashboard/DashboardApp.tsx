@@ -25,10 +25,11 @@ import {
   readLocalProfile,
 } from "../lib/local-profile";
 import { clearGoogleIdentitySelection, googleIdentitySelected } from "../lib/identity-choice";
-import type {
-  ExistingTeamConnectionResult,
-  ExistingTeamReadOnlyConnectionResult,
-  ExistingTeamVpsHost,
+import {
+  existingTeamBridge,
+  type ExistingTeamConnectionResult,
+  type ExistingTeamReadOnlyConnectionResult,
+  type ExistingTeamVpsHost,
 } from "../lib/existing-team";
 import {
   enterExistingTeamReadOnly,
@@ -949,11 +950,41 @@ export default function DashboardApp() {
     }
   }, [beginActivityInvocation, fail, identityKey, recordActivityProgress, setRuntime]);
 
+  const openReadOnlyExistingTeam = useCallback((result: ExistingTeamReadOnlyConnectionResult) => {
+    if (!identityKey || activeIdentityKeyRef.current !== identityKey) return;
+    // On before the Shell mounts: its pages read in effects that run first.
+    enterExistingTeamReadOnly(result.readiness, {
+      at: Date.now(),
+      captainRunning: result.snapshot.captainRunning === true,
+      assistantRunning: result.snapshot.assistantRunning === true,
+    });
+    setReadOnlyExistingTeamKey(identityKey);
+  }, [identityKey]);
+
+  /**
+   * After a restart, a profile that already saved an existing team (candidate and
+   * selection) goes back to its read-only view: the native side takes the saved
+   * host and team, checks the pin and the identity again and starts nothing.
+   * Without a saved team, or if it cannot be reached, the usual resume goes on.
+   */
+  const reopenExistingTeam = useCallback(async (): Promise<boolean> => {
+    try {
+      const result = await existingTeamBridge.reopen();
+      // Closing the read-only view goes back to the setup's first step, not to a spinner.
+      setRuntime({ status: "collecting", stage: "host" });
+      openReadOnlyExistingTeam(result);
+      return true;
+    } catch {
+      return false;
+    }
+  }, [openReadOnlyExistingTeam, setRuntime]);
+
   const resumeAssistant = useCallback(async () => {
     if (!identityKey) throw new Error("identity-missing");
     try {
       setActivity(createOnboardingActivity());
       setRuntime({ status: "working", stage: "runtime", message: stateText().checkingRealState });
+      if (await reopenExistingTeam()) return;
       const nativeSnapshot = await resumeOnboardingSnapshot();
       if (activeIdentityKeyRef.current !== identityKey) throw new Error("account-changed");
       const prerequisiteFailure = resumedPrerequisiteFailure(nativeSnapshot);
@@ -987,7 +1018,7 @@ export default function DashboardApp() {
       }
       fail("runtime", error);
     }
-  }, [collectHostAgain, fail, identityKey, setRuntime]);
+  }, [collectHostAgain, fail, identityKey, reopenExistingTeam, setRuntime]);
 
   const resumeTeam = useCallback(async () => {
     if (!identityKey) throw new Error("identity-missing");
@@ -1066,17 +1097,6 @@ export default function DashboardApp() {
     setAssistantChatIdentityKey(identityKey);
     navigate("/messages?agent=assistente", { replace: true });
   }, [identityKey, markerId]);
-
-  const openReadOnlyExistingTeam = useCallback((result: ExistingTeamReadOnlyConnectionResult) => {
-    if (!identityKey || activeIdentityKeyRef.current !== identityKey) return;
-    // On before the Shell mounts: its pages read in effects that run first.
-    enterExistingTeamReadOnly(result.readiness, {
-      at: Date.now(),
-      captainRunning: result.snapshot.captainRunning === true,
-      assistantRunning: result.snapshot.assistantRunning === true,
-    });
-    setReadOnlyExistingTeamKey(identityKey);
-  }, [identityKey]);
 
   const closeReadOnlyExistingTeam = useCallback(() => {
     leaveExistingTeamReadOnly();

@@ -56,6 +56,13 @@ export interface ExistingTeamBridge {
   confirm(host: ExistingTeamVpsHost, probe: SshHostKeyProbe): Promise<void>;
   connect(request: ExistingTeamRequest, onProgress: (progress: ExistingTeamProgress) => void): Promise<ExistingTeamConnectionResult>;
   connectReadOnly(request: ExistingTeamRequest): Promise<ExistingTeamReadOnlyConnectionResult>;
+  /**
+   * Reopens the read-only view of the team this profile already saved. The native
+   * side takes host and team from the saved target and checks the pin and the
+   * team's identity again; it refuses (candidate or selection missing) before
+   * any network call. Nothing is started.
+   */
+  reopen(): Promise<ExistingTeamReadOnlyConnectionResult>;
   /** Reads what the VPS declares about the team's container. Writes nothing. */
   discover(request: ExistingTeamRequest): Promise<ExistingTeamReceipt>;
   /** Saves the target the person was shown. Host and team come from the native receipt. */
@@ -79,6 +86,9 @@ export const existingTeamBridge: ExistingTeamBridge = {
   },
   connectReadOnly(request) {
     return invoke<ExistingTeamReadOnlyConnectionResult>("onboarding_existing_team_readonly_connect", { request });
+  },
+  reopen() {
+    return invoke<ExistingTeamReadOnlyConnectionResult>("onboarding_existing_team_reopen");
   },
   discover(request) {
     return invoke<ExistingTeamReceipt>("onboarding_existing_team_discover", { request });

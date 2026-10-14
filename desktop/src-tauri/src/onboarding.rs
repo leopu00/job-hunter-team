@@ -2711,6 +2711,68 @@ pub(crate) fn existing_team_readonly_connect_with(
     Ok(readiness)
 }
 
+/// Reopens the read-only view of the existing team this profile already saved:
+/// the host and team come from the saved candidate (never from the renderer), a
+/// selection must already exist, and the identity probe and the pin are done
+/// again by the same read-only connection as ever. Nothing is started and no
+/// candidate or selection is created: without a candidate or a selection it
+/// refuses before any SSH call, and the caller goes on as it did before.
+pub(crate) fn existing_team_reopen_with(
+    root: &Path,
+    scope: &AccountScope,
+    validate_host: &mut dyn FnMut(&ExecutionHost) -> Result<crate::runtime_host::ValidatedHost, &'static str>,
+    persist_host: &mut dyn FnMut(&ExecutionHost) -> Result<(), &'static str>,
+    run: &mut dyn FnMut(
+        &crate::runtime_host::ValidatedHost,
+        &str,
+        Option<&[u8]>,
+        Duration,
+    ) -> Result<ProcessResult, &'static str>,
+) -> Result<ExistingTeamReadiness, OnboardingError> {
+    let (host, team_id) = crate::existing_team_runtime::candidate_identity_at(root, scope).map_err(failure)?;
+    if !matches!(host, ExecutionHost::Vps { .. }) {
+        return Err(failure("existing_team_vps_required"));
+    }
+    match crate::existing_team_runtime::selected_at(root, scope, &host).map_err(failure)? {
+        Some(target) if target.team_id == team_id => {}
+        _ => return Err(failure("existing_team_runtime_selection_required")),
+    }
+    existing_team_readonly_connect_with(
+        root,
+        scope,
+        &host,
+        &team_id,
+        &mut || validate_host(&host),
+        &mut || persist_host(&host),
+        run,
+    )
+}
+
+#[tauri::command]
+pub(crate) async fn onboarding_existing_team_reopen(
+    app: tauri::AppHandle,
+    scopes: State<'_, AccountScopeState>,
+) -> Result<ExistingTeamReadiness, OnboardingError> {
+    let expected = scopes.active().map_err(failure)?;
+    let scope_state = scopes.inner().clone();
+    let worker_expected = expected.clone();
+    let result = tauri::async_runtime::spawn_blocking(move || {
+        let _scope = scope_state.lock_expected(&worker_expected).map_err(failure)?;
+        let root = crate::existing_team_runtime::root(&app).map_err(failure)?;
+        existing_team_reopen_with(
+            &root,
+            &worker_expected,
+            &mut |host| crate::runtime_host::validate_host_for_scope(&app, host, &worker_expected),
+            &mut |host| crate::direct_chat::persist_onboarding_host(&app, &worker_expected, host),
+            &mut |validated, command, input, timeout| run_ssh_command(validated, command, input, timeout, None),
+        )
+    })
+    .await
+    .unwrap_or_else(|_| Err(failure("existing_team_unavailable")));
+    let _scope = scopes.lock_expected(&expected).map_err(failure)?;
+    result
+}
+
 /// Explicit read-only entry for an existing team. It shares the candidate,
 /// identity and immutable-target checks with the normal connection, but never
 /// reconnects chat, writes a ready marker, starts an agent, or invokes a

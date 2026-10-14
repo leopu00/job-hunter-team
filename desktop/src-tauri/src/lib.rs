@@ -91,6 +91,7 @@ pub fn run() {
             onboarding::existing_team_assistant_start,
             onboarding::onboarding_existing_team_connect,
             onboarding::onboarding_existing_team_readonly_connect,
+            onboarding::onboarding_existing_team_reopen,
             onboarding::onboarding_podman_machine_recreate,
             onboarding::onboarding_local_uninstall_available,
             onboarding::onboarding_local_uninstall,
