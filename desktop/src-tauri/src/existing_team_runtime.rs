@@ -84,8 +84,10 @@ def matching(item,filters):
   if key in filters and not validate_strings(filters[key]): return None
  if 'scoreBands' in filters and not validate_bands(filters['scoreBands']): return None
  if 'criticBands' in filters and not validate_bands(filters['criticBands']): return None
- for key in ('unscored','criticUnscored','writeRequested'):
+ for key in ('unscored','criticUnscored','writeRequested','scoredOnly','hideExcluded'):
   if key in filters and type(filters[key]) is not bool: return None
+ if filters.get('scoredOnly') and item.get('score') is None: return False
+ if filters.get('hideExcluded') and item.get('status')=='excluded': return False
  if filters.get('statuses') and item.get('status') not in filters['statuses']: return False
  if filters.get('remoteTypes') and item.get('remote_type') not in filters['remoteTypes']: return False
  if filters.get('sources') and item.get('source') not in filters['sources']: return False
@@ -129,6 +131,8 @@ def sort_items(items,filters):
   present=[item for item in items if value(item) is not None]; missing=[item for item in items if value(item) is None]
   present.sort(key=value,reverse=direction=='desc'); items[:]=present+missing
  return items
+LIST_KEYS=('id','legacy_id','title','company','location','remote_type','source','found_at','status','role_family','loc_country','loc_city','score','critic_score','critic_verdict','written_at','applied_at','salary_min','salary_max','salary_currency','has_open_ticket','ticket_indicator','public_state','write_requested')
+def light(item): return {key:item.get(key) for key in LIST_KEYS}
 try: req=json.loads(sys.stdin.readline())
 except Exception: fail('positions_request_invalid')
 if not isinstance(req,dict) or set(req)-{'op','filters','id'}: fail('positions_request_invalid')
@@ -148,7 +152,7 @@ if op=='facets':
    rows.append({'id':sid(row[0]),'status':row[1],'title':row[2],'company':row[3],'role_family':row[4],'loc_country':row[5],'loc_city':row[6],'score':row[7],'critic_score':row[8],'source':row[9]})
  except sqlite3.Error: fail('positions_unavailable')
  emit({'ok':True,'data':{'items':rows}})
-filters=req.get('filters') or {}; allowed={'statuses','remoteTypes','sources','verdicts','families','countries','cities','scoreBands','unscored','criticBands','criticUnscored','writeRequested','q','limit','offset','sort','dir'}
+filters=req.get('filters') or {}; allowed={'statuses','remoteTypes','sources','verdicts','families','countries','cities','scoreBands','unscored','criticBands','criticUnscored','writeRequested','scoredOnly','hideExcluded','q','limit','offset','sort','dir'}
 if set(filters)-allowed: fail('positions_request_invalid')
 if not isinstance(filters,dict) or any(value is None for value in filters.values()): fail('positions_request_invalid')
 if matching({},filters) is None: fail('positions_request_invalid')
@@ -165,7 +169,8 @@ rows=sort_items(rows,filters)
 limit=filters.get('limit'); offset=filters.get('offset',0)
 if limit is not None and (type(limit) is not int or not 1<=limit<=600): fail('positions_request_invalid')
 if type(offset) is not int or not 0<=offset<=100000: fail('positions_request_invalid')
-emit({'ok':True,'data':{'items':rows[offset:offset+limit] if limit is not None else rows[offset:]}})
+window=rows[offset:offset+limit] if limit is not None else rows[offset:]
+emit({'ok':True,'data':{'items':[light(item) for item in window],'total':len(rows)}})
 "#;
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
@@ -220,6 +225,10 @@ struct PositionFilters {
     critic_unscored: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
     write_requested: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    scored_only: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    hide_excluded: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
     q: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -977,6 +986,37 @@ mod tests {
     }
 
     #[test]
+    fn positions_requests_the_desktop_pages_send_are_accepted_by_the_strict_decoder() {
+        // The exact payloads the Positions and Position pages put on the wire
+        // (desktop/src/pages/positions/existing-team-readonly.test.tsx records
+        // the first one): a refusal here would be a request nobody can read.
+        for payload in [
+            // the Positions page, default view, first and later page (desktop test pins the same)
+            json!({"op": "list", "filters": {"limit": 50, "offset": 0, "sort": "found_at", "dir": "desc", "scoredOnly": true, "hideExcluded": true}}),
+            json!({"op": "list", "filters": {"limit": 25, "offset": 25, "sort": "found_at", "dir": "desc", "scoredOnly": true, "hideExcluded": true}}),
+            json!({"op": "list", "filters": {"limit": 600, "offset": 600, "sort": "found_at", "dir": "desc"}}),
+            json!({"op": "list", "filters": {"q": "row 07", "sort": "score", "dir": "asc", "limit": 100, "offset": 0}}),
+            json!({"op": "list", "filters": {
+                "statuses": ["scored", "ready"], "remoteTypes": ["full_remote"], "sources": ["board-a"],
+                "verdicts": ["PASS"], "families": ["Data"], "countries": ["IT"], "cities": ["IT|Rome"],
+                "scoreBands": [{"lo": 80.5, "hi": 99.5}], "unscored": true,
+                "criticBands": [{"lo": 7.5, "hi": 9.5}], "criticUnscored": true,
+                "writeRequested": false, "scoredOnly": true, "hideExcluded": false,
+                "q": "x", "limit": 600, "offset": 0, "sort": "found_at", "dir": "desc"
+            }}),
+            json!({"op": "detail", "id": "101"}),
+            json!({"op": "facets"}),
+        ] {
+            let request = parse_positions_request(payload.clone())
+                .unwrap_or_else(|()| panic!("the decoder refused {payload}"));
+            let wire = serde_json::to_vec(&request).expect("request serializes");
+            assert!(wire.len() <= 8192);
+            // what the native side forwards is what the page asked, nothing added or dropped
+            assert_eq!(serde_json::from_slice::<Value>(&wire).expect("wire is json"), payload);
+        }
+    }
+
+    #[test]
     fn positions_request_omits_absent_filter_options() {
         let request = parse_positions_request(json!({
             "op": "list", "filters": {"q": "engineer"}
@@ -1074,6 +1114,9 @@ mod tests {
             "'userNote':note",
             "'exclusionEventAt':excluded.get('ts') if excluded else None",
             "'data':{'items':rows}",
+            // the list is a light projection with the matching total, so a page of it
+            // stays far under the 2 MiB the core accepts back
+            "'data':{'items':[light(item) for item in window],'total':len(rows)}",
             // the sidebar's source list is counted from the facets, one light reply
             "'critic_score':row[8],'source':row[9]}",
         ] {
