@@ -20,6 +20,7 @@ import { clearGoogleIdentitySelection, googleIdentitySelected } from "../lib/ide
 import { readDesktopPlatform } from "../lib/desktop-platform";
 import { openRuntimeLog, runtimeLogPath } from "../lib/runtime-log";
 import { describeError, ERROR_CATALOG } from "../lib/error-catalog";
+import { existingTeamReadOnly } from "../lib/existing-team-readonly";
 import type { ExistingTeamConnectModalProps } from "../onboarding/ExistingTeamConnectModal";
 import {
   loadOnboardingGate,
@@ -113,10 +114,11 @@ vi.mock("../lib/runtime-log", () => ({
 }));
 vi.mock("../lib/desktop-platform", () => ({ readDesktopPlatform: vi.fn() }));
 vi.mock("../shell/Shell", () => ({
-  default: ({ onLogout }: { onLogout?: () => Promise<void> }) => (
+  default: ({ onLogout, onCloseReadOnly }: { onLogout?: () => Promise<void>; onCloseReadOnly?: () => void }) => (
     <main data-testid="shell">
       Shell
       {onLogout && <button type="button" onClick={() => void onLogout()}>local-logout</button>}
+      {onCloseReadOnly && <button type="button" onClick={onCloseReadOnly}>close-read-only</button>}
     </main>
   ),
 }));
@@ -209,6 +211,7 @@ vi.mock("../onboarding/ExistingTeamConnectModal", () => ({
         <button type="button" onClick={props.onCancel}>cancel-existing-team</button>
         <button type="button" onClick={() => void props.onConnected(result(false))}>connect-existing-team-incomplete</button>
         <button type="button" onClick={() => void props.onConnected(result(true))}>connect-existing-team-ready</button>
+        <button type="button" onClick={() => props.onReadOnlyConnected({ readiness: false, snapshot: result(false) })}>connect-existing-team-read-only</button>
       </section>
     );
   },
@@ -634,6 +637,37 @@ describe("DashboardApp onboarding router", () => {
     );
     expect(markOnboardingStarted).not.toHaveBeenCalled();
     expect(screen.queryByTestId("assistant-chat")).not.toBeInTheDocument();
+  });
+
+  it("shows an existing team read-only in the Shell, with no setup, marker or chat, and leaves it on request", async () => {
+    vi.mocked(useSession).mockReturnValue(signedInAs("existing-read-only"));
+    vi.mocked(loadOnboardingGate).mockResolvedValue({
+      phase: "required",
+      account: { displayName: "Reader Person" },
+      resumeAvailable: false,
+      existingTeam: { teamId: "team-opaque-0004", status: "available" },
+      runtime: { status: "collecting", stage: "host" },
+    });
+
+    const user = userEvent.setup();
+    render(<DashboardApp />);
+    expect(existingTeamReadOnly()).toBeNull();
+    await user.click(await screen.findByRole("button", { name: "connect-existing-team-read-only" }));
+
+    expect(await screen.findByTestId("shell")).toBeInTheDocument();
+    // On before the Shell mounts (its pages read in effects that run first),
+    // with the assistant reported off.
+    expect(existingTeamReadOnly()).toEqual({ assistantActive: false });
+    expect(screen.queryByTestId("existing-team-modal")).not.toBeInTheDocument();
+    expect(reconnectDirectChat).not.toHaveBeenCalled();
+    expect(markOnboardingReady).not.toHaveBeenCalled();
+    expect(markOnboardingStarted).not.toHaveBeenCalled();
+    expect(screen.queryByTestId("assistant-chat")).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "close-read-only" }));
+    expect(await screen.findByTestId("onboarding")).toBeInTheDocument();
+    expect(existingTeamReadOnly()).toBeNull();
+    expect(screen.queryByTestId("shell")).not.toBeInTheDocument();
   });
 
   it("maps preparing, Podman, container and provider progress without optimistic completion", async () => {

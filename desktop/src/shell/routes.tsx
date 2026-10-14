@@ -35,6 +35,12 @@ export type Route = {
 
 export const HOME = "/dashboard";
 
+/**
+ * Reading an existing team's VPS (lib/existing-team-readonly.ts): the pages
+ * that read it, and no other. The rest of the shell reads the cloud or the box.
+ */
+export const READ_ONLY_HOME = "/positions";
+
 export const ROUTES: Route[] = [
   { path: "/dashboard", page: DashboardPage },
   { path: "/map", page: MapPage },
@@ -57,3 +63,7 @@ export const ROUTES: Route[] = [
   // «Remove JHT from this computer» (Windows): linked only where it can run.
   { path: "/computer", page: ComputerPage },
 ];
+
+export const READ_ONLY_ROUTES: Route[] = ROUTES.filter(
+  (route) => route.path === "/positions" || route.path === "/positions/:id",
+);

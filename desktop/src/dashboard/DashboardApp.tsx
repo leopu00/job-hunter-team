@@ -25,7 +25,15 @@ import {
   readLocalProfile,
 } from "../lib/local-profile";
 import { clearGoogleIdentitySelection, googleIdentitySelected } from "../lib/identity-choice";
-import type { ExistingTeamConnectionResult, ExistingTeamVpsHost } from "../lib/existing-team";
+import type {
+  ExistingTeamConnectionResult,
+  ExistingTeamReadOnlyConnectionResult,
+  ExistingTeamVpsHost,
+} from "../lib/existing-team";
+import {
+  enterExistingTeamReadOnly,
+  leaveExistingTeamReadOnly,
+} from "../lib/existing-team-readonly";
 import {
   isOnboardingAssistantReachable,
   isOnboardingRuntimeReady,
@@ -347,6 +355,9 @@ export default function DashboardApp() {
   const [assistantChatIdentityKey, setAssistantChatIdentityKey] = useState<string | null>(null);
   const [existingTeamDismissedIdentityKey, setExistingTeamDismissedIdentityKey] = useState<string | null>(null);
   const [manualExistingTeam, setManualExistingTeam] = useState<{ identityKey: string; host: ExistingTeamVpsHost } | null>(null);
+  // The account is reading an existing team's VPS and nothing else: the Shell
+  // shows its positions (lib/existing-team-readonly.ts), the setup waits.
+  const [readOnlyExistingTeamKey, setReadOnlyExistingTeamKey] = useState<string | null>(null);
   const [onboardingUiVersion, setOnboardingUiVersion] = useState(0);
   const [accountScope, setAccountScope] = useState<{
     identityKey: string;
@@ -491,6 +502,15 @@ export default function DashboardApp() {
     window.addEventListener(LOCAL_RUNTIME_REMOVED_EVENT, onRemoved);
     return () => window.removeEventListener(LOCAL_RUNTIME_REMOVED_EVENT, onRemoved);
   }, [markerId]);
+
+  // Leaving the account, or the app, ends the read-only view with it.
+  useEffect(() => {
+    if (readOnlyExistingTeamKey && readOnlyExistingTeamKey !== identityKey) {
+      leaveExistingTeamReadOnly();
+      setReadOnlyExistingTeamKey(null);
+    }
+  }, [identityKey, readOnlyExistingTeamKey]);
+  useEffect(() => leaveExistingTeamReadOnly, []);
 
   useEffect(() => {
     const staleProviderSession = providerSessionRef.current;
@@ -1047,6 +1067,20 @@ export default function DashboardApp() {
     navigate("/messages?agent=assistente", { replace: true });
   }, [identityKey, markerId]);
 
+  const openReadOnlyExistingTeam = useCallback((result: ExistingTeamReadOnlyConnectionResult) => {
+    if (!identityKey || activeIdentityKeyRef.current !== identityKey) return;
+    // On before the Shell mounts: its pages read in effects that run first.
+    enterExistingTeamReadOnly(result.readiness);
+    setReadOnlyExistingTeamKey(identityKey);
+  }, [identityKey]);
+
+  const closeReadOnlyExistingTeam = useCallback(() => {
+    leaveExistingTeamReadOnly();
+    setReadOnlyExistingTeamKey(null);
+    setExistingTeamDismissedIdentityKey(identityKey);
+    setManualExistingTeam(null);
+  }, [identityKey]);
+
   useEffect(() => {
     if (!identityKey || gate.phase !== "required" || gate.existingTeam || !gate.resumeAvailable ||
         assistantChatIdentityKey === identityKey || resumeAttemptedIdentityRef.current === identityKey) return;
@@ -1101,6 +1135,13 @@ export default function DashboardApp() {
     if (stage === "assistant") return finishAssistant();
     return submit(submission);
   }, [connectResumedAssistant, fail, finishAssistant, gate, loginProvider, resumeAssistant, resumeTeam, setRuntime, startTeam, submit]);
+
+  const logout = localProfile ? async () => {
+    leaveExistingTeamReadOnly();
+    await clearDesktopAccountScope();
+    clearLocalIdentitySelection();
+    goTo(LOGIN_PAGE);
+  } : undefined;
 
   if (migrationProfile && localMigration?.identityKey === identityKey) {
     if (localMigration.phase === "checking") {
@@ -1174,6 +1215,9 @@ export default function DashboardApp() {
     );
   }
   if (gate.phase === "required") {
+    if (readOnlyExistingTeamKey === identityKey) {
+      return <Shell key={identityKey} onLogout={logout} onCloseReadOnly={closeReadOnlyExistingTeam} />;
+    }
     if (assistantChatIdentityKey === identityKey) {
       return (
         <main data-testid="onboarding-assistant-chat" aria-label={stateText().assistantOnboardingAria}>
@@ -1194,6 +1238,7 @@ export default function DashboardApp() {
             setManualExistingTeam(null);
           }}
           onConnected={connectExistingTeam}
+          onReadOnlyConnected={openReadOnlyExistingTeam}
         />
       );
     }
@@ -1226,10 +1271,5 @@ export default function DashboardApp() {
       />
     );
   }
-  const logout = localProfile ? async () => {
-    await clearDesktopAccountScope();
-    clearLocalIdentitySelection();
-    goTo(LOGIN_PAGE);
-  } : undefined;
   return <Shell key={identityKey} onLogout={logout} />;
 }

@@ -53,6 +53,48 @@ describe("existing-team positions bridge", () => {
     });
   });
 
+  it("reads a list larger than the native bound in bounded replies, in order", async () => {
+    const rows = (from: number, count: number) =>
+      Array.from({ length: count }, (_unused, index) => ({ ...position, id: String(from + index) }));
+    native.invoke
+      .mockResolvedValueOnce({ ok: true, data: { items: rows(0, 600) } })
+      .mockResolvedValueOnce({ ok: true, data: { items: rows(600, 600) } })
+      .mockResolvedValueOnce({ ok: true, data: { items: rows(1200, 100) } });
+
+    const result = await readDesktopVpsPositions({ q: "synthetic", sort: "score", limit: 1300 });
+
+    expect(result.source === "vps" && result.data.map((row) => row.id)).toEqual(rows(0, 1300).map((row) => row.id));
+    expect(native.invoke.mock.calls.map(([, args]) => args.request.filters)).toEqual([
+      { q: "synthetic", sort: "score", limit: 600, offset: 0 },
+      { q: "synthetic", sort: "score", limit: 600, offset: 600 },
+      { q: "synthetic", sort: "score", limit: 100, offset: 1200 },
+    ]);
+  });
+
+  it("stops at the first short reply and keeps a requested offset", async () => {
+    native.invoke.mockResolvedValueOnce({ ok: true, data: { items: [position] } });
+
+    await expect(readDesktopVpsPositions({ limit: 2000, offset: 40 })).resolves.toEqual({
+      source: "vps",
+      data: [position],
+    });
+    expect(native.invoke).toHaveBeenCalledTimes(1);
+    expect(native.invoke).toHaveBeenCalledWith("existing_team_positions_read", {
+      request: { op: "list", filters: { limit: 600, offset: 40 } },
+    });
+  });
+
+  it("returns the failure, not a partial list, when a later reply fails", async () => {
+    native.invoke
+      .mockResolvedValueOnce({ ok: true, data: { items: Array.from({ length: 600 }, () => position) } })
+      .mockResolvedValueOnce({ ok: false, error: "positions_unavailable" });
+
+    await expect(readDesktopVpsPositions({ limit: 2000 })).resolves.toEqual({
+      source: "unavailable",
+      code: "positions_unavailable",
+    });
+  });
+
   it("preserves related detail and correlated facets from fixed operations", async () => {
     native.invoke
       .mockResolvedValueOnce({ ok: true, data: detail })

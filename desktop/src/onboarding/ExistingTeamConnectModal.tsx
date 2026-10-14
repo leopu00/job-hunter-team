@@ -16,10 +16,9 @@ import {
 } from "../lib/existing-team";
 import { EXISTING_TEAM_ID_TEXT } from "./existing-team-id.i18n";
 import { OnboardingArtwork } from "./OnboardingArtwork";
-import { ReadonlyExistingPositions } from "./ReadonlyExistingPositions";
 import "./existing-team-connect.css";
 
-type ModalStage = "fields" | "probing" | "confirm" | "attaching" | "readonly" | "failed";
+type ModalStage = "fields" | "probing" | "confirm" | "attaching" | "failed";
 type FailedOperation = "probe" | "attach" | "notify";
 
 export interface ExistingTeamConnectModalProps {
@@ -27,6 +26,8 @@ export interface ExistingTeamConnectModalProps {
   initialHost?: ExistingTeamVpsHost;
   onCancel: () => void;
   onConnected: (result: ExistingTeamConnectionResult) => Promise<void>;
+  /** The team was connected to read only: the app shows its positions in place of this dialog. */
+  onReadOnlyConnected: (result: ExistingTeamReadOnlyConnectionResult) => void;
   bridge?: ExistingTeamBridge;
 }
 
@@ -60,6 +61,7 @@ export default function ExistingTeamConnectModal({
   initialHost,
   onCancel,
   onConnected,
+  onReadOnlyConnected,
   bridge = existingTeamBridge,
 }: ExistingTeamConnectModalProps) {
   const t = ONBOARDING_TEXT[appLocale()];
@@ -83,7 +85,6 @@ export default function ExistingTeamConnectModal({
   const [errorCode, setErrorCode] = useState<string | null>(null);
   const [failedOperation, setFailedOperation] = useState<FailedOperation | null>(null);
   const [readOnlyRequested, setReadOnlyRequested] = useState(false);
-  const [readOnlyResult, setReadOnlyResult] = useState<ExistingTeamReadOnlyConnectionResult | null>(null);
   const [attachProgress, setAttachProgress] = useState<ExistingTeamProgress["stage"]>("runtime");
   const terminal = errorCode ? isTerminalExistingTeamError(errorCode) : false;
 
@@ -156,9 +157,7 @@ export default function ExistingTeamConnectModal({
     try {
       await bridge.confirm(request.host, probe);
       if (readOnly) {
-        const result = await bridge.connectReadOnly(request);
-        setReadOnlyResult(result);
-        setStage("readonly");
+        onReadOnlyConnected(await bridge.connectReadOnly(request));
         return;
       }
       const result = await bridge.connect(request, (progress) => setAttachProgress(progress.stage));
@@ -241,12 +240,10 @@ export default function ExistingTeamConnectModal({
             <div className="existing-team-modal__actions">
               <button type="button" className="existing-team-modal__secondary" onClick={backToFields}>{t.back}</button>
               <button type="button" className="existing-team-modal__primary" onClick={() => void attach()}>{t.existingTeam.confirmAndLink}</button>
-              <button type="button" className="existing-team-modal__secondary" onClick={() => void attach(true)}>Visualizza annunci in sola lettura</button>
+              <button type="button" className="existing-team-modal__secondary" onClick={() => void attach(true)}>{t.existingTeam.readOnlyPositions}</button>
             </div>
           </section>
         )}
-
-        {stage === "readonly" && readOnlyResult && <ReadonlyExistingPositions readiness={readOnlyResult.readiness} onClose={onCancel} />}
 
         {stage === "attaching" && (
           <section className="existing-team-modal__status" role="status" aria-live="polite">

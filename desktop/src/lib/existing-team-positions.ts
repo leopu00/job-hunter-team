@@ -1,4 +1,5 @@
 import { invoke, isTauri } from "@tauri-apps/api/core";
+import { reportPositionsRead } from "./existing-team-readonly";
 import type {
   DesktopVpsRead,
 } from "../../../web/lib/desktop-vps-positions";
@@ -52,11 +53,14 @@ async function read<T>(request: Request): Promise<DesktopVpsRead<T>> {
   // Browser/web tests stay on their established data paths. In the packaged
   // desktop, absence or drift of the native binding fails closed below.
   if (!isTauri()) return { source: "not_desktop" };
+  let result: DesktopVpsRead<T>;
   try {
-    return reply<T>(await invoke<unknown>(COMMAND, { request }));
+    result = reply<T>(await invoke<unknown>(COMMAND, { request }));
   } catch {
-    return { source: "unavailable", code: "desktop_transport_unavailable" };
+    result = { source: "unavailable", code: "desktop_transport_unavailable" };
   }
+  reportPositionsRead(result.source === "unavailable" ? result.code : null);
+  return result;
 }
 
 function arrayRead<T>(value: DesktopVpsRead<unknown>): DesktopVpsRead<T[]> {
@@ -79,10 +83,38 @@ function detailRead(value: DesktopVpsRead<unknown>): DesktopVpsRead<PositionDeta
     : { source: "unavailable", code: "desktop_bad_reply" };
 }
 
-export function readDesktopVpsPositions(
+function readPositionsPage(
   opts?: PositionFilterOpts,
 ): Promise<DesktopVpsRead<PositionWithScore[]>> {
   return read<unknown>(listRequest(opts)).then(arrayRead<PositionWithScore>);
+}
+
+/**
+ * The most rows the native side returns in one reply (its request bound, and
+ * the 2 MiB it lets a reply weigh). The web's list asks for up to 2000 at once
+ * and filters and pages them itself, so a larger `limit` is read in order, one
+ * bounded reply after the other, and joined: the same rows the web's own query
+ * returns, never a silent empty list for a request the native side refuses.
+ */
+const NATIVE_PAGE_ROWS = 600;
+
+export async function readDesktopVpsPositions(
+  opts?: PositionFilterOpts,
+): Promise<DesktopVpsRead<PositionWithScore[]>> {
+  const wanted = opts?.limit;
+  if (wanted === undefined || !Number.isInteger(wanted) || wanted <= NATIVE_PAGE_ROWS) {
+    return readPositionsPage(opts);
+  }
+  const start = opts?.offset ?? 0;
+  const rows: PositionWithScore[] = [];
+  while (rows.length < wanted) {
+    const size = Math.min(NATIVE_PAGE_ROWS, wanted - rows.length);
+    const page = await readPositionsPage({ ...opts, limit: size, offset: start + rows.length });
+    if (page.source !== "vps") return page;
+    rows.push(...page.data);
+    if (page.data.length < size) break;
+  }
+  return { source: "vps", data: rows };
 }
 
 export function readDesktopVpsPosition(

@@ -39,10 +39,10 @@ describe("existing VPS entry", () => {
 
 describe("existing team identifier", () => {
   const host = { kind: "vps" as const, address: "vps.example.invalid", user: "synthetic", port: 22, keyPath: "/synthetic/key" };
-  function native() { return { probe: vi.fn().mockResolvedValue({ status: "confirmation_required", algorithm: "ssh-ed25519", fingerprint: "synthetic" }), confirm: vi.fn().mockResolvedValue(undefined), connect: vi.fn().mockResolvedValue({}) }; }
+  function native() { return { probe: vi.fn().mockResolvedValue({ status: "confirmation_required", algorithm: "ssh-ed25519", fingerprint: "synthetic" }), confirm: vi.fn().mockResolvedValue(undefined), connect: vi.fn().mockResolvedValue({}), connectReadOnly: vi.fn() }; }
   it("requires an explicit identifier before probing and sends it unchanged", async () => {
     const user = userEvent.setup(), bridge = native();
-    render(<ExistingTeamConnectModal initialHost={host} bridge={bridge} onCancel={vi.fn()} onConnected={vi.fn()} />);
+    render(<ExistingTeamConnectModal initialHost={host} bridge={bridge} onCancel={vi.fn()} onConnected={vi.fn()} onReadOnlyConnected={vi.fn()} />);
     expect(screen.getByRole("button", { name: /verifica vps/i })).toBeDisabled();
     expect(bridge.probe).not.toHaveBeenCalled();
     await user.type(screen.getByLabelText(/identificativo della squadra esistente/i), "synthetic-team-001");
@@ -52,7 +52,7 @@ describe("existing team identifier", () => {
     expect(bridge.connect).toHaveBeenCalledWith({ teamId: "synthetic-team-001", host }, expect.any(Function));
   });
   it("keeps the cloud identifier fixed without a manual identifier field", () => {
-    render(<ExistingTeamConnectModal teamId="synthetic-cloud-001" initialHost={host} bridge={native()} onCancel={vi.fn()} onConnected={vi.fn()} />);
+    render(<ExistingTeamConnectModal teamId="synthetic-cloud-001" initialHost={host} bridge={native()} onCancel={vi.fn()} onConnected={vi.fn()} onReadOnlyConnected={vi.fn()} />);
     expect(screen.queryByLabelText(/identificativo della squadra esistente/i)).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: /verifica vps/i })).toBeEnabled();
   });
