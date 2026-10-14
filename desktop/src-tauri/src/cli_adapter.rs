@@ -13,20 +13,34 @@ use std::io::{self, Read};
 const MAX_REQUEST_BYTES: usize = 8192;
 
 #[derive(Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-struct AdapterRequest {
-    profile_id: String,
-    #[serde(flatten)]
-    operation: AdapterOperation,
+#[serde(tag = "op", rename_all = "lowercase", deny_unknown_fields)]
+enum AdapterRequest {
+    Connect {
+        #[serde(rename = "profileId")] profile_id: String,
+        #[serde(rename = "teamId")] team_id: String,
+    },
+    List {
+        #[serde(rename = "profileId")] profile_id: String,
+        #[serde(default)] filters: Option<Value>,
+    },
+    Detail {
+        #[serde(rename = "profileId")] profile_id: String,
+        id: String,
+    },
+    Facets {
+        #[serde(rename = "profileId")] profile_id: String,
+    },
 }
 
-#[derive(Deserialize)]
-#[serde(tag = "op", rename_all = "lowercase", deny_unknown_fields)]
-enum AdapterOperation {
-    Connect { #[serde(rename = "teamId")] team_id: String },
-    List { #[serde(default)] filters: Option<Value> },
-    Detail { id: String },
-    Facets,
+impl AdapterRequest {
+    fn profile_id(&self) -> &str {
+        match self {
+            Self::Connect { profile_id, .. }
+            | Self::List { profile_id, .. }
+            | Self::Detail { profile_id, .. }
+            | Self::Facets { profile_id } => profile_id,
+        }
+    }
 }
 
 fn code_for(error: &str) -> i32 {
@@ -61,24 +75,24 @@ fn envelope_core(phase: &'static str, result: Value) -> (i32, Value) {
 }
 
 fn execute(app: &tauri::AppHandle, request: AdapterRequest) -> (i32, Value) {
-    let scope = match account_scope::cli_local_scope(app, &request.profile_id) {
+    let scope = match account_scope::cli_local_scope(app, request.profile_id()) {
         Ok(scope) => scope,
         Err(error) => return fail("scope", error),
     };
-    match request.operation {
-        AdapterOperation::Connect { team_id } => match onboarding::cli_existing_team_connect(app, &scope, &team_id) {
+    match request {
+        AdapterRequest::Connect { team_id, .. } => match onboarding::cli_existing_team_connect(app, &scope, &team_id) {
             Ok(result) => (0, json!({"ok":true,"phase":"connect","code":0,"readiness":result.readiness,"snapshot":result.snapshot})),
             Err(error) => fail("connect", error),
         },
-        AdapterOperation::List { filters } => {
+        AdapterRequest::List { filters, .. } => {
             let request = match filters {
                 Some(filters) => json!({"op":"list","filters":filters}),
                 None => json!({"op":"list"}),
             };
             envelope_core("read", existing_team_runtime::positions_read_for_scope(app, &scope, request))
         }
-        AdapterOperation::Detail { id } => envelope_core("read", existing_team_runtime::positions_read_for_scope(app, &scope, json!({"op":"detail","id":id}))),
-        AdapterOperation::Facets => envelope_core("read", existing_team_runtime::positions_read_for_scope(app, &scope, json!({"op":"facets"}))),
+        AdapterRequest::Detail { id, .. } => envelope_core("read", existing_team_runtime::positions_read_for_scope(app, &scope, json!({"op":"detail","id":id}))),
+        AdapterRequest::Facets { .. } => envelope_core("read", existing_team_runtime::positions_read_for_scope(app, &scope, json!({"op":"facets"}))),
     }
 }
 
@@ -131,15 +145,15 @@ mod tests {
     }
 
     #[test]
-    fn decodes_exact_node_requests_with_flatten_and_strict_fields() {
+    fn decodes_exact_node_requests_with_strict_fields() {
         let connect = decoded(r#"{"profileId":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","op":"connect","teamId":"existing_team_0001"}"#);
-        assert!(matches!(connect.operation, AdapterOperation::Connect { ref team_id } if team_id == "existing_team_0001"));
+        assert!(matches!(connect, AdapterRequest::Connect { ref team_id, .. } if team_id == "existing_team_0001"));
         let list = decoded(r#"{"profileId":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","op":"list","filters":{"q":"engineer","limit":10}}"#);
-        assert!(matches!(list.operation, AdapterOperation::List { filters: Some(_) }));
+        assert!(matches!(list, AdapterRequest::List { filters: Some(_), .. }));
         let detail = decoded(r#"{"profileId":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","op":"detail","id":"42"}"#);
-        assert!(matches!(detail.operation, AdapterOperation::Detail { ref id } if id == "42"));
+        assert!(matches!(detail, AdapterRequest::Detail { ref id, .. } if id == "42"));
         let facets = decoded(r#"{"profileId":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","op":"facets"}"#);
-        assert!(matches!(facets.operation, AdapterOperation::Facets));
+        assert!(matches!(facets, AdapterRequest::Facets { .. }));
         assert!(serde_json::from_str::<AdapterRequest>(r#"{"profileId":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","op":"facets","unexpected":true}"#).is_err());
     }
 
