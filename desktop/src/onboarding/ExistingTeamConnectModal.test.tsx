@@ -24,6 +24,15 @@ const PROBE: SshHostKeyProbe = {
   fingerprint: "SHA256:synthetic-fingerprint",
 };
 
+const READONLY_RESULT: ExistingTeamReadOnlyConnectionResult = {
+  readiness: false,
+  snapshot: {
+    runtimeInstalled: true, containerRunning: true, providerConfigured: true,
+    providerAuthenticated: true, assistantRunning: false, captainRunning: true,
+    profileReady: false, assistantWelcomed: false, directChatReady: false,
+  },
+};
+
 const RESULT: ExistingTeamConnectionResult = {
   runtimeInstalled: true,
   containerRunning: true,
@@ -41,6 +50,7 @@ function bridge(overrides: Partial<ExistingTeamBridge> = {}): ExistingTeamBridge
     probe: vi.fn().mockResolvedValue(PROBE),
     confirm: vi.fn().mockResolvedValue(undefined),
     connect: vi.fn().mockResolvedValue(RESULT),
+    connectReadOnly: vi.fn().mockResolvedValue(READONLY_RESULT),
     ...overrides,
   };
 }
@@ -175,4 +185,33 @@ describe("ExistingTeamConnectModal", () => {
     await user.keyboard("{Escape}");
     expect(onCancel).toHaveBeenCalledOnce();
   });
+
+  it("keeps the explicit read-only path degraded and never calls the operational callback", async () => {
+    const user = userEvent.setup();
+    const native = bridge();
+    const onConnected = vi.fn();
+    render(<ExistingTeamConnectModal teamId="team-opaque-0001" bridge={native} onCancel={vi.fn()} onConnected={onConnected} />);
+    await fillHost(user);
+    await user.click(screen.getByRole("button", { name: /verifica vps/i }));
+    await user.click(await screen.findByRole("button", { name: /visualizza annunci in sola lettura/i }));
+    expect(await screen.findByText(/assistente non attivo/i)).toBeInTheDocument();
+    expect(native.connectReadOnly).toHaveBeenCalledOnce();
+    expect(native.connect).not.toHaveBeenCalled();
+    expect(onConnected).not.toHaveBeenCalled();
+  });
+
+  it("retries a read-only failure as read-only and keeps denied data out of the panel", async () => {
+    const user = userEvent.setup();
+    const connectReadOnly = vi.fn().mockRejectedValueOnce({ code: "existing_team_identity_mismatch" });
+    const native = bridge({ connectReadOnly });
+    render(<ExistingTeamConnectModal teamId="team-opaque-0001" bridge={native} onCancel={vi.fn()} onConnected={vi.fn()} />);
+    await fillHost(user);
+    await user.click(screen.getByRole("button", { name: /verifica vps/i }));
+    await user.click(await screen.findByRole("button", { name: /visualizza annunci in sola lettura/i }));
+    expect(await screen.findByRole("alert")).toBeInTheDocument();
+    expect(screen.queryByText(/annunci in sola lettura/i)).not.toBeInTheDocument();
+    expect(native.connect).not.toHaveBeenCalled();
+    expect(connectReadOnly).toHaveBeenCalledOnce();
+  });
+
 });
