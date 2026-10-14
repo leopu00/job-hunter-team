@@ -10,6 +10,7 @@ import { describeError } from "../lib/error-catalog";
 import {
   existingTeamReadOnlyReason,
   useExistingTeamReadFailure,
+  useExistingTeamReadNotice,
   useExistingTeamReadOnly,
 } from "../lib/existing-team-readonly";
 import { EXISTING_TEAM_READONLY_TEXT } from "../lib/existing-team-readonly.i18n";
@@ -155,6 +156,7 @@ export default function Shell({ onLogout, onCloseReadOnly }: ShellProps) {
   const { path, search } = useLocation();
   const readOnlyTeam = useExistingTeamReadOnly();
   const readFailure = useExistingTeamReadFailure();
+  const readNotice = useExistingTeamReadNotice();
   const readOnly = readOnlyTeam !== null;
   const match = matchRoute(readOnly ? READ_ONLY_ROUTES : ROUTES, path);
   const params = useMemo(() => new URLSearchParams(search), [search]);
@@ -181,11 +183,16 @@ export default function Shell({ onLogout, onCloseReadOnly }: ShellProps) {
               <strong className="text-[var(--color-bright)]">{existingTeamReadOnlyReason(readOnlyTeam)}.</strong>{" "}
               {text.banner}
             </p>
+            {readNotice === "sort_last_action" && (
+              <p role="status" data-testid="existing-team-readonly-notice" className="px-4 py-2 text-[11px] text-[var(--color-muted)]">
+                {text.sortLastAction}
+              </p>
+            )}
             {readFailure && (
               <p role="alert" className="px-4 py-2 text-[11px]" style={{ color: "var(--color-red)" }}>
                 {(() => {
                   const failure = describeError(readFailure, { fallback: "existing_team_unavailable", locale: appLocale() });
-                  return `${failure.text} ${failure.action}`;
+                  return `${failure.text} ${failure.action} (${readFailure})`;
                 })()}
               </p>
             )}

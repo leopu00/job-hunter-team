@@ -544,10 +544,34 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
     "Sign in with the account that created the team, or enter another VPS.",
   ),
   existing_team_not_active: copy(
-    "Il team registrato non risulta attivo sulla VPS.",
-    "Accendi il team sulla VPS e riprova.",
-    "The registered team is not running on the VPS.",
-    "Start the team on the VPS and try again.",
+    "Nel team registrato non sono attive tutte le sessioni sulla VPS.",
+    "Servono sia il capitano sia l’assistente: avviali sulla VPS e riprova. Gli annunci si possono comunque leggere in sola lettura.",
+    "Not every session of the registered team is running on the VPS.",
+    "Both the captain and the assistant must be running: start them on the VPS and try again. The positions can still be read in read-only mode.",
+  ),
+  positions_unavailable: copy(
+    "La VPS non ha restituito gli annunci.",
+    "Premi Aggiorna. Se si ripete, segnala il codice che vedi accanto.",
+    "The VPS did not return the positions.",
+    "Press Refresh. If it keeps happening, report the code shown next to it.",
+  ),
+  desktop_transport_unavailable: copy(
+    "L’app non è riuscita a parlare con il suo nucleo nativo.",
+    "Riprova con Aggiorna. Se si ripete, chiudi Job Hunter Team del tutto e riaprilo.",
+    "The app could not talk to its native core.",
+    "Try Refresh. If it keeps happening, quit Job Hunter Team completely and open it again.",
+  ),
+  desktop_bad_reply: copy(
+    "Il nucleo nativo ha risposto in una forma che l’app non riconosce.",
+    "Riprova con Aggiorna. Se si ripete, segnala il codice che vedi accanto.",
+    "The native core answered in a form the app does not recognise.",
+    "Try Refresh. If it keeps happening, report the code shown next to it.",
+  ),
+  positions_request_invalid: copy(
+    "L’app ha chiesto gli annunci in un modo che il core non accetta.",
+    "Segnala il codice che vedi accanto: non dipende dalla VPS.",
+    "The app asked for the positions in a way the core does not accept.",
+    "Report the code shown next to it: it does not depend on the VPS.",
   ),
   existing_team_runtime_candidate_required: copy(
     "Manca la configurazione verificata della squadra esistente.",

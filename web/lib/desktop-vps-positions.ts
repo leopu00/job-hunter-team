@@ -19,7 +19,19 @@ export type DesktopVpsRead<T> =
   | { source: "vps"; data: T }
   | { source: "unavailable"; code: string };
 
+/** One page of the team's positions, and how many match in all (the core counts them). */
+export interface DesktopVpsPositionsWindow {
+  items: PositionWithScore[];
+  total: number;
+}
+
 const notDesktop = <T>(): DesktopVpsRead<T> => ({ source: "not_desktop" });
+
+export async function readDesktopVpsPositionsWindow(
+  _opts: PositionFilterOpts,
+): Promise<DesktopVpsRead<DesktopVpsPositionsWindow>> {
+  return notDesktop();
+}
 
 export async function readDesktopVpsPositions(
   _opts?: PositionFilterOpts,

@@ -14,6 +14,8 @@ import { EXISTING_TEAM_READONLY_TEXT } from "./existing-team-readonly.i18n";
  * connects turns it on before the Shell mounts, and turns it off when the
  * person leaves the read-only view, signs out or changes account.
  */
+export type ReadNotice = "sort_last_action";
+
 export interface ExistingTeamReadOnly {
   /** The team's assistant session is running (the read-only probe said so). */
   assistantActive: boolean;
@@ -22,6 +24,8 @@ export interface ExistingTeamReadOnly {
 let current: ExistingTeamReadOnly | null = null;
 /** Why the last read of the team's positions failed; null when it worked. */
 let readFailure: string | null = null;
+/** What the last page of the list could not do as asked; null when it did all. */
+let readNotice: ReadNotice | null = null;
 const listeners = new Set<() => void>();
 
 function emit() {
@@ -32,6 +36,7 @@ export function enterExistingTeamReadOnly(assistantActive: boolean): void {
   if (current?.assistantActive === assistantActive) return;
   current = { assistantActive };
   readFailure = null;
+  readNotice = null;
   emit();
 }
 
@@ -39,6 +44,7 @@ export function leaveExistingTeamReadOnly(): void {
   if (!current) return;
   current = null;
   readFailure = null;
+  readNotice = null;
   emit();
 }
 
@@ -59,6 +65,16 @@ export function reportPositionsRead(failure: string | null): void {
   if (readFailure === failure) return;
   readFailure = failure;
   if (current) emit();
+}
+
+export function reportPositionsNotice(notice: ReadNotice | null): void {
+  if (readNotice === notice) return;
+  readNotice = notice;
+  if (current) emit();
+}
+
+export function useExistingTeamReadNotice(): ReadNotice | null {
+  return useSyncExternalStore(subscribe, () => readNotice, () => readNotice);
 }
 
 export function useExistingTeamReadFailure(): string | null {

@@ -9,6 +9,8 @@ export interface ExistingTeamReadOnlyText {
   positions: string;
   back: string;
   navAria: string;
+  /** The list is sorted by the insertion date: the team's last action is not read. */
+  sortLastAction: string;
 }
 
 export const EXISTING_TEAM_READONLY_TEXT: Record<Locale, ExistingTeamReadOnlyText> = {
@@ -19,6 +21,7 @@ export const EXISTING_TEAM_READONLY_TEXT: Record<Locale, ExistingTeamReadOnlyTex
     positions: "Posizioni",
     back: "Torna alla configurazione",
     navAria: "Navigazione in sola lettura",
+    sortLastAction: "L’ordinamento per ultima azione non è disponibile in sola lettura: gli annunci sono ordinati per data di inserimento.",
   },
   en: {
     assistantOff: "Read only: assistant not active",
@@ -27,6 +30,7 @@ export const EXISTING_TEAM_READONLY_TEXT: Record<Locale, ExistingTeamReadOnlyTex
     positions: "Positions",
     back: "Back to setup",
     navAria: "Read-only navigation",
+    sortLastAction: "Sorting by last action is not available read only: the positions are sorted by the date they were found.",
   },
   de: {
     assistantOff: "Nur Lesen: Assistent nicht aktiv",
@@ -35,6 +39,7 @@ export const EXISTING_TEAM_READONLY_TEXT: Record<Locale, ExistingTeamReadOnlyTex
     positions: "Stellen",
     back: "Zurück zur Einrichtung",
     navAria: "Navigation im Lesemodus",
+    sortLastAction: "Die Sortierung nach letzter Aktion ist im Lesemodus nicht verfügbar: Die Stellen sind nach Funddatum sortiert.",
   },
   fr: {
     assistantOff: "Lecture seule : assistant inactif",
@@ -43,6 +48,7 @@ export const EXISTING_TEAM_READONLY_TEXT: Record<Locale, ExistingTeamReadOnlyTex
     positions: "Postes",
     back: "Retour à la configuration",
     navAria: "Navigation en lecture seule",
+    sortLastAction: "Le tri par dernière action n’est pas disponible en lecture seule : les offres sont triées par date de découverte.",
   },
   es: {
     assistantOff: "Solo lectura: asistente no activo",
@@ -51,6 +57,7 @@ export const EXISTING_TEAM_READONLY_TEXT: Record<Locale, ExistingTeamReadOnlyTex
     positions: "Puestos",
     back: "Volver a la configuración",
     navAria: "Navegación de solo lectura",
+    sortLastAction: "La ordenación por última acción no está disponible en solo lectura: las ofertas se ordenan por fecha de hallazgo.",
   },
   pt: {
     assistantOff: "Só leitura: assistente não ativo",
@@ -59,6 +66,7 @@ export const EXISTING_TEAM_READONLY_TEXT: Record<Locale, ExistingTeamReadOnlyTex
     positions: "Vagas",
     back: "Voltar à configuração",
     navAria: "Navegação só de leitura",
+    sortLastAction: "A ordenação por última ação não está disponível só em leitura: as vagas estão ordenadas pela data em que foram encontradas.",
   },
   hu: {
     assistantOff: "Csak olvasható: az asszisztens nem aktív",
@@ -67,5 +75,6 @@ export const EXISTING_TEAM_READONLY_TEXT: Record<Locale, ExistingTeamReadOnlyTex
     positions: "Pozíciók",
     back: "Vissza a beállításhoz",
     navAria: "Csak olvasható navigáció",
+    sortLastAction: "Az utolsó művelet szerinti rendezés csak olvasható módban nem érhető el: a pozíciók a megtalálás dátuma szerint vannak rendezve.",
   },
 };

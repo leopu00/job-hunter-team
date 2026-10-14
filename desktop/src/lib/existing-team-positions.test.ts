@@ -8,7 +8,9 @@ import {
   readDesktopVpsPosition,
   readDesktopVpsPositionFacets,
   readDesktopVpsPositions,
+  readDesktopVpsPositionsWindow,
 } from "./existing-team-positions";
+import { enterExistingTeamReadOnly, leaveExistingTeamReadOnly, existingTeamReadOnly } from "./existing-team-readonly";
 
 const native = vi.hoisted(() => ({ invoke: vi.fn(), isTauri: vi.fn() }));
 vi.mock("@tauri-apps/api/core", () => native);
@@ -93,6 +95,49 @@ describe("existing-team positions bridge", () => {
       source: "unavailable",
       code: "positions_unavailable",
     });
+  });
+
+  it("reads one page with the count the core made, in one bounded request", async () => {
+    native.invoke.mockResolvedValueOnce({ ok: true, data: { items: [position], total: 137 } });
+
+    await expect(
+      readDesktopVpsPositionsWindow({ q: "synthetic", sort: "score", dir: "desc", limit: 25, offset: 50, scoredOnly: true, hideExcluded: true }),
+    ).resolves.toEqual({ source: "vps", data: { items: [position], total: 137 } });
+    expect(native.invoke).toHaveBeenCalledTimes(1);
+    expect(native.invoke).toHaveBeenCalledWith("existing_team_positions_read", {
+      request: {
+        op: "list",
+        filters: { q: "synthetic", sort: "score", dir: "desc", limit: 25, offset: 50, scoredOnly: true, hideExcluded: true },
+      },
+    });
+  });
+
+  it("refuses a page whose count is missing or not a count", async () => {
+    for (const data of [{ items: [position] }, { items: [position], total: "3" }, { items: [position], total: -1 }, { total: 1 }]) {
+      native.invoke.mockResolvedValueOnce({ ok: true, data });
+      await expect(readDesktopVpsPositionsWindow({ limit: 25 })).resolves.toEqual({
+        source: "unavailable",
+        code: "desktop_bad_reply",
+      });
+    }
+  });
+
+  it("asks for the date order by name when the sort is one the core rows cannot carry, and says so", async () => {
+    enterExistingTeamReadOnly(false);
+    try {
+      native.invoke.mockResolvedValue({ ok: true, data: { items: [], total: 0 } });
+      await readDesktopVpsPositionsWindow({ sort: "last_action_at", dir: "asc", limit: 25 });
+      expect(native.invoke).toHaveBeenLastCalledWith("existing_team_positions_read", {
+        request: { op: "list", filters: { sort: "found_at", dir: "asc", limit: 25 } },
+      });
+      expect(existingTeamReadOnly()).not.toBeNull();
+      await readDesktopVpsPositionsWindow({ sort: "score", limit: 25 });
+      expect(native.invoke).toHaveBeenLastCalledWith("existing_team_positions_read", {
+        request: { op: "list", filters: { sort: "score", limit: 25 } },
+      });
+    } finally {
+      leaveExistingTeamReadOnly();
+    }
   });
 
   it("preserves related detail and correlated facets from fixed operations", async () => {

@@ -50,7 +50,14 @@ const ROWS: Row[] = Array.from({ length: 60 }, (_unused, index) => ({
 }));
 ROWS[0] = { ...ROWS[0], id: "101", legacy_id: 101, title: "Synthetic role A", company: "Synthetic Co A" };
 
-type Filters = { q?: string; limit?: number; offset?: number };
+type Filters = {
+  q?: string;
+  limit?: number;
+  offset?: number;
+  scoredOnly?: boolean;
+  hideExcluded?: boolean;
+  sort?: string;
+};
 let fetched: string[] = [];
 /** Every call the pages make to the app's own /api, with its method, as the bridge saw it. */
 let apiCalls: string[] = [];
@@ -65,12 +72,21 @@ function companion(request: { op: string; filters?: Filters; id?: string }) {
   if (request.op === "detail") {
     return { ok: true, data: request.id === "101" ? syntheticDetail : null };
   }
-  const { q, limit, offset = 0 } = request.filters ?? {};
+  // What the core does: filter, count, then give one page of light rows.
+  const { q, limit, offset = 0, scoredOnly, hideExcluded } = request.filters ?? {};
   const hay = (row: Row) => `${row.title} ${row.company}`.toLowerCase();
-  const matching = q ? ROWS.filter((row) => hay(row).includes(q.toLowerCase())) : ROWS;
+  const matching = ROWS.filter(
+    (row) =>
+      (!q || hay(row).includes(q.toLowerCase())) &&
+      (!scoredOnly || row.score != null) &&
+      (!hideExcluded || (row.status as string) !== "excluded"),
+  );
   return {
     ok: true,
-    data: { items: matching.slice(offset, limit === undefined ? undefined : offset + limit) },
+    data: {
+      items: matching.slice(offset, limit === undefined ? undefined : offset + limit),
+      total: matching.length,
+    },
   };
 }
 
@@ -140,15 +156,34 @@ describe("Posizioni on an existing team read only", () => {
     expect(fake.current!.rpc).toEqual([]);
   }, 20_000);
 
-  it("asks the companion in bounded replies, never the 2000 rows the web page wants at once", async () => {
+  it("asks the companion for one page at a time, with the default view and the count done there", async () => {
     navigate("/positions", { replace: true });
     render(<Shell />);
     await screen.findAllByText("Synthetic role A");
 
-    const requests = listRequests();
-    expect(requests.length).toBeGreaterThan(0);
-    for (const { filters } of requests) expect(filters?.limit).toBeLessThanOrEqual(600);
-    expect(requests[0].filters).toMatchObject({ limit: 600, offset: 0 });
+    // The payload the page really puts on the wire (the Rust decoder test pins
+    // the same one): the page size, not the 2000 the web asks of the cloud.
+    expect(listRequests()).toEqual([
+      { op: "list", filters: { limit: 50, offset: 0, sort: "found_at", dir: "desc", scoredOnly: true, hideExcluded: true } },
+    ]);
+  });
+
+  it("asks for the next page, not for everything, when the person pages", async () => {
+    navigate("/positions?page=2&pageSize=25", { replace: true });
+    render(<Shell />);
+    expect((await screen.findAllByText("Synthetic row 30")).length).toBeGreaterThan(0);
+    expect(listRequests().map(({ filters }) => [filters?.limit, filters?.offset])).toEqual([[25, 25]]);
+    expect(screen.getByText(/26–50 di 60/)).toBeInTheDocument();
+  });
+
+  it("tells the person when the sort they asked for is not one the core can do", async () => {
+    navigate("/positions?sort=last_action_at&dir=asc", { replace: true });
+    render(<Shell />);
+    expect(await screen.findByTestId("existing-team-readonly-notice")).toHaveTextContent(
+      EXISTING_TEAM_READONLY_TEXT.it.sortLastAction,
+    );
+    // asked by name for the date order, never silently left unsorted
+    expect(listRequests()[0].filters).toMatchObject({ sort: "found_at", dir: "asc" });
   });
 
   it("pages the list as the web does and keeps the filter in the query string", async () => {
@@ -180,7 +215,9 @@ describe("Posizioni on an existing team read only", () => {
     render(<Shell />);
 
     const alert = await screen.findByRole("alert");
-    expect(alert).toHaveTextContent(describeError("existing_team_unavailable", { locale: "it" }).text);
+    // The core's own code, not a catch-all "cannot be reached", is what the person reads.
+    expect(alert).toHaveTextContent(describeError("positions_unavailable", { locale: "it" }).text);
+    expect(alert).toHaveTextContent("(positions_unavailable)");
     expect(screen.queryByText("Synthetic role A")).not.toBeInTheDocument();
 
     native.invoke.mockImplementation(async (_command: string, args: { request: never }) => companion(args.request));

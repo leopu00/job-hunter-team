@@ -12,6 +12,7 @@ import {
   readDesktopVpsPosition,
   readDesktopVpsPositionFacets,
   readDesktopVpsPositions,
+  readDesktopVpsPositionsWindow,
 } from "@/lib/desktop-vps-positions";
 // [JHT-WEB-DEMO] Modalità demo (onboarding cloud): quando il cookie
 // jht_demo_persona è attivo le query servono il dataset statico della
@@ -251,6 +252,11 @@ export type PositionFilterOpts = {
   offset?: number;
   sort?: string;
   dir?: "asc" | "desc";
+  // The list's default view, asked of the existing team's VPS reader (the other
+  // sources apply it themselves, after the read): only positions with a score,
+  // and none of the excluded.
+  scoredOnly?: boolean;
+  hideExcluded?: boolean;
 };
 
 export type PositionDetail = {
@@ -544,6 +550,53 @@ export async function getPositions(
 }
 
 // ── Single position with all details ───────────────────────────────
+export type PositionsWindow = {
+  rows: PositionWithScore[];
+  /** How many match in all. */
+  total: number;
+  /** The source served this page only, filtered and counted: do not slice or filter it again. */
+  windowed: boolean;
+};
+
+/**
+ * One page of the list. The existing team's VPS serves it page by page, with
+ * its own default view and its own count (a page of light rows stays far
+ * under what the core accepts back, and the app never holds the whole team).
+ * Every other source reads what getPositions reads and leaves the paging to
+ * the caller, exactly as before.
+ */
+export async function getPositionsWindow(
+  opts: PositionFilterOpts,
+  win: { page: number; pageSize: number; defaultView: boolean },
+): Promise<PositionsWindow> {
+  if (!(await activeDemoPersona())) {
+    const read = (page: number) =>
+      readDesktopVpsPositionsWindow({
+        ...opts,
+        limit: win.pageSize,
+        offset: (page - 1) * win.pageSize,
+        ...(win.defaultView ? { scoredOnly: true, hideExcluded: true } : {}),
+      });
+    let page = Math.max(1, win.page);
+    let desktop = await read(page);
+    if (desktop.source === "vps") {
+      // A page past the end shows the last one, as the caller's own paging does.
+      const last = Math.max(1, Math.ceil(desktop.data.total / win.pageSize));
+      if (page > last) {
+        page = last;
+        desktop = await read(page);
+      }
+    }
+    if (desktop.source === "vps") {
+      return { rows: desktop.data.items, total: desktop.data.total, windowed: true };
+    }
+    // Same rule as getPositions: no valid target must not show another dataset.
+    if (desktop.source === "unavailable") return { rows: [], total: 0, windowed: true };
+  }
+  const rows = await getPositions(opts);
+  return { rows, total: rows.length, windowed: false };
+}
+
 export async function getPositionById(id: string): Promise<PositionDetail | null> {
   const desktop = await readDesktopVpsPosition(id);
   if (desktop.source === "vps") return desktop.data;

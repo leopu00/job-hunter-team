@@ -1,6 +1,7 @@
 import { invoke, isTauri } from "@tauri-apps/api/core";
-import { reportPositionsRead } from "./existing-team-readonly";
+import { reportPositionsNotice, reportPositionsRead } from "./existing-team-readonly";
 import type {
+  DesktopVpsPositionsWindow,
   DesktopVpsRead,
 } from "../../../web/lib/desktop-vps-positions";
 import type { PositionWithScore } from "../../../web/lib/types";
@@ -10,7 +11,10 @@ import type {
   PositionFilterOpts,
 } from "../../../web/lib/queries";
 
-export type { DesktopVpsRead } from "../../../web/lib/desktop-vps-positions";
+export type {
+  DesktopVpsPositionsWindow,
+  DesktopVpsRead,
+} from "../../../web/lib/desktop-vps-positions";
 
 /**
  * Fixed native read command. The native side resolves the account-scoped
@@ -115,6 +119,35 @@ export async function readDesktopVpsPositions(
     if (page.data.length < size) break;
   }
   return { source: "vps", data: rows };
+}
+
+/**
+ * The columns the core's rows do not carry (the team's last action is not in
+ * its projection): sorting by them would silently keep the date order, so the
+ * date order is asked for by name and the person is told.
+ */
+const SORTS_THE_CORE_CANNOT_DO = new Set(["last_action_at", "last_action_by"]);
+
+/**
+ * One page, as the core serves it: at most `limit` light rows from `offset`, and
+ * the total that match, so the person pages through the team's positions
+ * without the app holding them all. `limit` is the native bound (600) at most.
+ */
+export async function readDesktopVpsPositionsWindow(
+  opts: PositionFilterOpts,
+): Promise<DesktopVpsRead<DesktopVpsPositionsWindow>> {
+  const substituted = opts.sort !== undefined && SORTS_THE_CORE_CANNOT_DO.has(opts.sort);
+  const value = await read<unknown>(listRequest(substituted ? { ...opts, sort: "found_at" } : opts));
+  reportPositionsNotice(value.source === "vps" && substituted ? "sort_last_action" : null);
+  if (value.source !== "vps") return value;
+  const data = value.data;
+  if (!data || typeof data !== "object" || Array.isArray(data)) {
+    return { source: "unavailable", code: "desktop_bad_reply" };
+  }
+  const { items, total } = data as Record<string, unknown>;
+  return Array.isArray(items) && typeof total === "number" && Number.isInteger(total) && total >= 0
+    ? { source: "vps", data: { items: items as PositionWithScore[], total } }
+    : { source: "unavailable", code: "desktop_bad_reply" };
 }
 
 export function readDesktopVpsPosition(
