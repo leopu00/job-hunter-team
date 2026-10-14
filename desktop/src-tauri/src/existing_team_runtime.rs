@@ -833,7 +833,8 @@ pub(crate) fn candidate_bytes(
     };
     let bytes =
         serde_json::to_vec(&candidate).map_err(|_| "existing_team_runtime_candidate_invalid")?;
-    if parse_candidate_bytes(&bytes)? != candidate {
+    // Every read refuses more than MAX_BYTES: never publish what could not be read back.
+    if bytes.len() > MAX_BYTES || parse_candidate_bytes(&bytes)? != candidate {
         return Err("existing_team_runtime_candidate_invalid");
     }
     let hash = sha256(&bytes);

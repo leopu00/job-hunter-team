@@ -8,7 +8,8 @@ pub mod cli_adapter;
 mod desktop_platform;
 mod direct_chat;
 mod existing_team_register;
-#[cfg(test)]
+// The tests rely on 0600 files, hard links and symlinks; Windows is not covered.
+#[cfg(all(test, unix))]
 mod existing_team_register_tests;
 mod existing_team_runtime;
 mod live_screen;

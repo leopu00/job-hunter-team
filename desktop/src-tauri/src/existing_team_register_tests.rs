@@ -1358,3 +1358,19 @@ fn t11_the_commands_share_one_gate_and_teardown_empties_the_receipt() {
     crate::onboarding::teardown(&state);
     assert!(state.receipt.lock().unwrap().is_none(), "a scope change forgets the receipt");
 }
+
+#[test]
+fn t12_a_candidate_larger_than_every_read_accepts_is_refused_before_it_is_published() {
+    let world = team_world();
+    let huge = ExecutionHost::Vps {
+        address: "a".repeat(9000),
+        user: "jht".into(),
+        port: 22,
+        key_path: "/tmp/synthetic-key".into(),
+    };
+    assert_eq!(
+        runtime::candidate_bytes(&huge, TEAM, &target_of(&world, 1)).err(),
+        Some("existing_team_runtime_candidate_invalid")
+    );
+    assert!(runtime::candidate_bytes(&host(), TEAM, &target_of(&world, 1)).is_ok());
+}
