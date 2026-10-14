@@ -176,6 +176,17 @@ describe("Posizioni on an existing team read only", () => {
     expect(screen.getByText(/26–50 di 60/)).toBeInTheDocument();
   });
 
+  it.each([
+    "id", "title", "company", "role_family", "source", "location", "loc_city", "loc_country", "remote",
+    "score", "salary", "monthly", "critic", "found_at", "status", "written_at", "applied_at",
+  ])("sends the clicked column and its direction to the core: sort=%s&dir=asc", async (column) => {
+    // the URL a click on the header makes, with a filter next to it, as on the real team
+    navigate(`/positions?remote=full_remote&sort=${column}&dir=asc`, { replace: true });
+    render(<Shell />);
+    await screen.findAllByText("Synthetic role A");
+    expect(listRequests()[0].filters).toMatchObject({ sort: column, dir: "asc", remoteTypes: ["full_remote"] });
+  });
+
   it("tells the person when the sort they asked for is not one the core can do", async () => {
     navigate("/positions?sort=last_action_at&dir=asc", { replace: true });
     render(<Shell />);

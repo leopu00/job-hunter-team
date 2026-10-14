@@ -120,13 +120,18 @@ def sort_items(items,filters):
  if key is not None and (not isinstance(key,str) or key not in {'id','score','salary','monthly','last_action_by','critic','found_at','last_action_at','status','written_at','applied_at','title','company','role_family','source','location','remote','loc_country','loc_city'}): fail('positions_request_invalid')
  direction=filters.get('dir','desc')
  if direction not in ('asc','desc'): fail('positions_request_invalid')
- def value(item):
-  if key=='id': return item.get('legacy_id')
+ def raw(item):
+  if key=='id':
+   legacy=item.get('legacy_id')
+   return legacy if legacy is not None else (int(item['id']) if str(item.get('id') or '').isdigit() else None)
   if key in ('salary','monthly'): return item.get('salary_min')
   if key=='remote': return item.get('remote_type')
   if key=='critic': return item.get('critic_score')
   if key=='last_action_by': return item.get('last_action_actor')
   return item.get(key or 'found_at')
+ def value(item):
+  found=raw(item)
+  return found.casefold() if isinstance(found,str) else found
  if key:
   present=[item for item in items if value(item) is not None]; missing=[item for item in items if value(item) is None]
   present.sort(key=value,reverse=direction=='desc'); items[:]=present+missing
@@ -1114,6 +1119,8 @@ mod tests {
             "'userNote':note",
             "'exclusionEventAt':excluded.get('ts') if excluded else None",
             "'data':{'items':rows}",
+            // the ID column sorts by what the table shows: a row without a legacy id by its own id
+            "return legacy if legacy is not None else (int(item['id'])",
             // the list is a light projection with the matching total, so a page of it
             // stays far under the 2 MiB the core accepts back
             "'data':{'items':[light(item) for item in window],'total':len(rows)}",
