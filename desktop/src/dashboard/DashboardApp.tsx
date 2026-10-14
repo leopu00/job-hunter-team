@@ -965,17 +965,33 @@ export default function DashboardApp() {
    * After a restart, a profile that already saved an existing team (candidate and
    * selection) goes back to its read-only view: the native side takes the saved
    * host and team, checks the pin and the identity again and starts nothing.
-   * Without a saved team, or if it cannot be reached, the usual resume goes on.
+   * Only "there is no saved existing team" (refused before any SSH call) lets the
+   * usual resume go on. Any other refusal is a saved team that cannot be reached
+   * or confirmed right now: it is shown as that, with its catalog sentence and a
+   * retry that asks the same question again, never as the team-start action.
    */
-  const reopenExistingTeam = useCallback(async (): Promise<boolean> => {
+  const reopenExistingTeam = useCallback(async (): Promise<"opened" | "none" | OnboardingRuntimeState> => {
     try {
       const result = await existingTeamBridge.reopen();
       // Closing the read-only view goes back to the setup's first step, not to a spinner.
       setRuntime({ status: "collecting", stage: "host" });
       openReadOnlyExistingTeam(result);
-      return true;
-    } catch {
-      return false;
+      return "opened";
+    } catch (error) {
+      const code = nativeErrorCode(error);
+      if (code === "existing_team_runtime_candidate_required" || code === "existing_team_runtime_selection_required") {
+        return "none";
+      }
+      const described = describeError(code, { locale: appLocale() });
+      return {
+        status: "failed",
+        stage: "runtime",
+        title: stateText().savedTeamUnreachableTitle,
+        message: described.text,
+        action: described.action,
+        ...(code ? { code } : {}),
+        retryable: true,
+      };
     }
   }, [openReadOnlyExistingTeam, setRuntime]);
 
@@ -984,7 +1000,12 @@ export default function DashboardApp() {
     try {
       setActivity(createOnboardingActivity());
       setRuntime({ status: "working", stage: "runtime", message: stateText().checkingRealState });
-      if (await reopenExistingTeam()) return;
+      const reopened = await reopenExistingTeam();
+      if (reopened === "opened") return;
+      if (reopened !== "none") {
+        setRuntime(reopened);
+        return;
+      }
       const nativeSnapshot = await resumeOnboardingSnapshot();
       if (activeIdentityKeyRef.current !== identityKey) throw new Error("account-changed");
       const prerequisiteFailure = resumedPrerequisiteFailure(nativeSnapshot);

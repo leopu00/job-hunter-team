@@ -706,6 +706,27 @@ const COPY_BY_ENGLISH_TEXT: Readonly<Record<string, ErrorTranslations>> = {
     hu: ["A műveletet nem erősítették meg: semmi nem került mentésre.", "A kapcsolat mentéséhez erősítsd meg az áttekintő képernyőn."],
     pt: ["A ação não foi confirmada: nada foi guardado.", "Confirma no ecrã de revisão para guardar a ligação."],
   },
+  "The saved team no longer matches the selected connection.": {
+    de: ["Das gespeicherte Team passt nicht mehr zur ausgewählten Verbindung.", "Prüfe die VPS und die Teamkennung und versuche es erneut."],
+    es: ["El equipo guardado ya no coincide con la conexión seleccionada.", "Comprueba el VPS y el identificador del equipo e inténtalo de nuevo."],
+    fr: ["L’équipe enregistrée ne correspond plus à la connexion sélectionnée.", "Vérifie le VPS et l’identifiant de l’équipe, puis réessaie."],
+    hu: ["A mentett csapat már nem egyezik a kiválasztott kapcsolattal.", "Ellenőrizd a VPS-t és a csapat azonosítóját, majd próbáld újra."],
+    pt: ["A equipa guardada já não corresponde à ligação selecionada.", "Verifica a VPS e o identificador da equipa e tenta novamente."],
+  },
+  "The saved selection for this team is not valid.": {
+    de: ["Die gespeicherte Auswahl für dieses Team ist ungültig.", "Bitte die Person, die die VPS verwaltet, die Verbindung zu prüfen, und versuche es erneut."],
+    es: ["La selección guardada para este equipo no es válida.", "Pide a quien gestiona el VPS que revise la conexión y vuelve a intentarlo."],
+    fr: ["La sélection enregistrée pour cette équipe n’est pas valide.", "Demande à la personne qui gère le VPS de vérifier la connexion, puis réessaie."],
+    hu: ["A csapathoz mentett kiválasztás érvénytelen.", "Kérd meg a VPS üzemeltetőjét, hogy ellenőrizze a kapcsolatot, majd próbáld újra."],
+    pt: ["A seleção guardada para esta equipa não é válida.", "Pede a quem gere a VPS que verifique a ligação e tenta novamente."],
+  },
+  "The app cannot read the team's saved data on this computer.": {
+    de: ["Die App kann die gespeicherten Teamdaten auf diesem Computer nicht lesen.", "Beende Job Hunter Team vollständig und öffne es erneut."],
+    es: ["La aplicación no puede leer los datos guardados del equipo en este ordenador.", "Cierra Job Hunter Team por completo y vuelve a abrirlo."],
+    fr: ["L’application ne peut pas lire les données enregistrées de l’équipe sur cet ordinateur.", "Quitte complètement Job Hunter Team, puis rouvre-le."],
+    hu: ["Az alkalmazás nem tudja beolvasni a csapat mentett adatait ezen a számítógépen.", "Zárd be teljesen a Job Hunter Teamet, majd nyisd meg újra."],
+    pt: ["A aplicação não consegue ler os dados guardados da equipa neste computador.", "Fecha completamente o Job Hunter Team e volta a abri-lo."],
+  },
 };
 
 function translated(englishText: string): ErrorTranslations {
@@ -858,6 +879,9 @@ export const ERROR_CATALOG_LOCALES: Readonly<Record<string, ErrorTranslations>> 
   existing_team_target_changed: translated("The team on the VPS changed while you were confirming."),
   existing_team_receipt_required: translated("The details you confirmed are no longer available."),
   existing_team_register_not_confirmed: translated("The action was not confirmed: nothing was saved."),
+  existing_team_runtime_target_changed: translated("The saved team no longer matches the selected connection."),
+  existing_team_runtime_selection_invalid: translated("The saved selection for this team is not valid."),
+  existing_team_runtime_unavailable: translated("The app cannot read the team's saved data on this computer."),
   existing_team_unavailable: translated("The team cannot be reached."),
   existing_team_runtime_required: translated("There is no verified connection for this team to start from."),
   assistant_start_not_confirmed: translated("The action was not confirmed: no command was sent."),

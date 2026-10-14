@@ -663,6 +663,24 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
     "The action was not confirmed: nothing was saved.",
     "Confirm from the review screen to save the connection.",
   ),
+  existing_team_runtime_target_changed: copy(
+    "La squadra salvata non corrisponde più al collegamento selezionato.",
+    "Controlla la VPS e l’identificativo della squadra, poi riprova.",
+    "The saved team no longer matches the selected connection.",
+    "Check the VPS and team identifier, then try again.",
+  ),
+  existing_team_runtime_selection_invalid: copy(
+    "La selezione salvata per questa squadra non è valida.",
+    "Chiedi a chi gestisce la VPS di verificare il collegamento, poi riprova.",
+    "The saved selection for this team is not valid.",
+    "Ask whoever manages the VPS to check the connection, then try again.",
+  ),
+  existing_team_runtime_unavailable: copy(
+    "L’app non riesce a leggere i dati salvati della squadra su questo computer.",
+    "Chiudi completamente Job Hunter Team e riaprilo.",
+    "The app cannot read the team's saved data on this computer.",
+    "Quit Job Hunter Team completely and open it again.",
+  ),
   existing_team_unavailable: TEAM_UNREACHABLE,
   existing_team_runtime_required: copy(
     "Per questa squadra non c’è un collegamento verificato da cui partire.",

@@ -1406,15 +1406,70 @@ describe("DashboardApp onboarding router", () => {
       expect(screen.queryByTestId("shell")).not.toBeInTheDocument();
     });
 
-    it("if the saved team cannot be reopened it falls back to the usual resume, which starts nothing by itself", async () => {
+    it("a refusal before any SSH call (no candidate, no selection) leaves the usual resume unchanged", async () => {
       startedLocalProfile();
-      vi.mocked(existingTeamBridge.reopen).mockRejectedValue({ code: "existing_team_unavailable" });
+      vi.mocked(existingTeamBridge.reopen).mockRejectedValue({ code: "existing_team_runtime_selection_required" });
       render(<DashboardApp />);
       expect(await screen.findByText("action-required:team-start")).toBeInTheDocument();
       expect(resumeOnboardingSnapshot).toHaveBeenCalledOnce();
-      for (const started of [resumeOnboardingTeamStart, startOnboardingTeam, prepareOnboardingRuntime, openOnboardingAssistant]) {
+      expect(resumeOnboardingTeamStart).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      "existing_team_unavailable",
+      "existing_team_discovery_timeout",
+      "host_key_missing",
+      "host_key_mismatch",
+      "existing_team_identity_mismatch",
+      "existing_team_runtime_candidate_mismatch",
+      "existing_team_runtime_candidate_invalid",
+      "existing_team_runtime_target_changed",
+      "existing_team_runtime_selection_invalid",
+      "existing_team_runtime_unavailable",
+    ])("a saved team that %s is shown as a saved team that cannot be reached, never as «start the team»", async (code) => {
+      startedLocalProfile();
+      vi.mocked(existingTeamBridge.reopen).mockRejectedValue({ code, message: "raw native text /private/key" });
+      render(<DashboardApp />);
+
+      expect(await screen.findByText("failed:runtime")).toBeInTheDocument();
+      expect(screen.getByText("title:" + "Squadra esistente salvata: non raggiungibile ora")).toBeInTheDocument();
+      expect(screen.getByText(`code:${code}`)).toBeInTheDocument();
+      expect(screen.getByText(ERROR_CATALOG[code].text.it)).toBeInTheDocument();
+      expect(screen.queryByText(/raw native text/)).not.toBeInTheDocument();
+      expect(screen.queryByText("action-required:team-start")).not.toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "retry-runtime" })).toBeInTheDocument();
+      expect(resumeOnboardingSnapshot).not.toHaveBeenCalled();
+      for (const started of [resumeOnboardingTeamStart, startOnboardingTeam, prepareOnboardingRuntime, startOnboardingProviderLogin, openOnboardingAssistant, reconnectDirectChat]) {
         expect(started).not.toHaveBeenCalled();
       }
+    });
+
+    it("«Riprova» asks the backend to reopen again and nothing else; once it can, the read-only view opens", async () => {
+      startedLocalProfile();
+      vi.mocked(existingTeamBridge.reopen)
+        .mockRejectedValueOnce({ code: "existing_team_unavailable" })
+        .mockResolvedValueOnce({ readiness: false, snapshot: { ...TEAM_READY, assistantRunning: false } });
+      const user = userEvent.setup();
+      render(<DashboardApp />);
+      await user.click(await screen.findByRole("button", { name: "retry-runtime" }));
+
+      expect(await screen.findByTestId("shell")).toBeInTheDocument();
+      expect(existingTeamBridge.reopen).toHaveBeenCalledTimes(2);
+      expect(resumeOnboardingSnapshot).not.toHaveBeenCalled();
+      expect(resumeOnboardingTeamStart).not.toHaveBeenCalled();
+      expect(startOnboardingTeam).not.toHaveBeenCalled();
+    });
+
+    it("«Riprova» that still fails stays on the saved-team state and starts nothing", async () => {
+      startedLocalProfile();
+      vi.mocked(existingTeamBridge.reopen).mockRejectedValue({ code: "existing_team_unavailable" });
+      const user = userEvent.setup();
+      render(<DashboardApp />);
+      await user.click(await screen.findByRole("button", { name: "retry-runtime" }));
+      await waitFor(() => expect(existingTeamBridge.reopen).toHaveBeenCalledTimes(2));
+      expect(await screen.findByText("failed:runtime")).toBeInTheDocument();
+      expect(screen.queryByText("action-required:team-start")).not.toBeInTheDocument();
+      expect(resumeOnboardingSnapshot).not.toHaveBeenCalled();
     });
   });
 
