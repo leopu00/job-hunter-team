@@ -10,7 +10,7 @@ use crate::{
         register_with, Budget, ExistingTeamRegisterRequest, Found, Receipt, DISCOVERY_SCRIPT,
     },
     existing_team_runtime::{self as runtime, CandidateWrite, RuntimeTarget},
-    onboarding::{existing_team_readonly_connect_with, SNAPSHOT_TIMEOUT},
+    onboarding::{existing_team_readonly_connect_with, OnboardingNativeState, SNAPSHOT_TIMEOUT},
     runtime_host::{ExecutionHost, ProcessResult, ValidatedHost},
 };
 use std::{
@@ -1334,4 +1334,27 @@ fn the_reply_cap_and_the_probe_cap_are_the_declared_ones() {
     let flood = ProcessResult { code: 0, stdout: vec![b'x'; 5000] };
     server.probes.borrow_mut().insert(container_id(1), Ok(flood));
     assert_eq!(discover(&sandbox, &server, Duration::from_secs(40)).expect_err("flood"), "existing_team_unavailable");
+}
+
+#[test]
+fn t11_the_commands_share_one_gate_and_teardown_empties_the_receipt() {
+    let state = OnboardingNativeState::default();
+    assert!(state.try_begin());
+    assert!(!state.try_begin(), "a second operation is refused while one runs");
+    state.finish();
+    assert!(state.try_begin());
+    state.finish();
+    let sandbox = Sandbox::new();
+    receipt_store(
+        &state.receipt,
+        Receipt {
+            scope_digest: sandbox.scope.digest().to_owned(),
+            host: host(),
+            team_id: TEAM.to_owned(),
+            candidate_sha256: "a".repeat(64),
+            at: Instant::now(),
+        },
+    );
+    crate::onboarding::teardown(&state);
+    assert!(state.receipt.lock().unwrap().is_none(), "a scope change forgets the receipt");
 }
