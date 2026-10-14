@@ -4,6 +4,7 @@ import RecentPositionsTable from "@/app/components/RecentPositionsTable";
 import type { Locale } from "@/i18n/config";
 import { buildApplicationTimeline } from "@/lib/application-timeline";
 import { getDashboardT } from "@/lib/dashboard-i18n";
+import ExistingTeamSummary from "./ExistingTeamSummary";
 import { displayCurrencies, newestScored, type DashboardData } from "./load-dashboard";
 
 /**
@@ -24,7 +25,9 @@ export default function DashboardScreen({
   const { stats, positions, rates, applicationEvents } = data;
   const applicationTimeline = buildApplicationTimeline(applicationEvents);
   const activeTotal = stats.total - stats.excluded;
-  const latest = newestScored(positions);
+  // Read from an existing team, the newest scored come from the core whole:
+  // `positions` may be a bounded slice of the team.
+  const latest = data.latest ?? newestScored(positions);
 
   return (
     <div style={{ animation: "fade-in 0.35s ease both", position: "relative" }}>
@@ -41,6 +44,8 @@ export default function DashboardScreen({
               {t.total_positions(stats.total, stats.excluded, activeTotal)}
             </div>
           </div>
+
+          {data.existingTeam && <ExistingTeamSummary info={data.existingTeam} locale={locale} />}
 
           <div style={{ animation: "fade-in 0.35s ease both 0.06s" }}>
             <RecentPositionsTable

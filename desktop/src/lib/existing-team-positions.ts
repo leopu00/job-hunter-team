@@ -4,7 +4,8 @@ import type {
   DesktopVpsPositionsWindow,
   DesktopVpsRead,
 } from "../../../web/lib/desktop-vps-positions";
-import type { PositionWithScore } from "../../../web/lib/types";
+import type { DashboardStats, PositionWithScore } from "../../../web/lib/types";
+import type { DashboardPosition } from "./dashboard-data";
 import type {
   PositionDetail,
   PositionFacet,
@@ -27,7 +28,8 @@ const COMMAND = "existing_team_positions_read";
 type Request =
   | { op: "list"; filters?: PositionFilterOpts }
   | { op: "detail"; id: string }
-  | { op: "facets" };
+  | { op: "facets" }
+  | { op: "stats" };
 
 function listRequest(opts?: PositionFilterOpts): Request {
   return opts === undefined ? { op: "list" } : { op: "list", filters: opts };
@@ -148,6 +150,62 @@ export async function readDesktopVpsPositionsWindow(
   return Array.isArray(items) && typeof total === "number" && Number.isInteger(total) && total >= 0
     ? { source: "vps", data: { items: items as PositionWithScore[], total } }
     : { source: "unavailable", code: "desktop_bad_reply" };
+}
+
+/** What the core's `stats` op serves: exact counts, and the bounded rows the charts draw. */
+export interface DesktopVpsStats {
+  stats: DashboardStats;
+  /** Over the active (not excluded) positions. */
+  distribution: {
+    active: number;
+    withScore: number;
+    avgScore: number | null;
+    buckets: Array<{ min: number; max: number; count: number }>;
+  };
+  sources: Array<{ source: string; count: number }>;
+  types: Array<{ role_family: string | null; count: number }>;
+  /** The newest scored positions, whatever the charts got. */
+  recent: DashboardPosition[];
+  /** `included` of the `of` active positions: the charts' rows. */
+  points: { rows: DashboardPosition[]; included: number; of: number };
+  /** `included` of the `of` submissions: the timeline's events. */
+  events: {
+    rows: Array<{ appliedAt: string; response: string | null; responseAt: string | null }>;
+    included: number;
+    of: number;
+  };
+}
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+const isCount = (value: unknown): value is number =>
+  typeof value === "number" && Number.isInteger(value) && value >= 0;
+
+function boundedPart(value: unknown): value is { rows: unknown[]; included: number; of: number } {
+  return isRecord(value) && Array.isArray(value.rows) && isCount(value.included) && isCount(value.of);
+}
+
+/**
+ * The dashboard's numbers, as the core counts them on the team's VPS: one
+ * reply, never rows downloaded to be counted here.
+ */
+export async function readDesktopVpsStats(): Promise<DesktopVpsRead<DesktopVpsStats>> {
+  const value = await read<unknown>({ op: "stats" });
+  if (value.source !== "vps") return value;
+  const data = value.data;
+  if (
+    !isRecord(data) ||
+    !isRecord(data.stats) ||
+    !isRecord(data.distribution) ||
+    !Array.isArray(data.sources) ||
+    !Array.isArray(data.types) ||
+    !Array.isArray(data.recent) ||
+    !boundedPart(data.points) ||
+    !boundedPart(data.events)
+  ) {
+    return { source: "unavailable", code: "desktop_bad_reply" };
+  }
+  return { source: "vps", data: data as unknown as DesktopVpsStats };
 }
 
 export function readDesktopVpsPosition(

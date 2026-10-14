@@ -38,8 +38,9 @@ export const HOME = "/dashboard";
 /**
  * Reading an existing team's VPS (lib/existing-team-readonly.ts): the pages
  * that read it, and no other. The rest of the shell reads the cloud or the box.
+ * It lands on the dashboard, as the web does.
  */
-export const READ_ONLY_HOME = "/positions";
+export const READ_ONLY_HOME = "/dashboard";
 
 export const ROUTES: Route[] = [
   { path: "/dashboard", page: DashboardPage },
@@ -64,6 +65,12 @@ export const ROUTES: Route[] = [
   { path: "/computer", page: ComputerPage },
 ];
 
-export const READ_ONLY_ROUTES: Route[] = ROUTES.filter(
-  (route) => route.path === "/positions" || route.path === "/positions/:id",
+export const READ_ONLY_ROUTES: Route[] = ROUTES.filter((route) =>
+  ["/dashboard", "/positions", "/positions/:id"].includes(route.path),
 );
+
+/** The navigation of that view, in the order of the web's own bar. */
+export const READ_ONLY_NAV = [
+  { href: "/dashboard", label: "nav_dashboard" },
+  { href: "/positions", label: "nav_positions" },
+] as const;

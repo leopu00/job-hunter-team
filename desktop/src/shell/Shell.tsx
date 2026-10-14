@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { DashboardI18nProvider } from "@/app/components/DashboardI18n";
+import { DashboardI18nProvider, useDashboardT } from "@/app/components/DashboardI18n";
 import MainChrome from "@/app/components/MainChrome";
 import NavLinks from "@/app/components/NavLinks";
 import Link from "../web-shims/next-link";
@@ -19,7 +19,7 @@ import { COMPUTER_TEXT } from "../pages/computer/computer.i18n";
 import { DESKTOP_LINKS } from "./desktop-links";
 import { MailRotationBanner } from "./MailRotationBanner";
 import { matchRoute, navigate, refresh, useLocation } from "./router";
-import { HOME, READ_ONLY_HOME, READ_ONLY_ROUTES, ROUTES } from "./routes";
+import { HOME, READ_ONLY_HOME, READ_ONLY_NAV, READ_ONLY_ROUTES, ROUTES } from "./routes";
 import ThemePicker from "./ThemePicker";
 
 /** The desktop's own pages (DESKTOP_LINKS): same look as NavLinks' NavLink, active on the path. */
@@ -73,6 +73,7 @@ function Navbar({
   readOnly?: boolean;
 }) {
   const readOnlyText = EXISTING_TEAM_READONLY_TEXT[appLocale()];
+  const { t: dashboardT } = useDashboardT();
   const { path } = useLocation();
   const [signingOut, setSigningOut] = useState(false);
   const [signOutFailed, setSignOutFailed] = useState(false);
@@ -111,14 +112,20 @@ function Navbar({
         >
           <div className="flex w-max items-center gap-1 mx-auto">
             {readOnly ? (
-              <Link
-                href={READ_ONLY_HOME}
-                aria-current={path === READ_ONLY_HOME || path.startsWith(READ_ONLY_HOME + "/") ? "page" : undefined}
-                className="relative px-3 py-1.5 text-[11px] font-semibold tracking-widest hover:bg-[var(--color-card)] rounded transition-colors no-underline inline-block"
-                style={{ color: "var(--color-white)" }}
-              >
-                {readOnlyText.positions}
-              </Link>
+              READ_ONLY_NAV.map(({ href, label }) => {
+                const active = path === href || path.startsWith(href + "/");
+                return (
+                  <Link
+                    key={href}
+                    href={href}
+                    aria-current={active ? "page" : undefined}
+                    className="relative px-3 py-1.5 text-[11px] font-semibold tracking-widest hover:bg-[var(--color-card)] rounded transition-colors no-underline inline-block"
+                    style={{ color: active ? "var(--color-white)" : "var(--color-muted)" }}
+                  >
+                    {dashboardT(label)}
+                  </Link>
+                );
+              })
             ) : (
               <>
                 <NavLinks />

@@ -9,7 +9,9 @@ import {
   readDesktopVpsPositionFacets,
   readDesktopVpsPositions,
   readDesktopVpsPositionsWindow,
+  readDesktopVpsStats,
 } from "./existing-team-positions";
+import { syntheticStats } from "../test-support/existing-team-stats-fixture";
 import { enterExistingTeamReadOnly, leaveExistingTeamReadOnly, existingTeamReadOnly } from "./existing-team-readonly";
 
 const native = vi.hoisted(() => ({ invoke: vi.fn(), isTauri: vi.fn() }));
@@ -138,6 +140,30 @@ describe("existing-team positions bridge", () => {
     } finally {
       leaveExistingTeamReadOnly();
     }
+  });
+
+  it("reads the core's stats in one fixed request and refuses a reply that is not whole", async () => {
+    const good = syntheticStats();
+    native.invoke.mockResolvedValueOnce({ ok: true, data: good });
+    await expect(readDesktopVpsStats()).resolves.toEqual({ source: "vps", data: good });
+    expect(native.invoke).toHaveBeenCalledWith("existing_team_positions_read", { request: { op: "stats" } });
+
+    const { points: _points, ...withoutPoints } = good;
+    const { events: _events, ...withoutEvents } = good;
+    for (const data of [
+      withoutPoints,
+      withoutEvents,
+      { ...good, points: { rows: [], included: -1, of: 0 } },
+      { ...good, points: { rows: "no", included: 0, of: 0 } },
+      { ...good, stats: [] },
+      { ...good, recent: {} },
+      null,
+    ]) {
+      native.invoke.mockResolvedValueOnce({ ok: true, data });
+      await expect(readDesktopVpsStats()).resolves.toEqual({ source: "unavailable", code: "desktop_bad_reply" });
+    }
+    native.invoke.mockResolvedValueOnce({ ok: false, error: "positions_unavailable" });
+    await expect(readDesktopVpsStats()).resolves.toEqual({ source: "unavailable", code: "positions_unavailable" });
   });
 
   it("preserves related detail and correlated facets from fixed operations", async () => {

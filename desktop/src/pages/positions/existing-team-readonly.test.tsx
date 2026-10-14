@@ -11,6 +11,7 @@ import { installApiBridge, notInDesktop, shellApi, type ApiFetch } from "../../s
 import { navigate } from "../../shell/router";
 import Shell from "../../shell/Shell";
 import { createPermissiveSupabase } from "../../test-support/permissive-supabase";
+import { syntheticStats } from "../../test-support/existing-team-stats-fixture";
 import {
   syntheticDetail,
   syntheticFacets,
@@ -68,6 +69,7 @@ const recordApi = (next: ApiFetch): ApiFetch => async (input, init) => {
 };
 
 function companion(request: { op: string; filters?: Filters; id?: string }) {
+  if (request.op === "stats") return { ok: true, data: syntheticStats() };
   if (request.op === "facets") return { ok: true, data: { items: syntheticFacets } };
   if (request.op === "detail") {
     return { ok: true, data: request.id === "101" ? syntheticDetail : null };
@@ -135,7 +137,7 @@ describe("Posizioni on an existing team read only", () => {
     // The honest banner, and one navigation entry: no page that reads the cloud or the box.
     expect(screen.getByTestId("existing-team-readonly-banner")).toHaveTextContent(REASON);
     const nav = screen.getByRole("navigation", { name: "Navigazione app" });
-    expect(within(nav).getAllByRole("link").map((link) => link.textContent)).toEqual(["JHT", "Posizioni"]);
+    expect(within(nav).getAllByRole("link").map((link) => link.textContent)).toEqual(["JHT", "Dashboard", "Posizioni"]);
     // The sidebar starts closed; opened, its dataset comes from the companion
     // through the web route, and its families are the team's own.
     await userEvent.setup().click(screen.getByRole("button", { name: /filtri/i }));
@@ -237,11 +239,11 @@ describe("Posizioni on an existing team read only", () => {
     await waitFor(() => expect(screen.queryByRole("alert")).not.toBeInTheDocument());
   });
 
-  it("falls back to the list when the hash asks for a page that reads another source", async () => {
-    navigate("/dashboard", { replace: true });
+  it("falls back to the dashboard when the hash asks for a page that reads another source", async () => {
+    navigate("/map", { replace: true });
     render(<Shell />);
-    expect((await screen.findAllByText("Synthetic role A")).length).toBeGreaterThan(0);
-    expect(window.location.hash).toMatch(/^#\/positions/);
+    expect(await screen.findByRole("heading", { name: "Dashboard" })).toBeInTheDocument();
+    expect(window.location.hash).toMatch(/^#\/dashboard/);
   });
 });
 
