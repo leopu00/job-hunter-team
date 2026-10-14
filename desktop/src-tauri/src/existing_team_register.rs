@@ -838,32 +838,3 @@ pub(crate) async fn onboarding_existing_team_register(
         Err(code) => Err(failure(code)),
     }
 }
-
-/// What the app needs to connect read-only with the target this profile already
-/// has: the host (its key path included, because the read-only connection compares
-/// the whole host with the candidate's) and the team. Nothing else of the candidate.
-#[derive(Debug, Serialize, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
-pub(crate) struct ExistingTeamCandidateSummary {
-    host: ExecutionHost,
-    team_id: String,
-}
-
-pub(crate) fn candidate_summary_for(
-    root: &Path,
-    scope: &AccountScope,
-) -> Result<Option<ExistingTeamCandidateSummary>, &'static str> {
-    Ok(runtime::candidate_summary_at(root, scope)?
-        .map(|(host, team_id)| ExistingTeamCandidateSummary { host, team_id }))
-}
-
-/// Read-only and local: no SSH, no write. `null` when the profile has no candidate.
-#[tauri::command]
-pub(crate) fn existing_team_candidate_summary(
-    app: tauri::AppHandle,
-    scopes: State<'_, AccountScopeState>,
-) -> Result<Option<ExistingTeamCandidateSummary>, OnboardingError> {
-    let guard = scopes.lock_active().map_err(failure)?;
-    let root = runtime::root(&app).map_err(failure)?;
-    candidate_summary_for(&root, guard.scope()).map_err(failure)
-}

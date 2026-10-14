@@ -39,7 +39,7 @@ function errorCopy(code: string): { text: string; action: string } {
   return describeError(code, { fallback: "existing_team_connect_failed", locale: appLocale() });
 }
 
-/** A target for this profile is already saved (here or by whoever got there first): use it, never replace it. */
+/** A target for this profile is already saved (here or by whoever got there first): never replace it. */
 function targetAlreadySaved(error: unknown): boolean {
   const code = existingTeamErrorCode(error);
   return code === "existing_team_runtime_candidate_exists" ||
@@ -167,11 +167,14 @@ export default function ExistingTeamConnectModal({
     }
   }
 
-  /** The profile's saved target, connected read only with ITS host and team. */
-  async function openWithSavedTarget() {
-    const saved = await bridge.candidate();
-    if (!saved) throw { code: "existing_team_runtime_candidate_invalid" };
-    onReadOnlyConnected(await bridge.connectReadOnly({ teamId: saved.teamId, host: saved.host }));
+  /**
+   * A target for this profile exists by now. Never open it blindly: connect read
+   * only with what the person typed. If it is the same team and host that
+   * works; if not, the native check answers candidate_mismatch, which the
+   * dialog shows, instead of showing another team in silence.
+   */
+  async function openSavedTarget(request: ExistingTeamRequest) {
+    onReadOnlyConnected(await bridge.connectReadOnly(request));
   }
 
   /**
@@ -191,7 +194,7 @@ export default function ExistingTeamConnectModal({
       setReceipt(await bridge.discover(request));
     } catch (error) {
       if (!targetAlreadySaved(error)) throw error;
-      await openWithSavedTarget();
+      await openSavedTarget(request);
       return;
     }
     setStage("receipt");
@@ -210,7 +213,7 @@ export default function ExistingTeamConnectModal({
         await bridge.register(receipt.candidateSha256);
       } catch (error) {
         if (!targetAlreadySaved(error)) throw error;
-        await openWithSavedTarget();
+        await openSavedTarget(request);
         return;
       }
       onReadOnlyConnected(await bridge.connectReadOnly(request));

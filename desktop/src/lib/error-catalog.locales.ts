@@ -657,12 +657,12 @@ const COPY_BY_ENGLISH_TEXT: Readonly<Record<string, ErrorTranslations>> = {
     hu: ["Ezen a VPS-en futnak Job Hunter Team csapatok, de egyik sem ezzel az azonosítóval.", "Ellenőrizd a csapat azonosítóját, majd próbáld újra."],
     pt: ["Esta VPS tem equipas do Job Hunter Team, mas nenhuma com este identificador.", "Verifica o identificador da equipa e tenta novamente."],
   },
-  "More than one container on this VPS answers for this team.": {
-    de: ["Auf dieser VPS antwortet mehr als ein Container für dieses Team.", "Ich wähle nicht für dich aus. Bitte die Person, die die VPS verwaltet, nur einen übrig zu lassen."],
-    es: ["En este VPS responde más de un contenedor por este equipo.", "No elijo uno por ti. Pide a quien gestiona el VPS que deje solo uno."],
-    fr: ["Sur ce VPS, plusieurs conteneurs répondent pour cette équipe.", "Je n’en choisis pas un à ta place. Demande à la personne qui gère le VPS de n’en laisser qu’un."],
-    hu: ["Ezen a VPS-en több konténer is válaszol ennek a csapatnak.", "Nem választok helyetted. Kérd meg a VPS üzemeltetőjét, hogy csak egyet hagyjon meg."],
-    pt: ["Nesta VPS responde mais de um contentor por esta equipa.", "Não escolho um por ti. Pede a quem gere a VPS que deixe só um."],
+  "I cannot tell which single container on this VPS belongs to this team.": {
+    de: ["Auf dieser VPS lässt sich nicht eindeutig ein einzelner Container für dieses Team bestimmen.", "Ich wähle nicht für dich aus. Bitte die Person, die die VPS verwaltet, nur einen Container für das Team zu belassen."],
+    es: ["En este VPS no se puede determinar un único contenedor para este equipo.", "No elijo uno por ti. Pide a quien gestiona el VPS que deje un solo contenedor para el equipo."],
+    fr: ["Sur ce VPS, impossible de déterminer un seul conteneur pour cette équipe.", "Je n’en choisis pas un à ta place. Demande à la personne qui gère le VPS de ne laisser qu’un conteneur pour l’équipe."],
+    hu: ["Ezen a VPS-en nem állapítható meg egyetlen konténer ehhez a csapathoz.", "Nem választok helyetted. Kérd meg a VPS üzemeltetőjét, hogy csak egy konténert hagyjon a csapatnak."],
+    pt: ["Nesta VPS não é possível determinar um único contentor para esta equipa.", "Não escolho um por ti. Pede a quem gere a VPS que deixe só um contentor para a equipa."],
   },
   "A Job Hunter Team container on this VPS has no clearly identified official image.": {
     de: ["Ein Job-Hunter-Team-Container auf dieser VPS hat kein eindeutig identifiziertes offizielles Image.", "Bitte die Person, die die VPS verwaltet, das Team mit dem offiziellen Image zu aktualisieren, und versuche es dann erneut."],
@@ -851,7 +851,7 @@ export const ERROR_CATALOG_LOCALES: Readonly<Record<string, ErrorTranslations>> 
   existing_team_runtime_already_selected: translated("This profile already has a team selected."),
   existing_team_container_not_found: translated("No Job Hunter Team container is running on this VPS."),
   existing_team_not_found: translated("This VPS runs Job Hunter Team teams, but none with this identifier."),
-  existing_team_ambiguous: translated("More than one container on this VPS answers for this team."),
+  existing_team_ambiguous: translated("I cannot tell which single container on this VPS belongs to this team."),
   existing_team_image_unattested: translated("A Job Hunter Team container on this VPS has no clearly identified official image."),
   existing_team_too_many_containers: translated("This VPS runs more containers than the app will inspect."),
   existing_team_discovery_timeout: translated("The VPS took too long to answer."),

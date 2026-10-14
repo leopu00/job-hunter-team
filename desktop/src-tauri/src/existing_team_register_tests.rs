@@ -6,7 +6,7 @@
 use crate::{
     account_scope::AccountScope,
     existing_team_register::{
-        candidate_summary_for, classify, discover_with, parse_discovery, receipt_clear, receipt_for, receipt_store,
+        classify, discover_with, parse_discovery, receipt_clear, receipt_for, receipt_store,
         register_with, Budget, ExistingTeamRegisterRequest, Found, Receipt, DISCOVERY_SCRIPT,
     },
     existing_team_runtime::{self as runtime, CandidateWrite, RuntimeTarget},
@@ -1373,34 +1373,4 @@ fn t12_a_candidate_larger_than_every_read_accepts_is_refused_before_it_is_publis
         Some("existing_team_runtime_candidate_invalid")
     );
     assert!(runtime::candidate_bytes(&host(), TEAM, &target_of(&world, 1)).is_ok());
-}
-
-#[test]
-fn t14_the_summary_gives_back_only_the_host_and_team_of_the_candidate_of_this_scope() {
-    let sandbox = Sandbox::new();
-    write_pin(&sandbox);
-    assert_eq!(candidate_summary_for(&sandbox.root, &sandbox.scope), Ok(None));
-    let world = team_world();
-    let server = team_server(&world);
-    let found = discover(&sandbox, &server, Duration::from_secs(40)).expect("found");
-    assert_eq!(candidate_summary_for(&sandbox.root, &sandbox.scope), Ok(None), "discover wrote nothing");
-    register(&sandbox, &server, &receipt_of(&sandbox, &found)).expect("registered");
-    let summary = candidate_summary_for(&sandbox.root, &sandbox.scope).expect("read").expect("some");
-    let json = serde_json::to_value(&summary).expect("json");
-    assert_eq!(json, serde_json::json!({
-        "host": {"kind": "vps", "address": "203.0.113.7", "user": "jht", "port": 22, "keyPath": "/tmp/synthetic-key"},
-        "teamId": TEAM,
-    }));
-    let text = json.to_string();
-    for secret in [&found.runtime.container_id, &found.runtime.image_id, &found.runtime.digest, &found.candidate_sha256] {
-        assert!(!text.contains(secret.as_str()), "nothing of the verified runtime leaves the backend here");
-    }
-    // another scope has its own (here: none)
-    let other = AccountScope::synthetic_local(b"f6-summary-other");
-    let dir = sandbox.root.join("accounts").join(other.digest());
-    sandbox.make_private_dir(&dir);
-    assert_eq!(candidate_summary_for(&sandbox.root, &other), Ok(None));
-    // an invalid candidate is an error, not "none": the existing path reports it
-    fs::write(dir.join("existing-team-runtime-candidate.json"), b"{}").unwrap();
-    assert_eq!(candidate_summary_for(&sandbox.root, &other), Err("existing_team_runtime_candidate_invalid"));
 }

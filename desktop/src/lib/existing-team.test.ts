@@ -53,14 +53,12 @@ describe("existing team native bridge", () => {
     });
   });
 
-  it("discovers, registers and reads the saved target through three separate commands", async () => {
+  it("discovers and registers through two separate commands", async () => {
     vi.mocked(invoke).mockResolvedValueOnce({ candidateSha256: "a".repeat(64) });
     vi.mocked(invoke).mockResolvedValueOnce({ outcome: "registered" });
-    vi.mocked(invoke).mockResolvedValueOnce(null);
 
     await existingTeamBridge.discover({ teamId: "team-opaque-0001", host: HOST });
     await existingTeamBridge.register("a".repeat(64));
-    expect(await existingTeamBridge.candidate()).toBeNull();
 
     expect(invoke).toHaveBeenNthCalledWith(1, "onboarding_existing_team_discover", {
       request: { teamId: "team-opaque-0001", host: HOST },
@@ -69,7 +67,9 @@ describe("existing team native bridge", () => {
     expect(invoke).toHaveBeenNthCalledWith(2, "onboarding_existing_team_register", {
       request: { candidateSha256: "a".repeat(64), confirmed: true },
     });
-    expect(invoke).toHaveBeenNthCalledWith(3, "existing_team_candidate_summary");
+    // nothing of the saved target is ever read back into the renderer
+    expect(invoke).toHaveBeenCalledTimes(2);
+    expect("candidate" in existingTeamBridge).toBe(false);
   });
 
   it("knows the new refusals and treats the ones a retry cannot fix as terminal", () => {

@@ -51,12 +51,6 @@ export interface ExistingTeamRegisterResult {
   outcome: "registered" | "already_registered";
 }
 
-/** The host and team of the target this profile already has. */
-export interface ExistingTeamCandidateSummary {
-  host: ExistingTeamVpsHost;
-  teamId: string;
-}
-
 export interface ExistingTeamBridge {
   probe(host: ExistingTeamVpsHost): Promise<SshHostKeyProbe>;
   confirm(host: ExistingTeamVpsHost, probe: SshHostKeyProbe): Promise<void>;
@@ -66,8 +60,6 @@ export interface ExistingTeamBridge {
   discover(request: ExistingTeamRequest): Promise<ExistingTeamReceipt>;
   /** Saves the target the person was shown. Host and team come from the native receipt. */
   register(candidateSha256: string): Promise<ExistingTeamRegisterResult>;
-  /** The host and team of the target already saved for this profile, or null. */
-  candidate(): Promise<ExistingTeamCandidateSummary | null>;
 }
 
 export const existingTeamBridge: ExistingTeamBridge = {
@@ -95,9 +87,6 @@ export const existingTeamBridge: ExistingTeamBridge = {
     return invoke<ExistingTeamRegisterResult>("onboarding_existing_team_register", {
       request: { candidateSha256, confirmed: true },
     });
-  },
-  candidate() {
-    return invoke<ExistingTeamCandidateSummary | null>("existing_team_candidate_summary");
   },
 };
 

@@ -10,6 +10,7 @@ import type {
 } from "../lib/existing-team";
 import ExistingTeamConnectModal from "./ExistingTeamConnectModal";
 import { ERROR_CATALOG } from "../lib/error-catalog";
+import { EXISTING_TEAM_RECEIPT_TEXT } from "./existing-team-receipt.i18n";
 
 vi.mock("../components/SshKeyPicker", () => ({
   default: ({ value, onChange, disabled }: { value: string; onChange: (path: string) => void; disabled?: boolean }) => (
@@ -71,7 +72,6 @@ function bridge(overrides: Partial<ExistingTeamBridge> = {}): ExistingTeamBridge
     connectReadOnly: vi.fn().mockResolvedValue(READONLY_RESULT),
     discover: vi.fn().mockResolvedValue(RECEIPT),
     register: vi.fn().mockResolvedValue({ outcome: "registered" }),
-    candidate: vi.fn().mockResolvedValue(null),
     ...overrides,
   };
 }
@@ -96,7 +96,6 @@ describe("ExistingTeamConnectModal", () => {
     expect(native.connect).not.toHaveBeenCalled();
     expect(native.discover).not.toHaveBeenCalled();
     expect(native.register).not.toHaveBeenCalled();
-    expect(native.candidate).not.toHaveBeenCalled();
   });
 
   it("probes first, shows only the fingerprint and attaches after explicit confirmation", async () => {
@@ -270,7 +269,6 @@ describe("ExistingTeamConnectModal", () => {
     await waitFor(() => expect(onReadOnlyConnected).toHaveBeenCalledOnce());
     expect(native.discover).not.toHaveBeenCalled();
     expect(native.register).not.toHaveBeenCalled();
-    expect(native.candidate).not.toHaveBeenCalled();
   });
 
   it("without a saved target it reads what the server declares, saves nothing until confirmed, then opens read only", async () => {
@@ -347,18 +345,13 @@ describe("ExistingTeamConnectModal", () => {
     expect(register).toHaveBeenCalledTimes(1);
   });
 
-  it("when a target was saved in the meantime it opens THAT target, with its host and team, and replaces nothing", async () => {
+  it("when a target was saved in the meantime it connects with what the person TYPED and replaces nothing", async () => {
     for (const where of ["discover", "register"] as const) {
       const user = userEvent.setup();
-      const saved = {
-        teamId: "saved-team-opaque-0009",
-        host: { kind: "vps" as const, address: "saved.example.invalid", user: "jht", port: 2222, keyPath: "/synthetic/saved/key" },
-      };
       const exists = { code: "existing_team_runtime_candidate_exists" };
       const connectReadOnly = vi.fn().mockRejectedValueOnce(CANDIDATE_REQUIRED).mockResolvedValue(READONLY_RESULT);
       const native = bridge({
         connectReadOnly,
-        candidate: vi.fn().mockResolvedValue(saved),
         ...(where === "discover" ? { discover: vi.fn().mockRejectedValue(exists) } : { register: vi.fn().mockRejectedValue({ code: "existing_team_runtime_candidate_conflict" }) }),
       });
       const onReadOnlyConnected = vi.fn();
@@ -366,11 +359,45 @@ describe("ExistingTeamConnectModal", () => {
       await toReadOnlyClick(user);
       if (where === "register") await user.click(await screen.findByRole("button", { name: /conferma e apri in sola lettura/i }));
       await waitFor(() => expect(onReadOnlyConnected).toHaveBeenCalledOnce());
-      expect(native.candidate).toHaveBeenCalledOnce();
-      expect(connectReadOnly).toHaveBeenLastCalledWith({ teamId: saved.teamId, host: saved.host });
+      expect(connectReadOnly).toHaveBeenLastCalledWith({
+        teamId: "team-opaque-0001",
+        host: expect.objectContaining({ address: "host.example.invalid", keyPath: "/synthetic/private/id_ed25519" }),
+      });
       expect(native.connect).not.toHaveBeenCalled();
+      expect("candidate" in native).toBe(false);
       view.unmount();
     }
+  });
+
+  it("when the saved target is another team the person sees the mismatch, never that other team", async () => {
+    const user = userEvent.setup();
+    const connectReadOnly = vi.fn()
+      .mockRejectedValueOnce(CANDIDATE_REQUIRED)
+      .mockRejectedValueOnce({ code: "existing_team_runtime_candidate_mismatch" });
+    const native = bridge({ connectReadOnly, discover: vi.fn().mockRejectedValue({ code: "existing_team_runtime_candidate_exists" }) });
+    const onReadOnlyConnected = vi.fn();
+    render(<ExistingTeamConnectModal teamId="team-opaque-0001" bridge={native} onCancel={vi.fn()} onConnected={vi.fn()} onReadOnlyConnected={onReadOnlyConnected} />);
+    await toReadOnlyClick(user);
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent(ERROR_CATALOG.existing_team_runtime_candidate_mismatch.text.it);
+    expect(onReadOnlyConnected).not.toHaveBeenCalled();
+    expect(native.register).not.toHaveBeenCalled();
+    expect(connectReadOnly).toHaveBeenCalledTimes(2);
+  });
+
+  it("no language of the receipt step calls the data verified, safe or confirmed by the app", () => {
+    const banned: Record<string, RegExp> = {
+      it: /verificat|sicur/i, en: /verified|\bsafe\b|\bsecure\b/i, de: /verifiziert|geprüft|sicher/i,
+      fr: /vérifié|\bsûr/i, es: /verificad|seguro/i, pt: /verificad|seguro/i, hu: /ellenőrzött|biztonságos/i,
+    };
+    expect(Object.keys(EXISTING_TEAM_RECEIPT_TEXT).sort()).toEqual(Object.keys(banned).sort());
+    for (const [locale, text] of Object.entries(EXISTING_TEAM_RECEIPT_TEXT)) {
+      for (const [key, value] of Object.entries(text)) expect(value, `${locale}.${key}`).not.toMatch(banned[locale]);
+      expect(text.caution, locale).toMatch(/\S/);
+    }
+    // and the caution never claims "nothing at all happens on the VPS"
+    expect(EXISTING_TEAM_RECEIPT_TEXT.it.caution).toMatch(/agenti/i);
+    expect(EXISTING_TEAM_RECEIPT_TEXT.en.caution).toMatch(/no agents/i);
   });
 
   it("tells a refusal of the discovery with the catalog's words and never registers", async () => {

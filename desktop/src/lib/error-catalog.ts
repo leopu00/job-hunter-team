@@ -622,10 +622,10 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
     "Check the team identifier, then try again.",
   ),
   existing_team_ambiguous: copy(
-    "Su questa VPS più di un container risponde per questa squadra.",
-    "Non ne scelgo uno al posto tuo. Chiedi a chi gestisce la VPS di lasciarne uno solo.",
-    "More than one container on this VPS answers for this team.",
-    "I will not pick one for you. Ask whoever manages the VPS to leave only one.",
+    "Su questa VPS non riesco a individuare un solo container per questa squadra.",
+    "Non ne scelgo uno al posto tuo. Chiedi a chi gestisce la VPS di lasciare un solo container per la squadra.",
+    "I cannot tell which single container on this VPS belongs to this team.",
+    "I will not pick one for you. Ask whoever manages the VPS to leave only one container for the team.",
   ),
   existing_team_image_unattested: copy(
     "Un container di Job Hunter Team su questa VPS non ha un’immagine ufficiale ben identificata.",

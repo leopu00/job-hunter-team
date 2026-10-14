@@ -709,20 +709,6 @@ pub(crate) fn candidate_for_request_at(
     })
 }
 
-/// The host and team of the candidate this scope already has, or `None` if it has
-/// none. Read-only; nothing else of the candidate (no runtime id, no hash) leaves
-/// this function. `read_candidate_at` applies every rule of every other read.
-pub(crate) fn candidate_summary_at(
-    root: &Path,
-    scope: &AccountScope,
-) -> Result<Option<(ExecutionHost, String)>, &'static str> {
-    match read_candidate_at(root, scope) {
-        Ok((candidate, _)) => Ok(Some((candidate.host, candidate.team_id))),
-        Err("existing_team_runtime_candidate_required") => Ok(None),
-        Err(error) => Err(error),
-    }
-}
-
 /// Gets the custodial host only after binding it to the explicit team id.
 /// The CLI companion never accepts a host, target or pin from stdin.
 pub(crate) fn candidate_host_for_team(

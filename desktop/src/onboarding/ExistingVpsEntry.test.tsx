@@ -39,7 +39,7 @@ describe("existing VPS entry", () => {
 
 describe("existing team identifier", () => {
   const host = { kind: "vps" as const, address: "vps.example.invalid", user: "synthetic", port: 22, keyPath: "/synthetic/key" };
-  function native() { return { probe: vi.fn().mockResolvedValue({ status: "confirmation_required", algorithm: "ssh-ed25519", fingerprint: "synthetic" }), confirm: vi.fn().mockResolvedValue(undefined), connect: vi.fn().mockResolvedValue({}), connectReadOnly: vi.fn(), discover: vi.fn(), register: vi.fn(), candidate: vi.fn() }; }
+  function native() { return { probe: vi.fn().mockResolvedValue({ status: "confirmation_required", algorithm: "ssh-ed25519", fingerprint: "synthetic" }), confirm: vi.fn().mockResolvedValue(undefined), connect: vi.fn().mockResolvedValue({}), connectReadOnly: vi.fn(), discover: vi.fn(), register: vi.fn() }; }
   it("requires an explicit identifier before probing and sends it unchanged", async () => {
     const user = userEvent.setup(), bridge = native();
     render(<ExistingTeamConnectModal initialHost={host} bridge={bridge} onCancel={vi.fn()} onConnected={vi.fn()} onReadOnlyConnected={vi.fn()} />);
