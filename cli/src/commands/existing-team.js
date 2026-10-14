@@ -1,5 +1,6 @@
 import { Command } from 'commander';
 import { runExistingTeamAdapter } from '../lib/existing-team-adapter.js';
+import { digestProfileResult } from '../lib/existing-team-profile-digest.js';
 
 function emit(result) {
   process.stdout.write(`${JSON.stringify(result.value)}\n`);
@@ -37,8 +38,12 @@ export function registerExistingTeamCommand(program) {
     .action((options) => emit(runExistingTeamAdapter({ op: 'stats', profileId: profile(options.profile) })));
   cmd.command('profile')
     .requiredOption('--profile <id>', 'local profile id')
-    .description('the candidate profile (personal data on stdout): the whitelisted fields of candidate_profile.yml and the summaries, with what was missing, dropped or cut; to compare, keep only state, bytes and sha256')
-    .action((options) => emit(runExistingTeamAdapter({ op: 'profile', profileId: profile(options.profile) })));
+    .option('--digest', 'print only the envelope and, for the profile file, each field present and each summary, their state, bytes, sha256 and lengths: no value and no summary name')
+    .description('the candidate profile: the whitelisted fields of candidate_profile.yml and the summaries, with what was missing, dropped or cut. WITHOUT --digest stdout IS the candidate\'s personal data')
+    .action((options) => {
+      const result = runExistingTeamAdapter({ op: 'profile', profileId: profile(options.profile) });
+      emit(options.digest ? digestProfileResult(result) : result);
+    });
   cmd.command('facets')
     .requiredOption('--profile <id>', 'local profile id')
     .action((options) => emit(runExistingTeamAdapter({ op: 'facets', profileId: profile(options.profile) })));

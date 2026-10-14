@@ -54,7 +54,7 @@ jht existing-team detail <position-id> --profile <local-profile-id>
 jht existing-team list --profile <local-profile-id> --query <text>
 jht existing-team facets --profile <local-profile-id>
 jht existing-team stats --profile <local-profile-id>
-jht existing-team profile --profile <local-profile-id>
+jht existing-team profile --profile <local-profile-id> [--digest]
 ```
 
 Commands return JSON and a nonzero exit code on failure. A verified connection
@@ -63,11 +63,14 @@ does not start agents or invoke a provider. Reconnecting revalidates the same
 selected runtime and does not replace another selection. This preview requires
 a companion built for the client platform; distribution packaging is separate.
 
-`jht existing-team profile` prints the candidate's own profile (the whitelisted
-fields of `candidate_profile.yml` and the summaries, with their text) to stdout:
-treat that output as personal data. To compare it without reading it, keep only
-`state`, `bytes` and `sha256` of `data.profile` and of each item of
-`data.summaries.items`, plus `parse`, `kept`, `dropped`, `included` and `of`.
+Without `--digest`, `jht existing-team profile` prints the candidate's own
+profile (the whitelisted fields of `candidate_profile.yml` and the summaries,
+with their text) to stdout: treat that output as personal data. With `--digest`
+it prints only the envelope, and for the profile file and each summary its
+state, bytes and sha256, `parse`, `kept`, `dropped`, `included` and `of`, and
+the name, kind and length of each field present: no value, and a summary name
+other than the four conventional ones (`about`, `goals`, `preferences`,
+`strengths`) is replaced by a hash of itself.
 
 ## See also
 
