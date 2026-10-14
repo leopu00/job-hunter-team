@@ -4,6 +4,8 @@ import { dirname, isAbsolute, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const MAX_REPLY = 2 * 1024 * 1024;
+const MAX_REQUEST = 8 * 1024;
+const ADAPTER_TIMEOUT_MS = 40_000;
 const BIN_DIR = dirname(fileURLToPath(new URL('../../bin/jht.js', import.meta.url)));
 
 export function adapterFailure(error, code = 69) {
@@ -24,22 +26,41 @@ export function resolveExistingTeamCompanion(env = process.env) {
   }
 }
 
-export function validAdapterRequest(request) {
-  if (!request || typeof request !== 'object' || Array.isArray(request)) return false;
-  if (typeof request.profileId !== 'string' || !/^[0-9a-f]{64}$/.test(request.profileId)) return false;
-  if (request.op === 'connect') return typeof request.teamId === 'string' && /^[A-Za-z0-9_-]{16,128}$/.test(request.teamId);
-  if (request.op === 'detail') return typeof request.id === 'string' && /^\d{1,20}$/.test(request.id);
-  if (request.op === 'facets') return Object.keys(request).every((key) => ['profileId', 'op'].includes(key));
-  if (request.op === 'list') return !('filters' in request) || (request.filters && typeof request.filters === 'object' && !Array.isArray(request.filters));
-  return false;
+function encodeTypedRequest(request) {
+  if (!request || typeof request !== 'object' || Array.isArray(request)) return null;
+  try {
+    const encoded = JSON.stringify(request);
+    return Buffer.byteLength(encoded, 'utf8') <= MAX_REQUEST ? encoded : null;
+  } catch {
+    return null;
+  }
 }
 
-export function runExistingTeamAdapter(request, { env = process.env, spawn = spawnSync } = {}) {
+export function validAdapterRequest(request) {
+  if (!encodeTypedRequest(request)) return false;
+  if (typeof request.profileId !== 'string' || !/^[0-9a-f]{64}$/.test(request.profileId)) return false;
+  const own = Object.keys(request);
+  const exactKeys = (keys) => own.length === keys.length && own.every((key) => keys.includes(key));
+  if (request.op === 'connect') return exactKeys(['profileId', 'op', 'teamId']) && typeof request.teamId === 'string' && /^[A-Za-z0-9_-]{16,128}$/.test(request.teamId);
+  if (request.op === 'detail') return exactKeys(['profileId', 'op', 'id']) && typeof request.id === 'string' && /^\d{1,20}$/.test(request.id);
+  if (request.op === 'facets') return exactKeys(['profileId', 'op']);
+  if (request.op !== 'list' || !own.every((key) => ['profileId', 'op', 'filters'].includes(key))) return false;
+  if (!('filters' in request)) return true;
+  const { filters } = request;
+  if (!filters || typeof filters !== 'object' || Array.isArray(filters)) return false;
+  if ('q' in filters && typeof filters.q !== 'string') return false;
+  if ('limit' in filters && (!Number.isFinite(filters.limit) || !Number.isInteger(filters.limit))) return false;
+  return true;
+}
+
+export function runExistingTeamAdapter(request, { env = process.env, spawn = spawnSync, resolve = resolveExistingTeamCompanion } = {}) {
   if (!validAdapterRequest(request)) return adapterFailure('adapter_request_invalid', 64);
-  const companion = resolveExistingTeamCompanion(env);
+  const input = encodeTypedRequest(request);
+  if (!input) return adapterFailure('adapter_request_invalid', 64);
+  const companion = resolve(env);
   if (!companion) return adapterFailure('existing_team_adapter_unavailable', 69);
   const result = spawn(companion, ['--stdio-json'], {
-    input: JSON.stringify(request), encoding: 'utf8', timeout: 20_000, maxBuffer: MAX_REPLY,
+    input, encoding: 'utf8', timeout: ADAPTER_TIMEOUT_MS, maxBuffer: MAX_REPLY,
     env: { PATH: env.PATH ?? '' },
   });
   if (result.error || result.status === null || Buffer.byteLength(result.stdout || '', 'utf8') > MAX_REPLY) {
@@ -47,7 +68,7 @@ export function runExistingTeamAdapter(request, { env = process.env, spawn = spa
   }
   try {
     const value = JSON.parse(result.stdout);
-    if (!value || typeof value !== 'object' || Array.isArray(value) || typeof value.ok !== 'boolean' || typeof value.code !== 'number') throw new Error('invalid');
+    if (!value || typeof value !== 'object' || Array.isArray(value) || typeof value.ok !== 'boolean' || !Number.isInteger(value.code)) throw new Error('invalid');
     return { code: Number.isInteger(result.status) ? result.status : 69, value };
   } catch {
     return adapterFailure('existing_team_adapter_invalid_reply', 69);

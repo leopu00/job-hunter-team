@@ -24,7 +24,7 @@ struct AdapterRequest {
 #[derive(Deserialize)]
 #[serde(tag = "op", rename_all = "lowercase", deny_unknown_fields)]
 enum AdapterOperation {
-    Connect { team_id: String },
+    Connect { #[serde(rename = "teamId")] team_id: String },
     List { #[serde(default)] filters: Option<Value> },
     Detail { id: String },
     Facets,
@@ -45,6 +45,22 @@ fn fail(phase: &'static str, error: &str) -> (i32, Value) {
     (code_for(error), json!({"ok":false,"phase":phase,"code":code_for(error),"error":error}))
 }
 
+fn envelope_core(phase: &'static str, result: Value) -> (i32, Value) {
+    match result.get("ok").and_then(Value::as_bool) {
+        Some(true) => (0, json!({
+            "ok": true,
+            "phase": phase,
+            "code": 0,
+            "data": result.get("data").cloned().unwrap_or(Value::Null),
+        })),
+        Some(false) => {
+            let error = result.get("error").and_then(Value::as_str).unwrap_or("positions_unavailable");
+            fail(phase, error)
+        }
+        None => fail(phase, "positions_unavailable"),
+    }
+}
+
 fn execute(app: &tauri::AppHandle, request: AdapterRequest) -> (i32, Value) {
     let scope = match account_scope::cli_local_scope(app, &request.profile_id) {
         Ok(scope) => scope,
@@ -60,10 +76,10 @@ fn execute(app: &tauri::AppHandle, request: AdapterRequest) -> (i32, Value) {
                 Some(filters) => json!({"op":"list","filters":filters}),
                 None => json!({"op":"list"}),
             };
-            (0, existing_team_runtime::positions_read_for_scope(app, &scope, request))
+            envelope_core("read", existing_team_runtime::positions_read_for_scope(app, &scope, request))
         }
-        AdapterOperation::Detail { id } => (0, existing_team_runtime::positions_read_for_scope(app, &scope, json!({"op":"detail","id":id}))),
-        AdapterOperation::Facets => (0, existing_team_runtime::positions_read_for_scope(app, &scope, json!({"op":"facets"}))),
+        AdapterOperation::Detail { id } => envelope_core("read", existing_team_runtime::positions_read_for_scope(app, &scope, json!({"op":"detail","id":id}))),
+        AdapterOperation::Facets => envelope_core("read", existing_team_runtime::positions_read_for_scope(app, &scope, json!({"op":"facets"}))),
     }
 }
 
@@ -87,6 +103,8 @@ pub fn run() -> i32 {
             return 64;
         }
     };
+    let mut context = tauri::generate_context!();
+    context.config_mut().app.windows.clear();
     let outcome = std::sync::Arc::new(std::sync::Mutex::new(None));
     let reply = outcome.clone();
     let run = tauri::Builder::default()
@@ -96,11 +114,45 @@ pub fn run() -> i32 {
             app.exit(0);
             Ok(())
         })
-        .run(tauri::generate_context!());
+        .run(context);
     let (code, value) = outcome.lock().ok().and_then(|mut reply| reply.take()).unwrap_or_else(|| {
         let detail = if run.is_err() { "adapter_unavailable" } else { "adapter_failed" };
         fail("adapter", detail)
     });
     let _ = serde_json::to_writer(io::stdout(), &value);
     code
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn decoded(input: &str) -> AdapterRequest {
+        serde_json::from_str(input).expect("exact Node request must decode")
+    }
+
+    #[test]
+    fn decodes_exact_node_requests_with_flatten_and_strict_fields() {
+        let connect = decoded(r#"{"profileId":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","op":"connect","teamId":"existing_team_0001"}"#);
+        assert!(matches!(connect.operation, AdapterOperation::Connect { ref team_id } if team_id == "existing_team_0001"));
+        let list = decoded(r#"{"profileId":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","op":"list","filters":{"q":"engineer","limit":10}}"#);
+        assert!(matches!(list.operation, AdapterOperation::List { filters: Some(_) }));
+        let detail = decoded(r#"{"profileId":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","op":"detail","id":"42"}"#);
+        assert!(matches!(detail.operation, AdapterOperation::Detail { ref id } if id == "42"));
+        let facets = decoded(r#"{"profileId":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","op":"facets"}"#);
+        assert!(matches!(facets.operation, AdapterOperation::Facets));
+        assert!(serde_json::from_str::<AdapterRequest>(r#"{"profileId":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","op":"facets","unexpected":true}"#).is_err());
+    }
+
+    #[test]
+    fn query_core_results_use_one_cli_envelope() {
+        for data in [json!({"items": []}), Value::Null, json!({"items": [{"id": "42"}]})] {
+            let (code, value) = envelope_core("read", json!({"ok": true, "data": data.clone()}));
+            assert_eq!(code, 0);
+            assert_eq!(value, json!({"ok": true, "phase": "read", "code": 0, "data": data}));
+        }
+        let (code, value) = envelope_core("read", json!({"ok": false, "error": "positions_unavailable"}));
+        assert_ne!(code, 0);
+        assert_eq!(value, json!({"ok": false, "phase": "read", "code": code, "error": "positions_unavailable"}));
+    }
 }
