@@ -2543,10 +2543,20 @@ pub(crate) async fn onboarding_resume_snapshot(
     result
 }
 
-fn existing_team_probe_with(
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct ExistingTeamReadiness {
+    pub(crate) snapshot: OnboardingSnapshot,
+    pub(crate) readiness: bool,
+}
+
+/// Validates the immutable target and team identity, then reports whether its
+/// assistant is active. A missing assistant is a degraded read-only state;
+/// it never authorizes messages, starts, or provider work.
+fn existing_team_readonly_probe_with(
     team_id: &str,
     run: impl FnOnce(&[u8]) -> Result<ProcessResult, &'static str>,
-) -> Result<OnboardingSnapshot, OnboardingError> {
+) -> Result<ExistingTeamReadiness, OnboardingError> {
     if !valid_team_id(team_id) {
         return Err(failure("invalid_team_id"));
     }
@@ -2568,10 +2578,25 @@ fn existing_team_probe_with(
     if !snapshot.runtime_installed || !snapshot.container_running {
         return Err(failure("existing_team_unavailable"));
     }
-    if !snapshot.captain_running || !snapshot.assistant_running {
+    if !snapshot.captain_running {
         return Err(failure("existing_team_not_active"));
     }
-    Ok(snapshot)
+    Ok(ExistingTeamReadiness {
+        readiness: snapshot.assistant_running,
+        snapshot,
+    })
+}
+
+/// GUI onboarding retains its existing policy: it needs both team sessions.
+fn existing_team_probe_with(
+    team_id: &str,
+    run: impl FnOnce(&[u8]) -> Result<ProcessResult, &'static str>,
+) -> Result<OnboardingSnapshot, OnboardingError> {
+    let result = existing_team_readonly_probe_with(team_id, run)?;
+    if !result.readiness {
+        return Err(failure("existing_team_not_active"));
+    }
+    Ok(result.snapshot)
 }
 
 #[tauri::command]
@@ -5429,6 +5454,27 @@ mod tests {
         .unwrap();
         assert!(active.container_running && active.captain_running && active.assistant_running);
         assert!(!active.profile_ready && !active.assistant_welcomed);
+
+        let degraded = existing_team_readonly_probe_with(team_id, |input| {
+            assert_eq!(input, format!("{team_id}\n").as_bytes());
+            Ok(ProcessResult {
+                code: 0,
+                stdout: b"runtimeInstalled=1\ncontainerRunning=1\ncaptainRunning=1\nassistantRunning=0\n".to_vec(),
+            })
+        })
+        .unwrap();
+        assert!(!degraded.readiness);
+        assert!(degraded.snapshot.captain_running);
+        assert!(!degraded.snapshot.assistant_running);
+        assert_eq!(
+            existing_team_probe_with(team_id, |_| Ok(ProcessResult {
+                code: 0,
+                stdout: b"runtimeInstalled=1\ncontainerRunning=1\ncaptainRunning=1\nassistantRunning=0\n".to_vec(),
+            }))
+            .unwrap_err()
+            .code,
+            "existing_team_not_active"
+        );
 
         let mismatch = existing_team_probe_with(team_id, |_| {
             outcome(false).map(|mut result| {
