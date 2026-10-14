@@ -111,7 +111,7 @@ pub fn run() -> i32 {
         .setup(move |app| {
             let result = execute(app.handle(), request);
             *reply.lock().expect("adapter reply lock") = Some(result);
-            app.exit(0);
+            app.handle().exit(0);
             Ok(())
         })
         .run(context);

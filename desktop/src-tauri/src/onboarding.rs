@@ -4117,7 +4117,7 @@ fn assistant_reached(snapshot: &OnboardingSnapshot) -> bool {
 #[cfg(test)]
 mod tests {
     use super::{
-        assistant_reached, existing_team_probe_with, expected_installer_digest, failure,
+        assistant_reached, existing_team_probe_with, existing_team_readonly_probe_with, expected_installer_digest, failure,
         parse_snapshot, parse_start_limits, parse_verified_snapshot, provider_bootstrap_input,
         redact, resume_team_prerequisite, start_and_verify_local_container_with, start_limits_gate,
         valid_interactive_request_id, valid_pairing_token, valid_provider_login_input,
