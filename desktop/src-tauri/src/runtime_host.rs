@@ -481,6 +481,9 @@ pub(crate) fn ssh_base_args(host: &ValidatedHost) -> Result<Vec<OsString>, &'sta
         return Err("not_vps");
     };
     Ok(vec![
+        "-a".into(),
+        "-x".into(),
+        "-T".into(),
         "-o".into(),
         "BatchMode=yes".into(),
         "-o".into(),
@@ -780,7 +783,8 @@ where
 mod tests {
     use super::{
         decode_base64, encode_base64, onboarding_ssh_host_key_confirm,
-        onboarding_ssh_host_key_probe, parse_scanned_host_key, probe_status, valid_address,
+        onboarding_ssh_host_key_probe, parse_scanned_host_key, probe_status, ssh_base_args,
+        valid_address,
         valid_user, write_pinned_host_key, ExecutionHost, HostKeyError, ScannedHostKey,
         SshHostKeyProbe,
     };
@@ -830,6 +834,42 @@ mod tests {
         for bad in ["", "-root", "root@host", "user name", "a/b"] {
             assert!(!valid_user(bad), "{bad}");
         }
+    }
+
+    #[test]
+    fn ssh_base_disables_forwarding_and_tty_but_an_explicit_oauth_tty_stays_last() {
+        let host = super::ValidatedHost::Vps {
+            address: "test-host".into(),
+            user: "test".into(),
+            port: 22,
+            key_path: "/private/synthetic-key".into(),
+            known_hosts: "/private/synthetic-known-hosts".into(),
+        };
+        let mut args = ssh_base_args(&host).unwrap();
+        let values: Vec<_> = args.iter().map(|value| value.to_string_lossy()).collect();
+        for required in [
+            "-a",
+            "-x",
+            "-T",
+            "BatchMode=yes",
+            "ConnectTimeout=12",
+            "StrictHostKeyChecking=yes",
+        ] {
+            assert!(values.iter().any(|value| value == required), "{required}");
+        }
+        let base_tty = values.iter().position(|value| value == "-T").unwrap();
+
+        // The OAuth caller pops the destination and adds `-tt` before it, so
+        // its explicit interactive request remains later than the base `-T`.
+        let destination = args.pop().unwrap();
+        args.push("-tt".into());
+        args.push(destination);
+        assert!(base_tty < args.len() - 2);
+        assert_eq!(args[args.len() - 2].to_string_lossy(), "-tt");
+        assert_eq!(
+            args.last().unwrap().to_string_lossy(),
+            "test@test-host"
+        );
     }
 
     #[test]
