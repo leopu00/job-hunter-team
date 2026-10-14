@@ -20,7 +20,7 @@ export const EXISTING_TEAM_READONLY_TEXT: Record<Locale, ExistingTeamReadOnlyTex
   it: {
     assistantOff: "Solo lettura: assistente non attivo",
     connectionReadOnly: "Solo lettura: questa connessione non consente modifiche",
-    banner: "Stai consultando gli annunci della squadra esistente. Le azioni che modificano restano disabilitate.",
+    banner: "Stai consultando gli annunci della squadra esistente in sola lettura. Le azioni che modificano i dati restano disabilitate; l’avvio dell’assistente è separato e chiede una conferma.",
     team: "Squadra",
     profile: "Profilo",
     back: "Torna alla configurazione",
@@ -30,7 +30,7 @@ export const EXISTING_TEAM_READONLY_TEXT: Record<Locale, ExistingTeamReadOnlyTex
   en: {
     assistantOff: "Read only: assistant not active",
     connectionReadOnly: "Read only: this connection does not allow changes",
-    banner: "You are browsing the existing team's positions. Actions that change anything stay disabled.",
+    banner: "You are browsing the existing team's positions read only. Actions that change data stay disabled; starting the assistant is separate and asks for a confirmation.",
     team: "Team",
     profile: "Profile",
     back: "Back to setup",
@@ -40,7 +40,7 @@ export const EXISTING_TEAM_READONLY_TEXT: Record<Locale, ExistingTeamReadOnlyTex
   de: {
     assistantOff: "Nur Lesen: Assistent nicht aktiv",
     connectionReadOnly: "Nur Lesen: Diese Verbindung erlaubt keine Änderungen",
-    banner: "Du siehst die Stellen des vorhandenen Teams. Aktionen, die etwas ändern, bleiben deaktiviert.",
+    banner: "Du siehst die Stellen des vorhandenen Teams nur lesend. Aktionen, die Daten ändern, bleiben deaktiviert; das Starten des Assistenten ist davon getrennt und verlangt eine Bestätigung.",
     team: "Team",
     profile: "Profil",
     back: "Zurück zur Einrichtung",
@@ -50,7 +50,7 @@ export const EXISTING_TEAM_READONLY_TEXT: Record<Locale, ExistingTeamReadOnlyTex
   fr: {
     assistantOff: "Lecture seule : assistant inactif",
     connectionReadOnly: "Lecture seule : cette connexion n’autorise aucune modification",
-    banner: "Vous consultez les offres de l’équipe existante. Les actions qui modifient quoi que ce soit restent désactivées.",
+    banner: "Vous consultez les offres de l’équipe existante en lecture seule. Les actions qui modifient les données restent désactivées ; le démarrage de l’assistant est distinct et demande une confirmation.",
     team: "Équipe",
     profile: "Profil",
     back: "Retour à la configuration",
@@ -60,7 +60,7 @@ export const EXISTING_TEAM_READONLY_TEXT: Record<Locale, ExistingTeamReadOnlyTex
   es: {
     assistantOff: "Solo lectura: asistente no activo",
     connectionReadOnly: "Solo lectura: esta conexión no permite cambios",
-    banner: "Estás consultando las ofertas del equipo existente. Las acciones que modifican algo siguen desactivadas.",
+    banner: "Estás consultando las ofertas del equipo existente en solo lectura. Las acciones que modifican datos siguen desactivadas; el inicio del asistente es aparte y pide una confirmación.",
     team: "Equipo",
     profile: "Perfil",
     back: "Volver a la configuración",
@@ -70,7 +70,7 @@ export const EXISTING_TEAM_READONLY_TEXT: Record<Locale, ExistingTeamReadOnlyTex
   pt: {
     assistantOff: "Só leitura: assistente não ativo",
     connectionReadOnly: "Só leitura: esta ligação não permite alterações",
-    banner: "Está a consultar as vagas da equipa existente. As ações que alteram algo continuam desativadas.",
+    banner: "Está a consultar as vagas da equipa existente só em leitura. As ações que alteram dados continuam desativadas; o arranque do assistente é separado e pede uma confirmação.",
     team: "Equipa",
     profile: "Perfil",
     back: "Voltar à configuração",
@@ -80,7 +80,7 @@ export const EXISTING_TEAM_READONLY_TEXT: Record<Locale, ExistingTeamReadOnlyTex
   hu: {
     assistantOff: "Csak olvasható: az asszisztens nem aktív",
     connectionReadOnly: "Csak olvasható: ez a kapcsolat nem engedi a módosítást",
-    banner: "A meglévő csapat pozícióit nézi. A módosító műveletek le vannak tiltva.",
+    banner: "A meglévő csapat pozícióit csak olvasható módban nézi. Az adatokat módosító műveletek le vannak tiltva; az asszisztens indítása külön dolog, és megerősítést kér.",
     team: "Csapat",
     profile: "Profil",
     back: "Vissza a beállításhoz",

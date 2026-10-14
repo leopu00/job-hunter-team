@@ -34,7 +34,7 @@ export interface ExistingTeamStatusText {
 export const EXISTING_TEAM_STATUS_TEXT: Record<Locale, ExistingTeamStatusText> = {
   it: {
     title: "Squadra",
-    intro: "Lo stato della squadra sulla VPS, letto adesso con un comando di sola lettura. Da qui non parte nessuna azione.",
+    intro: "Lo stato della squadra sulla VPS, letto adesso con un comando di sola lettura. La consultazione è in sola lettura: le azioni sui dati restano disabilitate; l’avvio dell’assistente è separato e chiede una conferma.",
     yes: "Sì",
     no: "No",
     refresh: "Aggiorna",
@@ -63,7 +63,7 @@ export const EXISTING_TEAM_STATUS_TEXT: Record<Locale, ExistingTeamStatusText> =
   },
   en: {
     title: "Team",
-    intro: "The team’s state on the VPS, read just now with a read-only command. No action starts from here.",
+    intro: "The team’s state on the VPS, read just now with a read-only command. Viewing is read only: actions on data stay disabled; starting the assistant is separate and asks for a confirmation.",
     yes: "Yes",
     no: "No",
     refresh: "Refresh",
@@ -92,7 +92,7 @@ export const EXISTING_TEAM_STATUS_TEXT: Record<Locale, ExistingTeamStatusText> =
   },
   de: {
     title: "Team",
-    intro: "Der Zustand des Teams auf dem VPS, soeben mit einem Lesebefehl gelesen. Von hier startet keine Aktion.",
+    intro: "Der Zustand des Teams auf dem VPS, soeben mit einem Lesebefehl gelesen. Die Ansicht ist nur lesend: Aktionen auf Daten bleiben deaktiviert; das Starten des Assistenten ist getrennt und verlangt eine Bestätigung.",
     yes: "Ja",
     no: "Nein",
     refresh: "Aktualisieren",
@@ -121,7 +121,7 @@ export const EXISTING_TEAM_STATUS_TEXT: Record<Locale, ExistingTeamStatusText> =
   },
   fr: {
     title: "Équipe",
-    intro: "L’état de l’équipe sur le VPS, lu à l’instant avec une commande en lecture seule. Aucune action ne part d’ici.",
+    intro: "L’état de l’équipe sur le VPS, lu à l’instant avec une commande en lecture seule. La consultation est en lecture seule : les actions sur les données restent désactivées ; le démarrage de l’assistant est distinct et demande une confirmation.",
     yes: "Oui",
     no: "Non",
     refresh: "Actualiser",
@@ -150,7 +150,7 @@ export const EXISTING_TEAM_STATUS_TEXT: Record<Locale, ExistingTeamStatusText> =
   },
   es: {
     title: "Equipo",
-    intro: "El estado del equipo en el VPS, leído ahora con un comando de solo lectura. Desde aquí no se inicia ninguna acción.",
+    intro: "El estado del equipo en el VPS, leído ahora con un comando de solo lectura. La consulta es de solo lectura: las acciones sobre los datos siguen desactivadas; el inicio del asistente es aparte y pide una confirmación.",
     yes: "Sí",
     no: "No",
     refresh: "Actualizar",
@@ -179,7 +179,7 @@ export const EXISTING_TEAM_STATUS_TEXT: Record<Locale, ExistingTeamStatusText> =
   },
   pt: {
     title: "Equipa",
-    intro: "O estado da equipa no VPS, lido agora com um comando só de leitura. Daqui não parte nenhuma ação.",
+    intro: "O estado da equipa no VPS, lido agora com um comando só de leitura. A consulta é só de leitura: as ações sobre os dados continuam desativadas; o arranque do assistente é separado e pede uma confirmação.",
     yes: "Sim",
     no: "Não",
     refresh: "Atualizar",
@@ -208,7 +208,7 @@ export const EXISTING_TEAM_STATUS_TEXT: Record<Locale, ExistingTeamStatusText> =
   },
   hu: {
     title: "Csapat",
-    intro: "A csapat állapota a VPS-en, az imént csak olvasható paranccsal beolvasva. Innen nem indul semmilyen művelet.",
+    intro: "A csapat állapota a VPS-en, az imént csak olvasható paranccsal beolvasva. A megtekintés csak olvasható: az adatokon végzett műveletek le vannak tiltva; az asszisztens indítása külön dolog, és megerősítést kér.",
     yes: "Igen",
     no: "Nem",
     refresh: "Frissítés",
