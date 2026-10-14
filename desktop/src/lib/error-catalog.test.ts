@@ -40,6 +40,13 @@ const NOT_ERRORS: Record<string, string> = {
   schema_version: "profile field",
   seniority_target: "profile field",
   tag_list: "profile block kind",
+  // How the profile file of an existing team was read: states the Profile page tells in its
+  // own sentences, not errors.
+  aliases_unsupported: "profile file parse state",
+  invalid_yaml: "profile file parse state",
+  not_a_mapping: "profile file parse state",
+  // The outcome of «Attiva assistente» when the assistant was already running: a result, not an error.
+  already_active: "assistant start outcome",
   target_role: "profile field",
   target_role_category_id: "profile field",
   target_specialty: "profile field",

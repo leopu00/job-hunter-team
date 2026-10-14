@@ -592,6 +592,18 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
     "Check the VPS and team identifier, then try again.",
   ),
   existing_team_unavailable: TEAM_UNREACHABLE,
+  existing_team_runtime_required: copy(
+    "Per questa squadra non c’è un collegamento verificato da cui partire.",
+    "Ricollega la squadra esistente dalla configurazione, poi riprova.",
+    "There is no verified connection for this team to start from.",
+    "Connect the existing team again from the setup, then try again.",
+  ),
+  assistant_start_not_confirmed: copy(
+    "L’azione non è stata confermata: non è partito nessun comando.",
+    "Conferma l’azione dopo aver letto cosa comporta, poi riprova.",
+    "The action was not confirmed: no command was sent.",
+    "Confirm the action after reading what it involves, then try again.",
+  ),
   ssh_unavailable: copy(
     "La VPS non è raggiungibile tramite SSH.",
     "Controlla che la VPS sia accesa e connessa, poi riprova.",

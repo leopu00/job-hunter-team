@@ -12,6 +12,7 @@ import {
 } from "../../lib/existing-team-status";
 import { useRefresh } from "../../shell/router";
 import type { PageProps } from "../types";
+import { AssistantCard } from "./assistant-card";
 import { EXISTING_TEAM_STATUS_TEXT } from "./existing-team-status.i18n";
 
 function stamp(at: number): string {
@@ -92,6 +93,8 @@ export default function ExistingTeamStatusPage(_props: PageProps) {
         {t.intro}
       </p>
 
+      <AssistantCard />
+
       {reading.kind === "unknown" && (
         <p data-testid="team-status-unknown" className="text-[12px]" style={{ color: "var(--color-muted)" }}>
           {t.unknown}
@@ -154,7 +157,9 @@ export default function ExistingTeamStatusPage(_props: PageProps) {
                   )}
                   {fromConnection && (
                     <p data-testid={`team-status-${field}-source`} className="mt-1 text-[10px]" style={{ color: "var(--color-muted)" }}>
-                      {connection ? t.atConnection.replace("{time}", stamp(connection.at)) : t.noConnectionValue}
+                      {connection
+                        ? (connection.source === "assistant_start" ? t.atAssistantStart : t.atConnection).replace("{time}", stamp(connection.at))
+                        : t.noConnectionValue}
                     </p>
                   )}
                 </li>
@@ -162,10 +167,12 @@ export default function ExistingTeamStatusPage(_props: PageProps) {
             })}
           </ul>
           <p data-testid="team-status-actions" className="mt-4 text-[11px]" style={{ color: "var(--color-muted)" }}>
-            {((connection ? connection.assistantRunning : readOnly?.assistantActive) ? t.actionsReadOnly : t.actionsAssistantOff).replace(
-              "{time}",
-              connection ? stamp(connection.at) : "—",
-            )}
+            {(connection?.source === "assistant_start"
+              ? t.actionsAfterStart
+              : (connection ? connection.assistantRunning : readOnly?.assistantActive)
+                ? t.actionsReadOnly
+                : t.actionsAssistantOff
+            ).replace("{time}", connection ? stamp(connection.at) : "—")}
           </p>
         </section>
       )}

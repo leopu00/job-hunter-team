@@ -73,3 +73,42 @@ npm run tauri:dev
 The archived Electron reference lives in
 [`archive/electron-desktop/`](../archive/electron-desktop/) and is not a
 dependency of this package.
+
+## Existing team: starting the assistant
+
+The read-only view of an existing VPS team (Dashboard, Positions, Team, Profile) reads and
+changes nothing. One action in the Team page changes the team, on the person's explicit,
+confirmed request only: **Start assistant**.
+
+What it does, on the verified target of the account (the team, container, image, platform and
+digest it was connected with; there is no fallback to another container):
+
+1. probes the team's readiness, with the team identity check; an assistant already running ends
+   here and no start command is sent;
+2. runs `/app/.launcher/start-agent.sh assistente` once in that container (the script the CLI's
+   `jht team start assistente` runs; idempotent: a lock per session and an exact `tmux has-session`);
+3. probes the readiness again, up to 20 times 3 seconds apart. Only a probe that sees the
+   assistant promotes the result (`started`); running out of tries is `assistant_verify_timeout`
+   and a failing probe ends with its own code. A timeout or an error enables nothing and reuses no
+   earlier snapshot.
+
+It never runs at connect, refresh, retry or when a page opens, and a second click (or a second
+window) while one start runs is refused. The confirmation states its cost first: the script opens
+the team's provider with the team's account and injects the one-shot `[WELCOME-USER]` message,
+which spends tokens of that subscription and puts the assistant to work. It does not change
+provider and does not touch the captain or the other sessions.
+
+There is no **Stop** here, on purpose: stopping is not a guaranteed rollback. To undo a start:
+
+- *What no stop undoes*: the tokens spent, the `profile/welcomed.flag` the assistant writes after
+  the welcome, and the logs the start script and its welcome watchdog write.
+- *Controlled target* (no watchdog, no autostart, like the controlled run the team was connected
+  to): the session stays until someone ends it. With access to the VPS, end the tmux session
+  `ASSISTENTE` in the pinned container (`jht team stop assistente` there does the same); nothing
+  restarts it. The next probe reads `assistantRunning=0`.
+- *Supervised target* (a watchdog is running): the watchdog restarts a stopped assistant, in about
+  30 seconds. Stopping the one agent does not stick; the team's persistent stop (`jht team stop`
+  with no agent creates `/jht_home/.team-halted.flag`) is a decision about the whole team, and
+  keeps the assistant alive by design. Turning the assistant off on such a target is therefore a
+  team-level decision of whoever runs it, not something this view does.
+

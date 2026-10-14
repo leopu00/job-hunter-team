@@ -10,6 +10,7 @@ import { navigate } from "../../shell/router";
 import Shell from "../../shell/Shell";
 import { createPermissiveSupabase } from "../../test-support/permissive-supabase";
 import { realSnapshotReply } from "../../test-support/snapshot-command-reply";
+import { EXISTING_TEAM_ASSISTANT_TEXT } from "./existing-team-assistant.i18n";
 import { EXISTING_TEAM_STATUS_TEXT } from "./existing-team-status.i18n";
 
 // «Squadra» on an existing team that is only read: the six fields the refresh
@@ -247,12 +248,12 @@ describe("Squadra on an existing team read only", () => {
     expect(value("profileReady")).toBe("yes");
   });
 
-  it("starts, stops and asks nothing: the page has no control but the refresh, and only the read-only command runs", async () => {
+  it("starts, stops and asks nothing by itself: the page has no control but the refresh and the one that asks to activate the assistant, and only the read-only command runs", async () => {
     navigate("/team", { replace: true });
     render(<Shell />);
     const read = await screen.findByTestId("team-status-read");
     const page = read.parentElement!;
-    expect(within(page).getAllByRole("button").map((button) => button.textContent)).toEqual([T.refresh]);
+    expect(within(page).getAllByRole("button").map((button) => button.textContent)).toEqual([T.refresh, EXISTING_TEAM_ASSISTANT_TEXT.it.activate]);
     expect(native.invoke.mock.calls.every(([command]) => command === COMMAND)).toBe(true);
     expect(fake.current!.calls).toEqual([]);
   });

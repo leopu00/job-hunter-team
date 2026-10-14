@@ -25,6 +25,11 @@ export interface ConnectionProbe {
   at: number;
   captainRunning: boolean;
   assistantRunning: boolean;
+  /**
+   * Who took the probe: the connection (the default), or the check that follows an explicit
+   * «Attiva assistente». The pages say which, so a value is never given a time it was not read at.
+   */
+  source?: "connection" | "assistant_start";
 }
 
 export interface ExistingTeamReadOnly {
