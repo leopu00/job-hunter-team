@@ -1,20 +1,28 @@
 import { resumeOnboardingSnapshot } from "./onboarding-runtime";
 
 /**
- * What the existing team's VPS reports about itself, and nothing more: the
- * fields the read-only probe the connection already runs returns. Each is a
- * yes or a no; no name, account or path of the provider ever reaches here.
+ * What the command behind a refresh reads from the team's VPS, and nothing
+ * more: the six fields that command prints. Each is a yes or a no; no name,
+ * account or path of the provider ever reaches here.
+ *
+ * The captain and assistant sessions are NOT among them. The reply's type has
+ * those two as booleans, but this command never prints them and the parser
+ * fills a missing key with false: reading them from here would show «no» for
+ * a session that may be running, as if it had just been looked at. Only the
+ * connection's own probe reads them (see ConnectionProbe).
  */
 export const TEAM_STATUS_FIELDS = [
   "runtimeInstalled",
   "containerRunning",
   "providerConfigured",
   "providerAuthenticated",
-  "captainRunning",
-  "assistantRunning",
   "profileReady",
   "assistantWelcomed",
 ] as const;
+
+/** The two session fields the refresh does not read: they come from the connection. */
+export const CONNECTION_STATUS_FIELDS = ["captainRunning", "assistantRunning"] as const;
+export type ConnectionStatusField = (typeof CONNECTION_STATUS_FIELDS)[number];
 
 export type TeamStatusField = (typeof TEAM_STATUS_FIELDS)[number];
 export type TeamStatusFields = Record<TeamStatusField, boolean>;
@@ -29,7 +37,7 @@ export type TeamStatusReading =
   | { kind: "read"; at: number; fields: TeamStatusFields }
   | { kind: "error"; at: number; code: string };
 
-/** The eight fields, if the reply has all of them as booleans; null otherwise. */
+/** The six fields, if the reply has all of them as booleans; null otherwise. */
 export function pickTeamStatusFields(snapshot: unknown): TeamStatusFields | null {
   if (!snapshot || typeof snapshot !== "object" || Array.isArray(snapshot)) return null;
   const record = snapshot as Record<string, unknown>;
@@ -49,7 +57,7 @@ export function teamStatusErrorCode(error: unknown): string {
 
 /**
  * Reads the team's state again through the same read-only command the
- * connection uses (the persisted host, the selected target, one fixed remote
+ * resume of a connection uses (the persisted host, the selected target, one fixed remote
  * probe): not a copy kept in memory.
  */
 export async function readTeamStatus(

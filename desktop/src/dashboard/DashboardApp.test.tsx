@@ -656,8 +656,12 @@ describe("DashboardApp onboarding router", () => {
 
     expect(await screen.findByTestId("shell")).toBeInTheDocument();
     // On before the Shell mounts (its pages read in effects that run first),
-    // with the assistant reported off.
-    expect(existingTeamReadOnly()).toEqual({ assistantActive: false });
+    // with the assistant reported off, and what the connection's probe said about the
+    // two sessions kept with the moment it said it (the Squadra page shows them as such).
+    expect(existingTeamReadOnly()).toEqual({
+      assistantActive: false,
+      connection: { at: expect.any(Number), captainRunning: true, assistantRunning: true },
+    });
     expect(screen.queryByTestId("existing-team-modal")).not.toBeInTheDocument();
     expect(reconnectDirectChat).not.toHaveBeenCalled();
     expect(markOnboardingReady).not.toHaveBeenCalled();

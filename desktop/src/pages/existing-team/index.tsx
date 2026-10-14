@@ -1,9 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { appLocale } from "../../lib/app-locale";
 import { describeError } from "../../lib/error-catalog";
+import { useExistingTeamReadOnly } from "../../lib/existing-team-readonly";
 import {
+  CONNECTION_STATUS_FIELDS,
   readTeamStatus,
   TEAM_STATUS_FIELDS,
+  type ConnectionStatusField,
+  type TeamStatusField,
   type TeamStatusReading,
 } from "../../lib/existing-team-status";
 import { useRefresh } from "../../shell/router";
@@ -14,11 +18,24 @@ function stamp(at: number): string {
   return new Date(at).toLocaleString(appLocale(), { dateStyle: "short", timeStyle: "medium" });
 }
 
+// The order the person reads them in; the two sessions come from the connection.
+const ROWS: Array<TeamStatusField | ConnectionStatusField> = [
+  "runtimeInstalled",
+  "containerRunning",
+  "providerConfigured",
+  "providerAuthenticated",
+  "captainRunning",
+  "assistantRunning",
+  "profileReady",
+  "assistantWelcomed",
+];
+
 /**
- * «Squadra» of an existing team that is only read: the state its VPS reports,
- * eight yes-or-no fields from the probe the connection already runs, each with
- * what it means for the person. «Aggiorna» reads it again through the same
- * read-only command; a reading carries the time it was made, a failed one says
+ * «Squadra» of an existing team that is only read: the state its VPS reports.
+ * Six yes-or-no fields are read by the command «Aggiorna» runs again, each with
+ * the time of that read; the captain and assistant sessions are not printed by
+ * that command, so they show what the connection's own probe said, with the
+ * connection's time, and are never rewritten by a refresh. A failed read says
  * why and clears the last good one, and nothing here starts, stops or asks
  * anything of the team.
  */
@@ -27,6 +44,8 @@ export default function ExistingTeamStatusPage(_props: PageProps) {
   const [reading, setReading] = useState<TeamStatusReading>({ kind: "unknown" });
   const [busy, setBusy] = useState(false);
   const latest = useRef(0);
+  const readOnly = useExistingTeamReadOnly();
+  const connection = readOnly?.connection ?? null;
 
   const read = useCallback(async () => {
     const mine = ++latest.current;
@@ -97,14 +116,21 @@ export default function ExistingTeamStatusPage(_props: PageProps) {
             {(busy ? t.staleWhileReading : t.readAt).replace("{time}", stamp(reading.at))}
           </p>
           <ul className="flex flex-col gap-2" style={{ opacity: busy ? 0.55 : 1 }}>
-            {TEAM_STATUS_FIELDS.map((field) => {
-              const on = reading.fields[field];
+            {ROWS.map((field) => {
               const text = t.fields[field];
+              const fromConnection = (CONNECTION_STATUS_FIELDS as readonly string[]).includes(field);
+              // A session row is the connection's value, or nothing: never a refresh's «no».
+              const known = fromConnection
+                ? connection && connection[field as ConnectionStatusField]
+                : reading.fields[field as TeamStatusField];
+              const hasValue = !fromConnection || connection !== null;
+              const on = known === true;
               return (
                 <li
                   key={field}
                   data-testid={`team-status-${field}`}
-                  data-value={on ? "yes" : "no"}
+                  data-value={hasValue ? (on ? "yes" : "no") : "unknown"}
+                  data-source={fromConnection ? "connection" : "read"}
                   className="rounded-lg border p-3"
                   style={{ borderColor: "var(--color-border)", background: "var(--color-card)" }}
                 >
@@ -112,22 +138,34 @@ export default function ExistingTeamStatusPage(_props: PageProps) {
                     <span className="text-[12px] font-semibold" style={{ color: "var(--color-white)" }}>
                       {text.label}
                     </span>
-                    <span
-                      className="text-[10px] font-bold uppercase tracking-widest"
-                      style={{ color: on ? "var(--color-green)" : "var(--color-red)" }}
-                    >
-                      {on ? t.yes : t.no}
-                    </span>
+                    {hasValue && (
+                      <span
+                        className="text-[10px] font-bold uppercase tracking-widest"
+                        style={{ color: on ? "var(--color-green)" : "var(--color-red)" }}
+                      >
+                        {on ? t.yes : t.no}
+                      </span>
+                    )}
                   </div>
-                  <p className="mt-1 text-[11px]" style={{ color: "var(--color-muted)" }}>
-                    {on ? text.yes : text.no}
-                  </p>
+                  {hasValue && (
+                    <p className="mt-1 text-[11px]" style={{ color: "var(--color-muted)" }}>
+                      {on ? text.yes : text.no}
+                    </p>
+                  )}
+                  {fromConnection && (
+                    <p data-testid={`team-status-${field}-source`} className="mt-1 text-[10px]" style={{ color: "var(--color-muted)" }}>
+                      {connection ? t.atConnection.replace("{time}", stamp(connection.at)) : t.noConnectionValue}
+                    </p>
+                  )}
                 </li>
               );
             })}
           </ul>
           <p data-testid="team-status-actions" className="mt-4 text-[11px]" style={{ color: "var(--color-muted)" }}>
-            {reading.fields.assistantRunning ? t.actionsReadOnly : t.actionsAssistantOff}
+            {((connection ? connection.assistantRunning : readOnly?.assistantActive) ? t.actionsReadOnly : t.actionsAssistantOff).replace(
+              "{time}",
+              connection ? stamp(connection.at) : "—",
+            )}
           </p>
         </section>
       )}

@@ -16,9 +16,22 @@ import { EXISTING_TEAM_READONLY_TEXT } from "./existing-team-readonly.i18n";
  */
 export type ReadNotice = "sort_last_action";
 
+/**
+ * What the connection's own probe said about the two agent sessions, and when.
+ * Only that probe reads them (the command behind a refresh does not), so the
+ * pages show them as the connection's value with its time, never as a fresh read.
+ */
+export interface ConnectionProbe {
+  at: number;
+  captainRunning: boolean;
+  assistantRunning: boolean;
+}
+
 export interface ExistingTeamReadOnly {
   /** The team's assistant session is running (the read-only probe said so). */
   assistantActive: boolean;
+  /** The connection's probe of the sessions; null when the caller gave none. */
+  connection: ConnectionProbe | null;
 }
 
 let current: ExistingTeamReadOnly | null = null;
@@ -32,9 +45,9 @@ function emit() {
   listeners.forEach((listener) => listener());
 }
 
-export function enterExistingTeamReadOnly(assistantActive: boolean): void {
-  if (current?.assistantActive === assistantActive) return;
-  current = { assistantActive };
+export function enterExistingTeamReadOnly(assistantActive: boolean, connection: ConnectionProbe | null = null): void {
+  if (current?.assistantActive === assistantActive && current.connection === connection) return;
+  current = { assistantActive, connection };
   readFailure = null;
   readNotice = null;
   emit();

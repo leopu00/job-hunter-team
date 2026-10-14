@@ -1070,7 +1070,11 @@ export default function DashboardApp() {
   const openReadOnlyExistingTeam = useCallback((result: ExistingTeamReadOnlyConnectionResult) => {
     if (!identityKey || activeIdentityKeyRef.current !== identityKey) return;
     // On before the Shell mounts: its pages read in effects that run first.
-    enterExistingTeamReadOnly(result.readiness);
+    enterExistingTeamReadOnly(result.readiness, {
+      at: Date.now(),
+      captainRunning: result.snapshot.captainRunning === true,
+      assistantRunning: result.snapshot.assistantRunning === true,
+    });
     setReadOnlyExistingTeamKey(identityKey);
   }, [identityKey]);
 

@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
+import { realSnapshotReply, snapshotCommandKeys } from "../test-support/snapshot-command-reply";
 import {
+  CONNECTION_STATUS_FIELDS,
   pickTeamStatusFields,
   readTeamStatus,
   TEAM_STATUS_FIELDS,
@@ -9,25 +11,46 @@ import {
 const ALL_NO = Object.fromEntries(TEAM_STATUS_FIELDS.map((field) => [field, false]));
 
 describe("pickTeamStatusFields", () => {
-  it("takes the eight probed fields, as booleans, and nothing else the reply carries", () => {
+  it("takes the six fields the command prints, as booleans, and nothing else the reply carries", () => {
     const picked = pickTeamStatusFields({
       ...ALL_NO,
+      containerRunning: true,
+      captainRunning: true,
       assistantRunning: true,
       directChatReady: true,
       limitsVerified: false,
       providerName: "synthetic-provider",
       credentialsPath: "/synthetic/path",
     });
-    expect(picked).toEqual({ ...ALL_NO, assistantRunning: true });
+    expect(picked).toEqual({ ...ALL_NO, containerRunning: true });
     expect(Object.keys(picked!).sort()).toEqual([...TEAM_STATUS_FIELDS].sort());
   });
 
   it("refuses a reply with a missing or non-boolean field instead of reading it as «no»", () => {
-    const { captainRunning: _captain, ...missing } = ALL_NO;
+    const { profileReady: _profile, ...missing } = ALL_NO;
     expect(pickTeamStatusFields(missing)).toBeNull();
     expect(pickTeamStatusFields({ ...ALL_NO, profileReady: "yes" })).toBeNull();
     expect(pickTeamStatusFields({ ...ALL_NO, profileReady: null })).toBeNull();
     for (const bad of [null, undefined, "x", 3, [], [ALL_NO]]) expect(pickTeamStatusFields(bad)).toBeNull();
+  });
+});
+
+describe("the fields against the command that really feeds them", () => {
+  it("reads exactly the keys snapshot_command prints, and never the two sessions it does not", () => {
+    const printed = snapshotCommandKeys();
+    expect(printed.sort()).toEqual([...TEAM_STATUS_FIELDS].sort());
+    for (const session of CONNECTION_STATUS_FIELDS) {
+      expect(printed).not.toContain(session);
+      expect(TEAM_STATUS_FIELDS as readonly string[]).not.toContain(session);
+    }
+  });
+
+  it("does not carry the parser's «false» for a session the command never printed", () => {
+    const reply = realSnapshotReply();
+    // the native parser fills the two absent keys with false...
+    expect(reply).toMatchObject({ captainRunning: false, assistantRunning: false });
+    // ...and the page's fields do not hold them
+    expect(Object.keys(pickTeamStatusFields(reply)!).sort()).toEqual([...TEAM_STATUS_FIELDS].sort());
   });
 });
 
@@ -63,11 +86,11 @@ describe("readTeamStatus", () => {
   });
 
   it("reads again every time: nothing is kept between two reads", async () => {
-    const read = vi.fn().mockResolvedValueOnce(ALL_NO).mockResolvedValueOnce({ ...ALL_NO, assistantRunning: true });
+    const read = vi.fn().mockResolvedValueOnce(ALL_NO).mockResolvedValueOnce({ ...ALL_NO, profileReady: true });
     const first = await readTeamStatus(read, () => 1);
     const second = await readTeamStatus(read, () => 2);
     expect(read).toHaveBeenCalledTimes(2);
-    expect(first).toMatchObject({ kind: "read", fields: { assistantRunning: false } });
-    expect(second).toMatchObject({ kind: "read", fields: { assistantRunning: true } });
+    expect(first).toMatchObject({ kind: "read", fields: { profileReady: false } });
+    expect(second).toMatchObject({ kind: "read", fields: { profileReady: true } });
   });
 });

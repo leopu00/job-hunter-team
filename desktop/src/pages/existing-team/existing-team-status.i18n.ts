@@ -1,5 +1,5 @@
 import type { Locale } from "@/i18n/config";
-import type { TeamStatusField } from "../../lib/existing-team-status";
+import type { ConnectionStatusField, TeamStatusField } from "../../lib/existing-team-status";
 
 export interface FieldText {
   label: string;
@@ -19,9 +19,13 @@ export interface ExistingTeamStatusText {
   staleWhileReading: string; // {time}
   failed: string;
   failedAt: string; // {time}
-  actionsAssistantOff: string;
-  actionsReadOnly: string;
-  fields: Record<TeamStatusField, FieldText>;
+  actionsAssistantOff: string; // {time}: the connection's
+  actionsReadOnly: string; // {time}: the connection's
+  /** Under the captain and assistant rows: their value is the connection's, not this refresh's. */
+  atConnection: string; // {time}
+  /** The connection gave no value for the row. */
+  noConnectionValue: string;
+  fields: Record<TeamStatusField | ConnectionStatusField, FieldText>;
 }
 
 export const EXISTING_TEAM_STATUS_TEXT: Record<Locale, ExistingTeamStatusText> = {
@@ -37,8 +41,10 @@ export const EXISTING_TEAM_STATUS_TEXT: Record<Locale, ExistingTeamStatusText> =
     staleWhileReading: "Valori della lettura delle {time}, aggiornamento in corso",
     failed: "Lettura non riuscita",
     failedAt: "Ultimo tentativo alle {time}. Nessun valore precedente viene mostrato come attuale.",
-    actionsAssistantOff: "Le azioni sono disabilitate perché l’assistente non è attivo, e questa connessione è comunque in sola lettura.",
-    actionsReadOnly: "L’assistente è attivo, ma questa connessione è in sola lettura: le azioni restano disabilitate.",
+    actionsAssistantOff: "Al collegamento delle {time} l’assistente non era attivo: le azioni sono disabilitate, e questa connessione è comunque in sola lettura.",
+    actionsReadOnly: "Al collegamento delle {time} l’assistente era attivo, ma questa connessione è in sola lettura: le azioni restano disabilitate.",
+    atConnection: "Valore del collegamento delle {time}, non riletto da questo aggiornamento.",
+    noConnectionValue: "Il collegamento non ha dato un valore per questa riga; questo aggiornamento non lo legge.",
     fields: {
       runtimeInstalled: { label: "Runtime installato", yes: "Il runtime della squadra è installato sulla VPS.", no: "Il runtime della squadra non risulta installato sulla VPS." },
       containerRunning: { label: "Container acceso", yes: "Il container della squadra è acceso.", no: "Il container della squadra è spento: la squadra non lavora." },
@@ -62,8 +68,10 @@ export const EXISTING_TEAM_STATUS_TEXT: Record<Locale, ExistingTeamStatusText> =
     staleWhileReading: "Values from the read at {time}, updating",
     failed: "The read did not succeed",
     failedAt: "Last attempt at {time}. No earlier value is shown as current.",
-    actionsAssistantOff: "Actions are disabled because the assistant is not running, and this connection is read only anyway.",
-    actionsReadOnly: "The assistant is running, but this connection is read only: actions stay disabled.",
+    actionsAssistantOff: "At the connection at {time} the assistant was not running: actions are disabled, and this connection is read only anyway.",
+    actionsReadOnly: "At the connection at {time} the assistant was running, but this connection is read only: actions stay disabled.",
+    atConnection: "Value from the connection at {time}, not read again by this refresh.",
+    noConnectionValue: "The connection gave no value for this row; this refresh does not read it.",
     fields: {
       runtimeInstalled: { label: "Runtime installed", yes: "The team’s runtime is installed on the VPS.", no: "The team’s runtime is not installed on the VPS." },
       containerRunning: { label: "Container running", yes: "The team’s container is running.", no: "The team’s container is stopped: the team is not working." },
@@ -87,8 +95,10 @@ export const EXISTING_TEAM_STATUS_TEXT: Record<Locale, ExistingTeamStatusText> =
     staleWhileReading: "Werte vom Lesen um {time}, Aktualisierung läuft",
     failed: "Lesen fehlgeschlagen",
     failedAt: "Letzter Versuch um {time}. Frühere Werte werden nicht als aktuell angezeigt.",
-    actionsAssistantOff: "Aktionen sind deaktiviert, weil der Assistent nicht läuft; diese Verbindung ist ohnehin schreibgeschützt.",
-    actionsReadOnly: "Der Assistent läuft, aber diese Verbindung ist schreibgeschützt: Aktionen bleiben deaktiviert.",
+    actionsAssistantOff: "Beim Verbinden um {time} lief der Assistent nicht: Aktionen sind deaktiviert; diese Verbindung ist ohnehin schreibgeschützt.",
+    actionsReadOnly: "Beim Verbinden um {time} lief der Assistent, aber diese Verbindung ist schreibgeschützt: Aktionen bleiben deaktiviert.",
+    atConnection: "Wert vom Verbinden um {time}, von dieser Aktualisierung nicht neu gelesen.",
+    noConnectionValue: "Die Verbindung hat für diese Zeile keinen Wert geliefert; diese Aktualisierung liest ihn nicht.",
     fields: {
       runtimeInstalled: { label: "Runtime installiert", yes: "Die Runtime des Teams ist auf dem VPS installiert.", no: "Die Runtime des Teams ist auf dem VPS nicht installiert." },
       containerRunning: { label: "Container läuft", yes: "Der Container des Teams läuft.", no: "Der Container des Teams ist gestoppt: Das Team arbeitet nicht." },
@@ -112,8 +122,10 @@ export const EXISTING_TEAM_STATUS_TEXT: Record<Locale, ExistingTeamStatusText> =
     staleWhileReading: "Valeurs de la lecture de {time}, mise à jour en cours",
     failed: "La lecture a échoué",
     failedAt: "Dernière tentative à {time}. Aucune valeur antérieure n’est présentée comme actuelle.",
-    actionsAssistantOff: "Les actions sont désactivées parce que l’assistant n’est pas actif, et cette connexion est de toute façon en lecture seule.",
-    actionsReadOnly: "L’assistant est actif, mais cette connexion est en lecture seule : les actions restent désactivées.",
+    actionsAssistantOff: "À la connexion de {time}, l’assistant n’était pas actif : les actions sont désactivées, et cette connexion est de toute façon en lecture seule.",
+    actionsReadOnly: "À la connexion de {time}, l’assistant était actif, mais cette connexion est en lecture seule : les actions restent désactivées.",
+    atConnection: "Valeur de la connexion de {time}, non relue par cette mise à jour.",
+    noConnectionValue: "La connexion n’a donné aucune valeur pour cette ligne ; cette mise à jour ne la lit pas.",
     fields: {
       runtimeInstalled: { label: "Runtime installé", yes: "Le runtime de l’équipe est installé sur le VPS.", no: "Le runtime de l’équipe n’est pas installé sur le VPS." },
       containerRunning: { label: "Conteneur actif", yes: "Le conteneur de l’équipe est actif.", no: "Le conteneur de l’équipe est arrêté : l’équipe ne travaille pas." },
@@ -137,8 +149,10 @@ export const EXISTING_TEAM_STATUS_TEXT: Record<Locale, ExistingTeamStatusText> =
     staleWhileReading: "Valores de la lectura de las {time}, actualizando",
     failed: "La lectura no ha tenido éxito",
     failedAt: "Último intento a las {time}. Ningún valor anterior se muestra como actual.",
-    actionsAssistantOff: "Las acciones están desactivadas porque el asistente no está activo, y esta conexión es de solo lectura de todos modos.",
-    actionsReadOnly: "El asistente está activo, pero esta conexión es de solo lectura: las acciones siguen desactivadas.",
+    actionsAssistantOff: "En la conexión de las {time} el asistente no estaba activo: las acciones están desactivadas, y esta conexión es de solo lectura de todos modos.",
+    actionsReadOnly: "En la conexión de las {time} el asistente estaba activo, pero esta conexión es de solo lectura: las acciones siguen desactivadas.",
+    atConnection: "Valor de la conexión de las {time}, no releído por esta actualización.",
+    noConnectionValue: "La conexión no dio ningún valor para esta fila; esta actualización no lo lee.",
     fields: {
       runtimeInstalled: { label: "Runtime instalado", yes: "El runtime del equipo está instalado en el VPS.", no: "El runtime del equipo no está instalado en el VPS." },
       containerRunning: { label: "Contenedor en marcha", yes: "El contenedor del equipo está en marcha.", no: "El contenedor del equipo está parado: el equipo no trabaja." },
@@ -162,8 +176,10 @@ export const EXISTING_TEAM_STATUS_TEXT: Record<Locale, ExistingTeamStatusText> =
     staleWhileReading: "Valores da leitura das {time}, a atualizar",
     failed: "A leitura não teve êxito",
     failedAt: "Última tentativa às {time}. Nenhum valor anterior é mostrado como atual.",
-    actionsAssistantOff: "As ações estão desativadas porque o assistente não está ativo, e esta ligação é só de leitura de qualquer forma.",
-    actionsReadOnly: "O assistente está ativo, mas esta ligação é só de leitura: as ações continuam desativadas.",
+    actionsAssistantOff: "Na ligação das {time} o assistente não estava ativo: as ações estão desativadas, e esta ligação é só de leitura de qualquer forma.",
+    actionsReadOnly: "Na ligação das {time} o assistente estava ativo, mas esta ligação é só de leitura: as ações continuam desativadas.",
+    atConnection: "Valor da ligação das {time}, não relido por esta atualização.",
+    noConnectionValue: "A ligação não deu nenhum valor para esta linha; esta atualização não o lê.",
     fields: {
       runtimeInstalled: { label: "Runtime instalado", yes: "O runtime da equipa está instalado no VPS.", no: "O runtime da equipa não está instalado no VPS." },
       containerRunning: { label: "Contentor ligado", yes: "O contentor da equipa está ligado.", no: "O contentor da equipa está parado: a equipa não trabalha." },
@@ -187,8 +203,10 @@ export const EXISTING_TEAM_STATUS_TEXT: Record<Locale, ExistingTeamStatusText> =
     staleWhileReading: "A {time}-i olvasás értékei, frissítés folyamatban",
     failed: "Az olvasás nem sikerült",
     failedAt: "Utolsó kísérlet: {time}. Korábbi érték nem jelenik meg aktuálisként.",
-    actionsAssistantOff: "A műveletek le vannak tiltva, mert az asszisztens nem fut, és ez a kapcsolat amúgy is csak olvasható.",
-    actionsReadOnly: "Az asszisztens fut, de ez a kapcsolat csak olvasható: a műveletek le maradnak tiltva.",
+    actionsAssistantOff: "A {time}-i kapcsolódáskor az asszisztens nem futott: a műveletek le vannak tiltva, és ez a kapcsolat amúgy is csak olvasható.",
+    actionsReadOnly: "A {time}-i kapcsolódáskor az asszisztens futott, de ez a kapcsolat csak olvasható: a műveletek le maradnak tiltva.",
+    atConnection: "A {time}-i kapcsolódás értéke, ez a frissítés nem olvasta újra.",
+    noConnectionValue: "A kapcsolódás nem adott értéket ehhez a sorhoz; ez a frissítés nem olvassa.",
     fields: {
       runtimeInstalled: { label: "Futtatókörnyezet telepítve", yes: "A csapat futtatókörnyezete telepítve van a VPS-en.", no: "A csapat futtatókörnyezete nincs telepítve a VPS-en." },
       containerRunning: { label: "Konténer fut", yes: "A csapat konténere fut.", no: "A csapat konténere áll: a csapat nem dolgozik." },
