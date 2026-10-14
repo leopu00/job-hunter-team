@@ -63,6 +63,12 @@ does not start agents or invoke a provider. Reconnecting revalidates the same
 selected runtime and does not replace another selection. This preview requires
 a companion built for the client platform; distribution packaging is separate.
 
+`jht existing-team profile` prints the candidate's own profile (the whitelisted
+fields of `candidate_profile.yml` and the summaries, with their text) to stdout:
+treat that output as personal data. To compare it without reading it, keep only
+`state`, `bytes` and `sha256` of `data.profile` and of each item of
+`data.summaries.items`, plus `parse`, `kept`, `dropped`, `included` and `of`.
+
 ## See also
 
 - Full command reference: [`docs/guides/CLI-REFERENCE.md`](../docs/guides/CLI-REFERENCE.md)

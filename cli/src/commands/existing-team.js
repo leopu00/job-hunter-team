@@ -37,7 +37,7 @@ export function registerExistingTeamCommand(program) {
     .action((options) => emit(runExistingTeamAdapter({ op: 'stats', profileId: profile(options.profile) })));
   cmd.command('profile')
     .requiredOption('--profile <id>', 'local profile id')
-    .description('the candidate profile: the whitelisted fields of candidate_profile.yml and the summaries, with what was missing, dropped or cut')
+    .description('the candidate profile (personal data on stdout): the whitelisted fields of candidate_profile.yml and the summaries, with what was missing, dropped or cut; to compare, keep only state, bytes and sha256')
     .action((options) => emit(runExistingTeamAdapter({ op: 'profile', profileId: profile(options.profile) })));
   cmd.command('facets')
     .requiredOption('--profile <id>', 'local profile id')
