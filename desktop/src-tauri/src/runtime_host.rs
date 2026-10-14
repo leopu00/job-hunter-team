@@ -237,6 +237,17 @@ fn read_pinned_host_key(path: &Path) -> Result<ScannedHostKey, &'static str> {
     parse_scanned_host_key(&bytes).ok_or("host_key_mismatch")
 }
 
+/// The SHA-256 fingerprint of the key the person already confirmed for this
+/// host, read from the local pin file. Read-only: it never scans or pins.
+pub(crate) fn pinned_host_fingerprint(host: &ValidatedHost) -> Result<String, &'static str> {
+    match host {
+        ValidatedHost::Vps { known_hosts, .. } => {
+            read_pinned_host_key(known_hosts).map(|key| key.fingerprint)
+        }
+        ValidatedHost::Local => Err("not_vps"),
+    }
+}
+
 fn probe_status(
     destination: &Path,
     scanned: &ScannedHostKey,

@@ -512,7 +512,7 @@ fn valid_positions_reply(request: &PositionsRequest, reply: &Value) -> bool {
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
-struct Candidate {
+pub(crate) struct Candidate {
     schema: u8,
     host: ExecutionHost,
     team_id: String,
@@ -535,25 +535,25 @@ pub(crate) struct ActivatedTarget {
     candidate_sha256: String,
 }
 
-fn hex(value: &str, length: usize) -> bool {
+pub(crate) fn hex(value: &str, length: usize) -> bool {
     value.len() == length
         && value
             .bytes()
             .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
 }
 
-fn sha256(bytes: &[u8]) -> String {
+pub(crate) fn sha256(bytes: &[u8]) -> String {
     format!("{:x}", Sha256::digest(bytes))
 }
 
-fn team_id(value: &str) -> bool {
+pub(crate) fn team_id(value: &str) -> bool {
     (16..=128).contains(&value.len())
         && value
             .bytes()
             .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'_' | b'-'))
 }
 
-fn valid_target(target: &RuntimeTarget) -> bool {
+pub(crate) fn valid_target(target: &RuntimeTarget) -> bool {
     hex(&target.container_id, 64)
         && target
             .image_id
@@ -643,23 +643,17 @@ fn read_bytes(
     Ok(bytes)
 }
 
-fn root(app: &tauri::AppHandle) -> Result<PathBuf, &'static str> {
+pub(crate) fn root(app: &tauri::AppHandle) -> Result<PathBuf, &'static str> {
     app.path()
         .app_local_data_dir()
         .map_err(|_| "existing_team_runtime_unavailable")
 }
 
-fn read_candidate_at(
-    root: &Path,
-    scope: &AccountScope,
-) -> Result<(Candidate, String), &'static str> {
-    let bytes = read_bytes(
-        &path(root, scope, CANDIDATE_FILE),
-        "existing_team_runtime_candidate_required",
-        "existing_team_runtime_candidate_invalid",
-    )?;
+/// Validates candidate bytes in memory: the same rules `read_candidate_at`
+/// applies on every read, so a writer can check what it is about to publish.
+pub(crate) fn parse_candidate_bytes(bytes: &[u8]) -> Result<Candidate, &'static str> {
     let value: serde_json::Value =
-        serde_json::from_slice(&bytes).map_err(|_| "existing_team_runtime_candidate_invalid")?;
+        serde_json::from_slice(bytes).map_err(|_| "existing_team_runtime_candidate_invalid")?;
     let candidate: Candidate = serde_json::from_value(value.clone())
         .map_err(|_| "existing_team_runtime_candidate_invalid")?;
     if value
@@ -671,6 +665,19 @@ fn read_candidate_at(
     {
         return Err("existing_team_runtime_candidate_invalid");
     }
+    Ok(candidate)
+}
+
+fn read_candidate_at(
+    root: &Path,
+    scope: &AccountScope,
+) -> Result<(Candidate, String), &'static str> {
+    let bytes = read_bytes(
+        &path(root, scope, CANDIDATE_FILE),
+        "existing_team_runtime_candidate_required",
+        "existing_team_runtime_candidate_invalid",
+    )?;
+    let candidate = parse_candidate_bytes(&bytes)?;
     Ok((candidate, sha256(&bytes)))
 }
 
@@ -682,7 +689,16 @@ pub(crate) fn candidate_for_request(
     host: &ExecutionHost,
     team: &str,
 ) -> Result<ActivatedTarget, &'static str> {
-    let (candidate, candidate_sha256) = read_candidate_at(&root(app)?, scope)?;
+    candidate_for_request_at(&root(app)?, scope, host, team)
+}
+
+pub(crate) fn candidate_for_request_at(
+    root: &Path,
+    scope: &AccountScope,
+    host: &ExecutionHost,
+    team: &str,
+) -> Result<ActivatedTarget, &'static str> {
+    let (candidate, candidate_sha256) = read_candidate_at(root, scope)?;
     if candidate.host != *host || candidate.team_id != team {
         return Err("existing_team_runtime_candidate_mismatch");
     }
@@ -786,6 +802,162 @@ fn write_selection_at(
     result
 }
 
+/// What the in-app registration finds locally before it may spend a single
+/// SSH call: a candidate or a selection of ANY kind (invalid, a symlink, even a
+/// dangling one) means the existing path owns this scope.
+pub(crate) fn registration_gate_at(root: &Path, scope: &AccountScope) -> Result<(), &'static str> {
+    match fs::symlink_metadata(path(root, scope, CANDIDATE_FILE)) {
+        Ok(_) => return Err("existing_team_runtime_candidate_exists"),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+        Err(_) => return Err("existing_team_runtime_unavailable"),
+    }
+    match fs::symlink_metadata(path(root, scope, SELECTION_FILE)) {
+        Ok(_) => Err("existing_team_runtime_already_selected"),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(_) => Err("existing_team_runtime_unavailable"),
+    }
+}
+
+/// The exact bytes of a candidate for this host, team and verified runtime and
+/// their SHA-256, validated in memory by the same rules every read applies.
+pub(crate) fn candidate_bytes(
+    host: &ExecutionHost,
+    team: &str,
+    runtime: &RuntimeTarget,
+) -> Result<(Vec<u8>, String), &'static str> {
+    let candidate = Candidate {
+        schema: 1,
+        host: host.clone(),
+        team_id: team.to_owned(),
+        runtime: runtime.clone(),
+    };
+    let bytes =
+        serde_json::to_vec(&candidate).map_err(|_| "existing_team_runtime_candidate_invalid")?;
+    if parse_candidate_bytes(&bytes)? != candidate {
+        return Err("existing_team_runtime_candidate_invalid");
+    }
+    let hash = sha256(&bytes);
+    Ok((bytes, hash))
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) enum CandidateWrite {
+    Written,
+    /// The definitive file appeared first with exactly these bytes (a second
+    /// registration that raced this one).
+    Identical,
+}
+
+/// Publishes a candidate without ever replacing one. The bytes are validated in
+/// memory and again on the private temporary file BEFORE `hard_link` makes them
+/// definitive and immutable; the link fails if the definitive file exists, and
+/// there is no fallback to `rename`, which would overwrite. It never creates
+/// the account directory: the confirmed SSH pin already lives inside it.
+pub(crate) fn write_candidate_at(
+    root: &Path,
+    scope: &AccountScope,
+    bytes: &[u8],
+) -> Result<CandidateWrite, &'static str> {
+    write_candidate_hooked(root, scope, bytes, &mut || {})
+}
+
+/// `before_link` runs once the bytes are staged and validated, right before
+/// the definitive file is created: the window a concurrent writer can use.
+pub(crate) fn write_candidate_hooked(
+    root: &Path,
+    scope: &AccountScope,
+    bytes: &[u8],
+    before_link: &mut dyn FnMut(),
+) -> Result<CandidateWrite, &'static str> {
+    parse_candidate_bytes(bytes)?;
+    let parent = account_dir(root, scope);
+    let parent_meta =
+        fs::symlink_metadata(&parent).map_err(|_| "existing_team_runtime_unavailable")?;
+    if parent_meta.file_type().is_symlink() || !parent_meta.is_dir() {
+        return Err("existing_team_runtime_unavailable");
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::{MetadataExt, PermissionsExt};
+        if parent_meta.uid() != unsafe { libc::geteuid() }
+            || parent_meta.permissions().mode() & 0o022 != 0
+        {
+            return Err("existing_team_runtime_unavailable");
+        }
+    }
+    let destination = path(root, scope, CANDIDATE_FILE);
+    match fs::symlink_metadata(&destination) {
+        Ok(_) => return Err("existing_team_runtime_candidate_exists"),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+        Err(_) => return Err("existing_team_runtime_unavailable"),
+    }
+    let nonce = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_err(|_| "existing_team_runtime_unavailable")?
+        .as_nanos();
+    let temporary = destination.with_extension(format!("tmp-{}-{nonce}", std::process::id()));
+    let mut options = OpenOptions::new();
+    options.write(true).create_new(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.mode(0o600);
+    }
+    let mut file = options
+        .open(&temporary)
+        .map_err(|_| "existing_team_runtime_unavailable")?;
+    let staged = (|| {
+        set_private_permissions(&temporary).map_err(|_| "existing_team_runtime_unavailable")?;
+        file.write_all(bytes)
+            .map_err(|_| "existing_team_runtime_unavailable")?;
+        file.sync_all()
+            .map_err(|_| "existing_team_runtime_unavailable")?;
+        drop(file);
+        let staged = read_bytes(
+            &temporary,
+            "existing_team_runtime_unavailable",
+            "existing_team_runtime_unavailable",
+        )?;
+        if staged != bytes {
+            return Err("existing_team_runtime_unavailable");
+        }
+        parse_candidate_bytes(&staged)?;
+        Ok(())
+    })();
+    if let Err(error) = staged {
+        let _ = fs::remove_file(&temporary);
+        return Err(error);
+    }
+    before_link();
+    let linked = fs::hard_link(&temporary, &destination);
+    let _ = fs::remove_file(&temporary);
+    match linked {
+        Ok(()) => {
+            let published = read_bytes(
+                &destination,
+                "existing_team_runtime_unavailable",
+                "existing_team_runtime_unavailable",
+            )?;
+            if published == bytes {
+                Ok(CandidateWrite::Written)
+            } else {
+                Err("existing_team_runtime_unavailable")
+            }
+        }
+        Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
+            match read_bytes(
+                &destination,
+                "existing_team_runtime_candidate_conflict",
+                "existing_team_runtime_candidate_conflict",
+            ) {
+                Ok(existing) if existing == bytes => Ok(CandidateWrite::Identical),
+                _ => Err("existing_team_runtime_candidate_conflict"),
+            }
+        }
+        Err(_) => Err("existing_team_runtime_unavailable"),
+    }
+}
+
 /// Called only after the exact host/team identity and both required sessions
 /// have passed the read-only remote probe.
 pub(crate) fn activate(
@@ -794,12 +966,20 @@ pub(crate) fn activate(
     host: &ExecutionHost,
     probed: &ActivatedTarget,
 ) -> Result<(), &'static str> {
-    let root = root(app)?;
-    let (candidate, hash) = read_candidate_at(&root, scope)?;
+    activate_at(&root(app)?, scope, host, probed)
+}
+
+pub(crate) fn activate_at(
+    root: &Path,
+    scope: &AccountScope,
+    host: &ExecutionHost,
+    probed: &ActivatedTarget,
+) -> Result<(), &'static str> {
+    let (candidate, hash) = read_candidate_at(root, scope)?;
     if !candidate_matches_probed(&candidate, &hash, host, probed) {
         return Err("existing_team_runtime_candidate_mismatch");
     }
-    write_selection_at(&root, scope, &candidate, &hash)
+    write_selection_at(root, scope, &candidate, &hash)
 }
 
 /// A local connection without a selection preserves the existing local path.
@@ -810,11 +990,18 @@ pub(crate) fn selected(
     scope: &AccountScope,
     host: &ExecutionHost,
 ) -> Result<Option<ActivatedTarget>, &'static str> {
-    let root = root(app)?;
-    let selection_path = path(&root, scope, SELECTION_FILE);
+    selected_at(&root(app)?, scope, host)
+}
+
+pub(crate) fn selected_at(
+    root: &Path,
+    scope: &AccountScope,
+    host: &ExecutionHost,
+) -> Result<Option<ActivatedTarget>, &'static str> {
+    let selection_path = path(root, scope, SELECTION_FILE);
     if let Err(error) = fs::symlink_metadata(&selection_path) {
         return if error.kind() == std::io::ErrorKind::NotFound {
-            let candidate_exists = match fs::symlink_metadata(path(&root, scope, CANDIDATE_FILE)) {
+            let candidate_exists = match fs::symlink_metadata(path(root, scope, CANDIDATE_FILE)) {
                 Ok(_) => true,
                 Err(candidate_error) if candidate_error.kind() == std::io::ErrorKind::NotFound => {
                     false
@@ -845,7 +1032,7 @@ pub(crate) fn selected(
     {
         return Err("existing_team_runtime_selection_invalid");
     }
-    let (candidate, hash) = read_candidate_at(&root, scope)?;
+    let (candidate, hash) = read_candidate_at(root, scope)?;
     if selection.host != *host
         || candidate.host != *host
         || selection.team_id != candidate.team_id

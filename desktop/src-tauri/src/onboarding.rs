@@ -29,7 +29,7 @@ const MAX_INSTALLER_BYTES: usize = 2 * 1024 * 1024;
 const MAX_WRAPPER_BYTES: u64 = 2 * 1024 * 1024;
 const PREPARE_TIMEOUT: Duration = Duration::from_secs(30 * 60);
 const COMMAND_TIMEOUT: Duration = Duration::from_secs(8 * 60);
-const SNAPSHOT_TIMEOUT: Duration = Duration::from_secs(25);
+pub(crate) const SNAPSHOT_TIMEOUT: Duration = Duration::from_secs(25);
 const LOCAL_CONTAINER_VERIFY_TIMEOUT: Duration = Duration::from_secs(10);
 const LOCAL_CONTAINER_VERIFY_ATTEMPTS: usize = 6;
 const LOCAL_CONTAINER_VERIFY_INTERVAL: Duration = Duration::from_secs(2);
@@ -63,6 +63,22 @@ static DIAGNOSTIC_SEQUENCE: AtomicU64 = AtomicU64::new(1);
 pub(crate) struct OnboardingNativeState {
     preparing: AtomicBool,
     interactive: Mutex<Option<InteractiveSession>>,
+    /// The receipt of the last successful in-app team discovery. Memory only,
+    /// never on disk; cleared with the rest of the state on a scope change.
+    pub(crate) receipt: Mutex<Option<crate::existing_team_register::Receipt>>,
+}
+
+impl OnboardingNativeState {
+    /// Takes the one-operation-at-a-time gate; false if another holds it.
+    pub(crate) fn try_begin(&self) -> bool {
+        self.preparing
+            .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+            .is_ok()
+    }
+
+    pub(crate) fn finish(&self) {
+        self.preparing.store(false, Ordering::Release);
+    }
 }
 
 impl Drop for OnboardingNativeState {
@@ -86,6 +102,9 @@ pub(crate) fn teardown(state: &OnboardingNativeState) {
                 let _ = process.wait();
             }
         }
+    }
+    if let Ok(mut receipt) = state.receipt.lock() {
+        *receipt = None;
     }
     state.preparing.store(false, Ordering::Release);
 }
@@ -742,7 +761,7 @@ pub(crate) enum InteractiveInputMode {
 /// sentence is never written here: the app tells every code in the person's
 /// language (desktop/src/lib/error-catalog.ts, 7 languages), and `message`
 /// carries the code itself for the callers that read one.
-fn failure(code: &'static str) -> OnboardingError {
+pub(crate) fn failure(code: &'static str) -> OnboardingError {
     // Retrying cannot help: the data, the host or the machine must change
     // first (PODMAN_MACHINE_MOUNTS_HOME: recreated, after the person confirms
     // it with onboarding_podman_machine_recreate).
@@ -766,6 +785,13 @@ fn failure(code: &'static str) -> OnboardingError {
             | "provider_input_not_requested"
             | "existing_team_vps_required"
             | "existing_team_identity_mismatch"
+            | "existing_team_runtime_candidate_exists"
+            | "existing_team_runtime_candidate_conflict"
+            | "existing_team_runtime_already_selected"
+            | "existing_team_ambiguous"
+            | "existing_team_image_unattested"
+            | "existing_team_too_many_containers"
+            | "existing_team_receipt_required"
             | "uninstall_unavailable"
             | "uninstall_unsupported"
     ) && !code.starts_with("invalid_");
@@ -944,7 +970,7 @@ fn valid_pairing_token(token: &str) -> bool {
         })
 }
 
-fn valid_team_id(value: &str) -> bool {
+pub(crate) fn valid_team_id(value: &str) -> bool {
     (16..=128).contains(&value.len())
         && value
             .bytes()
@@ -2553,7 +2579,7 @@ pub(crate) struct ExistingTeamReadiness {
 /// Validates the immutable target and team identity, then reports whether its
 /// assistant is active. A missing assistant is a degraded read-only state;
 /// it never authorizes messages, starts, or provider work.
-fn existing_team_readonly_probe_with(
+pub(crate) fn existing_team_readonly_probe_with(
     team_id: &str,
     run: impl FnOnce(&[u8]) -> Result<ProcessResult, &'static str>,
 ) -> Result<ExistingTeamReadiness, OnboardingError> {
@@ -2647,6 +2673,44 @@ pub(crate) fn cli_existing_team_connect(
     Ok(readiness)
 }
 
+/// The read-only connection of an existing team with every app-bound step
+/// injected, so the production order (host pin, candidate, identity probe,
+/// selection, persisted host) is the one the tests drive.
+pub(crate) fn existing_team_readonly_connect_with(
+    root: &Path,
+    scope: &AccountScope,
+    host: &ExecutionHost,
+    team_id: &str,
+    validate_host: &mut dyn FnMut() -> Result<crate::runtime_host::ValidatedHost, &'static str>,
+    persist_host: &mut dyn FnMut() -> Result<(), &'static str>,
+    run: &mut dyn FnMut(
+        &crate::runtime_host::ValidatedHost,
+        &str,
+        Option<&[u8]>,
+        Duration,
+    ) -> Result<ProcessResult, &'static str>,
+) -> Result<ExistingTeamReadiness, OnboardingError> {
+    let validated = validate_host().map_err(failure)?;
+    let target = crate::existing_team_runtime::candidate_for_request_at(root, scope, host, team_id).map_err(failure)?;
+    let probe = crate::existing_team_runtime::team_probe_command(&target.runtime).map_err(failure)?;
+    let readiness = existing_team_readonly_probe_with(team_id, |input| {
+        run(&validated, &probe, Some(input), SNAPSHOT_TIMEOUT)
+    })?;
+    validate_host().map_err(failure)?;
+    match crate::existing_team_runtime::activate_at(root, scope, host, &target) {
+        Ok(()) => {}
+        Err("existing_team_runtime_already_selected") => {
+            let selected = crate::existing_team_runtime::selected_at(root, scope, host).map_err(failure)?;
+            if selected.as_ref() != Some(&target) {
+                return Err(failure("existing_team_runtime_target_changed"));
+            }
+        }
+        Err(error) => return Err(failure(error)),
+    }
+    persist_host().map_err(failure)?;
+    Ok(readiness)
+}
+
 /// Explicit read-only entry for an existing team. It shares the candidate,
 /// identity and immutable-target checks with the normal connection, but never
 /// reconnects chat, writes a ready marker, starts an agent, or invokes a
@@ -2668,14 +2732,16 @@ pub(crate) async fn onboarding_existing_team_readonly_connect(
     let worker_expected = expected.clone();
     let result = tauri::async_runtime::spawn_blocking(move || {
         let _scope = scope_state.lock_expected(&worker_expected).map_err(failure)?;
-        let validated = crate::runtime_host::validate_host_for_scope(&app, &request.host, &worker_expected).map_err(failure)?;
-        let target = crate::existing_team_runtime::candidate_for_request(&app, &worker_expected, &request.host, &request.team_id).map_err(failure)?;
-        let probe = crate::existing_team_runtime::team_probe_command(&target.runtime).map_err(failure)?;
-        let readiness = existing_team_readonly_probe_with(&request.team_id, |input| {
-            run_ssh_command(&validated, &probe, Some(input), SNAPSHOT_TIMEOUT, None)
-        })?;
-        activate_readonly_existing_team_target(&app, &worker_expected, &request.host, &target).map_err(failure)?;
-        Ok(readiness)
+        let root = crate::existing_team_runtime::root(&app).map_err(failure)?;
+        existing_team_readonly_connect_with(
+            &root,
+            &worker_expected,
+            &request.host,
+            &request.team_id,
+            &mut || crate::runtime_host::validate_host_for_scope(&app, &request.host, &worker_expected),
+            &mut || crate::direct_chat::persist_onboarding_host(&app, &worker_expected, &request.host),
+            &mut |validated, command, input, timeout| run_ssh_command(validated, command, input, timeout, None),
+        )
     })
     .await
     .unwrap_or_else(|_| Err(failure("existing_team_unavailable")));

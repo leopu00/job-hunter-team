@@ -7,6 +7,9 @@ mod closer_desktop;
 pub mod cli_adapter;
 mod desktop_platform;
 mod direct_chat;
+mod existing_team_register;
+#[cfg(test)]
+mod existing_team_register_tests;
 mod existing_team_runtime;
 mod live_screen;
 mod mail;
@@ -82,6 +85,8 @@ pub fn run() {
             mail::mail_save_password,
             mail::mail_status,
             onboarding::onboarding_assistant_open,
+            existing_team_register::onboarding_existing_team_discover,
+            existing_team_register::onboarding_existing_team_register,
             onboarding::existing_team_assistant_start,
             onboarding::onboarding_existing_team_connect,
             onboarding::onboarding_existing_team_readonly_connect,
