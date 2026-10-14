@@ -68,7 +68,9 @@ profile (the whitelisted fields of `candidate_profile.yml` and the summaries,
 with their text) to stdout: treat that output as personal data. With `--digest`
 it prints only the envelope, and for the profile file and each summary its
 state, bytes and sha256, `parse`, `kept`, `dropped`, `included` and `of`, and
-the name, kind and length of each field present: no value, and a summary name
+the name and kind of each field present, with the length of a string, array or
+object (not of a boolean, a number or a null, which would give the value): no
+value, and a summary name
 other than the four conventional ones (`about`, `goals`, `preferences`,
 `strengths`) is replaced by a hash of itself.
 

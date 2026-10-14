@@ -31,6 +31,9 @@ const reply = () => ({
         name: 'SYNTHETIC-VALUE-NAME',
         target_role: 'SYNTHETIC-VALUE-ROLE',
         skills: { primary: ['SYNTHETIC-VALUE-SKILL'] },
+        has_degree: true,
+        experience_years: 17,
+        birth_year: null,
         notes: 'SYNTHETIC-VALUE-NOTE',
         candidate: { contacts: { phone: 'SYNTHETIC-VALUE-PHONE' } },
       },
@@ -61,7 +64,10 @@ test('the digest keeps the envelope, the states, counts, lengths and hashes, and
   assert.deepEqual(value.data.profile, {
     state: 'ok', parse: 'ok', bytes: 900, sha256: SHA_A, kept: 5, dropped: 2,
     fields: [
+      { name: 'birth_year', kind: 'null', length: null },
       { name: 'candidate', kind: 'object', length: JSON.stringify({ contacts: { phone: 'SYNTHETIC-VALUE-PHONE' } }).length },
+      { name: 'experience_years', kind: 'number', length: null },
+      { name: 'has_degree', kind: 'boolean', length: null },
       { name: 'name', kind: 'string', length: JSON.stringify('SYNTHETIC-VALUE-NAME').length },
       { name: 'notes', kind: 'string', length: JSON.stringify('SYNTHETIC-VALUE-NOTE').length },
       { name: 'skills', kind: 'object', length: JSON.stringify({ primary: ['SYNTHETIC-VALUE-SKILL'] }).length },
@@ -69,6 +75,8 @@ test('the digest keeps the envelope, the states, counts, lengths and hashes, and
     ],
   });
   assert.deepEqual({ ok: value.ok, phase: value.phase, code: value.code, digest: value.digest }, { ok: true, phase: 'read', code: 0, digest: true });
+  // a boolean's or a number's length would be its value: it is not given
+  assert.deepEqual(value.data.profile.fields.filter((field) => ['boolean', 'number', 'null'].includes(field.kind)).map((field) => field.length), [null, null, null]);
   assert.equal(value.data.summaries.included, 2);
   assert.equal(value.data.summaries.of, 3);
 });
@@ -162,7 +170,7 @@ test('with --digest the command prints no value of the profile, on stdout or std
   const printed = JSON.parse(run.stdout);
   assert.equal(printed.digest, true);
   assert.equal(printed.data.profile.sha256, SHA_A);
-  assert.equal(printed.data.profile.fields.length, 5);
+  assert.equal(printed.data.profile.fields.length, 8);
 });
 
 test('without --digest the output is the profile itself, and the help says so', () => {

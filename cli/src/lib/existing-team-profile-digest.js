@@ -44,11 +44,14 @@ function fieldFacts(fields) {
   if (!fields || typeof fields !== 'object' || Array.isArray(fields)) return null;
   return Object.keys(fields).sort().map((name) => {
     const value = fields[name];
-    const encoded = JSON.stringify(value);
+    // The length of a boolean, a number or a null IS its value (true is 4, false is 5): only a
+    // string, an array or an object, whose length says how much and not what, carries one.
+    const sized = typeof value === 'string' || (value !== null && typeof value === 'object');
+    const encoded = sized ? JSON.stringify(value) : null;
     return {
       name: PROFILE_FIELD_NAMES.includes(name) ? name : `h:${hash(name)}`,
       kind: kind(value),
-      length: typeof encoded === 'string' ? encoded.length : 0,
+      length: typeof encoded === 'string' ? encoded.length : null,
     };
   });
 }
