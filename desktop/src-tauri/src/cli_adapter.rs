@@ -33,6 +33,9 @@ enum AdapterRequest {
     Stats {
         #[serde(rename = "profileId")] profile_id: String,
     },
+    Profile {
+        #[serde(rename = "profileId")] profile_id: String,
+    },
 }
 
 impl AdapterRequest {
@@ -42,7 +45,8 @@ impl AdapterRequest {
             | Self::List { profile_id, .. }
             | Self::Detail { profile_id, .. }
             | Self::Facets { profile_id }
-            | Self::Stats { profile_id } => profile_id,
+            | Self::Stats { profile_id }
+            | Self::Profile { profile_id } => profile_id,
         }
     }
 }
@@ -98,6 +102,7 @@ fn execute(app: &tauri::AppHandle, request: AdapterRequest) -> (i32, Value) {
         AdapterRequest::Detail { id, .. } => envelope_core("read", existing_team_runtime::positions_read_for_scope(app, &scope, json!({"op":"detail","id":id}))),
         AdapterRequest::Facets { .. } => envelope_core("read", existing_team_runtime::positions_read_for_scope(app, &scope, json!({"op":"facets"}))),
         AdapterRequest::Stats { .. } => envelope_core("read", existing_team_runtime::positions_read_for_scope(app, &scope, json!({"op":"stats"}))),
+        AdapterRequest::Profile { .. } => envelope_core("read", existing_team_runtime::positions_read_for_scope(app, &scope, json!({"op":"profile"}))),
     }
 }
 
@@ -163,6 +168,9 @@ mod tests {
         let stats = decoded(r#"{"profileId":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","op":"stats"}"#);
         assert!(matches!(stats, AdapterRequest::Stats { .. }));
         assert!(serde_json::from_str::<AdapterRequest>(r#"{"profileId":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","op":"stats","filters":{}}"#).is_err());
+        let profile = decoded(r#"{"profileId":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","op":"profile"}"#);
+        assert!(matches!(profile, AdapterRequest::Profile { .. }));
+        assert!(serde_json::from_str::<AdapterRequest>(r#"{"profileId":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","op":"profile","path":"/jht_home/x"}"#).is_err());
         assert!(serde_json::from_str::<AdapterRequest>(r#"{"profileId":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","op":"facets","unexpected":true}"#).is_err());
     }
 

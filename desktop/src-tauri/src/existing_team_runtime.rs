@@ -142,10 +142,61 @@ try: req=json.loads(sys.stdin.readline())
 except Exception: fail('positions_request_invalid')
 if not isinstance(req,dict) or set(req)-{'op','filters','id'}: fail('positions_request_invalid')
 op=req.get('op')
-if op not in ('list','detail','facets','stats'): fail('positions_request_invalid')
+if op not in ('list','detail','facets','stats','profile'): fail('positions_request_invalid')
 if op=='detail' and (set(req)!={'op','id'} or not isinstance(req['id'],str) or not req['id'].isdigit() or len(req['id'])>20): fail('positions_request_invalid')
-if op in ('facets','stats') and set(req)!={'op'}: fail('positions_request_invalid')
+if op in ('facets','stats','profile') and set(req)!={'op'}: fail('positions_request_invalid')
 if op=='list' and (set(req)-{'op','filters'} or (req.get('filters') is not None and not isinstance(req.get('filters'),dict))): fail('positions_request_invalid')
+if op=='profile':
+ # The candidate's profile is two things on the team's VPS and nothing else is read: the file
+ # candidate_profile.yml and the narrative summaries/*.md. Its neighbours in the same folder (the
+ # provider's configuration, the candidate's original documents, flags) are never opened. A name
+ # that is not a plain file is reported, not followed. The reply is cut to a byte budget by dropping
+ # the heaviest summary text first, and says so.
+ import os,stat,hashlib
+ PROFILE_DIR='/jht_home/profile'; YAML_MAX=65536; SUMMARY_MAX=32768; SUMMARY_FILES=32; BUDGET=1363148
+ def plain_dir(path):
+  try: return stat.S_ISDIR(os.lstat(path).st_mode)
+  except OSError: return False
+ def read_plain(path,limit):
+  try: fd=os.open(path,os.O_RDONLY|os.O_NOFOLLOW|os.O_NONBLOCK)
+  except FileNotFoundError: return {'state':'absent'}
+  except OSError: return {'state':'unreadable'}
+  try:
+   info=os.fstat(fd)
+   if not stat.S_ISREG(info.st_mode): return {'state':'unreadable'}
+   if info.st_size>limit: return {'state':'too_large','bytes':info.st_size}
+   data=b''
+   while len(data)<=limit:
+    chunk=os.read(fd,limit+1-len(data))
+    if not chunk: break
+    data+=chunk
+  except OSError: return {'state':'unreadable'}
+  finally: os.close(fd)
+  if len(data)>limit: return {'state':'too_large','bytes':len(data)}
+  digest=hashlib.sha256(data).hexdigest()
+  try: text=data.decode('utf-8')
+  except UnicodeDecodeError: return {'state':'not_utf8','bytes':len(data),'sha256':digest}
+  return {'state':'ok','bytes':len(data),'sha256':digest,'text':text}
+ summaries={'state':'absent','items':[],'included':0,'of':0}
+ if not plain_dir(PROFILE_DIR): profile={'state':'absent'}
+ else:
+  profile=read_plain(PROFILE_DIR+'/candidate_profile.yml',YAML_MAX)
+  if plain_dir(PROFILE_DIR+'/summaries'):
+   try: names=sorted(name[:-3] for name in os.listdir(PROFILE_DIR+'/summaries') if re.match(r'^[A-Za-z0-9_-]{1,64}\.md$',name))
+   except OSError: names=None
+   if names is None: summaries['state']='unreadable'
+   else:
+    items=[]
+    for name in names[:SUMMARY_FILES]:
+     item=read_plain(PROFILE_DIR+'/summaries/'+name+'.md',SUMMARY_MAX); item['name']=name; items.append(item)
+    summaries={'state':'ok','items':items,'included':len(items),'of':len(names)}
+ data={'profile':profile,'summaries':summaries}
+ def size(): return len(json.dumps({'ok':True,'data':data},separators=(',',':')))
+ while size()>BUDGET:
+  heavy=[item for item in summaries['items'] if item.get('text') is not None]
+  if not heavy: break
+  victim=max(heavy,key=lambda item:len(item['text'])); victim['text']=None; victim['state']='over_budget'
+ emit({'ok':True,'data':data})
 try:
  db=sqlite3.connect('file:/jht_home/jobs.db?mode=ro',uri=True); db.row_factory=sqlite3.Row; db.execute('PRAGMA query_only=ON'); db.execute('SELECT 1 FROM positions LIMIT 1')
 except Exception: fail('positions_unavailable')
@@ -255,6 +306,7 @@ enum PositionsRequest {
     },
     Facets,
     Stats,
+    Profile,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -378,7 +430,7 @@ impl PositionsRequest {
             Self::Detail { id } => {
                 (1..=20).contains(&id.len()) && id.bytes().all(|byte| byte.is_ascii_digit())
             }
-            Self::Facets | Self::Stats => true,
+            Self::Facets | Self::Stats | Self::Profile => true,
         }
     }
 }
@@ -424,6 +476,19 @@ fn valid_positions_reply(request: &PositionsRequest, reply: &Value) -> bool {
                             && part.get("included").is_some_and(Value::is_u64)
                             && part.get("of").is_some_and(Value::is_u64)
                     })
+                })
+        }),
+        PositionsRequest::Profile => data.as_object().is_some_and(|data| {
+            data.len() == 2
+                && data
+                    .get("profile")
+                    .and_then(Value::as_object)
+                    .is_some_and(|profile| profile.get("state").is_some_and(Value::is_string))
+                && data.get("summaries").and_then(Value::as_object).is_some_and(|summaries| {
+                    summaries.get("state").is_some_and(Value::is_string)
+                        && array(summaries.get("items"))
+                        && summaries.get("included").is_some_and(Value::is_u64)
+                        && summaries.get("of").is_some_and(Value::is_u64)
                 })
         }),
         PositionsRequest::Detail { .. } => {
@@ -882,6 +947,117 @@ fn positions_failure(code: &'static str) -> Value {
     json!({"ok":false,"error":code})
 }
 
+/// The top-level keys of candidate_profile.yml the candidate's profile is built from: exactly the
+/// ones the cloud's own mapper reads (web/lib/profile-yaml-map.ts). Any other key of the file is
+/// counted and dropped here, so it never reaches the app or the CLI.
+const PROFILE_FIELDS: &[&str] = &[
+    "aspirations",
+    "birth_year",
+    "candidate",
+    "certifications",
+    "domain_expertise",
+    "education",
+    "email",
+    "experience",
+    "experience_months",
+    "experience_years",
+    "goals",
+    "has_degree",
+    "industry",
+    "interests",
+    "languages",
+    "location",
+    "location_preferences",
+    "name",
+    "nationality",
+    "notes",
+    "personal",
+    "positioning",
+    "preferences",
+    "projects",
+    "sector_details",
+    "seniority_target",
+    "skills",
+    "strengths",
+    "target_role",
+    "target_role_category_id",
+    "target_roles",
+    "target_roles_priority",
+    "target_specialty",
+    "timezone",
+    "work_authorization",
+];
+
+/// A YAML anchor (`&name`) and an alias (`*name`) both in the text: expanding aliases can blow a
+/// small file up without bound, and the parser does not limit it, so such a file is refused with
+/// its own reason instead of being parsed. Prose rarely has both as separate words.
+fn profile_has_aliases(text: &str) -> bool {
+    let bytes = text.as_bytes();
+    let (mut anchor, mut alias) = (false, false);
+    for (index, &byte) in bytes.iter().enumerate() {
+        if byte != b'&' && byte != b'*' {
+            continue;
+        }
+        let starts_token = index == 0
+            || matches!(bytes[index - 1], b' ' | b'\t' | b'\n' | b'\r' | b'[' | b'{' | b',' | b':' | b'-');
+        let named = bytes
+            .get(index + 1)
+            .is_some_and(|next| next.is_ascii_alphanumeric() || matches!(next, b'_' | b'-'));
+        if starts_token && named {
+            if byte == b'&' {
+                anchor = true;
+            } else {
+                alias = true;
+            }
+        }
+    }
+    anchor && alias
+}
+
+/// What the profile file says: `("ok", fields, kept, dropped)` with only the whitelisted keys, or
+/// the reason it could not be read as a profile, with no field at all.
+fn profile_fields(text: &str) -> (&'static str, Value, usize, usize) {
+    if profile_has_aliases(text) {
+        return ("aliases_unsupported", Value::Null, 0, 0);
+    }
+    match serde_yaml::from_str::<Value>(text) {
+        Ok(Value::Object(top)) => {
+            let total = top.len();
+            let kept: serde_json::Map<String, Value> = top
+                .into_iter()
+                .filter(|(key, _)| PROFILE_FIELDS.contains(&key.as_str()))
+                .collect();
+            let count = kept.len();
+            ("ok", Value::Object(kept), count, total - count)
+        }
+        Ok(_) => ("not_a_mapping", Value::Null, 0, 0),
+        Err(_) => ("invalid_yaml", Value::Null, 0, 0),
+    }
+}
+
+/// The reader sends the profile file as text; the app and the CLI get it as fields. The raw text
+/// is dropped here, with the keys outside the whitelist, and the reply says how the file was read
+/// (`parse`), how many keys were kept and how many dropped.
+fn shape_profile(mut reply: Value) -> Value {
+    let Some(profile) = reply
+        .get_mut("data")
+        .and_then(|data| data.get_mut("profile"))
+        .and_then(Value::as_object_mut)
+    else {
+        return positions_failure("positions_unavailable");
+    };
+    let text = profile.remove("text");
+    let (parse, fields, kept, dropped) = match text.as_ref().and_then(Value::as_str) {
+        Some(text) => profile_fields(text),
+        None => ("none", Value::Null, 0, 0),
+    };
+    profile.insert("parse".into(), json!(parse));
+    profile.insert("fields".into(), fields);
+    profile.insert("kept".into(), json!(kept));
+    profile.insert("dropped".into(), json!(dropped));
+    reply
+}
+
 fn request_has_explicit_null_filter(request: &Value) -> bool {
     let Some(object) = request.as_object() else {
         return false;
@@ -950,7 +1126,11 @@ pub(crate) fn positions_read_for_scope(
         Err(_) => return positions_failure("positions_unavailable"),
     };
     if valid_positions_reply(&request, &reply) {
-        return reply;
+        return if matches!(request, PositionsRequest::Profile) {
+            shape_profile(reply)
+        } else {
+            reply
+        };
     }
     match reply.get("error").and_then(Value::as_str) {
         Some("positions_request_invalid") => positions_failure("positions_request_invalid"),
@@ -990,6 +1170,93 @@ pub(crate) async fn existing_team_positions_read(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn profile_request_is_closed_and_the_reader_opens_only_the_two_profile_paths() {
+        assert!(matches!(parse_positions_request(json!({"op": "profile"})), Ok(PositionsRequest::Profile)));
+        // whatever a caller adds (a path, a file name, a field list) is gone before the reader:
+        // the core forwards the parsed request, never the received one
+        for extra in [json!({"op": "profile", "path": "/jht_home/x"}), json!({"op": "profile", "filters": {}}), json!({"op": "profile", "id": "1"})] {
+            let forwarded = parse_positions_request(extra.clone())
+                .map(|request| serde_json::to_value(request).expect("request serializes"));
+            assert_eq!(forwarded, Ok(json!({"op": "profile"})), "{extra}");
+        }
+        assert!(POSITIONS_READ_PY.contains("if op=='profile':"));
+        assert!(POSITIONS_READ_PY.contains("PROFILE_DIR+'/candidate_profile.yml'"));
+        assert!(POSITIONS_READ_PY.contains("PROFILE_DIR+'/summaries/'"));
+        assert!(POSITIONS_READ_PY.contains("os.O_NOFOLLOW"));
+        // the neighbours of the profile in the same folder are never named: the provider's
+        // configuration, the candidate's original documents, the flags
+        let reader = POSITIONS_READ_PY.split("if op=='profile':").nth(1).unwrap().split("db=sqlite3.connect").next().unwrap();
+        for forbidden in ["jht.config", "sources", "credentials", "cloud.json", ".claude", ".codex", ".kimi", "ready.flag", "welcomed.flag", "req.get"] {
+            assert!(!reader.contains(forbidden), "the profile reader names {forbidden}");
+        }
+    }
+
+    #[test]
+    fn profile_reply_must_have_both_parts_whole() {
+        let good = json!({"ok": true, "data": {
+            "profile": {"state": "absent"},
+            "summaries": {"state": "absent", "items": [], "included": 0, "of": 0}
+        }});
+        assert!(valid_positions_reply(&PositionsRequest::Profile, &good));
+        for broken in [
+            json!({"ok": true, "data": {"profile": {"state": "absent"}}}),
+            json!({"ok": true, "data": {"profile": {"state": 1}, "summaries": {"state": "ok", "items": [], "included": 0, "of": 0}}}),
+            json!({"ok": true, "data": {"profile": {"state": "ok"}, "summaries": {"state": "ok", "items": {}, "included": 0, "of": 0}}}),
+            json!({"ok": true, "data": {"profile": {"state": "ok"}, "summaries": {"state": "ok", "items": [], "included": -1, "of": 0}}}),
+            json!({"ok": true, "data": {"profile": {"state": "ok"}, "summaries": {"state": "ok", "items": [], "included": 0, "of": 0}, "extra": 1}}),
+        ] {
+            assert!(!valid_positions_reply(&PositionsRequest::Profile, &broken), "{broken}");
+        }
+    }
+
+    #[test]
+    fn profile_file_is_read_as_whitelisted_fields_and_the_rest_is_counted_and_dropped() {
+        let text = "name: Synthetic Person\ntarget_role: Synthetic Role\nskills:\n  primary: [Alpha, Beta]\nprovider_token: synthetic-secret-value\ninternal_note: synthetic\ncandidate:\n  contacts:\n    phone: '000'\n";
+        let (parse, fields, kept, dropped) = profile_fields(text);
+        assert_eq!((parse, kept, dropped), ("ok", 4, 2));
+        let fields = fields.as_object().unwrap();
+        assert_eq!(fields.keys().map(String::as_str).collect::<Vec<_>>(), ["candidate", "name", "skills", "target_role"]);
+        assert!(!serde_json::to_string(fields).unwrap().contains("synthetic-secret-value"));
+    }
+
+    #[test]
+    fn profile_file_that_cannot_be_read_says_why_and_gives_no_field() {
+        assert_eq!(profile_fields("name: [unclosed").0, "invalid_yaml");
+        // a repeated key is not an error to the file's own writer (the last one wins), nor here
+        let repeated = profile_fields("name: a\nname: b\n");
+        assert_eq!((repeated.0, repeated.1["name"].as_str()), ("ok", Some("b")));
+        assert_eq!(profile_fields("- just\n- a list\n").0, "not_a_mapping");
+        assert_eq!(profile_fields("").0, "not_a_mapping");
+        assert_eq!(profile_fields("12").0, "not_a_mapping");
+        let bomb = "a: &a [x, x, x]\nb: &b [*a, *a, *a]\nc: &c [*b, *b, *b]\nd: [*c, *c, *c]\n";
+        let (parse, fields, kept, dropped) = profile_fields(bomb);
+        assert_eq!((parse, kept, dropped), ("aliases_unsupported", 0, 0));
+        assert!(fields.is_null());
+        // prose with an asterisk or an ampersand is not an alias
+        let prose = "name: Q&A *emphasis* and R&D\nnotes: |\n  * a bullet\n  & more\n";
+        assert_eq!(profile_fields(prose).0, "ok");
+    }
+
+    #[test]
+    fn profile_reply_drops_the_raw_text_and_declares_what_it_did() {
+        let reply = json!({"ok": true, "data": {
+            "profile": {"state": "ok", "bytes": 20, "sha256": "a".repeat(64), "text": "name: Synthetic\nextra_key: x\n"},
+            "summaries": {"state": "ok", "items": [{"name": "about", "state": "ok", "bytes": 3, "sha256": "b".repeat(64), "text": "hi"}], "included": 1, "of": 1}
+        }});
+        let shaped = shape_profile(reply);
+        let profile = &shaped["data"]["profile"];
+        assert!(profile.get("text").is_none());
+        assert_eq!((profile["parse"].as_str(), profile["kept"].as_u64(), profile["dropped"].as_u64()), (Some("ok"), Some(1), Some(1)));
+        assert_eq!(profile["fields"], json!({"name": "Synthetic"}));
+        assert!(!shaped.to_string().contains("extra_key"));
+        assert_eq!(shaped["data"]["summaries"]["items"][0]["text"], "hi");
+
+        let absent = shape_profile(json!({"ok": true, "data": {"profile": {"state": "absent"}, "summaries": {"state": "absent", "items": [], "included": 0, "of": 0}}}));
+        assert_eq!(absent["data"]["profile"]["parse"], "none");
+        assert!(absent["data"]["profile"]["fields"].is_null());
+    }
 
     fn target() -> RuntimeTarget {
         RuntimeTarget {
