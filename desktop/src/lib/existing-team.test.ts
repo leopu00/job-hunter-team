@@ -55,6 +55,7 @@ describe("existing team native bridge", () => {
 
   it("allowlists errors without exposing native details", () => {
     expect(existingTeamErrorCode({ code: "host_key_mismatch", message: "/private/key" })).toBe("host_key_mismatch");
+    expect(existingTeamErrorCode({ code: "existing_team_runtime_candidate_required" })).toBe("existing_team_runtime_candidate_required");
     expect(existingTeamErrorCode({ code: "raw_secret", message: "secret" })).toBe("unknown");
     expect(isTerminalExistingTeamError("host_key_mismatch")).toBe(true);
     expect(existingTeamErrorCode("existing_team_identity_mismatch")).toBe("existing_team_identity_mismatch");
