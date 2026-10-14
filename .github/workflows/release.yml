@@ -78,7 +78,7 @@ jobs:
         with:
           python-version: "3.12"
 
-      - uses: chickensoft-games/setup-godot@c233594225991af5aec714e52457cc76d6df8fa2 # v2.4.2
+      - uses: chickensoft-games/setup-godot@ac93246ea68518a384c1c280a496e5989341f2f6 # v2.4.3
         with:
           version: 4.7.0
           use-dotnet: false
@@ -466,7 +466,7 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
       - name: Download desktop app artifacts
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
           pattern: app-*-release
           path: release-assets
