@@ -379,7 +379,7 @@ struct Selection {
     candidate_sha256: String,
 }
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq, Eq)]
 pub(crate) struct ActivatedTarget {
     pub(crate) team_id: String,
     pub(crate) runtime: RuntimeTarget,

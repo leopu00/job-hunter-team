@@ -2620,7 +2620,16 @@ pub(crate) fn cli_existing_team_connect(
     })
     .map_err(|error| error.code)?;
     crate::runtime_host::validate_host_for_scope(app, &host, scope)?;
-    crate::existing_team_runtime::activate(app, scope, &host, &target)?;
+    match crate::existing_team_runtime::activate(app, scope, &host, &target) {
+        Ok(()) => {}
+        Err("existing_team_runtime_already_selected") => {
+            let selected = crate::existing_team_runtime::selected(app, scope, &host)?;
+            if selected.as_ref() != Some(&target) {
+                return Err("existing_team_runtime_target_changed");
+            }
+        }
+        Err(error) => return Err(error),
+    }
     crate::direct_chat::persist_onboarding_host(app, scope, &host)?;
     Ok(readiness)
 }
