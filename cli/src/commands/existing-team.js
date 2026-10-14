@@ -31,6 +31,10 @@ export function registerExistingTeamCommand(program) {
   cmd.command('detail <id>')
     .requiredOption('--profile <id>', 'local profile id')
     .action((id, options) => emit(runExistingTeamAdapter({ op: 'detail', profileId: profile(options.profile), id: String(id) })));
+  cmd.command('stats')
+    .requiredOption('--profile <id>', 'local profile id')
+    .description('counts by status, score distribution, sources and the dashboard\'s bounded dataset')
+    .action((options) => emit(runExistingTeamAdapter({ op: 'stats', profileId: profile(options.profile) })));
   cmd.command('facets')
     .requiredOption('--profile <id>', 'local profile id')
     .action((options) => emit(runExistingTeamAdapter({ op: 'facets', profileId: profile(options.profile) })));

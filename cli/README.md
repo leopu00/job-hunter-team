@@ -53,6 +53,7 @@ jht existing-team list --profile <local-profile-id> --limit 5
 jht existing-team detail <position-id> --profile <local-profile-id>
 jht existing-team list --profile <local-profile-id> --query <text>
 jht existing-team facets --profile <local-profile-id>
+jht existing-team stats --profile <local-profile-id>
 ```
 
 Commands return JSON and a nonzero exit code on failure. A verified connection

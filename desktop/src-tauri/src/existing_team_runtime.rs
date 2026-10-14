@@ -142,14 +142,53 @@ try: req=json.loads(sys.stdin.readline())
 except Exception: fail('positions_request_invalid')
 if not isinstance(req,dict) or set(req)-{'op','filters','id'}: fail('positions_request_invalid')
 op=req.get('op')
-if op not in ('list','detail','facets'): fail('positions_request_invalid')
+if op not in ('list','detail','facets','stats'): fail('positions_request_invalid')
 if op=='detail' and (set(req)!={'op','id'} or not isinstance(req['id'],str) or not req['id'].isdigit() or len(req['id'])>20): fail('positions_request_invalid')
-if op=='facets' and set(req)!={'op'}: fail('positions_request_invalid')
+if op in ('facets','stats') and set(req)!={'op'}: fail('positions_request_invalid')
 if op=='list' and (set(req)-{'op','filters'} or (req.get('filters') is not None and not isinstance(req.get('filters'),dict))): fail('positions_request_invalid')
 try:
  db=sqlite3.connect('file:/jht_home/jobs.db?mode=ro',uri=True); db.row_factory=sqlite3.Row; db.execute('PRAGMA query_only=ON'); db.execute('SELECT 1 FROM positions LIMIT 1')
 except Exception: fail('positions_unavailable')
 if op=='detail': emit({'ok':True,'data':position_detail(int(req['id']))})
+def trunc(value,size): return value[:size] if isinstance(value,str) else value
+def number(value): return value if isinstance(value,(int,float)) and not isinstance(value,bool) else None
+def dash_row(raw,score,application):
+ sal=salary(raw); scored_at=nullable(score,'scored_at') if score else None; written_by=nullable(application,'written_by') if application else None
+ candidates=[(raw.get('found_at'),'scout',raw.get('found_by')),(raw.get('last_checked'),'analista','analista'),(scored_at,'scorer',nullable(score,'scored_by') if score else None),(nullable(application,'written_at') if application else None,'scrittore',written_by),(nullable(application,'critic_reviewed_at') if application else None,'scrittore',written_by),(nullable(application,'applied_at') if application else None,'user','user'),(nullable(application,'response_at') if application else None,'user','user')]
+ best=None
+ for stamp,by,actor in candidates:
+  if stamp and (best is None or stamp>best[0]): best=(stamp,by,actor or by)
+ at,by,actor=best or ('','scout','scout')
+ return {'id':sid(raw.get('id')),'legacy_id':nullable(raw,'legacy_id'),'title':trunc(nullable(raw,'title'),120),'company':trunc(nullable(raw,'company'),80),'location':trunc(nullable(raw,'location'),80),'remote_type':nullable(raw,'remote_type'),'status':raw.get('status'),'score':number(nullable(score,'total_score')) if score else None,'role_family':trunc(nullable(raw,'role_family'),60),'loc_country':trunc(nullable(raw,'loc_country'),40),'loc_city':trunc(nullable(raw,'loc_city'),60),'source':trunc(nullable(raw,'source'),60),'salary_min':number(sal[0]),'salary_max':number(sal[1]),'salary_currency':sal[2] or 'EUR','found_at':nullable(raw,'found_at'),'scored_at':scored_at,'last_action_at':at or nullable(raw,'found_at') or '','last_action_by':by,'last_action_actor':actor,'critic_score':number(nullable(application,'critic_score')) if application else None,'critic_verdict':nullable(application,'critic_verdict') if application else None}
+def dash_rows(sql,args=()):
+ out=[]
+ for raw in many(sql,args):
+  pid=raw.get('id'); out.append(dash_row(raw,one('SELECT * FROM scores WHERE position_id=?',(pid,)),one('SELECT * FROM applications WHERE position_id=?',(pid,))))
+ return out
+if op=='stats':
+ POINTS=2000; EVENTS=3000; live="(p.status IS NULL OR p.status!='excluded')"
+ try:
+  counts={}
+  for row in db.execute('SELECT status,COUNT(*) FROM positions GROUP BY status'): counts[row[0]]=row[1]
+  total=sum(counts.values()); excluded=counts.get('excluded',0); active=total-excluded
+  requested=requested_scored=0
+  if 'write_requested' in columns('positions'):
+   requested=db.execute("SELECT COUNT(*) FROM positions WHERE write_requested AND status IN ('scored','writing','review')").fetchone()[0]
+   requested_scored=db.execute("SELECT COUNT(*) FROM positions WHERE write_requested AND status='scored'").fetchone()[0]
+  stats={'total':total,'new':counts.get('new',0),'checked':counts.get('checked',0),'scored':counts.get('scored',0),'writing':counts.get('writing',0),'review':counts.get('review',0),'ready':counts.get('ready',0),'applied':counts.get('applied',0),'excluded':excluded,'response':counts.get('response',0),'scored_open':counts.get('scored',0)-requested_scored,'to_write':requested}
+  scored=[row[0] for row in db.execute('SELECT s.total_score FROM positions p JOIN scores s ON s.position_id=p.id WHERE '+live+' AND s.total_score>0')] if 'total_score' in columns('scores') else []
+  bands=[(76,100),(61,75),(41,60),(0,40)]
+  distribution={'active':active,'withScore':len(scored),'avgScore':int(sum(scored)/len(scored)+0.5) if scored else None,'buckets':[{'min':lo,'max':hi,'count':sum(1 for value in scored if lo<=value<=hi)} for lo,hi in bands]}
+  sources=[{'source':row[0] if row[0] is not None else 'sconosciuta','count':row[1]} for row in db.execute('SELECT source,COUNT(*) AS n FROM positions p WHERE '+live+' GROUP BY source ORDER BY n DESC LIMIT 8')]
+  types=[{'role_family':row[0],'count':row[1]} for row in db.execute('SELECT role_family,COUNT(*) AS n FROM positions p WHERE '+live+' GROUP BY role_family ORDER BY n DESC LIMIT 40')]
+  rows=dash_rows('SELECT p.* FROM positions p WHERE '+live+' ORDER BY p.found_at DESC,p.id ASC LIMIT '+str(POINTS))
+  scols=columns('scores')
+  recent=dash_rows('SELECT p.* FROM positions p JOIN scores s ON s.position_id=p.id WHERE '+live+' AND s.total_score IS NOT NULL AND s.scored_at IS NOT NULL ORDER BY s.scored_at DESC,p.id ASC LIMIT 8') if 'scored_at' in scols else []
+  acols=columns('applications'); events=[]
+  if 'applied_at' in acols:
+   events=[{'appliedAt':row['applied_at'],'response':row['response'] if 'response' in acols else None,'responseAt':row['response_at'] if 'response_at' in acols else None} for row in many('SELECT * FROM applications WHERE applied_at IS NOT NULL ORDER BY applied_at ASC,id ASC')]
+ except sqlite3.Error: fail('positions_unavailable')
+ emit({'ok':True,'data':{'stats':stats,'distribution':distribution,'sources':sources,'types':types,'recent':recent,'points':{'rows':rows,'included':len(rows),'of':active},'events':{'rows':events[-EVENTS:],'included':min(len(events),EVENTS),'of':len(events)}}})
 if op=='facets':
  rows=[]
  try:
@@ -201,6 +240,7 @@ enum PositionsRequest {
         id: String,
     },
     Facets,
+    Stats,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -324,7 +364,7 @@ impl PositionsRequest {
             Self::Detail { id } => {
                 (1..=20).contains(&id.len()) && id.bytes().all(|byte| byte.is_ascii_digit())
             }
-            Self::Facets => true,
+            Self::Facets | Self::Stats => true,
         }
     }
 }
@@ -356,6 +396,22 @@ fn valid_positions_reply(request: &PositionsRequest, reply: &Value) -> bool {
                     .as_array()
                     .is_some_and(|items| items.iter().all(|item| item.is_object()))
             }),
+        PositionsRequest::Stats => data.as_object().is_some_and(|data| {
+            data.len() == 7
+                && ["stats", "distribution"]
+                    .iter()
+                    .all(|key| data.get(*key).is_some_and(Value::is_object))
+                && ["sources", "types", "recent"]
+                    .iter()
+                    .all(|key| array(data.get(*key)))
+                && ["points", "events"].iter().all(|key| {
+                    data.get(*key).and_then(Value::as_object).is_some_and(|part| {
+                        array(part.get("rows"))
+                            && part.get("included").is_some_and(Value::is_u64)
+                            && part.get("of").is_some_and(Value::is_u64)
+                    })
+                })
+        }),
         PositionsRequest::Detail { .. } => {
             data.is_null()
                 || data.as_object().is_some_and(|data| {
@@ -1011,6 +1067,7 @@ mod tests {
             }}),
             json!({"op": "detail", "id": "101"}),
             json!({"op": "facets"}),
+            json!({"op": "stats"}),
         ] {
             let request = parse_positions_request(payload.clone())
                 .unwrap_or_else(|()| panic!("the decoder refused {payload}"));
@@ -1019,6 +1076,36 @@ mod tests {
             // what the native side forwards is what the page asked, nothing added or dropped
             assert_eq!(serde_json::from_slice::<Value>(&wire).expect("wire is json"), payload);
         }
+    }
+
+    #[test]
+    fn stats_is_a_closed_read_only_op_with_a_composite_reply() {
+        assert!(matches!(parse_positions_request(json!({"op": "stats"})), Ok(PositionsRequest::Stats)));
+        // serde keeps a unit variant open to extra keys (as it does for `facets`),
+        // but the core forwards the parsed request, never the received one: whatever
+        // a caller adds is gone before it reaches the reader, which refuses it anyway
+        let forwarded = parse_positions_request(json!({"op": "stats", "filters": {}, "id": "1"}))
+            .map(|request| serde_json::to_value(request).expect("request serializes"));
+        assert_eq!(forwarded, Ok(json!({"op": "stats"})));
+
+        let part = json!({"rows": [], "included": 0, "of": 0});
+        let good = json!({"ok": true, "data": {
+            "stats": {}, "distribution": {}, "sources": [], "types": [], "recent": [],
+            "points": part, "events": part
+        }});
+        assert!(valid_positions_reply(&PositionsRequest::Stats, &good));
+        for broken in [
+            json!({"ok": true, "data": {"items": []}}),
+            json!({"ok": true, "data": {"stats": {}, "distribution": {}, "sources": [], "types": [], "recent": [], "points": part}}),
+            json!({"ok": true, "data": {"stats": [], "distribution": {}, "sources": [], "types": [], "recent": [], "points": part, "events": part}}),
+            json!({"ok": true, "data": {"stats": {}, "distribution": {}, "sources": [], "types": [], "recent": [],
+                "points": {"rows": [], "included": -1, "of": 0}, "events": part}}),
+        ] {
+            assert!(!valid_positions_reply(&PositionsRequest::Stats, &broken), "{broken}");
+        }
+        // the Python reader serves this op and nothing else under it
+        assert!(POSITIONS_READ_PY.contains("if op=='stats':"));
+        assert!(POSITIONS_READ_PY.contains("mode=ro"));
     }
 
     #[test]

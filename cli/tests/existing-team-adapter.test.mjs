@@ -23,6 +23,7 @@ function blocked(request) {
 test('invalid adapter boundaries are rejected before the companion starts', () => {
   blocked({ op: 'list', profileId: PROFILE, filters: null });
   blocked({ op: 'facets', profileId: PROFILE, unexpected: true });
+  blocked({ op: 'stats', profileId: PROFILE, filters: {} });
   blocked({ op: 'list', profileId: PROFILE, filters: { q: 'x'.repeat(9000) } });
   blocked({ op: 'list', profileId: PROFILE, filters: { q: 7 } });
   blocked({ op: 'list', profileId: PROFILE, filters: { limit: Number.POSITIVE_INFINITY } });
@@ -43,11 +44,12 @@ test('typed list filters reach the companion with the external timeout margin', 
   assert.deepEqual(result, { code: 0, value: { ok: true, phase: 'read', code: 0, data: { items: [] } } });
 });
 
-test('synthetic companion envelopes preserve list detail and facets core data', () => {
+test('synthetic companion envelopes preserve list detail facets and stats core data', () => {
   const cases = [
     [{ op: 'list', profileId: PROFILE }, { items: [{ id: '1' }] }],
     [{ op: 'detail', profileId: PROFILE, id: '1' }, null],
     [{ op: 'facets', profileId: PROFILE }, { items: [{ id: '1', status: 'new' }] }],
+    [{ op: 'stats', profileId: PROFILE }, { stats: { total: 1 }, points: { rows: [], included: 0, of: 0 } }],
   ];
   for (const [request, data] of cases) {
     const result = runExistingTeamAdapter(request, {

@@ -30,6 +30,9 @@ enum AdapterRequest {
     Facets {
         #[serde(rename = "profileId")] profile_id: String,
     },
+    Stats {
+        #[serde(rename = "profileId")] profile_id: String,
+    },
 }
 
 impl AdapterRequest {
@@ -38,7 +41,8 @@ impl AdapterRequest {
             Self::Connect { profile_id, .. }
             | Self::List { profile_id, .. }
             | Self::Detail { profile_id, .. }
-            | Self::Facets { profile_id } => profile_id,
+            | Self::Facets { profile_id }
+            | Self::Stats { profile_id } => profile_id,
         }
     }
 }
@@ -93,6 +97,7 @@ fn execute(app: &tauri::AppHandle, request: AdapterRequest) -> (i32, Value) {
         }
         AdapterRequest::Detail { id, .. } => envelope_core("read", existing_team_runtime::positions_read_for_scope(app, &scope, json!({"op":"detail","id":id}))),
         AdapterRequest::Facets { .. } => envelope_core("read", existing_team_runtime::positions_read_for_scope(app, &scope, json!({"op":"facets"}))),
+        AdapterRequest::Stats { .. } => envelope_core("read", existing_team_runtime::positions_read_for_scope(app, &scope, json!({"op":"stats"}))),
     }
 }
 
@@ -155,6 +160,9 @@ mod tests {
         assert!(matches!(detail, AdapterRequest::Detail { ref id, .. } if id == "42"));
         let facets = decoded(r#"{"profileId":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","op":"facets"}"#);
         assert!(matches!(facets, AdapterRequest::Facets { .. }));
+        let stats = decoded(r#"{"profileId":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","op":"stats"}"#);
+        assert!(matches!(stats, AdapterRequest::Stats { .. }));
+        assert!(serde_json::from_str::<AdapterRequest>(r#"{"profileId":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","op":"stats","filters":{}}"#).is_err());
         assert!(serde_json::from_str::<AdapterRequest>(r#"{"profileId":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","op":"facets","unexpected":true}"#).is_err());
     }
 

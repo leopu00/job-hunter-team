@@ -43,7 +43,7 @@ export function validAdapterRequest(request) {
   const exactKeys = (keys) => own.length === keys.length && own.every((key) => keys.includes(key));
   if (request.op === 'connect') return exactKeys(['profileId', 'op', 'teamId']) && typeof request.teamId === 'string' && /^[A-Za-z0-9_-]{16,128}$/.test(request.teamId);
   if (request.op === 'detail') return exactKeys(['profileId', 'op', 'id']) && typeof request.id === 'string' && /^\d{1,20}$/.test(request.id);
-  if (request.op === 'facets') return exactKeys(['profileId', 'op']);
+  if (request.op === 'facets' || request.op === 'stats') return exactKeys(['profileId', 'op']);
   if (request.op !== 'list' || !own.every((key) => ['profileId', 'op', 'filters'].includes(key))) return false;
   if (!('filters' in request)) return true;
   const { filters } = request;
