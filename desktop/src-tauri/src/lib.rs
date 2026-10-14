@@ -4,6 +4,7 @@ mod auth_store;
 mod broker_view;
 mod browsers;
 mod closer_desktop;
+pub mod cli_adapter;
 mod desktop_platform;
 mod direct_chat;
 mod existing_team_runtime;

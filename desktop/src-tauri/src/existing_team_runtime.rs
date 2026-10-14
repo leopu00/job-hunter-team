@@ -544,6 +544,25 @@ pub(crate) fn candidate_for_request(
     })
 }
 
+/// Gets the custodial host only after binding it to the explicit team id.
+/// The CLI companion never accepts a host, target or pin from stdin.
+pub(crate) fn candidate_host_for_team(
+    app: &tauri::AppHandle,
+    scope: &AccountScope,
+    team: &str,
+) -> Result<(ExecutionHost, ActivatedTarget), &'static str> {
+    let (candidate, candidate_sha256) = read_candidate_at(&root(app)?, scope)?;
+    if candidate.team_id != team {
+        return Err("existing_team_runtime_candidate_mismatch");
+    }
+    let target = ActivatedTarget {
+        team_id: candidate.team_id,
+        runtime: candidate.runtime,
+        candidate_sha256,
+    };
+    Ok((candidate.host, target))
+}
+
 fn candidate_matches_probed(
     candidate: &Candidate,
     candidate_sha256: &str,
@@ -801,6 +820,61 @@ fn parse_positions_request(request: Value) -> Result<PositionsRequest, ()> {
     }
 }
 
+/// Fixed read-only jobs-db bridge shared by the Tauri command and the
+/// one-shot CLI companion. Callers provide only an account scope and typed
+/// request; host, target and SQL remain source-owned.
+pub(crate) fn positions_read_for_scope(
+    app: &tauri::AppHandle,
+    scope: &AccountScope,
+    request: Value,
+) -> Value {
+    let request = match parse_positions_request(request) {
+        Ok(request) => request,
+        Err(()) => return positions_failure("positions_request_invalid"),
+    };
+    let request_bytes = match serde_json::to_vec(&request) {
+        Ok(bytes) if bytes.len() <= 8192 => bytes,
+        _ => return positions_failure("positions_request_invalid"),
+    };
+    let host = match direct_chat::load_persisted_host(app, scope) {
+        Ok(host) => host,
+        Err(error) => return positions_failure(error),
+    };
+    let validated = match crate::runtime_host::validate_host_for_scope(app, &host, scope) {
+        Ok(validated) => validated,
+        Err(error) => return positions_failure(error),
+    };
+    let target = match selected(app, scope, &host) {
+        Ok(Some(target)) => target,
+        Ok(None) => return positions_failure("existing_team_runtime_required"),
+        Err(error) => return positions_failure(error),
+    };
+    let command = match python_command(&target.runtime) {
+        Ok(command) => command,
+        Err(error) => return positions_failure(error),
+    };
+    let mut input = hex_encode(POSITIONS_READ_PY.as_bytes()).into_bytes();
+    input.push(b'\n');
+    input.extend_from_slice(&request_bytes);
+    input.push(b'\n');
+    let output = match run_ssh_command(&validated, &command, Some(&input), READ_TIMEOUT, None) {
+        Ok(output) if output.success() && output.stdout.len() <= 2 * 1024 * 1024 => output,
+        _ => return positions_failure("positions_unavailable"),
+    };
+    let reply: Value = match serde_json::from_slice(&output.stdout) {
+        Ok(reply) => reply,
+        Err(_) => return positions_failure("positions_unavailable"),
+    };
+    if valid_positions_reply(&request, &reply) {
+        return reply;
+    }
+    match reply.get("error").and_then(Value::as_str) {
+        Some("positions_request_invalid") => positions_failure("positions_request_invalid"),
+        Some("positions_unavailable") => positions_failure("positions_unavailable"),
+        _ => positions_failure("positions_unavailable"),
+    }
+}
+
 /// Fixed read-only jobs-db bridge for the desktop adapter. The renderer sends
 /// typed operation data only; it never supplies a host, container or SQL.
 #[tauri::command]
@@ -809,14 +883,6 @@ pub(crate) async fn existing_team_positions_read(
     scopes: State<'_, AccountScopeState>,
     request: Value,
 ) -> Result<Value, String> {
-    let request = match parse_positions_request(request) {
-        Ok(request) => request,
-        Err(()) => return Ok(positions_failure("positions_request_invalid")),
-    };
-    let request_bytes = match serde_json::to_vec(&request) {
-        Ok(bytes) if bytes.len() <= 8192 => bytes,
-        _ => return Ok(positions_failure("positions_request_invalid")),
-    };
     let expected = match scopes.active() {
         Ok(scope) => scope,
         Err(_) => return Ok(positions_failure("account_scope_unavailable")),
@@ -827,32 +893,7 @@ pub(crate) async fn existing_team_positions_read(
         let _scope = scope_state
             .lock_expected(&worker_expected)
             .map_err(|_| "account_scope_changed")?;
-        let host = direct_chat::load_persisted_host(&app, &worker_expected)?;
-        let validated =
-            crate::runtime_host::validate_host_for_scope(&app, &host, &worker_expected)?;
-        let target =
-            selected(&app, &worker_expected, &host)?.ok_or("existing_team_runtime_required")?;
-        let command = python_command(&target.runtime)?;
-        let mut input = hex_encode(POSITIONS_READ_PY.as_bytes()).into_bytes();
-        input.push(b'\n');
-        input.extend_from_slice(&request_bytes);
-        input.push(b'\n');
-        let output = run_ssh_command(&validated, &command, Some(&input), READ_TIMEOUT, None)
-            .map_err(|_| "positions_unavailable")?;
-        if !output.success() || output.stdout.len() > 2 * 1024 * 1024 {
-            return Err("positions_unavailable");
-        }
-        let reply: Value =
-            serde_json::from_slice(&output.stdout).map_err(|_| "positions_unavailable")?;
-        if valid_positions_reply(&request, &reply) {
-            return Ok(reply);
-        }
-        let error = match reply.get("error").and_then(Value::as_str) {
-            Some("positions_request_invalid") => "positions_request_invalid",
-            Some("positions_unavailable") => "positions_unavailable",
-            _ => return Err("positions_unavailable"),
-        };
-        Ok(positions_failure(error))
+        Ok(positions_read_for_scope(&app, &worker_expected, request))
     })
     .await
     .unwrap_or_else(|_| Err("positions_unavailable"));

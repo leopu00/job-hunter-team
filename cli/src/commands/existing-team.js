@@ -1,0 +1,38 @@
+import { Command } from 'commander';
+import { runExistingTeamAdapter } from '../lib/existing-team-adapter.js';
+
+function emit(result) {
+  process.stdout.write(`${JSON.stringify(result.value)}\n`);
+  if (result.code !== 0) process.exitCode = result.code;
+}
+
+function profile(value) {
+  return String(value || '');
+}
+
+export function registerExistingTeamCommand(program) {
+  const cmd = new Command('existing-team').description('Read-only connection to an approved existing VPS team');
+  cmd.command('connect')
+    .requiredOption('--profile <id>', 'local profile id')
+    .requiredOption('--team <id>', 'expected team id')
+    .action((options) => emit(runExistingTeamAdapter({ op: 'connect', profileId: profile(options.profile), teamId: String(options.team) })));
+  cmd.command('list')
+    .requiredOption('--profile <id>', 'local profile id')
+    .option('--status <status>', 'position status filter')
+    .option('--query <text>', 'position text filter')
+    .option('--limit <count>', 'maximum rows')
+    .action((options) => {
+      const filters = {};
+      if (options.status) filters.statuses = [String(options.status)];
+      if (options.query) filters.q = String(options.query);
+      if (options.limit !== undefined) filters.limit = Number(options.limit);
+      emit(runExistingTeamAdapter({ op: 'list', profileId: profile(options.profile), ...(Object.keys(filters).length ? { filters } : {}) }));
+    });
+  cmd.command('detail <id>')
+    .requiredOption('--profile <id>', 'local profile id')
+    .action((id, options) => emit(runExistingTeamAdapter({ op: 'detail', profileId: profile(options.profile), id: String(id) })));
+  cmd.command('facets')
+    .requiredOption('--profile <id>', 'local profile id')
+    .action((options) => emit(runExistingTeamAdapter({ op: 'facets', profileId: profile(options.profile) })));
+  program.addCommand(cmd);
+}

@@ -200,6 +200,16 @@ fn create_local_profile_at(root: &Path) -> Result<LocalProfileCreated, &'static 
     Err("local_profile_storage_unavailable")
 }
 
+/// Resolves the explicit local-profile context for the one-shot CLI companion.
+/// It reads the same private record as the desktop command; it does not scan or
+/// infer another account scope.
+pub(crate) fn cli_local_scope(
+    app: &tauri::AppHandle,
+    profile_id: &str,
+) -> Result<AccountScope, &'static str> {
+    load_local_scope_at(&local_profiles_dir(app)?, profile_id)
+}
+
 fn load_local_scope_at(root: &Path, profile_id: &str) -> Result<AccountScope, &'static str> {
     if !valid_profile_id(profile_id) {
         return Err("local_profile_invalid");

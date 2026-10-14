@@ -2599,6 +2599,32 @@ fn existing_team_probe_with(
     Ok(result.snapshot)
 }
 
+/// One-shot companion path. The only stdin authority is the explicit team id:
+/// host and target come from the custodial candidate in the selected account.
+pub(crate) fn cli_existing_team_connect(
+    app: &tauri::AppHandle,
+    scope: &AccountScope,
+    team_id: &str,
+) -> Result<ExistingTeamReadiness, &'static str> {
+    if !valid_team_id(team_id) {
+        return Err("invalid_team_id");
+    }
+    let (host, target) = crate::existing_team_runtime::candidate_host_for_team(app, scope, team_id)?;
+    if !matches!(host, ExecutionHost::Vps { .. }) {
+        return Err("existing_team_vps_required");
+    }
+    let validated = crate::runtime_host::validate_host_for_scope(app, &host, scope)?;
+    let probe = crate::existing_team_runtime::team_probe_command(&target.runtime)?;
+    let readiness = existing_team_readonly_probe_with(team_id, |input| {
+        run_ssh_command(&validated, &probe, Some(input), SNAPSHOT_TIMEOUT, None)
+    })
+    .map_err(|error| error.code)?;
+    crate::runtime_host::validate_host_for_scope(app, &host, scope)?;
+    crate::existing_team_runtime::activate(app, scope, &host, &target)?;
+    crate::direct_chat::persist_onboarding_host(app, scope, &host)?;
+    Ok(readiness)
+}
+
 #[tauri::command]
 pub(crate) async fn onboarding_existing_team_connect(
     app: tauri::AppHandle,
