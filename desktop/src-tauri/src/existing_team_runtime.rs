@@ -107,7 +107,9 @@ def matching(item,filters):
   if not isinstance(query,str) or len(query)>120: return None
   q=query.strip().lower(); legacy=search_id(q)
   hay=' '.join(str(item.get(key) or '') for key in ('title','company','loc_city','loc_country','role_family','source')).lower()
-  if q and q not in hay and (legacy is None or item.get('legacy_id') != legacy): return False
+  candidate_id=item.get('legacy_id')
+  if candidate_id is None: candidate_id=item.get('id')
+  if q and q not in hay and (legacy is None or str(candidate_id) != str(legacy)): return False
  return True
 def sort_items(items,filters):
  key=filters.get('sort')
