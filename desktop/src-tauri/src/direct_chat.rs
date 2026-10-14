@@ -1,7 +1,7 @@
 use crate::account_scope::{AccountScope, AccountScopeState};
 use crate::existing_team_runtime::{self, ActivatedTarget};
 use crate::runtime_host::{
-    run_program, run_ssh, set_private_dir_permissions, set_private_permissions, ssh_base_args,
+    run_program, run_ssh, run_ssh_command, set_private_dir_permissions, set_private_permissions, ssh_base_args,
     validate_host, ExecutionHost, ProcessResult, ValidatedHost,
 };
 use serde::{Deserialize, Serialize};
@@ -577,7 +577,7 @@ fn run_connection(
                 (None, RemoteOperation::Python) => REMOTE_PYTHON_STDIN.to_owned(),
                 (None, RemoteOperation::Delivery(session)) => delivery_command(session).ok_or_else(|| failure("invalid_agent"))?.to_owned(),
             };
-            run_ssh(&connection.validated, &command, input, timeout, connection.control_path.as_deref()).map_err(failure)
+            run_ssh_command(&connection.validated, &command, input, timeout, connection.control_path.as_deref()).map_err(failure)
         }
     }
 }

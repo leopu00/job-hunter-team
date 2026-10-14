@@ -3,7 +3,7 @@ use crate::release_channel;
 use crate::windows_runtime::exit_failure;
 use crate::runtime_log::RuntimeLog;
 use crate::runtime_host::{
-    run_program, run_program_keeping_stderr, run_ssh, set_private_dir_permissions, set_private_permissions, ssh_base_args,
+    run_program, run_program_keeping_stderr, run_ssh, run_ssh_command, set_private_dir_permissions, set_private_permissions, ssh_base_args,
     validate_host, ExecutionHost, ProcessResult, ValidatedHost,
 };
 use serde::{Deserialize, Serialize};
@@ -2499,7 +2499,7 @@ pub(crate) async fn onboarding_snapshot(
         match crate::existing_team_runtime::selected(&app, &worker_expected, &host).map_err(failure)? {
             Some(target) => {
                 let command = crate::existing_team_runtime::snapshot_command(&target.runtime).map_err(failure)?;
-                let result = run_ssh(&validated, &command, None, SNAPSHOT_TIMEOUT, None).map_err(failure)?;
+                let result = run_ssh_command(&validated, &command, None, SNAPSHOT_TIMEOUT, None).map_err(failure)?;
                 if !result.success() { return Err(failure("snapshot_failed")); }
                 Ok(parse_snapshot(&result.stdout_text()))
             }
@@ -2530,7 +2530,7 @@ pub(crate) async fn onboarding_resume_snapshot(
         match crate::existing_team_runtime::selected(&app, &worker_expected, &host).map_err(failure)? {
             Some(target) => {
                 let command = crate::existing_team_runtime::snapshot_command(&target.runtime).map_err(failure)?;
-                let result = run_ssh(&validated, &command, None, SNAPSHOT_TIMEOUT, None).map_err(failure)?;
+                let result = run_ssh_command(&validated, &command, None, SNAPSHOT_TIMEOUT, None).map_err(failure)?;
                 if !result.success() { return Err(failure("snapshot_failed")); }
                 Ok(parse_snapshot(&result.stdout_text()))
             }
@@ -2619,7 +2619,7 @@ pub(crate) async fn onboarding_existing_team_connect(
             "ui_existing_container_done",
             || {
                 existing_team_probe_with(&request.team_id, |input| {
-                    run_ssh(
+                    run_ssh_command(
                         &validated,
                         &probe_command,
                         Some(input),
