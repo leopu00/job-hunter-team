@@ -127,7 +127,8 @@ pub fn run() -> i32 {
             app.handle().exit(0);
             Ok(())
         })
-        .run(context);
+        .build(context)
+        .map(|app| app.run_return(|_, _| {}));
     let (code, value) = outcome.lock().ok().and_then(|mut reply| reply.take()).unwrap_or_else(|| {
         let detail = if run.is_err() { "adapter_unavailable" } else { "adapter_failed" };
         fail("adapter", detail)
