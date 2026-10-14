@@ -187,34 +187,55 @@ async function recreateAction() {
 }
 
 // ── status ─────────────────────────────────────────────────────────
-function statusAction() {
-  const inspect = spawnSync('docker', ['inspect', CONTAINER_NAME,
+const CONTAINER_NAME_PATTERN = CONTAINER_NAME.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const MISSING_INSPECT = new RegExp(`^(?:Error response from daemon: )?No such (?:object|container): ${CONTAINER_NAME_PATTERN}$`);
+
+export function classifyContainerInspect(inspect) {
+  if (inspect?.status === 1 && !inspect.error && typeof inspect.stderr === 'string' && MISSING_INSPECT.test(inspect.stderr.trim())) {
+    return { kind: 'missing' };
+  }
+  if (inspect?.status !== 0 || typeof inspect?.stdout !== 'string') return { kind: 'unknown' };
+  const fields = inspect.stdout.trim().split('|');
+  if (fields.length !== 4) return { kind: 'unknown' };
+  const [rawState, image, startedAt, mounts] = fields;
+  if (!image) return { kind: 'unknown' };
+  const state = rawState === 'running' ? 'running' : (rawState === 'exited' || rawState === 'stopped' ? 'stopped' : null);
+  if (!state || (state === 'running' && Number.isNaN(new Date(startedAt).getTime()))) return { kind: 'unknown' };
+  return { kind: state, image, startedAt, mounts };
+}
+
+export function statusAction({ inspectRunner = spawnSync, write = console.log, setExitCode = (code) => { process.exitCode = code; }, now = Date.now } = {}) {
+  const inspect = inspectRunner('docker', ['inspect', CONTAINER_NAME,
     '--format', '{{.State.Status}}|{{.Config.Image}}|{{.State.StartedAt}}|{{range $i,$m := .Mounts}}{{if $i}},{{end}}{{$m.Source}}:{{$m.Destination}}{{end}}',
   ], { encoding: 'utf8', env: { ...process.env, MSYS_NO_PATHCONV: '1' } });
+  const result = classifyContainerInspect(inspect);
 
-  if (inspect.status !== 0) {
-    console.log(c.yellow(`Container '${CONTAINER_NAME}' does not exist.`));
-    console.log(c.dim('  Create it with: jht container up'));
-    return;
+  if (result.kind === 'unknown') {
+    write(c.yellow(`Container '${CONTAINER_NAME}' status is unknown.`));
+    write(c.dim('  Inspect did not return a trustworthy container state.'));
+    setExitCode(1);
+    return result;
   }
-  const [state, image, startedAt, mounts] = inspect.stdout.trim().split('|');
-  const running = state === 'running';
-  const uptime = running ? (() => {
-    const ms = Date.now() - new Date(startedAt).getTime();
-    const min = Math.round(ms / 60_000);
+  if (result.kind === 'missing') {
+    write(c.yellow(`Container '${CONTAINER_NAME}' is missing.`));
+    return result;
+  }
+
+  const uptime = result.kind === 'running' ? (() => {
+    const min = Math.round((now() - new Date(result.startedAt).getTime()) / 60_000);
     return min < 60 ? `${min} min` : `${Math.floor(min / 60)}h ${min % 60}min`;
   })() : '-';
-
-  console.log('');
-  console.log(`  ${c.bold('Container:')} ${CONTAINER_NAME}`);
-  console.log(`  State:     ${running ? c.green(state) : c.red(state)}`);
-  console.log(`  Image:     ${c.dim(image)}`);
-  if (running) console.log(`  Uptime:    ${c.dim(uptime)}`);
-  console.log('  Mounts:');
-  for (const m of mounts.split(',')) {
-    console.log('    ' + c.dim(m));
+  write('');
+  write(`  ${c.bold('Container:')} ${CONTAINER_NAME}`);
+  write(`  State:     ${result.kind === 'running' ? c.green(result.kind) : c.red(result.kind)}`);
+  write(`  Image:     ${c.dim(result.image)}`);
+  if (result.kind === 'running') write(`  Uptime:    ${c.dim(uptime)}`);
+  write('  Mounts:');
+  if (result.mounts) {
+    for (const mount of result.mounts.split(',')) write('    ' + c.dim(mount));
   }
-  console.log('');
+  write('');
+  return result;
 }
 
 // ── logs ───────────────────────────────────────────────────────────
