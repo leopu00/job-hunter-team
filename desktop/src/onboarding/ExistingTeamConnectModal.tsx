@@ -9,15 +9,17 @@ import {
   isTerminalExistingTeamError,
   type ExistingTeamBridge,
   type ExistingTeamConnectionResult,
+  type ExistingTeamReadOnlyConnectionResult,
   type ExistingTeamProgress,
   type ExistingTeamVpsHost,
   type SshHostKeyProbe,
 } from "../lib/existing-team";
 import { EXISTING_TEAM_ID_TEXT } from "./existing-team-id.i18n";
 import { OnboardingArtwork } from "./OnboardingArtwork";
+import { ReadonlyExistingPositions } from "./ReadonlyExistingPositions";
 import "./existing-team-connect.css";
 
-type ModalStage = "fields" | "probing" | "confirm" | "attaching" | "failed";
+type ModalStage = "fields" | "probing" | "confirm" | "attaching" | "readonly" | "failed";
 type FailedOperation = "probe" | "attach" | "notify";
 
 export interface ExistingTeamConnectModalProps {
@@ -80,6 +82,8 @@ export default function ExistingTeamConnectModal({
   const [probe, setProbe] = useState<SshHostKeyProbe | null>(null);
   const [errorCode, setErrorCode] = useState<string | null>(null);
   const [failedOperation, setFailedOperation] = useState<FailedOperation | null>(null);
+  const [readOnlyRequested, setReadOnlyRequested] = useState(false);
+  const [readOnlyResult, setReadOnlyResult] = useState<ExistingTeamReadOnlyConnectionResult | null>(null);
   const [attachProgress, setAttachProgress] = useState<ExistingTeamProgress["stage"]>("runtime");
   const terminal = errorCode ? isTerminalExistingTeamError(errorCode) : false;
 
@@ -142,14 +146,21 @@ export default function ExistingTeamConnectModal({
     }
   }
 
-  async function attach() {
+  async function attach(readOnly = false) {
     if (!probe || !teamIdValid || stage === "attaching") return;
     const request = { teamId: expectedTeamId, host: cleanHost(host) };
+    setReadOnlyRequested(readOnly);
     setStage("attaching");
     setErrorCode(null);
     setFailedOperation(null);
     try {
       await bridge.confirm(request.host, probe);
+      if (readOnly) {
+        const result = await bridge.connectReadOnly(request);
+        setReadOnlyResult(result);
+        setStage("readonly");
+        return;
+      }
       const result = await bridge.connect(request, (progress) => setAttachProgress(progress.stage));
       resultRef.current = result;
       await notify(result);
@@ -169,7 +180,7 @@ export default function ExistingTeamConnectModal({
     }
     if (failedOperation === "attach") {
       setStage("confirm");
-      return attach();
+      return attach(readOnlyRequested);
     }
   }
 
@@ -230,9 +241,12 @@ export default function ExistingTeamConnectModal({
             <div className="existing-team-modal__actions">
               <button type="button" className="existing-team-modal__secondary" onClick={backToFields}>{t.back}</button>
               <button type="button" className="existing-team-modal__primary" onClick={() => void attach()}>{t.existingTeam.confirmAndLink}</button>
+              <button type="button" className="existing-team-modal__secondary" onClick={() => void attach(true)}>Visualizza annunci in sola lettura</button>
             </div>
           </section>
         )}
+
+        {stage === "readonly" && readOnlyResult && <ReadonlyExistingPositions readiness={readOnlyResult.readiness} onClose={onCancel} />}
 
         {stage === "attaching" && (
           <section className="existing-team-modal__status" role="status" aria-live="polite">

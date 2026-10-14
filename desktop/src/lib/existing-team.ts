@@ -17,6 +17,11 @@ export type { SshHostKeyProbe };
 
 export type ExistingTeamConnectionResult = OnboardingRuntimeSnapshot;
 
+export interface ExistingTeamReadOnlyConnectionResult {
+  snapshot: OnboardingRuntimeSnapshot;
+  readiness: boolean;
+}
+
 export interface ExistingTeamProgress {
   stage: "preparing" | "runtime" | "container" | "provider" | "team";
   message: string;
@@ -26,6 +31,7 @@ export interface ExistingTeamBridge {
   probe(host: ExistingTeamVpsHost): Promise<SshHostKeyProbe>;
   confirm(host: ExistingTeamVpsHost, probe: SshHostKeyProbe): Promise<void>;
   connect(request: ExistingTeamRequest, onProgress: (progress: ExistingTeamProgress) => void): Promise<ExistingTeamConnectionResult>;
+  connectReadOnly(request: ExistingTeamRequest): Promise<ExistingTeamReadOnlyConnectionResult>;
 }
 
 export const existingTeamBridge: ExistingTeamBridge = {
@@ -42,6 +48,9 @@ export const existingTeamBridge: ExistingTeamBridge = {
       request,
       onProgress: channel,
     });
+  },
+  connectReadOnly(request) {
+    return invoke<ExistingTeamReadOnlyConnectionResult>("onboarding_existing_team_readonly_connect", { request });
   },
 };
 

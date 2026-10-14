@@ -2599,6 +2599,30 @@ fn existing_team_probe_with(
     Ok(result.snapshot)
 }
 
+/// Activates only the exact target just validated by the caller. Reusing an
+/// existing selection is safe only when it equals that target; this does not
+/// open chat or mark onboarding ready. Persisting the validated host supplies
+/// the common account context for subsequent read-only queries.
+fn activate_readonly_existing_team_target(
+    app: &tauri::AppHandle,
+    scope: &AccountScope,
+    host: &ExecutionHost,
+    target: &crate::existing_team_runtime::ActivatedTarget,
+) -> Result<(), &'static str> {
+    crate::runtime_host::validate_host_for_scope(app, host, scope)?;
+    match crate::existing_team_runtime::activate(app, scope, host, target) {
+        Ok(()) => {}
+        Err("existing_team_runtime_already_selected") => {
+            let selected = crate::existing_team_runtime::selected(app, scope, host)?;
+            if selected.as_ref() != Some(target) {
+                return Err("existing_team_runtime_target_changed");
+            }
+        }
+        Err(error) => return Err(error),
+    }
+    crate::direct_chat::persist_onboarding_host(app, scope, host)
+}
+
 /// One-shot companion path. The only stdin authority is the explicit team id:
 /// host and target come from the custodial candidate in the selected account.
 pub(crate) fn cli_existing_team_connect(
@@ -2619,19 +2643,44 @@ pub(crate) fn cli_existing_team_connect(
         run_ssh_command(&validated, &probe, Some(input), SNAPSHOT_TIMEOUT, None)
     })
     .map_err(|error| error.code)?;
-    crate::runtime_host::validate_host_for_scope(app, &host, scope)?;
-    match crate::existing_team_runtime::activate(app, scope, &host, &target) {
-        Ok(()) => {}
-        Err("existing_team_runtime_already_selected") => {
-            let selected = crate::existing_team_runtime::selected(app, scope, &host)?;
-            if selected.as_ref() != Some(&target) {
-                return Err("existing_team_runtime_target_changed");
-            }
-        }
-        Err(error) => return Err(error),
-    }
-    crate::direct_chat::persist_onboarding_host(app, scope, &host)?;
+    activate_readonly_existing_team_target(app, scope, &host, &target)?;
     Ok(readiness)
+}
+
+/// Explicit read-only entry for an existing team. It shares the candidate,
+/// identity and immutable-target checks with the normal connection, but never
+/// reconnects chat, writes a ready marker, starts an agent, or invokes a
+/// provider. An absent assistant remains visible as `readiness: false`.
+#[tauri::command]
+pub(crate) async fn onboarding_existing_team_readonly_connect(
+    app: tauri::AppHandle,
+    scopes: State<'_, AccountScopeState>,
+    request: ExistingTeamConnectRequest,
+) -> Result<ExistingTeamReadiness, OnboardingError> {
+    let expected = scopes.active().map_err(failure)?;
+    if !matches!(&request.host, ExecutionHost::Vps { .. }) {
+        return Err(failure("existing_team_vps_required"));
+    }
+    if !valid_team_id(&request.team_id) {
+        return Err(failure("invalid_team_id"));
+    }
+    let scope_state = scopes.inner().clone();
+    let worker_expected = expected.clone();
+    let result = tauri::async_runtime::spawn_blocking(move || {
+        let _scope = scope_state.lock_expected(&worker_expected).map_err(failure)?;
+        let validated = crate::runtime_host::validate_host_for_scope(&app, &request.host, &worker_expected).map_err(failure)?;
+        let target = crate::existing_team_runtime::candidate_for_request(&app, &worker_expected, &request.host, &request.team_id).map_err(failure)?;
+        let probe = crate::existing_team_runtime::team_probe_command(&target.runtime).map_err(failure)?;
+        let readiness = existing_team_readonly_probe_with(&request.team_id, |input| {
+            run_ssh_command(&validated, &probe, Some(input), SNAPSHOT_TIMEOUT, None)
+        })?;
+        activate_readonly_existing_team_target(&app, &worker_expected, &request.host, &target).map_err(failure)?;
+        Ok(readiness)
+    })
+    .await
+    .unwrap_or_else(|_| Err(failure("existing_team_unavailable")));
+    let _scope = scopes.lock_expected(&expected).map_err(failure)?;
+    result
 }
 
 #[tauri::command]

@@ -83,6 +83,7 @@ pub fn run() {
             mail::mail_status,
             onboarding::onboarding_assistant_open,
             onboarding::onboarding_existing_team_connect,
+            onboarding::onboarding_existing_team_readonly_connect,
             onboarding::onboarding_podman_machine_recreate,
             onboarding::onboarding_local_uninstall_available,
             onboarding::onboarding_local_uninstall,
