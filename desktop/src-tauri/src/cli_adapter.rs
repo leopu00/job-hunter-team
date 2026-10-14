@@ -9,7 +9,6 @@ use crate::{account_scope, existing_team_runtime, onboarding};
 use serde::Deserialize;
 use serde_json::{json, Value};
 use std::io::{self, Read};
-use tauri::Manager;
 
 const MAX_REQUEST_BYTES: usize = 8192;
 
@@ -103,7 +102,7 @@ pub fn run() -> i32 {
             return 64;
         }
     };
-    let mut context = tauri::generate_context!();
+    let mut context = crate::application_context();
     context.config_mut().app.windows.clear();
     let outcome = std::sync::Arc::new(std::sync::Mutex::new(None));
     let reply = outcome.clone();

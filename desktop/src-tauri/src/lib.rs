@@ -25,6 +25,10 @@ mod runtime_log;
 mod voice_input;
 mod windows_runtime;
 
+pub(crate) fn application_context() -> tauri::Context<tauri::Wry> {
+    tauri::generate_context!()
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -101,6 +105,6 @@ pub fn run() {
             voice_input::voice_input_status,
             voice_input::voice_input_stop
         ])
-        .run(tauri::generate_context!())
+        .run(application_context())
         .expect("error while running JHT Desktop");
 }
