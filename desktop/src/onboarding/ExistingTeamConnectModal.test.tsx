@@ -200,10 +200,9 @@ describe("ExistingTeamConnectModal", () => {
     expect(onConnected).not.toHaveBeenCalled();
   });
 
-  it("retries a read-only failure as read-only and keeps denied data out of the panel", async () => {
+  it("keeps identity denial out of the read-only panel", async () => {
     const user = userEvent.setup();
-    const connectReadOnly = vi.fn().mockRejectedValueOnce({ code: "existing_team_identity_mismatch" });
-    const native = bridge({ connectReadOnly });
+    const native = bridge({ connectReadOnly: vi.fn().mockRejectedValue({ code: "existing_team_identity_mismatch" }) });
     render(<ExistingTeamConnectModal teamId="team-opaque-0001" bridge={native} onCancel={vi.fn()} onConnected={vi.fn()} />);
     await fillHost(user);
     await user.click(screen.getByRole("button", { name: /verifica vps/i }));
@@ -211,7 +210,20 @@ describe("ExistingTeamConnectModal", () => {
     expect(await screen.findByRole("alert")).toBeInTheDocument();
     expect(screen.queryByText(/annunci in sola lettura/i)).not.toBeInTheDocument();
     expect(native.connect).not.toHaveBeenCalled();
-    expect(connectReadOnly).toHaveBeenCalledOnce();
+  });
+
+  it("retries a transient read-only failure without falling back to operational attach", async () => {
+    const user = userEvent.setup();
+    const connectReadOnly = vi.fn().mockRejectedValueOnce({ code: "existing_team_unavailable" }).mockResolvedValueOnce(READONLY_RESULT);
+    const native = bridge({ connectReadOnly });
+    render(<ExistingTeamConnectModal teamId="team-opaque-0001" bridge={native} onCancel={vi.fn()} onConnected={vi.fn()} />);
+    await fillHost(user);
+    await user.click(screen.getByRole("button", { name: /verifica vps/i }));
+    await user.click(await screen.findByRole("button", { name: /visualizza annunci in sola lettura/i }));
+    await user.click(await screen.findByRole("button", { name: /riprova/i }));
+    expect(await screen.findByText(/annunci in sola lettura/i)).toBeInTheDocument();
+    expect(connectReadOnly).toHaveBeenCalledTimes(2);
+    expect(native.connect).not.toHaveBeenCalled();
   });
 
 });

@@ -1,6 +1,6 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { syntheticDetail, syntheticPosition } from "../test-support/existing-team-positions-fixture";
 import { ReadonlyExistingPositions } from "./ReadonlyExistingPositions";
 
@@ -14,6 +14,8 @@ vi.mock("../lib/existing-team-positions", () => ({
 }));
 
 describe("ReadonlyExistingPositions", () => {
+  beforeEach(() => { queries.list.mockReset(); queries.detail.mockReset(); });
+
   it("shows degraded state and uses only fixed list/filter/detail reads", async () => {
     const user = userEvent.setup();
     queries.list.mockResolvedValueOnce({ source: "vps", data: [syntheticPosition] })
