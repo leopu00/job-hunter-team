@@ -480,6 +480,10 @@ pub(crate) fn ssh_base_args(host: &ValidatedHost) -> Result<Vec<OsString>, &'sta
     else {
         return Err("not_vps");
     };
+    // `-o` values still use ssh_config tokenization: keep this path one entry
+    // even when the app-data directory contains spaces, quotes or backslashes.
+    let known_hosts_option = known_hosts.display().to_string()
+        .replace('\\', "\\\\").replace('"', "\\\"");
     Ok(vec![
         "-a".into(),
         "-x".into(),
@@ -491,7 +495,7 @@ pub(crate) fn ssh_base_args(host: &ValidatedHost) -> Result<Vec<OsString>, &'sta
         "-o".into(),
         "StrictHostKeyChecking=yes".into(),
         "-o".into(),
-        format!("UserKnownHostsFile={}", known_hosts.display()).into(),
+        format!("UserKnownHostsFile=\"{known_hosts_option}\"").into(),
         "-o".into(),
         "GlobalKnownHostsFile=/dev/null".into(),
         "-i".into(),
@@ -870,6 +874,33 @@ mod tests {
             args.last().unwrap().to_string_lossy(),
             "test@test-host"
         );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn ssh_known_hosts_option_preserves_spaces_quotes_and_backslashes() {
+        let path = r#"/tmp/Application Support/synthetic"quoted\known_hosts"#;
+        let host = super::ValidatedHost::Vps {
+            address: "synthetic.invalid".into(),
+            user: "synthetic".into(),
+            port: 22,
+            key_path: "/tmp/synthetic-unused-key".into(),
+            known_hosts: path.into(),
+        };
+        let args = ssh_base_args(&host).unwrap();
+        let option = args.iter().find(|arg| {
+            arg.to_string_lossy().starts_with("UserKnownHostsFile=")
+        }).unwrap();
+        // Parse only: no configuration, credentials or network connection.
+        let parsed = std::process::Command::new("ssh")
+            .args(["-G", "-F", "/dev/null", "-o", "CanonicalizeHostname=no",
+                   "-o", "IdentityFile=none", "-o", "IdentityAgent=none", "-o"])
+            .arg(option).arg("synthetic.invalid").output()
+            .expect("OpenSSH is required to verify the Unix client's argument contract");
+        assert!(parsed.status.success(), "OpenSSH rejected the generated option");
+        let output = String::from_utf8(parsed.stdout).unwrap();
+        let parsed_path = output.lines().find(|line| line.starts_with("userknownhostsfile ")).unwrap();
+        assert_eq!(parsed_path, format!("userknownhostsfile {path}"));
     }
 
     #[test]
