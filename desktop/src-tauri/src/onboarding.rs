@@ -788,6 +788,7 @@ pub(crate) fn failure(code: &'static str) -> OnboardingError {
             | "existing_team_runtime_candidate_exists"
             | "existing_team_runtime_candidate_conflict"
             | "existing_team_runtime_already_selected"
+            | "existing_team_saved_incomplete"
             | "existing_team_ambiguous"
             | "existing_team_image_unattested"
             | "existing_team_too_many_containers"
@@ -2715,8 +2716,10 @@ pub(crate) fn existing_team_readonly_connect_with(
 /// the host and team come from the saved candidate (never from the renderer), a
 /// selection must already exist, and the identity probe and the pin are done
 /// again by the same read-only connection as ever. Nothing is started and no
-/// candidate or selection is created: without a candidate or a selection it
-/// refuses before any SSH call, and the caller goes on as it did before.
+/// candidate or selection is created: with neither saved it refuses before any
+/// SSH call, and the caller goes on as it did before.
+/// Candidate without selection, or selection without candidate, is a different
+/// refusal (existing_team_saved_incomplete): the caller must not treat it as "nothing saved".
 pub(crate) fn existing_team_reopen_with(
     root: &Path,
     scope: &AccountScope,
@@ -2729,13 +2732,21 @@ pub(crate) fn existing_team_reopen_with(
         Duration,
     ) -> Result<ProcessResult, &'static str>,
 ) -> Result<ExistingTeamReadiness, OnboardingError> {
+    // Neither saved: there is no existing team to reopen (the caller goes on as it
+    // always did). Only one of the two: the saved connection is incomplete, which is
+    // not the same as absent; refused here, before any SSH call, and never completed.
+    match crate::existing_team_runtime::saved_binding_at(root, scope).map_err(failure)? {
+        (false, false) => return Err(failure("existing_team_runtime_candidate_required")),
+        (true, true) => {}
+        _ => return Err(failure("existing_team_saved_incomplete")),
+    }
     let (host, team_id) = crate::existing_team_runtime::candidate_identity_at(root, scope).map_err(failure)?;
     if !matches!(host, ExecutionHost::Vps { .. }) {
         return Err(failure("existing_team_vps_required"));
     }
     match crate::existing_team_runtime::selected_at(root, scope, &host).map_err(failure)? {
         Some(target) if target.team_id == team_id => {}
-        _ => return Err(failure("existing_team_runtime_selection_required")),
+        _ => return Err(failure("existing_team_runtime_target_changed")),
     }
     existing_team_readonly_connect_with(
         root,

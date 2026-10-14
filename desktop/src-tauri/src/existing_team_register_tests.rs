@@ -1427,8 +1427,7 @@ fn t15_a_saved_team_with_the_assistant_down_reopens_read_only_and_starts_nothing
 }
 
 #[test]
-fn t15_without_a_saved_team_or_a_selection_it_refuses_before_any_call() {
-    // nothing saved
+fn t15_with_nothing_saved_it_refuses_before_any_call_and_creates_nothing() {
     let sandbox = Sandbox::new();
     write_pin(&sandbox);
     let server = Server::new(&team_world());
@@ -1436,15 +1435,39 @@ fn t15_without_a_saved_team_or_a_selection_it_refuses_before_any_call() {
     assert_eq!(reopen(&sandbox, &server, &persisted).expect_err("nothing").code, "existing_team_runtime_candidate_required");
     assert_eq!(server.count(), 0);
     assert_eq!(persisted.get(), 0);
-    // a candidate with no selection is not activated by a restart
+    assert_eq!(sandbox.entries(), vec!["pin".to_owned()]);
+}
+
+#[test]
+fn t15_a_half_saved_connection_is_incomplete_not_absent_and_is_never_completed() {
+    use std::os::unix::fs::symlink;
+    let persisted = Cell::new(0);
+    // a candidate with no selection: a restart does not activate it
+    let sandbox = Sandbox::new();
+    write_pin(&sandbox);
     let world = team_world();
     let server = team_server(&world);
     let found = discover(&sandbox, &server, Duration::from_secs(40)).expect("found");
     register(&sandbox, &server, &receipt_of(&sandbox, &found)).expect("registered");
-    let server = team_server(&world);
-    assert_eq!(reopen(&sandbox, &server, &persisted).expect_err("no selection").code, "existing_team_runtime_selection_required");
-    assert_eq!(server.count(), 0);
+    let fresh = team_server(&world);
+    assert_eq!(reopen(&sandbox, &fresh, &persisted).expect_err("no selection").code, "existing_team_saved_incomplete");
+    assert_eq!(fresh.count(), 0);
     assert!(!sandbox.selection().exists(), "no selection is created by reopening");
+    // a selection with no candidate
+    let sandbox = Sandbox::new();
+    let (world, _) = connected_once(&sandbox);
+    fs::remove_file(sandbox.candidate()).unwrap();
+    let fresh = team_server(&world);
+    assert_eq!(reopen(&sandbox, &fresh, &persisted).expect_err("no candidate").code, "existing_team_saved_incomplete");
+    assert_eq!(fresh.count(), 0);
+    assert!(!sandbox.candidate().exists(), "no candidate is invented");
+    // a dangling symlink counts as present, so it is not "nothing saved"
+    let sandbox = Sandbox::new();
+    write_pin(&sandbox);
+    symlink("/nonexistent/synthetic", sandbox.selection()).unwrap();
+    let fresh = Server::new(&world);
+    assert_eq!(reopen(&sandbox, &fresh, &persisted).expect_err("dangling").code, "existing_team_saved_incomplete");
+    assert_eq!(fresh.count(), 0);
     assert_eq!(persisted.get(), 0);
 }
 

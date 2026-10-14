@@ -681,6 +681,12 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
     "The app cannot read the team's saved data on this computer.",
     "Quit Job Hunter Team completely and open it again.",
   ),
+  existing_team_saved_incomplete: copy(
+    "Il collegamento salvato per la squadra esistente è incompleto.",
+    "Torna alla configurazione e collega di nuovo la squadra; se non basta, chiedi a chi gestisce la VPS di completare il collegamento.",
+    "The saved connection for the existing team is incomplete.",
+    "Go back to the setup and connect the team again; if that is not enough, ask whoever manages the VPS to complete the connection.",
+  ),
   existing_team_unavailable: TEAM_UNREACHABLE,
   existing_team_runtime_required: copy(
     "Per questa squadra non c’è un collegamento verificato da cui partire.",

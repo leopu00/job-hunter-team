@@ -727,6 +727,13 @@ const COPY_BY_ENGLISH_TEXT: Readonly<Record<string, ErrorTranslations>> = {
     hu: ["Az alkalmazás nem tudja beolvasni a csapat mentett adatait ezen a számítógépen.", "Zárd be teljesen a Job Hunter Teamet, majd nyisd meg újra."],
     pt: ["A aplicação não consegue ler os dados guardados da equipa neste computador.", "Fecha completamente o Job Hunter Team e volta a abri-lo."],
   },
+  "The saved connection for the existing team is incomplete.": {
+    de: ["Die gespeicherte Verbindung zum vorhandenen Team ist unvollständig.", "Geh zurück zur Einrichtung und verbinde das Team erneut; wenn das nicht reicht, bitte die Person, die die VPS verwaltet, die Verbindung zu vervollständigen."],
+    es: ["La conexión guardada con el equipo existente está incompleta.", "Vuelve a la configuración y conecta el equipo de nuevo; si no basta, pide a quien gestiona el VPS que complete la conexión."],
+    fr: ["La connexion enregistrée vers l’équipe existante est incomplète.", "Reviens à la configuration et reconnecte l’équipe ; si cela ne suffit pas, demande à la personne qui gère le VPS de compléter la connexion."],
+    hu: ["A meglévő csapathoz mentett kapcsolat hiányos.", "Térj vissza a beállításhoz, és kapcsold össze újra a csapatot; ha ez nem elég, kérd meg a VPS üzemeltetőjét, hogy egészítse ki a kapcsolatot."],
+    pt: ["A ligação guardada à equipa existente está incompleta.", "Volta à configuração e liga a equipa de novo; se não bastar, pede a quem gere a VPS que complete a ligação."],
+  },
 };
 
 function translated(englishText: string): ErrorTranslations {
@@ -882,6 +889,7 @@ export const ERROR_CATALOG_LOCALES: Readonly<Record<string, ErrorTranslations>> 
   existing_team_runtime_target_changed: translated("The saved team no longer matches the selected connection."),
   existing_team_runtime_selection_invalid: translated("The saved selection for this team is not valid."),
   existing_team_runtime_unavailable: translated("The app cannot read the team's saved data on this computer."),
+  existing_team_saved_incomplete: translated("The saved connection for the existing team is incomplete."),
   existing_team_unavailable: translated("The team cannot be reached."),
   existing_team_runtime_required: translated("There is no verified connection for this team to start from."),
   assistant_start_not_confirmed: translated("The action was not confirmed: no command was sent."),

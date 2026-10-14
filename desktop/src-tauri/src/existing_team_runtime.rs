@@ -709,6 +709,20 @@ pub(crate) fn candidate_for_request_at(
     })
 }
 
+/// Whether this scope has a candidate and whether it has a selection (a file of
+/// any kind counts, even an invalid one or a dangling symlink). Local only.
+pub(crate) fn saved_binding_at(
+    root: &Path,
+    scope: &AccountScope,
+) -> Result<(bool, bool), &'static str> {
+    let present = |name: &str| match fs::symlink_metadata(path(root, scope, name)) {
+        Ok(_) => Ok(true),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(false),
+        Err(_) => Err("existing_team_runtime_unavailable"),
+    };
+    Ok((present(CANDIDATE_FILE)?, present(SELECTION_FILE)?))
+}
+
 /// The host and team of the candidate this scope has, for the backend's own use
 /// (reopening a saved team). It never leaves the backend: no command returns it.
 pub(crate) fn candidate_identity_at(

@@ -375,6 +375,8 @@ export default function DashboardApp() {
   const providerStoppingAttemptRef = useRef<number | null>(null);
   const providerAttemptRef = useRef(0);
   const resumeAttemptedIdentityRef = useRef<string | null>(null);
+  // The screen shows a saved existing team that could not be reopened: «Riprova» asks again to reopen it.
+  const savedTeamFailureRef = useRef(false);
   const activeIdentityKeyRef = useRef<string | null>(identityKey);
   activeIdentityKeyRef.current = identityKey;
   const signedOut = !loading && !identityKey;
@@ -905,6 +907,7 @@ export default function DashboardApp() {
     if (providerSession) await closeOnboardingProviderLogin(providerSession).catch(() => undefined);
     resetOnboardingMarker(markerId);
     submissionRef.current = null;
+    savedTeamFailureRef.current = false;
     resumeAttemptedIdentityRef.current = identityKey;
     setProviderLogin(null);
     setSshHostKey(null);
@@ -922,6 +925,7 @@ export default function DashboardApp() {
 
   const exitTechnicalFailure = useCallback(() => {
     submissionRef.current = null;
+    savedTeamFailureRef.current = false;
     setProviderLogin(null);
     setSshHostKey(null);
     setActivity(null);
@@ -971,6 +975,7 @@ export default function DashboardApp() {
    * retry that asks the same question again, never as the team-start action.
    */
   const reopenExistingTeam = useCallback(async (): Promise<"opened" | "none" | OnboardingRuntimeState> => {
+    savedTeamFailureRef.current = false;
     try {
       const result = await existingTeamBridge.reopen();
       // Closing the read-only view goes back to the setup's first step, not to a spinner.
@@ -979,14 +984,18 @@ export default function DashboardApp() {
       return "opened";
     } catch (error) {
       const code = nativeErrorCode(error);
-      if (code === "existing_team_runtime_candidate_required" || code === "existing_team_runtime_selection_required") {
-        return "none";
-      }
+      // «None» means exactly this: neither a candidate nor a selection is saved. One without
+      // the other is an incomplete saved connection, and any other refusal a saved team that
+      // cannot be reached: both are shown as such and never lead to the team-start action.
+      if (code === "existing_team_runtime_candidate_required") return "none";
+      savedTeamFailureRef.current = true;
       const described = describeError(code, { locale: appLocale() });
       return {
         status: "failed",
         stage: "runtime",
-        title: stateText().savedTeamUnreachableTitle,
+        title: code === "existing_team_saved_incomplete"
+          ? stateText().savedTeamIncompleteTitle
+          : stateText().savedTeamUnreachableTitle,
         message: described.text,
         action: described.action,
         ...(code ? { code } : {}),
@@ -995,16 +1004,18 @@ export default function DashboardApp() {
     }
   }, [openReadOnlyExistingTeam, setRuntime]);
 
-  const resumeAssistant = useCallback(async () => {
+  const resumeAssistant = useCallback(async (options?: { reopened?: boolean }) => {
     if (!identityKey) throw new Error("identity-missing");
     try {
       setActivity(createOnboardingActivity());
       setRuntime({ status: "working", stage: "runtime", message: stateText().checkingRealState });
-      const reopened = await reopenExistingTeam();
-      if (reopened === "opened") return;
-      if (reopened !== "none") {
-        setRuntime(reopened);
-        return;
+      if (!options?.reopened) {
+        const reopened = await reopenExistingTeam();
+        if (reopened === "opened") return;
+        if (reopened !== "none") {
+          setRuntime(reopened);
+          return;
+        }
       }
       const nativeSnapshot = await resumeOnboardingSnapshot();
       if (activeIdentityKeyRef.current !== identityKey) throw new Error("account-changed");
@@ -1126,12 +1137,44 @@ export default function DashboardApp() {
     setManualExistingTeam(null);
   }, [identityKey]);
 
+  /**
+   * The first thing a started identity does: reopen the saved existing team, whatever
+   * the legacy onboarding marker says (a new connection in read-only mode does not
+   * write it). With nothing saved, a profile whose own setup was started goes on to
+   * the usual resume, and an empty profile stays on the normal gate with no resume at all.
+   */
+  const startupReopen = useCallback(async (thenUsualResume: boolean) => {
+    if (!identityKey) return;
+    let showed = false;
+    // A quick refusal (nothing saved) must not flash a spinner on a new profile's first screen.
+    const timer = setTimeout(() => {
+      showed = true;
+      setRuntime({ status: "working", stage: "runtime", message: stateText().checkingRealState });
+    }, 300);
+    let outcome: Awaited<ReturnType<typeof reopenExistingTeam>>;
+    try {
+      outcome = await reopenExistingTeam();
+    } finally {
+      clearTimeout(timer);
+    }
+    if (activeIdentityKeyRef.current !== identityKey || outcome === "opened") return;
+    if (outcome !== "none") {
+      if (!submissionRef.current) setRuntime(outcome);
+      return;
+    }
+    if (thenUsualResume) {
+      await resumeAssistant({ reopened: true });
+      return;
+    }
+    if (showed) setRuntime({ status: "collecting", stage: "host" });
+  }, [identityKey, reopenExistingTeam, resumeAssistant, setRuntime]);
+
   useEffect(() => {
-    if (!identityKey || gate.phase !== "required" || gate.existingTeam || !gate.resumeAvailable ||
+    if (!identityKey || gate.phase !== "required" ||
         assistantChatIdentityKey === identityKey || resumeAttemptedIdentityRef.current === identityKey) return;
     resumeAttemptedIdentityRef.current = identityKey;
-    void resumeAssistant().catch(() => undefined);
-  }, [assistantChatIdentityKey, gate, identityKey, resumeAssistant]);
+    void startupReopen(!gate.existingTeam && gate.resumeAvailable).catch(() => undefined);
+  }, [assistantChatIdentityKey, gate, identityKey, startupReopen]);
 
   const runtimeAction = useCallback(async (stage: "provider-login" | "team-start" | "assistant") => {
     if (stage === "provider-login") return loginProvider();
@@ -1169,6 +1212,10 @@ export default function DashboardApp() {
     if (gate.phase !== "required" || gate.runtime.status !== "failed") return;
     const { stage } = gate.runtime;
     const submission = submissionRef.current;
+    // A saved existing team that could not be reopened: ask to reopen it again, whatever the marker says.
+    if (savedTeamFailureRef.current && !submission) {
+      return startupReopen(gate.phase === "required" && !gate.existingTeam && gate.resumeAvailable);
+    }
     if (gate.resumeAvailable && !submission) {
       if (stage === "team-start") return resumeTeam();
       if (stage === "assistant") return connectResumedAssistant();
@@ -1179,7 +1226,7 @@ export default function DashboardApp() {
     if (stage === "team-start") return startTeam(submission);
     if (stage === "assistant") return finishAssistant();
     return submit(submission);
-  }, [connectResumedAssistant, fail, finishAssistant, gate, loginProvider, resumeAssistant, resumeTeam, setRuntime, startTeam, submit]);
+  }, [connectResumedAssistant, fail, finishAssistant, gate, loginProvider, resumeAssistant, resumeTeam, setRuntime, startTeam, startupReopen, submit]);
 
   const logout = localProfile ? async () => {
     leaveExistingTeamReadOnly();

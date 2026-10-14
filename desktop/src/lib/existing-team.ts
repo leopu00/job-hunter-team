@@ -126,6 +126,7 @@ export const EXISTING_TEAM_ERROR_CODES: ReadonlySet<string> = new Set([
   "existing_team_runtime_candidate_mismatch",
   "existing_team_runtime_candidate_exists",
   "existing_team_runtime_candidate_conflict",
+  "existing_team_saved_incomplete",
   "existing_team_runtime_already_selected",
   "existing_team_container_not_found",
   "existing_team_not_found",
