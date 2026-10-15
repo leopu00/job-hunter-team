@@ -162,7 +162,14 @@ def test_the_repair_names_only_callers_that_exist():
     # compose or docker itself.
     onboarding = (ROOT / "desktop" / "src-tauri" / "src" / "onboarding.rs").read_text(encoding="utf-8")
     install = onboarding[onboarding.index("fn install_local("):]
-    assert "#[cfg(windows)]" in install[:500] and "return install_local_windows(app, phase);" in install[:500]
+    # The body OPENS with the Windows block, and the block only hands over:
+    # nothing of the Unix path can run first on Windows.
+    body = install[install.index(") -> Result<PathBuf, OnboardingError> {\n") :].split("\n", 1)[1]
+    assert body.startswith("    #[cfg(windows)]\n    {\n"), body[:200]
+    block = body[len("    #[cfg(windows)]\n    {\n") : body.index("\n    }\n")]
+    statements = [line.strip() for line in block.splitlines() if line.strip()]
+    assert statements[-1] == "return install_local_windows(app, log, phase);", statements
+    assert all(re.fullmatch(r"let _ = \w+;", line) for line in statements[:-1]), statements
     windows = onboarding[onboarding.index("fn install_local_windows("):]
     windows = windows[: windows.index("\n}\n")]
     assert "installer_invocation(&script, &channel_args)" in windows
@@ -179,7 +186,13 @@ def test_the_windows_desktop_never_runs_docker_even_when_it_is_installed():
     onboarding = (src / "onboarding.rs").read_text(encoding="utf-8")
     windows = onboarding[onboarding.index("fn install_local_windows("):]
     windows = windows[: windows.index("\n}\n")]
-    assert "wsl_state(" in windows and "run_program_lines(" in windows
+    assert "wsl_state(" in windows
+    # It starts exactly two programs: wsl (--status) and the PowerShell that
+    # runs install.ps1, both resolved under SystemRoot.
+    assert "let wsl = wsl_path(" in windows and "let shell = powershell_path(" in windows
+    started = re.findall(r"run_program\w*\(\s*([A-Za-z_][\w.]*)", windows)
+    assert started == ["wsl.to_str", "shell.to_str"], started
+    assert "crate::runtime_host::run_program_lines_keeping_stderr(" in windows
     # A runtime already installed is reused only through the release
     # channel's rule: a test build always installs its own.
     reuse = windows[: windows.index('"install_reused"')]
@@ -188,7 +201,8 @@ def test_the_windows_desktop_never_runs_docker_even_when_it_is_installed():
     launches = []
     for path in sorted(src.glob("*.rs")):
         text = path.read_text(encoding="utf-8")
-        launches += re.findall(r'(?:Command::new|run_program(?:_lines)?)\(\s*"([^"]+)"', text)
+        # Every launcher of runtime_host.rs, the *_keeping_stderr ones too.
+        launches += re.findall(r'(?:Command::new|run_program(?:_lines)?(?:_keeping_stderr)?)\(\s*"([^"]+)"', text)
     assert launches, "no program launch found: the search itself is broken"
     assert not [program for program in launches if "docker" in program.lower()], launches
 
