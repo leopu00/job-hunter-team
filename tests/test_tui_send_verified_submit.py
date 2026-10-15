@@ -255,3 +255,15 @@ def test_a_quoted_status_line_does_not_hide_a_turn_that_starts(shell, tmp_path):
     rc, out = fake.send(shell, SHORT_MSG, enter="accept", busy=True, keep=True)
     assert rc == 0, out.stdout + out.stderr
     assert fake.enters() == 1
+
+
+def test_a_turn_already_running_does_not_confirm_a_lost_enter(shell, tmp_path):
+    """Reiniezione del watchdog del welcome mentre l'agente lavora: la riga di
+    stato c'era gia' prima dell'Enter, quindi non prova che QUESTO Enter sia
+    stato accettato. Il testo resta nel composer: non confermato."""
+    fake = _Fake(tmp_path)
+    (fake.dir / "transcript").write_text("• Working (12s • esc to interrupt)\n", encoding="utf-8")
+    rc, out = fake.send(shell, SHORT_MSG, enter="never")
+    assert rc == 2, out.stdout + out.stderr
+    assert fake.enters() == 3
+    assert fake.typed() == 1
