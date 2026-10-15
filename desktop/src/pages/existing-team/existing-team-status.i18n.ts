@@ -34,7 +34,7 @@ export interface ExistingTeamStatusText {
 export const EXISTING_TEAM_STATUS_TEXT: Record<Locale, ExistingTeamStatusText> = {
   it: {
     title: "Squadra",
-    intro: "Lo stato della squadra sulla VPS, letto adesso con un comando di sola lettura. La consultazione è in sola lettura: le azioni sui dati restano disabilitate; l’avvio dell’assistente è separato e chiede una conferma.",
+    intro: "Lo stato della squadra sulla VPS, letto adesso con un comando di sola lettura. Le azioni sui dati restano disabilitate; l’avvio dell’assistente è separato e chiede una conferma.",
     yes: "Sì",
     no: "No",
     refresh: "Aggiorna",

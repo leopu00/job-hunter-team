@@ -1,4 +1,4 @@
-import { act, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { connectDirectChat, directChatStatus, reconnectDirectChat } from "../lib/direct-chat";
@@ -1509,6 +1509,29 @@ describe("DashboardApp onboarding router", () => {
       expect(await screen.findByText("failed:runtime")).toBeInTheDocument();
       expect(screen.queryByText("action-required:team-start")).not.toBeInTheDocument();
       expect(resumeOnboardingSnapshot).not.toHaveBeenCalled();
+    });
+
+    it("«Riprova» answered «nothing saved» in under 300 ms replaces the old failure, with fake timers", async () => {
+      localProfile("absent");
+      vi.useFakeTimers();
+      vi.mocked(existingTeamBridge.reopen)
+        .mockRejectedValueOnce({ code: "existing_team_unavailable" })
+        .mockRejectedValueOnce({ code: "existing_team_runtime_candidate_required" });
+      render(<DashboardApp />);
+      await act(async () => { await vi.advanceTimersByTimeAsync(50); });
+      expect(screen.getByText("failed:runtime")).toBeInTheDocument();
+
+      fireEvent.click(screen.getByRole("button", { name: "retry-runtime" }));
+      // The answer is already in: the 300 ms spinner has not fired yet and never will.
+      await act(async () => { await vi.advanceTimersByTimeAsync(100); });
+
+      expect(existingTeamBridge.reopen).toHaveBeenCalledTimes(2);
+      expect(screen.queryByText("failed:runtime")).not.toBeInTheDocument();
+      expect(screen.getByText("collecting:host")).toBeInTheDocument();
+      await act(async () => { await vi.advanceTimersByTimeAsync(1000); });
+      expect(screen.getByText("collecting:host")).toBeInTheDocument();
+      expect(resumeOnboardingSnapshot).not.toHaveBeenCalled();
+      nothingStarted();
     });
 
     it("a «Start over» is respected: the explicit restart does not reopen the saved team on its own", async () => {

@@ -1146,6 +1146,8 @@ export default function DashboardApp() {
   const startupReopen = useCallback(async (thenUsualResume: boolean) => {
     if (!identityKey) return;
     let showed = false;
+    // A «Retry» of a saved team that could not be reopened starts from its failed state.
+    const retryingSavedFailure = savedTeamFailureRef.current;
     // A quick refusal (nothing saved) must not flash a spinner on a new profile's first screen.
     const timer = setTimeout(() => {
       showed = true;
@@ -1166,7 +1168,8 @@ export default function DashboardApp() {
       await resumeAssistant({ reopened: true });
       return;
     }
-    if (showed) setRuntime({ status: "collecting", stage: "host" });
+    // Whatever answered in under 300 ms never set a spinner, but the old failure is still on screen.
+    if (showed || retryingSavedFailure) setRuntime({ status: "collecting", stage: "host" });
   }, [identityKey, reopenExistingTeam, resumeAssistant, setRuntime]);
 
   useEffect(() => {
