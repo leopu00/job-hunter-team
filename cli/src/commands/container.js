@@ -1,8 +1,8 @@
 // Comando container — wrap di `docker compose` per il container jht
 //
 // Sottocomandi:
-//   jht container up        docker compose up -d jht (con fix ownership .next)
-//   jht container down      stop + rm del container (team muore, Assistente incluso)
+//   jht container up        docker compose up -d jht (create, start)
+//   jht container down      stop del container, senza rimuoverlo (team muore, Assistente incluso)
 //   jht container recreate  down + up (utile dopo bump immagine / compose edit)
 //   jht container status    stato, immagine, mount, uptime
 //   jht container logs [-f] docker logs del jht
@@ -20,35 +20,13 @@ const __dirname = dirname(__filename);
 
 // Repo root: cli/src/commands → up 3 livelli
 const REPO_ROOT = resolve(__dirname, '..', '..', '..');
+// Tenuta dal gate di pin dell'immagine (scripts/runtime_image_pin.py): non cancellarla.
 const DEFAULT_RUNTIME_IMAGE = 'ghcr.io/leopu00/jht@sha256:07b154bee43f32d2e6313c54f28e389836556e2b5cbe1b76d03398684c38b598';
 
 function dockerCompose(args, { cwd = REPO_ROOT, inherit = true } = {}) {
   const r = spawnSync('docker', ['compose', ...args], {
     cwd,
     stdio: inherit ? 'inherit' : 'pipe',
-    env: { ...process.env, MSYS_NO_PATHCONV: '1' },
-  });
-  return r.status === 0;
-}
-
-/**
- * Fix ownership del volume anonimo /app/web/.next dopo `up --no-start`.
- * Viene creato root-owned: il container gira come uid 1001 (jht) e la
- * prima compile Turbopack fallirebbe EACCES. Idem chown.
- * Usa un one-shot --volumes-from sulla stessa immagine.
- */
-function fixNextOwnership() {
-  const r = spawnSync('docker', [
-    // Root solo per il chown: nessun'altra capability, niente rete, niente
-    // privilegi da guadagnare (P1 del 08/10, come la riparazione dei mount).
-    'run', '--rm', '--user', 'root', '--cap-drop', 'ALL', '--cap-add', 'CHOWN',
-    '--network', 'none', '--security-opt', 'no-new-privileges',
-    '--entrypoint', '/bin/sh',
-    '--volumes-from', CONTAINER_NAME,
-    process.env.JHT_IMAGE || DEFAULT_RUNTIME_IMAGE,
-    '-c', 'chown -R 1001:1001 /app/web/.next 2>/dev/null || true',
-  ], {
-    stdio: 'ignore',
     env: { ...process.env, MSYS_NO_PATHCONV: '1' },
   });
   return r.status === 0;
@@ -116,8 +94,8 @@ async function ensureDockerDaemon() {
 
 // ── up ─────────────────────────────────────────────────────────────
 // Ogni fallimento segna `process.exitCode` e RITORNA. Il `return` non e'
-// cosmetico: con `process.exit()` la funzione non proseguiva mai, e i tre passi
-// di `up` (create → chown → start) sono in sequenza — senza il `return` un
+// cosmetico: con `process.exit()` la funzione non proseguiva mai, e i due passi
+// di `up` (create → start) sono in sequenza — senza il `return` un
 // `docker compose up --no-start` fallito lascerebbe partire lo `start` su un
 // container che non esiste. `recreateAction` fa `await upAction()` come ultima
 // istruzione, quindi nemmeno da li' resta codice da saltare.
@@ -138,16 +116,13 @@ async function upAction() {
     return;
   }
   console.log(c.bold('Starting the jht container...'));
-  // Passo 1: create (senza avviare) per avere il volume anonimo .next
+  // Passo 1: create (senza avviare)
   if (!dockerCompose(['up', '--no-start', 'jht'])) {
     console.error(c.red('docker compose up failed --no-start'));
     process.exitCode = 1;
     return;
   }
-  // Passo 2: chown del volume .next
-  console.log(c.dim('  Fix ownership /app/web/.next...'));
-  fixNextOwnership();
-  // Passo 3: start
+  // Passo 2: start
   if (!dockerCompose(['start', 'jht-telegram', 'jht'])) {
     console.error(c.red('docker compose start failed'));
     process.exitCode = 1;
