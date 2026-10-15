@@ -22,12 +22,14 @@ afterEach(() => {
   for (const dir of sandboxes.splice(0)) rmSync(dir, { recursive: true, force: true });
 });
 
-function probeScript(home: string): string {
+function probeScript(): string {
   const source = readFileSync(fileURLToPath(new URL("../../src-tauri/src/existing_team_runtime.rs", import.meta.url)), "utf8");
   const start = source.indexOf("node -e '", source.indexOf("pub(crate) fn team_probe_command"));
   const end = source.indexOf("' \"$JHT_EXPECTED_TEAM\"", start);
   if (start < 0 || end < 0) throw new Error("team probe script not found");
-  return source.slice(start + "node -e '".length, end).replaceAll("/jht_home", home);
+  // The home is not written into the source: every `"/jht_home...` literal becomes
+  // `process.argv[2]+"...`, so a Windows path with backslashes stays a plain argument.
+  return source.slice(start + "node -e '".length, end).replaceAll('"/jht_home', 'process.argv[2]+"');
 }
 
 function runProbe(cloudUserId: string, expectedTeam: string): number | null {
@@ -35,7 +37,7 @@ function runProbe(cloudUserId: string, expectedTeam: string): number | null {
   sandboxes.push(home);
   mkdirSync(join(home, "profile"));
   writeFileSync(join(home, "cloud.json"), JSON.stringify({ user_id: cloudUserId }));
-  return spawnSync(process.execPath, ["-e", probeScript(home), expectedTeam], { encoding: "utf8" }).status;
+  return spawnSync(process.execPath, ["-e", probeScript(), expectedTeam, home], { encoding: "utf8" }).status;
 }
 
 function gateClient(tokenRow: Record<string, unknown>) {
