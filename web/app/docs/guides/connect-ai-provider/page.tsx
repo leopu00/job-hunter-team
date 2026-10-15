@@ -29,13 +29,13 @@ export default async function ConnectAiProviderPage() {
       <P>{t.whichProviderP}</P>
       <UL>
         <LI>
-          🌙 <strong>Kimi</strong> {t.kimi}
-        </LI>
-        <LI>
           🔵 <strong>Codex</strong> {t.codex}
         </LI>
         <LI>
           🟠 <strong>Claude</strong> {t.claude}
+        </LI>
+        <LI>
+          🌙 <strong>Kimi</strong> {t.kimi}
         </LI>
       </UL>
       <Callout>
@@ -56,9 +56,9 @@ export default async function ConnectAiProviderPage() {
 
       <H3>{t.step1}</H3>
       <Pre>
-        {`jht providers list           # claude | codex | kimi
-jht providers use kimi       # set the active one
-jht providers update kimi    # install its CLI inside the container`}
+        {`jht providers list           # codex | claude | kimi
+jht providers use codex      # set the active one
+jht providers update codex   # install its CLI inside the container`}
       </Pre>
 
       <H3>{t.step2}</H3>

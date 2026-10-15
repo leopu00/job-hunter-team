@@ -1,32 +1,55 @@
 import { KeyboardEvent, useEffect, useId, useRef, useState } from "react";
 import SshKeyPicker from "../components/SshKeyPicker";
+import { appLocale } from "../lib/app-locale";
 import { describeError } from "../lib/error-catalog";
+import { ONBOARDING_TEXT } from "./onboarding.i18n";
 import {
   existingTeamBridge,
   existingTeamErrorCode,
   isTerminalExistingTeamError,
   type ExistingTeamBridge,
   type ExistingTeamConnectionResult,
+  type ExistingTeamReadOnlyConnectionResult,
   type ExistingTeamProgress,
+  type ExistingTeamReceipt,
+  type ExistingTeamRequest,
   type ExistingTeamVpsHost,
   type SshHostKeyProbe,
 } from "../lib/existing-team";
+import { EXISTING_TEAM_ID_TEXT } from "./existing-team-id.i18n";
+import { EXISTING_TEAM_RECEIPT_TEXT } from "./existing-team-receipt.i18n";
 import { OnboardingArtwork } from "./OnboardingArtwork";
 import "./existing-team-connect.css";
 
-type ModalStage = "fields" | "probing" | "confirm" | "attaching" | "failed";
+type ModalStage = "fields" | "probing" | "confirm" | "attaching" | "discovering" | "receipt" | "registering" | "failed";
 type FailedOperation = "probe" | "attach" | "notify";
 
 export interface ExistingTeamConnectModalProps {
-  teamId: string;
+  teamId?: string;
+  initialHost?: ExistingTeamVpsHost;
   onCancel: () => void;
   onConnected: (result: ExistingTeamConnectionResult) => Promise<void>;
+  /** The team was connected to read only: the app shows its positions in place of this dialog. */
+  onReadOnlyConnected: (result: ExistingTeamReadOnlyConnectionResult) => void;
   bridge?: ExistingTeamBridge;
 }
 
 /** The failure, told by the error catalog: what happened and what to do. */
 function errorCopy(code: string): { text: string; action: string } {
-  return describeError(code, { fallback: "existing_team_connect_failed" });
+  return describeError(code, { fallback: "existing_team_connect_failed", locale: appLocale() });
+}
+
+/** A target for this profile is already saved (here or by whoever got there first): never replace it. */
+function targetAlreadySaved(error: unknown): boolean {
+  const code = existingTeamErrorCode(error);
+  return code === "existing_team_runtime_candidate_exists" ||
+    code === "existing_team_runtime_candidate_conflict" ||
+    code === "existing_team_runtime_already_selected";
+}
+
+/** A short form of an identifier for the person to compare; the full value stays in the app. */
+function shortId(value: string): string {
+  return value.replace(/^sha256:/, "").slice(0, 12);
 }
 
 function cleanHost(host: ExistingTeamVpsHost): ExistingTeamVpsHost {
@@ -51,26 +74,36 @@ function focusable(dialog: HTMLElement): HTMLElement[] {
 
 export default function ExistingTeamConnectModal({
   teamId,
+  initialHost,
   onCancel,
   onConnected,
+  onReadOnlyConnected,
   bridge = existingTeamBridge,
 }: ExistingTeamConnectModalProps) {
+  const t = ONBOARDING_TEXT[appLocale()];
+  const r = EXISTING_TEAM_RECEIPT_TEXT[appLocale()];
   const titleId = useId();
   const descriptionId = useId();
   const dialogRef = useRef<HTMLElement>(null);
   const headingRef = useRef<HTMLHeadingElement>(null);
   const resultRef = useRef<ExistingTeamConnectionResult | null>(null);
-  const [host, setHost] = useState<ExistingTeamVpsHost>({
+  const registerInFlight = useRef(false);
+  const [host, setHost] = useState<ExistingTeamVpsHost>(initialHost ?? {
     kind: "vps",
     address: "",
     user: "root",
     port: 22,
     keyPath: "",
   });
+  const [enteredTeamId, setEnteredTeamId] = useState("");
+  const expectedTeamId = teamId ?? enteredTeamId.trim();
+  const teamIdValid = /^[A-Za-z0-9_-]{16,128}$/.test(expectedTeamId);
   const [stage, setStage] = useState<ModalStage>("fields");
   const [probe, setProbe] = useState<SshHostKeyProbe | null>(null);
   const [errorCode, setErrorCode] = useState<string | null>(null);
   const [failedOperation, setFailedOperation] = useState<FailedOperation | null>(null);
+  const [readOnlyRequested, setReadOnlyRequested] = useState(false);
+  const [receipt, setReceipt] = useState<ExistingTeamReceipt | null>(null);
   const [attachProgress, setAttachProgress] = useState<ExistingTeamProgress["stage"]>("runtime");
   const terminal = errorCode ? isTerminalExistingTeamError(errorCode) : false;
 
@@ -80,6 +113,7 @@ export default function ExistingTeamConnectModal({
 
   function backToFields() {
     resultRef.current = null;
+    setReceipt(null);
     setProbe(null);
     setErrorCode(null);
     setFailedOperation(null);
@@ -89,7 +123,7 @@ export default function ExistingTeamConnectModal({
   function keyDown(event: KeyboardEvent<HTMLElement>) {
     if (event.key === "Escape") {
       event.preventDefault();
-      if (stage === "confirm" || stage === "failed") backToFields();
+      if (stage === "confirm" || stage === "receipt" || stage === "failed") backToFields();
       else if (stage === "fields") onCancel();
       return;
     }
@@ -108,7 +142,7 @@ export default function ExistingTeamConnectModal({
   }
 
   async function runProbe() {
-    if (!validHost(host) || stage === "probing") return;
+    if (!validHost(host) || !teamIdValid || stage === "probing") return;
     setStage("probing");
     setErrorCode(null);
     setFailedOperation(null);
@@ -133,14 +167,78 @@ export default function ExistingTeamConnectModal({
     }
   }
 
-  async function attach() {
-    if (!probe || stage === "attaching") return;
-    const request = { teamId, host: cleanHost(host) };
+  /**
+   * A target for this profile exists by now. Never open it blindly: connect read
+   * only with what the person typed. If it is the same team and host that
+   * works; if not, the native check answers candidate_mismatch, which the
+   * dialog shows, instead of showing another team in silence.
+   */
+  async function openSavedTarget(request: ExistingTeamRequest) {
+    onReadOnlyConnected(await bridge.connectReadOnly(request));
+  }
+
+  /**
+   * Read only: the existing connection first. Only if the profile has no saved
+   * target does the app read what the server declares and ask the person to
+   * confirm before it saves anything.
+   */
+  async function openReadOnly(request: ExistingTeamRequest) {
+    try {
+      onReadOnlyConnected(await bridge.connectReadOnly(request));
+      return;
+    } catch (error) {
+      if (existingTeamErrorCode(error) !== "existing_team_runtime_candidate_required") throw error;
+    }
+    setStage("discovering");
+    try {
+      setReceipt(await bridge.discover(request));
+    } catch (error) {
+      if (!targetAlreadySaved(error)) throw error;
+      await openSavedTarget(request);
+      return;
+    }
+    setStage("receipt");
+  }
+
+  async function registerReceipt() {
+    if (!receipt || stage !== "receipt" || registerInFlight.current) return;
+    registerInFlight.current = true;
+    const request = { teamId: expectedTeamId, host: cleanHost(host) };
+    setReadOnlyRequested(true);
+    setStage("registering");
+    setErrorCode(null);
+    setFailedOperation(null);
+    try {
+      try {
+        await bridge.register(receipt.candidateSha256);
+      } catch (error) {
+        if (!targetAlreadySaved(error)) throw error;
+        await openSavedTarget(request);
+        return;
+      }
+      onReadOnlyConnected(await bridge.connectReadOnly(request));
+    } catch (error) {
+      setErrorCode(existingTeamErrorCode(error));
+      setFailedOperation("attach");
+      setStage("failed");
+    } finally {
+      registerInFlight.current = false;
+    }
+  }
+
+  async function attach(readOnly = false) {
+    if (!probe || !teamIdValid || stage === "attaching") return;
+    const request = { teamId: expectedTeamId, host: cleanHost(host) };
+    setReadOnlyRequested(readOnly);
     setStage("attaching");
     setErrorCode(null);
     setFailedOperation(null);
     try {
       await bridge.confirm(request.host, probe);
+      if (readOnly) {
+        await openReadOnly(request);
+        return;
+      }
       const result = await bridge.connect(request, (progress) => setAttachProgress(progress.stage));
       resultRef.current = result;
       await notify(result);
@@ -160,19 +258,13 @@ export default function ExistingTeamConnectModal({
     }
     if (failedOperation === "attach") {
       setStage("confirm");
-      return attach();
+      return attach(readOnlyRequested);
     }
   }
 
-  const busy = stage === "probing" || stage === "attaching";
+  const busy = stage === "probing" || stage === "attaching" || stage === "discovering" || stage === "registering";
   const activeStep = stage === "fields" || stage === "probing" ? 0 : stage === "confirm" ? 1 : 2;
-  const progressCopy: Record<ExistingTeamProgress["stage"], string> = {
-    preparing: "Preparo la verifica attach-only.",
-    runtime: "Verifico la VPS già configurata.",
-    container: "Controllo runtime e container senza modificarli.",
-    provider: "Controllo il provider già configurato.",
-    team: "Verifico che Capitano e Assistente siano attivi.",
-  };
+  const progressCopy: Record<ExistingTeamProgress["stage"], string> = t.existingTeam.progress;
 
   return (
     <div className="existing-team-modal__backdrop">
@@ -187,15 +279,15 @@ export default function ExistingTeamConnectModal({
         onKeyDown={keyDown}
       >
         <header className="existing-team-modal__header">
-          <p className="existing-team-modal__eyebrow">Team registrato</p>
-          <h2 id={titleId} ref={headingRef} tabIndex={-1}>Hai già un team attivo su VPS?</h2>
-          <p id={descriptionId}>Collega questa app senza reinstallare o riavviare il team. Host e chiave restano soltanto su questo computer.</p>
+          <p className="existing-team-modal__eyebrow">{t.existingTeam.eyebrow}</p>
+          <h2 id={titleId} ref={headingRef} tabIndex={-1}>{t.existingTeam.title}</h2>
+          <p id={descriptionId}>{t.existingTeam.description}</p>
         </header>
 
         <OnboardingArtwork name="environmentVps" className="existing-team-modal__artwork" />
 
-        <ol className="existing-team-modal__steps" aria-label="Avanzamento collegamento VPS">
-          {["Dati VPS", "Identità SSH", "Verifica team"].map((label, index) => (
+        <ol className="existing-team-modal__steps" aria-label={t.existingTeam.stepsAria}>
+          {t.existingTeam.steps.map((label, index) => (
             <li key={label} className={index < activeStep ? "is-complete" : index === activeStep ? "is-active" : undefined} aria-current={index === activeStep ? "step" : undefined}>
               <span aria-hidden="true">{index < activeStep ? "✓" : index + 1}</span>{label}
             </li>
@@ -204,46 +296,82 @@ export default function ExistingTeamConnectModal({
 
         {(stage === "fields" || stage === "probing") && (
           <form className="existing-team-modal__form" onSubmit={(event) => { event.preventDefault(); void runProbe(); }}>
-            <label><span>Host o indirizzo IP</span><input autoFocus autoComplete="off" value={host.address} onChange={(event) => setHost({ ...host, address: event.target.value })} disabled={busy} required /></label>
+            {!teamId && <label><span>{EXISTING_TEAM_ID_TEXT[appLocale()].label}</span><input autoComplete="off" value={enteredTeamId} onChange={(event) => setEnteredTeamId(event.target.value)} disabled={busy} required /><small>{EXISTING_TEAM_ID_TEXT[appLocale()].hint}</small></label>}
+            <label><span>{t.existingTeam.host}</span><input autoFocus autoComplete="off" value={host.address} onChange={(event) => setHost({ ...host, address: event.target.value })} disabled={busy} required /></label>
             <div className="existing-team-modal__row">
-              <label><span>Utente SSH</span><input autoComplete="username" value={host.user} onChange={(event) => setHost({ ...host, user: event.target.value })} disabled={busy} required /></label>
-              <label><span>Porta SSH</span><input type="number" min="1" max="65535" inputMode="numeric" value={host.port} onChange={(event) => setHost({ ...host, port: Number(event.target.value) })} disabled={busy} required /></label>
+              <label><span>{t.sshUser}</span><input autoComplete="username" value={host.user} onChange={(event) => setHost({ ...host, user: event.target.value })} disabled={busy} required /></label>
+              <label><span>{t.sshPort}</span><input type="number" min="1" max="65535" inputMode="numeric" value={host.port} onChange={(event) => setHost({ ...host, port: Number(event.target.value) })} disabled={busy} required /></label>
             </div>
             <SshKeyPicker value={host.keyPath} onChange={(keyPath) => setHost({ ...host, keyPath })} disabled={busy} />
             <div className="existing-team-modal__actions">
-              <button type="button" className="existing-team-modal__secondary" onClick={onCancel} disabled={busy}>Configura un nuovo team</button>
-              <button type="submit" className="existing-team-modal__primary" disabled={!validHost(host) || busy}>{stage === "probing" ? "Verifico l’identità…" : "Verifica VPS"}</button>
+              <button type="button" className="existing-team-modal__secondary" onClick={onCancel} disabled={busy}>{t.existingTeam.newTeam}</button>
+              <button type="submit" className="existing-team-modal__primary" disabled={!validHost(host) || !teamIdValid || busy}>{stage === "probing" ? t.existingTeam.verifyingIdentity : t.existingTeam.verifyVps}</button>
             </div>
           </form>
         )}
 
         {stage === "confirm" && probe && (
           <section className="existing-team-modal__confirm" aria-live="polite">
-            <p className="existing-team-modal__eyebrow">Conferma identità SSH</p>
-            <p>Confronta questa impronta con quella mostrata dal tuo provider VPS prima di collegare il team.</p>
-            <dl><div><dt>Algoritmo</dt><dd>{probe.algorithm}</dd></div><div><dt>Fingerprint</dt><dd>{probe.fingerprint}</dd></div></dl>
-            <p className="existing-team-modal__warning">Conferma soltanto se l’impronta coincide. Il collegamento non installerà né riavvierà nulla.</p>
+            <p className="existing-team-modal__eyebrow">{t.existingTeam.confirmEyebrow}</p>
+            <p>{t.existingTeam.compareText}</p>
+            <dl><div><dt>{t.algorithm}</dt><dd>{probe.algorithm}</dd></div><div><dt>{t.fingerprint}</dt><dd>{probe.fingerprint}</dd></div></dl>
+            <p className="existing-team-modal__warning">{t.existingTeam.warning}</p>
             <div className="existing-team-modal__actions">
-              <button type="button" className="existing-team-modal__secondary" onClick={backToFields}>Indietro</button>
-              <button type="button" className="existing-team-modal__primary" onClick={() => void attach()}>Conferma e collega</button>
+              <button type="button" className="existing-team-modal__secondary" onClick={backToFields}>{t.back}</button>
+              <button type="button" className="existing-team-modal__primary" onClick={() => void attach()}>{t.existingTeam.confirmAndLink}</button>
+              <button type="button" className="existing-team-modal__secondary" onClick={() => void attach(true)}>{t.existingTeam.readOnlyPositions}</button>
             </div>
           </section>
         )}
 
         {stage === "attaching" && (
           <section className="existing-team-modal__status" role="status" aria-live="polite">
-            <span aria-hidden="true">••</span><div><strong>Verifica attach-only in corso</strong><p>{progressCopy[attachProgress]}</p></div>
+            <span aria-hidden="true">••</span><div><strong>{t.existingTeam.attachInProgress}</strong><p>{progressCopy[attachProgress]}</p></div>
+          </section>
+        )}
+
+        {stage === "discovering" && (
+          <section className="existing-team-modal__status" role="status" aria-live="polite">
+            <span aria-hidden="true">••</span><div><strong>{r.discovering}</strong><p>{r.discoveringDetail}</p></div>
+          </section>
+        )}
+
+        {stage === "receipt" && receipt && (
+          <section className="existing-team-modal__confirm" aria-live="polite">
+            <p className="existing-team-modal__eyebrow">{r.eyebrow}</p>
+            <p>{r.intro}</p>
+            <dl>
+              <div><dt>{r.team}</dt><dd>{receipt.teamId}</dd></div>
+              <div><dt>{r.vps}</dt><dd>{receipt.hostAddress}:{receipt.hostPort}</dd></div>
+              {receipt.sshFingerprint && <div><dt>{r.fingerprint}</dt><dd>{receipt.sshFingerprint}</dd></div>}
+              <div><dt>{r.container}</dt><dd>{shortId(receipt.containerId)}</dd></div>
+              <div><dt>{r.image}</dt><dd>{shortId(receipt.imageId)}</dd></div>
+              <div><dt>{r.revision}</dt><dd>{shortId(receipt.ociRevision)}</dd></div>
+              <div><dt>{r.digest}</dt><dd>{shortId(receipt.digest)}</dd></div>
+              <div><dt>{r.assistant}</dt><dd>{receipt.readiness ? r.assistantUp : r.assistantDown}</dd></div>
+            </dl>
+            <p className="existing-team-modal__warning">{r.caution}</p>
+            <div className="existing-team-modal__actions">
+              <button type="button" className="existing-team-modal__secondary" onClick={backToFields}>{r.cancel}</button>
+              <button type="button" className="existing-team-modal__primary" onClick={() => void registerReceipt()}>{r.confirm}</button>
+            </div>
+          </section>
+        )}
+
+        {stage === "registering" && (
+          <section className="existing-team-modal__status" role="status" aria-live="polite">
+            <span aria-hidden="true">••</span><div><strong>{r.registering}</strong><p>{r.registeringDetail}</p></div>
           </section>
         )}
 
         {stage === "failed" && errorCode && (
           <section className={`existing-team-modal__failure${terminal ? " is-terminal" : ""}`} role="alert">
-            <strong>{terminal ? "Collegamento bloccato" : "Verifica non riuscita"}</strong>
+            <strong>{terminal ? t.existingTeam.blocked : t.existingTeam.failed}</strong>
             <p>{errorCopy(errorCode).text}</p>
             <p>{errorCopy(errorCode).action}</p>
             <div className="existing-team-modal__actions">
-              <button type="button" className="existing-team-modal__secondary" onClick={terminal ? onCancel : backToFields}>{terminal ? "Torna al setup" : "Modifica dati"}</button>
-              {!terminal && <button type="button" className="existing-team-modal__primary" onClick={() => void retry()}>Riprova</button>}
+              <button type="button" className="existing-team-modal__secondary" onClick={terminal ? onCancel : backToFields}>{terminal ? t.existingTeam.backToSetup : t.existingTeam.editData}</button>
+              {!terminal && <button type="button" className="existing-team-modal__primary" onClick={() => void retry()}>{t.retry}</button>}
             </div>
           </section>
         )}

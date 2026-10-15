@@ -1,21 +1,43 @@
 import { useEffect, useMemo, useState } from "react";
-import { DashboardI18nProvider } from "@/app/components/DashboardI18n";
+import { DashboardI18nProvider, useDashboardT } from "@/app/components/DashboardI18n";
 import MainChrome from "@/app/components/MainChrome";
 import NavLinks from "@/app/components/NavLinks";
 import Link from "../web-shims/next-link";
+import { ReadOnlyActionsProvider } from "@/lib/read-only-actions";
 import { signOut } from "../lib/supabase";
+import { appLocale } from "../lib/app-locale";
+import { describeError } from "../lib/error-catalog";
+import {
+  existingTeamReadOnlyReason,
+  useExistingTeamReadFailure,
+  useExistingTeamReadNotice,
+  useExistingTeamReadOnly,
+} from "../lib/existing-team-readonly";
+import { EXISTING_TEAM_READONLY_TEXT } from "../lib/existing-team-readonly.i18n";
+import { localUninstallAvailable } from "../lib/local-uninstall";
+import { COMPUTER_TEXT } from "../pages/computer/computer.i18n";
 import { DESKTOP_LINKS } from "./desktop-links";
 import { MailRotationBanner } from "./MailRotationBanner";
 import { matchRoute, navigate, refresh, useLocation } from "./router";
-import { HOME, ROUTES } from "./routes";
+import { HOME, READ_ONLY_HOME, READ_ONLY_NAV, READ_ONLY_ROUTES, ROUTES } from "./routes";
 import ThemePicker from "./ThemePicker";
 
 /** The desktop's own pages (DESKTOP_LINKS): same look as NavLinks' NavLink, active on the path. */
 function DesktopLinks() {
   const { path } = useLocation();
+  // «This computer» (removing JHT) only where the removal can run.
+  const [computer, setComputer] = useState(false);
+  useEffect(() => {
+    let active = true;
+    void localUninstallAvailable().then((yes) => { if (active) setComputer(yes); });
+    return () => { active = false; };
+  }, []);
+  const links = computer
+    ? [...DESKTOP_LINKS, { href: "/computer", label: COMPUTER_TEXT[appLocale()].navLabel }]
+    : DESKTOP_LINKS;
   return (
     <div className="flex items-center gap-1">
-      {DESKTOP_LINKS.map(({ href, label }) => {
+      {links.map(({ href, label }) => {
         const active = path === href || path.startsWith(href + "/");
         return (
           <Link
@@ -40,7 +62,19 @@ function DesktopLinks() {
  * the only horizontal overflow plane, so narrow windows keep the brand and
  * both actions fully visible while every destination remains reachable.
  */
-function Navbar({ onLogout = signOut }: { onLogout?: () => Promise<void> }) {
+function Navbar({
+  onLogout = signOut,
+  onCloseReadOnly,
+  readOnly = false,
+}: {
+  onLogout?: () => Promise<void>;
+  /** Reading an existing team's VPS: one page, and the way back to the setup. */
+  onCloseReadOnly?: () => void;
+  readOnly?: boolean;
+}) {
+  const readOnlyText = EXISTING_TEAM_READONLY_TEXT[appLocale()];
+  const { t: dashboardT } = useDashboardT();
+  const { path } = useLocation();
   const [signingOut, setSigningOut] = useState(false);
   const [signOutFailed, setSignOutFailed] = useState(false);
   const button =
@@ -65,7 +99,7 @@ function Navbar({ onLogout = signOut }: { onLogout?: () => Promise<void> }) {
         className="max-w-full min-w-0 overflow-hidden px-2 sm:px-4 lg:px-6 h-14 flex items-center gap-2 sm:gap-4"
       >
         <div className="flex items-center flex-shrink-0">
-          <Link href={HOME} className="flex items-center no-underline group">
+          <Link href={readOnly ? READ_ONLY_HOME : HOME} className="flex items-center no-underline group">
             <span className="text-[13px] font-bold tracking-widest text-[var(--color-white)] group-hover:opacity-80 transition-opacity">
               JHT
             </span>
@@ -77,8 +111,27 @@ function Navbar({ onLogout = signOut }: { onLogout?: () => Promise<void> }) {
           data-testid="navbar-links-scroll"
         >
           <div className="flex w-max items-center gap-1 mx-auto">
-            <NavLinks />
-            <DesktopLinks />
+            {readOnly ? (
+              READ_ONLY_NAV.map(({ href, label }) => {
+                const active = path === href || path.startsWith(href + "/");
+                return (
+                  <Link
+                    key={href}
+                    href={href}
+                    aria-current={active ? "page" : undefined}
+                    className="relative px-3 py-1.5 text-[11px] font-semibold tracking-widest hover:bg-[var(--color-card)] rounded transition-colors no-underline inline-block"
+                    style={{ color: active ? "var(--color-white)" : "var(--color-muted)" }}
+                  >
+                    {label.startsWith("own:") ? readOnlyText[label.slice(4) as "team" | "profile"] : dashboardT(label)}
+                  </Link>
+                );
+              })
+            ) : (
+              <>
+                <NavLinks />
+                <DesktopLinks />
+              </>
+            )}
           </div>
         </div>
         <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0" data-testid="navbar-actions">
@@ -86,6 +139,11 @@ function Navbar({ onLogout = signOut }: { onLogout?: () => Promise<void> }) {
             Aggiorna
           </button>
           {signOutFailed && <span role="alert" className="sr-only">Disconnessione non riuscita. Il runtime resta bloccato su questo account.</span>}
+          {readOnly && onCloseReadOnly && (
+            <button type="button" className={button} onClick={onCloseReadOnly}>
+              {readOnlyText.back}
+            </button>
+          )}
           <button type="button" className={button} onClick={() => void logout()} disabled={signingOut}>
             {signingOut ? "Uscita…" : "Esci"}
           </button>
@@ -95,20 +153,62 @@ function Navbar({ onLogout = signOut }: { onLogout?: () => Promise<void> }) {
   );
 }
 
-export interface ShellProps { onLogout?: () => Promise<void> }
+export interface ShellProps {
+  onLogout?: () => Promise<void>;
+  /** Leaves the read-only view of an existing team (back to the setup). */
+  onCloseReadOnly?: () => void;
+}
 
-export default function Shell({ onLogout }: ShellProps) {
+export default function Shell({ onLogout, onCloseReadOnly }: ShellProps) {
   const { path, search } = useLocation();
-  const match = matchRoute(ROUTES, path);
+  const readOnlyTeam = useExistingTeamReadOnly();
+  const readFailure = useExistingTeamReadFailure();
+  const readNotice = useExistingTeamReadNotice();
+  const readOnly = readOnlyTeam !== null;
+  const match = matchRoute(readOnly ? READ_ONLY_ROUTES : ROUTES, path);
   const params = useMemo(() => new URLSearchParams(search), [search]);
 
   // An empty or unknown hash lands on the dashboard.
   useEffect(() => {
-    if (!match) navigate(HOME, { replace: true });
-  }, [match]);
+    if (!match) navigate(readOnly ? READ_ONLY_HOME : HOME, { replace: true });
+  }, [match, readOnly]);
 
   const Page = match?.route.page;
   const page = Page && <Page key={path} params={match.params} search={params} />;
+  if (readOnlyTeam) {
+    const text = EXISTING_TEAM_READONLY_TEXT[appLocale()];
+    return (
+      <DashboardI18nProvider>
+        <ReadOnlyActionsProvider value={{ readOnly: true, reason: existingTeamReadOnlyReason(readOnlyTeam) }}>
+          <div style={{ position: "relative", zIndex: 1 }}>
+            <Navbar onLogout={onLogout} onCloseReadOnly={onCloseReadOnly} readOnly />
+            <p
+              role="status"
+              data-testid="existing-team-readonly-banner"
+              className="px-4 py-2 text-[11px] border-b border-[var(--color-border)] text-[var(--color-muted)]"
+            >
+              <strong className="text-[var(--color-bright)]">{existingTeamReadOnlyReason(readOnlyTeam)}.</strong>{" "}
+              {text.banner}
+            </p>
+            {readNotice === "sort_last_action" && (
+              <p role="status" data-testid="existing-team-readonly-notice" className="px-4 py-2 text-[11px] text-[var(--color-muted)]">
+                {text.sortLastAction}
+              </p>
+            )}
+            {readFailure && (
+              <p role="alert" className="px-4 py-2 text-[11px]" style={{ color: "var(--color-red)" }}>
+                {(() => {
+                  const failure = describeError(readFailure, { fallback: "existing_team_unavailable", locale: appLocale() });
+                  return `${failure.text} ${failure.action} (${readFailure})`;
+                })()}
+              </p>
+            )}
+            <MainChrome>{page}</MainChrome>
+          </div>
+        </ReadOnlyActionsProvider>
+      </DashboardI18nProvider>
+    );
+  }
   // A full-bleed page (the office) is a column as tall as the window: the
   // navbar, then the page in all the rest, with no margins and no page
   // scroll. Every other page keeps the web's MainChrome.

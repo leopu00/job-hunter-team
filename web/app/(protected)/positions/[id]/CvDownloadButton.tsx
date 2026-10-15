@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useState } from "react";
+import { useReadOnlyActions } from "@/lib/read-only-actions";
 
 /**
  * Pulsante di download del CV/Cover Letter generato per una posizione.
@@ -40,6 +41,7 @@ export function CvDownloadButton({
   color: string;
   labels: { idle: string; preparing: string; error: string };
 }) {
+  const readOnly = useReadOnlyActions();
   const [state, setState] = useState<ButtonState>("idle");
 
   const openLocal = useCallback(() => {
@@ -98,7 +100,8 @@ export function CvDownloadButton({
     <button
       type="button"
       onClick={onClick}
-      disabled={state === "loading"}
+      disabled={state === "loading" || readOnly.readOnly}
+      title={readOnly.readOnly ? readOnly.reason : undefined}
       className="flex items-center gap-2 px-3 py-2 rounded-lg border text-[11px] font-semibold no-underline transition-colors hover:bg-[var(--color-row)] disabled:cursor-wait bg-transparent cursor-pointer"
       style={{
         borderColor: isError ? "var(--color-red)" : color,

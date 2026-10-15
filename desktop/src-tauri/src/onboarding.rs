@@ -1,6 +1,9 @@
 use crate::account_scope::{AccountScope, AccountScopeState};
+use crate::release_channel;
+use crate::windows_runtime::exit_failure;
+use crate::runtime_log::{ExistingTeamPhase, RuntimeLog};
 use crate::runtime_host::{
-    run_program, run_ssh, set_private_dir_permissions, set_private_permissions, ssh_base_args,
+    run_program, run_program_keeping_stderr, run_ssh, run_ssh_command, set_private_dir_permissions, set_private_permissions, ssh_base_args,
     validate_host, ExecutionHost, ProcessResult, ValidatedHost,
 };
 use serde::{Deserialize, Serialize};
@@ -21,13 +24,12 @@ use std::{
 use tauri::{ipc::Channel, Manager, State};
 use zeroize::{Zeroize, Zeroizing};
 
-const INSTALL_URL: &str = "https://jobhunterteam.ai/install.sh";
 const INSTALL_SHA256: &str = include_str!("../installer.sha256");
 const MAX_INSTALLER_BYTES: usize = 2 * 1024 * 1024;
 const MAX_WRAPPER_BYTES: u64 = 2 * 1024 * 1024;
 const PREPARE_TIMEOUT: Duration = Duration::from_secs(30 * 60);
 const COMMAND_TIMEOUT: Duration = Duration::from_secs(8 * 60);
-const SNAPSHOT_TIMEOUT: Duration = Duration::from_secs(25);
+pub(crate) const SNAPSHOT_TIMEOUT: Duration = Duration::from_secs(25);
 const LOCAL_CONTAINER_VERIFY_TIMEOUT: Duration = Duration::from_secs(10);
 const LOCAL_CONTAINER_VERIFY_ATTEMPTS: usize = 6;
 const LOCAL_CONTAINER_VERIFY_INTERVAL: Duration = Duration::from_secs(2);
@@ -44,6 +46,9 @@ const PODMAN_OTHER_MACHINE_EXIT: i32 = 79;
 const PODMAN_OTHER_MACHINE_RUNNING: &str = "podman_other_machine_running";
 /// install.sh's refusal to move a Mac to another container engine.
 const RUNTIME_CHANGE_REQUIRES_MIGRATION: &str = "runtime_change_requires_migration";
+/// What the Windows install keeps of install.ps1's stdout for the runtime log.
+#[cfg_attr(not(windows), allow(dead_code))]
+const INSTALL_STDOUT_KEPT: usize = 256 * 1024;
 #[cfg(target_os = "macos")]
 const BUNDLED_LOCAL_WRAPPER: &[u8] = include_bytes!("../../../scripts/jht-wrapper.sh");
 #[cfg(target_os = "macos")]
@@ -62,6 +67,22 @@ static DIAGNOSTIC_SEQUENCE: AtomicU64 = AtomicU64::new(1);
 pub(crate) struct OnboardingNativeState {
     preparing: AtomicBool,
     interactive: Mutex<Option<InteractiveSession>>,
+    /// The receipt of the last successful in-app team discovery. Memory only,
+    /// never on disk; cleared with the rest of the state on a scope change.
+    pub(crate) receipt: Mutex<Option<crate::existing_team_register::Receipt>>,
+}
+
+impl OnboardingNativeState {
+    /// Takes the one-operation-at-a-time gate; false if another holds it.
+    pub(crate) fn try_begin(&self) -> bool {
+        self.preparing
+            .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+            .is_ok()
+    }
+
+    pub(crate) fn finish(&self) {
+        self.preparing.store(false, Ordering::Release);
+    }
 }
 
 impl Drop for OnboardingNativeState {
@@ -85,6 +106,9 @@ pub(crate) fn teardown(state: &OnboardingNativeState) {
                 let _ = process.wait();
             }
         }
+    }
+    if let Ok(mut receipt) = state.receipt.lock() {
+        *receipt = None;
     }
     state.preparing.store(false, Ordering::Release);
 }
@@ -659,6 +683,10 @@ pub(crate) struct OnboardingError {
     /// (`JHT_OTHER_MACHINE <name>`), only for `podman_other_machine_running`.
     #[serde(skip_serializing_if = "Option::is_none")]
     machine: Option<String>,
+    /// Why a local runtime step failed, in its own words (one line, redacted:
+    /// runtime_log::failure_cause), when it said so.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    detail: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -737,189 +765,54 @@ pub(crate) enum InteractiveInputMode {
     Text,
 }
 
-fn failure(code: &'static str) -> OnboardingError {
-    let (message, retryable) = match code {
-        "podman_missing" => (
-            "Podman non è stato installato. Verifica Homebrew e riprova.",
-            true,
-        ),
-        "podman_start_failed" => (
-            "La macchina Podman di JHT non si è avviata. Avviala e riprova.",
-            true,
-        ),
-        "podman_not_ready" => (
-            "Podman è installato ma non risponde. Verifica la macchina JHT e riprova.",
-            true,
-        ),
-        // Retrying cannot help: the machine has to be recreated, and only after
-        // the person confirms it (onboarding_podman_machine_recreate).
-        PODMAN_MACHINE_MOUNTS_HOME => (
-            "La macchina Podman di JHT vede più cartelle del Mac di quelle che servono. Ricreala per continuare.",
-            false,
-        ),
-        PODMAN_OTHER_MACHINE_RUNNING => (
-            "Un'altra macchina Podman è già accesa. Spegnila e riprova.",
-            true,
-        ),
-        // Retrying cannot help: the volumes stay in the other engine until a
-        // migration exists.
-        RUNTIME_CHANGE_REQUIRES_MIGRATION => (
-            "Su questo Mac il team è già installato con un altro motore dei container: passando a Podman, alcuni dati resterebbero lì.",
-            false,
-        ),
-        "podman_machine_recreate_failed" => (
-            "La macchina Podman di JHT non è stata ricreata. Riprova.",
-            true,
-        ),
-        "runtime_download_failed" => (
-            "Non riesco a scaricare il runtime verificato. Controlla la connessione e riprova.",
-            true,
-        ),
-        "runtime_install_failed" => (
-            "Il runtime locale non è stato installato correttamente. Riprova.",
-            true,
-        ),
-        "runtime_missing" => (
-            "Il runtime locale verificato non è disponibile. Configuralo di nuovo.",
-            true,
-        ),
-        "runtime_wrapper_install_failed" => (
-            "Il comando locale verificato non è stato aggiornato. Premi Riprova per completare la preparazione.",
-            true,
-        ),
-        "runtime_wrapper_publish_failed" => (
-            "Il comando locale verificato non è stato pubblicato correttamente. Premi Riprova.",
-            true,
-        ),
-        "runtime_wrapper_probe_failed" => (
-            "Il comando locale installato non supera la verifica di sola lettura. Premi Riprova.",
-            true,
-        ),
-        "runtime_install_unsupported" => (
-            "Il runtime locale non è supportato su questo sistema.",
-            false,
-        ),
-        "local_account_owner_missing" => (
-            "La cartella runtime locale contiene dati che non risultano creati da Job Hunter Team. Seleziona il profilo locale originale e riprova.",
-            false,
-        ),
-        "local_account_owner_mismatch" => (
-            "Il runtime locale appartiene a un altro profilo. Torna al profilo che lo ha configurato.",
-            false,
-        ),
-        "local_account_owner_invalid" => (
-            "La verifica del proprietario del runtime locale è danneggiata. Non è stato usato alcun dato locale.",
-            false,
-        ),
-        "local_account_owner_unavailable" => (
-            "Non riesco a verificare o registrare il proprietario del runtime locale. Controlla i permessi e riprova.",
-            true,
-        ),
-        "installer_digest_missing"
-        | "installer_digest_invalid"
-        | "installer_digest_mismatch"
-        | "installer_payload_invalid" => (
-            "Il pacchetto runtime non supera la verifica di integrità.",
-            false,
-        ),
-        "container_start_failed" => (
-            "Il container JHT non si è avviato. Controlla il runtime e riprova.",
-            true,
-        ),
-        "container_not_ready" => (
-            "Il container JHT è stato avviato ma non risponde ancora. Riprova.",
-            true,
-        ),
-        "timeout" | "command_timeout" => (
-            "L’operazione ha superato il tempo massimo. Controlla il runtime e riprova.",
-            true,
-        ),
-        "container_timeout" => (
-            "La verifica del container ha superato il tempo massimo. Riprova.",
-            true,
-        ),
-        "resume_runtime_not_ready" => (
-            "Il runtime salvato non risulta più disponibile. Riparti dal primo passaggio.",
-            false,
-        ),
-        "resume_container_not_ready" => (
-            "Il container salvato non risulta più attivo. Riparti dal passaggio container.",
-            false,
-        ),
-        "resume_provider_not_configured" => (
-            "Il provider salvato non risulta più configurato. Riparti dal passaggio provider.",
-            false,
-        ),
-        "resume_provider_not_authenticated" => (
-            "L’accesso al provider non risulta più disponibile. Accedi di nuovo al provider.",
-            false,
-        ),
-        "host_not_configured" | "host_config_invalid" => (
-            "La destinazione salvata non è più disponibile. Seleziona di nuovo l’ambiente.",
-            false,
-        ),
-        "team_start_failed" => (
-            "La sequenza di avvio della squadra non è riuscita. Riprova.",
-            true,
-        ),
-        "team_verify_failed" => (
-            "Assistente e Capitano non risultano entrambi attivi. Riprova.",
-            true,
-        ),
-        "provider_timeout" => (
-            "La configurazione del provider ha superato il tempo massimo. Riprova.",
-            true,
-        ),
-        "provider_config_failed" | "provider_install_failed" => (
-            "La configurazione del provider non è riuscita. Riprova.",
-            true,
-        ),
-        "provider_login_start_failed" | "provider_login_pipe_failed" => (
-            "Non riesco ad avviare l’accesso al provider. Riprova.",
-            true,
-        ),
-        "provider_login_failed" => (
-            "L’accesso al provider non è stato completato. Riprova.",
-            true,
-        ),
-        "provider_input_not_requested" => (
-            "Il provider non sta attendendo questa risposta.",
-            false,
-        ),
-        "assistant_start_failed" => ("L’assistente non si è avviato. Riprova.", true),
-        "assistant_verify_timeout" => (
-            "L’assistente è stato avviato ma non risulta ancora pronto. Riprova.",
-            true,
-        ),
-        "existing_team_vps_required" => (
-            "Seleziona una configurazione VPS valida per collegare il team esistente.",
-            false,
-        ),
-        "existing_team_identity_mismatch" => {
-            ("La VPS appartiene a un altro team o account.", false)
-        }
-        "existing_team_not_active" => (
-            "Il team sulla VPS non risulta attivo. Verificalo e riprova.",
-            true,
-        ),
-        "existing_team_unavailable" => (
-            "La VPS o il runtime JHT non sono raggiungibili. Verifica la connessione e riprova.",
-            true,
-        ),
-        "operation_in_progress" => ("Un’altra operazione è già in corso.", true),
-        "provider_limits_exhausted" => (
-            "I limiti del provider sono esauriti: la squadra partirà quando si liberano.",
-            true,
-        ),
-        code if code.starts_with("invalid_") => ("I dati ricevuti non sono validi.", false),
-        _ => ("L’operazione non è riuscita. Riprova.", true),
-    };
+/// An onboarding error: its code, and whether trying again can help. The
+/// sentence is never written here: the app tells every code in the person's
+/// language (desktop/src/lib/error-catalog.ts, 7 languages), and `message`
+/// carries the code itself for the callers that read one.
+pub(crate) fn failure(code: &'static str) -> OnboardingError {
+    // Retrying cannot help: the data, the host or the machine must change
+    // first (PODMAN_MACHINE_MOUNTS_HOME: recreated, after the person confirms
+    // it with onboarding_podman_machine_recreate; RUNTIME_CHANGE_REQUIRES_MIGRATION:
+    // the volumes stay in the other engine until a migration exists).
+    let retryable = !matches!(
+        code,
+        PODMAN_MACHINE_MOUNTS_HOME
+            | RUNTIME_CHANGE_REQUIRES_MIGRATION
+            | "runtime_install_unsupported"
+            | "local_account_owner_missing"
+            | "local_account_owner_mismatch"
+            | "local_account_owner_invalid"
+            | "installer_digest_missing"
+            | "installer_digest_invalid"
+            | "installer_digest_mismatch"
+            | "installer_payload_invalid"
+            | "resume_runtime_not_ready"
+            | "resume_container_not_ready"
+            | "resume_provider_not_configured"
+            | "resume_provider_not_authenticated"
+            | "host_not_configured"
+            | "host_config_invalid"
+            | "provider_input_not_requested"
+            | "existing_team_vps_required"
+            | "existing_team_identity_mismatch"
+            | "existing_team_runtime_candidate_exists"
+            | "existing_team_runtime_candidate_conflict"
+            | "existing_team_runtime_already_selected"
+            | "existing_team_saved_incomplete"
+            | "existing_team_ambiguous"
+            | "existing_team_image_unattested"
+            | "existing_team_too_many_containers"
+            | "existing_team_receipt_required"
+            | "uninstall_unavailable"
+            | "uninstall_unsupported"
+    ) && !code.starts_with("invalid_");
     OnboardingError {
         code,
-        message,
+        message: code,
         retryable,
         resets_at: None,
         machine: None,
+        detail: None,
     }
 }
 
@@ -940,6 +833,14 @@ fn other_machine_failure(stdout: &[u8]) -> OnboardingError {
     }
 }
 
+/// A local runtime step's error, with the cause the step printed.
+fn with_cause(error: OnboardingError, log: Option<&RuntimeLog>) -> OnboardingError {
+    OnboardingError {
+        detail: log.and_then(RuntimeLog::take_cause),
+        ..error
+    }
+}
+
 #[cfg(debug_assertions)]
 fn trace_local_runtime(stage: &'static str, event: &'static str) {
     eprintln!("[onboarding-runtime] stage={stage} event={event}");
@@ -951,6 +852,10 @@ fn trace_local_runtime(_stage: &'static str, _event: &'static str) {}
 struct ProgressReporter {
     emit: Arc<dyn Fn(OnboardingProgress) + Send + Sync>,
     sequence: Arc<AtomicU64>,
+    /// The step running now and the phase it last reported (install.ps1's
+    /// JHT_PHASE): the heartbeat repeats the phase instead of its generic
+    /// message, so the screen keeps saying what is happening.
+    current: Arc<Mutex<Option<(OnboardingProgressStage, Instant, &'static str)>>>,
 }
 
 impl ProgressReporter {
@@ -964,6 +869,22 @@ impl ProgressReporter {
         Self {
             emit: Arc::new(emit),
             sequence: Arc::new(AtomicU64::new(1)),
+            current: Arc::new(Mutex::new(None)),
+        }
+    }
+
+    /// A phase of the running step, shown at once with the step's elapsed
+    /// time and repeated by its heartbeat. Outside a step it is dropped.
+    fn phase(&self, message: &'static str) {
+        let running = {
+            let mut current = self.current.lock().unwrap_or_else(|e| e.into_inner());
+            current.as_mut().map(|(stage, started, shown)| {
+                *shown = message;
+                (*stage, *started)
+            })
+        };
+        if let Some((stage, started)) = running {
+            self.send(stage, OnboardingProgressStatus::Progress, message, started, None);
         }
     }
 
@@ -1022,6 +943,8 @@ impl ProgressReporter {
             started,
             None,
         );
+        *self.current.lock().unwrap_or_else(|e| e.into_inner()) =
+            Some((stage, started, heartbeat_message));
         let stopped = Arc::new(AtomicBool::new(false));
         let heartbeat_stopped = Arc::clone(&stopped);
         let heartbeat_reporter = self.clone();
@@ -1030,16 +953,22 @@ impl ProgressReporter {
             if heartbeat_stopped.load(Ordering::Acquire) {
                 break;
             }
+            let message = heartbeat_reporter
+                .current
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .map_or(heartbeat_message, |(_, _, shown)| shown);
             heartbeat_reporter.send(
                 stage,
                 OnboardingProgressStatus::Progress,
-                heartbeat_message,
+                message,
                 started,
                 None,
             );
         });
 
         let result = operation();
+        *self.current.lock().unwrap_or_else(|e| e.into_inner()) = None;
         stopped.store(true, Ordering::Release);
         heartbeat.thread().unpark();
         let _ = heartbeat.join();
@@ -1070,18 +999,25 @@ fn valid_pairing_token(token: &str) -> bool {
         })
 }
 
-fn valid_team_id(value: &str) -> bool {
+pub(crate) fn valid_team_id(value: &str) -> bool {
     (16..=128).contains(&value.len())
         && value
             .bytes()
             .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_'))
 }
-fn wrapper_candidates(home: &Path) -> [PathBuf; 3] {
-    [
+#[cfg(not(windows))]
+fn wrapper_candidates(home: &Path) -> Vec<PathBuf> {
+    vec![
         home.join(".local/bin/jht"),
         PathBuf::from("/usr/local/bin/jht"),
         PathBuf::from("/opt/homebrew/bin/jht"),
     ]
+}
+
+/// Where install.ps1 publishes the PowerShell wrapper.
+#[cfg(windows)]
+fn wrapper_candidates(home: &Path) -> Vec<PathBuf> {
+    vec![home.join(".local").join("bin").join("jht.ps1")]
 }
 
 fn wrapper_path_from_home(home: &Path) -> Option<PathBuf> {
@@ -1128,12 +1064,24 @@ fn valid_host_wrapper_file(path: &Path) -> bool {
         .is_some_and(|source| wrapper_has_protocol(&source, "JHT_HOST_RUNTIME_PROTOCOL=1"))
 }
 
+#[cfg(not(windows))]
 fn valid_wrapper_file(path: &Path) -> bool {
     wrapper_source(path).is_some_and(|source| {
         wrapper_has_protocol(&source, "JHT_HOST_RUNTIME_PROTOCOL=1")
             && wrapper_has_protocol(&source, "JHT_DESKTOP_CHAT_PROTOCOL=1")
             && wrapper_has_protocol(&source, "JHT_ONBOARDING_SNAPSHOT_PROTOCOL=1")
     })
+}
+
+/// jht.ps1 with the desktop's protocol lines, exactly as install.ps1 recorded
+/// it in the runtime's integrity manifest (with the compose file and the ACL
+/// helper it dot-sources).
+#[cfg(windows)]
+fn valid_wrapper_file(path: &Path) -> bool {
+    use crate::windows_runtime::{runtime_dir, wrapper_bundle_valid, wrapper_has_protocols};
+    wrapper_source(path).is_some_and(|source| wrapper_has_protocols(&source))
+        && runtime_dir(std::env::var_os("LOCALAPPDATA"))
+            .is_some_and(|runtime| wrapper_bundle_valid(path, &runtime))
 }
 
 #[cfg(target_os = "macos")]
@@ -1357,19 +1305,29 @@ fn runtime_bundle_manifest_valid(runtime_dir: &Path, wrapper: &Path) -> bool {
             return false;
         }
     }
-    let expected_keys = [
+    // A test-channel install also pins its image (install.sh --image):
+    // the file and its manifest line come together, or neither does.
+    let image_pin = runtime_dir.join("runtime-image");
+    let pinned = entries.contains_key("runtime-image");
+    if !pinned && fs::symlink_metadata(&image_pin).is_ok() {
+        return false;
+    }
+    let mut expected_keys = vec![
         "container-runtime",
         "docker-compose.yml",
         "docker-shim",
         "host-setup.sh",
         "jht-wrapper.sh",
         "podman-machine",
-        "version",
     ];
+    if pinned {
+        expected_keys.push("runtime-image");
+    }
+    expected_keys.push("version");
     if entries.keys().copied().collect::<Vec<_>>() != expected_keys || entries["version"] != "1" {
         return false;
     }
-    let artifacts = [
+    let mut artifacts = vec![
         ("docker-compose.yml", runtime_dir.join("docker-compose.yml")),
         ("host-setup.sh", runtime_dir.join("host-setup.sh")),
         ("jht-wrapper.sh", wrapper.to_path_buf()),
@@ -1377,6 +1335,9 @@ fn runtime_bundle_manifest_valid(runtime_dir: &Path, wrapper: &Path) -> bool {
         ("podman-machine", runtime_dir.join("podman-machine")),
         ("docker-shim", runtime_dir.join("bin/docker")),
     ];
+    if pinned {
+        artifacts.push(("runtime-image", image_pin));
+    }
     if fs::read_to_string(runtime_dir.join("container-runtime"))
         .ok()
         .is_none_or(|value| value.trim() != "podman")
@@ -1393,6 +1354,20 @@ fn bundled_wrapper_published(runtime_dir: &Path, wrapper: &Path) -> bool {
     valid_wrapper_file(wrapper)
         && fs::read(wrapper).is_ok_and(|bytes| bytes == BUNDLED_LOCAL_WRAPPER)
         && runtime_bundle_manifest_valid(runtime_dir, wrapper)
+}
+
+/// Linux: the host runtime dir of scripts/jht-wrapper.sh and install.sh.
+#[cfg(all(unix, not(target_os = "macos")))]
+fn local_runtime_dir(app: &tauri::AppHandle) -> Result<PathBuf, OnboardingError> {
+    let data = match std::env::var_os("XDG_DATA_HOME").filter(|value| !value.is_empty()) {
+        Some(value) => PathBuf::from(value),
+        None => app
+            .path()
+            .home_dir()
+            .map(|home| home.join(".local").join("share"))
+            .map_err(|_| failure("storage_failed"))?,
+    };
+    Ok(data.join("job-hunter-team").join("host-runtime"))
 }
 
 #[cfg(target_os = "macos")]
@@ -1435,8 +1410,9 @@ fn local_podman_install_required(
     wrapper_present: bool,
     marker_selected: bool,
     podman_present: bool,
+    channel_reusable: bool,
 ) -> bool {
-    !(wrapper_present && marker_selected && podman_present)
+    !(wrapper_present && marker_selected && podman_present && channel_reusable)
 }
 
 #[cfg(target_os = "macos")]
@@ -1456,6 +1432,32 @@ fn podman_path() -> Option<PathBuf> {
             PathBuf::from("/opt/podman/bin/podman"),
         ])
         .find(|path| path.is_file())
+}
+
+/// install.sh installs Podman and podman-compose with Homebrew, and installs
+/// Homebrew itself when it is missing. Run from the app it has no terminal and
+/// no administrator password, so Homebrew's own installer stops there: the app
+/// says it before starting, with `homebrew_missing`.
+#[cfg(target_os = "macos")]
+const HOMEBREW_PREFIXES: [&str; 2] = ["/opt/homebrew/bin/brew", "/usr/local/bin/brew"];
+
+/// `brew` on PATH or in one of Homebrew's two standard prefixes (an app
+/// opened from the Finder has a PATH without them).
+#[cfg(target_os = "macos")]
+fn homebrew_path_in(path: Option<std::ffi::OsString>, prefixes: &[&str]) -> Option<PathBuf> {
+    path.map(|value| std::env::split_paths(&value).map(|dir| dir.join("brew")).collect::<Vec<_>>())
+        .unwrap_or_default()
+        .into_iter()
+        .chain(prefixes.iter().map(PathBuf::from))
+        .find(|path| path.is_file())
+}
+
+#[cfg(target_os = "macos")]
+fn local_podman_install_preflight(install_required: bool, homebrew: Option<PathBuf>) -> Result<(), &'static str> {
+    if install_required && homebrew.is_none() {
+        return Err("homebrew_missing");
+    }
+    Ok(())
 }
 
 pub(crate) struct VerifiedInstaller {
@@ -1507,7 +1509,7 @@ pub(crate) fn attest_then<T>(
     })
 }
 
-fn download_installer_bytes(expected_digest: &str) -> Result<Vec<u8>, OnboardingError> {
+fn download_installer_bytes(url: &str, expected_digest: &str) -> Result<Vec<u8>, OnboardingError> {
     // Refuse a release without a compiled-in digest before touching the network.
     expected_installer_digest(expected_digest)?;
     let target = std::env::temp_dir().join(format!(
@@ -1518,7 +1520,7 @@ fn download_installer_bytes(expected_digest: &str) -> Result<Vec<u8>, Onboarding
     let result = (|| {
         let curl_args = [
             "-fsSL",
-            INSTALL_URL,
+            url,
             "-o",
             target.to_str().ok_or_else(|| failure("storage_failed"))?,
         ];
@@ -1538,46 +1540,220 @@ fn download_installer_bytes(expected_digest: &str) -> Result<Vec<u8>, Onboarding
     result
 }
 
+/// Downloads install.sh of the channel this app was built for, checks it
+/// against that channel's digest and hands it over with the channel's
+/// installer arguments (none in production).
 fn with_downloaded_installer<T>(
+    execute: impl FnOnce(&VerifiedInstaller, &[String]) -> Result<T, OnboardingError>,
+) -> Result<T, OnboardingError> {
+    let channel = release_channel::current().map_err(failure)?;
+    let expected = expected_installer_digest(release_channel::install_digest(
+        channel.as_ref(),
+        INSTALL_SHA256,
+    ))?;
+    let args = release_channel::installer_args(channel.as_ref());
+    download_then_attest(
+        &release_channel::install_url(channel.as_ref()),
+        expected,
+        |installer| execute(installer, &args),
+    )
+}
+
+/// Downloads the installer from `url` and runs `execute` only on bytes with
+/// `expected_digest`: a commit that does not exist, a network that is down or
+/// different bytes stop here, before anything runs.
+fn download_then_attest<T>(
+    url: &str,
+    expected_digest: &str,
     execute: impl FnOnce(&VerifiedInstaller) -> Result<T, OnboardingError>,
 ) -> Result<T, OnboardingError> {
-    let expected = expected_installer_digest(INSTALL_SHA256)?;
-    let bytes = download_installer_bytes(expected)?;
-    attest_then(bytes, expected, execute)
+    let bytes = download_installer_bytes(url, expected_digest)?;
+    attest_then(bytes, expected_digest, execute)
+}
+
+/// A local install command line: the fixed part, then the channel's
+/// installer arguments after `bash -s --`.
+fn local_install_args(base: &[&str], channel_args: &[String]) -> Vec<String> {
+    base.iter()
+        .map(|arg| (*arg).to_owned())
+        .chain(channel_args.iter().cloned())
+        .collect()
+}
+
+/// Windows: WSL first (the Podman machine runs in it), then the runtime that
+/// install.ps1 publishes, installed only when no verified wrapper is there:
+/// install.ps1 installs Podman when missing and creates the JHT machine.
+/// install.ps1 runs only if it has the compiled digest, from a private
+/// temporary file, through Windows PowerShell by its absolute path; each
+/// `JHT_PHASE` line it prints goes to the screen through `phase`.
+#[cfg(windows)]
+fn install_local_windows(
+    app: &tauri::AppHandle,
+    log: Option<&RuntimeLog>,
+    phase: &dyn Fn(&'static str),
+) -> Result<PathBuf, OnboardingError> {
+    use crate::windows_runtime::{
+        installer_invocation, installer_outcome, phase_message, powershell_path, wsl_path,
+        wsl_state, INSTALL_PS1_SHA256,
+    };
+    let wsl = wsl_path(std::env::var_os("SystemRoot"));
+    let started = Instant::now();
+    let (wsl_status, wsl_stderr) = run_program_keeping_stderr(
+        wsl.to_str().ok_or_else(|| failure("wsl_not_ready"))?,
+        ["--status"],
+        None,
+        Duration::from_secs(30),
+    );
+    if let Some(log) = log {
+        log.record_result("wsl --status", &wsl_status, &wsl_stderr, started.elapsed());
+    }
+    wsl_state(wsl_status).map_err(failure)?;
+    let channel = release_channel::current().map_err(failure)?;
+    // A runtime already there is reused only by a production build, and only
+    // when it is a production one: a test build always installs its own.
+    if let Some(wrapper) = wrapper_path(app) {
+        if crate::windows_runtime::runtime_dir(std::env::var_os("LOCALAPPDATA"))
+            .is_some_and(|dir| release_channel::installed_runtime_reusable(channel.as_ref(), &dir))
+        {
+            trace_local_runtime("runtime", "install_reused");
+            return Ok(wrapper);
+        }
+    }
+    let expected = expected_installer_digest(release_channel::install_ps1_digest(
+        channel.as_ref(),
+        INSTALL_PS1_SHA256,
+    ))?;
+    let bytes = download_verified_bytes(
+        &release_channel::install_ps1_url(channel.as_ref()),
+        expected,
+    )?;
+    let channel_args = release_channel::install_ps1_args(channel.as_ref());
+    attest_then(bytes, expected, |installer| {
+        let dir = std::env::temp_dir().join(format!(
+            "jht-install-{}-{}",
+            std::process::id(),
+            SESSION_SEQUENCE.fetch_add(1, Ordering::Relaxed)
+        ));
+        fs::create_dir(&dir).map_err(|_| failure("storage_failed"))?;
+        let result = (|| {
+            crate::private_acl::protect_dir(&dir).map_err(|_| failure("permissions_failed"))?;
+            let script = dir.join("install.ps1");
+            fs::write(&script, installer.bytes()).map_err(|_| failure("storage_failed"))?;
+            crate::private_acl::protect_file(&script).map_err(|_| failure("permissions_failed"))?;
+            let shell = powershell_path(std::env::var_os("SystemRoot"));
+            let started = Instant::now();
+            let mut stdout = Vec::new();
+            let (ended, stderr) = crate::runtime_host::run_program_lines_keeping_stderr(
+                shell.to_str().ok_or_else(|| failure("runtime_install_failed"))?,
+                installer_invocation(&script, &channel_args),
+                PREPARE_TIMEOUT,
+                |line| {
+                    if let Some(message) = phase_message(line) {
+                        phase(message);
+                    }
+                    if stdout.len() < INSTALL_STDOUT_KEPT {
+                        stdout.extend_from_slice(line.as_bytes());
+                    }
+                },
+            );
+            if let Some(log) = log {
+                log.record("install.ps1", ended, &stdout, &stderr, started.elapsed());
+            }
+            installer_outcome(ended).map_err(failure)
+        })();
+        let _ = fs::remove_dir_all(&dir);
+        result
+    })?;
+    wrapper_path(app).ok_or_else(|| failure("runtime_missing"))
+}
+
+/// A file from `url`, at most MAX_INSTALLER_BYTES, refused before the network
+/// when no digest was compiled in.
+#[cfg(windows)]
+fn download_verified_bytes(url: &str, expected_digest: &str) -> Result<Vec<u8>, OnboardingError> {
+    expected_installer_digest(expected_digest)?;
+    let target = std::env::temp_dir().join(format!(
+        "jht-download-{}-{}.ps1",
+        std::process::id(),
+        SESSION_SEQUENCE.fetch_add(1, Ordering::Relaxed)
+    ));
+    let result = (|| {
+        let target_text = target.to_str().ok_or_else(|| failure("storage_failed"))?;
+        let downloaded = run_program(
+            "curl.exe",
+            ["-fsSL", url, "-o", target_text],
+            None,
+            Duration::from_secs(90),
+        )
+        .map_err(failure)?;
+        if !downloaded.success() {
+            return Err(failure("runtime_download_failed"));
+        }
+        let metadata = fs::metadata(&target).map_err(|_| failure("runtime_download_failed"))?;
+        if metadata.len() == 0 || metadata.len() > MAX_INSTALLER_BYTES as u64 {
+            return Err(failure("installer_payload_invalid"));
+        }
+        fs::read(&target).map_err(|_| failure("runtime_download_failed"))
+    })();
+    let _ = fs::remove_file(&target);
+    result
 }
 
 fn install_local(
     app: &tauri::AppHandle,
     diagnostics: Option<&OnboardingDiagnosticSink>,
+    log: Option<&RuntimeLog>,
+    phase: &dyn Fn(&'static str),
 ) -> Result<PathBuf, OnboardingError> {
-    #[cfg(not(unix))]
+    #[cfg(windows)]
+    {
+        let _ = diagnostics;
+        return install_local_windows(app, log, phase);
+    }
+    #[cfg(not(windows))]
+    let _ = phase;
+    #[cfg(not(any(unix, windows)))]
     return Err(failure("runtime_install_unsupported"));
     #[cfg(unix)]
     {
         #[cfg(target_os = "macos")]
         {
+            let channel = release_channel::current().map_err(failure)?;
             let install_required = local_podman_install_required(
                 host_wrapper_path(app).is_some(),
                 podman_runtime_selected(app),
                 podman_path().is_some(),
+                release_channel::installed_runtime_reusable(
+                    channel.as_ref(),
+                    &local_runtime_dir(app)?,
+                ),
             );
             if install_required && installed_on_another_engine(local_runtime_marker(app).as_deref())
             {
                 trace_local_runtime("runtime", "installed_on_another_engine");
                 return Err(failure(RUNTIME_CHANGE_REQUIRES_MIGRATION));
             }
+            if let Err(code) = local_podman_install_preflight(
+                install_required,
+                homebrew_path_in(std::env::var_os("PATH"), &HOMEBREW_PREFIXES),
+            ) {
+                trace_local_runtime("runtime", code);
+                return Err(failure(code));
+            }
             if install_required {
                 trace_local_runtime("runtime", "install_required");
-                let installed = with_downloaded_installer(|installer| {
-                    ensure_success(
-                        run_program(
-                            "/usr/bin/env",
-                            LOCAL_PODMAN_INSTALL_ARGS,
-                            Some(installer.bytes()),
-                            PREPARE_TIMEOUT,
-                        ),
-                        "runtime_install_failed",
-                    )
+                let installed = with_downloaded_installer(|installer, channel_args| {
+                    let started = Instant::now();
+                    let (result, stderr) = run_program_keeping_stderr(
+                        "/usr/bin/env",
+                        local_install_args(&LOCAL_PODMAN_INSTALL_ARGS, channel_args),
+                        Some(installer.bytes()),
+                        PREPARE_TIMEOUT,
+                    );
+                    if let Some(log) = log {
+                        log.record_result("install.sh", &result, &stderr, started.elapsed());
+                    }
+                    ensure_success(result, "runtime_install_failed")
                 });
                 if let Err(error) = installed {
                     trace_local_runtime("runtime", "install_failed");
@@ -1618,7 +1794,7 @@ fn install_local(
             let snapshot = probe_installed_wrapper_with(|operation, timeout| {
                 probe_sequence = probe_sequence.saturating_add(1);
                 let started = Instant::now();
-                let result = run_local(&installed_wrapper, &operation.argv(), timeout);
+                let result = run_local_logged(&installed_wrapper, &operation.argv(), timeout, log);
                 if let Some(diagnostics) = diagnostics {
                     diagnostics.record_process(
                         format!("wrapper-{}-{probe_sequence}", operation.diagnostic_id()),
@@ -1638,18 +1814,29 @@ fn install_local(
         }
         #[cfg(not(target_os = "macos"))]
         {
-            if wrapper_path(app).is_none() {
-                with_downloaded_installer(|installer| {
-                    let args = ["JHT_SKIP_ONBOARD=1", "/bin/bash", "-s"];
-                    ensure_success(
-                        run_program(
-                            "/usr/bin/env",
-                            args,
-                            Some(installer.bytes()),
-                            PREPARE_TIMEOUT,
-                        ),
-                        "runtime_install_failed",
-                    )
+            let channel = release_channel::current().map_err(failure)?;
+            let reusable = wrapper_path(app).is_some()
+                && release_channel::installed_runtime_reusable(
+                    channel.as_ref(),
+                    &local_runtime_dir(app)?,
+                );
+            if !reusable {
+                with_downloaded_installer(|installer, channel_args| {
+                    let args = local_install_args(
+                        &["JHT_SKIP_ONBOARD=1", "/bin/bash", "-s", "--"],
+                        channel_args,
+                    );
+                    let started = Instant::now();
+                    let (result, stderr) = run_program_keeping_stderr(
+                        "/usr/bin/env",
+                        args,
+                        Some(installer.bytes()),
+                        PREPARE_TIMEOUT,
+                    );
+                    if let Some(log) = log {
+                        log.record_result("install.sh", &result, &stderr, started.elapsed());
+                    }
+                    ensure_success(result, "runtime_install_failed")
                 })?;
             }
             wrapper_path(app).ok_or_else(|| failure("runtime_missing"))
@@ -1675,6 +1862,27 @@ fi
 [ "$jht_actual_sha256" = "$JHT_INSTALL_SHA256" ] || exit 87
 /bin/bash "$jht_installer" --pairing-token "$JHT_PAIRING_TOKEN""#;
 
+/// REMOTE_INSTALL with the channel's installer arguments appended, each in
+/// single quotes. They are public build coordinates (commit, image ref,
+/// digest), never a secret, and only a closed character set is accepted, so
+/// the quoting cannot be broken; production appends nothing.
+fn remote_install_command(channel_args: &[String]) -> Result<String, OnboardingError> {
+    let mut command = REMOTE_INSTALL.to_owned();
+    for arg in channel_args {
+        if arg.is_empty()
+            || !arg
+                .bytes()
+                .all(|byte| byte.is_ascii_alphanumeric() || b"-_.:/@".contains(&byte))
+        {
+            return Err(failure("installer_digest_invalid"));
+        }
+        command.push_str(" '");
+        command.push_str(arg);
+        command.push('\'');
+    }
+    Ok(command)
+}
+
 pub(crate) fn remote_install_input(
     installer: &VerifiedInstaller,
     pairing_token: &str,
@@ -1693,12 +1901,6 @@ pub(crate) fn remote_install_input(
     Ok(input)
 }
 const REMOTE_JHT_UP: &str = r#"set -eu; JHT_BIN="$(command -v jht 2>/dev/null || true)"; [ -n "$JHT_BIN" ] || JHT_BIN="$HOME/.local/bin/jht"; exec "$JHT_BIN" up"#;
-const REMOTE_EXISTING_TEAM_PROBE: &str = r#"set -eu
-JHT_BIN="$(command -v jht 2>/dev/null || true)"
-[ -n "$JHT_BIN" ] || JHT_BIN="$HOME/.local/bin/jht"
-[ -f "$JHT_BIN" ] && [ -x "$JHT_BIN" ] && [ ! -L "$JHT_BIN" ] || exit 70
-grep -Fqx 'JHT_ONBOARDING_SNAPSHOT_PROTOCOL=1' "$JHT_BIN" || exit 70
-exec "$JHT_BIN" onboarding-snapshot --expect-team-stdin"#;
 const REMOTE_USE_CLAUDE: &str = r#"set -eu; JHT_BIN="$(command -v jht 2>/dev/null || true)"; [ -n "$JHT_BIN" ] || JHT_BIN="$HOME/.local/bin/jht"; exec "$JHT_BIN" providers use claude"#;
 const REMOTE_USE_CODEX: &str = r#"set -eu; JHT_BIN="$(command -v jht 2>/dev/null || true)"; [ -n "$JHT_BIN" ] || JHT_BIN="$HOME/.local/bin/jht"; exec "$JHT_BIN" providers use codex"#;
 const REMOTE_USE_KIMI: &str = r#"set -eu; JHT_BIN="$(command -v jht 2>/dev/null || true)"; [ -n "$JHT_BIN" ] || JHT_BIN="$HOME/.local/bin/jht"; exec "$JHT_BIN" providers use kimi"#;
@@ -1881,26 +2083,74 @@ pub(crate) fn run_verified_local_wrapper(
     input: Option<&[u8]>,
     timeout: Duration,
 ) -> Result<ProcessResult, &'static str> {
+    run_verified_local_wrapper_keeping_stderr(wrapper, args, input, timeout).0
+}
+
+/// run_verified_local_wrapper with the wrapper's stderr, for the runtime log
+/// only (run_local_logged).
+fn run_verified_local_wrapper_keeping_stderr(
+    wrapper: &Path,
+    args: &[&str],
+    input: Option<&[u8]>,
+    timeout: Duration,
+) -> (Result<ProcessResult, &'static str>, Vec<u8>) {
     if !valid_wrapper_file(wrapper) {
-        return Err("runtime_missing");
+        return (Err("runtime_missing"), Vec::new());
     }
     #[cfg(target_os = "macos")]
     {
-        let (program, invocation) = local_wrapper_command(wrapper, args, std::env::var_os("PATH"))?;
-        return run_program(
-            program.to_str().ok_or("runtime_missing")?,
-            invocation,
-            input,
-            timeout,
-        );
+        let (program, invocation) = match local_wrapper_command(wrapper, args, std::env::var_os("PATH")) {
+            Ok(command) => command,
+            Err(error) => return (Err(error), Vec::new()),
+        };
+        let Some(program) = program.to_str() else {
+            return (Err("runtime_missing"), Vec::new());
+        };
+        return run_program_keeping_stderr(program, invocation, input, timeout);
     }
-    #[cfg(not(target_os = "macos"))]
-    run_program(
-        wrapper.to_str().ok_or("runtime_missing")?,
-        args,
-        input,
-        timeout,
-    )
+    #[cfg(windows)]
+    {
+        use crate::windows_runtime::{powershell_path, script_invocation};
+        let shell = powershell_path(std::env::var_os("SystemRoot"));
+        let Some(shell) = shell.to_str() else {
+            return (Err("runtime_missing"), Vec::new());
+        };
+        return run_program_keeping_stderr(shell, script_invocation(wrapper, args), input, timeout);
+    }
+    #[cfg(not(any(target_os = "macos", windows)))]
+    let Some(program) = wrapper.to_str() else {
+        return (Err("runtime_missing"), Vec::new());
+    };
+    #[cfg(not(any(target_os = "macos", windows)))]
+    run_program_keeping_stderr(program, args, input, timeout)
+}
+
+/// run_local for a step that prepares the runtime: how it ended and what it
+/// printed go to the runtime log.
+fn run_local_logged(
+    wrapper: &Path,
+    args: &[&str],
+    timeout: Duration,
+    log: Option<&RuntimeLog>,
+) -> Result<ProcessResult, &'static str> {
+    let started = Instant::now();
+    let (result, stderr) = run_verified_local_wrapper_keeping_stderr(wrapper, args, None, timeout);
+    if let Some(log) = log {
+        log.record_result(&format!("jht {}", args.join(" ")), &result, &stderr, started.elapsed());
+    }
+    refuse_broad_podman_machine(result)
+}
+
+fn run_scoped_local_logged(
+    app: &tauri::AppHandle,
+    scope: &AccountScope,
+    wrapper: &Path,
+    operation: LocalCliOperation,
+    timeout: Duration,
+    log: Option<&RuntimeLog>,
+) -> Result<ProcessResult, &'static str> {
+    crate::account_scope::validate_local_runtime(app, scope)?;
+    run_local_logged(wrapper, &operation.argv(), timeout, log)
 }
 
 #[cfg(test)]
@@ -1915,6 +2165,13 @@ fn start_and_verify_local_container(wrapper: &Path) -> Result<(), OnboardingErro
     )
 }
 
+/// jht.ps1 up wakes the Podman machine in WSL and says with its exit code
+/// what did not start (windows_runtime::exit_failure); the sh wrapper's exit
+/// codes mean other things.
+fn up_exit_failure(code: i32, windows: bool) -> Option<&'static str> {
+    windows.then(|| exit_failure(code)).flatten()
+}
+
 fn start_and_verify_local_container_with(
     mut run: impl FnMut(LocalCliOperation, Duration) -> Result<ProcessResult, &'static str>,
     mut pause: impl FnMut(Duration),
@@ -1922,11 +2179,15 @@ fn start_and_verify_local_container_with(
 ) -> Result<(), OnboardingError> {
     let requested = match run(LocalCliOperation::Up, PREPARE_TIMEOUT) {
         Ok(result) if result.success() => Ok(()),
-        Err("process_timeout") => Err("container_timeout"),
-        Err(PODMAN_MACHINE_MOUNTS_HOME) => return Err(failure(PODMAN_MACHINE_MOUNTS_HOME)),
         Ok(result) if result.code == PODMAN_OTHER_MACHINE_EXIT => {
             return Err(other_machine_failure(&result.stdout))
         }
+        Ok(result) => match up_exit_failure(result.code, cfg!(windows)) {
+            Some(code) => return Err(failure(code)),
+            None => Err("container_start_failed"),
+        },
+        Err("process_timeout") => Err("container_timeout"),
+        Err(PODMAN_MACHINE_MOUNTS_HOME) => return Err(failure(PODMAN_MACHINE_MOUNTS_HOME)),
         _ => Err("container_start_failed"),
     };
 
@@ -1971,6 +2232,7 @@ fn prepare_impl(
         &scope,
         OnboardingDiagnosticHostKind::from_host(&submission.host),
     );
+    let runtime_log = RuntimeLog::new(&app);
     let progress_diagnostics = diagnostics.clone();
     let reporter = ProgressReporter::with_emitter(move |event| {
         let _ = channel.send(event.clone());
@@ -1981,13 +2243,21 @@ fn prepare_impl(
     let mut pairing = pairing_token.map(Zeroizing::new);
     let (validated, wrapper) = reporter.run(
         OnboardingProgressStage::Engine,
-        "Verifico il motore container",
-        "Preparazione del motore container in corso",
-        "Motore container verificato",
+        "ui_engine_start",
+        "ui_engine_progress",
+        "ui_engine_done",
         || {
             let validated = validate_host(&app, &submission.host).map_err(failure)?;
             let wrapper = match &validated {
-                ValidatedHost::Local => Some(install_local(&app, diagnostics.as_ref())?),
+                ValidatedHost::Local => Some(
+                    install_local(
+                        &app,
+                        diagnostics.as_ref(),
+                        runtime_log.as_ref(),
+                        &|message| reporter.phase(message),
+                    )
+                    .map_err(|error| with_cause(error, runtime_log.as_ref()))?,
+                ),
                 ValidatedHost::Vps { .. } => {
                     let token = pairing
                         .as_ref()
@@ -1995,12 +2265,13 @@ fn prepare_impl(
                     if !valid_pairing_token(token) {
                         return Err(failure("pairing_token_invalid"));
                     }
-                    with_downloaded_installer(|installer| {
+                    with_downloaded_installer(|installer, channel_args| {
+                        let command = remote_install_command(channel_args)?;
                         let mut input = remote_install_input(installer, token)?;
                         let result = ensure_success(
-                            run_ssh(
+                            crate::runtime_host::run_ssh_command(
                                 &validated,
-                                REMOTE_INSTALL,
+                                &command,
                                 Some(&input),
                                 PREPARE_TIMEOUT,
                                 None,
@@ -2019,9 +2290,9 @@ fn prepare_impl(
 
     reporter.run(
         OnboardingProgressStage::Runtime,
-        "Avvio il runtime Job Hunter Team",
-        "Avvio del runtime in corso",
-        "Runtime Job Hunter Team avviato",
+        "ui_runtime_start",
+        "ui_runtime_progress",
+        "ui_runtime_done",
         || match &validated {
             ValidatedHost::Local => {
                 let wrapper = wrapper.as_ref().ok_or_else(|| failure("runtime_missing"))?;
@@ -2030,7 +2301,14 @@ fn prepare_impl(
                     |operation, timeout| {
                         request_sequence = request_sequence.saturating_add(1);
                         let started = Instant::now();
-                        let result = run_scoped_local(&app, &scope, wrapper, operation, timeout);
+                        let result = run_scoped_local_logged(
+                            &app,
+                            &scope,
+                            wrapper,
+                            operation,
+                            timeout,
+                            runtime_log.as_ref(),
+                        );
                         if let Some(diagnostics) = diagnostics.as_ref() {
                             diagnostics.record_process(
                                 format!(
@@ -2052,6 +2330,7 @@ fn prepare_impl(
                     thread::sleep,
                     LOCAL_CONTAINER_VERIFY_ATTEMPTS,
                 )
+                .map_err(|error| with_cause(error, runtime_log.as_ref()))
             }
             ValidatedHost::Vps { .. } => ensure_success(
                 run_ssh(&validated, REMOTE_JHT_UP, None, PREPARE_TIMEOUT, None),
@@ -2062,9 +2341,9 @@ fn prepare_impl(
 
     reporter.run(
         OnboardingProgressStage::Container,
-        "Verifico il container Job Hunter Team",
-        "Verifica del container in corso",
-        "Container Job Hunter Team verificato",
+        "ui_container_start",
+        "ui_container_progress",
+        "ui_container_done",
         || {
             let started = Instant::now();
             let snapshot_result = snapshot_impl(&app, &scope, &validated);
@@ -2082,9 +2361,9 @@ fn prepare_impl(
 
     let snapshot = reporter.run(
         OnboardingProgressStage::Provider,
-        "Configuro il provider in abbonamento",
-        "Configurazione del provider in corso",
-        "Provider configurato",
+        "ui_provider_start",
+        "ui_provider_progress",
+        "ui_provider_done",
         || {
             match &validated {
                 ValidatedHost::Local => {
@@ -2299,8 +2578,16 @@ pub(crate) async fn onboarding_snapshot(
         let _scope = scope_state
             .lock_expected(&worker_expected)
             .map_err(failure)?;
-        let validated = validate_host(&app, &host).map_err(failure)?;
-        snapshot_impl(&app, &worker_expected, &validated)
+        let validated = crate::runtime_host::validate_host_for_scope(&app, &host, &worker_expected).map_err(failure)?;
+        match crate::existing_team_runtime::selected(&app, &worker_expected, &host).map_err(failure)? {
+            Some(target) => {
+                let command = crate::existing_team_runtime::snapshot_command(&target.runtime).map_err(failure)?;
+                let result = run_ssh_command(&validated, &command, None, SNAPSHOT_TIMEOUT, None).map_err(failure)?;
+                if !result.success() { return Err(failure("snapshot_failed")); }
+                Ok(parse_snapshot(&result.stdout_text()))
+            }
+            None => snapshot_impl(&app, &worker_expected, &validated),
+        }
     })
     .await
     .unwrap_or_else(|_| Err(failure("snapshot_failed")));
@@ -2322,8 +2609,16 @@ pub(crate) async fn onboarding_resume_snapshot(
             .map_err(failure)?;
         let host =
             crate::direct_chat::load_persisted_host(&app, &worker_expected).map_err(failure)?;
-        let validated = validate_host(&app, &host).map_err(failure)?;
-        snapshot_impl(&app, &worker_expected, &validated)
+        let validated = crate::runtime_host::validate_host_for_scope(&app, &host, &worker_expected).map_err(failure)?;
+        match crate::existing_team_runtime::selected(&app, &worker_expected, &host).map_err(failure)? {
+            Some(target) => {
+                let command = crate::existing_team_runtime::snapshot_command(&target.runtime).map_err(failure)?;
+                let result = run_ssh_command(&validated, &command, None, SNAPSHOT_TIMEOUT, None).map_err(failure)?;
+                if !result.success() { return Err(failure("snapshot_failed")); }
+                Ok(parse_snapshot(&result.stdout_text()))
+            }
+            None => snapshot_impl(&app, &worker_expected, &validated),
+        }
     })
     .await
     .unwrap_or_else(|_| Err(failure("snapshot_failed")));
@@ -2331,10 +2626,20 @@ pub(crate) async fn onboarding_resume_snapshot(
     result
 }
 
-fn existing_team_probe_with(
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct ExistingTeamReadiness {
+    pub(crate) snapshot: OnboardingSnapshot,
+    pub(crate) readiness: bool,
+}
+
+/// Validates the immutable target and team identity, then reports whether its
+/// assistant is active. A missing assistant is a degraded read-only state;
+/// it never authorizes messages, starts, or provider work.
+pub(crate) fn existing_team_readonly_probe_with(
     team_id: &str,
     run: impl FnOnce(&[u8]) -> Result<ProcessResult, &'static str>,
-) -> Result<OnboardingSnapshot, OnboardingError> {
+) -> Result<ExistingTeamReadiness, OnboardingError> {
     if !valid_team_id(team_id) {
         return Err(failure("invalid_team_id"));
     }
@@ -2356,10 +2661,362 @@ fn existing_team_probe_with(
     if !snapshot.runtime_installed || !snapshot.container_running {
         return Err(failure("existing_team_unavailable"));
     }
-    if !snapshot.captain_running || !snapshot.assistant_running {
+    if !snapshot.captain_running {
         return Err(failure("existing_team_not_active"));
     }
-    Ok(snapshot)
+    Ok(ExistingTeamReadiness {
+        readiness: snapshot.assistant_running,
+        snapshot,
+    })
+}
+
+/// GUI onboarding retains its existing policy: it needs both team sessions.
+fn existing_team_probe_with(
+    team_id: &str,
+    run: impl FnOnce(&[u8]) -> Result<ProcessResult, &'static str>,
+) -> Result<OnboardingSnapshot, OnboardingError> {
+    let result = existing_team_readonly_probe_with(team_id, run)?;
+    if !result.readiness {
+        return Err(failure("existing_team_not_active"));
+    }
+    Ok(result.snapshot)
+}
+
+/// Activates only the exact target just validated by the caller. Reusing an
+/// existing selection is safe only when it equals that target; this does not
+/// open chat or mark onboarding ready. Persisting the validated host supplies
+/// the common account context for subsequent read-only queries.
+fn activate_readonly_existing_team_target(
+    app: &tauri::AppHandle,
+    scope: &AccountScope,
+    host: &ExecutionHost,
+    target: &crate::existing_team_runtime::ActivatedTarget,
+) -> Result<(), &'static str> {
+    crate::runtime_host::validate_host_for_scope(app, host, scope)?;
+    match crate::existing_team_runtime::activate(app, scope, host, target) {
+        Ok(()) => {}
+        Err("existing_team_runtime_already_selected") => {
+            let selected = crate::existing_team_runtime::selected(app, scope, host)?;
+            if selected.as_ref() != Some(target) {
+                return Err("existing_team_runtime_target_changed");
+            }
+        }
+        Err(error) => return Err(error),
+    }
+    crate::direct_chat::persist_onboarding_host(app, scope, host)
+}
+
+/// One-shot companion path. The only stdin authority is the explicit team id:
+/// host and target come from the custodial candidate in the selected account.
+pub(crate) fn cli_existing_team_connect(
+    app: &tauri::AppHandle,
+    scope: &AccountScope,
+    team_id: &str,
+) -> Result<ExistingTeamReadiness, &'static str> {
+    if !valid_team_id(team_id) {
+        return Err("invalid_team_id");
+    }
+    let (host, target) = crate::existing_team_runtime::candidate_host_for_team(app, scope, team_id)?;
+    if !matches!(host, ExecutionHost::Vps { .. }) {
+        return Err("existing_team_vps_required");
+    }
+    let validated = crate::runtime_host::validate_host_for_scope(app, &host, scope)?;
+    let probe = crate::existing_team_runtime::team_probe_command(&target.runtime)?;
+    let readiness = existing_team_readonly_probe_with(team_id, |input| {
+        run_ssh_command(&validated, &probe, Some(input), SNAPSHOT_TIMEOUT, None)
+    })
+    .map_err(|error| error.code)?;
+    activate_readonly_existing_team_target(app, scope, &host, &target)?;
+    Ok(readiness)
+}
+
+/// The read-only connection of an existing team with every app-bound step
+/// injected, so the production order (host pin, candidate, identity probe,
+/// selection, persisted host) is the one the tests drive.
+pub(crate) fn existing_team_readonly_connect_with(
+    root: &Path,
+    scope: &AccountScope,
+    host: &ExecutionHost,
+    team_id: &str,
+    validate_host: &mut dyn FnMut() -> Result<crate::runtime_host::ValidatedHost, &'static str>,
+    persist_host: &mut dyn FnMut() -> Result<(), &'static str>,
+    run: &mut dyn FnMut(
+        &crate::runtime_host::ValidatedHost,
+        &str,
+        Option<&[u8]>,
+        Duration,
+    ) -> Result<ProcessResult, &'static str>,
+) -> Result<ExistingTeamReadiness, OnboardingError> {
+    let validated = validate_host().map_err(failure)?;
+    let target = crate::existing_team_runtime::candidate_for_request_at(root, scope, host, team_id).map_err(failure)?;
+    let probe = crate::existing_team_runtime::team_probe_command(&target.runtime).map_err(failure)?;
+    let readiness = existing_team_readonly_probe_with(team_id, |input| {
+        run(&validated, &probe, Some(input), SNAPSHOT_TIMEOUT)
+    })?;
+    validate_host().map_err(failure)?;
+    match crate::existing_team_runtime::activate_at(root, scope, host, &target) {
+        Ok(()) => {}
+        Err("existing_team_runtime_already_selected") => {
+            let selected = crate::existing_team_runtime::selected_at(root, scope, host).map_err(failure)?;
+            if selected.as_ref() != Some(&target) {
+                return Err(failure("existing_team_runtime_target_changed"));
+            }
+        }
+        Err(error) => return Err(failure(error)),
+    }
+    persist_host().map_err(failure)?;
+    Ok(readiness)
+}
+
+/// Reopens the read-only view of the existing team this profile already saved:
+/// the host and team come from the saved candidate (never from the renderer), a
+/// selection must already exist, and the identity probe and the pin are done
+/// again by the same read-only connection as ever. Nothing is started and no
+/// candidate or selection is created: with neither saved it refuses before any
+/// SSH call, and the caller goes on as it did before.
+/// Candidate without selection, or selection without candidate, is a different
+/// refusal (existing_team_saved_incomplete): the caller must not treat it as "nothing saved".
+pub(crate) fn existing_team_reopen_with(
+    root: &Path,
+    scope: &AccountScope,
+    validate_host: &mut dyn FnMut(&ExecutionHost) -> Result<crate::runtime_host::ValidatedHost, &'static str>,
+    persist_host: &mut dyn FnMut(&ExecutionHost) -> Result<(), &'static str>,
+    run: &mut dyn FnMut(
+        &crate::runtime_host::ValidatedHost,
+        &str,
+        Option<&[u8]>,
+        Duration,
+    ) -> Result<ProcessResult, &'static str>,
+) -> Result<ExistingTeamReadiness, OnboardingError> {
+    // Neither saved: there is no existing team to reopen (the caller goes on as it
+    // always did). Only one of the two: the saved connection is incomplete, which is
+    // not the same as absent; refused here, before any SSH call, and never completed.
+    match crate::existing_team_runtime::saved_binding_at(root, scope).map_err(failure)? {
+        (false, false) => return Err(failure("existing_team_runtime_candidate_required")),
+        (true, true) => {}
+        _ => return Err(failure("existing_team_saved_incomplete")),
+    }
+    let (host, team_id) = crate::existing_team_runtime::candidate_identity_at(root, scope).map_err(failure)?;
+    if !matches!(host, ExecutionHost::Vps { .. }) {
+        return Err(failure("existing_team_vps_required"));
+    }
+    match crate::existing_team_runtime::selected_at(root, scope, &host).map_err(failure)? {
+        Some(target) if target.team_id == team_id => {}
+        _ => return Err(failure("existing_team_runtime_target_changed")),
+    }
+    existing_team_readonly_connect_with(
+        root,
+        scope,
+        &host,
+        &team_id,
+        &mut || validate_host(&host),
+        &mut || persist_host(&host),
+        run,
+    )
+}
+
+#[tauri::command]
+pub(crate) async fn onboarding_existing_team_reopen(
+    app: tauri::AppHandle,
+    scopes: State<'_, AccountScopeState>,
+) -> Result<ExistingTeamReadiness, OnboardingError> {
+    let expected = scopes.active().map_err(failure)?;
+    let scope_state = scopes.inner().clone();
+    let worker_expected = expected.clone();
+    let result = tauri::async_runtime::spawn_blocking(move || {
+        let _scope = scope_state.lock_expected(&worker_expected).map_err(failure)?;
+        let root = crate::existing_team_runtime::root(&app).map_err(failure)?;
+        existing_team_reopen_with(
+            &root,
+            &worker_expected,
+            &mut |host| crate::runtime_host::validate_host_for_scope(&app, host, &worker_expected),
+            &mut |host| crate::direct_chat::persist_onboarding_host(&app, &worker_expected, host),
+            &mut |validated, command, input, timeout| run_ssh_command(validated, command, input, timeout, None),
+        )
+    })
+    .await
+    .unwrap_or_else(|_| Err(failure("existing_team_unavailable")));
+    let _scope = scopes.lock_expected(&expected).map_err(failure)?;
+    result
+}
+
+/// Explicit read-only entry for an existing team. It shares the candidate,
+/// identity and immutable-target checks with the normal connection, but never
+/// reconnects chat, writes a ready marker, starts an agent, or invokes a
+/// provider. An absent assistant remains visible as `readiness: false`.
+#[tauri::command]
+pub(crate) async fn onboarding_existing_team_readonly_connect(
+    app: tauri::AppHandle,
+    scopes: State<'_, AccountScopeState>,
+    request: ExistingTeamConnectRequest,
+) -> Result<ExistingTeamReadiness, OnboardingError> {
+    let expected = scopes.active().map_err(failure)?;
+    if !matches!(&request.host, ExecutionHost::Vps { .. }) {
+        return Err(failure("existing_team_vps_required"));
+    }
+    if !valid_team_id(&request.team_id) {
+        return Err(failure("invalid_team_id"));
+    }
+    let scope_state = scopes.inner().clone();
+    let worker_expected = expected.clone();
+    let result = tauri::async_runtime::spawn_blocking(move || {
+        let _scope = scope_state.lock_expected(&worker_expected).map_err(failure)?;
+        let root = crate::existing_team_runtime::root(&app).map_err(failure)?;
+        existing_team_readonly_connect_with(
+            &root,
+            &worker_expected,
+            &request.host,
+            &request.team_id,
+            &mut || crate::runtime_host::validate_host_for_scope(&app, &request.host, &worker_expected),
+            &mut || crate::direct_chat::persist_onboarding_host(&app, &worker_expected, &request.host),
+            &mut |validated, command, input, timeout| run_ssh_command(validated, command, input, timeout, None),
+        )
+    })
+    .await
+    .unwrap_or_else(|_| Err(failure("existing_team_unavailable")));
+    let _scope = scopes.lock_expected(&expected).map_err(failure)?;
+    result
+}
+
+/// What the person asked for, and nothing else: the confirmation is made by the person in the
+/// app after reading what starting the assistant costs. A request without it is refused here,
+/// whatever the renderer does.
+#[derive(Clone, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub(crate) struct ExistingTeamAssistantStartRequest {
+    confirmed: bool,
+}
+
+/// `started`: the session was not there, the start command ran and a new probe saw it.
+/// `already_active`: the first probe saw it and no start command ran. Anything else is an error
+/// with its code: a timeout or a failure never carries a readiness.
+#[derive(Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct ExistingTeamAssistantStartReply {
+    outcome: &'static str,
+    captain_running: bool,
+    assistant_running: bool,
+}
+
+/// One start at a time, whatever the number of clicks: the second caller is refused, not queued.
+struct ExistingTeamStartGate<'a>(&'a AtomicBool);
+
+impl<'a> ExistingTeamStartGate<'a> {
+    fn acquire(flag: &'a AtomicBool) -> Option<Self> {
+        flag.compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+            .ok()
+            .map(|_| Self(flag))
+    }
+}
+
+impl Drop for ExistingTeamStartGate<'_> {
+    fn drop(&mut self) {
+        self.0.store(false, Ordering::Release);
+    }
+}
+
+const ASSISTANT_START_TIMEOUT: Duration = Duration::from_secs(180);
+const ASSISTANT_VERIFY_POLLS: usize = 20;
+const ASSISTANT_VERIFY_INTERVAL: Duration = Duration::from_secs(3);
+
+/// Starts the ASSISTENTE session of an existing team, on the pinned target and nowhere else.
+///
+/// `pinned` is the team id and runtime target the account's verified selection holds (None when
+/// there is none: nothing runs, no default container is tried). Order, each step a remote command
+/// through `run`:
+/// 1. the readiness is probed with the team's identity check; an assistant already running ends
+///    here, with no start command;
+/// 2. the start command runs once; a non-zero exit or a timeout is an error;
+/// 3. the readiness is probed again, up to a bounded number of times; only a probe that sees the
+///    assistant promotes the outcome. A probe that fails ends with its error, and running out of
+///    tries is `assistant_verify_timeout`: neither carries a readiness, and no earlier snapshot
+///    is reused.
+fn existing_team_assistant_start_with(
+    confirmed: bool,
+    pinned: Option<(&str, &crate::existing_team_runtime::RuntimeTarget)>,
+    run: &mut dyn FnMut(&str, Option<&[u8]>, Duration) -> Result<ProcessResult, &'static str>,
+    sleep: &mut dyn FnMut(Duration),
+) -> Result<ExistingTeamAssistantStartReply, OnboardingError> {
+    if !confirmed {
+        return Err(failure("assistant_start_not_confirmed"));
+    }
+    let Some((team_id, runtime)) = pinned else {
+        return Err(failure("existing_team_runtime_required"));
+    };
+    let probe = crate::existing_team_runtime::team_probe_command(runtime).map_err(failure)?;
+    let start = crate::existing_team_runtime::assistant_start_command(runtime).map_err(failure)?;
+    let probe_now = |run: &mut dyn FnMut(&str, Option<&[u8]>, Duration) -> Result<ProcessResult, &'static str>| {
+        existing_team_readonly_probe_with(team_id, |input| run(&probe, Some(input), SNAPSHOT_TIMEOUT))
+    };
+    let first = probe_now(&mut *run)?;
+    if first.readiness {
+        return Ok(ExistingTeamAssistantStartReply {
+            outcome: "already_active",
+            captain_running: first.snapshot.captain_running,
+            assistant_running: true,
+        });
+    }
+    match run(&start, None, ASSISTANT_START_TIMEOUT) {
+        Ok(result) if result.success() => {}
+        Err("process_timeout") => return Err(failure("timeout")),
+        _ => return Err(failure("assistant_start_failed")),
+    }
+    for attempt in 0..ASSISTANT_VERIFY_POLLS {
+        if attempt > 0 {
+            sleep(ASSISTANT_VERIFY_INTERVAL);
+        }
+        let seen = probe_now(&mut *run)?;
+        if seen.readiness {
+            return Ok(ExistingTeamAssistantStartReply {
+                outcome: "started",
+                captain_running: seen.snapshot.captain_running,
+                assistant_running: true,
+            });
+        }
+    }
+    Err(failure("assistant_verify_timeout"))
+}
+
+/// «Attiva assistente» on an existing VPS team: only on the person's explicit, confirmed request.
+/// The host is the account's persisted one and the target the verified selection (the same
+/// binding the reads use); there is no fallback to another container, and nothing here runs at
+/// connect, refresh or retry. It starts the one session and probes again; it stops nothing.
+#[tauri::command]
+pub(crate) async fn existing_team_assistant_start(
+    app: tauri::AppHandle,
+    state: State<'_, OnboardingNativeState>,
+    scopes: State<'_, AccountScopeState>,
+    request: ExistingTeamAssistantStartRequest,
+) -> Result<ExistingTeamAssistantStartReply, OnboardingError> {
+    if !request.confirmed {
+        return Err(failure("assistant_start_not_confirmed"));
+    }
+    let expected = scopes.active().map_err(failure)?;
+    let Some(_gate) = ExistingTeamStartGate::acquire(&state.preparing) else {
+        return Err(failure("operation_in_progress"));
+    };
+    let scope_state = scopes.inner().clone();
+    let worker_expected = expected.clone();
+    let result = tauri::async_runtime::spawn_blocking(move || {
+        let _scope = scope_state.lock_expected(&worker_expected).map_err(failure)?;
+        let host = crate::direct_chat::load_persisted_host(&app, &worker_expected).map_err(failure)?;
+        if !matches!(host, ExecutionHost::Vps { .. }) {
+            return Err(failure("existing_team_vps_required"));
+        }
+        let validated =
+            crate::runtime_host::validate_host_for_scope(&app, &host, &worker_expected).map_err(failure)?;
+        let target = crate::existing_team_runtime::selected(&app, &worker_expected, &host).map_err(failure)?;
+        existing_team_assistant_start_with(
+            true,
+            target.as_ref().map(|target| (target.team_id.as_str(), &target.runtime)),
+            &mut |command, input, timeout| run_ssh_command(&validated, command, input, timeout, None),
+            &mut |interval| thread::sleep(interval),
+        )
+    })
+    .await
+    .unwrap_or_else(|_| Err(failure("assistant_start_failed")));
+    let _scope = scopes.lock_expected(&expected).map_err(failure)?;
+    result
 }
 
 #[tauri::command]
@@ -2370,7 +3027,13 @@ pub(crate) async fn onboarding_existing_team_connect(
     request: ExistingTeamConnectRequest,
     on_progress: Channel<OnboardingProgress>,
 ) -> Result<OnboardingSnapshot, OnboardingError> {
-    let expected = scopes.active().map_err(failure)?;
+    let diagnostic = RuntimeLog::new(&app);
+    let result: Result<OnboardingSnapshot, OnboardingError> = async {
+    let expected = scopes.active().map_err(|code| {
+        if let Some(log) = &diagnostic { log.record_existing_team_status(ExistingTeamPhase::Scope, Err(code)); }
+        failure(code)
+    })?;
+    if let Some(log) = &diagnostic { log.record_existing_team_status(ExistingTeamPhase::Scope, Ok(0)); }
     if !matches!(&request.host, ExecutionHost::Vps { .. }) {
         return Err(failure("existing_team_vps_required"));
     }
@@ -2386,51 +3049,72 @@ pub(crate) async fn onboarding_existing_team_connect(
     }
     let scope_state = scopes.inner().clone();
     let worker_expected = expected.clone();
+    let worker_diagnostic = diagnostic.clone();
     let result = tauri::async_runtime::spawn_blocking(move || {
         let _scope = scope_state
             .lock_expected(&worker_expected)
-            .map_err(failure)?;
+            .map_err(|code| {
+                if let Some(log) = &worker_diagnostic { log.record_existing_team_status(ExistingTeamPhase::Scope, Err(code)); }
+                failure(code)
+            })?;
         let reporter = ProgressReporter::new(on_progress);
         let validated = reporter.run(
             OnboardingProgressStage::Runtime,
-            "Verifico il runtime già configurato",
-            "Verifica del runtime in corso",
-            "Runtime già configurato verificato",
-            || validate_host(&app, &request.host).map_err(failure),
-        )?;
+            "ui_existing_runtime_start",
+            "ui_existing_runtime_progress",
+            "ui_existing_runtime_done",
+            || crate::runtime_host::validate_host_for_scope(&app, &request.host, &worker_expected).map_err(failure),
+        );
+        if let Some(log) = &worker_diagnostic { log.record_existing_team_status(ExistingTeamPhase::ValidateHost, validated.as_ref().map(|_| 0).map_err(|error| error.code)); }
+        let validated = validated?;
+        let target = crate::existing_team_runtime::candidate_for_request(&app, &worker_expected, &request.host, &request.team_id).map_err(failure);
+        if let Some(log) = &worker_diagnostic { log.record_existing_team_status(ExistingTeamPhase::Candidate, target.as_ref().map(|_| 0).map_err(|error| error.code)); }
+        let target = target?;
+        let probe_command = crate::existing_team_runtime::team_probe_command(&target.runtime).map_err(failure)?;
         let snapshot = reporter.run(
             OnboardingProgressStage::Container,
-            "Verifico il container esistente",
-            "Verifica del container esistente in corso",
-            "Container esistente verificato",
+            "ui_existing_container_start",
+            "ui_existing_container_progress",
+            "ui_existing_container_done",
             || {
                 existing_team_probe_with(&request.team_id, |input| {
-                    run_ssh(
+                    let result = run_ssh_command(
                         &validated,
-                        REMOTE_EXISTING_TEAM_PROBE,
+                        &probe_command,
                         Some(input),
                         SNAPSHOT_TIMEOUT,
                         None,
-                    )
+                    );
+                    if let Some(log) = &worker_diagnostic { log.record_existing_team_status(ExistingTeamPhase::Ssh, result.as_ref().map(|value| value.code).map_err(|code| *code)); }
+                    result
                 })
             },
         )?;
-        reporter.run(
+        let activated = reporter.run(
             OnboardingProgressStage::Team,
-            "Confermo il team esistente",
-            "Conferma del team esistente in corso",
-            "Team esistente attivo e verificato",
+            "ui_existing_team_start",
+            "ui_existing_team_progress",
+            "ui_existing_team_done",
             || {
+                crate::runtime_host::validate_host_for_scope(&app, &request.host, &worker_expected)
+                    .map_err(failure)?;
+                crate::existing_team_runtime::activate(&app, &worker_expected, &request.host, &target)
+                    .map_err(failure)?;
                 crate::direct_chat::persist_onboarding_host(&app, &worker_expected, &request.host)
                     .map_err(failure)?;
                 Ok(snapshot)
             },
-        )
+        );
+        if let Some(log) = &worker_diagnostic { log.record_existing_team_status(ExistingTeamPhase::Activation, activated.as_ref().map(|_| 0).map_err(|error| error.code)); }
+        activated
     })
     .await
     .unwrap_or_else(|_| Err(failure("existing_team_unavailable")));
     state.preparing.store(false, Ordering::Release);
     let _scope = scopes.lock_expected(&expected).map_err(failure)?;
+    result
+    }.await;
+    if let Some(log) = &diagnostic { log.record_existing_team_status(ExistingTeamPhase::Final, result.as_ref().map(|_| 0).map_err(|error| error.code)); }
     result
 }
 
@@ -2681,8 +3365,9 @@ fn secret_terminator(character: char) -> bool {
     character.is_whitespace() || matches!(character, '"' | '\'' | ',' | ';' | '}' | ']' | '\u{1b}')
 }
 
-#[cfg(test)]
-fn redact(text: String) -> String {
+/// Text with its secrets and terminal sequences taken out, as the runtime log
+/// writes it (runtime_log.rs).
+pub(crate) fn redact(text: String) -> String {
     let mut redactor = StreamRedactor::default();
     let mut output = redactor.push(&text);
     output.push_str(&redactor.finish());
@@ -2741,7 +3426,7 @@ impl InteractiveStateDetector {
                     events.push(InteractiveEvent::State {
                         status: InteractiveStateStatus::NeedsUserAction,
                         action: InteractiveAction::Device {
-                            instruction: "Apri l’indirizzo e inserisci il codice temporaneo.",
+                            instruction: "ui_login_device",
                             request_id: format!("codex-device-{}", self.request_sequence),
                             safe_url,
                             user_code,
@@ -2762,7 +3447,7 @@ impl InteractiveStateDetector {
                 events.push(InteractiveEvent::State {
                     status: InteractiveStateStatus::NeedsUserAction,
                     action: InteractiveAction::Url {
-                        instruction: "Completa l’accesso nel browser.",
+                        instruction: "ui_login_url",
                         safe_url,
                     },
                 });
@@ -2774,7 +3459,7 @@ impl InteractiveStateDetector {
                 events.push(InteractiveEvent::State {
                     status: InteractiveStateStatus::NeedsUserAction,
                     action: InteractiveAction::Code {
-                        instruction: "Inserisci nel browser il codice mostrato.",
+                        instruction: "ui_login_code",
                         user_code,
                     },
                 });
@@ -2787,16 +3472,16 @@ impl InteractiveStateDetector {
                 status: InteractiveStateStatus::NeedsUserAction,
                 action: InteractiveAction::Input {
                     instruction:
-                        "Completa l’accesso nel browser e inserisci la risposta richiesta.",
+                        "ui_login_input",
                     input_request: InteractiveInputRequest {
                         id: format!(
                             "{}-response-{}",
                             self.provider.cli_id(),
                             self.request_sequence
                         ),
-                        label: "Risposta richiesta dal provider",
-                        description: "Inserisci la risposta mostrata dal provider nel browser.",
-                        submit_label: "Invia risposta",
+                        label: "ui_login_input_label",
+                        description: "ui_login_input_description",
+                        submit_label: "ui_login_input_submit",
                         secret: false,
                         input_mode: InteractiveInputMode::Text,
                     },
@@ -3068,7 +3753,7 @@ pub(crate) fn onboarding_provider_login(
     reporter.send(
         OnboardingProgressStage::Login,
         OnboardingProgressStatus::Start,
-        "Avvio l’accesso al provider",
+        "ui_login_start",
         login_started,
         None,
     );
@@ -3088,7 +3773,14 @@ pub(crate) fn onboarding_provider_login(
                     cmd.arg("-q").arg("/dev/null").arg(program).args(invocation);
                     cmd
                 }
-                #[cfg(not(target_os = "macos"))]
+                #[cfg(windows)]
+                {
+                    use crate::windows_runtime::{powershell_path, script_invocation};
+                    let mut cmd = Command::new(powershell_path(std::env::var_os("SystemRoot")));
+                    cmd.args(script_invocation(&wrapper, &LocalCliOperation::OauthLogin.argv()));
+                    cmd
+                }
+                #[cfg(not(any(target_os = "macos", windows)))]
                 {
                     let mut cmd = Command::new(wrapper);
                     cmd.args(LocalCliOperation::OauthLogin.argv());
@@ -3196,7 +3888,7 @@ pub(crate) fn onboarding_provider_login(
                         reporter.send(
                             OnboardingProgressStage::Login,
                             OnboardingProgressStatus::Done,
-                            "Accesso al provider completato",
+                            "ui_login_done",
                             login_started,
                             None,
                         );
@@ -3232,7 +3924,7 @@ pub(crate) fn onboarding_provider_login(
                 reporter.send(
                     OnboardingProgressStage::Login,
                     OnboardingProgressStatus::Progress,
-                    "Accesso al provider in corso",
+                    "ui_login_progress",
                     login_started,
                     None,
                 );
@@ -3505,9 +4197,9 @@ pub(crate) async fn onboarding_team_start(
         let reporter = ProgressReporter::new(on_progress);
         reporter.run(
             OnboardingProgressStage::Team,
-            "Avvio la squadra",
-            "Avvio della squadra in corso",
-            "Squadra avviata e verificata",
+            "ui_team_start",
+            "ui_team_progress",
+            "ui_team_done",
             || {
                 let validated = validate_host(&app, &host).map_err(failure)?;
                 let limits =
@@ -3574,6 +4266,123 @@ pub(crate) async fn onboarding_podman_machine_recreate(
     result
 }
 
+/// How long «Remove JHT from this computer» may take: the Podman machine's
+/// deletion is the slow part.
+#[cfg_attr(not(windows), allow(dead_code))]
+const UNINSTALL_TIMEOUT: Duration = Duration::from_secs(10 * 60);
+
+/// A phase of the removal, as a key the app tells in its language.
+#[cfg_attr(not(windows), allow(dead_code))]
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct UninstallPhase {
+    key: &'static str,
+}
+
+/// The removal's end: complete, or what is still on this computer
+/// (`machine`, `runtime`, `commands`) so that the person can try again.
+#[cfg_attr(not(windows), allow(dead_code))]
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct UninstallOutcome {
+    complete: bool,
+    left: Vec<&'static str>,
+}
+
+/// Whether «Remove JHT from this computer» can run here: Windows, with the
+/// verified jht.ps1 of this account carrying $JHT_UNINSTALL_PROTOCOL.
+#[tauri::command]
+pub(crate) fn onboarding_local_uninstall_available(app: tauri::AppHandle) -> bool {
+    #[cfg(windows)]
+    {
+        return wrapper_path(&app)
+            .and_then(|wrapper| fs::read_to_string(wrapper).ok())
+            .is_some_and(|source| crate::windows_runtime::wrapper_supports_uninstall(&source));
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = app;
+        false
+    }
+}
+
+/// «Remove JHT from this computer», after the person confirmed it in the app:
+/// `jht.ps1 uninstall --confirm`, which removes the JHT Podman machine, the
+/// host runtime and the JHT commands, and keeps ~/.jht, the documents,
+/// Podman and Compose. Its phases go to the screen as keys; its end says
+/// what is left, if anything.
+#[tauri::command]
+pub(crate) async fn onboarding_local_uninstall(
+    app: tauri::AppHandle,
+    state: State<'_, OnboardingNativeState>,
+    scopes: State<'_, AccountScopeState>,
+    on_phase: Channel<UninstallPhase>,
+) -> Result<UninstallOutcome, OnboardingError> {
+    let expected = scopes.active().map_err(failure)?;
+    if state
+        .preparing
+        .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+        .is_err()
+    {
+        return Err(failure("operation_in_progress"));
+    }
+    let scope_state = scopes.inner().clone();
+    let worker_expected = expected.clone();
+    let result = tauri::async_runtime::spawn_blocking(move || {
+        let _scope = scope_state
+            .lock_expected(&worker_expected)
+            .map_err(failure)?;
+        crate::account_scope::validate_local_runtime(&app, &worker_expected).map_err(failure)?;
+        uninstall_local(&app, &on_phase)
+    })
+    .await
+    .unwrap_or_else(|_| Err(failure("uninstall_failed")));
+    state.preparing.store(false, Ordering::Release);
+    let _scope = scopes.lock_expected(&expected).map_err(failure)?;
+    result
+}
+
+#[cfg(windows)]
+fn uninstall_local(
+    app: &tauri::AppHandle,
+    on_phase: &Channel<UninstallPhase>,
+) -> Result<UninstallOutcome, OnboardingError> {
+    use crate::windows_runtime::{
+        powershell_path, script_invocation, uninstall_line, uninstall_outcome,
+        wrapper_supports_uninstall, UninstallLine,
+    };
+    let wrapper = wrapper_path(app).ok_or_else(|| failure("uninstall_unavailable"))?;
+    let source = fs::read_to_string(&wrapper).map_err(|_| failure("uninstall_unavailable"))?;
+    if !wrapper_supports_uninstall(&source) {
+        return Err(failure("uninstall_unavailable"));
+    }
+    let shell = powershell_path(std::env::var_os("SystemRoot"));
+    let mut left = Vec::new();
+    let result = crate::runtime_host::run_program_lines(
+        shell.to_str().ok_or_else(|| failure("uninstall_failed"))?,
+        script_invocation(&wrapper, &["uninstall", "--confirm"]),
+        UNINSTALL_TIMEOUT,
+        |line| match uninstall_line(line) {
+            Some(UninstallLine::Phase(key)) => {
+                let _ = on_phase.send(UninstallPhase { key });
+            }
+            Some(UninstallLine::Left(id)) => left.push(id),
+            None => {}
+        },
+    );
+    let (complete, left) = uninstall_outcome(result, left).map_err(failure)?;
+    trace_local_runtime("uninstall", if complete { "complete" } else { "incomplete" });
+    Ok(UninstallOutcome { complete, left })
+}
+
+#[cfg(not(windows))]
+fn uninstall_local(
+    _app: &tauri::AppHandle,
+    _on_phase: &Channel<UninstallPhase>,
+) -> Result<UninstallOutcome, OnboardingError> {
+    Err(failure("uninstall_unsupported"))
+}
+
 #[tauri::command]
 pub(crate) async fn onboarding_resume_team_start(
     app: tauri::AppHandle,
@@ -3598,9 +4407,9 @@ pub(crate) async fn onboarding_resume_team_start(
         let reporter = ProgressReporter::new(on_progress);
         reporter.run(
             OnboardingProgressStage::Team,
-            "Riprendo l’avvio della squadra",
-            "Ripristino della squadra in corso",
-            "Squadra ripristinata e verificata",
+            "ui_team_resume_start",
+            "ui_team_resume_progress",
+            "ui_team_resume_done",
             || {
                 let host = crate::direct_chat::load_persisted_host(&app, &worker_expected)
                     .map_err(failure)?;
@@ -3647,9 +4456,9 @@ pub(crate) async fn onboarding_assistant_open(
         let reporter = ProgressReporter::new(on_progress);
         reporter.run(
             OnboardingProgressStage::Assistant,
-            "Avvio l’assistente",
-            "Avvio dell’assistente in corso",
-            "Assistente avviato e verificato",
+            "ui_assistant_start",
+            "ui_assistant_progress",
+            "ui_assistant_done",
             || {
                 let validated = validate_host(&app, &host).map_err(failure)?;
                 match &validated {
@@ -3703,7 +4512,7 @@ fn assistant_reached(snapshot: &OnboardingSnapshot) -> bool {
 #[cfg(test)]
 mod tests {
     use super::{
-        assistant_reached, existing_team_probe_with, expected_installer_digest, failure,
+        assistant_reached, existing_team_probe_with, existing_team_readonly_probe_with, expected_installer_digest, failure,
         parse_snapshot, parse_start_limits, parse_verified_snapshot, provider_bootstrap_input,
         redact, resume_team_prerequisite, start_and_verify_local_container_with, start_limits_gate,
         valid_interactive_request_id, valid_pairing_token, valid_provider_login_input,
@@ -3712,7 +4521,7 @@ mod tests {
         OnboardingDiagnosticSink, OnboardingProgress, OnboardingProgressStage,
         OnboardingProgressStatus, OnboardingSubmission, ProgressReporter, StartLimits,
         StreamRedactor, SubscriptionProvider, DIAGNOSTIC_MAX_BYTES, DIAGNOSTIC_MAX_RECORDS,
-        INSTALL_SHA256, REMOTE_EXISTING_TEAM_PROBE, REMOTE_INSTALL, REMOTE_SNAPSHOT,
+        INSTALL_SHA256, REMOTE_INSTALL, REMOTE_SNAPSHOT,
     };
     use super::{
         ensure_success, ensure_success_with_timeout, recreate_podman_machine_with,
@@ -3749,6 +4558,155 @@ mod tests {
         );
     }
 
+    const CHANNEL_SHA: &str = "0123456789abcdef0123456789abcdef01234567";
+    const CHANNEL_DIGEST: &str =
+        "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+
+    fn channel_args() -> Vec<String> {
+        [
+            "--source-sha",
+            CHANNEL_SHA,
+            "--image",
+            "ghcr.io/leopu00/jht:master-arthur",
+            "--expected-image-digest",
+            CHANNEL_DIGEST,
+        ]
+        .map(str::to_owned)
+        .to_vec()
+    }
+
+    #[test]
+    fn production_install_commands_are_unchanged() {
+        assert_eq!(super::remote_install_command(&[]).unwrap(), REMOTE_INSTALL);
+        assert_eq!(
+            super::local_install_args(&["JHT_SKIP_ONBOARD=1", "/bin/bash", "-s", "--"], &[]),
+            ["JHT_SKIP_ONBOARD=1", "/bin/bash", "-s", "--"]
+        );
+    }
+
+    #[test]
+    fn test_channel_coordinates_reach_the_installer_as_arguments() {
+        let local = super::local_install_args(
+            &["JHT_SKIP_ONBOARD=1", "/bin/bash", "-s", "--"],
+            &channel_args(),
+        );
+        assert_eq!(local[..4], ["JHT_SKIP_ONBOARD=1", "/bin/bash", "-s", "--"]);
+        assert_eq!(local[4..], channel_args()[..]);
+
+        // The fixed remote script, then each argument in single quotes.
+        let command = super::remote_install_command(&channel_args()).unwrap();
+        let quoted: String = channel_args()
+            .iter()
+            .map(|arg| format!(" '{arg}'"))
+            .collect();
+        assert_eq!(command, format!("{REMOTE_INSTALL}{quoted}"));
+    }
+
+    /// The fixed remote script, run for real by the shell that runs it on
+    /// the VPS: the attested installer gets the pairing token and then
+    /// exactly the channel's arguments, while stdin keeps its contract
+    /// (digest, token, installer bytes). /bin/bash exists only on unix.
+    #[cfg(unix)]
+    #[test]
+    fn the_remote_script_hands_the_channel_arguments_to_the_installer() {
+        let command = super::remote_install_command(&channel_args()).unwrap();
+        let installer = b"printf '%s\\n' \"$@\"\n";
+        let digest = format!("{:x}", Sha256::digest(installer));
+        let output = super::attest_then(installer.to_vec(), &digest, |verified| {
+            let input = super::remote_install_input(verified, &"t".repeat(32))?;
+            let mut child = std::process::Command::new("/bin/bash")
+                .args(["-c", &command])
+                .stdin(std::process::Stdio::piped())
+                .stdout(std::process::Stdio::piped())
+                .spawn()
+                .unwrap();
+            {
+                use std::io::Write;
+                child.stdin.take().unwrap().write_all(&input).unwrap();
+            }
+            Ok(child.wait_with_output().unwrap())
+        })
+        .unwrap();
+        assert!(output.status.success());
+        let mut expected = vec!["--pairing-token".to_owned(), "t".repeat(32)];
+        expected.extend(channel_args());
+        assert_eq!(
+            String::from_utf8(output.stdout)
+                .unwrap()
+                .lines()
+                .collect::<Vec<_>>(),
+            expected
+        );
+    }
+
+    /// The test channel's download, where it can go wrong: install.sh of a
+    /// commit that does not exist (raw answers 404), a network that is down,
+    /// bytes that are not the ones the build expects. Each stops before the
+    /// installer runs, with its own code.
+    #[cfg(unix)]
+    #[test]
+    fn a_missing_commit_a_dead_network_or_other_bytes_never_run_the_installer() {
+        use std::{fs, net::TcpListener};
+
+        let root = std::env::temp_dir().join(format!(
+            "jht-channel-download-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        fs::create_dir_all(&root).unwrap();
+        let installer = root.join("install.sh");
+        fs::write(&installer, b"echo the installer\n").unwrap();
+        let digest = format!("{:x}", Sha256::digest(b"echo the installer\n"));
+        let url = format!("file://{}", installer.display());
+        let ran = std::cell::Cell::new(0);
+        let execute = |_: &super::VerifiedInstaller| {
+            ran.set(ran.get() + 1);
+            Ok(())
+        };
+
+        // The right bytes run, once.
+        super::download_then_attest(&url, &digest, execute).unwrap();
+        assert_eq!(ran.get(), 1);
+
+        // A commit that does not exist: nothing to download.
+        let missing = format!("file://{}", root.join("no-such-commit/install.sh").display());
+        let error = super::download_then_attest(&missing, &digest, execute).unwrap_err();
+        assert_eq!(error.code, "runtime_download_failed");
+
+        // The network is down: nobody listens on the port.
+        let port = TcpListener::bind("127.0.0.1:0")
+            .unwrap()
+            .local_addr()
+            .unwrap()
+            .port();
+        let down = format!("http://127.0.0.1:{port}/install.sh");
+        let error = super::download_then_attest(&down, &digest, execute).unwrap_err();
+        assert_eq!(error.code, "runtime_download_failed");
+
+        // Other bytes than the build's digest (another commit, a tampered file).
+        fs::write(&installer, b"echo someone else\n").unwrap();
+        let error = super::download_then_attest(&url, &digest, execute).unwrap_err();
+        assert_eq!(error.code, "installer_digest_mismatch");
+
+        // A build without a digest refuses before touching the network.
+        let error = super::download_then_attest(&down, "", execute).unwrap_err();
+        assert_eq!(error.code, "installer_digest_missing");
+
+        assert_eq!(ran.get(), 1, "the installer ran on a failed download");
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn remote_install_command_refuses_arguments_that_could_break_quoting() {
+        for bad in ["", "a'b", "a b", "$(id)", "a\nb", "a;b", "`id`"] {
+            let error = super::remote_install_command(&[bad.to_owned()]).unwrap_err();
+            assert_eq!(error.code, "installer_digest_invalid", "{bad:?}");
+        }
+    }
+
     fn outcome(success: bool) -> Result<ProcessResult, &'static str> {
         Ok(ProcessResult {
             code: if success { 0 } else { 1 },
@@ -3757,11 +4715,46 @@ mod tests {
     }
 
     #[test]
+    fn windows_up_exit_codes_name_wsl_podman_or_the_machine() {
+        assert_eq!(super::up_exit_failure(20, true), Some("wsl_not_ready"));
+        assert_eq!(super::up_exit_failure(21, true), Some("podman_missing"));
+        assert_eq!(super::up_exit_failure(22, true), Some("podman_start_failed"));
+        assert_eq!(super::up_exit_failure(1, true), None);
+        // The sh wrapper's 20 means something else.
+        assert_eq!(super::up_exit_failure(20, false), None);
+        let code = |code| {
+            Ok(ProcessResult {
+                code,
+                stdout: Vec::new(),
+            })
+        };
+        if cfg!(windows) {
+            let mut calls = Vec::new();
+            let error = start_and_verify_local_container_with(
+                |operation, _| {
+                    calls.push(operation.argv()[0]);
+                    code(22)
+                },
+                |_| {},
+                3,
+            )
+            .unwrap_err();
+            assert_eq!(error.code, "podman_start_failed");
+            assert_eq!(calls, ["up"]);
+        } else {
+            let error =
+                start_and_verify_local_container_with(|_, _| code(22), |_| {}, 1).unwrap_err();
+            assert_eq!(error.code, "container_start_failed");
+        }
+    }
+
+    #[test]
     fn local_runtime_prepare_errors_preserve_sanitized_contract() {
         for code in [
             "podman_missing",
             "podman_start_failed",
             "podman_not_ready",
+            "wsl_not_ready",
             "runtime_download_failed",
             "runtime_install_failed",
             "runtime_missing",
@@ -3779,9 +4772,9 @@ mod tests {
             assert_eq!(error.code, code);
             assert_eq!(serialized["code"], code);
             assert_eq!(serialized["retryable"], true);
-            assert!(serialized["message"].as_str().is_some_and(|value| {
-                !value.is_empty() && value != "L’operazione non è riuscita. Riprova."
-            }));
+            // The sentence is the app's, in the person's language: natively
+            // only the code travels.
+            assert_eq!(serialized["message"], code);
             let serialized = serialized.to_string();
             assert!(!serialized.contains("stderr"));
             assert!(!serialized.contains("path"));
@@ -4175,6 +5168,72 @@ mod tests {
 
     #[cfg(target_os = "macos")]
     #[test]
+    fn mac_test_channel_keeps_the_podman_path_and_adds_the_coordinates() {
+        let args = super::local_install_args(&LOCAL_PODMAN_INSTALL_ARGS, &channel_args());
+        assert_eq!(args[..6], LOCAL_PODMAN_INSTALL_ARGS.map(str::to_owned)[..]);
+        assert_eq!(args[6..], channel_args()[..]);
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn mac_manifest_accepts_the_image_pin_only_with_its_digest() {
+        use std::{
+            fs,
+            os::unix::fs::PermissionsExt,
+            time::{SystemTime, UNIX_EPOCH},
+        };
+
+        let nonce = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let root = std::env::temp_dir().join(format!("jht-image-pin-{nonce}"));
+        let runtime = root.join("runtime");
+        fs::create_dir_all(runtime.join("bin")).unwrap();
+        let wrapper = root.join("jht");
+        let files = [
+            (wrapper.clone(), "#!/bin/sh\n"),
+            (runtime.join("docker-compose.yml"), "services: {}\n"),
+            (runtime.join("host-setup.sh"), "#!/bin/sh\n"),
+            (runtime.join("container-runtime"), "podman\n"),
+            (runtime.join("podman-machine"), "jht-podman\n"),
+            (runtime.join("bin/docker"), "#!/bin/sh\n"),
+        ];
+        for (path, content) in &files {
+            fs::write(path, content).unwrap();
+            fs::set_permissions(path, fs::Permissions::from_mode(0o600)).unwrap();
+        }
+        let digest =
+            |path: &std::path::Path| format!("{:x}", Sha256::digest(fs::read(path).unwrap()));
+        let base = format!(
+            "version=1\ndocker-compose.yml={}\nhost-setup.sh={}\njht-wrapper.sh={}\ncontainer-runtime={}\npodman-machine={}\ndocker-shim={}\n",
+            digest(&runtime.join("docker-compose.yml")),
+            digest(&runtime.join("host-setup.sh")),
+            digest(&wrapper),
+            digest(&runtime.join("container-runtime")),
+            digest(&runtime.join("podman-machine")),
+            digest(&runtime.join("bin/docker")),
+        );
+        let manifest = runtime.join(".runtime-integrity");
+        fs::write(&manifest, &base).unwrap();
+        assert!(super::runtime_bundle_manifest_valid(&runtime, &wrapper));
+
+        let pin = runtime.join("runtime-image");
+        fs::write(&pin, format!("ghcr.io/leopu00/jht@{CHANNEL_DIGEST}\n")).unwrap();
+        // A pin the manifest does not attest is refused.
+        assert!(!super::runtime_bundle_manifest_valid(&runtime, &wrapper));
+        fs::write(&manifest, format!("{base}runtime-image={}\n", digest(&pin))).unwrap();
+        assert!(super::runtime_bundle_manifest_valid(&runtime, &wrapper));
+        // A changed pin, or one that went missing, is refused too.
+        fs::write(&pin, "ghcr.io/leopu00/jht:latest\n").unwrap();
+        assert!(!super::runtime_bundle_manifest_valid(&runtime, &wrapper));
+        fs::remove_file(&pin).unwrap();
+        assert!(!super::runtime_bundle_manifest_valid(&runtime, &wrapper));
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
     fn local_installer_explicitly_selects_the_attested_podman_path() {
         assert_eq!(
             LOCAL_PODMAN_INSTALL_ARGS,
@@ -4187,11 +5246,44 @@ mod tests {
                 "podman",
             ]
         );
-        assert!(local_podman_install_required(false, false, false));
-        assert!(local_podman_install_required(false, true, true));
-        assert!(local_podman_install_required(true, false, true));
-        assert!(local_podman_install_required(true, true, false));
-        assert!(!local_podman_install_required(true, true, true));
+        assert!(local_podman_install_required(false, false, false, true));
+        assert!(local_podman_install_required(false, true, true, true));
+        assert!(local_podman_install_required(true, false, true, true));
+        assert!(local_podman_install_required(true, true, false, true));
+        assert!(!local_podman_install_required(true, true, true, true));
+        // A complete runtime of the other channel (or any runtime, in a test
+        // build) is installed again, not reused.
+        assert!(local_podman_install_required(true, true, true, false));
+    }
+
+    /// Without Homebrew, install.sh would start Homebrew's own installer with
+    /// no terminal and no password, and stop there: the app says it first.
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn a_mac_without_homebrew_is_told_before_the_install_starts() {
+        use super::{homebrew_path_in, local_podman_install_preflight};
+        use std::fs;
+        let root = std::env::temp_dir().join(format!("jht-homebrew-{}", std::process::id()));
+        let bin = root.join("bin");
+        fs::create_dir_all(&bin).unwrap();
+        let nowhere = root.join("nowhere/brew");
+        let nowhere = nowhere.to_str().unwrap();
+
+        assert_eq!(homebrew_path_in(Some(bin.clone().into_os_string()), &[nowhere]), None);
+        assert_eq!(homebrew_path_in(None, &[nowhere]), None);
+        fs::write(bin.join("brew"), b"#!/bin/sh\n").unwrap();
+        assert_eq!(homebrew_path_in(Some(bin.clone().into_os_string()), &[nowhere]), Some(bin.join("brew")));
+        // The Finder's PATH has no Homebrew: its standard prefix still counts.
+        let prefix = bin.join("brew");
+        assert_eq!(homebrew_path_in(None, &[prefix.to_str().unwrap()]), Some(prefix.clone()));
+
+        assert_eq!(local_podman_install_preflight(true, None), Err("homebrew_missing"));
+        assert_eq!(local_podman_install_preflight(true, Some(prefix.clone())), Ok(()));
+        // A runtime that is reused installs nothing, so it needs no Homebrew.
+        assert_eq!(local_podman_install_preflight(false, None), Ok(()));
+        let error = super::failure("homebrew_missing");
+        assert!(error.retryable, "after installing Homebrew the person presses Try again");
+        let _ = fs::remove_dir_all(&root);
     }
 
     /// A Mac installed from the command line with Colima: the app refuses
@@ -4300,7 +5392,7 @@ mod tests {
 
         assert!(super::valid_host_wrapper_file(&wrapper));
         assert!(!valid_wrapper_file(&wrapper));
-        assert!(!local_podman_install_required(true, true, true));
+        assert!(!local_podman_install_required(true, true, true, true));
         assert!(super::runtime_bundle_manifest_valid(&runtime, &wrapper));
 
         fs::create_dir(runtime.join(".upgrade.lock")).unwrap();
@@ -4850,29 +5942,7 @@ mod tests {
     }
 
     #[test]
-    fn existing_team_probe_is_read_only_and_requires_identity_and_live_sessions() {
-        for forbidden in [
-            "jht up",
-            "team start",
-            "docker start",
-            "docker restart",
-            "docker compose",
-            "install",
-            "update",
-            "oauth-login",
-            "pairing",
-            "curl ",
-        ] {
-            assert!(
-                !REMOTE_EXISTING_TEAM_PROBE.contains(forbidden),
-                "mutating command in attach probe: {forbidden}"
-            );
-        }
-        assert!(REMOTE_EXISTING_TEAM_PROBE.contains("JHT_ONBOARDING_SNAPSHOT_PROTOCOL=1"));
-        assert!(REMOTE_EXISTING_TEAM_PROBE
-            .contains("exec \"$JHT_BIN\" onboarding-snapshot --expect-team-stdin"));
-        assert!(!REMOTE_EXISTING_TEAM_PROBE.contains("docker "));
-
+    fn existing_team_probe_result_requires_identity_and_live_sessions() {
         let team_id = "00000000-0000-4000-8000-000000000001";
         let active = existing_team_probe_with(team_id, |input| {
             assert_eq!(input, format!("{team_id}\n").as_bytes());
@@ -4884,6 +5954,27 @@ mod tests {
         .unwrap();
         assert!(active.container_running && active.captain_running && active.assistant_running);
         assert!(!active.profile_ready && !active.assistant_welcomed);
+
+        let degraded = existing_team_readonly_probe_with(team_id, |input| {
+            assert_eq!(input, format!("{team_id}\n").as_bytes());
+            Ok(ProcessResult {
+                code: 0,
+                stdout: b"runtimeInstalled=1\ncontainerRunning=1\ncaptainRunning=1\nassistantRunning=0\n".to_vec(),
+            })
+        })
+        .unwrap();
+        assert!(!degraded.readiness);
+        assert!(degraded.snapshot.captain_running);
+        assert!(!degraded.snapshot.assistant_running);
+        assert_eq!(
+            existing_team_probe_with(team_id, |_| Ok(ProcessResult {
+                code: 0,
+                stdout: b"runtimeInstalled=1\ncontainerRunning=1\ncaptainRunning=1\nassistantRunning=0\n".to_vec(),
+            }))
+            .unwrap_err()
+            .code,
+            "existing_team_not_active"
+        );
 
         let mismatch = existing_team_probe_with(team_id, |_| {
             outcome(false).map(|mut result| {
@@ -4946,6 +6037,50 @@ esac
         super::start_and_verify_local_container(&wrapper).unwrap();
         assert!(dir.join("container-ready").is_file());
         fs::remove_dir_all(dir).unwrap();
+    }
+
+    /// A local runtime step leaves how it ended and its stderr in the runtime
+    /// log, and still answers as run_local does.
+    #[cfg(unix)]
+    #[test]
+    fn a_local_runtime_step_writes_the_runtime_log() {
+        use std::{fs, os::unix::fs::PermissionsExt};
+        let dir = std::env::temp_dir().join(format!("jht-runtime-log-step-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        let wrapper = dir.join("jht");
+        fs::write(
+            &wrapper,
+            "#!/bin/sh\nJHT_HOST_RUNTIME_PROTOCOL=1\nJHT_DESKTOP_CHAT_PROTOCOL=1\nJHT_ONBOARDING_SNAPSHOT_PROTOCOL=1\necho 'starting the machine'\necho \"  x Podman machine non avviabile\" >&2\nexit 1\n",
+        )
+        .unwrap();
+        fs::set_permissions(&wrapper, fs::Permissions::from_mode(0o700)).unwrap();
+        let log = super::RuntimeLog::in_dir(&dir.join("logs"));
+        let result = super::run_local_logged(&wrapper, &["up"], std::time::Duration::from_secs(20), Some(&log)).unwrap();
+        assert_eq!(result.code, 1);
+        let text = fs::read_to_string(log.path()).unwrap();
+        assert!(
+            text.contains(" jht up: exit 1 after ") && text.contains("--- stdout\nstarting the machine\n--- stderr\n  x Podman machine non avviabile\n"),
+            "{text}"
+        );
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    /// A failed local step gives its error the cause it printed, once; the
+    /// screen reads it as `detail`, and an error without one has no field.
+    #[test]
+    fn a_local_step_error_carries_the_cause_it_printed() {
+        let dir = std::env::temp_dir().join(format!("jht-runtime-cause-{}", std::process::id()));
+        let log = super::RuntimeLog::in_dir(&dir.join("logs"));
+        log.record("install.ps1", Ok(1), b"  x winget could not install Podman.CLI\n", b"", std::time::Duration::ZERO);
+        let error = super::with_cause(failure("runtime_install_failed"), Some(&log));
+        let json = serde_json::to_value(&error).unwrap();
+        assert_eq!(json["code"], "runtime_install_failed");
+        assert_eq!(json["detail"], "winget could not install Podman.CLI");
+        let again = serde_json::to_value(super::with_cause(failure("runtime_install_failed"), Some(&log))).unwrap();
+        assert!(again.get("detail").is_none());
+        assert!(serde_json::to_value(super::with_cause(failure("timeout"), None)).unwrap().get("detail").is_none());
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
@@ -5068,7 +6203,7 @@ exit 0
         ] {
             let error = failure(code);
             assert!(!error.retryable);
-            assert_ne!(error.message, "L’operazione non è riuscita. Riprova.");
+            assert_eq!(error.message, code);
         }
         assert!(failure("team_start_failed").retryable);
         assert!(failure("team_verify_failed").retryable);
@@ -5419,5 +6554,307 @@ exit 0
         assert!(valid_pairing_token("YWJjZGVmZ2hpamtsbW5vcA=="));
         assert!(!valid_pairing_token("too-short"));
         assert!(!valid_pairing_token("YWJjZGVmZ2hpamts;rm"));
+    }
+}
+
+/// «Attiva assistente» for an existing team, with a stand-in for the remote commands: no VM, no
+/// engine, no SSH. The runner records every command it is given and answers from a script, so a
+/// test sees exactly what would have been sent.
+#[cfg(test)]
+mod existing_team_assistant_tests {
+    use super::*;
+    use crate::existing_team_runtime::RuntimeTarget;
+    use std::cell::RefCell;
+    use std::collections::VecDeque;
+    use std::sync::atomic::AtomicUsize;
+
+    const TEAM: &str = "synthetic-team-id-0001";
+
+    fn runtime() -> RuntimeTarget {
+        RuntimeTarget {
+            container_id: "a".repeat(64),
+            image_id: format!("sha256:{}", "b".repeat(64)),
+            platform_image_id: format!("sha256:{}", "c".repeat(64)),
+            oci_revision: "d".repeat(40),
+            digest: format!("sha256:{}", "e".repeat(64)),
+            os: "linux".into(),
+            architecture: "amd64".into(),
+        }
+    }
+
+    fn probe_reply(captain: bool, assistant: bool) -> Result<ProcessResult, &'static str> {
+        Ok(ProcessResult {
+            code: 0,
+            stdout: format!(
+                "runtimeInstalled=1\ncontainerRunning=1\nproviderConfigured=1\nproviderAuthenticated=1\nprofileReady=1\nassistantWelcomed=0\ncaptainRunning={}\nassistantRunning={}\n",
+                u8::from(captain),
+                u8::from(assistant)
+            )
+            .into_bytes(),
+        })
+    }
+
+    fn exit(code: i32) -> Result<ProcessResult, &'static str> {
+        Ok(ProcessResult { code, stdout: Vec::new() })
+    }
+
+    #[derive(Debug, Clone, PartialEq, Eq)]
+    struct Call {
+        command: String,
+        input: Option<Vec<u8>>,
+        timeout: Duration,
+    }
+
+    impl Call {
+        fn is_start(&self) -> bool {
+            self.command.contains("start-agent.sh")
+        }
+        fn is_probe(&self) -> bool {
+            self.command.contains("tmux has-session")
+        }
+    }
+
+    /// Answers the probes from `probes` in order (the last one repeats) and the start from `start`.
+    struct Script {
+        calls: RefCell<Vec<Call>>,
+        sleeps: RefCell<Vec<Duration>>,
+        probes: RefCell<VecDeque<Result<ProcessResult, &'static str>>>,
+        start: Result<ProcessResult, &'static str>,
+    }
+
+    impl Script {
+        fn new(probes: Vec<Result<ProcessResult, &'static str>>, start: Result<ProcessResult, &'static str>) -> Self {
+            Self { calls: RefCell::new(Vec::new()), sleeps: RefCell::new(Vec::new()), probes: RefCell::new(probes.into()), start }
+        }
+
+        fn run(&self, confirmed: bool, pinned: bool) -> Result<ExistingTeamAssistantStartReply, OnboardingError> {
+            let target = runtime();
+            existing_team_assistant_start_with(
+                confirmed,
+                pinned.then_some((TEAM, &target)),
+                &mut |command, input, timeout| {
+                    let call = Call { command: command.to_owned(), input: input.map(<[u8]>::to_vec), timeout };
+                    let start = call.is_start();
+                    self.calls.borrow_mut().push(call);
+                    if start {
+                        return match &self.start {
+                            Ok(result) => Ok(ProcessResult { code: result.code, stdout: result.stdout.clone() }),
+                            Err(error) => Err(*error),
+                        };
+                    }
+                    let mut probes = self.probes.borrow_mut();
+                    let next = if probes.len() > 1 { probes.pop_front().unwrap() } else { match probes.front() {
+                        Some(Ok(result)) => Ok(ProcessResult { code: result.code, stdout: result.stdout.clone() }),
+                        Some(Err(error)) => Err(*error),
+                        None => Err("process_failed"),
+                    } };
+                    next
+                },
+                &mut |interval| self.sleeps.borrow_mut().push(interval),
+            )
+        }
+
+        fn starts(&self) -> usize {
+            self.calls.borrow().iter().filter(|call| call.is_start()).count()
+        }
+    }
+
+    fn code(result: Result<ExistingTeamAssistantStartReply, OnboardingError>) -> &'static str {
+        result.expect_err("an error").code
+    }
+
+    #[test]
+    fn nothing_runs_without_the_persons_confirmation() {
+        let script = Script::new(vec![probe_reply(true, false)], exit(0));
+        assert_eq!(code(script.run(false, true)), "assistant_start_not_confirmed");
+        assert!(script.calls.borrow().is_empty());
+        // the request itself is closed: the confirmation is a field, nothing else is accepted
+        assert!(serde_json::from_str::<ExistingTeamAssistantStartRequest>(r#"{"confirmed":true}"#).is_ok());
+        for bad in [r#"{}"#, r#"{"confirmed":"yes"}"#, r#"{"confirmed":true,"container":"jht"}"#, r#"{"confirmed":true,"host":{}}"#] {
+            assert!(serde_json::from_str::<ExistingTeamAssistantStartRequest>(bad).is_err(), "{bad}");
+        }
+    }
+
+    #[test]
+    fn without_a_verified_target_nothing_runs_and_no_default_container_is_tried() {
+        let script = Script::new(vec![probe_reply(true, false)], exit(0));
+        assert_eq!(code(script.run(true, false)), "existing_team_runtime_required");
+        assert!(script.calls.borrow().is_empty());
+    }
+
+    #[test]
+    fn an_assistant_already_running_sends_no_start_command() {
+        let script = Script::new(vec![probe_reply(true, true)], exit(0));
+        let reply = script.run(true, true).expect("already active");
+        assert_eq!(reply, ExistingTeamAssistantStartReply { outcome: "already_active", captain_running: true, assistant_running: true });
+        let calls = script.calls.borrow();
+        assert_eq!(calls.len(), 1);
+        assert!(calls[0].is_probe());
+        assert_eq!(script.starts(), 0);
+    }
+
+    #[test]
+    fn a_missing_assistant_is_started_once_on_the_pinned_container_and_probed_again() {
+        let script = Script::new(vec![probe_reply(true, false), probe_reply(true, true)], exit(0));
+        let reply = script.run(true, true).expect("started");
+        assert_eq!(reply, ExistingTeamAssistantStartReply { outcome: "started", captain_running: true, assistant_running: true });
+        let calls = script.calls.borrow();
+        assert_eq!(calls.iter().map(|call| (call.is_probe(), call.is_start())).collect::<Vec<_>>(), [(true, false), (false, true), (true, false)]);
+        let cid = "a".repeat(64);
+        for call in calls.iter() {
+            // every command is the pinned one: it names the container id and checks it before it acts
+            assert!(call.command.contains(&format!("JHT_CID='{cid}'")), "{}", call.command);
+            assert!(call.command.contains("|| exit 70"), "the pin is checked first");
+            assert!(!call.command.contains("docker exec jht"), "the default container is never named");
+        }
+        assert_eq!(calls[0].input.as_deref(), Some(format!("{TEAM}\n").as_bytes()));
+        assert_eq!(calls[2].input.as_deref(), Some(format!("{TEAM}\n").as_bytes()));
+        assert_eq!(calls[1].input, None);
+        assert!(calls[1].command.contains("\"$JHT_CID\" bash /app/.launcher/start-agent.sh assistente"));
+        assert!(calls[1].command.contains("JHT_SPAWN_SRC=desktop-existing-team"));
+    }
+
+    #[test]
+    fn a_target_that_is_not_the_pinned_one_or_not_the_team_is_refused_before_any_start() {
+        // exit 70 is the shell's own pin check (container, image, platform, digest); 72 the team identity
+        for (code_out, expected) in [(70, "existing_team_unavailable"), (72, "existing_team_identity_mismatch"), (64, "invalid_team_id")] {
+            let script = Script::new(vec![exit(code_out)], exit(0));
+            assert_eq!(code(script.run(true, true)), expected);
+            assert_eq!(script.calls.borrow().len(), 1);
+            assert_eq!(script.starts(), 0);
+        }
+        // a team with no captain is not one this action starts anything on
+        let script = Script::new(vec![probe_reply(false, false)], exit(0));
+        assert_eq!(code(script.run(true, true)), "existing_team_not_active");
+        assert_eq!(script.starts(), 0);
+    }
+
+    #[test]
+    fn a_start_that_fails_or_times_out_is_an_error_and_is_not_probed_into_a_readiness() {
+        let script = Script::new(vec![probe_reply(true, false), probe_reply(true, true)], exit(1));
+        assert_eq!(code(script.run(true, true)), "assistant_start_failed");
+        assert_eq!(script.calls.borrow().len(), 2, "probe and start, then nothing");
+        let script = Script::new(vec![probe_reply(true, false), probe_reply(true, true)], Err("process_timeout"));
+        assert_eq!(code(script.run(true, true)), "timeout");
+        assert_eq!(script.calls.borrow().len(), 2);
+        let script = Script::new(vec![probe_reply(true, false), probe_reply(true, true)], Err("process_failed"));
+        assert_eq!(code(script.run(true, true)), "assistant_start_failed");
+    }
+
+    #[test]
+    fn a_verification_that_never_sees_the_assistant_times_out_and_promotes_nothing() {
+        let script = Script::new(vec![probe_reply(true, false)], exit(0));
+        assert_eq!(code(script.run(true, true)), "assistant_verify_timeout");
+        assert_eq!(script.starts(), 1, "one start, however long the wait");
+        assert_eq!(script.calls.borrow().iter().filter(|call| call.is_probe()).count(), 1 + ASSISTANT_VERIFY_POLLS);
+        assert_eq!(script.sleeps.borrow().len(), ASSISTANT_VERIFY_POLLS - 1);
+        assert!(script.sleeps.borrow().iter().all(|interval| *interval == ASSISTANT_VERIFY_INTERVAL));
+    }
+
+    #[test]
+    fn a_verification_that_fails_ends_with_its_error_and_no_second_start() {
+        for (probe, expected) in [(Err("process_timeout"), "existing_team_unavailable"), (exit(72), "existing_team_identity_mismatch"), (exit(1), "existing_team_unavailable")] {
+            let script = Script::new(vec![probe_reply(true, false), probe], exit(0));
+            assert_eq!(code(script.run(true, true)), expected);
+            assert_eq!(script.starts(), 1);
+        }
+        // a readiness read before the start is not reused: the probe after it is a new command
+        let script = Script::new(vec![probe_reply(true, false), probe_reply(true, false), probe_reply(true, true)], exit(0));
+        assert_eq!(script.run(true, true).expect("started").outcome, "started");
+        assert_eq!(script.calls.borrow().iter().filter(|call| call.is_probe()).count(), 3);
+    }
+
+    #[test]
+    fn many_clicks_at_once_send_one_start_command() {
+        let flag = AtomicBool::new(false);
+        let refused = AtomicUsize::new(0);
+        let starts = AtomicUsize::new(0);
+        let clicks = 6;
+        let barrier = std::sync::Barrier::new(clicks);
+        let outcomes: Vec<Result<Option<ExistingTeamAssistantStartReply>, &'static str>> = thread::scope(|scope| {
+            (0..clicks)
+                .map(|_| {
+                    scope.spawn(|| {
+                        barrier.wait();
+                        let Some(_gate) = ExistingTeamStartGate::acquire(&flag) else {
+                            refused.fetch_add(1, Ordering::SeqCst);
+                            return Ok(None);
+                        };
+                        let target = runtime();
+                        existing_team_assistant_start_with(
+                            true,
+                            Some((TEAM, &target)),
+                            &mut |command, _input, _timeout| {
+                                if command.contains("start-agent.sh") {
+                                    starts.fetch_add(1, Ordering::SeqCst);
+                                    // hold the gate until every other click has been refused
+                                    let deadline = Instant::now() + Duration::from_secs(10);
+                                    while refused.load(Ordering::SeqCst) < clicks - 1 && Instant::now() < deadline {
+                                        thread::yield_now();
+                                    }
+                                    return exit(0);
+                                }
+                                probe_reply(true, starts.load(Ordering::SeqCst) > 0)
+                            },
+                            &mut |_| {},
+                        )
+                        .map(Some)
+                        .map_err(|error| error.code)
+                    })
+                })
+                .collect::<Vec<_>>()
+                .into_iter()
+                .map(|handle| handle.join().unwrap())
+                .collect()
+        });
+        assert_eq!(starts.load(Ordering::SeqCst), 1);
+        assert_eq!(refused.load(Ordering::SeqCst), clicks - 1);
+        assert_eq!(outcomes.iter().filter(|outcome| matches!(outcome, Ok(Some(reply)) if reply.outcome == "started")).count(), 1);
+        // the gate is released when the start ends: the next click is a new operation
+        assert!(ExistingTeamStartGate::acquire(&flag).is_some());
+    }
+
+    #[test]
+    fn the_gate_is_released_on_error_and_is_exclusive_while_held() {
+        let flag = AtomicBool::new(false);
+        {
+            let held = ExistingTeamStartGate::acquire(&flag).expect("first");
+            assert!(ExistingTeamStartGate::acquire(&flag).is_none());
+            drop(held);
+        }
+        assert!(ExistingTeamStartGate::acquire(&flag).is_some());
+    }
+
+    #[test]
+    fn only_the_explicit_action_can_start_the_assistant() {
+        // the start command is built in one place and used by the one function behind the one
+        // command; connect, refresh, resume and the reads never name it, and neither does any
+        // other module
+        for (name, source) in [
+            ("cli_adapter", include_str!("cli_adapter.rs")),
+            ("direct_chat", include_str!("direct_chat.rs")),
+            ("runtime_host", include_str!("runtime_host.rs")),
+            ("lib", include_str!("lib.rs").split("generate_handler").next().unwrap()),
+        ] {
+            assert!(!source.contains("assistant_start_command"), "{name}");
+            assert!(!source.contains("existing_team_assistant_start_with"), "{name}");
+        }
+        let onboarding = include_str!("onboarding.rs").split("mod existing_team_assistant_tests").next().unwrap();
+        assert_eq!(onboarding.matches("assistant_start_command(").count(), 1);
+        assert_eq!(onboarding.matches("existing_team_assistant_start_with(").count(), 2, "its definition and the one command");
+        let function = onboarding
+            .split("fn existing_team_assistant_start_with(")
+            .nth(1)
+            .and_then(|rest| rest.split("pub(crate) async fn existing_team_assistant_start(").next())
+            .expect("the function");
+        assert!(function.contains("assistant_start_command("));
+        for (name, next) in [
+            ("pub(crate) async fn onboarding_existing_team_readonly_connect", "pub(crate) struct ExistingTeamAssistantStartRequest"),
+            ("pub(crate) async fn onboarding_resume_snapshot", "struct ExistingTeamReadiness"),
+            ("pub(crate) async fn onboarding_existing_team_connect", "#[tauri::command]"),
+        ] {
+            let body = onboarding.split(name).nth(1).and_then(|rest| rest.split(next).next()).expect(name);
+            assert!(!body.contains("assistant_start"), "{name}");
+        }
     }
 }

@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { useLocale } from "@/lib/use-locale";
+import { useReadOnlyActions } from "@/lib/read-only-actions";
 import type { Locale } from "@/i18n/config";
 
 // O-22 — blocco note PRIVATO sulla posizione.
@@ -141,6 +142,7 @@ export default function UserNote({
   initialNote: string | null;
 }) {
   const t = T[useLocale()];
+  const readOnly = useReadOnlyActions();
   const router = useRouter();
   const [text, setText] = useState(initialNote ?? "");
   const [saved, setSaved] = useState<string | null>(initialNote);
@@ -187,6 +189,8 @@ export default function UserNote({
         onChange={(e) => setText(e.target.value.slice(0, MAX))}
         placeholder={t.placeholder}
         rows={4}
+        disabled={readOnly.readOnly}
+        title={readOnly.readOnly ? readOnly.reason : undefined}
         className="mt-3 w-full resize-y rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2 text-[12px] text-[var(--color-base)] placeholder:text-[var(--color-dim)]"
       />
       <div className="mt-2 flex items-center justify-between gap-2">
@@ -198,7 +202,8 @@ export default function UserNote({
             <button
               type="button"
               onClick={() => void persist(true)}
-              disabled={pending}
+              disabled={pending || readOnly.readOnly}
+              title={readOnly.readOnly ? readOnly.reason : undefined}
               className="rounded-lg border border-[var(--color-border)] px-3 py-1.5 text-[11px] font-semibold text-[var(--color-muted)] transition-colors hover:bg-[var(--color-row)] disabled:opacity-60"
             >
               {t.remove}
@@ -207,7 +212,8 @@ export default function UserNote({
           <button
             type="button"
             onClick={() => void persist(false)}
-            disabled={pending || !dirty || !text.trim()}
+            disabled={pending || !dirty || !text.trim() || readOnly.readOnly}
+            title={readOnly.readOnly ? readOnly.reason : undefined}
             className="rounded-lg border px-3 py-1.5 text-[11px] font-semibold transition-colors disabled:opacity-40"
             style={{
               color: "var(--color-green)",

@@ -1,7 +1,7 @@
 import Link from "next/link";
 import type { CandidateProfile } from "@/lib/types";
 import type { Locale } from "@/i18n/config";
-import { getProfileT } from "@/lib/profile-i18n";
+import { getProfileT, languageLevelLabel } from "@/lib/profile-i18n";
 import ProfileStats from "@/app/components/ProfileStats";
 import ProfileEditButton from "@/app/components/ProfileEditButton";
 import RevealableContactRow from "@/app/components/RevealableContactRow";
@@ -348,7 +348,7 @@ export default function ProfileView({
                         {l.language}
                       </span>
                       <span className="text-[10px] text-[var(--color-muted)] bg-[var(--color-panel)] border border-[var(--color-border)] px-2 py-0.5 rounded">
-                        {l.level}
+                        {languageLevelLabel(l.level, t)}
                       </span>
                     </div>
                   ))}

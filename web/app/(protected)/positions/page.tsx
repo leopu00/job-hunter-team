@@ -1,6 +1,6 @@
 import Link from "next/link";
 import {
-  getPositions,
+  getPositionsWindow,
   getSeenPositionIds,
   getSourceDistribution,
   getVerdictMapByLegacyId,
@@ -242,27 +242,36 @@ export default async function PositionsPage({ searchParams }: PageProps) {
     : DEFAULT_PAGE_SIZE;
   const requestedPage = Math.max(1, parseInt(params.page ?? "1", 10) || 1);
 
-  const [allPositionsRaw, sourceList] = await Promise.all([
-    getPositions({
-      statuses: statuses.length ? statuses : undefined,
-      remoteTypes: remotes.length ? remotes : undefined,
-      sources: sources.length ? sources : undefined,
-      verdicts: verdicts.length ? verdicts : undefined,
-      families: families.length ? families : undefined,
-      countries: countries.length ? countries : undefined,
-      cities: cities.length ? cities : undefined,
-      scoreBands: scoreBands.length ? scoreBands : undefined,
-      unscored: unscored || undefined,
-      criticBands: criticBands.length ? criticBands : undefined,
-      criticUnscored: criticUnscored || undefined,
-      writeRequested,
-      q: query || undefined,
-      limit: 2000,
-      sort: sortCol,
-      dir: sortDir,
-    }),
+  // Default (scelta utente 19/07), più sotto: solo posizioni con uno score e non
+  // escluse, salvo stati espliciti, senza-score o una ricerca. Chi legge la
+  // squadra esistente la riceve già applicata e già contata, una pagina alla
+  // volta; ogni altra fonte la applica qui dopo la lettura, come sempre.
+  const defaultView = !(selectedStates.length || unscored || query);
+  const [listWindow, sourceList] = await Promise.all([
+    getPositionsWindow(
+      {
+        statuses: statuses.length ? statuses : undefined,
+        remoteTypes: remotes.length ? remotes : undefined,
+        sources: sources.length ? sources : undefined,
+        verdicts: verdicts.length ? verdicts : undefined,
+        families: families.length ? families : undefined,
+        countries: countries.length ? countries : undefined,
+        cities: cities.length ? cities : undefined,
+        scoreBands: scoreBands.length ? scoreBands : undefined,
+        unscored: unscored || undefined,
+        criticBands: criticBands.length ? criticBands : undefined,
+        criticUnscored: criticUnscored || undefined,
+        writeRequested,
+        q: query || undefined,
+        limit: 2000,
+        sort: sortCol,
+        dir: sortDir,
+      },
+      { page: requestedPage, pageSize, defaultView },
+    ),
     getSourceDistribution(),
   ]);
+  const allPositionsRaw = listWindow.rows;
   // Marker "nuova": overlay del set position_views dell'utente (cloud).
   // In local mode il set è vuoto e seen resta undefined → decide il
   // client via localStorage (UnseenDot).
@@ -296,7 +305,7 @@ export default async function PositionsPage({ searchParams }: PageProps) {
   // il default avrebbe nascosto restano riconoscibili: la colonna Stato dice
   // già "excluded", e le senza punteggio mostrano "—" nello Score.
   let positions =
-    selectedStates.length || unscored || query
+    listWindow.windowed || !defaultView
       ? allPositions
       : allPositions.filter(
           (p) =>
@@ -317,13 +326,25 @@ export default async function PositionsPage({ searchParams }: PageProps) {
       return v ? fbSel.includes(v) : fbSel.includes("none");
     });
   }
+  // Una pagina già servita e contata non si rifiltra: la squadra esistente non
+  // ha giudizi dell'utente, quindi «il tuo feedback» tiene solo «nessuno».
+  const windowedEmpty =
+    listWindow.windowed && fbSel.length > 0 && !fbSel.includes("none");
 
   // Pagination computed values
-  const totalResults = positions.length;
+  const totalResults = windowedEmpty
+    ? 0
+    : listWindow.windowed
+      ? listWindow.total
+      : positions.length;
   const pageCount = Math.max(1, Math.ceil(totalResults / pageSize));
   const page = Math.min(requestedPage, pageCount);
   const startIdx = (page - 1) * pageSize;
-  const visiblePositions = positions.slice(startIdx, startIdx + pageSize);
+  const visiblePositions = windowedEmpty
+    ? []
+    : listWindow.windowed
+      ? positions
+      : positions.slice(startIdx, startIdx + pageSize);
 
   // Helper per costruire URL preservando filtri attivi.
   const buildHref = (
@@ -423,7 +444,7 @@ export default async function PositionsPage({ searchParams }: PageProps) {
           {tr("positions")}
         </h1>
         <p className="text-[var(--color-muted)] text-[11px] mt-1">
-          {positions.length} {tr("results")}
+          {totalResults} {tr("results")}
         </p>
       </div>
 
@@ -502,8 +523,11 @@ export default async function PositionsPage({ searchParams }: PageProps) {
             posizione — titolo+score, azienda+località, stato+categoria+
             data. Tap sulla card = pagina dettaglio. */}
         {/* Sequenza corrente (filtri+ordinamento) per prev/next nel
-            dettaglio: tutte le posizioni filtrate, non solo la pagina. */}
-        <DeckSaver ids={positions.map((p) => String(p.id))} />
+            dettaglio: tutte le posizioni filtrate, non solo la pagina (la
+            squadra esistente serve una pagina alla volta: lì è la pagina). */}
+        <DeckSaver
+          ids={(windowedEmpty ? [] : positions).map((p) => String(p.id))}
+        />
         <div className="md:hidden flex flex-col gap-2">
           {visiblePositions.length === 0 ? (
             <div className="rounded-lg border border-[var(--color-border)] px-4 py-12 text-center text-[var(--color-dim)] text-[11px]">

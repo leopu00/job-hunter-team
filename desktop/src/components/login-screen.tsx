@@ -24,11 +24,13 @@ import { describeError } from "../lib/error-catalog";
 import { LOGIN_ERROR_CATALOG_CODE } from "../lib/login-error-codes";
 import { DASHBOARD_PAGE, goTo } from "../lib/pages";
 import { OnboardingArtwork } from "../onboarding/OnboardingArtwork";
+import { appLocale } from "../lib/app-locale";
+import { LOGIN_TEXT } from "./login-screen.i18n";
 import "./login-screen.css";
 
 /** The sentence and the action for a login error, from the error catalog. */
-function loginErrorCopy(code: LoginErrorCode): { text: string; action: string } {
-  return describeError(LOGIN_ERROR_CATALOG_CODE[code], { fallback: "login_failed" });
+function loginErrorCopy(code: LoginErrorCode, locale: string): { text: string; action: string } {
+  return describeError(LOGIN_ERROR_CATALOG_CODE[code], { fallback: "login_failed", locale });
 }
 
 export interface LoginScreenProps {
@@ -69,6 +71,8 @@ export function LoginScreen({
   onResetLocalPlayground,
   onRecoverLocalPlayground,
 }: LoginScreenProps) {
+  const locale = appLocale();
+  const t = LOGIN_TEXT[locale];
   const [browsers, setBrowsers] = useState<InstalledBrowser[]>([]);
   const [choice, setChoice] = useState<BrowserChoice>("default");
   const [waiting, setWaiting] = useState(false);
@@ -204,20 +208,20 @@ export function LoginScreen({
   const hasSavedLocalProfile = Boolean(readLocal());
 
   return (
-    <main className="page login-screen">
+    <main className="page login-screen" lang={locale}>
       <section className="login-card" aria-labelledby="login-title">
         <img src="/jht-mark.svg" alt="" className="login-card__mark" />
         <OnboardingArtwork name="identity" className="login-card__artwork" />
-        <p className="eyebrow">Pannello di controllo</p>
-        <h1 id="login-title">Come vuoi iniziare?</h1>
+        <p className="eyebrow">{t.eyebrow}</p>
+        <h1 id="login-title">{t.title}</h1>
         <p className="login-card__lede">
-          Scegli Google oppure continua solo su questo dispositivo. Host e provider si scelgono dopo.
+          {t.lede}
         </p>
 
         {localSetup ? (
           <form className="login-card__local" onSubmit={createLocalIdentity}>
             <label>
-              <span>Nome visualizzato</span>
+              <span>{t.name}</span>
               <input
                 autoFocus
                 autoComplete="nickname"
@@ -226,20 +230,20 @@ export function LoginScreen({
                 maxLength={80}
               />
             </label>
-            <p className="login-card__note">Resta solo su questo dispositivo.</p>
+            <p className="login-card__note">{t.localNote}</p>
             <button className="primary-button" type="submit" disabled={!localName.trim() || localBusy}>
-              {localBusy ? "Preparazione…" : "Continua in locale"}
+              {localBusy ? t.preparing : t.continueLocal}
             </button>
             <button className="login-card__secondary" type="button" onClick={() => setLocalSetup(false)} disabled={localBusy}>
-              Indietro
+              {t.back}
             </button>
           </form>
         ) : waiting ? (
           <div className="login-card__waiting" role="status">
             <p>
               {manual
-                ? "Copia il link e aprilo nel browser in cui vuoi accedere."
-                : "Completa l'accesso nel browser che si è aperto."}
+                ? t.manualWait
+                : t.browserWait}
             </p>
             {authorizeUrl && (
               <div className="login-card__link">
@@ -247,37 +251,37 @@ export function LoginScreen({
                   ref={linkField}
                   readOnly
                   value={authorizeUrl}
-                  aria-label="Link di accesso"
+                  aria-label={t.linkLabel}
                   onFocus={(event) => event.currentTarget.select()}
                 />
                 <button className="login-card__secondary" type="button" onClick={copyLink}>
-                  {copy === "copied" ? "Link copiato" : "Copia link"}
+                  {copy === "copied" ? t.copied : t.copy}
                 </button>
               </div>
             )}
             {copy === "failed" && (
-              <p className="login-card__note">Non riesco a copiarlo: selezionalo e copialo a mano.</p>
+              <p className="login-card__note">{t.copyFailed}</p>
             )}
             <button className="login-card__secondary" type="button" onClick={stop}>
-              Annulla
+              {t.cancel}
             </button>
           </div>
         ) : (
           <>
             <label className="login-card__browser">
-              <span>Apri con</span>
+              <span>{t.openWith}</span>
               <select
                 value={choice}
                 onChange={(event) => setChoice(event.target.value)}
                 disabled={!configured || keychainBlocked}
               >
-                <option value="default">Browser predefinito</option>
+                <option value="default">{t.defaultBrowser}</option>
                 {browsers.map((browser) => (
                   <option key={browser.id} value={browser.id}>
                     {browser.name}
                   </option>
                 ))}
-                <option value="manual">Nessuno: copio il link</option>
+                <option value="manual">{t.manualBrowser}</option>
               </select>
             </label>
             <button
@@ -286,16 +290,16 @@ export function LoginScreen({
               onClick={start}
               disabled={!configured || keychainBlocked}
             >
-              <GoogleIcon /> {keychainBlocked ? "Riavvia per riprovare" : "Continua con Google"}
+              <GoogleIcon /> {keychainBlocked ? t.restart : t.google}
             </button>
-            <div className="login-card__separator" aria-hidden="true"><span>oppure</span></div>
+            <div className="login-card__separator" aria-hidden="true"><span>{t.or}</span></div>
             <button
               className="login-card__local-button"
               type="button"
               onClick={() => void useLocal()}
               disabled={localBusy}
             >
-              {localBusy ? "Preparazione…" : "Usa in locale"}
+              {localBusy ? t.preparing : t.useLocal}
             </button>
             {onResetLocalPlayground && hasSavedLocalProfile && (
               <button
@@ -304,7 +308,7 @@ export function LoginScreen({
                 onClick={() => void resetLocalPlayground()}
                 disabled={localBusy}
               >
-                Reimposta identità locale di test
+                {t.resetLocal}
               </button>
             )}
             {onRecoverLocalPlayground && !hasSavedLocalProfile && (
@@ -314,7 +318,7 @@ export function LoginScreen({
                 onClick={() => void recoverLocalPlayground()}
                 disabled={localBusy}
               >
-                Recupera reset locale di test
+                {t.recoverLocal}
               </button>
             )}
           </>
@@ -322,15 +326,15 @@ export function LoginScreen({
 
         {error && !showCancelled && (
           <p className="login-card__error" role="alert">
-            {loginErrorCopy(error.code).text}
+            {loginErrorCopy(error.code, locale).text}
             {error.code === "denied" && error.detail ? ` (${error.detail})` : null}
-            {` ${loginErrorCopy(error.code).action}`}
+            {` ${loginErrorCopy(error.code, locale).action}`}
           </p>
         )}
-        {showCancelled && <p className="login-card__note">{loginErrorCopy("cancelled").text}</p>}
+        {showCancelled && <p className="login-card__note">{loginErrorCopy("cancelled", locale).text}</p>}
         {localError && (
           <p className="login-card__error" role="alert">
-            Non riesco ad attivare il profilo locale. Nessun runtime è stato aperto.
+            {t.localError}
           </p>
         )}
       </section>

@@ -54,6 +54,10 @@ export const DOCKER_URL: Record<OsId, string> = {
   linux: "https://docs.docker.com/engine/install/",
 };
 
+/** Su Windows il team gira in Podman dentro WSL: l'app installa Podman, non
+ *  WSL. Se WSL manca, la pagina ufficiale di Microsoft dice come installarlo. */
+export const WSL_URL = "https://learn.microsoft.com/windows/wsl/install";
+
 /** Installazione da terminale, per chi preferisce la CLI all'app. */
 export const CLI_INSTALL_CMD =
   "curl -fsSL https://jobhunterteam.ai/install.sh | bash";

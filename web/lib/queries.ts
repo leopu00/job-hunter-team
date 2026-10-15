@@ -8,6 +8,12 @@ import {
 import { isLocalRequest } from "@/lib/auth";
 import { verdictOf, type Verdict } from "@/lib/position-verdict";
 import * as local from "@/lib/local-queries";
+import {
+  readDesktopVpsPosition,
+  readDesktopVpsPositionFacets,
+  readDesktopVpsPositions,
+  readDesktopVpsPositionsWindow,
+} from "@/lib/desktop-vps-positions";
 // [JHT-WEB-DEMO] Modalità demo (onboarding cloud): quando il cookie
 // jht_demo_persona è attivo le query servono il dataset statico della
 // persona scelta nel wizard /welcome invece di interrogare Supabase.
@@ -246,6 +252,22 @@ export type PositionFilterOpts = {
   offset?: number;
   sort?: string;
   dir?: "asc" | "desc";
+  // The list's default view, asked of the existing team's VPS reader (the other
+  // sources apply it themselves, after the read): only positions with a score,
+  // and none of the excluded.
+  scoredOnly?: boolean;
+  hideExcluded?: boolean;
+};
+
+export type PositionDetail = {
+  position: Position;
+  score: Score | null;
+  highlights: PositionHighlight[];
+  company: Company | null;
+  application: Application | null;
+  tickets: PositionTicket[];
+  userNote?: { body: string; updated_at: string } | null;
+  exclusionEventAt?: string | null;
 };
 
 // Chiave city coerente con la sidebar/mappa: "Country|City". Country vuoto
@@ -310,6 +332,12 @@ export async function getPositions(
 ): Promise<PositionWithScore[]> {
   const dp = await activeDemoPersona();
   if (dp) return demo.demoPositions(dp, opts);
+  const desktop = await readDesktopVpsPositions(opts);
+  if (desktop.source === "vps") return desktop.data;
+  // An installed desktop with no valid current target must not silently show
+  // a different cloud dataset. The web fallback is only the explicit
+  // `not_desktop` result from the inert web implementation above.
+  if (desktop.source === "unavailable") return [];
   const w = await ws();
   if (w) {
     try {
@@ -522,25 +550,57 @@ export async function getPositions(
 }
 
 // ── Single position with all details ───────────────────────────────
-export async function getPositionById(id: string): Promise<{
-  position: Position;
-  score: Score | null;
-  highlights: PositionHighlight[];
-  company: Company | null;
-  application: Application | null;
-  tickets: PositionTicket[];
-  // Nota privata dell'utente (O-22). Da O-33 ha una casa su entrambe le
-  // sponde: a box acceso la legge `getPositionByIdLocal` dal jobs.db (riga
-  // `origin = 'box'`), a box spento arriva da `position_user_notes` sul cloud
-  // (riga `origin = 'web'`, mig 069). Il pannello mostra sempre e solo la nota
-  // della superficie che quel Salva sovrascriverebbe.
-  userNote?: { body: string; updated_at: string } | null;
-  // Ora della transizione a «esclusa» nell'event-log (`position_transitions`
-  // sul cloud, `position_state_transitions` nel jobs.db). È la data delle
-  // esclusioni decise dal TEAM: quelle dell'utente hanno `user_excluded_at`
-  // sulla posizione. Assente sulle personas demo, che non hanno event-log.
-  exclusionEventAt?: string | null;
-} | null> {
+export type PositionsWindow = {
+  rows: PositionWithScore[];
+  /** How many match in all. */
+  total: number;
+  /** The source served this page only, filtered and counted: do not slice or filter it again. */
+  windowed: boolean;
+};
+
+/**
+ * One page of the list. The existing team's VPS serves it page by page, with
+ * its own default view and its own count (a page of light rows stays far
+ * under what the core accepts back, and the app never holds the whole team).
+ * Every other source reads what getPositions reads and leaves the paging to
+ * the caller, exactly as before.
+ */
+export async function getPositionsWindow(
+  opts: PositionFilterOpts,
+  win: { page: number; pageSize: number; defaultView: boolean },
+): Promise<PositionsWindow> {
+  if (!(await activeDemoPersona())) {
+    const read = (page: number) =>
+      readDesktopVpsPositionsWindow({
+        ...opts,
+        limit: win.pageSize,
+        offset: (page - 1) * win.pageSize,
+        ...(win.defaultView ? { scoredOnly: true, hideExcluded: true } : {}),
+      });
+    let page = Math.max(1, win.page);
+    let desktop = await read(page);
+    if (desktop.source === "vps") {
+      // A page past the end shows the last one, as the caller's own paging does.
+      const last = Math.max(1, Math.ceil(desktop.data.total / win.pageSize));
+      if (page > last) {
+        page = last;
+        desktop = await read(page);
+      }
+    }
+    if (desktop.source === "vps") {
+      return { rows: desktop.data.items, total: desktop.data.total, windowed: true };
+    }
+    // Same rule as getPositions: no valid target must not show another dataset.
+    if (desktop.source === "unavailable") return { rows: [], total: 0, windowed: true };
+  }
+  const rows = await getPositions(opts);
+  return { rows, total: rows.length, windowed: false };
+}
+
+export async function getPositionById(id: string): Promise<PositionDetail | null> {
+  const desktop = await readDesktopVpsPosition(id);
+  if (desktop.source === "vps") return desktop.data;
+  if (desktop.source === "unavailable") return null;
   const dp = await activeDemoPersona();
   if (dp) return demo.demoPositionById(dp, id);
   const w = await ws();
@@ -728,6 +788,21 @@ export async function getSourceDistribution(): Promise<
 > {
   const dp = await activeDemoPersona();
   if (dp) return demo.demoSourceDistribution(dp);
+  const desktop = await readDesktopVpsPositionFacets();
+  if (desktop.source === "vps") {
+    const counts: Record<string, number> = {};
+    for (const row of desktop.data) {
+      if (row.status === "excluded") continue;
+      const s = row.source ?? "sconosciuta";
+      counts[s] = (counts[s] ?? 0) + 1;
+    }
+    return Object.entries(counts)
+      .map(([source, count]) => ({ source, count }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 8);
+  }
+  // Same rule as getPositions: no valid target must not show another dataset.
+  if (desktop.source === "unavailable") return [];
   const w = await ws();
   if (w) {
     try {
@@ -774,11 +849,16 @@ export type PositionFacet = {
   status: string;
   title: string | null;
   company: string | null;
+  /** Only the existing team's VPS reader sends it (the sidebar's source list). */
+  source?: string | null;
 };
 
 export async function getPositionFacets(): Promise<PositionFacet[]> {
   const dp = await activeDemoPersona();
   if (dp) return demo.demoFacets(dp);
+  const desktop = await readDesktopVpsPositionFacets();
+  if (desktop.source === "vps") return desktop.data;
+  if (desktop.source === "unavailable") return [];
   const w = await ws();
   if (w) {
     try {

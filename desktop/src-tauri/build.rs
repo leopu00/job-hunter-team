@@ -1,5 +1,9 @@
 use std::{env, fs};
 
+#[path = "src/release_channel_rules.rs"]
+#[allow(dead_code)]
+mod release_channel_rules;
+
 fn main() {
     println!("cargo:rerun-if-env-changed=VITE_SUPABASE_URL");
     println!("cargo:rerun-if-env-changed=VITE_SUPABASE_ANON_KEY");
@@ -11,6 +15,8 @@ fn main() {
     // service-role credentials must never be accepted here.
     println!("cargo:rustc-env=JHT_SUPABASE_URL={supabase_url}");
     println!("cargo:rustc-env=JHT_SUPABASE_ANON_KEY={supabase_anon_key}");
+
+    emit_release_channel();
 
     if std::env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("macos") {
         build_macos_voice_input();
@@ -87,4 +93,19 @@ fn build_macos_voice_input() {
     println!("cargo:rustc-link-lib=framework=AVFoundation");
     println!("cargo:rustc-link-lib=framework=Foundation");
     println!("cargo:rustc-link-lib=framework=Speech");
+}
+
+/// The release channel, fixed at build time (release_channel_rules.rs). A
+/// test build without every value, or values without a test channel, does
+/// not build at all. The logic is release_channel_rules::build_env, which the
+/// app's tests run; this only prints what it returns, or stops the build.
+fn emit_release_channel() {
+    for name in release_channel_rules::BUILD_INPUTS {
+        println!("cargo:rerun-if-env-changed={name}");
+    }
+    let compiled = release_channel_rules::build_env(|name| env::var(name).ok())
+        .unwrap_or_else(|error| panic!("release channel: {error}"));
+    for (name, value) in compiled {
+        println!("cargo:rustc-env={name}={value}");
+    }
 }

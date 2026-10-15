@@ -1,4 +1,6 @@
 import { FormEvent, useCallback, useEffect, useState } from "react";
+import type { Locale } from "@/i18n/config";
+import { appLocale } from "../../lib/app-locale";
 import { describeError, errorCodeOf } from "../../lib/error-catalog";
 import {
   MAIL_SAVED_EVENT,
@@ -9,11 +11,12 @@ import {
 } from "../../lib/mail";
 import { useRefresh } from "../../shell/router";
 import type { PageProps } from "../types";
+import { MAIL_TEXT } from "./mail.i18n";
 
 type Load = { state: "loading" } | { state: "ready"; status: MailStatus } | { state: "failed"; message: string };
 
-function catalogMessage(error: unknown, fallback: string): string {
-  const described = describeError(errorCodeOf(error), { fallback });
+function catalogMessage(error: unknown, fallback: string, locale: Locale): string {
+  const described = describeError(errorCodeOf(error), { fallback, locale });
   return `${described.text} ${described.action}`;
 }
 
@@ -26,10 +29,15 @@ function catalogMessage(error: unknown, fallback: string): string {
 export function MailScreen({
   loadStatus = mailStatus,
   save = saveMailPassword,
+  locale: localeOverride,
 }: {
   loadStatus?: () => Promise<MailStatus>;
   save?: (request: MailPasswordRequest) => Promise<void>;
+  /** The page's language; the app's own (lib/app-locale.ts) when absent. */
+  locale?: Locale;
 }) {
+  const locale = localeOverride ?? appLocale();
+  const t = MAIL_TEXT[locale];
   const [load, setLoad] = useState<Load>({ state: "loading" });
   const [address, setAddress] = useState("");
   const [dedicated, setDedicated] = useState<"yes" | "no" | null>(null);
@@ -45,8 +53,8 @@ export function MailScreen({
         setLoad({ state: "ready", status });
         setAddress((current) => current || status.address || "");
       })
-      .catch((error) => setLoad({ state: "failed", message: catalogMessage(error, "mail_unavailable") }));
-  }, [loadStatus]);
+      .catch((error) => setLoad({ state: "failed", message: catalogMessage(error, "mail_unavailable", locale) }));
+  }, [loadStatus, locale]);
 
   useEffect(read, [read]);
   useRefresh(read);
@@ -64,11 +72,11 @@ export function MailScreen({
         smtpHost: smtpHost.trim() || undefined,
         password,
       });
-      setResult({ ok: true, message: "Password salvata. Il team usa la nuova da subito." });
+      setResult({ ok: true, message: t.saved });
       window.dispatchEvent(new CustomEvent(MAIL_SAVED_EVENT));
       read();
     } catch (error) {
-      setResult({ ok: false, message: catalogMessage(error, "mail_save_failed") });
+      setResult({ ok: false, message: catalogMessage(error, "mail_save_failed", locale) });
     } finally {
       // Never kept on screen after an attempt, saved or not.
       setPassword("");
@@ -79,35 +87,32 @@ export function MailScreen({
   const status = load.state === "ready" ? load.status : null;
   return (
     <section className="max-w-3xl mx-auto px-5 py-8" aria-labelledby="mail-title">
-      <h1 id="mail-title" className="text-[16px] font-bold">Posta</h1>
-      <p className="mt-1 text-[12px] text-[var(--color-muted)]">
-        La casella da cui il team legge gli avvisi di lavoro e da cui invia le email. La password resta nel
-        servizio protetto del team: gli agenti non la leggono.
-      </p>
+      <h1 id="mail-title" className="text-[16px] font-bold">{t.title}</h1>
+      <p className="mt-1 text-[12px] text-[var(--color-muted)]">{t.intro}</p>
 
-      <dl className="mt-5 grid grid-cols-[max-content_1fr] gap-x-4 gap-y-1 text-[12px]" aria-label="Stato della casella">
-        <dt className="text-[var(--color-muted)]">Stato</dt>
+      <dl className="mt-5 grid grid-cols-[max-content_1fr] gap-x-4 gap-y-1 text-[12px]" aria-label={t.statusAria}>
+        <dt className="text-[var(--color-muted)]">{t.status}</dt>
         <dd>
-          {load.state === "loading" && "verifica…"}
+          {load.state === "loading" && t.checking}
           {load.state === "failed" && <span role="alert">{load.message}</span>}
-          {status && (status.configured ? "configurata" : "non configurata")}
+          {status && (status.configured ? t.configured : t.notConfigured)}
         </dd>
-        <dt className="text-[var(--color-muted)]">Indirizzo</dt>
+        <dt className="text-[var(--color-muted)]">{t.address}</dt>
         <dd>{status?.address ?? "—"}</dd>
-        <dt className="text-[var(--color-muted)]">Password</dt>
+        <dt className="text-[var(--color-muted)]">{t.password}</dt>
         <dd>
           {status?.rotationPending
-            ? "da sostituire: era leggibile dagli agenti (l’invio continua a funzionare)"
+            ? t.rotationPending
             : status?.configured
-              ? "a posto"
+              ? t.passwordOk
               : "—"}
         </dd>
       </dl>
 
-      <form className="mt-6 flex flex-col gap-3 text-[12px]" onSubmit={(event) => void submit(event)} aria-label="Salva la password per app">
-        <h2 className="text-[13px] font-semibold">Salva una nuova password per app</h2>
+      <form className="mt-6 flex flex-col gap-3 text-[12px]" onSubmit={(event) => void submit(event)} aria-label={t.formAria}>
+        <h2 className="text-[13px] font-semibold">{t.formTitle}</h2>
         <label className="flex flex-col gap-1">
-          Indirizzo della casella
+          {t.mailboxAddress}
           <input
             type="email"
             required
@@ -118,31 +123,31 @@ export function MailScreen({
           />
         </label>
         <fieldset className="flex flex-col gap-1">
-          <legend>È una casella dedicata agli avvisi di lavoro inoltrati?</legend>
+          <legend>{t.dedicatedLegend}</legend>
           <label className="flex items-center gap-2">
             <input type="radio" name="dedicated" required checked={dedicated === "yes"} onChange={() => setDedicated("yes")} />
-            Sì: il team legge tutta la casella
+            {t.dedicatedYes}
           </label>
           <label className="flex items-center gap-2">
             <input type="radio" name="dedicated" required checked={dedicated === "no"} onChange={() => setDedicated("no")} />
-            No: il team legge solo i mittenti ammessi
+            {t.dedicatedNo}
           </label>
         </fieldset>
         <details>
-          <summary>Server di posta (solo se il provider non è riconosciuto)</summary>
+          <summary>{t.serversSummary}</summary>
           <div className="mt-2 flex flex-col gap-2">
             <label className="flex flex-col gap-1">
-              Server IMAP
+              {t.imapServer}
               <input value={imapHost} onChange={(event) => setImapHost(event.target.value)} autoComplete="off" className="rounded border border-[var(--color-border)] bg-transparent px-2 py-1.5" />
             </label>
             <label className="flex flex-col gap-1">
-              Server SMTP
+              {t.smtpServer}
               <input value={smtpHost} onChange={(event) => setSmtpHost(event.target.value)} autoComplete="off" className="rounded border border-[var(--color-border)] bg-transparent px-2 py-1.5" />
             </label>
           </div>
         </details>
         <label className="flex flex-col gap-1">
-          Password per app (creata dal tuo provider di posta)
+          {t.appPassword}
           <input
             type="password"
             required
@@ -157,7 +162,7 @@ export function MailScreen({
           disabled={saving || dedicated === null || !password || !address.trim()}
           className="self-start rounded-md border border-[var(--color-border)] px-3 py-1.5 font-semibold"
         >
-          {saving ? "Salvataggio…" : "Salva la password"}
+          {saving ? t.saving : t.save}
         </button>
         {result && (
           <p role={result.ok ? "status" : "alert"} style={result.ok ? undefined : { color: "var(--color-red)" }}>

@@ -1,9 +1,11 @@
+import { readFileSync } from "node:fs";
 import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import type { OnboardingFlowProps } from "../lib/onboarding";
 import { describeError, ERROR_LOCALES } from "../lib/error-catalog";
 import { OnboardingFlow } from "./OnboardingFlow";
+import { WINDOWS_SETUP } from "./windows-setup";
 
 vi.mock("../components/SshKeyPicker", () => ({
   default: ({ value, onChange }: { value: string; onChange: (path: string) => void }) => (
@@ -97,6 +99,192 @@ describe("OnboardingFlow technical setup", () => {
     expect(screen.queryByRole("button", { name: /importa profilo/i })).not.toBeInTheDocument();
   });
 
+  it("proposes Codex: first and already chosen, so going on submits it", async () => {
+    const user = userEvent.setup();
+    const { props } = renderFlow();
+    await reachProviderLocal(user);
+    const providers = screen.getAllByRole("radio");
+    expect(providers[0]).toHaveTextContent("Codex");
+    // Only Codex carries the recommended label; Claude and Kimi stay choosable.
+    expect(providers[0]).toHaveTextContent("consigliato");
+    expect(providers.slice(1).map((radio) => radio.textContent)).toEqual([
+      expect.not.stringContaining("consigliato"), expect.not.stringContaining("consigliato"),
+    ]);
+    expect(screen.getByRole("radio", { name: /Codex/i })).toHaveAttribute("aria-checked", "true");
+    expect(screen.getByRole("radio", { name: /Claude Code/i })).toHaveAttribute("aria-checked", "false");
+    await user.click(screen.getByRole("button", { name: /rivedi il setup/i }));
+    await user.click(screen.getByRole("button", { name: /prepara la squadra/i }));
+
+    await waitFor(() => expect(props.onSubmit).toHaveBeenCalledWith({
+      host: { kind: "local" },
+      provider: "codex",
+    }));
+  });
+
+  it("says before the setup that a local profile takes an earlier version's data as it is", async () => {
+    const user = userEvent.setup();
+    renderFlow({ account: { displayName: "Ada", identity: "local" }, platform: "windows", previousLocalData: true });
+    await reachProviderLocal(user);
+    await user.click(screen.getByRole("button", { name: /rivedi il setup/i }));
+    const note = screen.getByRole("note", { name: /versione precedente/i });
+    expect(note).toHaveTextContent(/riutilizziamo configurazione, profilo, accesso al provider e documenti/i);
+    expect(note).toHaveTextContent(/cambia la password per app/i);
+    // The v0.3.9 team may still run in Docker Desktop on the same data.
+    expect(note).toHaveTextContent(/lascia Docker Desktop spento/i);
+    expect(note).toHaveTextContent(/fermalo ed eliminalo da Docker Desktop/i);
+  });
+
+  it("tells an account that only a local profile takes an earlier version's data", async () => {
+    const user = userEvent.setup();
+    renderFlow({ account: { displayName: "Ada", identity: "google" }, previousLocalData: true });
+    await reachProviderLocal(user);
+    await user.click(screen.getByRole("button", { name: /rivedi il setup/i }));
+    expect(screen.getByRole("note", { name: /versione precedente/i })).toHaveTextContent(/lo riprende solo un profilo locale/i);
+  });
+
+  it("lists, before the Windows setup starts, what it installs: the values are the script's", async () => {
+    const script = readFileSync("../scripts/enable-podman-windows-runtime.ps1", "utf8");
+    const init = script.match(/'machine' 'init' '--update-connection=false' '--provider' 'wsl' '--cpus' '(\d+)' '--memory' '(\d+)' '--disk-size' '(\d+)'/);
+    expect(init, "podman machine init not found in the script").not.toBeNull();
+    const [, cpus, memoryMb, diskGb] = init!;
+    expect(WINDOWS_SETUP).toMatchObject({ cpus: Number(cpus), memoryGb: Number(memoryMb) / 1024, diskGb: Number(diskGb) });
+    expect(script).toContain(`$PodmanCliVersion = '${WINDOWS_SETUP.podmanVersion}'`);
+    expect(script).toContain(`$ComposeProviderVersion = '${WINDOWS_SETUP.composeVersion}'`);
+    const packages = [...script.matchAll(/'--id' '([A-Za-z.]+)'/g)].map((match) => match[1]);
+    expect(packages).toEqual(["Podman.CLI"]);
+    // Compose is the runtime's own binary, from the release of that version.
+    expect(script).toContain(`/releases/download/v${WINDOWS_SETUP.composeVersion}/docker-compose-windows-x86_64.exe'`);
+
+    const user = userEvent.setup();
+    renderFlow({ platform: "windows" });
+    await reachProviderLocal(user);
+    await user.click(screen.getByRole("button", { name: /rivedi il setup/i }));
+    const installs = screen.getByRole("note", { name: /cosa installa l’app/i });
+    expect(installs).toHaveTextContent(`Podman ${WINDOWS_SETUP.podmanVersion}, con winget (pacchetto Podman.CLI)`);
+    expect(installs).toHaveTextContent(`Docker Compose ${WINDOWS_SETUP.composeVersion}, scaricato dalla sua release ufficiale e verificato, privato nel runtime di JHT`);
+    expect(installs).toHaveTextContent(`${cpus} CPU, ${Number(memoryMb) / 1024} GB di memoria, fino a ${diskGb} GB di disco`);
+    for (const id of packages) expect(installs).toHaveTextContent(id);
+    expect(installs).toHaveTextContent(/servizio .* tiene acceso il team anche ad app chiusa/i);
+    expect(installs).toHaveTextContent(/comando jht nel PATH del tuo utente/i);
+    expect(installs).toHaveTextContent(/docker\.exe compatibile resta privato nel runtime e non cambia Docker per gli altri programmi/i);
+    // How they are removed: JHT's own part (Compose included) from the app, Podman from Windows.
+    expect(installs).toHaveTextContent(/docker\.exe e Docker Compose si tolgono dall’app, da «Questo computer › Rimuovi JHT da questo computer»/);
+    expect(installs).toHaveTextContent(/Podman resta: si disinstalla da Impostazioni › App › App installate/);
+  });
+
+  it("shows where the runtime log is on a failed local step, with a button that opens it", async () => {
+    const open = vi.fn(async () => true);
+    const failed = { status: "failed" as const, stage: "runtime" as const, code: "runtime_install_failed", message: "Non riuscita.", retryable: true };
+    const path = "C:\\Users\\prova\\AppData\\Local\\ai.jobhunterteam.desktop\\logs\\runtime.log";
+    const { unmount } = renderFlow({ platform: "windows", runtime: failed, runtimeLogPath: path, onOpenRuntimeLog: open });
+    const status = screen.getByRole("alert");
+    expect(status).toHaveTextContent(`Il registro di ogni passo, con l’errore completo, è in: ${path}`);
+    await userEvent.click(within(status).getByRole("button", { name: "Apri il registro" }));
+    expect(open).toHaveBeenCalledOnce();
+    unmount();
+
+    // No log yet, or a step that is not this computer's: nothing to show.
+    renderFlow({ platform: "windows", runtime: failed, runtimeLogPath: null, onOpenRuntimeLog: open });
+    expect(screen.queryByText(/Il registro di ogni passo/)).toBeNull();
+  });
+
+  it("asks for the consent in the language of Windows when the person chose none", async () => {
+    const navigator = window.navigator;
+    const languages = Object.getOwnPropertyDescriptor(navigator, "languages");
+    const language = Object.getOwnPropertyDescriptor(navigator, "language");
+    Object.defineProperty(navigator, "languages", { configurable: true, get: () => ["de-DE", "en-US"] });
+    Object.defineProperty(navigator, "language", { configurable: true, get: () => "de-DE" });
+    try {
+      const user = userEvent.setup();
+      renderFlow({ platform: "windows" });
+      await user.click(screen.getByRole("button", { name: /einrichtung starten/i }));
+      await user.click(screen.getByRole("button", { name: /^weiter/i }));
+      await user.click(screen.getByRole("button", { name: /einrichtung prüfen/i }));
+      const installs = screen.getByRole("note", { name: /was die app installiert/i });
+      expect(installs).toHaveTextContent(`eine Podman-Maschine in WSL: ${WINDOWS_SETUP.cpus} CPUs, ${WINDOWS_SETUP.memoryGb} GB Arbeitsspeicher`);
+      expect(installs).toHaveTextContent(/auch bei geschlossener App laufen lässt/);
+      expect(installs).toHaveTextContent(/Einstellungen › Apps › Installierte Apps/);
+      expect(screen.getByRole("button", { name: /team vorbereiten/i })).toBeInTheDocument();
+    } finally {
+      if (languages) Object.defineProperty(navigator, "languages", languages);
+      if (language) Object.defineProperty(navigator, "language", language);
+    }
+  });
+
+  it.each(["en", "es", "fr", "hu", "pt"] as const)("shows the Windows consent in %s with the script's values", async (locale) => {
+    const user = userEvent.setup();
+    renderFlow({ platform: "windows", locale });
+    for (let step = 0; step < 3; step += 1) {
+      const buttons = screen.getAllByRole("button").filter((button) => button.className.includes("onboarding-primary"));
+      await user.click(buttons[buttons.length - 1]);
+    }
+    const installs = screen.getAllByRole("note")[0];
+    expect(installs).toHaveTextContent(`Podman ${WINDOWS_SETUP.podmanVersion}`);
+    expect(installs).toHaveTextContent(`Docker Compose ${WINDOWS_SETUP.composeVersion}`);
+    expect(installs).toHaveTextContent(`${WINDOWS_SETUP.diskGb}`);
+    expect(installs).toHaveTextContent("winget");
+    expect(installs).not.toHaveTextContent(/installa|macchina|servizio/);
+  });
+
+  it("lists nothing to install for Windows on a Mac", async () => {
+    const user = userEvent.setup();
+    renderFlow();
+    await reachProviderLocal(user);
+    await user.click(screen.getByRole("button", { name: /rivedi il setup/i }));
+    expect(screen.queryByRole("note", { name: /cosa installa l’app/i })).not.toBeInTheDocument();
+  });
+
+  it("says nothing about earlier data when there is none", async () => {
+    const user = userEvent.setup();
+    renderFlow({ account: { displayName: "Ada", identity: "local" } });
+    await reachProviderLocal(user);
+    await user.click(screen.getByRole("button", { name: /rivedi il setup/i }));
+    expect(screen.queryByRole("note")).not.toBeInTheDocument();
+  });
+
+  it("keeps Kimi visible but not selectable on Windows, with the catalog's reason", async () => {
+    const user = userEvent.setup();
+    renderFlow({ platform: "windows" });
+    await reachProviderLocal(user);
+    const kimi = screen.getByRole("radio", { name: /Kimi/i });
+    expect(kimi).toBeDisabled();
+    await user.click(kimi);
+    expect(kimi).toHaveAttribute("aria-checked", "false");
+    expect(screen.getByRole("radio", { name: /Codex/i })).toHaveAttribute("aria-checked", "true");
+    const reason = describeError("kimi_unavailable_windows", { locale: "it" });
+    expect(reason.known).toBe(true);
+    expect(kimi).toHaveAccessibleDescription(`${reason.text} ${reason.action}`);
+    // The arrows skip it: from Claude Code they go back to Codex.
+    await user.click(screen.getByRole("radio", { name: /Claude Code/i }));
+    await user.keyboard("{ArrowRight}");
+    expect(screen.getByRole("radio", { name: /Codex/i })).toHaveAttribute("aria-checked", "true");
+    expect(kimi).toHaveAttribute("aria-checked", "false");
+  });
+
+  it("says why Kimi is not available on Windows in the language of the app", async () => {
+    const user = userEvent.setup();
+    renderFlow({ platform: "windows", locale: "en" });
+    for (let step = 0; step < 2; step += 1) {
+      const buttons = screen.getAllByRole("button").filter((button) => button.className.includes("onboarding-primary"));
+      await user.click(buttons[buttons.length - 1]);
+    }
+    expect(screen.getByText("Kimi is not available on Windows yet. Choose Codex or Claude.")).toBeInTheDocument();
+  });
+
+  it("lets Kimi be chosen on a Mac", async () => {
+    const user = userEvent.setup();
+    const { props } = renderFlow({ platform: "macos" });
+    await reachProviderLocal(user);
+    const kimi = screen.getByRole("radio", { name: /Kimi/i });
+    expect(kimi).toBeEnabled();
+    expect(screen.queryByText(/Kimi non è ancora disponibile/)).not.toBeInTheDocument();
+    await user.click(kimi);
+    expect(kimi).toHaveAttribute("aria-checked", "true");
+    await user.click(screen.getByRole("button", { name: /rivedi il setup/i }));
+    await user.click(screen.getByRole("button", { name: /prepara la squadra/i }));
+    await waitFor(() => expect(props.onSubmit).toHaveBeenCalledWith({ host: { kind: "local" }, provider: "kimi" }));
+  });
+
   it("submits only host and provider for the local path", async () => {
     const user = userEvent.setup();
     const { props } = renderFlow();
@@ -130,9 +318,9 @@ describe("OnboardingFlow technical setup", () => {
     expect(screen.getByRole("heading", { name: /scegli il provider/i })).toHaveFocus();
 
     await user.tab();
-    expect(screen.getByRole("radio", { name: /Claude Code/i })).toHaveFocus();
+    expect(screen.getByRole("radio", { name: /Codex/i })).toHaveFocus();
     await user.keyboard("{ArrowRight}");
-    expect(screen.getByRole("radio", { name: /Codex/i })).toHaveAttribute("aria-checked", "true");
+    expect(screen.getByRole("radio", { name: /Claude Code/i })).toHaveAttribute("aria-checked", "true");
   });
 
   it("restores focus to the greeting when navigating back", async () => {
@@ -169,9 +357,22 @@ describe("OnboardingFlow technical setup", () => {
     }));
   });
 
-  it("requires VPS fields and a selected key when local runtime is unsupported", async () => {
+  it("offers this computer on Windows, with Podman in WSL installed by the app", async () => {
+    // Red if the Windows block of 03/10 (66e744298) comes back.
     const user = userEvent.setup();
     renderFlow({ platform: "windows" });
+    await begin(user);
+    const local = screen.getByRole("radio", { name: /questo computer/i });
+    expect(local).toHaveAttribute("aria-checked", "true");
+    expect(local).toHaveTextContent(/installa Podman e la sua macchina in WSL/i);
+    expect(local).not.toHaveTextContent(/docker/i);
+    expect(screen.queryByText(/VPS Linux/)).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^continua/i })).toBeEnabled();
+  });
+
+  it("requires VPS fields and a selected key when local runtime is unsupported", async () => {
+    const user = userEvent.setup();
+    renderFlow({ platform: "other" });
     await begin(user);
     expect(screen.queryByRole("radio", { name: /questo computer/i })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: /^continua/i })).toBeDisabled();
@@ -262,7 +463,7 @@ describe("OnboardingFlow technical setup", () => {
     unmount();
 
     renderFlow({
-      platform: "windows",
+      platform: "other",
       runtime: { status: "failed", stage: "runtime", code: "podman_machine_mounts_home", retryable: false, message: "Macchina." },
       onRecreatePodmanMachine,
     });
@@ -569,6 +770,68 @@ describe("OnboardingFlow technical setup", () => {
     await userEvent.click(screen.getByRole("button", { name: "Torna alla scelta ambiente" }));
     expect(onExitFailure).toHaveBeenCalledOnce();
     expect(onRestart).not.toHaveBeenCalled();
+  });
+
+  it("returns a retryable failure to the host form without retrying and preserves its draft", async () => {
+    const user = userEvent.setup();
+    let result!: ReturnType<typeof renderFlow>;
+    const onRetry = vi.fn();
+    const onExitFailure = vi.fn(() => {
+      result.rerender(<OnboardingFlow {...result.props} runtime={{ status: "collecting", stage: "host" }} />);
+    });
+    result = renderFlow({ onRetry, onExitFailure });
+
+    await begin(user);
+    await user.click(screen.getByRole("radio", { name: /vps/i }));
+    await user.type(screen.getByLabelText(/host o indirizzo ip/i), "draft.example.invalid");
+    await user.clear(screen.getByLabelText(/utente ssh/i));
+    await user.type(screen.getByLabelText(/utente ssh/i), "draft-user");
+    await user.click(screen.getByRole("button", { name: /scegli chiave ssh/i }));
+    await user.click(screen.getByRole("button", { name: /^continua/i }));
+    await user.click(screen.getByRole("radio", { name: /claude code/i }));
+
+    result.rerender(<OnboardingFlow {...result.props} runtime={{
+      status: "failed", stage: "runtime", message: "Errore terminale.", retryable: true,
+    }} />);
+    await user.click(screen.getByRole("button", { name: "Torna alla scelta ambiente" }));
+
+    expect(onExitFailure).toHaveBeenCalledOnce();
+    expect(onRetry).not.toHaveBeenCalled();
+    expect(screen.getByLabelText(/host o indirizzo ip/i)).toHaveValue("draft.example.invalid");
+    expect(screen.getByLabelText(/utente ssh/i)).toHaveValue("draft-user");
+    expect(screen.getByText("id_ed25519")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /^continua/i }));
+    expect(screen.getByRole("radio", { name: /claude code/i })).toHaveAttribute("aria-checked", "true");
+  });
+
+  it("does not offer a return to configuration while an operation is still working", () => {
+    const onExitFailure = vi.fn();
+    renderFlow({
+      runtime: { status: "working", stage: "runtime", message: "Operazione in corso." },
+      onExitFailure,
+    });
+
+    expect(screen.queryByRole("button", { name: "Torna alla scelta ambiente" })).not.toBeInTheDocument();
+    expect(onExitFailure).not.toHaveBeenCalled();
+  });
+
+  it("keeps an active provider-login takeover in control when its outer state has failed", () => {
+    const onExitFailure = vi.fn();
+    renderFlow({
+      runtime: { status: "failed", stage: "provider-login", message: "Accesso non completato.", retryable: true },
+      providerLogin: {
+        provider: "codex",
+        status: "needs_user_action",
+        actions: [{ kind: "code", instruction: "Conferma il codice.", userCode: "synthetic-code" }],
+        connectionState: "connected",
+        startedAt: Date.now(),
+      },
+      onExitFailure,
+    });
+
+    expect(screen.getByRole("heading", { name: /completa l’accesso a codex/i })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Torna alla scelta ambiente" })).not.toBeInTheDocument();
+    expect(onExitFailure).not.toHaveBeenCalled();
   });
 
   it("shows provider progress and invokes only the required interactive action", async () => {

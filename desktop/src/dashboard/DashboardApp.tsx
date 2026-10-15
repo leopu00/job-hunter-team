@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
 import DashboardSkeleton from "@/app/(protected)/_components/DashboardSkeleton";
+import { appLocale } from "../lib/app-locale";
+import { LOCAL_RUNTIME_REMOVED_EVENT } from "../lib/local-uninstall";
+import { failureText, stateText } from "../lib/onboarding-state.i18n";
 import { readDesktopPlatform, type DesktopPlatform } from "../lib/desktop-platform";
 import {
   connectDirectChat,
@@ -22,7 +25,16 @@ import {
   readLocalProfile,
 } from "../lib/local-profile";
 import { clearGoogleIdentitySelection, googleIdentitySelected } from "../lib/identity-choice";
-import type { ExistingTeamConnectionResult } from "../lib/existing-team";
+import {
+  existingTeamBridge,
+  type ExistingTeamConnectionResult,
+  type ExistingTeamReadOnlyConnectionResult,
+  type ExistingTeamVpsHost,
+} from "../lib/existing-team";
+import {
+  enterExistingTeamReadOnly,
+  leaveExistingTeamReadOnly,
+} from "../lib/existing-team-readonly";
 import {
   isOnboardingAssistantReachable,
   isOnboardingRuntimeReady,
@@ -49,6 +61,7 @@ import {
   prepareOnboardingRuntime,
   probeOnboardingSshHostKey,
   readOnboardingSnapshot,
+  readPreviousLocalData,
   recreateOnboardingPodmanMachine,
   resumeOnboardingSnapshot,
   resumeOnboardingTeamStart,
@@ -71,11 +84,8 @@ import MessagesPage from "../pages/messages";
 import Shell from "../shell/Shell";
 import { navigate } from "../shell/router";
 import { describeError, errorCodeOf, errorMachineOf, errorResetsAt } from "../lib/error-catalog";
+import { openRuntimeLog, runtimeLogPath } from "../lib/runtime-log";
 
-const GATE_ERROR = "Non riesco a verificare la configurazione dell’account. Riprova.";
-const ACCOUNT_SCOPE_ERROR = "Non riesco a verificare l’isolamento dell’account. Nessun runtime è stato aperto.";
-const PROVIDER_ACTION_INVALID = "La richiesta del provider non è valida. Riavvia l’accesso.";
-const MIGRATION_ERROR = "Non riesco a collegare il profilo locale. Il runtime resta intestato all’identità locale.";
 
 type LocalMigrationGate = {
   identityKey: string;
@@ -105,9 +115,38 @@ const PROVIDER_RUNTIME_ERRORS = new Set([
   "provider_timeout",
 ]);
 
+/**
+ * The cause a failed local step printed (the native error's `detail`, one
+ * redacted line: src-tauri/src/runtime_log.rs failure_cause), when it has one.
+ */
+function failureDetail(detail: unknown): string | null {
+  if (typeof detail !== "string") return null;
+  const line = detail.replace(/[\u0000-\u001f\u007f]+/g, " ").replace(/\s+/g, " ").trim();
+  return line ? line.slice(0, 300) : null;
+}
+
+/** The codes whose catalog action is only a guess (the network, a retry): the cause replaces it. */
+const CAUSE_REPLACES_ACTION = new Set([
+  "runtime_install_failed",
+  "container_start_failed",
+  "container_not_ready",
+  "runtime_wrapper_probe_failed",
+  "timeout",
+  "container_timeout",
+]);
+
+/** «Cause: …», then what to do: the catalog's own action, or retry and the log. */
+function actionWithCause(code: string, action: string, cause: string | null): string {
+  if (!cause) return action;
+  const text = stateText();
+  const said = text.failureCause.replace("{cause}", cause);
+  const sentence = /[.!?…]$/.test(said) ? said : `${said}.`;
+  return CAUSE_REPLACES_ACTION.has(code) ? `${sentence} ${text.failureCauseRetry}` : `${action} ${sentence}`;
+}
+
 function localRuntimeFailure(error: unknown): OnboardingRuntimeState {
   const value = typeof error === "object" && error !== null
-    ? error as { code?: unknown; message?: unknown; retryable?: unknown }
+    ? error as { code?: unknown; message?: unknown; retryable?: unknown; detail?: unknown }
     : {};
   if (typeof value.code !== "string" || !SAFE_RUNTIME_ERROR_CODE.test(value.code) ||
       typeof value.message !== "string" || !value.message.trim() ||
@@ -118,11 +157,11 @@ function localRuntimeFailure(error: unknown): OnboardingRuntimeState {
     ? "container"
     : PROVIDER_RUNTIME_ERRORS.has(value.code) ? "provider" : "runtime";
   if (value.code === "podman_machine_mounts_home") {
-    const described = describeError(value.code);
+    const described = describeError(value.code, { locale: appLocale() });
     return {
       status: "failed",
       stage: "runtime",
-      title: "Macchina Podman da ricreare",
+      title: stateText().podmanRecreateTitle,
       message: described.text,
       action: described.action,
       code: value.code,
@@ -133,31 +172,33 @@ function localRuntimeFailure(error: unknown): OnboardingRuntimeState {
     return {
       status: "failed",
       stage: "container",
-      title: "Versione del container non compatibile",
-      message: "La versione installata non coincide con quella richiesta da questa app. Il team non è stato avviato.",
-      action: describeError(value.code).action,
+      title: stateText().versionIncompatibleTitle,
+      message: stateText().versionIncompatibleMessage,
+      action: describeError(value.code, { locale: appLocale() }).action,
       code: value.code,
       retryable: false,
     };
   }
+  const cause = failureDetail(value.detail);
   if (stage === "container") {
     return {
       status: "failed",
       stage,
-      title: "Avvio del container non riuscito",
-      message: "Il container del team non risulta pronto. Il team non è stato avviato.",
-      action: describeError(value.code).action,
+      title: stateText().containerStartTitle,
+      message: stateText().containerStartMessage,
+      action: actionWithCause(value.code, describeError(value.code, { locale: appLocale() }).action, cause),
       code: value.code,
       retryable: value.retryable,
     };
   }
-  // The sentence comes from the app's catalog, never from the native message.
-  const described = describeError(value.code, { machine: errorMachineOf(error) });
+  // The sentence comes from the app's catalog, never from the native message;
+  // the cause is the step's own line, redacted on the native side.
+  const described = describeError(value.code, { locale: appLocale(), machine: errorMachineOf(error) });
   return {
     status: "failed",
     stage,
     message: described.text,
-    action: described.action,
+    action: actionWithCause(value.code, described.action, cause),
     code: value.code,
     retryable: value.retryable,
   };
@@ -167,7 +208,7 @@ function localRuntimeFailure(error: unknown): OnboardingRuntimeState {
 function catalogFailure(stage: OnboardingRuntimeStage, error: unknown): OnboardingRuntimeState | null {
   const code = errorCodeOf(error);
   if (!code) return null;
-  const described = describeError(code, { resetsAt: errorResetsAt(error), machine: errorMachineOf(error) });
+  const described = describeError(code, { resetsAt: errorResetsAt(error), locale: appLocale(), machine: errorMachineOf(error) });
   if (!described.known) return null;
   const retryable = typeof error === "object" && error !== null &&
     typeof (error as { retryable?: unknown }).retryable === "boolean"
@@ -182,7 +223,7 @@ function withLimitsNotice(
   snapshot: OnboardingRuntimeSnapshot,
 ): OnboardingRuntimeState {
   if (snapshot.limitsVerified !== false || !("message" in state)) return state;
-  const notice = describeError("provider_limits_unverified");
+  const notice = describeError("provider_limits_unverified", { locale: appLocale() });
   return { ...state, message: `${state.message} ${notice.text} ${notice.action}` };
 }
 
@@ -191,11 +232,11 @@ function sshHostKeyFailure(error: unknown): OnboardingRuntimeState {
   if (code === "host_key_mismatch" || code === "host_key_changed") {
     // The server key CHANGED from the confirmed one: possibly another server.
     // Not retryable, so no button lets the person go on anyway.
-    const described = describeError(code);
+    const described = describeError(code, { locale: appLocale() });
     return {
       status: "failed",
       stage: "ssh-host-key",
-      title: "Chiave del server cambiata",
+      title: stateText().hostKeyChangedTitle,
       code,
       retryable: false,
       message: described.text,
@@ -213,13 +254,7 @@ function sshHostKeyFailure(error: unknown): OnboardingRuntimeState {
 }
 
 function failureMessage(stage: OnboardingRuntimeStage): string {
-  if (stage === "provider-login") return "L’accesso al provider non è stato verificato. Riprova.";
-  if (stage === "ssh-host-key") return "L’identità SSH del server non è stata verificata. Controlla il fingerprint e riprova.";
-  if (stage === "team-start") return "Il team non risulta ancora operativo. Riprova.";
-  if (stage === "assistant") return "Assistente o chat diretta non risultano ancora pronti. Riprova.";
-  if (stage === "container") return "Il container non risulta attivo. Verifica il runtime e riprova.";
-  if (stage === "provider") return "Il provider non è stato preparato. Riprova.";
-  return "La preparazione del runtime non è stata verificata. Riprova.";
+  return failureText(stage);
 }
 
 function pairingToken(session: Session | null, submission: OnboardingSubmission): string | null {
@@ -238,19 +273,19 @@ function resumedPrerequisiteFailure(
 ): OnboardingRuntimeState | null {
   if (!snapshot.runtimeInstalled) return {
     status: "failed", stage: "runtime", retryable: false,
-    message: "Il runtime salvato non risulta pronto. Riparti dal setup tecnico.",
+    message: stateText().resumedRuntimeNotReady,
   };
   if (!snapshot.containerRunning) return {
     status: "failed", stage: "container", retryable: false,
-    message: "Il container salvato non risulta attivo. Riparti dal setup tecnico.",
+    message: stateText().resumedContainerNotActive,
   };
   if (!snapshot.providerConfigured) return {
     status: "failed", stage: "provider", retryable: false,
-    message: "Il provider salvato non risulta configurato. Riparti dal setup tecnico.",
+    message: stateText().resumedProviderNotConfigured,
   };
   if (!snapshot.providerAuthenticated) return {
     status: "failed", stage: "provider-login", retryable: false,
-    message: "L’accesso al provider non risulta più valido. Riparti dal setup tecnico.",
+    message: stateText().resumedProviderLoginInvalid,
   };
   return null;
 }
@@ -259,24 +294,24 @@ function resumedBackendFailure(error: unknown): OnboardingRuntimeState | "collec
   const code = nativeErrorCode(error);
   if (code === "host_not_configured" || code === "host_config_invalid") return "collecting-host";
   if (code === "resume_runtime_not_ready") return {
-    status: "failed", stage: "runtime", code, action: describeError(code).action, retryable: false,
-    message: "Il runtime salvato non risulta pronto. Riparti dal setup tecnico.",
+    status: "failed", stage: "runtime", code, action: describeError(code, { locale: appLocale() }).action, retryable: false,
+    message: stateText().resumedRuntimeNotReady,
   };
   if (code === "resume_container_not_ready") return {
-    status: "failed", stage: "container", code, action: describeError(code).action, retryable: false,
-    message: "Il container salvato non risulta attivo. Riparti dal setup tecnico.",
+    status: "failed", stage: "container", code, action: describeError(code, { locale: appLocale() }).action, retryable: false,
+    message: stateText().resumedContainerNotActive,
   };
   if (code === "resume_provider_not_configured") return {
-    status: "failed", stage: "provider", code, action: describeError(code).action, retryable: false,
-    message: "Il provider salvato non risulta configurato. Riparti dal setup tecnico.",
+    status: "failed", stage: "provider", code, action: describeError(code, { locale: appLocale() }).action, retryable: false,
+    message: stateText().resumedProviderNotConfigured,
   };
   if (code === "resume_provider_not_authenticated") return {
-    status: "failed", stage: "provider-login", code, action: describeError(code).action, retryable: false,
-    message: "L’accesso al provider non risulta più valido. Riparti dal setup tecnico.",
+    status: "failed", stage: "provider-login", code, action: describeError(code, { locale: appLocale() }).action, retryable: false,
+    message: stateText().resumedProviderLoginInvalid,
   };
   if (code === "team_start_failed" || code === "team_verify_failed") return {
-    status: "failed", stage: "team-start", code, action: describeError(code).action, retryable: true,
-    message: "Le sessioni del team non risultano ancora operative. Riprova.",
+    status: "failed", stage: "team-start", code, action: describeError(code, { locale: appLocale() }).action, retryable: true,
+    message: stateText().resumedTeamNotReady,
   };
   return null;
 }
@@ -313,11 +348,17 @@ export default function DashboardApp() {
   const markerId = localProfile ? `local:${localProfile.profileId}` : session?.user.id ?? null;
   const [gate, setGate] = useState<OnboardingGateState>({ phase: "loading" });
   const [platform, setPlatform] = useState<DesktopPlatform | null>(null);
+  const [previousLocalData, setPreviousLocalData] = useState(false);
+  const [runtimeLog, setRuntimeLog] = useState<string | null>(null);
   const [providerLogin, setProviderLogin] = useState<OnboardingProviderLoginState | null>(null);
   const [sshHostKey, setSshHostKey] = useState<OnboardingSshHostKeyConfirmation | null>(null);
   const [activity, setActivity] = useState<OnboardingActivityState | null>(null);
   const [assistantChatIdentityKey, setAssistantChatIdentityKey] = useState<string | null>(null);
   const [existingTeamDismissedIdentityKey, setExistingTeamDismissedIdentityKey] = useState<string | null>(null);
+  const [manualExistingTeam, setManualExistingTeam] = useState<{ identityKey: string; host: ExistingTeamVpsHost } | null>(null);
+  // The account is reading an existing team's VPS and nothing else: the Shell
+  // shows its positions (lib/existing-team-readonly.ts), the setup waits.
+  const [readOnlyExistingTeamKey, setReadOnlyExistingTeamKey] = useState<string | null>(null);
   const [onboardingUiVersion, setOnboardingUiVersion] = useState(0);
   const [accountScope, setAccountScope] = useState<{
     identityKey: string;
@@ -334,6 +375,8 @@ export default function DashboardApp() {
   const providerStoppingAttemptRef = useRef<number | null>(null);
   const providerAttemptRef = useRef(0);
   const resumeAttemptedIdentityRef = useRef<string | null>(null);
+  // The screen shows a saved existing team that could not be reopened: «Riprova» asks again to reopen it.
+  const savedTeamFailureRef = useRef(false);
   const activeIdentityKeyRef = useRef<string | null>(identityKey);
   activeIdentityKeyRef.current = identityKey;
   const signedOut = !loading && !identityKey;
@@ -367,7 +410,7 @@ export default function DashboardApp() {
       if (next && activeIdentityKeyRef.current === initializingKey) setGate(next);
     } catch {
       if (activeIdentityKeyRef.current !== initializingKey) return;
-      setGate({ phase: "error", message: GATE_ERROR });
+      setGate({ phase: "error", message: stateText().gateError });
     }
   }, [identityKey, localProfile?.displayName, localProfile?.profileId, markerId, migrationReady, session]);
 
@@ -444,8 +487,33 @@ export default function DashboardApp() {
     void readDesktopPlatform().then((detected) => {
       if (active) setPlatform(detected);
     });
+    void readPreviousLocalData().then((found) => {
+      if (active) setPreviousLocalData(found);
+    });
     return () => { active = false; };
   }, []);
+
+  // «Remove JHT from this computer» done: back to the first start. The gate
+  // only admits Shell again after a new setup (the marker says "restarted").
+  useEffect(() => {
+    if (!markerId) return;
+    const onRemoved = () => {
+      try { resetOnboardingMarker(markerId); } catch { /* the reload still asks the gate */ }
+      window.location.hash = "#/dashboard";
+      window.location.reload();
+    };
+    window.addEventListener(LOCAL_RUNTIME_REMOVED_EVENT, onRemoved);
+    return () => window.removeEventListener(LOCAL_RUNTIME_REMOVED_EVENT, onRemoved);
+  }, [markerId]);
+
+  // Leaving the account, or the app, ends the read-only view with it.
+  useEffect(() => {
+    if (readOnlyExistingTeamKey && readOnlyExistingTeamKey !== identityKey) {
+      leaveExistingTeamReadOnly();
+      setReadOnlyExistingTeamKey(null);
+    }
+  }, [identityKey, readOnlyExistingTeamKey]);
+  useEffect(() => leaveExistingTeamReadOnly, []);
 
   useEffect(() => {
     const staleProviderSession = providerSessionRef.current;
@@ -559,7 +627,7 @@ export default function DashboardApp() {
 
   const startTeam = useCallback(async (submission: OnboardingSubmission) => {
     try {
-      setRuntime({ status: "working", stage: "team-start", message: "Avvio container e agenti." });
+      setRuntime({ status: "working", stage: "team-start", message: stateText().startingContainerAndAgents });
       beginActivityInvocation();
       const snapshot = await startOnboardingTeam(submission.host, recordActivityProgress);
       setRuntime(withLimitsNotice(runtimeStateFromSnapshot(snapshot), snapshot));
@@ -570,7 +638,7 @@ export default function DashboardApp() {
 
   const prepareTechnicalSetup = useCallback(async (submission: OnboardingSubmission) => {
     if (!identityKey) throw new Error("identity-missing");
-    setRuntime({ status: "working", stage: "runtime", message: "Preparo il runtime production." });
+    setRuntime({ status: "working", stage: "runtime", message: stateText().preparingProductionRuntime });
     beginActivityInvocation();
     const snapshot = await prepareOnboardingRuntime(
       submission,
@@ -594,12 +662,12 @@ export default function DashboardApp() {
       fail("runtime", error);
     }
     if (submission.host.kind === "vps") {
-      setRuntime({ status: "working", stage: "ssh-host-key", message: "Verifico l’identità SSH del server." });
+      setRuntime({ status: "working", stage: "ssh-host-key", message: stateText().verifyingSshIdentity });
       try {
         const probe = await probeOnboardingSshHostKey(submission.host);
         if (probe.status === "confirmation_required") {
           setSshHostKey({ algorithm: probe.algorithm, fingerprint: probe.fingerprint });
-          setRuntime({ status: "action-required", stage: "ssh-host-key", message: "Confronta e conferma il fingerprint del server." });
+          setRuntime({ status: "action-required", stage: "ssh-host-key", message: stateText().compareFingerprint });
           return;
         }
       } catch (error) {
@@ -616,7 +684,7 @@ export default function DashboardApp() {
       return fail("ssh-host-key", new Error("host-key-confirmation-missing"));
     }
     try {
-      setRuntime({ status: "working", stage: "ssh-host-key", message: "Confermo il fingerprint SSH verificato." });
+      setRuntime({ status: "working", stage: "ssh-host-key", message: stateText().confirmingFingerprint });
       await confirmOnboardingSshHostKey(
         submission.host,
         sshHostKey,
@@ -663,7 +731,7 @@ export default function DashboardApp() {
         connectionState: "connecting",
         startedAt: Date.now(),
       });
-      setRuntime({ status: "working", stage: "provider-login", message: "Attendo il login ufficiale del provider." });
+      setRuntime({ status: "working", stage: "provider-login", message: stateText().waitingProviderLogin });
       beginActivityInvocation();
       let resolveExit!: () => void;
       let rejectExit!: (error: Error) => void;
@@ -683,7 +751,7 @@ export default function DashboardApp() {
             status: "error",
             connectionState: "disconnected",
             actions: [],
-            safeErrorMessage: PROVIDER_ACTION_INVALID,
+            safeErrorMessage: stateText().providerActionInvalid,
             exitCode: null,
           } : current);
           rejectExit(new Error(event.code));
@@ -817,7 +885,7 @@ export default function DashboardApp() {
     setRuntime({
       status: "action-required",
       stage: "provider-login",
-      message: "L’accesso è stato annullato. Riavvialo quando vuoi continuare.",
+      message: stateText().loginCancelled,
     });
   }, [setRuntime]);
 
@@ -839,6 +907,7 @@ export default function DashboardApp() {
     if (providerSession) await closeOnboardingProviderLogin(providerSession).catch(() => undefined);
     resetOnboardingMarker(markerId);
     submissionRef.current = null;
+    savedTeamFailureRef.current = false;
     resumeAttemptedIdentityRef.current = identityKey;
     setProviderLogin(null);
     setSshHostKey(null);
@@ -856,6 +925,7 @@ export default function DashboardApp() {
 
   const exitTechnicalFailure = useCallback(() => {
     submissionRef.current = null;
+    savedTeamFailureRef.current = false;
     setProviderLogin(null);
     setSshHostKey(null);
     setActivity(null);
@@ -869,7 +939,7 @@ export default function DashboardApp() {
     const submission = submissionRef.current;
     if (!submission || !identityKey) return fail("assistant", new Error("submission-missing"));
     try {
-      setRuntime({ status: "working", stage: "assistant", message: "Apro la chat diretta con l’Assistente." });
+      setRuntime({ status: "working", stage: "assistant", message: stateText().openingAssistantChat });
       beginActivityInvocation();
       const nativeSnapshot = await openOnboardingAssistant(submission.host, recordActivityProgress);
       const chat = await connectDirectChat(submission.host);
@@ -884,11 +954,69 @@ export default function DashboardApp() {
     }
   }, [beginActivityInvocation, fail, identityKey, recordActivityProgress, setRuntime]);
 
-  const resumeAssistant = useCallback(async () => {
+  const openReadOnlyExistingTeam = useCallback((result: ExistingTeamReadOnlyConnectionResult) => {
+    if (!identityKey || activeIdentityKeyRef.current !== identityKey) return;
+    // On before the Shell mounts: its pages read in effects that run first.
+    enterExistingTeamReadOnly(result.readiness, {
+      at: Date.now(),
+      captainRunning: result.snapshot.captainRunning === true,
+      assistantRunning: result.snapshot.assistantRunning === true,
+    });
+    setReadOnlyExistingTeamKey(identityKey);
+  }, [identityKey]);
+
+  /**
+   * After a restart, a profile that already saved an existing team (candidate and
+   * selection) goes back to its read-only view: the native side takes the saved
+   * host and team, checks the pin and the identity again and starts nothing.
+   * Only "there is no saved existing team" (refused before any SSH call) lets the
+   * usual resume go on. Any other refusal is a saved team that cannot be reached
+   * or confirmed right now: it is shown as that, with its catalog sentence and a
+   * retry that asks the same question again, never as the team-start action.
+   */
+  const reopenExistingTeam = useCallback(async (): Promise<"opened" | "none" | OnboardingRuntimeState> => {
+    savedTeamFailureRef.current = false;
+    try {
+      const result = await existingTeamBridge.reopen();
+      // Closing the read-only view goes back to the setup's first step, not to a spinner.
+      setRuntime({ status: "collecting", stage: "host" });
+      openReadOnlyExistingTeam(result);
+      return "opened";
+    } catch (error) {
+      const code = nativeErrorCode(error);
+      // «None» means exactly this: neither a candidate nor a selection is saved. One without
+      // the other is an incomplete saved connection, and any other refusal a saved team that
+      // cannot be reached: both are shown as such and never lead to the team-start action.
+      if (code === "existing_team_runtime_candidate_required") return "none";
+      savedTeamFailureRef.current = true;
+      const described = describeError(code, { locale: appLocale() });
+      return {
+        status: "failed",
+        stage: "runtime",
+        title: code === "existing_team_saved_incomplete"
+          ? stateText().savedTeamIncompleteTitle
+          : stateText().savedTeamUnreachableTitle,
+        message: described.text,
+        action: described.action,
+        ...(code ? { code } : {}),
+        retryable: true,
+      };
+    }
+  }, [openReadOnlyExistingTeam, setRuntime]);
+
+  const resumeAssistant = useCallback(async (options?: { reopened?: boolean }) => {
     if (!identityKey) throw new Error("identity-missing");
     try {
       setActivity(createOnboardingActivity());
-      setRuntime({ status: "working", stage: "runtime", message: "Verifico lo stato reale della configurazione." });
+      setRuntime({ status: "working", stage: "runtime", message: stateText().checkingRealState });
+      if (!options?.reopened) {
+        const reopened = await reopenExistingTeam();
+        if (reopened === "opened") return;
+        if (reopened !== "none") {
+          setRuntime(reopened);
+          return;
+        }
+      }
       const nativeSnapshot = await resumeOnboardingSnapshot();
       if (activeIdentityKeyRef.current !== identityKey) throw new Error("account-changed");
       const prerequisiteFailure = resumedPrerequisiteFailure(nativeSnapshot);
@@ -900,14 +1028,14 @@ export default function DashboardApp() {
         setRuntime({
           status: "action-required",
           stage: "team-start",
-          message: "Le sessioni del team sono ferme. Avviale quando vuoi continuare.",
+          message: stateText().teamStopped,
         });
         return;
       }
       setRuntime({
         status: "action-required",
         stage: "assistant",
-        message: "La squadra è attiva. Apri la chat con l’Assistente quando vuoi continuare.",
+        message: stateText().teamActive,
       });
     } catch (error) {
       if (activeIdentityKeyRef.current !== identityKey) throw error;
@@ -922,12 +1050,12 @@ export default function DashboardApp() {
       }
       fail("runtime", error);
     }
-  }, [collectHostAgain, fail, identityKey, setRuntime]);
+  }, [collectHostAgain, fail, identityKey, reopenExistingTeam, setRuntime]);
 
   const resumeTeam = useCallback(async () => {
     if (!identityKey) throw new Error("identity-missing");
     try {
-      setRuntime({ status: "working", stage: "team-start", message: "Ripristino le sessioni mancanti del team." });
+      setRuntime({ status: "working", stage: "team-start", message: stateText().restoringSessions });
       beginActivityInvocation();
       const snapshot = await resumeOnboardingTeamStart(recordActivityProgress);
       if (activeIdentityKeyRef.current !== identityKey) throw new Error("account-changed");
@@ -937,7 +1065,7 @@ export default function DashboardApp() {
       setRuntime(withLimitsNotice({
         status: "action-required",
         stage: "assistant",
-        message: "La squadra è attiva. Apri la chat con l’Assistente quando vuoi continuare.",
+        message: stateText().teamActive,
       }, snapshot));
     } catch (error) {
       if (activeIdentityKeyRef.current !== identityKey) throw error;
@@ -968,11 +1096,11 @@ export default function DashboardApp() {
         setRuntime({
           status: "action-required",
           stage: "team-start",
-          message: "Le sessioni del team sono ferme. Avviale quando vuoi continuare.",
+          message: stateText().teamStopped,
         });
         return;
       }
-      setRuntime({ status: "working", stage: "assistant", message: "Ricollego la chat verificata con l’Assistente." });
+      setRuntime({ status: "working", stage: "assistant", message: stateText().reconnectingChat });
       const chat = await reconnectDirectChat();
       if (activeIdentityKeyRef.current !== identityKey) throw new Error("account-changed");
       const snapshot = { ...nativeSnapshot, directChatReady: chat.state === "ready" };
@@ -987,6 +1115,7 @@ export default function DashboardApp() {
 
   const connectExistingTeam = useCallback(async (nativeSnapshot: ExistingTeamConnectionResult) => {
     if (!identityKey || !markerId) throw new Error("identity-missing");
+    if (activeIdentityKeyRef.current !== identityKey) throw new Error("account-changed");
     const chat = await reconnectDirectChat();
     if (activeIdentityKeyRef.current !== identityKey) throw new Error("account-changed");
     const snapshot = { ...nativeSnapshot, directChatReady: chat.state === "ready" };
@@ -1001,12 +1130,51 @@ export default function DashboardApp() {
     navigate("/messages?agent=assistente", { replace: true });
   }, [identityKey, markerId]);
 
+  const closeReadOnlyExistingTeam = useCallback(() => {
+    leaveExistingTeamReadOnly();
+    setReadOnlyExistingTeamKey(null);
+    setExistingTeamDismissedIdentityKey(identityKey);
+    setManualExistingTeam(null);
+  }, [identityKey]);
+
+  /**
+   * The first thing a started identity does: reopen the saved existing team, whatever
+   * the legacy onboarding marker says (a new connection in read-only mode does not
+   * write it). With nothing saved, a profile whose own setup was started goes on to
+   * the usual resume, and an empty profile stays on the normal gate with no resume at all.
+   */
+  const startupReopen = useCallback(async (thenUsualResume: boolean) => {
+    if (!identityKey) return;
+    let showed = false;
+    // A quick refusal (nothing saved) must not flash a spinner on a new profile's first screen.
+    const timer = setTimeout(() => {
+      showed = true;
+      setRuntime({ status: "working", stage: "runtime", message: stateText().checkingRealState });
+    }, 300);
+    let outcome: Awaited<ReturnType<typeof reopenExistingTeam>>;
+    try {
+      outcome = await reopenExistingTeam();
+    } finally {
+      clearTimeout(timer);
+    }
+    if (activeIdentityKeyRef.current !== identityKey || outcome === "opened") return;
+    if (outcome !== "none") {
+      if (!submissionRef.current) setRuntime(outcome);
+      return;
+    }
+    if (thenUsualResume) {
+      await resumeAssistant({ reopened: true });
+      return;
+    }
+    if (showed) setRuntime({ status: "collecting", stage: "host" });
+  }, [identityKey, reopenExistingTeam, resumeAssistant, setRuntime]);
+
   useEffect(() => {
-    if (!identityKey || gate.phase !== "required" || gate.existingTeam || !gate.resumeAvailable ||
+    if (!identityKey || gate.phase !== "required" ||
         assistantChatIdentityKey === identityKey || resumeAttemptedIdentityRef.current === identityKey) return;
     resumeAttemptedIdentityRef.current = identityKey;
-    void resumeAssistant().catch(() => undefined);
-  }, [assistantChatIdentityKey, gate, identityKey, resumeAssistant]);
+    void startupReopen(!gate.existingTeam && gate.resumeAvailable).catch(() => undefined);
+  }, [assistantChatIdentityKey, gate, identityKey, startupReopen]);
 
   const runtimeAction = useCallback(async (stage: "provider-login" | "team-start" | "assistant") => {
     if (stage === "provider-login") return loginProvider();
@@ -1017,10 +1185,19 @@ export default function DashboardApp() {
     return finishAssistant();
   }, [connectResumedAssistant, finishAssistant, gate, loginProvider, resumeTeam]);
 
+  // A failed setup step shows where the runtime log is, written by then.
+  const setupFailed = gate.phase === "required" && gate.runtime.status === "failed";
+  useEffect(() => {
+    if (!setupFailed) return;
+    let active = true;
+    void runtimeLogPath().then((path) => { if (active) setRuntimeLog(path); });
+    return () => { active = false; };
+  }, [setupFailed]);
+
   // Only from the confirmation on the podman_machine_mounts_home error: the
   // machine is deleted and created again, then the setup starts over.
   const recreatePodmanMachine = useCallback(async () => {
-    setRuntime({ status: "working", stage: "runtime", message: "Ricreo la macchina Podman con le sole cartelle di Job Hunter Team." });
+    setRuntime({ status: "working", stage: "runtime", message: stateText().recreatingMachine });
     try {
       await recreateOnboardingPodmanMachine();
     } catch (error) {
@@ -1035,6 +1212,10 @@ export default function DashboardApp() {
     if (gate.phase !== "required" || gate.runtime.status !== "failed") return;
     const { stage } = gate.runtime;
     const submission = submissionRef.current;
+    // A saved existing team that could not be reopened: ask to reopen it again, whatever the marker says.
+    if (savedTeamFailureRef.current && !submission) {
+      return startupReopen(gate.phase === "required" && !gate.existingTeam && gate.resumeAvailable);
+    }
     if (gate.resumeAvailable && !submission) {
       if (stage === "team-start") return resumeTeam();
       if (stage === "assistant") return connectResumedAssistant();
@@ -1045,33 +1226,37 @@ export default function DashboardApp() {
     if (stage === "team-start") return startTeam(submission);
     if (stage === "assistant") return finishAssistant();
     return submit(submission);
-  }, [connectResumedAssistant, fail, finishAssistant, gate, loginProvider, resumeAssistant, resumeTeam, setRuntime, startTeam, submit]);
+  }, [connectResumedAssistant, fail, finishAssistant, gate, loginProvider, resumeAssistant, resumeTeam, setRuntime, startTeam, startupReopen, submit]);
+
+  const logout = localProfile ? async () => {
+    leaveExistingTeamReadOnly();
+    await clearDesktopAccountScope();
+    clearLocalIdentitySelection();
+    goTo(LOGIN_PAGE);
+  } : undefined;
 
   if (migrationProfile && localMigration?.identityKey === identityKey) {
     if (localMigration.phase === "checking") {
-      return <DashboardSkeleton label="Verifica profilo locale" />;
+      return <DashboardSkeleton label={stateText().verifyingLocalProfile} />;
     }
     if (localMigration.phase === "required" || localMigration.phase === "migrating") {
       return (
         <main aria-labelledby="local-migration-title">
-          <h1 id="local-migration-title">Collega il profilo locale al tuo account Google?</h1>
-          <p>
-            Il profilo e il runtime restano su questo Mac. Job Hunter Team trasferirà solo
-            l’intestazione locale all’account con cui hai appena effettuato l’accesso.
-          </p>
+          <h1 id="local-migration-title">{stateText().migrationTitle}</h1>
+          <p>{stateText().migrationText}</p>
           <button
             type="button"
             onClick={() => void confirmLocalMigration()}
             disabled={localMigration.phase === "migrating"}
           >
-            {localMigration.phase === "migrating" ? "Collegamento…" : "Collega e continua"}
+            {localMigration.phase === "migrating" ? stateText().linking : stateText().linkAndContinue}
           </button>
           <button
             type="button"
             onClick={() => void cancelLocalMigration()}
             disabled={localMigration.phase === "migrating"}
           >
-            Annulla e resta in locale
+            {stateText().cancelStayLocal}
           </button>
         </main>
       );
@@ -1079,7 +1264,7 @@ export default function DashboardApp() {
     if (localMigration.phase === "error") {
       return (
         <main role="alert">
-          <p>{MIGRATION_ERROR}</p>
+          <p>{stateText().migrationError}</p>
           {localMigration.retryable && (
             <button
               type="button"
@@ -1089,52 +1274,63 @@ export default function DashboardApp() {
                 phase: "required",
               })}
             >
-              Riprova
+              {stateText().retry}
             </button>
           )}
           <button type="button" onClick={() => void cancelLocalMigration()}>
-            Annulla e resta in locale
+            {stateText().cancelStayLocal}
           </button>
         </main>
       );
     }
   }
   if (!identityKey || accountScope?.identityKey !== identityKey || accountScope.phase === "pending") {
-    return <DashboardSkeleton label="Caricamento dashboard" />;
+    return <DashboardSkeleton label={stateText().loadingDashboard} />;
   }
   if (accountScope.phase === "error") {
     return (
       <main role="alert">
-        <p>{ACCOUNT_SCOPE_ERROR}</p>
-        <button type="button" onClick={() => void initializeAccount()}>Riprova</button>
+        <p>{stateText().accountScopeError}</p>
+        <button type="button" onClick={() => void initializeAccount()}>{stateText().retry}</button>
       </main>
     );
   }
   if (gate.phase === "loading" || (gate.phase === "required" && platform === null)) {
-    return <DashboardSkeleton label="Caricamento dashboard" />;
+    return <DashboardSkeleton label={stateText().loadingDashboard} />;
   }
   if (gate.phase === "error") {
     return (
       <main role="alert">
         <p>{gate.message}</p>
-        <button type="button" onClick={() => void initializeAccount()}>Riprova</button>
+        <button type="button" onClick={() => void initializeAccount()}>{stateText().retry}</button>
       </main>
     );
   }
   if (gate.phase === "required") {
+    if (readOnlyExistingTeamKey === identityKey) {
+      return <Shell key={identityKey} onLogout={logout} onCloseReadOnly={closeReadOnlyExistingTeam} />;
+    }
     if (assistantChatIdentityKey === identityKey) {
       return (
-        <main data-testid="onboarding-assistant-chat" aria-label="Onboarding con l’Assistente">
+        <main data-testid="onboarding-assistant-chat" aria-label={stateText().assistantOnboardingAria}>
           <MessagesPage params={{}} search={new URLSearchParams("agent=assistente")} />
         </main>
       );
     }
-    if (gate.existingTeam && existingTeamDismissedIdentityKey !== identityKey) {
+    const manualExistingHost = gate.account.identity === "local" && manualExistingTeam?.identityKey === identityKey
+      ? manualExistingTeam.host : undefined;
+    if ((gate.existingTeam && existingTeamDismissedIdentityKey !== identityKey) || manualExistingHost) {
       return (
         <ExistingTeamConnectModal
-          teamId={gate.existingTeam.teamId}
-          onCancel={() => setExistingTeamDismissedIdentityKey(identityKey)}
+          key={identityKey}
+          teamId={gate.existingTeam?.teamId}
+          initialHost={manualExistingHost}
+          onCancel={() => {
+            setExistingTeamDismissedIdentityKey(identityKey);
+            setManualExistingTeam(null);
+          }}
           onConnected={connectExistingTeam}
+          onReadOnlyConnected={openReadOnlyExistingTeam}
         />
       );
     }
@@ -1142,6 +1338,9 @@ export default function DashboardApp() {
       <OnboardingFlow
         key={`${identityKey}:${onboardingUiVersion}`}
         account={gate.account}
+        onConnectExistingTeam={gate.account.identity === "local" ? (host) => {
+          if (activeIdentityKeyRef.current === identityKey) setManualExistingTeam({ identityKey, host });
+        } : undefined}
         platform={platform ?? "other"}
         runtime={gate.runtime}
         activity={activity}
@@ -1156,15 +1355,13 @@ export default function DashboardApp() {
         onProviderRestart={restartProviderLogin}
         onRetry={retry}
         onRecreatePodmanMachine={recreatePodmanMachine}
+        runtimeLogPath={runtimeLog}
+        onOpenRuntimeLog={openRuntimeLog}
+        previousLocalData={previousLocalData}
         onRestart={restartOnboarding}
         onExitFailure={exitTechnicalFailure}
       />
     );
   }
-  const logout = localProfile ? async () => {
-    await clearDesktopAccountScope();
-    clearLocalIdentitySelection();
-    goTo(LOGIN_PAGE);
-  } : undefined;
   return <Shell key={identityKey} onLogout={logout} />;
 }

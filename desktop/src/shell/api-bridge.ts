@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 import { locales } from "@/i18n/config";
 import { readLocaleCookie } from "@/lib/use-locale";
+import { existingTeamReadOnly } from "../lib/existing-team-readonly";
 
 /**
  * The web components call the web's Next routes (`fetch("/api/…")`), which do
@@ -31,6 +32,14 @@ export function apiPath(input: RequestInfo | URL): string | null {
 export const notInDesktop: ApiFetch = async (input) => json({ error: "not_in_desktop", path: apiPath(input) }, 404);
 
 /**
+ * While an existing team's VPS is only being read (lib/existing-team-readonly.ts)
+ * the pages ask for two things: the locale and the sidebar's dataset. Anything
+ * else is refused here, before a route can write to the cloud. The controls
+ * that would ask are disabled, so this answers a call nobody should make.
+ */
+const READ_ONLY_PATHS = new Set(["/api/i18n", "/api/positions/facets"]);
+
+/**
  * Routes the shell itself answers before handing over to `next`.
  * web/app/api/i18n/route.ts GET: the locale the web pages render in
  * (NavLinks and DashboardI18nProvider ask for it).
@@ -38,7 +47,11 @@ export const notInDesktop: ApiFetch = async (input) => json({ error: "not_in_des
 export function shellApi(next: ApiFetch): ApiFetch {
   return async (input, init) => {
     const method = (init?.method ?? (input instanceof Request ? input.method : "GET")).toUpperCase();
-    if (apiPath(input) === "/api/i18n" && method === "GET") {
+    const path = apiPath(input);
+    if (existingTeamReadOnly() && path && !(method === "GET" && READ_ONLY_PATHS.has(path))) {
+      return json({ error: "read_only" }, 403);
+    }
+    if (path === "/api/i18n" && method === "GET") {
       return json({ current: readLocaleCookie(), locales });
     }
     return next(input, init);

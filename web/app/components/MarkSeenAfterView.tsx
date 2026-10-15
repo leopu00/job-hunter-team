@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import { markSeen } from "@/lib/seen-positions";
+import { useReadOnlyActions } from "@/lib/read-only-actions";
 
 const DWELL_MS = 2000;
 
@@ -14,9 +15,12 @@ const DWELL_MS = 2000;
 // cross-device. Se la POST fallisce resta il localStorage: al prossimo
 // render server il pallino ricompare sugli ALTRI device, mai su questo.
 export default function MarkSeenAfterView({ id }: { id: string }) {
+  const { readOnly } = useReadOnlyActions();
   useEffect(() => {
     const t = window.setTimeout(() => {
       markSeen(id);
+      // Read-only: the marker stays in this browser, nothing is written.
+      if (readOnly) return;
       fetch("/api/positions/seen", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -25,6 +29,6 @@ export default function MarkSeenAfterView({ id }: { id: string }) {
       }).catch(() => {});
     }, DWELL_MS);
     return () => window.clearTimeout(t);
-  }, [id]);
+  }, [id, readOnly]);
   return null;
 }

@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { createPortal } from "react-dom";
 import { useLocale } from "@/lib/use-locale";
 import { makeT } from "@/lib/i18n-dict";
+import { useReadOnlyActions } from "@/lib/read-only-actions";
 import type { ApplyRequestState } from "@/lib/apply-request-rule";
 import {
   requestFailureMessage,
@@ -76,6 +77,7 @@ export function ApplyRequestView({
   onDismiss?: () => void;
   onWithdraw?: () => void;
 }) {
+  const readOnly = useReadOnlyActions();
   if (state.kind === "hidden") return null;
 
   const button = (
@@ -88,7 +90,8 @@ export function ApplyRequestView({
       type="button"
       data-action={action}
       onClick={onClick}
-      disabled={busy}
+      disabled={busy || readOnly.readOnly}
+      title={readOnly.readOnly ? readOnly.reason : undefined}
       className="rounded-lg border px-3 py-1.5 text-[11px] font-semibold transition-colors hover:bg-[var(--color-row)] disabled:cursor-not-allowed disabled:opacity-60"
       style={{
         borderColor:

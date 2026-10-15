@@ -43,6 +43,7 @@ HOST_UID="$(id -u)"
 CONTAINER_SERVICE="jht"
 # I servizi del compose: agenti e i due servizi isolati.
 COMPOSE_SERVICES="jht jht-broker jht-telegram"
+RUNTIME_MIGRATION_VOLUMES="jht-broker-state jht-secrets jht-telegram-secrets jht-telegram-state"
 ATTESTED_CONTAINER_ID=""
 if [ -n "${JHT_RUNTIME_DIR:-}" ]; then
   RUNTIME_DIR="$JHT_RUNTIME_DIR"
@@ -55,6 +56,12 @@ COMPOSE_FILE="${JHT_COMPOSE_FILE:-$RUNTIME_DIR/docker-compose.yml}"
 NODE_ENTRY="${JHT_NODE_ENTRY:-/app/cli/bin/jht.js}"
 HOST_SETUP_SCRIPT="${JHT_HOST_SETUP_SCRIPT:-$RUNTIME_DIR/host-setup.sh}"
 RUNTIME_MANIFEST="$RUNTIME_DIR/.runtime-integrity"
+RUNTIME_MIGRATION_MARKER="$RUNTIME_DIR/.runtime-migrated-podman"
+# Canale di test: install.sh --image fissa qui l'immagine verificata del suo
+# commit (ref canonico per digest). Sta nel runtime host, fuori dai mount del
+# container, ed e' coperto dal manifest: nessuna variabile d'ambiente serve
+# ai `jht up` successivi. Assente = produzione (immagine del compose).
+RUNTIME_IMAGE_PIN="$RUNTIME_DIR/runtime-image"
 # `jht upgrade` aggiorna anche i due file host scaricati dall'installer. Il
 # wrapper non puo' fidarsi di un checkout Git (la distribuzione utente e'
 # image-only), quindi la fonte e' la stessa raw release dell'installer. Chi
@@ -275,6 +282,9 @@ runtime_write_manifest() {
       fi
       printf 'docker-shim=%s\n' "$(runtime_sha256 "$DOCKER_SHIM")"
     fi
+    if [ -f "$RUNTIME_IMAGE_PIN" ]; then
+      printf 'runtime-image=%s\n' "$(runtime_sha256 "$RUNTIME_IMAGE_PIN")"
+    fi
   } > "$tmp" || return 1
   chmod 600 "$tmp" || { rm -f "$tmp"; return 1; }
   mv -f "$tmp" "$RUNTIME_MANIFEST"
@@ -343,9 +353,28 @@ runtime_bundle_trusted() {
     [ "$(runtime_manifest_value docker-shim)" = "$(runtime_sha256 "$DOCKER_SHIM")" ] || return 1
     grep -Fqx '# JHT_PODMAN_DOCKER_SHIM=1' "$DOCKER_SHIM" || return 1
   fi
+  if [ -e "$RUNTIME_IMAGE_PIN" ] || [ -L "$RUNTIME_IMAGE_PIN" ]; then
+    runtime_node_safe "$RUNTIME_IMAGE_PIN" file || return 1
+    [ "$(runtime_manifest_value runtime-image)" = "$(runtime_sha256 "$RUNTIME_IMAGE_PIN")" ] || return 1
+    runtime_image_pin_value >/dev/null || return 1
+  elif [ -n "$(runtime_manifest_value runtime-image)" ]; then
+    # Il manifest attesta un pin che non c'e' piu': tornare in silenzio
+    # all'immagine di produzione cambierebbe canale senza che nessuno lo chieda.
+    return 1
+  fi
   grep -Fqx 'JHT_HOST_RUNTIME_PROTOCOL=1' "$WRAPPER_PATH" || return 1
   grep -Fqx 'JHT_HOST_SETUP_PROTOCOL=1' "$HOST_SETUP_SCRIPT" || return 1
   grep -Eq '^[[:space:]]*-[[:space:]]*jht-runtime-mask:/jht_home/runtime([[:space:]]|$)' "$COMPOSE_FILE" || return 1
+}
+
+# Il ref del pin, solo nella forma canonica scritta da install.sh.
+runtime_image_pin_value() {
+  local value
+  [ -f "$RUNTIME_IMAGE_PIN" ] || return 1
+  [ "$(wc -l < "$RUNTIME_IMAGE_PIN" | tr -d ' ')" = "1" ] || return 1
+  value="$(tr -d '\n' < "$RUNTIME_IMAGE_PIN")"
+  printf '%s' "$value" | grep -Eqx 'ghcr\.io/leopu00/jht@sha256:[0-9a-f]{64}' || return 1
+  printf '%s\n' "$value"
 }
 
 runtime_bootstrap_release() {
@@ -426,6 +455,12 @@ require_trusted_runtime() {
     err "runtime host non attendibile (path, owner, permessi o SHA-256)"
     return 1
   }
+  # Il pin del canale di test vince su un JHT_IMAGE dell'ambiente: il canale
+  # e' deciso all'installazione, non da chi lancia il comando.
+  if [ -f "$RUNTIME_IMAGE_PIN" ]; then
+    JHT_IMAGE="$(runtime_image_pin_value)" || return 1
+    export JHT_IMAGE
+  fi
 }
 
 # ── Verifiche pre-flight ──────────────────────────────────────────────────
@@ -1493,6 +1528,241 @@ reset_command() {
   remove_broker_reset_data
 }
 
+# Manifest deterministico del contenuto di un volume. Conta i file regolari e
+# lega al digest aggregato sia il percorso relativo sia il digest di ciascun
+# file. Symlink e file speciali fanno fallire la migrazione: i quattro volumi
+# persistenti JHT contengono soltanto directory e file regolari.
+RUNTIME_VOLUME_MANIFEST_PY='import hashlib,os,stat,sys
+root=sys.argv[1]
+root_stat=os.lstat(root)
+entries=[("D",".",str(root_stat.st_uid)+":"+str(root_stat.st_gid)+":"+format(stat.S_IMODE(root_stat.st_mode),"o"),"")]
+count=0
+for base,dirs,files in os.walk(root,topdown=True,followlinks=False):
+    dirs.sort(); files.sort()
+    for name in list(dirs):
+        path=os.path.join(base,name); mode=os.lstat(path).st_mode
+        if not stat.S_ISDIR(mode): raise SystemExit(41)
+        metadata=os.lstat(path)
+        owner=str(metadata.st_uid)+":"+str(metadata.st_gid)+":"+format(stat.S_IMODE(mode),"o")
+        entries.append(("D",os.path.relpath(path,root),owner,""))
+    for name in files:
+        path=os.path.join(base,name); mode=os.lstat(path).st_mode
+        if not stat.S_ISREG(mode): raise SystemExit(42)
+        digest=hashlib.sha256()
+        with open(path,"rb") as stream:
+            for block in iter(lambda:stream.read(1024*1024),b""): digest.update(block)
+        metadata=os.lstat(path)
+        owner=str(metadata.st_uid)+":"+str(metadata.st_gid)+":"+format(stat.S_IMODE(mode),"o")
+        entries.append(("F",os.path.relpath(path,root),owner,digest.hexdigest())); count+=1
+aggregate=hashlib.sha256()
+for kind,path,owner,digest in entries:
+    aggregate.update(kind.encode()+b"\0"+path.encode("utf-8")+b"\0"+owner.encode()+b"\0"+digest.encode()+b"\0")
+print(str(count)+" "+aggregate.hexdigest())'
+
+migration_docker_binary() {
+  local candidate="${JHT_MIGRATION_DOCKER:-}" resolved=""
+  for candidate in "$candidate" "$(command -v docker 2>/dev/null || true)" \
+      /usr/bin/docker /usr/local/bin/docker /opt/homebrew/bin/docker \
+      /Applications/Docker.app/Contents/Resources/bin/docker; do
+    [ -n "$candidate" ] && [ -x "$candidate" ] || continue
+    resolved="$(cd -P "$(dirname "$candidate")" 2>/dev/null && printf '%s/%s\n' "$(pwd -P)" "$(basename "$candidate")")" || continue
+    [ "$resolved" != "$DOCKER_SHIM" ] || continue
+    printf '%s\n' "$resolved"
+    return 0
+  done
+  return 1
+}
+
+migration_podman_run() {
+  local podman_bin="$1"
+  shift
+  if [ "$HOST_KERNEL" = "Darwin" ]; then
+    "$podman_bin" --connection "$PODMAN_MACHINE_NAME" "$@"
+  else
+    "$podman_bin" "$@"
+  fi
+}
+
+migration_volume_id() {
+  local engine="$1" binary="$2" project="$3" logical="$4" ids=""
+  if [ "$engine" = docker ]; then
+    ids="$("$binary" volume ls -q \
+      --filter "label=com.docker.compose.project=$project" \
+      --filter "label=com.docker.compose.volume=$logical")" || return 1
+  else
+    ids="$(migration_podman_run "$binary" volume ls -q \
+      --filter "label=com.docker.compose.project=$project" \
+      --filter "label=com.docker.compose.volume=$logical")" || return 1
+  fi
+  case "$ids" in *$'\n'*) return 2 ;; esac
+  printf '%s' "$ids"
+}
+
+migration_volume_manifest() {
+  local engine="$1" binary="$2" image="$3" volume="$4" result
+  if [ "$engine" = docker ]; then
+    result="$("$binary" run --rm --network none --read-only --cap-drop ALL \
+      --security-opt no-new-privileges --volume "$volume:/volume:ro" \
+      --entrypoint /usr/bin/python3 "$image" -I -c "$RUNTIME_VOLUME_MANIFEST_PY" /volume)" \
+      || return 1
+  else
+    result="$(migration_podman_run "$binary" run --rm --network none --read-only --cap-drop ALL \
+      --security-opt no-new-privileges --volume "$volume:/volume:ro" \
+      --entrypoint /usr/bin/python3 "$image" -I -c "$RUNTIME_VOLUME_MANIFEST_PY" /volume)" \
+      || return 1
+  fi
+  printf '%s\n' "$result" | grep -Eq '^[0-9]+ [0-9a-f]{64}$' || return 1
+  printf '%s\n' "$result"
+}
+
+migration_copy_volume() {
+  local docker_bin="$1" podman_bin="$2" image="$3" source="$4" target="$5"
+  "$docker_bin" run --rm --network none --read-only --cap-drop ALL \
+      --security-opt no-new-privileges --volume "$source:/volume:ro" \
+      --entrypoint /bin/tar "$image" -C /volume -cf - . \
+    | migration_podman_run "$podman_bin" run --rm -i --network none --read-only \
+      --cap-drop ALL --security-opt no-new-privileges \
+      --volume "$target:/volume" --entrypoint /bin/tar "$image" \
+      -C /volume -xf -
+}
+
+migration_left() {
+  local verified=" $1 " logical
+  for logical in $RUNTIME_MIGRATION_VOLUMES; do
+    case "$verified" in *" $logical "*) ;; *) printf 'JHT_LEFT %s\n' "$logical" ;; esac
+  done
+}
+
+migrate_runtime_podman() {
+  local docker_bin podman_bin image logical source target source_manifest target_manifest
+  local verified="" records="" tmp_marker running
+  docker_bin="$(migration_docker_binary)" || {
+    err "runtime_migration_docker_missing: il client Docker originale non e' disponibile."
+    migration_left "$verified"; return 24
+  }
+  podman_bin="${JHT_MIGRATION_PODMAN:-$(podman_binary 2>/dev/null || true)}"
+  [ -n "$podman_bin" ] && [ -x "$podman_bin" ] || {
+    err "runtime_migration_podman_missing: Podman non e' disponibile."
+    migration_left "$verified"; return 24
+  }
+  image="${JHT_MIGRATION_IMAGE:-${JHT_IMAGE:-$DEFAULT_RUNTIME_IMAGE}}"
+  if ! printf '%s\n' "$image" \
+      | grep -Eq '^ghcr\.io/leopu00/jht@sha256:[0-9a-f]{64}$'; then
+    err "runtime_migration_image_invalid: serve l'immagine JHT fissata per digest."
+    migration_left "$verified"; return 24
+  fi
+  "$docker_bin" image inspect "$image" >/dev/null 2>&1 \
+    && migration_podman_run "$podman_bin" image inspect "$image" >/dev/null 2>&1 || {
+      err "runtime_migration_image_missing: la stessa immagine JHT deve esistere in Docker e Podman."
+      migration_left "$verified"; return 24
+    }
+  running="$("$docker_bin" ps -q --filter label=com.docker.compose.project=host-runtime)" || {
+    migration_left "$verified"; return 24
+  }
+  [ -z "$running" ] || {
+    err "runtime_migration_team_running: ferma prima il team Docker."
+    migration_left "$verified"; return 24
+  }
+  running="$(migration_podman_run "$podman_bin" ps -q --filter label=com.docker.compose.project=jht)" || {
+    migration_left "$verified"; return 24
+  }
+  [ -z "$running" ] || {
+    err "runtime_migration_team_running: ferma prima il team Podman."
+    migration_left "$verified"; return 24
+  }
+
+  # Un marker completo rende il comando un no-op soltanto se sorgente e
+  # destinazione sono ancora identici. Non sovrascriviamo dati Podman usati
+  # dopo una migrazione conclusa.
+  if [ -f "$RUNTIME_MIGRATION_MARKER" ]; then
+    for logical in $RUNTIME_MIGRATION_VOLUMES; do
+      source="$(migration_volume_id docker "$docker_bin" host-runtime "$logical")" || {
+        migration_left "$verified"; return 24
+      }
+      target="$(migration_volume_id podman "$podman_bin" jht "$logical")" || {
+        migration_left "$verified"; return 24
+      }
+      if [ -z "$source" ] && [ -z "$target" ] \
+          && grep -Fqx "$logical=absent" "$RUNTIME_MIGRATION_MARKER"; then
+        verified="$verified $logical"; continue
+      fi
+      [ -n "$source" ] && [ -n "$target" ] || {
+        err "runtime_migration_changed: $logical non corrisponde piu' al marker verificato."
+        migration_left "$verified"; return 24
+      }
+      source_manifest="$(migration_volume_manifest docker "$docker_bin" "$image" "$source")" || {
+        migration_left "$verified"; return 24
+      }
+      target_manifest="$(migration_volume_manifest podman "$podman_bin" "$image" "$target")" || {
+        migration_left "$verified"; return 24
+      }
+      [ "$source_manifest" = "$target_manifest" ] \
+        && grep -Fqx "$logical=$source_manifest" "$RUNTIME_MIGRATION_MARKER" || {
+          err "runtime_migration_changed: checksum diverso per $logical dopo la migrazione."
+          migration_left "$verified"; return 24
+        }
+      verified="$verified $logical"
+    done
+    info "Migrazione Docker -> Podman gia' verificata; i volumi Docker restano intatti e contengono ancora le password della posta, gli accessi ai portali e i token di Telegram."
+    return 0
+  fi
+
+  for logical in $RUNTIME_MIGRATION_VOLUMES; do
+    source="$(migration_volume_id docker "$docker_bin" host-runtime "$logical")" || {
+      migration_left "$verified"; return 24
+    }
+    target="$(migration_volume_id podman "$podman_bin" jht "$logical")" || {
+      migration_left "$verified"; return 24
+    }
+    if [ -z "$source" ]; then
+      [ -z "$target" ] || {
+        err "runtime_migration_source_missing: $logical manca in Docker ma esiste in Podman; non lo sovrascrivo."
+        migration_left "$verified"; return 24
+      }
+      records="${records}${logical}=absent\n"
+      verified="$verified $logical"
+      continue
+    fi
+    source_manifest="$(migration_volume_manifest docker "$docker_bin" "$image" "$source")" || {
+      migration_left "$verified"; return 24
+    }
+    [ -z "$target" ] || migration_podman_run "$podman_bin" volume rm -f "$target" >/dev/null || {
+      migration_left "$verified"; return 24
+    }
+    target="jht_$logical"
+    migration_podman_run "$podman_bin" volume create \
+      --label com.docker.compose.project=jht \
+      --label com.docker.compose.volume="$logical" \
+      --label io.podman.compose.project=jht \
+      --label io.podman.compose.volume="$logical" "$target" >/dev/null || {
+        migration_left "$verified"; return 24
+      }
+    migration_copy_volume "$docker_bin" "$podman_bin" "$image" "$source" "$target" || {
+      err "runtime_migration_interrupted: copia incompleta di $logical; il sorgente Docker e' intatto."
+      migration_left "$verified"; return 24
+    }
+    target_manifest="$(migration_volume_manifest podman "$podman_bin" "$image" "$target")" || {
+      migration_left "$verified"; return 24
+    }
+    [ "$source_manifest" = "$target_manifest" ] || {
+      err "runtime_migration_checksum_mismatch: $logical non ha superato la verifica."
+      migration_left "$verified"; return 24
+    }
+    records="${records}${logical}=${source_manifest}\n"
+    verified="$verified $logical"
+  done
+  tmp_marker="${RUNTIME_MIGRATION_MARKER}.tmp.$$"
+  umask 077
+  {
+    printf 'version=1\nsource=docker:host-runtime\ntarget=podman:jht\n'
+    printf '%b' "$records"
+  } > "$tmp_marker" || { rm -f "$tmp_marker"; migration_left "$verified"; return 24; }
+  chmod 600 "$tmp_marker" && mv -f "$tmp_marker" "$RUNTIME_MIGRATION_MARKER" || {
+    rm -f "$tmp_marker"; migration_left "$verified"; return 24
+  }
+  info "Migrazione Docker -> Podman verificata. I volumi Docker non sono stati rimossi e contengono ancora le password della posta, gli accessi ai portali e i token di Telegram: cancellali solo con una conferma esplicita nel futuro comando di pulizia."
+}
+
 # `jht mail setup --password-stdin --user U --dedicated|--not-dedicated` e' il
 # canale del desktop: nessuna domanda, la password e' la prima riga di stdin
 # (mai argv, file o log), e su stdout c'e' una sola riga JSON, quella del
@@ -1837,6 +2107,9 @@ jht — Job Hunter Team
     jht telegram pair --all abbina in una seduta tutti i ruoli legacy
     jht telegram chat-id ROLE sposta il bot su un'altra chat, con lo stesso codice
     jht reset              cancella configurazione e volumi del broker
+    jht migrate-runtime podman
+                           copia e verifica i volumi Docker in Podman;
+                           non seleziona il nuovo runtime e non cancella Docker
     jht podman-machine-recreate --confirm
                            ricrea la macchina Podman (macOS) vedendo
                            solo ~/.jht e ~/Documents/Job Hunter Team
@@ -1872,7 +2145,7 @@ serve_help_without_docker() {
 # falso errore; il loro aiuto resta quindi quello locale anche in quel caso.
 host_command_uses_local_help() {
   case "$1" in
-    up|start-container|down|stop-container|restart|recreate|upgrade|logs|status|shell|oauth-login|claude-login|setup|download|podman-machine-recreate|mail|telegram|reset)
+    up|start-container|down|stop-container|restart|recreate|upgrade|logs|status|shell|oauth-login|claude-login|setup|download|podman-machine-recreate|mail|telegram|reset|migrate-runtime)
       return 0
       ;;
   esac
@@ -2807,6 +3080,12 @@ handle_runtime_upgrade() {
     upgrade_result false false preflight unknown none unknown none false "Runtime host non attendibile" false
     return 1
   fi
+  # Un'installazione del canale di test e' fissata a un commit: l'upgrade
+  # scaricherebbe il compose di produzione e mescolerebbe i due canali.
+  if [ -f "$RUNTIME_IMAGE_PIN" ]; then
+    upgrade_result false false preflight unknown none unknown none false "Installazione del canale di test: si aggiorna reinstallando dalla build di test" false
+    return 1
+  fi
   if ! upgrade_docker_ready; then
     upgrade_result false false preflight unknown none unknown none false "Docker non e disponibile" false
     return 1
@@ -3562,6 +3841,16 @@ case "$SUB" in
     require_compose_file
     require_docker
     reset_command "${@:2}"
+    exit $?
+    ;;
+
+  migrate-runtime)
+    require_compose_file
+    if [ "${2:-}" != podman ] || [ $# -ne 2 ]; then
+      err "uso: jht migrate-runtime podman"
+      exit 2
+    fi
+    migrate_runtime_podman
     exit $?
     ;;
 

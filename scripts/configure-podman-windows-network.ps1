@@ -4,10 +4,17 @@
 [CmdletBinding()]
 param(
   [string]$MachineName = 'jht-podman-probe',
-  [int]$Port = 3128
+  [int]$Port = 3128,
+  [int]$BrokerPort = 3129,
+  [int]$TelegramPort = 3130
 )
 
 $ErrorActionPreference = 'Stop'
+$proxyPorts = @($Port, $BrokerPort, $TelegramPort)
+if (($proxyPorts | Where-Object { $_ -lt 1 -or $_ -gt 65535 }).Count -ne 0 -or
+    ($proxyPorts | Sort-Object -Unique).Count -ne 3) {
+  throw 'Agent, broker and Telegram proxy ports must be distinct valid TCP ports.'
+}
 $Podman = (Get-Command podman.exe -CommandType Application -ErrorAction SilentlyContinue |
   Select-Object -First 1).Source
 if (-not $Podman) {
@@ -54,6 +61,8 @@ function New-NativeConnector {
   $source = @'
 using System;
 using System.IO;
+using System.Net;
+using System.Net.NetworkInformation;
 using System.Net.Sockets;
 using System.Threading;
 
@@ -70,6 +79,20 @@ public static class JhtWindowsConnect
         }
     }
 
+    // The PC's own addresses are the user's home even when they are public
+    // (a PC with a public IPv4 of its own): never a destination.
+    private static bool IsOwnAddress(IPAddress target)
+    {
+        foreach (NetworkInterface card in NetworkInterface.GetAllNetworkInterfaces())
+        {
+            foreach (UnicastIPAddressInformation own in card.GetIPProperties().UnicastAddresses)
+            {
+                if (own.Address.Equals(target)) return true;
+            }
+        }
+        return false;
+    }
+
     public static int Main(string[] args)
     {
         Stream output = Console.OpenStandardOutput();
@@ -77,11 +100,22 @@ public static class JhtWindowsConnect
         int port;
         if (!Int32.TryParse(args[1], out port) || port < 1 || port > 65535)
         { output.WriteByte(1); output.Flush(); return 2; }
+        // Only the numeric IPv4 address the proxy verified: never a name
+        // (it would be resolved again here), never IPv6 (a global IPv6 can
+        // be the home /64), never one of this PC's own addresses.
+        IPAddress target;
+        if (!IPAddress.TryParse(args[0], out target) || target.AddressFamily != AddressFamily.InterNetwork)
+        { output.WriteByte(1); output.Flush(); return 3; }
+        try
+        {
+            if (IsOwnAddress(target)) { output.WriteByte(1); output.Flush(); return 3; }
+        }
+        catch { output.WriteByte(1); output.Flush(); return 3; }
 
         TcpClient client = new TcpClient();
         try
         {
-            IAsyncResult pending = client.BeginConnect(args[0], port, null, null);
+            IAsyncResult pending = client.BeginConnect(target, port, null, null);
             if (!pending.AsyncWaitHandle.WaitOne(TimeSpan.FromSeconds(60)))
                 throw new TimeoutException("connect timeout");
             client.EndConnect(pending);
@@ -129,7 +163,10 @@ public static class JhtWindowsConnect
 
 $stateDir = Join-Path $env:LOCALAPPDATA 'Job Hunter Team\podman-network'
 New-Item -ItemType Directory -Path $stateDir -Force | Out-Null
-$connector = Join-Path $stateDir 'jht-windows-connect.exe'
+# The name carries the source's digest (tests/test_podman_windows_probe.py
+# checks it): New-NativeConnector never overwrites an existing binary, so a
+# changed connector must get a new name to reach installs that have the old.
+$connector = Join-Path $stateDir 'jht-windows-connect-1d6ba098a310.exe'
 New-NativeConnector -Destination $connector
 
 $proxySource = Join-Path $PSScriptRoot 'wsl-interop-connect-proxy.py'
@@ -138,9 +175,15 @@ $proxySourceWsl = ConvertTo-WslPath $proxySource
 $connectorWsl = ConvertTo-WslPath $connector
 $proxyUrl = "http://127.0.0.1:$Port"
 
-$unit = @"
+function New-JhtProxyUnit {
+  param(
+    [Parameter(Mandatory)][string]$Description,
+    [Parameter(Mandatory)][ValidateSet('agent', 'broker', 'telegram')][string]$Policy,
+    [Parameter(Mandatory)][int]$ListenPort
+  )
+  return @"
 [Unit]
-Description=JHT Windows interop egress proxy
+Description=$Description
 Before=jht-rootless-podman.service
 
 [Service]
@@ -148,17 +191,26 @@ Type=simple
 User=user
 Group=user
 Environment="HOME=/home/user"
-ExecStart=/usr/bin/python3 /home/user/.local/share/jht-podman/wsl-interop-connect-proxy.py --bind 127.0.0.1 --port $Port --connector "$connectorWsl"
+ExecStart=/usr/bin/python3 /home/user/.local/share/jht-podman/wsl-interop-connect-proxy.py --bind 127.0.0.1 --port $ListenPort --policy $Policy --connector "$connectorWsl"
 Restart=always
 RestartSec=1s
 
 [Install]
 WantedBy=multi-user.target
 "@
+}
+
+$unit = New-JhtProxyUnit -Description 'JHT Windows agent egress proxy' -Policy agent -ListenPort $Port
+$brokerUnit = New-JhtProxyUnit -Description 'JHT Windows broker egress proxy' -Policy broker -ListenPort $BrokerPort
+$telegramUnit = New-JhtProxyUnit -Description 'JHT Windows Telegram egress proxy' -Policy telegram -ListenPort $TelegramPort
 $apiService = @"
 [Unit]
 Requires=jht-windows-egress-proxy.service
 After=jht-windows-egress-proxy.service
+Requires=jht-windows-egress-proxy-broker.service
+After=jht-windows-egress-proxy-broker.service
+Requires=jht-windows-egress-proxy-telegram.service
+After=jht-windows-egress-proxy-telegram.service
 Requires=user-runtime-dir@1000.service
 After=user-runtime-dir@1000.service
 
@@ -185,24 +237,83 @@ ExecStart=/usr/bin/podman --log-level=info system service --time=0 unix:///run/u
 WantedBy=multi-user.target
 "@
 $unitFile = Join-Path $stateDir 'jht-windows-egress-proxy.service'
+$brokerUnitFile = Join-Path $stateDir 'jht-windows-egress-proxy-broker.service'
+$telegramUnitFile = Join-Path $stateDir 'jht-windows-egress-proxy-telegram.service'
 $apiServiceFile = Join-Path $stateDir 'jht-rootless-podman.service'
 [IO.File]::WriteAllText($unitFile, $unit, [Text.UTF8Encoding]::new($false))
+[IO.File]::WriteAllText($brokerUnitFile, $brokerUnit, [Text.UTF8Encoding]::new($false))
+[IO.File]::WriteAllText($telegramUnitFile, $telegramUnit, [Text.UTF8Encoding]::new($false))
 [IO.File]::WriteAllText($apiServiceFile, $apiService, [Text.UTF8Encoding]::new($false))
 $unitWsl = ConvertTo-WslPath $unitFile
+$brokerUnitWsl = ConvertTo-WslPath $brokerUnitFile
+$telegramUnitWsl = ConvertTo-WslPath $telegramUnitFile
 $apiServiceWsl = ConvertTo-WslPath $apiServiceFile
 
-Invoke-MachineShell ("sudo mkdir -p /home/user/.local/share/jht-podman /home/user/.config/systemd/user && " +
-  "sudo install -o user -g user -m 0644 $(Quote-Sh $proxySourceWsl) /home/user/.local/share/jht-podman/wsl-interop-connect-proxy.py && " +
-  "sudo rm -f /home/user/.config/systemd/user/default.target.wants/jht-windows-egress-proxy.service /home/user/.config/systemd/user/jht-windows-egress-proxy.service /home/user/.config/systemd/user/jht-windows-interop-proxy.service /home/user/.config/systemd/user/podman.service.d/jht-proxy.conf && " +
-  "sudo ln -sfn /dev/null /home/user/.config/systemd/user/podman.socket && " +
-  "sudo ln -sfn /dev/null /home/user/.config/systemd/user/podman.service && " +
-  "sudo install -m 0644 $(Quote-Sh $unitWsl) /etc/systemd/system/jht-windows-egress-proxy.service && " +
-  "sudo install -m 0644 $(Quote-Sh $apiServiceWsl) /etc/systemd/system/jht-rootless-podman.service && " +
-  "sudo systemctl disable --now jht-rootless-podman.socket 2>/dev/null || true; " +
-  "sudo rm -f /etc/systemd/system/jht-rootless-podman.socket /etc/systemd/system/sockets.target.wants/jht-rootless-podman.socket /etc/systemd/system/multi-user.target.wants/jht-rootless-podman.socket")
-Invoke-MachineShell 'sudo systemctl daemon-reload && sudo systemctl enable jht-windows-egress-proxy.service jht-rootless-podman.service && sudo systemctl restart jht-windows-egress-proxy.service jht-rootless-podman.service'
-$validation = "code=`$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' --proxy $(Quote-Sh $proxyUrl) https://ghcr.io/v2/); test `"`$code`" = 401"
+# No systemd reload while the machine runs. In Podman's WSL machine systemd
+# runs in its own PID namespace, and on a Windows 10 test PC (09/10/2026)
+# the reload implied by `systemctl enable` never finished: systemd stopped
+# answering, `podman machine ssh` hung with it, and so did the installer.
+# Units seen for the first time are loaded from disk when started; a unit
+# that systemd already holds and that changed is picked up by restarting the
+# machine instead. Every systemctl runs under a timeout, so a stuck systemd
+# becomes an error instead of an endless wait.
+$egressServices = 'jht-windows-egress-proxy.service jht-windows-egress-proxy-broker.service jht-windows-egress-proxy-telegram.service'
+$runtimeServices = "$egressServices jht-rootless-podman.service"
+$unitInstall = ''
+foreach ($unitEntry in @(
+  @($unitWsl, 'jht-windows-egress-proxy.service'),
+  @($brokerUnitWsl, 'jht-windows-egress-proxy-broker.service'),
+  @($telegramUnitWsl, 'jht-windows-egress-proxy-telegram.service'),
+  @($apiServiceWsl, 'jht-rootless-podman.service')
+)) {
+  $unitSource = Quote-Sh $unitEntry[0]
+  $unitTarget = '/etc/systemd/system/' + $unitEntry[1]
+  $unitInstall += "if [ -e $unitTarget ] && ! sudo cmp -s $unitSource $unitTarget; then units_changed=1; fi; " +
+    "sudo install -m 0644 $unitSource $unitTarget; "
+}
+$proxyTarget = '/home/user/.local/share/jht-podman/wsl-interop-connect-proxy.py'
+$machineOutput = @(Invoke-MachineShell ("set -e; units_changed=0; proxy_changed=0; " +
+  "sudo mkdir -p /home/user/.local/share/jht-podman /home/user/.config/systemd/user; " +
+  "sudo cmp -s $(Quote-Sh $proxySourceWsl) $proxyTarget || proxy_changed=1; " +
+  "sudo install -o user -g user -m 0644 $(Quote-Sh $proxySourceWsl) $proxyTarget; " +
+  "sudo rm -f /home/user/.config/systemd/user/default.target.wants/jht-windows-egress-proxy.service /home/user/.config/systemd/user/jht-windows-egress-proxy.service /home/user/.config/systemd/user/jht-windows-interop-proxy.service /home/user/.config/systemd/user/podman.service.d/jht-proxy.conf; " +
+  "sudo ln -sfn /dev/null /home/user/.config/systemd/user/podman.socket; " +
+  "sudo ln -sfn /dev/null /home/user/.config/systemd/user/podman.service; " +
+  $unitInstall +
+  "sudo timeout 60 systemctl disable --no-reload --now jht-rootless-podman.socket 2>/dev/null || true; " +
+  "sudo rm -f /etc/systemd/system/jht-rootless-podman.socket /etc/systemd/system/sockets.target.wants/jht-rootless-podman.socket /etc/systemd/system/multi-user.target.wants/jht-rootless-podman.socket; " +
+  "sudo timeout 60 systemctl enable --no-reload $runtimeServices; " +
+  "if [ `$units_changed = 1 ]; then echo JHT_MACHINE_RESTART; exit 0; fi; " +
+  "if [ `$proxy_changed = 1 ]; then sudo timeout 90 systemctl restart $egressServices; fi; " +
+  "sudo timeout 90 systemctl start $runtimeServices"))
+$machineOutput | ForEach-Object { Write-Host $_ }
+if (@($machineOutput | Where-Object { ([string]$_).Trim() -eq 'JHT_MACHINE_RESTART' }).Count -gt 0) {
+  Invoke-Checked $Podman 'machine' 'stop' $MachineName
+  Invoke-Checked $Podman 'machine' 'start' '--update-connection=false' $MachineName
+  # `podman machine start` does not wait for systemd: the enabled units
+  # come up with it at boot.
+  $deadline = [DateTime]::UtcNow.AddSeconds(120)
+  $servicesActive = $false
+  $previousPreference = $ErrorActionPreference
+  $ErrorActionPreference = 'Continue'
+  try {
+    while (-not $servicesActive -and [DateTime]::UtcNow -lt $deadline) {
+      & $Podman machine ssh $MachineName "timeout 20 systemctl is-active --quiet $runtimeServices" 2>$null | Out-Null
+      $servicesActive = ($LASTEXITCODE -eq 0)
+      if (-not $servicesActive) { Start-Sleep -Seconds 2 }
+    }
+  } finally {
+    $ErrorActionPreference = $previousPreference
+  }
+  if (-not $servicesActive) { throw "JHT egress services did not start after restarting Podman machine '$MachineName'." }
+}
+$validation = "agent=`$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' --proxy http://127.0.0.1:$Port https://ghcr.io/v2/) && test `"`$agent`" = 401 && " +
+  "broker=`$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' --proxy http://127.0.0.1:$BrokerPort https://ghcr.io/v2/) && test `"`$broker`" = 401 && " +
+  "curl --silent --show-error --output /dev/null --proxy http://127.0.0.1:$TelegramPort https://api.telegram.org/ && " +
+  "test `"`$(curl --silent --output /dev/null --write-out '%{http_code}' --proxy http://127.0.0.1:$Port https://example.com:993/)`" = 403 && " +
+  "test `"`$(curl --silent --output /dev/null --write-out '%{http_code}' --proxy http://127.0.0.1:$BrokerPort http://example.com/)`" = 403 && " +
+  "test `"`$(curl --silent --output /dev/null --write-out '%{http_code}' --proxy http://127.0.0.1:$TelegramPort https://example.com/)`" = 403"
 Invoke-MachineShell $validation
 Invoke-Checked $Podman '--connection' $MachineName 'info' '--format' 'rootless={{.Host.Security.Rootless}} cgroups={{.Host.CgroupManager}}' | Out-Null
 
-Write-Host "PODMAN WINDOWS NETWORK READY ($MachineName via $proxyUrl)" -ForegroundColor Green
+Write-Host "PODMAN WINDOWS NETWORK READY ($MachineName via agent=$Port broker=$BrokerPort telegram=$TelegramPort)" -ForegroundColor Green

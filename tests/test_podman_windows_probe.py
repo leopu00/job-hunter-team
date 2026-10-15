@@ -102,10 +102,26 @@ def test_persistent_network_config_uses_native_connector_and_localhost_proxy():
     assert "system service --time=0 unix:///run/user/1000/podman/podman.sock" in source
     assert "Requires=user-runtime-dir@1000.service" in source
     assert "CONTAINERS_CGROUP_MANAGER=cgroupfs" in source
-    assert "sudo systemctl restart jht-windows-egress-proxy.service" in source
+    assert "sudo timeout 90 systemctl restart $egressServices" in source
+    assert "jht-windows-egress-proxy.service jht-windows-egress-proxy-broker.service" in source
+    assert "-Policy agent -ListenPort $Port" in source
+    assert "-Policy broker -ListenPort $BrokerPort" in source
+    assert "-Policy telegram -ListenPort $TelegramPort" in source
+    assert "--policy $Policy" in source
+    assert "jht-windows-egress-proxy-broker.service" in source
+    assert "jht-windows-egress-proxy-telegram.service" in source
+    assert "[int]$BrokerPort = 3129" in source
+    assert "[int]$TelegramPort = 3130" in source
+    assert "Agent, broker and Telegram proxy ports must be distinct" in source
+    assert "http://127.0.0.1:$Port https://example.com:993/" in source
+    assert "http://127.0.0.1:$BrokerPort http://example.com/" in source
+    assert "http://127.0.0.1:$TelegramPort https://api.telegram.org/" in source
+    assert "http://127.0.0.1:$TelegramPort https://example.com/" in source
     assert "https://ghcr.io/v2/" in source
     assert "--node" not in proxy
-    assert "[self.server.connector, host, str(port)]" in proxy
+    assert "[self.server.connector, resolved_ip, str(port)]" in proxy
+    assert "resolved_ip = resolve_public_target(" in proxy
+    assert "self.server.allowed_ports" in proxy
 
 
 def test_interop_proxy_defaults_to_loopback_when_run_standalone():
@@ -120,7 +136,18 @@ def test_podman_compose_preserves_private_bind_mount_ownership():
     source = PODMAN_COMPOSE.read_text(encoding="utf-8")
 
     assert 'userns_mode: "keep-id:uid=1001,gid=1001"' in source
-    assert "network_mode: host" in source
+    assert 'network_mode: "pasta:' in source
+
+
+def test_probe_closes_the_atomic_config_rename_and_signal_regressions():
+    source = PROBE.read_text(encoding="utf-8")
+
+    assert 'fs.renameSync(t,p)' in source
+    assert 'stat -c %u /jht_home/jht.config.json' in source
+    assert 'test ! -e /jht_home/.jht.config.tmp' in source
+    assert "Assert-FileContains -Path (Join-Path $probeJhtHome 'jht.config.json')" in source
+    assert 'kill -TERM "$p"' in source
+    assert "/sys/module/apparmor/parameters/enabled" in source
 
 
 def test_private_config_atomic_rename_tolerates_host_acl_filesystems():
@@ -181,11 +208,13 @@ def test_runtime_enabler_installs_persistent_container_lifecycle():
     assert "Requires=jht-windows-egress-proxy.service" in source
     assert "After=jht-windows-egress-proxy.service" in source
     assert "Requires=jht-rootless-podman.service" in source
-    assert "ExecStart=/usr/bin/podman --remote --url unix:///run/user/1000/podman/podman.sock start jht" in source
-    assert "ExecStop=-/usr/bin/podman --remote --url unix:///run/user/1000/podman/podman.sock stop --time 30 jht" in source
+    assert "ExecStart=/usr/bin/podman --remote --url unix:///run/user/1000/podman/podman.sock start --sig-proxy=false jht-broker jht-telegram jht" in source
+    assert "ExecStop=-/usr/bin/podman --remote --url unix:///run/user/1000/podman/podman.sock stop --time 30 jht jht-telegram jht-broker" in source
     assert "WantedBy=multi-user.target" in source
-    assert "sudo systemctl enable jht-container.service" in source
-    assert "sudo systemctl start jht-container.service" in source
+    assert "systemctl enable --no-reload jht-container.service" in source
+    assert "sudo timeout 120 systemctl start jht-container.service" in source
+    assert "New-ScheduledTaskTrigger -AtLogOn -User $UserId" in source
+    assert "Install-JhtStartupTask -PodmanPath $Podman" in source
 
 
 @pytest.mark.skipif(shutil.which("pwsh") is None, reason="PowerShell is unavailable")
@@ -232,3 +261,33 @@ def test_native_shim_compiles_and_propagates_backend_exit_code(shell, tmp_path):
         timeout=60,
     )
     assert result.returncode == 0, result.stderr
+
+
+def _connector_source() -> str:
+    source = NETWORK.read_text(encoding="utf-8")
+    start = source.index("$source = @'\n") + len("$source = @'\n")
+    return source[start : source.index("\n'@", start)]
+
+
+def test_the_native_connector_takes_only_a_numeric_ipv4_that_is_not_the_pc():
+    # The proxy hands over the verified address; the connector must not
+    # resolve a name again, must not reach IPv6 (a global IPv6 can be the
+    # home /64) and must not reach the PC's own addresses, even public ones.
+    connector = _connector_source()
+    parse = connector.index("IPAddress.TryParse(args[0], out target)")
+    assert "target.AddressFamily != AddressFamily.InterNetwork" in connector
+    own = connector.index("if (IsOwnAddress(target))")
+    connect = connector.index("client.BeginConnect(target, port, null, null)")
+    assert parse < own < connect
+    assert "BeginConnect(args[0]" not in connector
+    assert "NetworkInterface.GetAllNetworkInterfaces()" in connector
+
+
+def test_a_changed_connector_gets_a_new_binary_name():
+    # New-NativeConnector never overwrites an existing binary (a tunnel may
+    # hold it open), so the name carries the source's digest: a change of
+    # the source without a new name would never reach an existing install.
+    import hashlib
+
+    digest = hashlib.sha256(_connector_source().encode("utf-8")).hexdigest()[:12]
+    assert f"'jht-windows-connect-{digest}.exe'" in NETWORK.read_text(encoding="utf-8")

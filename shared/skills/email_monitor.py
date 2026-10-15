@@ -70,6 +70,7 @@ from pathlib import Path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from url_guard import is_fetchable  # noqa: E402  (dopo sys.path, per costruzione)
+import mail_egress  # noqa: E402  (IMAP/SMTP attraverso il proxy di uscita, se c'è)
 
 # Cap di link estratti da una singola email (una digest può contenerne molti):
 # evita che un solo messaggio gonfi la coda con decine di candidati.
@@ -240,7 +241,7 @@ class CredentialsEncodingError(Exception):
 def _imap_connect(creds: dict):
     host = creds.get("imap_host", "imap.gmail.com")
     port = int(creds.get("imap_port", 993))
-    M = imaplib.IMAP4_SSL(host, port)
+    M = mail_egress.imap_ssl(host, port)
     try:
         M.login(creds["user"], creds.get("password", ""))
     except UnicodeError:
@@ -416,12 +417,12 @@ def send_message(creds: dict, to: list[str], subject: str, body: str) -> dict:
     context = ssl.create_default_context()
     try:
         if port == 587:
-            with smtplib.SMTP(host, port, timeout=30) as smtp:
+            with mail_egress.smtp(host, port, timeout=30) as smtp:
                 smtp.starttls(context=context)
                 smtp.login(creds["user"], creds["password"])
                 smtp.send_message(msg)
         else:
-            with smtplib.SMTP_SSL(host, port, context=context, timeout=30) as smtp:
+            with mail_egress.smtp_ssl(host, port, context=context, timeout=30) as smtp:
                 smtp.login(creds["user"], creds["password"])
                 smtp.send_message(msg)
     except UnicodeError:

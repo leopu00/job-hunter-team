@@ -142,20 +142,26 @@ jobs:
           [[ "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]
           # python3 puo' mancare nella bash del runner Windows: sha256sum c'e'
           # nella Git Bash di Windows e su Linux, shasum su macOS.
-          if command -v sha256sum >/dev/null 2>&1; then
-            install_sha256="$(sha256sum scripts/install.sh | cut -d' ' -f1)"
-          else
-            install_sha256="$(shasum -a 256 scripts/install.sh | cut -d' ' -f1)"
-          fi
+          file_sha256() {
+            if command -v sha256sum >/dev/null 2>&1; then
+              sha256sum "$1" | cut -d' ' -f1
+            else
+              shasum -a 256 "$1" | cut -d' ' -f1
+            fi
+          }
+          install_sha256="$(file_sha256 scripts/install.sh)"
+          install_ps1_sha256="$(file_sha256 scripts/install.ps1)"
           [[ "$install_sha256" =~ ^[0-9a-f]{64}$ ]]
+          [[ "$install_ps1_sha256" =~ ^[0-9a-f]{64}$ ]]
           {
             echo "JHT_CHANNEL=test"
             echo "JHT_SOURCE_SHA=$SOURCE_SHA"
             echo "JHT_RUNTIME_IMAGE=$RUNTIME_IMAGE"
             echo "JHT_RUNTIME_IMAGE_DIGEST=$RUNTIME_IMAGE_DIGEST"
             echo "JHT_INSTALL_SHA256=$install_sha256"
+            echo "JHT_INSTALL_PS1_SHA256=$install_ps1_sha256"
           } >> "$GITHUB_ENV"
-          echo "test channel: source $SOURCE_SHA, image $RUNTIME_IMAGE ($RUNTIME_IMAGE_DIGEST), install.sh sha256 $install_sha256"
+          echo "test channel: source $SOURCE_SHA, image $RUNTIME_IMAGE ($RUNTIME_IMAGE_DIGEST), install.sh sha256 $install_sha256, install.ps1 sha256 $install_ps1_sha256"
 
       # La matrice di integrazione prova il packaging con firma ad-hoc su Mac.
       # Firma Developer ID e notarizzazione sono obbligatorie nel tag workflow.
@@ -184,6 +190,81 @@ jobs:
           VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
           VITE_SUPABASE_ANON_KEY: ${{ vars.VITE_SUPABASE_ANON_KEY }}
         run: python scripts/verify-tauri-login-bundle.py --path desktop/dist
+
+      # The NSIS setup as a person runs it, per user, here silent: what it
+      # writes for «App e funzionalità», then its own uninstaller.
+      # desktop/src-tauri/windows/installer-hooks.nsi is what it checks.
+      - name: Install and uninstall the NSIS setup
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $setup = Get-ChildItem desktop/src-tauri/target/release/bundle/nsis -Filter '*-setup.exe' | Select-Object -First 1
+          if (-not $setup) { throw 'NSIS setup not found' }
+          $installed = Start-Process -FilePath $setup.FullName -ArgumentList '/S' -Wait -PassThru
+          if ($installed.ExitCode -ne 0) { throw "setup exited $($installed.ExitCode)" }
+          $key = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\Job Hunter Team'
+          $location = (Get-ItemProperty -LiteralPath $key).InstallLocation
+          Write-Host "InstallLocation: $location"
+          if ($location -match '"') { throw "InstallLocation is written in quotes: $location" }
+          $uninstaller = Join-Path $location 'uninstall.exe'
+          if (-not (Test-Path -LiteralPath $uninstaller -PathType Leaf)) { throw "no uninstaller in InstallLocation: $location" }
+          Start-Process -FilePath $uninstaller -ArgumentList '/S' -Wait | Out-Null
+          # The uninstaller copies itself and returns: wait for its entry to go.
+          $deadline = (Get-Date).AddSeconds(90)
+          while ((Test-Path -LiteralPath $key) -and (Get-Date) -lt $deadline) { Start-Sleep -Seconds 2 }
+          if (Test-Path -LiteralPath $key) { throw 'the uninstaller left its entry in App e funzionalità' }
+
+      # Next to the v0.3.9 game (a stand-in with its uninstall entry, folder and
+      # desktop shortcut): silent, the setup keeps it untouched and names its
+      # own shortcuts «Job Hunter Team App»; its uninstaller removes only those.
+      - name: Install and uninstall the NSIS setup next to the v0.3.9 game
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $setup = Get-ChildItem desktop/src-tauri/target/release/bundle/nsis -Filter '*-setup.exe' | Select-Object -First 1
+          $gameKey = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\JobHunterTeam'
+          $gameDir = Join-Path $env:LOCALAPPDATA 'Programs\Job Hunter Team'
+          $desktop = [Environment]::GetFolderPath('Desktop')
+          $programs = Join-Path $env:APPDATA 'Microsoft\Windows\Start Menu\Programs'
+          New-Item -ItemType Directory -Force -Path $gameDir, $desktop | Out-Null
+          Set-Content -LiteralPath (Join-Path $gameDir 'Uninstall.exe') -Value 'stand-in, never run' -NoNewline
+          $gameLink = Join-Path $desktop 'Job Hunter Team.lnk'
+          Set-Content -LiteralPath $gameLink -Value 'the game shortcut' -NoNewline
+          New-Item -Force -Path $gameKey | Out-Null
+          Set-ItemProperty -Path $gameKey -Name DisplayName -Value 'Job Hunter Team'
+          Set-ItemProperty -Path $gameKey -Name DisplayVersion -Value '0.3.9'
+          Set-ItemProperty -Path $gameKey -Name InstallLocation -Value $gameDir
+          Set-ItemProperty -Path $gameKey -Name UninstallString -Value "`"$gameDir\Uninstall.exe`""
+          $before = (Get-FileHash -LiteralPath $gameLink).Hash
+          function Assert-GameUntouched {
+            if ((Get-FileHash -LiteralPath $gameLink).Hash -ne $before) { throw 'the game desktop shortcut was changed' }
+            if (-not (Test-Path -LiteralPath $gameKey)) { throw 'the game uninstall entry is gone' }
+            if (-not (Test-Path -LiteralPath (Join-Path $gameDir 'Uninstall.exe'))) { throw 'the game uninstaller is gone' }
+          }
+
+          $installed = Start-Process -FilePath $setup.FullName -ArgumentList '/S' -Wait -PassThru
+          if ($installed.ExitCode -ne 0) { throw "setup exited $($installed.ExitCode)" }
+          Assert-GameUntouched
+          foreach ($link in @((Join-Path $desktop 'Job Hunter Team App.lnk'), (Join-Path $programs 'Job Hunter Team App.lnk'))) {
+            if (-not (Test-Path -LiteralPath $link)) { throw "missing: $link" }
+          }
+          if (Test-Path -LiteralPath (Join-Path $programs 'Job Hunter Team.lnk')) { throw 'the app took the game Start menu name' }
+
+          $key = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\Job Hunter Team'
+          $location = (Get-ItemProperty -LiteralPath $key).InstallLocation
+          Start-Process -FilePath (Join-Path $location 'uninstall.exe') -ArgumentList '/S' -Wait | Out-Null
+          $deadline = (Get-Date).AddSeconds(90)
+          while ((Test-Path -LiteralPath $key) -and (Get-Date) -lt $deadline) { Start-Sleep -Seconds 2 }
+          if (Test-Path -LiteralPath $key) { throw 'the uninstaller left its entry' }
+          Assert-GameUntouched
+          foreach ($link in @((Join-Path $desktop 'Job Hunter Team App.lnk'), (Join-Path $programs 'Job Hunter Team App.lnk'))) {
+            if (Test-Path -LiteralPath $link) { throw "left behind: $link" }
+          }
+          Remove-Item -LiteralPath $gameKey -Recurse -Force
+          Remove-Item -LiteralPath $gameDir -Recurse -Force
+          Remove-Item -LiteralPath $gameLink -Force
 
       - name: Collect bundle outputs
         run: |

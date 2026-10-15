@@ -6,7 +6,10 @@
 param(
   [string]$MachineName = 'jht-podman',
   [switch]$InstallDependencies,
-  [switch]$InitializeMachine
+  [switch]$InitializeMachine,
+  [string]$RuntimeImage = 'ghcr.io/leopu00/jht@sha256:07b154bee43f32d2e6313c54f28e389836556e2b5cbe1b76d03398684c38b598',
+  [string]$ExpectedImageDigest = '',
+  [switch]$PersistImagePin
 )
 
 $ErrorActionPreference = 'Stop'
@@ -14,7 +17,25 @@ $RepoRoot = Split-Path -Parent $PSScriptRoot
 $LocalAppData = if ($env:LOCALAPPDATA) { $env:LOCALAPPDATA } else { [Environment]::GetFolderPath('LocalApplicationData') }
 $RuntimeDir = if ($env:JHT_RUNTIME_DIR) { $env:JHT_RUNTIME_DIR } else { Join-Path $LocalAppData 'Job Hunter Team\host-runtime' }
 $BinDir = if ($env:JHT_BIN_DIR) { $env:JHT_BIN_DIR } else { Join-Path $env:USERPROFILE '.local\bin' }
+$RuntimeShimDir = Join-Path $RuntimeDir 'bin'
 $JhtHome = Join-Path $env:USERPROFILE '.jht'
+$PodmanCliVersion = '6.0.2'
+$ComposeProviderVersion = '5.1.2'
+# JHT's own docker-compose.exe, private to the runtime: never one found in
+# PATH (Docker Desktop ships its own, of another version). The release asset
+# and SHA-256 are those of winget's Docker.DockerCompose 5.1.2 manifest; the
+# CI parity gate (.github/workflows/test.yml) reads both from here.
+$ComposeProviderUrl = 'https://github.com/docker/compose/releases/download/v5.1.2/docker-compose-windows-x86_64.exe'
+$ComposeProviderSha256 = '00e839301ca18ee5109b3ef086788f3a281c317c0b77ba42a06fc6f806401255'
+$ComposeProvider = Join-Path $RuntimeShimDir 'docker-compose.exe'
+
+function Write-JhtPhase {
+  param([Parameter(Mandatory)][ValidateSet(
+    'wsl_check', 'podman_install', 'podman_machine_init',
+    'podman_machine_start', 'runtime_download', 'image_pull'
+  )][string]$Id)
+  [Console]::Out.WriteLine("JHT_PHASE $Id")
+}
 
 function Update-ProcessPath {
   $env:PATH = @(
@@ -30,9 +51,64 @@ function Invoke-Checked {
   if ($LASTEXITCODE -ne 0) { throw "Command failed ($LASTEXITCODE): $FilePath $($Arguments -join ' ')" }
 }
 
+function Install-PrivateComposeProvider {
+  param([Parameter(Mandatory)][string]$Destination)
+  if ((Test-Path -LiteralPath $Destination -PathType Leaf) -and
+      (Get-FileHash -Algorithm SHA256 -LiteralPath $Destination).Hash -eq $ComposeProviderSha256) { return }
+  New-Item -ItemType Directory -Path (Split-Path -Parent $Destination) -Force | Out-Null
+  $temp = "$Destination.download-$PID"
+  # Windows PowerShell's progress bar slows a large download by minutes.
+  $previousProgress = $ProgressPreference
+  $ProgressPreference = 'SilentlyContinue'
+  try {
+    Invoke-WebRequest -UseBasicParsing -Uri $ComposeProviderUrl -OutFile $temp -ErrorAction Stop
+    $actual = (Get-FileHash -Algorithm SHA256 -LiteralPath $temp).Hash
+    if ($actual -ne $ComposeProviderSha256) { throw "docker-compose.exe $ComposeProviderVersion has SHA-256 $actual, expected $ComposeProviderSha256" }
+    Move-Item -LiteralPath $temp -Destination $Destination -Force
+  } finally {
+    $ProgressPreference = $previousProgress
+    Remove-Item -LiteralPath $temp -Force -ErrorAction SilentlyContinue
+  }
+}
+
 function Get-Application {
   param([Parameter(Mandatory)][string]$Name)
   return (Get-Command $Name -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1).Source
+}
+
+function Report-LegacyDockerVolumes {
+  param([string]$DockerPath)
+  $visible = @()
+  if ($DockerPath) {
+    try {
+      $visible = @(& $DockerPath volume ls --format '{{.Name}}' `
+        --filter 'label=com.docker.compose.project=host-runtime' 2>$null |
+        ForEach-Object { ([string]$_).Trim() } | Where-Object { $_ })
+      if ($LASTEXITCODE -ne 0) { $visible = @() }
+    } catch { $visible = @() }
+  }
+
+  # v0.3.9/docker-compose.yml mounts all durable user state from Windows.
+  # Its only named volumes are a reinstallable provider CLI/cache and an
+  # empty mask over the protected host runtime directory.
+  [Console]::Out.WriteLine('JHT v0.3.9 Docker volumes contain only reinstallable provider CLI/cache (jht-deps) and an empty runtime mask; config, profile, provider login and documents are in ~/.jht and Documents.')
+  [Console]::Out.WriteLine('Those Docker volumes are not copied to Podman and remain in Docker Desktop for manual removal after the upgrade is verified.')
+  if ($visible.Count -eq 0) {
+    [Console]::Out.WriteLine('Docker Desktop was not started; no legacy volume was enumerated.')
+    return
+  }
+  $expected = @($visible | Where-Object {
+    $_ -in @('host-runtime_jht-deps', 'host-runtime_jht-runtime-mask')
+  })
+  $unexpected = @($visible | Where-Object {
+    $_ -notin @('host-runtime_jht-deps', 'host-runtime_jht-runtime-mask')
+  })
+  if ($expected.Count -gt 0) {
+    [Console]::Out.WriteLine("Legacy v0.3.9 volumes left in Docker Desktop: $($expected -join ', ').")
+  }
+  if ($unexpected.Count -gt 0) {
+    [Console]::Error.WriteLine("Additional JHT Docker volumes were left untouched and were not migrated: $($unexpected -join ', ').")
+  }
 }
 
 function ConvertTo-WslPath {
@@ -49,7 +125,16 @@ function Quote-Sh {
 }
 
 function New-DockerShim {
-  param([Parameter(Mandatory)][string]$Destination, [Parameter(Mandatory)][string]$PodmanPath)
+  param(
+    [Parameter(Mandatory)][string]$Destination,
+    [Parameter(Mandatory)][string]$PodmanPath,
+    # The connection the shim falls back to when CONTAINER_CONNECTION is unset:
+    # jht-wrapper.ps1 sets it, but a call that reaches docker.exe without the
+    # wrapper would get Podman's DEFAULT connection, which on a computer with
+    # two machines is not ours.
+    [string]$MachineName = 'jht-podman'
+  )
+  if ($MachineName -notmatch '^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$') { throw "Invalid Podman machine name for the docker shim: $MachineName" }
   $escaped = $PodmanPath.Replace('\', '\\').Replace('"', '\"')
   $source = @"
 using System;
@@ -57,6 +142,7 @@ using System.Diagnostics;
 using System.Text;
 public static class JhtPodmanDockerShim {
   private const string PodmanPath = "$escaped";
+  private const string MachineConnection = "$MachineName";
   private static string Quote(string value) {
     if (value.Length > 0 && value.IndexOfAny(new[] { ' ', '\t', '\n', '\v', '"' }) < 0) return value;
     var result = new StringBuilder("\""); int slashes = 0;
@@ -70,10 +156,15 @@ public static class JhtPodmanDockerShim {
   public static int Main(string[] args) {
     var joined = new StringBuilder();
     foreach (var arg in args) { if (joined.Length > 0) joined.Append(' '); joined.Append(Quote(arg)); }
+    // Set on the shim's own process, which podman inherits: an exe compiled by
+    // pwsh fails on the environment dictionary of ProcessStartInfo.
+    if (string.IsNullOrEmpty(Environment.GetEnvironmentVariable("CONTAINER_CONNECTION")))
+      Environment.SetEnvironmentVariable("CONTAINER_CONNECTION", MachineConnection);
     var start = new ProcessStartInfo { FileName = PodmanPath, Arguments = joined.ToString(), UseShellExecute = false };
     using (var process = Process.Start(start)) { process.WaitForExit(); return process.ExitCode; }
   }
 }
+
 "@
   $sourcePath = [IO.Path]::ChangeExtension($Destination, '.cs')
   try {
@@ -85,6 +176,23 @@ public static class JhtPodmanDockerShim {
     if ($LASTEXITCODE -ne 0) { throw "Native docker shim compiler exited with $LASTEXITCODE." }
   } finally { Remove-Item -LiteralPath $sourcePath -Force -ErrorAction SilentlyContinue }
   if (-not (Test-Path -LiteralPath $Destination -PathType Leaf)) { throw "docker.exe shim was not created: $Destination" }
+}
+
+function Test-AttestedLegacyDockerShim {
+  param(
+    [Parameter(Mandatory)][string]$ManifestPath,
+    [Parameter(Mandatory)][string]$LegacyShimPath
+  )
+  try {
+    if (-not (Test-Path -LiteralPath $ManifestPath -PathType Leaf) -or
+        -not (Test-Path -LiteralPath $LegacyShimPath -PathType Leaf)) { return $false }
+    $item = Get-Item -LiteralPath $LegacyShimPath -Force
+    if (($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) { return $false }
+    $values = ConvertFrom-StringData (Get-Content -LiteralPath $ManifestPath -Raw)
+    if ($values.version -ne '1' -or -not $values.ContainsKey('docker.exe')) { return $false }
+    $actual = (Get-FileHash -Algorithm SHA256 -LiteralPath $LegacyShimPath).Hash.ToLowerInvariant()
+    return $values.'docker.exe' -eq $actual
+  } catch { return $false }
 }
 
 function Copy-NodeWithoutWslMetadata {
@@ -125,7 +233,7 @@ function Protect-OwnerOnlyDirectory {
   foreach ($rule in @($acl.Access)) { [void]$acl.RemoveAccessRuleAll($rule) }
   $acl.SetAccessRule((New-Object Security.AccessControl.FileSystemAccessRule(
     $identity.User, 'FullControl', 'ContainerInherit,ObjectInherit', 'None', 'Allow')))
-  Set-Acl -LiteralPath $Path -AclObject $acl
+  Set-JhtAccessControl -Path $Path -Acl $acl
   if (-not (Get-Acl -LiteralPath $Path).AreAccessRulesProtected) { throw "ACL inheritance remains enabled: $Path" }
 }
 
@@ -166,17 +274,68 @@ function Install-JhtContainerService {
     [Parameter(Mandatory)][string]$UnitPath
   )
   $unitWsl = ConvertTo-WslPath $UnitPath
+  # Never `systemctl daemon-reload` here (configure-podman-windows-network.ps1
+  # says why): a unit seen for the first time is read from disk when started,
+  # and a changed unit that is already loaded takes effect at the machine's
+  # next start (after a Windows restart at the latest).
   $install = "sudo rm -f /home/user/.config/systemd/user/default.target.wants/jht-container.service /home/user/.config/systemd/user/jht-container.service && " +
     "sudo install -m 0644 $(Quote-Sh $unitWsl) /etc/systemd/system/jht-container.service && " +
-    'sudo systemctl daemon-reload && sudo systemctl enable jht-container.service && ' +
-    '(sudo systemctl is-active --quiet jht-container.service || sudo systemctl start jht-container.service)'
+    'sudo timeout 60 systemctl enable --no-reload jht-container.service && ' +
+    '(sudo timeout 30 systemctl is-active --quiet jht-container.service || sudo timeout 120 systemctl start jht-container.service)'
   Invoke-Checked $PodmanPath 'machine' 'ssh' $MachineName $install
 }
 
+function Install-JhtStartupTask {
+  param(
+    [Parameter(Mandatory)][string]$PodmanPath,
+    [Parameter(Mandatory)][string]$MachineName,
+    [Parameter(Mandatory)][string]$UserId
+  )
+  $taskName = 'Job Hunter Team - Start runtime'
+  $description = 'Starts the dedicated Job Hunter Team Podman machine at sign-in so the local team can resume after Windows restarts. It never starts or stops other Podman machines.'
+  $arguments = "machine start --update-connection=false $MachineName"
+  $action = New-ScheduledTaskAction -Execute $PodmanPath -Argument $arguments
+  $trigger = New-ScheduledTaskTrigger -AtLogOn -User $UserId
+  $principal = New-ScheduledTaskPrincipal -UserId $UserId -LogonType Interactive -RunLevel Limited
+  # Keep the task visible in Task Scheduler: hiding a persistent logon action
+  # makes inspection and manual removal needlessly difficult. Visibility is
+  # unrelated to whether the command opens a console window.
+  $settings = New-ScheduledTaskSettingsSet -StartWhenAvailable `
+    -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -MultipleInstances IgnoreNew `
+    -ExecutionTimeLimit ([TimeSpan]::FromMinutes(10))
+  Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $trigger `
+    -Principal $principal -Settings $settings -Description $description -Force | Out-Null
+
+  # Registration is part of the reboot contract, not a best-effort hint. Check
+  # the exact executable, machine and user before publishing a successful install.
+  $registered = Get-ScheduledTask -TaskName $taskName -ErrorAction Stop
+  $registeredActions = @($registered.Actions)
+  $registeredTriggers = @($registered.Triggers)
+  $sameExecutable = $registeredActions.Count -eq 1 -and
+    ([IO.Path]::GetFullPath([string]$registeredActions[0].Execute)).Equals(
+      [IO.Path]::GetFullPath($PodmanPath), [StringComparison]::OrdinalIgnoreCase)
+  if (-not $sameExecutable -or
+      ([string]$registeredActions[0].Arguments) -cne $arguments -or
+      $registeredTriggers.Count -ne 1 -or
+      ([string]$registeredTriggers[0].UserId) -cne $UserId -or
+      ([string]$registered.Principal.UserId) -cne $UserId -or
+      ([string]$registered.Principal.LogonType) -notmatch '^Interactive' -or
+      ([string]$registered.Principal.RunLevel) -cne 'Limited' -or
+      [bool]$registered.Settings.Hidden -or
+      ([string]$registered.Description) -cne $description) {
+    throw "JHT startup task verification failed: $taskName"
+  }
+}
+
 if ($InstallDependencies) {
-  if (-not (Get-Command winget -ErrorAction SilentlyContinue)) { throw 'winget is required to install Podman dependencies.' }
-  if (-not (Get-Application 'podman.exe')) { Invoke-Checked 'winget' 'install' '--exact' '--silent' '--disable-interactivity' '--accept-package-agreements' '--accept-source-agreements' '--id' 'Podman.CLI' }
-  if (-not (Get-Application 'docker-compose.exe')) { Invoke-Checked 'winget' 'install' '--exact' '--silent' '--disable-interactivity' '--accept-package-agreements' '--accept-source-agreements' '--id' 'Docker.DockerCompose' }
+  Write-JhtPhase podman_install
+  try {
+    if (-not (Get-Command winget -ErrorAction SilentlyContinue)) { throw 'winget is required to install Podman dependencies.' }
+    if (-not (Get-Application 'podman.exe')) { Invoke-Checked 'winget' 'install' '--exact' '--source' 'winget' '--version' $PodmanCliVersion '--silent' '--disable-interactivity' '--accept-package-agreements' '--accept-source-agreements' '--id' 'Podman.CLI' }
+  } catch {
+    [Console]::Error.WriteLine("podman_not_installable: $($_.Exception.Message)")
+    exit 21
+  }
 }
 Update-ProcessPath
 $Podman = Get-Application 'podman.exe'
@@ -184,26 +343,86 @@ if (-not $Podman) {
   $candidate = Join-Path $LocalAppData 'Programs\Podman\podman.exe'
   if (Test-Path -LiteralPath $candidate -PathType Leaf) { $Podman = $candidate }
 }
-if (-not $Podman) { throw 'podman.exe is unavailable; re-run with -InstallDependencies.' }
-if (-not (Get-Application 'docker-compose.exe')) { throw 'docker-compose.exe is unavailable; re-run with -InstallDependencies.' }
+if (-not $Podman) { [Console]::Error.WriteLine('podman_not_installable: podman.exe is unavailable after installation.'); exit 21 }
+try { Install-PrivateComposeProvider -Destination $ComposeProvider } catch {
+  [Console]::Error.WriteLine("podman_not_installable: $($_.Exception.Message)")
+  exit 21
+}
 
-$machines = @((& $Podman machine list --format json | ConvertFrom-Json))
-$machine = $machines | Where-Object Name -eq $MachineName | Select-Object -First 1
-if (-not $machine) {
-  if (-not $InitializeMachine) { throw "Podman machine '$MachineName' is absent; re-run with -InitializeMachine." }
-  Invoke-Checked $Podman 'machine' 'init' '--now' '--provider' 'wsl' $MachineName
-} elseif (-not [bool]$machine.Running) {
-  Invoke-Checked $Podman 'machine' 'start' $MachineName
+try {
+  $machines = @((& $Podman machine list --format json | ConvertFrom-Json))
+  $machine = $machines | Where-Object Name -eq $MachineName | Select-Object -First 1
+  if (-not $machine) {
+    if (-not $InitializeMachine) { throw "Podman machine '$MachineName' is absent; re-run with -InitializeMachine." }
+    Write-JhtPhase podman_machine_init
+    Invoke-Checked $Podman 'machine' 'init' '--update-connection=false' '--provider' 'wsl' '--cpus' '2' '--memory' '3072' '--disk-size' '30' $MachineName
+    Write-JhtPhase podman_machine_start
+    Invoke-Checked $Podman 'machine' 'start' '--update-connection=false' $MachineName
+  } elseif (-not [bool]$machine.Running) {
+    Write-JhtPhase podman_machine_start
+    Invoke-Checked $Podman 'machine' 'start' '--update-connection=false' $MachineName
+  }
+  Invoke-Checked $Podman '--connection' $MachineName 'info' | Out-Null
+} catch {
+  [Console]::Error.WriteLine("podman_machine_unavailable: $($_.Exception.Message)")
+  exit 22
 }
 
 & (Join-Path $PSScriptRoot 'configure-podman-windows-network.ps1') -MachineName $MachineName
 if ($LASTEXITCODE -ne 0) { throw 'Podman network configuration failed.' }
+
+if ($RuntimeImage -notmatch '^ghcr\.io/leopu00/jht(?::[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}|@sha256:[0-9a-f]{64})$') {
+  throw 'Runtime image reference is not canonical.'
+}
+if (-not $ExpectedImageDigest -and $RuntimeImage -match '@(sha256:[0-9a-f]{64})$') {
+  $ExpectedImageDigest = $Matches[1]
+}
+if ($ExpectedImageDigest -and $ExpectedImageDigest -notmatch '^sha256:[0-9a-f]{64}$') { throw 'Expected runtime image digest is invalid.' }
+if ($RuntimeImage -match '@(sha256:[0-9a-f]{64})$' -and $Matches[1] -ne $ExpectedImageDigest) {
+  throw 'Runtime image reference and expected digest disagree.'
+}
+Write-JhtPhase image_pull
+Invoke-Checked $Podman '--connection' $MachineName 'pull' $RuntimeImage | Out-Null
+$repoDigestsJson = ((& $Podman --connection $MachineName image inspect $RuntimeImage --format '{{json .RepoDigests}}' 2>$null) -join '')
+if ($LASTEXITCODE -ne 0 -or -not $repoDigestsJson) { throw 'Cannot inspect the pulled runtime image digest.' }
+$repoDigests = @($repoDigestsJson | ConvertFrom-Json)
+$matchingRepoDigests = @($repoDigests | Where-Object { $_ -match '^ghcr\.io/leopu00/jht@sha256:[0-9a-f]{64}$' })
+if ($ExpectedImageDigest) {
+  $canonicalImage = "ghcr.io/leopu00/jht@$ExpectedImageDigest"
+  if ($matchingRepoDigests -notcontains $canonicalImage) { throw 'Pulled runtime image does not expose the expected repository digest.' }
+} else {
+  # Preserve the production JHT_IMAGE tag override. It is resolved once to
+  # the immutable identity reported by Podman; only the build test channel
+  # requires that identity to match an independently supplied digest.
+  $canonicalImage = $matchingRepoDigests | Select-Object -First 1
+  if (-not $canonicalImage) { throw 'Pulled runtime image has no canonical repository digest.' }
+}
+$env:JHT_IMAGE = $canonicalImage
+
+$legacyInstallDetected = (Test-Path -LiteralPath (Join-Path $JhtHome 'jht.config.json')) -or
+  (Test-Path -LiteralPath (Join-Path $JhtHome 'profile')) -or
+  (Test-Path -LiteralPath (Join-Path $JhtHome '.codex'))
+if ($legacyInstallDetected) {
+  Write-Host 'Existing JHT config, profile and Codex login will be reused in Podman; Documents stay in their current folder.' -ForegroundColor Yellow
+  Write-Host 'If the old game stored a mail password, rotate that app password after startup; the broker migration will keep warning until setup is renewed.' -ForegroundColor Yellow
+  $legacyDocker = ''
+  if ($env:ProgramFiles) {
+    $dockerDesktopCli = Join-Path $env:ProgramFiles 'Docker\Docker\resources\bin\docker.exe'
+    if (Test-Path -LiteralPath $dockerDesktopCli -PathType Leaf) { $legacyDocker = $dockerDesktopCli }
+  }
+  Report-LegacyDockerVolumes -DockerPath $legacyDocker
+}
+
 $metadataRepaired = Repair-LegacyBindMetadata -PodmanPath $Podman
 
-New-Item -ItemType Directory -Path $RuntimeDir, $BinDir, $JhtHome -Force | Out-Null
-Protect-OwnerOnlyDirectory -Path $RuntimeDir
+New-Item -ItemType Directory -Path $RuntimeDir, $RuntimeShimDir, $BinDir, $JhtHome -Force | Out-Null
+# Set-JhtAccessControl and the ~/.jht ACL functions.
 $helperSource = Join-Path $PSScriptRoot 'windows-private-acl.ps1'
 . $helperSource
+Protect-OwnerOnlyDirectory -Path $RuntimeDir
+$legacyShim = Join-Path $BinDir 'docker.exe'
+$legacyShimOwned = Test-AttestedLegacyDockerShim `
+  -ManifestPath (Join-Path $RuntimeDir '.runtime-integrity') -LegacyShimPath $legacyShim
 if (-not (Test-PrivateJhtHomeAcl -Path $JhtHome)) { Protect-JhtHomeAcl -Path $JhtHome }
 
 $files = @{
@@ -236,8 +455,8 @@ Group=user
 Environment=HOME=/home/user
 Environment=XDG_RUNTIME_DIR=/run/user/1000
 Environment=CONTAINERS_CGROUP_MANAGER=cgroupfs
-ExecStart=/usr/bin/podman --remote --url unix:///run/user/1000/podman/podman.sock start jht
-ExecStop=-/usr/bin/podman --remote --url unix:///run/user/1000/podman/podman.sock stop --time 30 jht
+ExecStart=/usr/bin/podman --remote --url unix:///run/user/1000/podman/podman.sock start --sig-proxy=false jht-broker jht-telegram jht
+ExecStop=-/usr/bin/podman --remote --url unix:///run/user/1000/podman/podman.sock stop --time 30 jht jht-telegram jht-broker
 TimeoutStartSec=90
 TimeoutStopSec=45
 
@@ -245,8 +464,8 @@ TimeoutStopSec=45
 WantedBy=multi-user.target
 '@
 [IO.File]::WriteAllText($containerUnitFile, ($containerUnit.Trim() + "`n"), [Text.UTF8Encoding]::new($false))
-$shim = Join-Path $BinDir 'docker.exe'
-New-DockerShim -Destination $shim -PodmanPath $Podman
+$shim = Join-Path $RuntimeShimDir 'docker.exe'
+New-DockerShim -Destination $shim -PodmanPath $Podman -MachineName $MachineName
 
 $composeHash = (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $RuntimeDir 'docker-compose.yml')).Hash.ToLowerInvariant()
 $podmanHash = (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $RuntimeDir 'docker-compose.podman.yml')).Hash.ToLowerInvariant()
@@ -256,14 +475,26 @@ $helperHash = (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $BinDir 'w
 $selectionHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $selectionFile).Hash.ToLowerInvariant()
 $machineHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $machineFile).Hash.ToLowerInvariant()
 $containerUnitHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $containerUnitFile).Hash.ToLowerInvariant()
-$manifest = "version=1`ndocker-compose.yml=$composeHash`njht-wrapper.ps1=$wrapperHash`ndocker-compose.podman.yml=$podmanHash`ndocker.exe=$shimHash`ncontainer-runtime=$selectionHash`npodman-machine=$machineHash`njht-container.service=$containerUnitHash`nwindows-private-acl.ps1=$helperHash`n"
+$runtimeImageFile = Join-Path $RuntimeDir 'runtime-image'
+$runtimeImageManifest = ''
+if ($PersistImagePin) {
+  [IO.File]::WriteAllText($runtimeImageFile, "$canonicalImage`n", [Text.UTF8Encoding]::new($false))
+  $runtimeImageHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $runtimeImageFile).Hash.ToLowerInvariant()
+  $runtimeImageManifest = "runtime-image=$runtimeImageHash`n"
+} else {
+  Remove-Item -LiteralPath $runtimeImageFile -Force -ErrorAction SilentlyContinue
+}
+$manifest = "version=1`ndocker-compose.yml=$composeHash`njht-wrapper.ps1=$wrapperHash`ndocker-compose.podman.yml=$podmanHash`ndocker.exe=$shimHash`ncontainer-runtime=$selectionHash`npodman-machine=$machineHash`njht-container.service=$containerUnitHash`nwindows-private-acl.ps1=$helperHash`n$runtimeImageManifest"
 [IO.File]::WriteAllText((Join-Path $RuntimeDir '.runtime-integrity'), $manifest, [Text.UTF8Encoding]::new($false))
+if ($legacyShimOwned) {
+  Remove-Item -LiteralPath $legacyShim -Force -ErrorAction Stop
+}
 
 [Environment]::SetEnvironmentVariable('JHT_CONTAINER_RUNTIME', 'podman', 'User')
 [Environment]::SetEnvironmentVariable('JHT_PODMAN_MACHINE', $MachineName, 'User')
 $env:JHT_CONTAINER_RUNTIME = 'podman'
 $env:JHT_PODMAN_MACHINE = $MachineName
-$env:PATH = "$BinDir$([IO.Path]::PathSeparator)$env:PATH"
+$env:PATH = "$RuntimeShimDir$([IO.Path]::PathSeparator)$env:PATH"
 
 [string]$existingProject = (& $Podman --connection $MachineName inspect jht --format '{{index .Config.Labels "com.docker.compose.project"}}' 2>$null | Select-Object -First 1)
 $existingProject = $existingProject.Trim()
@@ -287,5 +518,8 @@ if ($metadataRepaired -or -not (& $Podman --connection $MachineName ps --format 
 }
 
 Install-JhtContainerService -PodmanPath $Podman -UnitPath $containerUnitFile
+$currentUserSid = [Security.Principal.WindowsIdentity]::GetCurrent().User.Value
+if (-not $currentUserSid) { throw 'Cannot identify the Windows user for runtime startup.' }
+Install-JhtStartupTask -PodmanPath $Podman -MachineName $MachineName -UserId $currentUserSid
 
 Write-Host "PODMAN JHT RUNTIME ENABLED (machine=$MachineName, wrapper=$(Join-Path $BinDir 'jht.ps1'))" -ForegroundColor Green

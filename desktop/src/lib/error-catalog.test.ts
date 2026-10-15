@@ -17,6 +17,7 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { ERROR_CATALOG, ERROR_LOCALES, NOT_EMITTED, describeError, errorCodeOf, errorMachineOf, errorResetsAt } from "./error-catalog";
 import { EXISTING_TEAM_ERROR_CODES } from "./existing-team";
+import { isRuntimeTextKey } from "./onboarding-runtime.i18n";
 import { liveScreenErrorCode } from "./live-screen";
 import { LOGIN_ERROR_CATALOG_CODE } from "./login-error-codes";
 
@@ -39,6 +40,16 @@ const NOT_ERRORS: Record<string, string> = {
   schema_version: "profile field",
   seniority_target: "profile field",
   tag_list: "profile block kind",
+  // How the profile file of an existing team was read: states the Profile page tells in its
+  // own sentences, not errors.
+  aliases_unsupported: "profile file parse state",
+  invalid_yaml: "profile file parse state",
+  not_a_mapping: "profile file parse state",
+  // The outcome of «Attiva assistente» when the assistant was already running: a result, not an error.
+  already_active: "assistant start outcome",
+  // The outcome of the in-app registration of a team's target: a result, not an error.
+  registered: "target registration outcome",
+  already_registered: "target registration outcome",
   target_role: "profile field",
   target_role_category_id: "profile field",
   target_specialty: "profile field",
@@ -88,6 +99,7 @@ const NOT_ERRORS: Record<string, string> = {
   granted: "permission state",
   local: "host kind",
   vps: "host kind",
+  production: "release channel name (release_channel_rules.rs), not an error",
   snapshot: "wrapper subcommand",
   status: "wrapper subcommand",
   up: "wrapper subcommand",
@@ -103,6 +115,20 @@ const NOT_ERRORS: Record<string, string> = {
   // States of the broker's LinkedIn login (`jht linkedin status`), shown as a status.
   logged_in: "broker login state",
   login_required: "broker login state",
+  // install.ps1's phases (windows_runtime::INSTALL_PHASES): shown as progress, never an error.
+  wsl_check: "install.ps1 phase id",
+  podman_install: "install.ps1 phase id",
+  podman_machine_init: "install.ps1 phase id",
+  podman_machine_start: "install.ps1 phase id",
+  runtime_download: "install.ps1 phase id",
+  image_pull: "install.ps1 phase id",
+  // runtime_log.rs: a log that cannot be written never stops the step it describes (RuntimeLog::record drops it).
+  runtime_log_failed: "runtime log write, never surfaced",
+  runtime_log_invalid: "runtime log write, never surfaced",
+  // jht.ps1 uninstall's phases (windows_runtime::UNINSTALL_PHASES): shown as progress, never an error.
+  uninstall_machine: "jht.ps1 uninstall phase id",
+  uninstall_runtime: "jht.ps1 uninstall phase id",
+  uninstall_commands: "jht.ps1 uninstall phase id",
 };
 
 function compiledRustModules(): string[] {
@@ -111,7 +137,8 @@ function compiledRustModules(): string[] {
   const lines = lib.split("\n");
   lines.forEach((line, index) => {
     const match = /^mod (\w+);$/.exec(line.trim());
-    if (match && lines[index - 1]?.trim() !== "#[cfg(test)]") modules.push(match[1]);
+    // A module behind any `#[cfg(...test...)]` (`test`, `all(test, unix)`) is test code.
+    if (match && !/^#\[cfg\(.*\btest\b.*\)\]$/.test(lines[index - 1]?.trim() ?? "")) modules.push(match[1]);
   });
   return modules;
 }
@@ -166,7 +193,12 @@ describe("error catalog", () => {
   });
 
   it("has a sentence and an action for every Rust code that can reach the person", () => {
-    const missing = [...rust].filter((code) => !(code in ERROR_CATALOG) && !(code in NOT_ERRORS)).sort();
+    // `ui_*` keys are texts, not errors: the onboarding's progress, phases
+    // and login instructions, told by onboarding-runtime.i18n.ts. A `ui_*`
+    // key that table lacks is still reported here.
+    const missing = [...rust]
+      .filter((code) => !(code in ERROR_CATALOG) && !(code in NOT_ERRORS) && !isRuntimeTextKey(code))
+      .sort();
     expect(missing, "codes with no sentence: add them to ERROR_CATALOG or to NOT_ERRORS with a reason").toEqual([]);
   });
 
@@ -349,5 +381,18 @@ describe("a Mac installed with another container engine", () => {
         expect(value, locale).not.toMatch(/terminal|curl|install\.sh|--runtime|`/i);
       }
     }
+  });
+});
+
+describe("homebrew_missing", () => {
+  // The Retry button of the setup's error screen, as each language labels it.
+  const RETRY = { it: "Riprova", en: "Try again", de: "Erneut versuchen", es: "Reintentar", fr: "Réessayer", hu: "Újra", pt: "Tentar novamente" };
+  it.each(Object.entries(RETRY))("%s: points to Homebrew's .pkg on brew.sh and to Retry, never to a terminal", (locale, retry) => {
+    const described = describeError("homebrew_missing", { locale });
+    expect(described.text).toContain("Homebrew");
+    expect(described.action).toContain("brew.sh");
+    expect(described.action).toContain(".pkg");
+    expect(described.action).toContain(retry);
+    expect(`${described.text} ${described.action}`).not.toMatch(/Terminal|brew install|curl|sudo/i);
   });
 });

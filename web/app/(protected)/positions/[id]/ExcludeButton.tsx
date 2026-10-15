@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { useLocale } from "@/lib/use-locale";
+import { useReadOnlyActions } from "@/lib/read-only-actions";
 import type { Locale } from "@/i18n/config";
 import { ReasonPicker } from "./ReasonPicker";
 import { REASON_LABELS, type ReasonKey } from "./exclusion-reasons";
@@ -130,12 +131,14 @@ interface Props {
 export function ExcludeButton({ legacyId, status, initialReason }: Props) {
   const locale = useLocale();
   const t = T[locale];
+  const readOnly = useReadOnlyActions();
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [reason, setReason] = useState("");
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
+  const locked = busy || isPending || readOnly.readOnly;
 
   const isUserExcluded = !!initialReason;
   const red = "var(--color-red)";
@@ -204,10 +207,10 @@ export function ExcludeButton({ legacyId, status, initialReason }: Props) {
         <button
           type="button"
           onClick={undo}
-          disabled={busy || isPending}
+          disabled={locked}
           className="flex items-center gap-1.5 px-4 py-2 rounded-lg border text-[11px] font-semibold transition-colors hover:bg-[var(--color-row)] disabled:opacity-60 disabled:cursor-wait"
           style={{ borderColor: red, color: red }}
-          title={t.undoTitle}
+          title={readOnly.readOnly ? readOnly.reason : t.undoTitle}
         >
           ⊘ {t.excludedByYou} · {reasonLabel} — {t.undo}
         </button>
@@ -232,15 +235,15 @@ export function ExcludeButton({ legacyId, status, initialReason }: Props) {
           onChange={setReason}
           note={note}
           onNoteChange={setNote}
-          disabled={busy || isPending}
+          disabled={locked}
           placeholder={t.selectPlaceholder}
-          selectTitle={t.excludeTitle}
+          selectTitle={readOnly.readOnly ? readOnly.reason : t.excludeTitle}
         />
         {reason && (
           <button
             type="button"
             onClick={doExclude}
-            disabled={busy || isPending}
+            disabled={locked}
             className="flex items-center gap-1.5 px-4 py-2 rounded-lg border text-[11px] font-semibold transition-colors hover:bg-[var(--color-row)] disabled:opacity-60 disabled:cursor-wait"
             style={{ borderColor: red, color: red }}
           >

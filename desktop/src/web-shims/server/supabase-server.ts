@@ -1,4 +1,6 @@
+import { existingTeamReadOnly } from "../../lib/existing-team-readonly";
 import { supabase } from "../../lib/supabase";
+import { inertSupabase } from "./inert-supabase";
 
 /**
  * Stand-in for web/lib/supabase/server.ts. On the web the server client
@@ -11,5 +13,6 @@ import { supabase } from "../../lib/supabase";
  * their select strings by concatenation, which the typed client rejects.
  */
 export async function createClient(): Promise<any> {
-  return supabase;
+  // Reading an existing team's VPS: no cloud row is read next to it.
+  return existingTeamReadOnly() ? inertSupabase : supabase;
 }

@@ -18,7 +18,9 @@ llama.cpp servers; installing and selecting a model remains an operator choice.
 JHT does not download a model automatically.
 
 The runtime container reaches a server on the host through
-`host.docker.internal`. Configure `~/.jht/jht.config.json` without changing the
+`host.docker.internal`. **Not on Windows** (Podman in WSL): there the agents'
+container has no route out except the egress proxy, which does not admit the
+host, so a local endpoint cannot be reached. Configure `~/.jht/jht.config.json` without changing the
 normal team provider:
 
 ```json
@@ -57,7 +59,7 @@ docker exec jht python3 /app/shared/skills/local_scorer.py once
 ```
 
 The launcher checks `team.local_scorer.enabled` only when starting a Scorer.
-Other roles continue to launch the configured Claude, Codex, or Kimi CLI.
+Other roles continue to launch the configured Codex, Claude, or Kimi CLI.
 
 ## Shadow, then write
 

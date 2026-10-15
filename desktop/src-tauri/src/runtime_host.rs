@@ -109,7 +109,7 @@ pub(crate) fn validate_host(
     validate_host_for_scope(app, host, &scope)
 }
 
-fn validate_host_for_scope(
+pub(crate) fn validate_host_for_scope(
     app: &tauri::AppHandle,
     host: &ExecutionHost,
     scope: &AccountScope,
@@ -235,6 +235,17 @@ fn parse_scanned_host_key(bytes: &[u8]) -> Option<ScannedHostKey> {
 fn read_pinned_host_key(path: &Path) -> Result<ScannedHostKey, &'static str> {
     let bytes = fs::read(path).map_err(|_| "host_key_mismatch")?;
     parse_scanned_host_key(&bytes).ok_or("host_key_mismatch")
+}
+
+/// The SHA-256 fingerprint of the key the person already confirmed for this
+/// host, read from the local pin file. Read-only: it never scans or pins.
+pub(crate) fn pinned_host_fingerprint(host: &ValidatedHost) -> Result<String, &'static str> {
+    match host {
+        ValidatedHost::Vps { known_hosts, .. } => {
+            read_pinned_host_key(known_hosts).map(|key| key.fingerprint)
+        }
+        ValidatedHost::Local => Err("not_vps"),
+    }
 }
 
 fn probe_status(
@@ -384,7 +395,7 @@ pub(crate) fn onboarding_ssh_host_key_confirm(
     )?)
 }
 
-fn decode_base64(value: &str) -> Option<Vec<u8>> {
+pub(crate) fn decode_base64(value: &str) -> Option<Vec<u8>> {
     let unpadded = value.trim_end_matches('=');
     if value.len() - unpadded.len() > 2 || unpadded.contains('=') || unpadded.len() % 4 == 1 {
         return None;
@@ -480,7 +491,14 @@ pub(crate) fn ssh_base_args(host: &ValidatedHost) -> Result<Vec<OsString>, &'sta
     else {
         return Err("not_vps");
     };
+    // `-o` values still use ssh_config tokenization: keep this path one entry
+    // even when the app-data directory contains spaces, quotes or backslashes.
+    let known_hosts_option = known_hosts.display().to_string()
+        .replace('\\', "\\\\").replace('"', "\\\"");
     Ok(vec![
+        "-a".into(),
+        "-x".into(),
+        "-T".into(),
         "-o".into(),
         "BatchMode=yes".into(),
         "-o".into(),
@@ -488,7 +506,7 @@ pub(crate) fn ssh_base_args(host: &ValidatedHost) -> Result<Vec<OsString>, &'sta
         "-o".into(),
         "StrictHostKeyChecking=yes".into(),
         "-o".into(),
-        format!("UserKnownHostsFile={}", known_hosts.display()).into(),
+        format!("UserKnownHostsFile=\"{known_hosts_option}\"").into(),
         "-o".into(),
         "GlobalKnownHostsFile=/dev/null".into(),
         "-i".into(),
@@ -544,6 +562,146 @@ fn read_capped(mut reader: impl Read) -> Vec<u8> {
     output
 }
 
+/// On Windows a console program started by the app (PowerShell, wsl.exe,
+/// curl.exe, ssh.exe) would open its own console window: the user must never
+/// see a terminal.
+#[cfg(windows)]
+fn hide_console(command: &mut Command) {
+    use std::os::windows::process::CommandExt;
+    const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+    command.creation_flags(CREATE_NO_WINDOW);
+}
+#[cfg(not(windows))]
+fn hide_console(_command: &mut Command) {}
+
+/// The longest stdout line run_program_lines hands over whole; a longer one
+/// arrives in pieces.
+const MAX_LINE_BYTES: u64 = 4096;
+/// After the program exits, how long its last lines may take to arrive. A
+/// process it left running in the background can hold its stdout open for
+/// ever (a Podman machine started by an installer): the app does not wait
+/// for that one.
+const LINES_DRAIN_GRACE: Duration = Duration::from_secs(2);
+
+/// run_program for a long installer that says what it is doing: stdin
+/// closed, each stdout line handed to `on_line` while the program runs, the
+/// exit code returned. stdout is not kept and stderr is drained unread, as
+/// in run_program.
+pub(crate) fn run_program_lines<I, S>(
+    program: &str,
+    args: I,
+    timeout: Duration,
+    on_line: impl FnMut(&str),
+) -> Result<i32, &'static str>
+where
+    I: IntoIterator<Item = S>,
+    S: AsRef<OsStr>,
+{
+    run_program_lines_keeping_stderr(program, args, timeout, on_line).0
+}
+
+/// run_program_lines that also returns what the program printed on stderr
+/// (capped), for the local runtime's own log only: see run_program_keeping_stderr.
+pub(crate) fn run_program_lines_keeping_stderr<I, S>(
+    program: &str,
+    args: I,
+    timeout: Duration,
+    mut on_line: impl FnMut(&str),
+) -> (Result<i32, &'static str>, Vec<u8>)
+where
+    I: IntoIterator<Item = S>,
+    S: AsRef<OsStr>,
+{
+    use std::io::BufRead;
+    let mut command = Command::new(program);
+    command
+        .args(args)
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+    hide_console(&mut command);
+    let Ok(mut child) = command.spawn() else {
+        return (Err("process_start_failed"), Vec::new());
+    };
+    let (Some(stdout), Some(stderr)) = (child.stdout.take(), child.stderr.take()) else {
+        let _ = child.kill();
+        let _ = child.wait();
+        return (Err("process_pipe_failed"), Vec::new());
+    };
+    let (lines, received) = std::sync::mpsc::channel::<String>();
+    // Neither reader is joined: see LINES_DRAIN_GRACE.
+    thread::spawn(move || {
+        let mut reader = std::io::BufReader::new(stdout);
+        let mut line = Vec::new();
+        loop {
+            line.clear();
+            match (&mut reader).take(MAX_LINE_BYTES).read_until(b'\n', &mut line) {
+                Ok(0) | Err(_) => break,
+                Ok(_) => {
+                    if lines.send(String::from_utf8_lossy(&line).into_owned()).is_err() {
+                        break;
+                    }
+                }
+            }
+        }
+    });
+    // stderr is read as it comes, so what arrived is there even when the
+    // program is killed or leaves a process holding the pipe.
+    let kept = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+    let (stderr_closed, stderr_done) = std::sync::mpsc::channel::<()>();
+    {
+        let kept = kept.clone();
+        thread::spawn(move || {
+            let mut stderr = stderr;
+            let mut buffer = [0u8; 8192];
+            loop {
+                match stderr.read(&mut buffer) {
+                    Ok(0) | Err(_) => break,
+                    Ok(count) => {
+                        if let Ok(mut kept) = kept.lock() {
+                            let room = MAX_OUTPUT_BYTES.saturating_sub(kept.len());
+                            kept.extend_from_slice(&buffer[..count.min(room)]);
+                        }
+                    }
+                }
+            }
+            let _ = stderr_closed.send(());
+        });
+    }
+    let taken = |kept: &std::sync::Mutex<Vec<u8>>| kept.lock().map(|mut kept| std::mem::take(&mut *kept)).unwrap_or_default();
+    let started = Instant::now();
+    let tick = Duration::from_millis(50);
+    let code = loop {
+        match received.recv_timeout(tick) {
+            Ok(line) => on_line(&line),
+            Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {}
+            // stdout closed: recv_timeout no longer waits, so this does.
+            Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => thread::sleep(tick),
+        }
+        match child.try_wait() {
+            Ok(Some(status)) => break status.code().unwrap_or(-1),
+            Ok(None) => {}
+            Err(_) => return (Err("process_wait_failed"), taken(&kept)),
+        }
+        if started.elapsed() >= timeout {
+            let _ = child.kill();
+            let _ = child.wait();
+            return (Err("process_timeout"), taken(&kept));
+        }
+    };
+    let exited = Instant::now();
+    while let Some(left) = LINES_DRAIN_GRACE.checked_sub(exited.elapsed()) {
+        match received.recv_timeout(left) {
+            Ok(line) => on_line(&line),
+            Err(_) => break,
+        }
+    }
+    if let Some(left) = LINES_DRAIN_GRACE.checked_sub(exited.elapsed()) {
+        let _ = stderr_done.recv_timeout(left);
+    }
+    (Ok(code), taken(&kept))
+}
+
 pub(crate) fn run_program<I, S>(
     program: &str,
     args: I,
@@ -554,55 +712,94 @@ where
     I: IntoIterator<Item = S>,
     S: AsRef<OsStr>,
 {
+    run_program_keeping_stderr(program, args, input, timeout).0
+}
+
+/// run_program that also returns what the program printed on stderr. Only
+/// for the steps that prepare the local runtime, which keep it in their own
+/// log (runtime_log.rs, redacted there): never for SSH or provider commands,
+/// whose stderr can carry credentials or host data.
+pub(crate) fn run_program_keeping_stderr<I, S>(
+    program: &str,
+    args: I,
+    input: Option<&[u8]>,
+    timeout: Duration,
+) -> (Result<ProcessResult, &'static str>, Vec<u8>)
+where
+    I: IntoIterator<Item = S>,
+    S: AsRef<OsStr>,
+{
     let mut command = Command::new(program);
     command
         .args(args)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
+    hide_console(&mut command);
     if input.is_some() {
         command.stdin(Stdio::piped());
     } else {
         command.stdin(Stdio::null());
     }
-    let mut child = command.spawn().map_err(|_| "process_start_failed")?;
-    let stdout = child.stdout.take().ok_or("process_pipe_failed")?;
-    let stderr = child.stderr.take().ok_or("process_pipe_failed")?;
+    let Ok(mut child) = command.spawn() else {
+        return (Err("process_start_failed"), Vec::new());
+    };
+    let (Some(stdout), Some(stderr)) = (child.stdout.take(), child.stderr.take()) else {
+        let _ = child.kill();
+        let _ = child.wait();
+        return (Err("process_pipe_failed"), Vec::new());
+    };
     let stdout_reader = thread::spawn(move || read_capped(stdout));
     let stderr_reader = thread::spawn(move || read_capped(stderr));
+    let stopped = |child: &mut std::process::Child,
+                   stdout_reader: thread::JoinHandle<Vec<u8>>,
+                   stderr_reader: thread::JoinHandle<Vec<u8>>,
+                   error: &'static str| {
+        let _ = child.kill();
+        let _ = child.wait();
+        let _ = stdout_reader.join();
+        (Err(error), stderr_reader.join().unwrap_or_default())
+    };
     if let Some(bytes) = input {
-        let mut stdin = child.stdin.take().ok_or("process_pipe_failed")?;
-        stdin.write_all(bytes).map_err(|_| "process_input_failed")?;
+        let Some(mut stdin) = child.stdin.take() else {
+            return stopped(&mut child, stdout_reader, stderr_reader, "process_pipe_failed");
+        };
+        if stdin.write_all(bytes).is_err() {
+            return stopped(&mut child, stdout_reader, stderr_reader, "process_input_failed");
+        }
     }
     let started = Instant::now();
     let status = loop {
-        if let Some(status) = child.try_wait().map_err(|_| "process_wait_failed")? {
-            break status;
+        match child.try_wait() {
+            Ok(Some(status)) => break status,
+            Ok(None) => {}
+            Err(_) => return stopped(&mut child, stdout_reader, stderr_reader, "process_wait_failed"),
         }
         if started.elapsed() >= timeout {
-            let _ = child.kill();
-            let _ = child.wait();
-            let _ = stdout_reader.join();
-            let _ = stderr_reader.join();
-            return Err("process_timeout");
+            return stopped(&mut child, stdout_reader, stderr_reader, "process_timeout");
         }
         thread::sleep(Duration::from_millis(50));
     };
     let stdout = stdout_reader.join().unwrap_or_default();
-    // stderr is deliberately drained but never returned to UI-facing callers:
-    // SSH/provider output can contain credentials or host data. Stable error
-    // codes are the public contract.
-    let _ = stderr_reader.join();
-    Ok(ProcessResult {
-        code: status.code().unwrap_or(-1),
-        stdout,
-    })
+    // stderr is never returned to UI-facing callers: SSH/provider output can
+    // contain credentials or host data, and stable error codes are the public
+    // contract. run_program drops it; only the local runtime's own log keeps
+    // it, redacted.
+    let stderr = stderr_reader.join().unwrap_or_default();
+    (
+        Ok(ProcessResult {
+            code: status.code().unwrap_or(-1),
+            stdout,
+        }),
+        stderr,
+    )
 }
 
 #[cfg(test)]
 mod tests {
     use super::{
         decode_base64, encode_base64, onboarding_ssh_host_key_confirm,
-        onboarding_ssh_host_key_probe, parse_scanned_host_key, probe_status, valid_address,
+        onboarding_ssh_host_key_probe, parse_scanned_host_key, probe_status, ssh_base_args,
+        valid_address,
         valid_user, write_pinned_host_key, ExecutionHost, HostKeyError, ScannedHostKey,
         SshHostKeyProbe,
     };
@@ -652,6 +849,69 @@ mod tests {
         for bad in ["", "-root", "root@host", "user name", "a/b"] {
             assert!(!valid_user(bad), "{bad}");
         }
+    }
+
+    #[test]
+    fn ssh_base_disables_forwarding_and_tty_but_an_explicit_oauth_tty_stays_last() {
+        let host = super::ValidatedHost::Vps {
+            address: "test-host".into(),
+            user: "test".into(),
+            port: 22,
+            key_path: "/private/synthetic-key".into(),
+            known_hosts: "/private/synthetic-known-hosts".into(),
+        };
+        let mut args = ssh_base_args(&host).unwrap();
+        let values: Vec<_> = args.iter().map(|value| value.to_string_lossy()).collect();
+        for required in [
+            "-a",
+            "-x",
+            "-T",
+            "BatchMode=yes",
+            "ConnectTimeout=12",
+            "StrictHostKeyChecking=yes",
+        ] {
+            assert!(values.iter().any(|value| value == required), "{required}");
+        }
+        let base_tty = values.iter().position(|value| value == "-T").unwrap();
+
+        // The OAuth caller pops the destination and adds `-tt` before it, so
+        // its explicit interactive request remains later than the base `-T`.
+        let destination = args.pop().unwrap();
+        args.push("-tt".into());
+        args.push(destination);
+        assert!(base_tty < args.len() - 2);
+        assert_eq!(args[args.len() - 2].to_string_lossy(), "-tt");
+        assert_eq!(
+            args.last().unwrap().to_string_lossy(),
+            "test@test-host"
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn ssh_known_hosts_option_preserves_spaces_quotes_and_backslashes() {
+        let path = r#"/tmp/Application Support/synthetic"quoted\known_hosts"#;
+        let host = super::ValidatedHost::Vps {
+            address: "synthetic.invalid".into(),
+            user: "synthetic".into(),
+            port: 22,
+            key_path: "/tmp/synthetic-unused-key".into(),
+            known_hosts: path.into(),
+        };
+        let args = ssh_base_args(&host).unwrap();
+        let option = args.iter().find(|arg| {
+            arg.to_string_lossy().starts_with("UserKnownHostsFile=")
+        }).unwrap();
+        // Parse only: no configuration, credentials or network connection.
+        let parsed = std::process::Command::new("ssh")
+            .args(["-G", "-F", "/dev/null", "-o", "CanonicalizeHostname=no",
+                   "-o", "IdentityFile=none", "-o", "IdentityAgent=none", "-o"])
+            .arg(option).arg("synthetic.invalid").output()
+            .expect("OpenSSH is required to verify the Unix client's argument contract");
+        assert!(parsed.status.success(), "OpenSSH rejected the generated option");
+        let output = String::from_utf8(parsed.stdout).unwrap();
+        let parsed_path = output.lines().find(|line| line.starts_with("userknownhostsfile ")).unwrap();
+        assert_eq!(parsed_path, format!("userknownhostsfile {path}"));
     }
 
     #[test]
@@ -732,5 +992,116 @@ mod tests {
         );
 
         fs::remove_dir_all(destination.parent().unwrap()).unwrap();
+    }
+
+    #[cfg(unix)]
+    fn lines_of(script: &str, timeout: std::time::Duration) -> (Result<i32, &'static str>, Vec<String>) {
+        let mut seen = Vec::new();
+        let result = super::run_program_lines("/bin/sh", ["-c", script], timeout, |line| {
+            seen.push(line.to_owned())
+        });
+        (result, seen)
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn an_installer_s_lines_arrive_in_order_with_its_exit_code() {
+        let (result, seen) = lines_of(
+            "echo 'JHT_PHASE wsl_check'; echo noise >&2; printf 'JHT_PHASE podman_install\\r\\n'; printf 'last'; exit 21",
+            std::time::Duration::from_secs(20),
+        );
+        assert_eq!(result, Ok(21));
+        assert_eq!(seen, ["JHT_PHASE wsl_check\n", "JHT_PHASE podman_install\r\n", "last"]);
+    }
+
+    /// Each line reaches the caller while the program still runs, not at the
+    /// end: the onboarding shows the phase as it starts.
+    #[cfg(unix)]
+    #[test]
+    fn a_line_arrives_before_the_program_ends() {
+        let started = std::time::Instant::now();
+        let mut first_at = None;
+        let result = super::run_program_lines(
+            "/bin/sh",
+            ["-c", "echo first; sleep 2; echo second"],
+            std::time::Duration::from_secs(20),
+            |_| {
+                first_at.get_or_insert_with(|| started.elapsed());
+            },
+        );
+        assert_eq!(result, Ok(0));
+        assert!(first_at.unwrap() < std::time::Duration::from_millis(1500), "{first_at:?}");
+    }
+
+    /// A background process the installer leaves running keeps stdout open:
+    /// the app returns anyway, shortly after the installer exits.
+    #[cfg(unix)]
+    #[test]
+    fn a_process_left_running_does_not_hold_the_app() {
+        let started = std::time::Instant::now();
+        let (result, seen) = lines_of(
+            "echo 'JHT_PHASE podman_machine_start'; sleep 30 & exit 0",
+            std::time::Duration::from_secs(60),
+        );
+        assert_eq!(result, Ok(0));
+        assert_eq!(seen, ["JHT_PHASE podman_machine_start\n"]);
+        assert!(started.elapsed() < std::time::Duration::from_secs(10), "{:?}", started.elapsed());
+    }
+
+    /// The local runtime's steps keep what the program said on stderr, for
+    /// their log: when it fails, when it is killed, and next to its stdout.
+    #[cfg(unix)]
+    #[test]
+    fn a_runtime_step_keeps_its_stderr_and_run_program_still_drops_it() {
+        let (result, stderr) = super::run_program_keeping_stderr(
+            "/bin/sh",
+            ["-c", "echo out; echo 'install.ps1 : Access denied' >&2; exit 3"],
+            None,
+            std::time::Duration::from_secs(20),
+        );
+        let result = result.unwrap();
+        assert_eq!((result.code, result.stdout.as_slice()), (3, &b"out\n"[..]));
+        assert_eq!(stderr, b"install.ps1 : Access denied\n");
+
+        let (timed_out, stderr) = super::run_program_keeping_stderr(
+            "/bin/sh",
+            ["-c", "echo 'stuck at the machine' >&2; exec sleep 30"],
+            None,
+            std::time::Duration::from_millis(500),
+        );
+        assert_eq!(timed_out.unwrap_err(), "process_timeout");
+        assert_eq!(stderr, b"stuck at the machine\n");
+
+        let mut seen = Vec::new();
+        let (ended, stderr) = super::run_program_lines_keeping_stderr(
+            "/bin/sh",
+            ["-c", "echo 'JHT_PHASE podman_install'; echo 'winget: 0x8a15000f' >&2; exit 1"],
+            std::time::Duration::from_secs(20),
+            |line| seen.push(line.to_owned()),
+        );
+        assert_eq!(ended, Ok(1));
+        assert_eq!(seen, ["JHT_PHASE podman_install\n"]);
+        assert_eq!(stderr, b"winget: 0x8a15000f\n");
+
+        let (timed_out, stderr) = super::run_program_lines_keeping_stderr(
+            "/bin/sh",
+            ["-c", "echo 'still pulling' >&2; exec sleep 30"],
+            std::time::Duration::from_millis(500),
+            |_| {},
+        );
+        assert_eq!(timed_out, Err("process_timeout"));
+        assert_eq!(stderr, b"still pulling\n");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_silent_installer_times_out_and_a_missing_one_does_not_start() {
+        let started = std::time::Instant::now();
+        let (result, _) = lines_of("exec sleep 30", std::time::Duration::from_millis(300));
+        assert_eq!(result, Err("process_timeout"));
+        assert!(started.elapsed() < std::time::Duration::from_secs(10));
+        let missing =
+            super::run_program_lines("/nonexistent/jht-installer", ["x"], std::time::Duration::from_secs(1), |_| {});
+        assert_eq!(missing, Err("process_start_failed"));
     }
 }

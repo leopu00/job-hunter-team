@@ -12,7 +12,7 @@ Electron wizard is not involved.
 - SSH available on the standard port 22. The native host field currently
   accepts a hostname or IPv4 address, not a custom port or IPv6 address.
 - The SSH private key matching a public key installed on the VPS.
-- A dedicated Claude, Codex or Kimi subscription.
+- A dedicated Codex (recommended), Claude or Kimi subscription.
 - Optionally, three Telegram bots and a dedicated job-alert mailbox.
 
 The native app can generate a dedicated Ed25519 key under
@@ -35,7 +35,7 @@ explicitly excluded from migrations.
    writes VPS host mode, pulls and starts the container, saves the connection
    and switches the office to the remote backend. **Advanced console** keeps a
    visible recovery path for troubleshooting.
-6. In the Coordinator conversation, choose Claude, Codex or Kimi and open
+6. In the Coordinator conversation, choose Codex (recommended), Claude or Kimi and open
    subscription login. The provider CLI runs in the embedded console. A
    browser may open only for provider authorization; codes and prompts remain
    visible in the app.
