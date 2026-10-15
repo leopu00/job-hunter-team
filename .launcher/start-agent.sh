@@ -1765,7 +1765,10 @@ echo "  Connect with: tmux attach -t \"$SESSION\""
 #
 # Send: tui_send_verified — dopo il send -l del testo, capture-pane e
 # verifica che la signature sia presente PRIMA di spingere Enter. Con 3
-# retry recuperiamo i casi in cui la TUI non era davvero ricettiva.
+# retry recuperiamo i casi in cui la TUI non era davvero ricettiva. Dopo
+# l'Enter verifica che la TUI lo abbia accettato (turno partito o testo
+# uscito dal composer): "SENT OK" solo allora, altrimenti "SUBMIT NOT
+# CONFIRMED" — il testo e' rimasto nel composer e l'agente non e' partito.
 #
 # setsid: scolleghiamo dal process-group di start-agent.sh cosi' il parent
 # puo' uscire senza killare il sub-shell del kick-off.
@@ -1791,11 +1794,12 @@ _kickoff() {
     echo "[$(date +%H:%M:%S)] waiting for ready..."
     if tui_wait_ready "$JHT_KICKOFF_SESS"; then
       echo "[$(date +%H:%M:%S)] ready. sending message (${#JHT_KICKOFF_MSG} chars)..."
-      if tui_send_verified "$JHT_KICKOFF_SESS" "$JHT_KICKOFF_MSG"; then
-        echo "[$(date +%H:%M:%S)] SENT OK"
-      else
-        echo "[$(date +%H:%M:%S)] SEND FAILED (retries exhausted)"
-      fi
+      tui_send_verified "$JHT_KICKOFF_SESS" "$JHT_KICKOFF_MSG"
+      case $? in
+        0) echo "[$(date +%H:%M:%S)] SENT OK" ;;
+        2) echo "[$(date +%H:%M:%S)] SUBMIT NOT CONFIRMED (text left in the composer, Enter not accepted)" ;;
+        *) echo "[$(date +%H:%M:%S)] SEND FAILED (retries exhausted)" ;;
+      esac
     else
       echo "[$(date +%H:%M:%S)] WAIT_READY TIMEOUT"
     fi
@@ -1851,8 +1855,12 @@ _welcome_kickoff() {
         exit 0
       fi
       echo "[$(date +%H:%M:%S)] flag missing (retry $retry/3): reinjecting"
-      tui_send_verified "$JHT_WELCOME_SESS" "$JHT_WELCOME_MSG" || \
-        echo "[$(date +%H:%M:%S)] tui_send_verified failed"
+      tui_send_verified "$JHT_WELCOME_SESS" "$JHT_WELCOME_MSG"
+      case $? in
+        0) ;;
+        2) echo "[$(date +%H:%M:%S)] SUBMIT NOT CONFIRMED (text left in the composer, Enter not accepted)" ;;
+        *) echo "[$(date +%H:%M:%S)] tui_send_verified failed" ;;
+      esac
     done
     if [ ! -f "$JHT_WELCOME_FLAG" ]; then
       echo "[$(date +%H:%M:%S)] watchdog giving up: welcome not confirmed"
