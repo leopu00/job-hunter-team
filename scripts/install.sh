@@ -1814,9 +1814,42 @@ maybe_onboard() {
   jht setup || warn "The wizard exited with an error. Re-run it with 'jht setup'."
 }
 
+# ── Free disk space (Linux) ───────────────────────────────────────────────
+# The image is pulled by `jht up`, after this installer has finished, so a disk
+# that cannot hold it used to surface as a failed start with no reason. Refuse
+# here instead, before Docker is installed or anything is written. JHT_MIN_FREE_GIB
+# overrides the minimum; macOS keeps its disk inside the container VM.
+MIN_FREE_GIB="${JHT_MIN_FREE_GIB:-5}"
+
+free_kib() {
+  df -Pk "$1" 2>/dev/null | awk 'NR==2 {print $4}'
+}
+
+check_free_disk() {
+  case "$OS" in linux|wsl) ;; *) return 0 ;; esac
+  case "$MIN_FREE_GIB" in ''|*[!0-9]*) fail "Invalid JHT_MIN_FREE_GIB: $MIN_FREE_GIB" ;; esac
+  # Where the image lands (Docker's data root, else its parent) and where the
+  # team's data lands. A separate Docker volume is judged on its own.
+  local path free_kib_value docker_root=/var/lib
+  [ -d /var/lib/docker ] && docker_root=/var/lib/docker
+  for path in "$docker_root" "$HOME"; do
+    [ -d "$path" ] || continue
+    free_kib_value="$(free_kib "$path")"
+    case "$free_kib_value" in ''|*[!0-9]*) continue ;; esac
+    if [ "$free_kib_value" -lt $((MIN_FREE_GIB * 1024 * 1024)) ]; then
+      if [ "$DRY_RUN" -eq 1 ]; then
+        warn "Only $((free_kib_value / 1024 / 1024)) GiB free on $path; a real install needs at least $MIN_FREE_GIB GiB."
+        return 0
+      fi
+      fail "not enough free disk space: $((free_kib_value / 1024 / 1024)) GiB free on $path, the Job Hunter Team image and its data need at least $MIN_FREE_GIB GiB. Free some space (on a server that already runs Docker, 'docker image prune -af' removes unused images) and run the installer again. Nothing was changed."
+    fi
+  done
+}
+
 # ── Main ──────────────────────────────────────────────────────────────────
 main_docker() {
   detect_system "$TOTAL_STEPS_DOCKER"
+  check_free_disk
   install_container_runtime
   verify_docker_works
   download_runtime_files
