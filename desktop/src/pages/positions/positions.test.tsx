@@ -107,9 +107,13 @@ describe("the desktop pages hand the route to the web pages", () => {
     const { default: PositionsPage } = await import("./index");
     render(<PositionsPage params={{}} search={new URLSearchParams("q=sintetica")} />);
     expect((await screen.findAllByText("Ruolo sintetico 42")).length).toBeGreaterThan(0);
-    const positions = fake.current!.calls.find((c) => c.table === "positions")!;
+    // The page reads the list and the source counts side by side, both from
+    // `positions`, in an order the awaits decide: look at every read, not the first.
+    const reads = fake.current!.calls.filter((c) => c.table === "positions");
     // getPositions turns a free-text search into a PostgREST `or` filter.
-    expect(positions.ops.some((o) => o.name === "or" && String(o.args[0]).includes("sintetica"))).toBe(true);
+    expect(
+      reads.some((c) => c.ops.some((o) => o.name === "or" && String(o.args[0]).includes("sintetica"))),
+    ).toBe(true);
   });
 
   it("/positions/:id passes the id", async () => {
