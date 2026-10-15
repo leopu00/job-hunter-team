@@ -230,7 +230,7 @@ type ProfileRow = {
   positioning?: unknown;
 };
 
-type ExistingTeamRow = { id?: string | null };
+type ExistingTeamRow = { user_id?: string | null };
 
 const MARKER_PREFIX = "jht.desktop.onboarding.";
 const MARKER_VALUE = "subscription-v1";
@@ -306,8 +306,10 @@ export async function loadOnboardingGate(
     client.from("candidate_profiles")
       .select("user_id,name,email,target_role,location,experience_years,seniority_target,skills,languages,location_preferences,positioning")
       .eq("user_id", user.id).maybeSingle(),
+    // The team probe on the VPS compares the expected team with the `user_id` of
+    // its cloud.json, which is this column: never the token row's own `id`.
     client.from("cloud_sync_tokens")
-      .select("id")
+      .select("user_id")
       .eq("user_id", user.id)
       .is("revoked_at", null)
       .order("last_used_at", { ascending: false, nullsFirst: false })
@@ -323,8 +325,8 @@ export async function loadOnboardingGate(
   return {
     phase: "required", account: { displayName: displayName(user), identity: "google" },
     resumeAvailable: started,
-    ...(milestones?.vps_setup_completed_at && typeof team?.id === "string" && clean(team.id)
-      ? { existingTeam: { teamId: clean(team.id), status: "available" as const } }
+    ...(milestones?.vps_setup_completed_at && typeof team?.user_id === "string" && clean(team.user_id)
+      ? { existingTeam: { teamId: clean(team.user_id), status: "available" as const } }
       : {}),
     runtime: { status: "collecting", stage: "host" },
   };
