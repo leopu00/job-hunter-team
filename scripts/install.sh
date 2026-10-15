@@ -181,6 +181,16 @@ while [ $# -gt 0 ]; do
       shift 2
       ;;
     --pairing-token=*) PAIRING_TOKEN="${1#*=}"; shift ;;
+    --pairing-token-env)
+      # Same token, taken from $JHT_PAIRING_TOKEN instead of the command line:
+      # the arguments of a process are readable by every user of the server
+      # (ps, /proc/<pid>/cmdline), its environment only by its owner. The
+      # variable is dropped at once, so nothing the installer starts inherits it.
+      [ -n "${JHT_PAIRING_TOKEN:-}" ] || { printf "%s needs JHT_PAIRING_TOKEN in the environment\n" "$1" >&2; exit 2; }
+      PAIRING_TOKEN="$JHT_PAIRING_TOKEN"
+      unset JHT_PAIRING_TOKEN
+      shift
+      ;;
     -h|--help)
       sed -n '2,54p' "$0" | sed 's/^# \{0,1\}//'
       exit 0

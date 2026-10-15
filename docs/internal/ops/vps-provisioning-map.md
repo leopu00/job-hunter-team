@@ -12,7 +12,7 @@ sono quelli riservati alla documentazione (`192.0.2.x`).
 | Codice | `desktop/src-tauri/src/onboarding.rs`, `runtime_host.rs` | `game/scripts/setup/setup_service.gd` | `scripts/install.sh`, `scripts/host-setup.sh` |
 | Fiducia nel server | probe ed25519 + **conferma dell'utente** sull'impronta SHA256, poi `known_hosts` per account e host:porta | `ssh-keyscan` e **pin automatico alla prima connessione** (l'impronta si mostra dopo) | l'utente confronta a mano l'impronta con quella del provider |
 | Installer sul server | scaricato dall'app, **verificato con lo sha256 incorporato**, inviato su stdin | `curl -fsSL …/install.sh \| bash` sul server, **senza digest** | `curl … -o install.sh`, lettura, poi `bash install.sh` |
-| Token di pairing | su stdin, poi `--pairing-token` | non usato | scelta dell'utente in `jht setup` |
+| Token di pairing | su stdin, poi nell'ambiente di `install.sh --pairing-token-env` (mai negli argomenti di un processo) | non usato | scelta dell'utente in `jht setup` |
 | Idempotenza | rilancio di `REMOTE_INSTALL` | installa solo se `jht` manca | rilancio di `install.sh` |
 
 ## La sequenza dell'app desktop (`prepare_impl`, ramo VPS)
@@ -24,7 +24,7 @@ sono quelli riservati alla documentazione (`192.0.2.x`).
 3. `ssh … REMOTE_INSTALL`, con `BatchMode=yes`, `StrictHostKeyChecking=yes`,
    `GlobalKnownHostsFile=/dev/null`. Sul server: lo script legge lo sha256 e il
    token dalla stdin, controlla l'installer (exit 87 se non coincide, 86 se
-   non c'è uno strumento per l'hash) e lancia `install.sh --pairing-token`.
+   non c'è uno strumento per l'hash) e lancia `install.sh --pairing-token-env` con il token nell'ambiente.
 4. `install.sh` su Linux, nell'ordine: rilevamento del sistema (apt, dnf,
    pacman) → riuso di Docker se `docker info` risponde, altrimenti installa
    Docker e il plugin compose, `systemctl enable --now docker`, gruppo docker

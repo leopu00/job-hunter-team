@@ -4,7 +4,7 @@ What the desktop app does for a new server (desktop/src-tauri/src/onboarding.rs,
 prepare_impl, VPS arm) is a fixed sequence of ``ssh`` calls:
 
   1. REMOTE_INSTALL   - the verified install.sh is piped on stdin and run with
-                        ``--pairing-token``: Docker, wrapper, compose, host.env
+                        ``--pairing-token-env``: Docker, wrapper, compose, host.env
   2. REMOTE_JHT_UP    - ``jht up``
   3. REMOTE_SNAPSHOT  - the state probe that proves the container is running
   4. REMOTE_USE_*     - ``jht providers use <provider>``
@@ -45,7 +45,7 @@ OTHER_KEY = "AAAAC3NzaC1lZDI1NTE5AAAAIattackerkeyattackerkeyattackerkey00"
 SYSTEM_TOOLS = (
     "awk bash basename cat chmod cp curl cut date dirname env grep head id ln "
     "ls mkdir mktemp mv printf readlink rm sed sh sort tail tee touch tr wc "
-    "sha256sum shasum stat find xargs diff cmp tty"
+    "sha256sum shasum stat find xargs diff cmp tty ps"
 ).split()
 
 FAKE_SSH = r"""#!/bin/bash
@@ -95,6 +95,10 @@ exec env -i HOME="$FAKE_REMOTE_HOME" PATH="$FAKE_REMOTE_PATH" \
 
 FAKE_DOCKER = r"""#!/bin/bash
 echo "docker $*" >> "$FAKE_LOG"
+# What a user of the server could read about the process that called us: its
+# arguments (world-readable) and whether the pairing token is in its environment.
+echo "parent-args: $(ps -o args= -p $PPID 2>/dev/null)" >> "$FAKE_LOG"
+echo "parent-env-token: $([ -n "${JHT_PAIRING_TOKEN:-}" ] && echo present || echo absent)" >> "$FAKE_LOG"
 case "$1" in
   info) [ "${FAKE_DOCKER:-up}" = up ] ;;
   compose) [ "$2" = version ] ;;
@@ -308,6 +312,16 @@ def test_the_token_is_not_printed_by_the_installer_nor_logged_by_the_fake_tools(
     assert TOKEN not in server.log.read_text()
 
 
+def test_the_token_is_in_no_process_argument_on_the_server_and_not_in_its_children(server, source):
+    done = install(server, source)
+    assert done.returncode == 0, done.stderr.decode()
+    seen = [c for c in server.calls() if c.startswith("parent-args:")]
+    assert any("install" in c or "bash" in c for c in seen), "the probe saw no installer process"
+    assert not any(TOKEN in c for c in seen)
+    assert [c for c in server.calls() if c.startswith("parent-env-token:")] == \
+        ["parent-env-token: absent"] * len([c for c in server.calls() if c.startswith("parent-env-token:")])
+
+
 def test_the_remote_steps_after_the_install_reach_the_wrapper_in_order(server, source):
     assert install(server, source).returncode == 0
     jht = server.home / ".local/bin/jht"
@@ -448,3 +462,36 @@ def test_a_disk_with_room_goes_on(server, source):
     done = server.ssh(rust_const(source, "REMOTE_INSTALL"), server.installer_input(),
                       FAKE_FREE_KB=str(40 * 1024 * 1024))
     assert done.returncode == 0, done.stderr.decode()
+
+
+# ── the token flag of the installer ───────────────────────────────────────
+
+def parse_flag(tmp_path: Path, *args: str, env_token: str | None = None):
+    script = (
+        f'JHT_INSTALLER_SOURCE_ONLY=1 . "{INSTALL}" "$@"\n'
+        'printf "token=%s\\nleft=%s\\n" "$PAIRING_TOKEN" "${JHT_PAIRING_TOKEN:-}"\n'
+    )
+    env = {"PATH": "/usr/bin:/bin", "HOME": str(tmp_path)}
+    if env_token is not None:
+        env["JHT_PAIRING_TOKEN"] = env_token
+    return subprocess.run(["bash", "-c", script, "install.sh", *args], env=env,
+                          capture_output=True, text=True, timeout=30)
+
+
+def test_the_token_can_come_from_the_environment_and_is_dropped_at_once(tmp_path):
+    done = parse_flag(tmp_path, "--pairing-token-env", env_token=TOKEN)
+    assert done.returncode == 0, done.stderr
+    assert f"token={TOKEN}\n" in done.stdout
+    assert "left=\n" in done.stdout
+
+
+def test_the_environment_flag_without_a_token_in_the_environment_is_refused(tmp_path):
+    done = parse_flag(tmp_path, "--pairing-token-env")
+    assert done.returncode == 2
+    assert "JHT_PAIRING_TOKEN" in done.stderr
+
+
+def test_the_old_flag_with_the_token_as_an_argument_still_works_for_manual_use(tmp_path):
+    done = parse_flag(tmp_path, "--pairing-token", TOKEN)
+    assert done.returncode == 0, done.stderr
+    assert f"token={TOKEN}\n" in done.stdout

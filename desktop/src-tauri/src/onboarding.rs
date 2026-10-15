@@ -1673,7 +1673,8 @@ else
   exit 86
 fi
 [ "$jht_actual_sha256" = "$JHT_INSTALL_SHA256" ] || exit 87
-/bin/bash "$jht_installer" --pairing-token "$JHT_PAIRING_TOKEN""#;
+export JHT_PAIRING_TOKEN
+/bin/bash "$jht_installer" --pairing-token-env"#;
 
 pub(crate) fn remote_install_input(
     installer: &VerifiedInstaller,
