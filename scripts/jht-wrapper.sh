@@ -942,9 +942,21 @@ LEGACY_SECRET_NAMES="email_monitor email_transport"
 BROKER_VOLUME_NAMES="jht-secrets jht-broker-state jht-broker-sock"
 HOST_RESET_CONFIRMED_EXIT=20
 
+# Il compose installato segue le release, non il repo: finche' `jht upgrade`
+# non lo rinnova, puo' non avere il servizio. Con il servizio assente `jht up`
+# non lo crea mai: la via d'uscita giusta e' `jht upgrade`, non un altro `up`.
+compose_lacks_service() {
+  ! grep -q "^  $1:" "$COMPOSE_FILE" 2>/dev/null
+}
+
 broker_admin() {
   local broker_id
   broker_id="$(read_only_service_id "$BROKER_SERVICE")" || {
+    if compose_lacks_service "$BROKER_SERVICE"; then
+      err "broker_unavailable: il runtime installato è più vecchio e non ha il broker dei segreti."
+      err "Cosa fare: jht upgrade"
+      return 1
+    fi
     err "broker_unavailable: il broker dei segreti non è attivo o non è attestabile."
     err "Cosa fare: jht up"
     return 1
@@ -960,6 +972,11 @@ TELEGRAM_SERVICE="jht-telegram"
 telegram_admin() {
   local telegram_id
   telegram_id="$(read_only_service_id "$TELEGRAM_SERVICE")" || {
+    if compose_lacks_service "$TELEGRAM_SERVICE"; then
+      err "telegram_unavailable: il runtime installato è più vecchio e non ha il servizio Telegram isolato."
+      err "Cosa fare: jht upgrade"
+      return 1
+    fi
     err "telegram_unavailable: il servizio Telegram isolato non è attivo o non è attestabile."
     err "Cosa fare: jht up"
     return 1
@@ -970,6 +987,11 @@ telegram_admin() {
 telegram_admin_input() {
   local telegram_id
   telegram_id="$(read_only_service_id "$TELEGRAM_SERVICE")" || {
+    if compose_lacks_service "$TELEGRAM_SERVICE"; then
+      err "telegram_unavailable: il runtime installato è più vecchio e non ha il servizio Telegram isolato."
+      err "Cosa fare: jht upgrade"
+      return 1
+    fi
     err "telegram_unavailable: il servizio Telegram isolato non è attivo o non è attestabile."
     err "Cosa fare: jht up"
     return 1
