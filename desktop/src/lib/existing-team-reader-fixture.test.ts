@@ -21,10 +21,12 @@ describe("pointing the core's reader at a synthetic folder", () => {
   });
 
   it("builds a sqlite URI for the database, with no backslash in it", () => {
-    // The URI of the same path, whatever the drive: file:///tmp/... here, file:///D:/tmp/... on a Windows runner.
-    const database = join(tmpdir(), "with space", "jobs.db");
+    // POSIX: a fixed literal, so the test does not lean on the function the helper uses.
+    // Windows: the drive letter is the runner's (file:///D:/tmp/...), so the URI is built from the same path.
+    const posix = process.platform !== "win32";
+    const database = posix ? "/tmp/with space/jobs.db" : join(tmpdir(), "with space", "jobs.db");
     const reader = readerOnDatabase(SOURCE, database);
-    expect(reader).toContain(JSON.stringify(`${pathToFileURL(database).href}?mode=ro`));
+    expect(reader).toContain(posix ? '"file:///tmp/with%20space/jobs.db?mode=ro"' : JSON.stringify(`${pathToFileURL(database).href}?mode=ro`));
     expect(reader).toContain("%20");
     expect(reader).not.toContain("\\");
     expect(reader).not.toContain("/jht_home/jobs.db");
