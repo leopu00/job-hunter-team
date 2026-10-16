@@ -56,7 +56,7 @@ jobs:
             artifact: tauri-windows-x64
           - os: macos-14
             label: macOS Universal 2
-            args: --target universal-apple-darwin --bundles dmg
+            args: --target universal-apple-darwin --bundles dmg --config src-tauri/tauri.macos-universal.conf.json
             artifact: tauri-macos-universal
           - os: ubuntu-22.04
             label: Linux x64
@@ -194,6 +194,14 @@ jobs:
           binary=desktop/src-tauri/target/universal-apple-darwin/release/jht-desktop
           lipo -info "$binary"
           lipo "$binary" -verify_arch x86_64 arm64
+
+      # Quello che si installa e' la .app dentro il dmg: li' devono esserci
+      # tutti e due i binari del crate, la shell e il compagno jht-existing-team,
+      # eseguibili, con le due fette e la firma ad-hoc di questa matrice. Il
+      # compagno mancava nel target universale e il bundle si fermava.
+      - name: Gate macOS universal bundle — shell and companion shipped
+        if: runner.os == 'macOS'
+        run: python3 scripts/ci/verify_macos_universal_bundle.py desktop/src-tauri/target/universal-apple-darwin/release/bundle --signature adhoc --require-dmg
 
       - name: Gate bundled Google login configuration
         env:
