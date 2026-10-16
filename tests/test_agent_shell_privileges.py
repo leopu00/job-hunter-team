@@ -132,9 +132,11 @@ def test_the_one_shot_root_containers_keep_only_chown():
 
 def test_container_up_runs_no_root_one_shot_at_all():
     # `jht container up` used to chown the anonymous /app/web/.next volume from a
-    # root one-shot. No compose file declares that volume any more (the dev
-    # override dropped it on 2026-07-26), so the one-shot was a root container
-    # with nothing to repair: it is gone, and nothing may bring it back unseen.
+    # root one-shot. The two compose files it can use (docker-compose.yml and the
+    # dev override, which dropped the volume on 2026-07-26) no longer declare
+    # it, so the one-shot was a root container with nothing to repair: it is
+    # gone, and nothing may bring it back unseen. (The simulation compose under
+    # scripts/sim still declares the volume, but `jht container up` never uses it.)
     js = CONTAINER_JS.read_text(encoding="utf-8")
     assert "'--user', 'root'" not in js
     assert "--volumes-from" not in js

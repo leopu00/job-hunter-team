@@ -94,7 +94,7 @@ def run(host, body: str, stdin: str = "") -> subprocess.CompletedProcess:
         f'RUNTIME_DIR="{host.runtime}"\nCOMPOSE_FILE="{host.runtime}/docker-compose.yml"\n'
         'BROKER_SERVICE="jht-broker"\nTELEGRAM_SERVICE="jht-telegram"\nLEGACY_SECRET_NAMES="email_monitor email_transport"\n'
         'BROKER_LEGACY_MARKER="$RUNTIME_DIR/.broker-legacy-migrated"\n'
-        + wrapper_functions("compose_lacks_service", "broker_admin", "telegram_admin", "telegram_admin_input",
+        + wrapper_functions("compose_lacks_service", "compose_unreadable", "broker_admin", "telegram_admin", "telegram_admin_input",
                           "broker_migrate_legacy", "broker_migrate_legacy_once", "mail_setup")
         + "\n" + body
     )
@@ -226,3 +226,26 @@ def test_a_compose_with_the_service_that_is_not_running_still_points_to_up(host,
     assert "rc=1" in result.stdout
     assert f"{service}_unavailable" in result.stderr
     assert result.stderr.rstrip().endswith("Cosa fare: jht up")
+
+
+@pytest.mark.parametrize("call, service", [
+    ("broker_admin status", "broker"),
+    ("telegram_admin status", "telegram"),
+    ("telegram_admin_input status", "telegram"),
+])
+def test_an_unreadable_compose_is_not_called_an_old_runtime(host, call, service):
+    (host.runtime / "docker-compose.yml").unlink()
+    result = run(host, f"read_only_service_id() {{ return 1; }}\n{call}; echo rc=$?")
+    assert "rc=1" in result.stdout
+    assert f"{service}_unavailable" in result.stderr and "non è leggibile" in result.stderr
+    assert "Cosa fare: jht upgrade" not in result.stderr
+    assert "Cosa fare: reinstalla il runtime" in result.stderr
+
+
+def test_the_service_is_found_whatever_the_indentation(host):
+    (host.runtime / "docker-compose.yml").write_text("services:\n    jht:\n        image: x\n    jht-broker:\n        image: x\n")
+    result = run(host, "read_only_service_id() { return 1; }\nbroker_admin status; echo rc=$?")
+    assert result.stderr.rstrip().endswith("Cosa fare: jht up")
+    (host.runtime / "docker-compose.yml").write_text("services:\n    jht:\n        image: x\n")
+    result = run(host, "read_only_service_id() { return 1; }\nbroker_admin status; echo rc=$?")
+    assert "Cosa fare: jht upgrade" in result.stderr
