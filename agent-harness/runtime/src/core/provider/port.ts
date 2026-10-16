@@ -2,9 +2,9 @@
  * The provider port.
  *
  * This is the only surface through which the runtime reaches a model. No call
- * site outside `src/core/provider/` may import an AI SDK symbol — see HHT ADR 0004
- * decision 4. That rule is what keeps the loop replaceable: a different loop is
- * a third implementation of this interface, not a rewrite.
+ * site outside `src/core/provider/` may import an AI SDK symbol. That rule is
+ * what keeps the loop replaceable: a different loop is a third implementation
+ * of this interface, not a rewrite.
  */
 
 import type { z } from "zod";
@@ -22,7 +22,7 @@ export interface ModelCapabilities {
 
 /**
  * What a model can do and what it costs. Capabilities are declared here, never
- * inferred from a provider or model name (HHT ADR 0001 decision 5).
+ * inferred from a provider or model name.
  */
 export interface ModelProfile {
   providerId: ProviderId;
@@ -153,7 +153,7 @@ export interface OpenAISettings {
   baseURL?: string;
 }
 
-/** Endpoint settings for any OpenAI-compatible provider (HHT ADR 0001 decision 2). */
+/** Endpoint settings for any OpenAI-compatible provider. */
 export interface OpenAICompatibleSettings {
   name: string;
   baseURL: string;

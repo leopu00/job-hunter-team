@@ -1,9 +1,8 @@
 # agent-harness/runtime — product roles on the API
 
 The runtime that runs Job Hunter Team's roles (SCOUT, ANALYST…) on pay-per-use
-API calls instead of a TUI subscription. It is a port of Home Hunter Team's
-runtime (`home-hunter-team/src/core`, `src/tools`, `src/cli/monitor.ts`), so
-the design notes live in HHT's ADRs 0001–0005; this file covers what differs
+API calls instead of a TUI subscription. It is a port of an external
+API-call runtime; this file covers what differs
 and how to run it.
 
 `../app/` is a separate, hand-written Python exercise and is not part of this.

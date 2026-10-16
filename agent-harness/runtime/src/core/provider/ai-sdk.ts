@@ -2,7 +2,7 @@
  * The live provider, on the AI SDK.
  *
  * This is the ONLY file in the codebase allowed to import from `ai` or
- * `@ai-sdk/*` (HHT ADR 0004 decision 4). Everything else speaks `ProviderPort`.
+ * `@ai-sdk/*`. Everything else speaks `ProviderPort`.
  * Keeping the import surface here is what makes the loop swappable.
  */
 

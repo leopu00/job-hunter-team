@@ -26,7 +26,7 @@
  * resolved the same way here, so both sides of every comparison are real.
  *
  * This is a gate, not a sandbox. A permitted shell command can do anything the
- * user can. The sandbox is the container of HHT ADR 0002; this is what makes the
+ * user can. The sandbox is the container; this is what makes the
  * agent usable on a bare machine until then.
  */
 
