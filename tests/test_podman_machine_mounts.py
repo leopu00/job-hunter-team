@@ -48,19 +48,32 @@ pytestmark = pytest.mark.skipif(os.name == "nt", reason="the wrapper is a POSIX 
 def test_macos_fixture_uses_the_native_fast_host_tools_on_a_mac(tmp_path: Path):
     write_macos_host_tools(tmp_path, host_kernel="Darwin")
 
-    assert list(tmp_path.iterdir()) == []
+    # Solo il `df` finto: lo spazio libero non deve dipendere dalla macchina.
+    assert {path.name for path in tmp_path.iterdir()} == {"df"}
 
 
 def test_macos_fixture_emulates_uname_and_stat_on_a_non_macos_runner(tmp_path: Path):
     write_macos_host_tools(tmp_path, host_kernel="Linux")
 
-    assert {path.name for path in tmp_path.iterdir()} == {"stat", "uname"}
+    assert {path.name for path in tmp_path.iterdir()} == {"df", "stat", "uname"}
 
 
 def test_linux_fixture_keeps_the_native_stat_on_a_linux_runner(tmp_path: Path):
     write_linux_host_tools(tmp_path, host_kernel="Linux")
 
-    assert {path.name for path in tmp_path.iterdir()} == {"uname"}
+    assert {path.name for path in tmp_path.iterdir()} == {"df", "uname"}
+
+
+def test_the_fixture_df_reports_a_healthy_disk_unless_told_otherwise(tmp_path: Path):
+    write_linux_host_tools(tmp_path, host_kernel="Linux")
+
+    def free_pct(**env):
+        out = subprocess.run([str(tmp_path / "df"), "-Pk", str(tmp_path)], text=True, capture_output=True,
+                             env=env, check=True).stdout.splitlines()[1].split()
+        return int(out[3]) * 100 // int(out[1])
+
+    assert free_pct() == 50
+    assert free_pct(FAKE_DF_FREE_PCT="2") == 2
 
 
 def test_linux_fixture_answers_the_gnu_stat_probe_on_a_mac(tmp_path: Path):

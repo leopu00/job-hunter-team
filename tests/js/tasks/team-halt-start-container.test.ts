@@ -11,6 +11,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { fakeDiskNodeOptions } from "./fake-disk";
 
 const REPO = path.resolve(__dirname, "../../..");
 const JHT_BIN = path.join(REPO, "cli", "bin", "jht.js");
@@ -103,6 +104,7 @@ process.exit(0);
   );
   writeExecutable(path.join(bin, "claude"), "process.exit(0);");
   return {
+    nodeOptions: fakeDiskNodeOptions(root),
     root,
     home,
     state,
@@ -124,6 +126,9 @@ function run(
       PATH: `${sb.bin}${path.delimiter}${process.env.PATH}`,
       JHT_HOME: sb.home,
       JHT_CONTAINER_NAME: "jht",
+      // Disco finto e sano (50%): il guard del 3% di `team start` non deve
+      // dipendere dal volume della macchina. `env` puo' abbassarlo.
+      NODE_OPTIONS: sb.nodeOptions,
       FAKE_CONTAINER_STATE: sb.state,
       NO_COLOR: "1",
       ...env,
@@ -266,4 +271,37 @@ describe("team halt gate — CLI host verso runtime container", () => {
     expect(result.stdout).toContain("0 started");
     expect(result.stdout).toContain("6 already active");
   });
+
+  it("sotto il 3% di disco libero lo start rifiuta con disk_low e non lancia niente", () => {
+    const sb = sandbox();
+    const single = run(sb, ["start", "scout"], {
+      FAKE_STATFS_FREE_PCT: "2",
+      FAKE_START_SUCCESS_ROLES: "scout",
+    });
+    expect(single.status, `${single.stdout}\n${single.stderr}`).toBe(1);
+    expect(single.stdout).toContain("disk_low");
+    expect(
+      dockerLog(sb).some((row) => row.command[1] === "/app/.launcher/start-agent.sh"),
+    ).toBe(false);
+
+    const all = run(sb, ["start"], {
+      FAKE_STATFS_FREE_PCT: "2",
+      FAKE_START_SUCCESS_ROLES: "capitano",
+    });
+    expect(all.status, `${all.stdout}\n${all.stderr}`).toBe(1);
+    expect(all.stdout).toContain("disk_low");
+    expect(
+      dockerLog(sb).some((row) => row.command[1] === "/app/.launcher/start-agent.sh"),
+    ).toBe(false);
+  }, 15_000);
+
+  it("all'8% di disco libero lo start parte: l'avviso non ferma niente", () => {
+    const sb = sandbox();
+    const result = run(sb, ["start", "scout"], {
+      FAKE_STATFS_FREE_PCT: "8",
+      FAKE_START_SUCCESS_ROLES: "scout",
+    });
+    expect(result.status, `${result.stdout}\n${result.stderr}`).toBe(0);
+    expect(result.stdout).toContain("1 started");
+  }, 15_000);
 });

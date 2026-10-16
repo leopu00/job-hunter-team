@@ -337,3 +337,73 @@ def isolated_jht_home():
                 os.environ.pop("JHT_HOME", None)
             else:
                 os.environ["JHT_HOME"] = previous
+
+
+# ── Un disco sano e FINTO per i test che lanciano launcher, wrapper o CLI ─────
+#
+# `start-agent.sh`, `jht team start` e `jht upgrade` rifiutano con `disk_low`
+# sotto il 3% di spazio libero. Lo spazio libero e' della macchina su cui il
+# test gira, non del codice: senza un disco finto lo stesso test sarebbe verde
+# o rosso a seconda del volume (un Mac al 4% o un runner pieno). La fixture
+# mette nei sottoprocessi del test: un `df` finto davanti nel PATH (wrapper), un
+# `sitecustomize` che finge `os.statvfs` (host_vitals.py, dal launcher) e un
+# preload che finge `fs.statfsSync` (CLI Node, via NODE_OPTIONS). Il codice di
+# produzione non ha nessun gancio di test. `pct` si cambia con
+# `healthy_disk(pct)`: la fixture ritorna una funzione.
+_HEALTHY_DISK_SITECUSTOMIZE = '''
+import os
+_pct = float(os.environ.get("FAKE_DISK_FREE_PCT", "50"))
+def _fake(path):
+    total = 1_000_000
+    free = int(total * _pct / 100)
+    return os.statvfs_result((4096, 4096, total, free, free, 100, 50, 50, 0, 255))
+os.statvfs = _fake
+'''
+
+_HEALTHY_DISK_NODE_PRELOAD = '''import fs from "node:fs";
+const pct = Number(process.env.FAKE_DISK_FREE_PCT ?? 50);
+fs.statfsSync = () => {
+  const blocks = 1000000;
+  const bavail = Math.floor((blocks * pct) / 100);
+  return { bsize: 4096, blocks, bfree: bavail, bavail };
+};
+'''
+
+_HEALTHY_DISK_DF = '''#!/bin/sh
+pct="${FAKE_DISK_FREE_PCT:-50}"
+total=1000000
+avail=$((total * pct / 100))
+printf 'Filesystem 1024-blocks Used Available Capacity Mounted on\\n'
+printf '/dev/fake %s %s %s 1%% /\\n' "$total" "$((total - avail))" "$avail"
+'''
+
+
+@pytest.fixture
+def healthy_disk(monkeypatch, tmp_path_factory):
+    """Disco finto e sano (50% libero) per i sottoprocessi del test.
+
+    Ritorna `set_free_pct(pct)` per portarlo a un'altra percentuale.
+    """
+    from pathlib import Path
+
+    base = Path(tmp_path_factory.mktemp("healthy-disk"))
+    (base / "bin").mkdir()
+    df = base / "bin" / "df"
+    df.write_text(_HEALTHY_DISK_DF, encoding="utf-8")
+    df.chmod(0o755)
+    (base / "py").mkdir()
+    (base / "py" / "sitecustomize.py").write_text(_HEALTHY_DISK_SITECUSTOMIZE, encoding="utf-8")
+    preload = base / "fake-statfs.mjs"
+    preload.write_text(_HEALTHY_DISK_NODE_PRELOAD, encoding="utf-8")
+
+    monkeypatch.setenv("PATH", f"{base / 'bin'}{os.pathsep}{os.environ.get('PATH', '')}")
+    old_py = os.environ.get("PYTHONPATH")
+    monkeypatch.setenv("PYTHONPATH", f"{base / 'py'}{os.pathsep}{old_py}" if old_py else str(base / "py"))
+    old_node = os.environ.get("NODE_OPTIONS", "")
+    monkeypatch.setenv("NODE_OPTIONS", f"{old_node} --import {preload.as_uri()}".strip())
+    monkeypatch.setenv("FAKE_DISK_FREE_PCT", "50")
+
+    def set_free_pct(pct):
+        monkeypatch.setenv("FAKE_DISK_FREE_PCT", str(pct))
+
+    return set_free_pct
