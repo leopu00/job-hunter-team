@@ -783,7 +783,7 @@ describe("OnboardingFlow technical setup", () => {
 
     await begin(user);
     await user.click(screen.getByRole("radio", { name: /vps/i }));
-    await user.type(screen.getByLabelText(/host o indirizzo ip/i), "draft.example.invalid");
+    await user.type(screen.getByLabelText(/indirizzo VPS/i), "draft.example.invalid");
     await user.clear(screen.getByLabelText(/utente ssh/i));
     await user.type(screen.getByLabelText(/utente ssh/i), "draft-user");
     await user.click(screen.getByRole("button", { name: /scegli chiave ssh/i }));
@@ -797,7 +797,7 @@ describe("OnboardingFlow technical setup", () => {
 
     expect(onExitFailure).toHaveBeenCalledOnce();
     expect(onRetry).not.toHaveBeenCalled();
-    expect(screen.getByLabelText(/host o indirizzo ip/i)).toHaveValue("draft.example.invalid");
+    expect(screen.getByLabelText(/indirizzo VPS/i)).toHaveValue("draft.example.invalid");
     expect(screen.getByLabelText(/utente ssh/i)).toHaveValue("draft-user");
     expect(screen.getByText("id_ed25519")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: /^continua/i }));

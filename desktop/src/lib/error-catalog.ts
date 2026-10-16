@@ -272,6 +272,18 @@ const PERMISSIONS = copy(
   "I cannot make Job Hunter Team’s data private on this computer.",
   "Check that you have permissions on your user folder and try again.",
 );
+const NO_VERIFIED_CONNECTION = copy(
+  "Per questa squadra non c’è un collegamento verificato da cui partire.",
+  "Ricollega la squadra esistente dalla configurazione, poi riprova.",
+  "There is no verified connection for this team to start from.",
+  "Connect the existing team again from the setup, then try again.",
+);
+const BROWSER_REPLY = copy(
+  "Il browser assistito sulla VPS ha risposto in un modo che l’app non accetta.",
+  "Riprova. Se si ripete, chiudi il browser assistito e riaprilo.",
+  "The assisted browser on the VPS answered in a way the app does not accept.",
+  "Try again. If it happens again, close the assisted browser and open it again.",
+);
 
 export const UNKNOWN_ERROR: ErrorCopy = RETRY;
 
@@ -301,6 +313,7 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
   // ── Account scope and local owner ────────────────────────────────────────
   account_scope_state_failed: ACCOUNT_SCOPE,
   account_scope_required: ACCOUNT_SCOPE,
+  account_scope_unavailable: ACCOUNT_SCOPE,
   account_scope_changed: ACCOUNT_CHANGED,
   account_scope_mismatch: ACCOUNT_CHANGED,
   local_runtime_unsupported: LOCAL_UNSUPPORTED,
@@ -594,6 +607,31 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
     "The app asked for the positions in a way the core does not accept.",
     "Report the code shown next to it: it does not depend on the VPS.",
   ),
+  // The assisted browser (closer_desktop.rs) and the registration of its VPS.
+  browser_busy: BUSY,
+  browser_request_invalid: RETRY,
+  browser_transport_unavailable: RETRY,
+  browser_response_invalid: BROWSER_REPLY,
+  browser_response_too_large: BROWSER_REPLY,
+  browser_response_binding_mismatch: BROWSER_REPLY,
+  browser_runtime_binding_required: copy(
+    "Il browser assistito non è ancora pronto per questa squadra.",
+    "Funziona con una squadra su VPS: chiedi a chi gestisce la VPS di prepararlo, poi riapri il browser assistito.",
+    "The assisted browser is not ready for this team yet.",
+    "It works with a team on a VPS: ask whoever manages the VPS to set it up, then open the assisted browser again.",
+  ),
+  browser_binding_invalid: copy(
+    "La configurazione salvata del browser assistito non è valida, quindi non la uso.",
+    "Chiedi a chi gestisce la VPS di prepararlo di nuovo, poi riapri il browser assistito.",
+    "The saved setup of the assisted browser is not valid, so I do not use it.",
+    "Ask whoever manages the VPS to set it up again, then open the assisted browser again.",
+  ),
+  browser_connection_changed: copy(
+    "La VPS collegata al browser assistito non corrisponde a quella scelta.",
+    "Controlla quale VPS hai scelto, poi riprova.",
+    "The VPS linked to the assisted browser does not match the one chosen.",
+    "Check which VPS you chose, then try again.",
+  ),
   existing_team_runtime_candidate_required: copy(
     "Manca la configurazione verificata della squadra esistente.",
     "Chiedi a chi gestisce la VPS di completare il collegamento, poi riprova.",
@@ -715,12 +753,8 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
     "Nothing was saved and the saved connection was not touched. Ask whoever manages the VPS to complete the connection.",
   ),
   existing_team_unavailable: TEAM_UNREACHABLE,
-  existing_team_runtime_required: copy(
-    "Per questa squadra non c’è un collegamento verificato da cui partire.",
-    "Ricollega la squadra esistente dalla configurazione, poi riprova.",
-    "There is no verified connection for this team to start from.",
-    "Connect the existing team again from the setup, then try again.",
-  ),
+  existing_team_runtime_required: NO_VERIFIED_CONNECTION,
+  existing_team_runtime_selection_required: NO_VERIFIED_CONNECTION,
   assistant_start_not_confirmed: copy(
     "L’azione non è stata confermata: non è partito nessun comando.",
     "Conferma l’azione dopo aver letto cosa comporta, poi riprova.",
