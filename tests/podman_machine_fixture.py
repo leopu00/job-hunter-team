@@ -27,6 +27,26 @@ def _host_kernel(host_kernel: str | None) -> str:
     return host_kernel
 
 
+def write_healthy_df(bin_dir: Path) -> None:
+    """A `df` that reports a healthy disk (FAKE_DF_FREE_PCT, 50% by default).
+
+    `jht upgrade` refuses below 3% free space (disk_low). Free space belongs to
+    the machine the test runs on, not to the code: without this stub the same
+    test would be green or red depending on the runner's disk.
+    """
+    df = bin_dir / "df"
+    df.write_text(
+        "#!/bin/sh\n"
+        'pct="${FAKE_DF_FREE_PCT:-50}"\n'
+        "total=1000000\n"
+        "avail=$((total * pct / 100))\n"
+        "printf 'Filesystem 1024-blocks Used Available Capacity Mounted on\\n'\n"
+        "printf '/dev/fake %s %s %s 1%% /\\n' \"$total\" \"$((total - avail))\" \"$avail\"\n",
+        encoding="utf-8",
+    )
+    df.chmod(0o700)
+
+
 def _write_uname(bin_dir: Path, kernel: str) -> None:
     uname = bin_dir / "uname"
     uname.write_text(f"#!/bin/sh\nprintf '%s\\n' {kernel}\n", encoding="utf-8")
@@ -59,6 +79,7 @@ def write_macos_host_tools(bin_dir: Path, *, host_kernel: str | None = None) -> 
     calls ``stat`` many times while attesting its runtime, and starting a
     Python interpreter for every native probe more than doubles this suite.
     """
+    write_healthy_df(bin_dir)
     if _host_kernel(host_kernel) == "Darwin":
         return
     _write_uname(bin_dir, "Darwin")
@@ -71,6 +92,7 @@ def write_linux_host_tools(bin_dir: Path, *, host_kernel: str | None = None) -> 
     The wrapper's Linux branch probes ``stat -c '%u %a'``, which the BSD
     ``stat`` of a macOS runner rejects: there the adapter answers it.
     """
+    write_healthy_df(bin_dir)
     _write_uname(bin_dir, "Linux")
     if _host_kernel(host_kernel) != "Linux":
         _write_stat_adapter(bin_dir)

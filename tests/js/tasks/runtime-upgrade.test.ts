@@ -132,6 +132,20 @@ function makeSandbox({
     "utf8",
   );
 
+  // Lo spazio libero e' della macchina, non del codice: senza un `df` finto il
+  // guard del 3% dell'upgrade (disk_low) renderebbe questa suite verde o rossa a
+  // seconda del disco su cui gira. Sano (50%) di serie; FAKE_DF_FREE_PCT lo cambia.
+  writeExec(
+    path.join(bin, "df"),
+    [
+      'pct="${FAKE_DF_FREE_PCT:-50}"',
+      "total=1000000",
+      "avail=$((total * pct / 100))",
+      "printf 'Filesystem 1024-blocks Used Available Capacity Mounted on\\n'",
+      "printf '/dev/fake %s %s %s 1%% /\\n' \"$total\" \"$((total - avail))\" \"$avail\"",
+    ].join("\n"),
+  );
+
   writeExec(
     path.join(bin, "curl"),
     [
@@ -464,6 +478,33 @@ posixOnly("jht upgrade — runtime image atomico", () => {
       calls.filter((line) => line.includes("inspect --type container aaaaaaaaaaaa"))
         .length,
     ).toBeGreaterThanOrEqual(3);
+  });
+
+  it("sotto il 3% di disco libero rifiuta con disk_low prima di scaricare qualunque cosa", () => {
+    for (const args of [["upgrade", "--json"], ["upgrade", "--check", "--json"]]) {
+      const sb = makeSandbox();
+      const result = run(sb, { FAKE_DF_FREE_PCT: "2" }, args);
+
+      expect(result.code).toBe(1);
+      expect(JSON.parse(result.stdout)).toMatchObject({
+        ok: false,
+        changed: false,
+        phase: "preflight",
+        message: "disk_low",
+        rolledBack: false,
+      });
+      expect(sb.state()).toBe("sha256:old");
+      expect(sb.compose()).toContain("example/old");
+      expect(sb.dockerCalls().filter((line) => / pull /.test(line))).toEqual([]);
+    }
+  });
+
+  it("all'8% l'upgrade parte (l'avviso e' un'altra cosa: non ferma niente)", () => {
+    const sb = makeSandbox();
+    const result = run(sb, { FAKE_DF_FREE_PCT: "8" });
+
+    expect(result.code).toBe(0);
+    expect(JSON.parse(result.stdout)).toMatchObject({ ok: true, phase: "complete" });
   });
 
   // Cinque esecuzioni del wrapper vero (upgrade, poi chat e snapshot prima e

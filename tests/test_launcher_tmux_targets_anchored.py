@@ -471,7 +471,7 @@ def test_a_kickoff_still_reaches_its_own_session(capable_bash, tmux):
 # ── start-agent.sh worker: la sonda del REPL non legge il pane di una sorella ─
 
 
-def test_the_sentinel_worker_repl_probe_never_reads_a_sibling(capable_bash, tmp_path):
+def test_the_sentinel_worker_repl_probe_never_reads_a_sibling(capable_bash, tmp_path, healthy_disk):
     """SENTINELLA-WORKER nasce, il CLI crasha e il pane si chiude; resta viva
     una sessione che ne estende il nome con un CLI vivo. Col target nudo la
     sonda leggeva `claude` nella sorella e stampava "started"."""

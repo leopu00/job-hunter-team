@@ -23,6 +23,7 @@ import importlib.util
 import json
 import os
 import re
+import shutil
 import subprocess
 from pathlib import Path
 
@@ -787,3 +788,27 @@ def test_the_closed_codes_are_in_the_desktop_catalog_with_every_translation():
         block = block[: block.index("\n  },")]
         for lang in ("de", "es", "fr", "hu", "pt"):
             assert re.search(rf"^    {lang}: \[", block, re.M), (english, lang)
+
+
+# ── la fixture che toglie il disco VERO dai test esistenti ────────────────────
+
+
+@pytest.mark.parametrize("pct,guard_rc", [(50, 0), (2, 3)])
+def test_healthy_disk_fixture_pins_all_three_channels_to_the_fake_value(healthy_disk, tmp_path, pct, guard_rc):
+    """launcher (statvfs), wrapper (df) e CLI Node (statfs) leggono il valore finto, non la macchina."""
+    healthy_disk(pct)
+    env = {**os.environ, "JHT_HOME": str(tmp_path), "JHT_ENGINE_DISK_PATH": "", "JHT_LANG": "en"}
+    guard = subprocess.run(["python3", str(VITALS), "disk-guard"], env=env, capture_output=True, text=True, timeout=30)
+    assert guard.returncode == guard_rc, guard.stderr
+
+    df = subprocess.run(["df", "-Pk", str(tmp_path)], env=env, capture_output=True, text=True, timeout=30)
+    total, avail = df.stdout.splitlines()[1].split()[1:4:2]
+    assert int(avail) * 100 // int(total) == pct
+
+    node = shutil.which("node")
+    if node:
+        probe = subprocess.run(
+            [node, "-e",
+             "const s=require('node:fs').statfsSync('/'); console.log(Math.floor(s.bavail*100/s.blocks))"],
+            env=env, capture_output=True, text=True, timeout=30)
+        assert probe.stdout.strip() == str(pct), probe.stderr
