@@ -153,7 +153,7 @@ jobs:
   # Il pannello di controllo desktop (Tauri + React): la sua suite vitest e
   # il typecheck non giravano in nessun job. Pacchetto a se' con il suo lock;
   # i moduli puri di web/lib che importa (tipi, regole) non hanno dipendenze,
-  # quindi web/ non si installa.
+  # quindi web/ non si installa. shared/ si': vedi sotto.
   desktop:
     name: desktop — types, vitest
     runs-on: ubuntu-latest
@@ -170,10 +170,20 @@ jobs:
         with:
           node-version: "24"
           cache: "npm"
-          cache-dependency-path: desktop/package-lock.json
+          cache-dependency-path: |
+            desktop/package-lock.json
+            shared/package-lock.json
 
       - name: Install desktop dependencies
         working-directory: desktop
+        run: npm ci
+
+      # Il desktop importa shared/config/profile-schema.ts, che vuole `zod`:
+      # zod e' dichiarato e bloccato in shared/, e senza le sue dipendenze
+      # typecheck, vitest e build vite non risolvono l'import. In locale non si
+      # vede: la radice del checkout ha gia' i suoi node_modules.
+      - name: Install shared dependencies for imported modules
+        working-directory: shared
         run: npm ci
 
       - name: Typecheck desktop

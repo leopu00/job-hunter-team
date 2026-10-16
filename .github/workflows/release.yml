@@ -73,7 +73,9 @@ jobs:
         with:
           node-version: "24"
           cache: npm
-          cache-dependency-path: desktop/package-lock.json
+          cache-dependency-path: |
+            desktop/package-lock.json
+            shared/package-lock.json
 
       - name: Install Tauri system libraries
         if: runner.os == 'Linux'
@@ -101,6 +103,13 @@ jobs:
 
       - name: Install desktop dependencies
         working-directory: desktop
+        run: npm ci
+
+      # Il desktop importa shared/config/profile-schema.ts, che vuole `zod`:
+      # zod e' dichiarato e bloccato in shared/, e senza le sue dipendenze
+      # i gate e la build vite non risolvono l'import.
+      - name: Install shared dependencies for imported modules
+        working-directory: shared
         run: npm ci
 
       - name: Run canonical Tauri release gates
