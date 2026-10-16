@@ -567,31 +567,63 @@ where
     let mut child = command.spawn().map_err(|_| "process_start_failed")?;
     let stdout = child.stdout.take().ok_or("process_pipe_failed")?;
     let stderr = child.stderr.take().ok_or("process_pipe_failed")?;
+    let stdin = if input.is_some() {
+        Some(child.stdin.take().ok_or("process_pipe_failed")?)
+    } else {
+        None
+    };
     let stdout_reader = thread::spawn(move || read_capped(stdout));
     let stderr_reader = thread::spawn(move || read_capped(stderr));
-    if let Some(bytes) = input {
-        let mut stdin = child.stdin.take().ok_or("process_pipe_failed")?;
-        stdin.write_all(bytes).map_err(|_| "process_input_failed")?;
-    }
     let started = Instant::now();
-    let status = loop {
-        if let Some(status) = child.try_wait().map_err(|_| "process_wait_failed")? {
-            break status;
-        }
-        if started.elapsed() >= timeout {
-            let _ = child.kill();
-            let _ = child.wait();
+    // The input goes in on its own thread, and the clock starts before it: a
+    // process that never reads (a server that accepts the connection and then
+    // stalls) would otherwise block `write_all` for good, with the timeout not
+    // yet armed. Killing the child closes the pipe and frees the writer.
+    let outcome = thread::scope(|scope| {
+        let writer = match (stdin, input) {
+            (Some(mut stdin), Some(bytes)) => {
+                Some(scope.spawn(move || stdin.write_all(bytes)))
+            }
+            _ => None,
+        };
+        let status = loop {
+            match child.try_wait() {
+                Ok(Some(status)) => break Ok(status),
+                Ok(None) => {}
+                Err(_) => break Err("process_wait_failed"),
+            }
+            if started.elapsed() >= timeout {
+                let _ = child.kill();
+                let _ = child.wait();
+                break Err("process_timeout");
+            }
+            thread::sleep(Duration::from_millis(50));
+        };
+        let input_written = match writer {
+            Some(handle) => handle.join().map(|result| result.is_ok()).unwrap_or(false),
+            None => true,
+        };
+        status.map(|status| (status, input_written))
+    });
+    let (status, input_written) = match outcome {
+        Ok(done) => done,
+        Err(code) => {
             let _ = stdout_reader.join();
             let _ = stderr_reader.join();
-            return Err("process_timeout");
+            return Err(code);
         }
-        thread::sleep(Duration::from_millis(50));
     };
     let stdout = stdout_reader.join().unwrap_or_default();
     // stderr is deliberately drained but never returned to UI-facing callers:
     // SSH/provider output can contain credentials or host data. Stable error
     // codes are the public contract.
     let _ = stderr_reader.join();
+    // A process that ended in failure without reading everything (ssh that
+    // could not connect) is told by its exit code; only a process that said
+    // "success" while its input was cut short is an input failure.
+    if !input_written && status.success() {
+        return Err("process_input_failed");
+    }
     Ok(ProcessResult {
         code: status.code().unwrap_or(-1),
         stdout,
@@ -652,6 +684,66 @@ mod tests {
         for bad in ["", "-root", "root@host", "user name", "a/b"] {
             assert!(!valid_user(bad), "{bad}");
         }
+    }
+
+    #[cfg(unix)]
+    fn run_with_deadline(
+        program: &'static str,
+        args: &'static [&'static str],
+        input: Vec<u8>,
+        timeout: std::time::Duration,
+    ) -> Result<Result<super::ProcessResult, &'static str>, std::sync::mpsc::RecvTimeoutError> {
+        let (tx, rx) = std::sync::mpsc::channel();
+        std::thread::spawn(move || {
+            let _ = tx.send(super::run_program(program, args, Some(&input), timeout));
+        });
+        rx.recv_timeout(std::time::Duration::from_secs(20))
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_process_that_never_reads_its_input_times_out_instead_of_blocking_the_write() {
+        // 4 MiB is far more than a pipe holds: `sleep` never reads it.
+        let started = std::time::Instant::now();
+        let result = run_with_deadline(
+            "sleep",
+            &["30"],
+            vec![b'x'; 4 * 1024 * 1024],
+            std::time::Duration::from_millis(500),
+        )
+        .expect("run_program must come back by itself, not hang on the write");
+        assert_eq!(result.unwrap_err(), "process_timeout");
+        assert!(started.elapsed() < std::time::Duration::from_secs(10));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_process_that_fails_before_reading_all_its_input_reports_its_exit_code() {
+        let result = run_with_deadline(
+            "sh",
+            &["-c", "exit 255"],
+            vec![b'x'; 4 * 1024 * 1024],
+            std::time::Duration::from_secs(10),
+        )
+        .expect("run_program must come back")
+        .expect("a failed process still has an exit code");
+        assert_eq!(result.code, 255);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_process_that_reads_all_its_input_and_answers_gets_everything_back() {
+        let input: Vec<u8> = (0..1024 * 1024).map(|n| (n % 251) as u8).collect();
+        let result = run_with_deadline(
+            "cat",
+            &[],
+            input.clone(),
+            std::time::Duration::from_secs(10),
+        )
+        .expect("run_program must come back")
+        .expect("cat succeeds");
+        assert_eq!(result.code, 0);
+        assert_eq!(result.stdout, input);
     }
 
     #[test]

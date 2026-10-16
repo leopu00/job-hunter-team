@@ -779,6 +779,12 @@ fn failure(code: &'static str) -> OnboardingError {
             "Il runtime locale non è stato installato correttamente. Riprova.",
             true,
         ),
+        // ssh itself exits 255 when it cannot reach the server or is refused
+        // (server off, key or pin no longer accepted); see `ssh_refused`.
+        "ssh_unavailable" => (
+            "La VPS non è raggiungibile tramite SSH. Controlla che sia accesa e connessa, poi riprova.",
+            true,
+        ),
         "runtime_missing" => (
             "Il runtime locale verificato non è disponibile. Configuralo di nuovo.",
             true,
@@ -1742,6 +1748,58 @@ fn ensure_success_with_timeout(
     }
 }
 
+/// The exit code of the `ssh` client itself when it cannot connect or is
+/// refused. stderr is never returned to this layer, so the code is the only
+/// sign: before, it was reported as the failure of whatever step was running.
+const SSH_REFUSED_EXIT: i32 = 255;
+/// `REMOTE_INSTALL`: no `sha256sum` or `shasum` on the server.
+const REMOTE_INSTALL_NO_HASH_TOOL_EXIT: i32 = 86;
+/// `REMOTE_INSTALL`: the installer that arrived is not the one that was sent.
+const REMOTE_INSTALL_DIGEST_MISMATCH_EXIT: i32 = 87;
+
+fn ssh_refused(result: &Result<ProcessResult, &'static str>) -> bool {
+    matches!(result, Ok(value) if value.code == SSH_REFUSED_EXIT)
+}
+
+/// `ensure_success` for a command run on the VPS.
+fn ensure_remote_success(
+    result: Result<ProcessResult, &'static str>,
+    code: &'static str,
+) -> Result<(), OnboardingError> {
+    if ssh_refused(&result) {
+        return Err(failure("ssh_unavailable"));
+    }
+    ensure_success(result, code)
+}
+
+/// `ensure_success_with_timeout` for a command run on the VPS.
+fn ensure_remote_success_with_timeout(
+    result: Result<ProcessResult, &'static str>,
+    code: &'static str,
+    timeout_code: &'static str,
+) -> Result<(), OnboardingError> {
+    if ssh_refused(&result) {
+        return Err(failure("ssh_unavailable"));
+    }
+    ensure_success_with_timeout(result, code, timeout_code)
+}
+
+/// The install on a VPS: the exits `REMOTE_INSTALL` itself chooses say why.
+fn ensure_remote_install_success(
+    result: Result<ProcessResult, &'static str>,
+) -> Result<(), OnboardingError> {
+    match &result {
+        Ok(value) if value.code == REMOTE_INSTALL_DIGEST_MISMATCH_EXIT => {
+            return Err(failure("installer_digest_mismatch"))
+        }
+        Ok(value) if value.code == REMOTE_INSTALL_NO_HASH_TOOL_EXIT => {
+            return Err(failure("installer_digest_missing"))
+        }
+        _ => {}
+    }
+    ensure_remote_success(result, "runtime_install_failed")
+}
+
 #[cfg(target_os = "macos")]
 fn local_wrapper_command(
     wrapper: &Path,
@@ -1998,16 +2056,13 @@ fn prepare_impl(
                     }
                     with_downloaded_installer(|installer| {
                         let mut input = remote_install_input(installer, token)?;
-                        let result = ensure_success(
-                            run_ssh(
-                                &validated,
-                                REMOTE_INSTALL,
-                                Some(&input),
-                                PREPARE_TIMEOUT,
-                                None,
-                            ),
-                            "runtime_install_failed",
-                        );
+                        let result = ensure_remote_install_success(run_ssh(
+                            &validated,
+                            REMOTE_INSTALL,
+                            Some(&input),
+                            PREPARE_TIMEOUT,
+                            None,
+                        ));
                         input.zeroize();
                         result
                     })?;
@@ -2054,7 +2109,7 @@ fn prepare_impl(
                     LOCAL_CONTAINER_VERIFY_ATTEMPTS,
                 )
             }
-            ValidatedHost::Vps { .. } => ensure_success(
+            ValidatedHost::Vps { .. } => ensure_remote_success(
                 run_ssh(&validated, REMOTE_JHT_UP, None, PREPARE_TIMEOUT, None),
                 "container_start_failed",
             ),
@@ -2119,12 +2174,12 @@ fn prepare_impl(
                         SubscriptionProvider::Codex => (REMOTE_USE_CODEX, REMOTE_UPDATE_CODEX),
                         SubscriptionProvider::Kimi => (REMOTE_USE_KIMI, REMOTE_UPDATE_KIMI),
                     };
-                    ensure_success_with_timeout(
+                    ensure_remote_success_with_timeout(
                         run_ssh(&validated, use_command, None, COMMAND_TIMEOUT, None),
                         "provider_config_failed",
                         "provider_timeout",
                     )?;
-                    ensure_success_with_timeout(
+                    ensure_remote_success_with_timeout(
                         run_ssh(&validated, update_command, None, PREPARE_TIMEOUT, None),
                         "provider_install_failed",
                         "provider_timeout",
@@ -4536,6 +4591,57 @@ mod tests {
                 .code,
             "team_start_failed"
         );
+    }
+
+    fn exited(code: i32) -> Result<ProcessResult, &'static str> {
+        Ok(ProcessResult { code, stdout: Vec::new() })
+    }
+
+    #[test]
+    fn a_vps_install_says_why_it_failed() {
+        use super::ensure_remote_install_success;
+        assert!(ensure_remote_install_success(exited(0)).is_ok());
+        for (result, code) in [
+            (exited(255), "ssh_unavailable"),
+            (exited(87), "installer_digest_mismatch"),
+            (exited(86), "installer_digest_missing"),
+            (exited(1), "runtime_install_failed"),
+            (exited(74), "runtime_install_failed"),
+            (Err("process_timeout"), "timeout"),
+            (Err("process_input_failed"), "runtime_install_failed"),
+        ] {
+            assert_eq!(
+                ensure_remote_install_success(result).unwrap_err().code,
+                code
+            );
+        }
+    }
+
+    #[test]
+    fn a_refused_ssh_is_not_the_failure_of_the_step_that_was_running() {
+        use super::{ensure_remote_success, ensure_remote_success_with_timeout};
+        assert_eq!(
+            ensure_remote_success(exited(255), "container_start_failed")
+                .unwrap_err()
+                .code,
+            "ssh_unavailable"
+        );
+        assert_eq!(
+            ensure_remote_success_with_timeout(exited(255), "provider_config_failed", "provider_timeout")
+                .unwrap_err()
+                .code,
+            "ssh_unavailable"
+        );
+        // Any other exit keeps the code of its step; the local path is untouched.
+        assert_eq!(
+            ensure_remote_success(exited(1), "container_start_failed").unwrap_err().code,
+            "container_start_failed"
+        );
+        assert_eq!(
+            ensure_success(exited(255), "team_start_failed").unwrap_err().code,
+            "team_start_failed"
+        );
+        assert!(failure("ssh_unavailable").retryable);
     }
 
     #[test]
