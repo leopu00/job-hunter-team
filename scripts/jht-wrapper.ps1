@@ -1639,6 +1639,8 @@ function Write-UpgradeResult {
     current = [ordered]@{ version = ConvertTo-UpgradeField $CurrentVersion; image = ConvertTo-UpgradeField $CurrentImage }
     restartRequired = $RestartRequired; message = $Message; rolledBack = $RolledBack
   }
+  # imagePrune c'e' solo dopo un upgrade riuscito che ha provato a pulire.
+  if ($script:UpgradePrune) { $result['imagePrune'] = $script:UpgradePrune }
   if ($script:UpgradeJson) {
     [Console]::Out.WriteLine(($result | ConvertTo-Json -Compress -Depth 4))
   } elseif ($Ok) {
@@ -1650,6 +1652,69 @@ function Write-UpgradeResult {
 }
 
 function Write-UpgradeNote { param([string]$Message) if (-not $script:UpgradeJson) { Write-Info $Message } }
+
+# ── Pulizia delle immagini JHT vecchie dopo un upgrade riuscito ────────────
+# Come in jht-wrapper.sh (stesse regole, stessi motivi): si tiene SOLO la
+# corrente e la precedente (l'ancora del rollback); solo repository JHT per
+# nome esatto; mai un'immagine di un container, anche fermo; per ID, senza -f,
+# mai prune; il rifiuto del motore si conta; JHT_KEEP_OLD_IMAGES=1 tiene tutto.
+# Chiamata solo a upgrade riuscito, mai su check, fallimento o rollback.
+$script:UpgradePrune = $null
+$JhtImageRepositories = @('ghcr.io/leopu00/jht', 'jht', 'localhost/jht')
+
+function Get-PlainImageId { param([string]$Id) return (([string]$Id).Trim() -replace '^sha256:', '') }
+
+function New-UpgradePrune {
+  param([string]$Skipped, [int]$Removed = 0, [long]$Freed = 0, [int]$Refused = 0, [int]$InUse = 0)
+  return [ordered]@{ removed = $Removed; freedBytes = $Freed; refused = $Refused; inUse = $InUse; kept = @('current', 'previous'); skipped = $Skipped }
+}
+
+function Remove-OldJhtImages {
+  param([string]$Current, [string]$Previous)
+  $script:UpgradePrune = $null
+  if ($env:JHT_KEEP_OLD_IMAGES -eq '1') {
+    $script:UpgradePrune = New-UpgradePrune 'opt-out'
+    Write-UpgradeNote 'Immagini JHT vecchie: tenute tutte (JHT_KEEP_OLD_IMAGES=1).'
+    return
+  }
+  $currentId = Get-PlainImageId $Current
+  $previousId = Get-PlainImageId $Previous
+  $unknown = @('', 'none', 'sconosciuta', 'unknown')
+  if ($unknown -contains $currentId) { $script:UpgradePrune = New-UpgradePrune 'current-unidentified'; return }
+  if ($unknown -contains $previousId) { $script:UpgradePrune = New-UpgradePrune 'previous-unidentified'; return }
+  # La corrente deve essere davvero quella del container che gira adesso.
+  if ((Get-PlainImageId (Get-UpgradeImage)) -ne $currentId) { $script:UpgradePrune = New-UpgradePrune 'current-not-running'; return }
+  # Immagini di TUTTI i container, anche fermi. Se non si leggono: niente.
+  $containers = @(& docker container ls -a -q --no-trunc 2>$null)
+  if ($LASTEXITCODE -ne 0) { $script:UpgradePrune = New-UpgradePrune 'containers-unreadable'; return }
+  $inUse = @()
+  if ($containers.Count -gt 0) {
+    $used = @(& docker inspect --format '{{.Image}}' @containers 2>$null)
+    if ($LASTEXITCODE -ne 0) { $script:UpgradePrune = New-UpgradePrune 'containers-unreadable'; return }
+    $inUse = @($used | ForEach-Object { Get-PlainImageId $_ })
+  }
+  $listing = @(& docker image ls --no-trunc --format '{{.ID}} {{.Repository}}' 2>$null)
+  if ($LASTEXITCODE -ne 0) { $script:UpgradePrune = New-UpgradePrune 'images-unreadable'; return }
+  $removed = 0; $freed = [long]0; $refused = 0; $busy = 0; $seen = @{}
+  foreach ($line in $listing) {
+    $parts = ([string]$line).Trim() -split '\s+', 2
+    if ($parts.Count -ne 2 -or $JhtImageRepositories -cnotcontains $parts[1]) { continue }
+    $plain = Get-PlainImageId $parts[0]
+    if ($plain -eq $currentId -or $plain -eq $previousId -or $seen.ContainsKey($plain)) { continue }
+    $seen[$plain] = $true
+    if ($inUse -contains $plain) { $busy++; continue }
+    $size = [long]0
+    $sizeText = ((& docker image inspect --format '{{.Size}}' $parts[0] 2>$null | Select-Object -First 1) -as [string])
+    if ($sizeText -and $sizeText.Trim() -match '^\d+$') { $size = [long]$sizeText.Trim() }
+    & docker image rm $parts[0] *> $null
+    if ($LASTEXITCODE -eq 0) { $removed++; $freed += $size } else { $refused++ }
+  }
+  $script:UpgradePrune = New-UpgradePrune '' $removed $freed $refused $busy
+  $note = "Immagini JHT vecchie: rimosse $removed, liberati circa $([long]($freed / 1MB)) MB (dimensione nominale: i layer condivisi si liberano solo in parte), tenute: corrente, precedente."
+  if ($busy -gt 0) { $note += " In uso da un container (tenute): $busy." }
+  if ($refused -gt 0) { $note += " Rifiutate dal motore (tenute): $refused." }
+  Write-UpgradeNote $note
+}
 
 function Invoke-UpgradeCompose {
   param([string]$File, [Parameter(ValueFromRemainingArguments)] [string[]]$ComposeArgs)
@@ -1910,6 +1975,9 @@ function Invoke-RuntimeUpgrade {
         Write-UpgradeNote "telegram_restart_failed: il servizio Telegram isolato non e' ripartito. Cosa fare: jht up"
       }
     }
+    # Solo qui: upgrade riuscito, container nuovo verificato e commit fatto.
+    # Un errore della pulizia non deve mai far ripristinare un upgrade riuscito.
+    try { Remove-OldJhtImages $candidateImage $oldImage } catch { $script:UpgradePrune = $null }
     $changed = ($candidateImage -ne $oldImage) -or $metadataChanged
     Write-UpgradeResult $true $changed 'complete' $oldVersion $oldImage $newVersion $candidateImage $false 'Nuova versione attiva e verificata' $false
     return 0

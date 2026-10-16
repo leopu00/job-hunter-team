@@ -2501,6 +2501,7 @@ UPGRADE_STAGE=""
 UPGRADE_LOCK=""
 UPGRADE_JOURNAL=""
 UPGRADE_ROLLBACK_DIR=""
+UPGRADE_PRUNE_JSON=""
 
 upgrade_safe_field() {
   # I valori arrivano da Docker e dal CLI, ma il JSON e' un contratto per la
@@ -2518,9 +2519,13 @@ upgrade_result() {
   current_version="$(upgrade_safe_field "$current_version")"
   current_image="$(upgrade_safe_field "$current_image")"
   if [ "$UPGRADE_JSON" = "1" ]; then
-    printf '{"ok":%s,"changed":%s,"phase":"%s","previous":{"version":"%s","image":"%s"},"current":{"version":"%s","image":"%s"},"restartRequired":%s,"message":"%s","rolledBack":%s}\n' \
+    # imagePrune c'e' solo dopo un upgrade riuscito che ha provato a pulire:
+    # gli altri esiti (check, fallimenti, rollback) restano byte per byte quelli di sempre.
+    local prune_field=""
+    [ -z "$UPGRADE_PRUNE_JSON" ] || prune_field=",\"imagePrune\":$UPGRADE_PRUNE_JSON"
+    printf '{"ok":%s,"changed":%s,"phase":"%s","previous":{"version":"%s","image":"%s"},"current":{"version":"%s","image":"%s"},"restartRequired":%s,"message":"%s","rolledBack":%s%s}\n' \
       "$ok" "$changed" "$phase" "$previous_version" "$previous_image" \
-      "$current_version" "$current_image" "$restart_required" "$message" "$rolled_back"
+      "$current_version" "$current_image" "$restart_required" "$message" "$rolled_back" "$prune_field"
   elif [ "$ok" = "true" ]; then
     printf 'Aggiornamento completato: %s (%s) -> %s (%s). %s\n' \
       "$previous_version" "$previous_image" "$current_version" "$current_image" "$message"
@@ -2540,6 +2545,117 @@ upgrade_run() {
   else
     "$@"
   fi
+}
+
+# ── Pulizia delle immagini JHT vecchie dopo un upgrade riuscito ────────────
+# Ogni upgrade porta un'immagine nuova e Docker/Podman non cancellano mai da
+# soli quelle vecchie: sull'host di un utente se ne accumulavano 23 (decine di
+# GB). Si tiene SOLO la corrente e la precedente (l'ancora del rollback).
+# Regole, tutte qui sotto e nei test:
+#   - solo repository JHT per nome ESATTO (ghcr.io/leopu00/jht, jht,
+#     localhost/jht): ghcr.io/leopu00/jht-altro o qualunque altro e' un'altra cosa;
+#   - mai un'immagine di un container, anche fermo; se i container non si
+#     leggono non si toglie niente;
+#   - per ID, senza -f, mai `prune`; il rifiuto del motore si CONTA;
+#   - chiamata solo a upgrade riuscito: mai su check, fallimento o rollback;
+#   - JHT_KEEP_OLD_IMAGES=1 tiene tutto.
+JHT_IMAGE_REPOSITORIES="ghcr.io/leopu00/jht jht localhost/jht"
+
+upgrade_image_plain() {
+  # Docker rende sha256:<id>, Podman l'id nudo: si confronta senza prefisso.
+  printf '%s' "${1#sha256:}"
+}
+
+upgrade_prune_result() {
+  # skipped removed freed_bytes refused in_use
+  UPGRADE_PRUNE_JSON="$(printf '{"removed":%s,"freedBytes":%s,"refused":%s,"inUse":%s,"kept":["current","previous"],"skipped":"%s"}' \
+    "$2" "$3" "$4" "$5" "$1")"
+}
+
+upgrade_prune_old_images() {
+  local current previous running_id containers in_use in_use_plain listing id repo known r
+  local removed=0 freed=0 refused=0 busy=0 size seen=""
+  UPGRADE_PRUNE_JSON=""
+  if [ "${JHT_KEEP_OLD_IMAGES:-0}" = "1" ]; then
+    upgrade_prune_result opt-out 0 0 0 0
+    upgrade_note "Immagini JHT vecchie: tenute tutte (JHT_KEEP_OLD_IMAGES=1)."
+    return 0
+  fi
+  current="$(upgrade_image_plain "$1")"
+  previous="$(upgrade_image_plain "$2")"
+  case "$current" in ''|none|sconosciuta|unknown) upgrade_prune_result current-unidentified 0 0 0 0; return 0 ;; esac
+  case "$previous" in ''|none|sconosciuta|unknown) upgrade_prune_result previous-unidentified 0 0 0 0; return 0 ;; esac
+  # La corrente deve essere davvero quella del container che gira adesso.
+  running_id="$(upgrade_image_plain "$(upgrade_image)")"
+  if [ "$running_id" != "$current" ]; then
+    upgrade_prune_result current-not-running 0 0 0 0
+    return 0
+  fi
+  # Immagini di TUTTI i container, anche fermi. Se non si leggono: niente.
+  containers="$(docker container ls -a -q --no-trunc 2>/dev/null)" || containers="__unreadable__"
+  if [ "$containers" = "__unreadable__" ]; then
+    upgrade_prune_result containers-unreadable 0 0 0 0
+    return 0
+  fi
+  in_use=""
+  if [ -n "$containers" ]; then
+    # shellcheck disable=SC2086
+    in_use="$(docker inspect --format '{{.Image}}' $containers 2>/dev/null)" || in_use="__unreadable__"
+    if [ "$in_use" = "__unreadable__" ]; then
+      upgrade_prune_result containers-unreadable 0 0 0 0
+      return 0
+    fi
+  fi
+  # Un id per riga, senza prefisso, con una riga vuota ai due capi: il
+  # confronto e' di riga intera, senza pipe (set -o pipefail + grep -q e SIGPIPE).
+  in_use_plain="
+$(printf '%s\n' "$in_use" | sed 's/^sha256://')
+"
+  listing="$(docker image ls --no-trunc --format '{{.ID}} {{.Repository}}' 2>/dev/null)" || listing="__unreadable__"
+  if [ "$listing" = "__unreadable__" ]; then
+    upgrade_prune_result images-unreadable 0 0 0 0
+    return 0
+  fi
+  while IFS=' ' read -r id repo; do
+    [ -n "$id" ] || continue
+    known=0
+    for r in $JHT_IMAGE_REPOSITORIES; do
+      [ "$repo" != "$r" ] || known=1
+    done
+    [ "$known" = 1 ] || continue
+    local plain
+    plain="$(upgrade_image_plain "$id")"
+    [ "$plain" != "$current" ] && [ "$plain" != "$previous" ] || continue
+    # Lo stesso ID compare una volta per tag: lo si tratta una volta sola.
+    case "
+$seen
+" in *"
+$plain
+"*) continue ;; esac
+    seen="$seen
+$plain"
+    case "$in_use_plain" in
+      *"
+$plain
+"*) busy=$((busy + 1)); continue ;;
+    esac
+    size="$(docker image inspect --format '{{.Size}}' "$id" 2>/dev/null | head -n 1)" || size=0
+    case "$size" in ''|*[!0-9]*) size=0 ;; esac
+    if docker image rm "$id" >/dev/null 2>&1; then
+      removed=$((removed + 1))
+      freed=$((freed + size))
+    else
+      refused=$((refused + 1))
+    fi
+  done <<EOF
+$listing
+EOF
+  upgrade_prune_result "" "$removed" "$freed" "$refused" "$busy"
+  local note="Immagini JHT vecchie: rimosse $removed, liberati circa $((freed / 1048576)) MB (dimensione nominale: i layer condivisi si liberano solo in parte), tenute: corrente, precedente."
+  [ "$busy" -eq 0 ] || note="$note In uso da un container (tenute): $busy."
+  [ "$refused" -eq 0 ] || note="$note Rifiutate dal motore (tenute): $refused."
+  upgrade_note "$note"
+  return 0
 }
 
 upgrade_docker_ready() {
@@ -2965,6 +3081,9 @@ handle_runtime_upgrade() {
     upgrade_run upgrade_compose "$COMPOSE_FILE" up -d --force-recreate "$TELEGRAM_SERVICE" \
       || upgrade_note "telegram_restart_failed: il servizio Telegram isolato non è ripartito. Cosa fare: jht up"
   fi
+  # Solo qui: upgrade riuscito, container nuovo verificato e commit fatto.
+  # Mai su check, fallimento o rollback, che escono prima.
+  upgrade_prune_old_images "$candidate_image" "$old_image" || true
   if [ "$candidate_image" = "$old_image" ] && [ "$metadata_changed" = "false" ]; then
     changed=false
   else
