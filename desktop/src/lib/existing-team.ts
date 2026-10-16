@@ -48,7 +48,8 @@ export interface ExistingTeamReceipt {
 }
 
 export interface ExistingTeamRegisterResult {
-  outcome: "registered" | "already_registered";
+  /** `restored`: a saved selection got back the candidate it was made from. */
+  outcome: "registered" | "already_registered" | "restored";
 }
 
 export interface ExistingTeamBridge {
@@ -127,6 +128,7 @@ export const EXISTING_TEAM_ERROR_CODES: ReadonlySet<string> = new Set([
   "existing_team_runtime_candidate_exists",
   "existing_team_runtime_candidate_conflict",
   "existing_team_saved_incomplete",
+  "existing_team_saved_selection_mismatch",
   "existing_team_runtime_already_selected",
   "existing_team_container_not_found",
   "existing_team_not_found",
@@ -157,5 +159,5 @@ export function isTerminalExistingTeamError(code: string): boolean {
   return code === "host_key_changed" || code === "host_key_mismatch" ||
     code === "existing_team_identity_mismatch" || code === "account_team_mismatch" ||
     code === "existing_team_ambiguous" || code === "existing_team_image_unattested" ||
-    code === "existing_team_too_many_containers";
+    code === "existing_team_too_many_containers" || code === "existing_team_saved_selection_mismatch";
 }

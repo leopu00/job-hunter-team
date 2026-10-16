@@ -727,6 +727,13 @@ const COPY_BY_ENGLISH_TEXT: Readonly<Record<string, ErrorTranslations>> = {
     hu: ["Az alkalmazás nem tudja beolvasni a csapat mentett adatait ezen a számítógépen.", "Zárd be teljesen a Job Hunter Teamet, majd nyisd meg újra."],
     pt: ["A aplicação não consegue ler os dados guardados da equipa neste computador.", "Fecha completamente o Job Hunter Team e volta a abri-lo."],
   },
+  "The team found on the VPS is no longer the one saved for this profile.": {
+    de: ["Das auf der VPS gefundene Team ist nicht mehr das für dieses Profil gespeicherte.", "Es wurde nichts gespeichert und die gespeicherte Verbindung wurde nicht verändert. Bitte die Person, die die VPS verwaltet, die Verbindung zu vervollständigen."],
+    es: ["El equipo encontrado en el VPS ya no es el guardado para este perfil.", "No se ha guardado nada y la conexión guardada no se ha tocado. Pide a quien gestiona el VPS que complete la conexión."],
+    fr: ["L’équipe trouvée sur le VPS n’est plus celle enregistrée pour ce profil.", "Rien n’a été enregistré et la connexion enregistrée n’a pas été modifiée. Demande à la personne qui gère le VPS de compléter la connexion."],
+    hu: ["A VPS-en talált csapat már nem az, amelyet ehhez a profilhoz mentettek.", "Semmi nem került mentésre, és a mentett kapcsolat érintetlen maradt. Kérd meg a VPS üzemeltetőjét, hogy egészítse ki a kapcsolatot."],
+    pt: ["A equipa encontrada na VPS já não é a que foi guardada para este perfil.", "Nada foi guardado e a ligação guardada não foi alterada. Pede a quem gere a VPS que complete a ligação."],
+  },
   "The saved connection for the existing team is incomplete.": {
     de: ["Die gespeicherte Verbindung zum vorhandenen Team ist unvollständig.", "Geh zurück zur Einrichtung und verbinde das Team erneut; wenn das nicht reicht, bitte die Person, die die VPS verwaltet, die Verbindung zu vervollständigen."],
     es: ["La conexión guardada con el equipo existente está incompleta.", "Vuelve a la configuración y conecta el equipo de nuevo; si no basta, pide a quien gestiona el VPS que complete la conexión."],
@@ -890,6 +897,7 @@ export const ERROR_CATALOG_LOCALES: Readonly<Record<string, ErrorTranslations>> 
   existing_team_runtime_selection_invalid: translated("The saved selection for this team is not valid."),
   existing_team_runtime_unavailable: translated("The app cannot read the team's saved data on this computer."),
   existing_team_saved_incomplete: translated("The saved connection for the existing team is incomplete."),
+  existing_team_saved_selection_mismatch: translated("The team found on the VPS is no longer the one saved for this profile."),
   existing_team_unavailable: translated("The team cannot be reached."),
   existing_team_runtime_required: translated("There is no verified connection for this team to start from."),
   assistant_start_not_confirmed: translated("The action was not confirmed: no command was sent."),

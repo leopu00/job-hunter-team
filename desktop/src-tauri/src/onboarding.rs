@@ -789,6 +789,7 @@ pub(crate) fn failure(code: &'static str) -> OnboardingError {
             | "existing_team_runtime_candidate_conflict"
             | "existing_team_runtime_already_selected"
             | "existing_team_saved_incomplete"
+            | "existing_team_saved_selection_mismatch"
             | "existing_team_ambiguous"
             | "existing_team_image_unattested"
             | "existing_team_too_many_containers"

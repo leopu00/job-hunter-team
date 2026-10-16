@@ -434,4 +434,49 @@ describe("ExistingTeamConnectModal", () => {
     expect(native.discover).toHaveBeenCalledOnce();
   });
 
+  it("a saved selection that lost its candidate gets it back through the same steps and opens read only", async () => {
+    const user = userEvent.setup();
+    // what the native side answers for a selection without candidate: the connection
+    // asks for a candidate, the discovery reads it, the register restores it
+    const connectReadOnly = vi.fn().mockRejectedValueOnce(CANDIDATE_REQUIRED).mockResolvedValueOnce(READONLY_RESULT);
+    const native = bridge({ connectReadOnly, register: vi.fn().mockResolvedValue({ outcome: "restored" }) });
+    const onReadOnlyConnected = vi.fn();
+    const onConnected = vi.fn();
+    render(<ExistingTeamConnectModal teamId="team-opaque-0001" bridge={native} onCancel={vi.fn()} onConnected={onConnected} onReadOnlyConnected={onReadOnlyConnected} />);
+    await toReadOnlyClick(user);
+    await user.click(await screen.findByRole("button", { name: /conferma e apri in sola lettura/i }));
+    await waitFor(() => expect(onReadOnlyConnected).toHaveBeenCalledOnce());
+    expect(native.register).toHaveBeenCalledOnce();
+    expect(native.register).toHaveBeenCalledWith(RECEIPT.candidateSha256);
+    expect(native.connect).not.toHaveBeenCalled();
+    expect(onConnected).not.toHaveBeenCalled();
+  });
+
+  it("a saved selection for another team or runtime is told with the catalog's words and never retried on its own", async () => {
+    const mismatch = { code: "existing_team_saved_selection_mismatch", message: "raw native detail" };
+    for (const where of ["discover", "register"] as const) {
+      const user = userEvent.setup();
+      const native = bridge({
+        connectReadOnly: vi.fn().mockRejectedValue(CANDIDATE_REQUIRED),
+        ...(where === "discover" ? { discover: vi.fn().mockRejectedValue(mismatch) } : { register: vi.fn().mockRejectedValue(mismatch) }),
+      });
+      const onReadOnlyConnected = vi.fn();
+      const { unmount } = render(<ExistingTeamConnectModal teamId="team-opaque-0001" bridge={native} onCancel={vi.fn()} onConnected={vi.fn()} onReadOnlyConnected={onReadOnlyConnected} />);
+      await toReadOnlyClick(user);
+      if (where === "register") await user.click(await screen.findByRole("button", { name: /conferma e apri in sola lettura/i }));
+      const alert = await screen.findByRole("alert");
+      expect(alert).toHaveTextContent(ERROR_CATALOG.existing_team_saved_selection_mismatch.text.it);
+      expect(alert).toHaveTextContent(ERROR_CATALOG.existing_team_saved_selection_mismatch.action.it);
+      expect(screen.queryByText(/raw native detail/i)).not.toBeInTheDocument();
+      // no Riprova, and nothing asked again behind the person's back
+      expect(screen.queryByRole("button", { name: /riprova/i })).not.toBeInTheDocument();
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      expect(native.discover).toHaveBeenCalledOnce();
+      expect(native.register).toHaveBeenCalledTimes(where === "register" ? 1 : 0);
+      expect(native.connectReadOnly).toHaveBeenCalledOnce();
+      expect(onReadOnlyConnected).not.toHaveBeenCalled();
+      unmount();
+    }
+  });
+
 });

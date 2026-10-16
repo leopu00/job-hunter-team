@@ -78,11 +78,14 @@ describe("existing team native bridge", () => {
       "existing_team_runtime_already_selected", "existing_team_container_not_found", "existing_team_not_found",
       "existing_team_ambiguous", "existing_team_image_unattested", "existing_team_too_many_containers",
       "existing_team_discovery_timeout", "existing_team_target_changed", "existing_team_receipt_required",
-      "existing_team_register_not_confirmed",
+      "existing_team_register_not_confirmed", "existing_team_saved_selection_mismatch",
     ]) {
       expect(existingTeamErrorCode({ code })).toBe(code);
     }
-    for (const code of ["existing_team_ambiguous", "existing_team_image_unattested", "existing_team_too_many_containers"]) {
+    for (const code of [
+      "existing_team_ambiguous", "existing_team_image_unattested", "existing_team_too_many_containers",
+      "existing_team_saved_selection_mismatch",
+    ]) {
       expect(isTerminalExistingTeamError(code)).toBe(true);
     }
     for (const code of ["existing_team_discovery_timeout", "existing_team_target_changed", "existing_team_not_found"]) {

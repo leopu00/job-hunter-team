@@ -7,7 +7,8 @@ use crate::{
     account_scope::AccountScope,
     existing_team_register::{
         classify, discover_with, parse_discovery, receipt_clear, receipt_for, receipt_store,
-        register_with, Budget, ExistingTeamRegisterRequest, Found, Receipt, DISCOVERY_SCRIPT,
+        register_hooked, register_outcome, register_with, settle_register, Budget,
+        ExistingTeamRegisterRequest, Found, Receipt, Registered, DISCOVERY_SCRIPT, SELECTION_MISMATCH,
     },
     existing_team_runtime::{self as runtime, CandidateWrite, RuntimeTarget},
     onboarding::{existing_team_readonly_connect_with, existing_team_reopen_with, OnboardingNativeState, SNAPSHOT_TIMEOUT},
@@ -392,7 +393,7 @@ fn receipt_of(sandbox: &Sandbox, found: &Found) -> Receipt {
     }
 }
 
-fn register(sandbox: &Sandbox, server: &Server, receipt: &Receipt) -> Result<CandidateWrite, &'static str> {
+fn register(sandbox: &Sandbox, server: &Server, receipt: &Receipt) -> Result<Registered, &'static str> {
     let clock = || server.clock.get();
     register_with(
         &sandbox.root,
@@ -474,7 +475,7 @@ fn t1_the_whole_cycle_of_a_new_profile_reaches_a_selection_and_a_read() {
         assert_eq!(sandbox.entries(), vec!["pin".to_owned()]);
 
         let receipt = receipt_of(&sandbox, &found);
-        assert_eq!(register(&sandbox, &server, &receipt), Ok(CandidateWrite::Written));
+        assert_eq!(register(&sandbox, &server, &receipt), Ok(Registered::New(CandidateWrite::Written)));
         let bytes = fs::read(sandbox.candidate()).expect("candidate");
         assert_eq!(runtime::sha256(&bytes), found.candidate_sha256);
         assert_eq!(bytes, found.candidate);
@@ -1094,7 +1095,7 @@ fn t12_the_filesystem_is_checked_before_and_nothing_else_is_created_or_touched()
     };
     let before = snapshot(&other_dir);
     let receipt = receipt_of(&sandbox, &found);
-    assert_eq!(register(&sandbox, &team_server(&world), &receipt), Ok(CandidateWrite::Written));
+    assert_eq!(register(&sandbox, &team_server(&world), &receipt), Ok(Registered::New(CandidateWrite::Written)));
     assert_eq!(snapshot(&other_dir), before);
     assert!(runtime::registration_gate_at(&sandbox.root, &other).is_err(), "the other scope has its own candidate and keeps it");
     // register on top of its own result: the existing path owns the scope now
@@ -1489,4 +1490,314 @@ fn t15_a_replaced_team_or_a_missing_pin_is_an_error_not_a_start() {
     );
     assert_eq!(result.expect_err("pin").code, "host_key_missing");
     assert_eq!(server.count(), 0);
+}
+
+// ------------------------------------------- a selection without its candidate
+
+/// A profile that connected once and then lost its candidate (taken away from
+/// outside): the saved selection, its bytes and the candidate bytes it attests.
+fn selection_without_candidate(sandbox: &Sandbox) -> (World, Vec<u8>, Vec<u8>) {
+    let (world, _) = connected_once(sandbox);
+    let candidate = fs::read(sandbox.candidate()).unwrap();
+    let selection = fs::read(sandbox.selection()).unwrap();
+    fs::remove_file(sandbox.candidate()).unwrap();
+    (world, candidate, selection)
+}
+
+fn file_state(path: &Path) -> (Vec<u8>, u32, std::time::SystemTime) {
+    use std::os::unix::fs::PermissionsExt;
+    let meta = fs::symlink_metadata(path).unwrap();
+    (fs::read(path).unwrap(), meta.permissions().mode(), meta.modified().unwrap())
+}
+
+fn write_private(path: &Path, bytes: &[u8]) {
+    use std::os::unix::fs::PermissionsExt;
+    fs::write(path, bytes).unwrap();
+    fs::set_permissions(path, fs::Permissions::from_mode(0o600)).unwrap();
+}
+
+#[test]
+fn t16_a_selection_without_candidate_gets_back_the_candidate_it_attests_and_opens_read_only() {
+    let sandbox = Sandbox::new();
+    let (world, candidate_before, _) = selection_without_candidate(&sandbox);
+    let selection_before = file_state(&sandbox.selection());
+    let server = team_server(&world);
+
+    // what the dialog does first: the usual read-only connection, refused before any SSH call
+    let refused = existing_team_readonly_connect_with(
+        &sandbox.root, &sandbox.scope, &host(), TEAM,
+        &mut || Ok(validated(&sandbox)), &mut || Ok(()),
+        &mut |_, c, i, t| server.answer(c, i, t),
+    );
+    assert_eq!(refused.expect_err("no candidate").code, "existing_team_runtime_candidate_required");
+    assert_eq!(server.count(), 0);
+
+    let found = discover(&sandbox, &server, Duration::from_secs(40)).expect("discovered");
+    assert!(found.restores);
+    assert_eq!(found.candidate, candidate_before, "the very bytes the selection was made from");
+    assert!(!sandbox.candidate().exists(), "discover writes nothing");
+
+    assert_eq!(register(&sandbox, &server, &receipt_of(&sandbox, &found)), Ok(Registered::Restored));
+    assert_eq!(fs::read(sandbox.candidate()).unwrap(), candidate_before);
+    assert_eq!(file_state(&sandbox.selection()), selection_before, "the selection is never written");
+    assert_eq!(
+        runtime::selected_at(&sandbox.root, &sandbox.scope, &host()).expect("selected").map(|t| t.runtime),
+        Some(target_of(&world, 1))
+    );
+
+    // the read-only connection of always takes it from here, and a restart reopens it
+    let persisted = Cell::new(0);
+    existing_team_readonly_connect_with(
+        &sandbox.root, &sandbox.scope, &host(), TEAM,
+        &mut || Ok(validated(&sandbox)),
+        &mut || {
+            persisted.set(persisted.get() + 1);
+            Ok(())
+        },
+        &mut |_, c, i, t| server.answer(c, i, t),
+    )
+    .expect("connected read only");
+    reopen(&sandbox, &team_server(&world), &persisted).expect("reopened");
+    assert_eq!(persisted.get(), 2);
+    assert_eq!(file_state(&sandbox.selection()), selection_before);
+    for command in server.commands() {
+        assert!(!command.contains("start-agent") && !command.contains("jht-tmux-send"));
+    }
+}
+
+#[test]
+fn t16_another_team_or_host_than_the_saved_one_is_refused_locally_before_the_pin_and_any_call() {
+    let sandbox = Sandbox::new();
+    let (world, _, _) = selection_without_candidate(&sandbox);
+    let before = sandbox.entries();
+    let selection_before = file_state(&sandbox.selection());
+    let other_key = ExecutionHost::Vps {
+        address: "203.0.113.7".into(),
+        user: "jht".into(),
+        port: 22,
+        key_path: "/tmp/another-synthetic-key".into(),
+    };
+    for (label, asked_host, asked_team) in [
+        ("another team", host(), "another-synthetic-team-9"),
+        ("another key path", other_key, TEAM),
+        ("another user", ExecutionHost::Vps { address: "203.0.113.7".into(), user: "root".into(), port: 22, key_path: "/tmp/synthetic-key".into() }, TEAM),
+    ] {
+        let server = team_server(&world);
+        let pins = Cell::new(0);
+        let clock = || server.clock.get();
+        let result = discover_with(
+            &sandbox.root, &sandbox.scope, &asked_host, asked_team,
+            &mut || {
+                pins.set(pins.get() + 1);
+                Ok(validated(&sandbox))
+            },
+            &mut |_, c, i, t| server.answer(c, i, t),
+            &budget_of(Duration::from_secs(40), &clock),
+        );
+        assert_eq!(result.expect_err(label), SELECTION_MISMATCH, "{label}");
+        assert_eq!(server.count(), 0, "{label}: no SSH");
+        assert_eq!(pins.get(), 0, "{label}: the pin is not even read");
+        assert_eq!(sandbox.entries(), before, "{label}: nothing written");
+        assert_eq!(file_state(&sandbox.selection()), selection_before, "{label}");
+    }
+}
+
+#[test]
+fn t16_a_team_whose_container_changed_since_the_selection_is_a_mismatch_and_nothing_is_written() {
+    let sandbox = Sandbox::new();
+    let (world, _, _) = selection_without_candidate(&sandbox);
+    let before = sandbox.entries();
+    // the team now runs in another container: the discovery finds it, its bytes differ
+    let changed = World::default().jht(7).jht(2);
+    let server = Server::new(&changed).probe(7, probe_ok(true, false));
+    assert_eq!(discover(&sandbox, &server, Duration::from_secs(40)).expect_err("changed"), SELECTION_MISMATCH);
+    assert!(server.count() > 0, "decided only after the discovery");
+    assert_eq!(sandbox.entries(), before);
+
+    // and if it changes between the discovery the person confirmed and the register
+    let found = discover(&sandbox, &team_server(&world), Duration::from_secs(40)).expect("found");
+    let receipt = receipt_of(&sandbox, &found);
+    assert_eq!(register(&sandbox, &server, &receipt), Err(SELECTION_MISMATCH));
+    assert_eq!(sandbox.entries(), before);
+}
+
+#[test]
+fn t16_a_selection_that_is_not_a_valid_private_one_still_owns_the_scope_with_no_call() {
+    use std::os::unix::fs::{symlink, PermissionsExt};
+    let world = team_world();
+    let cases: [(&str, Box<dyn Fn(&Sandbox, &[u8])>); 5] = [
+        ("readable by others", Box::new(|s, bytes| {
+            fs::write(s.selection(), bytes).unwrap();
+            fs::set_permissions(s.selection(), fs::Permissions::from_mode(0o644)).unwrap();
+        })),
+        ("another schema", Box::new(|s, bytes| {
+            let mut value: serde_json::Value = serde_json::from_slice(bytes).unwrap();
+            value["schema"] = serde_json::json!(2);
+            write_private(&s.selection(), &serde_json::to_vec(&value).unwrap());
+        })),
+        ("an unknown field", Box::new(|s, bytes| {
+            let mut value: serde_json::Value = serde_json::from_slice(bytes).unwrap();
+            value["extra"] = serde_json::json!(1);
+            write_private(&s.selection(), &serde_json::to_vec(&value).unwrap());
+        })),
+        ("a symlink to a valid selection", Box::new(|s, bytes| {
+            let elsewhere = s.account().join("elsewhere.json");
+            write_private(&elsewhere, bytes);
+            symlink(&elsewhere, s.selection()).unwrap();
+        })),
+        ("a directory", Box::new(|s, _| fs::create_dir(s.selection()).unwrap())),
+    ];
+    for (label, make) in cases {
+        let sandbox = Sandbox::new();
+        let (_, _, selection) = selection_without_candidate(&sandbox);
+        fs::remove_file(sandbox.selection()).unwrap();
+        make(&sandbox, selection.as_slice());
+        let before = sandbox.entries();
+        let server = team_server(&world);
+        assert_eq!(
+            discover(&sandbox, &server, Duration::from_secs(40)).expect_err(label),
+            "existing_team_runtime_already_selected",
+            "{label}"
+        );
+        assert_eq!(server.count(), 0, "{label}: no SSH");
+        assert_eq!(sandbox.entries(), before, "{label}: nothing written");
+    }
+    // a candidate with its selection, or a candidate alone: the existing path, as before
+    let sandbox = Sandbox::new();
+    connected_once(&sandbox);
+    let server = team_server(&world);
+    assert_eq!(discover(&sandbox, &server, Duration::from_secs(40)).expect_err("pair"), "existing_team_runtime_candidate_exists");
+    assert_eq!(server.count(), 0);
+}
+
+#[test]
+fn t16_restored_is_said_only_once_the_pair_reads_back_as_one() {
+    let sandbox = Sandbox::new();
+    let (world, candidate_before, selection) = selection_without_candidate(&sandbox);
+    let server = team_server(&world);
+    let found = discover(&sandbox, &server, Duration::from_secs(40)).expect("found");
+    let receipt = receipt_of(&sandbox, &found);
+    // in the window before the link, someone else replaces the selection with another valid one
+    let attested = runtime::sha256(&candidate_before);
+    let replaced = String::from_utf8(selection).unwrap().replace(&attested, &"b".repeat(64)).into_bytes();
+    let clock = || server.clock.get();
+    let result = register_hooked(
+        &sandbox.root, &sandbox.scope, &receipt,
+        &mut || Ok(validated(&sandbox)),
+        &mut |_, c, i, t| server.answer(c, i, t),
+        &budget_of(Duration::from_secs(60), &clock),
+        &mut || {
+            fs::remove_file(sandbox.selection()).unwrap();
+            write_private(&sandbox.selection(), &replaced);
+        },
+    );
+    assert_eq!(result, Err("existing_team_runtime_target_changed"), "never «restored»");
+    // the candidate written stays: nothing is ever removed
+    assert_eq!(fs::read(sandbox.candidate()).unwrap(), candidate_before);
+    assert_eq!(fs::read(sandbox.selection()).unwrap(), replaced, "the other selection is not touched");
+}
+
+#[test]
+fn t16_races_with_another_writer_rest_on_the_link_and_the_read_back_not_on_a_lock() {
+    // the same bytes appear first: identical, and the pair reads back, so restored
+    let sandbox = Sandbox::new();
+    let (world, candidate_before, _) = selection_without_candidate(&sandbox);
+    let server = team_server(&world);
+    let found = discover(&sandbox, &server, Duration::from_secs(40)).expect("found");
+    let clock = || server.clock.get();
+    let result = register_hooked(
+        &sandbox.root, &sandbox.scope, &receipt_of(&sandbox, &found),
+        &mut || Ok(validated(&sandbox)),
+        &mut |_, c, i, t| server.answer(c, i, t),
+        &budget_of(Duration::from_secs(60), &clock),
+        &mut || write_private(&sandbox.candidate(), &candidate_before),
+    );
+    assert_eq!(result, Ok(Registered::Restored));
+
+    // the same value in another layout appears first: a conflict, and that file stays as it was
+    let sandbox = Sandbox::new();
+    let (world, candidate_before, _) = selection_without_candidate(&sandbox);
+    let server = team_server(&world);
+    let found = discover(&sandbox, &server, Duration::from_secs(40)).expect("found");
+    let value: serde_json::Value = serde_json::from_slice(&candidate_before).unwrap();
+    let other_layout = serde_json::to_vec_pretty(&value).unwrap();
+    let appeared = RefCell::new(None);
+    let clock = || server.clock.get();
+    let result = register_hooked(
+        &sandbox.root, &sandbox.scope, &receipt_of(&sandbox, &found),
+        &mut || Ok(validated(&sandbox)),
+        &mut |_, c, i, t| server.answer(c, i, t),
+        &budget_of(Duration::from_secs(60), &clock),
+        &mut || {
+            write_private(&sandbox.candidate(), &other_layout);
+            *appeared.borrow_mut() = Some(file_state(&sandbox.candidate()));
+        },
+    );
+    assert_eq!(result, Err("existing_team_runtime_candidate_conflict"));
+    assert_eq!(Some(file_state(&sandbox.candidate())), appeared.into_inner(), "bytes, mode and mtime intact");
+
+    // a read-only connection in the same window writes no selection, and the one there stays
+    let sandbox = Sandbox::new();
+    let (world, _, _) = selection_without_candidate(&sandbox);
+    let selection_before = file_state(&sandbox.selection());
+    let server = team_server(&world);
+    let found = discover(&sandbox, &server, Duration::from_secs(40)).expect("found");
+    let other = team_server(&world);
+    let connected = RefCell::new(None);
+    let clock = || server.clock.get();
+    let result = register_hooked(
+        &sandbox.root, &sandbox.scope, &receipt_of(&sandbox, &found),
+        &mut || Ok(validated(&sandbox)),
+        &mut |_, c, i, t| server.answer(c, i, t),
+        &budget_of(Duration::from_secs(60), &clock),
+        &mut || {
+            let outcome = existing_team_readonly_connect_with(
+                &sandbox.root, &sandbox.scope, &host(), TEAM,
+                &mut || Ok(validated(&sandbox)), &mut || Ok(()),
+                &mut |_, c, i, t| other.answer(c, i, t),
+            );
+            *connected.borrow_mut() = Some(outcome.map(|_| ()).map_err(|e| e.code));
+        },
+    );
+    assert_eq!(connected.into_inner(), Some(Err("existing_team_runtime_candidate_required")));
+    assert_eq!(result, Ok(Registered::Restored));
+    assert_eq!(file_state(&sandbox.selection()), selection_before, "no selection written by the recovery");
+}
+
+#[test]
+fn t16_the_outcomes_and_the_receipt_after_a_mismatch() {
+    assert_eq!(register_outcome(&Registered::New(CandidateWrite::Written)), "registered");
+    assert_eq!(register_outcome(&Registered::New(CandidateWrite::Identical)), "already_registered");
+    assert_eq!(register_outcome(&Registered::Restored), "restored");
+
+    let receipt = || Receipt {
+        scope_digest: "d".repeat(64),
+        host: host(),
+        team_id: TEAM.to_owned(),
+        candidate_sha256: "a".repeat(64),
+        at: Instant::now(),
+    };
+    for (label, result, clears) in [
+        ("restored", Ok(Registered::Restored), true),
+        (SELECTION_MISMATCH, Err(SELECTION_MISMATCH), true),
+        ("existing_team_target_changed", Err("existing_team_target_changed"), true),
+        ("existing_team_runtime_target_changed", Err("existing_team_runtime_target_changed"), true),
+        ("existing_team_discovery_timeout", Err("existing_team_discovery_timeout"), false),
+    ] {
+        let slot = Mutex::new(Some(receipt()));
+        let reply = settle_register(&slot, result);
+        assert_eq!(slot.lock().unwrap().is_none(), clears, "{label}");
+        match reply {
+            Ok(reply) => assert_eq!(reply.outcome, label),
+            Err(error) => {
+                // the code alone: no host, team or hash in what leaves the backend
+                assert_eq!(
+                    serde_json::to_value(&error).unwrap(),
+                    serde_json::json!({ "code": label, "message": label, "retryable": label == "existing_team_discovery_timeout" || label.ends_with("target_changed") }),
+                    "{label}"
+                );
+            }
+        }
+    }
+    // the mismatch is not retried: the server must change first (checked above, retryable false)
 }

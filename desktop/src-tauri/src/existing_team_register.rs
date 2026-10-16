@@ -12,11 +12,20 @@
 //! key. `RepoDigests` is metadata local to the VPS: it guards against picking the
 //! wrong container, not against a compromised host.
 //!
+//! A valid selection whose candidate is gone is restored by the same two
+//! commands: discovery must recompose the very bytes the selection attests
+//! (their SHA-256), and only that candidate is written back. The selection is
+//! never written, and a different team, host or runtime is
+//! `existing_team_saved_selection_mismatch`, decided locally where it can be.
+//!
 //! Known limits, by design:
 //! - the candidate is immutable and there is no way out in the app: after the VPS
 //!   updates the JHT image every use ends in exit 70 for good and `register`
 //!   refuses (a candidate exists). Replacing it would be an explicit, confirmed
 //!   step that removes candidate and selection together, never a silent overwrite;
+//! - a selection made from a candidate the custodial producer wrote with another
+//!   JSON layout (spaces, key order) is never restored: the app recomposes its own
+//!   bytes, whose hash differs, so it answers the mismatch (fail closed);
 //! - the team probe also runs inside the JHT containers of OTHER teams on the
 //!   same VPS (a fixed script, only its exit code is read). An exit 70 on any of
 //!   them (a replaced container, a Docker too old for `docker image inspect
@@ -26,7 +35,7 @@
 
 use crate::{
     account_scope::{AccountScope, AccountScopeState},
-    existing_team_runtime::{self as runtime, CandidateWrite, RuntimeTarget},
+    existing_team_runtime::{self as runtime, CandidateWrite, RegistrationGate, RuntimeTarget},
     onboarding::{
         existing_team_readonly_probe_with, failure, valid_team_id, OnboardingError,
         OnboardingNativeState,
@@ -64,6 +73,9 @@ const PROBE_CALL: Duration = Duration::from_secs(12);
 const MIN_RESIDUAL: Duration = Duration::from_secs(2);
 const RECEIPT_TTL: Duration = Duration::from_secs(10 * 60);
 const UNAVAILABLE: &str = "existing_team_unavailable";
+/// The saved selection names another team, host or runtime than the one found.
+/// One code for all three: which field differs is not said.
+pub(crate) const SELECTION_MISMATCH: &str = "existing_team_saved_selection_mismatch";
 
 /// ONE constant, with no variable part: the team id is not in it. It lists the
 /// running containers (at most 32, decided before any loop), then one record
@@ -490,6 +502,9 @@ pub(crate) struct Found {
     pub(crate) candidate: Vec<u8>,
     pub(crate) candidate_sha256: String,
     pub(crate) fingerprint: Option<String>,
+    /// The scope has a valid selection and no candidate: these bytes are the ones
+    /// it attests, and writing them back restores the saved pair.
+    pub(crate) restores: bool,
 }
 
 fn run_call(
@@ -524,7 +539,16 @@ pub(crate) fn discover_with(
     if !valid_team_id(team_id) {
         return Err("invalid_team_id");
     }
-    runtime::registration_gate_at(root, scope)?;
+    // Every local refusal comes before the pin is read and before any SSH call.
+    let restoring = match runtime::registration_gate_at(root, scope)? {
+        RegistrationGate::Fresh => None,
+        RegistrationGate::Restore(selection) => {
+            if selection.host != *host || selection.team_id != team_id {
+                return Err(SELECTION_MISMATCH);
+            }
+            Some(selection.candidate_sha256)
+        }
+    };
     let validated = validate_host()?;
     let timeout = budget.call(DISCOVERY_CALL)?;
     let reply = run_call(run, &validated, DISCOVERY_SCRIPT, None, timeout)?;
@@ -569,6 +593,9 @@ pub(crate) fn discover_with(
         return Err("existing_team_not_active");
     };
     let (candidate, candidate_sha256) = runtime::candidate_bytes(host, team_id, &target)?;
+    if restoring.as_ref().is_some_and(|attested| *attested != candidate_sha256) {
+        return Err(SELECTION_MISMATCH);
+    }
     budget.check()?;
     Ok(Found {
         runtime: target,
@@ -576,7 +603,19 @@ pub(crate) fn discover_with(
         candidate,
         candidate_sha256,
         fingerprint: pinned_host_fingerprint(&validated).ok(),
+        restores: restoring.is_some(),
     })
+}
+
+/// What `register` did.
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) enum Registered {
+    /// A scope with nothing saved: the new candidate, or the identical one that
+    /// a concurrent registration published first.
+    New(CandidateWrite),
+    /// A selection without its candidate: the candidate it attests is back, and
+    /// the pair reads back as one (`selected_at`). Written or Identical alike.
+    Restored,
 }
 
 /// Re-discovers and compares with what the person confirmed, then publishes the
@@ -588,7 +627,22 @@ pub(crate) fn register_with(
     validate_host: &mut dyn FnMut() -> Result<ValidatedHost, &'static str>,
     run: &mut Runner<'_>,
     budget: &Budget<'_>,
-) -> Result<CandidateWrite, &'static str> {
+) -> Result<Registered, &'static str> {
+    register_hooked(root, scope, receipt, validate_host, run, budget, &mut || {})
+}
+
+/// `before_link` is the window right before the candidate becomes definitive,
+/// where a concurrent writer (the custodial producer, another process) can act:
+/// no lock serialises them, so correctness rests on the write and the read-back.
+pub(crate) fn register_hooked(
+    root: &Path,
+    scope: &AccountScope,
+    receipt: &Receipt,
+    validate_host: &mut dyn FnMut() -> Result<ValidatedHost, &'static str>,
+    run: &mut Runner<'_>,
+    budget: &Budget<'_>,
+    before_link: &mut dyn FnMut(),
+) -> Result<Registered, &'static str> {
     let found = discover_with(
         root,
         scope,
@@ -601,7 +655,22 @@ pub(crate) fn register_with(
     if found.candidate_sha256 != receipt.candidate_sha256 {
         return Err("existing_team_target_changed");
     }
-    runtime::write_candidate_at(root, scope, &found.candidate)
+    let written = runtime::write_candidate_hooked(root, scope, &found.candidate, before_link)?;
+    if !found.restores {
+        return Ok(Registered::New(written));
+    }
+    // «Restored» only when the pair reads back as one: the selection there now
+    // names exactly these bytes, this host and this team. Otherwise an error,
+    // and the candidate just written stays: nothing is ever removed.
+    match runtime::selected_at(root, scope, &receipt.host) {
+        Ok(Some(target))
+            if target.team_id == receipt.team_id
+                && target.candidate_sha256() == found.candidate_sha256 =>
+        {
+            Ok(Registered::Restored)
+        }
+        _ => Err("existing_team_runtime_target_changed"),
+    }
 }
 
 /// What the last successful discovery left in memory. It is the authority for
@@ -685,7 +754,15 @@ pub(crate) struct ExistingTeamReceipt {
 #[derive(Debug, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct ExistingTeamRegisterReply {
-    outcome: &'static str,
+    pub(crate) outcome: &'static str,
+}
+
+pub(crate) fn register_outcome(registered: &Registered) -> &'static str {
+    match registered {
+        Registered::New(CandidateWrite::Written) => "registered",
+        Registered::New(CandidateWrite::Identical) => "already_registered",
+        Registered::Restored => "restored",
+    }
 }
 
 fn receipt_view(request: &ExistingTeamDiscoverRequest, found: &Found) -> ExistingTeamReceipt {
@@ -757,6 +834,10 @@ pub(crate) async fn onboarding_existing_team_discover(
     .unwrap_or(Err(UNAVAILABLE));
     state.finish();
     let _scope = scopes.lock_expected(&expected).map_err(failure)?;
+    if result.as_ref().is_err_and(|code| *code == SELECTION_MISMATCH) {
+        // As for a changed target: a new attempt needs a new discovery.
+        receipt_clear(&state.receipt);
+    }
     let found = result.map_err(failure)?;
     receipt_store(
         &state.receipt,
@@ -772,8 +853,8 @@ pub(crate) async fn onboarding_existing_team_discover(
 }
 
 /// Writes ONLY the candidate, and only if the scope has neither a candidate nor
-/// a selection. The request carries the hash the person saw and the person's
-/// confirmation; host and team come from the receipt kept in memory. This is a
+/// a selection, or a valid selection that attests exactly these bytes. The
+/// request carries the hash the person saw and the person's confirmation; host and team come from the receipt kept in memory. This is a
 /// renderer-confirmed authority, at the level of `onboarding_ssh_host_key_confirm`
 /// and the `confirmed` flag of the assistant start: the confirmation is a UI
 /// control, not a defence against a hostile renderer.
@@ -790,6 +871,7 @@ pub(crate) async fn onboarding_existing_team_register(
     }
     let root = runtime::root(&app).map_err(failure)?;
     runtime::registration_gate_at(&root, &expected).map_err(failure)?;
+    // (the same gate runs again inside the discovery, with the selection read there)
     let receipt = receipt_for(&state.receipt, &expected, &request.candidate_sha256, Instant::now())
         .map_err(failure)?;
     if !state.try_begin() {
@@ -821,19 +903,26 @@ pub(crate) async fn onboarding_existing_team_register(
     .unwrap_or(Err(UNAVAILABLE));
     state.finish();
     let _scope = scopes.lock_expected(&expected).map_err(failure)?;
+    settle_register(&state.receipt, result)
+}
+
+/// The reply of `register`, and when the receipt goes: after a write, and when
+/// the target or the saved selection does not match (a new attempt then needs a
+/// new discovery). Any other failure keeps it, so the person can retry.
+pub(crate) fn settle_register(
+    slot: &Mutex<Option<Receipt>>,
+    result: Result<Registered, &'static str>,
+) -> Result<ExistingTeamRegisterReply, OnboardingError> {
     match result {
-        Ok(written) => {
-            receipt_clear(&state.receipt);
+        Ok(registered) => {
+            receipt_clear(slot);
             Ok(ExistingTeamRegisterReply {
-                outcome: match written {
-                    CandidateWrite::Written => "registered",
-                    CandidateWrite::Identical => "already_registered",
-                },
+                outcome: register_outcome(&registered),
             })
         }
-        Err("existing_team_target_changed") => {
-            receipt_clear(&state.receipt);
-            Err(failure("existing_team_target_changed"))
+        Err(code @ ("existing_team_target_changed" | SELECTION_MISMATCH | "existing_team_runtime_target_changed")) => {
+            receipt_clear(slot);
+            Err(failure(code))
         }
         Err(code) => Err(failure(code)),
     }

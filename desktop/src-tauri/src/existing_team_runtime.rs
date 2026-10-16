@@ -528,11 +528,26 @@ struct Selection {
     candidate_sha256: String,
 }
 
+/// A valid saved selection, read by the rules of every read of one: the host,
+/// the team and the SHA-256 of every byte of the candidate it was made from.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct SavedSelection {
+    pub(crate) host: ExecutionHost,
+    pub(crate) team_id: String,
+    pub(crate) candidate_sha256: String,
+}
+
 #[derive(Clone, PartialEq, Eq)]
 pub(crate) struct ActivatedTarget {
     pub(crate) team_id: String,
     pub(crate) runtime: RuntimeTarget,
     candidate_sha256: String,
+}
+
+impl ActivatedTarget {
+    pub(crate) fn candidate_sha256(&self) -> &str {
+        &self.candidate_sha256
+    }
 }
 
 pub(crate) fn hex(value: &str, length: usize) -> bool {
@@ -826,20 +841,40 @@ fn write_selection_at(
     result
 }
 
-/// What the in-app registration finds locally before it may spend a single
-/// SSH call: a candidate or a selection of ANY kind (invalid, a symlink, even a
-/// dangling one) means the existing path owns this scope.
-pub(crate) fn registration_gate_at(root: &Path, scope: &AccountScope) -> Result<(), &'static str> {
+/// What the in-app registration may do in this scope. Decided locally, before a
+/// single SSH call, by ONE predicate that discover and register both use.
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) enum RegistrationGate {
+    /// Neither a candidate nor a selection: a new candidate may be published.
+    Fresh,
+    /// A valid selection and no candidate: only the candidate whose bytes the
+    /// selection attests may be published back. The selection is never written.
+    Restore(SavedSelection),
+}
+
+/// A candidate of ANY kind (invalid, a symlink, even a dangling one) means the
+/// existing path owns this scope. So does a selection that is not a valid
+/// private one: only a valid selection without its candidate can be restored.
+pub(crate) fn registration_gate_at(
+    root: &Path,
+    scope: &AccountScope,
+) -> Result<RegistrationGate, &'static str> {
     match fs::symlink_metadata(path(root, scope, CANDIDATE_FILE)) {
         Ok(_) => return Err("existing_team_runtime_candidate_exists"),
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
         Err(_) => return Err("existing_team_runtime_unavailable"),
     }
     match fs::symlink_metadata(path(root, scope, SELECTION_FILE)) {
-        Ok(_) => Err("existing_team_runtime_already_selected"),
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
-        Err(_) => Err("existing_team_runtime_unavailable"),
+        Ok(_) => {}
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            return Ok(RegistrationGate::Fresh)
+        }
+        Err(_) => return Err("existing_team_runtime_unavailable"),
     }
+    // One read, with the rules of `selected_at` (O_NOFOLLOW, private, canonical).
+    read_selection_at(root, scope)
+        .map(RegistrationGate::Restore)
+        .map_err(|_| "existing_team_runtime_already_selected")
 }
 
 /// The exact bytes of a candidate for this host, team and verified runtime and
@@ -1007,6 +1042,36 @@ pub(crate) fn activate_at(
     write_selection_at(root, scope, &candidate, &hash)
 }
 
+/// The one parser of a selection's bytes, for `selected_at` and the
+/// registration gate alike: canonical JSON, schema 1, a valid team id and the
+/// SHA-256 of a candidate.
+fn parse_selection_bytes(bytes: &[u8]) -> Result<SavedSelection, &'static str> {
+    let invalid = "existing_team_runtime_selection_invalid";
+    let value: serde_json::Value = serde_json::from_slice(bytes).map_err(|_| invalid)?;
+    let selection: Selection = serde_json::from_value(value.clone()).map_err(|_| invalid)?;
+    if value != serde_json::to_value(&selection).map_err(|_| invalid)?
+        || selection.schema != 1
+        || !team_id(&selection.team_id)
+        || !hex(&selection.candidate_sha256, 64)
+    {
+        return Err(invalid);
+    }
+    Ok(SavedSelection {
+        host: selection.host,
+        team_id: selection.team_id,
+        candidate_sha256: selection.candidate_sha256,
+    })
+}
+
+fn read_selection_at(root: &Path, scope: &AccountScope) -> Result<SavedSelection, &'static str> {
+    let bytes = read_bytes(
+        &path(root, scope, SELECTION_FILE),
+        "existing_team_runtime_selection_invalid",
+        "existing_team_runtime_selection_invalid",
+    )?;
+    parse_selection_bytes(&bytes)
+}
+
 /// A local connection without a selection preserves the existing local path.
 /// Every VPS operation requires a selection; once present, it must see the
 /// same candidate bytes, host and team or fail closed.
@@ -1039,24 +1104,7 @@ pub(crate) fn selected_at(
             Err("existing_team_runtime_selection_invalid")
         };
     }
-    let bytes = read_bytes(
-        &selection_path,
-        "existing_team_runtime_selection_invalid",
-        "existing_team_runtime_selection_invalid",
-    )?;
-    let value: serde_json::Value =
-        serde_json::from_slice(&bytes).map_err(|_| "existing_team_runtime_selection_invalid")?;
-    let selection: Selection = serde_json::from_value(value.clone())
-        .map_err(|_| "existing_team_runtime_selection_invalid")?;
-    if value
-        != serde_json::to_value(&selection)
-            .map_err(|_| "existing_team_runtime_selection_invalid")?
-        || selection.schema != 1
-        || !team_id(&selection.team_id)
-        || !hex(&selection.candidate_sha256, 64)
-    {
-        return Err("existing_team_runtime_selection_invalid");
-    }
+    let selection = read_selection_at(root, scope)?;
     let (candidate, hash) = read_candidate_at(root, scope)?;
     if selection.host != *host
         || candidate.host != *host
