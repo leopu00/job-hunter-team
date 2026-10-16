@@ -135,7 +135,7 @@ const AGENTS := {
 			"dept.chatter.assistente.3",
 		],
 	},
-	# one-shot/on-demand del sistema reale (roster barto li pubblica:
+	# one-shot/on-demand del sistema reale (il roster li pubblica:
 	# senza un posto in scena sparivano con un warn — la scena deve
 	# mostrare TUTTI gli attivi veri)
 	"mantenitore": {
