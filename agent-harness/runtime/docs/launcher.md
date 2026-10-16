@@ -1,7 +1,6 @@
 # The CAPITANO's launcher
 
-SICUREZZA-HARNESS §9, accepted by the MASTER as the launcher's
-specification. The CAPITANO **asks**, the launcher **decides**: every limit
+The launcher's specification. The CAPITANO **asks**, the launcher **decides**: every limit
 below is in the hub or on the host, in files the CAPITANO cannot touch. Its
 prompt may repeat them; nothing relies on the prompt.
 

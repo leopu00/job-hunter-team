@@ -321,7 +321,7 @@ tmux and the throttle engine do for a TUI agent:
 
 **The wall the team really hits: the upstream 429 (T27-b, 23/09).** Three
 rehearsals of the whole team on `ashley` ended on the account's rate limit and
-not on money (`agents-hq/piani/collaudo-budget-squadra-vps-res.txt`): in the
+not on money: in the
 last one **13 of 59 requests came back 429**, five agents of six died, the
 CAPITANO among them, and the team stopped after 56 seconds having spent less
 than a third of its cap. The AI SDK's own retrying is off (`maxRetries: 0`) and
@@ -623,8 +623,7 @@ the code:
    asserts what really happens: the file goes. The files no tool touched are
    still there, byte for byte; the one the shell took is not. When the mount
    closes this, that assertion turns red and has to be read — which is why it
-   is written down instead of claiming a boundary we do not have
-   (`agents-hq/piani/MISURA-BASH-E-CONFINE.md`).
+   is written down instead of claiming a boundary we do not have.
 
 Its logbook carries the captain diary's bounds (CAP-1), for the same reason:
 a logbook outlives the session, so a role steered by injected text could leave

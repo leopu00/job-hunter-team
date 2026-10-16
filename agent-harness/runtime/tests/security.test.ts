@@ -8,8 +8,7 @@
  *
  * What this suite does NOT claim: the permission gate is not a sandbox. In
  * `auto` mode `bash` may `cat` any file the process can read; keeping the
- * provider key out of that reach is the container's job (see
- * agents-hq/piani/SICUREZZA-HARNESS.md, finding H-3).
+ * provider key out of that reach is the container's job.
  */
 
 import { mkdir, mkdtemp, realpath, rm, symlink, writeFile } from "node:fs/promises";
