@@ -111,7 +111,7 @@ jobs:
       # vede: la radice del checkout ha gia' i suoi node_modules.
       - name: Install shared dependencies for imported modules
         working-directory: shared
-        run: npm ci
+        run: npm ci --ignore-scripts
 
       # Il vitest della desktop su Windows e macOS gira solo qui (test.yml lo
       # gira su Linux). `cargo test` invece non c'e' piu' (07/10): lo stesso

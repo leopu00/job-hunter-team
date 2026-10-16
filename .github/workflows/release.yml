@@ -110,7 +110,7 @@ jobs:
       # i gate e la build vite non risolvono l'import.
       - name: Install shared dependencies for imported modules
         working-directory: shared
-        run: npm ci
+        run: npm ci --ignore-scripts
 
       - name: Run canonical Tauri release gates
         run: |

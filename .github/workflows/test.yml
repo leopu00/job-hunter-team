@@ -184,7 +184,7 @@ jobs:
       # vede: la radice del checkout ha gia' i suoi node_modules.
       - name: Install shared dependencies for imported modules
         working-directory: shared
-        run: npm ci
+        run: npm ci --ignore-scripts
 
       - name: Typecheck desktop
         working-directory: desktop
