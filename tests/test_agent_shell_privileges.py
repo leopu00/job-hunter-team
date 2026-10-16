@@ -128,11 +128,19 @@ def test_the_one_shot_root_containers_keep_only_chown():
     run = run[: run.index("$MountRepairDispatch")]
     for flag in ("--cap-drop ALL", "--cap-add CHOWN", "--network none", "--security-opt no-new-privileges"):
         assert flag in run, flag
+
+
+def test_container_up_runs_no_root_one_shot_at_all():
+    # `jht container up` used to chown the anonymous /app/web/.next volume from a
+    # root one-shot. No compose file declares that volume any more (the dev
+    # override dropped it on 2026-07-26), so the one-shot was a root container
+    # with nothing to repair: it is gone, and nothing may bring it back unseen.
     js = CONTAINER_JS.read_text(encoding="utf-8")
-    call = js[js.index("'run', '--rm', '--user', 'root'"):]
-    call = call[: call.index("--volumes-from")]
-    for flag in ("'--cap-drop', 'ALL'", "'--cap-add', 'CHOWN'", "'--network', 'none'", "'--security-opt', 'no-new-privileges'"):
-        assert flag in call, flag
+    assert "'--user', 'root'" not in js
+    assert "--volumes-from" not in js
+    assert "fixNextOwnership" not in js
+    assert "/app/web/.next" not in js
+    assert "chown" not in "\n".join(code_lines(js))
 
 
 def test_the_dev_one_shot_root_container_keeps_only_chown():
