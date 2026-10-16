@@ -3,7 +3,7 @@
  * siblings (SICUREZZA, 21/09).
  *
  * The history is a read-only root, and that rule wins over every own root,
- * whatever the permission mode. Nested — the mount that ashley ran for a day,
+ * whatever the permission mode. Nested — the mount a VPS ran for a day,
  * `/jht_user` holding `/jht_user/out` — every CV the SCRITTORE writes is
  * refused: safely, but the reason says "the person's profile", the live turn
  * is spent, and nothing is produced. Both halves were right on their own, and

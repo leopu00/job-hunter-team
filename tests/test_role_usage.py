@@ -218,7 +218,7 @@ for n in range(int(sys.argv[4])):
 
 
 def test_two_bridges_writing_together_never_leave_a_broken_file(tmp_path):
-    """Con più sentinel-bridge vivi (visto su ashley: 3 insieme), chi legge
+    """Con più sentinel-bridge vivi (visto su una VPS: 3 insieme), chi legge
     role-usage.json deve trovare sempre un JSON intero, e nessun temporaneo
     deve restare indietro."""
     target = tmp_path / "role-usage.json"

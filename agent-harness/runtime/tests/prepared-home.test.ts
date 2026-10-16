@@ -16,7 +16,7 @@
  *      nobody verified — anything that does not match and the role stops, and
  *      says which file;
  *   2. the switch belongs to the executor, not to the role;
- *   3. the final word is SICUREZZA's probe on ashley, not a local run.
+ *   3. the final word is SICUREZZA's probe on the VPS, not a local run.
  *
  * And what this check is NOT: the defence in place of the mount. The system
  * prompt carries the index of those paths and tells the model to read a

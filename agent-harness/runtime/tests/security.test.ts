@@ -266,7 +266,7 @@ describe("web_fetch: no local network, no cloud metadata", () => {
 
 describe("jobs.db outside apiHome (SICUREZZA D-1): only the database tools touch it", () => {
   /**
-   * The ashley layout: JHT_API_DB=/jht_home/db/jobs.db, outside the runtime's
+   * The VPS layout: JHT_API_DB=/jht_home/db/jobs.db, outside the runtime's
    * home, next to the candidate's profile under the same JHT home. The file
    * tools must not rewrite, truncate or read the database or SQLite's files
    * beside it — by name or through a link — and the profile stays readable.

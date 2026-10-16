@@ -45,7 +45,7 @@ Il secondo controllo nasce dal post-mortem `2026-05-18-capitano-zombie-night` (1
 - 🐞 **difetto già presente**: il cooldown usa **un unico file globale** `$BRIDGE_STATE_DIR/bridge-escalate.ts` (`:456`) per qualunque `what`. Un'escalation sui bridge zittisce per un'ora quella sui `pid1-child` e viceversa. E l'invio è `>/dev/null 2>&1 || true` (`:463`): se il Capitano non esiste, il fallimento è invisibile;
 - i tre chiamanti sono `:513` (suite bridge), `:538` (tg-bridge per ruolo), `:548` (`PROC_DEAD_DEEP`). **Nessuno riguarda un agente LLM.**
 
-**Gate del loop principale** (`:643-727`) — rilevanti perché definiscono quando un fallimento è *anomalo*: `.team-halted.flag` / `.weekly-halt.flag` (`:651`), standby a spesa zero (`:674`), `config_ready` (`:690`). Sotto questi gate non si tenta nemmeno lo spawn. Il solo caso già dotato di escalation *loud* è `config_ready=false` persistente oltre la grace (`:718-723`) — aggiunto dopo il post-mortem `2026-07-18-provider-vendor-enum-config-ready` (ashley morta ~44h in silenzio). È il precedente esatto della cosa che qui manca.
+**Gate del loop principale** (`:643-727`) — rilevanti perché definiscono quando un fallimento è *anomalo*: `.team-halted.flag` / `.weekly-halt.flag` (`:651`), standby a spesa zero (`:674`), `config_ready` (`:690`). Sotto questi gate non si tenta nemmeno lo spawn. Il solo caso già dotato di escalation *loud* è `config_ready=false` persistente oltre la grace (`:718-723`) — aggiunto dopo il post-mortem `2026-07-18-provider-vendor-enum-config-ready` (un'istanza morta ~44h in silenzio). È il precedente esatto della cosa che qui manca.
 
 ### 1.2 `shared/skills/process_health.py` — canary dei PROCESSI, non degli agenti
 

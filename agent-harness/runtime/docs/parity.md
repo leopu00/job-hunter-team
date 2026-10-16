@@ -99,7 +99,7 @@ reads:
    rendered prompt beside the deliverables). The two are **siblings, never
    nested**: a read-only root wins over every own root whatever the mode, so
    with the deliverables inside the history every CV would be refused — the
-   mount ashley ran for a day, safe but sterile, and the reason the agent
+   mount one deployment ran for a day, safe but sterile, and the reason the agent
    read said "the person's profile". A configuration that nests them now
    stops at startup with that explained (`config.ts`), and the policy's
    behaviour in both layouts is pinned in `tests/user-folders.test.ts`. With `run-team` the
@@ -320,7 +320,7 @@ tmux and the throttle engine do for a TUI agent:
    launcher that cannot answer counts as no children, as before.
 
 **The wall the team really hits: the upstream 429 (T27-b, 23/09).** Three
-rehearsals of the whole team on `ashley` ended on the account's rate limit and
+rehearsals of the whole team on a VPS ended on the account's rate limit and
 not on money (`agents-hq/piani/collaudo-budget-squadra-vps-res.txt`): in the
 last one **13 of 59 requests came back 429**, five agents of six died, the
 CAPITANO among them, and the team stopped after 56 seconds having spent less
@@ -751,7 +751,7 @@ TUI — a context that bloats, an Enter that hangs — does not exist here. If a
 stuck run ever shows up it is added then, from the hub, with the rule the team
 already has for `freeze_team`: the role asks, the launcher decides.
 
-**It writes only to the CAPITANO** (SICUREZZA P2, MASTER 23/09). In the TUI it
+**It writes only to the CAPITANO** (SICUREZZA P2). In the TUI it
 writes to every session and has to: it interviews each one before recreating it
 and kicks it off again afterwards. Here it interviews nobody, so the set of
 peers it used to need does not exist — and a role that may still write to every
