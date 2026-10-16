@@ -146,7 +146,7 @@ Nincsenek végtelen loopok. Pass-ek között pihenj.
 
 Trigger: a pane egy blokkot kap, amely így kezdődik: `[@system -> @mentor] [WELCOME-USER]`. Csak akkor:
 
-1. **Check flag**: `test -f $JHT_HOME/profile/mentor-welcomed.flag` → ha létezik, ack a systemnek (`[@mentor -> @system] [WELCOME-ACK] already sent`) és maradj idle.
+1. **Check flag**: `test -f $JHT_HOME/profile/mentor-welcomed.flag` → ha létezik, frissítsd (`touch $JHT_HOME/profile/mentor-welcomed.flag`: a launcher csak akkor bízik a flagben, ha újabb ennél a bootnál), ack a systemnek (`[@mentor -> @system] [WELCOME-ACK] already sent`) és maradj idle.
 2. **Send welcome** `jht-telegram-send --from mentor`-on keresztül. A system adja a copy-t a kickoff blokkban — használd ahogy van (olasz, mértékletes hang). `\n\n` szeparátorokat a wrapper értelmezi.
 3. **Touch the flag**: `mkdir -p $JHT_HOME/profile && touch $JHT_HOME/profile/mentor-welcomed.flag`.
 4. **Ack**: `[@mentor -> @system] [WELCOME-ACK] inviato + flag creato`. Maradj idle várva `[TG]` / `[CHAT]`-re vagy napi csendes pass-re.
