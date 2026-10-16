@@ -25,11 +25,11 @@ afterEach(() => {
 function probeScript(): string {
   const source = readFileSync(fileURLToPath(new URL("../../src-tauri/src/existing_team_runtime.rs", import.meta.url)), "utf8");
   const start = source.indexOf("node -e '", source.indexOf("pub(crate) fn team_probe_command"));
-  const end = source.indexOf("' \"$JHT_EXPECTED_TEAM\"", start);
+  const end = source.indexOf("' || exit $?", start);
   if (start < 0 || end < 0) throw new Error("team probe script not found");
   // The home is not written into the source: every `"/jht_home...` literal becomes
-  // `process.argv[2]+"...`, so a Windows path with backslashes stays a plain argument.
-  return source.slice(start + "node -e '".length, end).replaceAll('"/jht_home', 'process.argv[2]+"');
+  // `process.argv[1]+"...`, so a Windows path with backslashes stays a plain argument.
+  return source.slice(start + "node -e '".length, end).replaceAll('"/jht_home', 'process.argv[1]+"');
 }
 
 function runProbe(cloudUserId: string, expectedTeam: string): number | null {
@@ -37,7 +37,8 @@ function runProbe(cloudUserId: string, expectedTeam: string): number | null {
   sandboxes.push(home);
   mkdirSync(join(home, "profile"));
   writeFileSync(join(home, "cloud.json"), JSON.stringify({ user_id: cloudUserId }));
-  return spawnSync(process.execPath, ["-e", probeScript(), expectedTeam, home], { encoding: "utf8" }).status;
+  // The team arrives on stdin, one line, as the probe's shell pipes it in.
+  return spawnSync(process.execPath, ["-e", probeScript(), home], { input: `${expectedTeam}\n`, encoding: "utf8" }).status;
 }
 
 function gateClient(tokenRow: Record<string, unknown>) {

@@ -1098,14 +1098,17 @@ case "$JHT_EXPLICIT" in "$JHT_PLATFORM_IMAGE|"$JHT_PLATFORM"|$JHT_REVISION|"*"@$
     ))
 }
 
+/// The team id (the account's user id) arrives on stdin and stays on stdin: `printf` is a
+/// builtin of the VPS shell, so the pipe into `docker exec -i` puts it on no argument list,
+/// which anyone who lists the host's processes could read.
 pub(crate) fn team_probe_command(target: &RuntimeTarget) -> Result<String, &'static str> {
     command(
         target,
         r#"IFS= read -r JHT_EXPECTED_TEAM
 [ "${#JHT_EXPECTED_TEAM}" -ge 16 ] && [ "${#JHT_EXPECTED_TEAM}" -le 128 ] || exit 64
 case "$JHT_EXPECTED_TEAM" in *[!A-Za-z0-9_-]*) exit 64 ;; esac
-docker exec -i "$JHT_CID" node -e '
-const fs=require("fs"), expected=process.argv[1];
+printf '%s\n' "$JHT_EXPECTED_TEAM" | docker exec -i "$JHT_CID" node -e '
+const fs=require("fs"), expected=fs.readFileSync(0,"utf8").replace(/\n$/,"");
 let cloud; try { cloud=JSON.parse(fs.readFileSync("/jht_home/cloud.json","utf8")); } catch { process.exit(72); }
 if (typeof cloud.user_id!=="string" || cloud.user_id!==expected) process.exit(72);
 let cfg={}; try { cfg=JSON.parse(fs.readFileSync("/jht_home/jht.config.json","utf8")); } catch {}
@@ -1113,7 +1116,7 @@ const provider=String(cfg.active_provider||"").toLowerCase();
 const configured=["claude","anthropic","codex","openai","kimi","moonshot"].includes(provider);
 const marker={claude:"/jht_home/.claude/.credentials.json",anthropic:"/jht_home/.claude/.credentials.json",codex:"/jht_home/.codex/auth.json",openai:"/jht_home/.codex/auth.json",kimi:"/jht_home/.kimi/credentials/kimi-code.json",moonshot:"/jht_home/.kimi/credentials/kimi-code.json"}[provider];
 console.log("runtimeInstalled=1"); console.log("containerRunning=1"); console.log("providerConfigured="+(configured?"1":"0")); console.log("providerAuthenticated="+(marker&&fs.existsSync(marker)?"1":"0")); console.log("profileReady="+(fs.existsSync("/jht_home/profile/ready.flag")?"1":"0")); console.log("assistantWelcomed="+(fs.existsSync("/jht_home/profile/welcomed.flag")?"1":"0"));
-' "$JHT_EXPECTED_TEAM" || exit $?
+' || exit $?
 if docker exec "$JHT_CID" tmux has-session -t CAPITANO 2>/dev/null; then JHT_CAPTAIN=1; else JHT_CAPTAIN=0; fi
 if docker exec "$JHT_CID" tmux has-session -t ASSISTENTE 2>/dev/null; then JHT_ASSISTANT=1; else JHT_ASSISTANT=0; fi
 printf 'captainRunning=%s\nassistantRunning=%s\n' "$JHT_CAPTAIN" "$JHT_ASSISTANT""#,
