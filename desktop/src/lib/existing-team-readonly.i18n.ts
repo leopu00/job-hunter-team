@@ -19,7 +19,7 @@ export interface ExistingTeamReadOnlyText {
 export const EXISTING_TEAM_READONLY_TEXT: Record<Locale, ExistingTeamReadOnlyText> = {
   it: {
     assistantOff: "Solo lettura: assistente non attivo",
-    connectionReadOnly: "Solo lettura: questa connessione non consente modifiche",
+    connectionReadOnly: "Solo lettura: questa connessione non modifica i dati",
     banner: "Stai consultando gli annunci della squadra esistente in sola lettura. Le azioni che modificano i dati restano disabilitate; l’avvio dell’assistente è separato e chiede una conferma.",
     team: "Squadra",
     profile: "Profilo",
@@ -29,7 +29,7 @@ export const EXISTING_TEAM_READONLY_TEXT: Record<Locale, ExistingTeamReadOnlyTex
   },
   en: {
     assistantOff: "Read only: assistant not active",
-    connectionReadOnly: "Read only: this connection does not allow changes",
+    connectionReadOnly: "Read only: this connection does not change data",
     banner: "You are browsing the existing team's positions read only. Actions that change data stay disabled; starting the assistant is separate and asks for a confirmation.",
     team: "Team",
     profile: "Profile",
@@ -39,7 +39,7 @@ export const EXISTING_TEAM_READONLY_TEXT: Record<Locale, ExistingTeamReadOnlyTex
   },
   de: {
     assistantOff: "Nur Lesen: Assistent nicht aktiv",
-    connectionReadOnly: "Nur Lesen: Diese Verbindung erlaubt keine Änderungen",
+    connectionReadOnly: "Nur Lesen: Diese Verbindung ändert keine Daten",
     banner: "Du siehst die Stellen des vorhandenen Teams nur lesend. Aktionen, die Daten ändern, bleiben deaktiviert; das Starten des Assistenten ist davon getrennt und verlangt eine Bestätigung.",
     team: "Team",
     profile: "Profil",
@@ -49,7 +49,7 @@ export const EXISTING_TEAM_READONLY_TEXT: Record<Locale, ExistingTeamReadOnlyTex
   },
   fr: {
     assistantOff: "Lecture seule : assistant inactif",
-    connectionReadOnly: "Lecture seule : cette connexion n’autorise aucune modification",
+    connectionReadOnly: "Lecture seule : cette connexion ne modifie pas les données",
     banner: "Vous consultez les offres de l’équipe existante en lecture seule. Les actions qui modifient les données restent désactivées ; le démarrage de l’assistant est distinct et demande une confirmation.",
     team: "Équipe",
     profile: "Profil",
@@ -59,7 +59,7 @@ export const EXISTING_TEAM_READONLY_TEXT: Record<Locale, ExistingTeamReadOnlyTex
   },
   es: {
     assistantOff: "Solo lectura: asistente no activo",
-    connectionReadOnly: "Solo lectura: esta conexión no permite cambios",
+    connectionReadOnly: "Solo lectura: esta conexión no modifica los datos",
     banner: "Estás consultando las ofertas del equipo existente en solo lectura. Las acciones que modifican datos siguen desactivadas; el inicio del asistente es aparte y pide una confirmación.",
     team: "Equipo",
     profile: "Perfil",
@@ -69,7 +69,7 @@ export const EXISTING_TEAM_READONLY_TEXT: Record<Locale, ExistingTeamReadOnlyTex
   },
   pt: {
     assistantOff: "Só leitura: assistente não ativo",
-    connectionReadOnly: "Só leitura: esta ligação não permite alterações",
+    connectionReadOnly: "Só leitura: esta ligação não altera os dados",
     banner: "Está a consultar as vagas da equipa existente só em leitura. As ações que alteram dados continuam desativadas; o arranque do assistente é separado e pede uma confirmação.",
     team: "Equipa",
     profile: "Perfil",
@@ -79,7 +79,7 @@ export const EXISTING_TEAM_READONLY_TEXT: Record<Locale, ExistingTeamReadOnlyTex
   },
   hu: {
     assistantOff: "Csak olvasható: az asszisztens nem aktív",
-    connectionReadOnly: "Csak olvasható: ez a kapcsolat nem engedi a módosítást",
+    connectionReadOnly: "Csak olvasható: ez a kapcsolat nem módosítja az adatokat",
     banner: "A meglévő csapat pozícióit csak olvasható módban nézi. Az adatokat módosító műveletek le vannak tiltva; az asszisztens indítása külön dolog, és megerősítést kér.",
     team: "Csapat",
     profile: "Profil",
