@@ -23,7 +23,7 @@ import { TraceView } from "../src/cli/render.ts";
 const LUNA = modelProfile({ providerId: "openai", modelId: "gpt-5.6-luna" }).pricing!;
 const MINI = modelProfile({ providerId: "openai", modelId: "gpt-5-mini" }).pricing!;
 
-/** The one live calibration request of 2026-09-19 on luna (web-search-prezzi-vps-res.txt). */
+/** The one live calibration request of 2026-09-19 on luna. */
 const CALIBRATION = { inputTokens: 8_712, outputTokens: 194, cachedInputTokens: 0, cacheWriteTokens: 4_400, reasoningTokens: 89 };
 
 let dir: string;

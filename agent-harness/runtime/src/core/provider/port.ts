@@ -2,9 +2,9 @@
  * The provider port.
  *
  * This is the only surface through which the runtime reaches a model. No call
- * site outside `src/core/provider/` may import an AI SDK symbol — see HHT ADR 0004
- * decision 4. That rule is what keeps the loop replaceable: a different loop is
- * a third implementation of this interface, not a rewrite.
+ * site outside `src/core/provider/` may import an AI SDK symbol. That rule is
+ * what keeps the loop replaceable: a different loop is a third implementation
+ * of this interface, not a rewrite.
  */
 
 import type { z } from "zod";
@@ -22,7 +22,7 @@ export interface ModelCapabilities {
 
 /**
  * What a model can do and what it costs. Capabilities are declared here, never
- * inferred from a provider or model name (HHT ADR 0001 decision 5).
+ * inferred from a provider or model name.
  */
 export interface ModelProfile {
   providerId: ProviderId;
@@ -118,7 +118,7 @@ export const MAX_SEARCHES_PER_CALL = 1;
  * proxy books them. The request asks for one, but OpenAI ran two under
  * `max_tool_calls: 1` in 32 of 35 requests of the T13 proxy log, never
  * three; the proxy books twice the most seen (SICUREZZA T19-a). Source: the
- * proxy calibration, agents-hq/piani/t13-vps-res.txt §4.
+ * proxy calibration.
  */
 export const SEARCHES_BOOKED_PER_CALL = 4;
 
@@ -126,7 +126,7 @@ export const SEARCHES_BOOKED_PER_CALL = 4;
  * Input tokens reserved for one search before it runs: the results come back
  * as input the model reads on the provider's side (at most 12,406 per request
  * in the T13 log). The key proxy's SEARCH_TOKENS, twice that, from the same
- * calibration (agents-hq/piani/t13-vps-res.txt §4).
+ * calibration.
  */
 export const SEARCH_RESERVED_INPUT_TOKENS = 25_000;
 
@@ -153,7 +153,7 @@ export interface OpenAISettings {
   baseURL?: string;
 }
 
-/** Endpoint settings for any OpenAI-compatible provider (HHT ADR 0001 decision 2). */
+/** Endpoint settings for any OpenAI-compatible provider. */
 export interface OpenAICompatibleSettings {
   name: string;
   baseURL: string;

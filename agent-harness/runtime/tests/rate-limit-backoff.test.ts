@@ -4,8 +4,7 @@
  * The VPS's third budget rehearsal (23/09) ended on this wall for the third
  * time, and not on money: 13 of 59 requests came back 429 and five agents of
  * six died `provider_failed`, the CAPITANO among them, while the team had spent
- * less than a third of its cap
- * (`agents-hq/piani/collaudo-budget-squadra-vps-res.txt`). The backoff itself
+ * less than a third of its cap. The backoff itself
  * is measured in `ai-sdk-adapter.test.ts`, where the AI SDK may be imported;
  * what is held here is the other half of the MASTER's order — **the time spent
  * waiting must not pass for work in the trace** — because a round whose

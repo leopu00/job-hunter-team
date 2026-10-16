@@ -1,7 +1,7 @@
 /**
- * ADR 0004 decision 4 says no call site outside the provider adapter may import
- * an AI SDK symbol. That is what keeps the loop replaceable, so it is a test
- * rather than a comment: the day someone reaches past the port, this fails.
+ * No call site outside the provider adapter may import an AI SDK symbol. That
+ * is what keeps the loop replaceable, so it is a test rather than a comment:
+ * the day someone reaches past the port, this fails.
  */
 
 import { readdir, readFile } from "node:fs/promises";

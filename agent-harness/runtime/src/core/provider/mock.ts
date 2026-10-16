@@ -1,7 +1,7 @@
 /**
  * Deterministic provider.
  *
- * The default everywhere (HHT ADR 0003 and 0004, decision 4): the whole
+ * The default everywhere: the whole
  * runtime must be exercisable without a key, without a network and without
  * spending. It answers from a script, so a test asserts on an agent's control
  * flow rather than on a model's mood.

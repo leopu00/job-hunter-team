@@ -1,6 +1,6 @@
 /**
  * `render_pdf`: the CV and the cover letter turned into the one document the
- * team sends to a company (SICUREZZA-HARNESS.md §10, P1).
+ * team sends to a company.
  *
  * The TUI runs the render from the shell, as `cv-structure/SKILL.md` writes
  * it: `pandoc … --pdf-engine=wkhtmltopdf …`. wkhtmltopdf is a whole WebKit —

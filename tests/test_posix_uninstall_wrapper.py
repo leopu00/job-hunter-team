@@ -225,7 +225,7 @@ def test_mac_podman_removes_only_the_jht_machine_and_is_idempotent(tmp_path: Pat
     shim = shim_dir / "docker"
     shim.write_text("#!/bin/sh\n# JHT_PODMAN_DOCKER_SHIM=1\nexit 99\n", encoding="utf-8")
     shim.chmod(0o700)
-    box.machines("hht-podman", "jht-podman*", "somebody-else")
+    box.machines("other-podman", "jht-podman*", "somebody-else")
     zshrc = box.home / ".zshrc"
     zshrc.write_text("alias ll='ls -l'\n" + RC_BLOCK.format(bin=box.bin) + "export EDITOR=vim\n", encoding="utf-8")
     zshrc.chmod(0o640)
@@ -237,7 +237,7 @@ def test_mac_podman_removes_only_the_jht_machine_and_is_idempotent(tmp_path: Pat
         "JHT_PHASE uninstall_machine", "JHT_PHASE uninstall_runtime", "JHT_PHASE uninstall_commands",
     ]
     assert LOSS in first.stderr
-    assert box.remaining("machines").splitlines() == ["hht-podman", "somebody-else"]
+    assert box.remaining("machines").splitlines() == ["other-podman", "somebody-else"]
     removals = [call for call in box.calls() if call.startswith("podman machine rm")]
     assert removals == ["podman machine rm --force jht-podman"]
     assert not any(call.startswith("launchctl") for call in box.calls())

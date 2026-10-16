@@ -191,7 +191,7 @@ def _wrapper(tmp_path: Path, sources: tuple[str, ...] | None = None):
     secrets = tmp_path / "broker-secrets.volume"
     secrets.write_text("mail-password-and-linkedin-session\n", encoding="utf-8")
     default = tmp_path / "default-connection"
-    default.write_text("hht-podman\n", encoding="utf-8")
+    default.write_text("other-podman\n", encoding="utf-8")
     env["JHT_TEST_MACHINE_CONFIG"] = str(config)
     env["JHT_TEST_DEFAULT_CONNECTION"] = str(default)
     env["JHT_TEST_BROKER_STATE"] = str(state)
@@ -278,7 +278,7 @@ def test_a_confined_machine_is_used_and_up_creates_both_folders_before_starting(
     assert not any(line.startswith("missing ") for line in calls), calls
     assert (home / ".jht").is_dir() and (home / "Documents" / "Job Hunter Team").is_dir()
     assert oct((home / ".jht").stat().st_mode & 0o777) == "0o700"
-    assert (tmp_path / "default-connection").read_text(encoding="utf-8").strip() == "hht-podman"
+    assert (tmp_path / "default-connection").read_text(encoding="utf-8").strip() == "other-podman"
     assert not any("system connection default" in line for line in calls)
     assert result.returncode != 78
 
@@ -342,8 +342,8 @@ def test_recreate_rebuilds_the_machine_with_only_the_two_folders_and_keeps_the_d
     assert export < remove < init < trim < create < imported
     assert not any("jht-secrets:" in line for line in all_calls)
     # The person's default connection (another project's machine) is put back.
-    assert (tmp_path / "default-connection").read_text(encoding="utf-8").strip() == "hht-podman"
-    assert "podman system connection default hht-podman" in _calls(log)
+    assert (tmp_path / "default-connection").read_text(encoding="utf-8").strip() == "other-podman"
+    assert "podman system connection default other-podman" in _calls(log)
     assert not marker.exists()
     assert Path(env["JHT_TEST_BROKER_STATE"]).read_bytes() == state_before
     assert Path(env["JHT_TEST_BROKER_SECRETS"]).read_bytes() == b""

@@ -1,6 +1,6 @@
 # jht-hub — the team's database and channels behind one process
 
-T18, SICUREZZA-HARNESS §8 phase 2. Before it, a role that needed `jobs.db`
+Phase 2 of the harness security hardening. Before it, a role that needed `jobs.db`
 or the channels had them mounted, and its shell could write both: rewrite
 scores with `node:sqlite`, post into another role's inbox under any name,
 read the person's replies meant for someone else. With the hub, a role's

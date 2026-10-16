@@ -2,7 +2,7 @@
  * The live provider, on the AI SDK.
  *
  * This is the ONLY file in the codebase allowed to import from `ai` or
- * `@ai-sdk/*` (HHT ADR 0004 decision 4). Everything else speaks `ProviderPort`.
+ * `@ai-sdk/*`. Everything else speaks `ProviderPort`.
  * Keeping the import surface here is what makes the loop swappable.
  */
 
@@ -61,8 +61,7 @@ const OPENAI_STATELESS = { store: false, include: ["reasoning.encrypted_content"
  * `retry-after` when it sends one.
  *
  * **Why one retry was not enough, measured.** Three rehearsals of the whole
- * team on `ashley` ended on this wall, not on money
- * (`agents-hq/piani/collaudo-budget-squadra-vps-res.txt`): in the second,
+ * team on `ashley` ended on this wall, not on money: in the second,
  * **13 of 59 requests came back 429** — analista-1 ×2, scout-1 ×4, scout-2 ×2,
  * capitano-1 ×3, analista-2 ×2 — **five agents of six died `provider_failed`**,
  * the CAPITANO among them, and the team stopped after 56 seconds having spent
