@@ -1239,6 +1239,20 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
   not_recording: VOICE_FAILED,
   invalid_locale: VOICE_FAILED,
   native_failed: VOICE_FAILED,
+
+  // ── Disk space (host_vitals.py, the launcher, `jht team start`, `jht upgrade`) ──
+  disk_warning: copy(
+    "Lo spazio sul disco sta finendo.",
+    "Libera un po’ di spazio, altrimenti il team smetterà di avviare nuovi agenti e aggiornamenti.",
+    "Disk space is running low.",
+    "Free some space, or the team will stop starting new agents and updates.",
+  ),
+  disk_low: copy(
+    "Il disco è quasi pieno, quindi non parte nessun nuovo agente né aggiornamento.",
+    "Libera spazio sul disco e riprova. Gli agenti già avviati continuano a lavorare.",
+    "The disk is almost full, so no new agent or update will start.",
+    "Free some disk space and try again. Agents already running keep working.",
+  ),
 };
 
 /**
@@ -1257,6 +1271,10 @@ export const NOT_EMITTED: ReadonlySet<string> = new Set([
   "account_team_mismatch",
   "ssh_unavailable",
   "ssh_auth_failed",
+  // Shell layers: the launcher, `jht team start` and the host wrapper's upgrade
+  // print them. The app has no Rust or TS emission site for them yet.
+  "disk_warning",
+  "disk_low",
 ]);
 
 function localeOf(locale: string | null | undefined): ErrorLocale {

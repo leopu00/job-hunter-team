@@ -286,6 +286,14 @@ if [ "$ROLE" = "worker" ]; then
     exit 0
   fi
   : "${JHT_HOME:=/jht_home}"
+  # Disco quasi pieno (< 3%): un worker nuovo non nasce. Dopo la sonda, cosi'
+  # quello gia' vivo resta com'e'.
+  _spawn_stage="disk_guard"
+  if ! jht_spawn_disk_guard; then
+    _spawn_stage="disk_low"
+    echo "Refusing to start $WORKER_SESSION: disk_low." >&2
+    exit 1
+  fi
   _ensure_claude_onboarding "$JHT_HOME"
   _spawn_stage="worker_tmux_new_session"
   tmux new-session -d -x 220 -y 50 -s "$WORKER_SESSION" -c "$JHT_HOME"
@@ -892,6 +900,17 @@ fi
 # fallimento rumoroso ma onesto. Accettabile in cambio del punto 1.
 if [ "$_hs_rc" -ne 1 ]; then
   echo "  ⚠ 'tmux has-session' for '$SESSION' did not answer (rc=$_hs_rc) — continuing as if the session did not exist; tmux itself will reject a duplicate."
+fi
+# ── Disco quasi pieno: nessun NUOVO avvio ───────────────────────────────────
+# DOPO la sonda di idempotenza (un agente gia' vivo esce 0 qui sopra, intatto) e
+# PRIMA di toccare workdir, skill e tmux. Sotto il 3% di spazio libero si rifiuta
+# col codice chiuso `disk_low`: la frase la stampa host_vitals.py dalla tabella
+# codice->frase, non questo script. Vedi jht_spawn_disk_guard in spawn-lib.sh.
+_spawn_stage="disk_guard"
+if ! jht_spawn_disk_guard; then
+  _spawn_stage="disk_low"
+  echo "Refusing to start '$SESSION': disk_low." >&2
+  exit 1
 fi
 _spawn_stage="preflight"
 

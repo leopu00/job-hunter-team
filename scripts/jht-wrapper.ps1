@@ -2341,6 +2341,42 @@ function Write-UpgradeResult {
 
 function Write-UpgradeNote { param([string]$Message) if (-not $script:UpgradeJson) { Write-Info $Message } }
 
+# ── Disco quasi pieno: nessun upgrade ──────────────────────────────────────
+# Come in jht-wrapper.sh (stesse soglie, stesso codice chiuso `disk_low`, stesso
+# motivo): un upgrade scarica un'immagine e riscrive il runtime, e su un disco al
+# limite muore a meta'. Sotto il 3% di spazio libero si rifiuta PRIMA di scaricare
+# qualunque cosa, anche per `--check` (che scarica l'immagine). Le soglie sono
+# quelle di host_vitals.py, disk-guard.js e jht-wrapper.sh, in per mille
+# (tests/test_disk_guard.py le confronta).
+#
+# Si misura il volume della cartella dati. Il disco del motore (WSL/macchina
+# Podman) sta dentro una VM che da qui non si legge: resta «sconosciuto» e non
+# rifiuta niente. JHT_ENGINE_DISK_PATH forza un percorso da misurare.
+$DiskWarnFreePermille = 100
+$DiskBlockFreePermille = 30
+
+function Get-DiskFreePermille {
+  param([string]$Path)
+  try {
+    if (-not $Path) { return $null }
+    $root = [System.IO.Path]::GetPathRoot([System.IO.Path]::GetFullPath($Path))
+    $drive = New-Object System.IO.DriveInfo($root)
+    if (-not $drive.IsReady -or $drive.TotalSize -le 0) { return $null }
+    return [int][Math]::Floor([double]$drive.AvailableFreeSpace * 1000 / [double]$drive.TotalSize)
+  } catch { return $null }
+}
+
+# Il valore (per mille) del primo volume misurato sotto il 3%, altrimenti $null.
+function Get-DiskLowPermille {
+  $volumes = @($JhtHome)
+  if ($env:JHT_ENGINE_DISK_PATH) { $volumes += $env:JHT_ENGINE_DISK_PATH }
+  foreach ($volume in $volumes) {
+    $permille = Get-DiskFreePermille $volume
+    if ($null -ne $permille -and $permille -lt $DiskBlockFreePermille) { return $permille }
+  }
+  return $null
+}
+
 # ── Pulizia delle immagini JHT vecchie dopo un upgrade riuscito ────────────
 # Come in jht-wrapper.sh (stesse regole, stessi motivi): si tiene SOLO la
 # corrente e la precedente (l'ancora del rollback); solo repository JHT per
@@ -2609,6 +2645,15 @@ function Invoke-RuntimeUpgrade {
     $oldImage = if ($wasRunning) { Get-UpgradeImage } else { 'none' }
     $oldVersion = if ($wasRunning) { Get-UpgradeVersion } else { 'non-installata' }
     if (-not $oldImage) { $oldImage = 'none' }; if (-not $oldVersion) { $oldVersion = 'sconosciuta' }
+    # Disco quasi pieno (< 3% libero): nessun upgrade, nemmeno `--check`. PRIMA di
+    # creare la stage o scaricare: il runtime in corso resta intatto. Codice chiuso
+    # `disk_low`; la frase la mostra l'app dalla sua tabella codice->frase.
+    $diskLow = Get-DiskLowPermille
+    if ($null -ne $diskLow) {
+      if (-not $script:UpgradeJson) { Write-Err "disk_low: meno del 3% di disco libero ($diskLow per mille). Libera spazio e riprova: non e' stato scaricato ne' modificato niente." }
+      Write-UpgradeResult $false $false 'preflight' $oldVersion $oldImage $oldVersion $oldImage $false 'disk_low' $false
+      return 1
+    }
     $script:UpgradeStage = Join-Path $RuntimeDir ('.upgrade-stage-' + $PID + '-' + [guid]::NewGuid().ToString('N'))
     New-Item -ItemType Directory -Path $script:UpgradeStage -ErrorAction Stop | Out-Null
     $newCompose = Join-Path $script:UpgradeStage 'docker-compose.yml'; $newWrapper = Join-Path $script:UpgradeStage 'jht-wrapper.ps1'
