@@ -283,6 +283,35 @@ describe("Dettaglio posizione on an existing team read only", () => {
     expect(apiCalls.filter((call) => !["GET /api/i18n", "GET /api/positions/facets"].includes(call))).toEqual([]);
   });
 
+  it("shows «Feedback e richieste», read only, for the payload the team really sends (no legacy_id)", async () => {
+    const user = userEvent.setup();
+    // The team's jobs.db has no legacy_id column: the core sends null for it.
+    const real = { ...syntheticDetail, position: { ...syntheticDetail.position, legacy_id: null } };
+    native.invoke.mockImplementation(async (_command: string, args: { request: { op: string; id?: string } }) =>
+      args.request.op === "detail" ? { ok: true, data: args.request.id === "101" ? real : null } : companion(args.request as never),
+    );
+    navigate("/positions/101", { replace: true });
+    render(<Shell />);
+
+    expect((await screen.findAllByText("Synthetic role A")).length).toBeGreaterThan(0);
+    // The row's id is the box id, as on the cloud row of the same position.
+    expect(screen.getByText("JHT-101")).toBeInTheDocument();
+    const sheet = screen.getByRole("button", { name: /feedback e richieste/i });
+    await user.click(sheet);
+    const dialog = await screen.findByRole("dialog");
+    const blocked = within(dialog).getAllByTitle(REASON);
+    expect(blocked.length).toBeGreaterThanOrEqual(5);
+    for (const control of blocked) expect(control).toBeDisabled();
+    const enabled = within(dialog).queryAllByRole("button").filter((button) => !(button as HTMLButtonElement).disabled);
+    for (const button of enabled) {
+      expect(`${button.textContent} ${button.getAttribute("aria-label") ?? ""}`).toMatch(/chiudi|close|×|✕|annulla/i);
+    }
+    await user.click(blocked[0]);
+    await user.keyboard("{Escape}");
+    expect(fake.current!.calls).toEqual([]);
+    expect(apiCalls.filter((call) => !["GET /api/i18n", "GET /api/positions/facets"].includes(call))).toEqual([]);
+  });
+
   it("does not mark the position as seen on the cloud after the dwell time", async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
     try {

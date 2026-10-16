@@ -708,6 +708,12 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
     "The saved connection for the existing team is incomplete.",
     "Go back to the setup and connect the team again; if that is not enough, ask whoever manages the VPS to complete the connection.",
   ),
+  existing_team_saved_selection_mismatch: copy(
+    "La squadra trovata sulla VPS non è più quella salvata per questo profilo.",
+    "Non è stato salvato nulla e il collegamento salvato non è stato toccato. Chiedi a chi gestisce la VPS di completare il collegamento.",
+    "The team found on the VPS is no longer the one saved for this profile.",
+    "Nothing was saved and the saved connection was not touched. Ask whoever manages the VPS to complete the connection.",
+  ),
   existing_team_unavailable: TEAM_UNREACHABLE,
   existing_team_runtime_required: copy(
     "Per questa squadra non c’è un collegamento verificato da cui partire.",

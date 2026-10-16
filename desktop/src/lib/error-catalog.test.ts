@@ -50,6 +50,7 @@ const NOT_ERRORS: Record<string, string> = {
   // The outcome of the in-app registration of a team's target: a result, not an error.
   registered: "target registration outcome",
   already_registered: "target registration outcome",
+  restored: "target registration outcome",
   target_role: "profile field",
   target_role_category_id: "profile field",
   target_specialty: "profile field",

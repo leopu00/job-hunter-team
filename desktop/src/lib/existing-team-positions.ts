@@ -80,12 +80,27 @@ function arrayRead<T>(value: DesktopVpsRead<unknown>): DesktopVpsRead<T[]> {
     : { source: "unavailable", code: "desktop_bad_reply" };
 }
 
+/**
+ * The team's jobs.db has no `legacy_id` column (it is the cloud's name for the
+ * box row's id), so the core sends null for it, and the web's detail page shows
+ * "Feedback e richieste" only for a position with one. The web reads such a row
+ * the same way it reads a local workspace: the row's numeric id is the box id
+ * (COALESCE(p.legacy_id, p.id) in local-queries, `applyLegacyId` in the page).
+ * A legacy_id the core does send is kept as it is.
+ */
+function withBoxId(detail: PositionDetail): PositionDetail {
+  const { position } = detail;
+  if (!position || typeof position !== "object" || position.legacy_id != null) return detail;
+  const id = typeof position.id === "string" && /^[1-9]\d{0,14}$/.test(position.id) ? Number(position.id) : null;
+  return id === null ? detail : { ...detail, position: { ...position, legacy_id: id } };
+}
+
 function detailRead(value: DesktopVpsRead<unknown>): DesktopVpsRead<PositionDetail | null> {
   if (value.source !== "vps") return value;
   if (value.data === null) return { source: "vps", data: null };
   return typeof value.data === "object" && !Array.isArray(value.data) &&
     "position" in value.data
-    ? { source: "vps", data: value.data as PositionDetail }
+    ? { source: "vps", data: withBoxId(value.data as PositionDetail) }
     : { source: "unavailable", code: "desktop_bad_reply" };
 }
 

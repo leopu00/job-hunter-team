@@ -190,6 +190,23 @@ describe("existing-team positions bridge", () => {
     ]);
   });
 
+  it("gives a detail without legacy_id the row's id as box id, and keeps one the core sends", async () => {
+    // What the team's jobs.db really yields: no legacy_id column, so null.
+    const real = { ...detail, position: { ...detail.position, id: "37", legacy_id: null } };
+    native.invoke
+      .mockResolvedValueOnce({ ok: true, data: real })
+      .mockResolvedValueOnce({ ok: true, data: { ...detail, position: { ...detail.position, id: "37", legacy_id: 12 } } })
+      .mockResolvedValueOnce({ ok: true, data: { ...detail, position: { ...detail.position, id: "a1b2", legacy_id: null } } });
+
+    const read = await readDesktopVpsPosition("37");
+    expect(read).toEqual({ source: "vps", data: { ...real, position: { ...real.position, legacy_id: 37 } } });
+    // Nothing else of the reply changes, and the reply itself is not rewritten.
+    expect(real.position.legacy_id).toBeNull();
+    await expect(readDesktopVpsPosition("37")).resolves.toMatchObject({ data: { position: { id: "37", legacy_id: 12 } } });
+    // An id that is not a box row's number gives no box id.
+    await expect(readDesktopVpsPosition("a1b2")).resolves.toMatchObject({ data: { position: { legacy_id: null } } });
+  });
+
   it("fails closed for native failure, malformed replies, and non-desktop callers", async () => {
     native.invoke
       .mockResolvedValueOnce({ ok: false, error: "runtime_target_mismatch" })
