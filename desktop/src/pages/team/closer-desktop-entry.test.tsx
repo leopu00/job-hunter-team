@@ -11,7 +11,7 @@ afterEach(() => { cleanup(); localStorage.clear(); });
 
 it("opens the assisted browser inside Team while preserving the existing team view", () => {
   localStorage.setItem("jht-lang", "en");
-  render(<TeamPage search={new URLSearchParams()} />);
+  render(<TeamPage params={{}} search={new URLSearchParams()} />);
   expect(screen.getByText("Existing team")).toBeInTheDocument();
   const open = screen.getByRole("button", { name: "Open assisted browser" });
   expect(open).toHaveAttribute("aria-expanded", "false");
