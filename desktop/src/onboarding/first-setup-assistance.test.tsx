@@ -72,7 +72,9 @@ describe("official FIRSTSETUP assistance connection", () => {
       await user.type(screen.getByLabelText(t.vpsAddress), "draft.example.invalid");
       expect(screen.getByRole("button", { name: ASSISTANCE_TEXT.en.connect })).toBeDisabled();
       await user.click(screen.getByRole("button", { name: ASSISTANCE_TEXT.en.saved }));
-      expect(await screen.findByRole("heading", { name: "Assisted browser" })).toBeInTheDocument();
+      // The panel first draws a provisional heading and replaces it once its session exists:
+      // query again on every attempt instead of holding the element findByRole resolved with.
+      await waitFor(() => expect(screen.getByRole("heading", { name: "Assisted browser" })).toBeInTheDocument());
       await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent(error));
       expect(screen.queryByRole("img")).toBeNull();
       expect(screen.getByRole("button", { name: "Take control" })).toBeDisabled();
@@ -158,7 +160,9 @@ describe("official FIRSTSETUP assistance connection", () => {
     await user.type(screen.getByLabelText(t.vpsAddress), host.address);
     await user.click(screen.getByRole("button", { name: t.sshKeyPicker.choose }));
     await user.click(screen.getByRole("button", { name: ASSISTANCE_TEXT.en.connect }));
-    expect(await screen.findByRole("heading", { name: "Assisted browser" })).toBeInTheDocument();
+    // The panel first draws a provisional heading and replaces it once its session exists:
+    // query again on every attempt instead of holding the element findByRole resolved with.
+    await waitFor(() => expect(screen.getByRole("heading", { name: "Assisted browser" })).toBeInTheDocument());
     await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("browser_binding_required"));
     expect(screen.queryByRole("img")).toBeNull();
     expect(screen.getByRole("button", { name: "Take control" })).toBeDisabled();
