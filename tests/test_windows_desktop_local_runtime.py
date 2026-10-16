@@ -131,19 +131,26 @@ def test_wsl_preflight_is_hidden_actionable_and_retried_on_the_next_prepare():
     onboarding = ONBOARDING.read_text(encoding="utf-8")
     begin = onboarding.index("fn install_local_windows(")
     install = onboarding[begin : onboarding.index("fn download_verified_bytes", begin)]
-    preflight = install.index("wsl_state(run_program(")
+    # wsl --status runs through the launcher that keeps its stderr for the
+    # runtime log, and its result is judged before anything is reused or
+    # downloaded.
+    probe = install.index("let (wsl_status, wsl_stderr) = run_program_keeping_stderr(")
+    preflight = install.index("wsl_state(wsl_status).map_err(failure)?;")
     reuse = install.index("if let Some(wrapper) = wrapper_path(app)")
     download = install.index("download_verified_bytes(")
-    assert preflight < reuse < download
-    assert 'wsl.to_str().ok_or_else(|| failure("wsl_not_ready"))?' in install
-    assert '["--status"]' in install
-    assert "Duration::from_secs(30)" in install
+    assert probe < preflight < reuse < download
+    status_call = install[probe:preflight]
+    assert 'wsl.to_str().ok_or_else(|| failure("wsl_not_ready"))?' in status_call
+    assert '["--status"]' in status_call
+    assert "Duration::from_secs(30)" in status_call
 
     runtime = WINDOWS_RUNTIME.read_text(encoding="utf-8")
     assert 'Err("wsl_not_ready")' in runtime[runtime.index("pub(crate) fn wsl_state") :]
     host = RUNTIME_HOST.read_text(encoding="utf-8")
-    run_program = host[host.index("pub(crate) fn run_program<I, S>") :]
-    assert "hide_console(&mut command);" in run_program
+    for launcher in ("pub(crate) fn run_program<I, S>", "pub(crate) fn run_program_keeping_stderr<I, S>"):
+        body = host[host.index(launcher) :]
+        body = body[: body.index("command.spawn()")]
+        assert "hide_console(&mut command);" in body, launcher
     assert "const CREATE_NO_WINDOW: u32 = 0x0800_0000" in host
 
     # Rust transports the stable key and its retryability; the localized
