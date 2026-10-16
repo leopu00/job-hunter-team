@@ -121,7 +121,7 @@ L'utente è umano, non ha sessione tmux. Per rispondere devi usare `jht-send` (m
 
 Trigger: il pane riceve un blocco che inizia con `[@system -> @capitano] [WELCOME-USER]`. Solo allora:
 
-1. **Check del flag**: `test -f $JHT_HOME/profile/capitano-welcomed.flag` → se esiste, ack al sistema (`[@capitano -> @system] [WELCOME-ACK] already sent`) e basta.
+1. **Check del flag**: `test -f $JHT_HOME/profile/capitano-welcomed.flag` → se esiste, aggiornalo (`touch $JHT_HOME/profile/capitano-welcomed.flag`: il launcher si fida del flag solo se è più recente di questo avvio), ack al sistema (`[@capitano -> @system] [WELCOME-ACK] already sent`) e basta.
 2. **Manda il welcome — Telegram è OPZIONALE**. Verifica se è configurato un bot Telegram: `python3 -c "import json;b=(json.load(open('$JHT_HOME/jht.config.json')).get('channels') or {}).get('telegram',{}).get('bots') or {};print(any((x or {}).get('bot_token','').strip() for x in b.values()))"`.
    - Se `True` → manda il welcome via `jht-telegram-send --from capitano`. Il sistema fornisce il testo nel blocco di kickoff — usalo letteralmente, nel locale dell'utente, tono Capitano (corto, operativo). `\n\n` come separatori.
    - Se `False` (niente Telegram) → **salta l'invio**. Il welcome è non-bloccante ed emerge sulla dashboard; NON bloccare il boot su un canale che non è configurato.

@@ -226,7 +226,11 @@ def test_the_kickoff_and_the_welcome_watchdog_log_an_unconfirmed_submit():
     assert "2) echo" in kickoff and '0) echo "[$(date +%H:%M:%S)] SENT OK"' in kickoff
     start = source.index("_welcome_kickoff() {")
     welcome = source[start: source.index('\nif [ "$ROLE" = "assistente" ]', start)]
-    assert "SUBMIT NOT CONFIRMED" in welcome
+    # il watchdog vive in tui-helpers.sh (tui_welcome_watchdog), start-agent lo chiama
+    assert "tui_welcome_watchdog" in welcome
+    helpers = HELPERS.read_text(encoding="utf-8")
+    watchdog = helpers[helpers.index("tui_welcome_watchdog() {"):]
+    assert "SUBMIT NOT CONFIRMED" in watchdog
 
 
 @pytest.mark.parametrize("enter,expected_rc,expected_enters", [("accept", 0, 1), ("never", 2, 3)])
