@@ -57,7 +57,7 @@ describe("who can call it", () => {
         return /\.tsx?$/.test(entry.name) && !/\.test\.tsx?$/.test(entry.name) ? [path] : [];
       });
     const callers = files(root).filter((path) => /existing_team_assistant_start|startExistingTeamAssistant/.test(readFileSync(path, "utf8")));
-    expect(callers.map((path) => path.slice(root.length))).toEqual([
+    expect(callers.map((path) => path.slice(root.length).replaceAll("\\", "/"))).toEqual([
       "lib/existing-team-assistant.ts",
       "pages/existing-team/assistant-card.tsx",
     ]);

@@ -1,5 +1,8 @@
 // @vitest-environment node
 import { spawnSync } from "node:child_process";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { pathToFileURL } from "node:url";
 import { describe, expect, it } from "vitest";
 import { readerOnDatabase, readerOnProfile } from "./existing-team-reader-fixture";
 
@@ -18,8 +21,12 @@ describe("pointing the core's reader at a synthetic folder", () => {
   });
 
   it("builds a sqlite URI for the database, with no backslash in it", () => {
-    const reader = readerOnDatabase(SOURCE, "/tmp/with space/jobs.db");
-    expect(reader).toContain('"file:///tmp/with%20space/jobs.db?mode=ro"');
+    // The URI of the same path, whatever the drive: file:///tmp/... here, file:///D:/tmp/... on a Windows runner.
+    const database = join(tmpdir(), "with space", "jobs.db");
+    const reader = readerOnDatabase(SOURCE, database);
+    expect(reader).toContain(JSON.stringify(`${pathToFileURL(database).href}?mode=ro`));
+    expect(reader).toContain("%20");
+    expect(reader).not.toContain("\\");
     expect(reader).not.toContain("/jht_home/jobs.db");
   });
 
