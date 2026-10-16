@@ -56,7 +56,7 @@ jobs:
             artifact: tauri-windows-x64
           - os: macos-14
             label: macOS Universal 2
-            args: --target universal-apple-darwin --bundles dmg --config src-tauri/tauri.macos-universal.conf.json
+            args: --target universal-apple-darwin --bundles dmg --config src-tauri/tauri.macos-universal.conf.json --verbose
             artifact: tauri-macos-universal
           - os: ubuntu-22.04
             label: Linux x64
