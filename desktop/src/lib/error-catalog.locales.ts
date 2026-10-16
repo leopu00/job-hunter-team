@@ -22,6 +22,20 @@ function tr(
 }
 
 const COPY_BY_ENGLISH_TEXT: Readonly<Record<string, ErrorTranslations>> = {
+  "Disk space is running low.": {
+    de: ["Der Speicherplatz wird knapp.", "Gib etwas Platz frei, sonst startet das Team keine neuen Agenten und Updates mehr."],
+    es: ["Queda poco espacio en el disco.", "Libera algo de espacio o el equipo dejará de iniciar nuevos agentes y actualizaciones."],
+    fr: ["L’espace disque s’épuise.", "Libère un peu de place, sinon l’équipe ne démarrera plus de nouveaux agents ni de mises à jour."],
+    hu: ["Fogy a lemezterület.", "Szabadíts fel egy kis helyet, különben a csapat nem indít több új ügynököt és frissítést."],
+    pt: ["O espaço em disco está a acabar.", "Liberta algum espaço, ou a equipa deixará de iniciar novos agentes e atualizações."],
+  },
+  "The disk is almost full, so no new agent or update will start.": {
+    de: ["Die Festplatte ist fast voll, deshalb startet kein neuer Agent und kein Update.", "Gib Speicherplatz frei und versuche es erneut. Bereits laufende Agenten arbeiten weiter."],
+    es: ["El disco está casi lleno, así que no se iniciará ningún agente nuevo ni ninguna actualización.", "Libera espacio en el disco y vuelve a intentarlo. Los agentes ya iniciados siguen trabajando."],
+    fr: ["Le disque est presque plein : aucun nouvel agent ni aucune mise à jour ne démarrera.", "Libère de la place sur le disque, puis réessaie. Les agents déjà lancés continuent de travailler."],
+    hu: ["A lemez majdnem megtelt, ezért nem indul új ügynök és frissítés sem.", "Szabadíts fel lemezterületet, majd próbáld újra. A már elindított ügynökök tovább dolgoznak."],
+    pt: ["O disco está quase cheio, por isso não será iniciado nenhum agente novo nem nenhuma atualização.", "Liberta espaço no disco e tenta novamente. Os agentes já em execução continuam a trabalhar."],
+  },
   "The operation did not succeed.": {
     de: ["Der Vorgang ist fehlgeschlagen.", "Versuche es erneut. Wenn es wieder passiert, starte Job Hunter Team neu."],
     es: ["La operación no se ha completado.", "Inténtalo de nuevo. Si vuelve a ocurrir, reinicia Job Hunter Team."],
@@ -1040,4 +1054,6 @@ export const ERROR_CATALOG_LOCALES: Readonly<Record<string, ErrorTranslations>> 
   not_recording: translated("Dictation did not start."),
   invalid_locale: translated("Dictation did not start."),
   native_failed: translated("Dictation did not start."),
+  disk_warning: translated("Disk space is running low."),
+  disk_low: translated("The disk is almost full, so no new agent or update will start."),
 };

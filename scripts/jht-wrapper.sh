@@ -2812,6 +2812,70 @@ handle_host_download() {
 # l'immagine e i file precedenti: un kill a meta' viene rollbackato al prossimo
 # `jht upgrade`, mai lasciato come deploy ambiguo.
 
+# ── Disco quasi pieno: nessun upgrade ──────────────────────────────────────
+# Un upgrade scarica un'immagine da centinaia di MB e riscrive il runtime: su un
+# disco al limite muore a meta' e lascia un rollback da fare su un disco pieno.
+# Sotto il 3% di spazio libero si rifiuta PRIMA di scaricare qualunque cosa, col
+# codice chiuso `disk_low` (anche `--check`, che scarica l'immagine). Le soglie
+# sono le stesse di shared/skills/host_vitals.py, cli/src/lib/disk-guard.js e
+# jht-wrapper.ps1 (tests/test_disk_guard.py le confronta), qui in per mille per
+# restare in aritmetica intera.
+#
+# Si misurano i volumi che l'host puo' vedere: la cartella dati (~/.jht) e, su
+# Linux, la radice dati del motore. Su macOS il disco del motore sta dentro la
+# macchina Podman/VM e da qui non si legge: resta «sconosciuto» e NON si ripiega
+# sul disco del Mac. Un volume che non si misura non rifiuta niente.
+DISK_WARN_FREE_PERMILLE=100
+DISK_BLOCK_FREE_PERMILLE=30
+DISK_LOW_PERMILLE=""
+
+disk_free_permille() {
+  local target="$1" line total avail
+  [ -n "$target" ] || return 1
+  # La cartella dati puo' non esistere ancora: si misura il primo antenato.
+  while [ ! -e "$target" ] && [ "$target" != "/" ] && [ "$target" != "." ]; do
+    target="$(dirname "$target")"
+  done
+  [ -e "$target" ] || return 1
+  line="$(df -Pk "$target" 2>/dev/null | awk 'NR==2 {print $2 " " $4}')" || return 1
+  read -r total avail <<<"$line"
+  case "$total" in ''|*[!0-9]*) return 1 ;; esac
+  case "$avail" in ''|*[!0-9]*) return 1 ;; esac
+  [ "$total" -gt 0 ] || return 1
+  printf '%s' $(( avail * 1000 / total ))
+}
+
+disk_engine_path() {
+  if [ -n "${JHT_ENGINE_DISK_PATH+x}" ]; then
+    printf '%s' "$JHT_ENGINE_DISK_PATH"
+    return 0
+  fi
+  [ "$(uname -s)" = "Linux" ] || return 0
+  local candidate
+  for candidate in /var/lib/docker /var/lib/containers; do
+    if [ -d "$candidate" ]; then
+      printf '%s' "$candidate"
+      return 0
+    fi
+  done
+}
+
+# 0 = almeno un volume misurato e' sotto il 3% (in DISK_LOW_PERMILLE il valore);
+# 1 = tutti sani oppure non misurabili.
+disk_low() {
+  local volume permille
+  DISK_LOW_PERMILLE=""
+  for volume in "${JHT_HOME_HOST:-$HOME/.jht}" "$(disk_engine_path)"; do
+    [ -n "$volume" ] || continue
+    permille="$(disk_free_permille "$volume")" || continue
+    if [ "$permille" -lt "$DISK_BLOCK_FREE_PERMILLE" ]; then
+      DISK_LOW_PERMILLE="$permille"
+      return 0
+    fi
+  done
+  return 1
+}
+
 UPGRADE_JSON=0
 UPGRADE_STAGE=""
 UPGRADE_LOCK=""
@@ -3274,6 +3338,16 @@ handle_runtime_upgrade() {
   fi
   old_image="${old_image:-none}"
   old_version="${old_version:-sconosciuta}"
+
+  # Disco quasi pieno (< 3% libero): nessun upgrade, e nemmeno `--check` che
+  # scarica l'immagine. PRIMA di creare directory o scaricare: il runtime in
+  # corso, e gli agenti che ci girano, restano intatti. Il codice e' chiuso
+  # (`disk_low`); la frase la mostra l'app dalla sua tabella codice->frase.
+  if disk_low; then
+    [ "$UPGRADE_JSON" = "1" ] || err "disk_low: meno del 3% di disco libero (${DISK_LOW_PERMILLE} per mille). Libera spazio e riprova: non e' stato scaricato ne' modificato niente."
+    upgrade_result false false preflight "$old_version" "$old_image" "$old_version" "$old_image" false "disk_low" false
+    return 1
+  fi
 
   # Solo dopo avere escluso container estranei/stale e' lecito creare o
   # riallineare le directory bind-mountate sul percorso Linux/VPS.

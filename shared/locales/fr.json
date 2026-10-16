@@ -229,5 +229,7 @@
   "closer.reason.unknown_required_control.why": "Le formulaire a un champ obligatoire que le CLOSER ne peut pas remplir en toute sécurité.",
   "closer.reason.unknown_required_control.action": "Ouvre l'offre et postule à la main.",
   "closer.reason.linkedin_session_expired.why": "Ta session LinkedIn ouverte à la main a expiré, ou LinkedIn ne l'accepte plus.",
-  "closer.reason.linkedin_session_expired.action": "Reconnecte-toi à la main à LinkedIn dans le navigateur du CLOSER, puis autorise à nouveau le poste."
+  "closer.reason.linkedin_session_expired.action": "Reconnecte-toi à la main à LinkedIn dans le navigateur du CLOSER, puis autorise à nouveau le poste.",
+  "disk.warning": "L’espace disque s’épuise : seulement %s sont libres. Libère vite de la place, sinon l’équipe ne démarrera plus de nouveaux agents ni de mises à jour.",
+  "disk.low": "Le disque est presque plein (seulement %s sont libres) : aucun nouvel agent ne sera démarré et aucune mise à jour installée. Les agents déjà lancés continuent. Libère de la place pour continuer."
 }

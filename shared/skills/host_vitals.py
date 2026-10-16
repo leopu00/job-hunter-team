@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""host_vitals.py — campionamento RAM/CPU del container + summary.
+"""host_vitals.py — campionamento RAM/CPU/disco del container + summary.
 
 Una SOLA fonte di verità per i vitals di sistema, usata da due consumatori:
 
@@ -16,15 +16,34 @@ del container vs limite) con fallback `/proc/meminfo`; CPU da delta `/proc/stat`
 (% sull'intervallo di campionamento) + `/proc/loadavg` come contesto. Zero LLM,
 zero dipendenze esterne. Degrada a campi `None` fuori da Linux.
 
+Disco: spazio libero (e percentuale) del volume di JHT_HOME e di quello del
+motore container, letti con `os.statvfs`. Un volume che non si risolve vale
+«sconosciuto» (livello `unknown`), mai un errore: la misura non deve fermare né
+il bridge né un avvio. Due soglie sullo spazio LIBERO, uguali per ogni
+consumatore (launcher, `jht team start`, `jht upgrade`):
+
+  - sotto `DISK_WARN_FREE_PCT` (10%)  → livello `warn`, codice `disk_warning`:
+    avviso all'utente (`notify-disk`), non si ferma niente;
+  - sotto `DISK_BLOCK_FREE_PCT` (3%)  → livello `low`, codice `disk_low`: nessun
+    nuovo avvio, nessuno spawn di worker, nessun upgrade. Gli agenti già
+    avviati NON vengono toccati: la guardia gira solo prima di partire.
+
+La frase che l'utente legge sta nella tabella codice→frase (`disk.warning` e
+`disk.low` in shared/locales/*.json), mai scritta da un agente.
+
 CLI:
     python3 host_vitals.py sample [--file PATH]     # campiona + append (bridge)
     python3 host_vitals.py current                  # solo lettura, stampa JSON
     python3 host_vitals.py check [--pct 95]         # exit 1 + righe se sopra soglia
     python3 host_vitals.py summary [--hours 24]     # picchi/medie (Mantenitore)
+    python3 host_vitals.py disk                     # solo disco, stampa JSON
+    python3 host_vitals.py disk-guard               # exit 3 + `disk_low: frase` se < 3%
+    python3 host_vitals.py notify-disk              # avviso utente se < 10% (cooldown)
 """
 import argparse
 import json
 import os
+import subprocess
 import sys
 import time
 from datetime import datetime, timezone, timedelta
@@ -32,7 +51,22 @@ from pathlib import Path
 
 CGROUP = Path("/sys/fs/cgroup")
 DEFAULT_FILE = Path(os.environ.get("JHT_HOME", str(Path.home() / ".jht"))) / "logs" / "vitals.jsonl"
+DISK_NOTICE_FILE = DEFAULT_FILE.parent / "disk-notice.json"
 MAX_LINES = 4000  # ~7+ giorni a 1 sample / 2-10 min — cap anti-crescita
+
+# ── Disco: soglie sullo spazio LIBERO, codici chiusi ───────────────────────
+# Le stesse due cifre stanno in cli/src/lib/disk-guard.js, scripts/jht-wrapper.sh
+# e scripts/jht-wrapper.ps1: tests/test_disk_guard.py le confronta, perché una
+# soglia che differisce fra i quattro posti è un avvio che passa da uno e
+# viene rifiutato dall'altro.
+DISK_WARN_FREE_PCT = 10.0
+DISK_BLOCK_FREE_PCT = 3.0
+DISK_CODE_WARNING = "disk_warning"
+DISK_CODE_LOW = "disk_low"
+# Chiave della frase nella tabella codice→frase (shared/locales/*.json).
+DISK_PHRASE_KEYS = {DISK_CODE_WARNING: "disk.warning", DISK_CODE_LOW: "disk.low"}
+DISK_GUARD_EXIT = 3  # `disk-guard`: rifiutato. Qualunque altro rc = non rifiutare.
+DISK_NOTICE_COOLDOWN_S = 6 * 3600
 
 
 def _read_int(p):
@@ -112,8 +146,160 @@ def _cpu(sample_s=0.25):
             "load15": load[2] if load else None}
 
 
+# ── Disco ───────────────────────────────────────────────────────────────────
+
+def _nearest_existing(path):
+    """Il primo antenato che esiste: JHT_HOME può non esserci ancora al primo avvio."""
+    p = Path(path)
+    for cand in (p, *p.parents):
+        try:
+            if cand.exists():
+                return str(cand)
+        except OSError:
+            continue
+    return None
+
+
+def _volume(path):
+    """Spazio del volume che contiene `path`. Non si risolve → «sconosciuto»."""
+    unknown = {"path": str(path) if path else None, "total_bytes": None, "free_bytes": None,
+               "free_pct": None, "level": "unknown"}
+    target = _nearest_existing(path) if path else None
+    if not target:
+        return unknown
+    try:
+        st = os.statvfs(target)
+        frsize = st.f_frsize or st.f_bsize
+        total = st.f_blocks * frsize
+        free = st.f_bavail * frsize
+    except Exception:
+        return unknown
+    if not total or total < 0 or free < 0:
+        return unknown
+    pct = free / total * 100  # grezza: la decisione NON passa da un arrotondamento
+    level = "low" if pct < DISK_BLOCK_FREE_PCT else "warn" if pct < DISK_WARN_FREE_PCT else "ok"
+    return {"path": str(path), "total_bytes": total, "free_bytes": free,
+            "free_pct": round(pct, 2), "level": level, "_raw_pct": pct}
+
+
+def _in_container():
+    return Path("/.dockerenv").exists() or Path("/run/.containerenv").exists()
+
+
+def engine_disk_path(env=None):
+    """Dove vive il volume del motore container, se da qui si può sapere.
+
+    Dentro il container è `/` (l'overlay sta sul disco del motore). Su un host
+    Linux è la radice dati di Docker/Podman. Su macOS e Windows il disco del
+    motore è dentro una VM che l'host non vede: `None` = «sconosciuto», MAI il
+    disco del Mac al suo posto. `JHT_ENGINE_DISK_PATH` forza il percorso.
+    """
+    env = os.environ if env is None else env
+    forced = env.get("JHT_ENGINE_DISK_PATH")
+    if forced is not None:
+        return forced or None
+    if _in_container():
+        return "/"
+    if sys.platform.startswith("linux"):
+        for cand in ("/var/lib/docker", "/var/lib/containers"):
+            if os.path.isdir(cand):
+                return cand
+    return None
+
+
+def read_disk(env=None):
+    """Spazio libero dei due volumi e il livello peggiore (`ok|warn|low|unknown`)."""
+    env = os.environ if env is None else env
+    home = env.get("JHT_HOME") or str(Path.home() / ".jht")
+    vols = {"jht_home": _volume(home), "engine": _volume(engine_disk_path(env))}
+    known = [v for v in vols.values() if v["level"] != "unknown"]
+    worst = min(known, key=lambda v: v["_raw_pct"]) if known else None
+    for v in vols.values():
+        v.pop("_raw_pct", None)
+    level = worst["level"] if worst else "unknown"
+    code = {"low": DISK_CODE_LOW, "warn": DISK_CODE_WARNING}.get(level)
+    return {"level": level, "code": code,
+            "min_free_pct": worst["free_pct"] if worst else None, **vols}
+
+
+def disk_phrase(disk):
+    """La frase dell'utente per `disk["code"]`, dalla tabella codice→frase.
+
+    Vuota se non c'è un codice o la tabella non risponde: niente testo
+    improvvisato al suo posto.
+    """
+    code = disk.get("code")
+    key = DISK_PHRASE_KEYS.get(code)
+    if not key:
+        return ""
+    try:
+        shared = str(Path(__file__).resolve().parents[1])
+        if shared not in sys.path:
+            sys.path.insert(0, shared)
+        import i18n
+        phrase = i18n.tf(key, f"{disk['min_free_pct']:g}%")
+    except Exception:
+        return ""
+    return "" if phrase == key else phrase
+
+
+def _send_user_notice(code, phrase, bucket):
+    """Consegna deterministica: riga in pending_user_messages + Telegram se c'è."""
+    here = Path(__file__).resolve()
+    tool = next((p for p in (here.parents[2] / "agents" / "_tools" / "jht-notify-user",
+                             Path("/app/agents/_tools/jht-notify-user")) if p.exists()), None)
+    if tool is None:
+        return False
+    try:
+        r = subprocess.run(
+            [sys.executable, str(tool), "--agent", "sentinella", "--kind", "alert",
+             "--source-id", f"{code}:{bucket}", "--source-action", "disk_guard",
+             "--source-payload", json.dumps({"code": code}), phrase],
+            capture_output=True, text=True, timeout=20)
+    except Exception:
+        return False
+    return r.returncode == 0
+
+
+def notify_disk(disk, state_path=None, notifier=_send_user_notice, now=None):
+    """Avvisa l'utente se il disco è sotto soglia. True = avviso consegnato ora.
+
+    Un solo avviso per livello e per `DISK_NOTICE_COOLDOWN_S`; un peggioramento
+    (warn → low) avvisa subito. Quando il disco torna sano lo stato si azzera,
+    così la prossima discesa avvisa di nuovo. Lo stato si scrive solo a consegna
+    riuscita: un avviso fallito si ritenta al tick dopo.
+    """
+    path = Path(state_path) if state_path else DISK_NOTICE_FILE
+    now = time.time() if now is None else now
+    code = disk.get("code")
+    if not code:
+        try:
+            path.unlink()
+        except OSError:
+            pass
+        return False
+    try:
+        prev = json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        prev = {}
+    if prev.get("code") == code and now - float(prev.get("ts") or 0) < DISK_NOTICE_COOLDOWN_S:
+        return False
+    phrase = disk_phrase(disk)
+    if not phrase:
+        return False
+    if not notifier(code, phrase, int(now // DISK_NOTICE_COOLDOWN_S)):
+        return False
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps({"code": code, "ts": now}), encoding="utf-8")
+    except OSError:
+        pass
+    return True
+
+
 def read_vitals(ts=None):
-    return {"ts": ts or datetime.now(timezone.utc).isoformat(), "cpu": _cpu(), "mem": _mem()}
+    return {"ts": ts or datetime.now(timezone.utc).isoformat(), "cpu": _cpu(), "mem": _mem(),
+            "disk": read_disk()}
 
 
 def over_threshold(v, pct=95):
@@ -198,10 +384,27 @@ def main():
     sub.add_parser("current")
     ck = sub.add_parser("check"); ck.add_argument("--pct", type=float, default=95); ck.add_argument("--file", default=None)
     sm = sub.add_parser("summary"); sm.add_argument("--hours", type=float, default=24); sm.add_argument("--file", default=None)
+    sub.add_parser("disk")
+    sub.add_parser("disk-guard")
+    nd = sub.add_parser("notify-disk"); nd.add_argument("--state", default=None)
     args = ap.parse_args()
 
     if args.cmd == "sample":
         print(json.dumps(append_sample(args.file)))
+    elif args.cmd == "disk":
+        print(json.dumps(read_disk()))
+    elif args.cmd == "disk-guard":
+        # Rifiuta SOLO con una misura che dice «sotto il 3%». Disco sconosciuto o
+        # sano = rc 0 e nessuna riga: la guardia non è un secondo modo di rompere
+        # un avvio. La riga `disk_low: …` va su stderr, dove il chiamante la mostra.
+        disk = read_disk()
+        if disk["level"] == "low":
+            phrase = disk_phrase(disk)
+            print(f"{DISK_CODE_LOW}: {phrase}" if phrase else DISK_CODE_LOW, file=sys.stderr)
+            sys.exit(DISK_GUARD_EXIT)
+    elif args.cmd == "notify-disk":
+        sent = notify_disk(read_disk(), state_path=args.state)
+        print("sent" if sent else "none")
     elif args.cmd == "current":
         print(json.dumps(read_vitals()))
     elif args.cmd == "check":

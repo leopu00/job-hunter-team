@@ -42,6 +42,32 @@ fi
 # da solo, perché start-agent.sh sorgea daemon-lib.sh incondizionatamente sotto
 # `set -euo pipefail`. Chi ha bisogno del tetto lo pretende dove serve.
 
+# ── Disco quasi pieno: nessun NUOVO avvio ───────────────────────────────────
+# Prima di far nascere una sessione chiede a host_vitals.py (`disk-guard`) se lo
+# spazio libero del volume di JHT_HOME o di quello del motore container e'
+# sotto il 3%: in quel caso la riga `disk_low: <frase>` esce su stderr e la
+# funzione ritorna 1, e il chiamante rifiuta con quel codice invece di partire e
+# rompersi a meta' (un avvio morto ha gia' speso token). Le soglie e la frase
+# stanno in host_vitals.py e nella tabella shared/locales: qui non si decide
+# niente.
+#
+# Si rifiuta SOLO su rc 3 (la misura dice «sotto soglia»). Python assente,
+# modulo assente, crash, tetto scaduto, disco «sconosciuto»: si parte come
+# prima. Una guardia che non sa misurare non e' un secondo modo di non partire.
+# Gli agenti gia' vivi non passano di qui: chi chiama la usa DOPO la sonda di
+# idempotenza, quindi una sessione esistente resta com'e'.
+jht_spawn_disk_guard() {
+  local vitals="" cand rc=0
+  for cand in "$JHT_SPAWN_LIB_DIR/../shared/skills/host_vitals.py" /app/shared/skills/host_vitals.py; do
+    if [ -f "$cand" ]; then vitals="$cand"; break; fi
+  done
+  [ -n "$vitals" ] || return 0
+  command -v python3 >/dev/null 2>&1 || return 0
+  jht_timeout 10 python3 "$vitals" disk-guard || rc=$?
+  [ "$rc" -ne 3 ] || return 1
+  return 0
+}
+
 # PATH del pane tmux: `tmux new-session -d` apre una shell NON interattiva che
 # non legge .bashrc, quindi i CLI (codex/claude/kimi) e gli extra installati
 # dagli agenti (/opt/jht-deps/bin, vedi JHT_DEPS_PREFIX nel Dockerfile) non

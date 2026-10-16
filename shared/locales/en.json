@@ -259,5 +259,7 @@
   "closer.reason.unknown_required_control.why": "The form has a required field the CLOSER cannot fill safely.",
   "closer.reason.unknown_required_control.action": "Open the vacancy and apply by hand.",
   "closer.reason.linkedin_session_expired.why": "Your hand-made LinkedIn session has expired, or LinkedIn no longer accepts it.",
-  "closer.reason.linkedin_session_expired.action": "Sign in to LinkedIn again by hand in the CLOSER's browser, then authorise the position again."
+  "closer.reason.linkedin_session_expired.action": "Sign in to LinkedIn again by hand in the CLOSER's browser, then authorise the position again.",
+  "disk.warning": "Disk space is running low: only %s is free. Free some space soon, or the team will stop starting new agents and updates.",
+  "disk.low": "The disk is almost full (only %s is free), so no new agent will be started and no update installed. The agents already running keep going. Free some space to continue."
 }
