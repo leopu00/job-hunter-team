@@ -3,7 +3,7 @@ import { builtinModules } from "node:module";
 import { fileURLToPath } from "node:url";
 import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
-import { searchForWorkspaceRoot, type Plugin } from "vite";
+import type { Plugin } from "vite";
 import { defineConfig } from "vitest/config";
 import { webPublicAssets } from "./src/bundle/web-public-assets";
 import { applyTextOverrides } from "./src/desktop-texts/overrides";
@@ -175,11 +175,26 @@ export default defineConfig(({ mode }) => ({
     strictPort: true,
     host: "127.0.0.1",
     port: 1420,
-    // Vite serves nothing outside desktop/ by default: the reused web files
-    // would answer 403 in `tauri dev`.
-    // The web imports this shared baseline rule. Permit that file before the
-    // import graph is warmed, without exposing the rest of shared/ or the repo.
-    fs: { allow: [searchForWorkspaceRoot(process.cwd()), fromHere("../web"), fromHere("../shared/cloud/apply-request-rule.json"), ...previewFontLeaves()] },
+    // Naming allow replaces Vite's default (the workspace root, which from
+    // desktop/ is desktop/ itself, node_modules included): only what the
+    // preview serves is listed. Modules the app imports are granted by Vite as
+    // it resolves them; what a stylesheet points at (the fonts) is not, so the
+    // font leaves are named one by one.
+    // The reused web files live in ../web, and the web imports a shared
+    // baseline rule: permit that one file before the import graph is warmed,
+    // without exposing the rest of shared/ or the repo.
+    fs: {
+      allow: [
+        fromHere("./src"),
+        fromHere("./public"),
+        fromHere("./index.html"),
+        fromHere("./dashboard.html"),
+        fromHere("./live-screen.html"),
+        fromHere("../web"),
+        fromHere("../shared/cloud/apply-request-rule.json"),
+        ...previewFontLeaves(),
+      ],
+    },
   },
   envPrefix: ["VITE_", "TAURI_ENV_*"],
   build: {
