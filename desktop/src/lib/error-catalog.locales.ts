@@ -30,11 +30,11 @@ const COPY_BY_ENGLISH_TEXT: Readonly<Record<string, ErrorTranslations>> = {
     pt: ["O espaço em disco está a acabar.", "Liberta algum espaço, ou a equipa deixará de iniciar novos agentes e atualizações."],
   },
   "The disk is almost full, so no new agent or update will start.": {
-    de: ["Die Festplatte ist fast voll, deshalb startet kein neuer Agent und kein Update.", "Gib Speicherplatz frei und versuche es erneut. Bereits laufende Agenten arbeiten weiter."],
-    es: ["El disco está casi lleno, así que no se iniciará ningún agente nuevo ni ninguna actualización.", "Libera espacio en el disco y vuelve a intentarlo. Los agentes ya iniciados siguen trabajando."],
-    fr: ["Le disque est presque plein : aucun nouvel agent ni aucune mise à jour ne démarrera.", "Libère de la place sur le disque, puis réessaie. Les agents déjà lancés continuent de travailler."],
-    hu: ["A lemez majdnem megtelt, ezért nem indul új ügynök és frissítés sem.", "Szabadíts fel lemezterületet, majd próbáld újra. A már elindított ügynökök tovább dolgoznak."],
-    pt: ["O disco está quase cheio, por isso não será iniciado nenhum agente novo nem nenhuma atualização.", "Liberta espaço no disco e tenta novamente. Os agentes já em execução continuam a trabalhar."],
+    de: ["Die Festplatte ist fast voll, deshalb startet kein neuer Agent und kein Update.", "Leere den Papierkorb und lösche große Dateien, die du nicht mehr brauchst, etwa alte Downloads oder ungenutzte Docker/Podman-Images, und versuche es dann erneut. Bereits laufende Agenten arbeiten weiter."],
+    es: ["El disco está casi lleno, así que no se iniciará ningún agente nuevo ni ninguna actualización.", "Vacía la papelera y elimina los archivos grandes que ya no necesites, como descargas antiguas o imágenes de Docker/Podman sin usar, y vuelve a intentarlo. Los agentes ya iniciados siguen trabajando."],
+    fr: ["Le disque est presque plein : aucun nouvel agent ni aucune mise à jour ne démarrera.", "Vide la corbeille et supprime les gros fichiers dont tu n’as plus besoin, comme d’anciens téléchargements ou des images Docker/Podman inutilisées, puis réessaie. Les agents déjà lancés continuent de travailler."],
+    hu: ["A lemez majdnem megtelt, ezért nem indul új ügynök és frissítés sem.", "Ürítsd ki a Kukát, és töröld a nagy, már nem szükséges fájlokat, például a régi letöltéseket vagy a nem használt Docker/Podman-képeket, majd próbáld újra. A már elindított ügynökök tovább dolgoznak."],
+    pt: ["O disco está quase cheio, por isso não será iniciado nenhum agente novo nem nenhuma atualização.", "Esvazia o Lixo e apaga os ficheiros grandes de que já não precisas, como transferências antigas ou imagens Docker/Podman por usar, e tenta novamente. Os agentes já em execução continuam a trabalhar."],
   },
   "The operation did not succeed.": {
     de: ["Der Vorgang ist fehlgeschlagen.", "Versuche es erneut. Wenn es wieder passiert, starte Job Hunter Team neu."],

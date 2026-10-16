@@ -231,5 +231,5 @@
   "closer.reason.linkedin_session_expired.why": "A tua sessão do LinkedIn iniciada à mão expirou, ou o LinkedIn já não a aceita.",
   "closer.reason.linkedin_session_expired.action": "Volta a iniciar sessão à mão no LinkedIn no navegador do CLOSER e depois volta a autorizar a posição.",
   "disk.warning": "O espaço em disco está a acabar: só %s estão livres. Liberta espaço em breve, ou a equipa deixará de iniciar novos agentes e atualizações.",
-  "disk.low": "O disco está quase cheio (só %s estão livres): não será iniciado nenhum agente novo nem instalada nenhuma atualização. Os agentes já em execução continuam. Liberta espaço para continuar."
+  "disk.low": "O disco está quase cheio (só %s estão livres): não será iniciado nenhum agente novo nem instalada nenhuma atualização. Os agentes já em execução continuam. Para libertar espaço: esvazia o Lixo e apaga os ficheiros grandes de que já não precisas, como transferências antigas ou imagens Docker/Podman por usar, e tenta novamente."
 }

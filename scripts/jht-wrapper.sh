@@ -2815,21 +2815,31 @@ handle_host_download() {
 # ── Disco quasi pieno: nessun upgrade ──────────────────────────────────────
 # Un upgrade scarica un'immagine da centinaia di MB e riscrive il runtime: su un
 # disco al limite muore a meta' e lascia un rollback da fare su un disco pieno.
-# Sotto il 3% di spazio libero si rifiuta PRIMA di scaricare qualunque cosa, col
-# codice chiuso `disk_low` (anche `--check`, che scarica l'immagine). Le soglie
-# sono le stesse di shared/skills/host_vitals.py, cli/src/lib/disk-guard.js e
-# jht-wrapper.ps1 (tests/test_disk_guard.py le confronta), qui in per mille per
-# restare in aritmetica intera.
+# Si rifiuta PRIMA di scaricare qualunque cosa, col codice chiuso `disk_low`
+# (anche `--check`, che scarica l'immagine), quando lo spazio libero e' sotto il
+# 3% E sotto 8 GiB: la percentuale da sola rifiutava un disco da 500 GiB con 14 GiB
+# ancora liberi. Le soglie (avviso: 10% E 20 GiB) sono le stesse di
+# shared/skills/host_vitals.py e cli/src/lib/disk-guard.js (tests/test_disk_guard.py
+# le confronta), qui in per mille e in KiB (l'unita' di `df -Pk`) per restare in
+# aritmetica intera.
+#
+# La pulizia delle immagini JHT vecchie (piu' sotto) NON gira sotto la
+# soglia: tiene «corrente» e «precedente», e la precedente esiste solo dentro
+# un upgrade che sta riuscendo. Per questo il rifiuto dice all'utente cosa fare
+# per liberare spazio (la frase `disk.low`, e il messaggio qui sotto).
 #
 # Si misurano i volumi che l'host puo' vedere: la cartella dati (~/.jht) e, su
 # Linux, la radice dati del motore. Su macOS il disco del motore sta dentro la
 # macchina Podman/VM e da qui non si legge: resta «sconosciuto» e NON si ripiega
 # sul disco del Mac. Un volume che non si misura non rifiuta niente.
 DISK_WARN_FREE_PERMILLE=100
+DISK_WARN_FREE_KIB=20971520
 DISK_BLOCK_FREE_PERMILLE=30
+DISK_BLOCK_FREE_KIB=8388608
 DISK_LOW_PERMILLE=""
 
-disk_free_permille() {
+# Stampa «<per mille liberi> <KiB liberi>» del volume che contiene $1.
+disk_free_measure() {
   local target="$1" line total avail
   [ -n "$target" ] || return 1
   # La cartella dati puo' non esistere ancora: si misura il primo antenato.
@@ -2842,7 +2852,7 @@ disk_free_permille() {
   case "$total" in ''|*[!0-9]*) return 1 ;; esac
   case "$avail" in ''|*[!0-9]*) return 1 ;; esac
   [ "$total" -gt 0 ] || return 1
-  printf '%s' $(( avail * 1000 / total ))
+  printf '%s %s' $(( avail * 1000 / total )) "$avail"
 }
 
 disk_engine_path() {
@@ -2860,15 +2870,30 @@ disk_engine_path() {
   done
 }
 
-# 0 = almeno un volume misurato e' sotto il 3% (in DISK_LOW_PERMILLE il valore);
-# 1 = tutti sani oppure non misurabili.
+# Livello di uno spazio libero (`ok|warn|low`) dato per mille e KiB liberi: serve
+# la percentuale E i byte. Il per mille e' il pavimento di libero*1000/totale,
+# quindi «< 30» equivale esattamente a «libero*100 < 3*totale»: lo stesso
+# confine di Python e JS, senza arrotondamenti.
+disk_level_of() {
+  if [ "$1" -lt "$DISK_BLOCK_FREE_PERMILLE" ] && [ "$2" -lt "$DISK_BLOCK_FREE_KIB" ]; then
+    printf low
+  elif [ "$1" -lt "$DISK_WARN_FREE_PERMILLE" ] && [ "$2" -lt "$DISK_WARN_FREE_KIB" ]; then
+    printf warn
+  else
+    printf ok
+  fi
+}
+
+# 0 = almeno un volume misurato e' sotto il 3% E sotto 8 GiB (in
+# DISK_LOW_PERMILLE il valore); 1 = tutti sani oppure non misurabili.
 disk_low() {
-  local volume permille
+  local volume measure permille avail_kib
   DISK_LOW_PERMILLE=""
   for volume in "${JHT_HOME_HOST:-$HOME/.jht}" "$(disk_engine_path)"; do
     [ -n "$volume" ] || continue
-    permille="$(disk_free_permille "$volume")" || continue
-    if [ "$permille" -lt "$DISK_BLOCK_FREE_PERMILLE" ]; then
+    measure="$(disk_free_measure "$volume")" || continue
+    read -r permille avail_kib <<<"$measure"
+    if [ "$(disk_level_of "$permille" "$avail_kib")" = "low" ]; then
       DISK_LOW_PERMILLE="$permille"
       return 0
     fi
@@ -3339,12 +3364,12 @@ handle_runtime_upgrade() {
   old_image="${old_image:-none}"
   old_version="${old_version:-sconosciuta}"
 
-  # Disco quasi pieno (< 3% libero): nessun upgrade, e nemmeno `--check` che
+  # Disco quasi pieno (< 3% E < 8 GiB liberi): nessun upgrade, e nemmeno `--check` che
   # scarica l'immagine. PRIMA di creare directory o scaricare: il runtime in
   # corso, e gli agenti che ci girano, restano intatti. Il codice e' chiuso
   # (`disk_low`); la frase la mostra l'app dalla sua tabella codice->frase.
   if disk_low; then
-    [ "$UPGRADE_JSON" = "1" ] || err "disk_low: meno del 3% di disco libero (${DISK_LOW_PERMILLE} per mille). Libera spazio e riprova: non e' stato scaricato ne' modificato niente."
+    [ "$UPGRADE_JSON" = "1" ] || err "disk_low: meno del 3% di disco libero (${DISK_LOW_PERMILLE} per mille) e meno di 8 GiB. Per liberare spazio svuota il Cestino, elimina i file grandi che non ti servono e le immagini Docker/Podman inutilizzate, poi riprova: non e' stato scaricato ne' modificato niente."
     upgrade_result false false preflight "$old_version" "$old_image" "$old_version" "$old_image" false "disk_low" false
     return 1
   fi

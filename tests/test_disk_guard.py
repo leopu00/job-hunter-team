@@ -1,4 +1,4 @@
-"""Disco quasi pieno: avviso sotto il 10%, nessun NUOVO avvio sotto il 3%.
+"""Disco quasi pieno: avviso sotto il 10% E 20 GiB, nessun NUOVO avvio sotto il 3% E 8 GiB.
 
 Il disco pieno non era sorvegliato: jobs.db smette di scrivere, la squadra si
 pianta senza un errore chiaro, e un avvio che muore a meta' ha gia' speso token.
@@ -9,7 +9,10 @@ Questa suite tiene fermo, con `statvfs` FINTO (mai un disco vero):
 - 2%: spawn, `jht team start` e `jht upgrade` rifiutano con `disk_low`, e
   l'agente gia' in corso non viene toccato (la guardia sta DOPO la sonda di
   idempotenza);
-- le soglie e i codici sono gli stessi in Python, JavaScript, bash e PowerShell;
+- la soglia e' combinata (percentuale E byte): un disco da 500 GiB con 14 GiB liberi
+  (2,8%) non rifiuta piu' (prima si), e gli stessi casi limite danno lo stesso livello in Python, JS e bash;
+- soglie e codici sono gli stessi in Python, JavaScript e bash; PowerShell non
+  ha ancora i byte (vedi il test che lo dichiara);
 - la frase non la scrive nessun agente: viene da shared/locales/*.json.
 
 Il launcher gira per davvero (bash, tmux finto sul PATH); il wrapper gira con le
@@ -51,13 +54,16 @@ _spec = json.loads(os.environ.get("FAKE_STATVFS", "{}"))
 if _spec:
     def _fake(path):
         p = os.fspath(path)
-        best, pct = "", _spec.get("default", 50)
-        for prefix, value in _spec.get("paths", {}).items():
+        best, value = "", _spec.get("default", 50)
+        for prefix, v in _spec.get("paths", {}).items():
             inside = p == prefix or p.startswith(prefix.rstrip("/") + "/")
             if inside and len(prefix) >= len(best):
-                best, pct = prefix, value
-        total = 1_000_000
-        free = int(total * pct / 100)
+                best, value = prefix, v
+        if isinstance(value, dict):  # disco di capienza decisa: {"total_kib": n, "free_kib": n}
+            total, free = value["total_kib"] // 4, value["free_kib"] // 4
+        else:
+            total = 1_000_000
+            free = int(total * value / 100)
         return os.statvfs_result((4096, 4096, total, free, free, 100, 50, 50, 0, 255))
     os.statvfs = _fake
 '''
@@ -73,12 +79,15 @@ def load_vitals():
 def fake_statvfs(by_prefix, default=50):
     def _fake(path):
         p = os.fspath(path)
-        best, pct = "", default
-        for prefix, value in by_prefix.items():
+        best, value = "", default
+        for prefix, v in by_prefix.items():
             if (p == prefix or p.startswith(prefix.rstrip("/") + "/")) and len(prefix) >= len(best):
-                best, pct = prefix, value
-        total = 1_000_000
-        free = int(total * pct / 100)
+                best, value = prefix, v
+        if isinstance(value, dict):
+            total, free = value["total_kib"] // 4, value["free_kib"] // 4
+        else:
+            total = 1_000_000
+            free = int(total * value / 100)
         return os.statvfs_result((4096, 4096, total, free, free, 100, 50, 50, 0, 255))
     return _fake
 
@@ -117,6 +126,51 @@ def child_env(fakedir, home, engine, home_pct, engine_pct, **extra):
     }
 
 
+GIB_KIB = 1024 * 1024  # una GiB, in KiB: l'unita' di `df -Pk` e dei dischi finti
+MIB_KIB = 1024
+
+
+def disk(total_gib, free_kib):
+    """Un disco finto di capienza decisa: `total_gib` GiB con `free_kib` KiB liberi."""
+    return {"total_kib": total_gib * GIB_KIB, "free_kib": free_kib}
+
+
+# (nome, totale GiB, libero KiB, livello DOPO). La stessa tabella gira su Python, JS e bash.
+# Soglie: rifiuto se libero < 3% E < 8 GiB; avviso se libero < 10% E < 20 GiB.
+# Entrambi i confronti sono STRETTI (<): esattamente il 3% o esattamente 8 GiB
+# NON rifiutano. Prima del T19 contava la sola percentuale: i casi marcati
+# «PRIMA rifiutava» (o avvisava) sono quelli che cambiano, e sul codice di prima
+# questi test sono rossi.
+LEVEL_CASES = [
+    # 14 GiB su 500 GiB = 2,8%: PRIMA rifiutava, DOPO no
+    ("500G-14G-free-2.8pct-was-refused-now-warns", 500, 14 * GIB_KIB, "warn"),
+    # bordo del 3%: 15 GiB su 500 GiB e' esattamente il 3% (< stretto: non rifiuta)
+    ("500G-15G-free-exactly-3pct-not-refused", 500, 15 * GIB_KIB, "warn"),
+    ("500G-15G-less-1KiB-just-under-3pct-8G-or-more-not-refused", 500, 15 * GIB_KIB - 1, "warn"),
+    # bordo degli 8 GiB: esattamente 8 GiB (1,6%) non rifiuta, un KiB in meno si
+    ("500G-exactly-8G-free-not-refused", 500, 8 * GIB_KIB, "warn"),
+    ("500G-8G-less-1KiB-free-refused", 500, 8 * GIB_KIB - 1, "low"),
+    ("500G-7G-free-refused", 500, 7 * GIB_KIB, "low"),
+    # 4 GiB su 200 GiB = 2%: rifiuta, prima e dopo
+    ("200G-4G-free-2pct-refused-before-and-after", 200, 4 * GIB_KIB, "low"),
+    # 3% esatto di un disco piccolo: 6 GiB su 200 GiB (6 GiB < 8 GiB ma il 3% non e' < 3%)
+    ("200G-6G-free-exactly-3pct-not-refused", 200, 6 * GIB_KIB, "warn"),
+    ("200G-6G-less-1KiB-free-refused", 200, 6 * GIB_KIB - 1, "low"),
+    # soglia di avviso: 20 GiB e 10%
+    ("500G-20G-free-4pct-was-warned-now-fine", 500, 20 * GIB_KIB, "ok"),
+    ("500G-20G-less-1KiB-free-warns", 500, 20 * GIB_KIB - 1, "warn"),
+    ("500G-49G-free-9.8pct-was-warned-now-fine", 500, 49 * GIB_KIB, "ok"),
+    ("100G-exactly-10pct-fine", 100, 10 * GIB_KIB, "ok"),
+    ("100G-10pct-less-1KiB-warns", 100, 10 * GIB_KIB - 1, "warn"),
+    ("100G-30G-free-fine", 100, 30 * GIB_KIB, "ok"),
+    # dischi piccoli: sotto 8 GiB / 20 GiB conta la sola percentuale, come prima
+    ("small-4G-disk-at-2pct-refused", 4, 82 * MIB_KIB, "low"),
+    ("small-4G-disk-at-8pct-warns", 4, 328 * MIB_KIB, "warn"),
+    ("small-4G-disk-at-15pct-fine", 4, 614 * MIB_KIB, "ok"),
+]
+LEVEL_IDS = [c[0] for c in LEVEL_CASES]
+
+
 # ── (a) host_vitals: spazio libero di JHT_HOME e del motore ───────────────────
 
 
@@ -153,6 +207,27 @@ def test_thresholds_are_strictly_below_ten_and_three_percent(monkeypatch, volume
     assert disk_at(monkeypatch, volumes, 9.99, 50)[1]["level"] == "warn"
     assert disk_at(monkeypatch, volumes, 3, 50)[1]["level"] == "warn"
     assert disk_at(monkeypatch, volumes, 2.99, 50)[1]["level"] == "low"
+
+
+def test_combined_threshold_numbers():
+    hv = load_vitals()
+    assert (hv.DISK_WARN_FREE_PCT, hv.DISK_WARN_FREE_BYTES) == (10.0, 20 * 1024**3)
+    assert (hv.DISK_BLOCK_FREE_PCT, hv.DISK_BLOCK_FREE_BYTES) == (3.0, 8 * 1024**3)
+
+
+@pytest.mark.parametrize("name,total_gib,free_kib,level", LEVEL_CASES, ids=LEVEL_IDS)
+def test_level_needs_both_the_percent_and_the_bytes(monkeypatch, volumes, name, total_gib, free_kib, level):
+    _, result = disk_at(monkeypatch, volumes, disk(total_gib, free_kib), 50)
+    assert result["level"] == level, (name, result)
+    assert result["code"] == {"low": "disk_low", "warn": "disk_warning", "ok": None}[level]
+
+
+def test_a_big_volume_below_three_percent_does_not_hide_a_warning_on_the_other(monkeypatch, volumes):
+    """Il peggiore e' per gravita': 2% di un disco enorme (ok) non copre un `warn` accanto."""
+    _, result = disk_at(monkeypatch, volumes, disk(10000, 200 * GIB_KIB), disk(100, 5 * GIB_KIB))
+    assert result["jht_home"]["level"] == "ok" and result["engine"]["level"] == "warn"
+    assert (result["level"], result["code"]) == ("warn", "disk_warning")
+    assert result["min_free_pct"] == result["engine"]["free_pct"] == 5.0
 
 
 def test_a_volume_that_does_not_resolve_is_unknown_never_an_error(monkeypatch, volumes):
@@ -219,6 +294,7 @@ def test_phrases_come_from_the_table_in_every_language():
             assert key in table, (lang, key)
             assert table[key].count("%s") == 1, (lang, key)
             assert len(table[key]) > 40
+        assert "Docker/Podman" in table["disk.low"], lang  # come liberare spazio, in ogni lingua
 
 
 @pytest.mark.parametrize("lang", LANGS)
@@ -336,6 +412,20 @@ def test_disk_guard_command_refuses_only_under_three_percent(fakedir, volumes, p
         assert done.stderr == "" and done.stdout == ""
     else:
         assert done.stderr.strip() == f"disk_low: {phrase('en', 'disk.low', '2%')}"
+
+
+@pytest.mark.parametrize("name,total_gib,free_kib,level", LEVEL_CASES, ids=LEVEL_IDS)
+def test_disk_guard_command_refuses_only_when_percent_and_bytes_are_both_low(
+        fakedir, volumes, name, total_gib, free_kib, level):
+    home, engine = volumes
+    done = run_vitals(fakedir, home, engine, disk(total_gib, free_kib), 50, "disk-guard")
+    assert done.returncode == (3 if level == "low" else 0), (name, done.stderr)
+    if level == "low":
+        # la riga che il launcher mostra: codice chiuso + la frase della tabella, con l'indicazione
+        assert done.stderr.startswith("disk_low: ")
+        assert "Trash" in done.stderr and "Docker/Podman" in done.stderr, done.stderr
+    else:
+        assert done.stderr == ""
 
 
 def test_disk_guard_command_also_refuses_on_the_engine_volume(fakedir, volumes):
@@ -563,18 +653,41 @@ def wrapper_function(name: str) -> str:
     return match.group(0)
 
 
-DISK_FUNCTIONS = ("disk_free_permille", "disk_engine_path", "disk_low")
+def _disk_functions():
+    """Le funzioni disco che il wrapper ha: la misura (si chiamava disk_free_permille
+    prima del T19) e `disk_level_of`, che prima non c'era."""
+    text = WRAPPER_SH.read_text(encoding="utf-8")
+    names = ("disk_free_permille", "disk_free_measure", "disk_engine_path", "disk_level_of", "disk_low")
+    return tuple(n for n in names if re.search(rf"^{n}\(\) \{{", text, re.M))
+
+
+DISK_FUNCTIONS = _disk_functions()
+
+
+def wrapper_disk_constants() -> str:
+    """Le assegnazioni DISK_* del wrapper vero: un numero cambiato la' cambia anche qui."""
+    text = WRAPPER_SH.read_text(encoding="utf-8")
+    lines = re.findall(r"^DISK_[A-Z_]+=.*$", text, re.M)
+    assert len(lines) >= 3, lines
+    return "\n".join(lines) + "\n"
 
 
 def fake_df(bin_dir: Path, pct_by_path: dict, default=50):
-    """`df -Pk <path>` in formato POSIX, con lo spazio libero che decide il test."""
+    """`df -Pk <path>` in formato POSIX, con lo spazio libero che decide il test.
+
+    Il valore e' una percentuale (disco da 1.000.000 KiB) oppure `disk(...)`:
+    capienza e KiB liberi decisi dal test.
+    """
+    def spec(value):
+        if isinstance(value, dict):
+            return f'total={value["total_kib"]}; avail={value["free_kib"]}'
+        return f'total=1000000; avail=$(( total * {value} / 100 ))'
+
     lines = ['#!/bin/sh', 'for last; do :; done', 'case "$last" in']
-    for path, pct in pct_by_path.items():
-        lines.append(f'  "{path}"|"{path}"/*) pct={pct} ;;')
-    lines.append(f'  *) pct={default} ;;')
+    for path, value in pct_by_path.items():
+        lines.append(f'  "{path}"|"{path}"/*) {spec(value)} ;;')
+    lines.append(f'  *) {spec(default)} ;;')
     lines += ['esac',
-              'total=1000000',
-              'avail=$(( total * pct / 100 ))',
               'printf "Filesystem 1024-blocks Used Available Capacity Mounted on\\n"',
               'printf "/dev/fake %s %s %s 1%% /\\n" "$total" "$(( total - avail ))" "$avail"']
     (bin_dir / "df").write_text("\n".join(lines) + "\n", encoding="utf-8")
@@ -586,7 +699,7 @@ def run_wrapper_functions(tmp_path, snippet, pct_by_path, env_extra=None, defaul
     bin_dir.mkdir(exist_ok=True)
     fake_df(bin_dir, pct_by_path, default)
     script = (
-        "DISK_WARN_FREE_PERMILLE=100\nDISK_BLOCK_FREE_PERMILLE=30\nDISK_LOW_PERMILLE=\n"
+        wrapper_disk_constants()
         + "\n".join(wrapper_function(n) for n in DISK_FUNCTIONS)
         + "\n" + snippet
     )
@@ -599,12 +712,34 @@ def run_wrapper_functions(tmp_path, snippet, pct_by_path, env_extra=None, defaul
 
 
 @pytest.mark.parametrize("pct,low", [(15, False), (8, False), (3, False), (2, True)])
-def test_wrapper_disk_low_flags_only_under_three_percent(tmp_path, pct, low):
+def test_wrapper_disk_low_flags_only_under_three_percent_on_a_small_disk(tmp_path, pct, low):
     done = run_wrapper_functions(
         tmp_path, 'if disk_low; then echo "LOW=$DISK_LOW_PERMILLE"; else echo OK; fi',
         {str(tmp_path / "h" / ".jht"): pct, str(tmp_path / "h"): pct})
     assert done.returncode == 0, done.stderr
     assert (done.stdout.strip().startswith("LOW=")) is low, done.stdout
+
+
+@pytest.mark.parametrize("name,total_gib,free_kib,level", LEVEL_CASES, ids=LEVEL_IDS)
+def test_wrapper_level_needs_both_the_percent_and_the_bytes(tmp_path, name, total_gib, free_kib, level):
+    home = tmp_path / "h" / ".jht"
+    done = run_wrapper_functions(
+        tmp_path,
+        'if disk_low; then echo LOW; else echo OK; fi',
+        {str(home): disk(total_gib, free_kib), str(tmp_path / "h"): disk(total_gib, free_kib)})
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.split() == ["LOW" if level == "low" else "OK"], (name, done.stdout)
+
+
+@pytest.mark.parametrize("name,total_gib,free_kib,level", LEVEL_CASES, ids=LEVEL_IDS)
+def test_wrapper_disk_level_of_gives_the_three_levels(tmp_path, name, total_gib, free_kib, level):
+    home = tmp_path / "h" / ".jht"
+    spec = disk(total_gib, free_kib)
+    done = run_wrapper_functions(
+        tmp_path, 'read -r pm kib <<<"$(disk_free_measure "$HOME/.jht")"; disk_level_of "$pm" "$kib"',
+        {str(home): spec, str(tmp_path / "h"): spec})
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.strip() == level, (name, done.stdout)
 
 
 def test_wrapper_measures_the_engine_volume_when_it_can_see_it(tmp_path):
@@ -628,7 +763,7 @@ def test_wrapper_unreadable_df_does_not_refuse(tmp_path):
     (bin_dir / "df").write_text("#!/bin/sh\nexit 1\n", encoding="utf-8")
     (bin_dir / "df").chmod(0o755)
     script = (
-        "set -euo pipefail\nDISK_BLOCK_FREE_PERMILLE=30\nDISK_LOW_PERMILLE=\n"
+        "set -euo pipefail\n" + wrapper_disk_constants()
         + "\n".join(wrapper_function(n) for n in DISK_FUNCTIONS)
         + '\nif disk_low; then echo LOW; else echo OK; fi\n')
     done = subprocess.run(["bash", "-c", script], capture_output=True, text=True, timeout=30,
@@ -676,8 +811,8 @@ def run_upgrade(tmp_path, pct, args="--json", engine_pct=50):
     script = (
         "set -euo pipefail\n"
         'STATE="$1"\n'
-        "DISK_WARN_FREE_PERMILLE=100\nDISK_BLOCK_FREE_PERMILLE=30\nDISK_LOW_PERMILLE=\n"
-        "UPGRADE_JSON=0\nUPGRADE_STAGE=\nUPGRADE_LOCK=\nUPGRADE_JOURNAL=\nUPGRADE_ROLLBACK_DIR=\nUPGRADE_PRUNE_JSON=\n"
+        + wrapper_disk_constants()
+        + "UPGRADE_JSON=0\nUPGRADE_STAGE=\nUPGRADE_LOCK=\nUPGRADE_JOURNAL=\nUPGRADE_ROLLBACK_DIR=\nUPGRADE_PRUNE_JSON=\n"
         + UPGRADE_STUBS
         + "\n".join(wrapper_function(n) for n in DISK_FUNCTIONS + ("upgrade_safe_field", "upgrade_result", "handle_runtime_upgrade"))
         + f'\nset +e\nhandle_runtime_upgrade {args}\necho "rc=$?"\n'
@@ -708,7 +843,29 @@ def test_at_2_percent_the_plain_upgrade_says_disk_low_on_stderr(tmp_path):
     done, calls = run_upgrade(tmp_path, 2, "")
     assert "rc=1" in done.stdout
     assert "disk_low" in done.stderr
+    # sotto la soglia la pulizia delle immagini non gira (tiene corrente e
+    # precedente): il rifiuto dice allora cosa fare per liberare spazio
+    assert "Cestino" in done.stderr and "Docker/Podman" in done.stderr, done.stderr
+    assert "8 GiB" in done.stderr
     assert calls == []
+
+
+def test_the_refused_upgrade_never_prunes_images(tmp_path):
+    done, calls = run_upgrade(tmp_path, 2)
+    assert calls == []  # nessun `docker image rm`, nessuna `docker` di alcun tipo
+    assert "imagePrune" not in done.stdout
+
+
+@pytest.mark.parametrize("name,total_gib,free_kib,level", LEVEL_CASES, ids=LEVEL_IDS)
+def test_upgrade_is_refused_only_when_percent_and_bytes_are_both_low(tmp_path, name, total_gib, free_kib, level):
+    """500 GiB con 14 GiB liberi (2,8%) passa la guardia; 200 GiB con 4 GiB liberi (2%) no."""
+    done, calls = run_upgrade(tmp_path, disk(total_gib, free_kib))
+    if level == "low":
+        assert json.loads(done.stdout.splitlines()[0])["message"] == "disk_low", (name, done.stdout)
+        assert calls == []
+    else:
+        assert "ensure_bind_owner" in calls, (name, done.stdout, done.stderr, calls)
+        assert "disk_low" not in done.stdout + done.stderr
 
 
 def test_the_engine_volume_below_three_percent_also_refuses_the_upgrade(tmp_path):
@@ -728,6 +885,100 @@ def test_the_running_runtime_is_not_touched_by_a_refused_upgrade(tmp_path):
     """Nessuno stop/recreate: solo letture prima della guardia, nessuna chiamata dopo."""
     done, calls = run_upgrade(tmp_path, 2)
     assert not any(call.startswith(("docker", "compose", "curl")) for call in calls)
+
+
+# ── la pulizia delle immagini non cambia: stesse protezioni, solo un motore FINTO ─
+#
+# Il T19 non tocca `upgrade_prune_old_images`: sotto la soglia non gira (il
+# rifiuto ha la sua frase) e sopra resta quella di prima. Qui si fa girare la
+# funzione VERA contro un `docker` finto (una funzione di shell che registra le
+# chiamate): nessun motore reale, nessun volume.
+
+PRUNE_FUNCTIONS = ("upgrade_image_plain", "upgrade_prune_result", "upgrade_prune_old_images")
+
+FAKE_ENGINE = r'''
+CALLS="$STATE/engine.log"
+upgrade_image() { echo "sha256:cur"; }
+upgrade_note() { echo "NOTE $*" >> "$STATE/notes.log"; }
+docker() {
+  echo "$*" >> "$CALLS"
+  case "$1 $2" in
+    "container ls") [ "${ENGINE_UNREADABLE:-0}" = 1 ] && return 1; printf 'c1\nc2\n' ;;
+    "image ls") cat <<LIST
+sha256:cur ghcr.io/leopu00/jht
+sha256:prev ghcr.io/leopu00/jht
+sha256:busy jht
+sha256:old1 ghcr.io/leopu00/jht
+sha256:old2 localhost/jht
+sha256:alien ghcr.io/leopu00/jht-altro
+sha256:pg postgres
+LIST
+      ;;
+    "image inspect") echo 1048576 ;;
+    "image rm") return 0 ;;
+    *) if [ "$1" = inspect ]; then printf 'sha256:cur\nsha256:busy\n'; fi ;;
+  esac
+}
+'''
+
+
+def run_prune(tmp_path, env_extra=None, current="sha256:cur", previous="sha256:prev"):
+    state = tmp_path / "pstate"
+    state.mkdir(exist_ok=True)
+    text = WRAPPER_SH.read_text(encoding="utf-8")
+    repos = re.search(r"^JHT_IMAGE_REPOSITORIES=.*$", text, re.M).group(0)
+    script = (
+        'STATE="$1"\n' + repos + "\nUPGRADE_PRUNE_JSON=\n" + FAKE_ENGINE
+        + "\n".join(wrapper_function(n) for n in PRUNE_FUNCTIONS)
+        + f'\nupgrade_prune_old_images "{current}" "{previous}"\n'
+    )
+    done = subprocess.run(["bash", "-c", script, "bash", str(state)], capture_output=True, text=True,
+                          env={**os.environ, **(env_extra or {})}, timeout=30)
+    log = state / "engine.log"
+    return done, (log.read_text().splitlines() if log.exists() else [])
+
+
+def test_prune_still_removes_only_old_exact_jht_images_by_id(tmp_path):
+    done, calls = run_prune(tmp_path)
+    assert done.returncode == 0, done.stderr
+    removed = [c.split()[-1] for c in calls if c.startswith("image rm")]
+    # solo le due vecchie, ognuna per ID: la corrente, la precedente, quella di un
+    # container (anche fermo), un altro repository e un'immagine estranea restano
+    assert removed == ["sha256:old1", "sha256:old2"], calls
+    assert all(c == f"image rm {i}" for c, i in zip([c for c in calls if c.startswith("image rm")], removed)), calls
+
+
+def test_prune_never_touches_volumes_and_never_forces_or_prunes(tmp_path):
+    _, calls = run_prune(tmp_path)
+    joined = "\n".join(calls)
+    for forbidden in ("volume", "prune", " -f", "--force", "system", "container rm", "container stop", "kill", "rmi"):
+        assert forbidden not in joined, (forbidden, calls)
+    assert {c.split()[0] + " " + c.split()[1] for c in calls} <= {
+        "container ls", "inspect --format", "image ls", "image inspect", "image rm"}, calls
+
+
+def test_prune_removes_nothing_when_the_containers_cannot_be_read(tmp_path):
+    _, calls = run_prune(tmp_path, {"ENGINE_UNREADABLE": "1"})
+    assert not any(c.startswith("image rm") for c in calls), calls
+
+
+def test_prune_removes_nothing_when_the_current_image_is_not_the_running_one(tmp_path):
+    _, calls = run_prune(tmp_path, current="sha256:someone-else")
+    assert not any(c.startswith("image rm") for c in calls), calls
+
+
+def test_prune_opt_out_keeps_every_image(tmp_path):
+    _, calls = run_prune(tmp_path, {"JHT_KEEP_OLD_IMAGES": "1"})
+    assert calls == []
+
+
+def test_prune_runs_only_after_a_successful_upgrade_never_in_the_refused_path():
+    text = wrapper_function("handle_runtime_upgrade")
+    assert text.count("upgrade_prune_old_images") == 1
+    assert text.index("if disk_low; then") < text.index("upgrade_prune_old_images")
+    refusal = text[text.index("if disk_low; then"):]
+    refusal = refusal[: refusal.index("\n  fi\n")]
+    assert "upgrade_prune_old_images" not in refusal and "docker" not in refusal
 
 
 def test_wrapper_guard_sits_before_the_first_thing_the_upgrade_writes_or_downloads():
@@ -756,22 +1007,53 @@ def test_powershell_wrapper_has_the_same_guard_in_the_same_place():
 # ── le stesse soglie e gli stessi codici in ogni linguaggio ───────────────────
 
 
-def test_thresholds_and_codes_are_the_same_in_python_js_bash_and_powershell():
+def test_thresholds_and_codes_are_the_same_in_python_js_and_bash():
     hv = load_vitals()
     js = GUARD_JS.read_text(encoding="utf-8")
     sh = WRAPPER_SH.read_text(encoding="utf-8")
-    ps1 = WRAPPER_PS1.read_text(encoding="utf-8")
     warn, block = hv.DISK_WARN_FREE_PCT, hv.DISK_BLOCK_FREE_PCT
+    warn_gib, block_gib = hv.DISK_WARN_FREE_BYTES // 1024**3, hv.DISK_BLOCK_FREE_BYTES // 1024**3
+    assert (warn, warn_gib, block, block_gib) == (10.0, 20, 3.0, 8)
+    assert hv.DISK_WARN_FREE_BYTES == warn_gib * 1024**3 and hv.DISK_BLOCK_FREE_BYTES == block_gib * 1024**3
     assert re.search(rf"DISK_WARN_FREE_PCT = {warn:g};", js)
     assert re.search(rf"DISK_BLOCK_FREE_PCT = {block:g};", js)
+    assert re.search(rf"DISK_WARN_FREE_BYTES = {warn_gib} \* GIB;", js)
+    assert re.search(rf"DISK_BLOCK_FREE_BYTES = {block_gib} \* GIB;", js)
+    assert "const GIB = 1024 ** 3;" in js
     assert f"DISK_WARN_FREE_PERMILLE={int(warn * 10)}\n" in sh
     assert f"DISK_BLOCK_FREE_PERMILLE={int(block * 10)}\n" in sh
-    assert f"$DiskWarnFreePermille = {int(warn * 10)}\n" in ps1
-    assert f"$DiskBlockFreePermille = {int(block * 10)}\n" in ps1
+    assert f"DISK_WARN_FREE_KIB={warn_gib * 1024 * 1024}\n" in sh
+    assert f"DISK_BLOCK_FREE_KIB={block_gib * 1024 * 1024}\n" in sh
     for code in (hv.DISK_CODE_WARNING, hv.DISK_CODE_LOW):
         assert f"'{code}'" in js
     assert 'message "disk_low"' in sh or '"disk_low" false' in sh
     assert (hv.DISK_CODE_WARNING, hv.DISK_CODE_LOW) == ("disk_warning", "disk_low")
+
+
+def test_powershell_wrapper_still_has_only_the_percent_thresholds():
+    """Limite noto, FUORI da questo incarico: jht-wrapper.ps1 rifiuta ancora sotto il 3%
+    senza i byte (non si puo' eseguire su un Mac). Se qualcuno lo allinea, questo test
+    va riscritto per confrontare anche i KiB."""
+    hv = load_vitals()
+    ps1 = WRAPPER_PS1.read_text(encoding="utf-8")
+    assert f"$DiskWarnFreePermille = {int(hv.DISK_WARN_FREE_PCT * 10)}\n" in ps1
+    assert f"$DiskBlockFreePermille = {int(hv.DISK_BLOCK_FREE_PCT * 10)}\n" in ps1
+    assert "Kib" not in ps1 and "KiB" not in ps1
+
+
+@pytest.mark.skipif(not shutil.which("node"), reason="node non c'e'")
+@pytest.mark.parametrize("name,total_gib,free_kib,level", LEVEL_CASES, ids=LEVEL_IDS)
+def test_js_gives_the_same_level_on_the_same_cases(name, total_gib, free_kib, level):
+    script = (
+        f"import {{ volumeState }} from {GUARD_JS.as_uri()!r};\n"
+        f"const st = {{ bsize: 1024, blocks: {total_gib * GIB_KIB}, bavail: {free_kib} }};\n"
+        "console.log(volumeState('/x', { statfs: () => st, exists: () => true }).level);\n"
+    )
+    env = {**os.environ, "JHT_LANG": "en"}
+    env.pop("NODE_OPTIONS", None)
+    done = subprocess.run([shutil.which("node"), "--input-type=module", "-e", script],
+                          env=env, capture_output=True, text=True, timeout=30)
+    assert done.stdout.strip() == level, (name, done.stdout, done.stderr)
 
 
 def test_the_closed_codes_are_in_the_desktop_catalog_with_every_translation():
@@ -780,6 +1062,16 @@ def test_the_closed_codes_are_in_the_desktop_catalog_with_every_translation():
     for code in ("disk_warning", "disk_low"):
         assert re.search(rf"^  {code}: copy\(", catalog, re.M), code
         assert re.search(rf"^  {code}: translated\(", locales, re.M), code
+    # `disk_low` dice come liberare spazio, in tutte e sette le lingue
+    low = catalog[catalog.index("  disk_low: copy("):]
+    low = low[: low.index("\n  ),")]
+    assert "Cestino" in low and "Docker/Podman" in low and "Trash" in low
+    english = "The disk is almost full, so no new agent or update will start."
+    block = locales[locales.index(f'"{english}": {{'):]
+    block = block[: block.index("\n  },")]
+    for lang, word in (("de", "Papierkorb"), ("es", "papelera"), ("fr", "corbeille"), ("hu", "Kuká"), ("pt", "Lixo")):
+        row = next(line for line in block.splitlines() if line.strip().startswith(f"{lang}:"))
+        assert word in row and "Docker/Podman" in row, (lang, row)
     # nessun emettitore Rust/TS oggi: il catalogo lo dichiara, non lo finge
     assert '"disk_warning",\n  "disk_low",\n]);' in catalog
     for english in ("Disk space is running low.",

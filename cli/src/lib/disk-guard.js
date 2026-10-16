@@ -2,10 +2,14 @@
  * Disco quasi pieno: nessun NUOVO avvio.
  *
  * Specchio in Node di shared/skills/host_vitals.py (`read_disk`, `disk-guard`):
- * le stesse due soglie sullo spazio LIBERO e gli stessi codici chiusi.
+ * le stesse due soglie sullo spazio LIBERO e gli stessi codici chiusi. Ogni
+ * soglia e' combinata (percentuale E byte): il 3% di un disco da 500 GiB sono
+ * 15 GiB, e con 14 GiB liberi (2,8%) la sola percentuale rifiutava.
  *
- *   - sotto DISK_WARN_FREE_PCT  (10%)  livello `warn`, codice `disk_warning`
- *   - sotto DISK_BLOCK_FREE_PCT (3%)   livello `low`,  codice `disk_low`
+ *   - sotto DISK_WARN_FREE_PCT  (10%) E DISK_WARN_FREE_BYTES  (20 GiB)
+ *       livello `warn`, codice `disk_warning`
+ *   - sotto DISK_BLOCK_FREE_PCT (3%)  E DISK_BLOCK_FREE_BYTES (8 GiB)
+ *       livello `low`,  codice `disk_low`
  *
  * `jht team start` lo chiede PRIMA di far nascere una sessione e rifiuta con
  * `disk_low` invece di partire e rompersi a meta': un avvio morto ha gia'
@@ -26,10 +30,26 @@ import path from 'node:path';
 import { tf } from '../../wizard/i18n.js';
 import { isContainer } from '../../../shared/runtime/container.js';
 
+const GIB = 1024 ** 3;
 export const DISK_WARN_FREE_PCT = 10;
+export const DISK_WARN_FREE_BYTES = 20 * GIB;
 export const DISK_BLOCK_FREE_PCT = 3;
+export const DISK_BLOCK_FREE_BYTES = 8 * GIB;
 export const DISK_CODE_WARNING = 'disk_warning';
 export const DISK_CODE_LOW = 'disk_low';
+
+const LEVEL_RANK = { ok: 0, warn: 1, low: 2 };
+
+/**
+ * `ok|warn|low` per uno spazio libero: servono la percentuale E i byte. La
+ * percentuale si confronta per moltiplicazione (libero*100 < soglia*totale),
+ * come in Python e in shell: nessun arrotondamento sul confine.
+ */
+export function diskLevel(freeBytes, totalBytes) {
+  if (freeBytes * 100 < DISK_BLOCK_FREE_PCT * totalBytes && freeBytes < DISK_BLOCK_FREE_BYTES) return 'low';
+  if (freeBytes * 100 < DISK_WARN_FREE_PCT * totalBytes && freeBytes < DISK_WARN_FREE_BYTES) return 'warn';
+  return 'ok';
+}
 
 const UNKNOWN = Object.freeze({ level: 'unknown', freePct: null, freeBytes: null, totalBytes: null });
 
@@ -56,7 +76,7 @@ export function volumeState(target, { statfs = fs.statfsSync, exists = fs.exists
       return { path: target, ...UNKNOWN };
     }
     const pct = (free / total) * 100; // grezza: la decisione non passa da un arrotondamento
-    const level = pct < DISK_BLOCK_FREE_PCT ? 'low' : pct < DISK_WARN_FREE_PCT ? 'warn' : 'ok';
+    const level = diskLevel(free, total);
     return {
       path: target, level, freePct: Math.round(pct * 100) / 100, freeBytes: free, totalBytes: total, rawPct: pct,
     };
@@ -95,7 +115,12 @@ export function readDisk(options = {}) {
     env, inContainer: options.inContainer, platform: options.platform, exists: options.exists,
   }), clean);
   const known = [jhtHome, engine].filter((v) => v.level !== 'unknown');
-  const worst = known.reduce((a, b) => (a && a.rawPct <= b.rawPct ? a : b), null);
+  // Il peggiore: prima la gravita', a parita' la percentuale piu' bassa.
+  const worst = known.reduce((a, b) => {
+    if (!a) return b;
+    if (LEVEL_RANK[a.level] !== LEVEL_RANK[b.level]) return LEVEL_RANK[a.level] > LEVEL_RANK[b.level] ? a : b;
+    return a.rawPct <= b.rawPct ? a : b;
+  }, null);
   const level = worst ? worst.level : 'unknown';
   const code = level === 'low' ? DISK_CODE_LOW : level === 'warn' ? DISK_CODE_WARNING : null;
   const strip = ({ rawPct, ...rest }) => rest;

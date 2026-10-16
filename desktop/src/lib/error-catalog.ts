@@ -1249,9 +1249,9 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
   ),
   disk_low: copy(
     "Il disco è quasi pieno, quindi non parte nessun nuovo agente né aggiornamento.",
-    "Libera spazio sul disco e riprova. Gli agenti già avviati continuano a lavorare.",
+    "Svuota il Cestino ed elimina i file grandi che non ti servono, come vecchi download o immagini Docker/Podman inutilizzate, poi riprova. Gli agenti già avviati continuano a lavorare.",
     "The disk is almost full, so no new agent or update will start.",
-    "Free some disk space and try again. Agents already running keep working.",
+    "Empty the Trash and delete large files you no longer need, such as old downloads or unused Docker/Podman images, then try again. Agents already running keep working.",
   ),
 };
 

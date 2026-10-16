@@ -232,5 +232,5 @@
   "closer.reason.linkedin_session_expired.why": "A kézzel létrehozott LinkedIn-munkameneted lejárt, vagy a LinkedIn már nem fogadja el.",
   "closer.reason.linkedin_session_expired.action": "Jelentkezz be újra kézzel a LinkedInre a CLOSER böngészőjében, majd engedélyezd újra a pozíciót.",
   "disk.warning": "Fogy a lemezterület: csak %s szabad. Szabadíts fel helyet hamarosan, különben a csapat nem indít több új ügynököt és frissítést.",
-  "disk.low": "A lemez majdnem megtelt (csak %s szabad), ezért nem indul új ügynök, és nem települ frissítés. A már elindított ügynökök tovább futnak. Szabadíts fel helyet a folytatáshoz."
+  "disk.low": "A lemez majdnem megtelt (csak %s szabad), ezért nem indul új ügynök, és nem települ frissítés. A már elindított ügynökök tovább futnak. Hely felszabadításához: ürítsd ki a Kukát, és töröld a nagy, már nem szükséges fájlokat, például a régi letöltéseket vagy a nem használt Docker/Podman-képeket, majd próbáld újra."
 }

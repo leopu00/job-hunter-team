@@ -20,13 +20,16 @@ Disco: spazio libero (e percentuale) del volume di JHT_HOME e di quello del
 motore container, letti con `os.statvfs`. Un volume che non si risolve vale
 «sconosciuto» (livello `unknown`), mai un errore: la misura non deve fermare né
 il bridge né un avvio. Due soglie sullo spazio LIBERO, uguali per ogni
-consumatore (launcher, `jht team start`, `jht upgrade`):
+consumatore (launcher, `jht team start`, `jht upgrade`). Ognuna è combinata:
+la percentuale da sola rifiutava un disco da 500 GiB con 14 GiB ancora liberi (2,8%).
 
-  - sotto `DISK_WARN_FREE_PCT` (10%)  → livello `warn`, codice `disk_warning`:
-    avviso all'utente (`notify-disk`), non si ferma niente;
-  - sotto `DISK_BLOCK_FREE_PCT` (3%)  → livello `low`, codice `disk_low`: nessun
-    nuovo avvio, nessuno spawn di worker, nessun upgrade. Gli agenti già
-    avviati NON vengono toccati: la guardia gira solo prima di partire.
+  - sotto `DISK_WARN_FREE_PCT` (10%) E sotto `DISK_WARN_FREE_BYTES` (20 GiB)
+    → livello `warn`, codice `disk_warning`: avviso all'utente
+    (`notify-disk`), non si ferma niente;
+  - sotto `DISK_BLOCK_FREE_PCT` (3%) E sotto `DISK_BLOCK_FREE_BYTES` (8 GiB)
+    → livello `low`, codice `disk_low`: nessun nuovo avvio, nessuno spawn di
+    worker, nessun upgrade. Gli agenti già avviati NON vengono toccati: la
+    guardia gira solo prima di partire.
 
 La frase che l'utente legge sta nella tabella codice→frase (`disk.warning` e
 `disk.low` in shared/locales/*.json), mai scritta da un agente.
@@ -37,8 +40,8 @@ CLI:
     python3 host_vitals.py check [--pct 95]         # exit 1 + righe se sopra soglia
     python3 host_vitals.py summary [--hours 24]     # picchi/medie (Mantenitore)
     python3 host_vitals.py disk                     # solo disco, stampa JSON
-    python3 host_vitals.py disk-guard               # exit 3 + `disk_low: frase` se < 3%
-    python3 host_vitals.py notify-disk              # avviso utente se < 10% (cooldown)
+    python3 host_vitals.py disk-guard               # exit 3 + `disk_low: frase` se < 3% E < 8 GiB
+    python3 host_vitals.py notify-disk              # avviso utente se < 10% E < 20 GiB (cooldown)
 """
 import argparse
 import json
@@ -55,12 +58,15 @@ DISK_NOTICE_FILE = DEFAULT_FILE.parent / "disk-notice.json"
 MAX_LINES = 4000  # ~7+ giorni a 1 sample / 2-10 min — cap anti-crescita
 
 # ── Disco: soglie sullo spazio LIBERO, codici chiusi ───────────────────────
-# Le stesse due cifre stanno in cli/src/lib/disk-guard.js, scripts/jht-wrapper.sh
-# e scripts/jht-wrapper.ps1: tests/test_disk_guard.py le confronta, perché una
-# soglia che differisce fra i quattro posti è un avvio che passa da uno e
-# viene rifiutato dall'altro.
+# Le stesse quattro cifre stanno in cli/src/lib/disk-guard.js e in
+# scripts/jht-wrapper.sh (in KiB, per restare in aritmetica intera):
+# tests/test_disk_guard.py le confronta, perché una soglia che differisce fra i
+# posti è un avvio che passa da uno e viene rifiutato dall'altro.
+DISK_GIB = 1024 ** 3
 DISK_WARN_FREE_PCT = 10.0
+DISK_WARN_FREE_BYTES = 20 * DISK_GIB
 DISK_BLOCK_FREE_PCT = 3.0
+DISK_BLOCK_FREE_BYTES = 8 * DISK_GIB
 DISK_CODE_WARNING = "disk_warning"
 DISK_CODE_LOW = "disk_low"
 # Chiave della frase nella tabella codice→frase (shared/locales/*.json).
@@ -160,6 +166,21 @@ def _nearest_existing(path):
     return None
 
 
+def disk_level(free_bytes, total_bytes):
+    """`ok|warn|low` per uno spazio libero: serve la percentuale E i byte.
+
+    Una sola delle due non basta a dichiarare il disco pieno: il 3% di un disco
+    da 500 GiB sono 15 GiB, il 40% di uno da 10 GiB sono 4 GiB. Entrambe strette.
+    La percentuale si confronta per moltiplicazione (libero*100 < soglia*totale):
+    in interi, come fanno JS e shell, senza un arrotondamento sul confine.
+    """
+    if free_bytes * 100 < DISK_BLOCK_FREE_PCT * total_bytes and free_bytes < DISK_BLOCK_FREE_BYTES:
+        return "low"
+    if free_bytes * 100 < DISK_WARN_FREE_PCT * total_bytes and free_bytes < DISK_WARN_FREE_BYTES:
+        return "warn"
+    return "ok"
+
+
 def _volume(path):
     """Spazio del volume che contiene `path`. Non si risolve → «sconosciuto»."""
     unknown = {"path": str(path) if path else None, "total_bytes": None, "free_bytes": None,
@@ -177,9 +198,12 @@ def _volume(path):
     if not total or total < 0 or free < 0:
         return unknown
     pct = free / total * 100  # grezza: la decisione NON passa da un arrotondamento
-    level = "low" if pct < DISK_BLOCK_FREE_PCT else "warn" if pct < DISK_WARN_FREE_PCT else "ok"
+    level = disk_level(free, total)
     return {"path": str(path), "total_bytes": total, "free_bytes": free,
             "free_pct": round(pct, 2), "level": level, "_raw_pct": pct}
+
+
+_LEVEL_RANK = {"ok": 0, "warn": 1, "low": 2}
 
 
 def _in_container():
@@ -213,7 +237,9 @@ def read_disk(env=None):
     home = env.get("JHT_HOME") or str(Path.home() / ".jht")
     vols = {"jht_home": _volume(home), "engine": _volume(engine_disk_path(env))}
     known = [v for v in vols.values() if v["level"] != "unknown"]
-    worst = min(known, key=lambda v: v["_raw_pct"]) if known else None
+    # Il peggiore: prima la gravità, a parità la percentuale più bassa. Un volume
+    # al 2% ma da 500 GB liberi è `ok` e non deve coprirne uno `warn` accanto.
+    worst = max(known, key=lambda v: (_LEVEL_RANK[v["level"]], -v["_raw_pct"])) if known else None
     for v in vols.values():
         v.pop("_raw_pct", None)
     level = worst["level"] if worst else "unknown"
