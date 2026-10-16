@@ -946,12 +946,23 @@ HOST_RESET_CONFIRMED_EXIT=20
 # non lo rinnova, puo' non avere il servizio. Con il servizio assente `jht up`
 # non lo crea mai: la via d'uscita giusta e' `jht upgrade`, non un altro `up`.
 compose_lacks_service() {
-  ! grep -q "^  $1:" "$COMPOSE_FILE" 2>/dev/null
+  # Solo un compose LEGGIBILE senza il servizio vale «runtime vecchio»; la
+  # chiave si cerca con qualunque rientro, non solo con i due spazi.
+  [ -r "$COMPOSE_FILE" ] && ! grep -Eq "^[[:space:]]+$1:[[:space:]]*(#.*)?$" "$COMPOSE_FILE" 2>/dev/null
+}
+
+compose_unreadable() {
+  [ ! -r "$COMPOSE_FILE" ]
 }
 
 broker_admin() {
   local broker_id
   broker_id="$(read_only_service_id "$BROKER_SERVICE")" || {
+    if compose_unreadable; then
+      err "broker_unavailable: il compose del runtime installato non è leggibile, non si sa se ha il broker dei segreti."
+      err "Cosa fare: reinstalla il runtime con l'installer"
+      return 1
+    fi
     if compose_lacks_service "$BROKER_SERVICE"; then
       err "broker_unavailable: il runtime installato è più vecchio e non ha il broker dei segreti."
       err "Cosa fare: jht upgrade"
@@ -972,6 +983,11 @@ TELEGRAM_SERVICE="jht-telegram"
 telegram_admin() {
   local telegram_id
   telegram_id="$(read_only_service_id "$TELEGRAM_SERVICE")" || {
+    if compose_unreadable; then
+      err "telegram_unavailable: il compose del runtime installato non è leggibile, non si sa se ha il servizio Telegram isolato."
+      err "Cosa fare: reinstalla il runtime con l'installer"
+      return 1
+    fi
     if compose_lacks_service "$TELEGRAM_SERVICE"; then
       err "telegram_unavailable: il runtime installato è più vecchio e non ha il servizio Telegram isolato."
       err "Cosa fare: jht upgrade"
@@ -987,6 +1003,11 @@ telegram_admin() {
 telegram_admin_input() {
   local telegram_id
   telegram_id="$(read_only_service_id "$TELEGRAM_SERVICE")" || {
+    if compose_unreadable; then
+      err "telegram_unavailable: il compose del runtime installato non è leggibile, non si sa se ha il servizio Telegram isolato."
+      err "Cosa fare: reinstalla il runtime con l'installer"
+      return 1
+    fi
     if compose_lacks_service "$TELEGRAM_SERVICE"; then
       err "telegram_unavailable: il runtime installato è più vecchio e non ha il servizio Telegram isolato."
       err "Cosa fare: jht upgrade"
