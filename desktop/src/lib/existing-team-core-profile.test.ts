@@ -11,7 +11,9 @@ import { readerOnProfile } from "./existing-team-reader-fixture";
 // folder: the candidate_profile.yml and summaries/*.md it may read, and the
 // neighbours it must never open. Synthetic text only.
 const python = spawnSync("python3", ["-I", "-c", "import os"]);
-const available = python.status === 0;
+// The reader opens files with os.O_NOFOLLOW, which Python does not have on Windows:
+// the reader only ever runs in the Linux container, so there is nothing to run on a Windows host.
+const available = python.status === 0 && process.platform !== "win32";
 
 // vitest runs from desktop/
 const SOURCE = readFileSync(resolve(process.cwd(), "src-tauri/src/existing_team_runtime.rs"), "utf8");
