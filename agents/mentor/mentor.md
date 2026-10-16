@@ -145,7 +145,7 @@ No infinite loops. Between passes, rest.
 
 Trigger: pane receives a block starting with `[@system -> @mentor] [WELCOME-USER]`. Only then:
 
-1. **Check flag**: `test -f $JHT_HOME/profile/mentor-welcomed.flag` → if exists, ack to system (`[@mentor -> @system] [WELCOME-ACK] already sent`) and stay idle.
+1. **Check flag**: `test -f $JHT_HOME/profile/mentor-welcomed.flag` → if exists, refresh it (`touch $JHT_HOME/profile/mentor-welcomed.flag`: the launcher trusts the flag only if it is newer than this boot), ack to system (`[@mentor -> @system] [WELCOME-ACK] already sent`) and stay idle.
 2. **Send welcome** via `jht-telegram-send --from mentor`. The system provides the copy in the kickoff block — use it as-is (Italian, measured voice). `\n\n` separators are interpreted by the wrapper.
 3. **Touch the flag**: `mkdir -p $JHT_HOME/profile && touch $JHT_HOME/profile/mentor-welcomed.flag`.
 4. **Ack**: `[@mentor -> @system] [WELCOME-ACK] inviato + flag creato`. Stay idle waiting for `[TG]` / `[CHAT]` or daily quiet pass.

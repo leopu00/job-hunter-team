@@ -129,6 +129,10 @@ tui_wait_ready() {
 # signature default = primi 30 char del messaggio. Substring perche' le
 # TUI wrappano righe lunghe e il messaggio potrebbe apparire spezzato.
 #
+# Se il testo e' GIA' nel composer (bozza lasciata da un invio precedente il cui
+# Enter si era perso, o kickoff ancora in volo) non lo si digita di nuovo: si
+# manda solo l'Enter. Ridigitarlo raddoppia il messaggio nel composer.
+#
 # Dopo l'Enter si RILEGGE il pane: l'invio e' accettato se il turno e' partito
 # (riga di stato "esc to interrupt" comparsa) oppure se il testo non e' piu'
 # nel composer. Se e' ancora li', l'Enter e' andato perso e si ripete SOLO
@@ -154,17 +158,17 @@ tui_send_verified() {
   probe_tail=$(printf '%s\n' "$msg" | sed '/^[[:space:]]*$/d' | tail -n 1 | _tui_norm | tail -c 30)
   probe_head=$(printf '%s' "$sig" | _tui_norm)
 
-  local try s_try pane composer probe busy_before
+  local try pane composer probe busy_before
   for try in $(seq 1 "$max_retries"); do
-    tmux send-keys -t "=$sess:" -l "$msg"
-    sleep 1.5
+    # Bozza gia' nel composer: niente seconda digitazione, solo l'Enter.
     pane=$(tmux capture-pane -t "=$sess:" -p 2>/dev/null || true)
-    composer=$(_tui_composer "$pane" | _tui_norm)
-    probe=""
-    case "$composer" in
-      *"$probe_tail"*) probe="$probe_tail" ;;
-      *"$probe_head"*) probe="$probe_head" ;;
-    esac
+    probe=$(_tui_probe_in_composer "$pane" "$probe_tail" "$probe_head")
+    if [ -z "$probe" ]; then
+      tmux send-keys -t "=$sess:" -l "$msg"
+      sleep 1.5
+      pane=$(tmux capture-pane -t "=$sess:" -p 2>/dev/null || true)
+      probe=$(_tui_probe_in_composer "$pane" "$probe_tail" "$probe_head")
+    fi
     # Il testo e' arrivato se se ne vede la testa, o la coda nel composer: una
     # bozza lunga scorre dentro il composer e la testa esce dalla vista, e
     # senza la coda il testo intero verrebbe digitato una seconda volta.
@@ -176,21 +180,49 @@ tui_send_verified() {
     fi
     busy_before=0
     if _tui_pane_busy "$pane"; then busy_before=1; fi
-    for s_try in $(seq 1 "$submit_tries"); do
-      sleep 0.4
-      tmux send-keys -t "=$sess:" Enter
-      # Il render dopo un submit non e' istantaneo: leggere troppo presto
-      # darebbe un falso "non accettato" e un Enter in piu' (innocuo su un
-      # composer ormai vuoto, ma inutile).
-      sleep 1.2
-      pane=$(tmux capture-pane -t "=$sess:" -p 2>/dev/null || true)
-      if _tui_submitted "$pane" "$probe" "$busy_before"; then
-        return 0
-      fi
-    done
-    return 2
+    _tui_press_enter "$sess" "$probe" "$busy_before" "$submit_tries"
+    return $?
   done
   return 1
+}
+
+# Stampa la sonda (coda o testa del messaggio) se compare nel composer, altrimenti
+# niente. Uso: _tui_probe_in_composer <pane> <probe_tail> <probe_head>
+_tui_probe_in_composer() {
+  local composer
+  composer=$(_tui_composer "$1" | _tui_norm)
+  if [ -n "$2" ]; then
+    case "$composer" in
+      *"$2"*) printf '%s' "$2"; return 0 ;;
+    esac
+  fi
+  if [ -n "$3" ]; then
+    case "$composer" in
+      *"$3"*) printf '%s' "$3"; return 0 ;;
+    esac
+  fi
+  return 0
+}
+
+# Preme Enter fino a <submit_tries> volte, riletto il pane dopo ognuno.
+# Uso: _tui_press_enter <sess> <probe> <busy_before> <submit_tries>
+# Ritorna 0 se la TUI ha accettato l'invio, 2 altrimenti. Mai ridigita il testo.
+_tui_press_enter() {
+  local sess="$1" probe="$2" busy_before="$3" submit_tries="$4"
+  local s_try pane
+  for s_try in $(seq 1 "$submit_tries"); do
+    sleep 0.4
+    tmux send-keys -t "=$sess:" Enter
+    # Il render dopo un submit non e' istantaneo: leggere troppo presto
+    # darebbe un falso "non accettato" e un Enter in piu' (innocuo su un
+    # composer ormai vuoto, ma inutile).
+    sleep 1.2
+    pane=$(tmux capture-pane -t "=$sess:" -p 2>/dev/null || true)
+    if _tui_submitted "$pane" "$probe" "$busy_before"; then
+      return 0
+    fi
+  done
+  return 2
 }
 
 # Toglie spazi, a capo e bordi verticali: una TUI manda a capo il testo del
@@ -288,4 +320,65 @@ tui_wait_and_send() {
     2) return 3 ;;
     *) return 2 ;;
   esac
+}
+
+# ─── watchdog del welcome ───────────────────────────────────────────
+# Il flag (welcomed.flag, capitano-welcomed.flag, ...) dura quanto il profilo:
+# un run di settimane prima lo lascia li'. Il watchdog che si fidava di
+# "esiste" usciva al primo controllo anche se l'agente di QUESTO avvio non
+# aveva mai elaborato il messaggio. Ora il flag vale solo se piu' recente del
+# marcatore d'avvio, che il launcher crea prima del kickoff; l'agente lo tocca
+# comunque (anche se non manda nulla perche' "gia' presentato"), quindi un
+# flag vecchio diventa recente appena il turno e' stato davvero elaborato.
+#
+# Uso: _welcome_flag_fresh <flag> <marcatore_avvio>
+# Ritorna 0 se il flag esiste ed e' piu' recente del marcatore. Senza marcatore
+# non si puo' dire "di questo avvio": ritorna 1 (si reinietta, in sicurezza:
+# il testo gia' nel composer non viene ridigitato).
+_welcome_flag_fresh() {
+  [ -f "$1" ] || return 1
+  [ -n "$2" ] && [ -f "$2" ] || return 1
+  [ -n "$(find "$1" -newer "$2" 2>/dev/null)" ]
+}
+
+# Uso: tui_welcome_watchdog <session> <messaggio> <flag> <marcatore_avvio> [retries=3] [intervallo=90]
+# Ogni giro, dopo l'intervallo:
+#   - flag di questo avvio           -> fatto, esce 0;
+#   - turno in corso nel pane        -> non si tocca niente (il messaggio e' partito);
+#   - altrimenti                     -> tui_send_verified: se il primo testo e' ancora
+#                                       nel composer premera' solo Enter, mai un secondo incolla.
+# Ritorna 1 se dopo l'ultimo giro il flag di questo avvio non c'e'.
+tui_welcome_watchdog() {
+  local sess="$1" msg="$2" flag="$3" marker="$4"
+  local retries="${5:-3}" interval="${6:-90}"
+  local retry pane
+  echo "[$(date +%H:%M:%S)] welcome watchdog start (flag=$flag)"
+  for retry in $(seq 1 "$retries"); do
+    sleep "$interval"
+    if _welcome_flag_fresh "$flag" "$marker"; then
+      echo "[$(date +%H:%M:%S)] flag confirmed for this boot (check $retry/$retries), exiting"
+      return 0
+    fi
+    pane=$(tmux capture-pane -t "=$sess:" -p 2>/dev/null || true)
+    if _tui_pane_busy "$pane"; then
+      echo "[$(date +%H:%M:%S)] flag not confirmed yet (check $retry/$retries) but a turn is running: not reinjecting"
+      continue
+    fi
+    if [ -f "$flag" ]; then
+      echo "[$(date +%H:%M:%S)] flag is from a previous boot and no turn ran (check $retry/$retries): reinjecting"
+    else
+      echo "[$(date +%H:%M:%S)] flag missing (check $retry/$retries): reinjecting"
+    fi
+    tui_send_verified "$sess" "$msg"
+    case $? in
+      0) ;;
+      2) echo "[$(date +%H:%M:%S)] SUBMIT NOT CONFIRMED (text left in the composer, Enter not accepted)" ;;
+      *) echo "[$(date +%H:%M:%S)] tui_send_verified failed" ;;
+    esac
+  done
+  if ! _welcome_flag_fresh "$flag" "$marker"; then
+    echo "[$(date +%H:%M:%S)] watchdog giving up: welcome not confirmed"
+    return 1
+  fi
+  return 0
 }
