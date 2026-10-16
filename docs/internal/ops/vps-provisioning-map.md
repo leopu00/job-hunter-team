@@ -55,6 +55,8 @@ sono quelli riservati alla documentazione (`192.0.2.x`).
 | Disco pieno | stesso file (controllo in `install.sh`, prima di installare Docker) |
 | Doppio rilancio | stesso file (secondo giro identico; solo il token cambia con un token nuovo; PATH scritto una volta) |
 | Probe/conferma del pin in Rust | test unitari in `runtime_host.rs` |
+| Errori ssh (255) e installer (86/87) distinti dal fallimento del passo; timeout armato prima di scrivere su stdin | test unitari in `onboarding.rs` e `runtime_host.rs` |
+| Token di pairing fuori dagli argomenti dei processi sul server | `tests/test_vps_provisioning_sequence.py` (gli argomenti e l'ambiente dei figli dell'installer) |
 
 ## Cosa resta senza prova
 
