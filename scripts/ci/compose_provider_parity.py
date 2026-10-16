@@ -74,6 +74,44 @@ def _mount(value: Any) -> dict[str, Any]:
     return result
 
 
+def _port(value: Any) -> dict[str, Any]:
+    """Short "[host_ip:]published:target[/protocol]" and the long form alike.
+
+    docker-compose writes the long form, with mode "ingress" as its default;
+    podman-compose keeps the short string.
+    """
+    if isinstance(value, dict):
+        result = {
+            "host_ip": str(value.get("host_ip") or ""),
+            "published": str(value.get("published") or ""),
+            "target": int(value["target"]),
+            "protocol": str(value.get("protocol") or "tcp"),
+        }
+        if value.get("mode") not in (None, "", "ingress"):
+            result["mode"] = value["mode"]
+        return result
+    text = str(value)
+    protocol = "tcp"
+    if "/" in text:
+        text, protocol = text.rsplit("/", 1)
+    parts = text.rsplit(":", 2)
+    host_ip, published = "", ""
+    if len(parts) == 3:
+        host_ip, published, target = parts
+    elif len(parts) == 2:
+        published, target = parts
+    else:
+        target = parts[0]
+    if not target.isdigit() or (published and not published.isdigit()):
+        raise ComposeProviderParityError(f"unsupported port: {value}")
+    return {
+        "host_ip": host_ip.strip("[]"),
+        "published": published,
+        "target": int(target),
+        "protocol": protocol,
+    }
+
+
 def _key_value(value: Any, separator: str = "=") -> dict[str, Any]:
     if isinstance(value, dict):
         return dict(value)
@@ -138,6 +176,11 @@ def _service(value: dict[str, Any]) -> dict[str, Any]:
             (_mount(mount) for mount in service["volumes"]),
             key=lambda mount: (str(mount.get("target")), str(mount.get("source"))),
         )
+    if "ports" in service:
+        service["ports"] = sorted(
+            (_port(port) for port in service["ports"]),
+            key=lambda port: (port["target"], port["protocol"], port["published"]),
+        )
     if "networks" in service:
         service["networks"] = _networks(service["networks"])
     elif "network_mode" not in service:
@@ -183,9 +226,36 @@ def normalize_project(value: dict[str, Any], project: str = PROJECT) -> dict[str
     return result
 
 
-def assert_projects_equal(podman_project: dict[str, Any], docker_project: dict[str, Any]) -> None:
-    podman = normalize_project(podman_project)
-    docker = normalize_project(docker_project)
+def _rebase_home(project: dict[str, Any], home: str | None) -> dict[str, Any]:
+    """Write bind sources under ``home`` as ``${HOME}/...``.
+
+    JHT runs podman-compose on Linux and macOS, where HOME is a POSIX path,
+    and docker-compose.exe on Windows, where it carries a drive letter. The
+    same ``${HOME}/.jht`` bind therefore has a different host prefix per
+    provider; what must match is everything after it.
+    """
+    if not home:
+        return project
+    prefix = _canonical_path(home)
+    for service in project.get("services", {}).values():
+        for mount in service.get("volumes", []):
+            source = mount.get("source")
+            if mount.get("type") != "bind" or not isinstance(source, str):
+                continue
+            if source == prefix or source.startswith(prefix + "/"):
+                mount["source"] = "${HOME}" + source[len(prefix) :]
+    return project
+
+
+def assert_projects_equal(
+    podman_project: dict[str, Any],
+    docker_project: dict[str, Any],
+    *,
+    podman_home: str | None = None,
+    docker_home: str | None = None,
+) -> None:
+    podman = _rebase_home(normalize_project(podman_project), podman_home)
+    docker = _rebase_home(normalize_project(docker_project), docker_home)
     if podman == docker:
         return
     podman_text = json.dumps(podman, indent=2, sort_keys=True).splitlines()
@@ -228,9 +298,13 @@ def render_and_compare(root: Path, podman_compose: str, podman: str, docker_comp
         home = Path(temporary) / "JHT User"
         (home / ".jht").mkdir(parents=True)
         (home / "Documents" / "Job Hunter Team").mkdir(parents=True)
+        # Each provider gets the HOME it has in the product: docker-compose.exe
+        # a Windows folder, podman-compose (Linux and macOS only) a POSIX path.
+        # On Windows podman-compose splits "D:\...\.jht:/jht_home" on the
+        # drive letter's colon; no JHT user ever hands it such a path.
+        podman_home = "/home/jht-parity/JHT User" if os.name == "nt" else str(home)
         environment.update(
             {
-                "HOME": str(home),
                 "JHT_IMAGE": "ghcr.io/leopu00/jht@sha256:" + "a" * 64,
                 "JHT_HOST_TYPE": "vps",
                 "JHT_LANG": "it",
@@ -255,13 +329,24 @@ def render_and_compare(root: Path, podman_compose: str, podman: str, docker_comp
         override = root / "docker-compose.podman.yml"
         common = ["-p", PROJECT, "-f", str(compose), "-f", str(override), "config"]
         podman_yaml = _run(
-            [podman_compose, "--podman-path", podman, *common], root, environment
+            [podman_compose, "--podman-path", podman, *common],
+            root,
+            {**environment, "HOME": podman_home},
         )
-        docker_version = _run([docker_compose, "version"], root, environment)
-        if f"version {DOCKER_COMPOSE_VERSION}" not in docker_version:
+        docker_environment = {**environment, "HOME": str(home)}
+        docker_version = _run([docker_compose, "version"], root, docker_environment)
+        # docker-compose prints "Docker Compose version v5.1.2".
+        if not re.search(rf"\bversion v?{re.escape(DOCKER_COMPOSE_VERSION)}\b", docker_version):
             raise ComposeProviderParityError("docker-compose.exe must be exactly 5.1.2")
-        docker_json = _run([docker_compose, *common, "--format", "json"], root, environment)
-        assert_projects_equal(yaml.safe_load(podman_yaml), json.loads(docker_json))
+        docker_json = _run(
+            [docker_compose, *common, "--format", "json"], root, docker_environment
+        )
+        assert_projects_equal(
+            yaml.safe_load(podman_yaml),
+            json.loads(docker_json),
+            podman_home=podman_home,
+            docker_home=str(home),
+        )
 
 
 def main() -> int:
