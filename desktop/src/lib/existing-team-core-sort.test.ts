@@ -3,6 +3,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { readerOnDatabase } from "./existing-team-reader-fixture";
 
 // The reader the core runs on the team's VPS (POSITIONS_READ_PY in
 // src-tauri/src/existing_team_runtime.rs), run for real on a database shaped
@@ -87,7 +88,7 @@ beforeAll(() => {
   const database = join(dir, "jobs.db");
   expect(spawnSync("python3", ["-I", "-c", SETUP, database]).status).toBe(0);
   reader = join(dir, "reader.py");
-  writeFileSync(reader, READER.replace("file:/jht_home/jobs.db?mode=ro", `file:${database}?mode=ro`));
+  writeFileSync(reader, readerOnDatabase(READER, database));
 });
 afterAll(() => {
   if (dir) rmSync(dir, { recursive: true, force: true });

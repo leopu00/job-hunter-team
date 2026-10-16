@@ -4,6 +4,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, 
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { readerOnProfile } from "./existing-team-reader-fixture";
 
 // The reader the core runs on the team's VPS (POSITIONS_READ_PY in
 // src-tauri/src/existing_team_runtime.rs), run for real on a synthetic profile
@@ -45,7 +46,7 @@ beforeEach(() => {
   if (!available) return;
   profile = join(root, `p${Math.random().toString(36).slice(2)}`);
   mkdirSync(profile);
-  writeFileSync(reader, READER.replace("'/jht_home/profile'", `'${profile}'`));
+  writeFileSync(reader, readerOnProfile(READER, profile));
 });
 afterEach(() => {
   if (profile) rmSync(profile, { recursive: true, force: true });
