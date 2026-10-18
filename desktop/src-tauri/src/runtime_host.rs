@@ -702,6 +702,49 @@ where
     (Ok(code), taken(&kept))
 }
 
+/// What `wait_until` needs from a process: say whether it has ended, and stop it.
+trait Waited {
+    fn poll(&mut self) -> std::io::Result<Option<std::process::ExitStatus>>;
+    /// Kill it and reap it.
+    fn stop(&mut self);
+}
+
+impl Waited for std::process::Child {
+    fn poll(&mut self) -> std::io::Result<Option<std::process::ExitStatus>> {
+        self.try_wait()
+    }
+    fn stop(&mut self) {
+        let _ = self.kill();
+        let _ = self.wait();
+    }
+}
+
+/// Waits for a process to end, up to `timeout` from `started`. A deadline that
+/// passes and a wait that fails both stop the process: one left running holds
+/// the pipe the input's writer is blocked on, and the writer is joined next.
+fn wait_until<W: Waited>(
+    child: &mut W,
+    started: Instant,
+    timeout: Duration,
+    poll: Duration,
+) -> Result<std::process::ExitStatus, &'static str> {
+    loop {
+        match child.poll() {
+            Ok(Some(status)) => return Ok(status),
+            Ok(None) => {}
+            Err(_) => {
+                child.stop();
+                return Err("process_wait_failed");
+            }
+        }
+        if started.elapsed() >= timeout {
+            child.stop();
+            return Err("process_timeout");
+        }
+        thread::sleep(poll);
+    }
+}
+
 pub(crate) fn run_program<I, S>(
     program: &str,
     args: I,
@@ -774,19 +817,7 @@ where
             }
             _ => None,
         };
-        let status = loop {
-            match child.try_wait() {
-                Ok(Some(status)) => break Ok(status),
-                Ok(None) => {}
-                Err(_) => break Err("process_wait_failed"),
-            }
-            if started.elapsed() >= timeout {
-                let _ = child.kill();
-                let _ = child.wait();
-                break Err("process_timeout");
-            }
-            thread::sleep(Duration::from_millis(50));
-        };
+        let status = wait_until(&mut child, started, timeout, Duration::from_millis(50));
         let input_written = match writer {
             Some(handle) => handle.join().map(|result| result.is_ok()).unwrap_or(false),
             None => true,
@@ -873,6 +904,69 @@ mod tests {
         for bad in ["", "-root", "root@host", "user name", "a/b"] {
             assert!(!valid_user(bad), "{bad}");
         }
+    }
+
+    /// A process that is not a process: it answers what the test says and
+    /// counts how often it was stopped.
+    struct Scripted {
+        answers: std::collections::VecDeque<std::io::Result<Option<std::process::ExitStatus>>>,
+        stopped: usize,
+    }
+
+    impl super::Waited for Scripted {
+        fn poll(&mut self) -> std::io::Result<Option<std::process::ExitStatus>> {
+            self.answers.pop_front().unwrap_or(Ok(None))
+        }
+        fn stop(&mut self) {
+            self.stopped += 1;
+        }
+    }
+
+    fn scripted(
+        answers: Vec<std::io::Result<Option<std::process::ExitStatus>>>,
+    ) -> Scripted {
+        Scripted { answers: answers.into(), stopped: 0 }
+    }
+
+    #[test]
+    fn a_wait_that_fails_stops_the_process_before_giving_up() {
+        let mut child = scripted(vec![Ok(None), Err(std::io::Error::other("wait failed"))]);
+        let result = super::wait_until(
+            &mut child,
+            std::time::Instant::now(),
+            std::time::Duration::from_secs(60),
+            std::time::Duration::from_millis(1),
+        );
+        assert_eq!(result.unwrap_err(), "process_wait_failed");
+        assert_eq!(child.stopped, 1, "a process left running holds the pipe the writer is blocked on");
+    }
+
+    #[test]
+    fn a_deadline_that_passes_stops_the_process_once() {
+        let mut child = scripted(vec![]);
+        let result = super::wait_until(
+            &mut child,
+            std::time::Instant::now(),
+            std::time::Duration::ZERO,
+            std::time::Duration::from_millis(1),
+        );
+        assert_eq!(result.unwrap_err(), "process_timeout");
+        assert_eq!(child.stopped, 1);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_process_that_ended_is_not_stopped() {
+        use std::os::unix::process::ExitStatusExt;
+        let mut child = scripted(vec![Ok(None), Ok(Some(std::process::ExitStatus::from_raw(0)))]);
+        let result = super::wait_until(
+            &mut child,
+            std::time::Instant::now(),
+            std::time::Duration::from_secs(60),
+            std::time::Duration::from_millis(1),
+        );
+        assert!(result.unwrap().success());
+        assert_eq!(child.stopped, 0);
     }
 
     #[cfg(unix)]
