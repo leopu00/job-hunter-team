@@ -233,5 +233,6 @@
   "disk.warning": "Der Speicherplatz wird knapp: nur noch %s sind frei. Gib bald Platz frei, sonst startet das Team keine neuen Agenten und Updates mehr.",
   "disk.low": "Die Festplatte ist fast voll (nur noch %s frei): Es wird kein neuer Agent gestartet und kein Update installiert. Bereits laufende Agenten arbeiten weiter. So schaffst du Platz: Leere den Papierkorb und lösche große Dateien, die du nicht mehr brauchst, etwa alte Downloads oder ungenutzte Docker/Podman-Images, und versuche es dann erneut.",
   "question.expired": "Frage abgelaufen: „%s“. Ich habe getan: „%s“. Wenn du etwas anderes möchtest, schreib es mir hier, dann frage ich neu.",
-  "question.postpone": "Verschieben, nichts tun"
+  "question.postpone": "Verschieben, nichts tun",
+  "question.reply_hint": "Antworte mit der Nummer der Option (zum Beispiel 2). Sind mehrere Fragen offen, schreib „%s 2“."
 }

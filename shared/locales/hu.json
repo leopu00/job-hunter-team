@@ -234,5 +234,6 @@
   "disk.warning": "Fogy a lemezterület: csak %s szabad. Szabadíts fel helyet hamarosan, különben a csapat nem indít több új ügynököt és frissítést.",
   "disk.low": "A lemez majdnem megtelt (csak %s szabad), ezért nem indul új ügynök, és nem települ frissítés. A már elindított ügynökök tovább futnak. Hely felszabadításához: ürítsd ki a Kukát, és töröld a nagy, már nem szükséges fájlokat, például a régi letöltéseket vagy a nem használt Docker/Podman-képeket, majd próbáld újra.",
   "question.expired": "A kérdés lejárt: „%s”. Ezt tettem: „%s”. Ha mást szeretnél, írd ide, és újra megkérdezlek.",
-  "question.postpone": "Halaszd el, ne csinálj semmit"
+  "question.postpone": "Halaszd el, ne csinálj semmit",
+  "question.reply_hint": "Válaszolj a lehetőség számával (például 2). Ha több kérdés is nyitva van, írd: „%s 2”."
 }

@@ -34,6 +34,7 @@ Run the tests with: pytest tests/test_agent_questions.py -v
 
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 import secrets
@@ -76,6 +77,10 @@ MAX_PAYLOAD_CHARS = 8000
 ALLOW_CUSTOM_DEFAULT = False
 
 _OPTION_ID = re.compile(r"[a-z0-9][a-z0-9_]{0,23}")
+# The shape `build_question` gives a question id: anything else in `source_id` or in an
+# answer's `id_domanda` was not written by this module.
+QUESTION_ID_RE = re.compile(r"aq:[a-z0-9][a-z0-9_-]{0,39}:[0-9]+-[a-z0-9]{1,16}")
+ORIGINS = ("utente", "scadenza")
 _AGENT = re.compile(r"[a-z0-9][a-z0-9_-]{0,39}")
 _DURATION = re.compile(r"([0-9]{1,4})([mhd])")
 
@@ -113,6 +118,8 @@ class Answer:
     id_domanda: str
     answer: dict
     row_id: int | None = None
+    # Set when this call applied the expiry first (a late answer): the user is owed the notice.
+    expiry_notice: "Expired | None" = None
 
 
 @dataclass(frozen=True)
@@ -269,6 +276,14 @@ def validate_question_payload(payload: Any) -> dict:
     return dict(payload)
 
 
+def answer_code(id_domanda: str) -> str:
+    """The short code a user repeats when several questions are open: `Q` + 4 hex.
+
+    The same function as `application_answers.answer_code` (a test holds them equal).
+    """
+    return "Q" + hashlib.sha256(str(id_domanda).encode("utf-8")).hexdigest()[:4].upper()
+
+
 def kind_for(tipo: str) -> str:
     """The `kind` the database (and the cloud CHECK) already knows."""
     return "alert" if tipo == "urgente" else "question"
@@ -333,8 +348,11 @@ def build_question(
     if len(payload_json) > MAX_PAYLOAD_CHARS:
         raise QuestionRejected("payload_too_large", f"max {MAX_PAYLOAD_CHARS} characters")
     source_id = f"aq:{agent}:{int(now.timestamp())}-{nonce or secrets.token_hex(3)}"
-    bullets = "\n".join(f"• {option['label']}" for option in options)
-    body = f"{clean_text}\n\n{bullets}"
+    # Numbered, with the code and one line on how to reply: a UI that only has a text
+    # box (the web, the desktop today) can still give an answer the reader accepts.
+    numbered = "\n".join(f"{number}. {option['label']}" for number, option in enumerate(options, 1))
+    hint = catalog_text("question.reply_hint", answer_code(source_id), lang=lang)
+    body = f"{clean_text}\n\n{numbered}\n\n{hint}"
     return Question(
         source_id=source_id,
         agent=agent,
@@ -357,6 +375,8 @@ def _row_dict(conn: sqlite3.Connection, query: str, args: Sequence[Any]) -> list
 
 def load_question(conn: sqlite3.Connection, id_domanda: str) -> dict | None:
     """The stored question as {row, payload}; None if absent. Raises QuestionRejected if forged."""
+    if not isinstance(id_domanda, str) or not QUESTION_ID_RE.fullmatch(id_domanda):
+        raise QuestionRejected("id_invalid")
     rows = _row_dict(
         conn,
         "SELECT id, agent, body, kind, related_position_id, source_id, source_payload, user_reply, user_reply_at "
@@ -534,17 +554,18 @@ def record_answer(
     if question is None:
         raise AnswerRejected("question_unknown")
     choices, text = validate_answer(question["payload"], scelte, testo)
+    notice = None
     with _transaction(conn):
         expiry = question["payload"]["scadenza"]
         if expiry is not None and now >= parse_iso(expiry):
             # Too late: the expiry is applied first, so this answer meets its unique key.
-            _expire(conn, question, id_domanda, now, None)
+            notice = _expire(conn, question, id_domanda, now, None)
         inserted, answer, row_id = _insert_answer(conn, question, id_domanda, choices, text, canale, "utente", now)
     if inserted:
         return Answer("recorded", id_domanda, answer, row_id)
     stored = existing_answer(conn, id_domanda) or {}
     late = expiry is not None and now >= parse_iso(expiry) and stored.get("origine") == "scadenza"
-    return Answer("expired" if late else "already_answered", id_domanda, stored)
+    return Answer("expired" if late else "already_answered", id_domanda, stored, expiry_notice=notice)
 
 
 def expire_due(
@@ -640,8 +661,73 @@ def render_answer(answer: Mapping[str, Any], question: Mapping[str, Any] | None 
     return "\n".join(lines)
 
 
+def _row_time(text: Any) -> datetime:
+    """When a row says the user replied. The web writes ISO with milliseconds, SQLite 'YYYY-MM-DD HH:MM:SS'."""
+    raw = str(text or "").strip()
+    for candidate in (raw.replace("Z", "+00:00"), raw.replace(" ", "T") + "+00:00"):
+        try:
+            moment = datetime.fromisoformat(candidate)
+        except ValueError:
+            continue
+        if moment.tzinfo is None:
+            moment = moment.replace(tzinfo=timezone.utc)
+        return moment.astimezone(timezone.utc).replace(microsecond=0)
+    return utc_now()
+
+
+def validated_answer(conn: sqlite3.Connection, agent: str, row: Mapping[str, Any]) -> tuple[dict, dict]:
+    """The answer a stored row claims to be, believed only if it is one this module could have written.
+
+    A row in `pending_user_messages` can be written by anything that holds the database
+    (an agent in the container) or imported from the cloud. Reading it as data is not
+    believing it: the id has the shape of ours, the question exists and is the same
+    agent's, the choices are the question's, origin and channel are in the lists. What
+    comes out is rebuilt from the checked fields: nothing of the stored text passes through.
+    Raises AnswerRejected(code); the code is all the agent is told.
+    """
+    try:
+        stored = json.loads(row["source_payload"] or "")
+    except (ValueError, TypeError):
+        raise AnswerRejected("payload_invalid") from None
+    if not isinstance(stored, dict):
+        raise AnswerRejected("payload_invalid")
+    id_domanda = stored.get("id_domanda")
+    if not isinstance(id_domanda, str) or not QUESTION_ID_RE.fullmatch(id_domanda):
+        raise AnswerRejected("id_invalid")
+    if row["source_id"] != ANSWER_PREFIX + id_domanda:
+        raise AnswerRejected("id_mismatch")
+    try:
+        loaded = load_question(conn, id_domanda)
+    except QuestionRejected:
+        raise AnswerRejected("question_invalid") from None
+    if loaded is None:
+        raise AnswerRejected("question_unknown")
+    if loaded["row"]["agent"] != agent:
+        raise AnswerRejected("agent_mismatch")
+    payload = loaded["payload"]
+    origine, canale = stored.get("origine"), stored.get("canale")
+    if origine not in ORIGINS:
+        raise AnswerRejected("origin_invalid")
+    if canale not in CANALI:
+        raise AnswerRejected("channel_invalid")
+    scelte, testo = stored.get("scelte"), stored.get("testo", "")
+    choices, text = validate_answer(payload, scelte, testo)
+    if origine == "scadenza" and (payload["scadenza"] is None or choices != [payload["default"]] or text):
+        raise AnswerRejected("expiry_inconsistent")
+    try:
+        stamp = iso(parse_iso(stored.get("ts")))
+    except ValueError:
+        raise AnswerRejected("ts_invalid") from None
+    clean = {"id_domanda": id_domanda, "scelte": choices, "testo": text, "ts": stamp, "origine": origine, "canale": canale}
+    return clean, payload
+
+
 def answers_for_agent(conn: sqlite3.Connection, agent: str, *, mark_seen: bool = True) -> list[dict]:
-    """Structured answers this agent has not read yet: {row_id, answer, question}."""
+    """Structured answers this agent has not read yet.
+
+    Each item is {row_id, answer, question} for an answer that checks out, or
+    {row_id, invalid: code} for a row that does not: the agent is told THAT, never what it said.
+    """
     rows = _row_dict(
         conn,
         "SELECT id, source_id, source_payload FROM pending_user_messages "
@@ -651,16 +737,11 @@ def answers_for_agent(conn: sqlite3.Connection, agent: str, *, mark_seen: bool =
     found: list[dict] = []
     for row in rows:
         try:
-            answer = json.loads(row["source_payload"] or "")
-        except ValueError:
+            answer, question = validated_answer(conn, agent, row)
+        except AnswerRejected as error:
+            found.append({"row_id": row["id"], "invalid": error.code})
             continue
-        if not isinstance(answer, dict) or not isinstance(answer.get("id_domanda"), str):
-            continue
-        try:
-            loaded = load_question(conn, answer["id_domanda"])
-        except QuestionRejected:
-            loaded = None
-        found.append({"row_id": row["id"], "answer": answer, "question": loaded["payload"] if loaded else None})
+        found.append({"row_id": row["id"], "answer": answer, "question": question})
     if mark_seen and found:
         stamp = ",".join("?" for _ in found)
         conn.execute(
@@ -671,17 +752,53 @@ def answers_for_agent(conn: sqlite3.Connection, agent: str, *, mark_seen: bool =
     return found
 
 
-def legacy_replies_on_questions(conn: sqlite3.Connection, agent: str, *, mark_seen: bool = True) -> list[dict]:
-    """Free text typed on a structured question by a UI that predates this contract.
+def interpret_reply(payload: Mapping[str, Any], id_domanda: str, text: str) -> str:
+    """The option id a typed reply stands for. Accepts exactly three forms, nothing else:
 
-    Allowed only if the question is `libera`: it becomes a text answer. Otherwise it is
-    reported as invalid and the question stays open. Either way it is read once.
+    - the number of an option, as listed in the question (`2`);
+    - the question's code and the number (`Q1A2B 2`) — the code must be this question's;
+    - the exact label of an option (case apart).
+
+    Raises AnswerRejected: `code_mismatch`, `number_out_of_range`, `reply_not_an_option`.
+    """
+    options = payload["opzioni"]
+    reply = " ".join(str(text or "").split())
+    number = None
+    coded = re.fullmatch(r"(?i)(q[0-9a-f]{4})\s+([0-9]{1,2})", reply)
+    if coded:
+        if coded.group(1).upper() != answer_code(id_domanda):
+            raise AnswerRejected("code_mismatch")
+        number = int(coded.group(2))
+    elif re.fullmatch(r"[0-9]{1,2}", reply):
+        number = int(reply)
+    if number is not None:
+        if not 1 <= number <= len(options):
+            raise AnswerRejected("number_out_of_range")
+        return options[number - 1]["id"]
+    for option in options:
+        if option["label"].casefold() == reply.casefold() and reply:
+            return option["id"]
+    raise AnswerRejected("reply_not_an_option")
+
+
+def legacy_replies_on_questions(conn: sqlite3.Connection, agent: str, *, mark_seen: bool = True) -> list[dict]:
+    """What the user typed into a UI that only has a text box (the web, the desktop today).
+
+    It counts as an answer if it is exactly the number of an option, `Q#### <number>`, or
+    an option's exact label. A question that allows free text (`libera`) also takes any
+    other text, as a text-only answer. Anything else is reported as invalid and the
+    question stays open. Either way it is read once; a later reply is read again.
+
+    The reply is dated by the moment the user wrote it, not by the moment it is read: an
+    answer given before the deadline is not lost because the agent looked later.
+    Each note: {id_domanda, status, code?, expiry_notice?}.
     """
     rows = _row_dict(
         conn,
         "SELECT q.id, q.source_id, q.user_reply, q.user_reply_at FROM pending_user_messages q "
         "WHERE q.agent = ? AND q.source_action = ? AND q.user_reply IS NOT NULL "
-        "AND q.user_reply_at IS NOT NULL AND q.agent_seen_reply_at IS NULL "
+        "AND q.user_reply_at IS NOT NULL "
+        "AND (q.agent_seen_reply_at IS NULL OR datetime(q.agent_seen_reply_at) < datetime(q.user_reply_at)) "
         "AND NOT EXISTS (SELECT 1 FROM pending_user_messages a WHERE a.source_id = ? || q.source_id) "
         "ORDER BY q.id",
         (agent, SOURCE_ACTION, ANSWER_PREFIX),
@@ -694,15 +811,22 @@ def legacy_replies_on_questions(conn: sqlite3.Connection, agent: str, *, mark_se
             loaded = None
         if loaded is None:
             continue
-        reply = row["user_reply"] or ""
-        if loaded["payload"]["libera"]:
+        payload, reply, when = loaded["payload"], row["user_reply"] or "", _row_time(row["user_reply_at"])
+        note: dict = {"id_domanda": row["source_id"]}
+        try:
             try:
-                record_answer(conn, row["source_id"], [], reply, canale="web")
-                results.append({"id_domanda": row["source_id"], "status": "converted"})
+                choice = interpret_reply(payload, row["source_id"], reply)
+                answered = record_answer(conn, row["source_id"], [choice], "", canale="web", now=when)
             except AnswerRejected as error:
-                results.append({"id_domanda": row["source_id"], "status": "invalid", "code": error.code})
-        else:
-            results.append({"id_domanda": row["source_id"], "status": "invalid", "code": "free_text_not_allowed"})
+                if error.code != "reply_not_an_option" or not payload["libera"]:
+                    raise
+                answered = record_answer(conn, row["source_id"], [], reply, canale="web", now=when)
+            note["status"] = "converted" if answered.status == "recorded" else answered.status
+            if answered.expiry_notice is not None:
+                note["expiry_notice"] = answered.expiry_notice
+        except AnswerRejected as error:
+            note.update(status="invalid", code=error.code)
+        results.append(note)
         if mark_seen:
             conn.execute(
                 "UPDATE pending_user_messages SET agent_seen_reply_at = CURRENT_TIMESTAMP WHERE id = ?",

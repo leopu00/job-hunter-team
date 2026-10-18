@@ -233,5 +233,6 @@
   "disk.warning": "L’espace disque s’épuise : seulement %s sont libres. Libère vite de la place, sinon l’équipe ne démarrera plus de nouveaux agents ni de mises à jour.",
   "disk.low": "Le disque est presque plein (seulement %s sont libres) : aucun nouvel agent ne sera démarré et aucune mise à jour installée. Les agents déjà lancés continuent. Pour libérer de la place : vide la corbeille et supprime les gros fichiers dont tu n’as plus besoin, comme d’anciens téléchargements ou des images Docker/Podman inutilisées, puis réessaie.",
   "question.expired": "Question expirée : « %s ». J’ai fait : « %s ». Si tu préfères autre chose, écris-le-moi ici et je te reposerai la question.",
-  "question.postpone": "Reporter, ne rien faire"
+  "question.postpone": "Reporter, ne rien faire",
+  "question.reply_hint": "Réponds avec le numéro de l’option (par exemple 2). Si plusieurs questions sont ouvertes, écris « %s 2 »."
 }

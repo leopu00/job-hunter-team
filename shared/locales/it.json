@@ -233,5 +233,6 @@
   "disk.warning": "Lo spazio sul disco sta finendo: è libero solo %s. Libera presto un po' di spazio, altrimenti il team smetterà di avviare nuovi agenti e aggiornamenti.",
   "disk.low": "Il disco è quasi pieno (è libero solo %s): non viene avviato nessun nuovo agente né installato nessun aggiornamento. Gli agenti già avviati continuano. Per liberare spazio: svuota il Cestino ed elimina i file grandi che non ti servono, come vecchi download o immagini Docker/Podman inutilizzate, poi riprova.",
   "question.expired": "Domanda scaduta: «%s». Ho fatto: «%s». Se vuoi un’altra scelta, scrivimelo qui e te lo richiedo.",
-  "question.postpone": "Rinvia, non fare niente"
+  "question.postpone": "Rinvia, non fare niente",
+  "question.reply_hint": "Rispondi con il numero dell’opzione (ad esempio 2). Se hai più domande aperte, scrivi «%s 2»."
 }

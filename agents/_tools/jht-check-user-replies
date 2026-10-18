@@ -150,9 +150,12 @@ def structured_answers(db_path: str, agent: str, peek: bool):
             return [], [], aq
         notes: list[dict] = []
         if not peek:
-            expired = aq.expire_due(conn, agent=agent)
+            # First what the user typed (dated by when they typed it), THEN the deadlines:
+            # an answer given in time must not lose to a default just because the agent
+            # looked late.
             notes = aq.legacy_replies_on_questions(conn, agent)
-            deliver_expired(expired)
+            expired = aq.expire_due(conn, agent=agent)
+            deliver_expired([n["expiry_notice"] for n in notes if n.get("expiry_notice")] + expired)
         return aq.answers_for_agent(conn, agent, mark_seen=not peek), notes, aq
     except sqlite3.Error as e:
         print(f"jht-check-user-replies: warning, domande strutturate non lette: {e}", file=sys.stderr)
@@ -229,6 +232,8 @@ def main() -> int:
     rows = fetch_replies(db_path, agent=args.agent, limit=max(1, args.limit))
     answers, notes, aq = structured_answers(db_path, args.agent, args.peek)
     invalid = [n for n in notes if n.get("status") == "invalid"]
+    broken = [a for a in answers if "invalid" in a]       # stored rows that fail the checks
+    answers = [a for a in answers if "answer" in a]
 
     if args.as_json:
         items = list(rows)
@@ -247,6 +252,8 @@ def main() -> int:
             })
         for note in invalid:
             items.append({"kind": "agent_question_invalid", "id_domanda": note["id_domanda"], "codice": note.get("code")})
+        for item in broken:
+            items.append({"kind": "agent_question_answer_invalid", "riga": item["row_id"], "codice": item["invalid"]})
         print(json.dumps(items, ensure_ascii=False, default=str))
     else:
         parts = []
@@ -259,6 +266,12 @@ def main() -> int:
             parts.append(
                 f"[USER ANSWER INVALID id={note['id_domanda']} codice={note.get('code')}] "
                 "risposta non ammessa da questa domanda: la domanda resta aperta."
+            )
+        for item in broken:
+            # Nothing of the stored row is shown: it did not pass the checks, so it is not data.
+            parts.append(
+                f"[USER ANSWER INVALID riga={item['row_id']} codice={item['invalid']}] "
+                "riga di risposta non valida: ignorata."
             )
         if parts:
             print("\n\n".join(parts))

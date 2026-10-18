@@ -263,5 +263,6 @@
   "disk.warning": "Disk space is running low: only %s is free. Free some space soon, or the team will stop starting new agents and updates.",
   "disk.low": "The disk is almost full (only %s is free), so no new agent will be started and no update installed. The agents already running keep going. To free space: empty the Trash and delete large files you no longer need, such as old downloads or unused Docker/Podman images, then try again.",
   "question.expired": "Question expired: “%s”. I did: “%s”. If you want something else, tell me here and I will ask again.",
-  "question.postpone": "Postpone, do nothing"
+  "question.postpone": "Postpone, do nothing",
+  "question.reply_hint": "Reply with the option number (for example 2). If several questions are open, write “%s 2”."
 }
