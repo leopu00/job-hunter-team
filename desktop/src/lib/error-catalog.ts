@@ -1263,21 +1263,21 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
     "Confirm to free up space. If the container engine is off I do not start it and remove nothing.",
   ),
   clean_images_confirm_vm: copy(
-    "Tolgo solo le vecchie versioni di Job Hunter Team che non servono più, dentro la macchina virtuale di Podman: restano quella in uso, la precedente, quelle usate da un container e le immagini di altri programmi. Dati e volumi non vengono toccati.",
+    "Tolgo solo le vecchie versioni di Job Hunter Team che non servono più, dentro la macchina virtuale del motore dei container: restano quella in uso, la precedente, quelle usate da un container e le immagini di altri programmi. Dati e volumi non vengono toccati.",
     "Conferma per liberare spazio. Lo spazio si libera nella macchina virtuale, quindi il disco del Mac potrebbe non guadagnarne.",
-    "I remove only the old versions of Job Hunter Team that are no longer needed, inside Podman’s virtual machine: the one in use, the previous one, those used by a container and other programs’ images stay. Data and volumes are not touched.",
+    "I remove only the old versions of Job Hunter Team that are no longer needed, inside the container engine’s virtual machine: the one in use, the previous one, those used by a container and other programs’ images stay. Data and volumes are not touched.",
     "Confirm to free up space. The space is freed in the virtual machine, so the Mac’s disk may not gain any.",
   ),
   clean_images_freed: copy(
-    "Ho tolto le vecchie versioni di Job Hunter Team e liberato circa {size}.",
+    "Ho tolto le vecchie versioni di Job Hunter Team e liberato fino a circa {size}.",
     "Riprova ad avviare la squadra. Se il disco è ancora quasi pieno, svuota il Cestino ed elimina i file grandi che non ti servono.",
-    "I removed the old versions of Job Hunter Team and freed about {size}.",
+    "I removed the old versions of Job Hunter Team and freed up to about {size}.",
     "Try starting the team again. If the disk is still almost full, empty the Trash and delete large files you no longer need.",
   ),
   clean_images_freed_vm: copy(
-    "Ho tolto le vecchie versioni di Job Hunter Team e liberato circa {size} nella macchina virtuale di Podman.",
+    "Ho tolto le vecchie versioni di Job Hunter Team e liberato fino a circa {size} nella macchina virtuale del motore dei container.",
     "Riprova ad avviare la squadra. Lo spazio sul disco del Mac può restare lo stesso: se non basta, svuota il Cestino ed elimina i file grandi che non ti servono.",
-    "I removed the old versions of Job Hunter Team and freed about {size} in Podman’s virtual machine.",
+    "I removed the old versions of Job Hunter Team and freed up to about {size} in the container engine’s virtual machine.",
     "Try starting the team again. The space on the Mac’s disk may stay the same: if it is not enough, empty the Trash and delete large files you no longer need.",
   ),
   clean_images_nothing: copy(

@@ -16,7 +16,7 @@ export interface CleanImagesOutcome {
   refused: number;
   inUse: number;
   skipped: CleanImagesSkipped;
-  /** The images live in Podman's virtual machine (macOS): the space is freed there. */
+  /** The images live in the container engine's virtual machine (macOS: Colima, Podman or Docker Desktop): the space is freed there. */
   virtualMachine: boolean;
 }
 

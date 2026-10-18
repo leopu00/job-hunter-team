@@ -48,7 +48,7 @@ async function freeSpace(user: ReturnType<typeof userEvent.setup>) {
 const resultLine = () => document.querySelector(".onboarding-free-space");
 
 describe("«Free up space» on a full disk", () => {
-  it("asks first, then tells the freed space in GB, on the Mac as space of Podman's virtual machine", async () => {
+  it("asks first, then tells the freed space in GB, on the Mac as space of the container engine's virtual machine", async () => {
     const user = userEvent.setup();
     const onFreeDiskSpace = vi.fn().mockResolvedValue(outcome({ removed: 2, freedBytes: 3_435_973_837, inUse: 1, virtualMachine: true }));
     renderFlow({ platform: "macos", onFreeDiskSpace });
@@ -67,7 +67,7 @@ describe("«Free up space» on a full disk", () => {
     const expected = describeError("clean_images_freed_vm", { locale: "it", bytes: 3_435_973_837 });
     expect(expected.known).toBe(true);
     expect(resultLine()).toHaveTextContent(`${expected.text} ${expected.action}`);
-    expect(resultLine()).toHaveTextContent("3,2 GB nella macchina virtuale di Podman");
+    expect(resultLine()).toHaveTextContent("fino a circa 3,2 GB nella macchina virtuale del motore dei container");
     expect(expected.action).toContain("disco del Mac");
   });
 
@@ -78,7 +78,7 @@ describe("«Free up space» on a full disk", () => {
     expect(screen.getByRole("region", { name: t.freeSpaceAria }))
       .toHaveTextContent(describeError("clean_images_confirm", { locale: "it" }).text);
     await user.click(screen.getByRole("button", { name: new RegExp(t.freeSpaceYes) }));
-    await vi.waitFor(() => expect(resultLine()).toHaveTextContent("liberato circa 500 MB."));
+    await vi.waitFor(() => expect(resultLine()).toHaveTextContent("liberato fino a circa 500 MB."));
     expect(resultLine()).not.toHaveTextContent("macchina virtuale");
   });
 
