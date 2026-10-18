@@ -213,6 +213,7 @@ Infra, deploy, lifecycle, accessi.
 |---|---|
 | [`INFRA.md`](ops/INFRA.md) | Overview infra (canali utente↔team, network, storage) |
 | [`vps.md`](ops/vps.md) | Design VPS: host/container split, providers, install UX, lifecycle |
+| [`vps-provisioning-map.md`](ops/vps-provisioning-map.md) | Provisioning di una VPS nuova: la mappa del percorso reale (desktop e CLI) e quali punti hanno una prova automatica |
 | [`release.md`](ops/release.md) | Processo release (tag → CI → GitHub Release) |
 | [`triage.md`](ops/triage.md) | Triage feedback / bug report (tabella `feedback_tickets`) |
 | [`recording-profiles.md`](ops/recording-profiles.md) | Profili sintetici deterministici e gate di isolamento per registrazioni web e gioco |
