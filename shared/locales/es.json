@@ -232,5 +232,8 @@
   "closer.reason.linkedin_session_expired.action": "Vuelve a iniciar sesión a mano en LinkedIn en el navegador del CLOSER y luego autoriza de nuevo la posición.",
   "disk.warning": "Queda poco espacio en el disco: solo queda libre %s. Libera espacio pronto o el equipo dejará de iniciar nuevos agentes y actualizaciones.",
   "disk.low": "El disco está casi lleno (solo queda libre %s): no se iniciará ningún agente nuevo ni se instalará ninguna actualización. Los agentes ya iniciados siguen funcionando. Para liberar espacio: vacía la papelera y elimina los archivos grandes que ya no necesites, como descargas antiguas o imágenes de Docker/Podman sin usar, y vuelve a intentarlo.",
-  "disk.low.cli": "El disco está casi lleno (solo queda libre %s): no se iniciará ningún agente nuevo ni se instalará ninguna actualización. Los agentes ya iniciados siguen funcionando. Para liberar espacio: ejecuta `jht clean-images` (elimina solo las versiones antiguas de Job Hunter Team), vacía la papelera y elimina los archivos grandes que ya no necesites, como descargas antiguas, y vuelve a intentarlo."
+  "disk.low.cli": "El disco está casi lleno (solo queda libre %s): no se iniciará ningún agente nuevo ni se instalará ninguna actualización. Los agentes ya iniciados siguen funcionando. Para liberar espacio: ejecuta `jht clean-images` (elimina solo las versiones antiguas de Job Hunter Team), vacía la papelera y elimina los archivos grandes que ya no necesites, como descargas antiguas, y vuelve a intentarlo.",
+  "question.expired": "Pregunta caducada: «%s». He hecho: «%s». Si prefieres otra cosa, escríbemelo aquí y te lo vuelvo a preguntar.",
+  "question.postpone": "Aplazar, no hacer nada",
+  "question.reply_hint": "Responde con el número de la opción (por ejemplo 2). Si hay varias preguntas abiertas, escribe «%s 2»."
 }

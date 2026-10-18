@@ -14,6 +14,15 @@ Usage:
     jht-notify-user --agent capitano --position-id 42 "candidatura pronta"
     jht-notify-user --agent assistente --kind question "vuoi che procedi con apply?"
 
+Domanda strutturata (opzioni da toccare, scadenza, risposta come dato):
+    jht-notify-user --agent assistente --oggetto "CV per Acme" \
+        --option breve="CV breve" --option lungo="CV completo" \
+        --scade-tra 6h "Quale versione del CV uso?"
+  Esce subito (non aspetta): l'id della domanda e' l'ultima parola dell'output.
+  La risposta si legge con `jht-check-user-replies`. Con --scade-tra il codice
+  aggiunge l'opzione «Rinvia, non fare niente», che e' anche il default se
+  l'utente non risponde. Altri flag: --tipo, --multipla, --libera.
+
 Exit:
     0 → riga inserita in DB; consegna Telegram opzionale (best-effort)
     1 → argomenti invalidi
@@ -51,6 +60,32 @@ def interpret_escapes(text: str) -> str:
     Interpretiamo solo le escape comuni, mai un decode generico fragile.
     """
     return text.replace("\\n", "\n").replace("\\t", "\t").replace("\\r", "\r")
+
+
+def load_agent_questions():
+    """Il modulo delle domande strutturate (shared/skills/agent_questions.py), o None."""
+    here = pathlib.Path(__file__).resolve()
+    for directory in (
+        pathlib.Path("/app/shared/skills"),
+        here.parent.parent.parent / "shared" / "skills",
+    ):
+        if (directory / "agent_questions.py").exists():
+            sys.path.insert(0, str(directory))
+            import agent_questions
+
+            return agent_questions
+    return None
+
+
+def parse_option_specs(specs: list[str]) -> list[dict]:
+    """`--option id=Etichetta` -> {"id", "label"}. ValueError se manca il «=»."""
+    options = []
+    for spec in specs:
+        option_id, sep, label = spec.partition("=")
+        if not sep:
+            raise ValueError(f"--option vuole id=etichetta, non {spec!r}")
+        options.append({"id": option_id.strip(), "label": label})
+    return options
 
 
 def _is_off_hours() -> bool:
@@ -225,7 +260,7 @@ def main() -> int:
     )
     parser.add_argument(
         "--kind",
-        default="notification",
+        default=None,
         choices=["notification", "question", "digest", "alert"],
         help="Tipo di messaggio (default: notification).",
     )
@@ -248,8 +283,28 @@ def main() -> int:
     parser.add_argument("--source-id", help="Stable idempotency key (optional).")
     parser.add_argument("--source-action", help="Structured action name (optional).")
     parser.add_argument("--source-payload", help="Structured JSON payload (optional).")
+    parser.add_argument(
+        "--option", action="append", default=[], metavar="ID=ETICHETTA",
+        help="Domanda strutturata: un'opzione da toccare (ripetibile, 2-8).",
+    )
+    parser.add_argument("--oggetto", help="Domanda strutturata: titolo breve (obbligatorio con --option).")
+    parser.add_argument(
+        "--tipo", choices=["urgente", "blocco", "domanda", "completamento", "comunicazione"],
+        help="Domanda strutturata: tipo (default: domanda).",
+    )
+    parser.add_argument("--multipla", action="store_true", help="Domanda strutturata: si puo' scegliere piu' di un'opzione.")
+    parser.add_argument("--libera", action="store_true", help="Domanda strutturata: l'utente puo' aggiungere testo libero.")
+    parser.add_argument(
+        "--scade-tra", metavar="DURATA",
+        help="Domanda strutturata: scadenza (es. 30m, 6h, 2d; da 5 minuti a 7 giorni). Alla scadenza vale «Rinvia».",
+    )
     parser.add_argument("body", help="Testo del messaggio (quotalo).")
     args = parser.parse_args()
+    structured = bool(
+        args.option or args.oggetto or args.tipo or args.multipla or args.libera or args.scade_tra
+    )
+    if not structured and args.kind is None:
+        args.kind = "notification"
 
     if not args.body.strip():
         print("jht-notify-user: body vuoto", file=sys.stderr)
@@ -279,6 +334,42 @@ def main() -> int:
     # Normalizza una sola volta: il body interpretato finisce sia in DB
     # (e quindi in dashboard web via cloud push) sia in Telegram, coerente.
     body = interpret_escapes(args.body)
+
+    question = None
+    if structured:
+        # Una domanda strutturata decide da sola kind e metadati: chi li passa a
+        # mano la sta aggirando, e il contratto non si puo' verificare.
+        if args.kind is not None or args.source_id or args.source_action or args.source_payload \
+                or args.existing_id is not None:
+            print(
+                "jht-notify-user: --option non si combina con --kind, --source-* ne' --existing-id",
+                file=sys.stderr,
+            )
+            return 1
+        aq = load_agent_questions()
+        if aq is None:
+            print("jht-notify-user: modulo domande strutturate non trovato", file=sys.stderr)
+            return 1
+        try:
+            question = aq.build_question(
+                agent=args.agent,
+                testo=body,
+                oggetto=args.oggetto or "",
+                opzioni=parse_option_specs(args.option),
+                tipo=args.tipo or "domanda",
+                multipla=args.multipla,
+                libera=args.libera,
+                scade_tra=args.scade_tra,
+                related_position_id=args.position_id,
+            )
+        except (aq.QuestionRejected, ValueError) as error:
+            print(f"jht-notify-user: domanda non valida: {error}", file=sys.stderr)
+            return 1
+        body = question.body
+        args.kind = question.kind
+        args.source_id = question.source_id
+        args.source_action = aq.SOURCE_ACTION
+        args.source_payload = question.payload_json
 
     db_path = resolve_db_path()
     if not os.path.exists(db_path):
@@ -311,7 +402,9 @@ def main() -> int:
     # The CLOSER's round summary is the outcome of those same applications:
     # held for working hours it stayed on the web (14/09, after patch 21).
     off_hours = args.source_action not in (
-        "closer_application_answer", "closer_login_code", "closer_digest"
+        "closer_application_answer", "closer_login_code", "closer_digest",
+        # Chi ha una domanda con scadenza in corso la sta aspettando.
+        "agent_question", "agent_question_expired",
     ) and _is_off_hours()
     should_deliver = created or args.existing_id is not None
     if should_deliver and (
@@ -338,7 +431,10 @@ def main() -> int:
         )
 
     # Stampa l'id su stdout per pipeline / debug.
-    print(f"{row_id} via={delivered_via}")
+    if question is not None:
+        print(f"{row_id} via={delivered_via} id={question.source_id}")
+    else:
+        print(f"{row_id} via={delivered_via}")
     return 0
 
 
