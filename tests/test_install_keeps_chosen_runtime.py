@@ -82,8 +82,12 @@ def test_switching_engine_is_refused_with_what_would_stay_behind(tmp_path, marke
     assert (tmp_path / "runtime" / "container-runtime").read_text(encoding="utf-8") == marker + "\n"
 
 
-def test_linux_keeps_ignoring_the_runtime_choice(tmp_path):
-    assert choice(keep(tmp_path, "podman", os_name="linux")) == ""
+def test_linux_without_a_marker_keeps_ignoring_the_runtime_choice(tmp_path):
+    assert choice(keep(tmp_path, None, os_name="linux")) == ""
+
+
+def test_linux_on_rootless_podman_keeps_podman_on_a_rerun(tmp_path):
+    assert choice(keep(tmp_path, "podman", os_name="linux")) == "podman"
 
 
 def test_an_unsafe_or_unknown_marker_stops_the_installer(tmp_path):
