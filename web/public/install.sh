@@ -25,7 +25,8 @@
 # ║    --runtime <r>           macOS: colima (default), podman (preview),     ║
 # ║                            or docker-desktop (your Docker).              ║
 # ║                            Except for explicit Podman, a running Docker  ║
-# ║                            is reused (detect-first). Linux ignores it.   ║
+# ║                            is reused (detect-first). Linux: only podman ║
+# ║                            (rootless, no sudo, packages put there first).║
 # ║    --dry-run               Only show the actions that would be executed  ║
 # ║    --publish-runtime-bundle  Migrate one verified candidate installer,  ║
 # ║                              wrapper, compose and host-setup transaction;║
@@ -363,7 +364,9 @@ header() {
   printf "${BOLD}╚══════════════════════════════════════════╝${RESET}\n"
   printf "\n"
   if [ "$USE_DOCKER" -eq 1 ]; then
-    if [ "$RUNTIME_CHOICE" = "podman" ]; then
+    if [ "$RUNTIME_CHOICE" = "podman" ] && [ "${OS:-}" = "linux" ]; then
+      printf "  ${DIM}mode:    ${RESET}${BOLD}Container (Podman rootless)${RESET}\n"
+    elif [ "$RUNTIME_CHOICE" = "podman" ]; then
       printf "  ${DIM}mode:    ${RESET}${BOLD}Container (Podman preview)${RESET}\n"
     else
       printf "  ${DIM}mode:    ${RESET}${BOLD}Docker (isolated)${RESET}\n"
@@ -412,7 +415,7 @@ detect_os() {
 # carries the volumes across yet. Colima and Docker Desktop are both docker.
 keep_chosen_runtime() {
   [ -n "${OS:-}" ] || detect_os
-  [ "$OS" = "macos" ] || return 0
+  [ "$OS" = "macos" ] || [ "$OS" = "linux" ] || return 0
   local marker="$RUNTIME_DIR/container-runtime" current wanted
   [ -e "$marker" ] || [ -L "$marker" ] || return 0
   [ -f "$marker" ] && [ ! -L "$marker" ] \
@@ -426,7 +429,7 @@ keep_chosen_runtime() {
   wanted="docker"
   [ "$RUNTIME_CHOICE" = "podman" ] && wanted="podman"
   [ "$wanted" = "$current" ] && return 0
-  fail "runtime_change_requires_migration: this Mac runs JHT on $current. --runtime $RUNTIME_CHOICE would start it on $wanted, where its volumes are empty: the provider logins and tools (jht-deps), the secrets and the broker and Telegram state would stay behind on $current. Moving them is not available yet: re-run without --runtime to keep $current. Your profile and documents in ~/.jht and ~/Documents/Job Hunter Team are not affected."
+  fail "runtime_change_requires_migration: this computer runs JHT on $current. --runtime $RUNTIME_CHOICE would start it on $wanted, where its volumes are empty: the provider logins and tools (jht-deps), the secrets and the broker and Telegram state would stay behind on $current. Moving them is not available yet: re-run without --runtime to keep $current. Your profile and documents in ~/.jht and ~/Documents/Job Hunter Team are not affected."
 }
 
 # ── Package manager detection (Linux) ─────────────────────────────────────
@@ -456,6 +459,92 @@ detect_system() {
 # ╔══════════════════════════════════════════════════════════════════════════╗
 # ║                          DOCKER PATH                                     ║
 # ╚══════════════════════════════════════════════════════════════════════════╝
+
+# ── Podman rootless on Linux (--runtime podman) ───────────────────────────
+# The Mac's Podman runs in a machine; on Linux Podman is native and rootless,
+# for a user that is not root. This branch installs nothing and never uses
+# sudo: the packages are put there by the administrator beforehand. Each
+# thing that is missing leaves with its own code, so the app can tell the
+# administrator what to do: a line `JHT_ERROR <code>` on stderr, then the exit
+# code of the table below.
+#   90 podman_missing             91 podman_rootful_refused
+#   92 podman_compose_missing     93 podman_version_unsupported
+#   94 podman_linger_missing      95 podman_runtime_dir_missing
+#   96 podman_subuid_missing      97 podman_rootless_unavailable
+# The lowest versions the Linux wrapper is known to need. Only the Mac and
+# Windows runtimes keep the one exact pair.
+PODMAN_MIN_VERSION="5.0.0"
+PODMAN_COMPOSE_MIN_VERSION="1.1.0"
+
+podman_machine_mode() { [ "${OS:-}" = "macos" ] && [ "$RUNTIME_CHOICE" = "podman" ]; }
+podman_native_mode()  { [ "${OS:-}" = "linux" ] && [ "$RUNTIME_CHOICE" = "podman" ]; }
+
+podman_refuse() {
+  printf 'JHT_ERROR %s\n' "$1" >&2
+  printf "  ${RED}✗${RESET} %s: %s\n" "$1" "$3" >&2
+  exit "$2"
+}
+
+# version_at_least HAVE WANT: both are dotted numbers.
+version_at_least() {
+  local -a have want
+  local i a b
+  IFS=. read -ra have <<< "$1"
+  IFS=. read -ra want <<< "$2"
+  for i in 0 1 2; do
+    a="${have[$i]:-0}"; b="${want[$i]:-0}"
+    [ "$a" -gt "$b" ] && return 0
+    [ "$a" -lt "$b" ] && return 1
+  done
+  return 0
+}
+
+# Does the subuid (or subgid) file give this user a range.
+podman_subid_range() {
+  [ -r "$1" ] || return 1
+  awk -F: -v u="$2" -v n="$3" '($1 == u || $1 == n) && $3 + 0 > 0 { found = 1 } END { exit !found }' "$1"
+}
+
+check_podman_linux() {
+  step 2 "$TOTAL_STEPS_DOCKER" "Container runtime (Podman rootless)"
+  [ "$OS" = "linux" ] \
+    || podman_refuse podman_unsupported_host 1 "--runtime podman is for Linux and macOS; this system is $OS."
+  if [ "$DRY_RUN" -eq 1 ]; then
+    printf "  ${DIM}[dry-run]${RESET} would check: podman and podman-compose are installed, the user is not root, podman info says Rootless=true, linger, XDG_RUNTIME_DIR, subuid/subgid\n"
+    printf "  ${DIM}[dry-run]${RESET} would require: podman >= %s, podman-compose >= %s (nothing is installed, no sudo)\n" "$PODMAN_MIN_VERSION" "$PODMAN_COMPOSE_MIN_VERSION"
+    return 0
+  fi
+  local uid user etc xdg rootless have_podman have_compose
+  uid="$(id -u)"; user="$(id -un)"; etc="${JHT_ETC_DIR:-/etc}"
+  command -v podman >/dev/null 2>&1 \
+    || podman_refuse podman_missing 90 "podman is not installed. This installer does not install it. Ask the administrator of this server to run, as root: apt install podman podman-compose"
+  [ "$uid" -ne 0 ] \
+    || podman_refuse podman_rootful_refused 91 "JHT runs on Podman rootless, as a user that is not root. Sign in as that user and run the install again."
+  command -v podman-compose >/dev/null 2>&1 \
+    || podman_refuse podman_compose_missing 92 "podman-compose is not installed. Ask the administrator of this server to run, as root: apt install podman-compose"
+  xdg="${XDG_RUNTIME_DIR:-/run/user/$uid}"
+  { [ -d "$xdg" ] && [ -w "$xdg" ]; } \
+    || podman_refuse podman_runtime_dir_missing 95 "there is no runtime directory for this user ($xdg): the session has no user manager. Sign in again, or ask the administrator to run, as root: loginctl enable-linger $user"
+  if command -v loginctl >/dev/null 2>&1; then
+    loginctl show-user "$user" -p Linger 2>/dev/null | grep -qx 'Linger=yes' \
+      || podman_refuse podman_linger_missing 94 "the containers of $user would stop when the session ends. Ask the administrator of this server to run, as root: loginctl enable-linger $user"
+  else
+    warn "loginctl not found: linger was not checked."
+  fi
+  { podman_subid_range "$etc/subuid" "$user" "$uid" && podman_subid_range "$etc/subgid" "$user" "$uid"; } \
+    || podman_refuse podman_subuid_missing 96 "$user has no subordinate uid/gid range in $etc/subuid and $etc/subgid. Ask the administrator of this server to run, as root: usermod --add-subuids 100000-165535 --add-subgids 100000-165535 $user"
+  rootless="$(podman info --format '{{.Host.Security.Rootless}}' 2>/dev/null)" \
+    || podman_refuse podman_rootless_unavailable 97 "'podman info' fails for $user, so the rootless storage or runtime is not ready. Run it by hand to see why."
+  [ "$rootless" = "true" ] \
+    || podman_refuse podman_rootful_refused 91 "podman answers as rootful for $user (Rootless=$rootless): JHT needs Podman rootless."
+  have_podman="$(podman --version 2>/dev/null | awk '{ print $NF }' | sed 's/[^0-9.].*$//')"
+  have_compose="$(podman-compose --version 2>/dev/null | awk '/^podman-compose version/ { print $3; exit }' | sed 's/[^0-9.].*$//')"
+  { [ -n "$have_podman" ] && version_at_least "$have_podman" "$PODMAN_MIN_VERSION"; } \
+    || podman_refuse podman_version_unsupported 93 "podman ${have_podman:-of unknown version} is older than $PODMAN_MIN_VERSION. Ask the administrator of this server for a newer podman."
+  { [ -n "$have_compose" ] && version_at_least "$have_compose" "$PODMAN_COMPOSE_MIN_VERSION"; } \
+    || podman_refuse podman_version_unsupported 93 "podman-compose ${have_compose:-of unknown version} is older than $PODMAN_COMPOSE_MIN_VERSION. Ask the administrator of this server for a newer podman-compose."
+  ok "Podman rootless $have_podman + podman-compose $have_compose for $user"
+}
 
 # ── Docker runtime install ────────────────────────────────────────────────
 install_brew_if_missing() {
@@ -746,6 +835,10 @@ install_container_runtime() {
   if [ "$OS" = "macos" ] && [ "$RUNTIME_CHOICE" != "podman" ]; then
     resolve_macos_docker_cli
   fi
+  if [ "$RUNTIME_CHOICE" = "podman" ] && [ "$OS" != "macos" ]; then
+    check_podman_linux
+    return 0
+  fi
   # Detect-first: if a Docker daemon already responds (Docker Desktop, an
   # existing Colima, OrbStack, ...), we reuse it — no second installation/VM
   # on top (avoids the two-VM clash, ADR-0006).
@@ -789,6 +882,11 @@ resolve_macos_docker_cli() {
 
 verify_docker_works() {
   step 3 "$TOTAL_STEPS_DOCKER" "Container runtime check"
+  if podman_native_mode; then
+    # The check of the step before already ran podman info, rootless.
+    [ "$DRY_RUN" -eq 1 ] || ok "podman rootless reachable"
+    return 0
+  fi
   if [ "$DRY_RUN" -eq 1 ]; then
     if [ "$OS" = "macos" ] && [ "$RUNTIME_CHOICE" = "podman" ]; then
       printf "  ${DIM}[dry-run]${RESET} would execute: podman --connection %s info\n" "$PODMAN_MACHINE_NAME"
@@ -821,13 +919,15 @@ verify_docker_works() {
 }
 
 install_podman_adapter() {
-  [ "$OS" = "macos" ] && [ "$RUNTIME_CHOICE" = "podman" ] || return 0
+  podman_machine_mode || podman_native_mode || return 0
   local podman_bin adapter_bin shim_dest shim_tmp selection_file machine_file
   podman_bin="$(command -v podman)" || fail "podman disappeared from PATH"
   case "$podman_bin" in *"'"*|*$'\n'*) fail "Unsafe Podman executable path: $podman_bin" ;; esac
-  case "$PODMAN_MACHINE_NAME" in
-    ''|*[!A-Za-z0-9_.-]*) fail "Invalid JHT Podman machine name: $PODMAN_MACHINE_NAME" ;;
-  esac
+  if podman_machine_mode; then
+    case "$PODMAN_MACHINE_NAME" in
+      ''|*[!A-Za-z0-9_.-]*) fail "Invalid JHT Podman machine name: $PODMAN_MACHINE_NAME" ;;
+    esac
+  fi
   adapter_bin="$RUNTIME_DIR/bin"
   [ ! -L "$adapter_bin" ] || fail "Podman adapter bin path is a symlink: $adapter_bin"
   [ ! -e "$adapter_bin" ] || [ -d "$adapter_bin" ] \
@@ -845,16 +945,27 @@ install_podman_adapter() {
   shim_tmp="$(mktemp "$adapter_bin/.docker-podman.XXXXXX")"
   {
     printf '%s\n' '#!/bin/sh' '# JHT_PODMAN_DOCKER_SHIM=1'
-    printf "exec '%s' --connection '%s' \"\$@\"\n" "$podman_bin" "$PODMAN_MACHINE_NAME"
+    if podman_machine_mode; then
+      printf "exec '%s' --connection '%s' \"\$@\"\n" "$podman_bin" "$PODMAN_MACHINE_NAME"
+    else
+      printf "exec '%s' \"\$@\"\n" "$podman_bin"
+    fi
   } > "$shim_tmp"
   chmod 700 "$shim_tmp"
   mv -f "$shim_tmp" "$shim_dest"
   selection_file="$RUNTIME_DIR/container-runtime"
   machine_file="$RUNTIME_DIR/podman-machine"
   printf 'podman\n' > "$selection_file"
-  printf '%s\n' "$PODMAN_MACHINE_NAME" > "$machine_file"
-  chmod 600 "$selection_file" "$machine_file"
-  ok "Private JHT docker shim: $shim_dest (not added to global PATH; Colima untouched)"
+  chmod 600 "$selection_file"
+  if podman_machine_mode; then
+    printf '%s\n' "$PODMAN_MACHINE_NAME" > "$machine_file"
+    chmod 600 "$machine_file"
+    ok "Private JHT docker shim: $shim_dest (not added to global PATH; Colima untouched)"
+  else
+    # Native Linux has no machine: the wrapper refuses a machine file here.
+    rm -f "$machine_file"
+    ok "Private JHT docker shim: $shim_dest (not added to global PATH; rootless Podman, no machine)"
+  fi
 }
 
 download_runtime_files() {
@@ -984,7 +1095,7 @@ download_runtime_files() {
       selection_sha="$(sha256sum "$selection_source" | awk '{print $1}')"
     fi
     if [ "$RUNTIME_CHOICE" = "podman" ]; then
-      machine_sha="$(sha256sum "$RUNTIME_DIR/podman-machine" | awk '{print $1}')"
+      podman_machine_mode && machine_sha="$(sha256sum "$RUNTIME_DIR/podman-machine" | awk '{print $1}')"
       shim_sha="$(sha256sum "$RUNTIME_DIR/bin/docker" | awk '{print $1}')"
     fi
     if [ -n "$image_pin_publish" ]; then
@@ -998,7 +1109,7 @@ download_runtime_files() {
       selection_sha="$(shasum -a 256 "$selection_source" | awk '{print $1}')"
     fi
     if [ "$RUNTIME_CHOICE" = "podman" ]; then
-      machine_sha="$(shasum -a 256 "$RUNTIME_DIR/podman-machine" | awk '{print $1}')"
+      podman_machine_mode && machine_sha="$(shasum -a 256 "$RUNTIME_DIR/podman-machine" | awk '{print $1}')"
       shim_sha="$(shasum -a 256 "$RUNTIME_DIR/bin/docker" | awk '{print $1}')"
     fi
     if [ -n "$image_pin_publish" ]; then
@@ -1014,7 +1125,7 @@ download_runtime_files() {
       printf 'container-runtime=%s\n' "$selection_sha"
     fi
     if [ "$RUNTIME_CHOICE" = "podman" ]; then
-      printf 'podman-machine=%s\n' "$machine_sha"
+      podman_machine_mode && printf 'podman-machine=%s\n' "$machine_sha"
       printf 'docker-shim=%s\n' "$shim_sha"
     fi
     if [ -n "$image_pin_sha" ]; then
@@ -1699,7 +1810,7 @@ final_message() {
   if [ "$USE_DOCKER" -eq 1 ]; then
     printf "  ${BOLD}Container mode active.${RESET}\n"
     if [ "$RUNTIME_CHOICE" = "podman" ]; then
-      printf "  ${DIM}Podman preview selected; Colima remains installed and untouched.${RESET}\n"
+      podman_native_mode || printf "  ${DIM}Podman preview selected; Colima remains installed and untouched.${RESET}\n"
     fi
     printf "  ${DIM}The agents can only see:${RESET}\n"
     printf "  ${DIM}  ~/.jht/                       → /jht_home (config, db, agents)${RESET}\n"
@@ -1745,7 +1856,7 @@ final_message() {
     if [ "$RUNTIME_CHOICE" = "podman" ]; then
       printf "  ${DIM}  jht down && %s/bin/docker rmi %s && rm -rf %s %s/jht${RESET}\n" \
         "$RUNTIME_DIR" "$IMAGE" "$RUNTIME_DIR" "$BIN_DIR"
-      printf "  ${DIM}  (the Podman machine and Colima are both kept)${RESET}\n"
+      podman_native_mode || printf "  ${DIM}  (the Podman machine and Colima are both kept)${RESET}\n"
     else
       printf "  ${DIM}  jht down && rm -rf %s %s/jht && docker rmi %s${RESET}\n" "$RUNTIME_DIR" "$BIN_DIR" "$IMAGE"
     fi
@@ -1780,7 +1891,7 @@ save_pairing_token() {
   # The file is deleted by `jht cloud pair` right after consumption
   # (cli/src/commands/cloud.js handlePair), so the window is short either way.
   chmod 600 "$token_file" 2>/dev/null || true
-  chown 1001:1001 "$token_file" 2>/dev/null || true
+  podman_native_mode || chown 1001:1001 "$token_file" 2>/dev/null || true
   ok "Pairing token saved to $token_file (mode 0600)"
 }
 
@@ -1851,7 +1962,12 @@ run_host_setup() {
   # Both dirs are bind-mounted, so the host must be aligned.
   local jht_home="$HOME/.jht"
   local jht_user_dir="$HOME/Documents/Job Hunter Team"
-  if command -v chown >/dev/null 2>&1; then
+  if podman_native_mode; then
+    # Rootless Podman maps the host user onto the container's uid (keep-id):
+    # the user stays the owner, and a chown to 1001 would take it away.
+    mkdir -p "$jht_user_dir" 2>/dev/null
+    ok "Ownership of $jht_home and $jht_user_dir stays with this user (rootless Podman)"
+  elif command -v chown >/dev/null 2>&1; then
     chown -R 1001:1001 "$jht_home" 2>/dev/null && \
       ok "Ownership $jht_home → 1001:1001 (container UID)" || \
       warn "chown $jht_home failed — pairing may require a manual fix"
@@ -1949,8 +2065,10 @@ verify_test_image() {
   # pulled and checked inside the JHT machine, through its own connection,
   # never in another Docker that happens to be installed.
   local engine=("$DOCKER_CLI")
-  if [ "$OS" = "macos" ] && [ "$RUNTIME_CHOICE" = "podman" ]; then
+  if podman_machine_mode; then
     engine=(podman --connection "$PODMAN_MACHINE_NAME")
+  elif podman_native_mode; then
+    engine=(podman)
   fi
   if [ "$DRY_RUN" -eq 1 ]; then
     printf "  ${DIM}[dry-run]${RESET} would pull %s with %s and require %s\n" "$IMAGE" "${engine[*]}" "$wanted"
