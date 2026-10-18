@@ -24,6 +24,19 @@ The real functions of scripts/jht-wrapper.sh run against a stateful fake
   container, an upgrade in progress or interrupted, the opt-out;
 - it does not start anything: no machine, no engine, no container.
 
+Both engines write `.Created` in their own way, so the fake engine has two
+variants and EVERY test below runs on both (`host` is parametrized):
+
+- docker: RFC 3339 with nanoseconds, always `Z`. Source: Docker Engine API,
+  ImageInspect.Created (example in the API reference:
+  "2022-02-04T21:20:12.497794809Z").
+- podman: Go `time.Time.String()`, layout "2006-01-02 15:04:05.999999999 -0700
+  MST": a space instead of `T`, trailing zeros of the fraction cut, numeric
+  zone always present, then the zone name, or the offset again when the zone has
+  no name. Source: Go package `time`, `Time.String`; Podman prints `.Created`
+  (a time.Time in its image data) through it. The samples are BUILT from that
+  layout: none was captured from a running Podman.
+
 Run with: pytest tests/test_clean_images.py -v
 """
 
@@ -68,6 +81,9 @@ EXPECTED_REMOVED = {OLD[0], OLD[1], LOCAL_TAG}
 FAKE_DOCKER = r"""#!/bin/sh
 # Stateful fake of the docker CLI: images and containers live in $FAKE_STATE.
 printf '%s\n' "$*" >> "$FAKE_STATE/calls.log"
+# Dates are stored Docker-style (ISO, Z). The podman variant renders them the way Go's
+# time.Time.String() does; a stored value that is not ISO (a test's own sample) is echoed as is.
+created_style() { if [ "${FAKE_STYLE:-docker}" = podman ]; then sed -e 's/\(\.[0-9]*[1-9]\)0*Z$/\1Z/' -e 's/\.0*Z$/Z/' -e 's/^\([0-9-]*\)T\([0-9:.]*\)Z$/\1 \2 +0000 UTC/'; else cat; fi; }
 style() { if [ "${FAKE_STYLE:-docker}" = podman ]; then sed 's/^sha256://'; else sed 's/^\([0-9a-f]\)/sha256:\1/'; fi; }
 case "$1 $2" in
   "container ls")
@@ -82,7 +98,7 @@ case "$1 $2" in
       *Created*)
         case " ${FAKE_CREATED_FAIL:-} " in *" $id "*) exit 1 ;; esac
         if [ -n "${FAKE_CREATED_OVERRIDE+x}" ]; then echo "$FAKE_CREATED_OVERRIDE"; exit 0; fi
-        awk -v id="$id" '$1 == id { print $4; exit }' "$FAKE_STATE/images" ;;
+        awk -v id="$id" '$1 == id { sub(/^[^ ]+ [^ ]+ [^ ]+ /, ""); print; exit }' "$FAKE_STATE/images" | created_style ;;
       *) awk -v id="$id" '$1 == id { print $3; exit }' "$FAKE_STATE/images" ;;
     esac ;;
   "image rm")
@@ -99,7 +115,7 @@ esac
 
 FUNCTIONS = (
     "upgrade_image_plain", "upgrade_repo_is_jht", "upgrade_foreign_image_ids",
-    "upgrade_prune_result", "upgrade_prune_old_images", "clean_images_previous",
+    "upgrade_prune_result", "upgrade_prune_old_images", "clean_images_epoch", "clean_images_previous",
     "clean_images_message", "clean_images_emit", "handle_clean_images",
     "upgrade_acquire_lock", "upgrade_cleanup_ephemeral",
 )
@@ -360,6 +376,12 @@ def test_the_command_is_in_the_local_help_and_the_upgrade_still_refuses_below_th
     ({"FAKE_CREATED_OVERRIDE": "2026-10-05T10:00:00+02:00"}, "previous-unidentified"),   # not UTC
     ({"FAKE_CREATED_OVERRIDE": "yesterday"}, "previous-unidentified"),
     ({"FAKE_CREATED_OVERRIDE": ""}, "previous-unidentified"),
+    # Podman-shaped but unreadable: no numeric zone, month 13, a zero date, offset out of range.
+    ({"FAKE_CREATED_OVERRIDE": "2026-10-05 10:00:00 UTC"}, "previous-unidentified"),
+    ({"FAKE_CREATED_OVERRIDE": "2026-13-05 10:00:00 +0000 UTC"}, "previous-unidentified"),
+    ({"FAKE_CREATED_OVERRIDE": "0001-01-01 00:00:00 +0000 UTC"}, "previous-unidentified"),
+    ({"FAKE_CREATED_OVERRIDE": "2026-10-05 10:00:00 +2000 UTC"}, "previous-unidentified"),
+    ({"FAKE_CREATED_OVERRIDE": "2026-10-05 10:00:00 +0000 UTC m=+0.001"}, "previous-unidentified"),
     ({"JHT_KEEP_OLD_IMAGES": "1"}, "opt-out"),
 ])
 def test_doubt_removes_nothing(host, env, reason):
@@ -450,3 +472,84 @@ def test_the_cleaning_after_an_upgrade_keeps_an_id_that_also_carries_a_foreign_n
     subprocess.run(["bash", "-c", script], env=host.env, capture_output=True, text=True, timeout=60)
     assert MULTI in remaining_ids(host) and MULTI not in removed(host)
     assert set(removed(host)) == EXPECTED_REMOVED
+
+
+# ── Dates: each engine writes `.Created` its own way ─────────────────────────
+
+
+def set_created(host, **dates):
+    """Overwrite the stored creation date of images (raw text, echoed as is by the fake)."""
+    lines = []
+    for line in (host.state / "images").read_text().splitlines():
+        iid, repo, size, _ = line.split(" ", 3)
+        lines.append(f"{iid} {repo} {size} {dates[iid]}" if iid in dates else line)
+    (host.state / "images").write_text("\n".join(lines) + "\n")
+
+
+def test_the_fake_engine_writes_the_dates_the_way_its_engine_does(host):
+    # Guards the variants themselves: if both printed Docker dates the Podman runs
+    # would prove nothing (that is how the Podman gap went unseen).
+    script = 'docker image inspect --format "{{.Created}}" "$1"'
+    out = subprocess.run(["bash", "-c", script, "_", sha(host, CURRENT)], env=host.env,
+                         capture_output=True, text=True).stdout.strip()
+    if host.style == "podman":
+        assert out == "2026-10-10 10:00:00.5 +0000 UTC"
+    else:
+        assert out == "2026-10-10T10:00:00.500000000Z"
+
+
+def test_the_listing_the_cleaning_reads_uses_the_engine_date_format(host):
+    run_clean(host)
+    assert any(c.startswith("image inspect") for c in engine_calls(host))
+    inspected = subprocess.run(
+        ["bash", "-c", 'docker image inspect --format "{{.Created}}" "$1"', "_", sha(host, NEWEST)],
+        env=host.env, capture_output=True, text=True).stdout.strip()
+    pattern = r"\d{4}-\d\d-\d\d \d\d:\d\d:\d\d(\.\d+)? \+0000 UTC" if host.style == "podman" \
+        else r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(\.\d+)?Z"
+    assert re.fullmatch(pattern, inspected), inspected
+
+
+def test_the_previous_is_decided_on_the_utc_instant_not_on_the_text(host):
+    # NEWEST is 02:00Z on the 6th, written with a -0300 zone: as TEXT it sorts BEFORE the
+    # other image's "2026-10-06 01:00:00", as an INSTANT it is later. Reading the text
+    # would keep the wrong image and remove the real previous.
+    set_created(host, **{
+        NEWEST: "2026-10-05 23:00:00 -0300 -0300",
+        OLD[0]: "2026-10-06 01:00:00 +0000 UTC",
+    })
+    run_clean(host)
+    assert NEWEST in remaining_ids(host), "the real previous (later instant) was removed"
+    assert OLD[0] not in remaining_ids(host)
+
+
+def test_the_same_instant_in_two_zones_is_the_same_second(host):
+    # 10:00:00Z written as UTC and as +0200: pari secondo, both kept.
+    set_created(host, **{
+        NEWEST: "2026-10-05 12:00:00 +0200 CEST",
+        OLD[0]: "2026-10-05 10:00:00.4 +0000 UTC",
+    })
+    run_clean(host)
+    assert NEWEST in remaining_ids(host) and OLD[0] in remaining_ids(host)
+    assert OLD[1] not in remaining_ids(host)
+
+
+def test_a_zone_without_a_name_is_read_by_its_offset(host):
+    # Go prints the offset again when the zone has no abbreviation.
+    set_created(host, **{NEWEST: "2026-10-05 12:00:00 +0530 +0530", OLD[0]: "2026-10-05 06:30:00 +0000 UTC"})
+    run_clean(host)
+    assert NEWEST in remaining_ids(host) and OLD[0] in remaining_ids(host)   # both 06:30:00Z
+
+
+def test_one_unreadable_date_among_readable_ones_removes_nothing(host):
+    set_created(host, **{OLD[1]: "2026-09-01 10:00:00 UTC"})
+    done, payload = run_clean(host)
+    assert payload["imagePrune"]["skipped"] == "previous-unidentified"
+    untouched(host)
+
+
+def test_a_rollback_with_podman_dates_keeps_the_newest_of_all(host):
+    set_created(host, **{CURRENT: "2026-10-10 10:00:00 +0000 UTC", OLD[1]: "2026-09-01 12:00:00 +0200 CEST"})
+    done, payload = run_clean(host, running=OLD[1])
+    assert "rc=0" in done.stdout, done.stderr
+    kept = remaining_ids(host)
+    assert CURRENT in kept and OLD[1] in kept and OLD[0] not in kept

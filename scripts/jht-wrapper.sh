@@ -3115,15 +3115,52 @@ EOF
 # piu' recente per data di creazione fra le non correnti (a pari secondo si
 # tengono tutte). Dopo un rollback puo' essere PIU' NUOVA della corrente: va
 # bene, sbaglia dal lato prudente (tiene un'immagine in piu', mai una in meno).
-# Se una data non si legge, o non e' in UTC («...Z»), non si toglie niente:
-# confrontare orari con fusi diversi come testo darebbe l'ordine sbagliato.
+# Le date si confrontano come secondi dall'epoca UTC (clean_images_epoch), non
+# come testo: i due motori le scrivono in modo diverso e Podman con un fuso
+# esplicito. Se una data non si legge, non si toglie niente.
+
+# Stampa i secondi dall'epoca UTC di una data di creazione, o ritorna 1 se non
+# e' in uno dei due formati noti (qualunque altra cosa = illeggibile):
+#   Docker  2026-10-05T10:00:00.123456789Z       (RFC 3339, sempre «Z»)
+#   Podman  2026-10-05 10:00:00.123456789 +0000 UTC
+# Podman stampa `.Created` con time.Time.String() di Go: layout
+# «2006-01-02 15:04:05.999999999 -0700 MST», frazione senza zeri finali (o
+# assente), fuso numerico sempre presente; il nome del fuso e' una sigla
+# («UTC», «CEST») oppure, se il fuso non ha nome, ancora l'offset («+0200»).
+# Conta solo l'offset numerico, il nome si ignora. Prima del 1970 = illeggibile
+# (una data a zero e' «nessuna data», non «la piu' vecchia»).
+# $1 = il testo stampato dal motore.
+clean_images_epoch() {
+  local text="$1" y m d hh mi ss sign oh om offset days
+  local docker_re='^([0-9]{4})-([0-9]{2})-([0-9]{2})T([0-9]{2}):([0-9]{2}):([0-9]{2})(\.[0-9]+)?Z$'
+  local podman_re='^([0-9]{4})-([0-9]{2})-([0-9]{2})[ ]([0-9]{2}):([0-9]{2}):([0-9]{2})(\.[0-9]+)?[ ]([+-])([0-9]{2})([0-9]{2})([ ][^ ]+)?$'
+  if [[ "$text" =~ $docker_re ]]; then
+    sign=+ oh=00 om=00
+  elif [[ "$text" =~ $podman_re ]]; then
+    sign="${BASH_REMATCH[8]}" oh="${BASH_REMATCH[9]}" om="${BASH_REMATCH[10]}"
+  else
+    return 1
+  fi
+  y=$((10#${BASH_REMATCH[1]})) m=$((10#${BASH_REMATCH[2]})) d=$((10#${BASH_REMATCH[3]}))
+  hh=$((10#${BASH_REMATCH[4]})) mi=$((10#${BASH_REMATCH[5]})) ss=$((10#${BASH_REMATCH[6]}))
+  oh=$((10#$oh)) om=$((10#$om))
+  [ "$y" -ge 1970 ] && [ "$m" -ge 1 ] && [ "$m" -le 12 ] && [ "$d" -ge 1 ] && [ "$d" -le 31 ] || return 1
+  [ "$hh" -le 23 ] && [ "$mi" -le 59 ] && [ "$ss" -le 59 ] && [ "$oh" -le 14 ] && [ "$om" -le 59 ] || return 1
+  # Giorni dal 1970-01-01 (calendario gregoriano, algoritmo days-from-civil).
+  [ "$m" -gt 2 ] || y=$((y - 1))
+  days=$(( (y / 400) * 146097 + (y % 400) * 365 + (y % 400) / 4 - (y % 400) / 100 \
+           + (153 * ((m + 9) % 12) + 2) / 5 + d - 1 - 719468 ))
+  offset=$((oh * 3600 + om * 60))
+  [ "$sign" = + ] || offset=$((0 - offset))
+  echo $((days * 86400 + hh * 3600 + mi * 60 + ss - offset))
+}
 
 # Stampa gli ID (senza prefisso) delle JHT non correnti piu' recenti, uno per
 # riga; niente se non ce ne sono. Ritorna 1 se non si legge l'elenco o una data.
 # $1 = ID della corrente, senza prefisso.
 clean_images_previous() {
-  local current="$1" listing foreign id repo plain created stamp digits
-  local seen="" newest=0 keep=""
+  local current="$1" listing foreign id repo plain created epoch
+  local seen="" newest="" keep=""
   listing="$(docker image ls --no-trunc --format '{{.ID}} {{.Repository}}' 2>/dev/null)" || return 1
   foreign="$(upgrade_foreign_image_ids "$listing")"
   while IFS=' ' read -r id repo; do
@@ -3143,17 +3180,11 @@ $plain
     seen="$seen
 $plain"
     created="$(docker image inspect --format '{{.Created}}' "$id" 2>/dev/null | head -n 1)" || return 1
-    case "$created" in
-      [0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]*Z) ;;
-      *) return 1 ;;
-    esac
-    # Fino al secondo: la frazione puo' mancare o avere un numero di cifre diverso.
-    stamp="${created%%[.Z]*}"
-    digits="${stamp//[!0-9]/}"
-    if [ "$digits" -gt "$newest" ]; then
-      newest="$digits"
+    epoch="$(clean_images_epoch "$created")" || return 1
+    if [ -z "$newest" ] || [ "$epoch" -gt "$newest" ]; then
+      newest="$epoch"
       keep="$plain"
-    elif [ "$digits" -eq "$newest" ]; then
+    elif [ "$epoch" -eq "$newest" ]; then
       keep="$keep
 $plain"
     fi
