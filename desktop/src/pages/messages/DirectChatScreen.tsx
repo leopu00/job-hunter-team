@@ -1,7 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { appLocale } from "../../lib/app-locale";
 import { describeError } from "../../lib/error-catalog";
-import { DIRECT_CHAT_STATUS_TEXT } from "./direct-chat-status.i18n";
 import type { VoiceInputBridge } from "../../lib/voice-input";
 import { VoiceInputControl } from "../../voice-input";
 import type {
@@ -68,18 +66,17 @@ function StatusBar({
   reconnecting: boolean;
   onRetry: () => void;
 }) {
-  const locale = appLocale();
-  const t = DIRECT_CHAT_STATUS_TEXT[locale];
   const failed = status.state === "error" || status.state === "disconnected";
   const code = safeCode(operationError ?? status.code);
-  let text = status.state === "ready" ? t.ready : t.connecting;
-  // A failure is told by the catalog in the person's language: its code's sentence and action,
-  // or the state's own when the code is unknown. The raw code is never shown.
-  if (failed || operationError) {
-    const fallback = operationError ? "unknown" : status.state === "disconnected" ? "disconnected" : "connect_failed";
-    const described = describeError(code, { locale, fallback });
-    text = `${described.text} ${described.action}`;
-  }
+  let text = "Connessione sicura al team…";
+  if (status.state === "ready") text = "Team collegato";
+  if (status.state === "disconnected") text = "Team non collegato.";
+  if (status.state === "error") text = "Team non disponibile.";
+  if (operationError) text = "Operazione non riuscita.";
+  // A code the catalog knows is told with its sentence and action; the raw
+  // code is never shown.
+  const described = (failed || operationError) && code ? describeError(code) : null;
+  if (described?.known) text = `${described.text} ${described.action}`;
 
   return (
     <div
@@ -98,7 +95,7 @@ function StatusBar({
           disabled={reconnecting}
           className="shrink-0 rounded border border-[var(--color-border)] px-3 py-1 text-[10px] font-semibold text-[var(--color-bright)] disabled:opacity-50"
         >
-          {reconnecting ? t.retrying : t.retry}
+          {reconnecting ? "Connessione…" : "Riprova"}
         </button>
       )}
     </div>

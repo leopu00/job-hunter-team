@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import { formatRelative } from "@/lib/message-display";
 import { PUBLIC_STATE_COLORS, publicPositionState, publicPositionStateLabel } from "@/lib/position-state";
 import { useLocale } from "@/lib/use-locale";
+import { appLocale } from "../../lib/app-locale";
+import { describeError } from "../../lib/error-catalog";
 import type { AgentStatuses, DeptId, OfficeClick, OfficeLayout, OfficeSnapshot } from "../contract";
 import { OWN_KEYS_ATTR } from "../scene/controls";
 import { tagOf } from "../status";
@@ -21,6 +23,7 @@ import {
   type PlacesData,
 } from "./load-panels";
 import type { PanelClient } from "./types";
+import { vpsPanelLoaders } from "./vps-panels";
 
 /**
  * The panel a click in the office opens, INSIDE the office (D07): the scene
@@ -33,6 +36,13 @@ export type OfficePanelProps = {
   snapshot: OfficeSnapshot | null;
   statuses: AgentStatuses | null;
   client: PanelClient;
+  /**
+   * Where the panel reads: the cloud (`client`, the default), or the existing
+   * team's VPS in the read-only view (vps-panels.ts), where `client` is never
+   * used. The VPS has no moves of an agent, so an agent's panel is not opened
+   * there: the page says so with a speech bubble (pages/office/index.tsx).
+   */
+  source?: "cloud" | "vps";
   onClose: () => void;
   /** another panel in place of this one (the department's pile, from its panel) */
   onOpen: (target: OfficeClick) => void;
@@ -130,7 +140,16 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   );
 }
 
-function Loading({ error }: { error: string | null }) {
+function Loading({ error, source = "cloud" }: { error: string | null; source?: "cloud" | "vps" }) {
+  if (error && source === "vps") {
+    // the code of what failed, in the catalog's words: never the cloud, which this view does not read
+    const failure = describeError(error, { fallback: "existing_team_unavailable", locale: appLocale() });
+    return (
+      <p role="alert" className="m-0 text-[11px] text-[var(--color-muted)]">
+        {failure.text} {failure.action}
+      </p>
+    );
+  }
   return <p className="m-0 text-[11px] text-[var(--color-muted)]">{error ? `Non riesco a leggere il cloud: ${error}` : "Caricamento…"}</p>;
 }
 
@@ -201,14 +220,14 @@ function AgentBody({ target, layout, statuses, client, onNavigate }: OfficePanel
   );
 }
 
-function PhaseBody({ dept, layout, snapshot, client, onNavigate }: OfficePanelProps & { dept: DeptId }) {
-  const { data, error } = useLoad<PanelPosition[]>(() => loadPhase(client, dept));
+function PhaseBody({ dept, layout, snapshot, client, source = "cloud", onNavigate }: OfficePanelProps & { dept: DeptId }) {
+  const { data, error } = useLoad<PanelPosition[]>(() => (source === "vps" ? vpsPanelLoaders.phase(dept) : loadPhase(client, dept)));
   const count = snapshot?.piles[dept];
   return (
     <>
       <Heading title={deptName(layout, dept)} sub={count == null ? "Posizioni in questa fase" : `${count} posizioni in questa fase`} />
       {!data ? (
-        <Loading error={error} />
+        <Loading error={error} source={source} />
       ) : data.length === 0 ? (
         <p className="m-0 text-[11px] text-[var(--color-muted)]">Nessuna posizione in questa fase.</p>
       ) : (
@@ -226,7 +245,7 @@ function PhaseBody({ dept, layout, snapshot, client, onNavigate }: OfficePanelPr
   );
 }
 
-function DepartmentBody({ dept, layout, snapshot, statuses, client, onOpen }: OfficePanelProps & { dept: DeptId }) {
+function DepartmentBody({ dept, layout, snapshot, statuses, client, source = "cloud", onOpen }: OfficePanelProps & { dept: DeptId }) {
   const d = layout.departments.find((x) => x.id === dept);
   const agents = (snapshot?.roster ?? []).filter((a) => DEPT_OF_ROLE[a.role] === dept);
   const inbox = snapshot?.piles[dept];
@@ -261,18 +280,18 @@ function DepartmentBody({ dept, layout, snapshot, statuses, client, onOpen }: Of
           </ul>
         )}
       </Section>
-      {dept === "scout" && <FoundPerDay client={client} />}
+      {dept === "scout" && <FoundPerDay client={client} source={source} />}
     </>
   );
 }
 
-function FoundPerDay({ client }: { client: PanelClient }) {
-  const { data, error } = useLoad<DayCount[]>(() => loadFoundPerDay(client));
+function FoundPerDay({ client, source }: { client: PanelClient; source: "cloud" | "vps" }) {
+  const { data, error } = useLoad<DayCount[]>(() => (source === "vps" ? vpsPanelLoaders.foundPerDay() : loadFoundPerDay(client)));
   const max = Math.max(1, ...(data ?? []).map((d) => d.n));
   return (
     <Section title="Trovate negli ultimi 7 giorni">
       {!data ? (
-        <Loading error={error} />
+        <Loading error={error} source={source} />
       ) : (
         <div className="flex h-20 items-end gap-1" role="img" aria-label={data.map((d) => `${d.day}: ${d.n}`).join(", ")}>
           {data.map((d) => (
@@ -297,15 +316,15 @@ function Kpi({ label, value }: { label: string; value: string | number }) {
   );
 }
 
-function CvBody({ client, onNavigate }: OfficePanelProps) {
-  const { data, error } = useLoad<CvShelfData>(() => loadCvShelf(client));
+function CvBody({ client, source = "cloud", onNavigate }: OfficePanelProps) {
+  const { data, error } = useLoad<CvShelfData>(() => (source === "vps" ? vpsPanelLoaders.cvShelf() : loadCvShelf(client)));
   const scored = (data?.list ?? []).map((p) => p.score).filter((n): n is number => typeof n === "number");
   const avg = scored.length ? Math.round(scored.reduce((a, b) => a + b, 0) / scored.length) : null;
   return (
     <>
       <Heading title="CV prodotti" sub="Scaffale d'uscita: le candidature scritte dal team" />
       {!data ? (
-        <Loading error={error} />
+        <Loading error={error} source={source} />
       ) : (
         <>
           <div className="mb-3 flex gap-2">
@@ -326,14 +345,14 @@ function CvBody({ client, onNavigate }: OfficePanelProps) {
   );
 }
 
-function BoardBody({ client, onNavigate }: OfficePanelProps) {
+function BoardBody({ client, source = "cloud", onNavigate }: OfficePanelProps) {
   const locale = useLocale();
-  const { data, error } = useLoad<BoardData>(() => loadBoard(client));
+  const { data, error } = useLoad<BoardData>(() => (source === "vps" ? vpsPanelLoaders.board() : loadBoard(client)));
   return (
     <>
       <Heading title="Bacheca" sub="Posizioni pronte, inviate e con risposta" />
       {!data ? (
-        <Loading error={error} />
+        <Loading error={error} source={source} />
       ) : (
         <>
           <div className="mb-3 flex gap-2">
@@ -352,13 +371,13 @@ function BoardBody({ client, onNavigate }: OfficePanelProps) {
   );
 }
 
-function PlacesBody({ client, onNavigate }: OfficePanelProps) {
-  const { data, error } = useLoad<PlacesData>(() => loadPlaces(client));
+function PlacesBody({ client, source = "cloud", onNavigate }: OfficePanelProps) {
+  const { data, error } = useLoad<PlacesData>(() => (source === "vps" ? vpsPanelLoaders.places() : loadPlaces(client)));
   return (
     <>
       <Heading title="Mappa" sub="Dove sono le posizioni" />
       {!data ? (
-        <Loading error={error} />
+        <Loading error={error} source={source} />
       ) : data.places.length === 0 ? (
         <p className="m-0 text-[11px] text-[var(--color-muted)]">Nessuna posizione con un luogo.</p>
       ) : (

@@ -137,7 +137,7 @@ describe("Posizioni on an existing team read only", () => {
     // The honest banner, and one navigation entry: no page that reads the cloud or the box.
     expect(screen.getByTestId("existing-team-readonly-banner")).toHaveTextContent(REASON);
     const nav = screen.getByRole("navigation", { name: "Navigazione app" });
-    expect(within(nav).getAllByRole("link").map((link) => link.textContent)).toEqual(["JHT", "Dashboard", "Posizioni", "Squadra", "Profilo"]);
+    expect(within(nav).getAllByRole("link").map((link) => link.textContent)).toEqual(["JHT", "Dashboard", "Map", "Posizioni", "Squadra", "Profilo", "Ufficio"]);
     // The sidebar starts closed; opened, its dataset comes from the companion
     // through the web route, and its families are the team's own.
     await userEvent.setup().click(screen.getByRole("button", { name: /filtri/i }));
@@ -240,7 +240,7 @@ describe("Posizioni on an existing team read only", () => {
   });
 
   it("falls back to the dashboard when the hash asks for a page that reads another source", async () => {
-    navigate("/map", { replace: true });
+    navigate("/swipe", { replace: true });
     render(<Shell />);
     expect(await screen.findByRole("heading", { name: "Dashboard" })).toBeInTheDocument();
     expect(window.location.hash).toMatch(/^#\/dashboard/);

@@ -838,6 +838,67 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
     "The VPS did not present a valid ed25519 SSH key, so I cannot confirm its identity.",
     "Ask whoever manages the VPS to enable an ed25519 SSH key, then try again.",
   ),
+  // install.sh on a VPS, with its own exit: what stops rootless Podman there, for the administrator.
+  podman_install_failed: copy(
+    "Sulla VPS non sono riuscito a installare Podman.",
+    "Chiedi a chi gestisce la VPS di installare a mano podman, podman-compose e uidmap, poi riprova.",
+    "I could not install Podman on the VPS.",
+    "Ask whoever manages the VPS to install podman, podman-compose and uidmap by hand, then try again.",
+  ),
+  podman_sudo_required: copy(
+    "Sulla VPS il tuo utente non può completare la preparazione di Podman: sudo chiede una password o non c’è.",
+    "Chiedi a chi gestisce la VPS sudo senza password, oppure di installare podman, podman-compose e uidmap e di abilitare il linger per il tuo utente, poi riprova.",
+    "On the VPS your user cannot finish preparing Podman: sudo asks for a password or is not there.",
+    "Ask whoever manages the VPS for sudo without a password, or to install podman, podman-compose and uidmap and enable lingering for your user, then try again.",
+  ),
+  vps_podman_missing: copy(
+    "Sulla VPS manca Podman, che serve per far girare il team.",
+    "Chiedi a chi gestisce la VPS di installare Podman, poi riprova.",
+    "Podman is not installed on the VPS, and the team needs it to run.",
+    "Ask whoever manages the VPS to install Podman, then try again.",
+  ),
+  podman_rootful_refused: copy(
+    "Sulla VPS l’installazione girerebbe come amministratore (root), ma il team si installa solo con Podman senza privilegi.",
+    "Chiedi a chi gestisce la VPS un utente normale, non root, e collegati con quello.",
+    "On the VPS the install would run as the administrator (root), but the team only installs with Podman without privileges.",
+    "Ask whoever manages the VPS for a regular user, not root, and connect with that one.",
+  ),
+  podman_compose_missing: copy(
+    "Sulla VPS c’è Podman, ma manca podman compose.",
+    "Chiedi a chi gestisce la VPS di installare podman-compose, poi riprova.",
+    "Podman is on the VPS, but podman compose is missing.",
+    "Ask whoever manages the VPS to install podman-compose, then try again.",
+  ),
+  podman_version_unsupported: copy(
+    "Sulla VPS la versione di Podman o di podman-compose è troppo vecchia.",
+    "Chiedi a chi gestisce la VPS di aggiornare Podman e podman-compose, poi riprova.",
+    "On the VPS the version of Podman or podman-compose is too old.",
+    "Ask whoever manages the VPS to update Podman and podman-compose, then try again.",
+  ),
+  podman_runtime_dir_missing: copy(
+    "Sulla VPS la tua sessione non ha la cartella di lavoro che serve a Podman senza privilegi.",
+    "Chiedi a chi gestisce la VPS di attivare il linger per il tuo utente (loginctl enable-linger), poi riprova.",
+    "On the VPS your session has no runtime folder, which Podman without privileges needs.",
+    "Ask whoever manages the VPS to enable lingering for your user (loginctl enable-linger), then try again.",
+  ),
+  podman_rootless_unavailable: copy(
+    "Sulla VPS Podman non riesce a partire con il tuo utente.",
+    "Chiedi a chi gestisce la VPS di controllare che il comando podman info funzioni con il tuo utente, poi riprova.",
+    "On the VPS Podman cannot start for your user.",
+    "Ask whoever manages the VPS to check that the podman info command works for your user, then try again.",
+  ),
+  podman_linger_missing: copy(
+    "Sulla VPS il tuo utente non può tenere acceso il team quando ti disconnetti.",
+    "Chiedi a chi gestisce la VPS di attivare il linger per il tuo utente (loginctl enable-linger), poi riprova.",
+    "On the VPS your user cannot keep the team running after you disconnect.",
+    "Ask whoever manages the VPS to enable lingering for your user (loginctl enable-linger), then try again.",
+  ),
+  podman_subuid_missing: copy(
+    "Sulla VPS il tuo utente non ha gli ID subordinati che servono a Podman senza privilegi.",
+    "Chiedi a chi gestisce la VPS di aggiungere il tuo utente a /etc/subuid e /etc/subgid, poi riprova.",
+    "On the VPS your user has no subordinate IDs, which Podman without privileges needs.",
+    "Ask whoever manages the VPS to add your user to /etc/subuid and /etc/subgid, then try again.",
+  ),
   host_key_missing: copy(
     "L’identità SSH della VPS non è ancora stata confermata.",
     "Conferma l’impronta della VPS prima di continuare.",
