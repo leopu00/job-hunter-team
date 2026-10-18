@@ -10,7 +10,7 @@ export interface ExistingTeamReadOnlyText {
   team: string;
   /** The navigation entry of the page that shows the candidate profile. */
   profile: string;
-  /** The navigation entry of the office, drawn from the team's VPS. */
+  /** The navigation entry of the office (a desktop page, no web label). */
   office: string;
   back: string;
   navAria: string;
