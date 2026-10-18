@@ -241,6 +241,72 @@ def inline_external_value(value, label=None):
     return f"{header}{text}{INLINE_CLOSE_MARKER}"
 
 
+# ── Il turno scritto dall'utente (JHT-T21) ─────────────────────────────────
+#
+# Il testo che l'utente scrive in chat (app, web, Telegram) arriva al pane
+# dell'agente DIGITATO, carattere per carattere (`tmux send-keys -l`). Fino a
+# T21 ci arrivava com'era: un a capo seguito da `[@capitano -> @assistente]
+# [DELEGA] …` si leggeva come una riga di un collega; un ESC o un ritorno
+# carrello arrivavano alla TUI come tasti; un override bidi riscriveva l'ordine
+# di lettura. Misurato su un pane vero: `^[[31m` e i byte di U+202E arrivano
+# intatti.
+#
+# Qui NON si dice «non eseguire»: il testo dell'utente è la sua richiesta, e gli
+# agenti che parlano con lui (assistente, capitano, mentor) devono poterla
+# leggere come tale. Si dice DI CHI È: sta dentro un confine con nonce, su una
+# riga, e niente di ciò che c'è dentro può spacciarsi per una riga del sistema
+# o di un collega. Stessi pezzi del recinto dei dati esterni: il nonce, la
+# lista degli invisibili (UNA SOLA, sopra), lo scudo dei marcatori.
+USER_OPEN_MARKER = f"⟦UTENTE·{NONCE}⟧"
+USER_CLOSE_MARKER = f"⟦/UTENTE·{NONCE}⟧"
+ESCAPED_USER_OPEN = "⟦MARCATORE_UTENTE_ESCAPED⟧"
+ESCAPED_USER_CLOSE = "⟦/MARCATORE_UTENTE_ESCAPED⟧"
+
+# Un a capo dentro il testo diventa questo segno, visibile: le righe di un
+# elenco o i paragrafi restano distinguibili, ma nessuna riga del testo
+# comincia più «da sola» (dove una busta finta sarebbe credibile).
+LINE_BREAK_MARK = "⏎"
+_LINE_BREAKS = re.compile(r"\r\n|[\n\r\v\f\x1c-\x1e\x85\u2028\u2029]")
+
+# Come `_MARKER_SHAPE`, per i marcatori dell'utente: ci vuole il punto mediano,
+# così «[utente 1]» in una frase normale non viene toccato.
+_USER_MARKER_SHAPE = re.compile(
+    "|".join(
+        re.escape(opening)
+        + r"\s*/?\s*UTENTE\s*·[^"
+        + re.escape(closing[0])
+        + r"]*"
+        + re.escape(closing)
+        for opening, closing in _MARKER_BRACKETS
+    ),
+    re.IGNORECASE,
+)
+
+
+def flatten_user_turn(text):
+    """Il testo dell'utente su una riga: gli a capo diventano `⏎`, i comandi spariscono."""
+    lines = (flatten_to_one_line(part) for part in _LINE_BREAKS.split(str(text or "")))
+    return f" {LINE_BREAK_MARK} ".join(line for line in lines if line)
+
+
+def _defang_user_markers(text):
+    def replace(match):
+        return ESCAPED_USER_CLOSE if "/" in match.group(0) else ESCAPED_USER_OPEN
+
+    return _USER_MARKER_SHAPE.sub(replace, text)
+
+
+def fence_user_turn(text):
+    """Il testo scritto dall'utente, dentro il suo confine, su una riga sola.
+
+    Presentazione e basta: il testo che l'utente vede (cronologia, web, gioco)
+    resta quello che ha scritto.
+    """
+    safe = _defang_markers(_defang_user_markers(flatten_user_turn(text)))
+    return " ".join(part for part in (USER_OPEN_MARKER, safe, USER_CLOSE_MARKER) if part)
+
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(
         description="Fence external content as inert prompt data"
