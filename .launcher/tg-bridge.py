@@ -46,6 +46,7 @@ import sqlite3
 import subprocess
 import sys
 import time
+import urllib.parse
 import urllib.request
 import urllib.error
 from datetime import datetime, timezone
@@ -93,6 +94,14 @@ try:
 except Exception as _answers_import_error:  # pragma: no cover - degraded image
     application_answers = None
 
+# [JHT-T07] Le domande strutturate degli agenti (`jht-notify-user --option …`): una
+# risposta scritta o un bottone premuto va alla domanda. Senza il modulo il bridge
+# consegna la chat come prima.
+try:
+    import agent_questions  # noqa: E402
+except Exception as _questions_import_error:  # pragma: no cover - degraded image
+    agent_questions = None
+
 VALID_ROLES = ("assistente", "capitano", "mentor")
 
 JHT_HOME = Path(os.environ.get("JHT_HOME", "/jht_home"))
@@ -138,6 +147,11 @@ TARGET_SESSION = os.environ.get("JHT_TG_TARGET_SESSION", BOT_ROLE.upper())
 # reply e senza codice puo' valere come risposta all'unica domanda aperta.
 CLOSER_QUESTION_BOT = "assistente"
 POLL_TIMEOUT_SEC = 30
+# Detto OGNI volta, mai lasciato al default: Telegram ricorda l'ultimo elenco chiesto per questo
+# bot, e il servizio isolato (dopo un cutover poi annullato) lo lascia a messaggi soli — i bottoni
+# delle domande non arriverebbero mai.
+ALLOWED_UPDATES = ["message", "edited_message", "callback_query"]
+ALLOWED_UPDATES_QUERY = urllib.parse.quote(json.dumps(ALLOWED_UPDATES, separators=(",", ":")))
 MAX_DOC_SIZE_BYTES = 20 * 1024 * 1024  # 20 MB hard limit Bot API
 DOWNLOAD_CHUNK_BYTES = 64 * 1024
 
@@ -538,6 +552,63 @@ _REJECTION_TEXT = {
 }
 
 
+def _resolve_question(db: sqlite3.Connection, rec: dict, *, explicit_only: bool):
+    """Un messaggio scritto a questo bot come risposta a una sua domanda strutturata.
+
+    Stesso schema del CLOSER (SAVEPOINT: un errore non fa perdere il turno di chat).
+    Se e' una risposta, il turno di chat appena scritto NON va al pane come [CHAT]: la
+    riga resta nella cronologia ma gia' consegnata.
+    """
+    if agent_questions is None:
+        return None
+    db.execute("SAVEPOINT question_reply")
+    try:
+        typed = agent_questions.resolve_typed_reply(
+            db, BOT_ROLE, str(rec.get("body") or ""), rec.get("reply_to_text"), explicit_only=explicit_only,
+        )
+        if typed.status != "not_an_answer":
+            db.execute(
+                "UPDATE pending_user_messages SET delivered_at = CURRENT_TIMESTAMP "
+                "WHERE source_id = ? AND delivered_at IS NULL",
+                (rec["source_id"],),
+            )
+    except Exception as e:
+        db.execute("ROLLBACK TO question_reply")
+        db.execute("RELEASE question_reply")
+        log(f"question reply resolution failed: {type(e).__name__} — chat turn kept")
+        return None
+    db.execute("RELEASE question_reply")
+    if typed.status == "not_an_answer":
+        return None
+    log(f"question reply {typed.status} question={typed.id_domanda}")
+    return typed
+
+
+def _resolve_reply(db: sqlite3.Connection, rec: dict):
+    """Chi risponde, nell'ordine: una domanda nominata col codice, il CLOSER come prima, poi
+    l'unica domanda aperta di questo bot. Tutto il resto resta chat."""
+    for resolve in (
+        lambda: _resolve_question(db, rec, explicit_only=True),
+        lambda: _resolve_closer_answer(db, rec),
+        lambda: _resolve_question(db, rec, explicit_only=False),
+    ):
+        outcome = resolve()
+        if outcome is not None:
+            return outcome
+    return None
+
+
+def _question_feedback_text(typed) -> str | None:
+    """La frase per l'utente (nella sua lingua), o None se basta l'avviso di scadenza."""
+    if typed.status == "recorded":
+        return agent_questions.catalog_text("question.answer_saved", typed.label)
+    if typed.status == "already_answered":
+        return agent_questions.catalog_text("question.answer_already", typed.label) if typed.label else None
+    if typed.status == "invalid":
+        return agent_questions.catalog_text("question.answer_invalid", typed.answer_code)
+    return None  # expired: the notice «scaduta: ho fatto X» says it
+
+
 def _answer_feedback_text(outcome) -> str:
     if application_answers is not None and isinstance(outcome, application_answers.LoginCodeOutcome):
         return _LOGIN_FEEDBACK.get(outcome.status, _LOGIN_FEEDBACK["failed"])
@@ -563,6 +634,20 @@ def _answer_feedback_text(outcome) -> str:
 
 def _answer_feedback(outcome) -> None:
     """Best-effort: la risposta e' gia' salvata (o rifiutata) nel DB."""
+    if agent_questions is not None and isinstance(outcome, agent_questions.Typed):
+        if outcome.expiry_notice is not None:
+            agent_questions.deliver_expired([outcome.expiry_notice], warn=log)
+        text = _question_feedback_text(outcome)
+        if text is None:
+            return
+        try:
+            subprocess.run(
+                ["jht-telegram-send", "--from", BOT_ROLE, text],
+                capture_output=True, text=True, timeout=25, check=False,
+            )
+        except Exception as e:
+            log(f"question answer feedback not sent: {type(e).__name__}")
+        return
     try:
         subprocess.run(
             ["jht-telegram-send", "--from", BOT_ROLE, _answer_feedback_text(outcome)],
@@ -699,7 +784,7 @@ def flush_inbound_queue(db_path: Path | None = None) -> int:
                     if outcome is not None:
                         resolutions.append(outcome)
                 elif inserted == 1 and not rec.get("edited"):
-                    outcome = _resolve_closer_answer(db, rec)
+                    outcome = _resolve_reply(db, rec)
                     if outcome is not None:
                         resolutions.append(outcome)
             db.commit()
@@ -999,6 +1084,60 @@ def handle_voice(token: str, msg: dict) -> str:
 
 # ── Dispatch di un singolo update ───────────────────────────────────────
 
+def _bot_api(token: str, method: str, payload: dict) -> None:
+    """Una chiamata Bot API di cortesia (rispondere al bottone, toglierlo): mai un errore."""
+    request = urllib.request.Request(
+        f"https://api.telegram.org/bot{token}/{method}",
+        data=json.dumps(payload).encode("utf-8"),
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    try:
+        urllib.request.urlopen(request, timeout=10).read()
+    except (urllib.error.URLError, OSError, ValueError) as e:
+        log(f"{method} not delivered: {type(e).__name__}")
+
+
+def handle_callback(token: str, allowed_chat: int, callback: dict) -> None:
+    """Un bottone di una domanda strutturata, premuto nella chat autorizzata.
+
+    La risposta va dritta alla domanda (la prima vince, un tocco ripetuto no): niente
+    turno di chat, niente journal — `record_answer` e' idempotente, quindi un replay dopo
+    un crash trova la risposta gia' scritta. Un errore SOLLEVA: ci pensa main() a riprovare.
+    """
+    chat_id = ((callback.get("message") or {}).get("chat") or {}).get("id")
+    if chat_id != allowed_chat:
+        log(f"drop callback chat={chat_id} (not whitelisted)")
+        return
+    if agent_questions is None:
+        return
+    if not JOBS_DB_PATH.exists():
+        raise DurableQueueError(f"{JOBS_DB_PATH} not found")
+    db = sqlite3.connect(JOBS_DB_PATH, timeout=5)
+    try:
+        typed = agent_questions.resolve_callback(db, BOT_ROLE, callback.get("data"))
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+    finally:
+        db.close()
+    log(f"callback {typed.status} question={typed.id_domanda}")
+    text = _question_feedback_text(typed) if typed.status != "not_an_answer" else None
+    answer = {"callback_query_id": callback.get("id")}
+    if text:
+        answer["text"] = text[:200]
+    _bot_api(token, "answerCallbackQuery", answer)
+    message = callback.get("message") or {}
+    if typed.status in ("recorded", "already_answered", "expired") and message.get("message_id") is not None:
+        # The buttons have done their job: a second tap would only be told it is too late.
+        _bot_api(token, "editMessageReplyMarkup", {
+            "chat_id": chat_id, "message_id": message["message_id"], "reply_markup": {"inline_keyboard": []},
+        })
+    if typed.expiry_notice is not None:
+        agent_questions.deliver_expired([typed.expiry_notice], warn=log)
+
+
 def dispatch_update(token: str, allowed_chat: int, u: dict) -> None:
     """Instrada UN update. Solleva: e' main() a decidere ritentare o scartare.
 
@@ -1007,6 +1146,9 @@ def dispatch_update(token: str, allowed_chat: int, u: dict) -> None:
     falliti, e la coda deve avanzare oltre.
     """
     uid = u.get("update_id")
+    if isinstance(u.get("callback_query"), dict):
+        handle_callback(token, allowed_chat, u["callback_query"])
+        return
     edited = "edited_message" in u and "message" not in u
     m = u.get("message") or u.get("edited_message")
     if not m:
@@ -1164,6 +1306,7 @@ def main() -> None:
             url = (
                 f"https://api.telegram.org/bot{token}/getUpdates"
                 f"?offset={offset + 1}&timeout={POLL_TIMEOUT_SEC}"
+                f"&allowed_updates={ALLOWED_UPDATES_QUERY}"
             )
             r = urllib.request.urlopen(url, timeout=POLL_TIMEOUT_SEC + 5).read()
             d = json.loads(r)

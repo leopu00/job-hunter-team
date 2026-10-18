@@ -234,5 +234,8 @@
   "disk.low": "El disco está casi lleno (solo queda libre %s): no se iniciará ningún agente nuevo ni se instalará ninguna actualización. Los agentes ya iniciados siguen funcionando. Para liberar espacio: vacía la papelera y elimina los archivos grandes que ya no necesites, como descargas antiguas o imágenes de Docker/Podman sin usar, y vuelve a intentarlo.",
   "question.expired": "Pregunta caducada: «%s». He hecho: «%s». Si prefieres otra cosa, escríbemelo aquí y te lo vuelvo a preguntar.",
   "question.postpone": "Aplazar, no hacer nada",
-  "question.reply_hint": "Responde con el número de la opción (por ejemplo 2). Si hay varias preguntas abiertas, escribe «%s 2»."
+  "question.reply_hint": "Responde con el número de la opción (por ejemplo 2). Si hay varias preguntas abiertas, escribe «%s 2».",
+  "question.answer_saved": "Respuesta guardada: «%s».",
+  "question.answer_already": "Esta pregunta ya tiene una respuesta: «%s».",
+  "question.answer_invalid": "No es una de las opciones, así que no la he guardado. Responde con el número de una opción (por ejemplo 2) o escribe «%s 2»."
 }

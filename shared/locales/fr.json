@@ -234,5 +234,8 @@
   "disk.low": "Le disque est presque plein (seulement %s sont libres) : aucun nouvel agent ne sera démarré et aucune mise à jour installée. Les agents déjà lancés continuent. Pour libérer de la place : vide la corbeille et supprime les gros fichiers dont tu n’as plus besoin, comme d’anciens téléchargements ou des images Docker/Podman inutilisées, puis réessaie.",
   "question.expired": "Question expirée : « %s ». J’ai fait : « %s ». Si tu préfères autre chose, écris-le-moi ici et je te reposerai la question.",
   "question.postpone": "Reporter, ne rien faire",
-  "question.reply_hint": "Réponds avec le numéro de l’option (par exemple 2). Si plusieurs questions sont ouvertes, écris « %s 2 »."
+  "question.reply_hint": "Réponds avec le numéro de l’option (par exemple 2). Si plusieurs questions sont ouvertes, écris « %s 2 ».",
+  "question.answer_saved": "Réponse enregistrée : « %s ».",
+  "question.answer_already": "Cette question a déjà une réponse : « %s ».",
+  "question.answer_invalid": "Ce n’est pas une des options, je ne l’ai donc pas enregistrée. Réponds avec le numéro d’une option (par exemple 2) ou écris « %s 2 »."
 }
