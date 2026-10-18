@@ -875,9 +875,9 @@ export default function MapCharts({
               flex: 1,
               minHeight: 0,
               display: "flex",
-              alignItems: "center",
-              // Padding ridotto: con l'header la legenda (fino a ~9 voci)
-              // deve starci senza essere tagliata.
+              // stretch (non center): il donut prende l'altezza del corpo e
+              // la sua legenda scorre dentro, senza uscire dalla card.
+              alignItems: "stretch",
               padding: 12,
             }}
           >
