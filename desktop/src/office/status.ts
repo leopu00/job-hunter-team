@@ -113,7 +113,8 @@ export function tagOf(s: AgentStatus, now = Date.now()): { label: string; color:
     case "throttled":
       return countdown(s.throttleUntil, now);
     default:
-      // a status this file does not know is never drawn as work or as a wait
+      // "unknown" (an existing team read over its VPS: a session up says nothing about work) and any
+      // status this file does not know: grey, never drawn as work and never as a wait
       return { label: "UNKNOWN", color: UNKNOWN_COLOR };
   }
 }

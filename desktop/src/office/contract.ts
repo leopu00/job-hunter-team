@@ -354,7 +354,12 @@ export type AgentPose = {
  * traces; "idle" is the game's WAITING.
  */
 export type AgentStatus = {
-  status: "working" | "idle" | "paused" | "throttled";
+  /**
+   * "unknown": the agent is in the office but nothing says what it is doing
+   * (an existing team read over its VPS, where only the sessions' being up is
+   * known). Drawn grey, never as work or as a wait.
+   */
+  status: "working" | "idle" | "paused" | "throttled" | "unknown";
   /** throttled only: when the pause ends, on this computer's clock; absent when its length is not known */
   throttleUntil?: number;
   /**

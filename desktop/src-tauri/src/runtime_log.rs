@@ -78,7 +78,8 @@ impl RuntimeLog {
                 | "host_key_unavailable" | "host_key_missing" | "host_key_changed" | "host_key_mismatch"
                 | "host_key_confirmation_invalid" | "host_key_unwritable"
                 | "ssh_unavailable" | "ssh_auth_failed" | "process_start_failed" | "process_timeout"
-                | "process_write_failed" | "process_wait_failed" | "process_output_unavailable" => code,
+                | "process_write_failed" | "process_wait_failed" | "process_output_unavailable"
+                | "process_input_failed" | "process_pipe_failed" => code,
                 _ => "io_error_other",
             }.to_owned(),
         };
@@ -310,8 +311,14 @@ mod tests {
         log.record_existing_team_status(super::ExistingTeamPhase::Ssh, Ok(73));
         log.record_existing_team_status(super::ExistingTeamPhase::Final, Err("existing_team_not_active"));
         log.record_existing_team_status(super::ExistingTeamPhase::Candidate, Err("synthetic-private-account-key-token"));
+        // What run_ssh_command returns when the probe's stdin or pipes fail: named, not io_error_other.
+        log.record_existing_team_status(super::ExistingTeamPhase::Ssh, Err("process_input_failed"));
+        log.record_existing_team_status(super::ExistingTeamPhase::Ssh, Err("process_pipe_failed"));
         let text = fs::read_to_string(log.path()).unwrap();
-        assert_eq!(text.lines().count(), 3);
+        assert_eq!(text.lines().count(), 5);
+        assert!(text.contains(" existing_team.ssh: process_input_failed\n"));
+        assert!(text.contains(" existing_team.ssh: process_pipe_failed\n"));
+        assert_eq!(text.matches("io_error_other").count(), 1);
         assert!(text.contains(" existing_team.ssh: exit 73\n"));
         assert!(text.contains(" existing_team.final: existing_team_not_active\n"));
         assert!(text.contains(" existing_team.candidate: io_error_other\n"));

@@ -101,7 +101,7 @@ test('500 GiB with 14 GiB free is not refused; 200 GiB with 4 GiB free is, with 
   const refusal = diskLowRefusal({ ...base, statfs: sizedStatfs(200, 4 * GIB_KIB) });
   assert.equal(refusal.code, 'disk_low');
   assert.match(refusal.message, /Trash/);
-  assert.match(refusal.message, /Docker\/Podman/);
+  assert.match(refusal.message, /`jht clean-images`/);
 });
 
 test('the worst volume is chosen by severity, not by the lowest percent alone', () => {

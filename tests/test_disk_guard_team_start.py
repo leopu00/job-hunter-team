@@ -138,7 +138,7 @@ def spawned(calls):
 
 def disk_low_phrase(shown):
     table = json.loads((ROOT / "shared" / "locales" / "en.json").read_text(encoding="utf-8"))
-    return table["disk.low"].replace("%s", shown)
+    return table["disk.low.cli"].replace("%s", shown)
 
 
 def test_at_15_percent_one_agent_starts_as_before(cli_copy, tmp_path):

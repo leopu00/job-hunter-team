@@ -2342,37 +2342,61 @@ function Write-UpgradeResult {
 function Write-UpgradeNote { param([string]$Message) if (-not $script:UpgradeJson) { Write-Info $Message } }
 
 # ── Disco quasi pieno: nessun upgrade ──────────────────────────────────────
-# Come in jht-wrapper.sh (stesse soglie, stesso codice chiuso `disk_low`, stesso
+# Come in jht-wrapper.sh (stessi numeri, stesso codice chiuso `disk_low`, stesso
 # motivo): un upgrade scarica un'immagine e riscrive il runtime, e su un disco al
-# limite muore a meta'. Sotto il 3% di spazio libero si rifiuta PRIMA di scaricare
-# qualunque cosa, anche per `--check` (che scarica l'immagine). Le soglie sono
-# quelle di host_vitals.py, disk-guard.js e jht-wrapper.sh, in per mille
-# (tests/test_disk_guard.py le confronta).
+# limite muore a meta'. Si rifiuta PRIMA di scaricare qualunque cosa, anche per
+# `--check` (che scarica l'immagine), quando lo spazio libero e' sotto il 3% E
+# sotto 8 GiB: la percentuale da sola rifiutava un disco da 500 GiB con 14 GiB
+# ancora liberi. La soglia di avviso (10% E 20 GiB) c'e' per parita' e qui non
+# rifiuta niente. Sono le soglie di host_vitals.py, disk-guard.js e
+# jht-wrapper.sh (tests/test_disk_guard.py le confronta come testo), qui in per
+# mille e in KiB (come nel .sh).
+#
+# I confronti sono stretti ed esatti, in interi: «libero*1000 < permille*totale»
+# e «libero < KiB*1024», senza dividere in virgola mobile.
+#
+# NON E' MAI STATO ESEGUITO: sul Mac che l'ha scritto non c'e' PowerShell, e il
+# bundle NSIS verde non lo prova. I test lo leggono come testo. Il .sh ha in piu'
+# `jht clean-images` (il recupero di spazio a disco pieno); qui non c'e' ancora.
 #
 # Si misura il volume della cartella dati. Il disco del motore (WSL/macchina
 # Podman) sta dentro una VM che da qui non si legge: resta «sconosciuto» e non
 # rifiuta niente. JHT_ENGINE_DISK_PATH forza un percorso da misurare.
 $DiskWarnFreePermille = 100
+$DiskWarnFreeKib = 20971520
 $DiskBlockFreePermille = 30
+$DiskBlockFreeKib = 8388608
 
-function Get-DiskFreePermille {
+# Byte liberi e totali del volume che contiene $Path, oppure $null.
+function Get-DiskFreeMeasure {
   param([string]$Path)
   try {
     if (-not $Path) { return $null }
     $root = [System.IO.Path]::GetPathRoot([System.IO.Path]::GetFullPath($Path))
     $drive = New-Object System.IO.DriveInfo($root)
     if (-not $drive.IsReady -or $drive.TotalSize -le 0) { return $null }
-    return [int][Math]::Floor([double]$drive.AvailableFreeSpace * 1000 / [double]$drive.TotalSize)
+    return @{ Free = [long]$drive.AvailableFreeSpace; Total = [long]$drive.TotalSize }
   } catch { return $null }
 }
 
-# Il valore (per mille) del primo volume misurato sotto il 3%, altrimenti $null.
+# 'low' | 'warn' | 'ok': serve la percentuale E i byte.
+function Get-DiskLevelOf {
+  param([long]$Free, [long]$Total)
+  if (($Free * 1000) -lt ([long]$DiskBlockFreePermille * $Total) -and $Free -lt ([long]$DiskBlockFreeKib * 1024)) { return 'low' }
+  if (($Free * 1000) -lt ([long]$DiskWarnFreePermille * $Total) -and $Free -lt ([long]$DiskWarnFreeKib * 1024)) { return 'warn' }
+  return 'ok'
+}
+
+# Il valore (per mille, per il messaggio) del primo volume misurato sotto la
+# soglia (percentuale E byte), altrimenti $null.
 function Get-DiskLowPermille {
   $volumes = @($JhtHome)
   if ($env:JHT_ENGINE_DISK_PATH) { $volumes += $env:JHT_ENGINE_DISK_PATH }
   foreach ($volume in $volumes) {
-    $permille = Get-DiskFreePermille $volume
-    if ($null -ne $permille -and $permille -lt $DiskBlockFreePermille) { return $permille }
+    $measure = Get-DiskFreeMeasure $volume
+    if ($null -ne $measure -and (Get-DiskLevelOf $measure.Free $measure.Total) -eq 'low') {
+      return [int][Math]::Floor([double]$measure.Free * 1000 / [double]$measure.Total)
+    }
   }
   return $null
 }
@@ -2645,12 +2669,12 @@ function Invoke-RuntimeUpgrade {
     $oldImage = if ($wasRunning) { Get-UpgradeImage } else { 'none' }
     $oldVersion = if ($wasRunning) { Get-UpgradeVersion } else { 'non-installata' }
     if (-not $oldImage) { $oldImage = 'none' }; if (-not $oldVersion) { $oldVersion = 'sconosciuta' }
-    # Disco quasi pieno (< 3% libero): nessun upgrade, nemmeno `--check`. PRIMA di
+    # Disco quasi pieno (< 3% E < 8 GiB liberi): nessun upgrade, nemmeno `--check`. PRIMA di
     # creare la stage o scaricare: il runtime in corso resta intatto. Codice chiuso
     # `disk_low`; la frase la mostra l'app dalla sua tabella codice->frase.
     $diskLow = Get-DiskLowPermille
     if ($null -ne $diskLow) {
-      if (-not $script:UpgradeJson) { Write-Err "disk_low: meno del 3% di disco libero ($diskLow per mille). Libera spazio e riprova: non e' stato scaricato ne' modificato niente." }
+      if (-not $script:UpgradeJson) { Write-Err "disk_low: meno del 3% di disco libero ($diskLow per mille) e meno di 8 GiB. Per liberare spazio svuota il Cestino ed elimina i file grandi che non ti servono e le immagini Docker inutilizzate, poi riprova: non e' stato scaricato ne' modificato niente." }
       Write-UpgradeResult $false $false 'preflight' $oldVersion $oldImage $oldVersion $oldImage $false 'disk_low' $false
       return 1
     }

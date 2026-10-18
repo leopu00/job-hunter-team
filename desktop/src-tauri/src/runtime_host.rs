@@ -702,6 +702,49 @@ where
     (Ok(code), taken(&kept))
 }
 
+/// What `wait_until` needs from a process: say whether it has ended, and stop it.
+trait Waited {
+    fn poll(&mut self) -> std::io::Result<Option<std::process::ExitStatus>>;
+    /// Kill it and reap it.
+    fn stop(&mut self);
+}
+
+impl Waited for std::process::Child {
+    fn poll(&mut self) -> std::io::Result<Option<std::process::ExitStatus>> {
+        self.try_wait()
+    }
+    fn stop(&mut self) {
+        let _ = self.kill();
+        let _ = self.wait();
+    }
+}
+
+/// Waits for a process to end, up to `timeout` from `started`. A deadline that
+/// passes and a wait that fails both stop the process: one left running holds
+/// the pipe the input's writer is blocked on, and the writer is joined next.
+fn wait_until<W: Waited>(
+    child: &mut W,
+    started: Instant,
+    timeout: Duration,
+    poll: Duration,
+) -> Result<std::process::ExitStatus, &'static str> {
+    loop {
+        match child.poll() {
+            Ok(Some(status)) => return Ok(status),
+            Ok(None) => {}
+            Err(_) => {
+                child.stop();
+                return Err("process_wait_failed");
+            }
+        }
+        if started.elapsed() >= timeout {
+            child.stop();
+            return Err("process_timeout");
+        }
+        thread::sleep(poll);
+    }
+}
+
 pub(crate) fn run_program<I, S>(
     program: &str,
     args: I,
@@ -748,43 +791,55 @@ where
         let _ = child.wait();
         return (Err("process_pipe_failed"), Vec::new());
     };
+    let stdin = if input.is_some() {
+        match child.stdin.take() {
+            Some(stdin) => Some(stdin),
+            None => {
+                let _ = child.kill();
+                let _ = child.wait();
+                return (Err("process_pipe_failed"), Vec::new());
+            }
+        }
+    } else {
+        None
+    };
     let stdout_reader = thread::spawn(move || read_capped(stdout));
     let stderr_reader = thread::spawn(move || read_capped(stderr));
-    let stopped = |child: &mut std::process::Child,
-                   stdout_reader: thread::JoinHandle<Vec<u8>>,
-                   stderr_reader: thread::JoinHandle<Vec<u8>>,
-                   error: &'static str| {
-        let _ = child.kill();
-        let _ = child.wait();
-        let _ = stdout_reader.join();
-        (Err(error), stderr_reader.join().unwrap_or_default())
-    };
-    if let Some(bytes) = input {
-        let Some(mut stdin) = child.stdin.take() else {
-            return stopped(&mut child, stdout_reader, stderr_reader, "process_pipe_failed");
-        };
-        if stdin.write_all(bytes).is_err() {
-            return stopped(&mut child, stdout_reader, stderr_reader, "process_input_failed");
-        }
-    }
     let started = Instant::now();
-    let status = loop {
-        match child.try_wait() {
-            Ok(Some(status)) => break status,
-            Ok(None) => {}
-            Err(_) => return stopped(&mut child, stdout_reader, stderr_reader, "process_wait_failed"),
-        }
-        if started.elapsed() >= timeout {
-            return stopped(&mut child, stdout_reader, stderr_reader, "process_timeout");
-        }
-        thread::sleep(Duration::from_millis(50));
-    };
+    // The input goes in on its own thread, and the clock starts before it: a
+    // process that never reads (a server that accepts the connection and then
+    // stalls) would otherwise block `write_all` for good, with the timeout not
+    // yet armed. Killing the child closes the pipe and frees the writer.
+    let outcome = thread::scope(|scope| {
+        let writer = match (stdin, input) {
+            (Some(mut stdin), Some(bytes)) => {
+                Some(scope.spawn(move || stdin.write_all(bytes)))
+            }
+            _ => None,
+        };
+        let status = wait_until(&mut child, started, timeout, Duration::from_millis(50));
+        let input_written = match writer {
+            Some(handle) => handle.join().map(|result| result.is_ok()).unwrap_or(false),
+            None => true,
+        };
+        status.map(|status| (status, input_written))
+    });
     let stdout = stdout_reader.join().unwrap_or_default();
     // stderr is never returned to UI-facing callers: SSH/provider output can
     // contain credentials or host data, and stable error codes are the public
     // contract. run_program drops it; only the local runtime's own log keeps
     // it, redacted.
     let stderr = stderr_reader.join().unwrap_or_default();
+    let (status, input_written) = match outcome {
+        Ok(done) => done,
+        Err(code) => return (Err(code), stderr),
+    };
+    // A process that ended in failure without reading everything (ssh that
+    // could not connect) is told by its exit code; only a process that said
+    // "success" while its input was cut short is an input failure.
+    if !input_written && status.success() {
+        return (Err("process_input_failed"), stderr);
+    }
     (
         Ok(ProcessResult {
             code: status.code().unwrap_or(-1),
@@ -849,6 +904,129 @@ mod tests {
         for bad in ["", "-root", "root@host", "user name", "a/b"] {
             assert!(!valid_user(bad), "{bad}");
         }
+    }
+
+    /// A process that is not a process: it answers what the test says and
+    /// counts how often it was stopped.
+    struct Scripted {
+        answers: std::collections::VecDeque<std::io::Result<Option<std::process::ExitStatus>>>,
+        stopped: usize,
+    }
+
+    impl super::Waited for Scripted {
+        fn poll(&mut self) -> std::io::Result<Option<std::process::ExitStatus>> {
+            self.answers.pop_front().unwrap_or(Ok(None))
+        }
+        fn stop(&mut self) {
+            self.stopped += 1;
+        }
+    }
+
+    fn scripted(
+        answers: Vec<std::io::Result<Option<std::process::ExitStatus>>>,
+    ) -> Scripted {
+        Scripted { answers: answers.into(), stopped: 0 }
+    }
+
+    #[test]
+    fn a_wait_that_fails_stops_the_process_before_giving_up() {
+        let mut child = scripted(vec![Ok(None), Err(std::io::Error::other("wait failed"))]);
+        let result = super::wait_until(
+            &mut child,
+            std::time::Instant::now(),
+            std::time::Duration::from_secs(60),
+            std::time::Duration::from_millis(1),
+        );
+        assert_eq!(result.unwrap_err(), "process_wait_failed");
+        assert_eq!(child.stopped, 1, "a process left running holds the pipe the writer is blocked on");
+    }
+
+    #[test]
+    fn a_deadline_that_passes_stops_the_process_once() {
+        let mut child = scripted(vec![]);
+        let result = super::wait_until(
+            &mut child,
+            std::time::Instant::now(),
+            std::time::Duration::ZERO,
+            std::time::Duration::from_millis(1),
+        );
+        assert_eq!(result.unwrap_err(), "process_timeout");
+        assert_eq!(child.stopped, 1);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_process_that_ended_is_not_stopped() {
+        use std::os::unix::process::ExitStatusExt;
+        let mut child = scripted(vec![Ok(None), Ok(Some(std::process::ExitStatus::from_raw(0)))]);
+        let result = super::wait_until(
+            &mut child,
+            std::time::Instant::now(),
+            std::time::Duration::from_secs(60),
+            std::time::Duration::from_millis(1),
+        );
+        assert!(result.unwrap().success());
+        assert_eq!(child.stopped, 0);
+    }
+
+    #[cfg(unix)]
+    fn run_with_deadline(
+        program: &'static str,
+        args: &'static [&'static str],
+        input: Vec<u8>,
+        timeout: std::time::Duration,
+    ) -> Result<Result<super::ProcessResult, &'static str>, std::sync::mpsc::RecvTimeoutError> {
+        let (tx, rx) = std::sync::mpsc::channel();
+        std::thread::spawn(move || {
+            let _ = tx.send(super::run_program(program, args, Some(&input), timeout));
+        });
+        rx.recv_timeout(std::time::Duration::from_secs(20))
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_process_that_never_reads_its_input_times_out_instead_of_blocking_the_write() {
+        // 4 MiB is far more than a pipe holds: `sleep` never reads it.
+        let started = std::time::Instant::now();
+        let result = run_with_deadline(
+            "sleep",
+            &["30"],
+            vec![b'x'; 4 * 1024 * 1024],
+            std::time::Duration::from_millis(500),
+        )
+        .expect("run_program must come back by itself, not hang on the write");
+        assert_eq!(result.unwrap_err(), "process_timeout");
+        assert!(started.elapsed() < std::time::Duration::from_secs(10));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_process_that_fails_before_reading_all_its_input_reports_its_exit_code() {
+        let result = run_with_deadline(
+            "sh",
+            &["-c", "exit 255"],
+            vec![b'x'; 4 * 1024 * 1024],
+            std::time::Duration::from_secs(10),
+        )
+        .expect("run_program must come back")
+        .expect("a failed process still has an exit code");
+        assert_eq!(result.code, 255);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_process_that_reads_all_its_input_and_answers_gets_everything_back() {
+        let input: Vec<u8> = (0..1024 * 1024).map(|n| (n % 251) as u8).collect();
+        let result = run_with_deadline(
+            "cat",
+            &[],
+            input.clone(),
+            std::time::Duration::from_secs(10),
+        )
+        .expect("run_program must come back")
+        .expect("cat succeeds");
+        assert_eq!(result.code, 0);
+        assert_eq!(result.stdout, input);
     }
 
     #[test]
