@@ -9,6 +9,7 @@ import { currentLocation, matchRoute, navigate } from "./router";
 import { ROUTES } from "./routes";
 import { DESKTOP_LINKS } from "./desktop-links";
 import { THEME_STORAGE_KEY } from "./theme";
+import { enterExistingTeamReadOnly, leaveExistingTeamReadOnly } from "../lib/existing-team-readonly";
 import Shell from "./Shell";
 
 vi.mock("../lib/supabase", () => ({ supabase: { from: vi.fn() }, supabaseConfigured: true, signOut: vi.fn() }));
@@ -21,6 +22,7 @@ vi.mock("../pages/position", () => ({
 }));
 // The real office needs WebGL too: here only where the shell puts it.
 vi.mock("../pages/office", () => ({ default: () => <h1>Ufficio</h1> }));
+vi.mock("../pages/office/readonly", () => ({ default: () => <h1>Ufficio del team esistente</h1> }));
 vi.mock("../pages/dashboard/load-dashboard", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../pages/dashboard/load-dashboard")>()),
   loadDashboard: vi.fn(),
@@ -202,6 +204,26 @@ describe("Shell", () => {
     const dashboard = await screen.findByRole("heading", { name: "Dashboard" });
     expect(dashboard.closest("main")).not.toHaveAttribute("data-testid", "full-bleed");
     expect(ROUTES.filter((r) => r.fullBleed).map((r) => r.path)).toEqual(["/office"]);
+  });
+
+  it("gives the office the whole window in the read-only view of an existing team too, its bars above it", async () => {
+    enterExistingTeamReadOnly(true, null);
+    try {
+      navigate("/office", { replace: true });
+      render(<Shell />);
+      const office = await screen.findByRole("heading", { name: "Ufficio del team esistente" });
+      const bleed = office.closest("main")!;
+      expect(bleed).toHaveAttribute("data-testid", "full-bleed");
+      const column = bleed.parentElement!;
+      expect(column.style.height).toBe("calc(100svh / var(--zoom, 1))");
+      expect(column.style.overflow).toBe("hidden");
+      // the read-only banner stays, inside the column and outside the page
+      const banner = screen.getByTestId("existing-team-readonly-banner");
+      expect(column).toContainElement(banner);
+      expect(bleed).not.toContainElement(banner);
+    } finally {
+      leaveExistingTeamReadOnly();
+    }
   });
 
   it.each(["/team", "/team/log", "/team/scout", "/team/analista", "/team/scorer", "/team/scrittore", "/team/critico"])(

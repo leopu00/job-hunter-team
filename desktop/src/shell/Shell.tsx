@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import { DashboardI18nProvider, useDashboardT } from "@/app/components/DashboardI18n";
 import MainChrome from "@/app/components/MainChrome";
 import NavLinks from "@/app/components/NavLinks";
@@ -158,6 +158,16 @@ export interface ShellProps {
   onCloseReadOnly?: () => void;
 }
 
+/** A full-bleed page's column: as tall as the window, the navbar and its bars on top, the page in the rest, no page scroll. */
+const FULL_BLEED_COLUMN: CSSProperties = {
+  position: "relative",
+  zIndex: 1,
+  display: "flex",
+  flexDirection: "column",
+  height: "calc(100svh / var(--zoom, 1))",
+  overflow: "hidden",
+};
+
 export default function Shell({ onLogout, onCloseReadOnly }: ShellProps) {
   const { path, search } = useLocation();
   const readOnlyTeam = useExistingTeamReadOnly();
@@ -175,27 +185,42 @@ export default function Shell({ onLogout, onCloseReadOnly }: ShellProps) {
   const page = Page && <Page key={path} params={match.params} search={params} />;
   if (readOnlyTeam) {
     const text = EXISTING_TEAM_READONLY_TEXT[appLocale()];
+    const bars = (
+      <>
+        <Navbar onLogout={onLogout} onCloseReadOnly={onCloseReadOnly} readOnly />
+        <p
+          role="status"
+          data-testid="existing-team-readonly-banner"
+          className="px-4 py-2 text-[11px] border-b border-[var(--color-border)] text-[var(--color-muted)]"
+        >
+          <strong className="text-[var(--color-bright)]">{existingTeamReadOnlyReason(readOnlyTeam)}.</strong>{" "}
+          {text.banner}
+        </p>
+        {readNotice === "sort_last_action" && (
+          <p role="status" data-testid="existing-team-readonly-notice" className="px-4 py-2 text-[11px] text-[var(--color-muted)]">
+            {text.sortLastAction}
+          </p>
+        )}
+        <VpsLinkBar onCloseReadOnly={onCloseReadOnly} />
+      </>
+    );
     return (
       <DashboardI18nProvider>
         <ReadOnlyActionsProvider value={{ readOnly: true, reason: existingTeamReadOnlyReason(readOnlyTeam) }}>
-          <div style={{ position: "relative", zIndex: 1 }}>
-            <Navbar onLogout={onLogout} onCloseReadOnly={onCloseReadOnly} readOnly />
-            <p
-              role="status"
-              data-testid="existing-team-readonly-banner"
-              className="px-4 py-2 text-[11px] border-b border-[var(--color-border)] text-[var(--color-muted)]"
-            >
-              <strong className="text-[var(--color-bright)]">{existingTeamReadOnlyReason(readOnlyTeam)}.</strong>{" "}
-              {text.banner}
-            </p>
-            {readNotice === "sort_last_action" && (
-              <p role="status" data-testid="existing-team-readonly-notice" className="px-4 py-2 text-[11px] text-[var(--color-muted)]">
-                {text.sortLastAction}
-              </p>
-            )}
-            <VpsLinkBar onCloseReadOnly={onCloseReadOnly} />
-            <MainChrome>{page}</MainChrome>
-          </div>
+          {match?.route.fullBleed ? (
+            // the office: the same window-tall column as in the full shell, the read-only bars under the navbar
+            <div style={FULL_BLEED_COLUMN}>
+              {bars}
+              <main className="relative min-h-0 flex-1" data-testid="full-bleed">
+                {page}
+              </main>
+            </div>
+          ) : (
+            <div style={{ position: "relative", zIndex: 1 }}>
+              {bars}
+              <MainChrome>{page}</MainChrome>
+            </div>
+          )}
         </ReadOnlyActionsProvider>
       </DashboardI18nProvider>
     );
@@ -206,9 +231,7 @@ export default function Shell({ onLogout, onCloseReadOnly }: ShellProps) {
   if (match?.route.fullBleed) {
     return (
       <DashboardI18nProvider>
-        <div
-          style={{ position: "relative", zIndex: 1, display: "flex", flexDirection: "column", height: "calc(100svh / var(--zoom, 1))", overflow: "hidden" }}
-        >
+        <div style={FULL_BLEED_COLUMN}>
           <Navbar onLogout={onLogout} />
           <MailRotationBanner />
           <main className="relative min-h-0 flex-1" data-testid="full-bleed">
