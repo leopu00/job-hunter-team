@@ -1,6 +1,6 @@
 import type { PositionWithScore } from "@/lib/types";
 import { readVpsPositionsShared } from "../../lib/existing-team-positions-shared";
-import type { DeptId } from "../contract";
+import type { DeptId, Piles } from "../contract";
 import {
   BOARD_STATES,
   PANEL_LIST_MAX,
@@ -64,23 +64,35 @@ export function panelPositionOf(row: PositionWithScore): PanelPosition {
 
 const newestFirst = (a: PositionWithScore, b: PositionWithScore) => (b.found_at ?? "").localeCompare(a.found_at ?? "");
 
+/** Is the position on the pile of this phase: the rule of the piles (data/load.ts readPiles), the cloud's too. */
+function inPhase(row: PositionWithScore, dept: DeptId): boolean {
+  switch (dept) {
+    case "scout":
+      return row.status === "new";
+    case "analisti":
+      return row.status === "checked";
+    case "scorer":
+      return row.status === "scored" && !row.write_requested;
+    case "scrittori":
+      return row.status === "review" || (row.status === "ready" && !isPass(row.critic_verdict));
+    case "critici":
+      return row.status === "ready" && isPass(row.critic_verdict);
+  }
+}
+
 /** The positions of a phase as the piles count them (the cloud's loadPhase), newest found first. */
 export function phaseOf(rows: PositionWithScore[], dept: DeptId): PanelPosition[] {
-  const inPhase = (row: PositionWithScore): boolean => {
-    switch (dept) {
-      case "scout":
-        return row.status === "new";
-      case "analisti":
-        return row.status === "checked";
-      case "scorer":
-        return row.status === "scored" && !row.write_requested;
-      case "scrittori":
-        return row.status === "review" || (row.status === "ready" && !isPass(row.critic_verdict));
-      case "critici":
-        return row.status === "ready" && isPass(row.critic_verdict);
-    }
-  };
-  return rows.filter(inPhase).sort(newestFirst).slice(0, PANEL_LIST_MAX).map(panelPositionOf);
+  return rows.filter((row) => inPhase(row, dept)).sort(newestFirst).slice(0, PANEL_LIST_MAX).map(panelPositionOf);
+}
+
+/**
+ * The counts on the handoff piles of the office's scene, from the team's whole
+ * list: the same rule as the phase lists above, with no bound on the count
+ * (the list is bounded, the pile is not).
+ */
+export function pilesOf(rows: PositionWithScore[]): Piles {
+  const count = (dept: DeptId) => rows.filter((row) => inPhase(row, dept)).length;
+  return { scout: count("scout"), analisti: count("analisti"), scorer: count("scorer"), scrittori: count("scrittori"), critici: count("critici") };
 }
 
 /** Positions found per calendar day over the last `days` days, oldest first (the cloud's loadFoundPerDay). */
@@ -128,6 +140,16 @@ export function placesOf(rows: PositionWithScore[], top = 15): PlacesData {
   }
   const places: PlaceCount[] = [...by].map(([place, n]) => ({ place, n })).sort((a, b) => b.n - a.n || a.place.localeCompare(b.place));
   return { located, places: places.slice(0, top) };
+}
+
+/**
+ * The piles of the scene, read when the office opens from the same shared read
+ * as the panels and the globe. A team that could not be read has no piles:
+ * unknown (null), never zero.
+ */
+export async function readVpsPiles(): Promise<Piles | null> {
+  const read = await readVpsPositionsShared();
+  return read.source === "vps" ? pilesOf(read.data) : null;
 }
 
 /** The panels' readers over the VPS: the same names and shapes as the cloud's, one shared read each. */

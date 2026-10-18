@@ -212,7 +212,8 @@ describe("the office of an existing team, over its VPS", () => {
   it("a pile opens its panel with the team's positions of that phase, read from the VPS, and the cloud is not asked", async () => {
     mount();
     await waitFor(() => expect(entered()).toHaveLength(2));
-    expect(positionReads()).toHaveLength(0); // nothing is read until a panel asks
+    // the piles of the scene came with the office: the one read, which the panel below reuses
+    await waitFor(() => expect(positionReads()).toHaveLength(1));
     act(() => scene.options!.onClick({ kind: "pile", dept: "scout" }));
     const panel = await panelOf();
     expect(await within(panel).findByText("Cercatore di nuovi · Alfa")).toBeInTheDocument();
@@ -270,8 +271,38 @@ describe("the office of an existing team, over its VPS", () => {
     expect(screen.queryByRole("complementary")).toBeNull();
     const said = applied.filter((e): e is Extract<OfficeEvent, { type: "say" }> => e.type === "say");
     expect(said).toEqual([{ type: "say", uid: "capitano", text: EXISTING_TEAM_READONLY_TEXT.it.officeAgentNoMoves, seconds: 8 }]);
-    expect(positionReads()).toHaveLength(0);
+    expect(positionReads()).toHaveLength(1); // only the office's own, none for a panel
     expect(cloud.touched).toEqual([]);
+  });
+
+  it("the piles of the scene are counted from the team's positions, with the read the panels share", async () => {
+    mount();
+    await waitFor(() => expect(applied.some((e) => e.type === "piles")).toBe(true));
+    const piles = applied.filter((e): e is Extract<OfficeEvent, { type: "piles" }> => e.type === "piles").at(-1)!.piles;
+    // new 1, scored 1 (not asked to write), ready with a pass 1; the sent one is on no pile
+    expect(piles).toEqual({ scout: 1, analisti: 0, scorer: 1, scrittori: 0, critici: 1 });
+    expect(positionReads()).toHaveLength(1);
+    // a panel opened afterwards reuses the read
+    act(() => scene.options!.onClick({ kind: "pile", dept: "scout" }));
+    await within(await panelOf()).findByText("Cercatore di nuovi · Alfa");
+    expect(positionReads()).toHaveLength(1);
+    expect(cloud.touched).toEqual([]);
+  });
+
+  it("piles that could not be read are unknown, not zero, and the agents are still drawn", async () => {
+    positions = async () => ({ ok: false, error: "ssh_unavailable" });
+    mount();
+    await waitFor(() => expect(entered()).toHaveLength(2));
+    await waitFor(() => expect(positionReads()).toHaveLength(1));
+    const piles = applied.filter((e): e is Extract<OfficeEvent, { type: "piles" }> => e.type === "piles").at(-1)!.piles;
+    expect(Object.values(piles)).toEqual([null, null, null, null, null]);
+  });
+
+  it("a team that is off reads no positions at all", async () => {
+    answer = async () => realSnapshotReply({ containerRunning: false });
+    mount();
+    expect(await screen.findByRole("status")).toHaveTextContent(T.fields.containerRunning.no);
+    expect(positionReads()).toHaveLength(0);
   });
 
   it("a team whose positions cannot be read says why with the catalog's sentence: not an empty list", async () => {

@@ -6,7 +6,7 @@ import type { PositionWithScore } from "@/lib/types";
 const shared = vi.hoisted(() => ({ read: vi.fn() }));
 vi.mock("../../lib/existing-team-positions-shared", () => ({ readVpsPositionsShared: shared.read }));
 
-import { boardOf, cvShelfOf, foundPerDayOf, panelPositionOf, phaseOf, placesOf, vpsPanelLoaders } from "./vps-panels";
+import { boardOf, cvShelfOf, foundPerDayOf, panelPositionOf, phaseOf, pilesOf, placesOf, readVpsPiles, vpsPanelLoaders } from "./vps-panels";
 import { PANEL_LIST_MAX } from "./load-panels";
 
 let n = 0;
@@ -61,6 +61,30 @@ describe("the phases, as the piles count them", () => {
     expect(list).toHaveLength(PANEL_LIST_MAX);
     expect(list[0].foundAt! > list[1].foundAt!).toBe(true);
     expect(list[0].foundAt).toBe(many.at(-1)!.found_at);
+  });
+});
+
+describe("the piles of the scene", () => {
+  it("count the same positions as the phase lists, with no bound on the count", () => {
+    const rows = [
+      ...Array.from({ length: PANEL_LIST_MAX + 40 }, () => row({ status: "new" })),
+      row({ status: "checked" }), row({ status: "scored", write_requested: true }), row({ status: "scored" }),
+      row({ status: "review" }), row({ status: "ready", critic_verdict: "fail" }), row({ status: "ready", critic_verdict: "PASS" }),
+      row({ status: "applied" }), row({ status: "excluded" }),
+    ];
+    const piles = pilesOf(rows);
+    expect(piles).toEqual({ scout: PANEL_LIST_MAX + 40, analisti: 1, scorer: 1, scrittori: 2, critici: 1 });
+    for (const dept of ["analisti", "scorer", "scrittori", "critici"] as const) expect(phaseOf(rows, dept)).toHaveLength(piles[dept]!);
+    expect(phaseOf(rows, "scout")).toHaveLength(PANEL_LIST_MAX);
+  });
+
+  it("are read from the shared read, and are unknown, not zero, when the team could not be read", async () => {
+    shared.read.mockResolvedValue({ source: "vps", data: [row({ status: "new" })] });
+    expect(await readVpsPiles()).toMatchObject({ scout: 1, analisti: 0 });
+    shared.read.mockResolvedValue({ source: "unavailable", code: "ssh_unavailable" });
+    expect(await readVpsPiles()).toBeNull();
+    shared.read.mockResolvedValue({ source: "not_desktop" });
+    expect(await readVpsPiles()).toBeNull();
   });
 });
 

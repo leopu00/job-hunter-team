@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import DashboardSkeleton from "@/app/(protected)/_components/DashboardSkeleton";
-import type { AgentStatuses, OfficeClick, OfficeEngine, OfficeEvent, OfficeScene, OfficeSnapshot, Vec } from "../../office/contract";
+import type { AgentStatuses, OfficeClick, OfficeEngine, OfficeEvent, OfficeScene, OfficeSnapshot, Piles, Vec } from "../../office/contract";
 import { createLiveOffice, createReadScheduler, subscribeOffice, type LiveOffice, type ReadScheduler } from "../../office/live";
 import { watchReducedMotion } from "../../office/scene/motion";
 import OfficePanel from "../../office/panel/OfficePanel";
@@ -16,6 +16,7 @@ import { useExistingTeamReadOnly } from "../../lib/existing-team-readonly";
 import { EXISTING_TEAM_READONLY_TEXT } from "../../lib/existing-team-readonly.i18n";
 import { readTeamStatus } from "../../lib/existing-team-status";
 import { officeFromTeamProbe } from "../../office/readonly";
+import { readVpsPiles } from "../../office/panel/vps-panels";
 import { supabase } from "../../lib/supabase";
 import { navigate, useRefresh } from "../../shell/router";
 import type { PageProps } from "../types";
@@ -212,10 +213,12 @@ function Office({ ready, source }: { ready: Ready; source: OfficeSource }) {
   const readOnly = useExistingTeamReadOnly();
   const connection = readOnly?.connection ?? null;
   const reading = useRef<Awaited<ReturnType<typeof readTeamStatus>>>({ kind: "unknown" });
+  // the piles' counts from the team's positions, read with the probe while the container is up
+  const probePiles = useRef<Piles | null>(null);
   const probeRead = useRef(0);
   const showProbe = () => {
     if (!parts.data || !engineRef.current) return;
-    const office = officeFromTeamProbe(reading.current, connection, appLocale());
+    const office = officeFromTeamProbe(reading.current, connection, appLocale(), probePiles.current);
     live.current ??= createLiveOffice(parts.data.diff, applyEvent);
     live.current.snapshot(office.snapshot);
     setSnapshot(office.snapshot);
@@ -229,6 +232,15 @@ function Office({ ready, source }: { ready: Ready; source: OfficeSource }) {
     // A read that finished after a newer one started, or after leaving the page, is not shown.
     if (probeRead.current !== mine) return;
     reading.current = result;
+    // The piles come from the team's list of positions, the one read the panels and the globe
+    // share; only a team whose container is up has one to read, and one that cannot be read
+    // has unknown piles, not empty ones.
+    probePiles.current = null;
+    if (result.kind === "read" && result.fields.containerRunning) {
+      const piles = await readVpsPiles();
+      if (probeRead.current !== mine) return;
+      probePiles.current = piles;
+    }
     probeShow.current();
   };
   const probeShow = useRef(showProbe);
