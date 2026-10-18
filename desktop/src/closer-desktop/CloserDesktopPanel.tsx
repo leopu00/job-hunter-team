@@ -1,5 +1,7 @@
 import { useEffect, useReducer, useState } from "react";
 import { desktopKey, type Control, type DesktopTransport } from "../lib/closer-desktop";
+import { appLocale } from "../lib/app-locale";
+import { describeError } from "../lib/error-catalog";
 import { DesktopSession } from "./session";
 import { desktopCopy } from "./text";
 import "./closer-desktop.css";
@@ -35,6 +37,8 @@ export default function CloserDesktopPanel({ onClose, transport }: { onClose: ()
       ? d?.allowed_actions.includes("confirm") ? copy.review : copy.blocked
     : phase === "handoff" ? copy.human : phase === "blocked" ? copy.blocked
     : ["admitted", "ready"].includes(phase) ? copy.waiting : d ? copy.running : copy.unavailable;
+  // The catalog's sentence and action, in the person's language; the code stays only as a reference.
+  const failure = error ? describeError(error, { locale: appLocale() }) : null;
   const button = (op: Control) => <button key={op} type="button" disabled={!session.canControl(op)}
     onClick={() => void session.control(op)}>{copy[op]}</button>;
 
@@ -45,7 +49,7 @@ export default function CloserDesktopPanel({ onClose, transport }: { onClose: ()
       <strong>{copy.status}: {phaseLabel}</strong>
       {d && <span>{copy.position}: {d.position_id}</span>}
       <span>{d && !fresh ? copy.stale : input ? copy.human : copy.automatic}</span>
-      {error && <span className="closer-desktop__error">{copy.unavailable} ({error})</span>}
+      {failure && <span className="closer-desktop__error">{failure.text} {failure.action} ({failure.code})</span>}
       {notice && <span>{copy[notice]}</span>}
     </div>
     {(d?.block || d?.gate_reason) && <dl className="closer-desktop__block">

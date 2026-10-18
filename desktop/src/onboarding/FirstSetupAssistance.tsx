@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import type { Locale } from "@/i18n/config";
 import type { ExecutionHost } from "../lib/onboarding";
 import { registerAssistanceHost, type AssistanceHost } from "../lib/closer-desktop-connection";
+import { describeError, errorCodeOf } from "../lib/error-catalog";
 import { confirmOnboardingSshHostKey, probeOnboardingSshHostKey, type SshHostKeyProbe } from "../lib/onboarding-runtime";
 import { ONBOARDING_TEXT } from "./onboarding.i18n";
 import { ASSISTANCE_TEXT } from "./assistance.i18n";
@@ -20,6 +21,7 @@ export default function FirstSetupAssistance({ host, locale, onOpen }: {
   current.current = identity;
   useEffect(() => { live.current = true; return () => { live.current = false; }; }, []);
   useEffect(() => { setProbe(null); setError(null); }, [identity]);
+  const failure = error ? describeError(error, { locale }) : null;
   const valid = host.kind === "vps" && Boolean(host.address.trim() && host.user.trim() && host.keyPath.trim())
     && Number.isInteger(host.port) && host.port > 0 && host.port <= 65535;
 
@@ -49,8 +51,9 @@ export default function FirstSetupAssistance({ host, locale, onOpen }: {
         // Even an already-pinned probe returns to an explicit user action, never setup.
         setProbe(fingerprint);
       } else setError(result.error);
-    } catch {
-      if (fresh()) setError("desktop_transport_unavailable");
+    } catch (caught) {
+      // The SSH host-key commands reject with their own code (host_key_changed must show its warning).
+      if (fresh()) setError(errorCodeOf(caught) ?? "desktop_transport_unavailable");
     } finally {
       pending.current = false;
       if (live.current) setBusy(false);
@@ -59,7 +62,7 @@ export default function FirstSetupAssistance({ host, locale, onOpen }: {
 
   return <section className="onboarding-panel" aria-label={t.connect}>
     <p>{t.intro}</p>
-    {error && <p role="alert">{t.unavailable} ({error})</p>}
+    {failure && <p role="alert"><strong>{t.unavailable}</strong> {failure.text} {failure.action} ({failure.code})</p>}
     {probe && <section aria-label={setup.hostKeyAria}>
       <h3>{setup.hostKeyTitle}</h3><p>{setup.hostKeyText}</p>
       <dl><dt>{setup.algorithm}</dt><dd>{probe.algorithm}</dd><dt>{setup.fingerprint}</dt><dd>{probe.fingerprint}</dd></dl>

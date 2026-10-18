@@ -16,6 +16,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { ERROR_CATALOG, ERROR_LOCALES, NOT_EMITTED, describeError, errorCodeOf, errorMachineOf, errorResetsAt } from "./error-catalog";
+import { ERROR_CATALOG_LOCALES } from "./error-catalog.locales";
 import { EXISTING_TEAM_ERROR_CODES } from "./existing-team";
 import { isRuntimeTextKey } from "./onboarding-runtime.i18n";
 import { liveScreenErrorCode } from "./live-screen";
@@ -181,6 +182,22 @@ function compiledRustModules(): string[] {
   return modules;
 }
 
+/**
+ * The files the compiled modules are made of: each module, plus the non-test files it pulls in
+ * with `#[path = "x.rs"] mod y;` (the assisted browser's transport is one).
+ */
+function compiledRustFiles(): string[] {
+  return compiledRustModules().flatMap((module) => {
+    const lines = readFileSync(join(RUST, `${module}.rs`), "utf8").split("\n");
+    const submodules = lines.flatMap((line, index) => {
+      const match = /^#\[path = "([\w.]+\.rs)"\]$/.exec(line.trim());
+      const test = /^#\[cfg\(.*\btest\b.*\)\]$/.test(lines[index - 1]?.trim() ?? "");
+      return match && !test && /^mod \w+;$/.test(lines[index + 1]?.trim() ?? "") ? [match[1]] : [];
+    });
+    return [`${module}.rs`, ...submodules];
+  });
+}
+
 function withoutTests(source: string): string {
   const index = source.indexOf("#[cfg(test)]\nmod tests");
   return index >= 0 ? source.slice(0, index) : source;
@@ -191,8 +208,8 @@ const ERROR_SITE_WORD = /(?:failure|Err|ok_or|code:|\|_\||=>|Some|error:)\s*\(?\
 
 function rustCodes(): Set<string> {
   const codes = new Set<string>();
-  for (const module of compiledRustModules()) {
-    const source = withoutTests(readFileSync(join(RUST, `${module}.rs`), "utf8"));
+  for (const file of compiledRustFiles()) {
+    const source = withoutTests(readFileSync(join(RUST, file), "utf8"));
     for (const match of source.matchAll(SNAKE_LITERAL)) codes.add(match[1]);
     for (const match of source.matchAll(ERROR_SITE_WORD)) codes.add(match[1]);
   }
@@ -224,6 +241,8 @@ describe("error catalog", () => {
 
   it("reads the real sources, not an empty search", () => {
     expect(compiledRustModules()).toEqual(expect.arrayContaining(["onboarding", "direct_chat", "auth_login"]));
+    expect(compiledRustFiles()).toContain("closer_desktop_transport.rs");
+    expect(compiledRustFiles()).not.toContain("closer_desktop_tests.rs");
     expect(rust.size).toBeGreaterThan(200);
     expect([...ts]).toEqual(expect.arrayContaining([
       "desktop_only", "local_migration_in_progress", "receipt_unverified", "status_failed", "reconnect_failed",
@@ -260,8 +279,8 @@ describe("error catalog", () => {
 
   it("does not count codes nothing emits as covered: they are marked, and a marked one may not be emitted", () => {
     for (const code of NOT_EMITTED) expect(code in ERROR_CATALOG, code).toBe(true);
-    const rustSources = compiledRustModules()
-      .map((module) => withoutTests(readFileSync(join(RUST, `${module}.rs`), "utf8")))
+    const rustSources = compiledRustFiles()
+      .map((file) => withoutTests(readFileSync(join(RUST, file), "utf8")))
       .join("\n");
     const tsSourceText = tsSources(SRC).map((file) => readFileSync(file, "utf8")).join("\n");
     for (const code of NOT_EMITTED) {
@@ -296,6 +315,101 @@ describe("error catalog", () => {
         }
       }
     }
+  });
+});
+
+// The two panels of the assisted browser: the panel on the team page and the registration of its
+// VPS in the first setup. What they can receive is read from their sources, not listed here.
+const PANEL_SOURCES = [
+  "closer-desktop/session.ts", "closer-desktop/CloserDesktopPanel.tsx", "lib/closer-desktop.ts",
+  "lib/closer-desktop-connection.ts", "onboarding/FirstSetupAssistance.tsx",
+];
+/** Literals of those sources that are not codes. */
+const PANEL_NOT_ERRORS: Record<string, string> = {
+  delete_snapshot: "assisted browser request op",
+  handoff_pending: "assisted browser phase",
+  review_wait: "assisted browser phase",
+  closer_desktop_request: "native command name",
+  closer_desktop_register_host: "native command name",
+};
+const BRIDGE = fileURLToPath(new URL("../../src-tauri/src/closer_desktop_bridge.py", import.meta.url));
+
+/** The codes the VPS bridge can answer with: its `ValueError("x")`s, FAILED, and its allowlist. */
+function bridgeCodes(): Set<string> {
+  const source = readFileSync(BRIDGE, "utf8");
+  const codes = new Set([...source.matchAll(/"(browser_[a-z0-9_]+)"/g)].map((match) => match[1]));
+  const allowlist = /"browser_"\s*\+\s*c\s+for\s+c\s+in\s+\(([^)]*)\)/.exec(source)?.[1] ?? "";
+  for (const match of allowlist.matchAll(/"([a-z0-9_]+)"/g)) codes.add(`browser_${match[1]}`);
+  return codes;
+}
+
+describe("the assisted browser panels", () => {
+  it("has a sentence and an action for every code the two panels and the VPS bridge produce", () => {
+    const panel = new Set(PANEL_SOURCES.flatMap((file) =>
+      [...readFileSync(join(SRC, file), "utf8").matchAll(SNAKE_LITERAL)].map((match) => match[1])));
+    expect([...panel]).toEqual(expect.arrayContaining(["desktop_request_denied", "desktop_image_invalid", "ssh_host_key_invalid"]));
+    const missing = [...panel].filter((code) => !(code in ERROR_CATALOG) && !(code in PANEL_NOT_ERRORS)).sort();
+    expect(missing, "panel codes with no sentence").toEqual([]);
+    const stale = Object.keys(PANEL_NOT_ERRORS).filter((code) => !panel.has(code)).sort();
+    expect(stale, "remove entries the panel sources no longer contain").toEqual([]);
+
+    expect(readFileSync(join(RUST, "closer_desktop.rs"), "utf8")).toContain('include_str!("closer_desktop_bridge.py")');
+    const bridge = bridgeCodes();
+    expect([...bridge]).toEqual(expect.arrayContaining(["browser_container_mismatch", "browser_transport_timeout"]));
+    expect([...bridge].filter((code) => !(code in ERROR_CATALOG)).sort(), "bridge codes with no sentence").toEqual([]);
+  });
+
+  const NEW_CODES = [
+    "browser_transport_timeout", "browser_container_mismatch", "browser_image_mismatch",
+    "desktop_request_denied", "desktop_descriptor_unavailable", "desktop_frame_invalid",
+    "desktop_snapshot_invalid", "desktop_image_invalid", "ssh_host_key_invalid",
+  ];
+  it.each(ERROR_LOCALES)("%s: says each code of the panels in that language, never as the code", (locale) => {
+    for (const code of NEW_CODES) {
+      const described = describeError(code, { locale });
+      expect(described.known, code).toBe(true);
+      const [text, action] = locale === "it" || locale === "en"
+        ? [ERROR_CATALOG[code].text[locale], ERROR_CATALOG[code].action[locale]]
+        : ERROR_CATALOG_LOCALES[code][locale];
+      expect([described.text, described.action], `${code}/${locale}`).toEqual([text, action]);
+      if (locale !== "en") expect(described.text, `${code}/${locale}`).not.toBe(ERROR_CATALOG[code].text.en);
+      expect(`${described.text} ${described.action}`, `${code}/${locale}`).not.toMatch(/\b[a-z]+_[a-z0-9_]+\b/);
+    }
+  });
+});
+
+describe("the assisted browser's sentences for what the code cannot tell apart", () => {
+  it("browser_container_mismatch: the bridge says it for a merely stopped container too, and the sentence covers that", () => {
+    const bridge = readFileSync(BRIDGE, "utf8");
+    const raise = bridge.indexOf('raise ValueError("browser_container_mismatch")');
+    expect(raise).toBeGreaterThan(0);
+    const condition = bridge.slice(bridge.lastIndexOf("if (", raise), raise);
+    expect(condition, "the condition that raises it").toContain('info.get("Run") is not True');
+    // Each language says the team may be off and asks to start it first.
+    const STOPPED: Record<string, [RegExp, RegExp]> = {
+      it: [/spenta/, /^Avvia la squadra/], en: [/ is off /, /^Start the team/], de: [/ ist aus /, /^Starte das Team/],
+      es: [/apagado/, /^Inicia el equipo/], fr: [/arrêtée/, /^Démarre l’équipe/],
+      hu: [/ki van kapcsolva/, /^Indítsd el a csapatot/], pt: [/desligada/, /^Inicia a equipa/],
+    };
+    for (const locale of ERROR_LOCALES) {
+      const { text, action, known } = describeError("browser_container_mismatch", { locale });
+      expect(known, locale).toBe(true);
+      expect(text, locale).toMatch(STOPPED[locale][0]);
+      expect(action, locale).toMatch(STOPPED[locale][1]);
+    }
+    // An image mismatch comes only from a running container: it keeps its own sentence.
+    expect(describeError("browser_image_mismatch").text).not.toBe(describeError("browser_container_mismatch").text);
+  });
+
+  it("ssh_host_key_invalid: names the ed25519 key the VPS did not offer, never host and port", () => {
+    for (const locale of ERROR_LOCALES) {
+      const { text, action, known } = describeError("ssh_host_key_invalid", { locale });
+      expect(known, locale).toBe(true);
+      expect(text, locale).toContain("ed25519");
+      expect(action, locale).toContain("ed25519");
+    }
+    expect(describeError("ssh_host_key_invalid").action).not.toMatch(/host e porta/);
+    expect(describeError("ssh_host_key_invalid", { locale: "en" }).action).not.toMatch(/host and port/);
   });
 });
 

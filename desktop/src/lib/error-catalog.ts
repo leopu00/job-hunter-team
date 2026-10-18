@@ -285,6 +285,13 @@ const BROWSER_REPLY = copy(
   "Try again. If it happens again, close the assisted browser and open it again.",
 );
 
+const BROWSER_RUNTIME_CHANGED = copy(
+  "Il browser assistito sulla VPS non è più quello preparato per questa squadra, quindi non lo uso.",
+  "Chiedi a chi gestisce la VPS di prepararlo di nuovo, poi riapri il browser assistito.",
+  "The assisted browser on the VPS is no longer the one set up for this team, so I do not use it.",
+  "Ask whoever manages the VPS to set it up again, then open the assisted browser again.",
+);
+
 export const UNKNOWN_ERROR: ErrorCopy = RETRY;
 
 export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
@@ -614,6 +621,22 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
   browser_response_invalid: BROWSER_REPLY,
   browser_response_too_large: BROWSER_REPLY,
   browser_response_binding_mismatch: BROWSER_REPLY,
+  // The bridge on the VPS (closer_desktop_bridge.py) and its bounded transport.
+  browser_transport_timeout: TIMEOUT,
+  // The bridge says it also when the team's container is only stopped (State.Running).
+  browser_container_mismatch: copy(
+    "Il browser assistito non è disponibile: la squadra sulla VPS è spenta oppure il suo ambiente è cambiato.",
+    "Avvia la squadra sulla VPS e riapri il browser assistito. Se il problema resta, chiedi a chi gestisce la VPS di prepararlo di nuovo.",
+    "The assisted browser is not available: the team on the VPS is off or its environment has changed.",
+    "Start the team on the VPS and open the assisted browser again. If the problem stays, ask whoever manages the VPS to set it up again.",
+  ),
+  browser_image_mismatch: BROWSER_RUNTIME_CHANGED,
+  // The assisted browser panel itself (closer-desktop/session.ts, lib/closer-desktop.ts).
+  desktop_request_denied: BROWSER_REPLY,
+  desktop_descriptor_unavailable: BROWSER_REPLY,
+  desktop_frame_invalid: BROWSER_REPLY,
+  desktop_snapshot_invalid: BROWSER_REPLY,
+  desktop_image_invalid: BROWSER_REPLY,
   browser_runtime_binding_required: copy(
     "Il browser assistito non è ancora pronto per questa squadra.",
     "Funziona con una squadra su VPS: chiedi a chi gestisce la VPS di prepararlo, poi riapri il browser assistito.",
@@ -792,6 +815,14 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
     "Controlla host e porta, poi riprova.",
     "I cannot read the VPS SSH identity.",
     "Check host and port, then try again.",
+  ),
+  // The VPS registration of the assisted browser: a probe whose key is not ed25519 or whose
+  // fingerprint is not a SHA-256: host and port are right, the key type is not.
+  ssh_host_key_invalid: copy(
+    "La VPS non ha presentato una chiave SSH ed25519 valida, quindi non posso confermarne l’identità.",
+    "Chiedi a chi gestisce la VPS di abilitare una chiave SSH ed25519, poi riprova.",
+    "The VPS did not present a valid ed25519 SSH key, so I cannot confirm its identity.",
+    "Ask whoever manages the VPS to enable an ed25519 SSH key, then try again.",
   ),
   host_key_missing: copy(
     "L’identità SSH della VPS non è ancora stata confermata.",
