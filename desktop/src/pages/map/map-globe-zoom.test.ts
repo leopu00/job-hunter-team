@@ -8,14 +8,13 @@ const ONE_COUNTRY: [[number, number], [number, number]] = [[6, 45.5], [12, 47.5]
 const radiusAt = (zoom: number) => (512 * 2 ** zoom) / (2 * Math.PI);
 
 describe("overviewMaxZoom", () => {
-  it("keeps the globe's edge in a medium window when the pins span several countries", () => {
-    const view = { width: 1068, height: 650 };
+  it("shows the edge of the globe on both sides when the pins span several countries", () => {
+    const view = { width: 929, height: 570 };
     const zoom = overviewMaxZoom(EUROPE, view, 12);
-    expect(zoom).toBeGreaterThan(2.5);
-    expect(zoom).toBeLessThan(3.5);
-    // The sphere is narrower than the long side of the map: its edge is on screen.
-    expect(radiusAt(zoom) * 2).toBeLessThan(view.width * 1.4);
-    expect(radiusAt(zoom)).toBeLessThan(view.width);
+    // The sphere is narrower than the map: its edge is on screen left and right.
+    expect(radiusAt(zoom) * 2).toBeLessThan(view.width);
+    // ...and not so small that the beams run into each other.
+    expect(radiusAt(zoom) * 2).toBeGreaterThan(view.width * 0.7);
   });
 
   it("lets a bigger window come closer, with the same share of the sphere on screen", () => {

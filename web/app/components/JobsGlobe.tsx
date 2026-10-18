@@ -1701,15 +1701,17 @@ export default function JobsGlobe({
     if (!map || displayData.length === 0) return;
     const vp = bestViewport(displayData);
     if (!vp) return;
+    const maxZoom = overviewMaxZoom(vp.bounds, containerSize(map), 7);
     map.fitBounds(vp.bounds, {
       padding: {
         top: 60,
         bottom: 60,
-        left: 60 + fitPadLeftRef.current,
+        // Panoramica a globo: sfera centrata (vedi fitToDisplayData).
+        left: 60 + (maxZoom < 7 ? 0 : fitPadLeftRef.current),
         right: 60,
       },
       duration: profileRef.current.flyDuration,
-      maxZoom: overviewMaxZoom(vp.bounds, containerSize(map), 7),
+      maxZoom,
       // Reset anche dell'inclinazione (pitch) e dell'orientamento
       // (bearing) → torna alla vista piatta di default, non solo al
       // centro/zoom. L'utente può inclinare col touchpad; questo
@@ -1761,19 +1763,24 @@ export default function JobsGlobe({
     if (!map || pins.length === 0) return;
     const vp = bestViewport(pins);
     if (!vp) return;
+    // maxZoom city-level (era 7 = livello stato): filtrando una città si
+    // scende fino allo zoom città; per insiemi più ampi (paese, tutto)
+    // fitBounds sceglie comunque uno zoom inferiore; su più paesi il globo
+    // resta visibile come globo (overviewMaxZoom).
+    const maxZoom = overviewMaxZoom(vp.bounds, containerSize(map), 12);
+    // Panoramica a globo: la sfera sta al centro della mappa, così il bordo si
+    // vede da entrambi i lati e la colonna dei pannelli copre solo il mare.
+    // Un insieme stretto si inquadra invece nello spazio che la colonna lascia.
+    const overview = maxZoom < 12;
     map.fitBounds(vp.bounds, {
       padding: {
         top: 80,
         bottom: 80,
-        left: 80 + fitPadLeftRef.current,
+        left: 80 + (overview ? 0 : fitPadLeftRef.current),
         right: 80,
       },
       duration: profileRef.current.flyDuration,
-      // maxZoom city-level (era 7 = livello stato): filtrando una città
-      // si scende fino allo zoom città; per insiemi più ampi (paese,
-      // tutto) fitBounds sceglie comunque uno zoom inferiore; su più paesi il
-      // globo resta visibile come globo (overviewMaxZoom).
-      maxZoom: overviewMaxZoom(vp.bounds, containerSize(map), 12),
+      maxZoom,
     });
   };
   const fitToDisplayDataRef = useRef(fitToDisplayData);

@@ -88,11 +88,12 @@ export function bestViewport(pins: ViewportPin[]): {
 // pixel e la curvatura sta fuori dalla finestra: un'Europa inquadrata da vicino
 // sembra una mappa piatta (il globo c'è, MapLibre lo disegna, ma non si vede).
 // Per un'inquadratura d'insieme su più paesi si limita lo zoom a quello in cui
-// il raggio della sfera è RADIUS_SHARE del lato lungo della mappa: il bordo
-// compare sul lato corto e i fasci restano distinti. Un insieme dentro un
+// il raggio della sfera è RADIUS_SHARE del lato lungo della mappa: la sfera è
+// più stretta della mappa, quindi il bordo si vede a sinistra e a destra, e i
+// fasci restano distinti. Un insieme dentro un
 // paese si inquadra da vicino come prima.
 const WORLD_TILE = 512;
-const RADIUS_SHARE = 0.62;
+const RADIUS_SHARE = 0.45;
 // Sotto questa estensione (gradi) l'insieme sta in pochi paesi vicini.
 const MULTI_COUNTRY_SPAN = 12;
 
