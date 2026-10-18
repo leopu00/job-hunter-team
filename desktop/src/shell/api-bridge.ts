@@ -33,11 +33,18 @@ export const notInDesktop: ApiFetch = async (input) => json({ error: "not_in_des
 
 /**
  * While an existing team's VPS is only being read (lib/existing-team-readonly.ts)
- * the pages ask for two things: the locale and the sidebar's dataset. Anything
- * else is refused here, before a route can write to the cloud. The controls
- * that would ask are disabled, so this answers a call nobody should make.
+ * the pages ask for the locale, the sidebar's dataset and the globe's three
+ * reads (answered from the VPS by pages/map/map-api.ts). Anything else is
+ * refused here, before a route can write to the cloud. The controls that would
+ * ask are disabled, so this answers a call nobody should make.
  */
-const READ_ONLY_PATHS = new Set(["/api/i18n", "/api/positions/facets"]);
+const READ_ONLY_PATHS = new Set([
+  "/api/i18n",
+  "/api/positions/facets",
+  "/api/positions/coords",
+  "/api/positions/no-coords",
+  "/api/positions/locations",
+]);
 
 /**
  * Routes the shell itself answers before handing over to `next`.
