@@ -48,11 +48,59 @@ export type LabelItem = {
 };
 
 export type Placement = {
-  anchor: LabelAnchor;
+  /**
+   * Lato del testo sul pin. «center» = il testo sta lontano dal pin, al
+   * centro di `rect`, e `leader` dice di quanto (px dal pin al centro del
+   * testo): lo si collega al pin con una linea guida.
+   */
+  anchor: LabelAnchor | "center";
   rect: Rect;
-  /** true = nessun lato era libero: è stato preso quello che copre meno. */
+  leader: { dx: number; dy: number } | null;
+  /** true = nessuna posizione era libera: è stata presa quella che copre meno. */
   collides: boolean;
 };
+
+/**
+ * Distanze (px dal bordo del testo al pin) e direzioni provate per la linea
+ * guida, quando nessun lato attaccato al pin è libero. Prima i lati
+ * orizzontali, poi le diagonali, poi su e giù.
+ */
+export const LEADER_DISTANCES = [26, 44, 66] as const;
+export const LEADER_DIRECTIONS: readonly [number, number][] = [
+  [1, 0],
+  [-1, 0],
+  [1, -1],
+  [-1, -1],
+  [1, 1],
+  [-1, 1],
+  [0, -1],
+  [0, 1],
+];
+
+/** Ingombro del testo a una distanza `d` dal pin, nella direzione (ux, uy). */
+export function leaderRect(
+  item: Pick<LabelItem, "x" | "y" | "w" | "h">,
+  dir: readonly [number, number],
+  d: number,
+): { rect: Rect; dx: number; dy: number } {
+  const len = Math.hypot(dir[0], dir[1]) || 1;
+  const ux = dir[0] / len;
+  const uy = dir[1] / len;
+  // Il centro del testo sta a d + metà del suo ingombro lungo la direzione.
+  const reach = d + (item.w / 2) * Math.abs(ux) + (item.h / 2) * Math.abs(uy);
+  const dx = Math.round(ux * reach);
+  const dy = Math.round(uy * reach);
+  return {
+    rect: {
+      x: item.x + dx - item.w / 2,
+      y: item.y + dy - item.h / 2,
+      w: item.w,
+      h: item.h,
+    },
+    dx,
+    dy,
+  };
+}
 
 /** Ingombro del testo per un dato lato (px): `size` è il font-size. */
 export function labelRect(
@@ -115,24 +163,75 @@ export function estimateTextWidth(text: string, size: number): number {
 }
 
 /**
+ * Larghezza media di un carattere in em: maiuscolo e minuscolo del font dei
+ * nomi della basemap (Montserrat Medium / Open Sans Bold).
+ */
+export const UPPER_EM = 0.7;
+export const LOWER_EM = 0.56;
+
+/**
  * Rettangolo di un nome della mappa (paese, città) centrato sul suo punto.
- * I nomi dei paesi sono maiuscoli e spaziati: più larghi a parità di
- * caratteri.
+ * Il testo va a capo come in MapLibre (`text-max-width`, in em, default 10):
+ * «UNITED KINGDOM» sono due righe, e conta la riga più larga.
  */
 export function nameRect(
   point: { x: number; y: number },
   name: string,
   size = 12,
   uppercase = true,
+  maxWidthEm = 10,
+  letterSpacingEm = 0,
 ): Rect {
+  const perChar = (uppercase ? UPPER_EM : LOWER_EM) + letterSpacingEm;
+  const width = (text: string) => [...text].length * perChar * size;
+  const limit = maxWidthEm * size;
+  const lines: string[] = [];
+  let line = "";
+  for (const word of name.split(/\s+/).filter(Boolean)) {
+    const next = line ? `${line} ${word}` : word;
+    if (line && width(next) > limit) {
+      lines.push(line);
+      line = word;
+    } else {
+      line = next;
+    }
+  }
+  if (line) lines.push(line);
   // Un margine attorno al testo: il punto della feature non è sempre dove
-  // MapLibre ha poi disegnato il nome (le etichette dei paesi si spostano per
-  // le collisioni), e la stima della larghezza è approssimata.
-  const pad = 4;
-  const w =
-    Math.ceil([...name].length * size * (uppercase ? 0.78 : 0.6)) + 2 * pad;
-  const h = Math.ceil(size * 1.3) + 2 * pad;
+  // MapLibre ha poi disegnato il nome, e la stima della larghezza è
+  // approssimata.
+  const pad = 3;
+  const w = Math.ceil(Math.max(0, ...lines.map(width))) + 2 * pad;
+  const h = Math.ceil(lines.length * size * 1.2) + 2 * pad;
   return { x: point.x - w / 2, y: point.y - h / 2, w, h };
+}
+
+/**
+ * Valore di una proprietà di stile MapLibre che può essere un numero fisso o
+ * una funzione a stops ({stops: [[zoom, valore], ...]}): numerica interpolata
+ * in modo lineare, altrimenti a gradini. `fallback` se non si capisce.
+ */
+export function styleValueAtZoom<T extends number | string>(
+  prop: unknown,
+  zoom: number,
+  fallback: T,
+): T {
+  if (typeof prop === "number" || typeof prop === "string") return prop as T;
+  const stops = (prop as { stops?: unknown } | null | undefined)?.stops;
+  if (!Array.isArray(stops) || stops.length === 0) return fallback;
+  const pairs = stops as [number, T][];
+  if (zoom <= pairs[0][0]) return pairs[0][1];
+  for (let i = 1; i < pairs.length; i++) {
+    const [z1, v1] = pairs[i];
+    const [z0, v0] = pairs[i - 1];
+    if (zoom <= z1) {
+      if (typeof v0 === "number" && typeof v1 === "number") {
+        return (v0 + ((v1 - v0) * (zoom - z0)) / (z1 - z0)) as T;
+      }
+      return v0;
+    }
+  }
+  return pairs[pairs.length - 1][1];
 }
 
 /**
@@ -155,21 +254,41 @@ export function placeLabels(
   const placed: Rect[] = [];
   const out = new Map<string, Placement>();
   for (const item of order) {
+    const cost = (rect: Rect) => {
+      let c = 0;
+      for (const o of obstacles) c += overlapArea(rect, o);
+      for (const p of placed) c += overlapArea(rect, p);
+      return c;
+    };
     let best: Placement | null = null;
     let bestCost = Infinity;
+    const consider = (candidate: Placement, c: number) => {
+      if (c < bestCost) {
+        best = { ...candidate, collides: c > 0 };
+        bestCost = c;
+      }
+    };
     for (const anchor of anchors) {
       const rect = labelRect(anchor, item, size);
-      let cost = 0;
-      for (const o of obstacles) cost += overlapArea(rect, o);
-      for (const p of placed) cost += overlapArea(rect, p);
-      if (cost < bestCost) {
-        best = { anchor, rect, collides: cost > 0 };
-        bestCost = cost;
+      consider({ anchor, rect, leader: null, collides: false }, cost(rect));
+      if (bestCost === 0) break;
+    }
+    // Nessun lato attaccato al pin è libero: il testo si sposta più lontano,
+    // con una linea guida (prima la distanza minima in tutte le direzioni).
+    if (bestCost > 0) {
+      search: for (const d of LEADER_DISTANCES) {
+        for (const dir of LEADER_DIRECTIONS) {
+          const { rect, dx, dy } = leaderRect(item, dir, d);
+          consider(
+            { anchor: "center", rect, leader: { dx, dy }, collides: false },
+            cost(rect),
+          );
+          if (bestCost === 0) break search;
+        }
       }
-      if (cost === 0) break;
     }
     // anchors vuoto non si dà: ne serve almeno uno.
-    const choice = best!;
+    const choice = best as unknown as Placement;
     placed.push(choice.rect);
     out.set(item.id, choice);
   }

@@ -18,6 +18,7 @@ import {
   labelFontSize,
   nameRect,
   placeLabels,
+  styleValueAtZoom,
   type LabelAnchor,
   type LabelItem,
   type Rect,
@@ -45,6 +46,17 @@ import {
 const SOURCE_ID = "jht-jobs";
 const LAYER_HALO_ID = "jht-jobs-halo";
 const LAYER_DOT_ID = "jht-jobs-dot";
+// Etichette spostate lontano dal pin, con la loro linea guida (vedi
+// lib/globe-label-placement): sorgente e due layer propri.
+const LEADER_SOURCE_ID = "jht-label-leaders";
+const LAYER_LEADER_LINE_ID = "jht-label-leader-line";
+const LAYER_LEADER_TEXT_ID = "jht-label-leader-text";
+const OWN_LAYER_IDS = new Set([
+  LAYER_HALO_ID,
+  LAYER_DOT_ID,
+  LAYER_LEADER_LINE_ID,
+  LAYER_LEADER_TEXT_ID,
+]);
 
 // Tre regimi di aggregazione, selezionati dallo zoom SNAPPATO a intero.
 // Dentro ciascun regime le coordinate non cambiano MAI (ancore fisse =
@@ -473,16 +485,36 @@ function labelOffsetExpr(): maplibregl.ExpressionSpecification {
 // dal nome (MapLibre non espone il box del testo).
 function basemapNameRects(map: MaplibreMap): Rect[] {
   const layers = map.getStyle()?.layers ?? [];
+  const zoom = map.getZoom();
   const out: Rect[] = [];
   const seen = new Set<string>();
   for (const layer of layers) {
-    if (layer.type !== "symbol" || layer.id === LAYER_DOT_ID) continue;
+    if (layer.type !== "symbol" || OWN_LAYER_IDS.has(layer.id)) continue;
     if (map.getLayoutProperty(layer.id, "text-field") == null) continue;
     if (map.getLayoutProperty(layer.id, "visibility") === "none") continue;
-    const sizeProp = map.getLayoutProperty(layer.id, "text-size");
-    const size = typeof sizeProp === "number" ? sizeProp : 12;
+    // text-size, text-max-width e text-transform sono funzioni a stops dello
+    // zoom: si valutano allo zoom corrente.
+    const size = styleValueAtZoom(
+      map.getLayoutProperty(layer.id, "text-size"),
+      zoom,
+      16,
+    );
+    const maxWidthEm = styleValueAtZoom(
+      map.getLayoutProperty(layer.id, "text-max-width"),
+      zoom,
+      10,
+    );
+    const spacingEm = styleValueAtZoom(
+      map.getLayoutProperty(layer.id, "text-letter-spacing"),
+      zoom,
+      0,
+    );
     const upper =
-      map.getLayoutProperty(layer.id, "text-transform") === "uppercase";
+      styleValueAtZoom<string>(
+        map.getLayoutProperty(layer.id, "text-transform"),
+        zoom,
+        "none",
+      ) === "uppercase";
     let features: maplibregl.MapGeoJSONFeature[] = [];
     try {
       features = map.queryRenderedFeatures({ layers: [layer.id] });
@@ -493,7 +525,7 @@ function basemapNameRects(map: MaplibreMap): Rect[] {
       if (f.geometry.type !== "Point") continue;
       const props = f.properties ?? {};
       const name = String(
-        props["name:latin"] ?? props.name_en ?? props.name ?? "",
+        props.name_en ?? props["name:latin"] ?? props.name ?? "",
       );
       if (!name) continue;
       const [lon, lat] = f.geometry.coordinates as [number, number];
@@ -501,7 +533,7 @@ function basemapNameRects(map: MaplibreMap): Rect[] {
       const key = `${name}|${Math.round(pt.x / 6)}|${Math.round(pt.y / 6)}`;
       if (seen.has(key)) continue;
       seen.add(key);
-      out.push(nameRect(pt, name, size, upper));
+      out.push(nameRect(pt, name, size, upper, maxWidthEm, spacingEm));
     }
   }
   return out;
@@ -512,11 +544,19 @@ function containerSize(map: MaplibreMap): { width: number; height: number } {
   return { width: el.clientWidth, height: el.clientHeight };
 }
 
-function computeLabelAnchors(
+// Dove sta l'etichetta di un fascio: un lato attaccato al pin, oppure
+// «center» a (dx, dy) pixel dal pin con la sua linea guida.
+type LabelPlacement = {
+  anchor: LabelAnchor | "center";
+  dx: number;
+  dy: number;
+};
+
+function computeLabelPlacements(
   map: MaplibreMap,
   groups: GroupedFeature[],
   labels: Record<string, string>,
-): Record<string, LabelAnchor> {
+): Record<string, LabelPlacement> {
   const size = labelFontSize(map.getZoom());
   const el = map.getContainer();
   const margin = 200;
@@ -543,18 +583,30 @@ function computeLabelAnchors(
     });
   }
   const placed = placeLabels(items, basemapNameRects(map), size);
-  const out: Record<string, LabelAnchor> = {};
-  for (const [id, p] of placed) out[id] = p.anchor;
+  const out: Record<string, LabelPlacement> = {};
+  for (const [id, p] of placed) {
+    out[id] = {
+      anchor: p.anchor,
+      dx: p.leader?.dx ?? 0,
+      dy: p.leader?.dy ?? 0,
+    };
+  }
   return out;
 }
 
-function sameAnchors(
-  a: Record<string, LabelAnchor>,
-  b: Record<string, LabelAnchor>,
+function samePlacements(
+  a: Record<string, LabelPlacement>,
+  b: Record<string, LabelPlacement>,
 ): boolean {
   const ka = Object.keys(a);
   if (ka.length !== Object.keys(b).length) return false;
-  return ka.every((k) => a[k] === b[k]);
+  return ka.every(
+    (k) =>
+      b[k] &&
+      a[k].anchor === b[k].anchor &&
+      a[k].dx === b[k].dx &&
+      a[k].dy === b[k].dy,
+  );
 }
 
 // Applica al layer corrente le scelte del profilo qualità che vivono
@@ -576,7 +628,7 @@ function applyProfileToStyle(map: MaplibreMap, profile: MapTierProfile) {
   try {
     for (const layer of map.getStyle()?.layers ?? []) {
       if (layer.type !== "symbol") continue;
-      if (layer.id === LAYER_DOT_ID) continue; // i nostri pin restano
+      if (OWN_LAYER_IDS.has(layer.id)) continue; // i nostri pin restano
       map.setLayoutProperty(
         layer.id,
         "visibility",
@@ -820,7 +872,7 @@ export default function JobsGlobe({
   const clusteredRef = useRef<GroupedFeature[]>([]);
   // Lato scelto per l'etichetta di ogni fascio e testo con cui è stato
   // misurato (vedi relayoutLabels, nell'effetto di mount).
-  const labelAnchorsRef = useRef<Record<string, LabelAnchor>>({});
+  const labelPlacementsRef = useRef<Record<string, LabelPlacement>>({});
   const labelTextRef = useRef<Record<string, string>>({});
   // Registry icone gruppo registrate sulla mappa: iconId -> true. Permette
   // di rimuoverle quando il set di gruppi visibili cambia (filtri).
@@ -1282,6 +1334,51 @@ export default function JobsGlobe({
           },
         });
       }
+      // Linee guida e testo delle etichette spostate lontano dal pin.
+      if (!map.getSource(LEADER_SOURCE_ID)) {
+        map.addSource(LEADER_SOURCE_ID, {
+          type: "geojson",
+          data: { type: "FeatureCollection", features: [] },
+        });
+        map.addLayer({
+          id: LAYER_LEADER_LINE_ID,
+          type: "line",
+          source: LEADER_SOURCE_ID,
+          filter: ["==", ["geometry-type"], "LineString"],
+          paint: { "line-color": "rgba(255,255,255,0.6)", "line-width": 1 },
+        });
+        map.addLayer({
+          id: LAYER_LEADER_TEXT_ID,
+          type: "symbol",
+          source: LEADER_SOURCE_ID,
+          filter: ["==", ["geometry-type"], "Point"],
+          layout: {
+            "text-field": ["get", "label"],
+            "text-font": ["Open Sans Bold"],
+            "text-size": [
+              "interpolate",
+              ["linear"],
+              ["zoom"],
+              0,
+              11,
+              6,
+              12,
+              12,
+              14,
+            ],
+            "text-anchor": "center",
+            "text-allow-overlap": true,
+            "text-ignore-placement": true,
+            "symbol-sort-key": 999,
+          },
+          paint: {
+            "text-color": "#ffffff",
+            "text-halo-color": "rgba(0,0,0,0.95)",
+            "text-halo-width": 2.5,
+            "text-halo-blur": 0.5,
+          },
+        });
+      }
       layersReadyRef.current = true;
       // Halo/etichette secondo il tier corrente: va rifatto a ogni
       // style.load perché il cambio tema ricarica lo style da zero.
@@ -1297,13 +1394,13 @@ export default function JobsGlobe({
     // setData ritrova gli stessi lati e si ferma.
     const relayoutLabels = () => {
       if (!layersReadyRef.current) return;
-      const next = computeLabelAnchors(
+      const next = computeLabelPlacements(
         map,
         clusteredRef.current,
         labelTextRef.current,
       );
-      if (sameAnchors(next, labelAnchorsRef.current)) return;
-      labelAnchorsRef.current = next;
+      if (samePlacements(next, labelPlacementsRef.current)) return;
+      labelPlacementsRef.current = next;
       syncData(map);
     };
     map.on("idle", relayoutLabels);
@@ -1653,22 +1750,61 @@ export default function JobsGlobe({
     // count + iconId + label precomputata (count, con " · Da remoto" sui
     // fasci aggregati di sole remote). La lista positions completa è in
     // clusteredRef per il click handler.
-    const features: Feature[] = groups.map((g) => ({
-      type: "Feature",
-      geometry: { type: "Point", coordinates: [g.lon, g.lat] },
-      properties: {
-        groupKey: g.groupKey,
-        iconId: g.iconId,
-        count: g.count,
-        topScore: g.topScore,
-        label: groupLabel(g.count, g.remote, tr("remote")),
-        anchor: labelAnchorsRef.current[g.groupKey] ?? DEFAULT_LABEL_ANCHOR,
-      },
-    }));
-    labelTextRef.current = Object.fromEntries(
-      features.map((f) => [f.properties!.groupKey, f.properties!.label]),
-    );
+    const labels: Record<string, string> = {};
+    const leaderFeatures: Feature[] = [];
+    const features: Feature[] = groups.map((g) => {
+      const text = groupLabel(g.count, g.remote, tr("remote"));
+      labels[g.groupKey] = text;
+      const place = labelPlacementsRef.current[g.groupKey];
+      const leader = text && place?.anchor === "center" ? place : null;
+      if (leader) {
+        // Etichetta lontana dal pin: un punto proprio al suo posto (in
+        // coordinate geografiche, calcolate ora dalla vista) e la linea guida
+        // fino al pin. Il fascio non ha più il numero sotto di sé.
+        const pin = map.project([g.lon, g.lat]);
+        const at = map.unproject([pin.x + leader.dx, pin.y + leader.dy]);
+        leaderFeatures.push(
+          {
+            type: "Feature",
+            geometry: { type: "Point", coordinates: [at.lng, at.lat] },
+            properties: { label: text },
+          },
+          {
+            type: "Feature",
+            geometry: {
+              type: "LineString",
+              coordinates: [
+                [g.lon, g.lat],
+                [at.lng, at.lat],
+              ],
+            },
+            properties: {},
+          },
+        );
+      }
+      return {
+        type: "Feature",
+        geometry: { type: "Point", coordinates: [g.lon, g.lat] },
+        properties: {
+          groupKey: g.groupKey,
+          iconId: g.iconId,
+          count: g.count,
+          topScore: g.topScore,
+          label: leader ? "" : text,
+          anchor:
+            place && place.anchor !== "center"
+              ? place.anchor
+              : DEFAULT_LABEL_ANCHOR,
+        },
+      };
+    });
+    // Il testo vero di ogni gruppo (anche di quelli con la linea guida): serve
+    // al prossimo piazzamento per misurarlo.
+    labelTextRef.current = labels;
     src.setData({ type: "FeatureCollection", features });
+    (
+      map.getSource(LEADER_SOURCE_ID) as maplibregl.GeoJSONSource | undefined
+    )?.setData({ type: "FeatureCollection", features: leaderFeatures });
 
     // MapLibre 6 rende setData asincrono e, sul globo con style minimale, il
     // worker può restare pendente oltre la deadline della landing. Il gate
