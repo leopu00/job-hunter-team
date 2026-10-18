@@ -9,7 +9,7 @@ import {
 } from "@/lib/queries";
 import type { PositionWithScore } from "@/lib/types";
 import { existingTeamReadOnly } from "../../lib/existing-team-readonly";
-import { readDesktopVpsPositions } from "../../lib/existing-team-positions";
+import { readVpsPositionsShared, resetVpsPositionsShared } from "../../lib/existing-team-positions-shared";
 import { apiPath, json, type ApiFetch } from "../../shell/api-bridge";
 
 /**
@@ -34,28 +34,18 @@ const ROUTES: Record<string, () => Promise<unknown>> = {
   "/api/positions/locations": getPositionLocations,
 };
 
-/** All the team's positions in one bounded read per page (the native side pages by 600). */
-const ALL_ROWS = { limit: 20_000 } as const;
-/** The globe asks for its three routes together (coords twice): one read of the VPS serves them. */
-const SHARED_READ_MS = 5_000;
-
 type VpsRow = Pick<PositionWithScore, "id" | "title" | "company" | "status" | "role_family" | "location" |
   "remote_type" | "loc_country" | "loc_city"> & { score?: number | null; found_at?: string | null };
 
-let shared: { at: number; rows: Promise<VpsRow[]> } | null = null;
-
 /** The team's positions the web's map would show: not excluded. A failed read is an empty map. */
 function vpsRows(now = Date.now()): Promise<VpsRow[]> {
-  if (shared && now - shared.at < SHARED_READ_MS) return shared.rows;
-  const rows = readDesktopVpsPositions(ALL_ROWS).then((read) =>
+  return readVpsPositionsShared(now).then((read) =>
     read.source === "vps" ? (read.data as VpsRow[]).filter((row) => row.status !== "excluded") : []);
-  shared = { at: now, rows };
-  return rows;
 }
 
 /** Forgets the shared read (a test, or a new view). */
 export function resetMapVpsRead(): void {
-  shared = null;
+  resetVpsPositionsShared();
 }
 
 const score = (row: VpsRow) => (typeof row.score === "number" ? row.score : null);

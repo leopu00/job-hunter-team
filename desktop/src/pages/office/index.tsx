@@ -4,6 +4,7 @@ import type { AgentStatuses, OfficeClick, OfficeEngine, OfficeEvent, OfficeScene
 import { createLiveOffice, createReadScheduler, subscribeOffice, type LiveOffice, type ReadScheduler } from "../../office/live";
 import { watchReducedMotion } from "../../office/scene/motion";
 import OfficePanel from "../../office/panel/OfficePanel";
+import type { PanelClient } from "../../office/panel/types";
 import OfficeKeyboard from "../../office/panel/OfficeKeyboard";
 import OfficeTooltip, { tooltipFor } from "../../office/panel/OfficeTooltip";
 import { keyboardTargets } from "../../office/scene/hit";
@@ -12,6 +13,7 @@ import { emptyEngine, loadAssets, loadParts, type OfficeAssets, type OfficeParts
 import { loadAgentStatuses } from "../../office/status";
 import { appLocale } from "../../lib/app-locale";
 import { useExistingTeamReadOnly } from "../../lib/existing-team-readonly";
+import { EXISTING_TEAM_READONLY_TEXT } from "../../lib/existing-team-readonly.i18n";
 import { readTeamStatus } from "../../lib/existing-team-status";
 import { officeFromTeamProbe } from "../../office/readonly";
 import { supabase } from "../../lib/supabase";
@@ -40,8 +42,10 @@ export default function OfficePage(_props: PageProps) {
  * minute) in the full shell; the existing team's VPS in the read-only view,
  * where there is no cloud: the probe behind the Squadra page, read when the
  * page opens and when «Aggiorna» asks, never on a timer of its own
- * (office/readonly.ts). In that view the panels are not opened: they read the
- * cloud's positions, which that team does not have there.
+ * (office/readonly.ts). In that view the panels read the same list of positions
+ * the Posizioni page and the Map read (office/panel/vps-panels.ts), and never
+ * the cloud; an agent's panel is not opened (its moves are not in what the VPS
+ * reports) and a speech bubble over it says so.
  */
 export type OfficeSource = "cloud" | "team-probe";
 
@@ -93,6 +97,17 @@ function Office({ ready, source }: { ready: Ready; source: OfficeSource }) {
   const [status, setStatus] = useState<string | null>(null);
   const [statusIsAlert, setStatusIsAlert] = useState(false);
   const { assets, parts } = ready;
+  // A click or a key on the office. Over an existing team's VPS an agent has no panel (its moves
+  // are not in what the VPS reports): a speech bubble over it says so, never a panel with nothing in it.
+  const openPanel = (click: OfficeClick | null, button?: HTMLButtonElement) => {
+    if (click && source === "team-probe" && click.kind === "agent") {
+      engineRef.current?.apply({ type: "say", uid: click.uid, text: EXISTING_TEAM_READONLY_TEXT[appLocale()].officeAgentNoMoves, seconds: 8 });
+      setPanel(null);
+      return;
+    }
+    if (button) opener.current = button;
+    setPanel(click);
+  };
 
   // The scene: mounted once, resized with its box, destroyed on leave.
   useEffect(() => {
@@ -109,8 +124,8 @@ function Office({ ready, source }: { ready: Ready; source: OfficeSource }) {
           manifest: assets.manifest,
           layout: assets.layout,
           engine,
-          // a click on nothing closes the panel; a team read over its VPS has no panel to open
-          onClick: (click) => setPanel(source === "cloud" ? click : null),
+          // a click on nothing closes the panel
+          onClick: (click) => openPanel(click),
           onHover: (target, at) => setHover(target ? { target, at } : null),
         }),
       )
@@ -277,11 +292,7 @@ function Office({ ready, source }: { ready: Ready; source: OfficeSource }) {
         targets={targets}
         label={label}
         onFocusTarget={focusTarget}
-        onOpen={(t, button) => {
-          if (source !== "cloud") return;
-          opener.current = button;
-          setPanel(t);
-        }}
+        onOpen={(t, button) => openPanel(t, button)}
       />
       {tag && !panel && <OfficeTooltip target={tag.target} at={tag.at} layout={assets.layout} snapshot={snapshot} statuses={statuses} />}
       {panel && (
@@ -290,7 +301,8 @@ function Office({ ready, source }: { ready: Ready; source: OfficeSource }) {
           layout={assets.layout}
           snapshot={snapshot}
           statuses={statuses}
-          client={supabase}
+          client={source === "cloud" ? supabase : NO_CLOUD}
+          source={source === "cloud" ? "cloud" : "vps"}
           onClose={() => setPanel(null)}
           onOpen={setPanel}
           onNavigate={navigate}
@@ -304,6 +316,13 @@ function Office({ ready, source }: { ready: Ready; source: OfficeSource }) {
 function teamOffMessage(agents: number): string {
   return agents === 0 ? "Il team è spento: l'ufficio è vuoto." : "Il team è spento: restano gli agenti che hanno lavorato nelle ultime 24 ore.";
 }
+
+/** What the panels get over an existing team's VPS: the cloud is never asked, and a use of it is a failure. */
+const NO_CLOUD = new Proxy({} as PanelClient, {
+  get: (_, key) => {
+    throw new Error(`the cloud is not read over an existing team's VPS (${String(key)})`);
+  },
+});
 
 function Notice({ children, alert }: { children: React.ReactNode; alert?: boolean }) {
   return (
