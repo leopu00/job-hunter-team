@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { fakeSupabase } from "../test-support/fake-supabase";
-import { loadAgentStatuses, parseAgentStatuses, STATUS_STALE_MS, tagOf } from "./status";
+import { loadAgentStatuses, parseAgentStatuses, STATUS_STALE_MS, stateOf, tagOf } from "./status";
 
 const AT = "2026-09-27T20:00:00Z";
 const NOW = Date.parse(AT) + 30_000;
@@ -89,3 +89,72 @@ describe("the tag (AgentStateTag._label/_color)", () => {
     expect(tagOf({ status: "throttled" }, NOW)).toEqual({ label: "THROTTLED", color: 0xf5c518 });
   });
 });
+
+describe("the state a box publishes next to the old status", () => {
+  const UNTIL = new Date(Date.parse(AT) + 3_600_000).toISOString();
+  const read = (entry: object) =>
+    parseAgentStatuses({ agents_status: { tui: { at: AT, agents: { capitano: { status: "paused", since: AT, ...entry } } } } }, NOW)?.agents.capitano;
+
+  it("reads state, reason, since and until when they are there", () => {
+    expect(read({ state: "bloccato", reason: "limite_5h", until: UNTIL })).toEqual({
+      status: "paused",
+      state: "bloccato",
+      reason: "limite_5h",
+      since: Date.parse(AT),
+      until: Date.parse(UNTIL),
+    });
+  });
+
+  it("an older box has only the old keys and gets nothing new", () => {
+    expect(read({})).toEqual({ status: "paused" });
+  });
+
+  it("a state word this desktop does not know drops the new keys and keeps the old status", () => {
+    expect(read({ state: "dormiente", reason: "limite_5h", until: UNTIL })).toEqual({ status: "paused" });
+  });
+
+  it("a reason the catalog has no sentence for is not shown", () => {
+    expect(read({ state: "bloccato", reason: "colpa_del_gatto" })?.reason).toBeUndefined();
+  });
+
+  it("an unreadable date is left out, not turned into a time", () => {
+    const a = read({ state: "bloccato", reason: "limite_5h", until: "domani" });
+    expect(a?.until).toBeUndefined();
+  });
+
+  it("stateOf: the box's state first; a throttle of an older box is a block for pacing; nothing else is guessed", () => {
+    expect(stateOf({ status: "idle", state: "avviato_mai_partito" })).toMatchObject({ state: "avviato_mai_partito" });
+    expect(stateOf({ status: "throttled", throttleUntil: 5 })).toEqual({ state: "bloccato", reason: "pausa_pacing", until: 5 });
+    expect(stateOf({ status: "idle" })).toBeNull();
+    expect(stateOf({ status: "working" })).toBeNull();
+  });
+});
+
+describe("the tag of a published state", () => {
+  it("one label and colour per state: green work, amber blocked, blue waits for the person, grey the rest", () => {
+    expect(tagOf({ status: "working", state: "lavora" })).toEqual({ label: "WORKING", color: 0x58e68b });
+    expect(tagOf({ status: "paused", state: "bloccato", reason: "limite_5h" })).toEqual({ label: "BLOCKED", color: 0xf5c518 });
+    expect(tagOf({ status: "idle", state: "aspetta_umano" })).toEqual({ label: "WAITING FOR YOU", color: 0x5aa0ff });
+    expect(tagOf({ status: "idle", state: "avviato_mai_partito" }).label).toBe("NEVER STARTED");
+    expect(tagOf({ status: "idle", state: "sconosciuto", reason: "turno_silenzioso" }).label).toBe("UNKNOWN");
+    expect(tagOf({ status: "idle", state: "idle" }).label).toBe("IDLE");
+    expect(tagOf({ status: "idle", state: "spento" }).label).toBe("OFF");
+  });
+
+  it("a pacing block still counts down", () => {
+    expect(tagOf({ status: "throttled", state: "bloccato", reason: "pausa_pacing", until: NOW + 95_000 }, NOW).label).toBe("THROTTLED  1:35");
+  });
+
+  it("never-started and unknown are grey, and never the colour of work or of a wait", () => {
+    const grey = tagOf({ status: "idle", state: "avviato_mai_partito" }).color;
+    expect(grey).toBe(tagOf({ status: "idle", state: "sconosciuto" }).color);
+    for (const other of [0x58e68b, 0x7a7a96, 0xf5c518, 0xff7a65, 0x5aa0ff]) expect(grey).not.toBe(other);
+  });
+
+  it("a status this file does not know is UNKNOWN, never WAITING", () => {
+    const t = tagOf({ status: "sleeping" as never });
+    expect(t.label).toBe("UNKNOWN");
+    expect(t.color).not.toBe(0x7a7a96);
+  });
+});
+

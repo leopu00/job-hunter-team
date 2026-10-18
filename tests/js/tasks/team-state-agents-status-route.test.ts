@@ -27,6 +27,31 @@ describe("sanitizeAgentsStatus", () => {
     });
   });
 
+  it("keeps the state, the reason and the time a block lifts, next to the old status", () => {
+    const UNTIL = "2026-09-27T23:05:00.000Z";
+    const entry = { status: "paused", since: SINCE, state: "bloccato", reason: "limite_5h", until: UNTIL };
+    expect(sanitizeAgentsStatus({ tui: { agents: { capitano: entry, "scout-1": { status: "idle", since: SINCE, state: "avviato_mai_partito" } } } })).toEqual({
+      ok: true,
+      value: { tui: { agents: { capitano: entry, "scout-1": { status: "idle", since: SINCE, state: "avviato_mai_partito" } } } },
+    });
+    // an older box, with none of them, is still accepted as before
+    expect(sanitizeAgentsStatus({ tui: { agents: { capitano: { status: "idle", since: SINCE } } } }).ok).toBe(true);
+  });
+
+  it("refuses a state, a reason or a time that is not a code or a date, and any free text", () => {
+    const agent = { status: "paused", since: SINCE };
+    const bad: unknown[] = [
+      { ...agent, state: "BLOCKED!" },
+      { ...agent, state: 3 },
+      { ...agent, state: "bloccato", reason: "Rate limit reached" },
+      { ...agent, state: "bloccato", reason: "x".repeat(33) },
+      { ...agent, state: "bloccato", reason: 5 },
+      { ...agent, state: "bloccato", until: "tomorrow" },
+      { ...agent, state: "aspetta_umano", question: "procedo con la candidatura?" },
+    ];
+    for (const entry of bad) expect(sanitizeAgentsStatus({ tui: { agents: { capitano: entry } } }).ok, JSON.stringify(entry)).toBe(false);
+  });
+
   it("an agent with a name outside [a-z0-9-] is left out, the others are kept", () => {
     const agent = { status: "idle", since: SINCE };
     expect(sanitizeAgentsStatus({ tui: { agents: { "Scout 1": agent, test_session: agent, "scout-3": agent } } })).toEqual({

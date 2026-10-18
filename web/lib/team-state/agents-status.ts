@@ -21,12 +21,29 @@ export const AGENTS_STATUS_MAX_AGENTS = 64;
 
 const UID = /^[a-z0-9][a-z0-9-]{0,39}$/;
 const WORD = /^[a-z_]{1,24}$/;
-const ENTRY_KEYS = new Set(["status", "since", "throttle_left_s"]);
+// A reason is a code of the closed list in shared/agent-state/catalog.json
+// (limite_5h has a digit); the list itself is the reader's to know.
+const REASON = /^[a-z0-9_]{1,32}$/;
+const ENTRY_KEYS = new Set([
+  "status",
+  "since",
+  "throttle_left_s",
+  "state",
+  "reason",
+  "until",
+]);
 
 export type AgentStatusEntry = {
+  /** the old vocabulary (working, idle, paused, throttled), kept for older readers */
   status: string;
   since: string;
   throttle_left_s?: number;
+  /** what the agent is doing, from its CLI's events (shared/skills/agent_state.py) */
+  state?: string;
+  /** why, a code of the closed list: never a text the agent wrote */
+  reason?: string;
+  /** when a block lifts, ISO */
+  until?: string;
 };
 export type AgentsStatusPatch = Partial<
   Record<
@@ -77,7 +94,7 @@ export function sanitizeAgentsStatus(
           ok: false,
           error: `agents_status.${source}.${uid}: campi non riconosciuti`,
         };
-      const { status, since, throttle_left_s } = raw;
+      const { status, since, throttle_left_s, state, reason, until } = raw;
       if (typeof status !== "string" || !WORD.test(status))
         return {
           ok: false,
@@ -105,6 +122,34 @@ export function sanitizeAgentsStatus(
             error: `agents_status.${source}.${uid}: throttle_left_s non valido`,
           };
         item.throttle_left_s = Math.round(throttle_left_s);
+      }
+      if (state !== undefined) {
+        if (typeof state !== "string" || !WORD.test(state))
+          return {
+            ok: false,
+            error: `agents_status.${source}.${uid}: state non valido`,
+          };
+        item.state = state;
+      }
+      if (reason !== undefined) {
+        if (typeof reason !== "string" || !REASON.test(reason))
+          return {
+            ok: false,
+            error: `agents_status.${source}.${uid}: reason non valido`,
+          };
+        item.reason = reason;
+      }
+      if (until !== undefined) {
+        if (
+          typeof until !== "string" ||
+          until.length > 40 ||
+          Number.isNaN(Date.parse(until))
+        )
+          return {
+            ok: false,
+            error: `agents_status.${source}.${uid}: until non valido`,
+          };
+        item.until = until;
       }
       clean[uid] = item;
     }

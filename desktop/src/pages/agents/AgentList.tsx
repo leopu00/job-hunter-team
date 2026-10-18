@@ -1,6 +1,8 @@
 import type { CSSProperties } from "react";
+import { describeAgentState, isAnomalous, type AgentStateTone } from "@/lib/agent-state";
+import { appLocale } from "../../lib/app-locale";
 import Link from "../../web-shims/next-link";
-import { agentLed, lastActivity, unreadCount, type AgentDef, type AgentsData, type Led } from "./load-agents";
+import { agentLed, lastActivity, stateOfRole, unreadCount, type AgentDef, type AgentsData, type Led } from "./load-agents";
 import { whenShort } from "./when";
 
 /**
@@ -28,6 +30,9 @@ export default function AgentList({
         const on = agent.role === selected;
         const led = agentLed(data.team, agent.role, now);
         const unread = agent.chat ? unreadCount(data.messages, agent.role) : 0;
+        // the state only when something is off: a working agent is shown by its work
+        const info = stateOfRole(data.states, agent.role);
+        const state = info && isAnomalous(info.state) ? describeAgentState(info, appLocale(), now) : null;
         return (
           <Link
             key={agent.role}
@@ -59,6 +64,15 @@ export default function AgentList({
                   </span>
                 )}
               </span>
+              {state && (
+                <span
+                  data-testid={`agent-state-${agent.role}`}
+                  className="text-[10px] truncate"
+                  style={{ color: TONE_COLOR[state.tone] }}
+                >
+                  {state.line}
+                </span>
+              )}
             </span>
           </Link>
         );
@@ -66,6 +80,16 @@ export default function AgentList({
     </nav>
   );
 }
+
+/** By category, not by gravity: amber blocked, blue waits for the person, red only what needs a hand, grey the rest. */
+const TONE_COLOR: Record<AgentStateTone, string> = {
+  green: "var(--color-green)",
+  neutral: "var(--color-muted)",
+  amber: "var(--color-yellow)",
+  blue: "var(--color-blue)",
+  red: "var(--color-red)",
+  grey: "var(--color-dim)",
+};
 
 const LED_COLOR: Record<Led, string> = {
   on: "var(--color-green)",

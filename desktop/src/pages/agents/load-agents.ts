@@ -1,6 +1,9 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { isChatAgent } from "@/lib/chat-agents";
+import type { AgentState, AgentStateInfo } from "@/lib/agent-state";
 import type { PendingMessage } from "@/lib/types";
+import type { AgentStatuses } from "../../office/contract";
+import { loadAgentStatuses, stateOf } from "../../office/status";
 
 /**
  * The agents page's data, read from the cloud with the user's own session
@@ -80,6 +83,8 @@ export type AgentMove = {
 export type AgentsData = {
   /** null: the team never wrote its state on the cloud */
   team: TeamStatus | null;
+  /** what each agent is doing (team_state.agents_status); null: not published, or too old to be the present */
+  states: AgentStatuses | null;
   moves: Record<AgentRole, AgentMove[]>;
   messages: PendingMessage[];
 };
@@ -109,12 +114,14 @@ export async function loadAgents(client: Client): Promise<AgentsData> {
   const { data } = await client.auth.getSession();
   const userId = data.session?.user.id;
   if (!userId) throw new Error("nessuna sessione");
-  const [team, moves, messages] = await Promise.all([
+  const [team, moves, messages, states] = await Promise.all([
     readTeam(client, userId),
     readMoves(client, userId),
     readMessages(client, userId),
+    // its own query: a cloud without the column costs the state lines only
+    loadAgentStatuses(client),
   ]);
-  return { team, moves, messages };
+  return { team, states, moves, messages };
 }
 
 async function readTeam(client: Client, userId: string): Promise<TeamStatus | null> {
@@ -248,4 +255,30 @@ export function threadOf(messages: PendingMessage[], role: AgentRole): PendingMe
 /** Unread = the agent's turns not acknowledged yet (the user's own are born read). */
 export function unreadCount(messages: PendingMessage[], role: AgentRole): number {
   return messages.filter((m) => m.agent === role && m.author !== "user" && !m.acknowledged_at).length;
+}
+
+/** Which state of a role's instances is the one to tell: the one that needs a look first. */
+const RANK: Record<AgentState, number> = {
+  bloccato: 6,
+  aspetta_umano: 5,
+  avviato_mai_partito: 4,
+  sconosciuto: 3,
+  lavora: 2,
+  idle: 1,
+  spento: 0,
+};
+
+/**
+ * What a role is doing: its own uid (capitano) or its instances (scout-1,
+ * scout-2…), the most anomalous of them. null when the box does not say.
+ */
+export function stateOfRole(states: AgentStatuses | null, role: AgentRole): AgentStateInfo | null {
+  if (!states) return null;
+  let best: AgentStateInfo | null = null;
+  for (const [uid, status] of Object.entries(states.agents)) {
+    if (uid !== role && !new RegExp(`^${role}-(s?\\d+)$`).test(uid)) continue;
+    const info = stateOf(status);
+    if (info && (!best || RANK[info.state] > RANK[best.state])) best = info;
+  }
+  return best;
 }

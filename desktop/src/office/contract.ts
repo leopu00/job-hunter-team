@@ -17,6 +17,8 @@
  * floor FurnitureDefs.FLOOR = (240, 140, 2920, 1860). Times are seconds.
  */
 
+import type { AgentState } from "@/lib/agent-state";
+
 // ─── Geometry ────────────────────────────────────────────────────────────
 
 export type Vec = { x: number; y: number };
@@ -360,6 +362,17 @@ export type AgentStatus = {
   status: "working" | "idle" | "paused" | "throttled" | "unknown";
   /** throttled only: when the pause ends, on this computer's clock; absent when its length is not known */
   throttleUntil?: number;
+  /**
+   * What the agent is doing from its CLI's events (shared/skills/agent_state.py),
+   * when the box publishes it. Absent: an older box, which only knows `status`.
+   */
+  state?: AgentState;
+  /** why it is blocked or unknown: a code of shared/agent-state/catalog.json */
+  reason?: string;
+  /** when the state began, on this computer's clock */
+  since?: number;
+  /** when a block lifts */
+  until?: number;
 };
 
 /** The statuses to tag, by uid (capitano, scout-1…); `at` is when the newest source was observed. */

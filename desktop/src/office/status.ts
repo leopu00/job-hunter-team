@@ -1,4 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { isAgentState, isKnownReason } from "@/lib/agent-state";
+import type { AgentState } from "@/lib/agent-state";
 import type { AgentStatus, AgentStatuses } from "./contract";
 
 /**
@@ -65,6 +67,16 @@ export function parseAgentStatuses(row: StatusRow, now = Date.now()): AgentStatu
       const entry: AgentStatus = { status: value.status as AgentStatus["status"] };
       if (value.status === "throttled" && typeof value.throttle_left_s === "number" && value.throttle_left_s >= 0)
         entry.throttleUntil = at + value.throttle_left_s * 1000;
+      // What the box says it is doing, when it says it. A state word this
+      // desktop does not know drops all three: the old status still shows.
+      if (isAgentState(value.state)) {
+        entry.state = value.state;
+        if (isKnownReason(value.reason)) entry.reason = value.reason;
+        const since = typeof value.since === "string" ? Date.parse(value.since) : NaN;
+        if (!Number.isNaN(since)) entry.since = since;
+        const until = typeof value.until === "string" ? Date.parse(value.until) : NaN;
+        if (!Number.isNaN(until)) entry.until = until;
+      }
       agents[uid] = entry;
       seenAt[uid] = at;
     }
@@ -76,8 +88,21 @@ function isObject(v: unknown): v is Record<string, unknown> {
   return !!v && typeof v === "object" && !Array.isArray(v);
 }
 
-/** The tag's text and colour, AgentStateTag._label/_color. */
+/**
+ * The state to tell the person, or null when the box does not say. A box
+ * that publishes `state` is believed; an older one only has `throttled`,
+ * which is a block for pacing. Nothing else is guessed from the old words:
+ * "idle" there was a pane with no spinner, not a closed turn.
+ */
+export function stateOf(s: AgentStatus): { state: AgentState; reason?: string; since?: number; until?: number } | null {
+  if (s.state) return { state: s.state, reason: s.reason, since: s.since, until: s.until };
+  if (s.status === "throttled") return { state: "bloccato", reason: "pausa_pacing", until: s.throttleUntil };
+  return null;
+}
+
+/** The tag's text and colour, AgentStateTag._label/_color; a state the box published has its own. */
 export function tagOf(s: AgentStatus, now = Date.now()): { label: string; color: number } {
+  if (s.state) return stateTag(s, now);
   switch (s.status) {
     case "working":
       return { label: "WORKING", color: 0x58e68b };
@@ -85,14 +110,40 @@ export function tagOf(s: AgentStatus, now = Date.now()): { label: string; color:
       return { label: "WAITING", color: 0x7a7a96 };
     case "paused":
       return { label: "PAUSED", color: 0xff7a65 };
-    case "throttled": {
-      // the JHT API's pause has no known length: no clock rather than an invented one
-      if (s.throttleUntil == null) return { label: "THROTTLED", color: 0xf5c518 };
-      const left = Math.max(0, Math.ceil((s.throttleUntil - now) / 1000));
-      return { label: `THROTTLED  ${Math.floor(left / 60)}:${String(left % 60).padStart(2, "0")}`, color: 0xf5c518 };
-    }
+    case "throttled":
+      return countdown(s.throttleUntil, now);
     default:
-      // "unknown", and any status this file does not know: grey, never work and never a wait
-      return { label: "UNKNOWN", color: 0x9a9ab0 };
+      // "unknown" (an existing team read over its VPS: a session up says nothing about work) and any
+      // status this file does not know: grey, never drawn as work and never as a wait
+      return { label: "UNKNOWN", color: UNKNOWN_COLOR };
+  }
+}
+
+const UNKNOWN_COLOR = 0x9a9ab0;
+
+function countdown(until: number | undefined, now: number): { label: string; color: number } {
+  // the JHT API's pause has no known length: no clock rather than an invented one
+  if (until == null) return { label: "THROTTLED", color: 0xf5c518 };
+  const left = Math.max(0, Math.ceil((until - now) / 1000));
+  return { label: `THROTTLED  ${Math.floor(left / 60)}:${String(left % 60).padStart(2, "0")}`, color: 0xf5c518 };
+}
+
+/** One tag per state, by category: green work, amber blocked, blue waits for the person, grey the rest. */
+function stateTag(s: AgentStatus, now: number): { label: string; color: number } {
+  switch (s.state) {
+    case "lavora":
+      return { label: "WORKING", color: 0x58e68b };
+    case "idle":
+      return { label: "IDLE", color: 0x7a7a96 };
+    case "bloccato":
+      return s.reason === "pausa_pacing" ? countdown(s.until, now) : { label: "BLOCKED", color: 0xf5c518 };
+    case "aspetta_umano":
+      return { label: "WAITING FOR YOU", color: 0x5aa0ff };
+    case "avviato_mai_partito":
+      return { label: "NEVER STARTED", color: UNKNOWN_COLOR };
+    case "spento":
+      return { label: "OFF", color: 0x5a5a70 };
+    default:
+      return { label: "UNKNOWN", color: UNKNOWN_COLOR };
   }
 }
