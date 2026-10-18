@@ -10,7 +10,17 @@ import { useTheme } from "@/app/theme-provider";
 import { useLocale } from "@/lib/use-locale";
 import { UNCATEGORIZED_LABEL } from "@/lib/position-classifier";
 import { bestViewport } from "@/lib/globe-viewport";
-import { groupLabel } from "@/lib/globe-label-placement";
+import {
+  ANCHOR_OFFSET_EM,
+  estimateTextWidth,
+  groupLabel,
+  labelFontSize,
+  nameRect,
+  placeLabels,
+  type LabelAnchor,
+  type LabelItem,
+  type Rect,
+} from "@/lib/globe-label-placement";
 import { attachTouchAxisLock } from "@/lib/globe-touch-axis-lock";
 import { ensureMaplibreWorkerUrl } from "@/lib/maplibre-worker";
 import { scoreToRgb, scoreSpectrumCss } from "@/lib/score-color";
@@ -439,6 +449,108 @@ function aggregateGroups(
   return out;
 }
 
+// Lato del testo dei fasci rispetto al pin: «top» (sotto, il default) salvo
+// dove lì cade un nome della mappa o un'altra etichetta (lib/globe-label-
+// placement). È una proprietà della feature: text-anchor e text-offset del
+// layer la leggono.
+const DEFAULT_LABEL_ANCHOR: LabelAnchor = "top";
+
+function labelOffsetExpr(): maplibregl.ExpressionSpecification {
+  const entries = (Object.keys(ANCHOR_OFFSET_EM) as LabelAnchor[]).flatMap(
+    (a) => [a, ["literal", ANCHOR_OFFSET_EM[a]]],
+  );
+  return [
+    "match",
+    ["coalesce", ["get", "anchor"], DEFAULT_LABEL_ANCHOR],
+    ...entries,
+    ["literal", ANCHOR_OFFSET_EM[DEFAULT_LABEL_ANCHOR]],
+  ] as unknown as maplibregl.ExpressionSpecification;
+}
+
+// Ingombro dei nomi della basemap (paesi, città) attualmente disegnati: il
+// punto di ogni etichetta lo dà queryRenderedFeatures, la larghezza si stima
+// dal nome (MapLibre non espone il box del testo).
+function basemapNameRects(map: MaplibreMap): Rect[] {
+  const layers = map.getStyle()?.layers ?? [];
+  const out: Rect[] = [];
+  const seen = new Set<string>();
+  for (const layer of layers) {
+    if (layer.type !== "symbol" || layer.id === LAYER_DOT_ID) continue;
+    if (map.getLayoutProperty(layer.id, "text-field") == null) continue;
+    if (map.getLayoutProperty(layer.id, "visibility") === "none") continue;
+    const sizeProp = map.getLayoutProperty(layer.id, "text-size");
+    const size = typeof sizeProp === "number" ? sizeProp : 12;
+    const upper =
+      map.getLayoutProperty(layer.id, "text-transform") === "uppercase";
+    let features: maplibregl.MapGeoJSONFeature[] = [];
+    try {
+      features = map.queryRenderedFeatures({ layers: [layer.id] });
+    } catch {
+      continue;
+    }
+    for (const f of features) {
+      if (f.geometry.type !== "Point") continue;
+      const props = f.properties ?? {};
+      const name = String(
+        props["name:latin"] ?? props.name_en ?? props.name ?? "",
+      );
+      if (!name) continue;
+      const [lon, lat] = f.geometry.coordinates as [number, number];
+      const pt = map.project([lon, lat]);
+      const key = `${name}|${Math.round(pt.x / 6)}|${Math.round(pt.y / 6)}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push(nameRect(pt, name, size, upper));
+    }
+  }
+  return out;
+}
+
+function computeLabelAnchors(
+  map: MaplibreMap,
+  groups: GroupedFeature[],
+  labels: Record<string, string>,
+): Record<string, LabelAnchor> {
+  const size = labelFontSize(map.getZoom());
+  const el = map.getContainer();
+  const margin = 200;
+  const items: LabelItem[] = [];
+  for (const g of groups) {
+    const text = labels[g.groupKey];
+    if (!text) continue;
+    const pt = map.project([g.lon, g.lat]);
+    if (
+      pt.x < -margin ||
+      pt.y < -margin ||
+      pt.x > el.clientWidth + margin ||
+      pt.y > el.clientHeight + margin
+    ) {
+      continue;
+    }
+    items.push({
+      id: g.groupKey,
+      x: pt.x,
+      y: pt.y,
+      w: estimateTextWidth(text, size),
+      h: Math.ceil(size * 1.3),
+      priority: g.count,
+    });
+  }
+  const placed = placeLabels(items, basemapNameRects(map), size);
+  const out: Record<string, LabelAnchor> = {};
+  for (const [id, p] of placed) out[id] = p.anchor;
+  return out;
+}
+
+function sameAnchors(
+  a: Record<string, LabelAnchor>,
+  b: Record<string, LabelAnchor>,
+): boolean {
+  const ka = Object.keys(a);
+  if (ka.length !== Object.keys(b).length) return false;
+  return ka.every((k) => a[k] === b[k]);
+}
+
 // Applica al layer corrente le scelte del profilo qualità che vivono
 // nello style (non nel costruttore della mappa): halo dei fasci e
 // etichette della basemap. Il placement dei simboli di testo è lavoro
@@ -700,6 +812,10 @@ export default function JobsGlobe({
   // dentro onStyleLoad che ha una closure vecchia (registrato 1 sola
   // volta in mount).
   const clusteredRef = useRef<GroupedFeature[]>([]);
+  // Lato scelto per l'etichetta di ogni fascio e testo con cui è stato
+  // misurato (vedi relayoutLabels, nell'effetto di mount).
+  const labelAnchorsRef = useRef<Record<string, LabelAnchor>>({});
+  const labelTextRef = useRef<Record<string, string>>({});
   // Registry icone gruppo registrate sulla mappa: iconId -> true. Permette
   // di rimuoverle quando il set di gruppi visibili cambia (filtri).
   const registeredIconsRef = useRef<Set<string>>(new Set());
@@ -1139,8 +1255,12 @@ export default function JobsGlobe({
             ],
             // 0.3em sotto il pin: subito attaccato al cluster.
             // Halo forte (sotto) gestisce overlap coi nomi città.
-            "text-offset": [0, 0.3],
-            "text-anchor": "top",
+            "text-offset": labelOffsetExpr(),
+            "text-anchor": [
+              "coalesce",
+              ["get", "anchor"],
+              DEFAULT_LABEL_ANCHOR,
+            ],
             "text-allow-overlap": true,
             "text-ignore-placement": true,
             // Disegna SEMPRE sopra altri layer di testo della basemap.
@@ -1163,6 +1283,22 @@ export default function JobsGlobe({
       syncData(map);
     };
     map.on("style.load", onStyleLoad);
+
+    // A mappa ferma (idle) ogni etichetta prende il lato libero più vicino al
+    // default. Si rifà il disegno solo se un lato cambia: l'idle che segue
+    // setData ritrova gli stessi lati e si ferma.
+    const relayoutLabels = () => {
+      if (!layersReadyRef.current) return;
+      const next = computeLabelAnchors(
+        map,
+        clusteredRef.current,
+        labelTextRef.current,
+      );
+      if (sameAnchors(next, labelAnchorsRef.current)) return;
+      labelAnchorsRef.current = next;
+      syncData(map);
+    };
+    map.on("idle", relayoutLabels);
 
     map.on("error", (e: maplibregl.ErrorEvent) => {
       console.error("[JobsGlobe] map error:", (e as any)?.error?.message ?? e);
@@ -1518,8 +1654,12 @@ export default function JobsGlobe({
         count: g.count,
         topScore: g.topScore,
         label: groupLabel(g.count, g.remote, tr("remote")),
+        anchor: labelAnchorsRef.current[g.groupKey] ?? DEFAULT_LABEL_ANCHOR,
       },
     }));
+    labelTextRef.current = Object.fromEntries(
+      features.map((f) => [f.properties!.groupKey, f.properties!.label]),
+    );
     src.setData({ type: "FeatureCollection", features });
 
     // MapLibre 6 rende setData asincrono e, sul globo con style minimale, il
