@@ -37,6 +37,18 @@ Architettura (pattern simile a sentinel-bridge.py):
 
 Outbound (telegram-send) e' una skill agente che usa jht-telegram-send
 direttamente. Questo bridge gestisce solo l'inbound.
+
+Domande strutturate degli agenti (`jht-notify-user --option …`, T07): su questo bridge un
+bottone premuto (callback_query) e una risposta scritta («2», «Q#### 2», l'etichetta
+esatta) vanno alla domanda e non diventano un turno [CHAT].
+
+⚠️ Dopo il cutover al servizio Telegram isolato (`/run/jht-telegram/cutover`, vedi
+start-agent.sh) questo bridge NON gira: il servizio isolato ascolta solo `message` e
+`edited_message` (shared/telegram_service/api.py) e `jht-telegram-send` manda testo
+semplice. Li' i bottoni non compaiono (parte il testo con le opzioni numerate) e una
+risposta scritta e' un turno di chat come tutti gli altri. Estendere il relay e' un
+lavoro a parte; finche' non c'e', una domanda con scadenza su un host dopo il cutover si
+risponde dal web o dal desktop, e altrimenti scade con il suo default.
 """
 
 import json
