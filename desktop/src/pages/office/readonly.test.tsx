@@ -1,4 +1,4 @@
-import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { OfficeClick, OfficeEvent, OfficeLayout, OfficeManifest, OfficeSceneOptions } from "../../office/contract";
 import { diffOfficeSnapshots } from "../../office/data/diff";
@@ -7,6 +7,7 @@ import { enterExistingTeamReadOnly, leaveExistingTeamReadOnly } from "../../lib/
 import { describeError } from "../../lib/error-catalog";
 import { refresh } from "../../shell/router";
 import { realSnapshotReply } from "../../test-support/snapshot-command-reply";
+import { EXISTING_TEAM_READONLY_TEXT } from "../../lib/existing-team-readonly.i18n";
 import { EXISTING_TEAM_STATUS_TEXT } from "../existing-team/existing-team-status.i18n";
 
 // /office in the read-only view of an existing team: the same office, fed by
@@ -44,6 +45,7 @@ vi.mock("../../office/parts", async (importOriginal) => ({
   loadParts: vi.fn(async () => parts.value),
 }));
 
+import { resetVpsPositionsShared } from "../../lib/existing-team-positions-shared";
 import ExistingTeamOfficePage from "./readonly";
 
 const T = EXISTING_TEAM_STATUS_TEXT.it;
@@ -52,6 +54,15 @@ const LAYOUT = { version: 1, departments: [], furniture: [] } as unknown as Offi
 const MANIFEST: OfficeManifest = { version: 1, layout: "/office/layout.json", characters: [], atlases: [] };
 const CONNECTION = { at: Date.UTC(2026, 9, 18, 21, 0, 0), captainRunning: true, assistantRunning: true };
 
+const POSITIONS = "existing_team_positions_read";
+const TEAM_ROWS = [
+  { id: "11", legacy_id: 11, title: "Cercatore di nuovi", company: "Alfa", status: "new", location: "Roma", found_at: new Date().toISOString(), score: null },
+  { id: "12", legacy_id: 12, title: "Da punteggiare", company: "Beta", status: "scored", location: "Milano", found_at: "2026-10-16T09:00:00Z", score: 74, write_requested: false },
+  { id: "13", legacy_id: 13, title: "CV con pass", company: "Gamma", status: "ready", location: "Roma", found_at: "2026-10-15T09:00:00Z", score: 88, critic_verdict: "pass", critic_score: 9, written_at: "2026-10-16T12:00:00Z" },
+  { id: "14", legacy_id: 14, title: "Candidatura inviata", company: "Delta", status: "applied", location: "Torino", found_at: "2026-10-14T09:00:00Z", score: 81, written_at: "2026-10-15T12:00:00Z", critic_verdict: "pass" },
+];
+let positions: () => Promise<unknown>;
+const positionReads = () => native.invoke.mock.calls.filter(([command]) => command === POSITIONS);
 const json = (body: unknown) => new Response(JSON.stringify(body), { status: 200, headers: { "content-type": "application/json" } });
 let answer: () => Promise<unknown>;
 let applied: OfficeEvent[];
@@ -75,8 +86,11 @@ beforeEach(() => {
   native.isTauri.mockReturnValue(true);
   native.invoke.mockReset();
   answer = async () => realSnapshotReply();
+  positions = async () => ({ ok: true, data: { items: TEAM_ROWS, total: TEAM_ROWS.length } });
+  resetVpsPositionsShared();
   native.invoke.mockImplementation(async (command: string) => {
     if (command === COMMAND) return answer();
+    if (command === POSITIONS) return positions();
     throw new Error(`unexpected native command ${command}`);
   });
   vi.stubGlobal("ResizeObserver", class { observe() {} disconnect() {} });
@@ -193,15 +207,129 @@ describe("the office of an existing team, over its VPS", () => {
     expect(reads()).toBe(1);
   });
 
-  it("no panel opens on a click, and the cloud is not asked for one", async () => {
+  const panelOf = () => screen.findByRole("complementary", { name: "Dettagli dell'ufficio" });
+
+  it("a pile opens its panel with the team's positions of that phase, read from the VPS, and the cloud is not asked", async () => {
+    mount();
+    await waitFor(() => expect(entered()).toHaveLength(2));
+    // the piles of the scene came with the office: the one read, which the panel below reuses
+    await waitFor(() => expect(positionReads()).toHaveLength(1));
+    act(() => scene.options!.onClick({ kind: "pile", dept: "scout" }));
+    const panel = await panelOf();
+    expect(await within(panel).findByText("Cercatore di nuovi · Alfa")).toBeInTheDocument();
+    expect(within(panel).queryByText("Da punteggiare · Beta")).toBeNull();
+    expect(positionReads()).toHaveLength(1);
+    expect(cloud.touched).toEqual([]);
+  });
+
+  it("the scorer's pile, the CV shelf, the board and the hologram open from the same one read", async () => {
+    mount();
+    await waitFor(() => expect(entered()).toHaveLength(2));
+    act(() => scene.options!.onClick({ kind: "pile", dept: "scorer" }));
+    expect(await within(await panelOf()).findByText("Da punteggiare · Beta")).toBeInTheDocument();
+
+    act(() => scene.options!.onClick({ kind: "shelf" }));
+    const shelf = await screen.findByText("CV prodotti");
+    expect(shelf).toBeInTheDocument();
+    const panel = await panelOf();
+    // two CVs written (the ready one and the sent one), both with a pass
+    await waitFor(() => expect(within(panel).getByText("scritti").previousElementSibling).toHaveTextContent("2"));
+    expect(within(panel).getByText("pass").previousElementSibling).toHaveTextContent("2");
+    expect(within(panel).getByText("CV con pass · Gamma")).toBeInTheDocument();
+
+    act(() => scene.options!.onClick({ kind: "board" }));
+    expect(await screen.findByText("Bacheca")).toBeInTheDocument();
+    expect(await within(await panelOf()).findByText("Candidatura inviata · Delta")).toBeInTheDocument();
+
+    act(() => scene.options!.onClick({ kind: "hologram" }));
+    expect(await screen.findByText(/4 posizioni con un luogo/)).toBeInTheDocument();
+    const places = within(await panelOf());
+    expect(places.getByText("Roma").nextElementSibling).toHaveTextContent("2");
+
+    // one list served all of them
+    expect(positionReads()).toHaveLength(1);
+    expect(cloud.touched).toEqual([]);
+  });
+
+  it("the scout's department shows what was found in the last days, from the same list", async () => {
+    mount();
+    await waitFor(() => expect(entered()).toHaveLength(2));
+    act(() => scene.options!.onClick({ kind: "department", dept: "scout" }));
+    expect(await screen.findByText("Trovate negli ultimi 7 giorni")).toBeInTheDocument();
+    const chart = await screen.findByRole("img");
+    // the position found today is one of the days
+    await waitFor(() => expect(screen.getByRole("img").getAttribute("aria-label")).toMatch(/: 1(,|$)/));
+    expect(chart).toBeInTheDocument();
+    expect(cloud.touched).toEqual([]);
+  });
+
+  it("an agent has no panel here: a speech bubble over it says why, in the person's language, and nothing is read", async () => {
     mount();
     await waitFor(() => expect(entered()).toHaveLength(2));
     const click: OfficeClick = { kind: "agent", uid: "capitano", role: "capitano" };
     act(() => scene.options!.onClick(click));
-    expect(screen.queryByRole("dialog")).toBeNull();
-    act(() => scene.options!.onClick({ kind: "pile", dept: "scout" }));
-    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(screen.queryByRole("complementary")).toBeNull();
+    const said = applied.filter((e): e is Extract<OfficeEvent, { type: "say" }> => e.type === "say");
+    expect(said).toEqual([{ type: "say", uid: "capitano", text: EXISTING_TEAM_READONLY_TEXT.it.officeAgentNoMoves, seconds: 8 }]);
+    expect(positionReads()).toHaveLength(1); // only the office's own, none for a panel
     expect(cloud.touched).toEqual([]);
+  });
+
+  it("the piles of the scene are counted from the team's positions, with the read the panels share", async () => {
+    mount();
+    await waitFor(() => expect(applied.some((e) => e.type === "piles")).toBe(true));
+    const piles = applied.filter((e): e is Extract<OfficeEvent, { type: "piles" }> => e.type === "piles").at(-1)!.piles;
+    // new 1, scored 1 (not asked to write), ready with a pass 1; the sent one is on no pile
+    expect(piles).toEqual({ scout: 1, analisti: 0, scorer: 1, scrittori: 0, critici: 1 });
+    expect(positionReads()).toHaveLength(1);
+    // a panel opened afterwards reuses the read
+    act(() => scene.options!.onClick({ kind: "pile", dept: "scout" }));
+    await within(await panelOf()).findByText("Cercatore di nuovi · Alfa");
+    expect(positionReads()).toHaveLength(1);
+    expect(cloud.touched).toEqual([]);
+  });
+
+  it("piles that could not be read are unknown, not zero, and the agents are still drawn", async () => {
+    positions = async () => ({ ok: false, error: "ssh_unavailable" });
+    mount();
+    await waitFor(() => expect(entered()).toHaveLength(2));
+    await waitFor(() => expect(positionReads()).toHaveLength(1));
+    const piles = applied.filter((e): e is Extract<OfficeEvent, { type: "piles" }> => e.type === "piles").at(-1)!.piles;
+    expect(Object.values(piles)).toEqual([null, null, null, null, null]);
+  });
+
+  it("a team that is off reads no positions at all", async () => {
+    answer = async () => realSnapshotReply({ containerRunning: false });
+    mount();
+    expect(await screen.findByRole("status")).toHaveTextContent(T.fields.containerRunning.no);
+    expect(positionReads()).toHaveLength(0);
+  });
+
+  it("a team whose positions cannot be read says why with the catalog's sentence: not an empty list", async () => {
+    positions = async () => ({ ok: false, error: "ssh_unavailable" });
+    mount();
+    await waitFor(() => expect(entered()).toHaveLength(2));
+    act(() => scene.options!.onClick({ kind: "pile", dept: "scout" }));
+    const panel = await panelOf();
+    const failure = describeError("ssh_unavailable", { fallback: "existing_team_unavailable", locale: "it" });
+    const alert = await within(panel).findByRole("alert");
+    expect(alert).toHaveTextContent(failure.text);
+    expect(alert).toHaveTextContent(failure.action);
+    expect(within(panel).queryByText("Nessuna posizione in questa fase.")).toBeNull();
+    expect(panel).not.toHaveTextContent("cloud");
+  });
+
+  it("reads and never writes: the VPS is asked for a list only, and no request leaves for the cloud", async () => {
+    mount();
+    await waitFor(() => expect(entered()).toHaveLength(2));
+    act(() => scene.options!.onClick({ kind: "pile", dept: "scout" }));
+    await panelOf();
+    await waitFor(() => expect(positionReads()).toHaveLength(1));
+    for (const [, args] of positionReads()) expect((args as { request: { op: string } }).request.op).toBe("list");
+    const commands = native.invoke.mock.calls.map(([command]) => command);
+    expect(new Set(commands)).toEqual(new Set([COMMAND, POSITIONS]));
+    const urls = (fetch as unknown as { mock: { calls: unknown[][] } }).mock.calls.map(([url]) => String(url));
+    expect(urls.every((url) => url.startsWith("/office/"))).toBe(true);
   });
 
   it("says so when the office's art is not in the app", async () => {

@@ -40,6 +40,16 @@ describe("officeFromTeamProbe", () => {
     expect(snapshot.heartbeatAt).toBeNull();
   });
 
+  it("carries the piles it is given, wherever the team is on, and unknown ones otherwise", () => {
+    const piles = { scout: 3, analisti: 0, scorer: 2, scrittori: 1, critici: 0 };
+    expect(officeFromTeamProbe(read(), CONNECTION, "it", piles).snapshot.piles).toEqual(piles);
+    expect(officeFromTeamProbe(read(), null, "it", piles).snapshot.piles).toEqual(piles);
+    expect(officeFromTeamProbe(read(), CONNECTION, "it").snapshot.piles).toEqual({ scout: null, analisti: null, scorer: null, scrittori: null, critici: null });
+    // a team that is off, or a probe that failed, has no piles to show
+    expect(Object.values(officeFromTeamProbe(read({ containerRunning: false }), CONNECTION, "it", piles).snapshot.piles)).toEqual([null, null, null, null, null]);
+    expect(Object.values(officeFromTeamProbe({ kind: "error", at: AT, code: "x" }, CONNECTION, "it", piles).snapshot.piles)).toEqual([null, null, null, null, null]);
+  });
+
   it("draws only the sessions that are up", () => {
     const captainOnly = officeFromTeamProbe(read(), { ...CONNECTION, assistantRunning: false }, "it");
     expect(captainOnly.snapshot.roster.map((a) => a.uid)).toEqual(["capitano"]);

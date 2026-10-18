@@ -17,8 +17,12 @@ import type { AgentStatuses, OfficeAgent, OfficeSnapshot, Piles } from "./contra
  * So only those two agents can be in the office, and only when their session
  * is up. A session being up does not say what the agent is doing, so every
  * agent drawn has the status "unknown" (grey, «UNKNOWN»): never working,
- * never waiting. The piles are unknown (null), no position is moving, and an
- * agent that is not known to be there is not drawn, never invented.
+ * never waiting. No position is moving, and an agent that is not known to be
+ * there is not drawn, never invented. The piles are the counts of the team's
+ * positions when they could be read (the same read as the panels and the
+ * globe, vps-panels.ts), unknown (null) otherwise, never zero. The piles
+ * are the counts of the team's positions when they were read (the same read
+ * as the panels and the globe), unknown otherwise, never zero.
  */
 
 /** The two sessions the VPS probe tells about, as office agents. */
@@ -37,8 +41,8 @@ export type ProbeOffice = {
   notice: { text: string; alert: boolean } | null;
 };
 
-function snapshotOf(online: boolean | null, roster: OfficeAgent[]): OfficeSnapshot {
-  return { teamOnline: online, heartbeatAt: null, roster, piles: { ...UNKNOWN_PILES }, transitions: [] };
+function snapshotOf(online: boolean | null, roster: OfficeAgent[], piles: Piles | null = null): OfficeSnapshot {
+  return { teamOnline: online, heartbeatAt: null, roster, piles: { ...(piles ?? UNKNOWN_PILES) }, transitions: [] };
 }
 
 function stamp(at: number, locale: Locale): string {
@@ -54,6 +58,8 @@ export function officeFromTeamProbe(
   reading: TeamStatusReading,
   connection: ConnectionProbe | null,
   locale: Locale,
+  /** the piles' counts from the team's positions, when they could be read; otherwise unknown */
+  piles: Piles | null = null,
 ): ProbeOffice {
   const t = EXISTING_TEAM_STATUS_TEXT[locale];
   if (reading.kind === "unknown") {
@@ -76,12 +82,12 @@ export function officeFromTeamProbe(
   }
   if (!connection) {
     // The container is up but nobody can say which sessions: no one is drawn.
-    return { snapshot: snapshotOf(true, []), statuses: null, notice: { text: t.noConnectionValue, alert: false } };
+    return { snapshot: snapshotOf(true, [], piles), statuses: null, notice: { text: t.noConnectionValue, alert: false } };
   }
   const roster = SESSIONS.filter((s) => connection[s.field] === true).map((s) => s.agent);
   if (roster.length === 0) {
     return {
-      snapshot: snapshotOf(true, []),
+      snapshot: snapshotOf(true, [], piles),
       statuses: null,
       notice: { text: t.fields.captainRunning.no, alert: false },
     };
@@ -89,7 +95,7 @@ export function officeFromTeamProbe(
   const agents: AgentStatuses["agents"] = {};
   for (const a of roster) agents[a.uid] = { status: "unknown" };
   return {
-    snapshot: snapshotOf(true, roster),
+    snapshot: snapshotOf(true, roster, piles),
     statuses: { at: connection.at, agents },
     notice: {
       text: (connection.source === "assistant_start" ? t.atAssistantStart : t.atConnection).replace("{time}", stamp(connection.at, locale)),
