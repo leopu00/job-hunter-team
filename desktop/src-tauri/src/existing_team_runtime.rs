@@ -136,7 +136,7 @@ def sort_items(items,filters):
   present=[item for item in items if value(item) is not None]; missing=[item for item in items if value(item) is None]
   present.sort(key=value,reverse=direction=='desc'); items[:]=present+missing
  return items
-LIST_KEYS=('id','legacy_id','title','company','location','remote_type','source','found_at','status','role_family','loc_country','loc_city','score','critic_score','critic_verdict','written_at','applied_at','salary_min','salary_max','salary_currency','has_open_ticket','ticket_indicator','public_state','write_requested')
+LIST_KEYS=('id','legacy_id','title','company','location','remote_type','source','found_at','status','role_family','loc_country','loc_city','score','critic_score','critic_verdict','written_at','applied_at','salary_min','salary_max','salary_currency','has_open_ticket','ticket_indicator','public_state','write_requested','office_lat','office_lon','office_address')
 def light(item): return {key:item.get(key) for key in LIST_KEYS}
 try: req=json.loads(sys.stdin.readline())
 except Exception: fail('positions_request_invalid')
@@ -203,6 +203,10 @@ except Exception: fail('positions_unavailable')
 if op=='detail': emit({'ok':True,'data':position_detail(int(req['id']))})
 def trunc(value,size): return value[:size] if isinstance(value,str) else value
 def number(value): return value if isinstance(value,(int,float)) and not isinstance(value,bool) else None
+# An office coordinate the globe may place a pin on: a finite number within the globe, else None
+# (a jobs.db without the columns, an empty or garbled value, are placed by their city instead).
+def coord(value,limit): return value if number(value) is not None and value==value and -limit<=value<=limit else None
+def text(value,size): return value[:size] if isinstance(value,str) else None
 def dash_row(raw,score,application):
  sal=salary(raw); scored_at=nullable(score,'scored_at') if score else None; written_by=nullable(application,'written_by') if application else None
  candidates=[(raw.get('found_at'),'scout',raw.get('found_by')),(raw.get('last_checked'),'analista','analista'),(scored_at,'scorer',nullable(score,'scored_by') if score else None),(nullable(application,'written_at') if application else None,'scrittore',written_by),(nullable(application,'critic_reviewed_at') if application else None,'scrittore',written_by),(nullable(application,'applied_at') if application else None,'user','user'),(nullable(application,'response_at') if application else None,'user','user')]
@@ -269,7 +273,7 @@ try:
  rows=[]
  for raw in db.execute('SELECT p.* FROM positions p ORDER BY p.found_at DESC,p.id ASC'):
   position=as_dict(raw); pid=position.get('id'); score=one('SELECT * FROM scores WHERE position_id=?',(pid,)); application=one('SELECT * FROM applications WHERE position_id=?',(pid,)); item=map_position(position,score,application)
-  declared=salary(position); pending=ticket_count(pid)>0; item.update({'salary_min':declared[0],'salary_max':declared[1],'salary_currency':declared[2] or 'EUR','applied_at':nullable(application,'applied_at') if application else None,'written_at':nullable(application,'written_at') if application else None,'has_open_ticket':pending,'ticket_indicator':'pending' if pending else 'none','public_state':state(position.get('status'))})
+  declared=salary(position); pending=ticket_count(pid)>0; item.update({'salary_min':declared[0],'salary_max':declared[1],'salary_currency':declared[2] or 'EUR','applied_at':nullable(application,'applied_at') if application else None,'written_at':nullable(application,'written_at') if application else None,'has_open_ticket':pending,'ticket_indicator':'pending' if pending else 'none','public_state':state(position.get('status')),'office_lat':coord(position.get('office_lat'),90),'office_lon':coord(position.get('office_lon'),180),'office_address':text(position.get('office_address'),160)})
   matched=matching(item,filters)
   if matched is None: fail('positions_request_invalid')
   if matched: rows.append(item)
@@ -1688,6 +1692,19 @@ mod tests {
         // the Python reader serves this op and nothing else under it
         assert!(POSITIONS_READ_PY.contains("if op=='stats':"));
         assert!(POSITIONS_READ_PY.contains("mode=ro"));
+    }
+
+    #[test]
+    fn the_positions_list_carries_the_office_coordinates_only_when_they_are_on_the_globe() {
+        let keys = POSITIONS_READ_PY.split("LIST_KEYS=(").nth(1).unwrap().split(')').next().unwrap();
+        for key in ["'office_lat'", "'office_lon'", "'office_address'"] {
+            assert!(keys.contains(key), "{key} in LIST_KEYS");
+        }
+        // checked, not passed through: a value off the globe, garbled or absent is None
+        assert!(POSITIONS_READ_PY.contains("'office_lat':coord(position.get('office_lat'),90)"));
+        assert!(POSITIONS_READ_PY.contains("'office_lon':coord(position.get('office_lon'),180)"));
+        assert!(POSITIONS_READ_PY.contains("'office_address':text(position.get('office_address'),160)"));
+        assert!(POSITIONS_READ_PY.contains("value==value and -limit<=value<=limit"));
     }
 
     #[test]
