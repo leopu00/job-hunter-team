@@ -824,6 +824,37 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
     "The VPS did not present a valid ed25519 SSH key, so I cannot confirm its identity.",
     "Ask whoever manages the VPS to enable an ed25519 SSH key, then try again.",
   ),
+  // install.sh on a VPS, with its own exit: what stops rootless Podman there, for the administrator.
+  podman_missing: copy(
+    "Sulla VPS manca Podman, che serve per far girare il team.",
+    "Chiedi a chi gestisce la VPS di installare Podman, poi riprova.",
+    "Podman is not installed on the VPS, and the team needs it to run.",
+    "Ask whoever manages the VPS to install Podman, then try again.",
+  ),
+  podman_rootful_refused: copy(
+    "Sulla VPS l’installazione girerebbe come amministratore (root), ma il team si installa solo con Podman senza privilegi.",
+    "Chiedi a chi gestisce la VPS un utente normale, non root, e collegati con quello.",
+    "On the VPS the install would run as the administrator (root), but the team only installs with Podman without privileges.",
+    "Ask whoever manages the VPS for a regular user, not root, and connect with that one.",
+  ),
+  podman_compose_missing: copy(
+    "Sulla VPS c’è Podman, ma manca podman compose.",
+    "Chiedi a chi gestisce la VPS di installare podman-compose, poi riprova.",
+    "Podman is on the VPS, but podman compose is missing.",
+    "Ask whoever manages the VPS to install podman-compose, then try again.",
+  ),
+  podman_linger_missing: copy(
+    "Sulla VPS il tuo utente non può tenere acceso il team quando ti disconnetti.",
+    "Chiedi a chi gestisce la VPS di attivare il linger per il tuo utente (loginctl enable-linger), poi riprova.",
+    "On the VPS your user cannot keep the team running after you disconnect.",
+    "Ask whoever manages the VPS to enable lingering for your user (loginctl enable-linger), then try again.",
+  ),
+  podman_subuid_missing: copy(
+    "Sulla VPS il tuo utente non ha gli ID subordinati che servono a Podman senza privilegi.",
+    "Chiedi a chi gestisce la VPS di aggiungere il tuo utente a /etc/subuid e /etc/subgid, poi riprova.",
+    "On the VPS your user has no subordinate IDs, which Podman without privileges needs.",
+    "Ask whoever manages the VPS to add your user to /etc/subuid and /etc/subgid, then try again.",
+  ),
   host_key_missing: copy(
     "L’identità SSH della VPS non è ancora stata confermata.",
     "Conferma l’impronta della VPS prima di continuare.",

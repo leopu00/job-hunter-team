@@ -1865,11 +1865,14 @@ export JHT_PAIRING_TOKEN
 /bin/bash "$jht_installer" --pairing-token-env"#;
 
 /// REMOTE_INSTALL with the channel's installer arguments appended, each in
-/// single quotes. They are public build coordinates (commit, image ref,
+/// single quotes, after the runtime, which is fixed: a VPS always runs on
+/// rootless Podman, there is no choice in the form. They are public build
+/// coordinates (commit, image ref,
 /// digest), never a secret, and only a closed character set is accepted, so
 /// the quoting cannot be broken; production appends nothing.
 fn remote_install_command(channel_args: &[String]) -> Result<String, OnboardingError> {
     let mut command = REMOTE_INSTALL.to_owned();
+    command.push_str(REMOTE_INSTALL_RUNTIME);
     for arg in channel_args {
         if arg.is_empty()
             || !arg
@@ -1953,6 +1956,18 @@ const SSH_REFUSED_EXIT: i32 = 255;
 const REMOTE_INSTALL_NO_HASH_TOOL_EXIT: i32 = 86;
 /// `REMOTE_INSTALL`: the installer that arrived is not the one that was sent.
 const REMOTE_INSTALL_DIGEST_MISMATCH_EXIT: i32 = 87;
+/// The runtime of every VPS: rootless Podman, a fixed choice.
+const REMOTE_INSTALL_RUNTIME: &str = " --runtime podman";
+/// What install.sh says, with its own exit, when the VPS cannot run rootless
+/// Podman. Each is something only the VPS administrator can fix, so each has
+/// its own sentence in the catalog.
+const REMOTE_INSTALL_PODMAN_EXITS: [(i32, &str); 5] = [
+    (90, "podman_missing"),
+    (91, "podman_rootful_refused"),
+    (92, "podman_compose_missing"),
+    (93, "podman_linger_missing"),
+    (94, "podman_subuid_missing"),
+];
 
 fn ssh_refused(result: &Result<ProcessResult, &'static str>) -> bool {
     matches!(result, Ok(value) if value.code == SSH_REFUSED_EXIT)
@@ -1991,6 +2006,14 @@ fn ensure_remote_install_success(
         }
         Ok(value) if value.code == REMOTE_INSTALL_NO_HASH_TOOL_EXIT => {
             return Err(failure("installer_digest_missing"))
+        }
+        Ok(value) => {
+            if let Some((_, code)) = REMOTE_INSTALL_PODMAN_EXITS
+                .iter()
+                .find(|(exit, _)| *exit == value.code)
+            {
+                return Err(failure(code));
+            }
         }
         _ => {}
     }
@@ -4630,7 +4653,10 @@ mod tests {
 
     #[test]
     fn production_install_commands_are_unchanged() {
-        assert_eq!(super::remote_install_command(&[]).unwrap(), REMOTE_INSTALL);
+        assert_eq!(
+            super::remote_install_command(&[]).unwrap(),
+            format!("{REMOTE_INSTALL} --runtime podman")
+        );
         assert_eq!(
             super::local_install_args(&["JHT_SKIP_ONBOARD=1", "/bin/bash", "-s", "--"], &[]),
             ["JHT_SKIP_ONBOARD=1", "/bin/bash", "-s", "--"]
@@ -4646,13 +4672,13 @@ mod tests {
         assert_eq!(local[..4], ["JHT_SKIP_ONBOARD=1", "/bin/bash", "-s", "--"]);
         assert_eq!(local[4..], channel_args()[..]);
 
-        // The fixed remote script, then each argument in single quotes.
+        // The fixed remote script and runtime, then each argument in single quotes.
         let command = super::remote_install_command(&channel_args()).unwrap();
         let quoted: String = channel_args()
             .iter()
             .map(|arg| format!(" '{arg}'"))
             .collect();
-        assert_eq!(command, format!("{REMOTE_INSTALL}{quoted}"));
+        assert_eq!(command, format!("{REMOTE_INSTALL} --runtime podman{quoted}"));
     }
 
     /// The fixed remote script, run for real by the shell that runs it on
@@ -4683,7 +4709,10 @@ mod tests {
         .unwrap();
         assert!(output.status.success());
         // The token travels in the installer's environment, never in its arguments.
-        let mut expected = vec!["--pairing-token-env".to_owned()];
+        // A VPS always installs on rootless Podman, before the channel's arguments.
+        let mut expected = ["--pairing-token-env", "--runtime", "podman"]
+            .map(str::to_owned)
+            .to_vec();
         expected.extend(channel_args());
         assert_eq!(
             String::from_utf8(output.stdout)
@@ -5696,6 +5725,11 @@ mod tests {
             (exited(255), "ssh_unavailable"),
             (exited(87), "installer_digest_mismatch"),
             (exited(86), "installer_digest_missing"),
+            (exited(90), "podman_missing"),
+            (exited(91), "podman_rootful_refused"),
+            (exited(92), "podman_compose_missing"),
+            (exited(93), "podman_linger_missing"),
+            (exited(94), "podman_subuid_missing"),
             (exited(1), "runtime_install_failed"),
             (exited(74), "runtime_install_failed"),
             (Err("process_timeout"), "timeout"),
