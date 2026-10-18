@@ -1,0 +1,244 @@
+{
+  "languages": [
+    "it",
+    "en",
+    "de",
+    "es",
+    "fr",
+    "hu",
+    "pt"
+  ],
+  "_doc": "Sentences for the state of an agent (shared/skills/agent_state.py). {t} = a clock time, {d} = a duration; the consumer fills them. The reason is chosen by the computation, never written by the agent.",
+  "states": {
+    "spento": {
+      "icon": "⏻",
+      "tone": "grey",
+      "text": {
+        "it": "spento",
+        "en": "off",
+        "de": "aus",
+        "es": "apagado",
+        "fr": "éteint",
+        "hu": "leállítva",
+        "pt": "desligado"
+      }
+    },
+    "idle": {
+      "icon": "○",
+      "tone": "neutral",
+      "text": {
+        "it": "libero",
+        "en": "idle",
+        "de": "frei",
+        "es": "libre",
+        "fr": "libre",
+        "hu": "szabad",
+        "pt": "livre"
+      }
+    },
+    "lavora": {
+      "icon": "▶",
+      "tone": "green",
+      "text": {
+        "it": "lavora",
+        "en": "working",
+        "de": "arbeitet",
+        "es": "trabajando",
+        "fr": "travaille",
+        "hu": "dolgozik",
+        "pt": "a trabalhar"
+      }
+    },
+    "bloccato": {
+      "icon": "⏸",
+      "tone": "amber",
+      "text": {
+        "it": "bloccato",
+        "en": "blocked",
+        "de": "blockiert",
+        "es": "bloqueado",
+        "fr": "bloqué",
+        "hu": "blokkolva",
+        "pt": "bloqueado"
+      }
+    },
+    "aspetta_umano": {
+      "icon": "✋",
+      "tone": "blue",
+      "text": {
+        "it": "aspetta te",
+        "en": "waiting for you",
+        "de": "wartet auf dich",
+        "es": "te espera",
+        "fr": "t'attend",
+        "hu": "rád vár",
+        "pt": "espera por ti"
+      }
+    },
+    "sconosciuto": {
+      "icon": "?",
+      "tone": "grey",
+      "text": {
+        "it": "sconosciuto",
+        "en": "unknown",
+        "de": "unbekannt",
+        "es": "desconocido",
+        "fr": "inconnu",
+        "hu": "ismeretlen",
+        "pt": "desconhecido"
+      }
+    },
+    "avviato_mai_partito": {
+      "icon": "◌",
+      "tone": "grey",
+      "text": {
+        "it": "avviato, nessun turno",
+        "en": "started, never ran",
+        "de": "gestartet, nie gelaufen",
+        "es": "iniciado, sin turno",
+        "fr": "démarré, jamais lancé",
+        "hu": "elindult, nem dolgozott",
+        "pt": "iniciado, sem turno"
+      }
+    }
+  },
+  "reasons": {
+    "limite_5h": {
+      "text": {
+        "it": "limite di 5 ore · riprova {t}",
+        "en": "5-hour limit · retry {t}",
+        "de": "5-Stunden-Limit · erneut ab {t}",
+        "es": "límite de 5 h · reintenta a las {t}",
+        "fr": "limite de 5 h · réessaie à {t}",
+        "hu": "5 órás korlát · újra {t}-kor",
+        "pt": "limite de 5 h · tenta às {t}"
+      }
+    },
+    "limite_settimanale": {
+      "text": {
+        "it": "limite settimanale · riprova {t}",
+        "en": "weekly limit · retry {t}",
+        "de": "Wochenlimit · erneut ab {t}",
+        "es": "límite semanal · reintenta {t}",
+        "fr": "limite hebdomadaire · réessaie {t}",
+        "hu": "heti korlát · újra {t}",
+        "pt": "limite semanal · tenta {t}"
+      }
+    },
+    "limite_spesa_org": {
+      "text": {
+        "it": "tetto di spesa dell'organizzazione",
+        "en": "organization spend cap",
+        "de": "Ausgabenlimit der Organisation",
+        "es": "tope de gasto de la organización",
+        "fr": "plafond de dépenses de l'organisation",
+        "hu": "a szervezet költési kerete",
+        "pt": "teto de gastos da organização"
+      }
+    },
+    "limite_fornitore": {
+      "text": {
+        "it": "limite del fornitore",
+        "en": "provider limit",
+        "de": "Limit des Anbieters",
+        "es": "límite del proveedor",
+        "fr": "limite du fournisseur",
+        "hu": "a szolgáltató korlátja",
+        "pt": "limite do fornecedor"
+      }
+    },
+    "rete": {
+      "text": {
+        "it": "rete non raggiungibile",
+        "en": "network unreachable",
+        "de": "Netzwerk nicht erreichbar",
+        "es": "red inaccesible",
+        "fr": "réseau injoignable",
+        "hu": "a hálózat nem elérhető",
+        "pt": "rede inacessível"
+      }
+    },
+    "errore_fornitore": {
+      "text": {
+        "it": "errore del fornitore",
+        "en": "provider error",
+        "de": "Anbieterfehler",
+        "es": "error del proveedor",
+        "fr": "erreur du fournisseur",
+        "hu": "szolgáltatói hiba",
+        "pt": "erro do fornecedor"
+      }
+    },
+    "pausa_pacing": {
+      "text": {
+        "it": "in pausa per il ritmo · {d}",
+        "en": "paused for pacing · {d}",
+        "de": "Pause wegen Takt · {d}",
+        "es": "en pausa por ritmo · {d}",
+        "fr": "en pause (rythme) · {d}",
+        "hu": "szünet (ütemezés) · {d}",
+        "pt": "em pausa pelo ritmo · {d}"
+      }
+    },
+    "accesso_scaduto": {
+      "text": {
+        "it": "accesso scaduto: rifai il login",
+        "en": "login expired: sign in again",
+        "de": "Anmeldung abgelaufen: neu anmelden",
+        "es": "acceso caducado: vuelve a iniciar sesión",
+        "fr": "connexion expirée : reconnecte-toi",
+        "hu": "lejárt belépés: jelentkezz be újra",
+        "pt": "acesso expirado: entra de novo"
+      },
+      "tone": "red"
+    },
+    "turno_silenzioso": {
+      "text": {
+        "it": "turno aperto, nessun segnale da {d}",
+        "en": "turn open, no signal for {d}",
+        "de": "Durchlauf offen, seit {d} kein Signal",
+        "es": "turno abierto, sin señal desde hace {d}",
+        "fr": "tour ouvert, aucun signal depuis {d}",
+        "hu": "nyitott kör, {d} óta nincs jel",
+        "pt": "turno aberto, sem sinal há {d}"
+      }
+    },
+    "fonti_illeggibili": {
+      "text": {
+        "it": "non riesco a leggere i log",
+        "en": "cannot read the logs",
+        "de": "Logs nicht lesbar",
+        "es": "no puedo leer los registros",
+        "fr": "journaux illisibles",
+        "hu": "a naplók nem olvashatók",
+        "pt": "não consigo ler os registos"
+      }
+    },
+    "formato_non_riconosciuto": {
+      "text": {
+        "it": "formato dei log non riconosciuto",
+        "en": "log format not recognised",
+        "de": "Logformat unbekannt",
+        "es": "formato de registro no reconocido",
+        "fr": "format de journal inconnu",
+        "hu": "ismeretlen naplóformátum",
+        "pt": "formato de registo desconhecido"
+      }
+    },
+    "avvio_in_corso": {
+      "text": {
+        "it": "in avvio",
+        "en": "starting",
+        "de": "startet",
+        "es": "iniciando",
+        "fr": "démarrage",
+        "hu": "indul",
+        "pt": "a iniciar"
+      }
+    }
+  },
+  "not_emitted_by_the_module": [
+    "pausa_pacing",
+    "accesso_scaduto"
+  ]
+}
