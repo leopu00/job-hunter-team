@@ -119,7 +119,8 @@ def run_prune(host, current=CURRENT, previous=PREVIOUS, running=CURRENT, extra_e
         'UPGRADE_PRUNE_JSON=""\n'
         + 'JHT_IMAGE_REPOSITORIES="ghcr.io/leopu00/jht jht localhost/jht"\n'
         + "\n".join(wrapper_function(n) for n in
-                   ("upgrade_image_plain", "upgrade_prune_result", "upgrade_prune_old_images"))
+                   ("upgrade_image_plain", "upgrade_repo_is_jht", "upgrade_foreign_image_ids",
+                    "upgrade_prune_result", "upgrade_prune_old_images"))
         + f'\nupgrade_prune_old_images "{sha(current, host.style) if current else ""}" "{previous if previous in ("none", "sconosciuta", "") else sha(previous, host.style)}"\n'
         'echo "rc=$?"\necho "JSON=$UPGRADE_PRUNE_JSON"\n'
     )
@@ -252,8 +253,13 @@ def test_pruning_runs_once_after_the_commit_of_a_successful_upgrade():
 
 def test_every_other_use_of_the_pruning_is_the_definition():
     text = WRAPPER.read_text(encoding="utf-8")
-    uses = [m.start() for m in re.finditer(r"upgrade_prune_old_images", text)]
-    assert len(uses) == 2   # the definition and the single call in the upgrade
+    code = [line for line in text.splitlines() if "upgrade_prune_old_images" in line and not line.lstrip().startswith("#")]
+    # the definition, the single call in the upgrade and the single one in `jht clean-images`
+    assert sorted(line.strip() for line in code) == sorted([
+        "upgrade_prune_old_images() {",
+        'upgrade_prune_old_images "$candidate_image" "$old_image" || true',
+        'upgrade_prune_old_images "$current" "$previous" || true',
+    ]), code
 
 
 def test_the_json_contract_gains_image_prune_only_after_a_cleaning_upgrade():

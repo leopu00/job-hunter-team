@@ -16,7 +16,10 @@
  * speso token. Gli agenti gia' vivi non passano di qui e restano intatti.
  *
  * La frase che l'utente legge non e' scritta qui: viene dalla tabella
- * codice->frase (`disk.low` in shared/locales/*.json), la stessa del launcher.
+ * codice->frase (`disk.low.cli` in shared/locales/*.json). E' la frase di
+ * `disk.low` (quella del launcher e dell'app, senza comandi da terminale) con in
+ * piu' la via per recuperare spazio a disco pieno, `jht clean-images`: chi legge
+ * qui sta gia' in un terminale.
  *
  * Un volume che non si risolve vale «sconosciuto» e NON ferma niente: la
  * guardia rifiuta solo davanti a una misura che dice «sotto soglia».
@@ -135,6 +138,6 @@ export function readDisk(options = {}) {
 export function diskLowRefusal(options = {}) {
   const disk = readDisk(options);
   if (disk.level !== 'low') return null;
-  const phrase = tf('disk.low', `${disk.minFreePct}%`);
-  return { code: DISK_CODE_LOW, message: phrase === 'disk.low' ? '' : phrase, disk };
+  const phrase = tf('disk.low.cli', `${disk.minFreePct}%`);
+  return { code: DISK_CODE_LOW, message: phrase === 'disk.low.cli' ? '' : phrase, disk };
 }
