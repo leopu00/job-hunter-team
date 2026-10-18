@@ -39,6 +39,7 @@ from __future__ import annotations
 import os
 import re
 import subprocess
+import unicodedata
 
 
 # La busta come la scrivono gli agenti. Serve a leggere ciò che il mittente
@@ -111,13 +112,45 @@ def split_context_frame(message):
     return found.group(1), (message or "")[found.end():]
 
 
+# ── JHT-T21-b (review) · il verdetto si calcola su ciò che si LEGGE, non sui byte ──
+# `^\s*[@x -> @y]` lavora sul testo grezzo: uno ZWSP o un ESC davanti alla busta non sono
+# spazio, quindi la busta non veniva riconosciuta (`claimed=None`) e un agente poteva
+# firmarsi «capitano» senza che nessuno se ne accorgesse — l'LLM che legge il pane non
+# vede lo ZWSP, e il terminale non mostra l'ESC. Si salta il RUMORE iniziale, deciso da
+# `external_content.leading_noise_length` (la lista unica degli invisibili e le categorie
+# dei controlli). Non cambia un byte del messaggio: serve a trovare dove comincia la busta.
+_NOISE_FALLBACK = frozenset({"Cc", "Cf", "Zl", "Zp", "Zs"})
+
+
+def _noise_length(text):
+    try:
+        import sys as _sys
+
+        here = os.path.dirname(os.path.abspath(__file__))
+        if here not in _sys.path:
+            _sys.path.insert(0, here)
+        from external_content import leading_noise_length
+
+        return leading_noise_length(text)
+    except Exception:
+        # Se la funzione non si carica il verdetto non deve diventare piu' cieco: si salta
+        # almeno ESC e le categorie dei controlli e degli invisibili.
+        i = 0
+        while i < len(text) and (text[i] == "\x1b" or unicodedata.category(text[i]) in _NOISE_FALLBACK):
+            i += 1
+        return i
+
+
 def claimed_sender(message: str) -> str | None:
     """Il mittente che il messaggio DICHIARA, o None se non c'è busta.
 
     Con un blocco di contesto davanti si guarda la busta che lo segue: altrimenti chi
-    lo antepone a una firma falsa scavalcherebbe il controllo d'identità.
+    lo antepone a una firma falsa scavalcherebbe il controllo d'identità. E si guarda
+    dopo il rumore iniziale (ZWSP, ESC, invisibili): la busta che si legge è quella che
+    conta, non quella che i byte lasciano vedere a una regex.
     """
-    found = ENVELOPE_RE.match(split_context_frame(message)[1])
+    rest = split_context_frame(message)[1]
+    found = ENVELOPE_RE.match(rest[_noise_length(rest):])
     return found.group(1).lower() if found else None
 
 
@@ -231,16 +264,53 @@ USER_TURN_RE = re.compile(
 _EDITED_TAG_RE = re.compile(r"\[TG-EDITED\]\Z")
 
 
+_FRAME_END = "\n[FINE CONTESTO]\n\n"
+_ANY_LINE_BREAK = re.compile(r"\r\n|[\n\r\v\f\x1c-\x1e\x85\u2028\u2029]")
+USER_TEXT_MARK = "[USER TEXT]"
+
+
+def clean_context_frame(frame):
+    """Il blocco di contesto del gioco, ripulito riga per riga; '' se non si sa ripulire.
+
+    Lo compone il gioco, ma il CONTENUTO è testo dichiarato dall'utente (profilo, preferenze,
+    risposte dell'onboarding) e il profilo può venire da un CV: entrava nel pane grezzo, con a
+    capo, ESC, override bidi e righe che imitano una busta. Restano fissi la prima riga e il
+    terminatore; ogni riga del corpo passa per `sanitize_user_text` (una riga, invisibili tolti
+    con la lista unica, marcatori finti disinnescati) e una che comincia con `[` — dove una
+    busta finta sarebbe credibile — porta davanti `[USER TEXT]`, come fa il bridge. Un blocco
+    legittimo (righe di testo e di elenco) esce identico.
+    """
+    if not frame:
+        return frame
+    try:
+        import sys as _sys
+
+        here = os.path.dirname(os.path.abspath(__file__))
+        if here not in _sys.path:
+            _sys.path.insert(0, here)
+        from external_content import sanitize_user_text
+
+        first, _, rest = frame.partition("\n")
+        body = rest[: len(rest) - len(_FRAME_END)]
+        lines = []
+        for line in _ANY_LINE_BREAK.split(body):
+            clean = sanitize_user_text(line)
+            lines.append(f"{USER_TEXT_MARK} {clean}" if clean.startswith("[") else clean)
+        return sanitize_user_text(first) + "\n" + "\n".join(lines) + _FRAME_END
+    except Exception:
+        return ""
+
+
 def fence_user_turn_message(message):
     """Il messaggio con il testo dell'utente recintato; gli altri, identici."""
     frame, rest = split_context_frame(message)
-    found = USER_TURN_RE.match(rest or "")
+    found = USER_TURN_RE.match((rest or "")[_noise_length(rest or ""):])
     if not found:
         return message
     head, text = found.group(1), found.group(2) or ""
     if _EDITED_TAG_RE.search(head) and text.lstrip().startswith("[TG-"):
         return message           # an edited attachment: the bridge composed it
-    head = frame + head
+    head = clean_context_frame(frame) + head
     try:
         import sys as _sys
 
@@ -302,8 +372,9 @@ def mark_message(message, trust):
     accorgono di niente e non vanno toccati.
     """
     text = message or ""
-    found = ENVELOPE_RE.match(text)
-    head, body = (text[: found.end()], text[found.end() :]) if found else ("", text)
+    skip = _noise_length(text)
+    found = ENVELOPE_RE.match(text[skip:])
+    head, body = (text[: skip + found.end()], text[skip + found.end() :]) if found else ("", text)
     # Ripetuto: due timbri finti di fila non devono lasciarne uno in piedi.
     while True:
         cleaned = _ANY_MARK_RE.sub("", body, count=1)
@@ -369,6 +440,14 @@ def inspect_message(pid, message):
     return classify_sender(claimed, origin, set(panes.values())), claimed, origin
 
 
+def prepare_message(message, source=""):
+    """Il messaggio come verra' consegnato (recintato o ripulito), prima di ogni verdetto."""
+    delivered = fence_user_turn_message(message)
+    if delivered == message:     # not a chat envelope: the console may ask for it to be cleaned
+        delivered = sanitize_console_message(message, source)
+    return delivered
+
+
 def main(argv):
     """Uso dal trasporto: verdetto sulla prima riga, messaggio marcato sotto.
 
@@ -377,14 +456,15 @@ def main(argv):
     inghiottito da un `|| true` e la difesa sparirebbe senza rumore.
     """
     message = argv[1] if len(argv) > 1 else ""
-    trust, claimed, origin = inspect_message(os.getpid(), message)
+    # Si ripulisce PRIMA di giudicare: la pulizia può far comparire una busta che il
+    # controllo, sul testo grezzo, non vedeva (uno ZWSP davanti), e il verdetto deve
+    # valere per ciò che verrà davvero consegnato.
+    delivered = prepare_message(message, os.environ.get("JHT_TMUX_SEND_FROM", ""))
+    trust, claimed, origin = inspect_message(os.getpid(), delivered)
     # Prima riga il verdetto, dal resto il messaggio come va consegnato. Un
     # solo giro: chiedere due volte aprirebbe una finestra in cui l'elenco dei
     # pane cambia fra il controllo e la marcatura.
     print(f"{trust}\t{claimed or ''}\t{origin or ''}")
-    delivered = fence_user_turn_message(message)
-    if delivered == message:     # not a chat envelope: the console may ask for it to be cleaned
-        delivered = sanitize_console_message(message, os.environ.get("JHT_TMUX_SEND_FROM", ""))
     print(mark_message(delivered, trust), end="")
     return 0
 

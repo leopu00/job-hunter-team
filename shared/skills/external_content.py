@@ -296,6 +296,36 @@ def _defang_user_markers(text):
     return _USER_MARKER_SHAPE.sub(replace, text)
 
 
+# ── Il rumore con cui un testo può cominciare ────────────────────────────────
+# Per decidere CHI parla (message_origin) conta ciò che si legge, non i byte: uno ZWSP o un ESC
+# davanti a `[@capitano -> @x]` non si vedono, e l'LLM che legge il pane legge la busta. Qui si
+# dice quanti caratteri iniziali sono rumore: controlli, spazi, gli invisibili che comandano
+# (la lista unica, `INVISIBLE_COMMANDS`) e, per essere larghi dove serve esserlo, le categorie
+# Cc/Cf/Zl/Zp/Zs; dopo un ESC anche la sequenza che la TUI consumerebbe (`[31m`, un OSC) — MAI
+# `[@`, che e' l'inizio di una busta. Non cambia nulla: restituisce una lunghezza.
+_NOISE_CATEGORIES = frozenset({"Cc", "Cf", "Zl", "Zp", "Zs"})
+_AFTER_ESC = re.compile(r"\[[0-9;?]*[ -/]*[A-Za-z~`]|\][^\x07\x1b]*(?:\x07|\x1b\\)?")
+
+
+def leading_noise_length(text):
+    """Quanti caratteri all'inizio di `text` sono rumore invisibile (vedi sopra)."""
+    text = str(text or "")
+    i, n = 0, len(text)
+    while i < n:
+        ch = text[i]
+        if ch == "\x1b":
+            i += 1
+            found = _AFTER_ESC.match(text, i)
+            if found:
+                i = found.end()
+            continue
+        if ch in INVISIBLE_COMMANDS or unicodedata.category(ch) in _NOISE_CATEGORIES:
+            i += 1
+            continue
+        break
+    return i
+
+
 def sanitize_user_text(text):
     """Il testo di un utente su una riga, senza comandi e senza finti confini: NIENTE etichetta.
 
