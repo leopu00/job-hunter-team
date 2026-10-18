@@ -10,7 +10,7 @@
 
 import { APICallError } from "ai";
 import { MockLanguageModelV4 } from "ai/test";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 
 import { AiSdkProvider, attempt } from "../src/core/provider/ai-sdk.ts";
@@ -627,11 +627,10 @@ describe("a 429 from the provider", () => {
 
   /**
    * The ceiling on the waits of one call. Asserted as a RANGE and over twenty
-   * runs, not as a number: a `retry-after: 30` is jittered before the 30 s cap
-   * clips it, so the wait lands anywhere in 22.5-30 s. The first version of this
-   * test asserted `[30_000]` and passed whenever the jitter happened to land at
-   * or above 1.0 — green about two runs in three, red on master for the MASTER
-   * (26331 against 30000). A random path is not measured by one run.
+   * runs, not as a number: a `retry-after: 30` is jittered, and the jitter only
+   * goes UP (T10), so the wait lands anywhere in 30-37.5 s. The first version of
+   * this test asserted `[30_000]` and passed whenever the jitter happened to land
+   * at or above 1.0 — a random path is not measured by one run.
    */
   it("stops waiting once the waits of one call add up to the runtime's ceiling", async () => {
     for (let i = 0; i < 20; i++) {
@@ -649,8 +648,8 @@ describe("a 429 from the provider", () => {
       // One wait taken, jittered under the per-wait cap; the second would cross
       // the total, so it is not taken and the call is refused instead.
       expect(waits).toHaveLength(1);
-      expect(waits[0]).toBeGreaterThanOrEqual(22_500);
-      expect(waits[0]).toBeLessThanOrEqual(30_000);
+      expect(waits[0]).toBeGreaterThanOrEqual(30_000);
+      expect(waits[0]).toBeLessThanOrEqual(37_500);
       expect(calls).toBe(2);
       expect(String((error as Error).message)).toContain("45000 ms this runtime waits per call");
       expect(String((error as Error).message)).toContain("did send a `retry-after`");
@@ -703,31 +702,83 @@ describe("the wait before the second attempt", () => {
     expect(seen.size).toBeGreaterThan(20);
   });
 
-  it("obeys the provider's retry-after, and never waits more than half a minute", async () => {
-    for (const ms of await run(busy({ "retry-after": "10" }))) {
-      expect(ms).toBeGreaterThanOrEqual(7_500);
-      expect(ms).toBeLessThanOrEqual(12_500);
+  it("obeys the provider's retry-after: never less than asked, only spread upwards (T10)", async () => {
+    for (let i = 0; i < 50; i++) {
+      for (const ms of await run(busy({ "retry-after": "10" }))) {
+        expect(ms).toBeGreaterThanOrEqual(10_000);
+        expect(ms).toBeLessThanOrEqual(12_500);
+      }
     }
-    // Ten minutes asked for: jitter cannot bring it under the cap, so it is the cap.
-    expect((await run(busy({ "retry-after": "600" })))[0]).toBe(30_000);
-    // A header that is not a number is no instruction: the usual wait, jitter and all
-    // (2.5 s ± 25 % — the bound moved with the base, and this line did not, 23/09).
-    for (let i = 0; i < 20; i++) {
-      const usual = (await run(busy({ "retry-after": "Wed, 21 Oct 2026 07:28:00 GMT" })))[0]!;
-      expect(usual, `${usual}`).toBeGreaterThan(1_685);
-      expect(usual, `${usual}`).toBeLessThanOrEqual(3_125);
+  });
+
+  // The minimum, not the average: with the dice at their lowest the wait IS the figure asked for.
+  // The first version of this code jittered the figure too, 0.75-1.25, so a quarter of the retries
+  // landed before the time the provider named and were refused again.
+  it("waits exactly what was asked when the jitter draws its lowest, and never less", async () => {
+    const random = vi.spyOn(Math, "random").mockReturnValue(0);
+    try {
+      expect(await run(busy({ "retry-after": "8" }))).toEqual([8_000]);
+      expect(await run(busy({ "retry-after": "7.5" }))).toEqual([7_500]);
+      expect(await run(busy({ "Retry-After": "12" }))).toEqual([12_000]);
+    } finally {
+      random.mockRestore();
+    }
+  });
+
+  // An HTTP-date is read against the clock the loop was given, so the test fixes it.
+  it("reads a retry-after given as an HTTP-date against a fixed clock", async () => {
+    const at = Date.UTC(2026, 9, 19, 10, 0, 0);
+    const random = vi.spyOn(Math, "random").mockReturnValue(0);
+    try {
+      const waits: number[] = [];
+      let calls = 0;
+      await attempt(
+        async () => {
+          calls += 1;
+          if (calls < 2) throw busy({ "retry-after": new Date(at + 20_000).toUTCString() });
+          return "ok";
+        },
+        { sleep: async (ms: number) => void waits.push(ms), now: () => at },
+      );
+      expect(waits).toEqual([20_000]);
+      // A date already past is a wait of nothing, not a negative one and not the usual backoff.
+      waits.length = 0;
+      calls = 0;
+      await attempt(
+        async () => {
+          calls += 1;
+          if (calls < 2) throw busy({ "retry-after": new Date(at - 60_000).toUTCString() });
+          return "ok";
+        },
+        { sleep: async (ms: number) => void waits.push(ms), now: () => at },
+      );
+      expect(waits).toEqual([0]);
+    } finally {
+      random.mockRestore();
+    }
+  });
+
+  it("takes a header that is neither seconds nor a GMT date for no instruction: the usual wait, jitter and all", async () => {
+    // 2.5 s ± 25 % — the bound moved with the base, and this line did not, 23/09. "-5" is a
+    // year to Date.parse, and a date with no zone is the local clock: none is read.
+    for (const raw of ["soon", "-5", "+5", "", "Wed, 21 Oct 2026 07:28:00"]) {
+      for (let i = 0; i < 10; i++) {
+        const usual = (await run(busy({ "retry-after": raw })))[0]!;
+        expect(usual, `${raw} -> ${usual}`).toBeGreaterThan(1_685);
+        expect(usual, `${raw} -> ${usual}`).toBeLessThanOrEqual(3_125);
+      }
     }
   });
 
   it("ends the wait when the run is stopped during it, instead of sleeping on", async () => {
-    // A retry-after of ten minutes, capped at thirty seconds: a stop must not wait for it.
+    // A retry-after of twenty seconds: a stop must not wait for it.
     const stop = new AbortController();
     let calls = 0;
     const started = Date.now();
     const running = attempt(
       async () => {
         calls += 1;
-        throw busy({ "retry-after": "600" });
+        throw busy({ "retry-after": "20" });
       },
       { signal: stop.signal },
     );
@@ -767,5 +818,98 @@ describe("the wait before the second attempt", () => {
       ),
     ).rejects.toMatchObject({ statusCode: 429 });
     expect(calls).toBe(1);
+  });
+});
+
+/**
+ * T10: a 429 that outlives the backoff says WHAT it was — a burst to wait out
+ * (`rate_limit_429`) or a spent window (`quota`) — and how long the provider
+ * asked, instead of "waited 30 s and gave up".
+ */
+describe("a 429 that is not waited for", () => {
+  const AT = Date.UTC(2026, 9, 19, 10, 0, 0);
+  const refuse = async (headers?: Record<string, string>) => {
+    const waits: number[] = [];
+    let calls = 0;
+    const error = await attempt(
+      async () => {
+        calls += 1;
+        throw busy(headers);
+      },
+      { sleep: async (ms: number) => void waits.push(ms), now: () => AT },
+    ).catch((e: unknown) => e);
+    return { error, waits, calls };
+  };
+
+  it("fails at once on a retry-after past the 45 s ceiling, carrying what was asked and when it ends", async () => {
+    const { error, waits, calls } = await refuse({ "retry-after": "50" });
+    expect(waits).toEqual([]);
+    expect(calls).toBe(1);
+    expect(error).toMatchObject({
+      code: "provider_rate_limited",
+      rateLimit: { kind: "rate_limit_429", retryAfterMs: 50_000, resumeAt: new Date(AT + 50_000).toISOString() },
+    });
+    expect(String((error as Error).message)).toContain("more than the 45000 ms this runtime waits per call");
+  });
+
+  it("calls a wait of more than five minutes a spent window, not a burst", async () => {
+    const { error, waits, calls } = await refuse({ "retry-after": "600" });
+    expect(waits).toEqual([]);
+    expect(calls).toBe(1);
+    expect(error).toMatchObject({
+      code: "provider_rate_limited",
+      rateLimit: { kind: "quota", retryAfterMs: 600_000, resumeAt: new Date(AT + 600_000).toISOString() },
+    });
+    const said = String((error as Error).message);
+    expect(said).toContain("a spent window");
+    // The sentence of a burst would tell the person the wrong thing.
+    expect(said).not.toContain("requests per minute");
+    // The runtime never names the window: the headers of a 429 do not prove which one it is.
+    expect((error as { rateLimit: object }).rateLimit).not.toHaveProperty("reason");
+  });
+
+  it("reads the same figure from an HTTP-date, and the boundary sits at five minutes exactly", async () => {
+    const date = new Date(AT + 3_600_000).toUTCString();
+    expect((await refuse({ "retry-after": date })).error).toMatchObject({ rateLimit: { kind: "quota", retryAfterMs: 3_600_000 } });
+    expect((await refuse({ "retry-after": "300" })).error).toMatchObject({ rateLimit: { kind: "rate_limit_429" } });
+    expect((await refuse({ "retry-after": "301" })).error).toMatchObject({ rateLimit: { kind: "quota" } });
+  });
+
+  it("says a burst without a figure as a burst, with no wait it never heard", async () => {
+    const { error, calls } = await refuse();
+    expect(calls).toBe(4);
+    const details = (error as { rateLimit: Record<string, unknown> }).rateLimit;
+    expect(details["kind"]).toBe("rate_limit_429");
+    expect(details).not.toHaveProperty("retryAfterMs");
+    expect(details).not.toHaveProperty("resumeAt");
+  });
+
+  it("saves the headers that say how long and why, and nothing else", async () => {
+    const { error } = await refuse({
+      "retry-after": "600",
+      "x-ratelimit-reset-requests": "6m0s",
+      "x-ratelimit-remaining-tokens": "0",
+      "anthropic-ratelimit-requests-reset": "2026-10-19T10:10:00Z",
+      authorization: "Bearer sk-live-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "set-cookie": "session=abc",
+      "x-request-id": "req_123",
+      // A header of the family that carries something that looks like a secret is dropped by its value.
+      "x-ratelimit-key": "sk-proj-abcdefghijklmnopqrstuvwxyz0123456789",
+      "x-ratelimit-owner": "Bearer abc",
+    });
+    expect((error as { rateLimit: { headers: unknown } }).rateLimit.headers).toEqual({
+      "retry-after": "600",
+      "x-ratelimit-reset-requests": "6m0s",
+      "x-ratelimit-remaining-tokens": "0",
+      "anthropic-ratelimit-requests-reset": "2026-10-19T10:10:00Z",
+    });
+  });
+
+  it("finds the 429 and its headers when the SDK wrapped it", async () => {
+    const wrapped = new Error("retries exhausted", { cause: busy({ "retry-after": "900" }) });
+    const error = await attempt(async () => {
+      throw wrapped;
+    }, { sleep: async () => {}, now: () => AT }).catch((e: unknown) => e);
+    expect(error).toMatchObject({ code: "provider_rate_limited", rateLimit: { kind: "quota", retryAfterMs: 900_000 } });
   });
 });

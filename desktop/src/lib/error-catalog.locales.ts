@@ -825,6 +825,41 @@ const COPY_BY_ENGLISH_TEXT: Readonly<Record<string, ErrorTranslations>> = {
     hu: ["A VPS nem mutatott be érvényes ed25519 SSH-kulcsot, ezért nem tudom megerősíteni az azonosságát.", "Kérd meg a VPS üzemeltetőjét, hogy engedélyezzen egy ed25519 SSH-kulcsot, majd próbáld újra."],
     pt: ["A VPS não apresentou uma chave SSH ed25519 válida, por isso não consigo confirmar a sua identidade.", "Pede a quem gere a VPS que ative uma chave SSH ed25519 e tenta novamente."],
   },
+  "The team is slowing down on purpose: this is a limit of the app, not of your provider.": {
+    de: ["Das Team bremst absichtlich: Das ist ein Limit der App, nicht deines Anbieters.", "Es läuft von selbst weiter. Du musst nichts tun."],
+    es: ["El equipo va más despacio a propósito: es un límite de la aplicación, no de tu proveedor.", "Se reanuda solo. No tienes que hacer nada."],
+    fr: ["L’équipe ralentit volontairement : c’est une limite de l’application, pas de ton fournisseur.", "Elle reprend toute seule. Tu n’as rien à faire."],
+    hu: ["A csapat szándékosan lassít: ez az alkalmazás korlátja, nem a szolgáltatódé.", "Magától folytatódik. Nincs teendőd."],
+    pt: ["A equipa está a abrandar de propósito: é um limite da aplicação, não do teu fornecedor.", "Retoma sozinha. Não tens de fazer nada."],
+  },
+  "The provider asked us to wait a moment (error 429): your subscription is not used up.": {
+    de: ["Der Anbieter hat um kurze Wartezeit gebeten (Fehler 429): Dein Abo ist nicht aufgebraucht.", "Ich versuche es nach der genannten Wartezeit selbst erneut. Es sind keine Daten verloren gegangen."],
+    es: ["El proveedor ha pedido esperar un momento (error 429): tu suscripción no está agotada.", "Lo intento de nuevo yo solo tras la espera indicada. No se ha perdido ningún dato."],
+    fr: ["Le fournisseur a demandé d’attendre un instant (erreur 429) : ton abonnement n’est pas épuisé.", "Je réessaie tout seul après l’attente indiquée. Aucune donnée n’a été perdue."],
+    hu: ["A szolgáltató várakozást kért (429-es hiba): az előfizetésed nem merült ki.", "A jelzett várakozás után magam újrapróbálom. Nem veszett el adat."],
+    pt: ["O fornecedor pediu para esperar um momento (erro 429): a tua subscrição não está esgotada.", "Tento de novo sozinho depois da espera indicada. Não se perdeu nenhum dado."],
+  },
+  "Your subscription limits are used up until {time}.": {
+    de: ["Die Limits deines Abos sind bis {time} aufgebraucht.", "Versuche es nach {time} erneut. Es ist nichts verloren gegangen."],
+    es: ["Los límites de tu suscripción están agotados hasta las {time}.", "Vuelve a intentarlo después de las {time}. No se ha perdido nada."],
+    fr: ["Les limites de ton abonnement sont épuisées jusqu’à {time}.", "Réessaie après {time}. Rien n’a été perdu."],
+    hu: ["Az előfizetésed korlátai {time}-ig ki vannak merítve.", "Próbáld újra {time} után. Semmi sem veszett el."],
+    pt: ["Os limites da tua subscrição estão esgotados até às {time}.", "Tenta de novo depois das {time}. Não se perdeu nada."],
+  },
+  "The agent was started but its program never came up.": {
+    de: ["Der Agent wurde gestartet, aber sein Programm ist nie angelaufen.", "Starte das Team neu. Wenn es wieder passiert, sende einen Bericht aus den Einstellungen."],
+    es: ["El agente se inició pero su programa nunca arrancó.", "Reinicia el equipo. Si vuelve a ocurrir, envía un informe desde los ajustes."],
+    fr: ["L’agent a été lancé mais son programme n’a jamais démarré.", "Redémarre l’équipe. Si cela se reproduit, envoie un signalement depuis les réglages."],
+    hu: ["Az ügynök el lett indítva, de a programja sosem indult el.", "Indítsd újra a csapatot. Ha megismétlődik, küldj jelentést a beállításokból."],
+    pt: ["O agente foi iniciado mas o seu programa nunca arrancou.", "Reinicia a equipa. Se voltar a acontecer, envia um relatório pelas definições."],
+  },
+  "The provider did not give a usable answer: this is not a limit of your subscription.": {
+    de: ["Der Anbieter hat keine brauchbare Antwort geliefert: Das ist kein Limit deines Abos.", "Ich versuche es selbst erneut. Wenn es anhält, prüfe den Status des Anbieters."],
+    es: ["El proveedor no dio una respuesta utilizable: no es un límite de tu suscripción.", "Lo intento de nuevo yo solo. Si sigue así, revisa el estado del proveedor."],
+    fr: ["Le fournisseur n’a pas donné de réponse exploitable : ce n’est pas une limite de ton abonnement.", "Je réessaie tout seul. Si cela continue, vérifie l’état du fournisseur."],
+    hu: ["A szolgáltató nem adott használható választ: ez nem az előfizetésed korlátja.", "Magam újrapróbálom. Ha folytatódik, nézd meg a szolgáltató állapotát."],
+    pt: ["O fornecedor não deu uma resposta utilizável: não é um limite da tua subscrição.", "Tento de novo sozinho. Se continuar, verifica o estado do fornecedor."],
+  },
 };
 
 function translated(englishText: string): ErrorTranslations {
@@ -920,6 +955,14 @@ export const ERROR_CATALOG_LOCALES: Readonly<Record<string, ErrorTranslations>> 
   session_closed: translated("The provider sign-in session is no longer open."),
   provider_limits_exhausted: translated("Your subscription limits are used up until {time}: if the team started now it would stop right away."),
   provider_limits_unverified: translated("Provider limits not verified: the team started without knowing how much of your subscription is left."),
+  throttled_local: translated("The team is slowing down on purpose: this is a limit of the app, not of your provider."),
+  rate_limited: translated("The team is slowing down on purpose: this is a limit of the app, not of your provider."),
+  rate_limited_burst: translated("The team is slowing down on purpose: this is a limit of the app, not of your provider."),
+  rate_limited_daily: translated("The team is slowing down on purpose: this is a limit of the app, not of your provider."),
+  rate_limit_429: translated("The provider asked us to wait a moment (error 429): your subscription is not used up."),
+  quota: translated("Your subscription limits are used up until {time}."),
+  runtime_not_started: translated("The agent was started but its program never came up."),
+  provider_failed: translated("The provider did not give a usable answer: this is not a limit of your subscription."),
 
   team_start_failed: translated("The team did not start."),
   team_verify_failed: translated("The Assistant and the Captain are not both running."),

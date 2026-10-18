@@ -28,13 +28,38 @@ export type HarnessErrorCode =
   | "hub_unreachable"
   | "hub_failed";
 
+/**
+ * Which window of a plan is spent. The names are the agent-state vocabulary's
+ * (`shared/skills/agent_state.py`), not a second one: the runtime sets one only
+ * when it can prove it.
+ */
+export const QUOTA_REASONS = ["limite_5h", "limite_settimanale", "limite_spesa_org"] as const;
+export type QuotaReason = (typeof QUOTA_REASONS)[number];
+
+/**
+ * What the provider's 429 said, kept on the error for whoever manages the
+ * team. `rate_limit_429` is a burst to wait out; `quota` is a spent window.
+ */
+export interface RateLimitDetails {
+  kind: "rate_limit_429" | "quota";
+  /** What the provider asked to wait, in ms, when it asked. */
+  retryAfterMs?: number;
+  /** When that wait ends, ISO 8601 on this computer's clock. */
+  resumeAt?: string;
+  /** `retry-after` and the `…ratelimit…` headers, plain values only. */
+  headers: Record<string, string>;
+  reason?: QuotaReason;
+}
+
 export class HarnessError extends Error {
   readonly code: HarnessErrorCode;
+  readonly rateLimit?: RateLimitDetails;
 
-  constructor(code: HarnessErrorCode, message: string, options?: { cause?: unknown }) {
-    super(message, options);
+  constructor(code: HarnessErrorCode, message: string, options?: { cause?: unknown; rateLimit?: RateLimitDetails }) {
+    super(message, options?.cause === undefined ? undefined : { cause: options.cause });
     this.name = "HarnessError";
     this.code = code;
+    if (options?.rateLimit) this.rateLimit = options.rateLimit;
   }
 }
 

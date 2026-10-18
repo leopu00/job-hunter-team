@@ -110,9 +110,12 @@ export function loadTokens(file: string): Map<string, string> {
 
 class HttpError extends Error {
   readonly status: number;
-  constructor(status: number, message: string) {
+  /** Fields the body carries next to `error`: a code a caller can switch on. */
+  readonly fields: Record<string, unknown>;
+  constructor(status: number, message: string, fields: Record<string, unknown> = {}) {
     super(message);
     this.status = status;
+    this.fields = fields;
   }
 }
 
@@ -163,7 +166,14 @@ export function createHub(options: HubOptions): Server {
   const within = (log: Map<string, number[]>, agent: string, limit: { max: number; windowMs: number }, what: string) => {
     const at = now();
     const window = (log.get(agent) ?? []).filter((t) => at - t < limit.windowMs);
-    if (window.length >= limit.max) throw new HttpError(429, `${what} limit reached (${limit.max} per ${Math.round(limit.windowMs / 60_000)} min).`);
+    if (window.length >= limit.max) {
+      // OUR limit, not the provider's: the body says so with a code of its own, and when the oldest slot frees.
+      const retryAfterS = Math.max(1, Math.ceil((window[0]! + limit.windowMs - at) / 1000));
+      throw new HttpError(429, `${what} limit reached (${limit.max} per ${Math.round(limit.windowMs / 60_000)} min).`, {
+        code: "throttled_local",
+        retry_after_s: retryAfterS,
+      });
+    }
     window.push(at);
     log.set(agent, window);
     const release = () => {
@@ -356,7 +366,7 @@ export function createHub(options: HubOptions): Server {
       }
       reply(res, 200, await handle(path, agentOf(req.headers.authorization), body));
     } catch (error) {
-      if (error instanceof HttpError) reply(res, error.status, { error: error.message });
+      if (error instanceof HttpError) reply(res, error.status, { error: error.message, ...error.fields });
       else reply(res, 500, { error: "The hub failed on this request." });
     }
   };
