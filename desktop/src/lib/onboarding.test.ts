@@ -140,7 +140,7 @@ describe("loadOnboardingGate", () => {
   it("offers only an opaque account-scoped id for an existing VPS team", async () => {
     const { client } = fakeClient({
       milestones: { data: { vps_setup_completed_at: "2026-01-01T00:00:00Z" }, error: null },
-      team: { data: { id: "00000000-0000-4000-8000-000000000001" }, error: null },
+      team: { data: { user_id: "00000000-0000-4000-8000-000000000001" }, error: null },
     });
     await expect(loadOnboardingGate(client, USER, markerStore())).resolves.toMatchObject({
       phase: "required",

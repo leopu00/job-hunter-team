@@ -1,7 +1,6 @@
 /**
  * The operating-system boundary around `bash`, as Codex draws it in full-auto.
- * Ported from Home Hunter Team (f8cf133, 1a507bf), with this runtime's
- * credential names.
+ * Credential names are this runtime's own.
  *
  * The permission policy decides whether a call runs; it cannot see what a
  * shell command touches, because a command names no paths. This does: every

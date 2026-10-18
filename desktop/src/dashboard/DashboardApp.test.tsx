@@ -1,4 +1,4 @@
-import { act, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { connectDirectChat, directChatStatus, reconnectDirectChat } from "../lib/direct-chat";
@@ -18,7 +18,9 @@ import {
 } from "../lib/local-profile";
 import { clearGoogleIdentitySelection, googleIdentitySelected } from "../lib/identity-choice";
 import { readDesktopPlatform } from "../lib/desktop-platform";
+import { openRuntimeLog, runtimeLogPath } from "../lib/runtime-log";
 import { describeError, ERROR_CATALOG } from "../lib/error-catalog";
+import { existingTeamReadOnly } from "../lib/existing-team-readonly";
 import type { ExistingTeamConnectModalProps } from "../onboarding/ExistingTeamConnectModal";
 import {
   loadOnboardingGate,
@@ -36,6 +38,7 @@ import {
   prepareOnboardingRuntime,
   probeOnboardingSshHostKey,
   readOnboardingSnapshot,
+  readPreviousLocalData,
   recreateOnboardingPodmanMachine,
   resumeOnboardingSnapshot,
   resumeOnboardingTeamStart,
@@ -46,6 +49,7 @@ import {
 import { DASHBOARD_PAGE, goTo, LOGIN_PAGE } from "../lib/pages";
 import { useSession } from "../lib/supabase";
 import { navigate } from "../shell/router";
+import { existingTeamBridge } from "../lib/existing-team";
 import DashboardApp from "./DashboardApp";
 
 vi.mock("../lib/supabase", () => ({
@@ -73,6 +77,7 @@ vi.mock("../lib/onboarding-runtime", () => ({
   prepareOnboardingRuntime: vi.fn(),
   probeOnboardingSshHostKey: vi.fn(),
   readOnboardingSnapshot: vi.fn(),
+  readPreviousLocalData: vi.fn(),
   recreateOnboardingPodmanMachine: vi.fn(),
   resumeOnboardingSnapshot: vi.fn(),
   resumeOnboardingTeamStart: vi.fn(),
@@ -80,6 +85,10 @@ vi.mock("../lib/onboarding-runtime", () => ({
   startOnboardingProviderLogin: vi.fn(),
   startOnboardingTeam: vi.fn(),
 }));
+vi.mock("../lib/existing-team", async (importOriginal) => {
+  const original = await importOriginal<typeof import("../lib/existing-team")>();
+  return { ...original, existingTeamBridge: { ...original.existingTeamBridge, reopen: vi.fn() } };
+});
 vi.mock("../lib/direct-chat", () => ({
   connectDirectChat: vi.fn(),
   directChatStatus: vi.fn(),
@@ -104,12 +113,17 @@ vi.mock("../lib/identity-choice", () => ({
   googleIdentitySelected: vi.fn(),
 }));
 vi.mock("../shell/router", () => ({ navigate: vi.fn() }));
+vi.mock("../lib/runtime-log", () => ({
+  runtimeLogPath: vi.fn(async () => "C:\\Users\\prova\\AppData\\Local\\ai.jobhunterteam.desktop\\logs\\runtime.log"),
+  openRuntimeLog: vi.fn(async () => true),
+}));
 vi.mock("../lib/desktop-platform", () => ({ readDesktopPlatform: vi.fn() }));
 vi.mock("../shell/Shell", () => ({
-  default: ({ onLogout }: { onLogout?: () => Promise<void> }) => (
+  default: ({ onLogout, onCloseReadOnly }: { onLogout?: () => Promise<void>; onCloseReadOnly?: () => void }) => (
     <main data-testid="shell">
       Shell
       {onLogout && <button type="button" onClick={() => void onLogout()}>local-logout</button>}
+      {onCloseReadOnly && <button type="button" onClick={onCloseReadOnly}>close-read-only</button>}
     </main>
   ),
 }));
@@ -121,6 +135,7 @@ vi.mock("../onboarding", () => ({
     return (
       <section data-testid="onboarding">
         <p>platform:{props.platform}</p>
+        <p>previous-local-data:{String(props.previousLocalData ?? false)}</p>
         <p>{props.runtime.status}{stage}</p>
         {"message" in props.runtime && <p>{props.runtime.message}</p>}
         {props.runtime.status === "failed" && props.runtime.action && <p>Cosa fare: {props.runtime.action}</p>}
@@ -168,6 +183,10 @@ vi.mock("../onboarding", () => ({
         {props.runtime.status === "failed" && props.runtime.retryable === false && (
           <button type="button" onClick={props.onExitFailure}>exit-failure</button>
         )}
+        {props.runtimeLogPath && <p>runtime-log:{props.runtimeLogPath}</p>}
+        {props.onOpenRuntimeLog && (
+          <button type="button" onClick={() => void props.onOpenRuntimeLog?.()}>open-runtime-log</button>
+        )}
         {props.runtime.status === "failed" && props.runtime.code === "podman_machine_mounts_home" && props.onRecreatePodmanMachine && (
           <button type="button" onClick={() => void props.onRecreatePodmanMachine?.().catch(() => undefined)}>recreate-podman-machine</button>
         )}
@@ -197,6 +216,7 @@ vi.mock("../onboarding/ExistingTeamConnectModal", () => ({
         <button type="button" onClick={props.onCancel}>cancel-existing-team</button>
         <button type="button" onClick={() => void props.onConnected(result(false))}>connect-existing-team-incomplete</button>
         <button type="button" onClick={() => void props.onConnected(result(true))}>connect-existing-team-ready</button>
+        <button type="button" onClick={() => props.onReadOnlyConnected({ readiness: false, snapshot: result(false) })}>connect-existing-team-read-only</button>
       </section>
     );
   },
@@ -253,8 +273,11 @@ async function reachAssistant(user: ReturnType<typeof userEvent.setup>) {
 describe("DashboardApp onboarding router", () => {
   beforeEach(() => {
     vi.resetAllMocks();
+    vi.mocked(runtimeLogPath).mockResolvedValue(null);
+    vi.mocked(openRuntimeLog).mockResolvedValue(false);
     localStorage.clear();
     vi.mocked(readDesktopPlatform).mockResolvedValue("macos");
+    vi.mocked(readPreviousLocalData).mockResolvedValue(false);
     vi.mocked(closeOnboardingProviderLogin).mockResolvedValue();
     vi.mocked(confirmOnboardingSshHostKey).mockResolvedValue();
     vi.mocked(sendOnboardingProviderInput).mockResolvedValue();
@@ -262,6 +285,8 @@ describe("DashboardApp onboarding router", () => {
     vi.mocked(directChatStatus).mockResolvedValue({ state: "ready" });
     vi.mocked(reconnectDirectChat).mockResolvedValue({ state: "ready" });
     vi.mocked(resumeOnboardingTeamStart).mockResolvedValue(TEAM_READY);
+    // no saved existing team unless a test says so: the usual resume
+    vi.mocked(existingTeamBridge.reopen).mockRejectedValue({ code: "existing_team_runtime_candidate_required" });
     vi.mocked(activateDesktopAccountScope).mockResolvedValue();
     vi.mocked(activateDesktopLocalScope).mockResolvedValue();
     vi.mocked(clearDesktopAccountScope).mockResolvedValue();
@@ -307,6 +332,24 @@ describe("DashboardApp onboarding router", () => {
     expect(activateDesktopLocalScope).toHaveBeenCalledWith("opaque-local-profile");
     expect(activateDesktopAccountScope).not.toHaveBeenCalled();
     expect(loadOnboardingGate).not.toHaveBeenCalled();
+  });
+
+  it("tells the onboarding about an earlier version's ~/.jht, as the native side found it", async () => {
+    vi.mocked(readDesktopPlatform).mockResolvedValue("windows");
+    vi.mocked(readPreviousLocalData).mockResolvedValue(true);
+    vi.mocked(useSession).mockReturnValue({ session: null, loading: false });
+    vi.mocked(localIdentitySelected).mockReturnValue(true);
+    vi.mocked(readLocalProfile).mockReturnValue({
+      profileId: "opaque-local-profile",
+      displayName: "Ada Locale",
+    });
+
+    render(<DashboardApp />);
+
+    const onboarding = await screen.findByTestId("onboarding");
+    expect(onboarding).toHaveTextContent("platform:windows");
+    await waitFor(() => expect(onboarding).toHaveTextContent("previous-local-data:true"));
+    expect(readPreviousLocalData).toHaveBeenCalledTimes(1);
   });
 
   it("fails closed when a saved local profile is not owned by the backend", async () => {
@@ -603,6 +646,41 @@ describe("DashboardApp onboarding router", () => {
     expect(screen.queryByTestId("assistant-chat")).not.toBeInTheDocument();
   });
 
+  it("shows an existing team read-only in the Shell, with no setup, marker or chat, and leaves it on request", async () => {
+    vi.mocked(useSession).mockReturnValue(signedInAs("existing-read-only"));
+    vi.mocked(loadOnboardingGate).mockResolvedValue({
+      phase: "required",
+      account: { displayName: "Reader Person" },
+      resumeAvailable: false,
+      existingTeam: { teamId: "team-opaque-0004", status: "available" },
+      runtime: { status: "collecting", stage: "host" },
+    });
+
+    const user = userEvent.setup();
+    render(<DashboardApp />);
+    expect(existingTeamReadOnly()).toBeNull();
+    await user.click(await screen.findByRole("button", { name: "connect-existing-team-read-only" }));
+
+    expect(await screen.findByTestId("shell")).toBeInTheDocument();
+    // On before the Shell mounts (its pages read in effects that run first),
+    // with the assistant reported off, and what the connection's probe said about the
+    // two sessions kept with the moment it said it (the Squadra page shows them as such).
+    expect(existingTeamReadOnly()).toEqual({
+      assistantActive: false,
+      connection: { at: expect.any(Number), captainRunning: true, assistantRunning: true },
+    });
+    expect(screen.queryByTestId("existing-team-modal")).not.toBeInTheDocument();
+    expect(reconnectDirectChat).not.toHaveBeenCalled();
+    expect(markOnboardingReady).not.toHaveBeenCalled();
+    expect(markOnboardingStarted).not.toHaveBeenCalled();
+    expect(screen.queryByTestId("assistant-chat")).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "close-read-only" }));
+    expect(await screen.findByTestId("onboarding")).toBeInTheDocument();
+    expect(existingTeamReadOnly()).toBeNull();
+    expect(screen.queryByTestId("shell")).not.toBeInTheDocument();
+  });
+
   it("maps preparing, Podman, container and provider progress without optimistic completion", async () => {
     vi.mocked(useSession).mockReturnValue(signedInAs("progress-account"));
     requireOnboarding();
@@ -831,6 +909,62 @@ describe("DashboardApp onboarding router", () => {
     expect(described.text).toContain("«altra»");
     expect(screen.getByText(`Cosa fare: ${described.action}`)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "retry-runtime" })).toBeInTheDocument();
+  });
+
+  it("a failed local step says its own cause instead of the catalog's guess about the network", async () => {
+    vi.mocked(useSession).mockReturnValue(signedInAs("runtime-cause-account"));
+    requireOnboarding();
+    vi.mocked(prepareOnboardingRuntime)
+      .mockRejectedValueOnce({
+        code: "runtime_install_failed",
+        message: "runtime_install_failed",
+        retryable: true,
+        detail: "winget could not install Podman.CLI (0x8a15000f)",
+      });
+    render(<DashboardApp />);
+    await userEvent.click(await screen.findByRole("button", { name: "submit-onboarding" }));
+
+    expect(await screen.findByText("failed:runtime")).toBeInTheDocument();
+    expect(screen.getByText(describeError("runtime_install_failed").text)).toBeInTheDocument();
+    expect(screen.getByText(
+      "Cosa fare: Causa: winget could not install Podman.CLI (0x8a15000f). Riprova; se si ripete, apri il registro qui sotto e mandalo al supporto.",
+    )).toBeInTheDocument();
+    expect(screen.queryByText(`Cosa fare: ${describeError("runtime_install_failed").action}`)).not.toBeInTheDocument();
+  });
+
+  it("without a cause the catalog's action stays, and a code with its own instruction keeps it before the cause", async () => {
+    vi.mocked(useSession).mockReturnValue(signedInAs("runtime-no-cause-account"));
+    requireOnboarding();
+    vi.mocked(prepareOnboardingRuntime)
+      .mockRejectedValueOnce({ code: "runtime_install_failed", message: "x", retryable: true, detail: " \u0007 " })
+      .mockRejectedValueOnce({ code: "wsl_not_ready", message: "x", retryable: true, detail: "WSL is not usable" });
+    render(<DashboardApp />);
+    await userEvent.click(await screen.findByRole("button", { name: "submit-onboarding" }));
+    expect(await screen.findByText(`Cosa fare: ${describeError("runtime_install_failed").action}`)).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "retry-runtime" }));
+    expect(await screen.findByText(`Cosa fare: ${describeError("wsl_not_ready").action} Causa: WSL is not usable.`)).toBeInTheDocument();
+  });
+
+  it("a failed setup step shows where the runtime log is, and opens it", async () => {
+    vi.mocked(useSession).mockReturnValue(signedInAs("runtime-log-account"));
+    requireOnboarding();
+    vi.mocked(runtimeLogPath).mockResolvedValue("C:\\Users\\prova\\AppData\\Local\\ai.jobhunterteam.desktop\\logs\\runtime.log");
+    vi.mocked(openRuntimeLog).mockResolvedValue(true);
+    vi.mocked(prepareOnboardingRuntime).mockRejectedValue({
+      code: "runtime_install_failed",
+      message: "raw native message",
+      retryable: true,
+    });
+    render(<DashboardApp />);
+    expect(screen.queryByText(/^runtime-log:/)).not.toBeInTheDocument();
+    await userEvent.click(await screen.findByRole("button", { name: "submit-onboarding" }));
+
+    expect(await screen.findByText("failed:runtime")).toBeInTheDocument();
+    expect(await screen.findByText(/^runtime-log:.*\\logs\\runtime\.log$/)).toBeInTheDocument();
+    expect(runtimeLogPath).toHaveBeenCalled();
+    await userEvent.click(screen.getByRole("button", { name: "open-runtime-log" }));
+    expect(openRuntimeLog).toHaveBeenCalledOnce();
   });
 
   it("a Podman machine that sees more of the Mac is recreated only from its own action, then setup starts over", async () => {
@@ -1265,6 +1399,192 @@ describe("DashboardApp onboarding router", () => {
     expect(startOnboardingProviderLogin).not.toHaveBeenCalled();
     expect(startOnboardingTeam).not.toHaveBeenCalled();
     expect(openOnboardingAssistant).not.toHaveBeenCalled();
+  });
+
+  describe("a start with a saved existing team (host, candidate and selection) whose assistant is down", () => {
+    // The legacy marker is either «started» (an earlier setup wrote it) or ABSENT (a «Start over»
+    // erased it and a read-only connection does not write it): the saved team is reopened either way.
+    type Marker = "started" | "absent";
+    function localProfile(marker: Marker) {
+      vi.mocked(useSession).mockReturnValue({ session: null, loading: false });
+      vi.mocked(localIdentitySelected).mockReturnValue(true);
+      vi.mocked(readLocalProfile).mockReturnValue({ profileId: "opaque-local-saved-team", displayName: "Ada Locale" });
+      if (marker === "started") localStorage.setItem("jht.desktop.onboarding.local:opaque-local-saved-team", "subscription-v1-started");
+      vi.mocked(resumeOnboardingSnapshot).mockResolvedValue({ ...TEAM_READY, assistantRunning: false });
+    }
+    function nothingStarted() {
+      for (const started of [resumeOnboardingTeamStart, startOnboardingTeam, prepareOnboardingRuntime, startOnboardingProviderLogin, openOnboardingAssistant, reconnectDirectChat, markOnboardingStarted]) {
+        expect(started).not.toHaveBeenCalled();
+      }
+    }
+    const MARKERS: Marker[] = ["started", "absent"];
+
+    it.each(MARKERS)("marker %s: reopens the read-only view and never offers to start the team", async (marker) => {
+      localProfile(marker);
+      vi.mocked(existingTeamBridge.reopen).mockResolvedValue({
+        readiness: false,
+        snapshot: { ...TEAM_READY, assistantRunning: false },
+      });
+
+      render(<DashboardApp />);
+
+      expect(await screen.findByTestId("shell")).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "close-read-only" })).toBeInTheDocument();
+      expect(screen.queryByTestId("onboarding")).not.toBeInTheDocument();
+      expect(screen.queryByText("action-required:team-start")).not.toBeInTheDocument();
+      expect(existingTeamBridge.reopen).toHaveBeenCalledOnce();
+      expect(resumeOnboardingSnapshot).not.toHaveBeenCalled();
+      nothingStarted();
+
+      // leaving the read-only view goes back to the setup's host step, never to a spinner or to «Start the team»
+      await userEvent.setup().click(screen.getByRole("button", { name: "close-read-only" }));
+      expect(await screen.findByText("collecting:host")).toBeInTheDocument();
+      expect(screen.queryByText("action-required:team-start")).not.toBeInTheDocument();
+    });
+
+    it("an empty profile (nothing saved, no marker) stays on the normal first step and runs no resume at all", async () => {
+      localProfile("absent");
+      render(<DashboardApp />);
+      expect(await screen.findByText("collecting:host")).toBeInTheDocument();
+      await waitFor(() => expect(existingTeamBridge.reopen).toHaveBeenCalledOnce());
+      expect(resumeOnboardingSnapshot).not.toHaveBeenCalled();
+      expect(screen.queryByText("action-required:team-start")).not.toBeInTheDocument();
+      expect(screen.queryByTestId("shell")).not.toBeInTheDocument();
+      nothingStarted();
+    });
+
+    it("nothing saved but a setup of its own started keeps the usual probe-only resume", async () => {
+      localProfile("started");
+      render(<DashboardApp />);
+      expect(await screen.findByText("action-required:team-start")).toBeInTheDocument();
+      expect(existingTeamBridge.reopen).toHaveBeenCalledOnce();
+      expect(resumeOnboardingSnapshot).toHaveBeenCalledOnce();
+      expect(resumeOnboardingTeamStart).not.toHaveBeenCalled();
+      expect(screen.queryByTestId("shell")).not.toBeInTheDocument();
+    });
+
+    it.each(MARKERS.flatMap((marker) => [
+      "existing_team_unavailable",
+      "existing_team_discovery_timeout",
+      "host_key_missing",
+      "host_key_mismatch",
+      "existing_team_identity_mismatch",
+      "existing_team_runtime_candidate_mismatch",
+      "existing_team_runtime_candidate_invalid",
+      "existing_team_runtime_target_changed",
+      "existing_team_runtime_selection_invalid",
+      "existing_team_runtime_unavailable",
+    ].map((code) => [marker, code] as const)))("marker %s, a saved team that fails with %s is shown as a saved team that cannot be reached, never as «start the team»", async (marker, code) => {
+      localProfile(marker);
+      vi.mocked(existingTeamBridge.reopen).mockRejectedValue({ code, message: "raw native text /private/key" });
+      render(<DashboardApp />);
+
+      expect(await screen.findByText("failed:runtime")).toBeInTheDocument();
+      expect(screen.getByText("title:Squadra esistente salvata: non raggiungibile ora")).toBeInTheDocument();
+      expect(screen.getByText(`code:${code}`)).toBeInTheDocument();
+      expect(screen.getByText(ERROR_CATALOG[code].text.it)).toBeInTheDocument();
+      expect(screen.queryByText(/raw native text/)).not.toBeInTheDocument();
+      expect(screen.queryByText("action-required:team-start")).not.toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "retry-runtime" })).toBeInTheDocument();
+      expect(resumeOnboardingSnapshot).not.toHaveBeenCalled();
+      nothingStarted();
+    });
+
+    it.each(MARKERS)("marker %s: a missing selection is not «nothing saved»: the classic resume does not take over", async (marker) => {
+      localProfile(marker);
+      vi.mocked(existingTeamBridge.reopen).mockRejectedValue({ code: "existing_team_runtime_selection_required" });
+      render(<DashboardApp />);
+      expect(await screen.findByText("failed:runtime")).toBeInTheDocument();
+      expect(screen.queryByText("action-required:team-start")).not.toBeInTheDocument();
+      expect(resumeOnboardingSnapshot).not.toHaveBeenCalled();
+      nothingStarted();
+    });
+
+    it.each(MARKERS)("marker %s: a half-saved connection (only the candidate, or only the selection) is said to be incomplete, with no SSH and no start", async (marker) => {
+      localProfile(marker);
+      vi.mocked(existingTeamBridge.reopen).mockRejectedValue({ code: "existing_team_saved_incomplete" });
+      render(<DashboardApp />);
+
+      expect(await screen.findByText("failed:runtime")).toBeInTheDocument();
+      expect(screen.getByText("title:Squadra esistente salvata: collegamento incompleto")).toBeInTheDocument();
+      expect(screen.getByText(ERROR_CATALOG.existing_team_saved_incomplete.text.it)).toBeInTheDocument();
+      expect(screen.queryByText("action-required:team-start")).not.toBeInTheDocument();
+      expect(existingTeamBridge.reopen).toHaveBeenCalledOnce();
+      expect(resumeOnboardingSnapshot).not.toHaveBeenCalled();
+      nothingStarted();
+    });
+
+    it.each(MARKERS)("marker %s: an error without a code is a saved team that cannot be reached too", async (marker) => {
+      localProfile(marker);
+      vi.mocked(existingTeamBridge.reopen).mockRejectedValue(new Error("ipc failure"));
+      render(<DashboardApp />);
+      expect(await screen.findByText("failed:runtime")).toBeInTheDocument();
+      expect(screen.queryByText("action-required:team-start")).not.toBeInTheDocument();
+      expect(resumeOnboardingSnapshot).not.toHaveBeenCalled();
+      nothingStarted();
+    });
+
+    it.each(MARKERS)("marker %s: «Riprova» asks the backend to reopen again and nothing else; once it can, the read-only view opens", async (marker) => {
+      localProfile(marker);
+      vi.mocked(existingTeamBridge.reopen)
+        .mockRejectedValueOnce({ code: "existing_team_unavailable" })
+        .mockResolvedValueOnce({ readiness: false, snapshot: { ...TEAM_READY, assistantRunning: false } });
+      const user = userEvent.setup();
+      render(<DashboardApp />);
+      await user.click(await screen.findByRole("button", { name: "retry-runtime" }));
+
+      expect(await screen.findByTestId("shell")).toBeInTheDocument();
+      expect(existingTeamBridge.reopen).toHaveBeenCalledTimes(2);
+      expect(resumeOnboardingSnapshot).not.toHaveBeenCalled();
+      nothingStarted();
+    });
+
+    it("«Riprova» that still fails stays on the saved-team state and starts nothing", async () => {
+      localProfile("absent");
+      vi.mocked(existingTeamBridge.reopen).mockRejectedValue({ code: "existing_team_unavailable" });
+      const user = userEvent.setup();
+      render(<DashboardApp />);
+      await user.click(await screen.findByRole("button", { name: "retry-runtime" }));
+      await waitFor(() => expect(existingTeamBridge.reopen).toHaveBeenCalledTimes(2));
+      expect(await screen.findByText("failed:runtime")).toBeInTheDocument();
+      expect(screen.queryByText("action-required:team-start")).not.toBeInTheDocument();
+      expect(resumeOnboardingSnapshot).not.toHaveBeenCalled();
+    });
+
+    it("«Riprova» answered «nothing saved» in under 300 ms replaces the old failure, with fake timers", async () => {
+      localProfile("absent");
+      vi.useFakeTimers();
+      vi.mocked(existingTeamBridge.reopen)
+        .mockRejectedValueOnce({ code: "existing_team_unavailable" })
+        .mockRejectedValueOnce({ code: "existing_team_runtime_candidate_required" });
+      render(<DashboardApp />);
+      await act(async () => { await vi.advanceTimersByTimeAsync(50); });
+      expect(screen.getByText("failed:runtime")).toBeInTheDocument();
+
+      fireEvent.click(screen.getByRole("button", { name: "retry-runtime" }));
+      // The answer is already in: the 300 ms spinner has not fired yet and never will.
+      await act(async () => { await vi.advanceTimersByTimeAsync(100); });
+
+      expect(existingTeamBridge.reopen).toHaveBeenCalledTimes(2);
+      expect(screen.queryByText("failed:runtime")).not.toBeInTheDocument();
+      expect(screen.getByText("collecting:host")).toBeInTheDocument();
+      await act(async () => { await vi.advanceTimersByTimeAsync(1000); });
+      expect(screen.getByText("collecting:host")).toBeInTheDocument();
+      expect(resumeOnboardingSnapshot).not.toHaveBeenCalled();
+      nothingStarted();
+    });
+
+    it("a «Start over» is respected: the explicit restart does not reopen the saved team on its own", async () => {
+      localProfile("started");
+      vi.mocked(existingTeamBridge.reopen).mockRejectedValue({ code: "existing_team_unavailable" });
+      const user = userEvent.setup();
+      render(<DashboardApp />);
+      await screen.findByText("failed:runtime");
+      await user.click(screen.getByRole("button", { name: "restart-onboarding" }));
+      expect(await screen.findByText("collecting:host")).toBeInTheDocument();
+      expect(existingTeamBridge.reopen).toHaveBeenCalledOnce();
+      expect(resumeOnboardingSnapshot).not.toHaveBeenCalled();
+    });
   });
 
   it("fails closed on a Podman snapshot error without exposing backend text or auto-starting", async () => {

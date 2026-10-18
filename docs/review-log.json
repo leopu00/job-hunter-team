@@ -1799,6 +1799,16 @@
       "path": "docs/internal/architecture/desktop-local-runtime-parity.md",
       "description": "Parità del percorso runtime locale Electron-Tauri: identità, Podman, container, provider, team e adozione legacy",
       "last_review": null
+    },
+    {
+      "path": "docs/internal/architecture/assistance-host-registration.md",
+      "description": "Registrazione della VPS di assistenza nel primo setup: solo l'ExecutionHost VPS dell'account attivo",
+      "last_review": null
+    },
+    {
+      "path": "docs/internal/architecture/closer-desktop-tauri.md",
+      "description": "Browser assistito dentro l'app Tauri: richiesta unica al Rust, binding per account, container attestato, SSH senza PTY",
+      "last_review": null
     }
   ]
 }

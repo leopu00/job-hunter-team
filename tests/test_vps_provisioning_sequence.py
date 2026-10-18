@@ -269,7 +269,7 @@ def install(server: Server, source: str, **kwargs):
 def test_the_vps_arm_runs_install_then_up_then_snapshot_then_provider(source):
     arm = vps_arm_of_prepare(source)
     order = [
-        arm.index("REMOTE_INSTALL"),
+        arm.index("remote_install_command(channel_args)"),  # REMOTE_INSTALL, plus the channel's arguments
         arm.index("REMOTE_JHT_UP"),
         arm.index("snapshot_impl(&app, &scope, &validated)"),
         arm.index("REMOTE_USE_CLAUDE"),

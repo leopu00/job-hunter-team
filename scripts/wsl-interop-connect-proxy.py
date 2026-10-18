@@ -4,14 +4,59 @@
 from __future__ import annotations
 
 import argparse
+import ipaddress
 import select
 import socket
 import socketserver
 import subprocess
+from collections.abc import Callable, Sequence
 from urllib.parse import urlsplit
 
 
 MAX_HEADER = 64 * 1024
+HANDSHAKE_TIMEOUT_SECONDS = 65
+CONNECT_IDLE_TIMEOUT_SECONDS = 600
+POLICY_PORTS = {
+    "agent": frozenset({80, 443}),
+    "broker": frozenset({443, 465, 587, 993}),
+    "telegram": frozenset({443}),
+}
+POLICY_HOSTS = {
+    "agent": None,
+    "broker": None,
+    "telegram": frozenset({"api.telegram.org"}),
+}
+FORBIDDEN_V4 = tuple(
+    ipaddress.ip_network(value)
+    for value in (
+        "0.0.0.0/8",
+        "10.0.0.0/8",
+        "100." "64.0.0/10",
+        "127.0.0.0/8",
+        "169.254.0.0/16",
+        "172.16.0.0/12",
+        "192.168.0.0/16",
+        "198." "18.0.0/15",
+        "224.0.0.0/4",
+        "240." "0.0.0/4",
+    )
+)
+FORBIDDEN_V6 = tuple(
+    ipaddress.ip_network(value)
+    for value in (
+        "::/128",
+        "::1/128",
+        "::ffff:0:0/96",
+        "64:ff9b::/96",
+        "fc00::/7",
+        "fe80::/10",
+        "ff00::/8",
+    )
+)
+
+
+class PolicyDenied(ValueError):
+    """The requested destination is outside the public egress policy."""
 
 
 def read_header(client: socket.socket) -> bytes:
@@ -33,17 +78,81 @@ def parse_connect_target(value: str) -> tuple[str, int]:
     return parsed.hostname, parsed.port or 443
 
 
+def forbidden_ip(value: str) -> bool:
+    address = ipaddress.ip_address(value)
+    networks = FORBIDDEN_V4 if address.version == 4 else FORBIDDEN_V6
+    return any(address in network for network in networks)
+
+
+Resolver = Callable[..., Sequence[tuple[int, int, int, str, tuple[object, ...]]]]
+
+
+def resolve_public_target(
+    host: str,
+    port: int,
+    resolver: Resolver = socket.getaddrinfo,
+    allowed_ports: frozenset[int] = POLICY_PORTS["agent"],
+    allowed_hosts: frozenset[str] | None = POLICY_HOSTS["agent"],
+) -> str:
+    """Resolve once, IPv4 only, and reject the whole answer if any address is
+    non-public.
+
+    IPv6 is not admitted at all: the containers are IPv4-only (pasta -4), and
+    a global IPv6 address can still be the user's home (the SLAAC addresses of
+    the LAN's devices and of the PC on the home /64), which no fixed range
+    can tell apart from the Internet."""
+    normalized = host.rstrip(".").lower()
+    if normalized == "localhost" or normalized.endswith((".localhost", ".local")):
+        raise PolicyDenied("local hostname")
+    try:
+        literal = ipaddress.ip_address(normalized.strip("[]"))
+    except ValueError:
+        literal = None
+    if literal is not None and literal.version == 6:
+        raise PolicyDenied("IPv6 destination")
+    if allowed_hosts is not None and normalized not in allowed_hosts:
+        raise PolicyDenied("hostname denied")
+    if port not in allowed_ports:
+        raise PolicyDenied("port denied")
+
+    answers = resolver(
+        host, port, family=socket.AF_INET, type=socket.SOCK_STREAM, proto=socket.IPPROTO_TCP
+    )
+    addresses: list[str] = []
+    for family, socktype, protocol, _canonname, sockaddr in answers:
+        if family == socket.AF_INET6:
+            raise PolicyDenied("IPv6 destination")
+        if family != socket.AF_INET:
+            continue
+        if socktype != socket.SOCK_STREAM or protocol not in (0, socket.IPPROTO_TCP):
+            continue
+        address = str(ipaddress.ip_address(str(sockaddr[0])))
+        if address not in addresses:
+            addresses.append(address)
+    if not addresses:
+        raise OSError("destination did not resolve to an IP address")
+    if any(forbidden_ip(address) for address in addresses):
+        raise PolicyDenied("non-public address")
+    # The native connector receives the verified numeric address, never the
+    # original hostname, so it cannot resolve a different answer later.
+    return addresses[0]
+
+
+def send_error(client: socket.socket, status: bytes) -> None:
+    client.sendall(b"HTTP/1.1 " + status + b"\r\nConnection: close\r\n\r\n")
+
+
 class ProxyHandler(socketserver.BaseRequestHandler):
     def handle(self) -> None:
         client: socket.socket = self.request
-        client.settimeout(65)
+        client.settimeout(self.server.handshake_timeout)  # type: ignore[attr-defined]
         process: subprocess.Popen[bytes] | None = None
         try:
             header = read_header(client)
             first_line = header.split(b"\r\n", 1)[0].decode("ascii", "replace")
             parts = first_line.split(" ")
             if len(parts) != 3:
-                client.sendall(b"HTTP/1.1 400 Bad Request\r\nConnection: close\r\n\r\n")
+                send_error(client, b"400 Bad Request")
                 return
             is_connect = parts[0].upper() == "CONNECT"
             if is_connect:
@@ -52,7 +161,7 @@ class ProxyHandler(socketserver.BaseRequestHandler):
             else:
                 target = urlsplit(parts[1])
                 if target.scheme != "http" or not target.hostname:
-                    client.sendall(b"HTTP/1.1 501 Unsupported Proxy Request\r\nConnection: close\r\n\r\n")
+                    send_error(client, b"501 Unsupported Proxy Request")
                     return
                 host, port = target.hostname, target.port or 80
                 path = target.path or "/"
@@ -63,17 +172,33 @@ class ProxyHandler(socketserver.BaseRequestHandler):
                     f"{parts[0]} {path} {parts[2]}".encode("ascii"),
                     1,
                 )
+            resolved_ip = resolve_public_target(
+                host,
+                port,
+                self.server.resolver,  # type: ignore[attr-defined]
+                self.server.allowed_ports,  # type: ignore[attr-defined]
+                self.server.allowed_hosts,  # type: ignore[attr-defined]
+            )
             process = subprocess.Popen(
-                [self.server.connector, host, str(port)],  # type: ignore[attr-defined]
+                [self.server.connector, resolved_ip, str(port)],  # type: ignore[attr-defined]
                 stdin=subprocess.PIPE,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.DEVNULL,
                 bufsize=0,
             )
             assert process.stdin is not None and process.stdout is not None
+            ready_streams, _, _ = select.select(
+                [process.stdout],
+                [],
+                [],
+                self.server.handshake_timeout,  # type: ignore[attr-defined]
+            )
+            if not ready_streams:
+                send_error(client, b"502 Bad Gateway")
+                return
             ready = process.stdout.read(1)
             if ready != b"\x00":
-                client.sendall(b"HTTP/1.1 502 Bad Gateway\r\nConnection: close\r\n\r\n")
+                send_error(client, b"502 Bad Gateway")
                 return
             if is_connect:
                 client.sendall(b"HTTP/1.1 200 Connection Established\r\n\r\n")
@@ -81,9 +206,16 @@ class ProxyHandler(socketserver.BaseRequestHandler):
                 process.stdin.write(initial_data)
                 process.stdin.flush()
             client.settimeout(None)
+            idle_timeout = (
+                self.server.connect_idle_timeout  # type: ignore[attr-defined]
+                if is_connect
+                else self.server.handshake_timeout  # type: ignore[attr-defined]
+            )
 
             while True:
-                readable, _, _ = select.select([client, process.stdout], [], [], 65)
+                readable, _, _ = select.select(
+                    [client, process.stdout], [], [], idle_timeout
+                )
                 if not readable:
                     break
                 if client in readable:
@@ -97,9 +229,14 @@ class ProxyHandler(socketserver.BaseRequestHandler):
                     if not data:
                         break
                     client.sendall(data)
+        except PolicyDenied:
+            try:
+                send_error(client, b"403 Forbidden")
+            except OSError:
+                pass
         except (OSError, ValueError, subprocess.SubprocessError):
             try:
-                client.sendall(b"HTTP/1.1 502 Bad Gateway\r\nConnection: close\r\n\r\n")
+                send_error(client, b"502 Bad Gateway")
             except OSError:
                 pass
         finally:
@@ -111,8 +248,24 @@ class ThreadingProxy(socketserver.ThreadingTCPServer):
     allow_reuse_address = True
     daemon_threads = True
 
-    def __init__(self, address: tuple[str, int], connector: str):
+    def __init__(
+        self,
+        address: tuple[str, int],
+        connector: str,
+        resolver: Resolver = socket.getaddrinfo,
+        allowed_ports: frozenset[int] = POLICY_PORTS["agent"],
+        allowed_hosts: frozenset[str] | None = POLICY_HOSTS["agent"],
+        handshake_timeout: float = HANDSHAKE_TIMEOUT_SECONDS,
+        connect_idle_timeout: float = CONNECT_IDLE_TIMEOUT_SECONDS,
+    ):
+        if handshake_timeout <= 0 or connect_idle_timeout <= 0:
+            raise ValueError("proxy timeouts must be positive")
         self.connector = connector
+        self.resolver = resolver
+        self.allowed_ports = allowed_ports
+        self.allowed_hosts = allowed_hosts
+        self.handshake_timeout = handshake_timeout
+        self.connect_idle_timeout = connect_idle_timeout
         super().__init__(address, ProxyHandler)
 
 
@@ -124,14 +277,27 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="listen address (default: loopback only)",
     )
     parser.add_argument("--port", type=int, default=3128)
-    parser.add_argument("--connector", required=True, help="WSL path to native Windows connector")
+    parser.add_argument(
+        "--policy",
+        choices=tuple(POLICY_PORTS),
+        default="agent",
+        help="named outbound port policy (default: agent)",
+    )
+    parser.add_argument(
+        "--connector", required=True, help="WSL path to native Windows connector"
+    )
     return parser.parse_args(argv)
 
 
 def main() -> None:
     args = parse_args()
 
-    with ThreadingProxy((args.bind, args.port), args.connector) as server:
+    with ThreadingProxy(
+        (args.bind, args.port),
+        args.connector,
+        allowed_ports=POLICY_PORTS[args.policy],
+        allowed_hosts=POLICY_HOSTS[args.policy],
+    ) as server:
         print(f"JHT_INTEROP_PROXY_READY http://{args.bind}:{args.port}", flush=True)
         server.serve_forever(poll_interval=0.25)
 

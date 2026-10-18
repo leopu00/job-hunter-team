@@ -48,19 +48,32 @@ pytestmark = pytest.mark.skipif(os.name == "nt", reason="the wrapper is a POSIX 
 def test_macos_fixture_uses_the_native_fast_host_tools_on_a_mac(tmp_path: Path):
     write_macos_host_tools(tmp_path, host_kernel="Darwin")
 
-    assert list(tmp_path.iterdir()) == []
+    # Solo il `df` finto: lo spazio libero non deve dipendere dalla macchina.
+    assert {path.name for path in tmp_path.iterdir()} == {"df"}
 
 
 def test_macos_fixture_emulates_uname_and_stat_on_a_non_macos_runner(tmp_path: Path):
     write_macos_host_tools(tmp_path, host_kernel="Linux")
 
-    assert {path.name for path in tmp_path.iterdir()} == {"stat", "uname"}
+    assert {path.name for path in tmp_path.iterdir()} == {"df", "stat", "uname"}
 
 
 def test_linux_fixture_keeps_the_native_stat_on_a_linux_runner(tmp_path: Path):
     write_linux_host_tools(tmp_path, host_kernel="Linux")
 
-    assert {path.name for path in tmp_path.iterdir()} == {"uname"}
+    assert {path.name for path in tmp_path.iterdir()} == {"df", "uname"}
+
+
+def test_the_fixture_df_reports_a_healthy_disk_unless_told_otherwise(tmp_path: Path):
+    write_linux_host_tools(tmp_path, host_kernel="Linux")
+
+    def free_pct(**env):
+        out = subprocess.run([str(tmp_path / "df"), "-Pk", str(tmp_path)], text=True, capture_output=True,
+                             env=env, check=True).stdout.splitlines()[1].split()
+        return int(out[3]) * 100 // int(out[1])
+
+    assert free_pct() == 50
+    assert free_pct(FAKE_DF_FREE_PCT="2") == 2
 
 
 def test_linux_fixture_answers_the_gnu_stat_probe_on_a_mac(tmp_path: Path):
@@ -191,7 +204,7 @@ def _wrapper(tmp_path: Path, sources: tuple[str, ...] | None = None):
     secrets = tmp_path / "broker-secrets.volume"
     secrets.write_text("mail-password-and-linkedin-session\n", encoding="utf-8")
     default = tmp_path / "default-connection"
-    default.write_text("hht-podman\n", encoding="utf-8")
+    default.write_text("other-podman\n", encoding="utf-8")
     env["JHT_TEST_MACHINE_CONFIG"] = str(config)
     env["JHT_TEST_DEFAULT_CONNECTION"] = str(default)
     env["JHT_TEST_BROKER_STATE"] = str(state)
@@ -278,7 +291,7 @@ def test_a_confined_machine_is_used_and_up_creates_both_folders_before_starting(
     assert not any(line.startswith("missing ") for line in calls), calls
     assert (home / ".jht").is_dir() and (home / "Documents" / "Job Hunter Team").is_dir()
     assert oct((home / ".jht").stat().st_mode & 0o777) == "0o700"
-    assert (tmp_path / "default-connection").read_text(encoding="utf-8").strip() == "hht-podman"
+    assert (tmp_path / "default-connection").read_text(encoding="utf-8").strip() == "other-podman"
     assert not any("system connection default" in line for line in calls)
     assert result.returncode != 78
 
@@ -342,8 +355,8 @@ def test_recreate_rebuilds_the_machine_with_only_the_two_folders_and_keeps_the_d
     assert export < remove < init < trim < create < imported
     assert not any("jht-secrets:" in line for line in all_calls)
     # The person's default connection (another project's machine) is put back.
-    assert (tmp_path / "default-connection").read_text(encoding="utf-8").strip() == "hht-podman"
-    assert "podman system connection default hht-podman" in _calls(log)
+    assert (tmp_path / "default-connection").read_text(encoding="utf-8").strip() == "other-podman"
+    assert "podman system connection default other-podman" in _calls(log)
     assert not marker.exists()
     assert Path(env["JHT_TEST_BROKER_STATE"]).read_bytes() == state_before
     assert Path(env["JHT_TEST_BROKER_SECRETS"]).read_bytes() == b""

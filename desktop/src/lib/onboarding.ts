@@ -1,3 +1,5 @@
+import type { Locale } from "@/i18n/config";
+import { stateText } from "./onboarding-state.i18n";
 import type { SupabaseClient, User } from "@supabase/supabase-js";
 import type { DesktopPlatform } from "./desktop-platform";
 
@@ -156,6 +158,8 @@ export interface OnboardingFlowProps {
   runtime: OnboardingRuntimeState;
   activity?: OnboardingActivityState | null;
   onSubmit: (submission: OnboardingSubmission) => Promise<void>;
+  /** Explicit existing VPS connection; never prepares a new team. */
+  onConnectExistingTeam?: (host: Extract<ExecutionHost, { kind: "vps" }>) => void;
   onRuntimeAction: (stage: "provider-login" | "team-start" | "assistant") => Promise<void>;
   providerLogin: OnboardingProviderLoginState | null;
   sshHostKey: OnboardingSshHostKeyConfirmation | null;
@@ -173,6 +177,20 @@ export interface OnboardingFlowProps {
    * `podman_machine_mounts_home` error, after the person confirms it.
    */
   onRecreatePodmanMachine?: () => Promise<void>;
+  /**
+   * Where the local runtime's log is (lib/runtime-log.ts), shown with a button
+   * that opens it when a local setup step fails.
+   */
+  runtimeLogPath?: string | null;
+  onOpenRuntimeLog?: () => Promise<boolean>;
+  /** The language of the onboarding; the app's own (lib/app-locale.ts) when absent. */
+  locale?: Locale;
+  /**
+   * ~/.jht holds the data of an earlier version (the game, up to v0.3.9)
+   * that no profile has taken yet: a local profile takes it as it is, and the
+   * review step says so before the setup starts.
+   */
+  previousLocalData?: boolean;
 }
 
 export type OnboardingGateState =
@@ -212,13 +230,12 @@ type ProfileRow = {
   positioning?: unknown;
 };
 
-type ExistingTeamRow = { id?: string | null };
+type ExistingTeamRow = { user_id?: string | null };
 
 const MARKER_PREFIX = "jht.desktop.onboarding.";
 const MARKER_VALUE = "subscription-v1";
 const MARKER_STARTED = "subscription-v1-started";
 const MARKER_RESTARTED = "subscription-v1-restarted";
-const STATE_ERROR = "Non riesco a verificare la configurazione dell’account. Riprova.";
 
 function markerKey(userId: string): string { return `${MARKER_PREFIX}${userId}`; }
 function clean(value: string): string { return value.trim().replace(/\s+/g, " "); }
@@ -289,15 +306,17 @@ export async function loadOnboardingGate(
     client.from("candidate_profiles")
       .select("user_id,name,email,target_role,location,experience_years,seniority_target,skills,languages,location_preferences,positioning")
       .eq("user_id", user.id).maybeSingle(),
+    // The team probe on the VPS compares the expected team with the `user_id` of
+    // its cloud.json, which is this column: never the token row's own `id`.
     client.from("cloud_sync_tokens")
-      .select("id")
+      .select("user_id")
       .eq("user_id", user.id)
       .is("revoked_at", null)
       .order("last_used_at", { ascending: false, nullsFirst: false })
       .limit(1)
       .maybeSingle(),
   ]);
-  if (milestonesResult.error || profileResult.error || teamResult.error) return { phase: "error", message: STATE_ERROR };
+  if (milestonesResult.error || profileResult.error || teamResult.error) return { phase: "error", message: stateText().gateError };
   const milestones = milestonesResult.data as OnboardingMilestones | null;
   const profile = profileResult.data as ProfileRow | null;
   const team = teamResult.data as ExistingTeamRow | null;
@@ -306,8 +325,8 @@ export async function loadOnboardingGate(
   return {
     phase: "required", account: { displayName: displayName(user), identity: "google" },
     resumeAvailable: started,
-    ...(milestones?.vps_setup_completed_at && typeof team?.id === "string" && clean(team.id)
-      ? { existingTeam: { teamId: clean(team.id), status: "available" as const } }
+    ...(milestones?.vps_setup_completed_at && typeof team?.user_id === "string" && clean(team.user_id)
+      ? { existingTeam: { teamId: clean(team.user_id), status: "available" as const } }
       : {}),
     runtime: { status: "collecting", stage: "host" },
   };
@@ -348,25 +367,25 @@ export function isOnboardingRuntimeReady(snapshot: OnboardingRuntimeSnapshot): b
 export function runtimeStateFromSnapshot(snapshot: OnboardingRuntimeSnapshot): OnboardingRuntimeState {
   if (isOnboardingRuntimeReady(snapshot)) return { status: "ready" };
   if (!snapshot.runtimeInstalled) {
-    return { status: "failed", stage: "runtime", message: "Il runtime non ha completato la preparazione." };
+    return { status: "failed", stage: "runtime", message: stateText().snapshotRuntimeIncomplete };
   }
   if (!snapshot.containerRunning) {
-    return { status: "failed", stage: "container", message: "Il container non risulta attivo." };
+    return { status: "failed", stage: "container", message: stateText().snapshotContainerNotRunning };
   }
   if (!snapshot.providerConfigured) {
-    return { status: "failed", stage: "provider", message: "Il provider non ha completato la preparazione." };
+    return { status: "failed", stage: "provider", message: stateText().snapshotProviderIncomplete };
   }
   if (!snapshot.providerAuthenticated) {
-    return { status: "action-required", stage: "provider-login", message: "Accedi con l’abbonamento scelto." };
+    return { status: "action-required", stage: "provider-login", message: stateText().snapshotSignIn };
   }
   if (!snapshot.assistantRunning || !snapshot.captainRunning) {
-    return { status: "failed", stage: "team-start", message: "Il team non è ancora operativo." };
+    return { status: "failed", stage: "team-start", message: stateText().snapshotTeamNotOperational };
   }
   if (snapshot.profileReady && !snapshot.directChatReady) {
-    return { status: "failed", stage: "assistant", message: "La chat diretta non è ancora raggiungibile." };
+    return { status: "failed", stage: "assistant", message: stateText().snapshotChatUnreachable };
   }
   return { status: "action-required", stage: "assistant",
-    message: snapshot.profileReady ? "Completa la presentazione con l’Assistente." : "Completa il profilo con l’Assistente." };
+    message: snapshot.profileReady ? stateText().snapshotCompletePresentation : stateText().snapshotCompleteProfile };
 }
 
 export function markOnboardingReady(

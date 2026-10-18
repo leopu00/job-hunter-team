@@ -1044,6 +1044,15 @@ def _sample_vitals_and_maybe_alert():
         v = json.loads(r.stdout.strip().splitlines()[-1])
     except Exception:
         return
+    # Disco sotto il 10% libero: avviso all'utente, con la frase della tabella
+    # codice->frase e un cooldown (host_vitals.py notify-disk). Non passa dalla
+    # Sentinella: e' un fatto del volume, non una decisione di quota. Isolato come
+    # il resto: un errore qui non tocca ne' il campione ne' l'alert RAM/CPU.
+    try:
+        subprocess.run([sys.executable, VITALS_SKILL, "notify-disk"],
+                       capture_output=True, text=True, timeout=30)
+    except Exception:
+        pass
     cpu = (v.get("cpu") or {}).get("pct")
     mem = (v.get("mem") or {}).get("pct")
     over = []

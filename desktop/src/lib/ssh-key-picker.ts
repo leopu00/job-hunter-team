@@ -1,4 +1,7 @@
+import { homeDir } from "@tauri-apps/api/path";
 import { open, type OpenDialogOptions } from "@tauri-apps/plugin-dialog";
+import { ONBOARDING_TEXT } from "../onboarding/onboarding.i18n";
+import { appLocale } from "./app-locale";
 
 export type SshKeySelector = () => Promise<string | null>;
 
@@ -7,15 +10,25 @@ type OpenDialog = (
 ) => Promise<string | string[] | null>;
 
 const SSH_KEY_DIALOG_OPTIONS = {
-  title: "Scegli chiave SSH",
   multiple: false,
   directory: false,
   canCreateDirectories: false,
 } as const satisfies OpenDialogOptions;
 
-/** Opens a native single-file dialog without reading or copying the selected file. */
-export async function pickSshKey(openDialog: OpenDialog = open): Promise<string | null> {
-  const selected = await openDialog(SSH_KEY_DIALOG_OPTIONS);
+/**
+ * Opens a native single-file dialog without reading or copying the selected
+ * file. It starts in the person's home folder: without a starting folder
+ * Windows opens it in the app's own program folder.
+ */
+export async function pickSshKey(
+  openDialog: OpenDialog = open,
+  home: () => Promise<string> = homeDir,
+): Promise<string | null> {
+  const defaultPath = await home().catch(() => "");
+  const title = ONBOARDING_TEXT[appLocale()].sshKeyPicker.dialogTitle;
+  const selected = await openDialog(defaultPath
+    ? { title, ...SSH_KEY_DIALOG_OPTIONS, defaultPath }
+    : { title, ...SSH_KEY_DIALOG_OPTIONS });
   if (selected === null || selected === "") return null;
   if (typeof selected !== "string") throw new Error("ssh-key-dialog-invalid-selection");
   return selected;
@@ -24,5 +37,5 @@ export async function pickSshKey(openDialog: OpenDialog = open): Promise<string 
 /** Handles POSIX and Windows paths while never exposing their directory portion. */
 export function sshKeyBasename(path: string): string {
   const parts = path.split(/[\\/]/u).filter(Boolean);
-  return parts.at(-1) ?? "Nome file non disponibile";
+  return parts.at(-1) ?? ONBOARDING_TEXT[appLocale()].sshKeyPicker.noFileName;
 }

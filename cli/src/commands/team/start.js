@@ -9,6 +9,7 @@ import {
   JHT_HOME, JHT_USER_DIR, JHT_DB_PATH, JHT_CONFIG_PATH,
 } from './agents.js';
 import { execArgvInContainer, execInContainer, execScriptInContainer } from '../../utils/container-proxy.js';
+import { diskLowRefusal } from '../../lib/disk-guard.js';
 
 const CONTAINER_TEAM_HALTED_FLAG = '/jht_home/.team-halted.flag';
 const SPAWN_ERROR_TAIL_LINES = 5;
@@ -97,6 +98,18 @@ function buildContainerBootstrap() {
 
 function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
 
+// Disco quasi pieno (< 3% libero): nessun NUOVO avvio. Si chiede PRIMA di far
+// nascere una sessione, dopo che il controllo «gia' attiva» ha lasciato stare
+// quelle vive: un agente in corso non viene toccato. Il codice e' chiuso
+// (`disk_low`), la frase viene dalla tabella codice->frase, non da qui.
+// Se il disco non si misura, si parte: la guardia rifiuta solo su una misura.
+function refuseIfDiskLow(label) {
+  const refusal = diskLowRefusal();
+  if (!refusal) return false;
+  console.log(`  ${c.red('✗')} ${label} — ${refusal.code}${refusal.message ? `: ${refusal.message}` : ''}`);
+  return true;
+}
+
 // Uno stop globale crea il gate nel runtime che possiede gli agenti. Start
 // deve rimuoverlo NELLO STESSO runtime e osservare l'effetto prima di lanciare
 // qualunque TUI: un `rm` richiesto ma non applicato non è uno Start riuscito.
@@ -168,6 +181,14 @@ async function startActionContainer(agentArg, options = {}) {
       console.log(`Result: ${c.green('0 started')}, ${c.yellow('4 already active')}`);
       console.log(c.dim('  Team already running: no bridge or sync process restarted.'));
       console.log('');
+      return;
+    }
+
+    // Qualcosa da avviare c'e': sotto il 3% di disco libero non si avvia niente,
+    // ne' le sincronizzazioni cloud che scrivono su disco.
+    if (refuseIfDiskLow('team')) {
+      console.log('');
+      process.exitCode = 1;
       return;
     }
 
@@ -288,6 +309,8 @@ function launchInContainer({ role, instance, mode, env, notATmuxSession, session
     return 'skipped';
   }
 
+  if (refuseIfDiskLow(sName)) return 'error';
+
   const agent = AGENTS.find((a) => a.role === role);
   const useInstance = agent?.multi && instance;
   const scriptArgs = useInstance ? [role, instance] : [role];
@@ -381,6 +404,11 @@ export async function startAction(agentArg, options) {
     if (isSessionActive(sName)) {
       console.log(`  ${c.yellow('⏭')} ${sName} — already active`);
       skipped++;
+      continue;
+    }
+
+    if (refuseIfDiskLow(sName)) {
+      process.exitCode = 1;
       continue;
     }
 

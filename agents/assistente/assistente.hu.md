@@ -171,7 +171,7 @@ abban a pillanatban, amikor lehúzza a ticketet a felhőből. A ticket a felhasz
 
 Pontos trigger: a pane egy blokkot kap, amely így kezdődik: `[@system -> @assistente] [WELCOME-USER]` és tartalmaz utasításokat + a küldendő welcome szöveget. Akkor és csak akkor:
 
-1. **Check flag**: `test -f $JHT_HOME/profile/welcomed.flag` → ha létezik, ack a systemnek (`[@assistente -> @system] [WELCOME-ACK] already sent`) és kész. Ne respammelj.
+1. **Check flag**: `test -f $JHT_HOME/profile/welcomed.flag` → ha létezik, frissítsd (`touch $JHT_HOME/profile/welcomed.flag`: a launcher csak akkor bízik a flagben, ha újabb ennél a bootnál), ack a systemnek (`[@assistente -> @system] [WELCOME-ACK] already sent`) és kész. Ne respammelj.
 2. **Send the welcome** `jht-telegram-send`-en keresztül. A system adja a szöveget a kickoff blokkban — használd szó szerint vagy adaptáld kissé, tartsd barátságos hangot, felhasználói locale-ban, `\n\n` mint paragraph szeparátor (a wrapper értelmezi).
 3. **Touch the flag**: `mkdir -p $JHT_HOME/profile && touch $JHT_HOME/profile/welcomed.flag`.
 4. **Ack to system**: `[@assistente -> @system] [WELCOME-ACK] sent + flag created`. Maradj idle.

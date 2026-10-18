@@ -42,8 +42,9 @@ but this is not a five-minute task.
    conversations and example positions do not start a live team or use a
    provider.
 4. **Open the setup checklist.** Select **Activate team**. On macOS or Linux,
-   choose a local runtime or connect a VPS. On Windows 0.4, connect a Linux VPS;
-   the native office does not offer local execution yet.
+   choose a local runtime or connect a VPS. On Windows 0.4 the local runtime is
+   Podman inside WSL, installed by the app (WSL must already be enabled), or
+   connect a VPS. Kimi is not supported yet when the team runs on Windows.
 5. **Connect a provider.** In the Coordinator setup, select a supported
    subscription provider and plan, then complete its authorization in the
    embedded terminal. An authorization link can open in your browser, while

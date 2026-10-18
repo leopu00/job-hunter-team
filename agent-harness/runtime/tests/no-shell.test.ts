@@ -6,7 +6,7 @@
  * the SKILL.md files its `skills.list` really loads, shell blocks only, minus
  * every command that is already a tool — four of these seven had NOTHING left,
  * the MENTOR and the SENTINELLA had one spawn line, and the SCOUT had five
- * `echo` of its own diagnostics (`agents-hq/piani/MISURA-BASH-PER-RUOLO.md`).
+ * `echo` of its own diagnostics.
  *
  * Taking a tool away is the part that can go wrong quietly: a role that loses
  * something it used stops and does not say so, and this team has paid for that

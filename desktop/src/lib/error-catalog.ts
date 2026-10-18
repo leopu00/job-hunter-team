@@ -272,6 +272,18 @@ const PERMISSIONS = copy(
   "I cannot make Job Hunter Team’s data private on this computer.",
   "Check that you have permissions on your user folder and try again.",
 );
+const NO_VERIFIED_CONNECTION = copy(
+  "Per questa squadra non c’è un collegamento verificato da cui partire.",
+  "Ricollega la squadra esistente dalla configurazione, poi riprova.",
+  "There is no verified connection for this team to start from.",
+  "Connect the existing team again from the setup, then try again.",
+);
+const BROWSER_REPLY = copy(
+  "Il browser assistito sulla VPS ha risposto in un modo che l’app non accetta.",
+  "Riprova. Se si ripete, chiudi il browser assistito e riaprilo.",
+  "The assisted browser on the VPS answered in a way the app does not accept.",
+  "Try again. If it happens again, close the assisted browser and open it again.",
+);
 
 export const UNKNOWN_ERROR: ErrorCopy = RETRY;
 
@@ -301,6 +313,7 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
   // ── Account scope and local owner ────────────────────────────────────────
   account_scope_state_failed: ACCOUNT_SCOPE,
   account_scope_required: ACCOUNT_SCOPE,
+  account_scope_unavailable: ACCOUNT_SCOPE,
   account_scope_changed: ACCOUNT_CHANGED,
   account_scope_mismatch: ACCOUNT_CHANGED,
   local_runtime_unsupported: LOCAL_UNSUPPORTED,
@@ -320,6 +333,45 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
     "Riprova: l’app lo installa da sola. Se si ripete, controlla la connessione a internet.",
     "The container engine (Podman) was not installed.",
     "Try again: the app installs it by itself. If it happens again, check your internet connection.",
+  ),
+  homebrew_missing: copy(
+    "Su questo Mac manca Homebrew: l’app lo usa per installare Podman.",
+    "Scarica il pacchetto di installazione di Homebrew (il file .pkg) dalla pagina ufficiale brew.sh, aprilo e completa l’installazione di macOS, poi torna qui e premi Riprova.",
+    "Homebrew is missing on this Mac: the app uses it to install Podman.",
+    "Download Homebrew’s installer package (the .pkg file) from its official page brew.sh, open it and complete the macOS installation, then come back here and press Try again.",
+  ),
+  wsl_not_ready: copy(
+    "WSL non è pronto: su Windows è lui a far girare la macchina Podman del team.",
+    "Apri il Microsoft Store, installa o aggiorna «Sottosistema Windows per Linux», riavvia il computer e premi Riprova.",
+    "WSL is not ready: on Windows it runs the team’s Podman machine.",
+    "Open the Microsoft Store, install or update “Windows Subsystem for Linux”, restart the computer and press Try again.",
+  ),
+  // Not an error: why Kimi cannot be chosen at the setup on Windows (its CLI
+  // ignores the Windows proxy for login, usage, web and updates).
+  kimi_unavailable_windows: copy(
+    "Kimi non è ancora disponibile su Windows.",
+    "Scegli Codex o Claude.",
+    "Kimi is not available on Windows yet.",
+    "Choose Codex or Claude.",
+  ),
+  // ── «Remove JHT from this computer» (Windows) ─────────────────────────────
+  uninstall_unavailable: copy(
+    "La rimozione da questo computer non è disponibile con il runtime installato.",
+    "Aggiorna l’app all’ultima versione, riapri questa pagina e riprova.",
+    "Removing JHT from this computer is not available with the installed runtime.",
+    "Update the app to the latest version, open this page again and try again.",
+  ),
+  uninstall_unsupported: copy(
+    "Per ora la rimozione dall’app c’è solo su Windows.",
+    "Su questo sistema il pulsante non è ancora disponibile.",
+    "For now, removing JHT from the app is only available on Windows.",
+    "On this system the button is not available yet.",
+  ),
+  uninstall_failed: copy(
+    "La rimozione da questo computer non è riuscita.",
+    "Riprova. Se si ripete, riavvia il computer e riprova: i tuoi dati in ~/.jht e nei documenti non sono stati toccati.",
+    "Removing JHT from this computer did not succeed.",
+    "Try again. If it happens again, restart the computer and try again: your data in ~/.jht and in the documents was not touched.",
   ),
   podman_not_ready: copy(
     "Il motore dei container è installato ma non risponde.",
@@ -526,12 +578,189 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
     "Sign in with the account that created the team, or enter another VPS.",
   ),
   existing_team_not_active: copy(
-    "Il team registrato non risulta attivo sulla VPS.",
-    "Accendi il team sulla VPS e riprova.",
-    "The registered team is not running on the VPS.",
-    "Start the team on the VPS and try again.",
+    "Nel team registrato non sono attive tutte le sessioni sulla VPS.",
+    "Servono sia il capitano sia l’assistente: avviali sulla VPS e riprova. Gli annunci si possono comunque leggere in sola lettura.",
+    "Not every session of the registered team is running on the VPS.",
+    "Both the captain and the assistant must be running: start them on the VPS and try again. The positions can still be read in read-only mode.",
+  ),
+  positions_unavailable: copy(
+    "La VPS non ha restituito gli annunci.",
+    "Premi Aggiorna. Se si ripete, segnala il codice che vedi accanto.",
+    "The VPS did not return the positions.",
+    "Press Refresh. If it keeps happening, report the code shown next to it.",
+  ),
+  desktop_transport_unavailable: copy(
+    "L’app non è riuscita a parlare con il suo nucleo nativo.",
+    "Riprova con Aggiorna. Se si ripete, chiudi Job Hunter Team del tutto e riaprilo.",
+    "The app could not talk to its native core.",
+    "Try Refresh. If it keeps happening, quit Job Hunter Team completely and open it again.",
+  ),
+  desktop_bad_reply: copy(
+    "Il nucleo nativo ha risposto in una forma che l’app non riconosce.",
+    "Riprova con Aggiorna. Se si ripete, segnala il codice che vedi accanto.",
+    "The native core answered in a form the app does not recognise.",
+    "Try Refresh. If it keeps happening, report the code shown next to it.",
+  ),
+  positions_request_invalid: copy(
+    "L’app ha chiesto gli annunci in un modo che il core non accetta.",
+    "Segnala il codice che vedi accanto: non dipende dalla VPS.",
+    "The app asked for the positions in a way the core does not accept.",
+    "Report the code shown next to it: it does not depend on the VPS.",
+  ),
+  // The assisted browser (closer_desktop.rs) and the registration of its VPS.
+  browser_busy: BUSY,
+  browser_request_invalid: RETRY,
+  browser_transport_unavailable: RETRY,
+  browser_response_invalid: BROWSER_REPLY,
+  browser_response_too_large: BROWSER_REPLY,
+  browser_response_binding_mismatch: BROWSER_REPLY,
+  browser_runtime_binding_required: copy(
+    "Il browser assistito non è ancora pronto per questa squadra.",
+    "Funziona con una squadra su VPS: chiedi a chi gestisce la VPS di prepararlo, poi riapri il browser assistito.",
+    "The assisted browser is not ready for this team yet.",
+    "It works with a team on a VPS: ask whoever manages the VPS to set it up, then open the assisted browser again.",
+  ),
+  browser_binding_invalid: copy(
+    "La configurazione salvata del browser assistito non è valida, quindi non la uso.",
+    "Chiedi a chi gestisce la VPS di prepararlo di nuovo, poi riapri il browser assistito.",
+    "The saved setup of the assisted browser is not valid, so I do not use it.",
+    "Ask whoever manages the VPS to set it up again, then open the assisted browser again.",
+  ),
+  browser_connection_changed: copy(
+    "La VPS collegata al browser assistito non corrisponde a quella scelta.",
+    "Controlla quale VPS hai scelto, poi riprova.",
+    "The VPS linked to the assisted browser does not match the one chosen.",
+    "Check which VPS you chose, then try again.",
+  ),
+  existing_team_runtime_candidate_required: copy(
+    "Manca la configurazione verificata della squadra esistente.",
+    "Chiedi a chi gestisce la VPS di completare il collegamento, poi riprova.",
+    "The verified configuration for the existing team is missing.",
+    "Ask whoever manages the VPS to complete the connection, then try again.",
+  ),
+  existing_team_runtime_candidate_invalid: copy(
+    "La configurazione verificata della squadra esistente non è valida.",
+    "Chiedi a chi gestisce la VPS di verificare il collegamento, poi riprova.",
+    "The verified configuration for the existing team is not valid.",
+    "Ask whoever manages the VPS to check the connection, then try again.",
+  ),
+  existing_team_runtime_candidate_mismatch: copy(
+    "La configurazione verificata non corrisponde alla VPS o alla squadra scelta.",
+    "Controlla la VPS e l’identificativo della squadra, poi riprova.",
+    "The verified configuration does not match the selected VPS or team.",
+    "Check the VPS and team identifier, then try again.",
+  ),
+  existing_team_runtime_candidate_exists: copy(
+    "Questo profilo ha già un collegamento salvato per una squadra.",
+    "Apri la squadra con il collegamento già salvato: non ne creo un altro.",
+    "This profile already has a saved connection for a team.",
+    "Open the team with the saved connection; no second one is created.",
+  ),
+  existing_team_runtime_candidate_conflict: copy(
+    "Mentre confermavi, per questo profilo è stato salvato un altro collegamento.",
+    "Il collegamento già presente non è stato toccato. Apri la squadra con quello.",
+    "Another connection was saved for this profile while you were confirming.",
+    "The connection that was already there was not touched. Open the team with it.",
+  ),
+  existing_team_runtime_already_selected: copy(
+    "Per questo profilo c’è già una squadra selezionata.",
+    "Aprila dal collegamento esistente invece di cercarne un’altra.",
+    "This profile already has a team selected.",
+    "Open it from the existing connection instead of looking for another.",
+  ),
+  existing_team_container_not_found: copy(
+    "Su questa VPS non c’è nessun container di Job Hunter Team in esecuzione.",
+    "Controlla l’indirizzo della VPS e che la squadra sia accesa, poi riprova.",
+    "No Job Hunter Team container is running on this VPS.",
+    "Check the VPS address and that the team is on, then try again.",
+  ),
+  existing_team_not_found: copy(
+    "Su questa VPS ci sono squadre Job Hunter Team, ma nessuna con questo identificativo.",
+    "Controlla l’identificativo della squadra, poi riprova.",
+    "This VPS runs Job Hunter Team teams, but none with this identifier.",
+    "Check the team identifier, then try again.",
+  ),
+  existing_team_ambiguous: copy(
+    "Su questa VPS non riesco a individuare un solo container per questa squadra.",
+    "Non ne scelgo uno al posto tuo. Chiedi a chi gestisce la VPS di lasciare un solo container per la squadra.",
+    "I cannot tell which single container on this VPS belongs to this team.",
+    "I will not pick one for you. Ask whoever manages the VPS to leave only one container for the team.",
+  ),
+  existing_team_image_unattested: copy(
+    "Un container di Job Hunter Team su questa VPS non ha un’immagine ufficiale ben identificata.",
+    "Chiedi a chi gestisce la VPS di aggiornare la squadra con l’immagine ufficiale, poi riprova.",
+    "A Job Hunter Team container on this VPS has no clearly identified official image.",
+    "Ask whoever manages the VPS to update the team with the official image, then try again.",
+  ),
+  existing_team_too_many_containers: copy(
+    "Questa VPS esegue più container di quanti l’app ne esamini.",
+    "Usa una VPS dedicata a Job Hunter Team, oppure chiedi a chi la gestisce di ridurne il numero.",
+    "This VPS runs more containers than the app will inspect.",
+    "Use a VPS dedicated to Job Hunter Team, or ask whoever manages it to reduce the number.",
+  ),
+  existing_team_discovery_timeout: copy(
+    "La VPS ci ha messo troppo a rispondere.",
+    "Riprova tra poco. Se si ripete, controlla che la VPS sia raggiungibile.",
+    "The VPS took too long to answer.",
+    "Try again shortly. If it happens again, check that the VPS is reachable.",
+  ),
+  existing_team_target_changed: copy(
+    "La squadra sulla VPS è cambiata mentre confermavi.",
+    "Non è stato salvato nulla. Rileggi ciò che dichiara il server e conferma di nuovo.",
+    "The team on the VPS changed while you were confirming.",
+    "Nothing was saved. Read what the server declares again and confirm again.",
+  ),
+  existing_team_receipt_required: copy(
+    "I dati che hai confermato non sono più disponibili.",
+    "Non è stato salvato nulla. Leggi di nuovo ciò che dichiara il server.",
+    "The details you confirmed are no longer available.",
+    "Nothing was saved. Read what the server declares again.",
+  ),
+  existing_team_register_not_confirmed: copy(
+    "L’azione non è stata confermata: non è stato salvato nulla.",
+    "Conferma dalla schermata di lettura per salvare il collegamento.",
+    "The action was not confirmed: nothing was saved.",
+    "Confirm from the review screen to save the connection.",
+  ),
+  existing_team_runtime_target_changed: copy(
+    "La squadra salvata non corrisponde più al collegamento selezionato.",
+    "Controlla la VPS e l’identificativo della squadra, poi riprova.",
+    "The saved team no longer matches the selected connection.",
+    "Check the VPS and team identifier, then try again.",
+  ),
+  existing_team_runtime_selection_invalid: copy(
+    "La selezione salvata per questa squadra non è valida.",
+    "Chiedi a chi gestisce la VPS di verificare il collegamento, poi riprova.",
+    "The saved selection for this team is not valid.",
+    "Ask whoever manages the VPS to check the connection, then try again.",
+  ),
+  existing_team_runtime_unavailable: copy(
+    "L’app non riesce a leggere i dati salvati della squadra su questo computer.",
+    "Chiudi completamente Job Hunter Team e riaprilo.",
+    "The app cannot read the team's saved data on this computer.",
+    "Quit Job Hunter Team completely and open it again.",
+  ),
+  existing_team_saved_incomplete: copy(
+    "Il collegamento salvato per la squadra esistente è incompleto.",
+    "Torna alla configurazione e collega di nuovo la squadra; se non basta, chiedi a chi gestisce la VPS di completare il collegamento.",
+    "The saved connection for the existing team is incomplete.",
+    "Go back to the setup and connect the team again; if that is not enough, ask whoever manages the VPS to complete the connection.",
+  ),
+  existing_team_saved_selection_mismatch: copy(
+    "La squadra trovata sulla VPS non è più quella salvata per questo profilo.",
+    "Non è stato salvato nulla e il collegamento salvato non è stato toccato. Chiedi a chi gestisce la VPS di completare il collegamento.",
+    "The team found on the VPS is no longer the one saved for this profile.",
+    "Nothing was saved and the saved connection was not touched. Ask whoever manages the VPS to complete the connection.",
   ),
   existing_team_unavailable: TEAM_UNREACHABLE,
+  existing_team_runtime_required: NO_VERIFIED_CONNECTION,
+  existing_team_runtime_selection_required: NO_VERIFIED_CONNECTION,
+  assistant_start_not_confirmed: copy(
+    "L’azione non è stata confermata: non è partito nessun comando.",
+    "Conferma l’azione dopo aver letto cosa comporta, poi riprova.",
+    "The action was not confirmed: no command was sent.",
+    "Confirm the action after reading what it involves, then try again.",
+  ),
   ssh_unavailable: copy(
     "La VPS non è raggiungibile tramite SSH.",
     "Controlla che la VPS sia accesa e connessa, poi riprova.",
@@ -1010,6 +1239,20 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
   not_recording: VOICE_FAILED,
   invalid_locale: VOICE_FAILED,
   native_failed: VOICE_FAILED,
+
+  // ── Disk space (host_vitals.py, the launcher, `jht team start`, `jht upgrade`) ──
+  disk_warning: copy(
+    "Lo spazio sul disco sta finendo.",
+    "Libera un po’ di spazio, altrimenti il team smetterà di avviare nuovi agenti e aggiornamenti.",
+    "Disk space is running low.",
+    "Free some space, or the team will stop starting new agents and updates.",
+  ),
+  disk_low: copy(
+    "Il disco è quasi pieno, quindi non parte nessun nuovo agente né aggiornamento.",
+    "Svuota il Cestino ed elimina i file grandi che non ti servono, come vecchi download o immagini Docker/Podman inutilizzate, poi riprova. Gli agenti già avviati continuano a lavorare.",
+    "The disk is almost full, so no new agent or update will start.",
+    "Empty the Trash and delete large files you no longer need, such as old downloads or unused Docker/Podman images, then try again. Agents already running keep working.",
+  ),
 };
 
 /**
@@ -1020,15 +1263,17 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
  */
 export const NOT_EMITTED: ReadonlySet<string> = new Set([
   // Rust: only in the message table of onboarding::failure().
-  "podman_start_failed",
   "runtime_wrapper_install_failed",
   "command_timeout",
   // TS: handled by the UI, produced by no backend.
   "podman_other_machine_running_named",
   "container_version_incompatible",
   "account_team_mismatch",
-  "ssh_unavailable",
   "ssh_auth_failed",
+  // Shell layers: the launcher, `jht team start` and the host wrapper's upgrade
+  // print them. The app has no Rust or TS emission site for them yet.
+  "disk_warning",
+  "disk_low",
 ]);
 
 function localeOf(locale: string | null | undefined): ErrorLocale {

@@ -286,6 +286,14 @@ if [ "$ROLE" = "worker" ]; then
     exit 0
   fi
   : "${JHT_HOME:=/jht_home}"
+  # Disco quasi pieno (< 3%): un worker nuovo non nasce. Dopo la sonda, cosi'
+  # quello gia' vivo resta com'e'.
+  _spawn_stage="disk_guard"
+  if ! jht_spawn_disk_guard; then
+    _spawn_stage="disk_low"
+    echo "Refusing to start $WORKER_SESSION: disk_low." >&2
+    exit 1
+  fi
   _ensure_claude_onboarding "$JHT_HOME"
   _spawn_stage="worker_tmux_new_session"
   tmux new-session -d -x 220 -y 50 -s "$WORKER_SESSION" -c "$JHT_HOME"
@@ -892,6 +900,17 @@ fi
 # fallimento rumoroso ma onesto. Accettabile in cambio del punto 1.
 if [ "$_hs_rc" -ne 1 ]; then
   echo "  ⚠ 'tmux has-session' for '$SESSION' did not answer (rc=$_hs_rc) — continuing as if the session did not exist; tmux itself will reject a duplicate."
+fi
+# ── Disco quasi pieno: nessun NUOVO avvio ───────────────────────────────────
+# DOPO la sonda di idempotenza (un agente gia' vivo esce 0 qui sopra, intatto) e
+# PRIMA di toccare workdir, skill e tmux. Sotto il 3% di spazio libero si rifiuta
+# col codice chiuso `disk_low`: la frase la stampa host_vitals.py dalla tabella
+# codice->frase, non questo script. Vedi jht_spawn_disk_guard in spawn-lib.sh.
+_spawn_stage="disk_guard"
+if ! jht_spawn_disk_guard; then
+  _spawn_stage="disk_low"
+  echo "Refusing to start '$SESSION': disk_low." >&2
+  exit 1
 fi
 _spawn_stage="preflight"
 
@@ -1765,7 +1784,10 @@ echo "  Connect with: tmux attach -t \"$SESSION\""
 #
 # Send: tui_send_verified — dopo il send -l del testo, capture-pane e
 # verifica che la signature sia presente PRIMA di spingere Enter. Con 3
-# retry recuperiamo i casi in cui la TUI non era davvero ricettiva.
+# retry recuperiamo i casi in cui la TUI non era davvero ricettiva. Dopo
+# l'Enter verifica che la TUI lo abbia accettato (turno partito o testo
+# uscito dal composer): "SENT OK" solo allora, altrimenti "SUBMIT NOT
+# CONFIRMED" — il testo e' rimasto nel composer e l'agente non e' partito.
 #
 # setsid: scolleghiamo dal process-group di start-agent.sh cosi' il parent
 # puo' uscire senza killare il sub-shell del kick-off.
@@ -1791,11 +1813,12 @@ _kickoff() {
     echo "[$(date +%H:%M:%S)] waiting for ready..."
     if tui_wait_ready "$JHT_KICKOFF_SESS"; then
       echo "[$(date +%H:%M:%S)] ready. sending message (${#JHT_KICKOFF_MSG} chars)..."
-      if tui_send_verified "$JHT_KICKOFF_SESS" "$JHT_KICKOFF_MSG"; then
-        echo "[$(date +%H:%M:%S)] SENT OK"
-      else
-        echo "[$(date +%H:%M:%S)] SEND FAILED (retries exhausted)"
-      fi
+      tui_send_verified "$JHT_KICKOFF_SESS" "$JHT_KICKOFF_MSG"
+      case $? in
+        0) echo "[$(date +%H:%M:%S)] SENT OK" ;;
+        2) echo "[$(date +%H:%M:%S)] SUBMIT NOT CONFIRMED (text left in the composer, Enter not accepted)" ;;
+        *) echo "[$(date +%H:%M:%S)] SEND FAILED (retries exhausted)" ;;
+      esac
     else
       echo "[$(date +%H:%M:%S)] WAIT_READY TIMEOUT"
     fi
@@ -1811,11 +1834,16 @@ _kickoff() {
 # Lo stesso messaggio viene re-iniettato dal watchdog se il flag non
 # appare (3 retry × 90s) — copre boot lenti / trust dialog / contesto
 # pieno che ha ignorato il primo prompt.
+#
+# Il flag dura quanto il profilo, non quanto l'avvio: vale per QUESTO avvio solo
+# se e' piu' recente del marcatore creato qui sotto prima del kickoff (e il
+# prompt fa toccare il flag all'agente anche quando non manda niente). Il
+# watchdog e' tui_welcome_watchdog in tui-helpers.sh.
 _welcome_kickoff() {
   local role="$1" flag_name="$2" body="$3"
   local welcome_flag="${JHT_HOME:-/jht_home}/profile/${flag_name}"
   local welcome_dir="${JHT_HOME:-/jht_home}/profile"
-  local welcome_log
+  local welcome_log welcome_boot_marker
   local msg
   welcome_log="$(jht_daemon_log "welcome-watchdog-${role}.log")"
   msg=$(printf '%s\n' \
@@ -1823,7 +1851,7 @@ _welcome_kickoff() {
     "" \
     "User welcome protocol — idempotent:" \
     "" \
-    "1. If ${welcome_flag} exists: DO NOT send anything. You were already introduced on a previous boot. Acknowledge the system and wait for actual [CHAT] / [TG] messages." \
+    "1. If ${welcome_flag} exists: DO NOT send anything. You were already introduced on a previous boot. Run touch ${welcome_flag} (it tells the launcher this boot handled the welcome), acknowledge the system with '[@${role} -> @system] [WELCOME-ACK] already sent' and wait for actual [CHAT] / [TG] messages." \
     "" \
     "2. Otherwise, Telegram is OPTIONAL (web-first). Check whether a Telegram bot is configured: python3 -c \"import json;b=(json.load(open('\${JHT_HOME:-/jht_home}/jht.config.json')).get('channels') or {}).get('telegram',{}).get('bots') or {};print(any((x or {}).get('bot_token','').strip() for x in b.values()))\"." \
     "   - If True: send the welcome message below via jht-telegram-send --from ${role} (telegram-send skill). Send ONE message in the user's language (the text below is already localized — send it EXACTLY as written), with real blank lines (\\n\\n)." \
@@ -1836,27 +1864,18 @@ _welcome_kickoff() {
     "" \
     "4. Acknowledge the system with one line: '[@${role} -> @system] [WELCOME-ACK] sent/skipped + flag created'. THEN start working immediately (open pipeline-triage, read the budget, and act). DO NOT remain idle waiting for a Telegram signal."
   )
+  # Marcatore d'avvio: il flag conta solo se piu' recente di questo file.
+  welcome_boot_marker="${welcome_log%.log}.boot"
+  : >"$welcome_boot_marker" 2>/dev/null || true
   _kickoff "$SESSION" "$msg"
 
-  # Watchdog: 3 retry × 90s. Stesso pattern usato prima del refactor.
+  # Watchdog: 3 retry × 90s.
   JHT_WELCOME_SESS="$SESSION" JHT_WELCOME_FLAG="$welcome_flag" JHT_WELCOME_MSG="$msg" JHT_WELCOME_LOG="$welcome_log" \
+  JHT_WELCOME_BOOT="$welcome_boot_marker" \
   setsid sh -c '
     exec >"$JHT_WELCOME_LOG" 2>&1
-    echo "[$(date +%H:%M:%S)] welcome watchdog start (flag=$JHT_WELCOME_FLAG)"
     . /app/.launcher/tui-helpers.sh
-    for retry in 1 2 3; do
-      sleep 90
-      if [ -f "$JHT_WELCOME_FLAG" ]; then
-        echo "[$(date +%H:%M:%S)] flag present after retry=$retry-1, exiting"
-        exit 0
-      fi
-      echo "[$(date +%H:%M:%S)] flag missing (retry $retry/3): reinjecting"
-      tui_send_verified "$JHT_WELCOME_SESS" "$JHT_WELCOME_MSG" || \
-        echo "[$(date +%H:%M:%S)] tui_send_verified failed"
-    done
-    if [ ! -f "$JHT_WELCOME_FLAG" ]; then
-      echo "[$(date +%H:%M:%S)] watchdog giving up: welcome not confirmed"
-    fi
+    tui_welcome_watchdog "$JHT_WELCOME_SESS" "$JHT_WELCOME_MSG" "$JHT_WELCOME_FLAG" "$JHT_WELCOME_BOOT" 3 90
   ' </dev/null 9>&- &
 }
 

@@ -24,25 +24,42 @@ account-backed onboarding and subscription-provider access.**
 - Desktop sign-in uses Google through a PKCE browser flow and restores the
   account session before opening protected application surfaces.
 - First-run setup collects the profile and environment, then connects a
-  supported Claude Code, Codex or Kimi subscription through that provider's
-  login flow. Completion waits for the native snapshot and direct chat to be
+  supported Codex (recommended), Claude Code or Kimi subscription through that provider's
+  login flow (Kimi is not supported yet when the team runs on this computer on
+  Windows). Completion waits for the native snapshot and direct chat to be
   ready instead of reporting success optimistically.
 - The Assistant has a resumable guided introduction with tour, requirements
   and exploration paths, followed by an editable first message for the free
   chat. On macOS, on-device dictation can fill supported composers without
   sending automatically.
 
+### Windows: the team runs locally
+
+- On Windows the team now runs on your computer, in Podman inside WSL. The app
+  installs Podman and everything else it needs; Docker Desktop is not
+  required. WSL must be enabled on Windows: if it is not ready, the app says
+  what to do.
+- Not yet supported when the team runs on Windows: Kimi, sending applications
+  by email from the team, and the local scorer (Ollama).
+- **This computer › Remove JHT from this computer** takes the team off a
+  Windows computer after a confirmation, without a terminal. It deletes the
+  JHT Podman machine in WSL with everything inside it (the team container, the
+  provider CLIs, and the mail password and portal logins kept by the broker),
+  the JHT runtime and the `jht` commands. Your `.jht` folder (settings,
+  profile, CV, provider login), `Documents\Job Hunter Team`, Podman, Docker
+  Compose and your other WSL distributions stay. Then the app goes back to its
+  first run.
+
 ### Explicit limits
 
 - Version 0.4.0 is subscription/provider-only. It does not expose the retired
-  API-key/local-team mode, “Team Locale”, API spend data or the Budget API
-  route and native command.
+  API-key team mode (“Team Locale”), API spend data or the Budget API route
+  and native command.
 - On-device dictation depends on the macOS speech services and permissions;
   unsupported platforms show that limitation rather than pretending to
   transcribe.
-- This release does not claim a supported local-team runtime on Windows. Host
-  and provider readiness are verified during onboarding, and missing external
-  prerequisites remain actionable failures.
+- Host and provider readiness are verified during onboarding, and missing
+  external prerequisites remain actionable failures.
 
 ---
 

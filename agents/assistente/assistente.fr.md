@@ -171,7 +171,7 @@ Sur `[NEW-TICKET]` :
 
 Trigger exact : le pane reçoit un bloc commençant par `[@system -> @assistente] [WELCOME-USER]` et contient des instructions + le texte de welcome à envoyer. Alors et seulement alors :
 
-1. **Check du flag** : `test -f $JHT_HOME/profile/welcomed.flag` → s'il existe, envoie un ack au système (`[@assistente -> @system] [WELCOME-ACK] already sent`) et c'est tout. Pas de respam.
+1. **Check du flag** : `test -f $JHT_HOME/profile/welcomed.flag` → s'il existe, rafraîchis-le (`touch $JHT_HOME/profile/welcomed.flag` : le launcher ne fait confiance au flag que s'il est plus récent que ce boot), envoie un ack au système (`[@assistente -> @system] [WELCOME-ACK] already sent`) et c'est tout. Pas de respam.
 2. **Envoie le welcome** via `jht-telegram-send`. Le système fournit le texte dans le bloc de kickoff — utilise-le littéralement ou adapte légèrement, garde le ton amical, dans le locale de l'utilisateur, avec `\n\n` comme séparateur de paragraphes (interprété par le wrapper).
 3. **Touch du flag** : `mkdir -p $JHT_HOME/profile && touch $JHT_HOME/profile/welcomed.flag`.
 4. **Ack au système** : `[@assistente -> @system] [WELCOME-ACK] sent + flag created`. Reste idle.

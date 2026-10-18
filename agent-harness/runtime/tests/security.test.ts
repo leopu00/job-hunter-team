@@ -8,8 +8,7 @@
  *
  * What this suite does NOT claim: the permission gate is not a sandbox. In
  * `auto` mode `bash` may `cat` any file the process can read; keeping the
- * provider key out of that reach is the container's job (see
- * agents-hq/piani/SICUREZZA-HARNESS.md, finding H-3).
+ * provider key out of that reach is the container's job.
  */
 
 import { mkdir, mkdtemp, realpath, rm, symlink, writeFile } from "node:fs/promises";
@@ -266,7 +265,7 @@ describe("web_fetch: no local network, no cloud metadata", () => {
 
 describe("jobs.db outside apiHome (SICUREZZA D-1): only the database tools touch it", () => {
   /**
-   * The ashley layout: JHT_API_DB=/jht_home/db/jobs.db, outside the runtime's
+   * The VPS layout: JHT_API_DB=/jht_home/db/jobs.db, outside the runtime's
    * home, next to the candidate's profile under the same JHT home. The file
    * tools must not rewrite, truncate or read the database or SQLite's files
    * beside it — by name or through a link — and the profile stays readable.

@@ -43,6 +43,7 @@ HOST_UID="$(id -u)"
 CONTAINER_SERVICE="jht"
 # I servizi del compose: agenti e i due servizi isolati.
 COMPOSE_SERVICES="jht jht-broker jht-telegram"
+RUNTIME_MIGRATION_VOLUMES="jht-broker-state jht-secrets jht-telegram-secrets jht-telegram-state"
 ATTESTED_CONTAINER_ID=""
 if [ -n "${JHT_RUNTIME_DIR:-}" ]; then
   RUNTIME_DIR="$JHT_RUNTIME_DIR"
@@ -55,6 +56,12 @@ COMPOSE_FILE="${JHT_COMPOSE_FILE:-$RUNTIME_DIR/docker-compose.yml}"
 NODE_ENTRY="${JHT_NODE_ENTRY:-/app/cli/bin/jht.js}"
 HOST_SETUP_SCRIPT="${JHT_HOST_SETUP_SCRIPT:-$RUNTIME_DIR/host-setup.sh}"
 RUNTIME_MANIFEST="$RUNTIME_DIR/.runtime-integrity"
+RUNTIME_MIGRATION_MARKER="$RUNTIME_DIR/.runtime-migrated-podman"
+# Canale di test: install.sh --image fissa qui l'immagine verificata del suo
+# commit (ref canonico per digest). Sta nel runtime host, fuori dai mount del
+# container, ed e' coperto dal manifest: nessuna variabile d'ambiente serve
+# ai `jht up` successivi. Assente = produzione (immagine del compose).
+RUNTIME_IMAGE_PIN="$RUNTIME_DIR/runtime-image"
 # `jht upgrade` aggiorna anche i due file host scaricati dall'installer. Il
 # wrapper non puo' fidarsi di un checkout Git (la distribuzione utente e'
 # image-only), quindi la fonte e' la stessa raw release dell'installer. Chi
@@ -275,6 +282,9 @@ runtime_write_manifest() {
       fi
       printf 'docker-shim=%s\n' "$(runtime_sha256 "$DOCKER_SHIM")"
     fi
+    if [ -f "$RUNTIME_IMAGE_PIN" ]; then
+      printf 'runtime-image=%s\n' "$(runtime_sha256 "$RUNTIME_IMAGE_PIN")"
+    fi
   } > "$tmp" || return 1
   chmod 600 "$tmp" || { rm -f "$tmp"; return 1; }
   mv -f "$tmp" "$RUNTIME_MANIFEST"
@@ -343,9 +353,28 @@ runtime_bundle_trusted() {
     [ "$(runtime_manifest_value docker-shim)" = "$(runtime_sha256 "$DOCKER_SHIM")" ] || return 1
     grep -Fqx '# JHT_PODMAN_DOCKER_SHIM=1' "$DOCKER_SHIM" || return 1
   fi
+  if [ -e "$RUNTIME_IMAGE_PIN" ] || [ -L "$RUNTIME_IMAGE_PIN" ]; then
+    runtime_node_safe "$RUNTIME_IMAGE_PIN" file || return 1
+    [ "$(runtime_manifest_value runtime-image)" = "$(runtime_sha256 "$RUNTIME_IMAGE_PIN")" ] || return 1
+    runtime_image_pin_value >/dev/null || return 1
+  elif [ -n "$(runtime_manifest_value runtime-image)" ]; then
+    # Il manifest attesta un pin che non c'e' piu': tornare in silenzio
+    # all'immagine di produzione cambierebbe canale senza che nessuno lo chieda.
+    return 1
+  fi
   grep -Fqx 'JHT_HOST_RUNTIME_PROTOCOL=1' "$WRAPPER_PATH" || return 1
   grep -Fqx 'JHT_HOST_SETUP_PROTOCOL=1' "$HOST_SETUP_SCRIPT" || return 1
   grep -Eq '^[[:space:]]*-[[:space:]]*jht-runtime-mask:/jht_home/runtime([[:space:]]|$)' "$COMPOSE_FILE" || return 1
+}
+
+# Il ref del pin, solo nella forma canonica scritta da install.sh.
+runtime_image_pin_value() {
+  local value
+  [ -f "$RUNTIME_IMAGE_PIN" ] || return 1
+  [ "$(wc -l < "$RUNTIME_IMAGE_PIN" | tr -d ' ')" = "1" ] || return 1
+  value="$(tr -d '\n' < "$RUNTIME_IMAGE_PIN")"
+  printf '%s' "$value" | grep -Eqx 'ghcr\.io/leopu00/jht@sha256:[0-9a-f]{64}' || return 1
+  printf '%s\n' "$value"
 }
 
 runtime_bootstrap_release() {
@@ -426,6 +455,12 @@ require_trusted_runtime() {
     err "runtime host non attendibile (path, owner, permessi o SHA-256)"
     return 1
   }
+  # Il pin del canale di test vince su un JHT_IMAGE dell'ambiente: il canale
+  # e' deciso all'installazione, non da chi lancia il comando.
+  if [ -f "$RUNTIME_IMAGE_PIN" ]; then
+    JHT_IMAGE="$(runtime_image_pin_value)" || return 1
+    export JHT_IMAGE
+  fi
 }
 
 # ── Verifiche pre-flight ──────────────────────────────────────────────────
@@ -942,9 +977,32 @@ LEGACY_SECRET_NAMES="email_monitor email_transport"
 BROKER_VOLUME_NAMES="jht-secrets jht-broker-state jht-broker-sock"
 HOST_RESET_CONFIRMED_EXIT=20
 
+# Il compose installato segue le release, non il repo: finche' `jht upgrade`
+# non lo rinnova, puo' non avere il servizio. Con il servizio assente `jht up`
+# non lo crea mai: la via d'uscita giusta e' `jht upgrade`, non un altro `up`.
+compose_lacks_service() {
+  # Solo un compose LEGGIBILE senza il servizio vale «runtime vecchio»; la
+  # chiave si cerca con qualunque rientro, non solo con i due spazi.
+  [ -r "$COMPOSE_FILE" ] && ! grep -Eq "^[[:space:]]+$1:[[:space:]]*(#.*)?$" "$COMPOSE_FILE" 2>/dev/null
+}
+
+compose_unreadable() {
+  [ ! -r "$COMPOSE_FILE" ]
+}
+
 broker_admin() {
   local broker_id
   broker_id="$(read_only_service_id "$BROKER_SERVICE")" || {
+    if compose_unreadable; then
+      err "broker_unavailable: il compose del runtime installato non è leggibile, non si sa se ha il broker dei segreti."
+      err "Cosa fare: reinstalla il runtime con l'installer"
+      return 1
+    fi
+    if compose_lacks_service "$BROKER_SERVICE"; then
+      err "broker_unavailable: il runtime installato è più vecchio e non ha il broker dei segreti."
+      err "Cosa fare: jht upgrade"
+      return 1
+    fi
     err "broker_unavailable: il broker dei segreti non è attivo o non è attestabile."
     err "Cosa fare: jht up"
     return 1
@@ -960,6 +1018,16 @@ TELEGRAM_SERVICE="jht-telegram"
 telegram_admin() {
   local telegram_id
   telegram_id="$(read_only_service_id "$TELEGRAM_SERVICE")" || {
+    if compose_unreadable; then
+      err "telegram_unavailable: il compose del runtime installato non è leggibile, non si sa se ha il servizio Telegram isolato."
+      err "Cosa fare: reinstalla il runtime con l'installer"
+      return 1
+    fi
+    if compose_lacks_service "$TELEGRAM_SERVICE"; then
+      err "telegram_unavailable: il runtime installato è più vecchio e non ha il servizio Telegram isolato."
+      err "Cosa fare: jht upgrade"
+      return 1
+    fi
     err "telegram_unavailable: il servizio Telegram isolato non è attivo o non è attestabile."
     err "Cosa fare: jht up"
     return 1
@@ -970,6 +1038,16 @@ telegram_admin() {
 telegram_admin_input() {
   local telegram_id
   telegram_id="$(read_only_service_id "$TELEGRAM_SERVICE")" || {
+    if compose_unreadable; then
+      err "telegram_unavailable: il compose del runtime installato non è leggibile, non si sa se ha il servizio Telegram isolato."
+      err "Cosa fare: reinstalla il runtime con l'installer"
+      return 1
+    fi
+    if compose_lacks_service "$TELEGRAM_SERVICE"; then
+      err "telegram_unavailable: il runtime installato è più vecchio e non ha il servizio Telegram isolato."
+      err "Cosa fare: jht upgrade"
+      return 1
+    fi
     err "telegram_unavailable: il servizio Telegram isolato non è attivo o non è attestabile."
     err "Cosa fare: jht up"
     return 1
@@ -1493,6 +1571,241 @@ reset_command() {
   remove_broker_reset_data
 }
 
+# Manifest deterministico del contenuto di un volume. Conta i file regolari e
+# lega al digest aggregato sia il percorso relativo sia il digest di ciascun
+# file. Symlink e file speciali fanno fallire la migrazione: i quattro volumi
+# persistenti JHT contengono soltanto directory e file regolari.
+RUNTIME_VOLUME_MANIFEST_PY='import hashlib,os,stat,sys
+root=sys.argv[1]
+root_stat=os.lstat(root)
+entries=[("D",".",str(root_stat.st_uid)+":"+str(root_stat.st_gid)+":"+format(stat.S_IMODE(root_stat.st_mode),"o"),"")]
+count=0
+for base,dirs,files in os.walk(root,topdown=True,followlinks=False):
+    dirs.sort(); files.sort()
+    for name in list(dirs):
+        path=os.path.join(base,name); mode=os.lstat(path).st_mode
+        if not stat.S_ISDIR(mode): raise SystemExit(41)
+        metadata=os.lstat(path)
+        owner=str(metadata.st_uid)+":"+str(metadata.st_gid)+":"+format(stat.S_IMODE(mode),"o")
+        entries.append(("D",os.path.relpath(path,root),owner,""))
+    for name in files:
+        path=os.path.join(base,name); mode=os.lstat(path).st_mode
+        if not stat.S_ISREG(mode): raise SystemExit(42)
+        digest=hashlib.sha256()
+        with open(path,"rb") as stream:
+            for block in iter(lambda:stream.read(1024*1024),b""): digest.update(block)
+        metadata=os.lstat(path)
+        owner=str(metadata.st_uid)+":"+str(metadata.st_gid)+":"+format(stat.S_IMODE(mode),"o")
+        entries.append(("F",os.path.relpath(path,root),owner,digest.hexdigest())); count+=1
+aggregate=hashlib.sha256()
+for kind,path,owner,digest in entries:
+    aggregate.update(kind.encode()+b"\0"+path.encode("utf-8")+b"\0"+owner.encode()+b"\0"+digest.encode()+b"\0")
+print(str(count)+" "+aggregate.hexdigest())'
+
+migration_docker_binary() {
+  local candidate="${JHT_MIGRATION_DOCKER:-}" resolved=""
+  for candidate in "$candidate" "$(command -v docker 2>/dev/null || true)" \
+      /usr/bin/docker /usr/local/bin/docker /opt/homebrew/bin/docker \
+      /Applications/Docker.app/Contents/Resources/bin/docker; do
+    [ -n "$candidate" ] && [ -x "$candidate" ] || continue
+    resolved="$(cd -P "$(dirname "$candidate")" 2>/dev/null && printf '%s/%s\n' "$(pwd -P)" "$(basename "$candidate")")" || continue
+    [ "$resolved" != "$DOCKER_SHIM" ] || continue
+    printf '%s\n' "$resolved"
+    return 0
+  done
+  return 1
+}
+
+migration_podman_run() {
+  local podman_bin="$1"
+  shift
+  if [ "$HOST_KERNEL" = "Darwin" ]; then
+    "$podman_bin" --connection "$PODMAN_MACHINE_NAME" "$@"
+  else
+    "$podman_bin" "$@"
+  fi
+}
+
+migration_volume_id() {
+  local engine="$1" binary="$2" project="$3" logical="$4" ids=""
+  if [ "$engine" = docker ]; then
+    ids="$("$binary" volume ls -q \
+      --filter "label=com.docker.compose.project=$project" \
+      --filter "label=com.docker.compose.volume=$logical")" || return 1
+  else
+    ids="$(migration_podman_run "$binary" volume ls -q \
+      --filter "label=com.docker.compose.project=$project" \
+      --filter "label=com.docker.compose.volume=$logical")" || return 1
+  fi
+  case "$ids" in *$'\n'*) return 2 ;; esac
+  printf '%s' "$ids"
+}
+
+migration_volume_manifest() {
+  local engine="$1" binary="$2" image="$3" volume="$4" result
+  if [ "$engine" = docker ]; then
+    result="$("$binary" run --rm --network none --read-only --cap-drop ALL \
+      --security-opt no-new-privileges --volume "$volume:/volume:ro" \
+      --entrypoint /usr/bin/python3 "$image" -I -c "$RUNTIME_VOLUME_MANIFEST_PY" /volume)" \
+      || return 1
+  else
+    result="$(migration_podman_run "$binary" run --rm --network none --read-only --cap-drop ALL \
+      --security-opt no-new-privileges --volume "$volume:/volume:ro" \
+      --entrypoint /usr/bin/python3 "$image" -I -c "$RUNTIME_VOLUME_MANIFEST_PY" /volume)" \
+      || return 1
+  fi
+  printf '%s\n' "$result" | grep -Eq '^[0-9]+ [0-9a-f]{64}$' || return 1
+  printf '%s\n' "$result"
+}
+
+migration_copy_volume() {
+  local docker_bin="$1" podman_bin="$2" image="$3" source="$4" target="$5"
+  "$docker_bin" run --rm --network none --read-only --cap-drop ALL \
+      --security-opt no-new-privileges --volume "$source:/volume:ro" \
+      --entrypoint /bin/tar "$image" -C /volume -cf - . \
+    | migration_podman_run "$podman_bin" run --rm -i --network none --read-only \
+      --cap-drop ALL --security-opt no-new-privileges \
+      --volume "$target:/volume" --entrypoint /bin/tar "$image" \
+      -C /volume -xf -
+}
+
+migration_left() {
+  local verified=" $1 " logical
+  for logical in $RUNTIME_MIGRATION_VOLUMES; do
+    case "$verified" in *" $logical "*) ;; *) printf 'JHT_LEFT %s\n' "$logical" ;; esac
+  done
+}
+
+migrate_runtime_podman() {
+  local docker_bin podman_bin image logical source target source_manifest target_manifest
+  local verified="" records="" tmp_marker running
+  docker_bin="$(migration_docker_binary)" || {
+    err "runtime_migration_docker_missing: il client Docker originale non e' disponibile."
+    migration_left "$verified"; return 24
+  }
+  podman_bin="${JHT_MIGRATION_PODMAN:-$(podman_binary 2>/dev/null || true)}"
+  [ -n "$podman_bin" ] && [ -x "$podman_bin" ] || {
+    err "runtime_migration_podman_missing: Podman non e' disponibile."
+    migration_left "$verified"; return 24
+  }
+  image="${JHT_MIGRATION_IMAGE:-${JHT_IMAGE:-$DEFAULT_RUNTIME_IMAGE}}"
+  if ! printf '%s\n' "$image" \
+      | grep -Eq '^ghcr\.io/leopu00/jht@sha256:[0-9a-f]{64}$'; then
+    err "runtime_migration_image_invalid: serve l'immagine JHT fissata per digest."
+    migration_left "$verified"; return 24
+  fi
+  "$docker_bin" image inspect "$image" >/dev/null 2>&1 \
+    && migration_podman_run "$podman_bin" image inspect "$image" >/dev/null 2>&1 || {
+      err "runtime_migration_image_missing: la stessa immagine JHT deve esistere in Docker e Podman."
+      migration_left "$verified"; return 24
+    }
+  running="$("$docker_bin" ps -q --filter label=com.docker.compose.project=host-runtime)" || {
+    migration_left "$verified"; return 24
+  }
+  [ -z "$running" ] || {
+    err "runtime_migration_team_running: ferma prima il team Docker."
+    migration_left "$verified"; return 24
+  }
+  running="$(migration_podman_run "$podman_bin" ps -q --filter label=com.docker.compose.project=jht)" || {
+    migration_left "$verified"; return 24
+  }
+  [ -z "$running" ] || {
+    err "runtime_migration_team_running: ferma prima il team Podman."
+    migration_left "$verified"; return 24
+  }
+
+  # Un marker completo rende il comando un no-op soltanto se sorgente e
+  # destinazione sono ancora identici. Non sovrascriviamo dati Podman usati
+  # dopo una migrazione conclusa.
+  if [ -f "$RUNTIME_MIGRATION_MARKER" ]; then
+    for logical in $RUNTIME_MIGRATION_VOLUMES; do
+      source="$(migration_volume_id docker "$docker_bin" host-runtime "$logical")" || {
+        migration_left "$verified"; return 24
+      }
+      target="$(migration_volume_id podman "$podman_bin" jht "$logical")" || {
+        migration_left "$verified"; return 24
+      }
+      if [ -z "$source" ] && [ -z "$target" ] \
+          && grep -Fqx "$logical=absent" "$RUNTIME_MIGRATION_MARKER"; then
+        verified="$verified $logical"; continue
+      fi
+      [ -n "$source" ] && [ -n "$target" ] || {
+        err "runtime_migration_changed: $logical non corrisponde piu' al marker verificato."
+        migration_left "$verified"; return 24
+      }
+      source_manifest="$(migration_volume_manifest docker "$docker_bin" "$image" "$source")" || {
+        migration_left "$verified"; return 24
+      }
+      target_manifest="$(migration_volume_manifest podman "$podman_bin" "$image" "$target")" || {
+        migration_left "$verified"; return 24
+      }
+      [ "$source_manifest" = "$target_manifest" ] \
+        && grep -Fqx "$logical=$source_manifest" "$RUNTIME_MIGRATION_MARKER" || {
+          err "runtime_migration_changed: checksum diverso per $logical dopo la migrazione."
+          migration_left "$verified"; return 24
+        }
+      verified="$verified $logical"
+    done
+    info "Migrazione Docker -> Podman gia' verificata; i volumi Docker restano intatti e contengono ancora le password della posta, gli accessi ai portali e i token di Telegram."
+    return 0
+  fi
+
+  for logical in $RUNTIME_MIGRATION_VOLUMES; do
+    source="$(migration_volume_id docker "$docker_bin" host-runtime "$logical")" || {
+      migration_left "$verified"; return 24
+    }
+    target="$(migration_volume_id podman "$podman_bin" jht "$logical")" || {
+      migration_left "$verified"; return 24
+    }
+    if [ -z "$source" ]; then
+      [ -z "$target" ] || {
+        err "runtime_migration_source_missing: $logical manca in Docker ma esiste in Podman; non lo sovrascrivo."
+        migration_left "$verified"; return 24
+      }
+      records="${records}${logical}=absent\n"
+      verified="$verified $logical"
+      continue
+    fi
+    source_manifest="$(migration_volume_manifest docker "$docker_bin" "$image" "$source")" || {
+      migration_left "$verified"; return 24
+    }
+    [ -z "$target" ] || migration_podman_run "$podman_bin" volume rm -f "$target" >/dev/null || {
+      migration_left "$verified"; return 24
+    }
+    target="jht_$logical"
+    migration_podman_run "$podman_bin" volume create \
+      --label com.docker.compose.project=jht \
+      --label com.docker.compose.volume="$logical" \
+      --label io.podman.compose.project=jht \
+      --label io.podman.compose.volume="$logical" "$target" >/dev/null || {
+        migration_left "$verified"; return 24
+      }
+    migration_copy_volume "$docker_bin" "$podman_bin" "$image" "$source" "$target" || {
+      err "runtime_migration_interrupted: copia incompleta di $logical; il sorgente Docker e' intatto."
+      migration_left "$verified"; return 24
+    }
+    target_manifest="$(migration_volume_manifest podman "$podman_bin" "$image" "$target")" || {
+      migration_left "$verified"; return 24
+    }
+    [ "$source_manifest" = "$target_manifest" ] || {
+      err "runtime_migration_checksum_mismatch: $logical non ha superato la verifica."
+      migration_left "$verified"; return 24
+    }
+    records="${records}${logical}=${source_manifest}\n"
+    verified="$verified $logical"
+  done
+  tmp_marker="${RUNTIME_MIGRATION_MARKER}.tmp.$$"
+  umask 077
+  {
+    printf 'version=1\nsource=docker:host-runtime\ntarget=podman:jht\n'
+    printf '%b' "$records"
+  } > "$tmp_marker" || { rm -f "$tmp_marker"; migration_left "$verified"; return 24; }
+  chmod 600 "$tmp_marker" && mv -f "$tmp_marker" "$RUNTIME_MIGRATION_MARKER" || {
+    rm -f "$tmp_marker"; migration_left "$verified"; return 24
+  }
+  info "Migrazione Docker -> Podman verificata. I volumi Docker non sono stati rimossi e contengono ancora le password della posta, gli accessi ai portali e i token di Telegram: cancellali solo con una conferma esplicita nel futuro comando di pulizia."
+}
+
 # `jht mail setup --password-stdin --user U --dedicated|--not-dedicated` e' il
 # canale del desktop: nessuna domanda, la password e' la prima riga di stdin
 # (mai argv, file o log), e su stdout c'e' una sola riga JSON, quella del
@@ -1837,6 +2150,9 @@ jht — Job Hunter Team
     jht telegram pair --all abbina in una seduta tutti i ruoli legacy
     jht telegram chat-id ROLE sposta il bot su un'altra chat, con lo stesso codice
     jht reset              cancella configurazione e volumi del broker
+    jht migrate-runtime podman
+                           copia e verifica i volumi Docker in Podman;
+                           non seleziona il nuovo runtime e non cancella Docker
     jht podman-machine-recreate --confirm
                            ricrea la macchina Podman (macOS) vedendo
                            solo ~/.jht e ~/Documents/Job Hunter Team
@@ -1872,7 +2188,7 @@ serve_help_without_docker() {
 # falso errore; il loro aiuto resta quindi quello locale anche in quel caso.
 host_command_uses_local_help() {
   case "$1" in
-    up|start-container|down|stop-container|restart|recreate|upgrade|logs|status|shell|oauth-login|claude-login|setup|download|podman-machine-recreate|mail|telegram|reset)
+    up|start-container|down|stop-container|restart|recreate|upgrade|logs|status|shell|oauth-login|claude-login|setup|download|podman-machine-recreate|mail|telegram|reset|migrate-runtime)
       return 0
       ;;
   esac
@@ -2496,11 +2812,101 @@ handle_host_download() {
 # l'immagine e i file precedenti: un kill a meta' viene rollbackato al prossimo
 # `jht upgrade`, mai lasciato come deploy ambiguo.
 
+# ── Disco quasi pieno: nessun upgrade ──────────────────────────────────────
+# Un upgrade scarica un'immagine da centinaia di MB e riscrive il runtime: su un
+# disco al limite muore a meta' e lascia un rollback da fare su un disco pieno.
+# Si rifiuta PRIMA di scaricare qualunque cosa, col codice chiuso `disk_low`
+# (anche `--check`, che scarica l'immagine), quando lo spazio libero e' sotto il
+# 3% E sotto 8 GiB: la percentuale da sola rifiutava un disco da 500 GiB con 14 GiB
+# ancora liberi. Le soglie (avviso: 10% E 20 GiB) sono le stesse di
+# shared/skills/host_vitals.py e cli/src/lib/disk-guard.js (tests/test_disk_guard.py
+# le confronta), qui in per mille e in KiB (l'unita' di `df -Pk`) per restare in
+# aritmetica intera.
+#
+# La pulizia delle immagini JHT vecchie (piu' sotto) NON gira sotto la
+# soglia: tiene «corrente» e «precedente», e la precedente esiste solo dentro
+# un upgrade che sta riuscendo. Per questo il rifiuto dice all'utente cosa fare
+# per liberare spazio (la frase `disk.low`, e il messaggio qui sotto).
+#
+# Si misurano i volumi che l'host puo' vedere: la cartella dati (~/.jht) e, su
+# Linux, la radice dati del motore. Su macOS il disco del motore sta dentro la
+# macchina Podman/VM e da qui non si legge: resta «sconosciuto» e NON si ripiega
+# sul disco del Mac. Un volume che non si misura non rifiuta niente.
+DISK_WARN_FREE_PERMILLE=100
+DISK_WARN_FREE_KIB=20971520
+DISK_BLOCK_FREE_PERMILLE=30
+DISK_BLOCK_FREE_KIB=8388608
+DISK_LOW_PERMILLE=""
+
+# Stampa «<per mille liberi> <KiB liberi>» del volume che contiene $1.
+disk_free_measure() {
+  local target="$1" line total avail
+  [ -n "$target" ] || return 1
+  # La cartella dati puo' non esistere ancora: si misura il primo antenato.
+  while [ ! -e "$target" ] && [ "$target" != "/" ] && [ "$target" != "." ]; do
+    target="$(dirname "$target")"
+  done
+  [ -e "$target" ] || return 1
+  line="$(df -Pk "$target" 2>/dev/null | awk 'NR==2 {print $2 " " $4}')" || return 1
+  read -r total avail <<<"$line"
+  case "$total" in ''|*[!0-9]*) return 1 ;; esac
+  case "$avail" in ''|*[!0-9]*) return 1 ;; esac
+  [ "$total" -gt 0 ] || return 1
+  printf '%s %s' $(( avail * 1000 / total )) "$avail"
+}
+
+disk_engine_path() {
+  if [ -n "${JHT_ENGINE_DISK_PATH+x}" ]; then
+    printf '%s' "$JHT_ENGINE_DISK_PATH"
+    return 0
+  fi
+  [ "$(uname -s)" = "Linux" ] || return 0
+  local candidate
+  for candidate in /var/lib/docker /var/lib/containers; do
+    if [ -d "$candidate" ]; then
+      printf '%s' "$candidate"
+      return 0
+    fi
+  done
+}
+
+# Livello di uno spazio libero (`ok|warn|low`) dato per mille e KiB liberi: serve
+# la percentuale E i byte. Il per mille e' il pavimento di libero*1000/totale,
+# quindi «< 30» equivale esattamente a «libero*100 < 3*totale»: lo stesso
+# confine di Python e JS, senza arrotondamenti.
+disk_level_of() {
+  if [ "$1" -lt "$DISK_BLOCK_FREE_PERMILLE" ] && [ "$2" -lt "$DISK_BLOCK_FREE_KIB" ]; then
+    printf low
+  elif [ "$1" -lt "$DISK_WARN_FREE_PERMILLE" ] && [ "$2" -lt "$DISK_WARN_FREE_KIB" ]; then
+    printf warn
+  else
+    printf ok
+  fi
+}
+
+# 0 = almeno un volume misurato e' sotto il 3% E sotto 8 GiB (in
+# DISK_LOW_PERMILLE il valore); 1 = tutti sani oppure non misurabili.
+disk_low() {
+  local volume measure permille avail_kib
+  DISK_LOW_PERMILLE=""
+  for volume in "${JHT_HOME_HOST:-$HOME/.jht}" "$(disk_engine_path)"; do
+    [ -n "$volume" ] || continue
+    measure="$(disk_free_measure "$volume")" || continue
+    read -r permille avail_kib <<<"$measure"
+    if [ "$(disk_level_of "$permille" "$avail_kib")" = "low" ]; then
+      DISK_LOW_PERMILLE="$permille"
+      return 0
+    fi
+  done
+  return 1
+}
+
 UPGRADE_JSON=0
 UPGRADE_STAGE=""
 UPGRADE_LOCK=""
 UPGRADE_JOURNAL=""
 UPGRADE_ROLLBACK_DIR=""
+UPGRADE_PRUNE_JSON=""
 
 upgrade_safe_field() {
   # I valori arrivano da Docker e dal CLI, ma il JSON e' un contratto per la
@@ -2518,9 +2924,13 @@ upgrade_result() {
   current_version="$(upgrade_safe_field "$current_version")"
   current_image="$(upgrade_safe_field "$current_image")"
   if [ "$UPGRADE_JSON" = "1" ]; then
-    printf '{"ok":%s,"changed":%s,"phase":"%s","previous":{"version":"%s","image":"%s"},"current":{"version":"%s","image":"%s"},"restartRequired":%s,"message":"%s","rolledBack":%s}\n' \
+    # imagePrune c'e' solo dopo un upgrade riuscito che ha provato a pulire:
+    # gli altri esiti (check, fallimenti, rollback) restano byte per byte quelli di sempre.
+    local prune_field=""
+    [ -z "$UPGRADE_PRUNE_JSON" ] || prune_field=",\"imagePrune\":$UPGRADE_PRUNE_JSON"
+    printf '{"ok":%s,"changed":%s,"phase":"%s","previous":{"version":"%s","image":"%s"},"current":{"version":"%s","image":"%s"},"restartRequired":%s,"message":"%s","rolledBack":%s%s}\n' \
       "$ok" "$changed" "$phase" "$previous_version" "$previous_image" \
-      "$current_version" "$current_image" "$restart_required" "$message" "$rolled_back"
+      "$current_version" "$current_image" "$restart_required" "$message" "$rolled_back" "$prune_field"
   elif [ "$ok" = "true" ]; then
     printf 'Aggiornamento completato: %s (%s) -> %s (%s). %s\n' \
       "$previous_version" "$previous_image" "$current_version" "$current_image" "$message"
@@ -2540,6 +2950,117 @@ upgrade_run() {
   else
     "$@"
   fi
+}
+
+# ── Pulizia delle immagini JHT vecchie dopo un upgrade riuscito ────────────
+# Ogni upgrade porta un'immagine nuova e Docker/Podman non cancellano mai da
+# soli quelle vecchie: sull'host di un utente se ne accumulavano 23 (decine di
+# GB). Si tiene SOLO la corrente e la precedente (l'ancora del rollback).
+# Regole, tutte qui sotto e nei test:
+#   - solo repository JHT per nome ESATTO (ghcr.io/leopu00/jht, jht,
+#     localhost/jht): ghcr.io/leopu00/jht-altro o qualunque altro e' un'altra cosa;
+#   - mai un'immagine di un container, anche fermo; se i container non si
+#     leggono non si toglie niente;
+#   - per ID, senza -f, mai `prune`; il rifiuto del motore si CONTA;
+#   - chiamata solo a upgrade riuscito: mai su check, fallimento o rollback;
+#   - JHT_KEEP_OLD_IMAGES=1 tiene tutto.
+JHT_IMAGE_REPOSITORIES="ghcr.io/leopu00/jht jht localhost/jht"
+
+upgrade_image_plain() {
+  # Docker rende sha256:<id>, Podman l'id nudo: si confronta senza prefisso.
+  printf '%s' "${1#sha256:}"
+}
+
+upgrade_prune_result() {
+  # skipped removed freed_bytes refused in_use
+  UPGRADE_PRUNE_JSON="$(printf '{"removed":%s,"freedBytes":%s,"refused":%s,"inUse":%s,"kept":["current","previous"],"skipped":"%s"}' \
+    "$2" "$3" "$4" "$5" "$1")"
+}
+
+upgrade_prune_old_images() {
+  local current previous running_id containers in_use in_use_plain listing id repo known r
+  local removed=0 freed=0 refused=0 busy=0 size seen=""
+  UPGRADE_PRUNE_JSON=""
+  if [ "${JHT_KEEP_OLD_IMAGES:-0}" = "1" ]; then
+    upgrade_prune_result opt-out 0 0 0 0
+    upgrade_note "Immagini JHT vecchie: tenute tutte (JHT_KEEP_OLD_IMAGES=1)."
+    return 0
+  fi
+  current="$(upgrade_image_plain "$1")"
+  previous="$(upgrade_image_plain "$2")"
+  case "$current" in ''|none|sconosciuta|unknown) upgrade_prune_result current-unidentified 0 0 0 0; return 0 ;; esac
+  case "$previous" in ''|none|sconosciuta|unknown) upgrade_prune_result previous-unidentified 0 0 0 0; return 0 ;; esac
+  # La corrente deve essere davvero quella del container che gira adesso.
+  running_id="$(upgrade_image_plain "$(upgrade_image)")"
+  if [ "$running_id" != "$current" ]; then
+    upgrade_prune_result current-not-running 0 0 0 0
+    return 0
+  fi
+  # Immagini di TUTTI i container, anche fermi. Se non si leggono: niente.
+  containers="$(docker container ls -a -q --no-trunc 2>/dev/null)" || containers="__unreadable__"
+  if [ "$containers" = "__unreadable__" ]; then
+    upgrade_prune_result containers-unreadable 0 0 0 0
+    return 0
+  fi
+  in_use=""
+  if [ -n "$containers" ]; then
+    # shellcheck disable=SC2086
+    in_use="$(docker inspect --format '{{.Image}}' $containers 2>/dev/null)" || in_use="__unreadable__"
+    if [ "$in_use" = "__unreadable__" ]; then
+      upgrade_prune_result containers-unreadable 0 0 0 0
+      return 0
+    fi
+  fi
+  # Un id per riga, senza prefisso, con una riga vuota ai due capi: il
+  # confronto e' di riga intera, senza pipe (set -o pipefail + grep -q e SIGPIPE).
+  in_use_plain="
+$(printf '%s\n' "$in_use" | sed 's/^sha256://')
+"
+  listing="$(docker image ls --no-trunc --format '{{.ID}} {{.Repository}}' 2>/dev/null)" || listing="__unreadable__"
+  if [ "$listing" = "__unreadable__" ]; then
+    upgrade_prune_result images-unreadable 0 0 0 0
+    return 0
+  fi
+  while IFS=' ' read -r id repo; do
+    [ -n "$id" ] || continue
+    known=0
+    for r in $JHT_IMAGE_REPOSITORIES; do
+      [ "$repo" != "$r" ] || known=1
+    done
+    [ "$known" = 1 ] || continue
+    local plain
+    plain="$(upgrade_image_plain "$id")"
+    [ "$plain" != "$current" ] && [ "$plain" != "$previous" ] || continue
+    # Lo stesso ID compare una volta per tag: lo si tratta una volta sola.
+    case "
+$seen
+" in *"
+$plain
+"*) continue ;; esac
+    seen="$seen
+$plain"
+    case "$in_use_plain" in
+      *"
+$plain
+"*) busy=$((busy + 1)); continue ;;
+    esac
+    size="$(docker image inspect --format '{{.Size}}' "$id" 2>/dev/null | head -n 1)" || size=0
+    case "$size" in ''|*[!0-9]*) size=0 ;; esac
+    if docker image rm "$id" >/dev/null 2>&1; then
+      removed=$((removed + 1))
+      freed=$((freed + size))
+    else
+      refused=$((refused + 1))
+    fi
+  done <<EOF
+$listing
+EOF
+  upgrade_prune_result "" "$removed" "$freed" "$refused" "$busy"
+  local note="Immagini JHT vecchie: rimosse $removed, liberati circa $((freed / 1048576)) MB (dimensione nominale: i layer condivisi si liberano solo in parte), tenute: corrente, precedente."
+  [ "$busy" -eq 0 ] || note="$note In uso da un container (tenute): $busy."
+  [ "$refused" -eq 0 ] || note="$note Rifiutate dal motore (tenute): $refused."
+  upgrade_note "$note"
+  return 0
 }
 
 upgrade_docker_ready() {
@@ -2807,6 +3328,12 @@ handle_runtime_upgrade() {
     upgrade_result false false preflight unknown none unknown none false "Runtime host non attendibile" false
     return 1
   fi
+  # Un'installazione del canale di test e' fissata a un commit: l'upgrade
+  # scaricherebbe il compose di produzione e mescolerebbe i due canali.
+  if [ -f "$RUNTIME_IMAGE_PIN" ]; then
+    upgrade_result false false preflight unknown none unknown none false "Installazione del canale di test: si aggiorna reinstallando dalla build di test" false
+    return 1
+  fi
   if ! upgrade_docker_ready; then
     upgrade_result false false preflight unknown none unknown none false "Docker non e disponibile" false
     return 1
@@ -2836,6 +3363,16 @@ handle_runtime_upgrade() {
   fi
   old_image="${old_image:-none}"
   old_version="${old_version:-sconosciuta}"
+
+  # Disco quasi pieno (< 3% E < 8 GiB liberi): nessun upgrade, e nemmeno `--check` che
+  # scarica l'immagine. PRIMA di creare directory o scaricare: il runtime in
+  # corso, e gli agenti che ci girano, restano intatti. Il codice e' chiuso
+  # (`disk_low`); la frase la mostra l'app dalla sua tabella codice->frase.
+  if disk_low; then
+    [ "$UPGRADE_JSON" = "1" ] || err "disk_low: meno del 3% di disco libero (${DISK_LOW_PERMILLE} per mille) e meno di 8 GiB. Per liberare spazio svuota il Cestino, elimina i file grandi che non ti servono e le immagini Docker/Podman inutilizzate, poi riprova: non e' stato scaricato ne' modificato niente."
+    upgrade_result false false preflight "$old_version" "$old_image" "$old_version" "$old_image" false "disk_low" false
+    return 1
+  fi
 
   # Solo dopo avere escluso container estranei/stale e' lecito creare o
   # riallineare le directory bind-mountate sul percorso Linux/VPS.
@@ -2965,6 +3502,9 @@ handle_runtime_upgrade() {
     upgrade_run upgrade_compose "$COMPOSE_FILE" up -d --force-recreate "$TELEGRAM_SERVICE" \
       || upgrade_note "telegram_restart_failed: il servizio Telegram isolato non è ripartito. Cosa fare: jht up"
   fi
+  # Solo qui: upgrade riuscito, container nuovo verificato e commit fatto.
+  # Mai su check, fallimento o rollback, che escono prima.
+  upgrade_prune_old_images "$candidate_image" "$old_image" || true
   if [ "$candidate_image" = "$old_image" ] && [ "$metadata_changed" = "false" ]; then
     changed=false
   else
@@ -3562,6 +4102,16 @@ case "$SUB" in
     require_compose_file
     require_docker
     reset_command "${@:2}"
+    exit $?
+    ;;
+
+  migrate-runtime)
+    require_compose_file
+    if [ "${2:-}" != podman ] || [ $# -ne 2 ]; then
+      err "uso: jht migrate-runtime podman"
+      exit 2
+    fi
+    migrate_runtime_podman
     exit $?
     ;;
 

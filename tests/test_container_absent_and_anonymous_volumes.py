@@ -1,4 +1,4 @@
-"""Two container-engine traps reported by Home Hunter Team on 09/10/2026.
+"""Two container-engine traps seen on 09/10/2026.
 
 1. Podman 6 over a remote connection exits 125, not 1, when `inspect` asks
    for an object that does not exist. Code that reads «exit 1» as «absent»

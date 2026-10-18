@@ -18,21 +18,35 @@ sono tre, e nessuna e' cosmetica:
 
 ⚠️ **Il punto 3 vale finche' non c'e' un proxy.** Con `http_proxy` impostato
 `curl` non risolve niente in locale: manda un CONNECT al proxy, che risolve per
-conto suo, e `--resolve` diventa lettera morta. Oggi non e' raggiungibile —
-ne' l'immagine ne' il compose impostano un proxy — e NON si chiude con
-`--noproxy`, che romperebbe chi gira dietro un proxy aziendale: e' una scelta
-di prodotto, non un irrobustimento. E' scritto qui perche' il giorno in cui
-qualcuno aggiunge il supporto al proxy la difesa smette di funzionare in
-silenzio: nessun test diventa rosso, e il codice continua a dire che inchioda
-la connessione. Chi tocchera' quel file deve poterlo decidere, non scoprirlo.
+conto suo, e `--resolve` diventa lettera morta. Con un proxy qualunque (quello
+aziendale di chi lo usa) resta cosi': non lo si chiude con `--noproxy`, che
+romperebbe chi gira dietro quel proxy, ed e' una scelta di prodotto.
+
+**Dietro il proxy di uscita di JHT** (Podman su Windows) il container non ha
+DNS: `getaddrinfo` fallisce sempre, e i punti 2 e 3 rifiuterebbero ogni URL.
+Li' la risoluzione e il controllo degli indirizzi li fa il proxy
+(`scripts/wsl-interop-connect-proxy.py`: un solo IPv4 risolto e verificato,
+privati, loopback, link-local e CGNAT rifiutati con `403`). Qui restano lo
+schema, il nome e gli indirizzi scritti nell'URL (`url_guard`), piu' la porta
+(80 e 443, la policy del proxy per gli agenti), PRIMA di mandare; poi la
+richiesta va al proxy con `--proxytunnel`, cosi' anche un `http://` passa da un
+CONNECT e il `403` del proxy non si confonde con quello di un sito.
+
+Saltare la risoluzione per qualunque proxy trasformerebbe il salto in SSRF: una
+variabile alterata manderebbe la richiesta a un proxy che non filtra niente.
+Vale solo se il proxy e' **attestato** (`egress_proxy_for`): `JHT_EGRESS_PROXY`,
+che mette il compose di Windows, e' `http://127.0.0.1:<porta>` (l'unica strada
+fuori dal namespace di pasta), `http_proxy` e `https_proxy` dicono esattamente
+quello, e `no_proxy` non esclude l'host. Altrimenti si torna al comportamento
+di sempre, che li' fallisce chiuso: un host in `NO_PROXY` resta rifiutato.
 
 Uso:
     python3 /app/shared/skills/safe_fetch.py '<URL>' > pagina.html
     python3 /app/shared/skills/safe_fetch.py --status '<URL>'
     python3 /app/shared/skills/safe_fetch.py --user-agent 'jht-analyst/1.0' '<URL>'
 
-Exit code: 0 pagina su stdout · 1 rifiutata dal guard (il motivo su stderr) ·
-2 errore di rete o di `curl`.
+Exit code: 0 pagina su stdout · 1 rifiutata dal guard o dal proxy di uscita (il
+motivo su stderr) · 2 errore di rete o di `curl`.
 """
 
 from __future__ import annotations
@@ -42,6 +56,7 @@ import os
 import socket
 import subprocess
 import sys
+import urllib.request
 from functools import partial
 from urllib.parse import urljoin, urlsplit
 
@@ -58,16 +73,80 @@ MAX_REDIRECTS = 5
 MAX_SECONDS = 20
 MAX_BYTES = 5_000_000
 USER_AGENT = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)"
+# Le porte che il proxy di uscita lascia agli agenti (POLICY_PORTS["agent"]):
+# controllate qui prima di mandare, cosi' il rifiuto ha un motivo chiaro.
+EGRESS_PROXY_PORTS = (80, 443)
 
 
-def resolve_public_address(host: str, port: int) -> str:
+def _attested_egress_proxy() -> str | None:
+    """`JHT_EGRESS_PROXY` se ha la forma del proxy di uscita di JHT, se no `None`.
+
+    Solo `http://127.0.0.1:<porta>`: nel namespace di pasta e' l'unica strada
+    verso il proxy (`-T`). Un altro host vorrebbe dire un proxy che nessuno
+    ha controllato.
+    """
+    value = os.environ.get("JHT_EGRESS_PROXY", "").strip()
+    if not value:
+        return None
+    try:
+        parts = urlsplit(value)
+        port = parts.port
+    except ValueError:
+        return None
+    if (
+        parts.scheme != "http"
+        or parts.hostname != "127.0.0.1"
+        or port is None
+        or parts.username is not None
+        or parts.password is not None
+        or parts.path not in ("", "/")
+        or parts.query
+        or parts.fragment
+    ):
+        return None
+    return f"http://127.0.0.1:{port}"
+
+
+def _same_proxy(value: str | None, attested: str) -> bool:
+    return bool(value) and value.strip().lower().rstrip("/") == attested
+
+
+def egress_proxy_for(host: str) -> str | None:
+    """Il proxy di uscita di JHT, se questa richiesta passa di li'.
+
+    Tre condizioni insieme: il proxy e' attestato, `http_proxy` e
+    `https_proxy` (quelli che leggono `curl` e urllib) sono proprio lui, e
+    `no_proxy` non esclude `host`. Basta che una manchi e la richiesta resta
+    sulla strada di sempre, risoluzione e `--resolve` compresi.
+    """
+    attested = _attested_egress_proxy()
+    if attested is None:
+        return None
+    proxies = urllib.request.getproxies_environment()
+    if not (_same_proxy(proxies.get("http"), attested)
+            and _same_proxy(proxies.get("https"), attested)):
+        return None
+    if urllib.request.proxy_bypass_environment(host, proxies):
+        return None
+    return attested
+
+
+def resolve_public_address(host: str, port: int) -> str | None:
     """Un indirizzo pubblico per quell'host, o `UrlRejected`.
 
     Bastano un privato o un link-local fra quelli restituiti per rifiutare:
     non sappiamo quale sceglierebbe il sistema, e un round-robin che una volta
     su tre risponde `127.0.0.1` non e' un caso limite — e' il modo in cui si
     fa passare un nome pubblico per un servizio interno.
+
+    Dietro il proxy di uscita di JHT (`egress_proxy_for`) non si risolve: il
+    container non ha DNS e a controllare l'indirizzo e' il proxy. Si guarda
+    solo la porta, e si ritorna `None`: nessun indirizzo da inchiodare.
     """
+    if egress_proxy_for(host) is not None:
+        if port not in EGRESS_PROXY_PORTS:
+            raise UrlRejected(f"port {port} not allowed through the egress proxy")
+        return None
     try:
         infos = socket.getaddrinfo(host, port, proto=socket.IPPROTO_TCP)
     except socket.gaierror as exc:
@@ -81,8 +160,13 @@ def resolve_public_address(host: str, port: int) -> str:
     return addresses[0]
 
 
-def curl_hop(url: str, address: str, user_agent: str = USER_AGENT) -> tuple[int, str, bytes]:
+def curl_hop(url: str, address: str | None, user_agent: str = USER_AGENT) -> tuple[int, str, bytes]:
     """Un solo salto: nessun redirect seguito, connessione inchiodata a `address`.
+
+    Con `address` a `None` (dietro il proxy di uscita, vedi
+    `resolve_public_address`) la connessione va al proxy, con un CONNECT anche
+    per `http://`: il `403` del proxy arriva in `%{http_connect}` e diventa un
+    rifiuto (exit 1), il `502` un errore di rete (exit 2).
 
     Ritorna `(status, location, body)`. `--proto` e `--proto-redir` tengono
     fuori `file:`, `gopher:` e compagnia anche se il server prova a mandarci
@@ -103,6 +187,18 @@ def curl_hop(url: str, address: str, user_agent: str = USER_AGENT) -> tuple[int,
         raise UrlRejected("user-agent contains control characters")
     parts = urlsplit(url)
     port = parts.port or (443 if parts.scheme == "https" else 80)
+    env = None
+    if address is None:
+        proxy = egress_proxy_for(parts.hostname)
+        if proxy is None:
+            raise UrlRejected("no verified address and no egress proxy")
+        # Il proxy lo dice la riga di comando, non l'ambiente: `curl`
+        # applicherebbe `NO_PROXY` per conto suo, con regole sue.
+        env = {key: value for key, value in os.environ.items()
+               if not key.lower().endswith("_proxy")}
+        route = ["--proxy", proxy, "--proxytunnel"]
+    else:
+        route = ["--resolve", f"{parts.hostname}:{port}:{address}"]
     command = [
         "curl",
         "--silent",
@@ -113,19 +209,26 @@ def curl_hop(url: str, address: str, user_agent: str = USER_AGENT) -> tuple[int,
         "--max-time", str(MAX_SECONDS),
         "--max-filesize", str(MAX_BYTES),
         "--user-agent", user_agent,
-        "--resolve", f"{parts.hostname}:{port}:{address}",
+        *route,
         # L'a capo davanti rende separabile l'uscita: il corpo e' tutto quello
         # che sta prima dell'ULTIMO a capo, il resto e' questa riga.
-        "--write-out", "\n%{http_code} %{redirect_url}",
+        "--write-out", "\n%{http_code} %{http_connect} %{redirect_url}",
         url,
     ]
-    result = subprocess.run(command, capture_output=True)
+    result = subprocess.run(command, capture_output=True, env=env)
+    body, _, trailer = result.stdout.rpartition(b"\n")
+    fields = trailer.decode("utf-8", "replace").split(" ", 2)
+    if address is None and len(fields) > 1 and fields[1] not in ("", "000", "200"):
+        # La risposta del proxy al CONNECT, non del sito: 403 e' la sua policy
+        # (indirizzo non pubblico, porta, nome locale), il resto e' rete.
+        if fields[1] == "403":
+            raise UrlRejected("refused by the egress proxy (403): "
+                              "the destination is not a public address it allows")
+        raise RuntimeError(f"egress proxy answered {fields[1]} to CONNECT")
     if result.returncode != 0:
         raise RuntimeError(result.stderr.decode("utf-8", "replace").strip())
-    body, _, trailer = result.stdout.rpartition(b"\n")
-    fields = trailer.decode("utf-8", "replace").split(" ", 1)
     status = int(fields[0] or 0)
-    location = fields[1].strip() if len(fields) > 1 else ""
+    location = fields[2].strip() if len(fields) > 2 else ""
     return status, location, body
 
 

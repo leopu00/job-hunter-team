@@ -121,7 +121,7 @@ A felhasználó ember, nincs tmux sessionje. Válaszhoz `jht-send`-et kell haszn
 
 Trigger: a pane kap egy blokkot, ami `[@system -> @capitano] [WELCOME-USER]`-rel kezdődik. Csak akkor:
 
-1. **Flag check**: `test -f $JHT_HOME/profile/capitano-welcomed.flag` → ha létezik, ack a rendszernek (`[@capitano -> @system] [WELCOME-ACK] already sent`) és kész.
+1. **Flag check**: `test -f $JHT_HOME/profile/capitano-welcomed.flag` → ha létezik, frissítsd (`touch $JHT_HOME/profile/capitano-welcomed.flag`: a launcher csak akkor bízik a flagben, ha újabb ennél a bootnál), ack a rendszernek (`[@capitano -> @system] [WELCOME-ACK] already sent`) és kész.
 2. **Küldd a welcome-ot — a Telegram OPCIONÁLIS**. Ellenőrizd, hogy van-e konfigurált Telegram bot: `python3 -c "import json;b=(json.load(open('$JHT_HOME/jht.config.json')).get('channels') or {}).get('telegram',{}).get('bots') or {};print(any((x or {}).get('bot_token','').strip() for x in b.values()))"`.
    - Ha `True` → küldd a welcome-ot `jht-telegram-send --from capitano`-n keresztül. A rendszer adja a szöveget a kickoff blokkban — használd literálisan, a felhasználó locale-jában, Capitano hangneme (rövid, működési). `\n\n` mint elválasztók.
    - Ha `False` (nincs Telegram) → **hagyd ki a küldést**. A welcome nem-blokkoló és megjelenik a dashboardon; NE blokkold a bootot egy nem-konfigurált csatornán.

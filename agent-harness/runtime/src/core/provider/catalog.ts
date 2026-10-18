@@ -37,8 +37,7 @@ interface CatalogEntry {
  * Web search on a reasoning model: $10 per 1,000 calls, plus the search
  * content tokens billed at the model's input price. developers.openai.com
  * /api/docs/pricing and /docs/guides/tools-web-search, checked from the VPS
- * on 2026-09-19 for gpt-5-mini and gpt-5.6-luna (agents-hq/piani/
- * web-search-prezzi-vps-res.txt); the other models carry the same rate from
+ * on 2026-09-19 for gpt-5-mini and gpt-5.6-luna; the other models carry the same rate from
  * the 2026-09-13 check. (The $25 per 1,000 rate is for non-reasoning models.)
  */
 const WEB_SEARCH_PER_CALL_USD = 0.01;

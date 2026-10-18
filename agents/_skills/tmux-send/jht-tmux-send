@@ -256,8 +256,8 @@ signature_tail=$(printf '%s' "$message" | tail -c 30)
 # Ora si distingue la RIGA DI STATO dalla prosa con tre criteri, tarati su righe
 # vere raccolte dalla flotta:
 #   ◦ Working (16s • esc to interrupt)                       → STATO   (leone)
-#   ● All three workers running (esc to interrupt). Recording…→ prosa (ashley)
-#   All three are now running (esc to interrupt confirmed…).  → prosa (ashley)
+#   ● All three workers running (esc to interrupt). Recording…→ prosa (agent)
+#   All three are now running (esc to interrupt confirmed…).  → prosa (agent)
 #   …then confirm esc to interrupt before calling it fixed.   → prosa (delia)
 # 1. solo le ultime righe del pane: l'indicatore vive sopra al composer, il
 #    transcript scorre in alto;

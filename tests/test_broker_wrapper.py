@@ -92,9 +92,10 @@ def run(host, body: str, stdin: str = "") -> subprocess.CompletedProcess:
         "read_only_container_id() { echo agent-id; }\n"
         "read_only_service_id() { [ \"$1\" = jht-broker ] && echo broker-id; }\n"
         f'RUNTIME_DIR="{host.runtime}"\nCOMPOSE_FILE="{host.runtime}/docker-compose.yml"\n'
-        'BROKER_SERVICE="jht-broker"\nLEGACY_SECRET_NAMES="email_monitor email_transport"\n'
+        'BROKER_SERVICE="jht-broker"\nTELEGRAM_SERVICE="jht-telegram"\nLEGACY_SECRET_NAMES="email_monitor email_transport"\n'
         'BROKER_LEGACY_MARKER="$RUNTIME_DIR/.broker-legacy-migrated"\n'
-        + wrapper_functions("broker_admin", "broker_migrate_legacy", "broker_migrate_legacy_once", "mail_setup")
+        + wrapper_functions("compose_lacks_service", "compose_unreadable", "broker_admin", "telegram_admin", "telegram_admin_input",
+                          "broker_migrate_legacy", "broker_migrate_legacy_once", "mail_setup")
         + "\n" + body
     )
     return subprocess.run(["bash", "-c", script], env=host.env, input=stdin, capture_output=True, text=True, timeout=30)
@@ -193,3 +194,58 @@ def test_mail_setup_hands_the_password_on_stdin_never_in_argv(host):
     assert all(SECRET not in line for line in argv_lines)
     assert f"STDIN {SECRET}" in log
     assert SECRET not in result.stdout + result.stderr
+
+
+# A compose installed by an older release has no broker and no Telegram
+# service, and `jht up` never creates them: the way out is `jht upgrade`.
+OLD_COMPOSE = "services:\n  jht:\n    image: x\n"
+
+
+@pytest.mark.parametrize("call, service", [
+    ("broker_admin status", "broker"),
+    ("telegram_admin status", "telegram"),
+    ("telegram_admin_input status", "telegram"),
+])
+def test_an_old_compose_without_the_service_points_to_upgrade_not_up(host, call, service):
+    (host.runtime / "docker-compose.yml").write_text(OLD_COMPOSE)
+    result = run(host, f"read_only_service_id() {{ return 1; }}\n{call}; echo rc=$?")
+    assert "rc=1" in result.stdout
+    assert f"{service}_unavailable" in result.stderr
+    assert "Cosa fare: jht upgrade" in result.stderr
+    assert "Cosa fare: jht up\n" not in result.stderr + "\n"
+    assert not host.log.exists()
+
+
+@pytest.mark.parametrize("call, service", [
+    ("broker_admin status", "broker"),
+    ("telegram_admin status", "telegram"),
+])
+def test_a_compose_with_the_service_that_is_not_running_still_points_to_up(host, call, service):
+    (host.runtime / "docker-compose.yml").write_text(OLD_COMPOSE + "  jht-broker:\n    image: x\n  jht-telegram:\n    image: x\n")
+    result = run(host, f"read_only_service_id() {{ return 1; }}\n{call}; echo rc=$?")
+    assert "rc=1" in result.stdout
+    assert f"{service}_unavailable" in result.stderr
+    assert result.stderr.rstrip().endswith("Cosa fare: jht up")
+
+
+@pytest.mark.parametrize("call, service", [
+    ("broker_admin status", "broker"),
+    ("telegram_admin status", "telegram"),
+    ("telegram_admin_input status", "telegram"),
+])
+def test_an_unreadable_compose_is_not_called_an_old_runtime(host, call, service):
+    (host.runtime / "docker-compose.yml").unlink()
+    result = run(host, f"read_only_service_id() {{ return 1; }}\n{call}; echo rc=$?")
+    assert "rc=1" in result.stdout
+    assert f"{service}_unavailable" in result.stderr and "non è leggibile" in result.stderr
+    assert "Cosa fare: jht upgrade" not in result.stderr
+    assert "Cosa fare: reinstalla il runtime" in result.stderr
+
+
+def test_the_service_is_found_whatever_the_indentation(host):
+    (host.runtime / "docker-compose.yml").write_text("services:\n    jht:\n        image: x\n    jht-broker:\n        image: x\n")
+    result = run(host, "read_only_service_id() { return 1; }\nbroker_admin status; echo rc=$?")
+    assert result.stderr.rstrip().endswith("Cosa fare: jht up")
+    (host.runtime / "docker-compose.yml").write_text("services:\n    jht:\n        image: x\n")
+    result = run(host, "read_only_service_id() { return 1; }\nbroker_admin status; echo rc=$?")
+    assert "Cosa fare: jht upgrade" in result.stderr

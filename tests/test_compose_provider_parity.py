@@ -1,0 +1,162 @@
+"""The two distributed Compose providers must emit one effective project."""
+
+from __future__ import annotations
+
+from copy import deepcopy
+from pathlib import Path
+import re
+
+import pytest
+import yaml
+
+from scripts.ci.compose_provider_parity import (
+    ComposeProviderParityError,
+    assert_projects_equal,
+)
+
+
+ROOT = Path(__file__).resolve().parents[1]
+
+PODMAN_PROJECT = {
+    "services": {
+        "jht": {
+            "image": "example.invalid/jht@sha256:" + "a" * 64,
+            "network_mode": "host",
+            "userns_mode": "keep-id:uid=1001,gid=1001",
+            "depends_on": {"broker": {"condition": "service_started"}},
+            "extra_hosts": ["host.docker.internal:host-gateway"],
+            # podman-compose runs on Linux and macOS: HOME is a POSIX path.
+            "volumes": ["state:/state:ro", "/home/jht-parity/JHT User/.jht:/jht_home"],
+        },
+        "broker": {"networks": ["default"]},
+    },
+    "volumes": {"state": None},
+}
+
+DOCKER_PROJECT = {
+    "name": "jht",
+    "networks": {"default": {"name": "jht_default", "ipam": {}}},
+    "services": {
+        "jht": {
+            "image": "example.invalid/jht@sha256:" + "a" * 64,
+            "entrypoint": None,
+            "network_mode": "host",
+            "userns_mode": "keep-id:uid=1001,gid=1001",
+            "depends_on": {
+                "broker": {"condition": "service_started", "required": True}
+            },
+            "extra_hosts": ["host.docker.internal=host-gateway"],
+            "volumes": [
+                {
+                    "type": "volume",
+                    "source": "state",
+                    "target": "/state",
+                    "read_only": True,
+                    "volume": {},
+                },
+                {
+                    "type": "bind",
+                    "source": "C:\\JHT User\\.jht",
+                    "target": "/jht_home",
+                    "bind": {},
+                },
+            ],
+        },
+        "broker": {"networks": {"default": None}},
+    },
+    "volumes": {"state": {"name": "jht_state"}},
+}
+
+
+HOMES = {"podman_home": "/home/jht-parity/JHT User", "docker_home": "C:\\JHT User"}
+
+
+def test_provider_syntax_differences_normalize_to_one_project():
+    assert_projects_equal(PODMAN_PROJECT, DOCKER_PROJECT, **HOMES)
+
+
+def test_each_provider_s_home_prefix_is_the_only_tolerated_host_difference():
+    # Without the two HOMEs the POSIX and the Windows host paths differ.
+    with pytest.raises(ComposeProviderParityError, match="merged Compose projects differ"):
+        assert_projects_equal(PODMAN_PROJECT, DOCKER_PROJECT)
+    # Under the same HOME, a bind that points elsewhere is still drift.
+    drifted = deepcopy(DOCKER_PROJECT)
+    drifted["services"]["jht"]["volumes"][1]["source"] = "C:\\JHT User\\Documents"
+    with pytest.raises(ComposeProviderParityError, match="merged Compose projects differ"):
+        assert_projects_equal(PODMAN_PROJECT, drifted, **HOMES)
+    # A path that only starts with the same letters is not under HOME.
+    lookalike = deepcopy(DOCKER_PROJECT)
+    lookalike["services"]["jht"]["volumes"][1]["source"] = "C:\\JHT Users\\.jht"
+    with pytest.raises(ComposeProviderParityError, match="merged Compose projects differ"):
+        assert_projects_equal(PODMAN_PROJECT, lookalike, **HOMES)
+
+
+@pytest.mark.parametrize(
+    ("case", "mutate"),
+    [
+        ("network", lambda project: project["services"]["jht"].update(network_mode="bridge")),
+        ("volume", lambda project: project["volumes"]["state"].update(name="foreign_state")),
+        (
+            "mount",
+            lambda project: project["services"]["jht"]["volumes"][0].update(
+                read_only=False
+            ),
+        ),
+        (
+            "override",
+            lambda project: project["services"]["jht"].update(
+                userns_mode="keep-id:uid=1000,gid=1000"
+            ),
+        ),
+    ],
+)
+def test_network_volume_mount_and_override_drift_are_red(case, mutate):
+    drifted = deepcopy(DOCKER_PROJECT)
+    mutate(drifted)
+    with pytest.raises(ComposeProviderParityError, match="merged Compose projects differ"):
+        assert_projects_equal(PODMAN_PROJECT, drifted, **HOMES)
+
+
+def test_ci_runs_the_exact_distributed_providers_on_windows():
+    workflow = yaml.load(
+        (ROOT / ".github" / "workflows" / "test.yml").read_text(encoding="utf-8"),
+        Loader=yaml.BaseLoader,
+    )
+    job = workflow["jobs"]["compose-provider-parity"]
+    assert job["runs-on"] == "windows-2022"
+    commands = "\n".join(str(step.get("run", "")) for step in job["steps"])
+    # Exact bytes, not whatever the runner or an index serves that day.
+    requirements = (
+        ROOT / "scripts" / "ci" / "compose-providers-requirements.txt"
+    ).read_text(encoding="utf-8")
+    assert "podman-compose==1.6.0 \\\n" in requirements
+    assert "--require-hashes -r scripts/ci/compose-providers-requirements.txt" in commands
+    # docker-compose.exe: the very URL and SHA-256 the Windows enabler
+    # installs, read from it at run time and never repeated in the workflow.
+    enabler = (ROOT / "scripts" / "enable-podman-windows-runtime.ps1").read_text(
+        encoding="utf-8"
+    )
+    url = re.search(r"^\$ComposeProviderUrl = '(https://[^']+)'$", enabler, re.MULTILINE)
+    sha = re.search(r"^\$ComposeProviderSha256 = '([0-9a-f]{64})'$", enabler, re.MULTILINE)
+    assert url and sha
+    assert "/v5.1.2/" in url.group(1)
+    assert "$ComposeProviderVersion = '5.1.2'" in enabler
+    assert "Get-Content -Raw -LiteralPath scripts/enable-podman-windows-runtime.ps1" in commands
+    assert "Invoke-WebRequest -UseBasicParsing -Uri $url -OutFile $dockerCompose" in commands
+    assert "if ($digest -ne $sha256) { throw" in commands
+    assert url.group(1) not in commands and sha.group(1) not in commands
+    assert "winget" not in commands
+    assert "scripts/ci/compose_provider_parity.py" in commands
+
+
+def test_short_and_long_port_forms_normalize_to_one_project_and_drift_stays_red():
+    podman = deepcopy(PODMAN_PROJECT)
+    docker = deepcopy(DOCKER_PROJECT)
+    podman["services"]["jht"]["ports"] = ["127.0.0.1:6080:6080"]
+    docker["services"]["jht"]["ports"] = [
+        {"host_ip": "127.0.0.1", "mode": "ingress", "protocol": "tcp", "published": "6080", "target": 6080}
+    ]
+    assert_projects_equal(podman, docker, **HOMES)
+    docker["services"]["jht"]["ports"][0]["host_ip"] = "0.0.0.0"
+    with pytest.raises(ComposeProviderParityError, match="merged Compose projects differ"):
+        assert_projects_equal(podman, docker, **HOMES)

@@ -14,6 +14,8 @@ import {
   reconstructCanonicalProfile,
   syncProfileToSupabase,
 } from "./profile-sync.ts";
+import { completionByLevel } from "./profile-completion.ts";
+import type { CandidateProfile } from "./types.ts";
 
 const RAW_LEGACY = {
   name: "Mario Rossi",
@@ -222,5 +224,26 @@ describe("sync atomico del profilo", () => {
       error: "profile_sync_result_invalid",
       warnings: [],
     });
+  });
+});
+
+describe("il badge del profilo conta quello che il sync salva", () => {
+  it("un'email solo in candidate.contacts arriva nel campo che il badge legge", () => {
+    // RAW_LEGACY ha l'email solo in candidate.contacts.email. La riga
+    // candidate_profiles è quella che il web e l'app leggono: il positioning
+    // non porta i contatti (PII), quindi il badge vede solo `email`.
+    const row = mapYamlToCanonical(RAW_LEGACY, "u")
+      .profileRow as unknown as CandidateProfile;
+    assert.equal(row.email, RAW_LEGACY.candidate.contacts.email);
+    assert.equal(
+      (row.positioning as Record<string, unknown>).contacts,
+      undefined,
+    );
+    const required = completionByLevel(row).required;
+    assert.deepEqual(
+      required.missing.map((r) => r.key),
+      [],
+    );
+    assert.equal(required.filled, required.total);
   });
 });

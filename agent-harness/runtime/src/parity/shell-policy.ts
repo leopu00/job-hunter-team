@@ -38,7 +38,7 @@
  *
  * The other five keep it: the CAPITANO by the MASTER's decision, and the
  * ASSISTENTE, the SCRITTORE, the DOTTORE and the MANTENITORE until their
- * residue is measured the same way (`agents-hq/piani/MISURA-BASH-PER-RUOLO.md`).
+ * residue is measured the same way.
  */
 
 import { roleOf } from "../db/role-policy.ts";

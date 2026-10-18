@@ -3,8 +3,15 @@ mod auth_login;
 mod auth_store;
 mod broker_view;
 mod browsers;
+mod closer_desktop;
+pub mod cli_adapter;
 mod desktop_platform;
 mod direct_chat;
+mod existing_team_register;
+// The tests rely on 0600 files, hard links and symlinks; Windows is not covered.
+#[cfg(all(test, unix))]
+mod existing_team_register_tests;
+mod existing_team_runtime;
 mod live_screen;
 mod mail;
 mod onboarding;
@@ -15,8 +22,16 @@ mod podman;
 mod private_acl;
 mod profile_import;
 mod profile_migration;
+mod release_channel;
+mod release_channel_rules;
 mod runtime_host;
+mod runtime_log;
 mod voice_input;
+mod windows_runtime;
+
+pub(crate) fn application_context() -> tauri::Context<tauri::Wry> {
+    tauri::generate_context!()
+}
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -34,6 +49,7 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            account_scope::onboarding_previous_local_data,
             account_scope::runtime_account_scope_reset,
             account_scope::runtime_account_scope_set,
             account_scope::runtime_account_scope_set_local,
@@ -54,6 +70,9 @@ pub fn run() {
             broker_view::broker_login_view_open,
             broker_view::broker_login_view_session,
             browsers::auth_browsers,
+            closer_desktop::closer_desktop_register_host,
+            closer_desktop::closer_desktop_request,
+            existing_team_runtime::existing_team_positions_read,
             direct_chat::direct_chat_close,
             direct_chat::direct_chat_connect,
             direct_chat::direct_chat_read,
@@ -67,8 +86,17 @@ pub fn run() {
             mail::mail_save_password,
             mail::mail_status,
             onboarding::onboarding_assistant_open,
+            existing_team_register::onboarding_existing_team_discover,
+            existing_team_register::onboarding_existing_team_register,
+            onboarding::existing_team_assistant_start,
             onboarding::onboarding_existing_team_connect,
+            onboarding::onboarding_existing_team_readonly_connect,
+            onboarding::onboarding_existing_team_reopen,
             onboarding::onboarding_podman_machine_recreate,
+            onboarding::onboarding_local_uninstall_available,
+            onboarding::onboarding_local_uninstall,
+            runtime_log::onboarding_runtime_log,
+            runtime_log::onboarding_runtime_log_open,
             onboarding::onboarding_prepare,
             onboarding::onboarding_provider_login,
             onboarding::onboarding_provider_login_close,
@@ -86,6 +114,6 @@ pub fn run() {
             voice_input::voice_input_status,
             voice_input::voice_input_stop
         ])
-        .run(tauri::generate_context!())
+        .run(application_context())
         .expect("error while running JHT Desktop");
 }

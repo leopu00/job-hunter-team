@@ -213,8 +213,8 @@ prov = (d.get('active_provider') or '').strip().lower()
 # stesso marker di credenziali. Un mismatch qui era una timebomb: active_provider=
 # "openai"/"anthropic" cadeva su markers.get(prov,'')='' -> os.path.exists('')=
 # False -> config_ready FALSE in SILENZIO -> il watchdog smetteva di rispawnare
-# CAPITANO/MENTOR dopo un reboot, senza una riga di log (ashley morta ~44h il
-# 2026-07-18, barto armata dopo lo switch a Codex).
+# CAPITANO/MENTOR dopo un reboot, senza una riga di log (un'istanza morta ~44h il
+# 2026-07-18, un'altra armata dopo lo switch a Codex).
 # Vedi docs/internal/postmortems/2026-07-18-provider-vendor-enum-config-ready.md
 markers = {
   # kimi-cli 1.47+ scrive le creds in .kimi/credentials/<plan>.json
@@ -1134,7 +1134,7 @@ while true; do
     # restiamo silenziosi per i primi CONFIG_NOT_READY_GRACE_TICKS. Ma se PERSISTE
     # oltre la grace è un guasto vero (active_provider fuori-mappa, credenziali
     # mancanti) e NON deve più essere invisibile: quella silenziosità ha tenuto
-    # ashley morta ~44h il 2026-07-18 senza una riga di log. Escaliamo a log loud.
+    # un'istanza morta ~44h il 2026-07-18 senza una riga di log. Escaliamo a log loud.
     if [ "$config_not_ready_tick" -eq "$CONFIG_NOT_READY_GRACE_TICKS" ]; then
       _prov="$(python3 -c "import json,sys; print((json.load(open(sys.argv[1])).get('active_provider') or '?').strip() or '?')" "$CONFIG" 2>/dev/null || echo '?')"
       log "config NOT ready for ${CONFIG_NOT_READY_GRACE_TICKS} ticks (~$((CONFIG_NOT_READY_GRACE_TICKS*INTERVAL_SEC/60)) min): active_provider='${_prov}' has no valid credential marker — CAPITANO/MENTOR respawn SUSPENDED. If this is not the initial wizard, check active_provider against the map in config_ready()."

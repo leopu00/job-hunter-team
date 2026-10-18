@@ -23,7 +23,7 @@ For onboarding inside an already-cloned repo, see [legacy `setup.sh` / `setup.ps
 | Default mode | Docker (macOS: Colima by default or your Docker Desktop via `--runtime`; native Docker on Linux/WSL2) |
 | Expert mode | `--no-docker` (clone + build from source) |
 | OS support | macOS · Linux (apt/dnf/pacman) · WSL2 |
-| Windows | Use [`install.ps1`](../../scripts/install.ps1); Docker Desktop is required |
+| Windows | Use [`install.ps1`](../../scripts/install.ps1): the team runs in Podman inside WSL; Docker Desktop is not needed, WSL must be enabled |
 
 ---
 
@@ -296,8 +296,11 @@ What `--dry-run` intentionally does **not** do:
   (rewrite to `raw.githubusercontent.com/.../<tag>/scripts/install.sh`,
   or generate `web/public/install.sh` from the latest release at build
   time).
-- **Windows requires Docker Desktop** — `install.ps1` verifies it but does not
-  silently accept its license, enable WSL2 or complete a reboot.
+- **Windows requires WSL** — `install.ps1` installs Podman and the Compose
+  provider through winget and runs the team in a Podman machine inside WSL,
+  but it does not enable WSL or complete a reboot: when WSL is not usable it
+  stops with `wsl_not_ready`. Kimi is not supported yet when the team runs on
+  Windows.
 
 ---
 

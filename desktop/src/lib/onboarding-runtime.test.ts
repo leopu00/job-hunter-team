@@ -415,3 +415,40 @@ describe("SSH host-key consent contract", () => {
     });
   });
 });
+
+describe("what the native side reports is told in the app's language", () => {
+  const progress = (message: string) => ({
+    stage: "engine", status: "progress", message, sequence: 1, elapsedMs: 10, code: null, retryable: null,
+  });
+
+  it("turns a ui_* key into the sentence of the app's language", () => {
+    // vitest.setup.ts: an Italian system.
+    expect(parseOnboardingNativeProgress(progress("ui_phase_image_pull"))?.message)
+      .toBe("Scarico l’immagine del team: è la parte più lunga");
+    localStorage.setItem("jht-lang", "de");
+    try {
+      expect(parseOnboardingNativeProgress(progress("ui_phase_image_pull"))?.message)
+        .toBe("Image des Teams wird heruntergeladen: Das dauert am längsten");
+      expect(parseOnboardingNativeProgress(progress("https://example.com/x"))?.message)
+        .toBe("Umgebung wird geprüft.");
+    } finally {
+      localStorage.removeItem("jht-lang");
+    }
+  });
+
+  it("tells the provider login's instructions from their keys", () => {
+    localStorage.setItem("jht-lang", "en");
+    try {
+      const event = parseOnboardingInteractiveEvent({
+        kind: "state",
+        status: "needs_user_action",
+        action: { kind: "url", instruction: "ui_login_url", safeUrl: "https://example.invalid/device" },
+      });
+      expect(event).not.toBeNull();
+      expect(JSON.stringify(event)).toContain("Finish signing in in the browser.");
+      expect(JSON.stringify(event)).not.toContain("ui_login_url");
+    } finally {
+      localStorage.removeItem("jht-lang");
+    }
+  });
+});

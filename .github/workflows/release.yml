@@ -50,7 +50,7 @@ jobs:
             artifact_name: app-windows-release
           - os: macos-14
             label: macOS Universal 2
-            args: --target universal-apple-darwin --bundles app,dmg
+            args: --target universal-apple-darwin --bundles app,dmg --config src-tauri/tauri.macos-universal.conf.json
             artifact_name: app-macos-release
           - os: ubuntu-22.04
             label: Linux x64
@@ -73,7 +73,9 @@ jobs:
         with:
           node-version: "24"
           cache: npm
-          cache-dependency-path: desktop/package-lock.json
+          cache-dependency-path: |
+            desktop/package-lock.json
+            shared/package-lock.json
 
       - name: Install Tauri system libraries
         if: runner.os == 'Linux'
@@ -102,6 +104,13 @@ jobs:
       - name: Install desktop dependencies
         working-directory: desktop
         run: npm ci
+
+      # Il desktop importa shared/config/profile-schema.ts, che vuole `zod`:
+      # zod e' dichiarato e bloccato in shared/, e senza le sue dipendenze
+      # i gate e la build vite non risolvono l'import.
+      - name: Install shared dependencies for imported modules
+        working-directory: shared
+        run: npm ci --ignore-scripts
 
       - name: Run canonical Tauri release gates
         run: |
@@ -154,6 +163,14 @@ jobs:
           source="$(find desktop/src-tauri/target/release/bundle/nsis -type f -name '*-setup.exe' -print -quit)"
           test -n "$source"
           cp "$source" release-assets/job-hunter-team-windows-x64-setup.exe
+
+      # Quello che si distribuisce e' la .app e il dmg: in tutti e due devono
+      # esserci la shell e il compagno jht-existing-team, eseguibili, con le due
+      # fette e la firma che questo job produce. Developer ID e' certa: il passo
+      # «Select the Developer ID signing identity» si ferma se l'identita' manca.
+      - name: Gate macOS universal bundle — shell and companion shipped
+        if: runner.os == 'macOS'
+        run: python3 scripts/ci/verify_macos_universal_bundle.py desktop/src-tauri/target/universal-apple-darwin/release/bundle --signature developer-id --require-dmg
 
       - name: Collect and verify signed macOS installer
         if: runner.os == 'macOS'

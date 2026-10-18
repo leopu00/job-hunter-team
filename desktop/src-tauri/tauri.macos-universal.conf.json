@@ -1,0 +1,5 @@
+{
+  "build": {
+    "beforeBundleCommand": "python3 ../scripts/ci/macos_universal_companion.py"
+  }
+}

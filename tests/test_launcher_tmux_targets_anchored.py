@@ -224,7 +224,14 @@ case "$sub" in
   send-keys)
     # Il CLI "crasha" al lancio e il pane si chiude: la sessione sparisce.
     case "$all_args" in *" claude "*) grep -vF -- "$T_NEW|" "$state" > "$state.tmp"; mv "$state.tmp" "$state"; exit 0 ;; esac
-    s="$(resolve pane)"; [ -n "$s" ] || exit 1; printf '%s\n' "$positional" >> "$state.typed-$s"; echo "TYPED-INTO $s" >> "$T_CALLS" ;;
+    s="$(resolve pane)"; [ -n "$s" ] || exit 1
+    # Un Enter (non digitato con -l) e' un submit accettato: il composer si
+    # svuota, come in una TUI vera; tui_send_verified lo rilegge per crederci.
+    case "$all_args" in
+      *" -l "*) printf '%s\n' "$positional" >> "$state.typed-$s" ;;
+      *) if [ "$positional" = Enter ]; then : > "$state.typed-$s"; else printf '%s\n' "$positional" >> "$state.typed-$s"; fi ;;
+    esac
+    echo "TYPED-INTO $s" >> "$T_CALLS" ;;
   *) exit 0 ;;
 esac
 """
@@ -464,7 +471,7 @@ def test_a_kickoff_still_reaches_its_own_session(capable_bash, tmux):
 # ── start-agent.sh worker: la sonda del REPL non legge il pane di una sorella ─
 
 
-def test_the_sentinel_worker_repl_probe_never_reads_a_sibling(capable_bash, tmp_path):
+def test_the_sentinel_worker_repl_probe_never_reads_a_sibling(capable_bash, tmp_path, healthy_disk):
     """SENTINELLA-WORKER nasce, il CLI crasha e il pane si chiude; resta viva
     una sessione che ne estende il nome con un CLI vivo. Col target nudo la
     sonda leggeva `claude` nella sorella e stampava "started"."""

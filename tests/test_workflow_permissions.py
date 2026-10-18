@@ -48,6 +48,7 @@ EXPECTED_EFFECTIVE_PERMISSIONS = {
         "vitest": READ_CONTENTS,
         "desktop": READ_CONTENTS,
         "desktop-rust": READ_CONTENTS,
+        "compose-provider-parity": READ_CONTENTS,
         "agent-harness": READ_CONTENTS,
         "migration-gate": READ_CONTENTS,
         "pytest": READ_CONTENTS,
@@ -59,6 +60,7 @@ EXPECTED_EFFECTIVE_PERMISSIONS = {
     "windows-config-acl.yml": {"acl": READ_CONTENTS},
     "windows-dev-smoke.yml": {"next-dev": READ_CONTENTS},
     "windows-installer-smoke.yml": {"nsis": READ_CONTENTS},
+    "windows-wsl2-probe.yml": {"probe": READ_CONTENTS},
 }
 
 
@@ -83,7 +85,7 @@ def test_all_workflows_have_only_the_minimum_explicit_permissions():
     workflow_paths = {path.name: path for path in WORKFLOW_DIR.glob("*.yml")}
 
     assert set(workflow_paths) == set(EXPECTED_EFFECTIVE_PERMISSIONS)
-    assert len(workflow_paths) == 12
+    assert len(workflow_paths) == 13
 
     for name, expected_jobs in EXPECTED_EFFECTIVE_PERMISSIONS.items():
         workflow = _load_workflow(workflow_paths[name])

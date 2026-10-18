@@ -1,14 +1,29 @@
-import { readFileSync } from "node:fs";
+import { readFileSync, realpathSync } from "node:fs";
 import { builtinModules } from "node:module";
 import { fileURLToPath } from "node:url";
 import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
-import { searchForWorkspaceRoot, type Plugin } from "vite";
+import type { Plugin } from "vite";
 import { defineConfig } from "vitest/config";
 import { webPublicAssets } from "./src/bundle/web-public-assets";
 import { applyTextOverrides } from "./src/desktop-texts/overrides";
 
 const fromHere = (path: string) => fileURLToPath(new URL(path, import.meta.url));
+
+/** Only files referenced by the five font stylesheets imported by dashboard.css.
+ * Resolve each leaf: the preview may reuse node_modules through a symlink.
+ * Never allow the external package directory or its surrounding dependency cache.
+ */
+function previewFontLeaves(): string[] {
+  return [300, 400, 500, 600, 700].flatMap((weight) => {
+    const css = readFileSync(fromHere(`./node_modules/@fontsource/jetbrains-mono/${weight}.css`), "utf8");
+    return [...css.matchAll(/url\(\.\/files\/([^)]*)\)/g)].map(([, name]) => {
+      if (!new RegExp(`^jetbrains-mono-(?:cyrillic-ext|cyrillic|greek|vietnamese|latin-ext|latin)-${weight}-normal\\.woff2?$`).test(name))
+        throw new Error("unexpected-preview-font-resource");
+      return realpathSync(fromHere(`./node_modules/@fontsource/jetbrains-mono/files/${name}`));
+    });
+  });
+}
 
 function comparableFsPath(path: string): string {
   const normalized = path.replace(/\\/g, "/");
@@ -123,8 +138,10 @@ export default defineConfig(({ mode }) => ({
       { find: /^@\/lib\/auth$/, replacement: fromHere("./src/web-shims/server/auth.ts") },
       { find: /^@\/lib\/workspace$/, replacement: fromHere("./src/web-shims/server/workspace.ts") },
       { find: /^@\/lib\/local-queries$/, replacement: fromHere("./src/web-shims/server/local-queries.ts") },
+      { find: /^@\/lib\/desktop-vps-positions$/, replacement: fromHere("./src/web-shims/server/desktop-vps-positions.ts") },
       { find: /^@\/lib\/demo\/mode$/, replacement: fromHere("./src/web-shims/server/demo-mode.ts") },
       { find: /^@\/lib\/server-locale$/, replacement: fromHere("./src/web-shims/server/server-locale.ts") },
+      { find: /^@\/lib\/use-locale$/, replacement: fromHere("./src/web-shims/use-locale.ts") },
       { find: /^@\/lib\/position-document-file\.server$/, replacement: fromHere("./src/web-shims/server/position-document-file.ts") },
       { find: /^@\/lib\/deploy-mode$/, replacement: fromHere("./src/web-shims/server/deploy-mode.ts") },
       { find: /^@\/lib\/local-token$/, replacement: fromHere("./src/web-shims/server/local-token.ts") },
@@ -158,9 +175,26 @@ export default defineConfig(({ mode }) => ({
     strictPort: true,
     host: "127.0.0.1",
     port: 1420,
-    // Vite serves nothing outside desktop/ by default: the reused web files
-    // would answer 403 in `tauri dev`.
-    fs: { allow: [searchForWorkspaceRoot(process.cwd()), fromHere("../web")] },
+    // Naming allow replaces Vite's default (the workspace root, which from
+    // desktop/ is desktop/ itself, node_modules included): only what the
+    // preview serves is listed. Modules the app imports are granted by Vite as
+    // it resolves them; what a stylesheet points at (the fonts) is not, so the
+    // font leaves are named one by one.
+    // The reused web files live in ../web, and the web imports a shared
+    // baseline rule: permit that one file before the import graph is warmed,
+    // without exposing the rest of shared/ or the repo.
+    fs: {
+      allow: [
+        fromHere("./src"),
+        fromHere("./public"),
+        fromHere("./index.html"),
+        fromHere("./dashboard.html"),
+        fromHere("./live-screen.html"),
+        fromHere("../web"),
+        fromHere("../shared/cloud/apply-request-rule.json"),
+        ...previewFontLeaves(),
+      ],
+    },
   },
   envPrefix: ["VITE_", "TAURI_ENV_*"],
   build: {

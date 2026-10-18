@@ -87,13 +87,21 @@ SKIP = (
     ".git/",
 )
 SEARCHED = ("*.py", "*.js", "*.ts", "*.tsx", "*.sql", "*.mjs")
+# Lo stesso vale per i test che vivono accanto al codice (vitest `*.test.ts`
+# nel desktop e nel web): costruiscono database sintetici, mai quello
+# dell'utente. Si escludono per suffisso, non per cartella, cosi' il codice
+# che sta accanto a loro resta sorvegliato.
+TEST_SUFFIXES = (".test.ts", ".test.tsx", ".test.js", ".test.mjs")
 
 
 def _tracked(pattern: str) -> list[str]:
     out = subprocess.check_output(
         ["git", "-C", str(ROOT), "ls-files", pattern], text=True
     )
-    return [p for p in out.splitlines() if not p.startswith(SKIP)]
+    return [
+        p for p in out.splitlines()
+        if not p.startswith(SKIP) and not p.endswith(TEST_SUFFIXES)
+    ]
 
 
 def _writers_found() -> set[str]:

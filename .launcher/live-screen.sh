@@ -25,8 +25,8 @@
 #   - websockify ascolta su JHT_LIVE_SCREEN_BIND. Il default 0.0.0.0 è
 #     l'interfaccia del container sulla rete bridge di Docker, e diventa
 #     raggiungibile dall'host SOLO tramite la porta pubblicata, che il compose
-#     lega a 127.0.0.1. Con `network_mode: host` (compose Podman) l'interfaccia
-#     del container È quella dell'host: lì il compose imposta 127.0.0.1;
+#     lega a 127.0.0.1. Vale anche per il compose Podman di Windows: lì il
+#     container ha il suo spazio di rete (pasta) e la stessa porta pubblicata;
 #   - un WebSocket verso 127.0.0.1 non è soggetto a CORS, quindi QUALUNQUE
 #     pagina web aperta sull'host potrebbe collegarsi. Per questo ogni avvio
 #     genera una password VNC nuova, scritta in $JHT_HOME/live-screen/ con

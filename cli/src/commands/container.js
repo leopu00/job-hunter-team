@@ -1,8 +1,8 @@
 // Comando container — wrap di `docker compose` per il container jht
 //
 // Sottocomandi:
-//   jht container up        docker compose up -d jht (con fix ownership .next)
-//   jht container down      stop + rm del container (team muore, Assistente incluso)
+//   jht container up        docker compose up -d jht (create, start)
+//   jht container down      stop del container, senza rimuoverlo (team muore, Assistente incluso)
 //   jht container recreate  down + up (utile dopo bump immagine / compose edit)
 //   jht container status    stato, immagine, mount, uptime
 //   jht container logs [-f] docker logs del jht
@@ -20,35 +20,13 @@ const __dirname = dirname(__filename);
 
 // Repo root: cli/src/commands → up 3 livelli
 const REPO_ROOT = resolve(__dirname, '..', '..', '..');
+// Tenuta dal gate di pin dell'immagine (scripts/runtime_image_pin.py): non cancellarla.
 const DEFAULT_RUNTIME_IMAGE = 'ghcr.io/leopu00/jht@sha256:07b154bee43f32d2e6313c54f28e389836556e2b5cbe1b76d03398684c38b598';
 
 function dockerCompose(args, { cwd = REPO_ROOT, inherit = true } = {}) {
   const r = spawnSync('docker', ['compose', ...args], {
     cwd,
     stdio: inherit ? 'inherit' : 'pipe',
-    env: { ...process.env, MSYS_NO_PATHCONV: '1' },
-  });
-  return r.status === 0;
-}
-
-/**
- * Fix ownership del volume anonimo /app/web/.next dopo `up --no-start`.
- * Viene creato root-owned: il container gira come uid 1001 (jht) e la
- * prima compile Turbopack fallirebbe EACCES. Idem chown.
- * Usa un one-shot --volumes-from sulla stessa immagine.
- */
-function fixNextOwnership() {
-  const r = spawnSync('docker', [
-    // Root solo per il chown: nessun'altra capability, niente rete, niente
-    // privilegi da guadagnare (P1 del 08/10, come la riparazione dei mount).
-    'run', '--rm', '--user', 'root', '--cap-drop', 'ALL', '--cap-add', 'CHOWN',
-    '--network', 'none', '--security-opt', 'no-new-privileges',
-    '--entrypoint', '/bin/sh',
-    '--volumes-from', CONTAINER_NAME,
-    process.env.JHT_IMAGE || DEFAULT_RUNTIME_IMAGE,
-    '-c', 'chown -R 1001:1001 /app/web/.next 2>/dev/null || true',
-  ], {
-    stdio: 'ignore',
     env: { ...process.env, MSYS_NO_PATHCONV: '1' },
   });
   return r.status === 0;
@@ -116,8 +94,8 @@ async function ensureDockerDaemon() {
 
 // ── up ─────────────────────────────────────────────────────────────
 // Ogni fallimento segna `process.exitCode` e RITORNA. Il `return` non e'
-// cosmetico: con `process.exit()` la funzione non proseguiva mai, e i tre passi
-// di `up` (create → chown → start) sono in sequenza — senza il `return` un
+// cosmetico: con `process.exit()` la funzione non proseguiva mai, e i due passi
+// di `up` (create → start) sono in sequenza — senza il `return` un
 // `docker compose up --no-start` fallito lascerebbe partire lo `start` su un
 // container che non esiste. `recreateAction` fa `await upAction()` come ultima
 // istruzione, quindi nemmeno da li' resta codice da saltare.
@@ -138,16 +116,13 @@ async function upAction() {
     return;
   }
   console.log(c.bold('Starting the jht container...'));
-  // Passo 1: create (senza avviare) per avere il volume anonimo .next
+  // Passo 1: create (senza avviare)
   if (!dockerCompose(['up', '--no-start', 'jht'])) {
     console.error(c.red('docker compose up failed --no-start'));
     process.exitCode = 1;
     return;
   }
-  // Passo 2: chown del volume .next
-  console.log(c.dim('  Fix ownership /app/web/.next...'));
-  fixNextOwnership();
-  // Passo 3: start
+  // Passo 2: start
   if (!dockerCompose(['start', 'jht-telegram', 'jht'])) {
     console.error(c.red('docker compose start failed'));
     process.exitCode = 1;
@@ -187,34 +162,55 @@ async function recreateAction() {
 }
 
 // ── status ─────────────────────────────────────────────────────────
-function statusAction() {
-  const inspect = spawnSync('docker', ['inspect', CONTAINER_NAME,
+const CONTAINER_NAME_PATTERN = CONTAINER_NAME.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const MISSING_INSPECT = new RegExp(`^(?:Error response from daemon: )?No such (?:object|container): ${CONTAINER_NAME_PATTERN}$`);
+
+export function classifyContainerInspect(inspect) {
+  if (inspect?.status === 1 && !inspect.error && typeof inspect.stderr === 'string' && MISSING_INSPECT.test(inspect.stderr.trim())) {
+    return { kind: 'missing' };
+  }
+  if (inspect?.status !== 0 || typeof inspect?.stdout !== 'string') return { kind: 'unknown' };
+  const fields = inspect.stdout.trim().split('|');
+  if (fields.length !== 4) return { kind: 'unknown' };
+  const [rawState, image, startedAt, mounts] = fields;
+  if (!image) return { kind: 'unknown' };
+  const state = rawState === 'running' ? 'running' : (rawState === 'exited' || rawState === 'stopped' ? 'stopped' : null);
+  if (!state || (state === 'running' && Number.isNaN(new Date(startedAt).getTime()))) return { kind: 'unknown' };
+  return { kind: state, image, startedAt, mounts };
+}
+
+export function statusAction({ inspectRunner = spawnSync, write = console.log, setExitCode = (code) => { process.exitCode = code; }, now = Date.now } = {}) {
+  const inspect = inspectRunner('docker', ['inspect', CONTAINER_NAME,
     '--format', '{{.State.Status}}|{{.Config.Image}}|{{.State.StartedAt}}|{{range $i,$m := .Mounts}}{{if $i}},{{end}}{{$m.Source}}:{{$m.Destination}}{{end}}',
   ], { encoding: 'utf8', env: { ...process.env, MSYS_NO_PATHCONV: '1' } });
+  const result = classifyContainerInspect(inspect);
 
-  if (inspect.status !== 0) {
-    console.log(c.yellow(`Container '${CONTAINER_NAME}' does not exist.`));
-    console.log(c.dim('  Create it with: jht container up'));
-    return;
+  if (result.kind === 'unknown') {
+    write(c.yellow(`Container '${CONTAINER_NAME}' status is unknown.`));
+    write(c.dim('  Inspect did not return a trustworthy container state.'));
+    setExitCode(1);
+    return result;
   }
-  const [state, image, startedAt, mounts] = inspect.stdout.trim().split('|');
-  const running = state === 'running';
-  const uptime = running ? (() => {
-    const ms = Date.now() - new Date(startedAt).getTime();
-    const min = Math.round(ms / 60_000);
+  if (result.kind === 'missing') {
+    write(c.yellow(`Container '${CONTAINER_NAME}' is missing.`));
+    return result;
+  }
+
+  const uptime = result.kind === 'running' ? (() => {
+    const min = Math.round((now() - new Date(result.startedAt).getTime()) / 60_000);
     return min < 60 ? `${min} min` : `${Math.floor(min / 60)}h ${min % 60}min`;
   })() : '-';
-
-  console.log('');
-  console.log(`  ${c.bold('Container:')} ${CONTAINER_NAME}`);
-  console.log(`  State:     ${running ? c.green(state) : c.red(state)}`);
-  console.log(`  Image:     ${c.dim(image)}`);
-  if (running) console.log(`  Uptime:    ${c.dim(uptime)}`);
-  console.log('  Mounts:');
-  for (const m of mounts.split(',')) {
-    console.log('    ' + c.dim(m));
+  write('');
+  write(`  ${c.bold('Container:')} ${CONTAINER_NAME}`);
+  write(`  State:     ${result.kind === 'running' ? c.green(result.kind) : c.red(result.kind)}`);
+  write(`  Image:     ${c.dim(result.image)}`);
+  if (result.kind === 'running') write(`  Uptime:    ${c.dim(uptime)}`);
+  write('  Mounts:');
+  if (result.mounts) {
+    for (const mount of result.mounts.split(',')) write('    ' + c.dim(mount));
   }
-  console.log('');
+  write('');
+  return result;
 }
 
 // ── logs ───────────────────────────────────────────────────────────

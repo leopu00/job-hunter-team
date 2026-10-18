@@ -1,3 +1,15 @@
+# Never Set-Acl. When the target's access rules are already protected (as a
+# previous install leaves ~/.jht), Windows PowerShell's Set-Acl writes the SACL
+# too. That needs SeSecurityPrivilege, which only an elevated process holds:
+# the desktop app, a normal user, got PrivilegeNotHeldException on ~/.jht.
+# .NET persists only the sections that changed (access rules, owner).
+function Set-JhtAccessControl {
+  param([Parameter(Mandatory)][string]$Path, [Parameter(Mandatory)]$Acl)
+  $item = Get-Item -LiteralPath $Path -Force -ErrorAction Stop
+  if ($PSVersionTable.PSEdition -eq 'Core') { [IO.FileSystemAclExtensions]::SetAccessControl($item, $Acl) }
+  else { $item.SetAccessControl($Acl) }
+}
+
 function Protect-JhtHomeAcl {
   param([Parameter(Mandatory)][string]$Path)
   $owner = [Security.Principal.WindowsIdentity]::GetCurrent().Name
@@ -14,7 +26,7 @@ function Protect-JhtHomeAcl {
     $inherit = if ($node.PSIsContainer) { 'ContainerInherit,ObjectInherit' } else { 'None' }
     $rule = New-Object System.Security.AccessControl.FileSystemAccessRule($owner, 'FullControl', $inherit, 'None', 'Allow')
     $acl.SetAccessRule($rule)
-    Set-Acl -LiteralPath $node.FullName -AclObject $acl
+    Set-JhtAccessControl -Path $node.FullName -Acl $acl
   }
   $check = Get-Acl -LiteralPath $Path
   if (-not $check.AreAccessRulesProtected) { throw "ACL inheritance remains enabled: $Path" }

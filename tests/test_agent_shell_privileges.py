@@ -128,11 +128,21 @@ def test_the_one_shot_root_containers_keep_only_chown():
     run = run[: run.index("$MountRepairDispatch")]
     for flag in ("--cap-drop ALL", "--cap-add CHOWN", "--network none", "--security-opt no-new-privileges"):
         assert flag in run, flag
+
+
+def test_container_up_runs_no_root_one_shot_at_all():
+    # `jht container up` used to chown the anonymous /app/web/.next volume from a
+    # root one-shot. The two compose files it can use (docker-compose.yml and the
+    # dev override, which dropped the volume on 2026-07-26) no longer declare
+    # it, so the one-shot was a root container with nothing to repair: it is
+    # gone, and nothing may bring it back unseen. (The simulation compose under
+    # scripts/sim still declares the volume, but `jht container up` never uses it.)
     js = CONTAINER_JS.read_text(encoding="utf-8")
-    call = js[js.index("'run', '--rm', '--user', 'root'"):]
-    call = call[: call.index("--volumes-from")]
-    for flag in ("'--cap-drop', 'ALL'", "'--cap-add', 'CHOWN'", "'--network', 'none'", "'--security-opt', 'no-new-privileges'"):
-        assert flag in call, flag
+    assert "'--user', 'root'" not in js
+    assert "--volumes-from" not in js
+    assert "fixNextOwnership" not in js
+    assert "/app/web/.next" not in js
+    assert "chown" not in "\n".join(code_lines(js))
 
 
 def test_the_dev_one_shot_root_container_keeps_only_chown():
@@ -156,10 +166,55 @@ def test_the_repair_names_only_callers_that_exist():
     text = REPAIR.read_text(encoding="utf-8")
     assert "setup_service.gd" not in text and "_repair_mount_ownership" not in text
     assert "jht-wrapper.ps1 (Repair-MountOwnership)" in text
-    # The Tauri desktop starts no local runtime off Unix: it never needs the repair.
+    # On Windows the Tauri desktop starts the local runtime only through the
+    # installed jht.ps1, whose every `up` repairs first
+    # (test_every_up_of_the_windows_wrapper_repairs_first): it never runs
+    # compose or docker itself.
     onboarding = (ROOT / "desktop" / "src-tauri" / "src" / "onboarding.rs").read_text(encoding="utf-8")
     install = onboarding[onboarding.index("fn install_local("):]
-    assert '#[cfg(not(unix))]\n    return Err(failure("runtime_install_unsupported"));' in install[:400]
+    # The body OPENS with the Windows block, and the block only hands over:
+    # nothing of the Unix path can run first on Windows.
+    body = install[install.index(") -> Result<PathBuf, OnboardingError> {\n") :].split("\n", 1)[1]
+    assert body.startswith("    #[cfg(windows)]\n    {\n"), body[:200]
+    block = body[len("    #[cfg(windows)]\n    {\n") : body.index("\n    }\n")]
+    statements = [line.strip() for line in block.splitlines() if line.strip()]
+    assert statements[-1] == "return install_local_windows(app, log, phase);", statements
+    assert all(re.fullmatch(r"let _ = \w+;", line) for line in statements[:-1]), statements
+    windows = onboarding[onboarding.index("fn install_local_windows("):]
+    windows = windows[: windows.index("\n}\n")]
+    assert "installer_invocation(&script, &channel_args)" in windows
+    for direct in ("compose", '"up"', "docker run", "chown"):
+        assert direct not in windows, direct
+
+
+def test_the_windows_desktop_never_runs_docker_even_when_it_is_installed():
+    # The v0.3.9 upgrade case: Docker Desktop is still installed (stopped),
+    # Podman is not. The app checks WSL and runs install.ps1, which installs
+    # Podman; it never asks Docker anything, so a stopped Docker can neither
+    # be woken up nor be taken for the team's engine.
+    src = ROOT / "desktop" / "src-tauri" / "src"
+    onboarding = (src / "onboarding.rs").read_text(encoding="utf-8")
+    windows = onboarding[onboarding.index("fn install_local_windows("):]
+    windows = windows[: windows.index("\n}\n")]
+    assert "wsl_state(" in windows
+    # It starts exactly two programs: wsl (--status) and the PowerShell that
+    # runs install.ps1, both resolved under SystemRoot.
+    assert "let wsl = wsl_path(" in windows and "let shell = powershell_path(" in windows
+    started = re.findall(r"run_program\w*\(\s*([A-Za-z_][\w.]*)", windows)
+    assert started == ["wsl.to_str", "shell.to_str"], started
+    assert "crate::runtime_host::run_program_lines_keeping_stderr(" in windows
+    # A runtime already installed is reused only through the release
+    # channel's rule: a test build always installs its own.
+    reuse = windows[: windows.index('"install_reused"')]
+    assert "installed_runtime_reusable(channel.as_ref()" in reuse
+    assert "docker" not in windows.lower()
+    launches = []
+    for path in sorted(src.glob("*.rs")):
+        text = path.read_text(encoding="utf-8")
+        # Every launcher of runtime_host.rs, the *_keeping_stderr ones too.
+        launches += re.findall(r'(?:Command::new|run_program(?:_lines)?(?:_keeping_stderr)?)\(\s*"([^"]+)"', text)
+    assert launches, "no program launch found: the search itself is broken"
+    assert not [program for program in launches if "docker" in program.lower()], launches
 
 
 # ── What used sudo ───────────────────────────────────────────────────────
@@ -240,6 +295,15 @@ def test_a_failed_repair_stops_the_start_with_code_sentence_and_action():
     assert 'Write-Err "mount_repair_failed:' in text
     assert "Cosa fare:" in text
     assert text.count("if (-not (Repair-MountOwnership)) { exit 1 }") == 3
+
+
+def test_windows_wrapper_requires_positive_receipts_for_both_mounts():
+    text = PS1.read_text(encoding="utf-8")
+    repair = text[text.index("function Repair-MountOwnership") : text.index("function Get-ComposeProjectName")]
+    assert "$expected = @('/jht_home', '/jht_user')" in repair
+    assert "^mount_(?:ok|repaired) (/jht_home|/jht_user)$" in repair
+    assert "$receipts.Count -eq $expected.Count" in repair
+    assert "$confirmed.ContainsKey($_)" in repair
 
 
 def _stubbed_repair(tmp_path: Path, owners: dict[str, str], chown_works: bool):

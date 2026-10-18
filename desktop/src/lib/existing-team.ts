@@ -17,15 +17,57 @@ export type { SshHostKeyProbe };
 
 export type ExistingTeamConnectionResult = OnboardingRuntimeSnapshot;
 
+export interface ExistingTeamReadOnlyConnectionResult {
+  snapshot: OnboardingRuntimeSnapshot;
+  readiness: boolean;
+}
+
 export interface ExistingTeamProgress {
   stage: "preparing" | "runtime" | "container" | "provider" | "team";
   message: string;
+}
+
+/**
+ * What the VPS declares about the container of the team, shown before anything
+ * is saved. Everything here was reported by the server; none of it is verified
+ * independently by the app.
+ */
+export interface ExistingTeamReceipt {
+  teamId: string;
+  hostAddress: string;
+  hostPort: number;
+  sshFingerprint: string | null;
+  containerId: string;
+  imageId: string;
+  platformImageId: string;
+  ociRevision: string;
+  digest: string;
+  candidateSha256: string;
+  /** Whether the assistant session is up; informative. */
+  readiness: boolean;
+}
+
+export interface ExistingTeamRegisterResult {
+  /** `restored`: a saved selection got back the candidate it was made from. */
+  outcome: "registered" | "already_registered" | "restored";
 }
 
 export interface ExistingTeamBridge {
   probe(host: ExistingTeamVpsHost): Promise<SshHostKeyProbe>;
   confirm(host: ExistingTeamVpsHost, probe: SshHostKeyProbe): Promise<void>;
   connect(request: ExistingTeamRequest, onProgress: (progress: ExistingTeamProgress) => void): Promise<ExistingTeamConnectionResult>;
+  connectReadOnly(request: ExistingTeamRequest): Promise<ExistingTeamReadOnlyConnectionResult>;
+  /**
+   * Reopens the read-only view of the team this profile already saved. The native
+   * side takes host and team from the saved target and checks the pin and the
+   * team's identity again; it refuses (candidate or selection missing) before
+   * any network call. Nothing is started.
+   */
+  reopen(): Promise<ExistingTeamReadOnlyConnectionResult>;
+  /** Reads what the VPS declares about the team's container. Writes nothing. */
+  discover(request: ExistingTeamRequest): Promise<ExistingTeamReceipt>;
+  /** Saves the target the person was shown. Host and team come from the native receipt. */
+  register(candidateSha256: string): Promise<ExistingTeamRegisterResult>;
 }
 
 export const existingTeamBridge: ExistingTeamBridge = {
@@ -41,6 +83,20 @@ export const existingTeamBridge: ExistingTeamBridge = {
     return invoke<ExistingTeamConnectionResult>("onboarding_existing_team_connect", {
       request,
       onProgress: channel,
+    });
+  },
+  connectReadOnly(request) {
+    return invoke<ExistingTeamReadOnlyConnectionResult>("onboarding_existing_team_readonly_connect", { request });
+  },
+  reopen() {
+    return invoke<ExistingTeamReadOnlyConnectionResult>("onboarding_existing_team_reopen");
+  },
+  discover(request) {
+    return invoke<ExistingTeamReceipt>("onboarding_existing_team_discover", { request });
+  },
+  register(candidateSha256) {
+    return invoke<ExistingTeamRegisterResult>("onboarding_existing_team_register", {
+      request: { candidateSha256, confirmed: true },
     });
   },
 };
@@ -66,6 +122,24 @@ export const EXISTING_TEAM_ERROR_CODES: ReadonlySet<string> = new Set([
   "existing_team_identity_mismatch",
   "existing_team_not_active",
   "existing_team_unavailable",
+  "existing_team_runtime_candidate_required",
+  "existing_team_runtime_candidate_invalid",
+  "existing_team_runtime_candidate_mismatch",
+  "existing_team_runtime_candidate_exists",
+  "existing_team_runtime_candidate_conflict",
+  "existing_team_saved_incomplete",
+  "existing_team_saved_selection_mismatch",
+  "existing_team_runtime_already_selected",
+  "existing_team_container_not_found",
+  "existing_team_not_found",
+  "existing_team_ambiguous",
+  "existing_team_image_unattested",
+  "existing_team_too_many_containers",
+  "existing_team_discovery_timeout",
+  "existing_team_target_changed",
+  "existing_team_receipt_required",
+  "existing_team_register_not_confirmed",
+  "account_scope_changed",
   "account_team_mismatch",
   "ssh_unavailable",
   "ssh_auth_failed",
@@ -83,5 +157,7 @@ export function existingTeamErrorCode(error: unknown): string {
 
 export function isTerminalExistingTeamError(code: string): boolean {
   return code === "host_key_changed" || code === "host_key_mismatch" ||
-    code === "existing_team_identity_mismatch" || code === "account_team_mismatch";
+    code === "existing_team_identity_mismatch" || code === "account_team_mismatch" ||
+    code === "existing_team_ambiguous" || code === "existing_team_image_unattested" ||
+    code === "existing_team_too_many_containers" || code === "existing_team_saved_selection_mismatch";
 }

@@ -73,8 +73,9 @@ export const T: Record<Locale, Dict> = {
       ", not pay-per-use API keys — it works around the clock and that would get expensive. You need an active plan with ",
     subEmphOne: "one",
     subIntroD: " of three providers:",
-    kimi: " (Moonshot) — the simplest tier to start with.",
-    codex: " (OpenAI) — a balance of quality and cost.",
+    kimi: " (Moonshot) — the most affordable tier.",
+    codex:
+      " (OpenAI) — recommended: proven over a one-month autonomous run, with your ChatGPT Plus or Pro subscription.",
     claude:
       " (Anthropic) — the highest precision, best for scoring and writing.",
     dedicateLabel: "Dedicate the subscription to the team.",
@@ -94,12 +95,11 @@ export const T: Record<Locale, Dict> = {
     path2SoonB: ". In the meantime, use Path 1 or Path 3.",
     path3Title: "📦 Path 3 — One-liner installer",
     path3Mac: "macOS / Linux / WSL2:",
-    path3WinIntro:
-      "Windows (PowerShell, Docker Desktop must already be running):",
+    path3WinIntro: "Windows (PowerShell, WSL must already be enabled):",
     path3WizardIntro: "Then bring the team up and run the wizard:",
     dockerReqA: "The one requirement is ",
     dockerReqB:
-      " — the installer sets up the runtime on macOS and Linux for you (on Windows it expects Docker Desktop already installed). No Node, Python or tmux on your machine: everything lives inside the container.",
+      " — the installer sets up the runtime on macOS and Linux for you (on Windows it installs Podman inside WSL; Docker Desktop is not needed). No Node, Python or tmux on your machine: everything lives inside the container.",
     firstRunTitle: "🎬 Your first run",
     firstRunIntro: "Whichever path you took:",
     fr1A: "Set up your profile.",
@@ -131,8 +131,9 @@ export const T: Record<Locale, Dict> = {
       ", non con chiavi API a consumo — lavora 24 ore su 24 e ciò diventerebbe costoso. Ti serve un piano attivo con ",
     subEmphOne: "uno",
     subIntroD: " dei tre provider:",
-    kimi: " (Moonshot) — la fascia più semplice da cui partire.",
-    codex: " (OpenAI) — un equilibrio tra qualità e costo.",
+    kimi: " (Moonshot) — la fascia più economica.",
+    codex:
+      " (OpenAI) — consigliato: provato in un mese di lavoro autonomo, con il tuo abbonamento ChatGPT Plus o Pro.",
     claude:
       " (Anthropic) — la massima precisione, ideale per scoring e scrittura.",
     dedicateLabel: "Dedica l'abbonamento al team.",
@@ -152,12 +153,11 @@ export const T: Record<Locale, Dict> = {
     path2SoonB: ". Nel frattempo usa il Percorso 1 o il Percorso 3.",
     path3Title: "📦 Percorso 3 — Installer one-liner",
     path3Mac: "macOS / Linux / WSL2:",
-    path3WinIntro:
-      "Windows (PowerShell, Docker Desktop deve essere già in esecuzione):",
+    path3WinIntro: "Windows (PowerShell, WSL deve essere già attivo):",
     path3WizardIntro: "Poi avvia il team ed esegui la procedura guidata:",
     dockerReqA: "L'unico requisito è ",
     dockerReqB:
-      " — l'installer configura il runtime su macOS e Linux per te (su Windows si aspetta Docker Desktop già installato). Niente Node, Python o tmux sulla tua macchina: tutto vive dentro il container.",
+      " — l'installer configura il runtime su macOS e Linux per te (su Windows installa Podman dentro WSL; Docker Desktop non serve). Niente Node, Python o tmux sulla tua macchina: tutto vive dentro il container.",
     firstRunTitle: "🎬 La tua prima esecuzione",
     firstRunIntro: "Qualunque percorso tu abbia scelto:",
     fr1A: "Configura il tuo profilo.",
@@ -190,8 +190,9 @@ export const T: Record<Locale, Dict> = {
       ", no con claves API de pago por uso — trabaja las 24 horas y eso resultaría caro. Necesitas un plan activo con ",
     subEmphOne: "uno",
     subIntroD: " de tres proveedores:",
-    kimi: " (Moonshot) — el nivel más sencillo para empezar.",
-    codex: " (OpenAI) — un equilibrio entre calidad y coste.",
+    kimi: " (Moonshot) — el nivel más económico.",
+    codex:
+      " (OpenAI) — recomendado: probado durante un mes de trabajo autónomo, con tu suscripción ChatGPT Plus o Pro.",
     claude:
       " (Anthropic) — la máxima precisión, ideal para puntuar y redactar.",
     dedicateLabel: "Dedica la suscripción al equipo.",
@@ -211,12 +212,11 @@ export const T: Record<Locale, Dict> = {
     path2SoonB: ". Mientras tanto, usa la Vía 1 o la Vía 3.",
     path3Title: "📦 Vía 3 — Instalador en una línea",
     path3Mac: "macOS / Linux / WSL2:",
-    path3WinIntro:
-      "Windows (PowerShell, Docker Desktop ya debe estar en ejecución):",
+    path3WinIntro: "Windows (PowerShell, WSL ya debe estar activado):",
     path3WizardIntro: "Luego levanta el equipo y ejecuta el asistente:",
     dockerReqA: "El único requisito es ",
     dockerReqB:
-      " — el instalador configura el runtime en macOS y Linux por ti (en Windows espera Docker Desktop ya instalado). Sin Node, Python ni tmux en tu máquina: todo vive dentro del contenedor.",
+      " — el instalador configura el runtime en macOS y Linux por ti (en Windows instala Podman dentro de WSL; no necesitas Docker Desktop). Sin Node, Python ni tmux en tu máquina: todo vive dentro del contenedor.",
     firstRunTitle: "🎬 Tu primera ejecución",
     firstRunIntro: "Sea cual sea la vía que hayas elegido:",
     fr1A: "Configura tu perfil.",
@@ -249,8 +249,9 @@ export const T: Record<Locale, Dict> = {
       ", pas avec des clés API à l'usage — elle travaille 24 heures sur 24 et cela coûterait cher. Vous avez besoin d'un forfait actif chez ",
     subEmphOne: "l'un",
     subIntroD: " des trois fournisseurs :",
-    kimi: " (Moonshot) — la formule la plus simple pour débuter.",
-    codex: " (OpenAI) — un équilibre entre qualité et coût.",
+    kimi: " (Moonshot) — la formule la plus abordable.",
+    codex:
+      " (OpenAI) — recommandé : éprouvé sur un mois de travail autonome, avec votre abonnement ChatGPT Plus ou Pro.",
     claude:
       " (Anthropic) — la plus haute précision, idéale pour la notation et la rédaction.",
     dedicateLabel: "Dédiez l'abonnement à l'équipe.",
@@ -271,12 +272,11 @@ export const T: Record<Locale, Dict> = {
     path2SoonB: ". En attendant, utilisez la Voie 1 ou la Voie 3.",
     path3Title: "📦 Voie 3 — Installateur en une ligne",
     path3Mac: "macOS / Linux / WSL2 :",
-    path3WinIntro:
-      "Windows (PowerShell, Docker Desktop doit déjà être en cours d'exécution) :",
+    path3WinIntro: "Windows (PowerShell, WSL doit déjà être activé) :",
     path3WizardIntro: "Puis démarrez l'équipe et lancez l'assistant :",
     dockerReqA: "La seule exigence est ",
     dockerReqB:
-      " — l'installateur configure le runtime sur macOS et Linux pour vous (sous Windows, il attend Docker Desktop déjà installé). Pas de Node, Python ni tmux sur votre machine : tout vit à l'intérieur du conteneur.",
+      " — l'installateur configure le runtime sur macOS et Linux pour vous (sous Windows, il installe Podman dans WSL ; Docker Desktop n'est pas nécessaire). Pas de Node, Python ni tmux sur votre machine : tout vit à l'intérieur du conteneur.",
     firstRunTitle: "🎬 Votre première exécution",
     firstRunIntro: "Quelle que soit la voie choisie :",
     fr1A: "Configurez votre profil.",
@@ -309,8 +309,9 @@ export const T: Record<Locale, Dict> = {
       ", nicht mit nutzungsbasierten API-Schlüsseln — es arbeitet rund um die Uhr, und das würde teuer werden. Du brauchst einen aktiven Plan bei ",
     subEmphOne: "einem",
     subIntroD: " von drei Anbietern:",
-    kimi: " (Moonshot) — die einfachste Stufe für den Einstieg.",
-    codex: " (OpenAI) — ein Gleichgewicht aus Qualität und Kosten.",
+    kimi: " (Moonshot) — die günstigste Stufe.",
+    codex:
+      " (OpenAI) — empfohlen: einen Monat lang im autonomen Betrieb erprobt, mit deinem ChatGPT-Plus- oder -Pro-Abo.",
     claude:
       " (Anthropic) — die höchste Präzision, ideal für Bewertung und Verfassen.",
     dedicateLabel: "Widme das Abonnement dem Team.",
@@ -331,11 +332,11 @@ export const T: Record<Locale, Dict> = {
     path2SoonB: ". Nutze in der Zwischenzeit Weg 1 oder Weg 3.",
     path3Title: "📦 Weg 3 — Einzeiler-Installer",
     path3Mac: "macOS / Linux / WSL2:",
-    path3WinIntro: "Windows (PowerShell, Docker Desktop muss bereits laufen):",
+    path3WinIntro: "Windows (PowerShell, WSL muss bereits aktiviert sein):",
     path3WizardIntro: "Dann starte das Team und führe den Assistenten aus:",
     dockerReqA: "Die einzige Voraussetzung ist ",
     dockerReqB:
-      " — der Installer richtet die Laufzeitumgebung auf macOS und Linux für dich ein (unter Windows erwartet er ein bereits installiertes Docker Desktop). Kein Node, Python oder tmux auf deinem Rechner: alles lebt im Container.",
+      " — der Installer richtet die Laufzeitumgebung auf macOS und Linux für dich ein (unter Windows installiert er Podman in WSL; Docker Desktop wird nicht benötigt). Kein Node, Python oder tmux auf deinem Rechner: alles lebt im Container.",
     firstRunTitle: "🎬 Dein erster Lauf",
     firstRunIntro: "Welchen Weg du auch gewählt hast:",
     fr1A: "Richte dein Profil ein.",
@@ -368,8 +369,9 @@ export const T: Record<Locale, Dict> = {
       " fut, nem használatalapú API-kulcsokon — a nap 24 órájában dolgozik, és az drága lenne. Aktív csomagra van szükséged az alábbi három szolgáltató ",
     subEmphOne: "egyikénél",
     subIntroD: ":",
-    kimi: " (Moonshot) — a legegyszerűbb szint a kezdéshez.",
-    codex: " (OpenAI) — egyensúly a minőség és a költség között.",
+    kimi: " (Moonshot) — a legkedvezőbb árú szint.",
+    codex:
+      " (OpenAI) — ajánlott: egy hónapnyi önálló munkán bizonyított, a ChatGPT Plus vagy Pro előfizetéseddel.",
     claude:
       " (Anthropic) — a legnagyobb pontosság, ideális pontozáshoz és íráshoz.",
     dedicateLabel: "Szenteld az előfizetést a csapatnak.",
@@ -390,11 +392,12 @@ export const T: Record<Locale, Dict> = {
     path2SoonB: " követheted. Addig használd az 1. vagy a 3. utat.",
     path3Title: "📦 3. út — Egysoros telepítő",
     path3Mac: "macOS / Linux / WSL2:",
-    path3WinIntro: "Windows (PowerShell, a Docker Desktopnak már futnia kell):",
+    path3WinIntro:
+      "Windows (PowerShell, a WSL-nek már bekapcsolva kell lennie):",
     path3WizardIntro: "Aztán indítsd el a csapatot, és futtasd a varázslót:",
     dockerReqA: "Az egyetlen követelmény a ",
     dockerReqB:
-      " — a telepítő beállítja helyetted a futtatókörnyezetet macOS-en és Linuxon (Windowson már telepített Docker Desktopot vár). Nincs Node, Python vagy tmux a gépeden: minden a konténeren belül él.",
+      " — a telepítő beállítja helyetted a futtatókörnyezetet macOS-en és Linuxon (Windowson Podmant telepít a WSL-be; Docker Desktopra nincs szükség). Nincs Node, Python vagy tmux a gépeden: minden a konténeren belül él.",
     firstRunTitle: "🎬 Az első futtatásod",
     firstRunIntro: "Bármelyik utat is választottad:",
     fr1A: "Állítsd be a profilodat.",
@@ -427,8 +430,9 @@ export const T: Record<Locale, Dict> = {
       ", não com chaves de API pagas por utilização — trabalha 24 horas por dia e isso ficaria caro. Precisas de um plano ativo com ",
     subEmphOne: "um",
     subIntroD: " de três fornecedores:",
-    kimi: " (Moonshot) — o nível mais simples para começar.",
-    codex: " (OpenAI) — um equilíbrio entre qualidade e custo.",
+    kimi: " (Moonshot) — o nível mais económico.",
+    codex:
+      " (OpenAI) — recomendado: provado durante um mês de trabalho autónomo, com a tua subscrição ChatGPT Plus ou Pro.",
     claude: " (Anthropic) — a máxima precisão, ideal para pontuar e escrever.",
     dedicateLabel: "Dedica a subscrição à equipa.",
     dedicateBody:
@@ -447,12 +451,11 @@ export const T: Record<Locale, Dict> = {
     path2SoonB: ". Entretanto, usa a Via 1 ou a Via 3.",
     path3Title: "📦 Caminho 3 — Instalador numa só linha",
     path3Mac: "macOS / Linux / WSL2:",
-    path3WinIntro:
-      "Windows (PowerShell, o Docker Desktop já tem de estar em execução):",
+    path3WinIntro: "Windows (PowerShell, o WSL já tem de estar ativado):",
     path3WizardIntro: "Depois levanta a equipa e executa o assistente:",
     dockerReqA: "O único requisito é o ",
     dockerReqB:
-      " — o instalador configura o runtime no macOS e Linux por ti (no Windows espera o Docker Desktop já instalado). Sem Node, Python ou tmux na tua máquina: tudo vive dentro do contentor.",
+      " — o instalador configura o runtime no macOS e Linux por ti (no Windows instala o Podman dentro do WSL; o Docker Desktop não é necessário). Sem Node, Python ou tmux na tua máquina: tudo vive dentro do contentor.",
     firstRunTitle: "🎬 A tua primeira execução",
     firstRunIntro: "Seja qual for o caminho que escolheste:",
     fr1A: "Configura o teu perfil.",

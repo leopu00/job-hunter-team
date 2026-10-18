@@ -229,5 +229,7 @@
   "closer.reason.unknown_required_control.why": "Il form ha un campo obbligatorio che il CLOSER non può compilare in sicurezza.",
   "closer.reason.unknown_required_control.action": "Apri l'offerta e candidati a mano.",
   "closer.reason.linkedin_session_expired.why": "La sessione LinkedIn fatta a mano è scaduta, o LinkedIn non la accetta più.",
-  "closer.reason.linkedin_session_expired.action": "Rifai il login a mano nel browser del CLOSER, poi autorizza di nuovo la posizione."
+  "closer.reason.linkedin_session_expired.action": "Rifai il login a mano nel browser del CLOSER, poi autorizza di nuovo la posizione.",
+  "disk.warning": "Lo spazio sul disco sta finendo: è libero solo %s. Libera presto un po' di spazio, altrimenti il team smetterà di avviare nuovi agenti e aggiornamenti.",
+  "disk.low": "Il disco è quasi pieno (è libero solo %s): non viene avviato nessun nuovo agente né installato nessun aggiornamento. Gli agenti già avviati continuano. Per liberare spazio: svuota il Cestino ed elimina i file grandi che non ti servono, come vecchi download o immagini Docker/Podman inutilizzate, poi riprova."
 }

@@ -10,12 +10,39 @@ import {
   type DashboardStats,
 } from "../../lib/dashboard-data";
 
-/** What the dashboard screen draws: the same inputs web/app/(protected)/dashboard/page.tsx gathers. */
+/**
+ * What the dashboard screen draws: the same inputs web/app/(protected)/dashboard/page.tsx gathers.
+ * Read from an existing team's VPS it also says how much of each block it got
+ * (`existingTeam`) and brings the core's own numbers, so the screen never
+ * shows a bounded or missing block as a complete one.
+ */
 export type DashboardData = {
   stats: DashboardStats;
   positions: DashboardPosition[];
   rates: Rates;
   applicationEvents: ApplicationTimelineEvent[];
+  /** The newest scored positions, read apart from `positions` (which may be a bounded slice). */
+  latest?: DashboardPosition[];
+  existingTeam?: ExistingTeamDashboardInfo;
+};
+
+export type ExistingTeamDashboardInfo = {
+  /** Over the active positions, as the core counts them. */
+  active: number;
+  withScore: number;
+  avgScore: number | null;
+  buckets: Array<{ min: number; max: number; count: number }>;
+  sources: Array<{ source: string; count: number }>;
+  /** The charts draw `chartsIncluded` of the `chartsOf` active positions. */
+  chartsIncluded: number;
+  chartsOf: number;
+  /** The timeline draws `eventsIncluded` of the `eventsOf` submissions. */
+  eventsIncluded: number;
+  eventsOf: number;
+  /** Live exchange rates were read; without them only euro salaries are drawn. */
+  ratesAvailable: boolean;
+  /** Positions whose salary is not in euro and could not be converted. */
+  salaryUnconverted: number;
 };
 
 export type DashboardSources = {

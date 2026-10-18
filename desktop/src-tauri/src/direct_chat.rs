@@ -1,13 +1,14 @@
 use crate::account_scope::{AccountScope, AccountScopeState};
+use crate::existing_team_runtime::{self, ActivatedTarget};
 use crate::runtime_host::{
-    run_program, run_ssh, set_private_dir_permissions, set_private_permissions, ssh_base_args,
+    run_program, run_ssh, run_ssh_command, set_private_dir_permissions, set_private_permissions, ssh_base_args,
     validate_host, ExecutionHost, ProcessResult, ValidatedHost,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::{
     fs::{self, OpenOptions},
-    io::Read,
+    io::{Read, Write},
     path::{Path, PathBuf},
     process::{Child, Command, Stdio},
     sync::{Arc, Mutex},
@@ -100,14 +101,18 @@ struct DirectChatInner {
 }
 
 struct Connection {
+    app: Option<tauri::AppHandle>,
     scope: AccountScope,
     host: ExecutionHost,
     validated: ValidatedHost,
+    runtime: Option<ActivatedTarget>,
     local_wrapper: Option<PathBuf>,
     local_owner_marker: Option<PathBuf>,
     control_path: Option<PathBuf>,
     tunnel: Option<Child>,
 }
+
+enum RemoteOperation<'a> { Probe, Python, Delivery(&'a str) }
 
 impl Drop for Connection {
     fn drop(&mut self) {
@@ -300,21 +305,125 @@ pub(crate) fn verify_migration_local_host_at(
     }
 }
 
+// Every official connection writer shares this barrier. Registration may fill
+// an absent host, but must never overwrite an already selected different host.
+static HOST_PERSIST: Mutex<()> = Mutex::new(());
+
+fn persist_host_at(path: &Path, host: &ExecutionHost) -> Result<(), DirectChatError> {
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent).map_err(|_| failure("storage_unavailable"))?;
+        if fs::symlink_metadata(parent)
+            .map_err(|_| failure("storage_unavailable"))?
+            .file_type()
+            .is_symlink()
+        {
+            return Err(failure("storage_unavailable"));
+        }
+        set_private_dir_permissions(parent).map_err(failure)?;
+    }
+    let nonce = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_err(|_| failure("storage_unavailable"))?
+        .as_nanos();
+    let temporary = path.with_extension(format!("tmp-{}-{nonce}", std::process::id()));
+    let bytes = serde_json::to_vec(host).map_err(|_| failure("storage_unavailable"))?;
+    let mut options = OpenOptions::new();
+    options.write(true).create_new(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.mode(0o600);
+    }
+    let mut file = options
+        .open(&temporary)
+        .map_err(|_| failure("storage_unavailable"))?;
+    let result = (|| {
+        set_private_permissions(&temporary).map_err(failure)?;
+        file.write_all(&bytes)
+            .map_err(|_| failure("storage_unavailable"))?;
+        file.sync_all()
+            .map_err(|_| failure("storage_unavailable"))?;
+        drop(file);
+        fs::rename(&temporary, path).map_err(|_| failure("storage_unavailable"))
+    })();
+    if result.is_err() {
+        let _ = fs::remove_file(&temporary);
+    }
+    result
+}
+
 fn persist_host(
     app: &tauri::AppHandle,
     scope: &AccountScope,
     host: &ExecutionHost,
 ) -> Result<(), DirectChatError> {
-    let path = connection_config_path(app, scope)?;
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).map_err(|_| failure("storage_unavailable"))?;
-        set_private_dir_permissions(parent).map_err(failure)?;
+    let _write = HOST_PERSIST
+        .lock()
+        .map_err(|_| failure("storage_unavailable"))?;
+    persist_host_at(&connection_config_path(app, scope)?, host)
+}
+
+fn read_assistance_host_at(path: &Path) -> Result<ExecutionHost, &'static str> {
+    let metadata = fs::symlink_metadata(path).map_err(|_| "host_config_invalid")?;
+    if !metadata.file_type().is_file() || metadata.len() > 4096 {
+        return Err("host_config_invalid");
     }
-    let temporary = path.with_extension(format!("tmp-{}", std::process::id()));
-    let bytes = serde_json::to_vec(host).map_err(|_| failure("storage_unavailable"))?;
-    fs::write(&temporary, bytes).map_err(|_| failure("storage_unavailable"))?;
-    set_private_permissions(&temporary).map_err(failure)?;
-    fs::rename(&temporary, path).map_err(|_| failure("storage_unavailable"))
+    let mut options = OpenOptions::new();
+    options.read(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK);
+    }
+    let mut file = options.open(path).map_err(|_| "host_config_invalid")?;
+    let opened = file.metadata().map_err(|_| "host_config_invalid")?;
+    if !opened.is_file() || opened.len() > 4096 {
+        return Err("host_config_invalid");
+    }
+    let mut bytes = Vec::new();
+    Read::by_ref(&mut file)
+        .take(4097)
+        .read_to_end(&mut bytes)
+        .map_err(|_| "host_config_invalid")?;
+    if bytes.len() > 4096 {
+        return Err("host_config_invalid");
+    }
+    let value: Value = serde_json::from_slice(&bytes).map_err(|_| "host_config_invalid")?;
+    let host: ExecutionHost =
+        serde_json::from_value(value.clone()).map_err(|_| "host_config_invalid")?;
+    if serde_json::to_value(&host).map_err(|_| "host_config_invalid")? != value {
+        return Err("host_config_invalid");
+    }
+    Ok(host)
+}
+
+fn register_assistance_host_at(path: &Path, host: &ExecutionHost) -> Result<(), &'static str> {
+    let _write = HOST_PERSIST.lock().map_err(|_| "storage_unavailable")?;
+    match fs::symlink_metadata(path) {
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            persist_host_at(path, host).map_err(|error| error.code)?;
+        }
+        Err(_) => return Err("storage_unavailable"),
+        Ok(_) => {
+            if read_assistance_host_at(path)? != *host {
+                return Err("browser_connection_changed");
+            }
+            // Same host is idempotent: leave existing config bytes untouched.
+        }
+    }
+    if read_assistance_host_at(path)? != *host {
+        return Err("browser_connection_changed");
+    }
+    Ok(())
+}
+
+pub(crate) fn register_assistance_host(
+    app: &tauri::AppHandle,
+    scope: &AccountScope,
+    host: &ExecutionHost,
+) -> Result<(), &'static str> {
+    let path = connection_config_path(app, scope).map_err(|error| error.code)?;
+    register_assistance_host_at(&path, host)
 }
 
 pub(crate) fn persist_onboarding_host(
@@ -427,15 +536,12 @@ fn close_connection(connection: &mut Connection) {
 fn run_connection(
     connection: &Connection,
     local_args: &[&str],
-    remote_command: &'static str,
+    remote_operation: RemoteOperation<'_>,
     input: Option<&[u8]>,
     timeout: Duration,
 ) -> Result<ProcessResult, DirectChatError> {
     match &connection.validated {
         ValidatedHost::Local => {
-            #[cfg(target_os = "windows")]
-            return Err(failure("local_runtime_unsupported"));
-            #[cfg(not(target_os = "windows"))]
             {
                 crate::account_scope::verify_local_runtime_owner(
                     connection
@@ -457,14 +563,22 @@ fn run_connection(
                 .map_err(failure)
             }
         }
-        ValidatedHost::Vps { .. } => run_ssh(
-            &connection.validated,
-            remote_command,
-            input,
-            timeout,
-            connection.control_path.as_deref(),
-        )
-        .map_err(failure),
+        ValidatedHost::Vps { .. } => {
+            let selected = connection.app.as_ref().ok_or_else(|| failure("existing_team_runtime_target_changed"))
+                .and_then(|app| existing_team_runtime::selected(app, &connection.scope, &connection.host).map_err(failure))?;
+            if selected.as_ref().map(|target| (&target.team_id, &target.runtime)) != connection.runtime.as_ref().map(|target| (&target.team_id, &target.runtime)) {
+                return Err(failure("existing_team_runtime_target_changed"));
+            }
+            let command = match (selected.as_ref(), remote_operation) {
+                (Some(target), RemoteOperation::Probe) => existing_team_runtime::command(&target.runtime, "docker inspect --type container --format '{{.State.Running}}' \"$JHT_CID\"").map_err(failure)?,
+                (Some(target), RemoteOperation::Python) => existing_team_runtime::python_command(&target.runtime).map_err(failure)?,
+                (Some(target), RemoteOperation::Delivery(session)) => existing_team_runtime::delivery_command(&target.runtime, session).map_err(failure)?,
+                (None, RemoteOperation::Probe) => REMOTE_CONTAINER_PROBE.to_owned(),
+                (None, RemoteOperation::Python) => REMOTE_PYTHON_STDIN.to_owned(),
+                (None, RemoteOperation::Delivery(session)) => delivery_command(session).ok_or_else(|| failure("invalid_agent"))?.to_owned(),
+            };
+            run_ssh_command(&connection.validated, &command, input, timeout, connection.control_path.as_deref()).map_err(failure)
+        }
     }
 }
 
@@ -479,7 +593,7 @@ fn probe(connection: &Connection) -> DirectChatStatus {
     let result = run_connection(
         connection,
         &["desktop-chat", "probe"],
-        REMOTE_CONTAINER_PROBE,
+        RemoteOperation::Probe,
         None,
         CONNECT_TIMEOUT,
     );
@@ -496,28 +610,28 @@ fn connect_impl(
     scope: AccountScope,
     host: ExecutionHost,
 ) -> Result<Connection, DirectChatError> {
-    let validated = validate_host(app, &host).map_err(failure)?;
+    let validated = crate::runtime_host::validate_host_for_scope(app, &host, &scope).map_err(failure)?;
+    let runtime = if matches!(validated, ValidatedHost::Vps { .. }) {
+        existing_team_runtime::selected(app, &scope, &host).map_err(failure)?
+    } else { None };
     let (local_wrapper, local_owner_marker, control_path, tunnel) = match &validated {
-        ValidatedHost::Local => {
-            #[cfg(target_os = "windows")]
-            return Err(failure("local_runtime_unsupported"));
-            #[cfg(not(target_os = "windows"))]
-            (
+        ValidatedHost::Local => (
                 Some(crate::onboarding::verified_local_wrapper_path(app).map_err(failure)?),
                 Some(crate::account_scope::local_owner_marker_path(app).map_err(failure)?),
                 None,
                 None,
-            )
-        }
+            ),
         ValidatedHost::Vps { .. } => {
             let (path, child) = open_tunnel(&validated)?;
             (None, None, Some(path), Some(child))
         }
     };
     let mut connection = Connection {
+        app: Some(app.clone()),
         scope: scope.clone(),
         host,
         validated,
+        runtime,
         local_wrapper,
         local_owner_marker,
         control_path,
@@ -689,7 +803,7 @@ fn run_python(
     let result = run_connection(
         connection,
         &["desktop-chat", "python"],
-        REMOTE_PYTHON_STDIN,
+        RemoteOperation::Python,
         Some(&input),
         timeout,
     );
@@ -854,7 +968,7 @@ fn send_impl(
     let mut delivered = run_connection(
         connection,
         &local_delivery_args(session),
-        delivery_command(&agent).ok_or_else(|| failure("invalid_agent"))?,
+        RemoteOperation::Delivery(session),
         Some(envelope.as_bytes()),
         SEND_TIMEOUT,
     )?;
@@ -865,7 +979,7 @@ fn send_impl(
         delivered = run_connection(
             connection,
             &local_delivery_args(session),
-            delivery_command(&agent).ok_or_else(|| failure("invalid_agent"))?,
+            RemoteOperation::Delivery(session),
             Some(envelope.as_bytes()),
             SEND_TIMEOUT,
         )?;
@@ -1175,9 +1289,11 @@ mod tests {
         let owner = dir.join(".desktop-account-scope");
         fs::write(&owner, format!("{}\n", scope.digest())).unwrap();
         let connection = Connection {
+            app: None,
             scope,
             host: ExecutionHost::Local,
             validated: ValidatedHost::Local,
+            runtime: None,
             local_wrapper: Some(wrapper.clone()),
             local_owner_marker: Some(owner),
             control_path: None,
@@ -1194,5 +1310,182 @@ mod tests {
         assert_eq!(failed.state, "error");
         assert_eq!(failed.code, Some("container_unavailable"));
         fs::remove_dir_all(dir).unwrap();
+    }
+}
+
+#[cfg(test)]
+mod assistance_registration_tests {
+    use super::*;
+    struct Temporary(PathBuf);
+    impl Temporary {
+        fn new() -> Self {
+            let nonce = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_nanos();
+            let root = std::env::temp_dir().join(format!(
+                "jht-assistance-register-{}-{nonce}",
+                std::process::id()
+            ));
+            fs::create_dir(&root).unwrap();
+            Self(root)
+        }
+        fn path(&self) -> PathBuf {
+            self.0.join("account/direct-chat-host.json")
+        }
+    }
+    impl Drop for Temporary {
+        fn drop(&mut self) {
+            fs::remove_dir_all(&self.0).unwrap();
+        }
+    }
+    fn host(label: &str) -> ExecutionHost {
+        ExecutionHost::Vps {
+            address: format!("{label}.invalid"),
+            user: "fixture".into(),
+            port: 22,
+            key_path: "/fixture/key".into(),
+        }
+    }
+    #[test]
+    fn absent_host_is_private_and_same_host_keeps_exact_bytes() {
+        let temp = Temporary::new();
+        let path = temp.path();
+        register_assistance_host_at(&path, &host("one")).unwrap();
+        assert_eq!(
+            serde_json::from_slice::<ExecutionHost>(&fs::read(&path).unwrap()).unwrap(),
+            host("one")
+        );
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            assert_eq!(
+                fs::metadata(&path).unwrap().permissions().mode() & 0o777,
+                0o600
+            );
+            assert_eq!(
+                fs::metadata(path.parent().unwrap())
+                    .unwrap()
+                    .permissions()
+                    .mode()
+                    & 0o777,
+                0o700
+            );
+        }
+        // Exact existing bytes, including harmless whitespace, are preserved.
+        let mut bytes = fs::read(&path).unwrap();
+        bytes.push(b'\n');
+        fs::write(&path, &bytes).unwrap();
+        register_assistance_host_at(&path, &host("one")).unwrap();
+        assert_eq!(fs::read(&path).unwrap(), bytes);
+        assert_eq!(fs::read_dir(path.parent().unwrap()).unwrap().count(), 1);
+    }
+    #[test]
+    fn different_existing_host_is_never_overwritten() {
+        let temp = Temporary::new();
+        let path = temp.path();
+        register_assistance_host_at(&path, &host("one")).unwrap();
+        let before = fs::read(&path).unwrap();
+        assert_eq!(
+            register_assistance_host_at(&path, &host("two")),
+            Err("browser_connection_changed")
+        );
+        assert_eq!(fs::read(&path).unwrap(), before);
+    }
+    #[test]
+    fn malformed_oversize_extra_fields_and_nonfile_deny_without_repair() {
+        let temp = Temporary::new();
+        let path = temp.path();
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        let mut extra = serde_json::to_value(host("one")).unwrap();
+        extra["container_id"] = json!("spoof");
+        for bytes in [
+            b"{".to_vec(),
+            vec![b' '; 4097],
+            serde_json::to_vec(&extra).unwrap(),
+        ] {
+            fs::write(&path, &bytes).unwrap();
+            assert_eq!(
+                register_assistance_host_at(&path, &host("one")),
+                Err("host_config_invalid")
+            );
+            assert_eq!(fs::read(&path).unwrap(), bytes);
+        }
+        fs::remove_file(&path).unwrap();
+        fs::create_dir(&path).unwrap();
+        assert_eq!(
+            register_assistance_host_at(&path, &host("one")),
+            Err("host_config_invalid")
+        );
+        assert!(path.is_dir());
+    }
+    #[test]
+    fn host_alias_cannot_replace_other_account_config() {
+        let temp = Temporary::new();
+        let path = temp.path();
+        let scope = AccountScope::synthetic(b"assistance-a");
+        let other = AccountScope::synthetic(b"assistance-b");
+        assert_ne!(
+            connection_config_path_at(&temp.0, &scope),
+            connection_config_path_at(&temp.0, &other)
+        );
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::symlink;
+            fs::create_dir_all(path.parent().unwrap()).unwrap();
+            let target = temp.0.join("other-host.json");
+            let bytes = serde_json::to_vec(&host("two")).unwrap();
+            fs::write(&target, &bytes).unwrap();
+            symlink(&target, &path).unwrap();
+            assert_eq!(
+                register_assistance_host_at(&path, &host("one")),
+                Err("host_config_invalid")
+            );
+            assert_eq!(fs::read(&target).unwrap(), bytes);
+            assert!(fs::symlink_metadata(&path)
+                .unwrap()
+                .file_type()
+                .is_symlink());
+        }
+    }
+    #[test]
+    fn two_registrations_serialize_and_only_one_host_wins() {
+        let temp = Temporary::new();
+        let path = temp.path();
+        let barrier = Arc::new(std::sync::Barrier::new(2));
+        let children: Vec<_> = ["one", "two"]
+            .into_iter()
+            .map(|label| {
+                let path = path.clone();
+                let barrier = barrier.clone();
+                thread::spawn(move || {
+                    barrier.wait();
+                    (
+                        host(label),
+                        register_assistance_host_at(&path, &host(label)),
+                    )
+                })
+            })
+            .collect();
+        let results: Vec<_> = children
+            .into_iter()
+            .map(|child| child.join().unwrap())
+            .collect();
+        assert_eq!(
+            results.iter().filter(|(_, result)| result.is_ok()).count(),
+            1
+        );
+        assert_eq!(
+            results
+                .iter()
+                .filter(|(_, result)| *result == Err("browser_connection_changed"))
+                .count(),
+            1
+        );
+        let persisted: ExecutionHost = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+        assert_eq!(
+            &persisted,
+            &results.iter().find(|(_, result)| result.is_ok()).unwrap().0
+        );
     }
 }

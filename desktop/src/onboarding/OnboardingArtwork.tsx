@@ -2,40 +2,34 @@ import type {
   ExecutionHost,
   OnboardingRuntimeState,
 } from "../lib/onboarding";
+import { appLocale } from "../lib/app-locale";
+import { ONBOARDING_TEXT } from "./onboarding.i18n";
 import "./onboarding-artwork.css";
 
 export const ONBOARDING_ARTWORK = {
   identity: {
     src: "/onboarding/identity.webp",
-    alt: "Due percorsi di identità convergono nello stesso ingresso sicuro.",
   },
   environmentComputer: {
     src: "/onboarding/environment-computer-v2.webp",
-    alt: "Il computer proietta l’ufficio del team in una box luminosa.",
   },
   environmentVps: {
     src: "/onboarding/environment-vps-v2.webp",
-    alt: "La VPS proietta l’ufficio del team in una box luminosa.",
   },
   provider: {
     src: "/onboarding/provider-v2.webp",
-    alt: "Una rete neurale collega in modo paritario Claude, Codex e Kimi.",
   },
   providerAuth: {
     src: "/onboarding/provider-auth.webp",
-    alt: "Un accesso sicuro collega il dispositivo al provider.",
   },
   runtime: {
     src: "/onboarding/runtime.webp",
-    alt: "Il runtime prepara e verifica un container.",
   },
   teamStart: {
     src: "/onboarding/team-start.webp",
-    alt: "Gli agenti entrano nell’ufficio mentre il team si avvia.",
   },
   assistantReady: {
     src: "/onboarding/assistant-ready.webp",
-    alt: "L’Assistente accoglie l’utente davanti all’ufficio pronto.",
   },
 } as const;
 
@@ -73,7 +67,7 @@ export function OnboardingArtwork({
     <figure className={`onboarding-artwork${className ? ` ${className}` : ""}`}>
       <img
         src={artwork.src}
-        alt={artwork.alt}
+        alt={ONBOARDING_TEXT[appLocale()].artwork[name]}
         width={1600}
         height={1200}
         decoding="async"
