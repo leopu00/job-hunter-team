@@ -68,7 +68,8 @@ export const ROUTES: Route[] = [
 ];
 
 export const READ_ONLY_ROUTES: Route[] = [
-  ...ROUTES.filter((route) => ["/dashboard", "/positions", "/positions/:id"].includes(route.path)),
+  // The map and the office read the team's positions from its VPS when this view is on.
+  ...ROUTES.filter((route) => ["/dashboard", "/map", "/positions", "/positions/:id", "/office"].includes(route.path)),
   // Not the web's cloud Team page: the state the existing team's VPS reports about itself.
   { path: "/team", page: ExistingTeamStatusPage },
   // Not the web's cloud Profile page: the profile the existing team's VPS holds.
@@ -78,7 +79,10 @@ export const READ_ONLY_ROUTES: Route[] = [
 /** The navigation of that view, in the order of the web's own bar. */
 export const READ_ONLY_NAV = [
   { href: "/dashboard", label: "nav_dashboard" },
+  { href: "/map", label: "nav_map" },
   { href: "/positions", label: "nav_positions" },
   { href: "/team", label: "own:team" },
   { href: "/profile", label: "own:profile" },
+  // A desktop page, after the web's ones as in the full shell (DESKTOP_LINKS).
+  { href: "/office", label: "own:office" },
 ] as const;
