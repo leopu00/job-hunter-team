@@ -832,12 +832,12 @@ const COPY_BY_ENGLISH_TEXT: Readonly<Record<string, ErrorTranslations>> = {
     hu: ["Nem sikerült telepítenem a Podmant a VPS-re.", "Kérd meg a VPS üzemeltetőjét, hogy telepítse kézzel a podman, a podman-compose és az uidmap csomagot, majd próbáld újra."],
     pt: ["Não consegui instalar o Podman na VPS.", "Pede a quem gere a VPS que instale à mão o podman, o podman-compose e o uidmap e tenta novamente."],
   },
-  "On the VPS your user cannot install Podman: sudo asks for a password or is not there.": {
-    de: ["Auf der VPS kann dein Benutzer Podman nicht installieren: sudo fragt nach einem Passwort oder fehlt.", "Bitte die Person, die die VPS verwaltet, dir sudo ohne Passwort zu geben oder podman, podman-compose und uidmap von Hand zu installieren, und versuche es dann erneut."],
-    es: ["En el VPS tu usuario no puede instalar Podman: sudo pide una contraseña o no está.", "Pide a quien gestiona el VPS que te dé sudo sin contraseña, o que instale a mano podman, podman-compose y uidmap, y vuelve a intentarlo."],
-    fr: ["Sur le VPS, ton utilisateur ne peut pas installer Podman : sudo demande un mot de passe ou n’est pas là.", "Demande à la personne qui gère le VPS de te donner sudo sans mot de passe, ou d’installer à la main podman, podman-compose et uidmap, puis réessaie."],
-    hu: ["A VPS-en a felhasználód nem tudja telepíteni a Podmant: a sudo jelszót kér, vagy nincs telepítve.", "Kérd meg a VPS üzemeltetőjét, hogy adjon jelszó nélküli sudót, vagy telepítse kézzel a podman, a podman-compose és az uidmap csomagot, majd próbáld újra."],
-    pt: ["Na VPS o teu utilizador não consegue instalar o Podman: o sudo pede uma palavra-passe ou não existe.", "Pede a quem gere a VPS que te dê sudo sem palavra-passe, ou que instale à mão o podman, o podman-compose e o uidmap, e tenta novamente."],
+  "On the VPS your user cannot finish preparing Podman: sudo asks for a password or is not there.": {
+    de: ["Auf der VPS kann dein Benutzer die Einrichtung von Podman nicht abschließen: sudo fragt nach einem Passwort oder fehlt.", "Bitte die Person, die die VPS verwaltet, um sudo ohne Passwort oder darum, podman, podman-compose und uidmap zu installieren und Lingering für deinen Benutzer zu aktivieren, und versuche es dann erneut."],
+    es: ["En el VPS tu usuario no puede completar la preparación de Podman: sudo pide una contraseña o no está.", "Pide a quien gestiona el VPS sudo sin contraseña, o que instale podman, podman-compose y uidmap y active el lingering para tu usuario, y vuelve a intentarlo."],
+    fr: ["Sur le VPS, ton utilisateur ne peut pas terminer la préparation de Podman : sudo demande un mot de passe ou n’est pas là.", "Demande à la personne qui gère le VPS sudo sans mot de passe, ou d’installer podman, podman-compose et uidmap et d’activer le lingering pour ton utilisateur, puis réessaie."],
+    hu: ["A VPS-en a felhasználód nem tudja befejezni a Podman előkészítését: a sudo jelszót kér, vagy nincs telepítve.", "Kérj a VPS üzemeltetőjétől jelszó nélküli sudót, vagy kérd meg, hogy telepítse a podman, a podman-compose és az uidmap csomagot, és kapcsolja be a lingeringet a felhasználódnak, majd próbáld újra."],
+    pt: ["Na VPS o teu utilizador não consegue concluir a preparação do Podman: o sudo pede uma palavra-passe ou não existe.", "Pede a quem gere a VPS sudo sem palavra-passe, ou que instale o podman, o podman-compose e o uidmap e ative o lingering para o teu utilizador, e tenta novamente."],
   },
   "Podman is not installed on the VPS, and the team needs it to run.": {
     de: ["Auf der VPS ist Podman nicht installiert, und das Team braucht es zum Laufen.", "Bitte die Person, die die VPS verwaltet, Podman zu installieren, und versuche es dann erneut."],
@@ -1089,7 +1089,7 @@ export const ERROR_CATALOG_LOCALES: Readonly<Record<string, ErrorTranslations>> 
   host_key_unavailable: translated("I cannot read the VPS SSH identity."),
   ssh_host_key_invalid: translated("The VPS did not present a valid ed25519 SSH key, so I cannot confirm its identity."),
   podman_install_failed: translated("I could not install Podman on the VPS."),
-  podman_sudo_required: translated("On the VPS your user cannot install Podman: sudo asks for a password or is not there."),
+  podman_sudo_required: translated("On the VPS your user cannot finish preparing Podman: sudo asks for a password or is not there."),
   vps_podman_missing: translated("Podman is not installed on the VPS, and the team needs it to run."),
   podman_rootful_refused: translated("On the VPS the install would run as the administrator (root), but the team only installs with Podman without privileges."),
   podman_compose_missing: translated("Podman is on the VPS, but podman compose is missing."),
