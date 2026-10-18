@@ -66,8 +66,9 @@ case "$1" in
         if [ -n "${JHT_TEST_INSPECT_DETAILS:-}" ]; then
           printf '%s\n' "$JHT_TEST_INSPECT_DETAILS"
         else
-          printf 'jht|true|jht|jht|jht|jht|1|%s|%s/docker-compose.yml|1.6.0|podman-compose%sjht.service|%s\n' \
-            "$JHT_RUNTIME_DIR" "$JHT_RUNTIME_DIR" "$(printf '\\100')" "$JHT_TEST_CONFIG_HASH"
+          # config_files as podman-compose writes it: the files given to `-f`, joined by ",".
+          printf 'jht|true|jht|jht|jht|jht|1|%s|%s|1.6.0|podman-compose%sjht.service|%s\n' \
+            "$JHT_RUNTIME_DIR" "${JHT_TEST_CONFIG_FILES:-$JHT_RUNTIME_DIR/docker-compose.yml}" "$(printf '\\100')" "$JHT_TEST_CONFIG_HASH"
         fi
         if [ "${JHT_TEST_STOP_AFTER_INSPECT:-0}" = 1 ]; then : > "$JHT_TEST_CONTAINER_STOPPED"; fi ;;
       *'.State.Running}}'*)
@@ -253,6 +254,10 @@ esac
     env["JHT_TEST_RUNTIME_READY"] = "1"
     env["JHT_TEST_PODMAN_ROOTLESS"] = "true" if rootless else "false"
     env["JHT_BIND_OWNER"] = "424242:424242"
+    # On native Linux `up` passes the base file and the keep-id override (podman-compose 1.6.0 joins
+    # the files it was given with "," in the config_files label): the container the wrapper creates
+    # carries both, and the attestation of an existing container expects both.
+    env["JHT_TEST_CONFIG_FILES"] = f"{runtime}/docker-compose.yml,{runtime}/docker-compose.podman-linux.yml"
     env["CONTAINER_CONNECTION"] = "user-default-machine"
     return wrapper, env, log
 

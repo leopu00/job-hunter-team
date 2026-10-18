@@ -712,17 +712,109 @@ podman_compose_binary() {
   return 1
 }
 
+# Linux nativo: le versioni di macOS (esatte, quelle provate sulla Machine)
+# diventano un MINIMO, lo stesso di install.sh: podman 5.0.0 e podman-compose
+# 1.1.0 (la 1.1.0 e' la prima con `--verbose --dry-run` e la label
+# `io.podman.compose.config-hash` che l'attestazione del container legge).
+# Ubuntu 26.04 porta con apt podman 5.7.0 e podman-compose 1.5.0 (universe).
+# Un provider che non scrivesse la label fa rifiutare l'attestazione: si chiude,
+# non si accetta mai un container non verificato.
+PODMAN_NATIVE_MIN_VERSION="5.0.0"
+PODMAN_COMPOSE_NATIVE_MIN_VERSION="1.1.0"
+
+# Come install.sh: dei numeri iniziali conta quel che sta prima del primo carattere che non
+# e' una cifra o un punto, il resto (`+ds1`, `~rc1`, `-dev`) si scarta. I pacchetti di Ubuntu
+# e Debian hanno suffissi cosi' (`5.4.2+ds1`): rifiutarli darebbe un errore tardivo.
+version_leading_numbers() {
+  printf '%s\n' "$1" | sed 's/[^0-9.].*$//'
+}
+
+# $1 >= $2, confronto numerico per componente (10 > 9); componenti mancanti valgono 0.
+version_at_least() {
+  local have want a1 a2 a3 b1 b2 b3
+  have="$(version_leading_numbers "$1")"
+  want="$(version_leading_numbers "$2")"
+  case "$have" in ''|.*|*..*) return 1 ;; esac
+  case "$want" in ''|.*|*..*) return 1 ;; esac
+  IFS=. read -r a1 a2 a3 _ <<EOF
+$have
+EOF
+  IFS=. read -r b1 b2 b3 _ <<EOF
+$want
+EOF
+  a1="${a1:-0}" a2="${a2:-0}" a3="${a3:-0}" b1="${b1:-0}" b2="${b2:-0}" b3="${b3:-0}"
+  [ "$((10#$a1))" -ne "$((10#$b1))" ] && { [ "$((10#$a1))" -gt "$((10#$b1))" ]; return; }
+  [ "$((10#$a2))" -ne "$((10#$b2))" ] && { [ "$((10#$a2))" -gt "$((10#$b2))" ]; return; }
+  [ "$((10#$a3))" -ge "$((10#$b3))" ]
+}
+
+# La versione di podman e quella di podman-compose, dalle righe di --version.
+podman_version_number() {
+  local podman_bin="$1" line
+  line="$("$podman_bin" --version 2>/dev/null)" || return 1
+  case "$line" in 'podman version '*) printf '%s\n' "${line#podman version }" ;; *) return 1 ;; esac
+}
+
+podman_compose_version_number() {
+  local compose_bin="$1" out
+  if [ "$PODMAN_RUNTIME_MODE" = "machine" ]; then
+    out="$(CONTAINER_CONNECTION="$PODMAN_MACHINE_NAME" "$compose_bin" --version 2>/dev/null)" || return 1
+  else
+    out="$("$compose_bin" --version 2>/dev/null)" || return 1
+  fi
+  printf '%s\n' "$out" | sed -n 's/^podman-compose version \([^ ]*\)$/\1/p' | head -n 1
+}
+
 podman_compose_pair_supported() {
   local podman_bin="$1" compose_bin="$2" podman_version compose_version
+  if [ "$PODMAN_RUNTIME_MODE" = "native" ]; then
+    podman_version="$(podman_version_number "$podman_bin")" || return 1
+    version_at_least "$podman_version" "$PODMAN_NATIVE_MIN_VERSION" || return 1
+    compose_version="$(podman_compose_version_number "$compose_bin")" || return 1
+    version_at_least "$compose_version" "$PODMAN_COMPOSE_NATIVE_MIN_VERSION"
+    return
+  fi
   podman_version="$("$podman_bin" --version 2>/dev/null)" || return 1
   [ "$podman_version" = 'podman version 6.1.3' ] || return 1
-  if [ "$PODMAN_RUNTIME_MODE" = "machine" ]; then
-    compose_version="$(CONTAINER_CONNECTION="$PODMAN_MACHINE_NAME" \
-      "$compose_bin" --version 2>/dev/null)" || return 1
-  else
-    compose_version="$("$compose_bin" --version 2>/dev/null)" || return 1
-  fi
+  compose_version="$(CONTAINER_CONNECTION="$PODMAN_MACHINE_NAME" \
+    "$compose_bin" --version 2>/dev/null)" || return 1
   printf '%s\n' "$compose_version" | grep -Fqx 'podman-compose version 1.6.0'
+}
+
+# Linux nativo + Podman rootless: senza mappa degli uid, l'uid 1001 del
+# container cade in un subuid dell'host e ~/.jht (dell'utente, uid 1000) non
+# e' scrivibile. `keep-id:uid=1001,gid=1001` mappa l'utente dell'host
+# sull'1001 del container, come fa l'override per Windows. Lo stesso per il
+# broker e per il servizio Telegram: client e server devono vedere gli stessi uid
+# in SO_PEERCRED. Il contenuto e' QUESTO, nel wrapper (attestato col wrapper), e
+# viene riscritto a ogni uso se differisce: un file lasciato li' e modificato
+# non arriva mai a un `up`. Serve un percorso fisso: il container ne porta il nome
+# nella label `config_files`.
+podman_native_override_path() {
+  printf '%s\n' "$RUNTIME_DIR/docker-compose.podman-linux.yml"
+}
+
+podman_native_override_ensure() {
+  local file="$1" target tmp content
+  target="$(podman_native_override_path)"
+  content='services:
+  jht:
+    userns_mode: "keep-id:uid=1001,gid=1001"'
+  grep -Eq '^  jht-broker:' "$file" 2>/dev/null && content="$content
+  jht-broker:
+    userns_mode: \"keep-id:uid=1001,gid=1001\""
+  grep -Eq '^  jht-telegram:' "$file" 2>/dev/null && content="$content
+  jht-telegram:
+    userns_mode: \"keep-id:uid=1001,gid=1001\""
+  [ ! -L "$target" ] || return 1
+  if [ -f "$target" ] && [ "$(cat "$target" 2>/dev/null)" = "$content" ]; then
+    printf '%s\n' "$target"
+    return 0
+  fi
+  # Nome imprevedibile, nella stessa cartella (stesso filesystem: il mv e' atomico), 0600.
+  tmp="$(mktemp "$target.XXXXXX")" || return 1
+  { printf '%s\n' "$content" > "$tmp" && mv -f "$tmp" "$target"; } || { rm -f "$tmp"; return 1; }
+  printf '%s\n' "$target"
 }
 
 compose_project_name() {
@@ -905,10 +997,24 @@ compose_file() {
     # against the named machine without depending on the mutable default.
     local podman_bin compose_bin
     podman_bin="$(podman_binary)" || { err "Podman non trovato: reinstalla il runtime JHT."; return 127; }
-    compose_bin="$(podman_compose_binary)" \
-      || { err "Provider Podman Compose non trovato: reinstalla il runtime JHT."; return 127; }
-    podman_compose_pair_supported "$podman_bin" "$compose_bin" \
-      || { err "Versione Podman Compose non supportata dal runtime JHT."; return 1; }
+    if ! compose_bin="$(podman_compose_binary)"; then
+      if [ "$PODMAN_RUNTIME_MODE" = "native" ]; then
+        # `podman compose` non basta: delega al primo provider che trova (docker-compose,
+        # prima di podman-compose), e il wrapper si fida solo delle label di podman-compose.
+        err "podman-compose non trovato: installa il pacchetto «podman-compose» (su Ubuntu: sudo apt install podman-compose)."
+      else
+        err "Provider Podman Compose non trovato: reinstalla il runtime JHT."
+      fi
+      return 127
+    fi
+    if ! podman_compose_pair_supported "$podman_bin" "$compose_bin"; then
+      if [ "$PODMAN_RUNTIME_MODE" = "native" ]; then
+        err "Versione non supportata: servono podman >= $PODMAN_NATIVE_MIN_VERSION (trovato: $(podman_version_number "$podman_bin" || echo '?')) e podman-compose >= $PODMAN_COMPOSE_NATIVE_MIN_VERSION (trovato: $(podman_compose_version_number "$compose_bin" || echo '?'))."
+      else
+        err "Versione Podman Compose non supportata dal runtime JHT."
+      fi
+      return 1
+    fi
     if [ "$PODMAN_RUNTIME_MODE" = "machine" ]; then
       "$podman_bin" --connection "$PODMAN_MACHINE_NAME" info >/dev/null 2>&1 \
         || { err "La connessione Podman JHT non supporta il dispatcher Compose."; return 1; }
@@ -921,11 +1027,14 @@ compose_file() {
     else
       "$podman_bin" info >/dev/null 2>&1 \
         || { err "Il runtime Podman rootless locale non risponde."; return 1; }
+      local override
+      override="$(podman_native_override_ensure "$file")" \
+        || { err "Override Compose per Podman rootless non scrivibile in $RUNTIME_DIR."; return 1; }
       (
         cd "$RUNTIME_DIR" || return 1
         unset CONTAINER_CONNECTION
         PODMAN_COMPOSE_WARNING_LOGS=false \
-          "$compose_bin" --podman-path "$podman_bin" -p "$project" -f "$file" "$@"
+          "$compose_bin" --podman-path "$podman_bin" -p "$project" -f "$file" -f "$override" "$@"
       )
     fi
     return $?
@@ -1902,12 +2011,14 @@ podman_expected_config_hash() {
           --podman-path "$podman_bin" -f "$file" up -d --force-recreate "$service"
     } 2>&1)" || return 1
   else
+    local override
+    override="$(podman_native_override_ensure "$file")" || return 1
     resolved="$({
       cd "$RUNTIME_DIR" || return 1
       unset CONTAINER_CONNECTION
       PODMAN_COMPOSE_WARNING_LOGS=false \
         "$compose_bin" --verbose --dry-run --project-name jht \
-          --podman-path "$podman_bin" -f "$file" up -d --force-recreate "$service"
+          --podman-path "$podman_bin" -f "$file" -f "$override" up -d --force-recreate "$service"
     } 2>&1)" || return 1
   fi
   hashes="$(printf '%s\n' "$resolved" \
@@ -1941,10 +2052,16 @@ read_only_service_id() {
     case "$container_id" in *[!0-9a-fA-F]*) return 1 ;; esac
     [ "${#container_id}" -ge 12 ] && [ "${#container_id}" -le 64 ] || return 1
   done
+  local expected_files="$COMPOSE_FILE" expected_version="1.6.0"
   if [ "$CONTAINER_RUNTIME" = podman ]; then
     expected_project="$(compose_project_name)" || return 1
     expected_unit="$(printf 'podman-compose\100%s.service' "$expected_project")"
     expected_hash="$(podman_expected_config_hash "$COMPOSE_FILE" "$service")" || return 1
+    if [ "$PODMAN_RUNTIME_MODE" = "native" ]; then
+      # Il provider installato (>= 1.1.0) e i due file passati a `up`.
+      expected_version="$(podman_compose_version_number "$(podman_compose_binary)")" || return 1
+      expected_files="$COMPOSE_FILE,$(podman_native_override_path)"
+    fi
   fi
   for container_id in $ids; do
     if [ "$CONTAINER_RUNTIME" = podman ]; then
@@ -1959,7 +2076,7 @@ read_only_service_id() {
         return 1
       fi
       [ -z "$found" ] || return 1
-      [ "$details" = "$service|true|$expected_project|$expected_project|$service|$service|1|$RUNTIME_DIR|$COMPOSE_FILE|1.6.0|$expected_unit|$expected_hash" ] \
+      [ "$details" = "$service|true|$expected_project|$expected_project|$service|$service|1|$RUNTIME_DIR|$expected_files|$expected_version|$expected_unit|$expected_hash" ] \
         || return 1
     else
       [ -z "$found" ] || return 1
