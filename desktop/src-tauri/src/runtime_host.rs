@@ -248,6 +248,18 @@ pub(crate) fn pinned_host_fingerprint(host: &ValidatedHost) -> Result<String, &'
     }
 }
 
+/// Whether the key the VPS presents now is the one the person confirmed: a
+/// fresh `ssh-keyscan` against the local pin, read-only (it never pins).
+/// None when either cannot be read.
+pub(crate) fn host_key_matches_pin(host: &ValidatedHost) -> Option<bool> {
+    let ValidatedHost::Vps { address, port, .. } = host else {
+        return None;
+    };
+    let pinned = pinned_host_fingerprint(host).ok()?;
+    let scanned = scan_host_key(address, *port).ok()?;
+    Some(scanned.fingerprint == pinned)
+}
+
 fn probe_status(
     destination: &Path,
     scanned: &ScannedHostKey,

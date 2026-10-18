@@ -27,6 +27,7 @@ mod release_channel_rules;
 mod runtime_host;
 mod runtime_log;
 mod voice_input;
+mod vps_link;
 mod windows_runtime;
 
 pub(crate) fn application_context() -> tauri::Context<tauri::Wry> {
@@ -73,6 +74,7 @@ pub fn run() {
             closer_desktop::closer_desktop_register_host,
             closer_desktop::closer_desktop_request,
             existing_team_runtime::existing_team_positions_read,
+            existing_team_runtime::existing_team_link_identity,
             direct_chat::direct_chat_close,
             direct_chat::direct_chat_connect,
             direct_chat::direct_chat_read,

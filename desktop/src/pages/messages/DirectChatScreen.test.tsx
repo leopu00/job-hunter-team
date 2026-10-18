@@ -1,6 +1,6 @@
 import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import DirectChatScreen from "./DirectChatScreen";
 import type {
   VoiceInputBridge,
@@ -14,7 +14,9 @@ import type {
   DirectChatReceipt,
   DirectChatStatus,
 } from "./direct-chat-contract";
-import { ERROR_CATALOG } from "../../lib/error-catalog";
+import { ERROR_CATALOG, ERROR_LOCALES, describeError } from "../../lib/error-catalog";
+import { appLocale } from "../../lib/app-locale";
+import { DIRECT_CHAT_STATUS_TEXT } from "./direct-chat-status.i18n";
 
 const VOICE_IDLE: VoiceInputSnapshot = {
   available: true,
@@ -76,6 +78,9 @@ function viewport(width: number, height: number, zoom = "1.15") {
   Object.defineProperty(window, "innerHeight", { configurable: true, value: height });
   document.documentElement.style.setProperty("--zoom", zoom);
 }
+
+// The bar speaks the person's language; this file reads it in Italian unless a test says otherwise.
+beforeEach(() => { document.cookie = "NEXT_LOCALE=it; path=/"; });
 
 afterEach(() => {
   vi.useRealTimers();
@@ -184,11 +189,13 @@ describe("DirectChatScreen", () => {
     render(<DirectChatScreen client={mock} />);
 
     const status = await screen.findByTestId("direct-chat-status");
-    expect(status).toHaveTextContent("Team non disponibile.");
+    const t = DIRECT_CHAT_STATUS_TEXT[appLocale()];
+    // an unsafe code is never shown: the state's own sentence from the catalog instead
+    expect(status).toHaveTextContent(describeError("connect_failed", { locale: appLocale() }).text);
     expect(status).not.toHaveTextContent("/private/key");
-    await user.click(within(status).getByRole("button", { name: "Riprova" }));
+    await user.click(within(status).getByRole("button", { name: t.retry }));
     expect(mock.reconnect).toHaveBeenCalledOnce();
-    await waitFor(() => expect(status).toHaveTextContent("Team collegato"));
+    await waitFor(() => expect(status).toHaveTextContent(t.ready));
   });
 
   it("tells a known error with the app's sentence and action, never the raw code", async () => {
@@ -201,6 +208,26 @@ describe("DirectChatScreen", () => {
     expect(status).toHaveTextContent(ERROR_CATALOG.tunnel_unavailable.action.it);
     expect(status).not.toHaveTextContent("tunnel_unavailable");
     expect(status).not.toHaveTextContent("Codice");
+  });
+
+  it.each(ERROR_LOCALES)("%s: the status bar speaks the person's language, failures with the catalog's sentences", async (locale) => {
+    document.cookie = `NEXT_LOCALE=${locale}; path=/`;
+    viewport(1000, 500);
+    const t = DIRECT_CHAT_STATUS_TEXT[locale];
+    const ready = client();
+    const view = render(<DirectChatScreen client={ready.mock} />);
+    await waitFor(() => expect(screen.getByTestId("direct-chat-status")).toHaveTextContent(t.ready));
+    view.unmount();
+    for (const [status, code] of [[{ state: "disconnected" }, "disconnected"], [{ state: "error" }, "connect_failed"]] as const) {
+      const failing = client(status);
+      const shown = render(<DirectChatScreen client={failing.mock} />);
+      const bar = await screen.findByTestId("direct-chat-status");
+      const described = describeError(code, { locale });
+      await waitFor(() => expect(bar).toHaveTextContent(`${described.text} ${described.action}`));
+      expect(within(bar).getByRole("button", { name: t.retry })).toBeInTheDocument();
+      if (locale !== "it") expect(bar).not.toHaveTextContent(DIRECT_CHAT_STATUS_TEXT.it.ready);
+      shown.unmount();
+    }
   });
 
   it("polls the bounded history and reveals an asynchronous agent reply without switching", async () => {

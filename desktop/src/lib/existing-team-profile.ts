@@ -3,6 +3,7 @@ import type { ProfileBlock } from "@/app/(protected)/profile/ProfileView";
 import { mapYamlToCanonical } from "../../../web/lib/profile-yaml-map";
 import type { CandidateProfile } from "../../../web/lib/types";
 import { teamStatusErrorCode } from "./existing-team-status";
+import { reportVpsRead } from "./vps-link";
 
 /**
  * The candidate profile of an existing team, read from its VPS by the core's
@@ -116,6 +117,7 @@ export async function readExistingTeamProfile(
 ): Promise<ExistingTeamProfileReading> {
   try {
     const reply = await read();
+    reportVpsRead(reply);
     if (!isRecord(reply)) return { kind: "error", at: now(), code: "desktop_bad_reply" };
     if (reply.ok === false) return { kind: "error", at: now(), code: teamStatusErrorCode(reply.error) };
     const picked = reply.ok === true ? pickProfileRead(reply.data) : null;
@@ -123,6 +125,7 @@ export async function readExistingTeamProfile(
       ? { kind: "read", at: now(), read: picked }
       : { kind: "error", at: now(), code: "desktop_bad_reply" };
   } catch (error) {
+    reportVpsRead({ ok: false, error: teamStatusErrorCode(error) });
     return { kind: "error", at: now(), code: teamStatusErrorCode(error) };
   }
 }

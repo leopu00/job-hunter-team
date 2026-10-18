@@ -825,6 +825,20 @@ const COPY_BY_ENGLISH_TEXT: Readonly<Record<string, ErrorTranslations>> = {
     hu: ["A VPS nem mutatott be érvényes ed25519 SSH-kulcsot, ezért nem tudom megerősíteni az azonosságát.", "Kérd meg a VPS üzemeltetőjét, hogy engedélyezzen egy ed25519 SSH-kulcsot, majd próbáld újra."],
     pt: ["A VPS não apresentou uma chave SSH ed25519 válida, por isso não consigo confirmar a sua identidade.", "Pede a quem gere a VPS que ative uma chave SSH ed25519 e tenta novamente."],
   },
+  "The team on the VPS is off or is no longer the version that was connected.": {
+    de: ["Das Team auf der VPS ist aus oder nicht mehr die verbundene Version.", "Starte es auf der VPS und drücke Erneut versuchen; wenn das Problem bleibt, verbinde das Team in der Einrichtung neu."],
+    es: ["El equipo del VPS está apagado o ya no es la versión conectada.", "Inícialo en el VPS y pulsa Reintentar; si el problema continúa, vuelve a conectar el equipo desde la configuración."],
+    fr: ["L’équipe sur le VPS est arrêtée ou n’est plus la version connectée.", "Démarre-la sur le VPS et appuie sur Réessayer ; si le problème persiste, reconnecte l’équipe depuis la configuration."],
+    hu: ["A csapat a VPS-en ki van kapcsolva, vagy már nem a csatlakoztatott verzió.", "Indítsd el a VPS-en, és nyomd meg az Újra gombot; ha a probléma megmarad, csatlakoztasd újra a csapatot a beállításból."],
+    pt: ["A equipa na VPS está desligada ou já não é a versão ligada.", "Inicia-a na VPS e carrega em Tentar novamente; se o problema continuar, volta a ligar a equipa a partir da configuração."],
+  },
+  "The link to the VPS was lost: I try again by myself at {time}.": {
+    de: ["Die Verbindung zur VPS ist abgebrochen: Ich versuche es um {time} von selbst erneut.", "Du musst nichts tun: Aktionen im Team bleiben angehalten, bis die Verbindung wieder steht."],
+    es: ["Se ha perdido la conexión con el VPS: vuelvo a intentarlo yo solo a las {time}.", "No hace falta hacer nada: las acciones en el equipo quedan en espera hasta que vuelva la conexión."],
+    fr: ["La connexion au VPS est perdue : je réessaie tout seul à {time}.", "Tu n’as rien à faire : les actions sur l’équipe restent en attente jusqu’au retour de la connexion."],
+    hu: ["Megszakadt a kapcsolat a VPS-szel: {time}-kor magamtól újrapróbálom.", "Nem kell tenned semmit: a csapatot érintő műveletek szünetelnek, amíg a kapcsolat vissza nem tér."],
+    pt: ["A ligação à VPS perdeu-se: volto a tentar sozinho às {time}.", "Não é preciso fazer nada: as ações na equipa ficam em espera até a ligação voltar."],
+  },
 };
 
 function translated(englishText: string): ErrorTranslations {
@@ -998,6 +1012,8 @@ export const ERROR_CATALOG_LOCALES: Readonly<Record<string, ErrorTranslations>> 
   existing_team_target_changed: translated("The team on the VPS changed while you were confirming."),
   existing_team_receipt_required: translated("The details you confirmed are no longer available."),
   existing_team_register_not_confirmed: translated("The action was not confirmed: nothing was saved."),
+  existing_team_runtime_changed: translated("The team on the VPS is off or is no longer the version that was connected."),
+  vps_reconnecting: translated("The link to the VPS was lost: I try again by myself at {time}."),
   existing_team_runtime_target_changed: translated("The saved team no longer matches the selected connection."),
   existing_team_runtime_selection_invalid: translated("The saved selection for this team is not valid."),
   existing_team_runtime_unavailable: translated("The app cannot read the team's saved data on this computer."),

@@ -168,6 +168,11 @@ const NOT_ERRORS: Record<string, string> = {
   uninstall_machine: "jht.ps1 uninstall phase id",
   uninstall_runtime: "jht.ps1 uninstall phase id",
   uninstall_commands: "jht.ps1 uninstall phase id",
+  // vps_link.rs: the kind of a failed read of a team on a VPS, sent with its catalog code.
+  network: "vps link kind",
+  application: "vps link kind",
+  version: "vps link kind",
+  blocked: "vps link kind",
 };
 
 function compiledRustModules(): string[] {

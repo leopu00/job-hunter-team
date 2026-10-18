@@ -1,0 +1,92 @@
+import { useEffect, useState } from "react";
+import { appLocale } from "../lib/app-locale";
+import { describeError } from "../lib/error-catalog";
+import { readVpsLinkIdentity, retryVpsLink, useVpsLink, type LinkStatus, type VpsLinkIdentity } from "../lib/vps-link";
+import { VPS_LINK_TEXT } from "../lib/vps-link.i18n";
+
+const FAILED: readonly LinkStatus[] = ["network", "application", "version", "blocked"];
+const COLORS: Record<LinkStatus, string> = {
+  idle: "var(--color-muted)",
+  connected: "var(--color-green)",
+  reconnecting: "var(--color-yellow, var(--color-muted))",
+  network: "var(--color-red)",
+  application: "var(--color-red)",
+  version: "var(--color-red)",
+  blocked: "var(--color-red)",
+};
+
+function clock(at: number): string {
+  return new Date(at).toLocaleTimeString(appLocale(), { hour: "2-digit", minute: "2-digit" });
+}
+
+function copy(value: string) {
+  try {
+    void navigator.clipboard?.writeText(value)?.catch(() => undefined);
+  } catch {
+    // no clipboard in this webview: the value stays visible to copy by hand
+  }
+}
+
+/**
+ * The header of the read-only view of an existing team: which team (pinned
+ * revision and image, copyable), the link's state with the catalog's sentence,
+ * and the last working read. «Riprova» only where nothing retries by itself;
+ * a changed SSH key sends the person back to the setup to look at it again.
+ */
+export function VpsLinkBar({ onCloseReadOnly }: { onCloseReadOnly?: () => void }) {
+  const locale = appLocale();
+  const t = VPS_LINK_TEXT[locale];
+  const state = useVpsLink();
+  const [identity, setIdentity] = useState<VpsLinkIdentity | null>(null);
+
+  useEffect(() => {
+    let live = true;
+    void readVpsLinkIdentity().then((value) => { if (live) setIdentity(value); });
+    return () => { live = false; };
+  }, []);
+
+  const failed = FAILED.includes(state.status);
+  const failure = state.code ? describeError(state.code, { locale, fallback: "existing_team_unavailable" }) : null;
+  const waiting = state.status === "reconnecting" && state.nextAt !== null
+    ? describeError("vps_reconnecting", { locale, resetsAt: Math.ceil(state.nextAt / 1000) })
+    : null;
+  const label = state.status === "idle" ? t.checking : t[state.status];
+
+  return (
+    <div
+      data-testid="vps-link-bar"
+      data-state={state.status}
+      role={failed ? "alert" : "status"}
+      className="px-4 py-2 text-[11px] border-b border-[var(--color-border)] flex flex-wrap items-center gap-x-3 gap-y-1"
+      style={{ color: failed ? "var(--color-red)" : "var(--color-muted)" }}
+    >
+      <span aria-hidden="true" className="inline-block w-2 h-2 rounded-full" style={{ background: COLORS[state.status] }} />
+      <strong className="text-[var(--color-bright)]">{label}</strong>
+      {state.status === "connected" && state.lastContact !== null && (
+        <span data-testid="vps-link-contact">{t.lastContact.replace("{time}", clock(state.lastContact))}</span>
+      )}
+      {state.status === "reconnecting" && (
+        <span data-testid="vps-link-sentence">
+          {[waiting && `${waiting.text} ${waiting.action}`, failure?.text].filter(Boolean).join(" ")}
+        </span>
+      )}
+      {failed && failure && (
+        <span data-testid="vps-link-sentence">{`${failure.text} ${failure.action} (${state.code})`}</span>
+      )}
+      {identity && (
+        <span className="flex items-center gap-2" data-testid="vps-link-identity">
+          <span>{t.revision} <code title={identity.revision}>{identity.revision.slice(0, 7)}</code></span>
+          <button type="button" aria-label={t.copyRevision} onClick={() => copy(identity.revision)} className="underline">⧉</button>
+          <span>{t.image} <code title={identity.digest}>{`${identity.digest.slice(0, 11)}…${identity.digest.slice(-4)}`}</code></span>
+          <button type="button" aria-label={t.copyDigest} onClick={() => copy(identity.digest)} className="underline">⧉</button>
+        </span>
+      )}
+      {(state.status === "network" || state.status === "application" || state.status === "version") && (
+        <button type="button" onClick={retryVpsLink} className="ml-auto underline text-[var(--color-bright)]">{t.retry}</button>
+      )}
+      {state.status === "blocked" && onCloseReadOnly && (
+        <button type="button" onClick={onCloseReadOnly} className="ml-auto underline text-[var(--color-bright)]">{t.reviewKey}</button>
+      )}
+    </div>
+  );
+}

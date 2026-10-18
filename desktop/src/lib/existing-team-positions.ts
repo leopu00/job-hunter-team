@@ -1,5 +1,8 @@
 import { invoke, isTauri } from "@tauri-apps/api/core";
-import { reportPositionsNotice, reportPositionsRead } from "./existing-team-readonly";
+import { reportPositionsNotice } from "./existing-team-readonly";
+// The pages show an empty list for a list that could not be read, as the web does for a query
+// that fails; the header (shell/VpsLinkBar) is how the person is told it was not empty, and why.
+import { reportVpsRead } from "./vps-link";
 import type {
   DesktopVpsPositionsWindow,
   DesktopVpsRead,
@@ -61,11 +64,13 @@ async function read<T>(request: Request): Promise<DesktopVpsRead<T>> {
   if (!isTauri()) return { source: "not_desktop" };
   let result: DesktopVpsRead<T>;
   try {
-    result = reply<T>(await invoke<unknown>(COMMAND, { request }));
+    const answer = await invoke<unknown>(COMMAND, { request });
+    reportVpsRead(answer);
+    result = reply<T>(answer);
   } catch {
+    reportVpsRead({ ok: false, error: "desktop_transport_unavailable" });
     result = { source: "unavailable", code: "desktop_transport_unavailable" };
   }
-  reportPositionsRead(result.source === "unavailable" ? result.code : null);
   return result;
 }
 
