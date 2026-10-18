@@ -10,6 +10,10 @@ import { keyboardTargets } from "../../office/scene/hit";
 import { useLocale } from "@/lib/use-locale";
 import { emptyEngine, loadAssets, loadParts, type OfficeAssets, type OfficeParts } from "../../office/parts";
 import { loadAgentStatuses } from "../../office/status";
+import { appLocale } from "../../lib/app-locale";
+import { useExistingTeamReadOnly } from "../../lib/existing-team-readonly";
+import { readTeamStatus } from "../../lib/existing-team-status";
+import { officeFromTeamProbe } from "../../office/readonly";
 import { supabase } from "../../lib/supabase";
 import { navigate, useRefresh } from "../../shell/router";
 import type { PageProps } from "../types";
@@ -28,6 +32,20 @@ type Load = { state: "loading" } | { state: "ready"; ready: Ready } | { state: "
  * panel's secondary links change page.
  */
 export default function OfficePage(_props: PageProps) {
+  return <OfficeLoader source="cloud" />;
+}
+
+/**
+ * Where the office's data comes from. The cloud (Realtime, at most a read a
+ * minute) in the full shell; the existing team's VPS in the read-only view,
+ * where there is no cloud: the probe behind the Squadra page, read when the
+ * page opens and when «Aggiorna» asks, never on a timer of its own
+ * (office/readonly.ts). In that view the panels are not opened: they read the
+ * cloud's positions, which that team does not have there.
+ */
+export type OfficeSource = "cloud" | "team-probe";
+
+export function OfficeLoader({ source }: { source: OfficeSource }) {
   const [load, setLoad] = useState<Load>({ state: "loading" });
 
   useEffect(() => {
@@ -50,10 +68,10 @@ export default function OfficePage(_props: PageProps) {
   if (load.state === "no-assets") return <Notice>L'arte dell'ufficio non è ancora nell'app.</Notice>;
   if (load.state === "failed")
     return <Notice alert>Non riesco a caricare l'ufficio. Premi «Aggiorna» o riapri la pagina.</Notice>;
-  return <Office ready={load.ready} />;
+  return <Office ready={load.ready} source={source} />;
 }
 
-function Office({ ready }: { ready: Ready }) {
+function Office({ ready, source }: { ready: Ready; source: OfficeSource }) {
   const host = useRef<HTMLDivElement>(null);
   const engineRef = useRef<OfficeEngine | null>(null);
   const sceneRef = useRef<OfficeScene | null>(null);
@@ -73,6 +91,7 @@ function Office({ ready }: { ready: Ready }) {
   const opener = useRef<HTMLButtonElement | null>(null);
   const locale = useLocale();
   const [status, setStatus] = useState<string | null>(null);
+  const [statusIsAlert, setStatusIsAlert] = useState(false);
   const { assets, parts } = ready;
 
   // The scene: mounted once, resized with its box, destroyed on leave.
@@ -90,8 +109,8 @@ function Office({ ready }: { ready: Ready }) {
           manifest: assets.manifest,
           layout: assets.layout,
           engine,
-          // a click on nothing closes the panel
-          onClick: (click) => setPanel(click),
+          // a click on nothing closes the panel; a team read over its VPS has no panel to open
+          onClick: (click) => setPanel(source === "cloud" ? click : null),
           onHover: (target, at) => setHover(target ? { target, at } : null),
         }),
       )
@@ -113,7 +132,7 @@ function Office({ ready }: { ready: Ready }) {
       sceneRef.current = null;
       engineRef.current = null;
     };
-  }, [assets, parts]);
+  }, [assets, parts, source]);
 
   // The data, alive (D09, office/live.ts): Realtime on what the office reads
   // asks for a read, at most one a minute; with the channel down, one a
@@ -147,6 +166,7 @@ function Office({ ready }: { ready: Ready }) {
     }
   };
   useEffect(() => {
+    if (source !== "cloud") return;
     if (!parts.data) {
       setStatus("I dati dell'ufficio non sono ancora collegati: nessun agente in scena.");
       return;
@@ -168,9 +188,53 @@ function Office({ ready }: { ready: Ready }) {
       motion.stop();
       scheduler.current = null;
     };
-  }, [parts.data]);
+  }, [parts.data, source]);
+
+  // The existing team's VPS (office/readonly.ts): the Squadra page's probe, read
+  // once the page is open and again when «Aggiorna» asks, no timer of its own.
+  // The connection's own values (the two sessions) can change without a new
+  // read, so the office is drawn again from the last reading when they do.
+  const readOnly = useExistingTeamReadOnly();
+  const connection = readOnly?.connection ?? null;
+  const reading = useRef<Awaited<ReturnType<typeof readTeamStatus>>>({ kind: "unknown" });
+  const probeRead = useRef(0);
+  const showProbe = () => {
+    if (!parts.data || !engineRef.current) return;
+    const office = officeFromTeamProbe(reading.current, connection, appLocale());
+    live.current ??= createLiveOffice(parts.data.diff, applyEvent);
+    live.current.snapshot(office.snapshot);
+    setSnapshot(office.snapshot);
+    showStatuses(office.statuses);
+    setStatus(office.notice?.text ?? null);
+    setStatusIsAlert(office.notice?.alert ?? false);
+  };
+  const readProbe = async () => {
+    const mine = ++probeRead.current;
+    const result = await readTeamStatus();
+    // A read that finished after a newer one started, or after leaving the page, is not shown.
+    if (probeRead.current !== mine) return;
+    reading.current = result;
+    probeShow.current();
+  };
+  const probeShow = useRef(showProbe);
+  probeShow.current = showProbe;
+  useEffect(() => {
+    if (source !== "team-probe") return;
+    if (!parts.data) {
+      setStatus("I dati dell'ufficio non sono ancora collegati: nessun agente in scena.");
+      return;
+    }
+    void readProbe();
+    return () => {
+      probeRead.current++;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [source, parts.data]);
+  useEffect(() => {
+    if (source === "team-probe" && reading.current.kind !== "unknown") probeShow.current();
+  }, [source, connection]);
   // «Aggiorna» asks for a read too: the gap holds for it as well
-  useRefresh(() => scheduler.current?.poke());
+  useRefresh(() => (source === "cloud" ? scheduler.current?.poke() : void readProbe()));
 
   // Esc closes the panel, as the Godot office's overlays.
   useEffect(() => {
@@ -203,7 +267,7 @@ function Office({ ready }: { ready: Ready }) {
       <div ref={host} className="absolute inset-0" data-testid="office-canvas" />
       {status && (
         <p
-          role="status"
+          role={statusIsAlert ? "alert" : "status"}
           className="absolute left-4 top-4 m-0 rounded border border-[var(--color-border)] bg-[var(--color-panel)] px-3 py-1.5 text-[11px] text-[var(--color-muted)]"
         >
           {status}
@@ -214,6 +278,7 @@ function Office({ ready }: { ready: Ready }) {
         label={label}
         onFocusTarget={focusTarget}
         onOpen={(t, button) => {
+          if (source !== "cloud") return;
           opener.current = button;
           setPanel(t);
         }}

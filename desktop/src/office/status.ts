@@ -81,6 +81,8 @@ export function tagOf(s: AgentStatus, now = Date.now()): { label: string; color:
   switch (s.status) {
     case "working":
       return { label: "WORKING", color: 0x58e68b };
+    case "idle":
+      return { label: "WAITING", color: 0x7a7a96 };
     case "paused":
       return { label: "PAUSED", color: 0xff7a65 };
     case "throttled": {
@@ -90,6 +92,7 @@ export function tagOf(s: AgentStatus, now = Date.now()): { label: string; color:
       return { label: `THROTTLED  ${Math.floor(left / 60)}:${String(left % 60).padStart(2, "0")}`, color: 0xf5c518 };
     }
     default:
-      return { label: "WAITING", color: 0x7a7a96 };
+      // "unknown", and any status this file does not know: grey, never work and never a wait
+      return { label: "UNKNOWN", color: 0x9a9ab0 };
   }
 }
