@@ -462,11 +462,13 @@ detect_system() {
 
 # ── Podman rootless on Linux (--runtime podman) ───────────────────────────
 # The Mac's Podman runs in a machine; on Linux Podman is native and rootless,
-# for a user that is not root. This branch installs nothing and never uses
-# sudo: the packages are put there by the administrator beforehand. Each
-# thing that is missing leaves with its own code, so the app can tell the
-# administrator what to do: a line `JHT_ERROR <code>` on stderr, then the exit
-# code of the table below.
+# for a user that is not root. On a server as bought (an ordinary user with
+# sudo and no password) it sets Podman up itself, never Docker: the packages,
+# the subordinate uid/gid range, linger. Only that user's sudo is used, with
+# -n so that it never waits for a password. What it cannot do leaves with a
+# code of its own, so the app can tell the administrator what to do: a line
+# `JHT_ERROR <code>` on stderr, then the exit code of the table below.
+#   88 podman_install_failed      89 podman_sudo_required
 #   90 podman_missing             91 podman_rootful_refused
 #   92 podman_compose_missing     93 podman_version_unsupported
 #   94 podman_linger_missing      95 podman_runtime_dir_missing
@@ -505,24 +507,124 @@ podman_subid_range() {
   awk -F: -v u="$2" -v n="$3" '($1 == u || $1 == n) && $3 + 0 > 0 { found = 1 } END { exit !found }' "$1"
 }
 
+# The packages that give Podman rootless, by package manager.
+podman_packages_missing() {
+  local missing=""
+  command -v podman >/dev/null 2>&1 || missing="$missing podman"
+  command -v podman-compose >/dev/null 2>&1 || missing="$missing podman-compose"
+  { command -v newuidmap >/dev/null 2>&1 && command -v newgidmap >/dev/null 2>&1; } || \
+    case "$PKG" in
+      dnf) missing="$missing shadow-utils" ;;
+      pacman) missing="$missing shadow" ;;
+      *) missing="$missing uidmap" ;;
+    esac
+  printf '%s' "$missing"
+}
+
+# First start of a free range: after every range already given to anyone.
+podman_free_subid_start() {
+  awk -F: 'BEGIN { top = 100000 } { end = $2 + $3; if (end > top) top = end } END { print top }' \
+    "$1/subuid" "$1/subgid" 2>/dev/null || echo 100000
+}
+
+# Sets up what is missing for Podman rootless with the user's own sudo: the
+# packages, the subuid/subgid range (then `podman system migrate`) and linger.
+# Anything already there is left alone, and sudo is not even asked for then.
+provision_podman_linux() {
+  local uid="$1" user="$2" etc="$3" run_user="$4" missing="" need_subuid=0 need_subgid=0 need_linger=0
+  local start end i
+  missing="$(podman_packages_missing)"
+  podman_subid_range "$etc/subuid" "$user" "$uid" || need_subuid=1
+  podman_subid_range "$etc/subgid" "$user" "$uid" || need_subgid=1
+  if command -v loginctl >/dev/null 2>&1 \
+      && ! loginctl show-user "$user" -p Linger 2>/dev/null | grep -qx 'Linger=yes'; then
+    need_linger=1
+  fi
+  if [ -z "$missing" ] && [ "$need_subuid$need_subgid$need_linger" = "000" ]; then
+    return 0
+  fi
+  command -v sudo >/dev/null 2>&1 && sudo -n true >/dev/null 2>&1 \
+    || podman_refuse podman_sudo_required 89 "Podman needs a setup that only an administrator can do (missing:${missing:- the subuid range or linger}), and sudo for $user is not available without a password. Ask the administrator of this server to allow $user sudo without a password, or to run, as root: apt install podman podman-compose uidmap; loginctl enable-linger $user"
+  if [ -n "$missing" ]; then
+    info "Installing$missing with sudo (Podman rootless; Docker is not installed)..."
+    case "$PKG" in
+      apt)
+        sudo -n apt-get update -qq >/dev/null 2>&1 || warn "apt-get update failed: trying the install anyway."
+        sudo -n env DEBIAN_FRONTEND=noninteractive apt-get install -y $missing >/dev/null \
+          || podman_refuse podman_install_failed 88 "apt-get install$missing failed."
+        ;;
+      dnf)
+        sudo -n dnf install -y $missing >/dev/null \
+          || podman_refuse podman_install_failed 88 "dnf install$missing failed."
+        ;;
+      pacman)
+        sudo -n pacman -S --noconfirm --needed $missing >/dev/null \
+          || podman_refuse podman_install_failed 88 "pacman -S$missing failed."
+        ;;
+      *) podman_refuse podman_install_failed 88 "no known package manager (apt, dnf, pacman) to install:$missing" ;;
+    esac
+    hash -r 2>/dev/null || true
+    ok "Installed:$missing"
+  fi
+  if [ "$need_subuid$need_subgid" != "00" ]; then
+    start="$(podman_free_subid_start "$etc")"
+    end=$((start + 65535))
+    info "Giving $user the subordinate uid/gid range $start-$end..."
+    {
+      if [ "$need_subuid" = 1 ] && [ "$need_subgid" = 1 ]; then
+        sudo -n usermod --add-subuids "$start-$end" --add-subgids "$start-$end" "$user"
+      elif [ "$need_subuid" = 1 ]; then
+        sudo -n usermod --add-subuids "$start-$end" "$user"
+      else
+        sudo -n usermod --add-subgids "$start-$end" "$user"
+      fi
+    } || podman_refuse podman_subuid_missing 96 "usermod could not add the subordinate range ($start-$end) for $user."
+    if command -v podman >/dev/null 2>&1; then podman system migrate >/dev/null 2>&1 || true; fi
+    ok "subuid/subgid range $start-$end for $user"
+  fi
+  if [ "$need_linger" = 1 ]; then
+    info "Enabling linger for $user..."
+    sudo -n loginctl enable-linger "$user" \
+      || podman_refuse podman_linger_missing 94 "loginctl enable-linger $user failed."
+    # The user manager starts a moment later: the runtime directory follows it.
+    for i in 1 2 3 4 5 6 7 8 9 10; do
+      [ -d "$run_user" ] && break
+      sleep 1
+    done
+    ok "linger enabled for $user"
+  fi
+}
+
 check_podman_linux() {
   step 2 "$TOTAL_STEPS_DOCKER" "Container runtime (Podman rootless)"
   [ "$OS" = "linux" ] \
     || podman_refuse podman_unsupported_host 1 "--runtime podman is for Linux and macOS; this system is $OS."
   if [ "$DRY_RUN" -eq 1 ]; then
-    printf "  ${DIM}[dry-run]${RESET} would check: podman and podman-compose are installed, the user is not root, podman info says Rootless=true, linger, XDG_RUNTIME_DIR, subuid/subgid\n"
-    printf "  ${DIM}[dry-run]${RESET} would require: podman >= %s, podman-compose >= %s (nothing is installed, no sudo)\n" "$PODMAN_MIN_VERSION" "$PODMAN_COMPOSE_MIN_VERSION"
+    printf "  ${DIM}[dry-run]${RESET} would install with sudo -n what is missing of: podman podman-compose uidmap (never Docker)\n"
+    printf "  ${DIM}[dry-run]${RESET} would give the user a subuid/subgid range and enable linger if missing\n"
+    printf "  ${DIM}[dry-run]${RESET} would require: not root, podman info Rootless=true, podman >= %s, podman-compose >= %s\n" "$PODMAN_MIN_VERSION" "$PODMAN_COMPOSE_MIN_VERSION"
     return 0
   fi
-  local uid user etc xdg rootless have_podman have_compose
+  local uid user etc xdg run_user rootless have_podman have_compose
   uid="$(id -u)"; user="$(id -un)"; etc="${JHT_ETC_DIR:-/etc}"
-  command -v podman >/dev/null 2>&1 \
-    || podman_refuse podman_missing 90 "podman is not installed. This installer does not install it. Ask the administrator of this server to run, as root: apt install podman podman-compose"
+  run_user="${JHT_RUN_USER_DIR:-/run/user}/$uid"
   [ "$uid" -ne 0 ] \
     || podman_refuse podman_rootful_refused 91 "JHT runs on Podman rootless, as a user that is not root. Sign in as that user and run the install again."
+  provision_podman_linux "$uid" "$user" "$etc" "$run_user"
+  command -v podman >/dev/null 2>&1 \
+    || podman_refuse podman_missing 90 "podman is still not there after the install. Ask the administrator of this server to run, as root: apt install podman"
   command -v podman-compose >/dev/null 2>&1 \
-    || podman_refuse podman_compose_missing 92 "podman-compose is not installed. Ask the administrator of this server to run, as root: apt install podman-compose"
-  xdg="${XDG_RUNTIME_DIR:-/run/user/$uid}"
+    || podman_refuse podman_compose_missing 92 "podman-compose is not available from this system's packages. Ask the administrator of this server to install it, as root: apt install podman-compose"
+  # A session without a user manager has no XDG_RUNTIME_DIR: the directory
+  # linger has just started is the one Podman wants.
+  xdg="${XDG_RUNTIME_DIR:-}"
+  if [ -z "$xdg" ] || [ ! -d "$xdg" ]; then
+    xdg="$run_user"
+    if [ -d "$xdg" ]; then
+      export XDG_RUNTIME_DIR="$xdg"
+      [ -n "${DBUS_SESSION_BUS_ADDRESS:-}" ] || [ ! -S "$xdg/bus" ] || export DBUS_SESSION_BUS_ADDRESS="unix:path=$xdg/bus"
+    fi
+  fi
   { [ -d "$xdg" ] && [ -w "$xdg" ]; } \
     || podman_refuse podman_runtime_dir_missing 95 "there is no runtime directory for this user ($xdg): the session has no user manager. Sign in again, or ask the administrator to run, as root: loginctl enable-linger $user"
   if command -v loginctl >/dev/null 2>&1; then
