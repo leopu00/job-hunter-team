@@ -832,10 +832,10 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
     "Ask whoever manages the VPS to install podman, podman-compose and uidmap by hand, then try again.",
   ),
   podman_sudo_required: copy(
-    "Sulla VPS il tuo utente non può installare Podman: sudo chiede una password o non c’è.",
-    "Chiedi a chi gestisce la VPS di darti sudo senza password, oppure di installare a mano podman, podman-compose e uidmap, poi riprova.",
-    "On the VPS your user cannot install Podman: sudo asks for a password or is not there.",
-    "Ask whoever manages the VPS to give you sudo without a password, or to install podman, podman-compose and uidmap by hand, then try again.",
+    "Sulla VPS il tuo utente non può completare la preparazione di Podman: sudo chiede una password o non c’è.",
+    "Chiedi a chi gestisce la VPS sudo senza password, oppure di installare podman, podman-compose e uidmap e di abilitare il linger per il tuo utente, poi riprova.",
+    "On the VPS your user cannot finish preparing Podman: sudo asks for a password or is not there.",
+    "Ask whoever manages the VPS for sudo without a password, or to install podman, podman-compose and uidmap and enable lingering for your user, then try again.",
   ),
   vps_podman_missing: copy(
     "Sulla VPS manca Podman, che serve per far girare il team.",
