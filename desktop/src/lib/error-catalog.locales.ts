@@ -811,6 +811,20 @@ const COPY_BY_ENGLISH_TEXT: Readonly<Record<string, ErrorTranslations>> = {
     hu: ["A támogatott böngészőhöz kapcsolt VPS nem egyezik a kiválasztottal.", "Ellenőrizd, melyik VPS-t választottad, majd próbáld újra."],
     pt: ["A VPS ligada ao navegador assistido não corresponde à escolhida.", "Verifica que VPS escolheste e tenta novamente."],
   },
+  "The assisted browser is not available: the team on the VPS is off or its environment has changed.": {
+    de: ["Der assistierte Browser ist nicht verfügbar: Das Team auf der VPS ist aus oder seine Umgebung hat sich geändert.", "Starte das Team auf der VPS und öffne den assistierten Browser erneut. Wenn das Problem bleibt, bitte die Person, die die VPS verwaltet, ihn neu einzurichten."],
+    es: ["El navegador asistido no está disponible: el equipo del VPS está apagado o su entorno ha cambiado.", "Inicia el equipo en el VPS y vuelve a abrir el navegador asistido. Si el problema continúa, pide a quien gestiona el VPS que lo prepare de nuevo."],
+    fr: ["Le navigateur assisté n’est pas disponible : l’équipe sur le VPS est arrêtée ou son environnement a changé.", "Démarre l’équipe sur le VPS et rouvre le navigateur assisté. Si le problème persiste, demande à la personne qui gère le VPS de le préparer à nouveau."],
+    hu: ["A támogatott böngésző nem érhető el: a csapat a VPS-en ki van kapcsolva, vagy megváltozott a környezete.", "Indítsd el a csapatot a VPS-en, és nyisd meg újra a támogatott böngészőt. Ha a probléma megmarad, kérd meg a VPS üzemeltetőjét, hogy állítsa be újra."],
+    pt: ["O navegador assistido não está disponível: a equipa na VPS está desligada ou o seu ambiente mudou.", "Inicia a equipa na VPS e volta a abrir o navegador assistido. Se o problema continuar, pede a quem gere a VPS que o prepare de novo."],
+  },
+  "The VPS did not present a valid ed25519 SSH key, so I cannot confirm its identity.": {
+    de: ["Die VPS hat keinen gültigen ed25519-SSH-Schlüssel vorgelegt, daher kann ich ihre Identität nicht bestätigen.", "Bitte die Person, die die VPS verwaltet, einen ed25519-SSH-Schlüssel zu aktivieren, und versuche es dann erneut."],
+    es: ["El VPS no ha presentado una clave SSH ed25519 válida, así que no puedo confirmar su identidad.", "Pide a quien gestiona el VPS que active una clave SSH ed25519 y vuelve a intentarlo."],
+    fr: ["Le VPS n’a pas présenté de clé SSH ed25519 valide, je ne peux donc pas confirmer son identité.", "Demande à la personne qui gère le VPS d’activer une clé SSH ed25519, puis réessaie."],
+    hu: ["A VPS nem mutatott be érvényes ed25519 SSH-kulcsot, ezért nem tudom megerősíteni az azonosságát.", "Kérd meg a VPS üzemeltetőjét, hogy engedélyezzen egy ed25519 SSH-kulcsot, majd próbáld újra."],
+    pt: ["A VPS não apresentou uma chave SSH ed25519 válida, por isso não consigo confirmar a sua identidade.", "Pede a quem gere a VPS que ative uma chave SSH ed25519 e tenta novamente."],
+  },
 };
 
 function translated(englishText: string): ErrorTranslations {
@@ -959,7 +973,7 @@ export const ERROR_CATALOG_LOCALES: Readonly<Record<string, ErrorTranslations>> 
   browser_response_too_large: translated("The assisted browser on the VPS answered in a way the app does not accept."),
   browser_response_binding_mismatch: translated("The assisted browser on the VPS answered in a way the app does not accept."),
   browser_transport_timeout: translated("The operation took too long."),
-  browser_container_mismatch: translated("The assisted browser on the VPS is no longer the one set up for this team, so I do not use it."),
+  browser_container_mismatch: translated("The assisted browser is not available: the team on the VPS is off or its environment has changed."),
   browser_image_mismatch: translated("The assisted browser on the VPS is no longer the one set up for this team, so I do not use it."),
   desktop_request_denied: translated("The assisted browser on the VPS answered in a way the app does not accept."),
   desktop_descriptor_unavailable: translated("The assisted browser on the VPS answered in a way the app does not accept."),
@@ -1003,7 +1017,7 @@ export const ERROR_CATALOG_LOCALES: Readonly<Record<string, ErrorTranslations>> 
   invalid_key: translated("The selected SSH key cannot be used."),
   key_unavailable: translated("The selected SSH key cannot be used."),
   host_key_unavailable: translated("I cannot read the VPS SSH identity."),
-  ssh_host_key_invalid: translated("I cannot read the VPS SSH identity."),
+  ssh_host_key_invalid: translated("The VPS did not present a valid ed25519 SSH key, so I cannot confirm its identity."),
   host_key_missing: translated("The VPS SSH identity has not been confirmed yet."),
   host_key_mismatch: translated("The server’s SSH key has CHANGED from the one you confirmed: it may be a different server. The connection is blocked."),
   host_key_changed: translated("The server’s SSH key has CHANGED from the one you confirmed: it may be a different server. The connection is blocked."),

@@ -378,6 +378,41 @@ describe("the assisted browser panels", () => {
   });
 });
 
+describe("the assisted browser's sentences for what the code cannot tell apart", () => {
+  it("browser_container_mismatch: the bridge says it for a merely stopped container too, and the sentence covers that", () => {
+    const bridge = readFileSync(BRIDGE, "utf8");
+    const raise = bridge.indexOf('raise ValueError("browser_container_mismatch")');
+    expect(raise).toBeGreaterThan(0);
+    const condition = bridge.slice(bridge.lastIndexOf("if (", raise), raise);
+    expect(condition, "the condition that raises it").toContain('info.get("Run") is not True');
+    // Each language says the team may be off and asks to start it first.
+    const STOPPED: Record<string, [RegExp, RegExp]> = {
+      it: [/spenta/, /^Avvia la squadra/], en: [/ is off /, /^Start the team/], de: [/ ist aus /, /^Starte das Team/],
+      es: [/apagado/, /^Inicia el equipo/], fr: [/arrêtée/, /^Démarre l’équipe/],
+      hu: [/ki van kapcsolva/, /^Indítsd el a csapatot/], pt: [/desligada/, /^Inicia a equipa/],
+    };
+    for (const locale of ERROR_LOCALES) {
+      const { text, action, known } = describeError("browser_container_mismatch", { locale });
+      expect(known, locale).toBe(true);
+      expect(text, locale).toMatch(STOPPED[locale][0]);
+      expect(action, locale).toMatch(STOPPED[locale][1]);
+    }
+    // An image mismatch comes only from a running container: it keeps its own sentence.
+    expect(describeError("browser_image_mismatch").text).not.toBe(describeError("browser_container_mismatch").text);
+  });
+
+  it("ssh_host_key_invalid: names the ed25519 key the VPS did not offer, never host and port", () => {
+    for (const locale of ERROR_LOCALES) {
+      const { text, action, known } = describeError("ssh_host_key_invalid", { locale });
+      expect(known, locale).toBe(true);
+      expect(text, locale).toContain("ed25519");
+      expect(action, locale).toContain("ed25519");
+    }
+    expect(describeError("ssh_host_key_invalid").action).not.toMatch(/host e porta/);
+    expect(describeError("ssh_host_key_invalid", { locale: "en" }).action).not.toMatch(/host and port/);
+  });
+});
+
 describe("describeError", () => {
   const now = Date.UTC(2026, 9, 8, 9, 0);
 
