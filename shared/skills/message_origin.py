@@ -90,9 +90,34 @@ IMPERSONATION = "impersonation"
 UNSIGNED = "unsigned"
 
 
+# Il gioco può anteporre alla busta un blocco di contesto che compone lui (le risposte
+# dell'onboarding dichiarate dall'utente): `[CONTESTO ONBOARDING LOCALE …]\n…\n[FINE
+# CONTESTO]\n\n[@utente -> @x] [CHAT] <testo>` (vps_backend.gd, `_do_send_chat`). Il
+# blocco lo scrive il gioco, il testo dopo la busta lo scrive l'utente. La forma è
+# STRETTA: comincia con quella riga, finisce al PRIMO `[FINE CONTESTO]` seguito da una
+# busta `@utente`. Chi ci scrive dentro non sposta il confine verso il proprio testo:
+# può solo farne finire di più dentro il recinto.
+CONTEXT_FRAME_RE = re.compile(
+    r"\A(\[CONTESTO ONBOARDING LOCALE[^\n]*\]\n.*?\n\[FINE CONTESTO\]\n\n)(?=\[@utente\s*->)",
+    re.DOTALL,
+)
+
+
+def split_context_frame(message):
+    """`(blocco di contesto, resto)`; il blocco è '' se il messaggio non comincia con uno."""
+    found = CONTEXT_FRAME_RE.match(message or "")
+    if not found:
+        return "", message or ""
+    return found.group(1), (message or "")[found.end():]
+
+
 def claimed_sender(message: str) -> str | None:
-    """Il mittente che il messaggio DICHIARA, o None se non c'è busta."""
-    found = ENVELOPE_RE.match(message or "")
+    """Il mittente che il messaggio DICHIARA, o None se non c'è busta.
+
+    Con un blocco di contesto davanti si guarda la busta che lo segue: altrimenti chi
+    lo antepone a una firma falsa scavalcherebbe il controllo d'identità.
+    """
+    found = ENVELOPE_RE.match(split_context_frame(message)[1])
     return found.group(1).lower() if found else None
 
 
@@ -202,10 +227,11 @@ USER_TURN_RE = re.compile(
 
 def fence_user_turn_message(message):
     """Il messaggio con il testo dell'utente recintato; gli altri, identici."""
-    found = USER_TURN_RE.match(message or "")
+    frame, rest = split_context_frame(message)
+    found = USER_TURN_RE.match(rest or "")
     if not found:
         return message
-    head, text = found.group(1), found.group(2) or ""
+    head, text = frame + found.group(1), found.group(2) or ""
     try:
         import sys as _sys
 
@@ -220,6 +246,36 @@ def fence_user_turn_message(message):
         # arriva comunque com'era: su una riga e senza comandi non si può
         # garantire, quindi lo si segnala e basta.
         return f"{head} {UNFENCED_MARK} {text}"
+
+
+# ── JHT-T21-b · la console scrive testo libero, senza busta ─────────────────────
+# `jht team send` / `jht team chat` e il pannello locale (`/api/team/send`) mandano al
+# pane il testo di chi li usa, così com'è, senza busta: nessuno dice di chi sia, e il
+# destinatario lo legge come se fosse stato digitato nel pane. Il difetto tecnico è lo
+# stesso della chat (ESC e CR arrivano alla TUI come tasti, gli invisibili e i tag
+# nascondono istruzioni, una riga può imitare una busta), l'ATTRIBUZIONE è diversa: non
+# c'è niente di verificabile da affermare. Quindi qui si PULISCE senza etichettare:
+# `external_content.sanitize_user_text`, la stessa funzione del recinto, senza il
+# confine. Il chiamante lo CHIEDE con `JHT_TMUX_SEND_FROM=user-console`; chiederlo non
+# conferisce niente (aggiunge pulizia, non fiducia), quindi non serve che sia autentico.
+CONSOLE_SOURCE = "user-console"
+
+
+def sanitize_console_message(message, source):
+    """Il messaggio della console ripulito; qualunque altro, identico."""
+    if source != CONSOLE_SOURCE:
+        return message
+    try:
+        import sys as _sys
+
+        here = os.path.dirname(os.path.abspath(__file__))
+        if here not in _sys.path:
+            _sys.path.insert(0, here)
+        from external_content import sanitize_user_text
+
+        return sanitize_user_text(message)
+    except Exception:
+        return f"{UNFENCED_MARK} {message}"
 
 
 def mark_message(message, trust):
@@ -317,7 +373,10 @@ def main(argv):
     # solo giro: chiedere due volte aprirebbe una finestra in cui l'elenco dei
     # pane cambia fra il controllo e la marcatura.
     print(f"{trust}\t{claimed or ''}\t{origin or ''}")
-    print(mark_message(fence_user_turn_message(message), trust), end="")
+    delivered = fence_user_turn_message(message)
+    if delivered == message:     # not a chat envelope: the console may ask for it to be cleaned
+        delivered = sanitize_console_message(message, os.environ.get("JHT_TMUX_SEND_FROM", ""))
+    print(mark_message(delivered, trust), end="")
     return 0
 
 

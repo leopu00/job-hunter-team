@@ -61,9 +61,13 @@ function sendMessage(session, message) {
   // ricontrolla che il turno sia davvero partito.
   const escaped = bashSingleQuote(message);
   const args = `'${session}' '${escaped}'`;
+  // JHT_TMUX_SEND_FROM=user-console: il testo e' libero (nessuna busta) e lo scrive chi
+  // usa la console. Chiede al trasporto di ripulirlo (ESC/CR, invisibili, finte buste)
+  // senza attribuirlo a nessuno: shared/skills/message_origin.py, JHT-T21-b.
+  const from = 'JHT_TMUX_SEND_FROM=user-console';
   const cmd =
-    `if command -v jht-tmux-send >/dev/null 2>&1; then jht-tmux-send ${args}; ` +
-    `else /app/agents/_skills/tmux-send/jht-tmux-send ${args}; fi`;
+    `if command -v jht-tmux-send >/dev/null 2>&1; then ${from} jht-tmux-send ${args}; ` +
+    `else ${from} /app/agents/_skills/tmux-send/jht-tmux-send ${args}; fi`;
   const fail = (code, raw) => ({
     ok: false,
     code,

@@ -296,13 +296,23 @@ def _defang_user_markers(text):
     return _USER_MARKER_SHAPE.sub(replace, text)
 
 
+def sanitize_user_text(text):
+    """Il testo di un utente su una riga, senza comandi e senza finti confini: NIENTE etichetta.
+
+    Metà del recinto: pulisce, non attribuisce. Serve dove il testo arriva senza
+    una busta che dica di chi è (la console: `jht team send`, il pannello locale) e
+    dichiararne l'autore sarebbe affermare più di quanto si sa.
+    """
+    return _defang_markers(_defang_user_markers(flatten_user_turn(text)))
+
+
 def fence_user_turn(text):
     """Il testo scritto dall'utente, dentro il suo confine, su una riga sola.
 
     Presentazione e basta: il testo che l'utente vede (cronologia, web, gioco)
     resta quello che ha scritto.
     """
-    safe = _defang_markers(_defang_user_markers(flatten_user_turn(text)))
+    safe = sanitize_user_text(text)
     return " ".join(part for part in (USER_OPEN_MARKER, safe, USER_CLOSE_MARKER) if part)
 
 
