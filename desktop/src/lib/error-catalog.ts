@@ -843,6 +843,24 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
     "Podman is on the VPS, but podman compose is missing.",
     "Ask whoever manages the VPS to install podman-compose, then try again.",
   ),
+  podman_version_unsupported: copy(
+    "Sulla VPS la versione di Podman o di podman-compose è troppo vecchia.",
+    "Chiedi a chi gestisce la VPS di aggiornare Podman e podman-compose, poi riprova.",
+    "On the VPS the version of Podman or podman-compose is too old.",
+    "Ask whoever manages the VPS to update Podman and podman-compose, then try again.",
+  ),
+  podman_runtime_dir_missing: copy(
+    "Sulla VPS la tua sessione non ha la cartella di lavoro che serve a Podman senza privilegi.",
+    "Chiedi a chi gestisce la VPS di attivare il linger per il tuo utente (loginctl enable-linger), poi riprova.",
+    "On the VPS your session has no runtime folder, which Podman without privileges needs.",
+    "Ask whoever manages the VPS to enable lingering for your user (loginctl enable-linger), then try again.",
+  ),
+  podman_rootless_unavailable: copy(
+    "Sulla VPS Podman non riesce a partire con il tuo utente.",
+    "Chiedi a chi gestisce la VPS di controllare che il comando podman info funzioni con il tuo utente, poi riprova.",
+    "On the VPS Podman cannot start for your user.",
+    "Ask whoever manages the VPS to check that the podman info command works for your user, then try again.",
+  ),
   podman_linger_missing: copy(
     "Sulla VPS il tuo utente non può tenere acceso il team quando ti disconnetti.",
     "Chiedi a chi gestisce la VPS di attivare il linger per il tuo utente (loginctl enable-linger), poi riprova.",
