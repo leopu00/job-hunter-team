@@ -1308,7 +1308,7 @@ export type {
   LocationCountry,
 } from "@/lib/types";
 
-function buildLocationTree(
+export function buildLocationTree(
   rows: Array<{
     id: string;
     title: string | null;
