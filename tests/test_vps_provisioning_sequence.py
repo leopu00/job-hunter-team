@@ -95,7 +95,7 @@ exec env -i HOME="$FAKE_REMOTE_HOME" PATH="$FAKE_REMOTE_PATH" \
   FAKE_ROOTLESS="${FAKE_ROOTLESS:-}" FAKE_PODMAN_INFO="${FAKE_PODMAN_INFO:-}" FAKE_LINGER="${FAKE_LINGER:-}" \
   FAKE_STATE="${FAKE_STATE:-}" FAKE_SUDO_PASSWORD="${FAKE_SUDO_PASSWORD:-}" \
   FAKE_APT_INSTALLS_PODMAN="${FAKE_APT_INSTALLS_PODMAN:-}" FAKE_LINGER_STUCK="${FAKE_LINGER_STUCK:-}" \
-  FAKE_USERMOD_STUCK="${FAKE_USERMOD_STUCK:-}" JHT_RUN_USER_DIR="${JHT_RUN_USER_DIR:-}" \
+  FAKE_USERMOD_STUCK="${FAKE_USERMOD_STUCK:-}" JHT_RUN_USER_DIR="${JHT_RUN_USER_DIR:-}" FAKE_APT_LOCKED="${FAKE_APT_LOCKED:-}" \
   /bin/bash -c "$cmd"
 """
 
@@ -121,6 +121,10 @@ case "$*" in
   *"install -y"*)
     # Podman's packages: what is in stock/ comes out when it is installed.
     [ "${FAKE_APT_INSTALLS_PODMAN:-1}" = 1 ] || exit 100
+    # unattended-upgrades holds the dpkg lock: without a wait apt-get fails at once.
+    if [ "${FAKE_APT_LOCKED:-0}" = 1 ]; then
+      case "$*" in *"DPkg::Lock::Timeout="*) ;; *) echo "E: Could not get lock /var/lib/dpkg/lock-frontend" >&2; exit 100 ;; esac
+    fi
     d="$(dirname "$0")"
     for a in "$@"; do
       case "$a" in
@@ -642,10 +646,11 @@ def test_with_podman_rootless_there_the_install_needs_no_docker_and_no_sudo(serv
 
 def test_a_server_as_bought_gets_podman_a_range_and_linger_from_the_users_own_sudo_and_never_docker(server, source):
     with_podman(server, bare=True)
-    done = install_podman(server, source, FAKE_LINGER="no")
+    done = install_podman(server, source, FAKE_LINGER="no", FAKE_APT_LOCKED="1")
     assert done.returncode == 0, done.stderr.decode() + done.stdout.decode()
     calls = server.calls()
-    assert "sudo -n env DEBIAN_FRONTEND=noninteractive apt-get install -y podman podman-compose uidmap" in calls
+    assert ("sudo -n env DEBIAN_FRONTEND=noninteractive apt-get -o DPkg::Lock::Timeout=180 "
+            "install -y podman podman-compose uidmap") in calls
     # the range starts after the one somebody else already has
     assert "sudo -n usermod --add-subuids 165536-231071 --add-subgids 165536-231071 app" in calls
     assert (server.etc / "subuid").read_text() == "app:165536:65536\n"
@@ -732,3 +737,11 @@ def test_a_second_install_without_the_option_keeps_podman(server, source):
     runtime = server.home / ".local/share/job-hunter-team/host-runtime"
     assert (runtime / "container-runtime").read_text() == "podman\n"
     assert "docker-shim=" in (runtime / ".runtime-integrity").read_text()
+
+
+def test_a_range_is_chosen_after_the_one_readable_file_when_the_other_is_missing(server, source):
+    with_podman(server, bare=True)
+    (server.etc / "subuid").unlink()  # /etc/subuid absent, /etc/subgid there with someone's range
+    done = install_podman(server, source, FAKE_LINGER="no")
+    assert done.returncode == 0, done.stderr.decode()
+    assert "sudo -n usermod --add-subuids 165536-231071 --add-subgids 165536-231071 app" in server.calls()

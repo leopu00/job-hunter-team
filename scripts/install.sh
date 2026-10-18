@@ -523,8 +523,13 @@ podman_packages_missing() {
 
 # First start of a free range: after every range already given to anyone.
 podman_free_subid_start() {
-  awk -F: 'BEGIN { top = 100000 } { end = $2 + $3; if (end > top) top = end } END { print top }' \
-    "$1/subuid" "$1/subgid" 2>/dev/null || echo 100000
+  local -a files=()
+  local f
+  for f in "$1/subuid" "$1/subgid"; do
+    [ -r "$f" ] && files+=("$f")
+  done
+  [ "${#files[@]}" -gt 0 ] || { echo 100000; return 0; }
+  awk -F: 'BEGIN { top = 100000 } { end = $2 + $3; if (end > top) top = end } END { print top }' "${files[@]}"
 }
 
 # Sets up what is missing for Podman rootless with the user's own sudo: the
@@ -549,8 +554,10 @@ provision_podman_linux() {
     info "Installing$missing with sudo (Podman rootless; Docker is not installed)..."
     case "$PKG" in
       apt)
-        sudo -n apt-get update -qq >/dev/null 2>&1 || warn "apt-get update failed: trying the install anyway."
-        sudo -n env DEBIAN_FRONTEND=noninteractive apt-get install -y $missing >/dev/null \
+        # A server just bought runs unattended-upgrades, which holds the dpkg
+        # lock for minutes: wait for it (apt-get gives up at once otherwise).
+        sudo -n apt-get -o DPkg::Lock::Timeout=180 update -qq >/dev/null 2>&1 || warn "apt-get update failed: trying the install anyway."
+        sudo -n env DEBIAN_FRONTEND=noninteractive apt-get -o DPkg::Lock::Timeout=180 install -y $missing >/dev/null \
           || podman_refuse podman_install_failed 88 "apt-get install$missing failed."
         ;;
       dnf)
