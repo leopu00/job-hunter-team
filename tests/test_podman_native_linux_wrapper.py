@@ -22,7 +22,7 @@ ROOT = Path(__file__).resolve().parents[1]
 WRAPPER = ROOT / "scripts" / "jht-wrapper.sh"
 
 FUNCTIONS = (
-    "version_is_plain", "version_at_least", "podman_version_number", "podman_compose_version_number",
+    "version_leading_numbers", "version_at_least", "podman_version_number", "podman_compose_version_number",
     "podman_compose_pair_supported", "podman_native_override_path", "podman_native_override_ensure",
     "compose_project_name", "podman_binary", "podman_compose_binary", "compose_file",
 )
@@ -89,9 +89,15 @@ SUPPORTED = 'podman_compose_pair_supported "$(command -v podman)" "$(command -v 
         ("4.9.9", "1.5.0", "no"),
         ("5.7.0", "1.0.6", "no"),
         ("5.7.0", "1.0.99", "no"),
-        ("5.7.0-dev", "1.5.0", "no"),
-        ("5.7", "1.5.0", "no"),
-        ("5.7.0", "1.5.0rc1", "no"),
+        # The same reading as install.sh: the leading numbers count, a suffix after them is dropped.
+        ("5.4.2+ds1", "1.5.0", "yes"),    # how Ubuntu and Debian package it
+        ("5.7.0", "1.1.0~rc1", "yes"),
+        ("5.7.0-dev", "1.5.0", "yes"),
+        ("5.7", "1.5.0rc1", "yes"),       # missing components are zero: 5.7.0
+        ("4.9.9+ds1", "1.5.0", "no"),
+        ("5.7.0", "1.0.99+ds1", "no"),
+        ("5..7", "1.5.0", "no"),
+        ("dev", "1.5.0", "no"),
     ],
 )
 def test_native_linux_accepts_the_minimum_and_anything_above(box, podman, compose, expected):
@@ -151,3 +157,13 @@ def test_a_version_below_the_minimum_says_what_was_found_and_what_is_needed(box)
     assert "podman >= 5.0.0" in done.stderr and "4.9.4" in done.stderr
     assert "podman-compose >= 1.1.0" in done.stderr and "1.0.6" in done.stderr
     assert not box.log.exists()  # nothing was run
+
+
+def test_the_override_is_written_through_an_unpredictable_name_with_no_leftover(box):
+    done = box.run("native", f'podman_native_override_ensure "{box.base}"')
+    assert done.returncode == 0, done.stderr
+    path = Path(done.stdout.strip())
+    assert sorted(p.name for p in box.runtime.iterdir()) == ["docker-compose.podman-linux.yml", "docker-compose.yml"]
+    assert path.stat().st_mode & 0o777 == 0o600
+    function = re.search(r"^podman_native_override_ensure\(\) \{\n.*?^\}\n", WRAPPER.read_text(encoding="utf-8"), re.S | re.M).group(0)
+    assert 'tmp="$(mktemp "$target.XXXXXX")"' in function and "$$" not in function

@@ -722,26 +722,27 @@ podman_compose_binary() {
 PODMAN_NATIVE_MIN_VERSION="5.0.0"
 PODMAN_COMPOSE_NATIVE_MIN_VERSION="1.1.0"
 
-# "X.Y.Z" pulito -> successo; qualunque altra cosa (suffissi, -dev, vuoto) no.
-version_is_plain() {
-  case "$1" in
-    [0-9]*.[0-9]*.[0-9]*) ;;
-    *) return 1 ;;
-  esac
-  case "$1" in *[!0-9.]*|*..*|.*|*.) return 1 ;; esac
-  [ "$(printf '%s' "$1" | tr -cd '.' | wc -c | tr -d ' ')" = 2 ]
+# Come install.sh: dei numeri iniziali conta quel che sta prima del primo carattere che non
+# e' una cifra o un punto, il resto (`+ds1`, `~rc1`, `-dev`) si scarta. I pacchetti di Ubuntu
+# e Debian hanno suffissi cosi' (`5.4.2+ds1`): rifiutarli darebbe un errore tardivo.
+version_leading_numbers() {
+  printf '%s\n' "$1" | sed 's/[^0-9.].*$//'
 }
 
-# $1 >= $2, entrambe X.Y.Z, confronto numerico per componente (10 > 9).
+# $1 >= $2, confronto numerico per componente (10 > 9); componenti mancanti valgono 0.
 version_at_least() {
-  local a="$1" b="$2" a1 a2 a3 b1 b2 b3
-  version_is_plain "$a" && version_is_plain "$b" || return 1
-  IFS=. read -r a1 a2 a3 <<EOF
-$a
+  local have want a1 a2 a3 b1 b2 b3
+  have="$(version_leading_numbers "$1")"
+  want="$(version_leading_numbers "$2")"
+  case "$have" in ''|.*|*..*) return 1 ;; esac
+  case "$want" in ''|.*|*..*) return 1 ;; esac
+  IFS=. read -r a1 a2 a3 _ <<EOF
+$have
 EOF
-  IFS=. read -r b1 b2 b3 <<EOF
-$b
+  IFS=. read -r b1 b2 b3 _ <<EOF
+$want
 EOF
+  a1="${a1:-0}" a2="${a2:-0}" a3="${a3:-0}" b1="${b1:-0}" b2="${b2:-0}" b3="${b3:-0}"
   [ "$((10#$a1))" -ne "$((10#$b1))" ] && { [ "$((10#$a1))" -gt "$((10#$b1))" ]; return; }
   [ "$((10#$a2))" -ne "$((10#$b2))" ] && { [ "$((10#$a2))" -gt "$((10#$b2))" ]; return; }
   [ "$((10#$a3))" -ge "$((10#$b3))" ]
@@ -810,8 +811,9 @@ podman_native_override_ensure() {
     printf '%s\n' "$target"
     return 0
   fi
-  tmp="$target.tmp.$$"
-  ( umask 077; printf '%s\n' "$content" > "$tmp" ) && mv -f "$tmp" "$target" || { rm -f "$tmp"; return 1; }
+  # Nome imprevedibile, nella stessa cartella (stesso filesystem: il mv e' atomico), 0600.
+  tmp="$(mktemp "$target.XXXXXX")" || return 1
+  { printf '%s\n' "$content" > "$tmp" && mv -f "$tmp" "$target"; } || { rm -f "$tmp"; return 1; }
   printf '%s\n' "$target"
 }
 
@@ -2056,7 +2058,7 @@ read_only_service_id() {
     expected_unit="$(printf 'podman-compose\100%s.service' "$expected_project")"
     expected_hash="$(podman_expected_config_hash "$COMPOSE_FILE" "$service")" || return 1
     if [ "$PODMAN_RUNTIME_MODE" = "native" ]; then
-      # Il provider installato (>= 1.5.0) e i due file passati a `up`.
+      # Il provider installato (>= 1.1.0) e i due file passati a `up`.
       expected_version="$(podman_compose_version_number "$(podman_compose_binary)")" || return 1
       expected_files="$COMPOSE_FILE,$(podman_native_override_path)"
     fi
