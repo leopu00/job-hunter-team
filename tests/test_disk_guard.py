@@ -298,6 +298,16 @@ def test_phrases_come_from_the_table_in_every_language():
 
 
 @pytest.mark.parametrize("lang", LANGS)
+def test_only_the_cli_phrase_names_the_terminal_command(lang):
+    # L'app e il launcher usano `disk.low`: l'utente dell'app non usa il terminale.
+    # La CLI e il wrapper (`disk.low.cli`) dicono anche `jht clean-images`.
+    table = json.loads((LOCALES / f"{lang}.json").read_text(encoding="utf-8"))
+    assert table["disk.low.cli"].count("%s") == 1 and len(table["disk.low.cli"]) > 40
+    assert "`jht clean-images`" in table["disk.low.cli"]
+    assert "jht " not in table["disk.low"] and "clean-images" not in table["disk.low"]
+
+
+@pytest.mark.parametrize("lang", LANGS)
 def test_the_user_phrase_is_the_table_entry_in_the_users_language(monkeypatch, volumes, lang):
     home, _ = volumes
     hv = load_vitals()
@@ -639,7 +649,7 @@ def test_the_cli_refusal_prints_the_closed_code_and_the_table_phrase():
     body = body[: body.index("\n}\n")]
     assert "refusal.code" in body and "refusal.message" in body
     guard = GUARD_JS.read_text(encoding="utf-8")
-    assert "tf('disk.low'" in guard
+    assert "tf('disk.low.cli'" in guard
     assert "wizard/i18n.js" in guard
 
 
@@ -843,9 +853,9 @@ def test_at_2_percent_the_plain_upgrade_says_disk_low_on_stderr(tmp_path):
     done, calls = run_upgrade(tmp_path, 2, "")
     assert "rc=1" in done.stdout
     assert "disk_low" in done.stderr
-    # sotto la soglia la pulizia delle immagini non gira (tiene corrente e
-    # precedente): il rifiuto dice allora cosa fare per liberare spazio
-    assert "Cestino" in done.stderr and "Docker/Podman" in done.stderr, done.stderr
+    # l'upgrade resta rifiutato e la pulizia che gira a upgrade riuscito non parte:
+    # il rifiuto indica la via per liberare spazio, `jht clean-images` (comando separato)
+    assert "jht clean-images" in done.stderr and "Cestino" in done.stderr, done.stderr
     assert "8 GiB" in done.stderr
     assert calls == []
 
@@ -894,7 +904,8 @@ def test_the_running_runtime_is_not_touched_by_a_refused_upgrade(tmp_path):
 # funzione VERA contro un `docker` finto (una funzione di shell che registra le
 # chiamate): nessun motore reale, nessun volume.
 
-PRUNE_FUNCTIONS = ("upgrade_image_plain", "upgrade_prune_result", "upgrade_prune_old_images")
+PRUNE_FUNCTIONS = ("upgrade_image_plain", "upgrade_repo_is_jht", "upgrade_foreign_image_ids",
+                   "upgrade_prune_result", "upgrade_prune_old_images")
 
 FAKE_ENGINE = r'''
 CALLS="$STATE/engine.log"

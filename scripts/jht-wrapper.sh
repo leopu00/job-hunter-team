@@ -2134,6 +2134,10 @@ jht — Job Hunter Team
     jht status             stato di container e team
     jht logs [-f]          log del container
     jht upgrade            aggiorna all'immagine piu' recente
+    jht clean-images [--json]
+                           toglie le immagini JHT vecchie (tiene la corrente, la
+                           piu' recente delle altre e quelle in uso); permesso
+                           anche a disco quasi pieno
     jht setup              installazione guidata
     jht download --os X    scarica l'app desktop per un sistema
     jht game start|stop    avvia o ferma il videogioco
@@ -2188,7 +2192,7 @@ serve_help_without_docker() {
 # falso errore; il loro aiuto resta quindi quello locale anche in quel caso.
 host_command_uses_local_help() {
   case "$1" in
-    up|start-container|down|stop-container|restart|recreate|upgrade|logs|status|shell|oauth-login|claude-login|setup|download|podman-machine-recreate|mail|telegram|reset|migrate-runtime)
+    up|start-container|down|stop-container|restart|recreate|upgrade|clean-images|logs|status|shell|oauth-login|claude-login|setup|download|podman-machine-recreate|mail|telegram|reset|migrate-runtime)
       return 0
       ;;
   esac
@@ -2823,10 +2827,11 @@ handle_host_download() {
 # le confronta), qui in per mille e in KiB (l'unita' di `df -Pk`) per restare in
 # aritmetica intera.
 #
-# La pulizia delle immagini JHT vecchie (piu' sotto) NON gira sotto la
-# soglia: tiene «corrente» e «precedente», e la precedente esiste solo dentro
-# un upgrade che sta riuscendo. Per questo il rifiuto dice all'utente cosa fare
-# per liberare spazio (la frase `disk.low`, e il messaggio qui sotto).
+# La pulizia che gira a upgrade riuscito (piu' sotto) non parte sotto la soglia,
+# perche' l'upgrade e' rifiutato prima. La via per recuperare spazio a disco
+# pieno e' `jht clean-images`: la stessa pulizia, in un comando SEPARATO che non
+# passa da `disk_low`. Il rifiuto dice all'utente di usarlo (messaggio qui sotto
+# e frase `disk.low.cli`).
 #
 # Si misurano i volumi che l'host puo' vedere: la cartella dati (~/.jht) e, su
 # Linux, la radice dati del motore. Su macOS il disco del motore sta dentro la
@@ -2961,10 +2966,37 @@ upgrade_run() {
 #     localhost/jht): ghcr.io/leopu00/jht-altro o qualunque altro e' un'altra cosa;
 #   - mai un'immagine di un container, anche fermo; se i container non si
 #     leggono non si toglie niente;
+#   - un ID che porta anche un nome NON JHT (altro repository, o `<none>`) non
+#     e' nostro da togliere: si tiene;
 #   - per ID, senza -f, mai `prune`; il rifiuto del motore si CONTA;
-#   - chiamata solo a upgrade riuscito: mai su check, fallimento o rollback;
+#   - chiamata a upgrade riuscito (mai su check, fallimento o rollback) e dal
+#     comando `jht clean-images` (vedi sotto), che e' l'unica via di pulizia
+#     permessa anche a disco quasi pieno;
 #   - JHT_KEEP_OLD_IMAGES=1 tiene tutto.
 JHT_IMAGE_REPOSITORIES="ghcr.io/leopu00/jht jht localhost/jht"
+
+upgrade_repo_is_jht() {
+  local r
+  for r in $JHT_IMAGE_REPOSITORIES; do
+    [ "$1" != "$r" ] || return 0
+  done
+  return 1
+}
+
+# Gli ID che compaiono anche sotto un nome non JHT, uno per riga, preceduti da
+# una riga vuota (lo stesso formato del confronto di riga intera piu' sotto).
+# $1 = l'elenco «<id> <repository>» del motore.
+upgrade_foreign_image_ids() {
+  local id repo out=""
+  while IFS=' ' read -r id repo; do
+    [ -n "$id" ] || continue
+    upgrade_repo_is_jht "$repo" || out="$out
+$(upgrade_image_plain "$id")"
+  done <<EOF
+$1
+EOF
+  printf '%s\n' "$out"
+}
 
 upgrade_image_plain() {
   # Docker rende sha256:<id>, Podman l'id nudo: si confronta senza prefisso.
@@ -2978,7 +3010,7 @@ upgrade_prune_result() {
 }
 
 upgrade_prune_old_images() {
-  local current previous running_id containers in_use in_use_plain listing id repo known r
+  local current previous running_id containers in_use in_use_plain listing id repo foreign
   local removed=0 freed=0 refused=0 busy=0 size seen=""
   UPGRADE_PRUNE_JSON=""
   if [ "${JHT_KEEP_OLD_IMAGES:-0}" = "1" ]; then
@@ -3021,16 +3053,23 @@ $(printf '%s\n' "$in_use" | sed 's/^sha256://')
     upgrade_prune_result images-unreadable 0 0 0 0
     return 0
   fi
+  foreign="$(upgrade_foreign_image_ids "$listing")"
   while IFS=' ' read -r id repo; do
     [ -n "$id" ] || continue
-    known=0
-    for r in $JHT_IMAGE_REPOSITORIES; do
-      [ "$repo" != "$r" ] || known=1
-    done
-    [ "$known" = 1 ] || continue
+    upgrade_repo_is_jht "$repo" || continue
     local plain
     plain="$(upgrade_image_plain "$id")"
-    [ "$plain" != "$current" ] && [ "$plain" != "$previous" ] || continue
+    [ "$plain" != "$current" ] || continue
+    # `previous` e' un ID (upgrade) o piu' ID, uno per riga (clean-images).
+    case "
+$previous
+" in *"
+$plain
+"*) continue ;; esac
+    case "$foreign
+" in *"
+$plain
+"*) continue ;; esac
     # Lo stesso ID compare una volta per tag: lo si tratta una volta sola.
     case "
 $seen
@@ -3060,6 +3099,161 @@ EOF
   [ "$busy" -eq 0 ] || note="$note In uso da un container (tenute): $busy."
   [ "$refused" -eq 0 ] || note="$note Rifiutate dal motore (tenute): $refused."
   upgrade_note "$note"
+  return 0
+}
+
+# ── `jht clean-images`: la pulizia, permessa anche a disco quasi pieno ─────────
+# `jht upgrade` sotto la soglia del disco rifiuta (`disk_low`) e con lui la
+# pulizia che gira a upgrade riuscito: a disco pieno l'utente non avrebbe una
+# via per recuperare spazio. Questo comando e' quella via, SEPARATA dall'upgrade
+# (che resta rifiutato) e senza passare da `disk_low`. Fa la stessa pulizia
+# (upgrade_prune_old_images: stesse regole, nessuna in piu' o in meno sotto
+# soglia) e in piu' non accende niente: ne' machine Podman, ne' Docker, ne'
+# container.
+#
+# Fuori da un upgrade non c'e' un'immagine «precedente» registrata: e' la JHT
+# piu' recente per data di creazione fra le non correnti (a pari secondo si
+# tengono tutte). Dopo un rollback puo' essere PIU' NUOVA della corrente: va
+# bene, sbaglia dal lato prudente (tiene un'immagine in piu', mai una in meno).
+# Se una data non si legge, o non e' in UTC («...Z»), non si toglie niente:
+# confrontare orari con fusi diversi come testo darebbe l'ordine sbagliato.
+
+# Stampa gli ID (senza prefisso) delle JHT non correnti piu' recenti, uno per
+# riga; niente se non ce ne sono. Ritorna 1 se non si legge l'elenco o una data.
+# $1 = ID della corrente, senza prefisso.
+clean_images_previous() {
+  local current="$1" listing foreign id repo plain created stamp digits
+  local seen="" newest=0 keep=""
+  listing="$(docker image ls --no-trunc --format '{{.ID}} {{.Repository}}' 2>/dev/null)" || return 1
+  foreign="$(upgrade_foreign_image_ids "$listing")"
+  while IFS=' ' read -r id repo; do
+    [ -n "$id" ] || continue
+    upgrade_repo_is_jht "$repo" || continue
+    plain="$(upgrade_image_plain "$id")"
+    [ "$plain" != "$current" ] || continue
+    case "$foreign
+" in *"
+$plain
+"*) continue ;; esac
+    case "
+$seen
+" in *"
+$plain
+"*) continue ;; esac
+    seen="$seen
+$plain"
+    created="$(docker image inspect --format '{{.Created}}' "$id" 2>/dev/null | head -n 1)" || return 1
+    case "$created" in
+      [0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]*Z) ;;
+      *) return 1 ;;
+    esac
+    # Fino al secondo: la frazione puo' mancare o avere un numero di cifre diverso.
+    stamp="${created%%[.Z]*}"
+    digits="${stamp//[!0-9]/}"
+    if [ "$digits" -gt "$newest" ]; then
+      newest="$digits"
+      keep="$plain"
+    elif [ "$digits" -eq "$newest" ]; then
+      keep="$keep
+$plain"
+    fi
+  done <<EOF
+$listing
+EOF
+  [ -z "$keep" ] || printf '%s\n' "$keep"
+}
+
+clean_images_message() {
+  case "$1" in
+    opt-out) printf '%s' "JHT_KEEP_OLD_IMAGES=1: le immagini vecchie restano tutte. Toglilo per pulire." ;;
+    runtime-not-installed) printf '%s' "Il runtime di Job Hunter Team non e' installato: non c'e' niente da pulire." ;;
+    upgrade-in-progress) printf '%s' "Un aggiornamento e' in corso: riprova quando e' finito. Non e' stato tolto niente." ;;
+    upgrade-pending) printf '%s' "Un aggiornamento interrotto aspetta di essere ripreso (la versione precedente serve al ripristino): esegui 'jht upgrade'. Non e' stato tolto niente." ;;
+    current-unidentified|current-not-running) printf '%s' "Il container di Job Hunter Team non e' in esecuzione, quindi non so quale immagine e' quella in uso: accendilo con 'jht up' e riprova. Non e' stato tolto niente." ;;
+    previous-unidentified) printf '%s' "Non riesco a leggere la data delle immagini: non e' stato tolto niente." ;;
+    containers-unreadable|images-unreadable) printf '%s' "Il motore non risponde come atteso: non e' stato tolto niente." ;;
+    *) printf '%s' "Non e' stato tolto niente." ;;
+  esac
+}
+
+# $1 = ok (true|false), $2 = messaggio (testo fisso nostro: senza virgolette ne'
+# backslash). In --json e' l'unica riga di stdout.
+clean_images_emit() {
+  if [ "$UPGRADE_JSON" = "1" ]; then
+    printf '{"ok":%s,"message":"%s"%s}\n' "$1" "$2" \
+      "${UPGRADE_PRUNE_JSON:+,\"imagePrune\":$UPGRADE_PRUNE_JSON}"
+  elif [ -n "$2" ]; then
+    info "$2"
+  fi
+}
+
+handle_clean_images() {
+  local arg current previous skipped
+  UPGRADE_JSON=0
+  for arg in "$@"; do
+    case "$arg" in
+      --json) UPGRADE_JSON=1 ;;
+      *) err "Opzione di clean-images non supportata: $arg (uso: jht clean-images [--json])"; return 2 ;;
+    esac
+  done
+  # Come `status`: una sonda. Una machine Podman che vede piu' del dovuto, o un
+  # motore spento, non si accendono ne' si ripara da qui.
+  require_confined_podman_machine
+  if ! docker_reachable; then
+    [ "$UPGRADE_JSON" = "1" ] || err "Il motore dei container non e' attivo: non e' stato tolto niente."
+    UPGRADE_PRUNE_JSON=""
+    clean_images_emit false "Motore non attivo"
+    return 1
+  fi
+  UPGRADE_PRUNE_JSON=""
+  if [ ! -d "$RUNTIME_DIR" ]; then
+    upgrade_prune_result runtime-not-installed 0 0 0 0
+    clean_images_emit true "$(clean_images_message runtime-not-installed)"
+    return 0
+  fi
+  if ! upgrade_acquire_lock; then
+    upgrade_prune_result upgrade-in-progress 0 0 0 0
+    clean_images_emit true "$(clean_images_message upgrade-in-progress)"
+    return 0
+  fi
+  trap upgrade_cleanup_ephemeral EXIT INT TERM
+  if [ -e "$RUNTIME_DIR/.upgrade-journal" ]; then
+    upgrade_prune_result upgrade-pending 0 0 0 0
+    clean_images_emit true "$(clean_images_message upgrade-pending)"
+    return 0
+  fi
+  if [ "${JHT_KEEP_OLD_IMAGES:-0}" = "1" ]; then
+    upgrade_prune_result opt-out 0 0 0 0
+    clean_images_emit true "$(clean_images_message opt-out)"
+    return 0
+  fi
+  current="$(upgrade_image_plain "$(upgrade_image)")"
+  case "$current" in
+    ''|none|sconosciuta|unknown)
+      upgrade_prune_result current-unidentified 0 0 0 0
+      clean_images_emit true "$(clean_images_message current-unidentified)"
+      return 0
+      ;;
+  esac
+  if ! previous="$(clean_images_previous "$current")"; then
+    upgrade_prune_result previous-unidentified 0 0 0 0
+    clean_images_emit true "$(clean_images_message previous-unidentified)"
+    return 0
+  fi
+  if [ -z "$previous" ]; then
+    # Nessuna JHT oltre alla corrente: niente da togliere.
+    upgrade_prune_result "" 0 0 0 0
+    clean_images_emit true "Nessuna immagine JHT vecchia da togliere."
+    return 0
+  fi
+  # La pulizia stampa da sola l'esito (e lascia il blocco in UPGRADE_PRUNE_JSON).
+  upgrade_prune_old_images "$current" "$previous" || true
+  skipped="$(printf '%s' "$UPGRADE_PRUNE_JSON" | sed -n 's/.*"skipped":"\([^"]*\)".*/\1/p')"
+  if [ -n "$skipped" ]; then
+    clean_images_emit true "$(clean_images_message "$skipped")"
+  else
+    clean_images_emit true ""
+  fi
   return 0
 }
 
@@ -3369,7 +3563,7 @@ handle_runtime_upgrade() {
   # corso, e gli agenti che ci girano, restano intatti. Il codice e' chiuso
   # (`disk_low`); la frase la mostra l'app dalla sua tabella codice->frase.
   if disk_low; then
-    [ "$UPGRADE_JSON" = "1" ] || err "disk_low: meno del 3% di disco libero (${DISK_LOW_PERMILLE} per mille) e meno di 8 GiB. Per liberare spazio svuota il Cestino, elimina i file grandi che non ti servono e le immagini Docker/Podman inutilizzate, poi riprova: non e' stato scaricato ne' modificato niente."
+    [ "$UPGRADE_JSON" = "1" ] || err "disk_low: meno del 3% di disco libero (${DISK_LOW_PERMILLE} per mille) e meno di 8 GiB. Per liberare spazio esegui 'jht clean-images' (toglie solo le vecchie versioni di Job Hunter Team), svuota il Cestino ed elimina i file grandi che non ti servono, poi riprova: non e' stato scaricato ne' modificato niente."
     upgrade_result false false preflight "$old_version" "$old_image" "$old_version" "$old_image" false "disk_low" false
     return 1
   fi
@@ -4081,6 +4275,11 @@ case "$SUB" in
 
   upgrade)
     handle_runtime_upgrade "${@:2}"
+    ;;
+
+  clean-images)
+    handle_clean_images "${@:2}"
+    exit $?
     ;;
 
   mail)
