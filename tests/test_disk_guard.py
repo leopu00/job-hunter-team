@@ -1041,15 +1041,67 @@ def test_thresholds_and_codes_are_the_same_in_python_js_and_bash():
     assert (hv.DISK_CODE_WARNING, hv.DISK_CODE_LOW) == ("disk_warning", "disk_low")
 
 
-def test_powershell_wrapper_still_has_only_the_percent_thresholds():
-    """Limite noto, FUORI da questo incarico: jht-wrapper.ps1 rifiuta ancora sotto il 3%
-    senza i byte (non si puo' eseguire su un Mac). Se qualcuno lo allinea, questo test
-    va riscritto per confrontare anche i KiB."""
-    hv = load_vitals()
+def ps1_constants() -> dict:
     ps1 = WRAPPER_PS1.read_text(encoding="utf-8")
-    assert f"$DiskWarnFreePermille = {int(hv.DISK_WARN_FREE_PCT * 10)}\n" in ps1
-    assert f"$DiskBlockFreePermille = {int(hv.DISK_BLOCK_FREE_PCT * 10)}\n" in ps1
-    assert "Kib" not in ps1 and "KiB" not in ps1
+    values = dict(re.findall(r"^\$(Disk(?:Warn|Block)Free(?:Permille|Kib)) = (\d+)$", ps1, re.M))
+    assert set(values) == {"DiskWarnFreePermille", "DiskWarnFreeKib", "DiskBlockFreePermille", "DiskBlockFreeKib"}, values
+    return {k: int(v) for k, v in values.items()}
+
+
+def ps1_level(free_bytes: int, total_bytes: int) -> str:
+    """Esegue in Python le DUE condizioni di `Get-DiskLevelOf` del ps1, lette come testo.
+
+    Il ps1 non si puo' eseguire qui (niente pwsh): si traducono gli operatori
+    (-lt -> <, -and -> and, [long] tolto) e si valuta la stessa riga sugli
+    stessi casi di Python, JS e bash. Un confronto cambiato nel ps1 cambia
+    l'esito qui.
+    """
+    ps1 = WRAPPER_PS1.read_text(encoding="utf-8")
+    body = ps1[ps1.index("function Get-DiskLevelOf"):]
+    body = body[: body.index("\n}\n")]
+    names = {**ps1_constants(), "Free": free_bytes, "Total": total_bytes}
+    for condition, level in re.findall(r"if \((.*)\) \{ return '(\w+)' \}", body):
+        expr = condition.replace("[long]", "").replace("-lt", "<").replace("-and", " and ")
+        expr = re.sub(r"\$(\w+)", lambda m: f"names[{m.group(1)!r}]", expr)
+        assert re.fullmatch(r"[\w\s\[\]'()*<>]+", expr), expr
+        if eval(expr, {"__builtins__": {}}, {"names": names}):  # noqa: S307 - testo del nostro file
+            return level
+    return "ok"
+
+
+def test_powershell_wrapper_has_the_same_combined_thresholds_as_the_other_three():
+    """Il ps1 qui non gira: il confronto e' sul TESTO (costanti uguali, stesse condizioni).
+    Niente parita' Windows dichiarata: il bundle NSIS verde non prova questo."""
+    hv = load_vitals()
+    values = ps1_constants()
+    assert values["DiskWarnFreePermille"] == int(hv.DISK_WARN_FREE_PCT * 10)
+    assert values["DiskBlockFreePermille"] == int(hv.DISK_BLOCK_FREE_PCT * 10)
+    assert values["DiskWarnFreeKib"] == hv.DISK_WARN_FREE_BYTES // 1024
+    assert values["DiskBlockFreeKib"] == hv.DISK_BLOCK_FREE_BYTES // 1024
+    sh = WRAPPER_SH.read_text(encoding="utf-8")
+    assert f"DISK_WARN_FREE_KIB={values['DiskWarnFreeKib']}\n" in sh
+    assert f"DISK_BLOCK_FREE_KIB={values['DiskBlockFreeKib']}\n" in sh
+    ps1 = WRAPPER_PS1.read_text(encoding="utf-8")
+    level = ps1[ps1.index("function Get-DiskLevelOf"):]
+    level = level[: level.index("\n}\n")]
+    assert "-le" not in level and "-ge" not in level and "-or" not in level, "confronti stretti, e percentuale E byte"
+    assert level.count("-and") == 2 and level.count("-lt") == 4
+    assert "[Math]::Floor" not in level, "la decisione e' in interi, senza virgola mobile"
+
+
+@pytest.mark.parametrize("name,total_gib,free_kib,expected", LEVEL_CASES, ids=LEVEL_IDS)
+def test_powershell_conditions_give_the_same_level_on_the_same_cases(name, total_gib, free_kib, expected):
+    assert ps1_level(free_kib * 1024, total_gib * GIB_KIB * 1024) == expected
+
+
+def test_powershell_refuses_only_on_a_measure_that_says_low_and_says_so_in_the_message():
+    ps1 = WRAPPER_PS1.read_text(encoding="utf-8")
+    low = ps1[ps1.index("function Get-DiskLowPermille"):]
+    low = low[: low.index("\n}\n")]
+    assert "Get-DiskLevelOf" in low and "-eq 'low'" in low and "return $null" in low
+    assert "meno di 8 GiB" in ps1[ps1.index("disk_low: meno del 3%"):][:200]
+    # il commento che diceva «stesse soglie» quando non lo erano non c'e' piu'
+    assert "NON E' MAI STATO ESEGUITO" in ps1
 
 
 @pytest.mark.skipif(not shutil.which("node"), reason="node non c'e'")
