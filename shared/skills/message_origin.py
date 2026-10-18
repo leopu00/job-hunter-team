@@ -194,10 +194,16 @@ _ANY_MARK_RE = re.compile(r"\s*\[!(?:UNVERIFIED SENDER|RELAYED|UNFENCED)\]")
 # stessa funzione, un solo punto. Non tocca le altre buste (`[TG-DOC]`, i marker
 # di sistema, i messaggi fra agenti): la loro parte non-trusted è già trattata
 # da chi le compone.
+# `[TG-EDITED]` is what the Telegram bridge puts in front of a message the user EDITED
+# (tg-bridge.py `dispatch_update`): a new turn, with the user's text after it. The bridge
+# also puts it in front of an attachment envelope (`[TG-EDITED] [TG-DOC] path=…`), whose
+# fields it composed itself: that one is left as it is, like every other `[TG-*]` envelope.
+# A user's own text can never start with `[TG-`: the bridge marks it `[USER TEXT]`.
 USER_TURN_RE = re.compile(
-    r"^(\s*\[@utente\s*->\s*@[A-Za-z0-9_-]+\]\s*\[(?:CHAT|TG)\])(?:\s+(.*))?\Z",
+    r"^(\s*\[@utente\s*->\s*@[A-Za-z0-9_-]+\]\s*\[(?:CHAT|TG|TG-EDITED)\])(?:\s+(.*))?\Z",
     re.DOTALL,
 )
+_EDITED_TAG_RE = re.compile(r"\[TG-EDITED\]\Z")
 
 
 def fence_user_turn_message(message):
@@ -206,6 +212,8 @@ def fence_user_turn_message(message):
     if not found:
         return message
     head, text = found.group(1), found.group(2) or ""
+    if _EDITED_TAG_RE.search(head) and text.lstrip().startswith("[TG-"):
+        return message           # an edited attachment: the bridge composed it
     try:
         import sys as _sys
 
