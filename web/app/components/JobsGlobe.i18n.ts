@@ -36,6 +36,15 @@ export const T = {
     fr: "à distance",
     pt: "remoto",
   },
+  remote_legend: {
+    it: "Anello azzurro: posizioni da remoto",
+    en: "Blue ring: fully remote positions",
+    hu: "Kék gyűrű: teljes távmunka",
+    es: "Anillo azul: puestos 100 % remotos",
+    de: "Blauer Ring: reine Remote-Stellen",
+    fr: "Anneau bleu : postes 100 % à distance",
+    pt: "Anel azul: vagas 100 % remotas",
+  },
   overview: {
     it: "Vista generale",
     en: "Overview",

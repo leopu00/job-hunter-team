@@ -10,6 +10,7 @@ import { useTheme } from "@/app/theme-provider";
 import { useLocale } from "@/lib/use-locale";
 import { UNCATEGORIZED_LABEL } from "@/lib/position-classifier";
 import { bestViewport } from "@/lib/globe-viewport";
+import { groupLabel } from "@/lib/globe-label-placement";
 import { attachTouchAxisLock } from "@/lib/globe-touch-axis-lock";
 import { ensureMaplibreWorkerUrl } from "@/lib/maplibre-worker";
 import { scoreToRgb, scoreSpectrumCss } from "@/lib/score-color";
@@ -1516,12 +1517,7 @@ export default function JobsGlobe({
         iconId: g.iconId,
         count: g.count,
         topScore: g.topScore,
-        label:
-          g.count > 1
-            ? g.remote
-              ? `${g.count} · ${tr("remote")}`
-              : String(g.count)
-            : "",
+        label: groupLabel(g.count, g.remote, tr("remote")),
       },
     }));
     src.setData({ type: "FeatureCollection", features });
@@ -1548,6 +1544,9 @@ export default function JobsGlobe({
   }
 
   const remoteCount = data.filter((d) => d.is_remote).length;
+  const hasRemoteGroups = displayData.some(
+    (d) => d.remote_type === "full_remote",
+  );
 
   function flyToAll() {
     const map = mapRef.current;
@@ -1955,6 +1954,39 @@ export default function JobsGlobe({
             </div>
 
             {bottomCenterExtra}
+
+            {/* Chiave dell'anello azzurro: «2 remote» senza spiegazione non
+                dice che il fascio sta per posizioni senza sede. */}
+            {hasRemoteGroups && (
+              <div
+                className="hidden md:flex items-center gap-2 text-[10px]"
+                title={tr("remote_legend")}
+                style={{
+                  height: 44,
+                  padding: "0 14px",
+                  background: "var(--color-panel)",
+                  border: "1px solid var(--color-border)",
+                  borderRadius: 9999,
+                role="note"
+                  boxShadow: "0 4px 12px rgba(0,0,0,0.4)",
+                  color: "var(--color-muted)",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                <svg width="16" height="8" viewBox="0 0 16 8" aria-hidden>
+                  <ellipse
+                    cx="8"
+                    cy="4"
+                    rx="6.5"
+                    ry="2.8"
+                    fill="none"
+                    stroke={`rgb(${REMOTE_RING_RGB})`}
+                    strokeWidth="1.2"
+                  />
+                </svg>
+                {tr("remote")}
+              </div>
+            )}
           </div>
         )}
 
