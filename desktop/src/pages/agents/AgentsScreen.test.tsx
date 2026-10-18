@@ -39,6 +39,7 @@ function message(over: Partial<PendingMessage>): PendingMessage {
 }
 
 const DATA: AgentsData = {
+  states: null,
   team: {
     isRunning: true,
     heartbeatAt: new Date().toISOString(),
@@ -116,5 +117,50 @@ describe("AgentsScreen", () => {
     render(<AgentsScreen data={DATA} selected={byRole("capitano")} />);
     await user.click(screen.getByTestId("agent-mentor"));
     expect(currentLocation()).toEqual({ path: "/agents", search: "?agent=mentor" });
+  });
+
+  describe("the state line", () => {
+    const now = Date.now();
+    const withStates = (agents: NonNullable<AgentsData["states"]>["agents"]): AgentsData => ({
+      ...DATA,
+      states: { at: now, agents },
+    });
+
+    it("tells an agent that is blocked, waits for the person or never started, in one line each", () => {
+      render(
+        <AgentsScreen
+          selected={byRole("scout")}
+          data={withStates({
+            capitano: { status: "paused", state: "bloccato", reason: "limite_5h", until: now + 3_600_000, since: now - 60_000 },
+            "scout-1": { status: "idle", state: "aspetta_umano", since: now - 5 * 60_000 },
+            assistente: { status: "idle", state: "avviato_mai_partito", since: now - 10 * 60_000 },
+          })}
+        />,
+      );
+      const list = screen.getByRole("navigation", { name: "Agenti del team" });
+      expect(within(list).getByTestId("agent-state-capitano")).toHaveTextContent(/⏸/);
+      expect(within(list).getByTestId("agent-state-capitano").textContent).toMatch(/5/);
+      expect(within(list).getByTestId("agent-state-scout")).toHaveTextContent("✋");
+      expect(within(list).getByTestId("agent-state-assistente")).toHaveTextContent("◌");
+    });
+
+    it("says nothing for an agent that is working or free, and for one the box does not speak of", () => {
+      render(
+        <AgentsScreen
+          selected={byRole("scout")}
+          data={withStates({
+            capitano: { status: "working", state: "lavora", since: now - 60_000 },
+            "scout-1": { status: "idle", state: "idle", since: now - 60_000 },
+            "analista-1": { status: "working" },
+          })}
+        />,
+      );
+      for (const role of ["capitano", "scout", "analista", "mentor"]) expect(screen.queryByTestId(`agent-state-${role}`)).toBeNull();
+    });
+
+    it("an old box that only has throttled still tells the pause", () => {
+      render(<AgentsScreen selected={byRole("scout")} data={withStates({ "scorer-1": { status: "throttled", throttleUntil: now + 120_000 } })} />);
+      expect(screen.getByTestId("agent-state-scorer")).toHaveTextContent("⏸");
+    });
   });
 });

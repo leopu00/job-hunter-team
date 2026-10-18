@@ -10,6 +10,7 @@ import {
   HEARTBEAT_STALE_MS,
   lastActivity,
   loadAgents,
+  stateOfRole,
   MESSAGES_SELECT,
   MOVES_PER_ROLE,
   threadOf,
@@ -190,6 +191,7 @@ describe("agentLed", () => {
 describe("activity and chat", () => {
   const data: AgentsData = {
     team: team(),
+    states: null,
     moves: { capitano: [{ ts: "2026-09-27T08:00:00Z", actor: "capitano", from: null, to: "new", positionId: null, legacyId: 1, title: null, company: null }] } as AgentsData["moves"],
     messages: [
       message({ id: "u", author: "user", created_at: "2026-09-27T09:30:00Z", acknowledged_at: "2026-09-27T09:30:00Z" }),
@@ -209,5 +211,62 @@ describe("activity and chat", () => {
     expect(threadOf(data.messages, "capitano").map((m) => m.id)).toEqual(["a1", "a2", "u"]);
     expect(unreadCount(data.messages, "capitano")).toBe(1);
     expect(unreadCount(data.messages, "mentor")).toBe(1);
+  });
+});
+
+describe("what each agent is doing", () => {
+  const AT = new Date().toISOString();
+  const status = (agents: Record<string, unknown>) => ({ agents_status: { tui: { at: AT, agents } } });
+  const since = "2026-09-27T09:00:00Z";
+
+  it("reads agents_status in a query of its own, with the user's id", async () => {
+    const { client, queries } = fakeSupabase(
+      (q) => (q.table === "team_state" && String(q.op("select")?.[0]) === "agents_status"
+        ? { data: status({ capitano: { status: "paused", since, state: "bloccato", reason: "limite_5h" } }), error: null }
+        : answer(q)),
+      "user-a",
+    );
+    const data = await loadAgents(client);
+    expect(data.states?.agents.capitano).toMatchObject({ state: "bloccato", reason: "limite_5h" });
+    const own = queries.find((q) => q.table === "team_state" && String(q.op("select")?.[0]) === "agents_status");
+    expect(own?.op("eq")).toEqual(["user_id", "user-a"]);
+  });
+
+  it("a cloud without the column costs the state lines only, never the page", async () => {
+    const { client } = fakeSupabase((q) =>
+      q.table === "team_state" && String(q.op("select")?.[0]) === "agents_status"
+        ? { data: null, error: { message: "column team_state.agents_status does not exist" } }
+        : answer(q));
+    const data = await loadAgents(client);
+    expect(data.states).toBeNull();
+    expect(data.team?.isRunning).toBe(true);
+  });
+
+  it("a role takes the state of its instances that needs a look first", () => {
+    const at = Date.parse(AT);
+    const states = {
+      at,
+      agents: {
+        "scout-1": { status: "working" as const, state: "lavora" as const },
+        "scout-2": { status: "paused" as const, state: "bloccato" as const, reason: "limite_5h" },
+        "scout-3": { status: "idle" as const, state: "idle" as const },
+        capitano: { status: "idle" as const, state: "avviato_mai_partito" as const },
+        "analista-1": { status: "working" as const },
+      },
+    };
+    expect(stateOfRole(states, "scout")).toMatchObject({ state: "bloccato", reason: "limite_5h" });
+    expect(stateOfRole(states, "capitano")).toMatchObject({ state: "avviato_mai_partito" });
+    // an old box says only working: no state is invented from it
+    expect(stateOfRole(states, "analista")).toBeNull();
+    expect(stateOfRole(states, "mentor")).toBeNull();
+    expect(stateOfRole(null, "scout")).toBeNull();
+    // a role is not the prefix of another
+    expect(stateOfRole({ at, agents: { "scorer-1": { status: "idle", state: "idle" } } }, "scout")).toBeNull();
+  });
+
+  it("a pacing pause published the old way is a block for pacing", () => {
+    const at = Date.parse(AT);
+    const info = stateOfRole({ at, agents: { "scorer-2": { status: "throttled", throttleUntil: at + 90_000 } } }, "scorer");
+    expect(info).toMatchObject({ state: "bloccato", reason: "pausa_pacing", until: at + 90_000 });
   });
 });
