@@ -285,6 +285,19 @@ const BROWSER_REPLY = copy(
   "Try again. If it happens again, close the assisted browser and open it again.",
 );
 
+const BROWSER_RUNTIME_CHANGED = copy(
+  "Il browser assistito sulla VPS non è più quello preparato per questa squadra, quindi non lo uso.",
+  "Chiedi a chi gestisce la VPS di prepararlo di nuovo, poi riapri il browser assistito.",
+  "The assisted browser on the VPS is no longer the one set up for this team, so I do not use it.",
+  "Ask whoever manages the VPS to set it up again, then open the assisted browser again.",
+);
+const HOST_KEY_UNREADABLE = copy(
+  "Non riesco a leggere l’identità SSH della VPS.",
+  "Controlla host e porta, poi riprova.",
+  "I cannot read the VPS SSH identity.",
+  "Check host and port, then try again.",
+);
+
 export const UNKNOWN_ERROR: ErrorCopy = RETRY;
 
 export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
@@ -614,6 +627,16 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
   browser_response_invalid: BROWSER_REPLY,
   browser_response_too_large: BROWSER_REPLY,
   browser_response_binding_mismatch: BROWSER_REPLY,
+  // The bridge on the VPS (closer_desktop_bridge.py) and its bounded transport.
+  browser_transport_timeout: TIMEOUT,
+  browser_container_mismatch: BROWSER_RUNTIME_CHANGED,
+  browser_image_mismatch: BROWSER_RUNTIME_CHANGED,
+  // The assisted browser panel itself (closer-desktop/session.ts, lib/closer-desktop.ts).
+  desktop_request_denied: BROWSER_REPLY,
+  desktop_descriptor_unavailable: BROWSER_REPLY,
+  desktop_frame_invalid: BROWSER_REPLY,
+  desktop_snapshot_invalid: BROWSER_REPLY,
+  desktop_image_invalid: BROWSER_REPLY,
   browser_runtime_binding_required: copy(
     "Il browser assistito non è ancora pronto per questa squadra.",
     "Funziona con una squadra su VPS: chiedi a chi gestisce la VPS di prepararlo, poi riapri il browser assistito.",
@@ -787,12 +810,9 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
   invalid_key_path: SSH_KEY_FILE,
   invalid_key: SSH_KEY_FILE,
   key_unavailable: SSH_KEY_FILE,
-  host_key_unavailable: copy(
-    "Non riesco a leggere l’identità SSH della VPS.",
-    "Controlla host e porta, poi riprova.",
-    "I cannot read the VPS SSH identity.",
-    "Check host and port, then try again.",
-  ),
+  host_key_unavailable: HOST_KEY_UNREADABLE,
+  // The VPS registration of the assisted browser: a probe whose fingerprint is not an ed25519 SHA-256.
+  ssh_host_key_invalid: HOST_KEY_UNREADABLE,
   host_key_missing: copy(
     "L’identità SSH della VPS non è ancora stata confermata.",
     "Conferma l’impronta della VPS prima di continuare.",

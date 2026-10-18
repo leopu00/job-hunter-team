@@ -7,6 +7,7 @@ import { ONBOARDING_TEXT } from "./onboarding.i18n";
 import { ASSISTANCE_TEXT } from "./assistance.i18n";
 import { registerAssistanceHost, type AssistanceHost } from "../lib/closer-desktop-connection";
 import type { OnboardingFlowProps } from "../lib/onboarding";
+import { ERROR_CATALOG, describeError } from "../lib/error-catalog";
 
 const native = vi.hoisted(() => ({ invoke: vi.fn(), isTauri: () => true, Channel: class {} }));
 vi.mock("@tauri-apps/api/core", () => native);
@@ -143,6 +144,38 @@ describe("official FIRSTSETUP assistance connection", () => {
       expect(onOpen).not.toHaveBeenCalled();
     },
   );
+  // Each code the registration can meet: the native reply, the SSH host-key commands (which
+  // reject with { code }), and the panel's own codes. The catalog's sentence, never the code alone.
+  it.each([
+    ["browser_busy", async (op: string) => op === "closer_desktop_register_host" ? { ok: false, error: "browser_busy" } : null],
+    ["invalid_host", async (op: string) => op === "closer_desktop_register_host" ? { ok: false, error: "invalid_host" } : null],
+    ["ssh_host_key_invalid", async (op: string) => op === "closer_desktop_register_host"
+      ? { ok: false, error: "host_key_missing" } : { ...fingerprint, algorithm: "ssh-rsa" }],
+    ["host_key_changed", async (op: string) => {
+      if (op === "closer_desktop_register_host") return { ok: false, error: "host_key_missing" };
+      if (op === "onboarding_ssh_host_key_probe") return fingerprint;
+      throw { code: "host_key_changed" };
+    }],
+    ["desktop_transport_unavailable", async () => { throw new Error("synthetic sensitive transport detail"); }],
+  ])("shows the catalog sentence for %s, in the person's language", async (code, reply) => {
+    native.invoke.mockImplementation(reply);
+    render(<FirstSetupAssistance host={host} locale="de" onOpen={vi.fn()} />);
+    await userEvent.click(screen.getByRole("button", { name: ASSISTANCE_TEXT.de.connect }));
+    if (code === "host_key_changed")
+      await userEvent.click(await screen.findByRole("button", { name: ONBOARDING_TEXT.de.confirmFingerprint }));
+    const expected = describeError(code, { locale: "de" });
+    expect(expected.known).toBe(true);
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent(`${ASSISTANCE_TEXT.de.unavailable} ${expected.text} ${expected.action} (${code})`);
+    expect(alert).not.toHaveTextContent("synthetic sensitive");
+  });
+  it("shows the generic catalog sentence for a code the catalog does not have", async () => {
+    native.invoke.mockResolvedValue({ ok: false, error: "brand_new_registration_code" });
+    render(<FirstSetupAssistance host={host} locale="en" onOpen={vi.fn()} />);
+    await userEvent.click(screen.getByRole("button", { name: ASSISTANCE_TEXT.en.connect }));
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      `${ERROR_CATALOG.unknown.text.en} ${ERROR_CATALOG.unknown.action.en} (brand_new_registration_code)`);
+  });
   it("never exposes native diagnostics in the registration reply", async () => {
     native.invoke.mockRejectedValue(new Error("synthetic sensitive transport detail"));
     expect(await registerAssistanceHost(host)).toEqual({ ok: false, error: "desktop_transport_unavailable" });

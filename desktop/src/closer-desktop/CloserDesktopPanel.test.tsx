@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import CloserDesktopPanel, { displayPoint } from "./CloserDesktopPanel";
 import { descriptor, frame } from "./fixtures.test-support";
 import type { DesktopRequest } from "../lib/closer-desktop";
+import { ERROR_CATALOG, describeError } from "../lib/error-catalog";
 
 beforeEach(() => { vi.useFakeTimers(); localStorage.setItem("jht-lang", "en"); });
 afterEach(() => { cleanup(); vi.useRealTimers(); localStorage.clear(); });
@@ -55,6 +56,30 @@ describe("Team assisted browser panel", () => {
     expect(screen.queryByRole("img")).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Close view" })); expect(close).toHaveBeenCalledOnce();
     expect(transport.mock.calls.every(([r]) => r.op === "descriptor")).toBe(true);
+  });
+  // Codes from the native bridge, the VPS bridge and the panel itself: each one shows the catalog's
+  // sentence and action in the person's language, never only the code.
+  it.each([
+    ["browser_busy", { ok: false, error: "browser_busy" }],
+    ["browser_container_mismatch", { ok: false, error: "browser_container_mismatch" }],
+    ["browser_transport_timeout", { ok: false, error: "browser_transport_timeout" }],
+    ["desktop_request_denied", { ok: false }],
+    ["desktop_descriptor_unavailable", { ok: true, phase: "running" }],
+  ])("shows the catalog sentence for %s", async (code, reply) => {
+    localStorage.setItem("jht-lang", "it");
+    render(<CloserDesktopPanel onClose={vi.fn()} transport={vi.fn(async () => reply)} />); await advance();
+    const expected = describeError(code, { locale: "it" });
+    expect(expected.known).toBe(true);
+    const status = screen.getByRole("status");
+    expect(status).toHaveTextContent(`${expected.text} ${expected.action} (${code})`);
+    expect(status).not.toHaveTextContent("Desktop non disponibile (");
+  });
+  it("shows the generic catalog sentence for a code the catalog does not have", async () => {
+    render(<CloserDesktopPanel onClose={vi.fn()}
+      transport={vi.fn(async () => ({ ok: false, error: "interactive_state_busy" }))} />); await advance();
+    expect("interactive_state_busy" in ERROR_CATALOG).toBe(false);
+    expect(screen.getByRole("status"))
+      .toHaveTextContent(`${ERROR_CATALOG.unknown.text.en} ${ERROR_CATALOG.unknown.action.en} (interactive_state_busy)`);
   });
   it("maps letterboxed coordinates and rejects outside pixels", () => {
     const rect = { left: 10, top: 10, width: 1000, height: 1000 } as DOMRect;
