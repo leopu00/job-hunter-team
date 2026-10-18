@@ -825,7 +825,19 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
     "Ask whoever manages the VPS to enable an ed25519 SSH key, then try again.",
   ),
   // install.sh on a VPS, with its own exit: what stops rootless Podman there, for the administrator.
-  podman_missing: copy(
+  podman_install_failed: copy(
+    "Sulla VPS non sono riuscito a installare Podman.",
+    "Chiedi a chi gestisce la VPS di installare a mano podman, podman-compose e uidmap, poi riprova.",
+    "I could not install Podman on the VPS.",
+    "Ask whoever manages the VPS to install podman, podman-compose and uidmap by hand, then try again.",
+  ),
+  podman_sudo_required: copy(
+    "Sulla VPS il tuo utente non può installare Podman: sudo chiede una password o non c’è.",
+    "Chiedi a chi gestisce la VPS di darti sudo senza password, oppure di installare a mano podman, podman-compose e uidmap, poi riprova.",
+    "On the VPS your user cannot install Podman: sudo asks for a password or is not there.",
+    "Ask whoever manages the VPS to give you sudo without a password, or to install podman, podman-compose and uidmap by hand, then try again.",
+  ),
+  vps_podman_missing: copy(
     "Sulla VPS manca Podman, che serve per far girare il team.",
     "Chiedi a chi gestisce la VPS di installare Podman, poi riprova.",
     "Podman is not installed on the VPS, and the team needs it to run.",

@@ -1960,11 +1960,15 @@ const REMOTE_INSTALL_DIGEST_MISMATCH_EXIT: i32 = 87;
 const REMOTE_INSTALL_RUNTIME: &str = " --runtime podman";
 /// What install.sh says, with its own exit, when the VPS cannot run rootless
 /// Podman. Each is something only the VPS administrator can fix, so each has
-/// its own sentence in the catalog. install.sh also writes `JHT_ERROR <code>`
+/// its own sentence in the catalog (90 is install.sh's podman_missing: on a
+/// VPS the app cannot install Podman by itself, as it does on this computer,
+/// so it has its own code). install.sh also writes `JHT_ERROR <code>`
 /// on stderr, but the remote stderr never reaches this layer: the exit is
 /// the sign.
-const REMOTE_INSTALL_PODMAN_EXITS: [(i32, &str); 8] = [
-    (90, "podman_missing"),
+const REMOTE_INSTALL_PODMAN_EXITS: [(i32, &str); 10] = [
+    (88, "podman_install_failed"),
+    (89, "podman_sudo_required"),
+    (90, "vps_podman_missing"),
     (91, "podman_rootful_refused"),
     (92, "podman_compose_missing"),
     (93, "podman_version_unsupported"),
@@ -5730,7 +5734,9 @@ mod tests {
             (exited(255), "ssh_unavailable"),
             (exited(87), "installer_digest_mismatch"),
             (exited(86), "installer_digest_missing"),
-            (exited(90), "podman_missing"),
+            (exited(88), "podman_install_failed"),
+            (exited(89), "podman_sudo_required"),
+            (exited(90), "vps_podman_missing"),
             (exited(91), "podman_rootful_refused"),
             (exited(92), "podman_compose_missing"),
             (exited(93), "podman_version_unsupported"),
