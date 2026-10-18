@@ -177,9 +177,57 @@ MARKS = {
     RELAYED: "[!RELAYED]",
 }
 
+UNFENCED_MARK = "[!UNFENCED]"
+
 # Marchio riconosciuto in ingresso per essere TOLTO: nessuno deve potersi
 # timbrare da solo, né apporre un timbro a un altro.
-_ANY_MARK_RE = re.compile(r"\s*\[!(?:UNVERIFIED SENDER|RELAYED)\]")
+_ANY_MARK_RE = re.compile(r"\s*\[!(?:UNVERIFIED SENDER|RELAYED|UNFENCED)\]")
+
+# ── JHT-T21 · il testo dell'utente non entra nel pane com'è ─────────────────
+# Il turno che il daemon della chat (o il gioco) consegna ha la forma
+# `[@utente -> @agente] [CHAT] <testo>` oppure `... [TG] <testo>`. La busta e il
+# tag li compone il codice, il testo è dell'utente — o di chi gli ha scritto, o
+# di una pagina che ha incollato. Il trasporto digita tutto con `send-keys -l`,
+# quindi un a capo, un ESC o un ritorno carrello del testo arrivano alla TUI
+# come tasti, e una riga che comincia con `[@x -> @y]` si legge come un collega.
+# Il testo viene recintato qui, dove la provenienza della busta si decide già:
+# stessa funzione, un solo punto. Non tocca le altre buste (`[TG-DOC]`, i marker
+# di sistema, i messaggi fra agenti): la loro parte non-trusted è già trattata
+# da chi le compone.
+# `[TG-EDITED]` is what the Telegram bridge puts in front of a message the user EDITED
+# (tg-bridge.py `dispatch_update`): a new turn, with the user's text after it. The bridge
+# also puts it in front of an attachment envelope (`[TG-EDITED] [TG-DOC] path=…`), whose
+# fields it composed itself: that one is left as it is, like every other `[TG-*]` envelope.
+# A user's own text can never start with `[TG-`: the bridge marks it `[USER TEXT]`.
+USER_TURN_RE = re.compile(
+    r"^(\s*\[@utente\s*->\s*@[A-Za-z0-9_-]+\]\s*\[(?:CHAT|TG|TG-EDITED)\])(?:\s+(.*))?\Z",
+    re.DOTALL,
+)
+_EDITED_TAG_RE = re.compile(r"\[TG-EDITED\]\Z")
+
+
+def fence_user_turn_message(message):
+    """Il messaggio con il testo dell'utente recintato; gli altri, identici."""
+    found = USER_TURN_RE.match(message or "")
+    if not found:
+        return message
+    head, text = found.group(1), found.group(2) or ""
+    if _EDITED_TAG_RE.search(head) and text.lstrip().startswith("[TG-"):
+        return message           # an edited attachment: the bridge composed it
+    try:
+        import sys as _sys
+
+        here = os.path.dirname(os.path.abspath(__file__))
+        if here not in _sys.path:
+            _sys.path.insert(0, here)
+        from external_content import fence_user_turn
+
+        return f"{head} {fence_user_turn(text)}"
+    except Exception:
+        # Una difesa che non sa decidere deve dirlo, non tacere. Il testo non
+        # arriva comunque com'era: su una riga e senza comandi non si può
+        # garantire, quindi lo si segnala e basta.
+        return f"{head} {UNFENCED_MARK} {text}"
 
 
 def mark_message(message, trust):
@@ -277,7 +325,7 @@ def main(argv):
     # solo giro: chiedere due volte aprirebbe una finestra in cui l'elenco dei
     # pane cambia fra il controllo e la marcatura.
     print(f"{trust}\t{claimed or ''}\t{origin or ''}")
-    print(mark_message(message, trust), end="")
+    print(mark_message(fence_user_turn_message(message), trust), end="")
     return 0
 
 
