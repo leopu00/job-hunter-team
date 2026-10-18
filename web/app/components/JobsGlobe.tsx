@@ -635,6 +635,7 @@ export default function JobsGlobe({
   focusPosition = null,
   familyColors = {},
   showcase = null,
+  fitPaddingLeft = 0,
 }: {
   fullscreen?: boolean;
   selectedTypes?: string[];
@@ -657,7 +658,12 @@ export default function JobsGlobe({
   familyColors?: Record<string, string>;
   // Modalità vetrina della landing: vedi GlobeShowcase.
   showcase?: GlobeShowcase | null;
+  // Spazio a sinistra coperto da un pannello (px): i fitBounds lo aggiungono
+  // al loro padding, così i pin non finiscono sotto la colonna dei pannelli.
+  fitPaddingLeft?: number;
 } = {}) {
+  const fitPadLeftRef = useRef(fitPaddingLeft);
+  fitPadLeftRef.current = fitPaddingLeft;
   const { resolvedTheme } = useTheme();
   const locale = useLocale();
   // Sulla landing la lingua la sceglie il selettore della nav, non il
@@ -1226,7 +1232,12 @@ export default function JobsGlobe({
         const vp = bestViewport(g.positions);
         if (vp) {
           map.fitBounds(vp.bounds, {
-            padding: { top: 140, bottom: 90, left: 90, right: 90 },
+            padding: {
+              top: 140,
+              bottom: 90,
+              left: 90 + fitPadLeftRef.current,
+              right: 90,
+            },
             duration: profileRef.current.flyDuration,
             maxZoom: 14,
           });
@@ -1544,7 +1555,12 @@ export default function JobsGlobe({
     const vp = bestViewport(displayData);
     if (!vp) return;
     map.fitBounds(vp.bounds, {
-      padding: { top: 60, bottom: 60, left: 60, right: 60 },
+      padding: {
+        top: 60,
+        bottom: 60,
+        left: 60 + fitPadLeftRef.current,
+        right: 60,
+      },
       duration: profileRef.current.flyDuration,
       maxZoom: 7,
       // Reset anche dell'inclinazione (pitch) e dell'orientamento
@@ -1597,7 +1613,12 @@ export default function JobsGlobe({
     const vp = bestViewport(displayData);
     if (!vp) return;
     map.fitBounds(vp.bounds, {
-      padding: { top: 80, bottom: 80, left: 80, right: 80 },
+      padding: {
+        top: 80,
+        bottom: 80,
+        left: 80 + fitPadLeftRef.current,
+        right: 80,
+      },
       duration: profileRef.current.flyDuration,
       // maxZoom city-level (era 7 = livello stato): filtrando una città
       // si scende fino allo zoom città; per insiemi più ampi (paese,

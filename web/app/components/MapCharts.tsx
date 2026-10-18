@@ -2,8 +2,10 @@
 
 import { scoreSpectrumCss } from "@/lib/score-color";
 
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { RAIL_QUERY, railClearance } from "@/lib/map-panels-layout";
 import { useLocale } from "@/lib/use-locale";
+import { useMediaQuery } from "@/lib/use-media-query";
 import {
   UNCATEGORIZED_LABEL,
   type RoleFamilyCount,
@@ -108,8 +110,31 @@ export default function MapCharts({
     donut: boolean;
     remote: boolean;
   }>({ location: true, score: true, donut: true, remote: true });
+  // Finestra media: i pannelli stanno in una colonna a sinistra (vedi
+  // lib/map-panels-layout.ts) e se ne apre uno per volta, altrimenti due
+  // aperti superano l'altezza della mappa. Altrove restano indipendenti.
+  const railMode = useMediaQuery(RAIL_QUERY);
+  const shellRef = useRef<HTMLDivElement>(null);
+  const [railPadding, setRailPadding] = useState(0);
+  useEffect(() => {
+    if (!railMode) {
+      setRailPadding(0);
+      return;
+    }
+    const el = shellRef.current;
+    if (!el) return;
+    const measure = () => setRailPadding(railClearance(el.clientWidth));
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [railMode]);
   const toggleCollapse = (k: "location" | "score" | "donut" | "remote") =>
-    setCollapsed((c) => ({ ...c, [k]: !c[k] }));
+    setCollapsed((c) =>
+      railMode && c[k]
+        ? { location: true, score: true, donut: true, remote: true, [k]: false }
+        : { ...c, [k]: !c[k] },
+    );
   // MOBILE: nasconde in blocco la colonna delle 4 card (classe
   // map-card-offscreen, attiva solo nella media query di page.tsx) —
   // stesso pulsante per mostrare/nascondere, così il globo può prendersi
@@ -551,11 +576,13 @@ export default function MapCharts({
           flex dei controlli mappa (Vista generale + zoom) in basso-
           centro → l'insieme si ricentra da solo quando compare. */}
       <div
+        ref={shellRef}
         className="map-globe-layer"
         style={{ position: "absolute", inset: 0, zIndex: 0 }}
       >
         <JobsGlobeLazy
           fullscreen
+          fitPaddingLeft={railPadding}
           selectedTypes={selectedTypes}
           // Il globo filtra i pin per range: la soglia di default gli arriva
           // tradotta in un range aperto verso l'alto, altrimenti resterebbero
@@ -593,310 +620,316 @@ export default function MapCharts({
         />
       </div>
 
-      {/* Card Score top-right: header collassabile + grafico. */}
-      <div
-        className={
-          "map-float-card map-card-score bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg" +
-          offscreen
-        }
-        style={{
-          position: "absolute",
-          top: CARD_TOP,
-          right: CARD_SIDE,
-          width: CARD_W,
-          height: collapsed.score ? "auto" : CARD_H,
-          maxWidth: CARD_MAXW,
-          zIndex: 10,
-          pointerEvents: "auto",
-          display: "flex",
-          flexDirection: "column",
-          overflow: "hidden",
-          boxShadow: "0 8px 24px rgba(0,0,0,0.4)",
-        }}
-      >
-        <CardHeader
-          title={scoreTitle}
-          collapsed={collapsed.score}
-          onToggle={() => toggleCollapse("score")}
-          tr={tr}
-        />
-        {!collapsed.score && (
-          <div
-            className="map-bare-chart"
-            style={{ flex: 1, minHeight: 0, padding: BODY_PAD }}
-          >
-            <ScoreDistributionHorizontal
-              scores={histogramScores}
-              title={scoreTitle}
-              emptyLabel={emptyLabel}
-              selectedRanges={selectedRanges}
-              onToggleRange={toggleRange}
-              unscoredCount={unscoredCount}
-              unscoredSelected={unscoredSelected}
-              onToggleUnscored={() => {
-                // Come per i bin: chiedere le non valutate mentre la soglia
-                // di default è attiva darebbe zero risultati.
-                setMinScore(null);
-                setUnscoredSelected((v) => !v);
-              }}
-              fit
-              // Area utile = box meno header e padding → riempie esatto.
-              fitAspect={
-                (CARD_W - 2 * BODY_PAD) / (CARD_H - HEADER_H - 2 * BODY_PAD)
-              }
-            />
-          </div>
-        )}
-      </div>
+      <div className="map-panels">
+        {/* Card Score top-right: header collassabile + grafico. */}
+        <div
+          className={
+            "map-float-card map-card-score bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg" +
+            offscreen
+          }
+          style={{
+            position: "absolute",
+            top: CARD_TOP,
+            right: CARD_SIDE,
+            width: CARD_W,
+            height: collapsed.score ? "auto" : CARD_H,
+            maxWidth: CARD_MAXW,
+            zIndex: 10,
+            pointerEvents: "auto",
+            display: "flex",
+            flexDirection: "column",
+            overflow: "hidden",
+            boxShadow: "0 8px 24px rgba(0,0,0,0.4)",
+          }}
+        >
+          <CardHeader
+            title={scoreTitle}
+            collapsed={collapsed.score}
+            onToggle={() => toggleCollapse("score")}
+            tr={tr}
+          />
+          {!collapsed.score && (
+            <div
+              className="map-bare-chart"
+              style={{ flex: 1, minHeight: 0, padding: BODY_PAD }}
+            >
+              <ScoreDistributionHorizontal
+                scores={histogramScores}
+                title={scoreTitle}
+                emptyLabel={emptyLabel}
+                selectedRanges={selectedRanges}
+                onToggleRange={toggleRange}
+                unscoredCount={unscoredCount}
+                unscoredSelected={unscoredSelected}
+                onToggleUnscored={() => {
+                  // Come per i bin: chiedere le non valutate mentre la soglia
+                  // di default è attiva darebbe zero risultati.
+                  setMinScore(null);
+                  setUnscoredSelected((v) => !v);
+                }}
+                fit
+                // Area utile = box meno header e padding → riempie esatto.
+                fitAspect={
+                  (CARD_W - 2 * BODY_PAD) / (CARD_H - HEADER_H - 2 * BODY_PAD)
+                }
+              />
+            </div>
+          )}
+        </div>
 
-      {/* Card "Posizioni" — overlay bottom-right. Elenco di TUTTE le
+        {/* Card "Posizioni" — overlay bottom-right. Elenco di TUTTE le
           posizioni che passano i filtri correnti (tipo+score+location),
           più recenti in cima. Mostra titolo, azienda, location, score e
           stato (come la tabella della pagina Posizioni). Click su una
           posizione con coordinate → zoom sul pin in mappa; remote →
           apre il dettaglio. */}
-      <div
-        className={
-          "map-float-card map-card-positions bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg" +
-          offscreen
-        }
-        style={{
-          position: "absolute",
-          bottom: CARD_BOTTOM,
-          right: CARD_SIDE,
-          zIndex: 10,
-          width: CARD_W,
-          maxWidth: CARD_MAXW,
-          height: collapsed.remote ? "auto" : CARD_H,
-          display: "flex",
-          flexDirection: "column",
-          pointerEvents: "auto",
-          boxShadow: "0 8px 24px rgba(0,0,0,0.4)",
-          overflow: "hidden",
-        }}
-      >
-        <CardHeader
-          title={tr("positions_title")}
-          meta={filteredPositions.length}
-          collapsed={collapsed.remote}
-          onToggle={() => toggleCollapse("remote")}
-          tr={tr}
-        />
-        {!collapsed.remote && (
-          <ul
-            className="divide-y overflow-y-auto"
-            style={{
-              borderColor: "var(--color-border)",
-              flex: 1,
-              minHeight: 0,
-              // Niente scroll-chaining alla pagina (mappa) a fine lista.
-              overscrollBehavior: "contain",
-            }}
-          >
-            {filteredPositions.length === 0 && (
-              <li
-                className="px-4 py-6 text-[11px] text-center"
-                style={{ color: "var(--color-dim)" }}
-              >
-                {tr("no_positions")}
-              </li>
-            )}
-            {filteredPositions.map((p) => {
-              const loc = p.remote
-                ? REMOTE_LABEL
-                : [p.loc_city, p.loc_country].filter(Boolean).join(", ") || "—";
-              const family = p.role_family ?? UNCATEGORIZED_LABEL;
-              const famColor =
-                typeDist.find((d) => d.family === family)?.color ??
-                "var(--color-muted)";
-              return (
-                <li key={p.id} style={{ borderColor: "var(--color-border)" }}>
-                  <button
-                    onClick={() => openPosition(p.id)}
-                    className="block w-full text-left px-4 py-2 hover:bg-[rgba(255,255,255,0.04)] transition-colors"
-                    style={{
-                      background: "transparent",
-                      border: "none",
-                      cursor: "pointer",
-                    }}
-                  >
-                    <div className="flex items-baseline justify-between gap-2">
-                      <span
-                        className="text-[11px] font-medium truncate"
-                        style={{ color: "var(--color-bright)" }}
-                        title={p.title ?? ""}
-                      >
-                        {p.title ?? tr("no_title")}
-                      </span>
-                      {typeof p.score === "number" ? (
-                        <span
-                          className="tabular-nums font-semibold flex-shrink-0 text-[11px]"
-                          style={{ color: scoreColor(p.score) }}
-                        >
-                          {p.score}
-                        </span>
-                      ) : (
-                        <span
-                          className="text-[9px] italic flex-shrink-0"
-                          style={{ color: "var(--color-dim)" }}
-                        >
-                          {tr("no_score")}
-                        </span>
-                      )}
-                    </div>
-                    <div
-                      className="text-[10px] truncate"
-                      style={{ color: "var(--color-muted)" }}
-                    >
-                      {p.company ?? "—"}
-                    </div>
-                    <div className="flex items-center justify-between gap-2 mt-0.5">
-                      <span
-                        className="text-[9px] truncate"
-                        style={{ color: "var(--color-dim)" }}
-                        title={loc}
-                      >
-                        {loc}
-                      </span>
-                      {/* Tipologia (role_family) col colore della donut. */}
-                      <span
-                        className="text-[9px] truncate flex items-center gap-1 flex-shrink-0"
-                        style={{ color: "var(--color-muted)", maxWidth: "55%" }}
-                        title={family}
-                      >
-                        <span
-                          aria-hidden
-                          style={{
-                            width: 6,
-                            height: 6,
-                            borderRadius: "50%",
-                            background: famColor,
-                            flexShrink: 0,
-                          }}
-                        />
-                        <span className="truncate">{family}</span>
-                      </span>
-                    </div>
-                  </button>
+        <div
+          className={
+            "map-float-card map-card-positions bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg" +
+            offscreen
+          }
+          style={{
+            position: "absolute",
+            bottom: CARD_BOTTOM,
+            right: CARD_SIDE,
+            zIndex: 10,
+            width: CARD_W,
+            maxWidth: CARD_MAXW,
+            height: collapsed.remote ? "auto" : CARD_H,
+            display: "flex",
+            flexDirection: "column",
+            pointerEvents: "auto",
+            boxShadow: "0 8px 24px rgba(0,0,0,0.4)",
+            overflow: "hidden",
+          }}
+        >
+          <CardHeader
+            title={tr("positions_title")}
+            meta={filteredPositions.length}
+            collapsed={collapsed.remote}
+            onToggle={() => toggleCollapse("remote")}
+            tr={tr}
+          />
+          {!collapsed.remote && (
+            <ul
+              className="divide-y overflow-y-auto"
+              style={{
+                borderColor: "var(--color-border)",
+                flex: 1,
+                minHeight: 0,
+                // Niente scroll-chaining alla pagina (mappa) a fine lista.
+                overscrollBehavior: "contain",
+              }}
+            >
+              {filteredPositions.length === 0 && (
+                <li
+                  className="px-4 py-6 text-[11px] text-center"
+                  style={{ color: "var(--color-dim)" }}
+                >
+                  {tr("no_positions")}
                 </li>
-              );
-            })}
-          </ul>
-        )}
-      </div>
+              )}
+              {filteredPositions.map((p) => {
+                const loc = p.remote
+                  ? REMOTE_LABEL
+                  : [p.loc_city, p.loc_country].filter(Boolean).join(", ") ||
+                    "—";
+                const family = p.role_family ?? UNCATEGORIZED_LABEL;
+                const famColor =
+                  typeDist.find((d) => d.family === family)?.color ??
+                  "var(--color-muted)";
+                return (
+                  <li key={p.id} style={{ borderColor: "var(--color-border)" }}>
+                    <button
+                      onClick={() => openPosition(p.id)}
+                      className="block w-full text-left px-4 py-2 hover:bg-[rgba(255,255,255,0.04)] transition-colors"
+                      style={{
+                        background: "transparent",
+                        border: "none",
+                        cursor: "pointer",
+                      }}
+                    >
+                      <div className="flex items-baseline justify-between gap-2">
+                        <span
+                          className="text-[11px] font-medium truncate"
+                          style={{ color: "var(--color-bright)" }}
+                          title={p.title ?? ""}
+                        >
+                          {p.title ?? tr("no_title")}
+                        </span>
+                        {typeof p.score === "number" ? (
+                          <span
+                            className="tabular-nums font-semibold flex-shrink-0 text-[11px]"
+                            style={{ color: scoreColor(p.score) }}
+                          >
+                            {p.score}
+                          </span>
+                        ) : (
+                          <span
+                            className="text-[9px] italic flex-shrink-0"
+                            style={{ color: "var(--color-dim)" }}
+                          >
+                            {tr("no_score")}
+                          </span>
+                        )}
+                      </div>
+                      <div
+                        className="text-[10px] truncate"
+                        style={{ color: "var(--color-muted)" }}
+                      >
+                        {p.company ?? "—"}
+                      </div>
+                      <div className="flex items-center justify-between gap-2 mt-0.5">
+                        <span
+                          className="text-[9px] truncate"
+                          style={{ color: "var(--color-dim)" }}
+                          title={loc}
+                        >
+                          {loc}
+                        </span>
+                        {/* Tipologia (role_family) col colore della donut. */}
+                        <span
+                          className="text-[9px] truncate flex items-center gap-1 flex-shrink-0"
+                          style={{
+                            color: "var(--color-muted)",
+                            maxWidth: "55%",
+                          }}
+                          title={family}
+                        >
+                          <span
+                            aria-hidden
+                            style={{
+                              width: 6,
+                              height: 6,
+                              borderRadius: "50%",
+                              background: famColor,
+                              flexShrink: 0,
+                            }}
+                          />
+                          <span className="truncate">{family}</span>
+                        </span>
+                      </div>
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </div>
 
-      {/* Tree gerarchico Location: country → city → posizioni.
+        {/* Tree gerarchico Location: country → city → posizioni.
           Ricalcolato client-side da allItemsLite con i filtri tipi+score
           applicati → count e nodi visibili riflettono le selezioni
           donut/histogram. Click su country/city = filtra la mappa E
           apre/chiude il drilldown. Click position → apre /positions/<id>. */}
-      {effectiveLocationTree.length > 0 && (
-        <LocationTree
-          tree={effectiveLocationTree}
-          tr={tr}
-          collapsed={collapsed.location}
-          extraClass={offscreen}
-          onToggleCollapse={() => toggleCollapse("location")}
-          onPositionClick={openPosition}
-          openCountry={openCountry}
-          openCity={openCity}
-          selectedCountries={selectedCountries}
-          selectedCities={selectedCities}
-          onCountryClick={(c) => {
-            const isOpen = openCountry === c;
-            setOpenCountry(isOpen ? null : c);
-            setOpenCity(null);
-            const willSelect = !selectedCountries.includes(c);
-            toggleCountry(c);
-            // Selezionare un paese intero azzera eventuali sue città già
-            // filtrate (paese e città dello stesso paese sono mutuamente
-            // esclusivi: o tutto il paese, o città specifiche).
-            if (willSelect) {
-              setSelectedCities((cur) =>
-                cur.filter((k) => k.split("|")[0] !== c),
-              );
-            }
-          }}
-          onCityClick={(key) => {
-            const isOpen = openCity === key;
-            setOpenCity(isOpen ? null : key);
-            const willSelect = !selectedCities.includes(key);
-            toggleCity(key);
-            // Selezionare una città restringe a quella: rimuovi il filtro
-            // del paese genitore (altrimenti l'OR mostrerebbe tutto il
-            // paese invece della sola città).
-            if (willSelect) {
-              const country = key.split("|")[0];
-              setSelectedCountries((cur) => cur.filter((c) => c !== country));
-            }
-          }}
-          onCountryCaret={(c) => {
-            setOpenCountry((cur) => (cur === c ? null : c));
-            setOpenCity(null);
-          }}
-          onCityCaret={(key) =>
-            setOpenCity((cur) => (cur === key ? null : key))
-          }
-        />
-      )}
-
-      {/* Position Types donut — overlay bottom-left. Header collassabile
-          + donut/legenda. È il riferimento dimensionale delle 4 card. */}
-      <div
-        className={
-          "map-float-card map-card-donut bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg" +
-          offscreen
-        }
-        style={{
-          position: "absolute",
-          bottom: CARD_BOTTOM,
-          left: CARD_SIDE,
-          width: CARD_W,
-          maxWidth: CARD_MAXW,
-          height: collapsed.donut ? "auto" : CARD_H,
-          zIndex: 10,
-          pointerEvents: "auto",
-          display: "flex",
-          flexDirection: "column",
-          overflow: "hidden",
-          boxShadow: "0 8px 24px rgba(0,0,0,0.4)",
-        }}
-      >
-        <CardHeader
-          title={tr("types_title")}
-          meta={effectiveTypeDist.reduce((a, d) => a + d.count, 0) || null}
-          collapsed={collapsed.donut}
-          onToggle={() => toggleCollapse("donut")}
-          tr={tr}
-        />
-        {!collapsed.donut && (
-          <div
-            style={{
-              flex: 1,
-              minHeight: 0,
-              display: "flex",
-              // stretch (non center): il donut prende l'altezza del corpo e
-              // la sua legenda scorre dentro, senza uscire dalla card.
-              alignItems: "stretch",
-              padding: 12,
+        {effectiveLocationTree.length > 0 && (
+          <LocationTree
+            tree={effectiveLocationTree}
+            tr={tr}
+            collapsed={collapsed.location}
+            extraClass={offscreen}
+            onToggleCollapse={() => toggleCollapse("location")}
+            onPositionClick={openPosition}
+            openCountry={openCountry}
+            openCity={openCity}
+            selectedCountries={selectedCountries}
+            selectedCities={selectedCities}
+            onCountryClick={(c) => {
+              const isOpen = openCountry === c;
+              setOpenCountry(isOpen ? null : c);
+              setOpenCity(null);
+              const willSelect = !selectedCountries.includes(c);
+              toggleCountry(c);
+              // Selezionare un paese intero azzera eventuali sue città già
+              // filtrate (paese e città dello stesso paese sono mutuamente
+              // esclusivi: o tutto il paese, o città specifiche).
+              if (willSelect) {
+                setSelectedCities((cur) =>
+                  cur.filter((k) => k.split("|")[0] !== c),
+                );
+              }
             }}
-          >
-            <PositionTypesDonut
-              data={effectiveTypeDist}
-              emptyLabel={emptyLabel}
-              size={150}
-              labels={labels}
-              selectedTypes={selectedTypes}
-              onToggleType={(t) => {
-                toggleType(t);
-                // Pulisci selezioni score: i bin si ricalcolano, e anche
-                // unscored cambia conteggio col nuovo scope.
-                setSelectedRanges([]);
-                setUnscoredSelected(false);
-              }}
-            />
-          </div>
+            onCityClick={(key) => {
+              const isOpen = openCity === key;
+              setOpenCity(isOpen ? null : key);
+              const willSelect = !selectedCities.includes(key);
+              toggleCity(key);
+              // Selezionare una città restringe a quella: rimuovi il filtro
+              // del paese genitore (altrimenti l'OR mostrerebbe tutto il
+              // paese invece della sola città).
+              if (willSelect) {
+                const country = key.split("|")[0];
+                setSelectedCountries((cur) => cur.filter((c) => c !== country));
+              }
+            }}
+            onCountryCaret={(c) => {
+              setOpenCountry((cur) => (cur === c ? null : c));
+              setOpenCity(null);
+            }}
+            onCityCaret={(key) =>
+              setOpenCity((cur) => (cur === key ? null : key))
+            }
+          />
         )}
+
+        {/* Position Types donut — overlay bottom-left. Header collassabile
+          + donut/legenda. È il riferimento dimensionale delle 4 card. */}
+        <div
+          className={
+            "map-float-card map-card-donut bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg" +
+            offscreen
+          }
+          style={{
+            position: "absolute",
+            bottom: CARD_BOTTOM,
+            left: CARD_SIDE,
+            width: CARD_W,
+            maxWidth: CARD_MAXW,
+            height: collapsed.donut ? "auto" : CARD_H,
+            zIndex: 10,
+            pointerEvents: "auto",
+            display: "flex",
+            flexDirection: "column",
+            overflow: "hidden",
+            boxShadow: "0 8px 24px rgba(0,0,0,0.4)",
+          }}
+        >
+          <CardHeader
+            title={tr("types_title")}
+            meta={effectiveTypeDist.reduce((a, d) => a + d.count, 0) || null}
+            collapsed={collapsed.donut}
+            onToggle={() => toggleCollapse("donut")}
+            tr={tr}
+          />
+          {!collapsed.donut && (
+            <div
+              style={{
+                flex: 1,
+                minHeight: 0,
+                display: "flex",
+                // stretch (non center): il donut prende l'altezza del corpo e
+                // la sua legenda scorre dentro, senza uscire dalla card.
+                alignItems: "stretch",
+                padding: 12,
+              }}
+            >
+              <PositionTypesDonut
+                data={effectiveTypeDist}
+                emptyLabel={emptyLabel}
+                size={150}
+                labels={labels}
+                selectedTypes={selectedTypes}
+                onToggleType={(t) => {
+                  toggleType(t);
+                  // Pulisci selezioni score: i bin si ricalcolano, e anche
+                  // unscored cambia conteggio col nuovo scope.
+                  setSelectedRanges([]);
+                  setUnscoredSelected(false);
+                }}
+              />
+            </div>
+          )}
+        </div>
       </div>
     </>
   );
