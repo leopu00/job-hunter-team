@@ -9,7 +9,7 @@ import Link from "next/link";
 import { useTheme } from "@/app/theme-provider";
 import { useLocale } from "@/lib/use-locale";
 import { UNCATEGORIZED_LABEL } from "@/lib/position-classifier";
-import { bestViewport } from "@/lib/globe-viewport";
+import { bestViewport, overviewMaxZoom } from "@/lib/globe-viewport";
 import {
   ANCHOR_OFFSET_EM,
   estimateTextWidth,
@@ -504,6 +504,11 @@ function basemapNameRects(map: MaplibreMap): Rect[] {
     }
   }
   return out;
+}
+
+function containerSize(map: MaplibreMap): { width: number; height: number } {
+  const el = map.getContainer();
+  return { width: el.clientWidth, height: el.clientHeight };
 }
 
 function computeLabelAnchors(
@@ -1701,7 +1706,7 @@ export default function JobsGlobe({
         right: 60,
       },
       duration: profileRef.current.flyDuration,
-      maxZoom: 7,
+      maxZoom: overviewMaxZoom(vp.bounds, containerSize(map), 7),
       // Reset anche dell'inclinazione (pitch) e dell'orientamento
       // (bearing) → torna alla vista piatta di default, non solo al
       // centro/zoom. L'utente può inclinare col touchpad; questo
@@ -1761,8 +1766,9 @@ export default function JobsGlobe({
       duration: profileRef.current.flyDuration,
       // maxZoom city-level (era 7 = livello stato): filtrando una città
       // si scende fino allo zoom città; per insiemi più ampi (paese,
-      // tutto) fitBounds sceglie comunque uno zoom inferiore.
-      maxZoom: 12,
+      // tutto) fitBounds sceglie comunque uno zoom inferiore; su più paesi il
+      // globo resta visibile come globo (overviewMaxZoom).
+      maxZoom: overviewMaxZoom(vp.bounds, containerSize(map), 12),
     });
   }, [displayData]);
 
@@ -2101,13 +2107,13 @@ export default function JobsGlobe({
               <div
                 className="hidden md:flex items-center gap-2 text-[10px]"
                 title={tr("remote_legend")}
+                role="note"
                 style={{
                   height: 44,
                   padding: "0 14px",
                   background: "var(--color-panel)",
                   border: "1px solid var(--color-border)",
                   borderRadius: 9999,
-                role="note"
                   boxShadow: "0 4px 12px rgba(0,0,0,0.4)",
                   color: "var(--color-muted)",
                   whiteSpace: "nowrap",
