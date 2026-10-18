@@ -165,6 +165,7 @@ pub(crate) enum LocalCliOperation {
     LinkedinLogin,
     LinkedinLoginStop,
     LinkedinStatus,
+    CleanImages,
 }
 
 impl LocalCliOperation {
@@ -184,6 +185,7 @@ impl LocalCliOperation {
             Self::LinkedinLogin => vec!["linkedin", "login"],
             Self::LinkedinLoginStop => vec!["linkedin", "login", "--stop"],
             Self::LinkedinStatus => vec!["linkedin", "status", "--json"],
+            Self::CleanImages => vec!["clean-images", "--json"],
         }
     }
 
@@ -203,6 +205,7 @@ impl LocalCliOperation {
             Self::LinkedinLogin => "linkedin-login",
             Self::LinkedinLoginStop => "linkedin-login-stop",
             Self::LinkedinStatus => "linkedin-status",
+            Self::CleanImages => "clean-images",
         }
     }
 }
@@ -1911,6 +1914,7 @@ const REMOTE_UPDATE_KIMI: &str = r#"set -eu; JHT_BIN="$(command -v jht 2>/dev/nu
 const REMOTE_PROVIDER_CURRENT: &str = r#"set -eu; JHT_BIN="$(command -v jht 2>/dev/null || true)"; [ -n "$JHT_BIN" ] || JHT_BIN="$HOME/.local/bin/jht"; exec "$JHT_BIN" providers current"#;
 const REMOTE_PROVIDER_LIMITS: &str = r#"set -eu; JHT_BIN="$(command -v jht 2>/dev/null || true)"; [ -n "$JHT_BIN" ] || JHT_BIN="$HOME/.local/bin/jht"; exec "$JHT_BIN" providers limits --json"#;
 const REMOTE_TEAM_START: &str = r#"set -eu; JHT_BIN="$(command -v jht 2>/dev/null || true)"; [ -n "$JHT_BIN" ] || JHT_BIN="$HOME/.local/bin/jht"; exec "$JHT_BIN" team start"#;
+const REMOTE_CLEAN_IMAGES: &str = r#"set -eu; JHT_BIN="$(command -v jht 2>/dev/null || true)"; [ -n "$JHT_BIN" ] || JHT_BIN="$HOME/.local/bin/jht"; exec "$JHT_BIN" clean-images --json"#;
 const REMOTE_ASSISTANT_START: &str = r#"set -eu; JHT_BIN="$(command -v jht 2>/dev/null || true)"; [ -n "$JHT_BIN" ] || JHT_BIN="$HOME/.local/bin/jht"; exec "$JHT_BIN" team start assistente"#;
 pub(crate) const REMOTE_LINKEDIN_LOGIN: &str = r#"set -eu; JHT_BIN="$(command -v jht 2>/dev/null || true)"; [ -n "$JHT_BIN" ] || JHT_BIN="$HOME/.local/bin/jht"; exec "$JHT_BIN" linkedin login"#;
 pub(crate) const REMOTE_LINKEDIN_LOGIN_STOP: &str = r#"set -eu; JHT_BIN="$(command -v jht 2>/dev/null || true)"; [ -n "$JHT_BIN" ] || JHT_BIN="$HOME/.local/bin/jht"; exec "$JHT_BIN" linkedin login --stop"#;
@@ -4058,22 +4062,41 @@ fn start_team_impl(
     match validated {
         ValidatedHost::Local => {
             let wrapper = wrapper_path(app).ok_or_else(|| failure("runtime_missing"))?;
-            ensure_success(
-                run_scoped_local(
-                    app,
-                    scope,
-                    &wrapper,
-                    LocalCliOperation::TeamStart,
-                    PREPARE_TIMEOUT,
-                ),
-                "team_start_failed",
-            )
+            ensure_team_started(run_scoped_local(
+                app,
+                scope,
+                &wrapper,
+                LocalCliOperation::TeamStart,
+                PREPARE_TIMEOUT,
+            ))
         }
-        ValidatedHost::Vps { .. } => ensure_success(
-            run_ssh(validated, REMOTE_TEAM_START, None, PREPARE_TIMEOUT, None),
-            "team_start_failed",
-        ),
+        ValidatedHost::Vps { .. } => ensure_team_started(run_ssh(
+            validated,
+            REMOTE_TEAM_START,
+            None,
+            PREPARE_TIMEOUT,
+            None,
+        )),
     }
+}
+
+/// `jht team start` refuses on a nearly full disk with the closed code
+/// `disk_low` on its own output line (`✗ team — disk_low…`). The app says
+/// that, with its «Free up space» action, instead of team_start_failed.
+fn ensure_team_started(result: Result<ProcessResult, &'static str>) -> Result<(), OnboardingError> {
+    match result {
+        Ok(value) if !value.success() && team_start_refused_for_disk(&value.stdout) => {
+            Err(failure("disk_low"))
+        }
+        other => ensure_success(other, "team_start_failed"),
+    }
+}
+
+fn team_start_refused_for_disk(stdout: &[u8]) -> bool {
+    String::from_utf8_lossy(stdout).lines().any(|line| {
+        line.split(|c: char| !(c.is_ascii_alphanumeric() || c == '_'))
+            .any(|word| word == "disk_low")
+    })
 }
 
 /// What the provider says about its 5h and weekly windows before the team is
@@ -4262,6 +4285,163 @@ pub(crate) async fn onboarding_podman_machine_recreate(
     })
     .await
     .unwrap_or_else(|_| Err(failure("podman_machine_recreate_failed")));
+    state.preparing.store(false, Ordering::Release);
+    let _scope = scopes.lock_expected(&expected).map_err(failure)?;
+    result
+}
+
+/// How long the cleaning of old JHT images may take: one `image rm` at a time.
+const CLEAN_IMAGES_TIMEOUT: Duration = Duration::from_secs(10 * 60);
+
+/// Why `jht clean-images` removed nothing, as the wrapper writes it in
+/// `imagePrune.skipped` ("" = it ran). Anything else reads as "unknown".
+const CLEAN_IMAGES_SKIPPED: [&str; 10] = [
+    "",
+    "opt-out",
+    "runtime-not-installed",
+    "upgrade-in-progress",
+    "upgrade-pending",
+    "current-unidentified",
+    "current-not-running",
+    "previous-unidentified",
+    "containers-unreadable",
+    "images-unreadable",
+];
+
+/// What «Free up space» did: the `imagePrune` block of `jht clean-images
+/// --json`. `virtual_machine`: the images live in the Podman machine (macOS),
+/// so the space is freed there, not necessarily on the Mac's disk.
+#[derive(Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct CleanImagesOutcome {
+    removed: u64,
+    freed_bytes: u64,
+    refused: u64,
+    in_use: u64,
+    skipped: &'static str,
+    virtual_machine: bool,
+}
+
+#[derive(Deserialize)]
+struct CleanImagesReply {
+    ok: bool,
+    #[serde(rename = "imagePrune")]
+    image_prune: Option<CleanImagesPrune>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct CleanImagesPrune {
+    removed: u64,
+    freed_bytes: u64,
+    refused: u64,
+    in_use: u64,
+    skipped: String,
+}
+
+/// The one JSON line of `jht clean-images --json` (the last one starting with
+/// `{`: anything printed before it is ignored). `ok:false` is the engine that
+/// is off, whatever the exit code; `ok:true` counts only with exit 0 and its
+/// `imagePrune` block.
+fn parse_clean_images(result: &ProcessResult, virtual_machine: bool) -> Result<CleanImagesOutcome, &'static str> {
+    let stdout = String::from_utf8_lossy(&result.stdout);
+    let line = stdout
+        .lines()
+        .map(str::trim)
+        .filter(|line| line.starts_with('{'))
+        .last()
+        .ok_or("clean_images_failed")?;
+    let reply: CleanImagesReply = serde_json::from_str(line).map_err(|_| "clean_images_failed")?;
+    if !reply.ok {
+        return Err("clean_images_engine_off");
+    }
+    let prune = match reply.image_prune {
+        Some(prune) if result.success() => prune,
+        _ => return Err("clean_images_failed"),
+    };
+    let skipped = CLEAN_IMAGES_SKIPPED
+        .iter()
+        .find(|known| **known == prune.skipped)
+        .copied()
+        .unwrap_or("unknown");
+    Ok(CleanImagesOutcome {
+        removed: prune.removed,
+        freed_bytes: prune.freed_bytes,
+        refused: prune.refused,
+        in_use: prune.in_use,
+        skipped,
+        virtual_machine,
+    })
+}
+
+fn clean_images_with(
+    run: impl FnOnce(Duration) -> Result<ProcessResult, &'static str>,
+    virtual_machine: bool,
+) -> Result<CleanImagesOutcome, OnboardingError> {
+    match run(CLEAN_IMAGES_TIMEOUT) {
+        Ok(result) => parse_clean_images(&result, virtual_machine).map_err(failure),
+        Err("process_timeout") => Err(failure("timeout")),
+        Err(error) => Err(local_failure(error, "clean_images_failed")),
+    }
+}
+
+/// «Free up space», after the person confirmed it on the disk_low error:
+/// `jht clean-images --json` on the team's host, through the attested wrapper
+/// on this computer (same PATH handling as every other step) or `jht` over
+/// SSH. It removes only old JHT images by the wrapper's own rules, and starts
+/// nothing: with the engine off it says so. jht.ps1 has no such command yet.
+/// `host`: the one being set up; none = the saved one (a resumed team).
+#[tauri::command]
+pub(crate) async fn onboarding_clean_images(
+    app: tauri::AppHandle,
+    state: State<'_, OnboardingNativeState>,
+    scopes: State<'_, AccountScopeState>,
+    host: Option<ExecutionHost>,
+) -> Result<CleanImagesOutcome, OnboardingError> {
+    let expected = scopes.active().map_err(failure)?;
+    if state
+        .preparing
+        .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+        .is_err()
+    {
+        return Err(failure("operation_in_progress"));
+    }
+    let scope_state = scopes.inner().clone();
+    let worker_expected = expected.clone();
+    let result = tauri::async_runtime::spawn_blocking(move || {
+        let _scope = scope_state
+            .lock_expected(&worker_expected)
+            .map_err(failure)?;
+        let host = match host {
+            Some(host) => host,
+            None => crate::direct_chat::load_persisted_host(&app, &worker_expected).map_err(failure)?,
+        };
+        let validated = validate_host(&app, &host).map_err(failure)?;
+        match &validated {
+            ValidatedHost::Local if cfg!(windows) => Err(failure("clean_images_unsupported")),
+            ValidatedHost::Local => {
+                let wrapper = wrapper_path(&app).ok_or_else(|| failure("runtime_missing"))?;
+                clean_images_with(
+                    |timeout| {
+                        run_scoped_local(
+                            &app,
+                            &worker_expected,
+                            &wrapper,
+                            LocalCliOperation::CleanImages,
+                            timeout,
+                        )
+                    },
+                    cfg!(target_os = "macos"),
+                )
+            }
+            ValidatedHost::Vps { .. } => clean_images_with(
+                |timeout| run_ssh(&validated, REMOTE_CLEAN_IMAGES, None, timeout, None),
+                false,
+            ),
+        }
+    })
+    .await
+    .unwrap_or_else(|_| Err(failure("clean_images_failed")));
     state.preparing.store(false, Ordering::Release);
     let _scope = scopes.lock_expected(&expected).map_err(failure)?;
     result
@@ -4523,6 +4703,10 @@ mod tests {
         OnboardingProgressStatus, OnboardingSubmission, ProgressReporter, StartLimits,
         StreamRedactor, SubscriptionProvider, DIAGNOSTIC_MAX_BYTES, DIAGNOSTIC_MAX_RECORDS,
         INSTALL_SHA256, REMOTE_INSTALL, REMOTE_SNAPSHOT,
+    };
+    use super::{
+        clean_images_with, ensure_team_started, parse_clean_images, CleanImagesOutcome,
+        CLEAN_IMAGES_TIMEOUT, REMOTE_CLEAN_IMAGES,
     };
     use super::{
         ensure_success, ensure_success_with_timeout, recreate_podman_machine_with,
@@ -5654,6 +5838,116 @@ mod tests {
         let still_broad = recreate_podman_machine_with(|_, _| Err(PODMAN_MACHINE_MOUNTS_HOME))
             .unwrap_err();
         assert_eq!(still_broad.code, PODMAN_MACHINE_MOUNTS_HOME);
+    }
+
+    fn printed(code: i32, stdout: &str) -> ProcessResult {
+        ProcessResult { code, stdout: stdout.as_bytes().to_vec() }
+    }
+
+    fn prune(removed: u64, freed: u64, refused: u64, in_use: u64, skipped: &str) -> String {
+        format!(
+            r#"{{"ok":true,"message":"","imagePrune":{{"removed":{removed},"freedBytes":{freed},"refused":{refused},"inUse":{in_use},"kept":["current","previous"],"skipped":"{skipped}"}}}}"#
+        )
+    }
+
+    #[test]
+    fn clean_images_reads_the_image_prune_block_of_the_wrapper() {
+        // Lines printed before the JSON (the wrapper's notes) are ignored.
+        let freed = printed(0, &format!("Immagini JHT vecchie: rimosse 2\n{}\n", prune(2, 3_221_225_472, 1, 1, "")));
+        assert_eq!(
+            parse_clean_images(&freed, true).unwrap(),
+            CleanImagesOutcome {
+                removed: 2,
+                freed_bytes: 3_221_225_472,
+                refused: 1,
+                in_use: 1,
+                skipped: "",
+                virtual_machine: true,
+            }
+        );
+        let json = serde_json::to_value(parse_clean_images(&freed, false).unwrap()).unwrap();
+        assert_eq!(json["freedBytes"], 3_221_225_472u64);
+        assert_eq!(json["inUse"], 1);
+        assert_eq!(json["virtualMachine"], false);
+
+        for reason in ["opt-out", "upgrade-pending", "previous-unidentified", "images-unreadable", "current-not-running"] {
+            let outcome = parse_clean_images(&printed(0, &prune(0, 0, 0, 0, reason)), false).unwrap();
+            assert_eq!(outcome.skipped, reason);
+            assert_eq!(outcome.removed, 0);
+        }
+        // A reason the app does not know is never passed on as text.
+        let new_reason = parse_clean_images(&printed(0, &prune(0, 0, 0, 0, "brand-new\"reason")), false);
+        assert!(new_reason.is_err());
+        let new_reason = parse_clean_images(&printed(0, &prune(0, 0, 0, 0, "brand-new-reason")), false).unwrap();
+        assert_eq!(new_reason.skipped, "unknown");
+    }
+
+    #[test]
+    fn clean_images_tells_an_engine_that_is_off_and_refuses_anything_else() {
+        let off = printed(1, r#"{"ok":false,"message":"Motore non attivo"}"#);
+        assert_eq!(parse_clean_images(&off, true), Err("clean_images_engine_off"));
+        for stdout in [
+            "",
+            "Opzione di clean-images non supportata",
+            "{not json",
+            r#"{"ok":true,"message":""}"#,
+            r#"{"ok":true,"message":"","imagePrune":{"removed":-1,"freedBytes":0,"refused":0,"inUse":0,"skipped":""}}"#,
+        ] {
+            assert_eq!(parse_clean_images(&printed(0, stdout), false), Err("clean_images_failed"), "{stdout}");
+        }
+        // ok:true counts only with exit 0.
+        assert_eq!(parse_clean_images(&printed(2, &prune(1, 1, 0, 0, "")), false), Err("clean_images_failed"));
+    }
+
+    #[test]
+    fn clean_images_runs_one_bounded_command_and_keeps_the_step_errors() {
+        let mut timeouts = Vec::new();
+        let outcome = clean_images_with(
+            |timeout| {
+                timeouts.push(timeout);
+                Ok(printed(0, &prune(0, 0, 0, 0, "")))
+            },
+            false,
+        )
+        .unwrap();
+        assert_eq!(timeouts, [CLEAN_IMAGES_TIMEOUT]);
+        assert_eq!(outcome.skipped, "");
+        let off = clean_images_with(|_| Ok(printed(1, r#"{"ok":false,"message":"x"}"#)), true).unwrap_err();
+        assert_eq!(off.code, "clean_images_engine_off");
+        assert_eq!(clean_images_with(|_| Err("process_timeout"), true).unwrap_err().code, "timeout");
+        assert_eq!(clean_images_with(|_| Err("runtime_missing"), true).unwrap_err().code, "clean_images_failed");
+        assert_eq!(
+            clean_images_with(|_| Err(PODMAN_MACHINE_MOUNTS_HOME), true).unwrap_err().code,
+            PODMAN_MACHINE_MOUNTS_HOME
+        );
+    }
+
+    #[test]
+    fn clean_images_is_the_wrapper_command_only_never_a_forced_or_global_prune() {
+        assert_eq!(LocalCliOperation::CleanImages.argv(), ["clean-images", "--json"]);
+        assert!(REMOTE_CLEAN_IMAGES.ends_with(r#"exec "$JHT_BIN" clean-images --json"#));
+        for command in [LocalCliOperation::CleanImages.argv().join(" "), REMOTE_CLEAN_IMAGES.to_string()] {
+            for forbidden in [" -f", "--force", "prune", "volume", "system"] {
+                assert!(!command.contains(forbidden), "{command} contains {forbidden}");
+            }
+        }
+    }
+
+    #[test]
+    fn a_team_start_refused_for_the_disk_says_disk_low() {
+        let refused = printed(1, "\n  \u{2717} team \u{2014} disk_low: Il disco e' quasi pieno\n\n");
+        assert_eq!(ensure_team_started(Ok(refused)).unwrap_err().code, "disk_low");
+        // Any other failure stays team_start_failed, success stays success.
+        assert_eq!(
+            ensure_team_started(Ok(printed(1, "  x team \u{2014} tmux failed\n"))).unwrap_err().code,
+            "team_start_failed"
+        );
+        assert_eq!(
+            ensure_team_started(Ok(printed(1, "disk_lowish\n"))).unwrap_err().code,
+            "team_start_failed"
+        );
+        assert!(ensure_team_started(Ok(printed(0, "disk_low mentioned in a log\n"))).is_ok());
+        assert_eq!(ensure_team_started(Err("process_timeout")).unwrap_err().code, "timeout");
     }
 
     #[test]

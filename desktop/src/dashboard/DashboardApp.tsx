@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
 import DashboardSkeleton from "@/app/(protected)/_components/DashboardSkeleton";
 import { appLocale } from "../lib/app-locale";
+import { cleanImages } from "../lib/clean-images";
 import { LOCAL_RUNTIME_REMOVED_EVENT } from "../lib/local-uninstall";
 import { failureText, stateText } from "../lib/onboarding-state.i18n";
 import { readDesktopPlatform, type DesktopPlatform } from "../lib/desktop-platform";
@@ -1211,6 +1212,10 @@ export default function DashboardApp() {
     return resumeAssistant();
   }, [failLocalRuntime, prepareTechnicalSetup, resumeAssistant, setRuntime]);
 
+  // Only from the confirmation on the disk_low error: old JHT images on the
+  // host being set up, or on the saved one when the team is resumed.
+  const freeDiskSpace = useCallback(() => cleanImages(submissionRef.current?.host ?? null), []);
+
   const retry = useCallback(async () => {
     if (gate.phase !== "required" || gate.runtime.status !== "failed") return;
     const { stage } = gate.runtime;
@@ -1358,6 +1363,7 @@ export default function DashboardApp() {
         onProviderRestart={restartProviderLogin}
         onRetry={retry}
         onRecreatePodmanMachine={recreatePodmanMachine}
+        onFreeDiskSpace={freeDiskSpace}
         runtimeLogPath={runtimeLog}
         onOpenRuntimeLog={openRuntimeLog}
         previousLocalData={previousLocalData}

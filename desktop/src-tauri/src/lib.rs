@@ -93,6 +93,7 @@ pub fn run() {
             onboarding::onboarding_existing_team_readonly_connect,
             onboarding::onboarding_existing_team_reopen,
             onboarding::onboarding_podman_machine_recreate,
+            onboarding::onboarding_clean_images,
             onboarding::onboarding_local_uninstall_available,
             onboarding::onboarding_local_uninstall,
             runtime_log::onboarding_runtime_log,
