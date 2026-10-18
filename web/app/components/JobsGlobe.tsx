@@ -10,6 +10,7 @@ import { useTheme } from "@/app/theme-provider";
 import { useLocale } from "@/lib/use-locale";
 import { UNCATEGORIZED_LABEL } from "@/lib/position-classifier";
 import { bestViewport, overviewMaxZoom } from "@/lib/globe-viewport";
+import { createFitOnReady, type FitOnReady } from "@/lib/globe-fit-scheduler";
 import {
   ANCHOR_OFFSET_EM,
   estimateTextWidth,
@@ -1286,6 +1287,8 @@ export default function JobsGlobe({
       // style.load perché il cambio tema ricarica lo style da zero.
       applyProfileToStyle(map, profileRef.current);
       syncData(map);
+      // Dati arrivati prima dello style: il fit in sospeso parte ora.
+      fitOnReadyRef.current?.layersReady();
     };
     map.on("style.load", onStyleLoad);
 
@@ -1747,14 +1750,16 @@ export default function JobsGlobe({
 
   // Auto-zoom sui pin filtrati: ogni volta che cambia displayData
   // (filtri donut/histogram di /map o primo fetch), riadatta la
-  // vista per inquadrare i pin attualmente mostrati.
-  useEffect(() => {
-    // Vetrina: la camera appartiene all'autopilota della landing, il
-    // refit automatico sui dati la strapperebbe via a metà volo.
-    if (showcaseRef.current) return;
+  // vista per inquadrare i pin attualmente mostrati. Se i dati arrivano
+  // prima dello style (style.load), il fit resta in sospeso e parte appena
+  // i layer sono pronti (vedi lib/globe-fit-scheduler).
+  const displayDataRef = useRef(displayData);
+  displayDataRef.current = displayData;
+  const fitToDisplayData = () => {
     const map = mapRef.current;
-    if (!map || !layersReadyRef.current || displayData.length === 0) return;
-    const vp = bestViewport(displayData);
+    const pins = displayDataRef.current;
+    if (!map || pins.length === 0) return;
+    const vp = bestViewport(pins);
     if (!vp) return;
     map.fitBounds(vp.bounds, {
       padding: {
@@ -1770,6 +1775,23 @@ export default function JobsGlobe({
       // globo resta visibile come globo (overviewMaxZoom).
       maxZoom: overviewMaxZoom(vp.bounds, containerSize(map), 12),
     });
+  };
+  const fitToDisplayDataRef = useRef(fitToDisplayData);
+  fitToDisplayDataRef.current = fitToDisplayData;
+  const fitOnReadyRef = useRef<FitOnReady | null>(null);
+  if (!fitOnReadyRef.current) {
+    fitOnReadyRef.current = createFitOnReady(() =>
+      fitToDisplayDataRef.current(),
+    );
+  }
+  useEffect(() => {
+    // Vetrina: la camera appartiene all'autopilota della landing, il
+    // refit automatico sui dati la strapperebbe via a metà volo.
+    if (showcaseRef.current) return;
+    if (displayData.length === 0) return;
+    fitOnReadyRef.current!.dataChanged(
+      !!mapRef.current && layersReadyRef.current,
+    );
   }, [displayData]);
 
   // Focus su una posizione richiesto da una lista (card Posizioni o
