@@ -2,6 +2,7 @@ import { act, fireEvent, render, screen, waitFor } from "@testing-library/react"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import MapCharts from "@/app/components/MapCharts";
 import {
+  CORNER_CARD_W,
   MAP_PANELS_CSS,
   RAIL_BOTTOM,
   RAIL_CARD_W,
@@ -117,6 +118,19 @@ describe("rail geometry", () => {
     for (const w of [RAIL_MIN_WIDTH, 900, 1068, RAIL_MAX_WIDTH]) {
       expect(railClearance(w)).toBeLessThan(w / 2 + RAIL_SIDE + 16);
     }
+  });
+
+  it("covers a full-screen Mac, where the two bottom corner cards would sit on the controls", () => {
+    // Two corner cards (420 px, body zoom 1.15, 24 px margin) and the control
+    // bar (~440 px with the remote key) centred between them: the bar starts
+    // under the card edge up to ~1440, and clears it by only a few pixels at a
+    // 14" Mac's 1512 (card 511 px, bar from 536).
+    const cornerEdge = (CORNER_CARD_W + RAIL_SIDE) * 1.15;
+    const barHalf = 440 / 2;
+    expect(1440 / 2 - barHalf).toBeLessThan(cornerEdge);
+    expect(1512).toBeLessThanOrEqual(RAIL_MAX_WIDTH);
+    // Above the rail the corners clear the bar with room to spare.
+    expect((RAIL_MAX_WIDTH + 1) / 2 - barHalf).toBeGreaterThan(cornerEdge + 50);
   });
 
   it("is a rail only between the two widths, and a plain wrapper outside", () => {

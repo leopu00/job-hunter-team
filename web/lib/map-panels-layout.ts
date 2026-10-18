@@ -1,21 +1,25 @@
 /**
  * Layout dei quattro pannelli della mappa (Location, Score, Tipi, Posizioni).
  *
- * Sopra RAIL_MAX_WIDTH stanno nei quattro angoli (card fisse 420x250). In una
- * finestra media (RAIL_MIN_WIDTH..RAIL_MAX_WIDTH, un Mac con la finestra non
- * a tutto schermo) gli angoli si mangiano mezza mappa e il pannello in basso a
- * sinistra copre i controlli al centro: lì i pannelli diventano UNA colonna a
- * sinistra, a un pannello aperto per volta, e il globo inquadra lo spazio che
- * resta. Sotto RAIL_MIN_WIDTH vale il layout mobile di page.tsx.
+ * Sopra RAIL_MAX_WIDTH stanno nei quattro angoli (card fisse 420x250). Sotto,
+ * fino a RAIL_MIN_WIDTH (una finestra media, ma anche un Mac a tutto schermo:
+ * 1280-1500 px), gli angoli si mangiano mezza mappa e i due pannelli in basso
+ * coprono i controlli al centro: con la card larga 420 px e lo zoom 1.15 del
+ * corpo pagina i due angoli occupano ~510 px per lato, e la barra dei
+ * controlli (~480 px) sta centrata solo se la finestra è larga almeno ~1500.
+ * Lì i pannelli diventano UNA colonna a sinistra, a un pannello aperto per
+ * volta, e il globo inquadra lo spazio che resta. Sotto RAIL_MIN_WIDTH vale il
+ * layout mobile di page.tsx.
  *
  * La media query vive qui, una volta sola: la usano il CSS (page.tsx) e il JS
  * (MapCharts) e non possono divergere.
  */
 export const RAIL_MIN_WIDTH = 768;
-export const RAIL_MAX_WIDTH = 1279;
+export const RAIL_MAX_WIDTH = 1599;
 export const RAIL_QUERY = `(min-width: ${RAIL_MIN_WIDTH}px) and (max-width: ${RAIL_MAX_WIDTH}px)`;
 
-/** Larghezza massima di una card, e margini della colonna. */
+/** Card d'angolo (layout largo), e card della colonna con i suoi margini. */
+export const CORNER_CARD_W = 420;
 export const RAIL_CARD_W = 360;
 export const RAIL_SIDE = 24;
 export const RAIL_TOP = 24;

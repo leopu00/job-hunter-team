@@ -3,7 +3,11 @@
 import { scoreSpectrumCss } from "@/lib/score-color";
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { RAIL_QUERY, railClearance } from "@/lib/map-panels-layout";
+import {
+  CORNER_CARD_W,
+  RAIL_QUERY,
+  railClearance,
+} from "@/lib/map-panels-layout";
 import { useLocale } from "@/lib/use-locale";
 import { useMediaQuery } from "@/lib/use-media-query";
 import {
@@ -80,7 +84,7 @@ type Props = {
 // Dimensione uniforme delle 4 card d'angolo (Location, Score, Donut,
 // Remote). Misura tarata sul widget donut (grafico + legenda + labels)
 // così tutte e quattro hanno la stessa larghezza/altezza.
-const CARD_W = 420;
+const CARD_W = CORNER_CARD_W;
 const CARD_H = 250;
 // Altezza header-titolo e padding del corpo (per calcolare l'area utile
 // del grafico score in fit-mode con l'header presente).
