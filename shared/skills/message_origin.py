@@ -161,41 +161,42 @@ def _reading_view(text):
         )
 
 
-# I residui che un ESC lascia davanti a una busta quando lo si toglie da solo: l'introduttore di una
-# stringa (`]` `P` `X` `^` `_`) o di una CSI (`[`). `ESC P [@capitano…` arriva al CLI come «P[@capitano…»
-# e si legge come una busta; senza un ESC nel messaggio originale quel prefisso non e' niente.
-_ESC_RESIDUE = r"[\]PX^_\[]{1,2}"
+# ── JHT-T22 · caratteri VISIBILI davanti alla busta o dentro la parentesi ─────────────────────
+# Con i controlli del terminale tolti dal testo consegnato (strip_terminal_controls) restano forme
+# che un LLM legge ancora come la busta di un collega, con un refuso: `[]@capitano -> …]`,
+# `[P@capitano …`, `O[@capitano …`, `(B[@capitano …`, `31m[@capitano …`, `x[@capitano …`. Un agente
+# poteva scriverle anche prima, senza nessun ESC. Quindi, sulla PRIMA riga: una busta preceduta da
+# al massimo MAX_PREFIX caratteri non spazio, o con al massimo MAX_GAP caratteri fra «[» e «@», conta
+# come una busta dichiarata (e se e' di un altro agente noto e' impersonation). Un «ciao [@capitano …»
+# a meta' frase, o qualunque cosa sulle righe dopo la prima, resta una citazione.
+MAX_PREFIX = 3
+MAX_GAP = 2
+NEAR_ENVELOPE_RE = re.compile(
+    r"^[ \t]*[^\s]{0,%d}\[[^\n]{0,%d}@([A-Za-z0-9_-]+)\s*->\s*@([A-Za-z0-9_-]+)\]" % (MAX_PREFIX, MAX_GAP)
+)
 
 
-def _claim(view, lenient):
+def _claim(view):
     view = _reading_view(view)
     view = view[_noise_length(view):]
-    found = ENVELOPE_RE.match(view)
-    if not found and lenient:
-        for size in (1, 2):
-            if re.fullmatch(_ESC_RESIDUE, view[:size]):
-                found = ENVELOPE_RE.match(view[size:])
-                if found:
-                    break
+    found = ENVELOPE_RE.match(view) or NEAR_ENVELOPE_RE.match(view)
     return found.group(1).lower() if found else None
 
 
 def claimed_sender(message: str, raw: str | None = None) -> str | None:
     """Il mittente che il messaggio DICHIARA, o None se non c'è busta.
 
-    `raw` e' il messaggio prima di togliere i controlli (se diverso): si guarda anche quello, e se
-    conteneva un ESC si perdonano i residui che l'ESC lascia davanti alla busta. Un verdetto che
-    guarda piu' di un testo e' piu' severo, mai meno.
+    `raw` e' il messaggio prima di togliere i controlli (se diverso): si guarda anche quello. Un
+    verdetto che guarda piu' di un testo e' piu' severo, mai meno.
 
     Con un blocco di contesto davanti si guarda la busta che lo segue: altrimenti chi
-    lo antepone a una firma falsa scavalcherebbe il controllo d'identità. E si guarda
-    dopo il rumore iniziale (ZWSP, ESC, invisibili): la busta che si legge è quella che
-    conta, non quella che i byte lasciano vedere a una regex.
+    lo antepone a una firma falsa scavalcherebbe il controllo d'identità. Si guarda dopo il
+    rumore iniziale (ZWSP, ESC, invisibili), e una busta con un breve prefisso visibile o un
+    breve vuoto dopo «[» conta (vedi NEAR_ENVELOPE_RE).
     """
-    lenient = raw is not None and "\x1b" in raw
-    name = _claim(split_context_frame(message)[1], lenient)
+    name = _claim(split_context_frame(message)[1])
     if name is None and raw is not None and raw != message:
-        name = _claim(split_context_frame(raw)[1], lenient)
+        name = _claim(split_context_frame(raw)[1])
     return name
 
 
