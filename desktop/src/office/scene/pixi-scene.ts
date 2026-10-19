@@ -977,7 +977,7 @@ function frontOccluder(where: Rect, tex: Texture, cut: number, flip: boolean): S
 }
 
 /**
- * AgentStateTag._draw: a dark plate with the status colour's border and the (unlit) LED. First
+ * AgentStateTag._draw: a dark plate tinted and bordered with the status colour, and its LED lit. First
  * line: the agent's name and its state; second line, for a stopped agent: why, and until when.
  */
 function stateTag(name: string, label: string, color: number, detail: string | null): { node: Container; h: number } {
@@ -989,15 +989,20 @@ function stateTag(name: string, label: string, color: number, detail: string | n
   const gap = 8;
   const w = Math.max(who.width + gap + what.width, why?.width ?? 0) + 24;
   const h = why ? 38 : 24;
+  // the plate takes a tint of the state's colour, and the border is thicker: the state reads at a
+  // glance across the office, not only in a 1 px line
   const g = new Graphics()
     .rect(-w / 2, -h / 2, w, h)
     .fill({ color: 0x16161d, alpha: 0.96 })
     .rect(-w / 2, -h / 2, w, h)
-    .stroke({ color, alpha: 0.85, width: 1.4 });
+    .fill({ color, alpha: 0.16 })
+    .rect(-w / 2, -h / 2, w, h)
+    .stroke({ color, alpha: 0.95, width: 2 });
   const line = -h / 2 + 12;
-  // the game lights this LED from the CPU sampler, which the cloud does not have: always unlit
-  g.circle(-w / 2 + 9, line, 3).fill(0x252530);
-  g.circle(-w / 2 + 9, line, 2.7).stroke({ color: 0x4a4a5e, alpha: 0.8, width: 0.8 });
+  // The game lights this LED from the CPU sampler, which the desktop does not have: here it is
+  // lit with the state's colour, what the team publishes, with a soft halo.
+  g.circle(-w / 2 + 9, line, 5.5).fill({ color, alpha: 0.25 });
+  g.circle(-w / 2 + 9, line, 3.2).fill(color);
   who.position.set(-w / 2 + 16, line - who.height / 2);
   what.position.set(who.x + who.width + gap, line - what.height / 2);
   c.addChild(g, who, what);
