@@ -64,6 +64,15 @@ ITALIAN_COPY = re.compile(
     re.IGNORECASE,
 )
 
+# Codici-dato: valori di un vocabolario chiuso che un altro componente legge per nome (il web, il
+# gioco), non frasi mostrate. Una stringa che è ESATTAMENTE uno di questi non è copy. Si elencano
+# per esteso: un criterio "ha un trattino basso" lascerebbe passare prosa. Gli altri motivi di
+# `shared/skills/agent_state.py` (limite_5h, fonti_illeggibili, …) non hanno bisogno di stare qui
+# solo perché la regex sopra non li riconosce; questo sì, perché `avvi\w*` lo prende per intero.
+DATA_CODES = frozenset({
+    "avvio_in_corso",
+})
+
 # ── Sink Python (stessa logica del gate storico) ────────────────────────
 PY_VISIBLE_CALLS = {
     "print", "add_argument", "add_parser", "ArgumentParser",
@@ -405,6 +414,8 @@ def scan(dirs) -> list[str]:
     hits: list[str] = []
 
     def record(path: Path, line: int, text: str) -> None:
+        if text.strip() in DATA_CODES:
+            return
         if ITALIAN_COPY.search(text):
             hits.append(f"{path.relative_to(ROOT).as_posix()}:{line}: "
                         f"{' '.join(text.split())[:160]}")

@@ -750,7 +750,8 @@ def test_a_telegram_failure_without_the_new_flags_still_falls_back_to_the_web(bo
 def test_an_invalid_kind_is_still_refused_by_the_parser(box):
     done = notify(box, "--agent", "capitano", "--kind", "nope", "x")
     assert done.returncode == 2
-    assert "argument --kind: invalid choice: 'nope' (choose from 'notification', 'question', 'digest', 'alert')" in done.stderr
+    # The exit code and the option, not argparse's sentence: Python 3.12.12 prints the choices without quotes.
+    assert "argument --kind: invalid choice: 'nope'" in done.stderr
 
 
 # ── Review of 56a9169b8, MEDIO-1: a stored answer is data until it checks out ─
