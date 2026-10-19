@@ -289,37 +289,40 @@ function Office({ ready, source }: { ready: Ready; source: OfficeSource }) {
   const tag = hover ?? keyFocus;
 
   return (
-    // the shell gives the office the whole window under the navbar (Route.fullBleed)
-    <div className="relative h-full" data-testid="office-page">
-      <div ref={host} className="absolute inset-0" data-testid="office-canvas" />
+    // the shell gives the office the whole window under the navbar (Route.fullBleed);
+    // the status line sits above the scene, never over it
+    <div className="flex h-full flex-col" data-testid="office-page">
       {status && (
         <p
           role={statusIsAlert ? "alert" : "status"}
-          className="absolute left-4 top-4 m-0 rounded border border-[var(--color-border)] bg-[var(--color-panel)] px-3 py-1.5 text-[11px] text-[var(--color-muted)]"
+          className="m-0 shrink-0 border-b border-[var(--color-border)] px-4 py-1.5 text-[11px] text-[var(--color-muted)]"
         >
           {status}
         </p>
       )}
-      <OfficeKeyboard
-        targets={targets}
-        label={label}
-        onFocusTarget={focusTarget}
-        onOpen={(t, button) => openPanel(t, button)}
-      />
-      {tag && !panel && <OfficeTooltip target={tag.target} at={tag.at} layout={assets.layout} snapshot={snapshot} statuses={statuses} />}
-      {panel && (
-        <OfficePanel
-          target={panel}
-          layout={assets.layout}
-          snapshot={snapshot}
-          statuses={statuses}
-          client={source === "cloud" ? supabase : NO_CLOUD}
-          source={source === "cloud" ? "cloud" : "vps"}
-          onClose={() => setPanel(null)}
-          onOpen={setPanel}
-          onNavigate={navigate}
+      <div className="relative min-h-0 flex-1" data-testid="office-stage">
+        <div ref={host} className="absolute inset-0" data-testid="office-canvas" />
+        <OfficeKeyboard
+          targets={targets}
+          label={label}
+          onFocusTarget={focusTarget}
+          onOpen={(t, button) => openPanel(t, button)}
         />
-      )}
+        {tag && !panel && <OfficeTooltip target={tag.target} at={tag.at} layout={assets.layout} snapshot={snapshot} statuses={statuses} />}
+        {panel && (
+          <OfficePanel
+            target={panel}
+            layout={assets.layout}
+            snapshot={snapshot}
+            statuses={statuses}
+            client={source === "cloud" ? supabase : NO_CLOUD}
+            source={source === "cloud" ? "cloud" : "vps"}
+            onClose={() => setPanel(null)}
+            onOpen={setPanel}
+            onNavigate={navigate}
+          />
+        )}
+      </div>
     </div>
   );
 }
