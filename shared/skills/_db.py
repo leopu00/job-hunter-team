@@ -214,6 +214,9 @@ def ensure_schema(conn: sqlite3.Connection):
         office_address TEXT,
         office_geocoded INTEGER DEFAULT 0,
         office_verified INTEGER DEFAULT 0,
+        location_precision TEXT CHECK (location_precision IS NULL OR location_precision IN (
+            'address','street','district','city','country','remote'
+        )),
         expires_at DATE,
         is_open INTEGER DEFAULT 1,
         last_open_check TIMESTAMP,
@@ -877,6 +880,7 @@ def _run_migrations(conn: sqlite3.Connection) -> None:
     _migrate_positions_role_family(conn)
     _migrate_positions_structured_location(conn)
     _migrate_positions_office_geocoding(conn)
+    _migrate_positions_location_precision(conn)
     _migrate_positions_write_requested(conn)
     _migrate_positions_write_request_kind(conn)
     _migrate_cover_letter_request_effect(conn)
@@ -1918,6 +1922,51 @@ def _migrate_positions_office_geocoding(conn: sqlite3.Connection) -> None:
         "CREATE INDEX IF NOT EXISTS idx_positions_office_geocoded "
         "ON positions(office_geocoded) WHERE office_geocoded = 1"
     )
+
+
+# How precisely the place of a position is known (JHT-T04). Closed set, the same as the CHECK of
+# the cloud's positions_location_precision_check (supabase migration 095). NULL is «not classified».
+LOCATION_PRECISIONS = ('address', 'street', 'district', 'city', 'country', 'remote')
+
+
+def _migrate_positions_location_precision(conn: sqlite3.Connection) -> None:
+    """Aggiunge `positions.location_precision` e classifica le righe che hanno già un luogo.
+
+    `office_verified` diceva solo «indirizzo con civico» o «tutto il resto», e un centro città
+    salvato come ufficio sembrava un ufficio. Il livello (address|street|district|city|country|
+    remote) lo dice. Il CHECK sta nella colonna stessa: SQLite lo ammette in ADD COLUMN.
+
+    Backfill, solo righe senza livello (idempotente, non riscrive mai un livello già scritto):
+      coordinate + office_verified=1 -> address
+      coordinate + office_verified=0 -> city
+      senza coordinate + remoto dichiarato -> remote
+    Il resto resta NULL: il livello lo scrive chi sa il luogo (location-enrichment, geocoding).
+    """
+    if not _table_exists(conn, 'positions'):
+        return
+    if not _column_exists(conn, 'positions', 'location_precision'):
+        levels = ", ".join(f"'{level}'" for level in LOCATION_PRECISIONS)
+        conn.execute(
+            "ALTER TABLE positions ADD COLUMN location_precision TEXT "
+            f"CHECK (location_precision IS NULL OR location_precision IN ({levels}))"
+        )
+    has = lambda column: _column_exists(conn, 'positions', column)
+    if has('office_lat') and has('office_lon') and has('office_verified'):
+        conn.execute(
+            "UPDATE positions SET location_precision = CASE WHEN office_verified = 1 THEN 'address' ELSE 'city' END "
+            "WHERE location_precision IS NULL AND office_lat IS NOT NULL AND office_lon IS NOT NULL"
+        )
+    remote = [c for c in ("remote_type = 'full_remote'", "work_mode = 'remote'")
+              if has(c.split()[0])]
+    # a city or a country the position states is its place, even when the job is remote: it is not
+    # classified here, the check gate (or whoever knows the place) writes city or country
+    no_place = [f"COALESCE(TRIM({c}), '') = ''" for c in ('loc_city', 'loc_country') if has(c)]
+    if remote and has('office_lat'):
+        conn.execute(
+            "UPDATE positions SET location_precision = 'remote' "
+            f"WHERE location_precision IS NULL AND office_lat IS NULL AND ({' OR '.join(remote)})"
+            + "".join(f" AND {c}" for c in no_place)
+        )
 
 
 def _migrate_positions_jd_summary(conn: sqlite3.Connection) -> None:

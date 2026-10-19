@@ -23,7 +23,7 @@ import sys
 import os
 sys.path.insert(0, os.path.dirname(__file__))
 
-from _db import get_db, ensure_schema, resolve_company_id, _column_exists
+from _db import get_db, ensure_schema, resolve_company_id, _column_exists, LOCATION_PRECISIONS
 from external_content import normalize_external_inline_fields
 import role_taxonomy
 import maintenance_log
@@ -44,7 +44,7 @@ import maintenance_log
 MAINTENANCE_TRACKED_FIELDS = (
     "status", "url", "deadline", "expires_at", "is_open",
     "office_lat", "office_lon", "office_address",
-    "office_geocoded", "office_verified",
+    "office_geocoded", "office_verified", "location_precision",
     "jd_summary", "jd_text", "notes",
 )
 
@@ -169,6 +169,47 @@ def interpret_escapes(text):
     text = re.sub(r"\\U([0-9A-Fa-f]{8})", _chr, text)
     text = re.sub(r"\\u([0-9A-Fa-f]{4})", _chr, text)
     return text
+
+
+def _location_precision_writes(conn, args):
+    """(livello, office_verified) da scrivere insieme ai campi della chiamata, o None.
+
+    `location_precision` dice QUANTO bene si conosce il luogo (address|street|district|city|
+    country|remote); `office_verified` resta, ma derivato: vero solo per `address`. Una regola
+    sola, perché due verità sullo stesso fatto sono il difetto che questo campo toglie.
+
+      --location-precision X      scrive X; il flag segue (X == address). Se anche
+                                  --office-verified è dato e lo contraddice: rifiuto, nessuna scrittura.
+      solo --office-verified      client e skill di prima: true -> address (se ci sono coordinate),
+                                  false -> city SOLO se il livello non c'è ancora (mai abbassa).
+      niente                      niente.
+    Il livello non si abbassa mai da solo: solo chi lo dice, con --location-precision.
+    """
+    explicit = getattr(args, 'location_precision', None)
+    flag = args.office_verified
+    if explicit is not None:
+        if flag is not None and (flag == 'true') != (explicit == 'address'):
+            print(
+                f"⚠️  LOCATION_PRECISION REJECTED: --office-verified {flag} contradicts "
+                f"--location-precision {explicit} (the flag is true only for 'address').",
+                file=sys.stderr,
+            )
+            conn.close()
+            sys.exit(1)
+        return explicit, (None if flag is not None else (1 if explicit == 'address' else 0))
+    if flag is None:
+        return None, None
+    row = conn.execute(
+        "SELECT office_lat, office_lon, location_precision FROM positions WHERE id = ?", (args.id,)
+    ).fetchone()
+    lat = args.office_lat if args.office_lat is not None else (row['office_lat'] if row else None)
+    lon = args.office_lon if args.office_lon is not None else (row['office_lon'] if row else None)
+    if lat is None or lon is None:
+        return None, None
+    if flag == 'true':
+        return 'address', None
+    current = row['location_precision'] if row else None
+    return ('city' if current is None else None), None
 
 
 def update_position(args):
@@ -411,6 +452,17 @@ def update_position(args):
         updates.append("office_verified = ?")
         params.append(1 if args.office_verified == 'true' else 0)
         changed.append(f"office_verified={args.office_verified}")
+
+    # Precisione del luogo (JHT-T04). Una sola regola per il livello e per il flag.
+    precision, flag = _location_precision_writes(conn, args)
+    if precision is not None:
+        updates.append("location_precision = ?")
+        params.append(precision)
+        changed.append(f"location_precision={precision}")
+    if flag is not None:
+        updates.append("office_verified = ?")
+        params.append(flag)
+        changed.append(f"office_verified={'true' if flag else 'false'}")
 
     # Geocoding on-demand: la richiesta e il risultato devono atterrare nella
     # STESSA transazione. In precedenza `geocode_requested` restava acceso
@@ -1049,6 +1101,9 @@ def main():
     p.add_argument('--office-address', help='Full office address (geocoder display_name)')
     p.add_argument('--office-geocoded', choices=['true', 'false'], help='true if geocoding was attempted (even if it failed)')
     p.add_argument('--office-verified', choices=['true', 'false'], help='true if you are CERTAIN this is the correct office; false if city-level/multi-ambiguous')
+    p.add_argument('--location-precision', choices=list(LOCATION_PRECISIONS),
+                   help='How precisely the place is known: address (street number, checked) | street (no number) | '
+                        'district | city | country | remote. office_verified follows it (true only for address).')
     # Storico dei controlli: --action registra il giro, --outcome ne dice l'esito.
     maintenance_log.add_cli_args(p)
 
