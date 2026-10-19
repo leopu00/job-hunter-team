@@ -6,6 +6,7 @@ import type { TeamStatusReading } from "../lib/existing-team-status";
 import { EXISTING_TEAM_AGENTS_TEXT } from "../pages/agents/readonly.i18n";
 import { EXISTING_TEAM_STATUS_TEXT } from "../pages/existing-team/existing-team-status.i18n";
 import type { AgentRole, AgentStatus, AgentStatuses, OfficeAgent, OfficeSnapshot, Piles } from "./contract";
+import { officeSummary } from "./summary";
 
 /**
  * The office of an existing team that is only read over its VPS. It has no
@@ -140,8 +141,19 @@ function officeFromAgents(agents: Extract<TeamAgentsReading, { kind: "read" }>, 
   const roster: OfficeAgent[] = drawn.map((agent) => ({ uid: agent.name.toLowerCase(), role: agent.role as AgentRole, sheet: "" }));
   const read = t.officeReadAt.replace("{time}", stamp(agents.at, locale));
   const unknown = agents.read.statesKnown ? "" : ` ${t.statesUnknown}`;
+  // how the team is at a glance (summary.ts): the counts by state, when the team says them, and
+  // the agents the office has no seat for
+  const summary = officeSummary(
+    agents.read.agents.map((agent) => ({
+      name: agent.name,
+      state: agents.read.statesKnown && agent.state.state !== "sconosciuto" ? agent.state.state : null,
+      drawn: (OFFICE_ROLES as readonly string[]).includes(agent.role),
+    })),
+    locale,
+  );
+  const lead = summary ? `${summary}  ·  ` : "";
   if (roster.length === 0) {
-    return { snapshot: snapshotOf(true, [], piles), statuses: null, notice: { text: `${t.officeNoneUp} ${read}${unknown}`, alert: false } };
+    return { snapshot: snapshotOf(true, [], piles), statuses: null, notice: { text: `${lead}${t.officeNoneUp} ${read}${unknown}`, alert: false } };
   }
   const statuses: AgentStatuses["agents"] = {};
   for (const agent of drawn) {
@@ -157,6 +169,6 @@ function officeFromAgents(agents: Extract<TeamAgentsReading, { kind: "read" }>, 
   return {
     snapshot: snapshotOf(true, roster, piles),
     statuses: { at: agents.at, agents: statuses },
-    notice: { text: `${read}${unknown}`, alert: false },
+    notice: { text: `${lead}${read}${unknown}`, alert: false },
   };
 }

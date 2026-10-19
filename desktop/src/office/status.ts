@@ -1,5 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { isAgentState, isKnownReason } from "@/lib/agent-state";
+import { describeAgentState, isAgentState, isAnomalous, isKnownReason } from "@/lib/agent-state";
 import type { AgentState } from "@/lib/agent-state";
 import type { AgentStatus, AgentStatuses } from "./contract";
 
@@ -101,8 +101,11 @@ export function stateOf(s: AgentStatus): { state: AgentState; reason?: string; s
 }
 
 /** The tag's text and colour, AgentStateTag._label/_color; a state the box published has its own. */
-export function tagOf(s: AgentStatus, now = Date.now()): { label: string; color: number } {
-  if (s.state) return stateTag(s, now);
+export function tagOf(s: AgentStatus, now = Date.now(), locale = "en"): { label: string; color: number } {
+  // A state the box published, or an old box's "throttled" (a block for pacing, stateOf): the
+  // catalog's word in the person's language, the same the line above the scene counts.
+  const state = stateOf(s);
+  if (state) return stateTag(state, now, locale);
   switch (s.status) {
     case "working":
       return { label: "WORKING", color: 0x58e68b };
@@ -110,40 +113,55 @@ export function tagOf(s: AgentStatus, now = Date.now()): { label: string; color:
       return { label: "WAITING", color: 0x7a7a96 };
     case "paused":
       return { label: "PAUSED", color: 0xff7a65 };
-    case "throttled":
-      return countdown(s.throttleUntil, now);
     default:
       // "unknown" (an existing team read over its VPS: a session up says nothing about work) and any
-      // status this file does not know: grey, never drawn as work and never as a wait
-      return { label: "UNKNOWN", color: UNKNOWN_COLOR };
+      // status this file does not know: grey, never drawn as work and never as a wait; the
+      // catalog's word for it, in the person's language
+      return { label: describeAgentState({ state: "sconosciuto" }, locale).word.toLocaleUpperCase(locale), color: UNKNOWN_COLOR };
   }
 }
 
 const UNKNOWN_COLOR = 0x9a9ab0;
 
-function countdown(until: number | undefined, now: number): { label: string; color: number } {
+function countdown(word: string, until: number | undefined, now: number): { label: string; color: number } {
   // the JHT API's pause has no known length: no clock rather than an invented one
-  if (until == null) return { label: "THROTTLED", color: 0xf5c518 };
+  if (until == null) return { label: word, color: 0xf5c518 };
   const left = Math.max(0, Math.ceil((until - now) / 1000));
-  return { label: `THROTTLED  ${Math.floor(left / 60)}:${String(left % 60).padStart(2, "0")}`, color: 0xf5c518 };
+  return { label: `${word}  ${Math.floor(left / 60)}:${String(left % 60).padStart(2, "0")}`, color: 0xf5c518 };
 }
 
-/** One tag per state, by category: green work, amber blocked, blue waits for the person, grey the rest. */
-function stateTag(s: AgentStatus, now: number): { label: string; color: number } {
+/**
+ * One tag per state, by category: green work, amber blocked, blue waits for the person, grey the
+ * rest. The word is the agent_state catalog's (describeAgentState), upper case: a pause for pacing
+ * is "blocked" with its clock, as the catalog and the line above the scene call it.
+ */
+function stateTag(s: NonNullable<ReturnType<typeof stateOf>>, now: number, locale: string): { label: string; color: number } {
+  const word = describeAgentState({ state: s.state }, locale).word.toLocaleUpperCase(locale);
   switch (s.state) {
     case "lavora":
-      return { label: "WORKING", color: 0x58e68b };
+      return { label: word, color: 0x58e68b };
     case "idle":
-      return { label: "IDLE", color: 0x7a7a96 };
+      return { label: word, color: 0x7a7a96 };
     case "bloccato":
-      return s.reason === "pausa_pacing" ? countdown(s.until, now) : { label: "BLOCKED", color: 0xf5c518 };
+      return s.reason === "pausa_pacing" ? countdown(word, s.until, now) : { label: word, color: 0xf5c518 };
     case "aspetta_umano":
-      return { label: "WAITING FOR YOU", color: 0x5aa0ff };
-    case "avviato_mai_partito":
-      return { label: "NEVER STARTED", color: UNKNOWN_COLOR };
+      return { label: word, color: 0x5aa0ff };
     case "spento":
-      return { label: "OFF", color: 0x5a5a70 };
+      return { label: word, color: 0x5a5a70 };
     default:
-      return { label: "UNKNOWN", color: UNKNOWN_COLOR };
+      // sconosciuto, avviato_mai_partito
+      return { label: word, color: UNKNOWN_COLOR };
   }
+}
+
+/**
+ * The tag's second line: why a stopped agent is stopped and until when, or how long ago it
+ * stopped (the catalog's sentence, in the person's language: describeAgentState). Null for an
+ * agent at work or free, and for a box that says no state: nothing is guessed.
+ */
+export function tagDetail(s: AgentStatus, locale: string, now = Date.now()): string | null {
+  const info = stateOf(s);
+  if (!info || !isAnomalous(info.state)) return null;
+  const line = describeAgentState(info, locale, now);
+  return [line.reason, line.when].filter(Boolean).join(" · ") || null;
 }

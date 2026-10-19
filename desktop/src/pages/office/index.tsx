@@ -10,7 +10,9 @@ import OfficeTooltip, { tooltipFor } from "../../office/panel/OfficeTooltip";
 import { keyboardTargets } from "../../office/scene/hit";
 import { useLocale } from "@/lib/use-locale";
 import { emptyEngine, loadAssets, loadParts, type OfficeAssets, type OfficeParts } from "../../office/parts";
-import { loadAgentStatuses } from "../../office/status";
+import { loadAgentStatuses, stateOf } from "../../office/status";
+import { officeSummary } from "../../office/summary";
+import { withStatusAgents } from "../../office/data/load";
 import { appLocale } from "../../lib/app-locale";
 import { useExistingTeamReadOnly } from "../../lib/existing-team-readonly";
 import { EXISTING_TEAM_READONLY_TEXT } from "../../lib/existing-team-readonly.i18n";
@@ -171,14 +173,18 @@ function Office({ ready, source }: { ready: Ready; source: OfficeSource }) {
     // The tags' statuses in a query of their own: its failure costs the tags, not the office.
     const statuses = loadAgentStatuses(supabase);
     try {
-      const next = await data.load(supabase);
+      const read = await data.load(supabase);
       if (!engineRef.current) return;
+      // a team that is not online has no present status to show
+      const tags = read.teamOnline ? await statuses : null;
+      if (!engineRef.current) return;
+      // the agents the status map names are in the office too: the stopped ones move no position
+      const next = withStatusAgents(read, tags);
       live.current ??= createLiveOffice(data.diff, applyEvent);
       live.current.snapshot(next);
       setSnapshot(next);
-      setStatus(next.teamOnline === false ? teamOffMessage(next.roster.length) : null);
-      // a team that is not online has no present status to show
-      showStatuses(next.teamOnline ? await statuses : null);
+      setStatus(next.teamOnline === false ? teamOffMessage(next.roster.length) : summaryOf(tags, next));
+      showStatuses(tags);
     } catch {
       showStatuses(null);
       setStatus(officeText().readFailed);
@@ -331,6 +337,16 @@ function Office({ ready, source }: { ready: Ready; source: OfficeSource }) {
         )}
       </div>
     </div>
+  );
+}
+
+/** How the team is at a glance (office/summary.ts): the statuses' counts and who has no seat; null without statuses. */
+function summaryOf(tags: AgentStatuses | null, snapshot: OfficeSnapshot): string | null {
+  if (!tags) return null;
+  const drawn = new Set(snapshot.roster.map((a) => a.uid));
+  return officeSummary(
+    Object.entries(tags.agents).map(([uid, status]) => ({ name: uid, state: stateOf(status)?.state ?? null, drawn: drawn.has(uid) })),
+    appLocale(),
   );
 }
 

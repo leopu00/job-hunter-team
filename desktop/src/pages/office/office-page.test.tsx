@@ -26,7 +26,10 @@ vi.mock("../../lib/supabase", () => ({
   supabase: new Proxy({}, { get: (_, key) => sb.client[key as string] }),
 }));
 const statuses = vi.hoisted(() => ({ value: null as unknown }));
-vi.mock("../../office/status", () => ({ loadAgentStatuses: vi.fn(async () => statuses.value) }));
+vi.mock("../../office/status", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../office/status")>()),
+  loadAgentStatuses: vi.fn(async () => statuses.value),
+}));
 
 const parts = vi.hoisted(() => ({ value: { createEngine: null as unknown, data: null as unknown } }));
 vi.mock("../../office/parts", async (importOriginal) => ({
@@ -174,14 +177,14 @@ describe("the office page", () => {
 
   it("hands the scene the published statuses only while the team is online", async () => {
     statuses.value = { at: Date.now(), agents: { capitano: { status: "working" } } };
-    const online = { teamOnline: true } as OfficeSnapshot;
+    const online = { teamOnline: true, roster: [], transitions: [] } as unknown as OfficeSnapshot;
     parts.value = { createEngine: vi.fn(() => emptyEngine()), data: { load: vi.fn(async () => online), diff: vi.fn(() => []) } };
     const { unmount } = render(<OfficePage params={{}} search={new URLSearchParams()} />);
     await waitFor(() => expect(scene.setAgentStatuses).toHaveBeenCalledWith(statuses.value));
     unmount();
 
     scene.setAgentStatuses.mockClear();
-    const offline = { teamOnline: false } as OfficeSnapshot;
+    const offline = { teamOnline: false, roster: [], transitions: [] } as unknown as OfficeSnapshot;
     parts.value = { createEngine: vi.fn(() => emptyEngine()), data: { load: vi.fn(async () => offline), diff: vi.fn(() => []) } };
     render(<OfficePage params={{}} search={new URLSearchParams()} />);
     await waitFor(() => expect(scene.setAgentStatuses).toHaveBeenCalled());

@@ -180,7 +180,7 @@ function AgentBody({ target, layout, statuses, client, onNavigate }: OfficePanel
   const { data, error } = useLoad<AgentPanelData>(() => loadAgentPanel(client, target.uid));
   const dept = DEPT_OF_ROLE[target.role];
   const status = statuses?.agents[target.uid.toLowerCase()];
-  const tag = status ? tagOf(status) : null;
+  const tag = status ? tagOf(status, Date.now(), locale) : null;
   return (
     <>
       <Heading title={target.uid.toUpperCase()} sub={dept ? fill(t.departmentOf, { name: deptName(layout, dept) }) : target.role} />
@@ -271,7 +271,7 @@ function DepartmentBody({ dept, layout, snapshot, statuses, client, source = "cl
           <ul className="m-0 list-none p-0">
             {agents.map((a) => {
               const s = statuses?.agents[a.uid.toLowerCase()];
-              const tag = s ? tagOf(s) : null;
+              const tag = s ? tagOf(s, Date.now(), locale) : null;
               return (
                 <li key={a.uid} className="flex items-baseline justify-between border-b border-[var(--color-border)] py-1 last:border-0">
                   <span>{a.uid.toUpperCase()}</span>

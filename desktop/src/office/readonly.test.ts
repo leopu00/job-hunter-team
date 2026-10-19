@@ -188,6 +188,17 @@ describe("officeFromTeamProbe with the team's agents (the Agents page's read)", 
     expect(officeFromTeamProbe(read({ containerRunning: false }), CONNECTION, "it", null, agentsRead(TEAM)).snapshot.roster).toEqual([]);
   });
 
+  it("says above the scene how the team is: the counts by state the team computes, and who has no seat", () => {
+    const office = officeFromTeamProbe(read(), CONNECTION, "it", null, agentsRead(TEAM));
+    // CAPITANO and CLOSER-1 work, SCOUT-1 is blocked, SCOUT-2 and DOTTORE are free; CRITICO-S3 is not known
+    expect(office.notice?.text).toContain("▶ lavora 2 · ⏸ bloccato 1 · ○ libero 2");
+    expect(office.notice?.text).toContain("CLOSER-1, DOTTORE");
+    // without the team's own state, no count: only who has no seat
+    const unknown = officeFromTeamProbe(read(), CONNECTION, "it", null, agentsRead(TEAM, false));
+    expect(unknown.notice?.text).not.toContain("▶");
+    expect(unknown.notice?.text).toContain("CLOSER-1, DOTTORE");
+  });
+
   it("no sentence of the agents' office is left with a placeholder, in any language", () => {
     for (const locale of LOCALES) {
       const office = officeFromTeamProbe(read(), CONNECTION, locale, null, agentsRead(TEAM, false));

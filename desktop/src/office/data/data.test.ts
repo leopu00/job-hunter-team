@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { fakeSupabase, type FakeQuery } from "../../test-support/fake-supabase";
 import type { OfficeSnapshot, Piles } from "../contract";
 import { agentOf, diffOfficeSnapshots, loadOfficeSnapshot, TRANSITIONS_LIMIT } from "./index";
+import { withStatusAgents } from "./load";
 
 // Synthetic rows only.
 const NOW = Date.parse("2026-09-27T18:00:00Z");
@@ -198,5 +199,30 @@ describe("diffOfficeSnapshots", () => {
       transitions: [move("2026-09-27T17:00:00Z", "scout-1", "new", 1), move("2026-09-27T16:00:00Z", "scout-1", "new", 9)],
     });
     expect(diffOfficeSnapshots(prev, next)).toEqual([]);
+  });
+});
+
+describe("withStatusAgents", () => {
+  const snap = (roster: string[], teamOnline: boolean | null = true): OfficeSnapshot => ({
+    teamOnline,
+    heartbeatAt: null,
+    roster: roster.map((uid) => ({ uid, role: agentOf(uid)!.role, sheet: "" })),
+    piles: { scout: null, analisti: null, scorer: null, scrittori: null, critici: null },
+    transitions: [],
+  });
+  const tags = (...uids: string[]) => ({ at: NOW, agents: Object.fromEntries(uids.map((uid) => [uid, { status: "idle" as const }])) });
+
+  it("puts in the office the agents the status map names and that moved no position: the stopped ones", () => {
+    const out = withStatusAgents(snap(["capitano", "scout-1", "analista-1"]), tags("capitano", "scout-1", "scout-2", "scrittore-1", "critico"));
+    expect(out.roster.map((a) => a.uid)).toEqual(["capitano", "scout-1", "scout-2", "analista-1", "scrittore-1", "critico"]);
+    expect(out.roster.find((a) => a.uid === "scout-2")).toEqual({ uid: "scout-2", role: "scout", sheet: "" });
+  });
+
+  it("takes only names of agents, and nothing from a team that is not online or a missing map", () => {
+    expect(withStatusAgents(snap(["capitano"]), tags("unstuck", "user", "scout-0", "SCOUT-3")).roster.map((a) => a.uid)).toEqual(["capitano"]);
+    const off = snap(["scout-1"], false);
+    expect(withStatusAgents(off, tags("scout-2"))).toBe(off);
+    const on = snap(["scout-1"]);
+    expect(withStatusAgents(on, null)).toBe(on);
   });
 });

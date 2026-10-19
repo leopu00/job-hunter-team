@@ -35,8 +35,10 @@ import {
 import { feetAnchor, pickCell } from "./frames";
 import { assetUrl } from "./asset-url";
 import { READABLE_PX, readableScale } from "./readable";
+import { separateTags, type TagBox } from "./tag-layout";
 import { allFurniture, cameraBounds } from "../layout-items";
-import { tagOf } from "../status";
+import { tagDetail, tagOf } from "../status";
+import { appLocale } from "../../lib/app-locale";
 import { boxLights, darkness, GRAIN_AMOUNT, LAMPS, lighting, localHour, outsideBands, vignetteAlpha, type Pool } from "./atmosphere";
 import { RIG_SCALE } from "../contract";
 
@@ -168,24 +170,31 @@ export async function createOfficeScene(host: HTMLElement, options: OfficeSceneO
 
   // The departments' dressing (department_dressing.gd): tint, brackets, name. The name goes over
   // the scene with the other labels: grown to stay readable, on the floor it would go under the desks.
-  for (const dept of layout.departments) floorLayer.addChild(departmentDressing(dept, keepReadable, overlay));
+  // the departments' names: the agents' tags and the piles' counts keep clear of them too
+  const deptLabels: Container[] = [];
+  for (const dept of layout.departments) floorLayer.addChild(departmentDressing(dept, keepReadable, overlay, deptLabels));
 
   // The handoff tables' tags and piles: paper sheets with their count where
   // the layout says how (paper_pile.gd), a plain counter otherwise.
   const paper = layout.paperPile;
   const sheetTex = paper ? textureFor(textures, paper.image) : null;
   const piles = new Map<DeptId, (n: number | null) => void>();
+  // the piles' counts and where each wants to be: drawTags places them with the agents' tags
+  const pileBadges: PileBadge[] = [];
+  // the handoff tags: the agents' tags and the piles' counts keep clear of them (drawTags)
+  const handoffTags: Container[] = [];
   const pileNodes = new Map<DeptId, { node: Container; spot: Vec }>();
   for (const dept of layout.departments) {
     // over the scene, as the department's name: grown, among the furniture it would be cut by it
-    if (dept.handoff) overlay.addChild(keepReadable(handoffTag(dept.handoff.label, dept.handoff.labelPos, dept.color, dept.inbox.y + 1), 10, READABLE_PX.handoffTag));
+    if (dept.handoff)
+      handoffTags.push(overlay.addChild(keepReadable(handoffTag(dept.handoff.label, dept.handoff.labelPos, dept.color, dept.inbox.y + 1), 10, READABLE_PX.handoffTag)));
     const spot = dept.handoff?.pileSpot ?? dept.inbox;
     const pile = new Container();
     pile.position.set(spot.x, spot.y);
     pile.zIndex = dept.inbox.y + 0.5;
     pileNodes.set(dept.id, { node: pile, spot });
     sortedLayer.addChild(pile);
-    piles.set(dept.id, paper && sheetTex ? paperPile(pile, paper, sheetTex, keepReadable) : counterBadge(pile, dept.color, keepReadable));
+    piles.set(dept.id, paper && sheetTex ? paperPile(pile, paper, sheetTex, keepReadable, overlay, pileBadges) : counterBadge(pile, dept.color, keepReadable));
   }
 
   // The box's edges (tesseract_edges.gd): additive rays from the floor's corners, pulsing.
@@ -237,6 +246,8 @@ export async function createOfficeScene(host: HTMLElement, options: OfficeSceneO
     view: { w: app.screen.width, h: app.screen.height },
     bounds,
     start: floorCentre,
+    // the first view shows the whole floor: every department, where it is
+    fit: layout.floor,
     onChange: (camera) => {
       world.scale.set(camera.scale);
       world.position.set(camera.x, camera.y);
@@ -317,30 +328,58 @@ export async function createOfficeScene(host: HTMLElement, options: OfficeSceneO
   const bubbles = new Map<string, { node: Container; text: string }>();
   // The status tags (AgentStateTag): what the box published, never guessed.
   let statuses: AgentStatuses | null = null;
-  const tags = new Map<string, { node: Container; key: string }>();
+  const tags = new Map<string, { node: Container; h: number; key: string }>();
   const drawTags = (poses: AgentPose[]) => {
     const live = new Set<string>();
     const now = Date.now();
+    const k = readableScale(11, controls.camera().scale, READABLE_PX.stateTag);
+    const wanted: TagBox[] = [];
+    const nodes = new Map<string, Container>();
     for (const pose of poses) {
       const status = statuses?.agents[pose.uid.toLowerCase()];
       const sprite = agents.get(pose.uid);
       if (!status || !sprite) continue;
       live.add(pose.uid);
-      const { label, color } = tagOf(status, now);
-      const key = `${label}|${color}`;
+      // who (the session's name), what (the state) and, for a stopped agent, why and until when
+      const { label, color } = tagOf(status, now, appLocale());
+      const name = pose.uid.toUpperCase();
+      const detail = tagDetail(status, appLocale(), now);
+      const key = `${name}|${label}|${color}|${detail}`;
       let entry = tags.get(pose.uid);
       if (!entry || entry.key !== key) {
         entry?.node.destroy({ children: true });
-        entry = { node: stateTag(label, color), key };
+        entry = { ...stateTag(name, label, color, detail), key };
         tags.set(pose.uid, entry);
         overlay.addChild(entry.node);
       }
       // over the head: the cell's top above the feet, plus half the tag and 6 px (STATE_TAG_HEAD_CLEARANCE),
       // the tag kept readable at the camera's zoom
-      const k = readableScale(11, controls.camera().scale, READABLE_PX.stateTag);
       entry.node.scale.set(k);
       const top = sprite.getLocalBounds().y * Math.abs(sprite.scale.y);
-      entry.node.position.set(pose.pos.x, pose.pos.y + top - 12 * k - 6);
+      const w = entry.node.getLocalBounds().width * k;
+      wanted.push({ id: pose.uid, x: pose.pos.x, y: pose.pos.y + top - (entry.h / 2) * k - 6, w, h: entry.h * k });
+      nodes.set(pose.uid, entry.node);
+    }
+    // Tags that would overlap each other or a handoff tag move up just enough, and none leaves
+    // the top or a side of the view: two agents side by side are both read.
+    const fixed = [...handoffTags, ...deptLabels].map((node) => boxOf(node));
+    // the piles' counts, placed with the tags: where they want to be, or just above a label
+    const counts = new Map<string, { badge: PileBadge; cx: number; cy: number }>();
+    pileBadges.forEach((badge, i) => {
+      if (badge.node.children.length === 0) return;
+      const r = boxOf(badge.node, badge.home);
+      const id = `pile:${i}`;
+      counts.set(id, { badge, cx: r.x + r.w / 2, cy: r.y + r.h / 2 });
+      wanted.push({ id, x: r.x + r.w / 2, y: r.y + r.h / 2, w: r.w, h: r.h });
+    });
+    const corner = toWorld(controls.camera(), { x: 0, y: 0 });
+    const far = toWorld(controls.camera(), { x: app.screen.width, y: app.screen.height });
+    const at = separateTags(wanted, fixed, 4 * k, { top: corner.y, left: corner.x, right: far.x });
+    for (const tag of wanted) {
+      const p = at.get(tag.id) ?? tag;
+      const count = counts.get(tag.id);
+      if (count) count.badge.node.position.set(count.badge.home.x + p.x - count.cx, count.badge.home.y + p.y - count.cy);
+      else nodes.get(tag.id)!.position.set(p.x, p.y);
     }
     for (const [uid, entry] of tags) {
       if (live.has(uid)) continue;
@@ -498,6 +537,15 @@ export async function createOfficeScene(host: HTMLElement, options: OfficeSceneO
 /** A label kept readable at any zoom: its node, its font in world pixels, its smallest size on screen (readable.ts). */
 type Readable = { node: Container; font: number; min: number };
 type KeepReadable = <T extends Container>(node: T, font: number, min: number) => T;
+/** A pile's count: its node and where it wants to be (drawTags moves it off a label in the way). */
+type PileBadge = { node: Container; home: Vec };
+
+/** A node's box in its parent's (the world's) pixels, as drawn at its scale. */
+function boxOf(node: Container, at: Vec = node.position): Rect {
+  const b = node.getLocalBounds();
+  const s = node.scale.x;
+  return { x: at.x + b.x * s, y: at.y + b.y * s, w: b.width * s, h: b.height * s };
+}
 
 // ─── Textures ────────────────────────────────────────────────────────────
 
@@ -751,7 +799,7 @@ function seededRandom(seed: string): () => number {
 }
 
 /** DepartmentDressing._draw_zone: three faint tints, painted blotches, L brackets, name and tagline. */
-function departmentDressing(dept: Department, keepReadable: KeepReadable, labels: Container): Container {
+function departmentDressing(dept: Department, keepReadable: KeepReadable, labels: Container, named: Container[]): Container {
   const c = new Container();
   c.eventMode = "none";
   const col = colorOf(dept.color);
@@ -808,7 +856,7 @@ function departmentDressing(dept: Department, keepReadable: KeepReadable, labels
       .fill({ color: 0x0a0a0f, alpha: 0.82 });
     label.addChild(plate, tag);
   }
-  labels.addChild(keepReadable(label, 15, READABLE_PX.departmentTagline));
+  named.push(labels.addChild(keepReadable(label, 15, READABLE_PX.departmentTagline)));
   return c;
 }
 
@@ -832,12 +880,23 @@ function handoffTag(label: string, at: Vec, color: string, zIndex: number): Cont
 }
 
 /** The pile as paper: one sprite per sheet, and the count in a green-bordered box above the tallest stack. */
-function paperPile(pile: Container, rule: PaperRule, sheet: Texture, keepReadable: KeepReadable): (n: number | null) => void {
+function paperPile(
+  pile: Container,
+  rule: PaperRule,
+  sheet: Texture,
+  keepReadable: KeepReadable,
+  labels: Container,
+  badges: PileBadge[],
+): (n: number | null) => void {
   const sheets = new Container();
-  // the count's box, anchored at its text's baseline-left and kept readable there
+  // The count's box, anchored at its text's baseline-left and kept readable there. It goes over
+  // the scene with the labels, after them: a department's name grown to be read must not cover it.
   const badge = keepReadable(new Container(), 13, READABLE_PX.pileCount);
   const hit = new Graphics();
-  pile.addChild(hit, sheets, badge);
+  pile.addChild(hit, sheets);
+  labels.addChild(badge);
+  const placed: PileBadge = { node: badge, home: { x: pile.x, y: pile.y } };
+  badges.push(placed);
   let shown: number | null | undefined;
   const scale = rule.width / sheet.width;
   return (n) => {
@@ -858,7 +917,8 @@ function paperPile(pile: Container, rule: PaperRule, sheet: Texture, keepReadabl
     badge.removeChildren().forEach((b) => b.destroy());
     if (n == null || n <= 0) return;
     const text = new Text({ text: String(n), style: { fontFamily: FONT, fontSize: 13, fontWeight: "700", fill: GREEN } });
-    badge.position.set(92, -tower - 28);
+    placed.home = { x: pile.x + 92, y: pile.y - tower - 28 };
+    badge.position.set(placed.home.x, placed.home.y);
     badge.addChild(
       new Graphics()
         .rect(-5, -14, text.width + 10, text.height + 7)
@@ -970,22 +1030,39 @@ function frontOccluder(where: Rect, tex: Texture, cut: number, flip: boolean): S
   return s;
 }
 
-/** AgentStateTag._draw: a dark plate with the status colour's border, the (unlit) LED and the label. */
-function stateTag(label: string, color: number): Container {
+/**
+ * AgentStateTag._draw: a dark plate tinted and bordered with the status colour, and its LED lit. First
+ * line: the agent's name and its state; second line, for a stopped agent: why, and until when.
+ */
+function stateTag(name: string, label: string, color: number, detail: string | null): { node: Container; h: number } {
   const c = new Container();
   c.eventMode = "none";
-  const text = new Text({ text: label, style: { fontFamily: FONT, fontSize: 11, fontWeight: "700", fill: 0xf0f0fa } });
-  const w = text.width + 24;
-  const h = 24;
+  const who = new Text({ text: name, style: { fontFamily: FONT, fontSize: 11, fontWeight: "700", fill: 0xf0f0fa } });
+  const what = new Text({ text: label, style: { fontFamily: FONT, fontSize: 11, fontWeight: "700", fill: color } });
+  const why = detail ? new Text({ text: detail, style: { fontFamily: FONT, fontSize: 10, fontWeight: "500", fill: 0xc9d1d9 } }) : null;
+  const gap = 8;
+  const w = Math.max(who.width + gap + what.width, why?.width ?? 0) + 24;
+  const h = why ? 38 : 24;
+  // the plate takes a tint of the state's colour, and the border is thicker: the state reads at a
+  // glance across the office, not only in a 1 px line
   const g = new Graphics()
     .rect(-w / 2, -h / 2, w, h)
     .fill({ color: 0x16161d, alpha: 0.96 })
     .rect(-w / 2, -h / 2, w, h)
-    .stroke({ color, alpha: 0.85, width: 1.4 });
-  // the game lights this LED from the CPU sampler, which the cloud does not have: always unlit
-  g.circle(-w / 2 + 9, 0, 3).fill(0x252530);
-  g.circle(-w / 2 + 9, 0, 2.7).stroke({ color: 0x4a4a5e, alpha: 0.8, width: 0.8 });
-  text.position.set(-w / 2 + 16, -text.height / 2);
-  c.addChild(g, text);
-  return c;
+    .fill({ color, alpha: 0.16 })
+    .rect(-w / 2, -h / 2, w, h)
+    .stroke({ color, alpha: 0.95, width: 2 });
+  const line = -h / 2 + 12;
+  // The game lights this LED from the CPU sampler, which the desktop does not have: here it is
+  // lit with the state's colour, what the team publishes, with a soft halo.
+  g.circle(-w / 2 + 9, line, 5.5).fill({ color, alpha: 0.25 });
+  g.circle(-w / 2 + 9, line, 3.2).fill(color);
+  who.position.set(-w / 2 + 16, line - who.height / 2);
+  what.position.set(who.x + who.width + gap, line - what.height / 2);
+  c.addChild(g, who, what);
+  if (why) {
+    why.position.set(-w / 2 + 16, line + 7);
+    c.addChild(why);
+  }
+  return { node: c, h };
 }

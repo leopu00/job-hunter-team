@@ -6,8 +6,10 @@ import { pluralText, type PluralForms } from "../lib/plural";
  * The words around the office scene: the panel a click opens, the tag under
  * the pointer, the keyboard list and the page's status line. 7 languages;
  * Italian is the source and its shape is the type. What is NOT here is the
- * game's own English: the agents' state tags (WORKING, IDLE…) and the
- * departments' names and taglines (office/contract.ts).
+ * game's own English: the departments' names and taglines
+ * (office/contract.ts). The agents' state tags say the agent_state
+ * catalog's word in the person's language (office/status.ts, tagOf); only
+ * an old box's words without a state (WORKING, WAITING, PAUSED) stay English.
  * `{count}`, `{error}`, `{name}`, `{notes}` are filled by `fill`.
  */
 export interface OfficeText {
@@ -76,6 +78,8 @@ export interface OfficeText {
   noWebGl: string;
   teamOffEmpty: string;
   teamOffRecent: string;
+  // the line above the scene: the agents that have no seat in the office
+  notInOffice: string; // {names}
 }
 
 export const OFFICE_TEXT: Record<Locale, OfficeText> = {
@@ -141,6 +145,7 @@ export const OFFICE_TEXT: Record<Locale, OfficeText> = {
     noWebGl: "La scena non parte: questa finestra non ha WebGL.",
     teamOffEmpty: "Il team è spento: l'ufficio è vuoto.",
     teamOffRecent: "Il team è spento: restano gli agenti che hanno lavorato nelle ultime 24 ore.",
+    notInOffice: "Non nell'ufficio: {names}.",
   },
   en: {
     detailsAria: "Office details",
@@ -204,6 +209,7 @@ export const OFFICE_TEXT: Record<Locale, OfficeText> = {
     noWebGl: "The scene does not start: this window has no WebGL.",
     teamOffEmpty: "The team is off: the office is empty.",
     teamOffRecent: "The team is off: the agents who worked in the last 24 hours stay.",
+    notInOffice: "Not in the office: {names}.",
   },
   de: {
     detailsAria: "Details des Büros",
@@ -267,6 +273,7 @@ export const OFFICE_TEXT: Record<Locale, OfficeText> = {
     noWebGl: "Die Szene startet nicht: Dieses Fenster hat kein WebGL.",
     teamOffEmpty: "Das Team ist aus: Das Büro ist leer.",
     teamOffRecent: "Das Team ist aus: Es bleiben die Agenten, die in den letzten 24 Stunden gearbeitet haben.",
+    notInOffice: "Nicht im Büro: {names}.",
   },
   fr: {
     detailsAria: "Détails du bureau",
@@ -330,6 +337,7 @@ export const OFFICE_TEXT: Record<Locale, OfficeText> = {
     noWebGl: "La scène ne démarre pas : cette fenêtre n’a pas WebGL.",
     teamOffEmpty: "L’équipe est éteinte : le bureau est vide.",
     teamOffRecent: "L’équipe est éteinte : restent les agents qui ont travaillé ces dernières 24 heures.",
+    notInOffice: "Pas dans le bureau : {names}.",
   },
   es: {
     detailsAria: "Detalles de la oficina",
@@ -393,6 +401,7 @@ export const OFFICE_TEXT: Record<Locale, OfficeText> = {
     noWebGl: "La escena no arranca: esta ventana no tiene WebGL.",
     teamOffEmpty: "El equipo está apagado: la oficina está vacía.",
     teamOffRecent: "El equipo está apagado: quedan los agentes que han trabajado en las últimas 24 horas.",
+    notInOffice: "Fuera de la oficina: {names}.",
   },
   pt: {
     detailsAria: "Detalhes do escritório",
@@ -456,6 +465,7 @@ export const OFFICE_TEXT: Record<Locale, OfficeText> = {
     noWebGl: "A cena não arranca: esta janela não tem WebGL.",
     teamOffEmpty: "A equipa está desligada: o escritório está vazio.",
     teamOffRecent: "A equipa está desligada: ficam os agentes que trabalharam nas últimas 24 horas.",
+    notInOffice: "Fora do escritório: {names}.",
   },
   hu: {
     detailsAria: "Az iroda részletei",
@@ -519,6 +529,7 @@ export const OFFICE_TEXT: Record<Locale, OfficeText> = {
     noWebGl: "A jelenet nem indul: ennek az ablaknak nincs WebGL-je.",
     teamOffEmpty: "A csapat ki van kapcsolva: az iroda üres.",
     teamOffRecent: "A csapat ki van kapcsolva: az utolsó 24 órában dolgozó ügynökök maradnak.",
+    notInOffice: "Nincs az irodában: {names}.",
   },
 };
 

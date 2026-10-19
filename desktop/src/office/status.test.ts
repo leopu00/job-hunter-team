@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
+import { locales as LOCALES } from "@/i18n/config";
+import { describeAgentState } from "@/lib/agent-state";
+import { officeSummary } from "./summary";
 import { fakeSupabase } from "../test-support/fake-supabase";
-import { loadAgentStatuses, parseAgentStatuses, STATUS_STALE_MS, stateOf, tagOf } from "./status";
+import { tagDetail, loadAgentStatuses, parseAgentStatuses, STATUS_STALE_MS, stateOf, tagOf } from "./status";
 
 const AT = "2026-09-27T20:00:00Z";
 const NOW = Date.parse(AT) + 30_000;
@@ -81,12 +84,12 @@ describe("the tag (AgentStateTag._label/_color)", () => {
   });
 
   it("a throttle counts down to 0:00", () => {
-    expect(tagOf({ status: "throttled", throttleUntil: NOW + 95_000 }, NOW).label).toBe("THROTTLED  1:35");
-    expect(tagOf({ status: "throttled", throttleUntil: NOW - 5_000 }, NOW).label).toBe("THROTTLED  0:00");
+    expect(tagOf({ status: "throttled", throttleUntil: NOW + 95_000 }, NOW).label).toBe("BLOCKED  1:35");
+    expect(tagOf({ status: "throttled", throttleUntil: NOW - 5_000 }, NOW).label).toBe("BLOCKED  0:00");
   });
 
   it("a throttle of unknown length has no clock", () => {
-    expect(tagOf({ status: "throttled" }, NOW)).toEqual({ label: "THROTTLED", color: 0xf5c518 });
+    expect(tagOf({ status: "throttled" }, NOW)).toEqual({ label: "BLOCKED", color: 0xf5c518 });
   });
 });
 
@@ -135,14 +138,14 @@ describe("the tag of a published state", () => {
     expect(tagOf({ status: "working", state: "lavora" })).toEqual({ label: "WORKING", color: 0x58e68b });
     expect(tagOf({ status: "paused", state: "bloccato", reason: "limite_5h" })).toEqual({ label: "BLOCKED", color: 0xf5c518 });
     expect(tagOf({ status: "idle", state: "aspetta_umano" })).toEqual({ label: "WAITING FOR YOU", color: 0x5aa0ff });
-    expect(tagOf({ status: "idle", state: "avviato_mai_partito" }).label).toBe("NEVER STARTED");
+    expect(tagOf({ status: "idle", state: "avviato_mai_partito" }).label).toBe("STARTED, NEVER RAN");
     expect(tagOf({ status: "idle", state: "sconosciuto", reason: "turno_silenzioso" }).label).toBe("UNKNOWN");
     expect(tagOf({ status: "idle", state: "idle" }).label).toBe("IDLE");
     expect(tagOf({ status: "idle", state: "spento" }).label).toBe("OFF");
   });
 
   it("a pacing block still counts down", () => {
-    expect(tagOf({ status: "throttled", state: "bloccato", reason: "pausa_pacing", until: NOW + 95_000 }, NOW).label).toBe("THROTTLED  1:35");
+    expect(tagOf({ status: "throttled", state: "bloccato", reason: "pausa_pacing", until: NOW + 95_000 }, NOW).label).toBe("BLOCKED  1:35");
   });
 
   it("never-started and unknown are grey, and never the colour of work or of a wait", () => {
@@ -158,3 +161,44 @@ describe("the tag of a published state", () => {
   });
 });
 
+
+describe("tagDetail", () => {
+  const NOW_MS = Date.parse("2026-10-19T12:00:00Z");
+  it("says why a stopped agent is stopped and until when, in the person's language", () => {
+    const blocked = tagDetail({ status: "unknown", state: "bloccato", reason: "limite_5h", until: NOW_MS + 90 * 60_000 }, "en", NOW_MS);
+    expect(blocked).toMatch(/^5-hour limit · retry /);
+    expect(tagDetail({ status: "unknown", state: "bloccato", reason: "limite_5h", until: NOW_MS + 90 * 60_000 }, "it", NOW_MS)).not.toBe(blocked);
+    expect(tagDetail({ status: "unknown", state: "aspetta_umano", since: NOW_MS - 30 * 60_000 }, "en", NOW_MS)).toMatch(/30/);
+  });
+
+  it("says nothing for an agent at work or free, and guesses nothing for a box that says no state", () => {
+    expect(tagDetail({ status: "working", state: "lavora", since: NOW_MS - 60_000 }, "en", NOW_MS)).toBeNull();
+    expect(tagDetail({ status: "idle", state: "idle", since: NOW_MS - 60_000 }, "en", NOW_MS)).toBeNull();
+    expect(tagDetail({ status: "unknown" }, "en", NOW_MS)).toBeNull();
+    expect(tagDetail({ status: "idle" }, "en", NOW_MS)).toBeNull();
+  });
+});
+
+describe("the tag and the line above the scene say the same word, in every language", () => {
+  const PACING = { status: "throttled" as const, state: "bloccato" as const, reason: "pausa_pacing", until: Date.parse("2026-10-19T12:08:00Z") };
+  it("a pause for pacing is «blocked» with its clock, as the catalog and the counts call it", () => {
+    for (const locale of LOCALES) {
+      const line = officeSummary([{ name: "scrittore-2", state: "bloccato", drawn: true }], locale)!;
+      const word = describeAgentState({ state: "bloccato" }, locale).word;
+      expect(line, locale).toContain(word);
+      expect(tagOf(PACING, Date.parse("2026-10-19T12:00:00Z"), locale).label, locale).toBe(`${word.toLocaleUpperCase(locale)}  8:00`);
+      // an old box's "throttled" is the same block
+      expect(tagOf({ status: "throttled", throttleUntil: PACING.until }, Date.parse("2026-10-19T12:00:00Z"), locale).label, locale).toBe(
+        `${word.toLocaleUpperCase(locale)}  8:00`,
+      );
+    }
+  });
+
+  it("every state's tag is the catalog's word, upper case, in the person's language", () => {
+    for (const locale of LOCALES)
+      for (const state of ["lavora", "idle", "bloccato", "aspetta_umano", "spento", "sconosciuto", "avviato_mai_partito"] as const)
+        expect(tagOf({ status: "unknown", state }, 0, locale).label, `${locale} ${state}`).toBe(
+          describeAgentState({ state }, locale).word.toLocaleUpperCase(locale),
+        );
+  });
+});

@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { AGENTS, HEARTBEAT_STALE_MS, readPositions } from "../../pages/agents/load-agents";
-import type { AgentRole, OfficeAgent, OfficeSnapshot, Piles } from "../contract";
+import type { AgentRole, AgentStatuses, OfficeAgent, OfficeSnapshot, Piles } from "../contract";
 
 /**
  * The office's snapshot, read from the cloud with the user's own session,
@@ -80,6 +80,29 @@ export async function loadOfficeSnapshot(client: Client, now: number = Date.now(
       };
     }),
   };
+}
+
+/**
+ * The roster with every agent the team's status map names (team_state.agents_status, the
+ * tags' source). The roster comes from the positions moved in the last 24 h: an agent that
+ * is blocked, paused or waiting for the person moves none, so without this the office leaves
+ * out exactly the agents that are stopped. Only a team online has a present map; only names
+ * agentOf takes; the roster's order is kept.
+ */
+export function withStatusAgents(snapshot: OfficeSnapshot, statuses: AgentStatuses | null): OfficeSnapshot {
+  if (!statuses || snapshot.teamOnline !== true) return snapshot;
+  const known = new Set(snapshot.roster.map((a) => a.uid));
+  const added: OfficeAgent[] = [];
+  for (const uid of Object.keys(statuses.agents)) {
+    const who = known.has(uid) ? null : agentOf(uid);
+    if (who) added.push({ uid, role: who.role, sheet: "" });
+  }
+  if (added.length === 0) return snapshot;
+  const n = (uid: string) => agentOf(uid)?.n ?? 1;
+  const roster = [...snapshot.roster, ...added].sort(
+    (a, b) => ROLE_ORDER.indexOf(a.role) - ROLE_ORDER.indexOf(b.role) || n(a.uid) - n(b.uid) || a.uid.localeCompare(b.uid),
+  );
+  return { ...snapshot, roster };
 }
 
 async function readTeam(client: Client, userId: string): Promise<{ isRunning: boolean; heartbeatAt: string | null } | null> {
