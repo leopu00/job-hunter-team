@@ -904,7 +904,7 @@ describe("OnboardingFlow technical setup", () => {
     expect(screen.getByText("ssh-ed25519")).toBeInTheDocument();
     expect(screen.getByText("SHA256:synthetic-fingerprint")).toBeInTheDocument();
     expect(document.body).not.toHaveTextContent("host.example.invalid");
-    await userEvent.click(screen.getByRole("button", { name: /conferma fingerprint/i }));
+    await userEvent.click(screen.getByRole("button", { name: /conferma l’impronta/i }));
     expect(onConfirmHostKey).toHaveBeenCalledOnce();
     await userEvent.click(screen.getByRole("button", { name: /annulla/i }));
     expect(onCancelHostKey).toHaveBeenCalledOnce();
