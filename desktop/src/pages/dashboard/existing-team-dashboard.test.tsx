@@ -67,7 +67,12 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-const opsAsked = () => native.invoke.mock.calls.map(([, args]) => (args.request as { op: string }).op);
+// The header's read of which team this is (existing_team_link_identity: a local file, no SSH) has no
+// request; every other call must be the core's read.
+const opsAsked = () => {
+  const calls = native.invoke.mock.calls.filter(([command]) => command !== "existing_team_link_identity");
+  return calls.map(([, args]) => (args.request as { op: string }).op);
+};
 
 describe("Dashboard on an existing team read only", () => {
   it("draws the core's counts, the newest scored and the charts, and asks the cloud for nothing", async () => {
