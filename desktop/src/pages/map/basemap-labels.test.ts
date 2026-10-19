@@ -3,6 +3,8 @@ import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import { locales } from "@/i18n/config";
 import {
+  CALM_NAME_COLOR_DARK,
+  CALM_NAME_LAYERS,
   basemapNameExpression,
   basemapNameOf,
   isTranslatedNameLayer,
@@ -50,5 +52,28 @@ describe("basemap names in the interface language", () => {
     // a language change on a still map, and the names the labels avoid are read in that language.
     expect(globe).toMatch(/applyBasemapLanguage\(map, basemapLang\);/);
     expect(globe).toMatch(/basemapNameRects\(map, lang\)/);
+  });
+});
+
+// The country names are the background, the numbers of the beams the subject.
+describe("basemap names as background", () => {
+  const channels = (rgba: string) => rgba.match(/[\d.]+/g)!.map(Number);
+
+  it("are dimmer than the style's own light grey-blue (158, 182, 189), and not invisible", () => {
+    const [r, g, b, a] = channels(CALM_NAME_COLOR_DARK);
+    expect((r + g + b) / 3).toBeLessThan((158 + 182 + 189) / 3 - 30);
+    expect(a).toBeLessThan(1);
+    expect(a).toBeGreaterThan(0.6);
+  });
+
+  it("cover the countries and the continents", () => {
+    expect(CALM_NAME_LAYERS).toEqual(expect.arrayContaining(["place_country_1", "place_country_2"]));
+  });
+
+  it("are applied by the globe on every style load, right after the theme tint", () => {
+    const globe = readFileSync(resolve(process.cwd(), "../web/app/components/JobsGlobe.tsx"), "utf8");
+    expect(globe).toMatch(/tintMap\(map, themeRef\.current\);\s*calmBasemapNames\(map, themeRef\.current\);/);
+    // no capitals: the label placement reads the layout property, so it measures what is drawn
+    expect(globe).toMatch(/setLayoutProperty\(id, "text-transform", "none"\)/);
   });
 });

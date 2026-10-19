@@ -26,6 +26,8 @@ import {
 import {
   basemapNameExpression,
   basemapNameOf,
+  CALM_NAME_COLOR_DARK,
+  CALM_NAME_LAYERS,
   isTranslatedNameLayer,
 } from "@/lib/basemap-labels";
 import { attachTouchAxisLock } from "@/lib/globe-touch-axis-lock";
@@ -664,6 +666,22 @@ function applyBasemapLanguage(map: MaplibreMap, lang: string) {
   }
 }
 
+// I nomi dei paesi come sfondo, non come soggetto (vedi CALM_NAME_LAYERS).
+function calmBasemapNames(map: MaplibreMap, mode: "dark" | "light") {
+  const layerIds = new Set((map.getStyle()?.layers ?? []).map((l) => l.id));
+  for (const id of CALM_NAME_LAYERS) {
+    if (!layerIds.has(id)) continue;
+    try {
+      map.setLayoutProperty(id, "text-transform", "none");
+      if (mode === "dark") {
+        map.setPaintProperty(id, "text-color", CALM_NAME_COLOR_DARK);
+      }
+    } catch {
+      /* layer senza la prop: resta com'è */
+    }
+  }
+}
+
 // Paint override per allineare il basemap al theme JHT.
 // Dark = inverso cromatico della light: stessa palette grayscale
 // neutra (warm offwhite → warm darkgray), nessun verde/blu acceso.
@@ -1217,6 +1235,7 @@ export default function JobsGlobe({
       map.once("idle", collapseAttrib);
       // Tinta theme-aware sui layer base.
       tintMap(map, themeRef.current);
+      calmBasemapNames(map, themeRef.current);
       // Aggiungo source + layer per i pin. WebGL native = follow-mappa
       // garantito (i DOM markers su globe projection ballavano).
       if (!map.getSource(SOURCE_ID)) {

@@ -51,3 +51,19 @@ export function isTranslatedNameLayer(layer: {
     TRANSLATED_SOURCE_LAYERS.has(layer["source-layer"])
   );
 }
+
+/**
+ * Gerarchia: i nomi dei paesi sono lo sfondo, i numeri dei fasci sono il
+ * soggetto. Lo stile scuro li scrive in MAIUSCOLO, in grigio-azzurro chiaro,
+ * grandi quanto i numeri, e i fasci li attraversano. Qui diventano minuscole
+ * normali (maiuscola iniziale) e un grigio più spento; l'alone scuro resta,
+ * così si leggono ancora sotto un raggio.
+ */
+export const CALM_NAME_LAYERS: readonly string[] = [
+  "place_country_1",
+  "place_country_2",
+  "place_continent",
+];
+
+/** Colore dei nomi nel tema scuro: spento, non sparito. */
+export const CALM_NAME_COLOR_DARK = "rgba(124, 132, 142, 0.9)";
