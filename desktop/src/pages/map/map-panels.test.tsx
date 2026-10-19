@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import MapCharts from "@/app/components/MapCharts";
@@ -139,5 +141,27 @@ describe("rail geometry", () => {
     expect(MAP_PANELS_CSS).toContain(`@media ${RAIL_QUERY}`);
     // The column ends above the bottom controls.
     expect(MAP_PANELS_CSS).toContain(`bottom: ${RAIL_BOTTOM}px`);
+  });
+});
+
+describe("phone layout (390 px)", () => {
+  // Under 768 px page.tsx stacks the cards under the globe as flex items of
+  // .map-shell. The wrapper added around them must not change that.
+  // vitest runs with desktop/ as the working directory.
+  const page = readFileSync(
+    resolve(process.cwd(), "../web/app/(protected)/map/page.tsx"),
+    "utf8",
+  );
+  const outsideMedia = MAP_PANELS_CSS.replace(/@media[^{]*\{[\s\S]*\}\s*$/, "")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  it("leaves only «display: contents» for the wrapper outside the rail query, so the cards stay flex items of the shell", () => {
+    expect(outsideMedia).toBe(".map-panels { display: contents; }");
+  });
+
+  it("starts the rail exactly where the phone stack ends, with no width in both and none in neither", () => {
+    expect(page).toContain(`@media (max-width: ${RAIL_MIN_WIDTH - 1}px)`);
+    expect(page).toContain("${MAP_PANELS_CSS}");
   });
 });
