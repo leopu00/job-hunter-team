@@ -2051,6 +2051,19 @@ export default function JobsGlobe({
           quando l'utente apre col click (stato -show). Conforme alla
           licenza (il credito resta accessibile) ma non invadente. */}
       <style>{`
+        /* Il credito è un dovere di licenza, non il soggetto: la (i) di
+           default è un disco bianco pieno, l'oggetto più acceso della mappa.
+           Qui prende il pannello del tema e un'icona a metà intensità. */
+        .jht-globe-wrap .maplibregl-ctrl-attrib.maplibregl-compact {
+          background: var(--color-panel);
+          border: 1px solid var(--color-border);
+          color: var(--color-muted);
+        }
+        .jht-globe-wrap .maplibregl-ctrl-attrib.maplibregl-compact a { color: var(--color-muted); }
+        .jht-globe-wrap .maplibregl-ctrl-attrib-button {
+          background-color: transparent;
+          filter: ${paintedTheme(resolvedTheme) === "light" ? "none" : "invert(1)"} opacity(0.55);
+        }
         .jht-globe-wrap .maplibregl-ctrl-attrib-inner { display: none; }
         .jht-globe-wrap .maplibregl-ctrl-attrib:hover .maplibregl-ctrl-attrib-inner,
         .jht-globe-wrap .maplibregl-ctrl-attrib.maplibregl-compact-show .maplibregl-ctrl-attrib-inner { display: block; }
