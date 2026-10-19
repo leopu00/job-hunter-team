@@ -40,31 +40,12 @@ import { IconSort } from "./icons";
 import PositionsShell from "./PositionsShell";
 import TableScrollSync from "./TableScrollSync";
 import { intlTag } from "@/lib/locale-tag";
+import { formatShortStamp } from "@/lib/short-stamp";
 import { formatPositionEventStamp } from "@/lib/position-event-stamp";
 import { makeT } from "@/lib/i18n-dict";
 import { T } from "./page.i18n";
 import PositionStateCell from "@/app/components/PositionStateCell";
 import { positionStatusesForFilters } from "@/lib/position-state";
-
-function formatFoundAt(ts: string | null | undefined, locale: string) {
-  if (!ts) return "—";
-  const d = new Date(ts);
-  if (Number.isNaN(d.getTime())) return "—";
-  const today = new Date();
-  const sameDay = d.toDateString() === today.toDateString();
-  if (sameDay) {
-    return d.toLocaleTimeString(intlTag(locale), {
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  }
-  return d.toLocaleString(intlTag(locale), {
-    day: "2-digit",
-    month: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
 
 // Mini-tag del giudizio utente sulle righe/card (stessi colori/icone di
 // /swipe): rende visibile il feedback direttamente in lista.
@@ -644,7 +625,7 @@ export default async function PositionsPage({ searchParams }: PageProps) {
                     )}
                   </span>
                   <span className="shrink-0 font-mono tabular-nums text-[var(--color-dim)]">
-                    {formatFoundAt(p.last_action_at || p.found_at, locale)}
+                    {formatShortStamp(p.last_action_at || p.found_at, locale)}
                   </span>
                 </div>
               </div>
@@ -820,7 +801,7 @@ export default async function PositionsPage({ searchParams }: PageProps) {
                         <td
                           className={`px-4 py-3 ${columnAlignClass("last_action_at")} text-[10px] text-[var(--color-muted)] whitespace-nowrap font-mono tabular-nums`}
                         >
-                          {formatFoundAt(
+                          {formatShortStamp(
                             p.last_action_at || p.found_at,
                             locale,
                           )}

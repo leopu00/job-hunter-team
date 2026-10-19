@@ -6,6 +6,8 @@ import type { DashboardPosition } from "@/lib/queries";
 import UnseenDot from "@/app/components/UnseenDot";
 import { scoreSpectrumCss } from "@/lib/score-color";
 import { colorForFamily } from "@/lib/position-classifier";
+import { formatShortStamp } from "@/lib/short-stamp";
+import { useLocale } from "@/lib/use-locale";
 
 export type TableLabels = {
   title: string;
@@ -43,17 +45,7 @@ type Props = {
 // con il 9% e il 10% di una finestra da ~1070 px diventavano «Switze…» e
 // «Stockho…», e il timestamp «01/10 10:00» della prima colonna «01/10 10…».
 // Titolo e azienda (che già si troncano) cedono qualche punto percentuale.
-const COL_WIDTHS = ["12%", "28%", "22%", "13%", "14%", "11%"] as const;
-
-// Timestamp compatto "20/07 09:57" per la colonna della variante "scored".
-function formatScoredAt(iso: string | null): string {
-  if (!iso) return "—";
-  const t = Date.parse(iso);
-  if (!Number.isFinite(t)) return "—";
-  const d = new Date(t);
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${pad(d.getDate())}/${pad(d.getMonth() + 1)} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
-}
+const COL_WIDTHS = ["15%", "26%", "21%", "13%", "14%", "11%"] as const;
 
 // ── Card mobile ────────────────────────────────────────────────────────
 // Ogni card ha SEMPRE le stesse quattro righe: tre per titolo+azienda, una
@@ -83,6 +75,7 @@ function PositionCard({
   unseenLabel: string;
   firstCol: "id" | "scored";
 }) {
+  const locale = useLocale();
   const titleRef = useRef<HTMLAnchorElement>(null);
   const [titleLines, setTitleLines] = useState(1);
 
@@ -192,7 +185,7 @@ function PositionCard({
           suppressHydrationWarning={firstCol === "scored"}
         >
           {firstCol === "scored"
-            ? formatScoredAt(p.scored_at)
+            ? formatShortStamp(p.scored_at, locale)
             : p.legacy_id
               ? `JHT-${String(p.legacy_id).padStart(3, "0")}`
               : p.id.slice(0, 8)}
@@ -209,6 +202,7 @@ export default function RecentPositionsTable({
   totalFiltered,
   firstCol = "id",
 }: Props) {
+  const locale = useLocale();
   // Colonne "dati" allineate al centro (header + valore): le altre (testo:
   // titolo/azienda/paese…) restano a sinistra, che si legge meglio.
   const centeredHeaders = new Set([labels.colScore]);
@@ -316,7 +310,7 @@ export default function RecentPositionsTable({
                       title={p.scored_at ?? undefined}
                       suppressHydrationWarning
                     >
-                      {formatScoredAt(p.scored_at)}
+                      {formatShortStamp(p.scored_at, locale)}
                     </td>
                   ) : (
                     <td className="px-4 py-3 text-[10px] text-[var(--color-dim)] truncate">
