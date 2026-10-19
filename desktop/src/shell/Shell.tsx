@@ -12,6 +12,7 @@ import {
   useExistingTeamReadOnly,
 } from "../lib/existing-team-readonly";
 import { EXISTING_TEAM_READONLY_TEXT } from "../lib/existing-team-readonly.i18n";
+import { LeaveReadOnlyContext } from "../lib/leave-read-only";
 import { VpsLinkBar } from "./VpsLinkBar";
 import { localUninstallAvailable } from "../lib/local-uninstall";
 import { COMPUTER_TEXT } from "../pages/computer/computer.i18n";
@@ -208,6 +209,7 @@ export default function Shell({ onLogout, onCloseReadOnly }: ShellProps) {
     return (
       <DashboardI18nProvider>
         <ReadOnlyActionsProvider value={{ readOnly: true, reason: existingTeamReadOnlyReason(readOnlyTeam) }}>
+          <LeaveReadOnlyContext.Provider value={onCloseReadOnly ?? null}>
           {match?.route.fullBleed ? (
             // the office: the same window-tall column as in the full shell, the read-only bars under the navbar
             <div style={FULL_BLEED_COLUMN}>
@@ -222,6 +224,7 @@ export default function Shell({ onLogout, onCloseReadOnly }: ShellProps) {
               <MainChrome>{page}</MainChrome>
             </div>
           )}
+          </LeaveReadOnlyContext.Provider>
         </ReadOnlyActionsProvider>
       </DashboardI18nProvider>
     );

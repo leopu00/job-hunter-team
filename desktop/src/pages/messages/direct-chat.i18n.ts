@@ -28,6 +28,10 @@ export interface DirectChatText {
   writeTo: string; // {name}
   writeToPlaceholder: string; // {name}
   connectToWrite: string;
+  /** The read-only view: history and answers are shown, writing needs the full connection. */
+  readOnlyInvite: string;
+  /** The button under the invitation: it leaves the read-only view, towards «Conferma e collega». */
+  readOnlyConnect: string;
   sending: string;
   send: string;
 }
@@ -55,6 +59,8 @@ export const DIRECT_CHAT_TEXT: Record<Locale, DirectChatText> = {
     writeTo: "Scrivi a {name}",
     writeToPlaceholder: "Scrivi a {name}…",
     connectToWrite: "Collega il team per scrivere",
+    readOnlyInvite: "Vista in sola lettura: vedi lo storico e le risposte. Per scrivere collega il team con «Conferma e collega».",
+    readOnlyConnect: "Collega il team",
     sending: "Invio…",
     send: "Invia",
   },
@@ -80,6 +86,8 @@ export const DIRECT_CHAT_TEXT: Record<Locale, DirectChatText> = {
     writeTo: "Write to {name}",
     writeToPlaceholder: "Write to {name}…",
     connectToWrite: "Connect the team to write",
+    readOnlyInvite: "Read-only view: you can see the history and the replies. To write, connect the team with “Confirm and connect”.",
+    readOnlyConnect: "Connect the team",
     sending: "Sending…",
     send: "Send",
   },
@@ -105,6 +113,8 @@ export const DIRECT_CHAT_TEXT: Record<Locale, DirectChatText> = {
     writeTo: "Schreibe an {name}",
     writeToPlaceholder: "Schreibe an {name}…",
     connectToWrite: "Verbinde das Team, um zu schreiben",
+    readOnlyInvite: "Schreibgeschützte Ansicht: Du siehst Verlauf und Antworten. Zum Schreiben verbinde das Team mit „Bestätigen und verbinden“.",
+    readOnlyConnect: "Team verbinden",
     sending: "Senden…",
     send: "Senden",
   },
@@ -130,6 +140,8 @@ export const DIRECT_CHAT_TEXT: Record<Locale, DirectChatText> = {
     writeTo: "Écrire à {name}",
     writeToPlaceholder: "Écrire à {name}…",
     connectToWrite: "Connecte l’équipe pour écrire",
+    readOnlyInvite: "Vue en lecture seule : tu vois l’historique et les réponses. Pour écrire, relie l’équipe avec « Confirmer et relier ».",
+    readOnlyConnect: "Relier l’équipe",
     sending: "Envoi…",
     send: "Envoyer",
   },
@@ -155,6 +167,8 @@ export const DIRECT_CHAT_TEXT: Record<Locale, DirectChatText> = {
     writeTo: "Escribe a {name}",
     writeToPlaceholder: "Escribe a {name}…",
     connectToWrite: "Conecta el equipo para escribir",
+    readOnlyInvite: "Vista de solo lectura: ves el historial y las respuestas. Para escribir, conecta el equipo con «Confirmar y conectar».",
+    readOnlyConnect: "Conectar el equipo",
     sending: "Enviando…",
     send: "Enviar",
   },
@@ -180,6 +194,8 @@ export const DIRECT_CHAT_TEXT: Record<Locale, DirectChatText> = {
     writeTo: "Escreve a {name}",
     writeToPlaceholder: "Escreve a {name}…",
     connectToWrite: "Liga a equipa para escrever",
+    readOnlyInvite: "Vista só de leitura: vês o histórico e as respostas. Para escrever, liga a equipa com «Confirmar e ligar».",
+    readOnlyConnect: "Ligar a equipa",
     sending: "A enviar…",
     send: "Enviar",
   },
@@ -205,6 +221,8 @@ export const DIRECT_CHAT_TEXT: Record<Locale, DirectChatText> = {
     writeTo: "Írj neki: {name}",
     writeToPlaceholder: "Írj neki: {name}…",
     connectToWrite: "Csatlakoztasd a csapatot az íráshoz",
+    readOnlyInvite: "Csak olvasható nézet: látod az előzményeket és a válaszokat. Íráshoz csatlakoztasd a csapatot a „Megerősítés és csatlakozás” gombbal.",
+    readOnlyConnect: "Csapat csatlakoztatása",
     sending: "Küldés…",
     send: "Küldés",
   },

@@ -248,7 +248,10 @@ describe("DirectChatScreen", () => {
     expect(screen.getByText("Direct chat")).toBeInTheDocument();
     expect(screen.getByRole("navigation", { name: "Agent chats" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Writer" })).toBeInTheDocument();
-    expect(within(screen.getByTestId("direct-chat-status")).getByRole("button", { name: "Retry" })).toBeInTheDocument();
+    // The status is read asynchronously: the region is there from the first render, the error
+    // (and its Retry button) only once `client.status()` has answered. A slow runner showed
+    // «Securely connecting…» here, so the test waits for what it asserts.
+    expect(await within(screen.getByTestId("direct-chat-status")).findByRole("button", { name: "Retry" })).toBeInTheDocument();
     expect(screen.getByRole("textbox", { name: "Write to Captain" })).toHaveAttribute("placeholder", "Connect the team to write");
     expect(await screen.findByRole("button", { name: "Dictate a message" })).toBeInTheDocument();
     expect(voice.mock.status).toHaveBeenCalledWith("en-US");

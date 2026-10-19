@@ -1236,6 +1236,67 @@ pub(crate) fn delivery_command(
     )
 }
 
+/// The agents the chat may be opened with: the closed list of `agent_chat.py`, which refuses any
+/// other name again on its side.
+const CHAT_AGENTS: [&str; 8] = [
+    "capitano", "assistente", "mentor", "scout", "analista", "scorer", "scrittore", "critico",
+];
+
+/// What the app asks of the chat in a pinned container: two operations, each with its few
+/// arguments. The user's text is never one of them: it goes on standard input.
+pub(crate) enum ChatOperation<'a> {
+    Read { agent: &'a str, cursor: Option<&'a str> },
+    Send { agent: &'a str, client_message_id: &'a str },
+}
+
+fn chat_token(value: &str, max: usize, digits_only: bool) -> bool {
+    !value.is_empty()
+        && value.len() <= max
+        && value.bytes().all(|b| {
+            if digits_only {
+                b.is_ascii_digit()
+            } else {
+                b.is_ascii_alphanumeric() || b == b'-'
+            }
+        })
+}
+
+/// The chat of a pinned team: `agent_chat.py` with fixed arguments, in the verified container
+/// (`command` checks container, image, platform and digest first: exit 70 otherwise). Every token
+/// is checked here, against a closed list or a closed alphabet, before it enters the string, so
+/// the string holds nothing the person or the renderer wrote. It replaces `python_command` for
+/// the chat: no interpreter that runs what it is sent.
+pub(crate) fn chat_command(
+    target: &RuntimeTarget,
+    operation: &ChatOperation<'_>,
+) -> Result<String, &'static str> {
+    let arguments = match operation {
+        ChatOperation::Read { agent, cursor } => {
+            if !CHAT_AGENTS.contains(agent) {
+                return Err("invalid_agent");
+            }
+            match cursor {
+                None => format!("read '{agent}'"),
+                Some(cursor) if chat_token(cursor, 12, true) => format!("read '{agent}' '{cursor}'"),
+                Some(_) => return Err("invalid_request"),
+            }
+        }
+        ChatOperation::Send { agent, client_message_id } => {
+            if !CHAT_AGENTS.contains(agent) {
+                return Err("invalid_agent");
+            }
+            if !chat_token(client_message_id, 64, false) {
+                return Err("invalid_request");
+            }
+            format!("send '{agent}' '{client_message_id}'")
+        }
+    };
+    command(
+        target,
+        &format!("exec docker exec -i \"$JHT_CID\" python3 -I /app/shared/skills/agent_chat.py {arguments}"),
+    )
+}
+
 /// The full connection of an existing team ("Conferma e collega") in this run of the app: the
 /// connection key of the one team the person confirmed. Only the native side of that command
 /// sets it, and only when it succeeds. What writes to the team (the chat, the agent controls) is
@@ -1734,6 +1795,57 @@ mod tests {
             os: "linux".into(),
             architecture: "amd64".into(),
         }
+    }
+
+    #[test]
+    fn the_chat_command_is_the_fixed_script_in_the_verified_container_with_only_checked_tokens() {
+        let read = chat_command(&target(), &ChatOperation::Read { agent: "capitano", cursor: Some("123") }).expect("a read");
+        assert!(read.contains("exec docker exec -i \"$JHT_CID\" python3 -I /app/shared/skills/agent_chat.py read 'capitano' '123'"));
+        assert!(read.contains("|| exit 70") && read.starts_with("set -eu\nJHT_CID='"), "the pinned container is verified first");
+        let first = chat_command(&target(), &ChatOperation::Read { agent: "mentor", cursor: None }).expect("a first page");
+        assert!(first.ends_with("agent_chat.py read 'mentor'"));
+        let send = chat_command(&target(), &ChatOperation::Send { agent: "assistente", client_message_id: "id-1-A" }).expect("a send");
+        assert!(send.ends_with("agent_chat.py send 'assistente' 'id-1-A'"));
+        assert!(!send.contains("python3 -c") && !send.contains("exec(bytes.fromhex"), "no interpreter that runs what it is sent");
+    }
+
+    #[test]
+    fn golden_the_operation_line_of_each_chat_command_is_exactly_this() {
+        let last = |command: String| command.lines().last().expect("a last line").to_owned();
+        assert_eq!(
+            last(chat_command(&target(), &ChatOperation::Read { agent: "capitano", cursor: Some("4096") }).unwrap()),
+            "exec docker exec -i \"$JHT_CID\" python3 -I /app/shared/skills/agent_chat.py read 'capitano' '4096'"
+        );
+        assert_eq!(
+            last(chat_command(&target(), &ChatOperation::Read { agent: "mentor", cursor: None }).unwrap()),
+            "exec docker exec -i \"$JHT_CID\" python3 -I /app/shared/skills/agent_chat.py read 'mentor'"
+        );
+        assert_eq!(
+            last(chat_command(&target(), &ChatOperation::Send { agent: "assistente", client_message_id: "0b1c2d3e-4f50-6172-8394-a5b6c7d8e9f0" }).unwrap()),
+            "exec docker exec -i \"$JHT_CID\" python3 -I /app/shared/skills/agent_chat.py send 'assistente' '0b1c2d3e-4f50-6172-8394-a5b6c7d8e9f0'"
+        );
+    }
+
+    #[test]
+    fn nothing_outside_the_closed_forms_enters_the_chat_command() {
+        for agent in ["", "CAPITANO", "capitano ", "capitano'; id #", "scout-1", "../mentor", "capitano\n", "agente"] {
+            assert_eq!(chat_command(&target(), &ChatOperation::Read { agent, cursor: None }), Err("invalid_agent"), "{agent:?}");
+            assert_eq!(chat_command(&target(), &ChatOperation::Send { agent, client_message_id: "id" }), Err("invalid_agent"), "{agent:?}");
+        }
+        let long_cursor = "9".repeat(13);
+        for cursor in ["", "-1", "1.5", "12x", "1 2", "1;id", "'", long_cursor.as_str()] {
+            assert_eq!(chat_command(&target(), &ChatOperation::Read { agent: "capitano", cursor: Some(cursor) }), Err("invalid_request"), "{cursor:?}");
+        }
+        let long_id = "x".repeat(65);
+        for id in ["", "a b", "a'b", "a;b", "a$(id)", "a`id`", "a\nb", "è", "with_underscore", long_id.as_str()] {
+            assert_eq!(chat_command(&target(), &ChatOperation::Send { agent: "capitano", client_message_id: id }), Err("invalid_request"), "{id:?}");
+        }
+        let mut broken = target();
+        broken.container_id = "x".into();
+        assert_eq!(
+            chat_command(&broken, &ChatOperation::Read { agent: "capitano", cursor: None }),
+            Err("existing_team_runtime_candidate_invalid")
+        );
     }
 
     #[test]
