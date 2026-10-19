@@ -4,6 +4,8 @@ import RecentPositionsTable from "@/app/components/RecentPositionsTable";
 import type { Locale } from "@/i18n/config";
 import { buildApplicationTimeline } from "@/lib/application-timeline";
 import { getDashboardT } from "@/lib/dashboard-i18n";
+import { EXISTING_TEAM_READONLY_TEXT } from "../../lib/existing-team-readonly.i18n";
+import { EXISTING_TEAM_DASHBOARD_TEXT, fill } from "./existing-team-dashboard.i18n";
 import ExistingTeamSummary from "./ExistingTeamSummary";
 import { displayCurrencies, newestScored, type DashboardData } from "./load-dashboard";
 
@@ -28,6 +30,10 @@ export default function DashboardScreen({
   // Read from an existing team, the newest scored come from the core whole:
   // `positions` may be a bounded slice of the team.
   const latest = data.latest ?? newestScored(positions);
+  // An existing team that has found nothing: one empty state, not five boxes
+  // 300 px tall that each say «No data».
+  const teamIsEmpty = data.existingTeam !== undefined && stats.total === 0;
+  const emptyText = EXISTING_TEAM_DASHBOARD_TEXT[locale];
 
   return (
     <div style={{ animation: "fade-in 0.35s ease both", position: "relative" }}>
@@ -45,80 +51,96 @@ export default function DashboardScreen({
             </div>
           </div>
 
-          {data.existingTeam && <ExistingTeamSummary info={data.existingTeam} locale={locale} />}
+          {teamIsEmpty ? (
+            <section
+              role="status"
+              data-testid="dashboard-empty-team"
+              className="rounded-lg border p-5 text-[12px]"
+              style={{ borderColor: "var(--color-border)", background: "var(--color-card)", color: "var(--color-muted)" }}
+            >
+              <h2 className="mb-1 text-[13px] font-semibold" style={{ color: "var(--color-base)" }}>
+                {emptyText.emptyTitle}
+              </h2>
+              <p>{fill(emptyText.emptyBody, { team: EXISTING_TEAM_READONLY_TEXT[locale].team })}</p>
+            </section>
+          ) : (
+            <>
+            {data.existingTeam && <ExistingTeamSummary info={data.existingTeam} locale={locale} />}
 
-          <div style={{ animation: "fade-in 0.35s ease both 0.06s" }}>
-            <RecentPositionsTable
-              rows={latest}
-              firstCol="scored"
-              filtered={false}
-              totalFiltered={latest.length}
-              labels={{
-                title: t.new_positions,
-                titleFiltered: t.new_positions,
-                viewAll: t.view_all,
-                noPositions: t.no_positions,
-                unseen: t.unseen_marker,
-                colId: t.col_id,
-                colScored: t.col_scored,
-                colTitle: t.col_title,
-                colCompany: t.col_company,
-                colCountry: t.col_country,
-                colCity: t.col_city,
-                colScore: t.col_score,
-              }}
-            />
-          </div>
-
-          {applicationTimeline && (
-            <div style={{ animation: "fade-in 0.35s ease both 0.07s" }}>
-              <ApplicationTimeline
-                timeline={applicationTimeline}
-                locale={locale}
+            <div style={{ animation: "fade-in 0.35s ease both 0.06s" }}>
+              <RecentPositionsTable
+                rows={latest}
+                firstCol="scored"
+                filtered={false}
+                totalFiltered={latest.length}
                 labels={{
-                  title: t.application_timeline,
-                  range: t.application_timeline_range(applicationTimeline.rangeDays),
-                  total: t.application_timeline_total(applicationTimeline.visibleSubmitted),
-                  description: t.application_timeline_description,
-                  submitted: t.application_timeline_submitted,
-                  accepted: t.application_timeline_accepted,
-                  rejected: t.application_timeline_rejected,
-                }}
-              />
-            </div>
-          )}
-
-          <div className="mb-8" style={{ animation: "fade-in 0.35s ease both 0.08s" }}>
-            <DashboardLinkedCharts
-              positions={positions}
-              rates={rates}
-              // Without live rates only the euro is offered: a chosen currency would be
-              // shown on euro amounts, which are not converted (and the saved choice is ignored).
-              currencies={data.existingTeam && !data.existingTeam.ratesAvailable ? ["EUR"] : displayCurrencies()}
-              labels={{
-                types: t.position_types,
-                countries: t.position_countries,
-                cities: t.position_cities,
-                score: t.score_distribution,
-                salary: t.salary_distribution,
-                noData: t.no_data,
-                reset: t.reset_filters,
-                table: {
-                  title: t.recent_positions,
-                  titleFiltered: t.recent_positions_filtered,
+                  title: t.new_positions,
+                  titleFiltered: t.new_positions,
                   viewAll: t.view_all,
                   noPositions: t.no_positions,
                   unseen: t.unseen_marker,
                   colId: t.col_id,
+                  colScored: t.col_scored,
                   colTitle: t.col_title,
                   colCompany: t.col_company,
                   colCountry: t.col_country,
                   colCity: t.col_city,
                   colScore: t.col_score,
-                },
-              }}
-            />
-          </div>
+                }}
+              />
+            </div>
+
+            {applicationTimeline && (
+              <div style={{ animation: "fade-in 0.35s ease both 0.07s" }}>
+                <ApplicationTimeline
+                  timeline={applicationTimeline}
+                  locale={locale}
+                  labels={{
+                    title: t.application_timeline,
+                    range: t.application_timeline_range(applicationTimeline.rangeDays),
+                    total: t.application_timeline_total(applicationTimeline.visibleSubmitted),
+                    description: t.application_timeline_description,
+                    submitted: t.application_timeline_submitted,
+                    accepted: t.application_timeline_accepted,
+                    rejected: t.application_timeline_rejected,
+                  }}
+                />
+              </div>
+            )}
+
+            <div className="mb-8" style={{ animation: "fade-in 0.35s ease both 0.08s" }}>
+              <DashboardLinkedCharts
+                positions={positions}
+                rates={rates}
+                // Without live rates only the euro is offered: a chosen currency would be
+                // shown on euro amounts, which are not converted (and the saved choice is ignored).
+                currencies={data.existingTeam && !data.existingTeam.ratesAvailable ? ["EUR"] : displayCurrencies()}
+                labels={{
+                  types: t.position_types,
+                  countries: t.position_countries,
+                  cities: t.position_cities,
+                  score: t.score_distribution,
+                  salary: t.salary_distribution,
+                  noData: t.no_data,
+                  reset: t.reset_filters,
+                  table: {
+                    title: t.recent_positions,
+                    titleFiltered: t.recent_positions_filtered,
+                    viewAll: t.view_all,
+                    noPositions: t.no_positions,
+                    unseen: t.unseen_marker,
+                    colId: t.col_id,
+                    colTitle: t.col_title,
+                    colCompany: t.col_company,
+                    colCountry: t.col_country,
+                    colCity: t.col_city,
+                    colScore: t.col_score,
+                  },
+                }}
+              />
+            </div>
+            </>
+          )}
         </div>
       </div>
     </div>

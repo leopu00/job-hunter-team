@@ -89,6 +89,39 @@ describe("Dashboard on an existing team read only", () => {
     expect(apiCalls.filter((call) => !call.startsWith("GET "))).toEqual([]);
   });
 
+  it("tells a team with no position in one empty state, not in boxes that each say «No data»", async () => {
+    const stats = syntheticStats();
+    reply = () => ({
+      ok: true,
+      data: {
+        ...stats,
+        stats: { ...stats.stats, total: 0, new: 0, checked: 0, scored: 0, applied: 0, excluded: 0, scored_open: 0 },
+        distribution: { active: 0, withScore: 0, avgScore: null, buckets: stats.distribution.buckets.map((b) => ({ ...b, count: 0 })) },
+        sources: [],
+        types: [],
+        recent: [],
+        points: { rows: [], included: 0, of: 0 },
+        events: { rows: [], included: 0, of: 0 },
+      },
+    });
+    navigate("/dashboard", { replace: true });
+    render(<Shell />);
+    const empty = await screen.findByTestId("dashboard-empty-team");
+    expect(empty).toHaveTextContent(TEXT.emptyTitle);
+    expect(empty).toHaveTextContent("«Squadra»");
+    // one state, not the summary and the five charts around it
+    expect(screen.queryByTestId("existing-team-summary")).not.toBeInTheDocument();
+    expect(screen.queryByText(/Nessun dato/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Nessuna delle 0 posizioni attive/)).not.toBeInTheDocument();
+  });
+
+  it("keeps the summary and the charts for a team that has positions", async () => {
+    navigate("/dashboard", { replace: true });
+    render(<Shell />);
+    await screen.findByTestId("existing-team-summary");
+    expect(screen.queryByTestId("dashboard-empty-team")).not.toBeInTheDocument();
+  });
+
   it("lists the newest scored from the core, even when the charts got only a slice of the team", async () => {
     const stats = syntheticStats();
     const newest = fixturePosition(99, { id: "9999", legacy_id: null, title: "Synthetic newest only in recent", scored_at: "2026-12-31T00:00:00Z" });
