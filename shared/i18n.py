@@ -43,8 +43,18 @@ def _read_kv_file(path: Path, key: str) -> Optional[str]:
     return None
 
 
+def _prefs_stamp(home: Path) -> Optional[tuple]:
+    """Which version of i18n-prefs.json is there: None when there is none."""
+    try:
+        st = (home / "i18n-prefs.json").stat()
+    except OSError:
+        return None
+    return (st.st_mtime_ns, st.st_size, st.st_ino)
+
+
 @lru_cache(maxsize=1)
-def _resolve_lang() -> str:
+def _resolve_lang_for(_inputs: tuple) -> str:
+    """The language for these inputs; the inputs are the cache key, `_resolve_lang` builds them."""
     home = Path(os.environ.get("JHT_HOME", "/jht_home"))
     try:
         prefs = json.loads((home / "i18n-prefs.json").read_text(encoding="utf-8"))
@@ -68,6 +78,27 @@ def _resolve_lang() -> str:
         if v in _VALID_LANGS:
             return v
     return "en"
+
+
+def _resolve_lang() -> str:
+    """The language of the user NOW.
+
+    A long-lived process (the throttle daemon sweeping deadlines, a bridge) must follow the user who
+    changes language in the app, so the answer is kept only while what it depends on is the same: the
+    prefs file (its version, or its absence), $JHT_LANG and the places the fallbacks read. The catalog of
+    each language stays cached.
+    """
+    home = os.environ.get("JHT_HOME", "/jht_home")
+    return _resolve_lang_for((
+        home,
+        _prefs_stamp(Path(home)),
+        os.environ.get("JHT_LANG"),
+        os.environ.get("JHT_HOST_ENV_FILE"),
+        os.environ.get("HOME"),
+    ))
+
+
+_resolve_lang.cache_clear = _resolve_lang_for.cache_clear  # type: ignore[attr-defined]
 
 
 @lru_cache(maxsize=4)
