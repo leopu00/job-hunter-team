@@ -26,7 +26,10 @@ vi.mock("../../lib/supabase", () => ({
   supabase: new Proxy({}, { get: (_, key) => sb.client[key as string] }),
 }));
 const statuses = vi.hoisted(() => ({ value: null as unknown }));
-vi.mock("../../office/status", () => ({ loadAgentStatuses: vi.fn(async () => statuses.value) }));
+vi.mock("../../office/status", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../office/status")>()),
+  loadAgentStatuses: vi.fn(async () => statuses.value),
+}));
 
 const parts = vi.hoisted(() => ({ value: { createEngine: null as unknown, data: null as unknown } }));
 vi.mock("../../office/parts", async (importOriginal) => ({
