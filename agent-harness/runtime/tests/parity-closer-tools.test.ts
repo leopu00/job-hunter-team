@@ -108,7 +108,7 @@ function ours(tool: typeof applyGate, sequence: string[][], seed: Seed, extra: P
   try {
     // The CV folders the fixtures write to. The script confines nothing, so these
     // are the roots under which both sides must agree; the confinement itself
-    // is held in parity-pdf-layout.test.ts (SICUREZZA T39-3: never the home).
+    // is held in parity-pdf-layout.test.ts (never the home).
     const options: CloserOptions = { db: () => db, jhtHome: home, profileDir: join(home, "profile"), rulePath: RULE, cvRoots: [join(home, "cv"), join(home, "abs")], ...extra };
     const runs = sequence.map((args): Run => {
       const r: ScriptResult = guarded(() => tool(args, options));

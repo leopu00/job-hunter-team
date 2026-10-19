@@ -195,13 +195,13 @@ function readLocal(
   const userDir = rawUserDir ? resolveUserPath(rawUserDir, cwd, homedir()) : join(apiHome, "user");
   const rawHistory = env["JHT_API_USER_HISTORY_DIR"]?.trim();
   const userHistoryDir = rawHistory ? resolveUserPath(rawHistory, cwd, homedir()) : undefined;
-  // The two folders are siblings, never nested (SICUREZZA, 21/09). The person's documents
+  // The two folders are siblings, never nested. The person's documents
   // are a read-only root, and that rule wins over every own root whatever the mode: with the
   // deliverables inside them, every CV the SCRITTORE writes would be refused — safely, but
   // with "this is the person's profile" as the reason and a whole live turn spent for
   // nothing. A configuration that contradicts itself says so here, before the first write.
   // Judged on the folders themselves, links resolved, as the permission policy judges a
-  // path (SICUREZZA P2-b): a deliverables folder that is a link into the history is the
+  // path: a deliverables folder that is a link into the history is the
   // history, and would be refused at the first write instead of here, where it can be said.
   const nested = userHistoryDir !== undefined && (() => {
     const [out, history] = [realPath(userDir), realPath(userHistoryDir)];

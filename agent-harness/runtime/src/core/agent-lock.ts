@@ -4,7 +4,7 @@
  * `start-agent.sh scout` with no instance starts SCOUT-1, and `scout_coord`
  * gives a Scout started as `scout` the id scout-1: two runs, one as `scout`
  * and one as `scout-1`, would both write as scout-1 — the same claims, the
- * same split — and neither would know (SICUREZZA P2). Two runs under the same
+ * same split — and neither would know. Two runs under the same
  * name would also share a home and a mailbox. So a run takes a lock on its
  * agent's canonical id before anything else, and a second run is refused.
  *

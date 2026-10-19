@@ -267,7 +267,7 @@ describe("the CV path the database names", () => {
     expect(measured).toEqual([]);
   });
 
-  // SICUREZZA's probe (T39-3): under the JHT home the product keeps the
+  // The security probe: under the JHT home the product keeps the
   // person's secrets, and this path comes from a column a model writes. With
   // the home as a root, a row naming a credentials file had the gate hash it
   // and run poppler on it. The roots are the CV folders, not the house.
@@ -348,7 +348,7 @@ describe("the gate as the runtime builds it: poppler measures the CV", () => {
     expect(await held({ userDir: join(root, "hub-out") })).toEqual([{ position_id: 1, reason: "cv_pdf_check_unavailable" }]);
   });
 
-  // SICUREZZA, after piece three: the credentials test above hands the roots in
+  // Added after piece three: the credentials test above hands the roots in
   // itself, so it proves `resolveFile` and not the code that builds the roots.
   // Putting the JHT home back among them in skills/index.ts — where the product
   // really builds them — left the whole suite green. This one goes through

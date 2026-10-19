@@ -151,7 +151,7 @@ export function formatTime(argv: string[], options: CaptainOptions): ScriptResul
 // ── captain_diary ────────────────────────────────────────────────────────
 
 /**
- * CAP-1 (SICUREZZA, T21-2a): the diary outlives the session. A Captain steered by
+ * CAP-1: the diary outlives the session. A Captain steered by
  * injected text could write a "lesson" the next day's Captain inherits at wake, and
  * the script bounds neither the note nor what handoff rereads. Here a note is at
  * most NOTE_MAX characters, handoff rereads the last HANDOFF_NOTES notes within

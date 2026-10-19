@@ -28,7 +28,7 @@ whoever it finds up; `spawn_agent` is for the extras. Here the same thing:
 **host's own token** (`JHT_HUB_TEAM_TOKEN`, a file of its own, no role has
 it: a role's token gets 403, and the host's token is not an agent and can do
 nothing else). The hub books the whole set against the one piggy bank,
-applies §9, and writes one order per member in the configured order.
+applies the launcher's limits, and writes one order per member in the configured order.
 
 A member is a **peer, not a child**:
 - it does not spend the CAPITANO's `maxActive`, `maxSpawns` or `maxFailures`;

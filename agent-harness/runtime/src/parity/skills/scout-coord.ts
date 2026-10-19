@@ -8,7 +8,7 @@
  * reports on stderr with exit 3 (the database is unusable) comes back as a
  * failed call with the same message.
  *
- * Bound to the Scout that runs it (SICUREZZA §7 D-2). The script takes any
+ * Bound to the Scout that runs it. The script takes any
  * name, so one Scout could claim or assign in another's name, or close every
  * Scout's split. Here `assign` and `claim` act only for the calling agent —
  * `scout` may be omitted, and naming someone else is refused — and `reset`

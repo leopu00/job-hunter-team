@@ -195,7 +195,7 @@ describe("npm run role -- --role scout (a product role)", () => {
   }, CLI_RUN_TIMEOUT_MS);
 });
 
-describe("npm run role with JHT_API_DB outside the runtime's home (SICUREZZA D-1)", () => {
+describe("npm run role with JHT_API_DB outside the runtime's home", () => {
   it("keeps the file tools off the team database the run itself uses", async () => {
     const dbFile = join(root, "jht", "db", "jobs.db");
     const script = join(root, "script.json");
@@ -224,7 +224,7 @@ describe("npm run role with JHT_API_DB outside the runtime's home (SICUREZZA D-1
   }, CLI_RUN_TIMEOUT_MS);
 });
 
-describe("npm run role and a running agent of the same id (SICUREZZA P2)", () => {
+describe("npm run role and a running agent of the same id", () => {
   it("refuses to start `scout` while scout-1 runs, and leaves no lock after a run", async () => {
     // A live run as scout-1: this test process holds its lock.
     const locks = join(root, "api", "locks");

@@ -13,7 +13,7 @@
  * - **the git repository**: the image holds the source without `.git`, so a
  *   test that asks git anything errs. It happened on 21/09 — the census of
  *   `write_requested` used `git grep` and was the one red of a run inside the
- *   image (429 tests, 428 passed, 1 failed). SICUREZZA's reason for insisting
+ *   image (429 tests, 428 passed, 1 failed). The security review's reason for insisting
  *   on a test nobody depends on: a red everyone knows is false teaches people
  *   to ignore reds, and that is how the next real one goes unnoticed.
  *

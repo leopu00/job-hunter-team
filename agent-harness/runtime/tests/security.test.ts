@@ -1,5 +1,5 @@
 /**
- * Security baseline of the API harness (T3, HQ-SICUREZZA).
+ * Security baseline of the API harness (T3).
  *
  * Each case is an attack an agent can be steered into — by a prompt injection
  * in a scraped job page, or by its own mistake — and the refusal the runtime
@@ -263,7 +263,7 @@ describe("web_fetch: no local network, no cloud metadata", () => {
   );
 });
 
-describe("jobs.db outside apiHome (SICUREZZA D-1): only the database tools touch it", () => {
+describe("jobs.db outside apiHome: only the database tools touch it", () => {
   /**
    * The VPS layout: JHT_API_DB=/jht_home/db/jobs.db, outside the runtime's
    * home, next to the candidate's profile under the same JHT home. The file

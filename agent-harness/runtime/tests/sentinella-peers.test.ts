@@ -112,7 +112,7 @@ describe("the SENTINELLA's peers (T37)", () => {
 });
 
 /**
- * T41, SICUREZZA P2: the DOTTORE's addressees, now that it revives nobody.
+ * T41: the DOTTORE's addressees, now that it revives nobody.
  *
  * In the TUI it writes to every session, and it must: it interviews each one
  * before recreating it. Here it interviews nobody, so the set it used to write

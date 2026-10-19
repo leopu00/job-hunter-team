@@ -125,7 +125,7 @@ function captainCommand(db: Database, sub: string, a: Record<string, unknown>, e
     return { stdout: `${n + staleAssignments(db, staleHours(env)).length}\n`, exitCode: 0 };
   }
   if (sub === "assign") {
-    // Narrower than the script on purpose (SICUREZZA, T21-2b): the assignee is a name the
+    // Narrower than the script on purpose: the assignee is a name the
     // team's messages accept, not any text the model writes into a row the workers read.
     const agent = a["agent"] as string;
     if (!AGENT_NAME.safeParse(agent).success) {

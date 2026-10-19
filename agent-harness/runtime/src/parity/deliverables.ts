@@ -16,7 +16,7 @@
  * the only things the team sends to a company: this is the one place where a
  * manipulated document leaves the box, and least privilege belongs here.
  *
- * Two layers hold it, and both are needed (SICUREZZA and VPS agreed): the
+ * Two layers hold it, and both are needed (the security review and the VPS probe agreed): the
  * filesystem's own modes, which hold even from `bash`, and this one, which
  * turns a refusal into a sentence the agent can read and report instead of a
  * permission error it cannot place.

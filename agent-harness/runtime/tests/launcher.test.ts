@@ -1,6 +1,6 @@
 /**
- * The CAPITANO's launcher, the deciding half (SICUREZZA §9, T22): every limit
- * in §9 is the launcher's, checked here one by one; the order it hands the
+ * The CAPITANO's launcher, the deciding half (T22): every limit
+ * is the launcher's, checked here one by one; the order it hands the
  * host's executor carries only fields the launcher set.
  */
 
@@ -537,7 +537,7 @@ describe("through the hub", () => {
       expect(said).toContain("not which index to ask for");
       expect(said).toContain("At most 3 children running at once, 6 spawns in the session");
       expect(said).toContain("task of at most 2000 characters");
-      // SICUREZZA: the fixed limits are named as FIXED, and what is not fixed is named too.
+      // The fixed limits are named as FIXED, and what is not fixed is named too.
       // A description that promised "nothing is wasted" would spend the round it set out to
       // save the first time the session's money ran short — the likeliest refusal of all.
       expect(said).toContain("The session's MONEY is not fixed");

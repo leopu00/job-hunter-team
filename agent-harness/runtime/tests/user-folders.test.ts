@@ -1,6 +1,6 @@
 /**
  * The person's documents and the team's deliverables are two folders, and
- * siblings (SICUREZZA, 21/09).
+ * siblings (21/09).
  *
  * The history is a read-only root, and that rule wins over every own root,
  * whatever the permission mode. Nested — the mount a VPS ran for a day,

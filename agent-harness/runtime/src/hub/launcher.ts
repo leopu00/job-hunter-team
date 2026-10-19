@@ -1,5 +1,5 @@
 /**
- * The CAPITANO's launcher, the deciding half (SICUREZZA §9, T22).
+ * The CAPITANO's launcher, the deciding half.
  *
  * The CAPITANO asks, the launcher decides. Every limit is here, in the hub,
  * set by the operator in a file the CAPITANO cannot touch: a CAPITANO that
@@ -524,7 +524,7 @@ export class Launcher {
     // so the money left does not jump when the team reaches the CAPITANO.
     // Should it ever end having spent more than the reserve (its run's cap
     // and the key proxy's are what stop it), the measured spend is what
-    // counts: a fixed reserve must not hide real money (SICUREZZA, T24).
+    // counts: a fixed reserve must not hide real money.
     const going = (s: Spawn) => s.state === "queued" || s.state === "running";
     const measured = (s: Spawn) => (going(s) ? 0 : (s.spentUsd ?? 0));
     const held = (s: Spawn) => (going(s) || s.spentUsd === undefined ? s.capUsd : 0);

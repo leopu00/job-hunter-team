@@ -1,7 +1,7 @@
 /**
  * `jht-hub`: the one process that holds the team's database and channels.
  *
- * SICUREZZA §8 phase 2 (T18). A role's container no longer mounts `jobs.db`
+ * The second step in closing the database off from the roles (T18). A role's container no longer mounts `jobs.db`
  * nor `channels/`: from its shell, `node:sqlite` finds no file and no inbox
  * is there to write. Its runtime reaches both through this process, which
  * applies the same rules the tools applied in the role — the code is the
@@ -80,7 +80,7 @@ export interface HubOptions {
   /** How often the launcher takes in the executor's results with nobody asking. */
   sweepMs?: number;
   now?: () => number;
-  /** The CAPITANO's launcher (SICUREZZA §9). Absent: no one spawns through this hub. */
+  /** The CAPITANO's launcher. Absent: no one spawns through this hub. */
   launcher?: Launcher;
   /**
    * The host's own token, kept apart from the roles' (T24): with it, and only
@@ -267,7 +267,7 @@ export function createHub(options: HubOptions): Server {
         const request = parse(SendRequest, body);
         const to = agentInstanceId(request.to);
         if (!agents.has(to)) throw new HttpError(404, `No agent ${to} on this team. Agents: ${[...agents].sort().join(", ")}.`);
-        // T37 (SICUREZZA, on the SENTINELLA's RULE #0): who may write to whom
+        // T37, on the SENTINELLA's RULE #0: who may write to whom
         // is decided here too, from the TOKEN. In the role the same table is a
         // gate the model is asked to respect; a role that reaches the hub with
         // `bash` and this checkout would walk around it. The sender is never

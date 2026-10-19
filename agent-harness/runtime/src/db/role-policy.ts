@@ -76,7 +76,7 @@ export interface PositionUpdateRule {
   /**
    * On a row in the `later` statuses, closing it (`--status excluded`, or
    * `--is-open false`) takes a recorded proof: the liveness check that
-   * confirmed it closed, and its evidence (SICUREZZA A-3). A scored or ready
+   * confirmed it closed, and its evidence. A scored or ready
    * position is the Scorer's and the Scrittore's work already paid for.
    */
   laterCloseNeedsProof?: boolean;
@@ -123,7 +123,7 @@ export const DB_ROLE_POLICIES: Readonly<Record<string, DbRolePolicy>> = {
       // proof it closed (RULE-14 care mode). Never back to new, never past the Scorer's states
       // into the Scrittore's, never an application's.
       moves: { checked: ["new", "checked"], excluded: ["new", "checked", "scored", "writing", "review", "ready"] },
-      // Nothing once applied or answered, nor on a position already excluded (SICUREZZA A-1).
+      // Nothing once applied or answered, nor on a position already excluded.
       touches: ["new", "checked", "scored", "writing", "review", "ready"],
       later: {
         statuses: ["scored", "writing", "review", "ready"],
@@ -279,8 +279,7 @@ export const DB_ROLE_POLICIES: Readonly<Record<string, DbRolePolicy>> = {
 };
 
 /**
- * What the ASSISTENTE writes inside the person's profile folder (T38, P2 of
- * SICUREZZA). Not the folder: the files.
+ * What the ASSISTENTE writes inside the person's profile folder (T38). Not the folder: the files.
  *
  * On a real box that folder holds more than the profile — dated backups,
  * `applications/`, `audits/`, control flags of other roles, and scripts the
