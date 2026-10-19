@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import MapCharts from "@/app/components/MapCharts";
 import {
@@ -17,9 +18,12 @@ import {
 } from "@/lib/map-panels-layout";
 
 // The globe is a WebGL canvas: the panels are what is tested here.
+// It renders the controls the map hands it (the filters' pills), as the real one does.
 vi.mock("@/app/components/JobsGlobeLazy", () => ({
-  default: (props: { fitPaddingLeft?: number }) => (
-    <div data-testid="globe" data-fit-padding-left={props.fitPaddingLeft ?? 0} />
+  default: (props: { fitPaddingLeft?: number; bottomCenterExtra?: ReactNode }) => (
+    <div data-testid="globe" data-fit-padding-left={props.fitPaddingLeft ?? 0}>
+      {props.bottomCenterExtra}
+    </div>
   ),
 }));
 
@@ -163,5 +167,31 @@ describe("phone layout (390 px)", () => {
   it("starts the rail exactly where the phone stack ends, with no width in both and none in neither", () => {
     expect(page).toContain(`@media (max-width: ${RAIL_MIN_WIDTH - 1}px)`);
     expect(page).toContain("${MAP_PANELS_CSS}");
+  });
+});
+
+describe("the filters' badge", () => {
+  beforeEach(stubFetch);
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    delete (window as { matchMedia?: unknown }).matchMedia;
+  });
+
+  it("opens with the default score filter shown as the default, and counts only what the person picks", async () => {
+    mockMedia(false);
+    await renderMap();
+    // nothing picked: no number, and the button says the filter is the default one
+    expect(screen.queryAllByTestId("filters-count")).toEqual([]);
+    const buttons = screen.getAllByRole("button", { name: /filtri attivi|active filters/i });
+    expect(buttons.length).toBeGreaterThan(0);
+    for (const b of buttons) expect(b).toHaveAccessibleName(/· (predefinito|default)$/i);
+    fireEvent.click(buttons[0]!);
+    expect(screen.getAllByText(/≥ 65 · (predefinito|default)/i).length).toBeGreaterThan(0);
+
+    // a type picked in the legend is counted; the default filter still is not
+    fireEvent.click(header(/tipologie|position types/i));
+    fireEvent.click((await screen.findAllByText("Data")).at(-1)!.closest("li")!);
+    await waitFor(() => expect(screen.getAllByTestId("filters-count").map((e) => e.textContent)).toEqual(expect.arrayContaining(["1"])));
+    for (const count of screen.getAllByTestId("filters-count")) expect(count.textContent).toBe("1");
   });
 });

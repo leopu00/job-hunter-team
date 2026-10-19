@@ -528,10 +528,13 @@ export default function MapCharts({
     });
   }
   if (minScore != null) {
+    const isDefault = minScore === DEFAULT_MIN_SCORE;
+    const label = tr("min_score").replace("{n}", String(minScore));
     filterChips.push({
       key: "min-score",
-      label: tr("min_score").replace("{n}", String(minScore)),
+      label: isDefault ? `${label} · ${tr("default_filter")}` : label,
       onRemove: () => setMinScore(null),
+      isDefault,
     });
   }
   for (const r of selectedRanges) {
@@ -944,7 +947,22 @@ type FilterChipDesc = {
   label: string;
   color?: string;
   onRemove: () => void;
+  // Filtro con cui la mappa si apre (score ≥ 65): resta visibile e
+  // rimovibile, ma non è una scelta dell'utente e non entra nel numero.
+  isDefault?: boolean;
 };
+
+// Il numero sul bottone dei filtri: solo quelli scelti dall'utente.
+function chosenCount(chips: FilterChipDesc[]): number {
+  return chips.filter((c) => !c.isDefault).length;
+}
+
+// L'etichetta accessibile del bottone: il numero scelto, o «predefinito»
+// quando c'è solo il filtro di partenza.
+function filtersAria(chips: FilterChipDesc[], tr: Tr): string {
+  const n = chosenCount(chips);
+  return `${tr("filters_active")} · ${n > 0 ? n : tr("default_filter")}`;
+}
 
 // Bottone-filtro compatto: una sola icona a imbuto con il numero di
 // filtri attivi, ancorata in basso-centro (zona della mappa sempre
@@ -1011,7 +1029,7 @@ function MobileFilterPill({
             <button
               type="button"
               onClick={() => setOpen((v) => !v)}
-              aria-label={`${tr("filters_active")} · ${chips.length}`}
+              aria-label={filtersAria(chips, tr)}
               title={tr("filters_active")}
               className="flex items-center gap-1.5"
               style={{
@@ -1023,20 +1041,23 @@ function MobileFilterPill({
               }}
             >
               <FunnelIcon />
-              <span
-                className="rounded-full text-[9px] font-bold tabular-nums"
-                style={{
-                  background: "var(--color-green)",
-                  color: "var(--color-void)",
-                  minWidth: 15,
-                  height: 15,
-                  lineHeight: "15px",
-                  textAlign: "center",
-                  padding: "0 3px",
-                }}
-              >
-                {chips.length}
-              </span>
+              {chosenCount(chips) > 0 && (
+                <span
+                  data-testid="filters-count"
+                  className="rounded-full text-[9px] font-bold tabular-nums"
+                  style={{
+                    background: "var(--color-green)",
+                    color: "var(--color-void)",
+                    minWidth: 15,
+                    height: 15,
+                    lineHeight: "15px",
+                    textAlign: "center",
+                    padding: "0 3px",
+                  }}
+                >
+                  {chosenCount(chips)}
+                </span>
+              )}
             </button>
             <span
               aria-hidden
@@ -1209,7 +1230,7 @@ function FilterButton({
       <button
         onClick={() => setOpen((v) => !v)}
         title={tr("filters_active")}
-        aria-label={`${tr("filters_active")} · ${chips.length}`}
+        aria-label={filtersAria(chips, tr)}
         className="flex items-center gap-2 rounded-full border transition-colors hover:border-[var(--color-border-glow)]"
         style={{
           background: "var(--color-panel)",
@@ -1239,19 +1260,22 @@ function FilterButton({
         <span className="text-[11px] font-semibold tracking-wide">
           {tr("filters")}
         </span>
-        <span
-          className="text-[10px] font-bold tabular-nums rounded-full"
-          style={{
-            background: "var(--color-green)",
-            color: "var(--color-deep)",
-            minWidth: 16,
-            textAlign: "center",
-            padding: "0 5px",
-            lineHeight: "16px",
-          }}
-        >
-          {chips.length}
-        </span>
+        {chosenCount(chips) > 0 && (
+          <span
+            data-testid="filters-count"
+            className="text-[10px] font-bold tabular-nums rounded-full"
+            style={{
+              background: "var(--color-green)",
+              color: "var(--color-deep)",
+              minWidth: 16,
+              textAlign: "center",
+              padding: "0 5px",
+              lineHeight: "16px",
+            }}
+          >
+            {chosenCount(chips)}
+          </span>
+        )}
       </button>
     </div>
   );
