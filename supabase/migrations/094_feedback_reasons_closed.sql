@@ -85,7 +85,7 @@ update public.position_feedback
              when reason in ('not_interested', 'mismatch', 'conditions') then comment
              else coalesce(nullif(btrim(reason), ''), comment)
            end,
-           '[\x00-\x1f\x7f]', ' ', 'g')), 200), '')),
+           '[[:cntrl:]]', ' ', 'g')), 200), '')),
        comment = case
          when reason in ('not_interested', 'mismatch', 'conditions') or btrim(coalesce(reason, '')) = '' then comment
          when comment is null or btrim(comment) = '' then left(btrim(reason), 2000)
@@ -101,7 +101,7 @@ update public.position_feedback
    );
 
 update public.position_feedback
-   set note = nullif(left(btrim(regexp_replace(comment, '[\x00-\x1f\x7f]', ' ', 'g')), 200), '')
+   set note = nullif(left(btrim(regexp_replace(comment, '[[:cntrl:]]', ' ', 'g')), 200), '')
  where note is null
    and comment is not null
    and btrim(comment) <> '';
