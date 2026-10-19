@@ -76,7 +76,8 @@ describe("environment selection is idempotent for the current environment", () =
     expect(screen.queryByLabelText(t.vpsAddress)).toBeNull(); expect(next()).toBeEnabled();
     await user.click(vps());
     expect(screen.getByLabelText(t.vpsAddress)).toHaveValue("");
-    expect(screen.getByLabelText(t.sshUser)).toHaveValue("root");
+    expect(screen.getByLabelText(t.sshUser)).toHaveValue("");
+    expect(screen.getByLabelText(t.sshUser)).toHaveAttribute("placeholder", t.sshUserPlaceholder);
     expect(screen.getByLabelText(t.sshPort)).toHaveValue(22);
     expect(screen.queryByText("key", { selector: "strong" })).toBeNull();
     expect(next()).toBeDisabled();

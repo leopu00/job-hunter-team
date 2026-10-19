@@ -110,3 +110,28 @@ describe("the Environment step shows only what the choice made needs", () => {
     expect(rule(".onboarding-aside p")).toMatch(/color: var\(--color-muted\)/);
   });
 });
+
+describe("the SSH user is not guessed", () => {
+  const t = ONBOARDING_TEXT.it;
+
+  it("starts empty with an example as placeholder, and Continue waits for a user that is typed", async () => {
+    const user = userEvent.setup();
+    renderFlow();
+    await user.click(screen.getByRole("button", { name: new RegExp(t.startSetup) }));
+    await user.click(screen.getByRole("radio", { name: new RegExp(t.vpsServer) }));
+    const field = screen.getByLabelText(t.sshUser);
+    expect(field).toHaveValue("");
+    expect(field).toHaveAttribute("placeholder", "es. ubuntu");
+    await user.type(screen.getByLabelText(t.vpsAddress), "host.example.invalid");
+    await user.click(screen.getByRole("button", { name: /scegli chiave SSH/i }));
+    expect(screen.getByRole("button", { name: /^continua/i })).toBeDisabled();
+    await user.type(field, "ubuntu");
+    expect(screen.getByRole("button", { name: /^continua/i })).toBeEnabled();
+  });
+
+  it.each(Object.keys(ONBOARDING_TEXT) as (keyof typeof ONBOARDING_TEXT)[])("%s: the example is there and is not root", (locale) => {
+    const example = ONBOARDING_TEXT[locale].sshUserPlaceholder;
+    expect(example.trim()).not.toBe("");
+    expect(example.toLowerCase()).not.toContain("root");
+  });
+});

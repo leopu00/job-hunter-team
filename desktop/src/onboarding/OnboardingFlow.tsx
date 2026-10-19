@@ -24,7 +24,7 @@ import { WINDOWS_SETUP } from "./windows-setup";
 import "./onboarding.css";
 
 function emptyVpsHost(): ExecutionHost {
-  return { kind: "vps", address: "", user: "root", port: 22, keyPath: "" };
+  return { kind: "vps", address: "", user: "", port: 22, keyPath: "" };
 }
 const COLLECTION_STEP_COUNT = 4;
 
@@ -505,7 +505,7 @@ export function OnboardingFlow({ account, platform, runtime, activity, onSubmit,
             </div>
             {host.kind === "vps" && <div className="onboarding-fields onboarding-vps-fields">
               <label className="onboarding-field onboarding-field--full"><span>{t.vpsAddress}</span><input value={host.address} onChange={(event) => setHost({ ...host, address: event.target.value })} placeholder={t.vpsAddressPlaceholder} required /></label>
-              <label className="onboarding-field"><span>{t.sshUser}</span><input value={host.user} onChange={(event) => setHost({ ...host, user: event.target.value })} required /></label>
+              <label className="onboarding-field"><span>{t.sshUser}</span><input placeholder={t.sshUserPlaceholder} value={host.user} onChange={(event) => setHost({ ...host, user: event.target.value })} required /></label>
               <label className="onboarding-field"><span>{t.sshPort}</span><input type="number" min="1" max="65535" value={host.port} onChange={(event) => setHost({ ...host, port: Number(event.target.value) })} required /></label>
               <div className="onboarding-field onboarding-field--full"><span>{t.sshKey}</span><SshKeyPicker value={host.keyPath} onChange={(keyPath) => setHost({ ...host, keyPath })} disabled={submitting} /></div>
             </div>}

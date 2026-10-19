@@ -79,6 +79,7 @@ function bridge(overrides: Partial<ExistingTeamBridge> = {}): ExistingTeamBridge
 
 async function fillHost(user: ReturnType<typeof userEvent.setup>) {
   await user.type(screen.getByLabelText(/host o indirizzo ip/i), "host.example.invalid");
+  await user.type(screen.getByLabelText(/utente ssh/i), "ubuntu");
   await user.click(screen.getByRole("button", { name: /scegli chiave ssh/i }));
 }
 
@@ -90,7 +91,8 @@ describe("ExistingTeamConnectModal", () => {
     expect(screen.getByRole("dialog", { name: /hai già un team attivo su vps/i })).toBeInTheDocument();
     expect(screen.getByRole("img", { name: /vps proietta l’ufficio/i }))
       .toHaveAttribute("src", "/onboarding/environment-vps-v2.webp");
-    expect(screen.getByLabelText(/utente ssh/i)).toHaveValue("root");
+    expect(screen.getByLabelText(/utente ssh/i)).toHaveValue("");
+    expect(screen.getByLabelText(/utente ssh/i)).toHaveAttribute("placeholder", "es. ubuntu");
     expect(screen.getByLabelText(/porta ssh/i)).toHaveValue(22);
     expect(native.probe).not.toHaveBeenCalled();
     expect(native.confirm).not.toHaveBeenCalled();
@@ -111,7 +113,7 @@ describe("ExistingTeamConnectModal", () => {
     expect(native.probe).toHaveBeenCalledWith(expect.objectContaining({
       kind: "vps",
       address: "host.example.invalid",
-      user: "root",
+      user: "ubuntu",
       port: 22,
       keyPath: "/synthetic/private/id_ed25519",
     }));

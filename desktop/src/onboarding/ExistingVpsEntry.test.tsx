@@ -26,7 +26,7 @@ describe("existing VPS entry", () => {
     expect(calls.onConnectExistingTeam).not.toHaveBeenCalled();
     await user.click(screen.getByRole("button", { name: ONBOARDING_TEXT.en.startSetup }));
     await user.click(screen.getByRole("button", { name: ONBOARDING_TEXT.en.existingTeam.verifyVps }));
-    expect(calls.onConnectExistingTeam).toHaveBeenCalledExactlyOnceWith({ kind: "vps", address: "", user: "root", port: 22, keyPath: "" });
+    expect(calls.onConnectExistingTeam).toHaveBeenCalledExactlyOnceWith({ kind: "vps", address: "", user: "", port: 22, keyPath: "" });
     expect(calls.onSubmit).not.toHaveBeenCalled();
     expect(screen.queryByRole("heading", { name: /choose.*provider/i })).not.toBeInTheDocument();
   });

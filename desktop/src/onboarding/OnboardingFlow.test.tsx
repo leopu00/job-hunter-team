@@ -313,6 +313,7 @@ describe("OnboardingFlow technical setup", () => {
     expect(screen.getByRole("radio", { name: /server VPS/i })).toHaveFocus();
 
     await user.type(screen.getByLabelText(/indirizzo VPS/i), "host.example.invalid");
+    await user.type(screen.getByLabelText(/utente ssh/i), "ubuntu");
     await user.click(screen.getByRole("button", { name: /scegli chiave SSH/i }));
     await user.click(screen.getByRole("button", { name: /^continua/i }));
     expect(screen.getByRole("heading", { name: /scegli il provider/i })).toHaveFocus();
@@ -337,6 +338,7 @@ describe("OnboardingFlow technical setup", () => {
     await begin(user);
     await user.click(screen.getByRole("radio", { name: /server VPS/i }));
     await user.type(screen.getByLabelText(/indirizzo VPS/i), " host.example.invalid ");
+    await user.type(screen.getByLabelText(/utente ssh/i), "ubuntu");
     await user.click(screen.getByRole("button", { name: /scegli chiave SSH/i }));
     expect(screen.getByText("id_ed25519")).toBeInTheDocument();
     expect(screen.queryByText("/synthetic/private/id_ed25519")).not.toBeInTheDocument();
@@ -349,7 +351,7 @@ describe("OnboardingFlow technical setup", () => {
       host: {
         kind: "vps",
         address: "host.example.invalid",
-        user: "root",
+        user: "ubuntu",
         port: 22,
         keyPath: "/synthetic/private/id_ed25519",
       },
@@ -377,6 +379,7 @@ describe("OnboardingFlow technical setup", () => {
     expect(screen.queryByRole("radio", { name: /questo computer/i })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: /^continua/i })).toBeDisabled();
     await user.type(screen.getByLabelText(/indirizzo VPS/i), "host.example.invalid");
+    await user.type(screen.getByLabelText(/utente ssh/i), "ubuntu");
     expect(screen.getByRole("button", { name: /^continua/i })).toBeDisabled();
     await user.click(screen.getByRole("button", { name: /scegli chiave SSH/i }));
     expect(screen.getByRole("button", { name: /^continua/i })).toBeEnabled();
