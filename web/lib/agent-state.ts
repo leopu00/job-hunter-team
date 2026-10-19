@@ -20,21 +20,39 @@ export const AGENT_STATES = [
 export type AgentState = (typeof AGENT_STATES)[number];
 
 export function isAgentState(value: unknown): value is AgentState {
-  return typeof value === "string" && (AGENT_STATES as readonly string[]).includes(value);
+  return (
+    typeof value === "string" &&
+    (AGENT_STATES as readonly string[]).includes(value)
+  );
 }
 
-export type AgentStateTone = "green" | "neutral" | "amber" | "blue" | "red" | "grey";
+export type AgentStateTone =
+  | "green"
+  | "neutral"
+  | "amber"
+  | "blue"
+  | "red"
+  | "grey";
 
 type Catalog = {
   languages: string[];
-  states: Record<string, { icon: string; tone: AgentStateTone; text: Record<string, string> }>;
-  reasons: Record<string, { tone?: AgentStateTone; text: Record<string, string> }>;
+  states: Record<
+    string,
+    { icon: string; tone: AgentStateTone; text: Record<string, string> }
+  >;
+  reasons: Record<
+    string,
+    { tone?: AgentStateTone; text: Record<string, string> }
+  >;
 };
 const catalog = CATALOG as Catalog;
 
 /** A reason that has a sentence in the catalog. */
 export function isKnownReason(value: unknown): value is string {
-  return typeof value === "string" && Object.prototype.hasOwnProperty.call(catalog.reasons, value);
+  return (
+    typeof value === "string" &&
+    Object.prototype.hasOwnProperty.call(catalog.reasons, value)
+  );
 }
 
 export type AgentStateInfo = {
@@ -51,7 +69,12 @@ export type AgentStateInfo = {
  * shown by its work, a free one needs no line.
  */
 export function isAnomalous(state: AgentState): boolean {
-  return state === "bloccato" || state === "aspetta_umano" || state === "sconosciuto" || state === "avviato_mai_partito";
+  return (
+    state === "bloccato" ||
+    state === "aspetta_umano" ||
+    state === "sconosciuto" ||
+    state === "avviato_mai_partito"
+  );
 }
 
 function pick(text: Record<string, string>, locale: string): string {
@@ -59,15 +82,23 @@ function pick(text: Record<string, string>, locale: string): string {
 }
 
 function clock(ms: number, locale: string): string {
-  return new Date(ms).toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit" });
+  return new Date(ms).toLocaleTimeString(locale, {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 }
 
 /** "12 min", "2 h": a length of time, in the person's language. */
 function span(ms: number, locale: string): string {
   const minutes = Math.max(1, Math.round(ms / 60_000));
-  const [value, unit] = minutes >= 120 ? [Math.round(minutes / 60), "hour"] : [minutes, "minute"];
+  const [value, unit] =
+    minutes >= 120 ? [Math.round(minutes / 60), "hour"] : [minutes, "minute"];
   try {
-    return new Intl.NumberFormat(locale, { style: "unit", unit, unitDisplay: "narrow" }).format(value);
+    return new Intl.NumberFormat(locale, {
+      style: "unit",
+      unit,
+      unitDisplay: "narrow",
+    }).format(value);
   } catch {
     return `${value} ${unit === "hour" ? "h" : "min"}`;
   }
@@ -75,9 +106,13 @@ function span(ms: number, locale: string): string {
 
 function ago(ms: number, locale: string): string {
   const minutes = Math.max(1, Math.round(ms / 60_000));
-  const [value, unit] = minutes >= 120 ? [Math.round(minutes / 60), "hour"] : [minutes, "minute"];
+  const [value, unit] =
+    minutes >= 120 ? [Math.round(minutes / 60), "hour"] : [minutes, "minute"];
   try {
-    return new Intl.RelativeTimeFormat(locale, { numeric: "always", style: "narrow" }).format(-value, unit as Intl.RelativeTimeFormatUnit);
+    return new Intl.RelativeTimeFormat(locale, {
+      numeric: "always",
+      style: "narrow",
+    }).format(-value, unit as Intl.RelativeTimeFormatUnit);
   } catch {
     return `${value} ${unit === "hour" ? "h" : "min"}`;
   }
@@ -99,7 +134,11 @@ export type AgentStateLine = {
   line: string;
 };
 
-export function describeAgentState(info: AgentStateInfo, locale: string, now = Date.now()): AgentStateLine {
+export function describeAgentState(
+  info: AgentStateInfo,
+  locale: string,
+  now = Date.now(),
+): AgentStateLine {
   const entry = catalog.states[info.state];
   const word = pick(entry.text, locale);
   let tone = entry.tone;
@@ -112,18 +151,34 @@ export function describeAgentState(info: AgentStateInfo, locale: string, now = D
     timed = text.includes("{t}") && info.until != null;
     if (text.includes("{t}")) {
       // no time known: only what comes before the "· retry {t}" part
-      text = info.until != null ? text.replace("{t}", clock(info.until, locale)) : text.split(" · ")[0];
+      text =
+        info.until != null
+          ? text.replace("{t}", clock(info.until, locale))
+          : text.split(" · ")[0];
     }
     if (text.includes("{d}")) {
       timed = true;
       const from = DURATION_IS_LEFT.has(info.reason) ? info.until : info.since;
-      const length = from == null ? null : DURATION_IS_LEFT.has(info.reason) ? from - now : now - from;
-      text = length == null ? text.split(" · ")[0].replace(/\s*\{d\}.*$/, "") : text.replace("{d}", span(length, locale));
+      const length =
+        from == null
+          ? null
+          : DURATION_IS_LEFT.has(info.reason)
+            ? from - now
+            : now - from;
+      text =
+        length == null
+          ? text.split(" · ")[0].replace(/\s*\{d\}.*$/, "")
+          : text.replace("{d}", span(length, locale));
     }
     reason = text;
   }
   // when: a state that says no time of its own says how long ago it began
-  const when = !timed && info.since != null && isAnomalous(info.state) ? ago(now - info.since, locale) : null;
-  const line = [`${entry.icon} ${word}`, reason, when].filter(Boolean).join(" · ");
+  const when =
+    !timed && info.since != null && isAnomalous(info.state)
+      ? ago(now - info.since, locale)
+      : null;
+  const line = [`${entry.icon} ${word}`, reason, when]
+    .filter(Boolean)
+    .join(" · ");
   return { icon: entry.icon, tone, word, reason, when, line };
 }
