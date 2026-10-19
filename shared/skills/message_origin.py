@@ -141,6 +141,26 @@ def _noise_length(text):
         return i
 
 
+def _reading_view(text):
+    """Il testo come lo legge il destinatario (vedi `external_content.reading_view`)."""
+    try:
+        import sys as _sys
+
+        here = os.path.dirname(os.path.abspath(__file__))
+        if here not in _sys.path:
+            _sys.path.insert(0, here)
+        from external_content import reading_view
+
+        return reading_view(text)
+    except Exception:
+        # Se la funzione non si carica il verdetto non deve diventare piu' cieco: via ESC, i
+        # controlli e gli invisibili (categorie Cc/Cf) da tutto il testo.
+        return "".join(
+            ch for ch in text.replace("\x1b", "")
+            if ch in "\n\r\t" or unicodedata.category(ch) not in ("Cc", "Cf")
+        )
+
+
 def claimed_sender(message: str) -> str | None:
     """Il mittente che il messaggio DICHIARA, o None se non c'è busta.
 
@@ -149,7 +169,7 @@ def claimed_sender(message: str) -> str | None:
     dopo il rumore iniziale (ZWSP, ESC, invisibili): la busta che si legge è quella che
     conta, non quella che i byte lasciano vedere a una regex.
     """
-    rest = split_context_frame(message)[1]
+    rest = _reading_view(split_context_frame(message)[1])
     found = ENVELOPE_RE.match(rest[_noise_length(rest):])
     return found.group(1).lower() if found else None
 

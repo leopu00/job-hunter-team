@@ -304,7 +304,19 @@ def _defang_user_markers(text):
 # Cc/Cf/Zl/Zp/Zs; dopo un ESC anche la sequenza che la TUI consumerebbe (`[31m`, un OSC) — MAI
 # `[@`, che e' l'inizio di una busta. Non cambia nulla: restituisce una lunghezza.
 _NOISE_CATEGORIES = frozenset({"Cc", "Cf", "Zl", "Zp", "Zs"})
-_AFTER_ESC = re.compile(r"\[[0-9;?]*[ -/]*[A-Za-z~`]|\][^\x07\x1b]*(?:\x07|\x1b\\)?")
+# Dopo un ESC: una CSI completa (la finale e' una lettera, `~` o il backtick: MAI `@`, perche' `ESC[@`
+# e' l'inizio di una busta), oppure un OSC. L'OSC e' rumore solo fino a dove non puo' nascondere una
+# busta: si ferma a un terminatore (BEL o ST, consumato), a un a capo o a un «[@» (non consumati). Senza
+# terminatore NON arriva in fondo al testo: attraversare un «[@» vero e' proprio cio' che il verdetto
+# non deve fare.
+_AFTER_ESC = re.compile(
+    r"\[[0-9;?]*[ -/]*[A-Za-z~`]"
+    r"|\](?:(?!\[@)[^\x07\x1b\r\n])*(?:\x07|\x1b\\)?"
+)
+# Come sopra, per togliere le sequenze di un ESC da TUTTO il testo: una sequenza che non e' completa
+# lascia il solo ESC da togliere.
+_ESC_SEQUENCE = re.compile(r"\x1b(?:" + _AFTER_ESC.pattern + r")?")
+_KEEP_CONTROLS = frozenset("\n\r\t")
 
 
 def leading_noise_length(text):
@@ -324,6 +336,20 @@ def leading_noise_length(text):
             continue
         break
     return i
+
+
+def reading_view(text):
+    """Il testo come lo LEGGE chi lo riceve: senza ESC e relative sequenze, senza controlli e senza
+    invisibili in nessun punto. Serve a decidere CHI parla: `[<ZWSP>@capitano -> @x]` e
+    `[\x1b[0m@capitano -> @x]` si leggono come una busta del capitano, e i byte non la lasciano
+    vedere a una regex. Non e' il testo che si consegna: il verdetto lo guarda, nessuno lo consegna."""
+    text = _ESC_SEQUENCE.sub("", str(text or ""))
+    return "".join(
+        ch
+        for ch in text
+        if ch not in INVISIBLE_COMMANDS
+        and (ch in _KEEP_CONTROLS or unicodedata.category(ch) not in ("Cc", "Cf"))
+    )
 
 
 def sanitize_user_text(text):
