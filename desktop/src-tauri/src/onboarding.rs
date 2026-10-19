@@ -2720,6 +2720,9 @@ pub(crate) async fn onboarding_resume_snapshot(
 pub(crate) struct ExistingTeamReadiness {
     pub(crate) snapshot: OnboardingSnapshot,
     pub(crate) readiness: bool,
+    /// The connection the read-only view opened (existing_team_runtime::connection_key): the
+    /// renderer keys what it keeps of the team's data with it. None where no target was activated.
+    pub(crate) connection_key: Option<String>,
 }
 
 /// Validates the immutable target and team identity, then reports whether its
@@ -2756,6 +2759,7 @@ pub(crate) fn existing_team_readonly_probe_with(
     Ok(ExistingTeamReadiness {
         readiness: snapshot.assistant_running,
         snapshot,
+        connection_key: None,
     })
 }
 
@@ -2839,7 +2843,7 @@ pub(crate) fn existing_team_readonly_connect_with(
     let validated = validate_host().map_err(failure)?;
     let target = crate::existing_team_runtime::candidate_for_request_at(root, scope, host, team_id).map_err(failure)?;
     let probe = crate::existing_team_runtime::team_probe_command(&target.runtime).map_err(failure)?;
-    let readiness = existing_team_readonly_probe_with(team_id, |input| {
+    let mut readiness = existing_team_readonly_probe_with(team_id, |input| {
         run(&validated, &probe, Some(input), SNAPSHOT_TIMEOUT)
     })?;
     validate_host().map_err(failure)?;
@@ -2854,6 +2858,7 @@ pub(crate) fn existing_team_readonly_connect_with(
         Err(error) => return Err(failure(error)),
     }
     persist_host().map_err(failure)?;
+    readiness.connection_key = Some(crate::existing_team_runtime::connection_key(scope, &target));
     Ok(readiness)
 }
 

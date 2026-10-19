@@ -40,6 +40,9 @@ export interface ExistingTeamReadOnly {
 }
 
 let current: ExistingTeamReadOnly | null = null;
+/** A new one at every opening of the view, with the connection it opened on (lib/existing-team.ts). */
+let session = 0;
+let connectionIdentity = "";
 /** Why the last read of the team's positions failed; null when it worked. */
 let readFailure: string | null = null;
 /** What the last page of the list could not do as asked; null when it did all. */
@@ -50,8 +53,18 @@ function emit() {
   listeners.forEach((listener) => listener());
 }
 
-export function enterExistingTeamReadOnly(assistantActive: boolean, connection: ConnectionProbe | null = null): void {
-  if (current?.assistantActive === assistantActive && current.connection === connection) return;
+export function enterExistingTeamReadOnly(
+  assistantActive: boolean,
+  connection: ConnectionProbe | null = null,
+  identity?: string,
+): void {
+  // Another connection (account, VPS, team) is another opening, never the same view refreshed.
+  if (current === null || (identity !== undefined && identity !== connectionIdentity)) {
+    session += 1;
+    connectionIdentity = identity ?? "";
+  } else if (current.assistantActive === assistantActive && current.connection === connection) {
+    return;
+  }
   current = { assistantActive, connection };
   readFailure = null;
   readNotice = null;
@@ -61,6 +74,7 @@ export function enterExistingTeamReadOnly(assistantActive: boolean, connection: 
 export function leaveExistingTeamReadOnly(): void {
   if (!current) return;
   current = null;
+  connectionIdentity = "";
   readFailure = null;
   readNotice = null;
   emit();
@@ -68,6 +82,14 @@ export function leaveExistingTeamReadOnly(): void {
 
 export function existingTeamReadOnly(): ExistingTeamReadOnly | null {
   return current;
+}
+
+/**
+ * The key of what the view may keep between reads: this opening of the view and
+ * the connection it opened on. Null while the view is closed: nothing is kept.
+ */
+export function existingTeamConnectionKey(): string | null {
+  return current ? `${session}|${connectionIdentity}` : null;
 }
 
 function subscribe(listener: () => void) {
