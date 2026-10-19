@@ -117,10 +117,18 @@ export async function readExistingTeamProfile(
 ): Promise<ExistingTeamProfileReading> {
   try {
     const reply = await read();
-    reportVpsRead(reply);
-    if (!isRecord(reply)) return { kind: "error", at: now(), code: "desktop_bad_reply" };
-    if (reply.ok === false) return { kind: "error", at: now(), code: teamStatusErrorCode(reply.error) };
+    if (!isRecord(reply)) {
+      reportVpsRead(reply);
+      return { kind: "error", at: now(), code: "desktop_bad_reply" };
+    }
+    if (reply.ok === false) {
+      reportVpsRead(reply);
+      return { kind: "error", at: now(), code: teamStatusErrorCode(reply.error) };
+    }
     const picked = reply.ok === true ? pickProfileRead(reply.data) : null;
+    // A reply that says ok but whose profile is discarded is not a contact: the page shows a bad reply,
+    // and so does the header.
+    reportVpsRead(reply.ok === true && picked === null ? { ok: false, error: "desktop_bad_reply" } : reply);
     return picked
       ? { kind: "read", at: now(), read: picked }
       : { kind: "error", at: now(), code: "desktop_bad_reply" };
