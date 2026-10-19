@@ -20,6 +20,13 @@ export type ExistingTeamConnectionResult = OnboardingRuntimeSnapshot;
 export interface ExistingTeamReadOnlyConnectionResult {
   snapshot: OnboardingRuntimeSnapshot;
   readiness: boolean;
+  /**
+   * Which connection this is, for what the view keeps between reads (the shared
+   * positions read): one opaque value the native side derives from the account
+   * scope and the saved target (host, team and container), for a first opening
+   * and for a reopening alike.
+   */
+  connectionKey?: string | null;
 }
 
 export interface ExistingTeamProgress {

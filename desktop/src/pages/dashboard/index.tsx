@@ -10,6 +10,7 @@ import { appLocale } from "../../lib/app-locale";
 import { describeError } from "../../lib/error-catalog";
 import { ExistingTeamDashboardError, loadExistingTeamDashboard } from "../../lib/existing-team-dashboard";
 import { useExistingTeamReadOnly } from "../../lib/existing-team-readonly";
+import { PAGE_STATES_TEXT } from "../../lib/page-states.i18n";
 import { loadDashboard, type DashboardData } from "./load-dashboard";
 
 type Load =
@@ -39,7 +40,7 @@ export default function DashboardPage(_props: PageProps) {
   useEffect(read, [read]);
   useRefresh(read);
 
-  if (load.state === "loading") return <DashboardSkeleton label="Caricamento dashboard" />;
+  if (load.state === "loading") return <DashboardSkeleton label={PAGE_STATES_TEXT[appLocale()].loadingDashboard} />;
   if (load.state === "failed") {
     // The core's own code and what it means, not a guess about the network.
     const failure = load.code
@@ -49,7 +50,7 @@ export default function DashboardPage(_props: PageProps) {
       <p role="alert" className="max-w-6xl mx-auto px-5 pt-8 text-[12px]" style={{ color: "var(--color-red)" }}>
         {failure
           ? `${failure.text} ${failure.action} (${load.code})`
-          : "Non riesco a leggere la dashboard. Controlla la connessione e premi «Aggiorna»."}
+          : PAGE_STATES_TEXT[appLocale()].dashboardFailed}
       </p>
     );
   }

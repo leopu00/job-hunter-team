@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
+import { appLocale } from "../../lib/app-locale";
 import { brokerLoginStatus, openBrokerLoginView, type BrokerLoginStatus } from "../../lib/broker-login";
 import { describeError, errorCodeOf } from "../../lib/error-catalog";
+import { PROFILE_PAGE_TEXT } from "./profile-page.i18n";
 
 type Status = { state: "loading" } | { state: "known"; status: BrokerLoginStatus } | { state: "unknown" };
 
@@ -40,26 +42,26 @@ export function LinkedinLoginCard({
     try {
       await open();
     } catch (failure) {
-      const described = describeError(errorCodeOf(failure), { fallback: "view_unavailable" });
+      const described = describeError(errorCodeOf(failure), { fallback: "view_unavailable", locale: appLocale() });
       setError(`${described.text} ${described.action}`);
     } finally {
       setOpening(false);
     }
   }
 
+  const t = PROFILE_PAGE_TEXT[appLocale()];
   const loggedIn = status.state === "known" && status.status.linkedin === "logged_in";
   return (
-    <section aria-label="Accesso a LinkedIn" className="max-w-6xl mx-auto px-5 mt-8">
-      <h2 className="text-[13px] font-semibold">Accesso a LinkedIn per le candidature</h2>
+    <section aria-label={t.linkedinAria} className="max-w-6xl mx-auto px-5 mt-8">
+      <h2 className="text-[13px] font-semibold">{t.linkedinTitle}</h2>
       <p className="mt-1 text-[12px] text-[var(--color-muted)]">
-        L’accesso si fa nel browser protetto del team, in una finestra a parte: gli agenti non vedono
-        né la password né la sessione.
+        {t.linkedinIntro}
       </p>
       <p className="mt-2 text-[12px]">
-        Stato:{" "}
-        {status.state === "loading" && "verifica…"}
-        {status.state === "unknown" && "non disponibile"}
-        {status.state === "known" && (loggedIn ? "accesso fatto" : "accesso da fare")}
+        {t.statusLabel}{" "}
+        {status.state === "loading" && t.statusLoading}
+        {status.state === "unknown" && t.statusUnknown}
+        {status.state === "known" && (loggedIn ? t.statusLoggedIn : t.statusLoggedOut)}
       </p>
       <button
         type="button"
@@ -67,7 +69,7 @@ export function LinkedinLoginCard({
         onClick={() => void start()}
         disabled={opening}
       >
-        {opening ? "Apro lo schermo di accesso…" : loggedIn ? "Accedi di nuovo a LinkedIn" : "Accedi a LinkedIn"}
+        {opening ? t.opening : loggedIn ? t.loginAgain : t.login}
       </button>
       {error && (
         <p role="alert" className="mt-2 text-[12px]" style={{ color: "var(--color-red)" }}>

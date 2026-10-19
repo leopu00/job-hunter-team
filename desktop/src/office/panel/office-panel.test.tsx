@@ -1,6 +1,6 @@
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { OfficeLayout } from "../contract";
 import { fakeSupabase } from "../../test-support/fake-supabase";
 import { OWN_KEYS_ATTR } from "../scene/controls";
@@ -25,6 +25,30 @@ function open(onNavigate = vi.fn()) {
   );
   return screen.getByRole("complementary", { name: "Dettagli dell'ufficio" });
 }
+
+afterEach(() => {
+  document.cookie = "NEXT_LOCALE=; path=/; max-age=0";
+});
+
+describe("the office's panel in the app's language", () => {
+  it("tells its frame, its loading and its position's detail in English", async () => {
+    document.cookie = "NEXT_LOCALE=en; path=/";
+    const onNavigate = vi.fn();
+    const { client } = fakeSupabase((q) => ({ data: q.table === "positions" ? [position] : [], error: null }));
+    render(
+      <OfficePanel target={{ kind: "pile", dept: "scout" }} layout={layout} snapshot={null} statuses={null} client={client} onClose={vi.fn()} onOpen={vi.fn()} onNavigate={onNavigate} />,
+    );
+    const panel = screen.getByRole("complementary", { name: "Office details" });
+    expect(within(panel).getByRole("button", { name: "Close" })).toBeInTheDocument();
+    expect(within(panel).getByText("Positions in this phase")).toBeInTheDocument();
+    const user = userEvent.setup();
+    await user.click(await within(panel).findByRole("button", { name: /Dev · Acme/ }));
+    expect(within(panel).getByText("Place")).toBeInTheDocument();
+    await user.click(within(panel).getByRole("button", { name: "Open the position" }));
+    await waitFor(() => expect(onNavigate).toHaveBeenCalledWith("/positions/p1"));
+    expect(panel).not.toHaveTextContent(/Apri|Luogo|Chiudi|Posizioni|Tutte/);
+  });
+});
 
 describe("the office's panel with a keyboard (D08)", () => {
   it("takes the focus when it opens", () => {

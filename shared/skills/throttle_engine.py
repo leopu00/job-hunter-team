@@ -110,6 +110,8 @@ MAX_LOG_AGE_SEC = float(os.environ.get("JHT_THROTTLE_ENGINE_MAX_AGE",
 # Quando un gate blocca la sveglia non si molla l'agente: si ricontrolla più
 # tardi. Stessa scelta (e stesso valore) dello stepcap-watchdog.
 GATE_RETRY_SEC = float(os.environ.get("JHT_THROTTLE_ENGINE_GATE_RETRY", "900"))
+# Ogni quanto si applicano le scadenze delle domande strutturate (vedi `sweep_questions`).
+QUESTION_SWEEP_SEC = float(os.environ.get("JHT_QUESTION_SWEEP_INTERVAL", "30"))
 # Un wake consegnato un istante PRIMA che il daily hard-stop scriva il flag
 # puo arrivare all'agente dopo l'ESC iniziale. In quel caso `throttle-ack` e'
 # l'ultimo choke point deterministico prima che l'agente torni a lavorare o
@@ -937,6 +939,82 @@ def _handle_entry(agent, entry, now, sessions) -> bool:
     return False
 
 
+# ── Le scadenze delle domande strutturate ────────────────────────────────
+#
+# Una domanda con scadenza (`jht-notify-user --option … --scade-tra 6h`) riceve il
+# suo default solo se qualcuno applica la scadenza. Il lettore dell'agente lo fa,
+# ma solo quando l'agente guarda: un agente fermo, o in throttle, lascerebbe
+# l'utente senza avviso e la domanda aperta oltre il termine. Questo daemon è il
+# giro che c'è SEMPRE (pid1 lo avvia senza condizioni, non dipende da Telegram
+# né dal cloud, e un'eccezione non lo uccide), quindi la scadenza gira qui, nello
+# stesso modo del lettore: prima ciò che l'utente ha scritto in tempo, poi i
+# termini scaduti, poi l'avviso, una volta.
+#
+# Con `.team-halted.flag` il giro non scade niente e non scrive all'utente: il team è
+# fermo per sua volontà e un avviso «scaduta, ho scelto io» non è ciò che ha chiesto.
+# Il tempo dello stop NON si somma alle scadenze: una domanda scaduta durante lo stop
+# scade alla ripartenza (un giro dopo il flag tolto), una sola volta, e ciò che
+# l'utente ha scritto in tempo vince comunque, perché lo spazzino guarda prima quello.
+
+_last_question_sweep = 0.0
+
+
+def _jobs_db_path() -> Path:
+    explicit = os.environ.get("JHT_DB")
+    return Path(explicit) if explicit else _home() / "jobs.db"
+
+
+def team_halted() -> bool:
+    """Il team è fermato dall'utente (`.team-halted.flag`)."""
+    return any(name == "team-halted" and flag.exists() for name, flag in _halt_flags())
+
+
+def sweep_questions(*, db_path=None, deliver=None) -> int:
+    """Applica le scadenze di tutte le domande aperte. Ritorna quanti avvisi ha emesso.
+
+    Non fa niente (0) senza database, senza le colonne delle domande o senza il
+    modulo: è una funzione che si accende da sola quando qualcuno fa una domanda.
+    Non fa niente nemmeno a team fermato: né scadenze né avvisi (vedi sopra).
+    """
+    if team_halted():
+        return 0
+    path = Path(db_path) if db_path else _jobs_db_path()
+    if not path.exists():
+        return 0
+    try:
+        import agent_questions as aq
+    except ImportError:
+        return 0
+    import sqlite3
+    conn = sqlite3.connect(str(path), timeout=10)
+    try:
+        columns = {row[1] for row in conn.execute("PRAGMA table_info(pending_user_messages)")}
+        if not {"source_id", "source_action", "source_payload"} <= columns:
+            return 0
+        events = aq.sweep(conn)
+    finally:
+        conn.close()
+    if events:
+        (deliver or (lambda found: aq.deliver_expired(found, warn=_log)))(events)
+    return len(events)
+
+
+def maybe_sweep_questions(now=None) -> int:
+    """`sweep_questions` ogni QUESTION_SWEEP_SEC, e mai un guasto che esca da qui."""
+    global _last_question_sweep
+    if team_halted():
+        return 0  # il timer non avanza: alla ripartenza il primo giro spazza subito
+    moment = time.monotonic() if now is None else float(now)
+    if _last_question_sweep and moment - _last_question_sweep < QUESTION_SWEEP_SEC:
+        return 0
+    _last_question_sweep = moment
+    try:
+        return sweep_questions()
+    except Exception as exc:  # noqa: BLE001 — il throttle non cade per una domanda
+        _log("question sweep error: %s" % exc)
+        return 0
+
+
 def tick(now=None) -> dict:
     """Un giro completo. Ritorna lo stato aggiornato (comodo per i test).
 
@@ -1150,6 +1228,7 @@ def main(argv=None) -> int:
             tick()
         except Exception as exc:  # noqa: BLE001 — il loop non muore mai in silenzio
             _log("tick error: %s" % exc)
+        maybe_sweep_questions()
         time.sleep(INTERVAL_SEC)
 
 

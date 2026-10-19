@@ -17,6 +17,7 @@ import { appendFileSync, mkdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 
 import type { AgentEvent } from "./agent-loop.ts";
+import type { RateLimitDetails } from "./errors.ts";
 import type { Pricing, Usage } from "./usage.ts";
 
 /** Provider-side facts about one model call, when the provider reports them. */
@@ -85,7 +86,7 @@ export type TraceEvent =
       /** How late the event loop ran a timer, in ms. High means the agent process is starved. */
       loopLagMs: number;
     }
-  | { type: "run_failed"; code: string; message: string }
+  | { type: "run_failed"; code: string; message: string; rateLimit?: RateLimitDetails }
   | {
       type: "run_finished";
       reason: "completed" | "stopped";

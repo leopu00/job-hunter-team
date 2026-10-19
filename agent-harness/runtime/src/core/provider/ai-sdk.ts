@@ -22,6 +22,7 @@ import {
 } from "ai";
 
 import { HarnessError } from "../errors.ts";
+import { describeRateLimit, parseRetryAfter } from "./rate-limit.ts";
 import type { ResponseMeta } from "../trace.ts";
 import type {
   GenerateRequest,
@@ -80,10 +81,13 @@ const OPENAI_STATELESS = { store: false, include: ["reasoning.encrypted_content"
  * waiting in the worst case, and four attempts over a stretch long enough for a
  * minute-based window to move.
  *
- * **Two ceilings, because a backoff must not become the problem.** No single
- * wait is longer than `RETRY_MAX_MS` (a `retry-after: 600` is not obeyed to
- * the letter), and the waits of one call add up to at most
- * `RETRY_TOTAL_MS`. Above all, a wait never crosses the call's own budget —
+ * **Two ceilings, because a backoff must not become the problem.** No wait
+ * the runtime chooses is longer than `RETRY_MAX_MS`, and the waits of one call
+ * add up to at most `RETRY_TOTAL_MS`. A `retry-after` is never shortened to fit
+ * them — a retry before the time it asked for is refused again — so one that
+ * does not fit in the total is not waited for: the error carries what was
+ * asked and when it ends (`rateLimit`), and whoever manages the team decides.
+ * Above all, a wait never crosses the call's own budget —
  * the loop sets it to the lesser of the step timeout and what the run has
  * left on the wall clock — so **a sleeping run cannot outlive the ceiling it
  * was booked for**: the launcher's piggy bank holds a booking for as long as a
@@ -456,37 +460,51 @@ export async function attempt<T>(
   const startedAt = now();
   const signal = options.signal;
   let waitedMs = 0;
-  let retryAfterSeen = false;
+  let askedSeen: number | null = null;
   for (let n = 1; ; n++) {
     try {
       return { value: await call(), attempts: n, waitedMs };
     } catch (error) {
-      const asked = retryAfterHeader(error);
-      const waitMs = retryAfterMs(error, n);
-      if (waitMs === null) throw error;
+      const refused = apiError429(error);
+      if (refused === null) throw error;
       // A stop is immediate (SICUREZZA, §9): the raw error goes up, since the
       // run is ending for a reason of the operator's, not of the provider's.
       if (signal?.aborted) throw error;
-      retryAfterSeen ||= asked !== null;
-      const room = options.budgetMs === undefined ? Infinity : options.budgetMs - (now() - startedAt);
+      const at = now();
+      const asked = parseRetryAfter(headerOf(refused.responseHeaders, "retry-after"), at);
+      if (asked !== null) askedSeen = Math.max(askedSeen ?? 0, asked);
+      const left = RETRY_TOTAL_MS - waitedMs;
+      const waitMs = backoffMs(asked, n, left);
+      const room = options.budgetMs === undefined ? Infinity : options.budgetMs - (at - startedAt);
       const stop =
         n >= MAX_ATTEMPTS
           ? `${MAX_ATTEMPTS} attempts, the most this runtime makes`
-          : waitedMs + waitMs > RETRY_TOTAL_MS
-            ? `the ${RETRY_TOTAL_MS} ms this runtime waits per call, spent`
-            : waitMs > room
-              ? "no room left in this call's own budget: a wait may not outlive the run's ceiling"
-              : null;
+          : asked !== null && asked > left
+            ? // The provider's own figure is never shortened, so a figure that does
+              // not fit is not waited for at all: the error carries it instead.
+              waitedMs === 0
+              ? `the provider asked for ${asked} ms, more than the ${RETRY_TOTAL_MS} ms this runtime waits per call`
+              : `the ${RETRY_TOTAL_MS} ms this runtime waits per call, spent`
+            : waitMs > left
+              ? `the ${RETRY_TOTAL_MS} ms this runtime waits per call, spent`
+              : waitMs > room
+                ? "no room left in this call's own budget: a wait may not outlive the run's ceiling"
+                : null;
       if (stop !== null) {
+        const rateLimit = describeRateLimit(askedSeen, refused.responseHeaders, at);
         throw new HarnessError(
           "provider_rate_limited",
           `The provider refused this call with HTTP 429 after ${n} attempt(s) and ${waitedMs} ms of waiting: ` +
             `${stop}. This is the UPSTREAM account's rate limit — the request reached the provider and came back ` +
             `refused — and NOT a limit of this harness: not the budget, not the step cap, not the key proxy` +
-            `${retryAfterSeen ? ", and the provider did send a `retry-after`" : ""}. A refused call bills nothing, so ` +
-            `the money is untouched; what is exhausted is the account's requests per minute. Fewer agents at once, ` +
-            `or started in stages, is the fix — waiting longer here only holds the booking while nothing is produced.`,
-          { cause: error },
+            `${askedSeen !== null ? ", and the provider did send a `retry-after`" : ""}. A refused call bills nothing, so ` +
+            `the money is untouched; ` +
+            (rateLimit.kind === "quota"
+              ? `the wait it asked for (${askedSeen} ms, until ${rateLimit.resumeAt}) is a spent window of the account's plan, not a burst: ` +
+                `the role is better stopped until then than held asleep.`
+              : `what is exhausted is the account's requests per minute. Fewer agents at once, ` +
+                `or started in stages, is the fix — waiting longer here only holds the booking while nothing is produced.`),
+          { cause: error, rateLimit },
         );
       }
       await sleep(waitMs, signal);
@@ -499,38 +517,46 @@ export async function attempt<T>(
   }
 }
 
-/** The wait before another attempt, or null when the error is not a 429. */
-function retryAfterMs(error: unknown, attemptNumber = 1): number | null {
-  if (!is429(error)) return null;
-  const asked = retryAfterHeader(error);
-  // The provider's own figure when it sends one; otherwise a wait that grows
-  // with the attempt. Jitter either way: without it the roles that were
-  // refused together come back together, and the queue forms again.
-  const base = asked ?? RETRY_BASE_MS * 2 ** (attemptNumber - 1);
-  return Math.min(RETRY_MAX_MS, Math.round(base * (0.75 + Math.random() * 0.5)));
+/**
+ * The wait before another attempt. The provider's own figure when it sends
+ * one, and then **a floor**: jitter only spreads the roles that were refused
+ * together upwards, because a retry that lands before the time it asked for is
+ * refused again. `left` is what the call may still wait in total; the caller
+ * has already refused a figure that does not fit, so the result is never under
+ * `asked`. Without a figure, a wait that grows with the attempt, jittered both
+ * ways (the roles refused together must not come back together).
+ */
+function backoffMs(asked: number | null, attemptNumber: number, left: number): number {
+  if (asked === null) {
+    return Math.min(RETRY_MAX_MS, Math.round(RETRY_BASE_MS * 2 ** (attemptNumber - 1) * (0.75 + Math.random() * 0.5)));
+  }
+  return Math.min(Math.ceil(asked * (1 + Math.random() * 0.25)), Math.max(asked, left));
 }
 
 /**
- * A 429 from the provider, however the SDK wrapped it. The depth is bounded:
- * a chain that loops back on itself would otherwise never end, and no error
- * of the SDK's nests five deep (SICUREZZA, T27).
+ * The provider's 429, however the SDK wrapped it, or null. The depth is
+ * bounded: a chain that loops back on itself would otherwise never end, and no
+ * error of the SDK's nests five deep (SICUREZZA, T27).
  */
-function is429(error: unknown, depth = 0): boolean {
-  if (depth > 5) return false;
-  if (APICallError.isInstance(error) && error.statusCode === 429) return true;
+function apiError429(error: unknown, depth = 0): APICallError | null {
+  if (depth > 5) return null;
+  if (APICallError.isInstance(error) && error.statusCode === 429) return error;
   const errors = (error as { errors?: unknown })?.errors;
-  if (Array.isArray(errors) && errors.some((e) => is429(e, depth + 1))) return true;
+  if (Array.isArray(errors)) {
+    for (const inner of errors) {
+      const found = apiError429(inner, depth + 1);
+      if (found !== null) return found;
+    }
+  }
   const cause = (error as { cause?: unknown })?.cause;
-  return cause !== undefined && cause !== error && is429(cause, depth + 1);
+  return cause !== undefined && cause !== error ? apiError429(cause, depth + 1) : null;
 }
 
-/** `retry-after`, in milliseconds, when the provider sent one in seconds. */
-function retryAfterHeader(error: unknown): number | null {
-  const headers = APICallError.isInstance(error) ? error.responseHeaders : undefined;
-  const raw = headers?.["retry-after"];
-  if (raw === undefined) return null;
-  const seconds = Number(raw);
-  return Number.isFinite(seconds) && seconds >= 0 ? seconds * 1_000 : null;
+/** A response header by name, whatever the case the SDK left it in. */
+function headerOf(headers: Record<string, string> | undefined, name: string): string | undefined {
+  if (!headers) return undefined;
+  for (const [key, value] of Object.entries(headers)) if (key.toLowerCase() === name) return value;
+  return undefined;
 }
 
 /** Waits `ms`, or until the run is abandoned, whichever comes first. */

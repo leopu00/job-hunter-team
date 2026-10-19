@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import DashboardSkeleton from "@/app/(protected)/_components/DashboardSkeleton";
+import { appLocale } from "../../lib/app-locale";
+import { PAGE_STATES_TEXT } from "../../lib/page-states.i18n";
 import { supabase } from "../../lib/supabase";
 import { useRefresh } from "../../shell/router";
 import type { PageProps } from "../types";
@@ -30,11 +32,11 @@ export default function AgentsPage({ search }: PageProps) {
   useEffect(read, [read]);
   useRefresh(read);
 
-  if (load.state === "loading") return <DashboardSkeleton label="Caricamento agenti" />;
+  if (load.state === "loading") return <DashboardSkeleton label={PAGE_STATES_TEXT[appLocale()].loadingAgents} />;
   if (load.state === "failed")
     return (
       <p role="alert" className="max-w-6xl mx-auto px-5 pt-8 text-[12px]" style={{ color: "var(--color-red)" }}>
-        Non riesco a leggere gli agenti. Controlla la connessione e premi «Aggiorna».
+        {PAGE_STATES_TEXT[appLocale()].agentsFailed}
       </p>
     );
   const selected = AGENTS.find((a) => a.role === search.get("agent")) ?? AGENTS[0];

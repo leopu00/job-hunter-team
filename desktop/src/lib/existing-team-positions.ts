@@ -65,8 +65,10 @@ async function read<T>(request: Request): Promise<DesktopVpsRead<T>> {
   let result: DesktopVpsRead<T>;
   try {
     const answer = await invoke<unknown>(COMMAND, { request });
-    reportVpsRead(answer);
     result = reply<T>(answer);
+    // A reply that says ok but carries no data is not a contact: the header says the reply was bad
+    // (it is the one case the old «list not read» line had that a native failure code does not cover).
+    reportVpsRead(result.source === "unavailable" && (answer as { ok?: unknown } | null)?.ok === true ? { ok: false, error: result.code } : answer);
   } catch {
     reportVpsRead({ ok: false, error: "desktop_transport_unavailable" });
     result = { source: "unavailable", code: "desktop_transport_unavailable" };

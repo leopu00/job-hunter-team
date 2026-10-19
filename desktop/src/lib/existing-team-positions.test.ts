@@ -13,6 +13,7 @@ import {
 } from "./existing-team-positions";
 import { syntheticStats } from "../test-support/existing-team-stats-fixture";
 import { enterExistingTeamReadOnly, leaveExistingTeamReadOnly, existingTeamReadOnly } from "./existing-team-readonly";
+import { startVpsLink, stopVpsLink, vpsLinkState } from "./vps-link";
 
 const native = vi.hoisted(() => ({ invoke: vi.fn(), isTauri: vi.fn() }));
 vi.mock("@tauri-apps/api/core", () => native);
@@ -205,6 +206,36 @@ describe("existing-team positions bridge", () => {
     await expect(readDesktopVpsPosition("37")).resolves.toMatchObject({ data: { position: { id: "37", legacy_id: 12 } } });
     // An id that is not a box row's number gives no box id.
     await expect(readDesktopVpsPosition("a1b2")).resolves.toMatchObject({ data: { position: { legacy_id: null } } });
+  });
+
+  // The header of the link replaced the old «list not read» line: every read that line used to
+  // complain about has to leave a state in the header, and a working read has to leave «connected».
+  it.each([
+    ["a network failure", { ok: false, error: "timeout", kind: "network" }, "reconnecting", "timeout"],
+    ["the team answering with an error", { ok: false, error: "existing_team_not_active", kind: "application" }, "application", "existing_team_not_active"],
+    ["a team that is not the pinned one", { ok: false, error: "runtime_target_mismatch", kind: "version" }, "version", "runtime_target_mismatch"],
+    ["a changed SSH key", { ok: false, error: "host_key_changed", kind: "blocked" }, "blocked", "host_key_changed"],
+    ["a failure with no kind", { ok: false, error: "runtime_data_unavailable" }, "application", "runtime_data_unavailable"],
+    ["a reply that says ok and carries no data", { ok: true }, "application", "desktop_bad_reply"],
+    ["a reply that is not an object", "nope", "application", "desktop_bad_reply"],
+    ["a reply with neither ok nor error", { data: {} }, "application", "desktop_bad_reply"],
+  ])("leaves a state in the header for %s", async (_name, answer, status, code) => {
+    startVpsLink(true);
+    native.invoke.mockResolvedValueOnce(answer);
+    await readDesktopVpsPositions();
+    expect(vpsLinkState()).toMatchObject({ status, code });
+    stopVpsLink();
+  });
+
+  it("leaves a state in the header when the native call itself fails, and 'connected' after a working read", async () => {
+    startVpsLink(false);
+    native.invoke.mockRejectedValueOnce(new Error("no binding"));
+    await readDesktopVpsPositions();
+    expect(vpsLinkState()).toMatchObject({ status: "application", code: "desktop_transport_unavailable" });
+    native.invoke.mockResolvedValueOnce({ ok: true, data: { items: [] } });
+    await readDesktopVpsPositions();
+    expect(vpsLinkState()).toMatchObject({ status: "connected", code: null });
+    stopVpsLink();
   });
 
   it("fails closed for native failure, malformed replies, and non-desktop callers", async () => {

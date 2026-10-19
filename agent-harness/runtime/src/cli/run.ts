@@ -354,7 +354,7 @@ try {
   stopSampling?.();
   settle?.(isHarnessError(error) ? error.code : "crash");
   if (isHarnessError(error) && emit) {
-    emit({ type: "run_failed", code: error.code, message: error.message });
+    emit({ type: "run_failed", code: error.code, message: error.message, ...(error.rateLimit ? { rateLimit: error.rateLimit } : {}) });
     process.exitCode = 1;
   } else if (isHarnessError(error)) {
     console.error(`\n  ${error.code}: ${error.message}\n`);

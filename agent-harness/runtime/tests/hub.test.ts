@@ -177,7 +177,11 @@ describe("the channels", () => {
     expect(await send(SCOUT, "capitano-1")).toMatchObject({ status: 200 });
     expect(await send(SCOUT, "analista")).toMatchObject({ status: 200 });
     // The fourth in the window is refused; another sender has its own count.
-    expect(await send(SCOUT, "analista")).toMatchObject({ status: 429 });
+    // T10: the refusal is OURS and says so with a code of its own, not just "429", and when a slot frees.
+    const refused = await send(SCOUT, "analista");
+    expect(refused).toMatchObject({ status: 429, body: { code: "throttled_local", error: expect.stringContaining("limit reached") } });
+    expect(refused.body["retry_after_s"]).toBeGreaterThanOrEqual(1);
+    expect(refused.body["retry_after_s"]).toBeLessThanOrEqual(3_600);
     expect(await send(SCORER, "analista")).toMatchObject({ status: 200 });
     const { readdir } = await import("node:fs/promises");
     expect((await readdir(join(root, "hub", "channels", "mailbox"))).sort()).toEqual(["analista-1.jsonl", "capitano-1.jsonl"]);
@@ -204,7 +208,9 @@ describe("the channels", () => {
     const notify = (token: string) => raw(HUB_PATHS.notify, { token, body: JSON.stringify({ kind: "notification", text: "hi" }) });
     expect((await notify(SCOUT)).status).toBe(200);
     expect((await notify(SCOUT)).status).toBe(200);
-    expect((await notify(SCOUT)).status).toBe(429);
+    const refused = await notify(SCOUT);
+    expect(refused).toMatchObject({ status: 429, body: { code: "throttled_local" } });
+    expect(refused.body["retry_after_s"]).toBeGreaterThanOrEqual(1);
     expect((await notify(SCORER)).status).toBe(200);
     const lines = (await readFile(join(root, "hub", "channels", "notify.jsonl"), "utf8")).trim().split("\n").map((l) => JSON.parse(l) as { from: string });
     expect(lines.map((l) => l.from)).toEqual(["scout-1", "scout-1", "scorer-1"]);

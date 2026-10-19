@@ -7,7 +7,7 @@ import { signOut } from "../lib/supabase";
 import { installApiBridge, notInDesktop, shellApi } from "./api-bridge";
 import { currentLocation, matchRoute, navigate } from "./router";
 import { ROUTES } from "./routes";
-import { DESKTOP_LINKS } from "./desktop-links";
+import { desktopLinks } from "./desktop-links";
 import { THEME_STORAGE_KEY } from "./theme";
 import { enterExistingTeamReadOnly, leaveExistingTeamReadOnly } from "../lib/existing-team-readonly";
 import Shell from "./Shell";
@@ -171,14 +171,21 @@ describe("Shell", () => {
     navigate("/dashboard", { replace: true });
     render(<Shell />);
     const nav = screen.getByRole("navigation", { name: "Navigazione app" });
-    for (const { href, label } of DESKTOP_LINKS) {
+    for (const { href, label } of desktopLinks("it")) {
       expect(within(nav).getByRole("link", { name: label })).toHaveAttribute("href", "#" + href);
       expect(matchRoute(ROUTES, href)?.route.path).toBe(href);
     }
-    expect(DESKTOP_LINKS.map((l) => l.label)).toEqual(["Agenti", "Ufficio", "Posta"]);
+    expect(desktopLinks("it").map((l) => l.label)).toEqual(["Agenti", "Ufficio", "Posta"]);
     expect(within(nav).queryByRole("link", { name: "Budget" })).not.toBeInTheDocument();
-    expect(DESKTOP_LINKS.some((link) => link.href === "/budget")).toBe(false);
+    expect(desktopLinks("it").some((link) => link.href === "/budget")).toBe(false);
     expect(matchRoute(ROUTES, "/budget")).toBeNull();
+  });
+
+  it("names the desktop's own pages in the app's language, as the mail page names itself", () => {
+    expect(desktopLinks("en").map((l) => l.label)).toEqual(["Agents", "Office", "Mail"]);
+    expect(desktopLinks("de").map((l) => l.label)).toEqual(["Agenten", "Büro", "E-Mail"]);
+    for (const locale of ["it", "en", "de", "fr", "es", "pt", "hu"] as const)
+      expect(new Set(desktopLinks(locale).map((l) => l.href))).toEqual(new Set(["/agents", "/office", "/mail"]));
   });
 
   it("exports only its component, so an edit is Fast Refreshed instead of reloading the page", async () => {

@@ -28,10 +28,14 @@ export async function POST(req: NextRequest) {
   // il turno sia partito; i suoi exit code distinguono i modi di fallire.
   const q = (s: string) => `'${s.replace(/'/g, "'\\''")}'`;
   const args = `${q(session)} ${q(message)}`;
+  // JHT_TMUX_SEND_FROM=user-console: testo libero senza busta, scritto da chi usa il
+  // pannello locale. Chiede al trasporto di ripulirlo (ESC/CR, invisibili, finte buste)
+  // senza attribuirlo a nessuno: shared/skills/message_origin.py, JHT-T21-b.
+  const from = "JHT_TMUX_SEND_FROM=user-console";
   try {
     await runBash(
-      `if command -v jht-tmux-send >/dev/null 2>&1; then jht-tmux-send ${args}; ` +
-        `else /app/agents/_skills/tmux-send/jht-tmux-send ${args}; fi`,
+      `if command -v jht-tmux-send >/dev/null 2>&1; then ${from} jht-tmux-send ${args}; ` +
+        `else ${from} /app/agents/_skills/tmux-send/jht-tmux-send ${args}; fi`,
     );
     return NextResponse.json({ ok: true });
   } catch (err) {

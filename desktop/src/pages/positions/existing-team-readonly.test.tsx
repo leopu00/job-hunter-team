@@ -23,6 +23,8 @@ import { positionsApi } from "./positions-api";
 // Dettaglio pages, on rows the companion returns, with nothing asked of the
 // cloud and every control that writes disabled. Synthetic data only.
 const native = vi.hoisted(() => ({ invoke: vi.fn(), isTauri: vi.fn() }));
+// The header of the link also asks the app one command of its own (the team's identity); only this one is the pages'.
+const POSITIONS = "existing_team_positions_read";
 const fake = vi.hoisted(() => ({ current: null as ReturnType<typeof createPermissiveSupabase> | null }));
 
 vi.mock("@tauri-apps/api/core", () => native);
@@ -101,7 +103,7 @@ beforeEach(() => {
   apiCalls = [];
   native.isTauri.mockReturnValue(true);
   native.invoke.mockReset();
-  native.invoke.mockImplementation(async (_command: string, args: { request: never }) => companion(args.request));
+  native.invoke.mockImplementation(async (command: string, args?: { request: never }) => (command === POSITIONS ? companion(args!.request) : null));
   // Nothing but the app's own api reaches the network here, and the exchange
   // rates the web page asks for on its own (answered empty: it falls back).
   vi.stubGlobal(
@@ -124,6 +126,7 @@ afterEach(() => {
 const REASON = EXISTING_TEAM_READONLY_TEXT.it.assistantOff;
 const listRequests = () =>
   native.invoke.mock.calls
+    .filter(([command]) => command === POSITIONS)
     .map(([, args]) => args.request as { op: string; filters?: Filters })
     .filter((request) => request.op === "list");
 
@@ -137,7 +140,7 @@ describe("Posizioni on an existing team read only", () => {
     // The honest banner, and one navigation entry: no page that reads the cloud or the box.
     expect(screen.getByTestId("existing-team-readonly-banner")).toHaveTextContent(REASON);
     const nav = screen.getByRole("navigation", { name: "Navigazione app" });
-    expect(within(nav).getAllByRole("link").map((link) => link.textContent)).toEqual(["JHT", "Dashboard", "Map", "Posizioni", "Squadra", "Profilo", "Ufficio"]);
+    expect(within(nav).getAllByRole("link").map((link) => link.textContent)).toEqual(["JHT", "Dashboard", "Map", "Posizioni", "Squadra", "Profilo", "Ufficio", "Agenti"]);
     // The sidebar starts closed; opened, its dataset comes from the companion
     // through the web route, and its families are the team's own.
     await userEvent.setup().click(screen.getByRole("button", { name: /filtri/i }));
@@ -233,7 +236,7 @@ describe("Posizioni on an existing team read only", () => {
     expect(alert).toHaveTextContent("(positions_unavailable)");
     expect(screen.queryByText("Synthetic role A")).not.toBeInTheDocument();
 
-    native.invoke.mockImplementation(async (_command: string, args: { request: never }) => companion(args.request));
+    native.invoke.mockImplementation(async (command: string, args?: { request: never }) => (command === POSITIONS ? companion(args!.request) : null));
     await user.click(screen.getByRole("button", { name: "Aggiorna" }));
     expect((await screen.findAllByText("Synthetic role A")).length).toBeGreaterThan(0);
     await waitFor(() => expect(screen.queryByRole("alert")).not.toBeInTheDocument());
@@ -287,8 +290,12 @@ describe("Dettaglio posizione on an existing team read only", () => {
     const user = userEvent.setup();
     // The team's jobs.db has no legacy_id column: the core sends null for it.
     const real = { ...syntheticDetail, position: { ...syntheticDetail.position, legacy_id: null } };
-    native.invoke.mockImplementation(async (_command: string, args: { request: { op: string; id?: string } }) =>
-      args.request.op === "detail" ? { ok: true, data: args.request.id === "101" ? real : null } : companion(args.request as never),
+    native.invoke.mockImplementation(async (command: string, args?: { request: { op: string; id?: string } }) =>
+      command !== POSITIONS
+        ? null
+        : args!.request.op === "detail"
+          ? { ok: true, data: args!.request.id === "101" ? real : null }
+          : companion(args!.request as never),
     );
     navigate("/positions/101", { replace: true });
     render(<Shell />);

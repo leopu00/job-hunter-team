@@ -110,6 +110,52 @@ describe("the map on an existing team read only", () => {
     expect(countries).toEqual([["Italy", 2], ["(unknown)", 1]]);
   });
 
+  it("places a position on its office when the VPS gives its coordinates, as the web does", async () => {
+    native.invoke.mockImplementation(async () => ({ ok: true, data: { items: [
+      row("10", { loc_country: "Italy", loc_city: "Milano", office_lat: 45.4781, office_lon: 9.2275, office_address: "Synthetic street 10" }),
+      row("11", { loc_country: "Italy", loc_city: "Milano", office_lat: null, office_lon: null, office_address: null }),
+    ], total: 2 } }));
+    const coords = await get("/api/positions/coords");
+    const office = coords.find((pin: { id: string }) => pin.id === "10");
+    expect(office).toMatchObject({ lat: 45.4781, lon: 9.2275, office_address: "Synthetic street 10" });
+    // the one without an office is placed by its city, on the web's grid, not on the other's office
+    const byCity = coords.find((pin: { id: string }) => pin.id === "11");
+    expect(byCity.office_address).toBeNull();
+    expect([byCity.lat, byCity.lon]).not.toEqual([45.4781, 9.2275]);
+  });
+
+  it("an older reply without the office fields still places by city", async () => {
+    // ROWS carry no office_* key at all: what a jobs.db without the columns, or an older reply, gives
+    expect(ROWS.every((item) => !("office_lat" in item))).toBe(true);
+    const coords = await get("/api/positions/coords");
+    expect(coords.map((pin: { id: string }) => pin.id).sort()).toEqual(["1", "2"]);
+    for (const pin of coords) expect(Math.abs(pin.lat - 45.4642)).toBeLessThan(0.1);
+  });
+
+  it("never places a pin on a coordinate off the globe or not a number", async () => {
+    native.invoke.mockImplementation(async () => ({ ok: true, data: { items: [
+      row("20", { loc_country: "Italy", loc_city: "Milano", office_lat: 91, office_lon: 9.2 }),
+      row("21", { loc_country: "Italy", loc_city: "Milano", office_lat: "45.1", office_lon: "9.1" }),
+      row("22", { office_lat: 10, office_lon: 500 }),
+    ], total: 3 } }));
+    const coords = await get("/api/positions/coords");
+    expect(coords.map((pin: { id: string }) => pin.id).sort()).toEqual(["20", "21"]);
+    for (const pin of coords) expect(Math.abs(pin.lat - 45.4642)).toBeLessThan(0.1);
+    expect((await get("/api/positions/no-coords")).map((item: { id: string }) => item.id)).toEqual(["22"]);
+  });
+
+  it("keeps the web's rule for a point shared by three companies: the city's geocode, not an office", async () => {
+    const shared = { loc_country: "Italy", loc_city: "Milano", office_lat: 45.5, office_lon: 9.3 };
+    native.invoke.mockImplementation(async () => ({ ok: true, data: { items: [
+      row("30", { ...shared, company: "Synthetic A" }),
+      row("31", { ...shared, company: "Synthetic B" }),
+      row("32", { ...shared, company: "Synthetic C" }),
+    ], total: 3 } }));
+    const coords = await get("/api/positions/coords");
+    expect(coords).toHaveLength(3);
+    expect(coords.filter((pin: { lat: number; lon: number }) => pin.lat === 45.5 && pin.lon === 9.3)).toHaveLength(0);
+  });
+
   it("refuses anything but a read of those routes", async () => {
     expect((await fetch("/api/positions/coords", { method: "POST" })).status).toBe(403);
   });

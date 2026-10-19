@@ -18,9 +18,11 @@ INSTALL = ROOT / "scripts" / "install.sh"
 
 
 def keep(tmp_path: Path, marker: str | None, *args: str, os_name: str = "macos",
-         link: bool = False) -> subprocess.CompletedProcess:
+         link: bool = False, files: tuple[str, ...] = ()) -> subprocess.CompletedProcess:
     runtime = tmp_path / "runtime"
     runtime.mkdir(exist_ok=True)
+    for name in files:
+        (runtime / name).write_text("synthetic\n", encoding="utf-8")
     if marker is not None:
         target = runtime / "container-runtime"
         if link:
@@ -74,9 +76,9 @@ def test_the_same_engine_asked_explicitly_goes_on(tmp_path, marker, args):
 ])
 def test_switching_engine_is_refused_with_what_would_stay_behind(tmp_path, marker, args, wanted):
     result = keep(tmp_path, marker, *args)
-    assert result.returncode == 1
+    assert result.returncode == 85  # its own exit, which the app maps (onboarding.rs)
     assert "choice=" not in result.stdout
-    assert "runtime_change_requires_migration" in result.stderr
+    assert result.stderr.startswith("JHT_ERROR runtime_change_requires_migration\n")
     assert f"runs JHT on {marker}" in result.stderr and f"start it on {wanted}" in result.stderr
     assert "jht-deps" in result.stderr and f"without --runtime to keep {marker}" in result.stderr
     assert (tmp_path / "runtime" / "container-runtime").read_text(encoding="utf-8") == marker + "\n"
@@ -84,6 +86,28 @@ def test_switching_engine_is_refused_with_what_would_stay_behind(tmp_path, marke
 
 def test_linux_without_a_marker_keeps_ignoring_the_runtime_choice(tmp_path):
     assert choice(keep(tmp_path, None, os_name="linux")) == ""
+
+
+# A Linux server installed on Docker has no marker (the Docker path never writes it): an install
+# that was completed there (.runtime-integrity, published last) is Docker.
+def test_a_linux_server_installed_on_docker_asked_for_podman_is_refused(tmp_path):
+    result = keep(tmp_path, None, "--runtime", "podman", os_name="linux",
+                  files=("docker-compose.yml", ".runtime-integrity"))
+    assert result.returncode == 85
+    assert result.stderr.startswith("JHT_ERROR runtime_change_requires_migration\n")
+    assert "runs JHT on docker" in result.stderr and "start it on podman" in result.stderr
+    assert not (tmp_path / "runtime" / "container-runtime").exists()
+
+
+def test_a_linux_server_installed_on_docker_rerun_without_runtime_stays_docker(tmp_path):
+    files = ("docker-compose.yml", ".runtime-integrity")
+    assert choice(keep(tmp_path, None, os_name="linux", files=files)) == ""
+
+
+def test_a_first_podman_install_stopped_half_way_may_run_again(tmp_path):
+    # the compose is downloaded before the Podman marker is written; the manifest comes last
+    result = keep(tmp_path, None, "--runtime", "podman", os_name="linux", files=("docker-compose.yml",))
+    assert choice(result) == "podman"
 
 
 def test_linux_on_rootless_podman_keeps_podman_on_a_rerun(tmp_path):

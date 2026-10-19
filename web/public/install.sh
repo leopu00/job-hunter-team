@@ -413,15 +413,29 @@ detect_os() {
 # podman (it used to be rewritten to docker, i.e. Colima with empty volumes).
 # An explicit --runtime for the other engine is refused, because nothing
 # carries the volumes across yet. Colima and Docker Desktop are both docker.
+# On Linux the Docker path never writes the marker (only Podman and the Mac
+# do), so a server installed on Docker has none: there an install that was
+# completed (its .runtime-integrity manifest, published last, after the
+# Podman marker) without a marker is Docker. A first Podman install stopped
+# half way has no manifest yet, and may run again.
+# The refusal has an exit of its own, so the app can say what it means: a
+# line `JHT_ERROR runtime_change_requires_migration` on stderr, then exit 85
+# (the Linux Podman codes are 88-97, below).
+RUNTIME_CHANGE_REQUIRES_MIGRATION_EXIT=85
 keep_chosen_runtime() {
   [ -n "${OS:-}" ] || detect_os
   [ "$OS" = "macos" ] || [ "$OS" = "linux" ] || return 0
   local marker="$RUNTIME_DIR/container-runtime" current wanted
-  [ -e "$marker" ] || [ -L "$marker" ] || return 0
-  [ -f "$marker" ] && [ ! -L "$marker" ] \
-    || fail "Unsafe JHT runtime selection marker: $marker"
-  current="$(tr -d '\r\n' < "$marker")"
-  case "$current" in docker|podman) ;; *) fail "Invalid JHT runtime selection marker" ;; esac
+  if [ -e "$marker" ] || [ -L "$marker" ]; then
+    [ -f "$marker" ] && [ ! -L "$marker" ] \
+      || fail "Unsafe JHT runtime selection marker: $marker"
+    current="$(tr -d '\r\n' < "$marker")"
+    case "$current" in docker|podman) ;; *) fail "Invalid JHT runtime selection marker" ;; esac
+  elif [ "$OS" = "linux" ] && { [ -e "$RUNTIME_DIR/.runtime-integrity" ] || [ -L "$RUNTIME_DIR/.runtime-integrity" ]; }; then
+    current="docker"
+  else
+    return 0
+  fi
   if [ -z "$RUNTIME_CHOICE" ]; then
     [ "$current" = "podman" ] && RUNTIME_CHOICE="podman"
     return 0
@@ -429,7 +443,9 @@ keep_chosen_runtime() {
   wanted="docker"
   [ "$RUNTIME_CHOICE" = "podman" ] && wanted="podman"
   [ "$wanted" = "$current" ] && return 0
-  fail "runtime_change_requires_migration: this computer runs JHT on $current. --runtime $RUNTIME_CHOICE would start it on $wanted, where its volumes are empty: the provider logins and tools (jht-deps), the secrets and the broker and Telegram state would stay behind on $current. Moving them is not available yet: re-run without --runtime to keep $current. Your profile and documents in ~/.jht and ~/Documents/Job Hunter Team are not affected."
+  printf 'JHT_ERROR %s\n' runtime_change_requires_migration >&2
+  printf "  ${RED}✗${RESET} %s\n" "runtime_change_requires_migration: this computer runs JHT on $current. --runtime $RUNTIME_CHOICE would start it on $wanted, where its volumes are empty: the provider logins and tools (jht-deps), the secrets and the broker and Telegram state would stay behind on $current. Moving them is not available yet: re-run without --runtime to keep $current. Your profile and documents in ~/.jht and ~/Documents/Job Hunter Team are not affected." >&2
+  exit "$RUNTIME_CHANGE_REQUIRES_MIGRATION_EXIT"
 }
 
 # ── Package manager detection (Linux) ─────────────────────────────────────

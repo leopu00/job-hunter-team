@@ -5,6 +5,7 @@ import {
 } from "@/lib/queries";
 import MapCharts from "@/app/components/MapCharts";
 import LockBodyScroll from "./LockBodyScroll";
+import { MAP_PANELS_CSS } from "@/lib/map-panels-layout";
 import { getServerLocale } from "@/lib/server-locale";
 import { getDashboardT } from "@/lib/dashboard-i18n";
 import {
@@ -161,7 +162,7 @@ export default async function MapPage() {
           devono vincere sugli stili inline desktop (position:absolute
           ecc.). Ordine: globo → Location → Score → Tipologie →
           Posizioni. Desktop invariato. */}
-      <style>{`
+      <style>{`${MAP_PANELS_CSS}
         .map-bare-chart > div:first-child {
           background: transparent !important;
           border-color: transparent !important;

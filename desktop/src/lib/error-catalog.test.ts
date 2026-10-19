@@ -402,8 +402,17 @@ describe("the assisted browser's sentences for what the code cannot tell apart",
       expect(text, locale).toMatch(STOPPED[locale][0]);
       expect(action, locale).toMatch(STOPPED[locale][1]);
     }
-    // An image mismatch comes only from a running container: it keeps its own sentence.
-    expect(describeError("browser_image_mismatch").text).not.toBe(describeError("browser_container_mismatch").text);
+    // An image mismatch comes only from a running container: it keeps its own sentence — in EVERY
+    // language, not just the default one (T10): a translation that copied the stopped-container
+    // sentence into the image one would tell a person with a running team to start it.
+    for (const locale of ERROR_LOCALES) {
+      const image = describeError("browser_image_mismatch", { locale });
+      const container = describeError("browser_container_mismatch", { locale });
+      expect(image.known, locale).toBe(true);
+      expect(image.text, locale).not.toBe(container.text);
+      expect(image.action, locale).not.toBe(container.action);
+      expect(image.text, locale).not.toMatch(STOPPED[locale][0]);
+    }
   });
 
   it("ssh_host_key_invalid: names the ed25519 key the VPS did not offer, never host and port", () => {
@@ -491,6 +500,64 @@ describe("describeError", () => {
   });
 });
 
+describe("«Free up space» on a full disk (clean_images_*)", () => {
+  const CODES = Object.keys(ERROR_CATALOG).filter((code) => code.startsWith("clean_images_"));
+  const BYTES = 3_435_973_837; // 3.2 GB
+
+  it("has the confirmation, every outcome and every failure", () => {
+    expect(CODES.sort()).toEqual([
+      "clean_images_confirm", "clean_images_confirm_vm", "clean_images_container_off",
+      "clean_images_dates_unreadable", "clean_images_engine_off", "clean_images_engine_unreadable",
+      "clean_images_failed", "clean_images_freed", "clean_images_freed_vm", "clean_images_in_use",
+      "clean_images_kept", "clean_images_kept_by_choice", "clean_images_nothing", "clean_images_refused",
+      "clean_images_unsupported", "clean_images_upgrade",
+    ]);
+  });
+
+  const UP_TO: Record<string, RegExp> = {
+    it: /fino a circa/, en: /up to about/, de: /bis zu etwa/, es: /hasta unos/,
+    fr: /jusqu’à environ/, hu: /legfeljebb nagyjából/, pt: /até cerca de/,
+  };
+  const CONTAINER_ENGINE: Record<string, RegExp> = {
+    it: /motore dei container/, en: /container engine/, de: /Container-Engine/, es: /motor de contenedores/,
+    fr: /moteur de conteneurs/, hu: /konténermotor/, pt: /motor de contentores/,
+  };
+
+  it.each(ERROR_LOCALES)("%s: says each of them in that language, with the freed size", (locale) => {
+    for (const code of CODES) {
+      const described = describeError(code, { locale, bytes: BYTES });
+      expect(described.known, `${code}/${locale}`).toBe(true);
+      expect(`${described.text} ${described.action}`, `${code}/${locale}`).not.toMatch(/[{}]/);
+      if (locale !== "en") expect(described.text, `${code}/${locale}`).not.toBe(ERROR_CATALOG[code].text.en);
+    }
+    for (const code of ["clean_images_freed", "clean_images_freed_vm"]) {
+      const { text } = describeError(code, { locale, bytes: BYTES });
+      expect(text, `${code}/${locale}`).toMatch(/3[.,]2 GB/);
+      // The size is the images' NOMINAL size and layers shared between versions are freed only
+      // in part: the sentence promises "up to", never "freed {size}".
+      expect(text, `${code}/${locale}`).toMatch(UP_TO[locale]);
+    }
+    // On the Mac: the space is the virtual machine's, the Mac's disk is promised nothing, and
+    // the engine is not named: Colima (the default), Podman and Docker Desktop all run in one.
+    for (const code of ["clean_images_freed_vm", "clean_images_confirm_vm"]) {
+      const { text, action } = describeError(code, { locale, bytes: BYTES });
+      expect(text, `${code}/${locale}`).toMatch(CONTAINER_ENGINE[locale]);
+      expect(text, `${code}/${locale}`).not.toMatch(/Podman|Colima|Docker Desktop/);
+      expect(action, `${code}/${locale}`).toContain("Mac");
+    }
+    expect(describeError("clean_images_freed", { locale, bytes: BYTES }).text).not.toMatch(/Podman|Colima|Docker Desktop/);
+  });
+
+  it("writes small sizes in MB and never shows {size} without a size", () => {
+    expect(describeError("clean_images_freed", { locale: "en", bytes: 524_288_000 }).text).toContain("about 500 MB.");
+    for (const bytes of [undefined, null, -1, 1.5, Number.NaN]) {
+      const described = describeError("clean_images_freed", { bytes });
+      expect(described.known).toBe(false);
+      expect(described.text).toBe(ERROR_CATALOG.unknown.text.it);
+    }
+  });
+});
+
 describe("podman_other_machine_running", () => {
   // The Retry button, as each language labels it.
   const RETRY = { it: "Riprova", en: "Try again", de: "Erneut versuchen", es: "Reintentar", fr: "Réessayer", hu: "Újra", pt: "Tentar novamente" };
@@ -529,6 +596,24 @@ describe("podman_other_machine_running with the machine's name", () => {
   });
 });
 
+describe("a VPS whose team already runs on Docker", () => {
+  it("says that a migration is needed, that the data stays and what to do, in every language", () => {
+    const texts = new Set<string>();
+    for (const locale of ERROR_LOCALES) {
+      const { text, action } = describeError("vps_runtime_change_requires_migration", { locale });
+      expect(text, locale).toMatch(/Docker/);
+      expect(text, locale).toMatch(/Podman/);
+      expect(action, locale).toMatch(/VPS/);
+      expect(text).not.toEqual(describeError("runtime_change_requires_migration", { locale }).text);
+      for (const value of [text, action]) {
+        expect(value, locale).not.toMatch(/terminal|curl|install\.sh|--runtime|Colima|Mac\b|`/i);
+      }
+      texts.add(text);
+    }
+    expect(texts.size).toBe(ERROR_LOCALES.length);
+  });
+});
+
 describe("a Mac installed with another container engine", () => {
   it("says what would stay behind and what to do, in every language, without a terminal", () => {
     for (const locale of ERROR_LOCALES) {
@@ -555,5 +640,97 @@ describe("homebrew_missing", () => {
     expect(described.action).toContain(".pkg");
     expect(described.action).toContain(retry);
     expect(`${described.text} ${described.action}`).not.toMatch(/Terminal|brew install|curl|sudo/i);
+  });
+});
+
+// T10: a limit of the app, a wait the provider asked for, a spent plan, a program that never came up
+// and a provider that did not answer are five different facts, and the person reads which one.
+describe("the limits, said apart", () => {
+  const LIMIT_CODES = ["throttled_local", "rate_limit_429", "quota", "runtime_not_started", "provider_failed"];
+  const ALIASES = ["rate_limited", "rate_limited_burst", "rate_limited_daily"];
+  const RESETS_AT = Math.floor(Date.UTC(2026, 9, 19, 13, 30) / 1000);
+  const NOW = Date.UTC(2026, 9, 19, 10, 0);
+  const say = (code: string, locale: string) => describeError(code, { locale, resetsAt: RESETS_AT, now: NOW });
+  /** How each language says «of the app», which only the local limit may say. */
+  const OF_THE_APP: Record<string, RegExp> = {
+    it: /dell’app/, en: /of the app/, de: /der App/, es: /de la aplicación/, fr: /de l’application/,
+    hu: /alkalmazás/, pt: /da aplicação/,
+  };
+  /** How each language says «your subscription is not used up» / «not a limit of your subscription». */
+  const NOT_THE_PLAN: Record<string, RegExp> = {
+    it: /non è esaurito|non è un limite del tuo abbonamento/, en: /is not used up|not a limit of your subscription/,
+    de: /nicht aufgebraucht|kein Limit deines Abos/, es: /no está agotada|no es un límite de tu suscripción/,
+    fr: /n’est pas épuisé|pas une limite de ton abonnement/, hu: /nem merült ki|nem az előfizetésed korlátja/,
+    pt: /não está esgotada|não é um limite da tua subscrição/,
+  };
+
+  it.each(ERROR_LOCALES)("%s: has a sentence and an action for every code, never the code itself", (locale) => {
+    for (const code of [...LIMIT_CODES, ...ALIASES]) {
+      const described = say(code, locale);
+      expect(described.known, `${code}/${locale}`).toBe(true);
+      for (const text of [described.text, described.action]) {
+        expect(text.trim().length, `${code}/${locale}`).toBeGreaterThan(8);
+        expect(text, `${code}/${locale}`).not.toMatch(/\b[a-z]+_[a-z0-9_]+\b/);
+        expect(text, `${code}/${locale}`).not.toContain("{time}");
+      }
+      if (locale !== "en") expect(described.text, `${code}/${locale}`).not.toBe(say(code, "en").text);
+    }
+  });
+
+  it.each(ERROR_LOCALES)("%s: the three limits never share a sentence", (locale) => {
+    const texts = ["throttled_local", "rate_limit_429", "quota"].map((code) => say(code, locale).text);
+    expect(new Set(texts).size).toBe(3);
+    const actions = ["throttled_local", "rate_limit_429", "quota"].map((code) => say(code, locale).action);
+    expect(new Set(actions).size).toBe(3);
+  });
+
+  it.each(ERROR_LOCALES)("%s: a local limit is never shown as the provider limiting the person, and says so", (locale) => {
+    const local = say("throttled_local", locale).text;
+    expect(local, locale).toMatch(OF_THE_APP[locale]);
+    for (const code of ["rate_limit_429", "quota", "provider_failed"]) {
+      expect(say(code, locale).text, `${code}/${locale}`).not.toMatch(OF_THE_APP[locale]);
+    }
+    // A 429 and a failed call both say the subscription is fine; the local limit says whose limit it is instead.
+    expect(say("rate_limit_429", locale).text, locale).toMatch(NOT_THE_PLAN[locale]);
+    expect(say("provider_failed", locale).text, locale).toMatch(NOT_THE_PLAN[locale]);
+    expect(say("quota", locale).text, locale).not.toMatch(NOT_THE_PLAN[locale]);
+    expect(local, locale).not.toMatch(NOT_THE_PLAN[locale]);
+  });
+
+  it.each(ERROR_LOCALES)("%s: the web, hub and Telegram local limits read as the app's own", (locale) => {
+    for (const code of ALIASES) expect(say(code, locale), `${code}/${locale}`).toEqual({ ...say("throttled_local", locale), code });
+  });
+
+  it("says when a quota frees again, and is not shown without the hour (it would be a placeholder)", () => {
+    const time = new Intl.DateTimeFormat("it-IT", { hour: "2-digit", minute: "2-digit" }).format(new Date(RESETS_AT * 1000));
+    const described = say("quota", "it");
+    expect(described.text).toContain(time);
+    expect(described.action).toContain(time);
+    expect(describeError("quota", { locale: "it" })).toMatchObject({ known: false });
+    expect(describeError("quota", { locale: "it" }).text).not.toContain("{time}");
+  });
+
+  // The runtime does not retry a wait longer than the 45 s a call may spend: it stops and says how long was
+  // asked. So the sentence tells the person to wait, it does not promise a retry nobody makes (T10 review).
+  it("rate_limit_429 asks the person to try again after the wait, in every language, and promises no retry", () => {
+    const ASKS: Record<string, string> = {
+      it: "Riprova dopo l’attesa indicata. Nessun dato è andato perso.",
+      en: "Try again after the wait it asked for. No data was lost.",
+      de: "Versuche es nach der genannten Wartezeit erneut. Es sind keine Daten verloren gegangen.",
+      es: "Vuelve a intentarlo tras la espera indicada. No se ha perdido ningún dato.",
+      fr: "Réessaie après l’attente indiquée. Aucune donnée n’a été perdue.",
+      hu: "A jelzett várakozás után próbáld újra. Nem veszett el adat.",
+      pt: "Tenta de novo depois da espera indicada. Não se perdeu nenhum dado.",
+    };
+    for (const locale of ERROR_LOCALES) expect(say("rate_limit_429", locale).action, locale).toBe(ASKS[locale]);
+  });
+
+  it("mentions 429 only where a provider asked to wait", () => {
+    for (const locale of ERROR_LOCALES) {
+      expect(say("rate_limit_429", locale).text, locale).toContain("429");
+      for (const code of ["throttled_local", "quota", "runtime_not_started", "provider_failed"]) {
+        expect(say(code, locale).text, `${code}/${locale}`).not.toContain("429");
+      }
+    }
   });
 });

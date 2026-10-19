@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useLocale } from "@/lib/use-locale";
 import { SIZE, CX, CY, arc } from "@/lib/donut-geometry";
+import { fitCenterLabel } from "@/lib/donut-label";
 import type { Locale } from "@/i18n/config";
 import type { RoleFamilyCount } from "@/lib/position-classifier";
 
@@ -113,6 +114,10 @@ export default function PositionTypesDonut({
         // lunghe troncano e la % resta dentro al bordo.
         width: "100%",
         minWidth: 0,
+        // Alto quanto la card che lo contiene: la legenda (fino a ~14 voci)
+        // scorre dentro invece di sbordare e farsi tagliare da header e bordo.
+        height: "100%",
+        minHeight: 0,
       }}
       onMouseLeave={() => setHovered(null)}
     >
@@ -165,13 +170,13 @@ export default function PositionTypesDonut({
           x={CX}
           y={CY - 4}
           textAnchor="middle"
-          fontSize={focused ? 11 : 9}
+          fontSize={9}
           fill={focused ? focused.color : "var(--color-dim)"}
           fontWeight={700}
           style={{ pointerEvents: "none", fontFamily: "inherit" }}
         >
           {focused
-            ? (labels[focused.family] ?? focused.family)
+            ? fitCenterLabel(labels[focused.family] ?? focused.family)
             : aggregatedCount != null
               ? t.types(selectedTypes.length)
               : t.total}
@@ -205,8 +210,14 @@ export default function PositionTypesDonut({
         Click toggle stessa selezione delle fette; hover evidenzia
         la fetta corrispondente. */}
       <ul
-        className="flex flex-col gap-1 min-w-0 flex-1"
-        style={{ fontSize: 11, lineHeight: 1.2 }}
+        className="flex flex-col gap-1 min-w-0 flex-1 overflow-y-auto"
+        style={{
+          fontSize: 11,
+          lineHeight: 1.2,
+          maxHeight: "100%",
+          // Niente scroll-chaining alla mappa a fine lista.
+          overscrollBehavior: "contain",
+        }}
       >
         {data.map((d) => {
           const isHover = hovered === d.family;

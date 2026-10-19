@@ -23,10 +23,11 @@ import { apiPath, json, type ApiFetch } from "../../shell/api-bridge";
  *
  * While an existing team's VPS is only being read (lib/existing-team-readonly.ts)
  * the same three answers are built from the team's own positions, the list the
- * Posizioni page reads, with the web's own placement: no cloud row is read. The
- * core's list carries no office coordinates, so every position is placed by its
- * city (the web's grid north of the city's centre) and one whose city cannot be
- * placed goes to the "without coordinates" list, as on the web. Nothing invented.
+ * Posizioni page reads, with the web's own placement: no cloud row is read. A
+ * position is placed on its office when the list gives its coordinates, by its
+ * city otherwise (the web's grid north of the city's centre; a jobs.db without
+ * the office columns gives none), and one that cannot be placed goes to the
+ * "without coordinates" list, as on the web. Nothing invented.
  */
 const ROUTES: Record<string, () => Promise<unknown>> = {
   "/api/positions/coords": getPositionsWithCoords,
@@ -35,7 +36,14 @@ const ROUTES: Record<string, () => Promise<unknown>> = {
 };
 
 type VpsRow = Pick<PositionWithScore, "id" | "title" | "company" | "status" | "role_family" | "location" |
-  "remote_type" | "loc_country" | "loc_city"> & { score?: number | null; found_at?: string | null };
+  "remote_type" | "loc_country" | "loc_city"> & {
+  score?: number | null;
+  found_at?: string | null;
+  /** Absent from an older reply: the position is placed by its city. */
+  office_lat?: number | null;
+  office_lon?: number | null;
+  office_address?: string | null;
+};
 
 /** The team's positions the web's map would show: not excluded. A failed read is an empty map. */
 function vpsRows(now = Date.now()): Promise<VpsRow[]> {
@@ -49,13 +57,15 @@ export function resetMapVpsRead(): void {
 }
 
 const score = (row: VpsRow) => (typeof row.score === "number" ? row.score : null);
+const finite = (value: unknown, limit: number) =>
+  typeof value === "number" && Number.isFinite(value) && Math.abs(value) <= limit ? value : null;
 
 function pinsOf(rows: VpsRow[]) {
   return resolveCityPins(rows.map((row) => ({
     loc_country: row.loc_country ?? null,
     loc_city: row.loc_city ?? null,
-    office_lat: null,
-    office_lon: null,
+    office_lat: finite(row.office_lat, 90),
+    office_lon: finite(row.office_lon, 180),
     id: String(row.id),
     score: score(row),
     company: row.company ?? null,
@@ -82,7 +92,7 @@ export function vpsCoords(rows: VpsRow[]): PositionCoord[] {
       location: row.location ?? null,
       loc_country: row.loc_country ?? null,
       loc_city: row.loc_city ?? null,
-      office_address: null,
+      office_address: typeof row.office_address === "string" ? row.office_address : null,
       created_at: row.found_at ?? null,
     }] : [];
   });

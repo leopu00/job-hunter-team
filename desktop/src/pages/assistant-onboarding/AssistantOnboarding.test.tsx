@@ -153,6 +153,24 @@ describe("AssistantOnboarding", () => {
     );
   });
 
+  it("speaks the app's language in the first message's composer, and dictates in it", async () => {
+    document.cookie = "NEXT_LOCALE=en; Path=/";
+    const voice = voiceBridge();
+    render(
+      <AssistantOnboarding
+        initialState={{ path: "tour", step: 4 }}
+        onComplete={complete()}
+        voiceInputBridge={voice.bridge}
+      />,
+    );
+
+    const composer = screen.getByRole("textbox", { name: "Your first message to the Assistant" });
+    expect(composer).toHaveAttribute("placeholder", "Write or dictate where you want to start…");
+    expect(screen.getByText("The transcript stays editable and is delivered only when you confirm.")).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "Dictate a message" })).toBeInTheDocument();
+    expect(voice.bridge.status).toHaveBeenCalledWith("en-US");
+  });
+
   it("waits for durable completion and retries safely after a rejection", async () => {
     const user = userEvent.setup();
     let release!: () => void;

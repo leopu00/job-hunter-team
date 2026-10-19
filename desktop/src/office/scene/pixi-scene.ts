@@ -33,6 +33,8 @@ import {
   tesseractRays,
 } from "./effects";
 import { feetAnchor, pickCell } from "./frames";
+import { assetUrl } from "./asset-url";
+import { READABLE_PX, readableScale } from "./readable";
 import { allFurniture, cameraBounds } from "../layout-items";
 import { tagOf } from "../status";
 import { boxLights, darkness, GRAIN_AMOUNT, LAMPS, lighting, localHour, outsideBands, vignetteAlpha, type Pool } from "./atmosphere";
@@ -156,8 +158,17 @@ export async function createOfficeScene(host: HTMLElement, options: OfficeSceneO
   };
   sizeGrade(app.screen.width, app.screen.height);
 
-  // The departments' dressing (department_dressing.gd): tint, brackets, name.
-  for (const dept of layout.departments) floorLayer.addChild(departmentDressing(dept));
+  // Labels kept readable at any zoom (readable.ts): the camera's change grows the
+  // ones it would shrink below a readable size, around their own anchor.
+  const readable: Readable[] = [];
+  const keepReadable: KeepReadable = (node, font, min) => {
+    readable.push({ node, font, min });
+    return node;
+  };
+
+  // The departments' dressing (department_dressing.gd): tint, brackets, name. The name goes over
+  // the scene with the other labels: grown to stay readable, on the floor it would go under the desks.
+  for (const dept of layout.departments) floorLayer.addChild(departmentDressing(dept, keepReadable, overlay));
 
   // The handoff tables' tags and piles: paper sheets with their count where
   // the layout says how (paper_pile.gd), a plain counter otherwise.
@@ -166,14 +177,15 @@ export async function createOfficeScene(host: HTMLElement, options: OfficeSceneO
   const piles = new Map<DeptId, (n: number | null) => void>();
   const pileNodes = new Map<DeptId, { node: Container; spot: Vec }>();
   for (const dept of layout.departments) {
-    if (dept.handoff) sortedLayer.addChild(handoffTag(dept.handoff.label, dept.handoff.labelPos, dept.color, dept.inbox.y + 1));
+    // over the scene, as the department's name: grown, among the furniture it would be cut by it
+    if (dept.handoff) overlay.addChild(keepReadable(handoffTag(dept.handoff.label, dept.handoff.labelPos, dept.color, dept.inbox.y + 1), 10, READABLE_PX.handoffTag));
     const spot = dept.handoff?.pileSpot ?? dept.inbox;
     const pile = new Container();
     pile.position.set(spot.x, spot.y);
     pile.zIndex = dept.inbox.y + 0.5;
     pileNodes.set(dept.id, { node: pile, spot });
     sortedLayer.addChild(pile);
-    piles.set(dept.id, paper && sheetTex ? paperPile(pile, paper, sheetTex) : counterBadge(pile, dept.color));
+    piles.set(dept.id, paper && sheetTex ? paperPile(pile, paper, sheetTex, keepReadable) : counterBadge(pile, dept.color, keepReadable));
   }
 
   // The box's edges (tesseract_edges.gd): additive rays from the floor's corners, pulsing.
@@ -228,6 +240,7 @@ export async function createOfficeScene(host: HTMLElement, options: OfficeSceneO
     onChange: (camera) => {
       world.scale.set(camera.scale);
       world.position.set(camera.x, camera.y);
+      for (const r of readable) r.node.scale.set(readableScale(r.font, camera.scale, r.min));
     },
   });
 
@@ -322,9 +335,12 @@ export async function createOfficeScene(host: HTMLElement, options: OfficeSceneO
         tags.set(pose.uid, entry);
         overlay.addChild(entry.node);
       }
-      // over the head: the cell's top above the feet, plus half the tag and 6 px (STATE_TAG_HEAD_CLEARANCE)
+      // over the head: the cell's top above the feet, plus half the tag and 6 px (STATE_TAG_HEAD_CLEARANCE),
+      // the tag kept readable at the camera's zoom
+      const k = readableScale(11, controls.camera().scale, READABLE_PX.stateTag);
+      entry.node.scale.set(k);
       const top = sprite.getLocalBounds().y * Math.abs(sprite.scale.y);
-      entry.node.position.set(pose.pos.x, pose.pos.y + top - 18);
+      entry.node.position.set(pose.pos.x, pose.pos.y + top - 12 * k - 6);
     }
     for (const [uid, entry] of tags) {
       if (live.has(uid)) continue;
@@ -398,6 +414,8 @@ export async function createOfficeScene(host: HTMLElement, options: OfficeSceneO
         overlay.addChild(entry.node);
       }
       const top = sprite.getLocalBounds();
+      // drawn up from its bottom centre: grown there, it stays over the head
+      entry.node.scale.set(readableScale(15, controls.camera().scale, READABLE_PX.bubble));
       entry.node.position.set(pose.pos.x, pose.pos.y + top.y * Math.abs(sprite.scale.y) - 8);
     }
     for (const [uid, entry] of bubbles) {
@@ -477,6 +495,10 @@ export async function createOfficeScene(host: HTMLElement, options: OfficeSceneO
   };
 }
 
+/** A label kept readable at any zoom: its node, its font in world pixels, its smallest size on screen (readable.ts). */
+type Readable = { node: Container; font: number; min: number };
+type KeepReadable = <T extends Container>(node: T, font: number, min: number) => T;
+
 // ─── Textures ────────────────────────────────────────────────────────────
 
 type Textures = Map<string, Texture>;
@@ -501,7 +523,8 @@ async function loadTextures(
   await Promise.all(
     [...srcs].map(async (src) => {
       try {
-        out.set(src, await Assets.load<Texture>(src));
+        // the full URL: Pixi's own resolution loses the host on tauri://localhost (asset-url.ts)
+        out.set(src, await Assets.load<Texture>(assetUrl(src)));
       } catch (error) {
         // A missing picture draws as a plain block, not a dead office.
         console.warn("[office] image not loaded:", src, error);
@@ -728,7 +751,7 @@ function seededRandom(seed: string): () => number {
 }
 
 /** DepartmentDressing._draw_zone: three faint tints, painted blotches, L brackets, name and tagline. */
-function departmentDressing(dept: Department): Container {
+function departmentDressing(dept: Department, keepReadable: KeepReadable, labels: Container): Container {
   const c = new Container();
   c.eventMode = "none";
   const col = colorOf(dept.color);
@@ -764,20 +787,25 @@ function departmentDressing(dept: Department): Container {
   c.addChildAt(g, 0);
   const at = dept.labelPos ?? { x: z.x + 18, y: z.y + z.h - 34 };
   const name = dept.name.toUpperCase();
+  // The name and the tagline, one group anchored at the label's baseline: kept readable
+  // together, sized on the tagline (the smaller font), so the name stays the larger.
+  const label = new Container();
+  label.position.set(at.x, at.y);
   // draw_string's position is the baseline: the text's top is about a font size above
   const shadow = new Text({ text: name, style: { fontFamily: FONT, fontSize: 26, fontWeight: "800", fill: 0x000000 } });
   shadow.alpha = 0.55;
-  shadow.position.set(at.x + 1, at.y - 26 + 1 + 4);
+  shadow.position.set(1, -26 + 1 + 4);
   const title = new Text({ text: name, style: { fontFamily: FONT, fontSize: 26, fontWeight: "800", fill: col } });
   title.alpha = 0.9;
-  title.position.set(at.x, at.y - 26 + 4);
-  c.addChild(shadow, title);
+  title.position.set(0, -26 + 4);
+  label.addChild(shadow, title);
   if (dept.tagline) {
     const tag = new Text({ text: dept.tagline, style: { fontFamily: FONT, fontSize: 15, fontWeight: "500", fill: 0x7d8590 } });
     tag.alpha = 0.85;
-    tag.position.set(at.x, at.y + 24 - 15 + 3);
-    c.addChild(tag);
+    tag.position.set(0, 24 - 15 + 3);
+    label.addChild(tag);
   }
+  labels.addChild(keepReadable(label, 15, READABLE_PX.departmentTagline));
   return c;
 }
 
@@ -801,9 +829,10 @@ function handoffTag(label: string, at: Vec, color: string, zIndex: number): Cont
 }
 
 /** The pile as paper: one sprite per sheet, and the count in a green-bordered box above the tallest stack. */
-function paperPile(pile: Container, rule: PaperRule, sheet: Texture): (n: number | null) => void {
+function paperPile(pile: Container, rule: PaperRule, sheet: Texture, keepReadable: KeepReadable): (n: number | null) => void {
   const sheets = new Container();
-  const badge = new Container();
+  // the count's box, anchored at its text's baseline-left and kept readable there
+  const badge = keepReadable(new Container(), 13, READABLE_PX.pileCount);
   const hit = new Graphics();
   pile.addChild(hit, sheets, badge);
   let shown: number | null | undefined;
@@ -826,27 +855,29 @@ function paperPile(pile: Container, rule: PaperRule, sheet: Texture): (n: number
     badge.removeChildren().forEach((b) => b.destroy());
     if (n == null || n <= 0) return;
     const text = new Text({ text: String(n), style: { fontFamily: FONT, fontSize: 13, fontWeight: "700", fill: GREEN } });
-    const x = 92;
-    const y = -tower - 28;
+    badge.position.set(92, -tower - 28);
     badge.addChild(
       new Graphics()
-        .rect(x - 5, y - 14, text.width + 10, text.height + 7)
+        .rect(-5, -14, text.width + 10, text.height + 7)
         .fill({ color: 0x0a0a0f, alpha: 0.94 })
-        .rect(x - 5, y - 14, text.width + 10, text.height + 7)
+        .rect(-5, -14, text.width + 10, text.height + 7)
         .stroke({ color: GREEN, width: 1.2 }),
     );
-    text.position.set(x, y - 12);
+    text.position.set(0, -12);
     badge.addChild(text);
   };
 }
 
 /** Without paper art: the department-coloured counter. */
-function counterBadge(pile: Container, color: string): (n: number | null) => void {
-  pile.addChild(new Graphics().roundRect(-22, -30, 44, 30, 4).fill({ color: colorOf(color), alpha: 0.85 }));
+function counterBadge(pile: Container, color: string, keepReadable: KeepReadable): (n: number | null) => void {
+  // the counter stands on the pile's spot: kept readable around its bottom centre
+  const badge = keepReadable(new Container(), 16, READABLE_PX.pileCount);
+  pile.addChild(badge);
+  badge.addChild(new Graphics().roundRect(-22, -30, 44, 30, 4).fill({ color: colorOf(color), alpha: 0.85 }));
   const label = new Text({ text: "—", style: { fontFamily: FONT, fontSize: 16, fontWeight: "700", fill: 0x0b0f14 } });
   label.anchor.set(0.5, 0.5);
   label.position.set(0, -15);
-  pile.addChild(label);
+  badge.addChild(label);
   return (n) => {
     label.text = n == null ? "—" : String(n);
   };

@@ -5,6 +5,7 @@ import { useLocale } from "@/lib/use-locale";
 import { appLocale } from "../../lib/app-locale";
 import { describeError } from "../../lib/error-catalog";
 import type { AgentStatuses, DeptId, OfficeClick, OfficeLayout, OfficeSnapshot } from "../contract";
+import { fill, officeText, type OfficeText } from "../office.i18n";
 import { OWN_KEYS_ATTR } from "../scene/controls";
 import { tagOf } from "../status";
 import {
@@ -63,6 +64,7 @@ export function deptName(layout: OfficeLayout, dept: DeptId): string {
 
 export default function OfficePanel(props: OfficePanelProps) {
   const { target, onClose } = props;
+  const t = officeText(useLocale());
   // the panel takes the focus when it opens (D08): the keyboard and a screen reader land in it
   const self = useRef<HTMLElement>(null);
   const key = JSON.stringify(target);
@@ -73,13 +75,13 @@ export default function OfficePanel(props: OfficePanelProps) {
       tabIndex={-1}
       // its keys are its own: the arrows scroll the list, the camera stays (controls.ts)
       {...{ [OWN_KEYS_ATTR]: "" }}
-      aria-label="Dettagli dell'ufficio"
+      aria-label={t.detailsAria}
       className="absolute right-3 top-3 bottom-3 z-20 flex w-[380px] focus:outline-none max-w-[calc(100%-24px)] flex-col overflow-hidden rounded border border-[var(--color-border)] bg-[var(--color-panel)] shadow-2xl"
       onPointerDown={(e) => e.stopPropagation()}
     >
       <button
         type="button"
-        aria-label="Chiudi"
+        aria-label={t.close}
         onClick={onClose}
         className="absolute right-2 top-2 z-10 rounded px-2 py-0.5 text-[13px] text-[var(--color-muted)] hover:text-[var(--color-bright)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[var(--color-bright)]"
       >
@@ -141,6 +143,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 }
 
 function Loading({ error, source = "cloud" }: { error: string | null; source?: "cloud" | "vps" }) {
+  const t = officeText(useLocale());
   if (error && source === "vps") {
     // the code of what failed, in the catalog's words: never the cloud, which this view does not read
     const failure = describeError(error, { fallback: "existing_team_unavailable", locale: appLocale() });
@@ -150,7 +153,7 @@ function Loading({ error, source = "cloud" }: { error: string | null; source?: "
       </p>
     );
   }
-  return <p className="m-0 text-[11px] text-[var(--color-muted)]">{error ? `Non riesco a leggere il cloud: ${error}` : "Caricamento…"}</p>;
+  return <p className="m-0 text-[11px] text-[var(--color-muted)]">{error ? fill(t.cloudReadFailed, { error }) : t.loading}</p>;
 }
 
 function StateChip({ status }: { status: string | null }) {
@@ -173,49 +176,50 @@ function SecondaryLink({ label, onClick }: { label: string; onClick: () => void 
 
 function AgentBody({ target, layout, statuses, client, onNavigate }: OfficePanelProps & { target: Extract<OfficeClick, { kind: "agent" }> }) {
   const locale = useLocale();
+  const t = officeText(locale);
   const { data, error } = useLoad<AgentPanelData>(() => loadAgentPanel(client, target.uid));
   const dept = DEPT_OF_ROLE[target.role];
   const status = statuses?.agents[target.uid.toLowerCase()];
   const tag = status ? tagOf(status) : null;
   return (
     <>
-      <Heading title={target.uid.toUpperCase()} sub={dept ? `Reparto ${deptName(layout, dept)}` : target.role} />
-      <Section title="Ora">
+      <Heading title={target.uid.toUpperCase()} sub={dept ? fill(t.departmentOf, { name: deptName(layout, dept) }) : target.role} />
+      <Section title={t.sectionNow}>
         {tag ? (
           <span className="rounded border px-2 py-0.5 text-[10px] font-bold tracking-widest" style={{ color: hex(tag.color), borderColor: hex(tag.color) }}>
             {tag.label}
           </span>
         ) : (
-          <span className="text-[11px] text-[var(--color-muted)]">Stato non pubblicato dal team.</span>
+          <span className="text-[11px] text-[var(--color-muted)]">{t.statusNotPublished}</span>
         )}
       </Section>
-      <Section title="In mano">
+      <Section title={t.sectionInHand}>
         {!data ? (
           <Loading error={error} />
         ) : data.inHand.length === 0 ? (
-          <p className="m-0 text-[11px] text-[var(--color-muted)]">Nessuna posizione ferma dove l'ha lasciata.</p>
+          <p className="m-0 text-[11px] text-[var(--color-muted)]">{t.noneInHand}</p>
         ) : (
           <PositionList positions={data.inHand} onNavigate={onNavigate} />
         )}
       </Section>
-      <Section title="Ultime mosse">
+      <Section title={t.sectionMoves}>
         {!data ? (
           <Loading error={error} />
         ) : data.moves.length === 0 ? (
-          <p className="m-0 text-[11px] text-[var(--color-muted)]">Nessuna mossa registrata nel cloud.</p>
+          <p className="m-0 text-[11px] text-[var(--color-muted)]">{t.noMoves}</p>
         ) : (
           <ul className="m-0 list-none p-0">
             {data.moves.map((m, i) => (
               <li key={i} className="flex items-baseline gap-2 border-b border-[var(--color-border)] py-1 last:border-0">
                 <span className="w-16 flex-shrink-0 text-[10px] text-[var(--color-dim)]">{formatRelative(m.ts, locale)}</span>
-                <span className="min-w-0 flex-1 truncate">{m.position ? positionLine(m.position) : "posizione non più nel cloud"}</span>
+                <span className="min-w-0 flex-1 truncate">{m.position ? positionLine(m.position, t) : t.positionGone}</span>
                 <StateChip status={m.to} />
               </li>
             ))}
           </ul>
         )}
       </Section>
-      <SecondaryLink label="Apri la pagina dell'agente" onClick={() => onNavigate(`/agents?agent=${encodeURIComponent(target.role)}`)} />
+      <SecondaryLink label={t.openAgentPage} onClick={() => onNavigate(`/agents?agent=${encodeURIComponent(target.role)}`)} />
     </>
   );
 }
@@ -223,23 +227,24 @@ function AgentBody({ target, layout, statuses, client, onNavigate }: OfficePanel
 function PhaseBody({ dept, layout, snapshot, client, source = "cloud", onNavigate }: OfficePanelProps & { dept: DeptId }) {
   const { data, error } = useLoad<PanelPosition[]>(() => (source === "vps" ? vpsPanelLoaders.phase(dept) : loadPhase(client, dept)));
   const count = snapshot?.piles[dept];
+  const t = officeText(useLocale());
   return (
     <>
-      <Heading title={deptName(layout, dept)} sub={count == null ? "Posizioni in questa fase" : `${count} posizioni in questa fase`} />
+      <Heading title={deptName(layout, dept)} sub={count == null ? t.phaseSub : fill(t.phaseSubCount, { count })} />
       {!data ? (
         <Loading error={error} source={source} />
       ) : data.length === 0 ? (
-        <p className="m-0 text-[11px] text-[var(--color-muted)]">Nessuna posizione in questa fase.</p>
+        <p className="m-0 text-[11px] text-[var(--color-muted)]">{t.noPhase}</p>
       ) : (
         <>
           <PositionList positions={data} onNavigate={onNavigate} />
           {count != null && count > data.length && (
-            <p className="m-0 mt-2 text-[10px] text-[var(--color-dim)]">Le {Math.min(data.length, PANEL_LIST_MAX)} più recenti.</p>
+            <p className="m-0 mt-2 text-[10px] text-[var(--color-dim)]">{fill(t.mostRecent, { count: Math.min(data.length, PANEL_LIST_MAX) })}</p>
           )}
         </>
       )}
       <div className="mt-3">
-        <SecondaryLink label="Tutte le posizioni" onClick={() => onNavigate("/positions")} />
+        <SecondaryLink label={t.allPositions} onClick={() => onNavigate("/positions")} />
       </div>
     </>
   );
@@ -249,16 +254,17 @@ function DepartmentBody({ dept, layout, snapshot, statuses, client, source = "cl
   const d = layout.departments.find((x) => x.id === dept);
   const agents = (snapshot?.roster ?? []).filter((a) => DEPT_OF_ROLE[a.role] === dept);
   const inbox = snapshot?.piles[dept];
+  const t = officeText(useLocale());
   return (
     <>
       <Heading title={deptName(layout, dept)} sub={d?.tagline} />
-      <Section title="In ingresso">
-        <p className="m-0">{inbox == null ? "—" : `${inbox} posizioni sulla pila`}</p>
-        <SecondaryLink label="Le posizioni sulla pila" onClick={() => onOpen({ kind: "pile", dept })} />
+      <Section title={t.incoming}>
+        <p className="m-0">{inbox == null ? "—" : fill(t.onThePile, { count: inbox })}</p>
+        <SecondaryLink label={t.positionsOnThePile} onClick={() => onOpen({ kind: "pile", dept })} />
       </Section>
-      <Section title="Agenti del reparto">
+      <Section title={t.departmentAgents}>
         {agents.length === 0 ? (
-          <p className="m-0 text-[11px] text-[var(--color-muted)]">Nessun agente del reparto nelle ultime 24 ore.</p>
+          <p className="m-0 text-[11px] text-[var(--color-muted)]">{t.noDepartmentAgents}</p>
         ) : (
           <ul className="m-0 list-none p-0">
             {agents.map((a) => {
@@ -288,8 +294,9 @@ function DepartmentBody({ dept, layout, snapshot, statuses, client, source = "cl
 function FoundPerDay({ client, source }: { client: PanelClient; source: "cloud" | "vps" }) {
   const { data, error } = useLoad<DayCount[]>(() => (source === "vps" ? vpsPanelLoaders.foundPerDay() : loadFoundPerDay(client)));
   const max = Math.max(1, ...(data ?? []).map((d) => d.n));
+  const t = officeText(useLocale());
   return (
-    <Section title="Trovate negli ultimi 7 giorni">
+    <Section title={t.foundLast7}>
       {!data ? (
         <Loading error={error} source={source} />
       ) : (
@@ -320,22 +327,23 @@ function CvBody({ client, source = "cloud", onNavigate }: OfficePanelProps) {
   const { data, error } = useLoad<CvShelfData>(() => (source === "vps" ? vpsPanelLoaders.cvShelf() : loadCvShelf(client)));
   const scored = (data?.list ?? []).map((p) => p.score).filter((n): n is number => typeof n === "number");
   const avg = scored.length ? Math.round(scored.reduce((a, b) => a + b, 0) / scored.length) : null;
+  const t = officeText(useLocale());
   return (
     <>
-      <Heading title="CV prodotti" sub="Scaffale d'uscita: le candidature scritte dal team" />
+      <Heading title={t.cvTitle} sub={t.cvSub} />
       {!data ? (
         <Loading error={error} source={source} />
       ) : (
         <>
           <div className="mb-3 flex gap-2">
-            <Kpi label="scritti" value={data.written} />
-            <Kpi label="pass" value={data.passed} />
-            <Kpi label="senza verdetto" value={data.unreviewed} />
-            <Kpi label="punteggio medio" value={avg ?? "—"} />
+            <Kpi label={t.kpiWritten} value={data.written} />
+            <Kpi label={t.kpiPass} value={data.passed} />
+            <Kpi label={t.kpiNoVerdict} value={data.unreviewed} />
+            <Kpi label={t.kpiAverage} value={avg ?? "—"} />
           </div>
-          {avg != null && <p className="m-0 mb-2 text-[10px] text-[var(--color-dim)]">Punteggio medio dei {scored.length} più recenti con un punteggio.</p>}
+          {avg != null && <p className="m-0 mb-2 text-[10px] text-[var(--color-dim)]">{fill(t.averageNote, { count: scored.length })}</p>}
           {data.list.length === 0 ? (
-            <p className="m-0 text-[11px] text-[var(--color-muted)]">Nessun CV scritto.</p>
+            <p className="m-0 text-[11px] text-[var(--color-muted)]">{t.noCv}</p>
           ) : (
             <PositionList positions={data.list} onNavigate={onNavigate} />
           )}
@@ -347,10 +355,11 @@ function CvBody({ client, source = "cloud", onNavigate }: OfficePanelProps) {
 
 function BoardBody({ client, source = "cloud", onNavigate }: OfficePanelProps) {
   const locale = useLocale();
+  const t = officeText(locale);
   const { data, error } = useLoad<BoardData>(() => (source === "vps" ? vpsPanelLoaders.board() : loadBoard(client)));
   return (
     <>
-      <Heading title="Bacheca" sub="Posizioni pronte, inviate e con risposta" />
+      <Heading title={t.boardTitle} sub={t.boardSub} />
       {!data ? (
         <Loading error={error} source={source} />
       ) : (
@@ -361,7 +370,7 @@ function BoardBody({ client, source = "cloud", onNavigate }: OfficePanelProps) {
             ))}
           </div>
           {data.list.length === 0 ? (
-            <p className="m-0 text-[11px] text-[var(--color-muted)]">Nessuna posizione pronta, inviata o con risposta.</p>
+            <p className="m-0 text-[11px] text-[var(--color-muted)]">{t.noBoard}</p>
           ) : (
             <PositionList positions={data.list} onNavigate={onNavigate} />
           )}
@@ -372,17 +381,18 @@ function BoardBody({ client, source = "cloud", onNavigate }: OfficePanelProps) {
 }
 
 function PlacesBody({ client, source = "cloud", onNavigate }: OfficePanelProps) {
+  const t = officeText(useLocale());
   const { data, error } = useLoad<PlacesData>(() => (source === "vps" ? vpsPanelLoaders.places() : loadPlaces(client)));
   return (
     <>
-      <Heading title="Mappa" sub="Dove sono le posizioni" />
+      <Heading title={t.mapTitle} sub={t.mapSub} />
       {!data ? (
         <Loading error={error} source={source} />
       ) : data.places.length === 0 ? (
-        <p className="m-0 text-[11px] text-[var(--color-muted)]">Nessuna posizione con un luogo.</p>
+        <p className="m-0 text-[11px] text-[var(--color-muted)]">{t.noPlaces}</p>
       ) : (
         <>
-          <p className="m-0 mb-2 text-[11px] text-[var(--color-muted)]">{data.located} posizioni con un luogo; i più frequenti:</p>
+          <p className="m-0 mb-2 text-[11px] text-[var(--color-muted)]">{fill(t.located, { count: data.located })}</p>
           <ul className="m-0 list-none p-0">
             {data.places.map((p) => (
               <li key={p.place} className="flex items-baseline justify-between border-b border-[var(--color-border)] py-1 last:border-0">
@@ -394,18 +404,19 @@ function PlacesBody({ client, source = "cloud", onNavigate }: OfficePanelProps) 
         </>
       )}
       <div className="mt-3">
-        <SecondaryLink label="Apri la mappa" onClick={() => onNavigate("/map")} />
+        <SecondaryLink label={t.openMap} onClick={() => onNavigate("/map")} />
       </div>
     </>
   );
 }
 
-function positionLine(p: PanelPosition): string {
-  return [p.title ?? "(senza titolo)", p.company].filter(Boolean).join(" · ");
+function positionLine(p: PanelPosition, t: OfficeText): string {
+  return [p.title ?? t.untitled, p.company].filter(Boolean).join(" · ");
 }
 
 /** A list of positions; a row opens its detail in place. */
 function PositionList({ positions, onNavigate }: { positions: PanelPosition[]; onNavigate: (path: string) => void }) {
+  const t = officeText(useLocale());
   const [open, setOpen] = useState<string | null>(null);
   return (
     <ul className="m-0 list-none p-0">
@@ -418,7 +429,7 @@ function PositionList({ positions, onNavigate }: { positions: PanelPosition[]; o
             className="flex w-full items-baseline gap-2 rounded py-1.5 text-left hover:bg-[var(--color-card)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[var(--color-bright)]"
           >
             <span className="w-7 flex-shrink-0 text-right text-[11px] font-bold text-[var(--color-bright)]">{p.score ?? "—"}</span>
-            <span className="min-w-0 flex-1 truncate">{positionLine(p)}</span>
+            <span className="min-w-0 flex-1 truncate">{positionLine(p, t)}</span>
             <StateChip status={p.status} />
           </button>
           {open === p.id && <PositionDetail p={p} onNavigate={onNavigate} />}
@@ -430,12 +441,13 @@ function PositionList({ positions, onNavigate }: { positions: PanelPosition[]; o
 
 function PositionDetail({ p, onNavigate }: { p: PanelPosition; onNavigate: (path: string) => void }) {
   const locale = useLocale();
+  const t = officeText(locale);
   const when = (iso: string | null) => (iso ? formatRelative(iso, locale) : null);
   const rows: Array<[string, string | null]> = [
-    ["Luogo", [p.location, p.remoteType].filter(Boolean).join(" · ") || null],
-    ["Trovata", [p.foundBy, when(p.foundAt)].filter(Boolean).join(" · ") || null],
-    ["Scritta", [p.writtenBy, when(p.writtenAt)].filter(Boolean).join(" · ") || null],
-    ["Critico", [p.verdict?.toUpperCase(), p.criticScore == null ? null : `${p.criticScore}`, p.reviewedBy].filter(Boolean).join(" · ") || null],
+    [t.detailPlace, [p.location, p.remoteType].filter(Boolean).join(" · ") || null],
+    [t.detailFound, [p.foundBy, when(p.foundAt)].filter(Boolean).join(" · ") || null],
+    [t.detailWritten, [p.writtenBy, when(p.writtenAt)].filter(Boolean).join(" · ") || null],
+    [t.detailCritic, [p.verdict?.toUpperCase(), p.criticScore == null ? null : `${p.criticScore}`, p.reviewedBy].filter(Boolean).join(" · ") || null],
   ];
   return (
     <div className="mb-2 ml-9 text-[11px]">
@@ -450,9 +462,9 @@ function PositionDetail({ p, onNavigate }: { p: PanelPosition; onNavigate: (path
           ))}
       </dl>
       {p.jdSummary && <p className="m-0 mt-1 text-[var(--color-muted)]">{p.jdSummary}</p>}
-      {p.criticNotes && <p className="m-0 mt-1 text-[var(--color-muted)]">Note del critico: {p.criticNotes}</p>}
+      {p.criticNotes && <p className="m-0 mt-1 text-[var(--color-muted)]">{fill(t.criticNotes, { notes: p.criticNotes })}</p>}
       <div className="mt-1">
-        <SecondaryLink label="Apri la posizione" onClick={() => onNavigate(`/positions/${encodeURIComponent(p.id)}`)} />
+        <SecondaryLink label={t.openPosition} onClick={() => onNavigate(`/positions/${encodeURIComponent(p.id)}`)} />
       </div>
     </div>
   );

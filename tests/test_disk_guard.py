@@ -1135,8 +1135,11 @@ def test_the_closed_codes_are_in_the_desktop_catalog_with_every_translation():
     for lang, word in (("de", "Papierkorb"), ("es", "papelera"), ("fr", "corbeille"), ("hu", "Kuká"), ("pt", "Lixo")):
         row = next(line for line in block.splitlines() if line.strip().startswith(f"{lang}:"))
         assert word in row and "Docker/Podman" in row, (lang, row)
-    # nessun emettitore Rust/TS oggi: il catalogo lo dichiara, non lo finge
-    assert '"disk_warning",\n  "disk_low",\n]);' in catalog
+    # `disk_low` ha un emettitore (il pulsante «Libera spazio», `jht team start` lo porta all'app):
+    # NON sta in NOT_EMITTED. `disk_warning` non ne ha ancora, e il catalogo lo dichiara, non lo finge.
+    not_emitted = catalog[catalog.index("export const NOT_EMITTED"):]
+    not_emitted = not_emitted[: not_emitted.index("]);")]
+    assert '"disk_warning"' in not_emitted and '"disk_low"' not in not_emitted
     for english in ("Disk space is running low.",
                     "The disk is almost full, so no new agent or update will start."):
         block = locales[locales.index(f'"{english}": {{'):]

@@ -15,13 +15,13 @@ import { EXISTING_TEAM_READONLY_TEXT } from "../lib/existing-team-readonly.i18n"
 import { VpsLinkBar } from "./VpsLinkBar";
 import { localUninstallAvailable } from "../lib/local-uninstall";
 import { COMPUTER_TEXT } from "../pages/computer/computer.i18n";
-import { DESKTOP_LINKS } from "./desktop-links";
+import { desktopLinks } from "./desktop-links";
 import { MailRotationBanner } from "./MailRotationBanner";
 import { matchRoute, navigate, refresh, useLocation } from "./router";
 import { HOME, READ_ONLY_HOME, READ_ONLY_NAV, READ_ONLY_ROUTES, ROUTES } from "./routes";
 import ThemePicker from "./ThemePicker";
 
-/** The desktop's own pages (DESKTOP_LINKS): same look as NavLinks' NavLink, active on the path. */
+/** The desktop's own pages (desktopLinks): same look as NavLinks' NavLink, active on the path. */
 function DesktopLinks() {
   const { path } = useLocation();
   // «This computer» (removing JHT) only where the removal can run.
@@ -31,9 +31,8 @@ function DesktopLinks() {
     void localUninstallAvailable().then((yes) => { if (active) setComputer(yes); });
     return () => { active = false; };
   }, []);
-  const links = computer
-    ? [...DESKTOP_LINKS, { href: "/computer", label: COMPUTER_TEXT[appLocale()].navLabel }]
-    : DESKTOP_LINKS;
+  const own = desktopLinks(appLocale());
+  const links = computer ? [...own, { href: "/computer", label: COMPUTER_TEXT[appLocale()].navLabel }] : own;
   return (
     <div className="flex items-center gap-1">
       {links.map(({ href, label }) => {
@@ -121,7 +120,7 @@ function Navbar({
                     className="relative px-3 py-1.5 text-[11px] font-semibold tracking-widest hover:bg-[var(--color-card)] rounded transition-colors no-underline inline-block"
                     style={{ color: active ? "var(--color-white)" : "var(--color-muted)" }}
                   >
-                    {label.startsWith("own:") ? readOnlyText[label.slice(4) as "team" | "profile" | "office"] : dashboardT(label)}
+                    {label.startsWith("own:") ? readOnlyText[label.slice(4) as "team" | "profile" | "office" | "agents"] : dashboardT(label)}
                   </Link>
                 );
               })

@@ -1,8 +1,26 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { expect, it, vi } from "vitest";
+import { afterEach, expect, it, vi } from "vitest";
 import { describeError } from "../../lib/error-catalog";
 import { LinkedinLoginCard } from "./LinkedinLoginCard";
+
+afterEach(() => {
+  document.cookie = "NEXT_LOCALE=; path=/; max-age=0";
+});
+
+it("speaks the language of the app", async () => {
+  document.cookie = "NEXT_LOCALE=en; path=/";
+  const loadStatus = vi.fn().mockResolvedValue({ view: "idle", linkedin: "logged_in", lastReason: null });
+  render(<LinkedinLoginCard loadStatus={loadStatus} open={vi.fn()} />);
+
+  expect(await screen.findByText("Status: logged in")).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Log in to LinkedIn again" })).toBeInTheDocument();
+  expect(screen.getByRole("region", { name: "LinkedIn login" })).toBeInTheDocument();
+  // The agents use the session to apply: the card must not say they never touch it.
+  expect(screen.getByText(/use the session only to apply on your behalf/)).toBeInTheDocument();
+  expect(document.body).not.toHaveTextContent(/neither the password nor the session/);
+  expect(document.body).not.toHaveTextContent(/Accedi|Stato|accesso/);
+});
 
 it("shows the login state and opens the broker's login view", async () => {
   const user = userEvent.setup();

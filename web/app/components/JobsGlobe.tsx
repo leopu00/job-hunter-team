@@ -9,7 +9,20 @@ import Link from "next/link";
 import { useTheme } from "@/app/theme-provider";
 import { useLocale } from "@/lib/use-locale";
 import { UNCATEGORIZED_LABEL } from "@/lib/position-classifier";
-import { bestViewport } from "@/lib/globe-viewport";
+import { bestViewport, overviewMaxZoom } from "@/lib/globe-viewport";
+import { createFitOnReady, type FitOnReady } from "@/lib/globe-fit-scheduler";
+import {
+  ANCHOR_OFFSET_EM,
+  estimateTextWidth,
+  groupLabel,
+  labelFontSize,
+  nameRect,
+  placeLabels,
+  styleValueAtZoom,
+  type LabelAnchor,
+  type LabelItem,
+  type Rect,
+} from "@/lib/globe-label-placement";
 import { attachTouchAxisLock } from "@/lib/globe-touch-axis-lock";
 import { ensureMaplibreWorkerUrl } from "@/lib/maplibre-worker";
 import { scoreToRgb, scoreSpectrumCss } from "@/lib/score-color";
@@ -33,6 +46,17 @@ import {
 const SOURCE_ID = "jht-jobs";
 const LAYER_HALO_ID = "jht-jobs-halo";
 const LAYER_DOT_ID = "jht-jobs-dot";
+// Etichette spostate lontano dal pin, con la loro linea guida (vedi
+// lib/globe-label-placement): sorgente e due layer propri.
+const LEADER_SOURCE_ID = "jht-label-leaders";
+const LAYER_LEADER_LINE_ID = "jht-label-leader-line";
+const LAYER_LEADER_TEXT_ID = "jht-label-leader-text";
+const OWN_LAYER_IDS = new Set([
+  LAYER_HALO_ID,
+  LAYER_DOT_ID,
+  LAYER_LEADER_LINE_ID,
+  LAYER_LEADER_TEXT_ID,
+]);
 
 // Tre regimi di aggregazione, selezionati dallo zoom SNAPPATO a intero.
 // Dentro ciascun regime le coordinate non cambiano MAI (ancore fisse =
@@ -438,6 +462,153 @@ function aggregateGroups(
   return out;
 }
 
+// Lato del testo dei fasci rispetto al pin: «top» (sotto, il default) salvo
+// dove lì cade un nome della mappa o un'altra etichetta (lib/globe-label-
+// placement). È una proprietà della feature: text-anchor e text-offset del
+// layer la leggono.
+const DEFAULT_LABEL_ANCHOR: LabelAnchor = "top";
+
+function labelOffsetExpr(): maplibregl.ExpressionSpecification {
+  const entries = (Object.keys(ANCHOR_OFFSET_EM) as LabelAnchor[]).flatMap(
+    (a) => [a, ["literal", ANCHOR_OFFSET_EM[a]]],
+  );
+  return [
+    "match",
+    ["coalesce", ["get", "anchor"], DEFAULT_LABEL_ANCHOR],
+    ...entries,
+    ["literal", ANCHOR_OFFSET_EM[DEFAULT_LABEL_ANCHOR]],
+  ] as unknown as maplibregl.ExpressionSpecification;
+}
+
+// Ingombro dei nomi della basemap (paesi, città) attualmente disegnati: il
+// punto di ogni etichetta lo dà queryRenderedFeatures, la larghezza si stima
+// dal nome (MapLibre non espone il box del testo).
+function basemapNameRects(map: MaplibreMap): Rect[] {
+  const layers = map.getStyle()?.layers ?? [];
+  const zoom = map.getZoom();
+  const out: Rect[] = [];
+  const seen = new Set<string>();
+  for (const layer of layers) {
+    if (layer.type !== "symbol" || OWN_LAYER_IDS.has(layer.id)) continue;
+    if (map.getLayoutProperty(layer.id, "text-field") == null) continue;
+    if (map.getLayoutProperty(layer.id, "visibility") === "none") continue;
+    // text-size, text-max-width e text-transform sono funzioni a stops dello
+    // zoom: si valutano allo zoom corrente.
+    const size = styleValueAtZoom(
+      map.getLayoutProperty(layer.id, "text-size"),
+      zoom,
+      16,
+    );
+    const maxWidthEm = styleValueAtZoom(
+      map.getLayoutProperty(layer.id, "text-max-width"),
+      zoom,
+      10,
+    );
+    const spacingEm = styleValueAtZoom(
+      map.getLayoutProperty(layer.id, "text-letter-spacing"),
+      zoom,
+      0,
+    );
+    const upper =
+      styleValueAtZoom<string>(
+        map.getLayoutProperty(layer.id, "text-transform"),
+        zoom,
+        "none",
+      ) === "uppercase";
+    let features: maplibregl.MapGeoJSONFeature[] = [];
+    try {
+      features = map.queryRenderedFeatures({ layers: [layer.id] });
+    } catch {
+      continue;
+    }
+    for (const f of features) {
+      if (f.geometry.type !== "Point") continue;
+      const props = f.properties ?? {};
+      const name = String(
+        props.name_en ?? props["name:latin"] ?? props.name ?? "",
+      );
+      if (!name) continue;
+      const [lon, lat] = f.geometry.coordinates as [number, number];
+      const pt = map.project([lon, lat]);
+      const key = `${name}|${Math.round(pt.x / 6)}|${Math.round(pt.y / 6)}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push(nameRect(pt, name, size, upper, maxWidthEm, spacingEm));
+    }
+  }
+  return out;
+}
+
+function containerSize(map: MaplibreMap): { width: number; height: number } {
+  const el = map.getContainer();
+  return { width: el.clientWidth, height: el.clientHeight };
+}
+
+// Dove sta l'etichetta di un fascio: un lato attaccato al pin, oppure
+// «center» a (dx, dy) pixel dal pin con la sua linea guida.
+type LabelPlacement = {
+  anchor: LabelAnchor | "center";
+  dx: number;
+  dy: number;
+};
+
+function computeLabelPlacements(
+  map: MaplibreMap,
+  groups: GroupedFeature[],
+  labels: Record<string, string>,
+): Record<string, LabelPlacement> {
+  const size = labelFontSize(map.getZoom());
+  const el = map.getContainer();
+  const margin = 200;
+  const items: LabelItem[] = [];
+  for (const g of groups) {
+    const text = labels[g.groupKey];
+    if (!text) continue;
+    const pt = map.project([g.lon, g.lat]);
+    if (
+      pt.x < -margin ||
+      pt.y < -margin ||
+      pt.x > el.clientWidth + margin ||
+      pt.y > el.clientHeight + margin
+    ) {
+      continue;
+    }
+    items.push({
+      id: g.groupKey,
+      x: pt.x,
+      y: pt.y,
+      w: estimateTextWidth(text, size),
+      h: Math.ceil(size * 1.3),
+      priority: g.count,
+    });
+  }
+  const placed = placeLabels(items, basemapNameRects(map), size);
+  const out: Record<string, LabelPlacement> = {};
+  for (const [id, p] of placed) {
+    out[id] = {
+      anchor: p.anchor,
+      dx: p.leader?.dx ?? 0,
+      dy: p.leader?.dy ?? 0,
+    };
+  }
+  return out;
+}
+
+function samePlacements(
+  a: Record<string, LabelPlacement>,
+  b: Record<string, LabelPlacement>,
+): boolean {
+  const ka = Object.keys(a);
+  if (ka.length !== Object.keys(b).length) return false;
+  return ka.every(
+    (k) =>
+      b[k] &&
+      a[k].anchor === b[k].anchor &&
+      a[k].dx === b[k].dx &&
+      a[k].dy === b[k].dy,
+  );
+}
+
 // Applica al layer corrente le scelte del profilo qualità che vivono
 // nello style (non nel costruttore della mappa): halo dei fasci e
 // etichette della basemap. Il placement dei simboli di testo è lavoro
@@ -457,7 +628,7 @@ function applyProfileToStyle(map: MaplibreMap, profile: MapTierProfile) {
   try {
     for (const layer of map.getStyle()?.layers ?? []) {
       if (layer.type !== "symbol") continue;
-      if (layer.id === LAYER_DOT_ID) continue; // i nostri pin restano
+      if (OWN_LAYER_IDS.has(layer.id)) continue; // i nostri pin restano
       map.setLayoutProperty(
         layer.id,
         "visibility",
@@ -635,6 +806,7 @@ export default function JobsGlobe({
   focusPosition = null,
   familyColors = {},
   showcase = null,
+  fitPaddingLeft = 0,
 }: {
   fullscreen?: boolean;
   selectedTypes?: string[];
@@ -657,7 +829,12 @@ export default function JobsGlobe({
   familyColors?: Record<string, string>;
   // Modalità vetrina della landing: vedi GlobeShowcase.
   showcase?: GlobeShowcase | null;
+  // Spazio a sinistra coperto da un pannello (px): i fitBounds lo aggiungono
+  // al loro padding, così i pin non finiscono sotto la colonna dei pannelli.
+  fitPaddingLeft?: number;
 } = {}) {
+  const fitPadLeftRef = useRef(fitPaddingLeft);
+  fitPadLeftRef.current = fitPaddingLeft;
   const { resolvedTheme } = useTheme();
   const locale = useLocale();
   // Sulla landing la lingua la sceglie il selettore della nav, non il
@@ -693,6 +870,10 @@ export default function JobsGlobe({
   // dentro onStyleLoad che ha una closure vecchia (registrato 1 sola
   // volta in mount).
   const clusteredRef = useRef<GroupedFeature[]>([]);
+  // Lato scelto per l'etichetta di ogni fascio e testo con cui è stato
+  // misurato (vedi relayoutLabels, nell'effetto di mount).
+  const labelPlacementsRef = useRef<Record<string, LabelPlacement>>({});
+  const labelTextRef = useRef<Record<string, string>>({});
   // Registry icone gruppo registrate sulla mappa: iconId -> true. Permette
   // di rimuoverle quando il set di gruppi visibili cambia (filtri).
   const registeredIconsRef = useRef<Set<string>>(new Set());
@@ -1132,8 +1313,12 @@ export default function JobsGlobe({
             ],
             // 0.3em sotto il pin: subito attaccato al cluster.
             // Halo forte (sotto) gestisce overlap coi nomi città.
-            "text-offset": [0, 0.3],
-            "text-anchor": "top",
+            "text-offset": labelOffsetExpr(),
+            "text-anchor": [
+              "coalesce",
+              ["get", "anchor"],
+              DEFAULT_LABEL_ANCHOR,
+            ],
             "text-allow-overlap": true,
             "text-ignore-placement": true,
             // Disegna SEMPRE sopra altri layer di testo della basemap.
@@ -1149,13 +1334,76 @@ export default function JobsGlobe({
           },
         });
       }
+      // Linee guida e testo delle etichette spostate lontano dal pin.
+      if (!map.getSource(LEADER_SOURCE_ID)) {
+        map.addSource(LEADER_SOURCE_ID, {
+          type: "geojson",
+          data: { type: "FeatureCollection", features: [] },
+        });
+        map.addLayer({
+          id: LAYER_LEADER_LINE_ID,
+          type: "line",
+          source: LEADER_SOURCE_ID,
+          filter: ["==", ["geometry-type"], "LineString"],
+          paint: { "line-color": "rgba(255,255,255,0.6)", "line-width": 1 },
+        });
+        map.addLayer({
+          id: LAYER_LEADER_TEXT_ID,
+          type: "symbol",
+          source: LEADER_SOURCE_ID,
+          filter: ["==", ["geometry-type"], "Point"],
+          layout: {
+            "text-field": ["get", "label"],
+            "text-font": ["Open Sans Bold"],
+            "text-size": [
+              "interpolate",
+              ["linear"],
+              ["zoom"],
+              0,
+              11,
+              6,
+              12,
+              12,
+              14,
+            ],
+            "text-anchor": "center",
+            "text-allow-overlap": true,
+            "text-ignore-placement": true,
+            "symbol-sort-key": 999,
+          },
+          paint: {
+            "text-color": "#ffffff",
+            "text-halo-color": "rgba(0,0,0,0.95)",
+            "text-halo-width": 2.5,
+            "text-halo-blur": 0.5,
+          },
+        });
+      }
       layersReadyRef.current = true;
       // Halo/etichette secondo il tier corrente: va rifatto a ogni
       // style.load perché il cambio tema ricarica lo style da zero.
       applyProfileToStyle(map, profileRef.current);
       syncData(map);
+      // Dati arrivati prima dello style: il fit in sospeso parte ora.
+      fitOnReadyRef.current?.layersReady();
     };
     map.on("style.load", onStyleLoad);
+
+    // A mappa ferma (idle) ogni etichetta prende il lato libero più vicino al
+    // default. Si rifà il disegno solo se un lato cambia: l'idle che segue
+    // setData ritrova gli stessi lati e si ferma.
+    const relayoutLabels = () => {
+      if (!layersReadyRef.current) return;
+      const next = computeLabelPlacements(
+        map,
+        clusteredRef.current,
+        labelTextRef.current,
+      );
+      if (samePlacements(next, labelPlacementsRef.current)) return;
+      labelPlacementsRef.current = next;
+      syncData(map);
+    };
+    map.on("idle", relayoutLabels);
 
     map.on("error", (e: maplibregl.ErrorEvent) => {
       console.error("[JobsGlobe] map error:", (e as any)?.error?.message ?? e);
@@ -1226,7 +1474,12 @@ export default function JobsGlobe({
         const vp = bestViewport(g.positions);
         if (vp) {
           map.fitBounds(vp.bounds, {
-            padding: { top: 140, bottom: 90, left: 90, right: 90 },
+            padding: {
+              top: 140,
+              bottom: 90,
+              left: 90 + fitPadLeftRef.current,
+              right: 90,
+            },
             duration: profileRef.current.flyDuration,
             maxZoom: 14,
           });
@@ -1497,23 +1750,61 @@ export default function JobsGlobe({
     // count + iconId + label precomputata (count, con " · Da remoto" sui
     // fasci aggregati di sole remote). La lista positions completa è in
     // clusteredRef per il click handler.
-    const features: Feature[] = groups.map((g) => ({
-      type: "Feature",
-      geometry: { type: "Point", coordinates: [g.lon, g.lat] },
-      properties: {
-        groupKey: g.groupKey,
-        iconId: g.iconId,
-        count: g.count,
-        topScore: g.topScore,
-        label:
-          g.count > 1
-            ? g.remote
-              ? `${g.count} · ${tr("remote")}`
-              : String(g.count)
-            : "",
-      },
-    }));
+    const labels: Record<string, string> = {};
+    const leaderFeatures: Feature[] = [];
+    const features: Feature[] = groups.map((g) => {
+      const text = groupLabel(g.count, g.remote, tr("remote"));
+      labels[g.groupKey] = text;
+      const place = labelPlacementsRef.current[g.groupKey];
+      const leader = text && place?.anchor === "center" ? place : null;
+      if (leader) {
+        // Etichetta lontana dal pin: un punto proprio al suo posto (in
+        // coordinate geografiche, calcolate ora dalla vista) e la linea guida
+        // fino al pin. Il fascio non ha più il numero sotto di sé.
+        const pin = map.project([g.lon, g.lat]);
+        const at = map.unproject([pin.x + leader.dx, pin.y + leader.dy]);
+        leaderFeatures.push(
+          {
+            type: "Feature",
+            geometry: { type: "Point", coordinates: [at.lng, at.lat] },
+            properties: { label: text },
+          },
+          {
+            type: "Feature",
+            geometry: {
+              type: "LineString",
+              coordinates: [
+                [g.lon, g.lat],
+                [at.lng, at.lat],
+              ],
+            },
+            properties: {},
+          },
+        );
+      }
+      return {
+        type: "Feature",
+        geometry: { type: "Point", coordinates: [g.lon, g.lat] },
+        properties: {
+          groupKey: g.groupKey,
+          iconId: g.iconId,
+          count: g.count,
+          topScore: g.topScore,
+          label: leader ? "" : text,
+          anchor:
+            place && place.anchor !== "center"
+              ? place.anchor
+              : DEFAULT_LABEL_ANCHOR,
+        },
+      };
+    });
+    // Il testo vero di ogni gruppo (anche di quelli con la linea guida): serve
+    // al prossimo piazzamento per misurarlo.
+    labelTextRef.current = labels;
     src.setData({ type: "FeatureCollection", features });
+    (
+      map.getSource(LEADER_SOURCE_ID) as maplibregl.GeoJSONSource | undefined
+    )?.setData({ type: "FeatureCollection", features: leaderFeatures });
 
     // MapLibre 6 rende setData asincrono e, sul globo con style minimale, il
     // worker può restare pendente oltre la deadline della landing. Il gate
@@ -1537,16 +1828,26 @@ export default function JobsGlobe({
   }
 
   const remoteCount = data.filter((d) => d.is_remote).length;
+  const hasRemoteGroups = displayData.some(
+    (d) => d.remote_type === "full_remote",
+  );
 
   function flyToAll() {
     const map = mapRef.current;
     if (!map || displayData.length === 0) return;
     const vp = bestViewport(displayData);
     if (!vp) return;
+    const maxZoom = overviewMaxZoom(vp.bounds, containerSize(map), 7);
     map.fitBounds(vp.bounds, {
-      padding: { top: 60, bottom: 60, left: 60, right: 60 },
+      padding: {
+        top: 60,
+        bottom: 60,
+        // Panoramica a globo: sfera centrata (vedi fitToDisplayData).
+        left: 60 + (maxZoom < 7 ? 0 : fitPadLeftRef.current),
+        right: 60,
+      },
       duration: profileRef.current.flyDuration,
-      maxZoom: 7,
+      maxZoom,
       // Reset anche dell'inclinazione (pitch) e dell'orientamento
       // (bearing) → torna alla vista piatta di default, non solo al
       // centro/zoom. L'utente può inclinare col touchpad; questo
@@ -1587,23 +1888,53 @@ export default function JobsGlobe({
 
   // Auto-zoom sui pin filtrati: ogni volta che cambia displayData
   // (filtri donut/histogram di /map o primo fetch), riadatta la
-  // vista per inquadrare i pin attualmente mostrati.
+  // vista per inquadrare i pin attualmente mostrati. Se i dati arrivano
+  // prima dello style (style.load), il fit resta in sospeso e parte appena
+  // i layer sono pronti (vedi lib/globe-fit-scheduler).
+  const displayDataRef = useRef(displayData);
+  displayDataRef.current = displayData;
+  const fitToDisplayData = () => {
+    const map = mapRef.current;
+    const pins = displayDataRef.current;
+    if (!map || pins.length === 0) return;
+    const vp = bestViewport(pins);
+    if (!vp) return;
+    // maxZoom city-level (era 7 = livello stato): filtrando una città si
+    // scende fino allo zoom città; per insiemi più ampi (paese, tutto)
+    // fitBounds sceglie comunque uno zoom inferiore; su più paesi il globo
+    // resta visibile come globo (overviewMaxZoom).
+    const maxZoom = overviewMaxZoom(vp.bounds, containerSize(map), 12);
+    // Panoramica a globo: la sfera sta al centro della mappa, così il bordo si
+    // vede da entrambi i lati e la colonna dei pannelli copre solo il mare.
+    // Un insieme stretto si inquadra invece nello spazio che la colonna lascia.
+    const overview = maxZoom < 12;
+    map.fitBounds(vp.bounds, {
+      padding: {
+        top: 80,
+        bottom: 80,
+        left: 80 + (overview ? 0 : fitPadLeftRef.current),
+        right: 80,
+      },
+      duration: profileRef.current.flyDuration,
+      maxZoom,
+    });
+  };
+  const fitToDisplayDataRef = useRef(fitToDisplayData);
+  fitToDisplayDataRef.current = fitToDisplayData;
+  const fitOnReadyRef = useRef<FitOnReady | null>(null);
+  if (!fitOnReadyRef.current) {
+    fitOnReadyRef.current = createFitOnReady(() =>
+      fitToDisplayDataRef.current(),
+    );
+  }
   useEffect(() => {
     // Vetrina: la camera appartiene all'autopilota della landing, il
     // refit automatico sui dati la strapperebbe via a metà volo.
     if (showcaseRef.current) return;
-    const map = mapRef.current;
-    if (!map || !layersReadyRef.current || displayData.length === 0) return;
-    const vp = bestViewport(displayData);
-    if (!vp) return;
-    map.fitBounds(vp.bounds, {
-      padding: { top: 80, bottom: 80, left: 80, right: 80 },
-      duration: profileRef.current.flyDuration,
-      // maxZoom city-level (era 7 = livello stato): filtrando una città
-      // si scende fino allo zoom città; per insiemi più ampi (paese,
-      // tutto) fitBounds sceglie comunque uno zoom inferiore.
-      maxZoom: 12,
-    });
+    if (displayData.length === 0) return;
+    fitOnReadyRef.current!.dataChanged(
+      !!mapRef.current && layersReadyRef.current,
+    );
   }, [displayData]);
 
   // Focus su una posizione richiesto da una lista (card Posizioni o
@@ -1934,6 +2265,39 @@ export default function JobsGlobe({
             </div>
 
             {bottomCenterExtra}
+
+            {/* Chiave dell'anello azzurro: «2 remote» senza spiegazione non
+                dice che il fascio sta per posizioni senza sede. */}
+            {hasRemoteGroups && (
+              <div
+                className="hidden md:flex items-center gap-2 text-[10px]"
+                title={tr("remote_legend")}
+                role="note"
+                style={{
+                  height: 44,
+                  padding: "0 14px",
+                  background: "var(--color-panel)",
+                  border: "1px solid var(--color-border)",
+                  borderRadius: 9999,
+                  boxShadow: "0 4px 12px rgba(0,0,0,0.4)",
+                  color: "var(--color-muted)",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                <svg width="16" height="8" viewBox="0 0 16 8" aria-hidden>
+                  <ellipse
+                    cx="8"
+                    cy="4"
+                    rx="6.5"
+                    ry="2.8"
+                    fill="none"
+                    stroke={`rgb(${REMOTE_RING_RGB})`}
+                    strokeWidth="1.2"
+                  />
+                </svg>
+                {tr("remote")}
+              </div>
+            )}
           </div>
         )}
 

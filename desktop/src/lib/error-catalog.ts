@@ -44,6 +44,14 @@ function copy(itText: string, itAction: string, enText: string, enAction: string
 
 // ── Shared entries: several codes that mean the same thing to the person ────
 
+/** A limit of the app itself (pacing, a request limiter), never the provider's. */
+const THROTTLED_LOCAL = copy(
+  "La squadra sta rallentando di proposito: è un limite dell’app, non del tuo fornitore.",
+  "Riprende da sola. Non devi fare niente.",
+  "The team is slowing down on purpose: this is a limit of the app, not of your provider.",
+  "It resumes by itself. You do not need to do anything.",
+);
+
 const RETRY = copy(
   "L’operazione non è riuscita.",
   "Riprova. Se si ripete, riavvia Job Hunter Team.",
@@ -517,6 +525,40 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
     "If the team stops early, check the limits on the provider’s page.",
   ),
 
+  // ── What a limit is, said apart (T10). One sentence per fact: a limit of the
+  // app, a wait the provider asked for, a spent plan, a program that never
+  // came up, a provider that did not answer. The names are the runtime's; the
+  // reasons of a `quota` are the agent-state vocabulary's (limite_5h,
+  // limite_settimanale, limite_spesa_org) and do not change the sentence.
+  throttled_local: THROTTLED_LOCAL,
+  rate_limited: THROTTLED_LOCAL,
+  rate_limited_burst: THROTTLED_LOCAL,
+  rate_limited_daily: THROTTLED_LOCAL,
+  rate_limit_429: copy(
+    "Il fornitore ha chiesto di aspettare un momento (errore 429): il tuo abbonamento non è esaurito.",
+    "Riprova dopo l’attesa indicata. Nessun dato è andato perso.",
+    "The provider asked us to wait a moment (error 429): your subscription is not used up.",
+    "Try again after the wait it asked for. No data was lost.",
+  ),
+  quota: copy(
+    "I limiti del tuo abbonamento sono esauriti fino alle {time}.",
+    "Riprova dopo le {time}. Niente è andato perso.",
+    "Your subscription limits are used up until {time}.",
+    "Try again after {time}. Nothing was lost.",
+  ),
+  runtime_not_started: copy(
+    "L’agente è stato avviato ma il suo programma non è mai partito.",
+    "Riavvia la squadra. Se succede ancora, invia una segnalazione dalle impostazioni.",
+    "The agent was started but its program never came up.",
+    "Restart the team. If it happens again, send a report from the settings.",
+  ),
+  provider_failed: copy(
+    "Il fornitore non ha risposto in modo utilizzabile: non è un limite del tuo abbonamento.",
+    "Riprovo da solo. Se continua, controlla lo stato del fornitore.",
+    "The provider did not give a usable answer: this is not a limit of your subscription.",
+    "I will try again by myself. If it keeps happening, check the provider’s status page.",
+  ),
+
   // ── Team start and resume ────────────────────────────────────────────────
   team_start_failed: TEAM_START,
   team_verify_failed: copy(
@@ -595,6 +637,18 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
     "Premi Aggiorna. Se si ripete, segnala il codice che vedi accanto.",
     "The VPS did not return the positions.",
     "Press Refresh. If it keeps happening, report the code shown next to it.",
+  ),
+  agents_unavailable: copy(
+    "La VPS non ha restituito l’elenco degli agenti.",
+    "Premi Aggiorna. Se si ripete, segnala il codice che vedi accanto.",
+    "The VPS did not return the list of agents.",
+    "Press Refresh. If it keeps happening, report the code shown next to it.",
+  ),
+  agent_screen_unfiltered: copy(
+    "Il terminale di questo agente non si può mostrare: sulla VPS manca il filtro che toglie chiavi e codici dal testo.",
+    "Aggiorna la squadra sulla VPS, poi riapri il terminale.",
+    "This agent's terminal cannot be shown: the VPS lacks the filter that removes keys and codes from the text.",
+    "Update the team on the VPS, then open the terminal again.",
   ),
   desktop_transport_unavailable: copy(
     "L’app non è riuscita a parlare con il suo nucleo nativo.",
@@ -898,6 +952,14 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
     "Chiedi a chi gestisce la VPS di aggiungere il tuo utente a /etc/subuid e /etc/subgid, poi riprova.",
     "On the VPS your user has no subordinate IDs, which Podman without privileges needs.",
     "Ask whoever manages the VPS to add your user to /etc/subuid and /etc/subgid, then try again.",
+  ),
+  // install.sh on a VPS whose team already runs on Docker (exit 85): Podman would start it on
+  // empty volumes, and nothing moves them yet. The install stopped before changing anything.
+  vps_runtime_change_requires_migration: copy(
+    "Su questa VPS Job Hunter Team gira già con Docker. Passarlo a Podman richiede una migrazione, che oggi l’app non sa ancora fare da sola.",
+    "I dati del team restano dove sono, sulla VPS: non è stato spostato né cancellato nulla. Collegati al team che c’è già, senza reinstallarlo, oppure scegli un’altra VPS.",
+    "This VPS already runs Job Hunter Team with Docker. Moving it to Podman needs a migration, which the app cannot do by itself yet.",
+    "The team’s data stays where it is, on the VPS: nothing was moved or deleted. Connect to the team that is already there, without reinstalling it, or choose another VPS.",
   ),
   host_key_missing: copy(
     "L’identità SSH della VPS non è ancora stata confermata.",
@@ -1359,6 +1421,105 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
     "The disk is almost full, so no new agent or update will start.",
     "Empty the Trash and delete large files you no longer need, such as old downloads or unused Docker/Podman images, then try again. Agents already running keep working.",
   ),
+
+  // ── «Free up space» on disk_low: `jht clean-images --json` (onboarding_clean_images) ──
+  // The confirmation and each outcome; {size} is the freed space (describeError's `bytes`).
+  clean_images_confirm: copy(
+    "Tolgo solo le vecchie versioni di Job Hunter Team che non servono più: restano quella in uso, la precedente, quelle usate da un container e le immagini di altri programmi. Dati e volumi non vengono toccati.",
+    "Conferma per liberare spazio. Se il motore dei container è spento non lo accendo e non tolgo niente.",
+    "I remove only the old versions of Job Hunter Team that are no longer needed: the one in use, the previous one, those used by a container and other programs’ images stay. Data and volumes are not touched.",
+    "Confirm to free up space. If the container engine is off I do not start it and remove nothing.",
+  ),
+  clean_images_confirm_vm: copy(
+    "Tolgo solo le vecchie versioni di Job Hunter Team che non servono più, dentro la macchina virtuale del motore dei container: restano quella in uso, la precedente, quelle usate da un container e le immagini di altri programmi. Dati e volumi non vengono toccati.",
+    "Conferma per liberare spazio. Lo spazio si libera nella macchina virtuale, quindi il disco del Mac potrebbe non guadagnarne.",
+    "I remove only the old versions of Job Hunter Team that are no longer needed, inside the container engine’s virtual machine: the one in use, the previous one, those used by a container and other programs’ images stay. Data and volumes are not touched.",
+    "Confirm to free up space. The space is freed in the virtual machine, so the Mac’s disk may not gain any.",
+  ),
+  clean_images_freed: copy(
+    "Ho tolto le vecchie versioni di Job Hunter Team e liberato fino a circa {size}.",
+    "Riprova ad avviare la squadra. Se il disco è ancora quasi pieno, svuota il Cestino ed elimina i file grandi che non ti servono.",
+    "I removed the old versions of Job Hunter Team and freed up to about {size}.",
+    "Try starting the team again. If the disk is still almost full, empty the Trash and delete large files you no longer need.",
+  ),
+  clean_images_freed_vm: copy(
+    "Ho tolto le vecchie versioni di Job Hunter Team e liberato fino a circa {size} nella macchina virtuale del motore dei container.",
+    "Riprova ad avviare la squadra. Lo spazio sul disco del Mac può restare lo stesso: se non basta, svuota il Cestino ed elimina i file grandi che non ti servono.",
+    "I removed the old versions of Job Hunter Team and freed up to about {size} in the container engine’s virtual machine.",
+    "Try starting the team again. The space on the Mac’s disk may stay the same: if it is not enough, empty the Trash and delete large files you no longer need.",
+  ),
+  clean_images_nothing: copy(
+    "Non c’erano vecchie versioni di Job Hunter Team da togliere.",
+    "Per liberare spazio svuota il Cestino ed elimina i file grandi che non ti servono, poi riprova.",
+    "There were no old versions of Job Hunter Team to remove.",
+    "To free up space, empty the Trash and delete large files you no longer need, then try again.",
+  ),
+  clean_images_in_use: copy(
+    "Le vecchie versioni rimaste sono usate da un container, quindi le ho tenute.",
+    "Per liberare spazio svuota il Cestino ed elimina i file grandi che non ti servono, poi riprova.",
+    "The old versions left are used by a container, so I kept them.",
+    "To free up space, empty the Trash and delete large files you no longer need, then try again.",
+  ),
+  clean_images_refused: copy(
+    "Il motore dei container non ha tolto le vecchie versioni, quindi sono rimaste.",
+    "Per liberare spazio svuota il Cestino ed elimina i file grandi che non ti servono, poi riprova.",
+    "The container engine did not remove the old versions, so they stayed.",
+    "To free up space, empty the Trash and delete large files you no longer need, then try again.",
+  ),
+  clean_images_kept_by_choice: copy(
+    "Questo computer è impostato per tenere tutte le vecchie versioni di Job Hunter Team, quindi non ho tolto niente.",
+    "Per liberare spazio svuota il Cestino ed elimina i file grandi che non ti servono, poi riprova.",
+    "This computer is set to keep every old version of Job Hunter Team, so I removed nothing.",
+    "To free up space, empty the Trash and delete large files you no longer need, then try again.",
+  ),
+  clean_images_upgrade: copy(
+    "Un aggiornamento di Job Hunter Team è in corso o è rimasto a metà, e gli serve la versione precedente: non ho tolto niente.",
+    "Riprova più tardi. Intanto, per liberare spazio, svuota il Cestino ed elimina i file grandi che non ti servono.",
+    "An update of Job Hunter Team is running or was left halfway, and it needs the previous version: I removed nothing.",
+    "Try again later. Meanwhile, to free up space, empty the Trash and delete large files you no longer need.",
+  ),
+  clean_images_container_off: copy(
+    "Il container di Job Hunter Team non è acceso, quindi non so quale versione è in uso e non ho tolto niente.",
+    "Riprova più tardi. Intanto, per liberare spazio, svuota il Cestino ed elimina i file grandi che non ti servono.",
+    "The Job Hunter Team container is not running, so I do not know which version is in use and I removed nothing.",
+    "Try again later. Meanwhile, to free up space, empty the Trash and delete large files you no longer need.",
+  ),
+  clean_images_dates_unreadable: copy(
+    "Non riesco a leggere la data delle versioni di Job Hunter Team, quindi non ho tolto niente.",
+    "Riprova più tardi. Intanto, per liberare spazio, svuota il Cestino ed elimina i file grandi che non ti servono.",
+    "I cannot read the dates of the Job Hunter Team versions, so I removed nothing.",
+    "Try again later. Meanwhile, to free up space, empty the Trash and delete large files you no longer need.",
+  ),
+  clean_images_engine_unreadable: copy(
+    "Il motore dei container non risponde come dovrebbe, quindi non ho tolto niente.",
+    "Riavvia il computer e riprova.",
+    "The container engine does not answer as it should, so I removed nothing.",
+    "Restart the computer and try again.",
+  ),
+  clean_images_kept: copy(
+    "La pulizia non ha tolto niente.",
+    "Per liberare spazio svuota il Cestino ed elimina i file grandi che non ti servono, poi riprova.",
+    "The cleaning removed nothing.",
+    "To free up space, empty the Trash and delete large files you no longer need, then try again.",
+  ),
+  clean_images_engine_off: copy(
+    "Il motore dei container è spento: non l’ho acceso e non ho tolto niente.",
+    "Per liberare spazio svuota il Cestino ed elimina i file grandi che non ti servono, poi riprova.",
+    "The container engine is off: I did not start it and removed nothing.",
+    "To free up space, empty the Trash and delete large files you no longer need, then try again.",
+  ),
+  clean_images_failed: copy(
+    "La pulizia delle vecchie versioni di Job Hunter Team non è riuscita.",
+    "Riprova. Se si ripete, svuota il Cestino ed elimina i file grandi che non ti servono.",
+    "Cleaning the old versions of Job Hunter Team did not succeed.",
+    "Try again. If it happens again, empty the Trash and delete large files you no longer need.",
+  ),
+  clean_images_unsupported: copy(
+    "Su questo sistema la pulizia dall’app non c’è ancora.",
+    "Per liberare spazio svuota il Cestino ed elimina i file grandi che non ti servono, poi riprova.",
+    "Cleaning from the app is not available on this system yet.",
+    "To free up space, empty the Trash and delete large files you no longer need, then try again.",
+  ),
 };
 
 /**
@@ -1376,10 +1537,18 @@ export const NOT_EMITTED: ReadonlySet<string> = new Set([
   "container_version_incompatible",
   "account_team_mismatch",
   "ssh_auth_failed",
+  // The runtime, the hub and the web say them; the app reads them in the 2nd cut (T10).
+  "throttled_local",
+  "rate_limited",
+  "rate_limited_burst",
+  "rate_limited_daily",
+  "rate_limit_429",
+  "quota",
+  "runtime_not_started",
+  "provider_failed",
   // Shell layers: the launcher, `jht team start` and the host wrapper's upgrade
   // print them. The app has no Rust or TS emission site for them yet.
   "disk_warning",
-  "disk_low",
 ]);
 
 function localeOf(locale: string | null | undefined): ErrorLocale {
@@ -1387,12 +1556,21 @@ function localeOf(locale: string | null | undefined): ErrorLocale {
   return (ERROR_LOCALES as readonly string[]).includes(locale) ? locale as ErrorLocale : "en";
 }
 
+const LOCALE_TAGS: Record<ErrorLocale, string> = {
+  it: "it-IT", en: "en-GB", de: "de-DE", es: "es-ES", fr: "fr-FR", hu: "hu-HU", pt: "pt-PT",
+};
+
+/** A freed size for `{size}`: GB with one decimal from 1 GB, MB below. */
+function formatSize(bytes: number, locale: ErrorLocale): string {
+  const gb = bytes / 1024 ** 3;
+  const number = (value: number, digits: number) =>
+    new Intl.NumberFormat(LOCALE_TAGS[locale], { maximumFractionDigits: digits }).format(value);
+  return gb >= 1 ? `${number(gb, 1)} GB` : `${number(Math.round(bytes / 1024 ** 2), 0)} MB`;
+}
+
 function formatTime(resetsAt: number, locale: ErrorLocale, now: number): string {
   const date = new Date(resetsAt * 1000);
-  const tags: Record<ErrorLocale, string> = {
-    it: "it-IT", en: "en-GB", de: "de-DE", es: "es-ES", fr: "fr-FR", hu: "hu-HU", pt: "pt-PT",
-  };
-  const tag = tags[locale];
+  const tag = LOCALE_TAGS[locale];
   const time = new Intl.DateTimeFormat(tag, { hour: "2-digit", minute: "2-digit" }).format(date);
   if (new Date(now).toDateString() === date.toDateString()) return time;
   const day = new Intl.DateTimeFormat(tag, { weekday: "long", day: "numeric", month: "long" }).format(date);
@@ -1430,6 +1608,8 @@ export function describeError(
     fallback?: string;
     /** The Podman machine an error names (errorMachineOf), when it has one. */
     machine?: string | null;
+    /** The size an outcome names (`{size}`, the space «Free up space» freed), in bytes. */
+    bytes?: number | null;
   } = {},
 ): DescribedError {
   const locale = localeOf(options.locale);
@@ -1447,19 +1627,20 @@ export function describeError(
   const needsTime = text.includes("{time}") || action.includes("{time}");
   const resetsAt = options.resetsAt;
   const hasTime = typeof resetsAt === "number" && Number.isFinite(resetsAt) && resetsAt > 0;
-  if (needsTime && !hasTime) {
+  const needsSize = text.includes("{size}") || action.includes("{size}");
+  const bytes = options.bytes;
+  const hasSize = typeof bytes === "number" && Number.isSafeInteger(bytes) && bytes >= 0;
+  if ((needsTime && !hasTime) || (needsSize && !hasSize)) {
     chosen = UNKNOWN_ERROR;
     chosenCode = "unknown";
     [text, action] = localizedCopy(chosenCode, chosen, locale);
     known = false;
   }
   const time = hasTime ? formatTime(resetsAt as number, locale, options.now ?? Date.now()) : "";
-  return {
-    code: key,
-    text: text.replaceAll("{time}", time).replaceAll("{machine}", machine ?? ""),
-    action: action.replaceAll("{time}", time).replaceAll("{machine}", machine ?? ""),
-    known,
-  };
+  const size = hasSize ? formatSize(bytes as number, locale) : "";
+  const fill = (value: string) =>
+    value.replaceAll("{time}", time).replaceAll("{machine}", machine ?? "").replaceAll("{size}", size);
+  return { code: key, text: fill(text), action: fill(action), known };
 }
 
 /** Codes with a variant that names the machine, picked when one is given. */

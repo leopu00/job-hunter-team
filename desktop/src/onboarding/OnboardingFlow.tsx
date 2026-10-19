@@ -12,7 +12,8 @@ import {
   runtimeArtwork,
 } from "./OnboardingArtwork";
 import { OAuthLoginTakeover } from "../oauth-login-takeover";
-import { describeError } from "../lib/error-catalog";
+import { describeError, errorCodeOf, type DescribedError } from "../lib/error-catalog";
+import { cleanImagesResult } from "../lib/clean-images";
 import { appLocale } from "../lib/app-locale";
 import VpsProfileImport from "./VpsProfileImport";
 import CloserDesktopPanel from "../closer-desktop/CloserDesktopPanel";
@@ -86,9 +87,11 @@ function formatElapsed(milliseconds: number): string {
   return `${String(minutes).padStart(2, "0")}:${String(seconds % 60).padStart(2, "0")}`;
 }
 
-function RuntimeView({ host, t, locale, runtime, activity, onRetry, onRestart, onExitFailure, onRuntimeAction, providerLogin, sshHostKey, onConfirmHostKey, onCancelHostKey, onProviderInput, onProviderClose, onProviderRestart, onRecreatePodmanMachine, runtimeLogPath, onOpenRuntimeLog }: Pick<OnboardingFlowProps, "runtime" | "activity" | "onRetry" | "onRestart" | "onExitFailure" | "onRuntimeAction" | "providerLogin" | "sshHostKey" | "onConfirmHostKey" | "onCancelHostKey" | "onProviderInput" | "onProviderClose" | "onProviderRestart" | "onRecreatePodmanMachine" | "runtimeLogPath" | "onOpenRuntimeLog"> & { host: ExecutionHost; t: OnboardingCopy; locale: string }) {
+function RuntimeView({ host, platform, t, locale, runtime, activity, onRetry, onRestart, onExitFailure, onRuntimeAction, providerLogin, sshHostKey, onConfirmHostKey, onCancelHostKey, onProviderInput, onProviderClose, onProviderRestart, onRecreatePodmanMachine, onFreeDiskSpace, runtimeLogPath, onOpenRuntimeLog }: Pick<OnboardingFlowProps, "platform" | "runtime" | "activity" | "onRetry" | "onRestart" | "onExitFailure" | "onRuntimeAction" | "providerLogin" | "sshHostKey" | "onConfirmHostKey" | "onCancelHostKey" | "onProviderInput" | "onProviderClose" | "onProviderRestart" | "onRecreatePodmanMachine" | "onFreeDiskSpace" | "runtimeLogPath" | "onOpenRuntimeLog"> & { host: ExecutionHost; t: OnboardingCopy; locale: string }) {
   const [pending, setPending] = useState(false);
   const [confirmingRecreate, setConfirmingRecreate] = useState(false);
+  const [confirmingFreeSpace, setConfirmingFreeSpace] = useState(false);
+  const [freeSpaceResult, setFreeSpaceResult] = useState<DescribedError | null>(null);
   const [actionFailed, setActionFailed] = useState(false);
   const [now, setNow] = useState(() => Date.now());
   const pendingRef = useRef(false);
@@ -100,6 +103,8 @@ function RuntimeView({ host, t, locale, runtime, activity, onRetry, onRestart, o
     setPending(false);
     setActionFailed(false);
     setConfirmingRecreate(false);
+    setConfirmingFreeSpace(false);
+    setFreeSpaceResult(null);
   }, [runtime.status, "stage" in runtime ? runtime.stage : "ready"]);
 
   useEffect(() => {
@@ -201,6 +206,27 @@ function RuntimeView({ host, t, locale, runtime, activity, onRetry, onRestart, o
   const recreatePodmanMachine = failed && runtime.code === "podman_machine_mounts_home" && host.kind === "local"
     ? onRecreatePodmanMachine
     : undefined;
+  // «Free up space» on a full disk: only after a confirmation, never on
+  // Windows' own runtime (jht.ps1 has no cleaning command yet).
+  const freeDiskSpace = failed && runtime.code === "disk_low" && !(platform === "windows" && host.kind === "local")
+    ? onFreeDiskSpace
+    : undefined;
+  const freeSpaceConfirm = describeError(
+    platform === "macos" && host.kind === "local" ? "clean_images_confirm_vm" : "clean_images_confirm", { locale });
+  async function freeSpace() {
+    if (!freeDiskSpace || pendingRef.current) return;
+    pendingRef.current = true;
+    setPending(true); setConfirmingFreeSpace(false); setFreeSpaceResult(null);
+    try {
+      const { code, bytes } = cleanImagesResult(await freeDiskSpace());
+      setFreeSpaceResult(describeError(code, { locale, bytes }));
+    } catch (error) {
+      setFreeSpaceResult(describeError(errorCodeOf(error), { locale, fallback: "clean_images_failed" }));
+    } finally {
+      pendingRef.current = false;
+      setPending(false);
+    }
+  }
   const action = failed
     ? onRetry
     : runtime.stage === "ssh-host-key" ? onConfirmHostKey : () => onRuntimeAction(runtime.stage as "provider-login" | "team-start" | "assistant");
@@ -304,6 +330,12 @@ function RuntimeView({ host, t, locale, runtime, activity, onRetry, onRestart, o
               <div className="onboarding-provider-console__heading"><div><strong>{t.recreateTitle}</strong><small>{t.recreateText}</small><small>{recreateConfirm.text}</small><small>{recreateConfirm.action}</small></div></div>
             </section>
           )}
+          {freeDiskSpace && confirmingFreeSpace && (
+            <section className="onboarding-provider-console" aria-label={t.freeSpaceAria}>
+              <div className="onboarding-provider-console__heading"><div><strong>{t.freeSpaceTitle}</strong><small>{freeSpaceConfirm.text}</small><small>{freeSpaceConfirm.action}</small></div></div>
+            </section>
+          )}
+          {freeSpaceResult && <p className="onboarding-free-space" role="status">{freeSpaceResult.text} {freeSpaceResult.action}</p>}
           {actionFailed && <p className="onboarding-error" role="alert">{t.actionFailed}</p>}
           {failed && runtime.retryable === false && !runtime.action && runtime.code !== "container_version_incompatible" && <p className="onboarding-error">{t.fixData}</p>}
           <div className="onboarding-runtime-actions">
@@ -328,6 +360,19 @@ function RuntimeView({ host, t, locale, runtime, activity, onRetry, onRestart, o
               </button>
               </>
             )}
+            {freeDiskSpace && !confirmingFreeSpace && (
+              <button className="onboarding-secondary" type="button" onClick={() => setConfirmingFreeSpace(true)} disabled={pending}>
+                {pending ? t.freeSpacing : t.freeSpace}
+              </button>
+            )}
+            {freeDiskSpace && confirmingFreeSpace && (
+              <>
+              <button className="onboarding-secondary" type="button" onClick={() => setConfirmingFreeSpace(false)} disabled={pending}>{t.cancel}</button>
+              <button className="onboarding-primary" type="button" onClick={() => void freeSpace()} disabled={pending}>
+                {t.freeSpaceYes}<span aria-hidden="true">→</span>
+              </button>
+              </>
+            )}
             {((failed && runtime.retryable !== false) || actionRequired) && (
               <>
               {runtime.stage === "ssh-host-key" && !failed && <button className="onboarding-secondary" type="button" onClick={onCancelHostKey} disabled={pending}>{t.cancel}</button>}
@@ -343,7 +388,7 @@ function RuntimeView({ host, t, locale, runtime, activity, onRetry, onRestart, o
   );
 }
 
-export function OnboardingFlow({ account, platform, runtime, activity, onSubmit, onConnectExistingTeam, onRetry, onRestart, onExitFailure, onRuntimeAction, providerLogin, sshHostKey, onConfirmHostKey, onCancelHostKey, onProviderInput, onProviderClose, onProviderRestart, onRecreatePodmanMachine, runtimeLogPath, onOpenRuntimeLog, previousLocalData = false, locale: localeOverride }: OnboardingFlowProps) {
+export function OnboardingFlow({ account, platform, runtime, activity, onSubmit, onConnectExistingTeam, onRetry, onRestart, onExitFailure, onRuntimeAction, providerLogin, sshHostKey, onConfirmHostKey, onCancelHostKey, onProviderInput, onProviderClose, onProviderRestart, onRecreatePodmanMachine, onFreeDiskSpace, runtimeLogPath, onOpenRuntimeLog, previousLocalData = false, locale: localeOverride }: OnboardingFlowProps) {
   const locale = localeOverride ?? appLocale();
   const t = ONBOARDING_TEXT[locale];
   const providerChoices = providers(t);
@@ -378,7 +423,7 @@ export function OnboardingFlow({ account, platform, runtime, activity, onSubmit,
     window.scrollTo({ top: 0, left: 0, behavior: "instant" });
   }, [step, assistanceOpen]);
 
-  if (runtime.status !== "collecting") return <RuntimeView host={host} t={t} locale={locale} runtime={runtime} activity={activity} onRetry={onRetry} onRestart={onRestart} onExitFailure={exitFailure} onRuntimeAction={onRuntimeAction} providerLogin={providerLogin} sshHostKey={sshHostKey} onConfirmHostKey={onConfirmHostKey} onCancelHostKey={onCancelHostKey} onProviderInput={onProviderInput} onProviderClose={onProviderClose} onProviderRestart={onProviderRestart} onRecreatePodmanMachine={onRecreatePodmanMachine} runtimeLogPath={runtimeLogPath} onOpenRuntimeLog={onOpenRuntimeLog} />;
+  if (runtime.status !== "collecting") return <RuntimeView host={host} platform={platform} t={t} locale={locale} runtime={runtime} activity={activity} onRetry={onRetry} onRestart={onRestart} onExitFailure={exitFailure} onRuntimeAction={onRuntimeAction} providerLogin={providerLogin} sshHostKey={sshHostKey} onConfirmHostKey={onConfirmHostKey} onCancelHostKey={onCancelHostKey} onProviderInput={onProviderInput} onProviderClose={onProviderClose} onProviderRestart={onProviderRestart} onRecreatePodmanMachine={onRecreatePodmanMachine} onFreeDiskSpace={onFreeDiskSpace} runtimeLogPath={runtimeLogPath} onOpenRuntimeLog={onOpenRuntimeLog} />;
 
   if (assistanceOpen) return <main className="onboarding-shell" ref={shellRef} lang={locale}>
     <h1 ref={headingRef} tabIndex={-1}>{t.firstSetupTitle}</h1>

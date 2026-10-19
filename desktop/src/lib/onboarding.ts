@@ -1,3 +1,4 @@
+import type { CleanImagesOutcome } from "./clean-images";
 import type { Locale } from "@/i18n/config";
 import { stateText } from "./onboarding-state.i18n";
 import type { SupabaseClient, User } from "@supabase/supabase-js";
@@ -177,6 +178,11 @@ export interface OnboardingFlowProps {
    * `podman_machine_mounts_home` error, after the person confirms it.
    */
   onRecreatePodmanMachine?: () => Promise<void>;
+  /**
+   * «Free up space» on the disk_low error, after the person confirms it:
+   * `jht clean-images --json` on the team's host (lib/clean-images.ts).
+   */
+  onFreeDiskSpace?: () => Promise<CleanImagesOutcome>;
   /**
    * Where the local runtime's log is (lib/runtime-log.ts), shown with a button
    * that opens it when a local setup step fails.

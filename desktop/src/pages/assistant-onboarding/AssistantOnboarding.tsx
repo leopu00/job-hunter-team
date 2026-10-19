@@ -9,7 +9,8 @@ import type {
   AssistantOnboardingStep,
 } from "./contract";
 import { INITIAL_ASSISTANT_ONBOARDING_STATE } from "./contract";
-import { PROFILE_OVERVIEW_COPY } from "./AssistantOnboarding.i18n";
+import { DICTATION_LOCALE } from "../messages/direct-chat.i18n";
+import { FIRST_MESSAGE_LABEL, FIRST_MESSAGE_NOTE, FIRST_MESSAGE_PLACEHOLDER, PROFILE_OVERVIEW_COPY } from "./AssistantOnboarding.i18n";
 import { VoiceInputControl } from "../../voice-input";
 import "./assistant-onboarding.css";
 
@@ -255,7 +256,7 @@ export default function AssistantOnboarding({
               <p className="assistant-onboarding__message" aria-live="polite">{guideMessage(guide, locale)}</p>
               {state.step === 4 && (
                 <div className="assistant-onboarding__composer">
-                  <label htmlFor="assistant-first-message">Il tuo primo messaggio all’Assistente</label>
+                  <label htmlFor="assistant-first-message">{FIRST_MESSAGE_LABEL[locale]}</label>
                   <div className="assistant-onboarding__composer-row">
                     <textarea
                       id="assistant-first-message"
@@ -263,18 +264,18 @@ export default function AssistantOnboarding({
                       value={firstMessage}
                       onChange={(event) => setFirstMessage(event.target.value)}
                       disabled={completing || completionVerified}
-                      placeholder="Scrivi o detta da dove vuoi cominciare…"
+                      placeholder={FIRST_MESSAGE_PLACEHOLDER[locale]}
                     />
                     <VoiceInputControl
                       value={firstMessage}
                       onChange={setFirstMessage}
-                      locale="it-IT"
+                      locale={DICTATION_LOCALE[locale]}
                       bridge={voiceInputBridge}
                       disabled={completing || completionVerified}
                       className="assistant-onboarding__voice"
                     />
                   </div>
-                  <small>La trascrizione resta modificabile e sarà consegnata solo quando confermi.</small>
+                  <small>{FIRST_MESSAGE_NOTE[locale]}</small>
                 </div>
               )}
               {completionError && (

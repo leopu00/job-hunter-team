@@ -14,6 +14,8 @@ import { loadAgentStatuses } from "../../office/status";
 import { appLocale } from "../../lib/app-locale";
 import { useExistingTeamReadOnly } from "../../lib/existing-team-readonly";
 import { EXISTING_TEAM_READONLY_TEXT } from "../../lib/existing-team-readonly.i18n";
+import { officeText } from "../../office/office.i18n";
+import { PAGE_STATES_TEXT } from "../../lib/page-states.i18n";
 import { readTeamStatus } from "../../lib/existing-team-status";
 import { officeFromTeamProbe } from "../../office/readonly";
 import { readVpsPiles } from "../../office/panel/vps-panels";
@@ -69,10 +71,10 @@ export function OfficeLoader({ source }: { source: OfficeSource }) {
     };
   }, []);
 
-  if (load.state === "loading") return <DashboardSkeleton label="Caricamento ufficio" />;
-  if (load.state === "no-assets") return <Notice>L'arte dell'ufficio non è ancora nell'app.</Notice>;
+  if (load.state === "loading") return <DashboardSkeleton label={PAGE_STATES_TEXT[appLocale()].loadingOffice} />;
+  if (load.state === "no-assets") return <Notice>{PAGE_STATES_TEXT[appLocale()].officeNoAssets}</Notice>;
   if (load.state === "failed")
-    return <Notice alert>Non riesco a caricare l'ufficio. Premi «Aggiorna» o riapri la pagina.</Notice>;
+    return <Notice alert>{PAGE_STATES_TEXT[appLocale()].officeFailed}</Notice>;
   return <Office ready={load.ready} source={source} />;
 }
 
@@ -139,7 +141,7 @@ function Office({ ready, source }: { ready: Ready; source: OfficeSource }) {
       })
       .catch((error: unknown) => {
         console.error("[office] scene failed:", error);
-        setStatus("La scena non parte: questa finestra non ha WebGL.");
+        setStatus(officeText().noWebGl);
       });
     return () => {
       gone = true;
@@ -178,13 +180,13 @@ function Office({ ready, source }: { ready: Ready; source: OfficeSource }) {
       showStatuses(next.teamOnline ? await statuses : null);
     } catch {
       showStatuses(null);
-      setStatus("Non riesco a leggere il cloud: l'ufficio resta com'era.");
+      setStatus(officeText().readFailed);
     }
   };
   useEffect(() => {
     if (source !== "cloud") return;
     if (!parts.data) {
-      setStatus("I dati dell'ufficio non sono ancora collegati: nessun agente in scena.");
+      setStatus(officeText().notWired);
       return;
     }
     const motion = watchReducedMotion((r) => {
@@ -248,7 +250,7 @@ function Office({ ready, source }: { ready: Ready; source: OfficeSource }) {
   useEffect(() => {
     if (source !== "team-probe") return;
     if (!parts.data) {
-      setStatus("I dati dell'ufficio non sono ancora collegati: nessun agente in scena.");
+      setStatus(officeText().notWired);
       return;
     }
     void readProbe();
@@ -289,44 +291,48 @@ function Office({ ready, source }: { ready: Ready; source: OfficeSource }) {
   const tag = hover ?? keyFocus;
 
   return (
-    // the shell gives the office the whole window under the navbar (Route.fullBleed)
-    <div className="relative h-full" data-testid="office-page">
-      <div ref={host} className="absolute inset-0" data-testid="office-canvas" />
+    // the shell gives the office the whole window under the navbar (Route.fullBleed);
+    // the status line sits above the scene, never over it
+    <div className="flex h-full flex-col" data-testid="office-page">
       {status && (
         <p
           role={statusIsAlert ? "alert" : "status"}
-          className="absolute left-4 top-4 m-0 rounded border border-[var(--color-border)] bg-[var(--color-panel)] px-3 py-1.5 text-[11px] text-[var(--color-muted)]"
+          className="m-0 shrink-0 border-b border-[var(--color-border)] px-4 py-1.5 text-[11px] text-[var(--color-muted)]"
         >
           {status}
         </p>
       )}
-      <OfficeKeyboard
-        targets={targets}
-        label={label}
-        onFocusTarget={focusTarget}
-        onOpen={(t, button) => openPanel(t, button)}
-      />
-      {tag && !panel && <OfficeTooltip target={tag.target} at={tag.at} layout={assets.layout} snapshot={snapshot} statuses={statuses} />}
-      {panel && (
-        <OfficePanel
-          target={panel}
-          layout={assets.layout}
-          snapshot={snapshot}
-          statuses={statuses}
-          client={source === "cloud" ? supabase : NO_CLOUD}
-          source={source === "cloud" ? "cloud" : "vps"}
-          onClose={() => setPanel(null)}
-          onOpen={setPanel}
-          onNavigate={navigate}
+      <div className="relative min-h-0 flex-1" data-testid="office-stage">
+        <div ref={host} className="absolute inset-0" data-testid="office-canvas" />
+        <OfficeKeyboard
+          targets={targets}
+          label={label}
+          onFocusTarget={focusTarget}
+          onOpen={(t, button) => openPanel(t, button)}
         />
-      )}
+        {tag && !panel && <OfficeTooltip target={tag.target} at={tag.at} layout={assets.layout} snapshot={snapshot} statuses={statuses} />}
+        {panel && (
+          <OfficePanel
+            target={panel}
+            layout={assets.layout}
+            snapshot={snapshot}
+            statuses={statuses}
+            client={source === "cloud" ? supabase : NO_CLOUD}
+            source={source === "cloud" ? "cloud" : "vps"}
+            onClose={() => setPanel(null)}
+            onOpen={setPanel}
+            onNavigate={navigate}
+          />
+        )}
+      </div>
     </div>
   );
 }
 
 /** A team that is off: the core seats are empty, the agents of the last 24 hours stay (office/data/load.ts). */
 function teamOffMessage(agents: number): string {
-  return agents === 0 ? "Il team è spento: l'ufficio è vuoto." : "Il team è spento: restano gli agenti che hanno lavorato nelle ultime 24 ore.";
+  const t = officeText();
+  return agents === 0 ? t.teamOffEmpty : t.teamOffRecent;
 }
 
 /** What the panels get over an existing team's VPS: the cloud is never asked, and a use of it is a failure. */

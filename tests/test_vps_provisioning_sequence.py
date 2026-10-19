@@ -739,6 +739,40 @@ def test_a_second_install_without_the_option_keeps_podman(server, source):
     assert "docker-shim=" in (runtime / ".runtime-integrity").read_text()
 
 
+def test_a_server_already_on_docker_asked_for_podman_stops_with_its_own_code_and_changes_nothing(server, source):
+    # A VPS installed before Podman: the team runs on Docker (here the fake one).
+    first = install(server, source)
+    assert first.returncode == 0, first.stderr.decode()
+    runtime = server.home / ".local/share/job-hunter-team/host-runtime"
+    # the Docker path on Linux writes no marker: the completed install is what says Docker
+    assert not (runtime / "container-runtime").exists() and (runtime / ".runtime-integrity").is_file()
+    before = snapshot_tree(server.home)
+    calls_before = len(server.calls())
+    # The app installs again, as it does now on every VPS: --runtime podman.
+    with_podman(server)
+    done = install_podman(server, source)
+    assert done.returncode == rust_exit(source, "REMOTE_INSTALL_RUNTIME_CHANGE_EXIT") == 85, done.stderr.decode()
+    assert b"JHT_ERROR runtime_change_requires_migration\n" in done.stderr
+    # Refused before anything: the Docker team, its files and its token are as they were.
+    assert snapshot_tree(server.home) == before
+    assert not [c for c in server.calls()[calls_before:] if c.startswith(("apt-get", "docker", "podman", "sudo"))]
+
+
+def test_a_server_on_docker_installed_again_without_the_option_stays_on_docker(server, source):
+    assert install(server, source).returncode == 0
+    calls_before = len(server.calls())
+    again = install(server, source)
+    assert again.returncode == 0, again.stderr.decode()
+    runtime = server.home / ".local/share/job-hunter-team/host-runtime"
+    assert not (runtime / "container-runtime").exists()
+    assert "docker-shim=" not in (runtime / ".runtime-integrity").read_text()
+    assert not [c for c in server.calls()[calls_before:] if c.startswith("podman")]
+
+
+def rust_exit(source: str, name: str) -> int:
+    return int(re.search(rf"const {name}: i32 = (\d+);", source).group(1))
+
+
 def test_a_range_is_chosen_after_the_one_readable_file_when_the_other_is_missing(server, source):
     with_podman(server, bare=True)
     (server.etc / "subuid").unlink()  # /etc/subuid absent, /etc/subgid there with someone's range
