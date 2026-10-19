@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { appLocale } from "../lib/app-locale";
+import { SHELL_TEXT } from "./shell.i18n";
 import { useRefresh } from "./router";
 
 /**
@@ -53,7 +55,7 @@ export default function ServerPage({ render, fallback = null, failure, runKey }:
     return (
       failure ?? (
         <p role="alert" className="max-w-6xl mx-auto px-5 pt-8 text-[12px]" style={{ color: "var(--color-red)" }}>
-          Non riesco a leggere questa pagina. Controlla la connessione e premi «Aggiorna».
+          {SHELL_TEXT[appLocale()].pageReadFailed(SHELL_TEXT[appLocale()].refresh)}
         </p>
       )
     );

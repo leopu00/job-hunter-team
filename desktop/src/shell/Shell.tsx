@@ -17,6 +17,7 @@ import { EXISTING_TEAM_READONLY_TEXT } from "../lib/existing-team-readonly.i18n"
 import { localUninstallAvailable } from "../lib/local-uninstall";
 import { COMPUTER_TEXT } from "../pages/computer/computer.i18n";
 import { desktopLinks } from "./desktop-links";
+import { SHELL_TEXT } from "./shell.i18n";
 import { MailRotationBanner } from "./MailRotationBanner";
 import { matchRoute, navigate, refresh, useLocation } from "./router";
 import { HOME, READ_ONLY_HOME, READ_ONLY_NAV, READ_ONLY_ROUTES, ROUTES } from "./routes";
@@ -72,6 +73,7 @@ function Navbar({
   readOnly?: boolean;
 }) {
   const readOnlyText = EXISTING_TEAM_READONLY_TEXT[appLocale()];
+  const shellText = SHELL_TEXT[appLocale()];
   const { t: dashboardT } = useDashboardT();
   const { path } = useLocation();
   const [signingOut, setSigningOut] = useState(false);
@@ -94,7 +96,7 @@ function Navbar({
   return (
     <header className="sticky top-0 z-30 border-b border-[var(--color-border)] bg-[var(--color-panel)]">
       <nav
-        aria-label="Navigazione app"
+        aria-label={shellText.navAria}
         className="max-w-full min-w-0 overflow-hidden px-2 sm:px-4 lg:px-6 h-14 flex items-center gap-2 sm:gap-4"
       >
         <div className="flex items-center flex-shrink-0">
@@ -135,16 +137,16 @@ function Navbar({
         </div>
         <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0" data-testid="navbar-actions">
           <button type="button" className={button} onClick={refresh}>
-            Aggiorna
+            {shellText.refresh}
           </button>
-          {signOutFailed && <span role="alert" className="sr-only">Disconnessione non riuscita. Il runtime resta bloccato su questo account.</span>}
+          {signOutFailed && <span role="alert" className="sr-only">{shellText.signOutFailed}</span>}
           {readOnly && onCloseReadOnly && (
             <button type="button" className={button} onClick={onCloseReadOnly}>
               {readOnlyText.back}
             </button>
           )}
           <button type="button" className={button} onClick={() => void logout()} disabled={signingOut}>
-            {signingOut ? "Uscita…" : "Esci"}
+            {signingOut ? shellText.signingOut : shellText.signOut}
           </button>
         </div>
       </nav>

@@ -44,6 +44,23 @@ afterEach(() => {
   document.documentElement.removeAttribute("data-theme");
 });
 
+describe("Shell navbar language", () => {
+  afterEach(() => localStorage.removeItem("jht-lang"));
+
+  it("names its own buttons in the app's language, not always in Italian", async () => {
+    localStorage.setItem("jht-lang", "en");
+    navigate("/", { replace: true });
+    render(<Shell />);
+    expect(await screen.findByRole("heading", { name: "Dashboard" })).toBeInTheDocument();
+    expect(screen.getByRole("navigation", { name: "App navigation" })).toBeInTheDocument();
+    const actions = screen.getByTestId("navbar-actions");
+    expect(within(actions).getByRole("button", { name: "Refresh" })).toBeInTheDocument();
+    expect(within(actions).getByRole("button", { name: "Sign out" })).toBeInTheDocument();
+    expect(within(actions).queryByRole("button", { name: "Aggiorna" })).not.toBeInTheDocument();
+    expect(within(actions).queryByRole("button", { name: "Esci" })).not.toBeInTheDocument();
+  });
+});
+
 describe("Shell", () => {
   it("lands on the dashboard when the hash says nothing", async () => {
     navigate("/", { replace: true });
