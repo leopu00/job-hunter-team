@@ -486,6 +486,64 @@ describe("describeError", () => {
   });
 });
 
+describe("«Free up space» on a full disk (clean_images_*)", () => {
+  const CODES = Object.keys(ERROR_CATALOG).filter((code) => code.startsWith("clean_images_"));
+  const BYTES = 3_435_973_837; // 3.2 GB
+
+  it("has the confirmation, every outcome and every failure", () => {
+    expect(CODES.sort()).toEqual([
+      "clean_images_confirm", "clean_images_confirm_vm", "clean_images_container_off",
+      "clean_images_dates_unreadable", "clean_images_engine_off", "clean_images_engine_unreadable",
+      "clean_images_failed", "clean_images_freed", "clean_images_freed_vm", "clean_images_in_use",
+      "clean_images_kept", "clean_images_kept_by_choice", "clean_images_nothing", "clean_images_refused",
+      "clean_images_unsupported", "clean_images_upgrade",
+    ]);
+  });
+
+  const UP_TO: Record<string, RegExp> = {
+    it: /fino a circa/, en: /up to about/, de: /bis zu etwa/, es: /hasta unos/,
+    fr: /jusqu’à environ/, hu: /legfeljebb nagyjából/, pt: /até cerca de/,
+  };
+  const CONTAINER_ENGINE: Record<string, RegExp> = {
+    it: /motore dei container/, en: /container engine/, de: /Container-Engine/, es: /motor de contenedores/,
+    fr: /moteur de conteneurs/, hu: /konténermotor/, pt: /motor de contentores/,
+  };
+
+  it.each(ERROR_LOCALES)("%s: says each of them in that language, with the freed size", (locale) => {
+    for (const code of CODES) {
+      const described = describeError(code, { locale, bytes: BYTES });
+      expect(described.known, `${code}/${locale}`).toBe(true);
+      expect(`${described.text} ${described.action}`, `${code}/${locale}`).not.toMatch(/[{}]/);
+      if (locale !== "en") expect(described.text, `${code}/${locale}`).not.toBe(ERROR_CATALOG[code].text.en);
+    }
+    for (const code of ["clean_images_freed", "clean_images_freed_vm"]) {
+      const { text } = describeError(code, { locale, bytes: BYTES });
+      expect(text, `${code}/${locale}`).toMatch(/3[.,]2 GB/);
+      // The size is the images' NOMINAL size and layers shared between versions are freed only
+      // in part: the sentence promises "up to", never "freed {size}".
+      expect(text, `${code}/${locale}`).toMatch(UP_TO[locale]);
+    }
+    // On the Mac: the space is the virtual machine's, the Mac's disk is promised nothing, and
+    // the engine is not named: Colima (the default), Podman and Docker Desktop all run in one.
+    for (const code of ["clean_images_freed_vm", "clean_images_confirm_vm"]) {
+      const { text, action } = describeError(code, { locale, bytes: BYTES });
+      expect(text, `${code}/${locale}`).toMatch(CONTAINER_ENGINE[locale]);
+      expect(text, `${code}/${locale}`).not.toMatch(/Podman|Colima|Docker Desktop/);
+      expect(action, `${code}/${locale}`).toContain("Mac");
+    }
+    expect(describeError("clean_images_freed", { locale, bytes: BYTES }).text).not.toMatch(/Podman|Colima|Docker Desktop/);
+  });
+
+  it("writes small sizes in MB and never shows {size} without a size", () => {
+    expect(describeError("clean_images_freed", { locale: "en", bytes: 524_288_000 }).text).toContain("about 500 MB.");
+    for (const bytes of [undefined, null, -1, 1.5, Number.NaN]) {
+      const described = describeError("clean_images_freed", { bytes });
+      expect(described.known).toBe(false);
+      expect(described.text).toBe(ERROR_CATALOG.unknown.text.it);
+    }
+  });
+});
+
 describe("podman_other_machine_running", () => {
   // The Retry button, as each language labels it.
   const RETRY = { it: "Riprova", en: "Try again", de: "Erneut versuchen", es: "Reintentar", fr: "Réessayer", hu: "Újra", pt: "Tentar novamente" };
