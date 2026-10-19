@@ -84,6 +84,14 @@ type Props = {
 // Dimensione uniforme delle 4 card d'angolo (Location, Score, Donut,
 // Remote). Misura tarata sul widget donut (grafico + legenda + labels)
 // così tutte e quattro hanno la stessa larghezza/altezza.
+// Dissolvenza in fondo a una lista che scorre dentro una card (vedi uso).
+const LIST_FADE_PX = 28;
+const LIST_FADE_STYLE = {
+  paddingBottom: LIST_FADE_PX,
+  maskImage: `linear-gradient(to bottom, #000 calc(100% - ${LIST_FADE_PX}px), transparent)`,
+  WebkitMaskImage: `linear-gradient(to bottom, #000 calc(100% - ${LIST_FADE_PX}px), transparent)`,
+} as const;
+
 const CARD_W = CORNER_CARD_W;
 const CARD_H = 250;
 // Altezza header-titolo e padding del corpo (per calcolare l'area utile
@@ -723,6 +731,10 @@ export default function MapCharts({
                 minHeight: 0,
                 // Niente scroll-chaining alla pagina (mappa) a fine lista.
                 overscrollBehavior: "contain",
+                // La riga in fondo sfuma invece di essere tagliata a metà:
+                // dice che la lista continua. Il padding lascia l'ultima
+                // riga, a fine scorrimento, sopra la dissolvenza.
+                ...LIST_FADE_STYLE,
               }}
             >
               {filteredPositions.length === 0 && (
