@@ -17,7 +17,7 @@
 use crate::{
     account_scope::{AccountScope, AccountScopeState},
     direct_chat,
-    existing_team_runtime::{command, connection_key, selected, ActivatedTarget, RuntimeTarget},
+    existing_team_runtime::{command, connection_key, full_link_granted, selected, ActivatedTarget, RuntimeTarget},
     runtime_host::{run_ssh_command, ProcessResult},
 };
 use serde::Deserialize;
@@ -252,11 +252,14 @@ pub(crate) fn reply(result: Result<ProcessResult, &'static str>) -> Value {
 /// THE one place this command asks whether the team on the VPS is connected in
 /// full in this session of the app. The shared state of the full connection is
 /// written only when «Connect and confirm» succeeds, bound to the account scope and
-/// the candidate (the connection key), for this session only. Until it is wired
-/// here (`existing_team_runtime::full_link_granted`), it fails closed: nothing is
-/// written on a VPS.
-fn full_connection(_scope: &AccountScope, _target: &ActivatedTarget) -> Result<(), &'static str> {
-    Err("position_write_read_only")
+/// the candidate (the connection key), for this session only: the read-only view,
+/// a reopen and a restart of the app never hold it, so they stay read-only.
+fn full_connection(scope: &AccountScope, target: &ActivatedTarget) -> Result<(), &'static str> {
+    if full_link_granted(scope, target) {
+        Ok(())
+    } else {
+        Err("position_write_read_only")
+    }
 }
 
 /// The whole decision, with the app-bound steps injected (the order the tests drive).
@@ -387,10 +390,38 @@ mod tests {
         let ran = Cell::new(false);
         assert_eq!(write(feedback(), Err("position_write_read_only"), &ran)["error"], "position_write_read_only");
         assert!(!ran.get());
-        // and today, until the shared full-connection state is wired, it is always refused
-        let source = include_str!("existing_team_judgement.rs");
-        let gate = source.split("fn full_connection(").nth(1).unwrap().split("\n}\n").next().unwrap();
-        assert!(gate.contains("Err(\"position_write_read_only\")") && !gate.contains("Ok(())"));
+    }
+
+    #[test]
+    fn only_the_confirmed_team_of_this_run_may_write() {
+        use crate::existing_team_runtime::{grant_full_link, revoke_full_link, FULL_LINK_TEST_LOCK};
+        let _serial = FULL_LINK_TEST_LOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+        let (scope, other) = (AccountScope::synthetic(b"scope-one"), AccountScope::synthetic(b"scope-two"));
+        let found = ActivatedTarget::synthetic_for_tests();
+        let attempt = |scope: &AccountScope| {
+            let ran = Cell::new(false);
+            let out = position_write_with(feedback(), true, || Ok(KEY.into()), |_| full_connection(scope, &found), |_| {
+                ran.set(true);
+                Ok(ProcessResult { code: 0, stdout: br#"{"ok":true,"op":"feedback","id":12}"#.to_vec() })
+            });
+            (out, ran.get())
+        };
+        // read-only view, reopen, restart: nothing granted, nothing reaches the VPS
+        revoke_full_link();
+        let (out, ran) = attempt(&scope);
+        assert_eq!(out["error"], "position_write_read_only");
+        assert!(!ran);
+        // «Conferma e collega» succeeded for this account and this candidate
+        grant_full_link(&scope, &found);
+        let (out, ran) = attempt(&scope);
+        assert_eq!(out["ok"], true);
+        assert!(ran);
+        // another account never writes with it
+        let (out, ran) = attempt(&other);
+        assert_eq!(out["error"], "position_write_read_only");
+        assert!(!ran);
+        revoke_full_link();
+        assert_eq!(attempt(&scope).0["error"], "position_write_read_only");
     }
 
     #[test]
