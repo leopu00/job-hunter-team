@@ -9,9 +9,10 @@
 //!   shows is no longer the one an action would reach (another VPS, a new
 //!   connection, back to this computer), the action is refused:
 //!   existing_team_runtime_target_changed.
-//! - A VPS team is controlled only on a full link («Conferma e collega» in
-//!   this run of the app, see vps_mode). The read-only view reads, and every
-//!   action is refused here, whatever the page sends: agent_control_read_only.
+//! - A VPS team is controlled only on the full link of that team («Conferma
+//!   e collega» in this run of the app, see vps_mode). The read-only view
+//!   reads, and every action is refused here, whatever the page sends:
+//!   agent_control_read_only.
 //! - Only the main window may call this command (agent_control_window): the
 //!   other windows (the LinkedIn login view, the live screen) load content
 //!   the app does not own.
@@ -27,7 +28,10 @@ use crate::{
     account_scope::{AccountScope, AccountScopeState},
     direct_chat,
     existing_team_agents::{shape_reply, AgentsRequest},
-    existing_team_runtime::{command, hex_encode, python_command, selected, RuntimeTarget},
+    existing_team_runtime::{
+        command, connection_key, full_link_granted, hex_encode, own_vps_at, python_command, root, selected,
+        ActivatedTarget, RuntimeTarget,
+    },
     runtime_host::{run_ssh_command, ExecutionHost, ProcessResult, ValidatedHost},
 };
 use serde::Deserialize;
@@ -76,16 +80,20 @@ const RESULTS: &[&str] = &[
 pub(crate) enum VpsMode {
     ReadOnly,
     /// Granted by the full link only: see vps_mode.
-    #[allow(dead_code)]
     Full,
 }
 
-/// The one place that says whether the linked VPS may be controlled. The
-/// «full link» state belongs to the existing-team connection (granted by
-/// «Conferma e collega», revoked by a read-only opening); until this module
-/// reads it, it fails closed: a VPS is read, never controlled.
-pub(crate) fn vps_mode() -> VpsMode {
-    VpsMode::ReadOnly
+/// The one place that says whether the linked VPS may be controlled: only the
+/// team the person confirmed with «Conferma e collega» in this run of the app
+/// (the existing-team connection's full link, tied to its connection key). A
+/// read-only opening, a reopening at launch or a restart leave it without:
+/// read only.
+pub(crate) fn vps_mode(scope: &AccountScope, target: &ActivatedTarget) -> VpsMode {
+    if full_link_granted(scope, target) {
+        VpsMode::Full
+    } else {
+        VpsMode::ReadOnly
+    }
 }
 
 // ── the request ─────────────────────────────────────────────────────────────
@@ -173,8 +181,32 @@ impl ControlRequest {
 
 // ── where the team is ───────────────────────────────────────────────────────
 enum Destination {
+    /// An existing team, linked: its pinned container.
     Vps { validated: ValidatedHost, runtime: RuntimeTarget, mode: VpsMode, label: String },
+    /// The VPS the app set up itself (no existing team registered): its host's jht wrapper.
+    OwnVps { validated: ValidatedHost, label: String },
     Local { wrapper: PathBuf },
+}
+
+/// The jht wrapper of the person's own VPS, as the setup installed it, and only when it carries
+/// the protocol line of what is asked (2 otherwise: «update the team»).
+fn own_vps_wrapper(protocol: &str, operation: &str) -> String {
+    format!(
+        r#"set -eu; JHT_BIN="$(command -v jht 2>/dev/null || true)"; [ -n "$JHT_BIN" ] || JHT_BIN="$HOME/.local/bin/jht"; [ -f "$JHT_BIN" ] && [ -x "$JHT_BIN" ] && [ ! -L "$JHT_BIN" ] || exit 2; grep -Fqx '{protocol}' "$JHT_BIN" || exit 2; exec "$JHT_BIN" {operation}"#
+    )
+}
+
+/// The reads on the person's own VPS: the app's own copy of the script on the wrapper's
+/// python channel (the chat's), which the wrapper of today already has.
+pub(crate) fn own_vps_read_command() -> String {
+    own_vps_wrapper("JHT_DESKTOP_CHAT_PROTOCOL=1", "desktop-chat python")
+}
+
+/// An action on the person's own VPS: the wrapper's agent-control branch, which never starts
+/// the container.
+pub(crate) fn own_vps_action_command(argv: &[String]) -> Result<String, &'static str> {
+    let words = argv.iter().map(|word| quoted(word)).collect::<Option<Vec<_>>>().ok_or("agent_control_invalid")?;
+    Ok(own_vps_wrapper("JHT_AGENT_CONTROL_PROTOCOL=1", &format!("agent-control {} </dev/null", words.join(" "))))
 }
 
 fn fingerprint(parts: &[&str]) -> String {
@@ -189,14 +221,20 @@ fn fingerprint(parts: &[&str]) -> String {
 fn destination(app: &tauri::AppHandle, scope: &AccountScope) -> Result<(Destination, String), &'static str> {
     // The team is where the app keeps it: a persisted VPS host, or this computer.
     if let Ok(host @ ExecutionHost::Vps { .. }) = direct_chat::load_persisted_host(app, scope) {
-        let mode = vps_mode();
+        // the host key is pinned, or nothing goes there
         let validated = crate::runtime_host::validate_host_for_scope(app, &host, scope)?;
-        let target = selected(app, scope, &host)?.ok_or("existing_team_runtime_required")?;
         let (address, user, port) = match &host {
             ExecutionHost::Vps { address, user, port, .. } => (address.clone(), user.clone(), port.to_string()),
             ExecutionHost::Local => return Err("existing_team_vps_required"),
         };
-        let print = fingerprint(&["vps", &address, &user, &port, &target.team_id, &target.runtime.container_id]);
+        if own_vps_at(&root(app)?, scope) {
+            // The VPS the app set up: the person's own team, controlled as a full link.
+            let print = fingerprint(&["own-vps", scope.digest(), &address, &user, &port]);
+            return Ok((Destination::OwnVps { validated, label: address }, print));
+        }
+        let target = selected(app, scope, &host)?.ok_or("existing_team_runtime_required")?;
+        let mode = vps_mode(scope, &target);
+        let print = fingerprint(&["vps", &connection_key(scope, &target), &address, &user, &port, &target.team_id, &target.runtime.container_id]);
         return Ok((Destination::Vps { validated, runtime: target.runtime, mode, label: address }, print));
     }
     crate::account_scope::validate_local_runtime(app, scope).map_err(|_| "agent_control_no_team")?;
@@ -253,6 +291,14 @@ fn run(destination: &Destination, request: &ControlRequest, argv: &[String]) -> 
                 run_ssh_command(validated, &python_command(runtime)?, Some(&input), timeout, None)
             } else {
                 run_ssh_command(validated, &vps_action_command(runtime, argv)?, None, timeout, None)
+            }
+        }
+        Destination::OwnVps { validated, .. } => {
+            if read {
+                let input = read_input(request).ok_or("agent_control_invalid")?;
+                run_ssh_command(validated, &own_vps_read_command(), Some(&input), timeout, None)
+            } else {
+                run_ssh_command(validated, &own_vps_action_command(argv)?, None, timeout, None)
             }
         }
         Destination::Local { wrapper } => {
@@ -357,6 +403,16 @@ pub(crate) fn answer(request: &ControlRequest, output: &ProcessResult, target: &
     }
 }
 
+/// How a destination may be controlled: an existing team by its link, the person's own VPS
+/// as a full link, this computer always (None).
+fn destination_mode(destination: &Destination) -> Option<VpsMode> {
+    match destination {
+        Destination::Vps { mode, .. } => Some(*mode),
+        Destination::OwnVps { .. } => Some(VpsMode::Full),
+        Destination::Local { .. } => None,
+    }
+}
+
 /// Why an action may not run on this destination: the read-only link refuses
 /// every action, and an action prepared on another target is refused. Reads
 /// pass.
@@ -387,15 +443,12 @@ pub(crate) fn control_for_scope(app: &tauri::AppHandle, scope: &AccountScope, re
         Ok(found) => found,
         Err(error) => return failure(error),
     };
-    let mode = match &destination {
-        Destination::Vps { mode, .. } => Some(*mode),
-        Destination::Local { .. } => None,
-    };
+    let mode = destination_mode(&destination);
     if let Some(error) = action_refusal(&request, mode, &print) {
         return failure(error);
     }
     let label = match &destination {
-        Destination::Vps { label, .. } => Some(label.clone()),
+        Destination::Vps { label, .. } | Destination::OwnVps { label, .. } => Some(label.clone()),
         Destination::Local { .. } => None,
     };
     match run(&destination, &request, &argv) {
@@ -596,12 +649,85 @@ mod tests {
     }
 
     #[test]
-    fn until_the_full_link_is_read_a_vps_is_never_controlled() {
-        assert_eq!(vps_mode(), VpsMode::ReadOnly);
-        // a target names the VPS, the team and the container it was read from
-        let a = fingerprint(&["vps", "h", "u", "22", "team", "cid-1"]);
-        assert_ne!(a, fingerprint(&["vps", "h", "u", "22", "team", "cid-2"]));
-        assert_ne!(a, fingerprint(&["vps", "h2", "u", "22", "team", "cid-1"]));
+    fn a_vps_is_controlled_only_on_the_full_link_of_that_team() {
+        use crate::existing_team_runtime::{grant_full_link, revoke_full_link, FULL_LINK_TEST_LOCK};
+        let _serial = FULL_LINK_TEST_LOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+        let scope = AccountScope::synthetic(b"panel-scope");
+        let team = ActivatedTarget::synthetic_for_tests();
+        let stop = req(json!({"op":"stop","session":"SCOUT-1","target":"t","confirmed":true})).unwrap();
+        // without the grant (the read-only view, a reopening, a restart): read only
+        revoke_full_link();
+        assert_eq!(vps_mode(&scope, &team), VpsMode::ReadOnly);
+        assert_eq!(action_refusal(&stop, Some(vps_mode(&scope, &team)), "t"), Some("agent_control_read_only"));
+        // «Conferma e collega» on this team: it may be controlled
+        grant_full_link(&scope, &team);
+        assert_eq!(vps_mode(&scope, &team), VpsMode::Full);
+        assert_eq!(action_refusal(&stop, Some(vps_mode(&scope, &team)), "t"), None);
+        // the grant is that team's and that account's only
+        assert_eq!(vps_mode(&AccountScope::synthetic(b"other-scope"), &team), VpsMode::ReadOnly);
+        revoke_full_link();
+        assert_eq!(vps_mode(&scope, &team), VpsMode::ReadOnly);
+    }
+
+    fn validated_vps() -> ValidatedHost {
+        ValidatedHost::Vps {
+            address: "vps.example".into(),
+            user: "jht".into(),
+            port: 22,
+            key_path: "/k".into(),
+            known_hosts: "/kh".into(),
+        }
+    }
+
+    #[test]
+    fn the_own_vps_is_a_full_link_and_an_existing_team_follows_its_own() {
+        use crate::existing_team_runtime::{revoke_full_link, FULL_LINK_TEST_LOCK};
+        let _serial = FULL_LINK_TEST_LOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+        revoke_full_link();
+        let stop = req(json!({"op":"stop","session":"SCOUT-1","target":"t","confirmed":true})).unwrap();
+        // the VPS the app set up: actions pass
+        let own = Destination::OwnVps { validated: validated_vps(), label: "vps.example".into() };
+        assert_eq!(action_refusal(&stop, destination_mode(&own), "t"), None);
+        // an existing team opened read only (no full link): refused
+        let scope = AccountScope::synthetic(b"panel-scope-2");
+        let team = ActivatedTarget::synthetic_for_tests();
+        let existing = Destination::Vps {
+            validated: validated_vps(),
+            runtime: team.runtime.clone(),
+            mode: vps_mode(&scope, &team),
+            label: "vps.example".into(),
+        };
+        assert_eq!(action_refusal(&stop, destination_mode(&existing), "t"), Some("agent_control_read_only"));
+        // reads pass on both
+        let list = req(json!({"op":"list"})).unwrap();
+        assert_eq!(action_refusal(&list, destination_mode(&own), "x"), None);
+        assert_eq!(action_refusal(&list, destination_mode(&existing), "x"), None);
+    }
+
+    #[test]
+    fn the_own_vps_commands_go_through_its_wrapper_and_its_protocol_lines() {
+        let read = own_vps_read_command();
+        assert!(read.contains("grep -Fqx 'JHT_DESKTOP_CHAT_PROTOCOL=1' \"$JHT_BIN\" || exit 2"));
+        assert!(read.ends_with("exec \"$JHT_BIN\" desktop-chat python"));
+        let argv = req(json!({"op":"stop","session":"SCOUT-1","target":"t","confirmed":true})).unwrap().argv().unwrap();
+        let action = own_vps_action_command(&argv).unwrap();
+        assert!(action.contains("grep -Fqx 'JHT_AGENT_CONTROL_PROTOCOL=1' \"$JHT_BIN\" || exit 2"));
+        assert!(action.ends_with("exec \"$JHT_BIN\" agent-control 'stop' 'SCOUT-1' </dev/null"));
+        // an older wrapper is «update the team», never a start of the container
+        assert_eq!(code_of(2), "agent_control_unsupported");
+        assert!(own_vps_action_command(&["stop".into(), "SCOUT-1;id".into()]).is_err());
+        for command in [read, action] {
+            for word in ["ensure_up", "compose", " up", "start-container"] {
+                assert!(!command.contains(word), "{word}");
+            }
+        }
+    }
+
+    #[test]
+    fn a_target_names_the_connection_the_vps_and_the_container() {
+        let a = fingerprint(&["vps", "key-1", "h", "u", "22", "team", "cid-1"]);
+        assert_ne!(a, fingerprint(&["vps", "key-2", "h", "u", "22", "team", "cid-1"]));
+        assert_ne!(a, fingerprint(&["vps", "key-1", "h", "u", "22", "team", "cid-2"]));
         assert_ne!(a, fingerprint(&["local", "/path/jht"]));
     }
 }
