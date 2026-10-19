@@ -769,6 +769,15 @@ pub(crate) fn saved_binding_at(
     Ok((present(CANDIDATE_FILE)?, present(SELECTION_FILE)?))
 }
 
+/// A team the person made with the app on a VPS of their own, as opposed to an existing team
+/// connected to: this scope has no candidate and no selection (only the existing-team commands
+/// write them). Read from the saved files, never from what the renderer says. It is the
+/// full connection by its nature: the read-only view exists only for an existing team, which
+/// always has its selection, so the two cases are never mistaken for each other.
+pub(crate) fn own_vps_at(root: &Path, scope: &AccountScope) -> bool {
+    matches!(saved_binding_at(root, scope), Ok((false, false)))
+}
+
 /// The host and team of the candidate this scope has, for the backend's own use
 /// (reopening a saved team). It never leaves the backend: no command returns it.
 pub(crate) fn candidate_identity_at(
@@ -1846,6 +1855,29 @@ mod tests {
             chat_command(&broken, &ChatOperation::Read { agent: "capitano", cursor: None }),
             Err("existing_team_runtime_candidate_invalid")
         );
+    }
+
+    #[test]
+    fn a_vps_of_the_persons_own_is_the_scope_with_no_candidate_and_no_selection() {
+        let root = std::env::temp_dir().join(format!("jht-own-vps-{}-{}", std::process::id(), line!()));
+        let _ = fs::remove_dir_all(&root);
+        let scope = AccountScope::synthetic(b"scope-own");
+        assert!(own_vps_at(&root, &scope), "nothing saved: the person's own");
+        let dir = account_dir(&root, &scope);
+        fs::create_dir_all(&dir).unwrap();
+        // the person's own VPS, and then a selection appears (an existing team gets connected to): the
+        // existing team's rule is back, and the full connection must be confirmed again
+        fs::write(dir.join(SELECTION_FILE), b"{}").unwrap();
+        assert!(!own_vps_at(&root, &scope), "a selection that appears later: no longer the person's own");
+        fs::remove_file(dir.join(SELECTION_FILE)).unwrap();
+        assert!(own_vps_at(&root, &scope), "and without it, theirs again");
+        fs::write(dir.join(CANDIDATE_FILE), b"{}").unwrap();
+        assert!(!own_vps_at(&root, &scope), "a candidate: an existing team");
+        fs::remove_file(dir.join(CANDIDATE_FILE)).unwrap();
+        fs::write(dir.join(SELECTION_FILE), b"{}").unwrap();
+        assert!(!own_vps_at(&root, &scope), "a selection alone: an existing team too, and never mistaken");
+        assert!(own_vps_at(&root, &AccountScope::synthetic(b"another-scope")), "another account has its own files");
+        let _ = fs::remove_dir_all(&root);
     }
 
     #[test]
