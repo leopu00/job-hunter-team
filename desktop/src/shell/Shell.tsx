@@ -195,7 +195,7 @@ export default function Shell({ onLogout, onCloseReadOnly }: ShellProps) {
           className="px-4 py-2 text-[11px] border-b border-[var(--color-border)] text-[var(--color-muted)]"
         >
           <strong className="text-[var(--color-bright)]">{existingTeamReadOnlyReason(readOnlyTeam)}.</strong>{" "}
-          {text.banner}
+          {text.banner} <span data-testid="existing-team-judgement-coming">{text.judgementComing}</span>
         </p>
         {readNotice === "sort_last_action" && (
           <p role="status" data-testid="existing-team-readonly-notice" className="px-4 py-2 text-[11px] text-[var(--color-muted)]">
