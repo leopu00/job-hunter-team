@@ -799,6 +799,20 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
     "The action was not confirmed: nothing was saved.",
     "Confirm from the review screen to save the connection.",
   ),
+  // The link to an existing team's VPS (vps_link.rs, lib/vps-link.ts): the pinned team is not
+  // the one running (exit 70, a stopped container too), and the header while it retries.
+  existing_team_runtime_changed: copy(
+    "La squadra sulla VPS è spenta oppure non è più la versione collegata.",
+    "Avviala sulla VPS e premi Riprova; se il problema resta, ricollega la squadra dalla configurazione.",
+    "The team on the VPS is off or is no longer the version that was connected.",
+    "Start it on the VPS and press Retry; if the problem stays, connect the team again from the setup.",
+  ),
+  vps_reconnecting: copy(
+    "Collegamento alla VPS perso: riprovo da solo alle {time}.",
+    "Non serve fare niente: le azioni sulla squadra restano ferme finché il collegamento non torna.",
+    "The link to the VPS was lost: I try again by myself at {time}.",
+    "There is nothing to do: actions on the team stay on hold until the link is back.",
+  ),
   existing_team_runtime_target_changed: copy(
     "La squadra salvata non corrisponde più al collegamento selezionato.",
     "Controlla la VPS e l’identificativo della squadra, poi riprova.",

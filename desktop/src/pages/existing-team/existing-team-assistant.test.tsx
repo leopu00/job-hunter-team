@@ -7,6 +7,8 @@ import { installApiBridge, notInDesktop, shellApi } from "../../shell/api-bridge
 import { navigate } from "../../shell/router";
 import Shell from "../../shell/Shell";
 import { createPermissiveSupabase } from "../../test-support/permissive-supabase";
+import { reportVpsRead } from "../../lib/vps-link";
+import { VPS_LINK_TEXT } from "../../lib/vps-link.i18n";
 import { EXISTING_TEAM_ASSISTANT_TEXT } from "./existing-team-assistant.i18n";
 import { EXISTING_TEAM_STATUS_TEXT } from "./existing-team-status.i18n";
 
@@ -96,6 +98,32 @@ describe("nothing starts by itself", () => {
     enterExistingTeamReadOnly(false, null);
     await open();
     expect(screen.getByTestId("assistant-status")).toHaveTextContent(T.unknown);
+  });
+});
+
+describe("an uncertain link", () => {
+  it("never starts the assistant: after a network failure the button is disabled and says why", async () => {
+    const user = userEvent.setup();
+    await open();
+    expect(within(card()).getByTestId("assistant-activate")).toBeEnabled();
+    act(() => reportVpsRead({ ok: false, error: "timeout", kind: "network" }));
+    expect(within(card()).getByTestId("assistant-activate")).toBeDisabled();
+    expect(within(card()).getByTestId("assistant-link-wait")).toHaveTextContent(VPS_LINK_TEXT.it.actionsWait);
+    await user.click(within(card()).getByTestId("assistant-activate"));
+    expect(screen.queryByTestId("assistant-confirm-panel")).not.toBeInTheDocument();
+    expect(starts()).toHaveLength(0);
+    // the link back: the action is offered again
+    act(() => reportVpsRead({ ok: true, data: {} }));
+    expect(within(card()).getByTestId("assistant-activate")).toBeEnabled();
+  });
+
+  it("a confirmation already open does not send on a link that dropped meanwhile", async () => {
+    const user = userEvent.setup();
+    await open();
+    await asks(user);
+    act(() => reportVpsRead({ ok: false, error: "existing_team_not_active", kind: "application" }));
+    expect(within(screen.getByTestId("assistant-confirm-panel")).getByTestId("assistant-confirm")).toBeDisabled();
+    expect(starts()).toHaveLength(0);
   });
 });
 

@@ -6,14 +6,13 @@ import Link from "../web-shims/next-link";
 import { ReadOnlyActionsProvider } from "@/lib/read-only-actions";
 import { signOut } from "../lib/supabase";
 import { appLocale } from "../lib/app-locale";
-import { describeError } from "../lib/error-catalog";
 import {
   existingTeamReadOnlyReason,
-  useExistingTeamReadFailure,
   useExistingTeamReadNotice,
   useExistingTeamReadOnly,
 } from "../lib/existing-team-readonly";
 import { EXISTING_TEAM_READONLY_TEXT } from "../lib/existing-team-readonly.i18n";
+import { VpsLinkBar } from "./VpsLinkBar";
 import { localUninstallAvailable } from "../lib/local-uninstall";
 import { COMPUTER_TEXT } from "../pages/computer/computer.i18n";
 import { desktopLinks } from "./desktop-links";
@@ -173,7 +172,6 @@ const FULL_BLEED_COLUMN: CSSProperties = {
 export default function Shell({ onLogout, onCloseReadOnly }: ShellProps) {
   const { path, search } = useLocation();
   const readOnlyTeam = useExistingTeamReadOnly();
-  const readFailure = useExistingTeamReadFailure();
   const readNotice = useExistingTeamReadNotice();
   const readOnly = readOnlyTeam !== null;
   const match = matchRoute(readOnly ? READ_ONLY_ROUTES : ROUTES, path);
@@ -204,14 +202,7 @@ export default function Shell({ onLogout, onCloseReadOnly }: ShellProps) {
             {text.sortLastAction}
           </p>
         )}
-        {readFailure && (
-          <p role="alert" className="px-4 py-2 text-[11px]" style={{ color: "var(--color-red)" }}>
-            {(() => {
-              const failure = describeError(readFailure, { fallback: "existing_team_unavailable", locale: appLocale() });
-              return `${failure.text} ${failure.action} (${readFailure})`;
-            })()}
-          </p>
-        )}
+        <VpsLinkBar onCloseReadOnly={onCloseReadOnly} />
       </>
     );
     return (

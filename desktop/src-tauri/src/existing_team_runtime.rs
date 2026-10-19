@@ -9,7 +9,9 @@ use crate::{
     direct_chat,
     runtime_host::{
         run_ssh_command, set_private_dir_permissions, set_private_permissions, ExecutionHost,
+        ProcessResult,
     },
+    vps_link,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -1230,8 +1232,14 @@ pub(crate) fn hex_encode(bytes: &[u8]) -> String {
     output
 }
 
+/// A read that failed before anything ran on the VPS, with its kind for the app
+/// (vps_link): a pin that no longer reads blocks, anything else is the application.
 fn positions_failure(code: &'static str) -> Value {
-    json!({"ok":false,"error":code})
+    vps_link::failure_reply(vps_link::classify_setup_failure(code))
+}
+
+fn positions_answer_failure(code: &'static str) -> Value {
+    vps_link::failure_reply(vps_link::LinkOutcome { kind: vps_link::LinkKind::Application, code })
 }
 
 /// The top-level keys of candidate_profile.yml the candidate's profile is built from: exactly the
@@ -1400,19 +1408,73 @@ pub(crate) fn positions_read_for_scope(
         Ok(command) => command,
         Err(error) => return positions_failure(error),
     };
+    // A key found changed stays blocked for this scope and VPS until the person confirms it again: no `ssh`
+    // that is refused and no `ssh-keyscan` per read (the memory is vps_link's).
+    let (block_key, pinned) = match &validated {
+        crate::runtime_host::ValidatedHost::Vps { address, port, .. } => (
+            Some(vps_link::block_key(scope.digest(), address, *port)),
+            crate::runtime_host::pinned_host_fingerprint(&validated).ok(),
+        ),
+        crate::runtime_host::ValidatedHost::Local => (None, None),
+    };
+    read_unless_blocked(block_key, pinned, || {
+        positions_read_with(
+            &request,
+            &request_bytes,
+            |input| run_ssh_command(&validated, &command, Some(input), READ_TIMEOUT, None),
+            || crate::runtime_host::host_key_matches_pin(&validated),
+        )
+    })
+}
+
+/// Runs the read unless this VPS's key is already known to have changed; remembers the block when the read
+/// finds it. `pinned` is the fingerprint of the pin the read goes out against.
+fn read_unless_blocked(block_key: Option<String>, pinned: Option<String>, read: impl FnOnce() -> Value) -> Value {
+    if let Some(key) = &block_key {
+        if vps_link::remembered_block(key, pinned.as_deref()) {
+            return vps_link::blocked_reply();
+        }
+    }
+    let reply = read();
+    if vps_link::is_key_changed(&reply) {
+        if let (Some(key), Some(pinned)) = (&block_key, &pinned) {
+            vps_link::remember_block(key, pinned);
+        }
+    }
+    reply
+}
+
+/// The read once the host and the pinned target are known: one SSH run, then
+/// its reply. A failed run says why, in vps_link's kinds: the network (retried
+/// by the app), the team, a team that is not the pinned one, a changed SSH key.
+fn positions_read_with(
+    request: &PositionsRequest,
+    request_bytes: &[u8],
+    run: impl FnOnce(&[u8]) -> Result<ProcessResult, &'static str>,
+    key_matches_pin: impl FnOnce() -> Option<bool>,
+) -> Value {
     let mut input = hex_encode(POSITIONS_READ_PY.as_bytes()).into_bytes();
     input.push(b'\n');
-    input.extend_from_slice(&request_bytes);
+    input.extend_from_slice(request_bytes);
     input.push(b'\n');
-    let output = match run_ssh_command(&validated, &command, Some(&input), READ_TIMEOUT, None) {
-        Ok(output) if output.success() && output.stdout.len() <= 2 * 1024 * 1024 => output,
-        _ => return positions_failure("positions_unavailable"),
+    let output = match run(&input) {
+        Ok(output) if output.success() => output,
+        failed => {
+            return vps_link::failure_reply(vps_link::classify_failure(
+                &failed,
+                key_matches_pin,
+                "positions_unavailable",
+            ))
+        }
     };
+    if output.stdout.len() > 2 * 1024 * 1024 {
+        return positions_answer_failure("positions_unavailable");
+    }
     let reply: Value = match serde_json::from_slice(&output.stdout) {
         Ok(reply) => reply,
-        Err(_) => return positions_failure("positions_unavailable"),
+        Err(_) => return positions_answer_failure("positions_unavailable"),
     };
-    if valid_positions_reply(&request, &reply) {
+    if valid_positions_reply(request, &reply) {
         return if matches!(request, PositionsRequest::Profile) {
             shape_profile(reply)
         } else {
@@ -1420,9 +1482,8 @@ pub(crate) fn positions_read_for_scope(
         };
     }
     match reply.get("error").and_then(Value::as_str) {
-        Some("positions_request_invalid") => positions_failure("positions_request_invalid"),
-        Some("positions_unavailable") => positions_failure("positions_unavailable"),
-        _ => positions_failure("positions_unavailable"),
+        Some("positions_request_invalid") => positions_answer_failure("positions_request_invalid"),
+        _ => positions_answer_failure("positions_unavailable"),
     }
 }
 
@@ -1448,6 +1509,50 @@ pub(crate) async fn existing_team_positions_read(
     })
     .await
     .unwrap_or_else(|_| Err("positions_unavailable"));
+    if scopes.lock_expected(&expected).is_err() {
+        return Ok(positions_failure("account_scope_changed"));
+    }
+    Ok(result.unwrap_or_else(positions_failure))
+}
+
+/// Which team the desktop reads: the pinned revision and image digest of the
+/// saved target, for the header. Local files only, no SSH; values valid_target
+/// already checked (40 hex, `sha256:` + 64 hex).
+fn link_identity_for_scope(app: &tauri::AppHandle, scope: &AccountScope) -> Value {
+    let host = match direct_chat::load_persisted_host(app, scope) {
+        Ok(host) => host,
+        Err(error) => return positions_failure(error),
+    };
+    match selected(app, scope, &host) {
+        Ok(Some(target)) => json!({
+            "ok": true,
+            "revision": target.runtime.oci_revision,
+            "digest": target.runtime.digest,
+        }),
+        Ok(None) => positions_failure("existing_team_runtime_required"),
+        Err(error) => positions_failure(error),
+    }
+}
+
+#[tauri::command]
+pub(crate) async fn existing_team_link_identity(
+    app: tauri::AppHandle,
+    scopes: State<'_, AccountScopeState>,
+) -> Result<Value, String> {
+    let expected = match scopes.active() {
+        Ok(scope) => scope,
+        Err(_) => return Ok(positions_failure("account_scope_unavailable")),
+    };
+    let scope_state = scopes.inner().clone();
+    let worker_expected = expected.clone();
+    let result = tauri::async_runtime::spawn_blocking(move || {
+        let _scope = scope_state
+            .lock_expected(&worker_expected)
+            .map_err(|_| "account_scope_changed")?;
+        Ok(link_identity_for_scope(&app, &worker_expected))
+    })
+    .await
+    .unwrap_or_else(|_| Err("existing_team_unavailable"));
     if scopes.lock_expected(&expected).is_err() {
         return Ok(positions_failure("account_scope_changed"));
     }
@@ -1710,6 +1815,103 @@ mod tests {
         // the Python reader serves this op and nothing else under it
         assert!(POSITIONS_READ_PY.contains("if op=='stats':"));
         assert!(POSITIONS_READ_PY.contains("mode=ro"));
+    }
+
+    /// The read of the team's positions says why it failed, in the kinds the header acts on.
+    fn read_stats(
+        run: Result<ProcessResult, &'static str>,
+        key_matches_pin: Option<bool>,
+    ) -> (Value, usize) {
+        let mut scans = 0;
+        let reply = positions_read_with(
+            &PositionsRequest::Stats,
+            br#"{"op":"stats"}"#,
+            |input| {
+                // the fixed reader and the request travel on stdin, never in the command
+                assert!(input.ends_with(b"{\"op\":\"stats\"}\n"));
+                run
+            },
+            || {
+                scans += 1;
+                key_matches_pin
+            },
+        );
+        (reply, scans)
+    }
+
+    fn exited(code: i32, stdout: &str) -> Result<ProcessResult, &'static str> {
+        Ok(ProcessResult { code, stdout: stdout.as_bytes().to_vec() })
+    }
+
+    #[test]
+    fn a_failed_positions_read_says_network_application_version_or_blocked() {
+        let failure = |code: &str, kind: &str| json!({"ok": false, "error": code, "kind": kind});
+        assert_eq!(read_stats(Err("process_timeout"), None), (failure("timeout", "network"), 0));
+        assert_eq!(read_stats(exited(255, ""), None), (failure("ssh_unavailable", "network"), 1));
+        assert_eq!(read_stats(exited(255, ""), Some(true)), (failure("ssh_unavailable", "network"), 1));
+        assert_eq!(read_stats(exited(255, ""), Some(false)), (failure("host_key_changed", "blocked"), 1));
+        assert_eq!(
+            read_stats(exited(72, ""), Some(false)),
+            (failure("existing_team_identity_mismatch", "application"), 0)
+        );
+        assert_eq!(
+            read_stats(exited(70, ""), None),
+            (failure("existing_team_runtime_changed", "version"), 0)
+        );
+        assert_eq!(read_stats(exited(0, "not json"), None), (failure("positions_unavailable", "application"), 0));
+        assert_eq!(
+            read_stats(exited(0, r#"{"ok":false,"error":"positions_request_invalid"}"#), None),
+            (failure("positions_request_invalid", "application"), 0)
+        );
+        // a pin file that no longer reads blocks before anything runs
+        assert_eq!(positions_failure("host_key_mismatch"), failure("host_key_mismatch", "blocked"));
+        assert_eq!(positions_failure("host_not_configured"), failure("host_not_configured", "application"));
+    }
+
+    #[test]
+    fn once_the_key_is_found_changed_the_next_reads_do_not_go_out_until_the_pin_changes() {
+        use std::cell::Cell;
+        let key = Some(vps_link::block_key("scope-read-test", "vps.example", 22));
+        let pin = Some("SHA256:confirmed".to_string());
+        let goes_out = Cell::new(0);
+        let blocked_read = || {
+            goes_out.set(goes_out.get() + 1);
+            vps_link::blocked_reply()
+        };
+        // The first read goes out (ssh, then one keyscan) and finds the key changed.
+        let first = read_unless_blocked(key.clone(), pin.clone(), blocked_read);
+        assert!(vps_link::is_key_changed(&first));
+        assert_eq!(goes_out.get(), 1);
+        // The next ones answer at once: no ssh, no keyscan.
+        for _ in 0..3 {
+            let reply = read_unless_blocked(key.clone(), pin.clone(), blocked_read);
+            assert!(vps_link::is_key_changed(&reply));
+        }
+        assert_eq!(goes_out.get(), 1, "a read that is blocked is not run");
+        // The person confirmed the new key: the pin is another one and the read goes out again.
+        let reopened = read_unless_blocked(key.clone(), Some("SHA256:reconfirmed".to_string()), || {
+            goes_out.set(goes_out.get() + 1);
+            json!({"ok": true})
+        });
+        assert_eq!(reopened, json!({"ok": true}));
+        assert_eq!(goes_out.get(), 2);
+        // A network failure is never remembered as a block.
+        let net = read_unless_blocked(key.clone(), Some("SHA256:reconfirmed".to_string()), || {
+            vps_link::failure_reply(vps_link::LinkOutcome { kind: vps_link::LinkKind::Network, code: "timeout" })
+        });
+        assert_eq!(net["kind"], "network");
+        let after_net = read_unless_blocked(key, Some("SHA256:reconfirmed".to_string()), || json!({"ok": true}));
+        assert_eq!(after_net, json!({"ok": true}));
+    }
+
+    #[test]
+    fn a_working_positions_read_is_passed_on_unchanged() {
+        let part = json!({"rows": [], "included": 0, "of": 0});
+        let good = json!({"ok": true, "data": {
+            "stats": {}, "distribution": {}, "sources": [], "types": [], "recent": [],
+            "points": part, "events": part
+        }});
+        assert_eq!(read_stats(exited(0, &good.to_string()), None), (good, 0));
     }
 
     #[test]
