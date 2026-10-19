@@ -140,31 +140,31 @@ Um `critic_score < 5` recorrente com notas similares NÃO significa "o Scrittore
 - Sem métricas → extrair números do utilizador (custo de comida %, reduções de latência, headcount, horas poupadas)
 - Desalinhamento de stack → re-verificar `skills.primary` contra requisitos reais do JD
 
-## Padrão F — Motivos recorrentes nas palavras do utilizador
+## Padrão F — Motivos recorrentes que o utilizador escolhe
 
-A partir da web o utilizador julga as posições (pouco interessante / interessante / muito interessante, mais "excluir") e pode escrever **porquê**, em texto livre: `reason` (≤ 500 caracteres) e `comment` (≤ 2000). Esse texto é o único sítio onde diz o que quer com as suas palavras. Lido posição a posição é uma anedota; contado em conjunto é um facto. Dez "demasiado senior" não são dez opiniões sobre dez anúncios — são uma única frase sobre a pesquisa.
+A partir da web o utilizador julga as posições (pouco interessante / interessante / muito interessante, mais "excluir") e escolhe **porquê** numa lista fechada de códigos de motivo (`too_senior`, `too_junior`, `wrong_location`, `salary_low`, `wrong_stack`, `company`, `scam_or_gone`, `closed`, `already_applied`, `other`). Lido posição a posição é uma anedota; contado em conjunto é um facto. Dez "demasiado senior" não são dez opiniões sobre dez anúncios — são uma única frase sobre a pesquisa. O utilizador pode ainda juntar uma nota privada com palavras suas: é dele e nunca está disponível para ti.
 
 Atenção à diferença face ao Padrão B: lá as exclusões são dos **agentes** (`ESCLUSA: [TAG]` em `positions.notes`), aqui o juízo é do **utilizador**. Dois fluxos diferentes; quando concordam, ver a secção de referências cruzadas.
 
 Este feedback vive na cloud (`position_feedback`), não em `jobs.db`: é o único padrão que não passa por `db_query.py`.
 
-**`RAW_DISPLAY_BOUNDARY`** — agrupa sobre os raw `reason` / `comment`, mas nunca os retransmitas. Toda interpretação user-facing pode usar apenas `display_reason` / `display_comment` e `label` / `examples` sanitizados dos temas; chaves de máquina, IDs e notes `no-signal:*` ficam internos.
+**`RAW_DISPLAY_BOUNDARY`** — no que lês não há texto do utilizador: o motivo é um código e o seu `label` uma frase fixa. Chaves de máquina, IDs e notes `no-signal:*` ficam internos.
 
 ### Deteção
 
 ```bash
-# Os temas nos motivos escritos pelo utilizador, últimos 30 dias
+# Os códigos de motivo escolhidos pelo utilizador, últimos 30 dias
 python3 /app/shared/skills/feedback_query.py themes --days 30 --min-positions 3
 
-# O mesmo feedback sem agregar; lê apenas display_reason/display_comment
+# O mesmo feedback sem agregar
 python3 /app/shared/skills/feedback_query.py recent --days 30
 ```
 
-`themes` agrupa o texto livre por semelhança simples — não exige correspondência exata. Passa a minúsculas, retira acentos, pontuação e palavras funcionais, corta cada palavra aos primeiros 5 caracteres (`senior` / `seniority` / `seniore` / `séniorité` caem na mesma chave), e depois conta palavras isoladas e pares adjacentes por **posições distintas**. Um par ganha às suas partes quando cobre as mesmas posições: "demasiado senior" diz mais do que "senior", e é por isso que os intensificadores são mantidos.
+`themes` conta os códigos de motivo por **posições distintas**: cada posição conta uma vez, com o motivo do seu julgamento mais recente, e um julgamento retirado não conta. `other` é contado mas não diz nada de específico.
 
-Por cada tema devolve `positions`, `events`, `share` (fração das posições que levam texto), `actions` (como o tema se reparte por like / dislike / hide / star), `legacy_ids` internos e até 3 `examples` display sanitizados.
+Por cada tema devolve `key` (o código), `label` (uma frase fixa), `positions`, `events`, `share` (fração das posições que levam um motivo), `actions` (como o tema se reparte por like / dislike / hide / star) e `legacy_ids` internos.
 
-É tosco por construção e nota-se: sinónimos distantes ficam separados (`salário` e `RAL` são dois temas). Lê os `examples` e junta com a cabeça o que a ferramenta não conseguiu.
+Os temas são tão grosseiros quanto a lista: `wrong_location` não diz que cidade, e nada do que o utilizador escreveu o pode refinar.
 
 Se o payload trouxer uma `note` enum fechada (`no-signal:*`), não há agregado: cala-te, não retransmitas o código e não reconstruas o quadro com chamadas `check` posição a posição.
 
@@ -172,9 +172,9 @@ Se o payload trouxer uma `note` enum fechada (`no-signal:*`), não há agregado:
 
 Fala só se **as três** se verificarem:
 
-- **≥ 8 eventos de feedback levam texto** (`events_with_text`). Escrever um motivo custa esforço ao utilizador, portanto este volume está uma ordem de grandeza abaixo de qualquer contagem gerada por máquinas — mas abaixo de 8 uma percentagem não significa nada (com 3 textos, um tema já é um terço).
+- **≥ 8 eventos de feedback levam um motivo** (`events_with_reason`). Escolher um motivo custa um clique ao utilizador, portanto este volume está abaixo de qualquer contagem gerada por máquinas — mas abaixo de 8 uma percentagem não significa nada (com 3 motivos, um tema já é um terço).
 - O tema cobre **≥ 4 posições distintas** (`positions`, nunca `events`: julgar duas vezes o mesmo anúncio é uma só opinião, e contar eventos faria um anúncio teimoso parecer uma tendência).
-- O **`share` do tema é ≥ 0,30**. O texto livre reparte a mesma objeção real por sinónimos, portanto a dominância fica diluída por construção; o Padrão B pode exigir 40% porque as suas tags são um vocabulário fechado. Com volume baixo manda a regra das 4 posições, com volume alto manda o share — é intencional.
+- O **`share` do tema é ≥ 0,30**. Com volume baixo manda a regra das 4 posições, com volume alto manda o share — é intencional.
 
 Abaixo disso, não digas nada. Um "demasiado senior" é um comentário sobre um anúncio.
 
@@ -228,7 +228,7 @@ Se não tem nada de grau-padrão para dizer, **não diga nada**. Silêncio é um
 - ❌ Catastrofismo ("isto não leva a lado nenhum") OU cheerleading ("consegue!") — ambos violam a voz do Mentor. Números, depois uma pergunta. Ver skill `mentor-output`.
 - ❌ **Transformar o Padrão F numa instrução de pesquisa.** Nunca entregues ao Scout ou ao Capitano um "para de trazer X" derivado do que agrada ao utilizador. Uma pipeline que só pesca o que agrada inflaciona as suas próprias pontuações, e o utilizador acaba a acreditar que o mercado é rico quando foi a pipeline a escolher por ele. O Padrão F é dirigido **ao utilizador**: o que muda no perfil dele decide ele, e tu és read-only de qualquer forma (T10).
 - ❌ Atirar à cara um juízo que o utilizador retirou. `themes` já deixa de fora as posições cujo último evento é `clear`; não as tragas de volta com `--include-cleared` para atingir um limiar.
-- ❌ Citar um único comentário raw como se fosse um padrão. Os `examples` sanitizados dão voz a um tema **depois** de cruzar o limiar; não são o achado.
+- ❌ Procurar as palavras do utilizador por trás de um tema. São privadas e não estão disponíveis para ti; o tema é um código e o achado é a sua contagem.
 
 ## Ver também
 

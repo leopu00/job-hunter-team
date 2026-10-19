@@ -7,7 +7,7 @@ allowed-tools: Bash(python3 *)
 
 ## Límite raw/display (`RAW_DISPLAY_BOUNDARY`)
 
-`reason` y `comment` son entrada raw solo para máquina. Nunca los cites, reenvíes, resumas ni muestres al usuario. Toda nota o mensaje user-facing debe usar únicamente `display_reason` / `display_comment`; `label` / `examples` de los temas ya pasaron por el mismo sanitizer compartido. Una `note` es solo un enum cerrado `no-signal:*`: trátala como estado de disponibilidad y nunca como detalle de infraestructura.
+El `reason` de un juicio es un **código** de una lista cerrada (`too_senior`, `too_junior`, `wrong_location`, `salary_low`, `wrong_stack`, `company`, `scam_or_gone`, `closed`, `already_applied`, `other`). Lo que el usuario escribe con sus propias palabras es una nota privada que esta skill nunca devuelve: en ningún campo hay texto del usuario, y no hay nada que citar, reenviar ni parafrasear. El `label` del tema es una frase fija para el código. Una `note` es solo un enum cerrado `no-signal:*`: trátala como estado de disponibilidad y nunca como detalle de infraestructura.
 
 # feedback-query — Feedback del usuario por posición
 
@@ -17,8 +17,7 @@ El usuario puede hacer clic en like/dislike/hide/star en cualquier posición des
 |---------------------|---------|-------------|
 | `position_legacy_id`| TEXT    | El `legacy_id` (cadena) de la posición en `positions` |
 | `action`            | TEXT    | Uno de `like`, `dislike`, `hide`, `star`, `clear` (mig 059 — el usuario retira el juicio; gana el último evento, así que un `clear` al final significa "sin juicio") |
-| `reason`            | TEXT    | Razón corta opcional (≤500 char) |
-| `comment`           | TEXT    | Comentario verbose opcional (≤2000 char, mig 028) |
+| `reason`            | TEXT    | Razón opcional: un código de la lista cerrada de arriba |
 | `score`             | INTEGER | Puntuación granular opcional 1-5 (mig 028) |
 | `direction`         | TEXT    | Opcional `more_like_this` / `less_like_this` — señal de patrón para el Scout, NO skip por posición (mig 028) |
 | `created_at`        | TS      | Hora de envío |
@@ -42,12 +41,9 @@ Salida (JSON en stdout):
   "count": 2,
   "actions": [
     {"action": "dislike", "created_at": "2026-05-30T14:21:00Z",
-     "reason": "too senior", "comment": "5+ anni in Java richiesti, non mi interessa stack legacy",
-     "display_reason": "too senior", "display_comment": "5+ anni in Java richiesti, non mi interessa stack legacy",
-     "score": 2, "direction": "less_like_this"},
+     "reason": "too_senior", "score": 2, "direction": "less_like_this"},
     {"action": "like", "created_at": "2026-05-28T09:00:00Z",
-     "reason": null, "comment": null, "display_reason": null,
-     "display_comment": null, "score": null, "direction": null}
+     "reason": null, "score": null, "direction": null}
   ]
 }
 ```
@@ -75,45 +71,44 @@ Una sola llamada HTTP en lugar de N: `GET /api/positions/feedback?days=&limit=`,
 # Todos los eventos de feedback en la ventana, del más reciente
 python3 /app/shared/skills/feedback_query.py recent --days 30
 
-# Los motivos que el usuario escribió, agrupados por similitud
+# Los códigos de motivo, contados sobre posiciones distintas
 python3 /app/shared/skills/feedback_query.py themes --days 30 --min-positions 3
 ```
 
 Salida de `themes`:
 
 ```json
-{"ok": true, "window_days": 30, "field": "both",
- "events_total": 31, "events_with_text": 19,
- "positions_with_text": 17, "positions_cleared": 2,
+{"ok": true, "window_days": 30,
+ "events_total": 31, "events_with_reason": 19,
+ "positions_with_reason": 17, "positions_cleared": 2,
  "by_action": {"like": 6, "dislike": 21, "hide": 3, "star": 1},
  "min_positions": 3,
  "themes": [
-   {"key": "tropp senio", "label": "troppo senior",
-    "positions": 7, "events": 8, "share": 0.412,
-    "actions": {"dislike": 6, "hide": 2},
-    "legacy_ids": ["42", "51", "63"],
-    "examples": ["troppo senior", "richiesta troppo seniore — Lead role"]}
+   {"key": "too_senior", "label": "too senior",
+    "positions": 7, "events": 7, "share": 0.412,
+    "actions": {"dislike": 6, "hide": 1},
+    "legacy_ids": ["42", "51", "63"]}
  ]}
 ```
 
-Cómo funciona el agrupamiento (no se exige coincidencia exacta, ninguna dependencia nueva): minúsculas → acentos fuera → puntuación fuera → palabras de servicio fuera → cada palabra cortada a sus primeros 5 caracteres (`senior` / `seniority` / `seniore` / `séniorité` caen en una sola clave) → se cuentan palabras sueltas y **pares adyacentes**, por **posiciones distintas**, no por eventos. Un par absorbe sus partes cuando cubre ≥ 80% de las mismas posiciones, así "demasiado senior" gana a "senior"; los intensificadores se quedan en el flujo a propósito. `reason` y `comment` se tokenizan por separado, así no se inventa ningún par a caballo de los dos.
+Cómo funciona el conteo: cada posición cuenta **una vez**, con el motivo de su juicio **más reciente**, y solo cuentan los motivos que son un código de la lista (un motivo antiguo en texto libre se lee como `other`). No hay texto que agrupar y nada se interpreta. `other` se cuenta pero no dice nada concreto.
 
 Límites deliberados, declarados para que nadie lea en los números más de lo que hay:
-- Los sinónimos lejanos quedan separados (`salario` y `RAL` son dos temas) — es conteo de palabras, no semántica. Lee los `examples` display sanitizados (máx. 3) y une con la cabeza.
+- Un tema es un código, así que es tan grueso como la lista: `wrong_location` no dice qué ciudad. Nada de lo que el usuario escribió está disponible para afinarlo.
 - Las posiciones cuyo **último** evento es `clear` quedan fuera (el juicio fue retirado); `--include-cleared` las devuelve.
-- `share` = posiciones del tema / `positions_with_text`.
-- `--field reason|comment|both` (por defecto `both`), `--top N`, `--days 0` para todo el historial.
+- `share` = posiciones del tema / `positions_with_reason`.
+- `--top N`, `--days 0` para todo el historial. (`--field` se acepta y se ignora, por los prompts antiguos.)
 - Fallback cuando el endpoint agregado no responde: `--legacy-ids 12,13,14` lee esas posiciones una a una (más lento, mismo formato de salida).
 
-Flags: `--days` (por defecto 30, `0` = todo), `--limit` (por defecto 500 eventos), `--min-positions` (por defecto 3), `--text-chars` en `recent` (por defecto 300, trunca comentarios largos).
+Flags: `--days` (por defecto 30, `0` = todo), `--limit` (por defecto 500 eventos), `--min-positions` (por defecto 3).
 
 Cuando el payload trae una `note` enum cerrada (`no-signal:*`), no hay agregado. Trátala como "sin datos", nunca como "sin feedback", y no reenvíes el código.
 
 ## Cómo lo usan los agentes
 
-**Scorer — `FUTURE_FEEDBACK_ONLY`:** llama `themes --days 30 --min-positions 1 --top 10 --exclude-legacy-id <legacy_id>`. Usa únicamente `label` / `examples` sanitizados como evidencia contextual de preferencia para esa posición futura. El feedback de una posición ya votada nunca cambia su score, status o notes: sin bonus/malus fijo, marker de feedback ni backfill. Los scores existentes permanecen iguales. O-70 reevaluación explícita es un flujo separado pedido por el usuario.
+**Scorer — `FUTURE_FEEDBACK_ONLY`:** llama `themes --days 30 --min-positions 1 --top 10 --exclude-legacy-id <legacy_id>`. Usa los códigos `key` / `label` únicamente como evidencia contextual de preferencia al evaluar esa posición futura. El feedback de una posición ya votada nunca cambia su score, status o notes: sin bonus/malus fijo, marker de feedback ni backfill. Los scores existentes permanecen iguales. O-70 reevaluación explícita es un flujo separado pedido por el usuario.
 
-**Mentor** (Patrón F, solo lectura): `themes` sobre los últimos 30 días para contar los motivos que el usuario escribe. Umbrales e interpretación viven en la skill `mentor-patterns`. El Mentor habla **al usuario** — nunca emite instrucciones de búsqueda a partir de este dato.
+**Mentor** (Patrón F, solo lectura): `themes` sobre los últimos 30 días para contar los códigos de motivo que el usuario elige. Umbrales e interpretación viven en la skill `mentor-patterns`. El Mentor habla **al usuario** — nunca emite instrucciones de búsqueda a partir de este dato.
 
 **Scout** (señal contextual opcional):
 - No para skip por posición — eso ya está manejado por dedup (SC-05).

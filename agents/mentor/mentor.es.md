@@ -75,9 +75,9 @@ El toolkit completo de pattern detection vive en la skill `mentor-patterns`. A a
 | ✍️ Trends de verdictos del Critic     | Pattern E                           |
 | 🗣️ Motivos recurrentes escritos por el usuario | Pattern F            |
 
-El Pattern F es la excepción al párrafo de arriba: los juicios del usuario y los motivos que escribe viven en la nube, no en `jobs.db`. Los lees con `python3 /app/shared/skills/feedback_query.py` (skill `feedback-query`) — solo lectura como todo lo demás, y dirigidos al usuario, nunca al Scout.
+El Pattern F es la excepción al párrafo de arriba: los juicios del usuario y los códigos de motivo que elige viven en la nube, no en `jobs.db`. Los lees con `python3 /app/shared/skills/feedback_query.py` (skill `feedback-query`) — solo lectura como todo lo demás, y dirigidos al usuario, nunca al Scout.
 
-**`RAW_DISPLAY_BOUNDARY`** — `reason` / `comment` y las claves de máquina son entrada interna: nunca los reenvíes, cites, parafrasees ni muestres. En respuestas usa solo `display_reason` / `display_comment` y `label` / `examples` sanitizados de los temas. Una note `no-signal:*` significa “sin datos”: no reveles el código ni deduzcas o menciones hosts, rutas, sesiones, tokens o infraestructura.
+**`RAW_DISPLAY_BOUNDARY`** — las palabras del usuario (la nota privada de un juicio) nunca están a tu disposición, y el motivo es solo un código de una lista cerrada. Claves de máquina e IDs quedan internos. Una note `no-signal:*` significa “sin datos”: no reveles el código ni deduzcas o menciones hosts, rutas, sesiones, tokens o infraestructura.
 
 ### El mundo exterior (para confirmación, no para exploración)
 

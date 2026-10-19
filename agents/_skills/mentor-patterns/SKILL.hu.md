@@ -140,31 +140,31 @@ Visszatérő `critic_score < 5` hasonló megjegyzésekkel NEM azt jelenti, hogy 
 - Nincs metrika → bányászd a felhasználóból a számokat (food cost %, késleltetés csökkentések, létszám, megtakarított órák)
 - Stack eltérés → ellenőrizd újra a `skills.primary`-t a tényleges JD követelmények alapján
 
-## F minta — Visszatérő indokok a felhasználó saját szavaival
+## F minta — Visszatérő indokok, amelyeket a felhasználó választ
 
-A weben a felhasználó megítéli a pozíciókat (kevéssé érdekes / érdekes / nagyon érdekes, plusz "kizárás"), és leírhatja, **miért**, szabad szöveggel: `reason` (≤ 500 karakter) és `comment` (≤ 2000). Ez a szöveg az egyetlen hely, ahol a saját szavaival mondja el, mit akar. Pozíciónként olvasva anekdota; együtt számolva tény. Tíz "túl senior" nem tíz vélemény tíz hirdetésről — egyetlen mondat a keresésről.
+A weben a felhasználó megítéli a pozíciókat (kevéssé érdekes / érdekes / nagyon érdekes, plusz "kizárás"), és egy zárt indokkód-listából (`too_senior`, `too_junior`, `wrong_location`, `salary_low`, `wrong_stack`, `company`, `scam_or_gone`, `closed`, `already_applied`, `other`) választja ki, **miért**. Pozíciónként olvasva anekdota; együtt számolva tény. Tíz "túl senior" nem tíz vélemény tíz hirdetésről — egyetlen mondat a keresésről. A felhasználó privát jegyzetet is fűzhet hozzá a saját szavaival: az az övé, és számodra soha nem elérhető.
 
 Figyelj a B mintától való különbségre: ott a kizárások az **ágensekéi** (`ESCLUSA: [TAG]` a `positions.notes`-ban), itt az ítélet a **felhasználóé**. Két különböző folyam; ha egyetértenek, lásd a kereszthivatkozás szakaszt.
 
 Ez a visszajelzés a felhőben él (`position_feedback`), nem a `jobs.db`-ben: ez az egyetlen minta, amely nem a `db_query.py`-on keresztül megy.
 
-**`RAW_DISPLAY_BOUNDARY`** — a nyers `reason` / `comment` mezőkön csoportosíts, de soha ne továbbítsd őket. User-facing értelmezésben csak a `display_reason` / `display_comment` és a sanitizált téma-`label` / `examples` használható; a gépi kulcsok, ID-k és `no-signal:*` note-ok belsők maradnak.
+**`RAW_DISPLAY_BOUNDARY`** — abban, amit olvasol, nincs a felhasználó szövege: az indok egy kód, a `label` pedig fix kifejezés. A gépi kulcsok, ID-k és `no-signal:*` note-ok belsők maradnak.
 
 ### Detektálás
 
 ```bash
-# A felhasználó által írt indokok témái, utolsó 30 nap
+# A felhasználó által választott indokkódok, utolsó 30 nap
 python3 /app/shared/skills/feedback_query.py themes --days 30 --min-positions 3
 
-# Ugyanaz összesítés nélkül; csak display_reason/display_comment olvasható
+# Ugyanaz összesítés nélkül
 python3 /app/shared/skills/feedback_query.py recent --days 30
 ```
 
-A `themes` egyszerű hasonlóság alapján csoportosítja a szabad szöveget — nem kell pontos egyezés. Kisbetűsít, leszedi az ékezeteket, az írásjeleket és a funkciószavakat, minden szót az első 5 karakterére vág (`senior` / `seniority` / `seniore` / `séniorité` ugyanarra a kulcsra esik), majd egyedülálló szavakat és szomszédos párokat számol **külön pozíciónként**. Egy pár legyőzi a részeit, ha ugyanazokat a pozíciókat fedi le: a "túl senior" többet mond, mint a "senior" — pontosan ezért maradnak bent az erősítő szavak.
+A `themes` az indokkódokat **külön pozíciónként** számolja: minden pozíció egyszer számít, a legutóbbi értékelésének indokával, a visszavont értékelés pedig nem számít. Az `other` megszámolódik, de nem mond semmi konkrétat.
 
-Témánként visszaadja: `positions`, `events`, `share` (a szöveget hordozó pozíciók aránya), `actions` (hogyan oszlik meg a téma a like / dislike / hide / star között), belső `legacy_ids`, és legfeljebb 3 sanitizált display `examples`.
+Témánként visszaadja: `key` (a kód), `label` (fix kifejezés), `positions`, `events`, `share` (az indokot hordozó pozíciók aránya), `actions` (hogyan oszlik meg a téma a like / dislike / hide / star között) és belső `legacy_ids`.
 
-Konstrukcióból durva, és ez látszik is: a távoli szinonimák külön maradnak (a `fizetés` és a `RAL` két téma). Olvasd az `examples`-t, és fejjel kösd össze, amit az eszköz nem tudott.
+A témák olyan durvák, mint a lista: a `wrong_location` nem mondja meg, melyik város, és semmi, amit a felhasználó írt, nem finomíthatja.
 
 Ha a payload zárt `note` enumot hoz (`no-signal:*`), nincs összesítés: hallgass, ne továbbítsd a kódot, és ne rakd össze a képet pozíciónkénti `check` hívásokból.
 
@@ -172,9 +172,9 @@ Ha a payload zárt `note` enumot hoz (`no-signal:*`), nincs összesítés: hallg
 
 Csak akkor szólalj meg, ha **mind a három** teljesül:
 
-- **≥ 8 visszajelzés-esemény hordoz szöveget** (`events_with_text`). Egy indokot leírni erőfeszítésbe kerül a felhasználónak, tehát ez a mennyiség nagyságrenddel kisebb bármilyen gép által előállított számnál — 8 alatt viszont egy százalék semmit sem jelent (3 szövegnél egy téma már egyharmad).
+- **≥ 8 visszajelzés-esemény hordoz indokot** (`events_with_reason`). Egy indokot kiválasztani egy kattintásba kerül a felhasználónak, tehát ez a mennyiség kisebb bármilyen gép által előállított számnál — 8 alatt viszont egy százalék semmit sem jelent (3 indoknál egy téma már egyharmad).
 - A téma **≥ 4 külön pozíciót** fed le (`positions`, soha nem `events`: ugyanazt a hirdetést kétszer megítélni egyetlen vélemény, és az események számolása egyetlen makacs hirdetést trenddé tenne).
-- A téma **`share`-e ≥ 0,30**. A szabad szöveg ugyanazt a valódi kifogást szinonimákra osztja, tehát a dominancia konstrukcióból hígul; a B minta kérhet 40%-ot, mert a tagjei zárt szótár. Kis mennyiségnél a 4 pozíció szabálya köt, nagynál a share — így van szánva.
+- A téma **`share`-e ≥ 0,30**. Kis mennyiségnél a 4 pozíció szabálya köt, nagynál a share — így van szánva.
 
 Ez alatt ne mondj semmit. Egy "túl senior" egy hirdetésről szóló megjegyzés.
 
@@ -228,7 +228,7 @@ Ha nincs minta-szintű mondanivalód, **ne szólalj meg**. A csend válasz.
 - ❌ Végítélet ("ez sehova nem vezet") VAGY szurkolás ("meg tudod csinálni!") — mindkettő sérti a Mentor hangját. Számok, majd kérdés. Lásd `mentor-output` skill.
 - ❌ **Az F mintát keresési utasítássá alakítani.** Soha ne adj a Scoutnak vagy a Capitanónak olyan "ne hozz több X-et"-et, amit a felhasználó kedveléseiből vezettél le. Az a pipeline, amely csak azt halássza, ami tetszik, magától felfújja a saját pontszámait, és a felhasználó végül azt hiszi, gazdag a piac, holott a pipeline választott helyette. Az F minta **a felhasználónak** szól: hogy mi változik a profiljában, azt ő dönti el, te pedig amúgy is csak olvasol (T10).
 - ❌ Visszavont ítéletet a felhasználó szemére vetni. A `themes` már kihagyja azokat a pozíciókat, amelyek utolsó eseménye `clear`; ne hozd vissza őket az `--include-cleared`-del, hogy elérj egy küszöböt.
-- ❌ Egyetlen nyers megjegyzést mintaként idézni. A sanitizált `examples` **azután** ad hangot egy témának, hogy átlépte a küszöböt; nem az `examples` a megállapítás.
+- ❌ A felhasználó saját szavait keresni egy téma mögött. Privátak, és számodra nem elérhetők; a téma egy kód, a megállapítás pedig a számossága.
 
 ## Lásd még
 

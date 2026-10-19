@@ -139,31 +139,31 @@ A recurring `critic_score < 5` with similar notes does NOT mean "the Writer is b
 - No metrics → mine the user for numbers (food cost %, latency reductions, headcount, hours saved)
 - Stack mismatch → re-check `skills.primary` against actual JD requirements
 
-## Pattern F — Recurring reasons in the user's own words
+## Pattern F — Recurring reasons the user picks
 
-From the web the user judges positions (not interesting / interesting / very interesting, plus "exclude") and can write **why**, in free text: `reason` (≤ 500 chars) and `comment` (≤ 2000). That text is the only place where she says what she wants in her own words. Read one position at a time it is an anecdote; counted together it is a fact. Ten "too senior" are not ten opinions about ten job ads — they are one statement about the search.
+From the web the user judges positions (not interesting / interesting / very interesting, plus "exclude") and picks **why** from a closed list of reason codes (`too_senior`, `too_junior`, `wrong_location`, `salary_low`, `wrong_stack`, `company`, `scam_or_gone`, `closed`, `already_applied`, `other`). Read one position at a time it is an anecdote; counted together it is a fact. Ten "too senior" are not ten opinions about ten job ads — they are one statement about the search. The user can also add a private note in their own words: it is theirs and it is never available to you.
 
 Note the difference from Pattern B: there the exclusions are the **agents'** (`ESCLUSA: [TAG]` in `positions.notes`), here the judgement is the **user's**. Two different flows; when they agree, see the cross-referencing section.
 
 This feedback lives in the cloud (`position_feedback`), not in `jobs.db`: it is the one pattern that does not go through `db_query.py`.
 
-**`RAW_DISPLAY_BOUNDARY`** — cluster on raw `reason` / `comment`, but never relay them. Any user-facing interpretation may use only `display_reason` / `display_comment` and sanitized theme `label` / `examples`; machine keys, IDs and `no-signal:*` notes stay internal.
+**`RAW_DISPLAY_BOUNDARY`** — there is no user text in what you read: the reason is a code and its `label` a fixed phrase. Machine keys, IDs and `no-signal:*` notes stay internal.
 
 ### Detection
 
 ```bash
-# Themes in the reasons the user typed, last 30 days
+# Reason codes the user picked, last 30 days
 python3 /app/shared/skills/feedback_query.py themes --days 30 --min-positions 3
 
-# The same feedback unaggregated; read only display_reason/display_comment
+# The same feedback unaggregated
 python3 /app/shared/skills/feedback_query.py recent --days 30
 ```
 
-`themes` groups free text by plain similarity — no exact match required. It lowercases, strips accents, drops punctuation and service words, cuts every word to its first 5 characters (`senior` / `seniority` / `seniore` / `séniorité` land on the same key), then counts single words and adjacent word pairs by **distinct positions**. A pair wins over its parts when it covers the same positions: "too senior" says more than "senior", and intensifiers are kept on purpose for exactly that reason.
+`themes` counts the reason codes by **distinct positions**: each position counts once, with the reason of its latest judgement, and a withdrawn judgement does not count. `other` is counted but says nothing specific.
 
-Per theme it returns `positions`, `events`, `share` (fraction of the positions that carry text), `actions` (how the theme splits across like / dislike / hide / star), internal `legacy_ids`, and up to 3 sanitized display `examples`.
+Per theme it returns `key` (the code), `label` (a fixed phrase), `positions`, `events`, `share` (fraction of the positions that carry a reason), `actions` (how the theme splits across like / dislike / hide / star) and internal `legacy_ids`.
 
-It is cheap by construction and it shows: distant synonyms stay apart (`salary` and `RAL` are two themes). Read the `examples` and join with your head what the tool could not.
+The themes are as coarse as the list: `wrong_location` does not say which city, and nothing the user wrote can refine it.
 
 If the payload carries a closed `note` enum (`no-signal:*`), there is no aggregate: stay silent, never relay its code, and do not rebuild the picture out of single-position `check` calls.
 
@@ -171,9 +171,9 @@ If the payload carries a closed `note` enum (`no-signal:*`), there is no aggrega
 
 Speak only if **all three** hold in the window:
 
-- **≥ 8 feedback events carry text** (`events_with_text`). Writing a reason costs the user effort, so this volume is an order of magnitude below any machine-generated count — but under 8 a percentage means nothing (with 3 texts, one theme is already a third).
+- **≥ 8 feedback events carry a reason** (`events_with_reason`). Picking a reason costs the user a click, so this volume is below any machine-generated count — but under 8 a percentage means nothing (with 3 reasons, one theme is already a third).
 - The theme covers **≥ 4 distinct positions** (`positions`, never `events`: judging the same ad twice is one opinion, and counting events would let one stubborn job ad look like a trend).
-- The theme's **`share` ≥ 0.30**. Free text splits one real objection across synonyms, so dominance is diluted by construction; Pattern B can ask for 40% because its tags are a closed vocabulary. At low volume the "4 positions" rule binds, at high volume the share does — that is the intent.
+- The theme's **`share` ≥ 0.30**. At low volume the "4 positions" rule binds, at high volume the share does — that is the intent.
 
 Below that, say nothing. One "too senior" is a remark about one job ad.
 
@@ -227,7 +227,7 @@ If you have nothing pattern-grade to say, **say nothing**. Silence is an answer.
 - ❌ Doomsaying ("this leads nowhere") OR cheerleading ("you can do it!") — both violate the Mentor's voice. Numbers, then a question. See `mentor-output` skill.
 - ❌ **Turning Pattern F into a search instruction.** Never hand the Scout or the Capitano a "stop bringing X" derived from what the user likes. A pipeline that only fetches what pleases inflates its own scores, and the user ends up believing the market is rich when it was the pipeline that chose for her. Pattern F is addressed **to the user**: what changes in her profile is her decision, and the Mentor is read-only anyway (T10).
 - ❌ Quoting back a judgement the user has withdrawn. `themes` already leaves out positions whose last event is `clear`; do not put them back with `--include-cleared` to reach a threshold.
-- ❌ Quoting one raw comment as if it were a pattern. Sanitized `examples` give a theme a voice **after** it crosses the threshold; they are not the finding.
+- ❌ Hunting for the user's own words behind a theme. They are private and not available to you; the theme is a code and the finding is its count.
 
 ## See also
 

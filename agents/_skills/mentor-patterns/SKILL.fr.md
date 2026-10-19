@@ -140,31 +140,31 @@ Un `critic_score < 5` récurrent avec des notes similaires ne signifie PAS "le S
 - Pas de métriques → chercher des chiffres chez l'utilisateur (food cost %, réductions de latence, effectif, heures économisées)
 - Stack mismatch → revérifier `skills.primary` contre les exigences réelles des JD
 
-## Pattern F — Raisons récurrentes dans les mots de l'utilisateur
+## Pattern F — Raisons récurrentes que choisit l'utilisateur
 
-Depuis le web l'utilisateur juge les positions (peu intéressante / intéressante / très intéressante, plus "exclure") et peut écrire **pourquoi**, en texte libre : `reason` (≤ 500 caractères) et `comment` (≤ 2000). Ce texte est le seul endroit où il dit ce qu'il veut avec ses propres mots. Lu position par position, c'est une anecdote ; compté ensemble, c'est un fait. Dix "trop senior" ne sont pas dix opinions sur dix annonces — c'est une seule phrase sur la recherche.
+Depuis le web l'utilisateur juge les positions (peu intéressante / intéressante / très intéressante, plus "exclure") et choisit **pourquoi** dans une liste fermée de codes de raison (`too_senior`, `too_junior`, `wrong_location`, `salary_low`, `wrong_stack`, `company`, `scam_or_gone`, `closed`, `already_applied`, `other`). Lu position par position, c'est une anecdote ; compté ensemble, c'est un fait. Dix "trop senior" ne sont pas dix opinions sur dix annonces — c'est une seule phrase sur la recherche. L'utilisateur peut aussi ajouter une note privée avec ses propres mots : elle est à lui et ne t'est jamais accessible.
 
 Attention à la différence avec le Pattern B : là-bas les exclusions sont celles des **agents** (`ESCLUSA: [TAG]` dans `positions.notes`), ici le jugement est celui de l'**utilisateur**. Deux flux différents ; quand ils concordent, voir la section de croisement.
 
 Ces retours vivent dans le cloud (`position_feedback`), pas dans `jobs.db` : c'est le seul pattern qui ne passe pas par `db_query.py`.
 
-**`RAW_DISPLAY_BOUNDARY`** — regroupe sur les raw `reason` / `comment`, mais ne les relaie jamais. Toute interprétation user-facing utilise seulement `display_reason` / `display_comment` et les `label` / `examples` sanitizés des thèmes ; clés machine, IDs et notes `no-signal:*` restent internes.
+**`RAW_DISPLAY_BOUNDARY`** — dans ce que tu lis il n'y a aucun texte de l'utilisateur : la raison est un code et son `label` une phrase fixe. Clés machine, IDs et notes `no-signal:*` restent internes.
 
 ### Détection
 
 ```bash
-# Les thèmes dans les raisons écrites par l'utilisateur, 30 derniers jours
+# Les codes de raison choisis par l'utilisateur, 30 derniers jours
 python3 /app/shared/skills/feedback_query.py themes --days 30 --min-positions 3
 
-# Les mêmes retours non agrégés ; lis uniquement display_reason/display_comment
+# Les mêmes retours non agrégés
 python3 /app/shared/skills/feedback_query.py recent --days 30
 ```
 
-`themes` regroupe le texte libre par similarité simple — aucune correspondance exacte exigée. Il met en minuscules, retire accents, ponctuation et mots outils, coupe chaque mot à ses 5 premiers caractères (`senior` / `seniority` / `seniore` / `séniorité` tombent sur la même clé), puis compte les mots seuls et les paires adjacentes par **positions distinctes**. Une paire l'emporte sur ses parties quand elle couvre les mêmes positions : "trop senior" dit plus que "senior", et les intensificateurs sont conservés exprès pour cela.
+`themes` compte les codes de raison par **positions distinctes** : chaque position compte une fois, avec la raison de son jugement le plus récent, et un jugement retiré ne compte pas. `other` est compté mais ne dit rien de précis.
 
-Pour chaque thème il retourne `positions`, `events`, `share` (fraction des positions qui portent du texte), `actions` (comment le thème se répartit entre like / dislike / hide / star), des `legacy_ids` internes et jusqu'à 3 `examples` display sanitizés.
+Pour chaque thème il retourne `key` (le code), `label` (une phrase fixe), `positions`, `events`, `share` (fraction des positions qui portent une raison), `actions` (comment le thème se répartit entre like / dislike / hide / star) et des `legacy_ids` internes.
 
-C'est grossier par construction et cela se voit : les synonymes éloignés restent séparés (`salaire` et `RAL` sont deux thèmes). Lis les `examples` et rapproche avec ta tête ce que l'outil n'a pas pu.
+Les thèmes sont aussi grossiers que la liste : `wrong_location` ne dit pas quelle ville, et rien de ce que l'utilisateur a écrit ne peut l'affiner.
 
 Si le payload porte une `note` enum fermée (`no-signal:*`), l'agrégat n'existe pas : tais-toi, ne relaie pas le code et ne reconstruis pas le tableau à coups de `check` position par position.
 
@@ -172,9 +172,9 @@ Si le payload porte une `note` enum fermée (`no-signal:*`), l'agrégat n'existe
 
 Ne parle que si **les trois** sont vraies :
 
-- **≥ 8 événements de retour portent du texte** (`events_with_text`). Écrire une raison coûte un effort à l'utilisateur, donc ce volume est un ordre de grandeur sous n'importe quel comptage produit par les machines — mais sous 8, un pourcentage ne veut rien dire (avec 3 textes, un thème fait déjà un tiers).
+- **≥ 8 événements de retour portent une raison** (`events_with_reason`). Choisir une raison coûte un clic à l'utilisateur, donc ce volume est sous n'importe quel comptage produit par les machines — mais sous 8, un pourcentage ne veut rien dire (avec 3 raisons, un thème fait déjà un tiers).
 - Le thème couvre **≥ 4 positions distinctes** (`positions`, jamais `events` : juger deux fois la même annonce reste un seul avis, et compter les événements ferait passer une annonce obstinée pour une tendance).
-- Le **`share` du thème est ≥ 0,30**. Le texte libre éclate la même objection réelle entre synonymes, donc la dominance est diluée par construction ; le Pattern B peut exiger 40% parce que ses tags sont un vocabulaire fermé. À faible volume c'est la règle des 4 positions qui contraint, à fort volume c'est le share — c'est voulu.
+- Le **`share` du thème est ≥ 0,30**. À faible volume c'est la règle des 4 positions qui contraint, à fort volume c'est le share — c'est voulu.
 
 En dessous, ne dis rien. Un "trop senior" est une remarque sur une annonce.
 
@@ -228,7 +228,7 @@ Si vous n'avez rien de niveau pattern à dire, **ne dites rien**. Le silence est
 - ❌ Catastrophisme ("ça ne mène nulle part") OU pom-pom ("vous pouvez le faire !") — les deux violent la voix du Mentor. Des chiffres, puis une question. Voir la skill `mentor-output`.
 - ❌ **Transformer le Pattern F en instruction de recherche.** Ne remets jamais au Scout ou au Capitano un "arrête de ramener X" tiré de ce qui plaît à l'utilisateur. Une pipeline qui ne pêche que ce qui plaît gonfle ses propres scores, et l'utilisateur finit par croire que le marché est riche alors que c'est la pipeline qui a choisi pour lui. Le Pattern F s'adresse **à l'utilisateur** : ce qui change dans son profil, c'est lui qui le décide, et tu es de toute façon en lecture seule (T10).
 - ❌ Renvoyer à l'utilisateur un jugement qu'il a retiré. `themes` laisse déjà dehors les positions dont le dernier événement est `clear` ; ne les ramène pas avec `--include-cleared` pour atteindre un seuil.
-- ❌ Citer un seul commentaire raw comme s'il s'agissait d'un pattern. Les `examples` sanitizés donnent une voix à un thème **après** qu'il a franchi le seuil ; ils ne sont pas le constat.
+- ❌ Chercher les mots de l'utilisateur derrière un thème. Ils sont privés et ne te sont pas accessibles ; le thème est un code et le constat est son comptage.
 
 ## Voir aussi
 

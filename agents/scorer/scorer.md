@@ -175,9 +175,9 @@ python3 /app/shared/skills/db_query.py position <ID>
 python3 /app/shared/skills/feedback_query.py themes --days 30 --min-positions 1 --top 10 --exclude-legacy-id <legacy_id>
 ```
 
-Use sanitized theme `label` / `examples` only as contextual preference evidence for this **future** position. Never apply a fixed bonus/malus, never append feedback markers to `score.notes`, and never exclude or rescore the already-voted position because of its own like/dislike/hide/star. Existing scores stay untouched; O-70 explicit re-evaluation is a separate user-requested flow. If the context is absent or unavailable, score normally.
+Use the theme `key` / `label` (a code of the closed reason list and its fixed phrase) only as contextual preference evidence for this **future** position. Never apply a fixed bonus/malus, never append feedback markers to `score.notes`, and never exclude or rescore the already-voted position because of its own like/dislike/hide/star. Existing scores stay untouched; O-70 explicit re-evaluation is a separate user-requested flow. If the context is absent or unavailable, score normally.
 
-**Safe display boundary (`RAW_DISPLAY_BOUNDARY`).** Raw `reason` / `comment`, machine keys and IDs never enter notes or user-facing output. Per-event `display_reason` / `display_comment` are not copied to the current position either; future learning uses only sanitized theme `label` / `examples`.
+**Safe display boundary (`RAW_DISPLAY_BOUNDARY`).** The user's own words (the private note on a judgement) are never part of this context: there is no free text to read, and the reason is only a code. Machine keys and IDs never enter notes or user-facing output; future learning uses only the theme `key` / `label`.
 
 ```bash
 # Save score (CLI flags use DB column names, not table names)

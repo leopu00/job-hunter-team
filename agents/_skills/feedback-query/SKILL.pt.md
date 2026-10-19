@@ -7,7 +7,7 @@ allowed-tools: Bash(python3 *)
 
 ## Fronteira raw/display (`RAW_DISPLAY_BOUNDARY`)
 
-`reason` e `comment` são input raw apenas para a máquina. Nunca os cites, retransmitas, resumas ou mostres ao utilizador. Toda nota ou mensagem user-facing deve usar somente `display_reason` / `display_comment`; `label` / `examples` dos temas já passaram pelo mesmo sanitizer partilhado. Uma `note` é apenas um enum fechado `no-signal:*`: trata-a como estado de disponibilidade, nunca como detalhe de infraestrutura.
+O `reason` de um julgamento é um **código** de uma lista fechada (`too_senior`, `too_junior`, `wrong_location`, `salary_low`, `wrong_stack`, `company`, `scam_or_gone`, `closed`, `already_applied`, `other`). O que o utilizador escreve com palavras suas é uma nota privada que esta skill nunca devolve: em nenhum campo há texto do utilizador, e não há nada para citar, retransmitir ou parafrasear. O `label` do tema é uma frase fixa para o código. Uma `note` é apenas um enum fechado `no-signal:*`: trata-a como estado de disponibilidade, nunca como detalhe de infraestrutura.
 
 # feedback-query — Feedback do utilizador por posição
 
@@ -17,8 +17,7 @@ O utilizador pode clicar like/dislike/hide/star em qualquer posição a partir d
 |---------------------|---------|---------|
 | `position_legacy_id`| TEXT    | O `legacy_id` (string) da posição em `positions` |
 | `action`            | TEXT    | Um de `like`, `dislike`, `hide`, `star`, `clear` (mig 059 — o utilizador retira o juízo; ganha o último evento, portanto um `clear` no fim significa "sem juízo") |
-| `reason`            | TEXT    | Razão curta opcional (≤500 char) |
-| `comment`           | TEXT    | Comentário verboso opcional (≤2000 char, mig 028) |
+| `reason`            | TEXT    | Motivo opcional: um código da lista fechada acima |
 | `score`             | INTEGER | Pontuação granular opcional 1-5 (mig 028) |
 | `direction`         | TEXT    | Opcional `more_like_this` / `less_like_this` — sinal de padrão para o Scout, NÃO skip por posição (mig 028) |
 | `created_at`        | TS      | Momento da submissão |
@@ -42,12 +41,9 @@ Output (JSON em stdout):
   "count": 2,
   "actions": [
     {"action": "dislike", "created_at": "2026-05-30T14:21:00Z",
-     "reason": "too senior", "comment": "5+ anni in Java richiesti, non mi interessa stack legacy",
-     "display_reason": "too senior", "display_comment": "5+ anni in Java richiesti, non mi interessa stack legacy",
-     "score": 2, "direction": "less_like_this"},
+     "reason": "too_senior", "score": 2, "direction": "less_like_this"},
     {"action": "like", "created_at": "2026-05-28T09:00:00Z",
-     "reason": null, "comment": null, "display_reason": null,
-     "display_comment": null, "score": null, "direction": null}
+     "reason": null, "score": null, "direction": null}
   ]
 }
 ```
@@ -75,45 +71,44 @@ Uma única chamada HTTP em vez de N: `GET /api/positions/feedback?days=&limit=`,
 # Todos os eventos de feedback na janela, do mais recente
 python3 /app/shared/skills/feedback_query.py recent --days 30
 
-# Os motivos escritos pelo utilizador, agrupados por semelhança
+# Os códigos de motivo, contados sobre posições distintas
 python3 /app/shared/skills/feedback_query.py themes --days 30 --min-positions 3
 ```
 
 Saída de `themes`:
 
 ```json
-{"ok": true, "window_days": 30, "field": "both",
- "events_total": 31, "events_with_text": 19,
- "positions_with_text": 17, "positions_cleared": 2,
+{"ok": true, "window_days": 30,
+ "events_total": 31, "events_with_reason": 19,
+ "positions_with_reason": 17, "positions_cleared": 2,
  "by_action": {"like": 6, "dislike": 21, "hide": 3, "star": 1},
  "min_positions": 3,
  "themes": [
-   {"key": "tropp senio", "label": "troppo senior",
-    "positions": 7, "events": 8, "share": 0.412,
-    "actions": {"dislike": 6, "hide": 2},
-    "legacy_ids": ["42", "51", "63"],
-    "examples": ["troppo senior", "richiesta troppo seniore — Lead role"]}
+   {"key": "too_senior", "label": "too senior",
+    "positions": 7, "events": 7, "share": 0.412,
+    "actions": {"dislike": 6, "hide": 1},
+    "legacy_ids": ["42", "51", "63"]}
  ]}
 ```
 
-Como funciona o agrupamento (nenhuma correspondência exata exigida, nenhuma dependência nova): minúsculas → acentos fora → pontuação fora → palavras funcionais fora → cada palavra cortada aos primeiros 5 caracteres (`senior` / `seniority` / `seniore` / `séniorité` caem numa só chave) → contam-se palavras isoladas e **pares adjacentes**, por **posições distintas**, não por eventos. Um par absorve as suas partes quando cobre ≥ 80% das mesmas posições, por isso "demasiado senior" ganha a "senior"; os intensificadores ficam no fluxo de propósito. `reason` e `comment` são tokenizados em separado, portanto nenhum par é inventado a cavalo dos dois.
+Como funciona a contagem: cada posição conta **uma vez**, com o motivo do seu julgamento **mais recente**, e só contam os motivos que são um código da lista (um motivo antigo em texto livre lê-se como `other`). Não há texto para agrupar e nada é interpretado. `other` é contado mas não diz nada de específico.
 
 Limites deliberados, declarados para que ninguém leia nos números mais do que lá está:
-- Sinónimos distantes ficam separados (`salário` e `RAL` são dois temas) — isto é contagem de palavras, não semântica. Lê os `examples` display sanitizados (máx. 3) e junta com a cabeça.
+- Um tema é um código, por isso é tão grosseiro quanto a lista: `wrong_location` não diz que cidade. Nada do que o utilizador escreveu está disponível para o refinar.
 - As posições cujo **último** evento é `clear` ficam de fora (o juízo foi retirado); `--include-cleared` traz-nas de volta.
-- `share` = posições do tema / `positions_with_text`.
-- `--field reason|comment|both` (padrão `both`), `--top N`, `--days 0` para todo o histórico.
+- `share` = posições do tema / `positions_with_reason`.
+- `--top N`, `--days 0` para todo o histórico. (`--field` é aceite e ignorado, por causa de prompts antigos.)
 - Fallback quando o endpoint agregado não responde: `--legacy-ids 12,13,14` lê essas posições uma a uma (mais lento, mesmo formato de saída).
 
-Flags: `--days` (padrão 30, `0` = tudo), `--limit` (padrão 500 eventos), `--min-positions` (padrão 3), `--text-chars` em `recent` (padrão 300, trunca comentários longos).
+Flags: `--days` (padrão 30, `0` = tudo), `--limit` (padrão 500 eventos), `--min-positions` (padrão 3).
 
 Quando o payload traz uma `note` enum fechada (`no-signal:*`), não há agregado. Trata-a como "sem dados", nunca como "sem feedback", e não retransmitas o código.
 
 ## Como os agentes a usam
 
-**Scorer — `FUTURE_FEEDBACK_ONLY`:** chama `themes --days 30 --min-positions 1 --top 10 --exclude-legacy-id <legacy_id>`. Usa apenas `label` / `examples` sanitizados como evidência contextual de preferência para essa posição futura. O feedback de uma posição já votada nunca altera score, status ou notes: sem bónus/malus fixo, marker de feedback ou backfill. Os scores existentes ficam inalterados. O-70 reavaliação explícita é um fluxo separado pedido pelo utilizador.
+**Scorer — `FUTURE_FEEDBACK_ONLY`:** chama `themes --days 30 --min-positions 1 --top 10 --exclude-legacy-id <legacy_id>`. Usa os códigos `key` / `label` apenas como evidência contextual de preferência ao avaliar essa posição futura. O feedback de uma posição já votada nunca altera score, status ou notes: sem bónus/malus fixo, marker de feedback ou backfill. Os scores existentes ficam inalterados. O-70 reavaliação explícita é um fluxo separado pedido pelo utilizador.
 
-**Mentor** (Padrão F, read-only): `themes` sobre os últimos 30 dias para contar os motivos que o utilizador escreve. Limiares e interpretação vivem na skill `mentor-patterns`. O Mentor fala **ao utilizador** — nunca emite instruções de pesquisa a partir deste dado.
+**Mentor** (Padrão F, read-only): `themes` sobre os últimos 30 dias para contar os códigos de motivo que o utilizador escolhe. Limiares e interpretação vivem na skill `mentor-patterns`. O Mentor fala **ao utilizador** — nunca emite instruções de pesquisa a partir deste dado.
 
 **Scout** (sinal contextual opcional):
 - Não para skip por posição — isso já é tratado por dedup (SC-05).

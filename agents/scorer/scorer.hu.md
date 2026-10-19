@@ -176,9 +176,9 @@ python3 /app/shared/skills/db_query.py position <ID>
 python3 /app/shared/skills/feedback_query.py themes --days 30 --min-positions 1 --top 10 --exclude-legacy-id <legacy_id>
 ```
 
-Csak a sanitizált `label` / `examples` mezőket használd kontextuális preferenciajelként ehhez a **jövőbeli** pozícióhoz. Soha ne alkalmazz fix bónuszt/maluszt, ne írj feedback markert a `score.notes` mezőbe, és ne zárd ki vagy pontozd újra a már értékelt pozíciót a saját like/dislike/hide/star jele miatt. A meglévő score-ok változatlanok; az O-70 explicit újraértékelés külön, felhasználó által kért folyamat. Kontextus nélkül pontozz normálisan.
+A téma `key` / `label` mezőjét (a zárt indoklista egy kódját és annak fix kifejezését) csak kontextuális preferenciajelként használd ehhez a **jövőbeli** pozícióhoz. Soha ne alkalmazz fix bónuszt/maluszt, ne írj feedback markert a `score.notes` mezőbe, és ne zárd ki vagy pontozd újra a már értékelt pozíciót a saját like/dislike/hide/star jele miatt. A meglévő score-ok változatlanok; az O-70 explicit újraértékelés külön, felhasználó által kért folyamat. Kontextus nélkül pontozz normálisan.
 
-**Biztonságos display határ (`RAW_DISPLAY_BOUNDARY`).** A nyers `reason` / `comment`, gépi kulcsok és ID-k soha nem kerülnek jegyzetbe vagy user-facing outputba. Az esemény `display_reason` / `display_comment` mezőit sem másoljuk az aktuális pozícióra; a jövőbeli tanulás csak sanitizált téma-`label` / `examples` mezőket használ.
+**Biztonságos display határ (`RAW_DISPLAY_BOUNDARY`).** A felhasználó saját szavai (az értékeléshez írt privát jegyzet) soha nem részei ennek a kontextusnak: nincs olvasható szabad szöveg, az indok pedig csak egy kód. A gépi kulcsok és ID-k soha nem kerülnek jegyzetbe vagy user-facing outputba; a jövőbeli tanulás csak a téma `key` / `label` mezőit használja.
 
 ```bash
 # Mentsd a score-t (a CLI flag-ek DB oszlop neveket használnak, nem tábla neveket)

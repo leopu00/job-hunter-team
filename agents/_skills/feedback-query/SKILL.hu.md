@@ -7,7 +7,7 @@ allowed-tools: Bash(python3 *)
 
 ## Raw/display határ (`RAW_DISPLAY_BOUNDARY`)
 
-A `reason` és `comment` nyers, csak gépi bemenet. Soha ne idézd, továbbítsd, foglald össze vagy mutasd meg őket a felhasználónak. Minden user-facing jegyzet vagy üzenet kizárólag a `display_reason` / `display_comment` mezőket használhatja; a témák `label` / `examples` mezői már ugyanazon közös sanitizeren mentek át. A `note` csak zárt `no-signal:*` enum: elérhetőségi állapotként kezeld, soha ne infrastruktúra-részletként.
+Egy értékelés `reason` mezője egy zárt lista **kódja** (`too_senior`, `too_junior`, `wrong_location`, `salary_low`, `wrong_stack`, `company`, `scam_or_gone`, `closed`, `already_applied`, `other`). Amit a felhasználó a saját szavaival ír, az privát jegyzet, amelyet ez a skill soha nem ad vissza: egyetlen mezőben sincs a felhasználó szövege, és nincs mit idézni, továbbítani vagy körülírni. A téma `label` mezője a kód fix kifejezése. A `note` csak zárt `no-signal:*` enum: elérhetőségi állapotként kezeld, soha ne infrastruktúra-részletként.
 
 # feedback-query — Felhasználói visszajelzés pozíciónként
 
@@ -17,8 +17,7 @@ A felhasználó like/dislike/hide/star-t kattinthat bármelyik pozícióra a web
 |---------------------|---------|----------|
 | `position_legacy_id`| TEXT    | A pozíció `legacy_id`-je (string) a `positions`-ben |
 | `action`            | TEXT    | `like`, `dislike`, `hide`, `star`, `clear` egyike (mig 059 — a felhasználó visszavonja az ítéletet; az utolsó esemény nyer, tehát egy záró `clear` azt jelenti: "nincs ítélet") |
-| `reason`            | TEXT    | Opcionális rövid indok (≤500 karakter) |
-| `comment`           | TEXT    | Opcionális részletes megjegyzés (≤2000 karakter, mig 028) |
+| `reason`            | TEXT    | Opcionális indok: a fenti zárt lista egy kódja |
 | `score`             | INTEGER | Opcionális 1-5 granulált pontszám (mig 028) |
 | `direction`         | TEXT    | Opcionális `more_like_this` / `less_like_this` — minta jel a Scout számára, NEM pozíciónkénti kihagyás (mig 028) |
 | `created_at`        | TS      | Beküldési idő |
@@ -42,12 +41,9 @@ Kimenet (JSON stdout-ra):
   "count": 2,
   "actions": [
     {"action": "dislike", "created_at": "2026-05-30T14:21:00Z",
-     "reason": "too senior", "comment": "5+ evi Java szükseges, nem erdekel a legacy stack",
-     "display_reason": "too senior", "display_comment": "5+ evi Java szükseges, nem erdekel a legacy stack",
-     "score": 2, "direction": "less_like_this"},
+     "reason": "too_senior", "score": 2, "direction": "less_like_this"},
     {"action": "like", "created_at": "2026-05-28T09:00:00Z",
-     "reason": null, "comment": null, "display_reason": null,
-     "display_comment": null, "score": null, "direction": null}
+     "reason": null, "score": null, "direction": null}
   ]
 }
 ```
@@ -75,45 +71,44 @@ Egyetlen HTTP-hívás N helyett: `GET /api/positions/feedback?days=&limit=`, ugy
 # Az ablak összes visszajelzés-eseménye, a legfrissebbtől
 python3 /app/shared/skills/feedback_query.py recent --days 30
 
-# A felhasználó írta indokok, hasonlóság szerint csoportosítva
+# Az indokkódok, külön pozíciók szerint számolva
 python3 /app/shared/skills/feedback_query.py themes --days 30 --min-positions 3
 ```
 
 A `themes` kimenete:
 
 ```json
-{"ok": true, "window_days": 30, "field": "both",
- "events_total": 31, "events_with_text": 19,
- "positions_with_text": 17, "positions_cleared": 2,
+{"ok": true, "window_days": 30,
+ "events_total": 31, "events_with_reason": 19,
+ "positions_with_reason": 17, "positions_cleared": 2,
  "by_action": {"like": 6, "dislike": 21, "hide": 3, "star": 1},
  "min_positions": 3,
  "themes": [
-   {"key": "tropp senio", "label": "troppo senior",
-    "positions": 7, "events": 8, "share": 0.412,
-    "actions": {"dislike": 6, "hide": 2},
-    "legacy_ids": ["42", "51", "63"],
-    "examples": ["troppo senior", "richiesta troppo seniore — Lead role"]}
+   {"key": "too_senior", "label": "too senior",
+    "positions": 7, "events": 7, "share": 0.412,
+    "actions": {"dislike": 6, "hide": 1},
+    "legacy_ids": ["42", "51", "63"]}
  ]}
 ```
 
-Hogyan működik a csoportosítás (nem kell pontos egyezés, nincs új függőség): kisbetűsítés → ékezetek le → írásjelek ki → funkciószavak ki → minden szó az első 5 karakterére vágva (`senior` / `seniority` / `seniore` / `séniorité` egyetlen kulcsra esik) → egyedülálló szavakat és **szomszédos párokat** számolunk, **külön pozíciónként**, nem események szerint. Egy pár elnyeli a részeit, ha ugyanazon pozíciók ≥ 80%-át lefedi, így a "túl senior" nyer a "senior" ellen; az erősítő szavak szándékosan bennmaradnak a folyamban. A `reason` és a `comment` külön tokenizálódik, így nem születik pár a kettő határán.
+Hogyan működik a számolás: minden pozíció **egyszer** számít, a **legutóbbi** értékelésének indokával, és csak azok az indokok számítanak, amelyek a lista kódjai (egy régi szabad szöveges indok `other`-ként olvasódik). Nincs szöveg, amit csoportosítani kellene, és semmit sem értelmezünk. Az `other` megszámolódik, de nem mond semmi konkrétat.
 
 Szándékos korlátok, kimondva, hogy senki ne olvasson többet a számokba, mint ami bennük van:
-- A távoli szinonimák külön maradnak (a `fizetés` és a `RAL` két téma) — ez szószámolás, nem szemantika. A sanitizált display `examples` mezőket olvasd (max. 3), és fejjel kösd össze.
+- A téma egy kód, ezért olyan durva, mint a lista: a `wrong_location` nem mondja meg, melyik város. Semmi, amit a felhasználó írt, nem áll rendelkezésre a finomításhoz.
 - Azok a pozíciók, amelyek **utolsó** eseménye `clear`, kimaradnak (az ítéletet visszavonták); az `--include-cleared` visszahozza őket.
-- `share` = a téma pozíciói / `positions_with_text`.
-- `--field reason|comment|both` (alapértelmezés `both`), `--top N`, `--days 0` a teljes történetre.
+- `share` = a téma pozíciói / `positions_with_reason`.
+- `--top N`, `--days 0` a teljes történetre. (A `--field` elfogadott és figyelmen kívül hagyott, a régebbi promptok miatt.)
 - Tartalék, ha az összesített végpont nem válaszol: `--legacy-ids 12,13,14` egyesével olvassa azokat a pozíciókat (lassabb, azonos kimeneti formátum).
 
-Kapcsolók: `--days` (alap 30, `0` = minden), `--limit` (alap 500 esemény), `--min-positions` (alap 3), `--text-chars` a `recent`-en (alap 300, vágja a hosszú megjegyzéseket).
+Kapcsolók: `--days` (alap 30, `0` = minden), `--limit` (alap 500 esemény), `--min-positions` (alap 3).
 
 Ha a payload zárt `note` enumot hoz (`no-signal:*`), nincs összesítés. Kezeld úgy, hogy "nincs adat", soha ne úgy, hogy "nincs visszajelzés", és a kódot ne továbbítsd.
 
 ## Hogyan használják az ágensek
 
-**Scorer — `FUTURE_FEEDBACK_ONLY`:** hívd a `themes --days 30 --min-positions 1 --top 10 --exclude-legacy-id <legacy_id>` parancsot. Csak a sanitizált `label` / `examples` mezőket használd kontextuális preferenciajelként ehhez a jövőbeli pozícióhoz. A már értékelt pozíció feedbackje soha nem módosít score-t, statust vagy jegyzetet: nincs fix bónusz/malusz, feedback marker vagy backfill. A meglévő score-ok változatlanok. Az O-70 explicit újraértékelés külön, felhasználó által kért folyamat.
+**Scorer — `FUTURE_FEEDBACK_ONLY`:** hívd a `themes --days 30 --min-positions 1 --top 10 --exclude-legacy-id <legacy_id>` parancsot. A `key` / `label` kódokat csak kontextuális preferenciajelként használd, amikor ezt a jövőbeli pozíciót értékeled. A már értékelt pozíció feedbackje soha nem módosít score-t, statust vagy jegyzetet: nincs fix bónusz/malusz, feedback marker vagy backfill. A meglévő score-ok változatlanok. Az O-70 explicit újraértékelés külön, felhasználó által kért folyamat.
 
-**Mentor** (F minta, csak olvasás): `themes` az elmúlt 30 napra, hogy megszámolja a felhasználó által írt indokokat. A küszöbök és az értelmezés a `mentor-patterns` skillben élnek. A Mentor **a felhasználóhoz** beszél — ebből az adatból soha nem ad keresési utasítást.
+**Mentor** (F minta, csak olvasás): `themes` az elmúlt 30 napra, hogy megszámolja a felhasználó által választott indokkódokat. A küszöbök és az értelmezés a `mentor-patterns` skillben élnek. A Mentor **a felhasználóhoz** beszél — ebből az adatból soha nem ad keresési utasítást.
 
 **Scout** (opcionális kontextuális jel):
 - Nem pozíciónkénti kihagyásra — azt a dedup (SC-05) már kezeli.
