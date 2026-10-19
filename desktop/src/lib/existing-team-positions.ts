@@ -155,7 +155,10 @@ export async function readDesktopVpsPositionsWindow(
 ): Promise<DesktopVpsRead<DesktopVpsPositionsWindow>> {
   const substituted = opts.sort !== undefined && SORTS_THE_CORE_CANNOT_DO.has(opts.sort);
   const value = await read<unknown>(listRequest(substituted ? { ...opts, sort: "found_at" } : opts));
-  reportPositionsNotice(value.source === "vps" && substituted ? "sort_last_action" : null);
+  // The notice about the sort is for a list that has rows: over an empty one it
+  // would sit on top of a page with nothing to sort.
+  const rows = value.source === "vps" ? (value.data as { total?: unknown } | null)?.total : undefined;
+  reportPositionsNotice(value.source === "vps" && substituted && typeof rows === "number" && rows > 0 ? "sort_last_action" : null);
   if (value.source !== "vps") return value;
   const data = value.data;
   if (!data || typeof data !== "object" || Array.isArray(data)) {

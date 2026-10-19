@@ -60,6 +60,8 @@ type Filters = {
   sort?: string;
 };
 let fetched: string[] = [];
+/** The team has found nothing: the core counts and serves no row. */
+let emptyTeam = false;
 /** Every call the pages make to the app's own /api, with its method, as the bridge saw it. */
 let apiCalls: string[] = [];
 const recordApi = (next: ApiFetch): ApiFetch => async (input, init) => {
@@ -77,7 +79,7 @@ function companion(request: { op: string; filters?: Filters; id?: string }) {
   // What the core does: filter, count, then give one page of light rows.
   const { q, limit, offset = 0, scoredOnly, hideExcluded } = request.filters ?? {};
   const hay = (row: Row) => `${row.title} ${row.company}`.toLowerCase();
-  const matching = ROWS.filter(
+  const matching = (emptyTeam ? [] : ROWS).filter(
     (row) =>
       (!q || hay(row).includes(q.toLowerCase())) &&
       (!scoredOnly || row.score != null) &&
@@ -98,6 +100,7 @@ beforeEach(() => {
   fake.current.rows.positions = [{ id: "cloud-row", title: "Cloud row, must never show" }];
   document.cookie = "NEXT_LOCALE=it; path=/";
   fetched = [];
+  emptyTeam = false;
   apiCalls = [];
   native.isTauri.mockReturnValue(true);
   native.invoke.mockReset();
@@ -197,6 +200,22 @@ describe("Posizioni on an existing team read only", () => {
     );
     // asked by name for the date order, never silently left unsorted
     expect(listRequests()[0].filters).toMatchObject({ sort: "found_at", dir: "asc" });
+  });
+
+  it("tells an empty team's list in one sentence, not «no results with these filters», and keeps the sort notice off it", async () => {
+    emptyTeam = true;
+    navigate("/positions?sort=last_action_at&dir=asc", { replace: true });
+    render(<Shell />);
+    expect((await screen.findAllByText(/la squadra non ne ha ancora trovate con un punteggio/)).length).toBeGreaterThan(0);
+    expect(screen.queryByText(/con questi filtri/)).not.toBeInTheDocument();
+    expect(screen.queryByTestId("existing-team-readonly-notice")).not.toBeInTheDocument();
+  });
+
+  it("still says «with these filters» when the person's filters leave nothing", async () => {
+    navigate("/positions?q=nothing-matches-this", { replace: true });
+    render(<Shell />);
+    expect((await screen.findAllByText("Nessuna posizione trovata con questi filtri.")).length).toBeGreaterThan(0);
+    expect(screen.queryByText(/non ne ha ancora trovate/)).not.toBeInTheDocument();
   });
 
   it("pages the list as the web does and keeps the filter in the query string", async () => {
