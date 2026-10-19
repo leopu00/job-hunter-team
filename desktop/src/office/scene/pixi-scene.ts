@@ -341,7 +341,7 @@ export async function createOfficeScene(host: HTMLElement, options: OfficeSceneO
       if (!status || !sprite) continue;
       live.add(pose.uid);
       // who (the session's name), what (the state) and, for a stopped agent, why and until when
-      const { label, color } = tagOf(status, now);
+      const { label, color } = tagOf(status, now, appLocale());
       const name = pose.uid.toUpperCase();
       const detail = tagDetail(status, appLocale(), now);
       const key = `${name}|${label}|${color}|${detail}`;

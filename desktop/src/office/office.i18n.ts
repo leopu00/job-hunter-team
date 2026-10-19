@@ -6,8 +6,10 @@ import { pluralText, type PluralForms } from "../lib/plural";
  * The words around the office scene: the panel a click opens, the tag under
  * the pointer, the keyboard list and the page's status line. 7 languages;
  * Italian is the source and its shape is the type. What is NOT here is the
- * game's own English: the agents' state tags (WORKING, IDLE…) and the
- * departments' names and taglines (office/contract.ts).
+ * game's own English: the departments' names and taglines
+ * (office/contract.ts). The agents' state tags say the agent_state
+ * catalog's word in the person's language (office/status.ts, tagOf); only
+ * an old box's words without a state (WORKING, WAITING, PAUSED) stay English.
  * `{count}`, `{error}`, `{name}`, `{notes}` are filled by `fill`.
  */
 export interface OfficeText {

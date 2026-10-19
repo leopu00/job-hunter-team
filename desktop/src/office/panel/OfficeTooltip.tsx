@@ -24,7 +24,7 @@ export function tooltipFor(
     case "agent": {
       const s = statuses?.agents[target.uid.toLowerCase()];
       const last = snapshot?.transitions.find((t) => t.byAgent === target.uid);
-      const lines = [s ? tagOf(s, ctx.now).label : t.tipNotPublished];
+      const lines = [s ? tagOf(s, ctx.now, locale).label : t.tipNotPublished];
       if (last) {
         const state = last.to ? publicPositionStateLabel(publicPositionState(last.to), locale) : "";
         const what = [last.position.title, last.position.company].filter(Boolean).join(" · ");
