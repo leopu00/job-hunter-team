@@ -87,6 +87,21 @@ describe("Shell", () => {
     expect(vi.mocked(loadDashboard).mock.calls.length).toBe(before + 1);
   });
 
+  it("names the theme picker and its themes in the app's language", async () => {
+    document.cookie = "NEXT_LOCALE=en; path=/";
+    try {
+      navigate("/dashboard", { replace: true });
+      const user = userEvent.setup();
+      render(<Shell />);
+      await user.click(screen.getByRole("button", { name: "Theme: Dark. Change theme" }));
+      const menu = screen.getByRole("menu", { name: "App theme" });
+      expect(within(menu).getByRole("menuitemradio", { name: "Ocean" })).toBeInTheDocument();
+      expect(menu).not.toHaveTextContent(/Scuro|Chiaro|Oceano|Carta|Tema/);
+    } finally {
+      document.cookie = "NEXT_LOCALE=; path=/; max-age=0";
+    }
+  });
+
   it("keeps the signed-in shell mounted when scoped logout teardown fails", async () => {
     vi.mocked(signOut).mockRejectedValue({ code: "account_scope_reset_failed" });
     navigate("/dashboard", { replace: true });
