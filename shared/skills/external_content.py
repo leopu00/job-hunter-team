@@ -309,14 +309,34 @@ _NOISE_CATEGORIES = frozenset({"Cc", "Cf", "Zl", "Zp", "Zs"})
 # busta: si ferma a un terminatore (BEL o ST, consumato), a un a capo o a un «[@» (non consumati). Senza
 # terminatore NON arriva in fondo al testo: attraversare un «[@» vero e' proprio cio' che il verdetto
 # non deve fare.
+# L'OSC si ferma a QUALUNQUE «[» (non solo a «[@»): guardare due caratteri sui byte grezzi lasciava passare
+# `ESC ] [ ESC[0m @capitano`, dove il «[» sembrava innocuo e la sequenza dopo lo toglieva dal testo letto.
 _AFTER_ESC = re.compile(
     r"\[[0-9;?]*[ -/]*[A-Za-z~`]"
-    r"|\](?:(?!\[@)[^\x07\x1b\r\n])*(?:\x07|\x1b\\)?"
+    r"|\][^\x07\x1b\r\n\[]*(?:\x07|\x1b\\)?"
 )
 # Come sopra, per togliere le sequenze di un ESC da TUTTO il testo: una sequenza che non e' completa
 # lascia il solo ESC da togliere.
 _ESC_SEQUENCE = re.compile(r"\x1b(?:" + _AFTER_ESC.pattern + r")?")
 _KEEP_CONTROLS = frozenset("\n\r\t")
+
+# Invisibili che NON stanno in INVISIBLE_COMMANDS perche' sono lettere di una scrittura o una
+# presentazione (il selettore di variante FE0F e' l'emoji, quelli CJK e mongoli scelgono la forma di un
+# segno, i riempitivi hangul stanno in alcune sequenze di jamo): togliere quelli da un testo cambierebbe
+# cio' che l'autore ha scritto. Per decidere CHI parla pero' si leggono come niente: `[<FE0F>@capitano`,
+# un riempitivo hangul o un braille vuoto davanti alla busta si leggono come la busta del capitano.
+# Sono i Default_Ignorable di Unicode fuori dalla categoria Cf, piu' il braille vuoto (U+2800, che vuoto
+# non e' per Unicode ma lo e' per chi legge). Solo `reading_view` e `leading_noise_length` li usano.
+READING_IGNORABLES = (
+    frozenset("\u034f\u115f\u1160\u17b4\u17b5\u3164\uffa0\u2800")
+    | _codepoints(0x180B, 0x180F)
+    | _codepoints(0xFE00, 0xFE0F)
+    | _codepoints(0xE0100, 0xE01EF)
+)
+
+# Omoglifi che fanno leggere una busta dove i byte non la mostrano: la chiocciola a tutta larghezza.
+# Solo nella vista di lettura (il verdetto), mai nel testo che si consegna.
+_READING_HOMOGLYPHS = {ord("\uff20"): "@"}
 
 
 def leading_noise_length(text):
@@ -331,7 +351,7 @@ def leading_noise_length(text):
             if found:
                 i = found.end()
             continue
-        if ch in INVISIBLE_COMMANDS or unicodedata.category(ch) in _NOISE_CATEGORIES:
+        if ch in INVISIBLE_COMMANDS or ch in READING_IGNORABLES or unicodedata.category(ch) in _NOISE_CATEGORIES:
             i += 1
             continue
         break
@@ -343,13 +363,26 @@ def reading_view(text):
     invisibili in nessun punto. Serve a decidere CHI parla: `[<ZWSP>@capitano -> @x]` e
     `[\x1b[0m@capitano -> @x]` si leggono come una busta del capitano, e i byte non la lasciano
     vedere a una regex. Non e' il testo che si consegna: il verdetto lo guarda, nessuno lo consegna."""
-    text = _ESC_SEQUENCE.sub("", str(text or ""))
-    return "".join(
-        ch
-        for ch in text
-        if ch not in INVISIBLE_COMMANDS
-        and (ch in _KEEP_CONTROLS or unicodedata.category(ch) not in ("Cc", "Cf"))
-    )
+    text = str(text or "")
+    # Invisibili e controlli PRIMA (salvo l'ESC), le sequenze dopo, finche' non cambia piu': togliere
+    # una sequenza puo' far toccare due pezzi di busta che la sequenza teneva separati, e un invisibile
+    # dentro una sequenza non deve salvarla.
+    for _ in range(4):
+        before = text
+        text = "".join(
+            ch
+            for ch in text
+            if ch == "\x1b"
+            or (
+                ch not in INVISIBLE_COMMANDS
+                and ch not in READING_IGNORABLES
+                and (ch in _KEEP_CONTROLS or unicodedata.category(ch) not in ("Cc", "Cf"))
+            )
+        )
+        text = _ESC_SEQUENCE.sub("", text)
+        if text == before:
+            break
+    return text.translate(_READING_HOMOGLYPHS)
 
 
 def sanitize_user_text(text):
