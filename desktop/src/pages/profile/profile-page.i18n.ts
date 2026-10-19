@@ -25,7 +25,7 @@ export const PROFILE_PAGE_TEXT: Record<Locale, ProfilePageText> = {
   it: {
     linkedinAria: "Accesso a LinkedIn",
     linkedinTitle: "Accesso a LinkedIn per le candidature",
-    linkedinIntro: "L’accesso si fa nel browser protetto del team, in una finestra a parte: gli agenti non vedono né la password né la sessione.",
+    linkedinIntro: "L’accesso si fa nel browser protetto del team, in una finestra a parte. Gli agenti non vedono la password e non leggono i dati della sessione: la usano solo per candidarsi al posto tuo.",
     statusLabel: "Stato:",
     statusLoading: "verifica…",
     statusUnknown: "non disponibile",
@@ -39,7 +39,7 @@ export const PROFILE_PAGE_TEXT: Record<Locale, ProfilePageText> = {
   en: {
     linkedinAria: "LinkedIn login",
     linkedinTitle: "LinkedIn login for applications",
-    linkedinIntro: "You log in inside the team’s protected browser, in a separate window: the agents see neither the password nor the session.",
+    linkedinIntro: "You log in inside the team’s protected browser, in a separate window. The agents do not see the password and do not read the session data: they use the session only to apply on your behalf.",
     statusLabel: "Status:",
     statusLoading: "checking…",
     statusUnknown: "unavailable",
@@ -53,7 +53,7 @@ export const PROFILE_PAGE_TEXT: Record<Locale, ProfilePageText> = {
   de: {
     linkedinAria: "LinkedIn-Anmeldung",
     linkedinTitle: "LinkedIn-Anmeldung für die Bewerbungen",
-    linkedinIntro: "Die Anmeldung erfolgt im geschützten Browser des Teams, in einem eigenen Fenster: Die Agenten sehen weder das Passwort noch die Sitzung.",
+    linkedinIntro: "Die Anmeldung erfolgt im geschützten Browser des Teams, in einem eigenen Fenster. Die Agenten sehen das Passwort nicht und lesen die Sitzungsdaten nicht: Sie nutzen die Sitzung nur, um sich in deinem Namen zu bewerben.",
     statusLabel: "Status:",
     statusLoading: "wird geprüft…",
     statusUnknown: "nicht verfügbar",
@@ -67,7 +67,7 @@ export const PROFILE_PAGE_TEXT: Record<Locale, ProfilePageText> = {
   fr: {
     linkedinAria: "Connexion à LinkedIn",
     linkedinTitle: "Connexion à LinkedIn pour les candidatures",
-    linkedinIntro: "La connexion se fait dans le navigateur protégé de l’équipe, dans une fenêtre à part : les agents ne voient ni le mot de passe ni la session.",
+    linkedinIntro: "La connexion se fait dans le navigateur protégé de l’équipe, dans une fenêtre à part. Les agents ne voient pas le mot de passe et ne lisent pas les données de la session : ils l’utilisent seulement pour postuler à ta place.",
     statusLabel: "État :",
     statusLoading: "vérification…",
     statusUnknown: "indisponible",
@@ -81,7 +81,7 @@ export const PROFILE_PAGE_TEXT: Record<Locale, ProfilePageText> = {
   es: {
     linkedinAria: "Acceso a LinkedIn",
     linkedinTitle: "Acceso a LinkedIn para las candidaturas",
-    linkedinIntro: "El acceso se hace en el navegador protegido del equipo, en una ventana aparte: los agentes no ven ni la contraseña ni la sesión.",
+    linkedinIntro: "El acceso se hace en el navegador protegido del equipo, en una ventana aparte. Los agentes no ven la contraseña ni leen los datos de la sesión: solo la usan para postularse en tu lugar.",
     statusLabel: "Estado:",
     statusLoading: "comprobando…",
     statusUnknown: "no disponible",
@@ -95,7 +95,7 @@ export const PROFILE_PAGE_TEXT: Record<Locale, ProfilePageText> = {
   pt: {
     linkedinAria: "Acesso ao LinkedIn",
     linkedinTitle: "Acesso ao LinkedIn para as candidaturas",
-    linkedinIntro: "O acesso faz-se no navegador protegido da equipa, numa janela à parte: os agentes não veem nem a palavra-passe nem a sessão.",
+    linkedinIntro: "O acesso faz-se no navegador protegido da equipa, numa janela à parte. Os agentes não veem a palavra-passe nem leem os dados da sessão: usam-na apenas para se candidatarem por ti.",
     statusLabel: "Estado:",
     statusLoading: "a verificar…",
     statusUnknown: "indisponível",
@@ -109,7 +109,7 @@ export const PROFILE_PAGE_TEXT: Record<Locale, ProfilePageText> = {
   hu: {
     linkedinAria: "LinkedIn-bejelentkezés",
     linkedinTitle: "LinkedIn-bejelentkezés a jelentkezésekhez",
-    linkedinIntro: "A bejelentkezés a csapat védett böngészőjében történik, külön ablakban: az ügynökök sem a jelszót, sem a munkamenetet nem látják.",
+    linkedinIntro: "A bejelentkezés a csapat védett böngészőjében történik, külön ablakban. Az ügynökök nem látják a jelszót, és nem olvassák a munkamenet adatait: a munkamenetet csak arra használják, hogy a nevedben jelentkezzenek.",
     statusLabel: "Állapot:",
     statusLoading: "ellenőrzés…",
     statusUnknown: "nem elérhető",

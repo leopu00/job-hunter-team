@@ -16,6 +16,9 @@ it("speaks the language of the app", async () => {
   expect(await screen.findByText("Status: logged in")).toBeInTheDocument();
   expect(screen.getByRole("button", { name: "Log in to LinkedIn again" })).toBeInTheDocument();
   expect(screen.getByRole("region", { name: "LinkedIn login" })).toBeInTheDocument();
+  // The agents use the session to apply: the card must not say they never touch it.
+  expect(screen.getByText(/use the session only to apply on your behalf/)).toBeInTheDocument();
+  expect(document.body).not.toHaveTextContent(/neither the password nor the session/);
   expect(document.body).not.toHaveTextContent(/Accedi|Stato|accesso/);
 });
 
