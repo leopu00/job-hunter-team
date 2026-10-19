@@ -136,6 +136,15 @@ export const T = {
     fr: "Masquer les filtres",
     pt: "Ocultar filtros",
   },
+  default_filter: {
+    it: "predefinito",
+    en: "default",
+    hu: "alapértelmezett",
+    es: "predeterminado",
+    de: "Standard",
+    fr: "par défaut",
+    pt: "predefinido",
+  },
   filters_active: {
     it: "Filtri attivi",
     en: "Active filters",
