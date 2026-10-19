@@ -264,6 +264,10 @@ fn host_key_probe_args(known_hosts: &Path, address: &str, port: u16, on_windows:
         format!("UserKnownHostsFile=\"{known_hosts_option}\""),
         "GlobalKnownHostsFile=/dev/null".to_owned(),
         "HashKnownHosts=no".to_owned(),
+        // A connection the user's own ssh config keeps open would be reused: no
+        // key exchange, and the throwaway file would stay empty.
+        "ControlMaster=no".to_owned(),
+        "ControlPath=none".to_owned(),
         "HostKeyAlgorithms=ssh-ed25519".to_owned(),
         "PreferredAuthentications=none".to_owned(),
         "PubkeyAuthentication=no".to_owned(),
@@ -1344,6 +1348,8 @@ mod tests {
             "PasswordAuthentication=no",
             "GlobalKnownHostsFile=/dev/null",
             "HostKeyAlgorithms=ssh-ed25519",
+            "ControlMaster=no",
+            "ControlPath=none",
         ] {
             assert!(values.iter().any(|v| v == needed), "{needed}");
         }
