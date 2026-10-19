@@ -1,5 +1,6 @@
 // @vitest-environment node
 import { describe, expect, it } from "vitest";
+import { ASSISTANT_GUIDE_TEXT } from "../pages/assistant-onboarding/AssistantOnboarding.guide.i18n";
 import { OFFICE_TEXT } from "../office/office.i18n";
 import { DICTATION_LOCALE, DIRECT_CHAT_TEXT } from "../pages/messages/direct-chat.i18n";
 import { PROFILE_PAGE_TEXT } from "../pages/profile/profile-page.i18n";
@@ -23,6 +24,7 @@ describe.each([
   ["voice input", VOICE_INPUT_TEXT],
   ["profile page", PROFILE_PAGE_TEXT],
   ["office", OFFICE_TEXT],
+  ["assistant onboarding", ASSISTANT_GUIDE_TEXT],
 ] as const)("the %s texts", (_name, dictionary) => {
   const dict = dictionary as Record<string, unknown>;
 

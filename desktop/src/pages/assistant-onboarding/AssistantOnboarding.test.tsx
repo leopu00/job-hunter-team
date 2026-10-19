@@ -153,6 +153,22 @@ describe("AssistantOnboarding", () => {
     );
   });
 
+  it.each([
+    ["en", "Where do you want to start?", "Take me on the tour", "Step 01 · orientation", "Step 1 of 4", "Next"],
+    ["hu", "Hol szeretnéd kezdeni?", "Vezess végig a körúton", "01. lépés · tájékozódás", "1. lépés a 4-ből", "Tovább"],
+  ])("tells the choice, the steps and the buttons in %s", async (locale, title, tour, eyebrow, stepOf, next) => {
+    document.cookie = `NEXT_LOCALE=${locale}; Path=/`;
+    const user = userEvent.setup();
+    render(<AssistantOnboarding onComplete={complete()} />);
+
+    expect(screen.getByRole("heading", { name: title })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: new RegExp(tour) }));
+    expect(screen.getByText(new RegExp(eyebrow))).toBeInTheDocument();
+    expect(screen.getByText(stepOf)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: new RegExp(next) })).toBeInTheDocument();
+    expect(document.body).not.toHaveTextContent(/Tappa|Avanti|Indietro|Da dove vuoi/);
+  });
+
   it("speaks the app's language in the first message's composer, and dictates in it", async () => {
     document.cookie = "NEXT_LOCALE=en; Path=/";
     const voice = voiceBridge();
