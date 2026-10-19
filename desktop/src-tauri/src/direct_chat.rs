@@ -1099,6 +1099,7 @@ pub(crate) fn direct_chat_close(
 }
 
 pub(crate) fn teardown(state: &DirectChatState) {
+    crate::existing_team_runtime::revoke_full_link();
     if let Ok(mut slot) = state.inner.connection.lock() {
         if let Some(mut connection) = slot.take() {
             close_connection(&mut connection);

@@ -3205,6 +3205,9 @@ pub(crate) async fn onboarding_existing_team_connect(
                     .map_err(failure)?;
                 crate::direct_chat::persist_onboarding_host(&app, &worker_expected, &request.host)
                     .map_err(failure)?;
+                // The full connection, confirmed by the person: the chat may write to this team
+                // in this run of the app. The read-only connection never gets here.
+                crate::existing_team_runtime::grant_full_link(&worker_expected, &target);
                 Ok(snapshot)
             },
         );

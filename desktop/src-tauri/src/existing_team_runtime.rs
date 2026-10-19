@@ -20,6 +20,7 @@ use std::{
     fs::{self, File, OpenOptions},
     io::{Read, Write},
     path::{Path, PathBuf},
+    sync::Mutex,
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
 use tauri::{Manager, State};
@@ -551,6 +552,23 @@ pub(crate) struct ActivatedTarget {
 }
 
 impl ActivatedTarget {
+    #[cfg(test)]
+    pub(crate) fn synthetic_for_tests() -> Self {
+        Self {
+            team_id: "t".repeat(16),
+            runtime: RuntimeTarget {
+                container_id: "a".repeat(64),
+                image_id: format!("sha256:{}", "b".repeat(64)),
+                platform_image_id: format!("sha256:{}", "c".repeat(64)),
+                oci_revision: "d".repeat(40),
+                digest: format!("sha256:{}", "e".repeat(64)),
+                os: "linux".into(),
+                architecture: "amd64".into(),
+            },
+            candidate_sha256: "f".repeat(64),
+        }
+    }
+
     pub(crate) fn candidate_sha256(&self) -> &str {
         &self.candidate_sha256
     }
@@ -1218,6 +1236,33 @@ pub(crate) fn delivery_command(
     )
 }
 
+/// The full connection of an existing team ("Conferma e collega") in this run of the app: the
+/// connection key of the one team the person confirmed. Only the native side of that command
+/// sets it, and only when it succeeds. What writes to the team (the chat, the agent controls) is
+/// allowed only to a team that holds it: the read-only view activates a target too, and never
+/// holds it. It lives in memory: an app run that has not confirmed starts without it, so after a
+/// restart it fails closed. The commands that read it must refuse any window but `main` first.
+static FULL_LINK: Mutex<Option<String>> = Mutex::new(None);
+
+pub(crate) fn grant_full_link(scope: &AccountScope, target: &ActivatedTarget) {
+    if let Ok(mut slot) = FULL_LINK.lock() {
+        *slot = Some(connection_key(scope, target));
+    }
+}
+
+pub(crate) fn full_link_granted(scope: &AccountScope, target: &ActivatedTarget) -> bool {
+    FULL_LINK
+        .lock()
+        .map(|slot| slot.as_deref() == Some(connection_key(scope, target).as_str()))
+        .unwrap_or(false)
+}
+
+pub(crate) fn revoke_full_link() {
+    if let Ok(mut slot) = FULL_LINK.lock() {
+        *slot = None;
+    }
+}
+
 pub(crate) fn snapshot_command(target: &RuntimeTarget) -> Result<String, &'static str> {
     command(target, "docker exec \"$JHT_CID\" node -e 'const fs=require(\"fs\"); let c={}; try{c=JSON.parse(fs.readFileSync(\"/jht_home/jht.config.json\",\"utf8\"))}catch{}; const p=String(c.active_provider||\"\").toLowerCase(); const marker={claude:\"/jht_home/.claude/.credentials.json\",anthropic:\"/jht_home/.claude/.credentials.json\",codex:\"/jht_home/.codex/auth.json\",openai:\"/jht_home/.codex/auth.json\",kimi:\"/jht_home/.kimi/credentials/kimi-code.json\",moonshot:\"/jht_home/.kimi/credentials/kimi-code.json\"}[p]; const ok=[\"claude\",\"anthropic\",\"codex\",\"openai\",\"kimi\",\"moonshot\"].includes(p); console.log(\"runtimeInstalled=1\\ncontainerRunning=1\\nproviderConfigured=\"+(ok?\"1\":\"0\")+\"\\nproviderAuthenticated=\"+(marker&&fs.existsSync(marker)?\"1\":\"0\")+\"\\nprofileReady=\"+(fs.existsSync(\"/jht_home/profile/ready.flag\")?\"1\":\"0\")+\"\\nassistantWelcomed=\"+(fs.existsSync(\"/jht_home/profile/welcomed.flag\")?\"1\":\"0\"));'")
 }
@@ -1685,6 +1730,20 @@ mod tests {
             os: "linux".into(),
             architecture: "amd64".into(),
         }
+    }
+
+    #[test]
+    fn the_full_link_belongs_to_the_confirmed_team_in_this_run_only() {
+        let (one, two) = (AccountScope::synthetic(b"scope-one"), AccountScope::synthetic(b"scope-two"));
+        let activated = |hash: &str| ActivatedTarget { team_id: "t".repeat(16), runtime: target(), candidate_sha256: hash.to_owned() };
+        revoke_full_link();
+        assert!(!full_link_granted(&one, &activated("h1")), "an app run that has not confirmed starts without it");
+        grant_full_link(&one, &activated("h1"));
+        assert!(full_link_granted(&one, &activated("h1")));
+        assert!(!full_link_granted(&two, &activated("h1")), "another account never has it");
+        assert!(!full_link_granted(&one, &activated("h2")), "nor another candidate of the same account");
+        revoke_full_link();
+        assert!(!full_link_granted(&one, &activated("h1")));
     }
 
     #[test]
