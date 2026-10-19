@@ -4,7 +4,7 @@ import { appLocale } from "../../lib/app-locale";
 import { describeError } from "../../lib/error-catalog";
 import {
   readAgentScreen,
-  readTeamAgents,
+  readTeamAgentsShared,
   type AgentScreenReading,
   type TeamAgent,
   type TeamAgentsReading,
@@ -142,7 +142,7 @@ export default function ExistingTeamAgentsPage(_props: PageProps) {
   const read = useCallback(async () => {
     const mine = ++latest.current;
     setBusy(true);
-    const result = await readTeamAgents();
+    const result = await readTeamAgentsShared();
     if (latest.current !== mine) return;
     setReading(result);
     setBusy(false);

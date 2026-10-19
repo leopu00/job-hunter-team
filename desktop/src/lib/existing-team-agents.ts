@@ -1,5 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { isAgentState, isKnownReason, type AgentStateInfo } from "@/lib/agent-state";
+import { existingTeamReadOnly, type ExistingTeamReadOnly } from "./existing-team-readonly";
 import { teamStatusErrorCode } from "./existing-team-status";
 
 /**
@@ -92,6 +93,30 @@ export async function readTeamAgents(
   } catch (error) {
     return { kind: "error", at: now(), code: teamStatusErrorCode(error) };
   }
+}
+
+/** The page and the office opened one after the other: one read of the VPS serves both. */
+export const SHARED_AGENTS_MS = 5_000;
+
+let shared: { at: number; view: ExistingTeamReadOnly | null; read: Promise<TeamAgentsReading> } | null = null;
+
+/**
+ * The team's agents, one read shared by everything in the read-only view that
+ * shows them (the Agents page and the office) for SHARED_AGENTS_MS. It belongs
+ * to the opening of the view it was made in: after the view is left, or opened
+ * again (another VPS, another team), a new read is made, never the old one.
+ */
+export function readTeamAgentsShared(now = Date.now()): Promise<TeamAgentsReading> {
+  const view = existingTeamReadOnly();
+  if (shared && shared.view === view && now - shared.at < SHARED_AGENTS_MS) return shared.read;
+  const read = readTeamAgents();
+  shared = { at: now, view, read };
+  return read;
+}
+
+/** Forgets the shared read (a test). */
+export function resetTeamAgentsShared(): void {
+  shared = null;
 }
 
 /** The last lines of one agent's terminal, read once when the person opens it. */
