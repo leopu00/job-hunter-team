@@ -81,15 +81,24 @@ pub(crate) fn open_window(
         let _ = window.show();
         return window.set_focus().map(|_| None).map_err(|_| "window_failed");
     }
-    WebviewWindowBuilder::new(app, label, WebviewUrl::App(page.into()))
+    let window = WebviewWindowBuilder::new(app, label, WebviewUrl::App(page.into()))
         .title(title)
-        .inner_size(1180.0, 860.0)
-        .min_inner_size(480.0, 360.0)
+        .inner_size(WINDOW_SIZE.0, WINDOW_SIZE.1)
+        .min_inner_size(WINDOW_MIN.0, WINDOW_MIN.1)
         .resizable(true)
+        .visible(false)
         .build()
-        .map(Some)
-        .map_err(|_| "window_failed")
+        .map_err(|_| "window_failed")?;
+    // cut to the work area of the monitor, then shown: 1180x860 does not fit a
+    // 1366x768 screen even at 100%
+    crate::window_fit::fit_new_window(&window, WINDOW_SIZE, WINDOW_MIN);
+    window.show().map_err(|_| "window_failed")?;
+    Ok(Some(window))
 }
+
+/// What the window wants, before the work area has its say (window_fit).
+const WINDOW_SIZE: (f64, f64) = (1180.0, 860.0);
+const WINDOW_MIN: (f64, f64) = (480.0, 360.0);
 
 /// Dati di connessione per la finestra: URL WebSocket su loopback e password
 /// del giro corrente. Riletti a ogni tentativo, perché un riavvio del
