@@ -161,6 +161,35 @@ export function updatePosition(db: Database, a: Parsed, actor: string, userId: s
       const row = db.prepare("SELECT status FROM positions WHERE id = ?").get(id) as { status: string | null } | undefined;
       if (row) previous = row.status;
     }
+    // JHT-T03: no `checked` without a place — the gate of db_update.py `_checked_place_gate`, twin
+    // for twin. The row is read as it would result after this UPDATE; the floor is the first
+    // precision level, written in the same UPDATE when the row has none.
+    let precisionFloor: string | null = null;
+    if (a["status"] === "checked" && previous !== null && previous !== "checked") {
+      const row = db
+        .prepare("SELECT loc_city, loc_country, remote_type, work_mode, location_precision FROM positions WHERE id = ?")
+        .get(id) as
+        | { loc_city: string | null; loc_country: string | null; remote_type: string | null; work_mode: string | null; location_precision: string | null }
+        | undefined;
+      if (row) {
+        const effective = (arg: unknown, column: string | null): string => (((arg !== null && arg !== undefined ? (arg as string) : column) ?? "") as string).trim();
+        const city = effective(a["loc_city"], row.loc_city);
+        const country = effective(a["loc_country"], row.loc_country);
+        const remoteType = pyTruthy(a["remote_type"]) ? (a["remote_type"] as string) : row.remote_type;
+        const remote = remoteType === "full_remote" || effective(a["work_mode"], row.work_mode) === "remote";
+        if (!city && !country && !remote) {
+          db.exec("ROLLBACK");
+          return {
+            stdout: "",
+            stderr:
+              `⚠️  LOCATION_MISSING (location_missing): position ${id} cannot become 'checked' without a place. ` +
+              "Pass --loc-city or --loc-country in the same command, or mark it fully remote (--remote-type full_remote or --work-mode remote).\n",
+            exitCode: 1,
+          };
+        }
+        if (row.location_precision === null) precisionFloor = city ? "city" : country ? "country" : "remote";
+      }
+    }
     if (pyTruthy(outcome)) {
       try {
         checkClosingWrite("is_open", a["is_open"], outcome!);
@@ -353,6 +382,7 @@ export function updatePosition(db: Database, a: Parsed, actor: string, userId: s
           else if ((row?.location_precision ?? null) === null) precision = "city";
         }
       }
+      if (precision === null && precisionFloor !== null) precision = precisionFloor;
       if (precision !== null) {
         set("location_precision = ?", precision);
         changed.push(`location_precision=${precision}`);
