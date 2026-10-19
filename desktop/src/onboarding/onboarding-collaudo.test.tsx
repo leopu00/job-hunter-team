@@ -71,3 +71,42 @@ describe("a failed preparation step: the reason is next to the error", () => {
     expect(follows(document.querySelector(".onboarding-runtime-progress")!, status)).toBe(true);
   });
 });
+
+describe("the Environment step shows only what the choice made needs", () => {
+  const t = ONBOARDING_TEXT.it;
+
+  async function toEnvironment() {
+    const user = userEvent.setup();
+    const flow = renderFlow();
+    await user.click(screen.getByRole("button", { name: new RegExp(t.startSetup) }));
+    await screen.findByRole("heading", { name: /scegli l’ambiente/i });
+    return { user, ...flow };
+  }
+
+  it("with «Questo computer» there is no browser assistance and no «team già attivo» block", async () => {
+    await toEnvironment();
+    expect(screen.getByRole("radio", { name: new RegExp(t.thisComputer) })).toBeChecked();
+    expect(screen.queryByText(ASSISTANCE_TEXT.it.intro)).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: ASSISTANCE_TEXT.it.connect })).not.toBeInTheDocument();
+    expect(screen.queryByText(/assistenza browser/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: t.existingTeam.verifyVps })).not.toBeInTheDocument();
+  });
+
+  it("with a VPS both blocks are there, as small cards and not as second full-height panels", async () => {
+    const { user } = await toEnvironment();
+    await user.click(screen.getByRole("radio", { name: new RegExp(t.vpsServer) }));
+    const assistance = screen.getByText(ASSISTANCE_TEXT.it.intro).closest("section")!;
+    const existing = screen.getByRole("button", { name: t.existingTeam.verifyVps }).closest("section")!;
+    expect(assistance).toHaveClass("onboarding-aside");
+    expect(existing).toHaveClass("onboarding-aside");
+    expect(document.querySelectorAll("section.onboarding-panel")).toHaveLength(0);
+  });
+
+  it("styles those cards: a border, a title, muted text, and no minimum height of a whole panel", () => {
+    const rule = (selector: string) => styles.match(new RegExp(`${selector.replace(/[.]/g, "\\.")}\\s*\\{([^}]*)\\}`))?.[1] ?? "";
+    expect(rule(".onboarding-aside")).toMatch(/border:/);
+    expect(rule(".onboarding-aside")).not.toMatch(/min-height/);
+    expect(rule(".onboarding-aside h3")).toMatch(/font-size:/);
+    expect(rule(".onboarding-aside p")).toMatch(/color: var\(--color-muted\)/);
+  });
+});

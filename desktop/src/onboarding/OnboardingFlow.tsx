@@ -511,12 +511,12 @@ export function OnboardingFlow({ account, platform, runtime, activity, onSubmit,
             </div>}
             <div className="onboarding-actions"><button className="onboarding-secondary" type="button" onClick={() => setStep(0)}>{t.back}</button><button className="onboarding-primary" type="submit" disabled={!hostIsValid}>{t.continue} <span aria-hidden="true">→</span></button></div>
           </form>
-          {host.kind === "vps" && onConnectExistingTeam && <section className="onboarding-panel" aria-label={t.existingTeam.title}>
+          {host.kind === "vps" && onConnectExistingTeam && <section className="onboarding-aside" aria-label={t.existingTeam.title}>
             <h3>{t.existingTeam.title}</h3>
             <p>{t.existingTeam.description}</p>
             <button type="button" className="onboarding-secondary" onClick={() => onConnectExistingTeam(host)}>{t.existingTeam.verifyVps}</button>
           </section>}
-          <FirstSetupAssistance host={host} locale={locale} onOpen={() => setAssistanceOpen(true)} />
+          {host.kind === "vps" && <FirstSetupAssistance host={host} locale={locale} onOpen={() => setAssistanceOpen(true)} />}
           {account.identity === "local" && host.kind === "local" && <VpsProfileImport />}
           </>}
 

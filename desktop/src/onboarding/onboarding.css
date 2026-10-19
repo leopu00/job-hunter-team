@@ -1054,3 +1054,64 @@
   .onboarding-primary,
   .onboarding-secondary { transition: none; }
 }
+
+/* A short block after the form's own panel (a team already on a VPS, the
+   browser assistance for the VPS typed above): a quiet card, not a second
+   full-height panel. */
+.onboarding-aside {
+  margin-top: 14px;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+  border: 1px solid var(--color-border);
+  border-radius: 7px;
+  background: var(--color-card);
+}
+
+.onboarding-aside h3 {
+  margin: 0;
+  color: var(--color-bright);
+  font-size: 12px;
+  font-weight: 760;
+}
+
+.onboarding-aside p {
+  max-width: 590px;
+  margin: 0;
+  color: var(--color-muted);
+  font-size: 10px;
+  line-height: 1.55;
+}
+
+.onboarding-aside p strong {
+  color: var(--color-bright);
+}
+
+.onboarding-aside__hostkey {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.onboarding-aside dl {
+  margin: 0;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 4px 12px;
+  font-size: 10px;
+}
+
+.onboarding-aside dt {
+  color: var(--color-muted);
+}
+
+.onboarding-aside dd {
+  min-width: 0;
+  margin: 0;
+  color: var(--color-bright);
+  overflow-wrap: anywhere;
+}
