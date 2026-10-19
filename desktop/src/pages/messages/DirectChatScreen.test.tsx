@@ -78,6 +78,7 @@ function viewport(width: number, height: number, zoom = "1.15") {
 }
 
 afterEach(() => {
+  document.cookie = "NEXT_LOCALE=; path=/; max-age=0";
   vi.useRealTimers();
   document.documentElement.style.removeProperty("--zoom");
   vi.restoreAllMocks();
@@ -234,6 +235,24 @@ describe("DirectChatScreen", () => {
     });
     expect(screen.getByText("Risposta asincrona")).toBeInTheDocument();
     expect(mock.read).toHaveBeenLastCalledWith({ agentId: "assistente" });
+  });
+
+  it("speaks the language of the app, and dictates in it", async () => {
+    viewport(1280, 800);
+    document.cookie = "NEXT_LOCALE=en; path=/";
+    const { mock } = client({ state: "error", code: "status_failed" });
+    const voice = voiceBridge();
+    render(<DirectChatScreen client={mock} voiceInputBridge={voice.mock} />);
+
+    expect(await screen.findByRole("region", { name: "Conversation with Captain" })).toBeInTheDocument();
+    expect(screen.getByText("Direct chat")).toBeInTheDocument();
+    expect(screen.getByRole("navigation", { name: "Agent chats" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Writer" })).toBeInTheDocument();
+    expect(within(screen.getByTestId("direct-chat-status")).getByRole("button", { name: "Retry" })).toBeInTheDocument();
+    expect(screen.getByRole("textbox", { name: "Write to Captain" })).toHaveAttribute("placeholder", "Connect the team to write");
+    expect(await screen.findByRole("button", { name: "Dictate a message" })).toBeInTheDocument();
+    expect(voice.mock.status).toHaveBeenCalledWith("en-US");
+    expect(document.body).not.toHaveTextContent(/Capitano|Riprova|Invia|Chat diretta|Collega il team/);
   });
 
   it("closes the direct channel when the page unmounts", async () => {
