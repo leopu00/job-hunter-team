@@ -1,4 +1,5 @@
 import type { Locale } from "@/i18n/config";
+import type { PluralForms } from "../../lib/plural";
 
 /**
  * The words of the desktop's Profile page that the web's profile view does not
@@ -18,7 +19,7 @@ export interface ProfilePageText {
   opening: string;
   loginAgain: string;
   login: string;
-  sealedContacts: string; // {list}
+  sealedContacts: PluralForms; // {list}
 }
 
 export const PROFILE_PAGE_TEXT: Record<Locale, ProfilePageText> = {
@@ -34,7 +35,7 @@ export const PROFILE_PAGE_TEXT: Record<Locale, ProfilePageText> = {
     opening: "Apro lo schermo di accesso…",
     loginAgain: "Accedi di nuovo a LinkedIn",
     login: "Accedi a LinkedIn",
-    sealedContacts: "Alcuni contatti ({list}) sono cifrati sul server e nella desktop non si aprono ancora.",
+    sealedContacts: { one: "Un contatto ({list}) è cifrato sul server e nella desktop non si apre ancora.", other: "Alcuni contatti ({list}) sono cifrati sul server e nella desktop non si aprono ancora." },
   },
   en: {
     linkedinAria: "LinkedIn login",
@@ -48,7 +49,7 @@ export const PROFILE_PAGE_TEXT: Record<Locale, ProfilePageText> = {
     opening: "Opening the login screen…",
     loginAgain: "Log in to LinkedIn again",
     login: "Log in to LinkedIn",
-    sealedContacts: "Some contacts ({list}) are encrypted on the server and cannot be opened in the desktop yet.",
+    sealedContacts: { one: "One contact ({list}) is encrypted on the server and cannot be opened in the desktop yet.", other: "Some contacts ({list}) are encrypted on the server and cannot be opened in the desktop yet." },
   },
   de: {
     linkedinAria: "LinkedIn-Anmeldung",
@@ -62,7 +63,7 @@ export const PROFILE_PAGE_TEXT: Record<Locale, ProfilePageText> = {
     opening: "Anmeldebildschirm wird geöffnet…",
     loginAgain: "Erneut bei LinkedIn anmelden",
     login: "Bei LinkedIn anmelden",
-    sealedContacts: "Einige Kontakte ({list}) sind auf dem Server verschlüsselt und lassen sich in der Desktop-App noch nicht öffnen.",
+    sealedContacts: { one: "Ein Kontakt ({list}) ist auf dem Server verschlüsselt und lässt sich in der Desktop-App noch nicht öffnen.", other: "Einige Kontakte ({list}) sind auf dem Server verschlüsselt und lassen sich in der Desktop-App noch nicht öffnen." },
   },
   fr: {
     linkedinAria: "Connexion à LinkedIn",
@@ -76,7 +77,7 @@ export const PROFILE_PAGE_TEXT: Record<Locale, ProfilePageText> = {
     opening: "Ouverture de l’écran de connexion…",
     loginAgain: "Se reconnecter à LinkedIn",
     login: "Se connecter à LinkedIn",
-    sealedContacts: "Certains contacts ({list}) sont chiffrés sur le serveur et ne peuvent pas encore être ouverts dans l’app de bureau.",
+    sealedContacts: { one: "Un contact ({list}) est chiffré sur le serveur et ne peut pas encore être ouvert dans l’app de bureau.", other: "Certains contacts ({list}) sont chiffrés sur le serveur et ne peuvent pas encore être ouverts dans l’app de bureau." },
   },
   es: {
     linkedinAria: "Acceso a LinkedIn",
@@ -90,7 +91,7 @@ export const PROFILE_PAGE_TEXT: Record<Locale, ProfilePageText> = {
     opening: "Abriendo la pantalla de acceso…",
     loginAgain: "Acceder de nuevo a LinkedIn",
     login: "Acceder a LinkedIn",
-    sealedContacts: "Algunos contactos ({list}) están cifrados en el servidor y todavía no se pueden abrir en la app de escritorio.",
+    sealedContacts: { one: "Un contacto ({list}) está cifrado en el servidor y todavía no se puede abrir en la app de escritorio.", other: "Algunos contactos ({list}) están cifrados en el servidor y todavía no se pueden abrir en la app de escritorio." },
   },
   pt: {
     linkedinAria: "Acesso ao LinkedIn",
@@ -104,7 +105,7 @@ export const PROFILE_PAGE_TEXT: Record<Locale, ProfilePageText> = {
     opening: "A abrir o ecrã de acesso…",
     loginAgain: "Entrar de novo no LinkedIn",
     login: "Entrar no LinkedIn",
-    sealedContacts: "Alguns contactos ({list}) estão cifrados no servidor e ainda não se abrem na app de secretária.",
+    sealedContacts: { one: "Um contacto ({list}) está cifrado no servidor e ainda não se abre na app de secretária.", other: "Alguns contactos ({list}) estão cifrados no servidor e ainda não se abrem na app de secretária." },
   },
   hu: {
     linkedinAria: "LinkedIn-bejelentkezés",
@@ -118,6 +119,6 @@ export const PROFILE_PAGE_TEXT: Record<Locale, ProfilePageText> = {
     opening: "A bejelentkezési képernyő megnyitása…",
     loginAgain: "Jelentkezz be újra a LinkedInbe",
     login: "Jelentkezz be a LinkedInbe",
-    sealedContacts: "Néhány kapcsolat ({list}) titkosítva van a szerveren, és az asztali appban még nem nyitható meg.",
+    sealedContacts: { one: "Egy kapcsolat ({list}) titkosítva van a szerveren, és az asztali appban még nem nyitható meg.", other: "Néhány kapcsolat ({list}) titkosítva van a szerveren, és az asztali appban még nem nyitható meg." },
   },
 };

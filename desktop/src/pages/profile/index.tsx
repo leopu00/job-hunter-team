@@ -6,6 +6,7 @@ import type { Locale } from "@/i18n/config";
 import { getProfileT } from "@/lib/profile-i18n";
 import { readLocaleCookie } from "@/lib/use-locale";
 import { appLocale } from "../../lib/app-locale";
+import { pluralText } from "../../lib/plural";
 import { supabase } from "../../lib/supabase";
 import { useRefresh } from "../../shell/router";
 import type { PageProps } from "../types";
@@ -73,7 +74,7 @@ export function ProfilePage({ client = supabase }: { client?: SupabaseClient }) 
       />
       {data.sealedContacts.length > 0 && (
         <p className="mt-4 text-[11px] text-[var(--color-dim)]">
-          {PROFILE_PAGE_TEXT[appLocale()].sealedContacts.replace("{list}", data.sealedContacts.join(", "))}
+          {pluralText(appLocale(), data.sealedContacts.length, PROFILE_PAGE_TEXT[appLocale()].sealedContacts, { list: data.sealedContacts.join(", ") })}
         </p>
       )}
       <LinkedinLoginCard />

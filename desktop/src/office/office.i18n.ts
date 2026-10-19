@@ -1,5 +1,6 @@
 import { locales, type Locale } from "@/i18n/config";
 import { appLocale } from "../lib/app-locale";
+import { pluralText, type PluralForms } from "../lib/plural";
 
 /**
  * The words around the office scene: the panel a click opens, the tag under
@@ -26,12 +27,12 @@ export interface OfficeText {
   untitled: string;
   openAgentPage: string;
   phaseSub: string;
-  phaseSubCount: string; // {count}
+  phaseSubCount: PluralForms; // {count}
   noPhase: string;
-  mostRecent: string; // {count}
+  mostRecent: PluralForms; // {count}
   allPositions: string;
   incoming: string;
-  onThePile: string; // {count}
+  onThePile: PluralForms; // {count}
   positionsOnThePile: string;
   departmentAgents: string;
   noDepartmentAgents: string;
@@ -42,7 +43,7 @@ export interface OfficeText {
   kpiPass: string;
   kpiNoVerdict: string;
   kpiAverage: string;
-  averageNote: string; // {count}
+  averageNote: PluralForms; // {count}
   noCv: string;
   boardTitle: string;
   boardSub: string;
@@ -50,7 +51,7 @@ export interface OfficeText {
   mapTitle: string;
   mapSub: string;
   noPlaces: string;
-  located: string; // {count}
+  located: PluralForms; // {count}
   openMap: string;
   detailPlace: string;
   detailFound: string;
@@ -60,10 +61,10 @@ export interface OfficeText {
   openPosition: string;
   // the tag under the pointer
   tipNotPublished: string;
-  tipPile: string; // {count}
+  tipPile: PluralForms; // {count}
   tipPileNoCount: string;
   tipIncoming: string; // {count}
-  tipCvReady: string; // {count}
+  tipCvReady: PluralForms; // {count}
   tipCvWritten: string;
   tipBoard: string;
   tipMap: string;
@@ -94,12 +95,12 @@ export const OFFICE_TEXT: Record<Locale, OfficeText> = {
     untitled: "(senza titolo)",
     openAgentPage: "Apri la pagina dell'agente",
     phaseSub: "Posizioni in questa fase",
-    phaseSubCount: "{count} posizioni in questa fase",
+    phaseSubCount: { one: "{count} posizione in questa fase", other: "{count} posizioni in questa fase" },
     noPhase: "Nessuna posizione in questa fase.",
-    mostRecent: "Le {count} più recenti.",
+    mostRecent: { one: "La più recente.", other: "Le {count} più recenti." },
     allPositions: "Tutte le posizioni",
     incoming: "In ingresso",
-    onThePile: "{count} posizioni sulla pila",
+    onThePile: { one: "{count} posizione sulla pila", other: "{count} posizioni sulla pila" },
     positionsOnThePile: "Le posizioni sulla pila",
     departmentAgents: "Agenti del reparto",
     noDepartmentAgents: "Nessun agente del reparto nelle ultime 24 ore.",
@@ -110,7 +111,7 @@ export const OFFICE_TEXT: Record<Locale, OfficeText> = {
     kpiPass: "pass",
     kpiNoVerdict: "senza verdetto",
     kpiAverage: "punteggio medio",
-    averageNote: "Punteggio medio dei {count} più recenti con un punteggio.",
+    averageNote: { one: "Punteggio medio di un solo CV con un punteggio.", other: "Punteggio medio dei {count} più recenti con un punteggio." },
     noCv: "Nessun CV scritto.",
     boardTitle: "Bacheca",
     boardSub: "Posizioni pronte, inviate e con risposta",
@@ -118,7 +119,7 @@ export const OFFICE_TEXT: Record<Locale, OfficeText> = {
     mapTitle: "Mappa",
     mapSub: "Dove sono le posizioni",
     noPlaces: "Nessuna posizione con un luogo.",
-    located: "{count} posizioni con un luogo; i più frequenti:",
+    located: { one: "{count} posizione con un luogo:", other: "{count} posizioni con un luogo; i più frequenti:" },
     openMap: "Apri la mappa",
     detailPlace: "Luogo",
     detailFound: "Trovata",
@@ -127,10 +128,10 @@ export const OFFICE_TEXT: Record<Locale, OfficeText> = {
     criticNotes: "Note del critico: {notes}",
     openPosition: "Apri la posizione",
     tipNotPublished: "stato non pubblicato",
-    tipPile: "{count} posizioni sulla pila",
+    tipPile: { one: "{count} posizione sulla pila", other: "{count} posizioni sulla pila" },
     tipPileNoCount: "posizioni sulla pila",
     tipIncoming: "in ingresso: {count}",
-    tipCvReady: "{count} pronti col PASS del critico",
+    tipCvReady: { one: "{count} pronto col PASS del critico", other: "{count} pronti col PASS del critico" },
     tipCvWritten: "le candidature scritte",
     tipBoard: "posizioni pronte, inviate, con risposta",
     tipMap: "dove sono le posizioni",
@@ -157,12 +158,12 @@ export const OFFICE_TEXT: Record<Locale, OfficeText> = {
     untitled: "(untitled)",
     openAgentPage: "Open the agent's page",
     phaseSub: "Positions in this phase",
-    phaseSubCount: "{count} positions in this phase",
+    phaseSubCount: { one: "{count} position in this phase", other: "{count} positions in this phase" },
     noPhase: "No position in this phase.",
-    mostRecent: "The {count} most recent.",
+    mostRecent: { one: "The most recent.", other: "The {count} most recent." },
     allPositions: "All positions",
     incoming: "Incoming",
-    onThePile: "{count} positions on the pile",
+    onThePile: { one: "{count} position on the pile", other: "{count} positions on the pile" },
     positionsOnThePile: "The positions on the pile",
     departmentAgents: "Department agents",
     noDepartmentAgents: "No agent of the department in the last 24 hours.",
@@ -173,7 +174,7 @@ export const OFFICE_TEXT: Record<Locale, OfficeText> = {
     kpiPass: "pass",
     kpiNoVerdict: "no verdict",
     kpiAverage: "average score",
-    averageNote: "Average score of the {count} most recent with a score.",
+    averageNote: { one: "Average score of a single CV with a score.", other: "Average score of the {count} most recent with a score." },
     noCv: "No CV written.",
     boardTitle: "Board",
     boardSub: "Positions ready, sent and answered",
@@ -181,7 +182,7 @@ export const OFFICE_TEXT: Record<Locale, OfficeText> = {
     mapTitle: "Map",
     mapSub: "Where the positions are",
     noPlaces: "No position with a place.",
-    located: "{count} positions with a place; the most frequent:",
+    located: { one: "{count} position with a place:", other: "{count} positions with a place; the most frequent:" },
     openMap: "Open the map",
     detailPlace: "Place",
     detailFound: "Found",
@@ -190,10 +191,10 @@ export const OFFICE_TEXT: Record<Locale, OfficeText> = {
     criticNotes: "Critic's notes: {notes}",
     openPosition: "Open the position",
     tipNotPublished: "status not published",
-    tipPile: "{count} positions on the pile",
+    tipPile: { one: "{count} position on the pile", other: "{count} positions on the pile" },
     tipPileNoCount: "positions on the pile",
     tipIncoming: "incoming: {count}",
-    tipCvReady: "{count} ready with the critic's PASS",
+    tipCvReady: { one: "{count} ready with the critic's PASS", other: "{count} ready with the critic's PASS" },
     tipCvWritten: "the applications written",
     tipBoard: "positions ready, sent, answered",
     tipMap: "where the positions are",
@@ -220,12 +221,12 @@ export const OFFICE_TEXT: Record<Locale, OfficeText> = {
     untitled: "(ohne Titel)",
     openAgentPage: "Seite des Agenten öffnen",
     phaseSub: "Stellen in dieser Phase",
-    phaseSubCount: "{count} Stellen in dieser Phase",
+    phaseSubCount: { one: "{count} Stelle in dieser Phase", other: "{count} Stellen in dieser Phase" },
     noPhase: "Keine Stelle in dieser Phase.",
-    mostRecent: "Die {count} neuesten.",
+    mostRecent: { one: "Die neueste.", other: "Die {count} neuesten." },
     allPositions: "Alle Stellen",
     incoming: "Eingang",
-    onThePile: "{count} Stellen auf dem Stapel",
+    onThePile: { one: "{count} Stelle auf dem Stapel", other: "{count} Stellen auf dem Stapel" },
     positionsOnThePile: "Die Stellen auf dem Stapel",
     departmentAgents: "Agenten der Abteilung",
     noDepartmentAgents: "Kein Agent der Abteilung in den letzten 24 Stunden.",
@@ -236,7 +237,7 @@ export const OFFICE_TEXT: Record<Locale, OfficeText> = {
     kpiPass: "pass",
     kpiNoVerdict: "ohne Urteil",
     kpiAverage: "Ø Punktzahl",
-    averageNote: "Durchschnittliche Punktzahl der {count} neuesten mit Punktzahl.",
+    averageNote: { one: "Durchschnittliche Punktzahl eines einzigen Lebenslaufs mit Punktzahl.", other: "Durchschnittliche Punktzahl der {count} neuesten mit Punktzahl." },
     noCv: "Kein Lebenslauf geschrieben.",
     boardTitle: "Pinnwand",
     boardSub: "Stellen bereit, gesendet und beantwortet",
@@ -244,7 +245,7 @@ export const OFFICE_TEXT: Record<Locale, OfficeText> = {
     mapTitle: "Karte",
     mapSub: "Wo die Stellen sind",
     noPlaces: "Keine Stelle mit Ort.",
-    located: "{count} Stellen mit Ort; die häufigsten:",
+    located: { one: "{count} Stelle mit Ort:", other: "{count} Stellen mit Ort; die häufigsten:" },
     openMap: "Karte öffnen",
     detailPlace: "Ort",
     detailFound: "Gefunden",
@@ -253,10 +254,10 @@ export const OFFICE_TEXT: Record<Locale, OfficeText> = {
     criticNotes: "Notizen des Kritikers: {notes}",
     openPosition: "Stelle öffnen",
     tipNotPublished: "Status nicht veröffentlicht",
-    tipPile: "{count} Stellen auf dem Stapel",
+    tipPile: { one: "{count} Stelle auf dem Stapel", other: "{count} Stellen auf dem Stapel" },
     tipPileNoCount: "Stellen auf dem Stapel",
     tipIncoming: "Eingang: {count}",
-    tipCvReady: "{count} bereit mit dem PASS des Kritikers",
+    tipCvReady: { one: "{count} bereit mit dem PASS des Kritikers", other: "{count} bereit mit dem PASS des Kritikers" },
     tipCvWritten: "die geschriebenen Bewerbungen",
     tipBoard: "Stellen bereit, gesendet, beantwortet",
     tipMap: "wo die Stellen sind",
@@ -283,12 +284,12 @@ export const OFFICE_TEXT: Record<Locale, OfficeText> = {
     untitled: "(sans titre)",
     openAgentPage: "Ouvrir la page de l’agent",
     phaseSub: "Postes dans cette phase",
-    phaseSubCount: "{count} postes dans cette phase",
+    phaseSubCount: { one: "{count} poste dans cette phase", other: "{count} postes dans cette phase" },
     noPhase: "Aucun poste dans cette phase.",
-    mostRecent: "Les {count} plus récents.",
+    mostRecent: { one: "Le plus récent.", other: "Les {count} plus récents." },
     allPositions: "Tous les postes",
     incoming: "À l’entrée",
-    onThePile: "{count} postes sur la pile",
+    onThePile: { one: "{count} poste sur la pile", other: "{count} postes sur la pile" },
     positionsOnThePile: "Les postes sur la pile",
     departmentAgents: "Agents du service",
     noDepartmentAgents: "Aucun agent du service ces dernières 24 heures.",
@@ -299,7 +300,7 @@ export const OFFICE_TEXT: Record<Locale, OfficeText> = {
     kpiPass: "pass",
     kpiNoVerdict: "sans verdict",
     kpiAverage: "score moyen",
-    averageNote: "Score moyen des {count} plus récents avec un score.",
+    averageNote: { one: "Score moyen d’un seul CV avec un score.", other: "Score moyen des {count} plus récents avec un score." },
     noCv: "Aucun CV écrit.",
     boardTitle: "Tableau",
     boardSub: "Postes prêts, envoyés et avec réponse",
@@ -307,7 +308,7 @@ export const OFFICE_TEXT: Record<Locale, OfficeText> = {
     mapTitle: "Carte",
     mapSub: "Où sont les postes",
     noPlaces: "Aucun poste avec un lieu.",
-    located: "{count} postes avec un lieu ; les plus fréquents :",
+    located: { one: "{count} poste avec un lieu :", other: "{count} postes avec un lieu ; les plus fréquents :" },
     openMap: "Ouvrir la carte",
     detailPlace: "Lieu",
     detailFound: "Trouvé",
@@ -316,10 +317,10 @@ export const OFFICE_TEXT: Record<Locale, OfficeText> = {
     criticNotes: "Notes du critique : {notes}",
     openPosition: "Ouvrir le poste",
     tipNotPublished: "statut non publié",
-    tipPile: "{count} postes sur la pile",
+    tipPile: { one: "{count} poste sur la pile", other: "{count} postes sur la pile" },
     tipPileNoCount: "postes sur la pile",
     tipIncoming: "à l’entrée : {count}",
-    tipCvReady: "{count} prêts avec le PASS du critique",
+    tipCvReady: { one: "{count} prêt avec le PASS du critique", other: "{count} prêts avec le PASS du critique" },
     tipCvWritten: "les candidatures écrites",
     tipBoard: "postes prêts, envoyés, avec réponse",
     tipMap: "où sont les postes",
@@ -346,12 +347,12 @@ export const OFFICE_TEXT: Record<Locale, OfficeText> = {
     untitled: "(sin título)",
     openAgentPage: "Abrir la página del agente",
     phaseSub: "Posiciones en esta fase",
-    phaseSubCount: "{count} posiciones en esta fase",
+    phaseSubCount: { one: "{count} posición en esta fase", other: "{count} posiciones en esta fase" },
     noPhase: "Ninguna posición en esta fase.",
-    mostRecent: "Las {count} más recientes.",
+    mostRecent: { one: "La más reciente.", other: "Las {count} más recientes." },
     allPositions: "Todas las posiciones",
     incoming: "Entrada",
-    onThePile: "{count} posiciones en la pila",
+    onThePile: { one: "{count} posición en la pila", other: "{count} posiciones en la pila" },
     positionsOnThePile: "Las posiciones de la pila",
     departmentAgents: "Agentes del departamento",
     noDepartmentAgents: "Ningún agente del departamento en las últimas 24 horas.",
@@ -362,7 +363,7 @@ export const OFFICE_TEXT: Record<Locale, OfficeText> = {
     kpiPass: "pass",
     kpiNoVerdict: "sin veredicto",
     kpiAverage: "puntuación media",
-    averageNote: "Puntuación media de las {count} más recientes con puntuación.",
+    averageNote: { one: "Puntuación media de un solo CV con puntuación.", other: "Puntuación media de las {count} más recientes con puntuación." },
     noCv: "Ningún CV escrito.",
     boardTitle: "Tablón",
     boardSub: "Posiciones listas, enviadas y con respuesta",
@@ -370,7 +371,7 @@ export const OFFICE_TEXT: Record<Locale, OfficeText> = {
     mapTitle: "Mapa",
     mapSub: "Dónde están las posiciones",
     noPlaces: "Ninguna posición con un lugar.",
-    located: "{count} posiciones con un lugar; los más frecuentes:",
+    located: { one: "{count} posición con un lugar:", other: "{count} posiciones con un lugar; los más frecuentes:" },
     openMap: "Abrir el mapa",
     detailPlace: "Lugar",
     detailFound: "Encontrada",
@@ -379,10 +380,10 @@ export const OFFICE_TEXT: Record<Locale, OfficeText> = {
     criticNotes: "Notas del crítico: {notes}",
     openPosition: "Abrir la posición",
     tipNotPublished: "estado no publicado",
-    tipPile: "{count} posiciones en la pila",
+    tipPile: { one: "{count} posición en la pila", other: "{count} posiciones en la pila" },
     tipPileNoCount: "posiciones en la pila",
     tipIncoming: "entrada: {count}",
-    tipCvReady: "{count} listos con el PASS del crítico",
+    tipCvReady: { one: "{count} listo con el PASS del crítico", other: "{count} listos con el PASS del crítico" },
     tipCvWritten: "las candidaturas escritas",
     tipBoard: "posiciones listas, enviadas, con respuesta",
     tipMap: "dónde están las posiciones",
@@ -409,12 +410,12 @@ export const OFFICE_TEXT: Record<Locale, OfficeText> = {
     untitled: "(sem título)",
     openAgentPage: "Abrir a página do agente",
     phaseSub: "Posições nesta fase",
-    phaseSubCount: "{count} posições nesta fase",
+    phaseSubCount: { one: "{count} posição nesta fase", other: "{count} posições nesta fase" },
     noPhase: "Nenhuma posição nesta fase.",
-    mostRecent: "As {count} mais recentes.",
+    mostRecent: { one: "A mais recente.", other: "As {count} mais recentes." },
     allPositions: "Todas as posições",
     incoming: "Entrada",
-    onThePile: "{count} posições na pilha",
+    onThePile: { one: "{count} posição na pilha", other: "{count} posições na pilha" },
     positionsOnThePile: "As posições da pilha",
     departmentAgents: "Agentes do departamento",
     noDepartmentAgents: "Nenhum agente do departamento nas últimas 24 horas.",
@@ -425,7 +426,7 @@ export const OFFICE_TEXT: Record<Locale, OfficeText> = {
     kpiPass: "pass",
     kpiNoVerdict: "sem veredicto",
     kpiAverage: "pontuação média",
-    averageNote: "Pontuação média das {count} mais recentes com pontuação.",
+    averageNote: { one: "Pontuação média de um só CV com pontuação.", other: "Pontuação média das {count} mais recentes com pontuação." },
     noCv: "Nenhum CV escrito.",
     boardTitle: "Mural",
     boardSub: "Posições prontas, enviadas e com resposta",
@@ -433,7 +434,7 @@ export const OFFICE_TEXT: Record<Locale, OfficeText> = {
     mapTitle: "Mapa",
     mapSub: "Onde estão as posições",
     noPlaces: "Nenhuma posição com um local.",
-    located: "{count} posições com um local; os mais frequentes:",
+    located: { one: "{count} posição com um local:", other: "{count} posições com um local; os mais frequentes:" },
     openMap: "Abrir o mapa",
     detailPlace: "Local",
     detailFound: "Encontrada",
@@ -442,10 +443,10 @@ export const OFFICE_TEXT: Record<Locale, OfficeText> = {
     criticNotes: "Notas do crítico: {notes}",
     openPosition: "Abrir a posição",
     tipNotPublished: "estado não publicado",
-    tipPile: "{count} posições na pilha",
+    tipPile: { one: "{count} posição na pilha", other: "{count} posições na pilha" },
     tipPileNoCount: "posições na pilha",
     tipIncoming: "entrada: {count}",
-    tipCvReady: "{count} prontos com o PASS do crítico",
+    tipCvReady: { one: "{count} pronto com o PASS do crítico", other: "{count} prontos com o PASS do crítico" },
     tipCvWritten: "as candidaturas escritas",
     tipBoard: "posições prontas, enviadas, com resposta",
     tipMap: "onde estão as posições",
@@ -472,12 +473,12 @@ export const OFFICE_TEXT: Record<Locale, OfficeText> = {
     untitled: "(cím nélkül)",
     openAgentPage: "Az ügynök oldalának megnyitása",
     phaseSub: "Állások ebben a fázisban",
-    phaseSubCount: "{count} állás ebben a fázisban",
+    phaseSubCount: { one: "{count} állás ebben a fázisban", other: "{count} állás ebben a fázisban" },
     noPhase: "Nincs állás ebben a fázisban.",
-    mostRecent: "A legutóbbi {count}.",
+    mostRecent: { one: "A legutóbbi.", other: "A legutóbbi {count}." },
     allPositions: "Minden állás",
     incoming: "Beérkező",
-    onThePile: "{count} állás a halomban",
+    onThePile: { one: "{count} állás a halomban", other: "{count} állás a halomban" },
     positionsOnThePile: "A halomban lévő állások",
     departmentAgents: "A részleg ügynökei",
     noDepartmentAgents: "A részlegnek nincs ügynöke az utolsó 24 órában.",
@@ -488,7 +489,7 @@ export const OFFICE_TEXT: Record<Locale, OfficeText> = {
     kpiPass: "pass",
     kpiNoVerdict: "döntés nélkül",
     kpiAverage: "átlagos pontszám",
-    averageNote: "A legutóbbi {count}, pontszámmal rendelkező átlagos pontszáma.",
+    averageNote: { one: "Egyetlen, pontszámmal rendelkező önéletrajz átlagos pontszáma.", other: "A legutóbbi {count}, pontszámmal rendelkező átlagos pontszáma." },
     noCv: "Nincs megírt önéletrajz.",
     boardTitle: "Hirdetőtábla",
     boardSub: "Kész, elküldött és megválaszolt állások",
@@ -496,7 +497,7 @@ export const OFFICE_TEXT: Record<Locale, OfficeText> = {
     mapTitle: "Térkép",
     mapSub: "Hol vannak az állások",
     noPlaces: "Nincs helyszínnel rendelkező állás.",
-    located: "{count} helyszínnel rendelkező állás; a leggyakoribbak:",
+    located: { one: "{count} helyszínnel rendelkező állás:", other: "{count} helyszínnel rendelkező állás; a leggyakoribbak:" },
     openMap: "A térkép megnyitása",
     detailPlace: "Hely",
     detailFound: "Megtalálva",
@@ -505,10 +506,10 @@ export const OFFICE_TEXT: Record<Locale, OfficeText> = {
     criticNotes: "A kritikus jegyzetei: {notes}",
     openPosition: "Az állás megnyitása",
     tipNotPublished: "az állapot nincs közzétéve",
-    tipPile: "{count} állás a halomban",
+    tipPile: { one: "{count} állás a halomban", other: "{count} állás a halomban" },
     tipPileNoCount: "állás a halomban",
     tipIncoming: "beérkező: {count}",
-    tipCvReady: "{count} kész a kritikus PASS-ával",
+    tipCvReady: { one: "{count} kész a kritikus PASS-ával", other: "{count} kész a kritikus PASS-ával" },
     tipCvWritten: "a megírt jelentkezések",
     tipBoard: "kész, elküldött, megválaszolt állások",
     tipMap: "hol vannak az állások",
@@ -521,12 +522,19 @@ export const OFFICE_TEXT: Record<Locale, OfficeText> = {
   },
 };
 
-/** Fills the `{slot}`s of a sentence. */
-export function fill(sentence: string, values: Record<string, string | number>): string {
-  return sentence.replace(/\{(\w+)\}/g, (whole, key: string) => (key in values ? String(values[key]) : whole));
+export { fill } from "../lib/text-slots";
+
+/** The language a dictionary is picked for; one the app does not have gets the app's own. */
+export function officeLocale(locale?: string): Locale {
+  return (locales as readonly string[]).includes(locale ?? "") ? (locale as Locale) : appLocale();
+}
+
+/** The sentence for a count, in its singular or plural form. */
+export function ofCount(locale: string | undefined, count: number | string, forms: PluralForms): string {
+  return pluralText(officeLocale(locale), count, forms);
 }
 
 /** The dictionary of a language; one the app does not have gets the app's own. */
 export function officeText(locale?: string): OfficeText {
-  return OFFICE_TEXT[(locales as readonly string[]).includes(locale ?? "") ? (locale as Locale) : appLocale()];
+  return OFFICE_TEXT[officeLocale(locale)];
 }

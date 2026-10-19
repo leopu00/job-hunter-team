@@ -36,6 +36,14 @@ describe("the tag under the pointer: what the page already holds, nothing invent
     expect(tooltipFor({ kind: "pile", dept: "scout" }, { ...ctx, snapshot: null }).lines).toEqual(["posizioni sulla pila"]);
   });
 
+  it("tells one position in the singular, in every language that has one", () => {
+    const one = { ...ctx, snapshot: { ...snapshot, piles: { ...snapshot.piles, scout: 1, critici: 1 } } as OfficeSnapshot };
+    expect(tooltipFor({ kind: "pile", dept: "scout" }, one).lines).toEqual(["1 posizione sulla pila"]);
+    expect(tooltipFor({ kind: "pile", dept: "scout" }, { ...one, locale: "en" }).lines).toEqual(["1 position on the pile"]);
+    expect(tooltipFor({ kind: "shelf" }, one).lines).toEqual(["1 pronto col PASS del critico"]);
+    expect(tooltipFor({ kind: "shelf" }, { ...one, locale: "es" }).lines).toEqual(["1 listo con el PASS del crítico"]);
+  });
+
   it("speaks the language it is asked for, and the English words of the game stay", () => {
     const en = { ...ctx, locale: "en" };
     expect(tooltipFor({ kind: "agent", uid: "scout-2", role: "scout" }, en).lines).toEqual(["status not published"]);
