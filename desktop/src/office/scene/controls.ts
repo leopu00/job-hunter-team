@@ -1,5 +1,5 @@
 import type { Rect, Vec } from "../contract";
-import { clamp, cover, pan, zoomAt, type Camera } from "./camera";
+import { clamp, cover, coverScale, fitScale, pan, zoomAt, type Camera } from "./camera";
 
 /**
  * How the user moves around the office, as in the Godot game
@@ -76,16 +76,28 @@ export type Controls = {
 
 export function attachControls(
   el: HTMLElement,
-  options: { view: { w: number; h: number }; bounds: Rect; start: Vec; onChange: (camera: Camera) => void },
+  options: {
+    view: { w: number; h: number };
+    bounds: Rect;
+    start: Vec;
+    onChange: (camera: Camera) => void;
+    /**
+     * What the first view shows whole (the floor, with every department), and how far out the
+     * zoom goes. Without it, Godot's rule: the smallest zoom covers the view. In a window under
+     * a few bars, covering cut the bottom departments off, and the office is first of all a map
+     * of where each department is.
+     */
+    fit?: Rect;
+  },
 ): Controls {
   const { bounds, onChange } = options;
   let view = options.view;
+  const minScale = () => (options.fit ? Math.min(fitScale(view, options.fit), coverScale(view, bounds)) : cover(view, bounds).scale);
   const home = () => {
-    const c = cover(view, bounds);
+    const scale = options.fit ? minScale() : cover(view, bounds).scale;
     // centred on `start` (the floor's centre, as Godot), within the bounds
-    return clamp({ scale: c.scale, x: view.w / 2 - options.start.x * c.scale, y: view.h / 2 - options.start.y * c.scale }, view, bounds, c.scale);
+    return clamp({ scale, x: view.w / 2 - options.start.x * scale, y: view.h / 2 - options.start.y * scale }, view, bounds, minScale());
   };
-  const minScale = () => cover(view, bounds).scale;
   let camera = home();
   const set = (next: Camera) => {
     camera = next;

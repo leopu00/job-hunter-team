@@ -238,6 +238,8 @@ export async function createOfficeScene(host: HTMLElement, options: OfficeSceneO
     view: { w: app.screen.width, h: app.screen.height },
     bounds,
     start: floorCentre,
+    // the first view shows the whole floor: every department, where it is
+    fit: layout.floor,
     onChange: (camera) => {
       world.scale.set(camera.scale);
       world.position.set(camera.x, camera.y);

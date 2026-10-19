@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { Rect } from "../contract";
-import { MAX_SCALE, coverScale, toWorld, type Camera } from "./camera";
+import { MAX_SCALE, coverScale, fitScale, toWorld, type Camera } from "./camera";
 import { attachControls, classifyWheel, DRAG_CLICK_TOLERANCE, keyDirection, OWN_KEYS_ATTR, PAN_SPEED, ZOOM_STEP, type Controls } from "./controls";
 
 // The office as the layout frames it (floor + wall), and a canvas 1200x700.
@@ -198,5 +198,39 @@ describe("classifyWheel", () => {
   it("keys: WASD and arrows, opposite keys cancel", () => {
     expect(keyDirection(new Set(["w", "arrowright"]))).toEqual({ x: 1, y: -1 });
     expect(keyDirection(new Set(["a", "d"]))).toEqual({ x: 0, y: 0 });
+  });
+});
+
+describe("the office controls with a rect to show whole (the floor)", () => {
+  // a wide view under bars: covering cuts the floor's bottom off
+  const view = { w: 930, h: 505 };
+  const floor: Rect = { x: 240, y: 140, w: 2920, h: 1860 };
+  const bounds: Rect = { x: 0, y: 0, w: 3400, h: 2140 };
+  const start = { x: floor.x + floor.w / 2, y: floor.y + floor.h / 2 };
+
+  it("start showing the whole floor, every department in view, and never zoom out past it", () => {
+    const host = document.createElement("div");
+    document.body.appendChild(host);
+    const c = attachControls(host, { view, bounds, start, onChange: () => {}, fit: floor });
+    try {
+      const cam = c.camera();
+      expect(cam.scale).toBeCloseTo(fitScale(view, floor));
+      const topLeft = toWorld(cam, { x: 0, y: 0 });
+      const bottomRight = toWorld(cam, { x: view.w, y: view.h });
+      expect(topLeft.x).toBeLessThanOrEqual(floor.x + 1e-6);
+      expect(topLeft.y).toBeLessThanOrEqual(floor.y + 1e-6);
+      expect(bottomRight.x).toBeGreaterThanOrEqual(floor.x + floor.w - 1e-6);
+      expect(bottomRight.y).toBeGreaterThanOrEqual(floor.y + floor.h - 1e-6);
+      // without the rect, the first view covers and the floor's bottom is cut
+      const covering = attachControls(host, { view, bounds, start, onChange: () => {} });
+      expect(toWorld(covering.camera(), { x: 0, y: view.h }).y).toBeLessThan(floor.y + floor.h);
+      covering.destroy();
+      // zooming out stops at the whole floor
+      window.dispatchEvent(new KeyboardEvent("keydown", { key: "-" }));
+      expect(c.camera().scale).toBeGreaterThanOrEqual(fitScale(view, floor) - 1e-9);
+    } finally {
+      c.destroy();
+      host.remove();
+    }
   });
 });
