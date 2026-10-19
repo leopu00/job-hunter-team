@@ -18,6 +18,7 @@ import { COMPUTER_TEXT } from "../pages/computer/computer.i18n";
 import { desktopLinks } from "./desktop-links";
 import { SHELL_TEXT } from "./shell.i18n";
 import { MailRotationBanner } from "./MailRotationBanner";
+import NavStrip from "./NavStrip";
 import { matchRoute, navigate, refresh, useLocation } from "./router";
 import { HOME, READ_ONLY_HOME, READ_ONLY_NAV, READ_ONLY_ROUTES, ROUTES } from "./routes";
 import ThemePicker from "./ThemePicker";
@@ -106,34 +107,29 @@ function Navbar({
           </Link>
           <ThemePicker />
         </div>
-        <div
-          className="min-w-0 flex-1 overflow-x-auto overscroll-x-contain"
-          data-testid="navbar-links-scroll"
-        >
-          <div className="flex w-max items-center gap-1 mx-auto">
-            {readOnly ? (
-              READ_ONLY_NAV.map(({ href, label }) => {
-                const active = path === href || path.startsWith(href + "/");
-                return (
-                  <Link
-                    key={href}
-                    href={href}
-                    aria-current={active ? "page" : undefined}
-                    className="relative px-2 xl:px-3 py-1.5 text-[11px] font-semibold tracking-widest hover:bg-[var(--color-card)] rounded transition-colors no-underline inline-block"
-                    style={{ color: active ? "var(--color-white)" : "var(--color-muted)" }}
-                  >
-                    {label.startsWith("own:") ? readOnlyText[label.slice(4) as "team" | "profile" | "office" | "agents"] : dashboardT(label)}
-                  </Link>
-                );
-              })
-            ) : (
-              <>
-                <NavLinks />
-                <DesktopLinks />
-              </>
-            )}
-          </div>
-        </div>
+        <NavStrip>
+          {readOnly ? (
+            READ_ONLY_NAV.map(({ href, label }) => {
+              const active = path === href || path.startsWith(href + "/");
+              return (
+                <Link
+                  key={href}
+                  href={href}
+                  aria-current={active ? "page" : undefined}
+                  className="relative px-2 xl:px-3 py-1.5 text-[11px] font-semibold tracking-widest hover:bg-[var(--color-card)] rounded transition-colors no-underline inline-block"
+                  style={{ color: active ? "var(--color-white)" : "var(--color-muted)" }}
+                >
+                  {label.startsWith("own:") ? readOnlyText[label.slice(4) as "team" | "profile" | "office" | "agents"] : dashboardT(label)}
+                </Link>
+              );
+            })
+          ) : (
+            <>
+              <NavLinks />
+              <DesktopLinks />
+            </>
+          )}
+        </NavStrip>
         <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0" data-testid="navbar-actions">
           <button type="button" className={button} onClick={refresh}>
             {shellText.refresh}
