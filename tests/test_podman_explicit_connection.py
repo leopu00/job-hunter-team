@@ -22,25 +22,12 @@ DIRECT = re.compile(
 
 FUNCTION = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*\(\) \{")
 NATIVE_GUARD = '[ "$PODMAN_RUNTIME_MODE" = "native" ] || return 0'
-MACHINE_BRANCH = 'if [ "$PODMAN_RUNTIME_MODE" = "machine" ]; then'
 
 
 def _native_function(lines: list, index: int) -> bool:
     """The call sits in a function that returns first unless the mode is native."""
     start = next(i for i in range(index, -1, -1) if FUNCTION.match(lines[i]))
     return NATIVE_GUARD in [line.strip() for line in lines[start + 1:index]]
-
-
-def _native_else(lines: list, index: int) -> bool:
-    """The call opens the else of the machine-mode branch: native mode only."""
-    if index < 1 or lines[index - 1].strip() != "else":
-        return False
-    for line in reversed(lines[:index - 1]):
-        if line.strip() == "fi":
-            return False
-        if line.strip() == MACHINE_BRANCH:
-            return True
-    return False
 
 
 # The calls that name no JHT machine on purpose, each by name: what the call
@@ -58,14 +45,9 @@ NAMED_EXCEPTIONS = {
         "the uninstall removes the machine it names, by its own variable",
     ),
     "native-rootless-probe": (
-        "info --format '{{.Host.Security.Rootless}}'",
+        "info --format '{{.Host.Security.Rootless}} {{.Host.ServiceIsRemote}}'",
         _native_function,
         "native Podman on Linux: there is no JHT machine to name",
-    ),
-    "native-compose-probe": (
-        "info >/dev/null",
-        _native_else,
-        "native Podman on Linux: the else of the machine-mode branch",
     ),
 }
 
@@ -120,11 +102,11 @@ def test_the_scan_catches_a_call_on_the_default_connection():
 def test_a_named_exception_holds_only_where_its_proof_holds():
     found, total, used = unnamed_calls(
         'probe() {\n'
-        '  rootless="$("$podman_bin" info --format \'{{.Host.Security.Rootless}}\')"\n'
+        '  state="$("$podman_bin" info --format \'{{.Host.Security.Rootless}} {{.Host.ServiceIsRemote}}\')"\n'
         '}\n'
         'native() {\n'
         '  [ "$PODMAN_RUNTIME_MODE" = "native" ] || return 0\n'
-        '  rootless="$("$podman_bin" info --format \'{{.Host.Security.Rootless}}\')"\n'
+        '  state="$("$podman_bin" info --format \'{{.Host.Security.Rootless}} {{.Host.ServiceIsRemote}}\')"\n'
         '}\n'
         '  if [ "$PODMAN_RUNTIME_MODE" = "machine" ]; then\n'
         '    true\n'
@@ -138,10 +120,11 @@ def test_a_named_exception_holds_only_where_its_proof_holds():
         '  "$podman_bin" machine rm --force "$OTHER_MACHINE"\n'
         '  "$podman_bin" machine rm --force "$UNINSTALL_MACHINE_NAME"\n')
     assert total == 6
-    # Outside the native guard, after the machine branch closed, and a machine
-    # named by any other variable: all three still fail.
-    assert [line for line, _ in found] == [2, 11, 17]
-    assert sorted(used) == ["native-compose-probe", "native-rootless-probe", "uninstall-machine-rm"]
+    # Outside the native guard, a bare info anywhere (the native compose check
+    # is the rootless probe now, not an exception), and a machine named by any
+    # other variable: all still fail.
+    assert [line for line, _ in found] == [2, 11, 15, 17]
+    assert sorted(used) == ["native-rootless-probe", "uninstall-machine-rm"]
 
 
 def test_compose_and_the_macos_docker_shim_carry_the_connection():
