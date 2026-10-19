@@ -550,6 +550,13 @@ impl ActivatedTarget {
     }
 }
 
+/// The identity of a read-only connection, as one opaque value the renderer may hold: the account
+/// scope and the candidate's SHA-256 (the candidate's bytes carry the host, the team and the
+/// container). Two connections that differ in any of them never share a key.
+pub(crate) fn connection_key(scope: &AccountScope, target: &ActivatedTarget) -> String {
+    sha256(format!("{}\n{}", scope.digest(), target.candidate_sha256).as_bytes())
+}
+
 pub(crate) fn hex(value: &str, length: usize) -> bool {
     value.len() == length
         && value
@@ -1569,6 +1576,17 @@ mod tests {
             os: "linux".into(),
             architecture: "amd64".into(),
         }
+    }
+
+    #[test]
+    fn connection_key_differs_for_another_scope_or_another_candidate_and_only_then() {
+        let activated = |hash: &str| ActivatedTarget { team_id: "t".repeat(16), runtime: target(), candidate_sha256: hash.to_owned() };
+        let (one, two) = (AccountScope::synthetic(b"scope-one"), AccountScope::synthetic(b"scope-two"));
+        let key = connection_key(&one, &activated(&"1".repeat(64)));
+        assert!(hex(&key, 64));
+        assert_eq!(key, connection_key(&one, &activated(&"1".repeat(64))));
+        assert_ne!(key, connection_key(&two, &activated(&"1".repeat(64))));
+        assert_ne!(key, connection_key(&one, &activated(&"2".repeat(64))));
     }
 
     #[test]

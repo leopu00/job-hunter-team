@@ -22,10 +22,11 @@ export interface ExistingTeamReadOnlyConnectionResult {
   readiness: boolean;
   /**
    * Which connection this is, for what the view keeps between reads (the shared
-   * positions read): the VPS and the team asked for, or the profile's saved one
-   * when it is reopened (the native side picks it). Added here, never by native.
+   * positions read): one opaque value the native side derives from the account
+   * scope and the saved target (host, team and container), for a first opening
+   * and for a reopening alike.
    */
-  connection?: string;
+  connectionKey?: string | null;
 }
 
 export interface ExistingTeamProgress {
@@ -91,13 +92,11 @@ export const existingTeamBridge: ExistingTeamBridge = {
       onProgress: channel,
     });
   },
-  async connectReadOnly(request) {
-    const result = await invoke<ExistingTeamReadOnlyConnectionResult>("onboarding_existing_team_readonly_connect", { request });
-    return { ...result, connection: `vps:${request.host.address}:${request.host.port}|team:${request.teamId}` };
+  connectReadOnly(request) {
+    return invoke<ExistingTeamReadOnlyConnectionResult>("onboarding_existing_team_readonly_connect", { request });
   },
-  async reopen() {
-    const result = await invoke<ExistingTeamReadOnlyConnectionResult>("onboarding_existing_team_reopen");
-    return { ...result, connection: "saved" };
+  reopen() {
+    return invoke<ExistingTeamReadOnlyConnectionResult>("onboarding_existing_team_reopen");
   },
   discover(request) {
     return invoke<ExistingTeamReceipt>("onboarding_existing_team_discover", { request });

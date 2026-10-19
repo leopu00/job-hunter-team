@@ -507,6 +507,8 @@ fn t1_the_whole_cycle_of_a_new_profile_reaches_a_selection_and_a_read() {
             .expect("selection")
             .expect("some");
         assert_eq!(selected.runtime, found.runtime);
+        // the view is named by its connection: this account scope and this candidate (host, team, container)
+        assert_eq!(connected.connection_key.as_deref(), Some(runtime::connection_key(&sandbox.scope, &selected).as_str()));
         // a read goes through the pinned python command of the selected target
         let read = runtime::python_command(&selected.runtime).expect("read command");
         assert!(read.contains("exit 70") && read.contains(&found.runtime.container_id));
@@ -1417,6 +1419,9 @@ fn t15_a_saved_team_with_the_assistant_down_reopens_read_only_and_starts_nothing
     let persisted = Cell::new(0);
     let readiness = reopen(&sandbox, &server, &persisted).expect("reopened");
     assert!(!readiness.readiness, "the assistant is down and that is only reported");
+    // the reopened view is named by the saved connection, as the first opening was
+    let saved = runtime::selected_at(&sandbox.root, &sandbox.scope, &host()).unwrap().unwrap();
+    assert_eq!(readiness.connection_key, Some(runtime::connection_key(&sandbox.scope, &saved)));
     assert_eq!(persisted.get(), 1);
     // the pin and the identity are checked again, by the one probe of the saved target, and nothing else runs
     assert_eq!(server.commands(), vec![runtime::team_probe_command(&target_of(&world, 1)).unwrap()]);

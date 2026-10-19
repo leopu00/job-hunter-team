@@ -68,6 +68,17 @@ describe("the shared positions read of the read-only view", () => {
     expect(native.read).toHaveBeenCalledTimes(2);
   });
 
+  it("a read that comes back after another VPS was opened is not given to it", async () => {
+    let answer: (value: unknown) => void = () => undefined;
+    connect(VPS_A);
+    native.read.mockReturnValueOnce(new Promise((resolve) => { answer = resolve; }));
+    const late = readVpsPositionsShared(1_000);
+    connect(VPS_B);
+    answer(VPS_A.read);
+    expect(await late).toEqual({ source: "unavailable", code: "existing_team_target_changed" });
+    expect(await readVpsPositionsShared(1_100)).toBe(VPS_B.read);
+  });
+
   it("keeps nothing while the view is closed", async () => {
     native.read.mockResolvedValue(VPS_A.read);
     await readVpsPositionsShared(1_000);

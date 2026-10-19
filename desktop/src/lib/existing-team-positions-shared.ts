@@ -19,7 +19,9 @@ let shared: { at: number; key: string; read: Promise<DesktopVpsRead<PositionWith
  *
  * Kept only for the connection it was read on (existingTeamConnectionKey: this
  * opening of the view, its account, VPS and team): another team or another
- * opening reads again, and with the view closed nothing is kept.
+ * opening reads again, and with the view closed nothing is kept. A read that
+ * comes back after the view changed is not given to the new one: it is told the
+ * target changed.
  *
  * A module of its own, small: the office's panels must not bring the map's
  * queries (and the cloud client behind them) into their imports.
@@ -31,7 +33,8 @@ export function readVpsPositionsShared(now = Date.now()): Promise<DesktopVpsRead
     return readDesktopVpsPositions(ALL_ROWS);
   }
   if (shared && shared.key === key && now - shared.at < SHARED_READ_MS) return shared.read;
-  const read = readDesktopVpsPositions(ALL_ROWS);
+  const read = readDesktopVpsPositions(ALL_ROWS).then((result): DesktopVpsRead<PositionWithScore[]> =>
+    existingTeamConnectionKey() === key ? result : { source: "unavailable", code: "existing_team_target_changed" });
   shared = { at: now, key, read };
   return read;
 }
