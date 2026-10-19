@@ -4,6 +4,7 @@ import { ASSISTANT_GUIDE_TEXT } from "../pages/assistant-onboarding/AssistantOnb
 import { OFFICE_TEXT } from "../office/office.i18n";
 import { DICTATION_LOCALE, DIRECT_CHAT_TEXT } from "../pages/messages/direct-chat.i18n";
 import { THEME_TEXT } from "../shell/theme.i18n";
+import { HELP_TEXT } from "../pages/help/help.i18n";
 import { SETTINGS_TEXT } from "../pages/settings/settings.i18n";
 import { PROFILE_PAGE_TEXT } from "../pages/profile/profile-page.i18n";
 import { VOICE_INPUT_TEXT } from "../voice-input/voice-input.i18n";
@@ -29,6 +30,7 @@ describe.each([
   ["theme picker", THEME_TEXT],
   ["assistant onboarding", ASSISTANT_GUIDE_TEXT],
   ["settings page", SETTINGS_TEXT],
+  ["help page", HELP_TEXT],
 ] as const)("the %s texts", (_name, dictionary) => {
   const dict = dictionary as Record<string, unknown>;
 

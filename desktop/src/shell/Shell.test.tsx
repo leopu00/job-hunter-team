@@ -251,23 +251,25 @@ describe("Shell", () => {
       expect(within(nav).getByRole("link", { name: label })).toHaveAttribute("href", "#" + href);
       expect(matchRoute(ROUTES, href)?.route.path).toBe(href);
     }
-    expect(desktopLinks("it").map((l) => l.label)).toEqual(["Agenti", "Ufficio", "Posta", "Impostazioni"]);
+    expect(desktopLinks("it").map((l) => l.label)).toEqual(["Agenti", "Ufficio", "Posta", "Impostazioni", "Guida"]);
     expect(within(nav).queryByRole("link", { name: "Budget" })).not.toBeInTheDocument();
     expect(desktopLinks("it").some((link) => link.href === "/budget")).toBe(false);
     expect(matchRoute(ROUTES, "/budget")).toBeNull();
   });
 
   it("names the desktop's own pages in the app's language, as the mail page names itself", () => {
-    expect(desktopLinks("en").map((l) => l.label)).toEqual(["Agents", "Office", "Mail", "Settings"]);
-    expect(desktopLinks("de").map((l) => l.label)).toEqual(["Agenten", "Büro", "E-Mail", "Einstellungen"]);
+    expect(desktopLinks("en").map((l) => l.label)).toEqual(["Agents", "Office", "Mail", "Settings", "Help"]);
+    expect(desktopLinks("de").map((l) => l.label)).toEqual(["Agenten", "Büro", "E-Mail", "Einstellungen", "Hilfe"]);
     for (const locale of ["it", "en", "de", "fr", "es", "pt", "hu"] as const)
-      expect(new Set(desktopLinks(locale).map((l) => l.href))).toEqual(new Set(["/agents", "/office", "/mail", "/settings"]));
+      expect(new Set(desktopLinks(locale).map((l) => l.href))).toEqual(new Set(["/agents", "/office", "/mail", "/settings", "/help"]));
   });
 
-  it("has the settings page in the full shell and in the read-only view of an existing team", async () => {
-    expect(matchRoute(ROUTES, "/settings")?.route.path).toBe("/settings");
-    expect(matchRoute(READ_ONLY_ROUTES, "/settings")?.route.path).toBe("/settings");
-    expect(READ_ONLY_NAV.some((entry) => entry.href === "/settings")).toBe(true);
+  it("has the settings and help pages in the full shell and in the read-only view of an existing team", async () => {
+    for (const path of ["/settings", "/help"]) {
+      expect(matchRoute(ROUTES, path)?.route.path).toBe(path);
+      expect(matchRoute(READ_ONLY_ROUTES, path)?.route.path).toBe(path);
+      expect(READ_ONLY_NAV.some((entry) => entry.href === path)).toBe(true);
+    }
 
     enterExistingTeamReadOnly(true, null);
     try {
@@ -275,6 +277,7 @@ describe("Shell", () => {
       render(<Shell />);
       const nav = await screen.findByRole("navigation", { name: "Navigazione app" });
       expect(within(nav).getByRole("link", { name: "Impostazioni" })).toHaveAttribute("href", "#/settings");
+      expect(within(nav).getByRole("link", { name: "Guida" })).toHaveAttribute("href", "#/help");
     } finally {
       leaveExistingTeamReadOnly();
     }
