@@ -833,11 +833,11 @@ const COPY_BY_ENGLISH_TEXT: Readonly<Record<string, ErrorTranslations>> = {
     pt: ["A equipa está a abrandar de propósito: é um limite da aplicação, não do teu fornecedor.", "Retoma sozinha. Não tens de fazer nada."],
   },
   "The provider asked us to wait a moment (error 429): your subscription is not used up.": {
-    de: ["Der Anbieter hat um kurze Wartezeit gebeten (Fehler 429): Dein Abo ist nicht aufgebraucht.", "Ich versuche es nach der genannten Wartezeit selbst erneut. Es sind keine Daten verloren gegangen."],
-    es: ["El proveedor ha pedido esperar un momento (error 429): tu suscripción no está agotada.", "Lo intento de nuevo yo solo tras la espera indicada. No se ha perdido ningún dato."],
-    fr: ["Le fournisseur a demandé d’attendre un instant (erreur 429) : ton abonnement n’est pas épuisé.", "Je réessaie tout seul après l’attente indiquée. Aucune donnée n’a été perdue."],
-    hu: ["A szolgáltató várakozást kért (429-es hiba): az előfizetésed nem merült ki.", "A jelzett várakozás után magam újrapróbálom. Nem veszett el adat."],
-    pt: ["O fornecedor pediu para esperar um momento (erro 429): a tua subscrição não está esgotada.", "Tento de novo sozinho depois da espera indicada. Não se perdeu nenhum dado."],
+    de: ["Der Anbieter hat um kurze Wartezeit gebeten (Fehler 429): Dein Abo ist nicht aufgebraucht.", "Versuche es nach der genannten Wartezeit erneut. Es sind keine Daten verloren gegangen."],
+    es: ["El proveedor ha pedido esperar un momento (error 429): tu suscripción no está agotada.", "Vuelve a intentarlo tras la espera indicada. No se ha perdido ningún dato."],
+    fr: ["Le fournisseur a demandé d’attendre un instant (erreur 429) : ton abonnement n’est pas épuisé.", "Réessaie après l’attente indiquée. Aucune donnée n’a été perdue."],
+    hu: ["A szolgáltató várakozást kért (429-es hiba): az előfizetésed nem merült ki.", "A jelzett várakozás után próbáld újra. Nem veszett el adat."],
+    pt: ["O fornecedor pediu para esperar um momento (erro 429): a tua subscrição não está esgotada.", "Tenta de novo depois da espera indicada. Não se perdeu nenhum dado."],
   },
   "Your subscription limits are used up until {time}.": {
     de: ["Die Limits deines Abos sind bis {time} aufgebraucht.", "Versuche es nach {time} erneut. Es ist nichts verloren gegangen."],

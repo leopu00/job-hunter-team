@@ -536,9 +536,9 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
   rate_limited_daily: THROTTLED_LOCAL,
   rate_limit_429: copy(
     "Il fornitore ha chiesto di aspettare un momento (errore 429): il tuo abbonamento non è esaurito.",
-    "Riprovo da solo dopo l’attesa indicata. Nessun dato è andato perso.",
+    "Riprova dopo l’attesa indicata. Nessun dato è andato perso.",
     "The provider asked us to wait a moment (error 429): your subscription is not used up.",
-    "I will try again by myself after the wait it asked for. No data was lost.",
+    "Try again after the wait it asked for. No data was lost.",
   ),
   quota: copy(
     "I limiti del tuo abbonamento sono esauriti fino alle {time}.",

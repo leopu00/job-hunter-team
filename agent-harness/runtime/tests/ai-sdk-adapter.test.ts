@@ -905,6 +905,16 @@ describe("a 429 that is not waited for", () => {
     });
   });
 
+  it("raises the provider's error, never a RangeError, for a retry-after of a thousand years", async () => {
+    for (const raw of ["99999999999999", "9".repeat(300), "Fri, 31 Dec 9999 23:59:59 GMT"]) {
+      const { error, waits, calls } = await refuse({ "retry-after": raw });
+      expect(error, raw).toMatchObject({ code: "provider_rate_limited", rateLimit: { kind: "quota", retryAfterMs: 2_592_000_000 } });
+      expect(String((error as { rateLimit: { resumeAt: string } }).rateLimit.resumeAt), raw).toMatch(/^\d{4}-/);
+      expect(waits).toEqual([]);
+      expect(calls).toBe(1);
+    }
+  });
+
   it("finds the 429 and its headers when the SDK wrapped it", async () => {
     const wrapped = new Error("retries exhausted", { cause: busy({ "retry-after": "900" }) });
     const error = await attempt(async () => {

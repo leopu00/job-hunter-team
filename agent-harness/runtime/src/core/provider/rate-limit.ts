@@ -12,6 +12,12 @@ import type { QuotaReason, RateLimitDetails } from "../errors.ts";
  */
 export const QUOTA_THRESHOLD_MS = 5 * 60_000;
 
+/**
+ * No wait longer than this is believed. A provider asking for more (or a figure with 300 digits)
+ * is asking for "not today": 30 days says that, and keeps `now + asked` a date `toISOString` can write.
+ */
+export const MAX_ASKED_MS = 30 * 24 * 60 * 60_000;
+
 /** The most headers kept, and the longest name and value: an error is not a log. */
 const MAX_HEADERS = 20;
 const MAX_NAME = 64;
@@ -36,13 +42,13 @@ export function parseRetryAfter(raw: string | undefined, nowMs: number): number 
   const text = raw.trim();
   if (/^\d+(?:\.\d+)?$/.test(text)) {
     const seconds = Number(text);
-    return Number.isFinite(seconds) ? Math.ceil(seconds * 1_000) : null;
+    return Number.isFinite(seconds) ? Math.min(MAX_ASKED_MS, Math.ceil(seconds * 1_000)) : null;
   }
   // An HTTP-date is always GMT. Date.parse also reads "-5" and "1" as years, and a date with no zone as local time:
   // neither is an instruction, so only the GMT form is read.
   if (!/[A-Za-z]{3}/.test(text) || !/(?:GMT|UTC)$/i.test(text)) return null;
   const at = Date.parse(text);
-  return Number.isNaN(at) ? null : Math.max(0, at - nowMs);
+  return Number.isNaN(at) ? null : Math.min(MAX_ASKED_MS, Math.max(0, at - nowMs));
 }
 
 /** The headers of a 429 that say how long and why, and only those, and only when their value is plain. */

@@ -6,7 +6,13 @@
 import { describe, expect, it } from "vitest";
 
 import { QUOTA_REASONS } from "../src/core/errors.ts";
-import { QUOTA_THRESHOLD_MS, describeRateLimit, parseRetryAfter, rateLimitHeaders } from "../src/core/provider/rate-limit.ts";
+import {
+  MAX_ASKED_MS,
+  QUOTA_THRESHOLD_MS,
+  describeRateLimit,
+  parseRetryAfter,
+  rateLimitHeaders,
+} from "../src/core/provider/rate-limit.ts";
 
 const AT = Date.UTC(2026, 9, 19, 10, 0, 0);
 
@@ -75,5 +81,19 @@ describe("describeRateLimit", () => {
     expect(describeRateLimit(3_600_000, undefined, AT, "limite_5h")).toMatchObject({ kind: "quota", reason: "limite_5h" });
     expect(describeRateLimit(3_600_000, undefined, AT)).not.toHaveProperty("reason");
     expect(describeRateLimit(5_000, undefined, AT, "limite_5h")).not.toHaveProperty("reason");
+  });
+});
+
+describe("an absurd retry-after", () => {
+  it("is capped at 30 days, however many digits it has, so the date it implies can be written", () => {
+    for (const raw of ["99999999999999", "9".repeat(300), "2592000", "2592001"]) {
+      const asked = parseRetryAfter(raw, AT)!;
+      expect(asked, raw).toBeLessThanOrEqual(MAX_ASKED_MS);
+      expect(() => describeRateLimit(asked, undefined, AT), raw).not.toThrow();
+      expect(describeRateLimit(asked, undefined, AT).resumeAt, raw).toMatch(/^\d{4}-\d\d-\d\dT/);
+    }
+    expect(parseRetryAfter("2592000", AT)).toBe(MAX_ASKED_MS);
+    expect(parseRetryAfter("99999999999999", AT)).toBe(MAX_ASKED_MS);
+    expect(parseRetryAfter("Fri, 31 Dec 9999 23:59:59 GMT", AT)).toBe(MAX_ASKED_MS);
   });
 });

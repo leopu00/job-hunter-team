@@ -629,6 +629,21 @@ describe("the limits, said apart", () => {
     expect(describeError("quota", { locale: "it" }).text).not.toContain("{time}");
   });
 
+  // The runtime does not retry a wait longer than the 45 s a call may spend: it stops and says how long was
+  // asked. So the sentence tells the person to wait, it does not promise a retry nobody makes (T10 review).
+  it("rate_limit_429 asks the person to try again after the wait, in every language, and promises no retry", () => {
+    const ASKS: Record<string, string> = {
+      it: "Riprova dopo l’attesa indicata. Nessun dato è andato perso.",
+      en: "Try again after the wait it asked for. No data was lost.",
+      de: "Versuche es nach der genannten Wartezeit erneut. Es sind keine Daten verloren gegangen.",
+      es: "Vuelve a intentarlo tras la espera indicada. No se ha perdido ningún dato.",
+      fr: "Réessaie après l’attente indiquée. Aucune donnée n’a été perdue.",
+      hu: "A jelzett várakozás után próbáld újra. Nem veszett el adat.",
+      pt: "Tenta de novo depois da espera indicada. Não se perdeu nenhum dado.",
+    };
+    for (const locale of ERROR_LOCALES) expect(say("rate_limit_429", locale).action, locale).toBe(ASKS[locale]);
+  });
+
   it("mentions 429 only where a provider asked to wait", () => {
     for (const locale of ERROR_LOCALES) {
       expect(say("rate_limit_429", locale).text, locale).toContain("429");
