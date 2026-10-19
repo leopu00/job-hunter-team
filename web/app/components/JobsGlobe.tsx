@@ -23,6 +23,11 @@ import {
   type LabelItem,
   type Rect,
 } from "@/lib/globe-label-placement";
+import {
+  basemapNameExpression,
+  basemapNameOf,
+  isTranslatedNameLayer,
+} from "@/lib/basemap-labels";
 import { attachTouchAxisLock } from "@/lib/globe-touch-axis-lock";
 import { ensureMaplibreWorkerUrl } from "@/lib/maplibre-worker";
 import { scoreToRgb, scoreSpectrumCss } from "@/lib/score-color";
@@ -483,7 +488,7 @@ function labelOffsetExpr(): maplibregl.ExpressionSpecification {
 // Ingombro dei nomi della basemap (paesi, città) attualmente disegnati: il
 // punto di ogni etichetta lo dà queryRenderedFeatures, la larghezza si stima
 // dal nome (MapLibre non espone il box del testo).
-function basemapNameRects(map: MaplibreMap): Rect[] {
+function basemapNameRects(map: MaplibreMap, lang: string): Rect[] {
   const layers = map.getStyle()?.layers ?? [];
   const zoom = map.getZoom();
   const out: Rect[] = [];
@@ -524,9 +529,7 @@ function basemapNameRects(map: MaplibreMap): Rect[] {
     for (const f of features) {
       if (f.geometry.type !== "Point") continue;
       const props = f.properties ?? {};
-      const name = String(
-        props.name_en ?? props["name:latin"] ?? props.name ?? "",
-      );
+      const name = basemapNameOf(props, lang);
       if (!name) continue;
       const [lon, lat] = f.geometry.coordinates as [number, number];
       const pt = map.project([lon, lat]);
@@ -556,6 +559,7 @@ function computeLabelPlacements(
   map: MaplibreMap,
   groups: GroupedFeature[],
   labels: Record<string, string>,
+  lang: string,
 ): Record<string, LabelPlacement> {
   const size = labelFontSize(map.getZoom());
   const el = map.getContainer();
@@ -582,7 +586,7 @@ function computeLabelPlacements(
       priority: g.count,
     });
   }
-  const placed = placeLabels(items, basemapNameRects(map), size);
+  const placed = placeLabels(items, basemapNameRects(map, lang), size);
   const out: Record<string, LabelPlacement> = {};
   for (const [id, p] of placed) {
     out[id] = {
@@ -637,6 +641,26 @@ function applyProfileToStyle(map: MaplibreMap, profile: MapTierProfile) {
     }
   } catch {
     /* idem */
+  }
+}
+
+// I nomi di paesi, città e mari nella lingua dell'interfaccia (vedi
+// lib/basemap-labels.ts). Va rifatto a ogni style.load, perché il cambio tema
+// ricarica lo style da zero, e a ogni cambio di lingua.
+function applyBasemapLanguage(map: MaplibreMap, lang: string) {
+  try {
+    const field = basemapNameExpression(lang);
+    for (const layer of map.getStyle()?.layers ?? []) {
+      if (OWN_LAYER_IDS.has(layer.id) || !isTranslatedNameLayer(layer))
+        continue;
+      map.setLayoutProperty(
+        layer.id,
+        "text-field",
+        field as maplibregl.ExpressionSpecification,
+      );
+    }
+  } catch {
+    /* style non ancora pronto: ci ripasserà style.load */
   }
 }
 
@@ -841,6 +865,9 @@ export default function JobsGlobe({
   // cookie: senza questo, cambiando lingua in home la card resterebbe
   // nella lingua del cookie mentre tutto il resto della pagina cambia.
   const tr = makeT(T, showcase?.lang ?? locale);
+  const basemapLang = String(showcase?.lang ?? locale);
+  const basemapLangRef = useRef(basemapLang);
+  basemapLangRef.current = basemapLang;
   const [data, setData] = useState<PositionCoord[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [selected, setSelected] = useState<PositionCoord | null>(null);
@@ -1383,6 +1410,7 @@ export default function JobsGlobe({
       // Halo/etichette secondo il tier corrente: va rifatto a ogni
       // style.load perché il cambio tema ricarica lo style da zero.
       applyProfileToStyle(map, profileRef.current);
+      applyBasemapLanguage(map, basemapLangRef.current);
       syncData(map);
       // Dati arrivati prima dello style: il fit in sospeso parte ora.
       fitOnReadyRef.current?.layersReady();
@@ -1398,6 +1426,7 @@ export default function JobsGlobe({
         map,
         clusteredRef.current,
         labelTextRef.current,
+        basemapLangRef.current,
       );
       if (samePlacements(next, labelPlacementsRef.current)) return;
       labelPlacementsRef.current = next;
@@ -1700,6 +1729,15 @@ export default function JobsGlobe({
     layersReadyRef.current = false;
     map.setStyle(nextTheme === "light" ? STYLE_LIGHT : STYLE_DARK);
   }, [resolvedTheme]);
+
+  // Cambio di lingua a mappa ferma: i nomi si riscrivono senza ricaricare lo
+  // style (il cambio tema, invece, passa da style.load).
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !layersReadyRef.current) return;
+    applyBasemapLanguage(map, basemapLang);
+    labelPlacementsRef.current = {};
+  }, [basemapLang]);
 
   function syncData(map: MaplibreMap) {
     if (!layersReadyRef.current) return;
