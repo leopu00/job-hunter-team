@@ -1,0 +1,40 @@
+{
+  "version": 1,
+  "note_max_chars": 200,
+  "proposal_min_positions": 3,
+  "reasons": [
+    "too_senior",
+    "too_junior",
+    "wrong_location",
+    "salary_low",
+    "wrong_stack",
+    "company",
+    "scam_or_gone",
+    "closed",
+    "already_applied",
+    "other"
+  ],
+  "factual": ["scam_or_gone", "closed", "already_applied"],
+  "proposable": ["too_senior", "too_junior", "wrong_location", "salary_low", "wrong_stack", "company"],
+  "legacy": {
+    "closed": "closed",
+    "already_applied": "already_applied",
+    "company": "company",
+    "other": "other",
+    "not_interested": "other",
+    "mismatch": "other",
+    "conditions": "other"
+  },
+  "labels": {
+    "too_senior": "too senior",
+    "too_junior": "too junior",
+    "wrong_location": "wrong location",
+    "salary_low": "salary too low",
+    "wrong_stack": "wrong stack",
+    "company": "unwanted company",
+    "scam_or_gone": "scam or gone",
+    "closed": "closed",
+    "already_applied": "already applied",
+    "other": "other"
+  }
+}
