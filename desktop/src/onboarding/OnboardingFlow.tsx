@@ -230,6 +230,28 @@ function RuntimeView({ host, platform, t, locale, runtime, activity, onRetry, on
   const action = failed
     ? onRetry
     : runtime.stage === "ssh-host-key" ? onConfirmHostKey : () => onRuntimeAction(runtime.stage as "provider-login" | "team-start" | "assistant");
+  // The reason is the catalog's sentence for the failure's code. When a step failed it sits right
+  // under the title, above the artwork and the step list, so it is read before anything else.
+  const status = (
+    <div
+      className="onboarding-runtime-status"
+      aria-live={failed ? undefined : "polite"}
+      role={failed ? "alert" : "status"}
+    >
+      <span className="onboarding-runtime-status__pulse" aria-hidden="true">{failed ? "!" : actionRequired ? "→" : "••"}</span>
+      <div>
+        {!failed && <strong>{actionRequired ? t.actionNeeded : t.dontClose}</strong>}
+        <small>{runtime.message}</small>
+        {failed && runtime.action && <small className="onboarding-runtime-status__action">{t.whatToDo(runtime.action)}</small>}
+        {failed && host.kind === "local" && runtimeLogPath && (
+          <small className="onboarding-runtime-status__log">
+            {t.runtimeLogAt} <code>{runtimeLogPath}</code>{" "}
+            {onOpenRuntimeLog && <button className="onboarding-secondary" type="button" onClick={() => void onOpenRuntimeLog()}>{t.openRuntimeLog}</button>}
+          </small>
+        )}
+      </div>
+    </div>
+  );
   return (
     <main className="onboarding-shell">
       <header className="onboarding-header">
@@ -248,6 +270,7 @@ function RuntimeView({ host, platform, t, locale, runtime, activity, onRetry, on
             ref={failureHeadingRef}
             tabIndex={failed ? -1 : undefined}
           >{failed ? failureTitle : actionRequired ? activeLabel : t.preparing(activeLabel)}</h2>
+          {failed && status}
           <OnboardingArtwork name={runtimeArtwork(runtime)} />
           <section className="onboarding-runtime-progress" aria-label={t.progressAria}>
             <div className="onboarding-runtime-progress__heading">
@@ -268,24 +291,7 @@ function RuntimeView({ host, platform, t, locale, runtime, activity, onRetry, on
               ><i /></div>
             )}
           </section>
-          <div
-            className="onboarding-runtime-status"
-            aria-live={failed ? undefined : "polite"}
-            role={failed ? "alert" : "status"}
-          >
-            <span className="onboarding-runtime-status__pulse" aria-hidden="true">{failed ? "!" : actionRequired ? "→" : "••"}</span>
-            <div>
-              {!failed && <strong>{actionRequired ? t.actionNeeded : t.dontClose}</strong>}
-              <small>{runtime.message}</small>
-              {failed && runtime.action && <small className="onboarding-runtime-status__action">{t.whatToDo(runtime.action)}</small>}
-              {failed && host.kind === "local" && runtimeLogPath && (
-                <small className="onboarding-runtime-status__log">
-                  {t.runtimeLogAt} <code>{runtimeLogPath}</code>{" "}
-                  {onOpenRuntimeLog && <button className="onboarding-secondary" type="button" onClick={() => void onOpenRuntimeLog()}>{t.openRuntimeLog}</button>}
-                </small>
-              )}
-            </div>
-          </div>
+          {!failed && status}
           <ol className="onboarding-runtime-track">
             {visibleRuntimeStages.map((stage, index) => (
               <li key={stage.value} className={index < activeIndex ? "is-complete" : index === activeIndex ? "is-active" : undefined}>
