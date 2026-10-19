@@ -90,7 +90,7 @@ exec env -i HOME="$FAKE_REMOTE_HOME" PATH="$FAKE_REMOTE_PATH" \
   JHT_RAW_BASE="$FAKE_RAW_BASE" FAKE_LOG="$log" FAKE_DOCKER="${FAKE_DOCKER:-up}" \
   FAKE_APT_INSTALLS_DOCKER="${FAKE_APT_INSTALLS_DOCKER:-1}" \
   FAKE_FREE_KB="${FAKE_FREE_KB:-}" TERM=dumb \
-  XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-}" JHT_ETC_DIR="${JHT_ETC_DIR:-}" FAKE_UID="${FAKE_UID:-}" \
+  XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-}" JHT_ETC_DIR="${JHT_ETC_DIR:-}" FAKE_UID="${FAKE_UID:-}" FAKE_UID_1001="${FAKE_UID_1001:-}" \
   FAKE_PODMAN_VERSION="${FAKE_PODMAN_VERSION:-}" FAKE_COMPOSE_VERSION="${FAKE_COMPOSE_VERSION:-}" \
   FAKE_ROOTLESS="${FAKE_ROOTLESS:-}" FAKE_PODMAN_INFO="${FAKE_PODMAN_INFO:-}" FAKE_LINGER="${FAKE_LINGER:-}" \
   FAKE_STATE="${FAKE_STATE:-}" FAKE_SUDO_PASSWORD="${FAKE_SUDO_PASSWORD:-}" \
@@ -210,10 +210,19 @@ done
 """
 
 # The user is "app"; FAKE_UID=0 makes it root.
+# `id -un <uid>` reads the fake server's accounts, never the machine running the test: on a
+# GitHub runner uid 1001 is "runner", and the installer would stop at its uid 1001 guard.
+# FAKE_UID_1001 names another account at uid 1001 on the fake server.
 FAKE_ID = r"""#!/bin/bash
 case "$*" in
   -u) echo "${FAKE_UID:-1000}" ;;
   -un) echo app ;;
+  "-un "*)
+    if [ "$2" = "${FAKE_UID:-1000}" ]; then echo app
+    elif [ "$2" = 0 ]; then echo root
+    elif [ "$2" = 1001 ] && [ -n "${FAKE_UID_1001:-}" ]; then echo "$FAKE_UID_1001"
+    else echo "id: $2: no such user" >&2; exit 1
+    fi ;;
   *) exec REAL_ID "$@" ;;
 esac
 """
@@ -544,6 +553,16 @@ def test_a_disk_with_room_goes_on(server, source):
     done = server.ssh(rust_const(source, "REMOTE_INSTALL"), server.installer_input(),
                       FAKE_FREE_KB=str(40 * 1024 * 1024))
     assert done.returncode == 0, done.stderr.decode()
+
+
+def test_another_account_at_uid_1001_on_the_server_stops_before_the_token_is_written(server, source):
+    """The accounts are the fake server's: the same guard that a GitHub runner's own uid 1001 tripped."""
+    done = server.ssh(rust_const(source, "REMOTE_INSTALL"), server.installer_input(),
+                      FAKE_UID_1001="backup")
+    assert done.returncode != 0
+    assert b"uid 1001 on this computer is the account 'backup'" in done.stderr
+    assert not (server.home / ".jht/.pairing-token").exists()
+    assert not (server.home / ".jht/host.env").exists()
 
 
 # ── the token flag of the installer ───────────────────────────────────────
