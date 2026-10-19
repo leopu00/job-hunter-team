@@ -1,5 +1,6 @@
 // @vitest-environment node
 import { describe, expect, it } from "vitest";
+import { OFFICE_TEXT } from "../office/office.i18n";
 import { DICTATION_LOCALE, DIRECT_CHAT_TEXT } from "../pages/messages/direct-chat.i18n";
 import { PROFILE_PAGE_TEXT } from "../pages/profile/profile-page.i18n";
 import { VOICE_INPUT_TEXT } from "../voice-input/voice-input.i18n";
@@ -8,7 +9,7 @@ import { PAGE_STATES_TEXT } from "./page-states.i18n";
 const LOCALES = ["it", "en", "de", "fr", "es", "pt", "hu"];
 
 // Role names that are the same word in several languages.
-const SAME_AS_ITALIAN = new Set(["Mentor", "Scout", "Scorer", "Sistema", "Team", "Assistente", "Analista", "Agente", "Capitano", "Tu"]);
+const SAME_AS_ITALIAN = new Set(["Mentor", "Scout", "Scorer", "Sistema", "Team", "Assistente", "Analista", "Agente", "Capitano", "Tu", "pass"]);
 
 /** Every leaf string of a dictionary, with its path. */
 function leaves(value: unknown, path = ""): [string, string][] {
@@ -21,6 +22,7 @@ describe.each([
   ["direct chat", DIRECT_CHAT_TEXT],
   ["voice input", VOICE_INPUT_TEXT],
   ["profile page", PROFILE_PAGE_TEXT],
+  ["office", OFFICE_TEXT],
 ] as const)("the %s texts", (_name, dictionary) => {
   const dict = dictionary as Record<string, unknown>;
 
