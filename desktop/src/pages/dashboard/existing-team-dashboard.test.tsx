@@ -71,6 +71,7 @@ afterEach(() => {
 // request; every other call must be the core's read.
 const opsAsked = () => {
   const calls = native.invoke.mock.calls.filter(([command]) => command !== "existing_team_link_identity");
+  expect(calls.every(([command]) => command === "existing_team_positions_read")).toBe(true);
   return calls.map(([, args]) => (args.request as { op: string }).op);
 };
 
