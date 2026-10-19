@@ -1,0 +1,59 @@
+[
+  {"name": "three rejections on two positions: no proposal",
+   "events": [
+     {"legacy_id": "1", "action": "dislike", "reason": "too_senior", "created_at": "2026-10-01T10:00:00Z"},
+     {"legacy_id": "1", "action": "dislike", "reason": "too_senior", "created_at": "2026-10-02T10:00:00Z"},
+     {"legacy_id": "2", "action": "dislike", "reason": "too_senior", "created_at": "2026-10-03T10:00:00Z"}],
+   "expected": []},
+  {"name": "three rejections on three positions: a proposal",
+   "events": [
+     {"legacy_id": "1", "action": "dislike", "reason": "too_senior", "created_at": "2026-10-01T10:00:00Z"},
+     {"legacy_id": "2", "action": "hide", "reason": "too_senior", "created_at": "2026-10-02T10:00:00Z"},
+     {"legacy_id": "3", "action": "dislike", "reason": "too_senior", "created_at": "2026-10-03T10:00:00Z"}],
+   "expected": [{"reason": "too_senior", "positions": 3, "legacy_ids": ["1", "2", "3"]}]},
+  {"name": "a withdrawn vote counts zero",
+   "events": [
+     {"legacy_id": "1", "action": "dislike", "reason": "salary_low", "created_at": "2026-10-01T10:00:00Z"},
+     {"legacy_id": "1", "action": "clear", "reason": null, "created_at": "2026-10-04T10:00:00Z"},
+     {"legacy_id": "2", "action": "dislike", "reason": "salary_low", "created_at": "2026-10-02T10:00:00Z"},
+     {"legacy_id": "3", "action": "dislike", "reason": "salary_low", "created_at": "2026-10-03T10:00:00Z"}],
+   "expected": []},
+  {"name": "only the last judgement of a position counts",
+   "events": [
+     {"legacy_id": "1", "action": "dislike", "reason": "wrong_stack", "created_at": "2026-10-01T10:00:00Z"},
+     {"legacy_id": "1", "action": "dislike", "reason": "too_junior", "created_at": "2026-10-05T10:00:00Z"},
+     {"legacy_id": "2", "action": "dislike", "reason": "wrong_stack", "created_at": "2026-10-02T10:00:00Z"},
+     {"legacy_id": "3", "action": "dislike", "reason": "wrong_stack", "created_at": "2026-10-03T10:00:00Z"}],
+   "expected": []},
+  {"name": "other and the factual reasons are never proposed",
+   "events": [
+     {"legacy_id": "1", "action": "dislike", "reason": "other", "created_at": "2026-10-01T10:00:00Z"},
+     {"legacy_id": "2", "action": "dislike", "reason": "other", "created_at": "2026-10-02T10:00:00Z"},
+     {"legacy_id": "3", "action": "dislike", "reason": "other", "created_at": "2026-10-03T10:00:00Z"},
+     {"legacy_id": "4", "action": "dislike", "reason": "closed", "created_at": "2026-10-01T10:00:00Z"},
+     {"legacy_id": "5", "action": "dislike", "reason": "closed", "created_at": "2026-10-02T10:00:00Z"},
+     {"legacy_id": "6", "action": "dislike", "reason": "scam_or_gone", "created_at": "2026-10-01T10:00:00Z"},
+     {"legacy_id": "7", "action": "dislike", "reason": "scam_or_gone", "created_at": "2026-10-02T10:00:00Z"},
+     {"legacy_id": "8", "action": "dislike", "reason": "scam_or_gone", "created_at": "2026-10-03T10:00:00Z"}],
+   "expected": []},
+  {"name": "likes and stars are not rejections; an old free text reads as other",
+   "events": [
+     {"legacy_id": "1", "action": "like", "reason": "too_senior", "created_at": "2026-10-01T10:00:00Z"},
+     {"legacy_id": "2", "action": "star", "reason": "too_senior", "created_at": "2026-10-02T10:00:00Z"},
+     {"legacy_id": "3", "action": "dislike", "reason": "troppo senior per me", "created_at": "2026-10-03T10:00:00Z"},
+     {"legacy_id": "4", "action": "dislike", "reason": "not_interested", "created_at": "2026-10-03T10:00:00Z"},
+     {"legacy_id": "5", "action": "dislike", "reason": "mismatch", "created_at": "2026-10-03T10:00:00Z"}],
+   "expected": []},
+  {"name": "two reasons over the line, the larger first",
+   "events": [
+     {"legacy_id": "1", "action": "dislike", "reason": "company", "created_at": "2026-10-01T10:00:00Z"},
+     {"legacy_id": "2", "action": "dislike", "reason": "company", "created_at": "2026-10-01T10:00:00Z"},
+     {"legacy_id": "3", "action": "dislike", "reason": "company", "created_at": "2026-10-01T10:00:00Z"},
+     {"legacy_id": "4", "action": "dislike", "reason": "wrong_location", "created_at": "2026-10-01T10:00:00Z"},
+     {"legacy_id": "5", "action": "dislike", "reason": "wrong_location", "created_at": "2026-10-01T10:00:00Z"},
+     {"legacy_id": "6", "action": "dislike", "reason": "wrong_location", "created_at": "2026-10-01T10:00:00Z"},
+     {"legacy_id": "7", "action": "dislike", "reason": "wrong_location", "created_at": "2026-10-01T10:00:00Z"}],
+   "expected": [
+     {"reason": "wrong_location", "positions": 4, "legacy_ids": ["4", "5", "6", "7"]},
+     {"reason": "company", "positions": 3, "legacy_ids": ["1", "2", "3"]}]}
+]
