@@ -946,9 +946,15 @@ def _handle_entry(agent, entry, now, sessions) -> bool:
 # ma solo quando l'agente guarda: un agente fermo, o in throttle, lascerebbe
 # l'utente senza avviso e la domanda aperta oltre il termine. Questo daemon è il
 # giro che c'è SEMPRE (pid1 lo avvia senza condizioni, non dipende da Telegram
-# né dal cloud, non si ferma con `.team-halted.flag`, e un'eccezione non lo
-# uccide), quindi la scadenza gira qui, nello stesso modo del lettore: prima ciò
-# che l'utente ha scritto in tempo, poi i termini scaduti, poi l'avviso, una volta.
+# né dal cloud, e un'eccezione non lo uccide), quindi la scadenza gira qui, nello
+# stesso modo del lettore: prima ciò che l'utente ha scritto in tempo, poi i
+# termini scaduti, poi l'avviso, una volta.
+#
+# Con `.team-halted.flag` il giro non scade niente e non scrive all'utente: il team è
+# fermo per sua volontà e un avviso «scaduta, ho scelto io» non è ciò che ha chiesto.
+# Il tempo dello stop NON si somma alle scadenze: una domanda scaduta durante lo stop
+# scade alla ripartenza (un giro dopo il flag tolto), una sola volta, e ciò che
+# l'utente ha scritto in tempo vince comunque, perché lo spazzino guarda prima quello.
 
 _last_question_sweep = 0.0
 
@@ -958,12 +964,20 @@ def _jobs_db_path() -> Path:
     return Path(explicit) if explicit else _home() / "jobs.db"
 
 
+def team_halted() -> bool:
+    """Il team è fermato dall'utente (`.team-halted.flag`)."""
+    return any(name == "team-halted" and flag.exists() for name, flag in _halt_flags())
+
+
 def sweep_questions(*, db_path=None, deliver=None) -> int:
     """Applica le scadenze di tutte le domande aperte. Ritorna quanti avvisi ha emesso.
 
     Non fa niente (0) senza database, senza le colonne delle domande o senza il
     modulo: è una funzione che si accende da sola quando qualcuno fa una domanda.
+    Non fa niente nemmeno a team fermato: né scadenze né avvisi (vedi sopra).
     """
+    if team_halted():
+        return 0
     path = Path(db_path) if db_path else _jobs_db_path()
     if not path.exists():
         return 0
@@ -988,6 +1002,8 @@ def sweep_questions(*, db_path=None, deliver=None) -> int:
 def maybe_sweep_questions(now=None) -> int:
     """`sweep_questions` ogni QUESTION_SWEEP_SEC, e mai un guasto che esca da qui."""
     global _last_question_sweep
+    if team_halted():
+        return 0  # il timer non avanza: alla ripartenza il primo giro spazza subito
     moment = time.monotonic() if now is None else float(now)
     if _last_question_sweep and moment - _last_question_sweep < QUESTION_SWEEP_SEC:
         return 0

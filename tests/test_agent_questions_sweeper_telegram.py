@@ -242,6 +242,64 @@ def test_the_engine_sweeps_on_a_cadence_and_a_failure_never_leaves_it(world, mon
     assert engine.maybe_sweep_questions(now=5000) == 0  # logged, not raised
 
 
+def _stop_the_team(world):
+    (world.home / ".team-halted.flag").write_text("", encoding="utf-8")
+
+
+def _resume_the_team(world):
+    (world.home / ".team-halted.flag").unlink()
+
+
+def test_a_stopped_team_expires_nothing_and_writes_nothing_and_the_expiry_arrives_once_at_resume(world):
+    put(world, agent="mentor", scade_tra="1h")  # the deadline is long over: T0 is in the past
+    engine = _engine()
+    told = []
+    _stop_the_team(world)
+    for _ in range(3):
+        assert engine.sweep_questions(db_path=world.db, deliver=told.extend) == 0
+    assert told == []
+    assert stored_answers(world) == []  # no default chosen for the user
+    assert rows(world, "SELECT COUNT(*) FROM pending_user_messages WHERE source_action = ?", (aq.EXPIRED_ACTION,)) == [(0,)]
+    # The stop time does not count: the question that ran out while stopped runs out now, once.
+    _resume_the_team(world)
+    assert engine.sweep_questions(db_path=world.db, deliver=told.extend) == 1
+    assert [e.agent for e in told] == ["mentor"]
+    assert [a["origine"] for a in stored_answers(world)] == ["scadenza"]
+    assert engine.sweep_questions(db_path=world.db, deliver=told.extend) == 0
+    assert len(told) == 1
+
+
+def test_what_was_typed_in_time_still_wins_when_the_sweep_resumes(world, conn):
+    question = put(world, scade_tra="1h")
+    conn.execute(
+        "UPDATE pending_user_messages SET user_reply = '2', user_reply_at = '2026-10-18 10:30:00' WHERE source_id = ?",
+        (question.source_id,),
+    )
+    conn.commit()
+    engine = _engine()
+    told = []
+    _stop_the_team(world)
+    assert engine.sweep_questions(db_path=world.db, deliver=told.extend) == 0
+    assert stored_answers(world) == []
+    _resume_the_team(world)
+    assert engine.sweep_questions(db_path=world.db, deliver=told.extend) == 0  # answered: nothing expired
+    assert told == []
+    assert [(a["scelte"], a["origine"]) for a in stored_answers(world)] == [(["lungo"], "utente")]
+
+
+def test_the_cadence_does_not_run_while_stopped_and_the_first_round_after_the_stop_is_not_delayed(world, monkeypatch):
+    engine = _engine()
+    runs = []
+    monkeypatch.setattr(engine, "sweep_questions", lambda: runs.append(1) or 0)
+    _stop_the_team(world)
+    assert engine.maybe_sweep_questions(now=1000) == 0
+    assert engine.maybe_sweep_questions(now=1000 + engine.QUESTION_SWEEP_SEC + 1) == 0
+    assert runs == []
+    _resume_the_team(world)
+    engine.maybe_sweep_questions(now=1000 + engine.QUESTION_SWEEP_SEC + 2)  # right away: the stopped rounds did not use the slot
+    assert len(runs) == 1
+
+
 def test_a_database_without_questions_is_left_alone(tmp_path):
     engine = _engine()
     assert engine.sweep_questions(db_path=tmp_path / "missing.db") == 0
