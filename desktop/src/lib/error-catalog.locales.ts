@@ -895,6 +895,13 @@ const COPY_BY_ENGLISH_TEXT: Readonly<Record<string, ErrorTranslations>> = {
     hu: ["A VPS-en a felhasználódnak nincsenek alárendelt azonosítói, amelyekre a jogosultságok nélküli Podmannek szüksége van.", "Kérd meg a VPS üzemeltetőjét, hogy vegye fel a felhasználódat az /etc/subuid és az /etc/subgid fájlba, majd próbáld újra."],
     pt: ["Na VPS o teu utilizador não tem os IDs subordinados de que o Podman sem privilégios precisa.", "Pede a quem gere a VPS que adicione o teu utilizador a /etc/subuid e /etc/subgid e tenta novamente."],
   },
+  "This VPS already runs Job Hunter Team with Docker. Moving it to Podman needs a migration, which the app cannot do by itself yet.": {
+    de: ["Auf dieser VPS läuft Job Hunter Team bereits mit Docker. Der Wechsel zu Podman braucht eine Migration, die die App noch nicht selbst durchführen kann.", "Die Daten des Teams bleiben, wo sie sind, auf der VPS: Nichts wurde verschoben oder gelöscht. Verbinde dich mit dem Team, das schon da ist, ohne es neu zu installieren, oder wähle eine andere VPS."],
+    es: ["En este VPS Job Hunter Team ya funciona con Docker. Pasarlo a Podman requiere una migración que la app todavía no puede hacer sola.", "Los datos del equipo se quedan donde están, en el VPS: no se ha movido ni borrado nada. Conéctate al equipo que ya está, sin reinstalarlo, o elige otro VPS."],
+    fr: ["Sur ce VPS, Job Hunter Team tourne déjà avec Docker. Le passer à Podman demande une migration que l’app ne sait pas encore faire seule.", "Les données de l’équipe restent où elles sont, sur le VPS : rien n’a été déplacé ni supprimé. Connecte-toi à l’équipe déjà présente, sans la réinstaller, ou choisis un autre VPS."],
+    hu: ["Ezen a VPS-en a Job Hunter Team már Dockerrel fut. A Podmanre váltáshoz migráció kell, amelyet az alkalmazás egyelőre nem tud magától elvégezni.", "A csapat adatai ott maradnak, ahol vannak, a VPS-en: semmit sem helyeztünk át és nem töröltünk. Csatlakozz a már ott lévő csapathoz újratelepítés nélkül, vagy válassz másik VPS-t."],
+    pt: ["Nesta VPS o Job Hunter Team já corre com Docker. Passá-lo para o Podman exige uma migração que a app ainda não consegue fazer sozinha.", "Os dados da equipa ficam onde estão, na VPS: nada foi movido nem apagado. Liga-te à equipa que já lá está, sem a reinstalar, ou escolhe outra VPS."],
+  },
   "I remove only the old versions of Job Hunter Team that are no longer needed: the one in use, the previous one, those used by a container and other programs’ images stay. Data and volumes are not touched.": {
     de: ["Ich entferne nur die alten Versionen von Job Hunter Team, die nicht mehr gebraucht werden: Die verwendete, die vorherige, die von einem Container genutzten und die Images anderer Programme bleiben. Daten und Volumes werden nicht angerührt.", "Bestätige, um Platz freizugeben. Wenn die Container-Engine aus ist, starte ich sie nicht und entferne nichts."],
     es: ["Solo quito las versiones antiguas de Job Hunter Team que ya no hacen falta: se quedan la que está en uso, la anterior, las que usa un contenedor y las imágenes de otros programas. Los datos y los volúmenes no se tocan.", "Confirma para liberar espacio. Si el motor de contenedores está apagado, no lo enciendo y no quito nada."],
@@ -1210,6 +1217,7 @@ export const ERROR_CATALOG_LOCALES: Readonly<Record<string, ErrorTranslations>> 
   podman_rootless_unavailable: translated("On the VPS Podman cannot start for your user."),
   podman_linger_missing: translated("On the VPS your user cannot keep the team running after you disconnect."),
   podman_subuid_missing: translated("On the VPS your user has no subordinate IDs, which Podman without privileges needs."),
+  vps_runtime_change_requires_migration: translated("This VPS already runs Job Hunter Team with Docker. Moving it to Podman needs a migration, which the app cannot do by itself yet."),
   host_key_missing: translated("The VPS SSH identity has not been confirmed yet."),
   host_key_mismatch: translated("The server’s SSH key has CHANGED from the one you confirmed: it may be a different server. The connection is blocked."),
   host_key_changed: translated("The server’s SSH key has CHANGED from the one you confirmed: it may be a different server. The connection is blocked."),
