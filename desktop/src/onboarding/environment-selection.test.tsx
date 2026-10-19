@@ -16,7 +16,7 @@ beforeEach(() => { localStorage.clear(); localStorage.setItem("jht-lang", "en");
 afterEach(() => { cleanup(); localStorage.clear(); });
 function wizard(platform: OnboardingFlowProps["platform"]) {
   const props: OnboardingFlowProps = {
-    account: { identity: "local", displayName: "Synthetic" }, platform, runtime: { status: "collecting", stage: "host" },
+    account: { identity: "google", displayName: "Synthetic" }, platform, runtime: { status: "collecting", stage: "host" },
     onSubmit: vi.fn(), onRetry: vi.fn(), onRestart: vi.fn(), onExitFailure: vi.fn(), onRuntimeAction: vi.fn(),
     providerLogin: null, sshHostKey: null, onConfirmHostKey: vi.fn(), onCancelHostKey: vi.fn(),
     onProviderInput: vi.fn(), onProviderClose: vi.fn(), onProviderRestart: vi.fn(),

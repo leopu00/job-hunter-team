@@ -19,6 +19,7 @@ import VpsProfileImport from "./VpsProfileImport";
 import CloserDesktopPanel from "../closer-desktop/CloserDesktopPanel";
 import FirstSetupAssistance from "./FirstSetupAssistance";
 import { ASSISTANCE_TEXT } from "./assistance.i18n";
+import { LOGIN_TEXT } from "../components/login-screen.i18n";
 import { ONBOARDING_TEXT, type OnboardingCopy } from "./onboarding.i18n";
 import { WINDOWS_SETUP } from "./windows-setup";
 import "./onboarding.css";
@@ -394,7 +395,7 @@ function RuntimeView({ host, platform, t, locale, runtime, activity, onRetry, on
   );
 }
 
-export function OnboardingFlow({ account, platform, runtime, activity, onSubmit, onConnectExistingTeam, onRetry, onRestart, onExitFailure, onRuntimeAction, providerLogin, sshHostKey, onConfirmHostKey, onCancelHostKey, onProviderInput, onProviderClose, onProviderRestart, onRecreatePodmanMachine, onFreeDiskSpace, runtimeLogPath, onOpenRuntimeLog, previousLocalData = false, locale: localeOverride }: OnboardingFlowProps) {
+export function OnboardingFlow({ account, platform, runtime, activity, onSubmit, onConnectExistingTeam, onSignInWithGoogle, onRetry, onRestart, onExitFailure, onRuntimeAction, providerLogin, sshHostKey, onConfirmHostKey, onCancelHostKey, onProviderInput, onProviderClose, onProviderRestart, onRecreatePodmanMachine, onFreeDiskSpace, runtimeLogPath, onOpenRuntimeLog, previousLocalData = false, locale: localeOverride }: OnboardingFlowProps) {
   const locale = localeOverride ?? appLocale();
   const t = ONBOARDING_TEXT[locale];
   const providerChoices = providers(t);
@@ -437,8 +438,11 @@ export function OnboardingFlow({ account, platform, runtime, activity, onSubmit,
     <CloserDesktopPanel onClose={() => setAssistanceOpen(false)} />
   </main>;
 
+  // A team on a VPS pairs with the account: a local profile has none, so the step says so now
+  // instead of starting a setup that fails at the runtime stage (pairing_token_missing).
+  const vpsNeedsAccount = account.identity === "local" && host.kind === "vps";
   const hostIsValid = (localRuntimeSupported && host.kind === "local") ||
-    (host.kind === "vps" && Boolean(host.address.trim() && host.user.trim() && host.port > 0 && host.port <= 65535 && host.keyPath.trim()));
+    (host.kind === "vps" && !vpsNeedsAccount && Boolean(host.address.trim() && host.user.trim() && host.port > 0 && host.port <= 65535 && host.keyPath.trim()));
 
   function selectHost(kind: ExecutionHost["kind"]) {
     setHost((current) => current.kind === kind ? current : kind === "local" ? { kind } : emptyVpsHost());
@@ -505,9 +509,13 @@ export function OnboardingFlow({ account, platform, runtime, activity, onSubmit,
             </div>
             {host.kind === "vps" && <div className="onboarding-fields onboarding-vps-fields">
               <label className="onboarding-field onboarding-field--full"><span>{t.vpsAddress}</span><input value={host.address} onChange={(event) => setHost({ ...host, address: event.target.value })} placeholder={t.vpsAddressPlaceholder} required /></label>
-              <label className="onboarding-field"><span>{t.sshUser}</span><input placeholder={t.sshUserPlaceholder} value={host.user} onChange={(event) => setHost({ ...host, user: event.target.value })} required /></label>
+              <label className="onboarding-field"><span>{t.sshUser}</span><input placeholder={t.sshUserPlaceholder} autoCapitalize="off" autoCorrect="off" spellCheck={false} value={host.user} onChange={(event) => setHost({ ...host, user: event.target.value })} required /></label>
               <label className="onboarding-field"><span>{t.sshPort}</span><input type="number" min="1" max="65535" value={host.port} onChange={(event) => setHost({ ...host, port: Number(event.target.value) })} required /></label>
               <div className="onboarding-field onboarding-field--full"><span>{t.sshKey}</span><SshKeyPicker value={host.keyPath} onChange={(keyPath) => setHost({ ...host, keyPath })} disabled={submitting} /></div>
+            </div>}
+            {vpsNeedsAccount && <div className="onboarding-aside" role="note">
+              <p>{t.vpsNeedsGoogle}</p>
+              {onSignInWithGoogle && <button className="onboarding-secondary" type="button" onClick={() => void onSignInWithGoogle()}>{LOGIN_TEXT[locale].google}</button>}
             </div>}
             <div className="onboarding-actions"><button className="onboarding-secondary" type="button" onClick={() => setStep(0)}>{t.back}</button><button className="onboarding-primary" type="submit" disabled={!hostIsValid}>{t.continue} <span aria-hidden="true">→</span></button></div>
           </form>

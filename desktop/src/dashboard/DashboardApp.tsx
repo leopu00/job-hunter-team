@@ -1352,6 +1352,7 @@ export default function DashboardApp() {
         platform={platform ?? "other"}
         runtime={gate.runtime}
         activity={activity}
+        onSignInWithGoogle={gate.account.identity === "local" ? logout : undefined}
         onSubmit={submit}
         onRuntimeAction={runtimeAction}
         providerLogin={providerLogin}
