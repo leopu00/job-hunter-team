@@ -838,6 +838,7 @@ const COPY_BY_ENGLISH_TEXT: Readonly<Record<string, ErrorTranslations>> = {
     fr: ["La connexion au VPS est perdue : je réessaie tout seul à {time}.", "Tu n’as rien à faire : les actions sur l’équipe restent en attente jusqu’au retour de la connexion."],
     hu: ["Megszakadt a kapcsolat a VPS-szel: {time}-kor magamtól újrapróbálom.", "Nem kell tenned semmit: a csapatot érintő műveletek szünetelnek, amíg a kapcsolat vissza nem tér."],
     pt: ["A ligação à VPS perdeu-se: volto a tentar sozinho às {time}.", "Não é preciso fazer nada: as ações na equipa ficam em espera até a ligação voltar."],
+  },
   "I could not install Podman on the VPS.": {
     de: ["Ich konnte Podman auf der VPS nicht installieren.", "Bitte die Person, die die VPS verwaltet, podman, podman-compose und uidmap von Hand zu installieren, und versuche es dann erneut."],
     es: ["No he podido instalar Podman en el VPS.", "Pide a quien gestiona el VPS que instale a mano podman, podman-compose y uidmap y vuelve a intentarlo."],
