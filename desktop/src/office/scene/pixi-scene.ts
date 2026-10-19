@@ -170,14 +170,18 @@ export async function createOfficeScene(host: HTMLElement, options: OfficeSceneO
 
   // The departments' dressing (department_dressing.gd): tint, brackets, name. The name goes over
   // the scene with the other labels: grown to stay readable, on the floor it would go under the desks.
-  for (const dept of layout.departments) floorLayer.addChild(departmentDressing(dept, keepReadable, overlay));
+  // the departments' names: the agents' tags and the piles' counts keep clear of them too
+  const deptLabels: Container[] = [];
+  for (const dept of layout.departments) floorLayer.addChild(departmentDressing(dept, keepReadable, overlay, deptLabels));
 
   // The handoff tables' tags and piles: paper sheets with their count where
   // the layout says how (paper_pile.gd), a plain counter otherwise.
   const paper = layout.paperPile;
   const sheetTex = paper ? textureFor(textures, paper.image) : null;
   const piles = new Map<DeptId, (n: number | null) => void>();
-  // the handoff tags: the agents' tags keep clear of them (drawTags)
+  // the piles' counts and where each wants to be: drawTags places them with the agents' tags
+  const pileBadges: PileBadge[] = [];
+  // the handoff tags: the agents' tags and the piles' counts keep clear of them (drawTags)
   const handoffTags: Container[] = [];
   const pileNodes = new Map<DeptId, { node: Container; spot: Vec }>();
   for (const dept of layout.departments) {
@@ -190,7 +194,7 @@ export async function createOfficeScene(host: HTMLElement, options: OfficeSceneO
     pile.zIndex = dept.inbox.y + 0.5;
     pileNodes.set(dept.id, { node: pile, spot });
     sortedLayer.addChild(pile);
-    piles.set(dept.id, paper && sheetTex ? paperPile(pile, paper, sheetTex, keepReadable) : counterBadge(pile, dept.color, keepReadable));
+    piles.set(dept.id, paper && sheetTex ? paperPile(pile, paper, sheetTex, keepReadable, overlay, pileBadges) : counterBadge(pile, dept.color, keepReadable));
   }
 
   // The box's edges (tesseract_edges.gd): additive rays from the floor's corners, pulsing.
@@ -358,17 +362,24 @@ export async function createOfficeScene(host: HTMLElement, options: OfficeSceneO
     }
     // Tags that would overlap each other or a handoff tag move up just enough, and none leaves
     // the top or a side of the view: two agents side by side are both read.
-    const fixed = handoffTags.map((node) => {
-      const b = node.getLocalBounds();
-      const s = node.scale.x;
-      return { x: node.x + b.x * s, y: node.y + b.y * s, w: b.width * s, h: b.height * s };
+    const fixed = [...handoffTags, ...deptLabels].map((node) => boxOf(node));
+    // the piles' counts, placed with the tags: where they want to be, or just above a label
+    const counts = new Map<string, { badge: PileBadge; cx: number; cy: number }>();
+    pileBadges.forEach((badge, i) => {
+      if (badge.node.children.length === 0) return;
+      const r = boxOf(badge.node, badge.home);
+      const id = `pile:${i}`;
+      counts.set(id, { badge, cx: r.x + r.w / 2, cy: r.y + r.h / 2 });
+      wanted.push({ id, x: r.x + r.w / 2, y: r.y + r.h / 2, w: r.w, h: r.h });
     });
     const corner = toWorld(controls.camera(), { x: 0, y: 0 });
     const far = toWorld(controls.camera(), { x: app.screen.width, y: app.screen.height });
     const at = separateTags(wanted, fixed, 4 * k, { top: corner.y, left: corner.x, right: far.x });
     for (const tag of wanted) {
       const p = at.get(tag.id) ?? tag;
-      nodes.get(tag.id)!.position.set(p.x, p.y);
+      const count = counts.get(tag.id);
+      if (count) count.badge.node.position.set(count.badge.home.x + p.x - count.cx, count.badge.home.y + p.y - count.cy);
+      else nodes.get(tag.id)!.position.set(p.x, p.y);
     }
     for (const [uid, entry] of tags) {
       if (live.has(uid)) continue;
@@ -526,6 +537,15 @@ export async function createOfficeScene(host: HTMLElement, options: OfficeSceneO
 /** A label kept readable at any zoom: its node, its font in world pixels, its smallest size on screen (readable.ts). */
 type Readable = { node: Container; font: number; min: number };
 type KeepReadable = <T extends Container>(node: T, font: number, min: number) => T;
+/** A pile's count: its node and where it wants to be (drawTags moves it off a label in the way). */
+type PileBadge = { node: Container; home: Vec };
+
+/** A node's box in its parent's (the world's) pixels, as drawn at its scale. */
+function boxOf(node: Container, at: Vec = node.position): Rect {
+  const b = node.getLocalBounds();
+  const s = node.scale.x;
+  return { x: at.x + b.x * s, y: at.y + b.y * s, w: b.width * s, h: b.height * s };
+}
 
 // ─── Textures ────────────────────────────────────────────────────────────
 
@@ -779,7 +799,7 @@ function seededRandom(seed: string): () => number {
 }
 
 /** DepartmentDressing._draw_zone: three faint tints, painted blotches, L brackets, name and tagline. */
-function departmentDressing(dept: Department, keepReadable: KeepReadable, labels: Container): Container {
+function departmentDressing(dept: Department, keepReadable: KeepReadable, labels: Container, named: Container[]): Container {
   const c = new Container();
   c.eventMode = "none";
   const col = colorOf(dept.color);
@@ -836,7 +856,7 @@ function departmentDressing(dept: Department, keepReadable: KeepReadable, labels
       .fill({ color: 0x0a0a0f, alpha: 0.82 });
     label.addChild(plate, tag);
   }
-  labels.addChild(keepReadable(label, 15, READABLE_PX.departmentTagline));
+  named.push(labels.addChild(keepReadable(label, 15, READABLE_PX.departmentTagline)));
   return c;
 }
 
@@ -860,12 +880,23 @@ function handoffTag(label: string, at: Vec, color: string, zIndex: number): Cont
 }
 
 /** The pile as paper: one sprite per sheet, and the count in a green-bordered box above the tallest stack. */
-function paperPile(pile: Container, rule: PaperRule, sheet: Texture, keepReadable: KeepReadable): (n: number | null) => void {
+function paperPile(
+  pile: Container,
+  rule: PaperRule,
+  sheet: Texture,
+  keepReadable: KeepReadable,
+  labels: Container,
+  badges: PileBadge[],
+): (n: number | null) => void {
   const sheets = new Container();
-  // the count's box, anchored at its text's baseline-left and kept readable there
+  // The count's box, anchored at its text's baseline-left and kept readable there. It goes over
+  // the scene with the labels, after them: a department's name grown to be read must not cover it.
   const badge = keepReadable(new Container(), 13, READABLE_PX.pileCount);
   const hit = new Graphics();
-  pile.addChild(hit, sheets, badge);
+  pile.addChild(hit, sheets);
+  labels.addChild(badge);
+  const placed: PileBadge = { node: badge, home: { x: pile.x, y: pile.y } };
+  badges.push(placed);
   let shown: number | null | undefined;
   const scale = rule.width / sheet.width;
   return (n) => {
@@ -886,7 +917,8 @@ function paperPile(pile: Container, rule: PaperRule, sheet: Texture, keepReadabl
     badge.removeChildren().forEach((b) => b.destroy());
     if (n == null || n <= 0) return;
     const text = new Text({ text: String(n), style: { fontFamily: FONT, fontSize: 13, fontWeight: "700", fill: GREEN } });
-    badge.position.set(92, -tower - 28);
+    placed.home = { x: pile.x + 92, y: pile.y - tower - 28 };
+    badge.position.set(placed.home.x, placed.home.y);
     badge.addChild(
       new Graphics()
         .rect(-5, -14, text.width + 10, text.height + 7)
