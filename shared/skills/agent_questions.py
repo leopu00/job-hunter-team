@@ -850,6 +850,22 @@ def legacy_replies_on_questions(conn: sqlite3.Connection, agent: str | None, *, 
     return results
 
 
+# ── The stop: a team the person has stopped applies no deadline ──────────────
+
+TEAM_HALTED_FLAG = ".team-halted.flag"
+
+
+def team_halted(home: str | Path) -> bool:
+    """Whether the person has stopped the team (`.team-halted.flag` in the home).
+
+    The one answer to "is the team stopped" for everything that applies deadlines: the sweeper
+    and the agent's reader both ask here. While it is true nothing expires and the user is
+    told nothing; the stop time does not count, so what ran out meanwhile runs out at the first
+    look after the flag is gone, once.
+    """
+    return (Path(home) / TEAM_HALTED_FLAG).exists()
+
+
 # ── The sweeper: deadlines that do not wait for an agent to look ─────────────
 
 

@@ -965,8 +965,12 @@ def _jobs_db_path() -> Path:
 
 
 def team_halted() -> bool:
-    """Il team è fermato dall'utente (`.team-halted.flag`)."""
-    return any(name == "team-halted" and flag.exists() for name, flag in _halt_flags())
+    """Il team è fermato dall'utente (`.team-halted.flag`): la risposta è quella del modulo delle domande."""
+    try:
+        import agent_questions as aq
+    except ImportError:
+        return False  # senza il modulo lo spazzino non fa comunque niente
+    return aq.team_halted(_home())
 
 
 def sweep_questions(*, db_path=None, deliver=None) -> int:
