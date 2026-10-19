@@ -131,7 +131,7 @@ export const DB_ROLE_POLICIES: Readonly<Record<string, DbRolePolicy>> = {
           // RULE-12/14 recheck: liveness, and the exclusion with its reason when closed.
           "status", "notes", "is_open", "last_open_check", "last_checked", "expires_at",
           // RULE-14 categorize runs on checked..ready; geocoding on any live position.
-          "role_family", "office_lat", "office_lon", "office_address", "office_geocoded", "office_verified",
+          "role_family", "office_lat", "office_lon", "office_address", "office_geocoded", "office_verified", "location_precision",
           "action", "outcome", "evidence_kind", "evidence_url", "evidence_code", "evidence_hash", "duration_ms",
         ],
       },

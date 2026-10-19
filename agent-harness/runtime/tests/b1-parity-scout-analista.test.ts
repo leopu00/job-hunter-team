@@ -60,6 +60,11 @@ const ANALISTA: Step[] = [
     "position", "1", "--office-lat", "45.4642", "--office-lon", "9.19", "--office-address", "Via Roma 1, Milano",
     "--office-geocoded", "true", "--office-verified", "true", "--action", "geocode", "--outcome", "updated",
   ]],
+  // JHT-T04: the level of the place. A street, with no number; then the older flag alone, which
+  // says `address` (the coordinates are there) and is never turned back to a lower level by a `false`.
+  ["analista-1", "db_update.py", "db_update", ["position", "1", "--location-precision", "street"]],
+  ["analista-1", "db_update.py", "db_update", ["position", "1", "--office-verified", "true"]],
+  ["analista-1", "db_update.py", "db_update", ["position", "1", "--office-verified", "false"]],
   // RULE-08: the company, and the highlights.
   ["analista-1", "db_insert.py", "db_insert", [
     "company", "--name", "Globex", "--website", "https://globex.example", "--hq-country", "DE", "--sector", "retail", "--size", "10k+",
@@ -83,6 +88,23 @@ describe.skipIf(PYTHON_SKILLS === null)("B1 · SCOUT: the same inserts and updat
 });
 
 describe.skipIf(PYTHON_SKILLS === null)("B1 · the same refusals, and the company the ANALISTA meets again", () => {
+  it("JHT-T04: refuses a flag that contradicts the level on both sides, and writes nothing", async () => {
+    const t = twins(root, pipelineSeed);
+    const [refused] = await play(t, [["analista-1", "db_update.py", "db_update", [
+      "position", "1", "--location-precision", "street", "--office-verified", "true", "--notes", "must not land",
+    ]]]);
+    expect(refused).toMatchObject({ tui: false, api: false });
+    expect(strictDiff(t)).toEqual([]);
+    for (const path of [t.tui, t.api]) {
+      const db = openJobsDb(path);
+      try {
+        expect(db.prepare("SELECT notes, location_precision FROM positions WHERE id = 1").get()).toEqual({ notes: null, location_precision: null });
+      } finally {
+        db.close();
+      }
+    }
+  });
+
   it("skips a duplicate advert on both sides, and writes nothing", async () => {
     const t = twins(root, pipelineSeed);
     const [dup] = await play(t, [["scout-1", "db_insert.py", "db_insert", ["position", "--title", "SWE", "--company", "Acme", "--url", "https://acme.example/jobs/1"]]]);

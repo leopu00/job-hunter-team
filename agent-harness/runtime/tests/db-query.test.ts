@@ -83,6 +83,11 @@ function seeded(path: string, base = sqliteNow()): Database {
   run(event, "2026-09-12 10:00:00", "analista-very-long-2", "position", 1, "liveness_check", "inconclusive", null, null, null, 403);
   // A recheck already served: checked after it was requested, so out of the queue.
   run("UPDATE positions SET recheck_requested = 1, recheck_requested_at = ?, last_open_check = ? WHERE id = 3", "2026-09-01 10:00:00", "2026-09-02 10:00:00");
+  // The level of the rows that have a place and no level. Opening the database with _db.py gives it to
+  // them (its migration runs at every open) and the twin does not migrate, so a seed that left them
+  // without one would differ between the twins by exactly that, in whatever the command prints or reads.
+  run("UPDATE positions SET location_precision = CASE WHEN office_verified = 1 THEN 'address' ELSE 'city' END WHERE location_precision IS NULL AND office_lat IS NOT NULL AND office_lon IS NOT NULL");
+  run("UPDATE positions SET location_precision = 'remote' WHERE location_precision IS NULL AND office_lat IS NULL AND (remote_type = 'full_remote' OR work_mode = 'remote') AND COALESCE(TRIM(loc_city), '') = '' AND COALESCE(TRIM(loc_country), '') = ''");
   pinClock(db, base);
   // The uncategorized position is the newer one: the queue still puts it before the drifted.
   run("UPDATE positions SET created_at = datetime(?, '+1 minutes') WHERE id = 4", base);
@@ -270,7 +275,7 @@ describe("geocode-check against this tree's db_query.py, under the enrichment po
       for (const db of [ourDb, pyDb]) {
         // One remote, one already geocoded, one excluded, one scored above and one below 75.
         db.prepare("UPDATE positions SET work_mode = 'remote' WHERE id = 2").run();
-        db.prepare("UPDATE positions SET office_lat = 45.46, office_lon = 9.19, office_geocoded = 1 WHERE id = 3").run();
+        db.prepare("UPDATE positions SET office_lat = 45.46, office_lon = 9.19, office_geocoded = 1, location_precision = 'city' WHERE id = 3").run();
         db.prepare("UPDATE positions SET status = 'excluded' WHERE id = 5").run();
         db.prepare("INSERT INTO scores (position_id, total_score) VALUES (6, 76)").run();
         db.prepare("INSERT INTO scores (position_id, total_score) VALUES (4, 60)").run();
@@ -651,8 +656,10 @@ const ANALISTA_UPDATES: string[][] = [
 ];
 
 describe("db_update, as the ANALISTA runs it, against db_update.py (T14)", () => {
-  it.skipIf(skills === null).each(ANALISTA_UPDATES.map((u) => [u.join(" "), u]))("%s", async (_label, args) => {
-    const { call, py, pyDb, ourDb } = twins("analista-1");
+  // Against the Python of THIS tree: the pinned one has no place gate, and a `checked` with a place
+  // now also writes the level (JHT-T03), which the older Python never did.
+  it.skipIf(TREE === null).each(ANALISTA_UPDATES.map((u) => [u.join(" "), u]))("%s", async (_label, args) => {
+    const { call, py, pyDb, ourDb } = twins("analista-1", TREE);
     expectSame(await call("db_update", args as string[]), py("db_update.py", args as string[]));
     expect(fullSnapshot(ourDb)).toEqual(fullSnapshot(pyDb));
   });
