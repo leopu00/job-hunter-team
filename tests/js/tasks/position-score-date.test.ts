@@ -124,7 +124,7 @@ describe("data della valutazione nella pagina posizione", () => {
     );
 
     expect(html).toContain(`title="${scoredAt}"`);
-    expect(html).toContain("12/08 15:24");
+    expect(html).toContain("12/08, 15:24");
   });
 
   it("non inventa una data nel dettaglio quando scored_at e' assente", () => {
