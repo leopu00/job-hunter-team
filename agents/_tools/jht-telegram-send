@@ -16,6 +16,12 @@
 #   jht-telegram-send --from capitano "<testo>"       # bot Capitano
 #   jht-telegram-send --from mentor --html "<b>x</b>"
 #   jht-telegram-send --chat-id 123 "<testo>"         # override chat_id
+#   jht-telegram-send --inline-buttons '<json>' "<testo>"
+#       bottoni sotto il messaggio (solo `{"inline_keyboard":[[{"text":…,
+#       "callback_data":"jhtq:<4 esadecimali>:<n>"}]…]}`: i bottoni delle domande
+#       strutturate; li riceve tg-bridge.py come callback_query). Con il
+#       servizio Telegram isolato (dopo il cutover) i bottoni NON ci sono: parte
+#       il solo testo, con le opzioni numerate.
 #
 # Exit:
 #   0 → consegnato (HTTP 200, ok:true)
@@ -47,6 +53,7 @@ if [ -z "$role" ]; then
 fi
 keyboard_role=""
 photo_path=""
+inline_buttons=""
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -66,6 +73,8 @@ while [ $# -gt 0 ]; do
       # 2026-09-13). Il flag ora chiede a Telegram di TOGLIERE quella già
       # mostrata. Il valore (ruolo) resta solo nel log degli invii.
       keyboard_role="${2:-}"; shift 2 ;;
+    --inline-buttons)
+      inline_buttons="${2:-}"; shift 2 ;;
     --photo)
       # F-1.D bug #16: invia foto via sendPhoto. Il `<text>` posizionale
       # diventa caption (max 1024 char, Telegram cap). Photo > 10MB
@@ -142,6 +151,9 @@ if [ -f /run/jht-telegram/cutover ] || [ -f /run/jht-telegram/cutover-required ]
     echo "jht-telegram-send: isolated Telegram accepts plain text only; formatting, chat overrides and outbound attachments are unavailable" >&2
     exit 1
   fi
+  if [ -n "$inline_buttons" ]; then
+    echo "jht-telegram-send: isolated Telegram has no buttons: sending the text only" >&2
+  fi
   client="$(command -v jht-telegram-client 2>/dev/null || true)"
   if [ -z "$client" ]; then
     client="$(dirname "$0")/../../shared/telegram_service/bin/jht-telegram-client.py"
@@ -157,6 +169,34 @@ if [ -f /run/jht-telegram/cutover ] || [ -f /run/jht-telegram/cutover-required ]
   exec "$client" send --bot-role "$role" \
     --kind "${JHT_MESSAGE_KIND:-notification}" \
     "${source_args[@]}" -- "$text"
+fi
+
+# ── Bottoni (domande strutturate) ─────────────────────────────────────
+# Il testo dei bottoni è dell'agente come il corpo: stessa redazione, fail-closed.
+# Poi una forma sola: i bottoni delle domande, `callback_data` = `jhtq:<codice>:<n>`.
+if [ -n "$inline_buttons" ]; then
+  if ! inline_buttons=$(node "$redactor" --secrets <<<"$inline_buttons"); then
+    echo "jht-telegram-send: redazione dei bottoni fallita: non invio" >&2
+    exit 6
+  fi
+  if ! inline_buttons=$(python3 -c '
+import json, re, sys
+data = json.loads(sys.argv[1])
+rows = data.get("inline_keyboard") if isinstance(data, dict) and list(data) == ["inline_keyboard"] else None
+ok = isinstance(rows, list) and 1 <= len(rows) <= 8
+for row in rows if ok else []:
+    ok = ok and isinstance(row, list) and 1 <= len(row) <= 4
+    for button in row if isinstance(row, list) else []:
+        ok = ok and isinstance(button, dict) and sorted(button) == ["callback_data", "text"]
+        ok = ok and isinstance(button["text"], str) and 1 <= len(button["text"]) <= 64
+        ok = ok and isinstance(button["callback_data"], str) and re.fullmatch(r"jhtq:[0-9a-f]{4}:[0-9]{1,2}", button["callback_data"]) is not None
+if not ok:
+    sys.exit(1)
+print(json.dumps(data, ensure_ascii=False, separators=(",", ":")))
+' "$inline_buttons" 2>/dev/null); then
+    echo "jht-telegram-send: --inline-buttons non valido" >&2
+    exit 1
+  fi
 fi
 
 jht_home="${JHT_HOME:-$HOME/.jht}"
@@ -374,7 +414,10 @@ PYEOF
 
 _total=${#_chunks[@]}
 for _i in "${!_chunks[@]}"; do
-  if [ "$((_i + 1))" -eq "$_total" ] && [ -n "$keyboard_json_resolved" ]; then
+  if [ "$((_i + 1))" -eq "$_total" ] && [ -n "$inline_buttons" ]; then
+    # I bottoni al posto di `remove_keyboard`: non possono stare nello stesso reply_markup.
+    KEYBOARD_JSON="$inline_buttons" send_one "${_chunks[$_i]}" || exit $?
+  elif [ "$((_i + 1))" -eq "$_total" ] && [ -n "$keyboard_json_resolved" ]; then
     KEYBOARD_JSON="$keyboard_json_resolved" send_one "${_chunks[$_i]}" || exit $?
     _mark_keyboard_removed
   else

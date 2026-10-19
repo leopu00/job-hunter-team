@@ -50,7 +50,6 @@ import json
 import os
 import pathlib
 import sqlite3
-import subprocess
 import sys
 
 # Force UTF-8 on stdout: l'output contiene U+21B3 (↳) per le quote dei
@@ -113,29 +112,19 @@ def fetch_replies(db_path: str, agent: str, limit: int):
         conn.close()
 
 
-def deliver_expired(events) -> None:
+def deliver_expired(aq, events) -> None:
     """Avvisa l'utente («scaduta: ho fatto X») con lo stesso canale delle notifiche.
 
-    La riga e' gia' nel DB: `jht-notify-user --existing-id` la consegna e basta.
-    Best effort: se Telegram non c'e', la riga resta sul web.
+    La riga e' gia' nel DB: `jht-notify-user --existing-id` la consegna e basta. Lo stesso
+    codice lo usa lo spazzino delle scadenze (`aq.deliver_expired`). Best effort: se Telegram
+    non c'e', la riga resta sul web.
     """
     sibling = pathlib.Path(__file__).resolve().parent / "jht-notify-user"
-    tool = str(sibling) if sibling.exists() else "jht-notify-user"
-    for event in events:
-        cmd = [
-            tool, "--agent", event.agent, "--kind", "notification",
-            "--existing-id", str(event.notice_row_id),
-            "--source-id", event.source_id,
-            "--source-action", "agent_question_expired",
-            "--source-payload", event.source_payload,
-        ]
-        if event.related_position_id is not None:
-            cmd += ["--position-id", str(event.related_position_id)]
-        cmd.append(event.body)
-        try:
-            subprocess.run(cmd, capture_output=True, text=True, timeout=60)
-        except (OSError, subprocess.SubprocessError) as e:
-            print(f"jht-check-user-replies: warning, avviso di scadenza non consegnato: {e}", file=sys.stderr)
+    aq.deliver_expired(
+        events,
+        tool=str(sibling) if sibling.exists() else None,
+        warn=lambda text: print(f"jht-check-user-replies: warning, {text}", file=sys.stderr),
+    )
 
 
 def structured_answers(db_path: str, agent: str, peek: bool):
@@ -155,7 +144,7 @@ def structured_answers(db_path: str, agent: str, peek: bool):
             # looked late.
             notes = aq.legacy_replies_on_questions(conn, agent)
             expired = aq.expire_due(conn, agent=agent)
-            deliver_expired([n["expiry_notice"] for n in notes if n.get("expiry_notice")] + expired)
+            deliver_expired(aq, [n["expiry_notice"] for n in notes if n.get("expiry_notice")] + expired)
         return aq.answers_for_agent(conn, agent, mark_seen=not peek), notes, aq
     except sqlite3.Error as e:
         print(f"jht-check-user-replies: warning, domande strutturate non lette: {e}", file=sys.stderr)

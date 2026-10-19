@@ -235,5 +235,8 @@
   "disk.low.cli": "O disco está quase cheio (só %s estão livres): não será iniciado nenhum agente novo nem instalada nenhuma atualização. Os agentes já em execução continuam. Para libertar espaço: executa `jht clean-images` (remove só as versões antigas do Job Hunter Team), esvazia o Lixo e apaga os ficheiros grandes de que já não precisas, como transferências antigas, e tenta novamente.",
   "question.expired": "Pergunta expirada: «%s». Fiz: «%s». Se preferires outra coisa, escreve-me aqui e volto a perguntar.",
   "question.postpone": "Adiar, não fazer nada",
-  "question.reply_hint": "Responde com o número da opção (por exemplo 2). Se houver várias perguntas abertas, escreve «%s 2»."
+  "question.reply_hint": "Responde com o número da opção (por exemplo 2). Se houver várias perguntas abertas, escreve «%s 2».",
+  "question.answer_saved": "Resposta guardada: «%s».",
+  "question.answer_already": "Esta pergunta já tem uma resposta: «%s».",
+  "question.answer_invalid": "Não é uma das opções, por isso não a guardei. Responde com o número de uma opção (por exemplo 2) ou escreve «%s 2»."
 }

@@ -235,5 +235,8 @@
   "disk.low.cli": "Il disco è quasi pieno (è libero solo %s): non viene avviato nessun nuovo agente né installato nessun aggiornamento. Gli agenti già avviati continuano. Per liberare spazio: esegui `jht clean-images` (toglie solo le vecchie versioni di Job Hunter Team), svuota il Cestino ed elimina i file grandi che non ti servono, come vecchi download, poi riprova.",
   "question.expired": "Domanda scaduta: «%s». Ho fatto: «%s». Se vuoi un’altra scelta, scrivimelo qui e te lo richiedo.",
   "question.postpone": "Rinvia, non fare niente",
-  "question.reply_hint": "Rispondi con il numero dell’opzione (ad esempio 2). Se hai più domande aperte, scrivi «%s 2»."
+  "question.reply_hint": "Rispondi con il numero dell’opzione (ad esempio 2). Se hai più domande aperte, scrivi «%s 2».",
+  "question.answer_saved": "Risposta salvata: «%s».",
+  "question.answer_already": "Questa domanda ha già una risposta: «%s».",
+  "question.answer_invalid": "Non è una delle opzioni, quindi non l’ho salvata. Rispondi con il numero di un’opzione (ad esempio 2) o scrivi «%s 2»."
 }

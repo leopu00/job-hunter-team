@@ -38,12 +38,14 @@ import hashlib
 import json
 import re
 import secrets
+import shutil
 import sqlite3
+import subprocess
 import sys
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any, Mapping, Sequence
+from typing import Any, Callable, Mapping, Sequence
 
 _HERE = Path(__file__).resolve().parent
 for _path in (str(_HERE), str(_HERE.parent)):
@@ -182,6 +184,14 @@ def catalog_text(key: str, *args: Any, lang: str | None = None) -> str:
 # ── Building a question ──────────────────────────────────────────────────────
 
 
+def _check_label(label: str) -> None:
+    """A label made only of digits is refused: `interpret_reply` reads a bare number as the
+    NUMBER of an option, so the option labelled "2" and the second option would be the same
+    reply for two different things."""
+    if label.strip().isdecimal():
+        raise QuestionRejected("option_label_numeric", label)
+
+
 def _one_line(value: Any, limit: int, field_name: str) -> str:
     if not isinstance(value, str):
         raise QuestionRejected(f"{field_name}_invalid", "must be text")
@@ -213,6 +223,7 @@ def _options(raw: Sequence[Any], with_expiry: bool, lang: str | None) -> list[di
         if option_id in seen:
             raise QuestionRejected("option_id_duplicate", option_id)
         label = _one_line(item.get("label"), MAX_LABEL, "option_label")
+        _check_label(label)
         if label.casefold() in labels:
             raise QuestionRejected("option_label_duplicate", label)
         seen.add(option_id)
@@ -244,6 +255,7 @@ def validate_question_payload(payload: Any) -> dict:
     for option in options:
         if not isinstance(option, Mapping) or not isinstance(option.get("label"), str) or not option["label"].strip():
             raise QuestionRejected("option_invalid")
+        _check_label(option["label"])
         option_id = option.get("id")
         if not isinstance(option_id, str) or not (option_id == RINVIA or _OPTION_ID.fullmatch(option_id)):
             raise QuestionRejected("option_id_invalid")
@@ -781,7 +793,7 @@ def interpret_reply(payload: Mapping[str, Any], id_domanda: str, text: str) -> s
     raise AnswerRejected("reply_not_an_option")
 
 
-def legacy_replies_on_questions(conn: sqlite3.Connection, agent: str, *, mark_seen: bool = True) -> list[dict]:
+def legacy_replies_on_questions(conn: sqlite3.Connection, agent: str | None, *, mark_seen: bool = True) -> list[dict]:
     """What the user typed into a UI that only has a text box (the web, the desktop today).
 
     It counts as an answer if it is exactly the number of an option, `Q#### <number>`, or
@@ -792,16 +804,18 @@ def legacy_replies_on_questions(conn: sqlite3.Connection, agent: str, *, mark_se
     The reply is dated by the moment the user wrote it, not by the moment it is read: an
     answer given before the deadline is not lost because the agent looked later.
     Each note: {id_domanda, status, code?, expiry_notice?}.
+
+    `agent=None` reads the replies of every agent (the sweeper's way).
     """
     rows = _row_dict(
         conn,
         "SELECT q.id, q.source_id, q.user_reply, q.user_reply_at FROM pending_user_messages q "
-        "WHERE q.agent = ? AND q.source_action = ? AND q.user_reply IS NOT NULL "
+        "WHERE (? IS NULL OR q.agent = ?) AND q.source_action = ? AND q.user_reply IS NOT NULL "
         "AND q.user_reply_at IS NOT NULL "
         "AND (q.agent_seen_reply_at IS NULL OR datetime(q.agent_seen_reply_at) < datetime(q.user_reply_at)) "
         "AND NOT EXISTS (SELECT 1 FROM pending_user_messages a WHERE a.source_id = ? || q.source_id) "
         "ORDER BY q.id",
-        (agent, SOURCE_ACTION, ANSWER_PREFIX),
+        (agent, agent, SOURCE_ACTION, ANSWER_PREFIX),
     )
     results: list[dict] = []
     for row in rows:
@@ -834,3 +848,226 @@ def legacy_replies_on_questions(conn: sqlite3.Connection, agent: str, *, mark_se
             )
             conn.commit()
     return results
+
+
+# ── The sweeper: deadlines that do not wait for an agent to look ─────────────
+
+
+def sweep(conn: sqlite3.Connection, now: datetime | None = None, lang: str | None = None) -> list[Expired]:
+    """What the reader does before it shows anything, for every agent at once.
+
+    First what the user typed (dated by when they typed it) becomes an answer, THEN the
+    deadlines are applied: an answer given in time must not lose to a default because
+    nobody looked until after the deadline. Replies are not marked as seen — the agent's own
+    reader still reports an invalid one. Idempotent: whoever inserts the default first owns the
+    notice, so the user is told once, whether the sweeper or the reader got there first.
+    Returns the expiry notices still to be delivered.
+    """
+    notes = legacy_replies_on_questions(conn, None, mark_seen=False)
+    events = [note["expiry_notice"] for note in notes if note.get("expiry_notice")]
+    events += expire_due(conn, now, lang=lang)
+    return events
+
+
+def notify_tool() -> str:
+    """`jht-notify-user`: on the PATH, in the container, next to this checkout, or by name."""
+    found = shutil.which("jht-notify-user")
+    if found:
+        return found
+    for candidate in (Path("/app/agents/_tools/jht-notify-user"), _HERE.parent.parent / "agents" / "_tools" / "jht-notify-user"):
+        if candidate.exists():
+            return str(candidate)
+    return "jht-notify-user"
+
+
+def deliver_expired(
+    events: Sequence[Expired],
+    *,
+    tool: str | None = None,
+    warn: Callable[[str], None] | None = None,
+    runner: Callable[..., Any] = subprocess.run,
+) -> int:
+    """Tell the user («expired: I did X») on the channel notifications use. Returns how many left.
+
+    The row is already in the database: `jht-notify-user --existing-id` delivers it and that is
+    all. Best effort — without Telegram the row stays on the web.
+    """
+    sent = 0
+    tool = tool or notify_tool()
+    for event in events:
+        cmd = [
+            tool, "--agent", event.agent, "--kind", "notification",
+            "--existing-id", str(event.notice_row_id),
+            "--source-id", event.source_id,
+            "--source-action", EXPIRED_ACTION,
+            "--source-payload", event.source_payload,
+        ]
+        if event.related_position_id is not None:
+            cmd += ["--position-id", str(event.related_position_id)]
+        cmd.append(event.body)
+        try:
+            runner(cmd, capture_output=True, text=True, timeout=60)
+            sent += 1
+        except (OSError, subprocess.SubprocessError) as error:
+            (warn or (lambda text: print(text, file=sys.stderr)))(f"agent_questions: expiry notice not delivered: {error}")
+    return sent
+
+
+# ── Telegram: which bot a question leaves from, buttons, typed replies ───────
+
+BOT_ROLES = ("assistente", "capitano", "mentor")
+CALLBACK_PREFIX = "jhtq"
+_CALLBACK = re.compile(r"jhtq:([0-9a-f]{4}):([0-9]{1,2})")
+_CODE_ANYWHERE = re.compile(r"(?i)(?<![0-9a-z])q([0-9a-f]{4})(?![0-9a-z])")
+_CODED_REPLY = re.compile(r"(?i)q([0-9a-f]{4})\s+[0-9]{1,2}")
+
+
+def bot_role_for(agent: str) -> str:
+    """The bot a question of this agent leaves from (`jht-notify-user` says the same: a test holds them equal)."""
+    role = (agent or "").strip().lower()
+    return role if role in BOT_ROLES else "assistente"
+
+
+def inline_keyboard(id_domanda: str, payload: Mapping[str, Any]) -> dict | None:
+    """The buttons of a single-choice question, one per row, or None (a multiple choice is typed).
+
+    `callback_data` is `jhtq:<code>:<number>`: 12 bytes at most, far under Telegram's 64.
+    """
+    if payload["multipla"]:
+        return None
+    code = answer_code(id_domanda)[1:].lower()
+    rows = [
+        [{"text": option["label"], "callback_data": f"{CALLBACK_PREFIX}:{code}:{number}"}]
+        for number, option in enumerate(payload["opzioni"], 1)
+    ]
+    return {"inline_keyboard": rows}
+
+
+@dataclass(frozen=True)
+class Typed:
+    """What a message typed (or a button pressed) on Telegram did to the questions of one bot.
+
+    status: `recorded`, `already_answered`, `expired` (the deadline had passed: the default applied),
+    `invalid` (it meant a question and is not an option), `not_an_answer` (it is chat).
+    """
+
+    status: str
+    id_domanda: str = ""
+    code: str = ""
+    label: str = ""
+    answer_code: str = ""
+    expiry_notice: "Expired | None" = None
+
+
+def _bot_questions(conn: sqlite3.Connection, bot_role: str, *, answered: bool) -> list[dict]:
+    """Questions asked on this bot's chat, valid ones only, oldest first."""
+    query = (
+        "SELECT q.id, q.agent, q.body, q.kind, q.related_position_id, q.source_payload, q.source_id, "
+        "       q.user_reply, q.user_reply_at "
+        "FROM pending_user_messages q WHERE q.source_action = ? AND q.author = 'agent' "
+    )
+    if not answered:
+        query += "AND NOT EXISTS (SELECT 1 FROM pending_user_messages a WHERE a.source_id = ? || q.source_id) "
+    found: list[dict] = []
+    for row in _row_dict(conn, query + "ORDER BY q.id", (SOURCE_ACTION,) if answered else (SOURCE_ACTION, ANSWER_PREFIX)):
+        if bot_role_for(row["agent"]) != bot_role:
+            continue
+        try:
+            payload = validate_question_payload(json.loads(row["source_payload"] or ""))
+        except (ValueError, TypeError, QuestionRejected):
+            continue  # a forged or damaged row is never acted on
+        found.append({"row": row, "payload": payload, "id": row["source_id"]})
+    return found
+
+
+def _record_typed(
+    conn: sqlite3.Connection, question: dict, choice: str, now: datetime | None, *, explicit: bool
+) -> Typed:
+    code = answer_code(question["id"])
+    try:
+        answered = record_answer(conn, question["id"], [choice], "", canale="telegram", now=now)
+    except AnswerRejected as error:
+        return Typed("invalid", question["id"], error.code, answer_code=code) if explicit else Typed("not_an_answer")
+    label = _labels(question["payload"], [choice])
+    if answered.status == "recorded":
+        return Typed("recorded", question["id"], label=label, answer_code=code)
+    if answered.status == "expired":
+        return Typed("expired", question["id"], label=label, answer_code=code, expiry_notice=answered.expiry_notice)
+    stored = (answered.answer or {}).get("scelte") or []
+    return Typed(
+        "already_answered", question["id"], answer_code=code, label=_labels(question["payload"], stored) if stored else ""
+    ) if explicit else Typed("not_an_answer")
+
+
+def resolve_typed_reply(
+    conn: sqlite3.Connection,
+    bot_role: str,
+    text: str,
+    reply_to_text: str | None = None,
+    *,
+    explicit_only: bool = False,
+    now: datetime | None = None,
+) -> Typed:
+    """Does a message typed to this bot answer one of ITS open questions?
+
+    Only the three forms of `interpret_reply`: the number of an option (`2`), the question's code
+    and the number (`Q1A2B 2`), the exact label. Which question:
+    - the code written in the message, or the code in the message it quotes: the user MEANT a
+      question, so a wrong number is `invalid` (told so), not chat;
+    - otherwise, with exactly ONE question open on this bot, that one — but a message that is not
+      one of its options is chat, never a wrong answer. With several open and no code, chat.
+    `explicit_only` keeps the second case out (the caller tries the CLOSER's questions in between).
+    The caller holds the transaction.
+    """
+    reply = " ".join(str(text or "").split())
+    if not reply:
+        return Typed("not_an_answer")
+    open_questions = _bot_questions(conn, bot_role, answered=False)
+    if not open_questions:
+        return Typed("not_an_answer")
+    by_code: dict[str, list[dict]] = {}
+    for question in open_questions:
+        by_code.setdefault(answer_code(question["id"])[1:].upper(), []).append(question)
+    explicit = False
+    target: dict | None = None
+    coded = _CODED_REPLY.fullmatch(reply)
+    quoted = {m.upper() for m in _CODE_ANYWHERE.findall(reply_to_text or "")} & set(by_code)
+    if coded:
+        matches = by_code.get(coded.group(1).upper(), [])
+        if len(matches) != 1:
+            return Typed("not_an_answer")  # unknown here: another bot's, or the CLOSER's
+        target, explicit = matches[0], True
+    elif len(quoted) == 1:
+        matches = by_code[next(iter(quoted))]
+        if len(matches) != 1:
+            return Typed("not_an_answer")
+        target, explicit = matches[0], True
+    elif not explicit_only and len(open_questions) == 1:
+        target = open_questions[0]
+    if target is None:
+        return Typed("not_an_answer")
+    try:
+        choice = interpret_reply(target["payload"], target["id"], reply)
+    except AnswerRejected as error:
+        # A written code is an answer attempt, so a wrong number is told so. A message that only QUOTES the
+        # question and says something else (a comment, a doubt) is the user talking: chat, never eaten.
+        if explicit and (coded or error.code != "reply_not_an_option"):
+            return Typed("invalid", target["id"], error.code, answer_code=answer_code(target["id"]))
+        return Typed("not_an_answer")
+    return _record_typed(conn, target, choice, now, explicit=explicit)
+
+
+def resolve_callback(conn: sqlite3.Connection, bot_role: str, data: Any, now: datetime | None = None) -> Typed:
+    """A button pressed on this bot's chat. Anything that is not exactly one of our buttons is nothing."""
+    match = _CALLBACK.fullmatch(data) if isinstance(data, str) else None
+    if match is None:
+        return Typed("not_an_answer")
+    code, number = match.group(1).upper(), int(match.group(2))
+    matches = [q for q in _bot_questions(conn, bot_role, answered=True) if answer_code(q["id"])[1:] == code]
+    if len(matches) != 1:
+        return Typed("not_an_answer")
+    question = matches[0]
+    options = question["payload"]["opzioni"]
+    if question["payload"]["multipla"] or not 1 <= number <= len(options):
+        return Typed("invalid", question["id"], "number_out_of_range", answer_code=answer_code(question["id"]))
+    return _record_typed(conn, question, options[number - 1]["id"], now, explicit=True)

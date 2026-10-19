@@ -235,5 +235,8 @@
   "disk.low.cli": "Die Festplatte ist fast voll (nur noch %s frei): Es wird kein neuer Agent gestartet und kein Update installiert. Bereits laufende Agenten arbeiten weiter. So schaffst du Platz: Führe `jht clean-images` aus (entfernt nur die alten Versionen von Job Hunter Team), leere den Papierkorb und lösche große Dateien, die du nicht mehr brauchst, etwa alte Downloads, und versuche es dann erneut.",
   "question.expired": "Frage abgelaufen: „%s“. Ich habe getan: „%s“. Wenn du etwas anderes möchtest, schreib es mir hier, dann frage ich neu.",
   "question.postpone": "Verschieben, nichts tun",
-  "question.reply_hint": "Antworte mit der Nummer der Option (zum Beispiel 2). Sind mehrere Fragen offen, schreib „%s 2“."
+  "question.reply_hint": "Antworte mit der Nummer der Option (zum Beispiel 2). Sind mehrere Fragen offen, schreib „%s 2“.",
+  "question.answer_saved": "Antwort gespeichert: „%s“.",
+  "question.answer_already": "Diese Frage hat bereits eine Antwort: „%s“.",
+  "question.answer_invalid": "Das ist keine der Optionen, daher habe ich es nicht gespeichert. Antworte mit der Nummer einer Option (zum Beispiel 2) oder schreib „%s 2“."
 }

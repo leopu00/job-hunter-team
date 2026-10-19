@@ -236,5 +236,8 @@
   "disk.low.cli": "A lemez majdnem megtelt (csak %s szabad), ezért nem indul új ügynök, és nem települ frissítés. A már elindított ügynökök tovább futnak. Hely felszabadításához: futtasd a `jht clean-images` parancsot (csak a Job Hunter Team régi verzióit törli), ürítsd ki a Kukát, és töröld a nagy, már nem szükséges fájlokat, például a régi letöltéseket, majd próbáld újra.",
   "question.expired": "A kérdés lejárt: „%s”. Ezt tettem: „%s”. Ha mást szeretnél, írd ide, és újra megkérdezlek.",
   "question.postpone": "Halaszd el, ne csinálj semmit",
-  "question.reply_hint": "Válaszolj a lehetőség számával (például 2). Ha több kérdés is nyitva van, írd: „%s 2”."
+  "question.reply_hint": "Válaszolj a lehetőség számával (például 2). Ha több kérdés is nyitva van, írd: „%s 2”.",
+  "question.answer_saved": "Válasz mentve: „%s”.",
+  "question.answer_already": "Erre a kérdésre már van válasz: „%s”.",
+  "question.answer_invalid": "Ez nem tartozik a lehetőségek közé, ezért nem mentettem el. Válaszolj a lehetőség számával (például 2), vagy írd: „%s 2”."
 }
