@@ -21,13 +21,13 @@ ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / "scripts/check-live-schema.py"
 MANIFEST = ROOT / "supabase/live-schema/078-084.v3.json"
 QUERY = ROOT / "supabase/live-schema/078-084.v3.sql"
-WEB_MANIFEST = ROOT / "supabase/live-schema/078-094.web.v10.json"
-WEB_QUERY = ROOT / "supabase/live-schema/078-094.web.v10.sql"
-# v11 stands next to v10 (JHT-T04: positions.location_precision); v10 and its 43 receipts are not touched.
-WEB_MANIFEST_V10 = WEB_MANIFEST
-WEB_QUERY_V10 = WEB_QUERY
+# v11 is the contract in force (JHT-T04: positions.location_precision); v10 and its 43 receipts stand next to it, untouched.
+WEB_MANIFEST_V10 = ROOT / "supabase/live-schema/078-094.web.v10.json"
+WEB_QUERY_V10 = ROOT / "supabase/live-schema/078-094.web.v10.sql"
 WEB_MANIFEST_V11 = ROOT / "supabase/live-schema/078-095.web.v11.json"
 WEB_QUERY_V11 = ROOT / "supabase/live-schema/078-095.web.v11.sql"
+WEB_MANIFEST = WEB_MANIFEST_V11
+WEB_QUERY = WEB_QUERY_V11
 PREFLIGHT_QUERY = ROOT / "supabase/live-schema/081-preflight.v1.sql"
 SNAPSHOT_SHA256 = "78269292299f3fe4324a0e7553afc1095a4d8814605677146b82c41d34849346"
 POSTGRES_READY_MARKER = "database system is ready to accept connections"
@@ -48,6 +48,7 @@ MIGRATIONS = [
     ROOT / "supabase/migrations/087_rejection_reason.sql",
     ROOT / "supabase/migrations/088_positions_apply_requested.sql",
     ROOT / "supabase/migrations/094_feedback_reasons_closed.sql",
+    ROOT / "supabase/migrations/095_positions_location_precision.sql",
 ]
 # I test di ri-applicazione parlano della 084: nominarla per posizione la
 # faceva cambiare sotto ai piedi al primo numero nuovo.
@@ -468,9 +469,9 @@ def test_additive_web_contract_exactly_receipts_every_mapped_rpc_and_column():
     )
 
     assert contract.phase == "web"
-    assert contract.contract_id == "release-0.3.9-web-schema-078-094-feedback-reasons"
+    assert contract.contract_id == "release-0.4.0-web-schema-078-095-location-precision"
     assert len(contract.expected_checks) == 43
-    assert manifest["query"]["path"] == "supabase/live-schema/078-094.web.v10.sql"
+    assert manifest["query"]["path"] == "supabase/live-schema/078-095.web.v11.sql"
     assert "\\n" not in WEB_QUERY.read_text()
 
     mapped_receipts = {
@@ -492,7 +493,7 @@ def test_cli_validates_only_the_pinned_additive_web_contract(capsys):
     assert output.err == ""
     assert output.out == (
         "LIVE-SCHEMA MANIFEST OK "
-        "contract=release-0.3.9-web-schema-078-094-feedback-reasons checks=43\n"
+        "contract=release-0.4.0-web-schema-078-095-location-precision checks=43\n"
     )
 
 
@@ -995,14 +996,14 @@ def test_v11_is_v10_plus_two_columns_of_positions_and_the_095_migration():
 
 def test_pg16_additive_web_contract_passes_and_detects_column_and_rpc_drift():
     contract = canary.load_web_contract()
-    # Il contratto web copre 078-094: il clone deve arrivare alla 094, dove
-    # nascono la nota privata del feedback e la tabella delle preferenze
-    # sull'esclusione del profilo (prima, la 088 porta le tre colonne
+    # Il contratto web copre 078-095: il clone deve arrivare alla 095, che porta
+    # `positions.location_precision` (prima, la 094 porta la nota privata del
+    # feedback e la tabella delle preferenze sull'esclusione del profilo, la 088 porta le tre colonne
     # dell'autorizzazione alla candidatura (la 087 porta
     # il motivo di rifiuto e `mark_position_outcome` a cinque argomenti, la 086
     # le due RPC dell'esito, la 085 `applications.updated_at`). Il contratto
     # catalog resta fermo alla 084.
-    with pg16_schema_clone(migrated=True, through_version=94) as psql:
+    with pg16_schema_clone(migrated=True, through_version=95) as psql:
         baseline = receipt_rows(psql(WEB_QUERY.read_text()).stdout)
         column_drift = receipt_rows(
             psql(
@@ -1021,10 +1022,10 @@ def test_pg16_additive_web_contract_passes_and_detects_column_and_rpc_drift():
     assert tuple(sorted(baseline)) == contract.expected_checks
     assert all(baseline.values())
     assert [check for check, ok in column_drift.items() if not ok] == [
-        "095.web.columns.positions"
+        "096.web.columns.positions"
     ]
     assert [check for check, ok in rpc_drift.items() if not ok] == [
-        "095.web.rpc.increment_landing_hits"
+        "096.web.rpc.increment_landing_hits"
     ]
 
 

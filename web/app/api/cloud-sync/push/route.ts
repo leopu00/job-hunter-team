@@ -16,6 +16,7 @@ import {
   normalizePositionStatus,
 } from "@/lib/sync-vocabulary";
 import { invalidJsonBody } from "@/app/api/_lib/error-body";
+import { effectivePrecision } from "@/lib/city-coords";
 import { sanitizedError } from "@/lib/error-response";
 import {
   summarizeOutOfRange,
@@ -192,6 +193,9 @@ interface PositionIn {
   is_multi_location?: number | boolean | null;
   office_geocoded?: number | boolean | null;
   office_verified?: number | boolean | null;
+  // JHT-T04: how precisely the place is known. Only the closed set reaches the cloud's CHECK
+  // (migration 095); anything else, from a client newer than this server, is derived below.
+  location_precision?: string | null;
   // Expiry/lifecycle (mig 038): is_open BOOLEAN (SQLite 0|1, default TRUE),
   // expires_at DATE, last_open_check TIMESTAMPTZ. Alimenta "Scadute/Archivio".
   expires_at?: string | null;
@@ -895,6 +899,18 @@ export async function POST(req: NextRequest) {
               : typeof p.office_verified === "boolean"
                 ? p.office_verified
                 : p.office_verified === 1,
+          // A value of the closed set, or the level the row's own flag and coordinates give
+          // (the rule of migration 095), or NULL: never a value the CHECK would refuse, which
+          // would reject the whole upsert.
+          location_precision: effectivePrecision({
+            loc_country: null,
+            loc_city: null,
+            office_lat: p.office_lat ?? null,
+            office_lon: p.office_lon ?? null,
+            office_verified: p.office_verified == null ? false : p.office_verified === true || p.office_verified === 1,
+            location_precision: p.location_precision,
+            remote_type: p.remote_type ?? null,
+          }),
           // Expiry/lifecycle (mig 038). is_open default TRUE (NOT NULL DEFAULT TRUE).
           expires_at: p.expires_at ?? null,
           is_open:

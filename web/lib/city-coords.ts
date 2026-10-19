@@ -1,9 +1,13 @@
 // Risoluzione delle coordinate per la mappa.
 //
-// Ogni posizione con coordinate ufficio ESATTE (office_lat/lon) è resa alle
-// sue coordinate reali → sul globo diventa un pin al suo indirizzo (è per
-// questo che chiediamo al team di geocodare l'indirizzo preciso). Le posizioni
-// SENZA ufficio esatto vanno nella "griglia nord" della loro città (sotto).
+// Ogni posizione con coordinate ufficio ESATTE è resa alle sue coordinate reali
+// → sul globo diventa un pin al suo indirizzo (è per questo che chiediamo al
+// team di geocodare l'indirizzo preciso). "Esatte" lo dice il LIVELLO DI
+// PRECISIONE (JHT-T04, location_precision): solo `address` fa un pin. Una
+// coordinata che è il centro di una città, di un quartiere o di una via senza
+// civico NON è un ufficio e non diventa mai un pin: la posizione va nella
+// "griglia nord" della sua città (sotto), come una posizione senza coordinate.
+// Le posizioni SENZA ufficio esatto vanno nella "griglia nord" della loro città.
 //
 // Il centro città usa la MEDIANA (per componente lat/lon) delle coordinate
 // ufficio dei record della stessa città, non la media: una singola posizione
@@ -28,11 +32,28 @@ import {
   canonicalCityKey,
 } from "./city-gazetteer";
 
+/** Quanto bene si conosce il luogo di una posizione. Lo stesso insieme chiuso del CHECK della migrazione 095. */
+export const LOCATION_PRECISIONS = [
+  "address",
+  "street",
+  "district",
+  "city",
+  "country",
+  "remote",
+] as const;
+export type LocationPrecision = (typeof LOCATION_PRECISIONS)[number];
+
 export type GeoRow = {
   loc_country: string | null;
   loc_city: string | null;
   office_lat: number | null;
   office_lon: number | null;
+  // Il livello di precisione del luogo (JHT-T04). Null/assente = non classificato: si
+  // deriva da `office_verified` con la regola della migrazione (vedi effectivePrecision).
+  location_precision?: string | null;
+  // Il flag di prima. Se NÉ questo NÉ il livello sono dati (un chiamante che non li legge),
+  // le coordinate valgono come prima: un ufficio.
+  office_verified?: boolean | number | null;
   // Opzionali, usati SOLO per l'ordine dentro le griglie: score decrescente
   // (i migliori nella riga più vicina all'ancora), tie-break per id →
   // layout deterministico fra refresh a parità di dati.
@@ -53,6 +74,31 @@ export type GeoRow = {
 const NORTH_OFFSET_M = 10_000;
 const GRID_SPACING_M = 300;
 const M_PER_DEG_LAT = 111_320;
+
+function isLevel(value: unknown): value is LocationPrecision {
+  return (
+    typeof value === "string" &&
+    (LOCATION_PRECISIONS as readonly string[]).includes(value)
+  );
+}
+
+/**
+ * Il livello con cui una riga va letta. Quello scritto, se è uno dell'insieme chiuso (un valore
+ * ignoto, da un client più nuovo, vale come non classificato); altrimenti lo stesso che la
+ * migrazione dà alle righe che hanno già un luogo: coordinate + office_verified vero = `address`,
+ * coordinate con il flag non vero = `city`, senza coordinate e full remote = `remote`.
+ * Un chiamante che non legge né il livello né il flag lascia le coordinate com'erano: `address`.
+ */
+export function effectivePrecision(r: GeoRow): LocationPrecision | null {
+  if (isLevel(r.location_precision)) return r.location_precision;
+  if (r.office_lat != null && r.office_lon != null) {
+    if (r.office_verified === undefined) return "address";
+    return r.office_verified === true || r.office_verified === 1
+      ? "address"
+      : "city";
+  }
+  return r.remote_type === "full_remote" ? "remote" : null;
+}
 
 // Una coordinata-ufficio identica (~11 m, 4 decimali) condivisa da almeno
 // QUESTO numero di aziende diverse è un geocode città-level salvato come
@@ -141,7 +187,12 @@ export function resolveCityPins(
   const remoteByCountry = new Map<string, Member[]>();
   const remoteAnywhere: Member[] = [];
   rows.forEach((r, idx) => {
-    const hasOffice = r.office_lat != null && r.office_lon != null;
+    // Solo `address` ha coordinate che sono un ufficio. Le altre (città, quartiere, via senza civico,
+    // paese) restano coordinate di una zona: la posizione va dove va una senza coordinate.
+    const hasOffice =
+      r.office_lat != null &&
+      r.office_lon != null &&
+      effectivePrecision(r) === "address";
     const hasCity = (r.loc_city ?? "").trim() !== "";
     const fullRemote = r.remote_type === "full_remote";
     if (hasOffice) {

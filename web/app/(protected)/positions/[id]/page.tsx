@@ -394,11 +394,20 @@ export default async function PositionDetailPage({ params }: PageProps) {
   // link: app sul telefono, browser altrove) cercando l'INDIRIZZO testuale,
   // non le coordinate: così Maps mostra la via col civico, non un punto
   // anonimo "41°24'16.9\"N" (feedback utente 20/07).
+  // Il livello di precisione (JHT-T04) decide cosa è un indirizzo: `address` lo è, `street` è una via
+  // SENZA civico (mostrata, ma detto), il resto è una zona e non si presenta come un indirizzo. Una
+  // riga senza livello (cloud non ancora migrato) segue la regola di prima.
+  const precision = position.location_precision ?? null;
+  const streetOnly = precision === "street";
   const exactAddress =
     position.office_address &&
     position.office_lat != null &&
     position.office_lon != null &&
-    (position.office_verified === true || /\d/.test(position.office_address))
+    (precision === "address" ||
+      streetOnly ||
+      (precision === null &&
+        (position.office_verified === true ||
+          /\d/.test(position.office_address))))
       ? position.office_address
       : null;
   const mapsUrl = exactAddress
@@ -698,7 +707,8 @@ export default async function PositionDetailPage({ params }: PageProps) {
             title={t("open_in_maps")}
             className="max-w-[55%] shrink-0 text-right text-[10px] leading-snug text-[var(--color-blue)] no-underline transition-colors hover:text-[var(--color-bright)]"
           >
-            {exactAddress} <IconExternal />
+            {exactAddress}
+            {streetOnly && ` (${t("address_street_only")})`} <IconExternal />
           </a>
         )}
       </div>

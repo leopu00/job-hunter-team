@@ -92,6 +92,9 @@ export interface Position {
   office_lon?: number | null;
   office_address?: string | null;
   office_verified?: boolean;
+  // JHT-T04 — how precisely the place is known (address|street|district|city|country|remote);
+  // null when not classified. Only `address` is an office on the map.
+  location_precision?: string | null;
 }
 
 // ── Score ──────────────────────────────────────────────────────────

@@ -585,6 +585,16 @@ export function getScoreDistributionLocal(ws: string) {
 }
 
 // ── Positions con coordinate ufficio (per JobsGlobe) ───────────────
+/**
+ * `p.location_precision`, or NULL for a database that has not been migrated yet (the box's
+ * `_db.py` adds the column; the web reads the same file and must not fail on an older one).
+ */
+function precisionColumn(db: ReturnType<typeof getDb>): string {
+  return hasColumn(db, "positions", "location_precision")
+    ? "p.location_precision"
+    : "NULL";
+}
+
 export interface PositionCoord {
   id: string;
   title: string;
@@ -612,7 +622,8 @@ export function getPositionsWithCoordsLocal(ws: string): PositionCoord[] {
     SELECT p.id, p.title, p.company, p.status, p.role_family, p.location,
            p.loc_country, p.loc_city, p.office_address, p.created_at,
            s.total_score as score,
-           p.office_lat, p.office_lon,
+           p.office_lat, p.office_lon, p.office_verified,
+           ${precisionColumn(db)} AS location_precision,
            p.remote_type
     FROM positions p
     LEFT JOIN scores s ON s.position_id = p.id
@@ -626,6 +637,8 @@ export function getPositionsWithCoordsLocal(ws: string): PositionCoord[] {
       loc_city: r.loc_city ?? null,
       office_lat: r.office_lat ?? null,
       office_lon: r.office_lon ?? null,
+      office_verified: r.office_verified ?? null,
+      location_precision: r.location_precision ?? null,
       id: sid(r.id),
       score: typeof r.score === "number" ? r.score : null,
       company: r.company ?? null,
@@ -746,7 +759,8 @@ export function getPositionsWithoutCoordsLocal(ws: string) {
            p.role_family, p.created_at,
            s.total_score as score,
            p.is_remote, p.remote_type,
-           p.office_lat, p.office_lon
+           p.office_lat, p.office_lon, p.office_verified,
+           ${precisionColumn(db)} AS location_precision
     FROM positions p
     LEFT JOIN scores s ON s.position_id = p.id
     WHERE p.status != 'excluded'
@@ -763,6 +777,8 @@ export function getPositionsWithoutCoordsLocal(ws: string) {
       loc_city: r.loc_city ?? null,
       office_lat: r.office_lat ?? null,
       office_lon: r.office_lon ?? null,
+      office_verified: r.office_verified ?? null,
+      location_precision: r.location_precision ?? null,
       remote_type: r.remote_type ?? null,
     })),
   );
