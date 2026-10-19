@@ -53,7 +53,40 @@
      {"legacy_id": "5", "action": "dislike", "reason": "wrong_location", "created_at": "2026-10-01T10:00:00Z"},
      {"legacy_id": "6", "action": "dislike", "reason": "wrong_location", "created_at": "2026-10-01T10:00:00Z"},
      {"legacy_id": "7", "action": "dislike", "reason": "wrong_location", "created_at": "2026-10-01T10:00:00Z"}],
-   "expected": [
-     {"reason": "wrong_location", "positions": 4, "legacy_ids": ["4", "5", "6", "7"]},
-     {"reason": "company", "positions": 3, "legacy_ids": ["1", "2", "3"]}]}
+   "expected": [{"reason": "wrong_location", "positions": 4, "legacy_ids": ["4", "5", "6", "7"]}, {"reason": "company", "positions": 3, "legacy_ids": ["1", "2", "3"]}]},
+  {"name": "same second, no ids: the withdrawn vote wins whichever comes first",
+   "events": [
+     {"legacy_id": "1", "action": "dislike", "reason": "too_senior", "created_at": "2026-10-01T10:00:00Z"},
+     {"legacy_id": "2", "action": "dislike", "reason": "too_senior", "created_at": "2026-10-02T10:00:00Z"},
+     {"legacy_id": "3", "action": "dislike", "reason": "too_senior", "created_at": "2026-10-05T10:00:00Z"},
+     {"legacy_id": "3", "action": "clear", "reason": null, "created_at": "2026-10-05T10:00:00Z"}],
+   "expected": []},
+  {"name": "same second, no ids: the withdrawn vote wins in the other order too",
+   "events": [
+     {"legacy_id": "1", "action": "dislike", "reason": "too_senior", "created_at": "2026-10-01T10:00:00Z"},
+     {"legacy_id": "2", "action": "dislike", "reason": "too_senior", "created_at": "2026-10-02T10:00:00Z"},
+     {"legacy_id": "3", "action": "clear", "reason": null, "created_at": "2026-10-05T10:00:00Z"},
+     {"legacy_id": "3", "action": "dislike", "reason": "too_senior", "created_at": "2026-10-05T10:00:00Z"}],
+   "expected": []},
+  {"name": "same second with ids: the later event wins, a re-vote after the withdrawal counts",
+   "events": [
+     {"legacy_id": "1", "action": "dislike", "reason": "too_senior", "created_at": "2026-10-01T10:00:00Z"},
+     {"legacy_id": "2", "action": "dislike", "reason": "too_senior", "created_at": "2026-10-02T10:00:00Z"},
+     {"legacy_id": "3", "action": "clear", "reason": null, "created_at": "2026-10-05T10:00:00Z", "id": 7},
+     {"legacy_id": "3", "action": "dislike", "reason": "too_senior", "created_at": "2026-10-05T10:00:00Z", "id": 8}],
+   "expected": [{"reason": "too_senior", "positions": 3, "legacy_ids": ["1", "2", "3"]}]},
+  {"name": "same second with ids: a withdrawal after the vote counts zero",
+   "events": [
+     {"legacy_id": "1", "action": "dislike", "reason": "too_senior", "created_at": "2026-10-01T10:00:00Z"},
+     {"legacy_id": "2", "action": "dislike", "reason": "too_senior", "created_at": "2026-10-02T10:00:00Z"},
+     {"legacy_id": "3", "action": "dislike", "reason": "too_senior", "created_at": "2026-10-05T10:00:00Z", "id": 8},
+     {"legacy_id": "3", "action": "clear", "reason": null, "created_at": "2026-10-05T10:00:00Z", "id": 9}],
+   "expected": []},
+  {"name": "an event with no position id is dropped, not merged into one position",
+   "events": [
+     {"legacy_id": "1", "action": "dislike", "reason": "too_senior", "created_at": "2026-10-01T10:00:00Z"},
+     {"legacy_id": "2", "action": "dislike", "reason": "too_senior", "created_at": "2026-10-02T10:00:00Z"},
+     {"action": "dislike", "reason": "too_senior", "created_at": "2026-10-05T10:00:00Z"},
+     {"legacy_id": null, "action": "dislike", "reason": "too_senior", "created_at": "2026-10-05T10:00:00Z"}],
+   "expected": []}
 ]

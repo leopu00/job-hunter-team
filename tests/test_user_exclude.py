@@ -85,13 +85,13 @@ def transitions(db_path):
 
 
 def test_exclude_sposta_lo_stato_e_ricorda_da_dove(db):
-    r = run(db, 'exclude', '1', '--reason', 'not_interested')
+    r = run(db, 'exclude', '1', '--reason', 'wrong_stack')
     assert r.returncode == 0, r.stderr
     assert payload(r)['ok'] is True
 
     after = row(db)
     assert after['status'] == 'excluded'
-    assert after['user_excluded_reason'] == 'not_interested'
+    assert after['user_excluded_reason'] == 'wrong_stack'
     assert after['user_excluded_prev_status'] == 'scored'
     # last_actor='user': l'esclusione è una decisione dell'utente, e la
     # dashboard la attribuisce da questa colonna.
@@ -135,11 +135,22 @@ def test_levent_log_registra_solo_i_movimenti_veri(db):
     assert t[1]['from_state'] == 'excluded' and t[1]['to_state'] == 'scored'
 
 
-def test_other_senza_nota_e_rifiutato(db):
+def test_other_senza_nota_passa_ora(db):
+    """JHT-T05: «altro» non obbliga più a scrivere: la nota è facoltativa."""
     r = run(db, 'exclude', '1', '--reason', 'other')
-    assert r.returncode == 1
-    assert payload(r)['ok'] is False
-    assert row(db)['status'] == 'scored', "il DB non deve essere toccato"
+    assert r.returncode == 0
+    assert row(db)['user_excluded_note'] is None
+
+
+def test_la_nota_oltre_200_caratteri_e_rifiutata_e_il_db_non_si_tocca(db):
+    r = run(db, 'exclude', '1', '--reason', 'other', '--note', 'x' * 201)
+    assert r.returncode == 1 and 'note longer than 200' in payload(r)['error']
+    assert row(db)['status'] == 'scored'
+
+
+def test_la_nota_si_ripulisce_dai_caratteri_di_controllo(db):
+    run(db, 'exclude', '1', '--reason', 'other', '--note', "sede\u202e  sba\nglia\u200bta")
+    assert row(db)['user_excluded_note'] == 'sede sba gliata'
 
 
 def test_other_con_nota_passa_e_la_conserva(db):
@@ -162,33 +173,29 @@ def test_posizione_inesistente_fallisce_pulito(db):
 
 
 @pytest.mark.parametrize('reason', [
-    'closed', 'not_interested', 'mismatch', 'already_applied',
-    'company', 'conditions',
+    'too_senior', 'too_junior', 'wrong_location', 'salary_low', 'wrong_stack',
+    'company', 'scam_or_gone', 'closed', 'already_applied', 'other',
 ])
-def test_tutte_le_cause_della_ui_sono_accettate(db, reason):
+def test_tutte_le_cause_del_vocabolario_sono_accettate(db, reason):
     """Se la UI offre una causa che qui viene rifiutata, l'utente esclude dal
-    browser e non può più farlo dal CLI. 'already_applied' è legacy ma esiste
-    ancora nelle righe storiche, quindi deve restare accettata."""
+    browser e non può più farlo dal CLI."""
     assert run(db, 'exclude', '1', '--reason', reason).returncode == 0
     assert row(db)['user_excluded_reason'] == reason
 
 
-def test_le_cause_coincidono_con_quelle_della_route_web():
-    """Le due implementazioni devono almeno concordare sull'insieme di cause.
-    Non verifica il comportamento — solo che nessuno ne aggiunga una da un lato
-    soltanto, che è il modo più facile di far divergere le due copie."""
+@pytest.mark.parametrize('reason', ['not_interested', 'mismatch', 'conditions'])
+def test_le_cause_del_vecchio_elenco_non_si_scrivono_piu(db, reason):
+    r = run(db, 'exclude', '1', '--reason', reason)
+    assert r.returncode == 2, "argparse la ferma prima di toccare il DB"
+
+
+def test_la_route_web_legge_lo_stesso_vocabolario_del_cli():
+    """Un solo elenco: `shared/feedback-reasons.json`, letto dalla route e dal
+    CLI. Una route che tornasse ad avere il suo elenco lo farebbe divergere."""
     route = os.path.join(REPO_ROOT, 'web', 'app', 'api', 'positions',
                          '[legacyId]', 'user-exclude', 'route.ts')
     if not os.path.exists(route):
         pytest.skip('route web non presente in questo checkout')
-    import re
     src = open(route, encoding='utf-8').read()
-    block = re.search(r'VALID_REASONS\s*=\s*new Set\(\[(.*?)\]\)', src, re.S)
-    assert block, 'VALID_REASONS non trovato nella route TS'
-    ts_reasons = set(re.findall(r'"([a-z_]+)"', block.group(1)))
-
-    sys.path.insert(0, SKILLS_DIR)
-    from user_exclude import VALID_REASONS as py_reasons
-    assert ts_reasons == set(py_reasons), (
-        f"solo TS: {ts_reasons - set(py_reasons)} | "
-        f"solo Python: {set(py_reasons) - ts_reasons}")
+    assert 'feedback-reasons' in src
+    assert 'VALID_REASONS = new Set([' not in src

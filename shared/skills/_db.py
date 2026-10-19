@@ -396,6 +396,7 @@ def ensure_schema(conn: sqlite3.Connection):
         )),
         reason TEXT,
         comment TEXT,
+        note TEXT,
         score INTEGER CHECK (score IS NULL OR (score BETWEEN 1 AND 5)),
         direction TEXT CHECK (direction IS NULL OR direction IN (
             'more_like_this','less_like_this'
@@ -895,6 +896,7 @@ def _run_migrations(conn: sqlite3.Connection) -> None:
     _migrate_positions_url_unique(conn)
     _migrate_scout_coordination_unique(conn)
     _migrate_position_feedback(conn)
+    _migrate_feedback_reasons_closed(conn)
     _migrate_position_user_notes(conn)
     _migrate_position_user_notes_origin(conn)
     _migrate_applications_critic_round(conn)
@@ -1429,6 +1431,7 @@ def _migrate_position_feedback(conn: sqlite3.Connection) -> None:
             )),
             reason TEXT,
             comment TEXT,
+            note TEXT,
             score INTEGER CHECK (score IS NULL OR (score BETWEEN 1 AND 5)),
             direction TEXT CHECK (direction IS NULL OR direction IN (
                 'more_like_this','less_like_this'
@@ -1440,6 +1443,57 @@ def _migrate_position_feedback(conn: sqlite3.Connection) -> None:
         CREATE INDEX IF NOT EXISTS idx_position_feedback_position
             ON position_feedback(position_id, id DESC);
     """)
+
+
+def _migrate_feedback_reasons_closed(conn: sqlite3.Connection) -> None:
+    """JHT-T05: il motivo diventa un codice del vocabolario chiuso, la nota ha una colonna.
+
+    Idempotente. Per i giudizi già salvati:
+      - `note` nasce vuota sulle tabelle vecchie (ADD COLUMN);
+      - un `reason` che non è un codice si rimappa (`not_interested` → `other`,
+        un testo libero → `other`) e il testo che l'utente aveva scritto, in
+        `reason` o in `comment`, va in `note` ripulito e tagliato a 200
+        caratteri: non si perde niente per l'utente;
+      - `comment` NON si tocca: resta com'è, non lo legge più nessuno.
+    Lo stesso per i motivi di esclusione delle posizioni (le note lunghe
+    restano com'erano: nessuna skill degli agenti le legge più).
+    """
+    from feedback_reasons import REASONS, migrated_note, safe_reason
+
+    if _table_exists(conn, "position_feedback"):
+        cols = {r[1] for r in conn.execute("PRAGMA table_info(position_feedback)")}
+        if "note" not in cols:
+            conn.execute("ALTER TABLE position_feedback ADD COLUMN note TEXT")
+        rows = conn.execute(
+            "SELECT id, reason, comment, note FROM position_feedback "
+            "WHERE reason IS NOT NULL AND reason NOT IN (%s)" % ",".join("?" * len(REASONS)),
+            REASONS,
+        ).fetchall()
+        for row_id, reason, comment, note in rows:
+            code = safe_reason(reason)
+            free = None if str(reason).strip() in ("not_interested", "mismatch", "conditions") else reason
+            text = note or migrated_note(free) or migrated_note(comment)
+            conn.execute(
+                "UPDATE position_feedback SET reason = ?, note = COALESCE(note, ?) WHERE id = ?",
+                (code, text, row_id),
+            )
+        # righe con un codice valido ma ancora senza nota e con un commento: il
+        # commento diventa la nota (copia tagliata), l'originale resta.
+        pending = conn.execute(
+            "SELECT id, comment FROM position_feedback "
+            "WHERE note IS NULL AND comment IS NOT NULL AND TRIM(comment) != ''"
+        ).fetchall()
+        for row_id, comment in pending:
+            conn.execute("UPDATE position_feedback SET note = ? WHERE id = ?",
+                         (migrated_note(comment), row_id))
+    if _table_exists(conn, "positions"):
+        cols = {r[1] for r in conn.execute("PRAGMA table_info(positions)")}
+        if "user_excluded_reason" in cols:
+            conn.execute(
+                "UPDATE positions SET user_excluded_reason = 'other' "
+                "WHERE user_excluded_reason IN ('not_interested', 'mismatch', 'conditions')"
+            )
+    conn.commit()
 
 
 def _migrate_scout_coordination_unique(conn: sqlite3.Connection) -> None:

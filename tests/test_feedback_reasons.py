@@ -64,3 +64,14 @@ def test_clean_note_does_not_cut_so_that_a_long_note_can_be_refused():
 def test_migrated_note_cuts_to_the_maximum_and_empty_is_none():
     assert len(fr.migrated_note('y' * 500)) == fr.NOTE_MAX
     assert fr.migrated_note('  ​ ') is None
+
+
+def test_clean_note_keeps_the_joiners_that_are_part_of_writing():
+    """ZWJ tiene insieme le emoji composte e l'hindi, ZWNJ separa i grafemi in
+    persiano: sono categoria Cf ma non sono comandi, e toglierli cambia il testo."""
+    family = 'ciao \U0001F468\u200d\U0001F469\u200d\U0001F467 abc'
+    assert fr.clean_note(family) == family
+    persian = '\u0645\u06cc\u200c\u062e\u0648\u0627\u0647\u0645'
+    assert fr.clean_note(persian) == persian
+    # I comandi che riscrivono l'ordine di lettura, invece, vanno.
+    assert fr.clean_note('a\u202eb\u2066c\u200bd\ufeffe') == 'abcde'

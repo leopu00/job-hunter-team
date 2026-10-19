@@ -6,7 +6,7 @@ si scrivono. Il record nasce in SQLite (`position_feedback`) e il cloud è un
 riflesso: local-first, come ogni altra scrittura del prodotto.
 
     python3 feedback_record.py set 12345 like
-    python3 feedback_record.py set 12345 dislike --reason "troppo senior"
+    python3 feedback_record.py set 12345 dislike --reason too_senior --note "ruolo da team lead"
     python3 feedback_record.py set 12345 star --score 5 --direction more_like_this
     python3 feedback_record.py set 12345 clear
 
@@ -44,26 +44,30 @@ import urllib.parse
 sys.path.insert(0, os.path.dirname(__file__))
 
 from feedback_query import api_request  # noqa: E402  (dopo il sys.path)
+from feedback_reasons import (  # noqa: E402
+    NOTE_MAX, REASONS, clean_note, is_reason,
+)
 
 # Lo stesso elenco di VALID_ACTIONS nella route. 'clear' non cancella niente:
 # è un evento come gli altri e l'ultimo prevale, quindi «ritiro il voto» resta
 # leggibile nella storia invece di sparire da essa (mig 059).
 VALID_ACTIONS = ("like", "dislike", "hide", "star", "clear")
 VALID_DIRECTIONS = ("more_like_this", "less_like_this")
-MAX_REASON = 500
-MAX_COMMENT = 2000
 
 # Perché rivalidare qui, se la route valida già: il messaggio. Un 400 del
 # server arriva come `http-400: {"error":...}`, che un agente deve interpretare;
 # un rifiuto locale dice subito cosa cambiare, e non consuma una chiamata di
 # rete per scoprire che 7 non è un punteggio da 1 a 5.
-def validate(action: str, reason, comment, score, direction) -> str:
+def validate(action: str, reason, note, score, direction) -> str:
     if action not in VALID_ACTIONS:
         return f"invalid action: {action} (one of: {', '.join(VALID_ACTIONS)})"
-    if reason is not None and len(reason) > MAX_REASON:
-        return f"reason longer than {MAX_REASON} characters"
-    if comment is not None and len(comment) > MAX_COMMENT:
-        return f"comment longer than {MAX_COMMENT} characters"
+    # JHT-T05: il motivo è un codice del vocabolario chiuso, mai testo libero
+    # (lo scorer dovrebbe interpretarlo). Quello che l'utente vuole dire a
+    # parole sue è la nota, che resta all'utente.
+    if reason is not None and not is_reason(reason):
+        return f"invalid reason: {reason} (one of: {', '.join(REASONS)})"
+    if note is not None and len(clean_note(note)) > NOTE_MAX:
+        return f"note longer than {NOTE_MAX} characters"
     if score is not None and not (1 <= score <= 5):
         return "score must be an integer between 1 and 5"
     if direction is not None and direction not in VALID_DIRECTIONS:
@@ -72,7 +76,7 @@ def validate(action: str, reason, comment, score, direction) -> str:
 
 
 
-def _record_local(legacy_id, action, reason, comment, score, direction) -> dict:
+def _record_local(legacy_id, action, reason, note, score, direction) -> dict:
     """Scrive il giudizio nel jobs.db. È qui che il record esiste davvero.
 
     Un jobs.db più vecchio del codice non ha ancora `position_feedback`: in
@@ -109,9 +113,9 @@ def _record_local(legacy_id, action, reason, comment, score, direction) -> dict:
                     "error": f"position {legacy_id} not found in the local database"}
         cur = conn.execute(
             """INSERT INTO position_feedback
-                 (position_id, action, reason, comment, score, direction)
+                 (position_id, action, reason, note, score, direction)
                VALUES (?, ?, ?, ?, ?, ?)""",
-            (int(legacy_id), action, reason, comment, score, direction),
+            (int(legacy_id), action, reason, note, score, direction),
         )
         conn.commit()
         created = conn.execute(
@@ -125,26 +129,27 @@ def _record_local(legacy_id, action, reason, comment, score, direction) -> dict:
         conn.close()
 
 
-def record(legacy_id: str, action: str, reason=None, comment=None,
+def record(legacy_id: str, action: str, reason=None, note=None,
            score=None, direction=None) -> dict:
-    problem = validate(action, reason, comment, score, direction)
+    problem = validate(action, reason, note, score, direction)
     if problem:
         return {"ok": False, "error": problem, "legacy_id": str(legacy_id)}
 
+    note = clean_note(note) or None if note is not None else None
     body = {"action": action}
     # Solo i campi valorizzati: mandare `null` espliciti sovrascriverebbe con
     # NULL colonne che l'utente non ha toccato.
     if reason is not None:
         body["reason"] = reason
-    if comment is not None:
-        body["comment"] = comment
+    if note is not None:
+        body["note"] = note
     if score is not None:
         body["score"] = score
     if direction is not None:
         body["direction"] = direction
 
     # ── 1. Locale, che è dove il giudizio ESISTE ────────────────────────
-    local = _record_local(legacy_id, action, reason, comment, score, direction)
+    local = _record_local(legacy_id, action, reason, note, score, direction)
     if not local.get("ok"):
         # L'unico fallimento che ferma il comando: qui il giudizio non è
         # stato scritto da nessuna parte, e dire "fatto" sarebbe una bugia.
@@ -182,15 +187,18 @@ def main() -> int:
     p_set = sub.add_parser("set", help="record a judgement (the latest one wins)")
     p_set.add_argument("legacy_id", help="positions.legacy_id (TEXT)")
     p_set.add_argument("action", choices=VALID_ACTIONS)
-    p_set.add_argument("--reason", help=f"short reason (max {MAX_REASON} chars)")
-    p_set.add_argument("--comment", help=f"free text (max {MAX_COMMENT} chars)")
+    p_set.add_argument("--reason", help=f"one of: {', '.join(REASONS)}")
+    p_set.add_argument("--note", "--comment", dest="note",
+                       help=f"the user's own words (max {NOTE_MAX} chars); "
+                            "kept for the user, never shown to the agents "
+                            "(--comment is the old name)")
     p_set.add_argument("--score", type=int, help="1-5")
     p_set.add_argument("--direction", choices=VALID_DIRECTIONS,
                        help="tell the Scout to look for more, or fewer, like this")
 
     args = parser.parse_args()
     out = record(args.legacy_id, args.action, reason=args.reason,
-                 comment=args.comment, score=args.score, direction=args.direction)
+                 note=args.note, score=args.score, direction=args.direction)
     print(json.dumps(out))
     return 0 if out.get("ok") else 1
 

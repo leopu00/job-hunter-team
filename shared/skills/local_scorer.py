@@ -35,6 +35,7 @@ LOCAL_HOSTS = {"localhost", "127.0.0.1", "::1", "host.docker.internal"}
 # duplicazione non si vedeva, ma il marcatore ora porta un nonce per
 # esecuzione, e una copia che non lo sa stampa un confine diverso da quello
 # che le regole del team descrivono.
+from feedback_reasons import LABELS as FEEDBACK_LABELS  # noqa: E402
 from external_content import (  # noqa: E402  (dopo SKILLS_DIR, per costruzione)
     CLOSE_MARKER as EXTERNAL_CLOSE_MARKER,
     OPEN_MARKER as EXTERNAL_OPEN_MARKER,
@@ -365,16 +366,14 @@ def _feedback_context_from_payload(
     for theme in themes[:10]:
         if not isinstance(theme, dict):
             raise LocalScorerError("feedback theme must be an object")
-        label = theme.get("label")
-        examples = theme.get("examples")
+        # JHT-T05: un tema è un codice del vocabolario chiuso. L'etichetta si
+        # ricava dal catalogo, non dal payload, e nessun testo dell'utente
+        # entra nel prompt.
+        key = theme.get("key")
         actions = theme.get("actions")
-        if not isinstance(label, str) or len(label) > 240:
-            raise LocalScorerError("feedback theme label is invalid")
-        if not isinstance(examples, list) or any(
-            not isinstance(value, str) or len(value) > 240
-            for value in examples[:3]
-        ):
-            raise LocalScorerError("feedback theme examples are invalid")
+        if not isinstance(key, str) or key not in FEEDBACK_LABELS:
+            raise LocalScorerError("feedback theme key is invalid")
+        label = FEEDBACK_LABELS[key]
         if not isinstance(actions, dict) or any(
             action not in FEEDBACK_ACTIONS
             or isinstance(count, bool)
@@ -387,8 +386,8 @@ def _feedback_context_from_payload(
         if isinstance(positions, bool) or not isinstance(positions, int) or positions < 0:
             raise LocalScorerError("feedback theme positions are invalid")
         safe_themes.append({
+            "key": key,
             "label": label,
-            "examples": examples[:3],
             "actions": dict(actions),
             "positions": positions,
         })

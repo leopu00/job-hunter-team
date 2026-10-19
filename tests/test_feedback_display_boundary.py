@@ -67,28 +67,24 @@ def test_shared_sanitizer_redacts_infra_and_bounds(monkeypatch):
     assert "[redacted]" in rendered
 
 
-def test_check_recent_and_themes_share_the_raw_display_boundary(monkeypatch):
+def test_check_recent_and_themes_carry_a_code_never_the_text(monkeypatch):
+    """JHT-T05: il confine non è più «ripulire il testo»: il testo non passa."""
     event = {
         "action": "dislike",
-        # Relativa a oggi, non una data fissa: `recent_feedback(days=30)` filtra
-        # sulla finestra, e il 2026-08-13 scritto qui era uscito dalla finestra
-        # il 12/09 — il test e' diventato rosso da solo, senza che nessun codice
-        # cambiasse. Il confine che verifica e' la visualizzazione, non la data.
         "created_at": (datetime.now(timezone.utc) - timedelta(days=1)).strftime(
             "%Y-%m-%dT%H:%M:%SZ"
         ),
         "reason": SYNTHETIC_INTERNALS,
         "comment": SYNTHETIC_INTERNALS,
+        "note": SYNTHETIC_INTERNALS,
         "score": 2,
         "direction": "less_like_this",
     }
 
     check = feedback._shape_events("84", [event], source="local")
     action = check["actions"][0]
-    assert action["reason"] == SYNTHETIC_INTERNALS
-    assert action["comment"] == SYNTHETIC_INTERNALS
-    _assert_display_safe(action["display_reason"])
-    _assert_display_safe(action["display_comment"])
+    assert action["reason"] == "other"
+    assert not ({"comment", "note", "display_reason", "display_comment"} & set(action))
 
     monkeypatch.setattr(
         feedback,
@@ -98,29 +94,15 @@ def test_check_recent_and_themes_share_the_raw_display_boundary(monkeypatch):
             {"feedback": [{"position_legacy_id": "84", **event}]},
         ),
     )
-    recent = feedback.recent_feedback(days=30, text_chars=0)
+    recent = feedback.recent_feedback(days=30)
     item = recent["items"][0]
-    assert item["reason"] == SYNTHETIC_INTERNALS
-    _assert_display_safe(item["display_reason"])
+    assert item["reason"] == "other"
+    assert "synthetic" not in json.dumps(recent).lower()
 
     themes = feedback.themes_report(days=30, min_positions=1)
-    assert themes["themes"]
-    for theme in themes["themes"]:
-        _assert_theme_display_safe(theme["label"])
-        for example in theme["examples"]:
-            _assert_theme_display_safe(example)
-
-
-def test_recent_full_raw_text_keeps_display_bounded(monkeypatch):
-    raw = "useful feedback " + ("z" * 500)
-    monkeypatch.setattr(
-        feedback,
-        "fetch_events",
-        lambda **_kwargs: ([{"legacy_id": "84", "reason": raw}], None),
-    )
-    item = feedback.recent_feedback(text_chars=0)["items"][0]
-    assert item["reason"] == raw
-    assert len(item["display_reason"]) == display.DISPLAY_TEXT_MAX_CHARS
+    assert [t["key"] for t in themes["themes"]] == ["other"]
+    assert "synthetic" not in json.dumps(themes).lower()
+    assert all("examples" not in theme for theme in themes["themes"])
 
 
 def test_no_signal_notes_are_a_closed_enum_and_exception_details_stay_off_json(
@@ -219,5 +201,7 @@ def test_all_localized_agent_channels_forbid_raw_relay():
         for suffix in suffixes:
             source = (ROOT / template.format(suffix=suffix)).read_text()
             assert "RAW_DISPLAY_BOUNDARY" in source
-            assert "display_reason" in source
-            assert "display_comment" in source
+            # JHT-T05: nessun campo di testo dell'utente esiste più da leggere.
+            for gone in ("display_reason", "display_comment",
+                         "events_with_text", "positions_with_text"):
+                assert gone not in source, f"{template.format(suffix=suffix)}: {gone}"
