@@ -33,9 +33,10 @@ const report = (reply: unknown) => act(() => reportVpsRead(reply));
 
 describe("the header of an existing team's VPS", () => {
   it("connected: the state, the last contact, and the pinned team abbreviated and copyable", async () => {
+    // user-event installs its own clipboard when it is set up: the recorder goes in after it.
+    const user = userEvent.setup();
     const writeText = vi.fn(async () => undefined);
     vi.stubGlobal("navigator", { ...navigator, clipboard: { writeText } });
-    const user = userEvent.setup();
     render(<VpsLinkBar />);
     expect(bar()).toHaveAttribute("data-state", "idle");
     expect(bar()).toHaveTextContent(VPS_LINK_TEXT.it.checking);
