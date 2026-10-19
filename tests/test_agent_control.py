@@ -463,3 +463,10 @@ def test_the_watchdog_sees_the_users_stop_as_contained(team, capsys):
     assert subprocess.run([sys.executable, str(roster_tool), "is-contained", "CAPITANO"]).returncode == 0
     team.run("start", "CAPITANO", capsys=capsys)
     assert subprocess.run([sys.executable, str(roster_tool), "is-contained", "CAPITANO"]).returncode != 0
+
+
+def test_a_refused_name_is_never_echoed_nor_journaled(team, capsys):
+    for bad in ("SCOUT-1;rm -rf /", "scout-1", "X" * 80):
+        code, answer = team.run("stop", bad, capsys=capsys)
+        assert code in (100, 101) and answer["session"] is None
+    assert all(entry["session"] is None for entry in team.journal())
