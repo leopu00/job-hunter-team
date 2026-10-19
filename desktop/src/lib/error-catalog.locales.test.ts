@@ -41,6 +41,34 @@ describe("localized desktop error catalog", () => {
     }
   });
 
+  it.each([
+    ["installer_digest_mismatch", "is not the one this version of the app expects", "aggiorna"],
+    ["installer_payload_invalid", "is incomplete or damaged", "Riprova"],
+  ])("%s has its own sentence in every language, not the generic integrity one", (code, english, italianAction) => {
+    const generic = describeError("installer_digest_missing", { locale: "en" });
+    expect(describeError(code, { locale: "en" }).text).toContain(english);
+    expect(describeError(code, { locale: "it" }).action).toContain(italianAction);
+    const seen = new Set<string>();
+    for (const locale of ERROR_LOCALES) {
+      const described = describeError(code, { locale });
+      const genericHere = describeError("installer_digest_missing", { locale });
+      expect(described.known, `${code}/${locale}`).toBe(true);
+      expect(described.text, `${code}/${locale}`).not.toBe(genericHere.text);
+      if (locale !== "en") expect(described.text, `${code}/${locale}`).not.toBe(generic.text);
+      seen.add(described.text);
+    }
+    expect(seen.size).toBe(ERROR_LOCALES.length);
+  });
+
+  it("tells the two installer failures apart in every language", () => {
+    for (const locale of ERROR_LOCALES) {
+      const mismatch = describeError("installer_digest_mismatch", { locale });
+      const payload = describeError("installer_payload_invalid", { locale });
+      expect(mismatch.text, locale).not.toBe(payload.text);
+      expect(mismatch.action, locale).not.toBe(payload.action);
+    }
+  });
+
   it("names the next day in every product language when a limit resets after midnight", () => {
     const now = new Date(2026, 9, 8, 23, 30);
     const resetsAt = Math.floor(now.getTime() / 1000) + 2 * 3600;

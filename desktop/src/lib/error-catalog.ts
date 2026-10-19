@@ -112,6 +112,20 @@ const RUNTIME_INTEGRITY = copy(
   "The team environment package failed its integrity check.",
   "Do not use it: update Job Hunter Team to the latest version and try again.",
 );
+/** The installer that arrived is not the one this build was made for. */
+const RUNTIME_INTEGRITY_MISMATCH = copy(
+  "Il pacchetto scaricato non è quello che questa versione dell’app si aspetta.",
+  "Non usarlo: aggiorna Job Hunter Team all’ultima versione e riprova.",
+  "The downloaded package is not the one this version of the app expects.",
+  "Do not use it: update Job Hunter Team to the latest version and try again.",
+);
+/** The installer arrived empty, cut short or not an installer at all. */
+const RUNTIME_PAYLOAD_INVALID = copy(
+  "Il pacchetto scaricato è incompleto o danneggiato.",
+  "Riprova. Se si ripete, controlla la connessione a internet o aggiorna Job Hunter Team.",
+  "The downloaded package is incomplete or damaged.",
+  "Try again. If it happens again, check your internet connection or update Job Hunter Team.",
+);
 const RUNTIME_MISSING = copy(
   "L’ambiente del team non è installato su questo computer.",
   "Riparti dalla configurazione tecnica.",
@@ -450,8 +464,8 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
   runtime_missing: RUNTIME_MISSING,
   installer_digest_missing: RUNTIME_INTEGRITY,
   installer_digest_invalid: RUNTIME_INTEGRITY,
-  installer_digest_mismatch: RUNTIME_INTEGRITY,
-  installer_payload_invalid: RUNTIME_INTEGRITY,
+  installer_digest_mismatch: RUNTIME_INTEGRITY_MISMATCH,
+  installer_payload_invalid: RUNTIME_PAYLOAD_INVALID,
   // check_podman issues: the command is compiled but no screen calls it today.
   check_failed: PODMAN_CHECK,
   not_found: PODMAN_CHECK,
