@@ -436,7 +436,7 @@ export const REPLACED_REASONS: Record<string, string> = {
   // starts, not tmux sessions. The launcher picks the instance and holds every limit.
   "start-agent.sh": `${use("spawn_agent")} The launcher picks the first free instance: no roll_worker_number.`,
   "jht-agent-contain": "is not needed here: every agent runs in its own container, within the launcher's limits.",
-  // T30 (SICUREZZA §10): the renderer is a WebKit, and the markdown it renders is written
+  // T30: the renderer is a WebKit, and the markdown it renders is written
   // from scraped job ads. The command is never the agent's — `render_pdf` runs both
   // programs with a fixed argument vector — whether or not the box carries them.
   pandoc: `${use(RENDER_PDF_TOOL)} It renders the markdown with the skill's page size, margins and layout, and with the flags that keep a job ad's HTML from reading a local file or fetching an address.`,

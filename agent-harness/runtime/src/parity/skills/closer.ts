@@ -665,7 +665,7 @@ function resolveFile(value: unknown, options: CloserOptions): string | null | ty
   if (!truthy(value) || pyStrip(pyStrValue(value)) === "") return null;
   const p = pyPath(pyStrip(pyStrValue(value)));
   const full = p.startsWith("/") ? p : pyPath(options.jhtHome, p);
-  // SICUREZZA (T39-3): the roots are the CV folders, never the home they sit
+  // The roots are the CV folders, never the home they sit
   // in. Under the JHT home the product keeps the person's secrets —
   // `credentials/ats-accounts/<tenant>.json` (portal passwords),
   // `credentials/email_monitor.json` (the IMAP login) — and this path comes

@@ -34,7 +34,7 @@
  * - `--no-images`: no image is loaded at all, local or remote. A CV has none;
  * - `--disable-javascript`: no script in the page runs;
  * - `--disable-external-links`, `--disable-internal-links`: kept because
- *   SICUREZZA asked for them and a patched Qt honours them; measured **ignored**
+ *   the security review asked for them and a patched Qt honours them; measured **ignored**
  *   on this image, which says it on stderr. A flag that exists and does nothing
  *   is exactly why the fences above do not rely on it.
  *
@@ -43,7 +43,7 @@
  * something (`safeHtml`), but that is a second layer, not the defence: it is a
  * regex, and it keeps `<style>` on purpose because `cv-structure/SKILL.md`
  * relies on it — so a remote `@import` inside a `<style>` walks straight
- * through it, which SICUREZZA measured (21/09). The dead proxy is what stops
+ * through it, which the security review measured (21/09). The dead proxy is what stops
  * that one too. Whoever drops `--proxy` because "the stripping covers it"
  * reopens the hole. What the stripping is good for: it does not depend on a
  * switch the engine may ignore, and it keeps hostile HTML from failing an
@@ -149,8 +149,8 @@ export function pandocArgs(source: string, header: string, page: string, title: 
 }
 
 /**
- * What wkhtmltopdf makes of that HTML. The five deny flags are SICUREZZA's
- * §10 minimum; the margins and the page size are the skill's, passed here
+ * What wkhtmltopdf makes of that HTML. The five deny flags are the security
+ * minimum; the margins and the page size are the skill's, passed here
  * because wkhtmltopdf ignores `@page`.
  */
 export function engineArgs(page: string, pdf: string): string[] {

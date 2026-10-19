@@ -256,7 +256,7 @@ export async function verifyPreparedHome(prompt: RolePrompt, homeDir: string, sy
     fail(`${HOME_IDENTITY_FILE} is not the prompt this role composes (${[...(identity ?? "")].length} characters on disk, ${[...system].length} expected)`);
   }
 
-  // The home's own top level is an exact set too (SICUREZZA, cases C and D):
+  // The home's own top level is an exact set too:
   // a file or a folder the executor did not put there is text this role can be
   // told to read — the check used to cover the marker, the prompt and
   // `skills/`, and let everything beside them through.
@@ -277,7 +277,7 @@ export async function verifyPreparedHome(prompt: RolePrompt, homeDir: string, sy
   }
 
   // The skills folder is compared as a TREE, not looked up by the names we
-  // expect. SICUREZZA broke the first version twice, and both holes had the
+  // expect. The security review broke the first version twice, and both holes had the
   // same shape: a check that asks "is what I expect here?" instead of "is what
   // is here what it should be?" — an allowlist with gaps. A skill folder added
   // as a SYMLINK slipped through (`isDirectory()` is false for a link, so it
@@ -347,7 +347,7 @@ async function snapshotTree(dir: string): Promise<Map<string, TreeNode> | null> 
       } else if (entry.isFile()) {
         // `nlink` comes along: a hard link has the same bytes as the file it
         // shadows and the same kind, and whoever holds the other name can
-        // change them after this check (SICUREZZA, case E).
+        // change them after this check.
         out.set(rel, { kind: "file", bytes: await readFile(path), links: (await lstat(path)).nlink });
       } else {
         out.set(rel, { kind: "other" });

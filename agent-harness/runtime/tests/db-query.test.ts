@@ -684,7 +684,7 @@ describe("db_update, as the ANALISTA runs it, against db_update.py (T14)", () =>
       expect(r.content, args.join(" ")).toMatch(/not available to this agent|only from/);
     }
     expect(fullSnapshot(ourDb)).toEqual(before);
-    // SICUREZZA A-1: past the analysis, only liveness, category and office; nothing once applied.
+    // Past the analysis, only liveness, category and office; nothing once applied.
     for (const args of [
       ["position", "1", "--jd-summary", "rewritten"],
       ["position", "1", "--url", "https://elsewhere.example"],
@@ -707,7 +707,7 @@ describe("db_update, as the ANALISTA runs it, against db_update.py (T14)", () =>
     ]) {
       expect((await call("db_update", args)).ok, args.join(" ")).toBe(true);
     }
-    // SICUREZZA A-3: a scored position is closed only on proof, the liveness check that confirmed it and its evidence.
+    // A scored position is closed only on proof, the liveness check that confirmed it and its evidence.
     const before3 = fullSnapshot(ourDb);
     for (const args of [
       ["position", "1", "--status", "excluded", "--notes", "[SCADUTO] 404"],
@@ -773,7 +773,7 @@ describe("db_insert, as the ANALISTA runs it, against db_insert.py (T14)", () =>
   it.skipIf(TREE === null)("updates a company positions point at, as the Python does, keeping its id (B1-T1)", async () => {
     // It was INSERT OR REPLACE on both sides, and the foreign key refused it.
     const { call, py, pyDb, ourDb } = twins("analista-1", TREE);
-    // --analyzed-by as the skill passes it: without it the API still signs the row (SICUREZZA A-2), the Python does not.
+    // --analyzed-by as the skill passes it: without it the API still signs the row, the Python does not.
     const args = ["company", "--name", "Globex", "--verdict", "GO", "--analyzed-by", "analista-1"];
     expectSame(await call("db_insert", args), py("db_insert.py", args));
     expect(fullSnapshot(ourDb)).toEqual(fullSnapshot(pyDb));
@@ -782,7 +782,7 @@ describe("db_insert, as the ANALISTA runs it, against db_insert.py (T14)", () =>
     expect(linked(ourDb)).toEqual(linked(pyDb));
   });
 
-  it("signs a company as this agent, whatever --analyzed-by says (SICUREZZA A-2)", async () => {
+  it("signs a company as this agent, whatever --analyzed-by says", async () => {
     const { call, ourDb } = twins("analista-2");
     await call("db_insert", ["company", "--name", "Omega", "--analyzed-by", "capitano"]);
     await call("db_insert", ["company", "--name", "Sigma"]);

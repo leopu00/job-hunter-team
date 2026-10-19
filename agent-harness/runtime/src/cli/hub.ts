@@ -47,7 +47,7 @@ const tokens = loadTokens(required("JHT_HUB_TOKENS"));
 const profileDir = process.env["JHT_API_PROFILE_DIR"]?.trim();
 const jhtHome = process.env["JHT_HOME"]?.trim();
 const userDir = process.env["JHT_HUB_USER_DIR"]?.trim();
-// The launcher is on only when the operator gives it a configuration (SICUREZZA §9).
+// The launcher is on only when the operator gives it a configuration.
 const launcherConfig = process.env["JHT_LAUNCHER_CONFIG"]?.trim();
 const launcher = launcherConfig
   ? new Launcher({

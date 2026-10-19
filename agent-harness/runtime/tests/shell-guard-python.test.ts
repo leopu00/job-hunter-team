@@ -138,8 +138,8 @@ describe("any other Python at all", () => {
 });
 
 /**
- * The refusal is a constant, the REASON is a measurement (21/09, rilievo di
- * SICUREZZA on 8fad63768). The two closing messages asserted a fact about the
+ * The refusal is a constant, the REASON is a measurement (21/09, finding of
+ * the security review on 8fad63768). The two closing messages asserted a fact about the
  * box — "the image carries no Python". True of today's image, measured; false
  * on a development box, and false the day an image ships an interpreter. A
  * model handed a reason it can check and find wrong has been given a door, not

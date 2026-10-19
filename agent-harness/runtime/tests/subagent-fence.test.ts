@@ -1,7 +1,7 @@
 /**
  * T35: a subagent gets a toolkit built for IT, never the parent's array.
  *
- * SICUREZZA found the hole in the live chain (21/09): the critic-loop runs
+ * The security review found the hole in the live chain (21/09): the critic-loop runs
  * the CRITICO inside the SCRITTORE's process, as a subagent, and
  * `createAgentTool` handed the child the parent's tools. The blind fence of
  * T25 — the profile refused, a document under review fenced as data — is

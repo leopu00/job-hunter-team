@@ -122,7 +122,7 @@ export async function prepareProductRole(options: ProductRoleOptions): Promise<P
   const userDir = options.userDir ?? join(options.apiHome, "user");
   const ownDeliverable = deliverableDir(userDir, options.agent);
   for (const dir of [userDir, ...(ownDeliverable ? [ownDeliverable] : [])]) {
-    // Only the refusals a locked mount gives are swallowed (SICUREZZA): anything else —
+    // Only the refusals a locked mount gives are swallowed: anything else —
     // a file where the folder should be, a full disk — is the run's problem, said now.
     await mkdir(dir, { recursive: true }).catch((error: NodeJS.ErrnoException) => {
       if (!["EACCES", "EPERM", "EROFS"].includes(error.code ?? "")) throw error;
@@ -236,7 +236,7 @@ export async function prepareProductRole(options: ProductRoleOptions): Promise<P
   const skills = (hub ? hubSkillTools(skillOptions, hub) : createSkillTools({ ...skillOptions, jobsDb: options.jobsDb })).map((tool) =>
     watchInserts(tool, unit),
   );
-  // The CAPITANO starts the team only through the hub's launcher (SICUREZZA §9); without a hub it cannot.
+  // The CAPITANO starts the team only through the hub's launcher; without a hub it cannot.
   // The launcher's limits are read once, at boot, and named in the tool's description: the
   // allowlist and the cap window were costing two or three refused rounds per delegation
   // (VPS, five live rounds). A hub that cannot answer leaves the description saying so —

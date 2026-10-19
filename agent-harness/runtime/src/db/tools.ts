@@ -141,7 +141,7 @@ export function createDbTools(given: DbToolsOptions): ToolHandler[] {
     if (entity === "score") return insertScore(argv.slice(1));
     if (entity === "company") {
       const a = parseArgv(COMPANY_INSERT, argv.slice(1));
-      // SICUREZZA A-2: the row says who analyzed it, and that is this agent.
+      // The row says who analyzed it, and that is this agent.
       a["analyzed_by"] = options.agent;
       return insertCompany(options.db(), a);
     }
@@ -381,7 +381,7 @@ export function createDbTools(given: DbToolsOptions): ToolHandler[] {
     if (entity === undefined || !policy.update.includes(entity)) return refused("db_update", entity, [...policy.update]);
     if (entity === "company") {
       const a = parseArgv(COMPANY_UPDATE, argv.slice(1));
-      // SICUREZZA A-2, as D-5 for found_by: who analyzed the company is this agent, never an argument.
+      // As for found_by: who analyzed the company is this agent, never an argument.
       if (a["analyzed_by"] !== null) a["analyzed_by"] = options.agent;
       return updateCompany(options.db(), a, options.agent);
     }

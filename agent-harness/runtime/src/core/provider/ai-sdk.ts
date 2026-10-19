@@ -467,7 +467,7 @@ export async function attempt<T>(
     } catch (error) {
       const refused = apiError429(error);
       if (refused === null) throw error;
-      // A stop is immediate (SICUREZZA, §9): the raw error goes up, since the
+      // A stop is immediate: the raw error goes up, since the
       // run is ending for a reason of the operator's, not of the provider's.
       if (signal?.aborted) throw error;
       const at = now();
@@ -509,9 +509,9 @@ export async function attempt<T>(
       }
       await sleep(waitMs, signal);
       waitedMs += waitMs;
-      // A stop that arrives while we wait ends the wait, and the run: §9 says
-      // the operator's stop is immediate, and a `retry-after` of half a minute
-      // would otherwise hold the role for all of it (SICUREZZA, T27).
+      // A stop that arrives while we wait ends the wait, and the run: the
+      // operator's stop is immediate, and a `retry-after` of half a minute
+      // would otherwise hold the role for all of it.
       if (signal?.aborted) throw error;
     }
   }
@@ -536,7 +536,7 @@ function backoffMs(asked: number | null, attemptNumber: number, left: number): n
 /**
  * The provider's 429, however the SDK wrapped it, or null. The depth is
  * bounded: a chain that loops back on itself would otherwise never end, and no
- * error of the SDK's nests five deep (SICUREZZA, T27).
+ * error of the SDK's nests five deep.
  */
 function apiError429(error: unknown, depth = 0): APICallError | null {
   if (depth > 5) return null;

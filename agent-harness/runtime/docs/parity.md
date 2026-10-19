@@ -182,7 +182,7 @@ its replacement, without running anything.
 | `jht-check-user-replies` | `check_user_replies` {} | `UserReplies` port; same output format as the TUI tool |
 | `jht-install` | refused: the image carries the dependencies | — |
 | the dashboard's "Write CV" button, `/cv <id>` on Telegram (`write_request.py`) | `npm run user -- cv <id>`, or the hub's `/v1/user/write-request` with the host's token | **the person's, never a role's** (T28). In the product `positions.write_requested = 1` is set by the PERSON, and no agent may set it for itself; in the harness there was no way to do it at all, so a live rehearsal faked the request with an UPDATE typed into the test database by hand (20/09). The port is `src/db/write-request.ts`, guards and JSON answer as in the script, checked against it case by case (`tests/write-request.test.ts`); a test also holds it as the runtime's only writer of the column. Not ported: the CV rework branch ([JHT-CV-REWORK]), which reads the PDF's layout check — a rework request is refused with that reason, as `db_query next-for-scrittore` already says |
-| `pandoc … --pdf-engine=wkhtmltopdf` | `render_pdf` {source, title, output?} | **the renderer is a tool, never a shell command** (T30, SICUREZZA §10 P1). wkhtmltopdf is a whole WebKit and the markdown it renders is written from scraped job ads: by default it follows `file://`, loads remote images and runs JavaScript, and the PDF is the only thing the product sends to a company. So the runtime runs both programs itself with a fixed argument vector — pandoc `--sandbox`, then `--disable-local-file-access --disable-javascript --no-images --proxy http://127.0.0.1:1` — and strips every element that can fetch or run from the HTML before the engine sees it — in that order: **the network fence is the proxy**, the stripping is a second layer (a regex that keeps `<style>`, so a remote `@import` inside one goes through it and only the dead proxy stops it: SICUREZZA measured both, 21/09); the model chooses only the source, the title and the destination, both confined to the deliverables (its own folder to write). Measured in the image's own toolchain (pandoc 2.17, wkhtmltopdf 0.12.6, 21/09): the deny flags alone are **not** enough — a `<link rel="stylesheet" href="http://…">` written into the markdown was still fetched and the listening server saw the request, and `--disable-external-links`/`--disable-internal-links` are ignored by Debian's unpatched Qt, which says so on stderr. With the proxy at a closed port and the HTML stripped, the same hostile markdown renders with zero requests, no `file://` read ("Blocked access to file …") and exit 0; without the stripping a blocked `<iframe>` makes the engine exit 1 on a good PDF. The two flags stay: a patched Qt honours them. Same page size, margins and base layout as `cv-structure/SKILL.md`; the layout CSS ships with the runtime because the image has no `shared/`. Where the box has no toolchain the call fails with the old sentence: deliver the markdown, record it with `db_update application --cv-path`, say no PDF was rendered. The size and Producer gates stay the agent's — the tool reports the size, and the engine is no longer something the agent can get wrong |
+| `pandoc … --pdf-engine=wkhtmltopdf` | `render_pdf` {source, title, output?} | **the renderer is a tool, never a shell command** (T30). wkhtmltopdf is a whole WebKit and the markdown it renders is written from scraped job ads: by default it follows `file://`, loads remote images and runs JavaScript, and the PDF is the only thing the product sends to a company. So the runtime runs both programs itself with a fixed argument vector — pandoc `--sandbox`, then `--disable-local-file-access --disable-javascript --no-images --proxy http://127.0.0.1:1` — and strips every element that can fetch or run from the HTML before the engine sees it — in that order: **the network fence is the proxy**, the stripping is a second layer (a regex that keeps `<style>`, so a remote `@import` inside one goes through it and only the dead proxy stops it: the security review measured both, 21/09); the model chooses only the source, the title and the destination, both confined to the deliverables (its own folder to write). Measured in the image's own toolchain (pandoc 2.17, wkhtmltopdf 0.12.6, 21/09): the deny flags alone are **not** enough — a `<link rel="stylesheet" href="http://…">` written into the markdown was still fetched and the listening server saw the request, and `--disable-external-links`/`--disable-internal-links` are ignored by Debian's unpatched Qt, which says so on stderr. With the proxy at a closed port and the HTML stripped, the same hostile markdown renders with zero requests, no `file://` read ("Blocked access to file …") and exit 0; without the stripping a blocked `<iframe>` makes the engine exit 1 on a good PDF. The two flags stay: a patched Qt honours them. Same page size, margins and base layout as `cv-structure/SKILL.md`; the layout CSS ships with the runtime because the image has no `shared/`. Where the box has no toolchain the call fails with the old sentence: deliver the markdown, record it with `db_update application --cv-path`, say no PDF was rendered. The size and Producer gates stay the agent's — the tool reports the size, and the engine is no longer something the agent can get wrong |
 | `pdftotext`, `pdffonts` | run where the box has them | **detected, not declared** (T25 follow-up). Poppler measures a PDF, it does not make one: the harness refuses these two only where the executable is not on `PATH`. The image gained pandoc, wkhtmltopdf and poppler in T24-b, this table still said they were missing, and a SCRITTORE that had just seen `/usr/bin/pdftotext` with `command -v` was told poppler did not exist — it spent its whole cap looking for another way and delivered nothing. `pdf_layout_check.py` is Python and the image has no interpreter: it is still marked not available, and a native tool for it is open work |
 | `start-agent.sh`, `roll_worker_number.py`, `tmux …`, `jht-agent-contain` | `spawn_agent`, `list_agents`, `stop_agent` (the CAPITANO, with a hub) | the TUI's team is tmux sessions; here agents are containers the hub's launcher starts (T22), which picks the instance and holds every limit. The shell guard answers each with the tool to use and runs nothing; the rendered text names `spawn_agent` for `/app/.launcher/start-agent.sh` and marks the rest of `/app/.launcher/`, `/app/cli/bin/jht.js` and the hyphenated scripts (`throttle-config.py`, `agent-speed-table.py`) as not in the harness (T21). Without a hub the CAPITANO has no spawn |
 | `throttle-set`, `token-rate-now` | not mapped yet: CAPITANO only | — |
@@ -218,7 +218,7 @@ every statement is a constant with bound parameters.
 
 | Script | Native tool | Parity |
 | --- | --- | --- |
-| `scout_coord.py show/history/assign/reset/claim/check-claim/doctor` | `scout_coord` {command, scout?, cerchi?, fonti?, note?, job_id?, json?} | same lines and same rows in `scout_coordination` / `scout_claims`; exit 3 is a failed call with the script's message. `bootstrap` is the launcher's and not a tool. **One difference, on purpose (SICUREZZA D-2):** the tool acts for the agent running it — `assign` and `claim` in another Scout's name are refused, and `reset` closes only the caller's own split and old claims, where the script lets the lowest-numbered Scout reset everyone. A claim older than 24 h (the TUI's own limit, which its `reset` purged) is free again: `check-claim` answers `AVAILABLE` and the next `claim` overwrites it; no Scout deletes another's claims. A Scout started without a number (`--role scout`, no `--agent`) is `scout-1`, as `start-agent.sh scout` makes it SCOUT-1, and `scout` as a name always means the caller |
+| `scout_coord.py show/history/assign/reset/claim/check-claim/doctor` | `scout_coord` {command, scout?, cerchi?, fonti?, note?, job_id?, json?} | same lines and same rows in `scout_coordination` / `scout_claims`; exit 3 is a failed call with the script's message. `bootstrap` is the launcher's and not a tool. **One difference, on purpose:** the tool acts for the agent running it — `assign` and `claim` in another Scout's name are refused, and `reset` closes only the caller's own split and old claims, where the script lets the lowest-numbered Scout reset everyone. A claim older than 24 h (the TUI's own limit, which its `reset` purged) is free again: `check-claim` answers `AVAILABLE` and the next `claim` overwrites it; no Scout deletes another's claims. A Scout started without a number (`--role scout`, no `--agent`) is `scout-1`, as `start-agent.sh scout` makes it SCOUT-1, and `scout` as a name always means the caller |
 | `feedback_query.py check <legacy_id>` | `feedback_query` {command: check, legacy_id} | same JSON, from `position_feedback` in `jobs.db`, sanitised display fields included (`feedback-display.ts` ports `feedback_display.py`). No cloud lane: where the script would ask the cloud, the answer is its own `no-signal:cloud-disabled`. |
 | `feedback_query.py recent/themes` | `feedback_query` {command: recent\|themes, days?, limit?, legacy_ids?, …} | the SCORER's `themes` and the Mentor's `recent`, rule for rule: the same stopwords, the share rounded half-even to three digits, ties by code point. Both read the cloud aggregate unless given `legacy_ids`; the runtime has no cloud, so without them the answer is the script's `no-signal:cloud-disabled`, and with them it aggregates the local rows as the script does (T15) |
 | `db_query.py` | `db_query` {args} | the words after the script name as `args`; same output byte for byte and same exit code. Ported: the SCOUT's `check-url`, `position`, `positions`, `recent-activity`; the ANALISTA's queues (`next-for-analista`, `-recheck`, `-categorize`, `-salary-precise`, `-geocoding`, and in care mode `-recheck-due`/`-recheck-weekly`, `-geocode-missing`, `-logo-missing`), `company`, `companies`, `stats`, `check-history`, `active-categories`, `other-pile`, `category-sizes`; the SCORER's `next-for-scorer` (T14/T15). Each role runs only its own (`role-policy.ts`); the others are refused. The care-mode queues obey the person's enrichment policy (`enrichment-policy.ts`, read from the profile folder where the Python reads it next to `jobs.db`), and are off when there is none to read |
@@ -454,8 +454,8 @@ the script holds it. Three differences, all on purpose:
   takes any absolute path, `../` or link. That was an existence check; here
   the gate READS the file (a hash and three poppler runs, for the CLOSER and
   the CAPITANO), so the path must resolve — links followed — inside the CV
-  folders: the deliverables' `cv/` and the hub's own. **Never the team's home**
-  (SICUREZZA): the product keeps the person's credentials there — portal
+  folders: the deliverables' `cv/` and the hub's own. **Never the team's home**:
+  the product keeps the person's credentials there — portal
   passwords, the IMAP login — and this path comes from a column a model
   writes. Anything else is held `cv_pdf_path_outside` and the file is never
   opened; the check comes before any `stat`, so the answer cannot tell what
@@ -482,7 +482,7 @@ skill as the rewrite leaves it, and no skill folder nobody loads. Anything
 else and the role does **not** start, naming the file: a run on a prompt
 nobody verified is what the mount exists to prevent, and quietly rebuilding
 would hand it straight back. `skills/` is compared as a TREE, not looked up by the names the runtime
-expects. The first version of this check was broken twice by SICUREZZA, and
+expects. The first version of this check was broken twice by the security review, and
 both holes had one shape — asking "is what I expect here?" instead of "is what
 is here what it should be?", which is an allowlist with gaps: a skill folder
 added as a SYMBOLIC LINK passed, because `isDirectory()` is false for a link
@@ -494,14 +494,14 @@ name, KIND (a link is never a folder) and bytes — against the layout
 than kept by hand.
 
 `tests/prepared-home.test.ts` holds it: prepared and accepted, a replaced
-prompt, a changed and a smuggled skill, an empty home, and the two SICUREZZA
-found — a linked folder, a link in place of a file the role reads, an extra
+prompt, a changed and a smuggled skill, an empty home, and the two holes the security
+review found — a linked folder, a link in place of a file the role reads, an extra
 file beside `SKILL.md`, and a shipped script changed.
 
 The switch is the executor's, set on the container it starts; a role cannot
 turn it on for its own process, and turning it on without the files being
 right buys nothing, because the run stops. The final word is not this suite:
-it is SICUREZZA's probe on the real box, where the uid and the mount are.
+it is the security probe on the real box, where the uid and the mount are.
 
 **And this check is a second line, not the mount's replacement.** The system
 prompt carries the index of those paths and tells the model to read a
@@ -512,8 +512,7 @@ otherwise is the argument by which the read-only mount gets dropped one day.
 That is also why the home's own top level is an exact set — marker, prompt,
 `skills/`, nothing else — and why a file with more than one name is refused:
 a hard link has the right bytes and the right kind, and whoever holds the
-other name rewrites the inode when the check is over (SICUREZZA, cases C, D
-and E).
+other name rewrites the inode when the check is over.
 
 **Seven roles have no shell here (T42).** `bash` reached every role because it
 is in the base toolkit, not because a prompt asked for it — and it is the
@@ -750,7 +749,7 @@ TUI — a context that bloats, an Enter that hangs — does not exist here. If a
 stuck run ever shows up it is added then, from the hub, with the rule the team
 already has for `freeze_team`: the role asks, the launcher decides.
 
-**It writes only to the CAPITANO** (SICUREZZA P2). In the TUI it
+**It writes only to the CAPITANO.** In the TUI it
 writes to every session and has to: it interviews each one before recreating it
 and kicks it off again afterwards. Here it interviews nobody, so the set of
 peers it used to need does not exist — and a role that may still write to every

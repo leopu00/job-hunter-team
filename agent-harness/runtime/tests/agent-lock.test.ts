@@ -94,7 +94,7 @@ describe("AgentLock", () => {
   });
 });
 
-describe("AgentLock — two starts taking over the same dead lock (SICUREZZA P2)", () => {
+describe("AgentLock — two starts taking over the same dead lock", () => {
   it("lets only one of them run when the second slips in between the check and the takeover", () => {
     AgentLock.acquire({ dir, agent: "scout-1", runId: "crashed", pid: deadPid() });
     let b: AgentLock | undefined;

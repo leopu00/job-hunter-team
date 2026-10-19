@@ -9,7 +9,7 @@
  * stayed empty: the review existed only in the trace.
  *
  * Giving the SCRITTORE write access there was the tempting fix and the wrong
- * one (SICUREZZA): the reviewed would be able to rewrite its own review, in
+ * one: the reviewed would be able to rewrite its own review, in
  * silence, and that separation buys exactly one thing — that it cannot. The
  * runtime writing it changes nothing either, because inside that process the
  * kernel still sees the SCRITTORE. So the hub writes it: it already is the
@@ -19,7 +19,7 @@
  * What the model chooses: the text of the review, and which position it is
  * for. **Not one character of the path.** The company is read from the
  * database, not taken from the request — and even so it is a scraped string
- * from a job ad (SICUREZZA): it is cut to a slug of [a-z0-9-], and the
+ * from a job ad: it is cut to a slug of [a-z0-9-], and the
  * finished path is resolved and checked to be inside the deliverables before
  * anything is opened. A company called `../cv/CV_1.md` writes nothing.
  *

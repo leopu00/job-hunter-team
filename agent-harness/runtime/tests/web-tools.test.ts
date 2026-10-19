@@ -114,7 +114,7 @@ describe("web_fetch", () => {
     expect((await fetchWith({ url: "https://example.com/to-http" })).content).toContain("Only https URLs");
   });
 
-  it("takes the format other agents' fetch tools take, and never hands over markup (T9, SICUREZZA P2)", async () => {
+  it("takes the format other agents' fetch tools take, and never hands over markup (T9)", async () => {
     const markdown = await fetchWith({ url: "https://example.com/page", format: "markdown" });
     const text = await fetchWith({ url: "https://example.com/page", format: "text" });
     const html = await fetchWith({ url: "https://example.com/page", format: "html" });

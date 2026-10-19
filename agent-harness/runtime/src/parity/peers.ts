@@ -44,7 +44,7 @@ export const PEER_POLICY: Readonly<Record<string, readonly string[]>> = {
   // other correspondent, and M-01 keeps it away from the agents themselves.
   mantenitore: ["capitano"],
   /**
-   * T41, SICUREZZA P2 and the MASTER's decision (23/09): the DOTTORE speaks
+   * T41 and the MASTER's decision (23/09): the DOTTORE speaks
    * only to the CAPITANO.
    *
    * In the TUI it writes to everyone, and it has to: it interviews each session

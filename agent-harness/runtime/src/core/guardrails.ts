@@ -168,9 +168,9 @@ export class Guardrails {
   }
 
   /**
-   * Refuses a model call whose worst case does not fit in what is left
-   * (SICUREZZA, T13): the budget was only checked after a round, so the round
-   * that crossed it was paid in full (0.0033 USD over the cap in T13 run 2).
+   * Refuses a model call whose worst case does not fit in what is left: the
+   * budget was only checked after a round, so the round that crossed it was paid
+   * in full (0.0033 USD over the cap in a live run).
    */
   reserve(usage: Usage, extraUsd = 0): void {
     if (this.fits(usage, extraUsd)) return;

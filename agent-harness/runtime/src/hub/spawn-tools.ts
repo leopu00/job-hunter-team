@@ -1,5 +1,5 @@
 /**
- * The CAPITANO's tools to start and stop the team (SICUREZZA §9), through the
+ * The CAPITANO's tools to start and stop the team, through the
  * hub's launcher. They ask; the launcher decides, and says why when it
  * refuses. No container, socket or `run.sh` is ever in the CAPITANO's reach.
  */
@@ -84,7 +84,7 @@ function limitsSentence(limits: SpawnLimits | undefined): string {
     // and who picks them, at the point where the call is written.
     `How many may run together is not which index to ask for: the launcher assigns the index, so LEAVE \`instance\` OUT ` +
     `unless one must be reused — ${allowedIndicesLine(limits)}. ` +
-    // SICUREZZA, before the merge (24/09): the sentence above must not promise more than the
+    // Raised in review before the merge (24/09): the sentence above must not promise more than the
     // launcher keeps. Inside every fixed limit it still refuses for the session's MONEY
     // (`used + charge + reserve > sessionUsd`), for a role that failed too often, and for the
     // operator's STOP. With the session nearly spent — 1.70 USD left on the night this was

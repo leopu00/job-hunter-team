@@ -345,7 +345,7 @@ describe("scout_coord — boundaries", () => {
   });
 });
 
-describe("scout_coord is bound to the Scout that runs it (SICUREZZA D-2)", () => {
+describe("scout_coord is bound to the Scout that runs it", () => {
   const setup = () => {
     const db = openJobsDb(":memory:");
     const as = (agent: string) => createScoutCoordTool({ agent, db: () => db, dbPath: ":memory:" });

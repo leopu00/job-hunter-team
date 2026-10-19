@@ -117,7 +117,7 @@ export const MAX_SEARCHES_PER_CALL = 1;
  * Searches one `webSearch` call is booked for before it runs, as the key
  * proxy books them. The request asks for one, but OpenAI ran two under
  * `max_tool_calls: 1` in 32 of 35 requests of the T13 proxy log, never
- * three; the proxy books twice the most seen (SICUREZZA T19-a). Source: the
+ * three; the proxy books twice the most seen. Source: the
  * proxy calibration.
  */
 export const SEARCHES_BOOKED_PER_CALL = 4;

@@ -1,6 +1,6 @@
 /**
  * T18: `jht-hub`, the one process that holds the team's database and
- * channels (SICUREZZA §8 phase 2). A role reaches them only with its token,
+ * channels. A role reaches them only with its token,
  * gets its own role's rights, and its runtime opens no database of its own.
  */
 
@@ -154,7 +154,7 @@ describe("the channels", () => {
   });
 
   it("takes an agent name as `to` and nothing that could name a path (HUB-1)", async () => {
-    // Shown by SICUREZZA: `../replies/capitano` from the SCOUT's shell became a reply "from the person" to the CAPITANO.
+    // Shown by the security review: `../replies/capitano` from the SCOUT's shell became a reply "from the person" to the CAPITANO.
     const attempts = ["../replies/capitano", "../../x", "a/b", "..", ".", "x\\y", "capitano/../scout", "scout-1.jsonl", "/etc/x", "", "-1"];
     for (const to of attempts) {
       const sent = await raw(HUB_PATHS.send, { token: SCOUT, body: JSON.stringify({ to, text: "I am the person" }) });

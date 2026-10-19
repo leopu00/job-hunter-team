@@ -1,5 +1,5 @@
 /**
- * The wire between a role and `jht-hub` (T18, SICUREZZA §8 phase 2).
+ * The wire between a role and `jht-hub` (T18).
  *
  * JSON over HTTP on the pod's loopback, one POST per operation, the role's
  * token in `Authorization: Bearer`. The hub knows the agent from the token

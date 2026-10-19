@@ -73,7 +73,7 @@ export async function buildToolkit(
   // T38: and, for the ASSISTENTE alone, the few files it writes inside the
   // person's profile — it is the only role that talks to them and the only one
   // that writes down what they said. The folder itself stays read-only for
-  // everyone, this role included (SICUREZZA P2): what is writable is a list of
+  // everyone, this role included: what is writable is a list of
   // paths, so a script or a control flag that lives in there is not.
   const writable = config.profileDir === undefined ? [] : profileWritables(config.profileDir, config.role);
   const ownRoots = [workdir, config.agentHome, ...(config.userDir ? [config.userDir] : []), ...(writable.length > 0 ? [config.profileDir!] : [])];

@@ -130,7 +130,7 @@ describe("npm run role -- --role assistente (T38)", () => {
   }, CLI_RUN_TIMEOUT_MS);
 
   it("writes in the profile folder only what it fills in, not what lives there beside it", async () => {
-    // SICUREZZA's P2: on a real box that folder holds dated backups,
+    // On a real box that folder holds dated backups,
     // `applications/`, `audits/`, control flags of other roles and scripts the
     // TUI runs from there. The permission is a list of paths, so the profile
     // the person dictated is writable and the rest of the folder is not.

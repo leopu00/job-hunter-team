@@ -203,7 +203,7 @@ export class Board {
         run.model = record.modelId;
         run.budgetUsd = record.budgetUsd;
         // A line written by another branch or an older runtime may lack a field the type
-        // requires: the field stays blank, the screen stays up (SICUREZZA, P2).
+        // requires: the field stays blank, the screen stays up.
         if (typeof record.limits?.["maxWebSearches"] === "number") run.maxWebSearches = record.limits["maxWebSearches"];
         feed(`${c.green("▶")} started · ${record.providerId}/${record.modelId} · run cap ${usd(record.budgetUsd)}`);
         return;

@@ -1,5 +1,5 @@
 /**
- * T30 (SICUREZZA §10): the PDF the team sends is rendered by the runtime, not
+ * T30: the PDF the team sends is rendered by the runtime, not
  * by a command the model writes.
  *
  * Three claims, and each is checked the way it would fail:
@@ -263,7 +263,7 @@ describe("the HTML the engine is given", () => {
   });
 
   it("leaves a remote @import inside the CV's own style, which is why the proxy is the fence", () => {
-    // SICUREZZA measured it (21/09): `<style>@import url(http://…)</style>`
+    // The security review measured it (21/09): `<style>@import url(http://…)</style>`
     // fetches, deny flags and stripping notwithstanding. The `<style>` stays
     // because cv-structure needs it; what stops the request is `--proxy` at a
     // closed port, which `engineArgs` passes. Written here so that dropping
@@ -384,7 +384,7 @@ describe.skipIf(!onPath(PANDOC))("what pandoc hands the engine", () => {
 });
 
 /**
- * With the real engine — the image, where `CMD` is `npm test`. SICUREZZA's own
+ * With the real engine — the image, where `CMD` is `npm test`. The security review's own
  * check: hostile HTML rendered by the product's path, and neither the file nor
  * the address reaches the PDF, with no request made at all.
  */
