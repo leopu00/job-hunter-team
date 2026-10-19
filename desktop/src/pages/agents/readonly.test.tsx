@@ -124,9 +124,11 @@ describe("«Agenti» in the read-only view of an existing team", () => {
     expect(screenCalls()).toEqual([[COMMAND, { request: { op: "screen", name: "SCOUT-1" } }]]);
     fireEvent.click(within(screen.getByTestId("agent-SCOUT-1")).getByRole("button", { name: "Nascondi il terminale" }));
     expect(screen.queryByTestId("agent-SCOUT-1-terminal")).toBeNull();
-    // only the list and that one terminal: no other command, nothing that writes
-    expect(native.invoke.mock.calls.every(([command]) => command === COMMAND)).toBe(true);
-    expect(native.invoke.mock.calls.map(([, args]) => (args as { request: { op: string } }).request.op).sort()).toEqual(["list", "screen"]);
+    // only the list and that one terminal, and the header's read of which team this is (a local
+    // file, no SSH): no other command, nothing that writes
+    const calls = native.invoke.mock.calls.filter(([command]) => command !== "existing_team_link_identity");
+    expect(calls.every(([command]) => command === COMMAND)).toBe(true);
+    expect(calls.map(([, args]) => (args as { request: { op: string } }).request.op).sort()).toEqual(["list", "screen"]);
   });
 
   it("a terminal the VPS could not clean is not shown: the catalog's sentence, never the text", async () => {
