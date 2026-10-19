@@ -1263,6 +1263,10 @@ pub(crate) fn revoke_full_link() {
     }
 }
 
+/// The tests that grant or revoke share the one static of the process: cargo runs tests in parallel.
+#[cfg(test)]
+pub(crate) static FULL_LINK_TEST_LOCK: Mutex<()> = Mutex::new(());
+
 pub(crate) fn snapshot_command(target: &RuntimeTarget) -> Result<String, &'static str> {
     command(target, "docker exec \"$JHT_CID\" node -e 'const fs=require(\"fs\"); let c={}; try{c=JSON.parse(fs.readFileSync(\"/jht_home/jht.config.json\",\"utf8\"))}catch{}; const p=String(c.active_provider||\"\").toLowerCase(); const marker={claude:\"/jht_home/.claude/.credentials.json\",anthropic:\"/jht_home/.claude/.credentials.json\",codex:\"/jht_home/.codex/auth.json\",openai:\"/jht_home/.codex/auth.json\",kimi:\"/jht_home/.kimi/credentials/kimi-code.json\",moonshot:\"/jht_home/.kimi/credentials/kimi-code.json\"}[p]; const ok=[\"claude\",\"anthropic\",\"codex\",\"openai\",\"kimi\",\"moonshot\"].includes(p); console.log(\"runtimeInstalled=1\\ncontainerRunning=1\\nproviderConfigured=\"+(ok?\"1\":\"0\")+\"\\nproviderAuthenticated=\"+(marker&&fs.existsSync(marker)?\"1\":\"0\")+\"\\nprofileReady=\"+(fs.existsSync(\"/jht_home/profile/ready.flag\")?\"1\":\"0\")+\"\\nassistantWelcomed=\"+(fs.existsSync(\"/jht_home/profile/welcomed.flag\")?\"1\":\"0\"));'")
 }
@@ -1734,6 +1738,7 @@ mod tests {
 
     #[test]
     fn the_full_link_belongs_to_the_confirmed_team_in_this_run_only() {
+        let _serial = FULL_LINK_TEST_LOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
         let (one, two) = (AccountScope::synthetic(b"scope-one"), AccountScope::synthetic(b"scope-two"));
         let activated = |hash: &str| ActivatedTarget { team_id: "t".repeat(16), runtime: target(), candidate_sha256: hash.to_owned() };
         revoke_full_link();

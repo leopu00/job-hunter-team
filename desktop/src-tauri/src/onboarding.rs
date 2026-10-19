@@ -2849,6 +2849,9 @@ pub(crate) fn existing_team_readonly_connect_with(
         Duration,
     ) -> Result<ProcessResult, &'static str>,
 ) -> Result<ExistingTeamReadiness, OnboardingError> {
+    // Opening the team read-only takes the full connection away, whatever follows: the same team
+    // opened here has the same connection key, and the read-only view must never write.
+    crate::existing_team_runtime::revoke_full_link();
     let validated = validate_host().map_err(failure)?;
     let target = crate::existing_team_runtime::candidate_for_request_at(root, scope, host, team_id).map_err(failure)?;
     let probe = crate::existing_team_runtime::team_probe_command(&target.runtime).map_err(failure)?;
@@ -2891,6 +2894,8 @@ pub(crate) fn existing_team_reopen_with(
         Duration,
     ) -> Result<ProcessResult, &'static str>,
 ) -> Result<ExistingTeamReadiness, OnboardingError> {
+    // A reopening is the read-only view: it takes the full connection away, whatever follows.
+    crate::existing_team_runtime::revoke_full_link();
     // Neither saved: there is no existing team to reopen (the caller goes on as it
     // always did). Only one of the two: the saved connection is incomplete, which is
     // not the same as absent; refused here, before any SSH call, and never completed.
@@ -3132,6 +3137,8 @@ pub(crate) async fn onboarding_existing_team_connect(
 ) -> Result<OnboardingSnapshot, OnboardingError> {
     let diagnostic = RuntimeLog::new(&app);
     let result: Result<OnboardingSnapshot, OnboardingError> = async {
+    // A new confirmation starts from nothing: one that fails must not leave the old connection standing.
+    crate::existing_team_runtime::revoke_full_link();
     let expected = scopes.active().map_err(|code| {
         if let Some(log) = &diagnostic { log.record_existing_team_status(ExistingTeamPhase::Scope, Err(code)); }
         failure(code)
