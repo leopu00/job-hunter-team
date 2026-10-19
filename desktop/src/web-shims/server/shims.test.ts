@@ -223,6 +223,20 @@ describe("next/headers reads document.cookie", () => {
     }
   });
 
+  it("a NEXT_LOCALE cookie that is not a language the app has gives the app's language, not the bad value", async () => {
+    document.cookie = "NEXT_LOCALE=xx; path=/";
+    localStorage.setItem("jht-lang", "en");
+    try {
+      const { cookies } = await import("next/headers");
+      expect((await cookies()).get("NEXT_LOCALE")?.value).toBe("en");
+      const { getServerLocale } = await import("@/lib/server-locale");
+      await expect(getServerLocale()).resolves.toBe("en");
+    } finally {
+      localStorage.removeItem("jht-lang");
+      document.cookie = "NEXT_LOCALE=; path=/; max-age=0";
+    }
+  });
+
   it("a NEXT_LOCALE cookie that is there wins over the app's language", async () => {
     document.cookie = "NEXT_LOCALE=de; path=/";
     localStorage.setItem("jht-lang", "en");
