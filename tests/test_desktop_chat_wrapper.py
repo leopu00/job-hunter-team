@@ -211,16 +211,22 @@ def _native_linux_runtime(
     )
 
     podman = binary_dir / "podman"
+    # Podman's own rule (podman(1), containers.conf(5)): the client is remote only when
+    # CONTAINER_HOST, CONTAINER_CONNECTION, --url/--connection or remote = true in
+    # containers.conf turn it on. A default system connection alone leaves it local.
     podman.write_text(
         """#!/bin/sh
 printf 'podman %s\n' "$*" >> "$JHT_TEST_DOCKER_LOG"
+printf 'podman-env host=%s connection=%s\n' "${CONTAINER_HOST-}" "${CONTAINER_CONNECTION-}" >> "$JHT_TEST_DOCKER_LOG"
 if [ "${1:-}" = --version ]; then printf '%s\n' 'podman version 6.1.3'; exit 0; fi
+remote=false
+if [ -n "${CONTAINER_HOST-}" ] || [ -n "${CONTAINER_CONNECTION-}" ]; then remote=true; fi
+if [ -n "${CONTAINERS_CONF-}" ] && grep -Eq '^[[:space:]]*remote[[:space:]]*=[[:space:]]*true' "$CONTAINERS_CONF"; then remote=true; fi
 case "$*" in
   *machine*|*--connection*) exit 97 ;;
-  "info --format {{.Host.Security.Rootless}}")
-    printf '%s\n' "$JHT_TEST_PODMAN_ROOTLESS"
+  "info --format {{.Host.Security.Rootless}} {{.Host.ServiceIsRemote}}")
+    printf '%s %s\n' "$JHT_TEST_PODMAN_ROOTLESS" "$remote"
     exit 0 ;;
-  info) exit 0 ;;
 esac
 exit 93
 """,
@@ -278,8 +284,8 @@ def test_native_linux_podman_up_uses_rootless_local_socket_without_a_machine(
 
     assert result.returncode == 0, result.stderr
     calls = log.read_text(encoding="utf-8")
-    assert "podman info --format {{.Host.Security.Rootless}}" in calls
-    assert "podman info\n" in calls
+    assert "podman info --format {{.Host.Security.Rootless}} {{.Host.ServiceIsRemote}}" in calls
+    assert "podman info\n" not in calls  # the compose check is the same local, rootless probe
     assert "podman-compose connection= argv=" in calls
     assert " up -d" in calls
     assert "machine" not in calls
@@ -303,13 +309,55 @@ def test_native_linux_podman_refuses_rootful_before_runtime_mutation(tmp_path: P
     assert result.returncode != 0
     assert "podman_rootful_refused" in result.stderr
     calls = log.read_text(encoding="utf-8")
-    assert "podman info --format {{.Host.Security.Rootless}}" in calls
+    assert "podman info --format {{.Host.Security.Rootless}} {{.Host.ServiceIsRemote}}" in calls
     assert "podman-compose" not in calls
     assert "docker info" not in calls
 
     source = WRAPPER.read_text(encoding="utf-8")
     assert '[ "$HOST_UID" -ne 0 ] || return 1' in source
-    assert "info --format '{{.Host.Security.Rootless}}'" in source
+    assert "info --format '{{.Host.Security.Rootless}} {{.Host.ServiceIsRemote}}'" in source
+
+
+def _up(wrapper: Path, env: dict[str, str]) -> subprocess.CompletedProcess:
+    return subprocess.run([str(wrapper), "up"], env=env, text=True, capture_output=True, timeout=10, check=False)
+
+
+def test_native_linux_podman_ignores_a_container_host_of_the_user_and_stays_local(tmp_path: Path):
+    wrapper, env, log = _native_linux_runtime(tmp_path)
+    env["CONTAINER_HOST"] = "ssh://someone@remotehost.invalid/run/podman/podman.sock"
+    result = _up(wrapper, env)
+    assert result.returncode == 0, result.stderr
+    calls = log.read_text(encoding="utf-8")
+    assert "remotehost.invalid" not in calls  # no Podman call saw it
+    assert "podman-env host= connection=\n" in calls
+
+
+def test_native_linux_podman_with_only_a_default_system_connection_stays_local(tmp_path: Path):
+    wrapper, env, log = _native_linux_runtime(tmp_path)
+    conf = tmp_path / "containers.conf"
+    conf.write_text(
+        '[engine]\nactive_service = "elsewhere"\n'
+        '[engine.service_destinations.elsewhere]\nuri = "ssh://someone@remotehost.invalid/run/podman/podman.sock"\n',
+        encoding="utf-8",
+    )
+    env["CONTAINERS_CONF"] = str(conf)
+    result = _up(wrapper, env)
+    assert result.returncode == 0, result.stderr
+    assert " up -d" in log.read_text(encoding="utf-8")
+
+
+def test_native_linux_podman_refuses_a_client_in_remote_mode_before_runtime_mutation(tmp_path: Path):
+    wrapper, env, log = _native_linux_runtime(tmp_path)
+    conf = tmp_path / "containers.conf"
+    conf.write_text('[engine]\nremote = true\nactive_service = "elsewhere"\n', encoding="utf-8")
+    env["CONTAINERS_CONF"] = str(conf)
+    result = _up(wrapper, env)
+    assert result.returncode != 0
+    assert "podman_remote_service_refused" in result.stderr
+    assert "podman_rootful_refused" not in result.stderr
+    calls = log.read_text(encoding="utf-8")
+    assert "podman-compose" not in calls
+    assert "docker info" not in calls
 
 
 def test_desktop_chat_uses_private_podman_and_exact_compose_container(tmp_path: Path):

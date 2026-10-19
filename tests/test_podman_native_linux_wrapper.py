@@ -24,7 +24,7 @@ WRAPPER = ROOT / "scripts" / "jht-wrapper.sh"
 FUNCTIONS = (
     "version_leading_numbers", "version_at_least", "podman_version_number", "podman_compose_version_number",
     "podman_compose_pair_supported", "podman_native_override_path", "podman_native_override_ensure",
-    "compose_project_name", "podman_binary", "podman_compose_binary", "compose_file",
+    "compose_project_name", "podman_binary", "podman_compose_binary", "podman_native_rootless", "compose_file",
 )
 
 
@@ -50,7 +50,8 @@ def box(tmp_path):
 
     def tools(podman: str, compose: str):
         (bin_dir / "podman").write_text(
-            f'#!/bin/sh\nif [ "$1" = --version ]; then echo "podman version {podman}"; exit 0; fi\nexit 0\n', encoding="utf-8"
+            f'#!/bin/sh\nif [ "$1" = --version ]; then echo "podman version {podman}"; exit 0; fi\n'
+            'if [ "$1" = info ]; then echo "true false"; fi\nexit 0\n', encoding="utf-8"
         )
         (bin_dir / "podman-compose").write_text(
             "#!/bin/sh\n"
@@ -69,7 +70,7 @@ def box(tmp_path):
         script = (
             "set -u\n"
             f'PATH="{bin_dir}:/usr/bin:/bin"\nRUNTIME_DIR="{runtime}"\nPODMAN_RUNTIME_MODE={mode}\nPODMAN_MACHINE_NAME=jht-podman\n'
-            "CONTAINER_RUNTIME=podman\nerr() { echo \"error: $*\" >&2; }\n" + _source() + "\n" + body
+            "CONTAINER_RUNTIME=podman\nHOST_UID=1000\nPODMAN_NATIVE_REMOTE=0\nerr() { echo \"error: $*\" >&2; }\n" + _source() + "\n" + body
         )
         return subprocess.run(["bash", "-c", script], capture_output=True, text=True, env={**os.environ, "LC_ALL": "C"})
 

@@ -107,6 +107,10 @@ if [ "$CONTAINER_RUNTIME" = "podman" ]; then
   fi
   export PATH="$PODMAN_ADAPTER_BIN:$PATH"
   unset CONTAINER_CONNECTION
+  # Native Podman runs locally unless something turns its remote mode on: a
+  # default system connection alone does not, CONTAINER_HOST does (and
+  # remote = true in containers.conf, which the probe below refuses).
+  if [ "$PODMAN_RUNTIME_MODE" = "native" ]; then unset CONTAINER_HOST; fi
   export PODMAN_COMPOSE_WARNING_LOGS=false
   if command -v podman-compose >/dev/null 2>&1; then
     export PODMAN_COMPOSE_PROVIDER="$(command -v podman-compose)"
@@ -661,18 +665,28 @@ require_confined_podman_machine() {
   esac
 }
 
+# The local Podman of this user, rootless: the client answers for itself
+# (ServiceIsRemote false), so a remote service never stands in for it.
+PODMAN_NATIVE_REMOTE=0
 podman_native_rootless() {
   [ "$PODMAN_RUNTIME_MODE" = "native" ] || return 0
   [ "$HOST_UID" -ne 0 ] || return 1
-  local podman_bin rootless
+  local podman_bin state
   podman_bin="$(podman_binary)" || return 1
-  rootless="$("$podman_bin" info --format '{{.Host.Security.Rootless}}' 2>/dev/null)" || return 1
-  [ "$rootless" = "true" ]
+  state="$("$podman_bin" info --format '{{.Host.Security.Rootless}} {{.Host.ServiceIsRemote}}' 2>/dev/null)" || return 1
+  PODMAN_NATIVE_REMOTE=0
+  case "$state" in *" true") PODMAN_NATIVE_REMOTE=1; return 1 ;; esac
+  [ "$state" = "true false" ]
 }
 
 require_rootless_podman_native() {
   [ "$PODMAN_RUNTIME_MODE" = "native" ] || return 0
   podman_native_rootless && return 0
+  if [ "$PODMAN_NATIVE_REMOTE" -eq 1 ]; then
+    err "podman_remote_service_refused: su Linux JHT usa solo il Podman locale di questo utente, ma il client podman parla con un servizio remoto."
+    err "Togli remote = true da containers.conf (o CONTAINERS_CONF) per questo utente e riprova."
+    exit 1
+  fi
   err "podman_rootful_refused: JHT su Linux richiede Podman rootless eseguito da un utente non root."
   err "Accedi con l'utente JHT rootless configurato dall'installazione e riprova."
   exit 1
@@ -1025,7 +1039,7 @@ compose_file() {
           "$compose_bin" --podman-path "$podman_bin" -p "$project" -f "$file" "$@"
       )
     else
-      "$podman_bin" info >/dev/null 2>&1 \
+      podman_native_rootless \
         || { err "Il runtime Podman rootless locale non risponde."; return 1; }
       local override
       override="$(podman_native_override_ensure "$file")" \
