@@ -60,14 +60,14 @@ export default function FirstSetupAssistance({ host, locale, onOpen }: {
     }
   }
 
-  return <section className="onboarding-panel" aria-label={t.connect}>
+  return <section className="onboarding-aside" aria-label={t.connect}>
     <p>{t.intro}</p>
     {failure && <p role="alert"><strong>{t.unavailable}</strong> {failure.text} {failure.action} ({failure.code})</p>}
-    {probe && <section aria-label={setup.hostKeyAria}>
+    {probe && <section className="onboarding-aside__hostkey" aria-label={setup.hostKeyAria}>
       <h3>{setup.hostKeyTitle}</h3><p>{setup.hostKeyText}</p>
       <dl><dt>{setup.algorithm}</dt><dd>{probe.algorithm}</dd><dt>{setup.fingerprint}</dt><dd>{probe.fingerprint}</dd></dl>
-      <button type="button" disabled={busy} onClick={() => void connect(true)}>{setup.confirmFingerprint}</button>
-      <button type="button" disabled={busy} onClick={() => setProbe(null)}>{setup.cancel}</button>
+      <button className="onboarding-primary" type="button" disabled={busy} onClick={() => void connect(true)}>{setup.confirmFingerprint}</button>
+      <button className="onboarding-secondary" type="button" disabled={busy} onClick={() => setProbe(null)}>{setup.cancel}</button>
     </section>}
     {host.kind === "vps" && <>
       <p>{t.savedIntro}</p>

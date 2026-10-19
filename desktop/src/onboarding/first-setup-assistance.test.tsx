@@ -191,6 +191,7 @@ describe("official FIRSTSETUP assistance connection", () => {
     await user.click(screen.getByRole("button", { name: new RegExp(t.startSetup) }));
     await user.click(screen.getByRole("radio", { name: new RegExp(t.vpsServer) }));
     await user.type(screen.getByLabelText(t.vpsAddress), host.address);
+    await user.type(screen.getByLabelText(t.sshUser), host.user);
     await user.click(screen.getByRole("button", { name: t.sshKeyPicker.choose }));
     await user.click(screen.getByRole("button", { name: ASSISTANCE_TEXT.en.connect }));
     // The panel first draws a provisional heading and replaces it once its session exists:

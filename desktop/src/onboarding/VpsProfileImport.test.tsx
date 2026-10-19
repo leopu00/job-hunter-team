@@ -42,6 +42,7 @@ function bridge(overrides: Partial<ProfileImportBridge> = {}): ProfileImportBrid
 async function openAndFill(user: ReturnType<typeof userEvent.setup>) {
   await user.click(screen.getByRole("button", { name: /importa profilo/i }));
   await user.type(screen.getByLabelText(/host o indirizzo ip/i), " host.example.invalid ");
+  await user.type(screen.getByLabelText(/utente ssh/i), "ubuntu");
   await user.click(screen.getByRole("button", { name: /scegli chiave ssh/i }));
 }
 
@@ -85,7 +86,7 @@ describe("VpsProfileImport", () => {
     expect(await screen.findByText(PROBE.fingerprint)).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: /riusa il profilo/i })).toHaveFocus();
     expect(native.probe).toHaveBeenCalledWith({
-      kind: "vps", address: "host.example.invalid", user: "root", port: 22,
+      kind: "vps", address: "host.example.invalid", user: "ubuntu", port: 22,
       keyPath: "/synthetic/private/id_ed25519",
     });
     expect(native.confirm).not.toHaveBeenCalled();
