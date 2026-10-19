@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { fakeSupabase } from "../test-support/fake-supabase";
-import { loadAgentStatuses, parseAgentStatuses, STATUS_STALE_MS, stateOf, tagOf } from "./status";
+import { tagDetail, loadAgentStatuses, parseAgentStatuses, STATUS_STALE_MS, stateOf, tagOf } from "./status";
 
 const AT = "2026-09-27T20:00:00Z";
 const NOW = Date.parse(AT) + 30_000;
@@ -158,3 +158,20 @@ describe("the tag of a published state", () => {
   });
 });
 
+
+describe("tagDetail", () => {
+  const NOW_MS = Date.parse("2026-10-19T12:00:00Z");
+  it("says why a stopped agent is stopped and until when, in the person's language", () => {
+    const blocked = tagDetail({ status: "unknown", state: "bloccato", reason: "limite_5h", until: NOW_MS + 90 * 60_000 }, "en", NOW_MS);
+    expect(blocked).toMatch(/^5-hour limit · retry /);
+    expect(tagDetail({ status: "unknown", state: "bloccato", reason: "limite_5h", until: NOW_MS + 90 * 60_000 }, "it", NOW_MS)).not.toBe(blocked);
+    expect(tagDetail({ status: "unknown", state: "aspetta_umano", since: NOW_MS - 30 * 60_000 }, "en", NOW_MS)).toMatch(/30/);
+  });
+
+  it("says nothing for an agent at work or free, and guesses nothing for a box that says no state", () => {
+    expect(tagDetail({ status: "working", state: "lavora", since: NOW_MS - 60_000 }, "en", NOW_MS)).toBeNull();
+    expect(tagDetail({ status: "idle", state: "idle", since: NOW_MS - 60_000 }, "en", NOW_MS)).toBeNull();
+    expect(tagDetail({ status: "unknown" }, "en", NOW_MS)).toBeNull();
+    expect(tagDetail({ status: "idle" }, "en", NOW_MS)).toBeNull();
+  });
+});

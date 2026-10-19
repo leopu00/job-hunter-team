@@ -36,7 +36,8 @@ import { feetAnchor, pickCell } from "./frames";
 import { assetUrl } from "./asset-url";
 import { READABLE_PX, readableScale } from "./readable";
 import { allFurniture, cameraBounds } from "../layout-items";
-import { tagOf } from "../status";
+import { tagDetail, tagOf } from "../status";
+import { appLocale } from "../../lib/app-locale";
 import { boxLights, darkness, GRAIN_AMOUNT, LAMPS, lighting, localHour, outsideBands, vignetteAlpha, type Pool } from "./atmosphere";
 import { RIG_SCALE } from "../contract";
 
@@ -317,7 +318,7 @@ export async function createOfficeScene(host: HTMLElement, options: OfficeSceneO
   const bubbles = new Map<string, { node: Container; text: string }>();
   // The status tags (AgentStateTag): what the box published, never guessed.
   let statuses: AgentStatuses | null = null;
-  const tags = new Map<string, { node: Container; key: string }>();
+  const tags = new Map<string, { node: Container; h: number; key: string }>();
   const drawTags = (poses: AgentPose[]) => {
     const live = new Set<string>();
     const now = Date.now();
@@ -326,12 +327,15 @@ export async function createOfficeScene(host: HTMLElement, options: OfficeSceneO
       const sprite = agents.get(pose.uid);
       if (!status || !sprite) continue;
       live.add(pose.uid);
+      // who (the session's name), what (the state) and, for a stopped agent, why and until when
       const { label, color } = tagOf(status, now);
-      const key = `${label}|${color}`;
+      const name = pose.uid.toUpperCase();
+      const detail = tagDetail(status, appLocale(), now);
+      const key = `${name}|${label}|${color}|${detail}`;
       let entry = tags.get(pose.uid);
       if (!entry || entry.key !== key) {
         entry?.node.destroy({ children: true });
-        entry = { node: stateTag(label, color), key };
+        entry = { ...stateTag(name, label, color, detail), key };
         tags.set(pose.uid, entry);
         overlay.addChild(entry.node);
       }
@@ -340,7 +344,7 @@ export async function createOfficeScene(host: HTMLElement, options: OfficeSceneO
       const k = readableScale(11, controls.camera().scale, READABLE_PX.stateTag);
       entry.node.scale.set(k);
       const top = sprite.getLocalBounds().y * Math.abs(sprite.scale.y);
-      entry.node.position.set(pose.pos.x, pose.pos.y + top - 12 * k - 6);
+      entry.node.position.set(pose.pos.x, pose.pos.y + top - (entry.h / 2) * k - 6);
     }
     for (const [uid, entry] of tags) {
       if (live.has(uid)) continue;
@@ -970,22 +974,34 @@ function frontOccluder(where: Rect, tex: Texture, cut: number, flip: boolean): S
   return s;
 }
 
-/** AgentStateTag._draw: a dark plate with the status colour's border, the (unlit) LED and the label. */
-function stateTag(label: string, color: number): Container {
+/**
+ * AgentStateTag._draw: a dark plate with the status colour's border and the (unlit) LED. First
+ * line: the agent's name and its state; second line, for a stopped agent: why, and until when.
+ */
+function stateTag(name: string, label: string, color: number, detail: string | null): { node: Container; h: number } {
   const c = new Container();
   c.eventMode = "none";
-  const text = new Text({ text: label, style: { fontFamily: FONT, fontSize: 11, fontWeight: "700", fill: 0xf0f0fa } });
-  const w = text.width + 24;
-  const h = 24;
+  const who = new Text({ text: name, style: { fontFamily: FONT, fontSize: 11, fontWeight: "700", fill: 0xf0f0fa } });
+  const what = new Text({ text: label, style: { fontFamily: FONT, fontSize: 11, fontWeight: "700", fill: color } });
+  const why = detail ? new Text({ text: detail, style: { fontFamily: FONT, fontSize: 10, fontWeight: "500", fill: 0xc9d1d9 } }) : null;
+  const gap = 8;
+  const w = Math.max(who.width + gap + what.width, why?.width ?? 0) + 24;
+  const h = why ? 38 : 24;
   const g = new Graphics()
     .rect(-w / 2, -h / 2, w, h)
     .fill({ color: 0x16161d, alpha: 0.96 })
     .rect(-w / 2, -h / 2, w, h)
     .stroke({ color, alpha: 0.85, width: 1.4 });
+  const line = -h / 2 + 12;
   // the game lights this LED from the CPU sampler, which the cloud does not have: always unlit
-  g.circle(-w / 2 + 9, 0, 3).fill(0x252530);
-  g.circle(-w / 2 + 9, 0, 2.7).stroke({ color: 0x4a4a5e, alpha: 0.8, width: 0.8 });
-  text.position.set(-w / 2 + 16, -text.height / 2);
-  c.addChild(g, text);
-  return c;
+  g.circle(-w / 2 + 9, line, 3).fill(0x252530);
+  g.circle(-w / 2 + 9, line, 2.7).stroke({ color: 0x4a4a5e, alpha: 0.8, width: 0.8 });
+  who.position.set(-w / 2 + 16, line - who.height / 2);
+  what.position.set(who.x + who.width + gap, line - what.height / 2);
+  c.addChild(g, who, what);
+  if (why) {
+    why.position.set(-w / 2 + 16, line + 7);
+    c.addChild(why);
+  }
+  return { node: c, h };
 }

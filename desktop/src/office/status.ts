@@ -1,5 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { isAgentState, isKnownReason } from "@/lib/agent-state";
+import { describeAgentState, isAgentState, isAnomalous, isKnownReason } from "@/lib/agent-state";
 import type { AgentState } from "@/lib/agent-state";
 import type { AgentStatus, AgentStatuses } from "./contract";
 
@@ -146,4 +146,16 @@ function stateTag(s: AgentStatus, now: number): { label: string; color: number }
     default:
       return { label: "UNKNOWN", color: UNKNOWN_COLOR };
   }
+}
+
+/**
+ * The tag's second line: why a stopped agent is stopped and until when, or how long ago it
+ * stopped (the catalog's sentence, in the person's language: describeAgentState). Null for an
+ * agent at work or free, and for a box that says no state: nothing is guessed.
+ */
+export function tagDetail(s: AgentStatus, locale: string, now = Date.now()): string | null {
+  const info = stateOf(s);
+  if (!info || !isAnomalous(info.state)) return null;
+  const line = describeAgentState(info, locale, now);
+  return [line.reason, line.when].filter(Boolean).join(" · ") || null;
 }
