@@ -849,6 +849,23 @@
   justify-content: flex-end;
 }
 
+/* The app window on a 1366x768 laptop is ~660 px tall: the first action of every
+   step has to be on screen without a scroll nobody knows to make. */
+@media (max-height: 800px) {
+  .onboarding-layout {
+    padding-top: 12px;
+  }
+  .onboarding-card,
+  .onboarding-runtime-card {
+    min-height: 0;
+    padding-block: 24px;
+  }
+  /* the initial of the name is decoration: the greeting under it says the name */
+  .onboarding-account-mark {
+    display: none;
+  }
+}
+
 .onboarding-provider-console {
   margin-top: 18px;
   padding: 14px;

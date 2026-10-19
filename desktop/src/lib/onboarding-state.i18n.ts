@@ -26,7 +26,7 @@ const it = {
   hostKeyChangedTitle: "Chiave del server cambiata",
   failure: {
     "provider-login": "L’accesso al provider non è stato verificato. Riprova.",
-    "ssh-host-key": "L’identità SSH del server non è stata verificata. Controlla il fingerprint e riprova.",
+    "ssh-host-key": "L’identità SSH del server non è stata verificata. Controlla l’impronta e riprova.",
     "team-start": "Il team non risulta ancora operativo. Riprova.",
     assistant: "Assistente o chat diretta non risultano ancora pronti. Riprova.",
     container: "Il container non risulta attivo. Verifica il runtime e riprova.",

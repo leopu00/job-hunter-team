@@ -96,6 +96,7 @@ function RuntimeView({ host, platform, t, locale, runtime, activity, onRetry, on
   const [now, setNow] = useState(() => Date.now());
   const pendingRef = useRef(false);
   const failureHeadingRef = useRef<HTMLHeadingElement>(null);
+  const actionsRef = useRef<HTMLDivElement>(null);
   const focusedFailureKeyRef = useRef<string | null>(null);
   const failureKey = runtime.status === "failed" ? `${runtime.stage}:${runtime.code ?? "unknown"}` : null;
 
@@ -123,6 +124,15 @@ function RuntimeView({ host, platform, t, locale, runtime, activity, onRetry, on
     focusedFailureKeyRef.current = failureKey;
     failureHeadingRef.current?.focus();
   }, [failureKey]);
+
+  // When the person has to act (confirm the fingerprint, sign in, start the
+  // team) the button is at the bottom of a tall page: bring it into view, or
+  // a tester in a 660 px window sees «action required» and nothing to press.
+  const actionKey = runtime.status === "action-required" ? `${runtime.stage}:${sshHostKey ? "key" : ""}` : null;
+  useEffect(() => {
+    if (!actionKey) return;
+    actionsRef.current?.scrollIntoView?.({ block: "end", behavior: "smooth" });
+  }, [actionKey]);
 
   if (runtime.status === "ready") {
     return (
@@ -344,7 +354,7 @@ function RuntimeView({ host, platform, t, locale, runtime, activity, onRetry, on
           {freeSpaceResult && <p className="onboarding-free-space" role="status">{freeSpaceResult.text} {freeSpaceResult.action}</p>}
           {actionFailed && <p className="onboarding-error" role="alert">{t.actionFailed}</p>}
           {failed && runtime.retryable === false && !runtime.action && runtime.code !== "container_version_incompatible" && <p className="onboarding-error">{t.fixData}</p>}
-          <div className="onboarding-runtime-actions">
+          <div className="onboarding-runtime-actions" ref={actionsRef}>
             {!failed && <button className="onboarding-secondary" type="button" onClick={() => invoke(onRestart)} disabled={pending}>
               {t.restart}
             </button>}
