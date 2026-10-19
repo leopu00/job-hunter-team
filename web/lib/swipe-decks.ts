@@ -28,7 +28,7 @@ export async function getLatestFeedbackByLegacyId(
   // e le posizioni giudicate prima tornerebbero nel mazzo da giudicare.
   // Ordine chiuso da posizione e azione, così le pagine non si sovrappongono.
   // Non da `id`: la colonna non è nella ricevuta dello schema live di
-  // position_feedback (089.web.columns.position_feedback), e due eventi
+  // position_feedback (095.web.columns.position_feedback), e due eventi
   // della stessa posizione con la stessa azione nello stesso microsecondo
   // sono la stessa cosa per chi legge.
   const { data, error } = await fetchPostgrestRows<any>(

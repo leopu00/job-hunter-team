@@ -33,13 +33,15 @@ const { renderToStaticMarkup } = webRequire("react-dom/server");
 const LOCALES: Locale[] = ["it", "en", "hu", "es", "de", "fr", "pt"];
 
 describe("motivo obbligatorio sull'esclusione", () => {
-  it("tutti e sette i motivi sono raggiungibili", () => {
+  it("tutti e dieci i motivi sono raggiungibili", () => {
     // Il difetto trovato per strada: `ReasonKey` ne dichiarava sette e
     // l'elenco mostrato ne aveva sei — `already_applied` era definito e
-    // invisibile, cioè inesistente per chi usa il prodotto.
-    expect(REASON_ORDER).toHaveLength(7);
+    // invisibile, cioè inesistente per chi usa il prodotto. Dal 19/10 l'elenco
+    // è `shared/feedback-reasons.json`: il tipo e il menu leggono la stessa fonte.
+    expect(REASON_ORDER).toHaveLength(10);
     expect(REASON_ORDER).toContain("already_applied");
-    expect(new Set(REASON_ORDER).size).toBe(7);
+    expect(REASON_ORDER).toContain("too_senior");
+    expect(new Set(REASON_ORDER).size).toBe(10);
   });
 
   it("senza motivo non si registra niente", () => {
@@ -58,10 +60,11 @@ describe("motivo obbligatorio sull'esclusione", () => {
     });
   });
 
-  it("«altro» senza testo non è un motivo", () => {
+  it("«altro» non pretende più un testo: la nota è facoltativa", () => {
     expect(negativeSignalFor("other", "   ")).toEqual({
-      kind: "invalid",
-      missing: "text",
+      kind: "exclude",
+      reason: "other",
+      feedback: { reason: "other" },
     });
     expect(negativeSignalFor("other", "cercano un profilo junior")).toEqual({
       kind: "exclude",
@@ -69,9 +72,15 @@ describe("motivo obbligatorio sull'esclusione", () => {
       note: "cercano un profilo junior",
       feedback: {
         reason: "other",
-        comment: "cercano un profilo junior",
+        note: "cercano un profilo junior",
       },
     });
+  });
+
+  it("la nota è al massimo di 200 caratteri e ripulita", () => {
+    const signal = negativeSignalFor("too_senior", `  ${"x".repeat(300)} \u202e`);
+    expect(signal.kind).toBe("exclude");
+    if (signal.kind === "exclude") expect(signal.note).toHaveLength(200);
   });
 
   it("scaduta e già gestita ESCLUDONO e non insegnano niente", () => {
@@ -81,7 +90,9 @@ describe("motivo obbligatorio sull'esclusione", () => {
       // La forma è quella che la route user-exclude si aspetta.
       expect(signal).toEqual({ kind: "exclude", reason });
     }
-    expect(FACTUAL_REASONS).toEqual(["closed", "already_applied"]);
+    expect([...FACTUAL_REASONS].sort()).toEqual(
+      ["already_applied", "closed", "scam_or_gone"].sort(),
+    );
   });
 
   it("i motivi di gusto escludono e conservano il feedback", () => {
@@ -89,10 +100,12 @@ describe("motivo obbligatorio sull'esclusione", () => {
       (r) => !(FACTUAL_REASONS as string[]).includes(r),
     );
     expect(taste).toEqual([
-      "not_interested",
-      "mismatch",
+      "too_senior",
+      "too_junior",
+      "wrong_location",
+      "salary_low",
+      "wrong_stack",
       "company",
-      "conditions",
       "other",
     ]);
     for (const reason of taste) {
@@ -100,19 +113,19 @@ describe("motivo obbligatorio sull'esclusione", () => {
       expect(signal.kind, `${reason} deve escludere`).toBe("exclude");
       if (signal.kind === "exclude") {
         expect(signal.reason).toBe(reason);
-        expect(signal.feedback).toEqual({ reason, comment: "nota" });
+        expect(signal.feedback).toEqual({ reason, note: "nota" });
       }
     }
   });
 
   it("scaduta e non-interessante escludono entrambe, ma solo il gusto insegna", () => {
     const expired = negativeSignalFor("closed", "");
-    const disliked = negativeSignalFor("not_interested", "");
+    const disliked = negativeSignalFor("too_senior", "");
     expect(expired.kind).toBe("exclude");
     expect(disliked.kind).toBe("exclude");
     if (expired.kind === "exclude") expect(expired.feedback).toBeUndefined();
     if (disliked.kind === "exclude") {
-      expect(disliked.feedback).toEqual({ reason: "not_interested" });
+      expect(disliked.feedback).toEqual({ reason: "too_senior" });
     }
   });
 });
@@ -124,7 +137,7 @@ describe("selettore del motivo", () => {
   // traduzioni si verificano sul dizionario, sotto: fingere un `it.each` sulle
   // lingue renderebbe sette volte la stessa cosa dicendo di averne provate
   // sette.
-  it("mostra i sette motivi, nell'ordine dichiarato", () => {
+  it("mostra i dieci motivi, nell'ordine dichiarato", () => {
     const html = renderToStaticMarkup(
       createElement(ReasonPicker, {
         value: "",
@@ -153,7 +166,7 @@ describe("selettore del motivo", () => {
       // Etichette duplicate dentro la stessa lingua renderebbero due motivi
       // indistinguibili nel menu.
       const labels = REASON_ORDER.map((k) => REASON_LABELS[locale][k]);
-      expect(new Set(labels).size, `duplicati in ${locale}`).toBe(7);
+      expect(new Set(labels).size, `duplicati in ${locale}`).toBe(10);
     }
   });
 });

@@ -9,6 +9,7 @@ import {
   applyCloud,
   type ExcludeOutcome,
 } from "@/lib/positions/user-exclude-cloud";
+import { NOTE_MAX, acceptReason, cleanNote } from "@/lib/feedback-reasons";
 import { isDemoLegacyId } from "@/lib/demo/data";
 import { activeDemoPersona } from "@/lib/demo/mode";
 
@@ -30,15 +31,8 @@ export const dynamic = "force-dynamic";
 //      rientra al boot via il push/pull esistente.
 // Vedi pattern in write-request/route.ts + migration 041_positions_user_excluded.
 
-const VALID_REASONS = new Set([
-  "closed", // Chiusa / non più attiva
-  "not_interested", // Non mi interessa
-  "mismatch", // Non in linea col mio profilo (22/07, sostituisce already_applied nella UI)
-  "already_applied", // Già candidato / gestita altrove (legacy: righe esistenti)
-  "company", // Azienda non desiderata
-  "conditions", // Condizioni inadatte (stipendio/sede)
-  "other", // Altro (richiede note)
-]);
+// JHT-T05: i motivi sono il vocabolario chiuso `shared/feedback-reasons.json`
+// (lo stesso del CLI e dell'app); un codice del vecchio elenco vale `other`.
 
 type ApplyResult = StepResult<ExcludeOutcome>;
 
@@ -167,23 +161,17 @@ async function handle(
       reason?: string;
       note?: string;
     };
-    reason = body.reason;
-    note =
-      typeof body.note === "string"
-        ? body.note.trim().slice(0, 500)
-        : undefined;
-    if (!reason || !VALID_REASONS.has(reason)) {
-      return NextResponse.json(
-        { error: `Causa non valida: '${reason ?? ""}'` },
-        { status: 400 },
-      );
+    const accepted = acceptReason(body.reason);
+    if (!accepted) {
+      return NextResponse.json({ error: "reason_invalid" }, { status: 400 });
     }
-    if (reason === "other" && !note) {
-      return NextResponse.json(
-        { error: "Per 'Altro' serve un testo che spieghi la causa" },
-        { status: 400 },
-      );
+    reason = accepted;
+    // JHT-T05: la nota è facoltativa (anche per «Altro»), max 200 caratteri.
+    const text = cleanNote(body.note);
+    if (text.length > NOTE_MAX) {
+      return NextResponse.json({ error: "note_too_long" }, { status: 400 });
     }
+    note = text || undefined;
   }
 
   // I tre rami (desktop nativo → solo locale; browser col box acceso →

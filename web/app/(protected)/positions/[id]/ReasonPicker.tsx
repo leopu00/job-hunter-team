@@ -5,15 +5,16 @@
 // (`FeedbackButtons`).
 //
 // Qui dentro non c'è nessuna decisione su COSA farne: il componente
-// raccoglie motivo e testo libero; `negativeSignalFor` decide se al comando
+// raccoglie il motivo (un codice del vocabolario chiuso) e una nota privata
+// facoltativa di max 200 caratteri, che nessun agente legge; `negativeSignalFor` decide se al comando
 // di esclusione va affiancato anche un segnale di preferenza.
 
 import { useLocale } from "@/lib/use-locale";
+import { NOTE_MAX } from "@/lib/feedback-reasons";
 import {
   PICKER_T,
   REASON_LABELS,
   REASON_ORDER,
-  needsFreeText,
   type ReasonKey,
 } from "./exclusion-reasons";
 
@@ -62,13 +63,15 @@ export function ReasonPicker({
           </option>
         ))}
       </select>
-      {needsFreeText(value) && (
+      {value && (
         <input
           type="text"
           value={note}
           onChange={(e) => onNoteChange(e.target.value)}
-          maxLength={500}
+          maxLength={NOTE_MAX}
           placeholder={t.notePlaceholder}
+          title={t.notePrivate}
+          aria-label={`${t.notePlaceholder}: ${t.notePrivate}`}
           disabled={disabled}
           className="px-2 py-2 rounded-lg border text-[11px] w-40 min-w-0"
           style={{

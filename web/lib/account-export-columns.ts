@@ -314,6 +314,9 @@ export const EXPORT_COLUMNS: Record<string, readonly string[]> = {
     "reason",
     "created_at",
     "comment",
+    // JHT-T05/mig 094: la nota privata dell'utente sul giudizio. È sua, quindi
+    // nell'export, anche se nessun agente la legge.
+    "note",
     "score",
     "direction",
   ],
@@ -348,6 +351,7 @@ export const EXPORT_COLUMNS: Record<string, readonly string[]> = {
     "updated_at",
   ],
   position_views: ["position_id", "viewed_at"],
+  profile_exclusions: ["reason", "status", "positions_at_decision", "decided_at"],
   // Senza `restart_token` e `last_restart_token`.
   team_state: [
     "should_run",
@@ -485,6 +489,7 @@ const PRIMARY_KEYS_NOT_ID: Record<string, readonly string[]> = {
   user_settings: ["user_id"],
   position_user_notes: ["user_id", "position_id", "origin"],
   position_views: ["user_id", "position_id"],
+  profile_exclusions: ["user_id", "reason"],
   team_state: ["user_id"],
   team_directive_request_ledger: ["user_id", "request_id"],
   user_onboarding_state: ["user_id"],

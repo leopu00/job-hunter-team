@@ -130,16 +130,16 @@ describe("un token di dispositivo può registrare il giudizio dell'utente", () =
         action: "star",
         score: 5,
         direction: "more_like_this",
-        reason: "perfetta",
-        comment: "stack giusto",
+        reason: "wrong_stack",
+        note: "stack giusto",
       }),
       params,
     );
     expect(db.inserted[0]).toMatchObject({
       score: 5,
       direction: "more_like_this",
-      reason: "perfetta",
-      comment: "stack giusto",
+      reason: "wrong_stack",
+      note: "stack giusto",
     });
   });
 });

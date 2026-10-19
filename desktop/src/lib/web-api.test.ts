@@ -3,7 +3,7 @@ import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import { installApiBridge, shellApi } from "../shell/api-bridge";
 import { fakeSupabase, type FakeQuery, type FakeResult } from "../test-support/fake-supabase";
-import { createWebApiFetch, EXCLUDE_REASONS } from "./web-api";
+import { createWebApiFetch } from "./web-api";
 
 const USER = "00000000-0000-4000-8000-000000000001";
 const ok = (data: unknown): FakeResult => ({ data, error: null });
@@ -20,7 +20,7 @@ describe("feedback", () => {
     const api = createWebApiFetch(client);
     const res = await api(
       "/api/positions/42/feedback",
-      post({ action: "dislike", score: 1, direction: "less_like_this", reason: "company", comment: "no" }),
+      post({ action: "dislike", score: 1, direction: "less_like_this", reason: "company", note: "no" }),
     );
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ feedback: { id: "fb-1", table: "position_feedback" } });
@@ -31,7 +31,7 @@ describe("feedback", () => {
         position_legacy_id: "42",
         action: "dislike",
         reason: "company",
-        comment: "no",
+        note: "no",
         score: 1,
         direction: "less_like_this",
       },
@@ -47,7 +47,24 @@ describe("feedback", () => {
       (await api("/api/positions/1/feedback", post({ action: "like", direction: "sideways" }))).status,
     ).toBe(400);
     expect((await api("/api/positions/1/feedback", { method: "POST", body: "{not json" })).status).toBe(400);
+    // JHT-T05: the reason is a code of the closed list, the note is at most 200 characters.
+    expect((await api("/api/positions/1/feedback", post({ action: "dislike", reason: "troppo senior" }))).status).toBe(400);
+    expect((await api("/api/positions/1/feedback", post({ action: "dislike", note: "x".repeat(201) }))).status).toBe(400);
     expect(queries).toHaveLength(0);
+  });
+
+  it("answers the profile-exclusion preference, and only for the codes a proposal can name", async () => {
+    const { client, queries } = fakeSupabase(() => ok({ reason: "too_senior", status: "dismissed" }));
+    const api = createWebApiFetch(client);
+    for (const reason of ["other", "closed", "boring"]) {
+      expect((await api("/api/profile-exclusions", post({ reason, status: "accepted" }))).status, reason).toBe(400);
+    }
+    expect((await api("/api/profile-exclusions", post({ reason: "too_senior", status: "maybe" }))).status).toBe(400);
+    expect(queries).toHaveLength(0);
+    const saved = await api("/api/profile-exclusions", post({ reason: "too_senior", status: "dismissed", positions: 4 }));
+    expect(saved.status).toBe(200);
+    expect(queries[0].table).toBe("profile_exclusions");
+    expect(queries[0].op("upsert")?.[0]).toMatchObject({ user_id: USER, reason: "too_senior", status: "dismissed", positions_at_decision: 4 });
   });
 
   it("needs a session", async () => {
@@ -124,23 +141,26 @@ describe("user-exclude", () => {
     expect(queries[1].op("update")?.[0]).toMatchObject({ status: "ready", user_excluded_reason: null });
   });
 
-  it("refuses an unknown reason, and 'other' without a note", async () => {
+  it("refuses an unknown reason and a note over 200 characters, and accepts 'other' without a note", async () => {
     const { client, queries } = fakeSupabase(positions("scored"));
     const api = createWebApiFetch(client);
     expect((await api("/api/positions/9/user-exclude", post({ reason: "boring" }))).status).toBe(400);
-    expect((await api("/api/positions/9/user-exclude", post({ reason: "other", note: "  " }))).status).toBe(400);
+    expect((await api("/api/positions/9/user-exclude", post({ reason: "other", note: "x".repeat(201) }))).status).toBe(400);
     expect(queries).toHaveLength(0);
+    expect((await api("/api/positions/9/user-exclude", post({ reason: "other", note: "  " }))).status).toBe(200);
   });
 
-  it("has the reasons of the web route, no more and no fewer", () => {
+  it("takes its reasons from the same closed list as the web route", () => {
     const route = readFileSync(
       resolve(import.meta.dirname, "../../../web/app/api/positions/[legacyId]/user-exclude/route.ts"),
       "utf8",
     );
-    const block = /VALID_REASONS\s*=\s*new Set\(\[([\s\S]*?)\]\)/.exec(route);
-    expect(block, "VALID_REASONS non trovato nella route").not.toBeNull();
-    const reasons = [...block![1].matchAll(/"([a-z_]+)"/g)].map(([, reason]) => reason);
-    expect([...EXCLUDE_REASONS].sort()).toEqual(reasons.sort());
+    const source = readFileSync(resolve(import.meta.dirname, "./web-api.ts"), "utf8");
+    // One list, `shared/feedback-reasons.json`, read through acceptReason by both.
+    for (const code of [route, source]) {
+      expect(code).toContain("acceptReason");
+      expect(code).not.toMatch(/VALID_REASONS\s*=\s*new Set|EXCLUDE_REASONS\s*=/);
+    }
   });
 });
 

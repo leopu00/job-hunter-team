@@ -10,52 +10,43 @@
 // e `position_feedback.reason`); le etichette sono i18n e si possono
 // riscrivere senza toccare i dati.
 import type { Locale } from "@/i18n/config";
+import {
+  NOTE_MAX,
+  REASON_KEYS,
+  cleanNote,
+  isFactualReason as isFactualCode,
+  type ReasonKey,
+} from "@/lib/feedback-reasons";
 
-export type ReasonKey =
-  | "closed"
-  | "not_interested"
-  | "mismatch"
-  | "already_applied"
-  | "company"
-  | "conditions"
-  | "other";
+export type { ReasonKey };
 
-/** Ordine in cui l'utente li vede. Tutti e sette: mancarne uno lo rende
- *  inesistente per chi usa il prodotto, anche se il tipo lo conosce. */
-export const REASON_ORDER: ReasonKey[] = [
-  "closed",
-  "not_interested",
-  "mismatch",
-  "already_applied",
-  "company",
-  "conditions",
-  "other",
-];
+/** Ordine in cui l'utente li vede: l'elenco del vocabolario chiuso, tutti e dieci. */
+export const REASON_ORDER = REASON_KEYS as readonly ReasonKey[] as ReasonKey[];
 
 /**
  * I motivi che parlano della POSIZIONE, non dei gusti di chi la guarda.
  *
- * La distinzione non è filosofia: `agents/scout/scout.md` dice che con
- * `latest_direction='less_like_this'` lo Scout «deprioritizza» quella
- * azienda / famiglia di ruolo / località nelle ricerche future. Una
- * posizione ottima ma SCADUTA archiviata come «non interessante» insegna
- * quindi a evitarne di simili: è il difetto che l'operatore ha segnalato
- * cercando lavoro davvero.
- *
- * Per questi due motivi il gesto non deve produrre nessun segnale di gusto:
- * la posizione esce dal giro (esclusione) e il team non impara niente.
+ * `agents/scout/scout.md` dice che con `latest_direction='less_like_this'` lo
+ * Scout «deprioritizza» quella azienda / famiglia di ruolo / località nelle
+ * ricerche future. Una posizione ottima ma SCADUTA archiviata come «non
+ * interessante» insegna quindi a evitarne di simili. Per questi motivi
+ * (`closed`, `already_applied`, `scam_or_gone`) il gesto non produce nessun
+ * segnale di gusto: la posizione esce dal giro e il team non impara niente.
  */
-export const FACTUAL_REASONS: ReasonKey[] = ["closed", "already_applied"];
+export const FACTUAL_REASONS: ReasonKey[] = REASON_ORDER.filter((r) =>
+  isFactualCode(r),
+);
 
 export function isFactualReason(reason: string | null | undefined): boolean {
-  return (
-    !!reason && (FACTUAL_REASONS as readonly string[]).includes(reason as never)
-  );
+  return isFactualCode(reason);
 }
 
-/** Il motivo «altro» esiste solo insieme al testo che lo spiega. */
-export function needsFreeText(reason: string | null | undefined): boolean {
-  return reason === "other";
+/**
+ * Dal 19/10 (JHT-T05) nessun motivo pretende un testo: la nota è facoltativa,
+ * max 200 caratteri, e resta all'utente.
+ */
+export function needsFreeText(_reason: string | null | undefined): boolean {
+  return false;
 }
 
 /**
@@ -65,14 +56,15 @@ export function needsFreeText(reason: string | null | undefined): boolean {
  *
  * I motivi di gusto conservano anche il feedback `less_like_this`, ma solo
  * DOPO che l'esclusione canonica è stata confermata. I motivi fattuali non
- * insegnano preferenze allo Scout.
+ * insegnano preferenze allo Scout. La nota viaggia come `note` sia
+ * nell'esclusione sia nel feedback, e nessun agente la legge.
  */
 export type NegativeSignal =
   | {
       kind: "exclude";
       reason: ReasonKey;
       note?: string;
-      feedback?: { reason: ReasonKey; comment?: string };
+      feedback?: { reason: ReasonKey; note?: string };
     }
   | { kind: "invalid"; missing: "reason" | "text" };
 
@@ -84,8 +76,7 @@ export function negativeSignalFor(
   if (!key || !REASON_ORDER.includes(key)) {
     return { kind: "invalid", missing: "reason" };
   }
-  const text = (note ?? "").trim();
-  if (needsFreeText(key) && !text) return { kind: "invalid", missing: "text" };
+  const text = cleanNote(note).slice(0, NOTE_MAX);
   if (isFactualReason(key)) {
     return { kind: "exclude", reason: key, ...(text ? { note: text } : {}) };
   }
@@ -93,114 +84,142 @@ export function negativeSignalFor(
     kind: "exclude",
     reason: key,
     ...(text ? { note: text } : {}),
-    feedback: { reason: key, ...(text ? { comment: text } : {}) },
+    feedback: { reason: key, ...(text ? { note: text } : {}) },
   };
 }
 
 export const REASON_LABELS: Record<Locale, Record<ReasonKey, string>> = {
   it: {
-    closed: "Chiusa / non più attiva",
-    not_interested: "Non mi interessa",
-    mismatch: "Non in linea col mio profilo",
-    already_applied: "Già candidato / gestita altrove",
+    too_senior: "Troppo senior",
+    too_junior: "Troppo junior",
+    wrong_location: "Sede sbagliata",
+    salary_low: "Stipendio troppo basso",
+    wrong_stack: "Stack non adatto",
     company: "Azienda non desiderata",
-    conditions: "Condizioni inadatte (stipendio/sede)",
-    other: "Altro…",
+    scam_or_gone: "Truffa o non più valida",
+    closed: "Chiusa / non più attiva",
+    already_applied: "Già candidato / gestita altrove",
+    other: "Altro",
   },
   en: {
-    closed: "Closed / no longer active",
-    not_interested: "Not interested",
-    mismatch: "Not a match for my profile",
-    already_applied: "Already applied / handled elsewhere",
+    too_senior: "Too senior",
+    too_junior: "Too junior",
+    wrong_location: "Wrong location",
+    salary_low: "Salary too low",
+    wrong_stack: "Wrong stack",
     company: "Unwanted company",
-    conditions: "Unsuitable conditions (salary/location)",
-    other: "Other…",
+    scam_or_gone: "Scam or gone",
+    closed: "Closed / no longer active",
+    already_applied: "Already applied / handled elsewhere",
+    other: "Other",
   },
   es: {
-    closed: "Cerrada / ya no activa",
-    not_interested: "No me interesa",
-    mismatch: "No encaja con mi perfil",
-    already_applied: "Ya inscrito / gestionada en otro sitio",
+    too_senior: "Demasiado senior",
+    too_junior: "Demasiado junior",
+    wrong_location: "Ubicación inadecuada",
+    salary_low: "Salario demasiado bajo",
+    wrong_stack: "Stack inadecuado",
     company: "Empresa no deseada",
-    conditions: "Condiciones inadecuadas (salario/ubicación)",
-    other: "Otro…",
+    scam_or_gone: "Estafa o ya no existe",
+    closed: "Cerrada / ya no activa",
+    already_applied: "Ya inscrito / gestionada en otro sitio",
+    other: "Otro",
   },
   fr: {
-    closed: "Fermée / plus active",
-    not_interested: "Pas intéressé",
-    mismatch: "Pas adapté à mon profil",
-    already_applied: "Déjà postulé / traité ailleurs",
+    too_senior: "Trop senior",
+    too_junior: "Trop junior",
+    wrong_location: "Mauvais lieu",
+    salary_low: "Salaire trop bas",
+    wrong_stack: "Stack inadapté",
     company: "Entreprise non souhaitée",
-    conditions: "Conditions inadaptées (salaire/lieu)",
-    other: "Autre…",
+    scam_or_gone: "Arnaque ou disparue",
+    closed: "Fermée / plus active",
+    already_applied: "Déjà postulé / traité ailleurs",
+    other: "Autre",
   },
   de: {
-    closed: "Geschlossen / nicht mehr aktiv",
-    not_interested: "Kein Interesse",
-    mismatch: "Passt nicht zu meinem Profil",
-    already_applied: "Bereits beworben / anderweitig erledigt",
+    too_senior: "Zu senior",
+    too_junior: "Zu junior",
+    wrong_location: "Falscher Standort",
+    salary_low: "Gehalt zu niedrig",
+    wrong_stack: "Falscher Tech-Stack",
     company: "Unerwünschtes Unternehmen",
-    conditions: "Ungeeignete Bedingungen (Gehalt/Standort)",
-    other: "Sonstiges…",
+    scam_or_gone: "Betrug oder nicht mehr verfügbar",
+    closed: "Geschlossen / nicht mehr aktiv",
+    already_applied: "Bereits beworben / anderweitig erledigt",
+    other: "Sonstiges",
   },
   hu: {
-    closed: "Lezárva / már nem aktív",
-    not_interested: "Nem érdekel",
-    mismatch: "Nem illik a profilomhoz",
-    already_applied: "Már jelentkeztem / máshol kezelve",
+    too_senior: "Túl senior",
+    too_junior: "Túl junior",
+    wrong_location: "Nem megfelelő helyszín",
+    salary_low: "Túl alacsony fizetés",
+    wrong_stack: "Nem megfelelő technológia",
     company: "Nem kívánt cég",
-    conditions: "Nem megfelelő feltételek (fizetés/helyszín)",
-    other: "Egyéb…",
+    scam_or_gone: "Csalás vagy megszűnt",
+    closed: "Lezárva / már nem aktív",
+    already_applied: "Már jelentkeztem / máshol kezelve",
+    other: "Egyéb",
   },
   pt: {
-    closed: "Fechada / já não ativa",
-    not_interested: "Não tenho interesse",
-    mismatch: "Não se adequa ao meu perfil",
-    already_applied: "Já candidatado / tratado noutro lado",
+    too_senior: "Demasiado sénior",
+    too_junior: "Demasiado júnior",
+    wrong_location: "Localização inadequada",
+    salary_low: "Salário demasiado baixo",
+    wrong_stack: "Stack inadequado",
     company: "Empresa indesejada",
-    conditions: "Condições inadequadas (salário/local)",
-    other: "Outro…",
+    scam_or_gone: "Fraude ou já não existe",
+    closed: "Fechada / já não ativa",
+    already_applied: "Já candidatado / tratado noutro lado",
+    other: "Outro",
   },
 };
 
 /** Strings condivise dal selettore, ovunque venga montato. */
 export const PICKER_T: Record<
   Locale,
-  { pickReason: string; writeReason: string; notePlaceholder: string }
+  { pickReason: string; writeReason: string; notePlaceholder: string; notePrivate: string }
 > = {
   it: {
     pickReason: "Scegli una causa",
     writeReason: "Scrivi la causa",
-    notePlaceholder: "Causa…",
+    notePlaceholder: "Nota privata (facoltativa)",
+    notePrivate: "Solo tua: il team non la legge mai.",
   },
   en: {
     pickReason: "Pick a reason",
     writeReason: "Write the reason",
-    notePlaceholder: "Reason…",
+    notePlaceholder: "Private note (optional)",
+    notePrivate: "Only yours: the team never reads it.",
   },
   es: {
     pickReason: "Elige un motivo",
     writeReason: "Escribe el motivo",
-    notePlaceholder: "Motivo…",
+    notePlaceholder: "Nota privada (opcional)",
+    notePrivate: "Solo tuya: el equipo nunca la lee.",
   },
   fr: {
     pickReason: "Choisissez un motif",
     writeReason: "Écrivez le motif",
-    notePlaceholder: "Motif…",
+    notePlaceholder: "Note privée (facultative)",
+    notePrivate: "Rien que pour vous : l'équipe ne la lit jamais.",
   },
   de: {
     pickReason: "Grund auswählen",
     writeReason: "Grund eingeben",
-    notePlaceholder: "Grund…",
+    notePlaceholder: "Private Notiz (optional)",
+    notePrivate: "Nur für dich: das Team liest sie nie.",
   },
   hu: {
     pickReason: "Válassz okot",
     writeReason: "Írd be az okot",
-    notePlaceholder: "Ok…",
+    notePlaceholder: "Privát megjegyzés (nem kötelező)",
+    notePrivate: "Csak a tiéd: a csapat sosem olvassa.",
   },
   pt: {
     pickReason: "Escolhe um motivo",
     writeReason: "Escreve o motivo",
-    notePlaceholder: "Motivo…",
+    notePlaceholder: "Nota privada (opcional)",
+    notePrivate: "Só sua: a equipa nunca a lê.",
   },
 };

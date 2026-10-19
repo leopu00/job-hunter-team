@@ -67,7 +67,7 @@ export async function GET(req: NextRequest) {
   let filter = supabase
     .from("position_feedback")
     .select(
-      "position_legacy_id, action, reason, comment, score, direction, created_at",
+      "position_legacy_id, action, reason, score, direction, created_at",
     )
     .eq("user_id", userId);
 

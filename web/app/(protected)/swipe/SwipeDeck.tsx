@@ -91,6 +91,7 @@ import {
   isFactualReason,
   negativeSignalFor,
 } from "@/app/(protected)/positions/[id]/exclusion-reasons";
+import { NOTE_MAX, cleanNote } from "@/lib/feedback-reasons";
 import { T } from "./SwipeDeck.i18n";
 import { Chip, DualRange, FilterSection } from "./SwipeDeckParts";
 export type { Verdict };
@@ -736,7 +737,7 @@ export default function SwipeDeck({
             score: v.score,
             ...(v.direction ? { direction: v.direction } : {}),
             ...(reason ? { reason } : {}),
-            ...(note ? { comment: note } : {}),
+            ...(note ? { note } : {}),
           }),
         });
         return res.ok;
@@ -753,7 +754,7 @@ export default function SwipeDeck({
       const card = cards[idx];
       flyingRef.current = true;
       stopVoice();
-      const note = comment.trim().slice(0, 2000);
+      const note = cleanNote(comment).slice(0, NOTE_MAX);
       // Il verdetto che insegna cosa EVITARE non si registra al buio: la
       // carta vola lo stesso (il gesto resta rapido), ma la scrittura
       // aspetta il motivo — e senza motivo non avviene.
@@ -879,7 +880,7 @@ export default function SwipeDeck({
       void persist(
         card,
         "no",
-        signal.feedback.comment ?? "",
+        signal.feedback.note ?? "",
         signal.feedback.reason,
       ).then((ok) => {
         if (ok) setGiven((g) => ({ ...g, [card.id]: "no" }));
@@ -1518,7 +1519,7 @@ export default function SwipeDeck({
             <textarea
               autoFocus
               rows={6}
-              maxLength={2000}
+              maxLength={NOTE_MAX}
               value={comment}
               onChange={(e) => setComment(e.target.value)}
               placeholder={recording ? t.voiceListening : t.commentPh}

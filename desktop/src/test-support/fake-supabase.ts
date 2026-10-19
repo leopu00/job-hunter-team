@@ -12,7 +12,7 @@ export type FakeResult = { data: unknown; error: { message: string } | null; cou
 /**
  * A Supabase client that records every query chain and answers it with
  * `respond`. Enough of PostgREST's builder for the desktop pages: filters,
- * order/limit, insert/update/select, single/maybeSingle, and `await`.
+ * order/limit, insert/upsert/update/select, single/maybeSingle, and `await`.
  */
 export function fakeSupabase(
   respond: (query: FakeQuery) => FakeResult,
@@ -30,6 +30,7 @@ export function fakeSupabase(
     for (const name of [
       "select",
       "insert",
+      "upsert",
       "update",
       "delete",
       "eq",

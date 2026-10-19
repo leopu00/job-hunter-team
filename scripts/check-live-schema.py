@@ -24,7 +24,7 @@ from typing import Callable, ContextManager, Protocol
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_MANIFEST = ROOT / "supabase/live-schema/078-084.v3.json"
-WEB_MANIFEST = ROOT / "supabase/live-schema/078-088.web.v9.json"
+WEB_MANIFEST = ROOT / "supabase/live-schema/078-094.web.v10.json"
 PREFLIGHT_QUERY = ROOT / "supabase/live-schema/081-preflight.v1.sql"
 PREFLIGHT_MANIFEST = ROOT / "supabase/live-schema/081-preflight.v1.json"
 CATALOG_ORDERED_MIGRATIONS = [
@@ -51,6 +51,9 @@ WEB_ORDERED_MIGRATIONS = CATALOG_ORDERED_MIGRATIONS + [
     "supabase/migrations/086_position_outcome.sql",
     "supabase/migrations/087_rejection_reason.sql",
     "supabase/migrations/088_positions_apply_requested.sql",
+    # 094: la nota privata del feedback e la preferenza sull'esclusione del
+    # profilo (JHT-T05). 089-093 non toccano le colonne che il codice web legge.
+    "supabase/migrations/094_feedback_reasons_closed.sql",
 ]
 API_ORIGIN = "https://api.supabase.com"
 MAX_RESPONSE_BYTES = 64 * 1024

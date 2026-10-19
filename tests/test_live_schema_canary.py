@@ -21,8 +21,8 @@ ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / "scripts/check-live-schema.py"
 MANIFEST = ROOT / "supabase/live-schema/078-084.v3.json"
 QUERY = ROOT / "supabase/live-schema/078-084.v3.sql"
-WEB_MANIFEST = ROOT / "supabase/live-schema/078-088.web.v9.json"
-WEB_QUERY = ROOT / "supabase/live-schema/078-088.web.v9.sql"
+WEB_MANIFEST = ROOT / "supabase/live-schema/078-094.web.v10.json"
+WEB_QUERY = ROOT / "supabase/live-schema/078-094.web.v10.sql"
 PREFLIGHT_QUERY = ROOT / "supabase/live-schema/081-preflight.v1.sql"
 SNAPSHOT_SHA256 = "78269292299f3fe4324a0e7553afc1095a4d8814605677146b82c41d34849346"
 POSTGRES_READY_MARKER = "database system is ready to accept connections"
@@ -39,6 +39,10 @@ MIGRATIONS = [
     ROOT / "supabase/migrations/083_position_ticket_state_model.sql",
     ROOT / "supabase/migrations/084_cloud_sync_pairing_attempts.sql",
     ROOT / "supabase/migrations/085_applications_updated_at.sql",
+    ROOT / "supabase/migrations/086_position_outcome.sql",
+    ROOT / "supabase/migrations/087_rejection_reason.sql",
+    ROOT / "supabase/migrations/088_positions_apply_requested.sql",
+    ROOT / "supabase/migrations/094_feedback_reasons_closed.sql",
 ]
 # I test di ri-applicazione parlano della 084: nominarla per posizione la
 # faceva cambiare sotto ai piedi al primo numero nuovo.
@@ -452,9 +456,9 @@ def test_additive_web_contract_exactly_receipts_every_mapped_rpc_and_column():
     )
 
     assert contract.phase == "web"
-    assert contract.contract_id == "release-0.3.9-web-schema-078-088-apply-authorisation"
-    assert len(contract.expected_checks) == 42
-    assert manifest["query"]["path"] == "supabase/live-schema/078-088.web.v9.sql"
+    assert contract.contract_id == "release-0.3.9-web-schema-078-094-feedback-reasons"
+    assert len(contract.expected_checks) == 43
+    assert manifest["query"]["path"] == "supabase/live-schema/078-094.web.v10.sql"
     assert "\\n" not in WEB_QUERY.read_text()
 
     mapped_receipts = {
@@ -476,7 +480,7 @@ def test_cli_validates_only_the_pinned_additive_web_contract(capsys):
     assert output.err == ""
     assert output.out == (
         "LIVE-SCHEMA MANIFEST OK "
-        "contract=release-0.3.9-web-schema-078-088-apply-authorisation checks=42\n"
+        "contract=release-0.3.9-web-schema-078-094-feedback-reasons checks=43\n"
     )
 
 
@@ -937,12 +941,14 @@ def test_pg16_schema_only_clone_passes_after_ordered_078_through_084():
 
 def test_pg16_additive_web_contract_passes_and_detects_column_and_rpc_drift():
     contract = canary.load_web_contract()
-    # Il contratto web copre 078-088: il clone deve arrivare alla 088, dove
-    # nascono le tre colonne dell'autorizzazione alla candidatura (la 087 porta
+    # Il contratto web copre 078-094: il clone deve arrivare alla 094, dove
+    # nascono la nota privata del feedback e la tabella delle preferenze
+    # sull'esclusione del profilo (prima, la 088 porta le tre colonne
+    # dell'autorizzazione alla candidatura (la 087 porta
     # il motivo di rifiuto e `mark_position_outcome` a cinque argomenti, la 086
     # le due RPC dell'esito, la 085 `applications.updated_at`). Il contratto
     # catalog resta fermo alla 084.
-    with pg16_schema_clone(migrated=True, through_version=88) as psql:
+    with pg16_schema_clone(migrated=True, through_version=94) as psql:
         baseline = receipt_rows(psql(WEB_QUERY.read_text()).stdout)
         column_drift = receipt_rows(
             psql(
@@ -961,10 +967,10 @@ def test_pg16_additive_web_contract_passes_and_detects_column_and_rpc_drift():
     assert tuple(sorted(baseline)) == contract.expected_checks
     assert all(baseline.values())
     assert [check for check, ok in column_drift.items() if not ok] == [
-        "089.web.columns.positions"
+        "095.web.columns.positions"
     ]
     assert [check for check, ok in rpc_drift.items() if not ok] == [
-        "089.web.rpc.increment_landing_hits"
+        "095.web.rpc.increment_landing_hits"
     ]
 
 

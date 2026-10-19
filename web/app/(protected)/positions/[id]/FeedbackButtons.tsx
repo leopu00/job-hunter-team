@@ -418,7 +418,7 @@ export function FeedbackButtons({
 
   const postFeedback = (
     v: Verdict,
-    why?: { reason?: string; comment?: string },
+    why?: { reason?: string; note?: string },
   ) => {
     const cfg = VERDICTS[v];
     return fetch(`/api/positions/${legacyId}/feedback`, {
@@ -429,7 +429,7 @@ export function FeedbackButtons({
         score: cfg.score,
         ...(cfg.direction ? { direction: cfg.direction } : {}),
         ...(why?.reason ? { reason: why.reason } : {}),
-        ...(why?.comment ? { comment: why.comment } : {}),
+        ...(why?.note ? { note: why.note } : {}),
       }),
     });
   };
@@ -438,7 +438,7 @@ export function FeedbackButtons({
   // stessa scrittura solo come effetto secondario, dopo l'esclusione.
   const give = async (
     v: Verdict,
-    why?: { reason?: string; comment?: string },
+    why?: { reason?: string; note?: string },
   ) => {
     if (busy) return false;
     const prev = verdict;
