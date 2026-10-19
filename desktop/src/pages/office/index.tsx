@@ -14,6 +14,7 @@ import { loadAgentStatuses } from "../../office/status";
 import { appLocale } from "../../lib/app-locale";
 import { useExistingTeamReadOnly } from "../../lib/existing-team-readonly";
 import { EXISTING_TEAM_READONLY_TEXT } from "../../lib/existing-team-readonly.i18n";
+import { PAGE_STATES_TEXT } from "../../lib/page-states.i18n";
 import { readTeamStatus } from "../../lib/existing-team-status";
 import { officeFromTeamProbe } from "../../office/readonly";
 import { readVpsPiles } from "../../office/panel/vps-panels";
@@ -69,10 +70,10 @@ export function OfficeLoader({ source }: { source: OfficeSource }) {
     };
   }, []);
 
-  if (load.state === "loading") return <DashboardSkeleton label="Caricamento ufficio" />;
-  if (load.state === "no-assets") return <Notice>L'arte dell'ufficio non è ancora nell'app.</Notice>;
+  if (load.state === "loading") return <DashboardSkeleton label={PAGE_STATES_TEXT[appLocale()].loadingOffice} />;
+  if (load.state === "no-assets") return <Notice>{PAGE_STATES_TEXT[appLocale()].officeNoAssets}</Notice>;
   if (load.state === "failed")
-    return <Notice alert>Non riesco a caricare l'ufficio. Premi «Aggiorna» o riapri la pagina.</Notice>;
+    return <Notice alert>{PAGE_STATES_TEXT[appLocale()].officeFailed}</Notice>;
   return <Office ready={load.ready} source={source} />;
 }
 
