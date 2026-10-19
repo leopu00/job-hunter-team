@@ -79,7 +79,7 @@ function Navbar({
   const [signingOut, setSigningOut] = useState(false);
   const [signOutFailed, setSignOutFailed] = useState(false);
   const button =
-    "text-[10px] font-semibold tracking-widest uppercase px-3 py-1.5 rounded border border-[var(--color-border)] transition-colors text-[var(--color-muted)] hover:text-[var(--color-bright)] no-underline";
+    "text-[10px] font-semibold tracking-widest uppercase px-2 xl:px-3 py-1.5 rounded border border-[var(--color-border)] transition-colors text-[var(--color-muted)] hover:text-[var(--color-bright)] no-underline";
 
   async function logout() {
     if (signingOut) return;
@@ -120,7 +120,7 @@ function Navbar({
                     key={href}
                     href={href}
                     aria-current={active ? "page" : undefined}
-                    className="relative px-3 py-1.5 text-[11px] font-semibold tracking-widest hover:bg-[var(--color-card)] rounded transition-colors no-underline inline-block"
+                    className="relative px-2 xl:px-3 py-1.5 text-[11px] font-semibold tracking-widest hover:bg-[var(--color-card)] rounded transition-colors no-underline inline-block"
                     style={{ color: active ? "var(--color-white)" : "var(--color-muted)" }}
                   >
                     {label.startsWith("own:") ? readOnlyText[label.slice(4) as "team" | "profile" | "office" | "agents"] : dashboardT(label)}
