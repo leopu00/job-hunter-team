@@ -961,7 +961,7 @@ export default function DashboardApp() {
       at: Date.now(),
       captainRunning: result.snapshot.captainRunning === true,
       assistantRunning: result.snapshot.assistantRunning === true,
-    });
+    }, `account:${identityKey}|${result.connection ?? "saved"}`);
     setReadOnlyExistingTeamKey(identityKey);
   }, [identityKey]);
 
