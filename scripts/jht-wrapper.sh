@@ -2064,13 +2064,22 @@ mail_command() {
 # L'output verbose puo' contenere variabili risolte: resta confinato in memoria
 # e ne estraiamo solo un singolo SHA-256, mai stdout/stderr grezzo.
 podman_expected_config_hash() {
-  local file="$1" service="${2:-jht}" podman_bin compose_bin resolved hashes hash
+  local file="$1" service="${2:-jht}" podman_bin compose_bin resolved hashes hash pinned_image=""
   podman_bin="$(podman_binary)" || return 1
   compose_bin="$(podman_compose_binary)" || return 1
   podman_compose_pair_supported "$podman_bin" "$compose_bin" || return 1
+  # La stessa immagine di `up`: prima di ogni compose che avvia, require_trusted_runtime
+  # esporta JHT_IMAGE dal pin del canale di test. L'attestazione gira anche in un processo
+  # che non e' passato di li' (status, ensure_up, snapshot): senza il pin
+  # ${JHT_IMAGE:-...} si risolve al default del compose, e su un'installazione di test la
+  # hash non e' mai quella del container.
+  if [ -f "$RUNTIME_IMAGE_PIN" ]; then
+    pinned_image="$(runtime_image_pin_value)" || return 1
+  fi
   if [ "$PODMAN_RUNTIME_MODE" = "machine" ]; then
     resolved="$({
       cd "$RUNTIME_DIR" || return 1
+      [ -z "$pinned_image" ] || export JHT_IMAGE="$pinned_image"
       CONTAINER_CONNECTION="$PODMAN_MACHINE_NAME" \
       PODMAN_COMPOSE_WARNING_LOGS=false \
         "$compose_bin" --verbose --dry-run --project-name jht \
@@ -2083,13 +2092,19 @@ podman_expected_config_hash() {
     resolved="$({
       cd "$RUNTIME_DIR" || return 1
       unset CONTAINER_CONNECTION
+      [ -z "$pinned_image" ] || export JHT_IMAGE="$pinned_image"
       PODMAN_COMPOSE_WARNING_LOGS=false \
         "$compose_bin" "$no_pod" --verbose --dry-run --project-name jht \
           --podman-path "$podman_bin" -f "$file" -f "$override" up -d --force-recreate "$service"
     } 2>&1)" || return 1
   fi
+  # La config-hash e' una per tutto il progetto (podman-compose la calcola dal compose
+  # unito): il dry-run di un servizio la stampa per lui e per ogni sua dipendenza
+  # (jht -> jht-telegram), cioe' piu' righe uguali. Due valori DIVERSI non sono una
+  # configurazione: si rifiuta.
   hashes="$(printf '%s\n' "$resolved" \
-    | sed -n 's/.*io\.podman\.compose\.config-hash=\([0-9a-f]\{64\}\)\([[:space:]].*\)\{0,1\}$/\1/p')"
+    | sed -n 's/.*io\.podman\.compose\.config-hash=\([0-9a-f]\{64\}\)\([[:space:]].*\)\{0,1\}$/\1/p' \
+    | LC_ALL=C sort -u)"
   unset resolved
   case "$hashes" in ''|*$'\n'*) return 1 ;; esac
   hash="$hashes"

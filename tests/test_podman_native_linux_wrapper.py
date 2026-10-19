@@ -27,7 +27,7 @@ FUNCTIONS = (
     "version_leading_numbers", "version_at_least", "podman_version_number", "podman_compose_version_number",
     "podman_compose_pair_supported", "podman_native_override_path", "podman_native_override_ensure",
     "compose_project_name", "podman_binary", "podman_compose_binary", "podman_native_rootless", "compose_file",
-    "podman_native_no_pod_arg", "podman_expected_config_hash",
+    "podman_native_no_pod_arg", "podman_expected_config_hash", "runtime_image_pin_value",
 )
 
 
@@ -78,7 +78,8 @@ def box(tmp_path):
             fakes()
         script = (
             f"set -u\nJHT_PODMAN_UP_TIMEOUT_S={up_cap}\n"
-            f'PATH="{bin_dir}:/usr/bin:/bin"\nRUNTIME_DIR="{runtime}"\nPODMAN_RUNTIME_MODE={mode}\nPODMAN_MACHINE_NAME=jht-podman\n'
+            f'PATH="{bin_dir}:/usr/bin:/bin"\nRUNTIME_DIR="{runtime}"\nRUNTIME_IMAGE_PIN="{runtime}/runtime-image"\n'
+            f"PODMAN_RUNTIME_MODE={mode}\nPODMAN_MACHINE_NAME=jht-podman\n"
             "CONTAINER_RUNTIME=podman\nHOST_UID=1000\nPODMAN_NATIVE_REMOTE=0\nerr() { echo \"error: $*\" >&2; }\n" + _source() + "\n" + body
         )
         return subprocess.run(["bash", "-c", script], capture_output=True, text=True, env={**os.environ, "LC_ALL": "C"},
@@ -293,3 +294,64 @@ def test_an_up_that_fails_says_so_and_keeps_its_exit(box):
     done = run_podless(box, body, "1.2.0", hang="exit 7")
     assert "exit=7" in done.stdout, done.stdout + done.stderr
     assert "compose_up_failed" in done.stderr and "7" in done.stderr
+
+
+# ── the attestation's config-hash: one per project, with the image of `up` ──
+#
+# podman-compose computes io.podman.compose.config-hash from the merged compose, the same for every
+# container of the project; the dry-run of `up --force-recreate jht` creates jht and its dependency
+# jht-telegram, so 1.5.0 prints it twice. The compose interpolates ${JHT_IMAGE:-...}: `up` runs with
+# the test channel's pin (require_trusted_runtime), and the attestation must hash the same file.
+
+DRY_RUN_COMPOSE = r"""#!/bin/sh
+if [ "$1" = --version ]; then echo "podman-compose version 1.5.0"; echo "podman version 5.7.0"; exit 0; fi
+printf "%s\n" "${JHT_IMAGE:-unset}" >> "{log}"
+hash="$(printf '%s' "${JHT_IMAGE:-default}" | shasum -a 256 2>/dev/null | cut -c1-64)"
+[ -n "$hash" ] || hash="$(printf '%s' "${JHT_IMAGE:-default}" | sha256sum | cut -c1-64)"
+for line in {lines}; do
+  case "$line" in
+    same) echo "podman create --name jht --label io.podman.compose.config-hash=$hash jht" ;;
+    other) echo "podman create --name jht-telegram --label io.podman.compose.config-hash={other} x" ;;
+  esac
+done
+exit 0
+"""
+
+PIN = "ghcr.io/leopu00/jht@sha256:" + "c" * 64
+
+
+def _image_hash(image: str) -> str:
+    import hashlib
+    return hashlib.sha256(image.encode()).hexdigest()
+
+
+def config_hash(box, lines: str, pin: str | None = None):
+    def fakes():
+        path = box.bin / "podman-compose"
+        path.write_text(DRY_RUN_COMPOSE.replace("{log}", str(box.log)).replace("{lines}", lines)
+                        .replace("{other}", "b" * 64), encoding="utf-8")
+        path.chmod(0o755)
+        if pin is not None:
+            (box.runtime / "runtime-image").write_text(pin + "\n", encoding="utf-8")
+    return box.run("native", f'podman_expected_config_hash "{box.base}" jht', fakes=fakes)
+
+
+def test_the_same_hash_printed_for_a_service_and_its_dependency_is_one_hash(box):
+    done = config_hash(box, "same same")
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.strip() == _image_hash("default")
+
+
+def test_two_different_hashes_are_refused(box):
+    done = config_hash(box, "same other")
+    assert done.returncode == 1 and done.stdout.strip() == ""
+
+
+def test_the_attestation_hashes_the_compose_with_the_test_channels_image(box):
+    done = config_hash(box, "same same", pin=PIN)
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.strip() == _image_hash(PIN)  # the hash `up` wrote, not the compose default's
+    assert box.log.read_text(encoding="utf-8").splitlines() == [PIN]
+    # an invalid pin is never replaced by the default: the attestation refuses
+    done = config_hash(box, "same", pin="ghcr.io/someone/else:latest")
+    assert done.returncode == 1 and done.stdout.strip() == ""
