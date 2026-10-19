@@ -177,7 +177,8 @@ describe("Dashboard on an existing team read only", () => {
     expect(notes).toHaveTextContent(fill(TEXT.chartsPartial, { n: 2000, of: 2400 }));
     expect(notes).toHaveTextContent(fill(TEXT.eventsPartial, { n: 1, of: 5 }));
     expect(notes).toHaveTextContent(fill(TEXT.ratesUnavailable, { n: 2 }));
-    expect(notes).toHaveTextContent(TEXT.seenLocal);
+    // «new» is not drawn read only, so the summary no longer explains it.
+    expect(notes).not.toHaveTextContent(/new|nuova/i);
   });
 
   it("offers only the euro, and ignores a saved currency, when there are no exchange rates", async () => {

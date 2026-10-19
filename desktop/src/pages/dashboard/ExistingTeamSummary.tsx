@@ -21,7 +21,6 @@ export default function ExistingTeamSummary({
     info.eventsIncluded < info.eventsOf && fill(t.eventsPartial, { n: info.eventsIncluded, of: info.eventsOf }),
     !info.ratesAvailable && info.salaryUnconverted > 0 && fill(t.ratesUnavailable, { n: info.salaryUnconverted }),
     !info.ratesAvailable && t.eurOnly,
-    t.seenLocal,
   ].filter((note): note is string => typeof note === "string");
 
   return (
@@ -50,7 +49,7 @@ export default function ExistingTeamSummary({
           {info.sources.map((s) => `${s.source}: ${s.count}`).join(" · ")}
         </p>
       )}
-      <ul className="mt-2 list-disc pl-4" data-testid="existing-team-summary-notes">
+      <ul className={notes.length ? "mt-2 list-disc pl-4" : "list-disc pl-4"} data-testid="existing-team-summary-notes">
         {notes.map((note) => (
           <li key={note}>{note}</li>
         ))}
