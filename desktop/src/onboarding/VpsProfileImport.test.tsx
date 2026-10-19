@@ -47,6 +47,16 @@ async function openAndFill(user: ReturnType<typeof userEvent.setup>) {
 }
 
 describe("VpsProfileImport", () => {
+  it("does not let the keyboard capitalise or correct the SSH user", async () => {
+    const user = userEvent.setup();
+    render(<VpsProfileImport bridge={bridge()} />);
+    await user.click(screen.getByRole("button", { name: /importa profilo/i }));
+    const field = screen.getByLabelText(/utente ssh/i);
+    expect(field).toHaveAttribute("autocapitalize", "off");
+    expect(field).toHaveAttribute("autocorrect", "off");
+    expect(field).toHaveAttribute("spellcheck", "false");
+  });
+
   it("does nothing before the explicit gesture and cancel keeps the bridge untouched", async () => {
     const user = userEvent.setup();
     const native = bridge();

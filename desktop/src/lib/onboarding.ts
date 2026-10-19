@@ -161,6 +161,8 @@ export interface OnboardingFlowProps {
   onSubmit: (submission: OnboardingSubmission) => Promise<void>;
   /** Explicit existing VPS connection; never prepares a new team. */
   onConnectExistingTeam?: (host: Extract<ExecutionHost, { kind: "vps" }>) => void;
+  /** Back to the sign-in screen from a local profile (a team on a VPS needs the Google account). */
+  onSignInWithGoogle?: () => void | Promise<void>;
   onRuntimeAction: (stage: "provider-login" | "team-start" | "assistant") => Promise<void>;
   providerLogin: OnboardingProviderLoginState | null;
   sshHostKey: OnboardingSshHostKeyConfirmation | null;

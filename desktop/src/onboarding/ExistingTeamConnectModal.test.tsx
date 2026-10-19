@@ -93,6 +93,9 @@ describe("ExistingTeamConnectModal", () => {
       .toHaveAttribute("src", "/onboarding/environment-vps-v2.webp");
     expect(screen.getByLabelText(/utente ssh/i)).toHaveValue("");
     expect(screen.getByLabelText(/utente ssh/i)).toHaveAttribute("placeholder", "es. ubuntu");
+    expect(screen.getByLabelText(/utente ssh/i)).toHaveAttribute("autocapitalize", "off");
+    expect(screen.getByLabelText(/utente ssh/i)).toHaveAttribute("autocorrect", "off");
+    expect(screen.getByLabelText(/utente ssh/i)).toHaveAttribute("spellcheck", "false");
     expect(screen.getByLabelText(/porta ssh/i)).toHaveValue(22);
     expect(native.probe).not.toHaveBeenCalled();
     expect(native.confirm).not.toHaveBeenCalled();

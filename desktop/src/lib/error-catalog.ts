@@ -240,6 +240,16 @@ const SESSION = copy(
   "Your account session is no longer valid.",
   "Sign out and back in with your account.",
 );
+/**
+ * A team on a VPS pairs with the account. The error says what is missing, not that a session
+ * "is no longer valid": a person on a local profile never had one to lose.
+ */
+const PAIRING_ACCOUNT = copy(
+  "Una squadra su VPS ha bisogno del tuo account Google.",
+  "Esci e continua con Google, poi riprova.",
+  "A team on a VPS needs your Google account.",
+  "Sign out and continue with Google, then try again.",
+);
 const MIGRATION_SOURCE = copy(
   "I dati del profilo locale non superano la verifica per il collegamento all’account.",
   "Nessun dato è stato spostato. Contatta l’assistenza prima di riprovare.",
@@ -475,7 +485,7 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
   engine_unavailable: PODMAN_CHECK,
 
   // ── VPS pairing and container ────────────────────────────────────────────
-  pairing_token_missing: SESSION,
+  pairing_token_missing: PAIRING_ACCOUNT,
   pairing_token_invalid: SESSION,
   container_start_failed: CONTAINER,
   container_not_ready: CONTAINER,

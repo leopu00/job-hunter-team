@@ -160,7 +160,7 @@ export default function VpsProfileImport({ bridge = profileImportBridge }: VpsPr
         <form onSubmit={(event) => void probeHost(event)}>
           <label><span>{t.vpsImport.host}</span><input autoFocus autoComplete="off" value={host.address} onChange={(event) => setHost({ ...host, address: event.target.value })} disabled={busy} required /></label>
           <div className="vps-profile-import__row">
-            <label><span>{t.sshUser}</span><input autoComplete="username" placeholder={t.sshUserPlaceholder} value={host.user} onChange={(event) => setHost({ ...host, user: event.target.value })} disabled={busy} required /></label>
+            <label><span>{t.sshUser}</span><input autoComplete="username" autoCapitalize="off" autoCorrect="off" spellCheck={false} placeholder={t.sshUserPlaceholder} value={host.user} onChange={(event) => setHost({ ...host, user: event.target.value })} disabled={busy} required /></label>
             <label><span>{t.sshPort}</span><input type="number" min="1" max="65535" inputMode="numeric" value={host.port} onChange={(event) => setHost({ ...host, port: Number(event.target.value) })} disabled={busy} required /></label>
           </div>
           <SshKeyPicker value={host.keyPath} onChange={(keyPath) => setHost({ ...host, keyPath })} disabled={busy} />
