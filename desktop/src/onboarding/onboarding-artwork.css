@@ -24,3 +24,13 @@
     margin-block: 10px 16px;
   }
 }
+
+/* A 1366x768 laptop gives the app window ~660 px: the 260 px figure and its
+   margins pushed the first action 360 px under the edge. Shorter windows get a
+   smaller figure, the same picture. */
+@media (max-height: 800px) {
+  .onboarding-artwork {
+    width: min(150px, 100%);
+    margin-block: 4px 8px;
+  }
+}
