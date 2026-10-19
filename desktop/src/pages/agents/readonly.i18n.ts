@@ -24,6 +24,10 @@ export interface ExistingTeamAgentsText {
   screenDown: string;
   screenEmpty: string;
   readOnly: string;
+  /** Under the office's scene: when the agents drawn were read. */
+  officeReadAt: string; // {time}
+  /** Under the office's scene: the VPS has no agent session up that the office can draw. */
+  officeNoneUp: string;
 }
 
 export const EXISTING_TEAM_AGENTS_TEXT: Record<Locale, ExistingTeamAgentsText> = {
@@ -49,6 +53,8 @@ export const EXISTING_TEAM_AGENTS_TEXT: Record<Locale, ExistingTeamAgentsText> =
     screenDown: "La sessione non è più attiva.",
     screenEmpty: "Il terminale è vuoto.",
     readOnly: "Sola lettura: da qui non si scrive agli agenti e non si premono tasti nei loro terminali.",
+    officeReadAt: "Agenti letti dalla VPS alle {time}.",
+    officeNoneUp: "Sulla VPS non c’è nessun agente attivo da mostrare nell’ufficio.",
   },
   en: {
     title: "Agents",
@@ -72,6 +78,8 @@ export const EXISTING_TEAM_AGENTS_TEXT: Record<Locale, ExistingTeamAgentsText> =
     screenDown: "The session is no longer running.",
     screenEmpty: "The terminal is empty.",
     readOnly: "Read only: from here you do not write to the agents or press keys in their terminals.",
+    officeReadAt: "Agents read from the VPS at {time}.",
+    officeNoneUp: "The VPS has no running agent to show in the office.",
   },
   de: {
     title: "Agenten",
@@ -95,6 +103,8 @@ export const EXISTING_TEAM_AGENTS_TEXT: Record<Locale, ExistingTeamAgentsText> =
     screenDown: "Die Sitzung ist nicht mehr aktiv.",
     screenEmpty: "Das Terminal ist leer.",
     readOnly: "Nur Lesen: Von hier aus schreibst du den Agenten nicht und drückst keine Tasten in ihren Terminals.",
+    officeReadAt: "Agenten um {time} von der VPS gelesen.",
+    officeNoneUp: "Auf der VPS läuft kein Agent, der im Büro gezeigt werden kann.",
   },
   es: {
     title: "Agentes",
@@ -118,6 +128,8 @@ export const EXISTING_TEAM_AGENTS_TEXT: Record<Locale, ExistingTeamAgentsText> =
     screenDown: "La sesión ya no está activa.",
     screenEmpty: "El terminal está vacío.",
     readOnly: "Solo lectura: desde aquí no se escribe a los agentes ni se pulsan teclas en sus terminales.",
+    officeReadAt: "Agentes leídos del VPS a las {time}.",
+    officeNoneUp: "En el VPS no hay ningún agente activo que mostrar en la oficina.",
   },
   fr: {
     title: "Agents",
@@ -141,6 +153,8 @@ export const EXISTING_TEAM_AGENTS_TEXT: Record<Locale, ExistingTeamAgentsText> =
     screenDown: "La session n’est plus active.",
     screenEmpty: "Le terminal est vide.",
     readOnly: "Lecture seule : d’ici, on n’écrit pas aux agents et on n’appuie sur aucune touche dans leurs terminaux.",
+    officeReadAt: "Agents lus depuis le VPS à {time}.",
+    officeNoneUp: "Le VPS n’a aucun agent actif à montrer dans le bureau.",
   },
   hu: {
     title: "Ügynökök",
@@ -164,6 +178,8 @@ export const EXISTING_TEAM_AGENTS_TEXT: Record<Locale, ExistingTeamAgentsText> =
     screenDown: "A munkamenet már nem aktív.",
     screenEmpty: "A terminál üres.",
     readOnly: "Csak olvasás: innen nem írsz az ügynököknek, és nem nyomsz billentyűt a termináljukban.",
+    officeReadAt: "Az ügynökök beolvasva a VPS-ről: {time}.",
+    officeNoneUp: "A VPS-en nincs olyan aktív ügynök, amelyet az irodában meg lehetne mutatni.",
   },
   pt: {
     title: "Agentes",
@@ -187,5 +203,7 @@ export const EXISTING_TEAM_AGENTS_TEXT: Record<Locale, ExistingTeamAgentsText> =
     screenDown: "A sessão já não está ativa.",
     screenEmpty: "O terminal está vazio.",
     readOnly: "Só leitura: daqui não se escreve aos agentes nem se premem teclas nos terminais deles.",
+    officeReadAt: "Agentes lidos da VPS às {time}.",
+    officeNoneUp: "Na VPS não há nenhum agente ativo para mostrar no escritório.",
   },
 };

@@ -46,6 +46,7 @@ vi.mock("../../office/parts", async (importOriginal) => ({
 }));
 
 import { resetVpsPositionsShared } from "../../lib/existing-team-positions-shared";
+import { resetTeamAgentsShared } from "../../lib/existing-team-agents";
 import ExistingTeamOfficePage from "./readonly";
 
 const T = EXISTING_TEAM_STATUS_TEXT.it;
@@ -55,6 +56,8 @@ const MANIFEST: OfficeManifest = { version: 1, layout: "/office/layout.json", ch
 const CONNECTION = { at: Date.UTC(2026, 9, 18, 21, 0, 0), captainRunning: true, assistantRunning: true };
 
 const POSITIONS = "existing_team_positions_read";
+const AGENTS = "existing_team_agents_read";
+let agentsReply: () => Promise<unknown> = async () => ({ ok: false, error: "agents_unavailable" });
 const TEAM_ROWS = [
   { id: "11", legacy_id: 11, title: "Cercatore di nuovi", company: "Alfa", status: "new", location: "Roma", found_at: new Date().toISOString(), score: null },
   { id: "12", legacy_id: 12, title: "Da punteggiare", company: "Beta", status: "scored", location: "Milano", found_at: "2026-10-16T09:00:00Z", score: 74, write_requested: false },
@@ -88,9 +91,12 @@ beforeEach(() => {
   answer = async () => realSnapshotReply();
   positions = async () => ({ ok: true, data: { items: TEAM_ROWS, total: TEAM_ROWS.length } });
   resetVpsPositionsShared();
+  resetTeamAgentsShared();
+  agentsReply = async () => ({ ok: false, error: "agents_unavailable" });
   native.invoke.mockImplementation(async (command: string) => {
     if (command === COMMAND) return answer();
     if (command === POSITIONS) return positions();
+    if (command === AGENTS) return agentsReply();
     throw new Error(`unexpected native command ${command}`);
   });
   vi.stubGlobal("ResizeObserver", class { observe() {} disconnect() {} });
@@ -327,9 +333,30 @@ describe("the office of an existing team, over its VPS", () => {
     await waitFor(() => expect(positionReads()).toHaveLength(1));
     for (const [, args] of positionReads()) expect((args as { request: { op: string } }).request.op).toBe("list");
     const commands = native.invoke.mock.calls.map(([command]) => command);
-    expect(new Set(commands)).toEqual(new Set([COMMAND, POSITIONS]));
+    expect(new Set(commands)).toEqual(new Set([COMMAND, POSITIONS, AGENTS]));
+    // the agents are asked for their list only: never a terminal, never a write
+    for (const [command, args] of native.invoke.mock.calls) {
+      if (command === AGENTS) expect(args).toEqual({ request: { op: "list" } });
+    }
     const urls = (fetch as unknown as { mock: { calls: unknown[][] } }).mock.calls.map(([url]) => String(url));
     expect(urls.every((url) => url.startsWith("/office/"))).toBe(true);
+  });
+
+  it("draws every agent of the team the Agents page reads, by role and instance, not only the captain and the assistant", async () => {
+    const agent = (name: string, role: string, state: string | null) => ({
+      name, role, instance: null, up: true, created: null, activity: null, state, reason: null, since: null, until: null,
+    });
+    agentsReply = async () => ({
+      ok: true,
+      data: {
+        agents: [agent("CAPITANO", "capitano", "lavora"), agent("SCOUT-1", "scout", "idle"), agent("SCOUT-2", "scout", null), agent("CRITICO-S3", "critico", null), agent("CLOSER-1", "closer", null)],
+        roles: [],
+        states: true,
+      },
+    });
+    mount();
+    await waitFor(() => expect(entered()).toEqual(["capitano", "scout-1", "scout-2", "critico-s3"]));
+    expect(native.invoke.mock.calls.filter(([command]) => command === AGENTS)).toHaveLength(1);
   });
 
   it("says so when the office's art is not in the app", async () => {

@@ -16,6 +16,7 @@ import { useExistingTeamReadOnly } from "../../lib/existing-team-readonly";
 import { EXISTING_TEAM_READONLY_TEXT } from "../../lib/existing-team-readonly.i18n";
 import { officeText } from "../../office/office.i18n";
 import { PAGE_STATES_TEXT } from "../../lib/page-states.i18n";
+import { readTeamAgentsShared, type TeamAgentsReading } from "../../lib/existing-team-agents";
 import { readTeamStatus } from "../../lib/existing-team-status";
 import { officeFromTeamProbe } from "../../office/readonly";
 import { readVpsPiles } from "../../office/panel/vps-panels";
@@ -217,10 +218,12 @@ function Office({ ready, source }: { ready: Ready; source: OfficeSource }) {
   const reading = useRef<Awaited<ReturnType<typeof readTeamStatus>>>({ kind: "unknown" });
   // the piles' counts from the team's positions, read with the probe while the container is up
   const probePiles = useRef<Piles | null>(null);
+  // the team's agents, the Agents page's read (shared with it), while the container is up
+  const probeAgents = useRef<TeamAgentsReading | null>(null);
   const probeRead = useRef(0);
   const showProbe = () => {
     if (!parts.data || !engineRef.current) return;
-    const office = officeFromTeamProbe(reading.current, connection, appLocale(), probePiles.current);
+    const office = officeFromTeamProbe(reading.current, connection, appLocale(), probePiles.current, probeAgents.current);
     live.current ??= createLiveOffice(parts.data.diff, applyEvent);
     live.current.snapshot(office.snapshot);
     setSnapshot(office.snapshot);
@@ -238,10 +241,12 @@ function Office({ ready, source }: { ready: Ready; source: OfficeSource }) {
     // share; only a team whose container is up has one to read, and one that cannot be read
     // has unknown piles, not empty ones.
     probePiles.current = null;
+    probeAgents.current = null;
     if (result.kind === "read" && result.fields.containerRunning) {
-      const piles = await readVpsPiles();
+      const [piles, agents] = await Promise.all([readVpsPiles(), readTeamAgentsShared()]);
       if (probeRead.current !== mine) return;
       probePiles.current = piles;
+      probeAgents.current = agents;
     }
     probeShow.current();
   };
