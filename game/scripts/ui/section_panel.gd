@@ -3660,6 +3660,8 @@ func _build_pos_detail() -> void:
 		var exact := MapPins.is_exact(p)
 		var tag := UIStrings.t("pos.office_verified") if exact \
 				else UIStrings.t("pos.office_approx")
+		if str(p.get("location_precision", "")) == "street":
+			tag = UIStrings.t("pos.office_street")
 		var arow := HBoxContainer.new()
 		arow.add_theme_constant_override("separation", 10)
 		hero.add_child(arow)

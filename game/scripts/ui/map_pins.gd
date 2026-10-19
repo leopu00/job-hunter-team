@@ -74,6 +74,11 @@ static func coord_of(p: Dictionary) -> Vector2:
 static func is_exact(p: Dictionary) -> bool:
 	if p.get("office_lat") == null or p.get("office_lon") == null:
 		return false
+	# Il livello di precisione (location_precision) decide, se la riga ce l'ha: solo `address` e'
+	# l'edificio. Una via senza civico (`street`) NON lo e'. Senza livello vale il flag di prima.
+	var level: Variant = p.get("location_precision")
+	if level != null:
+		return str(level) == "address"
 	var v: Variant = p.get("office_verified")
 	return v != null and int(v) == 1
 
