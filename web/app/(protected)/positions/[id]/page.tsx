@@ -1064,7 +1064,7 @@ export default async function PositionDetailPage({ params }: PageProps) {
                     className="shrink-0"
                   />
                 )}
-                <div className="text-[13px] font-semibold text-[var(--color-white)] min-w-0 flex-1 truncate">
+                <div className="text-[13px] font-semibold text-[var(--color-white)] min-w-0 flex-1 break-words">
                   {company.name}
                 </div>
                 {(company.verdict || company.glassdoor_rating) && (
