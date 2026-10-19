@@ -397,8 +397,17 @@ describe("the assisted browser's sentences for what the code cannot tell apart",
       expect(text, locale).toMatch(STOPPED[locale][0]);
       expect(action, locale).toMatch(STOPPED[locale][1]);
     }
-    // An image mismatch comes only from a running container: it keeps its own sentence.
-    expect(describeError("browser_image_mismatch").text).not.toBe(describeError("browser_container_mismatch").text);
+    // An image mismatch comes only from a running container: it keeps its own sentence — in EVERY
+    // language, not just the default one (T10): a translation that copied the stopped-container
+    // sentence into the image one would tell a person with a running team to start it.
+    for (const locale of ERROR_LOCALES) {
+      const image = describeError("browser_image_mismatch", { locale });
+      const container = describeError("browser_container_mismatch", { locale });
+      expect(image.known, locale).toBe(true);
+      expect(image.text, locale).not.toBe(container.text);
+      expect(image.action, locale).not.toBe(container.action);
+      expect(image.text, locale).not.toMatch(STOPPED[locale][0]);
+    }
   });
 
   it("ssh_host_key_invalid: names the ed25519 key the VPS did not offer, never host and port", () => {
@@ -608,5 +617,97 @@ describe("homebrew_missing", () => {
     expect(described.action).toContain(".pkg");
     expect(described.action).toContain(retry);
     expect(`${described.text} ${described.action}`).not.toMatch(/Terminal|brew install|curl|sudo/i);
+  });
+});
+
+// T10: a limit of the app, a wait the provider asked for, a spent plan, a program that never came up
+// and a provider that did not answer are five different facts, and the person reads which one.
+describe("the limits, said apart", () => {
+  const LIMIT_CODES = ["throttled_local", "rate_limit_429", "quota", "runtime_not_started", "provider_failed"];
+  const ALIASES = ["rate_limited", "rate_limited_burst", "rate_limited_daily"];
+  const RESETS_AT = Math.floor(Date.UTC(2026, 9, 19, 13, 30) / 1000);
+  const NOW = Date.UTC(2026, 9, 19, 10, 0);
+  const say = (code: string, locale: string) => describeError(code, { locale, resetsAt: RESETS_AT, now: NOW });
+  /** How each language says «of the app», which only the local limit may say. */
+  const OF_THE_APP: Record<string, RegExp> = {
+    it: /dell’app/, en: /of the app/, de: /der App/, es: /de la aplicación/, fr: /de l’application/,
+    hu: /alkalmazás/, pt: /da aplicação/,
+  };
+  /** How each language says «your subscription is not used up» / «not a limit of your subscription». */
+  const NOT_THE_PLAN: Record<string, RegExp> = {
+    it: /non è esaurito|non è un limite del tuo abbonamento/, en: /is not used up|not a limit of your subscription/,
+    de: /nicht aufgebraucht|kein Limit deines Abos/, es: /no está agotada|no es un límite de tu suscripción/,
+    fr: /n’est pas épuisé|pas une limite de ton abonnement/, hu: /nem merült ki|nem az előfizetésed korlátja/,
+    pt: /não está esgotada|não é um limite da tua subscrição/,
+  };
+
+  it.each(ERROR_LOCALES)("%s: has a sentence and an action for every code, never the code itself", (locale) => {
+    for (const code of [...LIMIT_CODES, ...ALIASES]) {
+      const described = say(code, locale);
+      expect(described.known, `${code}/${locale}`).toBe(true);
+      for (const text of [described.text, described.action]) {
+        expect(text.trim().length, `${code}/${locale}`).toBeGreaterThan(8);
+        expect(text, `${code}/${locale}`).not.toMatch(/\b[a-z]+_[a-z0-9_]+\b/);
+        expect(text, `${code}/${locale}`).not.toContain("{time}");
+      }
+      if (locale !== "en") expect(described.text, `${code}/${locale}`).not.toBe(say(code, "en").text);
+    }
+  });
+
+  it.each(ERROR_LOCALES)("%s: the three limits never share a sentence", (locale) => {
+    const texts = ["throttled_local", "rate_limit_429", "quota"].map((code) => say(code, locale).text);
+    expect(new Set(texts).size).toBe(3);
+    const actions = ["throttled_local", "rate_limit_429", "quota"].map((code) => say(code, locale).action);
+    expect(new Set(actions).size).toBe(3);
+  });
+
+  it.each(ERROR_LOCALES)("%s: a local limit is never shown as the provider limiting the person, and says so", (locale) => {
+    const local = say("throttled_local", locale).text;
+    expect(local, locale).toMatch(OF_THE_APP[locale]);
+    for (const code of ["rate_limit_429", "quota", "provider_failed"]) {
+      expect(say(code, locale).text, `${code}/${locale}`).not.toMatch(OF_THE_APP[locale]);
+    }
+    // A 429 and a failed call both say the subscription is fine; the local limit says whose limit it is instead.
+    expect(say("rate_limit_429", locale).text, locale).toMatch(NOT_THE_PLAN[locale]);
+    expect(say("provider_failed", locale).text, locale).toMatch(NOT_THE_PLAN[locale]);
+    expect(say("quota", locale).text, locale).not.toMatch(NOT_THE_PLAN[locale]);
+    expect(local, locale).not.toMatch(NOT_THE_PLAN[locale]);
+  });
+
+  it.each(ERROR_LOCALES)("%s: the web, hub and Telegram local limits read as the app's own", (locale) => {
+    for (const code of ALIASES) expect(say(code, locale), `${code}/${locale}`).toEqual({ ...say("throttled_local", locale), code });
+  });
+
+  it("says when a quota frees again, and is not shown without the hour (it would be a placeholder)", () => {
+    const time = new Intl.DateTimeFormat("it-IT", { hour: "2-digit", minute: "2-digit" }).format(new Date(RESETS_AT * 1000));
+    const described = say("quota", "it");
+    expect(described.text).toContain(time);
+    expect(described.action).toContain(time);
+    expect(describeError("quota", { locale: "it" })).toMatchObject({ known: false });
+    expect(describeError("quota", { locale: "it" }).text).not.toContain("{time}");
+  });
+
+  // The runtime does not retry a wait longer than the 45 s a call may spend: it stops and says how long was
+  // asked. So the sentence tells the person to wait, it does not promise a retry nobody makes (T10 review).
+  it("rate_limit_429 asks the person to try again after the wait, in every language, and promises no retry", () => {
+    const ASKS: Record<string, string> = {
+      it: "Riprova dopo l’attesa indicata. Nessun dato è andato perso.",
+      en: "Try again after the wait it asked for. No data was lost.",
+      de: "Versuche es nach der genannten Wartezeit erneut. Es sind keine Daten verloren gegangen.",
+      es: "Vuelve a intentarlo tras la espera indicada. No se ha perdido ningún dato.",
+      fr: "Réessaie après l’attente indiquée. Aucune donnée n’a été perdue.",
+      hu: "A jelzett várakozás után próbáld újra. Nem veszett el adat.",
+      pt: "Tenta de novo depois da espera indicada. Não se perdeu nenhum dado.",
+    };
+    for (const locale of ERROR_LOCALES) expect(say("rate_limit_429", locale).action, locale).toBe(ASKS[locale]);
+  });
+
+  it("mentions 429 only where a provider asked to wait", () => {
+    for (const locale of ERROR_LOCALES) {
+      expect(say("rate_limit_429", locale).text, locale).toContain("429");
+      for (const code of ["throttled_local", "quota", "runtime_not_started", "provider_failed"]) {
+        expect(say(code, locale).text, `${code}/${locale}`).not.toContain("429");
+      }
+    }
   });
 });

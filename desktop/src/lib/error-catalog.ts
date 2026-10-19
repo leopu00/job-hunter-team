@@ -44,6 +44,14 @@ function copy(itText: string, itAction: string, enText: string, enAction: string
 
 // ── Shared entries: several codes that mean the same thing to the person ────
 
+/** A limit of the app itself (pacing, a request limiter), never the provider's. */
+const THROTTLED_LOCAL = copy(
+  "La squadra sta rallentando di proposito: è un limite dell’app, non del tuo fornitore.",
+  "Riprende da sola. Non devi fare niente.",
+  "The team is slowing down on purpose: this is a limit of the app, not of your provider.",
+  "It resumes by itself. You do not need to do anything.",
+);
+
 const RETRY = copy(
   "L’operazione non è riuscita.",
   "Riprova. Se si ripete, riavvia Job Hunter Team.",
@@ -515,6 +523,40 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
     "Se il team si ferma presto, controlla i limiti nella pagina del provider.",
     "Provider limits not verified: the team started without knowing how much of your subscription is left.",
     "If the team stops early, check the limits on the provider’s page.",
+  ),
+
+  // ── What a limit is, said apart (T10). One sentence per fact: a limit of the
+  // app, a wait the provider asked for, a spent plan, a program that never
+  // came up, a provider that did not answer. The names are the runtime's; the
+  // reasons of a `quota` are the agent-state vocabulary's (limite_5h,
+  // limite_settimanale, limite_spesa_org) and do not change the sentence.
+  throttled_local: THROTTLED_LOCAL,
+  rate_limited: THROTTLED_LOCAL,
+  rate_limited_burst: THROTTLED_LOCAL,
+  rate_limited_daily: THROTTLED_LOCAL,
+  rate_limit_429: copy(
+    "Il fornitore ha chiesto di aspettare un momento (errore 429): il tuo abbonamento non è esaurito.",
+    "Riprova dopo l’attesa indicata. Nessun dato è andato perso.",
+    "The provider asked us to wait a moment (error 429): your subscription is not used up.",
+    "Try again after the wait it asked for. No data was lost.",
+  ),
+  quota: copy(
+    "I limiti del tuo abbonamento sono esauriti fino alle {time}.",
+    "Riprova dopo le {time}. Niente è andato perso.",
+    "Your subscription limits are used up until {time}.",
+    "Try again after {time}. Nothing was lost.",
+  ),
+  runtime_not_started: copy(
+    "L’agente è stato avviato ma il suo programma non è mai partito.",
+    "Riavvia la squadra. Se succede ancora, invia una segnalazione dalle impostazioni.",
+    "The agent was started but its program never came up.",
+    "Restart the team. If it happens again, send a report from the settings.",
+  ),
+  provider_failed: copy(
+    "Il fornitore non ha risposto in modo utilizzabile: non è un limite del tuo abbonamento.",
+    "Riprovo da solo. Se continua, controlla lo stato del fornitore.",
+    "The provider did not give a usable answer: this is not a limit of your subscription.",
+    "I will try again by myself. If it keeps happening, check the provider’s status page.",
   ),
 
   // ── Team start and resume ────────────────────────────────────────────────
@@ -1461,6 +1503,15 @@ export const NOT_EMITTED: ReadonlySet<string> = new Set([
   "container_version_incompatible",
   "account_team_mismatch",
   "ssh_auth_failed",
+  // The runtime, the hub and the web say them; the app reads them in the 2nd cut (T10).
+  "throttled_local",
+  "rate_limited",
+  "rate_limited_burst",
+  "rate_limited_daily",
+  "rate_limit_429",
+  "quota",
+  "runtime_not_started",
+  "provider_failed",
   // Shell layers: the launcher, `jht team start` and the host wrapper's upgrade
   // print them. The app has no Rust or TS emission site for them yet.
   "disk_warning",
