@@ -33,7 +33,12 @@ import {
   POSITIONS_COL_MIN_WIDTH,
   columnAlignClass,
   columnFlexAlignClass,
+  COLUMN_TIER_HIDE_CLASS,
+  columnTier,
+  isDefaultColumnSet,
   parseColumnsCookie,
+  tierMinWidth,
+  tierWidthPercent,
   type PositionsColumnKey,
 } from "./columns";
 import { IconSort } from "./icons";
@@ -184,6 +189,11 @@ export default async function PositionsPage({ searchParams }: PageProps) {
     (s, c) => s + POSITIONS_COL_MIN_WIDTH[c],
     0,
   );
+  // Colonne di default: tre livelli per larghezza di finestra (vedi columns.ts).
+  // Con una scelta esplicita dell'utente la tabella resta com'era.
+  const responsiveCols = isDefaultColumnSet(visibleCols);
+  const tierHide = (c: PositionsColumnKey) =>
+    responsiveCols ? COLUMN_TIER_HIDE_CLASS[columnTier(c)] : "";
   const selectedStates = csv(params.status);
   const statuses = positionStatusesForFilters(selectedStates);
   const remotes = csv(params.remote);
@@ -640,20 +650,46 @@ export default async function PositionsPage({ searchParams }: PageProps) {
         <div className="hidden md:block">
           <TableScrollSync className="overflow-x-auto border border-[var(--color-border)] rounded-lg">
             <table
-              className="w-full table-fixed text-[12px]"
-              style={{ borderCollapse: "collapse", minWidth: tableMinWidth }}
+              className={
+                responsiveCols
+                  ? "w-full table-fixed text-[12px] [min-width:var(--min-a)] min-[1220px]:[min-width:var(--min-b)] min-[1460px]:[min-width:var(--min-c)]"
+                  : "w-full table-fixed text-[12px]"
+              }
+              style={
+                responsiveCols
+                  ? ({
+                      borderCollapse: "collapse",
+                      "--min-a": `${tierMinWidth(orderedCols, "a")}px`,
+                      "--min-b": `${tierMinWidth(orderedCols, "b")}px`,
+                      "--min-c": `${tierMinWidth(orderedCols, "c")}px`,
+                    } as React.CSSProperties)
+                  : { borderCollapse: "collapse", minWidth: tableMinWidth }
+              }
               aria-label={tr("list_positions")}
             >
               <colgroup>
                 {orderedCols.map((c) => (
                   <col
                     key={c}
-                    style={{
-                      width: `${(
-                        (POSITIONS_COL_MIN_WIDTH[c] / tableMinWidth) *
-                        100
-                      ).toFixed(3)}%`,
-                    }}
+                    className={
+                      responsiveCols
+                        ? `${tierHide(c)} [width:var(--wa)] min-[1220px]:[width:var(--wb)] min-[1460px]:[width:var(--wc)]`
+                        : undefined
+                    }
+                    style={
+                      responsiveCols
+                        ? ({
+                            "--wa": tierWidthPercent(c, orderedCols, "a"),
+                            "--wb": tierWidthPercent(c, orderedCols, "b"),
+                            "--wc": tierWidthPercent(c, orderedCols, "c"),
+                          } as React.CSSProperties)
+                        : {
+                            width: `${(
+                              (POSITIONS_COL_MIN_WIDTH[c] / tableMinWidth) *
+                              100
+                            ).toFixed(3)}%`,
+                          }
+                    }
                   />
                 ))}
               </colgroup>
@@ -731,7 +767,7 @@ export default async function PositionsPage({ searchParams }: PageProps) {
                       <th
                         key={col}
                         scope="col"
-                        className={`px-4 py-3 ${columnAlignClass(col as PositionsColumnKey)} text-[9.5px] font-semibold tracking-[0.15em] uppercase truncate`}
+                        className={`px-4 py-3 ${columnAlignClass(col as PositionsColumnKey)} ${tierHide(col as PositionsColumnKey)} text-[9.5px] font-semibold tracking-[0.15em] uppercase truncate`}
                         style={{
                           color:
                             sortable && sortCol === col
@@ -789,7 +825,7 @@ export default async function PositionsPage({ searchParams }: PageProps) {
                       {/* ID */}
                       {show("id") && (
                         <td
-                          className={`px-4 py-3 ${columnAlignClass("id")} text-[10px] text-[var(--color-dim)] whitespace-nowrap`}
+                          className={`px-4 py-3 ${columnAlignClass("id")} ${tierHide("id")} text-[10px] text-[var(--color-dim)] whitespace-nowrap`}
                         >
                           {p.legacy_id
                             ? `JHT-${String(p.legacy_id).padStart(3, "0")}`
@@ -799,7 +835,7 @@ export default async function PositionsPage({ searchParams }: PageProps) {
                       {/* Aggiornato (ultima azione, fallback rilevazione) */}
                       {show("last_action_at") && (
                         <td
-                          className={`px-4 py-3 ${columnAlignClass("last_action_at")} text-[10px] text-[var(--color-muted)] whitespace-nowrap font-mono tabular-nums`}
+                          className={`px-4 py-3 ${columnAlignClass("last_action_at")} ${tierHide("last_action_at")} text-[10px] text-[var(--color-muted)] whitespace-nowrap font-mono tabular-nums`}
                         >
                           {formatShortStamp(
                             p.last_action_at || p.found_at,
@@ -855,7 +891,7 @@ export default async function PositionsPage({ searchParams }: PageProps) {
                       {/* Azienda */}
                       {show("company") && (
                         <td
-                          className={`px-4 py-3 ${columnAlignClass("company")} text-[var(--color-base)] truncate`}
+                          className={`px-4 py-3 ${columnAlignClass("company")} ${tierHide("company")} text-[var(--color-base)] truncate`}
                           title={p.company}
                         >
                           {p.company}
@@ -898,7 +934,7 @@ export default async function PositionsPage({ searchParams }: PageProps) {
                       {/* Paese (Remote in corsivo se senza paese ma full remote) */}
                       {show("loc_country") && (
                         <td
-                          className={`px-4 py-3 ${columnAlignClass("loc_country")} text-[11px] truncate`}
+                          className={`px-4 py-3 ${columnAlignClass("loc_country")} ${tierHide("loc_country")} text-[11px] truncate`}
                           title={p.loc_country ?? undefined}
                         >
                           {p.loc_country && p.loc_country.trim() ? (
@@ -917,7 +953,7 @@ export default async function PositionsPage({ searchParams }: PageProps) {
                       {/* Città */}
                       {show("loc_city") && (
                         <td
-                          className={`px-4 py-3 ${columnAlignClass("loc_city")} text-[11px] text-[var(--color-muted)] truncate`}
+                          className={`px-4 py-3 ${columnAlignClass("loc_city")} ${tierHide("loc_city")} text-[11px] text-[var(--color-muted)] truncate`}
                           title={p.loc_city ?? undefined}
                         >
                           {p.loc_city && p.loc_city.trim() ? (
@@ -940,7 +976,7 @@ export default async function PositionsPage({ searchParams }: PageProps) {
                       {/* Score */}
                       {show("score") && (
                         <td
-                          className={`px-4 py-3 ${columnAlignClass("score")}`}
+                          className={`px-4 py-3 ${columnAlignClass("score")} ${tierHide("score")}`}
                         >
                           <div
                             className={`flex items-center gap-2 ${columnFlexAlignClass("score")}`}
@@ -1035,7 +1071,7 @@ export default async function PositionsPage({ searchParams }: PageProps) {
                       {/* Stato */}
                       {show("status") && (
                         <td
-                          className={`px-4 py-3 ${columnAlignClass("status")}`}
+                          className={`px-4 py-3 ${columnAlignClass("status")} ${tierHide("status")}`}
                         >
                           <PositionStateCell
                             status={p.status}

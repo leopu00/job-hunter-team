@@ -209,6 +209,94 @@ export const DEFAULT_POSITIONS_COLUMNS: PositionsColumnKey[] = [
   "status",
 ];
 
+// ── Colonne di default a livelli, per finestre strette ────────────────────
+// Le otto colonne di default chiedono ~1165 px (in px CSS, prima dello zoom
+// 1.15 del corpo pagina): in una finestra da ~1070 px la tabella era larga
+// il doppio del contenitore e Score e Stato finivano fuori a destra, dietro
+// uno scroll orizzontale che non si vede. Finché l'utente non sceglie le sue
+// colonne, la tabella ne mostra quante ne stanno, da tre livelli:
+//   a — sempre:        ID, titolo, azienda, score, stato   (822 px)
+//   b — da 1220 px:    + aggiornato                         (957 px)
+//   c — da 1460 px:    + paese, città = le otto di default (1165 px)
+// Le soglie sono in px di VIEWPORT e vengono dalle misure del 19/10: il
+// contenitore della tabella è `viewport − 111` px reali, che diviso per lo
+// zoom 1.15 dà i px CSS che stanno nel livello. Le classi sono scritte per
+// esteso (non composte) perché Tailwind le trova leggendo il sorgente.
+// Una scelta esplicita delle colonne (cookie) non passa di qui: scrolla come
+// prima, ed è quello che ha chiesto.
+export type ColumnTier = "a" | "b" | "c";
+
+const TIER_RANK: Record<ColumnTier, number> = { a: 0, b: 1, c: 2 };
+
+export const DEFAULT_COLUMN_TIER: Partial<
+  Record<PositionsColumnKey, ColumnTier>
+> = {
+  id: "a",
+  title: "a",
+  company: "a",
+  score: "a",
+  status: "a",
+  last_action_at: "b",
+  loc_country: "c",
+  loc_city: "c",
+};
+
+/** Viewport minimo (px) da cui il livello compare. */
+export const COLUMN_TIER_MIN_VIEWPORT: Record<ColumnTier, number> = {
+  a: 0,
+  b: 1220,
+  c: 1460,
+};
+
+/** Nasconde le colonne del livello sotto la sua soglia (in Tailwind 4 `max-[N]` è `width < N`). */
+export const COLUMN_TIER_HIDE_CLASS: Record<ColumnTier, string> = {
+  a: "",
+  b: "max-[1220px]:hidden",
+  c: "max-[1460px]:hidden",
+};
+
+export function columnTier(col: PositionsColumnKey): ColumnTier {
+  return DEFAULT_COLUMN_TIER[col] ?? "a";
+}
+
+/** Vero se le colonne visibili sono esattamente quelle di default. */
+export function isDefaultColumnSet(
+  visible: ReadonlySet<PositionsColumnKey>,
+): boolean {
+  return (
+    visible.size === DEFAULT_POSITIONS_COLUMNS.length &&
+    DEFAULT_POSITIONS_COLUMNS.every((c) => visible.has(c))
+  );
+}
+
+/** Le colonne che il livello mostra (quelle del livello e dei precedenti). */
+export function tierColumns(
+  cols: readonly PositionsColumnKey[],
+  tier: ColumnTier,
+): PositionsColumnKey[] {
+  return cols.filter((c) => TIER_RANK[columnTier(c)] <= TIER_RANK[tier]);
+}
+
+/** Larghezza minima (px) della tabella a quel livello. */
+export function tierMinWidth(
+  cols: readonly PositionsColumnKey[],
+  tier: ColumnTier,
+): number {
+  return tierColumns(cols, tier).reduce(
+    (sum, c) => sum + POSITIONS_COL_MIN_WIDTH[c],
+    0,
+  );
+}
+
+/** Larghezza percentuale di una colonna nel `colgroup` di quel livello. */
+export function tierWidthPercent(
+  col: PositionsColumnKey,
+  cols: readonly PositionsColumnKey[],
+  tier: ColumnTier,
+): string {
+  return `${((POSITIONS_COL_MIN_WIDTH[col] / tierMinWidth(cols, tier)) * 100).toFixed(3)}%`;
+}
+
 export const POSITIONS_COLS_COOKIE = "jht_positions_cols";
 
 // Cookie → set di colonne visibili. Chiavi ignote (versioni vecchie,
