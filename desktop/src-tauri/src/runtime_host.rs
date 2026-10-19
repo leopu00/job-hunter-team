@@ -179,7 +179,125 @@ fn known_hosts_path(
         .join(host_hash(address, port)))
 }
 
+/// The key the VPS offers, to show to the person before anything is pinned.
+/// Windows ships an OpenSSH whose `ssh-keyscan` offers a key exchange it does
+/// not implement (sntrup761x25519): a current sshd picks it, the handshake dies
+/// and nothing is printed. There the key is taken with `ssh` itself, whose
+/// proposal the app sets (see `kex_args`); elsewhere `ssh-keyscan` is enough.
 fn scan_host_key(address: &str, port: u16) -> Result<ScannedHostKey, &'static str> {
+    if cfg!(windows) {
+        scan_host_key_with_ssh("ssh", address, port)
+    } else {
+        scan_host_key_with_keyscan(address, port)
+    }
+}
+
+/// The part of the key exchange the Windows OpenSSH client gets wrong: the
+/// hybrid post-quantum method it proposes but cannot run is taken out of its
+/// proposal, the rest of the default list stays. Other platforms are untouched.
+// The method's name has an "@" in it; written in pieces so that it is not read as an address.
+const WINDOWS_KEX_OPTION: &str = concat!(
+    "KexAlgorithms=-sntrup761x25519-sha512",
+    "@",
+    "openssh.com",
+    ",sntrup761x25519-sha512"
+);
+
+fn kex_args(on_windows: bool) -> Vec<OsString> {
+    if on_windows {
+        vec!["-o".into(), WINDOWS_KEX_OPTION.into()]
+    } else {
+        Vec::new()
+    }
+}
+
+/// An sshd with `PerSourcePenalties` (OpenSSH 9.8 and later) refuses, for up to
+/// ten minutes, an address that closed connections before authenticating. What
+/// the client then prints is the only sign; it is read here and never kept.
+fn ssh_rejects_for_a_while(stderr: &[u8]) -> bool {
+    let text = String::from_utf8_lossy(stderr);
+    text.contains("kex_exchange_identification") || text.contains("Connection reset")
+}
+
+/// A known_hosts file that exists only for one probe, owner-only, and is gone
+/// when the probe ends. The key `ssh` writes there is not trusted by that: it
+/// is read, shown, and pinned only after the person confirms it.
+struct ProbeKnownHosts {
+    path: PathBuf,
+}
+
+impl ProbeKnownHosts {
+    fn create() -> Result<Self, &'static str> {
+        let nanos = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_nanos())
+            .unwrap_or(0);
+        let path = std::env::temp_dir().join(format!("jht-hostkey-{}-{nanos}", std::process::id()));
+        fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&path)
+            .map_err(|_| "storage_unavailable")?;
+        let probe = Self { path };
+        set_private_permissions(&probe.path)?;
+        Ok(probe)
+    }
+}
+
+impl Drop for ProbeKnownHosts {
+    fn drop(&mut self) {
+        let _ = fs::remove_file(&self.path);
+    }
+}
+
+/// `ssh` with no authentication, asked only to write the key it was offered.
+/// It never logs in: the server refuses and the connection ends.
+fn host_key_probe_args(known_hosts: &Path, address: &str, port: u16, on_windows: bool) -> Vec<OsString> {
+    let known_hosts_option = known_hosts.display().to_string()
+        .replace('\\', "\\\\").replace('"', "\\\"");
+    let mut args: Vec<OsString> = vec!["-a".into(), "-x".into(), "-T".into()];
+    for option in [
+        "BatchMode=yes".to_owned(),
+        "ConnectTimeout=12".to_owned(),
+        // Only into the throwaway file below: nothing is trusted by this.
+        "StrictHostKeyChecking=accept-new".to_owned(),
+        format!("UserKnownHostsFile=\"{known_hosts_option}\""),
+        "GlobalKnownHostsFile=/dev/null".to_owned(),
+        "HashKnownHosts=no".to_owned(),
+        "HostKeyAlgorithms=ssh-ed25519".to_owned(),
+        "PreferredAuthentications=none".to_owned(),
+        "PubkeyAuthentication=no".to_owned(),
+        "PasswordAuthentication=no".to_owned(),
+        "KbdInteractiveAuthentication=no".to_owned(),
+    ] {
+        args.push("-o".into());
+        args.push(option.into());
+    }
+    args.extend(kex_args(on_windows));
+    args.push("-p".into());
+    args.push(port.to_string().into());
+    args.push(format!("jht-hostkey@{address}").into());
+    args
+}
+
+fn scan_host_key_with_ssh(program: &str, address: &str, port: u16) -> Result<ScannedHostKey, &'static str> {
+    let known_hosts = ProbeKnownHosts::create()?;
+    let args = host_key_probe_args(&known_hosts.path, address, port, cfg!(windows));
+    let (result, stderr) = run_program_keeping_stderr(program, &args, None, Duration::from_secs(20));
+    let written = fs::read(&known_hosts.path).unwrap_or_default();
+    if !written.is_empty() && written.len() <= 64 * 1024 {
+        if let Some(key) = parse_keyscan_output(&written) {
+            return Ok(key);
+        }
+    }
+    if ssh_rejects_for_a_while(&stderr) {
+        return Err("ssh_rate_limited");
+    }
+    result?;
+    Err("host_key_unavailable")
+}
+
+fn scan_host_key_with_keyscan(address: &str, port: u16) -> Result<ScannedHostKey, &'static str> {
     let args = vec![
         OsString::from("-T"),
         OsString::from("8"),
@@ -190,10 +308,32 @@ fn scan_host_key(address: &str, port: u16) -> Result<ScannedHostKey, &'static st
         OsString::from(address),
     ];
     let result = run_program("ssh-keyscan", &args, None, Duration::from_secs(12))?;
-    if !result.success() || result.stdout.is_empty() || result.stdout.len() > 64 * 1024 {
+    // The exit status is not the test: what counts is a key line that parses.
+    // Some builds (Win32-OpenSSH) exit non-zero after printing the key.
+    if result.stdout.is_empty() || result.stdout.len() > 64 * 1024 {
         return Err("host_key_unavailable");
     }
-    parse_scanned_host_key(&result.stdout).ok_or("host_key_unavailable")
+    parse_keyscan_output(&result.stdout).ok_or("host_key_unavailable")
+}
+
+/// The key `ssh-keyscan` printed. The output is read the way a person would:
+/// a BOM, CRLF line ends, `# host:port banner` comment lines, lines of other
+/// algorithms and trailing comment fields are not the key and do not hide it.
+/// What is left must still be one ed25519 key, the same on every line, and goes
+/// through the strict parser the pin file is read with.
+fn parse_keyscan_output(bytes: &[u8]) -> Option<ScannedHostKey> {
+    let text = std::str::from_utf8(bytes).ok()?.trim_start_matches('\u{feff}');
+    let key_lines: Vec<String> = text
+        .lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty() && !line.starts_with('#'))
+        .filter_map(|line| {
+            let mut fields = line.split_whitespace();
+            let (host, algorithm, key) = (fields.next()?, fields.next()?, fields.next()?);
+            (algorithm == "ssh-ed25519").then(|| format!("{host} {algorithm} {key}"))
+        })
+        .collect();
+    parse_scanned_host_key(key_lines.join("\n").as_bytes())
 }
 
 fn parse_scanned_host_key(bytes: &[u8]) -> Option<ScannedHostKey> {
@@ -342,23 +482,38 @@ impl From<&'static str> for HostKeyError {
     }
 }
 
+// Both commands run `ssh-keyscan`, which can take its whole timeout. A plain
+// `fn` command runs on the main thread, and the window stops answering for
+// that long: the work goes to a blocking worker, like `onboarding_prepare`.
+
 #[tauri::command]
-pub(crate) fn onboarding_ssh_host_key_probe(
+pub(crate) async fn onboarding_ssh_host_key_probe(
     app: tauri::AppHandle,
     scopes: tauri::State<'_, AccountScopeState>,
     host: ExecutionHost,
 ) -> Result<SshHostKeyProbe, HostKeyError> {
+    let scopes = scopes.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || host_key_probe(&app, &scopes, &host))
+        .await
+        .unwrap_or_else(|_| Err("process_wait_failed".into()))
+}
+
+fn host_key_probe(
+    app: &tauri::AppHandle,
+    scopes: &AccountScopeState,
+    host: &ExecutionHost,
+) -> Result<SshHostKeyProbe, HostKeyError> {
     let scope = scopes.lock_active()?;
-    let ExecutionHost::Vps { address, port, .. } = &host else {
+    let ExecutionHost::Vps { address, port, .. } = host else {
         return Err("not_vps".into());
     };
     // Validate every host field, including the local private-key path, without
     // creating known_hosts or starting an SSH session.
-    match validate_host_for_scope(&app, &host, scope.scope()) {
+    match validate_host_for_scope(app, host, scope.scope()) {
         Ok(_) | Err("host_key_missing") | Err("host_key_mismatch") => {}
         Err(error) => return Err(error.into()),
     }
-    let destination = known_hosts_path(&app, scope.scope(), address, *port)?;
+    let destination = known_hosts_path(app, scope.scope(), address, *port)?;
     let scanned = scan_host_key(address, *port)?;
     let status = probe_status(&destination, &scanned)?;
     Ok(SshHostKeyProbe {
@@ -369,25 +524,40 @@ pub(crate) fn onboarding_ssh_host_key_probe(
 }
 
 #[tauri::command]
-pub(crate) fn onboarding_ssh_host_key_confirm(
+pub(crate) async fn onboarding_ssh_host_key_confirm(
     app: tauri::AppHandle,
     scopes: tauri::State<'_, AccountScopeState>,
     host: ExecutionHost,
     algorithm: String,
     fingerprint: String,
 ) -> Result<(), HostKeyError> {
+    let scopes = scopes.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        host_key_confirm(&app, &scopes, &host, &algorithm, &fingerprint)
+    })
+    .await
+    .unwrap_or_else(|_| Err("process_wait_failed".into()))
+}
+
+fn host_key_confirm(
+    app: &tauri::AppHandle,
+    scopes: &AccountScopeState,
+    host: &ExecutionHost,
+    algorithm: &str,
+    fingerprint: &str,
+) -> Result<(), HostKeyError> {
     let scope = scopes.lock_active()?;
     if algorithm != "ssh-ed25519" || !fingerprint.starts_with("SHA256:") {
         return Err("host_key_confirmation_invalid".into());
     }
-    let ExecutionHost::Vps { address, port, .. } = &host else {
+    let ExecutionHost::Vps { address, port, .. } = host else {
         return Err("not_vps".into());
     };
-    match validate_host_for_scope(&app, &host, scope.scope()) {
+    match validate_host_for_scope(app, host, scope.scope()) {
         Ok(_) | Err("host_key_missing") | Err("host_key_mismatch") => {}
         Err(error) => return Err(error.into()),
     }
-    let destination = known_hosts_path(&app, scope.scope(), address, *port)?;
+    let destination = known_hosts_path(app, scope.scope(), address, *port)?;
     let scanned = scan_host_key(address, *port)?;
     if scanned.algorithm != algorithm || scanned.fingerprint != fingerprint {
         return Err("host_key_changed".into());
@@ -492,6 +662,17 @@ pub(crate) fn set_private_dir_permissions(_path: &Path) -> Result<(), &'static s
     Ok(())
 }
 
+/// Why a program did not start. The OpenSSH client is an optional feature of
+/// Windows: when `ssh` or `ssh-keyscan` is simply not there the person gets a
+/// code of its own (install it), not the generic "a program did not start".
+fn spawn_failure(program: &str, error: &std::io::Error) -> &'static str {
+    if error.kind() == std::io::ErrorKind::NotFound && matches!(program, "ssh" | "ssh-keyscan") {
+        "ssh_client_missing"
+    } else {
+        "process_start_failed"
+    }
+}
+
 pub(crate) fn ssh_base_args(host: &ValidatedHost) -> Result<Vec<OsString>, &'static str> {
     let ValidatedHost::Vps {
         address,
@@ -507,7 +688,7 @@ pub(crate) fn ssh_base_args(host: &ValidatedHost) -> Result<Vec<OsString>, &'sta
     // even when the app-data directory contains spaces, quotes or backslashes.
     let known_hosts_option = known_hosts.display().to_string()
         .replace('\\', "\\\\").replace('"', "\\\"");
-    Ok(vec![
+    let mut args: Vec<OsString> = vec![
         "-a".into(),
         "-x".into(),
         "-T".into(),
@@ -515,18 +696,29 @@ pub(crate) fn ssh_base_args(host: &ValidatedHost) -> Result<Vec<OsString>, &'sta
         "BatchMode=yes".into(),
         "-o".into(),
         "ConnectTimeout=12".into(),
+        // A long step (the image pull of `jht up` prints nothing for minutes) must
+        // not be cut by a router that drops quiet connections: ssh sends a
+        // keepalive every 30 s and gives up after four unanswered ones.
+        "-o".into(),
+        "ServerAliveInterval=30".into(),
+        "-o".into(),
+        "ServerAliveCountMax=4".into(),
         "-o".into(),
         "StrictHostKeyChecking=yes".into(),
         "-o".into(),
         format!("UserKnownHostsFile=\"{known_hosts_option}\"").into(),
         "-o".into(),
         "GlobalKnownHostsFile=/dev/null".into(),
+    ];
+    args.extend(kex_args(cfg!(windows)));
+    args.extend([
         "-i".into(),
         key_path.as_os_str().to_owned(),
         "-p".into(),
         port.to_string().into(),
         format!("{user}@{address}").into(),
-    ])
+    ]);
+    Ok(args)
 }
 
 pub(crate) fn run_ssh(
@@ -554,7 +746,13 @@ pub(crate) fn run_ssh_command(
         args.insert(0, "-o".into());
     }
     args.push(remote_command.into());
-    run_program("ssh", &args, input, timeout)
+    let (result, stderr) = run_program_keeping_stderr("ssh", &args, input, timeout);
+    // The stderr of ssh is looked at for one thing and dropped: a server that is
+    // refusing this address for a while (see `ssh_rejects_for_a_while`).
+    if matches!(&result, Ok(value) if value.code == 255) && ssh_rejects_for_a_while(&stderr) {
+        return Err("ssh_rate_limited");
+    }
+    result
 }
 
 fn read_capped(mut reader: impl Read) -> Vec<u8> {
@@ -632,8 +830,9 @@ where
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
     hide_console(&mut command);
-    let Ok(mut child) = command.spawn() else {
-        return (Err("process_start_failed"), Vec::new());
+    let mut child = match command.spawn() {
+        Ok(child) => child,
+        Err(error) => return (Err(spawn_failure(program, &error)), Vec::new()),
     };
     let (Some(stdout), Some(stderr)) = (child.stdout.take(), child.stderr.take()) else {
         let _ = child.kill();
@@ -795,8 +994,9 @@ where
     } else {
         command.stdin(Stdio::null());
     }
-    let Ok(mut child) = command.spawn() else {
-        return (Err("process_start_failed"), Vec::new());
+    let mut child = match command.spawn() {
+        Ok(child) => child,
+        Err(error) => return (Err(spawn_failure(program, &error)), Vec::new()),
     };
     let (Some(stdout), Some(stderr)) = (child.stdout.take(), child.stderr.take()) else {
         let _ = child.kill();
@@ -864,31 +1064,33 @@ where
 #[cfg(test)]
 mod tests {
     use super::{
-        decode_base64, encode_base64, onboarding_ssh_host_key_confirm,
-        onboarding_ssh_host_key_probe, parse_scanned_host_key, probe_status, ssh_base_args,
+        decode_base64, encode_base64, parse_scanned_host_key, probe_status, ssh_base_args,
         valid_address,
         valid_user, write_pinned_host_key, ExecutionHost, HostKeyError, ScannedHostKey,
         SshHostKeyProbe,
     };
     use crate::account_scope::AccountScopeState;
+    use std::path::{Path, PathBuf};
     use std::{fs, time::SystemTime};
 
     #[test]
     fn host_key_commands_fail_with_a_structured_code_like_every_other_command() {
         // Compile-time pin: going back to a bare `&str` error breaks the build
-        // of the tests, not just a runtime assertion.
-        let _: for<'a> fn(
-            tauri::AppHandle,
-            tauri::State<'a, AccountScopeState>,
-            ExecutionHost,
-        ) -> Result<SshHostKeyProbe, HostKeyError> = onboarding_ssh_host_key_probe;
-        let _: for<'a> fn(
-            tauri::AppHandle,
-            tauri::State<'a, AccountScopeState>,
-            ExecutionHost,
-            String,
-            String,
-        ) -> Result<(), HostKeyError> = onboarding_ssh_host_key_confirm;
+        // of the tests, not just a runtime assertion. The commands themselves
+        // are async (they must not run on the main thread: `ssh-keyscan` can
+        // take its whole timeout) and return what these two functions return.
+        let _: fn(
+            &tauri::AppHandle,
+            &AccountScopeState,
+            &ExecutionHost,
+        ) -> Result<SshHostKeyProbe, HostKeyError> = super::host_key_probe;
+        let _: fn(
+            &tauri::AppHandle,
+            &AccountScopeState,
+            &ExecutionHost,
+            &str,
+            &str,
+        ) -> Result<(), HostKeyError> = super::host_key_confirm;
 
         for code in ["host_key_changed", "host_key_mismatch", "not_vps"] {
             assert_eq!(
@@ -1039,6 +1241,183 @@ mod tests {
         .expect("cat succeeds");
         assert_eq!(result.code, 0);
         assert_eq!(result.stdout, input);
+    }
+
+    #[test]
+    fn ssh_base_keeps_a_long_silent_step_alive() {
+        let host = super::ValidatedHost::Vps {
+            address: "test-host".into(),
+            user: "test".into(),
+            port: 22,
+            key_path: "/private/synthetic-key".into(),
+            known_hosts: "/private/synthetic-known-hosts".into(),
+        };
+        let args = ssh_base_args(&host).unwrap();
+        let values: Vec<_> = args.iter().map(|value| value.to_string_lossy().into_owned()).collect();
+        for option in ["ServerAliveInterval=30", "ServerAliveCountMax=4"] {
+            let at = values.iter().position(|value| value == option).expect(option);
+            assert_eq!(values[at - 1], "-o", "{option} must be an -o value");
+        }
+    }
+
+    #[test]
+    fn a_missing_ssh_client_has_its_own_code_and_other_programs_do_not() {
+        let missing = std::io::Error::from(std::io::ErrorKind::NotFound);
+        let denied = std::io::Error::from(std::io::ErrorKind::PermissionDenied);
+        assert_eq!(super::spawn_failure("ssh", &missing), "ssh_client_missing");
+        assert_eq!(super::spawn_failure("ssh-keyscan", &missing), "ssh_client_missing");
+        assert_eq!(super::spawn_failure("podman", &missing), "process_start_failed");
+        assert_eq!(super::spawn_failure("ssh", &denied), "process_start_failed");
+        // The real thing: a program that is not on the path.
+        let (result, _) = super::run_program_keeping_stderr(
+            "ssh-keyscan-that-does-not-exist",
+            ["-V"],
+            None,
+            std::time::Duration::from_secs(2),
+        );
+        assert_eq!(result.err(), Some("process_start_failed"));
+    }
+
+    const SNTRUP: &str = concat!("sntrup761x25519-sha512", "@", "openssh.com");
+    const OFFERED_KEY: &str = "AAAAC3NzaC1lZDI1NTE5AAAAIserverkeyserverkeyserverkeyserver00";
+    const OTHER_OFFERED_KEY: &str = "AAAAC3NzaC1lZDI1NTE5AAAAIattackerkeyattackerkeyattackerkey00";
+
+    #[test]
+    fn the_key_is_found_in_what_windows_prints() {
+        // BOM, CRLF, a banner comment, a key of another algorithm, a trailing comment.
+        let windows = format!(
+            "\u{feff}# 192.0.2.10:22 SSH-2.0-OpenSSH_10.2\r\n\
+             192.0.2.10 ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQ\r\n\
+             192.0.2.10 ssh-ed25519 {OFFERED_KEY} offered by the server\r\n"
+        );
+        let key = super::parse_keyscan_output(windows.as_bytes()).expect("key");
+        assert_eq!(key.algorithm, "ssh-ed25519");
+        assert_eq!(key.encoded_key, OFFERED_KEY);
+        // The same key under two names is one key; two keys are no key at all.
+        let twice = format!("a ssh-ed25519 {OFFERED_KEY}\nb ssh-ed25519 {OFFERED_KEY}\n");
+        assert!(super::parse_keyscan_output(twice.as_bytes()).is_some());
+        let clash = format!("a ssh-ed25519 {OFFERED_KEY}\nb ssh-ed25519 {OTHER_OFFERED_KEY}\n");
+        assert!(super::parse_keyscan_output(clash.as_bytes()).is_none());
+    }
+
+    #[test]
+    fn what_windows_printed_when_it_failed_is_no_key() {
+        // The real case: exit 1 after 8 s, stdout empty, the reason on stderr.
+        assert!(super::parse_keyscan_output(b"").is_none());
+        assert!(super::parse_keyscan_output(b"\r\n").is_none());
+        assert!(super::parse_keyscan_output(b"# 192.0.2.10:22 SSH-2.0-OpenSSH_10.2\r\n").is_none());
+        let kex_error = format!("choose_kex: unsupported KEX method {SNTRUP}\r\n");
+        assert!(super::parse_keyscan_output(kex_error.as_bytes()).is_none());
+        assert!(super::parse_keyscan_output(b"192.0.2.10 ssh-ed25519 not*base64\r\n").is_none());
+    }
+
+    #[test]
+    fn the_windows_client_proposes_no_key_exchange_it_cannot_run_and_other_systems_are_untouched() {
+        let on = super::kex_args(true);
+        assert_eq!(on.len(), 2);
+        assert_eq!(on[0].to_string_lossy(), "-o");
+        let option = on[1].to_string_lossy();
+        assert!(option.starts_with("KexAlgorithms=-"), "{option}");
+        assert!(option.contains(SNTRUP), "{option}");
+        assert!(super::kex_args(false).is_empty());
+
+        let host = super::ValidatedHost::Vps {
+            address: "test-host".into(),
+            user: "test".into(),
+            port: 22,
+            key_path: "/private/synthetic-key".into(),
+            known_hosts: "/private/synthetic-known-hosts".into(),
+        };
+        let args = ssh_base_args(&host).unwrap();
+        let has = args.iter().any(|a| a.to_string_lossy().starts_with("KexAlgorithms="));
+        assert_eq!(has, cfg!(windows));
+    }
+
+    #[test]
+    fn the_host_key_probe_never_logs_in_and_trusts_only_a_file_it_throws_away() {
+        let args = super::host_key_probe_args(Path::new("/tmp/jht-probe"), "192.0.2.10", 2222, true);
+        let values: Vec<_> = args.iter().map(|a| a.to_string_lossy().into_owned()).collect();
+        for needed in [
+            "BatchMode=yes",
+            "PreferredAuthentications=none",
+            "PubkeyAuthentication=no",
+            "PasswordAuthentication=no",
+            "GlobalKnownHostsFile=/dev/null",
+            "HostKeyAlgorithms=ssh-ed25519",
+        ] {
+            assert!(values.iter().any(|v| v == needed), "{needed}");
+        }
+        assert!(!values.iter().any(|v| v == "-i"), "no identity is offered");
+        assert!(values.iter().any(|v| v == "UserKnownHostsFile=\"/tmp/jht-probe\""));
+        assert!(values.iter().any(|v| v.starts_with("KexAlgorithms=-")));
+        assert_eq!(values.last().map(String::as_str), Some("jht-hostkey@192.0.2.10"));
+        assert!(!super::host_key_probe_args(Path::new("/tmp/x"), "h", 22, false)
+            .iter()
+            .any(|a| a.to_string_lossy().starts_with("KexAlgorithms=")));
+    }
+
+    #[test]
+    fn a_server_that_is_refusing_this_address_for_a_while_is_told_from_one_that_failed() {
+        assert!(super::ssh_rejects_for_a_while(
+            b"kex_exchange_identification: read: Connection reset by 192.0.2.10 port 22\r\n"
+        ));
+        assert!(super::ssh_rejects_for_a_while(b"Connection reset by 192.0.2.10 port 22"));
+        assert!(!super::ssh_rejects_for_a_while(b"Permission denied (publickey).\r\n"));
+        let kex_error = format!("choose_kex: unsupported KEX method {SNTRUP}\r\n");
+        assert!(!super::ssh_rejects_for_a_while(kex_error.as_bytes()));
+        assert!(!super::ssh_rejects_for_a_while(b""));
+    }
+
+    /// A stand-in for `ssh` that behaves as `script` says, in its own folder.
+    #[cfg(unix)]
+    fn fake_ssh(script: &str) -> (PathBuf, PathBuf) {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = std::env::temp_dir().join(format!("jht-fake-ssh-{}-{}", std::process::id(), script.len()));
+        fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("ssh");
+        fs::write(&path, format!("#!/bin/sh\n{script}\n")).unwrap();
+        fs::set_permissions(&path, fs::Permissions::from_mode(0o755)).unwrap();
+        (dir, path)
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn the_key_ssh_writes_in_the_throwaway_file_is_read_and_the_file_is_gone() {
+        let (dir, program) = fake_ssh(&format!(
+            "for a in \"$@\"; do case \"$a\" in UserKnownHostsFile=*) f=\"${{a#UserKnownHostsFile=}}\"; f=\"${{f#\\\"}}\"; f=\"${{f%\\\"}}\";; esac; done\n\
+             printf '[192.0.2.10]:2222 ssh-ed25519 {OFFERED_KEY}\\r\\n' >> \"$f\"\n\
+             printf '%s' \"$f\" > \"$(dirname \"$0\")/known-hosts-used\"\n\
+             echo 'Permission denied (none).' >&2\nexit 255"
+        ));
+        let key = super::scan_host_key_with_ssh(program.to_str().unwrap(), "192.0.2.10", 2222).expect("key");
+        assert_eq!(key.encoded_key, OFFERED_KEY);
+        // The file the fake was told to write into is the one that must be gone
+        // (other tests probe in parallel, so the temp folder is not searched).
+        let used = PathBuf::from(fs::read_to_string(dir.join("known-hosts-used")).expect("path"));
+        assert!(used.starts_with(std::env::temp_dir()), "{used:?}");
+        assert!(!used.exists(), "the throwaway known_hosts must be removed");
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn nothing_written_is_host_key_unavailable_and_a_reset_is_its_own_code() {
+        let (dir, program) = fake_ssh(&format!(
+            "echo 'choose_kex: unsupported KEX method {SNTRUP}' >&2\nexit 1"
+        ));
+        assert_eq!(
+            super::scan_host_key_with_ssh(program.to_str().unwrap(), "192.0.2.10", 22).err(),
+            Some("host_key_unavailable")
+        );
+        let _ = fs::remove_dir_all(dir);
+        let (dir, program) = fake_ssh(
+            "echo 'kex_exchange_identification: read: Connection reset by 192.0.2.10 port 22' >&2\nexit 255",
+        );
+        assert_eq!(
+            super::scan_host_key_with_ssh(program.to_str().unwrap(), "192.0.2.10", 22).err(),
+            Some("ssh_rate_limited")
+        );
+        let _ = fs::remove_dir_all(dir);
     }
 
     #[test]

@@ -77,7 +77,7 @@ impl RuntimeLog {
                 | "invalid_key" | "key_unavailable" | "not_vps" | "permissions_failed"
                 | "host_key_unavailable" | "host_key_missing" | "host_key_changed" | "host_key_mismatch"
                 | "host_key_confirmation_invalid" | "host_key_unwritable"
-                | "ssh_unavailable" | "ssh_auth_failed" | "process_start_failed" | "process_timeout"
+                | "ssh_unavailable" | "ssh_client_missing" | "ssh_rate_limited" | "ssh_auth_failed" | "process_start_failed" | "process_timeout"
                 | "process_write_failed" | "process_wait_failed" | "process_output_unavailable"
                 | "process_input_failed" | "process_pipe_failed" => code,
                 _ => "io_error_other",
