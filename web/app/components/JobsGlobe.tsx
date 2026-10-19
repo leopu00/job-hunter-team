@@ -2364,6 +2364,35 @@ export default function JobsGlobe({
           </p>
         )}
 
+        {/* Senza posizioni con una sede il globo era solo uno sfondo: una frase
+            dice perché è vuoto e cosa comparirà. */}
+        {loaded && data.length === 0 && !showcase && (
+          <div
+            className="absolute inset-x-0 bottom-24 flex justify-center px-4 pointer-events-none"
+            role="status"
+            data-testid="map-empty-state"
+          >
+            <div
+              className="text-center"
+              style={{
+                maxWidth: 360,
+                padding: "14px 18px",
+                background: "var(--color-panel)",
+                border: "1px solid var(--color-border)",
+                borderRadius: 12,
+                boxShadow: "0 4px 12px rgba(0,0,0,0.4)",
+              }}
+            >
+              <p className="text-[12px] font-semibold text-[var(--color-text)]">
+                {tr("empty_title")}
+              </p>
+              <p className="mt-1 text-[11px] leading-snug text-[var(--color-muted)]">
+                {tr("empty_hint")}
+              </p>
+            </div>
+          </div>
+        )}
+
         {selected && popupAnchor && (
           <div
             // Appiglio per i test end-to-end: la card è posizionata in
