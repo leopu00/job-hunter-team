@@ -20,7 +20,7 @@ Tables: `position`, `application`.
 
 ```bash
 # Promote to checked / excluded (Analyst's job)
-python3 /app/shared/skills/db_update.py position 42 --status checked
+python3 /app/shared/skills/db_update.py position 42 --status checked --loc-city "Milan" --loc-country "Italy"
 python3 /app/shared/skills/db_update.py position 42 --status excluded
 
 # last-checked marker (link confirmed alive — also used as anti-collision claim)

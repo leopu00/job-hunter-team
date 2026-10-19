@@ -2,7 +2,7 @@
 """Aggiorna dati nel database jobs.db (schema V2).
 
 Uso:
-  python3 db_update.py position 42 --status checked
+  python3 db_update.py position 42 --status checked --loc-city "Milan" --loc-country "Italy"
   python3 db_update.py position 42 --status scored --notes "Ottimo match"
   python3 db_update.py company "Adaptify" --verdict GO --red-flags "piccola"
   python3 db_update.py application 42 --critic-verdict PASS --critic-score 8.5 --reviewed-by critico
@@ -212,6 +212,52 @@ def _location_precision_writes(conn, args):
     return ('city' if current is None else None), None
 
 
+def _checked_place_gate(conn, args, previous_status):
+    """Nessun `checked` senza un luogo (JHT-T03): il livello minimo da scrivere, o None.
+
+    Guarda la riga COME RISULTEREBBE dopo l'UPDATE: i valori già in DB, scavalcati da quelli
+    della stessa chiamata (`location-enrichment` scrive il luogo nel comando che promuove).
+    Luogo = una città o un paese non vuoti, oppure un regime remoto esplicito (full_remote /
+    work_mode=remote: il full remote senza paese passa). Altrimenti exit 1, nessuna scrittura.
+
+    Vale solo per la transizione verso `checked`: ritoccare una riga già `checked` non rifiuta,
+    e le righe vecchie senza luogo non si riscrivono. Se il luogo c'è e il livello no, ritorna
+    il pavimento (city < country < remote) da scrivere nello stesso UPDATE; un livello già
+    presente non si tocca, mai abbassato.
+    """
+    if args.status != 'checked' or previous_status in (None, 'checked'):
+        return None
+    row = conn.execute(
+        "SELECT loc_city, loc_country, remote_type, work_mode, location_precision "
+        "FROM positions WHERE id = ?", (args.id,)
+    ).fetchone()
+    if row is None:
+        return None
+
+    def effective(arg_value, column):
+        # "" in riga di comando vuol dire "ripulisci" (NULL): il valore finale è vuoto.
+        value = arg_value if arg_value is not None else row[column]
+        return (value or '').strip()
+
+    city = effective(getattr(args, 'loc_city', None), 'loc_city')
+    country = effective(getattr(args, 'loc_country', None), 'loc_country')
+    remote_type = args.remote_type or row['remote_type']
+    work_mode = effective(getattr(args, 'work_mode', None), 'work_mode')
+    remote = remote_type == 'full_remote' or work_mode == 'remote'
+    if not (city or country or remote):
+        print(
+            f"⚠️  LOCATION_MISSING (location_missing): position {args.id} cannot become "
+            "'checked' without a place. Pass --loc-city or --loc-country in the same command, "
+            "or mark it fully remote (--remote-type full_remote or --work-mode remote).",
+            file=sys.stderr,
+        )
+        conn.close()
+        sys.exit(1)
+    if row['location_precision'] is not None:
+        return None
+    return 'city' if city else ('country' if country else 'remote')
+
+
 def update_position(args):
     # Stessa regola della INSERT: i campi che vengono dalla pagina restano una
     # riga sola. Una correzione dell'Analista al titolo passa da qui, e senza
@@ -247,6 +293,7 @@ def update_position(args):
         ).fetchone()
         if row is not None:
             previous_status = row[0] if not hasattr(row, "keys") else row["status"]
+    precision_floor = _checked_place_gate(conn, args, previous_status)
 
     # `getattr`: update_position è invocata anche con Namespace costruiti a
     # mano da altri moduli, che non conoscono i flag dello storico.
@@ -455,6 +502,8 @@ def update_position(args):
 
     # Precisione del luogo (JHT-T04). Una sola regola per il livello e per il flag.
     precision, flag = _location_precision_writes(conn, args)
+    if precision is None and precision_floor is not None:
+        precision = precision_floor
     if precision is not None:
         updates.append("location_precision = ?")
         params.append(precision)

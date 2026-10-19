@@ -215,7 +215,7 @@ python3 shared/skills/db_insert.py highlight \
 ### Update
 ```bash
 # Stato posizione
-python3 shared/skills/db_update.py position 42 --status checked
+python3 shared/skills/db_update.py position 42 --status checked --loc-city Milan --loc-country Italy
 
 # Stipendio dichiarato
 python3 shared/skills/db_update.py position 42 --salary-declared-min 40000 --salary-declared-max 55000

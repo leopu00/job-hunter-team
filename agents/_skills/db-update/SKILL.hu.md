@@ -21,7 +21,7 @@ Táblák: `position`, `application`.
 
 ```bash
 # Léptetés checked / excluded állapotba (Analyst feladata)
-python3 /app/shared/skills/db_update.py position 42 --status checked
+python3 /app/shared/skills/db_update.py position 42 --status checked --loc-city "Milan" --loc-country "Italy"
 python3 /app/shared/skills/db_update.py position 42 --status excluded
 
 # last-checked jelölő (link életben levése megerősítve — anti-ütközés foglalásként is használt)

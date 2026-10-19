@@ -21,7 +21,7 @@ Tables : `position`, `application`.
 
 ```bash
 # Promouvoir en checked / excluded (travail de l'Analista)
-python3 /app/shared/skills/db_update.py position 42 --status checked
+python3 /app/shared/skills/db_update.py position 42 --status checked --loc-city "Milan" --loc-country "Italy"
 python3 /app/shared/skills/db_update.py position 42 --status excluded
 
 # Marqueur last-checked (lien confirmé vivant — aussi utilisé comme revendication anti-collision)
