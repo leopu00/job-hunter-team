@@ -173,6 +173,14 @@ const NOT_ERRORS: Record<string, string> = {
   application: "vps link kind",
   version: "vps link kind",
   blocked: "vps link kind",
+  // The agents' control panel (agent_control.rs): the outcomes of an action,
+  // which the page says with its own sentences, and the fields of its reads.
+  already_paused: "agent control outcome",
+  already_running: "agent control outcome",
+  already_stopped: "agent control outcome",
+  not_paused: "agent control outcome",
+  by_user: "agent control read field",
+  weekly_reset: "agent control pause exit kind",
 };
 
 function compiledRustModules(): string[] {

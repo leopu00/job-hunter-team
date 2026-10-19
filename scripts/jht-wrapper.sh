@@ -32,6 +32,10 @@ JHT_UPGRADE_PROTOCOL=1
 JHT_HOST_RUNTIME_PROTOCOL=1
 JHT_DESKTOP_CHAT_PROTOCOL=1
 JHT_ONBOARDING_SNAPSHOT_PROTOCOL=1
+# Il pannello agenti del desktop chiama `agent-control` solo se trova questa
+# riga: un wrapper che non la ha passerebbe il comando al ramo generico, che
+# avvia il container.
+JHT_AGENT_CONTROL_PROTOCOL=1
 
 # Sistema e utente non cambiano durante una run: si leggono una volta sola. I
 # controlli d'integrita' del runtime (runtime_stat, runtime_node_safe) li
@@ -2222,6 +2226,21 @@ desktop_chat() {
   esac
 }
 
+# Pannello agenti del desktop (`jht agent-control ...`). Non avvia mai niente:
+# niente ensure_up, niente compose, niente machine. Con il container spento o
+# non attestato risponde con il codice chiuso agent_control_no_team (113) e
+# basta. Altrimenti passa gli argomenti, come argv e senza TTY, al CLI nel
+# container, che controlla la forma e li passa allo script del pannello;
+# stdout e codice d'uscita tornano invariati.
+agent_control() {
+  local container_id
+  container_id="$(read_only_container_id)" || {
+    printf '%s\n' '{"ok":false,"error":"agent_control_no_team"}'
+    return 113
+  }
+  docker exec -i -e JHT_HOST_TYPE="$JHT_HOST_TYPE" "$container_id" node "$NODE_ENTRY" agent-control "$@"
+}
+
 # Docker c'e' ED e' raggiungibile? A differenza di require_docker NON esce:
 # serve a DECIDERE, non a pretendere.
 docker_reachable() {
@@ -4224,7 +4243,9 @@ fi
 # Il gate informativo precede TUTTI i rami, inclusi quelli host-side. Tenerlo
 # solo nel catch-all lascia `up --help`, `setup --help`, ecc. liberi di entrare
 # nei rispettivi path Docker prima che il wrapper legga `--help`.
-if [ "$#" -gt 1 ] && [ "$SUB" != "game" ] && [ "$SUB" != "gui" ]; then
+# `agent-control` ne resta fuori: le sue forme sono chiuse e un `--help` fra i
+# suoi argomenti e' una richiesta da rifiutare con il suo codice, non aiuto.
+if [ "$#" -gt 1 ] && [ "$SUB" != "game" ] && [ "$SUB" != "gui" ] && [ "$SUB" != "agent-control" ]; then
   for arg in "${@:2}"; do
     case "$arg" in
       -h|--help)
@@ -4283,6 +4304,11 @@ case "$SUB" in
   onboarding-snapshot)
     shift || true
     onboarding_snapshot "$@"
+    ;;
+
+  agent-control)
+    shift || true
+    agent_control "$@"
     ;;
 
   # ── Machine Podman confinata (macOS) ─────────────────────────────────

@@ -7,6 +7,7 @@ mod closer_desktop;
 pub mod cli_adapter;
 mod desktop_platform;
 mod direct_chat;
+mod agent_control;
 mod existing_team_agents;
 mod existing_team_register;
 // The tests rely on 0600 files, hard links and symlinks; Windows is not covered.
@@ -77,6 +78,7 @@ pub fn run() {
             existing_team_runtime::existing_team_positions_read,
             existing_team_runtime::existing_team_link_identity,
             existing_team_agents::existing_team_agents_read,
+            agent_control::agent_control,
             direct_chat::direct_chat_close,
             direct_chat::direct_chat_connect,
             direct_chat::direct_chat_read,

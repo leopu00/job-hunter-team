@@ -38,6 +38,10 @@ $JHT_UPGRADE_PROTOCOL = 1
 $JHT_HOST_RUNTIME_PROTOCOL = 1
 $JHT_DESKTOP_CHAT_PROTOCOL = 1
 $JHT_ONBOARDING_SNAPSHOT_PROTOCOL = 1
+# Il pannello agenti del desktop chiama `agent-control` solo se trova questa
+# riga: un wrapper che non la ha passerebbe il comando al ramo generico, che
+# avvia il container.
+$JHT_AGENT_CONTROL_PROTOCOL = 1
 $JHT_UNINSTALL_PROTOCOL = 1
 $JhtUninstallRemovalNotice = 'Vengono cancellati anche la password della posta, la sessione LinkedIn e i token di Telegram salvati; ~/.jht e Documenti restano.'
 
@@ -927,6 +931,28 @@ function Invoke-DesktopChat {
     }
     default { $script:DesktopChatExitCode = 2 }
   }
+}
+
+# Pannello agenti del desktop (`jht agent-control ...`). Non avvia mai niente:
+# niente Ensure-Up, niente compose up, niente machine. Con il container spento
+# o non attestato risponde con il codice chiuso agent_control_no_team (113) e
+# basta. Altrimenti passa gli argomenti, senza TTY, al CLI nel container, che
+# controlla la forma e li passa allo script del pannello; stdout e codice
+# d'uscita tornano invariati.
+# Come Invoke-DesktopChat, il codice sta in $script:AgentControlExitCode: la
+# risposta del CLI esce sullo stdout dello script, non nel valore della funzione.
+$script:AgentControlExitCode = 113
+function Invoke-AgentControl {
+  param([string[]]$ControlArgs)
+  $script:AgentControlExitCode = 113
+  $containerId = $null
+  if (Test-RuntimeBundleTrusted) { $containerId = Get-RunningComposeServiceId $Container }
+  if (-not $containerId) {
+    [Console]::Out.WriteLine('{"ok":false,"error":"agent_control_no_team"}')
+    return
+  }
+  & docker exec -i -e "JHT_HOST_TYPE=$env:JHT_HOST_TYPE" $containerId node $NodeEntry agent-control @ControlArgs
+  $script:AgentControlExitCode = $LASTEXITCODE
 }
 
 function Test-BrokerUp {
@@ -2776,7 +2802,9 @@ $Sub = if ($args.Count -ge 1) { $args[0] } else { '' }
 # `up --help`, `setup --help`, ecc. e quei comandi toccherebbero Docker prima
 # di accorgersi che l'utente ha chiesto soltanto aiuto.
 $HelpRequested = @($Rest | Where-Object { $_ -in @('-h', '--help') }).Count -gt 0
-if ($HelpRequested -and $Sub -notin @('game', 'gui')) {
+# `agent-control` ne resta fuori: le sue forme sono chiuse e un `--help` fra i
+# suoi argomenti e' una richiesta da rifiutare con il suo codice, non aiuto.
+if ($HelpRequested -and $Sub -notin @('game', 'gui', 'agent-control')) {
   if (Test-HostCommandUsesLocalHelp $Sub) {
     Write-LocalHelp
     exit 0
@@ -2818,6 +2846,11 @@ switch ($Sub) {
   'desktop-chat' {
     Invoke-DesktopChat $Rest
     exit $script:DesktopChatExitCode
+  }
+
+  'agent-control' {
+    Invoke-AgentControl $Rest
+    exit $script:AgentControlExitCode
   }
 
   'game' {

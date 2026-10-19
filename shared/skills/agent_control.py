@@ -100,7 +100,9 @@ REVIEWER_RE = re.compile(r"^CRITICO-S([1-9][0-9]{0,3})$")
 NO_ACTIONS = {"DOTTORE", "MANTENITORE"}
 
 # ── where things are ────────────────────────────────────────────────────────
-HERE = Path(__file__).resolve().parent
+# Run from stdin (the read-only channel: `exec` of the app's own copy) the
+# file has no __file__: it is the container's skills folder all the same.
+HERE = Path(globals().get("__file__") or "/app/shared/skills/agent_control.py").resolve().parent
 
 
 def _first(*candidates: Path) -> Path:
@@ -616,6 +618,9 @@ def main(argv: list[str]) -> int:
             else:
                 result = resume()
     except Refusal as refusal:
+        # Only a name of the grammar is echoed or journaled: a refused request
+        # may carry anything.
+        session = session if isinstance(session, str) and NAME.match(session) else None
         answer = {"ok": False, "op": op, "session": session, "error": refusal.code}
         _emit(answer)
         if op in ACTIONS:

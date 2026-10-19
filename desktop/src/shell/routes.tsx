@@ -1,6 +1,5 @@
 import type { ComponentType } from "react";
-import AgentsPage from "../pages/agents";
-import ExistingTeamAgentsPage from "../pages/agents/readonly";
+import AgentsPanel from "../pages/agents/AgentsPanel";
 import ExistingTeamStatusPage from "../pages/existing-team";
 import ExistingTeamProfilePage from "../pages/existing-team/profile";
 import ExistingTeamOfficePage from "../pages/office/readonly";
@@ -62,7 +61,8 @@ export const ROUTES: Route[] = [
   { path: "/messages", page: MessagesPage },
   { path: "/profile", page: ProfilePage },
   // The desktop's own pages, with no web counterpart (DESKTOP_LINKS in desktop-links.ts).
-  { path: "/agents", page: AgentsPage },
+  // The agents' control panel, on this computer or on the linked VPS (agent_control).
+  { path: "/agents", page: AgentsPanel },
   { path: "/office", page: OfficePage, fullBleed: true },
   { path: "/mail", page: MailPage },
   // «Remove JHT from this computer» (Windows): linked only where it can run.
@@ -79,8 +79,8 @@ export const READ_ONLY_ROUTES: Route[] = [
   { path: "/profile", page: ExistingTeamProfilePage },
   // Not the cloud's Realtime office: the same office, drawn from what the team's VPS reports.
   { path: "/office", page: ExistingTeamOfficePage, fullBleed: true },
-  // Not the box's agents page: the agent sessions on the existing team's VPS, read only.
-  { path: "/agents", page: ExistingTeamAgentsPage },
+  // The same agents' panel: here it reads, and the native side refuses every action.
+  { path: "/agents", page: AgentsPanel },
 ];
 
 /** The navigation of that view, in the order of the web's own bar. */
