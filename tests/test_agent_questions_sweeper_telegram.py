@@ -83,6 +83,27 @@ def _keep_modules():
             sys.modules[name] = module
 
 
+def _forget_the_language():
+    """i18n keeps the language it resolved first (and the catalog of it) for the life of the process."""
+    module = sys.modules.get("i18n")
+    if module is not None:
+        module._resolve_lang.cache_clear()  # noqa: SLF001
+        module._load_catalog.cache_clear()  # noqa: SLF001
+
+
+@pytest.fixture(autouse=True)
+def _language_of_this_test():
+    """What the phrases come out in is decided by THIS test's JHT_LANG, not by the test that ran before.
+
+    Run after test_agent_questions and test_tg_bridge*, the first resolution (with no JHT_LANG, so English)
+    stayed cached in the shared i18n module and these tests got English where they expect Italian. Cleared
+    before the test, and after it so the next file does not inherit this one's.
+    """
+    _forget_the_language()
+    yield
+    _forget_the_language()
+
+
 @pytest.fixture()
 def world(tmp_path, monkeypatch):
     """A real jobs.db, a Telegram sender that records, and the PATH the tools run with."""
