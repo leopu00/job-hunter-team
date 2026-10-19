@@ -596,6 +596,12 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
     "The VPS did not return the positions.",
     "Press Refresh. If it keeps happening, report the code shown next to it.",
   ),
+  agents_unavailable: copy(
+    "La VPS non ha restituito l’elenco degli agenti.",
+    "Premi Aggiorna. Se si ripete, segnala il codice che vedi accanto.",
+    "The VPS did not return the list of agents.",
+    "Press Refresh. If it keeps happening, report the code shown next to it.",
+  ),
   desktop_transport_unavailable: copy(
     "L’app non è riuscita a parlare con il suo nucleo nativo.",
     "Riprova con Aggiorna. Se si ripete, chiudi Job Hunter Team del tutto e riaprilo.",

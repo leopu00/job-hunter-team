@@ -1,0 +1,191 @@
+import type { Locale } from "@/i18n/config";
+
+export interface ExistingTeamAgentsText {
+  title: string;
+  intro: string;
+  refresh: string;
+  refreshing: string;
+  unknown: string;
+  readAt: string; // {time}
+  failed: string;
+  failedAt: string; // {time}
+  up: string;
+  down: string;
+  /** A role that can have several sessions, none of them up. */
+  noneUp: string;
+  started: string; // {time}
+  activity: string; // {time}
+  /** The VPS does not publish the agents' state (agent_state.py comes with an update). */
+  statesUnknown: string;
+  open: string;
+  close: string;
+  screenReading: string;
+  screenAt: string; // {time}
+  screenDown: string;
+  screenEmpty: string;
+  readOnly: string;
+}
+
+export const EXISTING_TEAM_AGENTS_TEXT: Record<Locale, ExistingTeamAgentsText> = {
+  it: {
+    title: "Agenti",
+    intro: "Le sessioni degli agenti della squadra sulla VPS, il loro stato e le ultime righe del loro terminale.",
+    refresh: "Aggiorna",
+    refreshing: "Aggiorno…",
+    unknown: "Leggo gli agenti dalla VPS…",
+    readAt: "Letto alle {time}",
+    failed: "Non ho potuto leggere gli agenti.",
+    failedAt: "Tentativo delle {time}",
+    up: "attivo",
+    down: "non attivo",
+    noneUp: "nessuna sessione attiva",
+    started: "avviato {time}",
+    activity: "ultima attività {time}",
+    statesUnknown: "La VPS non pubblica ancora lo stato degli agenti: si vedrà dopo un aggiornamento della squadra. Fino ad allora lo stato è «sconosciuto».",
+    open: "Mostra il terminale",
+    close: "Nascondi il terminale",
+    screenReading: "Leggo il terminale…",
+    screenAt: "Ultime righe del terminale, lette alle {time}",
+    screenDown: "La sessione non è più attiva.",
+    screenEmpty: "Il terminale è vuoto.",
+    readOnly: "Sola lettura: da qui non si scrive agli agenti e non si premono tasti nei loro terminali.",
+  },
+  en: {
+    title: "Agents",
+    intro: "The team's agent sessions on the VPS, their state and the last lines of their terminal.",
+    refresh: "Refresh",
+    refreshing: "Refreshing…",
+    unknown: "Reading the agents from the VPS…",
+    readAt: "Read at {time}",
+    failed: "I could not read the agents.",
+    failedAt: "Attempt at {time}",
+    up: "up",
+    down: "not running",
+    noneUp: "no session running",
+    started: "started {time}",
+    activity: "last activity {time}",
+    statesUnknown: "The VPS does not publish the agents' state yet: it will show after the team is updated. Until then the state is “unknown”.",
+    open: "Show the terminal",
+    close: "Hide the terminal",
+    screenReading: "Reading the terminal…",
+    screenAt: "Last lines of the terminal, read at {time}",
+    screenDown: "The session is no longer running.",
+    screenEmpty: "The terminal is empty.",
+    readOnly: "Read only: from here you do not write to the agents or press keys in their terminals.",
+  },
+  de: {
+    title: "Agenten",
+    intro: "Die Sitzungen der Agenten des Teams auf der VPS, ihr Status und die letzten Zeilen ihres Terminals.",
+    refresh: "Aktualisieren",
+    refreshing: "Aktualisiere…",
+    unknown: "Ich lese die Agenten von der VPS…",
+    readAt: "Gelesen um {time}",
+    failed: "Ich konnte die Agenten nicht lesen.",
+    failedAt: "Versuch um {time}",
+    up: "aktiv",
+    down: "nicht aktiv",
+    noneUp: "keine Sitzung aktiv",
+    started: "gestartet {time}",
+    activity: "letzte Aktivität {time}",
+    statesUnknown: "Die VPS veröffentlicht den Status der Agenten noch nicht: Er erscheint nach einem Update des Teams. Bis dahin ist der Status „unbekannt“.",
+    open: "Terminal anzeigen",
+    close: "Terminal ausblenden",
+    screenReading: "Ich lese das Terminal…",
+    screenAt: "Letzte Zeilen des Terminals, gelesen um {time}",
+    screenDown: "Die Sitzung ist nicht mehr aktiv.",
+    screenEmpty: "Das Terminal ist leer.",
+    readOnly: "Nur Lesen: Von hier aus schreibst du den Agenten nicht und drückst keine Tasten in ihren Terminals.",
+  },
+  es: {
+    title: "Agentes",
+    intro: "Las sesiones de los agentes del equipo en el VPS, su estado y las últimas líneas de su terminal.",
+    refresh: "Actualizar",
+    refreshing: "Actualizando…",
+    unknown: "Leyendo los agentes del VPS…",
+    readAt: "Leído a las {time}",
+    failed: "No he podido leer los agentes.",
+    failedAt: "Intento de las {time}",
+    up: "activo",
+    down: "no activo",
+    noneUp: "ninguna sesión activa",
+    started: "iniciado {time}",
+    activity: "última actividad {time}",
+    statesUnknown: "El VPS todavía no publica el estado de los agentes: se verá tras una actualización del equipo. Hasta entonces el estado es «desconocido».",
+    open: "Mostrar el terminal",
+    close: "Ocultar el terminal",
+    screenReading: "Leyendo el terminal…",
+    screenAt: "Últimas líneas del terminal, leídas a las {time}",
+    screenDown: "La sesión ya no está activa.",
+    screenEmpty: "El terminal está vacío.",
+    readOnly: "Solo lectura: desde aquí no se escribe a los agentes ni se pulsan teclas en sus terminales.",
+  },
+  fr: {
+    title: "Agents",
+    intro: "Les sessions des agents de l’équipe sur le VPS, leur état et les dernières lignes de leur terminal.",
+    refresh: "Actualiser",
+    refreshing: "Actualisation…",
+    unknown: "Je lis les agents depuis le VPS…",
+    readAt: "Lu à {time}",
+    failed: "Je n’ai pas pu lire les agents.",
+    failedAt: "Tentative de {time}",
+    up: "actif",
+    down: "inactif",
+    noneUp: "aucune session active",
+    started: "démarré {time}",
+    activity: "dernière activité {time}",
+    statesUnknown: "Le VPS ne publie pas encore l’état des agents : il apparaîtra après une mise à jour de l’équipe. D’ici là, l’état est « inconnu ».",
+    open: "Afficher le terminal",
+    close: "Masquer le terminal",
+    screenReading: "Je lis le terminal…",
+    screenAt: "Dernières lignes du terminal, lues à {time}",
+    screenDown: "La session n’est plus active.",
+    screenEmpty: "Le terminal est vide.",
+    readOnly: "Lecture seule : d’ici, on n’écrit pas aux agents et on n’appuie sur aucune touche dans leurs terminaux.",
+  },
+  hu: {
+    title: "Ügynökök",
+    intro: "A csapat ügynökeinek munkamenetei a VPS-en, az állapotuk és a termináljuk utolsó sorai.",
+    refresh: "Frissítés",
+    refreshing: "Frissítés…",
+    unknown: "Beolvasom az ügynököket a VPS-ről…",
+    readAt: "Beolvasva: {time}",
+    failed: "Nem tudtam beolvasni az ügynököket.",
+    failedAt: "Próbálkozás: {time}",
+    up: "aktív",
+    down: "nem aktív",
+    noneUp: "nincs aktív munkamenet",
+    started: "elindítva: {time}",
+    activity: "utolsó tevékenység: {time}",
+    statesUnknown: "A VPS még nem teszi közzé az ügynökök állapotát: a csapat frissítése után látszik majd. Addig az állapot „ismeretlen”.",
+    open: "Terminál megjelenítése",
+    close: "Terminál elrejtése",
+    screenReading: "Beolvasom a terminált…",
+    screenAt: "A terminál utolsó sorai, beolvasva: {time}",
+    screenDown: "A munkamenet már nem aktív.",
+    screenEmpty: "A terminál üres.",
+    readOnly: "Csak olvasás: innen nem írsz az ügynököknek, és nem nyomsz billentyűt a termináljukban.",
+  },
+  pt: {
+    title: "Agentes",
+    intro: "As sessões dos agentes da equipa na VPS, o seu estado e as últimas linhas do terminal.",
+    refresh: "Atualizar",
+    refreshing: "A atualizar…",
+    unknown: "A ler os agentes da VPS…",
+    readAt: "Lido às {time}",
+    failed: "Não consegui ler os agentes.",
+    failedAt: "Tentativa das {time}",
+    up: "ativo",
+    down: "inativo",
+    noneUp: "nenhuma sessão ativa",
+    started: "iniciado {time}",
+    activity: "última atividade {time}",
+    statesUnknown: "A VPS ainda não publica o estado dos agentes: aparecerá depois de uma atualização da equipa. Até lá, o estado é «desconhecido».",
+    open: "Mostrar o terminal",
+    close: "Ocultar o terminal",
+    screenReading: "A ler o terminal…",
+    screenAt: "Últimas linhas do terminal, lidas às {time}",
+    screenDown: "A sessão já não está ativa.",
+    screenEmpty: "O terminal está vazio.",
+    readOnly: "Só leitura: daqui não se escreve aos agentes nem se premem teclas nos terminais deles.",
+  },
+};
