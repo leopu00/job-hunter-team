@@ -67,6 +67,18 @@ function historicV033Wrapper(): string {
     : LEGACY_V033_UPGRADE_BEHAVIOR;
 }
 
+// Answers both the BSD (`-f '%u %Lp'`) and the GNU (`-c '%u %a'`) probe of the wrapper.
+const STAT_ADAPTER = `#!/usr/bin/env python3
+import os
+import sys
+
+if len(sys.argv) == 4 and sys.argv[1:3] in (["-f", "%u %Lp"], ["-c", "%u %a"]):
+    metadata = os.stat(sys.argv[3], follow_symlinks=False)
+    print(f"{metadata.st_uid} {metadata.st_mode & 0o777:o}")
+    raise SystemExit(0)
+os.execv("/usr/bin/stat", ["stat", *sys.argv[1:]])
+`;
+
 function writeExec(file: string, body: string) {
   writeFileSync(file, `#!/bin/sh\nset -eu\n${body}\n`, "utf8");
   chmodSync(file, 0o755);
@@ -256,6 +268,15 @@ function enableExactPodmanHarness(sb: Sandbox): PodmanHarness {
   mkdirSync(adapterDir);
   writeFileSync(selection, "podman\n", "utf8");
   writeFileSync(machine, "jht-podman\n", "utf8");
+  // A JHT Podman machine exists only on a Mac. On a Linux runner the wrapper reads
+  // `uname -s`, takes the native rootless branch and never asks for the machine: off
+  // macOS, `uname` says Darwin and `stat` answers the BSD probe, as
+  // tests/podman_machine_fixture.py does for the Python tests.
+  if (spawnSync("uname", ["-s"], { encoding: "utf8" }).stdout.trim() !== "Darwin") {
+    writeExec(path.join(bin, "uname"), "printf '%s\\n' Darwin");
+    writeFileSync(path.join(bin, "stat"), STAT_ADAPTER, "utf8");
+    chmodSync(path.join(bin, "stat"), 0o755);
+  }
   writeFileSync(labelHash, oldHash, "utf8");
   writeFileSync(labelConfig, path.join(sb.runtime, "docker-compose.yml"), "utf8");
   writeFileSync(labelWorking, sb.runtime, "utf8");
