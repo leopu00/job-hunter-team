@@ -23,6 +23,13 @@ import {
   type LabelItem,
   type Rect,
 } from "@/lib/globe-label-placement";
+import {
+  basemapNameExpression,
+  basemapNameOf,
+  CALM_NAME_COLOR_DARK,
+  CALM_NAME_LAYERS,
+  isTranslatedNameLayer,
+} from "@/lib/basemap-labels";
 import { attachTouchAxisLock } from "@/lib/globe-touch-axis-lock";
 import { ensureMaplibreWorkerUrl } from "@/lib/maplibre-worker";
 import { scoreToRgb, scoreSpectrumCss } from "@/lib/score-color";
@@ -483,7 +490,7 @@ function labelOffsetExpr(): maplibregl.ExpressionSpecification {
 // Ingombro dei nomi della basemap (paesi, città) attualmente disegnati: il
 // punto di ogni etichetta lo dà queryRenderedFeatures, la larghezza si stima
 // dal nome (MapLibre non espone il box del testo).
-function basemapNameRects(map: MaplibreMap): Rect[] {
+function basemapNameRects(map: MaplibreMap, lang: string): Rect[] {
   const layers = map.getStyle()?.layers ?? [];
   const zoom = map.getZoom();
   const out: Rect[] = [];
@@ -524,9 +531,7 @@ function basemapNameRects(map: MaplibreMap): Rect[] {
     for (const f of features) {
       if (f.geometry.type !== "Point") continue;
       const props = f.properties ?? {};
-      const name = String(
-        props.name_en ?? props["name:latin"] ?? props.name ?? "",
-      );
+      const name = basemapNameOf(props, lang);
       if (!name) continue;
       const [lon, lat] = f.geometry.coordinates as [number, number];
       const pt = map.project([lon, lat]);
@@ -556,6 +561,7 @@ function computeLabelPlacements(
   map: MaplibreMap,
   groups: GroupedFeature[],
   labels: Record<string, string>,
+  lang: string,
 ): Record<string, LabelPlacement> {
   const size = labelFontSize(map.getZoom());
   const el = map.getContainer();
@@ -582,7 +588,7 @@ function computeLabelPlacements(
       priority: g.count,
     });
   }
-  const placed = placeLabels(items, basemapNameRects(map), size);
+  const placed = placeLabels(items, basemapNameRects(map, lang), size);
   const out: Record<string, LabelPlacement> = {};
   for (const [id, p] of placed) {
     out[id] = {
@@ -637,6 +643,42 @@ function applyProfileToStyle(map: MaplibreMap, profile: MapTierProfile) {
     }
   } catch {
     /* idem */
+  }
+}
+
+// I nomi di paesi, città e mari nella lingua dell'interfaccia (vedi
+// lib/basemap-labels.ts). Va rifatto a ogni style.load, perché il cambio tema
+// ricarica lo style da zero, e a ogni cambio di lingua.
+function applyBasemapLanguage(map: MaplibreMap, lang: string) {
+  try {
+    const field = basemapNameExpression(lang);
+    for (const layer of map.getStyle()?.layers ?? []) {
+      if (OWN_LAYER_IDS.has(layer.id) || !isTranslatedNameLayer(layer))
+        continue;
+      map.setLayoutProperty(
+        layer.id,
+        "text-field",
+        field as maplibregl.ExpressionSpecification,
+      );
+    }
+  } catch {
+    /* style non ancora pronto: ci ripasserà style.load */
+  }
+}
+
+// I nomi dei paesi come sfondo, non come soggetto (vedi CALM_NAME_LAYERS).
+function calmBasemapNames(map: MaplibreMap, mode: "dark" | "light") {
+  const layerIds = new Set((map.getStyle()?.layers ?? []).map((l) => l.id));
+  for (const id of CALM_NAME_LAYERS) {
+    if (!layerIds.has(id)) continue;
+    try {
+      map.setLayoutProperty(id, "text-transform", "none");
+      if (mode === "dark") {
+        map.setPaintProperty(id, "text-color", CALM_NAME_COLOR_DARK);
+      }
+    } catch {
+      /* layer senza la prop: resta com'è */
+    }
   }
 }
 
@@ -841,6 +883,9 @@ export default function JobsGlobe({
   // cookie: senza questo, cambiando lingua in home la card resterebbe
   // nella lingua del cookie mentre tutto il resto della pagina cambia.
   const tr = makeT(T, showcase?.lang ?? locale);
+  const basemapLang = String(showcase?.lang ?? locale);
+  const basemapLangRef = useRef(basemapLang);
+  basemapLangRef.current = basemapLang;
   const [data, setData] = useState<PositionCoord[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [selected, setSelected] = useState<PositionCoord | null>(null);
@@ -1190,6 +1235,7 @@ export default function JobsGlobe({
       map.once("idle", collapseAttrib);
       // Tinta theme-aware sui layer base.
       tintMap(map, themeRef.current);
+      calmBasemapNames(map, themeRef.current);
       // Aggiungo source + layer per i pin. WebGL native = follow-mappa
       // garantito (i DOM markers su globe projection ballavano).
       if (!map.getSource(SOURCE_ID)) {
@@ -1383,6 +1429,7 @@ export default function JobsGlobe({
       // Halo/etichette secondo il tier corrente: va rifatto a ogni
       // style.load perché il cambio tema ricarica lo style da zero.
       applyProfileToStyle(map, profileRef.current);
+      applyBasemapLanguage(map, basemapLangRef.current);
       syncData(map);
       // Dati arrivati prima dello style: il fit in sospeso parte ora.
       fitOnReadyRef.current?.layersReady();
@@ -1398,6 +1445,7 @@ export default function JobsGlobe({
         map,
         clusteredRef.current,
         labelTextRef.current,
+        basemapLangRef.current,
       );
       if (samePlacements(next, labelPlacementsRef.current)) return;
       labelPlacementsRef.current = next;
@@ -1701,6 +1749,15 @@ export default function JobsGlobe({
     map.setStyle(nextTheme === "light" ? STYLE_LIGHT : STYLE_DARK);
   }, [resolvedTheme]);
 
+  // Cambio di lingua a mappa ferma: i nomi si riscrivono senza ricaricare lo
+  // style (il cambio tema, invece, passa da style.load).
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !layersReadyRef.current) return;
+    applyBasemapLanguage(map, basemapLang);
+    labelPlacementsRef.current = {};
+  }, [basemapLang]);
+
   function syncData(map: MaplibreMap) {
     if (!layersReadyRef.current) return;
     const src = map.getSource(SOURCE_ID) as
@@ -1994,6 +2051,19 @@ export default function JobsGlobe({
           quando l'utente apre col click (stato -show). Conforme alla
           licenza (il credito resta accessibile) ma non invadente. */}
       <style>{`
+        /* Il credito è un dovere di licenza, non il soggetto: la (i) di
+           default è un disco bianco pieno, l'oggetto più acceso della mappa.
+           Qui prende il pannello del tema e un'icona a metà intensità. */
+        .jht-globe-wrap .maplibregl-ctrl-attrib.maplibregl-compact {
+          background: var(--color-panel);
+          border: 1px solid var(--color-border);
+          color: var(--color-muted);
+        }
+        .jht-globe-wrap .maplibregl-ctrl-attrib.maplibregl-compact a { color: var(--color-muted); }
+        .jht-globe-wrap .maplibregl-ctrl-attrib-button {
+          background-color: transparent;
+          filter: ${paintedTheme(resolvedTheme) === "light" ? "none" : "invert(1)"} opacity(0.55);
+        }
         .jht-globe-wrap .maplibregl-ctrl-attrib-inner { display: none; }
         .jht-globe-wrap .maplibregl-ctrl-attrib:hover .maplibregl-ctrl-attrib-inner,
         .jht-globe-wrap .maplibregl-ctrl-attrib.maplibregl-compact-show .maplibregl-ctrl-attrib-inner { display: block; }
@@ -2301,10 +2371,67 @@ export default function JobsGlobe({
           </div>
         )}
 
+        {/* Chiave dei segni del globo: l'altezza e il colore del raggio sono
+            lo score, il numero le posizioni. Senza, i raggi non si leggono.
+            Una pillola sopra la barra dei comandi, non un chip dentro:
+            a 1600 px la barra sta fra i pannelli d'angolo e un chip in più
+            ci finiva sotto. Da lg in su. */}
+        {displayData.length > 0 && (
+          <div
+            className="absolute inset-x-0 hidden lg:flex justify-center px-4 pointer-events-none z-10"
+            style={{ bottom: 76 }}
+          >
+            <p
+              className="text-[10px]"
+              role="note"
+              data-testid="map-beams-legend"
+              style={{
+                padding: "4px 12px",
+                background: "var(--color-panel)",
+                border: "1px solid var(--color-border)",
+                borderRadius: 9999,
+                color: "var(--color-muted)",
+                whiteSpace: "nowrap",
+              }}
+            >
+              {tr("beams_legend")}
+            </p>
+          </div>
+        )}
+
         {!loaded && (
           <p className="absolute inset-0 grid place-items-center text-[11px] text-[var(--color-dim)] pointer-events-none">
             {tr("loading")}
           </p>
+        )}
+
+        {/* Senza posizioni con una sede il globo era solo uno sfondo: una frase
+            dice perché è vuoto e cosa comparirà. */}
+        {loaded && data.length === 0 && !showcase && (
+          <div
+            className="absolute inset-x-0 bottom-24 flex justify-center px-4 pointer-events-none"
+            role="status"
+            data-testid="map-empty-state"
+          >
+            <div
+              className="text-center"
+              style={{
+                maxWidth: 360,
+                padding: "14px 18px",
+                background: "var(--color-panel)",
+                border: "1px solid var(--color-border)",
+                borderRadius: 12,
+                boxShadow: "0 4px 12px rgba(0,0,0,0.4)",
+              }}
+            >
+              <p className="text-[12px] font-semibold text-[var(--color-text)]">
+                {tr("empty_title")}
+              </p>
+              <p className="mt-1 text-[11px] leading-snug text-[var(--color-muted)]">
+                {tr("empty_hint")}
+              </p>
+            </div>
+          </div>
         )}
 
         {selected && popupAnchor && (
