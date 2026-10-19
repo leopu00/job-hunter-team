@@ -272,7 +272,7 @@ pub(crate) fn onboarding_runtime_log_open(app: tauri::AppHandle) -> bool {
 }
 
 #[cfg(windows)]
-fn reveal(path: &Path) -> std::io::Result<()> {
+pub(crate) fn reveal(path: &Path) -> std::io::Result<()> {
     let root = std::env::var_os("SystemRoot").map(PathBuf::from).unwrap_or_else(|| PathBuf::from(r"C:\Windows"));
     let mut select = std::ffi::OsString::from("/select,");
     select.push(path.as_os_str());
@@ -280,12 +280,12 @@ fn reveal(path: &Path) -> std::io::Result<()> {
 }
 
 #[cfg(target_os = "macos")]
-fn reveal(path: &Path) -> std::io::Result<()> {
+pub(crate) fn reveal(path: &Path) -> std::io::Result<()> {
     std::process::Command::new("/usr/bin/open").arg("-R").arg(path).spawn().map(|_| ())
 }
 
 #[cfg(not(any(windows, target_os = "macos")))]
-fn reveal(path: &Path) -> std::io::Result<()> {
+pub(crate) fn reveal(path: &Path) -> std::io::Result<()> {
     let dir = path.parent().unwrap_or(path);
     std::process::Command::new("xdg-open").arg(dir).spawn().map(|_| ())
 }

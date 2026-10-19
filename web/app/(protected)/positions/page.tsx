@@ -28,6 +28,7 @@ import CloudSyncStatusBanner from "@/app/components/CloudSyncStatusBanner";
 import UnseenDot from "@/app/components/UnseenDot";
 import ColumnsPicker from "./ColumnsPicker";
 import ExclusionProposalCard from "./ExclusionProposalCard";
+import ExportCsvButton from "./ExportCsvButton";
 import {
   POSITIONS_COLUMNS,
   POSITIONS_COLS_COOKIE,
@@ -529,6 +530,15 @@ export default async function PositionsPage({ searchParams }: PageProps) {
                 visible={[...visibleCols]}
                 texts={{ button: tr("cols_button"), reset: tr("cols_reset") }}
               />
+              <ExportCsvButton
+                labels={{
+                  button: tr("export_csv"),
+                  title: tr("export_csv_title"),
+                  saved: tr("export_saved"),
+                  failed: tr("export_failed"),
+                  empty: tr("export_empty"),
+                }}
+              />
             </span>
           </div>
         }
@@ -670,6 +680,7 @@ export default async function PositionsPage({ searchParams }: PageProps) {
                   : { borderCollapse: "collapse", minWidth: tableMinWidth }
               }
               aria-label={tr("list_positions")}
+              data-export="positions"
             >
               <colgroup>
                 {orderedCols.map((c) => (
