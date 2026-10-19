@@ -588,16 +588,23 @@ export async function getPositionsWindow(
       }
     }
     if (desktop.source === "vps") {
-      return { rows: desktop.data.items, total: desktop.data.total, windowed: true };
+      return {
+        rows: desktop.data.items,
+        total: desktop.data.total,
+        windowed: true,
+      };
     }
     // Same rule as getPositions: no valid target must not show another dataset.
-    if (desktop.source === "unavailable") return { rows: [], total: 0, windowed: true };
+    if (desktop.source === "unavailable")
+      return { rows: [], total: 0, windowed: true };
   }
   const rows = await getPositions(opts);
   return { rows, total: rows.length, windowed: false };
 }
 
-export async function getPositionById(id: string): Promise<PositionDetail | null> {
+export async function getPositionById(
+  id: string,
+): Promise<PositionDetail | null> {
   const desktop = await readDesktopVpsPosition(id);
   if (desktop.source === "vps") return desktop.data;
   if (desktop.source === "unavailable") return null;
