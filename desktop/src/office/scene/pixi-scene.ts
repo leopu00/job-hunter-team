@@ -33,6 +33,7 @@ import {
   tesseractRays,
 } from "./effects";
 import { feetAnchor, pickCell } from "./frames";
+import { assetUrl } from "./asset-url";
 import { allFurniture, cameraBounds } from "../layout-items";
 import { tagOf } from "../status";
 import { boxLights, darkness, GRAIN_AMOUNT, LAMPS, lighting, localHour, outsideBands, vignetteAlpha, type Pool } from "./atmosphere";
@@ -501,7 +502,8 @@ async function loadTextures(
   await Promise.all(
     [...srcs].map(async (src) => {
       try {
-        out.set(src, await Assets.load<Texture>(src));
+        // the full URL: Pixi's own resolution loses the host on tauri://localhost (asset-url.ts)
+        out.set(src, await Assets.load<Texture>(assetUrl(src)));
       } catch (error) {
         // A missing picture draws as a plain block, not a dead office.
         console.warn("[office] image not loaded:", src, error);
