@@ -201,7 +201,7 @@ def kimi_turn(begin, steps_end, *, progress=True, fast=False):
     return out
 
 
-KIMI_SESSION = "4a7f6212-42e3-436f-b4da-501faee11f1d"
+KIMI_SESSION = "00000000-0000-4000-8000-000000000001"
 
 
 def test_kimi_working_idle_and_failed_turn():
@@ -220,7 +220,7 @@ def test_kimi_working_idle_and_failed_turn():
     # the same wire with no line in kimi.log is an interrupt, a plain end
     assert state_of(st.parse_kimi(lines(failed), KIMI_SESSION, [])) == ("idle", None)
     # a failure of ANOTHER session does not count
-    other = st.kimi_log_failures([k_403(T + 1.6, "05f1a610-071a-4b81-8d9f-51ebda140646")])
+    other = st.kimi_log_failures([k_403(T + 1.6, "00000000-0000-4000-8000-000000000002")])
     assert state_of(st.parse_kimi(lines(failed), KIMI_SESSION, other)) == ("idle", None)
 
 
