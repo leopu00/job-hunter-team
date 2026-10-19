@@ -174,3 +174,14 @@ def test_census_exclusions_accept_windows_separators():
     assert census._excluded_relative(
         r"game\scripts\backend\payloads\agent_history.py"
     )
+
+
+def test_a_data_code_is_not_copy_but_prose_around_it_still_is(tmp_path):
+    """`avvio_in_corso` is a value the web reads by name; the same word in a sentence is still Italian copy."""
+    module = _load_census()
+    module.ROOT = tmp_path
+    (tmp_path / "d").mkdir()
+    (tmp_path / "d" / "m.py").write_text(
+        'print("avvio_in_corso")\nprint("avvio_in_corso: errore di rete")\nprint("avvio in corso")\n', encoding="utf-8"
+    )
+    assert [leak.split(":")[1] for leak in module.scan(["d"])] == ["2", "3"]
