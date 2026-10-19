@@ -73,7 +73,7 @@ export default function SalaryBars({
   return (
     <div className="h-full flex flex-col bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-5 transition-colors duration-200 hover:border-[var(--color-border-glow)]">
       <div className="flex items-center justify-between mb-4 gap-3 flex-wrap">
-        <span className="section-label flex items-center gap-3">
+        <span className="section-label mb-0! flex items-center gap-3">
           {title}
           {headerExtra}
         </span>

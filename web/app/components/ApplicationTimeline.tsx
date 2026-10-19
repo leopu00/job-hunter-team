@@ -98,7 +98,7 @@ export default function ApplicationTimeline({
       aria-labelledby="application-timeline-title"
     >
       <div className="flex items-center justify-between mb-3 gap-3 flex-wrap">
-        <h2 id="application-timeline-title" className="section-label">
+        <h2 id="application-timeline-title" className="section-label mb-0!">
           {labels.title}
         </h2>
         <div className="flex items-center gap-3 text-[10px] text-[var(--color-muted)] tabular-nums">

@@ -90,7 +90,7 @@ export default function PositionTypesPie({
   return (
     <div className="h-full flex flex-col bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-5 transition-colors duration-200 hover:border-[var(--color-border-glow)]">
       <div className="flex items-center justify-between mb-4">
-        <span className="section-label">{title}</span>
+        <span className="section-label mb-0!">{title}</span>
         {total > 0 && (
           <span className="text-[11px] font-semibold text-[var(--color-muted)]">
             {selectedTypes.length >= 1 ? selectedCount : total}
