@@ -1411,6 +1411,33 @@ fn reopen(sandbox: &Sandbox, server: &Server, persisted: &Cell<u32>) -> Result<c
 }
 
 #[test]
+fn t27_opening_the_team_read_only_takes_the_full_connection_away_and_so_does_reopening_it() {
+    let _serial = runtime::FULL_LINK_TEST_LOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+    let sandbox = Sandbox::new();
+    let (world, _) = connected_once(&sandbox);
+    let target = runtime::selected_at(&sandbox.root, &sandbox.scope, &host()).expect("selected").expect("a target");
+    let server = team_server(&world);
+
+    // «Conferma e collega» succeeded on this team: the chat and the controls may write to it
+    runtime::grant_full_link(&sandbox.scope, &target);
+    assert!(runtime::full_link_granted(&sandbox.scope, &target));
+    // the same team opened read-only has the very same connection key: the grant goes
+    existing_team_readonly_connect_with(
+        &sandbox.root, &sandbox.scope, &host(), TEAM,
+        &mut || Ok(validated(&sandbox)), &mut || Ok(()),
+        &mut |_, c, i, t| server.answer(c, i, t),
+    )
+    .expect("opened read only");
+    assert!(!runtime::full_link_granted(&sandbox.scope, &target), "the read-only view cannot write");
+
+    // and so does a restart's reopening
+    runtime::grant_full_link(&sandbox.scope, &target);
+    let again = team_server(&world);
+    reopen(&sandbox, &again, &Cell::new(0)).expect("reopened");
+    assert!(!runtime::full_link_granted(&sandbox.scope, &target), "nor can a reopened one");
+}
+
+#[test]
 fn t15_a_saved_team_with_the_assistant_down_reopens_read_only_and_starts_nothing() {
     let sandbox = Sandbox::new();
     let (world, server) = connected_once(&sandbox);

@@ -1,5 +1,5 @@
 use crate::account_scope::{AccountScope, AccountScopeState};
-use crate::existing_team_runtime::{self, ActivatedTarget};
+use crate::existing_team_runtime::{self, ActivatedTarget, ChatOperation};
 use crate::runtime_host::{
     run_program, run_ssh, run_ssh_command, set_private_dir_permissions, set_private_permissions, ssh_base_args,
     validate_host, ExecutionHost, ProcessResult, ValidatedHost,
@@ -21,6 +21,9 @@ use zeroize::{Zeroize, Zeroizing};
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(20);
 const READ_TIMEOUT: Duration = Duration::from_secs(20);
 const SEND_TIMEOUT: Duration = Duration::from_secs(105);
+/// The most bytes of the user's text that go on the chat command's standard input (the script
+/// refuses more again, after cleaning it).
+const MAX_CHAT_STDIN_BYTES: usize = 16 * 1024;
 const REMOTE_CONTAINER_PROBE: &str = r#"set -eu; JHT_BIN="$(command -v jht 2>/dev/null || true)"; [ -n "$JHT_BIN" ] || JHT_BIN="$HOME/.local/bin/jht"; [ -f "$JHT_BIN" ] && [ -x "$JHT_BIN" ] && [ ! -L "$JHT_BIN" ] || exit 70; grep -Fqx 'JHT_DESKTOP_CHAT_PROTOCOL=1' "$JHT_BIN" || exit 70; exec "$JHT_BIN" desktop-chat probe"#;
 const REMOTE_PYTHON_STDIN: &str = r#"set -eu; JHT_BIN="$(command -v jht 2>/dev/null || true)"; [ -n "$JHT_BIN" ] || JHT_BIN="$HOME/.local/bin/jht"; [ -f "$JHT_BIN" ] && [ -x "$JHT_BIN" ] && [ ! -L "$JHT_BIN" ] || exit 70; grep -Fqx 'JHT_DESKTOP_CHAT_PROTOCOL=1' "$JHT_BIN" || exit 70; exec "$JHT_BIN" desktop-chat python"#;
 
@@ -112,7 +115,7 @@ struct Connection {
     tunnel: Option<Child>,
 }
 
-enum RemoteOperation<'a> { Probe, Python, Delivery(&'a str) }
+enum RemoteOperation<'a> { Probe, Python, Delivery(&'a str), Chat(ChatOperation<'a>) }
 
 impl Drop for Connection {
     fn drop(&mut self) {
@@ -565,7 +568,7 @@ fn run_connection(
         }
         ValidatedHost::Vps { .. } => {
             let selected = connection.app.as_ref().ok_or_else(|| failure("existing_team_runtime_target_changed"))
-                .and_then(|app| existing_team_runtime::selected(app, &connection.scope, &connection.host).map_err(failure))?;
+                .and_then(|app| selected_or_own(app, &connection.scope, &connection.host).map_err(failure))?;
             if selected.as_ref().map(|target| (&target.team_id, &target.runtime)) != connection.runtime.as_ref().map(|target| (&target.team_id, &target.runtime)) {
                 return Err(failure("existing_team_runtime_target_changed"));
             }
@@ -573,6 +576,10 @@ fn run_connection(
                 (Some(target), RemoteOperation::Probe) => existing_team_runtime::command(&target.runtime, "docker inspect --type container --format '{{.State.Running}}' \"$JHT_CID\"").map_err(failure)?,
                 (Some(target), RemoteOperation::Python) => existing_team_runtime::python_command(&target.runtime).map_err(failure)?,
                 (Some(target), RemoteOperation::Delivery(session)) => existing_team_runtime::delivery_command(&target.runtime, session).map_err(failure)?,
+                (Some(target), RemoteOperation::Chat(operation)) => existing_team_runtime::chat_command(&target.runtime, &operation).map_err(failure)?,
+                (None, RemoteOperation::Chat(operation)) => remote_wrapper_command(
+                    &existing_team_runtime::chat_wrapper_arguments(&operation).map_err(failure)?,
+                ),
                 (None, RemoteOperation::Probe) => REMOTE_CONTAINER_PROBE.to_owned(),
                 (None, RemoteOperation::Python) => REMOTE_PYTHON_STDIN.to_owned(),
                 (None, RemoteOperation::Delivery(session)) => delivery_command(session).ok_or_else(|| failure("invalid_agent"))?.to_owned(),
@@ -612,7 +619,7 @@ fn connect_impl(
 ) -> Result<Connection, DirectChatError> {
     let validated = crate::runtime_host::validate_host_for_scope(app, &host, &scope).map_err(failure)?;
     let runtime = if matches!(validated, ValidatedHost::Vps { .. }) {
-        existing_team_runtime::selected(app, &scope, &host).map_err(failure)?
+        selected_or_own(app, &scope, &host).map_err(failure)?
     } else { None };
     let (local_wrapper, local_owner_marker, control_path, tunnel) = match &validated {
         ValidatedHost::Local => (
@@ -811,6 +818,116 @@ fn run_python(
     result
 }
 
+/// The pinned target of an existing team, or `None` for a VPS the person made with the app: it has
+/// no existing-team selection to find (`selected` refuses a VPS without one), it is theirs and
+/// connected in full, and its chat goes through the host's wrapper. Only a scope with no candidate
+/// and no selection is theirs: a half-saved existing team stays the refusal it is.
+fn selected_or_own(
+    app: &tauri::AppHandle,
+    scope: &AccountScope,
+    host: &ExecutionHost,
+) -> Result<Option<ActivatedTarget>, &'static str> {
+    match existing_team_runtime::selected(app, scope, host) {
+        Err("existing_team_runtime_selection_required")
+            if existing_team_runtime::root(app).is_ok_and(|root| existing_team_runtime::own_vps_at(&root, scope)) =>
+        {
+            Ok(None)
+        }
+        other => other,
+    }
+}
+
+/// The host's wrapper, run on a VPS that was never pinned: the checks of `REMOTE_PYTHON_STDIN`
+/// (the wrapper is there, executable, not a link, and speaks the chat protocol), then the wrapper
+/// with the arguments given. Every one was checked by the chat's argument list, and is quoted.
+fn remote_wrapper_command(arguments: &[String]) -> String {
+    let checks = REMOTE_PYTHON_STDIN.strip_suffix("desktop-chat python").unwrap_or(REMOTE_PYTHON_STDIN);
+    let quoted: Vec<String> = arguments.iter().map(|argument| format!("'{argument}'")).collect();
+    format!("{checks}{}", quoted.join(" "))
+}
+
+/// A pinned team's chat goes through the fixed script of the container; a local team and a VPS
+/// that was never pinned go through the host's wrapper, which runs the same script (and answers 2,
+/// as to any action it does not know, when it is older than the chat actions).
+fn uses_pinned_chat(connection: &Connection) -> bool {
+    matches!(connection.validated, ValidatedHost::Vps { .. }) && connection.runtime.is_some()
+}
+
+/// What the script (or the link under it) said, as a code of the error catalog. 2 is python3's
+/// answer for a missing file: an image older than this chat. 70 is the pinned container no longer
+/// being the one that was confirmed. 255 is ssh's own: the link is gone.
+fn chat_failure(code: i32, default: &'static str) -> &'static str {
+    match code {
+        2 => "chat_runtime_outdated",
+        70 => "existing_team_runtime_target_changed",
+        120 => "invalid_request",
+        121 => "team_not_running",
+        122 => "agent_not_running",
+        123 => "agent_unavailable",
+        124 => "agent_busy",
+        125 => "agent_stuck",
+        126 => "send_failed",
+        127 => "read_failed",
+        128 => "persist_failed",
+        // The image has no fence for the user's words: older than the chat, the same «update the team».
+        129 => "chat_runtime_outdated",
+        255 => "tunnel_unavailable",
+        _ => default,
+    }
+}
+
+/// The chat through the host's wrapper. `None`: the wrapper answered 2, so it is older than the
+/// chat actions, and the caller keeps the older path (the app and a VPS are updated apart).
+fn run_wrapper_chat(
+    connection: &Connection,
+    operation: ChatOperation<'_>,
+    input: Option<&[u8]>,
+    timeout: Duration,
+    default: &'static str,
+) -> Result<Option<ProcessResult>, DirectChatError> {
+    let arguments = existing_team_runtime::chat_wrapper_arguments(&operation).map_err(failure)?;
+    let references: Vec<&str> = arguments.iter().map(String::as_str).collect();
+    let result = run_connection(connection, &references, RemoteOperation::Chat(operation), input, timeout)?;
+    wrapper_outcome(result, default)
+}
+
+/// What the wrapper's exit says: done, «I do not know that action» (an older wrapper: 2), or a
+/// failure of the script behind it.
+fn wrapper_outcome(result: ProcessResult, default: &'static str) -> Result<Option<ProcessResult>, DirectChatError> {
+    match result.code {
+        0 => Ok(Some(result)),
+        2 => Ok(None),
+        code => Err(failure(chat_failure(code, default))),
+    }
+}
+
+fn run_chat(
+    connection: &Connection,
+    operation: ChatOperation<'_>,
+    input: Option<&[u8]>,
+    timeout: Duration,
+    default: &'static str,
+) -> Result<ProcessResult, DirectChatError> {
+    let result = run_connection(connection, &[], RemoteOperation::Chat(operation), input, timeout)?;
+    if result.success() {
+        Ok(result)
+    } else {
+        Err(failure(chat_failure(result.code, default)))
+    }
+}
+
+fn window_may_write(label: &str) -> bool {
+    label == "main"
+}
+
+/// Writing to an existing team's agent needs the full connection ("Collega e conferma") made in
+/// this run of the app. The read-only view activates the same target and opens the same chat, so
+/// it is decided here, in the native side, and not by the page: a chat opened read-only reads,
+/// and a send is refused whatever the renderer asks.
+fn link_allows_writing(runtime: Option<&ActivatedTarget>, full_link: impl Fn(&ActivatedTarget) -> bool) -> bool {
+    runtime.map_or(true, full_link)
+}
+
 fn parse_json<T: for<'de> Deserialize<'de>>(
     result: ProcessResult,
     code: &'static str,
@@ -852,6 +969,26 @@ pub(crate) async fn direct_chat_read(
         if &connection.scope != scope.scope() {
             return Err(failure("account_scope_mismatch"));
         }
+        if uses_pinned_chat(connection) {
+            let result = run_chat(
+                connection,
+                ChatOperation::Read { agent: &agent_id, cursor: cursor.as_deref() },
+                None,
+                READ_TIMEOUT,
+                "read_failed",
+            )?;
+            return parse_json::<DirectChatPage>(result, "read_failed");
+        }
+        if let Some(result) = run_wrapper_chat(
+            connection,
+            ChatOperation::Read { agent: &agent_id, cursor: cursor.as_deref() },
+            None,
+            READ_TIMEOUT,
+            "read_failed",
+        )? {
+            return parse_json::<DirectChatPage>(result, "read_failed");
+        }
+        // The host's wrapper is older than the chat actions: the older path.
         parse_json::<DirectChatPage>(
             run_python(
                 connection,
@@ -923,6 +1060,39 @@ fn local_delivery_args(session: &str) -> [&str; 3] {
     ["desktop-chat", "send", session]
 }
 
+/// One command does what the two used to: the turn is written once for its client id and goes to
+/// the agent's terminal in the user's envelope. A terminal that is busy (alive, taking a turn) is
+/// asked again with the same id, which writes nothing twice. `None`: the host's wrapper is older
+/// than the chat actions, and the caller keeps the older path.
+fn send_fixed(
+    connection: &Connection,
+    agent: &str,
+    text: &str,
+    client_id: &str,
+) -> Result<Option<DirectChatReceipt>, DirectChatError> {
+    if text.len() > MAX_CHAT_STDIN_BYTES {
+        return Err(failure("invalid_request"));
+    }
+    let input = Zeroizing::new(text.as_bytes().to_vec());
+    let pinned = uses_pinned_chat(connection);
+    let mut attempt = 0;
+    loop {
+        attempt += 1;
+        let operation = ChatOperation::Send { agent, client_message_id: client_id };
+        let outcome = if pinned {
+            run_chat(connection, operation, Some(&input), SEND_TIMEOUT, "send_failed").map(Some)
+        } else {
+            run_wrapper_chat(connection, operation, Some(&input), SEND_TIMEOUT, "send_failed")
+        };
+        match outcome {
+            Ok(Some(result)) => return parse_json(result, "send_verify_failed").map(Some),
+            Ok(None) => return Ok(None),
+            Err(error) if error.code == "agent_busy" && attempt < 3 => continue,
+            Err(error) => return Err(error),
+        }
+    }
+}
+
 fn send_impl(
     inner: &DirectChatInner,
     agent: String,
@@ -938,6 +1108,16 @@ fn send_impl(
         .lock()
         .map_err(|_| failure("state_failed"))?;
     let connection = slot.as_ref().ok_or_else(|| failure("disconnected"))?;
+    if !link_allows_writing(connection.runtime.as_ref(), |target| {
+        existing_team_runtime::full_link_granted(&connection.scope, target)
+    }) {
+        return Err(failure("read_only_link"));
+    }
+    if let Some(receipt) = send_fixed(connection, &agent, &text, &client_id)? {
+        return Ok(receipt);
+    }
+    // The host's wrapper is older than the chat actions (only a local team or an unpinned VPS gets
+    // here): the older path, as it was.
     let check: Value = parse_json(
         run_python(
             connection,
@@ -999,12 +1179,18 @@ fn send_impl(
 
 #[tauri::command]
 pub(crate) async fn direct_chat_send(
+    window: tauri::Window,
     state: State<'_, DirectChatState>,
     scopes: State<'_, AccountScopeState>,
     agent_id: String,
     text: String,
     client_message_id: String,
 ) -> Result<DirectChatReceipt, DirectChatError> {
+    // Writing to an agent is a command: only the app's own window may ask for it (the capability
+    // also reaches the windows that load other sites, the sign-in views).
+    if !window_may_write(window.label()) {
+        return Err(failure("invalid_request"));
+    }
     let trimmed = text.trim();
     if !valid_agent(&agent_id)
         || trimmed.is_empty()
@@ -1099,6 +1285,7 @@ pub(crate) fn direct_chat_close(
 }
 
 pub(crate) fn teardown(state: &DirectChatState) {
+    existing_team_runtime::revoke_full_link();
     if let Ok(mut slot) = state.inner.connection.lock() {
         if let Some(mut connection) = slot.take() {
             close_connection(&mut connection);
@@ -1112,11 +1299,60 @@ pub(crate) fn teardown(state: &DirectChatState) {
 #[cfg(test)]
 mod tests {
     use super::{
-        connection_config_path_at, delivery_command, hex_encode, parse_json, probe, session_for,
-        status, valid_agent, verify_migration_local_host_at, Connection, DirectChatPage,
-        ProcessResult, REMOTE_CONTAINER_PROBE, REMOTE_PYTHON_STDIN,
+        chat_failure, connection_config_path_at, wrapper_outcome, delivery_command, hex_encode, link_allows_writing,
+        parse_json, probe, session_for, status, valid_agent, verify_migration_local_host_at, window_may_write,
+        Connection, DirectChatPage, ProcessResult, REMOTE_CONTAINER_PROBE, REMOTE_PYTHON_STDIN,
     };
     use crate::runtime_host::{ExecutionHost, ValidatedHost};
+
+    #[test]
+    fn every_exit_of_the_chat_script_is_a_code_of_the_catalog_and_the_link_losing_is_its_own() {
+        for (code, expected) in [
+            (2, "chat_runtime_outdated"),
+            (70, "existing_team_runtime_target_changed"),
+            (120, "invalid_request"),
+            (121, "team_not_running"),
+            (122, "agent_not_running"),
+            (123, "agent_unavailable"),
+            (124, "agent_busy"),
+            (125, "agent_stuck"),
+            (126, "send_failed"),
+            (127, "read_failed"),
+            (128, "persist_failed"),
+            (129, "chat_runtime_outdated"),
+            (255, "tunnel_unavailable"),
+            (1, "the_default"),
+            (137, "the_default"),
+        ] {
+            assert_eq!(chat_failure(code, "the_default"), expected, "exit {code}");
+        }
+    }
+
+    #[test]
+    fn an_older_wrapper_that_does_not_know_the_chat_actions_keeps_the_older_path() {
+        let answered = |code: i32| ProcessResult { code, stdout: b"{}".to_vec() };
+        assert!(matches!(wrapper_outcome(answered(0), "read_failed"), Ok(Some(_))), "the script ran");
+        assert!(matches!(wrapper_outcome(answered(2), "read_failed"), Ok(None)), "2: no such action, keep the older path");
+        for (code, expected) in [(124, "agent_busy"), (122, "agent_not_running"), (129, "chat_runtime_outdated"), (1, "read_failed"), (255, "tunnel_unavailable")] {
+            assert_eq!(wrapper_outcome(answered(code), "read_failed").err().map(|error| error.code), Some(expected), "exit {code}");
+        }
+    }
+
+    #[test]
+    fn only_the_apps_own_window_may_write_to_an_agent() {
+        assert!(window_may_write("main"));
+        for label in ["live-screen", "broker-login", "", "main2", "Main"] {
+            assert!(!window_may_write(label), "{label:?}");
+        }
+    }
+
+    #[test]
+    fn an_existing_team_is_written_to_only_with_the_full_connection() {
+        let team = crate::existing_team_runtime::ActivatedTarget::synthetic_for_tests();
+        assert!(!link_allows_writing(Some(&team), |_| false), "the read-only view reads, it never writes");
+        assert!(link_allows_writing(Some(&team), |_| true), "the confirmed team is written to");
+        assert!(link_allows_writing(None, |_| false), "a local team has no read-only view of this kind");
+    }
 
     #[test]
     fn connect_and_status_never_report_ready_without_a_clean_probe() {
@@ -1319,13 +1555,16 @@ mod assistance_registration_tests {
     struct Temporary(PathBuf);
     impl Temporary {
         fn new() -> Self {
+            // Two tests starting in the same clock tick must not share a name: a counter breaks the tie.
+            static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
             let nonce = SystemTime::now()
                 .duration_since(UNIX_EPOCH)
                 .unwrap()
                 .as_nanos();
             let root = std::env::temp_dir().join(format!(
-                "jht-assistance-register-{}-{nonce}",
-                std::process::id()
+                "jht-assistance-register-{}-{nonce}-{}",
+                std::process::id(),
+                NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
             ));
             fs::create_dir(&root).unwrap();
             Self(root)

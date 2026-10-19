@@ -2222,6 +2222,18 @@ desktop_chat() {
       docker exec -i "$container_id" sh -c \
         'msg=$(cat); exec jht-tmux-send "$1" "$msg"' sh "$session"
       ;;
+    # The chat as ONE script of the container with closed arguments (the script refuses
+    # anything outside its lists and alphabets again): `read AGENT [CURSOR]` and
+    # `chat-send AGENT CLIENT_ID`, the text on standard input. A wrapper from before
+    # this answers 2 («no such action») and the app keeps the older actions above.
+    read)
+      [ "$#" -eq 2 ] || [ "$#" -eq 3 ] || return 2
+      docker exec -i "$container_id" python3 -I /app/shared/skills/agent_chat.py read "$2" ${3:+"$3"}
+      ;;
+    chat-send)
+      [ "$#" -eq 3 ] || return 2
+      docker exec -i "$container_id" python3 -I /app/shared/skills/agent_chat.py send "$2" "$3"
+      ;;
     *) return 2 ;;
   esac
 }

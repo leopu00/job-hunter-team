@@ -1136,6 +1136,24 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
     "The agent is not running.",
     "Start the team, then send the message again.",
   ),
+  team_not_running: copy(
+    "Il team non è acceso.",
+    "Accendi il team, poi rimanda il messaggio.",
+    "The team is not running.",
+    "Start the team, then send the message again.",
+  ),
+  read_only_link: copy(
+    "Questa vista è in sola lettura: il messaggio non è stato inviato.",
+    "Collega il team con «Conferma e collega» per scrivere.",
+    "This view is read only: the message was not sent.",
+    "Connect the team with “Confirm and connect” to write.",
+  ),
+  chat_runtime_outdated: copy(
+    "Il team non ha ancora questa chat.",
+    "Aggiorna il team all’ultima versione, poi riprova.",
+    "The team does not have this chat yet.",
+    "Update the team to the latest version, then try again.",
+  ),
   agent_unavailable: AGENT_NOT_READY,
   agent_busy: AGENT_NOT_READY,
   agent_stuck: copy(

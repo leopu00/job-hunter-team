@@ -92,7 +92,7 @@ case "$1" in
       tmux:has-session) exit 0 ;;
       test:-f) exit 0 ;;
       node:*) exit 0 ;;
-      python3:-c|sh:-c|bash:) exit 0 ;;
+      python3:-c|python3:-I|sh:-c|bash:) exit 0 ;;
       *) exit 97 ;;
     esac ;;
   *) exit 92 ;;
@@ -340,6 +340,78 @@ def test_desktop_chat_uses_private_podman_and_exact_compose_container(tmp_path: 
         " up " in line and "--dry-run" not in line for line in calls.splitlines()
     )
     assert "machine start" not in calls
+
+
+SCRIPT = "python3 -I /app/shared/skills/agent_chat.py"
+
+
+@pytest.mark.parametrize(
+    ("args", "expected"),
+    (
+        (("read", "capitano"), f"docker exec -i aaaaaaaaaaaa {SCRIPT} read capitano"),
+        (("read", "mentor", "4096"), f"docker exec -i aaaaaaaaaaaa {SCRIPT} read mentor 4096"),
+        (("chat-send", "assistente", "0b1c2d3e-4f50"), f"docker exec -i aaaaaaaaaaaa {SCRIPT} send assistente 0b1c2d3e-4f50"),
+    ),
+)
+def test_the_chat_actions_run_the_one_script_of_the_container_with_the_arguments_given(
+    tmp_path: Path, args: tuple, expected: str
+):
+    wrapper, env, log = _runtime(tmp_path)
+    env["JHT_TEST_RUNTIME_READY"] = "1"
+    done = subprocess.run(
+        [str(wrapper), "desktop-chat", *args], env=env, input="ciao", text=True, capture_output=True, timeout=10, check=False
+    )
+    assert done.returncode == 0, done.stderr
+    calls = log.read_text(encoding="utf-8").splitlines()
+    assert [line for line in calls if "agent_chat.py" in line] == [expected], "one call, nothing else typed"
+    assert not any("jht-tmux-send" in line or "python3 -c" in line for line in calls)
+
+
+@pytest.mark.parametrize(
+    "args",
+    (
+        ("read",),
+        ("read", "capitano", "1", "2"),
+        ("chat-send",),
+        ("chat-send", "capitano"),
+        ("chat-send", "capitano", "id", "extra"),
+        ("write", "capitano", "id"),
+    ),
+)
+def test_a_chat_action_with_the_wrong_arguments_answers_2_and_runs_no_script(tmp_path: Path, args: tuple):
+    # 2 is what an older wrapper answers to any action it does not know: the app takes it
+    # for «keep the older actions», so a malformed ask must never look like anything else.
+    wrapper, env, log = _runtime(tmp_path)
+    env["JHT_TEST_RUNTIME_READY"] = "1"
+    done = subprocess.run(
+        [str(wrapper), "desktop-chat", *args], env=env, input="ciao", text=True, capture_output=True, timeout=10, check=False
+    )
+    assert done.returncode == 2, done.stderr
+    assert "agent_chat.py" not in log.read_text(encoding="utf-8")
+
+
+def test_a_wrapper_from_before_the_chat_actions_answers_2_so_the_app_keeps_the_older_path(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    # The older wrapper is the current one without the two actions, installed the way a wrapper
+    # is (the runtime attests its digest, so it is built BEFORE the runtime is laid out).
+    text = WRAPPER.read_text(encoding="utf-8")
+    start = text.index("    # The chat as ONE script of the container with closed arguments")
+    end = text.index("    *) return 2 ;;", start)
+    older = tmp_path / "older-jht-wrapper.sh"
+    older.write_text(text[:start] + text[end:], encoding="utf-8")
+    assert "agent_chat.py" not in older.read_text(encoding="utf-8")
+    monkeypatch.setitem(globals(), "WRAPPER", older)
+    box = tmp_path / "box"
+    box.mkdir()
+    wrapper, env, log = _runtime(box)
+    env["JHT_TEST_RUNTIME_READY"] = "1"
+    for args in (("read", "capitano"), ("chat-send", "capitano", "id-1")):
+        done = subprocess.run(
+            [str(wrapper), "desktop-chat", *args], env=env, input="ciao", text=True, capture_output=True, timeout=10, check=False
+        )
+        assert done.returncode == 2, (args, done.stderr)
+    assert "agent_chat.py" not in log.read_text(encoding="utf-8")
 
 
 @pytest.mark.parametrize(

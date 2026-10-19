@@ -102,10 +102,22 @@ export default function DirectChatScreen({
   client,
   voiceInputBridge,
   initialAgentId = "capitano",
+  embedded = false,
+  writeLocked = false,
+  onConnect,
 }: {
   client: DirectChatClient;
   voiceInputBridge?: VoiceInputBridge;
   initialAgentId?: DirectChatAgentId;
+  /**
+   * One agent, inside another page (the Chat tab of the Agents page): no list of agents, no title,
+   * the connection stays open when the pane goes away, and a connection that fell is opened again.
+   */
+  embedded?: boolean;
+  /** The read-only view: history and answers are shown, the composer says why it cannot write. */
+  writeLocked?: boolean;
+  /** With `writeLocked`: where the invitation's button goes (the way to the full connection). */
+  onConnect?: () => void;
 }) {
   const [agentId, setAgentId] = useState<DirectChatAgentId>(initialAgentId);
   const [status, setStatus] = useState<DirectChatStatus>(INITIAL_STATUS);
@@ -143,7 +155,13 @@ export default function DirectChatScreen({
 
     void (async () => {
       try {
-        const snapshot = await client.status();
+        let snapshot = await client.status();
+        // An embedded pane may open after the connection was closed (leaving the Messages page
+        // closes it): the saved host is enough to open it again, with no question to the person.
+        if (embedded && active && snapshot.state === "disconnected") {
+          setStatus({ state: "connecting" });
+          snapshot = await client.reconnect();
+        }
         if (active) setStatus(snapshot);
       } catch (error) {
         if (active) setStatus({ state: "error", code: errorCode(error) ?? "status_failed" });
@@ -158,13 +176,16 @@ export default function DirectChatScreen({
 
     return () => {
       active = false;
+      // An embedded pane shares the connection with the page around it: closing it here would cut
+      // the chat of every other tab.
+      if (embedded) return;
       try {
         void Promise.resolve(client.close()).catch(() => undefined);
       } catch {
         // The browser preview has no native bridge; unmount must stay quiet.
       }
     };
-  }, [client]);
+  }, [client, embedded]);
 
   useEffect(() => {
     setMessages([]);
@@ -221,7 +242,7 @@ export default function DirectChatScreen({
 
   async function send() {
     const body = text.trim();
-    if (!body || sending || status.state !== "ready") return;
+    if (!body || sending || writeLocked || status.state !== "ready") return;
     const id = clientMessageId();
     const optimistic: DirectChatMessage = { id, role: "user", text: body, at: Date.now() };
     setText("");
@@ -246,14 +267,16 @@ export default function DirectChatScreen({
     }
   }
 
-  const canSend = status.state === "ready" && !sending && text.trim().length > 0;
+  const canSend = status.state === "ready" && !writeLocked && !sending && text.trim().length > 0;
+  const composerOff = status.state !== "ready" || sending || writeLocked;
 
   return (
     <div
       className="min-h-0 overflow-hidden flex flex-col md:flex-row bg-[var(--color-void)]"
-      style={{ height: "calc(100svh / var(--zoom, 1) - 3.5rem)" }}
+      style={embedded ? { height: "100%" } : { height: "calc(100svh / var(--zoom, 1) - 3.5rem)" }}
       data-testid="direct-chat-shell"
     >
+      {!embedded && (
       <aside className="hidden md:flex w-52 shrink-0 min-h-0 flex-col overflow-hidden border-r border-[var(--color-border)] bg-[var(--color-panel)]">
         <div className="shrink-0 px-4 pt-4 pb-2 text-[9px] font-semibold uppercase tracking-[0.14em] text-[var(--color-dim)]">
           {t.agentsHeading}
@@ -276,8 +299,10 @@ export default function DirectChatScreen({
           ))}
         </nav>
       </aside>
+      )}
 
       <section className="flex-1 min-w-0 min-h-0 overflow-hidden flex flex-col" aria-label={withName(t.conversationWith, selected.label)}>
+        {!embedded && (
         <header className="shrink-0 min-h-14 px-4 sm:px-5 flex items-center justify-between gap-3 border-b border-[var(--color-border)] bg-[var(--color-panel)]">
           <div>
             <div className="text-[9px] uppercase tracking-[0.14em] text-[var(--color-dim)]">{t.title}</div>
@@ -295,6 +320,7 @@ export default function DirectChatScreen({
             </select>
           </label>
         </header>
+        )}
 
         <StatusBar status={status} operationError={operationError} reconnecting={reconnecting} onRetry={() => void retry()} />
 
@@ -337,6 +363,24 @@ export default function DirectChatScreen({
           </div>
         </div>
 
+        {writeLocked && (
+          <p
+            role="note"
+            data-testid="direct-chat-read-only-invite"
+            className="shrink-0 m-0 border-t border-[var(--color-border)] bg-[var(--color-panel)] px-4 sm:px-6 py-2 text-[11px] text-[var(--color-muted)] flex flex-wrap items-center gap-3"
+          >
+            <span>{t.readOnlyInvite}</span>
+            {onConnect && (
+              <button
+                type="button"
+                onClick={onConnect}
+                className="shrink-0 rounded border border-[var(--color-border)] px-3 py-1 text-[10px] font-semibold text-[var(--color-bright)]"
+              >
+                {t.readOnlyConnect}
+              </button>
+            )}
+          </p>
+        )}
         <form
           className="shrink-0 border-t border-[var(--color-border)] bg-[var(--color-panel)] px-4 sm:px-6 py-3"
           data-testid="direct-chat-composer"
@@ -360,9 +404,13 @@ export default function DirectChatScreen({
               }}
               rows={1}
               maxLength={MAX_MESSAGE_LENGTH}
-              disabled={status.state !== "ready" || sending}
+              disabled={composerOff}
               aria-label={withName(t.writeTo, selected.label)}
-              placeholder={status.state === "ready" ? withName(t.writeToPlaceholder, selected.label) : t.connectToWrite}
+              placeholder={
+                writeLocked
+                  ? t.readOnlyInvite
+                  : status.state === "ready" ? withName(t.writeToPlaceholder, selected.label) : t.connectToWrite
+              }
               className="max-h-28 min-h-8 w-full min-w-0 flex-[1_1_16rem] resize-none border-0 bg-transparent px-1 py-1.5 text-[12px] text-[var(--color-base)] outline-none disabled:opacity-50 sm:min-w-48"
             />
             <VoiceInputControl
@@ -370,7 +418,7 @@ export default function DirectChatScreen({
               onChange={setText}
               locale={DICTATION_LOCALE[locale]}
               bridge={voiceInputBridge}
-              disabled={status.state !== "ready" || sending}
+              disabled={composerOff}
               className="w-full max-w-full sm:w-auto"
             />
             <button

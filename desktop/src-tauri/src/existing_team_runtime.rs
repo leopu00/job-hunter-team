@@ -20,6 +20,7 @@ use std::{
     fs::{self, File, OpenOptions},
     io::{Read, Write},
     path::{Path, PathBuf},
+    sync::Mutex,
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
 use tauri::{Manager, State};
@@ -551,6 +552,23 @@ pub(crate) struct ActivatedTarget {
 }
 
 impl ActivatedTarget {
+    #[cfg(test)]
+    pub(crate) fn synthetic_for_tests() -> Self {
+        Self {
+            team_id: "t".repeat(16),
+            runtime: RuntimeTarget {
+                container_id: "a".repeat(64),
+                image_id: format!("sha256:{}", "b".repeat(64)),
+                platform_image_id: format!("sha256:{}", "c".repeat(64)),
+                oci_revision: "d".repeat(40),
+                digest: format!("sha256:{}", "e".repeat(64)),
+                os: "linux".into(),
+                architecture: "amd64".into(),
+            },
+            candidate_sha256: "f".repeat(64),
+        }
+    }
+
     pub(crate) fn candidate_sha256(&self) -> &str {
         &self.candidate_sha256
     }
@@ -749,6 +767,15 @@ pub(crate) fn saved_binding_at(
         Err(_) => Err("existing_team_runtime_unavailable"),
     };
     Ok((present(CANDIDATE_FILE)?, present(SELECTION_FILE)?))
+}
+
+/// A team the person made with the app on a VPS of their own, as opposed to an existing team
+/// connected to: this scope has no candidate and no selection (only the existing-team commands
+/// write them). Read from the saved files, never from what the renderer says. It is the
+/// full connection by its nature: the read-only view exists only for an existing team, which
+/// always has its selection, so the two cases are never mistaken for each other.
+pub(crate) fn own_vps_at(root: &Path, scope: &AccountScope) -> bool {
+    matches!(saved_binding_at(root, scope), Ok((false, false)))
 }
 
 /// The host and team of the candidate this scope has, for the backend's own use
@@ -1218,6 +1245,127 @@ pub(crate) fn delivery_command(
     )
 }
 
+/// The agents the chat may be opened with: the closed list of `agent_chat.py`, which refuses any
+/// other name again on its side.
+const CHAT_AGENTS: [&str; 8] = [
+    "capitano", "assistente", "mentor", "scout", "analista", "scorer", "scrittore", "critico",
+];
+
+/// What the app asks of the chat in a pinned container: two operations, each with its few
+/// arguments. The user's text is never one of them: it goes on standard input.
+pub(crate) enum ChatOperation<'a> {
+    Read { agent: &'a str, cursor: Option<&'a str> },
+    Send { agent: &'a str, client_message_id: &'a str },
+}
+
+fn chat_token(value: &str, max: usize, digits_only: bool) -> bool {
+    !value.is_empty()
+        && value.len() <= max
+        && value.bytes().all(|b| {
+            if digits_only {
+                b.is_ascii_digit()
+            } else {
+                b.is_ascii_alphanumeric() || b == b'-'
+            }
+        })
+}
+
+/// The arguments of a chat operation, every one checked against its closed list or alphabet:
+/// the operation word, the agent, then the cursor or the client id. Whatever builds a command
+/// for the chat takes them from here, so there is one place that says what may enter one.
+fn chat_arguments(operation: &ChatOperation<'_>) -> Result<Vec<String>, &'static str> {
+    match operation {
+        ChatOperation::Read { agent, cursor } => {
+            if !CHAT_AGENTS.contains(agent) {
+                return Err("invalid_agent");
+            }
+            let mut arguments = vec!["read".to_owned(), (*agent).to_owned()];
+            match cursor {
+                None => {}
+                Some(cursor) if chat_token(cursor, 12, true) => arguments.push((*cursor).to_owned()),
+                Some(_) => return Err("invalid_request"),
+            }
+            Ok(arguments)
+        }
+        ChatOperation::Send { agent, client_message_id } => {
+            if !CHAT_AGENTS.contains(agent) {
+                return Err("invalid_agent");
+            }
+            if !chat_token(client_message_id, 64, false) {
+                return Err("invalid_request");
+            }
+            Ok(vec!["send".to_owned(), (*agent).to_owned(), (*client_message_id).to_owned()])
+        }
+    }
+}
+
+fn quoted(arguments: &[String]) -> String {
+    arguments
+        .iter()
+        .enumerate()
+        .map(|(index, argument)| if index == 0 { argument.clone() } else { format!("'{argument}'") })
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+/// The chat of a pinned team: `agent_chat.py` with fixed arguments, in the verified container
+/// (`command` checks container, image, platform and digest first: exit 70 otherwise). Every token
+/// is checked before it enters the string, so the string holds nothing the person or the renderer
+/// wrote. It replaces `python_command` for the chat: no interpreter that runs what it is sent.
+pub(crate) fn chat_command(
+    target: &RuntimeTarget,
+    operation: &ChatOperation<'_>,
+) -> Result<String, &'static str> {
+    let arguments = quoted(&chat_arguments(operation)?);
+    command(
+        target,
+        &format!("exec docker exec -i \"$JHT_CID\" python3 -I /app/shared/skills/agent_chat.py {arguments}"),
+    )
+}
+
+/// The same operation through the host's `jht` wrapper (a local team, a VPS that was never
+/// pinned): `desktop-chat read|chat-send ...`. The wrapper runs the same script in the container.
+/// An older wrapper answers 2 to an action it does not know, and the caller keeps the older path.
+pub(crate) fn chat_wrapper_arguments(operation: &ChatOperation<'_>) -> Result<Vec<String>, &'static str> {
+    let mut arguments = chat_arguments(operation)?;
+    if arguments[0] == "send" {
+        arguments[0] = "chat-send".to_owned();
+    }
+    arguments.insert(0, "desktop-chat".to_owned());
+    Ok(arguments)
+}
+
+/// The full connection of an existing team ("Conferma e collega") in this run of the app: the
+/// connection key of the one team the person confirmed. Only the native side of that command
+/// sets it, and only when it succeeds. What writes to the team (the chat, the agent controls) is
+/// allowed only to a team that holds it: the read-only view activates a target too, and never
+/// holds it. It lives in memory: an app run that has not confirmed starts without it, so after a
+/// restart it fails closed. The commands that read it must refuse any window but `main` first.
+static FULL_LINK: Mutex<Option<String>> = Mutex::new(None);
+
+pub(crate) fn grant_full_link(scope: &AccountScope, target: &ActivatedTarget) {
+    if let Ok(mut slot) = FULL_LINK.lock() {
+        *slot = Some(connection_key(scope, target));
+    }
+}
+
+pub(crate) fn full_link_granted(scope: &AccountScope, target: &ActivatedTarget) -> bool {
+    FULL_LINK
+        .lock()
+        .map(|slot| slot.as_deref() == Some(connection_key(scope, target).as_str()))
+        .unwrap_or(false)
+}
+
+pub(crate) fn revoke_full_link() {
+    if let Ok(mut slot) = FULL_LINK.lock() {
+        *slot = None;
+    }
+}
+
+/// The tests that grant or revoke share the one static of the process: cargo runs tests in parallel.
+#[cfg(test)]
+pub(crate) static FULL_LINK_TEST_LOCK: Mutex<()> = Mutex::new(());
+
 pub(crate) fn snapshot_command(target: &RuntimeTarget) -> Result<String, &'static str> {
     command(target, "docker exec \"$JHT_CID\" node -e 'const fs=require(\"fs\"); let c={}; try{c=JSON.parse(fs.readFileSync(\"/jht_home/jht.config.json\",\"utf8\"))}catch{}; const p=String(c.active_provider||\"\").toLowerCase(); const marker={claude:\"/jht_home/.claude/.credentials.json\",anthropic:\"/jht_home/.claude/.credentials.json\",codex:\"/jht_home/.codex/auth.json\",openai:\"/jht_home/.codex/auth.json\",kimi:\"/jht_home/.kimi/credentials/kimi-code.json\",moonshot:\"/jht_home/.kimi/credentials/kimi-code.json\"}[p]; const ok=[\"claude\",\"anthropic\",\"codex\",\"openai\",\"kimi\",\"moonshot\"].includes(p); console.log(\"runtimeInstalled=1\\ncontainerRunning=1\\nproviderConfigured=\"+(ok?\"1\":\"0\")+\"\\nproviderAuthenticated=\"+(marker&&fs.existsSync(marker)?\"1\":\"0\")+\"\\nprofileReady=\"+(fs.existsSync(\"/jht_home/profile/ready.flag\")?\"1\":\"0\")+\"\\nassistantWelcomed=\"+(fs.existsSync(\"/jht_home/profile/welcomed.flag\")?\"1\":\"0\"));'")
 }
@@ -1685,6 +1833,113 @@ mod tests {
             os: "linux".into(),
             architecture: "amd64".into(),
         }
+    }
+
+    #[test]
+    fn the_chat_command_is_the_fixed_script_in_the_verified_container_with_only_checked_tokens() {
+        let read = chat_command(&target(), &ChatOperation::Read { agent: "capitano", cursor: Some("123") }).expect("a read");
+        assert!(read.contains("exec docker exec -i \"$JHT_CID\" python3 -I /app/shared/skills/agent_chat.py read 'capitano' '123'"));
+        assert!(read.contains("|| exit 70") && read.starts_with("set -eu\nJHT_CID='"), "the pinned container is verified first");
+        let first = chat_command(&target(), &ChatOperation::Read { agent: "mentor", cursor: None }).expect("a first page");
+        assert!(first.ends_with("agent_chat.py read 'mentor'"));
+        let send = chat_command(&target(), &ChatOperation::Send { agent: "assistente", client_message_id: "id-1-A" }).expect("a send");
+        assert!(send.ends_with("agent_chat.py send 'assistente' 'id-1-A'"));
+        assert!(!send.contains("python3 -c") && !send.contains("exec(bytes.fromhex"), "no interpreter that runs what it is sent");
+    }
+
+    #[test]
+    fn the_wrapper_arguments_are_the_same_checked_tokens_behind_the_wrappers_two_actions() {
+        let read = chat_wrapper_arguments(&ChatOperation::Read { agent: "capitano", cursor: Some("4096") }).unwrap();
+        assert_eq!(read, ["desktop-chat", "read", "capitano", "4096"]);
+        let first = chat_wrapper_arguments(&ChatOperation::Read { agent: "mentor", cursor: None }).unwrap();
+        assert_eq!(first, ["desktop-chat", "read", "mentor"]);
+        let send = chat_wrapper_arguments(&ChatOperation::Send { agent: "assistente", client_message_id: "id-1" }).unwrap();
+        assert_eq!(send, ["desktop-chat", "chat-send", "assistente", "id-1"]);
+        assert_eq!(
+            chat_wrapper_arguments(&ChatOperation::Send { agent: "capitano", client_message_id: "a b" }),
+            Err("invalid_request")
+        );
+        assert_eq!(
+            chat_wrapper_arguments(&ChatOperation::Read { agent: "root", cursor: None }),
+            Err("invalid_agent")
+        );
+    }
+
+    #[test]
+    fn golden_the_operation_line_of_each_chat_command_is_exactly_this() {
+        let last = |command: String| command.lines().last().expect("a last line").to_owned();
+        assert_eq!(
+            last(chat_command(&target(), &ChatOperation::Read { agent: "capitano", cursor: Some("4096") }).unwrap()),
+            "exec docker exec -i \"$JHT_CID\" python3 -I /app/shared/skills/agent_chat.py read 'capitano' '4096'"
+        );
+        assert_eq!(
+            last(chat_command(&target(), &ChatOperation::Read { agent: "mentor", cursor: None }).unwrap()),
+            "exec docker exec -i \"$JHT_CID\" python3 -I /app/shared/skills/agent_chat.py read 'mentor'"
+        );
+        assert_eq!(
+            last(chat_command(&target(), &ChatOperation::Send { agent: "assistente", client_message_id: "0b1c2d3e-4f50-6172-8394-a5b6c7d8e9f0" }).unwrap()),
+            "exec docker exec -i \"$JHT_CID\" python3 -I /app/shared/skills/agent_chat.py send 'assistente' '0b1c2d3e-4f50-6172-8394-a5b6c7d8e9f0'"
+        );
+    }
+
+    #[test]
+    fn nothing_outside_the_closed_forms_enters_the_chat_command() {
+        for agent in ["", "CAPITANO", "capitano ", "capitano'; id #", "scout-1", "../mentor", "capitano\n", "agente"] {
+            assert_eq!(chat_command(&target(), &ChatOperation::Read { agent, cursor: None }), Err("invalid_agent"), "{agent:?}");
+            assert_eq!(chat_command(&target(), &ChatOperation::Send { agent, client_message_id: "id" }), Err("invalid_agent"), "{agent:?}");
+        }
+        let long_cursor = "9".repeat(13);
+        for cursor in ["", "-1", "1.5", "12x", "1 2", "1;id", "'", long_cursor.as_str()] {
+            assert_eq!(chat_command(&target(), &ChatOperation::Read { agent: "capitano", cursor: Some(cursor) }), Err("invalid_request"), "{cursor:?}");
+        }
+        let long_id = "x".repeat(65);
+        for id in ["", "a b", "a'b", "a;b", "a$(id)", "a`id`", "a\nb", "è", "with_underscore", long_id.as_str()] {
+            assert_eq!(chat_command(&target(), &ChatOperation::Send { agent: "capitano", client_message_id: id }), Err("invalid_request"), "{id:?}");
+        }
+        let mut broken = target();
+        broken.container_id = "x".into();
+        assert_eq!(
+            chat_command(&broken, &ChatOperation::Read { agent: "capitano", cursor: None }),
+            Err("existing_team_runtime_candidate_invalid")
+        );
+    }
+
+    #[test]
+    fn a_vps_of_the_persons_own_is_the_scope_with_no_candidate_and_no_selection() {
+        let root = std::env::temp_dir().join(format!("jht-own-vps-{}-{}", std::process::id(), line!()));
+        let _ = fs::remove_dir_all(&root);
+        let scope = AccountScope::synthetic(b"scope-own");
+        assert!(own_vps_at(&root, &scope), "nothing saved: the person's own");
+        let dir = account_dir(&root, &scope);
+        fs::create_dir_all(&dir).unwrap();
+        // the person's own VPS, and then a selection appears (an existing team gets connected to): the
+        // existing team's rule is back, and the full connection must be confirmed again
+        fs::write(dir.join(SELECTION_FILE), b"{}").unwrap();
+        assert!(!own_vps_at(&root, &scope), "a selection that appears later: no longer the person's own");
+        fs::remove_file(dir.join(SELECTION_FILE)).unwrap();
+        assert!(own_vps_at(&root, &scope), "and without it, theirs again");
+        fs::write(dir.join(CANDIDATE_FILE), b"{}").unwrap();
+        assert!(!own_vps_at(&root, &scope), "a candidate: an existing team");
+        fs::remove_file(dir.join(CANDIDATE_FILE)).unwrap();
+        fs::write(dir.join(SELECTION_FILE), b"{}").unwrap();
+        assert!(!own_vps_at(&root, &scope), "a selection alone: an existing team too, and never mistaken");
+        assert!(own_vps_at(&root, &AccountScope::synthetic(b"another-scope")), "another account has its own files");
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn the_full_link_belongs_to_the_confirmed_team_in_this_run_only() {
+        let _serial = FULL_LINK_TEST_LOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+        let (one, two) = (AccountScope::synthetic(b"scope-one"), AccountScope::synthetic(b"scope-two"));
+        let activated = |hash: &str| ActivatedTarget { team_id: "t".repeat(16), runtime: target(), candidate_sha256: hash.to_owned() };
+        revoke_full_link();
+        assert!(!full_link_granted(&one, &activated("h1")), "an app run that has not confirmed starts without it");
+        grant_full_link(&one, &activated("h1"));
+        assert!(full_link_granted(&one, &activated("h1")));
+        assert!(!full_link_granted(&two, &activated("h1")), "another account never has it");
+        assert!(!full_link_granted(&one, &activated("h2")), "nor another candidate of the same account");
+        revoke_full_link();
+        assert!(!full_link_granted(&one, &activated("h1")));
     }
 
     #[test]
