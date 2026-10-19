@@ -138,7 +138,9 @@ def bot_role_for(agent: str) -> str:
     return role if role in BOT_ROLES else DEFAULT_BOT_ROLE
 
 
-def try_telegram(agent: str, body: str, row_id: int | None = None, kind: str = "notification") -> bool:
+def try_telegram(
+    agent: str, body: str, row_id: int | None = None, kind: str = "notification", buttons: dict | None = None
+) -> bool:
     """Best-effort send via jht-telegram-send. Return True on exit 0.
 
     ⚠️ `--from` non c'era: il ruolo veniva passato solo in `JHT_NOTIFY_AGENT`,
@@ -150,6 +152,10 @@ def try_telegram(agent: str, body: str, row_id: int | None = None, kind: str = "
     conversazione sbagliata.
     """
     cmd = ["jht-telegram-send", "--from", bot_role_for(agent), body]
+    if buttons:
+        # The buttons of a single-choice question; the numbered options stay in the text.
+        cmd = ["jht-telegram-send", "--from", bot_role_for(agent), "--inline-buttons",
+               json.dumps(buttons, ensure_ascii=False, separators=(",", ":")), body]
     try:
         # Timeout corto: il bridge accetta o rifiuta entro pochi secondi.
         # Se la rete e' giu', meglio fallback su web subito che bloccare il loop agente.
@@ -410,7 +416,10 @@ def main() -> int:
     if should_deliver and (
         not args.no_telegram
         and not off_hours
-        and try_telegram(args.agent, body, row_id, args.kind)
+        and try_telegram(
+            args.agent, body, row_id, args.kind,
+            aq.inline_keyboard(question.source_id, question.payload) if question is not None else None,
+        )
     ):
         delivered_via = "telegram"
     if should_deliver and off_hours:

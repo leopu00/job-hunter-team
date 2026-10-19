@@ -296,13 +296,132 @@ def _defang_user_markers(text):
     return _USER_MARKER_SHAPE.sub(replace, text)
 
 
+# ── Il rumore con cui un testo può cominciare ────────────────────────────────
+# Per decidere CHI parla (message_origin) conta ciò che si legge, non i byte: uno ZWSP o un ESC
+# davanti a `[@capitano -> @x]` non si vedono, e l'LLM che legge il pane legge la busta. Qui si
+# dice quanti caratteri iniziali sono rumore: controlli, spazi, gli invisibili che comandano
+# (la lista unica, `INVISIBLE_COMMANDS`) e, per essere larghi dove serve esserlo, le categorie
+# Cc/Cf/Zl/Zp/Zs; dopo un ESC anche la sequenza che la TUI consumerebbe (`[31m`, un OSC) — MAI
+# `[@`, che e' l'inizio di una busta. Non cambia nulla: restituisce una lunghezza.
+_NOISE_CATEGORIES = frozenset({"Cc", "Cf", "Zl", "Zp", "Zs"})
+# Dopo un ESC: una CSI completa (la finale e' una lettera, `~` o il backtick: MAI `@`, perche' `ESC[@`
+# e' l'inizio di una busta), oppure un OSC. L'OSC e' rumore solo fino a dove non puo' nascondere una
+# busta: si ferma a un terminatore (BEL o ST, consumato), a un a capo o a un «[@» (non consumati). Senza
+# terminatore NON arriva in fondo al testo: attraversare un «[@» vero e' proprio cio' che il verdetto
+# non deve fare.
+# L'OSC si ferma a QUALUNQUE «[» (non solo a «[@»): guardare due caratteri sui byte grezzi lasciava passare
+# `ESC ] [ ESC[0m @capitano`, dove il «[» sembrava innocuo e la sequenza dopo lo toglieva dal testo letto.
+_AFTER_ESC = re.compile(
+    r"\[[0-9;?]*[ -/]*[A-Za-z~`]"
+    r"|\][^\x07\x1b\r\n\[]*(?:\x07|\x1b\\)?"
+)
+# Come sopra, per togliere le sequenze di un ESC da TUTTO il testo: una sequenza che non e' completa
+# lascia il solo ESC da togliere.
+_ESC_SEQUENCE = re.compile(r"\x1b(?:" + _AFTER_ESC.pattern + r")?")
+_KEEP_CONTROLS = frozenset("\n\r\t")
+
+# Invisibili che NON stanno in INVISIBLE_COMMANDS perche' sono lettere di una scrittura o una
+# presentazione (il selettore di variante FE0F e' l'emoji, quelli CJK e mongoli scelgono la forma di un
+# segno, i riempitivi hangul stanno in alcune sequenze di jamo): togliere quelli da un testo cambierebbe
+# cio' che l'autore ha scritto. Per decidere CHI parla pero' si leggono come niente: `[<FE0F>@capitano`,
+# un riempitivo hangul o un braille vuoto davanti alla busta si leggono come la busta del capitano.
+# Sono i Default_Ignorable di Unicode fuori dalla categoria Cf, piu' il braille vuoto (U+2800, che vuoto
+# non e' per Unicode ma lo e' per chi legge). Solo `reading_view` e `leading_noise_length` li usano.
+READING_IGNORABLES = (
+    frozenset("\u034f\u115f\u1160\u17b4\u17b5\u3164\uffa0\u2800")
+    | _codepoints(0x180B, 0x180F)
+    | _codepoints(0xFE00, 0xFE0F)
+    | _codepoints(0xE0100, 0xE01EF)
+)
+
+# Omoglifi che fanno leggere una busta dove i byte non la mostrano: la chiocciola a tutta larghezza.
+# Solo nella vista di lettura (il verdetto), mai nel testo che si consegna.
+_READING_HOMOGLYPHS = {ord("\uff20"): "@"}
+
+
+def leading_noise_length(text):
+    """Quanti caratteri all'inizio di `text` sono rumore invisibile (vedi sopra)."""
+    text = str(text or "")
+    i, n = 0, len(text)
+    while i < n:
+        ch = text[i]
+        if ch == "\x1b":
+            i += 1
+            found = _AFTER_ESC.match(text, i)
+            if found:
+                i = found.end()
+            continue
+        if ch in INVISIBLE_COMMANDS or ch in READING_IGNORABLES or unicodedata.category(ch) in _NOISE_CATEGORIES:
+            i += 1
+            continue
+        break
+    return i
+
+
+# ── I controlli del terminale non viaggiano fra agenti ──────────────────────────────────────────
+# Il trasporto digita con `tmux send-keys -l`: i byte arrivano al CLI come TASTI, non a un terminale
+# che li interpreta (ESC+«]» e' Alt+] o ESC e poi «]», non un OSC). Fra agenti un ESC non ha nessun
+# uso legittimo come tasto; un log colorato lo porta come sequenza. Quindi: una sequenza completa
+# (una CSI con la sua finale, una stringa OSC/DCS/SOS/PM/APC col suo terminatore sulla stessa riga) si
+# toglie intera, ogni altro ESC si toglie da solo, e con loro i controlli C0 (salvo a capo e tabulazione),
+# il DEL e i C1. Il testo resta leggibile. Il verdetto sul mittente si calcola su QUESTO testo.
+_COMPLETE_SEQUENCE = re.compile(
+    r"\x1b(?:\[[0-9;:?<=>]*[ -/]*[A-Za-z~`]|[\]PX^_][^\x07\x1b\r\n]*(?:\x07|\x1b\\))"
+)
+
+
+def strip_terminal_controls(text):
+    """`text` senza ESC (e le sequenze complete), controlli C0 (tranne \\n e \\t), DEL e C1."""
+    text = _COMPLETE_SEQUENCE.sub("", str(text or ""))
+    return "".join(
+        ch for ch in text if ch in "\n\t" or not (ord(ch) < 0x20 or ord(ch) == 0x7F or 0x80 <= ord(ch) <= 0x9F)
+    )
+
+
+def reading_view(text):
+    """Il testo come lo LEGGE chi lo riceve: senza ESC e relative sequenze, senza controlli e senza
+    invisibili in nessun punto. Serve a decidere CHI parla: `[<ZWSP>@capitano -> @x]` e
+    `[\x1b[0m@capitano -> @x]` si leggono come una busta del capitano, e i byte non la lasciano
+    vedere a una regex. Non e' il testo che si consegna: il verdetto lo guarda, nessuno lo consegna."""
+    text = str(text or "")
+    # Invisibili e controlli PRIMA (salvo l'ESC), le sequenze dopo, finche' non cambia piu': togliere
+    # una sequenza puo' far toccare due pezzi di busta che la sequenza teneva separati, e un invisibile
+    # dentro una sequenza non deve salvarla.
+    for _ in range(4):
+        before = text
+        text = "".join(
+            ch
+            for ch in text
+            if ch == "\x1b"
+            or (
+                ch not in INVISIBLE_COMMANDS
+                and ch not in READING_IGNORABLES
+                and (ch in _KEEP_CONTROLS or unicodedata.category(ch) not in ("Cc", "Cf"))
+            )
+        )
+        text = _ESC_SEQUENCE.sub("", text)
+        if text == before:
+            break
+    return text.translate(_READING_HOMOGLYPHS)
+
+
+def sanitize_user_text(text):
+    """Il testo di un utente su una riga, senza comandi e senza finti confini: NIENTE etichetta.
+
+    Metà del recinto: pulisce, non attribuisce. Serve dove il testo arriva senza
+    una busta che dica di chi è (la console: `jht team send`, il pannello locale) e
+    dichiararne l'autore sarebbe affermare più di quanto si sa.
+    """
+    return _defang_markers(_defang_user_markers(flatten_user_turn(text)))
+
+
 def fence_user_turn(text):
     """Il testo scritto dall'utente, dentro il suo confine, su una riga sola.
 
     Presentazione e basta: il testo che l'utente vede (cronologia, web, gioco)
     resta quello che ha scritto.
     """
-    safe = _defang_markers(_defang_user_markers(flatten_user_turn(text)))
+    safe = sanitize_user_text(text)
     return " ".join(part for part in (USER_OPEN_MARKER, safe, USER_CLOSE_MARKER) if part)
 
 

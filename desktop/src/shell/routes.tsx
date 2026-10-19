@@ -1,5 +1,6 @@
 import type { ComponentType } from "react";
 import AgentsPage from "../pages/agents";
+import ExistingTeamAgentsPage from "../pages/agents/readonly";
 import ExistingTeamStatusPage from "../pages/existing-team";
 import ExistingTeamProfilePage from "../pages/existing-team/profile";
 import ExistingTeamOfficePage from "../pages/office/readonly";
@@ -78,6 +79,8 @@ export const READ_ONLY_ROUTES: Route[] = [
   { path: "/profile", page: ExistingTeamProfilePage },
   // Not the cloud's Realtime office: the same office, drawn from what the team's VPS reports.
   { path: "/office", page: ExistingTeamOfficePage, fullBleed: true },
+  // Not the box's agents page: the agent sessions on the existing team's VPS, read only.
+  { path: "/agents", page: ExistingTeamAgentsPage },
 ];
 
 /** The navigation of that view, in the order of the web's own bar. */
@@ -89,4 +92,5 @@ export const READ_ONLY_NAV = [
   { href: "/profile", label: "own:profile" },
   // A desktop page, after the web's ones as in the full shell (DESKTOP_LINKS).
   { href: "/office", label: "own:office" },
+  { href: "/agents", label: "own:agents" },
 ] as const;

@@ -77,6 +77,16 @@ describe("the office page", () => {
     expect(await screen.findByRole("status")).toHaveTextContent("nessun agente in scena");
   });
 
+  it("says it on a line above the scene, never over it", async () => {
+    render(<OfficePage params={{}} search={new URLSearchParams()} />);
+    const status = await screen.findByRole("status");
+    const stage = screen.getByTestId("office-stage");
+    expect(stage).toContainElement(screen.getByTestId("office-canvas"));
+    expect(stage).not.toContainElement(status);
+    expect(status.className).not.toMatch(/\babsolute\b/);
+    expect(status.compareDocumentPosition(stage) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
   it("says so when the assets are missing", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => new Response("<!doctype html>", { headers: { "content-type": "text/html" } })));
     render(<OfficePage params={{}} search={new URLSearchParams()} />);

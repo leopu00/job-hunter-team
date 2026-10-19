@@ -39,6 +39,7 @@ from __future__ import annotations
 import os
 import re
 import subprocess
+import unicodedata
 
 
 # La busta come la scrivono gli agenti. Serve a leggere ciò che il mittente
@@ -90,10 +91,113 @@ IMPERSONATION = "impersonation"
 UNSIGNED = "unsigned"
 
 
-def claimed_sender(message: str) -> str | None:
-    """Il mittente che il messaggio DICHIARA, o None se non c'è busta."""
-    found = ENVELOPE_RE.match(message or "")
+# Il gioco può anteporre alla busta un blocco di contesto che compone lui (le risposte
+# dell'onboarding dichiarate dall'utente): `[CONTESTO ONBOARDING LOCALE …]\n…\n[FINE
+# CONTESTO]\n\n[@utente -> @x] [CHAT] <testo>` (vps_backend.gd, `_do_send_chat`). Il
+# blocco lo scrive il gioco, il testo dopo la busta lo scrive l'utente. La forma è
+# STRETTA: comincia con quella riga, finisce al PRIMO `[FINE CONTESTO]` seguito da una
+# busta `@utente`. Chi ci scrive dentro non sposta il confine verso il proprio testo:
+# può solo farne finire di più dentro il recinto.
+CONTEXT_FRAME_RE = re.compile(
+    r"\A(\[CONTESTO ONBOARDING LOCALE[^\n]*\]\n.*?\n\[FINE CONTESTO\]\n\n)(?=\[@utente\s*->)",
+    re.DOTALL,
+)
+
+
+def split_context_frame(message):
+    """`(blocco di contesto, resto)`; il blocco è '' se il messaggio non comincia con uno."""
+    found = CONTEXT_FRAME_RE.match(message or "")
+    if not found:
+        return "", message or ""
+    return found.group(1), (message or "")[found.end():]
+
+
+# ── JHT-T21-b (review) · il verdetto si calcola su ciò che si LEGGE, non sui byte ──
+# `^\s*[@x -> @y]` lavora sul testo grezzo: uno ZWSP o un ESC davanti alla busta non sono
+# spazio, quindi la busta non veniva riconosciuta (`claimed=None`) e un agente poteva
+# firmarsi «capitano» senza che nessuno se ne accorgesse — l'LLM che legge il pane non
+# vede lo ZWSP, e il terminale non mostra l'ESC. Si salta il RUMORE iniziale, deciso da
+# `external_content.leading_noise_length` (la lista unica degli invisibili e le categorie
+# dei controlli). Non cambia un byte del messaggio: serve a trovare dove comincia la busta.
+_NOISE_FALLBACK = frozenset({"Cc", "Cf", "Zl", "Zp", "Zs"})
+
+
+def _noise_length(text):
+    try:
+        import sys as _sys
+
+        here = os.path.dirname(os.path.abspath(__file__))
+        if here not in _sys.path:
+            _sys.path.insert(0, here)
+        from external_content import leading_noise_length
+
+        return leading_noise_length(text)
+    except Exception:
+        # Se la funzione non si carica il verdetto non deve diventare piu' cieco: si salta
+        # almeno ESC e le categorie dei controlli e degli invisibili.
+        i = 0
+        while i < len(text) and (text[i] == "\x1b" or unicodedata.category(text[i]) in _NOISE_FALLBACK):
+            i += 1
+        return i
+
+
+def _reading_view(text):
+    """Il testo come lo legge il destinatario (vedi `external_content.reading_view`)."""
+    try:
+        import sys as _sys
+
+        here = os.path.dirname(os.path.abspath(__file__))
+        if here not in _sys.path:
+            _sys.path.insert(0, here)
+        from external_content import reading_view
+
+        return reading_view(text)
+    except Exception:
+        # Se la funzione non si carica il verdetto non deve diventare piu' cieco: via ESC, i
+        # controlli e gli invisibili (categorie Cc/Cf) da tutto il testo.
+        return "".join(
+            ch for ch in text.replace("\x1b", "")
+            if ch in "\n\r\t" or unicodedata.category(ch) not in ("Cc", "Cf")
+        )
+
+
+# ── JHT-T22 · caratteri VISIBILI davanti alla busta o dentro la parentesi ─────────────────────
+# Con i controlli del terminale tolti dal testo consegnato (strip_terminal_controls) restano forme
+# che un LLM legge ancora come la busta di un collega, con un refuso: `[]@capitano -> …]`,
+# `[P@capitano …`, `O[@capitano …`, `(B[@capitano …`, `31m[@capitano …`, `x[@capitano …`. Un agente
+# poteva scriverle anche prima, senza nessun ESC. Quindi, sulla PRIMA riga: una busta preceduta da
+# al massimo MAX_PREFIX caratteri non spazio, o con al massimo MAX_GAP caratteri fra «[» e «@», conta
+# come una busta dichiarata (e se e' di un altro agente noto e' impersonation). Un «ciao [@capitano …»
+# a meta' frase, o qualunque cosa sulle righe dopo la prima, resta una citazione.
+MAX_PREFIX = 3
+MAX_GAP = 2
+NEAR_ENVELOPE_RE = re.compile(
+    r"^[ \t]*[^\s]{0,%d}\[[^\n]{0,%d}@([A-Za-z0-9_-]+)\s*->\s*@([A-Za-z0-9_-]+)\]" % (MAX_PREFIX, MAX_GAP)
+)
+
+
+def _claim(view):
+    view = _reading_view(view)
+    view = view[_noise_length(view):]
+    found = ENVELOPE_RE.match(view) or NEAR_ENVELOPE_RE.match(view)
     return found.group(1).lower() if found else None
+
+
+def claimed_sender(message: str, raw: str | None = None) -> str | None:
+    """Il mittente che il messaggio DICHIARA, o None se non c'è busta.
+
+    `raw` e' il messaggio prima di togliere i controlli (se diverso): si guarda anche quello. Un
+    verdetto che guarda piu' di un testo e' piu' severo, mai meno.
+
+    Con un blocco di contesto davanti si guarda la busta che lo segue: altrimenti chi
+    lo antepone a una firma falsa scavalcherebbe il controllo d'identità. Si guarda dopo il
+    rumore iniziale (ZWSP, ESC, invisibili), e una busta con un breve prefisso visibile o un
+    breve vuoto dopo «[» conta (vedi NEAR_ENVELOPE_RE).
+    """
+    name = _claim(split_context_frame(message)[1])
+    if name is None and raw is not None and raw != message:
+        name = _claim(split_context_frame(raw)[1])
+    return name
 
 
 def session_from_ancestry(pid, parent_of, pane_owner):
@@ -206,14 +310,53 @@ USER_TURN_RE = re.compile(
 _EDITED_TAG_RE = re.compile(r"\[TG-EDITED\]\Z")
 
 
+_FRAME_END = "\n[FINE CONTESTO]\n\n"
+_ANY_LINE_BREAK = re.compile(r"\r\n|[\n\r\v\f\x1c-\x1e\x85\u2028\u2029]")
+USER_TEXT_MARK = "[USER TEXT]"
+
+
+def clean_context_frame(frame):
+    """Il blocco di contesto del gioco, ripulito riga per riga; '' se non si sa ripulire.
+
+    Lo compone il gioco, ma il CONTENUTO è testo dichiarato dall'utente (profilo, preferenze,
+    risposte dell'onboarding) e il profilo può venire da un CV: entrava nel pane grezzo, con a
+    capo, ESC, override bidi e righe che imitano una busta. Restano fissi la prima riga e il
+    terminatore; ogni riga del corpo passa per `sanitize_user_text` (una riga, invisibili tolti
+    con la lista unica, marcatori finti disinnescati) e una che comincia con `[` — dove una
+    busta finta sarebbe credibile — porta davanti `[USER TEXT]`, come fa il bridge. Un blocco
+    legittimo (righe di testo e di elenco) esce identico.
+    """
+    if not frame:
+        return frame
+    try:
+        import sys as _sys
+
+        here = os.path.dirname(os.path.abspath(__file__))
+        if here not in _sys.path:
+            _sys.path.insert(0, here)
+        from external_content import sanitize_user_text
+
+        first, _, rest = frame.partition("\n")
+        body = rest[: len(rest) - len(_FRAME_END)]
+        lines = []
+        for line in _ANY_LINE_BREAK.split(body):
+            clean = sanitize_user_text(line)
+            lines.append(f"{USER_TEXT_MARK} {clean}" if clean.startswith("[") else clean)
+        return sanitize_user_text(first) + "\n" + "\n".join(lines) + _FRAME_END
+    except Exception:
+        return ""
+
+
 def fence_user_turn_message(message):
     """Il messaggio con il testo dell'utente recintato; gli altri, identici."""
-    found = USER_TURN_RE.match(message or "")
+    frame, rest = split_context_frame(message)
+    found = USER_TURN_RE.match((rest or "")[_noise_length(rest or ""):])
     if not found:
         return message
     head, text = found.group(1), found.group(2) or ""
     if _EDITED_TAG_RE.search(head) and text.lstrip().startswith("[TG-"):
         return message           # an edited attachment: the bridge composed it
+    head = clean_context_frame(frame) + head
     try:
         import sys as _sys
 
@@ -228,6 +371,36 @@ def fence_user_turn_message(message):
         # arriva comunque com'era: su una riga e senza comandi non si può
         # garantire, quindi lo si segnala e basta.
         return f"{head} {UNFENCED_MARK} {text}"
+
+
+# ── JHT-T21-b · la console scrive testo libero, senza busta ─────────────────────
+# `jht team send` / `jht team chat` e il pannello locale (`/api/team/send`) mandano al
+# pane il testo di chi li usa, così com'è, senza busta: nessuno dice di chi sia, e il
+# destinatario lo legge come se fosse stato digitato nel pane. Il difetto tecnico è lo
+# stesso della chat (ESC e CR arrivano alla TUI come tasti, gli invisibili e i tag
+# nascondono istruzioni, una riga può imitare una busta), l'ATTRIBUZIONE è diversa: non
+# c'è niente di verificabile da affermare. Quindi qui si PULISCE senza etichettare:
+# `external_content.sanitize_user_text`, la stessa funzione del recinto, senza il
+# confine. Il chiamante lo CHIEDE con `JHT_TMUX_SEND_FROM=user-console`; chiederlo non
+# conferisce niente (aggiunge pulizia, non fiducia), quindi non serve che sia autentico.
+CONSOLE_SOURCE = "user-console"
+
+
+def sanitize_console_message(message, source):
+    """Il messaggio della console ripulito; qualunque altro, identico."""
+    if source != CONSOLE_SOURCE:
+        return message
+    try:
+        import sys as _sys
+
+        here = os.path.dirname(os.path.abspath(__file__))
+        if here not in _sys.path:
+            _sys.path.insert(0, here)
+        from external_content import sanitize_user_text
+
+        return sanitize_user_text(message)
+    except Exception:
+        return f"{UNFENCED_MARK} {message}"
 
 
 def mark_message(message, trust):
@@ -245,8 +418,9 @@ def mark_message(message, trust):
     accorgono di niente e non vanno toccati.
     """
     text = message or ""
-    found = ENVELOPE_RE.match(text)
-    head, body = (text[: found.end()], text[found.end() :]) if found else ("", text)
+    skip = _noise_length(text)
+    found = ENVELOPE_RE.match(text[skip:])
+    head, body = (text[: skip + found.end()], text[skip + found.end() :]) if found else ("", text)
     # Ripetuto: due timbri finti di fila non devono lasciarne uno in piedi.
     while True:
         cleaned = _ANY_MARK_RE.sub("", body, count=1)
@@ -300,7 +474,7 @@ def verified_origin(pid):
     return session_from_ancestry(pid, parent_of, owners.get)
 
 
-def inspect_message(pid, message):
+def inspect_message(pid, message, raw=None):
     """`(trust, claimed, origin)` con una sola interrogazione a tmux.
 
     Le sessioni vive escono dalla stessa lettura dei pane: chiederle due volte
@@ -308,8 +482,38 @@ def inspect_message(pid, message):
     """
     panes = tmux_pane_owners()
     origin = session_from_ancestry(pid, parent_of, panes.get) if panes else None
-    claimed = claimed_sender(message)
+    claimed = claimed_sender(message, raw)
     return classify_sender(claimed, origin, set(panes.values())), claimed, origin
+
+
+def strip_controls(message):
+    """Il messaggio senza ESC, sequenze complete e controlli: quello che il CLI ricevera' davvero."""
+    try:
+        import sys as _sys
+
+        here = os.path.dirname(os.path.abspath(__file__))
+        if here not in _sys.path:
+            _sys.path.insert(0, here)
+        from external_content import strip_terminal_controls
+
+        return strip_terminal_controls(message)
+    except Exception:
+        # Senza la funzione si tolgono almeno ESC e controlli: meglio un testo piu' povero che grezzo.
+        return "".join(
+            ch for ch in str(message or "")
+            if ch in "\n\t" or not (ord(ch) < 0x20 or ord(ch) == 0x7F or 0x80 <= ord(ch) <= 0x9F)
+        )
+
+
+def prepare_message(message, source=""):
+    """Il messaggio come verra' consegnato, prima di ogni verdetto: senza controlli del terminale
+    (fra agenti un ESC non ha nessun uso legittimo, un log colorato resta leggibile), poi recintato
+    o ripulito."""
+    cleaned = strip_controls(message)
+    delivered = fence_user_turn_message(cleaned)
+    if delivered == cleaned:     # not a chat envelope: the console may ask for it to be cleaned
+        delivered = sanitize_console_message(cleaned, source)
+    return delivered
 
 
 def main(argv):
@@ -320,12 +524,16 @@ def main(argv):
     inghiottito da un `|| true` e la difesa sparirebbe senza rumore.
     """
     message = argv[1] if len(argv) > 1 else ""
-    trust, claimed, origin = inspect_message(os.getpid(), message)
+    # Si ripulisce PRIMA di giudicare: la pulizia può far comparire una busta che il
+    # controllo, sul testo grezzo, non vedeva (uno ZWSP davanti), e il verdetto deve
+    # valere per ciò che verrà davvero consegnato.
+    delivered = prepare_message(message, os.environ.get("JHT_TMUX_SEND_FROM", ""))
+    trust, claimed, origin = inspect_message(os.getpid(), delivered, message)
     # Prima riga il verdetto, dal resto il messaggio come va consegnato. Un
     # solo giro: chiedere due volte aprirebbe una finestra in cui l'elenco dei
     # pane cambia fra il controllo e la marcatura.
     print(f"{trust}\t{claimed or ''}\t{origin or ''}")
-    print(mark_message(fence_user_turn_message(message), trust), end="")
+    print(mark_message(delivered, trust), end="")
     return 0
 
 

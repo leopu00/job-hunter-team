@@ -45,7 +45,7 @@ OTHER_KEY = "AAAAC3NzaC1lZDI1NTE5AAAAIattackerkeyattackerkeyattackerkey00"
 SYSTEM_TOOLS = (
     "awk bash basename cat chmod cp curl cut date dirname env grep head id ln "
     "ls mkdir mktemp mv printf readlink rm sed sh sort tail tee touch tr wc "
-    "sha256sum shasum stat find xargs diff cmp tty ps"
+    "sha256sum shasum stat find xargs diff cmp tty ps sleep"
 ).split()
 
 FAKE_SSH = r"""#!/bin/bash
@@ -90,6 +90,12 @@ exec env -i HOME="$FAKE_REMOTE_HOME" PATH="$FAKE_REMOTE_PATH" \
   JHT_RAW_BASE="$FAKE_RAW_BASE" FAKE_LOG="$log" FAKE_DOCKER="${FAKE_DOCKER:-up}" \
   FAKE_APT_INSTALLS_DOCKER="${FAKE_APT_INSTALLS_DOCKER:-1}" \
   FAKE_FREE_KB="${FAKE_FREE_KB:-}" TERM=dumb \
+  XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-}" JHT_ETC_DIR="${JHT_ETC_DIR:-}" FAKE_UID="${FAKE_UID:-}" \
+  FAKE_PODMAN_VERSION="${FAKE_PODMAN_VERSION:-}" FAKE_COMPOSE_VERSION="${FAKE_COMPOSE_VERSION:-}" \
+  FAKE_ROOTLESS="${FAKE_ROOTLESS:-}" FAKE_PODMAN_INFO="${FAKE_PODMAN_INFO:-}" FAKE_LINGER="${FAKE_LINGER:-}" \
+  FAKE_STATE="${FAKE_STATE:-}" FAKE_SUDO_PASSWORD="${FAKE_SUDO_PASSWORD:-}" \
+  FAKE_APT_INSTALLS_PODMAN="${FAKE_APT_INSTALLS_PODMAN:-}" FAKE_LINGER_STUCK="${FAKE_LINGER_STUCK:-}" \
+  FAKE_USERMOD_STUCK="${FAKE_USERMOD_STUCK:-}" JHT_RUN_USER_DIR="${JHT_RUN_USER_DIR:-}" FAKE_APT_LOCKED="${FAKE_APT_LOCKED:-}" \
   /bin/bash -c "$cmd"
 """
 
@@ -112,6 +118,20 @@ case "$*" in
   *"install -y docker.io"*)
     [ "${FAKE_APT_INSTALLS_DOCKER:-1}" = 1 ] || exit 100
     cp "$(dirname "$0")/docker.real" "$(dirname "$0")/docker" ;;
+  *"install -y"*)
+    # Podman's packages: what is in stock/ comes out when it is installed.
+    [ "${FAKE_APT_INSTALLS_PODMAN:-1}" = 1 ] || exit 100
+    # unattended-upgrades holds the dpkg lock: without a wait apt-get fails at once.
+    if [ "${FAKE_APT_LOCKED:-0}" = 1 ]; then
+      case "$*" in *"DPkg::Lock::Timeout="*) ;; *) echo "E: Could not get lock /var/lib/dpkg/lock-frontend" >&2; exit 100 ;; esac
+    fi
+    d="$(dirname "$0")"
+    for a in "$@"; do
+      case "$a" in
+        podman|podman-compose) [ -f "$d/stock/$a" ] && cp "$d/stock/$a" "$d/$a" ;;
+        uidmap) cp "$d/stock/newuidmap" "$d/newuidmap"; cp "$d/stock/newgidmap" "$d/newgidmap" ;;
+      esac
+    done ;;
 esac
 exit 0
 """
@@ -120,8 +140,12 @@ exit 0
 # /swapfile, /etc or the CI runner, whoever it runs as.
 FAKE_SUDO = r"""#!/bin/bash
 echo "sudo $*" >> "$FAKE_LOG"
+if [ "${FAKE_SUDO_PASSWORD:-0}" = 1 ]; then
+  echo "sudo: a password is required" >&2; exit 1
+fi
+[ "$1" = "-n" ] && shift
 case "$1" in
-  apt-get|dnf|pacman|docker) exec "$@" ;;
+  apt-get|dnf|pacman|docker|env|usermod|loginctl) exec "$@" ;;
   *) exit 0 ;;
 esac
 """
@@ -145,6 +169,53 @@ if [ -n "${FAKE_FREE_KB:-}" ]; then
   exit 0
 fi
 exec /bin/df "$@"
+"""
+
+# Rootless Podman as the server's administrator left it: podman, podman-compose
+# and loginctl answer like the real ones, from variables the test sets.
+FAKE_PODMAN = r"""#!/bin/bash
+echo "podman $*" >> "$FAKE_LOG"
+case "$1" in
+  --version) echo "podman version ${FAKE_PODMAN_VERSION:-5.7.0}" ;;
+  info) [ "${FAKE_PODMAN_INFO:-ok}" = fail ] && exit 125; echo "${FAKE_ROOTLESS:-true}" ;;
+  *) exit 0 ;;
+esac
+"""
+
+FAKE_PODMAN_COMPOSE = r"""#!/bin/bash
+echo "podman-compose $*" >> "$FAKE_LOG"
+echo "podman-compose version ${FAKE_COMPOSE_VERSION:-1.6.0}"
+echo "podman version ${FAKE_PODMAN_VERSION:-5.7.0}"
+"""
+
+FAKE_LOGINCTL = r"""#!/bin/bash
+echo "loginctl $*" >> "$FAKE_LOG"
+case "$1" in
+  enable-linger) [ "${FAKE_LINGER_STUCK:-0}" = 1 ] || touch "$FAKE_STATE/linger" ;;
+  *) if [ -f "$FAKE_STATE/linger" ]; then echo "Linger=yes"; else echo "Linger=${FAKE_LINGER:-yes}"; fi ;;
+esac
+"""
+
+# usermod writes the ranges where the installer reads them (JHT_ETC_DIR).
+FAKE_USERMOD = r"""#!/bin/bash
+echo "usermod $*" >> "$FAKE_LOG"
+[ "${FAKE_USERMOD_STUCK:-0}" = 1 ] && exit 0
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --add-subuids) echo "app:${2%-*}:65536" >> "$JHT_ETC_DIR/subuid"; shift 2 ;;
+    --add-subgids) echo "app:${2%-*}:65536" >> "$JHT_ETC_DIR/subgid"; shift 2 ;;
+    *) shift ;;
+  esac
+done
+"""
+
+# The user is "app"; FAKE_UID=0 makes it root.
+FAKE_ID = r"""#!/bin/bash
+case "$*" in
+  -u) echo "${FAKE_UID:-1000}" ;;
+  -un) echo app ;;
+  *) exec REAL_ID "$@" ;;
+esac
 """
 
 FAKE_JHT_RECORDER = r"""#!/bin/bash
@@ -199,6 +270,17 @@ class Server:
         _write(self.fake / "uname", FAKE_UNAME)
         _write(self.fake / "df", FAKE_DF)
         _write(self.fake / "groups", "#!/bin/bash\necho docker\n")
+        _write(self.fake / "id", FAKE_ID.replace("REAL_ID", shutil.which("id")))
+        self.etc = tmp / "etc"
+        self.etc.mkdir()
+        (self.etc / "subuid").write_text("app:100000:65536\n")
+        (self.etc / "subgid").write_text("app:100000:65536\n")
+        self.xdg = tmp / "xdg"
+        self.xdg.mkdir()
+        self.run = tmp / "run-user"
+        self.run.mkdir()
+        self.state = tmp / "state"
+        self.state.mkdir()
         for name in ("fallocate", "dd", "mkswap", "swapon", "chown", "systemctl"):
             _write(self.fake / name, FAKE_LOGGER)
         self.env_extra: dict[str, str] = {}
@@ -495,3 +577,205 @@ def test_the_old_flag_with_the_token_as_an_argument_still_works_for_manual_use(t
     done = parse_flag(tmp_path, "--pairing-token", TOKEN)
     assert done.returncode == 0, done.stderr
     assert f"token={TOKEN}\n" in done.stdout
+
+
+# ── Podman rootless on a Linux server (--runtime podman) ──────────────────
+
+def with_podman(server: Server, *, bare: bool = False, compose_in_stock: bool = True) -> None:
+    """Docker is not there. Podman is, as an administrator left it, or (bare)
+    only in the package stock, where apt-get takes it from; the user has no
+    subordinate range and no linger yet."""
+    (server.fake / "docker").unlink()
+    (server.fake / "docker.real").unlink()
+    stock = server.fake / "stock"
+    stock.mkdir()
+    _write(stock / "podman", FAKE_PODMAN)
+    if compose_in_stock:
+        _write(stock / "podman-compose", FAKE_PODMAN_COMPOSE)
+    _write(stock / "newuidmap", FAKE_LOGGER)
+    _write(stock / "newgidmap", FAKE_LOGGER)
+    _write(server.fake / "loginctl", FAKE_LOGINCTL)
+    _write(server.fake / "usermod", FAKE_USERMOD)
+    if bare:
+        (server.run / "1000").mkdir(exist_ok=True)
+        (server.etc / "subuid").write_text("")
+        (server.etc / "subgid").write_text("other:100000:65536\n")
+    else:
+        for name in ("podman", "podman-compose", "newuidmap", "newgidmap"):
+            shutil.copy(stock / name, server.fake / name)
+
+
+def install_podman(server: Server, source: str, **extra: str):
+    command = rust_const(source, "REMOTE_INSTALL") + " --runtime podman"
+    env = {
+        "XDG_RUNTIME_DIR": str(server.xdg),
+        "JHT_ETC_DIR": str(server.etc),
+        "JHT_RUN_USER_DIR": str(server.run),
+        "FAKE_STATE": str(server.state),
+        **extra,
+    }
+    return server.ssh(command, server.installer_input(), **env)
+
+
+def sudo_calls(server: Server) -> list[str]:
+    swap = ("sudo fallocate", "sudo chmod 600 /swapfile", "sudo mkswap", "sudo swapon", "sudo tee -a /etc/fstab")
+    return [c for c in server.calls() if c.startswith("sudo") and not c.startswith(swap)]
+
+
+def test_with_podman_rootless_there_the_install_needs_no_docker_and_no_sudo(server, source):
+    with_podman(server)
+    done = install_podman(server, source)
+    assert done.returncode == 0, done.stderr.decode() + done.stdout.decode()
+    calls = server.calls()
+    assert not [c for c in calls if c.startswith(("apt-get", "docker", "systemctl", "chown"))]
+    # The one sudo left is host-setup.sh's swap on a small server (the sandbox
+    # has no /proc/meminfo, so it looks small); the installer's own branch has none.
+    assert not sudo_calls(server)
+    runtime = server.home / ".local/share/job-hunter-team/host-runtime"
+    assert (runtime / "container-runtime").read_text() == "podman\n"
+    assert not (runtime / "podman-machine").exists()
+    shim = (runtime / "bin/docker").read_text()
+    assert "JHT_PODMAN_DOCKER_SHIM=1" in shim and "--connection" not in shim
+    assert shim.splitlines()[-1] == f"exec '{server.fake / 'podman'}' \"$@\""
+    manifest = dict(line.split("=", 1) for line in (runtime / ".runtime-integrity").read_text().splitlines())
+    assert manifest["docker-shim"] == hashlib.sha256((runtime / "bin/docker").read_bytes()).hexdigest()
+    assert manifest["container-runtime"] == hashlib.sha256(b"podman\n").hexdigest()
+    assert "podman-machine" not in manifest
+    assert (server.home / ".jht/.pairing-token").read_text() == TOKEN
+
+
+def test_a_server_as_bought_gets_podman_a_range_and_linger_from_the_users_own_sudo_and_never_docker(server, source):
+    with_podman(server, bare=True)
+    done = install_podman(server, source, FAKE_LINGER="no", FAKE_APT_LOCKED="1")
+    assert done.returncode == 0, done.stderr.decode() + done.stdout.decode()
+    calls = server.calls()
+    assert ("sudo -n env DEBIAN_FRONTEND=noninteractive apt-get -o DPkg::Lock::Timeout=180 "
+            "install -y podman podman-compose uidmap") in calls
+    # the range starts after the one somebody else already has
+    assert "sudo -n usermod --add-subuids 165536-231071 --add-subgids 165536-231071 app" in calls
+    assert (server.etc / "subuid").read_text() == "app:165536:65536\n"
+    assert "podman system migrate" in calls
+    assert "sudo -n loginctl enable-linger app" in calls
+    assert not [c for c in calls if "docker" in c.split()[:3] or c.startswith("docker")]
+    assert (server.home / ".local/share/job-hunter-team/host-runtime/container-runtime").read_text() == "podman\n"
+
+
+def test_sudo_that_wants_a_password_stops_with_its_own_code_before_anything_is_written(server, source):
+    with_podman(server, bare=True)
+    done = install_podman(server, source, FAKE_SUDO_PASSWORD="1")
+    assert done.returncode == 89, done.stderr.decode()
+    assert b"JHT_ERROR podman_sudo_required\n" in done.stderr
+    assert not [c for c in server.calls() if c.startswith(("apt-get", "docker"))]
+    assert not (server.home / ".local").exists() and not (server.home / ".jht").exists()
+
+
+def test_a_package_install_that_fails_leaves_with_its_own_code(server, source):
+    with_podman(server, bare=True)
+    done = install_podman(server, source, FAKE_APT_INSTALLS_PODMAN="0")
+    assert done.returncode == 88, done.stderr.decode()
+    assert b"JHT_ERROR podman_install_failed\n" in done.stderr
+    assert not (server.home / ".jht").exists()
+
+
+def test_a_podman_compose_the_system_does_not_have_is_named_after_the_install(server, source):
+    with_podman(server, bare=True, compose_in_stock=False)
+    done = install_podman(server, source, FAKE_LINGER="no")
+    assert done.returncode == 92, done.stderr.decode()
+    assert b"JHT_ERROR podman_compose_missing\n" in done.stderr
+    assert not (server.home / ".jht").exists()
+
+
+def test_a_range_or_linger_that_does_not_stick_is_named_after_the_attempt(server, source):
+    with_podman(server, bare=True)
+    stuck = install_podman(server, source, FAKE_USERMOD_STUCK="1", FAKE_LINGER="no")
+    assert stuck.returncode == 96 and b"JHT_ERROR podman_subuid_missing\n" in stuck.stderr
+    (server.etc / "subuid").write_text("app:100000:65536\n")
+    (server.etc / "subgid").write_text("app:100000:65536\n")
+    (server.state / "linger").unlink()
+    lingering = install_podman(server, source, FAKE_LINGER="no", FAKE_LINGER_STUCK="1")
+    assert lingering.returncode == 94 and b"JHT_ERROR podman_linger_missing\n" in lingering.stderr
+
+
+def test_a_session_without_a_runtime_directory_is_given_the_one_linger_started(server, source):
+    with_podman(server)
+    (server.run / "1000").mkdir(exist_ok=True)
+    done = install_podman(server, source, XDG_RUNTIME_DIR="")
+    assert done.returncode == 0, done.stderr.decode()
+
+
+REFUSALS = [
+    ("podman_rootful_refused", 91, {"FAKE_UID": "0"}),
+    ("podman_rootful_refused", 91, {"FAKE_ROOTLESS": "false"}),
+    ("podman_version_unsupported", 93, {"FAKE_PODMAN_VERSION": "4.9.3"}),
+    ("podman_version_unsupported", 93, {"FAKE_COMPOSE_VERSION": "1.0.6"}),
+    ("podman_runtime_dir_missing", 95, {"XDG_RUNTIME_DIR": "/nonexistent-runtime-dir"}),
+    ("podman_rootless_unavailable", 97, {"FAKE_PODMAN_INFO": "fail"}),
+]
+
+
+@pytest.mark.parametrize("code,exit_code,env", REFUSALS, ids=[f"{c}-{n}" for n, (c, *_rest) in enumerate(REFUSALS)])
+def test_what_the_install_cannot_fix_leaves_with_its_own_code_before_anything_is_written(
+    server, source, code, exit_code, env
+):
+    with_podman(server)
+    done = install_podman(server, source, **env)
+    assert done.returncode == exit_code, done.stderr.decode()
+    assert f"JHT_ERROR {code}\n".encode() in done.stderr
+    assert not [c for c in server.calls() if c.startswith(("apt-get", "docker"))]
+    assert not sudo_calls(server)
+    assert not (server.home / ".local").exists()
+    assert not (server.home / ".jht").exists()
+
+
+def test_a_second_install_without_the_option_keeps_podman(server, source):
+    with_podman(server)
+    assert install_podman(server, source).returncode == 0
+    again = server.ssh(rust_const(source, "REMOTE_INSTALL"), server.installer_input(),
+                       XDG_RUNTIME_DIR=str(server.xdg), JHT_ETC_DIR=str(server.etc),
+                       JHT_RUN_USER_DIR=str(server.run), FAKE_STATE=str(server.state))
+    assert again.returncode == 0, again.stderr.decode()
+    runtime = server.home / ".local/share/job-hunter-team/host-runtime"
+    assert (runtime / "container-runtime").read_text() == "podman\n"
+    assert "docker-shim=" in (runtime / ".runtime-integrity").read_text()
+
+
+def test_a_server_already_on_docker_asked_for_podman_stops_with_its_own_code_and_changes_nothing(server, source):
+    # A VPS installed before Podman: the team runs on Docker (here the fake one).
+    first = install(server, source)
+    assert first.returncode == 0, first.stderr.decode()
+    runtime = server.home / ".local/share/job-hunter-team/host-runtime"
+    # the Docker path on Linux writes no marker: the completed install is what says Docker
+    assert not (runtime / "container-runtime").exists() and (runtime / ".runtime-integrity").is_file()
+    before = snapshot_tree(server.home)
+    calls_before = len(server.calls())
+    # The app installs again, as it does now on every VPS: --runtime podman.
+    with_podman(server)
+    done = install_podman(server, source)
+    assert done.returncode == rust_exit(source, "REMOTE_INSTALL_RUNTIME_CHANGE_EXIT") == 85, done.stderr.decode()
+    assert b"JHT_ERROR runtime_change_requires_migration\n" in done.stderr
+    # Refused before anything: the Docker team, its files and its token are as they were.
+    assert snapshot_tree(server.home) == before
+    assert not [c for c in server.calls()[calls_before:] if c.startswith(("apt-get", "docker", "podman", "sudo"))]
+
+
+def test_a_server_on_docker_installed_again_without_the_option_stays_on_docker(server, source):
+    assert install(server, source).returncode == 0
+    calls_before = len(server.calls())
+    again = install(server, source)
+    assert again.returncode == 0, again.stderr.decode()
+    runtime = server.home / ".local/share/job-hunter-team/host-runtime"
+    assert not (runtime / "container-runtime").exists()
+    assert "docker-shim=" not in (runtime / ".runtime-integrity").read_text()
+    assert not [c for c in server.calls()[calls_before:] if c.startswith("podman")]
+
+
+def rust_exit(source: str, name: str) -> int:
+    return int(re.search(rf"const {name}: i32 = (\d+);", source).group(1))
+
+
+def test_a_range_is_chosen_after_the_one_readable_file_when_the_other_is_missing(server, source):
+    with_podman(server, bare=True)
+    (server.etc / "subuid").unlink()  # /etc/subuid absent, /etc/subgid there with someone's range
+    done = install_podman(server, source, FAKE_LINGER="no")
+    assert done.returncode == 0, done.stderr.decode()
+    assert "sudo -n usermod --add-subuids 165536-231071 --add-subgids 165536-231071 app" in server.calls()
