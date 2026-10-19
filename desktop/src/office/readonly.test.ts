@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import { describeError } from "../lib/error-catalog";
 import type { TeamStatusFields, TeamStatusReading } from "../lib/existing-team-status";
 import { EXISTING_TEAM_STATUS_TEXT } from "../pages/existing-team/existing-team-status.i18n";
+import type { TeamAgent, TeamAgentsReading } from "../lib/existing-team-agents";
+import { EXISTING_TEAM_AGENTS_TEXT } from "../pages/agents/readonly.i18n";
 import { tagOf } from "./status";
 import { officeFromTeamProbe } from "./readonly";
 
@@ -128,6 +130,68 @@ describe("officeFromTeamProbe", () => {
         expect(office.notice!.text, locale).not.toMatch(/\{[a-z]+\}/);
         expect(office.notice!.text.length, locale).toBeGreaterThan(5);
       }
+    }
+  });
+});
+
+describe("officeFromTeamProbe with the team's agents (the Agents page's read)", () => {
+  const agent = (name: string, role: string, state: TeamAgent["state"] = { state: "sconosciuto" }): TeamAgent => ({
+    name, role, instance: null, created: null, activity: null, state,
+  });
+  const agentsRead = (agents: TeamAgent[], statesKnown = true): TeamAgentsReading => ({
+    kind: "read", at: AT, read: { agents, roles: [], statesKnown },
+  });
+  const TEAM = [
+    agent("CAPITANO", "capitano", { state: "lavora", since: AT - 60_000 }),
+    agent("SCOUT-1", "scout", { state: "bloccato", reason: "limite_5h", until: AT + 600_000 }),
+    agent("SCOUT-2", "scout", { state: "idle" }),
+    agent("CRITICO-S3", "critico", { state: "sconosciuto" }),
+    agent("CLOSER-1", "closer", { state: "lavora" }),
+    agent("DOTTORE", "dottore", { state: "idle" }),
+  ];
+
+  it("draws every agent that is up and has a character, by role and instance, with the team's state", () => {
+    const office = officeFromTeamProbe(read(), CONNECTION, "it", null, agentsRead(TEAM));
+    // the closer and the doctor have no character in the office: not drawn
+    expect(office.snapshot.roster).toEqual([
+      { uid: "capitano", role: "capitano", sheet: "" },
+      { uid: "scout-1", role: "scout", sheet: "" },
+      { uid: "scout-2", role: "scout", sheet: "" },
+      { uid: "critico-s3", role: "critico", sheet: "" },
+    ]);
+    const agents = office.statuses!.agents;
+    expect(office.statuses!.at).toBe(AT);
+    expect(agents.capitano).toEqual({ status: "unknown", state: "lavora", since: AT - 60_000 });
+    expect(agents["scout-1"]).toEqual({ status: "unknown", state: "bloccato", reason: "limite_5h", until: AT + 600_000 });
+    // a state the team could not compute stays grey
+    expect(agents["critico-s3"]).toEqual({ status: "unknown" });
+    expect(tagOf(agents["critico-s3"]!).label).toBe("UNKNOWN");
+    expect(office.notice?.text).toContain(EXISTING_TEAM_AGENTS_TEXT.it.officeReadAt.split("{time}")[0]!);
+  });
+
+  it("without the team's own state every agent is grey, never working, and the sentence says why", () => {
+    const office = officeFromTeamProbe(read(), CONNECTION, "it", null, agentsRead(TEAM, false));
+    for (const status of Object.values(office.statuses!.agents)) {
+      expect(status).toEqual({ status: "unknown" });
+      expect(tagOf(status).label).toBe("UNKNOWN");
+    }
+    expect(office.notice?.text).toContain(EXISTING_TEAM_AGENTS_TEXT.it.statesUnknown);
+  });
+
+  it("with no agent to draw says so, and a list that could not be read falls back to the connection's two sessions", () => {
+    const none = officeFromTeamProbe(read(), CONNECTION, "it", null, agentsRead([agent("CLOSER-1", "closer")]));
+    expect(none.snapshot.roster).toEqual([]);
+    expect(none.notice?.text).toContain(EXISTING_TEAM_AGENTS_TEXT.it.officeNoneUp);
+    const failed = officeFromTeamProbe(read(), CONNECTION, "it", null, { kind: "error", at: AT, code: "agents_unavailable" });
+    expect(failed.snapshot.roster.map((a) => a.uid)).toEqual(["capitano", "assistente"]);
+    // a team that is off has an empty office whatever the list says
+    expect(officeFromTeamProbe(read({ containerRunning: false }), CONNECTION, "it", null, agentsRead(TEAM)).snapshot.roster).toEqual([]);
+  });
+
+  it("no sentence of the agents' office is left with a placeholder, in any language", () => {
+    for (const locale of LOCALES) {
+      const office = officeFromTeamProbe(read(), CONNECTION, locale, null, agentsRead(TEAM, false));
+      expect(office.notice?.text).not.toMatch(/\{[a-z]+\}/);
     }
   });
 });

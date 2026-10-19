@@ -107,7 +107,10 @@ describe("Profilo on an existing team read only", () => {
     const edits = screen.getAllByRole("button", { name: /modific/i });
     expect(edits).toHaveLength(1);
     expect(edits[0]).toBe(edit);
-    expect(native.invoke.mock.calls.every(([command]) => command === COMMAND)).toBe(true);
+    // The read command, and the header's read of which team this is (a local file, no SSH): nothing else.
+    expect(
+      native.invoke.mock.calls.map(([command]) => command).filter((c) => c !== COMMAND && c !== "existing_team_link_identity"),
+    ).toEqual([]);
     expect(fake.current!.calls).toEqual([]);
   });
 

@@ -273,7 +273,10 @@ describe("Squadra on an existing team read only", () => {
     const read = await screen.findByTestId("team-status-read");
     const page = read.parentElement!;
     expect(within(page).getAllByRole("button").map((button) => button.textContent)).toEqual([T.refresh, EXISTING_TEAM_ASSISTANT_TEXT.it.activate]);
-    expect(native.invoke.mock.calls.every(([command]) => command === COMMAND)).toBe(true);
+    // The read command, and the header's read of which team this is (a local file, no SSH): nothing else.
+    expect(
+      native.invoke.mock.calls.map(([command]) => command).filter((c) => c !== COMMAND && c !== "existing_team_link_identity"),
+    ).toEqual([]);
     expect(fake.current!.calls).toEqual([]);
   });
 

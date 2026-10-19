@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { profileReply, SYNTHETIC_FIELDS } from "../test-support/existing-team-profile-fixture";
+import { startVpsLink, stopVpsLink, vpsLinkState } from "./vps-link";
 import { buildProfileView, missingCoreFields, pickProfileRead, readExistingTeamProfile } from "./existing-team-profile";
 
 const data = (overrides?: Parameters<typeof profileReply>[0]) => profileReply(overrides).data;
@@ -65,6 +66,21 @@ describe("readExistingTeamProfile", () => {
     for (const bad of [null, "x", { ok: true }, { ok: true, data: {} }, { ok: "yes" }]) {
       expect(await readExistingTeamProfile(vi.fn().mockResolvedValue(bad), () => 3)).toEqual({ kind: "error", at: 3, code: "desktop_bad_reply" });
     }
+  });
+
+  it("never leaves the header on «connected» for a reply the page shows as a bad reply", async () => {
+    for (const bad of [null, "x", { ok: true }, { ok: true, data: {} }, { ok: "yes" }]) {
+      startVpsLink(true);
+      await readExistingTeamProfile(vi.fn().mockResolvedValue(bad), () => 3);
+      expect(vpsLinkState(), JSON.stringify(bad)).toMatchObject({ status: "application", code: "desktop_bad_reply" });
+      stopVpsLink();
+    }
+    startVpsLink(false);
+    await readExistingTeamProfile(vi.fn().mockResolvedValue(profileReply()), () => 4);
+    expect(vpsLinkState()).toMatchObject({ status: "connected", code: null });
+    await readExistingTeamProfile(vi.fn().mockResolvedValue({ ok: false, error: "timeout", kind: "network" }), () => 5);
+    expect(vpsLinkState()).toMatchObject({ status: "reconnecting", code: "timeout" });
+    stopVpsLink();
   });
 
   it("reads again every time: nothing is kept between two reads", async () => {

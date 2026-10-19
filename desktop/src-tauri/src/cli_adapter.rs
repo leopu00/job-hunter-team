@@ -57,7 +57,7 @@ fn code_for(error: &str) -> i32 {
         "existing_team_identity_mismatch" => 72,
         "existing_team_not_active" => 73,
         error if error.starts_with("existing_team_runtime_")
-            || matches!(error, "host_key_missing" | "host_key_mismatch" | "invalid_host" | "invalid_user" | "invalid_port" | "invalid_key_path" | "invalid_key") => 70,
+            || matches!(error, "host_key_missing" | "host_key_mismatch" | "host_key_changed" | "invalid_host" | "invalid_user" | "invalid_port" | "invalid_key_path" | "invalid_key") => 70,
         _ => 69,
     }
 }

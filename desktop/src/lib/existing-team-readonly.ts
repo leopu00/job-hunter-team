@@ -1,6 +1,7 @@
 import { useSyncExternalStore } from "react";
 import { appLocale } from "./app-locale";
 import { EXISTING_TEAM_READONLY_TEXT } from "./existing-team-readonly.i18n";
+import { startVpsLink, stopVpsLink } from "./vps-link";
 
 /**
  * The desktop is connected to an existing team's VPS only to read it. While
@@ -43,8 +44,6 @@ let current: ExistingTeamReadOnly | null = null;
 /** A new one at every opening of the view, with the connection it opened on (lib/existing-team.ts). */
 let session = 0;
 let connectionIdentity = "";
-/** Why the last read of the team's positions failed; null when it worked. */
-let readFailure: string | null = null;
 /** What the last page of the list could not do as asked; null when it did all. */
 let readNotice: ReadNotice | null = null;
 const listeners = new Set<() => void>();
@@ -59,15 +58,18 @@ export function enterExistingTeamReadOnly(
   identity?: string,
 ): void {
   // Another connection (account, VPS, team) is another opening, never the same view refreshed.
+  let opening = false;
   if (current === null || (identity !== undefined && identity !== connectionIdentity)) {
     session += 1;
     connectionIdentity = identity ?? "";
+    opening = true;
   } else if (current.assistantActive === assistantActive && current.connection === connection) {
     return;
   }
   current = { assistantActive, connection };
-  readFailure = null;
   readNotice = null;
+  // A connection probe that just worked is a contact; the header starts from it.
+  if (opening || connection) startVpsLink(connection !== null);
   emit();
 }
 
@@ -75,8 +77,8 @@ export function leaveExistingTeamReadOnly(): void {
   if (!current) return;
   current = null;
   connectionIdentity = "";
-  readFailure = null;
   readNotice = null;
+  stopVpsLink();
   emit();
 }
 
@@ -97,16 +99,6 @@ function subscribe(listener: () => void) {
   return () => listeners.delete(listener);
 }
 
-/**
- * The pages show an empty list for a list that could not be read, as the web
- * does for a query that fails; this is how the person is told it was not empty.
- */
-export function reportPositionsRead(failure: string | null): void {
-  if (readFailure === failure) return;
-  readFailure = failure;
-  if (current) emit();
-}
-
 export function reportPositionsNotice(notice: ReadNotice | null): void {
   if (readNotice === notice) return;
   readNotice = notice;
@@ -115,10 +107,6 @@ export function reportPositionsNotice(notice: ReadNotice | null): void {
 
 export function useExistingTeamReadNotice(): ReadNotice | null {
   return useSyncExternalStore(subscribe, () => readNotice, () => readNotice);
-}
-
-export function useExistingTeamReadFailure(): string | null {
-  return useSyncExternalStore(subscribe, () => readFailure, () => readFailure);
 }
 
 export function useExistingTeamReadOnly(): ExistingTeamReadOnly | null {

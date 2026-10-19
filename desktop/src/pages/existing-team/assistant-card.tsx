@@ -4,6 +4,8 @@ import { describeError } from "../../lib/error-catalog";
 import { startExistingTeamAssistant, type AssistantStartOutcome } from "../../lib/existing-team-assistant";
 import { enterExistingTeamReadOnly, useExistingTeamReadOnly } from "../../lib/existing-team-readonly";
 import { EXISTING_TEAM_ASSISTANT_TEXT } from "./existing-team-assistant.i18n";
+import { linkAllowsActions, useVpsLink } from "../../lib/vps-link";
+import { VPS_LINK_TEXT } from "../../lib/vps-link.i18n";
 
 function stamp(at: number): string {
   return new Date(at).toLocaleString(appLocale(), { dateStyle: "short", timeStyle: "medium" });
@@ -25,6 +27,9 @@ export function AssistantCard() {
   const [phase, setPhase] = useState<Phase>("idle");
   const [outcome, setOutcome] = useState<AssistantStartOutcome | null>(null);
   const inFlight = useRef(false);
+  // A change to the team never leaves on an uncertain link: only on a recent working read.
+  const link = useVpsLink();
+  const linked = linkAllowsActions(link, Date.now());
 
   const running = connection ? connection.assistantRunning : readOnly?.assistantActive === true;
   const when = connection
@@ -32,7 +37,7 @@ export function AssistantCard() {
     : null;
 
   async function confirm() {
-    if (inFlight.current) return;
+    if (inFlight.current || !linked) return;
     inFlight.current = true;
     setPhase("starting");
     setOutcome(null);
@@ -69,8 +74,10 @@ export function AssistantCard() {
           <button
             type="button"
             data-testid="assistant-activate"
+            disabled={!linked}
+            title={linked ? undefined : VPS_LINK_TEXT[appLocale()].actionsWait}
             onClick={() => setPhase("confirming")}
-            className="text-[10px] font-semibold tracking-widest uppercase px-3 py-1.5 rounded border border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-bright)]"
+            className="text-[10px] font-semibold tracking-widest uppercase px-3 py-1.5 rounded border border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-bright)] disabled:opacity-60 disabled:cursor-not-allowed"
           >
             {t.activate}
           </button>
@@ -79,6 +86,12 @@ export function AssistantCard() {
       <p data-testid="assistant-status" data-running={running ? "yes" : "no"} className="mt-1 text-[11px]" style={{ color: "var(--color-muted)" }}>
         {when === null ? t.unknown : (running ? t.active : t.inactive).replace("{when}", when)}
       </p>
+
+      {!running && !linked && (
+        <p data-testid="assistant-link-wait" className="mt-1 text-[11px]" style={{ color: "var(--color-muted)" }}>
+          {VPS_LINK_TEXT[appLocale()].actionsWait}
+        </p>
+      )}
 
       {phase !== "idle" && (
         <div role="dialog" aria-label={t.confirmTitle} data-testid="assistant-confirm-panel" className="mt-3 text-[11px]" style={{ color: "var(--color-muted)" }}>
@@ -89,7 +102,7 @@ export function AssistantCard() {
             <button
               type="button"
               data-testid="assistant-confirm"
-              disabled={phase === "starting"}
+              disabled={phase === "starting" || !linked}
               onClick={() => void confirm()}
               className="text-[10px] font-semibold tracking-widest uppercase px-3 py-1.5 rounded border border-[var(--color-border)] text-[var(--color-bright)] disabled:opacity-60 disabled:cursor-wait"
             >

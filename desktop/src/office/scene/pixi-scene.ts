@@ -800,10 +800,13 @@ function departmentDressing(dept: Department, keepReadable: KeepReadable, labels
   title.position.set(0, -26 + 4);
   label.addChild(shadow, title);
   if (dept.tagline) {
-    const tag = new Text({ text: dept.tagline, style: { fontFamily: FONT, fontSize: 15, fontWeight: "500", fill: 0x7d8590 } });
-    tag.alpha = 0.85;
+    // On a dark plate, as the handoff tags: plain grey on the floor's grey it read as covered by the furniture.
+    const tag = new Text({ text: dept.tagline, style: { fontFamily: FONT, fontSize: 15, fontWeight: "500", fill: 0xc9d1d9 } });
     tag.position.set(0, 24 - 15 + 3);
-    label.addChild(tag);
+    const plate = new Graphics()
+      .rect(-6, tag.y - 3, tag.width + 12, tag.height + 6)
+      .fill({ color: 0x0a0a0f, alpha: 0.82 });
+    label.addChild(plate, tag);
   }
   labels.addChild(keepReadable(label, 15, READABLE_PX.departmentTagline));
   return c;

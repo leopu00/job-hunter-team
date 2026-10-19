@@ -522,7 +522,11 @@ export default async function PositionDetailPage({ params }: PageProps) {
           destra, tutto su una fascia — niente zone vuote. Su mobile il
           gruppo va a capo sotto il titolo (score a sinistra, fatti a
           destra), che è la resa già approvata. */}
-      <div className="flex flex-col md:flex-row md:items-center gap-3 md:gap-6">
+      {/* Fra lg e xl la pagina è a due colonne e questa card è larga ~630 px:
+          score+fatti (~360 px) lasciavano al titolo una colonna da 190 px
+          (nove righe per un titolo lungo). Lì il gruppo va a capo come su
+          mobile; da xl, dove la card ha spazio, torna accanto al titolo. */}
+      <div className="flex flex-col md:flex-row lg:flex-col xl:flex-row md:items-center lg:items-stretch xl:items-center gap-3 md:gap-6">
         <div className="min-w-0 md:flex-1">
           <h1 className="text-lg md:text-xl font-bold tracking-tight text-[var(--color-white)] mb-1">
             {position.title}
@@ -539,10 +543,10 @@ export default async function PositionDetailPage({ params }: PageProps) {
           </div>
         </div>
         <div
-          className={`grid w-full min-w-0 items-center gap-4 md:w-auto md:gap-6 ${
+          className={`grid w-full min-w-0 items-center gap-4 md:w-auto md:gap-6 lg:w-full xl:w-auto ${
             score
-              ? "grid-cols-[3.5rem_minmax(0,1fr)] md:grid-cols-[3.5rem_minmax(15rem,auto)]"
-              : "grid-cols-1 md:min-w-60"
+              ? "grid-cols-[3.5rem_minmax(0,1fr)] md:grid-cols-[3.5rem_minmax(15rem,auto)] lg:grid-cols-[3.5rem_minmax(0,1fr)] xl:grid-cols-[3.5rem_minmax(15rem,auto)]"
+              : "grid-cols-1 md:min-w-60 lg:min-w-0 xl:min-w-60"
           }`}
         >
           {score && <OverviewScoreBadge score={score.total_score} />}
@@ -1064,7 +1068,7 @@ export default async function PositionDetailPage({ params }: PageProps) {
                     className="shrink-0"
                   />
                 )}
-                <div className="text-[13px] font-semibold text-[var(--color-white)] min-w-0 flex-1 truncate">
+                <div className="text-[13px] font-semibold text-[var(--color-white)] min-w-0 flex-1 break-words">
                   {company.name}
                 </div>
                 {(company.verdict || company.glassdoor_rating) && (

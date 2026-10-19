@@ -39,7 +39,11 @@ type Props = {
 // tabella riempie sempre il contenitore SENZA scroll orizzontale — l'utente
 // vede tutte e sei le colonne a ogni larghezza. Titolo e azienda hanno la
 // fetta più grande; il testo che eccede viene troncato con ellipsis.
-const COL_WIDTHS = ["10%", "33%", "27%", "9%", "10%", "11%"] as const;
+// Paese e città sono parole corte che la gente cerca per riconoscere la riga:
+// con il 9% e il 10% di una finestra da ~1070 px diventavano «Switze…» e
+// «Stockho…», e il timestamp «01/10 10:00» della prima colonna «01/10 10…».
+// Titolo e azienda (che già si troncano) cedono qualche punto percentuale.
+const COL_WIDTHS = ["12%", "28%", "22%", "13%", "14%", "11%"] as const;
 
 // Timestamp compatto "20/07 09:57" per la colonna della variante "scored".
 function formatScoredAt(iso: string | null): string {
