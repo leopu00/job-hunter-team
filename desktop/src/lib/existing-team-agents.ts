@@ -104,12 +104,15 @@ let shared: { at: number; view: ExistingTeamReadOnly | null; read: Promise<TeamA
  * The team's agents, one read shared by everything in the read-only view that
  * shows them (the Agents page and the office) for SHARED_AGENTS_MS. It belongs
  * to the opening of the view it was made in: after the view is left, or opened
- * again (another VPS, another team), a new read is made, never the old one.
+ * again (another VPS, another team), a new read is made, never the old one. A
+ * read that comes back after the view changed is not given to the new one: it
+ * is told the target changed, as the shared positions read does.
  */
 export function readTeamAgentsShared(now = Date.now()): Promise<TeamAgentsReading> {
   const view = existingTeamReadOnly();
   if (shared && shared.view === view && now - shared.at < SHARED_AGENTS_MS) return shared.read;
-  const read = readTeamAgents();
+  const read = readTeamAgents().then((result): TeamAgentsReading =>
+    existingTeamReadOnly() === view ? result : { kind: "error", at: Date.now(), code: "existing_team_target_changed" });
   shared = { at: now, view, read };
   return read;
 }

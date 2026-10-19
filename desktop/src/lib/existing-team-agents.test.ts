@@ -44,4 +44,17 @@ describe("readTeamAgentsShared", () => {
     await readTeamAgentsShared(T0 + 1);
     expect(native.invoke).toHaveBeenCalledTimes(2);
   });
+
+  it("a read that comes back after the view changed is not given to the new one", async () => {
+    let answer: (value: unknown) => void = () => undefined;
+    native.invoke.mockImplementationOnce(() => new Promise((resolve) => (answer = resolve)));
+    const first = readTeamAgentsShared(T0);
+    leaveExistingTeamReadOnly();
+    enterExistingTeamReadOnly(true);
+    answer({ ok: true, data: { agents: [], roles: [], states: true } });
+    expect(await first).toMatchObject({ kind: "error", code: "existing_team_target_changed" });
+    // the new view reads its own
+    expect((await readTeamAgentsShared(T0 + 1)).kind).toBe("read");
+    expect(native.invoke).toHaveBeenCalledTimes(2);
+  });
 });
