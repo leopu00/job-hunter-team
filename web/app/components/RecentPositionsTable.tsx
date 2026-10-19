@@ -210,7 +210,7 @@ export default function RecentPositionsTable({
   return (
     <div className="mb-8">
       <div className="flex items-center justify-between mb-4">
-        <span className="section-label">
+        <span className="section-label mb-0!">
           {filtered
             ? `${labels.titleFiltered} · ${totalFiltered}`
             : labels.title}
