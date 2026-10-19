@@ -270,6 +270,20 @@ describe("Posizioni on an existing team read only", () => {
 });
 
 describe("Dettaglio posizione on an existing team read only", () => {
+  it("is written in the app's language when no NEXT_LOCALE cookie says otherwise (English app, English Dettaglio)", async () => {
+    document.cookie = "NEXT_LOCALE=; path=/; max-age=0";
+    localStorage.setItem("jht-lang", "en");
+    try {
+      navigate("/positions/101", { replace: true });
+      render(<Shell />);
+      expect((await screen.findAllByText("Synthetic role A")).length).toBeGreaterThan(0);
+      expect(screen.getByText("Overview")).toBeInTheDocument();
+      expect(screen.queryByText("Panoramica")).not.toBeInTheDocument();
+    } finally {
+      localStorage.removeItem("jht-lang");
+    }
+  });
+
   it("shows the position the companion returns and disables every control that would write", async () => {
     const user = userEvent.setup();
     navigate("/positions/101", { replace: true });

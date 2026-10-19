@@ -206,6 +206,33 @@ describe("next/headers reads document.cookie", () => {
     const { getServerLocale } = await import("@/lib/server-locale");
     await expect(getServerLocale()).resolves.toBe("de");
   });
+
+  it("without the NEXT_LOCALE cookie it says the app's language, not the web's default", async () => {
+    document.cookie = "NEXT_LOCALE=; path=/; max-age=0";
+    localStorage.setItem("jht-lang", "en");
+    try {
+      const { cookies } = await import("next/headers");
+      const store = await cookies();
+      expect(store.get("NEXT_LOCALE")?.value).toBe("en");
+      // Only that one is answered for the app: the others are the cookies there are.
+      expect(store.has("NEXT_LOCALE")).toBe(false);
+      expect(store.getAll().map((c) => c.name)).not.toContain("NEXT_LOCALE");
+      expect(store.get("jht_positions_cols")).toBeUndefined();
+    } finally {
+      localStorage.removeItem("jht-lang");
+    }
+  });
+
+  it("a NEXT_LOCALE cookie that is there wins over the app's language", async () => {
+    document.cookie = "NEXT_LOCALE=de; path=/";
+    localStorage.setItem("jht-lang", "en");
+    try {
+      const { cookies } = await import("next/headers");
+      expect((await cookies()).get("NEXT_LOCALE")?.value).toBe("de");
+    } finally {
+      localStorage.removeItem("jht-lang");
+    }
+  });
 });
 
 // vite.config.ts and tsconfig.json must send every specifier to the same
