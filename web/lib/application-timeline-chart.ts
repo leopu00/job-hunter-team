@@ -2,6 +2,8 @@ import type { ApplicationTimelinePoint } from "./application-timeline";
 
 export type DivergingTimelineScale = {
   maxMagnitude: number;
+  /** Quanto asse sotto lo zero: 0 quando nessun giorno ha rifiuti (niente metà vuota). */
+  minMagnitude: number;
   ticks: number[];
 };
 
@@ -35,9 +37,19 @@ export function applicationTimelineScale(
     ),
   );
   const half = Math.ceil(maxMagnitude / 2);
+  // Senza rifiuti la metà sotto lo zero resterebbe vuota: l'asse parte da 0.
+  const hasRejections = points.some((point) => point.rejected > 0);
+  const minMagnitude = hasRejections ? maxMagnitude : 0;
   return {
     maxMagnitude,
-    ticks: [...new Set([-maxMagnitude, -half, 0, half, maxMagnitude])],
+    minMagnitude,
+    ticks: [
+      ...new Set(
+        hasRejections
+          ? [-maxMagnitude, -half, 0, half, maxMagnitude]
+          : [0, half, maxMagnitude],
+      ),
+    ],
   };
 }
 
@@ -48,7 +60,9 @@ export function projectTimelineY(
   height: number,
 ): number {
   return (
-    top + ((scale.maxMagnitude - value) / (2 * scale.maxMagnitude)) * height
+    top +
+    ((scale.maxMagnitude - value) / (scale.maxMagnitude + scale.minMagnitude)) *
+      height
   );
 }
 
