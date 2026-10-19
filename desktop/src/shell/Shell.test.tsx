@@ -169,6 +169,50 @@ describe("Shell", () => {
       expect(within(nav).queryByRole("link", { name: /Team locale/i })).not.toBeInTheDocument();
     },
   );
+  describe("in a window too narrow for every link (1068 px)", () => {
+    // jsdom has no layout: the links are 80 px wide, the strip 420 px, as a
+    // window of about 1068 px leaves it with ten links.
+    const originals = new Map<string, PropertyDescriptor | undefined>();
+    beforeEach(() => {
+      for (const name of ["offsetWidth", "clientWidth"]) {
+        originals.set(name, Object.getOwnPropertyDescriptor(HTMLElement.prototype, name));
+        Object.defineProperty(HTMLElement.prototype, name, {
+          configurable: true,
+          get(this: HTMLElement) {
+            if (this.tagName === "A") return this.style.display === "none" ? 0 : 80;
+            if (this.dataset.testid === "navbar-links") return 420;
+            return 0;
+          },
+        });
+      }
+    });
+    afterEach(() => {
+      for (const [name, original] of originals) {
+        if (original) Object.defineProperty(HTMLElement.prototype, name, original);
+        else delete (HTMLElement.prototype as unknown as Record<string, unknown>)[name];
+      }
+      originals.clear();
+    });
+
+    it("puts the links that do not fit in «Altro», so no link is cut under the buttons, whatever their number", async () => {
+      navigate("/dashboard", { replace: true });
+      render(<Shell />);
+      await screen.findByRole("heading", { name: "Dashboard" });
+
+      const more = within(screen.getByTestId("navbar-more")).getByRole("button", { name: /Altro/ });
+      expect(more).toBeInTheDocument();
+      const strip = screen.getByTestId("navbar-links-scroll");
+      const inStrip = within(strip).getAllByRole("link").filter((link) => (link as HTMLElement).style.display !== "none");
+      expect(inStrip.length).toBeLessThan(within(strip).getAllByRole("link", { hidden: true }).length);
+      // the controls stay where they were
+      expect(within(screen.getByTestId("navbar-actions")).getByRole("button", { name: "Esci" })).toBeInTheDocument();
+
+      await userEvent.setup().click(more);
+      const inMenu = within(screen.getByRole("menu")).getAllByRole("menuitem");
+      expect(inMenu.length + inStrip.length).toBe(within(strip).getAllByRole("link", { hidden: true }).length);
+    });
+  });
+
   it("selects a theme, persists it, and restores it after a reload", async () => {
     navigate("/dashboard", { replace: true });
     const user = userEvent.setup();
