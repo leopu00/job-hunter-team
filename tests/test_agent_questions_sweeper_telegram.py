@@ -287,6 +287,39 @@ def test_what_was_typed_in_time_still_wins_when_the_sweep_resumes(world, conn):
     assert [(a["scelte"], a["origine"]) for a in stored_answers(world)] == [(["lungo"], "utente")]
 
 
+def _reader(world, agent, *extra):
+    done = subprocess.run([str(CHECK), "--agent", agent, *extra], capture_output=True, text=True, env=world.env)
+    assert done.returncode == 0, done.stderr
+    return done.stdout
+
+
+def test_the_agents_reader_applies_no_deadline_to_a_stopped_team_either_and_the_expiry_comes_once_at_resume(world):
+    put(world, agent="mentor", scade_tra="1h")
+    _stop_the_team(world)
+    assert "origine=scadenza" not in _reader(world, "mentor")
+    assert stored_answers(world) == []  # no default chosen
+    assert rows(world, "SELECT COUNT(*) FROM pending_user_messages WHERE source_action = ?", (aq.EXPIRED_ACTION,)) == [(0,)]
+    _resume_the_team(world)
+    assert "origine=scadenza" in _reader(world, "mentor")
+    assert [a["origine"] for a in stored_answers(world)] == ["scadenza"]
+    assert rows(world, "SELECT COUNT(*) FROM pending_user_messages WHERE source_action = ?", (aq.EXPIRED_ACTION,)) == [(1,)]
+
+
+def test_the_reader_of_a_stopped_team_still_shows_what_was_already_answered(world):
+    put(world, agent="mentor", scade_tra="1h")
+    assert _engine().sweep_questions(db_path=world.db, deliver=lambda found: None) == 1  # expired before the stop
+    _stop_the_team(world)
+    assert "origine=scadenza" in _reader(world, "mentor")
+
+
+def test_the_sweeper_and_the_reader_ask_the_same_function_whether_the_team_is_stopped(world):
+    engine = _engine()
+    assert engine.team_halted() is aq.team_halted(world.home) is False
+    _stop_the_team(world)
+    assert engine.team_halted() is aq.team_halted(world.home) is True
+    assert aq.team_halted(str(world.home)) is True  # a string path as well as a Path
+
+
 def test_the_cadence_does_not_run_while_stopped_and_the_first_round_after_the_stop_is_not_delayed(world, monkeypatch):
     engine = _engine()
     runs = []
