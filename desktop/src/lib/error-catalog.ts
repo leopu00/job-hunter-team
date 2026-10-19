@@ -939,6 +939,14 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
     "On the VPS your user has no subordinate IDs, which Podman without privileges needs.",
     "Ask whoever manages the VPS to add your user to /etc/subuid and /etc/subgid, then try again.",
   ),
+  // install.sh on a VPS whose team already runs on Docker (exit 85): Podman would start it on
+  // empty volumes, and nothing moves them yet. The install stopped before changing anything.
+  vps_runtime_change_requires_migration: copy(
+    "Su questa VPS Job Hunter Team gira già con Docker. Passarlo a Podman richiede una migrazione, che oggi l’app non sa ancora fare da sola.",
+    "I dati del team restano dove sono, sulla VPS: non è stato spostato né cancellato nulla. Collegati al team che c’è già, senza reinstallarlo, oppure scegli un’altra VPS.",
+    "This VPS already runs Job Hunter Team with Docker. Moving it to Podman needs a migration, which the app cannot do by itself yet.",
+    "The team’s data stays where it is, on the VPS: nothing was moved or deleted. Connect to the team that is already there, without reinstalling it, or choose another VPS.",
+  ),
   host_key_missing: copy(
     "L’identità SSH della VPS non è ancora stata confermata.",
     "Conferma l’impronta della VPS prima di continuare.",

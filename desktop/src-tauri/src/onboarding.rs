@@ -46,6 +46,8 @@ const PODMAN_OTHER_MACHINE_EXIT: i32 = 79;
 const PODMAN_OTHER_MACHINE_RUNNING: &str = "podman_other_machine_running";
 /// install.sh's refusal to move a Mac to another container engine.
 const RUNTIME_CHANGE_REQUIRES_MIGRATION: &str = "runtime_change_requires_migration";
+/// The same refusal on a VPS (install.sh's exit 85): its team already runs on another engine.
+const VPS_RUNTIME_CHANGE_REQUIRES_MIGRATION: &str = "vps_runtime_change_requires_migration";
 /// What the Windows install keeps of install.ps1's stdout for the runtime log.
 #[cfg_attr(not(windows), allow(dead_code))]
 const INSTALL_STDOUT_KEPT: usize = 256 * 1024;
@@ -775,12 +777,13 @@ pub(crate) enum InteractiveInputMode {
 pub(crate) fn failure(code: &'static str) -> OnboardingError {
     // Retrying cannot help: the data, the host or the machine must change
     // first (PODMAN_MACHINE_MOUNTS_HOME: recreated, after the person confirms
-    // it with onboarding_podman_machine_recreate; RUNTIME_CHANGE_REQUIRES_MIGRATION:
-    // the volumes stay in the other engine until a migration exists).
+    // it with onboarding_podman_machine_recreate; RUNTIME_CHANGE_REQUIRES_MIGRATION,
+    // here or on a VPS: the volumes stay in the other engine until a migration exists).
     let retryable = !matches!(
         code,
         PODMAN_MACHINE_MOUNTS_HOME
             | RUNTIME_CHANGE_REQUIRES_MIGRATION
+            | VPS_RUNTIME_CHANGE_REQUIRES_MIGRATION
             | "runtime_install_unsupported"
             | "local_account_owner_missing"
             | "local_account_owner_mismatch"
@@ -1960,6 +1963,9 @@ const SSH_REFUSED_EXIT: i32 = 255;
 const REMOTE_INSTALL_NO_HASH_TOOL_EXIT: i32 = 86;
 /// `REMOTE_INSTALL`: the installer that arrived is not the one that was sent.
 const REMOTE_INSTALL_DIGEST_MISMATCH_EXIT: i32 = 87;
+/// install.sh: the VPS already runs its team on another engine (Docker, from an
+/// install before Podman), and the volumes cannot move to Podman yet.
+const REMOTE_INSTALL_RUNTIME_CHANGE_EXIT: i32 = 85;
 /// The runtime of every VPS: rootless Podman, a fixed choice.
 const REMOTE_INSTALL_RUNTIME: &str = " --runtime podman";
 /// What install.sh says, with its own exit, when the VPS cannot run rootless
@@ -2019,6 +2025,9 @@ fn ensure_remote_install_success(
         }
         Ok(value) if value.code == REMOTE_INSTALL_NO_HASH_TOOL_EXIT => {
             return Err(failure("installer_digest_missing"))
+        }
+        Ok(value) if value.code == REMOTE_INSTALL_RUNTIME_CHANGE_EXIT => {
+            return Err(failure(VPS_RUNTIME_CHANGE_REQUIRES_MIGRATION))
         }
         Ok(value) => {
             if let Some((_, code)) = REMOTE_INSTALL_PODMAN_EXITS
@@ -5923,6 +5932,7 @@ mod tests {
             (exited(255), "ssh_unavailable"),
             (exited(87), "installer_digest_mismatch"),
             (exited(86), "installer_digest_missing"),
+            (exited(85), "vps_runtime_change_requires_migration"),
             (exited(88), "podman_install_failed"),
             (exited(89), "podman_sudo_required"),
             (exited(90), "vps_podman_missing"),
@@ -5944,6 +5954,8 @@ mod tests {
                 code
             );
         }
+        // a team already on Docker: trying again cannot help until a migration exists
+        assert!(!ensure_remote_install_success(exited(85)).unwrap_err().retryable);
     }
 
     #[test]

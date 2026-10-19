@@ -591,6 +591,24 @@ describe("podman_other_machine_running with the machine's name", () => {
   });
 });
 
+describe("a VPS whose team already runs on Docker", () => {
+  it("says that a migration is needed, that the data stays and what to do, in every language", () => {
+    const texts = new Set<string>();
+    for (const locale of ERROR_LOCALES) {
+      const { text, action } = describeError("vps_runtime_change_requires_migration", { locale });
+      expect(text, locale).toMatch(/Docker/);
+      expect(text, locale).toMatch(/Podman/);
+      expect(action, locale).toMatch(/VPS/);
+      expect(text).not.toEqual(describeError("runtime_change_requires_migration", { locale }).text);
+      for (const value of [text, action]) {
+        expect(value, locale).not.toMatch(/terminal|curl|install\.sh|--runtime|Colima|Mac\b|`/i);
+      }
+      texts.add(text);
+    }
+    expect(texts.size).toBe(ERROR_LOCALES.length);
+  });
+});
+
 describe("a Mac installed with another container engine", () => {
   it("says what would stay behind and what to do, in every language, without a terminal", () => {
     for (const locale of ERROR_LOCALES) {
