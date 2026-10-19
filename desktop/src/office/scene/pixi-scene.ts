@@ -35,6 +35,7 @@ import {
 import { feetAnchor, pickCell } from "./frames";
 import { assetUrl } from "./asset-url";
 import { READABLE_PX, readableScale } from "./readable";
+import { separateTags, type TagBox } from "./tag-layout";
 import { allFurniture, cameraBounds } from "../layout-items";
 import { tagDetail, tagOf } from "../status";
 import { appLocale } from "../../lib/app-locale";
@@ -176,10 +177,13 @@ export async function createOfficeScene(host: HTMLElement, options: OfficeSceneO
   const paper = layout.paperPile;
   const sheetTex = paper ? textureFor(textures, paper.image) : null;
   const piles = new Map<DeptId, (n: number | null) => void>();
+  // the handoff tags: the agents' tags keep clear of them (drawTags)
+  const handoffTags: Container[] = [];
   const pileNodes = new Map<DeptId, { node: Container; spot: Vec }>();
   for (const dept of layout.departments) {
     // over the scene, as the department's name: grown, among the furniture it would be cut by it
-    if (dept.handoff) overlay.addChild(keepReadable(handoffTag(dept.handoff.label, dept.handoff.labelPos, dept.color, dept.inbox.y + 1), 10, READABLE_PX.handoffTag));
+    if (dept.handoff)
+      handoffTags.push(overlay.addChild(keepReadable(handoffTag(dept.handoff.label, dept.handoff.labelPos, dept.color, dept.inbox.y + 1), 10, READABLE_PX.handoffTag)));
     const spot = dept.handoff?.pileSpot ?? dept.inbox;
     const pile = new Container();
     pile.position.set(spot.x, spot.y);
@@ -324,6 +328,9 @@ export async function createOfficeScene(host: HTMLElement, options: OfficeSceneO
   const drawTags = (poses: AgentPose[]) => {
     const live = new Set<string>();
     const now = Date.now();
+    const k = readableScale(11, controls.camera().scale, READABLE_PX.stateTag);
+    const wanted: TagBox[] = [];
+    const nodes = new Map<string, Container>();
     for (const pose of poses) {
       const status = statuses?.agents[pose.uid.toLowerCase()];
       const sprite = agents.get(pose.uid);
@@ -343,10 +350,25 @@ export async function createOfficeScene(host: HTMLElement, options: OfficeSceneO
       }
       // over the head: the cell's top above the feet, plus half the tag and 6 px (STATE_TAG_HEAD_CLEARANCE),
       // the tag kept readable at the camera's zoom
-      const k = readableScale(11, controls.camera().scale, READABLE_PX.stateTag);
       entry.node.scale.set(k);
       const top = sprite.getLocalBounds().y * Math.abs(sprite.scale.y);
-      entry.node.position.set(pose.pos.x, pose.pos.y + top - (entry.h / 2) * k - 6);
+      const w = entry.node.getLocalBounds().width * k;
+      wanted.push({ id: pose.uid, x: pose.pos.x, y: pose.pos.y + top - (entry.h / 2) * k - 6, w, h: entry.h * k });
+      nodes.set(pose.uid, entry.node);
+    }
+    // Tags that would overlap each other or a handoff tag move up just enough, and none leaves
+    // the top or a side of the view: two agents side by side are both read.
+    const fixed = handoffTags.map((node) => {
+      const b = node.getLocalBounds();
+      const s = node.scale.x;
+      return { x: node.x + b.x * s, y: node.y + b.y * s, w: b.width * s, h: b.height * s };
+    });
+    const corner = toWorld(controls.camera(), { x: 0, y: 0 });
+    const far = toWorld(controls.camera(), { x: app.screen.width, y: app.screen.height });
+    const at = separateTags(wanted, fixed, 4 * k, { top: corner.y, left: corner.x, right: far.x });
+    for (const tag of wanted) {
+      const p = at.get(tag.id) ?? tag;
+      nodes.get(tag.id)!.position.set(p.x, p.y);
     }
     for (const [uid, entry] of tags) {
       if (live.has(uid)) continue;
