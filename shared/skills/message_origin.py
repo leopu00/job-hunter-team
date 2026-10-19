@@ -161,17 +161,42 @@ def _reading_view(text):
         )
 
 
-def claimed_sender(message: str) -> str | None:
+# I residui che un ESC lascia davanti a una busta quando lo si toglie da solo: l'introduttore di una
+# stringa (`]` `P` `X` `^` `_`) o di una CSI (`[`). `ESC P [@capitano…` arriva al CLI come «P[@capitano…»
+# e si legge come una busta; senza un ESC nel messaggio originale quel prefisso non e' niente.
+_ESC_RESIDUE = r"[\]PX^_\[]{1,2}"
+
+
+def _claim(view, lenient):
+    view = _reading_view(view)
+    view = view[_noise_length(view):]
+    found = ENVELOPE_RE.match(view)
+    if not found and lenient:
+        for size in (1, 2):
+            if re.fullmatch(_ESC_RESIDUE, view[:size]):
+                found = ENVELOPE_RE.match(view[size:])
+                if found:
+                    break
+    return found.group(1).lower() if found else None
+
+
+def claimed_sender(message: str, raw: str | None = None) -> str | None:
     """Il mittente che il messaggio DICHIARA, o None se non c'è busta.
+
+    `raw` e' il messaggio prima di togliere i controlli (se diverso): si guarda anche quello, e se
+    conteneva un ESC si perdonano i residui che l'ESC lascia davanti alla busta. Un verdetto che
+    guarda piu' di un testo e' piu' severo, mai meno.
 
     Con un blocco di contesto davanti si guarda la busta che lo segue: altrimenti chi
     lo antepone a una firma falsa scavalcherebbe il controllo d'identità. E si guarda
     dopo il rumore iniziale (ZWSP, ESC, invisibili): la busta che si legge è quella che
     conta, non quella che i byte lasciano vedere a una regex.
     """
-    rest = _reading_view(split_context_frame(message)[1])
-    found = ENVELOPE_RE.match(rest[_noise_length(rest):])
-    return found.group(1).lower() if found else None
+    lenient = raw is not None and "\x1b" in raw
+    name = _claim(split_context_frame(message)[1], lenient)
+    if name is None and raw is not None and raw != message:
+        name = _claim(split_context_frame(raw)[1], lenient)
+    return name
 
 
 def session_from_ancestry(pid, parent_of, pane_owner):
@@ -448,7 +473,7 @@ def verified_origin(pid):
     return session_from_ancestry(pid, parent_of, owners.get)
 
 
-def inspect_message(pid, message):
+def inspect_message(pid, message, raw=None):
     """`(trust, claimed, origin)` con una sola interrogazione a tmux.
 
     Le sessioni vive escono dalla stessa lettura dei pane: chiederle due volte
@@ -456,15 +481,37 @@ def inspect_message(pid, message):
     """
     panes = tmux_pane_owners()
     origin = session_from_ancestry(pid, parent_of, panes.get) if panes else None
-    claimed = claimed_sender(message)
+    claimed = claimed_sender(message, raw)
     return classify_sender(claimed, origin, set(panes.values())), claimed, origin
 
 
+def strip_controls(message):
+    """Il messaggio senza ESC, sequenze complete e controlli: quello che il CLI ricevera' davvero."""
+    try:
+        import sys as _sys
+
+        here = os.path.dirname(os.path.abspath(__file__))
+        if here not in _sys.path:
+            _sys.path.insert(0, here)
+        from external_content import strip_terminal_controls
+
+        return strip_terminal_controls(message)
+    except Exception:
+        # Senza la funzione si tolgono almeno ESC e controlli: meglio un testo piu' povero che grezzo.
+        return "".join(
+            ch for ch in str(message or "")
+            if ch in "\n\t" or not (ord(ch) < 0x20 or ord(ch) == 0x7F or 0x80 <= ord(ch) <= 0x9F)
+        )
+
+
 def prepare_message(message, source=""):
-    """Il messaggio come verra' consegnato (recintato o ripulito), prima di ogni verdetto."""
-    delivered = fence_user_turn_message(message)
-    if delivered == message:     # not a chat envelope: the console may ask for it to be cleaned
-        delivered = sanitize_console_message(message, source)
+    """Il messaggio come verra' consegnato, prima di ogni verdetto: senza controlli del terminale
+    (fra agenti un ESC non ha nessun uso legittimo, un log colorato resta leggibile), poi recintato
+    o ripulito."""
+    cleaned = strip_controls(message)
+    delivered = fence_user_turn_message(cleaned)
+    if delivered == cleaned:     # not a chat envelope: the console may ask for it to be cleaned
+        delivered = sanitize_console_message(cleaned, source)
     return delivered
 
 
@@ -480,7 +527,7 @@ def main(argv):
     # controllo, sul testo grezzo, non vedeva (uno ZWSP davanti), e il verdetto deve
     # valere per ciò che verrà davvero consegnato.
     delivered = prepare_message(message, os.environ.get("JHT_TMUX_SEND_FROM", ""))
-    trust, claimed, origin = inspect_message(os.getpid(), delivered)
+    trust, claimed, origin = inspect_message(os.getpid(), delivered, message)
     # Prima riga il verdetto, dal resto il messaggio come va consegnato. Un
     # solo giro: chiedere due volte aprirebbe una finestra in cui l'elenco dei
     # pane cambia fra il controllo e la marcatura.

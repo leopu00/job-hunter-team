@@ -358,6 +358,26 @@ def leading_noise_length(text):
     return i
 
 
+# ── I controlli del terminale non viaggiano fra agenti ──────────────────────────────────────────
+# Il trasporto digita con `tmux send-keys -l`: i byte arrivano al CLI come TASTI, non a un terminale
+# che li interpreta (ESC+«]» e' Alt+] o ESC e poi «]», non un OSC). Fra agenti un ESC non ha nessun
+# uso legittimo come tasto; un log colorato lo porta come sequenza. Quindi: una sequenza completa
+# (una CSI con la sua finale, una stringa OSC/DCS/SOS/PM/APC col suo terminatore sulla stessa riga) si
+# toglie intera, ogni altro ESC si toglie da solo, e con loro i controlli C0 (salvo a capo e tabulazione),
+# il DEL e i C1. Il testo resta leggibile. Il verdetto sul mittente si calcola su QUESTO testo.
+_COMPLETE_SEQUENCE = re.compile(
+    r"\x1b(?:\[[0-9;:?<=>]*[ -/]*[A-Za-z~`]|[\]PX^_][^\x07\x1b\r\n]*(?:\x07|\x1b\\))"
+)
+
+
+def strip_terminal_controls(text):
+    """`text` senza ESC (e le sequenze complete), controlli C0 (tranne \\n e \\t), DEL e C1."""
+    text = _COMPLETE_SEQUENCE.sub("", str(text or ""))
+    return "".join(
+        ch for ch in text if ch in "\n\t" or not (ord(ch) < 0x20 or ord(ch) == 0x7F or 0x80 <= ord(ch) <= 0x9F)
+    )
+
+
 def reading_view(text):
     """Il testo come lo LEGGE chi lo riceve: senza ESC e relative sequenze, senza controlli e senza
     invisibili in nessun punto. Serve a decidere CHI parla: `[<ZWSP>@capitano -> @x]` e
