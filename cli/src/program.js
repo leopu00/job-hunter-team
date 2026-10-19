@@ -5,6 +5,7 @@ import { registerConfigCommand } from './commands/config.js';
 import { registerWorkingHoursCommand } from './commands/working-hours.js';
 import { registerBurnCommand } from './commands/burn.js';
 import { registerStandbyCommand } from './commands/standby.js';
+import { registerAgentControlCommand } from './commands/agent-control.js';
 import { registerStatusCommand } from './commands/status.js';
 import { registerTeamCommand } from './commands/team/index.js';
 import { registerCronCommand } from './commands/cron.js';
@@ -100,6 +101,7 @@ export function buildProgram() {
   registerWorkingHoursCommand(program);
   registerBurnCommand(program);
   registerStandbyCommand(program);
+  registerAgentControlCommand(program);
   registerStatusCommand(program);
   registerTeamCommand(program);
   registerCronCommand(program);
