@@ -93,6 +93,17 @@ export default function ExistingTeamStatusPage(_props: PageProps) {
         {t.intro}
       </p>
 
+      {reading.kind === "read" && !reading.fields.containerRunning && (
+        <p
+          role="status"
+          data-testid="team-status-summary"
+          className="mb-4 rounded-lg border p-3 text-[12px] font-semibold"
+          style={{ borderColor: "var(--color-yellow)", color: "var(--color-yellow)", background: "var(--color-card)" }}
+        >
+          {t.summaryOff}
+        </p>
+      )}
+
       <AssistantCard />
 
       {reading.kind === "unknown" && (
