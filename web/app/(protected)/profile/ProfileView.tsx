@@ -1,7 +1,11 @@
 import Link from "next/link";
 import type { CandidateProfile } from "@/lib/types";
 import type { Locale } from "@/i18n/config";
-import { getProfileT, languageLevelLabel, type ProfileT } from "@/lib/profile-i18n";
+import {
+  getProfileT,
+  languageLevelLabel,
+  type ProfileT,
+} from "@/lib/profile-i18n";
 import ProfileStats from "@/app/components/ProfileStats";
 import ProfileEditButton from "@/app/components/ProfileEditButton";
 import RevealableContactRow from "@/app/components/RevealableContactRow";

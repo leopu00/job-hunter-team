@@ -348,7 +348,9 @@ export default async function PositionsPage({ searchParams }: PageProps) {
     criticUnscored ||
     writeRequested !== undefined ||
     query !== "";
-  const emptyText = filtersActive ? tr("no_positions_filtered") : tr("no_positions_yet");
+  const emptyText = filtersActive
+    ? tr("no_positions_filtered")
+    : tr("no_positions_yet");
 
   // Pagination computed values
   const totalResults = windowedEmpty
