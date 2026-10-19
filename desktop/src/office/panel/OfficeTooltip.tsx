@@ -2,6 +2,7 @@ import { formatRelative } from "@/lib/message-display";
 import { publicPositionState, publicPositionStateLabel } from "@/lib/position-state";
 import { useLocale } from "@/lib/use-locale";
 import type { AgentStatuses, OfficeClick, OfficeLayout, OfficeSnapshot, Vec } from "../contract";
+import { fill, officeText } from "../office.i18n";
 import { tagOf } from "../status";
 import { deptName } from "./OfficePanel";
 
@@ -17,12 +18,13 @@ export function tooltipFor(
   ctx: { layout: OfficeLayout; snapshot: OfficeSnapshot | null; statuses: AgentStatuses | null; locale: string; now?: number },
 ): TooltipLines {
   const { layout, snapshot, statuses, locale } = ctx;
+  const t = officeText(locale);
   const piles = snapshot?.piles;
   switch (target.kind) {
     case "agent": {
       const s = statuses?.agents[target.uid.toLowerCase()];
       const last = snapshot?.transitions.find((t) => t.byAgent === target.uid);
-      const lines = [s ? tagOf(s, ctx.now).label : "stato non pubblicato"];
+      const lines = [s ? tagOf(s, ctx.now).label : t.tipNotPublished];
       if (last) {
         const state = last.to ? publicPositionStateLabel(publicPositionState(last.to), locale) : "";
         const what = [last.position.title, last.position.company].filter(Boolean).join(" · ");
@@ -31,20 +33,20 @@ export function tooltipFor(
       return { title: target.uid.toUpperCase(), lines };
     }
     case "pile":
-      return { title: deptName(layout, target.dept), lines: [piles ? `${piles[target.dept] ?? "—"} posizioni sulla pila` : "posizioni sulla pila"] };
+      return { title: deptName(layout, target.dept), lines: [piles ? fill(t.tipPile, { count: piles[target.dept] ?? "—" }) : t.tipPileNoCount] };
     case "department": {
       const d = layout.departments.find((x) => x.id === target.dept);
       const lines = [d?.tagline ?? ""].filter(Boolean);
-      if (piles) lines.push(`in ingresso: ${piles[target.dept] ?? "—"}`);
+      if (piles) lines.push(fill(t.tipIncoming, { count: piles[target.dept] ?? "—" }));
       return { title: deptName(layout, target.dept), lines };
     }
     case "shelf":
     case "printer":
-      return { title: "CV prodotti", lines: [piles?.critici != null ? `${piles.critici} pronti col PASS del critico` : "le candidature scritte"] };
+      return { title: t.cvTitle, lines: [piles?.critici != null ? fill(t.tipCvReady, { count: piles.critici }) : t.tipCvWritten] };
     case "board":
-      return { title: "Bacheca", lines: ["posizioni pronte, inviate, con risposta"] };
+      return { title: t.boardTitle, lines: [t.tipBoard] };
     case "hologram":
-      return { title: "Mappa", lines: ["dove sono le posizioni"] };
+      return { title: t.mapTitle, lines: [t.tipMap] };
   }
 }
 

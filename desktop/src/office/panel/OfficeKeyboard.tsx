@@ -1,4 +1,6 @@
+import { useLocale } from "@/lib/use-locale";
 import type { OfficeClick } from "../contract";
+import { officeText } from "../office.i18n";
 
 /**
  * The office without a mouse (D08): one button per agent and object, in
@@ -19,8 +21,9 @@ export type OfficeKeyboardProps = {
 export const targetKey = (t: OfficeClick) => JSON.stringify(t);
 
 export default function OfficeKeyboard({ targets, label, onFocusTarget, onOpen }: OfficeKeyboardProps) {
+  const t = officeText(useLocale());
   return (
-    <ul aria-label="Agenti e oggetti dell'ufficio" className="sr-only">
+    <ul aria-label={t.keyboardAria} className="sr-only">
       {targets.map((t) => (
         <li key={targetKey(t)}>
           <button

@@ -35,4 +35,12 @@ describe("the tag under the pointer: what the page already holds, nothing invent
   it("without a snapshot no number is shown", () => {
     expect(tooltipFor({ kind: "pile", dept: "scout" }, { ...ctx, snapshot: null }).lines).toEqual(["posizioni sulla pila"]);
   });
+
+  it("speaks the language it is asked for, and the English words of the game stay", () => {
+    const en = { ...ctx, locale: "en" };
+    expect(tooltipFor({ kind: "agent", uid: "scout-2", role: "scout" }, en).lines).toEqual(["status not published"]);
+    expect(tooltipFor({ kind: "pile", dept: "scout" }, en)).toEqual({ title: "Research", lines: ["13 positions on the pile"] });
+    expect(tooltipFor({ kind: "board" }, en)).toEqual({ title: "Board", lines: ["positions ready, sent, answered"] });
+    expect(tooltipFor({ kind: "agent", uid: "scout-1", role: "scout" }, en).lines[0]).toBe("WORKING");
+  });
 });

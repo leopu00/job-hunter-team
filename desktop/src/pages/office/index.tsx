@@ -14,6 +14,7 @@ import { loadAgentStatuses } from "../../office/status";
 import { appLocale } from "../../lib/app-locale";
 import { useExistingTeamReadOnly } from "../../lib/existing-team-readonly";
 import { EXISTING_TEAM_READONLY_TEXT } from "../../lib/existing-team-readonly.i18n";
+import { officeText } from "../../office/office.i18n";
 import { PAGE_STATES_TEXT } from "../../lib/page-states.i18n";
 import { readTeamStatus } from "../../lib/existing-team-status";
 import { officeFromTeamProbe } from "../../office/readonly";
@@ -140,7 +141,7 @@ function Office({ ready, source }: { ready: Ready; source: OfficeSource }) {
       })
       .catch((error: unknown) => {
         console.error("[office] scene failed:", error);
-        setStatus("La scena non parte: questa finestra non ha WebGL.");
+        setStatus(officeText().noWebGl);
       });
     return () => {
       gone = true;
@@ -179,13 +180,13 @@ function Office({ ready, source }: { ready: Ready; source: OfficeSource }) {
       showStatuses(next.teamOnline ? await statuses : null);
     } catch {
       showStatuses(null);
-      setStatus("Non riesco a leggere il cloud: l'ufficio resta com'era.");
+      setStatus(officeText().readFailed);
     }
   };
   useEffect(() => {
     if (source !== "cloud") return;
     if (!parts.data) {
-      setStatus("I dati dell'ufficio non sono ancora collegati: nessun agente in scena.");
+      setStatus(officeText().notWired);
       return;
     }
     const motion = watchReducedMotion((r) => {
@@ -249,7 +250,7 @@ function Office({ ready, source }: { ready: Ready; source: OfficeSource }) {
   useEffect(() => {
     if (source !== "team-probe") return;
     if (!parts.data) {
-      setStatus("I dati dell'ufficio non sono ancora collegati: nessun agente in scena.");
+      setStatus(officeText().notWired);
       return;
     }
     void readProbe();
@@ -327,7 +328,8 @@ function Office({ ready, source }: { ready: Ready; source: OfficeSource }) {
 
 /** A team that is off: the core seats are empty, the agents of the last 24 hours stay (office/data/load.ts). */
 function teamOffMessage(agents: number): string {
-  return agents === 0 ? "Il team è spento: l'ufficio è vuoto." : "Il team è spento: restano gli agenti che hanno lavorato nelle ultime 24 ore.";
+  const t = officeText();
+  return agents === 0 ? t.teamOffEmpty : t.teamOffRecent;
 }
 
 /** What the panels get over an existing team's VPS: the cloud is never asked, and a use of it is a failure. */
