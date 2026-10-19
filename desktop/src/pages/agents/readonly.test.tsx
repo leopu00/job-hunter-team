@@ -129,6 +129,18 @@ describe("«Agenti» in the read-only view of an existing team", () => {
     expect(native.invoke.mock.calls.map(([, args]) => (args as { request: { op: string } }).request.op).sort()).toEqual(["list", "screen"]);
   });
 
+  it("a terminal the VPS could not clean is not shown: the catalog's sentence, never the text", async () => {
+    native.invoke.mockImplementation(async (_command: string, args: { request: { op: string } }) =>
+      args.request.op === "list" ? listReply() : { ok: false, error: "agent_screen_unfiltered" });
+    navigate("/agents", { replace: true });
+    render(<Shell />);
+    await screen.findByTestId("agents-read");
+    fireEvent.click(within(screen.getByTestId("agent-SCOUT-1")).getByRole("button", { name: "Mostra il terminale" }));
+    const alert = await within(screen.getByTestId("agent-SCOUT-1-screen")).findByRole("alert");
+    expect(alert).toHaveTextContent(describeError("agent_screen_unfiltered", { locale: "it" }).text);
+    expect(screen.queryByTestId("agent-SCOUT-1-terminal")).toBeNull();
+  });
+
   it("on a failed read shows the catalog's sentence and no agent", async () => {
     native.invoke.mockImplementation(async () => ({ ok: false, error: "agents_unavailable" }));
     navigate("/agents", { replace: true });

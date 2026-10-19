@@ -602,6 +602,12 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
     "The VPS did not return the list of agents.",
     "Press Refresh. If it keeps happening, report the code shown next to it.",
   ),
+  agent_screen_unfiltered: copy(
+    "Il terminale di questo agente non si può mostrare: sulla VPS manca il filtro che toglie chiavi e codici dal testo.",
+    "Aggiorna la squadra sulla VPS, poi riapri il terminale.",
+    "This agent's terminal cannot be shown: the VPS lacks the filter that removes keys and codes from the text.",
+    "Update the team on the VPS, then open the terminal again.",
+  ),
   desktop_transport_unavailable: copy(
     "L’app non è riuscita a parlare con il suo nucleo nativo.",
     "Riprova con Aggiorna. Se si ripete, chiudi Job Hunter Team del tutto e riaprilo.",

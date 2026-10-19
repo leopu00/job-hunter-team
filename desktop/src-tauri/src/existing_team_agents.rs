@@ -3,6 +3,13 @@
 //! (shared/skills/agent_state.py, when the container has it) and, only when
 //! the user opens one, the last lines of its terminal.
 //!
+//! A terminal can hold what a CLI printed: a login code, a key. Its text is
+//! shown only after the container's own filters: the single list of
+//! invisible characters (shared/skills/external_content.py,
+//! INVISIBLE_COMMANDS) and the secrets redactor the Telegram channel uses
+//! (shared/redact-cli.mjs --secrets). When either is missing or fails, the
+//! terminal is not shown: agent_screen_unfiltered, never the raw text.
+//!
 //! Read only. The script below travels with the app and runs in the pinned
 //! container through the same fixed command as the positions read: it lists
 //! and captures, it never sends keys or messages. The container needs no
@@ -66,6 +73,8 @@ def fail(code): emit({'ok':False,'error':code})
 try: req=json.loads(sys.stdin.readline())
 except Exception: fail('agents_unavailable')
 NAME=re.compile(r'^[A-Z][A-Z0-9-]{0,39}$')
+SKILLS='/app/shared/skills'
+REDACTOR='/app/shared/redact-cli.mjs'
 def sessions():
  try: done=subprocess.run(['tmux','list-sessions','-F','#{session_name}\t#{session_created}\t#{session_activity}'],capture_output=True,text=True,timeout=8)
  except Exception: fail('agents_unavailable')
@@ -107,6 +116,14 @@ if req.get('op')=='screen':
  raw=done.stdout.decode('utf-8','replace')
  raw=re.sub(r'\x1b(\[[0-?]*[ -/]*[@-~]|\][^\x07\x1b]*(\x07|\x1b\\)?|[@-Z\\-_])','',raw)
  raw=''.join(ch for ch in raw if ch in '\n\t' or (ord(ch)>=32 and not 127<=ord(ch)<160))
+ try:
+  sys.path.insert(0,SKILLS); from external_content import INVISIBLE_COMMANDS
+ except Exception: fail('agent_screen_unfiltered')
+ raw=''.join(ch for ch in raw if ch not in INVISIBLE_COMMANDS)
+ try: done=subprocess.run(['node',REDACTOR,'--secrets'],input=raw.encode('utf-8'),capture_output=True,timeout=8)
+ except Exception: fail('agent_screen_unfiltered')
+ if done.returncode!=0: fail('agent_screen_unfiltered')
+ raw=done.stdout.decode('utf-8','replace')
  raw='\n'.join(raw.rstrip('\n').split('\n')[-60:])
  data=raw.encode('utf-8')
  if len(data)>16384: raw=data[-16384:].decode('utf-8','ignore')
@@ -295,7 +312,11 @@ fn parse_request(request: Value) -> Option<AgentsRequest> {
 /// The fixed script and the request, as the container's python reads them:
 /// the script in hex on the first line, the request on the second.
 pub(crate) fn script_input(request: &AgentsRequest) -> Option<Vec<u8>> {
-    let mut input = hex_encode(AGENTS_READ_PY.as_bytes()).into_bytes();
+    script_input_for(AGENTS_READ_PY, request)
+}
+
+fn script_input_for(script: &str, request: &AgentsRequest) -> Option<Vec<u8>> {
+    let mut input = hex_encode(script.as_bytes()).into_bytes();
     input.push(b'\n');
     input.extend_from_slice(&serde_json::to_vec(request).ok()?);
     input.push(b'\n');
@@ -330,10 +351,19 @@ pub(crate) fn agents_read_for_scope(app: &tauri::AppHandle, scope: &AccountScope
         Ok(output) if output.success() && output.stdout.len() <= MAX_REPLY => output,
         _ => return failure("agents_unavailable"),
     };
-    serde_json::from_slice::<Value>(&output.stdout)
-        .ok()
-        .and_then(|reply| shape_reply(&request, &reply))
-        .unwrap_or_else(|| failure("agents_unavailable"))
+    let Ok(reply) = serde_json::from_slice::<Value>(&output.stdout) else {
+        return failure("agents_unavailable");
+    };
+    if let Some(shaped) = shape_reply(&request, &reply) {
+        return shaped;
+    }
+    match reply.get("error").and_then(Value::as_str) {
+        // the terminal was read but could not be cleaned: it is not shown at all
+        Some("agent_screen_unfiltered") if matches!(request, AgentsRequest::Screen { .. }) => {
+            failure("agent_screen_unfiltered")
+        }
+        _ => failure("agents_unavailable"),
+    }
 }
 
 /// The agents' page of the existing team's view. The renderer sends only the
@@ -523,12 +553,18 @@ mod tests {
         let tmux = dir.join("tmux");
         std::fs::write(
             &tmux,
-            "#!/bin/sh\necho \"$@\" >> \"$(dirname \"$0\")/calls\"\ncase \"$1\" in\n list-sessions) printf 'CAPITANO\\t1760000000\\t1760000100\\nDOCTOR-WATCHDOG\\t1\\t2\\nCRITICO-S3\\t1760000000\\t1760000200\\nbad name\\t1\\t2\\n' ;;\n capture-pane) printf '\\033[1mworking\\033[0m on it\\n' ;;\n *) exit 1 ;;\nesac\n",
+            "#!/bin/sh\necho \"$@\" >> \"$(dirname \"$0\")/calls\"\ncase \"$1\" in\n list-sessions) printf 'CAPITANO\\t1760000000\\t1760000100\\nDOCTOR-WATCHDOG\\t1\\t2\\nCRITICO-S3\\t1760000000\\t1760000200\\nbad name\\t1\\t2\\n' ;;\n capture-pane) printf '\\033[1mworking\\033[0m on it\\nkey sk-%s\\n\\342\\200\\256desrever\\n' 'FAKEfake0123456789abcd' ;;\n *) exit 1 ;;\nesac\n",
         )
         .unwrap();
         std::fs::set_permissions(&tmux, std::fs::Permissions::from_mode(0o755)).unwrap();
-        let run = |request: &AgentsRequest| {
-            let input = script_input(request).unwrap();
+        // The container's own filters, from this checkout: the single list of
+        // invisibles and the secrets redactor.
+        let repo = concat!(env!("CARGO_MANIFEST_DIR"), "/../..");
+        let script = AGENTS_READ_PY
+            .replace("/app/shared/skills", &format!("{repo}/shared/skills"))
+            .replace("/app/shared/redact-cli.mjs", &format!("{repo}/shared/redact-cli.mjs"));
+        let run_script = |script: &str, request: &AgentsRequest| {
+            let input = script_input_for(script, request).unwrap();
             let mut child = std::process::Command::new("python3")
                 .args(["-c", "import sys;exec(bytes.fromhex(sys.stdin.buffer.readline().decode()).decode())"])
                 .env("PATH", format!("{}:{}", dir.display(), std::env::var("PATH").unwrap_or_default()))
@@ -543,6 +579,7 @@ mod tests {
             let output = child.wait_with_output().unwrap();
             serde_json::from_slice::<Value>(&output.stdout).unwrap()
         };
+        let run = |request: &AgentsRequest| run_script(&script, request);
         let list = run(&AgentsRequest::List {});
         assert_eq!(list["data"]["states"], false, "no agent_state.py outside the container");
         let shaped = shape_reply(&AgentsRequest::List {}, &list).unwrap();
@@ -550,7 +587,20 @@ mod tests {
         assert_eq!(shaped["data"]["agents"][1]["activity"], 1_760_000_200);
         let screen = AgentsRequest::Screen { name: "CRITICO-S3".into() };
         let shaped = shape_reply(&screen, &run(&screen)).unwrap();
-        assert_eq!(shaped["data"]["text"], "working on it");
+        let text = shaped["data"]["text"].as_str().unwrap();
+        assert!(text.starts_with("working on it\nkey "), "{text}");
+        // the key the CLI printed is gone, and nothing turns the line around
+        assert!(!text.contains("FAKEfake0123456789abcd"), "{text}");
+        assert!(text.contains("[provider-key]"), "{text}");
+        assert!(!text.contains('\u{202e}') && text.ends_with("desrever"), "{text}");
+        // without the redactor, or without the list, the terminal is not shown at all
+        let no_redactor = script.replace(&format!("{repo}/shared/redact-cli.mjs"), "/nonexistent/redact-cli.mjs");
+        let no_list = script.replace(&format!("{repo}/shared/skills"), "/nonexistent/skills");
+        for broken in [no_redactor, no_list] {
+            let reply = run_script(&broken, &screen);
+            assert_eq!(reply, json!({"ok":false,"error":"agent_screen_unfiltered"}));
+            assert!(shape_reply(&screen, &reply).is_none());
+        }
         let gone = AgentsRequest::Screen { name: "SCOUT-1".into() };
         assert_eq!(shape_reply(&gone, &run(&gone)).unwrap()["data"]["up"], false);
         let calls = std::fs::read_to_string(dir.join("calls")).unwrap();
