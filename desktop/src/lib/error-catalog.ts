@@ -969,10 +969,22 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
     "Confirm the action after reading what it involves, then try again.",
   ),
   ssh_unavailable: copy(
-    "La VPS non è raggiungibile tramite SSH.",
-    "Controlla che la VPS sia accesa e connessa, poi riprova.",
-    "The VPS cannot be reached over SSH.",
-    "Check that the VPS is on and connected, then try again.",
+    "La VPS non è raggiungibile tramite SSH. Cause probabili: una chiave con passphrase o con permessi troppo aperti, un utente sbagliato, una chiave che la VPS non accetta, una porta chiusa o un tempo scaduto.",
+    "Controlla che la VPS sia accesa e la porta SSH aperta, che l’utente sia quello giusto e che la chiave non abbia passphrase, sia leggibile solo da te e sia autorizzata sulla VPS; poi riprova.",
+    "The VPS cannot be reached over SSH. Likely causes: a key with a passphrase or with permissions that are too open, the wrong user, a key the VPS does not accept, a closed port, or a timeout.",
+    "Check that the VPS is on and the SSH port is open, that the user is the right one and that the key has no passphrase, is readable only by you and is authorized on the VPS; then try again.",
+  ),
+  ssh_rate_limited: copy(
+    "Il server sta rifiutando i collegamenti da questo computer per qualche minuto, dopo troppi tentativi.",
+    "Aspetta circa dieci minuti senza riprovare e poi riprova una volta sola: ogni tentativo prolunga l’attesa.",
+    "The server is refusing connections from this computer for a few minutes after too many attempts.",
+    "Wait about ten minutes without trying again, then try once: every attempt makes the wait longer.",
+  ),
+  ssh_client_missing: copy(
+    "Su questo computer manca il client SSH (OpenSSH), che serve per collegarsi alla VPS.",
+    "Installa OpenSSH (su Windows: Impostazioni › App › Funzionalità facoltative › Client OpenSSH; su Mac e Linux è già incluso), riavvia l’app e riprova.",
+    "This computer has no SSH client (OpenSSH), which is needed to connect to the VPS.",
+    "Install OpenSSH (on Windows: Settings › Apps › Optional features › OpenSSH Client; Mac and Linux include it), restart the app and try again.",
   ),
   ssh_auth_failed: copy(
     "L’accesso SSH alla VPS non è riuscito.",

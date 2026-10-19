@@ -32,6 +32,38 @@ describe("localized desktop error catalog", () => {
     }
   });
 
+  it("ssh_unavailable lists the likely causes and what to check in every language", () => {
+    for (const locale of ERROR_LOCALES) {
+      const described = describeError("ssh_unavailable", { locale });
+      expect(described.known, locale).toBe(true);
+      // Five causes in the sentence (passphrase or open permissions, wrong
+      // user, unauthorized key, closed port, timeout), not just "check the VPS".
+      expect(described.text.split(/[,;:]/).length, locale).toBeGreaterThanOrEqual(5);
+      expect(described.action.length, locale).toBeGreaterThan(80);
+    }
+    expect(describeError("ssh_unavailable", { locale: "it" }).text).toContain("passphrase");
+  });
+
+  it("ssh_client_missing has its own sentence and says to install OpenSSH in every language", () => {
+    for (const locale of ERROR_LOCALES) {
+      const described = describeError("ssh_client_missing", { locale });
+      expect(described.known, locale).toBe(true);
+      expect(described.text, locale).toContain("OpenSSH");
+      expect(described.action, locale).toContain("OpenSSH");
+      expect(described.text, locale).not.toBe(describeError("ssh_unavailable", { locale }).text);
+    }
+  });
+
+  it("ssh_rate_limited says to wait and try once, in every language, and is not the generic SSH sentence", () => {
+    for (const locale of ERROR_LOCALES) {
+      const described = describeError("ssh_rate_limited", { locale });
+      expect(described.known, locale).toBe(true);
+      expect(described.text, locale).not.toBe(describeError("ssh_unavailable", { locale }).text);
+      expect(described.action.length, locale).toBeGreaterThan(40);
+    }
+    expect(describeError("ssh_rate_limited", { locale: "it" }).action).toContain("dieci minuti");
+  });
+
   it("returns each requested product language instead of falling back to English", () => {
     for (const locale of ERROR_TRANSLATION_LOCALES) {
       const described = describeError("agent_busy", { locale });

@@ -27,6 +27,8 @@ const RUST = fileURLToPath(new URL("../../src-tauri/src/", import.meta.url));
 
 /** Literals that look like codes but never reach the person, and why. */
 const NOT_ERRORS: Record<string, string> = {
+  // What ssh prints when the server turns an address away; read to pick ssh_rate_limited.
+  kex_exchange_identification: "text of ssh stderr, not a code",
   // Candidate profile fields validated by profile import and migration.
   birth_year: "profile field",
   candidate_profile: "profile artifact id",

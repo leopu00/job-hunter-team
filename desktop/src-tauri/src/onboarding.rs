@@ -2000,8 +2000,16 @@ const REMOTE_INSTALL_PODMAN_EXITS: [(i32, &str); 10] = [
     (97, "podman_rootless_unavailable"),
 ];
 
-fn ssh_refused(result: &Result<ProcessResult, &'static str>) -> bool {
-    matches!(result, Ok(value) if value.code == SSH_REFUSED_EXIT)
+/// What ssh itself decided before the command ran: the connection was
+/// refused (255), the server is turning this address away for a while, or the
+/// OpenSSH client is not on this computer. Each says the step did not fail,
+/// the way in did.
+fn ssh_way_in_failure(result: &Result<ProcessResult, &'static str>) -> Option<OnboardingError> {
+    match result {
+        Ok(value) if value.code == SSH_REFUSED_EXIT => Some(failure("ssh_unavailable")),
+        Err(code @ ("ssh_rate_limited" | "ssh_client_missing")) => Some(failure(code)),
+        _ => None,
+    }
 }
 
 /// `ensure_success` for a command run on the VPS.
@@ -2009,8 +2017,8 @@ fn ensure_remote_success(
     result: Result<ProcessResult, &'static str>,
     code: &'static str,
 ) -> Result<(), OnboardingError> {
-    if ssh_refused(&result) {
-        return Err(failure("ssh_unavailable"));
+    if let Some(error) = ssh_way_in_failure(&result) {
+        return Err(error);
     }
     ensure_success(result, code)
 }
@@ -2021,8 +2029,8 @@ fn ensure_remote_success_with_timeout(
     code: &'static str,
     timeout_code: &'static str,
 ) -> Result<(), OnboardingError> {
-    if ssh_refused(&result) {
-        return Err(failure("ssh_unavailable"));
+    if let Some(error) = ssh_way_in_failure(&result) {
+        return Err(error);
     }
     ensure_success_with_timeout(result, code, timeout_code)
 }
