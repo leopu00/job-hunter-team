@@ -1066,6 +1066,18 @@ fn wrapper_has_protocol(source: &str, protocol: &str) -> bool {
         .any(|line| line == protocol)
 }
 
+/// Whether this account's wrapper has the agent control panel's own branch,
+/// which never starts the container. An older wrapper would route
+/// `agent-control` through its generic branch, which does: the panel does
+/// not call it at all then.
+pub(crate) fn wrapper_has_agent_control(path: &Path) -> bool {
+    wrapper_source(path).is_some_and(|source| {
+        source.lines().map(|line| line.trim_end_matches('\r').trim()).any(|line| {
+            line == "JHT_AGENT_CONTROL_PROTOCOL=1" || line == "$JHT_AGENT_CONTROL_PROTOCOL = 1"
+        })
+    })
+}
+
 fn valid_host_wrapper_file(path: &Path) -> bool {
     wrapper_source(path)
         .is_some_and(|source| wrapper_has_protocol(&source, "JHT_HOST_RUNTIME_PROTOCOL=1"))
