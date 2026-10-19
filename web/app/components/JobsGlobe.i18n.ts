@@ -45,6 +45,15 @@ export const T = {
     fr: "Anneau bleu : postes 100 % à distance",
     pt: "Anel azul: vagas 100 % remotas",
   },
+  beams_legend: {
+    it: "Altezza del raggio = score · numero = posizioni",
+    en: "Beam height = score · number = positions",
+    hu: "Sugár magassága = pontszám · szám = pozíciók",
+    es: "Altura del haz = puntuación · número = puestos",
+    de: "Strahlhöhe = Score · Zahl = Stellen",
+    fr: "Hauteur du faisceau = score · nombre = postes",
+    pt: "Altura do feixe = pontuação · número = vagas",
+  },
   empty_title: {
     it: "Ancora nessuna posizione sulla mappa",
     en: "No positions on the map yet",

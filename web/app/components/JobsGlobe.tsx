@@ -2358,6 +2358,34 @@ export default function JobsGlobe({
           </div>
         )}
 
+        {/* Chiave dei segni del globo: l'altezza e il colore del raggio sono
+            lo score, il numero le posizioni. Senza, i raggi non si leggono.
+            Una pillola sopra la barra dei comandi, non un chip dentro:
+            a 1600 px la barra sta fra i pannelli d'angolo e un chip in più
+            ci finiva sotto. Da lg in su. */}
+        {displayData.length > 0 && (
+          <div
+            className="absolute inset-x-0 hidden lg:flex justify-center px-4 pointer-events-none z-10"
+            style={{ bottom: 76 }}
+          >
+            <p
+              className="text-[10px]"
+              role="note"
+              data-testid="map-beams-legend"
+              style={{
+                padding: "4px 12px",
+                background: "var(--color-panel)",
+                border: "1px solid var(--color-border)",
+                borderRadius: 9999,
+                color: "var(--color-muted)",
+                whiteSpace: "nowrap",
+              }}
+            >
+              {tr("beams_legend")}
+            </p>
+          </div>
+        )}
+
         {!loaded && (
           <p className="absolute inset-0 grid place-items-center text-[11px] text-[var(--color-dim)] pointer-events-none">
             {tr("loading")}
