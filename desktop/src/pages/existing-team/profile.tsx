@@ -134,7 +134,8 @@ export default function ExistingTeamProfilePage(_props: PageProps) {
 
   return (
     <div style={{ animation: "fade-in 0.35s ease both" }}>
-      <div className="max-w-6xl mx-auto px-5 pt-6">
+      {/* No px-5 here: MainChrome already pads the page (max-w-6xl px-5); a second one put this block one margin to the right of the cards below. */}
+      <div className="max-w-6xl mx-auto pt-6">
         <div className="flex items-start justify-between gap-4 mb-2">
           <div>
             {reading.kind === "read" && (
