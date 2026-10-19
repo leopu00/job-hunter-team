@@ -92,7 +92,8 @@ case "$1" in
       tmux:has-session) exit 0 ;;
       test:-f) exit 0 ;;
       node:*) exit 0 ;;
-      python3:-c|python3:-I|sh:-c|bash:) exit 0 ;;
+      python3:-I) [ "${JHT_TEST_NO_SCRIPT:-0}" != 1 ] || exit 2; exit 0 ;;   # 2: python3's, no such file
+      python3:-c|sh:-c|bash:) exit 0 ;;
       *) exit 97 ;;
     esac ;;
   *) exit 92 ;;
@@ -390,28 +391,26 @@ def test_a_chat_action_with_the_wrong_arguments_answers_2_and_runs_no_script(tmp
     assert "agent_chat.py" not in log.read_text(encoding="utf-8")
 
 
-def test_a_wrapper_from_before_the_chat_actions_answers_2_so_the_app_keeps_the_older_path(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-):
-    # The older wrapper is the current one without the two actions, installed the way a wrapper
-    # is (the runtime attests its digest, so it is built BEFORE the runtime is laid out).
+def test_the_wrapper_with_the_chat_actions_says_so_by_a_marker_the_app_asks_for_first():
     text = WRAPPER.read_text(encoding="utf-8")
-    start = text.index("    # The chat as ONE script of the container with closed arguments")
-    end = text.index("    *) return 2 ;;", start)
-    older = tmp_path / "older-jht-wrapper.sh"
-    older.write_text(text[:start] + text[end:], encoding="utf-8")
-    assert "agent_chat.py" not in older.read_text(encoding="utf-8")
-    monkeypatch.setitem(globals(), "WRAPPER", older)
-    box = tmp_path / "box"
-    box.mkdir()
-    wrapper, env, log = _runtime(box)
+    lines = text.splitlines()
+    assert lines.count("JHT_DESKTOP_CHAT_FIXED=1") == 1, "one marker, on a line of its own, as the app greps it"
+    # the marker and the actions go together: a wrapper without one has no other
+    assert "    chat-send)" in text and "    read)" in text
+
+
+def test_an_image_without_the_script_gives_the_scripts_own_2_and_the_wrapper_does_not_turn_it_into_anything(tmp_path: Path):
+    # python3 answers 2 for a missing file. That 2 must reach the app as «the image is older than the chat»
+    # (it never means «this wrapper has no chat actions»: that is told by the marker, and answered 64).
+    wrapper, env, log = _runtime(tmp_path)
     env["JHT_TEST_RUNTIME_READY"] = "1"
+    env["JHT_TEST_NO_SCRIPT"] = "1"
     for args in (("read", "capitano"), ("chat-send", "capitano", "id-1")):
         done = subprocess.run(
             [str(wrapper), "desktop-chat", *args], env=env, input="ciao", text=True, capture_output=True, timeout=10, check=False
         )
         assert done.returncode == 2, (args, done.stderr)
-    assert "agent_chat.py" not in log.read_text(encoding="utf-8")
+    assert "JHT_DESKTOP_CHAT_FIXED=1" in wrapper.read_text(encoding="utf-8")
 
 
 @pytest.mark.parametrize(

@@ -31,6 +31,9 @@ set -euo pipefail
 JHT_UPGRADE_PROTOCOL=1
 JHT_HOST_RUNTIME_PROTOCOL=1
 JHT_DESKTOP_CHAT_PROTOCOL=1
+# This wrapper has the chat actions `desktop-chat read` and `desktop-chat chat-send`. The app asks for this
+# marker before it calls them, so a wrapper without it is told apart by name, never by an exit code.
+JHT_DESKTOP_CHAT_FIXED=1
 JHT_ONBOARDING_SNAPSHOT_PROTOCOL=1
 
 # Sistema e utente non cambiano durante una run: si leggono una volta sola. I
@@ -2220,8 +2223,9 @@ desktop_chat() {
       ;;
     # The chat as ONE script of the container with closed arguments (the script refuses
     # anything outside its lists and alphabets again): `read AGENT [CURSOR]` and
-    # `chat-send AGENT CLIENT_ID`, the text on standard input. A wrapper from before
-    # this answers 2 («no such action») and the app keeps the older actions above.
+    # `chat-send AGENT CLIENT_ID`, the text on standard input. The app calls them only on a wrapper
+    # that carries JHT_DESKTOP_CHAT_FIXED=1; for one that does not, it keeps the older actions above.
+    # Here a 2 is the script's own (python3 says it when the image has no agent_chat.py).
     read)
       [ "$#" -eq 2 ] || [ "$#" -eq 3 ] || return 2
       docker exec -i "$container_id" python3 -I /app/shared/skills/agent_chat.py read "$2" ${3:+"$3"}
