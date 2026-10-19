@@ -25,7 +25,7 @@ const SEND_TIMEOUT: Duration = Duration::from_secs(105);
 /// refuses more again, after cleaning it).
 const MAX_CHAT_STDIN_BYTES: usize = 16 * 1024;
 const REMOTE_CONTAINER_PROBE: &str = r#"set -eu; JHT_BIN="$(command -v jht 2>/dev/null || true)"; [ -n "$JHT_BIN" ] || JHT_BIN="$HOME/.local/bin/jht"; [ -f "$JHT_BIN" ] && [ -x "$JHT_BIN" ] && [ ! -L "$JHT_BIN" ] || exit 70; grep -Fqx 'JHT_DESKTOP_CHAT_PROTOCOL=1' "$JHT_BIN" || exit 70; exec "$JHT_BIN" desktop-chat probe"#;
-const REMOTE_PYTHON_STDIN: &str = r#"set -eu; JHT_BIN="$(command -v jht 2>/dev/null || true)"; [ -n "$JHT_BIN" ] || JHT_BIN="$HOME/.local/bin/jht"; [ -f "$JHT_BIN" ] && [ -x "$JHT_BIN" ] && [ ! -L "$JHT_BIN" ] || exit 70; grep -Fqx 'JHT_DESKTOP_CHAT_PROTOCOL=1' "$JHT_BIN" || exit 70; exec "$JHT_BIN" desktop-chat python"#;
+pub(crate) const REMOTE_PYTHON_STDIN: &str = r#"set -eu; JHT_BIN="$(command -v jht 2>/dev/null || true)"; [ -n "$JHT_BIN" ] || JHT_BIN="$HOME/.local/bin/jht"; [ -f "$JHT_BIN" ] && [ -x "$JHT_BIN" ] && [ ! -L "$JHT_BIN" ] || exit 70; grep -Fqx 'JHT_DESKTOP_CHAT_PROTOCOL=1' "$JHT_BIN" || exit 70; exec "$JHT_BIN" desktop-chat python"#;
 
 const CHAT_READ_PY: &str = r#"import hashlib,json,os,sys
 req=json.loads(sys.stdin.readline())
@@ -568,7 +568,7 @@ fn run_connection(
         }
         ValidatedHost::Vps { .. } => {
             let selected = connection.app.as_ref().ok_or_else(|| failure("existing_team_runtime_target_changed"))
-                .and_then(|app| selected_or_own(app, &connection.scope, &connection.host).map_err(failure))?;
+                .and_then(|app| existing_team_runtime::selected_or_own(app, &connection.scope, &connection.host).map_err(failure))?;
             if selected.as_ref().map(|target| (&target.team_id, &target.runtime)) != connection.runtime.as_ref().map(|target| (&target.team_id, &target.runtime)) {
                 return Err(failure("existing_team_runtime_target_changed"));
             }
@@ -619,7 +619,7 @@ fn connect_impl(
 ) -> Result<Connection, DirectChatError> {
     let validated = crate::runtime_host::validate_host_for_scope(app, &host, &scope).map_err(failure)?;
     let runtime = if matches!(validated, ValidatedHost::Vps { .. }) {
-        selected_or_own(app, &scope, &host).map_err(failure)?
+        existing_team_runtime::selected_or_own(app, &scope, &host).map_err(failure)?
     } else { None };
     let (local_wrapper, local_owner_marker, control_path, tunnel) = match &validated {
         ValidatedHost::Local => (
@@ -816,25 +816,6 @@ fn run_python(
     );
     input.zeroize();
     result
-}
-
-/// The pinned target of an existing team, or `None` for a VPS the person made with the app: it has
-/// no existing-team selection to find (`selected` refuses a VPS without one), it is theirs and
-/// connected in full, and its chat goes through the host's wrapper. Only a scope with no candidate
-/// and no selection is theirs: a half-saved existing team stays the refusal it is.
-fn selected_or_own(
-    app: &tauri::AppHandle,
-    scope: &AccountScope,
-    host: &ExecutionHost,
-) -> Result<Option<ActivatedTarget>, &'static str> {
-    match existing_team_runtime::selected(app, scope, host) {
-        Err("existing_team_runtime_selection_required")
-            if existing_team_runtime::root(app).is_ok_and(|root| existing_team_runtime::own_vps_at(&root, scope)) =>
-        {
-            Ok(None)
-        }
-        other => other,
-    }
 }
 
 /// The host's wrapper, run on a VPS that was never pinned: the checks of `REMOTE_PYTHON_STDIN`

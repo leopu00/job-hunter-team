@@ -18,7 +18,7 @@
 use crate::{
     account_scope::{AccountScope, AccountScopeState},
     direct_chat,
-    existing_team_runtime::{hex_encode, python_command, selected},
+    existing_team_runtime::hex_encode,
     runtime_host::run_ssh_command,
 };
 use serde::{Deserialize, Serialize};
@@ -337,12 +337,7 @@ pub(crate) fn agents_read_for_scope(app: &tauri::AppHandle, scope: &AccountScope
         Ok(validated) => validated,
         Err(error) => return failure(error),
     };
-    let target = match selected(app, scope, &host) {
-        Ok(Some(target)) => target,
-        Ok(None) => return failure("existing_team_runtime_required"),
-        Err(error) => return failure(error),
-    };
-    let command = match python_command(&target.runtime) {
+    let command = match crate::existing_team_runtime::read_command(app, scope, &host) {
         Ok(command) => command,
         Err(error) => return failure(error),
     };

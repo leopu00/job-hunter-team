@@ -2697,7 +2697,7 @@ pub(crate) async fn onboarding_snapshot(
             .lock_expected(&worker_expected)
             .map_err(failure)?;
         let validated = crate::runtime_host::validate_host_for_scope(&app, &host, &worker_expected).map_err(failure)?;
-        match crate::existing_team_runtime::selected(&app, &worker_expected, &host).map_err(failure)? {
+        match crate::existing_team_runtime::selected_or_own(&app, &worker_expected, &host).map_err(failure)? {
             Some(target) => {
                 let command = crate::existing_team_runtime::snapshot_command(&target.runtime).map_err(failure)?;
                 let result = run_ssh_command(&validated, &command, None, SNAPSHOT_TIMEOUT, None).map_err(failure)?;
@@ -2728,7 +2728,7 @@ pub(crate) async fn onboarding_resume_snapshot(
         let host =
             crate::direct_chat::load_persisted_host(&app, &worker_expected).map_err(failure)?;
         let validated = crate::runtime_host::validate_host_for_scope(&app, &host, &worker_expected).map_err(failure)?;
-        match crate::existing_team_runtime::selected(&app, &worker_expected, &host).map_err(failure)? {
+        match crate::existing_team_runtime::selected_or_own(&app, &worker_expected, &host).map_err(failure)? {
             Some(target) => {
                 let command = crate::existing_team_runtime::snapshot_command(&target.runtime).map_err(failure)?;
                 let result = run_ssh_command(&validated, &command, None, SNAPSHOT_TIMEOUT, None).map_err(failure)?;

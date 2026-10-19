@@ -1123,6 +1123,53 @@ pub(crate) fn selected(
     selected_at(&root(app)?, scope, host)
 }
 
+/// The pinned target of an existing team, or `None` for a VPS the person made with the app: it has
+/// no existing-team selection to find (`selected` refuses a VPS without one), it is theirs and
+/// connected in full, and it is reached through the host's wrapper. Only a scope with no candidate
+/// and no selection is theirs (`own_vps_at`, read from the files, never from the renderer): a
+/// half-saved existing team stays the refusal it is. Every reader of a VPS team goes through here.
+pub(crate) fn selected_or_own(
+    app: &tauri::AppHandle,
+    scope: &AccountScope,
+    host: &ExecutionHost,
+) -> Result<Option<ActivatedTarget>, &'static str> {
+    selected_or_own_at(&root(app)?, scope, host)
+}
+
+pub(crate) fn selected_or_own_at(
+    root: &Path,
+    scope: &AccountScope,
+    host: &ExecutionHost,
+) -> Result<Option<ActivatedTarget>, &'static str> {
+    match selected_at(root, scope, host) {
+        Err("existing_team_runtime_selection_required") if own_vps_at(root, scope) => Ok(None),
+        other => other,
+    }
+}
+
+/// The command a reader of the team's data runs, always with the same input (the app's own script
+/// in hex, then the request): the pinned container of an existing team, or, on the VPS the app set
+/// up itself, its host's wrapper on the python channel the chat uses (only when the wrapper carries
+/// the chat's protocol line; the channel reads the attested container and never starts it).
+pub(crate) fn read_command_for(
+    selected: Option<ActivatedTarget>,
+    host: &ExecutionHost,
+) -> Result<String, &'static str> {
+    match selected {
+        Some(target) => python_command(&target.runtime),
+        None if matches!(host, ExecutionHost::Vps { .. }) => Ok(crate::direct_chat::REMOTE_PYTHON_STDIN.to_owned()),
+        None => Err("existing_team_runtime_required"),
+    }
+}
+
+pub(crate) fn read_command(
+    app: &tauri::AppHandle,
+    scope: &AccountScope,
+    host: &ExecutionHost,
+) -> Result<String, &'static str> {
+    read_command_for(selected_or_own(app, scope, host)?, host)
+}
+
 pub(crate) fn selected_at(
     root: &Path,
     scope: &AccountScope,
@@ -1547,12 +1594,7 @@ pub(crate) fn positions_read_for_scope(
         Ok(validated) => validated,
         Err(error) => return positions_failure(error),
     };
-    let target = match selected(app, scope, &host) {
-        Ok(Some(target)) => target,
-        Ok(None) => return positions_failure("existing_team_runtime_required"),
-        Err(error) => return positions_failure(error),
-    };
-    let command = match python_command(&target.runtime) {
+    let command = match read_command(app, scope, &host) {
         Ok(command) => command,
         Err(error) => return positions_failure(error),
     };
@@ -1902,6 +1944,36 @@ mod tests {
             chat_command(&broken, &ChatOperation::Read { agent: "capitano", cursor: None }),
             Err("existing_team_runtime_candidate_invalid")
         );
+    }
+
+    #[test]
+    fn every_reader_of_the_vps_the_app_set_up_goes_through_its_wrapper_and_an_existing_team_through_its_pin() {
+        let root = std::env::temp_dir().join(format!("jht-own-vps-read-{}-{}", std::process::id(), line!()));
+        let _ = fs::remove_dir_all(&root);
+        let scope = AccountScope::synthetic(b"scope-own-read");
+        let vps = ExecutionHost::Vps {
+            address: "203.0.113.7".into(),
+            user: "jht".into(),
+            port: 22,
+            key_path: "/keys/id_ed25519".into(),
+        };
+        // the VPS the app set up: nothing saved for the scope, its reads go to the host's wrapper
+        assert!(matches!(selected_or_own_at(&root, &scope, &vps), Ok(None)));
+        let own = read_command_for(None, &vps).unwrap();
+        assert_eq!(own, crate::direct_chat::REMOTE_PYTHON_STDIN);
+        assert!(own.contains("grep -Fqx 'JHT_DESKTOP_CHAT_PROTOCOL=1' \"$JHT_BIN\""));
+        assert!(own.ends_with("exec \"$JHT_BIN\" desktop-chat python"));
+        // an existing team keeps today's command, the pinned container
+        let pinned = ActivatedTarget::synthetic_for_tests();
+        assert_eq!(read_command_for(Some(pinned.clone()), &vps).unwrap(), python_command(&pinned.runtime).unwrap());
+        // a half-saved existing team (a candidate without its selection) stays refused
+        let dir = account_dir(&root, &scope);
+        fs::create_dir_all(&dir).unwrap();
+        fs::write(dir.join(CANDIDATE_FILE), b"{}").unwrap();
+        assert_eq!(selected_or_own_at(&root, &scope, &vps).err(), Some("existing_team_runtime_selection_required"));
+        // this computer is never «a VPS of one's own»: no wrapper command for it
+        assert_eq!(read_command_for(None, &ExecutionHost::Local), Err("existing_team_runtime_required"));
+        let _ = fs::remove_dir_all(&root);
     }
 
     #[test]
