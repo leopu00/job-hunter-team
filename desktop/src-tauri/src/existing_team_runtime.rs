@@ -1397,12 +1397,40 @@ pub(crate) fn positions_read_for_scope(
         Ok(command) => command,
         Err(error) => return positions_failure(error),
     };
-    positions_read_with(
-        &request,
-        &request_bytes,
-        |input| run_ssh_command(&validated, &command, Some(input), READ_TIMEOUT, None),
-        || crate::runtime_host::host_key_matches_pin(&validated),
-    )
+    // A key found changed stays blocked for this scope and VPS until the person confirms it again: no `ssh`
+    // that is refused and no `ssh-keyscan` per read (the memory is vps_link's).
+    let (block_key, pinned) = match &validated {
+        crate::runtime_host::ValidatedHost::Vps { address, port, .. } => (
+            Some(vps_link::block_key(scope.digest(), address, *port)),
+            crate::runtime_host::pinned_host_fingerprint(&validated).ok(),
+        ),
+        crate::runtime_host::ValidatedHost::Local => (None, None),
+    };
+    read_unless_blocked(block_key, pinned, || {
+        positions_read_with(
+            &request,
+            &request_bytes,
+            |input| run_ssh_command(&validated, &command, Some(input), READ_TIMEOUT, None),
+            || crate::runtime_host::host_key_matches_pin(&validated),
+        )
+    })
+}
+
+/// Runs the read unless this VPS's key is already known to have changed; remembers the block when the read
+/// finds it. `pinned` is the fingerprint of the pin the read goes out against.
+fn read_unless_blocked(block_key: Option<String>, pinned: Option<String>, read: impl FnOnce() -> Value) -> Value {
+    if let Some(key) = &block_key {
+        if vps_link::remembered_block(key, pinned.as_deref()) {
+            return vps_link::blocked_reply();
+        }
+    }
+    let reply = read();
+    if vps_link::is_key_changed(&reply) {
+        if let (Some(key), Some(pinned)) = (&block_key, &pinned) {
+            vps_link::remember_block(key, pinned);
+        }
+    }
+    reply
 }
 
 /// The read once the host and the pinned target are known: one SSH run, then
@@ -1816,6 +1844,42 @@ mod tests {
         // a pin file that no longer reads blocks before anything runs
         assert_eq!(positions_failure("host_key_mismatch"), failure("host_key_mismatch", "blocked"));
         assert_eq!(positions_failure("host_not_configured"), failure("host_not_configured", "application"));
+    }
+
+    #[test]
+    fn once_the_key_is_found_changed_the_next_reads_do_not_go_out_until_the_pin_changes() {
+        use std::cell::Cell;
+        let key = Some(vps_link::block_key("scope-read-test", "vps.example", 22));
+        let pin = Some("SHA256:confirmed".to_string());
+        let goes_out = Cell::new(0);
+        let blocked_read = || {
+            goes_out.set(goes_out.get() + 1);
+            vps_link::blocked_reply()
+        };
+        // The first read goes out (ssh, then one keyscan) and finds the key changed.
+        let first = read_unless_blocked(key.clone(), pin.clone(), blocked_read);
+        assert!(vps_link::is_key_changed(&first));
+        assert_eq!(goes_out.get(), 1);
+        // The next ones answer at once: no ssh, no keyscan.
+        for _ in 0..3 {
+            let reply = read_unless_blocked(key.clone(), pin.clone(), blocked_read);
+            assert!(vps_link::is_key_changed(&reply));
+        }
+        assert_eq!(goes_out.get(), 1, "a read that is blocked is not run");
+        // The person confirmed the new key: the pin is another one and the read goes out again.
+        let reopened = read_unless_blocked(key.clone(), Some("SHA256:reconfirmed".to_string()), || {
+            goes_out.set(goes_out.get() + 1);
+            json!({"ok": true})
+        });
+        assert_eq!(reopened, json!({"ok": true}));
+        assert_eq!(goes_out.get(), 2);
+        // A network failure is never remembered as a block.
+        let net = read_unless_blocked(key.clone(), Some("SHA256:reconfirmed".to_string()), || {
+            vps_link::failure_reply(vps_link::LinkOutcome { kind: vps_link::LinkKind::Network, code: "timeout" })
+        });
+        assert_eq!(net["kind"], "network");
+        let after_net = read_unless_blocked(key, Some("SHA256:reconfirmed".to_string()), || json!({"ok": true}));
+        assert_eq!(after_net, json!({"ok": true}));
     }
 
     #[test]

@@ -10,6 +10,8 @@
 
 use crate::runtime_host::ProcessResult;
 use serde_json::{json, Value};
+use std::collections::HashMap;
+use std::sync::{Mutex, OnceLock};
 
 /// The `ssh` client itself could not connect or was refused.
 pub(crate) const SSH_EXIT: i32 = 255;
@@ -91,6 +93,53 @@ pub(crate) fn classify_setup_failure(code: &'static str) -> LinkOutcome {
     }
 }
 
+/// The VPS key found changed, remembered per account scope and VPS until the person confirms it again.
+/// The block used to live only in the app's view: reopening it started over, and every read repeated an
+/// `ssh` that is refused and a `ssh-keyscan` towards a host already known to have changed. The value is the
+/// fingerprint of the PIN the block was found against: a new pin (the person looked at the key again and
+/// confirmed it) is a different value, and the memory lets go of it.
+fn blocked_keys() -> &'static Mutex<HashMap<String, String>> {
+    static BLOCKED: OnceLock<Mutex<HashMap<String, String>>> = OnceLock::new();
+    BLOCKED.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
+pub(crate) fn block_key(scope_digest: &str, address: &str, port: u16) -> String {
+    format!("{scope_digest}|{address}:{port}")
+}
+
+pub(crate) fn remember_block(key: &str, pinned_fingerprint: &str) {
+    blocked_keys()
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .insert(key.to_string(), pinned_fingerprint.to_string());
+}
+
+/// Whether a read towards this VPS must not go out: the key is remembered as changed and the pin is still
+/// the one it was found against. A different (or unreadable) pin forgets the block: the person has been
+/// through the confirmation again, and the next read finds out by itself.
+pub(crate) fn remembered_block(key: &str, pinned_now: Option<&str>) -> bool {
+    let mut blocked = blocked_keys().lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+    match (blocked.get(key), pinned_now) {
+        (Some(found), Some(now)) if found == now => true,
+        (Some(_), _) => {
+            blocked.remove(key);
+            false
+        }
+        (None, _) => false,
+    }
+}
+
+/// The reply of a read that was not even tried: the key is already known to have changed.
+pub(crate) fn blocked_reply() -> Value {
+    failure_reply(outcome(LinkKind::Blocked, "host_key_changed"))
+}
+
+/// Whether a reply of a read says the VPS key changed.
+pub(crate) fn is_key_changed(reply: &Value) -> bool {
+    reply.get("kind").and_then(Value::as_str) == Some(LinkKind::Blocked.as_str())
+        && reply.get("error").and_then(Value::as_str) == Some("host_key_changed")
+}
+
 /// The reply of a failed read: its code and its kind.
 pub(crate) fn failure_reply(outcome: LinkOutcome) -> Value {
     json!({"ok": false, "error": outcome.code, "kind": outcome.kind.as_str()})
@@ -165,6 +214,28 @@ mod tests {
             classify_failure(&exited(PIN_EXIT), no_rescan, "positions_unavailable"),
             outcome(LinkKind::Version, "existing_team_runtime_changed")
         );
+    }
+
+    #[test]
+    fn a_changed_key_is_remembered_for_its_scope_and_vps_until_the_pin_changes() {
+        let key = block_key("scope-memory-test-a", "vps.example", 22);
+        let other_scope = block_key("scope-memory-test-b", "vps.example", 22);
+        let other_vps = block_key("scope-memory-test-a", "other.example", 22);
+        remember_block(&key, "SHA256:old");
+        assert!(remembered_block(&key, Some("SHA256:old")));
+        assert!(remembered_block(&key, Some("SHA256:old")), "asking does not spend it");
+        assert!(!remembered_block(&other_scope, Some("SHA256:old")));
+        assert!(!remembered_block(&other_vps, Some("SHA256:old")));
+        // the person confirmed the new key: another pin, and the memory lets go
+        assert!(!remembered_block(&key, Some("SHA256:new")));
+        assert!(!remembered_block(&key, Some("SHA256:old")), "and it does not come back");
+        // an unreadable pin is not a block we can stand on
+        remember_block(&key, "SHA256:old");
+        assert!(!remembered_block(&key, None));
+        assert!(blocked_reply().get("error").is_some());
+        assert!(is_key_changed(&blocked_reply()));
+        assert!(!is_key_changed(&failure_reply(outcome(LinkKind::Blocked, "host_key_mismatch"))));
+        assert!(!is_key_changed(&failure_reply(outcome(LinkKind::Network, "ssh_unavailable"))));
     }
 
     #[test]
