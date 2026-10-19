@@ -88,6 +88,14 @@ describe("Profilo on an existing team read only", () => {
     expect(noticeIds()).toEqual([]);
   });
 
+  it("tells the assistant's summary section in the app's language, not in the Italian it is stored in", async () => {
+    document.cookie = "NEXT_LOCALE=en; path=/";
+    await open();
+    const view = await screen.findByTestId("profile-view");
+    expect(within(view).getByText("About me")).toBeInTheDocument();
+    expect(view).not.toHaveTextContent(/Chi sono/i);
+  });
+
   it("shows editing disabled with the reason, and no control that changes anything", async () => {
     await open();
     await screen.findByTestId("profile-view");
