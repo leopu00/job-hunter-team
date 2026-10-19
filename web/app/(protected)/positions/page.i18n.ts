@@ -342,6 +342,17 @@ export const T = {
     fr: "Aucun poste trouvé avec ces filtres.",
     pt: "Nenhuma vaga encontrada com estes filtros.",
   },
+  // Nessun filtro attivo e niente da mostrare: la vista predefinita tiene solo le
+  // posizioni con un punteggio, quindi non si dice «nessuna posizione trovata».
+  no_positions_yet: {
+    it: "Nessuna posizione da mostrare: la squadra non ne ha ancora trovate con un punteggio.",
+    en: "Nothing to show yet: the team has not found any positions with a score yet.",
+    hu: "Még nincs mit mutatni: a csapat még nem talált pontszámmal rendelkező állást.",
+    es: "Todavía no hay nada que mostrar: el equipo aún no ha encontrado posiciones con puntuación.",
+    de: "Noch nichts anzuzeigen: Das Team hat noch keine Stellen mit Punktzahl gefunden.",
+    fr: "Rien à afficher pour l’instant : l’équipe n’a pas encore trouvé de postes avec un score.",
+    pt: "Ainda não há nada para mostrar: a equipa ainda não encontrou vagas com pontuação.",
+  },
   prev: {
     it: "Precedenti",
     en: "Previous",

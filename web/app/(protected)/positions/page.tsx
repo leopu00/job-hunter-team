@@ -331,6 +331,27 @@ export default async function PositionsPage({ searchParams }: PageProps) {
   const windowedEmpty =
     listWindow.windowed && fbSel.length > 0 && !fbSel.includes("none");
 
+  // Una lista vuota senza alcun filtro non è «nessun risultato con questi
+  // filtri»: è la squadra che non ha ancora niente da mostrare.
+  const filtersActive =
+    selectedStates.length > 0 ||
+    remotes.length > 0 ||
+    sources.length > 0 ||
+    verdicts.length > 0 ||
+    fbSel.length > 0 ||
+    families.length > 0 ||
+    countries.length > 0 ||
+    cities.length > 0 ||
+    scoreBands.length > 0 ||
+    unscored ||
+    criticBands.length > 0 ||
+    criticUnscored ||
+    writeRequested !== undefined ||
+    query !== "";
+  const emptyText = filtersActive
+    ? tr("no_positions_filtered")
+    : tr("no_positions_yet");
+
   // Pagination computed values
   const totalResults = windowedEmpty
     ? 0
@@ -531,7 +552,7 @@ export default async function PositionsPage({ searchParams }: PageProps) {
         <div className="md:hidden flex flex-col gap-2">
           {visiblePositions.length === 0 ? (
             <div className="rounded-lg border border-[var(--color-border)] px-4 py-12 text-center text-[var(--color-dim)] text-[11px]">
-              {tr("no_positions_filtered")}
+              {emptyText}
             </div>
           ) : (
             visiblePositions.map((p: PositionWithScore) => (
@@ -767,7 +788,7 @@ export default async function PositionsPage({ searchParams }: PageProps) {
                       colSpan={visibleCols.size}
                       className="px-4 py-12 text-center text-[var(--color-dim)] text-[11px]"
                     >
-                      {tr("no_positions_filtered")}
+                      {emptyText}
                     </td>
                   </tr>
                 ) : (

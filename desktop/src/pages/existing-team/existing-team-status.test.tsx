@@ -73,6 +73,25 @@ const ROWS = ["runtimeInstalled", "containerRunning", "providerConfigured", "pro
 const value = (field: string) => screen.getByTestId(`team-status-${field}`).getAttribute("data-value");
 
 describe("Squadra on an existing team read only", () => {
+  it("says in one line on top that the team is off when its container is stopped, before the rows", async () => {
+    answer = async () => realSnapshotReply({ containerRunning: false });
+    navigate("/team", { replace: true });
+    render(<Shell />);
+    const summary = await screen.findByTestId("team-status-summary");
+    expect(summary).toHaveTextContent(T.summaryOff);
+    // above the rows it summarises
+    const rows = screen.getByTestId("team-status-runtimeInstalled");
+    expect(summary.compareDocumentPosition(rows) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(value("containerRunning")).toBe("no");
+  });
+
+  it("has no such line while the container runs", async () => {
+    navigate("/team", { replace: true });
+    render(<Shell />);
+    await screen.findByTestId("team-status-read");
+    expect(screen.queryByTestId("team-status-summary")).not.toBeInTheDocument();
+  });
+
   it("is in the navigation, reads the state when opened and draws the eight rows, yes or no, with what each means", async () => {
     navigate("/team", { replace: true });
     render(<Shell />);

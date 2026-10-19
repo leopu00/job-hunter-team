@@ -229,6 +229,36 @@ export const T: Record<string, Entry> = {
     fr: "Notes libres",
     pt: "Notas livres",
   },
+  // Titles the Assistant's summaries are stored under (profile-yaml-map.ts,
+  // SUMMARY_TITLES): the stored title is Italian, the page tells it in the
+  // person's language.
+  sec_about: {
+    it: "Chi sono",
+    en: "About me",
+    hu: "Rólam",
+    es: "Sobre mí",
+    de: "Über mich",
+    fr: "À propos de moi",
+    pt: "Sobre mim",
+  },
+  sec_goals: {
+    it: "Obiettivi",
+    en: "Goals",
+    hu: "Célok",
+    es: "Objetivos",
+    de: "Ziele",
+    fr: "Objectifs",
+    pt: "Objetivos",
+  },
+  sec_work_preferences: {
+    it: "Preferenze di lavoro",
+    en: "Work preferences",
+    hu: "Munkahelyi preferenciák",
+    es: "Preferencias de trabajo",
+    de: "Arbeitspräferenzen",
+    fr: "Préférences de travail",
+    pt: "Preferências de trabalho",
+  },
   cert_label: {
     it: "Certificazioni",
     en: "Certifications",

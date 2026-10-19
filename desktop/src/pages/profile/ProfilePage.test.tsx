@@ -71,7 +71,7 @@ describe("ProfilePage", () => {
     expect(screen.getByText("Laurea di prova")).toBeInTheDocument();
     const exportLink = document.querySelector('a[download="profilo-candidato-' + new Date().toISOString().slice(0, 10) + '.json"]');
     expect(exportLink).toHaveAttribute("href", "blob:profile");
-    expect(screen.getByText(/sono cifrati sul server/)).toHaveTextContent("phone");
+    expect(screen.getByText(/è cifrato sul server/)).toHaveTextContent("Un contatto (phone)");
   });
 });
 

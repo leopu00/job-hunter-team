@@ -5,7 +5,7 @@ import { useLocale } from "@/lib/use-locale";
 import { appLocale } from "../../lib/app-locale";
 import { describeError } from "../../lib/error-catalog";
 import type { AgentStatuses, DeptId, OfficeClick, OfficeLayout, OfficeSnapshot } from "../contract";
-import { fill, officeText, type OfficeText } from "../office.i18n";
+import { fill, ofCount, officeText, type OfficeText } from "../office.i18n";
 import { OWN_KEYS_ATTR } from "../scene/controls";
 import { tagOf } from "../status";
 import {
@@ -227,10 +227,11 @@ function AgentBody({ target, layout, statuses, client, onNavigate }: OfficePanel
 function PhaseBody({ dept, layout, snapshot, client, source = "cloud", onNavigate }: OfficePanelProps & { dept: DeptId }) {
   const { data, error } = useLoad<PanelPosition[]>(() => (source === "vps" ? vpsPanelLoaders.phase(dept) : loadPhase(client, dept)));
   const count = snapshot?.piles[dept];
-  const t = officeText(useLocale());
+  const locale = useLocale();
+  const t = officeText(locale);
   return (
     <>
-      <Heading title={deptName(layout, dept)} sub={count == null ? t.phaseSub : fill(t.phaseSubCount, { count })} />
+      <Heading title={deptName(layout, dept)} sub={count == null ? t.phaseSub : ofCount(locale, count, t.phaseSubCount)} />
       {!data ? (
         <Loading error={error} source={source} />
       ) : data.length === 0 ? (
@@ -239,7 +240,7 @@ function PhaseBody({ dept, layout, snapshot, client, source = "cloud", onNavigat
         <>
           <PositionList positions={data} onNavigate={onNavigate} />
           {count != null && count > data.length && (
-            <p className="m-0 mt-2 text-[10px] text-[var(--color-dim)]">{fill(t.mostRecent, { count: Math.min(data.length, PANEL_LIST_MAX) })}</p>
+            <p className="m-0 mt-2 text-[10px] text-[var(--color-dim)]">{ofCount(locale, Math.min(data.length, PANEL_LIST_MAX), t.mostRecent)}</p>
           )}
         </>
       )}
@@ -254,12 +255,13 @@ function DepartmentBody({ dept, layout, snapshot, statuses, client, source = "cl
   const d = layout.departments.find((x) => x.id === dept);
   const agents = (snapshot?.roster ?? []).filter((a) => DEPT_OF_ROLE[a.role] === dept);
   const inbox = snapshot?.piles[dept];
-  const t = officeText(useLocale());
+  const locale = useLocale();
+  const t = officeText(locale);
   return (
     <>
       <Heading title={deptName(layout, dept)} sub={d?.tagline} />
       <Section title={t.incoming}>
-        <p className="m-0">{inbox == null ? "—" : fill(t.onThePile, { count: inbox })}</p>
+        <p className="m-0">{inbox == null ? "—" : ofCount(locale, inbox, t.onThePile)}</p>
         <SecondaryLink label={t.positionsOnThePile} onClick={() => onOpen({ kind: "pile", dept })} />
       </Section>
       <Section title={t.departmentAgents}>
@@ -327,7 +329,8 @@ function CvBody({ client, source = "cloud", onNavigate }: OfficePanelProps) {
   const { data, error } = useLoad<CvShelfData>(() => (source === "vps" ? vpsPanelLoaders.cvShelf() : loadCvShelf(client)));
   const scored = (data?.list ?? []).map((p) => p.score).filter((n): n is number => typeof n === "number");
   const avg = scored.length ? Math.round(scored.reduce((a, b) => a + b, 0) / scored.length) : null;
-  const t = officeText(useLocale());
+  const locale = useLocale();
+  const t = officeText(locale);
   return (
     <>
       <Heading title={t.cvTitle} sub={t.cvSub} />
@@ -341,7 +344,7 @@ function CvBody({ client, source = "cloud", onNavigate }: OfficePanelProps) {
             <Kpi label={t.kpiNoVerdict} value={data.unreviewed} />
             <Kpi label={t.kpiAverage} value={avg ?? "—"} />
           </div>
-          {avg != null && <p className="m-0 mb-2 text-[10px] text-[var(--color-dim)]">{fill(t.averageNote, { count: scored.length })}</p>}
+          {avg != null && <p className="m-0 mb-2 text-[10px] text-[var(--color-dim)]">{ofCount(locale, scored.length, t.averageNote)}</p>}
           {data.list.length === 0 ? (
             <p className="m-0 text-[11px] text-[var(--color-muted)]">{t.noCv}</p>
           ) : (
@@ -381,7 +384,8 @@ function BoardBody({ client, source = "cloud", onNavigate }: OfficePanelProps) {
 }
 
 function PlacesBody({ client, source = "cloud", onNavigate }: OfficePanelProps) {
-  const t = officeText(useLocale());
+  const locale = useLocale();
+  const t = officeText(locale);
   const { data, error } = useLoad<PlacesData>(() => (source === "vps" ? vpsPanelLoaders.places() : loadPlaces(client)));
   return (
     <>
@@ -392,7 +396,7 @@ function PlacesBody({ client, source = "cloud", onNavigate }: OfficePanelProps) 
         <p className="m-0 text-[11px] text-[var(--color-muted)]">{t.noPlaces}</p>
       ) : (
         <>
-          <p className="m-0 mb-2 text-[11px] text-[var(--color-muted)]">{fill(t.located, { count: data.located })}</p>
+          <p className="m-0 mb-2 text-[11px] text-[var(--color-muted)]">{ofCount(locale, data.located, t.located)}</p>
           <ul className="m-0 list-none p-0">
             {data.places.map((p) => (
               <li key={p.place} className="flex items-baseline justify-between border-b border-[var(--color-border)] py-1 last:border-0">

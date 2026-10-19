@@ -1,7 +1,11 @@
 import Link from "next/link";
 import type { CandidateProfile } from "@/lib/types";
 import type { Locale } from "@/i18n/config";
-import { getProfileT, languageLevelLabel } from "@/lib/profile-i18n";
+import {
+  getProfileT,
+  languageLevelLabel,
+  type ProfileT,
+} from "@/lib/profile-i18n";
 import ProfileStats from "@/app/components/ProfileStats";
 import ProfileEditButton from "@/app/components/ProfileEditButton";
 import RevealableContactRow from "@/app/components/RevealableContactRow";
@@ -928,7 +932,7 @@ export default function ProfileView({
                 Data-driven: ogni kind ha il suo renderer, un blocco custom nuovo
                 appare senza toccare codice. */}
             {extraBlocks.map((b) => (
-              <ProfileSection key={b.key} id={b.key} title={b.title}>
+              <ProfileSection key={b.key} id={b.key} title={blockTitle(b, t)}>
                 <ProfileBlockRenderer kind={b.kind} content={b.content} />
               </ProfileSection>
             ))}
@@ -937,6 +941,21 @@ export default function ProfileView({
       </div>
     </>
   );
+}
+
+// The Assistant's summaries are stored under an Italian title (profile-yaml-map.ts):
+// when a block still carries that title, the page tells it in the person's
+// language; a title the person (or another producer) chose is shown as stored.
+const SUMMARY_TITLE_KEYS: Record<string, { stored: string; key: string }> = {
+  about: { stored: "Chi sono", key: "sec_about" },
+  goals: { stored: "Obiettivi", key: "sec_goals" },
+  preferences: { stored: "Preferenze di lavoro", key: "sec_work_preferences" },
+  strengths: { stored: "Punti di forza", key: "sec_strengths" },
+};
+
+function blockTitle(b: ProfileBlock, t: ProfileT): string {
+  const known = SUMMARY_TITLE_KEYS[b.key];
+  return known && b.title === known.stored ? t(known.key) : b.title;
 }
 
 function ProfileSection({

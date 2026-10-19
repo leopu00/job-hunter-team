@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
+import { appLocale } from "../lib/app-locale";
+import { fill } from "../lib/text-slots";
 import {
   applyTheme,
   persistTheme,
@@ -6,6 +8,7 @@ import {
   THEMES,
   type Theme,
 } from "./theme";
+import { THEME_TEXT } from "./theme.i18n";
 
 const MENU_ID = "desktop-theme-menu";
 
@@ -40,8 +43,8 @@ export default function ThemePicker() {
   const pickerRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
 
-  const label =
-    THEMES.find((option) => option.value === theme)?.label ?? "Scuro";
+  const text = THEME_TEXT[appLocale()];
+  const label = text.names[theme];
 
   useEffect(() => applyTheme(theme), [theme]);
 
@@ -99,7 +102,7 @@ export default function ThemePicker() {
         ref={triggerRef}
         type="button"
         className="theme-picker__trigger"
-        aria-label={`Tema: ${label}. Cambia tema`}
+        aria-label={fill(text.trigger, { name: label })}
         aria-haspopup="menu"
         aria-expanded={open}
         aria-controls={open ? MENU_ID : undefined}
@@ -112,9 +115,9 @@ export default function ThemePicker() {
           id={MENU_ID}
           className="theme-picker__menu"
           role="menu"
-          aria-label="Tema dell'app"
+          aria-label={text.menu}
         >
-          <span className="theme-picker__heading">Tema</span>
+          <span className="theme-picker__heading">{text.heading}</span>
           {THEMES.map((option, index) => (
             <button
               key={option.value}
@@ -132,7 +135,7 @@ export default function ThemePicker() {
               >
                 <i />
               </span>
-              <span>{option.label}</span>
+              <span>{text.names[option.value]}</span>
               <span className="theme-picker__check" aria-hidden="true">
                 {theme === option.value ? "✓" : ""}
               </span>

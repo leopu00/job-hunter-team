@@ -10,6 +10,8 @@ export interface FieldText {
 export interface ExistingTeamStatusText {
   title: string;
   intro: string;
+  /** One line on top, when the VPS says the container is stopped: no agent can be working. */
+  summaryOff: string;
   yes: string;
   no: string;
   refresh: string;
@@ -35,6 +37,7 @@ export const EXISTING_TEAM_STATUS_TEXT: Record<Locale, ExistingTeamStatusText> =
   it: {
     title: "Squadra",
     intro: "Lo stato della squadra sulla VPS, letto adesso con un comando di sola lettura. Le azioni sui dati restano disabilitate; l’avvio dell’assistente è separato e chiede una conferma.",
+    summaryOff: "La squadra è spenta: il container non è acceso, quindi nessun agente lavora. Le righe qui sotto dicono cosa risulta sulla VPS.",
     yes: "Sì",
     no: "No",
     refresh: "Aggiorna",
@@ -64,6 +67,7 @@ export const EXISTING_TEAM_STATUS_TEXT: Record<Locale, ExistingTeamStatusText> =
   en: {
     title: "Team",
     intro: "The team’s state on the VPS, read just now with a read-only command. Viewing is read only: actions on data stay disabled; starting the assistant is separate and asks for a confirmation.",
+    summaryOff: "The team is off: its container is stopped, so no agent is working. The rows below say what the VPS reports.",
     yes: "Yes",
     no: "No",
     refresh: "Refresh",
@@ -93,6 +97,7 @@ export const EXISTING_TEAM_STATUS_TEXT: Record<Locale, ExistingTeamStatusText> =
   de: {
     title: "Team",
     intro: "Der Zustand des Teams auf dem VPS, soeben mit einem Lesebefehl gelesen. Die Ansicht ist nur lesend: Aktionen auf Daten bleiben deaktiviert; das Starten des Assistenten ist getrennt und verlangt eine Bestätigung.",
+    summaryOff: "Das Team ist aus: Der Container ist angehalten, daher arbeitet kein Agent. Die Zeilen darunter zeigen, was die VPS meldet.",
     yes: "Ja",
     no: "Nein",
     refresh: "Aktualisieren",
@@ -122,6 +127,7 @@ export const EXISTING_TEAM_STATUS_TEXT: Record<Locale, ExistingTeamStatusText> =
   fr: {
     title: "Équipe",
     intro: "L’état de l’équipe sur le VPS, lu à l’instant avec une commande en lecture seule. La consultation est en lecture seule : les actions sur les données restent désactivées ; le démarrage de l’assistant est distinct et demande une confirmation.",
+    summaryOff: "L’équipe est éteinte : son conteneur est arrêté, donc aucun agent ne travaille. Les lignes ci-dessous disent ce que la VPS rapporte.",
     yes: "Oui",
     no: "Non",
     refresh: "Actualiser",
@@ -151,6 +157,7 @@ export const EXISTING_TEAM_STATUS_TEXT: Record<Locale, ExistingTeamStatusText> =
   es: {
     title: "Equipo",
     intro: "El estado del equipo en el VPS, leído ahora con un comando de solo lectura. La consulta es de solo lectura: las acciones sobre los datos siguen desactivadas; el inicio del asistente es aparte y pide una confirmación.",
+    summaryOff: "El equipo está apagado: su contenedor está detenido, así que ningún agente trabaja. Las filas de abajo dicen lo que informa la VPS.",
     yes: "Sí",
     no: "No",
     refresh: "Actualizar",
@@ -180,6 +187,7 @@ export const EXISTING_TEAM_STATUS_TEXT: Record<Locale, ExistingTeamStatusText> =
   pt: {
     title: "Equipa",
     intro: "O estado da equipa no VPS, lido agora com um comando só de leitura. A consulta é só de leitura: as ações sobre os dados continuam desativadas; o arranque do assistente é separado e pede uma confirmação.",
+    summaryOff: "A equipa está desligada: o contentor está parado, por isso nenhum agente trabalha. As linhas abaixo dizem o que a VPS reporta.",
     yes: "Sim",
     no: "Não",
     refresh: "Atualizar",
@@ -209,6 +217,7 @@ export const EXISTING_TEAM_STATUS_TEXT: Record<Locale, ExistingTeamStatusText> =
   hu: {
     title: "Csapat",
     intro: "A csapat állapota a VPS-en, az imént csak olvasható paranccsal beolvasva. A megtekintés csak olvasható: az adatokon végzett műveletek le vannak tiltva; az asszisztens indítása külön dolog, és megerősítést kér.",
+    summaryOff: "A csapat ki van kapcsolva: a konténere leállt, ezért egy ügynök sem dolgozik. Az alábbi sorok azt mutatják, amit a VPS jelent.",
     yes: "Igen",
     no: "Nem",
     refresh: "Frissítés",

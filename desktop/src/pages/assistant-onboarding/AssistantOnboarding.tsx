@@ -1,6 +1,4 @@
 import { useEffect, useRef, useState } from "react";
-import type { Locale } from "@/i18n/config";
-import type { LocaleDict } from "@/lib/i18n-dict";
 import { useLocale } from "@/lib/use-locale";
 import type {
   AssistantOnboardingPath,
@@ -10,121 +8,29 @@ import type {
 } from "./contract";
 import { INITIAL_ASSISTANT_ONBOARDING_STATE } from "./contract";
 import { DICTATION_LOCALE } from "../messages/direct-chat.i18n";
-import { FIRST_MESSAGE_LABEL, FIRST_MESSAGE_NOTE, FIRST_MESSAGE_PLACEHOLDER, PROFILE_OVERVIEW_COPY } from "./AssistantOnboarding.i18n";
+import { fill } from "../../lib/text-slots";
+import { FIRST_MESSAGE_LABEL, FIRST_MESSAGE_NOTE, FIRST_MESSAGE_PLACEHOLDER } from "./AssistantOnboarding.i18n";
+import { ASSISTANT_GUIDE_TEXT } from "./AssistantOnboarding.guide.i18n";
 import { VoiceInputControl } from "../../voice-input";
 import "./assistant-onboarding.css";
 
-type GuideStep = {
-  eyebrow: string;
-  title: string;
-  message: string | LocaleDict;
-};
-
-const PATH_LABELS: Record<AssistantOnboardingPath, string> = {
-  tour: "Tour guidato",
-  requirements: "Cosa serve",
-  explore: "Esplora",
-};
-
-const GUIDES: Record<AssistantOnboardingPath, readonly GuideStep[]> = {
-  tour: [
-    {
-      eyebrow: "Tappa 01 · orientamento",
-      title: "Parti dalla Dashboard",
-      message:
-        "La Dashboard riunisce ciò che merita attenzione. Da lì puoi entrare nelle aree di lavoro senza perdere il filo.",
-    },
-    {
-      eyebrow: "Tappa 02 · opportunità",
-      title: "Leggi, confronta, decidi",
-      message:
-        "Posizioni raccoglie le opportunità, Map le mette nello spazio e Swipe aiuta a fare una prima scelta rapida.",
-    },
-    {
-      eyebrow: "Tappa 03 · squadra",
-      title: "Segui il lavoro del team",
-      message:
-        "Team e Agenti mostrano le persone e le attività. Messaggi è il punto in cui ritrovi le conversazioni disponibili.",
-    },
-    {
-      eyebrow: "Tappa 04 · Assistente",
-      title: "Continua con parole tue",
-      message:
-        "La guida finisce qui. Nella chat libera puoi fare una domanda concreta all’Assistente, senza scegliere da un elenco.",
-    },
-  ],
-  requirements: [
-    {
-      eyebrow: "Tappa 01 · ambiente",
-      title: "Una casa per il team",
-      message:
-        "Il team ha bisogno di una macchina configurata e raggiungibile. La relativa procedura di setup resta separata da questa guida.",
-    },
-    {
-      eyebrow: "Tappa 02 · provider",
-      title: "Un modello collegato",
-      message:
-        "Gli agenti possono lavorare quando il provider previsto dalla tua installazione è configurato. Qui non fingiamo di verificarne lo stato.",
-    },
-    {
-      eyebrow: "Tappa 03 · profilo",
-      title: "Indicazioni su ciò che cerchi",
-      message:
-        "Il Profilo aiuta la squadra a capire obiettivi e preferenze. Potrai correggere le informazioni anche in seguito.",
-    },
-    {
-      eyebrow: "Tappa 04 · conversazione",
-      title: "Poi si parte da una domanda",
-      message:
-        "Quando la tua installazione è pronta, apri la chat e racconta all’Assistente da dove vuoi cominciare.",
-    },
-  ],
-  explore: [
-    {
-      eyebrow: "Tappa 01 · panoramica",
-      title: "Guarda prima la Dashboard",
-      message:
-        "Puoi esplorare senza completare un tour. La Dashboard è un buon punto di partenza e ogni area resta raggiungibile dalla navigazione.",
-    },
-    {
-      eyebrow: "Tappa 02 · scoperta",
-      title: "Apri Map, Posizioni e Swipe",
-      message:
-        "Queste viste raccontano le opportunità da angolazioni diverse. Esplorarle non conferma né modifica dati da questa guida.",
-    },
-    {
-      eyebrow: "Tappa 03 · persone",
-      title: "Conosci Team e Agenti",
-      message:
-        "Qui trovi le superfici dedicate alla squadra. Puoi tornare all’Assistente in qualunque momento.",
-    },
-    {
-      eyebrow: "Tappa 04 · strumenti personali",
-      title: "Completa il giro a modo tuo",
-      message: PROFILE_OVERVIEW_COPY,
-    },
-  ],
-};
-
-function guideMessage(step: GuideStep, locale: Locale): string {
-  return typeof step.message === "string" ? step.message : step.message[locale];
-}
-
 function validInitialState(state: AssistantOnboardingState | undefined): AssistantOnboardingState {
-  if (!state?.path || !Object.hasOwn(GUIDES, state.path)) return INITIAL_ASSISTANT_ONBOARDING_STATE;
+  if (!state?.path || !Object.hasOwn(ASSISTANT_GUIDE_TEXT.it.guides, state.path)) return INITIAL_ASSISTANT_ONBOARDING_STATE;
   const numericStep = Number(state.step);
   const step = (Number.isInteger(numericStep) ? Math.min(4, Math.max(1, numericStep)) : 1) as AssistantOnboardingStep;
   return { path: state.path, step };
 }
 
 export default function AssistantOnboarding({
-  assistantName = "Assistente",
+  assistantName: givenName,
   initialState,
   onStateChange,
   onComplete,
   voiceInputBridge,
 }: AssistantOnboardingProps) {
   const locale = useLocale();
+  const t = ASSISTANT_GUIDE_TEXT[locale];
+  const assistantName = givenName ?? t.defaultName;
   const [state, setState] = useState<AssistantOnboardingState>(() => validInitialState(initialState));
   const [completing, setCompleting] = useState(false);
   const [completionError, setCompletionError] = useState(false);
@@ -132,8 +38,8 @@ export default function AssistantOnboarding({
   const [firstMessage, setFirstMessage] = useState("");
   const dialogueTitle = useRef<HTMLHeadingElement>(null);
   const path = state.path;
-  const guide = path ? GUIDES[path][state.step - 1] : null;
-  const pathLabel = path ? PATH_LABELS[path] : "";
+  const guide = path ? t.guides[path][state.step - 1] : null;
+  const pathLabel = path ? t.paths[path] : "";
   const visibleProgress = state.step === 4 && !completionVerified ? 3 : state.step;
 
   useEffect(() => {
@@ -185,8 +91,8 @@ export default function AssistantOnboarding({
     >
       <header className="assistant-onboarding__header">
         <div>
-          <p className="assistant-onboarding__kicker">Onboarding Assistente</p>
-          <h1 id="assistant-onboarding-title">Conosci l’app, poi continua in chat.</h1>
+          <p className="assistant-onboarding__kicker">{t.kicker}</p>
+          <h1 id="assistant-onboarding-title">{t.headline}</h1>
         </div>
         <div className="assistant-onboarding__progress-copy" aria-hidden="true">
           {visibleProgress}/4
@@ -194,7 +100,7 @@ export default function AssistantOnboarding({
         <div
           className="assistant-onboarding__progress"
           role="progressbar"
-          aria-label="Avanzamento onboarding Assistente"
+          aria-label={t.progressAria}
           aria-valuemin={0}
           aria-valuemax={4}
           aria-valuenow={visibleProgress}
@@ -206,42 +112,38 @@ export default function AssistantOnboarding({
       </header>
 
       <div className="assistant-onboarding__body" style={{ overflowY: "auto" }}>
-        <aside className="assistant-onboarding__identity" aria-label={`Presentazione ${assistantName}`}>
+        <aside className="assistant-onboarding__identity" aria-label={fill(t.identityAria, { name: assistantName })}>
           <div className="assistant-onboarding__portrait" aria-hidden="true">
             <span>AI</span>
           </div>
           <div>
-            <p className="assistant-onboarding__role">Guida dell’app</p>
+            <p className="assistant-onboarding__role">{t.role}</p>
             <h2>{assistantName}</h2>
-            <p>
-              Ti accompagno tra le aree principali. Questa introduzione non legge lo stato del team e non mostra dati simulati.
-            </p>
+            <p>{t.intro}</p>
           </div>
         </aside>
 
-        <div className="assistant-onboarding__dialogue" role="region" aria-label={`Dialogo guidato con ${assistantName}`}>
+        <div className="assistant-onboarding__dialogue" role="region" aria-label={fill(t.dialogueAria, { name: assistantName })}>
           {!guide ? (
             <>
               <p className="assistant-onboarding__speaker">{assistantName}</p>
-              <h2 ref={dialogueTitle} tabIndex={-1}>Da dove vuoi iniziare?</h2>
-              <p className="assistant-onboarding__message">
-                Posso mostrarti il percorso, spiegarti cosa serve oppure lasciarti esplorare. Scegli tu: potrai sempre tornare indietro.
-              </p>
-              <div className="assistant-onboarding__choices" role="group" aria-label="Scegli il percorso di onboarding">
+              <h2 ref={dialogueTitle} tabIndex={-1}>{t.startTitle}</h2>
+              <p className="assistant-onboarding__message">{t.startMessage}</p>
+              <div className="assistant-onboarding__choices" role="group" aria-label={t.choicesAria}>
                 <button type="button" onClick={() => choose("tour")}>
                   <span>01</span>
-                  <strong>Fammi fare il tour</strong>
-                  <small>Una panoramica guidata delle aree principali.</small>
+                  <strong>{t.choices.tour.title}</strong>
+                  <small>{t.choices.tour.hint}</small>
                 </button>
                 <button type="button" onClick={() => choose("requirements")}>
                   <span>02</span>
-                  <strong>Che cosa serve per iniziare?</strong>
-                  <small>I prerequisiti, senza fingere controlli di stato.</small>
+                  <strong>{t.choices.requirements.title}</strong>
+                  <small>{t.choices.requirements.hint}</small>
                 </button>
                 <button type="button" onClick={() => choose("explore")}>
                   <span>03</span>
-                  <strong>Preferisco esplorare</strong>
-                  <small>Quattro punti di riferimento, poi libertà completa.</small>
+                  <strong>{t.choices.explore.title}</strong>
+                  <small>{t.choices.explore.hint}</small>
                 </button>
               </div>
             </>
@@ -249,11 +151,11 @@ export default function AssistantOnboarding({
             <>
               <div className="assistant-onboarding__dialogue-meta">
                 <span>{pathLabel}</span>
-                <span>Tappa {state.step} di 4</span>
+                <span>{fill(t.stepOf, { step: state.step })}</span>
               </div>
               <p className="assistant-onboarding__speaker">{assistantName} · {guide.eyebrow}</p>
               <h2 ref={dialogueTitle} tabIndex={-1}>{guide.title}</h2>
-              <p className="assistant-onboarding__message" aria-live="polite">{guideMessage(guide, locale)}</p>
+              <p className="assistant-onboarding__message" aria-live="polite">{guide.message}</p>
               {state.step === 4 && (
                 <div className="assistant-onboarding__composer">
                   <label htmlFor="assistant-first-message">{FIRST_MESSAGE_LABEL[locale]}</label>
@@ -280,12 +182,12 @@ export default function AssistantOnboarding({
               )}
               {completionError && (
                 <p className="assistant-onboarding__error" role="alert">
-                  Non riesco ad aprire la chat. Riprova: il percorso non è stato segnato come completato.
+                  {t.completionError}
                 </p>
               )}
               <div className="assistant-onboarding__actions">
                 <button type="button" className="assistant-onboarding__back" onClick={back} disabled={completing || completionVerified}>
-                  <span aria-hidden="true">←</span> Indietro
+                  <span aria-hidden="true">←</span> {t.back}
                 </button>
                 <button
                   type="button"
@@ -294,14 +196,14 @@ export default function AssistantOnboarding({
                   disabled={completionVerified || completing || (state.step === 4 && !firstMessage.trim())}
                 >
                   {completionVerified
-                    ? "Chat verificata"
+                    ? t.verified
                     : completing
-                    ? "Apro la chat…"
+                    ? t.opening
                     : state.step === 4
                       ? completionError
-                        ? "Riprova e apri la chat"
-                        : "Passa alla chat libera"
-                      : "Avanti"}
+                        ? t.retry
+                        : t.toChat
+                      : t.next}
                   <span aria-hidden="true">→</span>
                 </button>
               </div>
