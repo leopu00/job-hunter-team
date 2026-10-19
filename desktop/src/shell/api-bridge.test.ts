@@ -1,4 +1,5 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { enterExistingTeamReadOnly, leaveExistingTeamReadOnly } from "../lib/existing-team-readonly";
 import { installApiBridge, notInDesktop, shellApi, webRoutes, type ApiFetch } from "./api-bridge";
 
 function fakeGlobal() {
@@ -37,6 +38,43 @@ describe("shellApi", () => {
     expect(other.status).toBe(404);
     expect(await other.json()).toEqual({ error: "not_in_desktop", path: "/api/positions/7/cv" });
     expect(next).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("shellApi, the language the person picks", () => {
+  const post = (locale: unknown) =>
+    ({ method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ locale }) }) satisfies RequestInit;
+  afterEach(() => {
+    document.cookie = "NEXT_LOCALE=; path=/; max-age=0";
+    leaveExistingTeamReadOnly();
+  });
+
+  it("keeps a language the app has in the NEXT_LOCALE cookie and answers it as the web does", async () => {
+    const next = vi.fn(notInDesktop);
+    const answer = await shellApi(next)("/api/i18n", post("de"));
+    expect(answer.status).toBe(200);
+    expect(await answer.json()).toEqual({ locale: "de" });
+    expect(document.cookie).toContain("NEXT_LOCALE=de");
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  it.each(["xx", "", 7, null])("refuses %j with a 400 and keeps the language it had", async (locale) => {
+    document.cookie = "NEXT_LOCALE=fr; path=/";
+    const answer = await shellApi(vi.fn(notInDesktop))("/api/i18n", post(locale));
+    expect(answer.status).toBe(400);
+    expect(document.cookie).toContain("NEXT_LOCALE=fr");
+  });
+
+  it("works while an existing team is only read (it writes nothing to the team), and nothing else does", async () => {
+    enterExistingTeamReadOnly(true, null);
+    const next = vi.fn(notInDesktop);
+    const api = shellApi(next);
+    expect((await api("/api/i18n", post("es"))).status).toBe(200);
+    expect(document.cookie).toContain("NEXT_LOCALE=es");
+    const other = await api("/api/positions/7/summary", { method: "POST" });
+    expect(other.status).toBe(403);
+    expect(await other.json()).toEqual({ error: "read_only" });
+    expect(next).not.toHaveBeenCalled();
   });
 });
 

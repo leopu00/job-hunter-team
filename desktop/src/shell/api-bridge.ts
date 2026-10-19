@@ -47,14 +47,38 @@ const READ_ONLY_PATHS = new Set([
 ]);
 
 /**
+ * web/app/api/i18n/route.ts POST, as the web serves it: a language the app has
+ * is kept in the NEXT_LOCALE cookie, anything else is a 400. It is answered
+ * before the read-only gate because it writes nothing to the team, the VPS or
+ * the cloud: the cookie is this webview's own, as it is on the web's open route.
+ */
+async function setLocale(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
+  let body: { locale?: unknown } = {};
+  try {
+    const raw = init?.body ?? (input instanceof Request ? await input.clone().text() : null);
+    if (typeof raw === "string") body = JSON.parse(raw);
+  } catch {
+    // An unreadable body is a missing language: the 400 below.
+  }
+  const locale = body.locale;
+  if (typeof locale !== "string" || !(locales as readonly string[]).includes(locale)) {
+    return json({ error: "unsupported_locale" }, 400);
+  }
+  document.cookie = `NEXT_LOCALE=${locale}; path=/; max-age=${60 * 60 * 24 * 365}; samesite=lax`;
+  return json({ locale });
+}
+
+/**
  * Routes the shell itself answers before handing over to `next`.
  * web/app/api/i18n/route.ts GET: the locale the web pages render in
- * (NavLinks and DashboardI18nProvider ask for it).
+ * (NavLinks and DashboardI18nProvider ask for it); POST: the language the
+ * person picks in the settings page.
  */
 export function shellApi(next: ApiFetch): ApiFetch {
   return async (input, init) => {
     const method = (init?.method ?? (input instanceof Request ? input.method : "GET")).toUpperCase();
     const path = apiPath(input);
+    if (path === "/api/i18n" && method === "POST") return setLocale(input, init);
     if (existingTeamReadOnly() && path && !(method === "GET" && READ_ONLY_PATHS.has(path))) {
       return json({ error: "read_only" }, 403);
     }
