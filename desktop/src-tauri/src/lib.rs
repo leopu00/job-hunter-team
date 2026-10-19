@@ -43,6 +43,8 @@ pub(crate) fn application_context() -> tauri::Context<tauri::Wry> {
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
+        // a new position's system notification (lib/notify): only what capabilities/new-position-notification.json allows
+        .plugin(tauri_plugin_notification::init())
         .manage(account_scope::AccountScopeState::default())
         .manage(broker_view::BrokerViewState::default())
         .manage(direct_chat::DirectChatState::default())

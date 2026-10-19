@@ -84,6 +84,7 @@ import { supabase, supabaseConfig, useSession } from "../lib/supabase";
 import { OnboardingFlow } from "../onboarding";
 import ExistingTeamConnectModal from "../onboarding/ExistingTeamConnectModal";
 import MessagesPage from "../pages/messages";
+import { NewPositionNotifier } from "../lib/notify/NewPositionNotifier";
 import Shell from "../shell/Shell";
 import { navigate } from "../shell/router";
 import { describeError, errorCodeOf, errorMachineOf, errorResetsAt } from "../lib/error-catalog";
@@ -1350,7 +1351,12 @@ export default function DashboardApp() {
   }
   if (gate.phase === "required") {
     if (readOnlyExistingTeamKey === identityKey) {
-      return <Shell key={identityKey} onLogout={logout} onCloseReadOnly={closeReadOnlyExistingTeam} />;
+      return (
+        <>
+          <Shell key={identityKey} onLogout={logout} onCloseReadOnly={closeReadOnlyExistingTeam} />
+          <NewPositionNotifier key={`notify:${identityKey}`} />
+        </>
+      );
     }
     if (assistantChatIdentityKey === identityKey) {
       return (
@@ -1410,5 +1416,10 @@ export default function DashboardApp() {
       />
     );
   }
-  return <Shell key={identityKey} onLogout={logout} />;
+  return (
+    <>
+      <Shell key={identityKey} onLogout={logout} />
+      <NewPositionNotifier key={`notify:${identityKey}`} />
+    </>
+  );
 }
