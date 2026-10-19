@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useReadOnlyActions } from "@/lib/read-only-actions";
 import { isSeen, SEEN_EVENT } from "@/lib/seen-positions";
 
 // Badge pieno: i titoli delle posizioni sono verdi e un badge verde "a filo"
@@ -25,6 +26,10 @@ type Props = {
 // non esiste in SSR e un render speculativo darebbe hydration mismatch.
 export default function UnseenDot({ id, label, initialSeen }: Props) {
   const [unseen, setUnseen] = useState(false);
+  // Su una squadra letta soltanto (il desktop) nessuna riga è «vista»: la
+  // squadra non registra cosa hai aperto, quindi ogni riga sarebbe NEW. Il
+  // web non fornisce il contesto: lì il marcatore resta com'è.
+  const { readOnly } = useReadOnlyActions();
 
   useEffect(() => {
     if (initialSeen) return;
@@ -40,7 +45,7 @@ export default function UnseenDot({ id, label, initialSeen }: Props) {
     };
   }, [id, initialSeen]);
 
-  if (!unseen) return null;
+  if (!unseen || readOnly) return null;
   return (
     <span
       title={label}

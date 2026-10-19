@@ -164,6 +164,22 @@ describe("Posizioni on an existing team read only", () => {
     expect(fake.current!.rpc).toEqual([]);
   }, 20_000);
 
+  it("shows the default columns in tiers: Score and Stato always, the rest as the window allows", async () => {
+    navigate("/positions", { replace: true });
+    render(<Shell />);
+
+    await screen.findAllByText("Synthetic role A");
+    const hidden = (header: RegExp) =>
+      screen.getAllByRole("columnheader", { name: header })[0].className;
+    // Always there, whatever the window.
+    expect(hidden(/score/i)).not.toMatch(/max-\[\d+px\]:hidden/);
+    expect(hidden(/stato|status/i)).not.toMatch(/max-\[\d+px\]:hidden/);
+    // Left out of a narrow window, so the table does not scroll sideways.
+    expect(hidden(/paese|country/i)).toMatch(/max-\[1460px\]:hidden/);
+    expect(hidden(/citt|city/i)).toMatch(/max-\[1460px\]:hidden/);
+    expect(document.querySelector("table")?.className).toContain("min-[1460px]:[min-width:var(--min-c)]");
+  }, 20_000);
+
   it("asks the companion for one page at a time, with the default view and the count done there", async () => {
     navigate("/positions", { replace: true });
     render(<Shell />);
@@ -270,6 +286,20 @@ describe("Posizioni on an existing team read only", () => {
 });
 
 describe("Dettaglio posizione on an existing team read only", () => {
+  it("is written in the app's language when no NEXT_LOCALE cookie says otherwise (English app, English Dettaglio)", async () => {
+    document.cookie = "NEXT_LOCALE=; path=/; max-age=0";
+    localStorage.setItem("jht-lang", "en");
+    try {
+      navigate("/positions/101", { replace: true });
+      render(<Shell />);
+      expect((await screen.findAllByText("Synthetic role A")).length).toBeGreaterThan(0);
+      expect(screen.getByText("Overview")).toBeInTheDocument();
+      expect(screen.queryByText("Panoramica")).not.toBeInTheDocument();
+    } finally {
+      localStorage.removeItem("jht-lang");
+    }
+  });
+
   it("shows the position the companion returns and disables every control that would write", async () => {
     const user = userEvent.setup();
     navigate("/positions/101", { replace: true });

@@ -4,8 +4,18 @@
  * visible columns and the salary currency, both written by client components
  * with document.cookie. So cookies() reads document.cookie; there is no
  * request, so headers() is empty.
+ *
+ * One cookie is answered even when it is not there: NEXT_LOCALE. The web's
+ * position page takes its language from that cookie alone and falls back to
+ * Italian, but the desktop speaks the system language until the person picks
+ * one (lib/app-locale.ts) and writes no cookie: the Dettaglio came out in
+ * Italian under an English app. Without the cookie it says the app's language.
  */
+import { appLocale } from "../lib/app-locale";
+
 type Cookie = { name: string; value: string };
+
+const LOCALE_COOKIE = "NEXT_LOCALE";
 
 function readCookies(): Cookie[] {
   if (typeof document === "undefined" || !document.cookie) return [];
@@ -27,7 +37,8 @@ function readCookies(): Cookie[] {
 export async function cookies() {
   const all = readCookies();
   return {
-    get: (name: string): Cookie | undefined => all.find((c) => c.name === name),
+    get: (name: string): Cookie | undefined =>
+      all.find((c) => c.name === name) ?? (name === LOCALE_COOKIE ? { name, value: appLocale() } : undefined),
     getAll: (): Cookie[] => all,
     has: (name: string): boolean => all.some((c) => c.name === name),
   };

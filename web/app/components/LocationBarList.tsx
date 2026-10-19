@@ -73,7 +73,10 @@ export default function LocationBarList({
   return (
     <div className="h-full flex flex-col bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-5 transition-colors duration-200 hover:border-[var(--color-border-glow)]">
       <div className="flex items-center justify-between mb-4">
-        <span className="section-label">{title}</span>
+        {/* `.section-label` porta un margine sotto di 14px: in una riga centrata
+            alza il titolo di 7px rispetto al numero. Qui il margine lo dà il
+            contenitore (mb-4). */}
+        <span className="section-label mb-0!">{title}</span>
         {total > 0 && headerCount != null && (
           <span className="text-[11px] font-semibold text-[var(--color-muted)]">
             {headerCount}
