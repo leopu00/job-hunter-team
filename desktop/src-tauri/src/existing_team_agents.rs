@@ -26,6 +26,8 @@ use serde_json::{json, Map, Value};
 use std::time::Duration;
 use tauri::State;
 
+/// The whole read over SSH. Each step of the script has its own limit, and the
+/// steps of one operation fit in it (see the test of the longest path).
 const READ_TIMEOUT: Duration = Duration::from_secs(20);
 const MAX_REPLY: usize = 256 * 1024;
 const MAX_SESSIONS: usize = 200;
@@ -120,7 +122,7 @@ if req.get('op')=='screen':
   sys.path.insert(0,SKILLS); from external_content import INVISIBLE_COMMANDS
  except Exception: fail('agent_screen_unfiltered')
  raw=''.join(ch for ch in raw if ch not in INVISIBLE_COMMANDS)
- try: done=subprocess.run(['node',REDACTOR,'--secrets'],input=raw.encode('utf-8'),capture_output=True,timeout=8)
+ try: done=subprocess.run(['node',REDACTOR,'--secrets'],input=raw.encode('utf-8'),capture_output=True,timeout=4)
  except Exception: fail('agent_screen_unfiltered')
  if done.returncode!=0: fail('agent_screen_unfiltered')
  raw=done.stdout.decode('utf-8','replace')
@@ -530,6 +532,27 @@ mod tests {
         }
     }
 
+    /// The time limit of the script's step that runs `marker`, in seconds.
+    fn step_limit(marker: &str) -> u64 {
+        let line = AGENTS_READ_PY.lines().find(|line| line.contains(marker)).unwrap();
+        let limit = line.split("timeout=").nth(1).unwrap();
+        limit[..limit.find(')').unwrap()].parse().unwrap()
+    }
+
+    /// The longest path of each operation ends within the SSH read, so a slow
+    /// step says what it is instead of the read being cut first.
+    #[test]
+    fn the_longest_path_of_each_operation_fits_in_the_read() {
+        let list = step_limit("'list-sessions'");
+        let state = step_limit("agent_state.py");
+        let capture = step_limit("'capture-pane'");
+        let redactor = step_limit("'node',REDACTOR");
+        assert_eq!(redactor, 4);
+        let read = READ_TIMEOUT.as_secs();
+        assert!(list + state <= read, "list: {list} + {state} > {read}");
+        assert!(list + capture + redactor <= read, "terminal: {list} + {capture} + {redactor} > {read}");
+    }
+
     #[test]
     fn the_terminal_is_text_without_escape_sequences() {
         let raw = "\u{1b}[31mred\u{1b}[0m line\n\u{1b}]0;title\u{7}next\u{1b}]8;;http://x\u{1b}\\link\u{0}\u{8}\n<script>x</script>\t\n";
@@ -560,7 +583,9 @@ mod tests {
         // The container's own filters, from this checkout: the single list of
         // invisibles and the secrets redactor.
         let repo = concat!(env!("CARGO_MANIFEST_DIR"), "/../..");
+        // agent_state.py stays out: it is in this checkout, and here it would read this machine's tmux.
         let script = AGENTS_READ_PY
+            .replace("/app/shared/skills/agent_state.py", "/nonexistent/agent_state.py")
             .replace("/app/shared/skills", &format!("{repo}/shared/skills"))
             .replace("/app/shared/redact-cli.mjs", &format!("{repo}/shared/redact-cli.mjs"));
         let run_script = |script: &str, request: &AgentsRequest| {
@@ -582,6 +607,16 @@ mod tests {
         let run = |request: &AgentsRequest| run_script(&script, request);
         let list = run(&AgentsRequest::List {});
         assert_eq!(list["data"]["states"], false, "no agent_state.py outside the container");
+        // with agent_state.py there (a stand-in that answers as the real one does), its states come through
+        let state = dir.join("agent_state.py");
+        std::fs::write(&state, "import json\nprint(json.dumps({'capitano':{'state':'lavora','since':1760000050},'critico-s3':{'state':'bloccato','reason':'limite_5h','until':1760003600}}))\n").unwrap();
+        let with_state = script.replace("/nonexistent/agent_state.py", &state.display().to_string());
+        let stated = shape_reply(&AgentsRequest::List {}, &run_script(&with_state, &AgentsRequest::List {})).unwrap();
+        assert_eq!(stated["data"]["states"], true);
+        assert_eq!(stated["data"]["agents"][0]["state"], "lavora");
+        assert_eq!(stated["data"]["agents"][0]["since"], 1_760_000_050.0);
+        assert_eq!(stated["data"]["agents"][1]["state"], "bloccato");
+        assert_eq!(stated["data"]["agents"][1]["reason"], "limite_5h");
         let shaped = shape_reply(&AgentsRequest::List {}, &list).unwrap();
         assert_eq!(names(&shaped), ["CAPITANO", "CRITICO-S3"]);
         assert_eq!(shaped["data"]["agents"][1]["activity"], 1_760_000_200);
