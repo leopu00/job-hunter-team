@@ -174,14 +174,14 @@ describe("the office page", () => {
 
   it("hands the scene the published statuses only while the team is online", async () => {
     statuses.value = { at: Date.now(), agents: { capitano: { status: "working" } } };
-    const online = { teamOnline: true } as OfficeSnapshot;
+    const online = { teamOnline: true, roster: [], transitions: [] } as unknown as OfficeSnapshot;
     parts.value = { createEngine: vi.fn(() => emptyEngine()), data: { load: vi.fn(async () => online), diff: vi.fn(() => []) } };
     const { unmount } = render(<OfficePage params={{}} search={new URLSearchParams()} />);
     await waitFor(() => expect(scene.setAgentStatuses).toHaveBeenCalledWith(statuses.value));
     unmount();
 
     scene.setAgentStatuses.mockClear();
-    const offline = { teamOnline: false } as OfficeSnapshot;
+    const offline = { teamOnline: false, roster: [], transitions: [] } as unknown as OfficeSnapshot;
     parts.value = { createEngine: vi.fn(() => emptyEngine()), data: { load: vi.fn(async () => offline), diff: vi.fn(() => []) } };
     render(<OfficePage params={{}} search={new URLSearchParams()} />);
     await waitFor(() => expect(scene.setAgentStatuses).toHaveBeenCalled());
