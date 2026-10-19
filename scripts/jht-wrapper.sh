@@ -835,6 +835,40 @@ podman_native_override_ensure() {
   printf '%s\n' "$target"
 }
 
+# Linux nativo: niente pod. podman-compose mette i servizi in un pod per default,
+# e Podman rifiuta lo userns per container (il keep-id dell'override) dentro un
+# pod: «--userns and --pod cannot be set together», e nessun container nasce.
+# Il flag giusto dipende dalla versione, e non ce n'e' uno valido per tutte:
+#   - 1.1.x: `--in-pod` e' un bool() di Python, ogni stringa non vuota vale vero
+#     («false» compreso): spegne il pod solo il valore vuoto; `x-podman: in_pod`
+#     li' non esiste;
+#   - dalla 1.2.0: «false» spegne il pod, il valore vuoto torna al default (pod).
+# Lo stesso flag su ogni chiamata (up, ps, down, il dry-run dell'attestazione):
+# la config-hash e' quella del compose unito, il pod non la cambia.
+podman_native_no_pod_arg() {
+  local version
+  version="$(podman_compose_version_number "$1")" || return 1
+  if version_at_least "$version" 1.2.0; then
+    printf '%s\n' '--in-pod=false'
+  else
+    printf '%s\n' '--in-pod='
+  fi
+}
+
+# Tetto di `up` sul Linux nativo. Dalla 1.3.0 podman-compose, prima di avviare un
+# servizio, aspetta le sue dipendenze (depends_on) con `podman wait` in un ciclo
+# senza fine: se un container non e' mai stato creato, `up -d` non esce piu'. Il
+# runtime e' gia' scaricato dall'installazione: su un VPS con Ubuntu 26.04
+# (podman 5.7.0, podman-compose 1.5.0) `up -d` ci mette 15 s. Il default e' 300 s;
+# JHT_PODMAN_UP_TIMEOUT_S lo cambia (secondi interi, 1-3600), un valore diverso
+# non vale e resta il default.
+PODMAN_NATIVE_UP_TIMEOUT=300
+case "${JHT_PODMAN_UP_TIMEOUT_S:-}" in
+  ''|*[!0-9]*) ;;
+  *) [ "${#JHT_PODMAN_UP_TIMEOUT_S}" -le 4 ] && [ "$((10#$JHT_PODMAN_UP_TIMEOUT_S))" -ge 1 ] \
+       && [ "$((10#$JHT_PODMAN_UP_TIMEOUT_S))" -le 3600 ] && PODMAN_NATIVE_UP_TIMEOUT="$((10#$JHT_PODMAN_UP_TIMEOUT_S))" ;;
+esac
+
 compose_project_name() {
   # Identita' prodotto, non input dell'utente e non derivata dal path. Deve
   # restare identica per compose canonico e stage di upgrade: podman-compose
@@ -1042,20 +1076,34 @@ compose_file() {
         PODMAN_COMPOSE_WARNING_LOGS=false \
           "$compose_bin" --podman-path "$podman_bin" -p "$project" -f "$file" "$@"
       )
+      return $?
     else
       podman_native_rootless \
         || { err "Il runtime Podman rootless locale non risponde."; return 1; }
-      local override
+      local override no_pod status=0
       override="$(podman_native_override_ensure "$file")" \
         || { err "Override Compose per Podman rootless non scrivibile in $RUNTIME_DIR."; return 1; }
+      no_pod="$(podman_native_no_pod_arg "$compose_bin")" \
+        || { err "Versione di podman-compose non leggibile."; return 1; }
+      local cap=()
+      if [ "${1:-}" = "up" ] && command -v timeout >/dev/null 2>&1; then
+        cap=(timeout --kill-after=10 "$PODMAN_NATIVE_UP_TIMEOUT")
+      fi
       (
         cd "$RUNTIME_DIR" || return 1
         unset CONTAINER_CONNECTION
         PODMAN_COMPOSE_WARNING_LOGS=false \
-          "$compose_bin" --podman-path "$podman_bin" -p "$project" -f "$file" -f "$override" "$@"
-      )
+          ${cap[@]+"${cap[@]}"} "$compose_bin" "$no_pod" --podman-path "$podman_bin" -p "$project" -f "$file" -f "$override" "$@"
+      ) || status=$?
+      if [ "${1:-}" = "up" ] && [ "$status" -ne 0 ]; then
+        if [ "${#cap[@]}" -gt 0 ] && { [ "$status" -eq 124 ] || [ "$status" -eq 137 ]; }; then
+          err "compose_up_timeout: podman-compose up non ha finito in ${PODMAN_NATIVE_UP_TIMEOUT}s ed e' stato fermato. Un servizio non e' partito: guarda «podman ps -a» e «podman logs jht»."
+          return 124
+        fi
+        err "compose_up_failed: podman-compose up e' uscito con $status. L'errore di Podman e' qui sopra."
+      fi
+      return $status
     fi
-    return $?
   fi
   # Il project Docker/VPS storico deriva da --project-directory. Non migrarlo
   # implicitamente al literal Podman: un secondo project colliderebbe sul
@@ -2029,13 +2077,14 @@ podman_expected_config_hash() {
           --podman-path "$podman_bin" -f "$file" up -d --force-recreate "$service"
     } 2>&1)" || return 1
   else
-    local override
+    local override no_pod
     override="$(podman_native_override_ensure "$file")" || return 1
+    no_pod="$(podman_native_no_pod_arg "$compose_bin")" || return 1
     resolved="$({
       cd "$RUNTIME_DIR" || return 1
       unset CONTAINER_CONNECTION
       PODMAN_COMPOSE_WARNING_LOGS=false \
-        "$compose_bin" --verbose --dry-run --project-name jht \
+        "$compose_bin" "$no_pod" --verbose --dry-run --project-name jht \
           --podman-path "$podman_bin" -f "$file" -f "$override" up -d --force-recreate "$service"
     } 2>&1)" || return 1
   fi
