@@ -577,7 +577,9 @@ fn run_connection(
                 (Some(target), RemoteOperation::Python) => existing_team_runtime::python_command(&target.runtime).map_err(failure)?,
                 (Some(target), RemoteOperation::Delivery(session)) => existing_team_runtime::delivery_command(&target.runtime, session).map_err(failure)?,
                 (Some(target), RemoteOperation::Chat(operation)) => existing_team_runtime::chat_command(&target.runtime, &operation).map_err(failure)?,
-                (None, RemoteOperation::Chat(_)) => return Err(failure("existing_team_runtime_target_changed")),
+                (None, RemoteOperation::Chat(operation)) => remote_wrapper_command(
+                    &existing_team_runtime::chat_wrapper_arguments(&operation).map_err(failure)?,
+                ),
                 (None, RemoteOperation::Probe) => REMOTE_CONTAINER_PROBE.to_owned(),
                 (None, RemoteOperation::Python) => REMOTE_PYTHON_STDIN.to_owned(),
                 (None, RemoteOperation::Delivery(session)) => delivery_command(session).ok_or_else(|| failure("invalid_agent"))?.to_owned(),
@@ -835,8 +837,18 @@ fn selected_or_own(
     }
 }
 
+/// The host's wrapper, run on a VPS that was never pinned: the checks of `REMOTE_PYTHON_STDIN`
+/// (the wrapper is there, executable, not a link, and speaks the chat protocol), then the wrapper
+/// with the arguments given. Every one was checked by the chat's argument list, and is quoted.
+fn remote_wrapper_command(arguments: &[String]) -> String {
+    let checks = REMOTE_PYTHON_STDIN.strip_suffix("desktop-chat python").unwrap_or(REMOTE_PYTHON_STDIN);
+    let quoted: Vec<String> = arguments.iter().map(|argument| format!("'{argument}'")).collect();
+    format!("{checks}{}", quoted.join(" "))
+}
+
 /// A pinned team's chat goes through the fixed script of the container; a local team and a VPS
-/// that was never pinned keep the path they had.
+/// that was never pinned go through the host's wrapper, which runs the same script (and answers 2,
+/// as to any action it does not know, when it is older than the chat actions).
 fn uses_pinned_chat(connection: &Connection) -> bool {
     matches!(connection.validated, ValidatedHost::Vps { .. }) && connection.runtime.is_some()
 }
@@ -861,6 +873,31 @@ fn chat_failure(code: i32, default: &'static str) -> &'static str {
         129 => "chat_runtime_outdated",
         255 => "tunnel_unavailable",
         _ => default,
+    }
+}
+
+/// The chat through the host's wrapper. `None`: the wrapper answered 2, so it is older than the
+/// chat actions, and the caller keeps the older path (the app and a VPS are updated apart).
+fn run_wrapper_chat(
+    connection: &Connection,
+    operation: ChatOperation<'_>,
+    input: Option<&[u8]>,
+    timeout: Duration,
+    default: &'static str,
+) -> Result<Option<ProcessResult>, DirectChatError> {
+    let arguments = existing_team_runtime::chat_wrapper_arguments(&operation).map_err(failure)?;
+    let references: Vec<&str> = arguments.iter().map(String::as_str).collect();
+    let result = run_connection(connection, &references, RemoteOperation::Chat(operation), input, timeout)?;
+    wrapper_outcome(result, default)
+}
+
+/// What the wrapper's exit says: done, «I do not know that action» (an older wrapper: 2), or a
+/// failure of the script behind it.
+fn wrapper_outcome(result: ProcessResult, default: &'static str) -> Result<Option<ProcessResult>, DirectChatError> {
+    match result.code {
+        0 => Ok(Some(result)),
+        2 => Ok(None),
+        code => Err(failure(chat_failure(code, default))),
     }
 }
 
@@ -942,6 +979,16 @@ pub(crate) async fn direct_chat_read(
             )?;
             return parse_json::<DirectChatPage>(result, "read_failed");
         }
+        if let Some(result) = run_wrapper_chat(
+            connection,
+            ChatOperation::Read { agent: &agent_id, cursor: cursor.as_deref() },
+            None,
+            READ_TIMEOUT,
+            "read_failed",
+        )? {
+            return parse_json::<DirectChatPage>(result, "read_failed");
+        }
+        // The host's wrapper is older than the chat actions: the older path.
         parse_json::<DirectChatPage>(
             run_python(
                 connection,
@@ -1015,28 +1062,31 @@ fn local_delivery_args(session: &str) -> [&str; 3] {
 
 /// One command does what the two used to: the turn is written once for its client id and goes to
 /// the agent's terminal in the user's envelope. A terminal that is busy (alive, taking a turn) is
-/// asked again with the same id, which writes nothing twice.
-fn send_pinned(
+/// asked again with the same id, which writes nothing twice. `None`: the host's wrapper is older
+/// than the chat actions, and the caller keeps the older path.
+fn send_fixed(
     connection: &Connection,
     agent: &str,
     text: &str,
     client_id: &str,
-) -> Result<DirectChatReceipt, DirectChatError> {
+) -> Result<Option<DirectChatReceipt>, DirectChatError> {
     if text.len() > MAX_CHAT_STDIN_BYTES {
         return Err(failure("invalid_request"));
     }
     let input = Zeroizing::new(text.as_bytes().to_vec());
+    let pinned = uses_pinned_chat(connection);
     let mut attempt = 0;
     loop {
         attempt += 1;
-        match run_chat(
-            connection,
-            ChatOperation::Send { agent, client_message_id: client_id },
-            Some(&input),
-            SEND_TIMEOUT,
-            "send_failed",
-        ) {
-            Ok(result) => return parse_json(result, "send_verify_failed"),
+        let operation = ChatOperation::Send { agent, client_message_id: client_id };
+        let outcome = if pinned {
+            run_chat(connection, operation, Some(&input), SEND_TIMEOUT, "send_failed").map(Some)
+        } else {
+            run_wrapper_chat(connection, operation, Some(&input), SEND_TIMEOUT, "send_failed")
+        };
+        match outcome {
+            Ok(Some(result)) => return parse_json(result, "send_verify_failed").map(Some),
+            Ok(None) => return Ok(None),
             Err(error) if error.code == "agent_busy" && attempt < 3 => continue,
             Err(error) => return Err(error),
         }
@@ -1063,9 +1113,11 @@ fn send_impl(
     }) {
         return Err(failure("read_only_link"));
     }
-    if uses_pinned_chat(connection) {
-        return send_pinned(connection, &agent, &text, &client_id);
+    if let Some(receipt) = send_fixed(connection, &agent, &text, &client_id)? {
+        return Ok(receipt);
     }
+    // The host's wrapper is older than the chat actions (only a local team or an unpinned VPS gets
+    // here): the older path, as it was.
     let check: Value = parse_json(
         run_python(
             connection,
@@ -1247,7 +1299,7 @@ pub(crate) fn teardown(state: &DirectChatState) {
 #[cfg(test)]
 mod tests {
     use super::{
-        chat_failure, connection_config_path_at, delivery_command, hex_encode, link_allows_writing,
+        chat_failure, connection_config_path_at, wrapper_outcome, delivery_command, hex_encode, link_allows_writing,
         parse_json, probe, session_for, status, valid_agent, verify_migration_local_host_at, window_may_write,
         Connection, DirectChatPage, ProcessResult, REMOTE_CONTAINER_PROBE, REMOTE_PYTHON_STDIN,
     };
@@ -1273,6 +1325,16 @@ mod tests {
             (137, "the_default"),
         ] {
             assert_eq!(chat_failure(code, "the_default"), expected, "exit {code}");
+        }
+    }
+
+    #[test]
+    fn an_older_wrapper_that_does_not_know_the_chat_actions_keeps_the_older_path() {
+        let answered = |code: i32| ProcessResult { code, stdout: b"{}".to_vec() };
+        assert!(matches!(wrapper_outcome(answered(0), "read_failed"), Ok(Some(_))), "the script ran");
+        assert!(matches!(wrapper_outcome(answered(2), "read_failed"), Ok(None)), "2: no such action, keep the older path");
+        for (code, expected) in [(124, "agent_busy"), (122, "agent_not_running"), (129, "chat_runtime_outdated"), (1, "read_failed"), (255, "tunnel_unavailable")] {
+            assert_eq!(wrapper_outcome(answered(code), "read_failed").err().map(|error| error.code), Some(expected), "exit {code}");
         }
     }
 
@@ -1493,13 +1555,16 @@ mod assistance_registration_tests {
     struct Temporary(PathBuf);
     impl Temporary {
         fn new() -> Self {
+            // Two tests starting in the same clock tick must not share a name: a counter breaks the tie.
+            static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
             let nonce = SystemTime::now()
                 .duration_since(UNIX_EPOCH)
                 .unwrap()
                 .as_nanos();
             let root = std::env::temp_dir().join(format!(
-                "jht-assistance-register-{}-{nonce}",
-                std::process::id()
+                "jht-assistance-register-{}-{nonce}-{}",
+                std::process::id(),
+                NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
             ));
             fs::create_dir(&root).unwrap();
             Self(root)

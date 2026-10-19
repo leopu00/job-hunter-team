@@ -1270,25 +1270,22 @@ fn chat_token(value: &str, max: usize, digits_only: bool) -> bool {
         })
 }
 
-/// The chat of a pinned team: `agent_chat.py` with fixed arguments, in the verified container
-/// (`command` checks container, image, platform and digest first: exit 70 otherwise). Every token
-/// is checked here, against a closed list or a closed alphabet, before it enters the string, so
-/// the string holds nothing the person or the renderer wrote. It replaces `python_command` for
-/// the chat: no interpreter that runs what it is sent.
-pub(crate) fn chat_command(
-    target: &RuntimeTarget,
-    operation: &ChatOperation<'_>,
-) -> Result<String, &'static str> {
-    let arguments = match operation {
+/// The arguments of a chat operation, every one checked against its closed list or alphabet:
+/// the operation word, the agent, then the cursor or the client id. Whatever builds a command
+/// for the chat takes them from here, so there is one place that says what may enter one.
+fn chat_arguments(operation: &ChatOperation<'_>) -> Result<Vec<String>, &'static str> {
+    match operation {
         ChatOperation::Read { agent, cursor } => {
             if !CHAT_AGENTS.contains(agent) {
                 return Err("invalid_agent");
             }
+            let mut arguments = vec!["read".to_owned(), (*agent).to_owned()];
             match cursor {
-                None => format!("read '{agent}'"),
-                Some(cursor) if chat_token(cursor, 12, true) => format!("read '{agent}' '{cursor}'"),
+                None => {}
+                Some(cursor) if chat_token(cursor, 12, true) => arguments.push((*cursor).to_owned()),
                 Some(_) => return Err("invalid_request"),
             }
+            Ok(arguments)
         }
         ChatOperation::Send { agent, client_message_id } => {
             if !CHAT_AGENTS.contains(agent) {
@@ -1297,13 +1294,45 @@ pub(crate) fn chat_command(
             if !chat_token(client_message_id, 64, false) {
                 return Err("invalid_request");
             }
-            format!("send '{agent}' '{client_message_id}'")
+            Ok(vec!["send".to_owned(), (*agent).to_owned(), (*client_message_id).to_owned()])
         }
-    };
+    }
+}
+
+fn quoted(arguments: &[String]) -> String {
+    arguments
+        .iter()
+        .enumerate()
+        .map(|(index, argument)| if index == 0 { argument.clone() } else { format!("'{argument}'") })
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+/// The chat of a pinned team: `agent_chat.py` with fixed arguments, in the verified container
+/// (`command` checks container, image, platform and digest first: exit 70 otherwise). Every token
+/// is checked before it enters the string, so the string holds nothing the person or the renderer
+/// wrote. It replaces `python_command` for the chat: no interpreter that runs what it is sent.
+pub(crate) fn chat_command(
+    target: &RuntimeTarget,
+    operation: &ChatOperation<'_>,
+) -> Result<String, &'static str> {
+    let arguments = quoted(&chat_arguments(operation)?);
     command(
         target,
         &format!("exec docker exec -i \"$JHT_CID\" python3 -I /app/shared/skills/agent_chat.py {arguments}"),
     )
+}
+
+/// The same operation through the host's `jht` wrapper (a local team, a VPS that was never
+/// pinned): `desktop-chat read|chat-send ...`. The wrapper runs the same script in the container.
+/// An older wrapper answers 2 to an action it does not know, and the caller keeps the older path.
+pub(crate) fn chat_wrapper_arguments(operation: &ChatOperation<'_>) -> Result<Vec<String>, &'static str> {
+    let mut arguments = chat_arguments(operation)?;
+    if arguments[0] == "send" {
+        arguments[0] = "chat-send".to_owned();
+    }
+    arguments.insert(0, "desktop-chat".to_owned());
+    Ok(arguments)
 }
 
 /// The full connection of an existing team ("Conferma e collega") in this run of the app: the
@@ -1816,6 +1845,24 @@ mod tests {
         let send = chat_command(&target(), &ChatOperation::Send { agent: "assistente", client_message_id: "id-1-A" }).expect("a send");
         assert!(send.ends_with("agent_chat.py send 'assistente' 'id-1-A'"));
         assert!(!send.contains("python3 -c") && !send.contains("exec(bytes.fromhex"), "no interpreter that runs what it is sent");
+    }
+
+    #[test]
+    fn the_wrapper_arguments_are_the_same_checked_tokens_behind_the_wrappers_two_actions() {
+        let read = chat_wrapper_arguments(&ChatOperation::Read { agent: "capitano", cursor: Some("4096") }).unwrap();
+        assert_eq!(read, ["desktop-chat", "read", "capitano", "4096"]);
+        let first = chat_wrapper_arguments(&ChatOperation::Read { agent: "mentor", cursor: None }).unwrap();
+        assert_eq!(first, ["desktop-chat", "read", "mentor"]);
+        let send = chat_wrapper_arguments(&ChatOperation::Send { agent: "assistente", client_message_id: "id-1" }).unwrap();
+        assert_eq!(send, ["desktop-chat", "chat-send", "assistente", "id-1"]);
+        assert_eq!(
+            chat_wrapper_arguments(&ChatOperation::Send { agent: "capitano", client_message_id: "a b" }),
+            Err("invalid_request")
+        );
+        assert_eq!(
+            chat_wrapper_arguments(&ChatOperation::Read { agent: "root", cursor: None }),
+            Err("invalid_agent")
+        );
     }
 
     #[test]
