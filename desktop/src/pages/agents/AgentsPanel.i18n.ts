@@ -97,6 +97,22 @@ export interface AgentsPanelText {
   readOnly: string;
   maintenance: string;
   reviewer: string;
+  // an agent's health in small: its context and its tokens of the last hour; «?» is not known, never 0
+  usageContextShort: string; // {pct}
+  usageContextTokensShort: string; // {tokens}
+  usageContextUnknownShort: string;
+  usageHourShort: string; // {tokens}
+  usageHourUnknownShort: string;
+  usageContext: string; // {pct} {tokens} {window}
+  usageContextPct: string; // {pct}
+  usageContextTokens: string; // {tokens}
+  usageContextUnknown: string;
+  usageReadAt: string; // {time}
+  usageHour: string; // {tokens}
+  usageCountedAt: string; // {time}
+  usageHourUnknown: string;
+  usageHowCounted: string;
+  usageUnknownWhy: string;
 }
 
 const it: AgentsPanelText = {
@@ -192,6 +208,21 @@ const it: AgentsPanelText = {
     "Sola lettura: per accendere, spegnere o mettere in pausa gli agenti collega la squadra con «Conferma e collega».",
   maintenance: "Agente di manutenzione: lo avvia e lo ferma la squadra.",
   reviewer: "Revisore dello Scrittore: si può solo spegnere, lo riavvia lo Scrittore quando serve.",
+  usageContextShort: "ctx {pct}%",
+  usageContextTokensShort: "ctx {tokens}",
+  usageContextUnknownShort: "ctx ?",
+  usageHourShort: "{tokens}/h",
+  usageHourUnknownShort: "?/h",
+  usageContext: "contesto usato {pct}% ({tokens} token su {window})",
+  usageContextPct: "contesto usato {pct}%",
+  usageContextTokens: "contesto {tokens} token (la finestra del modello non è nei log: percentuale non nota)",
+  usageContextUnknown: "contesto: non so",
+  usageReadAt: "letto alle {time}",
+  usageHour: "{tokens} token nell'ultima ora",
+  usageCountedAt: "contati dalla Sentinella alle {time}",
+  usageHourUnknown: "token dell'ultima ora: non so",
+  usageHowCounted: "I token sono quelli nuovi, input e output: la parte già in cache non conta.",
+  usageUnknownWhy: "«Non so» non vuol dire zero: la squadra non lo dice per questo agente (log non leggibili, immagine più vecchia, o la Sentinella non ha contato nell'ultimo quarto d'ora).",
 };
 
 const en: AgentsPanelText = {
@@ -286,6 +317,21 @@ const en: AgentsPanelText = {
   readOnly: "Read only: to start, stop or pause the agents, link the team with “Confirm and connect”.",
   maintenance: "Maintenance agent: the team starts and stops it.",
   reviewer: "The Writer's reviewer: it can only be stopped, the Writer starts it again when needed.",
+  usageContextShort: "ctx {pct}%",
+  usageContextTokensShort: "ctx {tokens}",
+  usageContextUnknownShort: "ctx ?",
+  usageHourShort: "{tokens}/h",
+  usageHourUnknownShort: "?/h",
+  usageContext: "context used {pct}% ({tokens} of {window} tokens)",
+  usageContextPct: "context used {pct}%",
+  usageContextTokens: "context {tokens} tokens (the model's window is not in the logs: percentage not known)",
+  usageContextUnknown: "context: not known",
+  usageReadAt: "read at {time}",
+  usageHour: "{tokens} tokens in the last hour",
+  usageCountedAt: "counted by the Sentinella at {time}",
+  usageHourUnknown: "tokens of the last hour: not known",
+  usageHowCounted: "These are the new tokens, input and output: the part already cached does not count.",
+  usageUnknownWhy: "“Not known” is not zero: the team does not say it for this agent (logs not readable, an older image, or the Sentinella has not counted in the last quarter of an hour).",
 };
 
 const de: AgentsPanelText = {
@@ -381,6 +427,21 @@ const de: AgentsPanelText = {
     "Nur Lesen: Um die Agenten zu starten, zu stoppen oder zu pausieren, verbinde das Team mit „Bestätigen und verbinden“.",
   maintenance: "Wartungsagent: Das Team startet und stoppt ihn.",
   reviewer: "Prüfer des Schreibers: Er kann nur gestoppt werden, der Schreiber startet ihn bei Bedarf wieder.",
+  usageContextShort: "Ktx {pct} %",
+  usageContextTokensShort: "Ktx {tokens}",
+  usageContextUnknownShort: "Ktx ?",
+  usageHourShort: "{tokens}/h",
+  usageHourUnknownShort: "?/h",
+  usageContext: "Kontext belegt {pct} % ({tokens} von {window} Token)",
+  usageContextPct: "Kontext belegt {pct} %",
+  usageContextTokens: "Kontext {tokens} Token (das Fenster des Modells steht nicht in den Logs: Anteil unbekannt)",
+  usageContextUnknown: "Kontext: unbekannt",
+  usageReadAt: "gelesen um {time}",
+  usageHour: "{tokens} Token in der letzten Stunde",
+  usageCountedAt: "gezählt von der Sentinella um {time}",
+  usageHourUnknown: "Token der letzten Stunde: unbekannt",
+  usageHowCounted: "Gezählt werden die neuen Token, Eingabe und Ausgabe: der bereits zwischengespeicherte Teil zählt nicht.",
+  usageUnknownWhy: "„Unbekannt“ heißt nicht null: Das Team sagt es für diesen Agenten nicht (Logs nicht lesbar, ein älteres Image, oder die Sentinella hat in der letzten Viertelstunde nicht gezählt).",
 };
 
 const es: AgentsPanelText = {
@@ -476,6 +537,21 @@ const es: AgentsPanelText = {
     "Solo lectura: para encender, apagar o poner en pausa los agentes, conecta el equipo con «Confirmar y conectar».",
   maintenance: "Agente de mantenimiento: lo inicia y lo detiene el equipo.",
   reviewer: "Revisor del Escritor: solo se puede apagar, el Escritor lo vuelve a iniciar cuando hace falta.",
+  usageContextShort: "ctx {pct} %",
+  usageContextTokensShort: "ctx {tokens}",
+  usageContextUnknownShort: "ctx ?",
+  usageHourShort: "{tokens}/h",
+  usageHourUnknownShort: "?/h",
+  usageContext: "contexto usado {pct} % ({tokens} de {window} tokens)",
+  usageContextPct: "contexto usado {pct} %",
+  usageContextTokens: "contexto {tokens} tokens (la ventana del modelo no está en los registros: porcentaje desconocido)",
+  usageContextUnknown: "contexto: no lo sé",
+  usageReadAt: "leído a las {time}",
+  usageHour: "{tokens} tokens en la última hora",
+  usageCountedAt: "contados por la Sentinella a las {time}",
+  usageHourUnknown: "tokens de la última hora: no lo sé",
+  usageHowCounted: "Son los tokens nuevos, de entrada y de salida: la parte que ya estaba en caché no cuenta.",
+  usageUnknownWhy: "«No lo sé» no quiere decir cero: el equipo no lo dice para este agente (registros ilegibles, una imagen más antigua, o la Sentinella no ha contado en el último cuarto de hora).",
 };
 
 const fr: AgentsPanelText = {
@@ -571,6 +647,21 @@ const fr: AgentsPanelText = {
     "Lecture seule : pour démarrer, arrêter ou mettre en pause les agents, reliez l’équipe avec « Confirmer et relier ».",
   maintenance: "Agent de maintenance : c’est l’équipe qui le démarre et l’arrête.",
   reviewer: "Relecteur du Rédacteur : il ne peut qu’être arrêté, le Rédacteur le redémarre quand il le faut.",
+  usageContextShort: "ctx {pct} %",
+  usageContextTokensShort: "ctx {tokens}",
+  usageContextUnknownShort: "ctx ?",
+  usageHourShort: "{tokens}/h",
+  usageHourUnknownShort: "?/h",
+  usageContext: "contexte utilisé {pct} % ({tokens} sur {window} jetons)",
+  usageContextPct: "contexte utilisé {pct} %",
+  usageContextTokens: "contexte {tokens} jetons (la fenêtre du modèle n’est pas dans les journaux : pourcentage inconnu)",
+  usageContextUnknown: "contexte : inconnu",
+  usageReadAt: "lu à {time}",
+  usageHour: "{tokens} jetons dans la dernière heure",
+  usageCountedAt: "comptés par la Sentinella à {time}",
+  usageHourUnknown: "jetons de la dernière heure : inconnu",
+  usageHowCounted: "Ce sont les nouveaux jetons, en entrée et en sortie : la part déjà en cache ne compte pas.",
+  usageUnknownWhy: "« Inconnu » ne veut pas dire zéro : l’équipe ne le dit pas pour cet agent (journaux illisibles, image plus ancienne, ou la Sentinella n’a pas compté dans le dernier quart d’heure).",
 };
 
 const hu: AgentsPanelText = {
@@ -666,6 +757,21 @@ const hu: AgentsPanelText = {
     "Csak olvasás: az ügynökök bekapcsolásához, kikapcsolásához vagy szüneteltetéséhez csatlakoztasd a csapatot a „Megerősítés és csatlakozás” gombbal.",
   maintenance: "Karbantartó ügynök: a csapat indítja és állítja le.",
   reviewer: "Az Író lektora: csak kikapcsolni lehet, szükség esetén az Író indítja újra.",
+  usageContextShort: "ktx {pct}%",
+  usageContextTokensShort: "ktx {tokens}",
+  usageContextUnknownShort: "ktx ?",
+  usageHourShort: "{tokens}/ó",
+  usageHourUnknownShort: "?/ó",
+  usageContext: "kontextus foglaltsága {pct}% ({tokens} / {window} token)",
+  usageContextPct: "kontextus foglaltsága {pct}%",
+  usageContextTokens: "kontextus {tokens} token (a modell ablaka nincs a naplókban: az arány nem ismert)",
+  usageContextUnknown: "kontextus: nem tudom",
+  usageReadAt: "beolvasva: {time}",
+  usageHour: "{tokens} token az elmúlt órában",
+  usageCountedAt: "a Sentinella számolta: {time}",
+  usageHourUnknown: "az elmúlt óra tokenjei: nem tudom",
+  usageHowCounted: "Az új tokenek számítanak, bemenet és kimenet: a gyorsítótárban már meglévő rész nem.",
+  usageUnknownWhy: "A „nem tudom” nem nulla: a csapat ezt nem adja meg ehhez az ügynökhöz (olvashatatlan naplók, régebbi image, vagy a Sentinella nem számolt az elmúlt negyedórában).",
 };
 
 const pt: AgentsPanelText = {
@@ -761,6 +867,21 @@ const pt: AgentsPanelText = {
     "Só leitura: para ligar, desligar ou pôr em pausa os agentes, liga a equipa com «Confirmar e ligar».",
   maintenance: "Agente de manutenção: é a equipa que o arranca e o para.",
   reviewer: "Revisor do Escritor: só pode ser desligado, o Escritor volta a arrancá-lo quando for preciso.",
+  usageContextShort: "ctx {pct}%",
+  usageContextTokensShort: "ctx {tokens}",
+  usageContextUnknownShort: "ctx ?",
+  usageHourShort: "{tokens}/h",
+  usageHourUnknownShort: "?/h",
+  usageContext: "contexto usado {pct}% ({tokens} de {window} tokens)",
+  usageContextPct: "contexto usado {pct}%",
+  usageContextTokens: "contexto {tokens} tokens (a janela do modelo não está nos registos: percentagem desconhecida)",
+  usageContextUnknown: "contexto: não sei",
+  usageReadAt: "lido às {time}",
+  usageHour: "{tokens} tokens na última hora",
+  usageCountedAt: "contados pela Sentinella às {time}",
+  usageHourUnknown: "tokens da última hora: não sei",
+  usageHowCounted: "São os tokens novos, de entrada e de saída: a parte que já estava em cache não conta.",
+  usageUnknownWhy: "«Não sei» não quer dizer zero: a equipa não o diz para este agente (registos ilegíveis, uma imagem mais antiga, ou a Sentinella não contou no último quarto de hora).",
 };
 
 export const AGENTS_PANEL_TEXT: Record<Locale, AgentsPanelText> = { it, en, de, es, fr, hu, pt };

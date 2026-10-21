@@ -499,6 +499,37 @@ def _text(value):
     return value if isinstance(value, str) and len(value) <= 40 else None
 
 
+# role-usage.json is written by the sentinel bridge at each of its readings (every
+# 5 min); older than this it is not the last hour any more, as the bridge reads it.
+HOUR_USAGE_MAX_AGE_S = 15 * 60
+
+
+def _hour_usage(now: float | None = None) -> tuple[dict, float] | None:
+    """({agent: tokens of the last hour}, when counted) from the bridge's file,
+    or None when it is missing, older than HOUR_USAGE_MAX_AGE_S or of an image
+    that does not count per agent."""
+    try:
+        data = json.loads((jht_home() / "logs" / "role-usage.json").read_text(encoding="utf-8"))
+        at = datetime.fromisoformat(str(data["generated_at"])).timestamp()
+    except (OSError, ValueError, TypeError, KeyError, AttributeError):
+        return None
+    agents = data.get("agents_1h")
+    now = datetime.now(timezone.utc).timestamp() if now is None else now
+    if not isinstance(agents, dict) or not -60 <= now - at <= HOUR_USAGE_MAX_AGE_S:
+        return None
+    return agents, at
+
+
+def _usage(name: str, known: dict, hour: tuple[dict, float] | None) -> dict:
+    """How full the agent's context is (agent_state.py) and its tokens of the
+    last hour (the bridge). Each field None when it is not known: never 0."""
+    context = known.get("context") if isinstance(known.get("context"), dict) else {}
+    return {"context_pct": _number(context.get("pct")), "context_tokens": _number(context.get("tokens")),
+            "context_window": _number(context.get("window")), "context_at": _number(context.get("at")),
+            "tokens_1h": _number(hour[0].get(name.lower())) if hour else None,
+            "tokens_at": hour[1] if hour else None}
+
+
 def read_list() -> dict:
     live = _sessions()
     if live is None:
@@ -513,6 +544,7 @@ def read_list() -> dict:
     except Exception:  # noqa: BLE001 - no state is «unknown», never an error
         states = None
     identities = _identities(set(live))
+    hour = _hour_usage()
     items = []
     for name in sorted(live)[:200]:
         created, activity = live[name]
@@ -521,7 +553,8 @@ def read_list() -> dict:
         items.append({"name": name, "created": created, "activity": activity,
                       "state": _text(known.get("state")), "reason": _text(known.get("reason")),
                       "since": _number(known.get("since")), "until": _number(known.get("until")),
-                      "identity": identities.get(name)})
+                      "identity": identities.get(name),
+                      "usage": _usage(name, known, hour)})
     return {"ok": True, "data": {"items": items, "states": states is not None}}
 
 

@@ -162,6 +162,23 @@ def test_role_usage_splits_three_providers_by_role_and_window(home):
     assert shares == pytest.approx(100.0, abs=0.2)
 
 
+def test_the_last_hour_per_agent_says_zero_only_for_an_agent_whose_logs_it_read(home):
+    """The agents panel shows these next to the state: 0 is a count, a missing
+    agent is «not known»."""
+    now = NOW - 60  # the events of an hour ago are inside the hour
+    data = series.role_usage(series.provider_windows(SAMPLE, NOW), now, provider="openai")
+    # critico-S2 has logs in the week and nothing in the hour: 0, under its lower-case name;
+    # the session without an agent is nobody's
+    assert data["agents_1h"] == {"scout-1": 1200, "capitano": 1000, "analista-2": 500, "critico-s2": 0}
+    # the 5h and week counts are the same as without it
+    assert data["windows"]["5h"]["total_kt"] == 3.2
+
+    # without the provider's windows the hour is still counted, from the hour's own logs
+    alone = series.role_usage({}, now, provider="openai")
+    assert alone["windows"] == {}
+    assert alone["agents_1h"] == {"scout-1": 1200, "capitano": 1000, "analista-2": 500}
+
+
 def test_bridge_writes_role_usage_and_the_tick_carries_it(home, tmp_path, monkeypatch):
     out = tmp_path / "logs" / "role-usage.json"
     out.parent.mkdir()

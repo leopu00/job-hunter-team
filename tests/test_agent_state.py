@@ -479,3 +479,65 @@ def test_every_reason_the_module_emits_is_declared():
     declared = {r for rs in st.REASONS.values() for r in rs}
     assert quoted <= declared, quoted - declared
     assert declared <= quoted, declared - quoted
+
+
+# ── how full the context is (the panel's health in small) ─────────────
+
+def x_tokens(ts, total, window=258400):
+    return x_event(ts, "token_count", info={
+        "total_token_usage": {"input_tokens": total * 3, "total_tokens": total * 3},
+        "last_token_usage": {"input_tokens": total - 500, "cached_input_tokens": 1000,
+                             "output_tokens": 500, "reasoning_output_tokens": 100, "total_tokens": total},
+        "model_context_window": window}, rate_limits=None)
+
+
+def c_usage(ts, sidechain=False, **usage):
+    line = {"type": "assistant", "timestamp": iso(ts),
+            "message": {"stop_reason": "tool_use", "content": [], "usage": usage}}
+    if sidechain:
+        line["isSidechain"] = True
+    return line
+
+
+def test_codex_says_the_context_of_its_last_call_against_its_own_window(tmp_path):
+    box = Box(tmp_path)
+    box.codex([x_event(T, "task_started"),
+               x_event(T + 1, "token_count", info=None, rate_limits={}),  # the first one has no reading
+               x_tokens(T + 5, 51680), x_item(T + 6), x_tokens(NOW - 20, 129200)])
+    v = box.derive()
+    assert v["state"] == "lavora"
+    assert v["context"] == {"at": round(NOW - 20, 3), "tokens": 129200, "window": 258400, "pct": 50.0}
+
+
+def test_kimi_says_the_share_of_its_context(tmp_path):
+    box = Box(tmp_path)
+    box.kimi(kimi_turn(T, None) + [k(NOW - 30, "StatusUpdate", context_usage=0.1234,
+                                     token_usage={"input_other": 10, "output": 5})])
+    assert box.derive()["context"] == {"at": NOW - 30, "tokens": None, "window": None, "pct": 12.3}
+
+
+def test_claude_says_the_tokens_and_not_the_window_so_the_share_is_not_known(tmp_path):
+    box = Box(tmp_path)
+    box.claude([c_prompt(T),
+                c_usage(T + 5, input_tokens=4, cache_creation_input_tokens=2000,
+                        cache_read_input_tokens=80000, output_tokens=300),
+                # a subagent's call fills its own context, not the agent's
+                c_usage(NOW - 10, sidechain=True, input_tokens=5, cache_read_input_tokens=900000)])
+    assert box.derive()["context"] == {"at": T + 5, "tokens": 82304, "window": None, "pct": None}
+
+
+def test_no_reading_or_a_previous_runs_reading_is_no_context(tmp_path):
+    box = Box(tmp_path / "none")
+    box.codex([x_event(T, "task_started"), x_item(NOW - 20)])
+    assert "context" not in box.derive()
+    old = Box(tmp_path / "old")
+    old.claude([c_prompt(CREATED - 3600), c_usage(CREATED - 3590, input_tokens=9, output_tokens=1),
+                c_prompt(T), c_tool(NOW - 20)])
+    assert "context" not in old.derive()
+    # a count that is not one is dropped, never shown
+    odd = Box(tmp_path / "odd")
+    odd.codex([x_event(T, "task_started"), x_event(NOW - 20, "token_count", info={
+        "last_token_usage": {"total_tokens": True}, "model_context_window": "big"})])
+    assert "context" not in odd.derive()
+    assert st._context(NOW, 300000, 258400)["pct"] == 100.0
+    assert st._context(NOW, share=1.7) is None

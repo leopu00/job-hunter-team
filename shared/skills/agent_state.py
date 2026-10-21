@@ -34,8 +34,14 @@ nothing about this one.
 Reasons are a closed list (REASONS); the sentence for each is the catalog's
 (shared/agent-state/catalog.json), never a text the agent or the CLI wrote.
 
+Beside the state, how full the agent's context is, from the same lines
+(`context`): the tokens of its last model call and, when the CLI writes it, the
+window they fill. Codex writes the window (model_context_window), Kimi the share
+(context_usage); Claude writes neither, so its percentage is not known (None),
+never guessed from the model's name.
+
 CLI:
-    python3 agent_state.py          # {session-lower: {state, reason?, since, until?}}
+    python3 agent_state.py          # {session-lower: {state, reason?, since, until?, context?}}
 """
 from __future__ import annotations
 
@@ -110,6 +116,33 @@ class Parsed:
     events: list[Ev] = field(default_factory=list)
     lines: int = 0       # JSON objects read
     recognised: int = 0  # of which this CLI's own record types
+    context: dict | None = None  # the newest reading of the context (_context)
+
+
+# More than any model's window: a bigger number is not a count of tokens.
+MAX_CONTEXT_TOKENS = 100_000_000
+
+
+def _count(value) -> int | None:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    return int(value) if 0 <= value <= MAX_CONTEXT_TOKENS else None
+
+
+def _context(ts: float, tokens=None, window=None, share=None) -> dict | None:
+    """One reading of the context: {at, tokens, window, pct}, each None when
+    the line does not say it. The percentage comes from the CLI's own window or
+    share, never from a table of models."""
+    tokens, window = _count(tokens), _count(window)
+    pct = None
+    if tokens is not None and window:
+        pct = min(100.0, tokens * 100.0 / window)
+    elif isinstance(share, (int, float)) and not isinstance(share, bool) and 0 <= share <= 1:
+        pct = share * 100.0
+    if tokens is None and pct is None:
+        return None
+    return {"at": ts, "tokens": tokens, "window": window or None,
+            "pct": round(pct, 1) if pct is not None else None}
 
 
 def _iso(value) -> float | None:
@@ -197,6 +230,14 @@ def parse_claude(lines: Iterable[str]) -> Parsed:
                 out.events.append(Ev(ts, "blocked", reason=reason, until=until))
             else:
                 out.events.append(Ev(ts, "activity"))
+                usage = msg.get("usage")
+                # a subagent's call fills its own context, not the agent's
+                if isinstance(usage, dict) and not e.get("isSidechain"):
+                    parts = [_count(usage.get(key)) for key in (
+                        "input_tokens", "cache_creation_input_tokens",
+                        "cache_read_input_tokens", "output_tokens")]
+                    if any(part is not None for part in parts):
+                        out.context = _context(ts, sum(part or 0 for part in parts)) or out.context
         elif kind == "system" and e.get("subtype") == "turn_duration":
             out.events.append(Ev(ts, "turn_end"))
     return out
@@ -234,6 +275,14 @@ def parse_codex(lines: Iterable[str]) -> Parsed:
                 out.events.append(Ev(ts, "turn_end"))
             else:
                 out.events.append(Ev(ts, "activity"))
+            info = payload.get("info") if sub == "token_count" else None
+            # the first token_count of a session has info null: no reading yet
+            if isinstance(info, dict) and isinstance(info.get("last_token_usage"), dict):
+                last = info["last_token_usage"]
+                tokens = last.get("total_tokens")
+                if _count(tokens) is None and _count(last.get("input_tokens")) is not None:
+                    tokens = _count(last.get("input_tokens")) + (_count(last.get("output_tokens")) or 0)
+                out.context = _context(ts, tokens, info.get("model_context_window")) or out.context
         elif kind == "response_item":
             out.events.append(Ev(ts, "activity"))
     return out
@@ -306,6 +355,8 @@ def parse_kimi(lines: Iterable[str], session: str = "",
         elif kind in _KIMI_PROGRESS:
             step_progress = True
             out.events.append(Ev(ts, "activity"))
+            if kind == "StatusUpdate":
+                out.context = _context(ts, share=payload.get("context_usage")) or out.context
         elif kind == "StepInterrupted":
             if step_ts is not None and not step_progress and ts - step_ts <= KIMI_FAST_FAIL_S:
                 fast_fail = True
@@ -456,10 +507,11 @@ def _newer(paths: Iterable[Path], since: float) -> list[Path]:
     return sorted(keep, key=lambda p: p.stat().st_mtime, reverse=True)
 
 
-def collect(src: Sources, cwd: str, created: float) -> tuple[list[Ev], bool, bool]:
-    """(events, readable, unrecognised) of the agent whose cwd is `cwd`, from
-    the logs written since its session started. Events of the CLI with the
-    newest one."""
+def collect(src: Sources, cwd: str, created: float) -> tuple[list[Ev], bool, bool, dict | None]:
+    """(events, readable, unrecognised, context) of the agent whose cwd is
+    `cwd`, from the logs written since its session started. Events and context
+    of the CLI with the newest event; a context read before the session
+    started belongs to a previous run and is None."""
     since = created - CLOCK_SLACK_S
     candidates: list[Parsed] = []
     listed = False
@@ -513,9 +565,10 @@ def collect(src: Sources, cwd: str, created: float) -> tuple[list[Ev], bool, boo
 
     unrecognised = seen_lines >= 5 and seen_known == 0
     if not candidates:
-        return [], listed, unrecognised
+        return [], listed, unrecognised, None
     best = max(candidates, key=lambda p: p.events[-1].ts)
-    return best.events, listed, False
+    context = best.context if best.context and best.context["at"] >= since else None
+    return best.events, listed, False, context
 
 
 def agent_dir(home: Path, uid: str) -> Path | None:
@@ -583,12 +636,15 @@ def derive(uid: str, home: Path, created: float | None, now: float,
     cwd = agent_dir(home, uid)
     if cwd is None:
         return verdict("sconosciuto", "fonti_illeggibili", created)
-    events, readable, unrecognised = collect(Sources(home), str(cwd), created)
+    events, readable, unrecognised, context = collect(Sources(home), str(cwd), created)
     cpu, cpu_age = read_cpu(home, uid, now)
     ctx = Ctx(now=now, session_created=created, cpu_pct=cpu, cpu_age_s=cpu_age,
               question=question_for(uid, questions or {}), readable=readable,
               unrecognised=unrecognised)
-    return fold(events, ctx)
+    out = fold(events, ctx)
+    if context is not None:
+        out["context"] = {**context, "at": round(context["at"], 3)}
+    return out
 
 
 # ── tmux and main ───────────────────────────────────────────────────────

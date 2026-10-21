@@ -106,6 +106,18 @@ def identities(names):
   if parts[0] not in names: continue
   seen[parts[0]]=None if parts[0] in seen or len(parts)!=4 else identity(*parts[1:])
  return seen
+def hour_usage():
+ try:
+  import os,time,datetime
+  data=json.load(open(os.environ.get('JHT_HOME','/jht_home')+'/logs/role-usage.json',encoding='utf-8'))
+  at=datetime.datetime.fromisoformat(str(data['generated_at'])).timestamp()
+  agents=data.get('agents_1h')
+  if isinstance(agents,dict) and -60<=time.time()-at<=900: return agents,at
+ except Exception: pass
+ return None
+def usage(name,known,hour):
+ context=known.get('context') if isinstance(known.get('context'),dict) else {}
+ return {'context_pct':number(context.get('pct')),'context_tokens':number(context.get('tokens')),'context_window':number(context.get('window')),'context_at':number(context.get('at')),'tokens_1h':number(hour[0].get(name.lower())) if hour else None,'tokens_at':hour[1] if hour else None}
 if req.get('op')=='list':
  live=sessions()
  states=None
@@ -116,12 +128,13 @@ if req.get('op')=='list':
    if isinstance(value,dict): states=value
  except Exception: states=None
  ids=identities(set(live))
+ hour=hour_usage()
  items=[]
  for name in sorted(live)[:200]:
   created,activity=live[name]
   known=states.get(name.lower()) if states is not None else None
   known=known if isinstance(known,dict) else {}
-  items.append({'name':name,'created':created,'activity':activity,'state':text(known.get('state')),'reason':text(known.get('reason')),'since':number(known.get('since')),'until':number(known.get('until')),'identity':ids.get(name)})
+  items.append({'name':name,'created':created,'activity':activity,'state':text(known.get('state')),'reason':text(known.get('reason')),'since':number(known.get('since')),'until':number(known.get('until')),'identity':ids.get(name),'usage':usage(name,known,hour)})
  emit({'ok':True,'data':{'items':items,'states':states is not None}})
 if req.get('op')=='screen':
  name=req.get('name')
@@ -288,6 +301,35 @@ pub(crate) fn plain_text(raw: &str) -> String {
     text
 }
 
+/// A count of tokens, within what any model's window or hour could hold.
+fn token_count(value: Option<&Value>) -> Value {
+    match value.and_then(Value::as_f64) {
+        Some(value) if value.is_finite() && (0.0..=1e10).contains(&value) => json!(value.round() as u64),
+        _ => Value::Null,
+    }
+}
+
+/// How full the agent's context is (agent_state.py) and its tokens of the last
+/// hour (the sentinel bridge's role-usage.json). The same closed fields for
+/// every agent, each null when the team does not say it: an image older than
+/// this read says none of them, and null is never shown as 0.
+fn shape_usage(value: Option<&Value>) -> Value {
+    let usage = value.and_then(Value::as_object);
+    let field = |key: &str| usage.and_then(|usage| usage.get(key));
+    let pct = match field("context_pct").and_then(Value::as_f64) {
+        Some(pct) if pct.is_finite() && (0.0..=100.0).contains(&pct) => json!(pct),
+        _ => Value::Null,
+    };
+    json!({
+        "contextPct": pct,
+        "contextTokens": token_count(field("context_tokens")),
+        "contextWindow": token_count(field("context_window")),
+        "contextAt": epoch_number(field("context_at")),
+        "tokensHour": token_count(field("tokens_1h")),
+        "tokensAt": epoch_number(field("tokens_at")),
+    })
+}
+
 /// The reply of the container, reduced to what the page shows: only the
 /// agents' sessions, only the closed list of fields.
 pub(crate) fn shape_reply(request: &AgentsRequest, reply: &Value) -> Option<Value> {
@@ -322,6 +364,7 @@ pub(crate) fn shape_reply(request: &AgentsRequest, reply: &Value) -> Option<Valu
                 agent.insert("reason".into(), known("reason"));
                 agent.insert("since".into(), if states { epoch_number(item.get("since")) } else { Value::Null });
                 agent.insert("until".into(), if states { epoch_number(item.get("until")) } else { Value::Null });
+                agent.insert("usage".into(), shape_usage(item.get("usage")));
                 agents.push(Value::Object(agent));
             }
             let roles: Vec<Value> = ROLE_ORDER
@@ -539,6 +582,34 @@ mod tests {
     }
 
     #[test]
+    fn the_health_of_an_agent_is_closed_and_what_is_not_known_is_null_never_zero() {
+        let mut reply = list_reply(&["CAPITANO", "SCOUT-1", "SCOUT-2", "SCORER-1"]);
+        reply["data"]["items"][0]["usage"] = json!({"context_pct": 42.5, "context_tokens": 109_820, "context_window": 258_400,
+            "context_at": 1_760_000_090.25, "tokens_1h": 12_345, "tokens_at": 1_760_000_000.0, "extra": "dropped"});
+        // a real zero stays zero
+        reply["data"]["items"][1]["usage"] = json!({"context_pct": 0, "context_tokens": 0, "context_window": null,
+            "context_at": 1_760_000_090, "tokens_1h": 0, "tokens_at": 1_760_000_000});
+        // what is not a count is not passed on
+        reply["data"]["items"][2]["usage"] = json!({"context_pct": 140, "context_tokens": -3, "context_window": "258k",
+            "context_at": true, "tokens_1h": "<b>9</b>", "tokens_at": -1});
+        // SCORER-1: an image older than this read sends no usage at all
+        let shaped = shape_reply(&AgentsRequest::List {}, &reply).unwrap();
+        let usage = |n: usize| shaped["data"]["agents"][n]["usage"].clone();
+        assert_eq!(
+            usage(0),
+            json!({"contextPct": 42.5, "contextTokens": 109_820, "contextWindow": 258_400, "contextAt": 1_760_000_090.25,
+                "tokensHour": 12_345, "tokensAt": 1_760_000_000.0})
+        );
+        assert_eq!(usage(1)["contextPct"], 0.0);
+        assert_eq!(usage(1)["tokensHour"], 0);
+        assert_eq!(usage(1)["contextWindow"], Value::Null);
+        let unknown = json!({"contextPct": null, "contextTokens": null, "contextWindow": null, "contextAt": null,
+            "tokensHour": null, "tokensAt": null});
+        assert_eq!(usage(2), unknown);
+        assert_eq!(usage(3), unknown);
+    }
+
+    #[test]
     fn only_a_complete_reply_is_shown() {
         assert!(shape_reply(&AgentsRequest::List {}, &json!({"ok":false,"error":"agents_unavailable"})).is_none());
         assert!(shape_reply(&AgentsRequest::List {}, &json!({"ok":true,"data":{"items":[]}})).is_none());
@@ -657,6 +728,7 @@ mod tests {
             let mut child = std::process::Command::new("python3")
                 .args(["-c", "import sys;exec(bytes.fromhex(sys.stdin.buffer.readline().decode()).decode())"])
                 .env("PATH", format!("{}:{}", dir.display(), std::env::var("PATH").unwrap_or_default()))
+                .env("JHT_HOME", &dir)
                 .stdin(std::process::Stdio::piped())
                 .stdout(std::process::Stdio::piped())
                 .spawn()
@@ -671,9 +743,31 @@ mod tests {
         let run = |request: &AgentsRequest| run_script(&script, request);
         let list = run(&AgentsRequest::List {});
         assert_eq!(list["data"]["states"], false, "no agent_state.py outside the container");
+        assert_eq!(list["data"]["items"][0]["usage"]["tokens_1h"], Value::Null, "no role-usage.json: not known");
+        // the bridge's count of the last hour, written a moment ago: CAPITANO counted 0, CRITICO-S3 not counted
+        let now = std::process::Command::new("python3")
+            .args(["-c", "import datetime;print(datetime.datetime.now(datetime.timezone.utc).isoformat())"])
+            .output()
+            .unwrap();
+        let now = String::from_utf8(now.stdout).unwrap();
+        std::fs::create_dir_all(dir.join("logs")).unwrap();
+        let role_usage = |at: &str| {
+            std::fs::write(dir.join("logs/role-usage.json"), json!({"generated_at": at.trim(), "agents_1h": {"capitano": 0, "scout-1": 900}}).to_string())
+                .unwrap()
+        };
+        role_usage(&now);
+        let counted = shape_reply(&AgentsRequest::List {}, &run(&AgentsRequest::List {})).unwrap();
+        assert_eq!(counted["data"]["agents"][0]["usage"]["tokensHour"], 0);
+        assert!(counted["data"]["agents"][0]["usage"]["tokensAt"].is_f64());
+        assert_eq!(counted["data"]["agents"][1]["usage"]["tokensHour"], Value::Null);
+        // a count older than the bridge's own 15 minutes is not the last hour any more
+        role_usage("2026-01-01T00:00:00+00:00");
+        let stale = shape_reply(&AgentsRequest::List {}, &run(&AgentsRequest::List {})).unwrap();
+        assert_eq!(stale["data"]["agents"][0]["usage"]["tokensHour"], Value::Null);
+        assert_eq!(stale["data"]["agents"][0]["usage"]["tokensAt"], Value::Null);
         // with agent_state.py there (a stand-in that answers as the real one does), its states come through
         let state = dir.join("agent_state.py");
-        std::fs::write(&state, "import json\nprint(json.dumps({'capitano':{'state':'lavora','since':1760000050},'critico-s3':{'state':'bloccato','reason':'limite_5h','until':1760003600}}))\n").unwrap();
+        std::fs::write(&state, "import json\nprint(json.dumps({'capitano':{'state':'lavora','since':1760000050,'context':{'at':1760000090,'tokens':109820,'window':258400,'pct':42.5}},'critico-s3':{'state':'bloccato','reason':'limite_5h','until':1760003600}}))\n").unwrap();
         let with_state = script.replace("/nonexistent/agent_state.py", &state.display().to_string());
         let stated = shape_reply(&AgentsRequest::List {}, &run_script(&with_state, &AgentsRequest::List {})).unwrap();
         assert_eq!(stated["data"]["states"], true);
@@ -681,6 +775,9 @@ mod tests {
         assert_eq!(stated["data"]["agents"][0]["since"], 1_760_000_050.0);
         assert_eq!(stated["data"]["agents"][1]["state"], "bloccato");
         assert_eq!(stated["data"]["agents"][1]["reason"], "limite_5h");
+        assert_eq!(stated["data"]["agents"][0]["usage"]["contextPct"], 42.5);
+        assert_eq!(stated["data"]["agents"][0]["usage"]["contextWindow"], 258_400);
+        assert_eq!(stated["data"]["agents"][1]["usage"]["contextPct"], Value::Null);
         let shaped = shape_reply(&AgentsRequest::List {}, &list).unwrap();
         assert_eq!(names(&shaped), ["CAPITANO", "CRITICO-S3"]);
         assert_eq!(shaped["data"]["agents"][1]["activity"], 1_760_000_200);
