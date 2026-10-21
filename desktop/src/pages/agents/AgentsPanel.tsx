@@ -207,11 +207,11 @@ function Terminal({ row, t }: { row: PanelRow; t: AgentsPanelText }) {
   if (!screen.value.up) return <p className="text-[11px] text-[var(--color-muted)]">{t.screenDown}</p>;
   return (
     <>
-      <p className="text-[10px] mb-1 text-[var(--color-muted)]">{fill(t.screenAt, { time: stamp(screen.at) })}</p>
+      <p className="text-[11px] mb-1 text-[var(--color-muted)]">{fill(t.screenAt, { time: stamp(screen.at) })}</p>
       {/* Text only: React escapes it, nothing in it is ever HTML. */}
       <pre
         data-testid={`panel-terminal-${session}`}
-        className="text-[10px] leading-snug whitespace-pre-wrap break-words max-h-[55vh] overflow-auto rounded p-2"
+        className="text-[11px] leading-snug whitespace-pre-wrap break-words max-h-[55vh] overflow-auto rounded p-2"
         style={{ background: "var(--color-deep)", color: "var(--color-bright)" }}
       >
         {screen.value.text === "" ? t.screenEmpty : screen.value.text}
@@ -429,7 +429,7 @@ export default function AgentsPanel({ search }: PageProps) {
           type="button"
           onClick={() => void read()}
           disabled={busy}
-          className="text-[10px] font-semibold tracking-widest uppercase px-3 py-1.5 rounded border border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-bright)] disabled:opacity-60 disabled:cursor-wait"
+          className="text-[11px] font-semibold tracking-widest uppercase px-3 py-1.5 rounded border border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-bright)] disabled:opacity-60 disabled:cursor-wait"
         >
           {busy ? t.refreshing : t.refresh}
         </button>
@@ -471,7 +471,7 @@ export default function AgentsPanel({ search }: PageProps) {
                 type="button"
                 data-testid={paused ? "panel-resume" : "panel-pause"}
                 onClick={() => setPending(paused ? { kind: "resume" } : { kind: "pause" })}
-                className="text-[10px] font-semibold uppercase tracking-widest px-3 py-1 rounded border border-[var(--color-border)] text-[var(--color-bright)]"
+                className="text-[11px] font-semibold uppercase tracking-widest px-3 py-1 rounded border border-[var(--color-border)] text-[var(--color-bright)]"
               >
                 {paused ? t.resume : t.pause}
               </button>
@@ -487,7 +487,7 @@ export default function AgentsPanel({ search }: PageProps) {
               {t.statesUnknown}
             </p>
           )}
-          <p className="text-[10px] mb-2 text-[var(--color-muted)]">{fill(t.readAt, { time: stamp(list.at) })}</p>
+          <p className="text-[11px] mb-2 text-[var(--color-muted)]">{fill(t.readAt, { time: stamp(list.at) })}</p>
 
           <div className="flex flex-col md:flex-row gap-3 min-h-0">
             <ul aria-label={t.title} className="md:w-[260px] shrink-0 flex flex-col gap-px rounded border overflow-hidden" style={{ borderColor: "var(--color-border)", opacity: busy ? 0.6 : 1 }}>
@@ -511,12 +511,12 @@ export default function AgentsPanel({ search }: PageProps) {
                       <span className="text-[11px] font-semibold tracking-wider w-[110px] shrink-0" style={{ color: row.agent ? "var(--color-white)" : "var(--color-muted)" }}>
                         {row.session}
                       </span>
-                      <span className="text-[10px] truncate" style={{ color: "var(--color-muted)" }}>
+                      <span className="text-[11px] truncate" style={{ color: "var(--color-muted)" }}>
                         {stateLine(t, row)}
                       </span>
                     </button>
                     {notices[row.session] && !notices[row.session].ok && (
-                      <p role="alert" className="px-3 pb-1 text-[10px] text-[var(--color-red)]">
+                      <p role="alert" className="px-3 pb-1 text-[11px] text-[var(--color-red)]">
                         {notices[row.session].text}
                       </p>
                     )}
@@ -534,7 +534,7 @@ export default function AgentsPanel({ search }: PageProps) {
                       <span className="text-[13px] font-bold tracking-widest" style={{ color: "var(--color-white)" }}>
                         {current.session}
                       </span>
-                      <span className="text-[10px] uppercase tracking-widest" style={{ color: current.agent ? "var(--color-green)" : "var(--color-dim)" }}>
+                      <span className="text-[11px] uppercase tracking-widest" style={{ color: current.agent ? "var(--color-green)" : "var(--color-dim)" }}>
                         {current.agent ? t.up : current.heldByUser ? t.heldByUser : t.down}
                       </span>
                     </div>
@@ -546,7 +546,7 @@ export default function AgentsPanel({ search }: PageProps) {
                       {stateLine(t, current)}
                     </p>
                     {current.agent && (
-                      <p className="text-[10px] mt-0.5 text-[var(--color-muted)]">
+                      <p className="text-[11px] mt-0.5 text-[var(--color-muted)]">
                         {fill(t.started, { time: clock(current.agent.created) })} · {fill(t.activity, { time: clock(current.agent.activity) })}
                         {current.agent.activity !== null &&
                           current.agent.state.state !== "lavora" &&
@@ -555,8 +555,8 @@ export default function AgentsPanel({ search }: PageProps) {
                           )}
                       </p>
                     )}
-                    {SCHEDULED.has(current.session) && <p className="text-[10px] mt-1 text-[var(--color-dim)]">{t.maintenance}</p>}
-                    {REVIEWER.test(current.session) && <p className="text-[10px] mt-1 text-[var(--color-dim)]">{t.reviewer}</p>}
+                    {SCHEDULED.has(current.session) && <p className="text-[11px] mt-1 text-[var(--color-dim)]">{t.maintenance}</p>}
+                    {REVIEWER.test(current.session) && <p className="text-[11px] mt-1 text-[var(--color-dim)]">{t.reviewer}</p>}
                   </div>
                   <div className="flex items-center gap-2">
                     {rowActions(current, readOnly).map((op) => (
@@ -565,7 +565,7 @@ export default function AgentsPanel({ search }: PageProps) {
                         type="button"
                         data-testid={`panel-${op}`}
                         onClick={() => setPending({ kind: "agent", op, row: current })}
-                        className={`text-[10px] font-semibold uppercase tracking-widest px-3 py-1 rounded border ${op === "stop" ? "ml-3" : ""}`}
+                        className={`text-[11px] font-semibold uppercase tracking-widest px-3 py-1 rounded border ${op === "stop" ? "ml-3" : ""}`}
                         style={
                           op === "stop"
                             ? { color: "var(--color-red)", borderColor: "var(--color-red)" }
@@ -598,7 +598,7 @@ export default function AgentsPanel({ search }: PageProps) {
                       type="button"
                       aria-selected={tab === name}
                       onClick={() => setTab(name as "terminal" | "chat")}
-                      className="text-[10px] font-semibold uppercase tracking-widest pb-1"
+                      className="text-[11px] font-semibold uppercase tracking-widest pb-1"
                       style={{ color: tab === name ? "var(--color-white)" : "var(--color-muted)", borderBottom: tab === name ? "2px solid var(--color-white)" : "2px solid transparent" }}
                     >
                       {name === "terminal" ? t.tabTerminal : t.tabChat}

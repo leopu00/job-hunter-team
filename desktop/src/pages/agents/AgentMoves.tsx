@@ -26,7 +26,7 @@ export default function AgentMoves({ agent, moves, now }: { agent: AgentDef; mov
                 className="rounded-lg border-l-2 px-4 py-2.5"
                 style={{ background: "var(--color-card)", borderLeftColor: agent.color }}
               >
-                <div className="flex items-center gap-2 text-[9px] text-[var(--color-dim)] mb-1">
+                <div className="flex items-center gap-2 text-[11px] text-[var(--color-dim)] mb-1">
                   <span className="font-semibold" style={{ color: agent.color }}>
                     {m.actor}
                   </span>

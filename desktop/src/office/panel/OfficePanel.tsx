@@ -136,7 +136,7 @@ function Heading({ title, sub }: { title: string; sub?: string }) {
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <section className="mb-4">
-      <h3 className="m-0 mb-1.5 text-[10px] font-semibold uppercase tracking-widest text-[var(--color-dim)]">{title}</h3>
+      <h3 className="m-0 mb-1.5 text-[11px] font-semibold uppercase tracking-widest text-[var(--color-dim)]">{title}</h3>
       {children}
     </section>
   );
@@ -160,7 +160,7 @@ function StateChip({ status }: { status: string | null }) {
   const locale = useLocale();
   const state = publicPositionState(status);
   return (
-    <span className="whitespace-nowrap text-[10px] font-semibold" style={{ color: PUBLIC_STATE_COLORS[state] }}>
+    <span className="whitespace-nowrap text-[11px] font-semibold" style={{ color: PUBLIC_STATE_COLORS[state] }}>
       {publicPositionStateLabel(state, locale)}
     </span>
   );
@@ -186,7 +186,7 @@ function AgentBody({ target, layout, statuses, client, onNavigate }: OfficePanel
       <Heading title={target.uid.toUpperCase()} sub={dept ? fill(t.departmentOf, { name: deptName(layout, dept) }) : target.role} />
       <Section title={t.sectionNow}>
         {tag ? (
-          <span className="rounded border px-2 py-0.5 text-[10px] font-bold tracking-widest" style={{ color: hex(tag.color), borderColor: hex(tag.color) }}>
+          <span className="rounded border px-2 py-0.5 text-[11px] font-bold tracking-widest" style={{ color: hex(tag.color), borderColor: hex(tag.color) }}>
             {tag.label}
           </span>
         ) : (
@@ -211,7 +211,7 @@ function AgentBody({ target, layout, statuses, client, onNavigate }: OfficePanel
           <ul className="m-0 list-none p-0">
             {data.moves.map((m, i) => (
               <li key={i} className="flex items-baseline gap-2 border-b border-[var(--color-border)] py-1 last:border-0">
-                <span className="w-16 flex-shrink-0 text-[10px] text-[var(--color-dim)]">{formatRelative(m.ts, locale)}</span>
+                <span className="w-16 flex-shrink-0 text-[11px] text-[var(--color-dim)]">{formatRelative(m.ts, locale)}</span>
                 <span className="min-w-0 flex-1 truncate">{m.position ? positionLine(m.position, t) : t.positionGone}</span>
                 <StateChip status={m.to} />
               </li>
@@ -240,7 +240,7 @@ function PhaseBody({ dept, layout, snapshot, client, source = "cloud", onNavigat
         <>
           <PositionList positions={data} onNavigate={onNavigate} />
           {count != null && count > data.length && (
-            <p className="m-0 mt-2 text-[10px] text-[var(--color-dim)]">{ofCount(locale, Math.min(data.length, PANEL_LIST_MAX), t.mostRecent)}</p>
+            <p className="m-0 mt-2 text-[11px] text-[var(--color-dim)]">{ofCount(locale, Math.min(data.length, PANEL_LIST_MAX), t.mostRecent)}</p>
           )}
         </>
       )}
@@ -276,11 +276,11 @@ function DepartmentBody({ dept, layout, snapshot, statuses, client, source = "cl
                 <li key={a.uid} className="flex items-baseline justify-between border-b border-[var(--color-border)] py-1 last:border-0">
                   <span>{a.uid.toUpperCase()}</span>
                   {tag ? (
-                    <span className="text-[10px] font-bold tracking-widest" style={{ color: hex(tag.color) }}>
+                    <span className="text-[11px] font-bold tracking-widest" style={{ color: hex(tag.color) }}>
                       {tag.label}
                     </span>
                   ) : (
-                    <span className="text-[10px] text-[var(--color-dim)]">—</span>
+                    <span className="text-[11px] text-[var(--color-dim)]">—</span>
                   )}
                 </li>
               );
@@ -305,9 +305,9 @@ function FoundPerDay({ client, source }: { client: PanelClient; source: "cloud" 
         <div className="flex h-20 items-end gap-1" role="img" aria-label={data.map((d) => `${d.day}: ${d.n}`).join(", ")}>
           {data.map((d) => (
             <div key={d.day} className="flex flex-1 flex-col items-center gap-0.5">
-              <span className="text-[9px] text-[var(--color-muted)]">{d.n}</span>
+              <span className="text-[11px] text-[var(--color-muted)]">{d.n}</span>
               <div className="w-full rounded-sm bg-[var(--color-green)]" style={{ height: `${(d.n / max) * 56}px`, minHeight: d.n ? 2 : 0 }} />
-              <span className="text-[9px] text-[var(--color-dim)]">{d.day.slice(8)}</span>
+              <span className="text-[11px] text-[var(--color-dim)]">{d.day.slice(8)}</span>
             </div>
           ))}
         </div>
@@ -320,7 +320,7 @@ function Kpi({ label, value }: { label: string; value: string | number }) {
   return (
     <div className="flex-1 rounded border border-[var(--color-border)] px-2 py-1.5 text-center">
       <div className="text-[15px] font-bold text-[var(--color-white)]">{value}</div>
-      <div className="text-[9px] uppercase tracking-widest text-[var(--color-dim)]">{label}</div>
+      <div className="text-[11px] uppercase tracking-widest text-[var(--color-dim)]">{label}</div>
     </div>
   );
 }
@@ -344,7 +344,7 @@ function CvBody({ client, source = "cloud", onNavigate }: OfficePanelProps) {
             <Kpi label={t.kpiNoVerdict} value={data.unreviewed} />
             <Kpi label={t.kpiAverage} value={avg ?? "—"} />
           </div>
-          {avg != null && <p className="m-0 mb-2 text-[10px] text-[var(--color-dim)]">{ofCount(locale, scored.length, t.averageNote)}</p>}
+          {avg != null && <p className="m-0 mb-2 text-[11px] text-[var(--color-dim)]">{ofCount(locale, scored.length, t.averageNote)}</p>}
           {data.list.length === 0 ? (
             <p className="m-0 text-[11px] text-[var(--color-muted)]">{t.noCv}</p>
           ) : (

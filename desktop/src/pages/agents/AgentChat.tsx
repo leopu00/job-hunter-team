@@ -122,19 +122,19 @@ export default function AgentChat({
                     <div className="flex items-center gap-2 mb-1.5">
                       {m.kind !== "notification" && (
                         <span
-                          className="text-[7.5px] font-semibold tracking-[0.14em] uppercase px-1 py-px rounded"
+                          className="text-[11px] font-semibold tracking-[0.14em] uppercase px-1 py-px rounded"
                           style={{ color: KIND_BORDER[m.kind], border: `1px solid ${KIND_BORDER[m.kind]}` }}
                         >
                           {kindLabel(m.kind, locale)}
                         </span>
                       )}
-                      <span className="text-[9px] text-[var(--color-dim)]">{formatRelative(m.created_at, locale)}</span>
+                      <span className="text-[11px] text-[var(--color-dim)]">{formatRelative(m.created_at, locale)}</span>
                     </div>
                     <MessageBody text={m.body} className="m-0 text-[12.5px] leading-relaxed text-[var(--color-base)]" />
                     {m.related_position_id && (
                       <Link
                         href={`/positions/${m.related_position_id}`}
-                        className="inline-block mt-1.5 text-[10px] text-[var(--color-blue)] hover:text-[var(--color-bright)] no-underline"
+                        className="inline-block mt-1.5 text-[11px] text-[var(--color-blue)] hover:text-[var(--color-bright)] no-underline"
                       >
                         {tr("see_position")}
                       </Link>
@@ -155,7 +155,7 @@ export default function AgentChat({
           {(error || blocked) && (
             <div
               role={error ? "alert" : "status"}
-              className="mb-2 px-3 py-1.5 rounded border text-[10px]"
+              className="mb-2 px-3 py-1.5 rounded border text-[11px]"
               style={{
                 borderColor: error ? "var(--color-red)" : "var(--color-yellow)",
                 color: error ? "var(--color-red)" : "var(--color-yellow)",
@@ -228,8 +228,8 @@ function UserBubble({
       }}
     >
       <div className="flex items-center gap-2 mb-1.5 justify-end">
-        <span className="text-[9px] font-semibold text-[var(--color-green)]">{you}</span>
-        {at && <span className="text-[9px] text-[var(--color-dim)]">{formatRelative(at, locale)}</span>}
+        <span className="text-[11px] font-semibold text-[var(--color-green)]">{you}</span>
+        {at && <span className="text-[11px] text-[var(--color-dim)]">{formatRelative(at, locale)}</span>}
         {children}
       </div>
       <MessageBody text={text} className="m-0 text-[12.5px] leading-relaxed text-[var(--color-base)]" />
