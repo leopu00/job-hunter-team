@@ -532,9 +532,17 @@
   transition: border-color 0.18s ease, background 0.18s ease, transform 0.18s ease;
 }
 
-.onboarding-choice:hover {
+.onboarding-choice:hover:not(:disabled) {
   transform: translateY(-1px);
   border-color: var(--color-border-glow);
+}
+
+/* A choice this platform cannot offer (Kimi on Windows): plainly off, with its
+   reason in the note right under the cards. */
+.onboarding-choice:disabled {
+  opacity: 0.5;
+  border-style: dashed;
+  cursor: not-allowed;
 }
 
 .onboarding-choice.is-selected {
