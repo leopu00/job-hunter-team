@@ -24,3 +24,7 @@
 .closer-desktop__artifact img { display: block; width: 100%; max-height: 420px; object-fit: contain; margin: 12px 0; }
 .closer-desktop__artifact p { font-size: .85rem; color: #bbc9db; }
 @media (max-width: 640px) { .closer-desktop { padding: 12px; } .closer-desktop header { flex-wrap: wrap; } .closer-desktop__block { grid-template-columns: 1fr; } }
+/* The entry on the Team page: on the right of its first row, out of the flow, so the page starts where it always does. */
+.closer-desktop-entry-row { position: relative; z-index: 1; display: flex; justify-content: flex-end; align-items: flex-start; height: 0; }
+.closer-desktop-entry-row .closer-desktop-entry { color: var(--color-bright, #e9edf5); background: var(--color-card, #23354d); border-color: var(--color-border-glow, #697d99); font-size: 12px; padding: 7px 12px; }
+.closer-desktop-entry-row + .closer-desktop { margin-top: 44px; }

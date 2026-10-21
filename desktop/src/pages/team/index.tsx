@@ -19,8 +19,11 @@ export default function TeamPage({ search }: PageProps) {
   const searchParams = Object.fromEntries(search);
   return (
     <>
-      <button type="button" className="closer-desktop-entry" aria-expanded={browserOpen}
-        onClick={() => setBrowserOpen((open) => !open)}>{desktopCopy().open}</button>
+      {/* on the right of the page's first row (the breadcrumb), not above it */}
+      <div className="closer-desktop-entry-row">
+        <button type="button" className="closer-desktop-entry" aria-expanded={browserOpen}
+          onClick={() => setBrowserOpen((open) => !open)}>{desktopCopy().open}</button>
+      </div>
       {browserOpen && <CloserDesktopPanel onClose={() => setBrowserOpen(false)} />}
       <ServerPage
         runKey={search.toString()}
