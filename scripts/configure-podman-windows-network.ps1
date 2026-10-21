@@ -10,6 +10,13 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+# Any failure here leaves with ONE stable code for the caller (install.ps1 →
+# the app): `podman_network_unready: <what failed>` on stderr, then exit 23.
+# The detail (which proxy, which answer) is in that line and in the log.
+trap {
+  [Console]::Error.WriteLine("podman_network_unready: $($_.Exception.Message)")
+  exit 23
+}
 $proxyPorts = @($Port, $BrokerPort, $TelegramPort)
 if (($proxyPorts | Where-Object { $_ -lt 1 -or $_ -gt 65535 }).Count -ne 0 -or
     ($proxyPorts | Sort-Object -Unique).Count -ne 3) {
@@ -257,6 +264,10 @@ $apiServiceWsl = ConvertTo-WslPath $apiServiceFile
 # that systemd already holds and that changed is picked up by restarting the
 # machine instead. Every systemctl runs under a timeout, so a stuck systemd
 # becomes an error instead of an endless wait.
+# «Changed on disk» is not only a rewritten unit: on a new machine systemd can
+# already hold a unit it was asked about before its file existed, and then it
+# starts the stale copy ("Run 'systemctl daemon-reload'" on every command).
+# systemd says so itself (NeedDaemonReload=yes): that unit takes the restart too.
 $egressServices = 'jht-windows-egress-proxy.service jht-windows-egress-proxy-broker.service jht-windows-egress-proxy-telegram.service'
 $runtimeServices = "$egressServices jht-rootless-podman.service"
 $unitInstall = ''
@@ -283,6 +294,7 @@ $machineOutput = @(Invoke-MachineShell ("set -e; units_changed=0; proxy_changed=
   "sudo timeout 60 systemctl disable --no-reload --now jht-rootless-podman.socket 2>/dev/null || true; " +
   "sudo rm -f /etc/systemd/system/jht-rootless-podman.socket /etc/systemd/system/sockets.target.wants/jht-rootless-podman.socket /etc/systemd/system/multi-user.target.wants/jht-rootless-podman.socket; " +
   "sudo timeout 60 systemctl enable --no-reload $runtimeServices; " +
+  "for unit in $runtimeServices; do if [ `"`$(sudo timeout 20 systemctl show -p NeedDaemonReload --value `$unit 2>/dev/null)`" = yes ]; then units_changed=1; fi; done; " +
   "if [ `$units_changed = 1 ]; then echo JHT_MACHINE_RESTART; exit 0; fi; " +
   "if [ `$proxy_changed = 1 ]; then sudo timeout 90 systemctl restart $egressServices; fi; " +
   "sudo timeout 90 systemctl start $runtimeServices"))
@@ -307,13 +319,77 @@ if (@($machineOutput | Where-Object { ([string]$_).Trim() -eq 'JHT_MACHINE_RESTA
   }
   if (-not $servicesActive) { throw "JHT egress services did not start after restarting Podman machine '$MachineName'." }
 }
-$validation = "agent=`$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' --proxy http://127.0.0.1:$Port https://ghcr.io/v2/) && test `"`$agent`" = 401 && " +
-  "broker=`$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' --proxy http://127.0.0.1:$BrokerPort https://ghcr.io/v2/) && test `"`$broker`" = 401 && " +
-  "curl --silent --show-error --output /dev/null --proxy http://127.0.0.1:$TelegramPort https://api.telegram.org/ && " +
-  "test `"`$(curl --silent --output /dev/null --write-out '%{http_code}' --proxy http://127.0.0.1:$Port https://example.com:993/)`" = 403 && " +
-  "test `"`$(curl --silent --output /dev/null --write-out '%{http_code}' --proxy http://127.0.0.1:$BrokerPort http://example.com/)`" = 403 && " +
-  "test `"`$(curl --silent --output /dev/null --write-out '%{http_code}' --proxy http://127.0.0.1:$TelegramPort https://example.com/)`" = 403"
-Invoke-MachineShell $validation
+# The proxies are checked only once they listen: `systemctl start` returns as
+# soon as a Type=simple service is forked, before python binds its port. Then
+# each check says what it asked and what came back, so a failure names the
+# proxy and the answer instead of a silent `&&` chain. Pure shell, run inside
+# the machine with the three ports as its arguments (tests run it with a fake
+# curl).
+$proxyCheck = @'
+set -u
+agent=$1 broker=$2 telegram=$3
+deadline=$(( $(date +%s) + ${JHT_PROXY_READY_SECONDS:-60} ))
+for port in "$agent" "$broker" "$telegram"; do
+  until (exec 3<>"/dev/tcp/127.0.0.1/$port") 2>/dev/null; do
+    if [ "$(date +%s)" -ge "$deadline" ]; then
+      echo "JHT_PROXY_UNREADY $port"
+      exit 3
+    fi
+    sleep 1
+  done
+done
+failed=0
+check() {
+  name=$1 port=$2 url=$3 expected=$4
+  got=$(curl --silent --output /dev/null --max-time 30 --write-out '%{http_code}' --proxy "http://127.0.0.1:$port" "$url" 2>/dev/null)
+  status=$?
+  [ -n "$got" ] || got=000
+  if [ "$expected" = reachable ]; then
+    if [ "$status" -eq 0 ]; then result=$got; else result="curl-$status"; failed=1; fi
+  else
+    result=$got
+    [ "$got" = "$expected" ] || failed=1
+  fi
+  echo "JHT_PROXY_CHECK $name $port $url $expected $result"
+}
+check agent "$agent" https://ghcr.io/v2/ 401
+check broker "$broker" https://ghcr.io/v2/ 401
+check telegram "$telegram" https://api.telegram.org/ reachable
+check agent "$agent" https://example.com:993/ 403
+check broker "$broker" http://example.com/ 403
+check telegram "$telegram" https://example.com/ 403
+exit $failed
+'@
+$proxyCheckEncoded = [Convert]::ToBase64String([Text.UTF8Encoding]::new($false).GetBytes($proxyCheck.Replace("`r`n", "`n")))
+$previousPreference = $ErrorActionPreference
+$ErrorActionPreference = 'Continue'
+try {
+  $checkOutput = @(& $Podman machine ssh $MachineName "echo $proxyCheckEncoded | base64 -d | bash -s -- $Port $BrokerPort $TelegramPort" 2>&1 | ForEach-Object { [string]$_ })
+  $checkCode = $LASTEXITCODE
+} finally {
+  $ErrorActionPreference = $previousPreference
+}
+$checkOutput | ForEach-Object { Write-Host $_ }
+if ($checkCode -ne 0) {
+  $unready = $null
+  $wrong = @()
+  foreach ($line in $checkOutput) {
+    if ($line -match '^JHT_PROXY_UNREADY (\d+)$') {
+      $unready = $Matches[1]
+    } elseif ($line -match '^JHT_PROXY_CHECK (\S+) (\d+) (\S+) (\S+) (\S+)$') {
+      $name, $checkPort, $url, $expected, $got = $Matches[1], $Matches[2], $Matches[3], $Matches[4], $Matches[5]
+      if ($expected -eq 'reachable') {
+        if ($got -like 'curl-*') { $wrong += "the $name proxy on 127.0.0.1:$checkPort could not reach $url ($got)" }
+      } elseif ($got -ne $expected) {
+        $wrong += "the $name proxy on 127.0.0.1:$checkPort answered $got for $url, expected $expected"
+      }
+    }
+  }
+  if ($unready) { throw "the proxy on 127.0.0.1:$unready did not start listening within 60 seconds." }
+  if ($wrong.Count -gt 0) { throw ($wrong -join '; ') }
+  throw "the proxy check exited with $checkCode."
+}
 Invoke-Checked $Podman '--connection' $MachineName 'info' '--format' 'rootless={{.Host.Security.Rootless}} cgroups={{.Host.CgroupManager}}' | Out-Null
 
 Write-Host "PODMAN WINDOWS NETWORK READY ($MachineName via agent=$Port broker=$BrokerPort telegram=$TelegramPort)" -ForegroundColor Green
+exit 0

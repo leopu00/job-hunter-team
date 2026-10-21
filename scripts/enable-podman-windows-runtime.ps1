@@ -327,22 +327,73 @@ function Install-JhtStartupTask {
   }
 }
 
+# Where Podman is: PATH as the system and the user have it NOW (a winget install
+# of an earlier run is not in this process's PATH), then winget's own folder.
+function Find-Podman {
+  Update-ProcessPath
+  $found = Get-Application 'podman.exe'
+  if (-not $found) {
+    $candidate = Join-Path $LocalAppData 'Programs\Podman\podman.exe'
+    if (Test-Path -LiteralPath $candidate -PathType Leaf) { $found = $candidate }
+  }
+  return $found
+}
+
+function Get-PodmanVersion {
+  param([string]$Path)
+  if (-not $Path) { return $null }
+  $line = @(& $Path --version 2>$null) | Select-Object -First 1
+  if ([string]$line -match '^podman(?:\.exe)? version (\S+)$') { return $Matches[1] }
+  return $null
+}
+
+# WSL opens its «Welcome to WSL» window (wslsettings) when one of the user's
+# distributions gets registered, unless the user's Lxss key says the welcome was
+# already shown: the DWORD OOBEComplete under HKCU\Software\Microsoft\Windows\
+# CurrentVersion\Lxss (WSL's LxssUserSession::_LaunchOOBEIfNeeded). `podman machine
+# init` registers one, so the window opened over the app in the middle of the setup.
+# Written only when absent or 0, never anything else; a failure here only costs the
+# window, never the setup.
+function Skip-WslWelcome {
+  $key = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Lxss'
+  try {
+    $current = (Get-ItemProperty -LiteralPath $key -Name 'OOBEComplete' -ErrorAction SilentlyContinue).OOBEComplete
+    if ($current) { return }
+    if (-not (Test-Path -LiteralPath $key)) { New-Item -Path $key -Force | Out-Null }
+    New-ItemProperty -LiteralPath $key -Name 'OOBEComplete' -PropertyType DWord -Value 1 -Force | Out-Null
+  } catch {
+    Write-Warning "Could not mark the WSL welcome as shown: $($_.Exception.Message)"
+  }
+}
+
+# winget's «already installed, no applicable update» (0x8A15002B): on a Try
+# again after a later step failed, Podman is there already. It is a success
+# only when the version installed is the one JHT pins; the check after the
+# install decides, never the exit code alone.
+$WingetUpdateNotApplicable = -1978335189
+
 if ($InstallDependencies) {
   Write-JhtPhase podman_install
   try {
-    if (-not (Get-Command winget -ErrorAction SilentlyContinue)) { throw 'winget is required to install Podman dependencies.' }
-    if (-not (Get-Application 'podman.exe')) { Invoke-Checked 'winget' 'install' '--exact' '--source' 'winget' '--version' $PodmanCliVersion '--silent' '--disable-interactivity' '--accept-package-agreements' '--accept-source-agreements' '--id' 'Podman.CLI' }
+    if ((Get-PodmanVersion (Find-Podman)) -ne $PodmanCliVersion) {
+      if (-not (Get-Command winget -ErrorAction SilentlyContinue)) { throw 'winget is required to install Podman dependencies.' }
+      & winget install --exact --source winget --version $PodmanCliVersion --silent --disable-interactivity --accept-package-agreements --accept-source-agreements --id Podman.CLI
+      $wingetCode = $LASTEXITCODE
+      if ($wingetCode -ne 0 -and $wingetCode -ne $WingetUpdateNotApplicable) {
+        throw "winget install Podman.CLI $PodmanCliVersion exited with $wingetCode."
+      }
+    }
   } catch {
     [Console]::Error.WriteLine("podman_not_installable: $($_.Exception.Message)")
     exit 21
   }
+  $installedVersion = Get-PodmanVersion (Find-Podman)
+  if ($installedVersion -and $installedVersion -ne $PodmanCliVersion) {
+    [Console]::Error.WriteLine("podman_version_mismatch: Podman $installedVersion is installed on this computer, and JHT needs Podman $PodmanCliVersion.")
+    exit 24
+  }
 }
-Update-ProcessPath
-$Podman = Get-Application 'podman.exe'
-if (-not $Podman) {
-  $candidate = Join-Path $LocalAppData 'Programs\Podman\podman.exe'
-  if (Test-Path -LiteralPath $candidate -PathType Leaf) { $Podman = $candidate }
-}
+$Podman = Find-Podman
 if (-not $Podman) { [Console]::Error.WriteLine('podman_not_installable: podman.exe is unavailable after installation.'); exit 21 }
 try { Install-PrivateComposeProvider -Destination $ComposeProvider } catch {
   [Console]::Error.WriteLine("podman_not_installable: $($_.Exception.Message)")
@@ -355,6 +406,7 @@ try {
   if (-not $machine) {
     if (-not $InitializeMachine) { throw "Podman machine '$MachineName' is absent; re-run with -InitializeMachine." }
     Write-JhtPhase podman_machine_init
+    Skip-WslWelcome
     Invoke-Checked $Podman 'machine' 'init' '--update-connection=false' '--provider' 'wsl' '--cpus' '2' '--memory' '3072' '--disk-size' '30' $MachineName
     Write-JhtPhase podman_machine_start
     Invoke-Checked $Podman 'machine' 'start' '--update-connection=false' $MachineName
@@ -368,8 +420,10 @@ try {
   exit 22
 }
 
+# The network script leaves with its own code (23, podman_network_unready, the
+# reason on stderr): passed on as it is, never turned into a generic failure.
 & (Join-Path $PSScriptRoot 'configure-podman-windows-network.ps1') -MachineName $MachineName
-if ($LASTEXITCODE -ne 0) { throw 'Podman network configuration failed.' }
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
 if ($RuntimeImage -notmatch '^ghcr\.io/leopu00/jht(?::[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}|@sha256:[0-9a-f]{64})$') {
   throw 'Runtime image reference is not canonical.'

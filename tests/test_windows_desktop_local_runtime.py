@@ -363,12 +363,13 @@ def test_declining_dependency_installation_cannot_run_winget():
     enabler = ENABLER.read_text(encoding="utf-8")
     guarded = enabler[
         enabler.index("if ($InstallDependencies) {") : enabler.index(
-            "Update-ProcessPath", enabler.index("if ($InstallDependencies) {")
+            "$Podman = Find-Podman", enabler.index("if ($InstallDependencies) {")
         )
     ]
-    assert enabler.count("Invoke-Checked 'winget' 'install'") == 1
-    assert guarded.count("Invoke-Checked 'winget' 'install'") == 1
-    assert "'--source' 'winget' '--version' $PodmanCliVersion" in guarded
+    # the one command that runs winget, inside the consent guard
+    assert enabler.count("& winget") == 1
+    assert guarded.count("& winget install") == 1
+    assert "--source winget --version $PodmanCliVersion" in guarded
     assert "$PodmanCliVersion = '6.0.2'" in enabler
     assert "$ComposeProviderVersion = '5.1.2'" in enabler
 

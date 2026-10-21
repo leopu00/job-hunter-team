@@ -113,11 +113,16 @@ def test_persistent_network_config_uses_native_connector_and_localhost_proxy():
     assert "[int]$BrokerPort = 3129" in source
     assert "[int]$TelegramPort = 3130" in source
     assert "Agent, broker and Telegram proxy ports must be distinct" in source
-    assert "http://127.0.0.1:$Port https://example.com:993/" in source
-    assert "http://127.0.0.1:$BrokerPort http://example.com/" in source
-    assert "http://127.0.0.1:$TelegramPort https://api.telegram.org/" in source
-    assert "http://127.0.0.1:$TelegramPort https://example.com/" in source
-    assert "https://ghcr.io/v2/" in source
+    # each proxy against its own policy (the check runs in the machine with the three ports in
+    # this order: tests/test_podman_windows_setup_retry.py runs it)
+    assert "bash -s -- $Port $BrokerPort $TelegramPort" in source
+    assert "agent=$1 broker=$2 telegram=$3" in source
+    assert 'check agent "$agent" https://ghcr.io/v2/ 401' in source
+    assert 'check broker "$broker" https://ghcr.io/v2/ 401' in source
+    assert 'check agent "$agent" https://example.com:993/ 403' in source
+    assert 'check broker "$broker" http://example.com/ 403' in source
+    assert 'check telegram "$telegram" https://api.telegram.org/ reachable' in source
+    assert 'check telegram "$telegram" https://example.com/ 403' in source
     assert "--node" not in proxy
     assert "[self.server.connector, resolved_ip, str(port)]" in proxy
     assert "resolved_ip = resolve_public_target(" in proxy
