@@ -73,7 +73,7 @@ ROLE-USAGE[week] scout=35.5% critico=32.3% ... unattributed=8.1% (6.2 kT)
      állapotra, hogy láttad-e őket: olvasd ki
      (`burn_intent.py status --json`).
 
-[BRIDGE VITALS ALERT] A konténer erőforrásai a küszöb felett: <CPU N% / RAM N%> (>=95%)
+[BRIDGE VITALS ALERT] A konténer erőforrásai a küszöb felett: <CPU N%/N%/N% over 3 consecutive samples (M min), load1 L on C cores; RAM N%> (>=95%)
    → NEM kvóta: valódi ERŐFORRÁS-NYOMÁS (OOM/telítődés kockázata), az EGYETLEN
      nem-kvóta jelzés, amit kezelsz. CSAK 95% felett érkezik (rate-limited), nem
      minden ticknél. Teendő: értékeld, és ha valós, szólj a Capitanónak, hogy

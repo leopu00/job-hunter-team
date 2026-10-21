@@ -1053,11 +1053,14 @@ def _sample_vitals_and_maybe_alert():
                        capture_output=True, text=True, timeout=30)
     except Exception:
         pass
-    cpu = (v.get("cpu") or {}).get("pct")
     mem = (v.get("mem") or {}).get("pct")
     over = []
-    if isinstance(cpu, (int, float)) and cpu >= VITALS_ALERT_PCT:
-        over.append(f"CPU {cpu}%")
+    # CPU: never one sample. A burst of one process makes a single high reading
+    # while the load stays low; only a pressure that lasts (consecutive samples)
+    # and that the load per core confirms is saturation (host_vitals.cpu_pressure).
+    cpu = _sustained_cpu()
+    if cpu:
+        over.append(cpu_alert_phrase(cpu))
     if isinstance(mem, (int, float)) and mem >= VITALS_ALERT_PCT:
         over.append(f"RAM {mem}%")
     if not over:
@@ -1068,11 +1071,33 @@ def _sample_vitals_and_maybe_alert():
     _LAST_VITALS_ALERT_AT = now
     jht_tmux_send(
         SENTINELLA_SESSION,
-        f"[BRIDGE VITALS ALERT] Container resources above threshold: {', '.join(over)} "
+        f"[BRIDGE VITALS ALERT] Container resources above threshold: {'; '.join(over)} "
         f"(>={VITALS_ALERT_PCT:.0f}%). This is real resource pressure (OOM/saturation risk), "
-        f"separate from the token quota. Consider escalating to Capitano: reduce the roster "
-        f"or stop one worker. Diagnostic history: {VITALS_FILE} (Mantenitore once per day).",
+        f"separate from the token quota: a single CPU spike never arrives here. Consider "
+        f"escalating to Capitano: reduce the roster or stop one worker. Diagnostic history: "
+        f"{VITALS_FILE} (Mantenitore once per day).",
     )
+
+
+def _sustained_cpu():
+    """host_vitals.py cpu-pressure on the samples already written: None or the pressure."""
+    try:
+        r = subprocess.run([sys.executable, VITALS_SKILL, "cpu-pressure",
+                            "--file", str(VITALS_FILE), "--pct", str(VITALS_ALERT_PCT)],
+                           capture_output=True, text=True, timeout=10)
+        if r.returncode != 0 or not r.stdout.strip():
+            return None
+        value = json.loads(r.stdout.strip().splitlines()[-1])
+    except Exception:
+        return None
+    return value if isinstance(value, dict) else None
+
+
+def cpu_alert_phrase(cpu):
+    """What the alert says about the CPU: how long, how many samples, the load per core."""
+    pcts = "/".join(f"{p:g}%" for p in cpu["pcts"])
+    return (f"CPU {pcts} over {cpu['samples']} consecutive samples ({cpu['minutes']:g} min), "
+            f"load1 {cpu['load1']:g} on {cpu['ncpu']} cores")
 
 
 # ── Codex: lettura rollout JSONL ────────────────────────────────────────

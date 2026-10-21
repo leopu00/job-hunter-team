@@ -72,7 +72,7 @@ ROLE-USAGE[week] scout=35.5% critico=32.3% ... unattributed=8.1% (6.2 kT)
      vez por transição, portanto nunca deduzas o estado de as teres visto ou
      não: lê-o (`burn_intent.py status --json`).
 
-[BRIDGE VITALS ALERT] Recursos do contêiner acima do limite: <CPU N% / RAM N%> (>=95%)
+[BRIDGE VITALS ALERT] Recursos do contêiner acima do limite: <CPU N%/N%/N% over 3 consecutive samples (M min), load1 L on C cores; RAM N%> (>=95%)
    → NÃO é cota: é PRESSÃO DE RECURSOS real (risco de OOM/saturação), o ÚNICO
      sinal fora-de-cota que você gere. Chega APENAS acima de 95% (rate-limited),
      não a cada tick. Ação: avalie e, se real, avise o Capitano para aliviar JÁ

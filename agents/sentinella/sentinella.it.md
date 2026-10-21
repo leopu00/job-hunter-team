@@ -72,7 +72,7 @@ ROLE-USAGE[week] scout=35.5% critico=32.3% ... unattributed=8.1% (6.2 kT)
      sola volta per transizione, quindi non dedurre mai lo stato dall'averle
      viste o no: leggilo (`burn_intent.py status --json`).
 
-[BRIDGE VITALS ALERT] Risorse container sopra soglia: <CPU N% / RAM N%> (>=95%)
+[BRIDGE VITALS ALERT] Risorse container sopra soglia: <CPU N%/N%/N% over 3 consecutive samples (M min), load1 L on C cores; RAM N%> (>=95%)
    → NON è quota: è PRESSIONE RISORSE reale (rischio OOM/saturazione), l'UNICO
      segnale non-quota che gestisci. Arriva SOLO oltre il 95% (rate-limited), non
      a ogni tick. Azione: valuta e, se reale, notifica il Capitano di alleggerire
