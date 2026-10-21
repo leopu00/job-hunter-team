@@ -4,7 +4,9 @@ The container runs as uid 1001 and, on Linux, install.sh and the wrapper's
 ensure_bind_owner chown ~/.jht and the documents folder to 1001. If another
 account on the host has uid 1001, that account owns all of ~/.jht — data and
 portal credentials — and can run a file the container made setuid there.
-Both now check `getent passwd 1001` first and stop, touching nothing.
+Both now check `getent passwd 1001` first and stop, touching nothing — except
+with native rootless Podman, where keep-id makes the container's 1001 the
+host user and nothing is chowned to 1001.
 
 Run with: pytest tests/test_bind_uid_conflict.py -v
 """
@@ -51,12 +53,13 @@ def env_for(bin_dir: Path, home: Path) -> dict[str, str]:
 # ── install.sh ───────────────────────────────────────────────────────────
 
 
-def run_installer_check(tmp_path, **kw):
+def run_installer_check(tmp_path, *, os_name: str = "", runtime: str = "", **kw):
     bin_dir, log = stubs(tmp_path, **kw)
     home = tmp_path / "home"
     home.mkdir()
     script = (
         f'JHT_INSTALLER_SOURCE_ONLY=1 . "{INSTALL}"\n'
+        f'OS="{os_name}"; RUNTIME_CHOICE="{runtime}"\n'
         "refuse_foreign_bind_uid\n"
         'chown -R 1001:1001 "$HOME/.jht"\n'
     )
@@ -78,6 +81,21 @@ def test_installer_goes_on_when_1001_is_the_installing_user(tmp_path):
 
 def test_installer_stops_when_1001_is_another_account_and_changes_nothing(tmp_path):
     result, chowns = run_installer_check(tmp_path, owner_of_1001="alice", self_uid="0")
+    assert result.returncode == 1
+    assert "'alice'" in result.stderr and "Nothing was changed" in result.stderr
+    assert chowns == ""
+
+
+def test_installer_goes_on_with_native_podman_even_when_1001_is_another_account(tmp_path):
+    # keep-id: the container's 1001 is this user, ~/.jht stays theirs, the other account owns none of it
+    result, _ = run_installer_check(tmp_path, os_name="linux", runtime="podman", owner_of_1001="alice", self_uid="1000")
+    assert result.returncode == 0, result.stderr
+    assert "Nothing was changed" not in result.stderr
+
+
+@pytest.mark.parametrize("os_name,runtime", [("linux", "docker"), ("linux", ""), ("macos", "podman")])
+def test_installer_still_stops_on_another_1001_outside_native_podman(tmp_path, os_name, runtime):
+    result, chowns = run_installer_check(tmp_path, os_name=os_name, runtime=runtime, owner_of_1001="alice", self_uid="1000")
     assert result.returncode == 1
     assert "'alice'" in result.stderr and "Nothing was changed" in result.stderr
     assert chowns == ""
