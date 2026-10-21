@@ -47,6 +47,7 @@ def _run(db: Path, *args: str) -> subprocess.CompletedProcess[str]:
 
 def _make(db: Path, **columns) -> int:
     conn = sqlite3.connect(db)
+    conn.row_factory = sqlite3.Row
     _db.ensure_schema(conn)
     columns = {"title": "Engineer", "company": "Acme", "status": "new", **columns}
     cursor = conn.execute(
