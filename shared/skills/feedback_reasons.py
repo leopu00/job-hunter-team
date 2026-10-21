@@ -14,6 +14,11 @@ import json
 import unicodedata
 from pathlib import Path
 
+# L'elenco dei caratteri invisibili che si TOLGONO è uno solo per tutto il
+# repo, e sta in external_content: non la categoria Cf intera, che porta via
+# anche ZWJ e ZWNJ (le emoji composte si rompono, il persiano perde le giunture).
+from external_content import INVISIBLE_COMMANDS
+
 _PATHS = (
     Path(__file__).resolve().parent.parent / "feedback-reasons.json",
     Path(__file__).resolve().parent / "feedback-reasons.json",
@@ -59,7 +64,9 @@ def safe_reason(value):
 
 
 def clean_note(value) -> str:
-    """La nota dell'utente, ripulita: NFC, senza controlli né bidi, spazi singoli.
+    """La nota dell'utente, ripulita: NFC, senza controlli né comandi bidi, spazi singoli.
+
+    ZWJ e ZWNJ restano: con quelli si scrive (emoji composte, persiano, hindi).
 
     Non taglia: chi la scrive controlla `len(...) <= NOTE_MAX` e rifiuta, così
     un testo troppo lungo non viene accorciato di nascosto.
@@ -72,7 +79,7 @@ def clean_note(value) -> str:
         cat = unicodedata.category(ch)
         if ch in "\r\n\t\u2028\u2029" or cat == "Zs":
             kept.append(" ")
-        elif cat in ("Cc", "Cf", "Cs", "Co", "Cn"):
+        elif ch in INVISIBLE_COMMANDS or cat in ("Cc", "Cs", "Co", "Cn"):
             continue
         else:
             kept.append(ch)
@@ -108,6 +115,20 @@ def _stamp(event):
     return dt.timestamp()
 
 
+def _event_id(event):
+    try:
+        return int(event.get("id"))
+    except (TypeError, ValueError):
+        return -1
+
+
+def _rank(event):
+    """Chi è più recente: l'orario, poi l'id dell'evento, poi, a parità, il
+    voto ritirato. Due eventi nello stesso secondo senza id non hanno un ordine
+    vero: vince `clear`, perché un voto ritirato deve contare zero."""
+    return (_stamp(event), _event_id(event), 0 if event.get("action") in _REJECTIONS else 1)
+
+
 def proposals(events, min_positions=PROPOSAL_MIN_POSITIONS):
     """Le esclusioni del profilo che l'app può PROPORRE (l'utente decide).
 
@@ -120,9 +141,11 @@ def proposals(events, min_positions=PROPOSAL_MIN_POSITIONS):
     """
     latest = {}
     for event in events:
+        if event.get("legacy_id") in (None, ""):
+            continue
         key = str(event.get("legacy_id"))
         current = latest.get(key)
-        if current is None or _stamp(event) > _stamp(current):
+        if current is None or _rank(event) > _rank(current):
             latest[key] = event
     by = {}
     for key, event in latest.items():

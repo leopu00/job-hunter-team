@@ -19,6 +19,17 @@ REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 
 SKILLS_DIR = os.path.join(REPO_ROOT, 'shared', 'skills')
 
+
+def copy_skills_with_vocabulary(tmp_path):
+    """Copia shared/skills/ nella cartella temporanea, e con lei il vocabolario
+    dei motivi del feedback che la migrazione dello schema legge: sta in
+    shared/ accanto alle skill (shared/feedback-reasons.json), non dentro."""
+    shutil.copytree(SKILLS_DIR, str(tmp_path / 'shared' / 'skills'))
+    shutil.copy2(
+        os.path.join(REPO_ROOT, 'shared', 'feedback-reasons.json'),
+        tmp_path / 'shared' / 'feedback-reasons.json',
+    )
+
 DB_INIT = os.path.join(SKILLS_DIR, 'db_init.py')
 DB_INSERT = os.path.join(SKILLS_DIR, 'db_insert.py')
 DB_UPDATE = os.path.join(SKILLS_DIR, 'db_update.py')
@@ -815,10 +826,7 @@ class TestSetupScript:
                 shutil.copy2(src, tmp_path / fname)
 
         # Copia shared/skills/ (db_init.py, _db.py, ecc.)
-        shutil.copytree(
-            os.path.join(REPO_ROOT, 'shared', 'skills'),
-            tmp_path / 'shared' / 'skills',
-        )
+        copy_skills_with_vocabulary(tmp_path)
         # shared/data/ serve come destinazione del DB
         (tmp_path / 'shared' / 'data').mkdir(parents=True, exist_ok=True)
 
@@ -859,10 +867,7 @@ class TestSetupScript:
                 (tmp_path / fname).parent.mkdir(parents=True, exist_ok=True)
                 shutil.copy2(src, tmp_path / fname)
 
-        shutil.copytree(
-            os.path.join(REPO_ROOT, 'shared', 'skills'),
-            tmp_path / 'shared' / 'skills',
-        )
+        copy_skills_with_vocabulary(tmp_path)
         (tmp_path / 'shared' / 'data').mkdir(parents=True, exist_ok=True)
 
         subprocess.run(
@@ -918,7 +923,7 @@ class TestCandidateProfileParsing:
         """
         skills_tmp = tmp_path / 'shared' / 'skills'
         if not skills_tmp.exists():
-            shutil.copytree(SKILLS_DIR, str(skills_tmp))
+            copy_skills_with_vocabulary(tmp_path)
 
         (tmp_path / 'shared' / 'data').mkdir(parents=True, exist_ok=True)
 

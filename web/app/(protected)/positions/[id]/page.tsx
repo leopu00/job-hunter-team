@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { normalizeReason } from "@/lib/feedback-reasons";
+import { REASON_LABELS } from "./exclusion-reasons";
 import { cookies } from "next/headers";
 import { notFound } from "next/navigation";
 import {
@@ -486,22 +488,16 @@ export default async function PositionDetailPage({ params }: PageProps) {
   // (mig 041); esclusione agente → tag EXCLUDED nelle notes (skill
   // db-update); righe legacy senza motivo → fallback esplicito.
   const isExcluded = position.status === "excluded";
-  const XR_KEYS = new Set([
-    "closed",
-    "not_interested",
-    "mismatch",
-    "already_applied",
-    "company",
-    "conditions",
-    "other",
-  ]);
   let exclusionByUser = false;
   let exclusionText: string | null = null;
   if (isExcluded) {
     const code = position.user_excluded_reason;
     if (code) {
       exclusionByUser = true;
-      const label = XR_KEYS.has(code) ? t(`xr_${code}`) : code;
+      // Un codice del vecchio elenco (righe non ancora migrate) si legge come
+      // «Altro»; nessun testo libero viene mai mostrato come etichetta.
+      const known = normalizeReason(code);
+      const label = known ? REASON_LABELS[locale][known] : code;
       const note = (position.user_excluded_note ?? "").trim();
       exclusionText =
         code === "other" && note ? note : note ? `${label} — ${note}` : label;

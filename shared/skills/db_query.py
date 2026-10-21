@@ -99,6 +99,46 @@ def emit_json(payload):
 def rows_to_dicts(rows):
     return [dict(r) for r in rows]
 
+
+# ── Cosa di `positions` può uscire verso un agente (JHT-T05) ───────────
+#
+# La nota con cui l'utente spiega un'esclusione (`user_excluded_note`) è sua:
+# nessun agente la legge. `positions --json`, `position <id> --json` e
+# `position <id> --field <col>` leggono `SELECT p.*`, quindi esce ogni colonna
+# che la tabella ha, anche quelle aggiunte domani. Qui la regola è l'elenco
+# delle colonne AMMESSE: una colonna nuova di `positions` non esce finché
+# qualcuno non la mette qui (e un test fallisce finché non lo fa).
+AGENT_POSITION_COLUMNS = frozenset("""
+    id title company company_id location remote_type
+    salary_declared_min salary_declared_max salary_declared_currency
+    salary_estimated_min salary_estimated_max salary_estimated_currency
+    salary_estimated_source url source jd_text requirements jd_summary
+    found_by found_at deadline status notes last_checked last_actor
+    role_family role_family_proposed loc_city loc_region loc_country
+    loc_country_code loc_continent work_mode work_country work_country_code
+    is_multi_location location_notes office_lat office_lon office_address
+    office_geocoded office_verified expires_at is_open last_open_check
+    write_requested write_requested_at write_request_kind geocode_requested
+    geocode_requested_at salary_precise_requested salary_precise_requested_at
+    salary_precise created_at updated_at user_excluded_reason user_excluded_at
+    user_excluded_prev_status recheck_requested recheck_requested_at
+    apply_requested apply_requested_at apply_requested_by
+""".split())
+# Le colonne di `positions` che sono dell'utente e che nessun agente legge.
+USER_ONLY_POSITION_COLUMNS = frozenset({"user_excluded_note"})
+
+
+def _withheld_position_columns(conn):
+    """Le colonne di `positions` che non sono ammesse (comprese quelle nuove)."""
+    columns = {r[1] for r in conn.execute("PRAGMA table_info(positions)")}
+    return columns - AGENT_POSITION_COLUMNS
+
+
+def agent_row(row, conn):
+    """La riga come la vede un agente: senza le colonne non ammesse di `positions`."""
+    drop = _withheld_position_columns(conn)
+    return {k: v for k, v in dict(row).items() if k not in drop}
+
 # Categorie ATTIVE del registro emergente (lane registro dev2). Usa la funzione
 # canonica di _db (active_categories: user_id=None → local_user_id) appena è
 # disponibile; fallback single-tenant tollerante finché il cross-merge non la
@@ -170,7 +210,8 @@ def query_positions(args):
     rows = conn.execute(query, params).fetchall()
 
     if getattr(args, 'json', False):
-        emit_json(rows_to_dicts(rows))
+        drop = _withheld_position_columns(conn)
+        emit_json([{k: v for k, v in dict(r).items() if k not in drop} for r in rows])
         conn.close()
         return
 
@@ -215,7 +256,7 @@ def query_position_detail(position_id, as_json=False):
     if as_json:
         # Assente → `null`, non un oggetto vuoto: chi legge deve poter
         # distinguere "non c'è" da "c'è ma è vuota" senza un secondo giro.
-        emit_json(dict(r) if r else None)
+        emit_json(agent_row(r, conn) if r else None)
         conn.close()
         return
 
@@ -999,8 +1040,7 @@ def calibration_scope(watermark):
     return ("""
         FROM (
             SELECT 'esclusione' AS kind, p.id, p.title, p.company,
-                   TRIM(COALESCE(p.user_excluded_reason, '') || ' ' ||
-                        COALESCE(p.user_excluded_note, '')) AS detail,
+                   COALESCE(p.user_excluded_reason, '') AS detail,
                    p.user_excluded_at AS ts
             FROM positions p
             WHERE p.user_excluded_at IS NOT NULL
@@ -1929,6 +1969,9 @@ def main():
         # --field mode (bug #26): scriptable lookup. Bypassa il print
         # umano e stampa solo il valore della colonna richiesta.
         if getattr(args, 'field', None):
+            if args.field not in AGENT_POSITION_COLUMNS:
+                print(f"error: field not available: {args.field}", file=sys.stderr)
+                sys.exit(1)
             conn = get_db()
             ensure_schema(conn)
             row = conn.execute(

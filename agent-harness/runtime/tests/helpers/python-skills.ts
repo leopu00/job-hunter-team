@@ -4,7 +4,8 @@
  * The port is judged against the Python it replaces, at the commit
  * `src/db/schema.sql` was dumped from: the same commit the schema comes from
  * is the one whose behaviour the tools copy. `git archive` extracts
- * `shared/skills` at that commit once per test file; tests that need it skip
+ * `shared/skills` at that commit once per test file, with the vocabulary of
+ * the feedback reasons that `_db.py` loads from `shared/`; tests that need it skip
  * where python3 or the commit is missing (the image has neither), and run
  * everywhere else.
  */
@@ -36,7 +37,7 @@ export function pythonSkills(): string | null {
   // Through a file, not a pipe: tar stops reading at the end-of-archive marker
   // and closes its stdin while git's padding is still being written (EPIPE).
   const archive = join(dir, "skills.tar");
-  execFileSync("git", ["archive", `--output=${archive}`, SOURCE_COMMIT, "shared/skills"], { cwd: REPO });
+  execFileSync("git", ["archive", `--output=${archive}`, SOURCE_COMMIT, "shared/skills", "shared/feedback-reasons.json"], { cwd: REPO });
   execFileSync("tar", ["-xf", archive, "-C", dir]);
   extracted = join(dir, "shared", "skills");
   return extracted;

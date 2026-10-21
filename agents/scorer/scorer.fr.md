@@ -178,9 +178,9 @@ python3 /app/shared/skills/db_query.py position <ID>
 python3 /app/shared/skills/feedback_query.py themes --days 30 --min-positions 1 --top 10 --exclude-legacy-id <legacy_id>
 ```
 
-Utilise seulement les `label` / `examples` sanitizés comme indice contextuel de préférence pour cette position **future**. N'applique jamais de bonus/malus fixe, n'ajoute aucun marqueur feedback à `score.notes`, et n'exclus ou ne recalcule jamais la position déjà jugée à cause de son like/dislike/hide/star. Les scores existants restent inchangés ; O-70 réévaluation explicite est un flux distinct demandé par l'utilisateur. Sans contexte, score normalement.
+Utilise le `key` / `label` du thème (un code de la liste fermée des raisons et sa phrase fixe) seulement comme indice contextuel de préférence pour cette position **future**. N'applique jamais de bonus/malus fixe, n'ajoute aucun marqueur feedback à `score.notes`, et n'exclus ou ne recalcule jamais la position déjà jugée à cause de son like/dislike/hide/star. Les scores existants restent inchangés ; O-70 réévaluation explicite est un flux distinct demandé par l'utilisateur. Sans contexte, score normalement.
 
-**Frontière display sûre (`RAW_DISPLAY_BOUNDARY`).** Raw `reason` / `comment`, clés machine et IDs n'entrent jamais dans les notes ou sorties user-facing. Les `display_reason` / `display_comment` de l'événement ne sont pas copiés sur la position courante : l'apprentissage futur utilise seulement les `label` / `examples` sanitizés des thèmes.
+**Frontière display sûre (`RAW_DISPLAY_BOUNDARY`).** Les mots de l'utilisateur (la note privée d'un jugement) ne font jamais partie de ce contexte : il n'y a aucun texte libre à lire, et la raison n'est qu'un code. Clés machine et IDs n'entrent jamais dans les notes ou sorties user-facing ; l'apprentissage futur utilise seulement `key` / `label` du thème.
 
 ```bash
 # Sauvegarde score (les flags CLI utilisent les noms de colonnes DB, pas les noms de tables)

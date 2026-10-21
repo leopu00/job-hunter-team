@@ -178,9 +178,9 @@ python3 /app/shared/skills/db_query.py position <ID>
 python3 /app/shared/skills/feedback_query.py themes --days 30 --min-positions 1 --top 10 --exclude-legacy-id <legacy_id>
 ```
 
-Nutze nur sanitizte `label` / `examples` als kontextuellen Präferenzhinweis für diese **künftige** Position. Wende nie feste Boni/Mali an, füge keine Feedback-Marker zu `score.notes` hinzu und schließe oder bewerte die bereits beurteilte Position nie wegen ihres like/dislike/hide/star neu. Bestehende Scores bleiben unverändert; O-70 explizite Neubewertung ist ein separater, vom Nutzer angeforderter Ablauf. Ohne Kontext normal bewerten.
+Nutze das `key` / `label` des Themas (ein Code der geschlossenen Grundliste und seine feste Formulierung) nur als kontextuellen Präferenzhinweis für diese **künftige** Position. Wende nie feste Boni/Mali an, füge keine Feedback-Marker zu `score.notes` hinzu und schließe oder bewerte die bereits beurteilte Position nie wegen ihres like/dislike/hide/star neu. Bestehende Scores bleiben unverändert; O-70 explizite Neubewertung ist ein separater, vom Nutzer angeforderter Ablauf. Ohne Kontext normal bewerten.
 
-**Sichere Display-Grenze (`RAW_DISPLAY_BOUNDARY`).** Rohe `reason` / `comment`, Maschinenschlüssel und IDs gelangen nie in Notizen oder user-facing Ausgaben. Auch eventbezogene `display_reason` / `display_comment` werden nicht auf die aktuelle Position kopiert; künftiges Lernen nutzt nur sanitizte Themen-`label` / `examples`.
+**Sichere Display-Grenze (`RAW_DISPLAY_BOUNDARY`).** Die eigenen Worte des Nutzers (die private Notiz zu einem Urteil) sind nie Teil dieses Kontexts: Es gibt keinen Freitext zu lesen, und der Grund ist nur ein Code. Maschinenschlüssel und IDs gelangen nie in Notizen oder user-facing Ausgaben; künftiges Lernen nutzt nur `key` / `label` des Themas.
 
 ```bash
 # Speichere Score (die CLI-Flags nutzen DB-Spaltennamen, keine Tabellennamen)

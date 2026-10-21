@@ -64,7 +64,7 @@ def _fresh(module_name: str):
 
 def test_recording_succeeds_with_the_cloud_unreachable(box):
     record = _fresh("feedback_record")
-    out = record.record("77", "like", reason="stack combacia")
+    out = record.record("77", "like", reason="wrong_stack")
 
     assert out["ok"] is True, out
     assert out["source"] == "local"
@@ -96,7 +96,7 @@ def test_the_judgement_is_really_in_the_local_database(box):
 
 def test_reading_answers_from_local_with_the_cloud_unreachable(box):
     record = _fresh("feedback_record")
-    record.record("77", "dislike", reason="troppo senior")
+    record.record("77", "dislike", reason="too_senior")
 
     query = _fresh("feedback_query")
     out = query.check_position("77")

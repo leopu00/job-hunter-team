@@ -27,6 +27,7 @@ import ActorIcon from "@/app/components/ActorIcon";
 import CloudSyncStatusBanner from "@/app/components/CloudSyncStatusBanner";
 import UnseenDot from "@/app/components/UnseenDot";
 import ColumnsPicker from "./ColumnsPicker";
+import ExclusionProposalCard from "./ExclusionProposalCard";
 import {
   POSITIONS_COLUMNS,
   POSITIONS_COLS_COOKIE,
@@ -430,6 +431,9 @@ export default async function PositionsPage({ searchParams }: PageProps) {
 
   return (
     <div style={{ animation: "fade-in 0.35s ease both" }}>
+      {/* JHT-T05: la proposta di escludere un tipo di posizioni (decide
+          l'utente; per ora solo una preferenza salvata). */}
+      <ExclusionProposalCard />
       {/* ── Header ──────────────────────────────────────────────── */}
       <div className="mb-4 pb-3 md:mb-8 md:pb-6 border-b border-[var(--color-border)]">
         <nav

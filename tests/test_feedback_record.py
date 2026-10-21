@@ -139,7 +139,8 @@ def test_clear_e_un_evento_come_gli_altri(calls):
     ({"score": 6}, "score"),
     ({"direction": "sideways"}, "direction"),
     ({"reason": "x" * 501}, "reason"),
-    ({"comment": "x" * 2001}, "comment"),
+    ({"note": "x" * 201}, "note"),
+    ({"reason": "troppo senior"}, "reason"),
 ])
 def test_rifiuta_in_locale_cio_che_la_route_rifiuterebbe(calls, kwargs, atteso):
     """Il server validerebbe comunque, ma risponderebbe `http-400: {...}`: un

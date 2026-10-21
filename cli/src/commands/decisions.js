@@ -101,14 +101,15 @@ export function registerFeedbackCommand(program) {
   cmd
     .command('set <legacy_id> <action>')
     .description('Record the user judgement: like | dislike | hide | star | clear')
-    .option('--reason <text>', 'short reason (max 500 chars)')
-    .option('--comment <text>', 'free text (max 2000 chars)')
+    .option('--reason <code>', 'one of: too_senior, too_junior, wrong_location, salary_low, wrong_stack, company, scam_or_gone, closed, already_applied, other')
+    .option('--note <text>', "the user's own words (max 200 chars): kept for the user, never shown to the agents")
+    .option('--comment <text>', 'old name of --note')
     .option('--score <n>', 'rating from 1 to 5')
     .option('--direction <dir>', 'more_like_this | less_like_this')
     .action((legacyId, action, options) => {
       const args = ['set', String(legacyId), String(action)];
       for (const [flag, value] of [['--reason', options.reason],
-        ['--comment', options.comment], ['--score', options.score],
+        ['--note', options.note ?? options.comment], ['--score', options.score],
         ['--direction', options.direction]]) {
         if (value !== undefined) args.push(flag, String(value));
       }
@@ -130,7 +131,7 @@ export function registerFeedbackCommand(program) {
 
   cmd
     .command('themes')
-    .description('Recurring reasons, grouped from what the user wrote')
+    .description('Recurring reason codes, counted over distinct positions')
     .option('--days <n>', 'window in days (0 = all)', '30')
     .option('--min-positions <n>', 'discard themes below N distinct positions', '3')
     .action((options) =>

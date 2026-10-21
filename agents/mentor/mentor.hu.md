@@ -77,9 +77,9 @@ A teljes minta-érzékelő toolkit a `mentor-patterns` skillben lakik. Magas szi
 | ✍️ Critic verdikt trendek    | Pattern E                           |
 | 🗣️ A felhasználó visszatérő indokai | Pattern F                        |
 
-A Pattern F kivétel a fenti bekezdés alól: a felhasználó ítéletei és az általa írt indokok a felhőben élnek, nem a `jobs.db`-ben. A `python3 /app/shared/skills/feedback_query.py`-vel olvasod őket (`feedback-query` skill) — csak olvasásra, mint minden mást, és a felhasználónak szólnak, soha nem a Scoutnak.
+A Pattern F kivétel a fenti bekezdés alól: a felhasználó ítéletei és az általa választott indokkódok a felhőben élnek, nem a `jobs.db`-ben. A `python3 /app/shared/skills/feedback_query.py`-vel olvasod őket (`feedback-query` skill) — csak olvasásra, mint minden mást, és a felhasználónak szólnak, soha nem a Scoutnak.
 
-**`RAW_DISPLAY_BOUNDARY`** — a `reason` / `comment` és a gépi kulcsok belső bemenetek: soha ne továbbítsd, idézd, fogalmazd át vagy jelenítsd meg őket. Válaszban csak a `display_reason` / `display_comment` és a sanitizált téma-`label` / `examples` mezők használhatók. A `no-signal:*` note jelentése „nincs adat”: a kódot hallgasd el, és ne következtess vagy nevezz meg hostot, útvonalat, sessiont, tokent vagy infrastruktúrát.
+**`RAW_DISPLAY_BOUNDARY`** — a felhasználó saját szavai (az értékeléshez írt privát jegyzet) számodra soha nem elérhetők, az indok pedig csak egy zárt lista kódja. A gépi kulcsok és ID-k belsők maradnak. A `no-signal:*` note jelentése „nincs adat”: a kódot hallgasd el, és ne következtess vagy nevezz meg hostot, útvonalat, sessiont, tokent vagy infrastruktúrát.
 
 ### A külső világ (megerősítésre, nem felfedezésre)
 

@@ -7,7 +7,7 @@ allowed-tools: Bash(python3 *)
 
 ## Raw/Display-Grenze (`RAW_DISPLAY_BOUNDARY`)
 
-`reason` und `comment` sind rohe Eingaben nur für Maschinen. Zitiere, übermittle, fasse oder zeige sie dem Nutzer niemals. Jede user-facing Notiz oder Nachricht darf nur `display_reason` / `display_comment` verwenden; `label` / `examples` der Themen haben bereits denselben gemeinsamen Sanitizer durchlaufen. Eine `note` ist nur ein geschlossenes `no-signal:*`-Enum: behandle sie als Verfügbarkeitsstatus, nie als Infrastrukturdetail.
+Der `reason` eines Urteils ist ein **Code** aus einer geschlossenen Liste (`too_senior`, `too_junior`, `wrong_location`, `salary_low`, `wrong_stack`, `company`, `scam_or_gone`, `closed`, `already_applied`, `other`). Was der Nutzer mit eigenen Worten schreibt, ist eine private Notiz, die dieser Skill nie zurückgibt: In keinem Feld steht Text des Nutzers, und es gibt nichts zu zitieren, weiterzugeben oder zu paraphrasieren. Das `label` des Themas ist eine feste Formulierung für den Code. Eine `note` ist nur ein geschlossenes `no-signal:*`-Enum: behandle sie als Verfügbarkeitsstatus, nie als Infrastrukturdetail.
 
 # feedback-query — Nutzer-Feedback pro Position
 
@@ -17,8 +17,7 @@ Der Nutzer kann auf dem Web-Dashboard like/dislike/hide/star auf jede Position k
 |---------------------|---------|---------|
 | `position_legacy_id`| TEXT    | Die `legacy_id` (String) der Position in `positions` |
 | `action`            | TEXT    | Eines von `like`, `dislike`, `hide`, `star`, `clear` (Mig 059 — der Nutzer zieht sein Urteil zurück; das letzte Event gewinnt, ein abschließendes `clear` bedeutet also "kein Urteil") |
-| `reason`            | TEXT    | Optionaler kurzer Grund (≤500 Zeichen) |
-| `comment`           | TEXT    | Optionaler ausführlicher Kommentar (≤2000 Zeichen, Mig 028) |
+| `reason`            | TEXT    | Optionaler Grund: ein Code der obigen geschlossenen Liste |
 | `score`             | INTEGER | Optionaler granularer Score 1-5 (Mig 028) |
 | `direction`         | TEXT    | Optionales `more_like_this` / `less_like_this` — Mustersignal für den Scout, NICHT Pro-Position-Skip (Mig 028) |
 | `created_at`        | TS      | Zeitpunkt der Einreichung |
@@ -42,12 +41,9 @@ Ausgabe (JSON auf stdout):
   "count": 2,
   "actions": [
     {"action": "dislike", "created_at": "2026-05-30T14:21:00Z",
-     "reason": "too senior", "comment": "5+ anni in Java richiesti, non mi interessa stack legacy",
-     "display_reason": "too senior", "display_comment": "5+ anni in Java richiesti, non mi interessa stack legacy",
-     "score": 2, "direction": "less_like_this"},
+     "reason": "too_senior", "score": 2, "direction": "less_like_this"},
     {"action": "like", "created_at": "2026-05-28T09:00:00Z",
-     "reason": null, "comment": null, "display_reason": null,
-     "display_comment": null, "score": null, "direction": null}
+     "reason": null, "score": null, "direction": null}
   ]
 }
 ```
@@ -75,45 +71,44 @@ Ein einziger HTTP-Aufruf statt N: `GET /api/positions/feedback?days=&limit=`, gl
 # Alle Feedback-Events im Fenster, neueste zuerst
 python3 /app/shared/skills/feedback_query.py recent --days 30
 
-# Die vom Nutzer geschriebenen Gründe, nach Ähnlichkeit gruppiert
+# Die Grund-Codes, über verschiedene Positionen gezählt
 python3 /app/shared/skills/feedback_query.py themes --days 30 --min-positions 3
 ```
 
 Ausgabe von `themes`:
 
 ```json
-{"ok": true, "window_days": 30, "field": "both",
- "events_total": 31, "events_with_text": 19,
- "positions_with_text": 17, "positions_cleared": 2,
+{"ok": true, "window_days": 30,
+ "events_total": 31, "events_with_reason": 19,
+ "positions_with_reason": 17, "positions_cleared": 2,
  "by_action": {"like": 6, "dislike": 21, "hide": 3, "star": 1},
  "min_positions": 3,
  "themes": [
-   {"key": "tropp senio", "label": "troppo senior",
-    "positions": 7, "events": 8, "share": 0.412,
-    "actions": {"dislike": 6, "hide": 2},
-    "legacy_ids": ["42", "51", "63"],
-    "examples": ["troppo senior", "richiesta troppo seniore — Lead role"]}
+   {"key": "too_senior", "label": "too senior",
+    "positions": 7, "events": 7, "share": 0.412,
+    "actions": {"dislike": 6, "hide": 1},
+    "legacy_ids": ["42", "51", "63"]}
  ]}
 ```
 
-Wie die Gruppierung arbeitet (keine exakte Übereinstimmung nötig, keine neue Abhängigkeit): Kleinschreibung → Akzente weg → Interpunktion weg → Funktionswörter weg → jedes Wort auf die ersten 5 Zeichen gekürzt (`senior` / `seniority` / `seniore` / `séniorité` fallen auf einen Schlüssel) → gezählt werden Einzelwörter und **benachbarte Paare**, nach **verschiedenen Positionen**, nicht nach Events. Ein Paar schluckt seine Teile, wenn es ≥ 80% derselben Positionen abdeckt, so gewinnt "zu senior" gegen "senior"; Verstärkungswörter bleiben absichtlich im Strom. `reason` und `comment` werden getrennt tokenisiert, also wird kein Paar über die Grenze der beiden hinweg erfunden.
+So funktioniert das Zählen: Jede Position zählt **einmal**, mit dem Grund ihres **letzten** Urteils, und es zählen nur Gründe, die ein Code der Liste sind (ein alter Freitext-Grund liest sich als `other`). Es gibt keinen Text zu gruppieren, und nichts wird interpretiert. `other` wird gezählt, sagt aber nichts Konkretes.
 
 Bewusste Grenzen, benannt, damit niemand mehr in die Zahlen liest, als drinsteht:
-- Entfernte Synonyme bleiben getrennt (`Gehalt` und `RAL` sind zwei Themen) — das ist Wörterzählen, keine Semantik. Lies die sanitizten Display-`examples` (max. 3) und verbinde mit dem Kopf, was das Werkzeug nicht konnte.
+- Ein Thema ist ein Code, also so grob wie die Liste: `wrong_location` sagt nicht, welche Stadt. Nichts, was der Nutzer geschrieben hat, steht zur Verfeinerung zur Verfügung.
 - Positionen, deren **letztes** Event `clear` ist, bleiben draußen (das Urteil wurde zurückgezogen); `--include-cleared` holt sie zurück.
-- `share` = Positionen des Themas / `positions_with_text`.
-- `--field reason|comment|both` (Standard `both`), `--top N`, `--days 0` für die ganze Historie.
+- `share` = Positionen des Themas / `positions_with_reason`.
+- `--top N`, `--days 0` für die ganze Historie. (`--field` wird akzeptiert und ignoriert, wegen älterer Prompts.)
 - Fallback, wenn der aggregierte Endpunkt nicht antwortet: `--legacy-ids 12,13,14` liest diese Positionen einzeln (langsamer, gleiches Ausgabeformat).
 
-Flags: `--days` (Standard 30, `0` = alles), `--limit` (Standard 500 Events), `--min-positions` (Standard 3), `--text-chars` bei `recent` (Standard 300, kürzt lange Kommentare).
+Flags: `--days` (Standard 30, `0` = alles), `--limit` (Standard 500 Events), `--min-positions` (Standard 3).
 
 Trägt der Payload eine geschlossene `note`-Enum (`no-signal:*`), gibt es kein Aggregat. Behandle sie als "keine Daten", nie als "kein Feedback", und gib den Code nie weiter.
 
 ## Wie Agenten es verwenden
 
-**Scorer — `FUTURE_FEEDBACK_ONLY`:** rufe `themes --days 30 --min-positions 1 --top 10 --exclude-legacy-id <legacy_id>` auf. Nutze nur sanitizte `label` / `examples` als kontextuellen Präferenzhinweis für diese künftige Position. Feedback einer bereits beurteilten Position ändert nie Score, Status oder Notizen: keine festen Boni/Mali, Feedback-Marker oder Backfills. Bestehende Scores bleiben unverändert. O-70 explizite Neubewertung ist ein separater, vom Nutzer angeforderter Ablauf.
+**Scorer — `FUTURE_FEEDBACK_ONLY`:** rufe `themes --days 30 --min-positions 1 --top 10 --exclude-legacy-id <legacy_id>` auf. Nutze die Codes `key` / `label` nur als kontextuellen Präferenzhinweis, wenn du diese künftige Position bewertest. Feedback einer bereits beurteilten Position ändert nie Score, Status oder Notizen: keine festen Boni/Mali, Feedback-Marker oder Backfills. Bestehende Scores bleiben unverändert. O-70 explizite Neubewertung ist ein separater, vom Nutzer angeforderter Ablauf.
 
-**Mentor** (Pattern F, nur lesend): `themes` über die letzten 30 Tage, um die vom Nutzer geschriebenen Gründe zu zählen. Schwellen und Deutung stehen im Skill `mentor-patterns`. Der Mentor spricht **zum Nutzer** — er erteilt aus diesen Daten niemals Suchanweisungen.
+**Mentor** (Pattern F, nur lesend): `themes` über die letzten 30 Tage, um die vom Nutzer gewählten Grund-Codes zu zählen. Schwellen und Deutung stehen im Skill `mentor-patterns`. Der Mentor spricht **zum Nutzer** — er erteilt aus diesen Daten niemals Suchanweisungen.
 
 **Scout** (optionales kontextuelles Signal):
 - Nicht für Pro-Position-Skip — das wird bereits durch Dedup (SC-05) behandelt.

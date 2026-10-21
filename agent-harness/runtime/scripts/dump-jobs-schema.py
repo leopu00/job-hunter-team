@@ -13,7 +13,7 @@ Usage (from agent-harness/runtime):
 
     python3 scripts/dump-jobs-schema.py <dir holding _db.py> <source label> [out]
 
-    git archive origin/master shared/skills | tar -x -C /tmp/src
+    git archive origin/master shared/skills shared/feedback-reasons.json | tar -x -C /tmp/src
     python3 scripts/dump-jobs-schema.py /tmp/src/shared/skills "origin/master $(git rev-parse --short=9 origin/master)"
 
 Rerun it whenever `_db.py` changes on the branch the TUI image is built from;

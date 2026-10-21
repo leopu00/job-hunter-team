@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { NOTE_MAX, acceptReason, cleanNote, isProposableReason } from "@/lib/feedback-reasons";
 import { applyCloud } from "@/lib/positions/user-exclude-cloud";
 import { json, notInDesktop, type ApiFetch } from "../shell/api-bridge";
 
@@ -56,10 +57,17 @@ async function postFeedback({ client, params, body, userId }: Call): Promise<Res
       400,
     );
   }
-  const reason =
-    typeof payload.reason === "string" && payload.reason.length <= 500 ? payload.reason : null;
-  const comment =
-    typeof payload.comment === "string" && payload.comment.length <= 2000 ? payload.comment : null;
+  // JHT-T05, come la rotta del web: il motivo è un codice del vocabolario
+  // chiuso (un testo libero è rifiutato) e il testo dell'utente è la nota,
+  // max 200 caratteri, che nessun agente legge.
+  let reason: string | null = null;
+  if (payload.reason !== undefined && payload.reason !== null && payload.reason !== "") {
+    reason = acceptReason(payload.reason);
+    if (!reason) return json({ error: "reason_invalid" }, 400);
+  }
+  const noteText = cleanNote(payload.note ?? payload.comment);
+  if (noteText.length > NOTE_MAX) return json({ error: "note_too_long" }, 400);
+  const note = noteText || null;
   let score: number | null = null;
   if (typeof payload.score === "number" && Number.isInteger(payload.score)) {
     if (payload.score < 1 || payload.score > 5) {
@@ -82,14 +90,82 @@ async function postFeedback({ client, params, body, userId }: Call): Promise<Res
       position_legacy_id: legacyId,
       action,
       reason,
-      comment,
+      note,
       score,
       direction,
     })
-    .select()
+    .select("id, position_legacy_id, action, reason, score, direction, created_at")
     .single();
   if (error) return internal("positions/[legacyId]/feedback", error);
   return json({ feedback: data });
+}
+
+// ── /api/positions/feedback (in blocco) ────────────────────────────────
+// web/app/api/positions/feedback/route.ts, ramo sessione: il giudizio
+// dell'utente su tutte le posizioni, senza la nota (JHT-T05). RLS, più il
+// filtro su user_id come la rotta.
+async function getFeedbackBulk({ client, userId }: Call): Promise<Response> {
+  const user = await userId();
+  if (!user) return unauthorized();
+  const { data, error } = await client
+    .from("position_feedback")
+    .select("position_legacy_id, action, reason, score, direction, created_at")
+    .eq("user_id", user)
+    .order("created_at", { ascending: false })
+    .limit(2000);
+  if (error) return internal("positions/feedback", error);
+  return json({ feedback: data ?? [] });
+}
+
+// ── /api/profile-exclusions ────────────────────────────────────────────
+// web/app/api/profile-exclusions/route.ts: la preferenza dell'utente sulle
+// proposte di esclusione del profilo (mig 094). Codice, stato, data.
+const PROFILE_EXCLUSION_COLUMNS = "reason, status, positions_at_decision, decided_at";
+
+async function getProfileExclusions({ client, userId }: Call): Promise<Response> {
+  const user = await userId();
+  if (!user) return unauthorized();
+  const { data, error } = await client
+    .from("profile_exclusions")
+    .select(PROFILE_EXCLUSION_COLUMNS)
+    .eq("user_id", user);
+  if (error) return internal("profile-exclusions", error);
+  return json({ exclusions: data ?? [] });
+}
+
+async function postProfileExclusion({ client, body, userId }: Call): Promise<Response> {
+  const user = await userId();
+  if (!user) return unauthorized();
+  const payload = await body();
+  if (!payload) return json({ error: "invalid_json" }, 400);
+  const reason = typeof payload.reason === "string" ? payload.reason : "";
+  if (!isProposableReason(reason)) return json({ error: "reason_invalid" }, 400);
+  if (payload.status !== "accepted" && payload.status !== "dismissed") {
+    return json({ error: "status_invalid" }, 400);
+  }
+  const positions =
+    typeof payload.positions === "number" &&
+    Number.isInteger(payload.positions) &&
+    payload.positions >= 0 &&
+    payload.positions <= 100_000
+      ? payload.positions
+      : 0;
+  const { data, error } = await client
+    .from("profile_exclusions")
+    .upsert(
+      {
+        user_id: user,
+        reason,
+        status: payload.status,
+        positions_at_decision: positions,
+        decided_at: new Date().toISOString(),
+      },
+      { onConflict: "user_id,reason" },
+    )
+    .select(PROFILE_EXCLUSION_COLUMNS)
+    .single();
+  if (error) return internal("profile-exclusions", error);
+  return json({ exclusion: data });
 }
 
 async function getFeedback({ client, params, userId }: Call): Promise<Response> {
@@ -97,7 +173,7 @@ async function getFeedback({ client, params, userId }: Call): Promise<Response> 
   if (!user) return unauthorized();
   const { data, error } = await client
     .from("position_feedback")
-    .select("*")
+    .select("id, position_legacy_id, action, reason, score, direction, created_at")
     .eq("user_id", user)
     .eq("position_legacy_id", params[0])
     .order("created_at", { ascending: false });
@@ -127,17 +203,8 @@ async function getSummary({ client, params }: Call): Promise<Response> {
 // ── /api/positions/[legacyId]/user-exclude ─────────────────────────────
 // web/app/api/positions/[legacyId]/user-exclude/route.ts: il ramo cloud
 // (box spento, Supabase unica sorgente), che è anche l'unico della desktop.
-// Le cause sono quelle di VALID_REASONS della rotta (un test le confronta).
-export const EXCLUDE_REASONS = [
-  "closed",
-  "not_interested",
-  "mismatch",
-  "already_applied",
-  "company",
-  "conditions",
-  "other",
-];
-
+// Le cause sono il vocabolario chiuso `shared/feedback-reasons.json`, lo stesso
+// della rotta (JHT-T05): una sola fonte, un codice del vecchio elenco vale `other`.
 async function userExclude(call: Call): Promise<Response> {
   const legacyId = Number.parseInt(call.params[0], 10);
   if (!Number.isInteger(legacyId) || legacyId <= 0) {
@@ -148,14 +215,12 @@ async function userExclude(call: Call): Promise<Response> {
   let note: string | undefined;
   if (action === "exclude") {
     const payload = (await call.body()) ?? {};
-    reason = typeof payload.reason === "string" ? payload.reason : undefined;
-    note = typeof payload.note === "string" ? payload.note.trim().slice(0, 500) : undefined;
-    if (!reason || !EXCLUDE_REASONS.includes(reason)) {
-      return json({ error: `Causa non valida: '${reason ?? ""}'` }, 400);
-    }
-    if (reason === "other" && !note) {
-      return json({ error: "Per 'Altro' serve un testo che spieghi la causa" }, 400);
-    }
+    const accepted = acceptReason(payload.reason);
+    if (!accepted) return json({ error: "reason_invalid" }, 400);
+    reason = accepted;
+    const text = cleanNote(payload.note);
+    if (text.length > NOTE_MAX) return json({ error: "note_too_long" }, 400);
+    note = text || undefined;
   }
   const user = await call.userId();
   if (!user) return unauthorized();
@@ -166,6 +231,9 @@ async function userExclude(call: Call): Promise<Response> {
 
 const ROUTES: Route[] = [
   { method: "GET", path: /^\/api\/positions\/(\d+)\/summary$/, handle: getSummary },
+  { method: "GET", path: /^\/api\/positions\/feedback$/, handle: getFeedbackBulk },
+  { method: "GET", path: /^\/api\/profile-exclusions$/, handle: getProfileExclusions },
+  { method: "POST", path: /^\/api\/profile-exclusions$/, handle: postProfileExclusion },
   { method: "GET", path: /^\/api\/positions\/(\d+)\/feedback$/, handle: getFeedback },
   { method: "POST", path: /^\/api\/positions\/(\d+)\/feedback$/, handle: postFeedback },
   { method: "POST", path: /^\/api\/positions\/(\d+)\/user-exclude$/, handle: userExclude },

@@ -140,31 +140,31 @@ Ein wiederkehrender `critic_score < 5` mit ähnlichen Notizen bedeutet NICHT "de
 - Keine Metriken → den Nutzer nach Zahlen befragen (Food Cost %, Latenz-Reduktionen, Mitarbeiteranzahl, eingesparte Stunden)
 - Stack-Mismatch → `skills.primary` gegen tatsächliche JD-Anforderungen neu prüfen
 
-## Muster F — Wiederkehrende Gründe in den Worten des Nutzers
+## Muster F — Wiederkehrende Gründe, die der Nutzer wählt
 
-Im Web beurteilt der Nutzer Positionen (wenig interessant / interessant / sehr interessant, dazu "ausschließen") und kann **warum** schreiben, als Freitext: `reason` (≤ 500 Zeichen) und `comment` (≤ 2000). Dieser Text ist der einzige Ort, an dem er mit eigenen Worten sagt, was er will. Position für Position gelesen ist es eine Anekdote; zusammengezählt ist es eine Tatsache. Zehnmal "zu senior" sind nicht zehn Meinungen über zehn Anzeigen — es ist ein einziger Satz über die Suche.
+Im Web beurteilt der Nutzer Positionen (wenig interessant / interessant / sehr interessant, dazu "ausschließen") und wählt **warum** aus einer geschlossenen Liste von Grund-Codes (`too_senior`, `too_junior`, `wrong_location`, `salary_low`, `wrong_stack`, `company`, `scam_or_gone`, `closed`, `already_applied`, `other`). Position für Position gelesen ist es eine Anekdote; zusammengezählt ist es eine Tatsache. Zehnmal "zu senior" sind nicht zehn Meinungen über zehn Anzeigen — es ist ein einziger Satz über die Suche. Der Nutzer kann außerdem eine private Notiz mit eigenen Worten hinzufügen: Sie gehört ihm und ist für dich nie verfügbar.
 
 Der Unterschied zu Muster B ist wichtig: dort sind es die Ausschlüsse der **Agenten** (`ESCLUSA: [TAG]` in `positions.notes`), hier ist es das Urteil des **Nutzers**. Zwei verschiedene Ströme; wenn sie übereinstimmen, siehe den Abschnitt zur Gegenprüfung.
 
 Dieses Feedback lebt in der Cloud (`position_feedback`), nicht in `jobs.db`: es ist das einzige Muster, das nicht über `db_query.py` läuft.
 
-**`RAW_DISPLAY_BOUNDARY`** — clustere rohe `reason` / `comment`, aber gib sie niemals weiter. Jede user-facing Deutung darf nur `display_reason` / `display_comment` und sanitizte Themen-`label` / `examples` verwenden; Maschinenschlüssel, IDs und `no-signal:*`-notes bleiben intern.
+**`RAW_DISPLAY_BOUNDARY`** — in dem, was du liest, steht kein Text des Nutzers: Der Grund ist ein Code und sein `label` eine feste Formulierung. Maschinenschlüssel, IDs und `no-signal:*`-notes bleiben intern.
 
 ### Erkennung
 
 ```bash
-# Die Themen in den vom Nutzer geschriebenen Gründen, letzte 30 Tage
+# Die vom Nutzer gewählten Grund-Codes, letzte 30 Tage
 python3 /app/shared/skills/feedback_query.py themes --days 30 --min-positions 3
 
-# Dasselbe Feedback unaggregiert; nur display_reason/display_comment lesen
+# Dasselbe Feedback unaggregiert
 python3 /app/shared/skills/feedback_query.py recent --days 30
 ```
 
-`themes` gruppiert Freitext nach einfacher Ähnlichkeit — keine exakte Übereinstimmung nötig. Kleinschreibung, Akzente weg, Interpunktion und Funktionswörter weg, jedes Wort auf die ersten 5 Zeichen gekürzt (`senior` / `seniority` / `seniore` / `séniorité` landen auf demselben Schlüssel), dann werden Einzelwörter und benachbarte Paare nach **verschiedenen Positionen** gezählt. Ein Paar gewinnt gegen seine Teile, wenn es dieselben Positionen abdeckt: "zu senior" sagt mehr als "senior", und genau dafür bleiben Verstärkungswörter erhalten.
+`themes` zählt die Grund-Codes nach **verschiedenen Positionen**: Jede Position zählt einmal, mit dem Grund ihres letzten Urteils, und ein zurückgezogenes Urteil zählt nicht. `other` wird gezählt, sagt aber nichts Konkretes.
 
-Pro Thema kommen zurück: `positions`, `events`, `share` (Anteil der Positionen mit Text), `actions` (wie sich das Thema auf like / dislike / hide / star verteilt), interne `legacy_ids` und bis zu 3 sanitizte Display-`examples`.
+Pro Thema kommen zurück: `key` (der Code), `label` (eine feste Formulierung), `positions`, `events`, `share` (Anteil der Positionen mit Grund), `actions` (wie sich das Thema auf like / dislike / hide / star verteilt) und interne `legacy_ids`.
 
-Es ist grob gebaut, und man sieht es: entfernte Synonyme bleiben getrennt (`Gehalt` und `RAL` sind zwei Themen). Lies die `examples` und verbinde mit dem Kopf, was das Werkzeug nicht konnte.
+Die Themen sind so grob wie die Liste: `wrong_location` sagt nicht, welche Stadt, und nichts, was der Nutzer geschrieben hat, kann es verfeinern.
 
 Trägt der Payload eine geschlossene `note`-Enum (`no-signal:*`), gibt es kein Aggregat: schweige, gib den Code nie weiter und baue das Bild nicht aus Einzelabfragen mit `check` wieder zusammen.
 
@@ -172,9 +172,9 @@ Trägt der Payload eine geschlossene `note`-Enum (`no-signal:*`), gibt es kein A
 
 Sprich nur, wenn **alle drei** zutreffen:
 
-- **≥ 8 Feedback-Events tragen Text** (`events_with_text`). Einen Grund zu schreiben kostet den Nutzer Mühe, dieses Volumen liegt also eine Größenordnung unter jedem maschinell erzeugten Zählwert — unter 8 sagt ein Prozentsatz aber nichts (bei 3 Texten ist ein Thema schon ein Drittel).
+- **≥ 8 Feedback-Events tragen einen Grund** (`events_with_reason`). Einen Grund auszuwählen kostet den Nutzer einen Klick, dieses Volumen liegt also unter jedem maschinell erzeugten Zählwert — unter 8 sagt ein Prozentsatz aber nichts (bei 3 Gründen ist ein Thema schon ein Drittel).
 - Das Thema deckt **≥ 4 verschiedene Positionen** ab (`positions`, nie `events`: dieselbe Anzeige zweimal zu beurteilen bleibt eine Meinung, und Events zu zählen ließe eine hartnäckige Anzeige wie einen Trend aussehen).
-- Der **`share` des Themas ist ≥ 0,30**. Freitext verteilt denselben echten Einwand über Synonyme, die Dominanz ist also bauartbedingt verdünnt; Muster B darf 40% verlangen, weil seine Tags ein geschlossenes Vokabular sind. Bei kleinem Volumen bindet die 4-Positionen-Regel, bei großem der Anteil — so ist es gemeint.
+- Der **`share` des Themas ist ≥ 0,30**. Bei kleinem Volumen bindet die 4-Positionen-Regel, bei großem der Anteil — so ist es gemeint.
 
 Darunter: nichts sagen. Ein "zu senior" ist eine Bemerkung zu einer Anzeige.
 
@@ -228,7 +228,7 @@ Wenn du nichts Muster-würdiges zu sagen hast, **sag nichts**. Stille ist eine A
 - ❌ Schwarzmalen ("das führt nirgendwohin") ODER Jubeln ("du schaffst das!") — beides verletzt die Stimme des Mentors. Zahlen, dann eine Frage. Siehe `mentor-output`-Skill.
 - ❌ **Muster F in eine Suchanweisung verwandeln.** Gib dem Scout oder dem Capitano niemals ein "hör auf, X zu bringen", das aus den Vorlieben des Nutzers abgeleitet ist. Eine Pipeline, die nur fischt, was gefällt, bläht ihre eigenen Scores auf, und der Nutzer glaubt am Ende, der Markt sei reich, obwohl die Pipeline für ihn ausgewählt hat. Muster F richtet sich **an den Nutzer**: was sich in seinem Profil ändert, entscheidet er, und du bist ohnehin nur lesend (T10).
 - ❌ Ein zurückgezogenes Urteil vorhalten. `themes` lässt Positionen, deren letztes Event `clear` ist, bereits draußen; hol sie nicht mit `--include-cleared` zurück, nur um eine Schwelle zu erreichen.
-- ❌ Einen einzelnen rohen Kommentar zitieren, als wäre er ein Muster. Sanitizte `examples` geben einem Thema eine Stimme, **nachdem** es die Schwelle überschritten hat; sie sind nicht der Befund.
+- ❌ Hinter einem Thema nach den eigenen Worten des Nutzers suchen. Sie sind privat und für dich nicht verfügbar; das Thema ist ein Code, und der Befund ist seine Zählung.
 
 ## Siehe auch
 

@@ -177,9 +177,9 @@ python3 /app/shared/skills/db_query.py position <ID>
 python3 /app/shared/skills/feedback_query.py themes --days 30 --min-positions 1 --top 10 --exclude-legacy-id <legacy_id>
 ```
 
-Usa soltanto `label` / `examples` sanitizzati come evidenza contestuale di preferenza per questa posizione **futura**. Non applicare bonus/malus fissi, non aggiungere marker feedback a `score.notes` e non escludere o rivalutare la posizione già votata per il suo like/dislike/hide/star. Gli score esistenti restano invariati; O-70 rivalutazione esplicita è un flusso separato richiesto dall'utente. Se il contesto manca, valuta normalmente.
+Usa il `key` / `label` del tema (un codice della lista chiusa dei motivi e la sua frase fissa) soltanto come evidenza contestuale di preferenza per questa posizione **futura**. Non applicare bonus/malus fissi, non aggiungere marker feedback a `score.notes` e non escludere o rivalutare la posizione già votata per il suo like/dislike/hide/star. Gli score esistenti restano invariati; O-70 rivalutazione esplicita è un flusso separato richiesto dall'utente. Se il contesto manca, valuta normalmente.
 
-**Confine display sicuro (`RAW_DISPLAY_BOUNDARY`).** Raw `reason` / `comment`, chiavi macchina e ID non entrano mai in note o output user-facing. Nemmeno `display_reason` / `display_comment` del singolo evento vengono copiati sulla posizione corrente: l'apprendimento futuro usa soltanto `label` / `examples` sanitizzati dei temi.
+**Confine display sicuro (`RAW_DISPLAY_BOUNDARY`).** Le parole dell'utente (la nota privata su un giudizio) non fanno mai parte di questo contesto: non c'è testo libero da leggere, e il motivo è soltanto un codice. Chiavi macchina e ID non entrano mai in note o output user-facing; l'apprendimento futuro usa soltanto `key` / `label` del tema.
 
 ```bash
 # Salva lo score (i flag CLI usano i nomi delle colonne DB, non i nomi della tabella)

@@ -490,6 +490,18 @@ describe("db_query against db_query.py", () => {
     expectSame(await call("db_query", args as string[]), py("db_query.py", args as string[]));
   });
 
+  it.skipIf(skills === null)("never shows an agent the note a user wrote on an exclusion, as db_query.py does not", async () => {
+    const { call, py, pyDb, ourDb } = twins();
+    for (const db of [pyDb, ourDb]) {
+      db.prepare("UPDATE positions SET user_excluded_reason = 'other', user_excluded_note = 'private words of the user' WHERE id = 1").run();
+    }
+    for (const args of [["position", "1", "--json"], ["positions", "--json"], ["position", "1", "--field", "user_excluded_note"], ["position", "1", "--field", "user_excluded_reason"]]) {
+      const ours = await call("db_query", args);
+      expectSame(ours, py("db_query.py", args));
+      expect(ours.content).not.toContain("private words of the user");
+    }
+  });
+
   it("refuses the subcommands of other roles, and reads with a new nonce every call", async () => {
     const db = seeded(join(root, "x.db"));
     const tool = createDbTools({ db: () => db, agent: "scout-1" }).find((t) => t.spec.name === "db_query")!;

@@ -158,10 +158,6 @@ export function ExcludeButton({ legacyId, status, initialReason }: Props) {
       setError(t.pickReason);
       return;
     }
-    if (reason === "other" && !note.trim()) {
-      setError(t.writeReason);
-      return;
-    }
     setBusy(true);
     try {
       const res = await post({ reason, note: note.trim() || undefined });

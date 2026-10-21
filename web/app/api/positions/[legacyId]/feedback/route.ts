@@ -10,6 +10,7 @@ import {
 } from "@/lib/demo/mode";
 import { invalidJsonBody } from "@/app/api/_lib/error-body";
 import { sanitizedError } from "@/lib/error-response";
+import { NOTE_MAX, acceptReason, cleanNote } from "@/lib/feedback-reasons";
 
 export const dynamic = "force-dynamic";
 
@@ -64,6 +65,8 @@ export async function POST(
   let body: {
     action?: unknown;
     reason?: unknown;
+    note?: unknown;
+    /** il vecchio nome di `note` */
     comment?: unknown;
     score?: unknown;
     direction?: unknown;
@@ -84,16 +87,24 @@ export async function POST(
       { status: 400 },
     );
   }
-  const reason =
-    typeof body.reason === "string" && body.reason.length <= 500
-      ? body.reason
-      : null;
+  // JHT-T05: il motivo è un codice del vocabolario chiuso (un testo libero è
+  // rifiutato: lo Scorer dovrebbe interpretarlo), e il testo dell'utente è la
+  // NOTA, max 200 caratteri, che nessun agente legge.
+  let reason: string | null = null;
+  if (body.reason !== undefined && body.reason !== null && body.reason !== "") {
+    reason = acceptReason(body.reason);
+    if (!reason) {
+      return NextResponse.json({ error: "reason_invalid" }, { status: 400 });
+    }
+  }
+  const rawNote = body.note ?? body.comment;
+  const noteText = cleanNote(rawNote);
+  if (noteText.length > NOTE_MAX) {
+    return NextResponse.json({ error: "note_too_long" }, { status: 400 });
+  }
+  const note = noteText || null;
 
   // mig 028: campi opzionali estesi.
-  const comment =
-    typeof body.comment === "string" && body.comment.length <= 2000
-      ? body.comment
-      : null;
   let score: number | null = null;
   if (typeof body.score === "number" && Number.isInteger(body.score)) {
     if (body.score < 1 || body.score > 5) {
@@ -130,7 +141,6 @@ export async function POST(
         position_legacy_id: legacyId,
         action,
         reason,
-        comment,
         score,
         direction,
         created_at: new Date().toISOString(),
@@ -152,11 +162,13 @@ export async function POST(
       position_legacy_id: legacyId,
       action,
       reason,
-      comment,
+      note,
       score,
       direction,
     })
-    .select()
+    .select(
+      "id, position_legacy_id, action, reason, score, direction, created_at",
+    )
     .single();
 
   if (error)
@@ -190,7 +202,6 @@ export async function GET(
               action: e.a,
               score: e.s,
               reason: null,
-              comment: null,
               direction: null,
               created_at: new Date().toISOString(),
             },
@@ -201,7 +212,11 @@ export async function GET(
 
   const { data, error } = await supabase
     .from("position_feedback")
-    .select("*")
+    // Colonne esplicite: la nota dell'utente e il vecchio commento non escono
+    // da una route che il token di un agente può leggere.
+    .select(
+      "id, position_legacy_id, action, reason, score, direction, created_at",
+    )
     .eq("user_id", userId)
     .eq("position_legacy_id", legacyId)
     .order("created_at", { ascending: false });

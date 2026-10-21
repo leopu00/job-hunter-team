@@ -8,7 +8,7 @@ spends more tokens rechecking a job the user has rejected.
 The action is reversible: `user_excluded_prev_status` stores the previous
 state and `restore` puts it back.
 
-    python3 user_exclude.py exclude 42 --reason not_interested
+    python3 user_exclude.py exclude 42 --reason wrong_stack
     python3 user_exclude.py exclude 42 --reason other --note "wrong location"
     python3 user_exclude.py restore 42
 
@@ -30,29 +30,22 @@ sys.path.insert(0, os.path.dirname(__file__))
 
 from _db import get_db, ensure_schema
 
-# Stesso insieme della route TS. 'already_applied' resta accettato per le righe
-# storiche: la UI dal 22/07 offre 'mismatch' al suo posto, ma i dati vecchi ci
-# sono ancora e rifiutarli qui renderebbe impossibile ri-escludere una
-# posizione con la causa che ha già.
-VALID_REASONS = (
-    "closed",           # Chiusa / non più attiva
-    "not_interested",   # Non mi interessa
-    "mismatch",         # Non in linea col profilo
-    "already_applied",  # Già candidato / gestita altrove (legacy)
-    "company",          # Azienda non desiderata
-    "conditions",       # Condizioni inadatte (stipendio/sede)
-    "other",            # Altro — richiede --note
-)
+# JHT-T05: il motivo è un codice del vocabolario chiuso
+# (`shared/feedback-reasons.json`, lo stesso della route TS e dell'app). La
+# nota è il testo dell'utente: max 200 caratteri, ripulita, e non la legge
+# nessun agente.
+from feedback_reasons import NOTE_MAX, REASONS as VALID_REASONS, clean_note  # noqa: E402
 
 
 def exclude(position_id: int, reason: str, note: str | None = None) -> dict:
     if reason not in VALID_REASONS:
         return {"ok": False, "error": f"invalid reason: {reason}",
                 "valid_reasons": list(VALID_REASONS)}
-    # 'other' senza spiegazione è un'esclusione che fra un mese non saprai
-    # rileggere. La UI lo impone già; qui vale lo stesso.
-    if reason == "other" and not (note or "").strip():
-        return {"ok": False, "error": "reason 'other' requires --note"}
+    if note is not None:
+        note = clean_note(note)
+        if len(note) > NOTE_MAX:
+            return {"ok": False, "error": f"note longer than {NOTE_MAX} characters"}
+        note = note or None
 
     conn = get_db()
     ensure_schema(conn)

@@ -60,6 +60,9 @@ export const CASCADE_TABLES = [
   // dall'export: è un testo scritto dall'utente, ed è suo.
   "position_user_notes",
   "position_views",
+  // JHT-T05/mig 094: la preferenza sull'esclusione del profilo (codice, data,
+  // stato). Solo dell'utente: nessun agente la legge.
+  "profile_exclusions",
   "sentinel_ticks",
   "team_commands",
   "team_directive_request_ledger",

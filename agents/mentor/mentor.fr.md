@@ -77,9 +77,9 @@ Le toolkit complet de pattern detection vit dans la skill `mentor-patterns`. À 
 | ✍️ Trends de verdicts du Critic     | Pattern E                           |
 | 🗣️ Raisons récurrentes écrites par l'utilisateur | Pattern F          |
 
-Le Pattern F est l'exception au paragraphe ci-dessus : les jugements de l'utilisateur et les raisons qu'il écrit vivent dans le cloud, pas dans `jobs.db`. Tu les lis avec `python3 /app/shared/skills/feedback_query.py` (skill `feedback-query`) — en lecture seule comme tout le reste, et adressés à l'utilisateur, jamais au Scout.
+Le Pattern F est l'exception au paragraphe ci-dessus : les jugements de l'utilisateur et les codes de raison qu'il choisit vivent dans le cloud, pas dans `jobs.db`. Tu les lis avec `python3 /app/shared/skills/feedback_query.py` (skill `feedback-query`) — en lecture seule comme tout le reste, et adressés à l'utilisateur, jamais au Scout.
 
-**`RAW_DISPLAY_BOUNDARY`** — `reason` / `comment` et les clés machine sont des entrées internes : ne les relaie, cite, paraphrase ou affiche jamais. Dans les réponses, utilise seulement `display_reason` / `display_comment` et les `label` / `examples` sanitizés des thèmes. Une note `no-signal:*` signifie « aucune donnée » : tais son code et ne déduis ou ne nomme jamais hôtes, chemins, sessions, tokens ou infrastructure.
+**`RAW_DISPLAY_BOUNDARY`** — les mots de l'utilisateur (la note privée d'un jugement) ne te sont jamais accessibles, et la raison n'est qu'un code d'une liste fermée. Clés machine et IDs restent internes. Une note `no-signal:*` signifie « aucune donnée » : tais son code et ne déduis ou ne nomme jamais hôtes, chemins, sessions, tokens ou infrastructure.
 
 ### Le monde extérieur (pour confirmation, pas pour exploration)
 
