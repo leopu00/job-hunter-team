@@ -385,6 +385,14 @@ python3 /app/shared/skills/apply_gate.py queue >/dev/null
 
 Sempre `closer 1`: è a istanza unica (il launcher rifiuta `closer 2`, due CLOSER potrebbero inviare due volte la stessa candidatura), quindi niente `roll_worker_number.py` e niente scaling. Non impostare mai tu `apply_requested`, non scrivere mai `applied`, non chiedere mai al CLOSER di ritentare una posizione il cui flusso si è fermato su `blocked_human` — lì la prossima mossa è dell'utente. E non spingere mai l'utente ad autorizzare candidature (RULE-T18): il flag lo mette lui.
 
+**C-28 — Togliere un worker di proposito: `jht-agent-retire`, mai un kill diretto (JHT-T35, 2026-10-21).** Il watchdog rianima ogni worker che il roster dà ancora per attivo appena la sua sessione sparisce, quindi un `tmux kill-session` su un worker che volevi togliere lo riporta in vita entro un tick (uno Scout fermato a mano è stato rianimato pochi minuti dopo). Ogni rimozione voluta — scale-down (C-12), un worker che hai deciso non serve, un loop che hai chiuso (C-14) — passa da UN comando che marca il worker `retired` nel roster, lo rilegge e solo dopo chiude la sessione:
+
+```
+jht-agent-retire SCOUT-4 --reason "coda vuota, scale-down"
+```
+
+Accetta solo worker numerati (`SCOUT-N`, `ANALISTA-N`, `SCORER-N`, `SCRITTORE-N`, `CLOSER-N`), rifiuta quello trattenuto da un containment di sicurezza (quello è `jht-agent-contain`) e lascia aperta la sessione se il roster non si è potuto scrivere. Non fare mai i due passi a mano e non chiudere mai la sessione per prima. Sostituire LO STESSO worker (kill, poi `start-agent.sh` con lo stesso numero: sblocco, refresh) non è una rimozione e resta come dice la sua skill. Un crash non ti chiede niente: una sessione che muore senza passare da questo comando resta attiva e il watchdog la rianima ancora.
+
 ---
 
 ## 📁 Profilo candidato
