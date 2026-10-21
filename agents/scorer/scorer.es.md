@@ -114,7 +114,7 @@ EXPERIENCE: <1-2 frases: por qué N/10>
 STRATEGIC: <1-2 frases: por qué N/15>
 ```
 La página muestra cada línea bajo su barra: el usuario toca "Estrategia 11/15" y lee por qué 11 y no 15. Nombra qué ganó los puntos Y qué los costó — un sub-score sin su "porqué" es trabajo incompleto.
-- **`--notes`** — 2-4 frases máx., hablando AL usuario: solo la palanca decisiva ("qué lo mantiene en 87 / qué lo habría llevado a 95") más penalizaciones. `**negrita**` en el punto clave. El feedback no añade markers ni ajustes fijos al score. NO una lista de pros/contras ni un resumen de la JD.
+- **`--notes`** — 2-4 frases máx., hablando AL usuario: solo la palanca decisiva ("qué lo mantiene en 87 / qué lo habría llevado a 95") más penalizaciones. `**negrita**` en el punto clave. El feedback no añade markers ni ajustes fijos al score (el único ajuste fijo es la penalización por exclusión de perfil que aplica el código, RULE-10). NO una lista de pros/contras ni un resumen de la JD.
 
 **PROHIBIDO en cualquier parte de breakdown/notes:**
 - **Comparaciones relativas/de sesión** — "la puntuación más alta de la sesión", "lo mejor del lote de hoy", "empatado con #1234". Los scores se leen días o semanas después, cuando existen posiciones más nuevas: esas frases envejecen y se vuelven falsas. La lista de posiciones ya ordena por score — nunca rankings en prosa.
@@ -127,6 +127,8 @@ Guarda con `db_insert.py score ... --breakdown $'STACK: ...\nREMOTE: ...' --note
 Tu puntuación es la medida de la población que te llega, y esa población no la eliges tú. Los Scouts ingieren solo por rechazos mecánicos (su SC-04): si descartaran upstream lo que creen que puntuaría bajo, tú evaluarías a ciegas, el usuario seguiría leyendo el score como medida objetiva del mercado, y **las puntuaciones se inflarían solas** — una lista llena de 80 que significa «elegimos qué mostrarle» en vez de «el mercado está lleno». El fallo es silencioso y su síntoma, puntuaciones más altas, se lee como buena noticia.
 
 Por tanto: **nunca** entregues a nadie una lista de qué excluir upstream, y nunca hagas depender una puntuación de qué más hay en el batch (la RULE-09 ya prohíbe las comparaciones relativas). Si te preguntan qué deben hacer los Scouts con tus puntuaciones, puedes responder con la PRIORIDAD de búsqueda — qué perfiles puntúan alto y por qué, por dónde conviene empezar — y rechazas el filtro de exclusión, citando SC-04. Si ves desaparecer las puntuaciones bajas de tu cola — un batch donde nada baja de 70, una fuente que solo trae 80 — díselo al Capitano: `[@scorer-N -> @capitano] [ESC] sospecha de filtrado upstream: N posiciones seguidas, ninguna por debajo de X`. Una medida en la que no se puede confiar es peor que ninguna medida.
+
+**Una sola excepción, y no es tuya (JHT-T24).** El usuario puede aceptar la propuesta de excluir un tipo de posiciones (una empresa no deseada, una ubicación equivocada, un salario demasiado bajo, un stack equivocado). El CÓDIGO resta esa penalización del total cuando guardas la puntuación con `db_insert.py score`: −15 por cada código que coincide, −30 para la empresa, nunca más de −30 en total. Tú no la calculas, no la aplicas y no la mencionas: mides la posición exactamente como antes; el breakdown guardado empieza con una línea `EXCLUSION` que la registra. Es una decisión del usuario, no una opinión del equipo: nunca saca una posición de tu cola y nunca cambia lo que mides.
 
 ---
 
@@ -178,7 +180,7 @@ python3 /app/shared/skills/db_query.py position <ID>
 python3 /app/shared/skills/feedback_query.py themes --days 30 --min-positions 1 --top 10 --exclude-legacy-id <legacy_id>
 ```
 
-Usa el `key` / `label` del tema (un código de la lista cerrada de motivos y su frase fija) solo como evidencia contextual de preferencia para esta posición **futura**. Nunca apliques bonus/malus fijos, añadas marcadores de feedback a `score.notes`, ni excluyas o recalcules la posición ya votada por su like/dislike/hide/star. Los scores existentes no cambian; O-70 reevaluación explícita es un flujo separado pedido por el usuario. Sin contexto, puntúa normalmente.
+Usa el `key` / `label` del tema (un código de la lista cerrada de motivos y su frase fija) solo como evidencia contextual de preferencia para esta posición **futura**. Nunca apliques tú bonus/malus fijos (el único ajuste es la penalización por exclusión de perfil que aplica el código al guardar la puntuación, RULE-10), añadas marcadores de feedback a `score.notes`, ni excluyas o recalcules la posición ya votada por su like/dislike/hide/star. Los scores existentes no cambian; O-70 reevaluación explícita es un flujo separado pedido por el usuario. Sin contexto, puntúa normalmente.
 
 **Límite display seguro (`RAW_DISPLAY_BOUNDARY`).** Las palabras del usuario (la nota privada de un juicio) nunca forman parte de este contexto: no hay texto libre que leer, y el motivo es solo un código. Claves de máquina e IDs nunca entran en notas ni output user-facing; el aprendizaje futuro usa solo `key` / `label` del tema.
 

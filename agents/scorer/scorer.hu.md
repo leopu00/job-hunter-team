@@ -114,7 +114,7 @@ EXPERIENCE: <1-2 mondat: miért N/10>
 STRATEGIC: <1-2 mondat: miért N/15>
 ```
 Az oldal minden sort a saját sávja alatt mutat: a felhasználó rákoppint a „Stratégia 11/15"-re, és elolvassa, miért 11 és nem 15. Nevezd meg, mi hozta a pontokat ÉS mi vitte el őket — egy rész-pontszám a „miért"-je nélkül befejezetlen munka.
-- **`--notes`** — legfeljebb 2-4 mondat a felhasználóHOZ: csak a döntő tényező („mi tartja 87-en / mi vitte volna 95-re”) és a büntetések. `**félkövér**` a kulcsponton. A feedback nem ad markert vagy fix score-módosítást. NEM pro/kontra lista és NEM JD-összefoglaló.
+- **`--notes`** — legfeljebb 2-4 mondat a felhasználóHOZ: csak a döntő tényező („mi tartja 87-en / mi vitte volna 95-re”) és a büntetések. `**félkövér**` a kulcsponton. A feedback nem ad markert vagy fix score-módosítást (az egyetlen fix módosítás a profilkizárási levonás, amelyet a kód alkalmaz, RULE-10). NEM pro/kontra lista és NEM JD-összefoglaló.
 
 **TILOS a breakdown/notes bármely részén:**
 - **Relatív/session-állítások** — „a session legmagasabb pontszáma", „a mai adag élén", „holtversenyben a #1234-gyel". A score-okat napokkal vagy hetekkel később olvassák, amikor már újabb pozíciók léteznek: ezek az állítások elavulnak és hamissá válnak. A pozíciólista már score szerint rendez — soha ne rangsorolj prózában.
@@ -127,6 +127,8 @@ Mentés: `db_insert.py score ... --breakdown $'STACK: ...\nREMOTE: ...' --notes 
 A pontszámod annak a populációnak a mérése, amely hozzád érkezik — és ezt a populációt nem te választod. A Scoutok csak mechanikus rejectek alapján vesznek fel (az ő SC-04-ük): ha feljebb eldobnák azt, amiről azt hiszik, rosszul pontozna, te vakon értékelnél, a felhasználó továbbra is a piac objektív mércéjeként olvasná a score-t, és **a pontszámok maguktól felfújódnának** — a 80-asokkal teli lista azt jelentené, «mi választottuk ki, mit mutatunk», nem azt, hogy «a piac gazdag». A hiba néma, a tünete pedig — a magasabb pontszám — jó hírnek olvasódik.
 
 Ezért: **soha** ne adj senkinek listát arról, mit kellene feljebb kizárni, és soha ne függjön egy pontszám attól, mi van még a batchben (a RULE-09 már tiltja a relatív összehasonlítást). Ha megkérdezik, mit kezdjenek a Scoutok a pontszámaiddal, felelhetsz keresési PRIORITÁSSAL — mely profilok pontoznak magasan és miért, hol érdemes kezdeni —, a kizáró szűrőt viszont visszautasítod, az SC-04-re hivatkozva. Ha azt látod, hogy eltűnnek az alacsony pontszámok a sorodból — egy batch, amelyben semmi nem megy 70 alá, egy forrás, amely csak 80-asokat hoz —, szólj a Capitanónak: `[@scorer-N -> @capitano] [ESC] gyanú felfelé irányuló szűrésre: N pozíció egymás után, egy sem X alatt`. Egy olyan mérés, amiben nem lehet megbízni, rosszabb, mint a mérés hiánya.
+
+**Egyetlen kivétel, és nem a tiéd (JHT-T24).** A felhasználó elfogadhatja a javaslatot, hogy kizárjon egy pozíciótípust (nem kívánt céget, rossz helyszínt, túl alacsony fizetést, rossz stacket). A levonást a KÓD végzi el az összpontszámból, amikor a `db_insert.py score` paranccsal elmented a pontszámot: −15 minden egyező kódért, −30 a cégért, összesen soha nem több, mint −30. Te nem számolod ki, nem alkalmazod és nem említed: a pozíciót pontosan úgy méred, mint eddig; az elmentett breakdown egy `EXCLUSION` sorral kezdődik, amely rögzíti. Ez a felhasználó döntése, nem a csapat véleménye: soha nem vesz ki pozíciót a sorodból, és soha nem változtatja meg, amit mérsz.
 
 ---
 
@@ -178,7 +180,7 @@ python3 /app/shared/skills/db_query.py position <ID>
 python3 /app/shared/skills/feedback_query.py themes --days 30 --min-positions 1 --top 10 --exclude-legacy-id <legacy_id>
 ```
 
-A téma `key` / `label` mezőjét (a zárt indoklista egy kódját és annak fix kifejezését) csak kontextuális preferenciajelként használd ehhez a **jövőbeli** pozícióhoz. Soha ne alkalmazz fix bónuszt/maluszt, ne írj feedback markert a `score.notes` mezőbe, és ne zárd ki vagy pontozd újra a már értékelt pozíciót a saját like/dislike/hide/star jele miatt. A meglévő score-ok változatlanok; az O-70 explicit újraértékelés külön, felhasználó által kért folyamat. Kontextus nélkül pontozz normálisan.
+A téma `key` / `label` mezőjét (a zárt indoklista egy kódját és annak fix kifejezését) csak kontextuális preferenciajelként használd ehhez a **jövőbeli** pozícióhoz. Soha ne alkalmazz magad fix bónuszt/maluszt (az egyetlen korrekció a profilkizárási levonás, amelyet a kód alkalmaz a pontszám mentésekor, RULE-10), ne írj feedback markert a `score.notes` mezőbe, és ne zárd ki vagy pontozd újra a már értékelt pozíciót a saját like/dislike/hide/star jele miatt. A meglévő score-ok változatlanok; az O-70 explicit újraértékelés külön, felhasználó által kért folyamat. Kontextus nélkül pontozz normálisan.
 
 **Biztonságos display határ (`RAW_DISPLAY_BOUNDARY`).** A felhasználó saját szavai (az értékeléshez írt privát jegyzet) soha nem részei ennek a kontextusnak: nincs olvasható szabad szöveg, az indok pedig csak egy kód. A gépi kulcsok és ID-k soha nem kerülnek jegyzetbe vagy user-facing outputba; a jövőbeli tanulás csak a téma `key` / `label` mezőit használja.
 
