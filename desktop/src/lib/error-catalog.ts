@@ -801,6 +801,48 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
   ),
   // The link to an existing team's VPS (vps_link.rs, lib/vps-link.ts): the pinned team is not
   // the one running (exit 70, a stopped container too), and the header while it retries.
+  existing_team_runtime_outdated: copy(
+    "La squadra sulla VPS ha una versione che non sa ancora ricevere questo dall’app.",
+    "Aggiorna la squadra sulla VPS, poi riprova.",
+    "The team on the VPS has a version that cannot take this from the app yet.",
+    "Update the team on the VPS, then try again.",
+  ),
+  note_too_long: copy(
+    "La nota è troppo lunga.",
+    "Accorciala e salva di nuovo.",
+    "The note is too long.",
+    "Shorten it and save again.",
+  ),
+  position_write_not_confirmed: copy(
+    "Per chiedere alla squadra di candidarti serve la tua conferma.",
+    "Conferma la richiesta di candidatura e riprova.",
+    "Asking the team to apply for you needs your confirmation.",
+    "Confirm the application request and try again.",
+  ),
+  position_write_read_only: copy(
+    "Questa squadra è collegata in sola lettura: da qui non si scrive niente.",
+    "Per giudicare gli annunci dall’app, collega la squadra con «Conferma e collega».",
+    "This team is connected read only: nothing is written from here.",
+    "To judge positions from the app, connect the team with “Confirm and connect”.",
+  ),
+  position_write_request_invalid: copy(
+    "La richiesta non è valida e non è stata mandata alla squadra.",
+    "Ricarica la pagina e riprova.",
+    "The request is not valid and was not sent to the team.",
+    "Reload the page and try again.",
+  ),
+  position_write_window_refused: copy(
+    "Questa azione si può fare solo dalla finestra principale dell’app.",
+    "Torna alla finestra principale e riprova.",
+    "This can be done only from the app’s main window.",
+    "Go back to the main window and try again.",
+  ),
+  reason_invalid: copy(
+    "Il motivo scelto non è tra quelli previsti.",
+    "Scegli un motivo dall’elenco e riprova.",
+    "The reason chosen is not one of the listed ones.",
+    "Pick a reason from the list and try again.",
+  ),
   existing_team_runtime_changed: copy(
     "La squadra sulla VPS è spenta oppure non è più la versione collegata.",
     "Avviala sulla VPS e premi Riprova; se il problema resta, ricollega la squadra dalla configurazione.",
