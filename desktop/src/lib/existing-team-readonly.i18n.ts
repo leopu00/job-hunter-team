@@ -6,6 +6,11 @@ export interface ExistingTeamReadOnlyText {
   /** Same, the assistant being on: this connection never lets the app write. */
   connectionReadOnly: string;
   banner: string;
+  /**
+   * What the disabled judgement controls are waiting for: they arrive in an upcoming update, for a team
+   * connected with the «Confirm and connect» of the onboarding, never in this read-only view.
+   */
+  judgementComing: string;
   /** The navigation entry of the page that tells the team's state. */
   team: string;
   /** The navigation entry of the page that shows the candidate profile. */
@@ -27,6 +32,7 @@ export const EXISTING_TEAM_READONLY_TEXT: Record<Locale, ExistingTeamReadOnlyTex
     assistantOff: "Solo lettura: assistente non attivo",
     connectionReadOnly: "Solo lettura: questa connessione non modifica i dati",
     banner: "Stai consultando gli annunci della squadra esistente in sola lettura. Le azioni che modificano i dati restano disabilitate; l’avvio dell’assistente è separato e chiede una conferma.",
+    judgementComing: "Giudicare gli annunci dall’app (mi piace, esclusione, note, richieste di CV e di candidatura) arriva con un prossimo aggiornamento, per una squadra collegata con «Conferma e collega».",
     team: "Squadra",
     profile: "Profilo",
     office: "Ufficio",
@@ -40,6 +46,7 @@ export const EXISTING_TEAM_READONLY_TEXT: Record<Locale, ExistingTeamReadOnlyTex
     assistantOff: "Read only: assistant not active",
     connectionReadOnly: "Read only: this connection does not change data",
     banner: "You are browsing the existing team's positions read only. Actions that change data stay disabled; starting the assistant is separate and asks for a confirmation.",
+    judgementComing: "Judging positions from the app (like, exclude, notes, CV and application requests) arrives in an upcoming update, for a team connected with “Confirm and connect”.",
     team: "Team",
     profile: "Profile",
     office: "Office",
@@ -53,6 +60,7 @@ export const EXISTING_TEAM_READONLY_TEXT: Record<Locale, ExistingTeamReadOnlyTex
     assistantOff: "Nur Lesen: Assistent nicht aktiv",
     connectionReadOnly: "Nur Lesen: Diese Verbindung ändert keine Daten",
     banner: "Du siehst die Stellen des vorhandenen Teams nur lesend. Aktionen, die Daten ändern, bleiben deaktiviert; das Starten des Assistenten ist davon getrennt und verlangt eine Bestätigung.",
+    judgementComing: "Stellen in der App bewerten (Gefällt mir, Ausschließen, Notizen, Anfragen für Lebenslauf und Bewerbung) kommt mit einem der nächsten Updates, für ein Team, das mit „Bestätigen und verbinden“ verbunden ist.",
     team: "Team",
     profile: "Profil",
     office: "Büro",
@@ -66,6 +74,7 @@ export const EXISTING_TEAM_READONLY_TEXT: Record<Locale, ExistingTeamReadOnlyTex
     assistantOff: "Lecture seule : assistant inactif",
     connectionReadOnly: "Lecture seule : cette connexion ne modifie pas les données",
     banner: "Vous consultez les offres de l’équipe existante en lecture seule. Les actions qui modifient les données restent désactivées ; le démarrage de l’assistant est distinct et demande une confirmation.",
+    judgementComing: "Juger les offres depuis l’app (j’aime, exclure, notes, demandes de CV et de candidature) arrive avec une prochaine mise à jour, pour une équipe reliée avec « Confirmer et relier ».",
     team: "Équipe",
     profile: "Profil",
     office: "Bureau",
@@ -79,6 +88,7 @@ export const EXISTING_TEAM_READONLY_TEXT: Record<Locale, ExistingTeamReadOnlyTex
     assistantOff: "Solo lectura: asistente no activo",
     connectionReadOnly: "Solo lectura: esta conexión no modifica los datos",
     banner: "Estás consultando las ofertas del equipo existente en solo lectura. Las acciones que modifican datos siguen desactivadas; el inicio del asistente es aparte y pide una confirmación.",
+    judgementComing: "Valorar las ofertas desde la app (me gusta, excluir, notas, solicitudes de CV y de candidatura) llega con una próxima actualización, para un equipo conectado con «Confirmar y conectar».",
     team: "Equipo",
     profile: "Perfil",
     office: "Oficina",
@@ -92,6 +102,7 @@ export const EXISTING_TEAM_READONLY_TEXT: Record<Locale, ExistingTeamReadOnlyTex
     assistantOff: "Só leitura: assistente não ativo",
     connectionReadOnly: "Só leitura: esta ligação não altera os dados",
     banner: "Está a consultar as vagas da equipa existente só em leitura. As ações que alteram dados continuam desativadas; o arranque do assistente é separado e pede uma confirmação.",
+    judgementComing: "Avaliar as vagas na app (gosto, excluir, notas, pedidos de CV e de candidatura) chega com uma próxima atualização, para uma equipa ligada com «Confirmar e ligar».",
     team: "Equipa",
     profile: "Perfil",
     office: "Escritório",
@@ -105,6 +116,7 @@ export const EXISTING_TEAM_READONLY_TEXT: Record<Locale, ExistingTeamReadOnlyTex
     assistantOff: "Csak olvasható: az asszisztens nem aktív",
     connectionReadOnly: "Csak olvasható: ez a kapcsolat nem módosítja az adatokat",
     banner: "A meglévő csapat pozícióit csak olvasható módban nézi. Az adatokat módosító műveletek le vannak tiltva; az asszisztens indítása külön dolog, és megerősítést kér.",
+    judgementComing: "A pozíciók értékelése az alkalmazásból (tetszik, kizárás, jegyzetek, önéletrajz- és jelentkezéskérés) egy következő frissítéssel érkezik, a „Megerősítés és csatlakozás” gombbal csatlakoztatott csapatnak.",
     team: "Csapat",
     profile: "Profil",
     office: "Iroda",
