@@ -909,7 +909,7 @@ const POSITIONS_SQL = `
  * The user's own note on an exclusion (`user_excluded_note`) is not one of them,
  * and neither is a column added tomorrow until someone lists it here.
  */
-const AGENT_POSITION_COLUMNS: ReadonlySet<string> = new Set(
+export const AGENT_POSITION_COLUMNS: ReadonlySet<string> = new Set(
   `
     id title company company_id location remote_type
     salary_declared_min salary_declared_max salary_declared_currency

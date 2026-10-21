@@ -4,6 +4,7 @@ import { join } from "node:path";
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
+import { AGENT_POSITION_COLUMNS } from "../src/db/db-query.ts";
 import { openJobsDb, type Database } from "../src/db/jobs-db.ts";
 import { EnrichmentPolicy } from "../src/db/enrichment-policy.ts";
 import { createDbTools } from "../src/db/tools.ts";
@@ -488,6 +489,12 @@ describe("db_query against db_query.py", () => {
   it.skipIf(skills === null).each(QUERIES.map((q) => [q.join(" ") || "(no args)", q]))("%s", async (_label, args) => {
     const { call, py } = twins();
     expectSame(await call("db_query", args as string[]), py("db_query.py", args as string[]));
+  });
+
+  it.skipIf(TREE === null)("allows the same columns of positions as db_query.py: the two lists are copies and must not drift", () => {
+    const py = runPython(TREE!, ["-c", "import json, db_query; print(json.dumps(sorted(db_query.AGENT_POSITION_COLUMNS)))"], { JHT_DB: join(root, "lists.db") });
+    expect(py.status, py.stderr).toBe(0);
+    expect([...AGENT_POSITION_COLUMNS].sort()).toEqual(JSON.parse(py.stdout));
   });
 
   it.skipIf(skills === null)("never shows an agent the note a user wrote on an exclusion, as db_query.py does not", async () => {
