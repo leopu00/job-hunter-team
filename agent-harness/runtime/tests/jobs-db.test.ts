@@ -38,7 +38,7 @@ describe("openJobsDb", () => {
     const count = (type: string) => rows.filter((r) => r.type === type && r.sql !== null).length;
     // sqlite_sequence is SQLite's own, created with the first AUTOINCREMENT table;
     // the UNIQUE constraints' automatic indexes have no SQL and are not counted.
-    expect([count("table"), count("index"), count("trigger")]).toEqual([24, 44, 23]);
+    expect([count("table"), count("index"), count("trigger")]).toEqual([25, 44, 23]);
     expect(rows.map((r) => r.name)).toEqual(expect.arrayContaining(["positions", "companies", "scores", "scout_claims"]));
     expect(db.prepare("PRAGMA user_version").get()).toEqual({ user_version: JOBS_DB_SCHEMA_VERSION });
     expect(db.prepare("PRAGMA foreign_keys").get()).toEqual({ foreign_keys: 1 });

@@ -16,6 +16,7 @@ type Catalog = {
   reasons: string[];
   factual: string[];
   proposable: string[];
+  acting: string[];
   legacy: Record<string, string>;
 };
 const catalog = CATALOG as Catalog;
@@ -48,6 +49,14 @@ export function isFactualReason(reason: string | null | undefined): boolean {
 /** I motivi su cui l'app può proporre un'esclusione del profilo. */
 export function isProposableReason(reason: string | null | undefined): boolean {
   return !!reason && catalog.proposable.includes(reason);
+}
+
+/**
+ * I motivi proponibili la cui esclusione, una volta accettata, AGISCE sul punteggio del team
+ * (JHT-T24). Gli altri (la seniority) l'utente può accettarli, ma per ora non cambiano niente.
+ */
+export function isActingReason(reason: string | null | undefined): boolean {
+  return !!reason && catalog.acting.includes(reason);
 }
 
 /**

@@ -26,6 +26,8 @@ import { describeTokenExpiry, probeTokenExpiry } from '../lib/token-expiry.js';
 import { summarizeOutOfRange } from '../lib/score-ranges.js';
 import { coalescingGuardedLane, createHaltGate, guardedLane } from '../lib/halt-gate.js';
 import { applyAppliedBackflow } from '../lib/applied-backflow.js';
+import { syncProfileExclusions } from '../lib/profile-exclusions-sync.js';
+import { runSkillCaptured } from './positions.js';
 import { createExclusiveRunner } from '../lib/exclusive-runner.js';
 import { boundedBackoffDelay } from '../lib/bounded-backoff.js';
 import {
@@ -2571,6 +2573,23 @@ async function handlePullDesiredState(options = {}) {
     log(pc.yellow('--dry-run: no UPDATE applied.'));
     return;
   }
+
+  // ── [JHT-T24] Le esclusioni di profilo decise dall'utente → tabella locale ──
+  // Il cloud tiene la decisione; la regola che penalizza il punteggio la scrive lo
+  // script del team. Best-effort: un errore qui non ferma il resto del pull.
+  await syncProfileExclusions({
+    reader,
+    fetchRemote: async () => {
+      const res = await fetch(`${baseUrl}/api/cloud-sync/profile-exclusions`, {
+        headers: cloudSyncHeaders(config.token),
+      });
+      const answer = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(`HTTP ${res.status} ${answer.error || 'unknown error'}`);
+      return answer.exclusions;
+    },
+    run: runSkillCaptured,
+    log: (line) => console.error(pc.yellow(line)),
+  });
 
   // ── [JHT-MSG-BACKFLOW] Reply/ack chat web → SQLite locale ──
   // L'agente legge le reply dalla SQLite locale (user_reply_at NOT NULL AND

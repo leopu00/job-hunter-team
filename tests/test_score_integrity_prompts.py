@@ -111,3 +111,29 @@ def test_the_scorer_rule_is_numbered_after_the_last_one(lang):
     _, text = _prompt('scorer', lang)
     assert '**RULE-09' in text and '**RULE-10' in text
     assert text.index('**RULE-09') < text.index('**RULE-10')
+
+
+# ── JHT-T24: l'esclusione di profilo accettata dall'utente ─────────────────
+# La penalità la calcola il CODICE (db_insert score); lo Scout la usa solo come
+# priorità di ricerca. SC-04 resta com'è: niente filtro a monte.
+
+@pytest.mark.parametrize('lang', LANGS)
+def test_the_scorer_knows_the_exclusion_penalty_is_the_codes_and_not_its_own(lang):
+    path, text = _prompt('scorer', lang)
+    block = _rule_block(text, 'RULE-10')
+    assert 'JHT-T24' in block, path
+    assert '`db_insert.py score`' in block, path
+    assert '`EXCLUSION`' in block, path
+    assert '−30' in block and '−15' in block, path
+    # Il passo 5 e la RULE-09 non dicono più «nessun aggiustamento fisso» senza l'unica eccezione.
+    assert text.count('RULE-10)') >= 2, path
+
+
+@pytest.mark.parametrize('lang', LANGS)
+def test_the_scout_uses_the_accepted_exclusions_only_as_a_search_priority(lang):
+    path, text = _prompt('scout', lang)
+    block = _rule_block(text, 'SC-04')
+    assert '`db_query.py profile-exclusions`' in block, path
+    assert 'PRIORI' in block.upper(), path
+    # …e le quattro regole meccaniche restano le quattro: nessun quinto reject.
+    assert 'real_years + 3' in block and 'SC-05' in block, path

@@ -29,6 +29,7 @@ from external_content import (
     normalize_external_inline_fields,
 )
 import maintenance_log
+import profile_exclusions
 
 # I flag di `db_insert.py position` che NON vengono dalla pagina: li sceglie
 # un agente nostro (o argparse, con `choices`/`type=int`). Gli altri sono
@@ -455,6 +456,16 @@ def insert_score(args):
     conn = get_db()
     ensure_schema(conn)
 
+    # Le esclusioni di profilo che l'utente ha accettato (JHT-T24): la penalita' la calcola il
+    # CODICE dalle colonne della posizione, non lo Scorer. Va sul totale; le componenti restano
+    # quelle misurate. I motivi stanno in cima al breakdown (frasi fisse e codici, mai testo).
+    penalty, excluded_by = profile_exclusions.penalty_for(conn, args.position_id)
+    if penalty:
+        raw_total = args.total
+        args.total = max(0, args.total - penalty)
+        line = profile_exclusions.breakdown_line(penalty, excluded_by)
+        args.breakdown = f"{line}\n{args.breakdown}" if args.breakdown else line
+
     # Un re-score è un aggiornamento della stessa valutazione. `REPLACE`
     # cancellerebbe la riga sul conflitto di position_id e ne creerebbe una
     # nuova: con AUTOINCREMENT cambierebbe scores.id, l'identità della riga
@@ -512,6 +523,8 @@ def insert_score(args):
               f"{args.total}/100 (no fields changed)")
     else:
         print(f"Score inserted for position {args.position_id}: {args.total}/100")
+    if penalty:
+        print(f"Profile exclusion: -{penalty} ({', '.join(excluded_by)}), {raw_total} -> {args.total}")
     conn.close()
 
 

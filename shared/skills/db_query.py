@@ -117,7 +117,7 @@ AGENT_POSITION_COLUMNS = frozenset("""
     role_family role_family_proposed loc_city loc_region loc_country
     loc_country_code loc_continent work_mode work_country work_country_code
     is_multi_location location_notes office_lat office_lon office_address
-    office_geocoded office_verified expires_at is_open last_open_check
+    office_geocoded office_verified location_precision expires_at is_open last_open_check
     write_requested write_requested_at write_request_kind geocode_requested
     geocode_requested_at salary_precise_requested salary_precise_requested_at
     salary_precise created_at updated_at user_excluded_reason user_excluded_at
@@ -527,6 +527,42 @@ def stats(as_json=False):
         return
     print(f"\npositions: {counts['positions']} | companies: {counts['companies']} | scores: {counts['scores']} | applications: {counts['applications']} | schema: V{version}")
     conn.close()
+
+
+def profile_exclusions_in_force(as_json=False):
+    """Le esclusioni di profilo accettate dall'utente (JHT-T24), per lo Scout.
+
+    SOLO un suggerimento di ricerca: dove cercare per prima, mai cosa scartare (SC-04). Lo Scorer
+    non le legge qui: la penalita' la applica `db_insert.py score`. Codici, frasi fisse e valori
+    delle colonne strutturali; nessun testo dell'utente.
+    """
+    import profile_exclusions as rules
+    conn = get_db()
+    ensure_schema(conn)
+    found = []
+    for code, params in rules.active(conn):
+        if code == 'company':
+            ids = params.get('company_ids', [])
+            names = [r[0] for r in conn.execute(
+                f"SELECT name FROM companies WHERE id IN ({','.join('?' for _ in ids)}) ORDER BY name", ids)] if ids else []
+            values = [inline_external_value(n) for n in names]
+        elif code == 'wrong_location':
+            values = list(params.get('country_codes', []))
+        elif code == 'salary_low':
+            values = [f"{cur} up to {top}" for cur, top in sorted(params.get('ceilings', {}).items())]
+        else:
+            values = list(params.get('role_families', []))
+        found.append({'code': code, 'label': rules.LABELS.get(code, code), 'values': values})
+    conn.close()
+    if as_json:
+        emit_json({'exclusions': found})
+        return
+    if not found:
+        print("No profile exclusions in force.")
+        return
+    print("Profile exclusions in force (a search hint: look elsewhere first; never skip a position for them, SC-04):")
+    for item in found:
+        print(f"- {item['label']}: {', '.join(item['values'])}")
 
 
 def check_history(position_id, as_json=False):
@@ -1961,9 +1997,14 @@ def main():
     ch.add_argument('id', type=int)
     ch.add_argument('--json', action='store_true', help=JSON_HELP)
 
+    pe = sub.add_parser('profile-exclusions')
+    pe.add_argument('--json', action='store_true', help=JSON_HELP)
+
     args = parser.parse_args()
 
-    if args.cmd == 'positions':
+    if args.cmd == 'profile-exclusions':
+        profile_exclusions_in_force(as_json=args.json)
+    elif args.cmd == 'positions':
         query_positions(args)
     elif args.cmd == 'position':
         # --field mode (bug #26): scriptable lookup. Bypassa il print

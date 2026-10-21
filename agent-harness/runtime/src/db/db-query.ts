@@ -26,6 +26,8 @@ import { extractLinkedinJobId } from "./dedup.ts";
 import { Fence, flattenExternalValue } from "./external-content.ts";
 import type { EnrichmentPolicy } from "./enrichment-policy.ts";
 import type { Database } from "./jobs-db.ts";
+import { activeExclusions } from "./profile-exclusions.ts";
+import { FEEDBACK_REASON_LABELS } from "../parity/skills/feedback-reasons.ts";
 import { pyFixed, pyJson, pyPad, pySlice, pyStr, pyStrip, pyTruthy } from "./py-format.ts";
 import type { ScriptResult } from "./tools.ts";
 
@@ -36,7 +38,7 @@ export const DB_QUERY_SUBCOMMANDS = [
   "next-for-categorize", "next-for-salary-precise", "next-for-recheck-due", "next-for-recheck-weekly",
   "next-for-geocode-missing", "next-for-logo-missing", "next-for-harvest", "next-for-calibration",
   "calibration-consume", "active-categories", "other-pile", "category-sizes", "application", "applications",
-  "check-url", "cv-pdf-paths", "maintenance-report", "geocode-check", "check-history",
+  "check-url", "cv-pdf-paths", "maintenance-report", "geocode-check", "check-history", "profile-exclusions",
 ] as const;
 
 /** The queues `next_for_role` answers with one SELECT each, and what each is called. */
@@ -59,7 +61,7 @@ const QUEUES = {
 type QueueCommand = keyof typeof QUEUES;
 
 export const DB_QUERY_PORTED = [
-  "check-url", "position", "positions", "recent-activity", "company", "companies", "stats", "check-history", "geocode-check", "dashboard", "application",
+  "check-url", "position", "positions", "recent-activity", "company", "companies", "stats", "check-history", "geocode-check", "dashboard", "application", "profile-exclusions",
   "applications", "active-categories", "other-pile", "category-sizes", ...(Object.keys(QUEUES) as QueueCommand[]),
 ] as const;
 type Ported = (typeof DB_QUERY_PORTED)[number];
@@ -121,6 +123,7 @@ const SPECS: Record<Ported, CommandSpec> = {
   },
   "check-history": { prog: "db_query.py check-history", positionals: [{ name: "id", type: "int" }], options: [JSON_FLAG] },
   "geocode-check": { prog: "db_query.py geocode-check", positionals: [{ name: "id", type: "int" }], options: [JSON_FLAG] },
+  "profile-exclusions": { prog: "db_query.py profile-exclusions", options: [JSON_FLAG] },
   "active-categories": {
     prog: "db_query.py active-categories",
     positionals: [{ name: "user_id", optional: true, default: null }],
@@ -734,6 +737,45 @@ export function dbQuery(db: () => Database, argv: string[], options: DbQueryOpti
     return done();
   }
 
+  if (name === "profile-exclusions") {
+    // The exclusions of the profile the user accepted, for the Scout: where to look first, never what to
+    // skip (SC-04). Codes, fixed phrases and the values of structured columns; nothing the user wrote.
+    const found = activeExclusions(db()).map(({ code, params }) => {
+      let values: string[];
+      if (code === "company") {
+        const ids = (Array.isArray(params["company_ids"]) ? params["company_ids"] : []) as number[];
+        values =
+          ids.length === 0
+            ? []
+            : (
+                db()
+                  .prepare(`SELECT name FROM companies WHERE id IN (${ids.map(() => "?").join(",")}) ORDER BY name`)
+                  .all(...ids) as Array<{ name: string }>
+              ).map((r) => fence.inline(r.name));
+      } else if (code === "wrong_location") {
+        values = (Array.isArray(params["country_codes"]) ? params["country_codes"] : []) as string[];
+      } else if (code === "salary_low") {
+        values = Object.entries((params["ceilings"] ?? {}) as Record<string, number>)
+          .sort(([x], [y]) => (x < y ? -1 : x > y ? 1 : 0))
+          .map(([currency, top]) => `${currency} up to ${top}`);
+      } else {
+        values = (Array.isArray(params["role_families"]) ? params["role_families"] : []) as string[];
+      }
+      return { code, label: FEEDBACK_REASON_LABELS[code] ?? code, values };
+    });
+    if (a["json"]) {
+      print(pyJson({ exclusions: found }, { ensureAscii: false }));
+      return done();
+    }
+    if (found.length === 0) {
+      print("No profile exclusions in force.");
+      return done();
+    }
+    print("Profile exclusions in force (a search hint: look elsewhere first; never skip a position for them, SC-04):");
+    for (const item of found) print(`- ${item.label}: ${item.values.join(", ")}`);
+    return done();
+  }
+
   if (name === "check-history") {
     const id = a["id"] as number;
     const pos = select(
@@ -919,7 +961,7 @@ export const AGENT_POSITION_COLUMNS: ReadonlySet<string> = new Set(
     role_family role_family_proposed loc_city loc_region loc_country
     loc_country_code loc_continent work_mode work_country work_country_code
     is_multi_location location_notes office_lat office_lon office_address
-    office_geocoded office_verified expires_at is_open last_open_check
+    office_geocoded office_verified location_precision expires_at is_open last_open_check
     write_requested write_requested_at write_request_kind geocode_requested
     geocode_requested_at salary_precise_requested salary_precise_requested_at
     salary_precise created_at updated_at user_excluded_reason user_excluded_at
