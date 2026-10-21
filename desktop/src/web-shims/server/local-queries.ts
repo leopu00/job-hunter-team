@@ -34,6 +34,7 @@ export interface PositionCoord {
 }
 
 export const countPendingMessagesLocal = localOnly("countPendingMessagesLocal");
+export const countScamSectionLocal = localOnly("countScamSectionLocal");
 export const getApplicationTimelineEventsLocal = localOnly("getApplicationTimelineEventsLocal");
 export const getDashboardPositionsLocal = localOnly("getDashboardPositionsLocal");
 export const getDashboardStatsLocal = localOnly("getDashboardStatsLocal");

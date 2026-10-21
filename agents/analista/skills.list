@@ -13,6 +13,7 @@ location-enrichment
 office-geocoding
 logo-extraction
 recheck-liveness
+scam-signals
 
 # User chat (game / desktop app). A [CHAT] landing in your pane is answered
 # with ONE short jht-send and then you go straight back to work: the reply

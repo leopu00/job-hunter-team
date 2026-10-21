@@ -69,6 +69,7 @@ import { ScoreAssessedAt } from "./ScoreAssessedAt";
 import { OverviewScoreBadge } from "./OverviewScoreBadge";
 import { OverviewFactRow, OverviewFacts } from "./OverviewFacts";
 import { ExclusionDecidedAt } from "./ExclusionDecidedAt";
+import { T as SCAM_T } from "@/lib/scam-signals.i18n";
 import { IconAlert, IconExternal } from "../icons";
 
 /**
@@ -281,6 +282,7 @@ export default async function PositionDetailPage({ params }: PageProps) {
       ? (cookieLocale as Locale)
       : defaultLocale;
   const t = makeT(T, locale);
+  const scamT = makeT(SCAM_T, locale);
 
   const data = await getPositionById(id);
 
@@ -629,6 +631,31 @@ export default async function PositionDetailPage({ params }: PageProps) {
           />
           <p className="text-[11px] text-[var(--color-base)] leading-relaxed">
             {exclusionText}
+          </p>
+        </div>
+      )}
+      {/* JHT-T06 — segnali anti-truffa deterministici: un avviso con i motivi,
+          mai un'esclusione (la posizione e il suo stato restano com'erano). */}
+      {position.scam_signals && (
+        <div
+          data-testid="scam-signals"
+          className="mt-4 rounded-lg border p-3"
+          style={{
+            borderColor: "var(--color-orange)",
+            background:
+              "color-mix(in srgb, var(--color-orange) 9%, transparent)",
+          }}
+        >
+          <div className="text-[9.5px] font-semibold tracking-widest uppercase text-[var(--color-orange)] mb-1">
+            {scamT("title")}
+          </div>
+          <ul className="list-disc pl-4 text-[11px] text-[var(--color-base)] leading-relaxed">
+            {position.scam_signals.codes.map((code) => (
+              <li key={code}>{scamT(code)}</li>
+            ))}
+          </ul>
+          <p className="mt-1 text-[10.5px] text-[var(--color-dim)]">
+            {scamT("note")}
           </p>
         </div>
       )}

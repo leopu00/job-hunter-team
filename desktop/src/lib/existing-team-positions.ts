@@ -180,9 +180,12 @@ export async function readDesktopVpsPositionsWindow(
   if (!data || typeof data !== "object" || Array.isArray(data)) {
     return { source: "unavailable", code: "desktop_bad_reply" };
   }
-  const { items, total } = data as Record<string, unknown>;
+  const { items, total, scamSection } = data as Record<string, unknown>;
+  // The count of the «suspicious» section rides with the page when the core sent one.
+  const section =
+    typeof scamSection === "number" && Number.isInteger(scamSection) && scamSection >= 0 ? { scamSection } : {};
   return Array.isArray(items) && typeof total === "number" && Number.isInteger(total) && total >= 0
-    ? { source: "vps", data: { items: items as PositionWithScore[], total } }
+    ? { source: "vps", data: { items: items as PositionWithScore[], total, ...section } }
     : { source: "unavailable", code: "desktop_bad_reply" };
 }
 

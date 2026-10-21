@@ -190,7 +190,7 @@ describe("Posizioni on an existing team read only", () => {
     // The payload the page really puts on the wire (the Rust decoder test pins
     // the same one): the page size, not the 2000 the web asks of the cloud.
     expect(listRequests()).toEqual([
-      { op: "list", filters: { limit: 50, offset: 0, sort: "found_at", dir: "desc", scoredOnly: true, hideExcluded: true } },
+      { op: "list", filters: { limit: 50, offset: 0, sort: "found_at", dir: "desc", scoredOnly: true, hideExcluded: true, scam: "hide" } },
     ]);
   });
 

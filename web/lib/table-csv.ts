@@ -35,8 +35,13 @@ export function readTable(table: HTMLTableElement): {
   headers: string[];
   rows: string[][];
 } {
-  const text = (cell: Element) =>
-    (cell.textContent ?? "").replace(/\s+/g, " ").trim();
+  // What a cell shows, except the flags that ride beside it (`data-csv-skip`):
+  // the title cell holds the title, not the «suspicious» badge next to it.
+  const text = (cell: Element) => {
+    const copy = cell.cloneNode(true) as Element;
+    copy.querySelectorAll("[data-csv-skip]").forEach((flag) => flag.remove());
+    return (copy.textContent ?? "").replace(/\s+/g, " ").trim();
+  };
   const headers = [...table.querySelectorAll("thead th")].map(text);
   const rows = [...table.querySelectorAll("tbody tr")]
     .map((row) =>

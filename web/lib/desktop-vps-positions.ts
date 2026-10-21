@@ -23,6 +23,8 @@ export type DesktopVpsRead<T> =
 export interface DesktopVpsPositionsWindow {
   items: PositionWithScore[];
   total: number;
+  /** How many of the matching rows are in the «suspicious» section (JHT-T06), whichever view was asked. */
+  scamSection?: number;
 }
 
 const notDesktop = <T>(): DesktopVpsRead<T> => ({ source: "not_desktop" });

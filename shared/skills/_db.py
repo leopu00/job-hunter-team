@@ -907,6 +907,7 @@ def _run_migrations(conn: sqlite3.Connection) -> None:
     _migrate_positions_recheck_requested(conn)
     _migrate_positions_apply_requested(conn)
     _migrate_positions_jd_summary(conn)
+    _migrate_positions_scam_signals(conn)
     _migrate_role_family_registry(conn)
     _migrate_position_tickets_cloud_id(conn)
     _migrate_position_tickets_active_rescore(conn)
@@ -1996,6 +1997,21 @@ def _migrate_positions_jd_summary(conn: sqlite3.Connection) -> None:
     if _column_exists(conn, 'positions', 'jd_summary'):
         return
     conn.execute("ALTER TABLE positions ADD COLUMN jd_summary TEXT")
+
+
+def _migrate_positions_scam_signals(conn: sqlite3.Connection) -> None:
+    """Aggiunge `positions.scam_signals` (text, nullable).
+
+    L'esito di `scam_signals.py`: JSON `{"v":1,"codes":[...],"bucket":"none|badge|section"}`
+    dei segnali anti-truffa DETERMINISTICI sull'annuncio. NULL = mai controllata.
+    Solo locale (JHT-T06 fase A): non viaggia nella sync cloud, che ha una lista
+    esplicita di colonne. Non cambia lo `status` e non esclude niente.
+    """
+    if not _table_exists(conn, 'positions'):
+        return
+    if _column_exists(conn, 'positions', 'scam_signals'):
+        return
+    conn.execute("ALTER TABLE positions ADD COLUMN scam_signals TEXT")
 
 
 def _migrate_companies_logo(conn: sqlite3.Connection) -> None:

@@ -6,6 +6,7 @@ import type { ApplyRequestSignals } from "./apply-request-rule";
 import { resolveCityPins } from "./city-coords";
 import { salaryPreference } from "./salary-source";
 import { likePattern, parsePositionQuery } from "./position-search";
+import { parseScamSignals } from "./scam-signals";
 import { publicPositionState } from "./position-state";
 import type { ApplicationTimelineEvent } from "./application-timeline";
 import {
@@ -1768,6 +1769,25 @@ export function getTeamActivityLogLocal(ws: string): RecentActivityEvent[] {
   }));
 }
 
+/**
+ * How many positions sit in the «suspicious» section (signals of two different
+ * kinds, JHT-T06). 0 on a workspace whose jobs.db has no `scam_signals` column yet.
+ */
+export function countScamSectionLocal(ws: string): number {
+  try {
+    const rows = getDb(ws)
+      .prepare(
+        "SELECT scam_signals FROM positions WHERE scam_signals LIKE '%\"section\"%'",
+      )
+      .all() as { scam_signals: string | null }[];
+    return rows.filter(
+      (r) => parseScamSignals(r.scam_signals)?.bucket === "section",
+    ).length;
+  } catch {
+    return 0;
+  }
+}
+
 // ── Mapping helpers ─────────────────────────────────────────────────
 
 function mapPosition(r: any): PositionWithScore {
@@ -1790,6 +1810,7 @@ function mapPosition(r: any): PositionWithScore {
     source: r.source,
     jd_text: r.jd_text ?? null,
     jd_summary: r.jd_summary ?? null,
+    scam_signals: parseScamSignals(r.scam_signals),
     requirements: r.requirements ?? null,
     found_by: r.found_by,
     found_at: r.found_at ?? "",
@@ -1843,6 +1864,7 @@ function mapPositionFull(r: any): Position {
     source: r.source,
     jd_text: r.jd_text ?? null,
     jd_summary: r.jd_summary ?? null,
+    scam_signals: parseScamSignals(r.scam_signals),
     requirements: r.requirements ?? null,
     found_by: r.found_by,
     found_at: r.found_at ?? "",

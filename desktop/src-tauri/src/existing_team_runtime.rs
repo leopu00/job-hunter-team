@@ -47,8 +47,17 @@ def many(sql,args=()):
 def columns(table):
  try: return {row[1] for row in db.execute('PRAGMA table_info('+table+')')}
  except sqlite3.Error: return set()
+SCAM_FAMILY={'same_text_many_places':'text','advance_payment':'text','company_unverifiable':'company','private_chat_only':'contact'}
+def scam(value):
+ try: found=json.loads(value) if isinstance(value,str) else None
+ except ValueError: return None
+ codes=found.get('codes') if isinstance(found,dict) else None
+ if not isinstance(codes,list): return None
+ kept=[code for code in SCAM_FAMILY if code in codes]
+ if not kept: return None
+ return {'codes':kept,'bucket':'section' if len({SCAM_FAMILY[code] for code in kept})>1 else 'badge'}
 def map_position(row,score=None,application=None,full=False):
- out={'id':sid(row.get('id')),'legacy_id':nullable(row,'legacy_id'),'title':nullable(row,'title'),'company':nullable(row,'company'),'company_id':sid(row.get('company_id')) if row.get('company_id') else None,'location':nullable(row,'location'),'remote_type':nullable(row,'remote_type'),'salary_declared_min':nullable(row,'salary_declared_min'),'salary_declared_max':nullable(row,'salary_declared_max'),'salary_declared_currency':nullable(row,'salary_declared_currency'),'salary_estimated_min':nullable(row,'salary_estimated_min'),'salary_estimated_max':nullable(row,'salary_estimated_max'),'salary_estimated_currency':nullable(row,'salary_estimated_currency'),'salary_estimated_source':nullable(row,'salary_estimated_source'),'url':nullable(row,'url'),'source':nullable(row,'source'),'jd_text':nullable(row,'jd_text'),'jd_summary':nullable(row,'jd_summary'),'requirements':nullable(row,'requirements'),'found_by':nullable(row,'found_by'),'found_at':nullable(row,'found_at') or '','deadline':nullable(row,'deadline'),'status':nullable(row,'status'),'notes':nullable(row,'notes'),'last_checked':nullable(row,'last_checked'),'role_family':nullable(row,'role_family'),'loc_country':nullable(row,'loc_country'),'loc_city':nullable(row,'loc_city')}
+ out={'id':sid(row.get('id')),'legacy_id':nullable(row,'legacy_id'),'title':nullable(row,'title'),'company':nullable(row,'company'),'company_id':sid(row.get('company_id')) if row.get('company_id') else None,'location':nullable(row,'location'),'remote_type':nullable(row,'remote_type'),'salary_declared_min':nullable(row,'salary_declared_min'),'salary_declared_max':nullable(row,'salary_declared_max'),'salary_declared_currency':nullable(row,'salary_declared_currency'),'salary_estimated_min':nullable(row,'salary_estimated_min'),'salary_estimated_max':nullable(row,'salary_estimated_max'),'salary_estimated_currency':nullable(row,'salary_estimated_currency'),'salary_estimated_source':nullable(row,'salary_estimated_source'),'url':nullable(row,'url'),'source':nullable(row,'source'),'jd_text':nullable(row,'jd_text'),'jd_summary':nullable(row,'jd_summary'),'scam_signals':scam(row.get('scam_signals')),'requirements':nullable(row,'requirements'),'found_by':nullable(row,'found_by'),'found_at':nullable(row,'found_at') or '','deadline':nullable(row,'deadline'),'status':nullable(row,'status'),'notes':nullable(row,'notes'),'last_checked':nullable(row,'last_checked'),'role_family':nullable(row,'role_family'),'loc_country':nullable(row,'loc_country'),'loc_city':nullable(row,'loc_city')}
  if full:
   out.update({'write_requested':truthy(row,'write_requested'),'write_requested_at':nullable(row,'write_requested_at'),'write_request_kind':nullable(row,'write_request_kind'),'geocode_requested':truthy(row,'geocode_requested'),'geocode_requested_at':nullable(row,'geocode_requested_at'),'office_geocoded':truthy(row,'office_geocoded'),'user_excluded_reason':nullable(row,'user_excluded_reason'),'user_excluded_note':nullable(row,'user_excluded_note'),'user_excluded_at':nullable(row,'user_excluded_at'),'user_excluded_prev_status':nullable(row,'user_excluded_prev_status'),'recheck_requested':truthy(row,'recheck_requested'),'recheck_requested_at':nullable(row,'recheck_requested_at'),'apply_requested':truthy(row,'apply_requested'),'apply_requested_at':nullable(row,'apply_requested_at'),'apply_requested_by':nullable(row,'apply_requested_by'),'last_open_check':nullable(row,'last_open_check')})
  else:
@@ -88,6 +97,7 @@ def matching(item,filters):
   if key in filters and not validate_strings(filters[key]): return None
  if 'scoreBands' in filters and not validate_bands(filters['scoreBands']): return None
  if 'criticBands' in filters and not validate_bands(filters['criticBands']): return None
+ if filters.get('scam') not in (None,'hide','only'): return None
  for key in ('unscored','criticUnscored','writeRequested','scoredOnly','hideExcluded'):
   if key in filters and type(filters[key]) is not bool: return None
  if filters.get('scoredOnly') and item.get('score') is None: return False
@@ -140,7 +150,7 @@ def sort_items(items,filters):
   present=[item for item in items if value(item) is not None]; missing=[item for item in items if value(item) is None]
   present.sort(key=value,reverse=direction=='desc'); items[:]=present+missing
  return items
-LIST_KEYS=('id','legacy_id','title','company','location','remote_type','source','found_at','status','role_family','loc_country','loc_city','score','critic_score','critic_verdict','written_at','applied_at','salary_min','salary_max','salary_currency','has_open_ticket','ticket_indicator','public_state','write_requested','office_lat','office_lon','office_address')
+LIST_KEYS=('id','legacy_id','title','company','location','remote_type','source','found_at','status','role_family','loc_country','loc_city','score','critic_score','critic_verdict','written_at','applied_at','salary_min','salary_max','salary_currency','has_open_ticket','ticket_indicator','public_state','write_requested','scam_signals','office_lat','office_lon','office_address')
 def light(item): return {key:item.get(key) for key in LIST_KEYS}
 try: req=json.loads(sys.stdin.readline())
 except Exception: fail('positions_request_invalid')
@@ -269,25 +279,29 @@ if op=='facets':
    rows.append({'id':sid(row[0]),'status':row[1],'title':row[2],'company':row[3],'role_family':row[4],'loc_country':row[5],'loc_city':row[6],'score':row[7],'critic_score':row[8],'source':row[9]})
  except sqlite3.Error: fail('positions_unavailable')
  emit({'ok':True,'data':{'items':rows}})
-filters=req.get('filters') or {}; allowed={'statuses','remoteTypes','sources','verdicts','families','countries','cities','scoreBands','unscored','criticBands','criticUnscored','writeRequested','scoredOnly','hideExcluded','q','limit','offset','sort','dir'}
+filters=req.get('filters') or {}; allowed={'statuses','remoteTypes','sources','verdicts','families','countries','cities','scoreBands','unscored','criticBands','criticUnscored','writeRequested','scoredOnly','hideExcluded','scam','q','limit','offset','sort','dir'}
 if set(filters)-allowed: fail('positions_request_invalid')
 if not isinstance(filters,dict) or any(value is None for value in filters.values()): fail('positions_request_invalid')
 if matching({},filters) is None: fail('positions_request_invalid')
 try:
- rows=[]
+ rows=[]; section_total=0
  for raw in db.execute('SELECT p.* FROM positions p ORDER BY p.found_at DESC,p.id ASC'):
   position=as_dict(raw); pid=position.get('id'); score=one('SELECT * FROM scores WHERE position_id=?',(pid,)); application=one('SELECT * FROM applications WHERE position_id=?',(pid,)); item=map_position(position,score,application)
   declared=salary(position); pending=ticket_count(pid)>0; item.update({'salary_min':declared[0],'salary_max':declared[1],'salary_currency':declared[2] or 'EUR','applied_at':nullable(application,'applied_at') if application else None,'written_at':nullable(application,'written_at') if application else None,'has_open_ticket':pending,'ticket_indicator':'pending' if pending else 'none','public_state':state(position.get('status')),'office_lat':coord(position.get('office_lat'),90),'office_lon':coord(position.get('office_lon'),180),'office_address':text(position.get('office_address'),160)})
   matched=matching(item,filters)
   if matched is None: fail('positions_request_invalid')
-  if matched: rows.append(item)
+  if matched:
+   section=(item.get('scam_signals') or {}).get('bucket')=='section'
+   if section: section_total+=1
+   if filters.get('scam') and section!=(filters['scam']=='only'): continue
+   rows.append(item)
 except sqlite3.Error: fail('positions_unavailable')
 rows=sort_items(rows,filters)
 limit=filters.get('limit'); offset=filters.get('offset',0)
 if limit is not None and (type(limit) is not int or not 1<=limit<=600): fail('positions_request_invalid')
 if type(offset) is not int or not 0<=offset<=100000: fail('positions_request_invalid')
 window=rows[offset:offset+limit] if limit is not None else rows[offset:]
-emit({'ok':True,'data':{'items':[light(item) for item in window],'total':len(rows)}})
+emit({'ok':True,'data':{'items':[light(item) for item in window],'total':len(rows),'scamSection':section_total}})
 "#;
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
@@ -349,6 +363,8 @@ struct PositionFilters {
     #[serde(skip_serializing_if = "Option::is_none")]
     hide_excluded: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    scam: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     q: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     limit: Option<u16>,
@@ -398,6 +414,10 @@ impl PositionFilters {
         .all(Self::valid_strings)
             && Self::valid_bands(&self.score_bands)
             && Self::valid_bands(&self.critic_bands)
+            && self
+                .scam
+                .as_ref()
+                .map_or(true, |value| matches!(value.as_str(), "hide" | "only"))
             && self.q.as_ref().map_or(true, |value| value.len() <= 120)
             && self.limit.map_or(true, |value| (1..=600).contains(&value))
             && self.offset.map_or(true, |value| value <= 100_000)
@@ -2709,8 +2729,8 @@ mod tests {
         // the first one): a refusal here would be a request nobody can read.
         for payload in [
             // the Positions page, default view, first and later page (desktop test pins the same)
-            json!({"op": "list", "filters": {"limit": 50, "offset": 0, "sort": "found_at", "dir": "desc", "scoredOnly": true, "hideExcluded": true}}),
-            json!({"op": "list", "filters": {"limit": 25, "offset": 25, "sort": "found_at", "dir": "desc", "scoredOnly": true, "hideExcluded": true}}),
+            json!({"op": "list", "filters": {"limit": 50, "offset": 0, "sort": "found_at", "dir": "desc", "scoredOnly": true, "hideExcluded": true, "scam": "hide"}}),
+            json!({"op": "list", "filters": {"limit": 25, "offset": 25, "sort": "found_at", "dir": "desc", "scoredOnly": true, "hideExcluded": true, "scam": "only"}}),
             json!({"op": "list", "filters": {"limit": 600, "offset": 600, "sort": "found_at", "dir": "desc"}}),
             json!({"op": "list", "filters": {"q": "row 07", "sort": "score", "dir": "asc", "limit": 100, "offset": 0}}),
             json!({"op": "list", "filters": {
@@ -2875,6 +2895,27 @@ mod tests {
     }
 
     #[test]
+    fn the_positions_list_carries_the_scam_signals_checked_and_filters_on_them() {
+        let keys = POSITIONS_READ_PY.split("LIST_KEYS=(").nth(1).unwrap().split(')').next().unwrap();
+        assert!(keys.contains("'scam_signals'"));
+        // checked, not passed through: only the known codes survive, and the bucket is recomputed
+        assert!(POSITIONS_READ_PY.contains("'scam_signals':scam(row.get('scam_signals'))"));
+        assert!(POSITIONS_READ_PY.contains("SCAM_FAMILY={'same_text_many_places':'text'"));
+        assert!(POSITIONS_READ_PY.contains("if filters.get('scam') not in (None,'hide','only'): return None"));
+        // the count of the section is over everything the other filters match, whichever view is asked
+        assert!(POSITIONS_READ_PY.contains("if section: section_total+=1"));
+        for value in ["hide", "only"] {
+            let request = parse_positions_request(json!({"op": "list", "filters": {"scam": value}}))
+                .expect("a scam filter parses");
+            assert_eq!(
+                serde_json::to_value(request).unwrap(),
+                json!({"op": "list", "filters": {"scam": value}})
+            );
+        }
+        assert!(parse_positions_request(json!({"op": "list", "filters": {"scam": "all"}})).is_err());
+    }
+
+    #[test]
     fn positions_request_omits_absent_filter_options() {
         let request = parse_positions_request(json!({
             "op": "list", "filters": {"q": "engineer"}
@@ -2978,7 +3019,7 @@ mod tests {
             "BUDGET=1363148",
             // the list is a light projection with the matching total, so a page of it
             // stays far under the 2 MiB the core accepts back
-            "'data':{'items':[light(item) for item in window],'total':len(rows)}",
+            "'data':{'items':[light(item) for item in window],'total':len(rows),'scamSection':section_total}",
             // the sidebar's source list is counted from the facets, one light reply
             "'critic_score':row[8],'source':row[9]}",
         ] {
