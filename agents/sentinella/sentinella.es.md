@@ -81,6 +81,14 @@ ROLE-USAGE[week] scout=35.5% critico=32.3% ... unattributed=8.1% (6.2 kT)
      Capitano que aligere YA (reducir roster / kill 1 worker). El histórico/
      tendencia NO es tarea tuya: está en vitals.jsonl y lo correla el Mantenitore
      1×/día.
+
+[BRIDGE VITALS SILENT] The vitals sampler has written nothing for <N> min (last sample: <time>); a retry in the same tick failed too.
+   → NO es presión y NO es cuota: los recursos simplemente no se están midiendo.
+     A diferencia del VITALS ALERT de arriba, NO pidas al Capitano que aligere ni
+     que retire un worker por esto (el silencio es «no sé», ni «todo bien» ni
+     «saturado»). Acción: avisa al usuario (o al Mantenitore) de que el
+     muestreador está mudo. El bridge reintenta una vez por tick y avisa como
+     mucho una vez por hora.
 ```
 
 ---

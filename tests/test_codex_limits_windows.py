@@ -119,3 +119,31 @@ def test_pacing_axes_keep_the_single_window_on_both(bridge):
     assert parsed["usage"] == 24
     assert parsed["weekly_usage"] == 24
     assert parsed["usage_is_weekly"] is True
+
+
+def test_the_real_shape_of_a_single_window_plan_has_no_invented_five_hour(bridge):
+    """Il payload di un piano a UNA finestra (plan_type "prolite"), con tutte le chiavi
+    che Codex scrive: `primary` = 7 giorni, `secondary` null, nessuna finestra da 300."""
+    _rollout(bridge, {
+        "limit_id": "codex",
+        "limit_name": None,
+        "primary": {"used_percent": 13.6, "window_minutes": 10080, "resets_at": WEEKLY_RESET},
+        "secondary": None,
+        "credits": {"has_credits": False, "unlimited": False, "balance": "0"},
+        "individual_limit": None,
+        "spend_control_reached": None,
+        "plan_type": "prolite",
+        "rate_limit_reached_type": None,
+    })
+    verdict = _limits(bridge)
+    assert verdict == {
+        "status": "ok",
+        "resets_at": None,
+        "five_hour": None,
+        "weekly": {"used_pct": 14, "resets_at": WEEKLY_RESET},
+    }
+    # il ritmo del team continua a leggere la finestra unica come suo unico vincolo
+    parsed = bridge.fetch_codex_rollout()
+    assert parsed["usage"] == 14 and parsed["weekly_usage"] == 14
+    assert parsed["reset_at_unix"] == parsed["weekly_reset_at_unix"] == float(WEEKLY_RESET)
+    assert parsed["usage_is_weekly"] is True

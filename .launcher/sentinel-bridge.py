@@ -77,6 +77,14 @@ VITALS_FILE = LOGS_DIR / "vitals.jsonl"
 VITALS_ALERT_PCT = 95.0
 VITALS_ALERT_COOLDOWN_MIN = 30.0
 _LAST_VITALS_ALERT_AT = 0.0
+# Campionatore muto: vitals.jsonl non cresce piu'. Dopo T32 un buco di campioni vale
+# «non so» e non azzera la catena CPU, ma se il campionatore si ferma del tutto nessuno
+# lo vede: va detto, con un avviso DISTINTO dall'allarme CPU.
+VITALS_SILENT_INTERVALS = 3        # tick senza un campione prima di dirlo
+VITALS_SILENT_MIN_MINUTES = 2.0    # pavimento: con tick brevissimi non si accusa a ogni sbaglio
+VITALS_SILENT_COOLDOWN_MIN = 60.0
+_LAST_VITALS_SILENT_AT = 0.0
+_BRIDGE_STARTED_AT = datetime.now(timezone.utc).isoformat()
 DATA_JSONL = LOGS_DIR / "sentinel-data.jsonl"
 LOG_TXT = LOGS_DIR / "sentinel-log.txt"
 PID_FILE = LOGS_DIR / "sentinel-bridge.pid"
@@ -1072,21 +1080,75 @@ def _enforce_daily_halt():
     return escaped
 
 
-def _sample_vitals_and_maybe_alert():
+def _take_vitals_sample():
+    """Un campione di vitals.jsonl, o None. Se il primo tentativo fallisce ne fa UN
+    secondo subito: il campionatore e' un sottoprocesso per tick, quindi «riavviarlo»
+    e' rilanciarlo (legge /proc e appende una riga: nessun effetto da ripetere)."""
+    for _attempt in range(2):
+        try:
+            r = subprocess.run([sys.executable, VITALS_SKILL, "sample"],
+                               capture_output=True, text=True, timeout=10)
+            if r.returncode == 0 and r.stdout.strip():
+                return json.loads(r.stdout.strip().splitlines()[-1])
+        except Exception:
+            pass
+    return None
+
+
+def _sampler_silence(tick_min):
+    """host_vitals.py silent: None, o {"minutes", "last"} se vitals.jsonl non cresce da
+    VITALS_SILENT_INTERVALS tick (o dall'avvio del bridge, se non c'e' mai stato un campione)."""
+    max_age_min = max(VITALS_SILENT_MIN_MINUTES, VITALS_SILENT_INTERVALS * float(tick_min))
+    try:
+        r = subprocess.run([sys.executable, VITALS_SKILL, "silent", "--file", str(VITALS_FILE),
+                            "--max-age-min", str(max_age_min), "--since", _BRIDGE_STARTED_AT],
+                           capture_output=True, text=True, timeout=10)
+        if r.returncode != 0 or not r.stdout.strip():
+            return None
+        value = json.loads(r.stdout.strip().splitlines()[-1])
+    except Exception:
+        return None
+    return value if isinstance(value, dict) else None
+
+
+def _warn_if_vitals_silent(tick_min):
+    """Avviso `[BRIDGE VITALS SILENT]` alla Sentinella, con cooldown. NON e' un allarme
+    CPU/RAM: dice solo che non si sta misurando, e che non e' un motivo per togliere worker."""
+    global _LAST_VITALS_SILENT_AT
+    silence = _sampler_silence(tick_min)
+    if not silence:
+        return
+    now = time.time()
+    if now - _LAST_VITALS_SILENT_AT < VITALS_SILENT_COOLDOWN_MIN * 60:
+        return
+    _LAST_VITALS_SILENT_AT = now
+    since = silence.get("last") or "the bridge start"
+    jht_tmux_send(
+        SENTINELLA_SESSION,
+        f"[BRIDGE VITALS SILENT] The vitals sampler has written nothing for "
+        f"{silence['minutes']:g} min (last sample: {since}); a retry in the same tick failed too. "
+        f"This is NOT a CPU/RAM alarm and says nothing about the machine: resources are simply "
+        f"not being measured, so do not retire workers because of it. Tell the user or the "
+        f"Mantenitore; history in {VITALS_FILE}.",
+    )
+
+
+def _sample_vitals_and_maybe_alert(tick_min=ANCHOR_TICK_MIN):
     """Campiona RAM/CPU → vitals.jsonl (file dedicato, NON il tick Sentinella).
 
     Sveglia la Sentinella SOLO se RAM o CPU >= VITALS_ALERT_PCT (pressione risorse
-    REALE, distinta dalla quota token), con cooldown anti-spam. Isolato: qualsiasi
-    errore qui NON tocca il tick di quota. Il Mantenitore correla vitals.jsonl 1×/dì.
+    REALE, distinta dalla quota token), con cooldown anti-spam. Se il campione non
+    si riesce a prendere (anche al secondo tentativo) e vitals.jsonl non cresce da
+    3 tick, avvisa a parte che i vitals sono muti. Isolato: qualsiasi errore qui NON
+    tocca il tick di quota. Il Mantenitore correla vitals.jsonl 1×/dì.
     """
     global _LAST_VITALS_ALERT_AT
-    try:
-        r = subprocess.run([sys.executable, VITALS_SKILL, "sample"],
-                           capture_output=True, text=True, timeout=10)
-        if r.returncode != 0 or not r.stdout.strip():
-            return
-        v = json.loads(r.stdout.strip().splitlines()[-1])
-    except Exception:
+    v = _take_vitals_sample()
+    if v is None:
+        try:
+            _warn_if_vitals_silent(tick_min)
+        except Exception:
+            pass
         return
     # Disco sotto il 10% libero: avviso all'utente, con la frase della tabella
     # codice->frase e un cooldown (host_vitals.py notify-disk). Non passa dalla
@@ -2926,7 +2988,7 @@ def main():
             # (file dedicato — NON nel tick Sentinella, che resta sul flusso quota).
             # Sveglia la Sentinella SOLO se RAM/CPU >95% (rate-limited). FUORI dal
             # gate orario sotto: una pressione risorse è emergenza infra, non quota.
-            _sample_vitals_and_maybe_alert()
+            _sample_vitals_and_maybe_alert(ANCHOR_TICK_MIN if override_min is None else override_min)
 
             usage = entry.get("usage")
             proj = entry.get("projection")

@@ -83,6 +83,14 @@ ROLE-USAGE[week] scout=35.5% critico=32.3% ... unattributed=8.1% (6.2 kT)
      Capitano d'alléger TOUT DE SUITE (réduire le roster / kill 1 worker).
      L'historique/tendance N'est PAS ton rôle : il est dans vitals.jsonl et le
      Mantenitore le corrèle 1×/jour.
+
+[BRIDGE VITALS SILENT] The vitals sampler has written nothing for <N> min (last sample: <time>); a retry in the same tick failed too.
+   → PAS de la pression et PAS du quota : les ressources ne sont simplement pas
+     mesurées. Contrairement au VITALS ALERT ci-dessus, ne demande PAS au
+     Capitano d'alléger ni de retirer un worker pour cela (le silence est
+     « je ne sais pas », ni « tout va bien » ni « saturé »). Action : préviens
+     l'utilisateur (ou le Mantenitore) que l'échantillonneur est muet. Le bridge
+     réessaie une fois par tick et prévient au plus une fois par heure.
 ```
 
 ---
