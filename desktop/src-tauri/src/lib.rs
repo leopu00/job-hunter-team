@@ -10,6 +10,7 @@ mod direct_chat;
 mod agent_control;
 mod existing_team_agents;
 mod existing_team_judgement;
+mod export_file;
 mod existing_team_register;
 // The tests rely on 0600 files, hard links and symlinks; Windows is not covered.
 #[cfg(all(test, unix))]
@@ -84,6 +85,7 @@ pub fn run() {
             existing_team_runtime::existing_team_link_identity,
             existing_team_agents::existing_team_agents_read,
             agent_control::agent_control,
+            export_file::export_csv_save,
             direct_chat::direct_chat_close,
             direct_chat::direct_chat_connect,
             direct_chat::direct_chat_read,

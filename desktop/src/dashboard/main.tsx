@@ -6,6 +6,7 @@ import { mapApi } from "../pages/map/map-api";
 import { messagesApi } from "../pages/messages/messages-api";
 import { positionsApi } from "../pages/positions/positions-api";
 import { teamApi } from "../pages/team/team-api";
+import { installCsvExport } from "../lib/export-csv";
 import { installApiBridge, shellApi } from "../shell/api-bridge";
 import { initializeTheme } from "../shell/theme";
 import { DashboardEntrypoint } from "./DashboardEntrypoint";
@@ -16,6 +17,7 @@ import "./dashboard.css";
 // (lib/web-api.ts) answers what nobody ported with a JSON 404.
 installApiBridge(shellApi(mapApi(positionsApi(messagesApi(teamApi(createWebApiFetch(supabase)))))));
 initializeTheme();
+installCsvExport();
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>

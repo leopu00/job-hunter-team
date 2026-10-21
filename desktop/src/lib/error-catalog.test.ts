@@ -192,6 +192,14 @@ const NOT_ERRORS: Record<string, string> = {
   burn_intent: "agent control read field (the full-throttle override)",
   expires_at: "agent control read field (when the full-throttle override ends)",
   remaining_min: "agent control read field (minutes left of the full-throttle override)",
+  // The positions table's CSV export (export_file.rs): the page catches every failure of
+  // `export_csv_save` and says its own sentence (page.i18n.ts, export_failed); the code
+  // itself never reaches the person.
+  export_dir_unavailable: "CSV export failure, said by the page as export_failed",
+  export_name_invalid: "CSV export failure, said by the page as export_failed",
+  export_too_large: "CSV export failure, said by the page as export_failed",
+  export_window: "CSV export failure, said by the page as export_failed",
+  export_write_failed: "CSV export failure, said by the page as export_failed",
 };
 
 function compiledRustModules(): string[] {
