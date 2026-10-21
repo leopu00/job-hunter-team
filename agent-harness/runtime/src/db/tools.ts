@@ -23,6 +23,7 @@ import type { ToolExecution, ToolHandler } from "../tools/registry.ts";
 import { ArgvError, destOf, parseArgv, pyRepr, type CommandSpec, type Parsed } from "./argv.ts";
 import { insertApplication, insertCompany, insertHighlight } from "./db-insert.ts";
 import { dbQuery } from "./db-query.ts";
+import { exclusionBreakdownLine, exclusionPenalty } from "./profile-exclusions.ts";
 import type { EnrichmentPolicy } from "./enrichment-policy.ts";
 import { EVIDENCE_KINDS, MAINTENANCE_ACTIONS, MAINTENANCE_OUTCOMES, recordDiffs, updateApplication, updateCompany, updatePosition } from "./db-update.ts";
 import { checkDuplicate, type Duplicate } from "./dedup.ts";
@@ -293,6 +294,13 @@ export function createDbTools(given: DbToolsOptions): ToolHandler[] {
     // position may be anywhere past the queue, and nothing else opens it.
     const db = options.db();
     const positionId = a["position_id"] as number;
+    // The exclusions of the profile the user accepted (JHT-T24): the penalty is the code's, taken off
+    // the total from the columns of the position; the reasons head the breakdown. Not the scorer's call.
+    const exclusion = exclusionPenalty(db, positionId);
+    const rawTotal = a["total"] as number;
+    const total = exclusion.points > 0 ? Math.max(0, rawTotal - exclusion.points) : rawTotal;
+    const line = exclusion.points > 0 ? exclusionBreakdownLine(exclusion.points, exclusion.codes) : "";
+    const breakdown = exclusion.points > 0 ? (pyTruthy(a["breakdown"]) ? `${line}\n${a["breakdown"] as string}` : line) : a["breakdown"];
     const [where, whereParams] = rescore
       ? [
           "EXISTS (SELECT 1 FROM position_tickets WHERE position_id = ? AND kind = 'rescore' AND status = 'assigned' " +
@@ -327,13 +335,13 @@ export function createDbTools(given: DbToolsOptions): ToolHandler[] {
         )
         .run(
           positionId,
-          sql(a["total"]),
+          sql(total),
           sql(a["stack_match"]),
           sql(a["remote_fit"]),
           sql(a["salary_fit"]),
           sql(a["experience_fit"]),
           sql(a["strategic_fit"]),
-          sql(a["breakdown"]),
+          sql(breakdown),
           sql(a["notes"]),
           // As --found-by (D-5): the scorer is the agent the runtime runs, not what the model typed.
           options.agent,
@@ -372,8 +380,9 @@ export function createDbTools(given: DbToolsOptions): ToolHandler[] {
         exitCode: 1,
       };
     }
-    if (unchanged) return { stdout: `Score unchanged for position ${positionId}: ${a["total"]}/100 (no fields changed)\n`, exitCode: 0 };
-    return { stdout: `Score inserted for position ${a["position_id"]}: ${a["total"]}/100\n`, exitCode: 0 };
+    const noted = exclusion.points > 0 ? `Profile exclusion: -${exclusion.points} (${exclusion.codes.join(", ")}), ${rawTotal} -> ${total}\n` : "";
+    if (unchanged) return { stdout: `Score unchanged for position ${positionId}: ${total}/100 (no fields changed)\n${noted}`, exitCode: 0 };
+    return { stdout: `Score inserted for position ${a["position_id"]}: ${total}/100\n${noted}`, exitCode: 0 };
   };
 
   const dbUpdate = (argv: string[]): ScriptResult => {

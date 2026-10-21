@@ -89,7 +89,8 @@ const NONE: DbRolePolicy = { query: [], insert: [], update: [] };
 export const DB_ROLE_POLICIES: Readonly<Record<string, DbRolePolicy>> = {
   // SC-03: inserts positions, excludes its own duplicates, reads.
   scout: {
-    query: ["check-url", "position", "positions", "recent-activity"],
+    // `profile-exclusions`: the exclusions the user accepted, as a search HINT only (SC-04).
+    query: ["check-url", "position", "positions", "recent-activity", "profile-exclusions"],
     insert: ["position"],
     update: ["position"],
     position: {
