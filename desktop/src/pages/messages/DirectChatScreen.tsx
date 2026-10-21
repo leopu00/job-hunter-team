@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { appLocale } from "../../lib/app-locale";
 import { describeError } from "../../lib/error-catalog";
+import OwnVpsClaim from "../../components/OwnVpsClaim";
+import { isOwnVpsClaimCode } from "../../lib/own-vps-claim";
 import type { VoiceInputBridge } from "../../lib/voice-input";
 import { VoiceInputControl } from "../../voice-input";
 import type {
@@ -323,6 +325,11 @@ export default function DirectChatScreen({
         )}
 
         <StatusBar status={status} operationError={operationError} reconnecting={reconnecting} onRetry={() => void retry()} />
+        {!writeLocked && isOwnVpsClaimCode(operationError) && (
+          <div className="shrink-0 px-4 pt-3">
+            <OwnVpsClaim reason={operationError} onClaimed={() => setOperationError(null)} />
+          </div>
+        )}
 
         <div
           ref={transcript}

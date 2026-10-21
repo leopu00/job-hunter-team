@@ -881,33 +881,226 @@ pub(crate) fn mark_own_vps(
     mark_own_vps_at(&root(app)?, scope, address, port, host_key)
 }
 
-/// A team the person made with the app on a VPS of their own, as opposed to an existing team
-/// connected to. It is the full connection by its nature: the read-only view exists only for an
-/// existing team, which always has its selection, so the two are never mistaken for each other.
+/// Where a VPS of the person's own stands (JHT-T30). The reads and the writes do not ask the same:
 ///
-/// «Own» is decided by a POSITIVE mark, written by the app's own provisioning (`mark_own_vps_at`):
-/// this account, this host (address and port) and the fingerprint of the host key that is pinned NOW
-/// (`pinned_key`, read from the local pin by the caller). A host or a key that is not the marked one,
-/// a mark of another account, a missing or malformed mark: not the person's own. And, as before, an
-/// existing team's candidate or selection in the scope is never an own VPS, mark or no mark: the
-/// absence of the two files is required, no longer enough. Read from the saved files, never from
-/// what the renderer says.
-pub(crate) fn own_vps_at(
+/// - `Marked`: the app's own provisioning wrote the mark for this host, and the host key pinned NOW is
+///   the marked one. The full connection: reads and writes.
+/// - `Claimable`: no existing team in the account and no mark for this host: a VPS the app set up before
+///   the mark existed (or the mark is of another host). Reads yes; writes only after the person claims it.
+/// - `KeyChanged`: the mark is for this host and port, but the key pinned now is another: the VPS was
+///   reinstalled or replaced. Reads yes; writes need a new claim, and the message says so.
+/// - `NotOwn`: an existing team's candidate or selection in the account, this computer, or no pin.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum OwnVpsState {
+    Marked,
+    Claimable,
+    KeyChanged,
+    NotOwn,
+}
+
+impl OwnVpsState {
+    /// The word the page reads.
+    pub(crate) fn word(self) -> &'static str {
+        match self {
+            OwnVpsState::Marked => "marked",
+            OwnVpsState::Claimable => "claimable",
+            OwnVpsState::KeyChanged => "key_changed",
+            OwnVpsState::NotOwn => "not_own",
+        }
+    }
+
+    /// Why a write is refused here, or none when it may go: the codes the page turns into the
+    /// invitation to claim the VPS. An existing team has its own rule (the full link), not this one.
+    pub(crate) fn write_refusal(self) -> Option<&'static str> {
+        match self {
+            OwnVpsState::Marked => None,
+            OwnVpsState::Claimable => Some("own_vps_claim_required"),
+            OwnVpsState::KeyChanged => Some("own_vps_key_changed"),
+            OwnVpsState::NotOwn => Some("own_vps_claim_refused"),
+        }
+    }
+}
+
+/// The state of the VPS `host` for this account, from the saved files and the key pinned now
+/// (`pinned_key`, read from the local pin by the caller). Read from the files, never from what the
+/// renderer says. An existing team's candidate or selection in the account always wins: it is that
+/// team's rule, never an own VPS, mark or no mark.
+pub(crate) fn own_vps_state_at(
+    root: &Path,
+    scope: &AccountScope,
+    host: &ExecutionHost,
+    pinned_key: Option<&str>,
+) -> OwnVpsState {
+    let (ExecutionHost::Vps { address, port, .. }, Some(pinned_key)) = (host, pinned_key) else {
+        return OwnVpsState::NotOwn;
+    };
+    if !matches!(saved_binding_at(root, scope), Ok((false, false))) {
+        return OwnVpsState::NotOwn;
+    }
+    match read_own_vps_marker_at(root, scope) {
+        Some(marker) if marker.address == address.trim() && marker.port == *port => {
+            if marker.host_key == pinned_key {
+                OwnVpsState::Marked
+            } else {
+                OwnVpsState::KeyChanged
+            }
+        }
+        _ => OwnVpsState::Claimable,
+    }
+}
+
+/// WRITES to a VPS of the person's own (the panel's actions, the chat's messages, the judgements):
+/// only with the mark. «The scope has no candidate and no selection» is not a permission to write.
+pub(crate) fn own_vps_for_writes_at(
     root: &Path,
     scope: &AccountScope,
     host: &ExecutionHost,
     pinned_key: Option<&str>,
 ) -> bool {
-    let (ExecutionHost::Vps { address, port, .. }, Some(pinned_key)) = (host, pinned_key) else {
-        return false;
+    own_vps_state_at(root, scope, host, pinned_key) == OwnVpsState::Marked
+}
+
+/// READS of a VPS the app set up (positions, agents, the setup's snapshot): the mark, or what held
+/// before the mark existed, a scope with no candidate and no selection (only the existing-team
+/// commands write them). A VPS the app set up before the mark must not go back to being unreadable;
+/// what it cannot do without the mark is write. A read exposes the person's own data to the person.
+pub(crate) fn own_vps_for_reads_at(root: &Path, scope: &AccountScope) -> bool {
+    matches!(saved_binding_at(root, scope), Ok((false, false)))
+}
+
+/// The person says that this VPS was set up by them with the app (JHT-T30). Writes the mark, and only
+/// when all of it holds: the VPS is a host with a pinned key, the account has no existing team (a
+/// read-only view or a connection to one always has its candidate or selection), the VPS answers as
+/// the team of this account (`identity_matches`, from the identity probe), and the person confirmed. Atomic
+/// (the mark is written once, after the checks); a refusal leaves no file.
+pub(crate) fn claim_own_vps_at(
+    root: &Path,
+    scope: &AccountScope,
+    host: &ExecutionHost,
+    pinned_key: Option<&str>,
+    identity_matches: bool,
+) -> Result<(), &'static str> {
+    let ExecutionHost::Vps { address, port, .. } = host else {
+        return Err("own_vps_claim_refused");
     };
-    let Some(marker) = read_own_vps_marker_at(root, scope) else {
-        return false;
+    match own_vps_state_at(root, scope, host, pinned_key) {
+        OwnVpsState::Marked => return Ok(()),
+        OwnVpsState::Claimable | OwnVpsState::KeyChanged => {}
+        OwnVpsState::NotOwn => return Err("own_vps_claim_refused"),
+    }
+    if !identity_matches {
+        return Err("own_vps_claim_refused");
+    }
+    let key = pinned_key.ok_or("own_vps_claim_refused")?;
+    mark_own_vps_at(root, scope, address, *port, key).map_err(|_| "own_vps_claim_refused")
+}
+
+/// The script the identity probe runs in the VPS's container, through the read channel of the host's
+/// wrapper (the chat's): it starts nothing and prints one boolean. The account's id arrives on standard
+/// input and nothing of `cloud.json` comes back. An unreadable file is «no».
+const OWN_VPS_IDENTITY_PY: &str = r#"import json,sys
+try:
+ expected=json.loads(sys.stdin.readline()).get('user_id')
+ cloud=json.load(open('/jht_home/cloud.json'))
+ match=isinstance(expected,str) and len(expected)>=16 and cloud.get('user_id')==expected
+except Exception:
+ match=False
+print(json.dumps({'match':match}))"#;
+
+/// What the probe sends: the script in hex, then the expected id. Never an argument.
+pub(crate) fn own_vps_identity_input(user_id: &str) -> Option<Vec<u8>> {
+    if !crate::onboarding::valid_team_id(user_id) {
+        return None;
+    }
+    let mut input = hex_encode(OWN_VPS_IDENTITY_PY.as_bytes()).into_bytes();
+    input.push(b'\n');
+    input.extend_from_slice(json!({ "user_id": user_id }).to_string().as_bytes());
+    input.push(b'\n');
+    Some(input)
+}
+
+/// The probe's one answer: exactly `{"match": true}`. Anything else, an error, a different shape: no.
+pub(crate) fn own_vps_identity_matches(stdout: &[u8]) -> bool {
+    serde_json::from_slice::<Value>(stdout.trim_ascii())
+        .ok()
+        .and_then(|value| {
+            let object = value.as_object()?;
+            (object.len() == 1).then(|| object.get("match") == Some(&Value::Bool(true)))
+        })
+        .unwrap_or(false)
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub(crate) struct OwnVpsClaimRequest {
+    user_id: String,
+    confirmed: bool,
+}
+
+fn claim_own_vps_impl(
+    app: &tauri::AppHandle,
+    scope: &AccountScope,
+    request: &OwnVpsClaimRequest,
+) -> Result<(), &'static str> {
+    if !request.confirmed {
+        return Err("own_vps_claim_not_confirmed");
+    }
+    let input = own_vps_identity_input(&request.user_id).ok_or("own_vps_claim_refused")?;
+    let host = direct_chat::load_persisted_host(app, scope).map_err(|_| "own_vps_claim_refused")?;
+    if !matches!(host, ExecutionHost::Vps { .. }) {
+        return Err("own_vps_claim_refused");
+    }
+    let validated = crate::runtime_host::validate_host_for_scope(app, &host, scope).map_err(|_| "own_vps_claim_refused")?;
+    let pinned = crate::runtime_host::pinned_host_fingerprint(&validated).map_err(|_| "own_vps_claim_refused")?;
+    let root = root(app)?;
+    // Before any network: an existing team, or no VPS of the app's, is refused here.
+    match own_vps_state_at(&root, scope, &host, Some(&pinned)) {
+        OwnVpsState::Marked => return Ok(()),
+        OwnVpsState::NotOwn => return Err("own_vps_claim_refused"),
+        OwnVpsState::Claimable | OwnVpsState::KeyChanged => {}
+    }
+    let started = std::time::Instant::now();
+    let log = crate::runtime_log::RuntimeLog::new(app);
+    // The probe goes where the chat's reads go, to the wrapper's python channel, which reads the
+    // attested container and never starts it.
+    let probe = run_ssh_command(&validated, &crate::agent_control::own_vps_read_command(), Some(&input), Duration::from_secs(30), None);
+    let outcome = match &probe {
+        Ok(result) if result.success() => {
+            let matches = own_vps_identity_matches(&result.stdout);
+            claim_own_vps_at(&root, scope, &host, Some(&pinned), matches)
+        }
+        _ => Err("own_vps_claim_unreachable"),
     };
-    marker.address == address.trim()
-        && marker.port == *port
-        && marker.host_key == pinned_key
-        && matches!(saved_binding_at(root, scope), Ok((false, false)))
+    // The runtime log keeps that a claim was made and how it ended: no host, no account, no answer.
+    if let Some(log) = log {
+        log.record("own_vps_claim", outcome.map(|_| 0), &[], &[], started.elapsed());
+    }
+    outcome
+}
+
+/// «This VPS I set up with the app» (JHT-T30). Only the app's own window, only with the person's
+/// confirmation, never by itself: nothing calls it but the page's button.
+#[tauri::command]
+pub(crate) async fn own_vps_claim(
+    window: tauri::Window,
+    app: tauri::AppHandle,
+    scopes: State<'_, AccountScopeState>,
+    request: OwnVpsClaimRequest,
+) -> Result<(), &'static str> {
+    if !direct_chat::window_may_write(window.label()) {
+        return Err("own_vps_claim_refused");
+    }
+    let expected = scopes.active().map_err(|_| "own_vps_claim_refused")?;
+    let scope_state = scopes.inner().clone();
+    let worker_expected = expected.clone();
+    let result = tauri::async_runtime::spawn_blocking(move || {
+        let _scope = scope_state.lock_expected(&worker_expected).map_err(|_| "own_vps_claim_refused")?;
+        claim_own_vps_impl(&app, &worker_expected, &request)
+    })
+    .await
+    .unwrap_or(Err("own_vps_claim_unreachable"));
+    scopes.lock_expected(&expected).map_err(|_| "own_vps_claim_refused")?;
+    result
 }
 
 /// «Forget the team» for an account: the existing-team candidate and selection, and the own-VPS mark.
@@ -1274,21 +1467,20 @@ pub(crate) fn selected(
 
 /// The pinned target of an existing team, or `None` for a VPS the person made with the app: it has
 /// no existing-team selection to find (`selected` refuses a VPS without one), it is theirs and
-/// connected in full, and it is reached through the host's wrapper. Only a host the app's own
-/// provisioning marked, with the key still pinned and no candidate or selection in the scope, is
-/// theirs (`own_vps_at`, read from the files, never from the renderer): a half-saved existing team
-/// stays the refusal it is. Every reader of a VPS team goes through here.
+/// connected, and it is reached through the host's wrapper. For READING it is theirs when the scope
+/// has no candidate and no selection (`own_vps_for_reads_at`, read from the files, never from the
+/// renderer): a half-saved existing team stays the refusal it is. WRITING needs more, the mark the
+/// app's own setup writes (`own_vps_for_writes_at`), and the page offers to claim a VPS that has none. Every reader of a VPS team goes through here.
 pub(crate) fn selected_or_own(
     app: &tauri::AppHandle,
     scope: &AccountScope,
     host: &ExecutionHost,
 ) -> Result<Option<ActivatedTarget>, &'static str> {
-    let pinned = pinned_key_for(app, scope, host);
-    selected_or_own_at(&root(app)?, scope, host, pinned.as_deref())
+    selected_or_own_at(&root(app)?, scope, host)
 }
 
 /// The fingerprint of the host key the person confirmed for this host, read from the local pin; none
-/// when the host does not validate or has no pin (and then nothing is the person's own).
+/// when the host does not validate or has no pin (and then no write to an own VPS goes).
 pub(crate) fn pinned_key_for(app: &tauri::AppHandle, scope: &AccountScope, host: &ExecutionHost) -> Option<String> {
     let validated = crate::runtime_host::validate_host_for_scope(app, host, scope).ok()?;
     crate::runtime_host::pinned_host_fingerprint(&validated).ok()
@@ -1298,10 +1490,9 @@ pub(crate) fn selected_or_own_at(
     root: &Path,
     scope: &AccountScope,
     host: &ExecutionHost,
-    pinned_key: Option<&str>,
 ) -> Result<Option<ActivatedTarget>, &'static str> {
     match selected_at(root, scope, host) {
-        Err("existing_team_runtime_selection_required") if own_vps_at(root, scope, host, pinned_key) => Ok(None),
+        Err("existing_team_runtime_selection_required") if own_vps_for_reads_at(root, scope) => Ok(None),
         other => other,
     }
 }
@@ -2116,14 +2307,10 @@ mod tests {
             port: 22,
             key_path: "/keys/id_ed25519".into(),
         };
-        // the VPS the app set up: nothing saved for the scope but its own mark, its reads go to the host's wrapper
-        assert_eq!(
-            selected_or_own_at(&root, &scope, &vps, Some(PINNED_KEY)).err(),
-            Some("existing_team_runtime_selection_required"),
-            "without the mark it is not the person's own"
-        );
+        // a VPS the app set up before the mark existed: nothing saved for the scope, its READS go to the host's wrapper
+        assert!(matches!(selected_or_own_at(&root, &scope, &vps), Ok(None)), "no candidate, no selection: read as before");
         mark_own_vps_at(&root, &scope, "203.0.113.7", 22, PINNED_KEY).unwrap();
-        assert!(matches!(selected_or_own_at(&root, &scope, &vps, Some(PINNED_KEY)), Ok(None)));
+        assert!(matches!(selected_or_own_at(&root, &scope, &vps), Ok(None)));
         let own = read_command_for(None, &vps).unwrap();
         assert_eq!(own, crate::direct_chat::REMOTE_PYTHON_STDIN);
         assert!(own.contains("grep -Fqx 'JHT_DESKTOP_CHAT_PROTOCOL=1' \"$JHT_BIN\""));
@@ -2131,11 +2318,11 @@ mod tests {
         // an existing team keeps today's command, the pinned container
         let pinned = ActivatedTarget::synthetic_for_tests();
         assert_eq!(read_command_for(Some(pinned.clone()), &vps).unwrap(), python_command(&pinned.runtime).unwrap());
-        // a half-saved existing team (a candidate without its selection) stays refused
+        // a half-saved existing team (a candidate without its selection) stays refused, mark or no mark
         let dir = account_dir(&root, &scope);
         fs::create_dir_all(&dir).unwrap();
         fs::write(dir.join(CANDIDATE_FILE), b"{}").unwrap();
-        assert_eq!(selected_or_own_at(&root, &scope, &vps, Some(PINNED_KEY)).err(), Some("existing_team_runtime_selection_required"));
+        assert_eq!(selected_or_own_at(&root, &scope, &vps).err(), Some("existing_team_runtime_selection_required"));
         // this computer is never «a VPS of one's own»: no wrapper command for it
         assert_eq!(read_command_for(None, &ExecutionHost::Local), Err("existing_team_runtime_required"));
         let _ = fs::remove_dir_all(&root);
@@ -2153,15 +2340,28 @@ mod tests {
         ExecutionHost::Vps { address: address.into(), user: "jht".into(), port, key_path: "/keys/id_ed25519".into() }
     }
 
+    /// The state with the key pinned now being `PINNED_KEY`.
+    fn state_of(root: &Path, scope: &AccountScope, host: &ExecutionHost) -> OwnVpsState {
+        own_vps_state_at(root, scope, host, Some(PINNED_KEY))
+    }
+
+    fn may_write(root: &Path, scope: &AccountScope, host: &ExecutionHost, key: Option<&str>) -> bool {
+        own_vps_for_writes_at(root, scope, host, key)
+    }
+
     #[test]
-    fn a_vps_of_the_persons_own_needs_the_mark_the_provisioning_writes() {
+    fn a_vps_of_the_persons_own_is_written_to_only_with_the_mark_the_provisioning_writes() {
         let root = own_vps_root("mark");
         let scope = AccountScope::synthetic(b"scope-own");
         let vps = own_host("203.0.113.7", 22);
-        // nothing saved at all is no longer «the person's own»: the absence of two files proves nothing
-        assert!(!own_vps_at(&root, &scope, &vps, Some(PINNED_KEY)), "no mark: not theirs");
+        // an old VPS, set up before the mark: reads yes, writes no (until the person claims it)
+        assert!(own_vps_for_reads_at(&root, &scope), "no candidate, no selection: read as before");
+        assert!(!may_write(&root, &scope, &vps, Some(PINNED_KEY)), "no mark: no write");
+        assert_eq!(state_of(&root, &scope, &vps), OwnVpsState::Claimable);
+        assert_eq!(state_of(&root, &scope, &vps).write_refusal(), Some("own_vps_claim_required"));
         mark_own_vps_at(&root, &scope, "203.0.113.7", 22, PINNED_KEY).unwrap();
-        assert!(own_vps_at(&root, &scope, &vps, Some(PINNED_KEY)), "the mark, this host, this key: theirs");
+        assert!(may_write(&root, &scope, &vps, Some(PINNED_KEY)), "the mark, this host, this key: writes too");
+        assert_eq!(state_of(&root, &scope, &vps).write_refusal(), None);
         // the mark is private, and says nothing but the account, the host and the key
         let file = path(&root, &scope, OWN_VPS_FILE);
         #[cfg(unix)]
@@ -2172,7 +2372,7 @@ mod tests {
         let written: serde_json::Value = serde_json::from_slice(&fs::read(&file).unwrap()).unwrap();
         assert_eq!(written.as_object().unwrap().len(), 5);
         // it is the account's: another account has no mark
-        assert!(!own_vps_at(&root, &AccountScope::synthetic(b"another-scope"), &vps, Some(PINNED_KEY)));
+        assert!(!may_write(&root, &AccountScope::synthetic(b"another-scope"), &vps, Some(PINNED_KEY)));
         let _ = fs::remove_dir_all(&root);
     }
 
@@ -2181,17 +2381,27 @@ mod tests {
         let root = own_vps_root("other");
         let scope = AccountScope::synthetic(b"scope-own");
         mark_own_vps_at(&root, &scope, "203.0.113.7", 22, PINNED_KEY).unwrap();
-        assert!(own_vps_at(&root, &scope, &own_host("203.0.113.7", 22), Some(PINNED_KEY)));
-        assert!(!own_vps_at(&root, &scope, &own_host("203.0.113.8", 22), Some(PINNED_KEY)), "another host");
-        assert!(!own_vps_at(&root, &scope, &own_host("203.0.113.7", 2222), Some(PINNED_KEY)), "another port");
-        assert!(!own_vps_at(&root, &scope, &own_host("203.0.113.7", 22), Some("SHA256:another-key-than-the-marked-one")), "another key");
-        assert!(!own_vps_at(&root, &scope, &own_host("203.0.113.7", 22), None), "no pin to compare: not theirs");
-        assert!(!own_vps_at(&root, &scope, &ExecutionHost::Local, Some(PINNED_KEY)), "this computer is never a VPS of one's own");
+        assert!(may_write(&root, &scope, &own_host("203.0.113.7", 22), Some(PINNED_KEY)));
+        // the mark of another host or port: this one is a VPS to claim, not a marked one
+        assert_eq!(state_of(&root, &scope, &own_host("203.0.113.8", 22)), OwnVpsState::Claimable, "another host");
+        assert_eq!(state_of(&root, &scope, &own_host("203.0.113.7", 2222)), OwnVpsState::Claimable, "another port");
+        assert!(!may_write(&root, &scope, &own_host("203.0.113.8", 22), Some(PINNED_KEY)));
+        assert!(!may_write(&root, &scope, &own_host("203.0.113.7", 2222), Some(PINNED_KEY)));
+        // the same host with another key: reinstalled or replaced. Reads stay, writes ask for a new claim, with their own word
+        let other = Some("SHA256:another-key-than-the-marked-one");
+        assert_eq!(own_vps_state_at(&root, &scope, &own_host("203.0.113.7", 22), other), OwnVpsState::KeyChanged);
+        assert_eq!(OwnVpsState::KeyChanged.write_refusal(), Some("own_vps_key_changed"));
+        assert!(!may_write(&root, &scope, &own_host("203.0.113.7", 22), other), "another key");
+        assert!(own_vps_for_reads_at(&root, &scope), "reads do not depend on the key");
+        // no pin to compare, or this computer: never a VPS of one's own
+        assert!(!may_write(&root, &scope, &own_host("203.0.113.7", 22), None), "no pin to compare");
+        assert_eq!(own_vps_state_at(&root, &scope, &own_host("203.0.113.7", 22), None), OwnVpsState::NotOwn);
+        assert_eq!(own_vps_state_at(&root, &scope, &ExecutionHost::Local, Some(PINNED_KEY)), OwnVpsState::NotOwn);
         let _ = fs::remove_dir_all(&root);
     }
 
     #[test]
-    fn an_existing_teams_files_win_over_any_mark() {
+    fn an_existing_teams_files_win_over_any_mark_for_reads_and_writes() {
         let root = own_vps_root("files");
         let scope = AccountScope::synthetic(b"scope-own");
         let vps = own_host("203.0.113.7", 22);
@@ -2200,14 +2410,17 @@ mod tests {
         // the person's own VPS, and then a selection appears (an existing team gets connected to): the
         // existing team's rule is back, and the full connection must be confirmed again
         fs::write(dir.join(SELECTION_FILE), b"{}").unwrap();
-        assert!(!own_vps_at(&root, &scope, &vps, Some(PINNED_KEY)), "a selection that appears later: no longer the person's own");
+        assert!(!may_write(&root, &scope, &vps, Some(PINNED_KEY)), "a selection that appears later: no longer the person's own");
+        assert!(!own_vps_for_reads_at(&root, &scope), "nor read as one");
         fs::remove_file(dir.join(SELECTION_FILE)).unwrap();
-        assert!(own_vps_at(&root, &scope, &vps, Some(PINNED_KEY)), "and without it, theirs again");
+        assert!(may_write(&root, &scope, &vps, Some(PINNED_KEY)), "and without it, theirs again");
         fs::write(dir.join(CANDIDATE_FILE), b"{}").unwrap();
-        assert!(!own_vps_at(&root, &scope, &vps, Some(PINNED_KEY)), "a candidate: an existing team");
+        assert!(!may_write(&root, &scope, &vps, Some(PINNED_KEY)), "a candidate: an existing team");
+        assert!(!own_vps_for_reads_at(&root, &scope));
         fs::remove_file(dir.join(CANDIDATE_FILE)).unwrap();
         fs::write(dir.join(SELECTION_FILE), b"{}").unwrap();
-        assert!(!own_vps_at(&root, &scope, &vps, Some(PINNED_KEY)), "a selection alone: an existing team too, and never mistaken");
+        assert!(!may_write(&root, &scope, &vps, Some(PINNED_KEY)), "a selection alone: an existing team too, and never mistaken");
+        assert_eq!(state_of(&root, &scope, &vps), OwnVpsState::NotOwn);
         let _ = fs::remove_dir_all(&root);
     }
 
@@ -2235,13 +2448,14 @@ mod tests {
             let mut forged = value.clone();
             mutate(&mut forged);
             rewrite(&forged);
-            assert!(!own_vps_at(&root, &scope, &vps, Some(PINNED_KEY)), "{name}");
+            assert!(!may_write(&root, &scope, &vps, Some(PINNED_KEY)), "{name}");
+            assert_eq!(state_of(&root, &scope, &vps), OwnVpsState::Claimable, "{name}: a VPS to claim, not a marked one");
         }
         // not JSON, not an object, too long: no mark
         for bytes in [b"not json".to_vec(), b"[]".to_vec(), vec![b'{'; MAX_BYTES + 1]] {
             fs::write(&file, &bytes).unwrap();
             set_private_permissions(&file).unwrap();
-            assert!(!own_vps_at(&root, &scope, &vps, Some(PINNED_KEY)));
+            assert!(!may_write(&root, &scope, &vps, Some(PINNED_KEY)));
         }
         // the right bytes, but readable by others or a link to somewhere else: no mark
         fs::write(&file, &good).unwrap();
@@ -2249,15 +2463,15 @@ mod tests {
         {
             use std::os::unix::fs::PermissionsExt;
             fs::set_permissions(&file, fs::Permissions::from_mode(0o644)).unwrap();
-            assert!(!own_vps_at(&root, &scope, &vps, Some(PINNED_KEY)), "not private");
+            assert!(!may_write(&root, &scope, &vps, Some(PINNED_KEY)), "not private");
             set_private_permissions(&file).unwrap();
-            assert!(own_vps_at(&root, &scope, &vps, Some(PINNED_KEY)), "private again");
+            assert!(may_write(&root, &scope, &vps, Some(PINNED_KEY)), "private again");
             let elsewhere = root.join("elsewhere.json");
             fs::write(&elsewhere, &good).unwrap();
             set_private_permissions(&elsewhere).unwrap();
             fs::remove_file(&file).unwrap();
             std::os::unix::fs::symlink(&elsewhere, &file).unwrap();
-            assert!(!own_vps_at(&root, &scope, &vps, Some(PINNED_KEY)), "a link");
+            assert!(!may_write(&root, &scope, &vps, Some(PINNED_KEY)), "a link");
         }
         let _ = fs::remove_dir_all(&root);
     }
@@ -2271,8 +2485,8 @@ mod tests {
         fs::create_dir_all(account_dir(&root, &two)).unwrap();
         fs::copy(path(&root, &one, OWN_VPS_FILE), path(&root, &two, OWN_VPS_FILE)).unwrap();
         set_private_permissions(&path(&root, &two, OWN_VPS_FILE)).unwrap();
-        assert!(own_vps_at(&root, &one, &vps, Some(PINNED_KEY)));
-        assert!(!own_vps_at(&root, &two, &vps, Some(PINNED_KEY)), "the copy says it is account one's");
+        assert!(may_write(&root, &one, &vps, Some(PINNED_KEY)));
+        assert!(!may_write(&root, &two, &vps, Some(PINNED_KEY)), "the copy says it is account one's");
         let _ = fs::remove_dir_all(&root);
     }
 
@@ -2282,13 +2496,15 @@ mod tests {
         let scope = AccountScope::synthetic(b"scope-own");
         let vps = own_host("203.0.113.7", 22);
         mark_own_vps_at(&root, &scope, "203.0.113.7", 22, PINNED_KEY).unwrap();
-        assert!(own_vps_at(&root, &scope, &vps, Some(PINNED_KEY)));
+        assert!(may_write(&root, &scope, &vps, Some(PINNED_KEY)));
         let dir = account_dir(&root, &scope);
         fs::write(dir.join(CANDIDATE_FILE), b"{}").unwrap();
         fs::write(dir.join(SELECTION_FILE), b"{}").unwrap();
         forget_team_at(&root, &scope).unwrap();
         assert!(!path(&root, &scope, OWN_VPS_FILE).exists() && !dir.join(CANDIDATE_FILE).exists() && !dir.join(SELECTION_FILE).exists());
-        assert!(!own_vps_at(&root, &scope, &vps, Some(PINNED_KEY)), "no mark and no files: not theirs any more (it used to be)");
+        // the mark is gone: a VPS to claim again, and nothing is written to it until then
+        assert!(!may_write(&root, &scope, &vps, Some(PINNED_KEY)), "no mark: no write any more");
+        assert_eq!(state_of(&root, &scope, &vps), OwnVpsState::Claimable);
         // nothing there is fine; the same again is fine
         forget_team_at(&root, &scope).unwrap();
         forget_team_at(&root, &AccountScope::synthetic(b"never-seen")).unwrap();
@@ -2301,12 +2517,73 @@ mod tests {
         let scope = AccountScope::synthetic(b"scope-own");
         mark_own_vps_at(&root, &scope, "203.0.113.7", 22, PINNED_KEY).unwrap();
         mark_own_vps_at(&root, &scope, " 203.0.113.9 ", 22, PINNED_KEY).unwrap();
-        assert!(own_vps_at(&root, &scope, &own_host("203.0.113.9", 22), Some(PINNED_KEY)));
-        assert!(!own_vps_at(&root, &scope, &own_host("203.0.113.7", 22), Some(PINNED_KEY)), "the old host is no longer marked");
+        assert!(may_write(&root, &scope, &own_host("203.0.113.9", 22), Some(PINNED_KEY)));
+        assert!(!may_write(&root, &scope, &own_host("203.0.113.7", 22), Some(PINNED_KEY)), "the old host is no longer marked");
         for (address, port, key) in [("", 22, PINNED_KEY), ("203.0.113.7", 0, PINNED_KEY), ("203.0.113.7", 22, ""), ("203.0.113.7", 22, "no-sha256-prefix"), ("203.0.113.7", 22, "SHA256:with space")] {
             assert_eq!(mark_own_vps_at(&root, &scope, address, port, key), Err("existing_team_runtime_own_vps_invalid"), "{address}:{port} {key}");
         }
         let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn claiming_an_old_vps_writes_the_mark_only_when_the_person_confirmed_and_it_answers_as_theirs() {
+        let root = own_vps_root("claim");
+        let scope = AccountScope::synthetic(b"scope-own");
+        let vps = own_host("203.0.113.7", 22);
+        // old VPS without the mark: writes no, and then, after the claim, yes
+        assert!(!may_write(&root, &scope, &vps, Some(PINNED_KEY)));
+        // it does not answer as the team of this account: refused, and no file is left
+        assert_eq!(claim_own_vps_at(&root, &scope, &vps, Some(PINNED_KEY), false), Err("own_vps_claim_refused"));
+        assert!(!path(&root, &scope, OWN_VPS_FILE).exists(), "a refused claim leaves nothing");
+        // no pin, or this computer: refused
+        assert_eq!(claim_own_vps_at(&root, &scope, &vps, None, true), Err("own_vps_claim_refused"));
+        assert_eq!(claim_own_vps_at(&root, &scope, &ExecutionHost::Local, Some(PINNED_KEY), true), Err("own_vps_claim_refused"));
+        assert!(!path(&root, &scope, OWN_VPS_FILE).exists());
+        // it answers as theirs: marked, and writes go
+        claim_own_vps_at(&root, &scope, &vps, Some(PINNED_KEY), true).unwrap();
+        assert!(may_write(&root, &scope, &vps, Some(PINNED_KEY)), "after the claim, writes go");
+        // claiming again is a no-op
+        claim_own_vps_at(&root, &scope, &vps, Some(PINNED_KEY), false).unwrap();
+        // the key changed: claimed again with the new key, the mark follows it
+        let other = "SHA256:Zz9PqE2cPNwUj8mP6X7Zr6l9kKq3b8m1sT4n2uYfA0c";
+        assert_eq!(own_vps_state_at(&root, &scope, &vps, Some(other)), OwnVpsState::KeyChanged);
+        assert_eq!(claim_own_vps_at(&root, &scope, &vps, Some(other), false), Err("own_vps_claim_refused"), "the new key needs the probe too");
+        claim_own_vps_at(&root, &scope, &vps, Some(other), true).unwrap();
+        assert_eq!(own_vps_state_at(&root, &scope, &vps, Some(other)), OwnVpsState::Marked);
+        assert_eq!(own_vps_state_at(&root, &scope, &vps, Some(PINNED_KEY)), OwnVpsState::KeyChanged, "the old key is the changed one now");
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn an_existing_team_is_never_claimed_as_the_persons_own() {
+        let root = own_vps_root("claim-existing");
+        let scope = AccountScope::synthetic(b"scope-own");
+        let vps = own_host("203.0.113.7", 22);
+        let dir = account_dir(&root, &scope);
+        fs::create_dir_all(&dir).unwrap();
+        for file in [CANDIDATE_FILE, SELECTION_FILE] {
+            fs::write(dir.join(file), b"{}").unwrap();
+            assert_eq!(claim_own_vps_at(&root, &scope, &vps, Some(PINNED_KEY), true), Err("own_vps_claim_refused"), "{file}");
+            assert!(!path(&root, &scope, OWN_VPS_FILE).exists(), "{file}: no mark written");
+            fs::remove_file(dir.join(file)).unwrap();
+        }
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn the_identity_probe_sends_the_id_on_input_and_trusts_only_one_true_answer() {
+        let id = "a".repeat(32);
+        let input = String::from_utf8(own_vps_identity_input(&id).unwrap()).unwrap();
+        let mut lines = input.lines();
+        assert_eq!(lines.next().unwrap(), hex_encode(OWN_VPS_IDENTITY_PY.as_bytes()), "the script, in hex");
+        assert_eq!(serde_json::from_str::<Value>(lines.next().unwrap()).unwrap(), json!({"user_id": id}));
+        assert!(lines.next().is_none() && input.ends_with('\n'));
+        assert!(!OWN_VPS_IDENTITY_PY.contains(&id), "the id is never in the script");
+        assert!(own_vps_identity_input("short").is_none() && own_vps_identity_input("a;b").is_none());
+        assert!(own_vps_identity_matches(br#"{"match": true}"#));
+        for bad in [&br#"{"match": false}"#[..], br#"{"match": true, "x": 1}"#, br#"{"match": "true"}"#, br#"[true]"#, b"", b"match", br#"{"error":"x"}"#] {
+            assert!(!own_vps_identity_matches(bad), "{}", String::from_utf8_lossy(bad));
+        }
     }
 
     #[test]

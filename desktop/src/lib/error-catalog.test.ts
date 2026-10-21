@@ -183,6 +183,13 @@ const NOT_ERRORS: Record<string, string> = {
   not_paused: "agent control outcome",
   existing_team_runtime_own_vps_invalid: "own-VPS mark: refused or unreadable, never shown (the setup says storage_unavailable)",
   existing_team_runtime_own_vps_missing: "own-VPS mark: absent, read as «not the person's own»",
+  // Where a VPS of the person's own stands, as the agents list tells the page (own_vps_claim_* are the errors).
+  claimable: "own-VPS state word: no mark yet, the page offers the claim",
+  key_changed: "own-VPS state word: the host key is not the marked one, the page offers a new claim",
+  marked: "own-VPS state word: the mark is there",
+  not_own: "own-VPS state word: an existing team or this computer",
+  own_vps_claim: "runtime-log label of the claim, not an error",
+  user_id: "request field of the claim: the account's id, read from the page's session",
   by_user: "agent control read field",
   weekly_reset: "agent control pause exit kind",
 };

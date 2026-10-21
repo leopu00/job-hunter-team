@@ -29,7 +29,8 @@ use crate::{
     direct_chat,
     existing_team_agents::{shape_reply, AgentsRequest},
     existing_team_runtime::{
-        command, connection_key, full_link_granted, hex_encode, own_vps_at, python_command, root, selected,
+        command, connection_key, full_link_granted, hex_encode, own_vps_for_reads_at, own_vps_state_at, python_command, root,
+        selected, OwnVpsState,
         ActivatedTarget, RuntimeTarget,
     },
     runtime_host::{run_ssh_command, ExecutionHost, ProcessResult, ValidatedHost},
@@ -184,7 +185,7 @@ enum Destination {
     /// An existing team, linked: its pinned container.
     Vps { validated: ValidatedHost, runtime: RuntimeTarget, mode: VpsMode, label: String },
     /// The VPS the app set up itself (no existing team registered): its host's jht wrapper.
-    OwnVps { validated: ValidatedHost, label: String },
+    OwnVps { validated: ValidatedHost, label: String, state: OwnVpsState },
     Local { wrapper: PathBuf },
 }
 
@@ -228,10 +229,13 @@ fn destination(app: &tauri::AppHandle, scope: &AccountScope) -> Result<(Destinat
             ExecutionHost::Local => return Err("existing_team_vps_required"),
         };
         let pinned = crate::runtime_host::pinned_host_fingerprint(&validated).ok();
-        if own_vps_at(&root(app)?, scope, &host, pinned.as_deref()) {
-            // The VPS the app set up: the person's own team, controlled as a full link.
-            let print = fingerprint(&["own-vps", scope.digest(), &address, &user, &port]);
-            return Ok((Destination::OwnVps { validated, label: address }, print));
+        let root = root(app)?;
+        if own_vps_for_reads_at(&root, scope) {
+            // The VPS the app set up: the person's own team. It is read as it always was; it is controlled
+            // only with the mark the setup writes (or after the person claimed it): the state is in the print.
+            let state = own_vps_state_at(&root, scope, &host, pinned.as_deref());
+            let print = fingerprint(&["own-vps", scope.digest(), &address, &user, &port, state.word()]);
+            return Ok((Destination::OwnVps { validated, label: address, state }, print));
         }
         let target = selected(app, scope, &host)?.ok_or("existing_team_runtime_required")?;
         let mode = vps_mode(scope, &target);
@@ -409,7 +413,7 @@ pub(crate) fn answer(request: &ControlRequest, output: &ProcessResult, target: &
 fn destination_mode(destination: &Destination) -> Option<VpsMode> {
     match destination {
         Destination::Vps { mode, .. } => Some(*mode),
-        Destination::OwnVps { .. } => Some(VpsMode::Full),
+        Destination::OwnVps { state, .. } => Some(if *state == OwnVpsState::Marked { VpsMode::Full } else { VpsMode::ReadOnly }),
         Destination::Local { .. } => None,
     }
 }
@@ -445,6 +449,13 @@ pub(crate) fn control_for_scope(app: &tauri::AppHandle, scope: &AccountScope, re
         Err(error) => return failure(error),
     };
     let mode = destination_mode(&destination);
+    // An action on a VPS of the person's own with no mark: the page's invitation to claim it, not a
+    // generic «read only».
+    if let (Destination::OwnVps { state, .. }, true) = (&destination, request.action().is_some()) {
+        if let Some(code) = state.write_refusal() {
+            return failure(code);
+        }
+    }
     if let Some(error) = action_refusal(&request, mode, &print) {
         return failure(error);
     }
@@ -453,7 +464,16 @@ pub(crate) fn control_for_scope(app: &tauri::AppHandle, scope: &AccountScope, re
         Destination::Local { .. } => None,
     };
     match run(&destination, &request, &argv) {
-        Ok(output) => answer(&request, &output, &print, label.as_deref()),
+        Ok(output) => {
+            let mut reply = answer(&request, &output, &print, label.as_deref());
+            // Where the VPS of one's own stands, for the page to offer the claim (JHT-T30).
+            if let (Destination::OwnVps { state, .. }, ControlRequest::List {}) = (&destination, &request) {
+                if let Some(data) = reply.get_mut("data").and_then(Value::as_object_mut) {
+                    data.insert("ownVps".into(), json!(state.word()));
+                }
+            }
+            reply
+        }
         Err(error) => failure(error),
     }
 }
@@ -686,9 +706,15 @@ mod tests {
         let _serial = FULL_LINK_TEST_LOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
         revoke_full_link();
         let stop = req(json!({"op":"stop","session":"SCOUT-1","target":"t","confirmed":true})).unwrap();
-        // the VPS the app set up: actions pass
-        let own = Destination::OwnVps { validated: validated_vps(), label: "vps.example".into() };
+        // the VPS the app set up and marked: actions pass
+        let own = Destination::OwnVps { validated: validated_vps(), label: "vps.example".into(), state: OwnVpsState::Marked };
         assert_eq!(action_refusal(&stop, destination_mode(&own), "t"), None);
+        // the same VPS with no mark (an old one, or its key changed): reads pass, actions do not
+        for state in [OwnVpsState::Claimable, OwnVpsState::KeyChanged] {
+            let unmarked = Destination::OwnVps { validated: validated_vps(), label: "vps.example".into(), state };
+            assert_eq!(action_refusal(&stop, destination_mode(&unmarked), "t"), Some("agent_control_read_only"), "{state:?}");
+            assert!(state.write_refusal().is_some());
+        }
         // an existing team opened read only (no full link): refused
         let scope = AccountScope::synthetic(b"panel-scope-2");
         let team = ActivatedTarget::synthetic_for_tests();

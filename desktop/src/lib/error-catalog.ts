@@ -1184,6 +1184,36 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
     "This view is read only: the message was not sent.",
     "Connect the team with “Confirm and connect” to write.",
   ),
+  own_vps_claim_required: copy(
+    "Questa VPS è stata creata prima che l’app la segnasse come tua: da qui si legge, ma non si scrive.",
+    "Conferma che è la tua con «È la mia VPS», poi riprova.",
+    "This VPS was set up before the app marked it as yours: you can read it from here, but not write to it.",
+    "Confirm that it is yours with “This is my VPS”, then try again.",
+  ),
+  own_vps_key_changed: copy(
+    "La chiave di questa VPS è cambiata dall’ultima volta che l’hai confermata come tua.",
+    "Se l’hai reinstallata tu, confermala di nuovo con «È la mia VPS»; altrimenti non fidarti e controlla.",
+    "The key of this VPS has changed since you last confirmed it as yours.",
+    "If you reinstalled it yourself, confirm it again with “This is my VPS”; otherwise do not trust it and check it.",
+  ),
+  own_vps_claim_refused: copy(
+    "Questa VPS non può essere confermata come tua.",
+    "Controlla di aver aperto la squadra giusta, poi riprova.",
+    "This VPS cannot be confirmed as yours.",
+    "Check that you opened the right team, then try again.",
+  ),
+  own_vps_claim_unreachable: copy(
+    "La VPS non ha risposto alla verifica.",
+    "Controlla che sia accesa e raggiungibile, poi riprova.",
+    "The VPS did not answer the check.",
+    "Check that it is on and reachable, then try again.",
+  ),
+  own_vps_claim_not_confirmed: copy(
+    "La conferma non è stata data.",
+    "Ripeti l’operazione e confermala nella finestra che si apre.",
+    "The confirmation was not given.",
+    "Repeat the operation and confirm it in the dialog that opens.",
+  ),
   chat_runtime_outdated: copy(
     "Il team non ha ancora questa chat.",
     "Aggiorna il team all’ultima versione, poi riprova.",

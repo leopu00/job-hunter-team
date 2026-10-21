@@ -94,6 +94,7 @@ pub fn run() {
             onboarding::onboarding_assistant_open,
             existing_team_register::onboarding_existing_team_discover,
             existing_team_register::onboarding_existing_team_register,
+            existing_team_runtime::own_vps_claim,
             onboarding::existing_team_assistant_start,
             onboarding::onboarding_existing_team_connect,
             onboarding::onboarding_existing_team_readonly_connect,

@@ -41,7 +41,11 @@ let target = "T1";
 let held: { session: string; byUser: boolean }[] = [];
 let standby = { state: "off", until: null as string | null, weeklyReset: false };
 let actionReply: Record<string, unknown> = { ok: true, data: { result: "stopped" } };
-const listReply = () => ({ ok: true, data: { agents: AGENTS, roles: ROLES, states: true, target, where: "vps", label: "vps.example" } });
+let ownVps: string | undefined;
+const listReply = () => ({
+  ok: true,
+  data: { agents: AGENTS, roles: ROLES, states: true, target, where: "vps", label: "vps.example", ...(ownVps ? { ownVps } : {}) },
+});
 const ops = () => native.invoke.mock.calls.filter(([c]) => c === COMMAND).map(([, a]) => (a as { request: Record<string, unknown> }).request);
 const ACTIONS = new Set(["start", "stop", "restart", "pause", "resume"]);
 
@@ -53,8 +57,13 @@ beforeEach(() => {
   held = [];
   standby = { state: "off", until: null, weeklyReset: false };
   actionReply = { ok: true, data: { result: "stopped" } };
+  ownVps = undefined;
   native.invoke.mockReset();
   native.invoke.mockImplementation(async (command: string, args: { request: Record<string, unknown> }) => {
+    if (command === "own_vps_claim") {
+      ownVps = "marked";
+      return undefined;
+    }
     if (command !== COMMAND) return { ok: false, error: "not_in_test" };
     const { op } = args.request;
     if (op === "list") return listReply();
@@ -193,6 +202,66 @@ describe("«Agenti», the agents' control panel", () => {
     expect(within(nav).getByRole("link", { name: "Agenti" })).toHaveAttribute("aria-current", "page");
     expect(ops().every((r) => ["list", "team", "screen"].includes(String(r.op)))).toBe(true);
     expect(fake.current!.calls).toEqual([]);
+  });
+
+  it("a VPS of one's own without the mark offers the claim, and writes only after the person confirmed it", async () => {
+    ownVps = "claimable";
+    show();
+    const invite = await screen.findByTestId("own-vps-invite");
+    expect(invite).toHaveTextContent("per comandarla o scriverle devi confermare che è la tua");
+    expect(native.invoke.mock.calls.some(([c]) => c === "own_vps_claim")).toBe(false);
+    fireEvent.click(within(invite).getByTestId("own-vps-claim"));
+    // the dialog says what the confirmation allows, and nothing has gone to the native side yet
+    expect(within(invite).getByTestId("own-vps-confirm")).toHaveTextContent("scrivere ai tuoi agenti su questa VPS");
+    expect(native.invoke.mock.calls.some(([c]) => c === "own_vps_claim")).toBe(false);
+    fireEvent.click(within(invite).getByTestId("own-vps-confirm-yes"));
+    await waitFor(() => expect(screen.queryByTestId("own-vps-invite")).toBeNull());
+    expect(native.invoke).toHaveBeenCalledWith("own_vps_claim", { request: { userId: "user-1", confirmed: true } });
+  });
+
+  it("cancelling the claim sends nothing; a marked VPS or a changed key asks what each asks", async () => {
+    ownVps = "claimable";
+    show();
+    fireEvent.click(within(await screen.findByTestId("own-vps-invite")).getByTestId("own-vps-claim"));
+    fireEvent.click(screen.getByTestId("own-vps-cancel"));
+    expect(screen.queryByTestId("own-vps-confirm")).toBeNull();
+    expect(native.invoke.mock.calls.some(([c]) => c === "own_vps_claim")).toBe(false);
+    cleanup();
+    ownVps = "key_changed";
+    show();
+    expect(await screen.findByTestId("own-vps-invite")).toHaveTextContent("La chiave di questa VPS è cambiata");
+    cleanup();
+    for (const state of ["marked", "not_own", undefined]) {
+      ownVps = state;
+      show();
+      await screen.findByTestId("panel-summary");
+      expect(screen.queryByTestId("own-vps-invite")).toBeNull();
+      cleanup();
+    }
+  });
+
+  it("a refused claim says why with the catalog's sentence and the invitation stays", async () => {
+    ownVps = "claimable";
+    const base = native.invoke.getMockImplementation()!;
+    native.invoke.mockImplementation(async (command: string, args: { request: Record<string, unknown> }) => {
+      if (command === "own_vps_claim") throw "own_vps_claim_refused";
+      return base(command, args);
+    });
+    show();
+    fireEvent.click(within(await screen.findByTestId("own-vps-invite")).getByTestId("own-vps-claim"));
+    fireEvent.click(screen.getByTestId("own-vps-confirm-yes"));
+    expect(await screen.findByTestId("own-vps-failure")).toHaveTextContent(describeError("own_vps_claim_refused", { locale: "it" }).text);
+    expect(screen.getByTestId("own-vps-invite")).toBeInTheDocument();
+  });
+
+  it("the read-only view of an existing team never offers the claim", async () => {
+    ownVps = "claimable";
+    enterExistingTeamReadOnly(false);
+    navigate("/agents", { replace: true });
+    render(<Shell />);
+    await screen.findByTestId("panel-read-only");
+    await screen.findByTestId("panel-summary");
+    expect(screen.queryByTestId("own-vps-invite")).toBeNull();
   });
 
   it("a failed read says why, with the catalog's sentence", async () => {
