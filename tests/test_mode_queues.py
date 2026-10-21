@@ -159,10 +159,12 @@ def test_calibration_elenca_esclusioni_e_ticket_in_ordine_cronologico(db):
         ('ticket', 'Ticketed'),        # 08-02 09:30
         ('esclusione', 'Excl2'),       # 08-02 12:00
     ]
-    # Il testo dell'utente viaggia nella riga: senza, la coda dice "quale
-    # posizione" ma non "perché".
+    # Nella riga viaggia il MOTIVO (un codice del vocabolario chiuso): la coda
+    # dice "quale posizione" e "perché". La nota che l'utente scrive a parole
+    # sue resta all'utente e non arriva a chi calibra (JHT-T05).
     assert d['rows'][0]['detail'] == 'company'
-    assert d['rows'][2]['detail'] == 'other sede sbagliata'
+    assert d['rows'][2]['detail'] == 'other'
+    assert 'sede sbagliata' not in json.dumps(d)
 
 
 def test_calibration_leggere_non_e_consumare(db):
