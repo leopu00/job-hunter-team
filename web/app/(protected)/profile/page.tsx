@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { cookies } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/workspace";
 import { isCloudDeploy } from "@/lib/deploy-mode";
@@ -8,19 +7,16 @@ import { isLocalRequest } from "@/lib/auth";
 import { activeDemoPersona } from "@/lib/demo/mode";
 import { getDemoCandidate } from "@/lib/demo/profile";
 import type { CandidateProfile } from "@/lib/types";
-import { locales, defaultLocale, type Locale } from "@/i18n/config";
+import { getServerLocale } from "@/lib/server-locale";
 import { getProfileT } from "@/lib/profile-i18n";
 import { decryptContacts } from "@/lib/pii-crypto";
 import ProfileView, { type ProfileBlock } from "./ProfileView";
 
 export default async function ProfilePage() {
-  // Locale corrente dalla fonte unica: il cookie NEXT_LOCALE.
-  const cookieStore = await cookies();
-  const cookieLocale = cookieStore.get("NEXT_LOCALE")?.value;
-  const locale: Locale =
-    cookieLocale && (locales as string[]).includes(cookieLocale)
-      ? (cookieLocale as Locale)
-      : defaultLocale;
+  // Locale dell'area protetta: cookie NEXT_LOCALE, poi la preferenza del desktop,
+  // poi la lingua del browser (JHT-T31: senza cookie un utente straniero non
+  // deve vedere l'italiano), poi l'italiano.
+  const locale = await getServerLocale();
   const t = getProfileT(locale);
 
   let profile: CandidateProfile | null = null;

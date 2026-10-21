@@ -13,7 +13,12 @@
  *     cookie e vale per qualunque browser apra il desktop su localhost. Sul
  *     desktop, dove il file esiste, comanda ancora lui ogni volta che il
  *     cookie manca.
- *  3. "it" solo quando NESSUNA delle due fonti dice qualcosa.
+ *  3. L'intestazione `Accept-Language` del browser: chi arriva per la prima
+ *     volta (nessun cookie) e non ha il file (sito cloud) NON è un utente
+ *     italiano per default. La prima lingua che gestiamo, in ordine di
+ *     preferenza; se il browser ne dichiara solo di non gestite, "en".
+ *  4. "it" solo quando NESSUNA fonte dice qualcosa (nessuna intestazione:
+ *     crawler, test, chiamate interne).
  *
  * È lo stesso ordine di `GET /api/i18n` e del client (`lib/use-locale`, che
  * legge il cookie): server e browser rendono così la stessa lingua.
@@ -33,6 +38,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { JHT_HOME } from "@/lib/jht-paths";
+import { headers } from "next/headers";
 import { readLocaleCookie } from "@/lib/request-locale";
 
 export type ServerLocale = "it" | "en" | "hu" | "es" | "de" | "fr" | "pt";
@@ -66,8 +72,49 @@ export function readLocalePrefsFile(): ServerLocale | null {
   return null;
 }
 
+/**
+ * La lingua che dice un'intestazione `Accept-Language` ("en-US,en;q=0.9,it;q=0.8"):
+ * la prima gestita per ordine di `q` (a pari `q`, per ordine di apparizione).
+ * `null` se l'intestazione manca o è vuota; "en" se dichiara solo lingue che non
+ * gestiamo (un browser giapponese non deve vedere l'italiano).
+ */
+export function localeFromAcceptLanguage(
+  header: string | null | undefined,
+): ServerLocale | null {
+  if (!header || !header.trim()) return null;
+  const entries = header
+    .split(",")
+    .map((part, order) => {
+      const [tag, ...params] = part.trim().split(";");
+      const q = params
+        .map((p) => p.trim())
+        .find((p) => p.startsWith("q="));
+      const weight = q ? Number(q.slice(2)) : 1;
+      return {
+        lang: tag.trim().toLowerCase().split("-")[0],
+        weight: Number.isFinite(weight) ? weight : 0,
+        order,
+      };
+    })
+    .filter((e) => e.lang && e.lang !== "*" && e.weight > 0)
+    .sort((a, b) => b.weight - a.weight || a.order - b.order);
+  if (entries.length === 0) return null;
+  for (const e of entries) {
+    if ((VALID_LOCALES as string[]).includes(e.lang)) return e.lang as ServerLocale;
+  }
+  return "en";
+}
+
 export async function getServerLocale(): Promise<ServerLocale> {
   const fromCookie = await readLocaleCookie();
   if (fromCookie) return fromCookie;
-  return readLocalePrefsFile() ?? DEFAULT_SERVER_LOCALE;
+  const fromFile = readLocalePrefsFile();
+  if (fromFile) return fromFile;
+  let fromBrowser: ServerLocale | null = null;
+  try {
+    fromBrowser = localeFromAcceptLanguage((await headers()).get("accept-language"));
+  } catch {
+    /* fuori da una request (test, build): nessuna intestazione da leggere */
+  }
+  return fromBrowser ?? DEFAULT_SERVER_LOCALE;
 }
