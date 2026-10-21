@@ -410,6 +410,20 @@ def ensure_schema(conn: sqlite3.Connection):
         FOREIGN KEY (position_id) REFERENCES positions(id)
     );
 
+    -- Le esclusioni di profilo che l'utente ha ACCETTATO e che agiscono sul punteggio (JHT-T24).
+    -- Un codice del vocabolario chiuso dei motivi, i parametri congelati quando l'utente accetta
+    -- (colonne strutturali delle posizioni che aveva bocciato con quel motivo: mai testo) e lo stato.
+    -- Le scrive solo `profile_exclusions.py`; `db_insert.py score` ne toglie la penalita' al totale.
+    -- Non viaggia sul cloud: il cloud tiene la decisione (profile_exclusions, mig 094), qui sta la regola.
+    CREATE TABLE IF NOT EXISTS profile_exclusions (
+        code TEXT PRIMARY KEY CHECK (code IN (
+            'company','wrong_location','salary_low','wrong_stack'
+        )),
+        status TEXT NOT NULL CHECK (status IN ('active','withdrawn')),
+        params TEXT NOT NULL DEFAULT '{}',
+        decided_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+
     -- Blocco note PRIVATO dell'utente su una posizione (O-22). «Cose che mi
     -- possono essere utili una volta che rivisito la posizione»: un
     -- promemoria per sé, NON un ordine al team — gli agenti non la leggono.
