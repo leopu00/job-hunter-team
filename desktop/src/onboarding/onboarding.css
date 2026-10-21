@@ -63,7 +63,7 @@
   border-radius: 999px;
   color: var(--color-muted);
   background: var(--color-panel);
-  font-size: 9px;
+  font-size: 11px;
   letter-spacing: 0.1em;
   text-transform: uppercase;
 }
@@ -96,7 +96,7 @@
 .onboarding-eyebrow {
   margin: 0 0 13px;
   color: var(--color-green);
-  font-size: 9px;
+  font-size: 11px;
   font-weight: 780;
   letter-spacing: 0.18em;
   text-transform: uppercase;
@@ -151,7 +151,7 @@
   border: 1px solid var(--color-border);
   border-radius: 50%;
   background: var(--color-card);
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 800;
 }
 
@@ -162,7 +162,7 @@
 
 .onboarding-progress li small {
   margin-bottom: 4px;
-  font-size: 7px;
+  font-size: 11px;
   letter-spacing: 0.12em;
   text-transform: uppercase;
 }
@@ -194,7 +194,7 @@
 .onboarding-progress__privacy {
   margin: 28px 0 0;
   color: var(--color-muted);
-  font-size: 8px;
+  font-size: 11px;
   letter-spacing: 0.06em;
 }
 
@@ -219,7 +219,7 @@
   align-self: flex-end;
   color: var(--color-muted);
   font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
-  font-size: 8px;
+  font-size: 11px;
   letter-spacing: 0.12em;
 }
 
@@ -280,21 +280,21 @@
   border-radius: 8px;
   color: var(--color-void);
   background: var(--color-green);
-  font-size: 9px;
+  font-size: 11px;
   font-weight: 850;
 }
 
 .onboarding-callout p {
   margin: 0;
   color: var(--color-muted);
-  font-size: 9px;
+  font-size: 12px;
   line-height: 1.5;
 }
 
 .onboarding-callout strong {
   display: block;
   color: var(--color-bright);
-  font-size: 10px;
+  font-size: 11px;
 }
 
 .onboarding-fields {
@@ -315,7 +315,7 @@
 
 .onboarding-field > span {
   color: var(--color-base);
-  font-size: 9px;
+  font-size: 11px;
   font-weight: 720;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -369,7 +369,7 @@
 
 .onboarding-field small {
   color: var(--color-muted);
-  font-size: 8px;
+  font-size: 12px;
 }
 
 .onboarding-actions {
@@ -461,7 +461,7 @@
 .onboarding-review dt {
   margin-bottom: 8px;
   color: var(--color-muted);
-  font-size: 7px;
+  font-size: 11px;
   letter-spacing: 0.13em;
   text-transform: uppercase;
 }
@@ -470,7 +470,7 @@
   margin: 0;
   overflow-wrap: anywhere;
   color: var(--color-bright);
-  font-size: 10px;
+  font-size: 11px;
   line-height: 1.45;
 }
 
@@ -478,7 +478,7 @@
   margin-top: 4px;
   display: block;
   color: var(--color-muted);
-  font-size: 8px;
+  font-size: 12px;
 }
 
 .onboarding-review-note {
@@ -487,7 +487,7 @@
   border: 1px solid var(--color-border);
   border-radius: 7px;
   background: var(--color-card);
-  font-size: 9px;
+  font-size: 12px;
   line-height: 1.5;
 }
 
@@ -507,7 +507,7 @@
   border-radius: 7px;
   color: var(--color-red);
   background: color-mix(in srgb, var(--color-red) 8%, var(--color-panel));
-  font-size: 9px;
+  font-size: 12px;
   line-height: 1.5;
 }
 
@@ -559,7 +559,7 @@
   color: var(--color-blue);
   background: var(--color-row);
   font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
-  font-size: 9px;
+  font-size: 11px;
   font-weight: 850;
 }
 
@@ -579,7 +579,7 @@
   border: 1px solid var(--color-green);
   border-radius: 999px;
   color: var(--color-green);
-  font-size: 8px;
+  font-size: 11px;
   font-weight: 700;
   vertical-align: 1px;
 }
@@ -587,14 +587,14 @@
 .onboarding-choice small {
   margin-top: 5px;
   color: var(--color-muted);
-  font-size: 8px;
+  font-size: 12px;
   line-height: 1.45;
 }
 
 .onboarding-choice__check {
   margin: auto 0 0 auto;
   color: var(--color-green);
-  font-size: 10px;
+  font-size: 11px;
   opacity: 0;
 }
 
@@ -625,7 +625,7 @@
   border-radius: 7px;
   color: var(--color-muted);
   background: var(--color-card);
-  font-size: 8px;
+  font-size: 12px;
   line-height: 1.5;
 }
 
@@ -673,15 +673,15 @@
 
 .onboarding-runtime-progress__heading strong,
 .onboarding-runtime-progress__heading small { display: block; }
-.onboarding-runtime-progress__heading strong { color: var(--color-bright); font-size: 10px; }
-.onboarding-runtime-progress__heading small { margin-top: 4px; color: var(--color-muted); font-size: 8px; line-height: 1.45; }
-.onboarding-runtime-progress__heading > span { flex: none; color: var(--color-muted); font-size: 8px; text-transform: uppercase; letter-spacing: .08em; }
+.onboarding-runtime-progress__heading strong { color: var(--color-bright); font-size: 11px; }
+.onboarding-runtime-progress__heading small { margin-top: 4px; color: var(--color-muted); font-size: 11px; line-height: 1.45; }
+.onboarding-runtime-progress__heading > span { flex: none; color: var(--color-muted); font-size: 11px; text-transform: uppercase; letter-spacing: .08em; }
 .onboarding-runtime-progress__heading time { color: var(--color-blue); font-variant-numeric: tabular-nums; }
 .onboarding-runtime-progress progress { width: 100%; height: 6px; margin-top: 13px; display: block; overflow: hidden; border: 0; border-radius: 99px; background: var(--color-row); }
 .onboarding-runtime-progress progress::-webkit-progress-bar { background: var(--color-row); }
 .onboarding-runtime-progress progress::-webkit-progress-value { border-radius: 99px; background: var(--color-blue); }
 .onboarding-runtime-progress progress::-moz-progress-bar { border-radius: 99px; background: var(--color-blue); }
-.onboarding-runtime-progress__meta { margin-top: 7px; color: var(--color-muted); font-size: 7px; text-transform: uppercase; letter-spacing: .08em; }
+.onboarding-runtime-progress__meta { margin-top: 7px; color: var(--color-muted); font-size: 11px; text-transform: uppercase; letter-spacing: .08em; }
 .onboarding-runtime-progress__indeterminate { height: 4px; margin-top: 11px; overflow: hidden; border-radius: 99px; background: var(--color-row); }
 .onboarding-runtime-progress__indeterminate i { width: 34%; height: 100%; display: block; border-radius: inherit; background: var(--color-blue); animation: onboarding-indeterminate 1.25s ease-in-out infinite; }
 
@@ -722,7 +722,7 @@
 .onboarding-runtime-status small {
   margin-top: 5px;
   color: var(--color-muted);
-  font-size: 9px;
+  font-size: 12px;
   line-height: 1.45;
 }
 
@@ -760,7 +760,7 @@
   border-radius: 50%;
   color: var(--color-muted);
   background: var(--color-row);
-  font-size: 8px;
+  font-size: 11px;
   font-weight: 800;
 }
 
@@ -770,17 +770,17 @@
 }
 
 .onboarding-runtime-track li strong {
-  font-size: 10px;
+  font-size: 11px;
 }
 
 .onboarding-runtime-track li small {
   margin-top: 3px;
   color: var(--color-muted);
-  font-size: 7px;
+  font-size: 11px;
 }
 
 .onboarding-runtime-track li > em {
-  font-size: 7px;
+  font-size: 11px;
   font-style: normal;
   letter-spacing: 0.09em;
   text-transform: uppercase;
@@ -810,25 +810,25 @@
 }
 
 .onboarding-activity-details { margin-top: 16px; border: 1px solid var(--color-border); border-radius: 9px; background: var(--color-card); }
-.onboarding-activity-details summary { padding: 12px 14px; display: flex; align-items: center; justify-content: space-between; gap: 12px; color: var(--color-bright); font-size: 9px; font-weight: 750; cursor: pointer; list-style: none; }
+.onboarding-activity-details summary { padding: 12px 14px; display: flex; align-items: center; justify-content: space-between; gap: 12px; color: var(--color-bright); font-size: 11px; font-weight: 750; cursor: pointer; list-style: none; }
 .onboarding-activity-details summary::-webkit-details-marker { display: none; }
 .onboarding-activity-details summary::before { content: "+"; color: var(--color-blue); }
 .onboarding-activity-details[open] summary::before { content: "−"; }
-.onboarding-activity-details summary span { margin-left: auto; color: var(--color-muted); font-size: 8px; }
-.onboarding-activity-details > p { margin: 0; padding: 0 14px 14px; color: var(--color-muted); font-size: 8px; }
+.onboarding-activity-details summary span { margin-left: auto; color: var(--color-muted); font-size: 11px; }
+.onboarding-activity-details > p { margin: 0; padding: 0 14px 14px; color: var(--color-muted); font-size: 12px; }
 .onboarding-activity-details ol { max-height: 210px; margin: 0; padding: 0 14px 12px; overflow: auto; list-style: none; }
 .onboarding-activity-details li { min-height: 48px; display: grid; grid-template-columns: 42px minmax(0, 1fr) auto; align-items: center; gap: 10px; border-top: 1px solid var(--color-border); }
-.onboarding-activity-details li time { color: var(--color-muted); font-size: 8px; font-variant-numeric: tabular-nums; }
+.onboarding-activity-details li time { color: var(--color-muted); font-size: 11px; font-variant-numeric: tabular-nums; }
 .onboarding-activity-details li strong, .onboarding-activity-details li small { display: block; }
-.onboarding-activity-details li strong { color: var(--color-bright); font-size: 9px; }
-.onboarding-activity-details li small { margin-top: 3px; color: var(--color-muted); font-size: 7px; line-height: 1.4; }
-.onboarding-activity-details li > span { color: var(--color-blue); font-size: 7px; text-transform: uppercase; letter-spacing: .07em; }
+.onboarding-activity-details li strong { color: var(--color-bright); font-size: 11px; }
+.onboarding-activity-details li small { margin-top: 3px; color: var(--color-muted); font-size: 11px; line-height: 1.4; }
+.onboarding-activity-details li > span { color: var(--color-blue); font-size: 11px; text-transform: uppercase; letter-spacing: .07em; }
 .onboarding-activity-details li.is-complete > span { color: var(--color-ready); }
 .onboarding-activity-details li.is-failed > span { color: var(--color-red); }
 .onboarding-technical-details dl { margin: 0; padding: 0 14px 14px; }
 .onboarding-technical-details dl > div { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 12px; padding-top: 10px; border-top: 1px solid var(--color-border); }
-.onboarding-technical-details dt { color: var(--color-muted); font-size: 8px; }
-.onboarding-technical-details dd { min-width: 0; margin: 0; color: var(--color-bright); font-size: 8px; overflow-wrap: anywhere; }
+.onboarding-technical-details dt { color: var(--color-muted); font-size: 11px; }
+.onboarding-technical-details dd { min-width: 0; margin: 0; color: var(--color-bright); font-size: 11px; overflow-wrap: anywhere; }
 .onboarding-technical-details code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
 
 .onboarding-runtime-card--failed .onboarding-runtime-status {
@@ -884,20 +884,20 @@
 .onboarding-provider-console__heading {
   justify-content: space-between;
   color: var(--color-bright);
-  font-size: 10px;
+  font-size: 11px;
 }
 
 .onboarding-provider-console__heading small {
   display: block;
   margin-top: 3px;
   color: var(--color-muted);
-  font-size: 8px;
+  font-size: 12px;
   font-weight: 500;
 }
 
 .onboarding-provider-console__heading > span {
   color: var(--color-blue);
-  font-size: 8px;
+  font-size: 11px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
@@ -920,7 +920,7 @@
 .onboarding-provider-console__help {
   margin: -3px 0 12px;
   color: var(--color-muted);
-  font-size: 9px;
+  font-size: 12px;
   line-height: 1.5;
 }
 
@@ -928,7 +928,7 @@
   display: block;
   margin-bottom: 7px;
   color: var(--color-base);
-  font-size: 8px;
+  font-size: 11px;
   font-weight: 720;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -1009,7 +1009,7 @@
   border-radius: 999px;
   color: var(--color-base);
   background: var(--color-card);
-  font-size: 8px;
+  font-size: 11px;
 }
 
 @keyframes onboarding-enter {
@@ -1098,7 +1098,7 @@
   max-width: 590px;
   margin: 0;
   color: var(--color-muted);
-  font-size: 10px;
+  font-size: 12px;
   line-height: 1.55;
 }
 
@@ -1119,7 +1119,7 @@
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
   gap: 4px 12px;
-  font-size: 10px;
+  font-size: 12px;
 }
 
 .onboarding-aside dt {
@@ -1137,7 +1137,7 @@
 .onboarding-hint {
   margin: 8px 0 0;
   color: var(--color-muted);
-  font-size: 10px;
+  font-size: 12px;
   line-height: 1.55;
 }
 
