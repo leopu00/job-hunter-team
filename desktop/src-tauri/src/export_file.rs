@@ -48,15 +48,24 @@ pub(crate) fn write_new_csv(dir: &Path, name: &str, content: &str) -> std::io::R
     ))
 }
 
+/// Only the app's main window: the others load pages the app does not own.
+fn window_may_export(label: &str) -> bool {
+    label == "main"
+}
+
 /// Saves a CSV the page built in the person's Downloads folder, shows it in the
 /// file manager, and says where it went. The page chooses the content (what its
 /// table shows); the file's name and place are chosen here.
 #[tauri::command]
 pub(crate) fn export_csv_save(
     app: tauri::AppHandle,
+    window: tauri::Window,
     name: String,
     content: String,
 ) -> Result<String, String> {
+    if !window_may_export(window.label()) {
+        return Err("export_window".into());
+    }
     let name = safe_csv_name(&name).ok_or("export_name_invalid")?;
     if content.len() > MAX_BYTES {
         return Err("export_too_large".into());
@@ -75,7 +84,7 @@ pub(crate) fn export_csv_save(
 
 #[cfg(test)]
 mod tests {
-    use super::{safe_csv_name, write_new_csv};
+    use super::{safe_csv_name, window_may_export, write_new_csv};
 
     #[test]
     fn accepts_a_plain_csv_name() {
@@ -88,6 +97,23 @@ mod tests {
             assert_eq!(safe_csv_name(name), None, "{name}");
         }
         assert_eq!(safe_csv_name(&format!("{}.csv", "a".repeat(80))), None);
+    }
+
+    #[test]
+    fn only_the_apps_own_window_may_export() {
+        assert!(window_may_export("main"));
+        for label in ["", "live-screen", "Main", "main ", "other"] {
+            assert!(!window_may_export(label), "{label:?}");
+        }
+    }
+
+    #[test]
+    fn the_command_asks_the_window_before_anything_else() {
+        let source = include_str!("export_file.rs");
+        let command = &source[source.find("pub(crate) fn export_csv_save").unwrap()..];
+        let check = command.find("window_may_export(window.label())").unwrap();
+        let first_work = command.find("safe_csv_name(&name)").unwrap();
+        assert!(check < first_work);
     }
 
     #[test]
