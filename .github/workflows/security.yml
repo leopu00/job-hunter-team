@@ -36,6 +36,12 @@ jobs:
         working-directory: tests/js
         run: npm audit --audit-level=high --package-lock-only
 
+      # Il pi che gli agenti possono usare come harness (JHT_AGENT_HARNESS_*):
+      # gira dentro il container con gli stessi permessi degli agenti.
+      - name: Audit shared/runtime/pi-harness/
+        working-directory: shared/runtime/pi-harness
+        run: npm audit --audit-level=high --package-lock-only
+
       # Le dipendenze di sviluppo restano sotto osservazione ma non bloccano il
       # merge, perché non finiscono in nessun bundle e a volte non hanno una via
       # d'uscita: il 25/07 l'unico avviso era brace-expansion (DoS per

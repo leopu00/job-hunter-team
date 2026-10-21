@@ -317,9 +317,11 @@ def test_the_auto_enter_watcher_is_never_armed_for_codex():
 
     Su Codex un Enter cieco dopo 120 secondi cade nel turno gia' operativo e
     altera il lavoro invece di confermare un dialog noto. La sonda REPL che
-    segue resta invece provider-neutral.
+    segue resta invece provider-neutral. Lo stesso vale per pi: parte con
+    `-na`, quindi non ha un dialog da confermare.
     """
-    guard = 'if [ "$CLI_BIN" != "python3" ] && [ "$CLI_BIN" != "codex" ]; then'
+    guard = ('if [ "$CLI_BIN" != "python3" ] && [ "$CLI_BIN" != "codex" ]'
+             ' && [ "$CLI_BIN" != "pi" ]; then')
     assert f"{guard}\n    setsid sh -c" in SOURCE
 
     windows_spawn = SOURCE.index(

@@ -159,6 +159,12 @@ try:
 except Exception:
   pass" "$config_path" 2>/dev/null || true)
 fi
+# Il Ctrl-S è per la CLI di Kimi, non per il provider: una sessione che
+# start-agent.sh ha marcato con l'harness pi non lo riceve, anche su Kimi.
+if [ "$provider" = "kimi" ] && \
+   [ "$(tmux show-options -qv -t "=$session" @jht_harness 2>/dev/null)" = "pi" ]; then
+  provider="kimi-on-pi"
+fi
 
 # Log strutturato per la UI live: parsa il formato "[@from -> @to] [TYPE] ..."
 # e appendix una riga JSONL in $JHT_HOME/logs/messages.jsonl. Il backend

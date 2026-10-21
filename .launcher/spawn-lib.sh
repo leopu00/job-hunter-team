@@ -279,7 +279,7 @@ jht_spawn_copy_skills() {
   rm -rf "$workdir/.claude/skills" "$workdir/.agents/skills" 2>/dev/null || true
   case "$provider" in
     anthropic|claude) destinations=("$workdir/.claude/skills") ;;
-    openai|codex|kimi) destinations=("$workdir/.agents/skills") ;;
+    openai|codex|kimi|pi) destinations=("$workdir/.agents/skills") ;;
     *) destinations=("$workdir/.claude/skills" "$workdir/.agents/skills") ;;
   esac
 
@@ -375,6 +375,143 @@ jht_codex_web_search_role() {
     *" ${1:-} "*) return 0 ;;
   esac
   return 1
+}
+
+# ── Harness per ruolo: pi (prototipo) ────────────────────────────────────────
+# L'harness è la CLI che guida l'agente; il provider resta `active_provider`.
+# Di default l'harness è quella del provider (claude, codex, kimi). La variabile
+# JHT_AGENT_HARNESS_<RUOLO>=pi la sostituisce con pi (`@earendil-works/
+# pi-coding-agent`), che con lo stesso account parla al provider con un login
+# suo. Oggi vale SOLO per lo Scout e SOLO con active_provider=openai (Sign in
+# with ChatGPT): con un abbonamento Claude pi va sull'extra usage di Anthropic,
+# pagato a token, e si rifiuta di partire invece di spendere.
+#
+# Il pin: un pi diverso da questa versione non parte. Si installa SOLO dal lock
+# rivisto di shared/runtime/pi-harness (integrity di ogni dipendenza, sha256 dei
+# due file, Node minimo controllato), con lo script che sta lì; si alza come
+# quelli di shared/config/provider-versions.json: changelog, e2e, commit.
+JHT_PI_VERSION="1.3.0"
+JHT_PI_INSTALL="/app/shared/runtime/pi-harness/install-pi.sh"
+# I tool di pi accesi per l'agente: read/bash/edit/write sono il suo default,
+# grep/find/ls vanno chiesti. Niente MCP, niente estensioni.
+JHT_PI_TOOLS="read,bash,edit,write,grep,find,ls"
+
+# jht_agent_harness <ruolo>
+#   Stampa "pi" se il ruolo deve girare su pi, niente per l'harness di oggi.
+#   rc 2 (col perché su stderr) se la variabile chiede qualcosa che non c'è:
+#   un valore sconosciuto o pi su un ruolo diverso dallo Scout. Un errore di
+#   configurazione ferma l'avvio, non ricade in silenzio sull'harness di oggi.
+jht_agent_harness() {
+  local role var value
+  role="$(printf '%s' "${1:-}" | tr 'a-z' 'A-Z')"
+  case "$role" in
+    ""|*[!A-Z0-9_]*) return 0 ;;
+  esac
+  var="JHT_AGENT_HARNESS_${role}"
+  value="${!var:-}"
+  case "$value" in
+    "") return 0 ;;
+    pi) ;;
+    *)
+      echo "Error: $var='$value' is not a known agent harness (the only one is 'pi'; leave it unset for the default)." >&2
+      return 2
+      ;;
+  esac
+  if [ "$role" != "SCOUT" ]; then
+    echo "Error: $var=pi: the pi harness is available only for the scout in this release." >&2
+    return 2
+  fi
+  printf 'pi\n'
+}
+
+# jht_pi_provider_check <active_provider> <auth_method>
+#   0 se pi può partire su quel provider, altrimenti rc 1 e il perché.
+jht_pi_provider_check() {
+  case "${1:-}" in
+    openai|codex) return 0 ;;
+    anthropic|claude)
+      if [ "${2:-}" != "api_key" ]; then
+        echo "Error: the pi harness is refused with a Claude subscription: Anthropic bills a subscription used from pi as extra usage, per token. Unset JHT_AGENT_HARNESS_SCOUT to keep the scout on Claude Code." >&2
+      else
+        echo "Error: the pi harness supports only active_provider=openai for now (configured: '${1}'). Unset JHT_AGENT_HARNESS_SCOUT." >&2
+      fi
+      return 1
+      ;;
+    *)
+      echo "Error: the pi harness supports only active_provider=openai for now (configured: '${1:-}'). Unset JHT_AGENT_HARNESS_SCOUT." >&2
+      return 1
+      ;;
+  esac
+}
+
+# jht_pi_args <agent_dir> <modello> <effort>
+#   Gli argomenti di pi per un agente. Ognuno chiude una porta:
+#   --tui-mode regular  la TUI di pi è a schermo intero di default (alternate
+#                       screen): capture-pane vedrebbe solo la finestra e lo
+#                       scrollback resterebbe vuoto, cioè watchdog e prove ciechi;
+#   -nc + --append-system-prompt  l'identità è SOLO il file del ruolo: senza
+#                       -nc pi legge AGENTS.md e CLAUDE.md anche dalle cartelle
+#                       sopra la workdir, e un CLAUDE.md rimasto da un avvio
+#                       con claude entrerebbe nel prompt;
+#   -na -ns --skill     le skill sono SOLO la distribuzione del ruolo
+#                       (.agents/skills); -na evita la domanda di project trust
+#                       che le .agents/skills del progetto aprirebbero all'avvio.
+jht_pi_args() {
+  local agent_dir="$1" model="$2" effort="$3"
+  printf '%s' "--tui-mode regular -nc --append-system-prompt '$agent_dir/AGENTS.md'"
+  printf '%s' " -na -ns --skill '$agent_dir/.agents/skills'"
+  printf '%s' " --tools $JHT_PI_TOOLS --no-mcp -ne"
+  printf '%s\n' " --provider openai --model $model --thinking $effort"
+}
+
+# jht_pi_agent_dir — la cartella di pi (settings, auth.json del /login,
+# sessioni), condivisa dagli agenti pi del container: il login si fa una volta.
+# shared/skills/uncounted_usage.py guarda le sessioni qui dentro.
+jht_pi_agent_dir() {
+  printf '%s\n' "${JHT_HOME:-/jht_home}/.pi/agent"
+}
+
+# jht_pi_settings <settings.json>
+#   Scrive le chiavi che servono senza toccare le altre (pi ci tiene anche il
+#   deviceId del login ChatGPT). Un file illeggibile ferma l'avvio: riscriverlo
+#   da zero perderebbe quello che pi ci ha messo.
+jht_pi_settings() {
+  python3 - "$1" <<'PYEOF'
+import json, os, sys
+path = sys.argv[1]
+wanted = {"tuiMode": "regular", "defaultProjectTrust": "never", "enableInstallTelemetry": False}
+try:
+    with open(path, encoding="utf-8") as handle:
+        current = json.load(handle)
+except FileNotFoundError:
+    current = {}
+except (OSError, ValueError) as exc:
+    print(f"Error: pi settings '{path}' are unreadable ({exc}); fix or remove them.", file=sys.stderr)
+    raise SystemExit(1)
+if not isinstance(current, dict):
+    print(f"Error: pi settings '{path}' are not a JSON object; fix or remove them.", file=sys.stderr)
+    raise SystemExit(1)
+if all(current.get(k) == v for k, v in wanted.items()):
+    raise SystemExit(0)
+current.update(wanted)
+os.makedirs(os.path.dirname(path), mode=0o700, exist_ok=True)
+tmp = f"{path}.tmp.{os.getpid()}"
+with open(tmp, "w", encoding="utf-8") as handle:
+    json.dump(current, handle, indent=2)
+    handle.write("\n")
+os.chmod(tmp, 0o600)
+os.replace(tmp, path)
+PYEOF
+}
+
+# jht_pi_version_check — 0 se il pi sul PATH è quello del pin.
+jht_pi_version_check() {
+  local got
+  got="$(PI_SKIP_VERSION_CHECK=1 PI_TELEMETRY=0 pi --version 2>/dev/null | tr -d '[:space:]')" || got=""
+  if [ "$got" != "$JHT_PI_VERSION" ]; then
+    echo "Error: pi ${got:-not runnable} found, this release needs pi $JHT_PI_VERSION: bash $JHT_PI_INSTALL" >&2
+    return 1
+  fi
 }
 
 # jht_spawn_repl_cmd

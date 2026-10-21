@@ -453,6 +453,34 @@ def _should_notify_sentinella(on_pace, state, now_ts, is_quarter, status=None):
     return elapsed_min >= SENTINELLA_RECONFIRM_MIN
 
 
+_UNCOUNTED_MOD = None
+_UNCOUNTED_WARNED = False
+
+
+def _uncounted_usage():
+    """Le sessioni di pi che il bridge non legge, nelle ultime 5 ore.
+
+    Il bridge misura l'usage dai file delle CLI dei provider; un agente
+    sull'harness pi (JHT_AGENT_HARNESS_<RUOLO>=pi) scrive altrove. I limiti
+    dell'account restano giusti finché gli altri agenti girano sulla CLI del
+    provider, ma il buco va dichiarato, non taciuto: finisce nello stato
+    pubblicato e, la prima volta, nel log. None se non c'è niente da dire.
+    """
+    global _UNCOUNTED_MOD, _UNCOUNTED_WARNED
+    if _UNCOUNTED_MOD is None:
+        _UNCOUNTED_MOD = _load_skill_module("uncounted_usage", "uncounted_usage.py") or False
+    if not _UNCOUNTED_MOD:
+        return None
+    try:
+        gap = _UNCOUNTED_MOD.declared_gap(JHT_HOME, time.time() - 5 * 3600)
+    except Exception:
+        return None
+    if gap and not _UNCOUNTED_WARNED:
+        print(f"[bridge V6] WARN {gap['pi_sessions']} {gap['note']}", file=sys.stderr)
+        _UNCOUNTED_WARNED = True
+    return gap
+
+
 def _write_state_file(state, last_tick_at, next_tick_at, tick_interval_min,
                       last_status=None, last_projection=None, last_usage=None,
                       last_reset_at=None, last_reset_at_unix=None,
@@ -491,6 +519,7 @@ def _write_state_file(state, last_tick_at, next_tick_at, tick_interval_min,
         "last_provider": last_provider,
         "g_spot": {"lower": GSPOT_LOWER, "upper": GSPOT_UPPER},
         "sentinella_cooldown_min": SENTINELLA_COOLDOWN_MIN,
+        "uncounted": _uncounted_usage(),
     }
     tmp = STATE_FILE.with_suffix(".json.tmp")
     try:

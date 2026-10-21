@@ -1,0 +1,8 @@
+{
+  "name": "jht-pi-harness",
+  "private": true,
+  "description": "The pi harness the agents may run on: one exact version, every dependency locked with its integrity.",
+  "dependencies": {
+    "@earendil-works/pi-coding-agent": "1.3.0"
+  }
+}
