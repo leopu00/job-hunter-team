@@ -64,6 +64,7 @@ Questo file è il RIFERIMENTO UFFICIALE per lo schema del database. Tutti gli ag
 | notes | TEXT | | Note libere |
 | last_checked | TIMESTAMP | | Ultima verifica link/JD |
 | write_requested | INTEGER | 0 | **V6** — `1` = l'utente ha richiesto un CV per questa posizione (tramite pulsante web o `/cv` Telegram). Il Capitano interroga questa colonna per generare Scrittori on-demand. |
+| scam_signals | TEXT | NULL | **JHT-T06** — `scam_signals.py`: JSON `{"v":1,"codes":[...],"bucket":"none\|badge\|section"}` (same text in different companies, advance payment, unverifiable company, private chat only). NULL = never checked. A warning, never an exclusion: `status` unchanged. Local only (not cloud-synced). |
 | write_requested_at | TIMESTAMP | NULL | **V6** — quando l'utente ha richiesto il CV. Usato dal Capitano per l'ordinamento FIFO nella generazione degli Scrittori. |
 | created_at | TIMESTAMP | CURRENT_TIMESTAMP | **V4** — inserimento riga |
 | updated_at | TIMESTAMP | CURRENT_TIMESTAMP | **V4** — aggiornato automaticamente ad ogni UPDATE tramite trigger |

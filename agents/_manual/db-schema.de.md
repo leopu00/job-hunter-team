@@ -64,6 +64,7 @@ Diese Datei ist die OFFIZIELLE REFERENZ für das Datenbankschema. Alle Agenten m
 | notes | TEXT | | Freie Notizen |
 | last_checked | TIMESTAMP | | Letzte Überprüfung des Links/JD |
 | write_requested | INTEGER | 0 | **V6** — `1` = Der Benutzer hat einen Lebenslauf für diese Position angefordert (via Web-Button oder `/cv` Telegram). Der Kapitän fragt diese Spalte ab, um Schreiber on-demand zu erzeugen. |
+| scam_signals | TEXT | NULL | **JHT-T06** — `scam_signals.py`: JSON `{"v":1,"codes":[...],"bucket":"none\|badge\|section"}` (same text in different companies, advance payment, unverifiable company, private chat only). NULL = never checked. A warning, never an exclusion: `status` unchanged. Local only (not cloud-synced). |
 | write_requested_at | TIMESTAMP | NULL | **V6** — Wann der Benutzer den Lebenslauf angefordert hat. Vom Kapitän für die FIFO-Sortierung bei der Schreiber-Erzeugung verwendet. |
 | created_at | TIMESTAMP | CURRENT_TIMESTAMP | **V4** — Zeileneinfügung |
 | updated_at | TIMESTAMP | CURRENT_TIMESTAMP | **V4** — automatisch aktualisiert bei jedem UPDATE via Trigger |

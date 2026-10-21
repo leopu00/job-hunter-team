@@ -64,6 +64,7 @@ Ez a fájl a HIVATALOS REFERENCIA az adatbázis-sémához. Minden ügynöknek EZ
 | notes | TEXT | | Szabad megjegyzések |
 | last_checked | TIMESTAMP | | Utolsó link/JD ellenőrzés |
 | write_requested | INTEGER | 0 | **V6** — `1` = a felhasználó CV-t kért ehhez a pozícióhoz (webes gombbal vagy `/cv` Telegram paranccsal). A Kapitány ezt az oszlopot kérdezi le az Írók on-demand létrehozásához. |
+| scam_signals | TEXT | NULL | **JHT-T06** — `scam_signals.py`: JSON `{"v":1,"codes":[...],"bucket":"none\|badge\|section"}` (same text in different companies, advance payment, unverifiable company, private chat only). NULL = never checked. A warning, never an exclusion: `status` unchanged. Local only (not cloud-synced). |
 | write_requested_at | TIMESTAMP | NULL | **V6** — mikor kérte a felhasználó a CV-t. A Kapitány FIFO sorrendezéshez használja az Írók létrehozásakor. |
 | created_at | TIMESTAMP | CURRENT_TIMESTAMP | **V4** — sor beszúrása |
 | updated_at | TIMESTAMP | CURRENT_TIMESTAMP | **V4** — automatikusan frissítve minden UPDATE-nél trigger segítségével |

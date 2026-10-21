@@ -64,6 +64,7 @@ Este ficheiro é a REFERÊNCIA OFICIAL do esquema da base de dados. Todos os age
 | notes | TEXT | | Notas livres |
 | last_checked | TIMESTAMP | | Última verificação do link/JD |
 | write_requested | INTEGER | 0 | **V6** — `1` = o utilizador pediu um CV para esta posição (via botão web ou `/cv` Telegram). O Capitão consulta esta coluna para gerar Escritores on-demand. |
+| scam_signals | TEXT | NULL | **JHT-T06** — `scam_signals.py`: JSON `{"v":1,"codes":[...],"bucket":"none\|badge\|section"}` (same text in different companies, advance payment, unverifiable company, private chat only). NULL = never checked. A warning, never an exclusion: `status` unchanged. Local only (not cloud-synced). |
 | write_requested_at | TIMESTAMP | NULL | **V6** — quando o utilizador pediu o CV. Usado pelo Capitão para a ordenação FIFO ao gerar Escritores. |
 | created_at | TIMESTAMP | CURRENT_TIMESTAMP | **V4** — inserção de linha |
 | updated_at | TIMESTAMP | CURRENT_TIMESTAMP | **V4** — atualizado automaticamente a cada UPDATE via trigger |

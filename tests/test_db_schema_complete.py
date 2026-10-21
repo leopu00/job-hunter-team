@@ -39,7 +39,7 @@ MIGRATION_ADDED = [
     # rifiutare, quindi il difetto si vedrebbe come «il CLOSER non parte mai»
     # invece che come una migrazione mancante.
     'apply_requested', 'apply_requested_at', 'apply_requested_by',
-    'role_family', 'role_family_proposed', 'jd_summary',
+    'role_family', 'role_family_proposed', 'jd_summary', 'scam_signals',
 ]
 
 _ONE_CALL = """
