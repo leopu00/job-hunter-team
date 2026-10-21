@@ -867,12 +867,14 @@ export function sanitizeLimits(raw) {
   const resets = Number.isInteger(raw.resets_at) ? raw.resets_at : null;
   const fiveHour = limitsWindow(raw.five_hour);
   if (raw.status === 'exhausted' && resets === null) return { ...LIMITS_UNKNOWN };
-  if (raw.status === 'ok' && fiveHour === null) return { ...LIMITS_UNKNOWN };
+  const weekly = limitsWindow(raw.weekly);
+  // Un piano a finestra unica settimanale non ha il 5h: basta la settimanale.
+  if (raw.status === 'ok' && fiveHour === null && weekly === null) return { ...LIMITS_UNKNOWN };
   return {
     status: raw.status,
     resets_at: raw.status === 'exhausted' ? resets : null,
     five_hour: fiveHour,
-    weekly: limitsWindow(raw.weekly),
+    weekly,
   };
 }
 
@@ -901,8 +903,10 @@ function handleLimits(opts = {}) {
   if (limits.status === 'exhausted') {
     console.log(`${c.yellow('Limits exhausted')} — free again at ${at(limits.resets_at)}`);
   } else if (limits.status === 'ok') {
-    console.log(`${c.green('Limits ok')} — 5h ${limits.five_hour.used_pct}%` +
-      (limits.weekly ? `, weekly ${limits.weekly.used_pct}%` : ''));
+    const parts = [];
+    if (limits.five_hour) parts.push(`5h ${limits.five_hour.used_pct}%`);
+    if (limits.weekly) parts.push(`weekly ${limits.weekly.used_pct}%`);
+    console.log(`${c.green('Limits ok')} — ${parts.join(', ')}`);
   } else {
     console.log(`${c.dim('Limits not verified')}`);
   }

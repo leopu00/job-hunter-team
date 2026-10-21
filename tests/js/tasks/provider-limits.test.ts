@@ -85,6 +85,17 @@ posixOnly("jht providers limits --json", () => {
     });
   });
 
+  it("passes an ok verdict of a single-weekly-window plan without inventing a 5h window", () => {
+    const verdict = {
+      status: "ok",
+      resets_at: null,
+      five_hour: null,
+      weekly: { used_pct: 14, resets_at: 1_900_500_000 },
+    };
+    const { parsed } = limits(sandbox(`printf '%s' '${JSON.stringify(verdict)}'`));
+    expect(parsed).toEqual(verdict);
+  });
+
   it.each([
     ["the probe fails", `echo "Traceback: token ${SECRET}" >&2; exit 1`],
     ["the probe prints garbage", `echo "not json ${SECRET}"`],
