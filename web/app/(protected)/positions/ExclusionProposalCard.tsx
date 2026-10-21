@@ -1,16 +1,19 @@
 "use client";
 
-// La proposta di escludere un tipo di posizioni dal profilo (JHT-T05).
+// La proposta di escludere un tipo di posizioni dal profilo (JHT-T05, JHT-T24).
 //
 // Compare quando l'utente ha bocciato, con lo stesso motivo, almeno tre
 // posizioni DIVERSE (la regola è `exclusionProposals`, la stessa di Python).
-// Decide l'utente: «Salva la preferenza» o «Non ora». E il testo dice in
-// chiaro cosa NON succede: per ora la preferenza viene solo salvata, non
-// cambia ciò che il team cerca né come valuta. Niente promesse che non
-// manteniamo.
+// Decide l'utente, e solo dall'app desktop: «Escludi questo tipo» o «Non ora».
+// Sul sito la proposta si vede ma non si decide. Il testo dice in chiaro cosa
+// succede: per i quattro motivi che agiscono (azienda, località, stipendio,
+// stack) il team ABBASSA il punteggio di quelle posizioni (non le nasconde);
+// per la seniority la preferenza si salva e per ora non cambia niente.
 
 import { useEffect, useState } from "react";
 import { useLocale } from "@/lib/use-locale";
+import { isActingReason } from "@/lib/feedback-reasons";
+import { useProfileExclusionControl } from "@/lib/profile-exclusion-control";
 import {
   visibleProposals,
   type ExclusionDecision,
@@ -26,7 +29,9 @@ const T: Record<
   {
     title: string;
     question: string;
-    honest: string;
+    acts: string;
+    notYet: string;
+    desktopOnly: string;
     save: string;
     later: string;
     saved: string;
@@ -35,66 +40,80 @@ const T: Record<
   it: {
     title: "{n} posizioni scartate come «{reason}»",
     question: "Vuoi escludere questo tipo di posizioni dal tuo profilo?",
-    honest:
-      "Per ora salviamo solo la tua preferenza: non cambia ancora quello che il team cerca né come valuta le posizioni.",
-    save: "Salva la preferenza",
+    acts: "Se accetti, il team abbassa il punteggio delle posizioni di questo tipo (−15, −30 per un'azienda): non le nasconde e non smette di cercarle. Puoi ritirare la scelta quando vuoi.",
+    notYet:
+      "Per ora salviamo solo la tua preferenza: per la seniority non cambia ancora quello che il team cerca né come valuta le posizioni.",
+    desktopOnly: "Questa scelta si fa nell'app desktop.",
+    save: "Escludi questo tipo",
     later: "Non ora",
-    saved: "Preferenza salvata.",
+    saved: "Esclusione salvata.",
   },
   en: {
     title: "{n} positions rejected as “{reason}”",
     question: "Do you want to exclude this kind of position from your profile?",
-    honest:
-      "For now we only save your preference: it does not yet change what the team looks for or how it scores positions.",
-    save: "Save the preference",
+    acts: "If you accept, the team lowers the score of positions like these (−15, −30 for a company): it does not hide them or stop finding them. You can withdraw the choice at any time.",
+    notYet:
+      "For now we only save your preference: for seniority it does not yet change what the team looks for or how it scores positions.",
+    desktopOnly: "You make this choice in the desktop app.",
+    save: "Exclude this kind",
     later: "Not now",
-    saved: "Preference saved.",
+    saved: "Exclusion saved.",
   },
   es: {
     title: "{n} posiciones descartadas como «{reason}»",
     question: "¿Quieres excluir este tipo de posiciones de tu perfil?",
-    honest:
-      "Por ahora solo guardamos tu preferencia: todavía no cambia lo que busca el equipo ni cómo valora las posiciones.",
-    save: "Guardar la preferencia",
+    acts: "Si aceptas, el equipo baja la puntuación de las posiciones de este tipo (−15, −30 para una empresa): no las oculta ni deja de buscarlas. Puedes retirar la elección cuando quieras.",
+    notYet:
+      "Por ahora solo guardamos tu preferencia: para la seniority todavía no cambia lo que busca el equipo ni cómo valora las posiciones.",
+    desktopOnly: "Esta elección se hace en la aplicación de escritorio.",
+    save: "Excluir este tipo",
     later: "Ahora no",
-    saved: "Preferencia guardada.",
+    saved: "Exclusión guardada.",
   },
   fr: {
     title: "{n} postes écartés comme « {reason} »",
     question: "Voulez-vous exclure ce type de postes de votre profil ?",
-    honest:
-      "Pour l'instant nous enregistrons seulement votre préférence : elle ne change pas encore ce que l'équipe cherche ni comment elle note les postes.",
-    save: "Enregistrer la préférence",
+    acts: "Si vous acceptez, l'équipe baisse la note des postes de ce type (−15, −30 pour une entreprise) : elle ne les cache pas et continue de les trouver. Vous pouvez retirer ce choix à tout moment.",
+    notYet:
+      "Pour l'instant nous enregistrons seulement votre préférence : pour la séniorité elle ne change pas encore ce que l'équipe cherche ni comment elle note les postes.",
+    desktopOnly: "Ce choix se fait dans l'application de bureau.",
+    save: "Exclure ce type",
     later: "Pas maintenant",
-    saved: "Préférence enregistrée.",
+    saved: "Exclusion enregistrée.",
   },
   de: {
     title: "{n} Stellen als „{reason}“ abgelehnt",
     question:
       "Möchtest du diese Art von Stellen aus deinem Profil ausschließen?",
-    honest:
-      "Vorerst speichern wir nur deine Präferenz: Sie ändert noch nicht, wonach das Team sucht oder wie es Stellen bewertet.",
-    save: "Präferenz speichern",
+    acts: "Wenn du zustimmst, senkt das Team die Bewertung solcher Stellen (−15, −30 bei einem Unternehmen): Es blendet sie nicht aus und sucht weiter. Du kannst die Entscheidung jederzeit zurücknehmen.",
+    notYet:
+      "Vorerst speichern wir nur deine Präferenz: Bei der Seniorität ändert sie noch nicht, wonach das Team sucht oder wie es Stellen bewertet.",
+    desktopOnly: "Diese Entscheidung triffst du in der Desktop-App.",
+    save: "Diesen Typ ausschließen",
     later: "Nicht jetzt",
-    saved: "Präferenz gespeichert.",
+    saved: "Ausschluss gespeichert.",
   },
   hu: {
     title: "{n} pozíció elutasítva ezzel az okkal: „{reason}”",
     question: "Ki szeretnéd zárni ezt a fajta pozíciót a profilodból?",
-    honest:
-      "Egyelőre csak a preferenciádat mentjük: ez még nem változtatja meg, mit keres a csapat, és hogyan értékeli a pozíciókat.",
-    save: "Preferencia mentése",
+    acts: "Ha elfogadod, a csapat csökkenti az ilyen pozíciók pontszámát (−15, cég esetén −30): nem rejti el őket, és tovább keresi őket. A döntést bármikor visszavonhatod.",
+    notYet:
+      "Egyelőre csak a preferenciádat mentjük: a szenioritásnál ez még nem változtatja meg, mit keres a csapat, és hogyan értékeli a pozíciókat.",
+    desktopOnly: "Ezt a döntést az asztali alkalmazásban hozhatod meg.",
+    save: "Ezt a típust kizárom",
     later: "Most nem",
-    saved: "Preferencia elmentve.",
+    saved: "Kizárás elmentve.",
   },
   pt: {
     title: "{n} vagas rejeitadas como «{reason}»",
     question: "Quer excluir este tipo de vaga do seu perfil?",
-    honest:
-      "Por agora só guardamos a sua preferência: ainda não muda o que a equipa procura nem como avalia as vagas.",
-    save: "Guardar a preferência",
+    acts: "Se aceitar, a equipa baixa a pontuação das vagas deste tipo (−15, −30 para uma empresa): não as esconde nem deixa de as encontrar. Pode retirar a escolha quando quiser.",
+    notYet:
+      "Por agora só guardamos a sua preferência: para a senioridade ainda não muda o que a equipa procura nem como avalia as vagas.",
+    desktopOnly: "Esta escolha faz-se na aplicação de ambiente de trabalho.",
+    save: "Excluir este tipo",
     later: "Agora não",
-    saved: "Preferência guardada.",
+    saved: "Exclusão guardada.",
   },
 };
 
@@ -108,6 +127,7 @@ type FeedbackRow = {
 export default function ExclusionProposalCard() {
   const locale = useLocale();
   const t = T[locale] ?? T.en;
+  const { canChange } = useProfileExclusionControl();
   const labels = REASON_LABELS[locale] ?? REASON_LABELS.en;
   const [proposals, setProposals] = useState<ExclusionProposal[]>([]);
   const [saved, setSaved] = useState(false);
@@ -159,7 +179,7 @@ export default function ExclusionProposalCard() {
   if (!proposal) return null;
 
   const decide = async (status: "accepted" | "dismissed") => {
-    if (busy) return;
+    if (busy || !canChange) return;
     setBusy(true);
     try {
       const res = await fetch("/api/profile-exclusions", {
@@ -204,34 +224,44 @@ export default function ExclusionProposalCard() {
         {t.question}
       </p>
       <p className="text-[11px] mt-1" style={{ color: "var(--color-muted)" }}>
-        {t.honest}
+        {isActingReason(proposal.reason) ? t.acts : t.notYet}
       </p>
-      <div className="flex gap-2 mt-2">
-        <button
-          type="button"
-          disabled={busy}
-          onClick={() => decide("accepted")}
-          className="px-3 py-1.5 rounded-lg border text-[11px] font-semibold disabled:opacity-60"
-          style={{
-            borderColor: "var(--color-border)",
-            color: "var(--color-text)",
-          }}
+      {!canChange && (
+        <p
+          className="text-[11px] mt-1 font-semibold"
+          style={{ color: "var(--color-muted)" }}
         >
-          {t.save}
-        </button>
-        <button
-          type="button"
-          disabled={busy}
-          onClick={() => decide("dismissed")}
-          className="px-3 py-1.5 rounded-lg border text-[11px] disabled:opacity-60"
-          style={{
-            borderColor: "var(--color-border)",
-            color: "var(--color-muted)",
-          }}
-        >
-          {t.later}
-        </button>
-      </div>
+          {t.desktopOnly}
+        </p>
+      )}
+      {canChange && (
+        <div className="flex gap-2 mt-2">
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => decide("accepted")}
+            className="px-3 py-1.5 rounded-lg border text-[11px] font-semibold disabled:opacity-60"
+            style={{
+              borderColor: "var(--color-border)",
+              color: "var(--color-text)",
+            }}
+          >
+            {t.save}
+          </button>
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => decide("dismissed")}
+            className="px-3 py-1.5 rounded-lg border text-[11px] disabled:opacity-60"
+            style={{
+              borderColor: "var(--color-border)",
+              color: "var(--color-muted)",
+            }}
+          >
+            {t.later}
+          </button>
+        </div>
+      )}
     </section>
   );
 }

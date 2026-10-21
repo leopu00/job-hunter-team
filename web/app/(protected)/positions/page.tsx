@@ -27,6 +27,7 @@ import ActorIcon from "@/app/components/ActorIcon";
 import CloudSyncStatusBanner from "@/app/components/CloudSyncStatusBanner";
 import UnseenDot from "@/app/components/UnseenDot";
 import ColumnsPicker from "./ColumnsPicker";
+import ActiveExclusions from "./ActiveExclusions";
 import ExclusionProposalCard from "./ExclusionProposalCard";
 import ExportCsvButton from "./ExportCsvButton";
 import {
@@ -432,9 +433,11 @@ export default async function PositionsPage({ searchParams }: PageProps) {
 
   return (
     <div style={{ animation: "fade-in 0.35s ease both" }}>
-      {/* JHT-T05: la proposta di escludere un tipo di posizioni (decide
-          l'utente; per ora solo una preferenza salvata). */}
+      {/* JHT-T05/T24: la proposta di escludere un tipo di posizioni (decide
+          l'utente, dall'app desktop) e l'elenco di quelle accettate (si ritirano
+          dall'app desktop; sul sito sono in sola lettura). */}
       <ExclusionProposalCard />
+      <ActiveExclusions />
       {/* ── Header ──────────────────────────────────────────────── */}
       <div className="mb-4 pb-3 md:mb-8 md:pb-6 border-b border-[var(--color-border)]">
         <nav
