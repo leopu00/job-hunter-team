@@ -1,6 +1,14 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from "react";
 import type { Locale } from "@/i18n/config";
 import { useLocale } from "@/lib/use-locale";
 
@@ -263,6 +271,13 @@ export function MobileChatDeliveryWarning({
   );
 }
 
+/**
+ * What stands where the emergency stop is. On the web nothing is given and the
+ * card keeps its own stop; the desktop gives a link to its agents' panel,
+ * where the team's commands (pause and stop) live.
+ */
+export const TeamStatusControls = createContext<ReactNode | null>(null);
+
 export function mobileTeamStatus(
   state: TeamState | null,
 ): "running" | "stopping" | "stopped" | "unavailable" {
@@ -300,6 +315,7 @@ export default function MobileTeamStatus() {
   const [confirming, setConfirming] = useState(false);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<"ok" | "error" | null>(null);
+  const controls = useContext(TeamStatusControls);
 
   const load = useCallback(async () => {
     try {
@@ -393,7 +409,9 @@ export default function MobileTeamStatus() {
         </div>
 
         <div className="flex w-full shrink-0 flex-col gap-2 sm:w-auto sm:min-w-52">
-          {!confirming ? (
+          {controls ? (
+            controls
+          ) : !confirming ? (
             <button
               type="button"
               onClick={() => setConfirming(true)}

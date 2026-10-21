@@ -4,6 +4,7 @@ import { appLocale } from "../../lib/app-locale";
 import { describeError } from "../../lib/error-catalog";
 import { formatRelative } from "@/lib/message-display";
 import { pluralText } from "../../lib/plural";
+import { requestTeamStop } from "./team-stop";
 import { useExistingTeamReadOnly } from "../../lib/existing-team-readonly";
 import {
   controlAgent,
@@ -127,6 +128,7 @@ type Notice = { ok: boolean; text: string };
 type Pending =
   | { kind: "agent"; op: AgentAction; row: PanelRow }
   | { kind: "pause" }
+  | { kind: "stop-team" }
   | { kind: "resume" };
 
 function fill(template: string, values: Record<string, string | number>): string {
@@ -274,6 +276,10 @@ function Confirm({
   } else if (pending.kind === "pause") {
     title = fill(t.confirmPause, { where });
     body = [t.bodyPause];
+  } else if (pending.kind === "stop-team") {
+    title = fill(t.confirmStopTeam, { where });
+    body = [t.bodyStopTeam];
+    danger = true;
   } else {
     title = fill(t.confirmResume, { where });
     body = [t.bodyResume];
@@ -404,6 +410,14 @@ export default function AgentsPanel({ search }: PageProps) {
     setActing(true);
     let key = "team";
     let done: Outcome<ActionResult>;
+    if (pending.kind === "stop-team") {
+      const stopped = await requestTeamStop();
+      setNotices((all) => ({ ...all, team: { ok: stopped.ok, text: stopped.ok ? t.resultStopRequested : t.stopTeamFailed } }));
+      setActing(false);
+      setPending(null);
+      await read();
+      return;
+    }
     if (pending.kind === "agent") {
       key = pending.row.session;
       done = await controlAgent(pending.op, pending.row.session, target);
@@ -492,16 +506,32 @@ export default function AgentsPanel({ search }: PageProps) {
               )}
             </span>
             {!readOnly && team && !team.halted && (
-              <button
-                type="button"
-                data-testid={paused ? "panel-resume" : "panel-pause"}
-                onClick={() => setPending(paused ? { kind: "resume" } : { kind: "pause" })}
-                className="text-[11px] font-semibold uppercase tracking-widest px-3 py-1 rounded border border-[var(--color-border)] text-[var(--color-bright)]"
-              >
-                {paused ? t.resume : t.pause}
-              </button>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  data-testid={paused ? "panel-resume" : "panel-pause"}
+                  onClick={() => setPending(paused ? { kind: "resume" } : { kind: "pause" })}
+                  className="text-[11px] font-semibold uppercase tracking-widest px-3 py-1 rounded border border-[var(--color-border)] text-[var(--color-bright)]"
+                >
+                  {paused ? t.resume : t.pause}
+                </button>
+                <button
+                  type="button"
+                  data-testid="panel-stop-team"
+                  onClick={() => setPending({ kind: "stop-team" })}
+                  className="text-[11px] font-semibold uppercase tracking-widest px-3 py-1 rounded border"
+                  style={{ color: "var(--color-red)", borderColor: "var(--color-red)" }}
+                >
+                  {t.stopTeam}
+                </button>
+              </div>
             )}
           </div>
+          {!readOnly && team && !team.halted && (
+            <p data-testid="panel-team-help" className="text-[11px] -mt-2 mb-3 text-[var(--color-muted)]">
+              {t.teamControlsHelp}
+            </p>
+          )}
           {notices.team && (
             <p role={notices.team.ok ? "status" : "alert"} className="text-[11px] mb-2" style={{ color: notices.team.ok ? "var(--color-green)" : "var(--color-red)" }}>
               {notices.team.text}

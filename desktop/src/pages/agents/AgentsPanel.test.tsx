@@ -277,3 +277,49 @@ describe("«Agenti», how a row reads", () => {
     expect(blocked.className).toMatch(/break-words/);
   });
 });
+
+describe("«Agenti», stopping the whole team", () => {
+  it("stops the team only after a confirmation that says what happens, with the Team page's request", async () => {
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ ok: true }), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+    show();
+    await screen.findByTestId("panel-summary");
+    // pause and stop side by side, and a line that tells them apart
+    expect(screen.getByTestId("panel-pause")).toBeInTheDocument();
+    expect(screen.getByTestId("panel-team-help")).toHaveTextContent("riparte da sola");
+    expect(screen.getByTestId("panel-team-help")).toHaveTextContent("non riparte finché");
+    fireEvent.click(screen.getByTestId("panel-stop-team"));
+    const dialog = screen.getByTestId("panel-confirm");
+    expect(dialog).toHaveTextContent("Fermare la squadra sulla VPS vps.example?");
+    expect(dialog).toHaveTextContent("L’assistente resta acceso.");
+    expect(fetchMock).not.toHaveBeenCalled();
+    fireEvent.click(within(dialog).getByRole("button", { name: "Conferma" }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toBe("/api/team-state/emergency-stop");
+    expect(init.method).toBe("POST");
+    expect(JSON.parse(String(init.body))).toEqual({ confirm: "STOP" });
+    expect(await screen.findByText("Stop chiesto: la squadra si ferma entro pochi secondi.")).toBeInTheDocument();
+    // no agent_control action: the stop is the cloud's intent
+    expect(ops().filter((r) => ACTIONS.has(String(r.op)))).toEqual([]);
+  });
+
+  it("offers no stop in the read-only view, nor on a team already stopped", async () => {
+    enterExistingTeamReadOnly(false);
+    show();
+    await screen.findByTestId("panel-summary");
+    expect(screen.queryByTestId("panel-stop-team")).toBeNull();
+    leaveExistingTeamReadOnly();
+    cleanup();
+    native.invoke.mockImplementation(async (command: string, args: { request: Record<string, unknown> }) => {
+      if (command !== COMMAND) return { ok: false, error: "not_in_test" };
+      if (args.request.op === "list") return listReply();
+      if (args.request.op === "team") return { ok: true, data: { halted: true, standby, held } };
+      return { ok: true, data: { name: args.request.session, up: true, text: "" } };
+    });
+    show();
+    await screen.findByTestId("panel-team-state");
+    expect(screen.queryByTestId("panel-stop-team")).toBeNull();
+    expect(screen.queryByTestId("panel-pause")).toBeNull();
+  });
+});

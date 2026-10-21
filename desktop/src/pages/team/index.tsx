@@ -1,10 +1,12 @@
 import TeamLoading from "@/app/(protected)/team/loading";
 import WebTeamPage from "@/app/(protected)/team/page";
+import { TeamStatusControls } from "@/app/(protected)/team/MobileTeamStatus";
 import ServerPage from "../../shell/server-page";
 import type { PageProps } from "../types";
 import { useState } from "react";
 import CloserDesktopPanel from "../../closer-desktop/CloserDesktopPanel";
 import { desktopCopy } from "../../closer-desktop/text";
+import TeamControlsLink from "./TeamControlsLink";
 
 /**
  * The web's /team (web/app/(protected)/team/page.tsx), run as it is: the
@@ -25,11 +27,14 @@ export default function TeamPage({ search }: PageProps) {
           onClick={() => setBrowserOpen((open) => !open)}>{desktopCopy().open}</button>
       </div>
       {browserOpen && <CloserDesktopPanel onClose={() => setBrowserOpen(false)} />}
-      <ServerPage
-        runKey={search.toString()}
-        render={() => WebTeamPage({ searchParams: Promise.resolve(searchParams) })}
-        fallback={<TeamLoading />}
-      />
+      {/* the status card links to the agents' panel instead of stopping the team itself */}
+      <TeamStatusControls.Provider value={<TeamControlsLink />}>
+        <ServerPage
+          runKey={search.toString()}
+          render={() => WebTeamPage({ searchParams: Promise.resolve(searchParams) })}
+          fallback={<TeamLoading />}
+        />
+      </TeamStatusControls.Provider>
     </>
   );
 }
