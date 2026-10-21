@@ -137,6 +137,73 @@ def test_a_contained_worker_is_refused_and_keeps_its_hold(world, monkeypatch):
     assert "SCOUT-4" in alive
 
 
+def _hold(by):
+    evidence = roster.roster_path().parent / "pane.txt"
+    evidence.write_text("pane", encoding="utf-8")
+    roster.contain("SCOUT-4", by, "reason", str(evidence))
+
+
+def test_a_hold_set_by_the_user_is_said_so_and_never_offered_for_release(
+        world, monkeypatch, capsys):
+    tool, events, alive, _ = world
+    _hold("user")
+    assert _run(tool, monkeypatch, "SCOUT-4", "--reason", "scale-down") == 1
+    err = capsys.readouterr().err
+    assert "stopped by the user" in err
+    assert "neither retired nor released" in err
+    assert "--release" not in err and "jht-agent-contain" not in err
+    assert _status("SCOUT-4") == "contained"
+    assert not [e for e in events if e[:2] == ("tmux", "kill-session")]
+
+
+@pytest.mark.parametrize("by", ["CAPITANO", "SENTINELLA", "unknown"])
+def test_a_safety_hold_sends_to_whoever_set_it_without_inviting_a_release(
+        world, monkeypatch, capsys, by):
+    tool, events, _, _ = world
+    _hold(by)
+    assert _run(tool, monkeypatch, "SCOUT-4", "--reason", "scale-down") == 1
+    err = capsys.readouterr().err
+    assert "ask whoever set the hold" in err
+    assert "--release" not in err and "jht-agent-contain" not in err
+    assert "stopped by the user" not in err
+    assert not [e for e in events if e[:2] == ("tmux", "kill-session")]
+
+
+def test_the_hold_marker_alone_counts_even_if_the_entry_says_active(world, monkeypatch, capsys):
+    tool, _, _, _ = world
+    _hold("user")
+    state = roster.load()
+    state["agents"]["SCOUT-4"]["status"] = "active"
+    state["agents"]["SCOUT-4"].pop("contained_by")
+    roster.save(state)
+    assert _run(tool, monkeypatch, "SCOUT-4", "--reason", "scale-down") == 1
+    assert "stopped by the user" in capsys.readouterr().err
+    assert _status("SCOUT-4") == "active"
+
+
+def test_the_reason_is_one_clean_line(world, monkeypatch):
+    tool, _, _, _ = world
+    dirty = "queue\u202e empty,\n\tscale-down\x00\u200b   now"
+    assert _run(tool, monkeypatch, "SCOUT-4", "--reason", dirty) == 0
+    stored = roster.load()["agents"]["SCOUT-4"]["retire_reason"]
+    assert stored == "queue empty, scale-down now"
+
+
+@pytest.mark.parametrize("reason", ["x" * 201, "\u202e\u200b \n\t", ""])
+def test_a_reason_too_long_or_empty_changes_nothing(world, monkeypatch, capsys, reason):
+    tool, events, alive, _ = world
+    assert _run(tool, monkeypatch, "SCOUT-4", "--reason", reason) == 1
+    assert "--reason" in capsys.readouterr().err
+    assert _status("SCOUT-4") == "active"
+    assert events == [] and "SCOUT-4" in alive
+
+
+def test_a_reason_at_the_limit_is_accepted(world, monkeypatch):
+    tool, _, _, _ = world
+    assert _run(tool, monkeypatch, "SCOUT-4", "--reason", "x" * 200) == 0
+    assert len(roster.load()["agents"]["SCOUT-4"]["retire_reason"]) == 200
+
+
 @pytest.mark.parametrize("session", ["CAPITANO", "SENTINELLA", "MENTOR", "ASSISTENTE",
                                      "CRITICO-S1", "SCOUT", "scout; rm -rf", ""])
 def test_only_numbered_workers_can_be_retired(world, monkeypatch, session):

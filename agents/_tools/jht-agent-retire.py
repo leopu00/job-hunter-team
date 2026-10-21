@@ -17,7 +17,11 @@ import os
 from pathlib import Path
 import subprocess
 import sys
+import unicodedata
 from datetime import datetime, timezone
+
+REASON_MAX = 200
+USER = "user"  # `contained_by` of the hold the user sets from the app (agent_control.py)
 
 
 def home() -> Path:
@@ -59,6 +63,42 @@ def journal(event: dict) -> None:
         handle.write(json.dumps(event, ensure_ascii=False) + "\n")
 
 
+def clean_reason(raw: str) -> str:
+    """One line of plain text: NFC, no control or format (bidi) characters, single spaces.
+
+    The reason is the agent's free text and lands in the roster and the journal.
+    Too long is refused, never silently cut."""
+    text = unicodedata.normalize("NFC", raw or "")
+    kept = []
+    for ch in text:
+        category = unicodedata.category(ch)
+        if ch in "\r\n\t\u2028\u2029" or category == "Zs":
+            kept.append(" ")
+        elif category in ("Cc", "Cf", "Cs", "Co", "Cn"):
+            continue
+        else:
+            kept.append(ch)
+    reason = " ".join("".join(kept).split())
+    if not reason:
+        raise ValueError("--reason is empty (after removing control characters)")
+    if len(reason) > REASON_MAX:
+        raise ValueError(f"--reason is {len(reason)} characters; the limit is {REASON_MAX}")
+    return reason
+
+
+def held_by(roster, session: str, entry: dict | None) -> str | None:
+    """None, or who holds the session contained (the marker counts as much as the entry)."""
+    if not (entry and entry.get("status") == "contained") and not roster.is_contained(session):
+        return None
+    by = (entry or {}).get("contained_by")
+    if not by:
+        try:
+            by = json.loads(roster.containment_marker(session).read_text(encoding="utf-8")).get("by")
+        except (OSError, ValueError, AttributeError):
+            by = None
+    return str(by or "unknown")
+
+
 def retirable_session(roster, raw: str) -> str:
     """Only a numbered worker the watchdog could respawn is retired this way."""
     session = raw.strip().upper()
@@ -82,16 +122,22 @@ def main() -> int:
     try:
         roster = load_roster()
         session = retirable_session(roster, args.session)
+        reason = clean_reason(args.reason)
         entry = roster.load().get("agents", {}).get(session)
-        if entry and entry.get("status") == "contained":
+        holder = held_by(roster, session, entry)
+        if holder is not None:
+            if holder.strip().lower() == USER:
+                raise RuntimeError(
+                    f"{session} was stopped by the user from the app: "
+                    "it is neither retired nor released from here")
             raise RuntimeError(
-                f"{session} is held by a safety containment; "
-                "release it with jht-agent-contain --release instead")
+                f"{session} is held by a containment: it is not retired from here; "
+                "ask whoever set the hold")
         if entry is None:
             # Never recorded: the watchdog has nothing to respawn, so closing is safe.
             declared = False
         else:
-            if not roster.retire(session, args.reason):
+            if not roster.retire(session, reason):
                 raise RuntimeError(f"could not mark {session} retired")
             # `save` fails open (an unwritable roster must not block a spawn), so
             # `retire` can report success without a write: read it back.
@@ -111,7 +157,7 @@ def main() -> int:
                     f"{killed.stderr.strip() or 'tmux error'}")
             closed = True
         journal({"ts": now_iso(), "event": "retired", "session": session,
-                 "reason": args.reason, "declared": declared, "closed": closed})
+                 "reason": reason, "declared": declared, "closed": closed})
         print(f"retired {session}"
               + ("" if declared else " (not in the roster: nothing to respawn)")
               + ("; session closed" if closed else "; session was already down"))
