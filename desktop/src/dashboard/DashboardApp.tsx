@@ -43,6 +43,8 @@ import {
   loadOnboardingGate,
   markOnboardingReady,
   markOnboardingStarted,
+  clearOnboardingInterruption,
+  recordOnboardingInterruption,
   resetOnboardingMarker,
   runtimeStateFromSnapshot,
   type OnboardingActivityState,
@@ -653,13 +655,21 @@ export default function DashboardApp() {
       submission,
       pairingToken(localProfile ? null : session, submission),
       recordActivityProgress,
-    ).catch(failLocalRuntime);
+    ).catch((error) => {
+      const failed = localRuntimeFailure(error);
+      if (markerId && submission.host.kind === "local" && failed.status === "failed") {
+        recordOnboardingInterruption(markerId, {
+          stage: failed.stage, code: failed.code ?? null, at: Date.now(), provider: submission.provider,
+        });
+      }
+      return failLocalRuntime(error);
+    });
     if (!snapshot.providerAuthenticated) {
       setRuntime(runtimeStateFromSnapshot(snapshot));
       return;
     }
     await startTeam(submission);
-  }, [beginActivityInvocation, failLocalRuntime, identityKey, localProfile?.profileId, recordActivityProgress, session, setRuntime, startTeam]);
+  }, [beginActivityInvocation, failLocalRuntime, identityKey, localProfile?.profileId, markerId, recordActivityProgress, session, setRuntime, startTeam]);
 
   const submit = useCallback(async (submission: OnboardingSubmission) => {
     if (!identityKey || !markerId) throw new Error("identity-missing");
@@ -1188,6 +1198,22 @@ export default function DashboardApp() {
     void startupReopen(!gate.existingTeam && gate.resumeAvailable).catch(() => undefined);
   }, [assistantChatIdentityKey, gate, identityKey, startupReopen]);
 
+  // A local preparation that stopped and was never finished: «Resume» runs the same preparation again
+  // with what was chosen (it checks what is already there), «Start over» forgets the interruption.
+  const interruption = gate.phase === "required" ? gate.interruption : undefined;
+  const resumeInterrupted = useCallback(async () => {
+    if (!interruption) return;
+    await submit({ host: { kind: "local" }, provider: interruption.provider });
+  }, [interruption, submit]);
+  const discardInterruption = useCallback(() => {
+    if (markerId) clearOnboardingInterruption(markerId);
+    setGate((current) => {
+      if (current.phase !== "required") return current;
+      const { interruption: _dropped, ...rest } = current;
+      return rest;
+    });
+  }, [markerId]);
+
   const runtimeAction = useCallback(async (stage: "provider-login" | "team-start" | "assistant") => {
     if (stage === "provider-login") return loginProvider();
     if (stage === "team-start") return resumeTeam();
@@ -1376,6 +1402,9 @@ export default function DashboardApp() {
         runtimeLogPath={runtimeLog}
         onOpenRuntimeLog={openRuntimeLog}
         previousLocalData={previousLocalData}
+        interruption={interruption}
+        onResumeInterrupted={interruption ? resumeInterrupted : undefined}
+        onDiscardInterruption={interruption ? discardInterruption : undefined}
         onRestart={restartOnboarding}
         onExitFailure={exitTechnicalFailure}
       />

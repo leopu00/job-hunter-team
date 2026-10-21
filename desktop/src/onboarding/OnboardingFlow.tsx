@@ -407,13 +407,15 @@ function RuntimeView({ host, platform, t, locale, runtime, activity, onRetry, on
   );
 }
 
-export function OnboardingFlow({ account, platform, runtime, activity, onSubmit, onConnectExistingTeam, onSignInWithGoogle, onRetry, onRestart, onExitFailure, onRuntimeAction, providerLogin, sshHostKey, onConfirmHostKey, onCancelHostKey, onProviderInput, onProviderClose, onProviderRestart, onRecreatePodmanMachine, onFreeDiskSpace, runtimeLogPath, onOpenRuntimeLog, previousLocalData = false, locale: localeOverride }: OnboardingFlowProps) {
+export function OnboardingFlow({ account, platform, runtime, activity, onSubmit, onConnectExistingTeam, onSignInWithGoogle, onRetry, onRestart, onExitFailure, onRuntimeAction, providerLogin, sshHostKey, onConfirmHostKey, onCancelHostKey, onProviderInput, onProviderClose, onProviderRestart, onRecreatePodmanMachine, onFreeDiskSpace, runtimeLogPath, onOpenRuntimeLog, previousLocalData = false, interruption, onResumeInterrupted, onDiscardInterruption, locale: localeOverride }: OnboardingFlowProps) {
   const locale = localeOverride ?? appLocale();
   const t = ONBOARDING_TEXT[locale];
   const providerChoices = providers(t);
   const unavailable = unavailableProviders(platform);
   const selectableProviders = providerChoices.map(({ value }) => value).filter((value) => !unavailable.has(value));
   const kimiReason = unavailable.has("kimi") ? describeError("kimi_unavailable_windows", { locale }) : null;
+  const interruptionCause = interruption?.code ? describeError(interruption.code, { locale }) : null;
+  const interruptionReason = interruptionCause?.known ? interruptionCause.text : t.interruptedUnknown;
   // Windows runs the team locally too, with Podman inside WSL.
   const localRuntimeSupported = platform === "macos" || platform === "linux" || platform === "windows";
   const [step, setStep] = useState(0);
@@ -513,6 +515,17 @@ export function OnboardingFlow({ account, platform, runtime, activity, onSubmit,
             <div className="onboarding-account-mark" aria-hidden="true">{(account.displayName || "J").trim().charAt(0).toUpperCase() || "J"}</div>
             <p className="onboarding-eyebrow">{account.identity === "local" ? t.welcomeEyebrowLocal : t.welcomeEyebrowAccount}</p><h2 ref={headingRef} tabIndex={-1}>{t.hello(account.displayName ?? "")}</h2>
             <p className="onboarding-lede">{account.identity === "local" ? t.welcomeLedeLocal : t.welcomeLedeAccount}</p>
+            {interruption && onResumeInterrupted && <div className="onboarding-aside" role="note" data-testid="onboarding-interrupted">
+              <strong>{t.interruptedTitle}</strong>
+              <p>{fill(t.interruptedText, {
+                date: new Date(interruption.at).toLocaleString(locale, { dateStyle: "medium", timeStyle: "short" }),
+                reason: interruptionReason,
+              })}</p>
+              <div className="onboarding-actions">
+                <button className="onboarding-secondary" type="button" onClick={() => onDiscardInterruption?.()}>{t.startOver}</button>
+                <button className="onboarding-primary" type="button" onClick={() => void onResumeInterrupted()}>{t.resumeSetup} <span aria-hidden="true">→</span></button>
+              </div>
+            </div>}
             <div className="onboarding-callout"><span aria-hidden="true">01</span><p><strong>{t.calloutStrong}</strong> {t.calloutText}</p></div>
             <button className="onboarding-primary" type="submit">{t.startSetup} <span aria-hidden="true">→</span></button>
           </form>}
