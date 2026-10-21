@@ -433,6 +433,25 @@ def test_the_team_read_tells_stopped_paused_and_held(team, capsys):
     assert data["held"] == [{"session": "SCOUT-1", "by_user": True}, {"session": "SCOUT-2", "by_user": False}]
 
 
+def test_the_team_read_tells_the_full_throttle_override(team, capsys):
+    """JHT-T33: the panel's header can say the override is on, when it ends, and that it has ended."""
+    import json as _json
+    from datetime import datetime, timedelta, timezone
+
+    assert team.run("team", capsys=capsys)[1]["data"]["burn_intent"] == {
+        "state": "off", "expires_at": None, "remaining_min": None}
+    now = datetime.now(timezone.utc)
+    flag = team.home / ".burn-intent.flag"
+    ends = (now + timedelta(minutes=90)).isoformat(timespec="seconds")
+    flag.write_text(_json.dumps({"granted_at": now.isoformat(timespec="seconds"), "expires_at": ends, "hours": 1.5}))
+    burn = team.run("team", capsys=capsys)[1]["data"]["burn_intent"]
+    assert burn["state"] == "active" and burn["expires_at"] == ends and 88 <= burn["remaining_min"] <= 90
+    flag.write_text(_json.dumps({"granted_at": now.isoformat(timespec="seconds"),
+                                 "expires_at": (now - timedelta(minutes=5)).isoformat(timespec="seconds")}))
+    gone = team.run("team", capsys=capsys)[1]["data"]["burn_intent"]
+    assert gone["state"] == "expired" and gone["remaining_min"] == 0
+
+
 # ── the journal (N3) ────────────────────────────────────────────────────────
 def test_the_journal_rotates_and_never_grows_without_end(team, capsys):
     log = team.home / "logs" / "agent-control.jsonl"

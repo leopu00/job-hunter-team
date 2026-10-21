@@ -40,6 +40,7 @@ const AGENTS = [
 let target = "T1";
 let held: { session: string; byUser: boolean }[] = [];
 let standby = { state: "off", until: null as string | null, weeklyReset: false };
+let burnIntent: Record<string, unknown> | undefined;
 let actionReply: Record<string, unknown> = { ok: true, data: { result: "stopped" } };
 const listReply = () => ({ ok: true, data: { agents: AGENTS, roles: ROLES, states: true, target, where: "vps", label: "vps.example" } });
 const ops = () => native.invoke.mock.calls.filter(([c]) => c === COMMAND).map(([, a]) => (a as { request: Record<string, unknown> }).request);
@@ -52,13 +53,14 @@ beforeEach(() => {
   target = "T1";
   held = [];
   standby = { state: "off", until: null, weeklyReset: false };
+  burnIntent = undefined;
   actionReply = { ok: true, data: { result: "stopped" } };
   native.invoke.mockReset();
   native.invoke.mockImplementation(async (command: string, args: { request: Record<string, unknown> }) => {
     if (command !== COMMAND) return { ok: false, error: "not_in_test" };
     const { op } = args.request;
     if (op === "list") return listReply();
-    if (op === "team") return { ok: true, data: { halted: false, standby, held } };
+    if (op === "team") return { ok: true, data: { halted: false, standby, held, ...(burnIntent ? { burnIntent } : {}) } };
     if (op === "screen") return { ok: true, data: { name: args.request.session, up: true, text: "<b>not html</b>\nworking" } };
     return actionReply;
   });
@@ -170,6 +172,39 @@ describe("«Agenti», the agents' control panel", () => {
     show();
     expect(await screen.findByTestId("panel-team-state")).toHaveTextContent("in pausa fino al reset del limite settimanale");
     expect(screen.getByTestId("panel-resume")).toBeInTheDocument();
+  });
+
+  it("JHT-T33: says that the full-throttle override is on, when it ends, and that it has ended", async () => {
+    burnIntent = { state: "active", expiresAt: "2026-10-21T22:30:00+00:00", remainingMin: 240 };
+    const first = show();
+    const on = await screen.findByTestId("panel-burn-intent");
+    expect(on).toHaveTextContent("A tutto gas fino alle");
+    expect(on).toHaveTextContent("restano 240 min");
+    first.unmount();
+
+    // Within the hour it says so, and how to go on.
+    burnIntent = { state: "active", expiresAt: "2026-10-21T22:30:00+00:00", remainingMin: 59 };
+    const second = show();
+    expect(await screen.findByTestId("panel-burn-intent")).toHaveTextContent("finisce tra 59 min");
+    expect(screen.getByTestId("panel-burn-intent")).toHaveTextContent("Capitano di rinnovarlo");
+    second.unmount();
+
+    burnIntent = { state: "expired", expiresAt: "2026-10-21T22:30:00+00:00", remainingMin: 0 };
+    show();
+    expect(await screen.findByTestId("panel-burn-intent")).toHaveTextContent("Il tutto gas è finito: la squadra è tornata al ritmo normale");
+  });
+
+  it("JHT-T33: says nothing about the override when it is off or when the image does not report it", async () => {
+    burnIntent = { state: "off", expiresAt: null, remainingMin: null };
+    const off = show();
+    await screen.findByTestId("panel-team-state");
+    expect(screen.queryByTestId("panel-burn-intent")).toBeNull();
+    off.unmount();
+
+    burnIntent = undefined;
+    show();
+    await screen.findByTestId("panel-team-state");
+    expect(screen.queryByTestId("panel-burn-intent")).toBeNull();
   });
 
   it("shows the terminal as text, read when shown", async () => {
