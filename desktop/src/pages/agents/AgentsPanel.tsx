@@ -21,7 +21,7 @@ import {
   type PauseExit,
   type TeamControlState,
 } from "../../lib/agent-control";
-import type { TeamAgent } from "../../lib/existing-team-agents";
+import type { AgentIdentity, TeamAgent } from "../../lib/existing-team-agents";
 import OwnVpsClaim from "../../components/OwnVpsClaim";
 import { useRefresh } from "../../shell/router";
 import type { PageProps } from "../types";
@@ -197,6 +197,26 @@ function Led({ row }: { row: PanelRow }) {
       style={{ background: isUp(row) ? TONE[tone] : "var(--color-border)" }}
     />
   );
+}
+
+const CLI_NAME: Record<AgentIdentity["cli"], string> = { claude: "Claude", codex: "Codex", kimi: "Kimi", pi: "pi", local: "" };
+
+/**
+ * Who the agent is: «Codex · gpt-5.6-terra · effort alto · su questo computer».
+ * Only shown, never decided on (the agent can rewrite its session's options).
+ * A part the session does not say is «non so»; Kimi gets no model nor effort
+ * from the launcher (its own default), the local scorer neither.
+ */
+export function identityLine(t: AgentsPanelText, identity: AgentIdentity | null, where: string): string {
+  if (!identity) return t.identityUnknown;
+  const effortName = { low: t.effortLow, medium: t.effortMedium, high: t.effortHigh };
+  const parts: string[] = [identity.cli === "local" ? t.identityLocal : CLI_NAME[identity.cli]];
+  if (identity.cli !== "local") {
+    parts.push(identity.model ?? (identity.cli === "kimi" ? t.identityModelDefault : t.identityModelUnknown));
+    if (identity.cli !== "kimi") parts.push(identity.effort ? fill(t.identityEffort, { effort: effortName[identity.effort] }) : t.identityEffortUnknown);
+  }
+  if (where) parts.push(where);
+  return parts.join(" · ");
 }
 
 function stateLine(t: AgentsPanelText, row: PanelRow): string {
@@ -576,6 +596,7 @@ export default function AgentsPanel({ search }: PageProps) {
                       type="button"
                       data-testid={`panel-row-${row.session}`}
                       data-state={row.agent ? row.agent.state.state : "down"}
+                      title={row.agent ? identityLine(t, row.agent.identity, where) : undefined}
                       aria-current={active ? "true" : undefined}
                       onClick={() => {
                         setSelected(row.session);
@@ -622,6 +643,11 @@ export default function AgentsPanel({ search }: PageProps) {
                     >
                       {stateLine(t, current)}
                     </p>
+                    {current.agent && (
+                      <p data-testid="panel-identity" className="text-[11px] mt-0.5 text-[var(--color-muted)]">
+                        {identityLine(t, current.agent.identity, where)}
+                      </p>
+                    )}
                     {current.agent && (
                       <p
                         data-testid="panel-times"

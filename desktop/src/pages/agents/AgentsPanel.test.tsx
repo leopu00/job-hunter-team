@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { describeError } from "../../lib/error-catalog";
@@ -10,7 +11,7 @@ import Shell from "../../shell/Shell";
 import { createPermissiveSupabase } from "../../test-support/permissive-supabase";
 import type { Locale } from "@/i18n/config";
 import { pluralText } from "../../lib/plural";
-import AgentsPanel from "./AgentsPanel";
+import AgentsPanel, { identityLine } from "./AgentsPanel";
 import { AGENTS_PANEL_TEXT, type AgentsPanelText } from "./AgentsPanel.i18n";
 
 // «Agenti»: the agents' control panel, against a stand-in native side
@@ -425,5 +426,60 @@ describe("«Agenti», stopping the whole team", () => {
     await screen.findByTestId("panel-team-state");
     expect(screen.queryByTestId("panel-stop-team")).toBeNull();
     expect(screen.queryByTestId("panel-pause")).toBeNull();
+  });
+});
+
+describe("«Agenti», who an agent is", () => {
+  const it_ = AGENTS_PANEL_TEXT.it;
+
+  it("says cli, model, effort and where, with «non so» for what the session does not say", () => {
+    expect(identityLine(it_, { cli: "codex", model: "gpt-5.6-terra", effort: "high" }, "su questo computer")).toBe(
+      "Codex · gpt-5.6-terra · effort alto · su questo computer",
+    );
+    expect(identityLine(it_, { cli: "claude", model: null, effort: null }, "sulla VPS vps.example")).toBe(
+      "Claude · modello: non so · effort: non so · sulla VPS vps.example",
+    );
+    // kimi gets no model nor effort from the launcher: its own default, no effort part
+    expect(identityLine(it_, { cli: "kimi", model: null, effort: null }, "su questo computer")).toBe("Kimi · modello predefinito · su questo computer");
+    expect(identityLine(it_, { cli: "local", model: null, effort: null }, "")).toBe("scorer locale");
+    // a session started before the launcher wrote it
+    expect(identityLine(it_, null, "su questo computer")).toBe(it_.identityUnknown);
+  });
+
+  it("shows it under the state, and in the row's tooltip", async () => {
+    native.invoke.mockImplementation(async (command: string, args: { request: Record<string, unknown> }) => {
+      if (command !== COMMAND) return { ok: false, error: "not_in_test" };
+      if (args.request.op === "list") {
+        const agents = AGENTS.map((a) => (a.name === "CAPITANO" ? { ...a, identity: { cli: "codex", model: "gpt-5.6-sol", effort: "high" } } : a));
+        return { ok: true, data: { agents, roles: ROLES, states: true, target, where: "vps", label: "vps.example" } };
+      }
+      if (args.request.op === "team") return { ok: true, data: { halted: false, standby, held } };
+      return { ok: true, data: { name: args.request.session, up: true, text: "" } };
+    });
+    show();
+    await screen.findByTestId("panel-summary");
+    expect(screen.getByTestId("panel-row-CAPITANO")).toHaveAttribute("title", "Codex · gpt-5.6-sol · effort alto · sulla VPS vps.example");
+    fireEvent.click(screen.getByTestId("panel-row-CAPITANO"));
+    expect(await screen.findByTestId("panel-identity")).toHaveTextContent("Codex · gpt-5.6-sol · effort alto · sulla VPS vps.example");
+    fireEvent.click(screen.getByTestId("panel-row-SCOUT-1"));
+    await waitFor(() => expect(screen.getByTestId("panel-identity")).toHaveTextContent(it_.identityUnknown));
+  });
+
+  it("has every language's words for it", () => {
+    for (const [locale, text] of Object.entries(AGENTS_PANEL_TEXT)) {
+      expect(text.identityEffort, locale).toContain("{effort}");
+      for (const key of ["identityUnknown", "identityModelUnknown", "identityModelDefault", "identityEffortUnknown", "identityLocal", "effortLow", "effortMedium", "effortHigh"] as const) {
+        expect(text[key].trim().length, `${locale} ${key}`).toBeGreaterThan(1);
+      }
+    }
+  });
+
+  it("is only shown: nothing the panel decides reads it", () => {
+    // the agent can rewrite its session's options; actions, counts and order never look at them
+    const source = readFileSync("src/pages/agents/AgentsPanel.tsx", "utf-8");
+    const lines = source.split("\n").filter((line) => /identity/i.test(line));
+    const allowed = [/AgentIdentity/, /identityLine\(/, /data-testid="panel-identity"/, /identity\.(cli|model|effort)/, /if \(!identity\) return t\.identityUnknown/, /identity: AgentIdentity/];
+    for (const line of lines) expect(allowed.some((re) => re.test(line)), line).toBe(true);
+    expect(source.match(/identityLine\(t, /g)).toHaveLength(2);
   });
 });

@@ -19,8 +19,22 @@ export type TeamAgent = {
   created: number | null;
   /** the session's last activity, epoch s */
   activity: number | null;
+  /** which CLI, model and effort the agent was started with, null when the session does not say (only to be shown) */
+  identity: AgentIdentity | null;
   /** what agent_state.py says, or "sconosciuto" when the VPS does not say it */
   state: AgentStateInfo;
+};
+
+/**
+ * Who an agent is, as start-agent.sh wrote it on the agent's own tmux session
+ * and the native side filtered it (existing_team_agents.rs, shape_identity).
+ * Only to be shown: the agent can rewrite its session's options, so nothing
+ * decides on it. A part the session does not say is null («non so»).
+ */
+export type AgentIdentity = {
+  cli: "claude" | "codex" | "kimi" | "pi" | "local";
+  model: string | null;
+  effort: "low" | "medium" | "high" | null;
 };
 
 export type TeamRole = { role: string; multi: boolean };
@@ -44,6 +58,20 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 const SESSION = /^[A-Z][A-Z0-9-]{0,39}$/;
 const epoch = (value: unknown) => (typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : null);
 
+const IDENTITY_CLI = new Set(["claude", "codex", "kimi", "pi", "local"]);
+const IDENTITY_EFFORT = new Set(["low", "medium", "high"]);
+const IDENTITY_MODEL = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,39}$/;
+
+/** The same closed shape the native side lets through, checked once more. */
+export function pickIdentity(value: unknown): AgentIdentity | null {
+  if (!isRecord(value) || typeof value.cli !== "string" || !IDENTITY_CLI.has(value.cli)) return null;
+  return {
+    cli: value.cli as AgentIdentity["cli"],
+    model: typeof value.model === "string" && IDENTITY_MODEL.test(value.model) ? value.model : null,
+    effort: typeof value.effort === "string" && IDENTITY_EFFORT.has(value.effort) ? (value.effort as AgentIdentity["effort"]) : null,
+  };
+}
+
 function pickAgent(value: unknown, statesKnown: boolean): TeamAgent | null {
   if (!isRecord(value) || typeof value.name !== "string" || !SESSION.test(value.name)) return null;
   if (typeof value.role !== "string") return null;
@@ -63,6 +91,7 @@ function pickAgent(value: unknown, statesKnown: boolean): TeamAgent | null {
     instance: typeof value.instance === "string" ? value.instance : null,
     created: epoch(value.created),
     activity: epoch(value.activity),
+    identity: pickIdentity(value.identity),
     state,
   };
 }

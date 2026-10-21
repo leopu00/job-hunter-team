@@ -92,6 +92,20 @@ def sessions():
  return out
 def number(value): return value if isinstance(value,(int,float)) and not isinstance(value,bool) else None
 def text(value): return value if isinstance(value,str) and len(value)<=40 else None
+IDENTITY_MODEL=re.compile(r'^[A-Za-z0-9][A-Za-z0-9._:-]{0,39}\Z')
+def identity(cli,model,effort):
+ out={'cli':cli if cli in ('claude','codex','kimi','pi','local') else None,'model':model if IDENTITY_MODEL.match(model) else None,'effort':effort if effort in ('low','medium','high') else None}
+ return out if out['cli'] is not None else None
+def identities(names):
+ try: done=subprocess.run(['tmux','list-sessions','-F','#{session_name}\t#{@jht-cli}\t#{@jht-model}\t#{@jht-effort}'],capture_output=True,text=True,timeout=2)
+ except Exception: return {}
+ if done.returncode!=0: return {}
+ seen={}
+ for line in done.stdout.splitlines():
+  parts=line.split('\t')
+  if parts[0] not in names: continue
+  seen[parts[0]]=None if parts[0] in seen or len(parts)!=4 else identity(*parts[1:])
+ return seen
 if req.get('op')=='list':
  live=sessions()
  states=None
@@ -101,12 +115,13 @@ if req.get('op')=='list':
    value=json.loads(done.stdout)
    if isinstance(value,dict): states=value
  except Exception: states=None
+ ids=identities(set(live))
  items=[]
  for name in sorted(live)[:200]:
   created,activity=live[name]
   known=states.get(name.lower()) if states is not None else None
   known=known if isinstance(known,dict) else {}
-  items.append({'name':name,'created':created,'activity':activity,'state':text(known.get('state')),'reason':text(known.get('reason')),'since':number(known.get('since')),'until':number(known.get('until'))})
+  items.append({'name':name,'created':created,'activity':activity,'state':text(known.get('state')),'reason':text(known.get('reason')),'since':number(known.get('since')),'until':number(known.get('until')),'identity':ids.get(name)})
  emit({'ok':True,'data':{'items':items,'states':states is not None}})
 if req.get('op')=='screen':
  name=req.get('name')
@@ -182,6 +197,32 @@ fn epoch_number(value: Option<&Value>) -> Value {
         Some(value) if value.is_finite() && (0.0..=4_102_444_800.0).contains(&value) => json!(value),
         _ => Value::Null,
     }
+}
+
+/// Who an agent is (cli, model, effort), as start-agent.sh wrote it on the
+/// agent's own session: only to be shown, never decided on. The agent can
+/// rewrite its session's options, so the same closed sets and model shape as
+/// the scripts (agent_control.py, AGENTS_READ_PY) are checked again here.
+fn shape_identity(value: Option<&Value>) -> Value {
+    let Some(object) = value.and_then(Value::as_object) else {
+        return Value::Null;
+    };
+    let pick = |key: &str, ok: &dyn Fn(&str) -> bool| match object.get(key).and_then(Value::as_str) {
+        Some(text) if ok(text) => json!(text),
+        _ => Value::Null,
+    };
+    let cli = pick("cli", &|text| matches!(text, "claude" | "codex" | "kimi" | "pi" | "local"));
+    if cli.is_null() {
+        return Value::Null;
+    }
+    let model = pick("model", &|text| {
+        let mut bytes = text.bytes();
+        text.len() <= 40
+            && bytes.next().is_some_and(|first| first.is_ascii_alphanumeric())
+            && bytes.all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'_' | b':' | b'-'))
+    });
+    let effort = pick("effort", &|text| matches!(text, "low" | "medium" | "high"));
+    json!({"cli": cli, "model": model, "effort": effort})
 }
 
 /// A state or reason code as agent_state.py writes them; which ones the page
@@ -275,6 +316,7 @@ pub(crate) fn shape_reply(request: &AgentsRequest, reply: &Value) -> Option<Valu
                 agent.insert("up".into(), json!(true));
                 agent.insert("created".into(), json!(epoch(item.get("created"))));
                 agent.insert("activity".into(), json!(epoch(item.get("activity"))));
+                agent.insert("identity".into(), shape_identity(item.get("identity")));
                 let known = |key: &str| if states { code(item.get(key)) } else { Value::Null };
                 agent.insert("state".into(), known("state"));
                 agent.insert("reason".into(), known("reason"));
@@ -512,6 +554,31 @@ mod tests {
     }
 
     #[test]
+    fn who_an_agent_is_passes_only_in_its_closed_shape() {
+        let list = |identity: Value| {
+            let reply = json!({"ok":true,"data":{"states":false,"items":[{"name":"SCOUT-1","created":1,"activity":2,"identity":identity}]}});
+            shape_reply(&AgentsRequest::List {}, &reply).unwrap()["data"]["agents"][0]["identity"].clone()
+        };
+        assert_eq!(
+            list(json!({"cli":"codex","model":"gpt-5.6-terra","effort":"high"})),
+            json!({"cli":"codex","model":"gpt-5.6-terra","effort":"high"})
+        );
+        // kimi gets neither a model nor an effort: what is not there stays null
+        assert_eq!(list(json!({"cli":"kimi","model":null,"effort":null})), json!({"cli":"kimi","model":null,"effort":null}));
+        // a part out of shape is null; an unknown cli, or none, is no identity at all
+        assert_eq!(
+            list(json!({"cli":"claude","model":"opus; rm -rf /","effort":"extreme"})),
+            json!({"cli":"claude","model":null,"effort":null})
+        );
+        for model in ["-opus", "", "<b>x</b>", "a\nFAKE-1", "m".repeat(41).as_str()] {
+            assert_eq!(list(json!({"cli":"pi","model":model,"effort":"low"}))["model"], Value::Null, "{model}");
+        }
+        for bad in [json!({"cli":"gpt","model":"x","effort":"low"}), json!({"model":"x"}), json!("codex"), Value::Null] {
+            assert_eq!(list(bad.clone()), Value::Null, "{bad}");
+        }
+    }
+
+    #[test]
     fn a_terminal_is_asked_only_for_an_agent_and_only_by_name() {
         assert_eq!(parse_request(json!({"op":"list"})), Some(AgentsRequest::List {}));
         assert!(parse_request(json!({"op":"screen","name":"SCOUT-1"})).is_some());
@@ -539,12 +606,14 @@ mod tests {
     #[test]
     fn the_longest_path_of_each_operation_fits_in_the_read() {
         let list = step_limit("'list-sessions'");
+        // who each agent is: a second, short list-sessions (never folded into the first)
+        let identity = step_limit("@jht-cli");
         let state = step_limit("agent_state.py");
         let capture = step_limit("'capture-pane'");
         let redactor = step_limit("'node',REDACTOR");
         assert_eq!(redactor, 4);
         let read = READ_TIMEOUT.as_secs();
-        assert!(list + state <= read, "list: {list} + {state} > {read}");
+        assert!(list + identity + state <= read, "list: {list} + {identity} + {state} > {read}");
         assert!(list + capture + redactor <= read, "terminal: {list} + {capture} + {redactor} > {read}");
     }
 
@@ -571,7 +640,7 @@ mod tests {
         let tmux = dir.join("tmux");
         std::fs::write(
             &tmux,
-            "#!/bin/sh\necho \"$@\" >> \"$(dirname \"$0\")/calls\"\ncase \"$1\" in\n list-sessions) printf 'CAPITANO\\t1760000000\\t1760000100\\nDOCTOR-WATCHDOG\\t1\\t2\\nCRITICO-S3\\t1760000000\\t1760000200\\nbad name\\t1\\t2\\n' ;;\n capture-pane) printf '\\033[1mworking\\033[0m on it\\nkey sk-%s\\n\\342\\200\\256desrever\\n' 'FAKEfake0123456789abcd' ;;\n *) exit 1 ;;\nesac\n",
+            "#!/bin/sh\necho \"$@\" >> \"$(dirname \"$0\")/calls\"\ncase \"$1\" in\n list-sessions) case \"$3\" in *@jht-cli*) printf 'CAPITANO\\tcodex\\tgpt-5.6-terra\\thigh\\nCRITICO-S3\\tclaude\\tx\\nFAKE-1\\t0\\t0\\n' ;; *) printf 'CAPITANO\\t1760000000\\t1760000100\\nDOCTOR-WATCHDOG\\t1\\t2\\nCRITICO-S3\\t1760000000\\t1760000200\\nbad name\\t1\\t2\\n' ;; esac ;;\n capture-pane) printf '\\033[1mworking\\033[0m on it\\nkey sk-%s\\n\\342\\200\\256desrever\\n' 'FAKEfake0123456789abcd' ;;\n *) exit 1 ;;\nesac\n",
         )
         .unwrap();
         std::fs::set_permissions(&tmux, std::fs::Permissions::from_mode(0o755)).unwrap();
@@ -615,6 +684,11 @@ mod tests {
         let shaped = shape_reply(&AgentsRequest::List {}, &list).unwrap();
         assert_eq!(names(&shaped), ["CAPITANO", "CRITICO-S3"]);
         assert_eq!(shaped["data"]["agents"][1]["activity"], 1_760_000_200);
+        // who each agent is: read apart, so a model written as «x», a newline and
+        // «FAKE-1\t0\t0» on CRITICO-S3's own session makes up nothing and moves no time
+        assert_eq!(shaped["data"]["agents"][0]["identity"], json!({"cli":"codex","model":"gpt-5.6-terra","effort":"high"}));
+        assert_eq!(shaped["data"]["agents"][1]["identity"], Value::Null);
+        assert_eq!(shaped["data"]["agents"][0]["created"], 1_760_000_000);
         let screen = AgentsRequest::Screen { name: "CRITICO-S3".into() };
         let shaped = shape_reply(&screen, &run(&screen)).unwrap();
         let text = shaped["data"]["text"].as_str().unwrap();

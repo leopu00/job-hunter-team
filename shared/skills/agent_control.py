@@ -448,6 +448,49 @@ def _sessions() -> dict | None:
     return out
 
 
+# Who each agent is, as start-agent.sh wrote it on the agent's own session.
+IDENTITY_CLI = frozenset({"claude", "codex", "kimi", "pi", "local"})
+IDENTITY_EFFORT = frozenset({"low", "medium", "high"})
+IDENTITY_MODEL = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,39}\Z")
+
+
+def _identity(cli: str, model: str, effort: str):
+    out = {
+        "cli": cli if cli in IDENTITY_CLI else None,
+        "model": model if IDENTITY_MODEL.match(model) else None,
+        "effort": effort if effort in IDENTITY_EFFORT else None,
+    }
+    return out if out["cli"] is not None else None
+
+
+def _identities(names) -> dict:
+    """cli, model and effort of the listed sessions, only to be shown.
+
+    A call of its own, never folded into _sessions(): the three options live on
+    the agent's own session, which may write anything in them, a newline or a
+    tab included. Read together with the session list they could add sessions
+    that do not exist or move the times of real ones. Here a line counts only
+    with exactly four fields, for a session the real list has, and only when
+    that session's name comes once (a made-up line for a real session makes it
+    come twice: then it has no identity). Nothing decides on this field.
+    """
+    try:
+        # short: tmux answers in milliseconds, and the read has its own ceiling (agent_control.rs)
+        done = _tmux("list-sessions", "-F", "#{session_name}\t#{@jht-cli}\t#{@jht-model}\t#{@jht-effort}", timeout=2)
+    except (OSError, subprocess.TimeoutExpired):
+        return {}
+    if done.returncode != 0:
+        return {}
+    seen: dict = {}
+    for line in done.stdout.splitlines():
+        parts = line.split("\t")
+        name = parts[0]
+        if name not in names:
+            continue
+        seen[name] = None if name in seen or len(parts) != 4 else _identity(*parts[1:])
+    return seen
+
+
 def _number(value):
     return value if isinstance(value, (int, float)) and not isinstance(value, bool) else None
 
@@ -469,6 +512,7 @@ def read_list() -> dict:
                 states = value
     except Exception:  # noqa: BLE001 - no state is «unknown», never an error
         states = None
+    identities = _identities(set(live))
     items = []
     for name in sorted(live)[:200]:
         created, activity = live[name]
@@ -476,7 +520,8 @@ def read_list() -> dict:
         known = known if isinstance(known, dict) else {}
         items.append({"name": name, "created": created, "activity": activity,
                       "state": _text(known.get("state")), "reason": _text(known.get("reason")),
-                      "since": _number(known.get("since")), "until": _number(known.get("until"))})
+                      "since": _number(known.get("since")), "until": _number(known.get("until")),
+                      "identity": identities.get(name)})
     return {"ok": True, "data": {"items": items, "states": states is not None}}
 
 
