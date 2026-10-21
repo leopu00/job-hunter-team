@@ -263,6 +263,7 @@ describe("the SSH key is named as the PRIVATE key, once", () => {
     expect(screen.getByText("Chiave SSH privata")).toBeInTheDocument();
     const hint = screen.getByText(/di solito nella cartella ~\/\.ssh/);
     expect(hint).toHaveTextContent("Non quello che finisce in .pub");
+    expect(hint).toHaveTextContent("Resta su questo computer");
     expect(hint.closest(".onboarding-field")).toContainElement(screen.getByText("Chiave SSH privata"));
   });
 
@@ -271,5 +272,7 @@ describe("the SSH key is named as the PRIVATE key, once", () => {
     expect(text.sshKey).not.toBe(text.sshKeyPicker.label);
     expect(text.sshKeyHint).toContain("~/.ssh");
     expect(text.sshKeyHint).toContain(".pub");
+    // the promise after the warning: the key stays on this computer
+    expect(text.sshKeyHint.split(".pub")[1].length).toBeGreaterThan(20);
   });
 });
