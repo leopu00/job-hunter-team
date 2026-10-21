@@ -2040,6 +2040,11 @@ bind_uid_conflict() {
 
 refuse_foreign_bind_uid() {
   local name
+  # Native rootless Podman maps this user onto the container's uid 1001
+  # (keep-id): ~/.jht and the documents stay this user's, nothing is chowned to
+  # 1001, and a host account with uid 1001 owns none of it. The wrapper skips
+  # the same check there (ensure_bind_owner). Docker and the Mac's machine keep it.
+  podman_native_mode && return 0
   name="$(bind_uid_conflict 1001)" || return 0
   fail "uid 1001 on this computer is the account '$name'. The Job Hunter Team container runs as uid 1001, so that account would own ~/.jht (your data and the portal credentials). Nothing was changed. Run JHT from the account '$name', or give '$name' another uid, then try again."
 }
