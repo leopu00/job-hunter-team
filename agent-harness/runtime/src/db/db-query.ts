@@ -919,7 +919,7 @@ export const AGENT_POSITION_COLUMNS: ReadonlySet<string> = new Set(
     role_family role_family_proposed loc_city loc_region loc_country
     loc_country_code loc_continent work_mode work_country work_country_code
     is_multi_location location_notes office_lat office_lon office_address
-    office_geocoded office_verified expires_at is_open last_open_check
+    office_geocoded office_verified location_precision expires_at is_open last_open_check
     write_requested write_requested_at write_request_kind geocode_requested
     geocode_requested_at salary_precise_requested salary_precise_requested_at
     salary_precise created_at updated_at user_excluded_reason user_excluded_at
