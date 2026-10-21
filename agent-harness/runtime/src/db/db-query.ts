@@ -219,6 +219,9 @@ export function dbQuery(db: () => Database, argv: string[], options: DbQueryOpti
   if (name === "position") {
     const id = a["id"] as number;
     if (pyTruthy(a["field"])) {
+      if (!AGENT_POSITION_COLUMNS.has(a["field"] as string)) {
+        return { stdout: "", stderr: `error: field not available: ${a["field"] as string}\n`, exitCode: 1 };
+      }
       const { rows, s } = select(db(), "SELECT * FROM positions WHERE id = ?", [id]);
       const row = rows[0];
       if (!row) return { stdout: "", exitCode: 1 };
@@ -229,7 +232,7 @@ export function dbQuery(db: () => Database, argv: string[], options: DbQueryOpti
     const { rows, declared, s } = select(db(), POSITION_DETAIL_SQL, [id]);
     const r = rows[0];
     if (a["json"]) {
-      print(r ? rowsJson([r], declared).slice(1, -1) : "null");
+      print(r ? rowsJson(agentRows(db(), [r]), declared).slice(1, -1) : "null");
       return done();
     }
     if (!r) {
@@ -300,7 +303,7 @@ export function dbQuery(db: () => Database, argv: string[], options: DbQueryOpti
     sql += " ORDER BY COALESCE(s.total_score, 0) DESC, p.found_at DESC";
     const { rows, declared, s } = select(db(), sql, params);
     if (a["json"]) {
-      print(rowsJson(rows, declared));
+      print(rowsJson(agentRows(db(), rows), declared));
       return done();
     }
     if (rows.length === 0) {
@@ -900,6 +903,44 @@ const POSITIONS_SQL = `
         LEFT JOIN companies c ON c.id = p.company_id
         WHERE 1=1
     `;
+
+/**
+ * `AGENT_POSITION_COLUMNS`: what of `positions` may reach an agent (JHT-T05).
+ * The user's own note on an exclusion (`user_excluded_note`) is not one of them,
+ * and neither is a column added tomorrow until someone lists it here.
+ */
+const AGENT_POSITION_COLUMNS: ReadonlySet<string> = new Set(
+  `
+    id title company company_id location remote_type
+    salary_declared_min salary_declared_max salary_declared_currency
+    salary_estimated_min salary_estimated_max salary_estimated_currency
+    salary_estimated_source url source jd_text requirements jd_summary
+    found_by found_at deadline status notes last_checked last_actor
+    role_family role_family_proposed loc_city loc_region loc_country
+    loc_country_code loc_continent work_mode work_country work_country_code
+    is_multi_location location_notes office_lat office_lon office_address
+    office_geocoded office_verified expires_at is_open last_open_check
+    write_requested write_requested_at write_request_kind geocode_requested
+    geocode_requested_at salary_precise_requested salary_precise_requested_at
+    salary_precise created_at updated_at user_excluded_reason user_excluded_at
+    user_excluded_prev_status recheck_requested recheck_requested_at
+    apply_requested apply_requested_at apply_requested_by
+  `
+    .split(/\s+/)
+    .filter(Boolean),
+);
+
+/** `_withheld_position_columns`: the columns of `positions` that are not allowed, new ones included. */
+function withheldPositionColumns(db: Database): Set<string> {
+  const columns = (db.prepare("PRAGMA table_info(positions)").all() as Array<{ name: string }>).map((c) => c.name);
+  return new Set(columns.filter((c) => !AGENT_POSITION_COLUMNS.has(c)));
+}
+
+/** `agent_row`: the rows as an agent sees them, without the columns of `positions` that are not allowed. */
+function agentRows(db: Database, rows: Row[]): Row[] {
+  const drop = withheldPositionColumns(db);
+  return rows.map((r) => Object.fromEntries(Object.entries(r).filter(([k]) => !drop.has(k))));
+}
 
 const COMPANY_POSITIONS_SQL = `
             SELECT p.id, p.title, p.status, s.total_score

@@ -104,7 +104,7 @@ describe("schema.sql against shared/skills/_db.py", () => {
     const src = join(root, "src");
     mkdirSync(src);
     const archive = join(root, "skills.tar");
-    execFileSync("git", ["archive", `--output=${archive}`, source!, "shared/skills"], { cwd: join(RUNTIME, "..", "..") });
+    execFileSync("git", ["archive", `--output=${archive}`, source!, "shared/skills", "shared/feedback-reasons.json"], { cwd: join(RUNTIME, "..", "..") });
     execFileSync("tar", ["-xf", archive, "-C", src]);
     const skills = join(src, "shared", "skills");
 
