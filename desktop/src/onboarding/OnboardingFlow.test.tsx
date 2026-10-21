@@ -150,7 +150,8 @@ describe("OnboardingFlow technical setup", () => {
     expect(WINDOWS_SETUP).toMatchObject({ cpus: Number(cpus), memoryGb: Number(memoryMb) / 1024, diskGb: Number(diskGb) });
     expect(script).toContain(`$PodmanCliVersion = '${WINDOWS_SETUP.podmanVersion}'`);
     expect(script).toContain(`$ComposeProviderVersion = '${WINDOWS_SETUP.composeVersion}'`);
-    const packages = [...script.matchAll(/'--id' '([A-Za-z.]+)'/g)].map((match) => match[1]);
+    // every package winget installs: the script's one winget line, `& winget install ... --id <package>`
+    const packages = [...script.matchAll(/& winget install [^\n]*--id ([A-Za-z.]+)/g)].map((match) => match[1]);
     expect(packages).toEqual(["Podman.CLI"]);
     // Compose is the runtime's own binary, from the release of that version.
     expect(script).toContain(`/releases/download/v${WINDOWS_SETUP.composeVersion}/docker-compose-windows-x86_64.exe'`);
