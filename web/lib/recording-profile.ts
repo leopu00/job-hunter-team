@@ -251,7 +251,10 @@ export function buildRecordingProfileDataset(
       office_lon: p.office_lon,
       office_address: p.office_address,
       office_geocoded: p.office_lat != null && p.office_lon != null,
-      office_verified: p.office_lat != null && p.office_lon != null,
+      // The coordinates of a recording profile are a city centre, never a checked office: they were
+      // flagged verified, and every one of them drew an «exact» pin that is not (JHT-T04).
+      office_verified: false,
+      location_precision: p.office_lat != null && p.office_lon != null ? "city" : null,
       is_remote: p.remote_type === "full_remote",
       is_open: p.is_open,
       deleted_at: null,

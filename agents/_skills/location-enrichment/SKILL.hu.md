@@ -291,3 +291,5 @@ python3 /app/shared/skills/db_query.py raw \
 python3 /app/shared/skills/db_update.py position <ID> --status checked \
   --notes "ESPERIENZA: ... \\n LINGUA: ... \\n SENIORITY: ..."
 ```
+
+A parancs `LOCATION_MISSING` hibával elutasítja (exit 1, a sor változatlan), ha a pozíciónak nincs városa és országa, és nincs teljes távmunkának nyilvánítva (`--remote-type full_remote` vagy `--work-mode remote`): előbb írd be a helyet, egy korábbi parancsban vagy ebben. Az ország nélküli teljes távmunka pozíció megengedett. Ugyanez a parancs írja az első pontossági szintet (`city`, `country` vagy `remote`); az `office-geocoding` később emeli `--location-precision`-nel.

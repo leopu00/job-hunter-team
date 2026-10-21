@@ -292,3 +292,5 @@ python3 /app/shared/skills/db_query.py raw \
 python3 /app/shared/skills/db_update.py position <ID> --status checked \
   --notes "ESPERIENZA: ... \\n LINGUA: ... \\n SENIORITY: ..."
 ```
+
+Il comando rifiuta con `LOCATION_MISSING` (exit 1, riga invariata) se la posizione non ha né città né paese e non è dichiarata full remote (`--remote-type full_remote` o `--work-mode remote`): scrivi prima il luogo, in un comando precedente o in questo. Una posizione full remote senza paese è ammessa. Lo stesso comando scrive il primo livello di precisione (`city`, `country` o `remote`); `office-geocoding` lo alza dopo con `--location-precision`.

@@ -5,6 +5,10 @@ import { join } from 'node:path';
 import pc from 'picocolors';
 import * as clack from '@clack/prompts';
 import { JHT_HOME, JHT_DB_PATH } from '../jht-paths.js';
+
+// The closed set of the level of precision of a place (JHT-T04): the CHECK of positions.location_precision,
+// in the local database and in the cloud's migration 095.
+const LOCATION_PRECISIONS = ['address', 'street', 'district', 'city', 'country', 'remote'];
 import { SupabaseAuthError } from '../lib/supabase-direct.js';
 import { getDirectReader } from '../lib/cloud-direct.js';
 import { realtimeSyncEnabled } from '../lib/cloud-realtime.js';
@@ -452,6 +456,12 @@ async function handleRestore(options) {
     const restoreWriteKindStmt = restoreWriteKind
       ? db.prepare('UPDATE positions SET write_request_kind = ? WHERE id = ?')
       : null;
+    // JHT-T04: how precisely the place is known. Written after the row like write_request_kind (an
+    // older jobs.db has no column, and naming it would fail the whole restore), and only a value of
+    // the closed set: the column's CHECK would refuse anything else and stop the restore.
+    const restorePrecisionStmt = sqliteHasColumn(db, 'positions', 'location_precision')
+      ? db.prepare('UPDATE positions SET location_precision = ? WHERE id = ?')
+      : null;
     const posStmt = db.prepare(`
       INSERT OR REPLACE INTO positions (
         id, title, company, company_id, location, remote_type,
@@ -506,6 +516,7 @@ async function handleRestore(options) {
           p.created_at ?? null, p.updated_at ?? null,
         );
         restoreWriteKindStmt?.run(p.write_request_kind ?? null, legacyId);
+        restorePrecisionStmt?.run(LOCATION_PRECISIONS.includes(p.location_precision) ? p.location_precision : null, legacyId);
         inserted.positions++;
       }
 
@@ -1383,6 +1394,8 @@ async function performPush(options) {
         // questo flag (regola B01: degradare, non cadere).
         ...(sqliteHasColumn(db, 'positions', 'apply_requested')
           ? ['apply_requested', 'apply_requested_at', 'apply_requested_by'] : []),
+        // JHT-T04: the level of precision of the place. Same degrade as the columns above.
+        ...(sqliteHasColumn(db, 'positions', 'location_precision') ? ['location_precision'] : []),
         // Metadati location/categoria (Parte B sync, 2026-06-14): prodotti
         // dall'analista, alimentano i grafici categoria/mappa della dashboard
         // (che ESISTE gia' — va solo alimentata). Erano OMESSI dal push →
