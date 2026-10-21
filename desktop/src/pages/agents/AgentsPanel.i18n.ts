@@ -26,6 +26,16 @@ export interface AgentsPanelText {
   noneUp: string;
   started: string; // {time}
   activity: string; // {time}
+  // who the agent is (cli, model, effort), in the detail and the row's tooltip; a part the session does not say is «non so»
+  identityUnknown: string;
+  identityModelUnknown: string;
+  identityModelDefault: string;
+  identityEffort: string; // {effort}
+  identityEffortUnknown: string;
+  identityLocal: string;
+  effortLow: string;
+  effortMedium: string;
+  effortHigh: string;
   /** the second source of the state: the terminal changed a moment ago */
   screenMoving: string; // {seconds}
   statesUnknown: string;
@@ -110,6 +120,15 @@ const it: AgentsPanelText = {
   noneUp: "nessuna sessione accesa",
   started: "avviato {time}",
   activity: "ultima attività {time}",
+  identityUnknown: "programma, modello ed effort: non so (avviato prima che l’app li registrasse)",
+  identityModelUnknown: "modello: non so",
+  identityModelDefault: "modello predefinito",
+  identityEffort: "effort {effort}",
+  identityEffortUnknown: "effort: non so",
+  identityLocal: "scorer locale",
+  effortLow: "basso",
+  effortMedium: "medio",
+  effortHigh: "alto",
   screenMoving: "il terminale è cambiato {seconds} s fa",
   statesUnknown:
     "La squadra non pubblica ancora lo stato degli agenti: si vedrà dopo un suo aggiornamento. Fino ad allora lo stato è «sconosciuto».",
@@ -196,6 +215,15 @@ const en: AgentsPanelText = {
   noneUp: "no session up",
   started: "started {time}",
   activity: "last activity {time}",
+  identityUnknown: "CLI, model and effort: unknown (started before the app recorded them)",
+  identityModelUnknown: "model: unknown",
+  identityModelDefault: "default model",
+  identityEffort: "effort {effort}",
+  identityEffortUnknown: "effort: unknown",
+  identityLocal: "local scorer",
+  effortLow: "low",
+  effortMedium: "medium",
+  effortHigh: "high",
   screenMoving: "the terminal changed {seconds} s ago",
   statesUnknown:
     "The team does not publish the agents' state yet: it will show after the team is updated. Until then the state is “unknown”.",
@@ -281,6 +309,15 @@ const de: AgentsPanelText = {
   noneUp: "keine Sitzung aktiv",
   started: "gestartet {time}",
   activity: "letzte Aktivität {time}",
+  identityUnknown: "CLI, Modell und Effort: unbekannt (gestartet, bevor die App sie erfasst hat)",
+  identityModelUnknown: "Modell: unbekannt",
+  identityModelDefault: "Standardmodell",
+  identityEffort: "Effort {effort}",
+  identityEffortUnknown: "Effort: unbekannt",
+  identityLocal: "lokaler Scorer",
+  effortLow: "niedrig",
+  effortMedium: "mittel",
+  effortHigh: "hoch",
   screenMoving: "das Terminal hat sich vor {seconds} s geändert",
   statesUnknown:
     "Das Team veröffentlicht den Status der Agenten noch nicht: Er erscheint nach einem Update des Teams. Bis dahin ist der Status „unbekannt“.",
@@ -367,6 +404,15 @@ const es: AgentsPanelText = {
   noneUp: "ninguna sesión activa",
   started: "iniciado {time}",
   activity: "última actividad {time}",
+  identityUnknown: "CLI, modelo y esfuerzo: no se sabe (iniciado antes de que la app los registrara)",
+  identityModelUnknown: "modelo: no se sabe",
+  identityModelDefault: "modelo predeterminado",
+  identityEffort: "esfuerzo {effort}",
+  identityEffortUnknown: "esfuerzo: no se sabe",
+  identityLocal: "scorer local",
+  effortLow: "bajo",
+  effortMedium: "medio",
+  effortHigh: "alto",
   screenMoving: "el terminal cambió hace {seconds} s",
   statesUnknown:
     "El equipo todavía no publica el estado de los agentes: se verá tras una actualización del equipo. Hasta entonces el estado es «desconocido».",
@@ -453,6 +499,15 @@ const fr: AgentsPanelText = {
   noneUp: "aucune session active",
   started: "démarré {time}",
   activity: "dernière activité {time}",
+  identityUnknown: "CLI, modèle et effort : inconnus (démarré avant que l’app ne les enregistre)",
+  identityModelUnknown: "modèle : inconnu",
+  identityModelDefault: "modèle par défaut",
+  identityEffort: "effort {effort}",
+  identityEffortUnknown: "effort : inconnu",
+  identityLocal: "scorer local",
+  effortLow: "faible",
+  effortMedium: "moyen",
+  effortHigh: "élevé",
   screenMoving: "le terminal a changé il y a {seconds} s",
   statesUnknown:
     "L’équipe ne publie pas encore l’état des agents : il apparaîtra après une mise à jour de l’équipe. D’ici là, l’état est « inconnu ».",
@@ -539,6 +594,15 @@ const hu: AgentsPanelText = {
   noneUp: "nincs aktív munkamenet",
   started: "elindítva: {time}",
   activity: "utolsó tevékenység: {time}",
+  identityUnknown: "CLI, modell és effort: ismeretlen (azelőtt indult, hogy az app rögzítette volna)",
+  identityModelUnknown: "modell: ismeretlen",
+  identityModelDefault: "alapértelmezett modell",
+  identityEffort: "effort: {effort}",
+  identityEffortUnknown: "effort: ismeretlen",
+  identityLocal: "helyi pontozó",
+  effortLow: "alacsony",
+  effortMedium: "közepes",
+  effortHigh: "magas",
   screenMoving: "a terminál {seconds} mp-cel ezelőtt változott",
   statesUnknown:
     "A csapat még nem teszi közzé az ügynökök állapotát: a csapat frissítése után látszik majd. Addig az állapot „ismeretlen”.",
@@ -625,6 +689,15 @@ const pt: AgentsPanelText = {
   noneUp: "nenhuma sessão ativa",
   started: "iniciado {time}",
   activity: "última atividade {time}",
+  identityUnknown: "CLI, modelo e esforço: não se sabe (iniciado antes de a app os registar)",
+  identityModelUnknown: "modelo: não se sabe",
+  identityModelDefault: "modelo predefinido",
+  identityEffort: "esforço {effort}",
+  identityEffortUnknown: "esforço: não se sabe",
+  identityLocal: "scorer local",
+  effortLow: "baixo",
+  effortMedium: "médio",
+  effortHigh: "alto",
   screenMoving: "o terminal mudou há {seconds} s",
   statesUnknown:
     "A equipa ainda não publica o estado dos agentes: aparecerá depois de uma atualização da equipa. Até lá, o estado é «desconhecido».",

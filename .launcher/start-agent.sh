@@ -990,6 +990,26 @@ resolve_codex_model() {
   printf '%s\n' "$resolved"
 }
 
+# Chi è l'agente, per il Pannello Agenti: «cli|modello|effort» dei valori
+# EFFETTIVI di questo spawn, quelli che il CLI riceve davvero. Un valore che
+# non è fra gli ammessi resta vuoto, e uno vuoto non si scrive: sono gli stessi
+# filtri di agent_control.py e del nativo. Kimi non riceve né modello né
+# effort (usa il proprio default e il «thinking»), lo scorer locale nemmeno.
+jht_agent_identity() {
+  local cli_bin="$1" model_override="$2" codex_model="$3" pi_model="$4" effort="$5"
+  local cli="" model="" eff=""
+  case "$cli_bin" in
+    claude)  cli="claude"; model="${model_override:-opus}"; eff="$effort" ;;
+    codex)   cli="codex";  model="$codex_model";            eff="$effort" ;;
+    pi)      cli="pi";     model="$pi_model";               eff="$effort" ;;
+    kimi)    cli="kimi" ;;
+    python3) cli="local" ;;
+  esac
+  case "$eff" in low|medium|high) ;; *) eff="" ;; esac
+  [[ "$model" =~ ^[A-Za-z0-9][A-Za-z0-9._:-]{0,39}$ ]] || model=""
+  printf '%s|%s|%s\n' "$cli" "$model" "$eff"
+}
+
 # Nessun default implicito: il provider e' configurazione utente. Se il file
 # manca, e' illeggibile o contiene un valore sconosciuto, avviare un CLI
 # diverso trasformerebbe un errore di configurazione in consumo e lavoro sul
@@ -1794,6 +1814,20 @@ fi
 case "$STAGGER_SEC" in
   ''|*[!0-9]*) STAGGER_SEC=0 ;;
 esac
+
+# ── Chi è l'agente, sulla sua sessione ────────────────────────────────────
+# Il Pannello Agenti (agent_control.py list) legge da qui cli, modello ed
+# effort di questo spawn: opzioni utente della sessione tmux, che vivono e
+# muoiono con lei (un respawn le riscrive, niente resta vecchio). Solo da
+# mostrare: l'agente stesso le può riscrivere, e nessuna decisione le legge.
+# Valori filtrati (jht_agent_identity), `--` prima del nome e del valore;
+# best-effort: un set-option fallito non ferma lo spawn.
+IFS='|' read -r _id_cli _id_model _id_effort <<< "$(jht_agent_identity "$CLI_BIN" "${model_override:-}" "${codex_model:-}" "${pi_model:-}" "$effort")"
+for _id_pair in "cli=$_id_cli" "model=$_id_model" "effort=$_id_effort"; do
+  _id_value="${_id_pair#*=}"
+  [ -n "$_id_value" ] || continue
+  jht_timeout "$JHT_SPAWN_TMUX_PROBE_SEC" tmux set-option -t "=$SESSION:" -- "@jht-${_id_pair%%=*}" "$_id_value" >/dev/null 2>&1 9>&- || true
+done
 
 echo "✓ $SESSION started (cli: $CLI_BIN, provider: $PROVIDER, auth: ${AUTH_METHOD:-subscription}, effort: $effort, mode: $MODE)"
 

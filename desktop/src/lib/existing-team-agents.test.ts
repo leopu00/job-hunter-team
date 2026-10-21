@@ -58,3 +58,14 @@ describe("readTeamAgentsShared", () => {
     expect(native.invoke).toHaveBeenCalledTimes(2);
   });
 });
+
+describe("who an agent is, as the native side lets it through", () => {
+  it("keeps only the closed shape: a known cli, a short model, a known effort", async () => {
+    const { pickIdentity } = await import("./existing-team-agents");
+    expect(pickIdentity({ cli: "codex", model: "gpt-5.6-terra", effort: "high" })).toEqual({ cli: "codex", model: "gpt-5.6-terra", effort: "high" });
+    expect(pickIdentity({ cli: "kimi", model: null, effort: null })).toEqual({ cli: "kimi", model: null, effort: null });
+    expect(pickIdentity({ cli: "claude", model: "<b>opus</b>", effort: "extreme" })).toEqual({ cli: "claude", model: null, effort: null });
+    expect(pickIdentity({ cli: "claude", model: "m".repeat(41), effort: "low" })?.model).toBeNull();
+    for (const bad of [{ cli: "gpt" }, { model: "x" }, "codex", null, undefined]) expect(pickIdentity(bad)).toBeNull();
+  });
+});
