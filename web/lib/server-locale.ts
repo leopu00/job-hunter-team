@@ -86,9 +86,7 @@ export function localeFromAcceptLanguage(
     .split(",")
     .map((part, order) => {
       const [tag, ...params] = part.trim().split(";");
-      const q = params
-        .map((p) => p.trim())
-        .find((p) => p.startsWith("q="));
+      const q = params.map((p) => p.trim()).find((p) => p.startsWith("q="));
       const weight = q ? Number(q.slice(2)) : 1;
       return {
         lang: tag.trim().toLowerCase().split("-")[0],
@@ -100,7 +98,8 @@ export function localeFromAcceptLanguage(
     .sort((a, b) => b.weight - a.weight || a.order - b.order);
   if (entries.length === 0) return null;
   for (const e of entries) {
-    if ((VALID_LOCALES as string[]).includes(e.lang)) return e.lang as ServerLocale;
+    if ((VALID_LOCALES as string[]).includes(e.lang))
+      return e.lang as ServerLocale;
   }
   return "en";
 }
@@ -112,7 +111,9 @@ export async function getServerLocale(): Promise<ServerLocale> {
   if (fromFile) return fromFile;
   let fromBrowser: ServerLocale | null = null;
   try {
-    fromBrowser = localeFromAcceptLanguage((await headers()).get("accept-language"));
+    fromBrowser = localeFromAcceptLanguage(
+      (await headers()).get("accept-language"),
+    );
   } catch {
     /* fuori da una request (test, build): nessuna intestazione da leggere */
   }
