@@ -372,14 +372,38 @@ def due_notices(now: Optional[datetime] = None) -> list[str]:
 _TIME_FORMAT_12H = ("en",)
 
 
+def _zone(name):
+    try:
+        from zoneinfo import ZoneInfo
+        return ZoneInfo(name) if isinstance(name, str) and name.strip() else None
+    except Exception:                   # noqa: BLE001 — no such zone
+        return None
+
+
+def _user_zone():
+    """The zone the user chose at the setup (host.env: JHT_USER_TZ), as format_time resolves it.
+
+    format_time answers «UTC» when nothing was ever set, which here means «not chosen»: None.
+    """
+    try:
+        here = str(Path(__file__).resolve().parent)
+        if here not in sys.path:
+            sys.path.insert(0, here)
+        import format_time
+
+        name = format_time._read_profile_timezone()
+        return None if name.strip().upper() == format_time.DEFAULT_TZ else _zone(name)
+    except Exception:                   # noqa: BLE001
+        return None
+
+
 def _team_zone():
     """The zone the team works in (jht.config.json: team.working_hours.timezone), or None."""
     try:
         name = json.loads((JHT_HOME / "jht.config.json").read_text(encoding="utf-8"))["team"]["working_hours"]["timezone"]
-        from zoneinfo import ZoneInfo
-        return ZoneInfo(name) if isinstance(name, str) and name.strip() else None
-    except Exception:                   # noqa: BLE001 — no config, no such zone: the system's
+    except Exception:                   # noqa: BLE001 — no config, or one without the field
         return None
+    return _zone(name)
 
 
 def _system_zone():
@@ -389,13 +413,16 @@ def _system_zone():
 def local_time(moment: datetime, lang: str) -> str:
     """`moment` on the user's wall clock, written the way `lang` writes it.
 
-    The user reads «alle 21:30», not «alle 19:30 UTC»: the team's zone when the config names one,
-    otherwise the system's.
+    The user reads «alle 21:30», not «alle 19:30 UTC». The zone is the one chosen at the setup
+    (JHT_USER_TZ), then the team's, then the system's; when it all comes down to UTC the clock says
+    so («19:30 UTC»), because nobody should take it for their own.
     """
-    local = moment.astimezone(_team_zone() or _system_zone())
+    local = moment.astimezone(_user_zone() or _team_zone() or _system_zone())
     if lang in _TIME_FORMAT_12H:
-        return f"{local.hour % 12 or 12}:{local.minute:02d} {'AM' if local.hour < 12 else 'PM'}"
-    return f"{local.hour:02d}:{local.minute:02d}"
+        text = f"{local.hour % 12 or 12}:{local.minute:02d} {'AM' if local.hour < 12 else 'PM'}"
+    else:
+        text = f"{local.hour:02d}:{local.minute:02d}"
+    return f"{text} UTC" if local.tzname() in ("UTC", "Z") else text
 
 
 def notice_text(kind: str, data: dict) -> str:

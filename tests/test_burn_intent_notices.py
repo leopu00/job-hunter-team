@@ -40,7 +40,14 @@ def bi(tmp_path, monkeypatch):
     bi_module.AUDIT_LOG = tmp_path / "logs" / "burn-intent.jsonl"
     bi_module.NOTICES_FILE = tmp_path / ".burn-intent-notices.json"
     bi_module.JHT_HOME = tmp_path
-    # No team zone configured: the system's, here a fixed one so that the times below do not move.
+    # Nothing chosen: the system's zone, here a fixed one (UTC) so that the times below do not move.
+    # The user's zone (JHT_USER_TZ) is looked up by format_time, which caches it for the process.
+    monkeypatch.delenv("JHT_USER_TZ", raising=False)
+    monkeypatch.setenv("JHT_HOST_ENV_FILE", str(tmp_path / "no-host.env"))
+    import format_time
+    format_time._read_profile_timezone.cache_clear()
+    monkeypatch.setattr(format_time, "_HOST_ENV_CANDIDATES", [])
+    monkeypatch.setattr(format_time, "_PROFILE_CANDIDATES", [])
     monkeypatch.setattr(bi_module, "_system_zone", lambda: timezone.utc)
     monkeypatch.setenv("JHT_HOME", str(tmp_path))
     monkeypatch.setenv("JHT_LANG", "en")
@@ -66,7 +73,7 @@ def test_the_user_is_warned_an_hour_before_the_end_and_only_once(bi):
     assert bi.announce(now=ends - timedelta(minutes=60), notifier=out) == ["warning"]
     assert bi.announce(now=ends - timedelta(minutes=30), notifier=out) == []
     [(kind, message)] = out.sent
-    assert kind == "warning" and "60 minutes" in message and "8:48 AM" in message and "UTC" not in message and "Captain" in message
+    assert kind == "warning" and "60 minutes" in message and "8:48 AM UTC" in message and "Captain" in message
 
 
 def test_the_user_is_told_when_it_has_ended_before_the_flag_is_cleared(bi):
@@ -77,7 +84,7 @@ def test_the_user_is_told_when_it_has_ended_before_the_flag_is_cleared(bi):
     after = ends + timedelta(minutes=1)
     assert bi.announce(now=after, notifier=out) == ["expired"]
     assert [k for k, _ in out.sent] == ["warning", "expired"]
-    assert "8:48 AM" in out.sent[1][1] and "UTC" not in out.sent[1][1]
+    assert "8:48 AM UTC" in out.sent[1][1]
     # The bridge sweeps after announcing; once the flag is gone there is nothing more to say.
     assert bi.sweep(now=after) is not None
     assert bi.announce(now=after + timedelta(minutes=5), notifier=out) == []
@@ -144,7 +151,7 @@ def test_the_message_is_in_the_users_language(bi, monkeypatch, lang):
     warning = bi.notice_text("warning", data)
     expired = bi.notice_text("expired", data)
     assert "60" in warning and "burn_intent" not in warning
-    assert "burn_intent" not in expired and "UTC" not in warning + expired
+    assert "burn_intent" not in expired and "UTC" in warning and "UTC" in expired  # nothing chosen: the clock says so
     assert warning != expired
     import text_language
 
@@ -206,7 +213,7 @@ def test_the_user_reads_the_teams_local_time_in_the_format_of_the_language(bi, m
 
 def test_without_a_team_zone_or_with_a_wrong_one_it_is_the_system_zone(bi, monkeypatch):
     data = bi.grant(hours=8.8, now=T0)
-    monkeypatch.setattr(bi, "_system_zone", lambda: timezone(timedelta(hours=-5)))
+    monkeypatch.setattr(bi, "_system_zone", lambda: timezone(timedelta(hours=-5), "EST"))
     monkeypatch.setenv("JHT_LANG", "de")
     assert "um 03:48" in bi.notice_text("expired", data)
     _team_in(bi, "Mars/Olympus_Mons")
@@ -217,10 +224,40 @@ def test_without_a_team_zone_or_with_a_wrong_one_it_is_the_system_zone(bi, monke
 
 @pytest.mark.parametrize(("hour", "minute", "written"), [(0, 7, "12:07 AM"), (9, 5, "9:05 AM"), (12, 0, "12:00 PM"), (12, 5, "12:05 PM"), (23, 59, "11:59 PM")])
 def test_english_writes_the_clock_on_twelve_hours(bi, hour, minute, written):
-    assert bi.local_time(datetime(2026, 10, 20, hour, minute, tzinfo=timezone.utc), "en") == written
+    assert bi.local_time(datetime(2026, 10, 20, hour, minute, tzinfo=timezone.utc), "en") == f"{written} UTC"
 
 
 def test_the_other_languages_write_it_on_twenty_four_hours(bi):
     moment = datetime(2026, 10, 20, 21, 5, tzinfo=timezone.utc)
     for lang in ("it", "de", "es", "fr", "hu", "pt"):
-        assert bi.local_time(moment, lang) == "21:05"
+        assert bi.local_time(moment, lang) == "21:05 UTC"
+
+
+def test_the_zone_chosen_at_the_setup_comes_first_even_without_working_hours(bi, monkeypatch):
+    """JHT_USER_TZ is what the setup asked the user; a config with no working_hours says nothing."""
+    import format_time
+
+    data = bi.grant(hours=8.8, now=T0)  # ends 08:48 UTC
+    bi.JHT_HOME.joinpath("jht.config.json").write_text(json.dumps({"team": {"agents": 3}}), encoding="utf-8")
+    monkeypatch.setenv("JHT_USER_TZ", "Europe/Rome")
+    format_time._read_profile_timezone.cache_clear()
+    monkeypatch.setenv("JHT_LANG", "it")
+    text = bi.notice_text("expired", data)
+    assert "10:48" in text and "UTC" not in text
+    # It also wins over the team's zone: the clock the user lives by.
+    _team_in(bi, "America/New_York")
+    assert "10:48" in bi.notice_text("expired", data)
+
+
+def test_a_utc_that_is_only_the_fallback_is_written_utc(bi, monkeypatch):
+    import format_time
+
+    data = bi.grant(hours=8.8, now=T0)
+    monkeypatch.setenv("JHT_USER_TZ", "UTC")  # what format_time answers when it was never set
+    format_time._read_profile_timezone.cache_clear()
+    monkeypatch.setenv("JHT_LANG", "it")
+    assert "08:48 UTC" in bi.notice_text("expired", data)
+    # A zone the setup left that does not exist is as good as none.
+    monkeypatch.setenv("JHT_USER_TZ", "Nowhere/Land")
+    format_time._read_profile_timezone.cache_clear()
+    assert "08:48 UTC" in bi.notice_text("expired", data)
