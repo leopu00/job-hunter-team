@@ -30,6 +30,7 @@ mod runtime_host;
 mod runtime_log;
 mod voice_input;
 mod vps_link;
+mod window_fit;
 mod windows_runtime;
 
 pub(crate) fn application_context() -> tauri::Context<tauri::Wry> {
@@ -48,6 +49,8 @@ pub fn run() {
         .manage(voice_input::VoiceInputState::default())
         .manage(auth_store::system_key_cache())
         .setup(|app| {
+            // inside the work area of its monitor, at any scale
+            window_fit::fit_main_window(app.handle());
             voice_input::attach(app.handle())?;
             Ok(())
         })
