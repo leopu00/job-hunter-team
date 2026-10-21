@@ -76,13 +76,13 @@ describe("Shell", () => {
     const nav = screen.getByRole("navigation", { name: "Navigazione app" });
     // The labels come from the web's dictionary once /api/i18n answers "it".
     await within(nav).findByRole("link", { name: "Posizioni" });
-    for (const label of ["Dashboard", "Map", "Swipe", "Team", "Messaggi", "Profilo"]) {
+    for (const label of ["Dashboard", "Mappa", "Swipe", "Team", "Messaggi", "Profilo"]) {
       expect(within(nav).getByRole("link", { name: label })).toBeInTheDocument();
     }
-    await user.click(within(nav).getByRole("link", { name: "Map" }));
+    await user.click(within(nav).getByRole("link", { name: "Mappa" }));
     expect(currentLocation().path).toBe("/map");
     expect(await screen.findByRole("heading", { name: "Mappa" })).toBeInTheDocument();
-    expect(within(nav).getByRole("link", { name: "Map" })).toHaveAttribute("aria-current", "page");
+    expect(within(nav).getByRole("link", { name: "Mappa" })).toHaveAttribute("aria-current", "page");
   });
 
   it("routes a position link to the position page", async () => {
