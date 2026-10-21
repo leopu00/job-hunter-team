@@ -9,6 +9,10 @@ allowed-tools: Bash(jht profile validate *), Bash(python3 *), Bash(mkdir -p *), 
 
 A csapat minden CV-hez, minden pontszamhoz, minden illesztesi donteshez a `candidate_profile.yml` fajlt olvassa. Ha pontosan tartod, a rendszer tobbi resze mukodik; ha hagyod elavulni, a Writers steril CV-ket keszit, a Scorer pedig rosszul ertekeli a poziciokat.
 
+## 🌍 A szabad szöveg nyelve (kötelező)
+
+A profil `narrative`, `key_points` és `timeline` szövege a felhasználó nyelvén készül (a `python3 /app/shared/skills/text_language.py lang` kiírja), **akkor is, ha az önéletrajz, amelyből származik, más nyelvű** (RULE-T14). A `validate_profile.py` `WARN: LANGUAGE: …` figyelmeztetést ír ki a hosszú, egyértelműen más nyelvű szövegre: írd át, ne hagyd figyelmen kívül. A nevek, cégek és eszközök változatlanok maradnak.
+
 ## Utvonal & tulajdonjog
 
 | Utvonal                                       | Ki irja              | Ki olvassa               |

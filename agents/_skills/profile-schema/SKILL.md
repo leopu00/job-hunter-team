@@ -13,6 +13,10 @@ machine-verifiable definition lives in:
 - `shared/config/profile-schema.ts` (Zod types, web side)
 - `shared/skills/validate_profile.py` (runtime gate, agent/CLI side)
 
+## 🌍 Language of the free text (binding)
+
+The `narrative`, `key_points` and `timeline` text of the profile is written in the user's language (`python3 /app/shared/skills/text_language.py lang` prints it), **even when the CV it comes from is in another language** (RULE-T14). `validate_profile.py` prints `WARN: LANGUAGE: …` for a long text that is clearly in another language: rewrite it, do not ignore the warning. Names, companies and tools stay as they are.
+
 ## 🎚️ 3-level model
 
 ```

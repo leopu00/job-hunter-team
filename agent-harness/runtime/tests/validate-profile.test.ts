@@ -19,9 +19,10 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { createValidateProfileTool, runValidateProfile } from "../src/parity/skills/validate-profile.ts";
-import { pythonSkills, runPython } from "./helpers/python-skills.ts";
+import { pythonSkillsOfThisTree, runPython } from "./helpers/python-skills.ts";
 
-const SKILLS = pythonSkills();
+// This tree's script, not the pinned commit's: the port and the script gained the language notice together (JHT-T31).
+const SKILLS = pythonSkillsOfThisTree();
 const context = { account: undefined as never, remainingMs: () => 60_000 };
 
 let root: string;
@@ -208,7 +209,12 @@ describe("the tool", () => {
     const file = join(profileDir, "candidate_profile.yml");
     writeFileSync(file, GOOD.replace("- language: Italiano", "- name: Italiano"));
     const report = JSON.parse(runValidateProfile([file, "--json"], (p) => p).stdout) as { ok: boolean; errors: string[]; warnings: string[] };
-    expect(report).toEqual({ ok: true, errors: [], warnings: ["languages[0]: use 'language' (not 'name') — canonical key"] });
+    expect(report).toEqual({
+      ok: true,
+      errors: [],
+      warnings: ["languages[0]: use 'language' (not 'name') — canonical key"],
+      language_warnings: [],
+    });
     expect(runValidateProfile([file], (p) => p).exitCode).toBe(0);
     expect(runValidateProfile([file, "--strict"], (p) => p).exitCode).toBe(1);
   });

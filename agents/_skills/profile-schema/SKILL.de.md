@@ -14,6 +14,10 @@ maschinenverifizierbare Definition lebt in:
 - `shared/config/profile-schema.ts` (Zod-Typen, Web-Seite)
 - `shared/skills/validate_profile.py` (Runtime-Gate, Agenten-/CLI-Seite)
 
+## 🌍 Sprache des Freitexts (verbindlich)
+
+Der Text von `narrative`, `key_points` und `timeline` im Profil wird in der Sprache des Users geschrieben (`python3 /app/shared/skills/text_language.py lang` gibt sie aus), **auch wenn der Lebenslauf, aus dem er stammt, in einer anderen Sprache ist** (RULE-T14). `validate_profile.py` gibt `WARN: LANGUAGE: …` für einen langen Text aus, der klar in einer anderen Sprache ist: schreibe ihn neu, ignoriere die Warnung nicht. Namen, Firmen und Tools bleiben unverändert.
+
 ## 🎚️ 3-Ebenen-Modell
 
 ```

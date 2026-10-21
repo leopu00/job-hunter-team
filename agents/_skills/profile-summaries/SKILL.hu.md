@@ -9,6 +9,10 @@ allowed-tools: Bash(mkdir -p *)
 
 A strukturalt YAML kituno filterekhez es matchekhez, de semmit nem mond arrol, *ki* a jelolt. A `summaries/` konyvtarban levo 4 MD fajl hordozza azt a narrativat, amire az Iroknak szukseguk van ahhoz, hogy az oneletrajzok emberien szoljanak, ne pedig egy pipalo lista legyen beloluk.
 
+## 🌍 Nyelv (kötelező)
+
+A négy fájlt a felhasználó nyelvén írd — a `python3 /app/shared/skills/text_language.py lang` kiírja (`i18n-prefs.json`, majd `$JHT_LANG`) — **akkor is, ha a beszélgetés, az önéletrajz vagy az üzenetek, amiket olvasol, más nyelven vannak** (RULE-T14). A tulajdonnevek, cégek és eszközök változatlanok maradnak. Fájl mentése előtt a `python3 /app/shared/skills/text_language.py check "<szöveg>"` válasza `OK` kell legyen; `WRONG_LANGUAGE` esetén írd át a szöveget.
+
 ## A 4 fajl (fajlnevek FIXEK)
 
 | Fajl             | A felhasznalonak mutatott UI-cim | Mit tartalmaz                                                               | Hosszlimit  |

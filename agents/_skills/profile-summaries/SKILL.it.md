@@ -9,6 +9,10 @@ allowed-tools: Bash(mkdir -p *)
 
 Lo YAML strutturato è ottimo per filtri e match ma non dice nulla su *chi* è il candidato. I 4 file MD in `summaries/` portano la narrativa di cui gli Scrittori hanno bisogno per produrre CV che suonano come una persona, non una lista di checkbox.
 
+## 🌍 Lingua (vincolante)
+
+Scrivi i quattro file nella lingua dell'utente — `python3 /app/shared/skills/text_language.py lang` la stampa (`i18n-prefs.json`, poi `$JHT_LANG`) — **anche se la conversazione, il CV o i messaggi che leggi sono in un'altra lingua** (RULE-T14). Nomi propri, aziende e strumenti restano come sono. Prima di salvare un file, `python3 /app/shared/skills/text_language.py check "<testo>"` deve rispondere `OK`; con `WRONG_LANGUAGE`, riscrivi il testo.
+
 ## I 4 file (nomi file FISSI)
 
 | File             | Titolo UI mostrato all'utente | Cosa contiene                                                            | Limite lunghezza |

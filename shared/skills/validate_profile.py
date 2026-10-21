@@ -16,12 +16,18 @@ posto di .language; skills come lista piatta) emettendo WARNING non bloccanti. G
 sono bloccanti.
 
 Uso:
-    python3 validate_profile.py <path/candidate_profile.yml> [--strict] [--json]
+    python3 validate_profile.py <path/candidate_profile.yml> [--strict] [--json] [--lang XX]
 Output:
     VALID_PROFILE   (exit 0)   eventuali "WARN: ..." su stderr
     INVALID_PROFILE (exit 1)   "ERROR: ..." su stderr
 Con --strict anche i warning diventano errori (usato dopo la migrazione produttori).
+
+Lingua (RULE-T14): il testo libero che l'utente legge (narrative, key_points, timeline, summary)
+deve essere nella lingua dell'utente (i18n-prefs.json, poi JHT_LANG; `--lang XX` la forza). Un testo
+abbastanza lungo e chiaramente in un'altra lingua produce un AVVISO "LANGUAGE: ..." su stderr (e in
+--json sotto "language_warnings"): non rende il profilo invalido e non conta in --strict.
 """
+import os
 import sys
 import json
 
@@ -39,6 +45,7 @@ TARGET_ROLE_SPECIALTIES = {
 
 errors: list[str] = []
 warnings: list[str] = []
+language_warnings: list[str] = []
 
 
 def err(msg: str) -> None:
@@ -47,6 +54,55 @@ def err(msg: str) -> None:
 
 def warn(msg: str) -> None:
     warnings.append(msg)
+
+
+# Chiavi delle voci di timeline che portano prosa; le altre (date, ruoli, nomi di aziende) non si giudicano.
+_TIMELINE_PROSE_KEYS = ("description", "summary", "text", "detail")
+
+
+def _prose(profile):
+    """(dove, testo) per il testo libero che l'utente legge nel profilo."""
+    if _is_str(profile.get("summary")):
+        yield "summary", profile["summary"]
+    blocks = profile.get("blocks")
+    if not isinstance(blocks, list):
+        return
+    for i, b in enumerate(blocks):
+        if not isinstance(b, dict):
+            continue
+        where = f"blocks[{i}]" + (f" ({b['key']})" if _is_str(b.get("key")) else "")
+        content = b.get("content")
+        if b.get("kind") == "narrative" and _is_str(content):
+            yield where, content
+        elif b.get("kind") == "key_points" and isinstance(content, list):
+            for j, it in enumerate(content):
+                if isinstance(it, dict) and _is_str(it.get("text")):
+                    yield f"{where}.content[{j}]", it["text"]
+        elif b.get("kind") == "timeline" and isinstance(content, list):
+            for j, it in enumerate(content):
+                if isinstance(it, dict):
+                    for k in _TIMELINE_PROSE_KEYS:
+                        if _is_str(it.get(k)):
+                            yield f"{where}.content[{j}].{k}", it[k]
+
+
+def check_language(profile, expected=None) -> None:
+    """Avvisa (mai rifiuta) sul testo libero che è chiaramente in una lingua diversa da quella dell'utente."""
+    # `python3 -I` (and an import from elsewhere) leaves the script's folder off sys.path.
+    here = os.path.dirname(os.path.abspath(__file__))
+    if here not in sys.path:
+        sys.path.insert(0, here)
+    try:
+        import text_language
+    except ImportError:
+        return
+    expected = expected or text_language.user_language()
+    for where, text in _prose(profile):
+        found = text_language.wrong_language(text, expected)
+        if found:
+            language_warnings.append(
+                f"LANGUAGE: {where} looks {found}, the user's language is {expected}: rewrite it in {expected}"
+            )
 
 
 def _is_str(v) -> bool:
@@ -181,10 +237,22 @@ def validate(profile) -> None:
     validate_languages(profile.get("languages"))
     validate_blocks(profile.get("blocks"))
     validate_target_role_choice(profile)
+    check_language(profile, _expected_language)
+
+
+_expected_language = None
 
 
 def main() -> int:
+    global _expected_language
     args = [a for a in sys.argv[1:]]
+    if "--lang" in args:
+        i = args.index("--lang")
+        if i + 1 >= len(args):
+            print("usage: --lang needs a language code", file=sys.stderr)
+            return 2
+        _expected_language = args[i + 1]
+        del args[i:i + 2]
     strict = "--strict" in args
     as_json = "--json" in args
     paths = [a for a in args if not a.startswith("--")]
@@ -210,9 +278,12 @@ def main() -> int:
     blocking = errors + (warnings if strict else [])
 
     if as_json:
-        print(json.dumps({"ok": not blocking, "errors": errors, "warnings": warnings}))
+        print(json.dumps({"ok": not blocking, "errors": errors, "warnings": warnings,
+                          "language_warnings": language_warnings}))
     else:
         for w in warnings:
+            print(f"WARN: {w}", file=sys.stderr)
+        for w in language_warnings:
             print(f"WARN: {w}", file=sys.stderr)
         for e in errors:
             print(f"ERROR: {e}", file=sys.stderr)

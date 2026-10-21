@@ -231,7 +231,11 @@ export function createSkillTools(options: SkillToolsOptions): ToolHandler[] {
   // canonical schema, `profile-yaml` the write-and-validate loop: either one
   // names the validator.
   if ((listed.has("profile-schema") || listed.has("profile-yaml")) && options.profileDir) {
-    tools.push(createValidateProfileTool({ profileDir: options.profileDir, workdir: options.workdir ?? options.profileDir }));
+    tools.push(createValidateProfileTool({
+        profileDir: options.profileDir,
+        workdir: options.workdir ?? options.profileDir,
+        ...(options.jhtHome ? { jhtHome: options.jhtHome } : {}),
+      }));
   }
   // The ASSISTENTE's two flags (ready.flag, welcomed.flag). Its bash runs in the kernel
   // sandbox, which does not let it write the person's profile: without this tool the

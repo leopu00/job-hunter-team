@@ -14,6 +14,10 @@ definizione macchina-verificabile vive in:
 - `shared/config/profile-schema.ts` (tipi Zod, lato web)
 - `shared/skills/validate_profile.py` (gate runtime, lato agenti/CLI)
 
+## 🌍 Lingua del testo libero (vincolante)
+
+Il testo di `narrative`, `key_points` e `timeline` del profilo è scritto nella lingua dell'utente (`python3 /app/shared/skills/text_language.py lang` la stampa), **anche se il CV da cui viene è in un'altra lingua** (RULE-T14). `validate_profile.py` stampa `WARN: LANGUAGE: …` per un testo lungo chiaramente in un'altra lingua: riscrivilo, non ignorare l'avviso. Nomi, aziende e strumenti restano come sono.
+
 ## 🎚️ Modello a 3 livelli
 
 ```

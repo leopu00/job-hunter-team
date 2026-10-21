@@ -8,6 +8,10 @@ allowed-tools: Bash(mkdir -p *)
 
 The structured YAML is great for filters and matches but says nothing about *who* the candidate is. The 4 MD files in `summaries/` carry the narrative the Writers need to produce CVs that read like a person, not a checkbox list.
 
+## 🌍 Language (binding)
+
+Write the four files in the user's language — `python3 /app/shared/skills/text_language.py lang` prints it (`i18n-prefs.json`, then `$JHT_LANG`) — **even if the conversation, the CV or the messages you read are in another language** (RULE-T14). Proper names, companies and tools stay as they are. Before you save a file, `python3 /app/shared/skills/text_language.py check "<text>"` must answer `OK`; on `WRONG_LANGUAGE`, rewrite the text.
+
 ## The 4 files (filenames are FIXED)
 
 | File             | UI title shown to the user  | What it contains                                                            | Length cap |
