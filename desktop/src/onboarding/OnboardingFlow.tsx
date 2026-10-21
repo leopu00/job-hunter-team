@@ -20,6 +20,7 @@ import CloserDesktopPanel from "../closer-desktop/CloserDesktopPanel";
 import FirstSetupAssistance from "./FirstSetupAssistance";
 import { ASSISTANCE_TEXT } from "./assistance.i18n";
 import { LOGIN_TEXT } from "../components/login-screen.i18n";
+import { fill } from "../lib/text-slots";
 import { ONBOARDING_TEXT, type OnboardingCopy } from "./onboarding.i18n";
 import { WINDOWS_SETUP } from "./windows-setup";
 import "./onboarding.css";
@@ -451,6 +452,15 @@ export function OnboardingFlow({ account, platform, runtime, activity, onSubmit,
   // A team on a VPS pairs with the account: a local profile has none, so the step says so now
   // instead of starting a setup that fails at the runtime stage (pairing_token_missing).
   const vpsNeedsAccount = account.identity === "local" && host.kind === "vps";
+  // What a VPS still lacks before Continue works, in the words of the form, so a disabled button says why.
+  const missingVps = host.kind === "vps" && !vpsNeedsAccount
+    ? ([
+        !host.address.trim() && t.vpsMissingItems.address,
+        !host.user.trim() && t.vpsMissingItems.user,
+        !(host.port > 0 && host.port <= 65535) && t.vpsMissingItems.port,
+        !host.keyPath.trim() && t.vpsMissingItems.key,
+      ].filter(Boolean) as string[])
+    : [];
   const hostIsValid = (localRuntimeSupported && host.kind === "local") ||
     (host.kind === "vps" && !vpsNeedsAccount && Boolean(host.address.trim() && host.user.trim() && host.port > 0 && host.port <= 65535 && host.keyPath.trim()));
 
@@ -521,13 +531,16 @@ export function OnboardingFlow({ account, platform, runtime, activity, onSubmit,
               <label className="onboarding-field onboarding-field--full"><span>{t.vpsAddress}</span><input value={host.address} onChange={(event) => setHost({ ...host, address: event.target.value })} placeholder={t.vpsAddressPlaceholder} required /></label>
               <label className="onboarding-field"><span>{t.sshUser}</span><input placeholder={t.sshUserPlaceholder} autoCapitalize="off" autoCorrect="off" spellCheck={false} value={host.user} onChange={(event) => setHost({ ...host, user: event.target.value })} required /></label>
               <label className="onboarding-field"><span>{t.sshPort}</span><input type="number" min="1" max="65535" value={host.port} onChange={(event) => setHost({ ...host, port: Number(event.target.value) })} required /></label>
-              <div className="onboarding-field onboarding-field--full"><span>{t.sshKey}</span><SshKeyPicker value={host.keyPath} onChange={(keyPath) => setHost({ ...host, keyPath })} disabled={submitting} /></div>
+              <div className="onboarding-field onboarding-field--full"><span>{t.sshKey}</span><SshKeyPicker value={host.keyPath} onChange={(keyPath) => setHost({ ...host, keyPath })} disabled={submitting} /><small className="onboarding-hint">{t.sshKeyHint}</small></div>
             </div>}
+            {missingVps.length > 0 && <p className="onboarding-hint" id="onboarding-vps-missing" role="status">
+              {fill(t.vpsMissing, { list: new Intl.ListFormat(locale, { style: "long", type: "conjunction" }).format(missingVps) })}
+            </p>}
             {vpsNeedsAccount && <div className="onboarding-aside" role="note">
               <p>{t.vpsNeedsGoogle}</p>
               {onSignInWithGoogle && <button className="onboarding-secondary" type="button" onClick={() => void onSignInWithGoogle()}>{LOGIN_TEXT[locale].google}</button>}
             </div>}
-            <div className="onboarding-actions"><button className="onboarding-secondary" type="button" onClick={() => setStep(0)}>{t.back}</button><button className="onboarding-primary" type="submit" disabled={!hostIsValid}>{t.continue} <span aria-hidden="true">→</span></button></div>
+            <div className="onboarding-actions"><button className="onboarding-secondary" type="button" onClick={() => setStep(0)}>{t.back}</button><button className="onboarding-primary" type="submit" disabled={!hostIsValid} aria-describedby={missingVps.length > 0 ? "onboarding-vps-missing" : undefined}>{t.continue} <span aria-hidden="true">→</span></button></div>
           </form>
           {host.kind === "vps" && onConnectExistingTeam && <section className="onboarding-aside" aria-label={t.existingTeam.title}>
             <h3>{t.existingTeam.title}</h3>

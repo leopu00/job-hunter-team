@@ -1132,3 +1132,16 @@
   color: var(--color-bright);
   overflow-wrap: anywhere;
 }
+
+/* A line of help under a field or a disabled button: what to enter, or what is still missing. */
+.onboarding-hint {
+  margin: 8px 0 0;
+  color: var(--color-muted);
+  font-size: 10px;
+  line-height: 1.55;
+}
+
+.onboarding-field > .onboarding-hint {
+  display: block;
+  margin-top: 6px;
+}
