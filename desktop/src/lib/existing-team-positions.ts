@@ -153,6 +153,15 @@ export async function readDesktopVpsPositions(
 const SORTS_THE_CORE_CANNOT_DO = new Set(["last_action_at", "last_action_by"]);
 
 /**
+ * The newest positions on the team's VPS, found first, at most `limit`: the new-position
+ * notifications' read (lib/notify). The same read-only list the pages use, with no notice for the
+ * pages: it runs in the background and must not change what a page says.
+ */
+export function readDesktopVpsNewestPositions(limit = 50): Promise<DesktopVpsRead<PositionWithScore[]>> {
+  return readPositionsPage({ sort: "found_at", dir: "desc", limit, offset: 0 });
+}
+
+/**
  * One page, as the core serves it: at most `limit` light rows from `offset`, and
  * the total that match, so the person pages through the team's positions
  * without the app holding them all. `limit` is the native bound (600) at most.
