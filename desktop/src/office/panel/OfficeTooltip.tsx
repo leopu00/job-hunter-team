@@ -36,7 +36,8 @@ export function tooltipFor(
       return { title: deptName(layout, target.dept), lines: [piles ? ofCount(locale, piles[target.dept] ?? "—", t.tipPile) : t.tipPileNoCount] };
     case "department": {
       const d = layout.departments.find((x) => x.id === target.dept);
-      const lines = [d?.tagline ?? ""].filter(Boolean);
+      // what the department does, in the person's language; the floor's English sign as a fallback
+      const lines = [t.departmentTaglines[target.dept] ?? d?.tagline ?? ""].filter(Boolean);
       if (piles) lines.push(fill(t.tipIncoming, { count: piles[target.dept] ?? "—" }));
       return { title: deptName(layout, target.dept), lines };
     }

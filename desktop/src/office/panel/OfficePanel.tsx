@@ -259,7 +259,7 @@ function DepartmentBody({ dept, layout, snapshot, statuses, client, source = "cl
   const t = officeText(locale);
   return (
     <>
-      <Heading title={deptName(layout, dept)} sub={d?.tagline} />
+      <Heading title={deptName(layout, dept)} sub={t.departmentTaglines[dept] ?? d?.tagline} />
       <Section title={t.incoming}>
         <p className="m-0">{inbox == null ? "—" : ofCount(locale, inbox, t.onThePile)}</p>
         <SecondaryLink label={t.positionsOnThePile} onClick={() => onOpen({ kind: "pile", dept })} />

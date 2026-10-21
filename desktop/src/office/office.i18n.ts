@@ -1,15 +1,18 @@
 import { locales, type Locale } from "@/i18n/config";
 import { appLocale } from "../lib/app-locale";
 import { pluralText, type PluralForms } from "../lib/plural";
+import type { DeptId } from "./contract";
 
 /**
  * The words around the office scene: the panel a click opens, the tag under
  * the pointer, the keyboard list and the page's status line. 7 languages;
  * Italian is the source and its shape is the type. What is NOT here is the
- * game's own English: the departments' names and taglines
- * (office/contract.ts). The agents' state tags say the agent_state
- * catalog's word in the person's language (office/status.ts, tagOf); only
- * an old box's words without a state (WORKING, WAITING, PAUSED) stay English.
+ * game's own English: the departments' names and the taglines painted on
+ * the floor (office/contract.ts); the panel and the tooltip say what a
+ * department does in the person's language (departmentTaglines). The
+ * agents' state tags say the agent_state catalog's word in the person's
+ * language (office/status.ts, tagOf); only an old box's words without a
+ * state (WORKING, WAITING, PAUSED) stay English.
  * `{count}`, `{error}`, `{name}`, `{notes}` are filled by `fill`.
  */
 export interface OfficeText {
@@ -19,6 +22,8 @@ export interface OfficeText {
   cloudReadFailed: string; // {error}
   loading: string;
   departmentOf: string; // {name}
+  // what each department does, by its id: the floor's sign stays in the game's English, the panel and the tooltip say it in the person's language
+  departmentTaglines: Record<DeptId, string>;
   sectionNow: string;
   statusNotPublished: string;
   sectionInHand: string;
@@ -89,6 +94,13 @@ export const OFFICE_TEXT: Record<Locale, OfficeText> = {
     cloudReadFailed: "Non riesco a leggere il cloud: {error}",
     loading: "Caricamento…",
     departmentOf: "Reparto {name}",
+    departmentTaglines: {
+      scout: "Trova le opportunità giuste per te.",
+      analisti: "Trasforma gli annunci in decisioni chiare.",
+      scorer: "Misura quanto ogni ruolo è adatto a te.",
+      scrittori: "Adatta ogni candidatura a te e al ruolo.",
+      critici: "Controlla ogni dettaglio prima che tu decida.",
+    },
     sectionNow: "Ora",
     statusNotPublished: "Stato non pubblicato dal team.",
     sectionInHand: "In mano",
@@ -153,6 +165,13 @@ export const OFFICE_TEXT: Record<Locale, OfficeText> = {
     cloudReadFailed: "I can't read the cloud: {error}",
     loading: "Loading…",
     departmentOf: "{name} department",
+    departmentTaglines: {
+      scout: "Finds relevant opportunities for you.",
+      analisti: "Turns listings into clear decisions.",
+      scorer: "Gauges how well each role fits you.",
+      scrittori: "Tailors each application to you and the role.",
+      critici: "Reviews every detail before you decide.",
+    },
     sectionNow: "Now",
     statusNotPublished: "Status not published by the team.",
     sectionInHand: "In hand",
@@ -217,6 +236,13 @@ export const OFFICE_TEXT: Record<Locale, OfficeText> = {
     cloudReadFailed: "Die Cloud lässt sich nicht lesen: {error}",
     loading: "Wird geladen…",
     departmentOf: "Abteilung {name}",
+    departmentTaglines: {
+      scout: "Findet passende Chancen für dich.",
+      analisti: "Macht aus Stellenanzeigen klare Entscheidungen.",
+      scorer: "Misst, wie gut jede Stelle zu dir passt.",
+      scrittori: "Passt jede Bewerbung an dich und die Stelle an.",
+      critici: "Prüft jedes Detail, bevor du entscheidest.",
+    },
     sectionNow: "Jetzt",
     statusNotPublished: "Status vom Team nicht veröffentlicht.",
     sectionInHand: "In Arbeit",
@@ -281,6 +307,13 @@ export const OFFICE_TEXT: Record<Locale, OfficeText> = {
     cloudReadFailed: "Impossible de lire le cloud : {error}",
     loading: "Chargement…",
     departmentOf: "Service {name}",
+    departmentTaglines: {
+      scout: "Trouve les opportunités qui vous correspondent.",
+      analisti: "Transforme les annonces en décisions claires.",
+      scorer: "Mesure à quel point chaque poste vous correspond.",
+      scrittori: "Adapte chaque candidature à vous et au poste.",
+      critici: "Vérifie chaque détail avant que vous décidiez.",
+    },
     sectionNow: "Maintenant",
     statusNotPublished: "Statut non publié par l’équipe.",
     sectionInHand: "En main",
@@ -345,6 +378,13 @@ export const OFFICE_TEXT: Record<Locale, OfficeText> = {
     cloudReadFailed: "No puedo leer la nube: {error}",
     loading: "Cargando…",
     departmentOf: "Departamento {name}",
+    departmentTaglines: {
+      scout: "Encuentra las oportunidades adecuadas para ti.",
+      analisti: "Convierte las ofertas en decisiones claras.",
+      scorer: "Mide cuánto encaja cada puesto contigo.",
+      scrittori: "Adapta cada candidatura a ti y al puesto.",
+      critici: "Revisa cada detalle antes de que decidas.",
+    },
     sectionNow: "Ahora",
     statusNotPublished: "Estado no publicado por el equipo.",
     sectionInHand: "En mano",
@@ -409,6 +449,13 @@ export const OFFICE_TEXT: Record<Locale, OfficeText> = {
     cloudReadFailed: "Não consigo ler a cloud: {error}",
     loading: "A carregar…",
     departmentOf: "Departamento {name}",
+    departmentTaglines: {
+      scout: "Encontra as oportunidades certas para ti.",
+      analisti: "Transforma anúncios em decisões claras.",
+      scorer: "Mede o quanto cada vaga combina contigo.",
+      scrittori: "Adapta cada candidatura a ti e à vaga.",
+      critici: "Revê cada detalhe antes de decidires.",
+    },
     sectionNow: "Agora",
     statusNotPublished: "Estado não publicado pela equipa.",
     sectionInHand: "Em mãos",
@@ -473,6 +520,13 @@ export const OFFICE_TEXT: Record<Locale, OfficeText> = {
     cloudReadFailed: "Nem tudom beolvasni a felhőt: {error}",
     loading: "Betöltés…",
     departmentOf: "{name} részleg",
+    departmentTaglines: {
+      scout: "Megtalálja a hozzád illő lehetőségeket.",
+      analisti: "Az álláshirdetésekből világos döntéseket csinál.",
+      scorer: "Felméri, mennyire illik hozzád egy-egy állás.",
+      scrittori: "Minden jelentkezést hozzád és az álláshoz igazít.",
+      critici: "Minden részletet átnéz, mielőtt döntesz.",
+    },
     sectionNow: "Most",
     statusNotPublished: "A csapat nem tette közzé az állapotot.",
     sectionInHand: "Kézben",

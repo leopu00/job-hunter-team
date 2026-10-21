@@ -28,7 +28,9 @@ describe("the tag under the pointer: what the page already holds, nothing invent
 
   it("a pile, a department, the shelf: the counts of the snapshot", () => {
     expect(tooltipFor({ kind: "pile", dept: "scout" }, ctx)).toEqual({ title: "Research", lines: ["13 posizioni sulla pila"] });
-    expect(tooltipFor({ kind: "department", dept: "scout" }, ctx).lines).toEqual(["Finds relevant opportunities for you.", "in ingresso: 13"]);
+    // what the department does, in the person's language (the floor's sign stays English)
+    expect(tooltipFor({ kind: "department", dept: "scout" }, ctx).lines).toEqual(["Trova le opportunità giuste per te.", "in ingresso: 13"]);
+    expect(tooltipFor({ kind: "department", dept: "scout" }, { ...ctx, locale: "en" }).lines[0]).toBe("Finds relevant opportunities for you.");
     expect(tooltipFor({ kind: "printer" }, ctx).lines).toEqual(["3 pronti col PASS del critico"]);
   });
 
@@ -50,5 +52,18 @@ describe("the tag under the pointer: what the page already holds, nothing invent
     expect(tooltipFor({ kind: "pile", dept: "scout" }, en)).toEqual({ title: "Research", lines: ["13 positions on the pile"] });
     expect(tooltipFor({ kind: "board" }, en)).toEqual({ title: "Board", lines: ["positions ready, sent, answered"] });
     expect(tooltipFor({ kind: "agent", uid: "scout-1", role: "scout" }, en).lines[0]).toBe("WORKING");
+  });
+});
+
+describe("what each department does, said in every language", () => {
+  it("has the five departments in every language, and the English is the floor's sign", async () => {
+    const { OFFICE_TEXT } = await import("../office.i18n");
+    const { readFileSync } = await import("node:fs");
+    const floor = JSON.parse(readFileSync("public/office/layout.json", "utf-8")) as { departments: { id: string; tagline: string }[] };
+    for (const [locale, text] of Object.entries(OFFICE_TEXT)) {
+      expect(Object.keys(text.departmentTaglines).sort(), locale).toEqual(["analisti", "critici", "scorer", "scout", "scrittori"]);
+      for (const line of Object.values(text.departmentTaglines)) expect(line.trim().length, locale).toBeGreaterThan(10);
+    }
+    for (const d of floor.departments) expect(OFFICE_TEXT.en.departmentTaglines[d.id as "scout"]).toBe(d.tagline);
   });
 });
