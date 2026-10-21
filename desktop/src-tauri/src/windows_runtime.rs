@@ -220,12 +220,14 @@ pub(crate) fn wsl_state(
 /// What a failed install.ps1 or `jht.ps1 up` says with its exit code (the
 /// contract with the PowerShell side): 20 WSL not usable, 21 Podman or
 /// Compose not installable, 22 the Podman machine missing, not creatable or
-/// not starting. Any other failure is the caller's generic code.
+/// not starting, 23 the machine's egress proxies not ready (which one and
+/// what it answered is on stderr). Any other failure is the caller's generic code.
 pub(crate) fn exit_failure(code: i32) -> Option<&'static str> {
     match code {
         20 => Some("wsl_not_ready"),
         21 => Some("podman_missing"),
         22 => Some("podman_start_failed"),
+        23 => Some("podman_network_unready"),
         _ => None,
     }
 }
@@ -559,7 +561,8 @@ mod tests {
         assert_eq!(exit_failure(20), Some("wsl_not_ready"));
         assert_eq!(exit_failure(21), Some("podman_missing"));
         assert_eq!(exit_failure(22), Some("podman_start_failed"));
-        for generic in [0, 1, 2, 19, 23, 78, -1] {
+        assert_eq!(exit_failure(23), Some("podman_network_unready"));
+        for generic in [0, 1, 2, 19, 24, 78, -1] {
             assert_eq!(exit_failure(generic), None, "{generic}");
         }
     }
@@ -570,6 +573,8 @@ mod tests {
         assert_eq!(installer_outcome(Ok(20)), Err("wsl_not_ready"));
         assert_eq!(installer_outcome(Ok(21)), Err("podman_missing"));
         assert_eq!(installer_outcome(Ok(22)), Err("podman_start_failed"));
+        // the network script's own code: never «check your internet» for every failure
+        assert_eq!(installer_outcome(Ok(23)), Err("podman_network_unready"));
         assert_eq!(installer_outcome(Ok(1)), Err("runtime_install_failed"));
         assert_eq!(installer_outcome(Err("process_timeout")), Err("timeout"));
         assert_eq!(installer_outcome(Err("process_start_failed")), Err("runtime_install_failed"));

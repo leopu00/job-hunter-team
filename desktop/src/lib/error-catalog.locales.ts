@@ -253,6 +253,13 @@ const COPY_BY_ENGLISH_TEXT: Readonly<Record<string, ErrorTranslations>> = {
     hu: ["A konténermotor telepítve van, de nem válaszol.", "Próbáld újra. Ha ismét megtörténik, indítsd újra a számítógépet."],
     pt: ["O motor de contentores está instalado, mas não responde.", "Tenta novamente. Se voltar a acontecer, reinicia o computador."],
   },
+  "The team’s network inside the Podman machine did not get ready.": {
+    de: ["Das Netzwerk des Teams in der Podman-Maschine wurde nicht bereit.", "Versuche es erneut. Wenn es wieder passiert, starte den Computer neu und versuche es erneut: Das Protokoll der Vorbereitung sagt, welche Prüfung nicht bestanden wurde."],
+    es: ["La red del equipo dentro de la máquina de Podman no se ha preparado.", "Inténtalo de nuevo. Si vuelve a ocurrir, reinicia el ordenador e inténtalo de nuevo: el registro de la preparación dice qué comprobación no se ha superado."],
+    fr: ["Le réseau de l’équipe dans la machine Podman ne s’est pas préparé.", "Réessaie. Si le problème se reproduit, redémarre l’ordinateur et réessaie : le journal de la préparation dit quel contrôle n’est pas passé."],
+    hu: ["A csapat hálózata a Podman-gépen belül nem állt készen.", "Próbáld újra. Ha ismét megtörténik, indítsd újra a számítógépet, és próbáld újra: az előkészítés naplója megmondja, melyik ellenőrzés nem sikerült."],
+    pt: ["A rede da equipa dentro da máquina Podman não ficou pronta.", "Tenta novamente. Se voltar a acontecer, reinicia o computador e tenta novamente: o registo da preparação diz qual verificação não passou."],
+  },
   "Homebrew is missing on this Mac: the app uses it to install Podman.": {
     de: ["Auf diesem Mac fehlt Homebrew: Die App installiert Podman damit.", "Lade das Installationspaket von Homebrew (die .pkg-Datei) von der offiziellen Seite brew.sh herunter, öffne es und schließe die macOS-Installation ab. Komm dann hierher zurück und klicke auf Erneut versuchen."],
     es: ["Falta Homebrew en este Mac: la aplicación lo usa para instalar Podman.", "Descarga el paquete de instalación de Homebrew (el archivo .pkg) desde su página oficial brew.sh, ábrelo y completa la instalación de macOS; luego vuelve aquí y pulsa Reintentar."],
@@ -1192,6 +1199,7 @@ export const ERROR_CATALOG_LOCALES: Readonly<Record<string, ErrorTranslations>> 
   uninstall_unsupported: translated("For now, removing JHT from the app is only available on Windows."),
   uninstall_failed: translated("Removing JHT from this computer did not succeed."),
   homebrew_missing: translated("Homebrew is missing on this Mac: the app uses it to install Podman."),
+  podman_network_unready: translated("The team’s network inside the Podman machine did not get ready."),
   podman_start_failed: translated("The container engine did not start."),
   podman_other_machine_running: translated("Another Podman machine is already running: on a Mac only one can run at a time."),
   podman_other_machine_running_named: translated("The Podman machine “{machine}” is already running: on a Mac only one can run at a time."),

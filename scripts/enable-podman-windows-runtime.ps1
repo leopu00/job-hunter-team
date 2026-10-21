@@ -368,8 +368,10 @@ try {
   exit 22
 }
 
+# The network script leaves with its own code (23, podman_network_unready, the
+# reason on stderr): passed on as it is, never turned into a generic failure.
 & (Join-Path $PSScriptRoot 'configure-podman-windows-network.ps1') -MachineName $MachineName
-if ($LASTEXITCODE -ne 0) { throw 'Podman network configuration failed.' }
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
 if ($RuntimeImage -notmatch '^ghcr\.io/leopu00/jht(?::[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}|@sha256:[0-9a-f]{64})$') {
   throw 'Runtime image reference is not canonical.'
