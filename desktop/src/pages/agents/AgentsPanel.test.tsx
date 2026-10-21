@@ -8,7 +8,10 @@ import { navigate } from "../../shell/router";
 import { READ_ONLY_NAV, READ_ONLY_ROUTES, ROUTES } from "../../shell/routes";
 import Shell from "../../shell/Shell";
 import { createPermissiveSupabase } from "../../test-support/permissive-supabase";
+import type { Locale } from "@/i18n/config";
+import { pluralText } from "../../lib/plural";
 import AgentsPanel from "./AgentsPanel";
+import { AGENTS_PANEL_TEXT, type AgentsPanelText } from "./AgentsPanel.i18n";
 
 // «Agenti»: the agents' control panel, against a stand-in native side
 // (agent_control). Synthetic data only.
@@ -91,8 +94,26 @@ describe("«Agenti», the agents' control panel", () => {
     // a role with no session is there, off, after the ones that are up
     expect(order.indexOf("ANALISTA-1")).toBeGreaterThan(order.indexOf("DOTTORE"));
     expect(screen.getByTestId("panel-row-ANALISTA-1")).toHaveAttribute("data-state", "down");
-    expect(screen.getByTestId("panel-summary")).toHaveTextContent("1 ti aspettano · 1 al lavoro · 5 accesi su");
+    // one person waiting is singular, five up are plural
+    expect(screen.getByTestId("panel-summary")).toHaveTextContent(/^1 ti aspetta · 1 al lavoro · 5 accesi su \d+ · /);
     expect(screen.getByTestId("panel-row-SCORER-1")).toHaveTextContent("limite di 5 ore");
+  });
+
+  it("says the summary's counts in the singular or the plural, in every language", () => {
+    for (const [locale, text] of Object.entries(AGENTS_PANEL_TEXT) as [Locale, AgentsPanelText][]) {
+      for (const forms of [text.summaryWaiting, text.summaryWorking, text.summaryUp]) {
+        expect(forms.one, locale).toContain("{count}");
+        expect(forms.other, locale).toContain("{count}");
+      }
+      expect(text.summaryUp.one, locale).toContain("{total}");
+      expect(text.summaryUp.other, locale).toContain("{total}");
+    }
+    const italian = AGENTS_PANEL_TEXT.it;
+    expect(pluralText("it", 1, italian.summaryWaiting)).toBe("1 ti aspetta");
+    expect(pluralText("it", 2, italian.summaryWaiting)).toBe("2 ti aspettano");
+    expect(pluralText("it", 1, italian.summaryUp, { total: 13 })).toBe("1 acceso su 13");
+    expect(pluralText("de", 1, AGENTS_PANEL_TEXT.de.summaryWaiting)).toBe("1 wartet auf dich");
+    expect(pluralText("fr", 3, AGENTS_PANEL_TEXT.fr.summaryWaiting)).toBe("3 vous attendent");
   });
 
   it("stops an agent only after the confirmation, which names the VPS, and sends back the list's target", async () => {
@@ -251,5 +272,89 @@ describe("«until tomorrow at 8» is the person's own 8 o'clock (N1)", () => {
   ])("in %s, at %s, it is %s", (zone, now, expected) => {
     process.env.TZ = zone;
     expect(tomorrowAtEightUtc(new Date(now))).toBe(expected);
+  });
+});
+
+describe("«Agenti», how a row reads", () => {
+  it("shows and counts an agent whose state says off as off, like a row with no session", async () => {
+    native.invoke.mockImplementation(async (command: string, args: { request: Record<string, unknown> }) => {
+      if (command !== COMMAND) return { ok: false, error: "not_in_test" };
+      if (args.request.op === "list")
+        return { ok: true, data: { agents: [...AGENTS, agent("MENTOR", "mentor", null, "spento")], roles: ROLES, states: true, target, where: "vps", label: "vps.example" } };
+      if (args.request.op === "team") return { ok: true, data: { halted: false, standby, held } };
+      return { ok: true, data: { name: args.request.session, up: true, text: "" } };
+    });
+    show();
+    await screen.findByTestId("panel-summary");
+    // five up, as without MENTOR: an agent off is not up
+    expect(screen.getByTestId("panel-summary")).toHaveTextContent(/· 5 accesi su /);
+    const mentor = screen.getByTestId("panel-row-MENTOR");
+    const absent = screen.getByTestId("panel-row-ANALISTA-1");
+    // the same words as a role with no session
+    expect(within(mentor).getByText(within(absent).getByText(/spento/).textContent!)).toBeInTheDocument();
+  });
+
+  it("says the last activity as how long ago, the full date in the tooltip", async () => {
+    show();
+    await screen.findByTestId("panel-summary");
+    fireEvent.click(screen.getByTestId("panel-row-CAPITANO"));
+    const times = await screen.findByTestId("panel-times");
+    // the fixture's activity is ten minutes ago
+    expect(times).toHaveTextContent("ultima attività 10m fa");
+    expect(times.getAttribute("title")).toMatch(/ultima attività \d{2}\/\d{2}\/\d{2}/);
+  });
+
+  it("lets a long state wrap in the list instead of cutting it", async () => {
+    show();
+    await screen.findByTestId("panel-summary");
+    const blocked = within(screen.getByTestId("panel-row-SCORER-1")).getByText(/limite di 5 ore/);
+    expect(blocked.className).not.toMatch(/\btruncate\b/);
+    expect(blocked.className).toMatch(/break-words/);
+  });
+});
+
+describe("«Agenti», stopping the whole team", () => {
+  it("stops the team only after a confirmation that says what happens, with the Team page's request", async () => {
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ ok: true }), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+    show();
+    await screen.findByTestId("panel-summary");
+    // pause and stop side by side, and a line that tells them apart
+    expect(screen.getByTestId("panel-pause")).toBeInTheDocument();
+    expect(screen.getByTestId("panel-team-help")).toHaveTextContent("riparte da sola");
+    expect(screen.getByTestId("panel-team-help")).toHaveTextContent("non riparte finché");
+    fireEvent.click(screen.getByTestId("panel-stop-team"));
+    const dialog = screen.getByTestId("panel-confirm");
+    expect(dialog).toHaveTextContent("Fermare la squadra sulla VPS vps.example?");
+    expect(dialog).toHaveTextContent("L’assistente resta acceso.");
+    expect(fetchMock).not.toHaveBeenCalled();
+    fireEvent.click(within(dialog).getByRole("button", { name: "Conferma" }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toBe("/api/team-state/emergency-stop");
+    expect(init.method).toBe("POST");
+    expect(JSON.parse(String(init.body))).toEqual({ confirm: "STOP" });
+    expect(await screen.findByText("Stop chiesto: la squadra si ferma entro pochi secondi.")).toBeInTheDocument();
+    // no agent_control action: the stop is the cloud's intent
+    expect(ops().filter((r) => ACTIONS.has(String(r.op)))).toEqual([]);
+  });
+
+  it("offers no stop in the read-only view, nor on a team already stopped", async () => {
+    enterExistingTeamReadOnly(false);
+    show();
+    await screen.findByTestId("panel-summary");
+    expect(screen.queryByTestId("panel-stop-team")).toBeNull();
+    leaveExistingTeamReadOnly();
+    cleanup();
+    native.invoke.mockImplementation(async (command: string, args: { request: Record<string, unknown> }) => {
+      if (command !== COMMAND) return { ok: false, error: "not_in_test" };
+      if (args.request.op === "list") return listReply();
+      if (args.request.op === "team") return { ok: true, data: { halted: true, standby, held } };
+      return { ok: true, data: { name: args.request.session, up: true, text: "" } };
+    });
+    show();
+    await screen.findByTestId("panel-team-state");
+    expect(screen.queryByTestId("panel-stop-team")).toBeNull();
+    expect(screen.queryByTestId("panel-pause")).toBeNull();
   });
 });

@@ -1,4 +1,5 @@
 import type { Locale } from "@/i18n/config";
+import type { PluralForms } from "../../lib/plural";
 
 export interface AgentsPanelText {
   title: string;
@@ -14,7 +15,10 @@ export interface AgentsPanelText {
   failed: string;
   failedAt: string; // {time}
   /** the line above the list: who needs the person first */
-  summary: string; // {waiting} {working} {up} {total}
+  // the summary line, three counts joined by « · »: each with its singular and plural
+  summaryWaiting: PluralForms; // {count}
+  summaryWorking: PluralForms; // {count}
+  summaryUp: PluralForms; // {count} {total}
   up: string;
   down: string;
   heldByUser: string;
@@ -67,6 +71,13 @@ export interface AgentsPanelText {
   resume: string;
   confirmPause: string; // {where}
   bodyPause: string;
+  // stopping the whole team (the cloud's stop intent, as the Team page sent it): the button, the line under the bar, the confirmation, the outcome
+  stopTeam: string;
+  teamControlsHelp: string;
+  confirmStopTeam: string; // {where}
+  bodyStopTeam: string;
+  resultStopRequested: string;
+  stopTeamFailed: string;
   pauseHours1: string;
   pauseHours4: string;
   pauseTomorrow: string;
@@ -89,7 +100,9 @@ const it: AgentsPanelText = {
   readAt: "Letto alle {time}",
   failed: "Non ho potuto leggere gli agenti.",
   failedAt: "Tentativo delle {time}",
-  summary: "{waiting} ti aspettano · {working} al lavoro · {up} accesi su {total}",
+  summaryWaiting: { one: "{count} ti aspetta", other: "{count} ti aspettano" },
+  summaryWorking: { one: "{count} al lavoro", other: "{count} al lavoro" },
+  summaryUp: { one: "{count} acceso su {total}", other: "{count} accesi su {total}" },
   up: "acceso",
   down: "spento",
   heldByUser: "spento da te",
@@ -144,6 +157,12 @@ const it: AgentsPanelText = {
   confirmPause: "Mettere in pausa la squadra {where}?",
   bodyPause:
     "Gli agenti finiscono quello che stanno facendo e si fermano senza consumare. La squadra riprende da sola alla scadenza, oppure quando la riprendi da qui.",
+  stopTeam: "Ferma la squadra",
+  teamControlsHelp: "Pausa: la squadra si ferma per il tempo che scegli e riparte da sola. Ferma: la squadra si spegne (l’assistente resta acceso) e non riparte finché non riaccendi gli agenti da qui.",
+  confirmStopTeam: "Fermare la squadra {where}?",
+  bodyStopTeam: "Gli agenti si spengono: quello che stavano facendo si interrompe, le posizioni restano dove sono. La squadra non riparte da sola: riaccendi gli agenti uno per uno con «Accendi». L’assistente resta acceso.",
+  resultStopRequested: "Stop chiesto: la squadra si ferma entro pochi secondi.",
+  stopTeamFailed: "Non sono riuscito a chiedere lo stop. Riprova.",
   pauseHours1: "Per 1 ora",
   pauseHours4: "Per 4 ore",
   pauseTomorrow: "Fino a domani alle 8",
@@ -167,7 +186,9 @@ const en: AgentsPanelText = {
   readAt: "Read at {time}",
   failed: "I could not read the agents.",
   failedAt: "Attempt at {time}",
-  summary: "{waiting} waiting for you · {working} working · {up} up of {total}",
+  summaryWaiting: { one: "{count} waiting for you", other: "{count} waiting for you" },
+  summaryWorking: { one: "{count} working", other: "{count} working" },
+  summaryUp: { one: "{count} up of {total}", other: "{count} up of {total}" },
   up: "up",
   down: "off",
   heldByUser: "stopped by you",
@@ -222,6 +243,12 @@ const en: AgentsPanelText = {
   confirmPause: "Pause the team {where}?",
   bodyPause:
     "The agents finish what they are doing and stop without spending. The team resumes by itself when the time is up, or when you resume it from here.",
+  stopTeam: "Stop the team",
+  teamControlsHelp: "Pause: the team stops for the time you choose and starts again by itself. Stop: the team shuts down (the assistant stays on) and does not start again until you start the agents from here.",
+  confirmStopTeam: "Stop the team {where}?",
+  bodyStopTeam: "The agents shut down: what they were doing is interrupted, the positions stay where they are. The team does not start again by itself: start the agents one by one with “Start”. The assistant stays on.",
+  resultStopRequested: "Stop requested: the team stops within a few seconds.",
+  stopTeamFailed: "The stop request failed. Try again.",
   pauseHours1: "For 1 hour",
   pauseHours4: "For 4 hours",
   pauseTomorrow: "Until tomorrow at 8",
@@ -244,7 +271,9 @@ const de: AgentsPanelText = {
   readAt: "Gelesen um {time}",
   failed: "Ich konnte die Agenten nicht lesen.",
   failedAt: "Versuch um {time}",
-  summary: "{waiting} warten auf dich · {working} arbeiten · {up} von {total} aktiv",
+  summaryWaiting: { one: "{count} wartet auf dich", other: "{count} warten auf dich" },
+  summaryWorking: { one: "{count} arbeitet", other: "{count} arbeiten" },
+  summaryUp: { one: "{count} von {total} aktiv", other: "{count} von {total} aktiv" },
   up: "aktiv",
   down: "aus",
   heldByUser: "von dir gestoppt",
@@ -299,6 +328,12 @@ const de: AgentsPanelText = {
   confirmPause: "Das Team {where} pausieren?",
   bodyPause:
     "Die Agenten beenden, was sie gerade tun, und halten an, ohne etwas zu verbrauchen. Das Team setzt von selbst fort, wenn die Zeit abgelaufen ist, oder wenn du es hier fortsetzt.",
+  stopTeam: "Team stoppen",
+  teamControlsHelp: "Pause: Das Team hält für die gewählte Zeit an und startet dann von selbst wieder. Stoppen: Das Team wird ausgeschaltet (der Assistent bleibt an) und startet erst wieder, wenn du die Agenten hier startest.",
+  confirmStopTeam: "Das Team {where} stoppen?",
+  bodyStopTeam: "Die Agenten werden ausgeschaltet: Was sie gerade tun, wird unterbrochen, die Stellen bleiben, wo sie sind. Das Team startet nicht von selbst wieder: Starte die Agenten einzeln mit „Starten“. Der Assistent bleibt an.",
+  resultStopRequested: "Stopp angefordert: Das Team hält in wenigen Sekunden an.",
+  stopTeamFailed: "Die Stopp-Anfrage ist fehlgeschlagen. Versuche es erneut.",
   pauseHours1: "Für 1 Stunde",
   pauseHours4: "Für 4 Stunden",
   pauseTomorrow: "Bis morgen um 8 Uhr",
@@ -322,7 +357,9 @@ const es: AgentsPanelText = {
   readAt: "Leído a las {time}",
   failed: "No he podido leer los agentes.",
   failedAt: "Intento de las {time}",
-  summary: "{waiting} te esperan · {working} trabajando · {up} activos de {total}",
+  summaryWaiting: { one: "{count} te espera", other: "{count} te esperan" },
+  summaryWorking: { one: "{count} trabajando", other: "{count} trabajando" },
+  summaryUp: { one: "{count} activo de {total}", other: "{count} activos de {total}" },
   up: "activo",
   down: "apagado",
   heldByUser: "apagado por ti",
@@ -377,6 +414,12 @@ const es: AgentsPanelText = {
   confirmPause: "¿Poner en pausa el equipo {where}?",
   bodyPause:
     "Los agentes terminan lo que están haciendo y se detienen sin consumir. El equipo se reanuda solo al vencer el plazo, o cuando lo reanudes desde aquí.",
+  stopTeam: "Detener el equipo",
+  teamControlsHelp: "Pausa: el equipo se detiene el tiempo que elijas y vuelve a arrancar solo. Detener: el equipo se apaga (el asistente sigue encendido) y no vuelve a arrancar hasta que enciendas los agentes desde aquí.",
+  confirmStopTeam: "¿Detener el equipo {where}?",
+  bodyStopTeam: "Los agentes se apagan: lo que estaban haciendo se interrumpe y las ofertas se quedan donde están. El equipo no vuelve a arrancar solo: enciende los agentes uno a uno con «Encender». El asistente sigue encendido.",
+  resultStopRequested: "Parada solicitada: el equipo se detiene en pocos segundos.",
+  stopTeamFailed: "No se pudo solicitar la parada. Inténtalo de nuevo.",
   pauseHours1: "Durante 1 hora",
   pauseHours4: "Durante 4 horas",
   pauseTomorrow: "Hasta mañana a las 8",
@@ -400,7 +443,9 @@ const fr: AgentsPanelText = {
   readAt: "Lu à {time}",
   failed: "Je n’ai pas pu lire les agents.",
   failedAt: "Tentative de {time}",
-  summary: "{waiting} vous attendent · {working} au travail · {up} actifs sur {total}",
+  summaryWaiting: { one: "{count} vous attend", other: "{count} vous attendent" },
+  summaryWorking: { one: "{count} au travail", other: "{count} au travail" },
+  summaryUp: { one: "{count} actif sur {total}", other: "{count} actifs sur {total}" },
   up: "actif",
   down: "éteint",
   heldByUser: "arrêté par vous",
@@ -455,6 +500,12 @@ const fr: AgentsPanelText = {
   confirmPause: "Mettre en pause l’équipe {where} ?",
   bodyPause:
     "Les agents terminent ce qu’ils font et s’arrêtent sans rien consommer. L’équipe reprend d’elle-même à l’échéance, ou quand vous la reprenez d’ici.",
+  stopTeam: "Arrêter l’équipe",
+  teamControlsHelp: "Pause : l’équipe s’arrête pendant la durée choisie puis repart seule. Arrêter : l’équipe s’éteint (l’assistant reste allumé) et ne repart pas tant que vous ne redémarrez pas les agents d’ici.",
+  confirmStopTeam: "Arrêter l’équipe {where} ?",
+  bodyStopTeam: "Les agents s’éteignent : ce qu’ils faisaient s’interrompt, les offres restent où elles sont. L’équipe ne repart pas seule : redémarrez les agents un par un avec « Démarrer ». L’assistant reste allumé.",
+  resultStopRequested: "Arrêt demandé : l’équipe s’arrête dans quelques secondes.",
+  stopTeamFailed: "La demande d’arrêt a échoué. Réessayez.",
   pauseHours1: "Pendant 1 heure",
   pauseHours4: "Pendant 4 heures",
   pauseTomorrow: "Jusqu’à demain à 8 h",
@@ -478,7 +529,9 @@ const hu: AgentsPanelText = {
   readAt: "Beolvasva: {time}",
   failed: "Nem tudtam beolvasni az ügynököket.",
   failedAt: "Próbálkozás: {time}",
-  summary: "{waiting} rád vár · {working} dolgozik · {up} aktív / {total}",
+  summaryWaiting: { one: "{count} rád vár", other: "{count} rád vár" },
+  summaryWorking: { one: "{count} dolgozik", other: "{count} dolgozik" },
+  summaryUp: { one: "{count} aktív / {total}", other: "{count} aktív / {total}" },
   up: "aktív",
   down: "kikapcsolva",
   heldByUser: "te kapcsoltad ki",
@@ -533,6 +586,12 @@ const hu: AgentsPanelText = {
   confirmPause: "Szünetelteted a csapatot {where}?",
   bodyPause:
     "Az ügynökök befejezik, amin dolgoznak, és fogyasztás nélkül leállnak. A csapat a határidő lejártakor magától folytatja, vagy amikor innen folytatod.",
+  stopTeam: "Csapat leállítása",
+  teamControlsHelp: "Szünet: a csapat a választott ideig megáll, aztán magától újraindul. Leállítás: a csapat kikapcsol (az asszisztens bekapcsolva marad), és addig nem indul újra, amíg innen be nem kapcsolod az ügynököket.",
+  confirmStopTeam: "Leállítod a csapatot {where}?",
+  bodyStopTeam: "Az ügynökök kikapcsolnak: amit éppen csináltak, megszakad, az állások ott maradnak, ahol vannak. A csapat nem indul újra magától: kapcsold be az ügynököket egyenként a „Bekapcsolás” gombbal. Az asszisztens bekapcsolva marad.",
+  resultStopRequested: "Leállítás kérve: a csapat néhány másodpercen belül megáll.",
+  stopTeamFailed: "A leállítási kérés nem sikerült. Próbáld újra.",
   pauseHours1: "1 órára",
   pauseHours4: "4 órára",
   pauseTomorrow: "Holnap 8 óráig",
@@ -556,7 +615,9 @@ const pt: AgentsPanelText = {
   readAt: "Lido às {time}",
   failed: "Não consegui ler os agentes.",
   failedAt: "Tentativa das {time}",
-  summary: "{waiting} à tua espera · {working} a trabalhar · {up} ativos de {total}",
+  summaryWaiting: { one: "{count} à tua espera", other: "{count} à tua espera" },
+  summaryWorking: { one: "{count} a trabalhar", other: "{count} a trabalhar" },
+  summaryUp: { one: "{count} ativo de {total}", other: "{count} ativos de {total}" },
   up: "ativo",
   down: "desligado",
   heldByUser: "desligado por ti",
@@ -611,6 +672,12 @@ const pt: AgentsPanelText = {
   confirmPause: "Pôr em pausa a equipa {where}?",
   bodyPause:
     "Os agentes terminam o que estão a fazer e param sem consumir. A equipa retoma sozinha no fim do prazo, ou quando a retomares daqui.",
+  stopTeam: "Parar a equipa",
+  teamControlsHelp: "Pausa: a equipa para durante o tempo que escolheres e volta a arrancar sozinha. Parar: a equipa desliga-se (o assistente fica ligado) e não volta a arrancar até ligares os agentes aqui.",
+  confirmStopTeam: "Parar a equipa {where}?",
+  bodyStopTeam: "Os agentes desligam-se: o que estavam a fazer é interrompido e as vagas ficam onde estão. A equipa não volta a arrancar sozinha: liga os agentes um a um com «Ligar». O assistente fica ligado.",
+  resultStopRequested: "Paragem pedida: a equipa para dentro de poucos segundos.",
+  stopTeamFailed: "O pedido de paragem falhou. Tenta novamente.",
   pauseHours1: "Durante 1 hora",
   pauseHours4: "Durante 4 horas",
   pauseTomorrow: "Até amanhã às 8",

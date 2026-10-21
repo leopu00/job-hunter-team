@@ -48,16 +48,16 @@ export default function AgentList({
                 <b className="text-[11.5px] tracking-wide truncate" style={{ color: on ? agent.color : "var(--color-bright)" }}>
                   {agent.name}
                 </b>
-                <small className="ml-auto text-[9px] text-[var(--color-dim)] shrink-0">
+                <small className="ml-auto text-[11px] text-[var(--color-dim)] shrink-0">
                   {whenShort(lastActivity(data, agent.role), now)}
                 </small>
               </span>
               <span className="flex items-center gap-2">
-                <span className="text-[10px] text-[var(--color-muted)] truncate flex-1 min-w-0">{preview(agent, data)}</span>
+                <span className="text-[11px] text-[var(--color-muted)] truncate flex-1 min-w-0">{preview(agent, data)}</span>
                 {unread > 0 && (
                   <span
                     aria-label={`${unread} non letti`}
-                    className="min-w-[15px] h-[15px] px-0.5 rounded-full flex items-center justify-center text-[8px] font-bold leading-none shrink-0"
+                    className="min-w-[17px] h-[17px] px-0.5 rounded-full flex items-center justify-center text-[11px] font-bold leading-none shrink-0"
                     style={{ background: "var(--color-yellow)", color: "var(--color-void)" }}
                   >
                     {unread > 9 ? "9+" : unread}
@@ -67,7 +67,7 @@ export default function AgentList({
               {state && (
                 <span
                   data-testid={`agent-state-${agent.role}`}
-                  className="text-[10px] truncate"
+                  className="text-[11px] truncate"
                   style={{ color: TONE_COLOR[state.tone] }}
                 >
                   {state.line}

@@ -2,6 +2,9 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ComponentType }
 import { describeAgentState, type AgentState, type AgentStateTone } from "@/lib/agent-state";
 import { appLocale } from "../../lib/app-locale";
 import { describeError } from "../../lib/error-catalog";
+import { formatRelative } from "@/lib/message-display";
+import { pluralText } from "../../lib/plural";
+import { requestTeamStop } from "./team-stop";
 import { useExistingTeamReadOnly } from "../../lib/existing-team-readonly";
 import {
   controlAgent,
@@ -125,14 +128,30 @@ type Notice = { ok: boolean; text: string };
 type Pending =
   | { kind: "agent"; op: AgentAction; row: PanelRow }
   | { kind: "pause" }
+  | { kind: "stop-team" }
   | { kind: "resume" };
 
 function fill(template: string, values: Record<string, string | number>): string {
   return template.replace(/\{(\w+)\}/g, (_, key: string) => String(values[key] ?? `{${key}}`));
 }
 
-function stamp(at: number): string {
+/** The full date and time, for a tooltip. */
+function fullStamp(at: number): string {
   return new Date(at).toLocaleString(appLocale(), { dateStyle: "short", timeStyle: "medium" });
+}
+
+/** Today: the time alone; another day: a short date and the time. The full one goes in the tooltip. */
+function stamp(at: number, now = Date.now()): string {
+  const d = new Date(at);
+  const sameDay = d.toDateString() === new Date(now).toDateString();
+  return sameDay
+    ? d.toLocaleTimeString(appLocale(), { timeStyle: "medium" })
+    : d.toLocaleString(appLocale(), { dateStyle: "short", timeStyle: "short" });
+}
+
+/** How long ago, short («2m fa»), as the rest of the app says it. */
+function ago(seconds: number | null): string {
+  return seconds === null ? "—" : formatRelative(new Date(seconds * 1000).toISOString(), appLocale());
 }
 
 function clock(seconds: number | null): string {
@@ -159,20 +178,29 @@ function resultText(t: AgentsPanelText, result: ActionResult, name: string): str
   return fill(key, { name });
 }
 
+/**
+ * Whether the row's agent runs. A listed agent whose state says "spento" (no
+ * tmux session: it ended between the list and the state's read) is off, as a
+ * row with no session: same word, same led, not counted among the ones up.
+ */
+export function isUp(row: PanelRow): boolean {
+  return row.agent !== null && row.agent.state.state !== "spento";
+}
+
 function Led({ row }: { row: PanelRow }) {
-  const tone = row.agent ? describeAgentState(row.agent.state, appLocale()).tone : "grey";
+  const tone = isUp(row) ? describeAgentState(row.agent!.state, appLocale()).tone : "grey";
   return (
     <span
       aria-hidden
       className="inline-block w-2 h-2 rounded-full shrink-0"
-      style={{ background: row.agent ? TONE[tone] : "var(--color-border)" }}
+      style={{ background: isUp(row) ? TONE[tone] : "var(--color-border)" }}
     />
   );
 }
 
 function stateLine(t: AgentsPanelText, row: PanelRow): string {
   if (row.heldBySafety) return t.heldBySafety;
-  if (!row.agent) return row.heldByUser ? t.heldByUser : t.down;
+  if (!row.agent || !isUp(row)) return row.heldByUser ? t.heldByUser : t.down;
   return describeAgentState(row.agent.state, appLocale()).line;
 }
 
@@ -206,11 +234,11 @@ function Terminal({ row, t }: { row: PanelRow; t: AgentsPanelText }) {
   if (!screen.value.up) return <p className="text-[11px] text-[var(--color-muted)]">{t.screenDown}</p>;
   return (
     <>
-      <p className="text-[10px] mb-1 text-[var(--color-muted)]">{fill(t.screenAt, { time: stamp(screen.at) })}</p>
+      <p className="text-[11px] mb-1 text-[var(--color-muted)]">{fill(t.screenAt, { time: stamp(screen.at) })}</p>
       {/* Text only: React escapes it, nothing in it is ever HTML. */}
       <pre
         data-testid={`panel-terminal-${session}`}
-        className="text-[10px] leading-snug whitespace-pre-wrap break-words max-h-[55vh] overflow-auto rounded p-2"
+        className="text-[11px] leading-snug whitespace-pre-wrap break-words max-h-[55vh] overflow-auto rounded p-2"
         style={{ background: "var(--color-deep)", color: "var(--color-bright)" }}
       >
         {screen.value.text === "" ? t.screenEmpty : screen.value.text}
@@ -248,6 +276,10 @@ function Confirm({
   } else if (pending.kind === "pause") {
     title = fill(t.confirmPause, { where });
     body = [t.bodyPause];
+  } else if (pending.kind === "stop-team") {
+    title = fill(t.confirmStopTeam, { where });
+    body = [t.bodyStopTeam];
+    danger = true;
   } else {
     title = fill(t.confirmResume, { where });
     body = [t.bodyResume];
@@ -378,6 +410,14 @@ export default function AgentsPanel({ search }: PageProps) {
     setActing(true);
     let key = "team";
     let done: Outcome<ActionResult>;
+    if (pending.kind === "stop-team") {
+      const stopped = await requestTeamStop();
+      setNotices((all) => ({ ...all, team: { ok: stopped.ok, text: stopped.ok ? t.resultStopRequested : t.stopTeamFailed } }));
+      setActing(false);
+      setPending(null);
+      await read();
+      return;
+    }
     if (pending.kind === "agent") {
       key = pending.row.session;
       done = await controlAgent(pending.op, pending.row.session, target);
@@ -397,7 +437,7 @@ export default function AgentsPanel({ search }: PageProps) {
   };
 
   const counts = useMemo(() => {
-    const up = rows.filter((row) => row.agent);
+    const up = rows.filter(isUp);
     return {
       waiting: up.filter((row) => row.agent?.state.state === "aspetta_umano").length,
       working: up.filter((row) => row.agent?.state.state === "lavora").length,
@@ -437,7 +477,7 @@ export default function AgentsPanel({ search }: PageProps) {
           type="button"
           onClick={() => void read()}
           disabled={busy}
-          className="text-[10px] font-semibold tracking-widest uppercase px-3 py-1.5 rounded border border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-bright)] disabled:opacity-60 disabled:cursor-wait"
+          className="text-[11px] font-semibold tracking-widest uppercase px-3 py-1.5 rounded border border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-bright)] disabled:opacity-60 disabled:cursor-wait"
         >
           {busy ? t.refreshing : t.refresh}
         </button>
@@ -462,7 +502,11 @@ export default function AgentsPanel({ search }: PageProps) {
         <>
           <div className="flex flex-wrap items-center justify-between gap-2 mb-3 rounded border px-3 py-2" style={{ borderColor: "var(--color-border)" }}>
             <span data-testid="panel-summary" className="text-[11px]" style={{ color: "var(--color-bright)" }}>
-              {fill(t.summary, counts)}
+              {[
+                pluralText(appLocale(), counts.waiting, t.summaryWaiting),
+                pluralText(appLocale(), counts.working, t.summaryWorking),
+                pluralText(appLocale(), counts.up, t.summaryUp, { total: counts.total }),
+              ].join(" · ")}
               {teamLine && (
                 <>
                   {" · "}
@@ -477,16 +521,32 @@ export default function AgentsPanel({ search }: PageProps) {
               )}
             </span>
             {!readOnly && team && !team.halted && (
-              <button
-                type="button"
-                data-testid={paused ? "panel-resume" : "panel-pause"}
-                onClick={() => setPending(paused ? { kind: "resume" } : { kind: "pause" })}
-                className="text-[10px] font-semibold uppercase tracking-widest px-3 py-1 rounded border border-[var(--color-border)] text-[var(--color-bright)]"
-              >
-                {paused ? t.resume : t.pause}
-              </button>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  data-testid={paused ? "panel-resume" : "panel-pause"}
+                  onClick={() => setPending(paused ? { kind: "resume" } : { kind: "pause" })}
+                  className="text-[11px] font-semibold uppercase tracking-widest px-3 py-1 rounded border border-[var(--color-border)] text-[var(--color-bright)]"
+                >
+                  {paused ? t.resume : t.pause}
+                </button>
+                <button
+                  type="button"
+                  data-testid="panel-stop-team"
+                  onClick={() => setPending({ kind: "stop-team" })}
+                  className="text-[11px] font-semibold uppercase tracking-widest px-3 py-1 rounded border"
+                  style={{ color: "var(--color-red)", borderColor: "var(--color-red)" }}
+                >
+                  {t.stopTeam}
+                </button>
+              </div>
             )}
           </div>
+          {!readOnly && team && !team.halted && (
+            <p data-testid="panel-team-help" className="text-[11px] -mt-2 mb-3 text-[var(--color-muted)]">
+              {t.teamControlsHelp}
+            </p>
+          )}
           {notices.team && (
             <p role={notices.team.ok ? "status" : "alert"} className="text-[11px] mb-2" style={{ color: notices.team.ok ? "var(--color-green)" : "var(--color-red)" }}>
               {notices.team.text}
@@ -497,7 +557,7 @@ export default function AgentsPanel({ search }: PageProps) {
               {t.statesUnknown}
             </p>
           )}
-          <p className="text-[10px] mb-2 text-[var(--color-muted)]">{fill(t.readAt, { time: stamp(list.at) })}</p>
+          <p className="text-[11px] mb-2 text-[var(--color-muted)]">{fill(t.readAt, { time: stamp(list.at) })}</p>
 
           <div className="flex flex-col md:flex-row gap-3 min-h-0">
             <ul aria-label={t.title} className="md:w-[260px] shrink-0 flex flex-col gap-px rounded border overflow-hidden" style={{ borderColor: "var(--color-border)", opacity: busy ? 0.6 : 1 }}>
@@ -518,15 +578,15 @@ export default function AgentsPanel({ search }: PageProps) {
                       style={{ background: active ? "var(--color-card)" : "transparent" }}
                     >
                       <Led row={row} />
-                      <span className="text-[11px] font-semibold tracking-wider w-[110px] shrink-0" style={{ color: row.agent ? "var(--color-white)" : "var(--color-muted)" }}>
+                      <span className="text-[11px] font-semibold tracking-wider w-[110px] shrink-0" style={{ color: isUp(row) ? "var(--color-white)" : "var(--color-muted)" }}>
                         {row.session}
                       </span>
-                      <span className="text-[10px] truncate" style={{ color: "var(--color-muted)" }}>
+                      <span className="text-[11px] min-w-0 leading-snug break-words" style={{ color: "var(--color-muted)" }}>
                         {stateLine(t, row)}
                       </span>
                     </button>
                     {notices[row.session] && !notices[row.session].ok && (
-                      <p role="alert" className="px-3 pb-1 text-[10px] text-[var(--color-red)]">
+                      <p role="alert" className="px-3 pb-1 text-[11px] text-[var(--color-red)]">
                         {notices[row.session].text}
                       </p>
                     )}
@@ -544,8 +604,8 @@ export default function AgentsPanel({ search }: PageProps) {
                       <span className="text-[13px] font-bold tracking-widest" style={{ color: "var(--color-white)" }}>
                         {current.session}
                       </span>
-                      <span className="text-[10px] uppercase tracking-widest" style={{ color: current.agent ? "var(--color-green)" : "var(--color-dim)" }}>
-                        {current.agent ? t.up : current.heldByUser ? t.heldByUser : t.down}
+                      <span className="text-[11px] uppercase tracking-widest" style={{ color: current.agent ? "var(--color-green)" : "var(--color-dim)" }}>
+                        {isUp(current) ? t.up : current.heldByUser ? t.heldByUser : t.down}
                       </span>
                     </div>
                     <p
@@ -556,8 +616,12 @@ export default function AgentsPanel({ search }: PageProps) {
                       {stateLine(t, current)}
                     </p>
                     {current.agent && (
-                      <p className="text-[10px] mt-0.5 text-[var(--color-muted)]">
-                        {fill(t.started, { time: clock(current.agent.created) })} · {fill(t.activity, { time: clock(current.agent.activity) })}
+                      <p
+                        data-testid="panel-times"
+                        className="text-[11px] mt-0.5 text-[var(--color-muted)]"
+                        title={`${fill(t.started, { time: current.agent.created === null ? "—" : fullStamp(current.agent.created * 1000) })} · ${fill(t.activity, { time: current.agent.activity === null ? "—" : fullStamp(current.agent.activity * 1000) })}`}
+                      >
+                        {fill(t.started, { time: clock(current.agent.created) })} · {fill(t.activity, { time: ago(current.agent.activity) })}
                         {current.agent.activity !== null &&
                           current.agent.state.state !== "lavora" &&
                           now - current.agent.activity * 1000 < MOVING_MS && (
@@ -565,8 +629,8 @@ export default function AgentsPanel({ search }: PageProps) {
                           )}
                       </p>
                     )}
-                    {SCHEDULED.has(current.session) && <p className="text-[10px] mt-1 text-[var(--color-dim)]">{t.maintenance}</p>}
-                    {REVIEWER.test(current.session) && <p className="text-[10px] mt-1 text-[var(--color-dim)]">{t.reviewer}</p>}
+                    {SCHEDULED.has(current.session) && <p className="text-[11px] mt-1 text-[var(--color-dim)]">{t.maintenance}</p>}
+                    {REVIEWER.test(current.session) && <p className="text-[11px] mt-1 text-[var(--color-dim)]">{t.reviewer}</p>}
                   </div>
                   <div className="flex items-center gap-2">
                     {rowActions(current, readOnly).map((op) => (
@@ -575,7 +639,7 @@ export default function AgentsPanel({ search }: PageProps) {
                         type="button"
                         data-testid={`panel-${op}`}
                         onClick={() => setPending({ kind: "agent", op, row: current })}
-                        className={`text-[10px] font-semibold uppercase tracking-widest px-3 py-1 rounded border ${op === "stop" ? "ml-3" : ""}`}
+                        className={`text-[11px] font-semibold uppercase tracking-widest px-3 py-1 rounded border ${op === "stop" ? "ml-3" : ""}`}
                         style={
                           op === "stop"
                             ? { color: "var(--color-red)", borderColor: "var(--color-red)" }
@@ -608,7 +672,7 @@ export default function AgentsPanel({ search }: PageProps) {
                       type="button"
                       aria-selected={tab === name}
                       onClick={() => setTab(name as "terminal" | "chat")}
-                      className="text-[10px] font-semibold uppercase tracking-widest pb-1"
+                      className="text-[11px] font-semibold uppercase tracking-widest pb-1"
                       style={{ color: tab === name ? "var(--color-white)" : "var(--color-muted)", borderBottom: tab === name ? "2px solid var(--color-white)" : "2px solid transparent" }}
                     >
                       {name === "terminal" ? t.tabTerminal : t.tabChat}

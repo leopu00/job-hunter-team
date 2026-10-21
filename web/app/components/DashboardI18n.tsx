@@ -18,7 +18,7 @@ const TRANSLATIONS: Record<DashboardLocale, Record<string, string>> = {
     // Navbar
     nav_dashboard: "Dashboard",
     nav_analisi: "Analisi",
-    nav_map: "Map",
+    nav_map: "Mappa",
     nav_positions: "Posizioni",
     nav_swipe: "Swipe",
     nav_ready: "Pronte",
@@ -376,7 +376,7 @@ const TRANSLATIONS: Record<DashboardLocale, Record<string, string>> = {
     // Navbar
     nav_dashboard: "Irányítópult",
     nav_analisi: "Elemzés",
-    nav_map: "Map",
+    nav_map: "Térkép",
     nav_positions: "Állások",
     nav_swipe: "Swipe",
     nav_ready: "Kész",

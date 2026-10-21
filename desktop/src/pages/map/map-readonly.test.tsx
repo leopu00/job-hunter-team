@@ -77,7 +77,7 @@ describe("the map on an existing team read only", () => {
     expect(await screen.findByRole("heading", { name: "Mappa" })).toBeInTheDocument();
     expect(window.location.hash).toMatch(/^#\/map/);
     const nav = screen.getByRole("navigation", { name: "Navigazione app" });
-    expect(within(nav).getByRole("link", { name: "Map" })).toHaveAttribute("aria-current", "page");
+    expect(within(nav).getByRole("link", { name: "Mappa" })).toHaveAttribute("aria-current", "page");
   });
 
   it("feeds the globe from the team's positions on the VPS, with the web's placement and no cloud read", async () => {

@@ -28,7 +28,9 @@ describe("desktop-only texts", () => {
     const id = `${repo}web/app/(protected)/team/MobileTeamStatus.tsx`;
     const desktop = applyTextOverrides(id, readFileSync(id, "utf-8"));
     expect(desktop).not.toMatch(/mobile view|vista mobile|vista móvil|vue mobile|mobile Ansicht|mobilnézet|vista móvel/i);
-    expect(desktop).toContain("Qui vedi lo stato del team e puoi fermarlo. Il runtime viene configurato durante l’onboarding.");
+    // the team is paused and stopped from the agents' panel, which the card links to
+    expect(desktop).toContain("Qui vedi lo stato del team; la pausa e lo stop sono nel Pannello Agenti. Il runtime viene configurato durante l’onboarding.");
+    expect(desktop).not.toMatch(/puoi fermarlo|can stop it/);
     expect(desktop).not.toContain("Team locale");
   });
 

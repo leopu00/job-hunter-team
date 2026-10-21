@@ -46,7 +46,7 @@ export default function AgentBar({ agent, data, now }: { agent: AgentDef; data: 
           <h1 className="m-0 text-[14px] font-bold tracking-wide" style={{ color: agent.color }}>
             {agent.name}
           </h1>
-          <dl className="m-0 mt-1 flex flex-wrap gap-x-4 gap-y-0.5 text-[10px]">
+          <dl className="m-0 mt-1 flex flex-wrap gap-x-4 gap-y-0.5 text-[11px]">
             {barEntries(agent, data, now).map((e) => (
               <div key={e.label} className="flex gap-1">
                 <dt className="text-[var(--color-dim)]">{e.label}</dt>
@@ -58,14 +58,14 @@ export default function AgentBar({ agent, data, now }: { agent: AgentDef; data: 
         {agent.page && (
           <Link
             href={agent.page}
-            className="shrink-0 text-[10px] font-semibold tracking-widest uppercase px-3 py-1.5 rounded border border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-bright)] no-underline transition-colors"
+            className="shrink-0 text-[11px] font-semibold tracking-widest uppercase px-3 py-1.5 rounded border border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-bright)] no-underline transition-colors"
           >
             Pagina del ruolo
           </Link>
         )}
       </div>
       {error && (
-        <p className="m-0 mt-2 text-[10px]" style={{ color: "var(--color-red)" }}>
+        <p className="m-0 mt-2 text-[11px]" style={{ color: "var(--color-red)" }}>
           Ultimo errore del team ({whenLong(data.team?.lastErrorAt, now)}): {error}
         </p>
       )}
