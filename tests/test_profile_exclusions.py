@@ -233,6 +233,18 @@ def test_the_scout_gets_the_hint_with_the_values_and_never_the_users_words(db):
     assert "No profile exclusions in force." in _run("db_query.py", db, "profile-exclusions").stdout
 
 
+def test_the_codes_that_act_are_the_ones_the_json_names_and_the_table_accepts(db):
+    data = json.loads((ROOT / "shared" / "feedback-reasons.json").read_text(encoding="utf-8"))
+    assert list(rules.CODES) == data["acting"]
+    assert all(code in data["proposable"] for code in rules.CODES)
+    conn = sqlite3.connect(db)
+    table = conn.execute("SELECT sql FROM sqlite_master WHERE name = 'profile_exclusions'").fetchone()[0]
+    for code in rules.CODES:
+        assert f"'{code}'" in table
+    for code in set(data["proposable"]) - set(rules.CODES):
+        assert f"'{code}'" not in table, "a seniority code has no row in the table yet"
+
+
 def test_a_database_without_the_table_scores_as_before(tmp_path):
     path = tmp_path / "old.db"
     conn = sqlite3.connect(path)

@@ -35,9 +35,9 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from _db import ensure_schema, get_db  # noqa: E402
-from feedback_reasons import LABELS  # noqa: E402
+from feedback_reasons import ACTING, LABELS  # noqa: E402
 
-CODES = ("company", "wrong_location", "salary_low", "wrong_stack")
+CODES = ACTING
 # What each code takes off the total, once per matching exclusion; the sum never takes off more than CAP.
 PENALTY = {"company": 30, "wrong_location": 15, "salary_low": 15, "wrong_stack": 15}
 CAP = 30
