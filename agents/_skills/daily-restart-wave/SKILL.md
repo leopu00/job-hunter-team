@@ -42,11 +42,13 @@ ALL THREE must be true. Skip with `status=skipped` and a `reason` field in the l
    If the file doesn't exist → treat as "never fired" → condition is true.
    If `now - last_wave_at < 23h` → skip with `reason=anti_thrash`.
 
-3. **Team is not in `.team-halted.flag` or `.weekly-halt.flag`**. If either flag exists, the user has explicitly paused the team — restarting now would be hostile.
+3. **Team is not in `.team-halted.flag`, `.weekly-halt.flag` or `.team-standby.flag`**. If any of these flags exists, the user has explicitly paused the team — restarting now would be hostile.
 
    ```bash
-   [ -f /jht_home/.jht/.team-halted.flag ] && skip
-   [ -f /jht_home/.jht/.weekly-halt.flag ] && skip
+   JHT_HOME="${JHT_HOME:-/jht_home}"
+   [ -f "$JHT_HOME/.team-halted.flag" ] && skip
+   [ -f "$JHT_HOME/.weekly-halt.flag" ] && skip
+   [ -f "$JHT_HOME/.team-standby.flag" ] && skip
    ```
 
 If all 3 pass → proceed. The whole 3-check block is `<2s`, runs at every Dottore wake-up, costs nothing when out-of-window.

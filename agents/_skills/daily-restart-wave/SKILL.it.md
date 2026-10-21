@@ -43,11 +43,13 @@ TUTTE E TRE devono essere vere. Salta con `status=skipped` e un campo `reason` n
    Se il file non esiste → tratta come "mai eseguito" → condizione vera.
    Se `now - last_wave_at < 23h` → salta con `reason=anti_thrash`.
 
-3. **Il team non è in `.team-halted.flag` o `.weekly-halt.flag`**. Se uno dei due flag esiste, l'utente ha esplicitamente messo in pausa il team — riavviare ora sarebbe ostile.
+3. **Il team non è in `.team-halted.flag`, `.weekly-halt.flag` o `.team-standby.flag`**. Se uno di questi flag esiste, l'utente ha esplicitamente messo in pausa il team — riavviare ora sarebbe ostile.
 
    ```bash
-   [ -f /jht_home/.jht/.team-halted.flag ] && skip
-   [ -f /jht_home/.jht/.weekly-halt.flag ] && skip
+   JHT_HOME="${JHT_HOME:-/jht_home}"
+   [ -f "$JHT_HOME/.team-halted.flag" ] && skip
+   [ -f "$JHT_HOME/.weekly-halt.flag" ] && skip
+   [ -f "$JHT_HOME/.team-standby.flag" ] && skip
    ```
 
 Se tutte e 3 passano → procedi. L'intero blocco dei 3 check dura `<2s`, gira a ogni risveglio del Dottore, non costa nulla quando fuori finestra.
