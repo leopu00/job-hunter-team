@@ -73,7 +73,7 @@ describe("SshKeyPicker", () => {
   it("has a named group, live status and operable labelled controls", () => {
     render(<Harness pickKey={vi.fn().mockResolvedValue(null)} />);
 
-    expect(screen.getByRole("group", { name: "File chiave SSH" })).toBeInTheDocument();
+    expect(screen.getByRole("group", { name: "File della chiave" })).toBeInTheDocument();
     expect(screen.getByRole("status")).toHaveTextContent("Nessuna chiave selezionata");
     expect(screen.getByRole("button", { name: "Scegli chiave…" })).toHaveAttribute(
       "aria-describedby",
