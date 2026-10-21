@@ -179,7 +179,7 @@ describe("OnboardingFlow technical setup", () => {
     const { unmount } = renderFlow({ platform: "windows", runtime: failed, runtimeLogPath: path, onOpenRuntimeLog: open });
     const status = screen.getByRole("alert");
     expect(status).toHaveTextContent(`Il registro di ogni passo, con l’errore completo, è in: ${path}`);
-    await userEvent.click(within(status).getByRole("button", { name: "Apri il registro" }));
+    await userEvent.click(within(status).getByRole("button", { name: "Mostra il file del registro" }));
     expect(open).toHaveBeenCalledOnce();
     unmount();
 

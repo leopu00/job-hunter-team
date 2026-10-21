@@ -151,6 +151,9 @@ vi.mock("../onboarding", () => ({
         {props.runtime.status === "failed" && props.runtime.code && <p>code:{props.runtime.code}</p>}
         {props.runtime.status === "failed" && props.runtime.title && <p>title:{props.runtime.title}</p>}
         <button type="button" onClick={() => void props.onSubmit(SUBMISSION).catch(() => undefined)}>submit-onboarding</button>
+        {props.interruption && <p>interrupted:{props.interruption.stage}:{props.interruption.provider}</p>}
+        {props.onResumeInterrupted && <button type="button" onClick={() => void props.onResumeInterrupted?.().catch(() => undefined)}>resume-interrupted</button>}
+        {props.onDiscardInterruption && <button type="button" onClick={() => props.onDiscardInterruption?.()}>discard-interruption</button>}
         <button type="button" onClick={() => void props.onSubmit(SUBMISSION_VPS).catch(() => undefined)}>submit-vps</button>
         {(["claude", "codex", "kimi"] as const).map((provider) => (
           <button key={provider} type="button" onClick={() => void props.onSubmit({ ...SUBMISSION, provider }).catch(() => undefined)}>submit-{provider}</button>
@@ -930,6 +933,60 @@ describe("DashboardApp onboarding router", () => {
       "Cosa fare: Causa: winget could not install Podman.CLI (0x8a15000f). Riprova; se si ripete, apri il registro qui sotto e mandalo al supporto.",
     )).toBeInTheDocument();
     expect(screen.queryByText(`Cosa fare: ${describeError("runtime_install_failed").action}`)).not.toBeInTheDocument();
+  });
+
+  it("a cause that is a piece of a command is not told: the retry sentence stands and the piece goes to the technical details", async () => {
+    vi.mocked(useSession).mockReturnValue(signedInAs("runtime-command-cause-account"));
+    requireOnboarding();
+    vi.mocked(prepareOnboardingRuntime)
+      .mockRejectedValueOnce({
+        code: "runtime_install_failed",
+        message: "runtime_install_failed",
+        retryable: true,
+        detail: "t '%{http_code}' --proxy http://127.0.0.1:3130 https://example.com/)\" = 403",
+      });
+    render(<DashboardApp />);
+    await userEvent.click(await screen.findByRole("button", { name: "submit-onboarding" }));
+
+    expect(await screen.findByText("failed:runtime")).toBeInTheDocument();
+    expect(screen.getByText(
+      "Cosa fare: Riprova; se si ripete, apri il registro qui sotto e mandalo al supporto.",
+    )).toBeInTheDocument();
+    expect(screen.queryByText(/Causa:/)).not.toBeInTheDocument();
+  });
+
+  it("a local preparation that fails is remembered, and a reopened setup can resume it with the same provider or drop it", async () => {
+    vi.mocked(useSession).mockReturnValue(signedInAs("interrupted-account"));
+    requireOnboarding();
+    vi.mocked(prepareOnboardingRuntime).mockRejectedValueOnce({
+      code: "runtime_install_failed", message: "runtime_install_failed", retryable: true,
+    });
+    const first = render(<DashboardApp />);
+    await userEvent.click(await screen.findByRole("button", { name: "submit-onboarding" }));
+    expect(await screen.findByText("failed:runtime")).toBeInTheDocument();
+    const kept = JSON.parse(localStorage.getItem("jht.desktop.onboarding.interrupted.interrupted-account") ?? "null");
+    expect(kept).toMatchObject({ stage: "runtime", code: "runtime_install_failed", provider: "claude" });
+    first.unmount();
+
+    // Reopened: the gate carries what was kept; «Resume» prepares again with the same choice.
+    vi.mocked(loadOnboardingGate).mockResolvedValue({
+      phase: "required",
+      account: { displayName: "Synthetic Person" },
+      resumeAvailable: true,
+      interruption: { stage: "runtime", code: "runtime_install_failed", at: 1_700_000_000_000, provider: "codex" },
+      runtime: { status: "collecting", stage: "host" },
+    });
+    vi.mocked(prepareOnboardingRuntime).mockClear();
+    vi.mocked(prepareOnboardingRuntime).mockRejectedValueOnce({ code: "runtime_install_failed", message: "x", retryable: true });
+    render(<DashboardApp />);
+    expect(await screen.findByText("interrupted:runtime:codex")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "resume-interrupted" }));
+    await waitFor(() => expect(prepareOnboardingRuntime).toHaveBeenCalledOnce());
+    expect(vi.mocked(prepareOnboardingRuntime).mock.calls[0][0]).toEqual({ host: { kind: "local" }, provider: "codex" });
+
+    await userEvent.click(screen.getByRole("button", { name: "discard-interruption" }));
+    expect(screen.queryByText(/^interrupted:/)).not.toBeInTheDocument();
+    expect(localStorage.getItem("jht.desktop.onboarding.interrupted.interrupted-account")).toBe("");
   });
 
   it("without a cause the catalog's action stays, and a code with its own instruction keeps it before the cause", async () => {

@@ -208,3 +208,71 @@ describe("the SSH user of the setup step is not capitalised or corrected by the 
     expect(field).toHaveAttribute("spellcheck", "false");
   });
 });
+
+describe("Continue says why it is off", () => {
+  const t = ONBOARDING_TEXT.it;
+  const missing = () => document.getElementById("onboarding-vps-missing");
+
+  async function vps(overrides: Partial<OnboardingFlowProps> = {}) {
+    const user = userEvent.setup();
+    renderFlow(overrides);
+    await user.click(screen.getByRole("button", { name: new RegExp(t.startSetup) }));
+    await user.click(screen.getByRole("radio", { name: new RegExp(t.vpsServer) }));
+    return user;
+  }
+
+  it("lists what the VPS form still lacks, and the list shrinks as it is filled", async () => {
+    const user = await vps();
+    expect(missing()).toHaveTextContent("Per continuare manca ancora: l’indirizzo VPS, l’utente SSH e il file della chiave privata.");
+    expect(screen.getByRole("button", { name: /^continua(?! con google)/i })).toHaveAttribute("aria-describedby", "onboarding-vps-missing");
+    await user.type(screen.getByLabelText(t.vpsAddress), "host.example.invalid");
+    expect(missing()).toHaveTextContent("manca ancora: l’utente SSH e il file della chiave privata.");
+    await user.type(screen.getByLabelText(t.sshUser), "ubuntu");
+    await user.click(screen.getByRole("button", { name: /scegli chiave SSH/i }));
+    expect(missing()).toBeNull();
+    expect(screen.getByRole("button", { name: /^continua(?! con google)/i })).toBeEnabled();
+  });
+
+  it("names a port that is not valid, and says nothing on «Questo computer»", async () => {
+    const user = await vps();
+    await user.clear(screen.getByLabelText(t.sshPort));
+    expect(missing()).toHaveTextContent("una porta valida");
+    await user.click(screen.getByRole("radio", { name: new RegExp(t.thisComputer) }));
+    expect(missing()).toBeNull();
+  });
+
+  it("does not add a second line to a local profile on a VPS: the Google note already says what to do", async () => {
+    await vps({ account: { displayName: "Ada", identity: "local" } });
+    expect(missing()).toBeNull();
+    expect(screen.getByRole("note")).toBeInTheDocument();
+  });
+
+  it.each(Object.keys(ONBOARDING_TEXT) as (keyof typeof ONBOARDING_TEXT)[])("%s: the sentence has its slot and all four items are named", (locale) => {
+    const text = ONBOARDING_TEXT[locale];
+    expect(text.vpsMissing).toContain("{list}");
+    for (const item of Object.values(text.vpsMissingItems)) expect(item.trim()).not.toBe("");
+  });
+});
+
+describe("the SSH key is named as the PRIVATE key, once", () => {
+  it("shows the field label, and under the picker where the key usually is and which file is not it", async () => {
+    const user = userEvent.setup();
+    renderFlow();
+    await user.click(screen.getByRole("button", { name: new RegExp(ONBOARDING_TEXT.it.startSetup) }));
+    await user.click(screen.getByRole("radio", { name: new RegExp(ONBOARDING_TEXT.it.vpsServer) }));
+    expect(screen.getByText("Chiave SSH privata")).toBeInTheDocument();
+    const hint = screen.getByText(/di solito nella cartella ~\/\.ssh/);
+    expect(hint).toHaveTextContent("Non quello che finisce in .pub");
+    expect(hint).toHaveTextContent("Resta su questo computer");
+    expect(hint.closest(".onboarding-field")).toContainElement(screen.getByText("Chiave SSH privata"));
+  });
+
+  it.each(Object.keys(ONBOARDING_TEXT) as (keyof typeof ONBOARDING_TEXT)[])("%s: the two labels differ, and the hint gives the folder and the .pub warning", (locale) => {
+    const text = ONBOARDING_TEXT[locale];
+    expect(text.sshKey).not.toBe(text.sshKeyPicker.label);
+    expect(text.sshKeyHint).toContain("~/.ssh");
+    expect(text.sshKeyHint).toContain(".pub");
+    // the promise after the warning: the key stays on this computer
+    expect(text.sshKeyHint.split(".pub")[1].length).toBeGreaterThan(20);
+  });
+});

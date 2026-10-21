@@ -81,6 +81,8 @@ export type OnboardingRuntimeState =
       message: string;
       /** What to do now, from the error catalog. */
       action?: string;
+      /** The step's own last line when it is not a sentence to tell: shown under the technical details. */
+      cause?: string;
       code?: string;
       retryable?: boolean;
     }
@@ -199,6 +201,18 @@ export interface OnboardingFlowProps {
    * review step says so before the setup starts.
    */
   previousLocalData?: boolean;
+  /** The first step offers to resume (or drop) a local preparation that stopped half-way. */
+  interruption?: OnboardingInterruption;
+  onResumeInterrupted?: () => Promise<void>;
+  onDiscardInterruption?: () => void;
+}
+
+/** What a stopped local preparation leaves behind in the renderer: where it stopped, why, when, with which provider. */
+export interface OnboardingInterruption {
+  stage: OnboardingRuntimeStage;
+  code: string | null;
+  at: number;
+  provider: SubscriptionProvider;
 }
 
 export type OnboardingGateState =
@@ -207,6 +221,8 @@ export type OnboardingGateState =
       phase: "required";
       account: OnboardingAccount;
       resumeAvailable: boolean;
+      /** A local preparation that stopped on a failure and was never finished (see recordOnboardingInterruption). */
+      interruption?: OnboardingInterruption;
       existingTeam?: ExistingTeamHint;
       runtime: OnboardingRuntimeState;
     }
@@ -291,8 +307,51 @@ function displayName(user: User): string | null {
   return null;
 }
 
+const INTERRUPTION_PREFIX = "jht.desktop.onboarding.interrupted.";
+const INTERRUPTION_STAGES = new Set<string>([
+  "host", "provider", "ssh-host-key", "runtime", "container", "provider-login", "team-start", "assistant",
+]);
+const INTERRUPTION_PROVIDERS = new Set<string>(["claude", "codex", "kimi"]);
+
+/** Remembers that a local preparation stopped, so a reopened app can say so instead of starting from the welcome as if nothing had happened. */
+export function recordOnboardingInterruption(
+  userId: string, value: OnboardingInterruption, store: OnboardingMarkerStore = localStorage,
+): void {
+  try { store.setItem(`${INTERRUPTION_PREFIX}${userId}`, JSON.stringify(value)); } catch { /* the app still shows the failure; only the memory is lost */ }
+}
+
+export function readOnboardingInterruption(
+  userId: string, store: OnboardingMarkerStore = localStorage,
+): OnboardingInterruption | undefined {
+  try {
+    const raw = store.getItem(`${INTERRUPTION_PREFIX}${userId}`);
+    if (!raw) return undefined;
+    const row = record(JSON.parse(raw));
+    if (typeof row.stage !== "string" || !INTERRUPTION_STAGES.has(row.stage) ||
+        typeof row.provider !== "string" || !INTERRUPTION_PROVIDERS.has(row.provider) ||
+        typeof row.at !== "number" || !Number.isFinite(row.at) ||
+        (row.code !== null && !(typeof row.code === "string" && /^[a-z][a-z0-9_]{0,63}$/.test(row.code)))) return undefined;
+    return {
+      stage: row.stage as OnboardingRuntimeStage,
+      code: row.code as string | null,
+      at: row.at,
+      provider: row.provider as SubscriptionProvider,
+    };
+  } catch { return undefined; }
+}
+
+export function clearOnboardingInterruption(userId: string, store: OnboardingMarkerStore = localStorage): void {
+  try {
+    if (store.getItem(`${INTERRUPTION_PREFIX}${userId}`)) store.setItem(`${INTERRUPTION_PREFIX}${userId}`, "");
+  } catch { /* nothing to clear */ }
+}
+
 function markerPresent(store: OnboardingMarkerStore, userId: string): boolean {
   try { return store.getItem(markerKey(userId)) === MARKER_VALUE; } catch { return false; }
+}
+function interruptionOf(store: OnboardingMarkerStore, userId: string): { interruption?: OnboardingInterruption } {
+  const interruption = readOnboardingInterruption(userId, store);
+  return interruption ? { interruption } : {};
 }
 function markerStarted(store: OnboardingMarkerStore, userId: string): boolean {
   try { return store.getItem(markerKey(userId)) === MARKER_STARTED; } catch { return false; }
@@ -333,6 +392,7 @@ export async function loadOnboardingGate(
   return {
     phase: "required", account: { displayName: displayName(user), identity: "google" },
     resumeAvailable: started,
+    ...interruptionOf(store, user.id),
     ...(milestones?.vps_setup_completed_at && typeof team?.user_id === "string" && clean(team.user_id)
       ? { existingTeam: { teamId: clean(team.user_id), status: "available" as const } }
       : {}),
@@ -352,6 +412,7 @@ export function loadLocalOnboardingGate(
     phase: "required",
     account: { displayName: clean(localDisplayName), identity: "local" },
     resumeAvailable: markerStarted(store, markerId),
+    ...interruptionOf(store, markerId),
     runtime: { status: "collecting", stage: "host" },
   };
 }
@@ -404,6 +465,7 @@ export function markOnboardingReady(
     store.setItem(markerKey(userId), MARKER_VALUE);
     if (!markerPresent(store, userId)) throw new Error("marker was not persisted");
   } catch { throw new OnboardingSaveError("marker-failed"); }
+  clearOnboardingInterruption(userId, store);
 }
 
 /** Prevents an interrupted new 0.4 flow from being mistaken for a legacy completed account. */

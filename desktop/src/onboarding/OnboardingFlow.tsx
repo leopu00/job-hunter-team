@@ -20,6 +20,7 @@ import CloserDesktopPanel from "../closer-desktop/CloserDesktopPanel";
 import FirstSetupAssistance from "./FirstSetupAssistance";
 import { ASSISTANCE_TEXT } from "./assistance.i18n";
 import { LOGIN_TEXT } from "../components/login-screen.i18n";
+import { fill } from "../lib/text-slots";
 import { ONBOARDING_TEXT, type OnboardingCopy } from "./onboarding.i18n";
 import { WINDOWS_SETUP } from "./windows-setup";
 import "./onboarding.css";
@@ -325,11 +326,12 @@ function RuntimeView({ host, platform, t, locale, runtime, activity, onRetry, on
               </ol>
             ) : <p>{t.waitingFirstUpdate}</p>}
           </details>
-          {failed && runtime.code && (
+          {failed && (runtime.code || runtime.cause) && (
             <details className="onboarding-activity-details onboarding-technical-details">
               <summary>{t.technicalDetails}</summary>
               <dl>
-                <div><dt>{t.code}</dt><dd><code>{runtime.code}</code></dd></div>
+                {runtime.code && <div><dt>{t.code}</dt><dd><code>{runtime.code}</code></dd></div>}
+                {runtime.cause && <div><dt>{t.technicalCause}</dt><dd><code>{runtime.cause}</code></dd></div>}
               </dl>
             </details>
           )}
@@ -405,13 +407,15 @@ function RuntimeView({ host, platform, t, locale, runtime, activity, onRetry, on
   );
 }
 
-export function OnboardingFlow({ account, platform, runtime, activity, onSubmit, onConnectExistingTeam, onSignInWithGoogle, onRetry, onRestart, onExitFailure, onRuntimeAction, providerLogin, sshHostKey, onConfirmHostKey, onCancelHostKey, onProviderInput, onProviderClose, onProviderRestart, onRecreatePodmanMachine, onFreeDiskSpace, runtimeLogPath, onOpenRuntimeLog, previousLocalData = false, locale: localeOverride }: OnboardingFlowProps) {
+export function OnboardingFlow({ account, platform, runtime, activity, onSubmit, onConnectExistingTeam, onSignInWithGoogle, onRetry, onRestart, onExitFailure, onRuntimeAction, providerLogin, sshHostKey, onConfirmHostKey, onCancelHostKey, onProviderInput, onProviderClose, onProviderRestart, onRecreatePodmanMachine, onFreeDiskSpace, runtimeLogPath, onOpenRuntimeLog, previousLocalData = false, interruption, onResumeInterrupted, onDiscardInterruption, locale: localeOverride }: OnboardingFlowProps) {
   const locale = localeOverride ?? appLocale();
   const t = ONBOARDING_TEXT[locale];
   const providerChoices = providers(t);
   const unavailable = unavailableProviders(platform);
   const selectableProviders = providerChoices.map(({ value }) => value).filter((value) => !unavailable.has(value));
   const kimiReason = unavailable.has("kimi") ? describeError("kimi_unavailable_windows", { locale }) : null;
+  const interruptionCause = interruption?.code ? describeError(interruption.code, { locale }) : null;
+  const interruptionReason = interruptionCause?.known ? interruptionCause.text : t.interruptedUnknown;
   // Windows runs the team locally too, with Podman inside WSL.
   const localRuntimeSupported = platform === "macos" || platform === "linux" || platform === "windows";
   const [step, setStep] = useState(0);
@@ -451,6 +455,15 @@ export function OnboardingFlow({ account, platform, runtime, activity, onSubmit,
   // A team on a VPS pairs with the account: a local profile has none, so the step says so now
   // instead of starting a setup that fails at the runtime stage (pairing_token_missing).
   const vpsNeedsAccount = account.identity === "local" && host.kind === "vps";
+  // What a VPS still lacks before Continue works, in the words of the form, so a disabled button says why.
+  const missingVps = host.kind === "vps" && !vpsNeedsAccount
+    ? ([
+        !host.address.trim() && t.vpsMissingItems.address,
+        !host.user.trim() && t.vpsMissingItems.user,
+        !(host.port > 0 && host.port <= 65535) && t.vpsMissingItems.port,
+        !host.keyPath.trim() && t.vpsMissingItems.key,
+      ].filter(Boolean) as string[])
+    : [];
   const hostIsValid = (localRuntimeSupported && host.kind === "local") ||
     (host.kind === "vps" && !vpsNeedsAccount && Boolean(host.address.trim() && host.user.trim() && host.port > 0 && host.port <= 65535 && host.keyPath.trim()));
 
@@ -502,6 +515,17 @@ export function OnboardingFlow({ account, platform, runtime, activity, onSubmit,
             <div className="onboarding-account-mark" aria-hidden="true">{(account.displayName || "J").trim().charAt(0).toUpperCase() || "J"}</div>
             <p className="onboarding-eyebrow">{account.identity === "local" ? t.welcomeEyebrowLocal : t.welcomeEyebrowAccount}</p><h2 ref={headingRef} tabIndex={-1}>{t.hello(account.displayName ?? "")}</h2>
             <p className="onboarding-lede">{account.identity === "local" ? t.welcomeLedeLocal : t.welcomeLedeAccount}</p>
+            {interruption && onResumeInterrupted && <div className="onboarding-aside" role="note" data-testid="onboarding-interrupted">
+              <strong>{t.interruptedTitle}</strong>
+              <p>{fill(t.interruptedText, {
+                date: new Date(interruption.at).toLocaleString(locale, { dateStyle: "medium", timeStyle: "short" }),
+                reason: interruptionReason,
+              })}</p>
+              <div className="onboarding-actions">
+                <button className="onboarding-secondary" type="button" onClick={() => onDiscardInterruption?.()}>{t.startOver}</button>
+                <button className="onboarding-primary" type="button" onClick={() => void onResumeInterrupted()}>{t.resumeSetup} <span aria-hidden="true">→</span></button>
+              </div>
+            </div>}
             <div className="onboarding-callout"><span aria-hidden="true">01</span><p><strong>{t.calloutStrong}</strong> {t.calloutText}</p></div>
             <button className="onboarding-primary" type="submit">{t.startSetup} <span aria-hidden="true">→</span></button>
           </form>}
@@ -521,13 +545,16 @@ export function OnboardingFlow({ account, platform, runtime, activity, onSubmit,
               <label className="onboarding-field onboarding-field--full"><span>{t.vpsAddress}</span><input value={host.address} onChange={(event) => setHost({ ...host, address: event.target.value })} placeholder={t.vpsAddressPlaceholder} required /></label>
               <label className="onboarding-field"><span>{t.sshUser}</span><input placeholder={t.sshUserPlaceholder} autoCapitalize="off" autoCorrect="off" spellCheck={false} value={host.user} onChange={(event) => setHost({ ...host, user: event.target.value })} required /></label>
               <label className="onboarding-field"><span>{t.sshPort}</span><input type="number" min="1" max="65535" value={host.port} onChange={(event) => setHost({ ...host, port: Number(event.target.value) })} required /></label>
-              <div className="onboarding-field onboarding-field--full"><span>{t.sshKey}</span><SshKeyPicker value={host.keyPath} onChange={(keyPath) => setHost({ ...host, keyPath })} disabled={submitting} /></div>
+              <div className="onboarding-field onboarding-field--full"><span>{t.sshKey}</span><SshKeyPicker value={host.keyPath} onChange={(keyPath) => setHost({ ...host, keyPath })} disabled={submitting} /><small className="onboarding-hint">{t.sshKeyHint}</small></div>
             </div>}
+            {missingVps.length > 0 && <p className="onboarding-hint" id="onboarding-vps-missing" role="status">
+              {fill(t.vpsMissing, { list: new Intl.ListFormat(locale, { style: "long", type: "conjunction" }).format(missingVps) })}
+            </p>}
             {vpsNeedsAccount && <div className="onboarding-aside" role="note">
               <p>{t.vpsNeedsGoogle}</p>
               {onSignInWithGoogle && <button className="onboarding-secondary" type="button" onClick={() => void onSignInWithGoogle()}>{LOGIN_TEXT[locale].google}</button>}
             </div>}
-            <div className="onboarding-actions"><button className="onboarding-secondary" type="button" onClick={() => setStep(0)}>{t.back}</button><button className="onboarding-primary" type="submit" disabled={!hostIsValid}>{t.continue} <span aria-hidden="true">→</span></button></div>
+            <div className="onboarding-actions"><button className="onboarding-secondary" type="button" onClick={() => setStep(0)}>{t.back}</button><button className="onboarding-primary" type="submit" disabled={!hostIsValid} aria-describedby={missingVps.length > 0 ? "onboarding-vps-missing" : undefined}>{t.continue} <span aria-hidden="true">→</span></button></div>
           </form>
           {host.kind === "vps" && onConnectExistingTeam && <section className="onboarding-aside" aria-label={t.existingTeam.title}>
             <h3>{t.existingTeam.title}</h3>
