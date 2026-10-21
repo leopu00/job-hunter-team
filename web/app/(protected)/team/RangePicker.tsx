@@ -165,7 +165,7 @@ export default function RangePicker({
           value={from}
           max={to}
           onChange={(e) => e.target.value && apply(e.target.value, to)}
-          className="min-h-11 min-w-0 bg-[var(--color-card)] border border-[var(--color-border)] rounded-md px-2 py-1 text-[11px] text-[var(--color-white)] outline-none focus:border-[var(--color-blue)] transition-colors"
+          className="min-h-11 w-40 min-w-0 bg-[var(--color-card)] border border-[var(--color-border)] rounded-md px-2 py-1 text-[11px] text-[var(--color-white)] outline-none focus:border-[var(--color-blue)] transition-colors"
           style={{ colorScheme: "dark", fontFamily: "inherit" }}
         />
         <span className="text-[10px] text-[var(--color-dim)] uppercase tracking-widest">
@@ -177,7 +177,7 @@ export default function RangePicker({
           min={from}
           max={today}
           onChange={(e) => e.target.value && apply(from, e.target.value)}
-          className="min-h-11 min-w-0 bg-[var(--color-card)] border border-[var(--color-border)] rounded-md px-2 py-1 text-[11px] text-[var(--color-white)] outline-none focus:border-[var(--color-blue)] transition-colors"
+          className="min-h-11 w-40 min-w-0 bg-[var(--color-card)] border border-[var(--color-border)] rounded-md px-2 py-1 text-[11px] text-[var(--color-white)] outline-none focus:border-[var(--color-blue)] transition-colors"
           style={{ colorScheme: "dark", fontFamily: "inherit" }}
         />
         <span className="text-[10px] text-[var(--color-dim)] tabular-nums">
