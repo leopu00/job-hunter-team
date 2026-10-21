@@ -3,7 +3,7 @@ import { cookies } from "next/headers";
 import Database from "better-sqlite3";
 import fs from "fs";
 import { resolveUser } from "@/lib/team-state/auth";
-import { requireAuth } from "@/lib/auth";
+import { requireAuth, requireDesktopWrite } from "@/lib/auth";
 import {
   LOCAL_TOKEN_COOKIE,
   isLocalTokenAuthenticated,
@@ -129,6 +129,9 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
 export async function POST(req: NextRequest): Promise<NextResponse> {
   const denied = await requireAuth();
   if (denied) return denied;
+  // Ordini permanenti al Capitano: li scrive l'app desktop, il sito li legge.
+  const notDesktop = await requireDesktopWrite();
+  if (notDesktop) return notDesktop;
   const body = (await req.json().catch(() => ({}))) as {
     body?: string;
     kind?: string;
@@ -233,6 +236,9 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
 export async function PATCH(req: NextRequest): Promise<NextResponse> {
   const denied = await requireAuth();
   if (denied) return denied;
+  // Ordini permanenti al Capitano: li scrive l'app desktop, il sito li legge.
+  const notDesktop = await requireDesktopWrite();
+  if (notDesktop) return notDesktop;
   const body = (await req.json().catch(() => ({}))) as {
     id?: number | string;
     body?: string;

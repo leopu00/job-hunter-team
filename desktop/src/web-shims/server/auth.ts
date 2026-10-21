@@ -45,3 +45,12 @@ export const DESKTOP_READ_ONLY_MESSAGE = "I comandi al team dalla desktop sono i
 export async function requireLocalWrite(): Promise<NextResponse | null> {
   return NextResponse.json({ error: "read_only", message: DESKTOP_READ_ONLY_MESSAGE }, { status: 403 });
 }
+
+/**
+ * web/lib/auth.ts requireDesktopWrite: the writes that command the team (the
+ * standing orders of the captain) are the desktop's own. Here the signed-in user (requireAuth, run before it) is the
+ * authority, so it lets them through; on the website the same call is a 403.
+ */
+export async function requireDesktopWrite(): Promise<NextResponse | null> {
+  return null;
+}

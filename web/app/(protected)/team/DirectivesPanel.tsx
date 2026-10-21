@@ -12,6 +12,7 @@ import { useToast } from "../../components/Toast";
 import { makeT } from "@/lib/i18n-dict";
 import { T } from "./DirectivesPanel.i18n";
 import { IconClipboard } from "@/app/components/PanelIcons";
+import { useDesktopWrite } from "@/lib/desktop-write";
 import {
   type DirectiveAction,
   directiveErrorTranslationKey,
@@ -73,10 +74,14 @@ const KIND_LABEL: Record<string, Record<string, string>> = {
 const KINDS = ["order", "strategy", "formation", "note"];
 
 export default function DirectivesPanel({
-  readOnly = false,
+  readOnly: readOnlyProp = false,
 }: {
   readOnly?: boolean;
 }) {
+  // The orders to the captain are written by the desktop app (the route says
+  // 403 read_only to the website): the site shows them, nothing to edit.
+  const { canChange } = useDesktopWrite();
+  const readOnly = readOnlyProp || !canChange;
   const locale = useLocale();
   const { toast } = useToast();
   const t = makeT(T, locale);
@@ -224,8 +229,14 @@ export default function DirectivesPanel({
         {t("subtitle")}
       </p>
 
-      {/* `readOnly` resta per gli embed informativi; la pagina /team monta il
-          pannello editabile sia in locale sia sul cloud. */}
+      {!readOnlyProp && !canChange && (
+        <p className="mb-4 text-[12px] text-[var(--color-dim)]">
+          {t("desktopOnly")}
+        </p>
+      )}
+
+      {/* Si scrive solo dalla desktop (`canChange`): il sito mostra la bacheca
+          e `readOnly` copre gli embed informativi. */}
       {!readOnly && (
         <div className="mb-5 flex flex-col gap-2 sm:flex-row">
           <textarea

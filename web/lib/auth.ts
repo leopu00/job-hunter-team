@@ -182,6 +182,12 @@ export async function requireAuth(): Promise<NextResponse | null> {
  *   - azioni-posizione "leggere": feedback like/dislike, ticket, write/geocode/
  *     recheck-request, user-exclude — intenzioni che viaggiano via cloud-sync
  *     verso la VPS (l'utente le vuole anche da telefono).
+ *   - mark-applied, outcome, user-note: stessa corsia. Non comandano la squadra
+ *     e non toccano segreti o config: annotano una posizione dell'utente sulla
+ *     sua riga e arrivano al box per la stessa via delle altre (richiesta async
+ *     che il box applica), quindi vanno bene anche da telefono. Una sessione
+ *     web rubata può solo scrivere una nota o un esito sulle posizioni di quel
+ *     profilo, mai ordinare agli agenti: per quello c'e' `requireDesktopWrite`.
  */
 export async function requireLocalWrite(): Promise<NextResponse | null> {
   // [JHT-DASHBOARD-SPLIT] Decisione DURA a build: su un deploy `cloud` la
@@ -193,6 +199,21 @@ export async function requireLocalWrite(): Promise<NextResponse | null> {
   if (isCloudDeploy()) return readOnlyResponse();
   if (await isLocalRequest()) return null;
   return readOnlyResponse();
+}
+
+/**
+ * Write-guard delle scritture che COMANDANO la squadra e non sono richieste
+ * async: gli ordini permanenti al Capitano (team-directives POST/PATCH). Il
+ * sito li mostra e basta; li scrive l'app desktop. Una sessione web rubata non deve poter dare ordini agli
+ * agenti, e per questo non bastano `requireAuth` ne' la corsia async.
+ *
+ * Sul sito e' come `requireLocalWrite` (403 `read_only`). Esiste a parte perche'
+ * nel desktop i due divergono: `requireLocalWrite` li' rifiuta sempre (i comandi
+ * al team sono ancora in arrivo), mentre queste scritture sono proprio del
+ * desktop: lo shim di `desktop/src/web-shims/server/auth.ts` le lascia passare.
+ */
+export async function requireDesktopWrite(): Promise<NextResponse | null> {
+  return requireLocalWrite();
 }
 
 /**
