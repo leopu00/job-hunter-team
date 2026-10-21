@@ -14,6 +14,10 @@ definition verifiable par la machine se trouve dans :
 - `shared/config/profile-schema.ts` (types Zod, cote web)
 - `shared/skills/validate_profile.py` (gate runtime, cote agents/CLI)
 
+## 🌍 Langue du texte libre (contraignant)
+
+Le texte de `narrative`, `key_points` et `timeline` du profil est écrit dans la langue de l'utilisateur (`python3 /app/shared/skills/text_language.py lang` l'affiche), **même si le CV dont il provient est dans une autre langue** (RULE-T14). `validate_profile.py` affiche `WARN: LANGUAGE: …` pour un long texte clairement dans une autre langue : réécris-le, n'ignore pas l'avertissement. Les noms, les entreprises et les outils restent tels quels.
+
 ## 🎚️ Modele a 3 niveaux
 
 ```

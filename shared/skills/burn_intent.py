@@ -69,17 +69,37 @@ Uso:
   python3 burn_intent.py grant [--hours N] [--reason "..."]
   python3 burn_intent.py revoke [--reason "..."]
   python3 burn_intent.py sweep               # rimuove il flag se scaduto
+  python3 burn_intent.py announce [--json]   # avvisa l'UTENTE: T-60 min e scadenza (una volta per concessione)
+
+## Avvisare l'utente (JHT-T33)
+
+Il 20/10 una deroga di 8,8 h è scaduta alle 05:58 UTC e il team è tornato al
+ritmo normale: la notte dopo la resa è passata da 58 a 17 posizioni e nessuno,
+utente compreso, ne sapeva il motivo. `announce()` dice all'utente due cose, ognuna
+UNA volta per concessione (la chiave è `granted_at|expires_at`: un rinnovo è una
+concessione nuova e riavvia il conto):
+
+  • `warning`  — mancano al più 60 minuti alla scadenza (non per una concessione
+                 di 60 minuti o meno: sarebbe un avviso al momento stesso del via)
+  • `expired`  — la deroga è scaduta; i freni sono tornati
+
+Il messaggio passa da `jht-notify-user` (chat dell'app, Telegram, dashboard web), nella
+lingua dell'utente, e dice come rinnovare. Va chiamata PRIMA di `sweep()`, che
+cancella il flag alla scadenza: il proprietario del tick è `sentinel-bridge`.
+Se l'invio fallisce l'avviso NON è segnato come inviato e si riprova al tick dopo.
 """
 from __future__ import annotations
 
 import argparse
 import json
 import os
+import shutil
+import subprocess
 import sys
 import tempfile
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Optional
+from typing import Callable, Optional
 
 
 JHT_HOME = Path(os.environ.get("JHT_HOME") or str(Path.home() / ".jht"))
@@ -89,6 +109,10 @@ INTENT_FLAG = JHT_HOME / ".burn-intent.flag"
 # Traccia esplicita di ogni transizione. Con i freni tolti la responsabilità di
 # non sprecare passa al coordinatore: va SCRITTO, non lasciato dedurre.
 AUDIT_LOG = JHT_HOME / "logs" / "burn-intent.jsonl"
+# Quali avvisi all'utente sono già partiti per la concessione corrente (JHT-T33).
+NOTICES_FILE = JHT_HOME / ".burn-intent-notices.json"
+# Quanto prima della scadenza l'utente viene avvisato.
+WARN_MINUTES = 60
 
 # Una finestra di provider (5h) è la durata naturale della deroga: è l'unità su
 # cui il team ragiona e quella su cui l'utente vede il risultato.
@@ -286,6 +310,182 @@ def sweep(now: Optional[datetime] = None) -> Optional[dict]:
     return data
 
 
+def _grant_key(data: dict) -> str:
+    return f"{data.get('granted_at')}|{data.get('expires_at')}"
+
+
+def _sent_notices(data: dict) -> list[str]:
+    """Gli avvisi già inviati per QUESTA concessione; vuoto se il file è di un'altra o illeggibile."""
+    try:
+        raw = json.loads(NOTICES_FILE.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, ValueError):
+        return []
+    if not isinstance(raw, dict) or raw.get("key") != _grant_key(data):
+        return []
+    sent = raw.get("sent")
+    return [k for k in sent if k in ("warning", "expired")] if isinstance(sent, list) else []
+
+
+def _mark_sent(data: dict, kind: str) -> None:
+    sent = _sent_notices(data)
+    if kind not in sent:
+        sent.append(kind)
+    body = json.dumps({"key": _grant_key(data), "sent": sent}, sort_keys=True) + "\n"
+    NOTICES_FILE.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp = tempfile.mkstemp(prefix=".burn-intent-notices-", suffix=".tmp", dir=str(NOTICES_FILE.parent))
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            f.write(body)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp, NOTICES_FILE)
+    except Exception:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+        raise
+
+
+def due_notices(now: Optional[datetime] = None) -> list[str]:
+    """Gli avvisi all'utente che spettano ora e non sono ancora partiti: [] / ['warning'] / ['expired']."""
+    data = read()
+    if data is None:
+        return []
+    st = status(now)
+    sent = _sent_notices(data)
+    expires = _parse_ts(data.get("expires_at"))
+    granted = _parse_ts(data.get("granted_at"))
+    if st["state"] == STATE_EXPIRED:
+        return [] if "expired" in sent else ["expired"]
+    if "warning" in sent or expires is None:
+        return []
+    remaining_min = (expires - _now(now)).total_seconds() / 60
+    # Una concessione di WARN_MINUTES o meno non ha un "un'ora prima": l'avviso arriverebbe
+    # insieme al via. Senza `granted_at` leggibile si avvisa comunque.
+    if granted is not None and (expires - granted).total_seconds() / 60 <= WARN_MINUTES:
+        return []
+    return ["warning"] if remaining_min <= WARN_MINUTES else []
+
+
+# The clock as each language writes it: 24 hours everywhere but English.
+_TIME_FORMAT_12H = ("en",)
+
+
+def _zone(name):
+    try:
+        from zoneinfo import ZoneInfo
+        return ZoneInfo(name) if isinstance(name, str) and name.strip() else None
+    except Exception:                   # noqa: BLE001 — no such zone
+        return None
+
+
+def _user_zone():
+    """The zone the user chose at the setup (host.env: JHT_USER_TZ), as format_time resolves it.
+
+    format_time answers «UTC» when nothing was ever set, which here means «not chosen»: None.
+    """
+    try:
+        here = str(Path(__file__).resolve().parent)
+        if here not in sys.path:
+            sys.path.insert(0, here)
+        import format_time
+
+        name = format_time._read_profile_timezone()
+        return None if name.strip().upper() == format_time.DEFAULT_TZ else _zone(name)
+    except Exception:                   # noqa: BLE001
+        return None
+
+
+def _team_zone():
+    """The zone the team works in (jht.config.json: team.working_hours.timezone), or None."""
+    try:
+        name = json.loads((JHT_HOME / "jht.config.json").read_text(encoding="utf-8"))["team"]["working_hours"]["timezone"]
+    except Exception:                   # noqa: BLE001 — no config, or one without the field
+        return None
+    return _zone(name)
+
+
+def _system_zone():
+    return datetime.now().astimezone().tzinfo
+
+
+def local_time(moment: datetime, lang: str) -> str:
+    """`moment` on the user's wall clock, written the way `lang` writes it.
+
+    The user reads «alle 21:30», not «alle 19:30 UTC». The zone is the one chosen at the setup
+    (JHT_USER_TZ), then the team's, then the system's; when it all comes down to UTC the clock says
+    so («19:30 UTC»), because nobody should take it for their own.
+    """
+    local = moment.astimezone(_user_zone() or _team_zone() or _system_zone())
+    if lang in _TIME_FORMAT_12H:
+        text = f"{local.hour % 12 or 12}:{local.minute:02d} {'AM' if local.hour < 12 else 'PM'}"
+    else:
+        text = f"{local.hour:02d}:{local.minute:02d}"
+    return f"{text} UTC" if local.tzname() in ("UTC", "Z") else text
+
+
+def notice_text(kind: str, data: dict) -> str:
+    """Il testo dell'avviso, nella lingua dell'utente (catalogo shared/locales), con l'ora LOCALE."""
+    shared = Path(__file__).resolve().parents[1]
+    if str(shared) not in sys.path:
+        sys.path.insert(0, str(shared))
+    import i18n  # noqa: E402 — shared/i18n.py: stessa lingua della shell, del CLI e dei bridge
+
+    expires = _parse_ts(data.get("expires_at"))
+    at = local_time(expires, i18n.current_lang()) if expires else "?"
+    if kind == "warning":
+        return i18n.tf("burn_intent.warning", WARN_MINUTES, at)
+    return i18n.tf("burn_intent.expired", at)
+
+
+def _default_notifier(kind: str, message: str, data: dict) -> None:
+    candidates = [
+        shutil.which("jht-notify-user"),
+        "/app/agents/_tools/jht-notify-user",
+        str(Path(__file__).resolve().parents[2] / "agents" / "_tools" / "jht-notify-user"),
+    ]
+    executable = next((c for c in candidates if c and Path(c).is_file()), None)
+    if not executable:
+        raise RuntimeError("jht-notify-user is unavailable")
+    payload = {"kind": kind, "expires_at": data.get("expires_at")}
+    result = subprocess.run(
+        [executable, "--agent", "capitano", "--kind", "alert",
+         "--source-id", f"burn-intent-{kind}-{data.get('expires_at')}",
+         "--source-action", "burn_intent_notice",
+         "--source-payload", json.dumps(payload, sort_keys=True), message],
+        check=False, capture_output=True, text=True, timeout=60)
+    if result.returncode != 0:
+        raise RuntimeError(f"jht-notify-user failed with exit {result.returncode}")
+
+
+def announce(now: Optional[datetime] = None,
+             notifier: Optional[Callable[[str, str, dict], None]] = None) -> list[str]:
+    """Avvisa l'UTENTE (T-60 min e scadenza), una volta per concessione. Ritorna gli avvisi inviati.
+
+    Mai solleva: un avviso che non parte non deve fermare il tick del bridge, e non viene segnato
+    come inviato (si riprova al tick dopo). Da chiamare PRIMA di `sweep()`.
+    """
+    sent: list[str] = []
+    try:
+        data = read()
+        if data is None:
+            return sent
+        send = notifier or _default_notifier
+        for kind in due_notices(now):
+            try:
+                send(kind, notice_text(kind, data), data)
+            except Exception as e:      # noqa: BLE001 — si riprova al prossimo tick
+                _audit("notice_failed", notice=kind, error=str(e)[:200])
+                continue
+            _mark_sent(data, kind)
+            _audit("notice_sent", notice=kind, expires_at=data.get("expires_at"))
+            sent.append(kind)
+    except Exception:                    # noqa: BLE001
+        return sent
+    return sent
+
+
 def main(argv: list[str]) -> int:
     ap = argparse.ArgumentParser(
         prog="burn_intent",
@@ -305,6 +505,9 @@ def main(argv: list[str]) -> int:
     p_rv.add_argument("--reason", default="", help="reason (recorded in logs)")
 
     sub.add_parser("sweep", help="remove the flag if expired")
+
+    p_an = sub.add_parser("announce", help="tell the user: one hour before the override ends, and when it has")
+    p_an.add_argument("--json", action="store_true", help="output machine-readable")
 
     args = ap.parse_args(argv)
 
@@ -335,6 +538,14 @@ def main(argv: list[str]) -> int:
         removed = sweep()
         print("BURN-INTENT expired → flag removed." if removed
               else "nothing to remove.")
+        return 0
+
+    if args.cmd == "announce":
+        sent = announce()
+        if args.json:
+            print(json.dumps({"sent": sent}))
+        else:
+            print(("user notified: " + ", ".join(sent)) if sent else "nothing to announce.")
         return 0
 
     return 1

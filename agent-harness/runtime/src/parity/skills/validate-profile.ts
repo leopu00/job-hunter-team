@@ -28,6 +28,7 @@ import type { ToolHandler } from "../../tools/registry.ts";
 import { argvTool } from "./argv-tool.ts";
 import { pySafeLoad } from "./profile-gate.ts";
 import { pyJson } from "./py-compat.ts";
+import { userLanguage, wrongLanguage } from "./text-language.ts";
 
 export const VALIDATE_PROFILE_TOOL = "validate_profile";
 
@@ -47,6 +48,8 @@ const TARGET_ROLE_SPECIALTIES: Readonly<Record<string, readonly string[]>> = {
 export interface ProfileReport {
   errors: string[];
   warnings: string[];
+  /** Free text clearly in another language than the person's: a notice, never blocking, not counted by `--strict`. */
+  languageWarnings: string[];
 }
 
 type Dict = Record<string, unknown>;
@@ -63,9 +66,10 @@ const isInt = (value: unknown): boolean => typeof value === "bigint";
 const isNum = (value: unknown): boolean => typeof value === "bigint" || (typeof value === "number" && !Number.isNaN(value));
 
 /** Every check of the script, in its order, so the messages come out in its order too. */
-export function validateProfile(profile: unknown): ProfileReport {
+export function validateProfile(profile: unknown, expectedLanguage: () => string = () => userLanguage(undefined)): ProfileReport {
   const errors: string[] = [];
   const warnings: string[] = [];
+  const languageWarnings: string[] = [];
   const err = (message: string) => errors.push(message);
   const warn = (message: string) => warnings.push(message);
   const requireStr = (object: Dict, key: string, where: string) => {
@@ -73,7 +77,7 @@ export function validateProfile(profile: unknown): ProfileReport {
   };
 
   if (!isDict(profile)) {
-    return { errors: ["(root): profile must be a top-level YAML object"], warnings };
+    return { errors: ["(root): profile must be a top-level YAML object"], warnings, languageWarnings };
   }
   for (const key of ["name", "target_role", "location", "seniority_target"]) requireStr(profile, key, "(root)");
   const years = profile["experience_years"];
@@ -123,7 +127,43 @@ export function validateProfile(profile: unknown): ProfileReport {
     err("target_specialty: invalid for target_role_category_id");
   }
 
-  return { errors, warnings };
+  checkLanguage(profile, expectedLanguage, languageWarnings);
+
+  return { errors, warnings, languageWarnings };
+}
+
+/** Keys of a timeline entry that carry prose; dates, roles and company names are not judged. */
+const TIMELINE_PROSE_KEYS = ["description", "summary", "text", "detail"] as const;
+
+/** The free text the person reads in the profile, and where it is. */
+function* prose(profile: Dict): Generator<[string, string]> {
+  if (isStr(profile["summary"])) yield ["summary", profile["summary"]];
+  const blocks = profile["blocks"];
+  if (!Array.isArray(blocks)) return;
+  for (const [i, block] of blocks.entries()) {
+    if (!isDict(block)) continue;
+    const where = `blocks[${i}]${isStr(block["key"]) ? ` (${block["key"]})` : ""}`;
+    const content = block["content"];
+    if (block["kind"] === "narrative" && isStr(content)) yield [where, content];
+    else if (block["kind"] === "key_points" && Array.isArray(content)) {
+      for (const [j, item] of content.entries()) if (isDict(item) && isStr(item["text"])) yield [`${where}.content[${j}]`, item["text"]];
+    } else if (block["kind"] === "timeline" && Array.isArray(content)) {
+      for (const [j, item] of content.entries()) {
+        if (!isDict(item)) continue;
+        for (const key of TIMELINE_PROSE_KEYS) if (isStr(item[key])) yield [`${where}.content[${j}].${key}`, item[key]];
+      }
+    }
+  }
+}
+
+/** The script's `check_language`: warns, never refuses. */
+function checkLanguage(profile: Dict, expectedLanguage: () => string, out: string[]): void {
+  let expected: string | null = null;
+  for (const [where, text] of prose(profile)) {
+    expected ??= expectedLanguage();
+    const found = wrongLanguage(text, expected);
+    if (found) out.push(`LANGUAGE: ${where} looks ${found}, the user's language is ${expected}: rewrite it in ${expected}`);
+  }
 }
 
 function validateBlocks(blocks: unknown, err: (message: string) => void, requireStr: (object: Dict, key: string, where: string) => void): void {
@@ -206,10 +246,19 @@ export interface ValidateProfileResult {
  * The script's command line: `validate_profile.py <path> [--strict] [--json]`,
  * with its own output and exit code (0 valid, 1 invalid, 2 usage).
  */
-export function runValidateProfile(args: string[], resolve: (path: string) => string): ValidateProfileResult {
+export function runValidateProfile(
+  args: string[],
+  resolve: (path: string) => string,
+  userLanguageNow: () => string = () => userLanguage(undefined),
+): ValidateProfileResult {
   const strict = args.includes("--strict");
   const asJson = args.includes("--json");
-  const paths = args.filter((arg) => !arg.startsWith("--"));
+  // `--lang XX` forces the expected language, as in the script; its value is not a path.
+  const langAt = args.indexOf("--lang");
+  if (langAt >= 0 && langAt + 1 >= args.length) return { stdout: "", stderr: "usage: --lang needs a language code\n", exitCode: 2 };
+  const forced = langAt >= 0 ? args[langAt + 1]! : null;
+  const rest = langAt >= 0 ? args.filter((_, i) => i !== langAt && i !== langAt + 1) : args;
+  const paths = rest.filter((arg) => !arg.startsWith("--"));
   if (paths.length === 0) {
     return { stdout: "", stderr: "usage: validate_profile.py <candidate_profile.yml> [--strict] [--json]\n", exitCode: 2 };
   }
@@ -230,13 +279,13 @@ export function runValidateProfile(args: string[], resolve: (path: string) => st
     return { stdout: "", stderr: `INVALID_PROFILE\nERROR: YAML could not be parsed: ${said}\n`, exitCode: 1 };
   }
 
-  const { errors, warnings } = validateProfile(data);
+  const { errors, warnings, languageWarnings } = validateProfile(data, () => forced ?? userLanguageNow());
   const blocking = [...errors, ...(strict ? warnings : [])];
   if (asJson) {
     // `json.dumps` spacing, not JSON.stringify's: the skill greps this line.
-    return { stdout: `${pyJson({ ok: blocking.length === 0, errors, warnings })}\n`, stderr: "", exitCode: blocking.length === 0 ? 0 : 1 };
+    return { stdout: `${pyJson({ ok: blocking.length === 0, errors, warnings, language_warnings: languageWarnings })}\n`, stderr: "", exitCode: blocking.length === 0 ? 0 : 1 };
   }
-  const said = [...warnings.map((w) => `WARN: ${w}`), ...errors.map((e) => `ERROR: ${e}`)];
+  const said = [...warnings.map((w) => `WARN: ${w}`), ...languageWarnings.map((w) => `WARN: ${w}`), ...errors.map((e) => `ERROR: ${e}`)];
   return {
     stdout: `${blocking.length === 0 ? "VALID_PROFILE" : "INVALID_PROFILE"}\n`,
     stderr: said.length === 0 ? "" : `${said.join("\n")}\n`,
@@ -247,6 +296,8 @@ export function runValidateProfile(args: string[], resolve: (path: string) => st
 export interface ValidateProfileToolOptions {
   /** The person's profile folder: what the tool may read. Absolute. */
   profileDir: string;
+  /** The JHT home, where `i18n-prefs.json` says the person's language. Default: `$JHT_HOME`, then `/jht_home`. */
+  jhtHome?: string;
   /** Where a relative path resolves, and the other folder the role may validate from. Absolute. */
   workdir: string;
 }
@@ -276,7 +327,7 @@ export function createValidateProfileTool(options: ValidateProfileToolOptions): 
     okCodes: [0, 1],
     run: (args) => {
       try {
-        return runValidateProfile(args, resolve);
+        return runValidateProfile(args, resolve, () => userLanguage(options.jhtHome));
       } catch (error) {
         if (error instanceof OutsideProfile) return { stdout: "", stderr: `ERROR: ${error.message}\n`, exitCode: 1 };
         throw error;

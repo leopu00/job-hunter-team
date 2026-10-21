@@ -238,5 +238,7 @@
   "question.reply_hint": "Réponds avec le numéro de l’option (par exemple 2). Si plusieurs questions sont ouvertes, écris « %s 2 ».",
   "question.answer_saved": "Réponse enregistrée : « %s ».",
   "question.answer_already": "Cette question a déjà une réponse : « %s ».",
-  "question.answer_invalid": "Ce n’est pas une des options, je ne l’ai donc pas enregistrée. Réponds avec le numéro d’une option (par exemple 2) ou écris « %s 2 »."
+  "question.answer_invalid": "Ce n’est pas une des options, je ne l’ai donc pas enregistrée. Réponds avec le numéro d’une option (par exemple 2) ou écris « %s 2 ».",
+  "burn_intent.warning": "🔥 Le mode pleins gaz se termine dans environ %d minutes (à %s) : ensuite l'équipe revient à son rythme normal et tu verras moins de nouveaux postes par heure. Pour continuer, demande au Capitaine de le renouveler, par exemple « pleins gaz pour 4 heures de plus ».",
+  "burn_intent.expired": "⏱️ Le mode pleins gaz s'est terminé à %s : l'équipe est revenue à son rythme normal, attends-toi donc à moins de nouveaux postes par heure. Pour repartir, dis-le au Capitaine, par exemple « pleins gaz pour 5 heures »."
 }

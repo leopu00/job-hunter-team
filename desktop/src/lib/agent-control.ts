@@ -29,6 +29,8 @@ export type TeamControlState = {
   standby: { state: "off" | "active" | "expired" | "invalid" | "unknown"; until: string | null; weeklyReset: boolean };
   /** the sessions held off: by the user from here, or by the team for safety; null when unknown */
   held: { session: string; byUser: boolean }[] | null;
+  /** the user's full-throttle override: off, on until `expiresAt`, or ended; unknown for an image that does not say */
+  burnIntent: { state: "off" | "active" | "expired" | "unknown" | null; expiresAt: string | null; remainingMin: number | null };
 };
 
 export type AgentAction = "start" | "stop" | "restart";
@@ -77,12 +79,14 @@ export async function readPanelList(): Promise<Outcome<PanelList>> {
 }
 
 const STANDBY_STATES = new Set(["off", "active", "expired", "invalid", "unknown"]);
+const BURN_STATES = new Set(["off", "active", "expired", "unknown"]);
 
 export async function readTeamState(): Promise<Outcome<TeamControlState>> {
   const read = await call({ op: "team" });
   if (!read.ok) return read;
   const data = read.value;
   const standby = isRecord(data.standby) ? data.standby : null;
+  const burn = isRecord(data.burnIntent) ? data.burnIntent : null;
   if (typeof data.halted !== "boolean" || !standby || !STANDBY_STATES.has(String(standby.state))) {
     return { ok: false, at: read.at, code: "desktop_bad_reply" };
   }
@@ -103,6 +107,12 @@ export async function readTeamState(): Promise<Outcome<TeamControlState>> {
         weeklyReset: standby.weeklyReset === true,
       },
       held,
+      burnIntent: {
+        state: BURN_STATES.has(String(burn?.state)) ? (burn!.state as NonNullable<TeamControlState["burnIntent"]["state"]>) : null,
+        expiresAt: typeof burn?.expiresAt === "string" ? burn.expiresAt : null,
+        remainingMin:
+          typeof burn?.remainingMin === "number" && Number.isInteger(burn.remainingMin) && burn.remainingMin >= 0 ? burn.remainingMin : null,
+      },
     },
   };
 }

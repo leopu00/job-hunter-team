@@ -840,6 +840,21 @@ def _burn_intent_sweep():
         return None
 
 
+def _burn_intent_notify_user():
+    """Avvisa l'UTENTE (JHT-T33): un'ora prima che la deroga scada, e quando è scaduta.
+
+    PRIMA dello sweep, che alla scadenza cancella il flag: dopo non resterebbe niente
+    da cui sapere che c'è stata una deroga. Una volta per concessione, nella lingua
+    dell'utente; un invio fallito si riprova al tick dopo. Non solleva mai."""
+    global _BURN_INTENT_MOD
+    try:
+        if _BURN_INTENT_MOD is None:
+            _BURN_INTENT_MOD = _load_skill_module("burn_intent", "burn_intent.py")
+        return _BURN_INTENT_MOD.announce() if _BURN_INTENT_MOD else []
+    except Exception:                                       # noqa: BLE001
+        return []
+
+
 def _burn_intent_announce(state, bi):
     """Dice agli AGENTI che la deroga è cambiata (requisito: non basta il codice).
 
@@ -2770,6 +2785,7 @@ def main():
         # ── Intento dell'utente, consultato PRIMA di ogni automatismo ──────
         # Lo sweep (scadenza) e l'annuncio agli agenti stanno qui, in testa al
         # tick: sotto, ogni freno di spesa legge `_bi` e nessuno lo ri-calcola.
+        _burn_intent_notify_user()
         _burn_intent_sweep()
         _bi = _burn_intent_status()
         _bi_on = bool(_bi.get("active"))

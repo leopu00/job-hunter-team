@@ -9,6 +9,10 @@ allowed-tools: Bash(mkdir -p *)
 
 Das strukturierte YAML eignet sich hervorragend für Filter und Matches, sagt aber nichts darüber aus, *wer* der Kandidat ist. Die 4 MD-Dateien in `summaries/` tragen die Erzählung, die die Schreiber brauchen, um Lebensläufe zu erstellen, die wie eine Person klingen, nicht wie eine Checkliste.
 
+## 🌍 Sprache (verbindlich)
+
+Schreibe die vier Dateien in der Sprache des Users — `python3 /app/shared/skills/text_language.py lang` gibt sie aus (`i18n-prefs.json`, dann `$JHT_LANG`) — **auch wenn das Gespräch, der Lebenslauf oder die Nachrichten, die du liest, in einer anderen Sprache sind** (RULE-T14). Eigennamen, Firmen und Tools bleiben unverändert. Bevor du eine Datei speicherst, muss `python3 /app/shared/skills/text_language.py check "<Text>"` mit `OK` antworten; bei `WRONG_LANGUAGE` schreibst du den Text neu.
+
 ## Die 4 Dateien (Dateinamen sind FEST)
 
 | Datei            | UI-Titel für den Benutzer   | Was sie enthält                                                             | Längenlimit |

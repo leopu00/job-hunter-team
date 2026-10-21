@@ -268,5 +268,7 @@
   "question.reply_hint": "Reply with the option number (for example 2). If several questions are open, write “%s 2”.",
   "question.answer_saved": "Answer saved: “%s”.",
   "question.answer_already": "This question already has an answer: “%s”.",
-  "question.answer_invalid": "That is not one of the options, so I did not save it. Reply with the number of an option (for example 2) or write “%s 2”."
+  "question.answer_invalid": "That is not one of the options, so I did not save it. Reply with the number of an option (for example 2) or write “%s 2”.",
+  "burn_intent.warning": "🔥 Full-throttle mode ends in about %d minutes (at %s): after that the team goes back to its normal pace and you will see fewer new positions per hour. To keep going, tell the Captain to renew it, for example “full throttle for 4 more hours”.",
+  "burn_intent.expired": "⏱️ Full-throttle mode ended at %s: the team is back at its normal pace, so expect fewer new positions per hour. To start again, tell the Captain, for example “full throttle for 5 hours”."
 }

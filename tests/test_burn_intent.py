@@ -57,6 +57,7 @@ def bi(tmp_path):
     """
     bi_module.INTENT_FLAG = tmp_path / ".burn-intent.flag"
     bi_module.AUDIT_LOG = tmp_path / "logs" / "burn-intent.jsonl"
+    bi_module.NOTICES_FILE = tmp_path / ".burn-intent-notices.json"
     return bi_module
 
 

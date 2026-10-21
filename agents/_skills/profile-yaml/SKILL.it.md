@@ -9,6 +9,10 @@ allowed-tools: Bash(jht profile validate *), Bash(python3 *), Bash(mkdir -p *), 
 
 Il team legge `candidate_profile.yml` per ogni CV, ogni punteggio, ogni decisione di match. Se lo mantieni accurato il resto del sistema funziona; se lo lasci andare alla deriva gli Scrittori producono CV sterili e lo Scorer sbaglia i match delle posizioni.
 
+## 🌍 Lingua del testo libero (vincolante)
+
+Il testo di `narrative`, `key_points` e `timeline` del profilo è scritto nella lingua dell'utente (`python3 /app/shared/skills/text_language.py lang` la stampa), **anche se il CV da cui viene è in un'altra lingua** (RULE-T14). `validate_profile.py` stampa `WARN: LANGUAGE: …` per un testo lungo chiaramente in un'altra lingua: riscrivilo, non ignorare l'avviso. Nomi, aziende e strumenti restano come sono.
+
 ## Path e ownership
 
 | Path                                          | Chi lo scrive       | Chi lo legge             |

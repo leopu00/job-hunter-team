@@ -417,6 +417,15 @@ export default function AgentsPanel({ search }: PageProps) {
     return t.teamActive;
   })();
   const paused = team?.standby.state === "active";
+  // The user's full-throttle override (JHT-T33): on with its end, ending within the hour, or ended.
+  const burnLine = (() => {
+    const burn = team?.burnIntent;
+    if (!burn) return null;
+    if (burn.state === "expired") return t.burnEnded;
+    if (burn.state !== "active" || burn.remainingMin === null || burn.expiresAt === null) return null;
+    const time = stamp(Date.parse(burn.expiresAt));
+    return fill(burn.remainingMin <= 60 ? t.burnEnding : t.burnOn, { time, minutes: String(burn.remainingMin) });
+  })();
 
   return (
     <div className="max-w-6xl mx-auto px-5 pt-6 pb-8" style={{ animation: "fade-in 0.35s ease both" }}>
@@ -458,6 +467,12 @@ export default function AgentsPanel({ search }: PageProps) {
                 <>
                   {" · "}
                   <span data-testid="panel-team-state">{teamLine}</span>
+                </>
+              )}
+              {burnLine && (
+                <>
+                  {" · "}
+                  <span data-testid="panel-burn-intent">{burnLine}</span>
                 </>
               )}
             </span>

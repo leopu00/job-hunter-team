@@ -1,0 +1,263 @@
+"""JHT-T33 — the user is told when the full-throttle override is about to end, and when it has.
+
+On 20/10 an override of 8.8 hours expired at 05:58 UTC and the team went back to its normal pace;
+the next night the yield fell from 58 positions to 17 and nobody, the user included, knew why. Now
+`burn_intent.announce()` tells the user twice per grant, in the user's language, through the same
+channel every other message to the user takes:
+
+- `warning` — one hour (or less) before the end; not for a grant of an hour or less;
+- `expired` — the override ran out; sent before the flag is cleared, so it is still there to read.
+
+Each is sent once per grant; a renewal is a new grant. A send that fails is not marked as sent and
+is tried again at the next tick. The panel of the agents reads the state from `agent_control team`
+(see test_agent_control.py).
+"""
+
+from __future__ import annotations
+
+import json
+import sys
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
+
+import pytest
+
+ROOT = Path(__file__).resolve().parents[1]
+SKILLS = ROOT / "shared" / "skills"
+LAUNCHER = ROOT / ".launcher"
+sys.path.insert(0, str(SKILLS))
+sys.path.insert(0, str(ROOT / "shared"))
+
+import burn_intent as bi_module  # noqa: E402
+
+T0 = datetime(2026, 10, 20, 0, 0, tzinfo=timezone.utc)
+LANGS = ("en", "it", "de", "es", "fr", "hu", "pt")
+
+
+@pytest.fixture
+def bi(tmp_path, monkeypatch):
+    bi_module.INTENT_FLAG = tmp_path / ".burn-intent.flag"
+    bi_module.AUDIT_LOG = tmp_path / "logs" / "burn-intent.jsonl"
+    bi_module.NOTICES_FILE = tmp_path / ".burn-intent-notices.json"
+    bi_module.JHT_HOME = tmp_path
+    # Nothing chosen: the system's zone, here a fixed one (UTC) so that the times below do not move.
+    # The user's zone (JHT_USER_TZ) is looked up by format_time, which caches it for the process.
+    monkeypatch.delenv("JHT_USER_TZ", raising=False)
+    monkeypatch.setenv("JHT_HOST_ENV_FILE", str(tmp_path / "no-host.env"))
+    import format_time
+    format_time._read_profile_timezone.cache_clear()
+    monkeypatch.setattr(format_time, "_HOST_ENV_CANDIDATES", [])
+    monkeypatch.setattr(format_time, "_PROFILE_CANDIDATES", [])
+    monkeypatch.setattr(bi_module, "_system_zone", lambda: timezone.utc)
+    monkeypatch.setenv("JHT_HOME", str(tmp_path))
+    monkeypatch.setenv("JHT_LANG", "en")
+    return bi_module
+
+
+class Outbox:
+    def __init__(self):
+        self.sent: list[tuple[str, str]] = []
+        self.fail = False
+
+    def __call__(self, kind, message, data):
+        if self.fail:
+            raise RuntimeError("the channel is down")
+        self.sent.append((kind, message))
+
+
+def test_the_user_is_warned_an_hour_before_the_end_and_only_once(bi):
+    bi.grant(hours=8.8, now=T0)
+    out = Outbox()
+    ends = T0 + timedelta(hours=8.8)
+    assert bi.announce(now=ends - timedelta(minutes=61), notifier=out) == []
+    assert bi.announce(now=ends - timedelta(minutes=60), notifier=out) == ["warning"]
+    assert bi.announce(now=ends - timedelta(minutes=30), notifier=out) == []
+    [(kind, message)] = out.sent
+    assert kind == "warning" and "60 minutes" in message and "8:48 AM UTC" in message and "Captain" in message
+
+
+def test_the_user_is_told_when_it_has_ended_before_the_flag_is_cleared(bi):
+    bi.grant(hours=8.8, now=T0)
+    out = Outbox()
+    ends = T0 + timedelta(hours=8.8)
+    assert bi.announce(now=ends - timedelta(minutes=10), notifier=out) == ["warning"]
+    after = ends + timedelta(minutes=1)
+    assert bi.announce(now=after, notifier=out) == ["expired"]
+    assert [k for k, _ in out.sent] == ["warning", "expired"]
+    assert "8:48 AM UTC" in out.sent[1][1]
+    # The bridge sweeps after announcing; once the flag is gone there is nothing more to say.
+    assert bi.sweep(now=after) is not None
+    assert bi.announce(now=after + timedelta(minutes=5), notifier=out) == []
+    assert len(out.sent) == 2
+
+
+def test_a_bridge_that_was_down_still_says_it_ended_but_not_that_it_was_ending(bi):
+    bi.grant(hours=5, now=T0)
+    out = Outbox()
+    assert bi.announce(now=T0 + timedelta(hours=7), notifier=out) == ["expired"]
+    assert [k for k, _ in out.sent] == ["expired"]
+
+
+def test_a_grant_of_an_hour_or_less_has_no_warning_only_the_end(bi):
+    bi.grant(hours=1, now=T0)
+    out = Outbox()
+    assert bi.announce(now=T0 + timedelta(minutes=1), notifier=out) == []
+    assert bi.announce(now=T0 + timedelta(minutes=59), notifier=out) == []
+    assert bi.announce(now=T0 + timedelta(minutes=61), notifier=out) == ["expired"]
+
+
+def test_a_renewal_is_a_new_grant_and_warns_again(bi):
+    bi.grant(hours=5, now=T0)
+    out = Outbox()
+    assert bi.announce(now=T0 + timedelta(hours=4, minutes=5), notifier=out) == ["warning"]
+    renewed = T0 + timedelta(hours=4, minutes=10)
+    bi.grant(hours=5, now=renewed)
+    assert bi.announce(now=renewed + timedelta(minutes=1), notifier=out) == []
+    assert bi.announce(now=renewed + timedelta(hours=4, minutes=5), notifier=out) == ["warning"]
+
+
+def test_a_revoked_override_does_not_announce_an_ending(bi):
+    bi.grant(hours=5, now=T0)
+    out = Outbox()
+    bi.revoke(now=T0 + timedelta(hours=1))
+    assert bi.announce(now=T0 + timedelta(hours=6), notifier=out) == []
+    assert out.sent == []
+
+
+def test_a_send_that_fails_is_not_marked_and_is_tried_again(bi):
+    bi.grant(hours=5, now=T0)
+    out = Outbox()
+    out.fail = True
+    when = T0 + timedelta(hours=4, minutes=30)
+    assert bi.announce(now=when, notifier=out) == []
+    assert not bi.NOTICES_FILE.exists()
+    out.fail = False
+    assert bi.announce(now=when + timedelta(minutes=1), notifier=out) == ["warning"]
+    assert json.loads(bi.NOTICES_FILE.read_text())["sent"] == ["warning"]
+
+
+def test_no_flag_or_a_broken_one_announces_nothing_and_never_raises(bi):
+    out = Outbox()
+    assert bi.announce(now=T0, notifier=out) == []
+    bi.INTENT_FLAG.write_text("not json", encoding="utf-8")
+    assert bi.announce(now=T0, notifier=out) == []
+    assert out.sent == []
+
+
+@pytest.mark.parametrize("lang", LANGS)
+def test_the_message_is_in_the_users_language(bi, monkeypatch, lang):
+    monkeypatch.setenv("JHT_LANG", lang)
+    data = bi.grant(hours=5, now=T0)
+    warning = bi.notice_text("warning", data)
+    expired = bi.notice_text("expired", data)
+    assert "60" in warning and "burn_intent" not in warning
+    assert "burn_intent" not in expired and "UTC" in warning and "UTC" in expired  # nothing chosen: the clock says so
+    assert warning != expired
+    import text_language
+
+    for text in (warning, expired):
+        assert text_language.guess_language(text) in (lang, None), (lang, text)
+
+
+def test_every_catalog_has_both_messages_with_the_same_placeholders():
+    catalogs = {lang: json.loads((ROOT / "shared" / "locales" / f"{lang}.json").read_text(encoding="utf-8")) for lang in LANGS}
+    for lang, catalog in catalogs.items():
+        assert catalog["burn_intent.warning"].count("%d") == 1 and catalog["burn_intent.warning"].count("%s") == 1, lang
+        assert catalog["burn_intent.expired"].count("%s") == 1 and "%d" not in catalog["burn_intent.expired"], lang
+    assert len({c["burn_intent.warning"] for c in catalogs.values()}) == len(LANGS)
+
+
+def test_the_message_goes_through_the_channel_every_other_message_to_the_user_takes(bi, monkeypatch):
+    calls = []
+
+    class Done:
+        returncode = 0
+
+    monkeypatch.setattr(bi.subprocess, "run", lambda command, **kw: calls.append(command) or Done())
+    monkeypatch.setattr(bi.shutil, "which", lambda name: None)
+    data = bi.grant(hours=5, now=T0)
+    bi._default_notifier("warning", "hello", data)
+    [command] = calls
+    assert command[0].endswith("jht-notify-user")
+    assert command[command.index("--agent") + 1] == "capitano" and command[command.index("--kind") + 1] == "alert"
+    payload = json.loads(command[command.index("--source-payload") + 1])
+    assert payload == {"kind": "warning", "expires_at": data["expires_at"]}
+    assert command[command.index("--source-action") + 1] == "burn_intent_notice"
+    assert command[-1] == "hello"
+
+
+def test_the_sentinel_bridge_announces_before_it_sweeps():
+    src = (LAUNCHER / "sentinel-bridge.py").read_text(encoding="utf-8")
+    tick = src[src.index("_burn_intent_notify_user()\n"):]
+    assert tick.index("_burn_intent_notify_user()") < tick.index("_burn_intent_sweep()")
+    assert "announce()" in src
+
+
+def _team_in(bi, zone):
+    bi.JHT_HOME.joinpath("jht.config.json").write_text(
+        json.dumps({"team": {"working_hours": {"timezone": zone, "windows": []}}}), encoding="utf-8")
+
+
+def test_the_user_reads_the_teams_local_time_in_the_format_of_the_language(bi, monkeypatch):
+    data = bi.grant(hours=8.8, now=T0)  # ends 08:48 UTC = 10:48 in Rome on 20/10 (summer time)
+    _team_in(bi, "Europe/Rome")
+    monkeypatch.setenv("JHT_LANG", "it")
+    assert "10:48" in bi.notice_text("expired", data)
+    monkeypatch.setenv("JHT_LANG", "en")
+    assert "10:48 AM" in bi.notice_text("expired", data)
+    _team_in(bi, "America/New_York")  # 04:48 on the same day
+    assert "4:48 AM" in bi.notice_text("expired", data)
+    monkeypatch.setenv("JHT_LANG", "hu")
+    assert "04:48-kor" in bi.notice_text("expired", data)
+
+
+def test_without_a_team_zone_or_with_a_wrong_one_it_is_the_system_zone(bi, monkeypatch):
+    data = bi.grant(hours=8.8, now=T0)
+    monkeypatch.setattr(bi, "_system_zone", lambda: timezone(timedelta(hours=-5), "EST"))
+    monkeypatch.setenv("JHT_LANG", "de")
+    assert "um 03:48" in bi.notice_text("expired", data)
+    _team_in(bi, "Mars/Olympus_Mons")
+    assert "um 03:48" in bi.notice_text("expired", data)
+    bi.JHT_HOME.joinpath("jht.config.json").write_text("{not json", encoding="utf-8")
+    assert "um 03:48" in bi.notice_text("expired", data)
+
+
+@pytest.mark.parametrize(("hour", "minute", "written"), [(0, 7, "12:07 AM"), (9, 5, "9:05 AM"), (12, 0, "12:00 PM"), (12, 5, "12:05 PM"), (23, 59, "11:59 PM")])
+def test_english_writes_the_clock_on_twelve_hours(bi, hour, minute, written):
+    assert bi.local_time(datetime(2026, 10, 20, hour, minute, tzinfo=timezone.utc), "en") == f"{written} UTC"
+
+
+def test_the_other_languages_write_it_on_twenty_four_hours(bi):
+    moment = datetime(2026, 10, 20, 21, 5, tzinfo=timezone.utc)
+    for lang in ("it", "de", "es", "fr", "hu", "pt"):
+        assert bi.local_time(moment, lang) == "21:05 UTC"
+
+
+def test_the_zone_chosen_at_the_setup_comes_first_even_without_working_hours(bi, monkeypatch):
+    """JHT_USER_TZ is what the setup asked the user; a config with no working_hours says nothing."""
+    import format_time
+
+    data = bi.grant(hours=8.8, now=T0)  # ends 08:48 UTC
+    bi.JHT_HOME.joinpath("jht.config.json").write_text(json.dumps({"team": {"agents": 3}}), encoding="utf-8")
+    monkeypatch.setenv("JHT_USER_TZ", "Europe/Rome")
+    format_time._read_profile_timezone.cache_clear()
+    monkeypatch.setenv("JHT_LANG", "it")
+    text = bi.notice_text("expired", data)
+    assert "10:48" in text and "UTC" not in text
+    # It also wins over the team's zone: the clock the user lives by.
+    _team_in(bi, "America/New_York")
+    assert "10:48" in bi.notice_text("expired", data)
+
+
+def test_a_utc_that_is_only_the_fallback_is_written_utc(bi, monkeypatch):
+    import format_time
+
+    data = bi.grant(hours=8.8, now=T0)
+    monkeypatch.setenv("JHT_USER_TZ", "UTC")  # what format_time answers when it was never set
+    format_time._read_profile_timezone.cache_clear()
+    monkeypatch.setenv("JHT_LANG", "it")
+    assert "08:48 UTC" in bi.notice_text("expired", data)
+    # A zone the setup left that does not exist is as good as none.
+    monkeypatch.setenv("JHT_USER_TZ", "Nowhere/Land")
+    format_time._read_profile_timezone.cache_clear()
+    assert "08:48 UTC" in bi.notice_text("expired", data)

@@ -22,7 +22,10 @@ import type { ServerLocale } from "./server-locale.ts";
 
 // `vi.mock` è issato sopra gli import: la cassetta condivisa col factory deve
 // nascere con `vi.hoisted`, altrimenti il factory la legge prima che esista.
-const req = vi.hoisted(() => ({ cookie: null as string | null }));
+const req = vi.hoisted(() => ({
+  cookie: null as string | null,
+  acceptLanguage: null as string | null,
+}));
 
 vi.mock("next/headers", () => ({
   cookies: async () => ({
@@ -31,6 +34,10 @@ vi.mock("next/headers", () => ({
         ? { name, value: req.cookie }
         : undefined,
   }),
+  headers: async () => ({
+    get: (name: string) =>
+      name === "accept-language" ? req.acceptLanguage : null,
+  }),
 }));
 
 let home: string;
@@ -38,6 +45,7 @@ let home: string;
 beforeEach(() => {
   home = fs.mkdtempSync(path.join(os.tmpdir(), "jht-locale-"));
   req.cookie = null;
+  req.acceptLanguage = null;
 });
 
 afterEach(() => {
@@ -154,5 +162,53 @@ describe("readLocalePrefsFile — distingue «assente» da «italiano»", () => 
     expect(readLocalePrefsFile()).toBeNull();
     writePrefs(JSON.stringify({ locale: "it" }));
     expect(readLocalePrefsFile()).toBe("it");
+  });
+});
+
+describe("JHT-T31 — senza cookie e senza file, la lingua del browser", () => {
+  it("un utente straniero al primo accesso non vede l'italiano", async () => {
+    req.acceptLanguage = "en-US,en;q=0.9,it;q=0.8";
+    expect(await resolveLocale()).toBe("en");
+    req.acceptLanguage = "de-DE,de;q=0.9";
+    expect(await resolveLocale()).toBe("de");
+    req.acceptLanguage = "hu";
+    expect(await resolveLocale()).toBe("hu");
+  });
+
+  it("conta l'ordine di q, non quello di apparizione", async () => {
+    req.acceptLanguage = "it;q=0.4,fr;q=0.9,en;q=0.5";
+    expect(await resolveLocale()).toBe("fr");
+  });
+
+  it("un browser che chiede solo lingue che non gestiamo riceve l'inglese", async () => {
+    req.acceptLanguage = "ja,zh-CN;q=0.9";
+    expect(await resolveLocale()).toBe("en");
+  });
+
+  it("un browser italiano resta italiano; nessuna intestazione resta il default", async () => {
+    req.acceptLanguage = "it-IT,it;q=0.9,en;q=0.5";
+    expect(await resolveLocale()).toBe("it");
+    req.acceptLanguage = null;
+    expect(await resolveLocale()).toBe("it");
+  });
+
+  it("il cookie e il file passano davanti al browser", async () => {
+    req.acceptLanguage = "de";
+    req.cookie = "fr";
+    expect(await resolveLocale()).toBe("fr");
+    req.cookie = null;
+    writePrefs(JSON.stringify({ locale: "hu" }));
+    expect(await resolveLocale()).toBe("hu");
+  });
+
+  it("localeFromAcceptLanguage: casi limite", async () => {
+    const { localeFromAcceptLanguage } = await import("./server-locale.ts");
+    expect(localeFromAcceptLanguage(null)).toBeNull();
+    expect(localeFromAcceptLanguage("   ")).toBeNull();
+    expect(localeFromAcceptLanguage("*")).toBeNull();
+    expect(localeFromAcceptLanguage("pt-BR,pt;q=0.9,en;q=0.8")).toBe("pt");
+    expect(localeFromAcceptLanguage("EN-gb")).toBe("en");
+    expect(localeFromAcceptLanguage("xx;q=0,es;q=0.1")).toBe("es");
+    expect(localeFromAcceptLanguage("es;q=abc,fr")).toBe("fr");
   });
 });

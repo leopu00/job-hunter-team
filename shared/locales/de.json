@@ -238,5 +238,7 @@
   "question.reply_hint": "Antworte mit der Nummer der Option (zum Beispiel 2). Sind mehrere Fragen offen, schreib „%s 2“.",
   "question.answer_saved": "Antwort gespeichert: „%s“.",
   "question.answer_already": "Diese Frage hat bereits eine Antwort: „%s“.",
-  "question.answer_invalid": "Das ist keine der Optionen, daher habe ich es nicht gespeichert. Antworte mit der Nummer einer Option (zum Beispiel 2) oder schreib „%s 2“."
+  "question.answer_invalid": "Das ist keine der Optionen, daher habe ich es nicht gespeichert. Antworte mit der Nummer einer Option (zum Beispiel 2) oder schreib „%s 2“.",
+  "burn_intent.warning": "🔥 Der Vollgas-Modus endet in etwa %d Minuten (um %s): danach arbeitet das Team wieder im normalen Tempo und du siehst weniger neue Stellen pro Stunde. Um weiterzumachen, sag dem Kapitän, dass er ihn verlängern soll, zum Beispiel „Vollgas für weitere 4 Stunden“.",
+  "burn_intent.expired": "⏱️ Der Vollgas-Modus ist um %s zu Ende gegangen: das Team arbeitet wieder im normalen Tempo, du siehst also weniger neue Stellen pro Stunde. Um neu zu starten, sag es dem Kapitän, zum Beispiel „Vollgas für 5 Stunden“."
 }

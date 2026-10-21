@@ -14,6 +14,10 @@ geppel ellenorizheto definicio itt el:
 - `shared/config/profile-schema.ts` (Zod tipusok, web oldal)
 - `shared/skills/validate_profile.py` (runtime gate, ugynokk/CLI oldal)
 
+## 🌍 A szabad szöveg nyelve (kötelező)
+
+A profil `narrative`, `key_points` és `timeline` szövege a felhasználó nyelvén készül (a `python3 /app/shared/skills/text_language.py lang` kiírja), **akkor is, ha az önéletrajz, amelyből származik, más nyelvű** (RULE-T14). A `validate_profile.py` `WARN: LANGUAGE: …` figyelmeztetést ír ki a hosszú, egyértelműen más nyelvű szövegre: írd át, ne hagyd figyelmen kívül. A nevek, cégek és eszközök változatlanok maradnak.
+
 ## 🎚️ 3 szintu modell
 
 ```

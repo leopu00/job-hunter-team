@@ -321,6 +321,11 @@ fn word(value: Option<&Value>, allowed: &[&str]) -> Value {
     }
 }
 
+/// A timestamp the container wrote, as long as it is only the characters of one.
+fn stamp(value: Option<&Value>) -> Option<&str> {
+    value.and_then(Value::as_str).filter(|text| text.len() <= 40 && text.bytes().all(|b| b.is_ascii_alphanumeric() || b"-:+.".contains(&b)))
+}
+
 /// The team's own state, reduced to the closed fields the page shows.
 pub(crate) fn shape_team(reply: &Value) -> Option<Value> {
     if reply.get("ok") != Some(&Value::Bool(true)) {
@@ -328,7 +333,15 @@ pub(crate) fn shape_team(reply: &Value) -> Option<Value> {
     }
     let data = reply.get("data")?.as_object()?;
     let standby = data.get("standby")?.as_object()?;
-    let until = standby.get("until").and_then(Value::as_str).filter(|until| until.len() <= 40 && until.bytes().all(|b| b.is_ascii_alphanumeric() || b"-:+.".contains(&b)));
+    let until = stamp(standby.get("until"));
+    // The user's full-throttle override: a closed state, when it ends, and the minutes left. An image
+    // older than this field answers none of it, and the page says nothing about it.
+    let burn = data.get("burn_intent").and_then(Value::as_object);
+    let burn_intent = json!({
+        "state": word(burn.and_then(|b| b.get("state")), &["off", "active", "expired", "unknown"]),
+        "expiresAt": stamp(burn.and_then(|b| b.get("expires_at"))),
+        "remainingMin": burn.and_then(|b| b.get("remaining_min")).and_then(Value::as_u64).filter(|minutes| *minutes <= 100_000),
+    });
     let held = match data.get("held") {
         Some(Value::Array(items)) => Value::Array(
             items
@@ -350,6 +363,7 @@ pub(crate) fn shape_team(reply: &Value) -> Option<Value> {
             "weeklyReset": standby.get("weekly_reset") == Some(&Value::Bool(true)),
         },
         "held": held,
+        "burnIntent": burn_intent,
     }}))
 }
 
@@ -613,7 +627,27 @@ mod tests {
         let team = req(json!({"op":"team"})).unwrap();
         let reply = json!({"ok":true,"data":{"halted":true,"standby":{"state":"active","until":"2026-10-20T06:00:00+00:00","weekly_reset":false},"held":[{"session":"SCOUT-1","by_user":true},{"session":"rm -rf","by_user":true}]}});
         let shaped = answer(&team, &ProcessResult { code: 0, stdout: reply.to_string().into_bytes() }, "t", None);
-        assert_eq!(shaped, json!({"ok":true,"data":{"halted":true,"standby":{"state":"active","until":"2026-10-20T06:00:00+00:00","weeklyReset":false},"held":[{"session":"SCOUT-1","byUser":true}]}}));
+        assert_eq!(shaped, json!({"ok":true,"data":{"halted":true,"standby":{"state":"active","until":"2026-10-20T06:00:00+00:00","weeklyReset":false},"held":[{"session":"SCOUT-1","byUser":true}],"burnIntent":{"state":null,"expiresAt":null,"remainingMin":null}}}));
+    }
+
+    #[test]
+    fn the_full_throttle_state_is_read_closed() {
+        let team = req(json!({"op":"team"})).unwrap();
+        let read = |burn: Value| {
+            let reply = json!({"ok":true,"data":{"halted":false,"standby":{"state":"off","until":null,"weekly_reset":false},"held":[],"burn_intent":burn}});
+            answer(&team, &ProcessResult { code: 0, stdout: reply.to_string().into_bytes() }, "t", None)["data"]["burnIntent"].clone()
+        };
+        assert_eq!(
+            read(json!({"state":"active","expires_at":"2026-10-21T22:30:00+00:00","remaining_min":59})),
+            json!({"state":"active","expiresAt":"2026-10-21T22:30:00+00:00","remainingMin":59})
+        );
+        assert_eq!(read(json!({"state":"expired","expires_at":"2026-10-21T22:30:00+00:00","remaining_min":0}))["state"], "expired");
+        // Anything outside the closed words, a text that is not a timestamp, a negative or a huge count: nothing.
+        assert_eq!(
+            read(json!({"state":"on fire","expires_at":"x; rm -rf /","remaining_min":-3})),
+            json!({"state":null,"expiresAt":null,"remainingMin":null})
+        );
+        assert_eq!(read(json!({"state":"active","expires_at":"2026-10-21T22:30:00+00:00","remaining_min":9_999_999}))["remainingMin"], Value::Null);
     }
 
     #[test]

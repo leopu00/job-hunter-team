@@ -183,6 +183,9 @@ const NOT_ERRORS: Record<string, string> = {
   not_paused: "agent control outcome",
   by_user: "agent control read field",
   weekly_reset: "agent control pause exit kind",
+  burn_intent: "agent control read field (the full-throttle override)",
+  expires_at: "agent control read field (when the full-throttle override ends)",
+  remaining_min: "agent control read field (minutes left of the full-throttle override)",
 };
 
 function compiledRustModules(): string[] {

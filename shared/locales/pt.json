@@ -238,5 +238,7 @@
   "question.reply_hint": "Responde com o número da opção (por exemplo 2). Se houver várias perguntas abertas, escreve «%s 2».",
   "question.answer_saved": "Resposta guardada: «%s».",
   "question.answer_already": "Esta pergunta já tem uma resposta: «%s».",
-  "question.answer_invalid": "Não é uma das opções, por isso não a guardei. Responde com o número de uma opção (por exemplo 2) ou escreve «%s 2»."
+  "question.answer_invalid": "Não é uma das opções, por isso não a guardei. Responde com o número de uma opção (por exemplo 2) ou escreve «%s 2».",
+  "burn_intent.warning": "🔥 O modo a todo o gás termina dentro de cerca de %d minutos (às %s): depois a equipa volta ao ritmo normal e verás menos posições novas por hora. Para continuar, pede ao Capitão que o renove, por exemplo «a todo o gás por mais 4 horas».",
+  "burn_intent.expired": "⏱️ O modo a todo o gás terminou às %s: a equipa voltou ao ritmo normal, por isso espera menos posições novas por hora. Para recomeçar, diz ao Capitão, por exemplo «a todo o gás por 5 horas»."
 }

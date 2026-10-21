@@ -60,6 +60,9 @@ export interface AgentsPanelText {
   teamPausedWeekly: string;
   teamPauseEnding: string;
   teamHalted: string;
+  burnOn: string;
+  burnEnding: string;
+  burnEnded: string;
   pause: string;
   resume: string;
   confirmPause: string; // {where}
@@ -133,6 +136,9 @@ const it: AgentsPanelText = {
   teamPausedWeekly: "Squadra in pausa fino al reset del limite settimanale",
   teamPauseEnding: "La pausa è finita: la squadra si sta risvegliando",
   teamHalted: "Squadra fermata da te: non riparte da sola.",
+  burnOn: "🔥 A tutto gas fino alle {time} (restano {minutes} min)",
+  burnEnding: "🔥 A tutto gas: finisce tra {minutes} min ({time}). Di' al Capitano di rinnovarlo",
+  burnEnded: "⏱️ Il tutto gas è finito: la squadra è tornata al ritmo normale",
   pause: "Pausa",
   resume: "Riprendi",
   confirmPause: "Mettere in pausa la squadra {where}?",
@@ -208,6 +214,9 @@ const en: AgentsPanelText = {
   teamPausedWeekly: "Team paused until the weekly limit resets",
   teamPauseEnding: "The pause is over: the team is waking up",
   teamHalted: "Team stopped by you: it does not start again by itself.",
+  burnOn: "🔥 Full throttle until {time} ({minutes} min left)",
+  burnEnding: "🔥 Full throttle ends in {minutes} min ({time}). Tell the Captain to renew it",
+  burnEnded: "⏱️ Full throttle ended: the team is back at its normal pace",
   pause: "Pause",
   resume: "Resume",
   confirmPause: "Pause the team {where}?",
@@ -282,6 +291,9 @@ const de: AgentsPanelText = {
   teamPausedWeekly: "Team pausiert bis zum Zurücksetzen des Wochenlimits",
   teamPauseEnding: "Die Pause ist vorbei: Das Team wacht gerade auf",
   teamHalted: "Team von dir gestoppt: Es startet nicht von selbst wieder.",
+  burnOn: "🔥 Vollgas bis {time} (noch {minutes} Min.)",
+  burnEnding: "🔥 Vollgas endet in {minutes} Min. ({time}). Sag dem Kapitän, dass er es verlängern soll",
+  burnEnded: "⏱️ Vollgas ist zu Ende: das Team arbeitet wieder im normalen Tempo",
   pause: "Pausieren",
   resume: "Fortsetzen",
   confirmPause: "Das Team {where} pausieren?",
@@ -357,6 +369,9 @@ const es: AgentsPanelText = {
   teamPausedWeekly: "Equipo en pausa hasta que se restablezca el límite semanal",
   teamPauseEnding: "La pausa ha terminado: el equipo se está despertando",
   teamHalted: "Equipo detenido por ti: no vuelve a arrancar solo.",
+  burnOn: "🔥 A todo gas hasta las {time} (quedan {minutes} min)",
+  burnEnding: "🔥 A todo gas termina en {minutes} min ({time}). Dile al Capitán que lo renueve",
+  burnEnded: "⏱️ Se acabó el todo gas: el equipo vuelve a su ritmo normal",
   pause: "Pausa",
   resume: "Reanudar",
   confirmPause: "¿Poner en pausa el equipo {where}?",
@@ -432,6 +447,9 @@ const fr: AgentsPanelText = {
   teamPausedWeekly: "Équipe en pause jusqu’à la réinitialisation de la limite hebdomadaire",
   teamPauseEnding: "La pause est terminée : l’équipe se réveille",
   teamHalted: "Équipe arrêtée par vous : elle ne redémarre pas d’elle-même.",
+  burnOn: "🔥 Pleins gaz jusqu’à {time} ({minutes} min restantes)",
+  burnEnding: "🔥 Les pleins gaz se terminent dans {minutes} min ({time}). Demandez au Capitaine de les renouveler",
+  burnEnded: "⏱️ Les pleins gaz sont terminés : l’équipe est revenue à son rythme normal",
   pause: "Pause",
   resume: "Reprendre",
   confirmPause: "Mettre en pause l’équipe {where} ?",
@@ -507,6 +525,9 @@ const hu: AgentsPanelText = {
   teamPausedWeekly: "A csapat szünetel a heti limit visszaállásáig",
   teamPauseEnding: "A szünet véget ért: a csapat éppen ébred",
   teamHalted: "A csapatot te állítottad le: magától nem indul újra.",
+  burnOn: "🔥 Full gőz eddig: {time} (még {minutes} perc)",
+  burnEnding: "🔥 A full gőz {minutes} perc múlva véget ér ({time}). Kérd meg a Kapitányt, hogy hosszabbítsa meg",
+  burnEnded: "⏱️ A full gőz véget ért: a csapat visszatért a normál tempóra",
   pause: "Szünet",
   resume: "Folytatás",
   confirmPause: "Szünetelteted a csapatot {where}?",
@@ -582,6 +603,9 @@ const pt: AgentsPanelText = {
   teamPausedWeekly: "Equipa em pausa até à reposição do limite semanal",
   teamPauseEnding: "A pausa terminou: a equipa está a acordar",
   teamHalted: "Equipa parada por ti: não volta a arrancar sozinha.",
+  burnOn: "🔥 A todo o gás até às {time} (faltam {minutes} min)",
+  burnEnding: "🔥 O todo o gás termina em {minutes} min ({time}). Pede ao Capitão que o renove",
+  burnEnded: "⏱️ O todo o gás terminou: a equipa voltou ao ritmo normal",
   pause: "Pausa",
   resume: "Retomar",
   confirmPause: "Pôr em pausa a equipa {where}?",

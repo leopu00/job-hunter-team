@@ -145,6 +145,10 @@ def standby():
     return _load("agent_control_standby", "standby.py")
 
 
+def burn_intent():
+    return _load("agent_control_burn_intent", "burn_intent.py")
+
+
 # ── answers ─────────────────────────────────────────────────────────────────
 class Refusal(Exception):
     def __init__(self, code: str):
@@ -537,12 +541,24 @@ def read_team() -> dict:
     except Exception:  # noqa: BLE001
         held = None
     wake_on = state.get("wake_on") if isinstance(state.get("wake_on"), dict) else None
+    # The user's full-throttle override (JHT-T33): on, with its end, or off; "expired" until the
+    # bridge clears the flag. Read through the module that owns the flag, never from the file.
+    burn = {"state": "unknown", "expires_at": None, "remaining_min": None}
+    try:
+        seen = burn_intent().status()
+        remaining = seen.get("remaining_min")
+        burn = {"state": seen["state"] if seen.get("state") in ("off", "active", "expired") else "unknown",
+                "expires_at": _text(seen.get("expires_at")),
+                "remaining_min": remaining if isinstance(remaining, int) and not isinstance(remaining, bool) else None}
+    except Exception:  # noqa: BLE001
+        pass
     return {"ok": True, "data": {
         "halted": _halted(),
         "standby": {"state": _text(state.get("state")) or "unknown",
                     "until": _text(state.get("until")),
                     "weekly_reset": bool(wake_on and wake_on.get("weekly_below") is not None)},
         "held": held,
+        "burn_intent": burn,
     }}
 
 
