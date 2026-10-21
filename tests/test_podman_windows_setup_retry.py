@@ -263,3 +263,22 @@ def test_the_install_block_with_a_fake_winget(tmp_path, installed, winget_code, 
         assert expected_line in done.stderr
     assert calls.exists() == (winget_code is not None)
 
+
+# ── no «Welcome to WSL» window over the app ──
+
+def test_the_wsl_welcome_is_marked_shown_before_podman_registers_its_distribution():
+    # WSL opens wslsettings' welcome when a distribution of the user's gets registered, unless the
+    # DWORD OOBEComplete under HKCU\...\Lxss is set (LxssUserSession::_LaunchOOBEIfNeeded).
+    enabler = _code(ENABLER)
+    skip = enabler[enabler.index("function Skip-WslWelcome {") :]
+    skip = skip[: skip.index("\n}\n")]
+    assert "$key = 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Lxss'" in skip
+    # only when absent or 0, and only that value, as a DWORD 1
+    assert skip.index("if ($current) { return }") < skip.index("New-ItemProperty")
+    assert "-Name 'OOBEComplete' -PropertyType DWord -Value 1" in skip
+    assert skip.count("New-ItemProperty") == 1 and "Remove-Item" not in skip
+    # a failure costs the window, never the setup
+    assert "catch {" in skip and "throw" not in skip
+    # right before the machine is created, which registers the distribution
+    init = enabler.index("Invoke-Checked $Podman 'machine' 'init'")
+    assert enabler.rindex("Skip-WslWelcome", 0, init) > enabler.rindex("Write-JhtPhase podman_machine_init", 0, init)

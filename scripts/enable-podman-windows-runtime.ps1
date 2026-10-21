@@ -347,6 +347,25 @@ function Get-PodmanVersion {
   return $null
 }
 
+# WSL opens its «Welcome to WSL» window (wslsettings) when one of the user's
+# distributions gets registered, unless the user's Lxss key says the welcome was
+# already shown: the DWORD OOBEComplete under HKCU\Software\Microsoft\Windows\
+# CurrentVersion\Lxss (WSL's LxssUserSession::_LaunchOOBEIfNeeded). `podman machine
+# init` registers one, so the window opened over the app in the middle of the setup.
+# Written only when absent or 0, never anything else; a failure here only costs the
+# window, never the setup.
+function Skip-WslWelcome {
+  $key = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Lxss'
+  try {
+    $current = (Get-ItemProperty -LiteralPath $key -Name 'OOBEComplete' -ErrorAction SilentlyContinue).OOBEComplete
+    if ($current) { return }
+    if (-not (Test-Path -LiteralPath $key)) { New-Item -Path $key -Force | Out-Null }
+    New-ItemProperty -LiteralPath $key -Name 'OOBEComplete' -PropertyType DWord -Value 1 -Force | Out-Null
+  } catch {
+    Write-Warning "Could not mark the WSL welcome as shown: $($_.Exception.Message)"
+  }
+}
+
 # winget's «already installed, no applicable update» (0x8A15002B): on a Try
 # again after a later step failed, Podman is there already. It is a success
 # only when the version installed is the one JHT pins; the check after the
@@ -387,6 +406,7 @@ try {
   if (-not $machine) {
     if (-not $InitializeMachine) { throw "Podman machine '$MachineName' is absent; re-run with -InitializeMachine." }
     Write-JhtPhase podman_machine_init
+    Skip-WslWelcome
     Invoke-Checked $Podman 'machine' 'init' '--update-connection=false' '--provider' 'wsl' '--cpus' '2' '--memory' '3072' '--disk-size' '30' $MachineName
     Write-JhtPhase podman_machine_start
     Invoke-Checked $Podman 'machine' 'start' '--update-connection=false' $MachineName
