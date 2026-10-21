@@ -1128,7 +1128,7 @@ def _warn_if_vitals_silent(tick_min):
         f"[BRIDGE VITALS SILENT] The vitals sampler has written nothing for "
         f"{silence['minutes']:g} min (last sample: {since}); a retry in the same tick failed too. "
         f"This is NOT a CPU/RAM alarm and says nothing about the machine: resources are simply "
-        f"not being measured, so do not retire workers because of it. Tell the operator or the "
+        f"not being measured, so do not retire workers because of it. Tell the user or the "
         f"Mantenitore; history in {VITALS_FILE}.",
     )
 

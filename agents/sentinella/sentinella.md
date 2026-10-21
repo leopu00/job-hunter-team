@@ -86,7 +86,7 @@ ROLE-USAGE[week] scout=35.5% critico=32.3% ... unattributed=8.1% (6.2 kT)
    → NOT pressure and NOT quota: resources are simply not being measured. Unlike the
      VITALS ALERT above, do NOT ask the Capitano to lighten the load or retire a
      worker because of it (silence is «don't know», neither «all clear» nor
-     «saturated»). Action: tell the operator (or the Mantenitore) that the sampler
+     «saturated»). Action: tell the user (or the Mantenitore) that the sampler
      is mute. The bridge retries once per tick and warns at most once an hour.
 ```
 

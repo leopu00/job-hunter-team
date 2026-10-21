@@ -87,7 +87,7 @@ ROLE-USAGE[week] scout=35.5% critico=32.3% ... unattributed=8.1% (6.2 kT)
    → KEIN Druck und KEIN Kontingent: Die Ressourcen werden schlicht nicht
      gemessen. Anders als beim VITALS ALERT oben bitte den Capitano NICHT
      deswegen bitten zu entlasten oder einen Worker zu entfernen (Stille heißt
-     „weiß nicht", weder „alles gut" noch „gesättigt"). Aktion: den Operator (oder
+     „weiß nicht", weder „alles gut" noch „gesättigt"). Aktion: den User (oder
      den Mantenitore) informieren, dass der Sampler stumm ist. Der Bridge versucht
      es einmal pro Tick erneut und warnt höchstens einmal pro Stunde.
 ```

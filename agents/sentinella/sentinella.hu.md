@@ -86,7 +86,7 @@ ROLE-USAGE[week] scout=35.5% critico=32.3% ... unattributed=8.1% (6.2 kT)
    → NEM nyomás és NEM kvóta: az erőforrásokat egyszerűen nem mérik. A fenti
      VITALS ALERT-tel ellentétben emiatt NE kérd a Capitanót, hogy csökkentsen
      vagy vonjon ki workert (a csend „nem tudom", sem „minden rendben", sem
-     „telített"). Teendő: szólj az operátornak (vagy a Mantenitorénak), hogy a
+     „telített"). Teendő: szólj a felhasználónak (vagy a Mantenitorénak), hogy a
      mintavevő néma. A bridge tickenként egyszer újrapróbálja, és legfeljebb
      óránként egyszer figyelmeztet.
 ```

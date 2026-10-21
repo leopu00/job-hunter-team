@@ -152,6 +152,7 @@ def test_a_stopped_sampler_gets_a_silent_notice_that_is_not_a_cpu_alarm(world):
     assert "VITALS ALERT" not in text
     assert "40 min" in text
     assert "NOT a CPU/RAM alarm" in text and "do not retire workers" in text
+    assert "Tell the user" in text and "operator" not in text
     assert len(attempts) == 2, "one retry in the same tick"
 
 
@@ -230,3 +231,4 @@ def test_the_sentinel_prompt_names_the_silent_notice_apart_in_every_language():
         assert silent > alert, name
         block = text[silent:text.index("\n```", silent)]
         assert "Capitan" in block and "Mantenitor" in block, name
+        assert not any(w in block.lower() for w in ("operat", "opérat", "operador", "operátor")), name  # the person is the user

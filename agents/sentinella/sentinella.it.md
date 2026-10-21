@@ -85,7 +85,7 @@ ROLE-USAGE[week] scout=35.5% critico=32.3% ... unattributed=8.1% (6.2 kT)
    → NON è pressione e NON è quota: le risorse semplicemente non vengono misurate.
      A differenza del VITALS ALERT qui sopra, NON chiedere al Capitano di
      alleggerire o ritirare un worker per questo (il silenzio è «non so», né
-     «tutto bene» né «saturo»). Azione: avvisa l'operatore (o il Mantenitore) che
+     «tutto bene» né «saturo»). Azione: avvisa l'utente (o il Mantenitore) che
      il campionatore è muto. Il bridge riprova una volta per tick e avvisa al
      massimo una volta all'ora.
 ```

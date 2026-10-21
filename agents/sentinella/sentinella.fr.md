@@ -89,7 +89,7 @@ ROLE-USAGE[week] scout=35.5% critico=32.3% ... unattributed=8.1% (6.2 kT)
      mesurées. Contrairement au VITALS ALERT ci-dessus, ne demande PAS au
      Capitano d'alléger ni de retirer un worker pour cela (le silence est
      « je ne sais pas », ni « tout va bien » ni « saturé »). Action : préviens
-     l'opérateur (ou le Mantenitore) que l'échantillonneur est muet. Le bridge
+     l'utilisateur (ou le Mantenitore) que l'échantillonneur est muet. Le bridge
      réessaie une fois par tick et prévient au plus une fois par heure.
 ```
 
