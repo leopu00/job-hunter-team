@@ -11,13 +11,26 @@
 
 import { useEffect, useState } from "react";
 import { useLocale } from "@/lib/use-locale";
-import { visibleProposals, type ExclusionDecision } from "@/lib/exclusion-proposals";
-import type { ExclusionProposal, FeedbackEventLike } from "@/lib/feedback-reasons";
+import {
+  visibleProposals,
+  type ExclusionDecision,
+} from "@/lib/exclusion-proposals";
+import type {
+  ExclusionProposal,
+  FeedbackEventLike,
+} from "@/lib/feedback-reasons";
 import { REASON_LABELS } from "./[id]/exclusion-reasons";
 
 const T: Record<
   string,
-  { title: string; question: string; honest: string; save: string; later: string; saved: string }
+  {
+    title: string;
+    question: string;
+    honest: string;
+    save: string;
+    later: string;
+    saved: string;
+  }
 > = {
   it: {
     title: "{n} posizioni scartate come «{reason}»",
@@ -57,7 +70,8 @@ const T: Record<
   },
   de: {
     title: "{n} Stellen als „{reason}“ abgelehnt",
-    question: "Möchtest du diese Art von Stellen aus deinem Profil ausschließen?",
+    question:
+      "Möchtest du diese Art von Stellen aus deinem Profil ausschließen?",
     honest:
       "Vorerst speichern wir nur deine Präferenz: Sie ändert noch nicht, wonach das Team sucht oder wie es Stellen bewertet.",
     save: "Präferenz speichern",
@@ -108,9 +122,12 @@ export default function ExclusionProposalCard() {
           fetch("/api/profile-exclusions"),
         ]);
         if (!feedback.ok || !decisions.ok) return;
-        const rows = ((await feedback.json()) as { feedback?: FeedbackRow[] }).feedback ?? [];
+        const rows =
+          ((await feedback.json()) as { feedback?: FeedbackRow[] }).feedback ??
+          [];
         const decided =
-          ((await decisions.json()) as { exclusions?: ExclusionDecision[] }).exclusions ?? [];
+          ((await decisions.json()) as { exclusions?: ExclusionDecision[] })
+            .exclusions ?? [];
         const events: FeedbackEventLike[] = rows.map((r) => ({
           legacy_id: r.position_legacy_id,
           action: r.action,
@@ -130,7 +147,11 @@ export default function ExclusionProposalCard() {
   const proposal = proposals[0];
   if (saved) {
     return (
-      <p role="status" className="text-[12px] mb-3" style={{ color: "var(--color-muted)" }}>
+      <p
+        role="status"
+        className="text-[12px] mb-3"
+        style={{ color: "var(--color-muted)" }}
+      >
         {t.saved}
       </p>
     );
@@ -168,9 +189,15 @@ export default function ExclusionProposalCard() {
       aria-label={title}
       data-exclusion-proposal={proposal.reason}
       className="rounded-lg border p-3 mb-3"
-      style={{ borderColor: "var(--color-border)", background: "var(--color-row)" }}
+      style={{
+        borderColor: "var(--color-border)",
+        background: "var(--color-row)",
+      }}
     >
-      <p className="text-[12px] font-semibold" style={{ color: "var(--color-text)" }}>
+      <p
+        className="text-[12px] font-semibold"
+        style={{ color: "var(--color-text)" }}
+      >
         {title}
       </p>
       <p className="text-[12px] mt-1" style={{ color: "var(--color-text)" }}>
@@ -185,7 +212,10 @@ export default function ExclusionProposalCard() {
           disabled={busy}
           onClick={() => decide("accepted")}
           className="px-3 py-1.5 rounded-lg border text-[11px] font-semibold disabled:opacity-60"
-          style={{ borderColor: "var(--color-border)", color: "var(--color-text)" }}
+          style={{
+            borderColor: "var(--color-border)",
+            color: "var(--color-text)",
+          }}
         >
           {t.save}
         </button>
@@ -194,7 +224,10 @@ export default function ExclusionProposalCard() {
           disabled={busy}
           onClick={() => decide("dismissed")}
           className="px-3 py-1.5 rounded-lg border text-[11px] disabled:opacity-60"
-          style={{ borderColor: "var(--color-border)", color: "var(--color-muted)" }}
+          style={{
+            borderColor: "var(--color-border)",
+            color: "var(--color-muted)",
+          }}
         >
           {t.later}
         </button>

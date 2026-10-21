@@ -436,10 +436,7 @@ export function FeedbackButtons({
 
   // I tre giudizi non negativi sono feedback puri. Il negativo usa questa
   // stessa scrittura solo come effetto secondario, dopo l'esclusione.
-  const give = async (
-    v: Verdict,
-    why?: { reason?: string; note?: string },
-  ) => {
+  const give = async (v: Verdict, why?: { reason?: string; note?: string }) => {
     if (busy) return false;
     const prev = verdict;
     setError(null);

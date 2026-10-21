@@ -351,7 +351,12 @@ export const EXPORT_COLUMNS: Record<string, readonly string[]> = {
     "updated_at",
   ],
   position_views: ["position_id", "viewed_at"],
-  profile_exclusions: ["reason", "status", "positions_at_decision", "decided_at"],
+  profile_exclusions: [
+    "reason",
+    "status",
+    "positions_at_decision",
+    "decided_at",
+  ],
   // Senza `restart_token` e `last_restart_token`.
   team_state: [
     "should_run",

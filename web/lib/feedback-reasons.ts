@@ -87,8 +87,7 @@ export function acceptReason(value: unknown): ReasonKey | null {
  * joiner, BOM, annotazioni interlineari, tag). NON tutta la categoria Cf: ZWJ e
  * ZWNJ restano, con quelli si scrive (emoji composte, persiano, hindi).
  */
-const INVISIBLE_COMMANDS =
-  /[­​⁠﻿‪-‮⁦-⁩￹-￻\u{e0000}-\u{e007f}]/gu;
+const INVISIBLE_COMMANDS = /[­​⁠﻿‪-‮⁦-⁩￹-￻\u{e0000}-\u{e007f}]/gu;
 
 /**
  * La nota ripulita: NFC, senza caratteri di controllo né comandi bidi o
@@ -169,6 +168,12 @@ export function exclusionProposals(
   }
   return [...by]
     .filter(([, ids]) => ids.length >= minPositions)
-    .map(([reason, ids]) => ({ reason, positions: ids.length, legacy_ids: ids.sort() }))
-    .sort((a, b) => b.positions - a.positions || a.reason.localeCompare(b.reason));
+    .map(([reason, ids]) => ({
+      reason,
+      positions: ids.length,
+      legacy_ids: ids.sort(),
+    }))
+    .sort(
+      (a, b) => b.positions - a.positions || a.reason.localeCompare(b.reason),
+    );
 }

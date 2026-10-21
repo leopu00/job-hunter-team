@@ -30,6 +30,9 @@ export function visibleProposals(
     const decided = byReason.get(proposal.reason);
     if (!decided) return true;
     if (decided.status === "accepted") return false;
-    return proposal.positions >= decided.positions_at_decision + PROPOSAL_MIN_POSITIONS;
+    return (
+      proposal.positions >=
+      decided.positions_at_decision + PROPOSAL_MIN_POSITIONS
+    );
   });
 }

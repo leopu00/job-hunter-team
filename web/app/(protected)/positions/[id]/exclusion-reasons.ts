@@ -178,7 +178,12 @@ export const REASON_LABELS: Record<Locale, Record<ReasonKey, string>> = {
 /** Strings condivise dal selettore, ovunque venga montato. */
 export const PICKER_T: Record<
   Locale,
-  { pickReason: string; writeReason: string; notePlaceholder: string; notePrivate: string }
+  {
+    pickReason: string;
+    writeReason: string;
+    notePlaceholder: string;
+    notePrivate: string;
+  }
 > = {
   it: {
     pickReason: "Scegli una causa",

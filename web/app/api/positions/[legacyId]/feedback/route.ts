@@ -166,7 +166,9 @@ export async function POST(
       score,
       direction,
     })
-    .select("id, position_legacy_id, action, reason, score, direction, created_at")
+    .select(
+      "id, position_legacy_id, action, reason, score, direction, created_at",
+    )
     .single();
 
   if (error)
@@ -212,7 +214,9 @@ export async function GET(
     .from("position_feedback")
     // Colonne esplicite: la nota dell'utente e il vecchio commento non escono
     // da una route che il token di un agente può leggere.
-    .select("id, position_legacy_id, action, reason, score, direction, created_at")
+    .select(
+      "id, position_legacy_id, action, reason, score, direction, created_at",
+    )
     .eq("user_id", userId)
     .eq("position_legacy_id", legacyId)
     .order("created_at", { ascending: false });

@@ -67,7 +67,7 @@
     },
     {
       "path": "supabase/migrations/094_feedback_reasons_closed.sql",
-      "sha256": "ffded7569dc09c2e27709be4c270e99b082c2f934fc17d233376c8c13214149a"
+      "sha256": "b1bc27cb78416b425a5278699c7c16ec9c076217bdbf59df0bcce1cdfaf57a7f"
     }
   ],
   "query": {
