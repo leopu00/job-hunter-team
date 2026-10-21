@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ComponentType }
 import { describeAgentState, type AgentState, type AgentStateTone } from "@/lib/agent-state";
 import { appLocale } from "../../lib/app-locale";
 import { describeError } from "../../lib/error-catalog";
+import { formatRelative } from "@/lib/message-display";
 import { pluralText } from "../../lib/plural";
 import { useExistingTeamReadOnly } from "../../lib/existing-team-readonly";
 import {
@@ -132,8 +133,23 @@ function fill(template: string, values: Record<string, string | number>): string
   return template.replace(/\{(\w+)\}/g, (_, key: string) => String(values[key] ?? `{${key}}`));
 }
 
-function stamp(at: number): string {
+/** The full date and time, for a tooltip. */
+function fullStamp(at: number): string {
   return new Date(at).toLocaleString(appLocale(), { dateStyle: "short", timeStyle: "medium" });
+}
+
+/** Today: the time alone; another day: a short date and the time. The full one goes in the tooltip. */
+function stamp(at: number, now = Date.now()): string {
+  const d = new Date(at);
+  const sameDay = d.toDateString() === new Date(now).toDateString();
+  return sameDay
+    ? d.toLocaleTimeString(appLocale(), { timeStyle: "medium" })
+    : d.toLocaleString(appLocale(), { dateStyle: "short", timeStyle: "short" });
+}
+
+/** How long ago, short («2m fa»), as the rest of the app says it. */
+function ago(seconds: number | null): string {
+  return seconds === null ? "—" : formatRelative(new Date(seconds * 1000).toISOString(), appLocale());
 }
 
 function clock(seconds: number | null): string {
@@ -160,20 +176,29 @@ function resultText(t: AgentsPanelText, result: ActionResult, name: string): str
   return fill(key, { name });
 }
 
+/**
+ * Whether the row's agent runs. A listed agent whose state says "spento" (no
+ * tmux session: it ended between the list and the state's read) is off, as a
+ * row with no session: same word, same led, not counted among the ones up.
+ */
+export function isUp(row: PanelRow): boolean {
+  return row.agent !== null && row.agent.state.state !== "spento";
+}
+
 function Led({ row }: { row: PanelRow }) {
-  const tone = row.agent ? describeAgentState(row.agent.state, appLocale()).tone : "grey";
+  const tone = isUp(row) ? describeAgentState(row.agent!.state, appLocale()).tone : "grey";
   return (
     <span
       aria-hidden
       className="inline-block w-2 h-2 rounded-full shrink-0"
-      style={{ background: row.agent ? TONE[tone] : "var(--color-border)" }}
+      style={{ background: isUp(row) ? TONE[tone] : "var(--color-border)" }}
     />
   );
 }
 
 function stateLine(t: AgentsPanelText, row: PanelRow): string {
   if (row.heldBySafety) return t.heldBySafety;
-  if (!row.agent) return row.heldByUser ? t.heldByUser : t.down;
+  if (!row.agent || !isUp(row)) return row.heldByUser ? t.heldByUser : t.down;
   return describeAgentState(row.agent.state, appLocale()).line;
 }
 
@@ -398,7 +423,7 @@ export default function AgentsPanel({ search }: PageProps) {
   };
 
   const counts = useMemo(() => {
-    const up = rows.filter((row) => row.agent);
+    const up = rows.filter(isUp);
     return {
       waiting: up.filter((row) => row.agent?.state.state === "aspetta_umano").length,
       working: up.filter((row) => row.agent?.state.state === "lavora").length,
@@ -508,10 +533,10 @@ export default function AgentsPanel({ search }: PageProps) {
                       style={{ background: active ? "var(--color-card)" : "transparent" }}
                     >
                       <Led row={row} />
-                      <span className="text-[11px] font-semibold tracking-wider w-[110px] shrink-0" style={{ color: row.agent ? "var(--color-white)" : "var(--color-muted)" }}>
+                      <span className="text-[11px] font-semibold tracking-wider w-[110px] shrink-0" style={{ color: isUp(row) ? "var(--color-white)" : "var(--color-muted)" }}>
                         {row.session}
                       </span>
-                      <span className="text-[11px] truncate" style={{ color: "var(--color-muted)" }}>
+                      <span className="text-[11px] min-w-0 leading-snug break-words" style={{ color: "var(--color-muted)" }}>
                         {stateLine(t, row)}
                       </span>
                     </button>
@@ -535,7 +560,7 @@ export default function AgentsPanel({ search }: PageProps) {
                         {current.session}
                       </span>
                       <span className="text-[11px] uppercase tracking-widest" style={{ color: current.agent ? "var(--color-green)" : "var(--color-dim)" }}>
-                        {current.agent ? t.up : current.heldByUser ? t.heldByUser : t.down}
+                        {isUp(current) ? t.up : current.heldByUser ? t.heldByUser : t.down}
                       </span>
                     </div>
                     <p
@@ -546,8 +571,12 @@ export default function AgentsPanel({ search }: PageProps) {
                       {stateLine(t, current)}
                     </p>
                     {current.agent && (
-                      <p className="text-[11px] mt-0.5 text-[var(--color-muted)]">
-                        {fill(t.started, { time: clock(current.agent.created) })} · {fill(t.activity, { time: clock(current.agent.activity) })}
+                      <p
+                        data-testid="panel-times"
+                        className="text-[11px] mt-0.5 text-[var(--color-muted)]"
+                        title={`${fill(t.started, { time: current.agent.created === null ? "—" : fullStamp(current.agent.created * 1000) })} · ${fill(t.activity, { time: current.agent.activity === null ? "—" : fullStamp(current.agent.activity * 1000) })}`}
+                      >
+                        {fill(t.started, { time: clock(current.agent.created) })} · {fill(t.activity, { time: ago(current.agent.activity) })}
                         {current.agent.activity !== null &&
                           current.agent.state.state !== "lavora" &&
                           now - current.agent.activity * 1000 < MOVING_MS && (

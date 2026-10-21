@@ -239,3 +239,41 @@ describe("«until tomorrow at 8» is the person's own 8 o'clock (N1)", () => {
     expect(tomorrowAtEightUtc(new Date(now))).toBe(expected);
   });
 });
+
+describe("«Agenti», how a row reads", () => {
+  it("shows and counts an agent whose state says off as off, like a row with no session", async () => {
+    native.invoke.mockImplementation(async (command: string, args: { request: Record<string, unknown> }) => {
+      if (command !== COMMAND) return { ok: false, error: "not_in_test" };
+      if (args.request.op === "list")
+        return { ok: true, data: { agents: [...AGENTS, agent("MENTOR", "mentor", null, "spento")], roles: ROLES, states: true, target, where: "vps", label: "vps.example" } };
+      if (args.request.op === "team") return { ok: true, data: { halted: false, standby, held } };
+      return { ok: true, data: { name: args.request.session, up: true, text: "" } };
+    });
+    show();
+    await screen.findByTestId("panel-summary");
+    // five up, as without MENTOR: an agent off is not up
+    expect(screen.getByTestId("panel-summary")).toHaveTextContent(/· 5 accesi su /);
+    const mentor = screen.getByTestId("panel-row-MENTOR");
+    const absent = screen.getByTestId("panel-row-ANALISTA-1");
+    // the same words as a role with no session
+    expect(within(mentor).getByText(within(absent).getByText(/spento/).textContent!)).toBeInTheDocument();
+  });
+
+  it("says the last activity as how long ago, the full date in the tooltip", async () => {
+    show();
+    await screen.findByTestId("panel-summary");
+    fireEvent.click(screen.getByTestId("panel-row-CAPITANO"));
+    const times = await screen.findByTestId("panel-times");
+    // the fixture's activity is ten minutes ago
+    expect(times).toHaveTextContent("ultima attività 10m fa");
+    expect(times.getAttribute("title")).toMatch(/ultima attività \d{2}\/\d{2}\/\d{2}/);
+  });
+
+  it("lets a long state wrap in the list instead of cutting it", async () => {
+    show();
+    await screen.findByTestId("panel-summary");
+    const blocked = within(screen.getByTestId("panel-row-SCORER-1")).getByText(/limite di 5 ore/);
+    expect(blocked.className).not.toMatch(/\btruncate\b/);
+    expect(blocked.className).toMatch(/break-words/);
+  });
+});
