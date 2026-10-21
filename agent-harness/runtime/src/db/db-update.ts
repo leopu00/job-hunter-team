@@ -30,7 +30,7 @@ const INCONCLUSIVE_OUTCOMES = ["inconclusive", "unreachable", "failed", "skipped
 /** `MAINTENANCE_TRACKED_FIELDS`: last_checked and last_open_check left out on purpose, as the Python explains. */
 const POSITION_TRACKED = [
   "status", "url", "deadline", "expires_at", "is_open", "office_lat", "office_lon", "office_address",
-  "office_geocoded", "office_verified", "jd_summary", "jd_text", "notes",
+  "office_geocoded", "office_verified", "location_precision", "jd_summary", "jd_text", "notes",
 ];
 /** `COMPANY_TRACKED_FIELDS`. */
 const COMPANY_TRACKED = ["website", "logo", "logo_source", "logo_fetched", "sector", "hq_country", "size"];
@@ -160,6 +160,35 @@ export function updatePosition(db: Database, a: Parsed, actor: string, userId: s
     if (pyTruthy(a["status"])) {
       const row = db.prepare("SELECT status FROM positions WHERE id = ?").get(id) as { status: string | null } | undefined;
       if (row) previous = row.status;
+    }
+    // JHT-T03: no `checked` without a place — the gate of db_update.py `_checked_place_gate`, twin
+    // for twin. The row is read as it would result after this UPDATE; the floor is the first
+    // precision level, written in the same UPDATE when the row has none.
+    let precisionFloor: string | null = null;
+    if (a["status"] === "checked" && previous !== null && previous !== "checked") {
+      const row = db
+        .prepare("SELECT loc_city, loc_country, remote_type, work_mode, location_precision FROM positions WHERE id = ?")
+        .get(id) as
+        | { loc_city: string | null; loc_country: string | null; remote_type: string | null; work_mode: string | null; location_precision: string | null }
+        | undefined;
+      if (row) {
+        const effective = (arg: unknown, column: string | null): string => (((arg !== null && arg !== undefined ? (arg as string) : column) ?? "") as string).trim();
+        const city = effective(a["loc_city"], row.loc_city);
+        const country = effective(a["loc_country"], row.loc_country);
+        const remoteType = pyTruthy(a["remote_type"]) ? (a["remote_type"] as string) : row.remote_type;
+        const remote = remoteType === "full_remote" || effective(a["work_mode"], row.work_mode) === "remote";
+        if (!city && !country && !remote) {
+          db.exec("ROLLBACK");
+          return {
+            stdout: "",
+            stderr:
+              `⚠️  LOCATION_MISSING (location_missing): position ${id} cannot become 'checked' without a place. ` +
+              "Pass --loc-city or --loc-country in the same command, or mark it fully remote (--remote-type full_remote or --work-mode remote).\n",
+            exitCode: 1,
+          };
+        }
+        if (row.location_precision === null) precisionFloor = city ? "city" : country ? "country" : "remote";
+      }
     }
     if (pyTruthy(outcome)) {
       try {
@@ -322,6 +351,45 @@ export function updatePosition(db: Database, a: Parsed, actor: string, userId: s
       if (a[k] !== null) {
         set(`${k} = ?`, a[k] === "true" ? 1 : 0);
         changed.push(`${k}=${str(k)}`);
+      }
+    }
+    // Place precision (JHT-T04): the level, and the flag that follows it. One rule, the one of
+    // db_update.py `_location_precision_writes`.
+    {
+      const explicit = a["location_precision"] as string | null;
+      const flag = a["office_verified"] as string | null;
+      let precision: string | null = null;
+      let flagWrite: number | null = null;
+      if (explicit !== null) {
+        if (flag !== null && (flag === "true") !== (explicit === "address")) {
+          db.exec("ROLLBACK");
+          return {
+            stdout: "",
+            stderr: `⚠️  LOCATION_PRECISION REJECTED: --office-verified ${flag} contradicts --location-precision ${explicit} (the flag is true only for 'address').\n`,
+            exitCode: 1,
+          };
+        }
+        precision = explicit;
+        flagWrite = flag !== null ? null : explicit === "address" ? 1 : 0;
+      } else if (flag !== null) {
+        const row = db.prepare("SELECT office_lat, office_lon, location_precision FROM positions WHERE id = ?").get(id) as
+          | { office_lat: number | null; office_lon: number | null; location_precision: string | null }
+          | undefined;
+        const lat = a["office_lat"] !== null ? num("office_lat") : (row?.office_lat ?? null);
+        const lon = a["office_lon"] !== null ? num("office_lon") : (row?.office_lon ?? null);
+        if (lat !== null && lon !== null) {
+          if (flag === "true") precision = "address";
+          else if ((row?.location_precision ?? null) === null) precision = "city";
+        }
+      }
+      if (precision === null && precisionFloor !== null) precision = precisionFloor;
+      if (precision !== null) {
+        set("location_precision = ?", precision);
+        changed.push(`location_precision=${precision}`);
+      }
+      if (flagWrite !== null) {
+        set("office_verified = ?", flagWrite);
+        changed.push(`office_verified=${flagWrite ? "true" : "false"}`);
       }
     }
     // The geocoding request and its result land in one transaction. The

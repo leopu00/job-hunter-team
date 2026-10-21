@@ -62,6 +62,24 @@ webes forrásból ellenőrizted volna** mint a cég valós irodája. A helyes so
 Csak ha a pozíció full-remote loc_city/loc_country nélkül (nincs
 fizikai iroda a geokódoláshoz). Lásd a "Mikor SKIP" szekciót alább.
 
+## Pontossági szint: `--location-precision`
+
+Az `office_verified` megmarad, de önmagában nem elég: az irodaként mentett városközpont a térképen
+irodának látszik. Írd be a SZINTET is, egyetlen szabállyal (az `office_verified` követi: csak
+`address` esetén igaz):
+
+| `--location-precision` | Mikor |
+|---|---|
+| `address` | utca és házszám, a weben ellenőrizve (a fenti aranyszabály) |
+| `street` | csak az utca, házszám nélkül: a térképen a címtől KÜLÖNBÖZŐ jel |
+| `district` | csak a városrész |
+| `city` | visszaesés a városközpontra (`office_address = <city>, <country>`) |
+| `country` | csak az ország |
+
+Soha ne írj `address`-t házszám nélkül. Kétség esetén a legalacsonyabb szintet írd, amit igazolni
+tudsz. Egy már beírt szint nem csökken magától: csak az változtatja meg, aki a
+`--location-precision`-nel kimondja.
+
 ## Mikor tölts ki `office_verified=true`-val
 
 **Valóban biztos** vagy, hogy az a cím a helyes iroda:
@@ -153,6 +171,7 @@ python3 /app/shared/skills/db_update.py position <ID> \
   --office-address "Via Roma 1, 00100 Roma, Italy" \
   --office-geocoded true \
   --office-verified true \
+  --location-precision address \
   --action geocode --outcome updated
 ```
 

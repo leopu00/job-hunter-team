@@ -2,7 +2,7 @@
 """Aggiorna dati nel database jobs.db (schema V2).
 
 Uso:
-  python3 db_update.py position 42 --status checked
+  python3 db_update.py position 42 --status checked --loc-city "Milan" --loc-country "Italy"
   python3 db_update.py position 42 --status scored --notes "Ottimo match"
   python3 db_update.py company "Adaptify" --verdict GO --red-flags "piccola"
   python3 db_update.py application 42 --critic-verdict PASS --critic-score 8.5 --reviewed-by critico
@@ -23,7 +23,7 @@ import sys
 import os
 sys.path.insert(0, os.path.dirname(__file__))
 
-from _db import get_db, ensure_schema, resolve_company_id, _column_exists
+from _db import get_db, ensure_schema, resolve_company_id, _column_exists, LOCATION_PRECISIONS
 from external_content import normalize_external_inline_fields
 import role_taxonomy
 import maintenance_log
@@ -44,7 +44,7 @@ import maintenance_log
 MAINTENANCE_TRACKED_FIELDS = (
     "status", "url", "deadline", "expires_at", "is_open",
     "office_lat", "office_lon", "office_address",
-    "office_geocoded", "office_verified",
+    "office_geocoded", "office_verified", "location_precision",
     "jd_summary", "jd_text", "notes",
 )
 
@@ -171,6 +171,93 @@ def interpret_escapes(text):
     return text
 
 
+def _location_precision_writes(conn, args):
+    """(livello, office_verified) da scrivere insieme ai campi della chiamata, o None.
+
+    `location_precision` dice QUANTO bene si conosce il luogo (address|street|district|city|
+    country|remote); `office_verified` resta, ma derivato: vero solo per `address`. Una regola
+    sola, perché due verità sullo stesso fatto sono il difetto che questo campo toglie.
+
+      --location-precision X      scrive X; il flag segue (X == address). Se anche
+                                  --office-verified è dato e lo contraddice: rifiuto, nessuna scrittura.
+      solo --office-verified      client e skill di prima: true -> address (se ci sono coordinate),
+                                  false -> city SOLO se il livello non c'è ancora (mai abbassa).
+      niente                      niente.
+    Il livello non si abbassa mai da solo: solo chi lo dice, con --location-precision.
+    """
+    explicit = getattr(args, 'location_precision', None)
+    flag = args.office_verified
+    if explicit is not None:
+        if flag is not None and (flag == 'true') != (explicit == 'address'):
+            print(
+                f"⚠️  LOCATION_PRECISION REJECTED: --office-verified {flag} contradicts "
+                f"--location-precision {explicit} (the flag is true only for 'address').",
+                file=sys.stderr,
+            )
+            conn.close()
+            sys.exit(1)
+        return explicit, (None if flag is not None else (1 if explicit == 'address' else 0))
+    if flag is None:
+        return None, None
+    row = conn.execute(
+        "SELECT office_lat, office_lon, location_precision FROM positions WHERE id = ?", (args.id,)
+    ).fetchone()
+    lat = args.office_lat if args.office_lat is not None else (row['office_lat'] if row else None)
+    lon = args.office_lon if args.office_lon is not None else (row['office_lon'] if row else None)
+    if lat is None or lon is None:
+        return None, None
+    if flag == 'true':
+        return 'address', None
+    current = row['location_precision'] if row else None
+    return ('city' if current is None else None), None
+
+
+def _checked_place_gate(conn, args, previous_status):
+    """Nessun `checked` senza un luogo (JHT-T03): il livello minimo da scrivere, o None.
+
+    Guarda la riga COME RISULTEREBBE dopo l'UPDATE: i valori già in DB, scavalcati da quelli
+    della stessa chiamata (`location-enrichment` scrive il luogo nel comando che promuove).
+    Luogo = una città o un paese non vuoti, oppure un regime remoto esplicito (full_remote /
+    work_mode=remote: il full remote senza paese passa). Altrimenti exit 1, nessuna scrittura.
+
+    Vale solo per la transizione verso `checked`: ritoccare una riga già `checked` non rifiuta,
+    e le righe vecchie senza luogo non si riscrivono. Se il luogo c'è e il livello no, ritorna
+    il pavimento (city < country < remote) da scrivere nello stesso UPDATE; un livello già
+    presente non si tocca, mai abbassato.
+    """
+    if args.status != 'checked' or previous_status in (None, 'checked'):
+        return None
+    row = conn.execute(
+        "SELECT loc_city, loc_country, remote_type, work_mode, location_precision "
+        "FROM positions WHERE id = ?", (args.id,)
+    ).fetchone()
+    if row is None:
+        return None
+
+    def effective(arg_value, column):
+        # "" in riga di comando vuol dire "ripulisci" (NULL): il valore finale è vuoto.
+        value = arg_value if arg_value is not None else row[column]
+        return (value or '').strip()
+
+    city = effective(getattr(args, 'loc_city', None), 'loc_city')
+    country = effective(getattr(args, 'loc_country', None), 'loc_country')
+    remote_type = args.remote_type or row['remote_type']
+    work_mode = effective(getattr(args, 'work_mode', None), 'work_mode')
+    remote = remote_type == 'full_remote' or work_mode == 'remote'
+    if not (city or country or remote):
+        print(
+            f"⚠️  LOCATION_MISSING (location_missing): position {args.id} cannot become "
+            "'checked' without a place. Pass --loc-city or --loc-country in the same command, "
+            "or mark it fully remote (--remote-type full_remote or --work-mode remote).",
+            file=sys.stderr,
+        )
+        conn.close()
+        sys.exit(1)
+    if row['location_precision'] is not None:
+        return None
+    return 'city' if city else ('country' if country else 'remote')
+
+
 def update_position(args):
     # Stessa regola della INSERT: i campi che vengono dalla pagina restano una
     # riga sola. Una correzione dell'Analista al titolo passa da qui, e senza
@@ -206,6 +293,7 @@ def update_position(args):
         ).fetchone()
         if row is not None:
             previous_status = row[0] if not hasattr(row, "keys") else row["status"]
+    precision_floor = _checked_place_gate(conn, args, previous_status)
 
     # `getattr`: update_position è invocata anche con Namespace costruiti a
     # mano da altri moduli, che non conoscono i flag dello storico.
@@ -411,6 +499,19 @@ def update_position(args):
         updates.append("office_verified = ?")
         params.append(1 if args.office_verified == 'true' else 0)
         changed.append(f"office_verified={args.office_verified}")
+
+    # Precisione del luogo (JHT-T04). Una sola regola per il livello e per il flag.
+    precision, flag = _location_precision_writes(conn, args)
+    if precision is None and precision_floor is not None:
+        precision = precision_floor
+    if precision is not None:
+        updates.append("location_precision = ?")
+        params.append(precision)
+        changed.append(f"location_precision={precision}")
+    if flag is not None:
+        updates.append("office_verified = ?")
+        params.append(flag)
+        changed.append(f"office_verified={'true' if flag else 'false'}")
 
     # Geocoding on-demand: la richiesta e il risultato devono atterrare nella
     # STESSA transazione. In precedenza `geocode_requested` restava acceso
@@ -1049,6 +1150,9 @@ def main():
     p.add_argument('--office-address', help='Full office address (geocoder display_name)')
     p.add_argument('--office-geocoded', choices=['true', 'false'], help='true if geocoding was attempted (even if it failed)')
     p.add_argument('--office-verified', choices=['true', 'false'], help='true if you are CERTAIN this is the correct office; false if city-level/multi-ambiguous')
+    p.add_argument('--location-precision', choices=list(LOCATION_PRECISIONS),
+                   help='How precisely the place is known: address (street number, checked) | street (no number) | '
+                        'district | city | country | remote. office_verified follows it (true only for address).')
     # Storico dei controlli: --action registra il giro, --outcome ne dice l'esito.
     maintenance_log.add_cli_args(p)
 

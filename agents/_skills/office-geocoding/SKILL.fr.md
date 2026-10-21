@@ -45,6 +45,24 @@ office_verified   bool     true si vous êtes SÛR que c'est le bon bureau ;
 
 Uniquement si la position est full-remote sans loc_city/loc_country (pas de bureau physique à géocoder). Voir section "Quand SKIP" ci-dessous.
 
+## Niveau de précision : `--location-precision`
+
+`office_verified` reste, mais ne suffit pas seul : un centre-ville enregistré comme bureau ressemble
+à un bureau sur la carte. Écrivez aussi le NIVEAU, avec une seule règle (`office_verified` le suit :
+il n'est vrai que pour `address`) :
+
+| `--location-precision` | Quand |
+|---|---|
+| `address` | rue et numéro, vérifiés sur le web (la règle d'or ci-dessus) |
+| `street` | seulement la rue, sans numéro : sur la carte c'est un signe DIFFÉRENT d'une adresse |
+| `district` | seulement le quartier |
+| `city` | repli sur le centre de la ville (`office_address = <city>, <country>`) |
+| `country` | seulement le pays |
+
+N'écrivez jamais `address` sans le numéro. Dans le doute, le niveau le plus bas que vous pouvez
+démontrer. Un niveau déjà écrit ne baisse pas tout seul : seul celui qui le dit avec
+`--location-precision` le change.
+
 ## Quand remplir avec `office_verified=true`
 
 Vous êtes **vraiment sûr** que cette adresse est le bon bureau :
@@ -132,6 +150,7 @@ python3 /app/shared/skills/db_update.py position <ID> \
   --office-address "Via Roma 1, 00100 Roma, Italy" \
   --office-geocoded true \
   --office-verified true \
+  --location-precision address \
   --action geocode --outcome updated
 ```
 

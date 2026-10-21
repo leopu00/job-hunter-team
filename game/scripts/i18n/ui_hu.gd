@@ -456,6 +456,7 @@ const S := {
 	"pos.office_address": "CÍM",
 	"pos.office_verified": "az Elemzők ellenőrizték",
 	"pos.office_approx": "nem ellenőrzött · városközpont",
+	"pos.office_street": "utca, házszám nélkül",
 
 	"apps.ready": "önéletrajz kész",
 	"apps.applied": "elküldve",

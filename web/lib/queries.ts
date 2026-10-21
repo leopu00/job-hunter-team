@@ -1251,7 +1251,7 @@ export async function getPositionsWithCoords(): Promise<local.PositionCoord[]> {
   const query = supabase
     .from("positions")
     .select(
-      "id, title, company, status, role_family, location, loc_country, loc_city, office_address, office_lat, office_lon, remote_type, created_at, scores ( total_score )",
+      "id, title, company, status, role_family, location, loc_country, loc_city, office_address, office_lat, office_lon, office_verified, location_precision, remote_type, created_at, scores ( total_score )",
     )
     .not("status", "eq", "excluded")
     .is("deleted_at", null)
@@ -1268,6 +1268,8 @@ export async function getPositionsWithCoords(): Promise<local.PositionCoord[]> {
         loc_city: p.loc_city ?? null,
         office_lat: p.office_lat,
         office_lon: p.office_lon,
+        office_verified: p.office_verified ?? null,
+        location_precision: p.location_precision ?? null,
         id: String(p.id),
         score: typeof s?.total_score === "number" ? s.total_score : null,
         company: p.company ?? null,
@@ -1447,7 +1449,7 @@ export async function getPositionsWithoutCoords(): Promise<PositionNoCoord[]> {
   const query = supabase
     .from("positions")
     .select(
-      "id, title, company, status, role_family, office_lat, office_lon, is_remote, remote_type, location, loc_country, loc_city, created_at, scores ( total_score )",
+      "id, title, company, status, role_family, office_lat, office_lon, office_verified, location_precision, is_remote, remote_type, location, loc_country, loc_city, created_at, scores ( total_score )",
     )
     .not("status", "eq", "excluded")
     .is("deleted_at", null)
@@ -1466,6 +1468,8 @@ export async function getPositionsWithoutCoords(): Promise<PositionNoCoord[]> {
       loc_city: p.loc_city ?? null,
       office_lat: p.office_lat,
       office_lon: p.office_lon,
+      office_verified: p.office_verified ?? null,
+      location_precision: p.location_precision ?? null,
       remote_type: p.remote_type ?? null,
     })),
   );

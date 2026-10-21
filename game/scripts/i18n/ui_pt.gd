@@ -456,6 +456,7 @@ const S := {
 	"pos.office_address": "ENDEREÇO",
 	"pos.office_verified": "verificado pelos Analistas",
 	"pos.office_approx": "não verificado · centro da cidade",
+	"pos.office_street": "rua, sem número",
 
 	"apps.ready": "CV pronto",
 	"apps.applied": "enviada",

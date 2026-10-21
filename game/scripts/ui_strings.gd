@@ -675,6 +675,7 @@ const S := {
 	"pos.office_address": "INDIRIZZO",
 	"pos.office_verified": "verificato dagli Analisti",
 	"pos.office_approx": "non verificato · centro città",
+	"pos.office_street": "via, senza civico",
 
 	# ── Candidature e Notifiche (dati reali) ──────────────────────
 	"apps.ready": "CV pronto",

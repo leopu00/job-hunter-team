@@ -420,6 +420,15 @@ export const T = {
     fr: "Ouvrir dans Google Maps",
     pt: "Abrir no Google Maps",
   },
+  address_street_only: {
+    it: "via, senza civico",
+    en: "street, no street number",
+    hu: "utca, házszám nélkül",
+    es: "calle, sin número",
+    de: "Straße, ohne Hausnummer",
+    fr: "rue, sans numéro",
+    pt: "rua, sem número",
+  },
   location: {
     it: "Località",
     en: "Location",

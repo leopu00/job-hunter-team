@@ -137,7 +137,7 @@ def insert_position(db_path, tmp, title, company, url=None, source='test', found
 def update_position(db_path, tmp, pos_id, **kwargs):
     args = ['position', str(pos_id)]
     for k, v in kwargs.items():
-        args += [f'--{k}', str(v)]
+        args += [f'--{k.replace("_", "-")}', str(v)]
     return run_cli(DB_UPDATE, args, db_path, tmp)
 
 
@@ -195,7 +195,7 @@ class TestAnalistaFlow:
         """next-for-scorer deve mostrare posizioni in status='checked'."""
         db_path, tmp = fresh_db
         pos_id = insert_position(db_path, tmp, 'Checked Role', 'CheckedCo')
-        update_position(db_path, tmp, pos_id, status='checked')
+        update_position(db_path, tmp, pos_id, status='checked', loc_city='Milan')
 
         r = run_cli(DB_QUERY, ['next-for-scorer'], db_path, tmp)
         assert r.returncode == 0
@@ -206,7 +206,7 @@ class TestAnalistaFlow:
         """Le note dell'analista devono essere salvate nel DB."""
         db_path, tmp = fresh_db
         pos_id = insert_position(db_path, tmp, 'Role', 'NoteCo')
-        update_position(db_path, tmp, pos_id, status='checked',
+        update_position(db_path, tmp, pos_id, status='checked', loc_city='Milan',
                         notes='azienda interessante')
 
         conn = sqlite3.connect(db_path)
@@ -224,7 +224,7 @@ class TestScorerFlow:
 
     def _setup_checked(self, db_path, tmp, title='Scored Dev', company='ScorerCo'):
         pos_id = insert_position(db_path, tmp, title, company)
-        update_position(db_path, tmp, pos_id, status='checked')
+        update_position(db_path, tmp, pos_id, status='checked', loc_city='Milan')
         return pos_id
 
     def test_scorer_next_for_scrittore_excludes_low_scores(self, fresh_db):
@@ -291,7 +291,7 @@ class TestScrittoreCriticoFlow:
 
     def _setup_scored(self, db_path, tmp, title='Write Me Dev', company='WriteCo', total=80):
         pos_id = insert_position(db_path, tmp, title, company)
-        update_position(db_path, tmp, pos_id, status='checked')
+        update_position(db_path, tmp, pos_id, status='checked', loc_city='Milan')
         insert_score(db_path, tmp, pos_id, total=total)
         update_position(db_path, tmp, pos_id, status='scored')
         return pos_id
@@ -361,7 +361,7 @@ class TestScrittoreCriticoFlow:
         conn.close()
 
         # Analista
-        update_position(db_path, tmp, pos_id, status='checked')
+        update_position(db_path, tmp, pos_id, status='checked', loc_city='Milan')
 
         # Scorer
         insert_score(db_path, tmp, pos_id, total=82)

@@ -62,6 +62,23 @@ ist **Web-Suche ZUERST, Geokodierung DANACH** — nicht umgekehrt.
 Nur wenn die Position full-remote ohne loc_city/loc_country ist (kein
 physisches Büro zu geokodieren). Siehe Abschnitt "Wann ÜBERSPRINGEN" unten.
 
+## Genauigkeitsstufe: `--location-precision`
+
+`office_verified` bleibt, genügt aber allein nicht: Ein als Büro gespeichertes Stadtzentrum sieht
+auf der Karte wie ein Büro aus. Schreibe auch die STUFE, mit einer einzigen Regel (`office_verified`
+folgt ihr: es ist nur bei `address` wahr):
+
+| `--location-precision` | Wann |
+|---|---|
+| `address` | Straße und Hausnummer, im Web bestätigt (die goldene Regel oben) |
+| `street` | nur die Straße, ohne Hausnummer: auf der Karte ein ANDERES Zeichen als eine Adresse |
+| `district` | nur das Viertel |
+| `city` | Rückfall auf das Stadtzentrum (`office_address = <city>, <country>`) |
+| `country` | nur das Land |
+
+Schreibe nie `address` ohne Hausnummer. Im Zweifel die niedrigste Stufe, die du belegen kannst.
+Eine geschriebene Stufe sinkt nicht von selbst: Sie ändert nur, wer es mit `--location-precision` sagt.
+
 ## Wann mit `office_verified=true` befüllen
 
 Du bist **wirklich sicher**, dass diese Adresse das richtige Büro ist:
@@ -153,6 +170,7 @@ python3 /app/shared/skills/db_update.py position <ID> \
   --office-address "Via Roma 1, 00100 Roma, Italy" \
   --office-geocoded true \
   --office-verified true \
+  --location-precision address \
   --action geocode --outcome updated
 ```
 
