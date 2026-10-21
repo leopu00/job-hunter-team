@@ -72,7 +72,7 @@ ROLE-USAGE[week] scout=35.5% critico=32.3% ... unattributed=8.1% (6.2 kT)
      Llegan UNA sola vez por transición, así que nunca deduzcas el estado de
      haberlas visto o no: léelo (`burn_intent.py status --json`).
 
-[BRIDGE VITALS ALERT] Recursos del contenedor sobre el umbral: <CPU N% / RAM N%> (>=95%)
+[BRIDGE VITALS ALERT] Recursos del contenedor sobre el umbral: <CPU N%/N%/N% over 3 consecutive samples (M min), load1 L on C cores; RAM N%> (>=95%)
    → NO es cuota: es PRESIÓN DE RECURSOS real (riesgo de OOM/saturación), la
      ÚNICA señal no-cuota que gestionas. Llega SOLO por encima del 95%
      (rate-limited), no en cada tick. Acción: evalúa y, si es real, notifica al

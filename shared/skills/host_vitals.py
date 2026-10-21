@@ -6,8 +6,10 @@ Una SOLA fonte di verità per i vitals di sistema, usata da due consumatori:
   - **sentinel-bridge.py** (a ogni tick, ~2-10 min): `append_sample()` scrive un
     record su `vitals.jsonl` — un FILE DEDICATO, NON il tick della Sentinella (la
     Sentinella NON viene avvisata del consumo PC nel suo flusso decisionale di
-    quota). Il bridge usa `over_threshold()` per mandare un `[VITALS ALERT]` alla
-    Sentinella **solo** se RAM o CPU superano la soglia (default 95%).
+    quota). Il bridge manda un `[VITALS ALERT]` alla Sentinella **solo** se la RAM
+    supera la soglia (default 95%) o se la CPU la supera in modo SOSTENUTO
+    (`cpu_pressure()`: 3 campioni consecutivi sopra soglia E load1 per core che lo
+    conferma). Un picco singolo non è saturazione: non sveglia nessuno.
   - **Mantenitore** (1×/giorno): `summary` (CLI) per leggere picchi/trend delle
     ultime 24h e metterli IN CROCE con la diagnosi infra.
 
@@ -38,6 +40,8 @@ CLI:
     python3 host_vitals.py sample [--file PATH]     # campiona + append (bridge)
     python3 host_vitals.py current                  # solo lettura, stampa JSON
     python3 host_vitals.py check [--pct 95]         # exit 1 + righe se sopra soglia
+    python3 host_vitals.py cpu-pressure [--file PATH] [--pct 95]
+                                                    # JSON: CPU sostenuta (bridge) o null
     python3 host_vitals.py summary [--hours 24]     # picchi/medie (Mantenitore)
     python3 host_vitals.py disk                     # solo disco, stampa JSON
     python3 host_vitals.py disk-guard               # exit 3 + `disk_low: frase` se < 3% E < 8 GiB
@@ -73,6 +77,15 @@ DISK_CODE_LOW = "disk_low"
 DISK_PHRASE_KEYS = {DISK_CODE_WARNING: "disk.warning", DISK_CODE_LOW: "disk.low"}
 DISK_GUARD_EXIT = 3  # `disk-guard`: rifiutato. Qualunque altro rc = non rifiutare.
 DISK_NOTICE_COOLDOWN_S = 6 * 3600
+
+# ── CPU: quando è saturazione e non un picco ─────────────────────────────────
+# Un quarto di secondo prendeva ogni raffica di un solo processo: su un VPS con 4
+# core, 7 campioni su 565 a ≥95% in due giorni, tutti isolati (i vicini a ~0) e con
+# load 0,2-2,6, e a ogni allarme il Capitano ritirava uno scout. La finestra di una
+# misura è più lunga, e l'allarme vuole una pressione che DURA e che il load conferma.
+CPU_SAMPLE_S = 2.0
+CPU_ALERT_RUN = 3                 # campioni consecutivi sopra soglia
+CPU_ALERT_LOAD_PER_CORE = 0.9     # load1 >= 0,9 × ncpu sull'ultimo campione
 
 
 def _read_int(p):
@@ -124,7 +137,7 @@ def _mem():
             "swap_pct": swap_pct}
 
 
-def _cpu(sample_s=0.25):
+def _cpu(sample_s=CPU_SAMPLE_S):
     """CPU% sull'intervallo (delta /proc/stat) + loadavg di contesto."""
     def snap():
         parts = Path("/proc/stat").read_text().splitlines()[0].split()[1:]
@@ -343,6 +356,74 @@ def over_threshold(v, pct=95):
     return out
 
 
+def _ts(record):
+    try:
+        ts = datetime.fromisoformat(str(record.get("ts")))
+    except (TypeError, ValueError):
+        return None
+    return ts if ts.tzinfo else ts.replace(tzinfo=timezone.utc)
+
+
+def cpu_pressure(samples, pct=95, run=CPU_ALERT_RUN, load_per_core=CPU_ALERT_LOAD_PER_CORE):
+    """La CPU è satura in modo sostenuto? `samples` dal più vecchio al più recente.
+
+    Sì solo se gli ultimi `run` campioni MISURATI sono tutti >= `pct` E il load1
+    dell'ultimo è >= `load_per_core` × ncpu. Quello che manca vale «non so», mai «va
+    bene»: un campione senza CPU o senza ora si salta, e un campionatore rimasto
+    zitto (un buco di tempo fra due campioni) non azzera la catena, perché una
+    macchina satura perde le misure proprio quando serve. Solo un campione misurato
+    sotto soglia la azzera. La durata detta è quella vera, dal primo all'ultimo.
+    Senza load l'ultimo non conferma niente: None.
+    Ritorna None, oppure quello che l'allarme dice: le percentuali, quanti campioni,
+    da quanti minuti, il load e i core.
+    """
+    measured = []
+    for record in samples:
+        cpu = (record or {}).get("cpu") or {}
+        value, ts = cpu.get("pct"), _ts(record or {})
+        if isinstance(value, (int, float)) and ts is not None:
+            measured.append((record, value, ts))
+    tail = measured[-run:]
+    if run < 1 or len(tail) < run:
+        return None
+    pcts, stamps = [], []
+    for _record, value, ts in tail:
+        if value < pct:
+            return None
+        pcts.append(value)
+        stamps.append(ts)
+    tail = [record for record, _value, _ts_ in tail]
+    last = (tail[-1] or {}).get("cpu") or {}
+    load1, ncpu = last.get("load1"), last.get("ncpu")
+    if not isinstance(load1, (int, float)) or not isinstance(ncpu, int) or ncpu < 1:
+        return None
+    if load1 < load_per_core * ncpu:
+        return None
+    return {"pcts": pcts, "samples": run,
+            "minutes": round((stamps[-1] - stamps[0]).total_seconds() / 60, 1),
+            "load1": load1, "ncpu": ncpu}
+
+
+def read_samples(path=None, last=4 * CPU_ALERT_RUN):
+    """Gli ultimi `last` campioni leggibili di vitals.jsonl, dal più vecchio."""
+    path = Path(path) if path else DEFAULT_FILE
+    out = []
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines()
+    except OSError:
+        return out
+    for line in reversed(lines):
+        if len(out) >= last:
+            break
+        try:
+            record = json.loads(line)
+        except ValueError:
+            continue
+        if isinstance(record, dict):
+            out.append(record)
+    return list(reversed(out))
+
+
 def append_sample(path=None, max_lines=MAX_LINES):
     """Campiona e appende a vitals.jsonl; tronca ai max_lines più recenti."""
     path = Path(path) if path else DEFAULT_FILE
@@ -409,6 +490,7 @@ def main():
     sp = sub.add_parser("sample"); sp.add_argument("--file", default=None)
     sub.add_parser("current")
     ck = sub.add_parser("check"); ck.add_argument("--pct", type=float, default=95); ck.add_argument("--file", default=None)
+    cp = sub.add_parser("cpu-pressure"); cp.add_argument("--pct", type=float, default=95); cp.add_argument("--file", default=None)
     sm = sub.add_parser("summary"); sm.add_argument("--hours", type=float, default=24); sm.add_argument("--file", default=None)
     sub.add_parser("disk")
     sub.add_parser("disk-guard")
@@ -433,6 +515,8 @@ def main():
         print("sent" if sent else "none")
     elif args.cmd == "current":
         print(json.dumps(read_vitals()))
+    elif args.cmd == "cpu-pressure":
+        print(json.dumps(cpu_pressure(read_samples(args.file), args.pct)))
     elif args.cmd == "check":
         v = read_vitals()
         over = over_threshold(v, args.pct)

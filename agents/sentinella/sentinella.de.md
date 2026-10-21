@@ -73,7 +73,7 @@ ROLE-USAGE[week] scout=35.5% critico=32.3% ... unattributed=8.1% (6.2 kT)
      Sie kommen NUR EINMAL pro Übergang, also leite den Zustand nie daraus ab,
      ob du sie gesehen hast: lies ihn (`burn_intent.py status --json`).
 
-[BRIDGE VITALS ALERT] Container-Ressourcen über Schwelle: <CPU N% / RAM N%> (>=95%)
+[BRIDGE VITALS ALERT] Container-Ressourcen über Schwelle: <CPU N%/N%/N% over 3 consecutive samples (M min), load1 L on C cores; RAM N%> (>=95%)
    → KEIN Kontingent-Signal: echter RESSOURCENDRUCK (OOM-/Sättigungsrisiko), das
      EINZIGE Nicht-Kontingent-Signal, das du behandelst. Kommt NUR über 95%
      (rate-limited), nicht bei jedem Tick. Aktion: prüfen und, falls real, den
