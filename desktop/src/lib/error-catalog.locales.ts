@@ -22,6 +22,41 @@ function tr(
 }
 
 const COPY_BY_ENGLISH_TEXT: Readonly<Record<string, ErrorTranslations>> = {
+  "This VPS was set up before the app marked it as yours: you can read it from here, but not write to it.": {
+    de: ["Dieser VPS wurde eingerichtet, bevor die App ihn als deinen markiert hat: Du kannst ihn von hier lesen, aber nicht beschreiben.", "Bestätige mit „Das ist mein VPS“, dass er dir gehört, und versuche es dann erneut."],
+    es: ["Este VPS se creó antes de que la app lo marcara como tuyo: desde aquí se puede leer, pero no escribir.", "Confirma que es tuyo con «Es mi VPS» y vuelve a intentarlo."],
+    fr: ["Ce VPS a été créé avant que l’app ne le marque comme le tien : d’ici tu peux le lire, mais pas y écrire.", "Confirme qu’il est à toi avec « C’est mon VPS », puis réessaie."],
+    hu: ["Ezt a VPS-t még azelőtt hoztuk létre, hogy az app a tiédnek jelölte volna: innen olvasható, de nem írható.", "Erősítsd meg, hogy a tiéd, az „Ez az én VPS-em” gombbal, majd próbáld újra."],
+    pt: ["Este VPS foi criado antes de a app o marcar como teu: daqui lê-se, mas não se escreve.", "Confirma que é teu com «Este VPS é meu» e tenta novamente."],
+  },
+  "The key of this VPS has changed since you last confirmed it as yours.": {
+    de: ["Der Schlüssel dieses VPS hat sich seit deiner letzten Bestätigung geändert.", "Wenn du ihn selbst neu installiert hast, bestätige ihn erneut mit „Das ist mein VPS“; sonst vertraue ihm nicht und prüfe ihn."],
+    es: ["La clave de este VPS ha cambiado desde la última vez que lo confirmaste como tuyo.", "Si lo reinstalaste tú, confírmalo de nuevo con «Es mi VPS»; si no, no te fíes y compruébalo."],
+    fr: ["La clé de ce VPS a changé depuis la dernière fois que tu l’as confirmé comme le tien.", "Si tu l’as réinstallé toi-même, confirme-le à nouveau avec « C’est mon VPS » ; sinon, ne lui fais pas confiance et vérifie-le."],
+    hu: ["A VPS kulcsa megváltozott azóta, hogy utoljára a tiédként megerősítetted.", "Ha te telepítetted újra, erősítsd meg újra az „Ez az én VPS-em” gombbal; ha nem, ne bízz benne, és ellenőrizd."],
+    pt: ["A chave deste VPS mudou desde a última vez que o confirmaste como teu.", "Se o reinstalaste tu, confirma-o de novo com «Este VPS é meu»; caso contrário, não confies e verifica-o."],
+  },
+  "This VPS cannot be confirmed as yours.": {
+    de: ["Dieser VPS kann nicht als deiner bestätigt werden.", "Prüfe, ob du das richtige Team geöffnet hast, und versuche es dann erneut."],
+    es: ["Este VPS no se puede confirmar como tuyo.", "Comprueba que has abierto el equipo correcto y vuelve a intentarlo."],
+    fr: ["Ce VPS ne peut pas être confirmé comme le tien.", "Vérifie que tu as ouvert la bonne équipe, puis réessaie."],
+    hu: ["Ez a VPS nem erősíthető meg a tiédként.", "Ellenőrizd, hogy a megfelelő csapatot nyitottad-e meg, majd próbáld újra."],
+    pt: ["Este VPS não pode ser confirmado como teu.", "Verifica se abriste a equipa certa e tenta novamente."],
+  },
+  "The VPS did not answer the check.": {
+    de: ["Der VPS hat auf die Prüfung nicht geantwortet.", "Prüfe, ob er eingeschaltet und erreichbar ist, und versuche es dann erneut."],
+    es: ["El VPS no respondió a la comprobación.", "Comprueba que esté encendido y accesible, y vuelve a intentarlo."],
+    fr: ["Le VPS n’a pas répondu à la vérification.", "Vérifie qu’il est allumé et joignable, puis réessaie."],
+    hu: ["A VPS nem válaszolt az ellenőrzésre.", "Ellenőrizd, hogy be van-e kapcsolva és elérhető-e, majd próbáld újra."],
+    pt: ["O VPS não respondeu à verificação.", "Verifica se está ligado e acessível e tenta novamente."],
+  },
+  "The confirmation was not given.": {
+    de: ["Die Bestätigung wurde nicht erteilt.", "Wiederhole den Vorgang und bestätige ihn im Fenster, das sich öffnet."],
+    es: ["No se dio la confirmación.", "Repite la operación y confírmala en la ventana que se abre."],
+    fr: ["La confirmation n’a pas été donnée.", "Répète l’opération et confirme-la dans la fenêtre qui s’ouvre."],
+    hu: ["A megerősítés nem történt meg.", "Ismételd meg a műveletet, és erősítsd meg a megnyíló ablakban."],
+    pt: ["A confirmação não foi dada.", "Repete a operação e confirma-a na janela que se abre."],
+  },
   "Disk space is running low.": {
     de: ["Der Speicherplatz wird knapp.", "Gib etwas Platz frei, sonst startet das Team keine neuen Agenten und Updates mehr."],
     es: ["Queda poco espacio en el disco.", "Libera algo de espacio o el equipo dejará de iniciar nuevos agentes y actualizaciones."],
@@ -1330,6 +1365,11 @@ export const ERROR_CATALOG_LOCALES: Readonly<Record<string, ErrorTranslations>> 
   agent_not_running: translated("The agent is not running."),
   team_not_running: translated("The team is not running."),
   read_only_link: translated("This view is read only: the message was not sent."),
+  own_vps_claim_required: translated("This VPS was set up before the app marked it as yours: you can read it from here, but not write to it."),
+  own_vps_key_changed: translated("The key of this VPS has changed since you last confirmed it as yours."),
+  own_vps_claim_refused: translated("This VPS cannot be confirmed as yours."),
+  own_vps_claim_unreachable: translated("The VPS did not answer the check."),
+  own_vps_claim_not_confirmed: translated("The confirmation was not given."),
   chat_runtime_outdated: translated("The team does not have this chat yet."),
   agent_unavailable: translated("The agent cannot receive the message right now."),
   agent_busy: translated("The agent cannot receive the message right now."),

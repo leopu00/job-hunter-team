@@ -2530,6 +2530,14 @@ fn prepare_impl(
             let snapshot = snapshot_impl(&app, &scope, &validated)?;
             crate::direct_chat::persist_onboarding_host(&app, &scope, &submission.host)
                 .map_err(failure)?;
+            // The VPS the app has just set up and pinned is the person's own: the positive mark (this
+            // account, this host, the pinned key) that the full connection is decided from (JHT-T30).
+            if let (ExecutionHost::Vps { address, port, .. }, Ok(host_key)) =
+                (&submission.host, crate::runtime_host::pinned_host_fingerprint(&validated))
+            {
+                crate::existing_team_runtime::mark_own_vps(&app, &scope, address, *port, &host_key)
+                    .map_err(|_| failure("storage_unavailable"))?;
+            }
             Ok(snapshot)
         },
     )?;
@@ -7351,6 +7359,29 @@ mod existing_team_assistant_tests {
         ] {
             let body = onboarding.split(name).nth(1).and_then(|rest| rest.split(next).next()).expect(name);
             assert!(!body.contains("assistant_start"), "{name}");
+        }
+    }
+
+    #[test]
+    fn only_the_provisioning_of_a_vps_marks_it_as_the_persons_own() {
+        // JHT-T30: «a VPS of one's own» is decided from the mark the app's own setup writes, so the setup
+        // writes it after the host is persisted and its key pinned, and nothing that connects an existing
+        // team does.
+        let onboarding = include_str!("onboarding.rs").split("mod existing_team_assistant_tests").next().unwrap();
+        assert_eq!(onboarding.matches("mark_own_vps(").count(), 1, "one writer in the whole file");
+        let prepare = onboarding.split("fn prepare_impl(").nth(1).and_then(|rest| rest.split("pub(crate) async fn onboarding_prepare(").next()).expect("prepare_impl");
+        let persisted = prepare.find("persist_onboarding_host(").expect("it persists the host");
+        let marked = prepare.find("mark_own_vps(").expect("and marks it");
+        assert!(persisted < marked, "the mark comes after the host is persisted");
+        assert!(prepare[..marked].contains("pinned_host_fingerprint(&validated)") || prepare[marked..].contains("pinned_host_fingerprint(&validated)"));
+        for name in [
+            "fn activate_readonly_existing_team_target(",
+            "pub(crate) async fn onboarding_existing_team_reopen(",
+            "pub(crate) async fn onboarding_existing_team_readonly_connect(",
+            "pub(crate) async fn onboarding_existing_team_connect(",
+        ] {
+            let body = onboarding.split(name).nth(1).and_then(|rest| rest.split("\n}\n").next()).expect(name);
+            assert!(!body.contains("mark_own_vps"), "{name}");
         }
     }
 }

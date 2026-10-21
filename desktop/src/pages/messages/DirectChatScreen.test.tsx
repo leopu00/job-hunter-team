@@ -121,6 +121,34 @@ describe("DirectChatScreen", () => {
     },
   );
 
+  it("a message refused because the VPS is not claimed yet offers the claim and keeps what was typed", async () => {
+    viewport(1280, 800);
+    const { mock } = client();
+    mock.send = vi.fn(async () => {
+      throw { code: "own_vps_claim_required" };
+    });
+    const user = userEvent.setup();
+    render(<DirectChatScreen client={mock} />);
+    await screen.findByText("Messaggio dalla VPS");
+    await user.type(screen.getByRole("textbox", { name: "Scrivi a Capitano" }), "Ciao{Enter}");
+    const invite = await screen.findByTestId("own-vps-invite");
+    expect(invite).toHaveTextContent("devi confermare che è la tua");
+    expect(screen.getByTestId("direct-chat-status")).toHaveTextContent(/non si scrive/i);
+    // the text typed is back in the box: nothing was lost
+    expect(screen.getByRole("textbox", { name: "Scrivi a Capitano" })).toHaveValue("Ciao");
+  });
+
+  it("the read-only chat never offers the claim", async () => {
+    viewport(1280, 800);
+    const { mock, emit } = client();
+    render(<DirectChatScreen client={mock} writeLocked />);
+    await screen.findByText("Messaggio dalla VPS");
+    // even an error that asks for the claim: the read-only view has no claim to make
+    act(() => emit({ kind: "error", operation: "send", code: "own_vps_claim_required" }));
+    expect(await screen.findByTestId("direct-chat-status")).toHaveTextContent(/non si scrive/i);
+    expect(screen.queryByTestId("own-vps-invite")).toBeNull();
+  });
+
   it("selects an agent, reads its direct history and sends through the typed client", async () => {
     viewport(1280, 800);
     const { mock, emit } = client();

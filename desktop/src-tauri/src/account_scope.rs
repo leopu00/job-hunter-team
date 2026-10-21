@@ -128,6 +128,12 @@ fn derive_scope(account_id: &[u8]) -> AccountScope {
     )
 }
 
+/// The scope of an account the backend itself authenticated (`auth_store::authenticated_account_id`),
+/// for a command that must tie its work to the account whose session is open.
+pub(crate) fn scope_of_authenticated(account_id: &[u8]) -> AccountScope {
+    derive_scope(account_id)
+}
+
 fn derive_local_scope(secret: &[u8]) -> AccountScope {
     derive_scope_with_domain(
         LOCAL_DIGEST_DOMAIN,

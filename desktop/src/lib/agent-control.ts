@@ -1,6 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { pickAgentsRead, type TeamAgentsRead } from "./existing-team-agents";
 import { teamStatusErrorCode } from "./existing-team-status";
+import { pickOwnVpsState, type OwnVpsState } from "./own-vps-claim";
 
 /**
  * The agents' control panel (native command agent_control, agent_control.rs):
@@ -21,6 +22,8 @@ export type PanelList = TeamAgentsRead & {
   where: PanelWhere;
   /** the VPS's address, for the confirmation; null on this computer */
   label: string | null;
+  /** where a VPS of the person's own stands (claim or key changed ask for their confirmation); null when it is not one */
+  ownVps: OwnVpsState | null;
 };
 
 export type TeamControlState = {
@@ -74,7 +77,13 @@ export async function readPanelList(): Promise<Outcome<PanelList>> {
   return {
     ok: true,
     at: read.at,
-    value: { ...agents, target: data.target, where, label: typeof data.label === "string" ? data.label : null },
+    value: {
+      ...agents,
+      target: data.target,
+      where,
+      label: typeof data.label === "string" ? data.label : null,
+      ownVps: pickOwnVpsState(data.ownVps),
+    },
   };
 }
 

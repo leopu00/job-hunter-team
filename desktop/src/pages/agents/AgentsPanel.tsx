@@ -22,6 +22,7 @@ import {
   type TeamControlState,
 } from "../../lib/agent-control";
 import type { TeamAgent } from "../../lib/existing-team-agents";
+import OwnVpsClaim from "../../components/OwnVpsClaim";
 import { useRefresh } from "../../shell/router";
 import type { PageProps } from "../types";
 import { AGENTS_PANEL_TEXT, type AgentsPanelText } from "./AgentsPanel.i18n";
@@ -500,6 +501,12 @@ export default function AgentsPanel({ search }: PageProps) {
 
       {list?.ok && (
         <>
+          {!readOnly && (list.value.ownVps === "claimable" || list.value.ownVps === "key_changed") && (
+            <OwnVpsClaim
+              reason={list.value.ownVps === "key_changed" ? "own_vps_key_changed" : "own_vps_claim_required"}
+              onClaimed={() => void read()}
+            />
+          )}
           <div className="flex flex-wrap items-center justify-between gap-2 mb-3 rounded border px-3 py-2" style={{ borderColor: "var(--color-border)" }}>
             <span data-testid="panel-summary" className="text-[11px]" style={{ color: "var(--color-bright)" }}>
               {[

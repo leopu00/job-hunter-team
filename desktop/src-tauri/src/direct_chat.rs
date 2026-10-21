@@ -904,7 +904,7 @@ fn run_chat(
     }
 }
 
-fn window_may_write(label: &str) -> bool {
+pub(crate) fn window_may_write(label: &str) -> bool {
     label == "main"
 }
 
@@ -912,8 +912,29 @@ fn window_may_write(label: &str) -> bool {
 /// this run of the app. The read-only view activates the same target and opens the same chat, so
 /// it is decided here, in the native side, and not by the page: a chat opened read-only reads,
 /// and a send is refused whatever the renderer asks.
-fn link_allows_writing(runtime: Option<&ActivatedTarget>, full_link: impl Fn(&ActivatedTarget) -> bool) -> bool {
-    runtime.map_or(true, full_link)
+///
+/// A team with no pinned target is this computer's (always writable) or a VPS of the person's own,
+/// which `own_may_write` answers: writing to it needs the mark the app's own setup writes, or the
+/// person's claim of it (JHT-T30). Not having a candidate or a selection is no permission.
+fn link_allows_writing(runtime: Option<&ActivatedTarget>, own_may_write: bool, full_link: impl Fn(&ActivatedTarget) -> bool) -> bool {
+    runtime.map_or(own_may_write, full_link)
+}
+
+/// Why a message may not go to the VPS of the person's own this connection is on, or none: this
+/// computer and an existing team have their own rules. The codes are the page's invitation to claim
+/// the VPS (`own_vps_claim_required`) or to claim it again after its key changed (`own_vps_key_changed`).
+fn own_vps_write_refusal(connection: &Connection) -> Option<&'static str> {
+    if connection.runtime.is_some() || !matches!(connection.validated, ValidatedHost::Vps { .. }) {
+        return None;
+    }
+    let Some(app) = connection.app.as_ref() else {
+        return Some("own_vps_claim_refused");
+    };
+    let pinned = crate::runtime_host::pinned_host_fingerprint(&connection.validated).ok();
+    match existing_team_runtime::root(app) {
+        Ok(root) => existing_team_runtime::own_vps_state_at(&root, &connection.scope, &connection.host, pinned.as_deref()).write_refusal(),
+        Err(_) => Some("own_vps_claim_refused"),
+    }
 }
 
 fn parse_json<T: for<'de> Deserialize<'de>>(
@@ -1096,10 +1117,11 @@ fn send_impl(
         .lock()
         .map_err(|_| failure("state_failed"))?;
     let connection = slot.as_ref().ok_or_else(|| failure("disconnected"))?;
-    if !link_allows_writing(connection.runtime.as_ref(), |target| {
+    let own_refusal = own_vps_write_refusal(connection);
+    if !link_allows_writing(connection.runtime.as_ref(), own_refusal.is_none(), |target| {
         existing_team_runtime::full_link_granted(&connection.scope, target)
     }) {
-        return Err(failure("read_only_link"));
+        return Err(failure(own_refusal.unwrap_or("read_only_link")));
     }
     if let Some(receipt) = send_fixed(connection, &agent, &text, &client_id)? {
         return Ok(receipt);
@@ -1377,9 +1399,10 @@ mod tests {
     #[test]
     fn an_existing_team_is_written_to_only_with_the_full_connection() {
         let team = crate::existing_team_runtime::ActivatedTarget::synthetic_for_tests();
-        assert!(!link_allows_writing(Some(&team), |_| false), "the read-only view reads, it never writes");
-        assert!(link_allows_writing(Some(&team), |_| true), "the confirmed team is written to");
-        assert!(link_allows_writing(None, |_| false), "a local team has no read-only view of this kind");
+        assert!(!link_allows_writing(Some(&team), true, |_| false), "the read-only view reads, it never writes");
+        assert!(link_allows_writing(Some(&team), false, |_| true), "the confirmed team is written to");
+        assert!(link_allows_writing(None, true, |_| false), "a local team, or a marked VPS of one's own, has no read-only view of this kind");
+        assert!(!link_allows_writing(None, false, |_| true), "a VPS of one's own with no mark is not written to");
     }
 
     #[test]
