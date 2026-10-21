@@ -1,4 +1,5 @@
-"""Windows runtime setup: the egress proxies are awaited and checked one by one.
+"""Windows runtime setup: the egress proxies are awaited and checked one by one, and a Try again
+after a later failure gets past the Podman install.
 
 On a fresh Windows profile `configure-podman-windows-network.ps1` failed its proxy checks right
 after systemd printed «changed on disk, run daemon-reload» for the new units: a Type=simple
@@ -7,10 +8,17 @@ WSL machine (it hung systemd on 09/10, see test_windows_desktop_local_runtime): 
 says needs one (NeedDaemonReload=yes) takes the machine restart; the proxies are awaited until
 they listen; each check prints what it asked and what came back; any failure is ONE stable code,
 podman_network_unready, exit 23.
+
+On a Try again winget answered 0x8A15002B (already installed, no applicable update) because the
+process did not see Podman in its PATH yet, and that was podman_not_installable: Podman is now
+found first, the installed version decides, and another version is podman_version_mismatch, 24.
 """
 
 from __future__ import annotations
 
+import os
+import re
+import shutil
 import socket
 import subprocess
 import threading
@@ -178,4 +186,80 @@ def test_every_failure_of_the_network_script_is_one_stable_code_and_the_enabler_
     enabler = _code(ENABLER)
     call = enabler.index("& (Join-Path $PSScriptRoot 'configure-podman-windows-network.ps1') -MachineName $MachineName")
     assert enabler[call:].split("\n", 2)[1].strip() == "if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }"
+
+
+def test_a_try_again_finds_podman_before_winget_and_the_version_decides():
+    enabler = _code(ENABLER)
+    block = enabler[enabler.index("if ($InstallDependencies) {") :]
+    block = block[: block.index("$Podman = Find-Podman")]
+    # Podman is looked for (PATH refreshed, then winget's folder) BEFORE winget runs
+    assert block.index("Get-PodmanVersion (Find-Podman)") < block.index("& winget install")
+    find = enabler[enabler.index("function Find-Podman {") :]
+    find = find[: find.index("\n}\n")]
+    assert find.index("Update-ProcessPath") < find.index("Get-Application 'podman.exe'")
+    assert "Programs\\Podman\\podman.exe" in find
+    # 0x8A15002B, as PowerShell reads a native exit code
+    assert re.search(r"\$WingetUpdateNotApplicable = (-?\d+)", enabler).group(1) == str(0x8A15002B - 2**32)
+    assert "$wingetCode -ne 0 -and $wingetCode -ne $WingetUpdateNotApplicable" in block
+    # after winget the installed version decides: another one is its own code, never «not installable»
+    assert block.index("& winget install") < block.index("$installedVersion = Get-PodmanVersion (Find-Podman)")
+    assert "podman_version_mismatch:" in block and "exit 24" in block
+
+
+# ── the same block, run by PowerShell with a fake winget and a fake podman ──
+
+PWSH = shutil.which("pwsh")
+
+
+def _enabler_install_block() -> str:
+    source = ENABLER.read_text(encoding="utf-8")
+    functions = "".join(
+        source[source.index(f"function {name} {{") :].split("\n}\n", 1)[0] + "\n}\n"
+        for name in ("Update-ProcessPath", "Get-Application", "Find-Podman", "Get-PodmanVersion")
+    )
+    block = source[source.index("$WingetUpdateNotApplicable = ") : source.index("$Podman = Find-Podman")]
+    return functions + block
+
+
+# PowerShell off Windows: a fake podman.exe can be a shell script there, and Join-Path keeps the
+# installer's «Programs\Podman\podman.exe» as one file name, which is where the fake goes.
+@pytest.mark.skipif(PWSH is None or os.name == "nt", reason="needs PowerShell off Windows")
+@pytest.mark.parametrize(("installed", "winget_code", "expected_exit", "expected_line"), [
+    ("6.0.2", None, 0, None),                                  # already there: winget is not even run
+    (None, 0, 0, None),                                        # first install
+    ("6.0.2-late", 0x8A15002B - 2**32, 0, None),               # a Try again: already installed, the right one
+    ("5.4.0", 0x8A15002B - 2**32, 24, "podman_version_mismatch: Podman 5.4.0"),
+    (None, 0x8A150006 - 2**32, 21, "podman_not_installable: winget install Podman.CLI 6.0.2 exited with"),
+])
+def test_the_install_block_with_a_fake_winget(tmp_path, installed, winget_code, expected_exit, expected_line):
+    calls = tmp_path / "winget-calls"
+    script = tmp_path / "block.ps1"
+    # «6.0.2-late»: Podman appears only once winget ran (what PATH did not show before)
+    present_before = installed is not None and not installed.endswith("-late")
+    version = (installed or "6.0.2").replace("-late", "")
+    fake_podman = tmp_path / "Programs\\Podman\\podman.exe"
+    podman_body = f"#!/bin/sh\necho 'podman version {version}'\n"
+    if present_before:
+        fake_podman.write_text(podman_body, encoding="utf-8")
+        fake_podman.chmod(0o755)
+    winget = (
+        "function winget {\n"
+        f"  Add-Content -LiteralPath '{calls}' -Value ($args -join ' ')\n"
+        + (f"  Set-Content -LiteralPath '{fake_podman}' -Value \"#!/bin/sh`necho 'podman version {version}'\"\n"
+           f"  & chmod 755 '{fake_podman}'\n")
+        + f"  $global:LASTEXITCODE = {winget_code if winget_code is not None else 0}\n"
+        "}\n"
+    )
+    script.write_text(
+        "$ErrorActionPreference = 'Stop'\n"
+        f"$LocalAppData = '{tmp_path}'\n$PodmanCliVersion = '6.0.2'\n$InstallDependencies = $true\n"
+        "function Write-JhtPhase { }\n" + winget + _enabler_install_block() + "\nexit 0\n",
+        encoding="utf-8",
+    )
+    done = subprocess.run([PWSH, "-NoProfile", "-NonInteractive", "-File", str(script)], capture_output=True,
+                          text=True, timeout=60, env={"PATH": "/usr/bin:/bin", "HOME": str(tmp_path)})
+    assert done.returncode == expected_exit, done.stdout + done.stderr
+    if expected_line:
+        assert expected_line in done.stderr
+    assert calls.exists() == (winget_code is not None)
 

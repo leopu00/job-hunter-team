@@ -327,22 +327,54 @@ function Install-JhtStartupTask {
   }
 }
 
+# Where Podman is: PATH as the system and the user have it NOW (a winget install
+# of an earlier run is not in this process's PATH), then winget's own folder.
+function Find-Podman {
+  Update-ProcessPath
+  $found = Get-Application 'podman.exe'
+  if (-not $found) {
+    $candidate = Join-Path $LocalAppData 'Programs\Podman\podman.exe'
+    if (Test-Path -LiteralPath $candidate -PathType Leaf) { $found = $candidate }
+  }
+  return $found
+}
+
+function Get-PodmanVersion {
+  param([string]$Path)
+  if (-not $Path) { return $null }
+  $line = @(& $Path --version 2>$null) | Select-Object -First 1
+  if ([string]$line -match '^podman(?:\.exe)? version (\S+)$') { return $Matches[1] }
+  return $null
+}
+
+# winget's «already installed, no applicable update» (0x8A15002B): on a Try
+# again after a later step failed, Podman is there already. It is a success
+# only when the version installed is the one JHT pins; the check after the
+# install decides, never the exit code alone.
+$WingetUpdateNotApplicable = -1978335189
+
 if ($InstallDependencies) {
   Write-JhtPhase podman_install
   try {
-    if (-not (Get-Command winget -ErrorAction SilentlyContinue)) { throw 'winget is required to install Podman dependencies.' }
-    if (-not (Get-Application 'podman.exe')) { Invoke-Checked 'winget' 'install' '--exact' '--source' 'winget' '--version' $PodmanCliVersion '--silent' '--disable-interactivity' '--accept-package-agreements' '--accept-source-agreements' '--id' 'Podman.CLI' }
+    if ((Get-PodmanVersion (Find-Podman)) -ne $PodmanCliVersion) {
+      if (-not (Get-Command winget -ErrorAction SilentlyContinue)) { throw 'winget is required to install Podman dependencies.' }
+      & winget install --exact --source winget --version $PodmanCliVersion --silent --disable-interactivity --accept-package-agreements --accept-source-agreements --id Podman.CLI
+      $wingetCode = $LASTEXITCODE
+      if ($wingetCode -ne 0 -and $wingetCode -ne $WingetUpdateNotApplicable) {
+        throw "winget install Podman.CLI $PodmanCliVersion exited with $wingetCode."
+      }
+    }
   } catch {
     [Console]::Error.WriteLine("podman_not_installable: $($_.Exception.Message)")
     exit 21
   }
+  $installedVersion = Get-PodmanVersion (Find-Podman)
+  if ($installedVersion -and $installedVersion -ne $PodmanCliVersion) {
+    [Console]::Error.WriteLine("podman_version_mismatch: Podman $installedVersion is installed on this computer, and JHT needs Podman $PodmanCliVersion.")
+    exit 24
+  }
 }
-Update-ProcessPath
-$Podman = Get-Application 'podman.exe'
-if (-not $Podman) {
-  $candidate = Join-Path $LocalAppData 'Programs\Podman\podman.exe'
-  if (Test-Path -LiteralPath $candidate -PathType Leaf) { $Podman = $candidate }
-}
+$Podman = Find-Podman
 if (-not $Podman) { [Console]::Error.WriteLine('podman_not_installable: podman.exe is unavailable after installation.'); exit 21 }
 try { Install-PrivateComposeProvider -Destination $ComposeProvider } catch {
   [Console]::Error.WriteLine("podman_not_installable: $($_.Exception.Message)")

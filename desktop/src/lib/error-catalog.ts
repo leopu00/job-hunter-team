@@ -379,6 +379,12 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
     "The team’s network inside the Podman machine did not get ready.",
     "Try again. If it happens again, restart the computer and try again: the setup log says which check did not pass.",
   ),
+  podman_version_mismatch: copy(
+    "Su questo computer c’è un’altra versione di Podman, diversa da quella che il team usa.",
+    "Disinstalla Podman dalle app di Windows, poi premi Riprova: l’app installa la versione giusta.",
+    "This computer has another version of Podman than the one the team uses.",
+    "Uninstall Podman from Windows’ apps, then press Try again: the app installs the right version.",
+  ),
   homebrew_missing: copy(
     "Su questo Mac manca Homebrew: l’app lo usa per installare Podman.",
     "Scarica il pacchetto di installazione di Homebrew (il file .pkg) dalla pagina ufficiale brew.sh, aprilo e completa l’installazione di macOS, poi torna qui e premi Riprova.",
