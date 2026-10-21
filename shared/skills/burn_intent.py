@@ -368,15 +368,45 @@ def due_notices(now: Optional[datetime] = None) -> list[str]:
     return ["warning"] if remaining_min <= WARN_MINUTES else []
 
 
+# The clock as each language writes it: 24 hours everywhere but English.
+_TIME_FORMAT_12H = ("en",)
+
+
+def _team_zone():
+    """The zone the team works in (jht.config.json: team.working_hours.timezone), or None."""
+    try:
+        name = json.loads((JHT_HOME / "jht.config.json").read_text(encoding="utf-8"))["team"]["working_hours"]["timezone"]
+        from zoneinfo import ZoneInfo
+        return ZoneInfo(name) if isinstance(name, str) and name.strip() else None
+    except Exception:                   # noqa: BLE001 — no config, no such zone: the system's
+        return None
+
+
+def _system_zone():
+    return datetime.now().astimezone().tzinfo
+
+
+def local_time(moment: datetime, lang: str) -> str:
+    """`moment` on the user's wall clock, written the way `lang` writes it.
+
+    The user reads «alle 21:30», not «alle 19:30 UTC»: the team's zone when the config names one,
+    otherwise the system's.
+    """
+    local = moment.astimezone(_team_zone() or _system_zone())
+    if lang in _TIME_FORMAT_12H:
+        return f"{local.hour % 12 or 12}:{local.minute:02d} {'AM' if local.hour < 12 else 'PM'}"
+    return f"{local.hour:02d}:{local.minute:02d}"
+
+
 def notice_text(kind: str, data: dict) -> str:
-    """Il testo dell'avviso, nella lingua dell'utente (catalogo shared/locales)."""
+    """Il testo dell'avviso, nella lingua dell'utente (catalogo shared/locales), con l'ora LOCALE."""
     shared = Path(__file__).resolve().parents[1]
     if str(shared) not in sys.path:
         sys.path.insert(0, str(shared))
     import i18n  # noqa: E402 — shared/i18n.py: stessa lingua della shell, del CLI e dei bridge
 
     expires = _parse_ts(data.get("expires_at"))
-    at = expires.astimezone(timezone.utc).strftime("%H:%M") if expires else "?"
+    at = local_time(expires, i18n.current_lang()) if expires else "?"
     if kind == "warning":
         return i18n.tf("burn_intent.warning", WARN_MINUTES, at)
     return i18n.tf("burn_intent.expired", at)

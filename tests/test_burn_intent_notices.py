@@ -39,6 +39,9 @@ def bi(tmp_path, monkeypatch):
     bi_module.INTENT_FLAG = tmp_path / ".burn-intent.flag"
     bi_module.AUDIT_LOG = tmp_path / "logs" / "burn-intent.jsonl"
     bi_module.NOTICES_FILE = tmp_path / ".burn-intent-notices.json"
+    bi_module.JHT_HOME = tmp_path
+    # No team zone configured: the system's, here a fixed one so that the times below do not move.
+    monkeypatch.setattr(bi_module, "_system_zone", lambda: timezone.utc)
     monkeypatch.setenv("JHT_HOME", str(tmp_path))
     monkeypatch.setenv("JHT_LANG", "en")
     return bi_module
@@ -63,7 +66,7 @@ def test_the_user_is_warned_an_hour_before_the_end_and_only_once(bi):
     assert bi.announce(now=ends - timedelta(minutes=60), notifier=out) == ["warning"]
     assert bi.announce(now=ends - timedelta(minutes=30), notifier=out) == []
     [(kind, message)] = out.sent
-    assert kind == "warning" and "60 minutes" in message and "08:48 UTC" in message and "Captain" in message
+    assert kind == "warning" and "60 minutes" in message and "8:48 AM" in message and "UTC" not in message and "Captain" in message
 
 
 def test_the_user_is_told_when_it_has_ended_before_the_flag_is_cleared(bi):
@@ -74,7 +77,7 @@ def test_the_user_is_told_when_it_has_ended_before_the_flag_is_cleared(bi):
     after = ends + timedelta(minutes=1)
     assert bi.announce(now=after, notifier=out) == ["expired"]
     assert [k for k, _ in out.sent] == ["warning", "expired"]
-    assert "08:48 UTC" in out.sent[1][1]
+    assert "8:48 AM" in out.sent[1][1] and "UTC" not in out.sent[1][1]
     # The bridge sweeps after announcing; once the flag is gone there is nothing more to say.
     assert bi.sweep(now=after) is not None
     assert bi.announce(now=after + timedelta(minutes=5), notifier=out) == []
@@ -140,8 +143,8 @@ def test_the_message_is_in_the_users_language(bi, monkeypatch, lang):
     data = bi.grant(hours=5, now=T0)
     warning = bi.notice_text("warning", data)
     expired = bi.notice_text("expired", data)
-    assert "60" in warning and "05:00" in warning and "burn_intent" not in warning
-    assert "burn_intent" not in expired
+    assert "60" in warning and "burn_intent" not in warning
+    assert "burn_intent" not in expired and "UTC" not in warning + expired
     assert warning != expired
     import text_language
 
@@ -181,3 +184,43 @@ def test_the_sentinel_bridge_announces_before_it_sweeps():
     tick = src[src.index("_burn_intent_notify_user()\n"):]
     assert tick.index("_burn_intent_notify_user()") < tick.index("_burn_intent_sweep()")
     assert "announce()" in src
+
+
+def _team_in(bi, zone):
+    bi.JHT_HOME.joinpath("jht.config.json").write_text(
+        json.dumps({"team": {"working_hours": {"timezone": zone, "windows": []}}}), encoding="utf-8")
+
+
+def test_the_user_reads_the_teams_local_time_in_the_format_of_the_language(bi, monkeypatch):
+    data = bi.grant(hours=8.8, now=T0)  # ends 08:48 UTC = 10:48 in Rome on 20/10 (summer time)
+    _team_in(bi, "Europe/Rome")
+    monkeypatch.setenv("JHT_LANG", "it")
+    assert "10:48" in bi.notice_text("expired", data)
+    monkeypatch.setenv("JHT_LANG", "en")
+    assert "10:48 AM" in bi.notice_text("expired", data)
+    _team_in(bi, "America/New_York")  # 04:48 on the same day
+    assert "4:48 AM" in bi.notice_text("expired", data)
+    monkeypatch.setenv("JHT_LANG", "hu")
+    assert "04:48-kor" in bi.notice_text("expired", data)
+
+
+def test_without_a_team_zone_or_with_a_wrong_one_it_is_the_system_zone(bi, monkeypatch):
+    data = bi.grant(hours=8.8, now=T0)
+    monkeypatch.setattr(bi, "_system_zone", lambda: timezone(timedelta(hours=-5)))
+    monkeypatch.setenv("JHT_LANG", "de")
+    assert "um 03:48" in bi.notice_text("expired", data)
+    _team_in(bi, "Mars/Olympus_Mons")
+    assert "um 03:48" in bi.notice_text("expired", data)
+    bi.JHT_HOME.joinpath("jht.config.json").write_text("{not json", encoding="utf-8")
+    assert "um 03:48" in bi.notice_text("expired", data)
+
+
+@pytest.mark.parametrize(("hour", "minute", "written"), [(0, 7, "12:07 AM"), (9, 5, "9:05 AM"), (12, 0, "12:00 PM"), (12, 5, "12:05 PM"), (23, 59, "11:59 PM")])
+def test_english_writes_the_clock_on_twelve_hours(bi, hour, minute, written):
+    assert bi.local_time(datetime(2026, 10, 20, hour, minute, tzinfo=timezone.utc), "en") == written
+
+
+def test_the_other_languages_write_it_on_twenty_four_hours(bi):
+    moment = datetime(2026, 10, 20, 21, 5, tzinfo=timezone.utc)
+    for lang in ("it", "de", "es", "fr", "hu", "pt"):
+        assert bi.local_time(moment, lang) == "21:05"
