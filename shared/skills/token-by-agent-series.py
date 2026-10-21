@@ -524,14 +524,35 @@ def provider_windows(sample, now_ts: float) -> dict:
     return out
 
 
+AGENT_HOUR_S = 3600
+
+
+def agents_last_hour(by_agent, now_ts: float) -> dict:
+    """Token pesati dell'ultima ora per AGENTE (scout-1, critico-s2), con lo
+    stesso peso dei ruoli. Ci sono gli agenti di cui si è letto almeno un
+    evento nel periodo raccolto: 0 vuol dire che i loro log ci sono e
+    nell'ultima ora non hanno consumato. Chi manca non ha log leggibili, e
+    chi legge lo dice come «non so», mai come zero."""
+    since_ts = now_ts - AGENT_HOUR_S
+    out = {}
+    for agent, evs in by_agent.items():
+        if agent_role(agent) is None or not evs:
+            continue
+        key = str(agent).strip().lower()
+        hour = sum(v for ts, v in evs if since_ts <= ts <= now_ts)
+        out[key] = out.get(key, 0) + int(round(hour))
+    return out
+
+
 def role_usage(windows: dict, now_ts: float, provider=None) -> dict:
     """Consumo per ruolo per ogni finestra: una sola lettura dei log, dal
-    più vecchio inizio, poi filtro per finestra."""
+    più vecchio inizio, poi filtro per finestra. In più l'ultima ora per
+    agente (`agents_1h`), letta dagli stessi eventi: il pannello Agenti la
+    mostra accanto allo stato."""
     now_iso = datetime.fromtimestamp(now_ts, tz=timezone.utc).isoformat()
     out = {"generated_at": now_iso, "provider": provider, "windows": {}}
-    if not windows:
-        return out
-    by_agent = collect_events(min(windows.values()))
+    by_agent = collect_events(min([*windows.values(), now_ts - AGENT_HOUR_S]))
+    out["agents_1h"] = agents_last_hour(by_agent, now_ts)
     for name, since_ts in windows.items():
         g = group_by_role(by_agent, since_ts, now_ts)
         g["since"] = datetime.fromtimestamp(since_ts, tz=timezone.utc).isoformat()

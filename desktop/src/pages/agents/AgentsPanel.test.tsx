@@ -383,6 +383,78 @@ describe("«Agenti», how a row reads", () => {
   });
 });
 
+describe("«Agenti», each agent's health in small", () => {
+  const usage = (fields: Record<string, number | null>) => ({
+    contextPct: null, contextTokens: null, contextWindow: null, contextAt: null, tokensHour: null, tokensAt: null, ...fields,
+  });
+  beforeEach(() => {
+    const agents = [
+      agent("CAPITANO", "capitano", null, "lavora", {
+        usage: usage({ contextPct: 42.5, contextTokens: 109820, contextWindow: 258400, contextAt: NOW_S - 60, tokensHour: 12345, tokensAt: NOW_S - 120 }),
+      }),
+      // read and zero for the hour, the context not said (a CLI that writes no window and no call yet)
+      agent("SCOUT-1", "scout", "1", "idle", { usage: usage({ tokensHour: 0, tokensAt: NOW_S - 120 }) }),
+      agent("SCORER-1", "scorer", "1", "lavora", { usage: usage({ contextPct: 91, contextAt: NOW_S - 60 }) }),
+      // an image older than this read: no usage at all
+      agent("ASSISTENTE", "assistente", null, "idle"),
+    ];
+    native.invoke.mockImplementation(async (command: string, args: { request: Record<string, unknown> }) => {
+      if (command !== COMMAND) return { ok: false, error: "not_in_test" };
+      if (args.request.op === "list") return { ...listReply(), data: { ...listReply().data, agents } };
+      if (args.request.op === "team") return { ok: true, data: { halted: false, standby, held } };
+      return { ok: true, data: { name: args.request.session, up: true, text: "" } };
+    });
+  });
+
+  it("says context and tokens of the hour next to the state, and «?» where the team does not say them, never 0", async () => {
+    show();
+    await screen.findByTestId("panel-summary");
+    const short = (session: string) => within(screen.getByTestId(`panel-row-${session}`)).getByTestId("panel-usage-short");
+    expect(short("CAPITANO")).toHaveTextContent("ctx 43% · 12,3K/h");
+    expect(short("SCOUT-1")).toHaveTextContent("ctx ? · 0/h");
+    expect(short("ASSISTENTE")).toHaveTextContent("ctx ? · ?/h");
+    // a context near full stands out
+    expect(within(short("SCORER-1")).getByText("ctx 91%")).toHaveStyle({ color: "var(--color-yellow)" });
+    expect(within(short("CAPITANO")).getByText("ctx 43%")).not.toHaveStyle({ color: "var(--color-yellow)" });
+    // the detail on hover: the whole numbers, when they were read, how they are counted
+    expect(short("CAPITANO").title).toContain("contesto usato 43% (109.820 token su 258.400)");
+    expect(short("CAPITANO").title).toContain("12.345 token nell'ultima ora (contati dalla Sentinella alle");
+    expect(short("CAPITANO").title).toContain("la parte già in cache non conta");
+    expect(short("CAPITANO").title).not.toContain("non vuol dire zero");
+    expect(short("ASSISTENTE").title).toContain("«Non so» non vuol dire zero");
+    // an agent that is off says nothing of it
+    expect(within(screen.getByTestId("panel-row-ANALISTA-1")).queryByTestId("panel-usage-short")).toBeNull();
+  });
+
+  it("says the whole sentences in the detail of the agent", async () => {
+    show("agent=CAPITANO");
+    expect(await screen.findByTestId("panel-usage")).toHaveTextContent(
+      /^contesto usato 43% \(109\.820 token su 258\.400\) \(letto alle .+\) · 12\.345 token nell'ultima ora \(contati dalla Sentinella alle .+\)$/,
+    );
+    cleanup();
+    show("agent=SCOUT-1");
+    expect(await screen.findByTestId("panel-usage")).toHaveTextContent(/^contesto: non so · 0 token nell'ultima ora/);
+  });
+
+  it("has the same sentences, with their numbers, in every language", () => {
+    for (const [locale, text] of Object.entries(AGENTS_PANEL_TEXT) as [Locale, AgentsPanelText][]) {
+      expect(text.usageContextShort, locale).toContain("{pct}");
+      expect(text.usageContextTokensShort, locale).toContain("{tokens}");
+      expect(text.usageHourShort, locale).toContain("{tokens}");
+      for (const key of ["{pct}", "{tokens}", "{window}"]) expect(text.usageContext, locale).toContain(key);
+      expect(text.usageContextPct, locale).toContain("{pct}");
+      expect(text.usageContextTokens, locale).toContain("{tokens}");
+      expect(text.usageHour, locale).toContain("{tokens}");
+      expect(text.usageReadAt, locale).toContain("{time}");
+      expect(text.usageCountedAt, locale).toContain("{time}");
+      // «not known» is never written as a zero
+      for (const unknown of [text.usageContextUnknownShort, text.usageHourUnknownShort, text.usageContextUnknown, text.usageHourUnknown]) {
+        expect(unknown, locale).not.toMatch(/\b0\b/);
+      }
+    }
+  });
+});
+
 describe("«Agenti», stopping the whole team", () => {
   it("stops the team only after a confirmation that says what happens, with the Team page's request", async () => {
     const fetchMock = vi.fn(async () => new Response(JSON.stringify({ ok: true }), { status: 200 }));

@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { describeError } from "../lib/error-catalog";
 import type { TeamStatusFields, TeamStatusReading } from "../lib/existing-team-status";
 import { EXISTING_TEAM_STATUS_TEXT } from "../pages/existing-team/existing-team-status.i18n";
-import type { TeamAgent, TeamAgentsReading } from "../lib/existing-team-agents";
+import { pickUsage, type TeamAgent, type TeamAgentsReading } from "../lib/existing-team-agents";
 import { EXISTING_TEAM_AGENTS_TEXT } from "../pages/agents/readonly.i18n";
 import { tagOf } from "./status";
 import { officeFromTeamProbe } from "./readonly";
@@ -136,7 +136,7 @@ describe("officeFromTeamProbe", () => {
 
 describe("officeFromTeamProbe with the team's agents (the Agents page's read)", () => {
   const agent = (name: string, role: string, state: TeamAgent["state"] = { state: "sconosciuto" }): TeamAgent => ({
-    name, role, instance: null, created: null, activity: null, identity: null, state,
+    name, role, instance: null, created: null, activity: null, identity: null, state, usage: pickUsage(null),
   });
   const agentsRead = (agents: TeamAgent[], statesKnown = true): TeamAgentsReading => ({
     kind: "read", at: AT, read: { agents, roles: [], statesKnown },

@@ -23,6 +23,22 @@ export type TeamAgent = {
   identity: AgentIdentity | null;
   /** what agent_state.py says, or "sconosciuto" when the VPS does not say it */
   state: AgentStateInfo;
+  /** how full its context is and its tokens of the last hour: each null when the team does not say it, never 0 */
+  usage: AgentUsage;
+};
+
+export type AgentUsage = {
+  /** 0-100, from the CLI's own window or share; null for a CLI that writes neither (Claude) */
+  contextPct: number | null;
+  /** the tokens of its last model call */
+  contextTokens: number | null;
+  contextWindow: number | null;
+  /** when the context was read, epoch ms */
+  contextAt: number | null;
+  /** the tokens of the last hour, as the team's sentinel counts them */
+  tokensHour: number | null;
+  /** when they were counted, epoch ms */
+  tokensAt: number | null;
 };
 
 /**
@@ -72,6 +88,25 @@ export function pickIdentity(value: unknown): AgentIdentity | null {
   };
 }
 
+const count = (value: unknown) => (typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : null);
+
+export function pickUsage(value: unknown): AgentUsage {
+  const usage = isRecord(value) ? value : {};
+  const pct = count(usage.contextPct);
+  const at = (key: string) => {
+    const seconds = epoch(usage[key]);
+    return seconds === null ? null : seconds * 1000;
+  };
+  return {
+    contextPct: pct !== null && pct <= 100 ? pct : null,
+    contextTokens: count(usage.contextTokens),
+    contextWindow: count(usage.contextWindow),
+    contextAt: at("contextAt"),
+    tokensHour: count(usage.tokensHour),
+    tokensAt: at("tokensAt"),
+  };
+}
+
 function pickAgent(value: unknown, statesKnown: boolean): TeamAgent | null {
   if (!isRecord(value) || typeof value.name !== "string" || !SESSION.test(value.name)) return null;
   if (typeof value.role !== "string") return null;
@@ -93,6 +128,7 @@ function pickAgent(value: unknown, statesKnown: boolean): TeamAgent | null {
     activity: epoch(value.activity),
     identity: pickIdentity(value.identity),
     state,
+    usage: pickUsage(value.usage),
   };
 }
 

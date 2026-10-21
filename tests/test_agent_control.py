@@ -421,6 +421,62 @@ def test_on_stdin_the_list_reads(team, capsys, monkeypatch):
     assert [item["name"] for item in answer["data"]["items"]] == ["CAPITANO", "SCOUT-1"]
 
 
+STATE_WITH_CONTEXT = (
+    "import json\n"
+    "print(json.dumps({'capitano': {'state': 'lavora', 'since': 1, 'context': "
+    "{'at': 1790000000.5, 'tokens': 109820, 'window': 258400, 'pct': 42.5}},"
+    " 'scout-1': {'state': 'idle', 'since': 1}}))\n"
+)
+
+
+def _hour_counted(team, at: datetime, agents: dict) -> None:
+    logs = team.home / "logs"
+    logs.mkdir(exist_ok=True)
+    (logs / "role-usage.json").write_text(json.dumps({"generated_at": at.isoformat(), "agents_1h": agents}))
+
+
+def test_the_list_tells_each_agents_context_and_tokens_and_unknown_is_never_zero(team, capsys):
+    """The panel's health in small: the context from agent_state.py, the last
+    hour from the bridge's role-usage.json. A zero is a count read; what is not
+    read is None."""
+    team.up("CAPITANO", "SCOUT-1", "SCOUT-2")
+    team.tool.AGENT_STATE = _script(team.tmp / "agent_state.py", STATE_WITH_CONTEXT)
+    _hour_counted(team, datetime.now(timezone.utc) - timedelta(minutes=4), {"capitano": 12345, "scout-1": 0})
+
+    usage = {item["name"]: item["usage"] for item in team.run("list", capsys=capsys)[1]["data"]["items"]}
+
+    assert usage["CAPITANO"]["context_pct"] == 42.5
+    assert usage["CAPITANO"]["context_tokens"] == 109820
+    assert usage["CAPITANO"]["context_window"] == 258400
+    assert usage["CAPITANO"]["context_at"] == 1790000000.5
+    assert usage["CAPITANO"]["tokens_1h"] == 12345
+    assert isinstance(usage["CAPITANO"]["tokens_at"], float)
+    # read and zero: zero; never read: None
+    assert usage["SCOUT-1"]["tokens_1h"] == 0
+    assert usage["SCOUT-1"]["context_pct"] is None and usage["SCOUT-1"]["context_tokens"] is None
+    assert usage["SCOUT-2"]["tokens_1h"] is None
+
+
+@pytest.mark.parametrize("written", ["stale", "missing", "older image", "not json"])
+def test_an_hour_the_bridge_did_not_count_lately_is_not_known(team, capsys, written):
+    team.up("CAPITANO")
+    team.tool.AGENT_STATE = team.tmp / "nonexistent.py"
+    now = datetime.now(timezone.utc)
+    if written == "stale":
+        _hour_counted(team, now - timedelta(minutes=16), {"capitano": 12345})
+    elif written == "older image":
+        (team.home / "logs").mkdir()
+        (team.home / "logs" / "role-usage.json").write_text(json.dumps({"generated_at": now.isoformat(), "windows": {}}))
+    elif written == "not json":
+        (team.home / "logs").mkdir()
+        (team.home / "logs" / "role-usage.json").write_text("{")
+
+    usage = team.run("list", capsys=capsys)[1]["data"]["items"][0]["usage"]
+
+    assert usage == {"context_pct": None, "context_tokens": None, "context_window": None,
+                     "context_at": None, "tokens_1h": None, "tokens_at": None}
+
+
 def test_the_team_read_tells_stopped_paused_and_held(team, capsys):
     team.run("stop", "SCOUT-1", capsys=capsys)
     team.roster().record("scout", 2, src="test")

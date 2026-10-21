@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { readTeamAgentsShared, resetTeamAgentsShared, SHARED_AGENTS_MS } from "./existing-team-agents";
+import { pickAgentsRead, pickUsage, readTeamAgentsShared, resetTeamAgentsShared, SHARED_AGENTS_MS } from "./existing-team-agents";
 import { enterExistingTeamReadOnly, leaveExistingTeamReadOnly } from "./existing-team-readonly";
 
 // One read of the team's agents serves the Agents page and the office of the
@@ -67,5 +67,25 @@ describe("who an agent is, as the native side lets it through", () => {
     expect(pickIdentity({ cli: "claude", model: "<b>opus</b>", effort: "extreme" })).toEqual({ cli: "claude", model: null, effort: null });
     expect(pickIdentity({ cli: "claude", model: "m".repeat(41), effort: "low" })?.model).toBeNull();
     for (const bad of [{ cli: "gpt" }, { model: "x" }, "codex", null, undefined]) expect(pickIdentity(bad)).toBeNull();
+  });
+});
+
+describe("an agent's health in small (pickUsage)", () => {
+  const UNKNOWN = { contextPct: null, contextTokens: null, contextWindow: null, contextAt: null, tokensHour: null, tokensAt: null };
+
+  it("keeps a zero that was read and turns the native side's seconds into milliseconds", () => {
+    expect(pickUsage({ contextPct: 0, contextTokens: 0, contextWindow: 258400, contextAt: 1_790_000_000, tokensHour: 0, tokensAt: 1_790_000_100.5 })).toEqual({
+      contextPct: 0, contextTokens: 0, contextWindow: 258400, contextAt: 1_790_000_000_000, tokensHour: 0, tokensAt: 1_790_000_100_500,
+    });
+  });
+
+  it("says «not known» for what is missing or is not a count, never 0", () => {
+    expect(pickUsage(undefined)).toEqual(UNKNOWN);
+    expect(pickUsage({ contextPct: 101, contextTokens: -1, contextWindow: "258k", contextAt: true, tokensHour: Number.NaN, tokensAt: null })).toEqual(UNKNOWN);
+  });
+
+  it("is on every agent of a list, also of an image that does not send it", () => {
+    const read = pickAgentsRead({ agents: [{ name: "SCOUT-1", role: "scout", state: "idle" }], roles: [], states: true });
+    expect(read?.agents[0].usage).toEqual(UNKNOWN);
   });
 });
