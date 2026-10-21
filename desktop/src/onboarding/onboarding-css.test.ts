@@ -74,6 +74,16 @@ describe("OnboardingFlow JHT palette", () => {
     for (const token of usedTokens) expect(palette.has(token), `${value} lacks ${token}`).toBe(true);
   });
 
+  it.each(THEMES)("keeps the dim text colour at 4.5:1 on every surface in $label", ({ value }) => {
+    const palette = themeTokens(value);
+    for (const surface of ["--color-void", "--color-deep", "--color-panel", "--color-card", "--color-row"]) {
+      expect(
+        contrast(palette.get("--color-dim")!, palette.get(surface)!),
+        `${value}: --color-dim on ${surface}`,
+      ).toBeGreaterThanOrEqual(4.5);
+    }
+  });
+
   it.each(THEMES)("keeps text, CTA, focus, success and error contrast readable in $label", ({ value }) => {
     const palette = themeTokens(value);
     const color = (token: string) => {
