@@ -227,7 +227,8 @@ fn destination(app: &tauri::AppHandle, scope: &AccountScope) -> Result<(Destinat
             ExecutionHost::Vps { address, user, port, .. } => (address.clone(), user.clone(), port.to_string()),
             ExecutionHost::Local => return Err("existing_team_vps_required"),
         };
-        if own_vps_at(&root(app)?, scope) {
+        let pinned = crate::runtime_host::pinned_host_fingerprint(&validated).ok();
+        if own_vps_at(&root(app)?, scope, &host, pinned.as_deref()) {
             // The VPS the app set up: the person's own team, controlled as a full link.
             let print = fingerprint(&["own-vps", scope.digest(), &address, &user, &port]);
             return Ok((Destination::OwnVps { validated, label: address }, print));
