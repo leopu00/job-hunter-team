@@ -4,7 +4,8 @@ shared/skills/host_vitals.py measured /proc/stat over 0.25 s and the bridge sent
 [BRIDGE VITALS ALERT] on ONE sample >= 95%. On a 4-core VPS: 7 samples out of 565 in
 two days, all isolated (their neighbours ~0), load 0.2-2.6, and the Capitano retired
 a scout at each alert. Now one measure lasts CPU_SAMPLE_S, and the alert wants
-CPU_ALERT_RUN consecutive samples >= the threshold, close in time, with load1 >=
+CPU_ALERT_RUN consecutive measured samples >= the threshold (a missing measure or a
+silent sampler is «don't know», never «all clear»), with load1 >=
 0.9 x ncpu on the last one; its text says how long and the load per core.
 Synthetic samples only.
 """
@@ -54,12 +55,11 @@ def test_three_consecutive_high_samples_with_a_high_load_are_an_alert_that_says_
     [sample(0, 97.0, 2.6), sample(5, 98.0, 2.6), sample(10, 99.0, 2.6)],
     # two high samples only
     [sample(0, 1.0), sample(5, 97.0, 4.0), sample(10, 99.0, 4.0)],
-    # three high ones, but one long pause between them: not consecutive
-    [sample(0, 97.0, 4.0), sample(5, 98.0, 4.0), sample(60, 99.0, 4.0)],
-    # a sample without the CPU, the time or the load confirms nothing
+    # two measured samples around one that could not be measured are still two
     [sample(0, 97.0, 4.0), sample(5, None, 4.0), sample(10, 99.0, 4.0)],
-    [sample(0, 97.0, 4.0), sample(5, 98.0, 4.0), sample(10, 99.0, None)],
     [sample(0, 97.0, 4.0), {"cpu": {"pct": 98.0, "ncpu": 4, "load1": 4.0}}, sample(10, 99.0, 4.0)],
+    # the last one without the load confirms nothing
+    [sample(0, 97.0, 4.0), sample(5, 98.0, 4.0), sample(10, 99.0, None)],
 ])
 def test_anything_short_of_sustained_and_confirmed_is_no_alert(samples):
     assert hv.cpu_pressure(samples) is None
@@ -131,3 +131,20 @@ def test_the_bridge_alerts_on_sustained_pressure_with_duration_and_load(bridge):
     assert text.startswith("[BRIDGE VITALS ALERT] Container resources above threshold: ")
     assert "CPU 96%/97.5%/99% over 3 consecutive samples (10 min), load1 4.1 on 4 cores" in text
     assert "a single CPU spike never arrives here" in text
+
+
+def test_a_silent_sampler_is_not_knowing_never_all_clear():
+    # the sampler quiet for an hour between two high samples: the run goes on, and the alert says how long
+    samples = [sample(0, 97.0, 4.0), sample(5, 98.0, 4.0), sample(65, 99.0, 4.1)]
+    assert hv.cpu_pressure(samples) == {"pcts": [97.0, 98.0, 99.0], "samples": 3, "minutes": 65.0,
+                                        "load1": 4.1, "ncpu": 4}
+    # only a MEASURED sample under the threshold resets it
+    assert hv.cpu_pressure([sample(0, 97.0, 4.0), sample(5, 20.0, 4.0), sample(65, 99.0, 4.1)]) is None
+
+
+def test_a_sample_the_machine_could_not_measure_does_not_break_the_run():
+    # saturation can cost a measure (the sampler late, /proc/stat unreadable): it is skipped, not a reset
+    samples = [sample(0, 97.0, 3.9), sample(5, None, 3.9), {"cpu": {"pct": 98.0}}, sample(10, 98.0, 3.9),
+               sample(15, 99.0, 4.0)]
+    assert hv.cpu_pressure(samples) == {"pcts": [97.0, 98.0, 99.0], "samples": 3, "minutes": 15.0,
+                                        "load1": 4.0, "ncpu": 4}

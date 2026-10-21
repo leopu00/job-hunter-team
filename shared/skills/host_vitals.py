@@ -86,7 +86,6 @@ DISK_NOTICE_COOLDOWN_S = 6 * 3600
 CPU_SAMPLE_S = 2.0
 CPU_ALERT_RUN = 3                 # campioni consecutivi sopra soglia
 CPU_ALERT_LOAD_PER_CORE = 0.9     # load1 >= 0,9 × ncpu sull'ultimo campione
-CPU_ALERT_MAX_GAP_S = 20 * 60     # due campioni più distanti non sono consecutivi
 
 
 def _read_int(p):
@@ -365,30 +364,35 @@ def _ts(record):
     return ts if ts.tzinfo else ts.replace(tzinfo=timezone.utc)
 
 
-def cpu_pressure(samples, pct=95, run=CPU_ALERT_RUN, load_per_core=CPU_ALERT_LOAD_PER_CORE,
-                 max_gap_s=CPU_ALERT_MAX_GAP_S):
+def cpu_pressure(samples, pct=95, run=CPU_ALERT_RUN, load_per_core=CPU_ALERT_LOAD_PER_CORE):
     """La CPU è satura in modo sostenuto? `samples` dal più vecchio al più recente.
 
-    Sì solo se gli ultimi `run` campioni sono tutti >= `pct`, ognuno a non più di
-    `max_gap_s` dal precedente, E il load1 dell'ultimo è >= `load_per_core` × ncpu.
-    Un campione senza CPU, senza ora o senza load non conferma niente: None.
+    Sì solo se gli ultimi `run` campioni MISURATI sono tutti >= `pct` E il load1
+    dell'ultimo è >= `load_per_core` × ncpu. Quello che manca vale «non so», mai «va
+    bene»: un campione senza CPU o senza ora si salta, e un campionatore rimasto
+    zitto (un buco di tempo fra due campioni) non azzera la catena, perché una
+    macchina satura perde le misure proprio quando serve. Solo un campione misurato
+    sotto soglia la azzera. La durata detta è quella vera, dal primo all'ultimo.
+    Senza load l'ultimo non conferma niente: None.
     Ritorna None, oppure quello che l'allarme dice: le percentuali, quanti campioni,
     da quanti minuti, il load e i core.
     """
-    tail = list(samples)[-run:]
+    measured = []
+    for record in samples:
+        cpu = (record or {}).get("cpu") or {}
+        value, ts = cpu.get("pct"), _ts(record or {})
+        if isinstance(value, (int, float)) and ts is not None:
+            measured.append((record, value, ts))
+    tail = measured[-run:]
     if run < 1 or len(tail) < run:
         return None
     pcts, stamps = [], []
-    for record in tail:
-        cpu = (record or {}).get("cpu") or {}
-        value, ts = cpu.get("pct"), _ts(record or {})
-        if not isinstance(value, (int, float)) or value < pct or ts is None:
+    for _record, value, ts in tail:
+        if value < pct:
             return None
         pcts.append(value)
         stamps.append(ts)
-    if any((b - a).total_seconds() < 0 or (b - a).total_seconds() > max_gap_s
-           for a, b in zip(stamps, stamps[1:])):
-        return None
+    tail = [record for record, _value, _ts_ in tail]
     last = (tail[-1] or {}).get("cpu") or {}
     load1, ncpu = last.get("load1"), last.get("ncpu")
     if not isinstance(load1, (int, float)) or not isinstance(ncpu, int) or ncpu < 1:
@@ -400,7 +404,7 @@ def cpu_pressure(samples, pct=95, run=CPU_ALERT_RUN, load_per_core=CPU_ALERT_LOA
             "load1": load1, "ncpu": ncpu}
 
 
-def read_samples(path=None, last=CPU_ALERT_RUN):
+def read_samples(path=None, last=4 * CPU_ALERT_RUN):
     """Gli ultimi `last` campioni leggibili di vitals.jsonl, dal più vecchio."""
     path = Path(path) if path else DEFAULT_FILE
     out = []
