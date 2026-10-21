@@ -9,6 +9,7 @@ mod desktop_platform;
 mod direct_chat;
 mod agent_control;
 mod existing_team_agents;
+mod existing_team_judgement;
 mod existing_team_register;
 // The tests rely on 0600 files, hard links and symlinks; Windows is not covered.
 #[cfg(all(test, unix))]
@@ -79,6 +80,7 @@ pub fn run() {
             closer_desktop::closer_desktop_register_host,
             closer_desktop::closer_desktop_request,
             existing_team_runtime::existing_team_positions_read,
+            existing_team_judgement::existing_team_position_write,
             existing_team_runtime::existing_team_link_identity,
             existing_team_agents::existing_team_agents_read,
             agent_control::agent_control,

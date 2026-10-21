@@ -49,6 +49,12 @@ const NOT_ERRORS: Record<string, string> = {
   invalid_yaml: "profile file parse state",
   not_a_mapping: "profile file parse state",
   none: "profile file parse state (no profile file)",
+  // The values of the person's judgement on a position, sent to the VPS's position script
+  // (existing_team_judgement.rs): verbs of the request, never an outcome or an error.
+  like: "position judgement value",
+  dislike: "position judgement value",
+  hide: "position judgement value",
+  clear: "position judgement value",
   // The outcome of «Attiva assistente» when the assistant was already running: a result, not an error.
   already_active: "assistant start outcome",
   // The outcome of the in-app registration of a team's target: a result, not an error.
