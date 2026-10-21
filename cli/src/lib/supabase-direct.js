@@ -219,6 +219,19 @@ export function createSupabaseDirect({ supabaseUrl, anonKey, refreshToken, userI
   }
 
   /**
+   * Le decisioni dell'utente sulle proposte di esclusione del profilo (JHT-T24): solo codice,
+   * stato e data. Il team le porta nella sua jobs.db (`profile_exclusions.py reconcile`).
+   * Filtro user_id esplicito oltre alla RLS.
+   */
+  async function readProfileExclusions() {
+    const params = new URLSearchParams();
+    params.set('select', 'reason,status,decided_at');
+    if (userId) params.set('user_id', `eq.${userId}`);
+    const rows = await rest(`profile_exclusions?${params.toString()}`);
+    return Array.isArray(rows) ? rows : [];
+  }
+
+  /**
    * #186 — candidature decise dall'utente sul web (`applications`, campi
    * user-side). Il click in cloud-mode scrive solo su Supabase: senza questa
    * lettura il box non lo sa mai, e il team pianifica su una fotografia in cui
@@ -356,6 +369,7 @@ export function createSupabaseDirect({ supabaseUrl, anonKey, refreshToken, userI
     readDesiredStateChanges,
     readPendingReplyChanges,
     readAppliedChanges,
+    readProfileExclusions,
     readUndeliveredUserChat,
     markUserChatDelivered,
     readTeamState,
