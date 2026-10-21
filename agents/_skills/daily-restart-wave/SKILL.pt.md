@@ -43,11 +43,13 @@ TODAS AS TRÊS devem ser verdadeiras. Pular com `status=skipped` e um campo `rea
    Se o ficheiro não existir → tratar como "nunca disparou" → condição é verdadeira.
    Se `now - last_wave_at < 23h` → pular com `reason=anti_thrash`.
 
-3. **A equipa não está em `.team-halted.flag` ou `.weekly-halt.flag`**. Se qualquer flag existir, o utilizador pausou explicitamente a equipa — reiniciar agora seria hostil.
+3. **A equipa não está em `.team-halted.flag`, `.weekly-halt.flag` ou `.team-standby.flag`**. Se qualquer flag existir, o utilizador pausou explicitamente a equipa — reiniciar agora seria hostil.
 
    ```bash
-   [ -f /jht_home/.jht/.team-halted.flag ] && skip
-   [ -f /jht_home/.jht/.weekly-halt.flag ] && skip
+   JHT_HOME="${JHT_HOME:-/jht_home}"
+   [ -f "$JHT_HOME/.team-halted.flag" ] && skip
+   [ -f "$JHT_HOME/.weekly-halt.flag" ] && skip
+   [ -f "$JHT_HOME/.team-standby.flag" ] && skip
    ```
 
 Se todas as 3 passarem → prosseguir. Todo o bloco de 3 verificações é `<2s`, executa a cada despertar do Dottore, não custa nada quando fora da janela.

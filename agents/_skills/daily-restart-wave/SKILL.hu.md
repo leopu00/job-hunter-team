@@ -43,11 +43,13 @@ MIND A HÁROMNAK igaznak kell lennie. Hagyd ki `status=skipped`-del és `reason`
    Ha a fájl nem létezik → kezeld "soha nem indult"-ként → a feltétel igaz.
    Ha `now - last_wave_at < 23h` → hagyd ki `reason=anti_thrash`-sel.
 
-3. **A csapat nincs `.team-halted.flag` vagy `.weekly-halt.flag` állapotban**. Ha bármelyik jelző létezik, a felhasználó kifejezetten szüneteltette a csapatot — az újraindítás most ellenséges lenne.
+3. **A csapat nincs `.team-halted.flag`, `.weekly-halt.flag` vagy `.team-standby.flag` állapotban**. Ha bármelyik jelző létezik, a felhasználó kifejezetten szüneteltette a csapatot — az újraindítás most ellenséges lenne.
 
    ```bash
-   [ -f /jht_home/.jht/.team-halted.flag ] && skip
-   [ -f /jht_home/.jht/.weekly-halt.flag ] && skip
+   JHT_HOME="${JHT_HOME:-/jht_home}"
+   [ -f "$JHT_HOME/.team-halted.flag" ] && skip
+   [ -f "$JHT_HOME/.weekly-halt.flag" ] && skip
+   [ -f "$JHT_HOME/.team-standby.flag" ] && skip
    ```
 
 Ha mind a 3 átmegy → folytasd. A teljes 3 ellenőrzési blokk `<2 másodperc`, minden Dottore ébredéskor fut, semmibe nem kerül az ablakon kívül.

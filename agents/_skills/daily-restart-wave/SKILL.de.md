@@ -43,11 +43,13 @@ ALLE DREI müssen wahr sein. Andernfalls mit `status=skipped` und einem `reason`
    Wenn die Datei nicht existiert → als "nie ausgelöst" behandeln → Bedingung ist wahr.
    Wenn `now - last_wave_at < 23h` → mit `reason=anti_thrash` überspringen.
 
-3. **Team ist nicht in `.team-halted.flag` oder `.weekly-halt.flag`**. Wenn eines der Flags existiert, hat der Nutzer das Team explizit pausiert — jetzt neu zu starten wäre feindlich.
+3. **Team ist nicht in `.team-halted.flag`, `.weekly-halt.flag` oder `.team-standby.flag`**. Wenn eines der Flags existiert, hat der Nutzer das Team explizit pausiert — jetzt neu zu starten wäre feindlich.
 
    ```bash
-   [ -f /jht_home/.jht/.team-halted.flag ] && skip
-   [ -f /jht_home/.jht/.weekly-halt.flag ] && skip
+   JHT_HOME="${JHT_HOME:-/jht_home}"
+   [ -f "$JHT_HOME/.team-halted.flag" ] && skip
+   [ -f "$JHT_HOME/.weekly-halt.flag" ] && skip
+   [ -f "$JHT_HOME/.team-standby.flag" ] && skip
    ```
 
 Wenn alle 3 bestehen → fortfahren. Der gesamte 3-Prüfungs-Block ist `<2s`, läuft bei jedem Dottore-Aufwachen, kostet nichts wenn außerhalb des Fensters.
