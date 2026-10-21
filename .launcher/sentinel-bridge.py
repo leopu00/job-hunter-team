@@ -1120,6 +1120,17 @@ def cpu_alert_phrase(cpu):
 CODEX_SESSIONS_DIR = JHT_HOME / ".codex" / "sessions"
 
 
+_WEEKLY_MIN_MINUTES = 1440
+
+
+def _window_minutes(window):
+    """Durata dichiarata di una finestra di rate-limit; 0 se manca."""
+    try:
+        return float((window or {}).get("window_minutes") or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
 def fetch_codex_rollout():
     """Legge il rollout JSONL più recente sotto ~/.codex/sessions/ e
     estrae rate_limits.primary.used_percent + resets_at."""
@@ -1207,6 +1218,13 @@ def fetch_codex_rollout():
         # (all_rls ordinato desc per timestamp).
         freshest_rl = recent[0][1]
         secondary = freshest_rl.get("secondary") or {}
+        # La finestra si riconosce dalla DURATA dichiarata, non dalla
+        # posizione: se il payload dà la settimanale come primary e la corta
+        # come secondary, vanno scambiate (altrimenti il 5h finirebbe sull'asse
+        # settimanale e viceversa). Senza window_minutes vale la posizione.
+        if (_window_minutes(primary) >= _WEEKLY_MIN_MINUTES
+                and 0 < _window_minutes(secondary) < _WEEKLY_MIN_MINUTES):
+            primary, secondary = secondary, primary
         try:
             usage = int(round(float(primary.get("used_percent", 0))))
             weekly = (
@@ -1244,14 +1262,12 @@ def fetch_codex_rollout():
         # su `usage` perché resta l'unico vincolo reale (il pacing 5h, che
         # riempie al 100% entro reset_at, diventa di fatto un pacer
         # settimanale corretto), e sui campi weekly perché è ciò che sono.
-        try:
-            window_min = float(primary.get("window_minutes") or 0)
-        except (TypeError, ValueError):
-            window_min = 0
-        if weekly is None and window_min >= 1440:
+        usage_is_weekly = False
+        if weekly is None and _window_minutes(primary) >= _WEEKLY_MIN_MINUTES:
             weekly = usage
             weekly_reset_at = reset_at
             weekly_reset_at_unix = reset_at_unix
+            usage_is_weekly = True
 
         return {
             "usage": usage,
@@ -1260,6 +1276,9 @@ def fetch_codex_rollout():
             "weekly_usage": weekly,
             "weekly_reset_at": weekly_reset_at,
             "weekly_reset_at_unix": weekly_reset_at_unix,
+            # `usage` è la settimanale ricopiata (finestra unica): una finestra
+            # 5h non esiste, e chi la mostra non deve inventarla.
+            "usage_is_weekly": usage_is_weekly,
         }
     except (OSError, json.JSONDecodeError):
         return None
@@ -2662,7 +2681,11 @@ def limits_verdict(parsed, now):
                "five_hour": None, "weekly": None}
     if not isinstance(parsed, dict):
         return unknown
-    five_hour = _probe_window(parsed, "usage", "reset_at_unix", now)
+    # Piano a finestra unica settimanale: `usage` è la settimanale ricopiata,
+    # una finestra 5h non c'è. Mostrarla uguale alla settimanale (stessa
+    # percentuale, stesso reset) farebbe credere a un dato che non esiste.
+    single_weekly = parsed.get("usage_is_weekly") is True
+    five_hour = None if single_weekly else _probe_window(parsed, "usage", "reset_at_unix", now)
     weekly = _probe_window(parsed, "weekly_usage", "weekly_reset_at_unix", now)
     windows = {
         "five_hour": {"used_pct": five_hour[0], "resets_at": five_hour[1]} if five_hour else None,
@@ -2672,7 +2695,7 @@ def limits_verdict(parsed, now):
     if exhausted:
         return {"status": "exhausted",
                 "resets_at": max(reset for _, reset in exhausted), **windows}
-    if five_hour is None:
+    if five_hour is None and not (single_weekly and weekly):
         return {**unknown, **windows}
     return {"status": "ok", "resets_at": None, **windows}
 

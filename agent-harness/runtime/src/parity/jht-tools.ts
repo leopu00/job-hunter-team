@@ -387,7 +387,7 @@ instructions name for talking and pausing are tools here:
 - \`jht-install\` → not available: the image carries the dependencies
 - \`pandoc … --pdf-engine=wkhtmltopdf …\` → \`render_pdf\` (source, title, output): the renderer's
   arguments are the harness's, so no markdown can make it read a file or fetch an address
-- \`tmux\`, \`start-agent.sh\`, \`jht-agent-contain\` → not here: agents are not tmux sessions. The
+- \`tmux\`, \`start-agent.sh\`, \`jht-agent-contain\`, \`jht-agent-retire\` → not here: agents are not tmux sessions. The
   CAPITANO starts, lists and stops them with \`spawn_agent\`, \`list_agents\`, \`stop_agent\`
 
 The Python skills your instructions run are tools too, named after the script:
@@ -436,6 +436,7 @@ export const REPLACED_REASONS: Record<string, string> = {
   // starts, not tmux sessions. The launcher picks the instance and holds every limit.
   "start-agent.sh": `${use("spawn_agent")} The launcher picks the first free instance: no roll_worker_number.`,
   "jht-agent-contain": "is not needed here: every agent runs in its own container, within the launcher's limits.",
+  "jht-agent-retire": `${use("stop_agent")} A stopped agent is a container the hub closed: there is no watchdog here to revive it.`,
   // T30: the renderer is a WebKit, and the markdown it renders is written
   // from scraped job ads. The command is never the agent's — `render_pdf` runs both
   // programs with a fixed argument vector — whether or not the box carries them.

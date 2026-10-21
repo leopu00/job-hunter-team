@@ -282,7 +282,7 @@ describe("guardShellTool", () => {
 describe("PARITY_NOTES", () => {
   it("names every native tool and every command the guard stops", () => {
     for (const name of JHT_TOOL_NAMES) expect(PARITY_NOTES).toContain(`\`${name}\``);
-    for (const command of ["jht-tmux-send", "jht-send", "throttle-ack", "jht-telegram-send", "jht-install", "tmux", "start-agent.sh", "jht-agent-contain"]) {
+    for (const command of ["jht-tmux-send", "jht-send", "throttle-ack", "jht-telegram-send", "jht-install", "tmux", "start-agent.sh", "jht-agent-contain", "jht-agent-retire"]) {
       expect(PARITY_NOTES).toContain(command);
       expect(replacedCommand(`${command} x`)).toBe(command);
     }
@@ -302,6 +302,7 @@ describe("replacedCommand", () => {
     expect(replacedCommand("tmux kill-session -t SCORER-2")).toBe("tmux");
     expect(replacedCommand("n=$(tmux capture-pane -t ANALISTA-1 -p | tail -5)")).toBe("tmux");
     expect(replacedCommand("jht-agent-contain SCOUT-1 && echo ok")).toBe("jht-agent-contain");
+    expect(replacedCommand("jht-agent-retire SCOUT-1 --reason x")).toBe("jht-agent-retire");
     expect(replacedCommand("tmux-send x")).toBeNull();
   });
 

@@ -302,8 +302,14 @@ RUN useradd --create-home --shell /bin/bash jht \
     # spawnano con PATH ripulito da /etc/login.defs. Senza questo,
     # PATH del Dockerfile (/app/agents/_tools:...) viene ignorato dai
     # bash -l -c "..." figli.
+    # Un tool Python può chiamarsi `jht-x.py` (l'hook dei commit non accetta file
+    # senza estensione fuori da un elenco): su PATH si chiama `jht-x`, come per
+    # le skill qui sotto.
     && for f in /app/agents/_tools/*; do \
-         [ -x "$f" ] && ln -sf "$f" "/usr/local/bin/$(basename "$f")"; \
+         if [ -x "$f" ]; then \
+           name="$(basename "$f")"; name="${name%.py}"; \
+           ln -sf "$f" "/usr/local/bin/$name"; \
+         fi; \
        done \
     # Stessa logica per gli script colocated dentro le skill
     # (agents/_skills/<skill>/jht-*): permettono di tenere SKILL.md + binario

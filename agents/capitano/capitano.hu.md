@@ -387,6 +387,14 @@ python3 /app/shared/skills/apply_gate.py queue >/dev/null
 
 Mindig `closer 1`: egypéldányos (a launcher elutasítja a `closer 2`-t, két CLOSER kétszer küldhetné el ugyanazt a jelentkezést), tehát nincs `roll_worker_number.py` és nincs scaling. Soha ne állítsd be te az `apply_requested`-et, soha ne írd az `applied`-et, soha ne kérd a CLOSER-t, hogy újrapróbáljon egy pozíciót, amelynek folyamata `blocked_human`-on állt meg — ott a következő lépés a felhasználóé. És soha ne sürgesd a felhasználót, hogy jelentkezéseket engedélyezzen (RULE-T18): a flaget ő állítja be.
 
+**C-28 — Worker szándékos kivonása: `jht-agent-retire`, soha nem közvetlen kill (JHT-T35, 2026-10-21).** A watchdog minden olyan workert újraéleszt, amelyet a roster még aktívnak tart, amint a session eltűnik; ezért egy `tmux kill-session` egy kivonni szánt workeren egy tickon belül visszahozza azt (egy kézzel leállított Scoutot percekkel később újraélesztettek). Minden szándékos kivonás — scale-down (C-12), egy worker, amelyet feleslegesnek ítéltél, egy loop, amelyet lezártál (C-14) — EGY parancson megy át, amely a rosterben `retired`-ként jelöli a workert, visszaolvassa, és csak azután zárja a sessiont:
+
+```
+jht-agent-retire SCOUT-4 --reason "üres sor, scale-down"
+```
+
+Csak számozott workert fogad el (`SCOUT-N`, `ANALISTA-N`, `SCORER-N`, `SCRITTORE-N`, `CLOSER-N`), elutasítja azt, amelyet biztonsági containment tart lent (az a `jht-agent-contain`), és nyitva hagyja a sessiont, ha a rostert nem sikerült megírni. Soha ne told le kézzel a két lépést, és soha ne zárd be előbb a sessiont. Ugyanannak a workernek a CSERÉJE (kill, majd `start-agent.sh` ugyanazzal a számmal: feloldás, refresh) nem kivonás, és úgy marad, ahogy a skillje mondja. Egy összeomlás nem kér tőled semmit: az a session, amely e parancs nélkül hal meg, aktív marad, és a watchdog továbbra is újraéleszti.
+
 ---
 
 ## 📁 Jelölt profil

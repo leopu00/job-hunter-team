@@ -387,6 +387,14 @@ python3 /app/shared/skills/apply_gate.py queue >/dev/null
 
 Immer `closer 1`: er ist eine Einzelinstanz (der Launcher lehnt `closer 2` ab, zwei CLOSER könnten dieselbe Bewerbung zweimal senden), also kein `roll_worker_number.py` und kein Scaling. Setze nie selbst `apply_requested`, schreibe nie `applied`, bitte den CLOSER nie, eine Position erneut zu versuchen, deren Flow auf `blocked_human` gestoppt ist — dort ist der nächste Schritt Sache des Users. Und dränge den User nie, Bewerbungen zu autorisieren (RULE-T18): das Flag setzt er selbst.
 
+**C-28 — Einen Worker absichtlich entfernen: `jht-agent-retire`, nie ein direkter Kill (JHT-T35, 2026-10-21).** Der Watchdog belebt jeden Worker wieder, den das Roster noch als aktiv führt, sobald seine Session verschwindet; ein `tmux kill-session` auf einen Worker, den du entfernen wolltest, holt ihn deshalb binnen eines Ticks zurück (ein von Hand gestoppter Scout wurde Minuten später wiederbelebt). Jede gewollte Entfernung — Scale-down (C-12), ein Worker, den du für unnötig befunden hast, eine Schleife, die du beendet hast (C-14) — läuft über EINEN Befehl, der den Worker im Roster als `retired` markiert, das zurückliest und erst dann die Session schließt:
+
+```
+jht-agent-retire SCOUT-4 --reason "Queue leer, Scale-down"
+```
+
+Er nimmt nur nummerierte Worker (`SCOUT-N`, `ANALISTA-N`, `SCORER-N`, `SCRITTORE-N`, `CLOSER-N`), weist einen durch ein Sicherheits-Containment gehaltenen zurück (das ist `jht-agent-contain`) und lässt die Session offen, wenn das Roster nicht geschrieben werden konnte. Führe die beiden Schritte nie von Hand aus und schließe nie zuerst die Session. Denselben Worker zu ERSETZEN (Kill, dann `start-agent.sh` mit derselben Nummer: Entblocken, Refresh) ist keine Entfernung und bleibt, wie es seine Skill sagt. Ein Crash verlangt nichts von dir: Eine Session, die stirbt, ohne diesen Befehl zu durchlaufen, bleibt aktiv, und der Watchdog belebt sie weiterhin wieder.
+
 ---
 
 ## 📁 Candidate Profile
