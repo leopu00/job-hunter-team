@@ -47,7 +47,9 @@ JS_MODULE = os.path.join(REPO_ROOT, 'shared', 'queries', 'readonly-sqlite.js')
 #     serializzatori diversi;
 #   · un'azienda con `verdict` NULL, che NON deve entrare in
 #     `companies_by_verdict`;
-#   · una posizione senza `company_id`, che non deve entrare nel conteggio.
+#   · una posizione senza `company_id`, che non deve entrare nel conteggio;
+#   · una nota dell'utente su un'esclusione (`user_excluded_note`): nessuna
+#     lettura del team la porta, e le due letture devono tacerla allo stesso modo.
 _SEED = """
 import sys
 sys.path.insert(0, {skills!r})
@@ -81,6 +83,8 @@ conn.execute("INSERT INTO applications (position_id, status, written_at) "
 conn.execute("INSERT INTO applications (position_id, status, applied_at, "
              "critic_verdict) VALUES (?,?,?,?)",
              (4, 'applied', '2026-07-05 10:00:00', 'APPROVED'))
+conn.execute("UPDATE positions SET user_excluded_reason = 'other', "
+             "user_excluded_note = 'parole private dell utente' WHERE id = 4")
 conn.commit()
 conn.close()
 """
@@ -102,6 +106,7 @@ try {
     filtered: backend.listPositions({ status: 'new' }),
     company: backend.listPositions({ company: 'Stripe' }),
     detail: backend.getPosition(1),
+    detailExcluded: backend.getPosition(4),
     missing: backend.getPosition(999999),
     dashboard: backend.getDashboard(),
   }));
@@ -215,3 +220,13 @@ def test_dashboard_identica_chiave_per_chiave(db, js):
     assert expected['companies_by_verdict'] == {'GO': 1}, \
         "un verdict NULL non deve entrare nel conteggio"
     assert expected['positions_with_company_id'] == 2
+
+
+def test_la_nota_dell_utente_non_esce_da_nessuna_lettura(db, js):
+    """`user_excluded_note` è dell'utente (JHT-T05): né il Python né il lettore
+    JS la mettono sul filo, e la tolgono entrambi anche dal dettaglio."""
+    for payload in (_py(db, 'positions'), _py(db, 'position', '4'),
+                    js['positions'], js['filtered'], js['company'],
+                    js['detail'], js['detailExcluded']):
+        assert 'parole private' not in json.dumps(payload)
+        assert 'user_excluded_note' not in json.dumps(payload)

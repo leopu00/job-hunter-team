@@ -21,6 +21,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import {
+  AGENT_POSITION_COLUMNS,
   DASHBOARD_APPLICATIONS,
   DASHBOARD_BY_STATUS,
   DASHBOARD_COMPANIES_BY_VERDICT,
@@ -213,6 +214,25 @@ describe("l'SQL del dettaglio e della dashboard", () => {
         "una chiave in più o in meno è un cambio di payload, che per il " +
         "contratto dell'API vale un bump di API_CONTRACT",
     ).toEqual(keys);
+  });
+});
+
+describe("le colonne di positions che escono sul filo", () => {
+  it("AGENT_POSITION_COLUMNS è l'elenco ammesso di db_query.py", () => {
+    const match = /AGENT_POSITION_COLUMNS = frozenset\("""([\s\S]*?)"""\.split\(\)\)/.exec(
+      python,
+    );
+    expect(
+      match,
+      "non trovo AGENT_POSITION_COLUMNS in shared/skills/db_query.py",
+    ).toBeTruthy();
+    const pythonColumns = match![1].split(/\s+/).filter(Boolean).sort();
+    expect(
+      [...AGENT_POSITION_COLUMNS].sort(),
+      "la copia in shared/queries/readonly-sqlite.js deve elencare le stesse " +
+        "colonne del Python: la nota dell'utente non esce da nessuna lettura",
+    ).toEqual(pythonColumns);
+    expect(AGENT_POSITION_COLUMNS.has("user_excluded_note")).toBe(false);
   });
 });
 

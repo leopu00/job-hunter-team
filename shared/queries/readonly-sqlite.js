@@ -151,6 +151,50 @@ export const POSITIONS_FILTERS = Object.freeze({
 export const POSITIONS_ORDER_BY =
   " ORDER BY COALESCE(s.total_score, 0) DESC, p.found_at DESC";
 
+/**
+ * Cosa di `positions` può uscire sul filo (JHT-T05): la copia di
+ * `AGENT_POSITION_COLUMNS` di `db_query.py`. La nota con cui l'utente spiega
+ * un'esclusione (`user_excluded_note`) è sua e non esce da nessuna lettura
+ * del team: `SELECT p.*` esce con ogni colonna della tabella, anche quelle
+ * aggiunte domani, quindi la regola è l'elenco delle AMMESSE. Il cancello di
+ * drift (`tests/js/tasks/api-read-sql-drift.test.ts`) confronta questo elenco
+ * con quello del Python.
+ */
+export const AGENT_POSITION_COLUMNS = Object.freeze(new Set([
+    "id", "title", "company", "company_id", "location", "remote_type",
+    "salary_declared_min", "salary_declared_max", "salary_declared_currency",
+    "salary_estimated_min", "salary_estimated_max",
+    "salary_estimated_currency", "salary_estimated_source", "url", "source",
+    "jd_text", "requirements", "jd_summary", "found_by", "found_at",
+    "deadline", "status", "notes", "last_checked", "last_actor",
+    "role_family", "role_family_proposed", "loc_city", "loc_region",
+    "loc_country", "loc_country_code", "loc_continent", "work_mode",
+    "work_country", "work_country_code", "is_multi_location",
+    "location_notes", "office_lat", "office_lon", "office_address",
+    "office_geocoded", "office_verified", "location_precision", "expires_at",
+    "is_open", "last_open_check", "write_requested", "write_requested_at",
+    "write_request_kind", "geocode_requested", "geocode_requested_at",
+    "salary_precise_requested", "salary_precise_requested_at",
+    "salary_precise", "created_at", "updated_at", "user_excluded_reason",
+    "user_excluded_at", "user_excluded_prev_status", "recheck_requested",
+    "recheck_requested_at", "apply_requested", "apply_requested_at",
+    "apply_requested_by",
+]));
+
+/**
+ * Le colonne di `positions` non ammesse (comprese quelle nuove): le sole
+ * chiavi che si tolgono, perché `p.*` condivide la riga con gli alias dei JOIN.
+ *
+ * @param {{ prepare: (sql: string) => { all: () => Array<Record<string, unknown>> } }} conn
+ */
+function withheldPositionColumns(conn) {
+  const names = conn
+    .prepare("PRAGMA table_info(positions)")
+    .all()
+    .map((r) => String(r.name));
+  return new Set(names.filter((n) => !AGENT_POSITION_COLUMNS.has(n)));
+}
+
 /** `db_query.py:194-207` (`query_position_detail`), `WHERE p.id = ?`. */
 export const POSITION_DETAIL_SELECT = `
         SELECT p.*, s.total_score, s.stack_match, s.remote_fit, s.salary_fit,
@@ -259,12 +303,14 @@ function describeType(value) {
  * restano nell'ordine delle colonne.
  *
  * @param {Record<string, unknown>} row
+ * @param {ReadonlySet<string>} [withheld] chiavi da non mettere sul filo
  * @returns {Record<string, number | string | boolean | null>}
  */
-function toWireRow(row) {
+function toWireRow(row, withheld) {
   /** @type {Record<string, number | string | boolean | null>} */
   const out = {};
   for (const key of Object.keys(row)) {
+    if (withheld && withheld.has(key)) continue;
     const value = row[key];
     if (value === null || value === undefined) {
       out[key] = null;
@@ -730,8 +776,13 @@ export function createReadonlyBackend({ DatabaseSync, dbPath }) {
      */
     listPositions(filters = {}) {
       const { sql, params } = buildPositionsQuery(filters);
-      const rows = runRead((conn) => conn.prepare(sql).all(...params));
-      return rows.map(toWireRow);
+      return runRead((conn) => {
+        const withheld = withheldPositionColumns(conn);
+        return conn
+          .prepare(sql)
+          .all(...params)
+          .map((row) => toWireRow(row, withheld));
+      });
     },
 
     /**
@@ -744,12 +795,15 @@ export function createReadonlyBackend({ DatabaseSync, dbPath }) {
      */
     getPosition(id) {
       const key = coerceInteger("position id", id);
-      const row = runRead((conn) =>
-        conn.prepare(POSITION_DETAIL_SELECT).get(key),
-      );
-      return row
-        ? toWireRow(/** @type {Record<string, unknown>} */ (row))
-        : null;
+      return runRead((conn) => {
+        const row = conn.prepare(POSITION_DETAIL_SELECT).get(key);
+        return row
+          ? toWireRow(
+              /** @type {Record<string, unknown>} */ (row),
+              withheldPositionColumns(conn),
+            )
+          : null;
+      });
     },
 
     /**
@@ -767,7 +821,10 @@ export function createReadonlyBackend({ DatabaseSync, dbPath }) {
      */
     getDashboard() {
       return runRead((conn) => {
-        const statuses = conn.prepare(DASHBOARD_BY_STATUS).all().map(toWireRow);
+        const statuses = conn
+          .prepare(DASHBOARD_BY_STATUS)
+          .all()
+          .map((r) => toWireRow(r));
         let total = 0;
         /** @type {Record<string, number>} */
         const byStatus = {};
@@ -782,7 +839,7 @@ export function createReadonlyBackend({ DatabaseSync, dbPath }) {
         for (const row of conn
           .prepare(DASHBOARD_COMPANIES_BY_VERDICT)
           .all()
-          .map(toWireRow)) {
+          .map((r) => toWireRow(r))) {
           companiesByVerdict[String(row.verdict)] = Number(row.cnt);
         }
 
@@ -796,11 +853,14 @@ export function createReadonlyBackend({ DatabaseSync, dbPath }) {
         return {
           total,
           by_status: byStatus,
-          top_scores: conn.prepare(DASHBOARD_TOP_SCORES).all().map(toWireRow),
+          top_scores: conn
+            .prepare(DASHBOARD_TOP_SCORES)
+            .all()
+            .map((r) => toWireRow(r)),
           applications: conn
             .prepare(DASHBOARD_APPLICATIONS)
             .all()
-            .map(toWireRow),
+            .map((r) => toWireRow(r)),
           companies_by_verdict: companiesByVerdict,
           positions_with_company_id: withCompanyId,
         };
