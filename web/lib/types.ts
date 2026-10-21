@@ -1,3 +1,4 @@
+import type { ScamSignals } from "@/lib/scam-signals";
 // ── Position ──────────────────────────────────────────────────────
 export type PositionStatus =
   | "new"
@@ -29,6 +30,8 @@ export interface Position {
   source: string | null;
   jd_text: string | null;
   jd_summary: string | null;
+  // JHT-T06 — segnali anti-truffa deterministici (solo locale): avviso, mai esclusione.
+  scam_signals?: ScamSignals | null;
   requirements: string | null;
   found_by: string | null;
   found_at: string;

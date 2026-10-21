@@ -30,6 +30,7 @@ import {
 } from "@/lib/swipe-decks";
 import { parsePositionQuery } from "@/lib/position-search";
 import { publicPositionState } from "@/lib/position-state";
+import { filterByScamView } from "@/lib/scam-signals";
 import type { ApplicationTimelineEvent } from "@/lib/application-timeline";
 import {
   aggregateRoleFamilies,
@@ -257,6 +258,11 @@ export type PositionFilterOpts = {
   // and none of the excluded.
   scoredOnly?: boolean;
   hideExcluded?: boolean;
+  // JHT-T06 — i segnali anti-truffa: "hide" tiene fuori dall'elenco le posizioni
+  // della sezione «sospette» (due segnali di famiglie diverse), "only" mostra
+  // SOLO quelle. Niente viene cancellato né cambia stato. Dove i segnali non
+  // esistono (cloud, squadra esistente) "hide" non toglie nulla.
+  scam?: "hide" | "only";
 };
 
 export type PositionDetail = {
@@ -324,6 +330,7 @@ function applyFacetFilters(
   if (opts?.writeRequested != null) {
     out = out.filter((p) => Boolean(p.write_requested) === opts.writeRequested);
   }
+  if (opts?.scam) out = filterByScamView(out, opts.scam);
   return out;
 }
 
@@ -556,6 +563,8 @@ export type PositionsWindow = {
   total: number;
   /** The source served this page only, filtered and counted: do not slice or filter it again. */
   windowed: boolean;
+  /** JHT-T06 — how many matching positions are in the «suspicious» section (the windowed source counts them). */
+  scamSection?: number;
 };
 
 /**
@@ -592,6 +601,7 @@ export async function getPositionsWindow(
         rows: desktop.data.items,
         total: desktop.data.total,
         windowed: true,
+        scamSection: desktop.data.scamSection ?? 0,
       };
     }
     // Same rule as getPositions: no valid target must not show another dataset.
@@ -600,6 +610,17 @@ export async function getPositionsWindow(
   }
   const rows = await getPositions(opts);
   return { rows, total: rows.length, windowed: false };
+}
+
+/**
+ * How many positions are in the «suspicious» section (JHT-T06) of a LOCAL
+ * workspace. A team read by the desktop gets the count with its page
+ * (`PositionsWindow.scamSection`); the cloud has no scam signals and says 0.
+ */
+export async function getScamSectionCount(): Promise<number> {
+  if (await activeDemoPersona()) return 0;
+  const w = await ws();
+  return w ? local.countScamSectionLocal(w) : 0;
 }
 
 export async function getPositionById(

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import {
   getPositionsWindow,
+  getScamSectionCount,
   getSeenPositionIds,
   getSourceDistribution,
   getVerdictMapByLegacyId,
@@ -30,6 +31,8 @@ import ColumnsPicker from "./ColumnsPicker";
 import ActiveExclusions from "./ActiveExclusions";
 import ExclusionProposalCard from "./ExclusionProposalCard";
 import ExportCsvButton from "./ExportCsvButton";
+import ScamBadge from "@/app/components/ScamBadge";
+import { T as SCAM_T } from "@/lib/scam-signals.i18n";
 import {
   POSITIONS_COLUMNS,
   POSITIONS_COLS_COOKIE,
@@ -89,6 +92,7 @@ interface PageProps {
     dir?: string;
     page?: string;
     pageSize?: string;
+    scam?: string;
   }>;
 }
 
@@ -173,6 +177,7 @@ function formatMonthly(
 export default async function PositionsPage({ searchParams }: PageProps) {
   const locale = await getServerLocale();
   const tr = makeT(T, locale);
+  const scamTr = makeT(SCAM_T, locale);
   const params = await searchParams;
 
   // Colonne visibili dal cookie (vedi columns.ts): il server renderizza
@@ -214,6 +219,9 @@ export default async function PositionsPage({ searchParams }: PageProps) {
   const unscored = params.noscore === "1";
   const criticBands = parseBands(params.cscore);
   const criticUnscored = params.cnoscore === "1";
+  // JHT-T06 — la sezione «sospette»: due segnali anti-truffa di famiglie diverse.
+  // Nell'elenco normale non compaiono; con ?scam=only si vedono SOLO quelle.
+  const scamOnly = params.scam === "only";
   // writereq: "1" = solo selezionate, "0" = solo non selezionate, assente = no filtro
   const writeRequested =
     params.writereq === "1"
@@ -240,8 +248,8 @@ export default async function PositionsPage({ searchParams }: PageProps) {
   // escluse, salvo stati espliciti, senza-score o una ricerca. Chi legge la
   // squadra esistente la riceve già applicata e già contata, una pagina alla
   // volta; ogni altra fonte la applica qui dopo la lettura, come sempre.
-  const defaultView = !(selectedStates.length || unscored || query);
-  const [listWindow, sourceList] = await Promise.all([
+  const defaultView = !(selectedStates.length || unscored || query || scamOnly);
+  const [listWindow, sourceList, localScamSection] = await Promise.all([
     getPositionsWindow(
       {
         statuses: statuses.length ? statuses : undefined,
@@ -260,12 +268,18 @@ export default async function PositionsPage({ searchParams }: PageProps) {
         limit: 2000,
         sort: sortCol,
         dir: sortDir,
+        scam: scamOnly ? "only" : "hide",
       },
       { page: requestedPage, pageSize, defaultView },
     ),
     getSourceDistribution(),
+    getScamSectionCount(),
   ]);
   const allPositionsRaw = listWindow.rows;
+  // JHT-T06 — quante sono nella sezione «sospette»: la fonte a finestre le conta lei.
+  const scamSectionCount = listWindow.windowed
+    ? (listWindow.scamSection ?? 0)
+    : localScamSection;
   // Marker "nuova": overlay del set position_views dell'utente (cloud).
   // In local mode il set è vuoto e seen resta undefined → decide il
   // client via localStorage (UnseenDot).
@@ -314,6 +328,15 @@ export default async function PositionsPage({ searchParams }: PageProps) {
   const vmap = await getVerdictMapByLegacyId();
   const verdictOfP = (p: PositionWithScore) =>
     p.legacy_id != null ? vmap[String(p.legacy_id)] : undefined;
+  // JHT-T06 — il badge «sospetto» (un avviso: la posizione resta dov'è) e i suoi motivi.
+  const scamBadgeFor = (p: PositionWithScore) =>
+    p.scam_signals ? (
+      <ScamBadge
+        signals={p.scam_signals}
+        label={scamTr("badge")}
+        reasons={p.scam_signals.codes.map((code) => scamTr(code)).join("\n")}
+      />
+    ) : null;
   if (fbSel.length) {
     positions = positions.filter((p) => {
       const v = verdictOfP(p);
@@ -340,6 +363,7 @@ export default async function PositionsPage({ searchParams }: PageProps) {
     unscored ||
     criticBands.length > 0 ||
     criticUnscored ||
+    scamOnly ||
     writeRequested !== undefined ||
     query !== "";
   const emptyText = filtersActive
@@ -363,10 +387,13 @@ export default async function PositionsPage({ searchParams }: PageProps) {
 
   // Helper per costruire URL preservando filtri attivi.
   const buildHref = (
-    overrides: Partial<Record<"sort" | "dir" | "page" | "pageSize", string>>,
+    overrides: Partial<
+      Record<"sort" | "dir" | "page" | "pageSize" | "scam", string>
+    >,
   ) => {
     const merged: Record<string, string> = {};
     if (selectedStates.length) merged.status = selectedStates.join(",");
+    if (scamOnly) merged.scam = "only";
     if (remotes.length) merged.remote = remotes.join(",");
     if (sources.length) merged.source = sources.join(",");
     if (verdicts.length) merged.verdict = verdicts.join(",");
@@ -395,6 +422,7 @@ export default async function PositionsPage({ searchParams }: PageProps) {
         delete merged[k];
       if (k === "pageSize" && merged[k] === String(DEFAULT_PAGE_SIZE))
         delete merged[k];
+      if (k === "scam" && merged[k] !== "only") delete merged[k];
     }
     const qs = new URLSearchParams(merged).toString();
     return qs ? `/positions?${qs}` : "/positions";
@@ -557,6 +585,46 @@ export default async function PositionsPage({ searchParams }: PageProps) {
         <DeckSaver
           ids={(windowedEmpty ? [] : positions).map((p) => String(p.id))}
         />
+        {/* JHT-T06 — la sezione «sospette»: annunci con segnali anti-truffa di
+            due tipi diversi. Messi da parte, mai cancellati. */}
+        {(scamSectionCount > 0 || scamOnly) && (
+          <div
+            data-testid="scam-section"
+            className="mb-3 flex items-center gap-3 text-[11px]"
+          >
+            {scamOnly ? (
+              <>
+                <span className="font-semibold uppercase tracking-widest text-[var(--color-orange)]">
+                  {scamTr("section_heading")}
+                </span>
+                <span className="text-[var(--color-dim)]">
+                  {scamTr("note")}
+                </span>
+                <Link
+                  href={buildHref({ page: "1", scam: "" })}
+                  className="no-underline text-[var(--color-blue)]"
+                >
+                  {scamTr("section_back")}
+                </Link>
+              </>
+            ) : (
+              <Link
+                href={buildHref({ page: "1", scam: "only" })}
+                title={scamTr("section_chip_title")}
+                className="rounded-full border px-2.5 py-0.5 font-semibold no-underline"
+                style={{
+                  color: "var(--color-orange)",
+                  borderColor: "var(--color-orange)",
+                }}
+              >
+                {scamTr("section_chip").replace(
+                  "{n}",
+                  String(scamSectionCount),
+                )}
+              </Link>
+            )}
+          </div>
+        )}
         <div className="md:hidden flex flex-col gap-2">
           {visiblePositions.length === 0 ? (
             <div className="rounded-lg border border-[var(--color-border)] px-4 py-12 text-center text-[var(--color-dim)] text-[11px]">
@@ -598,6 +666,7 @@ export default async function PositionsPage({ searchParams }: PageProps) {
                     />
                   </Link>
                   <span className="shrink-0 flex items-center gap-1.5">
+                    {scamBadgeFor(p)}
                     {(() => {
                       const v = verdictOfP(p);
                       const tag = v ? FB_TAG[v] : null;
@@ -890,6 +959,7 @@ export default async function PositionsPage({ searchParams }: PageProps) {
                             label={tr("unseen_marker")}
                             initialSeen={p.seen || verdictOfP(p) != null}
                           />
+                          {scamBadgeFor(p)}
                           {(() => {
                             const v = verdictOfP(p);
                             const tag = v ? FB_TAG[v] : null;
