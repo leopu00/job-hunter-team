@@ -80,6 +80,14 @@ ROLE-USAGE[week] scout=35.5% critico=32.3% ... unattributed=8.1% (6.2 kT)
      a ogni tick. Azione: valuta e, se reale, notifica il Capitano di alleggerire
      SUBITO (ridurre roster / kill 1 worker). Lo storico/trend NON è compito tuo:
      è in vitals.jsonl e lo correla il Mantenitore 1×/giorno.
+
+[BRIDGE VITALS SILENT] The vitals sampler has written nothing for <N> min (last sample: <time>); a retry in the same tick failed too.
+   → NON è pressione e NON è quota: le risorse semplicemente non vengono misurate.
+     A differenza del VITALS ALERT qui sopra, NON chiedere al Capitano di
+     alleggerire o ritirare un worker per questo (il silenzio è «non so», né
+     «tutto bene» né «saturo»). Azione: avvisa l'operatore (o il Mantenitore) che
+     il campionatore è muto. Il bridge riprova una volta per tick e avvisa al
+     massimo una volta all'ora.
 ```
 
 ---

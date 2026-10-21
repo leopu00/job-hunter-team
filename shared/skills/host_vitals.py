@@ -42,6 +42,8 @@ CLI:
     python3 host_vitals.py check [--pct 95]         # exit 1 + righe se sopra soglia
     python3 host_vitals.py cpu-pressure [--file PATH] [--pct 95]
                                                     # JSON: CPU sostenuta (bridge) o null
+    python3 host_vitals.py silent [--file PATH] [--max-age-min 15] [--since ISO]
+                                                    # JSON: il campionatore tace da N minuti, o null
     python3 host_vitals.py summary [--hours 24]     # picchi/medie (Mantenitore)
     python3 host_vitals.py disk                     # solo disco, stampa JSON
     python3 host_vitals.py disk-guard               # exit 3 + `disk_low: frase` se < 3% E < 8 GiB
@@ -404,6 +406,34 @@ def cpu_pressure(samples, pct=95, run=CPU_ALERT_RUN, load_per_core=CPU_ALERT_LOA
             "load1": load1, "ncpu": ncpu}
 
 
+def sampler_silence(samples, now, max_age_s, since=None):
+    """Il campionatore tace? `samples` dal più vecchio al più recente.
+
+    Sì se l'ultimo campione con un'ora leggibile è più vecchio di `max_age_s`
+    (o non ce n'è nessuno) e lo è anche `since`, l'istante da cui sappiamo che
+    avrebbe dovuto girare (l'avvio del bridge): senza, un file ancora vuoto
+    accuserebbe un bridge appena acceso. Ritorna None, oppure quello che
+    l'avviso dice: da quanti minuti e l'ora dell'ultimo campione.
+
+    Non dice niente della CPU: un campionatore muto è «non so», non «tutto bene»
+    né «saturo». L'allarme CPU (`cpu_pressure`) non lo legge.
+    """
+    last = None
+    for record in samples:
+        ts = _ts(record or {})
+        if ts is not None and (last is None or ts > last):
+            last = ts
+    reference = last
+    if since is not None and (reference is None or since > reference):
+        reference = since
+    if reference is None:
+        return None          # niente da cui contare: non si accusa
+    age = (now - reference).total_seconds()
+    if age <= max_age_s:
+        return None
+    return {"minutes": round(age / 60, 1), "last": last.isoformat() if last else None}
+
+
 def read_samples(path=None, last=4 * CPU_ALERT_RUN):
     """Gli ultimi `last` campioni leggibili di vitals.jsonl, dal più vecchio."""
     path = Path(path) if path else DEFAULT_FILE
@@ -490,6 +520,7 @@ def main():
     sp = sub.add_parser("sample"); sp.add_argument("--file", default=None)
     sub.add_parser("current")
     ck = sub.add_parser("check"); ck.add_argument("--pct", type=float, default=95); ck.add_argument("--file", default=None)
+    si = sub.add_parser("silent"); si.add_argument("--file", default=None); si.add_argument("--max-age-min", type=float, default=15.0); si.add_argument("--since", default=None)
     cp = sub.add_parser("cpu-pressure"); cp.add_argument("--pct", type=float, default=95); cp.add_argument("--file", default=None)
     sm = sub.add_parser("summary"); sm.add_argument("--hours", type=float, default=24); sm.add_argument("--file", default=None)
     sub.add_parser("disk")
@@ -515,6 +546,16 @@ def main():
         print("sent" if sent else "none")
     elif args.cmd == "current":
         print(json.dumps(read_vitals()))
+    elif args.cmd == "silent":
+        since = None
+        if args.since:
+            try:
+                since = datetime.fromisoformat(args.since)
+                since = since if since.tzinfo else since.replace(tzinfo=timezone.utc)
+            except ValueError:
+                since = None
+        print(json.dumps(sampler_silence(read_samples(args.file), datetime.now(timezone.utc),
+                                         args.max_age_min * 60, since)))
     elif args.cmd == "cpu-pressure":
         print(json.dumps(cpu_pressure(read_samples(args.file), args.pct)))
     elif args.cmd == "check":

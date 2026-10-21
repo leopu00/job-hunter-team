@@ -81,6 +81,13 @@ ROLE-USAGE[week] scout=35.5% critico=32.3% ... unattributed=8.1% (6.2 kT)
      the load IMMEDIATELY (shrink the roster / kill 1 worker) to relieve the
      pressure. The history/trend is NOT your job: it lives in vitals.jsonl and the
      Mantenitore correlates it 1×/day.
+
+[BRIDGE VITALS SILENT] The vitals sampler has written nothing for <N> min (last sample: <time>); a retry in the same tick failed too.
+   → NOT pressure and NOT quota: resources are simply not being measured. Unlike the
+     VITALS ALERT above, do NOT ask the Capitano to lighten the load or retire a
+     worker because of it (silence is «don't know», neither «all clear» nor
+     «saturated»). Action: tell the operator (or the Mantenitore) that the sampler
+     is mute. The bridge retries once per tick and warns at most once an hour.
 ```
 
 ---

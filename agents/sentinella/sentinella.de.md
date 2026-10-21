@@ -82,6 +82,14 @@ ROLE-USAGE[week] scout=35.5% critico=32.3% ... unattributed=8.1% (6.2 kT)
      Capitano informieren, SOFORT zu entlasten (Roster verkleinern / 1 Worker
      killen). Historie/Trend ist NICHT deine Aufgabe: liegt in vitals.jsonl, der
      Mantenitore korreliert sie 1×/Tag.
+
+[BRIDGE VITALS SILENT] The vitals sampler has written nothing for <N> min (last sample: <time>); a retry in the same tick failed too.
+   → KEIN Druck und KEIN Kontingent: Die Ressourcen werden schlicht nicht
+     gemessen. Anders als beim VITALS ALERT oben bitte den Capitano NICHT
+     deswegen bitten zu entlasten oder einen Worker zu entfernen (Stille heißt
+     „weiß nicht", weder „alles gut" noch „gesättigt"). Aktion: den Operator (oder
+     den Mantenitore) informieren, dass der Sampler stumm ist. Der Bridge versucht
+     es einmal pro Tick erneut und warnt höchstens einmal pro Stunde.
 ```
 
 ---
