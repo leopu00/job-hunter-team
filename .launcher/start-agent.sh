@@ -1088,6 +1088,29 @@ case "$PROVIDER" in
     ;;
 esac
 
+# ── Harness per ruolo (prototipo pi) ─────────────────────────────────────────
+# JHT_AGENT_HARNESS_<RUOLO>=pi fa girare quel ruolo su pi invece che sulla CLI
+# del provider; senza la variabile non cambia nulla. Regole e perché in
+# spawn-lib.sh (jht_agent_harness, jht_pi_provider_check). Il modello è quello
+# che lo stesso ruolo avrebbe su Codex: pi parla al provider openai con gli
+# stessi id. Gli argomenti si compongono più sotto, quando la workdir con
+# AGENTS.md e le skill esiste.
+if ! AGENT_HARNESS="$(jht_agent_harness "$ROLE")"; then
+  exit 1
+fi
+if [ "$AGENT_HARNESS" = "pi" ]; then
+  if ! jht_pi_provider_check "$PROVIDER" "$AUTH_METHOD"; then
+    exit 1
+  fi
+  if ! pi_model="$(resolve_codex_model "$model_override")"; then
+    exit 1
+  fi
+  CLI_BIN="pi"
+  CLI_ARGS=""
+  # La chiave API, se c'è, resta quella del ramo openai qui sopra.
+  CLI_ENV_PREFIX="PI_CODING_AGENT_DIR='$(jht_pi_agent_dir)' PI_SKIP_VERSION_CHECK=1 PI_TELEMETRY=0 ${CLI_ENV_PREFIX}"
+fi
+
 # Override sperimentale e ROLE-SCOPED della missione M5. Non aggiunge un
 # quarto provider globale: active_provider continua a governare tutti gli
 # altri agenti. Il runner rilegge e valida la config (incluso host locale)
@@ -1120,8 +1143,12 @@ if ! command -v "$CLI_BIN" &>/dev/null; then
     claude) echo "Install the Claude CLI: https://claude.ai/download" ;;
     codex)  echo "Install the Codex CLI: https://github.com/openai/codex" ;;
     kimi)   echo "Install the Kimi CLI from provider Moonshot." ;;
+    pi)     echo "Install pi: npm install -g --ignore-scripts $JHT_PI_PACKAGE@$JHT_PI_VERSION (or unset JHT_AGENT_HARNESS_SCOUT)." ;;
   esac
   echo "Alternatively, edit ~/.jht/jht.config.json to use another provider."
+  exit 1
+fi
+if [ "$CLI_BIN" = "pi" ] && ! jht_pi_version_check; then
   exit 1
 fi
 if ! command -v tmux &>/dev/null; then
@@ -1364,6 +1391,20 @@ if [ "$CLI_BIN" = "claude" ] && [ -n "${JHT_HOME:-}" ]; then
   fi
 fi
 
+# pi: identità e skill passano per percorso. `--append-system-prompt` prende
+# il TESTO stesso quando il file non esiste, quindi un AGENTS.md mancante non
+# darebbe errore: l'agente partirebbe con un percorso al posto dell'identità.
+if [ "$CLI_BIN" = "pi" ]; then
+  if [ ! -s "$AGENT_DIR/AGENTS.md" ] || [ ! -d "$AGENT_DIR/.agents/skills" ]; then
+    echo "Error: pi needs $AGENT_DIR/AGENTS.md and $AGENT_DIR/.agents/skills before it starts; one is missing." >&2
+    exit 1
+  fi
+  if ! jht_pi_settings "$(jht_pi_agent_dir)/settings.json"; then
+    exit 1
+  fi
+  CLI_ARGS="$(jht_pi_args "$AGENT_DIR" "$pi_model" "$effort")"
+fi
+
 FULL_CMD="${CLI_ENV_PREFIX}${CLI_BIN}${CLI_ARGS:+ $CLI_ARGS}"
 
 # Env OPZIONALI che, quando esistono, devono arrivare all'agente. Le liste di
@@ -1509,7 +1550,7 @@ if [ "${IS_CONTAINER:-0}" != "1" ] && grep -qi microsoft /proc/version 2>/dev/nu
   # Su Codex il workspace e' gia' pre-autorizzato nella config: un Enter
   # cieco dopo 8 secondi puo' invece cadere nel turno operativo dell'agente.
   # Gli altri provider conservano il comportamento precedente.
-  if [ "$CLI_BIN" != "python3" ] && [ "$CLI_BIN" != "codex" ]; then
+  if [ "$CLI_BIN" != "python3" ] && [ "$CLI_BIN" != "codex" ] && [ "$CLI_BIN" != "pi" ]; then
     # Auto-accept workspace trust dialog ("Yes, I trust" è già selezionato, basta Enter)
     sleep 8
     jht_spawn_tmux send-keys -t "$SESSION" Enter
@@ -1629,6 +1670,12 @@ else
     exit 1
   fi
   _SPAWN_SESSION_CREATED=1
+  # Chi legge o scrive nel pane (stepcap-watchdog, jht-tmux-send) deve sapere
+  # che qui non gira la CLI del provider: il Ctrl-S che Kimi vuole dopo l'Enter
+  # a pi non va mandato.
+  if [ "$CLI_BIN" = "pi" ]; then
+    jht_spawn_tmux set-option -t "=$SESSION" @jht_harness pi >/dev/null 2>&1 || true
+  fi
   send_env_vars
   jht_spawn_tmux send-keys -t "$SESSION" "$FULL_CMD" C-m
   # Auto-respond a TUI startup prompt: detect-and-respond invece di blind
@@ -1654,7 +1701,7 @@ else
   # 120 secondi, preme Enter nel turno corrente dell'agente: non sblocca un
   # prompt noto e può invece inviare input mentre Codex sta già lavorando. Gli
   # altri provider conservano il comportamento precedente.
-  if [ "$CLI_BIN" != "python3" ] && [ "$CLI_BIN" != "codex" ]; then
+  if [ "$CLI_BIN" != "python3" ] && [ "$CLI_BIN" != "codex" ] && [ "$CLI_BIN" != "pi" ]; then
     setsid sh -c '
     _sess="'"$SESSION"'"
     _i=0

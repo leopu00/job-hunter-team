@@ -346,6 +346,16 @@ def _active_provider() -> str:
     return str(cfg.get("active_provider") or "").strip().lower()
 
 
+def _session_harness(session: str) -> str:
+    """L'harness che start-agent.sh ha scritto sulla sessione (`@jht_harness`).
+
+    Vuoto = la CLI del provider, cioè il caso di sempre. L'opzione è di
+    sessione: il target vuole `=NOME`, non la forma pane di `_pane_target`.
+    """
+    out = _tmux("show-options", "-qv", "-t", f"={session}", "@jht_harness")
+    return (out or "").strip()
+
+
 def markers() -> tuple:
     """Marcatori di cap: tabella per provider + estensioni da file/env."""
     found = []
@@ -662,9 +672,11 @@ def send_resume(session: str, agent: str, message: str) -> bool:
     time.sleep(float(os.environ.get("JHT_STEPCAP_PASTE_SETTLE", "0.5")))
     if _tmux("send-keys", "-t", _pane_target(session), "Enter") is None:
         return False
-    if _active_provider() == "kimi":
+    if _active_provider() == "kimi" and _session_harness(session) != "pi":
         # Kimi può accodare il prompt: Ctrl-S ne forza il submit (stesso
         # accorgimento di jht-tmux-send). Innocuo se l'Enter è già passato.
+        # Vale per la CLI di Kimi, non per il provider: una sessione su pi
+        # (marcata da start-agent.sh) non lo riceve.
         time.sleep(0.2)
         _tmux("send-keys", "-t", _pane_target(session), "C-s")
     return True

@@ -34,6 +34,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import token_metrics_lib as tlib  # noqa: E402
+import uncounted_usage  # noqa: E402
 
 JHT_HOME = Path(os.environ.get("JHT_HOME", "/jht_home"))
 KIMI_SESSIONS = JHT_HOME / ".kimi" / "sessions"
@@ -506,6 +507,11 @@ def main():
             f"weighted={int(weighted):>8,} | ratio={ratio_str} ema={ema_str}kT/1% "
             f"calib={calibrator.calibrations}"
         )
+        # Agents on the pi harness write sessions this meter does not read:
+        # say so on every line instead of reporting their usage as zero.
+        uncounted = uncounted_usage.declared_gap(JHT_HOME, window_start_ts)
+        if uncounted:
+            line += f" | WARN {uncounted['pi_sessions']} {uncounted['note']}"
         print(line, flush=True)
 
         with CSV_OUT.open("a") as f:
@@ -573,6 +579,7 @@ def main():
             # del Capitano (RULE C-11). Vedi BACKLOG
             # [JHT-TOKEN-MONITOR-WRITER-CRITIC].
             "per_writer_aggregated": tlib.aggregate_writer_critic_rates(per_agent_out),
+            "uncounted": uncounted,
         }
         write_state_atomic(STATE_OUT, state_payload)
 
