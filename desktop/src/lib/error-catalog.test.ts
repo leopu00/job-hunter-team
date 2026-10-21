@@ -201,6 +201,13 @@ const NOT_ERRORS: Record<string, string> = {
   burn_intent: "agent control read field (the full-throttle override)",
   expires_at: "agent control read field (when the full-throttle override ends)",
   remaining_min: "agent control read field (minutes left of the full-throttle override)",
+  // An agent's health in the list (existing_team_agents.rs shape_usage): numbers, never an outcome.
+  context_pct: "agent list read field (how full the agent's context is)",
+  context_tokens: "agent list read field (the tokens of the agent's last call)",
+  context_window: "agent list read field (the window of the agent's model, when its CLI writes it)",
+  context_at: "agent list read field (when the context was read)",
+  tokens_1h: "agent list read field (the agent's tokens of the last hour)",
+  tokens_at: "agent list read field (when the hour was counted)",
   // The positions table's CSV export (export_file.rs): the page catches every failure of
   // `export_csv_save` and says its own sentence (page.i18n.ts, export_failed); the code
   // itself never reaches the person.
