@@ -597,13 +597,19 @@ esac
     return wrapper, env, podman_log, create_marker
 
 
+# Only a guard against a wrapper that hangs: `upgrade --apply` alone runs the fake compose,
+# the candidate checks and two health probes one second apart, and takes 10-30 s on a loaded
+# runner or laptop. A 10 s guard failed the upgrade test on a correct wrapper.
+WRAPPER_TIMEOUT_S = 60
+
+
 def _run(wrapper: Path, env: dict[str, str], *args: str) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
         [str(wrapper), *args],
         env=env,
         text=True,
         capture_output=True,
-        timeout=10,
+        timeout=WRAPPER_TIMEOUT_S,
         check=False,
     )
 
