@@ -73,6 +73,8 @@ if args and args[0] == "list-sessions":
     print("\\n".join(sessions))
 elif args and args[0] == "kill-session":
     target = args[args.index("-t") + 1]
+    # a real tmux reads «=NAME» as the exact name, which is what `team stop` sends
+    target = target[1:] if target.startswith("=") else target
     if target not in sessions:
         sys.exit(1)
     sessions.remove(target)
