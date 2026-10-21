@@ -1143,7 +1143,7 @@ if ! command -v "$CLI_BIN" &>/dev/null; then
     claude) echo "Install the Claude CLI: https://claude.ai/download" ;;
     codex)  echo "Install the Codex CLI: https://github.com/openai/codex" ;;
     kimi)   echo "Install the Kimi CLI from provider Moonshot." ;;
-    pi)     echo "Install pi: npm install -g --ignore-scripts $JHT_PI_PACKAGE@$JHT_PI_VERSION (or unset JHT_AGENT_HARNESS_SCOUT)." ;;
+    pi)     echo "Install pi: bash $JHT_PI_INSTALL (or unset JHT_AGENT_HARNESS_SCOUT)." ;;
   esac
   echo "Alternatively, edit ~/.jht/jht.config.json to use another provider."
   exit 1

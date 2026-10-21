@@ -386,10 +386,12 @@ jht_codex_web_search_role() {
 # with ChatGPT): con un abbonamento Claude pi va sull'extra usage di Anthropic,
 # pagato a token, e si rifiuta di partire invece di spendere.
 #
-# Il pin: un pi diverso da questa versione non parte. Si alza come quelli di
-# shared/config/provider-versions.json: changelog, e2e, commit.
+# Il pin: un pi diverso da questa versione non parte. Si installa SOLO dal lock
+# rivisto di shared/runtime/pi-harness (integrity di ogni dipendenza, sha256 dei
+# due file, Node minimo controllato), con lo script che sta lì; si alza come
+# quelli di shared/config/provider-versions.json: changelog, e2e, commit.
 JHT_PI_VERSION="1.3.0"
-JHT_PI_PACKAGE="@earendil-works/pi-coding-agent"
+JHT_PI_INSTALL="/app/shared/runtime/pi-harness/install-pi.sh"
 # I tool di pi accesi per l'agente: read/bash/edit/write sono il suo default,
 # grep/find/ls vanno chiesti. Niente MCP, niente estensioni.
 JHT_PI_TOOLS="read,bash,edit,write,grep,find,ls"
@@ -507,7 +509,7 @@ jht_pi_version_check() {
   local got
   got="$(PI_SKIP_VERSION_CHECK=1 PI_TELEMETRY=0 pi --version 2>/dev/null | tr -d '[:space:]')" || got=""
   if [ "$got" != "$JHT_PI_VERSION" ]; then
-    echo "Error: pi ${got:-not runnable} found, this release needs pi $JHT_PI_VERSION: npm install -g --ignore-scripts $JHT_PI_PACKAGE@$JHT_PI_VERSION" >&2
+    echo "Error: pi ${got:-not runnable} found, this release needs pi $JHT_PI_VERSION: bash $JHT_PI_INSTALL" >&2
     return 1
   fi
 }

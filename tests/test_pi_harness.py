@@ -330,7 +330,7 @@ def test_another_pi_version_is_refused_with_the_install_command(tmp_path: Path) 
     result = _version_check(_fake_pi(tmp_path, "1.2.0"))
     assert result.returncode != 0
     assert "pi 1.2.0 found" in result.stderr
-    assert "npm install -g --ignore-scripts @earendil-works/pi-coding-agent@" in result.stderr
+    assert "bash /app/shared/runtime/pi-harness/install-pi.sh" in result.stderr
 
 
 def test_pi_gets_only_the_agent_skills_tree(tmp_path: Path) -> None:
