@@ -932,6 +932,26 @@ describe("DashboardApp onboarding router", () => {
     expect(screen.queryByText(`Cosa fare: ${describeError("runtime_install_failed").action}`)).not.toBeInTheDocument();
   });
 
+  it("a cause that is a piece of a command is not told: the retry sentence stands and the piece goes to the technical details", async () => {
+    vi.mocked(useSession).mockReturnValue(signedInAs("runtime-command-cause-account"));
+    requireOnboarding();
+    vi.mocked(prepareOnboardingRuntime)
+      .mockRejectedValueOnce({
+        code: "runtime_install_failed",
+        message: "runtime_install_failed",
+        retryable: true,
+        detail: "t '%{http_code}' --proxy http://127.0.0.1:3130 https://example.com/)\" = 403",
+      });
+    render(<DashboardApp />);
+    await userEvent.click(await screen.findByRole("button", { name: "submit-onboarding" }));
+
+    expect(await screen.findByText("failed:runtime")).toBeInTheDocument();
+    expect(screen.getByText(
+      "Cosa fare: Riprova; se si ripete, apri il registro qui sotto e mandalo al supporto.",
+    )).toBeInTheDocument();
+    expect(screen.queryByText(/Causa:/)).not.toBeInTheDocument();
+  });
+
   it("without a cause the catalog's action stays, and a code with its own instruction keeps it before the cause", async () => {
     vi.mocked(useSession).mockReturnValue(signedInAs("runtime-no-cause-account"));
     requireOnboarding();

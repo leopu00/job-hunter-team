@@ -85,6 +85,7 @@ import MessagesPage from "../pages/messages";
 import Shell from "../shell/Shell";
 import { navigate } from "../shell/router";
 import { describeError, errorCodeOf, errorMachineOf, errorResetsAt } from "../lib/error-catalog";
+import { isReadableCause } from "../lib/failure-cause";
 import { openRuntimeLog, runtimeLogPath } from "../lib/runtime-log";
 
 
@@ -145,6 +146,13 @@ function actionWithCause(code: string, action: string, cause: string | null): st
   return CAUSE_REPLACES_ACTION.has(code) ? `${sentence} ${text.failureCauseRetry}` : `${action} ${sentence}`;
 }
 
+/** The action to tell, and the raw cause for the technical details when it is not a sentence. */
+function causeParts(code: string, action: string, cause: string | null): { action: string; cause?: string } {
+  if (!cause) return { action };
+  if (isReadableCause(cause)) return { action: actionWithCause(code, action, cause) };
+  return { action: CAUSE_REPLACES_ACTION.has(code) ? stateText().failureCauseRetry : action, cause };
+}
+
 function localRuntimeFailure(error: unknown): OnboardingRuntimeState {
   const value = typeof error === "object" && error !== null
     ? error as { code?: unknown; message?: unknown; retryable?: unknown; detail?: unknown }
@@ -187,7 +195,7 @@ function localRuntimeFailure(error: unknown): OnboardingRuntimeState {
       stage,
       title: stateText().containerStartTitle,
       message: stateText().containerStartMessage,
-      action: actionWithCause(value.code, describeError(value.code, { locale: appLocale() }).action, cause),
+      ...causeParts(value.code, describeError(value.code, { locale: appLocale() }).action, cause),
       code: value.code,
       retryable: value.retryable,
     };
@@ -199,7 +207,7 @@ function localRuntimeFailure(error: unknown): OnboardingRuntimeState {
     status: "failed",
     stage,
     message: described.text,
-    action: actionWithCause(value.code, described.action, cause),
+    ...causeParts(value.code, described.action, cause),
     code: value.code,
     retryable: value.retryable,
   };

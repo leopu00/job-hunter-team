@@ -326,11 +326,12 @@ function RuntimeView({ host, platform, t, locale, runtime, activity, onRetry, on
               </ol>
             ) : <p>{t.waitingFirstUpdate}</p>}
           </details>
-          {failed && runtime.code && (
+          {failed && (runtime.code || runtime.cause) && (
             <details className="onboarding-activity-details onboarding-technical-details">
               <summary>{t.technicalDetails}</summary>
               <dl>
-                <div><dt>{t.code}</dt><dd><code>{runtime.code}</code></dd></div>
+                {runtime.code && <div><dt>{t.code}</dt><dd><code>{runtime.code}</code></dd></div>}
+                {runtime.cause && <div><dt>{t.technicalCause}</dt><dd><code>{runtime.cause}</code></dd></div>}
               </dl>
             </details>
           )}

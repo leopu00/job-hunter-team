@@ -81,6 +81,8 @@ export type OnboardingRuntimeState =
       message: string;
       /** What to do now, from the error catalog. */
       action?: string;
+      /** The step's own last line when it is not a sentence to tell: shown under the technical details. */
+      cause?: string;
       code?: string;
       retryable?: boolean;
     }
