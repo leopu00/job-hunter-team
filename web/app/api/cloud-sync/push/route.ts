@@ -907,7 +907,10 @@ export async function POST(req: NextRequest) {
             loc_city: null,
             office_lat: p.office_lat ?? null,
             office_lon: p.office_lon ?? null,
-            office_verified: p.office_verified == null ? false : p.office_verified === true || p.office_verified === 1,
+            office_verified:
+              p.office_verified == null
+                ? false
+                : p.office_verified === true || p.office_verified === 1,
             location_precision: p.location_precision,
             remote_type: p.remote_type ?? null,
           }),
