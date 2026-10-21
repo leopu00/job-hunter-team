@@ -8,7 +8,10 @@ import { navigate } from "../../shell/router";
 import { READ_ONLY_NAV, READ_ONLY_ROUTES, ROUTES } from "../../shell/routes";
 import Shell from "../../shell/Shell";
 import { createPermissiveSupabase } from "../../test-support/permissive-supabase";
+import type { Locale } from "@/i18n/config";
+import { pluralText } from "../../lib/plural";
 import AgentsPanel from "./AgentsPanel";
+import { AGENTS_PANEL_TEXT, type AgentsPanelText } from "./AgentsPanel.i18n";
 
 // «Agenti»: the agents' control panel, against a stand-in native side
 // (agent_control). Synthetic data only.
@@ -89,8 +92,26 @@ describe("«Agenti», the agents' control panel", () => {
     // a role with no session is there, off, after the ones that are up
     expect(order.indexOf("ANALISTA-1")).toBeGreaterThan(order.indexOf("DOTTORE"));
     expect(screen.getByTestId("panel-row-ANALISTA-1")).toHaveAttribute("data-state", "down");
-    expect(screen.getByTestId("panel-summary")).toHaveTextContent("1 ti aspettano · 1 al lavoro · 5 accesi su");
+    // one person waiting is singular, five up are plural
+    expect(screen.getByTestId("panel-summary")).toHaveTextContent(/^1 ti aspetta · 1 al lavoro · 5 accesi su \d+ · /);
     expect(screen.getByTestId("panel-row-SCORER-1")).toHaveTextContent("limite di 5 ore");
+  });
+
+  it("says the summary's counts in the singular or the plural, in every language", () => {
+    for (const [locale, text] of Object.entries(AGENTS_PANEL_TEXT) as [Locale, AgentsPanelText][]) {
+      for (const forms of [text.summaryWaiting, text.summaryWorking, text.summaryUp]) {
+        expect(forms.one, locale).toContain("{count}");
+        expect(forms.other, locale).toContain("{count}");
+      }
+      expect(text.summaryUp.one, locale).toContain("{total}");
+      expect(text.summaryUp.other, locale).toContain("{total}");
+    }
+    const italian = AGENTS_PANEL_TEXT.it;
+    expect(pluralText("it", 1, italian.summaryWaiting)).toBe("1 ti aspetta");
+    expect(pluralText("it", 2, italian.summaryWaiting)).toBe("2 ti aspettano");
+    expect(pluralText("it", 1, italian.summaryUp, { total: 13 })).toBe("1 acceso su 13");
+    expect(pluralText("de", 1, AGENTS_PANEL_TEXT.de.summaryWaiting)).toBe("1 wartet auf dich");
+    expect(pluralText("fr", 3, AGENTS_PANEL_TEXT.fr.summaryWaiting)).toBe("3 vous attendent");
   });
 
   it("stops an agent only after the confirmation, which names the VPS, and sends back the list's target", async () => {

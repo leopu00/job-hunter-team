@@ -1,4 +1,5 @@
 import type { Locale } from "@/i18n/config";
+import type { PluralForms } from "../../lib/plural";
 
 export interface AgentsPanelText {
   title: string;
@@ -14,7 +15,10 @@ export interface AgentsPanelText {
   failed: string;
   failedAt: string; // {time}
   /** the line above the list: who needs the person first */
-  summary: string; // {waiting} {working} {up} {total}
+  // the summary line, three counts joined by « · »: each with its singular and plural
+  summaryWaiting: PluralForms; // {count}
+  summaryWorking: PluralForms; // {count}
+  summaryUp: PluralForms; // {count} {total}
   up: string;
   down: string;
   heldByUser: string;
@@ -86,7 +90,9 @@ const it: AgentsPanelText = {
   readAt: "Letto alle {time}",
   failed: "Non ho potuto leggere gli agenti.",
   failedAt: "Tentativo delle {time}",
-  summary: "{waiting} ti aspettano · {working} al lavoro · {up} accesi su {total}",
+  summaryWaiting: { one: "{count} ti aspetta", other: "{count} ti aspettano" },
+  summaryWorking: { one: "{count} al lavoro", other: "{count} al lavoro" },
+  summaryUp: { one: "{count} acceso su {total}", other: "{count} accesi su {total}" },
   up: "acceso",
   down: "spento",
   heldByUser: "spento da te",
@@ -161,7 +167,9 @@ const en: AgentsPanelText = {
   readAt: "Read at {time}",
   failed: "I could not read the agents.",
   failedAt: "Attempt at {time}",
-  summary: "{waiting} waiting for you · {working} working · {up} up of {total}",
+  summaryWaiting: { one: "{count} waiting for you", other: "{count} waiting for you" },
+  summaryWorking: { one: "{count} working", other: "{count} working" },
+  summaryUp: { one: "{count} up of {total}", other: "{count} up of {total}" },
   up: "up",
   down: "off",
   heldByUser: "stopped by you",
@@ -235,7 +243,9 @@ const de: AgentsPanelText = {
   readAt: "Gelesen um {time}",
   failed: "Ich konnte die Agenten nicht lesen.",
   failedAt: "Versuch um {time}",
-  summary: "{waiting} warten auf dich · {working} arbeiten · {up} von {total} aktiv",
+  summaryWaiting: { one: "{count} wartet auf dich", other: "{count} warten auf dich" },
+  summaryWorking: { one: "{count} arbeitet", other: "{count} arbeiten" },
+  summaryUp: { one: "{count} von {total} aktiv", other: "{count} von {total} aktiv" },
   up: "aktiv",
   down: "aus",
   heldByUser: "von dir gestoppt",
@@ -310,7 +320,9 @@ const es: AgentsPanelText = {
   readAt: "Leído a las {time}",
   failed: "No he podido leer los agentes.",
   failedAt: "Intento de las {time}",
-  summary: "{waiting} te esperan · {working} trabajando · {up} activos de {total}",
+  summaryWaiting: { one: "{count} te espera", other: "{count} te esperan" },
+  summaryWorking: { one: "{count} trabajando", other: "{count} trabajando" },
+  summaryUp: { one: "{count} activo de {total}", other: "{count} activos de {total}" },
   up: "activo",
   down: "apagado",
   heldByUser: "apagado por ti",
@@ -385,7 +397,9 @@ const fr: AgentsPanelText = {
   readAt: "Lu à {time}",
   failed: "Je n’ai pas pu lire les agents.",
   failedAt: "Tentative de {time}",
-  summary: "{waiting} vous attendent · {working} au travail · {up} actifs sur {total}",
+  summaryWaiting: { one: "{count} vous attend", other: "{count} vous attendent" },
+  summaryWorking: { one: "{count} au travail", other: "{count} au travail" },
+  summaryUp: { one: "{count} actif sur {total}", other: "{count} actifs sur {total}" },
   up: "actif",
   down: "éteint",
   heldByUser: "arrêté par vous",
@@ -460,7 +474,9 @@ const hu: AgentsPanelText = {
   readAt: "Beolvasva: {time}",
   failed: "Nem tudtam beolvasni az ügynököket.",
   failedAt: "Próbálkozás: {time}",
-  summary: "{waiting} rád vár · {working} dolgozik · {up} aktív / {total}",
+  summaryWaiting: { one: "{count} rád vár", other: "{count} rád vár" },
+  summaryWorking: { one: "{count} dolgozik", other: "{count} dolgozik" },
+  summaryUp: { one: "{count} aktív / {total}", other: "{count} aktív / {total}" },
   up: "aktív",
   down: "kikapcsolva",
   heldByUser: "te kapcsoltad ki",
@@ -535,7 +551,9 @@ const pt: AgentsPanelText = {
   readAt: "Lido às {time}",
   failed: "Não consegui ler os agentes.",
   failedAt: "Tentativa das {time}",
-  summary: "{waiting} à tua espera · {working} a trabalhar · {up} ativos de {total}",
+  summaryWaiting: { one: "{count} à tua espera", other: "{count} à tua espera" },
+  summaryWorking: { one: "{count} a trabalhar", other: "{count} a trabalhar" },
+  summaryUp: { one: "{count} ativo de {total}", other: "{count} ativos de {total}" },
   up: "ativo",
   down: "desligado",
   heldByUser: "desligado por ti",

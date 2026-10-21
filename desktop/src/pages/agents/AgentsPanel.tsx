@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ComponentType }
 import { describeAgentState, type AgentState, type AgentStateTone } from "@/lib/agent-state";
 import { appLocale } from "../../lib/app-locale";
 import { describeError } from "../../lib/error-catalog";
+import { pluralText } from "../../lib/plural";
 import { useExistingTeamReadOnly } from "../../lib/existing-team-readonly";
 import {
   controlAgent,
@@ -453,7 +454,11 @@ export default function AgentsPanel({ search }: PageProps) {
         <>
           <div className="flex flex-wrap items-center justify-between gap-2 mb-3 rounded border px-3 py-2" style={{ borderColor: "var(--color-border)" }}>
             <span data-testid="panel-summary" className="text-[11px]" style={{ color: "var(--color-bright)" }}>
-              {fill(t.summary, counts)}
+              {[
+                pluralText(appLocale(), counts.waiting, t.summaryWaiting),
+                pluralText(appLocale(), counts.working, t.summaryWorking),
+                pluralText(appLocale(), counts.up, t.summaryUp, { total: counts.total }),
+              ].join(" · ")}
               {teamLine && (
                 <>
                   {" · "}
