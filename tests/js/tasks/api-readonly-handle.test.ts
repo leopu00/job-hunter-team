@@ -50,7 +50,7 @@ const MODULE_FILE = path.join(ROOT, "shared/queries/readonly-sqlite.js");
 
 /**
  * Lo schema del fixture: le colonne che i due SELECT portati da `db_query.py`
- * nominano, e una `raw BLOB` che il DB vero NON ha — serve al caso di fedeltà
+ * nominano, e una `jd_text` BLOB (nel DB vero è TEXT) — serve al caso di fedeltà
  * dei tipi, che è un difetto FUTURO (la prima migrazione che aggiunge un BLOB)
  * e va provato prima che arrivi. La parità con lo schema reale la tiene il
  * cancello Python (`tests/test_api_read_parity.py`), che costruisce il DB con
@@ -59,7 +59,7 @@ const MODULE_FILE = path.join(ROOT, "shared/queries/readonly-sqlite.js");
 const FIXTURE_DDL = `
   CREATE TABLE positions (
     id INTEGER PRIMARY KEY, title TEXT, company TEXT, status TEXT, source TEXT,
-    found_at TEXT, company_id INTEGER, location TEXT, raw BLOB);
+    found_at TEXT, company_id INTEGER, location TEXT, jd_text BLOB);
   CREATE TABLE scores (
     id INTEGER PRIMARY KEY, position_id INTEGER, total_score INTEGER,
     stack_match INTEGER, remote_fit INTEGER, salary_fit INTEGER,
@@ -266,7 +266,7 @@ describe("fedeltà dei tipi sul filo", () => {
     const dbPath = makeDb();
     const writer = new DatabaseSync(dbPath);
     try {
-      writer.prepare("UPDATE positions SET raw=? WHERE id=1").run(
+      writer.prepare("UPDATE positions SET jd_text=? WHERE id=1").run(
         Buffer.from([1, 2, 3]),
       );
     } finally {
@@ -290,7 +290,7 @@ describe("fedeltà dei tipi sul filo", () => {
       expect(
         String(raised?.message ?? ""),
         "il messaggio deve nominare la colonna, non stampare il valore",
-      ).toContain('"raw"');
+      ).toContain('"jd_text"');
     } finally {
       backend.close();
     }
