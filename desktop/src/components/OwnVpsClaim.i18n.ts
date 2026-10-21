@@ -14,7 +14,6 @@ export interface OwnVpsClaimText {
   cancel: string;
   working: string;
   done: string;
-  noAccount: string;
 }
 
 const it: OwnVpsClaimText = {
@@ -32,7 +31,6 @@ const it: OwnVpsClaimText = {
   cancel: "Annulla",
   working: "Verifica in corso…",
   done: "Fatto: la VPS è confermata come tua.",
-  noAccount: "Per confermare serve aver fatto l’accesso con il tuo account Google.",
 };
 
 const en: OwnVpsClaimText = {
@@ -50,7 +48,6 @@ const en: OwnVpsClaimText = {
   cancel: "Cancel",
   working: "Checking…",
   done: "Done: the VPS is confirmed as yours.",
-  noAccount: "To confirm you need to be signed in with your Google account.",
 };
 
 const de: OwnVpsClaimText = {
@@ -68,7 +65,6 @@ const de: OwnVpsClaimText = {
   cancel: "Abbrechen",
   working: "Wird geprüft …",
   done: "Fertig: Der VPS ist als deiner bestätigt.",
-  noAccount: "Zum Bestätigen musst du mit deinem Google-Konto angemeldet sein.",
 };
 
 const es: OwnVpsClaimText = {
@@ -86,7 +82,6 @@ const es: OwnVpsClaimText = {
   cancel: "Cancelar",
   working: "Comprobando…",
   done: "Hecho: el VPS queda confirmado como tuyo.",
-  noAccount: "Para confirmar hay que haber iniciado sesión con tu cuenta de Google.",
 };
 
 const fr: OwnVpsClaimText = {
@@ -104,7 +99,6 @@ const fr: OwnVpsClaimText = {
   cancel: "Annuler",
   working: "Vérification en cours…",
   done: "Terminé : le VPS est confirmé comme le tien.",
-  noAccount: "Pour confirmer, tu dois être connecté avec ton compte Google.",
 };
 
 const hu: OwnVpsClaimText = {
@@ -122,7 +116,6 @@ const hu: OwnVpsClaimText = {
   cancel: "Mégse",
   working: "Ellenőrzés…",
   done: "Kész: a VPS meg van erősítve a tiédként.",
-  noAccount: "A megerősítéshez be kell jelentkezned a Google-fiókoddal.",
 };
 
 const pt: OwnVpsClaimText = {
@@ -140,7 +133,6 @@ const pt: OwnVpsClaimText = {
   cancel: "Cancelar",
   working: "A verificar…",
   done: "Feito: o VPS fica confirmado como teu.",
-  noAccount: "Para confirmar tens de ter iniciado sessão com a tua conta Google.",
 };
 
 export const OWN_VPS_CLAIM_TEXT: Record<Locale, OwnVpsClaimText> = { it, en, de, es, fr, hu, pt };

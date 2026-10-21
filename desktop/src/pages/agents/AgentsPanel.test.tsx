@@ -216,7 +216,7 @@ describe("«Agenti», the agents' control panel", () => {
     expect(native.invoke.mock.calls.some(([c]) => c === "own_vps_claim")).toBe(false);
     fireEvent.click(within(invite).getByTestId("own-vps-confirm-yes"));
     await waitFor(() => expect(screen.queryByTestId("own-vps-invite")).toBeNull());
-    expect(native.invoke).toHaveBeenCalledWith("own_vps_claim", { request: { userId: "user-1", confirmed: true } });
+    expect(native.invoke).toHaveBeenCalledWith("own_vps_claim", { request: { confirmed: true } });
   });
 
   it("cancelling the claim sends nothing; a marked VPS or a changed key asks what each asks", async () => {

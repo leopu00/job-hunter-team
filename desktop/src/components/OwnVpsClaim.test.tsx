@@ -9,8 +9,6 @@ import { isOwnVpsClaimCode, pickOwnVpsState } from "../lib/own-vps-claim";
 const native = vi.hoisted(() => ({ invoke: vi.fn(), isTauri: vi.fn(() => true) }));
 vi.mock("@tauri-apps/api/core", () => native);
 
-const ID = "11111111-2222-4333-8444-555555555555";
-
 beforeEach(() => {
   document.cookie = "NEXT_LOCALE=it; path=/";
   native.invoke.mockReset();
@@ -19,9 +17,9 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe("OwnVpsClaim", () => {
-  it("claims only after the dialog, with the account's id and the confirmation, and nothing else", async () => {
+  it("claims only after the dialog, with the confirmation and no id of the account", async () => {
     const onClaimed = vi.fn();
-    render(<OwnVpsClaim reason="own_vps_claim_required" onClaimed={onClaimed} getUserId={async () => ID} />);
+    render(<OwnVpsClaim reason="own_vps_claim_required" onClaimed={onClaimed} />);
     fireEvent.click(screen.getByTestId("own-vps-claim"));
     expect(native.invoke).not.toHaveBeenCalled();
     expect(screen.getByTestId("own-vps-confirm")).toHaveTextContent(OWN_VPS_CLAIM_TEXT.it.confirmBody);
@@ -29,30 +27,30 @@ describe("OwnVpsClaim", () => {
     fireEvent.click(screen.getByTestId("own-vps-confirm-yes"));
     await waitFor(() => expect(onClaimed).toHaveBeenCalledTimes(1));
     expect(native.invoke).toHaveBeenCalledTimes(1);
-    expect(native.invoke).toHaveBeenCalledWith("own_vps_claim", { request: { userId: ID, confirmed: true } });
+    expect(native.invoke).toHaveBeenCalledWith("own_vps_claim", { request: { confirmed: true } });
   });
 
   it("a changed key says so in the invitation and in the dialog", () => {
-    render(<OwnVpsClaim reason="own_vps_key_changed" onClaimed={vi.fn()} getUserId={async () => ID} />);
+    render(<OwnVpsClaim reason="own_vps_key_changed" onClaimed={vi.fn()} />);
     expect(screen.getByTestId("own-vps-invite")).toHaveTextContent(OWN_VPS_CLAIM_TEXT.it.inviteKeyChanged);
     fireEvent.click(screen.getByTestId("own-vps-claim"));
     expect(screen.getByTestId("own-vps-confirm")).toHaveTextContent(OWN_VPS_CLAIM_TEXT.it.confirmKeyChanged);
   });
 
-  it("without a signed-in account it asks nothing of the native side", async () => {
+  it("without a session the native side's answer is told with the catalog's sentence, and nothing is claimed", async () => {
+    native.invoke.mockRejectedValue("account_session_required");
     const onClaimed = vi.fn();
-    render(<OwnVpsClaim reason="own_vps_claim_required" onClaimed={onClaimed} getUserId={async () => null} />);
+    render(<OwnVpsClaim reason="own_vps_claim_required" onClaimed={onClaimed} />);
     fireEvent.click(screen.getByTestId("own-vps-claim"));
     fireEvent.click(screen.getByTestId("own-vps-confirm-yes"));
-    expect(await screen.findByTestId("own-vps-failure")).toHaveTextContent(OWN_VPS_CLAIM_TEXT.it.noAccount);
-    expect(native.invoke).not.toHaveBeenCalled();
+    expect(await screen.findByTestId("own-vps-failure")).toHaveTextContent(describeError("account_session_required", { locale: "it" }).text);
     expect(onClaimed).not.toHaveBeenCalled();
   });
 
   it("a refusal is told with the catalog's sentence and the person can try again", async () => {
     native.invoke.mockRejectedValue("own_vps_claim_unreachable");
     const onClaimed = vi.fn();
-    render(<OwnVpsClaim reason="own_vps_claim_required" onClaimed={onClaimed} getUserId={async () => ID} />);
+    render(<OwnVpsClaim reason="own_vps_claim_required" onClaimed={onClaimed} />);
     fireEvent.click(screen.getByTestId("own-vps-claim"));
     fireEvent.click(screen.getByTestId("own-vps-confirm-yes"));
     expect(await screen.findByTestId("own-vps-failure")).toHaveTextContent(describeError("own_vps_claim_unreachable", { locale: "it" }).text);

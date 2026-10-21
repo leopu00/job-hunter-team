@@ -189,7 +189,7 @@ const NOT_ERRORS: Record<string, string> = {
   marked: "own-VPS state word: the mark is there",
   not_own: "own-VPS state word: an existing team or this computer",
   own_vps_claim: "runtime-log label of the claim, not an error",
-  user_id: "request field of the claim: the account's id, read from the page's session",
+  user_id: "field of the claim's identity probe (the account's id, from the backend's own session)",
   by_user: "agent control read field",
   weekly_reset: "agent control pause exit kind",
 };

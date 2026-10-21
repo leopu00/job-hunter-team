@@ -4,12 +4,6 @@ import { describeError } from "../lib/error-catalog";
 import { claimOwnVps, type OwnVpsClaimCode } from "../lib/own-vps-claim";
 import { OWN_VPS_CLAIM_TEXT } from "./OwnVpsClaim.i18n";
 
-/** The signed-in account's id, or null: read when the person confirms, never kept. */
-async function sessionUserId(): Promise<string | null> {
-  const { supabase } = await import("../lib/supabase");
-  return (await supabase.auth.getSession()).data.session?.user.id ?? null;
-}
-
 /**
  * The invitation to claim a VPS the app set up before it marked them (or whose key changed): reads work,
  * writes need the person's «this VPS is mine», confirmed in a dialog that says what it allows.
@@ -18,11 +12,9 @@ async function sessionUserId(): Promise<string | null> {
 export default function OwnVpsClaim({
   reason,
   onClaimed,
-  getUserId = sessionUserId,
 }: {
   reason: OwnVpsClaimCode;
   onClaimed: () => void;
-  getUserId?: () => Promise<string | null>;
 }) {
   const t = OWN_VPS_CLAIM_TEXT[appLocale()];
   const [confirming, setConfirming] = useState(false);
@@ -33,13 +25,7 @@ export default function OwnVpsClaim({
   const confirm = async () => {
     setBusy(true);
     setFailure(null);
-    const userId = await getUserId().catch(() => null);
-    if (!userId) {
-      setFailure(t.noAccount);
-      setBusy(false);
-      return;
-    }
-    const done = await claimOwnVps(userId);
+    const done = await claimOwnVps();
     setBusy(false);
     if (done.ok) {
       setConfirming(false);

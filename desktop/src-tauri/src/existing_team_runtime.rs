@@ -1033,19 +1033,20 @@ pub(crate) fn own_vps_identity_matches(stdout: &[u8]) -> bool {
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub(crate) struct OwnVpsClaimRequest {
-    user_id: String,
     confirmed: bool,
 }
 
+/// `account_id` is the one the backend authenticated itself, never one the page sent.
 fn claim_own_vps_impl(
     app: &tauri::AppHandle,
     scope: &AccountScope,
+    account_id: &str,
     request: &OwnVpsClaimRequest,
 ) -> Result<(), &'static str> {
     if !request.confirmed {
         return Err("own_vps_claim_not_confirmed");
     }
-    let input = own_vps_identity_input(&request.user_id).ok_or("own_vps_claim_refused")?;
+    let input = own_vps_identity_input(account_id).ok_or("own_vps_claim_refused")?;
     let host = direct_chat::load_persisted_host(app, scope).map_err(|_| "own_vps_claim_refused")?;
     if !matches!(host, ExecutionHost::Vps { .. }) {
         return Err("own_vps_claim_refused");
@@ -1079,11 +1080,14 @@ fn claim_own_vps_impl(
 }
 
 /// «This VPS I set up with the app» (JHT-T30). Only the app's own window, only with the person's
-/// confirmation, never by itself: nothing calls it but the page's button.
+/// confirmation, never by itself: nothing calls it but the page's button. The page sends no identifier:
+/// the account is the one whose session this backend holds and verified (`authenticated_account_id`),
+/// and it must be the account the app is working in; the identity probe asks the VPS about that account.
 #[tauri::command]
 pub(crate) async fn own_vps_claim(
     window: tauri::Window,
     app: tauri::AppHandle,
+    keys: State<'_, crate::auth_store::SystemKeyCache>,
     scopes: State<'_, AccountScopeState>,
     request: OwnVpsClaimRequest,
 ) -> Result<(), &'static str> {
@@ -1091,11 +1095,15 @@ pub(crate) async fn own_vps_claim(
         return Err("own_vps_claim_refused");
     }
     let expected = scopes.active().map_err(|_| "own_vps_claim_refused")?;
+    let account_id = crate::auth_store::authenticated_account_id(&app, &keys).await?;
+    if crate::account_scope::scope_of_authenticated(account_id.as_bytes()) != expected {
+        return Err("own_vps_claim_refused");
+    }
     let scope_state = scopes.inner().clone();
     let worker_expected = expected.clone();
     let result = tauri::async_runtime::spawn_blocking(move || {
         let _scope = scope_state.lock_expected(&worker_expected).map_err(|_| "own_vps_claim_refused")?;
-        claim_own_vps_impl(&app, &worker_expected, &request)
+        claim_own_vps_impl(&app, &worker_expected, &account_id, &request)
     })
     .await
     .unwrap_or(Err("own_vps_claim_unreachable"));
@@ -2568,6 +2576,31 @@ mod tests {
             fs::remove_file(dir.join(file)).unwrap();
         }
         let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn the_claim_request_carries_the_confirmation_and_nothing_the_page_could_say_about_the_account() {
+        let ok: OwnVpsClaimRequest = serde_json::from_value(json!({"confirmed": true})).unwrap();
+        assert!(ok.confirmed);
+        // an id sent by the page is refused, whichever name it comes with
+        for field in ["userId", "user_id", "accountId", "scope", "host"] {
+            let mut body = json!({"confirmed": true});
+            body[field] = json!("a".repeat(32));
+            assert!(serde_json::from_value::<OwnVpsClaimRequest>(body).is_err(), "{field}");
+        }
+        assert!(serde_json::from_value::<OwnVpsClaimRequest>(json!({})).is_err(), "no confirmation: no request");
+    }
+
+    #[test]
+    fn the_claim_asks_the_backend_for_the_account_and_ties_it_to_the_active_scope() {
+        let source = include_str!("existing_team_runtime.rs");
+        let command = &source[source.find("pub(crate) async fn own_vps_claim(").unwrap()..];
+        let command = &command[..command.find("
+}
+").unwrap()];
+        assert!(command.contains("authenticated_account_id(&app, &keys)"), "the account comes from the verified session");
+        assert!(command.contains("scope_of_authenticated(account_id.as_bytes()) != expected"), "and is the active scope's");
+        assert!(command.contains("claim_own_vps_impl(&app, &worker_expected, &account_id, &request)"));
     }
 
     #[test]

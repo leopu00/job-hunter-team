@@ -4,8 +4,9 @@ import { teamStatusErrorCode } from "./existing-team-status";
 /**
  * «This VPS is mine» (native command own_vps_claim, existing_team_runtime.rs). For a VPS the app set up
  * before it started to mark them: the person confirms it in the page's dialog, and the native side checks
- * with the VPS itself that it answers as this account's team before it writes the mark. The page sends
- * the account's id and the confirmation, never a host, a key or a path.
+ * with the VPS itself that it answers as this account's team before it writes the mark. The account is
+ * the one whose session the native side holds: the page sends the confirmation and nothing else, never an
+ * id, a host, a key or a path.
  */
 const COMMAND = "own_vps_claim";
 
@@ -25,9 +26,9 @@ export function pickOwnVpsState(value: unknown): OwnVpsState | null {
 }
 
 /** Only after the person confirmed it in the dialog. */
-export async function claimOwnVps(userId: string): Promise<{ ok: true } | { ok: false; code: string }> {
+export async function claimOwnVps(): Promise<{ ok: true } | { ok: false; code: string }> {
   try {
-    await invoke<unknown>(COMMAND, { request: { userId, confirmed: true } });
+    await invoke<unknown>(COMMAND, { request: { confirmed: true } });
     return { ok: true };
   } catch (error) {
     return { ok: false, code: teamStatusErrorCode(error) };
