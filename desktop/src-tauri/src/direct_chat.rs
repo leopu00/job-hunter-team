@@ -823,9 +823,16 @@ fn run_python(
 /// with the arguments given. Every one was checked by the chat's argument list, and is quoted.
 fn remote_wrapper_command(arguments: &[String]) -> String {
     let checks = REMOTE_PYTHON_STDIN.strip_suffix("desktop-chat python").unwrap_or(REMOTE_PYTHON_STDIN);
+    let checks = checks.strip_suffix(r#"exec "$JHT_BIN" "#).unwrap_or(checks);
     let quoted: Vec<String> = arguments.iter().map(|argument| format!("'{argument}'")).collect();
-    format!("{checks}{}", quoted.join(" "))
+    // A wrapper without the chat marker does not know the actions: 64 says exactly that, and only 64
+    // sends the caller back to the older path. Any other exit (2 included, which python3 gives when the
+    // image has no agent_chat.py) is the script's, and is told as such.
+    format!(r#"{checks}grep -Fqx 'JHT_DESKTOP_CHAT_FIXED=1' "$JHT_BIN" || exit {UNKNOWN_ACTION}; exec "$JHT_BIN" {}"#, quoted.join(" "))
 }
+
+/// The exit that says «the host's wrapper does not have the chat actions».
+const UNKNOWN_ACTION: i32 = 64;
 
 /// A pinned team's chat goes through the fixed script of the container; a local team and a VPS
 /// that was never pinned go through the host's wrapper, which runs the same script (and answers 2,
@@ -857,8 +864,8 @@ fn chat_failure(code: i32, default: &'static str) -> &'static str {
     }
 }
 
-/// The chat through the host's wrapper. `None`: the wrapper answered 2, so it is older than the
-/// chat actions, and the caller keeps the older path (the app and a VPS are updated apart).
+/// The chat through the host's wrapper. `None`: the wrapper has no chat marker (exit 64), so it is
+/// older than the chat actions, and the caller keeps the older path (the app and a VPS are updated apart).
 fn run_wrapper_chat(
     connection: &Connection,
     operation: ChatOperation<'_>,
@@ -872,12 +879,12 @@ fn run_wrapper_chat(
     wrapper_outcome(result, default)
 }
 
-/// What the wrapper's exit says: done, «I do not know that action» (an older wrapper: 2), or a
-/// failure of the script behind it.
+/// What the wrapper's exit says: done, «this wrapper has no chat actions» (64, and only 64), or a
+/// failure of the script behind it. A 2 is python3's for a missing file, an image older than the chat.
 fn wrapper_outcome(result: ProcessResult, default: &'static str) -> Result<Option<ProcessResult>, DirectChatError> {
     match result.code {
         0 => Ok(Some(result)),
-        2 => Ok(None),
+        UNKNOWN_ACTION => Ok(None),
         code => Err(failure(chat_failure(code, default))),
     }
 }
@@ -1280,11 +1287,12 @@ pub(crate) fn teardown(state: &DirectChatState) {
 #[cfg(test)]
 mod tests {
     use super::{
-        chat_failure, connection_config_path_at, wrapper_outcome, delivery_command, hex_encode, link_allows_writing,
+        chat_failure, connection_config_path_at, remote_wrapper_command, wrapper_outcome, delivery_command, hex_encode, link_allows_writing,
         parse_json, probe, session_for, status, valid_agent, verify_migration_local_host_at, window_may_write,
-        Connection, DirectChatPage, ProcessResult, REMOTE_CONTAINER_PROBE, REMOTE_PYTHON_STDIN,
+        Connection, DirectChatPage, ProcessResult, REMOTE_CONTAINER_PROBE, REMOTE_PYTHON_STDIN, UNKNOWN_ACTION,
     };
     use crate::runtime_host::{ExecutionHost, ValidatedHost};
+    use std::{fs, process::Command};
 
     #[test]
     fn every_exit_of_the_chat_script_is_a_code_of_the_catalog_and_the_link_losing_is_its_own() {
@@ -1313,10 +1321,49 @@ mod tests {
     fn an_older_wrapper_that_does_not_know_the_chat_actions_keeps_the_older_path() {
         let answered = |code: i32| ProcessResult { code, stdout: b"{}".to_vec() };
         assert!(matches!(wrapper_outcome(answered(0), "read_failed"), Ok(Some(_))), "the script ran");
-        assert!(matches!(wrapper_outcome(answered(2), "read_failed"), Ok(None)), "2: no such action, keep the older path");
-        for (code, expected) in [(124, "agent_busy"), (122, "agent_not_running"), (129, "chat_runtime_outdated"), (1, "read_failed"), (255, "tunnel_unavailable")] {
+        assert!(matches!(wrapper_outcome(answered(64), "read_failed"), Ok(None)), "64: no chat actions, keep the older path");
+        for (code, expected) in [(2, "chat_runtime_outdated"), (124, "agent_busy"), (122, "agent_not_running"), (129, "chat_runtime_outdated"), (1, "read_failed"), (255, "tunnel_unavailable")] {
             assert_eq!(wrapper_outcome(answered(code), "read_failed").err().map(|error| error.code), Some(expected), "exit {code}");
         }
+    }
+
+    #[test]
+    fn the_remote_preamble_tells_a_wrapper_without_the_chat_marker_by_name_and_never_by_the_scripts_exit() {
+        use std::os::unix::fs::PermissionsExt;
+        static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+        let dir = std::env::temp_dir().join(format!(
+            "jht-chat-preamble-{}-{}",
+            std::process::id(),
+            NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+        ));
+        fs::create_dir_all(&dir).unwrap();
+        let command = remote_wrapper_command(&["desktop-chat".to_owned(), "read".to_owned(), "capitano".to_owned()]);
+        let run_with = |wrapper: &str| {
+            let binary = dir.join("jht");
+            let _ = fs::remove_file(&binary);
+            fs::write(&binary, wrapper).unwrap();
+            fs::set_permissions(&binary, fs::Permissions::from_mode(0o700)).unwrap();
+            let done = Command::new("sh")
+                .arg("-c")
+                .arg(&command)
+                .env("PATH", format!("{}:/usr/bin:/bin", dir.display()))
+                .env("HOME", &dir)
+                .output()
+                .unwrap();
+            (done.status.code(), String::from_utf8_lossy(&done.stdout).into_owned())
+        };
+        let protocol = "JHT_DESKTOP_CHAT_PROTOCOL=1\n";
+        let marker = "JHT_DESKTOP_CHAT_FIXED=1\n";
+        // a wrapper with the chat actions runs, with exactly the arguments given
+        assert_eq!(
+            run_with(&format!("#!/bin/sh\n{protocol}{marker}printf 'ran:%s' \"$*\"\n")),
+            (Some(0), "ran:desktop-chat read capitano".to_owned())
+        );
+        // one that does not have them is told apart by its missing marker: 64, and nothing ran
+        assert_eq!(run_with(&format!("#!/bin/sh\n{protocol}printf 'ran'\n")), (Some(UNKNOWN_ACTION), String::new()));
+        // the script's own 2 (python3: no such file, an image older than the chat) is not «no chat actions»
+        assert_eq!(run_with(&format!("#!/bin/sh\n{protocol}{marker}exit 2\n")), (Some(2), String::new()));
+        let _ = fs::remove_dir_all(&dir);
     }
 
     #[test]
