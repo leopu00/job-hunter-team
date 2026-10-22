@@ -91,11 +91,26 @@ def _workdir(tmp_path: Path, identity: bool = True, skills: bool = True) -> Path
 
 def _launch(tmp_path: Path, *, role: str = "scout", provider: str = "openai",
             auth: str = "subscription", harness: str | None = "pi",
-            agent_dir: Path | None = None) -> subprocess.CompletedProcess[str]:
-    """Run the launcher's provider-to-command chain and print FULL_CMD."""
+            agent_dir: Path | None = None,
+            role_models: dict | None = None) -> subprocess.CompletedProcess[str]:
+    """Run the launcher's provider-to-command chain and print FULL_CMD.
+
+    With `role_models`, the config's team.role_models goes through the
+    launcher's own override first, as on a real start.
+    """
     source = START_AGENT.read_text(encoding="utf-8")
     choose, compose = _launcher_blocks()
     agent_dir = agent_dir or _workdir(tmp_path)
+    override: list[str] = []
+    if role_models is not None:
+        config = tmp_path / "jht.config.json"
+        config.write_text(json.dumps({"team": {"role_models": role_models}}), encoding="utf-8")
+        override = [
+            _function(source, "jht_role_model_override"),
+            'MODE=""',
+            f"JHT_CONFIG_FILE='{config}'",
+            _block(source, "# Override per ruolo dal config", "# Nessun default implicito"),
+        ]
     script = "\n".join([
         "set -euo pipefail",
         f'source "{SPAWN_LIB}"',
@@ -105,6 +120,7 @@ def _launch(tmp_path: Path, *, role: str = "scout", provider: str = "openai",
         f'IFS="|" read -r session_prefix effort model_override <<< "$(get_agent_info {role})"',
         f"PROVIDER={provider}",
         f"AUTH_METHOD={auth}",
+        *override,
         # What the provider branch left behind: the harness of today.
         'CLI_BIN=codex',
         'CLI_ARGS="--yolo --model gpt-5.6-terra"',
@@ -119,6 +135,26 @@ def _launch(tmp_path: Path, *, role: str = "scout", provider: str = "openai",
         env[f"JHT_AGENT_HARNESS_{role.upper()}"] = harness
     return subprocess.run([_bash(), "-c", script], capture_output=True, text=True,
                           check=False, env=env)
+
+
+def test_pi_takes_the_class_and_effort_the_config_gives_the_role(tmp_path: Path) -> None:
+    """team.role_models reaches pi as it reaches Codex: luna and medium, not the map's terra and high."""
+    result = _launch(tmp_path, role_models={"scout": {"model": "luna", "effort": "medium"}})
+    assert result.returncode == 0, result.stderr
+    _env, argv = _argv(result.stdout.strip())
+
+    assert argv[0] == "pi"
+    assert _after(argv, "--model") == "gpt-5.6-luna"
+    assert _after(argv, "--thinking") == "medium"
+
+
+def test_pi_keeps_the_role_map_when_the_config_names_another_role(tmp_path: Path) -> None:
+    result = _launch(tmp_path, role_models={"scorer": {"model": "luna"}})
+    assert result.returncode == 0, result.stderr
+    _env, argv = _argv(result.stdout.strip())
+
+    assert _after(argv, "--model") == "gpt-5.6-terra"
+    assert _after(argv, "--thinking") == "high"
 
 
 def _argv(full_cmd: str) -> tuple[dict[str, str], list[str]]:
