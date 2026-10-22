@@ -94,6 +94,24 @@ SEARCHED = ("*.py", "*.js", "*.ts", "*.tsx", "*.sql", "*.mjs")
 TEST_SUFFIXES = (".test.ts", ".test.tsx", ".test.js", ".test.mjs")
 
 
+# Escluderli per suffisso regge solo se il codice di prodotto non li IMPORTA:
+# uno scrittore vero chiamato `*.test.ts` e importato da una rotta sparirebbe
+# dal censimento. Si cerca la forma dell'import (from, import, require,
+# import(), import.meta.glob), non il nome: molti commenti citano i test per
+# nome. L'estensione puo' mancare (`./x.test`) e la query di Vite (`?raw`) pure.
+JS_SOURCES = ("*.js", "*.mjs", "*.cjs", "*.jsx", "*.ts", "*.tsx")
+_TEST_MODULE = (
+    r"[^'\"`\n]*\.test(?:"
+    + "|".join(re.escape(s[len(".test"):]) for s in TEST_SUFFIXES)
+    + r")?(?:\?[^'\"`\n]*)?"
+)
+TEST_IMPORT = re.compile(
+    r"(?:\b(?:from|import)\s*['\"]" + _TEST_MODULE + r"['\"]"
+    r"|\b(?:require|import|import\.meta\.glob)\s*\(\s*['\"`]" + _TEST_MODULE + r"['\"`])"
+)
+ANY_IMPORT = re.compile(r"\b(?:from|import)\s*['\"]|\brequire\s*\(\s*['\"]")
+
+
 def _tracked(pattern: str) -> list[str]:
     out = subprocess.check_output(
         ["git", "-C", str(ROOT), "ls-files", pattern], text=True
@@ -141,6 +159,57 @@ def test_il_censimento_non_nomina_scrittori_che_non_esistono_piu():
     """Una riga di censimento stantia sorveglia un file che nessuno esegue."""
     spariti = sorted(set(WRITERS) - FOUND)
     assert not spariti, spariti
+
+
+def test_nessun_file_di_prodotto_importa_un_modulo_di_test():
+    """L'esclusione per suffisso vale solo se i `*.test.*` restano test.
+
+    Se un file di prodotto ne importa uno, quel modulo gira nel prodotto ma
+    il censimento non lo legge: uno scrittore di `scores` li' dentro non
+    comparirebbe mai sopra.
+    """
+    importatori = {}
+    import_letti = 0
+    for pattern in JS_SOURCES:
+        for rel in _tracked(pattern):
+            try:
+                body = (ROOT / rel).read_text(encoding="utf-8", errors="ignore")
+            except OSError:
+                continue
+            import_letti += len(ANY_IMPORT.findall(body))
+            trovati = [m.group(0) for m in TEST_IMPORT.finditer(body)]
+            if trovati:
+                importatori[rel] = trovati
+    # Senza import letti il controllo sarebbe verde su un albero vuoto.
+    assert import_letti >= 100, import_letti
+    assert not importatori, (
+        f"codice di prodotto che importa moduli di test: {importatori}. "
+        f"Il censimento degli scrittori salta i `*.test.*` "
+        f"({', '.join(TEST_SUFFIXES)}): quel che serve al prodotto va in un "
+        f"file senza il suffisso."
+    )
+
+
+@pytest.mark.parametrize(
+    "riga, importa",
+    [
+        ('import { scrivi } from "./scores.test";', True),
+        ("import { scrivi } from './scores.test.ts';", True),
+        ('export * from "../lib/scores.test.tsx";', True),
+        ('import "./setup.test.js";', True),
+        ('const m = await import("./scores.test.mjs");', True),
+        ("const m = require('./scores.test');", True),
+        ('const all = import.meta.glob("./**/*.test.ts");', True),
+        ('import raw from "./scores.test.ts?raw";', True),
+        ("// la guardia sta in `tests/js/tasks/scores.test.ts`", False),
+        ('import { a } from "./scores.testing";', False),
+        ('import { a } from "./latest";', False),
+        ('include: ["../../web/lib/**/*.test.ts"],', False),
+    ],
+)
+def test_la_forma_dell_import_di_un_test(riga, importa):
+    """Le forme che il controllo sopra riconosce, e i commenti che non deve prendere."""
+    assert bool(TEST_IMPORT.search(riga)) is importa
 
 
 @pytest.mark.parametrize(
