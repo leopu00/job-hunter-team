@@ -47,12 +47,19 @@ STANDARD_GATES = (
 )
 
 
-# The single door of the actions the site does for the user (JHT web-capace). `requestAction` checks the
-# session itself (no user = 401, before any database call), the origin, the confirmation and the limits, so
-# a route that hands its request to it has a gate. It counts as one ONLY if the route really CALLS it:
-# an import, a name in a comment or a string that merely mentions it gates nothing.
-REQUEST_ACTION_IMPORT = re.compile(r"""from\s+["']@/lib/request-action["']""")
-REQUEST_ACTION_CALL = re.compile(r"\brequestAction\s*\(")
+# The single door of the actions the site does for the user (JHT web-capace). Two ways in, both ending in
+# the database function `request_action`, which decides the user (auth.uid(), no user = refused before any
+# effect), the origin of the call, the confirmation and the limits:
+#   - `requestAction` (lib/request-action.ts): the route hands over its whole request;
+#   - `callDoor` (lib/door-rpc.ts): the route, or a helper of the route, calls the function with the
+#     client of the user's session (the desktop uses the same one).
+# Either counts as a gate ONLY if the route really USES it: it imports the name from the module that
+# defines it AND calls it in code. An import that is never used, a name in a comment or in a string, a call
+# to another function whose name contains it, or a call to one imported from elsewhere gates nothing.
+DOOR_GATES = {
+    "requestAction": "@/lib/request-action",
+    "callDoor": "@/lib/door-rpc",
+}
 
 
 def _code_only(source):
@@ -82,15 +89,29 @@ def _code_only(source):
     return "".join(out)
 
 
-def calls_request_action(source):
-    """True when the route imports `requestAction` from the door AND calls it in code."""
-    return bool(REQUEST_ACTION_IMPORT.search(source)) and bool(
-        REQUEST_ACTION_CALL.search(_code_only(source))
+def _uses_gate(source, name, module):
+    imported = re.search(
+        r"import\s*\{[^}]*\b" + re.escape(name) + r"\b[^}]*\}\s*from\s*[\"']" + re.escape(module) + r"[\"']",
+        source,
     )
+    return bool(imported) and bool(re.search(r"\b" + re.escape(name) + r"\s*\(", _code_only(source)))
+
+
+def calls_the_door(source):
+    """True when the route imports a way into the door from its module AND calls it in code."""
+    return any(_uses_gate(source, name, module) for name, module in DOOR_GATES.items())
+
+
+def calls_request_action(source):
+    return _uses_gate(source, "requestAction", DOOR_GATES["requestAction"])
+
+
+def calls_call_door(source):
+    return _uses_gate(source, "callDoor", DOOR_GATES["callDoor"])
 
 
 def has_gate(source):
-    return any(token in source for token in STANDARD_GATES) or calls_request_action(source)
+    return any(token in source for token in STANDARD_GATES) or calls_the_door(source)
 
 
 def _routes():
@@ -208,3 +229,37 @@ def test_the_routes_that_hand_over_to_the_door_really_call_it():
         if not (API_ROOT / rel).exists() or not calls_request_action((API_ROOT / rel).read_text(encoding="utf-8"))
     ]
     assert not not_calling, "route che non chiamano requestAction:\n  " + "\n  ".join(not_calling)
+
+
+def test_call_door_is_a_gate_only_when_the_route_uses_it():
+    """Same rigour as for requestAction: imported from the door's module and called in code."""
+    imp = 'import { callDoor } from "@/lib/door-rpc";\n'
+    called = imp + "export async function POST() { return callDoor(client, { action: 'x', level: 'L1' }); }\n"
+    assert calls_call_door(called) and calls_the_door(called) and has_gate(called)
+    # with other names in the same import
+    multi = 'import { DOOR_REFUSAL_STATUS, callDoor } from "@/lib/door-rpc";\nexport async function POST() { return callDoor(c, {}); }\n'
+    assert calls_call_door(multi)
+    # imported, never called
+    assert not calls_call_door(imp + "export async function POST() { return new Response(null); }\n")
+    # the constant imported, the function not
+    assert not calls_call_door(
+        'import { DOOR_REFUSAL_STATUS } from "@/lib/door-rpc";\nexport async function POST() { return callDoor(c, {}); }\n'
+    )
+    # called but imported from somewhere else, or not imported
+    assert not calls_call_door('import { callDoor } from "@/lib/other";\nexport async function POST() { return callDoor(c, {}); }\n')
+    assert not calls_call_door("export async function POST() { return callDoor(c, {}); }\n")
+    # only named in a comment, a block comment, a string or a template
+    for mention in (
+        "// return callDoor(c, {});\n",
+        "/* callDoor(c, {}) */\n",
+        'const t = "callDoor(c)";\n',
+        "const t = `callDoor(c)`;\n",
+    ):
+        assert not calls_call_door(imp + mention + "export async function POST() {}\n")
+    # a function whose name merely contains it
+    assert not calls_call_door(imp + "export async function POST() { return mycallDoor(c, {}); }\n")
+    # the two ways do not stand in for each other
+    assert not calls_request_action(called)
+    assert not calls_call_door(
+        'import { requestAction } from "@/lib/request-action";\nexport async function POST(r) { return requestAction(r, {}); }\n'
+    )
