@@ -3,8 +3,9 @@
 Job Hunter Team (JHT) has one containerized team and more than one place to
 run it. The desktop application stays on the computer you use, and the
 container can run on that same computer or on a Linux host reached over SSH.
-On macOS and Linux the local container runs in Docker; on Windows 0.4 it runs
-in Podman inside WSL, installed by the app.
+The desktop app runs the local container in Podman on macOS (installed with
+Homebrew) and in Docker on Linux; on Windows 0.4 it runs in Podman inside WSL,
+installed by the app.
 
 This guide compares three deployment paths. It does not compare the native
 application with the command-line interface (CLI): those are two ways to
@@ -28,20 +29,21 @@ host.
    Optional cloud sync can show supported mirrored data in the browser, but it
    does not make the remote host reachable over SSH.
 
-If you are unsure, start locally. Moving later is possible, but read [Moving an existing
-team](#moving-an-existing-team) before relying on the automated migration flow.
+If you are unsure, start locally. The desktop app does not move a team between
+hosts yet: read [Moving an existing team](#moving-an-existing-team) before
+choosing.
 
 ## At a glance
 
 | | Local PC | Dedicated PC on the LAN | VPS |
 |---|---|---|---|
-| **Current product path** | Supported on macOS and Linux (Docker) and on Windows 0.4 (Podman inside WSL) | Existing SSH transport; advanced topology, not separately validated as a guided path | Supported remote runtime on every desktop platform |
+| **Current product path** | Supported on macOS (Podman) and on Windows 0.4 (Podman inside WSL); Linux (Docker) is built but not tested yet | Existing SSH transport; advanced topology, not separately validated as a guided path | Supported remote runtime on every desktop platform |
 | **Where the team runs** | Your everyday computer | A Linux computer you own or control | A Linux virtual server from an infrastructure provider |
-| **How the desktop reaches it** | Direct `docker` commands (on Windows, forwarded to Podman) | SSH over your network | SSH over the internet |
+| **How the desktop reaches it** | The `jht` command of the local runtime | SSH over your network | SSH over the internet |
 | **Must your everyday PC stay on?** | Yes | No; only while you use the desktop | No; only while you use the desktop |
-| **What must stay available?** | Your PC, Docker and its network connection | Dedicated PC, Docker, power and the LAN | VPS, Docker, provider account and network |
+| **What must stay available?** | Your PC, its container runtime and network connection | Dedicated PC, Podman, power and the LAN | VPS, Podman, provider account and network |
 | **Where persistent workspace data lives** | On your PC | On the dedicated PC | On the VPS provider's storage |
-| **Extra operating work** | Keep Docker and the PC healthy | Administer Linux, SSH, Docker, power, updates and backups | Administer Linux, SSH, Docker, provider billing, updates and backups |
+| **Extra operating work** | Keep the container runtime and the PC healthy | Administer Linux, SSH, Podman, power, updates and backups | Administer Linux, SSH, Podman, provider billing, updates and backups |
 | **Cost categories** | Existing hardware, power, internet and AI-provider subscription | Hardware, power, internet, maintenance and AI-provider subscription | VPS service, optional provider add-ons and AI-provider subscription |
 
 The project does not sell the server or AI subscription. Prices vary by
@@ -52,8 +54,8 @@ supported AI accounts without turning an old price into a deployment promise.
 
 ## Requirements shared by all paths
 
-- **Docker is the runtime boundary.** The supported team runs in the JHT
-  container. The container publishes no network port; the desktop controls a
+- **The container is the runtime boundary.** The supported team runs in the
+  JHT container. The container publishes no network port; the desktop controls a
   local runtime directly and a remote runtime through SSH.
 - **A supported AI-provider subscription is separate.** JHT uses the selected
   provider's official CLI under your account. It does not include or resell
@@ -61,14 +63,16 @@ supported AI accounts without turning an old price into a deployment promise.
 - **A host choice is not an offline mode.** Agents fetch job information, and
   the selected provider can process prompts, profile or CV context needed for
   the work. Review that provider's current terms and privacy policy.
-- **Cloud pairing is optional for the runtime and native setup path.** Without
+- **Cloud pairing is optional for a local team and for the CLI.** Without
   it, the team can still run on its host. With it, supported profile, job and
   team records are synchronized to the hosted dashboard. On a host marked as
   a VPS, the interactive CLI wizard offers pairing before provider setup, but
   it can be skipped; a failed `jht cloud login` also leaves provider setup free
   to continue. Pairing can be retried later with the same command. The
-  dashboard is not a local web server and does not replace the SSH connection.
-- **Plan for the Docker image and persistent data.** No universal local disk
+  desktop app pairs a new team on a VPS with the Google account you signed in
+  with. The dashboard is not a local web server and does not replace the SSH
+  connection.
+- **Plan for the container image and persistent data.** No universal local disk
   minimum has been measured. Leave room for the image, runtime state, uploaded
   documents and generated application files, and monitor growth on every
   host.
@@ -80,15 +84,16 @@ desktop, container, SSH and optional-cloud boundaries.
 
 Choose this when you want the least infrastructure and can leave your computer
 awake while the agents work. On Windows 0.4 the team runs in Podman inside WSL;
-Kimi is not supported yet when the team runs on this computer on Windows.
+Kimi is not available in the Windows app yet.
 
 ### What you need
 
-- A supported desktop release: Linux x64, macOS (Intel 11 or newer; Apple
-  silicon 13 or newer) or Windows x64.
-- On macOS and Linux, Docker installed and running; the native setup guide
-  handles the supported runtime choices. On Windows, WSL enabled: the app
-  installs Podman and the rest, and Docker Desktop is not needed.
+- A supported desktop release: Linux x64, macOS (one universal build for Intel
+  and Apple silicon) or Windows x64.
+- On macOS, Homebrew: the app installs Podman with it. On Linux, Docker Engine
+  and its Compose plugin installed before you start; the Linux release is
+  built, but this setup has not been tested yet. On Windows, WSL enabled: the
+  app installs Podman and the rest, and Docker Desktop is not needed.
 - About **8 GB of RAM available before starting the team** for comfortable
   local use. This is a measured recommendation, not a universal minimum.
 - Enough unmeasured disk headroom for the image and your data.
@@ -96,18 +101,16 @@ Kimi is not supported yet when the team runs on this computer on Windows.
 ### Availability and operations
 
 The container uses `restart: unless-stopped`, so it can return after a normal
-host reboot once Docker is available. It cannot work while the computer is
-powered off or asleep, while Docker is stopped, or while its required network
-services are unavailable. When agents are active and you close the desktop,
-the application asks whether to stop the team or leave it working. Choose the
-explicit **QUIT · THE TEAM KEEPS WORKING** path if you want only the window to
-close; the stop choices shut down the local team and container. If no agents
-are active, closing the native desktop stops the local container without that
-choice. By contrast, finishing a CLI command or closing its terminal does not
-stop the container; use the documented lifecycle command when you intend to
-stop it.
+host reboot once its container runtime is running. On Windows a scheduled task
+turns the JHT Podman machine back on when you sign in, and a service in that
+machine keeps the team running while the app is closed. The team cannot work
+while the computer is powered off or asleep, while its runtime is stopped, or
+while its required network services are unavailable. Closing the desktop app
+or a CLI terminal does not stop the container; use the documented lifecycle
+command when you intend to stop it.
 
-You operate the computer, Docker, updates, disk space and backups. There is no
+You operate the computer, the container runtime, updates, disk space and
+backups. There is no
 separate hosting invoice from JHT, but the computer still uses power, internet
 and the AI subscription you chose.
 
@@ -126,32 +129,33 @@ Continue with the [Quickstart](QUICKSTART.md).
 Choose this when you already control a spare Linux computer, want the team off
 your everyday PC, and are comfortable administering the host yourself.
 
-The current desktop does **not** have a dedicated-PC wizard. Its remote backend
-accepts a DNS hostname or IPv4 address and uses OpenSSH, so the same controls
-labelled **Settings → Connect VPS** can address a reachable Linux machine on a
+The current desktop does **not** have a dedicated-PC wizard. Its VPS setup
+takes a hostname or IP address, an SSH port and an SSH user and uses OpenSSH,
+so the same **VPS server** choice can address a reachable Linux machine on a
 LAN. This transport is implemented, but this exact topology has not been
 separately validated end to end as a guided release path. Treat it as advanced
 operation rather than plug-and-play discovery.
 
 ### What you need
 
-- A dedicated x64 Linux host reachable from the desktop over a trusted network
-  on the standard SSH port **22**. The current native host field does not
-  accept a custom port.
-- Docker support on that host and enough disk for the image and persistent
-  data.
-- SSH key authentication and an OpenSSH client on the desktop computer.
-- A remote account that is `root`, has passwordless `sudo`, or is already
-  allowed to run Docker. The desktop verifies one of those conditions.
-- A DNS hostname or IPv4 address. The current input and transfer path do not
-  support IPv6 addresses or `host:port` values.
+- A dedicated x64 Linux host reachable from the desktop over SSH on a trusted
+  network.
+- Rootless Podman support on that host and enough disk for the image and
+  persistent data.
+- SSH key authentication, an ed25519 host key, and an OpenSSH client on the
+  desktop computer.
+- A remote account that is not `root`, with passwordless `sudo` or with
+  Podman already prepared for it, as described in the
+  [native VPS setup guide](VPS-SETUP-WIZARD.md).
+- A Google sign-in in the desktop app, which pairs a new remote team with
+  your account.
 - Capacity comparable to the local recommendation unless you measure your own
   workload. There is no separate dedicated-PC benchmark or universal minimum
   to quote.
 
 ### Availability and operations
 
-The dedicated PC, Docker and the LAN must remain available. Your everyday PC
+The dedicated PC, Podman and the LAN must remain available. Your everyday PC
 may be off while the container works, but you need it and a working SSH path
 to use the native desktop directly. Closing the desktop does not stop the
 remote container.
@@ -162,7 +166,7 @@ just to imitate a VPS. If you need access away from home or the office, operate
 a secure network path yourself or choose a VPS.
 
 You are responsible for the Linux installation, SSH configuration and host-key
-verification, Docker, power, updates, backups and disk monitoring. Existing
+verification, Podman, power, updates, backups and disk monitoring. Existing
 hardware may avoid a VPS bill, but it does not remove hardware, electricity,
 network or maintenance costs.
 
@@ -193,13 +197,12 @@ native desktop or install through the CLI.
   2 vCPU, 80 GB SSD and 2 GB preventive swap**. This is a dedicated-server
   baseline, not a claim that every workload or Linux distribution behaves the
   same way.
-- SSH key authentication from your computer.
-- For native desktop control, SSH on the standard port **22**. The current
-  native host field does not accept a custom port. A terminal-only operator
-  can configure their own SSH client separately, but that does not add custom
-  port support to the desktop.
-- `root`, passwordless `sudo`, or an account already allowed to run Docker for
-  a fresh prepare/connect flow.
+- SSH key authentication from your computer, and an ed25519 host key on the
+  server. The desktop asks for the SSH port.
+- For the desktop app, a normal user that is not `root`, with passwordless
+  `sudo` or with rootless Podman already prepared, and a Google sign-in in the
+  app for a new team. The CLI path in [VPS-SETUP.md](VPS-SETUP.md) has its own
+  requirements.
 - Outbound HTTPS for installation, AI-provider authorization, job sources and
   any optional cloud features.
 - A supported AI-provider subscription in addition to the VPS account.
@@ -208,12 +211,13 @@ native desktop or install through the CLI.
 
 The container can continue after the desktop closes and uses
 `restart: unless-stopped` after normal host restarts. Availability still
-depends on the VPS provider, account and billing state, host health, Docker,
-network access and the services the agents call. “VPS” does not mean managed
+depends on the VPS provider, account and billing state, host health, the
+container runtime, network access and the services the agents call. “VPS” does not mean managed
 by the JHT project.
 
 You choose the provider, region and optional backup products, and you operate
-access control, operating-system updates, Docker, storage, monitoring,
+access control, operating-system updates, the container runtime, storage,
+monitoring,
 recovery and eventual deletion. Ask the provider what shutdown, suspension and
 server deletion do to billing and retained data. Check current prices directly;
 none are stable enough to embed here.
@@ -231,21 +235,21 @@ Use the [native setup guide](VPS-SETUP-WIZARD.md) or the
 
 ## Moving an existing team
 
-The native desktop includes local-to-remote, remote-to-remote and
-remote-to-local migration flows. They stop the source, transfer the persistent
-workspace, verify the archive and preserve a destination backup.
+The desktop app does not move a team from one host to another yet. What it
+does:
 
-There is an important current limit: the automated remote migration scripts
-still use root-owned paths such as `/root/.jht`. A fresh remote prepare/connect
-can use `root`, passwordless `sudo`, or an account allowed to run Docker, but
-**automated migration to or from a non-root remote account is not currently
-implemented**. Do not treat a successful SSH verification as proof that this
-migration variant is supported. Use a root-based remote destination or perform
-a separately reviewed manual migration until that code is changed and tested.
+- it connects to a team already running on a VPS without reinstalling or
+  restarting it;
+- with a local profile, it imports the confirmed profile from a VPS into a new
+  local setup;
+- on a VPS where an earlier installation runs the team with Docker, it does not
+  switch the team to Podman: nothing is moved or deleted.
 
-After a successful move, do not run both copies as one team. Confirm the new
-host, data and provider login before retiring the old host, and delete old
-copies according to the retention rules you chose.
+Moving the persistent workspace (`~/.jht` and `~/Documents/Job Hunter Team`)
+by hand is outside the guided path and needs its own review. After a move, do
+not run both copies as one team. Confirm the new host, data and provider login
+before retiring the old host, and delete old copies according to the retention
+rules you chose.
 
 ## What is not implemented for you
 
@@ -256,7 +260,7 @@ JHT currently does not:
 - configure router port forwarding, a VPN, an SSH tunnel or Wake-on-LAN;
 - make a remote host reachable through cloud pairing;
 - provide a separately validated dedicated-PC setup wizard;
-- automate migration to or from a non-root remote account; or
+- move a team between hosts from the desktop app; or
 - guarantee uptime, provider capacity, a fixed monthly price or a universal
   resource minimum.
 

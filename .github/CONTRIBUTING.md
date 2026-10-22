@@ -111,6 +111,7 @@ Rules:
 - [ ] `npm run format:check` passes (from repo root)
 - [ ] `npm test` passes (in `tests/js/`)
 - [ ] `python -m pytest tests/ -q -m "not production"` passes (from repo root — same command CI runs; the `production` marker is for post-deploy smoke tests against the live site)
+- [ ] `npm --prefix desktop test`, `npm --prefix desktop run build` and `cargo test --manifest-path desktop/src-tauri/Cargo.toml --locked` pass, if you touched `desktop/` (after `npm --prefix shared ci --ignore-scripts`: the desktop imports modules from `shared/`)
 - [ ] `game/tools/run.sh test gate` passes, if you touched `game/` (needs `godot` on `PATH`)
 - [ ] `pre-commit run --all-files` passes (security hooks: secrets, actionlint, zizmor, npm-audit-prod)
 - [ ] No sensitive files included (PDF, DB, credentials, personal data)
@@ -122,11 +123,13 @@ If your change introduces a design decision that isn't obvious from the diff (ne
 
 Load-bearing invariants live in ADRs — breaking them breaks the rest of the system.
 
-## Working on the office (the desktop application)
+## Working on the desktop app
 
-The Godot office in [`game/`](../game/) is the only native desktop client. Its docs live next to the code in [`game/docs/`](../game/docs/): start from [`GDD.md`](../game/docs/GDD.md) (product design), [`FIRST-RUN.md`](../game/docs/FIRST-RUN.md) (the token-free first-run contract) and [`DATA-ADAPTER.md`](../game/docs/DATA-ADAPTER.md) (how scenes get team data without knowing about Supabase).
+The desktop app is the Tauri 2 shell in [`desktop/`](../desktop/): a React and Vite frontend in `desktop/src/` and the native side, in Rust, in `desktop/src-tauri/`. [`docs/guides/DESKTOP.md`](../docs/guides/DESKTOP.md) describes what the user sees; [`desktop/README.md`](../desktop/README.md) covers sign-in and the build environment.
 
-To run it you need `godot` on your `PATH`; from the repo root, `game/tools/run.sh play` opens the office and `game/tools/run.sh test gate` runs the self-test tier that has to be green before a PR (`all` adds the slower ones; the list itself lives in [`game/tools/test-matrix.txt`](../game/tools/test-matrix.txt)). Both re-import resources first and refuse to start while another Godot instance of the project is open.
+To run it from source you need Node 24, Rust and the Tauri 2 prerequisites for your system. From the repo root: `npm --prefix shared ci --ignore-scripts`, `npm --prefix desktop ci`, then `npm --prefix desktop run tauri:dev`. Before a PR, `npm --prefix desktop test` and `cargo test --manifest-path desktop/src-tauri/Cargo.toml --locked` have to be green: they are the gates the release workflow runs.
+
+The Godot office in [`game/`](../game/) is no longer the desktop client, but its code and self-tests are still in the repo. If you touch it, `game/tools/run.sh test gate` runs its self-test tier (needs `godot` on `PATH`; the list lives in [`game/tools/test-matrix.txt`](../game/tools/test-matrix.txt)).
 
 ## Working on agents
 
@@ -142,9 +145,12 @@ Note: the set of **supported agent CLIs** (Claude Code, Codex, Kimi) is closed b
 ## Cutting a release (maintainers)
 
 Releases are published by pushing a `vX.Y.Z` tag at the tested commit on the
-`production` branch. Bump the root `package.json`, `game/project.godot` and
-`game/export_presets.cfg` before tagging. Godot is the only native desktop
-artifact. The full checklist lives
+`production` branch. Before tagging, bump every version that
+`scripts/check-release-version.sh vX.Y.Z` checks (among them the `package.json`
+files and their locks, `desktop/src-tauri/tauri.conf.json` and `Cargo.toml`, a
+`CHANGELOG.md` section) and run it. The native desktop artifacts are the Tauri
+installers: the Windows `-setup.exe`, the macOS universal `.dmg`, and the Linux
+`.AppImage` and `.deb`. The full checklist lives
 in [`docs/internal/ops/release.md`](../docs/internal/ops/release.md).
 
 ## Code of conduct

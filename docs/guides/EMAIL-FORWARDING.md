@@ -203,5 +203,5 @@ Note the first shot is now the **Godot office**, not the retired Electron wizard
 ## 📚 Related
 
 - 🚀 [`QUICKSTART`](QUICKSTART.md) — install and first run
-- 🖥️ [`VPS-SETUP-WIZARD`](VPS-SETUP-WIZARD.md) — run the team on a VPS from the native office
+- 🖥️ [`VPS-SETUP-WIZARD`](VPS-SETUP-WIZARD.md) — run the team on a VPS from the desktop app
 - 🤖 [`docs/about/RESULTS`](../about/RESULTS.md) — case studies and metrics

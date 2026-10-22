@@ -8,22 +8,19 @@ the public videos are not yet published.
 
 ## Italiano (`it`)
 
-### Gioco (`#game`)
+### App desktop (`#game`)
 
-Il tutorial di gioco ti aiuta a esplorare l'ufficio nativo, a capire come il
-lavoro attraversa il team e a controllare un risultato prima di decidere cosa
-fare.
+Questo tutorial segue l'app desktop: prepara il team, mostra come il lavoro
+attraversa il team e come controllare un risultato prima di decidere cosa fare.
 
 #### Pianifica il setup
 
-Questo percorso parte dal download sul sito e termina con il team attivo: non
-presuppone che l'app desktop o Docker siano già configurati. Prevedi tempo
-prima di iniziare. In una prova end-to-end Linux + Docker misurata, dal doppio
-clic sull'app scaricata al completamento dell'onboarding e al pannello Docker
-post-onboarding sono trascorsi **32 minuti e 58 secondi**. La prova misurata
-ha poi raggiunto un blocco durante l'autorizzazione del provider a **54 minuti
-e 40 secondi** (`T0 + 54:40`). Hardware, velocità di download e Docker fanno
-variare il risultato, ma non è un'operazione da cinque minuti.
+Questo percorso parte dal download sul sito e termina quando il team è pronto e
+l'app apre la chat con l'Assistente. Non presuppone che l'app desktop o un
+motore di container siano già installati. Durante il primo setup l'app installa
+ciò che serve al team nell'ambiente che scegli e scarica l'immagine del team:
+quanto tempo serve dipende dalla connessione e dal computer. Tieni l'app aperta
+mentre lavora.
 
 #### Configura il team
 
@@ -32,37 +29,47 @@ variare il risultato, ma non è un'operazione da cinque minuti.
    è già selezionato: clicca una volta macOS, Windows o Linux per avviare il
    download della release corrente per quella piattaforma.
 2. **Apri il download per il tuo sistema.** Su Windows avvia
-   `job-hunter-team-windows-x64-setup.exe` per installare l'app, oppure apri
-   direttamente `job-hunter-team-windows-x64-portable.exe` se preferisci non
-   installarla; su macOS estrai `job-hunter-team.zip` e apri l'app;
-   su Linux estrai `job-hunter-team-linux-x64.tar.gz`, verifica che
-   `job-hunter-team.x86_64` sia autorizzato all'esecuzione e, se necessario,
-   abilita il permesso di esecuzione prima di avviarlo. Windows e Linux possono
-   mostrare un avviso: prosegui solo se il download viene dal sito ufficiale o
-   dalla release collegata.
-3. **Entra nell'ufficio.** Al primo avvio, scegli e conferma la lingua
-   dell'interfaccia prima della schermata iniziale: devi confermare la scelta,
-   English è preselezionato e l'app la salva per le aperture successive. Poi
-   inserisci il nome se vuoi ed entra nell'ufficio. Puoi esplorarlo prima del
-   setup: conversazioni e posizioni di esempio non avviano un team dal vivo né
-   usano un provider.
-4. **Apri la checklist.** Seleziona **Attiva team**. Su macOS o Linux scegli un
-   runtime locale o collega una VPS. Su Windows 0.4 il runtime locale è Podman
-   dentro WSL, installato dall'app (WSL deve essere già attivo), oppure collega
-   una VPS. Kimi non è ancora supportato quando il team gira su Windows.
-5. **Collega un provider.** Nel setup del Coordinatore scegli un provider in
-   abbonamento e il piano, poi completa l'autorizzazione nel terminale
-   integrato. Un link può aprirsi nel browser, ma codici e scelte restano nel
-   terminale dell'ufficio.
-6. **Completa il profilo.** Compila il profilo nativo: servono nome, email,
-   ruolo desiderato, località, esperienza, seniority, almeno due competenze e
-   almeno una lingua.
-7. **Imposta gli orari di lavoro.** Scegli quando il team può lavorare. La
-   checklist resta incompleta finché runtime, provider, profilo e orari non
-   sono tutti pronti.
-8. **Attiva il team.** Torna a **Attiva team** e completa le quattro porte. Il
-   Coordinatore avvia gli agenti e nell'ufficio arrivano risposte e posizioni
-   dal vivo.
+   `job-hunter-team-windows-x64-setup.exe`: installa l'app per il tuo utente.
+   Su macOS apri `job-hunter-team-macos-universal.dmg` e trascina l'app in
+   Applicazioni; è firmata con un Developer ID Apple e notarizzata da Apple. Su
+   Linux consenti a `job-hunter-team-linux-x64.AppImage` di essere eseguito
+   come programma e aprilo, oppure installa `job-hunter-team-linux-x64.deb` sui
+   sistemi basati su Debian. Windows e Linux possono mostrare un avviso:
+   prosegui solo se il download viene dal sito ufficiale o dalla release
+   collegata.
+3. **Scegli come iniziare.** L'app usa la lingua del sistema, oppure l'inglese
+   se non ha quella lingua. Seleziona **Continua con Google**, oppure **Usa in
+   locale**: inserisci un nome visualizzato, che resta su questo dispositivo, e
+   seleziona **Continua in locale**. Per preparare un nuovo team su una VPS
+   serve l'accesso con Google.
+4. **Scegli l'ambiente.** Seleziona **Inizia la configurazione**, poi **Questo
+   computer** o **Server VPS**. Su Windows 0.4 il team gira su questo computer
+   in Podman dentro WSL, installato dall'app: WSL deve essere già attivo e
+   Docker Desktop non serve. Su macOS l'app installa Podman con Homebrew, che
+   deve essere già installato; se manca, l'app lo dice prima di installare
+   qualsiasi cosa. Su Linux l'app usa Docker: installa Docker Engine e il suo
+   plugin Compose prima di iniziare, perché per installarli servono i permessi
+   di amministratore. La release per Linux è costruita, ma questo setup non è
+   ancora stato collaudato. Per una VPS inserisci indirizzo, utente SSH, porta
+   e file della chiave privata, che resta su questo computer.
+5. **Scegli il provider.** Seleziona Codex (consigliato), Claude o Kimi, poi
+   **Rivedi il setup**. Accedi con il tuo abbonamento più avanti nel setup: non
+   serve una chiave API. Kimi non è ancora disponibile nell'app per Windows.
+6. **Conferma e prepara la squadra.** L'ultima schermata riassume ambiente e
+   provider. Quando il team gira su questo computer con Windows, elenca anche
+   cosa installa l'app e come rimuoverlo in seguito. Seleziona **Prepara la
+   squadra** e tieni l'app aperta mentre prepara runtime, container e strumento
+   del provider. Per una VPS l'app mostra prima l'impronta SSH del server:
+   confermala solo se è uguale a quella mostrata dal tuo provider VPS.
+7. **Accedi al provider.** Quando la schermata dice che tocca a te, segui la
+   richiesta che mostra: il link di accesso del provider, un codice da inserire
+   nella pagina del provider o un campo per la risposta che il provider ti dà.
+8. **Conosci l'Assistente.** Quando provider, container e agenti sono
+   verificati, l'app dice che il team è pronto e apre la chat con l'Assistente,
+   che impara i tuoi obiettivi e le tue preferenze parlando con te. Se un passo
+   non riesce, la schermata ne dice la causa con **Riprova la preparazione** e
+   **Mostra il file del registro**; se l'app si chiude a metà, all'avvio
+   successivo propone **Riprendi la preparazione** o **Ricomincia da capo**.
 
 #### Esplora un team attivo
 
@@ -185,23 +192,21 @@ Quando il video sarà disponibile, potrai guardarlo come alternativa.
 
 ## Español (`es`)
 
-### Juego (`#game`)
+### Aplicación de escritorio (`#game`)
 
-El tutorial de juego te ayuda a explorar la oficina nativa, entender cómo el
-trabajo avanza por el equipo e inspeccionar un resultado antes de decidir qué
-hacer.
+Este tutorial sigue la aplicación de escritorio: prepara el equipo, muestra
+cómo avanza el trabajo por el equipo y cómo revisar un resultado antes de
+decidir qué hacer.
 
 #### Planifica la configuración
 
-Este recorrido comienza con la descarga del sitio y termina con el equipo
-activo; no presupone que la aplicación de escritorio ni Docker estén
-configurados. Reserva tiempo antes de empezar. En una ejecución end-to-end
-medida con Linux + Docker, desde el doble clic en la aplicación descargada
-hasta completar el onboarding y llegar al panel de configuración de Docker
-transcurrieron **32 minutos y 58 segundos**. La ejecución medida llegó después
-a un bloqueo de autorización del proveedor a los **54 minutos y 40 segundos**
-(`T0 + 54:40`). El hardware, la descarga y Docker cambian el resultado, pero
-no es una tarea de cinco minutos.
+Este recorrido empieza en la descarga del sitio web y termina cuando el equipo
+está listo y la aplicación abre el chat con el Asistente. No da por hecho que
+la aplicación de escritorio o un motor de contenedores ya estén instalados.
+Durante la primera configuración la aplicación instala lo que el equipo
+necesita en el entorno que elijas y descarga la imagen del equipo: cuánto tarda
+depende de tu conexión y de tu ordenador. Mantén la aplicación abierta mientras
+trabaja.
 
 #### Configura el equipo
 
@@ -210,38 +215,52 @@ no es una tarea de cinco minutos.
    ya está seleccionado: haz clic una vez en macOS, Windows o Linux para iniciar
    la descarga de la versión actual para esa plataforma.
 2. **Abre la descarga para tu sistema.** En Windows ejecuta
-   `job-hunter-team-windows-x64-setup.exe` para instalar la aplicación, o abre
-   directamente `job-hunter-team-windows-x64-portable.exe` si prefieres no
-   instalarla; en macOS descomprime `job-hunter-team.zip` y abre la
-   aplicación; en Linux extrae `job-hunter-team-linux-x64.tar.gz`, comprueba
-   que `job-hunter-team.x86_64` tenga permiso para ejecutarse y, si hace falta,
-   activa su permiso de ejecución antes de ejecutarlo. Windows y Linux pueden
-   mostrar un aviso: continúa solo si descargaste desde el sitio oficial o
-   desde la versión enlazada.
-3. **Entra en la oficina.** En el primer inicio, elige y confirma el idioma de
-   la interfaz antes de la pantalla inicial: debes confirmar la elección,
-   English está preseleccionado y la aplicación la guarda para las siguientes
-   aperturas. Después añade tu nombre si quieres y entra en la oficina. Puedes
-   explorarla antes de configurarla: las conversaciones y posiciones de ejemplo
-   no inician un equipo real ni usan un proveedor.
-4. **Abre la lista de configuración.** Selecciona **Activar equipo**. En macOS
-   o Linux, elige un runtime local o conecta una VPS. En Windows 0.4, el runtime
-   local es Podman dentro de WSL, instalado por la aplicación (WSL ya debe estar
-   activado), o conecta una VPS. Kimi aún no es compatible cuando el equipo se
-   ejecuta en Windows.
-5. **Conecta un proveedor.** En la configuración del Coordinador selecciona un
-   proveedor de suscripción y su plan, y completa la autorización en el
-   terminal integrado. Un enlace puede abrirse en el navegador, pero los
-   códigos y las opciones quedan en el terminal de la oficina.
-6. **Completa el perfil.** Rellena el perfil nativo: se necesitan nombre,
-   correo, puesto objetivo, ubicación, experiencia, seniority, al menos dos
-   habilidades y un idioma.
-7. **Define el horario de trabajo.** Elige cuándo puede trabajar el equipo. La
-   lista no queda completa hasta que runtime, proveedor, perfil y horario estén
-   listos.
-8. **Activa el equipo.** Vuelve a **Activar equipo** y completa las cuatro
-   puertas. El Coordinador inicia a los agentes y la oficina recibe respuestas
-   y posiciones en vivo.
+   `job-hunter-team-windows-x64-setup.exe`: instala la aplicación para tu
+   usuario. En macOS abre `job-hunter-team-macos-universal.dmg` y arrastra la
+   aplicación a Aplicaciones; está firmada con un Developer ID de Apple y
+   notarizada por Apple. En Linux permite que
+   `job-hunter-team-linux-x64.AppImage` se ejecute como programa y ábrelo, o
+   instala `job-hunter-team-linux-x64.deb` en sistemas basados en Debian.
+   Windows y Linux pueden mostrar un aviso: continúa solo si descargaste desde
+   el sitio oficial o desde la versión enlazada.
+3. **Elige cómo empezar.** La aplicación usa el idioma de tu sistema, o el
+   inglés si no tiene ese idioma. Selecciona **Continuar con Google**, o **Usar
+   en local**: escribe un nombre visible, que se queda en este dispositivo, y
+   selecciona **Continuar en local**. Para preparar un equipo nuevo en un VPS
+   hace falta iniciar sesión con Google.
+4. **Elige el entorno.** Selecciona **Empezar la configuración** y luego **Este
+   ordenador** o **Servidor VPS**. En Windows 0.4 el equipo se ejecuta en este
+   ordenador en Podman dentro de WSL, instalado por la aplicación: WSL ya debe
+   estar activado y Docker Desktop no hace falta. En macOS la aplicación
+   instala Podman con Homebrew, que ya debe estar instalado; si falta, la
+   aplicación lo dice antes de instalar nada. En Linux la aplicación usa
+   Docker: instala Docker Engine y su plugin Compose antes de empezar, porque
+   instalarlos requiere permisos de administrador. La versión para Linux está
+   compilada, pero esta configuración todavía no se ha probado. Para un VPS,
+   introduce su dirección, el usuario SSH, el puerto y el archivo de la clave
+   privada, que se queda en este ordenador.
+5. **Elige el proveedor.** Selecciona Codex (recomendado), Claude o Kimi y
+   luego **Revisar la configuración**. Inicias sesión con tu suscripción más
+   adelante en la configuración: no hace falta una clave API. Kimi todavía no
+   está disponible en la aplicación para Windows.
+6. **Confirma y prepara el equipo.** La última pantalla resume el entorno y el
+   proveedor. Cuando el equipo se ejecuta en este ordenador con Windows,
+   también enumera lo que instala la aplicación y cómo quitarlo después.
+   Selecciona **Preparar el equipo** y mantén la aplicación abierta mientras
+   prepara el runtime, el contenedor y la herramienta del proveedor. Para un
+   VPS, la aplicación muestra primero la huella SSH del servidor: confírmala
+   solo si coincide con la que muestra tu proveedor de VPS.
+7. **Inicia sesión en el proveedor.** Cuando la pantalla diga que es tu turno,
+   sigue la solicitud que muestra: el enlace de inicio de sesión del proveedor,
+   un código que introducir en la página del proveedor o un campo para la
+   respuesta que te da el proveedor.
+8. **Conoce al Asistente.** Cuando el proveedor, el contenedor y los agentes
+   están verificados, la aplicación dice que el equipo está listo y abre el
+   chat con el Asistente, que aprende tus objetivos y preferencias hablando
+   contigo. Si un paso falla, la pantalla indica la causa con **Reintentar la
+   preparación** y **Mostrar el archivo de registro**; si la aplicación se
+   cierra a medias, el siguiente inicio ofrece **Reanudar la preparación** o
+   **Empezar de nuevo**.
 
 #### Explora un equipo activo
 
@@ -368,23 +387,21 @@ Cuando el vídeo esté disponible, podrás verlo como alternativa.
 
 ## Français (`fr`)
 
-### Jeu (`#game`)
+### Application de bureau (`#game`)
 
-Le tutoriel de jeu vous aide à explorer le bureau natif, à comprendre comment
-le travail circule dans l'équipe et à examiner un résultat avant de décider de
-la suite.
+Ce tutoriel suit l'application de bureau : il prépare l'équipe, montre comment
+le travail traverse l'équipe et comment examiner un résultat avant de décider
+quoi faire.
 
 #### Planifiez la configuration
 
-Ce parcours commence par le téléchargement sur le site et se termine avec
-l'équipe active : il ne suppose pas que l'application de bureau ou Docker sont
-déjà configurés. Prévoyez du temps avant de commencer. Lors d'un parcours
-end-to-end Linux + Docker mesuré, **32 minutes et 58 secondes** se sont
-écoulées entre le double-clic sur l'application téléchargée, la fin de
-l'onboarding et l'arrivée au panneau de configuration Docker. Ce parcours
-mesuré a ensuite atteint un blocage d'autorisation du fournisseur à **54
-minutes et 40 secondes** (`T0 + 54:40`). Le matériel, le téléchargement et
-Docker font varier ce résultat, mais ce n'est pas une tâche de cinq minutes.
+Ce parcours commence au téléchargement sur le site et se termine quand l'équipe
+est prête et que l'application ouvre la conversation avec l'Assistant. Il ne
+suppose pas que l'application de bureau ou un moteur de conteneurs soit déjà
+installé. Pendant la première configuration, l'application installe ce dont
+l'équipe a besoin dans l'environnement que vous choisissez et télécharge
+l'image de l'équipe : la durée dépend de votre connexion et de votre
+ordinateur. Gardez l'application ouverte pendant qu'elle travaille.
 
 #### Configurez l'équipe
 
@@ -393,40 +410,56 @@ Docker font varier ce résultat, mais ce n'est pas une tâche de cinq minutes.
    est déjà sélectionné : cliquez une fois sur macOS, Windows ou Linux pour
    lancer le téléchargement de la version actuelle pour cette plateforme.
 2. **Ouvrez le téléchargement pour votre système.** Sous Windows, lancez
-   `job-hunter-team-windows-x64-setup.exe` pour installer l'application, ou
-   ouvrez directement `job-hunter-team-windows-x64-portable.exe` si vous
-   préférez ne pas l'installer ; sous macOS, décompressez `job-hunter-team.zip` et
-   ouvrez l'application ; sous Linux, extrayez
-   `job-hunter-team-linux-x64.tar.gz`, vérifiez que
-   `job-hunter-team.x86_64` est autorisé à s'exécuter et, si nécessaire,
-   activez son autorisation d'exécution avant de le lancer. Windows et Linux
-   peuvent afficher un avertissement : continuez uniquement si le téléchargement
-   vient du site officiel ou de la version liée.
-3. **Entrez dans le bureau.** Lors du premier lancement, choisissez et
-   confirmez la langue de l'interface avant l'écran de départ : vous devez
-   confirmer ce choix, English est présélectionné et l'application le mémorise
-   pour les ouvertures suivantes. Ajoutez ensuite votre nom si vous le souhaitez
-   puis entrez dans le bureau. Vous pouvez l'explorer avant la configuration :
-   les conversations et positions d'exemple ne lancent pas une équipe en direct
-   et n'utilisent pas de fournisseur.
-4. **Ouvrez la liste de configuration.** Sélectionnez **Activer l'équipe**. Sur
-   macOS ou Linux, choisissez un runtime local ou connectez un VPS. Sous Windows
-   0.4, le runtime local est Podman dans WSL, installé par l'application (WSL doit
-   déjà être activé), ou connectez un VPS. Kimi n'est pas encore pris en charge
-   lorsque l'équipe tourne sous Windows.
-5. **Connectez un fournisseur.** Dans la configuration du Coordinateur,
-   sélectionnez un fournisseur par abonnement et son forfait, puis terminez
-   l'autorisation dans le terminal intégré. Un lien peut s'ouvrir dans le
-   navigateur, mais les codes et choix restent dans le terminal du bureau.
-6. **Complétez le profil.** Renseignez le profil natif : nom, e-mail, poste
-   visé, lieu, expérience, niveau, au moins deux compétences et une langue
-   sont requis.
-7. **Définissez les heures de travail.** Choisissez quand l'équipe peut
-   travailler. La liste reste incomplète tant que runtime, fournisseur, profil
-   et horaires ne sont pas tous prêts.
-8. **Activez l'équipe.** Revenez à **Activer l'équipe** et terminez les quatre
-   conditions. Le Coordinateur démarre les agents et le bureau reçoit les
-   réponses et positions en direct.
+   `job-hunter-team-windows-x64-setup.exe` : il installe l'application pour
+   votre utilisateur. Sous macOS, ouvrez `job-hunter-team-macos-universal.dmg`
+   et faites glisser l'application dans Applications ; elle est signée avec un
+   Developer ID Apple et notarisée par Apple. Sous Linux, autorisez
+   `job-hunter-team-linux-x64.AppImage` à s'exécuter comme programme et
+   ouvrez-le, ou installez `job-hunter-team-linux-x64.deb` sur les systèmes
+   basés sur Debian. Windows et Linux peuvent afficher un avertissement :
+   continuez uniquement si le téléchargement vient du site officiel ou de la
+   version liée.
+3. **Choisissez comment commencer.** L'application utilise la langue de votre
+   système, ou l'anglais si elle n'a pas cette langue. Sélectionnez **Continuer
+   avec Google**, ou **Utiliser en local** : saisissez un nom affiché, qui
+   reste sur cet appareil, puis sélectionnez **Continuer en local**. Pour
+   préparer une nouvelle équipe sur un VPS, la connexion avec Google est
+   nécessaire.
+4. **Choisissez l'environnement.** Sélectionnez **Commencer la configuration**,
+   puis **Cet ordinateur** ou **Serveur VPS**. Sous Windows 0.4, l'équipe
+   tourne sur cet ordinateur dans Podman dans WSL, installé par l'application :
+   WSL doit déjà être activé et Docker Desktop n'est pas nécessaire. Sous
+   macOS, l'application installe Podman avec Homebrew, qui doit déjà être
+   installé ; s'il manque, l'application le dit avant d'installer quoi que ce
+   soit. Sous Linux, l'application utilise Docker : installez Docker Engine et
+   son plugin Compose avant de commencer, car leur installation demande des
+   droits d'administrateur. La version Linux est construite, mais cette
+   configuration n'a pas encore été testée. Pour un VPS, saisissez son adresse,
+   l'utilisateur SSH, le port et le fichier de la clé privée, qui reste sur cet
+   ordinateur.
+5. **Choisissez le fournisseur.** Sélectionnez Codex (recommandé), Claude ou
+   Kimi, puis **Vérifier la configuration**. Vous vous connectez avec votre
+   abonnement plus tard dans la configuration : aucune clé API n'est
+   nécessaire. Kimi n'est pas encore disponible dans l'application pour
+   Windows.
+6. **Confirmez et préparez l'équipe.** Le dernier écran résume l'environnement
+   et le fournisseur. Quand l'équipe tourne sur cet ordinateur sous Windows, il
+   liste aussi ce que l'application installe et comment le supprimer plus tard.
+   Sélectionnez **Préparer l’équipe** et gardez l'application ouverte pendant
+   qu'elle prépare le runtime, le conteneur et l'outil du fournisseur. Pour un
+   VPS, l'application affiche d'abord l'empreinte SSH du serveur : confirmez-la
+   seulement si elle est identique à celle qu'affiche votre fournisseur de VPS.
+7. **Connectez-vous au fournisseur.** Quand l'écran indique que c'est à vous,
+   suivez la demande qu'il affiche : le lien de connexion du fournisseur, un
+   code à saisir sur la page du fournisseur ou un champ pour la réponse que le
+   fournisseur vous donne.
+8. **Faites connaissance avec l'Assistant.** Quand le fournisseur, le conteneur
+   et les agents sont vérifiés, l'application indique que l'équipe est prête et
+   ouvre la conversation avec l'Assistant, qui apprend vos objectifs et vos
+   préférences en discutant avec vous. Si une étape échoue, l'écran en donne la
+   cause avec **Relancer la préparation** et **Afficher le fichier journal** ;
+   si l'application se ferme en cours de route, le lancement suivant propose
+   **Reprendre la préparation** ou **Recommencer**.
 
 #### Explorez une équipe active
 
@@ -557,23 +590,21 @@ Lorsque la vidéo sera disponible, vous pourrez la regarder comme alternative.
 
 ## Deutsch (`de`)
 
-### Spiel (`#game`)
+### Desktop-App (`#game`)
 
-Das Spiel-Tutorial hilft dir, das native Büro zu erkunden, den Ablauf der
-Arbeit im Team zu verstehen und ein Ergebnis zu prüfen, bevor du entscheidest,
-was als Nächstes geschieht.
+Dieses Tutorial folgt der Desktop-App: Es richtet das Team ein, zeigt, wie die
+Arbeit durch das Team läuft, und wie du ein Ergebnis prüfst, bevor du
+entscheidest, was als Nächstes geschieht.
 
 #### Plane die Einrichtung
 
-Dieser Weg beginnt mit dem Download auf der Website und endet mit dem aktiven
-Team; er setzt weder eine eingerichtete Desktop-App noch Docker voraus. Plane
-vorher Zeit ein. In einem gemessenen Linux- und Docker-End-to-End-Lauf lagen
-zwischen dem Doppelklick auf die heruntergeladene App, dem Abschluss des
-Onboardings und dem Erreichen des Docker-Einrichtungspanels **32 Minuten und
-58 Sekunden**. Der gemessene Lauf erreichte dann nach **54 Minuten und 40
-Sekunden** (`T0 + 54:40`) eine Blockierung bei der Provider-Autorisierung.
-Hardware, Download und Docker verändern das Ergebnis, aber dies ist keine
-Fünf-Minuten-Aufgabe.
+Dieser Weg beginnt beim Download auf der Website und endet, wenn das Team
+bereit ist und die App den Chat mit dem Assistenten öffnet. Er setzt nicht
+voraus, dass die Desktop-App oder eine Container-Engine bereits installiert
+ist. Bei der ersten Einrichtung installiert die App, was das Team in der
+gewählten Umgebung braucht, und lädt das Image des Teams herunter: Wie lange
+das dauert, hängt von deiner Verbindung und deinem Computer ab. Lass die App
+geöffnet, während sie arbeitet.
 
 #### Richte das Team ein
 
@@ -582,38 +613,53 @@ Fünf-Minuten-Aufgabe.
    ist bereits ausgewählt: Klicke einmal auf macOS, Windows oder Linux, um den
    Download der aktuellen Version für diese Plattform zu starten.
 2. **Öffne den Download für dein System.** Starte unter Windows
-   `job-hunter-team-windows-x64-setup.exe`, um die App zu installieren, oder
-   öffne `job-hunter-team-windows-x64-portable.exe` direkt, wenn du sie nicht
-   installieren möchtest; entpacke unter macOS `job-hunter-team.zip` und öffne
-   die App; entpacke unter Linux `job-hunter-team-linux-x64.tar.gz`, prüfe, ob
-   `job-hunter-team.x86_64` ausgeführt werden darf, und aktiviere bei Bedarf
-   seine Ausführungsberechtigung, bevor du es ausführst. Windows und Linux
-   können eine Warnung anzeigen: fahre nur fort, wenn der Download von der
-   offiziellen Website oder der verlinkten Version stammt.
-3. **Betritt das Büro.** Wähle und bestätige beim ersten Start vor dem
-   Startbildschirm die Oberflächensprache: Du musst die Auswahl bestätigen,
-   English ist vorausgewählt und die App speichert sie für spätere Starts. Gib
-   danach deinen Namen ein, wenn du möchtest, und betritt das Büro. Du kannst
-   es vor der Einrichtung erkunden: Beispielgespräche und -positionen starten
-   kein Live-Team und nutzen keinen Provider.
-4. **Öffne die Einrichtungs-Checkliste.** Wähle **Team aktivieren**. Wähle unter
-   macOS oder Linux eine lokale Runtime oder verbinde einen VPS. Unter Windows
-   0.4 ist die lokale Runtime Podman in WSL, von der App installiert (WSL muss
-   bereits aktiviert sein), oder verbinde einen VPS. Kimi wird noch nicht
-   unterstützt, wenn das Team unter Windows läuft.
-5. **Verbinde einen Provider.** Wähle in der Koordinator-Einrichtung einen
-   Abonnement-Provider und Tarif und schließe die Autorisierung im integrierten
-   Terminal ab. Ein Link kann sich im Browser öffnen, Codes und Auswahl bleiben
-   jedoch im Büro-Terminal.
-6. **Vervollständige das Profil.** Fülle das native Profil aus: erforderlich
-   sind Name, E-Mail, Zielrolle, Ort, Erfahrung, Senioritätsstufe, mindestens
-   zwei Fähigkeiten und eine Sprache.
-7. **Lege Arbeitszeiten fest.** Wähle, wann das Team arbeiten darf. Die
-   Checkliste bleibt unvollständig, bis Runtime, Provider, Profil und
-   Arbeitszeiten bereit sind.
-8. **Aktiviere das Team.** Kehre zu **Team aktivieren** zurück und erfülle die
-   vier Bedingungen. Der Koordinator startet die Agenten; im Büro erscheinen
-   Live-Antworten und Positionen.
+   `job-hunter-team-windows-x64-setup.exe`: Es installiert die App für deinen
+   Benutzer. Öffne unter macOS `job-hunter-team-macos-universal.dmg` und ziehe
+   die App in den Ordner Programme; sie ist mit einer Apple Developer ID
+   signiert und von Apple notarisiert. Erlaube unter Linux
+   `job-hunter-team-linux-x64.AppImage`, als Programm ausgeführt zu werden, und
+   öffne es, oder installiere `job-hunter-team-linux-x64.deb` auf
+   Debian-basierten Systemen. Windows und Linux können eine Warnung anzeigen:
+   fahre nur fort, wenn der Download von der offiziellen Website oder der
+   verlinkten Version stammt.
+3. **Wähle, wie du beginnst.** Die App verwendet die Sprache deines Systems,
+   oder Englisch, wenn sie diese Sprache nicht hat. Wähle **Mit Google
+   fortfahren** oder **Lokal verwenden**: Gib einen Anzeigenamen ein, der auf
+   diesem Gerät bleibt, und wähle **Lokal fortfahren**. Um ein neues Team auf
+   einem VPS einzurichten, brauchst du die Anmeldung mit Google.
+4. **Wähle die Umgebung.** Wähle **Einrichtung starten**, dann **Dieser
+   Computer** oder **VPS-Server**. Unter Windows 0.4 läuft das Team auf diesem
+   Computer in Podman in WSL, das die App installiert: WSL muss bereits
+   aktiviert sein, Docker Desktop wird nicht gebraucht. Unter macOS installiert
+   die App Podman mit Homebrew, das bereits installiert sein muss; fehlt es,
+   sagt die App das, bevor sie etwas installiert. Unter Linux verwendet die App
+   Docker: Installiere Docker Engine und sein Compose-Plugin vor dem Start,
+   denn dafür sind Administratorrechte nötig. Die Linux-Version ist gebaut,
+   aber diese Einrichtung wurde noch nicht getestet. Für einen VPS gibst du
+   seine Adresse, den SSH-Benutzer, den Port und die Datei des privaten
+   Schlüssels ein, der auf diesem Computer bleibt.
+5. **Wähle den Anbieter.** Wähle Codex (empfohlen), Claude oder Kimi, dann
+   **Einrichtung prüfen**. Du meldest dich später in der Einrichtung mit deinem
+   Abo an: Ein API-Schlüssel ist nicht nötig. Kimi ist in der Windows-App noch
+   nicht verfügbar.
+6. **Bestätige und bereite das Team vor.** Der letzte Bildschirm fasst Umgebung
+   und Anbieter zusammen. Wenn das Team unter Windows auf diesem Computer
+   läuft, listet er auch auf, was die App installiert und wie du es später
+   entfernst. Wähle **Team vorbereiten** und lass die App geöffnet, während sie
+   Runtime, Container und das Werkzeug des Anbieters vorbereitet. Bei einem VPS
+   zeigt die App zuerst den SSH-Fingerabdruck des Servers: Bestätige ihn nur,
+   wenn er mit dem übereinstimmt, den dein VPS-Anbieter anzeigt.
+7. **Melde dich beim Anbieter an.** Wenn der Bildschirm sagt, dass du dran
+   bist, folge der Anfrage, die er zeigt: dem Anmeldelink des Anbieters, einem
+   Code für die Seite des Anbieters oder einem Feld für die Antwort, die dir
+   der Anbieter gibt.
+8. **Lerne den Assistenten kennen.** Wenn Anbieter, Container und Agenten
+   geprüft sind, meldet die App, dass das Team bereit ist, und öffnet den Chat
+   mit dem Assistenten, der im Gespräch mit dir deine Ziele und Vorlieben
+   kennenlernt. Schlägt ein Schritt fehl, nennt der Bildschirm die Ursache, mit
+   **Vorbereitung erneut versuchen** und **Protokolldatei anzeigen**; schließt
+   sich die App mittendrin, bietet der nächste Start **Einrichtung fortsetzen**
+   oder **Neu beginnen** an.
 
 #### Erkunde ein aktives Team
 
@@ -746,23 +792,21 @@ Sobald das Video verfügbar ist, kannst du es als Alternative ansehen.
 
 ## Português (`pt`)
 
-### Jogo (`#game`)
+### Aplicação de ambiente de trabalho (`#game`)
 
-O tutorial de jogo ajuda-te a explorar o escritório nativo, a compreender como
-o trabalho avança pela equipa e a inspecionar um resultado antes de decidires o
-que fazer.
+Este tutorial segue a aplicação de ambiente de trabalho: prepara a equipa,
+mostra como o trabalho passa pela equipa e como verificar um resultado antes de
+decidires o que fazer.
 
 #### Planeia a configuração
 
-Este percurso começa no download do site e termina com a equipa ativa; não
-pressupõe que a aplicação de ambiente de trabalho ou o Docker já estejam
-configurados. Reserva tempo antes de começar. Numa execução end-to-end medida
-em Linux + Docker, passaram **32 minutos e 58 segundos** entre o duplo clique
-na aplicação descarregada, a conclusão do onboarding e a chegada ao painel de
-configuração do Docker. A execução medida chegou depois a um bloqueio da
-autorização do fornecedor aos **54 minutos e 40 segundos** (`T0 + 54:40`). O
-hardware, o download e o Docker alteram o resultado, mas esta não é uma tarefa
-de cinco minutos.
+Este percurso começa no download do site e termina quando a equipa está pronta
+e a aplicação abre a conversa com o Assistente. Não pressupõe que a aplicação
+de ambiente de trabalho ou um motor de contentores já estejam instalados.
+Durante a primeira configuração, a aplicação instala o que a equipa precisa no
+ambiente que escolheres e descarrega a imagem da equipa: quanto tempo demora
+depende da tua ligação e do teu computador. Mantém a aplicação aberta enquanto
+trabalha.
 
 #### Configura a equipa
 
@@ -771,38 +815,51 @@ de cinco minutos.
    já está selecionado: clica uma vez em macOS, Windows ou Linux para iniciar
    a transferência da versão atual para essa plataforma.
 2. **Abre o download para o teu sistema.** No Windows executa
-   `job-hunter-team-windows-x64-setup.exe` para instalar a aplicação, ou abre
-   diretamente `job-hunter-team-windows-x64-portable.exe` se preferires não a
-   instalar; no macOS descomprime `job-hunter-team.zip` e abre a
-   aplicação; no Linux extrai `job-hunter-team-linux-x64.tar.gz`, confirma que
-   `job-hunter-team.x86_64` tem permissão para executar e, se necessário,
-   ativa a respetiva permissão de execução antes de o executar. Windows e Linux
-   podem mostrar um aviso: avança apenas se o download vier do site oficial ou
-   da versão ligada.
-3. **Entra no escritório.** No primeiro arranque, escolhe e confirma o idioma
-   da interface antes do ecrã inicial: tens de confirmar a escolha, English
-   vem pré-selecionado e a aplicação guarda-a para aberturas posteriores.
-   Depois acrescenta o teu nome se quiseres e entra no escritório. Podes
-   explorá-lo antes da configuração: as conversas e posições de exemplo não
-   iniciam uma equipa real nem usam um fornecedor.
-4. **Abre a lista de configuração.** Seleciona **Ativar equipa**. No macOS ou
-   Linux, escolhe um runtime local ou liga uma VPS. No Windows 0.4, o runtime
-   local é o Podman dentro do WSL, instalado pela aplicação (o WSL já tem de
-   estar ativado), ou liga uma VPS. O Kimi ainda não é suportado quando a equipa
-   corre no Windows.
-5. **Liga um fornecedor.** Na configuração do Coordenador, escolhe um
-   fornecedor por subscrição e o plano e conclui a autorização no terminal
-   integrado. Uma ligação pode abrir no navegador, mas os códigos e as escolhas
-   ficam no terminal do escritório.
-6. **Completa o perfil.** Preenche o perfil nativo: são necessários nome,
-   e-mail, função pretendida, localização, experiência, senioridade, pelo menos
-   duas competências e uma língua.
-7. **Define o horário de trabalho.** Escolhe quando a equipa pode trabalhar. A
-   lista fica incompleta até runtime, fornecedor, perfil e horário estarem
-   prontos.
-8. **Ativa a equipa.** Volta a **Ativar equipa** e completa as quatro
-   condições. O Coordenador inicia os agentes e o escritório recebe respostas
-   e posições ao vivo.
+   `job-hunter-team-windows-x64-setup.exe`: instala a aplicação para o teu
+   utilizador. No macOS abre `job-hunter-team-macos-universal.dmg` e arrasta a
+   aplicação para Aplicações; está assinada com um Developer ID da Apple e
+   notarizada pela Apple. No Linux permite que
+   `job-hunter-team-linux-x64.AppImage` seja executado como programa e abre-o,
+   ou instala `job-hunter-team-linux-x64.deb` em sistemas baseados em Debian.
+   Windows e Linux podem mostrar um aviso: avança apenas se o download vier do
+   site oficial ou da versão ligada.
+3. **Escolhe como começar.** A aplicação usa o idioma do teu sistema, ou o
+   inglês se não tiver esse idioma. Seleciona **Continuar com Google**, ou
+   **Usar localmente**: escreve um nome apresentado, que fica neste
+   dispositivo, e seleciona **Continuar localmente**. Para preparar uma equipa
+   nova numa VPS é preciso iniciar sessão com Google.
+4. **Escolhe o ambiente.** Seleciona **Começar a configuração** e depois **Este
+   computador** ou **Servidor VPS**. No Windows 0.4 a equipa corre neste
+   computador em Podman dentro do WSL, instalado pela aplicação: o WSL já tem
+   de estar ativado e o Docker Desktop não é necessário. No macOS a aplicação
+   instala o Podman com o Homebrew, que já tem de estar instalado; se faltar, a
+   aplicação diz isso antes de instalar o que quer que seja. No Linux a
+   aplicação usa o Docker: instala o Docker Engine e o seu plugin Compose antes
+   de começar, porque instalá-los exige permissões de administrador. A versão
+   para Linux está compilada, mas esta configuração ainda não foi testada. Para
+   uma VPS, introduz o endereço, o utilizador SSH, a porta e o ficheiro da
+   chave privada, que fica neste computador.
+5. **Escolhe o fornecedor.** Seleciona Codex (recomendado), Claude ou Kimi e
+   depois **Rever a configuração**. Inicias sessão com a tua subscrição mais à
+   frente na configuração: não é precisa uma chave API. O Kimi ainda não está
+   disponível na aplicação para Windows.
+6. **Confirma e prepara a equipa.** O último ecrã resume o ambiente e o
+   fornecedor. Quando a equipa corre neste computador com Windows, também
+   enumera o que a aplicação instala e como o remover mais tarde. Seleciona
+   **Preparar a equipa** e mantém a aplicação aberta enquanto prepara o
+   runtime, o contentor e a ferramenta do fornecedor. Para uma VPS, a aplicação
+   mostra primeiro a impressão digital SSH do servidor: confirma-a só se for
+   igual à que o teu fornecedor de VPS mostra.
+7. **Inicia sessão no fornecedor.** Quando o ecrã disser que é a tua vez, segue
+   o pedido que mostra: o link de início de sessão do fornecedor, um código
+   para introduzir na página do fornecedor ou um campo para a resposta que o
+   fornecedor te dá.
+8. **Conhece o Assistente.** Quando o fornecedor, o contentor e os agentes
+   estão verificados, a aplicação diz que a equipa está pronta e abre a
+   conversa com o Assistente, que aprende os teus objetivos e preferências a
+   conversar contigo. Se um passo falhar, o ecrã indica a causa com **Repetir a
+   preparação** e **Mostrar o ficheiro de registo**; se a aplicação fechar a
+   meio, o arranque seguinte propõe **Retomar a preparação** ou **Recomeçar**.
 
 #### Explora uma equipa ativa
 
@@ -929,22 +986,21 @@ Quando o vídeo estiver disponível, poderás vê-lo como alternativa.
 
 ## Magyar (`hu`)
 
-### Játék (`#game`)
+### Asztali alkalmazás (`#game`)
 
-A játék oktatóanyaga segít felfedezni a natív irodát, megérteni, hogyan halad
-át a munka a csapaton, és ellenőrizni egy eredményt, mielőtt eldöntenéd, mi
-legyen a következő lépés.
+Ez az oktatóanyag az asztali alkalmazást követi: beállítja a csapatot,
+megmutatja, hogyan halad a munka a csapaton át, és hogyan ellenőrizz egy
+eredményt, mielőtt eldöntöd, mi legyen a következő lépés.
 
 #### Tervezd meg a beállítást
 
-Ez az útvonal a webhelyről való letöltéssel kezdődik, és az aktív csapatnál
-ér véget; nem feltételezi, hogy az asztali alkalmazás vagy a Docker már be van
-állítva. Kezdés előtt szánj rá időt. Egy mért Linux + Docker end-to-end futásban
-a letöltött alkalmazásra kattintástól az onboarding befejezéséig és a Docker
-beállítási panel eléréséig **32 perc 58 másodperc** telt el. A mért futás
-ezután a szolgáltatói engedélyezésnél **54 perc 40 másodpercnél**
-(`T0 + 54:40`) blokkolódott. A hardver, a letöltés és a Docker módosítja az
-eredményt, de ez nem ötperces feladat.
+Ez az útvonal a weboldalról való letöltéssel kezdődik, és akkor ér véget,
+amikor a csapat készen áll, és az alkalmazás megnyitja a csevegést az
+Asszisztenssel. Nem feltételezi, hogy az asztali alkalmazás vagy egy
+konténermotor már telepítve van. Az első beállítás során az alkalmazás
+telepíti, amire a csapatnak szüksége van a választott környezetben, és letölti
+a csapat konténerképét: hogy ez mennyi ideig tart, az a kapcsolatodtól és a
+számítógépedtől függ. Hagyd nyitva az alkalmazást, amíg dolgozik.
 
 #### Állítsd be a csapatot
 
@@ -953,38 +1009,57 @@ eredményt, de ez nem ötperces feladat.
    **Desktop** már ki van jelölve: kattints egyszer a macOS, Windows vagy Linux
    lehetőségre az adott platform aktuális kiadásának letöltéséhez.
 2. **Nyisd meg a rendszeredhez való letöltést.** Windowson futtasd a
-   `job-hunter-team-windows-x64-setup.exe` fájlt az alkalmazás telepítéséhez,
-   vagy nyisd meg közvetlenül a `job-hunter-team-windows-x64-portable.exe`
-   fájlt, ha nem szeretnéd telepíteni; macOS-en csomagold ki a
-   `job-hunter-team.zip` fájlt és nyisd meg az alkalmazást; Linuxon csomagold
-   ki a `job-hunter-team-linux-x64.tar.gz` fájlt, ellenőrizd, hogy a
-   `job-hunter-team.x86_64` fájl futtatható-e, és ha kell, engedélyezd a
-   futtatási jogosultságát, mielőtt futtatnád. Windows és Linux figyelmeztetést
-   jeleníthet meg: csak akkor folytasd, ha a letöltés a hivatalos oldalról vagy
-   a hivatkozott kiadásból származik.
-3. **Lépj be az irodába.** Első indításkor a kezdőképernyő előtt válaszd ki és
-   erősítsd meg a felület nyelvét: meg kell erősítened a választást, az English
-   van előre kijelölve, és az alkalmazás a következő megnyitásokhoz elmenti.
-   Ezután add meg a nevedet, ha szeretnéd, majd lépj be az irodába. A beállítás
-   előtt is felfedezheted: a példa beszélgetések és pozíciók nem indítanak élő
-   csapatot és nem használnak szolgáltatót.
-4. **Nyisd meg a beállítási ellenőrzőlistát.** Válaszd a **Csapat aktiválása**
-   lehetőséget. macOS vagy Linux alatt válassz helyi runtime-ot vagy kapcsolj
-   VPS-t. Windows 0.4 alatt a helyi runtime a WSL-en belül futó Podman, amelyet
-   az alkalmazás telepít (a WSL-nek már bekapcsolva kell lennie), vagy kapcsolj
-   VPS-t. A Kimi még nem támogatott, ha a csapat Windowson fut.
-5. **Kapcsolj szolgáltatót.** A Koordinátor beállításában válassz előfizetéses
-   AI-szolgáltatót és csomagot, majd fejezd be az engedélyezést a beépített
-   terminálban. A hivatkozás megnyílhat a böngészőben, de a kódok és választások
-   az iroda termináljában maradnak.
-6. **Töltsd ki a profilt.** Töltsd ki a natív profilt: név, e-mail, célpozíció,
-   hely, tapasztalat, senioritás, legalább két készség és egy nyelv szükséges.
-7. **Állítsd be a munkaidőt.** Válaszd ki, mikor dolgozhat a csapat. Az
-   ellenőrzőlista addig hiányos, amíg a runtime, a szolgáltató, a profil és a
-   munkaidő nincs kész.
-8. **Aktiváld a csapatot.** Térj vissza a **Csapat aktiválása** ponthoz és
-   teljesítsd a négy feltételt. A Koordinátor elindítja az ügynököket, és az
-   irodában élő válaszok és pozíciók jelennek meg.
+   `job-hunter-team-windows-x64-setup.exe` fájlt: a felhasználódnak telepíti az
+   alkalmazást. macOS-en nyisd meg a `job-hunter-team-macos-universal.dmg`
+   fájlt, és húzd az alkalmazást az Alkalmazások mappába; Apple Developer
+   ID-val van aláírva, és az Apple hitelesítette. Linuxon engedélyezd, hogy a
+   `job-hunter-team-linux-x64.AppImage` programként fusson, és nyisd meg, vagy
+   Debian-alapú rendszeren telepítsd a `job-hunter-team-linux-x64.deb`
+   csomagot. Windows és Linux figyelmeztetést jeleníthet meg: csak akkor
+   folytasd, ha a letöltés a hivatalos oldalról vagy a hivatkozott kiadásból
+   származik.
+3. **Válaszd ki, hogyan kezdesz.** Az alkalmazás a rendszered nyelvét
+   használja, vagy az angolt, ha azt a nyelvet nem ismeri. Válaszd a
+   **Folytatás Google-fiókkal** lehetőséget, vagy a **Helyi használat**
+   lehetőséget: adj meg egy megjelenített nevet, amely ezen az eszközön marad,
+   majd válaszd a **Folytatás helyben** gombot. Új csapat VPS-en való
+   beállításához Google-bejelentkezés kell.
+4. **Válaszd ki a környezetet.** Válaszd **A beállítás indítása** gombot, majd
+   az **Ez a számítógép** vagy a **VPS-szerver** lehetőséget. Windows 0.4 alatt
+   a csapat ezen a számítógépen fut, a WSL-en belül futó Podman alatt, amelyet
+   az alkalmazás telepít: a WSL-nek már engedélyezve kell lennie, a Docker
+   Desktopra nincs szükség. macOS-en az alkalmazás a Homebrew segítségével
+   telepíti a Podmant; a Homebrew-nak már telepítve kell lennie, és ha
+   hiányzik, az alkalmazás ezt még a telepítés előtt jelzi. Linuxon az
+   alkalmazás Dockert használ: kezdés előtt telepítsd a Docker Engine-t és a
+   Compose bővítményét, mert a telepítésükhöz rendszergazdai jogok kellenek. A
+   linuxos kiadás elkészült, de ezt a beállítást még nem tesztelték. VPS esetén
+   add meg a címét, az SSH-felhasználót, a portot és a privát kulcs fájlját,
+   amely ezen a számítógépen marad.
+5. **Válaszd ki a szolgáltatót.** Válaszd a Codexet (ajánlott), a Claude-ot
+   vagy a Kimit, majd **A beállítás áttekintése** gombot. Az előfizetéseddel a
+   beállítás egy későbbi lépésében jelentkezel be: API-kulcsra nincs szükség. A
+   Kimi a Windows-alkalmazásban még nem érhető el.
+6. **Erősítsd meg, és készítsd elő a csapatot.** Az utolsó képernyő
+   összefoglalja a környezetet és a szolgáltatót. Ha a csapat Windowson ezen a
+   számítógépen fut, azt is felsorolja, mit telepít az alkalmazás, és hogyan
+   távolíthatod el később. Válaszd **A csapat előkészítése** gombot, és hagyd
+   nyitva az alkalmazást, amíg előkészíti a futtatókörnyezetet, a konténert és
+   a szolgáltató eszközét. VPS esetén az alkalmazás először a szerver
+   SSH-ujjlenyomatát mutatja: csak akkor erősítsd meg, ha megegyezik azzal,
+   amelyet a VPS-szolgáltatód mutat.
+7. **Jelentkezz be a szolgáltatónál.** Amikor a képernyő jelzi, hogy te
+   következel, kövesd a megjelenített kérést: a szolgáltató bejelentkezési
+   linkjét, egy kódot, amelyet a szolgáltató oldalán kell megadnod, vagy egy
+   mezőt a szolgáltatótól kapott válasznak.
+8. **Ismerd meg az Asszisztenst.** Amikor a szolgáltató, a konténer és az
+   ügynökök ellenőrizve vannak, az alkalmazás jelzi, hogy a csapat készen áll,
+   és megnyitja a csevegést az Asszisztenssel, aki beszélgetés közben megismeri
+   a céljaidat és a preferenciáidat. Ha egy lépés nem sikerül, a képernyő
+   megmondja az okát, és felkínálja **Az előkészítés újrapróbálása** és a
+   **Naplófájl megjelenítése** gombot; ha az alkalmazás félúton bezárul, a
+   következő indításkor az **Előkészítés folytatása** vagy az **Újrakezdés**
+   közül választhatsz.
 
 #### Fedezd fel az aktív csapatot
 

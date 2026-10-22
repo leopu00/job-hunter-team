@@ -1,7 +1,7 @@
 # ☁️ Manual VPS setup
 
 This is the current terminal-first path for an existing Linux VPS. For the
-guided path, use the native office and
+guided path, use the desktop app and
 [`VPS-SETUP-WIZARD.md`](VPS-SETUP-WIZARD.md).
 
 JHT does not create, bill or delete a VPS in this flow. Choose and provision
@@ -172,23 +172,17 @@ jht logs --tail 200
 Redact names, email addresses, CV/application content, machine addresses,
 hostnames, account identifiers and credentials before sharing any excerpt.
 
-## Native-office migration
+## Moving a team
 
-The office can move a local or remote team through
-**Settings → Connect VPS → Complete migration**. It stops the source, verifies
-the archive and database, excludes SSH keys and runtime files, stages the
-destination and keeps a verified backup. Do not run both copies after a
-successful migration.
-
-The current automated remote migration scripts use root-owned paths under
-`/root`. Fresh setup supports root, passwordless `sudo`, or an account allowed
-to run Docker, but automated migration to or from a non-root remote account is
-not implemented. The full current contract is in
-[`VPS-SETUP-WIZARD.md`](VPS-SETUP-WIZARD.md).
+The desktop app does not move a team between hosts. It can connect to a team
+already running on a VPS without reinstalling it, and it does not switch a
+VPS that runs the team with Docker to Podman. See
+[`VPS-SETUP-WIZARD.md`](VPS-SETUP-WIZARD.md). Whatever the path, do not run
+both copies of a team after moving it.
 
 ## Related
 
-- [`QUICKSTART.md`](QUICKSTART.md) — choose native office or CLI
+- [`QUICKSTART.md`](QUICKSTART.md) — choose the desktop app or the CLI
 - [`AI-AGENT-INTEGRATION.md`](AI-AGENT-INTEGRATION.md) — safe automation
 - [`CLI-INSTALL.md`](CLI-INSTALL.md) — exact installer behavior
 - [`CLI-REFERENCE.md`](CLI-REFERENCE.md) — lifecycle and operational commands

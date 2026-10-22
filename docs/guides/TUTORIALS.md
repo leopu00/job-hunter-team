@@ -4,21 +4,19 @@ These are the complete text-first tutorials for the public `/tutorials` page.
 Read the path that matches the interface you use; the video after each path is
 an optional alternative, not a requirement.
 
-## Game
+## Desktop app
 
-The game tutorial helps you explore the native office, understand how work
-moves through the team, and inspect a result before you decide what to do.
+This tutorial follows the desktop app: it sets up the team, shows how work
+moves through it, and how to inspect a result before you decide what to do.
 
 ### Plan the setup
 
-This path starts at the website download and ends when the team is active; it
-does not assume that the desktop app or Docker is already configured. Allow
-time before you start. In an observed Linux + Docker end-to-end run, the time
-from double-clicking the downloaded app to completing onboarding and reaching
-the Docker setup panel was **32 minutes 58 seconds**. That observed run then
-reached a provider-authorization block at **54 minutes 40 seconds**
-(`T0 + 54:40`). Hardware, download speed, and Docker setup change the result,
-but this is not a five-minute task.
+This path starts at the website download and ends when the team is ready and
+the app opens the chat with the Assistant. It does not assume that the desktop
+app or a container engine is already installed. During the first setup the app
+installs what the team needs on the environment you choose and downloads the
+team's image: how long that takes depends on your connection and your computer.
+Keep the app open while it works.
 
 ### Set up the team
 
@@ -27,37 +25,47 @@ but this is not a five-minute task.
    is already selected: click macOS, Windows, or Linux once to start the
    current release download for that platform.
 2. **Open the download for your system.** On Windows, run
-   `job-hunter-team-windows-x64-setup.exe` to install the app, or open
-   `job-hunter-team-windows-x64-portable.exe` directly if you would rather not
-   install it; on macOS, unzip `job-hunter-team.zip` and open the
-   app; on Linux, extract `job-hunter-team-linux-x64.tar.gz`, verify that
-   `job-hunter-team.x86_64` is allowed to run, and enable its executable
-   permission before running it if needed. Windows and Linux can display a
-   platform warning: continue only when the download came from the official
-   site or its linked release.
-3. **Enter the office.** On first launch, choose and confirm the interface
-   language before the title screen: confirming a choice is required, English
-   is preselected, and the app saves it for later openings. Then add your name
-   if you want and enter the office. It is explorable before setup: its preview
-   conversations and example positions do not start a live team or use a
-   provider.
-4. **Open the setup checklist.** Select **Activate team**. On macOS or Linux,
-   choose a local runtime or connect a VPS. On Windows 0.4 the local runtime is
-   Podman inside WSL, installed by the app (WSL must already be enabled), or
-   connect a VPS. Kimi is not supported yet when the team runs on Windows.
-5. **Connect a provider.** In the Coordinator setup, select a supported
-   subscription provider and plan, then complete its authorization in the
-   embedded terminal. An authorization link can open in your browser, while
-   codes and choices stay in the office terminal.
-6. **Complete the profile.** Fill in the native profile. The ready gate needs
-   your name, email, target role, location, experience, seniority, at least
-   two skills, and at least one language.
-7. **Set working hours.** Choose when the team may work. The checklist stays
-   incomplete until the runtime, provider, profile, and working-hours gates
-   are all ready.
-8. **Activate the team.** Return to **Activate team** and complete the four
-   gates. The Coordinator then starts the agents; live replies and positions
-   become available in the office.
+   `job-hunter-team-windows-x64-setup.exe`: it installs the app for your user.
+   On macOS, open `job-hunter-team-macos-universal.dmg` and drag the app into
+   Applications; it is signed with an Apple Developer ID and notarized by
+   Apple. On Linux, allow `job-hunter-team-linux-x64.AppImage` to run as a
+   program and open it, or install `job-hunter-team-linux-x64.deb` on
+   Debian-based systems. Windows and Linux can display a platform warning:
+   continue only when the download came from the official site or its linked
+   release.
+3. **Choose how to start.** The app uses your system's language, or English
+   when it does not have that language. Select **Continue with Google**, or
+   select **Use locally**, enter a display name, which stays on this device,
+   and select **Continue locally**. Setting up a new team on a VPS needs the
+   Google sign-in.
+4. **Choose the environment.** Select **Start the setup**, then **This
+   computer** or **VPS server**. On Windows 0.4 the team runs on this computer
+   in Podman inside WSL, installed by the app: WSL must already be enabled, and
+   Docker Desktop is not needed. On macOS the app installs Podman with
+   Homebrew, which must already be installed; without it, the app says so
+   before installing anything. On Linux the app uses Docker: install Docker
+   Engine and its Compose plugin before you start, because installing them
+   needs administrator rights. The Linux release is built, but this setup has
+   not been tested yet. For a VPS, enter its address, the SSH user, the port
+   and the private key file, which stays on this computer.
+5. **Choose the provider.** Select Codex (recommended), Claude or Kimi, then
+   **Review the setup**. You sign in with your subscription later in the setup:
+   no API key is needed. Kimi is not available in the Windows app yet.
+6. **Confirm and prepare the team.** The last screen sums up the environment
+   and the provider. When the team runs on this computer on Windows, it also
+   lists what the app installs and how to remove it later. Select **Prepare the
+   team** and keep the app open while it prepares the runtime, the container
+   and the provider's tool. For a VPS, the app first shows the server's SSH
+   fingerprint: confirm it only if it matches the one your VPS provider shows.
+7. **Sign in to the provider.** When the screen says it is your turn, follow
+   the request it shows: the provider's sign-in link, a code to enter on the
+   provider's page, or a field for the answer the provider gives you.
+8. **Meet the Assistant.** When provider, container and agents are verified,
+   the app says the team is ready and opens the chat with the Assistant, which
+   learns your goals and preferences by talking with you. If a step fails, the
+   screen gives its cause with **Retry the preparation** and **Show the log
+   file**; if the app closes halfway, the next launch offers **Resume the
+   setup** or **Start over**.
 
 ### Explore a running team
 

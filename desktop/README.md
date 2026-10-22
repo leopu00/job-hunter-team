@@ -1,26 +1,23 @@
 # JHT Desktop (Tauri 2)
 
-The active desktop shell. It is a static React application inside a minimal
-Tauri 2 host and does not replace or modify [`game/`](../game/).
+The desktop app of Job Hunter Team: a React and Vite frontend in `src/`
+inside a Tauri 2 host in `src-tauri/`. It is the desktop client that the
+release builds; the Godot office in [`game/`](../game/) stays in the
+repository but is not part of it.
 
-The current slice implements two screens:
+## What it does
 
-1. welcome;
-2. the fixed `own PC + Podman + own OpenAI API key + headless agents` setup.
-
-The setup screen asks the Tauri backend to verify that the Podman CLI is
-installed and that its engine is reachable. Submitting an OpenAI API key starts
-a one-shot full-team test against the checked-in synthetic candidate and job
-fixtures. The first run builds the bundled `api-worker` image; following runs
-reuse Podman's build cache. The team is capped at two CPUs, 1 GB RAM and a
-configured maximum provider cost of USD 0.10.
-
-The key is cleared from the React state on submit, passed to Podman over stdin
-as a temporary secret, zeroized in Rust and removed after the run. It is never
-written to app configuration, a command-line argument or an image layer.
-
-Completed runs persist their isolated SQLite database and generated artifacts
-under the application's local data directory.
+- **Sign-in**: Google, or a local profile that stays on this device (below).
+- **First setup** (`src/onboarding/`, `src-tauri/src/onboarding.rs`): the
+  environment (this computer or a VPS server), the provider and a final
+  confirmation. Then the native side prepares the runtime: `install.ps1` with
+  Podman inside WSL on Windows, `install.sh` with Podman on macOS, `install.sh`
+  on Linux, and `install.sh` with rootless Podman over SSH on a VPS. It also
+  installs the provider's CLI, runs its sign-in and starts the team, then
+  opens the chat with the Assistant.
+- **The pages**: the office, the agents panel, positions, the map, messages
+  and the profile. [`docs/guides/DESKTOP.md`](../docs/guides/DESKTOP.md)
+  describes each one for the user.
 
 ## Sign-in
 
@@ -61,14 +58,30 @@ in the app. `src/lib/supabase.ts` exports the signed-in client (`supabase`),
 - The CSP allows `https://*.supabase.co` and `wss://*.supabase.co`; a project
   on a custom domain needs its host added there.
 
+The same screen offers **Use locally**: a local profile with a display name,
+kept on this device, without a Supabase session. Setting up a new team on a VPS
+needs the Google sign-in, because that team is paired with the account.
+
 ## Development
 
-```powershell
-npm install
-npm test
-npm run build
-npm run tauri:dev
+You need Node 24, Rust and the Tauri 2 prerequisites for your system. From the
+repository root:
+
+```bash
+npm --prefix shared ci --ignore-scripts   # the app imports modules from shared/
+npm --prefix desktop ci
+npm --prefix desktop run tauri:dev
 ```
+
+Before a PR, the gates the release workflow runs:
+
+```bash
+npm --prefix desktop test
+cargo test --manifest-path desktop/src-tauri/Cargo.toml --locked
+```
+
+`npm --prefix desktop run build` also type-checks the frontend (`tsc --noEmit`)
+before the Vite build.
 
 The archived Electron reference lives in
 [`archive/electron-desktop/`](../archive/electron-desktop/) and is not a
