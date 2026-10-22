@@ -20,6 +20,7 @@ import {
   isTerminal,
   readCommandStatus,
   readDoorAnswer,
+  teamControlEnabled,
 } from "@/app/(protected)/team/team-control";
 import { T } from "@/app/(protected)/team/TeamControl.i18n";
 
@@ -129,8 +130,27 @@ describe("the page", () => {
     expect(page.indexOf("<MobileTeamStatus />")).toBeLessThan(page.indexOf("<TeamControl />"));
     const ui = read("app/(protected)/team/TeamControl.tsx");
     expect(ui).toContain("useContext(TeamStatusControls)");
-    expect(ui).toMatch(/if \(desktopControls\) return null;/);
+    expect(ui).toMatch(/if \(desktopControls \|\| !teamControlEnabled\(\)\) return null;/);
     // it never decides what the database decides
     expect(ui).not.toMatch(/\.rpc\(|from\("team_commands"\)|from\("team_state"\)/);
+  });
+});
+
+describe("the flag: start, stop and restart stay hidden until the box runs team_commands", () => {
+  it("is off unless the build says exactly 1", () => {
+    expect(teamControlEnabled(undefined)).toBe(false);
+    for (const value of ["", "0", "true", "yes", " 1", "1 "]) expect(teamControlEnabled(value)).toBe(false);
+    expect(teamControlEnabled("1")).toBe(true);
+  });
+
+  it("reads NEXT_PUBLIC_JHT_TEAM_CONTROL by default (inlined at build time)", () => {
+    const pure = read("app/(protected)/team/team-control.ts");
+    expect(pure).toContain("value: string | undefined = process.env.NEXT_PUBLIC_JHT_TEAM_CONTROL");
+  });
+
+  it("the emergency stop does not depend on it", () => {
+    const status = read("app/(protected)/team/MobileTeamStatus.tsx");
+    expect(status).not.toContain("teamControlEnabled");
+    expect(status).toContain('fetch("/api/team-state/emergency-stop"');
   });
 });

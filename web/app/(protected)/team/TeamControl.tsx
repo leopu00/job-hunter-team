@@ -18,6 +18,7 @@ import {
   firstCall,
   isTarget,
   isTerminal,
+  teamControlEnabled,
   readCommandStatus,
   readDoorAnswer,
   type CommandStatus,
@@ -133,7 +134,7 @@ export default function TeamControl() {
     [poll],
   );
 
-  if (desktopControls) return null;
+  if (desktopControls || !teamControlEnabled()) return null;
 
   return (
     <section

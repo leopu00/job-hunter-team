@@ -1,6 +1,18 @@
 // The pure part of TeamControl: what the buttons ask, what the door answers, how an answer is read.
 // No React here, so a test can run it as it is.
 
+/**
+ * Start, stop and restart from the site stay hidden until the box runs the commands it is sent: today no
+ * box executes team_commands (its poller was retired), so a command would wait forever. Turned on at build
+ * time with NEXT_PUBLIC_JHT_TEAM_CONTROL=1 once the executor is in the box and measured on a test box.
+ * The emergency stop does not depend on it and stays visible.
+ */
+export function teamControlEnabled(
+  value: string | undefined = process.env.NEXT_PUBLIC_JHT_TEAM_CONTROL,
+): boolean {
+  return value === "1";
+}
+
 export const ACTIONS = ["start", "stop", "restart"] as const;
 export type TeamAction = (typeof ACTIONS)[number];
 
