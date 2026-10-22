@@ -141,11 +141,18 @@
 .existing-team-modal__failure p { margin: 4px 0 0; }
 .existing-team-modal__failure.is-terminal { border-color: #a84852; background: rgb(168 72 82 / 0.1); }
 
+/* The dialog scrolls inside itself; the buttons stay on the bottom edge of what is visible, so a short window (a 125% screen) never hides them. */
 .existing-team-modal__actions {
+  position: sticky;
+  bottom: 0;
+  z-index: 1;
   display: flex;
   justify-content: flex-end;
   gap: 10px;
   margin-top: 6px;
+  padding-block: 12px;
+  background: var(--color-panel, #111512);
+  border-top: 1px solid var(--color-border, #303731);
 }
 
 .existing-team-modal__actions button {
@@ -160,6 +167,12 @@
 .existing-team-modal__primary { border: 1px solid var(--color-accent, #bbf246); background: var(--color-accent, #bbf246); color: #10130f; }
 .existing-team-modal__secondary { border: 1px solid var(--color-border, #303731); background: transparent; color: var(--color-base, #f5f6f2); }
 .existing-team-modal__actions button:disabled { cursor: not-allowed; opacity: 0.56; }
+
+/* Short windows: the picture is the first thing to go, so the form and its buttons get the height. */
+@media (max-height: 700px) {
+  .existing-team-modal__artwork { display: none; }
+  .existing-team-modal__steps { margin: 16px 0; }
+}
 
 @media (max-width: 560px) {
   .existing-team-modal__backdrop { align-items: end; padding: 0; }
