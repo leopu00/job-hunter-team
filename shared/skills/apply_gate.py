@@ -57,6 +57,7 @@ Uso come CLI (gate da shell)::
 from __future__ import annotations
 
 import argparse
+import datetime
 import hashlib
 import json
 import os
@@ -69,7 +70,10 @@ from typing import Any
 __all__ = [
     "AUTO_APPLY_MODES",
     "DEFAULT_MAX_PER_DAY",
+    "DEFAULT_MAX_WEB_PER_DAY",
     "USER_REQUEST_ORIGINS",
+    "WEB_ORIGIN",
+    "web_cap_notice",
     "Verdict",
     "application_queue",
     "apply_verdict",
@@ -96,6 +100,18 @@ AUTO_APPLY_MODES = ("authorised", "dry_run")
 # essere un massimo»). Un intero positivo in config resta un tetto, se l'utente
 # lo vuole; assente o null = nessun tetto.
 DEFAULT_MAX_PER_DAY = None
+
+# Tetto giornaliero delle candidature AUTORIZZATE DAL SITO (22/10/2026). Il sito
+# può autorizzare una candidatura con la sola sessione (decisione dell'operatore:
+# il sito fa ciò che serve all'utente); finché non c'è la conferma a due tempi e
+# il registro lato database (fase 5), il freno sta qui, dove la candidatura parte.
+# Vale per le sole posizioni il cui flag è stato acceso con `apply_requested_by =
+# user_web`: quelle del desktop (`user_local`) e di Telegram non lo consumano.
+# Oltre il tetto restano in attesa fino a domani (`daily_web_cap_reached`, nella
+# coda sotto `held`), senza perdere l'autorizzazione. Configurabile con
+# `applications.auto_apply.max_web_per_day` (intero positivo); assente = 5.
+DEFAULT_MAX_WEB_PER_DAY = 5
+WEB_ORIGIN = "user_web"
 
 # ── La regola di chi può chiedere cosa: UN file, letto da due linguaggi ──────
 #
@@ -306,11 +322,23 @@ def consent_verdict(config: dict | None = None, path: Path | None = None) -> Ver
             {"max_per_day": repr(max_per_day)},
         )
 
+    max_web_per_day = auto.get("max_web_per_day", DEFAULT_MAX_WEB_PER_DAY)
+    # Qui non esiste «nessun tetto»: il tetto del sito è un freno, e il valore
+    # deve essere un intero positivo. Assente = il valore prudente di default.
+    if isinstance(max_web_per_day, bool) or not isinstance(max_web_per_day, int) or max_web_per_day < 1:
+        return Verdict(
+            False,
+            "consent_cap_invalid",
+            "`applications.auto_apply.max_web_per_day` is neither absent nor a positive integer: "
+            "refusing rather than guessing the cap of the applications authorised from the website",
+            {"max_web_per_day": repr(max_web_per_day)},
+        )
+
     return Verdict(
         True,
         "consent_granted",
         "the user consented to auto-apply",
-        {"mode": mode, "max_per_day": max_per_day},
+        {"mode": mode, "max_per_day": max_per_day, "max_web_per_day": max_web_per_day},
     )
 
 
@@ -913,7 +941,9 @@ CAP_RESERVATIONS_TABLE = "apply_cap_reservations"
 CAP_CHANNELS = ("email", "browser")
 
 
-def _sent_today(conn: sqlite3.Connection, *, except_position: int | None = None) -> int:
+def _sent_today(
+    conn: sqlite3.Connection, *, except_position: int | None = None, web_only: bool = False
+) -> int:
     """Automated sends that consume today's cap, browser and email together.
 
     One per position, from three sources: an application recorded as sent by
@@ -924,6 +954,9 @@ def _sent_today(conn: sqlite3.Connection, *, except_position: int | None = None)
 
     `except_position` leaves one position out: the one about to reserve, which
     cannot take a second slot for itself.
+
+    `web_only` counts only the positions whose authorisation came from the
+    website (`apply_requested_by = user_web`): the cap of those is its own.
     """
     if AUTOMATED_RULE_ERROR:
         raise sqlite3.DatabaseError(f"automated channels unreadable: {AUTOMATED_RULE_ERROR}")
@@ -950,10 +983,16 @@ def _sent_today(conn: sqlite3.Connection, *, except_position: int | None = None)
             f"WHERE state = 'reserved' "
             f"AND date(reserved_at, 'localtime') = date('now', 'localtime')"
         )
-    query = f"SELECT COUNT(*) FROM ({' UNION '.join(parts)})"
+    query = f"SELECT COUNT(*) FROM ({' UNION '.join(parts)}) u"
+    where: list[str] = []
+    if web_only:
+        where.append("u.position_id IN (SELECT id FROM positions WHERE apply_requested_by = ?)")
+        params.append(WEB_ORIGIN)
     if except_position is not None:
-        query += " WHERE position_id != ?"
+        where.append("u.position_id != ?")
         params.append(int(except_position))
+    if where:
+        query += " WHERE " + " AND ".join(where)
     return int(conn.execute(query, params).fetchone()[0])
 
 
@@ -1023,6 +1062,22 @@ def reserve_daily_slot(
                     "the daily cap of automated applications is reached; nothing may be sent",
                     context,
                 )
+            # The cap of the applications authorised from the website, counted in the
+            # same transaction: a second run racing for the last web slot loses it.
+            max_web = consent.context.get("max_web_per_day")
+            origin = conn.execute("SELECT apply_requested_by FROM positions WHERE id = ?", (pid,)).fetchone()
+            if origin is not None and origin[0] == WEB_ORIGIN and max_web is not None:
+                web_sent = _sent_today(conn, except_position=pid, web_only=True)
+                context.update(max_web_per_day=max_web, web_sent_today=web_sent)
+                if web_sent >= max_web:
+                    conn.execute("ROLLBACK")
+                    return Verdict(
+                        False,
+                        "daily_web_cap_reached",
+                        "the daily cap of applications authorised from the website is reached; "
+                        "this one waits for tomorrow, still authorised",
+                        context,
+                    )
             conn.execute(
                 f"INSERT INTO {CAP_RESERVATIONS_TABLE} (position_id, channel, token) VALUES (?, ?, ?)",
                 (pid, channel, token),
@@ -1175,7 +1230,7 @@ def application_queue(
     raggiunto e almeno una posizione passa `position_verdict` senza essere
     ferma. In ogni altro caso è falso, con un `reason` stabile:
     `consent_*`/`config_*`, `db_unavailable`, `queue_unreadable`,
-    `queue_empty`, `daily_cap_reached`.
+    `queue_empty`, `daily_cap_reached`, `daily_web_cap_reached`.
     """
     out: dict[str, Any] = {
         "ready": False,
@@ -1185,6 +1240,9 @@ def application_queue(
         "max_per_day": None,
         "sent_today": None,
         "remaining_today": None,
+        "max_web_per_day": None,
+        "web_sent_today": None,
+        "remaining_web_today": None,
         "positions": [],
         "held": [],
     }
@@ -1195,6 +1253,7 @@ def application_queue(
         return out
     out["mode"] = consent.context.get("mode")
     out["max_per_day"] = consent.context.get("max_per_day")
+    out["max_web_per_day"] = max_web = consent.context.get("max_web_per_day")
 
     own_conn = conn is None
     if own_conn:
@@ -1206,7 +1265,7 @@ def application_queue(
     try:
         try:
             rows = conn.execute(
-                "SELECT p.id, p.url, p.apply_requested_at, a.cv_pdf_path "
+                "SELECT p.id, p.url, p.apply_requested_at, a.cv_pdf_path, p.apply_requested_by "
                 "FROM positions p LEFT JOIN applications a ON a.position_id = p.id "
                 "WHERE p.apply_requested = 1 AND p.status = ? "
                 "ORDER BY p.apply_requested_at, p.id",
@@ -1217,13 +1276,15 @@ def application_queue(
             # esiste per il ritmo dell'automazione, non per quello della persona.
             # Browser ed email condividono lo stesso tetto (`_sent_today`).
             sent_today = _sent_today(conn)
+            web_sent_today = _sent_today(conn, web_only=True)
         except sqlite3.Error as err:
             out.update(reason="queue_unreadable", detail=f"cannot read the application queue: {err}")
             return out
 
         positions, held, cv_rework = [], [], []
         essentials_hold = _essentials_hold(conn, jht_home)
-        for pid, url, asked_at, cv_pdf in rows:
+        web_taken = 0
+        for pid, url, asked_at, cv_pdf, origin in rows:
             verdict = position_verdict(pid, conn=conn)
             if not verdict.allowed:
                 held.append({"position_id": pid, "reason": verdict.reason})
@@ -1257,16 +1318,37 @@ def application_queue(
             if hold:
                 held.append({"position_id": pid, "reason": hold})
                 continue
+            # The applications authorised from the website have a cap of their own:
+            # the ones that fit today are taken in the order they were asked, the
+            # others wait for tomorrow and keep their authorisation.
+            if origin == WEB_ORIGIN and max_web is not None:
+                if web_sent_today + web_taken >= max_web:
+                    held.append({"position_id": pid, "reason": "daily_web_cap_reached"})
+                    continue
+                web_taken += 1
             positions.append({"position_id": pid, "url": str(url).strip(), "cv_pdf_path": str(cv)})
     finally:
         if own_conn and conn is not None:
             conn.close()
 
     remaining = _remaining_today(out["max_per_day"], sent_today)
-    out.update(sent_today=sent_today, remaining_today=remaining, positions=positions, held=held)
+    out.update(
+        sent_today=sent_today,
+        remaining_today=remaining,
+        web_sent_today=web_sent_today,
+        remaining_web_today=_remaining_today(max_web, web_sent_today),
+        positions=positions,
+        held=held,
+    )
     if cv_rework:
         out["cv_rework"] = cv_rework
-    if not positions:
+    if not positions and any(h["reason"] == "daily_web_cap_reached" for h in held):
+        out.update(
+            reason="daily_web_cap_reached",
+            detail="the daily cap of applications authorised from the website is reached; "
+            "those wait for tomorrow, still authorised",
+        )
+    elif not positions:
         out.update(reason="queue_empty", detail="no authorised position can be taken now")
     elif remaining is not None and remaining <= 0:
         out.update(
@@ -1276,6 +1358,38 @@ def application_queue(
     else:
         out.update(ready=True, reason="queue_ready", detail=f"{len(positions)} authorised position(s) can be taken")
     return out
+
+
+WEB_CAP_NOTICE_MARKER = "apply-web-cap-notified"
+
+
+def web_cap_notice(queue: dict[str, Any], jht_home: Path | None = None, today: str | None = None) -> dict[str, Any] | None:
+    """The one notice a day that applications authorised from the website are waiting for the cap.
+
+    The queue holds them (`daily_web_cap_reached`) and the user would otherwise
+    see only an authorisation that does not go out. The first time each local day
+    the queue holds some, this returns what the CLOSER tells the user once:
+    `{"waiting": n, "max_web_per_day": cap}`; the rest of the day it returns
+    `None`. The day is written to `state/apply-web-cap-notified` BEFORE the
+    notice is handed over: a notice lost is better than the same one at every
+    iteration of the queue.
+    """
+    waiting = sum(1 for h in queue.get("held", []) if h.get("reason") == "daily_web_cap_reached")
+    if not waiting:
+        return None
+    day = today or datetime.date.today().isoformat()
+    marker = (jht_home or _jht_home()) / "state" / WEB_CAP_NOTICE_MARKER
+    try:
+        if marker.read_text(encoding="utf-8").strip() == day:
+            return None
+    except OSError:
+        pass
+    try:
+        marker.parent.mkdir(parents=True, exist_ok=True)
+        marker.write_text(day, encoding="utf-8")
+    except OSError:
+        return None  # without a record the notice would repeat at every iteration
+    return {"waiting": waiting, "max_web_per_day": queue.get("max_web_per_day")}
 
 
 # ── CLI ──────────────────────────────────────────────────────────────────────
@@ -1320,6 +1434,9 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.check == "queue":
         q = application_queue(config_path=cfg_path, db_path=args.db)
+        notice = web_cap_notice(q)
+        if notice:
+            q["web_cap_notice"] = notice
         if args.json:
             print(json.dumps(q, ensure_ascii=False))
         elif q["ready"]:
