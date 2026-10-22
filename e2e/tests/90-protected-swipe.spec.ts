@@ -127,9 +127,12 @@ test.describe("area riservata — swipe interattivo", () => {
     // Contratto corrente del controllo rosso: l'esclusione canonica è
     // l'effetto primario (user-exclude, awaited dall'UI), e un motivo di
     // GUSTO emette in coda anche il giudizio `less_like_this` col motivo
-    // attaccato. Si aspettano ENTRAMBE le risposte: perdere la seconda
-    // significherebbe che lo Scout non impara più dai motivi di gusto.
-    await why.locator("select").selectOption("not_interested");
+    // attaccato. I motivi sono i codici del vocabolario chiuso
+    // (`shared/feedback-reasons.json`): `other` è di gusto, i fattuali
+    // (`closed`, `scam_or_gone`, `already_applied`) non emettono il giudizio.
+    // Si aspettano ENTRAMBE le risposte: perdere la seconda significherebbe
+    // che lo Scout non impara più dai motivi di gusto.
+    await why.locator("select").selectOption("other");
     const [exclusion, feedback] = await Promise.all([
       page.waitForResponse((r) => r.url().includes("/user-exclude")),
       page.waitForResponse((r) => r.url().includes("/feedback")),
@@ -139,12 +142,12 @@ test.describe("area riservata — swipe interattivo", () => {
     expect(
       exclusion.request().postDataJSON(),
       "l'esclusione è arrivata senza il motivo che l'utente ha scelto",
-    ).toMatchObject({ reason: "not_interested" });
+    ).toMatchObject({ reason: "other" });
     expect(feedback.ok(), "il giudizio non è stato accettato").toBe(true);
     expect(
       feedback.request().postDataJSON(),
       "il giudizio è arrivato senza il motivo che l'utente ha scelto",
-    ).toMatchObject({ action: "dislike", reason: "not_interested" });
+    ).toMatchObject({ action: "dislike", reason: "other" });
     await expect(
       why,
       "il pannello non si è chiuso dopo la conferma",
