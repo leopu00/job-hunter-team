@@ -10,8 +10,7 @@ export type BarEntry = { label: string; value: string };
  * The entries of an agent's bar. The same list for every agent, and «—»
  * where the cloud has nothing: model and provider are never synced, and the
  * heartbeat and the last error belong to the whole team, not to one agent.
- * Adapted from FLEET's vociAgente (tmux-paradise
- * app/src/components/BarraAgente.tsx): labelled entries instead of bare
+ * Adapted from the operator's panel: labelled entries instead of bare
  * values, so nobody has to guess what a value is.
  */
 export function barEntries(agent: AgentDef, data: AgentsData, now: number): BarEntry[] {
@@ -31,8 +30,8 @@ export function barEntries(agent: AgentDef, data: AgentsData, now: number): BarE
 /**
  * The bar over the conversation: who the agent is and what the cloud knows
  * of it, with the team's last error when there is one. One bar, the same for
- * every agent (FLEET's BarraAgente, 27/09: «è UNA barra, identica in ogni
- * posto»); what stays in FLEET is the machine's side (CPU, RAM, start/stop),
+ * every agent (as in the operator's panel: one bar, the same everywhere);
+ * what stays in the panel is the machine's side (CPU, RAM, start/stop),
  * which the desktop cannot see.
  */
 export default function AgentBar({ agent, data, now }: { agent: AgentDef; data: AgentsData; now: number }) {

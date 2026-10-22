@@ -1,6 +1,6 @@
 # Guida di setup sul sito — pagina e innesto dei contenuti canonici
 
-**7 agosto 2026 · HQ-FRONTEND · branch `frontend`**
+**7 agosto 2026 · team frontend · branch `frontend`**
 
 Nota di consegna della parte web della guida a capitoli che sostituisce i
 video-demo di setup: cosa c'è, cosa resta da fare, e dove si innesta ciò che
@@ -16,13 +16,13 @@ manca.
 | --- | --- |
 | Route | `/setup-guide` — lo slug raccomandato dal contratto |
 | Codice | `web/app/setup-guide/` |
-| Contenuti | `guide-content.ts` — **contratto di HQ-DOCS, adottato alla radice** |
+| Contenuti | `guide-content.ts` — **contratto del team docs, adottato alla radice** |
 | Schermate | `guide-screens.ts` — id `G00`, `S01`–`S17`, `W01`–`W04` |
 | Test dati | `tests/js/i18n/setup-guide.test.ts` |
 | Test pagina | `e2e/tests/87-setup-guide.spec.ts` |
 | Preview telefono | `e2e/scripts/setup-guide-mobile-preview.mjs` |
 
-## I contenuti sono quelli di HQ-DOCS, non una seconda versione
+## I contenuti sono quelli del team docs, non una seconda versione
 
 La fonte è `docs/internal/2026-08-07-setup-guide-content-contract.md`. Id,
 titoli, corpi, link e id delle schermate sono i suoi, **adottati alla
@@ -108,7 +108,7 @@ consegnato, mentre macOS e Windows non hanno nulla.
 
 ### Due superfici native, non due riprese
 
-HQ-DOCS ha deciso il 7 agosto (`3864199e3`) che `G00` e `S01` **non sono
+Il team docs ha deciso il 7 agosto (`3864199e3`) che `G00` e `S01` **non sono
 richieste di cattura**:
 
 - `S01` è la `RequirementsCard` costruita nella pagina;
@@ -171,7 +171,7 @@ test e2e lo verifica in tedesco.
   Windows non hanno ancora nulla. Le due immagini già in repo
   (`office-overview`, `departments`) restano **fuori** dalla guida: il
   contratto stabilisce che non provano né il setup né un team vivo.
-- **Le traduzioni** dei testi del contratto (HQ-FULLSTACK-1).
+- **Le traduzioni** dei testi del contratto (un fullstack).
 - **`W02`–`W04` restano senza immagine**: servono un account Google di prova
   isolato e approvato. La localizzazione inglese del terminale è entrata in
   `master` (`13c9e7902`), ma un merge non è una release pubblicata: finché
@@ -183,7 +183,7 @@ test e2e lo verifica in tedesco.
   sotto `/docs` come *Product Tour*. Non fatto: è un lavoro a sé e tocca
   navigazione e sitemap.
 - **I link di download** sono quelli del contratto e coincidono con la
-  pagina `/download` attuale; restano da confermare con HQ-BACKEND se i
+  pagina `/download` attuale; restano da confermare con il team backend se i
   comandi CLI in corso li cambiano.
 
 ## Verifiche fatte

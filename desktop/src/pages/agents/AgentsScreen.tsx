@@ -9,11 +9,11 @@ import AgentMoves from "./AgentMoves";
 import { AGENTS, agentLed, type AgentDef, type AgentsData } from "./load-agents";
 
 /**
- * The agents page, laid out as FLEET's Messaggi (tmux-paradise
- * app/src/views/Messaggi.tsx): the list of the agents on the left, and for
- * the chosen one, at full width, its bar on top and under it the
- * conversation. FLEET keeps the list in its side menu; the desktop has no
- * side menu, so the list is the page's own left column. For the three agents
+ * The agents page, laid out as the operator's panel lays out its messages:
+ * the list of the agents on the left, and for the chosen one, at full width,
+ * its bar on top and under it the conversation. The panel keeps the list in
+ * its side menu; the desktop has no side menu, so the list is the page's own
+ * left column. For the three agents
  * the user chats with the body is the chat; for the others, which have no
  * chat, their latest moves.
  */

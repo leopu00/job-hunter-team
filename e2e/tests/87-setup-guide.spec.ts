@@ -35,7 +35,7 @@ test("la guida si legge a larghezza telefono senza scorrere di lato", async ({
     // stesso si allarga e `innerWidth` cresce insieme a lui — il gate
     // passava mentre la pagina era larga 417 CSS invece di 339. Il
     // riferimento giusto è la larghezza attesa, viewport diviso lo zoom.
-    // Trovato da HQ-FULLSTACK-1 misurando i pixel della preview tedesca.
+    // Trovato da un fullstack misurando i pixel della preview tedesca.
     const width = await page.evaluate(() => {
       const zoom =
         Number.parseFloat(
