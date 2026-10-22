@@ -57,6 +57,7 @@ import {
   saveAwaitingApplication,
 } from '../lib/cloud-push-awaiting.js';
 import { ReceiptKeyInvalid } from '../../../shared/cloud/receipt-ids.js';
+import { instantKey, noticeWebActions } from '../lib/web-action-notice.js';
 import {
   bootstrapLimits, decideBootstrapPush, nextBootstrapState,
   readBootstrapState, readFirstRunPhase, readLocalSignature, saveBootstrapState,
@@ -2711,6 +2712,9 @@ async function handlePullDesiredState(options = {}) {
   let updated = 0;
   let missing = 0;
   let excludeChanges = 0;
+  // W7: what the website authorised, told to the user out of band once the
+  // database is closed (the notice writes in it too).
+  const webNotices = [];
   try {
     const db = new DatabaseSync(dbPath);
     db.exec('PRAGMA foreign_keys = ON');
@@ -2814,6 +2818,12 @@ async function handlePullDesiredState(options = {}) {
         stmt.run(writeFlag, writeAt, writeKind, geoFlag, geoAt, rcFlag, rcAt, spFlag, spAt,
           apFlag, apAt, apBy, legacyId);
         updated++;
+        // An authorisation that arrives from the website, at a new instant: the
+        // user hears of it before the CLOSER takes it (W7).
+        const at = instantKey(apAt);
+        if (apFlag === 1 && apBy === 'user_web' && at && (local.apply_requested_at ?? null) !== apAt) {
+          webNotices.push({ code: 'apply_authorized_from_web', key: `apply:${legacyId}:${at}`, positionId: legacyId });
+        }
       }
 
       // ── Sync NARROW dell'esclusione utente ──
@@ -2847,8 +2857,12 @@ async function handlePullDesiredState(options = {}) {
   } catch (err) {
     console.error(pc.red(`UPDATE SQLite Error: ${err.message}`));
     process.exitCode = 1;
+    // What was written before the error stays written: its notices go out.
+    await noticeWebActions(webNotices, { dbPath, log: (msg) => console.error(pc.yellow(`  ${msg}`)) });
     return;
   }
+
+  await noticeWebActions(webNotices, { dbPath, log: (msg) => console.error(pc.yellow(`  ${msg}`)) });
 
   // Successo sostanziale loggato anche in `silent`: nel daemon vogliamo
   // sapere quando l'utente clicca via web e il pull ha applicato qualcosa
@@ -3149,6 +3163,17 @@ async function handleTicketSync(options = {}) {
 }
 
 /**
+ * W7: the notice of a team order imported from the website. Its key is the
+ * directive and the instant of the change, so the same change pulled twice is
+ * one notice; without an instant, the text and the status name the change.
+ */
+function directiveNotice(cloudId, cd) {
+  const at = instantKey(cd.updated_at) || instantKey(cd.created_at)
+    || createHash('sha256').update(`${cd.body}\u0000${cd.status || 'active'}`).digest('hex').slice(0, 16);
+  return { code: 'directive_changed_from_web', key: `directive:${cloudId}:${at}` };
+}
+
+/**
  * Sync bidirezionale della bacheca (team_directives) cloud↔VPS. Mirror di
  * handleTicketSync per gli ordini PERMANENTI dell'utente:
  *   PULL  cloud → locale : direttive create/modificate dall'utente sul web (edit
@@ -3198,6 +3223,8 @@ async function handleDirectiveSync(options = {}) {
   let pushedUpdates = 0;
   let pushedInserts = 0;
   let db;
+  // W7: orders from the website, told once the database is closed.
+  const directiveNotices = [];
   try {
     db = new DatabaseSync(dbPath);
     db.exec('PRAGMA foreign_keys = ON');
@@ -3249,10 +3276,16 @@ async function handleDirectiveSync(options = {}) {
         const status = cd.status || 'active';
         const so = Number.isInteger(Number(cd.sort_order)) ? Number(cd.sort_order) : 0;
         if (findByCloud.get(cloudId)) {
+          // W7: a change that came from the website (body or status), told to the user.
+          const before = db.prepare('SELECT body, status FROM team_directives WHERE cloud_id = ?').get(cloudId);
+          if (cd.origin !== 'desktop' && before && (before.body !== cd.body || before.status !== status)) {
+            directiveNotices.push(directiveNotice(cloudId, cd));
+          }
           upd.run(cd.body, kind, status, so, cd.updated_at || null, cd.archived_at || null, cloudId);
         } else {
           ins.run(cd.body, kind, status, so, cd.created_by || 'user', cloudId,
                   cd.created_at || null, cd.updated_at || null, cd.archived_at || null);
+          if (cd.origin !== 'desktop') directiveNotices.push(directiveNotice(cloudId, cd));
         }
         imported++;
       }
@@ -3306,9 +3339,11 @@ async function handleDirectiveSync(options = {}) {
     try { if (db) db.close(); } catch { /* già chiuso */ }
     console.error(pc.red(`Error directive-sync SQLite: ${err.message}`));
     process.exitCode = 1;
+    await noticeWebActions(directiveNotices, { dbPath, log: (msg) => console.error(pc.yellow(`  ${msg}`)) });
     return;
   }
 
+  await noticeWebActions(directiveNotices, { dbPath, log: (msg) => console.error(pc.yellow(`  ${msg}`)) });
   await saveDirectivesCursor(cursor);
 
   const total = imported + pushedUpdates + pushedInserts;

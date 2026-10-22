@@ -25,6 +25,7 @@
  */
 
 import { spawn } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { readFile, writeFile, unlink } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
@@ -35,6 +36,7 @@ import { observeTeam as observeBoxTeam } from './team-observed.js';
 import { cloudSyncHeaders } from './client-identity.js';
 import { agentsStatusWriter, createAgentsStatusReader, createHeartbeatCarrier, startAgentsStatusPublisher } from './agents-status.js';
 import { createApiAgentsStatusReader } from './agents-status-traces.js';
+import { instantKey, noticeWebAction } from './web-action-notice.js';
 import { createDoneStore, serverClock } from './team-command-guard.js';
 import { desiredKey, desiredRefusal, emergencyStopRefusal, stopRefusal } from './team-state-guard.js';
 
@@ -167,6 +169,26 @@ async function applyAction(baseUrl, token, command, args, exec = execJht) {
 }
 
 /**
+ * W7: a start, a stop or a restart that came from the website, told to the
+ * user out of band (web-action-notice.js). Never thrown: the team action has
+ * already run. `ctx.notice` lets the tests see it without a Python.
+ */
+async function tellWebAction(ctx, code, key) {
+  const notice = ctx?.notice || noticeWebAction;
+  try {
+    await notice({ code, key }, { log: (msg) => log('warn', 'web-action-notice', { msg }) });
+  } catch (err) {
+    log('warn', 'web-action-notice', { err: err.message });
+  }
+}
+
+/** A restart token as a key: its own characters when they fit, else a hash of it. */
+function tokenKey(token) {
+  const text = String(token ?? '');
+  return /^[A-Za-z0-9_.-]{1,80}$/.test(text) ? text : createHash('sha256').update(text).digest('hex').slice(0, 24);
+}
+
+/**
  * The full desired-state convergence (only in runTeamStateReconciler). `ctx`:
  *   ownerId     user_id of cloud.json
  *   serverNow() the server's clock (the poll reply's Date plus the time since)
@@ -185,8 +207,9 @@ export async function reconcile(baseUrl, token, state, ctx) {
     } else {
       log('info', 'reconcile.restart', { token: state.restart_token });
       ctx.done.add(desiredKey('restart', state));
-      const { updates } = await applyAction(baseUrl, token, 'restarted', ['team', 'restart'], exec);
+      const { r, updates } = await applyAction(baseUrl, token, 'restarted', ['team', 'restart'], exec);
       updates.last_restart_token = state.restart_token;
+      if (r.ok) await tellWebAction(ctx, 'team_restarted_from_web', `restart:${tokenKey(state.restart_token)}`);
       await apiCall('PATCH', baseUrl, token, '/api/team-state', updates).catch((err) =>
         log('error', 'reconcile.observe-write-failed', { err: err.message })
       );
@@ -203,7 +226,8 @@ export async function reconcile(baseUrl, token, state, ctx) {
     }
     log('info', 'reconcile.start');
     ctx.done.add(desiredKey('start', state));
-    const { updates } = await applyAction(baseUrl, token, 'started', ['team', 'start'], exec);
+    const { r, updates } = await applyAction(baseUrl, token, 'started', ['team', 'start'], exec);
+    if (r.ok) await tellWebAction(ctx, 'team_started_from_web', `start:${instantKey(state.desired_changed_at) || 'now'}`);
     await apiCall('PATCH', baseUrl, token, '/api/team-state', updates).catch((err) =>
       log('error', 'reconcile.observe-write-failed', { err: err.message })
     );
@@ -218,7 +242,8 @@ export async function reconcile(baseUrl, token, state, ctx) {
       return null;
     }
     log('info', 'reconcile.stop');
-    const { updates } = await applyAction(baseUrl, token, 'stopped', ['team', 'stop'], exec);
+    const { r, updates } = await applyAction(baseUrl, token, 'stopped', ['team', 'stop'], exec);
+    if (r.ok) await tellWebAction(ctx, 'team_stopped_from_web', `stop:${instantKey(state.desired_changed_at) || 'now'}`);
     await apiCall('PATCH', baseUrl, token, '/api/team-state', updates).catch((err) =>
       log('error', 'reconcile.observe-write-failed', { err: err.message })
     );
@@ -352,7 +377,7 @@ export function emergencyStopRequired(state) {
     && (!Number.isFinite(completed) || requested > completed);
 }
 
-export async function reconcileEmergencyStop(config, state, { done = doneStore(), exec = execJht } = {}) {
+export async function reconcileEmergencyStop(config, state, { done = doneStore(), exec = execJht, notice = noticeWebAction } = {}) {
   if (!emergencyStopRequired(state)) {
     return { ok: true, action: null };
   }
@@ -384,6 +409,8 @@ export async function reconcileEmergencyStop(config, state, { done = doneStore()
   );
   if (r.ok) {
     updates.emergency_stop_completed_at = state.emergency_stop_requested_at;
+    await tellWebAction({ notice }, 'team_stopped_from_web',
+      `emergency-stop:${instantKey(state.emergency_stop_requested_at) || 'now'}`);
     // Written down after the stop has worked: an unwritable store does not undo a stop.
     try {
       done.add(desiredKey('emergency-stop', state));
