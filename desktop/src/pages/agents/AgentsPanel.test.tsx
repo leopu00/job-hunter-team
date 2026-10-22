@@ -52,7 +52,7 @@ const listReply = () => ({
   data: { agents: AGENTS, roles: ROLES, states: true, target, where: "vps", label: "vps.example", ...(ownVps ? { ownVps } : {}) },
 });
 const ops = () => native.invoke.mock.calls.filter(([c]) => c === COMMAND).map(([, a]) => (a as { request: Record<string, unknown> }).request);
-const ACTIONS = new Set(["start", "stop", "restart", "pause", "resume"]);
+const ACTIONS = new Set(["start", "stop", "restart", "pause", "resume", "answer"]);
 
 let restoreBridge: () => void;
 beforeEach(() => {
@@ -628,7 +628,8 @@ describe("«Agenti», the questions the agents asked the person", () => {
     expect(first).toHaveTextContent("blocco");
     expect(first).toHaveTextContent("CV per Acme");
     expect(first).toHaveTextContent("Quale CV uso per Acme?");
-    expect(within(first).getByTestId("panel-question-options")).toHaveTextContent("CV breve · Rinvia, non fare niente");
+    // a structured question with one choice: its options are the buttons that answer it
+    expect(within(first).getAllByTestId(/^panel-answer-/).map((button) => button.textContent)).toEqual(["CV breve", "Rinvia, non fare niente"]);
     expect(within(first).getByTestId("panel-question-expiry")).toHaveTextContent("scade fra 3 h, poi: Rinvia, non fare niente");
     expect(second).toHaveAttribute("data-type", "none");
     expect(second).toHaveTextContent("senza tipo");
@@ -679,7 +680,112 @@ describe("«Agenti», the questions the agents asked the person", () => {
   it("only shows them: the panel's source names the questions only where it shows them", () => {
     const source = readFileSync("src/pages/agents/AgentsPanel.tsx", "utf8");
     const lines = source.split("\n").filter((line) => /questions/i.test(line));
-    const allowed = [/from "\.\/AgentQuestions"/, /questionsSummary\(t, /, /<QuestionMarks t=\{t\} questions=/, /<QuestionList t=\{t\} questions=/, /counts\.questions/, /title=\{t\.questionsSummaryHelp\}/, /data-testid="panel-questions-summary"/, /the questions of the agents that are up/];
+    const allowed = [/from "\.\/AgentQuestions"/, /questionsSummary\(t, /, /<QuestionMarks t=\{t\} questions=/, /^\s*questions=\{current\.agent!\.questions\}$/, /counts\.questions/, /title=\{t\.questionsSummaryHelp\}/, /data-testid="panel-questions-summary"/, /the questions of the agents that are up/];
     for (const line of lines) expect(allowed.some((re) => re.test(line)), line).toBe(true);
+  });
+});
+
+describe("«Agenti», answering an agent's question from the panel", () => {
+  const QUESTION = "aq:scrittore:1790000000-ab12cd";
+  const asked = (fields: Record<string, unknown> = {}) => ({
+    id: QUESTION, tipo: "blocco", oggetto: "CV per Acme", testo: "Quale CV uso per Acme?",
+    opzioni: [{ id: "breve", label: "CV breve", reversibile: true }, { id: "lungo", label: "CV completo" }, { id: "_rinvia", label: "Rinvia", reversibile: true }],
+    multipla: false, libera: false, scadenza: NOW_S + 3600, default: "_rinvia", at: NOW_S - 600, ...fields,
+  });
+  let items: Record<string, unknown>[];
+  let answerReply: Record<string, unknown>;
+  beforeEach(() => {
+    items = [asked()];
+    answerReply = { ok: true, data: { result: "answered" } };
+    native.invoke.mockImplementation(async (command: string, args: { request: Record<string, unknown> }) => {
+      if (command !== COMMAND) return { ok: false, error: "not_in_test" };
+      const { op } = args.request;
+      if (op === "list") {
+        const agents = [agent("SCRITTORE-1", "scrittore", "1", "aspetta_umano", { questions: { open: items.length, unread: 1, items } })];
+        return { ...listReply(), data: { ...listReply().data, agents } };
+      }
+      if (op === "team") return { ok: true, data: { halted: false, standby, held } };
+      if (op === "answer") return answerReply;
+      return { ok: true, data: { name: args.request.session, up: true, text: "" } };
+    });
+  });
+  const answers = () => ops().filter((r) => r.op === "answer");
+
+  it("answers a reversible option at the click, with the ids and the list's target, and says what happened", async () => {
+    show("agent=SCRITTORE-1");
+    const button = await screen.findByTestId("panel-answer-breve");
+    expect(button).toHaveTextContent("CV breve");
+    fireEvent.click(button);
+    await waitFor(() => expect(answers()).toEqual([{ op: "answer", question: QUESTION, choice: "breve", target: "T1", confirmed: true }]));
+    expect(await screen.findByTestId("panel-notice")).toHaveTextContent("Risposta inviata a Scrittore-1: «CV breve».");
+    // the list is read again, so the counts follow
+    await waitFor(() => expect(ops().filter((r) => r.op === "list").length).toBeGreaterThan(1));
+    expect(screen.queryByTestId("panel-confirm")).toBeNull();
+  });
+
+  it("asks first for an option that does not say it can be undone, and sends nothing on cancel", async () => {
+    show("agent=SCRITTORE-1");
+    const button = await screen.findByTestId("panel-answer-lungo");
+    expect(button).toHaveAttribute("data-reversible", "false");
+    fireEvent.click(button);
+    const dialog = await screen.findByTestId("panel-confirm");
+    expect(dialog).toHaveTextContent("Rispondere «CV completo» a Scrittore-1 sulla VPS vps.example?");
+    expect(dialog).toHaveTextContent("La prima risposta vale: dopo non si cambia.");
+    fireEvent.click(within(dialog).getByText("Annulla"));
+    expect(answers()).toEqual([]);
+    fireEvent.click(screen.getByTestId("panel-answer-lungo"));
+    fireEvent.click(within(await screen.findByTestId("panel-confirm")).getByText("Conferma"));
+    await waitFor(() => expect(answers()).toEqual([{ op: "answer", question: QUESTION, choice: "lungo", target: "T1", confirmed: true }]));
+  });
+
+  it("says when the answer was already given elsewhere, when the question had expired, and a refusal with its code", async () => {
+    answerReply = { ok: true, data: { result: "already_answered" } };
+    show("agent=SCRITTORE-1");
+    fireEvent.click(await screen.findByTestId("panel-answer-breve"));
+    expect(await screen.findByTestId("panel-notice")).toHaveTextContent("Hai già risposto da un’altra parte: vale quella risposta.");
+    cleanup();
+    answerReply = { ok: true, data: { result: "expired" } };
+    show("agent=SCRITTORE-1");
+    fireEvent.click(await screen.findByTestId("panel-answer-breve"));
+    expect(await screen.findByTestId("panel-notice")).toHaveTextContent("Era scaduta: ha fatto «Rinvia».");
+    cleanup();
+    answerReply = { ok: false, error: "answer_refused" };
+    show("agent=SCRITTORE-1");
+    fireEvent.click(await screen.findByTestId("panel-answer-breve"));
+    expect(await screen.findByTestId("panel-notice")).toHaveTextContent(/answer_refused/);
+  });
+
+  it("has no buttons for a question with several choices, with room for words, or written before the contract", async () => {
+    items = [
+      asked({ id: "aq:scrittore:1790000000-m1", multipla: true }),
+      asked({ id: "aq:scrittore:1790000000-l1", libera: true }),
+      { id: null, tipo: null, oggetto: null, testo: "Procedo?", opzioni: [], multipla: false, libera: true, scadenza: null, default: null, at: NOW_S - 900 },
+    ];
+    show("agent=SCRITTORE-1");
+    const list = await screen.findByTestId("panel-questions");
+    expect(within(list).queryAllByTestId(/^panel-answer-/)).toEqual([]);
+    expect(within(list).getAllByTestId("panel-question-options")).toHaveLength(2);
+    expect(within(list).getByTestId("panel-questions-messages")).toBeInTheDocument();
+  });
+
+  it("in the read-only view: the options are text, and no answer reaches the native side", async () => {
+    enterExistingTeamReadOnly(false);
+    navigate("/agents?agent=SCRITTORE-1", { replace: true });
+    render(<Shell />);
+    const list = await screen.findByTestId("panel-questions");
+    expect(within(list).queryAllByTestId(/^panel-answer-/)).toEqual([]);
+    expect(within(list).getByTestId("panel-question-options")).toHaveTextContent("CV breve · CV completo · Rinvia");
+    expect(answers()).toEqual([]);
+  });
+
+  it("has the sentences of an answer in every language", () => {
+    for (const [locale, text] of Object.entries(AGENTS_PANEL_TEXT) as [Locale, AgentsPanelText][]) {
+      for (const slot of ["{option}", "{name}", "{where}"]) expect(text.confirmAnswer, locale).toContain(slot);
+      expect(text.bodyAnswer, locale).toContain("{name}");
+      expect(text.resultAnswered, locale).toContain("{name}");
+      expect(text.resultAnswered, locale).toContain("{option}");
+      expect(text.resultExpired, locale).toContain("{option}");
+      for (const key of ["answering", "answerConfirmFirst", "resultAlreadyAnswered"] as const) expect(text[key], `${locale} ${key}`).toMatch(/\S/);
+    }
   });
 });

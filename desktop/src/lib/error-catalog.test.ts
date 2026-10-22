@@ -197,6 +197,7 @@ const NOT_ERRORS: Record<string, string> = {
   already_paused: "agent control outcome",
   already_running: "agent control outcome",
   already_stopped: "agent control outcome",
+  already_answered: "agent control outcome: the question was answered elsewhere first (the page says it)",
   not_paused: "agent control outcome",
   existing_team_runtime_own_vps_invalid: "own-VPS mark: refused or unreadable, never shown (the setup says storage_unavailable)",
   existing_team_runtime_own_vps_missing: "own-VPS mark: absent, read as «not the person's own»",

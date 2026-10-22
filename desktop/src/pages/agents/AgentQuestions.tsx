@@ -1,5 +1,5 @@
 import { appLocale } from "../../lib/app-locale";
-import type { AgentQuestion, AgentQuestions, QuestionType } from "../../lib/existing-team-agents";
+import type { AgentQuestion, AgentQuestions, QuestionOption, QuestionType } from "../../lib/existing-team-agents";
 import { pluralText } from "../../lib/plural";
 import Link from "../../web-shims/next-link";
 import type { AgentsPanelText } from "./AgentsPanel.i18n";
@@ -116,8 +116,32 @@ export function expiryLine(t: AgentsPanelText, question: AgentQuestion, now: num
   return option ? `${when}, ${fill(t.questionThen, { option: option.label })}` : when;
 }
 
-function Question({ t, question, now }: { t: AgentsPanelText; question: AgentQuestion; now: number }) {
+type OnAnswer = (question: AgentQuestion, option: QuestionOption) => void;
+
+/**
+ * Whether the panel answers it with its buttons: a structured question with one choice and no
+ * words of the person. One with several choices or with room for words, and one written before
+ * the contract, is answered from Messages.
+ */
+export function answerable(question: AgentQuestion): question is AgentQuestion & { id: string } {
+  return question.id !== null && !question.multiple && !question.free;
+}
+
+function Question({
+  t,
+  question,
+  now,
+  onAnswer,
+  answering,
+}: {
+  t: AgentsPanelText;
+  question: AgentQuestion;
+  now: number;
+  onAnswer?: OnAnswer;
+  answering: string | null;
+}) {
   const expiry = expiryLine(t, question, now);
+  const buttons = onAnswer !== undefined && answerable(question);
   return (
     <li data-testid="panel-question" data-type={question.type ?? "none"} className="rounded border px-2.5 py-2" style={{ borderColor: "var(--color-border)" }}>
       <p className="text-[11px] flex flex-wrap gap-x-2">
@@ -137,10 +161,29 @@ function Question({ t, question, now }: { t: AgentsPanelText; question: AgentQue
         </p>
       )}
       <p className="text-[11px] mt-0.5 break-words text-[var(--color-bright)]">{question.text}</p>
-      {question.options.length > 0 && (
-        <p data-testid="panel-question-options" className="text-[11px] mt-1 break-words text-[var(--color-muted)]">
-          {question.options.map((option) => option.label).join(" · ")}
-        </p>
+      {buttons ? (
+        <div data-testid="panel-question-answers" className="flex flex-wrap gap-1.5 mt-1.5">
+          {question.options.map((option) => (
+            <button
+              key={option.id}
+              type="button"
+              data-testid={`panel-answer-${option.id}`}
+              data-reversible={option.reversible ? "true" : "false"}
+              disabled={answering !== null}
+              title={option.reversible ? undefined : t.answerConfirmFirst}
+              onClick={() => onAnswer?.(question, option)}
+              className="text-[11px] font-semibold px-2.5 py-1 rounded border border-[var(--color-border)] text-[var(--color-bright)] break-words text-left disabled:opacity-60 disabled:cursor-wait"
+            >
+              {answering === question.id ? t.answering : option.label}
+            </button>
+          ))}
+        </div>
+      ) : (
+        question.options.length > 0 && (
+          <p data-testid="panel-question-options" className="text-[11px] mt-1 break-words text-[var(--color-muted)]">
+            {question.options.map((option) => option.label).join(" · ")}
+          </p>
+        )
       )}
     </li>
   );
@@ -152,11 +195,16 @@ export function QuestionList({
   questions,
   readOnly,
   now,
+  onAnswer,
+  answering = null,
 }: {
   t: AgentsPanelText;
   questions: AgentQuestions | null;
   readOnly: boolean;
   now: number;
+  /** only where the panel acts: never in the read-only view */
+  onAnswer?: OnAnswer;
+  answering?: string | null;
 }) {
   if (!questions) {
     return (
@@ -183,7 +231,14 @@ export function QuestionList({
       </p>
       <ul className="flex flex-col gap-1.5 mt-1">
         {questions.items.map((question) => (
-          <Question key={question.id ?? `row-${question.at}-${question.text}`} t={t} question={question} now={now} />
+          <Question
+            key={question.id ?? `row-${question.at}-${question.text}`}
+            t={t}
+            question={question}
+            now={now}
+            onAnswer={readOnly ? undefined : onAnswer}
+            answering={answering}
+          />
         ))}
       </ul>
       {more > 0 && <p className="text-[11px] mt-1 text-[var(--color-muted)]">{pluralText(appLocale(), more, t.questionsMore)}</p>}

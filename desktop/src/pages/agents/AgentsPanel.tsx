@@ -7,6 +7,7 @@ import { pluralText } from "../../lib/plural";
 import { requestTeamStop } from "./team-stop";
 import { useExistingTeamReadOnly } from "../../lib/existing-team-readonly";
 import {
+  answerQuestion,
   controlAgent,
   pauseTeam,
   readPanelList,
@@ -15,13 +16,14 @@ import {
   resumeTeam,
   tomorrowAtEightUtc,
   type ActionResult,
+  type AnswerResult,
   type AgentAction,
   type Outcome,
   type PanelList,
   type PauseExit,
   type TeamControlState,
 } from "../../lib/agent-control";
-import type { AgentIdentity, TeamAgent } from "../../lib/existing-team-agents";
+import type { AgentIdentity, AgentQuestion, QuestionOption, TeamAgent } from "../../lib/existing-team-agents";
 import OwnVpsClaim from "../../components/OwnVpsClaim";
 import { useRefresh } from "../../shell/router";
 import type { PageProps } from "../types";
@@ -130,6 +132,7 @@ export function rowActions(row: PanelRow, readOnly: boolean): AgentAction[] {
 type Notice = { ok: boolean; text: string };
 type Pending =
   | { kind: "agent"; op: AgentAction; row: PanelRow }
+  | { kind: "answer"; row: PanelRow; question: AgentQuestion; option: QuestionOption }
   | { kind: "pause" }
   | { kind: "stop-team" }
   | { kind: "resume" };
@@ -179,6 +182,14 @@ function resultText(t: AgentsPanelText, result: ActionResult, name: string): str
     not_paused: t.resultNotPaused,
   }[result];
   return fill(key, { name });
+}
+
+/** What happened to an answer, in the page's words: the option is the question's own label. */
+function answerText(t: AgentsPanelText, result: AnswerResult, name: string, question: AgentQuestion, option: QuestionOption): string {
+  if (result === "answered") return fill(t.resultAnswered, { name, option: option.label });
+  if (result === "already_answered") return t.resultAlreadyAnswered;
+  const taken = question.options.find((item) => item.id === question.fallback)?.label ?? "";
+  return fill(t.resultExpired, { option: taken });
 }
 
 /**
@@ -296,6 +307,10 @@ function Confirm({
     if (pending.op === "stop" && pending.row.session === "CAPITANO") body.push(t.bodyStopCaptain);
     if (pending.op === "stop" && pending.row.session === "ASSISTENTE") body.push(t.bodyStopAssistant);
     danger = pending.op !== "start";
+  } else if (pending.kind === "answer") {
+    const name = displayName(pending.row.session);
+    title = fill(t.confirmAnswer, { option: pending.option.label, name, where });
+    body = [fill(t.bodyAnswer, { name })];
   } else if (pending.kind === "pause") {
     title = fill(t.confirmPause, { where });
     body = [t.bodyPause];
@@ -433,6 +448,12 @@ export default function AgentsPanel({ search }: PageProps) {
     setActing(true);
     let key = "team";
     let done: Outcome<ActionResult>;
+    if (pending.kind === "answer") {
+      await sendAnswer(pending.row, pending.question, pending.option);
+      setActing(false);
+      setPending(null);
+      return;
+    }
     if (pending.kind === "stop-team") {
       const stopped = await requestTeamStop();
       setNotices((all) => ({ ...all, team: { ok: stopped.ok, text: stopped.ok ? t.resultStopRequested : t.stopTeamFailed } }));
@@ -457,6 +478,26 @@ export default function AgentsPanel({ search }: PageProps) {
     setActing(false);
     setPending(null);
     await read();
+  };
+
+  // One answer at a time; the list is read again after it, so the counts follow.
+  const [answering, setAnswering] = useState<string | null>(null);
+  const sendAnswer = async (row: PanelRow, question: AgentQuestion, option: QuestionOption) => {
+    if (!list?.ok || !question.id) return;
+    setAnswering(question.id);
+    const done = await answerQuestion(question.id, option.id, list.value.target);
+    const name = displayName(row.session);
+    setNotices((all) => ({
+      ...all,
+      [row.session]: done.ok ? { ok: true, text: answerText(t, done.value, name, question, option) } : { ok: false, text: failureText(done.code) },
+    }));
+    setAnswering(null);
+    await read();
+  };
+  // An option that does not say it can be undone is confirmed first: the first answer wins.
+  const chooseOption = (row: PanelRow, question: AgentQuestion, option: QuestionOption) => {
+    if (option.reversible) void sendAnswer(row, question, option);
+    else setPending({ kind: "answer", row, question, option });
   };
 
   const counts = useMemo(() => {
@@ -677,7 +718,16 @@ export default function AgentsPanel({ search }: PageProps) {
                       </p>
                     )}
                     {isUp(current) && <UsageLine t={t} usage={current.agent!.usage} />}
-                    {isUp(current) && <QuestionList t={t} questions={current.agent!.questions} readOnly={readOnly} now={now} />}
+                    {isUp(current) && (
+                      <QuestionList
+                        t={t}
+                        questions={current.agent!.questions}
+                        readOnly={readOnly}
+                        now={now}
+                        answering={answering}
+                        onAnswer={readOnly ? undefined : (question, option) => chooseOption(current, question, option)}
+                      />
+                    )}
                     {SCHEDULED.has(current.session) && <p className="text-[11px] mt-1 text-[var(--color-dim)]">{t.maintenance}</p>}
                     {REVIEWER.test(current.session) && <p className="text-[11px] mt-1 text-[var(--color-dim)]">{t.reviewer}</p>}
                   </div>

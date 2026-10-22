@@ -132,6 +132,14 @@ export interface AgentsPanelText {
   questionsMore: PluralForms; // {count}
   questionsAnswerInMessages: string;
   questionsAnswerElsewhere: string;
+  // answering a question from the panel (one option, by its id)
+  answering: string;
+  answerConfirmFirst: string;
+  confirmAnswer: string; // {option} {name} {where}
+  bodyAnswer: string; // {name}
+  resultAnswered: string; // {name} {option}
+  resultAlreadyAnswered: string;
+  resultExpired: string; // {option}
 }
 
 const it: AgentsPanelText = {
@@ -260,6 +268,13 @@ const it: AgentsPanelText = {
   questionsMore: { one: "e un'altra: la trovi nei Messaggi", other: "e altre {count}: le trovi nei Messaggi" },
   questionsAnswerInMessages: "Rispondi dai Messaggi",
   questionsAnswerElsewhere: "Qui si legge soltanto: rispondi da Telegram o dal web.",
+  answering: "Invio…",
+  answerConfirmFirst: "Questa scelta non dice di potersi annullare: ti chiedo conferma.",
+  confirmAnswer: "Rispondere «{option}» a {name} {where}?",
+  bodyAnswer: "La prima risposta vale: dopo non si cambia. {name} la legge al suo prossimo passo.",
+  resultAnswered: "Risposta inviata a {name}: «{option}».",
+  resultAlreadyAnswered: "Hai già risposto da un’altra parte: vale quella risposta.",
+  resultExpired: "Era scaduta: ha fatto «{option}».",
 };
 
 const en: AgentsPanelText = {
@@ -387,6 +402,13 @@ const en: AgentsPanelText = {
   questionsMore: { one: "and one more: you find it in Messages", other: "and {count} more: you find them in Messages" },
   questionsAnswerInMessages: "Answer from Messages",
   questionsAnswerElsewhere: "This view only reads: answer from Telegram or the web.",
+  answering: "Sending…",
+  answerConfirmFirst: "This choice does not say it can be undone: you are asked to confirm.",
+  confirmAnswer: "Answer “{option}” to {name} {where}?",
+  bodyAnswer: "The first answer counts: it cannot be changed afterwards. {name} reads it at its next step.",
+  resultAnswered: "Answer sent to {name}: “{option}”.",
+  resultAlreadyAnswered: "You already answered somewhere else: that answer counts.",
+  resultExpired: "It had expired: it did “{option}”.",
 };
 
 const de: AgentsPanelText = {
@@ -515,6 +537,13 @@ const de: AgentsPanelText = {
   questionsMore: { one: "und eine weitere: du findest sie unter Nachrichten", other: "und {count} weitere: du findest sie unter Nachrichten" },
   questionsAnswerInMessages: "Unter Nachrichten antworten",
   questionsAnswerElsewhere: "Diese Ansicht liest nur: antworte über Telegram oder das Web.",
+  answering: "Wird gesendet…",
+  answerConfirmFirst: "Diese Wahl sagt nicht, dass sie sich rückgängig machen lässt: du wirst um Bestätigung gebeten.",
+  confirmAnswer: "„{option}“ an {name} {where} antworten?",
+  bodyAnswer: "Die erste Antwort gilt: danach lässt sie sich nicht ändern. {name} liest sie beim nächsten Schritt.",
+  resultAnswered: "Antwort an {name} gesendet: „{option}“.",
+  resultAlreadyAnswered: "Du hast schon anderswo geantwortet: Diese Antwort gilt.",
+  resultExpired: "Sie war abgelaufen: es wurde „{option}“ gewählt.",
 };
 
 const es: AgentsPanelText = {
@@ -643,6 +672,13 @@ const es: AgentsPanelText = {
   questionsMore: { one: "y otra más: la encuentras en Mensajes", other: "y {count} más: las encuentras en Mensajes" },
   questionsAnswerInMessages: "Responder desde Mensajes",
   questionsAnswerElsewhere: "Esta vista solo lee: responde desde Telegram o la web.",
+  answering: "Enviando…",
+  answerConfirmFirst: "Esta opción no dice que se pueda deshacer: se te pide confirmación.",
+  confirmAnswer: "¿Responder «{option}» a {name} {where}?",
+  bodyAnswer: "Vale la primera respuesta: después no se cambia. {name} la lee en su próximo paso.",
+  resultAnswered: "Respuesta enviada a {name}: «{option}».",
+  resultAlreadyAnswered: "Ya respondiste desde otro sitio: vale esa respuesta.",
+  resultExpired: "Había caducado: se hizo «{option}».",
 };
 
 const fr: AgentsPanelText = {
@@ -771,6 +807,13 @@ const fr: AgentsPanelText = {
   questionsMore: { one: "et une autre : tu la trouves dans Messages", other: "et {count} autres : tu les trouves dans Messages" },
   questionsAnswerInMessages: "Répondre depuis Messages",
   questionsAnswerElsewhere: "Cette vue ne fait que lire : réponds depuis Telegram ou le web.",
+  answering: "Envoi…",
+  answerConfirmFirst: "Ce choix ne dit pas qu’il peut être annulé : une confirmation t’est demandée.",
+  confirmAnswer: "Répondre « {option} » à {name} {where} ?",
+  bodyAnswer: "La première réponse compte : elle ne se change plus ensuite. {name} la lit à sa prochaine étape.",
+  resultAnswered: "Réponse envoyée à {name} : « {option} ».",
+  resultAlreadyAnswered: "Tu as déjà répondu ailleurs : c’est cette réponse qui compte.",
+  resultExpired: "Elle avait expiré : « {option} » a été fait.",
 };
 
 const hu: AgentsPanelText = {
@@ -899,6 +942,13 @@ const hu: AgentsPanelText = {
   questionsMore: { one: "és még egy: az Üzenetek között találod", other: "és még {count}: az Üzenetek között találod" },
   questionsAnswerInMessages: "Válasz az Üzenetek oldalon",
   questionsAnswerElsewhere: "Ez a nézet csak olvas: válaszolj Telegramon vagy a weben.",
+  answering: "Küldés…",
+  answerConfirmFirst: "Ez a választás nem jelzi, hogy visszavonható: megerősítést kérünk.",
+  confirmAnswer: "Ezt válaszolod ({name}, {where}): „{option}”?",
+  bodyAnswer: "Az első válasz számít: utána nem módosítható. {name} a következő lépésénél olvassa el.",
+  resultAnswered: "Válasz elküldve ({name}): „{option}”.",
+  resultAlreadyAnswered: "Már válaszoltál máshol: az a válasz számít.",
+  resultExpired: "Lejárt: ez történt: „{option}”.",
 };
 
 const pt: AgentsPanelText = {
@@ -1027,6 +1077,13 @@ const pt: AgentsPanelText = {
   questionsMore: { one: "e mais uma: encontras-a em Mensagens", other: "e mais {count}: encontras-as em Mensagens" },
   questionsAnswerInMessages: "Responder em Mensagens",
   questionsAnswerElsewhere: "Esta vista só lê: responde pelo Telegram ou pela web.",
+  answering: "A enviar…",
+  answerConfirmFirst: "Esta opção não diz que se pode desfazer: é-te pedida confirmação.",
+  confirmAnswer: "Responder «{option}» a {name} {where}?",
+  bodyAnswer: "Vale a primeira resposta: depois não se altera. {name} lê-a no seu próximo passo.",
+  resultAnswered: "Resposta enviada a {name}: «{option}».",
+  resultAlreadyAnswered: "Já respondeste noutro lado: vale essa resposta.",
+  resultExpired: "Tinha expirado: foi feito «{option}».",
 };
 
 export const AGENTS_PANEL_TEXT: Record<Locale, AgentsPanelText> = { it, en, de, es, fr, hu, pt };

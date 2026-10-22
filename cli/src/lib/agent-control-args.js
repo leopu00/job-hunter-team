@@ -8,7 +8,7 @@
 
 export const AGENT_CONTROL_SCRIPT = '/app/shared/skills/agent_control.py';
 
-// The script's own codes are 100-112 and 115-116; these two are the command's.
+// The script's own codes are 100-112 and 115-120; these two are the command's.
 export const EXIT_INVALID = 100;
 export const EXIT_NO_TEAM = 113;
 export const EXIT_UNANSWERED = 114;
@@ -28,6 +28,10 @@ const ALONE = new Set(['resume', 'list', 'team', 'exclusions']);
 // A code of the exclusions' closed vocabulary (JHT-T24-b); the script checks it against the list.
 const WITH_CODE = new Set(['exclusion-accept', 'exclusion-withdraw']);
 const CODE = /^[a-z][a-z_]{0,31}$/;
+// The answer to an agent's structured question (JHT-T38): the question's id and one option's id,
+// in the shapes agent_questions.py gives them. Never text; the script checks the option is the question's.
+const QUESTION_ID = /^aq:[a-z0-9][a-z0-9_-]{0,39}:[0-9]{1,20}-[a-z0-9]{1,16}$/;
+const OPTION_ID = /^(?:_rinvia|[a-z0-9][a-z0-9_]{0,23})$/;
 
 /** The argv for the script, or null when `args` is not one of the shapes. */
 export function agentControlArgv(args) {
@@ -38,6 +42,9 @@ export function agentControlArgv(args) {
   }
   if (WITH_CODE.has(op)) {
     return rest.length === 1 && CODE.test(rest[0]) ? [op, rest[0]] : null;
+  }
+  if (op === 'answer') {
+    return rest.length === 2 && QUESTION_ID.test(rest[0]) && OPTION_ID.test(rest[1]) ? [op, rest[0], rest[1]] : null;
   }
   if (ALONE.has(op)) return rest.length === 0 ? [op] : null;
   if (op !== 'pause') return null;
