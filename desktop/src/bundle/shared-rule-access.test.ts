@@ -39,6 +39,11 @@ describe("baseline shared application rule in the desktop dev server", () => {
   });
   it("transforms the real web importer and JSON into modules with the baseline rule", async () => {
     const baseline = JSON.parse(readFileSync(rule, "utf8"));
+    // ../web is not allowed as a folder: its files are reached the way the
+    // browser reaches them, from the desktop page that imports the web page.
+    expect((await server.transformRequest("/src/pages/position/index.tsx"))?.code).toContain("/positions/[id]/page.tsx");
+    expect((await server.transformRequest(`/@fs/${importer.replace("lib/apply-request-rule.ts", "app/(protected)/positions/[id]/page.tsx")}`))?.code)
+      .toContain("/lib/apply-request-rule.ts");
     const imported = await server.transformRequest(`/@fs/${importer}`);
     expect(imported?.code).toContain("shared/cloud/apply-request-rule.json");
     const loaded = await server.transformRequest(`/@fs/${rule}`);
