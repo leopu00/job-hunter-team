@@ -28,6 +28,7 @@ def test_every_code_has_a_sentence_in_every_language_and_no_free_text():
     assert wan.CODES == {
         "apply_authorized_from_web",
         "apply_revoked_from_web",
+        "apply_revoked_many_from_web",
         "team_stopped_from_web",
         "team_started_from_web",
         "team_restarted_from_web",

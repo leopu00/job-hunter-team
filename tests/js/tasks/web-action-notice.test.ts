@@ -168,6 +168,25 @@ describe("an application authorised from the website", () => {
     expect(notices(dbPath).map((r) => r.payload)).toEqual([{ code: "apply_revoked_from_web", position_id: 7 }]);
   });
 
+  it("at most three withdrawals an hour are told one by one, then one summary for the hour", async () => {
+    const { dbPath } = box();
+    const db = new DatabaseSync(dbPath);
+    for (let id = 8; id <= 12; id += 1) {
+      db.prepare("INSERT INTO positions (id, title, company, status) VALUES (?, 'Engineer', 'Example Ltd', 'ready')").run(id);
+    }
+    db.close();
+    const at = (n: number) => new Date(Date.now() - 60_000 + n * 1000).toISOString();
+    const revoked = (id: number, n: number) => ({ legacy_id: id, apply_requested: false, apply_requested_at: at(n), apply_requested_by: null });
+    await pull(dbPath, [7, 8, 9, 10, 11].map((id, n) => revoked(id, n)));
+    const codes = () => notices(dbPath).map((r) => r.payload.code);
+    expect(codes()).toEqual(["apply_revoked_from_web", "apply_revoked_from_web", "apply_revoked_from_web", "apply_revoked_many_from_web"]);
+    // the summary carries no position and no count
+    expect(notices(dbPath)[3]!.payload).toEqual({ code: "apply_revoked_many_from_web" });
+    // more in the same hour: no new single notice, the summary stays one
+    await pull(dbPath, [revoked(12, 9)]);
+    expect(codes()).toEqual(["apply_revoked_from_web", "apply_revoked_from_web", "apply_revoked_from_web", "apply_revoked_many_from_web"]);
+  });
+
   it("an old withdrawal the box never saw (a database recreated from scratch) is not told again", async () => {
     const { dbPath } = box();
     const at = new Date(Date.now() - 3 * 24 * 3600_000).toISOString();

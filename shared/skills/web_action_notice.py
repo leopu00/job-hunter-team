@@ -51,6 +51,15 @@ TEXTS: dict[str, dict[str, str]] = {
         "pt": "Foi retirada a autorização de uma candidatura a partir do site (vaga {position}). Se não foste tu, verifica quem consegue entrar na tua conta.",
         "hu": "A weboldalról visszavontak egy jelentkezési engedélyt ({position}. állás). Ha nem te voltál, ellenőrizd, ki fér hozzá a fiókodhoz.",
     },
+    "apply_revoked_many_from_web": {
+        "en": "Several application authorisations were withdrawn from the website in the last hour. If it was not you, check who can access your account.",
+        "it": "Nell'ultima ora dal sito sono state ritirate diverse autorizzazioni a candidature. Se non sei stato tu, controlla chi può entrare nel tuo account.",
+        "de": "In der letzten Stunde wurden über die Website mehrere Bewerbungsfreigaben zurückgenommen. Wenn du das nicht warst, prüfe, wer Zugriff auf dein Konto hat.",
+        "fr": "Plusieurs autorisations de candidature ont été retirées depuis le site au cours de la dernière heure. Si ce n'était pas toi, vérifie qui peut accéder à ton compte.",
+        "es": "En la última hora se retiraron desde el sitio varias autorizaciones de candidaturas. Si no fuiste tú, revisa quién puede entrar en tu cuenta.",
+        "pt": "Na última hora foram retiradas a partir do site várias autorizações de candidaturas. Se não foste tu, verifica quem consegue entrar na tua conta.",
+        "hu": "Az elmúlt órában a weboldalról több jelentkezési engedélyt is visszavontak. Ha nem te voltál, ellenőrizd, ki fér hozzá a fiókodhoz.",
+    },
     "team_stopped_from_web": {
         "en": "The team was stopped from the website. If it was not you, check who can access your account.",
         "it": "La squadra è stata fermata dal sito. Se non sei stato tu, controlla chi può entrare nel tuo account.",
