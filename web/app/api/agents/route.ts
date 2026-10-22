@@ -1,16 +1,18 @@
 /**
  * API Route — /api/agents
  *
- * GET  → lista agenti con stato (running/stopped)
- * POST → start o stop di un agente specifico
+ * GET → lista agenti con stato (running/stopped)
+ *
+ * Solo lettura. Lo start/stop di un agente è `POST /api/agents/[id]` (guardato da
+ * `requireLocalWrite`); la POST che stava qui (JHT-T25) mandava C-c alla sessione
+ * o accodava un comando al team con il solo `requireAuth`, senza che nessuno la
+ * chiamasse, ed è stata tolta.
  */
 
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { runBash } from "@/lib/shell";
 import { requireAuth, isLocalRequest } from "@/lib/auth";
-import { enqueueIfRemote } from "@/lib/team-bus";
 import { createClient } from "@/lib/supabase/server";
-import { invalidJsonBody } from "@/app/api/_lib/error-body";
 
 export const dynamic = "force-dynamic";
 
@@ -227,92 +229,4 @@ export async function GET() {
     };
   });
   return NextResponse.json({ agents });
-}
-
-export async function POST(req: NextRequest) {
-  const denied = await requireAuth();
-  if (denied) return denied;
-  let body: Record<string, unknown>;
-  try {
-    body = await req.json();
-  } catch {
-    return invalidJsonBody();
-  }
-
-  const agentId = typeof body.agentId === "string" ? body.agentId.trim() : "";
-  const action = typeof body.action === "string" ? body.action.trim() : "";
-
-  if (!agentId || !action) {
-    return NextResponse.json(
-      { error: "agentId e action obbligatori" },
-      { status: 400 },
-    );
-  }
-
-  if (action !== "start" && action !== "stop") {
-    return NextResponse.json(
-      { error: 'action deve essere "start" o "stop"' },
-      { status: 400 },
-    );
-  }
-
-  // Validazione: solo ID noti (previene injection)
-  const agent = AGENTS.find((a) => a.id === agentId);
-  if (!agent) {
-    return NextResponse.json(
-      { error: `Agente sconosciuto: ${agentId}` },
-      { status: 404 },
-    );
-  }
-
-  // Cloud dispatch: la dashboard prod chiama questo endpoint da Vercel
-  // (no tmux). Inoltriamo al bus team_commands con target=agent.id; il
-  // subscriber sulla VPS esegue `jht team start/stop <agent>`. Local: shell.
-  const remote = await enqueueIfRemote(action as "start" | "stop", agent.id);
-  if (remote) return remote;
-
-  const active = await activeSessions();
-  const running =
-    active.has(agent.session) ||
-    Array.from(active).some((s) => s.startsWith(`${agent.session}-`));
-
-  if (action === "start" && running) {
-    return NextResponse.json({
-      ok: true,
-      message: "Agente già attivo",
-      status: "running",
-    });
-  }
-
-  if (action === "stop" && !running) {
-    return NextResponse.json({
-      ok: true,
-      message: "Agente già fermo",
-      status: "stopped",
-    });
-  }
-
-  // Stop: invia SIGTERM alla sessione tmux
-  if (action === "stop") {
-    try {
-      await runBash(`tmux send-keys -t "${agent.session}" C-c`);
-      return NextResponse.json({
-        ok: true,
-        message: "Stop inviato",
-        status: "stopping",
-      });
-    } catch {
-      return NextResponse.json(
-        { error: "Errore durante lo stop" },
-        { status: 500 },
-      );
-    }
-  }
-
-  // Start: info — il lancio effettivo è gestito dal setup.sh o dal team manager
-  return NextResponse.json({
-    ok: true,
-    message: `Avvio agente ${agent.name} richiesto. Usa "jht team start ${agent.id}" dalla CLI.`,
-    status: "pending",
-  });
 }
