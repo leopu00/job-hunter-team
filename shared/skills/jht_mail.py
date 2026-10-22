@@ -64,6 +64,9 @@ MAX_BODY_BYTES = 12288
 # MAX_BODY_BYTES, the rest of the JSON is short).
 MAX_FILE = 16384
 MAX_PENDING = 200
+# The receipts are read from their tail, up to here, and rewritten when they grow past the second.
+RECEIPTS_READ_CAP = 1048576
+RECEIPTS_TRIM_AT = 262144
 RETENTION = timedelta(days=7)
 # How long a message may stay queued after its last nudge (or its creation), by kind.
 NOT_TAKEN_AFTER = {"URG": 120, "CHAT": 120}
@@ -194,19 +197,38 @@ def _receipt(agent: str, message_id: str, state: str, at: datetime, **extra) -> 
     path = box_dir(agent) / "receipts.jsonl"
     path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
     # One write of one line: appends of this size do not interleave.
-    fd = os.open(path, os.O_WRONLY | os.O_APPEND | os.O_CREAT, 0o600)
+    fd = os.open(path, os.O_WRONLY | os.O_APPEND | os.O_CREAT | getattr(os, "O_NOFOLLOW", 0), 0o600)
     try:
         os.write(fd, (json.dumps(line, ensure_ascii=False) + "\n").encode("utf-8"))
     finally:
         os.close(fd)
 
 
+def _read_tail(path: Path, cap: int) -> str:
+    """The last `cap` bytes of a regular file (not a link), from a whole line; '' when it is not one."""
+    flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0)
+    try:
+        fd = os.open(path, flags)
+    except OSError:
+        return ""
+    try:
+        info = os.fstat(fd)
+        if not stat.S_ISREG(info.st_mode):
+            return ""
+        start = max(0, info.st_size - cap)
+        os.lseek(fd, start, os.SEEK_SET)
+        raw = os.read(fd, cap)
+    except OSError:
+        return ""
+    finally:
+        os.close(fd)
+    text = raw.decode("utf-8", errors="replace")
+    return text.split("\n", 1)[1] if start > 0 and "\n" in text else text
+
+
 def receipts(agent: str, message_id: str | None = None) -> list[dict]:
-    path = box_dir(agent) / "receipts.jsonl"
-    if not path.exists():
-        return []
     out = []
-    for raw in path.read_text(encoding="utf-8", errors="replace").splitlines():
+    for raw in _read_tail(box_dir(agent) / "receipts.jsonl", RECEIPTS_READ_CAP).splitlines():
         try:
             entry = json.loads(raw)
         except json.JSONDecodeError:
@@ -216,14 +238,50 @@ def receipts(agent: str, message_id: str | None = None) -> list[dict]:
     return out
 
 
+def _trim_receipts(agent: str, moment: datetime) -> None:
+    """Receipts older than the retention go: the file is rewritten only when it has grown."""
+    path = box_dir(agent) / "receipts.jsonl"
+    try:
+        info = os.lstat(path)
+    except OSError:
+        return
+    if not stat.S_ISREG(info.st_mode) or info.st_size <= RECEIPTS_TRIM_AT:
+        return
+    keep = []
+    for raw in _read_tail(path, RECEIPTS_READ_CAP).splitlines():
+        try:
+            entry = json.loads(raw)
+        except json.JSONDecodeError:
+            continue
+        at = _parse(entry.get("at")) if isinstance(entry, dict) else None
+        if at and moment - at <= RETENTION:
+            keep.append(raw)
+    temp = box_dir(agent) / ".tmp" / f"receipts.{os.getpid()}.{uuid.uuid4().hex[:8]}"
+    temp.write_text("".join(line + "\n" for line in keep), encoding="utf-8")
+    os.replace(temp, path)
+
+
 # -- messages --------------------------------------------------------------------
 
+def _external():
+    sys.path.insert(0, str(HERE))
+    try:
+        import external_content
+    except Exception:
+        # Without the shared cleaning nothing is queued or shown: fail closed.
+        raise MailError("refused", "the shared text cleaning is missing")
+    finally:
+        sys.path.pop(0)
+    return external_content
+
+
 def strip_controls(text: str) -> str:
-    """No terminal control reaches a reader: ESC and the other C0/C1 controls go, line breaks and tabs stay."""
-    return "".join(
-        ch for ch in str(text or "")
-        if ch in "\n\t" or not (ord(ch) < 0x20 or ord(ch) == 0x7F or 0x80 <= ord(ch) <= 0x9F)
-    )
+    """The text without terminal controls and sequences, and without the invisible characters that
+    hide a command, by the shared rules (external_content). Persian and emoji joiners stay."""
+    shared = _external()
+    cleaned = shared.strip_terminal_controls(text)
+    hidden = frozenset(shared.INVISIBLE_COMMANDS) - shared.WRITING_INVISIBLES
+    return "".join(ch for ch in cleaned if ch not in hidden)
 
 
 def default_id(sender: str, to: str, body: str, now: datetime) -> str:
@@ -282,8 +340,8 @@ def send(
     to: str,
     body: str,
     *,
+    sender: tuple[str, str | None, str | None],
     kind: str = "MSG",
-    sender: tuple[str, str | None, str | None] = (LOCAL_TRUST, None, None),
     message_id: str | None = None,
     requires_done: bool | None = None,
     ttl_seconds: int | None = None,
@@ -305,7 +363,10 @@ def send(
     if len(text) > MAX_BODY or len(text.encode("utf-8")) > MAX_BODY_BYTES:
         raise MailError("refused", f"message longer than {MAX_BODY} characters")
     trust, claimed, origin = sender
-    if trust not in (VERIFIED_TRUST, LOCAL_TRUST):
+    if trust == VERIFIED_TRUST:
+        if not (isinstance(origin, str) and CANONICAL_AGENT.match(origin) and claimed == origin):
+            raise MailError("refused", "a verified sender is an agent, named once")
+    elif not (trust == LOCAL_TRUST and kind == NOTICE_KIND and claimed == LOCAL_SENDER and origin is None):
         raise MailError("refused", "only agents write to an agent's mailbox")
     mid = message_id or default_id(origin or claimed or trust, recipient, text, moment)
     if not MESSAGE_ID.match(mid):
@@ -537,8 +598,14 @@ def sweep(agent: str, now: datetime | None = None) -> dict:
                 notices.append(record)
         for name in ("taken", "expired", "rejected"):
             for path in folders[name].glob("*.json"):
-                if moment - datetime.fromtimestamp(path.lstat().st_mtime, timezone.utc) > RETENTION:
-                    path.unlink(missing_ok=True)
+                try:
+                    info = path.lstat()
+                    # Only plain files are forgotten; a folder or a link that got here is left for a person.
+                    if stat.S_ISREG(info.st_mode) and moment - datetime.fromtimestamp(info.st_mtime, timezone.utc) > RETENTION:
+                        path.unlink()
+                except OSError:
+                    continue
+        _trim_receipts(agent, moment)
     told = []
     for record in notices:
         for target in notice_targets(record):
@@ -577,7 +644,12 @@ def _verified_origin() -> str | None:
 def _reader(explicit: str | None) -> str:
     """Whose box this process reads: its own, as tmux says. A process that tmux can place in another
     agent's pane never reads somebody else's box; one outside any pane (the person at a shell)
-    names the box with --agent."""
+    names the box with --agent.
+
+    Declared limit, the same as for every other file of the team: a process that tmux cannot place
+    (one that detached itself with setsid) chooses the box with --agent or the environment, and can
+    take the mail of another agent. All agents share one uid; the mailbox bounds what a reader
+    receives, it does not keep one agent out of another's folder."""
     origin = _verified_origin()
     named = explicit or os.environ.get("JHT_AGENT_NAME")
     if origin and named and agent_id(origin) != agent_id(named):
@@ -664,8 +736,16 @@ def main(argv=None) -> int:
             _emit({"pending": pending(_reader(args.agent))})
             return EXIT["ok"]
         if args.command == "sweep":
-            names = args.agents or sorted(p.name for p in (home() / "mailbox").glob("*") if p.is_dir())
-            _emit({name: sweep(name) for name in names})
+            names = args.agents or sorted(
+                p.name for p in (home() / "mailbox").glob("*")
+                if p.is_dir() and not p.is_symlink() and CANONICAL_AGENT.match(p.name))
+            report: dict = {}
+            for name in names:
+                try:
+                    report[name] = sweep(name)
+                except (MailError, OSError) as error:  # one bad box must not stop the others
+                    report[name] = {"error": getattr(error, "code", "io_error")}
+            _emit(report)
             return EXIT["ok"]
     except MailError as error:
         _emit({"error": error.code, "detail": error.detail})

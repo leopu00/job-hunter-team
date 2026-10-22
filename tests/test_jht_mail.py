@@ -489,3 +489,103 @@ def test_nothing_in_the_running_system_calls_the_mailbox_yet():
                      ".launcher/sentinel-bridge.py", "agents/_skills/tmux-send/jht-tmux-send",
                      "shared/skills/agent_chat.py", "shared/skills/bridge_mailbox.py"):
         assert "jht-mail" not in (ROOT / relative).read_text(encoding="utf-8"), relative
+
+
+# -- review of phase 1: who may be a sender, what the clock may touch, how big the receipts get ----------------------
+
+def test_a_sender_is_always_given_and_the_local_one_is_only_for_the_not_taken_notice():
+    with pytest.raises(TypeError):
+        mail.send("capitano", "no sender at all", now=T0)
+    for kind in ("MSG", "URG", "CHAT"):
+        with pytest.raises(mail.MailError):
+            mail.send("capitano", "from nobody", kind=kind, sender=(mail.LOCAL_TRUST, None, None), now=T0)
+        with pytest.raises(mail.MailError):
+            mail.send("capitano", "from the box", kind=kind, sender=(mail.LOCAL_TRUST, mail.LOCAL_SENDER, None), now=T0)
+    with pytest.raises(mail.MailError):  # a notice signed by somebody else
+        mail.send("capitano", "n", kind=mail.NOTICE_KIND, sender=(mail.LOCAL_TRUST, "scout-1", None), now=T0)
+    with pytest.raises(mail.MailError):  # a verified sender that names two different agents
+        mail.send("capitano", "x", sender=(mail.VERIFIED_TRUST, "scout-1", "analista-1"), now=T0)
+    with pytest.raises(mail.MailError):
+        mail.send("capitano", "x", sender=(mail.VERIFIED_TRUST, "../x", "../x"), now=T0)
+    assert not list((mail.box_dir("capitano") / "new").glob("*.json")), "nothing was queued by a refusal"
+    ok = mail.send("capitano", "late", kind=mail.NOTICE_KIND,
+                   sender=(mail.LOCAL_TRUST, mail.LOCAL_SENDER, None), now=T0)
+    assert ok["created"] is True and [m["kind"] for m in mail.drain("capitano")] == [mail.NOTICE_KIND]
+
+
+def test_a_folder_in_a_box_is_set_aside_and_the_old_clean_up_leaves_it_alone():
+    folder = mail.box_dir("capitano") / "new"
+    folder.mkdir(parents=True)
+    (folder / "x.json").mkdir()
+    assert mail.drain("capitano") == []
+    [aside] = list((mail.box_dir("capitano") / "rejected").iterdir())
+    assert aside.is_dir()
+    old = (T0 - timedelta(days=30)).timestamp()
+    (aside / "inner").write_text("kept")  # before the date: writing into a folder changes its time
+    os.utime(aside, (old, old))
+    queue(to="capitano", message_id="old-taken-1")
+    mail.drain("capitano", now=T0)
+    taken = mail.box_dir("capitano") / "taken" / "old-taken-1.json"
+    os.utime(taken, (old, old))
+    swept = mail.sweep("capitano", now=T0 + timedelta(seconds=1))  # must not raise on the folder
+    assert aside.is_dir() and not taken.exists(), "the file went, the folder was left"
+    assert swept["expired"] == []
+
+
+def test_the_sweep_of_every_box_survives_one_bad_box(tmp_path):
+    queue(to="scorer", kind="URG", message_id="needs-sweep")
+    broken = tmp_path / "mailbox" / "analista-1"
+    broken.mkdir(parents=True)
+    (broken / "new").symlink_to(tmp_path)  # a link where a folder must be
+    (tmp_path / "mailbox" / "not an agent").mkdir()
+    (tmp_path / "mailbox" / "loose-file").write_text("x")
+    done = run_cli(tmp_path, "sweep")
+    assert done.returncode == 0, done.stderr
+    report = json.loads(done.stdout)
+    assert "error" in report["analista-1"] and "expired" in report["scorer-1"]
+    assert "not an agent" not in report and "loose-file" not in report
+
+
+def test_the_receipts_are_read_from_their_tail_and_never_through_a_link(tmp_path):
+    queue(message_id="r-1")
+    path = mail.box_dir("capitano") / "receipts.jsonl"
+    filler = json.dumps({"id": "old", "state": "queued", "at": "2020-01-01T00:00:00Z"}) + "\n"
+    with open(path, "a") as handle:
+        handle.write(filler * (mail.RECEIPTS_READ_CAP // len(filler) + 10))
+    mail.drain("capitano", now=T0)
+    seen = mail.receipts("capitano")
+    assert len(seen) < (path.stat().st_size // len(filler)), "not the whole file"
+    assert [r["state"] for r in mail.receipts("capitano", "r-1")] == ["taken"], "the tail holds the recent ones"
+    target = tmp_path / "elsewhere.jsonl"
+    target.write_text(json.dumps({"id": "r-2", "state": "done", "at": "2027-01-01T00:00:00Z"}) + "\n")
+    path.unlink()
+    path.symlink_to(target)
+    assert mail.receipts("capitano") == []
+    with pytest.raises(OSError):
+        mail._receipt("capitano", "r-3", "queued", T0)
+    assert target.read_text().count("\n") == 1, "nothing was appended through the link"
+
+
+def test_old_receipts_are_forgotten_when_the_file_has_grown():
+    queue(message_id="keep-1")
+    path = mail.box_dir("capitano") / "receipts.jsonl"
+    old = json.dumps({"id": "old", "state": "taken", "at": _iso_days_ago(30)}) + "\n"
+    with open(path, "a") as handle:
+        handle.write(old * (mail.RECEIPTS_TRIM_AT // len(old) + 5))
+    mail.sweep("capitano", now=datetime.now(timezone.utc))
+    left = path.read_text()
+    # counted, not compared with `in`: a failing `in` on a big string makes pytest crawl
+    assert left.count("keep-1") == 1 and left.count('"old"') == 0
+    assert path.stat().st_size < mail.RECEIPTS_TRIM_AT
+
+
+def _iso_days_ago(days):
+    return (datetime.now(timezone.utc) - timedelta(days=days)).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def test_the_text_is_cleaned_by_the_shared_rules_and_keeps_what_a_language_needs():
+    queue(text="red \x1b[31mcolour\x1b[0m end \x1b]0;title\x07 tag\U000e0041 mark\u202e ok", message_id="c-1")
+    queue(text="persian a\u200cb joiner", message_id="c-2")
+    one, two = mail.drain("capitano")
+    assert one["body"] == "red colour end  tag mark ok"
+    assert "\u200c" in two["body"], "a joiner a language needs stays"
