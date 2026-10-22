@@ -121,10 +121,7 @@ const CAUSE_MAX_CHARS: usize = 240;
 /// cause. Redacted like the log.
 pub(crate) fn failure_cause(stdout: &[u8], stderr: &[u8]) -> Option<String> {
     let text = |bytes: &[u8]| crate::onboarding::redact(String::from_utf8_lossy(bytes).replace("\r\n", "\n"));
-    text(stderr)
-        .lines()
-        .rev()
-        .find_map(cause_line)
+    stderr_cause(&text(stderr))
         .or_else(|| {
             text(stdout).lines().rev().find_map(|line| {
                 let line = line.trim_start();
@@ -136,9 +133,54 @@ pub(crate) fn failure_cause(stdout: &[u8], stderr: &[u8]) -> Option<String> {
         })
 }
 
-/// PowerShell's «where» line, which comes in the language of the system: «At
-/// C:\x.ps1:473 char:60», «In C:\x.ps1:473 car:60», «In Zeile:473 Zeichen:60»,
-/// «At line:1 char:1». Always two numbers, the last one behind a word and a colon.
+/// The message of the last error in a stderr. PowerShell prints an error as its message, then the
+/// «where» line, the «+ …» excerpt, «CategoryInfo» and «FullyQualifiedErrorId»; from the first of
+/// those to the next empty line it is all decoration, whatever way the console wrapped it. So the
+/// stderr is read forward, and the cause is the last message line that came before a decoration.
+fn stderr_cause(text: &str) -> Option<String> {
+    let lines: Vec<&str> = text.lines().map(str::trim).collect();
+    let mut causes: Vec<(usize, String)> = Vec::new();
+    let mut decoration = false;
+    for (index, line) in lines.iter().enumerate() {
+        if line.is_empty() {
+            decoration = false;
+            continue;
+        }
+        if decoration {
+            continue;
+        }
+        if is_decoration(line) {
+            decoration = true;
+            // A «where» line the console wrapped: its second half carries the numbers, the first
+            // half («In C:\…\Job Hunter ») is not a message and neither is what lies between.
+            if is_position_line(line) && !starts_position(line) {
+                if let Some(start) = (index.saturating_sub(3)..index).rev().find(|&before| starts_position(lines[before])) {
+                    causes.retain(|(at, _)| *at < start);
+                }
+            }
+            continue;
+        }
+        if let Some(cause) = cause_line(line) {
+            causes.push((index, cause));
+        }
+    }
+    causes.pop().map(|(_, cause)| cause)
+}
+
+/// What PowerShell adds around an error's message.
+fn is_decoration(line: &str) -> bool {
+    line.starts_with('+')
+        || line.starts_with('~')
+        || line.starts_with("At line:")
+        || (line.starts_with("At ") && line.contains(" char:"))
+        || is_position_line(line)
+        || line.starts_with("CategoryInfo")
+        || line.starts_with("FullyQualifiedErrorId")
+}
+
+/// The end of PowerShell's «where» line, which comes in the language of the system: «At
+/// C:\x.ps1:473 char:60», «In C:\x.ps1:473 car:60», «In Zeile:473 Zeichen:60», «At line:1 char:1».
+/// Always two numbers, the last one behind a word and a colon.
 fn is_position_line(line: &str) -> bool {
     let numbered = |token: &str, labelled: bool| match token.rsplit_once(':') {
         Some((head, digits)) => {
@@ -152,19 +194,36 @@ fn is_position_line(line: &str) -> bool {
     matches!((tokens.next(), tokens.next()), (Some(last), Some(before)) if numbered(last, true) && numbered(before, false))
 }
 
+/// The start of PowerShell's «where» line: up to two words («At», «In», «Au caractère»), then a
+/// path («C:\…», «\\server\…», «/…») or «Zeile:473». A line wrapped in the middle of the path has
+/// its numbers on the second line and this on the first.
+fn starts_position(line: &str) -> bool {
+    let words = |token: &str| !token.is_empty() && token.chars().all(char::is_alphabetic);
+    let mut tokens = line.split_whitespace();
+    let Some(mut token) = tokens.next() else {
+        return false;
+    };
+    for _ in 0..2 {
+        if !words(token) {
+            break;
+        }
+        match tokens.next() {
+            Some(next) => token = next,
+            None => return false,
+        }
+    }
+    let mut start = token.chars();
+    let drive = matches!((start.next(), start.next(), start.next()), (Some(letter), Some(':'), Some('\\')) if letter.is_ascii_alphabetic());
+    let labelled = match token.rsplit_once(':') {
+        Some((word, digits)) => words(word) && !digits.is_empty() && digits.chars().all(|character| character.is_ascii_digit()),
+        None => false,
+    };
+    drive || token.starts_with("\\\\") || token.starts_with('/') || labelled
+}
+
 fn cause_line(line: &str) -> Option<String> {
     let line = line.trim();
-    let decoration = line.is_empty()
-        || line.starts_with('+')
-        || line.starts_with('~')
-        || line.starts_with("At line:")
-        || (line.starts_with("At ") && line.contains(" char:"))
-        || is_position_line(line)
-        || line.starts_with("CategoryInfo")
-        || line.starts_with("FullyQualifiedErrorId")
-        || line.starts_with("JHT_PHASE ")
-        || line.starts_with("JHT_LEFT ");
-    if decoration {
+    if line.is_empty() || is_decoration(line) || line.starts_with("JHT_PHASE ") || line.starts_with("JHT_LEFT ") {
         return None;
     }
     // «C:\…\install.ps1 : message» and «Set-Acl : message» → «message».
@@ -487,6 +546,62 @@ mod tests {
             ]);
             assert_eq!(failure_cause(b"", &thrown).as_deref(), Some(message), "{position}");
         }
+    }
+
+    #[test]
+    fn the_cause_survives_a_where_line_the_console_wrapped_in_the_middle_of_the_path() {
+        // The real stderr of the setup's image check on an Italian Windows 10 (PowerShell 5.1, stderr
+        // redirected): the path of the script wraps after a space, so its numbers are on the second line.
+        let message = "Error: template: inspect:1: function \"com\" not defined";
+        let italian = stderr(&[
+            "Copying config sha256:9336f89d7ba855343b13e1415fc6f8b5fe2fa19a70bf9f18d0f85177bb6f66f2",
+            "Writing manifest to image destination",
+            "podman.exe : Error: template: inspect:1: function \"com\" not defined",
+            "In C:\\Users\\<utente>\\AppData\\Local\\Job Hunter ",
+            "Team\\host-runtime\\.install-stage-<id>\\scripts\\enable-podman-windows-runtime.ps1:634 car:29",
+            "+ ... gProject = (& $Podman --connection $MachineName inspect jht --format  ...",
+            "+                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~",
+            "    + CategoryInfo          : NotSpecified: (Error: template...om\" not defined:String) [], RemoteException",
+            "    + FullyQualifiedErrorId : NativeCommandError",
+            " ",
+            "",
+        ]);
+        assert_eq!(failure_cause(b"JHT_PHASE image_pull\n", &italian).as_deref(), Some(message));
+        // The same on an English Windows, and with the path on three lines.
+        for where_line in [
+            vec![
+                "At C:\\Users\\<utente>\\AppData\\Local\\Job Hunter ",
+                "Team\\host-runtime\\.install-stage-<id>\\scripts\\enable-podman-windows-runtime.ps1:634 char:29",
+            ],
+            vec![
+                "At C:\\Users\\<utente>\\AppData\\Local\\Job ",
+                "Hunter Team\\host-runtime\\.install-stage-<id>\\scripts\\",
+                "enable-podman-windows-runtime.ps1:634 char:29",
+            ],
+        ] {
+            let mut lines = vec!["Writing manifest to image destination", "podman.exe : Error: template: inspect:1: function \"com\" not defined"];
+            lines.extend(where_line.iter().copied());
+            lines.extend([
+                "+ ... gProject = (& $Podman --connection $MachineName inspect jht --format  ...",
+                "+                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~",
+                "    + CategoryInfo          : NotSpecified: (Error: template...om\" not defined:String) [], RemoteException",
+                "    + FullyQualifiedErrorId : NativeCommandError",
+                " ",
+            ]);
+            assert_eq!(failure_cause(b"", &stderr(&lines)).as_deref(), Some(message), "{where_line:?}");
+        }
+        // A wrapped excerpt or category line is decoration too: nothing after the first «+» is a cause.
+        let wrapped_excerpt = stderr(&[
+            "boom",
+            "In C:\\x.ps1:1 car:1",
+            "+ & $Podman --connection $MachineName inspect jht --format '{{ com }}' --a-very-long-argument",
+            "that the console wrapped",
+            "    + CategoryInfo          : NotSpecified: (:) [], RemoteException",
+        ]);
+        assert_eq!(failure_cause(b"", &wrapped_excerpt).as_deref(), Some("boom"));
+        // Two errors separated by an empty line: the last one is the cause.
+        let two = stderr(&["first : one", "In C:\\x.ps1:1 car:1", "+ ~~~", "", "second : two", "In C:\\x.ps1:2 car:1", "+ ~~~"]);
+        assert_eq!(failure_cause(b"", &two).as_deref(), Some("two"));
     }
 
     #[test]
