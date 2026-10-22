@@ -24,13 +24,18 @@ screen of the terminal.
      read the message twice;
   3. the agent's session is not there -> a closed code, NOTHING written and
      nothing started (this file never starts an agent);
-  4. the turn is written once per client id (a repeat is not a second line),
+  4. the agent's terminal must be at its prompt: an empty composer and no turn
+     running. A menu, a sign-in, a permission question or text already typed
+     there is a closed code, a running turn another; NOTHING written. The text
+     is never typed over something that would take it as a choice;
+  5. the turn is written once per client id (a repeat is not a second line),
      and one that was written but never delivered is delivered again from the
      line already there, with no new line;
-  5. the turn goes to the terminal in the user's envelope, which the message
+  6. the turn goes to the terminal in the user's envelope, which the message
      fence (message_origin.py) puts between its own marks, and only if that
      fence is in this image (the delivery below would otherwise type the text
-     as written); then the id is recorded as delivered.
+     as written); then the id is recorded as delivered. Delivered means the
+     transport saw the CLI take the text: typed in the composer, then sent.
 The whole of it runs under one lock per agent, so two asks with the same id
 cannot both deliver. A dropped link does not stop it halfway (SIGHUP and SIGPIPE
 are ignored): what was delivered is recorded.
@@ -75,6 +80,8 @@ EXIT = {
     "read_failed": 127,
     "persist_failed": 128,
     "fence_missing": 129,
+    # Below 120: from 128 up an exit is also a signal's (130 is an interrupt).
+    "agent_not_at_prompt": 119,
 }
 
 # jht-tmux-send's own exits: 2 no session, 3 the terminal never took the text,
@@ -107,6 +114,8 @@ LOCK_FILE = ".chat-send.lock"
 MAX_LINE = 65536
 PAGE_ROWS = 120
 TMUX_TIMEOUT_S = 10
+# The prompt is looked for in the last lines of the pane: the transcript scrolls above it.
+PROMPT_TAIL = 14
 DELIVERY_TIMEOUT_S = 100
 
 # Direction marks and zero-width characters read as nothing and rewrite what
@@ -219,6 +228,77 @@ def check_session(session: str) -> None:
         raise Refusal("team_not_running")
     if _tmux("has-session", "-t", "=" + session) != 0:
         raise Refusal("agent_not_running")
+
+
+# ── at the prompt ───────────────────────────────────────────────────────────
+# The composer's line: the input mark of the CLIs (❯ Claude Code and Kimi, › Codex, > older builds,
+# ▌ a block cursor), maybe inside the border of a box.
+_COMPOSER = re.compile(r"^\s*[│┃╎|]?\s*[❯›>▌]\s?(.*?)\s*[│┃╎|]?\s*$")
+# A menu's option under the mark: a permission question, a sign-in, a folder to trust.
+_OPTION = re.compile(r"^\d{1,2}[.)]\s")
+# What an empty composer shows in grey; anything else there is text already typed.
+_PLACEHOLDER = re.compile(r"^(?:try\s|ask\s|type\s|write\s|send\s|scrivi\s|\?\s*for\s|/\s*for\s)", re.I)
+
+
+def _status_line_busy(line: str) -> bool:
+    """A status line saying a turn is running, not prose that mentions it (the transport's own rule)."""
+    lower = line.lower()
+    if "esc to interrupt" not in lower:
+        return False
+    before, _, after = lower.partition("esc to interrupt")
+    if before.rstrip().endswith(('"', "'", "“", "«")):
+        return False
+    if len(after) > 40:
+        return False
+    rest = after.rstrip(") ").lstrip()
+    return rest == "" or rest[0] in "·•|,-"
+
+
+def prompt_state(pane: str) -> str:
+    """`ready`, `busy` or `not_at_prompt`, from the text of the agent's pane.
+
+    Ready is shown, never assumed: the last composer line of the tail, empty or with its
+    placeholder, and no turn running. Everything else is not at the prompt: no composer (a
+    sign-in, a shell, a CLI still starting), a menu's option under the mark, text already typed.
+    """
+    lines = [line.rstrip() for line in (pane or "").splitlines()]
+    while lines and not lines[-1].strip():
+        lines.pop()
+    tail = lines[-PROMPT_TAIL:]
+    if any(_status_line_busy(line) for line in tail[-10:]):
+        return "busy"
+    for line in reversed(tail):
+        match = _COMPOSER.match(line)
+        if not match:
+            continue
+        content = match.group(1).strip()
+        if not content or _PLACEHOLDER.match(content):
+            return "ready"
+        return "not_at_prompt"
+    return "not_at_prompt"
+
+
+def capture_pane(session: str) -> str | None:
+    try:
+        done = subprocess.run(["tmux", "capture-pane", "-p", "-t", "=" + session + ":"],
+                              capture_output=True, timeout=TMUX_TIMEOUT_S, check=False)
+    except (OSError, subprocess.SubprocessError):
+        return None
+    if done.returncode != 0:
+        return None
+    return done.stdout.decode("utf-8", errors="replace")
+
+
+def require_prompt(session: str) -> None:
+    """Refuses, writing nothing, unless the agent's terminal waits at its prompt."""
+    pane = capture_pane(session)
+    if pane is None:
+        raise Refusal("agent_unavailable")
+    state = prompt_state(pane)
+    if state == "busy":
+        raise Refusal("agent_busy")
+    if state != "ready":
+        raise Refusal("agent_not_at_prompt")
 
 
 def _found(path: Path, client_id: str) -> dict | None:
@@ -389,13 +469,16 @@ def send(agent: str, client_id: str, raw_text: str) -> dict:
     done = _found(delivered, client_id)
     if done is not None:
         return _receipt(client_id, done.get("message_id"), done.get("at"))
-    # Both checks come before anything is created, the lock's folder included: a refusal leaves nothing behind.
+    # The checks come before anything is created, the lock's folder included: a refusal leaves nothing behind.
     check_session(session)
     require_fence(agent, text)
+    require_prompt(session)
     with _AgentLock(agent):
         done = _found(delivered, client_id)         # another ask with this id may have finished while we waited
         if done is not None:
             return _receipt(client_id, done.get("message_id"), done.get("at"))
+        # Another send may have started a turn while this one waited for the lock: look again.
+        require_prompt(session)
         row = persist(agent, client_id, text)
         # A line already there is what the agent is sent, not this ask's text: the id is the message.
         deliver(agent, session, str(row.get("text") or text))

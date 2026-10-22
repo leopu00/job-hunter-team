@@ -1318,6 +1318,12 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
   ),
   agent_unavailable: AGENT_NOT_READY,
   agent_busy: AGENT_NOT_READY,
+  agent_not_at_prompt: copy(
+    "L’agente non è al prompt: sul suo terminale c’è un menu, un accesso, una domanda di permesso o del testo già scritto.",
+    "Guarda il suo terminale nella pagina Agenti; quando è tornato al prompt, rimanda il messaggio.",
+    "The agent is not at its prompt: its terminal shows a menu, a sign-in, a permission question or text already typed.",
+    "Look at its terminal on the Agents page; when it is back at the prompt, send the message again.",
+  ),
   agent_stuck: copy(
     "L’agente non risponde.",
     "Attendi qualche minuto: il team lo riavvia da solo. Poi rimanda il messaggio.",
