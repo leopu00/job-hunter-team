@@ -759,6 +759,91 @@ pub(crate) fn run_ssh_command(
     result
 }
 
+/// The file ssh writes its own messages in (`-E`) instead of its stderr:
+/// private, used once, read after ssh ends and removed with this value.
+struct SshMessages {
+    path: PathBuf,
+}
+
+impl SshMessages {
+    fn create() -> Result<Self, &'static str> {
+        let nanos = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_nanos())
+            .unwrap_or(0);
+        let path = std::env::temp_dir().join(format!("jht-ssh-{}-{nanos}.log", std::process::id()));
+        fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&path)
+            .map_err(|_| "storage_unavailable")?;
+        let messages = Self { path };
+        set_private_permissions(&messages.path)?;
+        Ok(messages)
+    }
+
+    fn read(&self) -> Vec<u8> {
+        fs::File::open(&self.path).map(read_capped).unwrap_or_default()
+    }
+}
+
+impl Drop for SshMessages {
+    fn drop(&mut self) {
+        let _ = fs::remove_file(&self.path);
+    }
+}
+
+/// The remote command with its stderr left on the server: the VPS runs it in
+/// a POSIX shell, and nothing it prints on stderr travels back to ssh.
+fn without_remote_stderr(remote_command: &str) -> String {
+    format!("exec 2>/dev/null; {remote_command}")
+}
+
+/// ssh's arguments when nothing may reach its stderr: its own messages go to
+/// `messages` (`-E`), the remote command's stderr stays on the server.
+fn stderr_free_ssh_args(
+    host: &ValidatedHost,
+    messages: &Path,
+    remote_command: &str,
+) -> Result<Vec<OsString>, &'static str> {
+    let mut args: Vec<OsString> = vec!["-E".into(), messages.as_os_str().to_owned()];
+    args.extend(ssh_base_args(host)?);
+    args.push(without_remote_stderr(remote_command).into());
+    Ok(args)
+}
+
+/// `run_ssh_command` for Windows' ssh (Win32-OpenSSH), which can stay hung when
+/// anything reaches its stderr, its own messages or the remote command's: a race
+/// inside ssh.exe, with a pipe or a file alike (T70). So nothing ever does: the
+/// remote command's stderr stays on the server, ssh's own messages go to a
+/// private file (`-E`) read after it ends (for `ssh_rate_limited`) and removed,
+/// and its stderr is the null device. No ControlMaster either (T69): every call
+/// is its own connection.
+pub(crate) fn run_ssh_command_stderr_free(
+    host: &ValidatedHost,
+    remote_command: &str,
+    input: Option<&[u8]>,
+    timeout: Duration,
+) -> Result<ProcessResult, &'static str> {
+    run_ssh_command_stderr_free_with("ssh", host, remote_command, input, timeout)
+}
+
+fn run_ssh_command_stderr_free_with(
+    program: &str,
+    host: &ValidatedHost,
+    remote_command: &str,
+    input: Option<&[u8]>,
+    timeout: Duration,
+) -> Result<ProcessResult, &'static str> {
+    let messages = SshMessages::create()?;
+    let args = stderr_free_ssh_args(host, &messages.path, remote_command)?;
+    let (result, _) = run_program_with_stderr(program, &args, input, timeout, StderrTo::Null);
+    if matches!(&result, Ok(value) if value.code == 255) && ssh_rejects_for_a_while(&messages.read()) {
+        return Err("ssh_rate_limited");
+    }
+    result
+}
+
 fn read_capped(mut reader: impl Read) -> Vec<u8> {
     let mut output = Vec::new();
     let mut buffer = [0u8; 8192];
@@ -988,11 +1073,34 @@ where
     I: IntoIterator<Item = S>,
     S: AsRef<OsStr>,
 {
+    run_program_with_stderr(program, args, input, timeout, StderrTo::Pipe)
+}
+
+/// Where a program's stderr goes.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum StderrTo {
+    /// A pipe, read while the program runs.
+    Pipe,
+    /// The null device (Windows' ssh, which must get nothing on stderr: T70).
+    Null,
+}
+
+fn run_program_with_stderr<I, S>(
+    program: &str,
+    args: I,
+    input: Option<&[u8]>,
+    timeout: Duration,
+    stderr_to: StderrTo,
+) -> (Result<ProcessResult, &'static str>, Vec<u8>)
+where
+    I: IntoIterator<Item = S>,
+    S: AsRef<OsStr>,
+{
     let mut command = Command::new(program);
-    command
-        .args(args)
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped());
+    command.args(args).stdout(Stdio::piped()).stderr(match stderr_to {
+        StderrTo::Pipe => Stdio::piped(),
+        StderrTo::Null => Stdio::null(),
+    });
     hide_console(&mut command);
     if input.is_some() {
         command.stdin(Stdio::piped());
@@ -1003,11 +1111,17 @@ where
         Ok(child) => child,
         Err(error) => return (Err(spawn_failure(program, &error)), Vec::new()),
     };
-    let (Some(stdout), Some(stderr)) = (child.stdout.take(), child.stderr.take()) else {
+    let stderr = child.stderr.take();
+    let Some(stdout) = child.stdout.take() else {
         let _ = child.kill();
         let _ = child.wait();
         return (Err("process_pipe_failed"), Vec::new());
     };
+    if stderr_to == StderrTo::Pipe && stderr.is_none() {
+        let _ = child.kill();
+        let _ = child.wait();
+        return (Err("process_pipe_failed"), Vec::new());
+    }
     let stdin = if input.is_some() {
         match child.stdin.take() {
             Some(stdin) => Some(stdin),
@@ -1021,7 +1135,7 @@ where
         None
     };
     let stdout_reader = thread::spawn(move || read_capped(stdout));
-    let stderr_reader = thread::spawn(move || read_capped(stderr));
+    let stderr_reader = stderr.map(|stderr| thread::spawn(move || read_capped(stderr)));
     let started = Instant::now();
     // The input goes in on its own thread, and the clock starts before it: a
     // process that never reads (a server that accepts the connection and then
@@ -1046,7 +1160,9 @@ where
     // contain credentials or host data, and stable error codes are the public
     // contract. run_program drops it; only the local runtime's own log keeps
     // it, redacted.
-    let stderr = stderr_reader.join().unwrap_or_default();
+    let stderr = stderr_reader
+        .map(|reader| reader.join().unwrap_or_default())
+        .unwrap_or_default();
     let (status, input_written) = match outcome {
         Ok(done) => done,
         Err(code) => return (Err(code), stderr),
@@ -1424,6 +1540,66 @@ mod tests {
             super::scan_host_key_with_ssh(program.to_str().unwrap(), "192.0.2.10", 22).err(),
             Some("ssh_rate_limited")
         );
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    /// Windows' ssh (T69, T70): no master, its own messages in `-E <file>`, the remote stderr left
+    /// on the server.
+    #[test]
+    fn stderr_free_ssh_never_opens_a_master_and_keeps_the_remote_stderr_on_the_server() {
+        let host = super::ValidatedHost::Vps {
+            address: "test-host".into(),
+            user: "test".into(),
+            port: 22,
+            key_path: "/private/synthetic-key".into(),
+            known_hosts: "/private/synthetic-known-hosts".into(),
+        };
+        let args = super::stderr_free_ssh_args(&host, Path::new("/private/synthetic.log"), "jht desktop-chat probe").unwrap();
+        let values: Vec<_> = args.iter().map(|value| value.to_string_lossy().into_owned()).collect();
+        assert_eq!(&values[..2], ["-E", "/private/synthetic.log"]);
+        assert_eq!(values.last().unwrap(), "exec 2>/dev/null; jht desktop-chat probe");
+        for forbidden in ["-M", "-S", "-O"] {
+            assert!(!values.iter().any(|value| value == forbidden), "{forbidden} in {values:?}");
+        }
+        assert!(!values.iter().any(|value| value.starts_with("ControlMaster=yes") || value.starts_with("ControlPath=/")), "{values:?}");
+        // everything else is the same ssh every other call uses
+        let base: Vec<_> = ssh_base_args(&host).unwrap().iter().map(|value| value.to_string_lossy().into_owned()).collect();
+        assert_eq!(&values[2..values.len() - 1], &base[..]);
+    }
+
+    /// The real process: its stderr is not a pipe (here, a stand-in for ssh asks its own fd 2), what
+    /// it says on stderr goes nowhere, and ssh's messages in the `-E` file still tell a server that
+    /// refuses this computer; the file is gone after.
+    #[cfg(unix)]
+    #[test]
+    fn stderr_free_ssh_gets_no_stderr_pipe_and_reads_its_messages_from_the_file() {
+        let host = super::ValidatedHost::Vps {
+            address: "test-host".into(),
+            user: "test".into(),
+            port: 22,
+            key_path: "/private/synthetic-key".into(),
+            known_hosts: "/private/synthetic-known-hosts".into(),
+        };
+        let (dir, program) = fake_ssh(
+            "printf '%s' \"$2\" > \"$(dirname \"$0\")/log-used\"\n\
+             if [ -p /dev/fd/2 ]; then echo pipe; else echo not-a-pipe; fi\n\
+             echo 'remote noise' >&2\n\
+             case \"$*\" in *refuse*) echo 'kex_exchange_identification: read: Connection reset by 192.0.2.10 port 22' >> \"$2\"; exit 255;; esac\n\
+             exit 0",
+        );
+        let program = program.to_str().unwrap();
+        let done = super::run_ssh_command_stderr_free_with(program, &host, "exit 0", None, std::time::Duration::from_secs(20)).unwrap();
+        assert_eq!((done.code, done.stdout_text().trim()), (0, "not-a-pipe"));
+        let used = PathBuf::from(fs::read_to_string(dir.join("log-used")).unwrap());
+        assert!(used.starts_with(std::env::temp_dir()) && !used.exists(), "{used:?}");
+        assert_eq!(
+            super::run_ssh_command_stderr_free_with(program, &host, "refuse", None, std::time::Duration::from_secs(20)).err(),
+            Some("ssh_rate_limited")
+        );
+        assert!(!PathBuf::from(fs::read_to_string(dir.join("log-used")).unwrap()).exists());
+        // the same stand-in with the usual runner does see a pipe: the probe tells them apart
+        let (piped, _) = super::run_program_keeping_stderr(program, ["-E", "/dev/null", "x"], None, std::time::Duration::from_secs(20));
+        assert_eq!(piped.unwrap().stdout_text().trim(), "pipe");
         let _ = fs::remove_dir_all(dir);
     }
 

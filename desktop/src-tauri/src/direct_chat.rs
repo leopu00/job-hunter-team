@@ -1,7 +1,7 @@
 use crate::account_scope::{AccountScope, AccountScopeState};
 use crate::existing_team_runtime::{self, ActivatedTarget, ChatOperation};
 use crate::runtime_host::{
-    run_program, run_ssh, run_ssh_command, set_private_dir_permissions, set_private_permissions, ssh_base_args,
+    run_program, run_ssh, run_ssh_command, run_ssh_command_stderr_free, set_private_dir_permissions, set_private_permissions, ssh_base_args,
     validate_host, ExecutionHost, ProcessResult, ValidatedHost,
 };
 use serde::{Deserialize, Serialize};
@@ -113,6 +113,24 @@ struct Connection {
     local_owner_marker: Option<PathBuf>,
     control_path: Option<PathBuf>,
     tunnel: Option<Child>,
+    link: VpsLink,
+}
+
+/// How the app talks to a VPS. `Master`: one ssh master (ControlMaster) that every command reuses.
+/// `PerCommand`: Windows' ssh (Win32-OpenSSH) has no ControlMaster (PowerShell/Win32-OpenSSH#405,
+/// T69), so every command is its own connection, and nothing reaches its stderr (T70).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum VpsLink {
+    Master,
+    PerCommand,
+}
+
+fn vps_link_for(os: &str) -> VpsLink {
+    if os == "windows" {
+        VpsLink::PerCommand
+    } else {
+        VpsLink::Master
+    }
 }
 
 enum RemoteOperation<'a> { Probe, Python, Delivery(&'a str), Chat(ChatOperation<'a>) }
@@ -128,6 +146,10 @@ pub(crate) struct DirectChatStatus {
     state: &'static str,
     #[serde(skip_serializing_if = "Option::is_none")]
     code: Option<&'static str>,
+    /// `per-command` when every read costs a new ssh connection (Windows to a VPS): the page reads
+    /// less often then.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    link: Option<&'static str>,
 }
 
 /// The codes a system line of the chat may carry. The page has a sentence for each, in every language.
@@ -206,7 +228,16 @@ fn failure(code: &'static str) -> DirectChatError {
     DirectChatError { code }
 }
 fn status(state: &'static str, code: Option<&'static str>) -> DirectChatStatus {
-    DirectChatStatus { state, code }
+    DirectChatStatus { state, code, link: None }
+}
+
+/// A connection that answered, with the way its commands reach the VPS when that costs a connection each.
+fn ready_for(connection: &Connection) -> DirectChatStatus {
+    DirectChatStatus {
+        link: (matches!(connection.validated, ValidatedHost::Vps { .. }) && connection.link == VpsLink::PerCommand)
+            .then_some("per-command"),
+        ..status("ready", None)
+    }
 }
 
 fn valid_agent(value: &str) -> bool {
@@ -613,6 +644,27 @@ fn open_tunnel(host: &ValidatedHost) -> Result<(PathBuf, Child), DirectChatError
     Err(failure("tunnel_verify_failed"))
 }
 
+/// The VPS link a connection starts with: the ssh master, or, where ssh has none (Windows), a check
+/// that one connection answers, with the same errors as the master: `tunnel_verify_failed`, or
+/// `ssh_rate_limited` when the server turns this computer away. `exit 0` means the same in every
+/// shell, so the check assumes none.
+fn open_vps_link(
+    host: &ValidatedHost,
+    link: VpsLink,
+    check: impl FnOnce(&ValidatedHost) -> Result<ProcessResult, &'static str>,
+) -> Result<(Option<PathBuf>, Option<Child>), DirectChatError> {
+    match link {
+        VpsLink::Master => open_tunnel(host).map(|(path, child)| (Some(path), Some(child))),
+        VpsLink::PerCommand => match check(host) {
+            Ok(result) if result.success() => Ok((None, None)),
+            Err(code @ "ssh_rate_limited") => Err(failure(code)),
+            _ => Err(failure("tunnel_verify_failed")),
+        },
+    }
+}
+
+const VPS_LINK_CHECK: &str = "exit 0";
+
 fn close_connection(connection: &mut Connection) {
     if let (Some(path), ValidatedHost::Vps { .. }) =
         (&connection.control_path, &connection.validated)
@@ -676,7 +728,11 @@ fn run_connection(
                 (None, RemoteOperation::Python) => REMOTE_PYTHON_STDIN.to_owned(),
                 (None, RemoteOperation::Delivery(session)) => delivery_command(session).ok_or_else(|| failure("invalid_agent"))?.to_owned(),
             };
-            run_ssh_command(&connection.validated, &command, input, timeout, connection.control_path.as_deref()).map_err(failure)
+            match connection.link {
+                VpsLink::Master => run_ssh_command(&connection.validated, &command, input, timeout, connection.control_path.as_deref()),
+                VpsLink::PerCommand => run_ssh_command_stderr_free(&connection.validated, &command, input, timeout),
+            }
+            .map_err(failure)
         }
     }
 }
@@ -698,7 +754,7 @@ fn probe(connection: &Connection) -> DirectChatStatus {
     );
     match result {
         Ok(result) if result.success() && result.stdout_text().trim() == "true" => {
-            status("ready", None)
+            ready_for(connection)
         }
         _ => status("error", Some("container_unavailable")),
     }
@@ -713,6 +769,7 @@ fn connect_impl(
     let runtime = if matches!(validated, ValidatedHost::Vps { .. }) {
         existing_team_runtime::selected_or_own(app, &scope, &host).map_err(failure)?
     } else { None };
+    let link = vps_link_for(std::env::consts::OS);
     let (local_wrapper, local_owner_marker, control_path, tunnel) = match &validated {
         ValidatedHost::Local => (
                 Some(crate::onboarding::verified_local_wrapper_path(app).map_err(failure)?),
@@ -721,8 +778,10 @@ fn connect_impl(
                 None,
             ),
         ValidatedHost::Vps { .. } => {
-            let (path, child) = open_tunnel(&validated)?;
-            (None, None, Some(path), Some(child))
+            let (path, child) = open_vps_link(&validated, link, |host| {
+                run_ssh_command_stderr_free(host, VPS_LINK_CHECK, None, CONNECT_TIMEOUT)
+            })?;
+            (None, None, path, child)
         }
     };
     let mut connection = Connection {
@@ -735,6 +794,7 @@ fn connect_impl(
         local_owner_marker,
         control_path,
         tunnel,
+        link,
     };
     let state = probe(&connection);
     if state.state != "ready" {
@@ -795,8 +855,8 @@ async fn connect_scoped(
                 .connection
                 .lock()
                 .map_err(|_| failure("state_failed"))?;
+            let ready = ready_for(&connection);
             *slot = Some(connection);
-            let ready = status("ready", None);
             emit(
                 &state.inner,
                 DirectChatEvent::Status {
@@ -1419,6 +1479,7 @@ mod tests {
         Connection, DirectChatPage, ProcessResult, REMOTE_CONTAINER_PROBE, REMOTE_PYTHON_STDIN, UNKNOWN_ACTION,
         control_path_fits, remove_tunnel_socket, tunnel_dir_name, tunnel_socket_bases, tunnel_socket_path,
         SOCKET_PATH_MAX, SSH_SOCKET_SUFFIX,
+        open_vps_link, ready_for, vps_link_for, VpsLink, VPS_LINK_CHECK,
     };
     use crate::runtime_host::{ExecutionHost, ValidatedHost};
     use std::{fs, process::Command};
@@ -1490,6 +1551,91 @@ mod tests {
         assert!(socket.starts_with(&base));
         assert_eq!(tunnel_socket_path(&[long], tunnel_dir_name), Err("tunnel_path_unavailable"));
         let _ = fs::remove_dir_all(&base);
+    }
+
+    fn synthetic_vps() -> ValidatedHost {
+        ValidatedHost::Vps {
+            address: "test-host".into(),
+            user: "test".into(),
+            port: 22,
+            key_path: "/private/synthetic-key".into(),
+            known_hosts: "/private/synthetic-known-hosts".into(),
+        }
+    }
+
+    fn exited(code: i32) -> Result<ProcessResult, &'static str> {
+        Ok(ProcessResult { code, stdout: Vec::new() })
+    }
+
+    /// Win32-OpenSSH has no ControlMaster (T69): on Windows a VPS is reached one connection per command.
+    #[test]
+    fn only_windows_reaches_a_vps_one_connection_per_command() {
+        assert_eq!(vps_link_for("windows"), VpsLink::PerCommand);
+        for os in ["macos", "linux", "freebsd"] {
+            assert_eq!(vps_link_for(os), VpsLink::Master, "{os}");
+        }
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn this_windows_build_never_opens_an_ssh_master() {
+        assert_eq!(vps_link_for(std::env::consts::OS), VpsLink::PerCommand);
+    }
+
+    /// Without a master the link is one ssh that answers, with the master's own errors; there is no
+    /// socket and no process to keep or to close.
+    #[test]
+    fn a_per_command_link_is_one_ssh_that_answers_with_the_masters_errors() {
+        let host = synthetic_vps();
+        let mut asked = Vec::new();
+        let opened = open_vps_link(&host, VpsLink::PerCommand, |checked| {
+            asked.push(matches!(checked, ValidatedHost::Vps { .. }));
+            exited(0)
+        })
+        .expect("an ssh that answers is a link");
+        assert!(opened.0.is_none() && opened.1.is_none());
+        assert_eq!(asked, [true]);
+        for (outcome, code) in [
+            (exited(255), "tunnel_verify_failed"),
+            (exited(1), "tunnel_verify_failed"),
+            (Err("process_timeout"), "tunnel_verify_failed"),
+            (Err("ssh_client_missing"), "tunnel_verify_failed"),
+            (Err("ssh_rate_limited"), "ssh_rate_limited"),
+        ] {
+            let error = open_vps_link(&host, VpsLink::PerCommand, |_| outcome).unwrap_err();
+            assert_eq!(error.code, code);
+        }
+        // the check is a command every remote shell runs the same way
+        assert_eq!(VPS_LINK_CHECK, "exit 0");
+    }
+
+    /// The page reads every 5 s instead of 1.5 only when each read is a new ssh connection.
+    #[test]
+    fn only_a_vps_reached_per_command_is_ready_with_a_slow_link() {
+        let connection = |validated: ValidatedHost, link: VpsLink| Connection {
+            app: None,
+            scope: crate::account_scope::AccountScope::synthetic(b"synthetic-account-link"),
+            host: ExecutionHost::Local,
+            validated,
+            runtime: None,
+            local_wrapper: None,
+            local_owner_marker: None,
+            control_path: None,
+            tunnel: None,
+            link,
+        };
+        assert_eq!(
+            serde_json::to_value(ready_for(&connection(synthetic_vps(), VpsLink::PerCommand))).unwrap(),
+            serde_json::json!({"state": "ready", "link": "per-command"})
+        );
+        assert_eq!(
+            serde_json::to_value(ready_for(&connection(synthetic_vps(), VpsLink::Master))).unwrap(),
+            serde_json::json!({"state": "ready"})
+        );
+        assert_eq!(
+            serde_json::to_value(ready_for(&connection(ValidatedHost::Local, VpsLink::PerCommand))).unwrap(),
+            serde_json::json!({"state": "ready"})
+        );
     }
 
     #[test]
@@ -1794,8 +1940,11 @@ mod tests {
             local_owner_marker: Some(owner),
             control_path: None,
             tunnel: None,
+            link: VpsLink::PerCommand,
         };
         assert_eq!(probe(&connection).state, "ready");
+        // a local chat never pays an ssh connection per read, even where ssh has no master
+        assert_eq!(serde_json::to_value(probe(&connection)).unwrap(), serde_json::json!({"state": "ready"}));
 
         fs::write(
             &wrapper,

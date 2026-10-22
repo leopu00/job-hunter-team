@@ -1,4 +1,4 @@
-import { act, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import DirectChatScreen, { newLineAt, systemLineText } from "./DirectChatScreen";
@@ -263,6 +263,48 @@ describe("DirectChatScreen", () => {
     });
     expect(screen.getByText("Risposta asincrona")).toBeInTheDocument();
     expect(mock.read).toHaveBeenLastCalledWith({ agentId: "assistente" });
+  });
+
+  it("reads every 5 s when each read is a new ssh connection, and every 1.5 s for 30 s after a send", async () => {
+    vi.useFakeTimers();
+    const { mock } = client({ state: "ready", link: "per-command" });
+    const flush = () => act(async () => {
+      for (let i = 0; i < 5; i += 1) await Promise.resolve();
+    });
+    const after = async (ms: number) => {
+      await act(async () => {
+        vi.advanceTimersByTime(ms);
+      });
+      await flush();
+    };
+    render(<DirectChatScreen client={mock} initialAgentId="assistente" />);
+    await flush();
+    expect(mock.read).toHaveBeenCalledTimes(1);
+
+    // a slow link: nothing at 1.5 s, the next read at 5 s
+    await after(1_500);
+    expect(mock.read).toHaveBeenCalledTimes(1);
+    await after(3_500);
+    expect(mock.read).toHaveBeenCalledTimes(2);
+
+    // a send brings the next read 1.5 s later, and keeps that pace for 30 s
+    const input = screen.getByRole("textbox", { name: "Scrivi a Assistente" });
+    fireEvent.change(input, { target: { value: "Ci sei?" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+    await flush();
+    expect(mock.send).toHaveBeenCalledTimes(1);
+    await after(1_500);
+    expect(mock.read).toHaveBeenCalledTimes(3);
+    await after(1_500);
+    expect(mock.read).toHaveBeenCalledTimes(4);
+
+    // past the 30 s, back to 5 s
+    await after(30_000);
+    const settled = vi.mocked(mock.read).mock.calls.length;
+    await after(1_500);
+    expect(mock.read).toHaveBeenCalledTimes(settled);
+    await after(3_500);
+    expect(mock.read).toHaveBeenCalledTimes(settled + 1);
   });
 
   it("speaks the language of the app, and dictates in it", async () => {

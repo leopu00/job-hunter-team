@@ -26,6 +26,11 @@ export function isDirectChatAgentId(value: string | null): value is DirectChatAg
 const INITIAL_STATUS: DirectChatStatus = { state: "connecting" };
 const MAX_MESSAGE_LENGTH = 4_000;
 const HISTORY_POLL_MS = 1_500;
+// When every read is a new ssh connection (Windows to a VPS: no ControlMaster there), the page reads
+// every 5 s, and every 1.5 s again for the 30 s after the person sends: fewer connections, so a
+// server that limits them does not turn this computer away.
+const SLOW_LINK_POLL_MS = 5_000;
+const AFTER_SEND_FAST_MS = 30_000;
 
 function safeCode(value: unknown): string | null {
   return typeof value === "string" && /^[a-z0-9_-]{1,48}$/i.test(value)
@@ -156,6 +161,10 @@ export default function DirectChatScreen({
   const [queued, setQueued] = useState<ReadonlySet<string>>(() => new Set());
   const [inFlight, setInFlight] = useState<string | null>(null);
   const composer = useRef<HTMLTextAreaElement>(null);
+  const slowLink = status.state === "ready" && status.link === "per-command";
+  const lastSentAt = useRef(0);
+  // Set by the reading loop: the next read comes soon after a send, not up to 5 s later.
+  const readSoon = useRef<(() => void) | null>(null);
   // Where the cursor goes once the new line is in the box: set in the same commit, before the next
   // key is read, so a person typing fast keeps writing after the new line, not before it.
   const cursorAfterNewLine = useRef<number | null>(null);
@@ -254,13 +263,25 @@ export default function DirectChatScreen({
       }
     }
 
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const delay = () =>
+      slowLink && Date.now() - lastSentAt.current > AFTER_SEND_FAST_MS ? SLOW_LINK_POLL_MS : HISTORY_POLL_MS;
+    const schedule = (after: number) => {
+      clearTimeout(timer);
+      timer = setTimeout(async () => {
+        await readHistory(false);
+        if (active) schedule(delay());
+      }, after);
+    };
+    readSoon.current = () => schedule(HISTORY_POLL_MS);
     void readHistory(true);
-    const interval = setInterval(() => void readHistory(false), HISTORY_POLL_MS);
+    schedule(delay());
     return () => {
       active = false;
-      clearInterval(interval);
+      readSoon.current = null;
+      clearTimeout(timer);
     };
-  }, [agentId, client, status.state]);
+  }, [agentId, client, status.state, slowLink]);
 
   useEffect(() => {
     const node = transcript.current;
@@ -288,6 +309,8 @@ export default function DirectChatScreen({
     setText("");
     setSending(true);
     setInFlight(id);
+    lastSentAt.current = Date.now();
+    readSoon.current?.();
     setOperationError(null);
     setMessages((current) => mergeMessages(current, { messages: [optimistic] }));
     try {
