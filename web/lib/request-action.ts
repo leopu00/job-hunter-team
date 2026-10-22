@@ -3,6 +3,9 @@ import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/workspace";
 import { isCloudDeploy } from "@/lib/deploy-mode";
 import { shouldRejectBrowserMutation, strictMutationRefusal } from "@/lib/csrf";
+import { DATABASE_REFUSALS } from "@/lib/request-action-codes";
+
+export { DATABASE_REFUSALS };
 
 /**
  * La porta unica delle azioni che il sito fa per conto dell'utente (JHT «web capace», fase 2-b).
@@ -47,24 +50,6 @@ const MAX_SUMMARY = 400;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const ACTION_NAME = /^[a-z][a-z0-9_]{0,31}(\.[a-z][a-z0-9_]{0,31})?$/;
 const FORBIDDEN_KEYS = new Set(["__proto__", "constructor", "prototype"]);
-
-/** I codici del contratto e la risposta HTTP di ciascuno. Qualsiasi altro codice è un errore del server. */
-export const DATABASE_REFUSALS: Record<string, number> = {
-  unauthenticated: 401,
-  reauth_required: 401,
-  rate_limited: 429,
-  unknown_action: 400,
-  invalid_params: 400,
-  not_found: 404,
-  confirm_not_found: 404,
-  confirm_expired: 410,
-  confirm_used: 409,
-  confirm_session_mismatch: 409,
-  confirm_action_mismatch: 409,
-  level_mismatch: 500,
-  position_not_ready: 409,
-  already_submitted: 409,
-};
 
 /** I rifiuti dell'ingresso (prima del database) e la risposta HTTP di ciascuno. */
 const ENTRY_REFUSALS = {

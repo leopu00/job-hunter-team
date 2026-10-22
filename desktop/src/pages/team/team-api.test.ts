@@ -46,15 +46,28 @@ describe("the /team routes in the desktop", () => {
     expect((await fetch("/api/scout/activity")).status).toBe(401);
   });
 
-  it("POST /api/team-state/emergency-stop sets should_run=false, and only with the STOP confirmation", async () => {
-    fake.current!.rows.team_state = [{ should_run: false }];
-    expect((await post("/api/team-state/emergency-stop", { confirm: "yes" })).status).toBe(400);
-    expect(ops("team_state").some((o) => o.name === "upsert")).toBe(false);
-
-    const res = await post("/api/team-state/emergency-stop", { confirm: "STOP" });
+  it("POST /api/team-state/emergency-stop asks the single door with the user's session, and writes no table itself", async () => {
+    fake.current!.rpcResults.request_action = { data: { ok: true, state: "queued", id: "x", level: "L2", summary: "emergency_stop" }, error: null };
+    const res = await post("/api/team-state/emergency-stop", {});
     expect(res.status).toBe(200);
-    const upsert = ops("team_state").find((o) => o.name === "upsert");
-    expect(upsert?.args[0]).toMatchObject({ user_id: "user-1", should_run: false });
+    expect(await res.json()).toEqual({ ok: true, state: "queued" });
+    expect(fake.current!.rpc).toEqual([
+      { name: "request_action", args: { p_action: "team.emergency_stop", p_params: {}, p_confirm_id: null, p_route_level: "L2" } },
+    ]);
+    expect(tables()).not.toContain("team_state");
+  });
+
+  it("POST /api/team-state/emergency-stop passes on the door's refusals, and anything else is a 502", async () => {
+    fake.current!.rpcResults.request_action = { data: { ok: false, error: "rate_limited" }, error: null };
+    expect((await post("/api/team-state/emergency-stop", {})).status).toBe(429);
+    fake.current!.rpcResults.request_action = { data: { ok: false, error: "something_new" }, error: null };
+    expect((await post("/api/team-state/emergency-stop", {})).status).toBe(502);
+    fake.current!.rpcResults.request_action = { data: null, error: { message: "boom" } };
+    const failed = await post("/api/team-state/emergency-stop", {});
+    expect(failed.status).toBe(502);
+    expect(await failed.text()).not.toContain("boom");
+    fake.current!.user = null;
+    expect((await post("/api/team-state/emergency-stop", {})).status).toBe(401);
   });
 
   it("POST /api/team/send stays refused, as on the cloud: nothing reaches an agent's terminal", async () => {
