@@ -1,4 +1,4 @@
-import { cleanup, render, screen, within } from "@testing-library/react";
+import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { describeError } from "../../lib/error-catalog";
@@ -88,7 +88,7 @@ describe("Dashboard on an existing team read only", () => {
     expect(screen.getByText("Candidature inviate")).toBeInTheDocument();
     // the navigation of that view
     const nav = screen.getByRole("navigation", { name: "Navigazione app" });
-    expect(within(nav).getAllByRole("link").map((link) => link.textContent)).toEqual(["JHT", "Dashboard", "Map", "Posizioni", "Squadra", "Profilo", "Ufficio", "Agenti"]);
+    expect(within(nav).getAllByRole("link").map((link) => link.textContent)).toEqual(["JHT", "Dashboard", "Map", "Posizioni", "Squadra", "Profilo", "Ufficio", "Agenti", "Impostazioni", "Guida"]);
     // nothing from the cloud, no write
     expect(fake.current!.calls).toEqual([]);
     expect(fake.current!.rpc).toEqual([]);
@@ -232,9 +232,12 @@ describe("Dashboard on an existing team read only", () => {
     reply = () => ({ ok: false, error: "positions_unavailable" });
     navigate("/dashboard", { replace: true });
     render(<Shell />);
-    const alerts = await screen.findAllByRole("alert");
-    expect(alerts.some((alert) => alert.textContent?.includes("(positions_unavailable)"))).toBe(true);
-    expect(alerts.some((alert) => alert.textContent?.includes(describeError("positions_unavailable", { locale: "it" }).text))).toBe(true);
+    // the link bar's alert comes first and has no code; the page's own alert says it
+    await waitFor(() => {
+      const alerts = screen.getAllByRole("alert");
+      expect(alerts.some((alert) => alert.textContent?.includes("(positions_unavailable)"))).toBe(true);
+      expect(alerts.some((alert) => alert.textContent?.includes(describeError("positions_unavailable", { locale: "it" }).text))).toBe(true);
+    });
 
     reply = () => ({ ok: true, data: syntheticStats() });
     await user.click(screen.getByRole("button", { name: "Aggiorna" }));
