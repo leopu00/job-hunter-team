@@ -1,0 +1,342 @@
+// Words of the action log: what the site asked on the person's behalf (the
+// page «Registro delle azioni» of the web and the same section of the desktop's
+// agents panel). Italian is the type source: a language missing a word does not
+// compile. Every action and status is a closed code of the log's vocabulary (the
+// CHECKs of the table); a code this file does not know, from a later migration, is
+// shown as «other action» with the code, never hidden.
+import type { Locale } from "@/i18n/config";
+import type {
+  WebActionCode,
+  WebActionLevel,
+  WebActionStatus,
+} from "@/lib/web-action-log";
+
+const IT = {
+  title: "Registro delle azioni",
+  intro:
+    "Quello che dal sito è stato chiesto a nome tuo: accendere o fermare la squadra, autorizzare una candidatura. Il registro si legge e basta: lo scrive solo il sito, nel momento in cui una richiesta parte.",
+  reading: "Leggo il registro…",
+  refresh: "Aggiorna",
+  empty: "Dal sito non è stata chiesta nessuna azione, per ora.",
+  unavailable: "Non riesco a leggere il registro. Riprova tra poco.",
+  notYet:
+    "Il registro non è ancora attivo su questo account: comparirà qui quando il sito inizierà a usarlo.",
+  signedOut: "Accedi con il tuo account per vedere il registro.",
+  localCopy: "Il registro sta sul sito, non su questa copia: aprilo da lì.",
+  limitNote: "Sono mostrate le ultime {n} azioni.",
+  footnote:
+    "Di ogni azione c’è solo un riassunto: mai chiavi, password o testi interi.",
+  listLabel: "Azioni chieste dal sito",
+  confirmed: "confermata {time}",
+  targetAll: "tutta la squadra",
+  expires: "scade {time}",
+  result: "Esito",
+  level: {
+    L1: "Nota",
+    L2: "Comando alla squadra",
+    L3: "Verso l’esterno",
+  } satisfies Record<WebActionLevel, string>,
+  levelHelp: {
+    L1: "Un dato tuo, senza effetti fuori da te.",
+    L2: "Dà un’istruzione alla squadra o la accende e la spegne.",
+    L3: "Ha un effetto verso terzi, come una candidatura.",
+  } satisfies Record<WebActionLevel, string>,
+  status: {
+    awaiting_confirm: "In attesa di conferma",
+    queued: "In coda",
+    done: "Eseguita",
+    error: "Non riuscita",
+    cancelled: "Annullata",
+    expired: "Scaduta",
+  } satisfies Record<WebActionStatus, string>,
+  unknownStatus: "Stato non noto",
+  unknownAction: "Altra azione ({code})",
+  action: {
+    "team.start": "Avvio",
+    "team.stop": "Arresto",
+    "team.restart": "Riavvio",
+    "team.emergency_stop": "Arresto di emergenza",
+    "position.apply_authorize": "Candidatura autorizzata",
+    "position.apply_revoke": "Autorizzazione a candidarsi ritirata",
+  } satisfies Record<WebActionCode, string>,
+};
+
+export type WebActionLogText = typeof IT;
+
+export const WEB_ACTION_LOG_TEXT: Record<Locale, WebActionLogText> = {
+  it: IT,
+  en: {
+    title: "Action log",
+    intro:
+      "What the site asked on your behalf: starting or stopping the team, authorising an application. The log is read-only: only the site writes it, at the moment a request goes out.",
+    reading: "Reading the log…",
+    refresh: "Refresh",
+    empty: "The site has asked for no action yet.",
+    unavailable: "I cannot read the log. Try again in a moment.",
+    notYet:
+      "The log is not active on this account yet: it will show here once the site starts using it.",
+    signedOut: "Sign in with your account to see the log.",
+    localCopy: "The log lives on the site, not on this copy: open it there.",
+    limitNote: "The last {n} actions are shown.",
+    footnote:
+      "Each action has only a summary: never keys, passwords or whole texts.",
+    listLabel: "Actions asked by the site",
+    confirmed: "confirmed {time}",
+    targetAll: "the whole team",
+    expires: "expires {time}",
+    result: "Result",
+    level: { L1: "Note", L2: "Command to the team", L3: "Towards the outside" },
+    levelHelp: {
+      L1: "Your own data, with no effect outside you.",
+      L2: "Instructs the team, or turns it on and off.",
+      L3: "Has an effect on third parties, such as an application.",
+    },
+    status: {
+      awaiting_confirm: "Waiting for confirmation",
+      queued: "Queued",
+      done: "Done",
+      error: "Failed",
+      cancelled: "Cancelled",
+      expired: "Expired",
+    },
+    unknownStatus: "Unknown state",
+    unknownAction: "Other action ({code})",
+    action: {
+      "team.start": "Start",
+      "team.stop": "Stop",
+      "team.restart": "Restart",
+      "team.emergency_stop": "Emergency stop",
+      "position.apply_authorize": "Application authorised",
+      "position.apply_revoke": "Authorisation to apply withdrawn",
+    },
+  },
+  de: {
+    title: "Aktionsprotokoll",
+    intro:
+      "Was die Website in deinem Namen angefordert hat: das Team starten oder stoppen, eine Bewerbung freigeben. Das Protokoll wird nur gelesen: Es schreibt allein die Website, in dem Moment, in dem eine Anfrage hinausgeht.",
+    reading: "Ich lese das Protokoll …",
+    refresh: "Aktualisieren",
+    empty: "Die Website hat bisher keine Aktion angefordert.",
+    unavailable:
+      "Ich kann das Protokoll nicht lesen. Versuche es gleich noch einmal.",
+    notYet:
+      "Das Protokoll ist für dieses Konto noch nicht aktiv: Es erscheint hier, sobald die Website es benutzt.",
+    signedOut: "Melde dich mit deinem Konto an, um das Protokoll zu sehen.",
+    localCopy:
+      "Das Protokoll liegt auf der Website, nicht auf dieser Kopie: Öffne es dort.",
+    limitNote: "Angezeigt werden die letzten {n} Aktionen.",
+    footnote:
+      "Von jeder Aktion gibt es nur eine Zusammenfassung: nie Schlüssel, Passwörter oder ganze Texte.",
+    listLabel: "Von der Website angeforderte Aktionen",
+    confirmed: "bestätigt {time}",
+    targetAll: "das ganze Team",
+    expires: "läuft ab {time}",
+    result: "Ergebnis",
+    level: { L1: "Notiz", L2: "Befehl an das Team", L3: "Nach außen" },
+    levelHelp: {
+      L1: "Deine eigenen Daten, ohne Wirkung außerhalb von dir.",
+      L2: "Gibt dem Team eine Anweisung oder schaltet es ein und aus.",
+      L3: "Wirkt auf Dritte, etwa eine Bewerbung.",
+    },
+    status: {
+      awaiting_confirm: "Wartet auf Bestätigung",
+      queued: "In der Warteschlange",
+      done: "Ausgeführt",
+      error: "Fehlgeschlagen",
+      cancelled: "Abgebrochen",
+      expired: "Abgelaufen",
+    },
+    unknownStatus: "Unbekannter Status",
+    unknownAction: "Andere Aktion ({code})",
+    action: {
+      "team.start": "Start",
+      "team.stop": "Stopp",
+      "team.restart": "Neustart",
+      "team.emergency_stop": "Notstopp",
+      "position.apply_authorize": "Bewerbung freigegeben",
+      "position.apply_revoke": "Freigabe zur Bewerbung zurückgezogen",
+    },
+  },
+  es: {
+    title: "Registro de acciones",
+    intro:
+      "Lo que el sitio ha pedido en tu nombre: encender o detener el equipo, autorizar una candidatura. El registro solo se lee: lo escribe únicamente el sitio, en el momento en que sale una petición.",
+    reading: "Leyendo el registro…",
+    refresh: "Actualizar",
+    empty: "El sitio todavía no ha pedido ninguna acción.",
+    unavailable: "No puedo leer el registro. Inténtalo de nuevo en un momento.",
+    notYet:
+      "El registro aún no está activo en esta cuenta: aparecerá aquí cuando el sitio empiece a usarlo.",
+    signedOut: "Inicia sesión con tu cuenta para ver el registro.",
+    localCopy: "El registro está en el sitio, no en esta copia: ábrelo allí.",
+    limitNote: "Se muestran las últimas {n} acciones.",
+    footnote:
+      "De cada acción solo hay un resumen: nunca claves, contraseñas ni textos enteros.",
+    listLabel: "Acciones pedidas por el sitio",
+    confirmed: "confirmada {time}",
+    targetAll: "todo el equipo",
+    expires: "caduca {time}",
+    result: "Resultado",
+    level: { L1: "Nota", L2: "Orden al equipo", L3: "Hacia el exterior" },
+    levelHelp: {
+      L1: "Un dato tuyo, sin efectos fuera de ti.",
+      L2: "Da una instrucción al equipo, o lo enciende y lo apaga.",
+      L3: "Tiene un efecto sobre terceros, como una candidatura.",
+    },
+    status: {
+      awaiting_confirm: "Esperando confirmación",
+      queued: "En cola",
+      done: "Ejecutada",
+      error: "Fallida",
+      cancelled: "Cancelada",
+      expired: "Caducada",
+    },
+    unknownStatus: "Estado desconocido",
+    unknownAction: "Otra acción ({code})",
+    action: {
+      "team.start": "Encendido",
+      "team.stop": "Parada",
+      "team.restart": "Reinicio",
+      "team.emergency_stop": "Parada de emergencia",
+      "position.apply_authorize": "Candidatura autorizada",
+      "position.apply_revoke": "Autorización de candidatura retirada",
+    },
+  },
+  fr: {
+    title: "Journal des actions",
+    intro:
+      "Ce que le site a demandé en ton nom : démarrer ou arrêter l’équipe, autoriser une candidature. Le journal se lit seulement : seul le site l’écrit, au moment où une demande part.",
+    reading: "Lecture du journal…",
+    refresh: "Actualiser",
+    empty: "Le site n’a encore demandé aucune action.",
+    unavailable: "Je ne peux pas lire le journal. Réessaie dans un instant.",
+    notYet:
+      "Le journal n’est pas encore actif sur ce compte : il apparaîtra ici quand le site commencera à l’utiliser.",
+    signedOut: "Connecte-toi avec ton compte pour voir le journal.",
+    localCopy:
+      "Le journal est sur le site, pas sur cette copie : ouvre-le là-bas.",
+    limitNote: "Les {n} dernières actions sont affichées.",
+    footnote:
+      "De chaque action il n’y a qu’un résumé : jamais de clés, de mots de passe ni de textes entiers.",
+    listLabel: "Actions demandées par le site",
+    confirmed: "confirmée {time}",
+    targetAll: "toute l’équipe",
+    expires: "expire {time}",
+    result: "Résultat",
+    level: { L1: "Note", L2: "Ordre à l’équipe", L3: "Vers l’extérieur" },
+    levelHelp: {
+      L1: "Une donnée à toi, sans effet en dehors de toi.",
+      L2: "Donne une consigne à l’équipe, ou l’allume et l’éteint.",
+      L3: "A un effet sur des tiers, comme une candidature.",
+    },
+    status: {
+      awaiting_confirm: "En attente de confirmation",
+      queued: "En file",
+      done: "Exécutée",
+      error: "Échouée",
+      cancelled: "Annulée",
+      expired: "Expirée",
+    },
+    unknownStatus: "État inconnu",
+    unknownAction: "Autre action ({code})",
+    action: {
+      "team.start": "Démarrage",
+      "team.stop": "Arrêt",
+      "team.restart": "Redémarrage",
+      "team.emergency_stop": "Arrêt d’urgence",
+      "position.apply_authorize": "Candidature autorisée",
+      "position.apply_revoke": "Autorisation de candidature retirée",
+    },
+  },
+  hu: {
+    title: "Műveletnapló",
+    intro:
+      "Amit a webhely a nevedben kért: a csapat elindítása vagy leállítása, egy jelentkezés engedélyezése. A napló csak olvasható: kizárólag a webhely írja, abban a pillanatban, amikor egy kérés elindul.",
+    reading: "A napló olvasása…",
+    refresh: "Frissítés",
+    empty: "A webhely eddig nem kért semmilyen műveletet.",
+    unavailable:
+      "Nem tudom elolvasni a naplót. Próbáld újra egy pillanat múlva.",
+    notYet:
+      "A napló ezen a fiókon még nem aktív: itt jelenik meg, amint a webhely használni kezdi.",
+    signedOut: "Jelentkezz be a fiókoddal a napló megtekintéséhez.",
+    localCopy: "A napló a webhelyen van, nem ezen a példányon: ott nyisd meg.",
+    limitNote: "Az utolsó {n} művelet látható.",
+    footnote:
+      "Minden műveletről csak egy összefoglaló van: soha kulcsok, jelszavak vagy teljes szövegek.",
+    listLabel: "A webhely által kért műveletek",
+    confirmed: "megerősítve: {time}",
+    targetAll: "az egész csapat",
+    expires: "lejár: {time}",
+    result: "Eredmény",
+    level: { L1: "Jegyzet", L2: "Parancs a csapatnak", L3: "Kifelé" },
+    levelHelp: {
+      L1: "Saját adatod, rajtad kívül nincs hatása.",
+      L2: "Utasítást ad a csapatnak, vagy be- és kikapcsolja.",
+      L3: "Harmadik felekre van hatása, például egy jelentkezés.",
+    },
+    status: {
+      awaiting_confirm: "Megerősítésre vár",
+      queued: "Sorban áll",
+      done: "Végrehajtva",
+      error: "Sikertelen",
+      cancelled: "Visszavonva",
+      expired: "Lejárt",
+    },
+    unknownStatus: "Ismeretlen állapot",
+    unknownAction: "Másik művelet ({code})",
+    action: {
+      "team.start": "Indítás",
+      "team.stop": "Leállítás",
+      "team.restart": "Újraindítás",
+      "team.emergency_stop": "Vészleállítás",
+      "position.apply_authorize": "Jelentkezés engedélyezve",
+      "position.apply_revoke": "Jelentkezési engedély visszavonva",
+    },
+  },
+  pt: {
+    title: "Registo de ações",
+    intro:
+      "O que o site pediu em teu nome: ligar ou parar a equipa, autorizar uma candidatura. O registo só se lê: quem o escreve é apenas o site, no momento em que um pedido sai.",
+    reading: "A ler o registo…",
+    refresh: "Atualizar",
+    empty: "O site ainda não pediu nenhuma ação.",
+    unavailable: "Não consigo ler o registo. Tenta de novo daqui a pouco.",
+    notYet:
+      "O registo ainda não está ativo nesta conta: aparecerá aqui quando o site começar a usá-lo.",
+    signedOut: "Entra com a tua conta para ver o registo.",
+    localCopy: "O registo está no site, não nesta cópia: abre-o lá.",
+    limitNote: "São mostradas as últimas {n} ações.",
+    footnote:
+      "De cada ação há só um resumo: nunca chaves, palavras-passe ou textos inteiros.",
+    listLabel: "Ações pedidas pelo site",
+    confirmed: "confirmada {time}",
+    targetAll: "toda a equipa",
+    expires: "expira {time}",
+    result: "Resultado",
+    level: { L1: "Nota", L2: "Comando à equipa", L3: "Para o exterior" },
+    levelHelp: {
+      L1: "Um dado teu, sem efeitos fora de ti.",
+      L2: "Dá uma instrução à equipa, ou liga-a e desliga-a.",
+      L3: "Tem efeito sobre terceiros, como uma candidatura.",
+    },
+    status: {
+      awaiting_confirm: "À espera de confirmação",
+      queued: "Na fila",
+      done: "Executada",
+      error: "Falhou",
+      cancelled: "Cancelada",
+      expired: "Expirada",
+    },
+    unknownStatus: "Estado desconhecido",
+    unknownAction: "Outra ação ({code})",
+    action: {
+      "team.start": "Arranque",
+      "team.stop": "Paragem",
+      "team.restart": "Reinício",
+      "team.emergency_stop": "Paragem de emergência",
+      "position.apply_authorize": "Candidatura autorizada",
+      "position.apply_revoke": "Autorização de candidatura retirada",
+    },
+  },
+};
