@@ -28,16 +28,55 @@ import re
 import shutil
 import socket
 import subprocess
+import tempfile
 import threading
 import time
+from functools import lru_cache
 from pathlib import Path
 
 import pytest
+
+from windows_native_fakes import (
+    ENGINE_CHECK, WINDOWS, assert_engine, expected_engine, git_bash, install_fake, launcher, powershell_argv, windows_env,
+)
 
 ROOT = Path(__file__).resolve().parents[1]
 NETWORK = ROOT / "scripts" / "configure-podman-windows-network.ps1"
 ENABLER = ROOT / "scripts" / "enable-podman-windows-runtime.ps1"
 PWSH = shutil.which("pwsh")
+
+# Off Windows these need pwsh; on Windows they run under JHT_TEST_SHELL (windows_native_fakes),
+# where a missing shell fails instead of skipping.
+needs_powershell = pytest.mark.skipif(not WINDOWS and PWSH is None, reason="needs PowerShell")
+
+
+def _ps(tmp_path: Path, text: str, *, bin_dirs=(), extra=None, timeout=60) -> subprocess.CompletedProcess:
+    """Runs `text` as a script under the PowerShell under test and checks the engine that ran it.
+    On Windows the case gets windows_env and a PATH with only `bin_dirs`."""
+    script = tmp_path / "case.ps1"
+    engine = tmp_path / "engine.txt"
+    engine.unlink(missing_ok=True)
+    script.write_text(ENGINE_CHECK + text, encoding="utf-8")
+    if WINDOWS:
+        env = {**windows_env(tmp_path), "PATH": os.pathsep.join(map(str, bin_dirs))}
+    else:
+        env = {"PATH": os.pathsep.join([*map(str, bin_dirs), "/usr/bin", "/bin"])}
+    env.update({"HOME": str(tmp_path), "JHT_ENGINE_FILE": str(engine), **(extra or {})})
+    done = subprocess.run([*powershell_argv(), "-File", str(script)], capture_output=True, text=True,
+                          timeout=timeout, env=env)
+    assert_engine(engine, done.stderr)
+    return done
+
+
+def _ps_make_podman(path: Path, version: str) -> str:
+    """PowerShell lines that put a fake podman.exe answering `--version` at `path` (what winget leaves)."""
+    if not WINDOWS:
+        return (f"  Set-Content -LiteralPath '{path}' -Value \"#!/bin/sh`necho 'podman version {version}'\"\n"
+                f"  & chmod 755 '{path}'\n")
+    # -NoNewline: 5.1's Set-Content would end the line with CRLF, and bash would print the \r too.
+    return (f"  Copy-Item -LiteralPath '{launcher()}' -Destination '{path}'\n"
+            f"  Set-Content -NoNewline -LiteralPath '{path.with_suffix('.sh')}' "
+            f"-Value \"#!/bin/sh`necho 'podman version {version}'`n\"\n")
 
 
 def _proxy_check() -> str:
@@ -106,9 +145,16 @@ def machine(tmp_path):
         table.write_text("".join(f"{p} {u} {a}\n" for p, u, a in rows if a is not None), encoding="utf-8")
 
     def run(ready_seconds=5, check_ports=None):
-        env = {"PATH": f"{bin_dir}:/usr/bin:/bin", "CURL_TABLE": str(table), "JHT_PROXY_READY_SECONDS": str(ready_seconds)}
+        if WINDOWS:
+            # Git's bash by path: `bash` on a Windows PATH can be WSL's. The fakes first, then Git's tools.
+            bash = str(git_bash())
+            env = {**windows_env(tmp_path), "PATH": os.pathsep.join([str(bin_dir), str(git_bash().parent)])}
+        else:
+            bash = "bash"
+            env = {"PATH": f"{bin_dir}:/usr/bin:/bin"}
+        env.update({"CURL_TABLE": str(table), "JHT_PROXY_READY_SECONDS": str(ready_seconds)})
         started = time.monotonic()
-        done = subprocess.run(["bash", "-s", "--", *map(str, check_ports or ports)], input=_proxy_check(),
+        done = subprocess.run([bash, "-s", "--", *map(str, check_ports or ports)], input=_proxy_check(),
                               capture_output=True, text=True, env=env, timeout=60)
         return done, time.monotonic() - started
 
@@ -191,7 +237,7 @@ exec bash -c "$1"
 """
 
 
-@pytest.mark.skipif(PWSH is None or os.name == "nt", reason="needs PowerShell off Windows")
+@needs_powershell
 @pytest.mark.parametrize(("change", "expected_exit", "expected_line"), [
     ({}, 0, None),
     ({"telegram_other": None}, 23,
@@ -203,23 +249,19 @@ exec bash -c "$1"
 ])
 def test_the_network_script_passes_a_refused_connect_and_names_a_missing_one(machine, tmp_path, change,
                                                                               expected_exit, expected_line):
-    podman = tmp_path / "bin" / "podman"
-    podman.write_text(FAKE_PODMAN, encoding="utf-8")
-    podman.chmod(0o755)
+    podman = install_fake(tmp_path / "bin", "podman", FAKE_PODMAN)
     agent, broker, telegram = machine.ports
     machine.answers(**change)
-    script = tmp_path / "network-check.ps1"
-    script.write_text(
+    done = _ps(
+        tmp_path,
         "$ErrorActionPreference = 'Stop'\n"
         f"$Podman = '{podman}'\n$MachineName = 'jht-podman'\n"
         f"$Port = {agent}\n$BrokerPort = {broker}\n$TelegramPort = {telegram}\n"
         + _network_check_block() + "\nexit 0\n",
-        encoding="utf-8",
+        bin_dirs=[tmp_path / "bin"],
+        extra={"CURL_TABLE": str(tmp_path / "curl-table"), "JHT_PROXY_READY_SECONDS": "5"},
+        timeout=120,
     )
-    env = {"PATH": f"{tmp_path / 'bin'}:/usr/bin:/bin", "HOME": str(tmp_path),
-           "CURL_TABLE": str(tmp_path / "curl-table"), "JHT_PROXY_READY_SECONDS": "5"}
-    done = subprocess.run([PWSH, "-NoProfile", "-NonInteractive", "-File", str(script)], capture_output=True,
-                          text=True, timeout=120, env=env)
     assert done.returncode == expected_exit, done.stdout + done.stderr
     if expected_line:
         assert expected_line.format(agent=agent, telegram=telegram) in done.stderr
@@ -341,20 +383,49 @@ def test_already_installed_for_another_user_is_installed_for_this_one_or_its_own
 
 
 
-def _enabler_install_block() -> str:
+def _enabler_functions() -> str:
     source = ENABLER.read_text(encoding="utf-8")
-    functions = "".join(
+    return "".join(
         source[source.index(f"function {name} {{") :].split("\n}\n", 1)[0] + "\n}\n"
         for name in ("Update-ProcessPath", "Get-Application", "Find-Podman", "Get-PodmanVersion")
     )
+
+
+def _enabler_install_block() -> str:
+    source = ENABLER.read_text(encoding="utf-8")
     block = source[source.index("$WingetUpdateNotApplicable = ") : source.index("$Podman = Find-Podman")]
-    return functions + block
+    return _enabler_functions() + block
+
+
+@lru_cache(maxsize=1)
+def _real_podman_seen() -> str:
+    """On a real Windows Find-Podman also reads the Machine and User PATH and the registry's InstallDir,
+    which no test can fake without a seam in the enabler: it is asked here, with no fake anywhere."""
+    empty = Path(tempfile.mkdtemp(prefix="jht-no-podman-"))
+    done = _ps(empty, "$LocalAppData = '" + str(empty) + "'\n" + _enabler_functions()
+               + "[Console]::Out.WriteLine('FOUND=' + (Find-Podman))\n")
+    found = re.findall(r"^FOUND=(.*)$", done.stdout, flags=re.MULTILINE)
+    assert done.returncode == 0 and found, done.stdout + done.stderr
+    return found[-1].strip()
+
+
+def _install_block_is_isolated() -> None:
+    """The install block cases see only their fakes off Windows. On Windows they run only where no real
+    Podman is visible (a GitHub runner): there one is a failure, elsewhere (a PC with Podman) a skip."""
+    if not WINDOWS:
+        return
+    seen = _real_podman_seen()
+    if seen:
+        message = f"a real Podman is visible to Find-Podman here ({seen}): the install block cases would find it"
+        if os.environ.get("CI"):
+            pytest.fail(message)
+        pytest.skip(message)
 
 
 # PowerShell off Windows: a fake podman.exe can be a shell script there, and PowerShell reads the
 # installer's «Programs\Podman\podman.exe» with \ as a separator (Join-Path gives
 # Programs/Podman/podman.exe), so the fake goes in real Programs/Podman folders.
-@pytest.mark.skipif(PWSH is None or os.name == "nt", reason="needs PowerShell off Windows")
+@needs_powershell
 @pytest.mark.parametrize(("installed", "winget_code", "expected_exit", "expected_line"), [
     ("6.0.2", None, 0, None),                                  # already there: winget is not even run
     (None, 0, 0, None),                                        # first install
@@ -363,8 +434,8 @@ def _enabler_install_block() -> str:
     (None, 0x8A150006 - 2**32, 21, "podman_not_installable: winget install Podman.CLI 6.0.2 exited with"),
 ])
 def test_the_install_block_with_a_fake_winget(tmp_path, installed, winget_code, expected_exit, expected_line):
+    _install_block_is_isolated()
     calls = tmp_path / "winget-calls"
-    script = tmp_path / "block.ps1"
     # «6.0.2-late»: Podman appears only once winget ran (what PATH did not show before)
     present_before = installed is not None and not installed.endswith("-late")
     version = (installed or "6.0.2").replace("-late", "")
@@ -372,24 +443,20 @@ def test_the_install_block_with_a_fake_winget(tmp_path, installed, winget_code, 
     fake_podman.parent.mkdir(parents=True)
     podman_body = f"#!/bin/sh\necho 'podman version {version}'\n"
     if present_before:
-        fake_podman.write_text(podman_body, encoding="utf-8")
-        fake_podman.chmod(0o755)
+        install_fake(fake_podman.parent, "podman.exe", podman_body)
     winget = (
         "function winget {\n"
         f"  Add-Content -LiteralPath '{calls}' -Value ($args -join ' ')\n"
-        + (f"  Set-Content -LiteralPath '{fake_podman}' -Value \"#!/bin/sh`necho 'podman version {version}'\"\n"
-           f"  & chmod 755 '{fake_podman}'\n")
+        + _ps_make_podman(fake_podman, version)
         + f"  $global:LASTEXITCODE = {winget_code if winget_code is not None else 0}\n"
         "}\n"
     )
-    script.write_text(
+    done = _ps(
+        tmp_path,
         "$ErrorActionPreference = 'Stop'\n"
         f"$LocalAppData = '{tmp_path}'\n$PodmanCliVersion = '6.0.2'\n$InstallDependencies = $true\n"
         "function Write-JhtPhase { }\n" + winget + _enabler_install_block() + "\nexit 0\n",
-        encoding="utf-8",
     )
-    done = subprocess.run([PWSH, "-NoProfile", "-NonInteractive", "-File", str(script)], capture_output=True,
-                          text=True, timeout=60, env={"PATH": "/usr/bin:/bin", "HOME": str(tmp_path)})
     assert done.returncode == expected_exit, done.stdout + done.stderr
     if expected_line:
         assert expected_line in done.stderr
@@ -398,7 +465,7 @@ def test_the_install_block_with_a_fake_winget(tmp_path, installed, winget_code, 
 
 # JHT-T56: the pin is what the app installs; a newer 6 is used with a warning, an older 6 is brought
 # to the pin, another major is podman_version_mismatch without touching it.
-@pytest.mark.skipif(PWSH is None or os.name == "nt", reason="needs PowerShell off Windows")
+@needs_powershell
 @pytest.mark.parametrize(("before", "after", "expected_exit", "expected_line", "winget_runs"), [
     ("6.0.2", None, 0, None, False),
     ("6.1.4", None, 0, "JHT_WARNING podman_version_newer: Podman 6.1.4 is installed on this computer;", False),
@@ -413,12 +480,10 @@ def test_a_podman_of_another_version(tmp_path, before, after, expected_exit, exp
     calls = tmp_path / "winget-calls"
     fake_podman = tmp_path / "Programs" / "Podman" / "podman.exe"
     fake_podman.parent.mkdir(parents=True)
-    fake_podman.write_text(f"#!/bin/sh\necho 'podman version {before}'\n", encoding="utf-8")
-    fake_podman.chmod(0o755)
+    install_fake(fake_podman.parent, "podman.exe", f"#!/bin/sh\necho 'podman version {before}'\n")
     winget = f"  Add-Content -LiteralPath '{calls}' -Value ($args -join ' ')\n"
     if after:
-        winget += (f"  Set-Content -LiteralPath '{fake_podman}' -Value \"#!/bin/sh`necho 'podman version {after}'\"\n"
-                   f"  & chmod 755 '{fake_podman}'\n")
+        winget += _ps_make_podman(fake_podman, after)
     winget += "  $global:LASTEXITCODE = 0\n"
     done = _run_block(tmp_path, winget)
     assert done.returncode == expected_exit, done.stdout + done.stderr
@@ -434,16 +499,14 @@ def test_a_podman_of_another_version(tmp_path, before, after, expected_exit, exp
 
 
 def _run_block(tmp_path, winget_body, extra=""):
-    script = tmp_path / "block.ps1"
-    script.write_text(
+    _install_block_is_isolated()
+    return _ps(
+        tmp_path,
         "$ErrorActionPreference = 'Stop'\n"
         f"$LocalAppData = '{tmp_path}'\n$PodmanCliVersion = '6.0.2'\n$InstallDependencies = $true\n"
         "function Write-JhtPhase { }\n" + extra + "function winget {\n" + winget_body + "}\n"
         + _enabler_install_block() + "\nexit 0\n",
-        encoding="utf-8",
     )
-    return subprocess.run([PWSH, "-NoProfile", "-NonInteractive", "-File", str(script)], capture_output=True,
-                          text=True, timeout=60, env={"PATH": "/usr/bin:/bin", "HOME": str(tmp_path)})
 
 
 ALREADY = 0x8A15002B - 2**32
@@ -451,7 +514,7 @@ ALREADY = 0x8A15002B - 2**32
 
 # winget says «already installed» on its first pass and podman.exe is nowhere for this user; the
 # second pass (for this user) installs it, or does not.
-@pytest.mark.skipif(PWSH is None or os.name == "nt", reason="needs PowerShell off Windows")
+@needs_powershell
 @pytest.mark.parametrize(("second_installs", "second_code", "expected_exit"), [
     (True, 0, 0),
     (False, 0x8A150006 - 2**32, 25),
@@ -462,8 +525,7 @@ def test_already_installed_for_another_user_with_a_fake_winget(tmp_path, second_
     calls = tmp_path / "winget-calls"
     fake_podman = tmp_path / "Programs" / "Podman" / "podman.exe"
     fake_podman.parent.mkdir(parents=True)
-    install = (f"    Set-Content -LiteralPath '{fake_podman}' -Value \"#!/bin/sh`necho 'podman version 6.0.2'\"\n"
-               f"    & chmod 755 '{fake_podman}'\n") if second_installs else ""
+    install = _ps_make_podman(fake_podman, "6.0.2") if second_installs else ""
     winget = (
         f"  Add-Content -LiteralPath '{calls}' -Value ($args -join ' ')\n"
         # winget sees «installed» (the other user's Uninstall entry is in HKLM): without --force it does nothing
@@ -487,7 +549,7 @@ def test_already_installed_for_another_user_with_a_fake_winget(tmp_path, second_
         assert done.stderr == ""
 
 
-@pytest.mark.skipif(PWSH is None or os.name == "nt", reason="needs PowerShell off Windows")
+@needs_powershell
 def test_already_installed_and_reachable_needs_no_second_pass(tmp_path):
     # the Try again after a later failure: «already installed», and this user's podman.exe is there
     calls = tmp_path / "winget-calls"
@@ -495,24 +557,22 @@ def test_already_installed_and_reachable_needs_no_second_pass(tmp_path):
     fake_podman.parent.mkdir(parents=True)
     winget = (
         f"  Add-Content -LiteralPath '{calls}' -Value ($args -join ' ')\n"
-        f"  Set-Content -LiteralPath '{fake_podman}' -Value \"#!/bin/sh`necho 'podman version 6.0.2'\"\n"
-        f"  & chmod 755 '{fake_podman}'\n"
-        f"  $global:LASTEXITCODE = {ALREADY}\n"
+        + _ps_make_podman(fake_podman, "6.0.2")
+        + f"  $global:LASTEXITCODE = {ALREADY}\n"
     )
     done = _run_block(tmp_path, winget)
     assert done.returncode == 0, done.stdout + done.stderr
     assert len(calls.read_text().splitlines()) == 1
 
 
-@pytest.mark.skipif(PWSH is None or os.name == "nt", reason="needs PowerShell off Windows")
+@needs_powershell
 def test_podman_installed_for_the_computer_is_found_without_winget(tmp_path):
     # the MSI's machine scope puts it in %ProgramFiles%\Podman, outside this user's PATH here
     calls = tmp_path / "winget-calls"
     program_files = tmp_path / "ProgramFiles"
     fake_podman = program_files / "Podman" / "podman.exe"
     fake_podman.parent.mkdir(parents=True)
-    fake_podman.write_text("#!/bin/sh\necho 'podman version 6.0.2'\n", encoding="utf-8")
-    fake_podman.chmod(0o755)
+    install_fake(fake_podman.parent, "podman.exe", "#!/bin/sh\necho 'podman version 6.0.2'\n")
     winget = f"  Add-Content -LiteralPath '{calls}' -Value ($args -join ' ')\n  $global:LASTEXITCODE = 0\n"
     done = _run_block(tmp_path, winget, extra=f"$env:ProgramFiles = '{program_files}'\n")
     assert done.returncode == 0, done.stdout + done.stderr
@@ -562,7 +622,7 @@ WINDOWS_POWERSHELL_JSON = (
 )
 
 
-@pytest.mark.skipif(PWSH is None or os.name == "nt", reason="needs PowerShell off Windows")
+@needs_powershell
 @pytest.mark.parametrize("shell", ["windows-powershell-5.1", "powershell-7"])
 @pytest.mark.parametrize(("digests", "accepted"), [
     ([f"ghcr.io/leopu00/jht@{PLATFORM}", f"ghcr.io/leopu00/jht@{INDEX}"], True),   # Podman 6, by index
@@ -573,10 +633,12 @@ WINDOWS_POWERSHELL_JSON = (
 ])
 def test_the_pulled_image_is_found_by_its_digest_among_all_its_digests(tmp_path, shell, digests, accepted):
     inspect = json.dumps(digests) if digests else "null"
-    script = tmp_path / "image.ps1"
-    script.write_text(
+    # Under the real Windows PowerShell 5.1 the 5.1 shape is the engine's own (and -NoEnumerate does not exist).
+    imitate = shell == "windows-powershell-5.1" and expected_engine() != "5.1"
+    done = _ps(
+        tmp_path,
         "$ErrorActionPreference = 'Stop'\n"
-        + (WINDOWS_POWERSHELL_JSON if shell == "windows-powershell-5.1" else "")
+        + (WINDOWS_POWERSHELL_JSON if imitate else "")
         + "function Write-JhtPhase { }\n"
         "function Invoke-Checked { $global:LASTEXITCODE = 0 }\n"
         f"function fake-podman {{ $global:LASTEXITCODE = 0; '{inspect}' }}\n"
@@ -584,10 +646,7 @@ def test_the_pulled_image_is_found_by_its_digest_among_all_its_digests(tmp_path,
         f"$RuntimeImage = 'ghcr.io/leopu00/jht@{INDEX}'; $ExpectedImageDigest = '{INDEX}'\n"
         + _image_check_block()
         + "\n$canonicalImage\nexit 0\n",
-        encoding="utf-8",
     )
-    done = subprocess.run([PWSH, "-NoProfile", "-NonInteractive", "-File", str(script)], capture_output=True,
-                          text=True, timeout=60, env={"PATH": "/usr/bin:/bin", "HOME": str(tmp_path)})
     if accepted:
         assert done.returncode == 0, done.stdout + done.stderr
         assert done.stdout.strip().splitlines()[-1] == f"ghcr.io/leopu00/jht@{INDEX}"
@@ -596,9 +655,14 @@ def test_the_pulled_image_is_found_by_its_digest_among_all_its_digests(tmp_path,
         assert "Pulled runtime image does not expose the expected repository digest" in done.stdout + done.stderr
 
 
-@pytest.mark.skipif(PWSH is None or os.name == "nt", reason="needs PowerShell off Windows")
-def test_the_windows_powershell_shape_is_really_one_object():
-    # the harness reproduces what it claims: in the 5.1 shape a two-digest array is one pipeline object
+@needs_powershell
+def test_the_windows_powershell_shape_is_really_one_object(tmp_path):
+    # the harness reproduces what it claims: in the 5.1 shape a two-digest array is one pipeline object.
+    # Under the real 5.1 the engine itself is checked: that is the shape the imitation reproduces.
+    if expected_engine() == "5.1":
+        done = _ps(tmp_path, "@('[\"a\",\"b\"]' | ConvertFrom-Json).Count\n")
+        assert done.stdout.split() == ["1"], done.stdout + done.stderr
+        return
     probe = WINDOWS_POWERSHELL_JSON + "@('[\"a\",\"b\"]' | ConvertFrom-Json).Count; @('[\"a\",\"b\"]' | Microsoft.PowerShell.Utility\\ConvertFrom-Json).Count\n"
-    done = subprocess.run([PWSH, "-NoProfile", "-NonInteractive", "-Command", probe], capture_output=True, text=True, timeout=60)
+    done = _ps(tmp_path, probe)
     assert done.stdout.split() == ["1", "2"], done.stdout + done.stderr

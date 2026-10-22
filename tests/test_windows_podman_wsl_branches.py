@@ -17,7 +17,14 @@ this runs in the pytest job, where WSL does not exist. What needs a real WSL2
 and a real Podman machine is in the collaudo script, not here.
 
 The fakes are POSIX sh scripts: pwsh on Linux and macOS finds a file named
-podman.exe as an application. On Windows this file is skipped.
+podman.exe as an application. On Windows the same scripts run under Git for
+Windows' bash, behind a small native launcher named like the real program
+(wsl.exe, podman.exe, docker.exe): the scripts look them up with Get-Command
+-CommandType Application and run them as native processes. There the file runs
+under the shell named by JHT_TEST_SHELL (`powershell`, Windows PowerShell 5.1,
+the one the app uses; or `pwsh`), and every run checks that the engine was the
+one named: 5.1 does not enumerate a JSON array through the pipeline, 7 does. A
+missing shell, bash or compiler on Windows is a failure, never a skip.
 """
 
 from __future__ import annotations
@@ -25,7 +32,6 @@ from __future__ import annotations
 import json
 import os
 import re
-import shutil
 import subprocess
 from pathlib import Path
 
@@ -40,16 +46,8 @@ SELFTEST = SCRIPTS / "windows-config-acl-selftest.ps1"
 WINDOWS_RUNTIME_RS = ROOT / "desktop" / "src-tauri" / "src" / "windows_runtime.rs"
 
 
-def _pwsh() -> str:
-    found = os.environ.get("JHT_TEST_PWSH") or shutil.which("pwsh")
-    if found:
-        return found
-    if os.environ.get("CI"):
-        pytest.fail("pwsh is missing on the CI runner: these branches would go untested")
-    pytest.skip("pwsh not installed")
+from windows_native_fakes import ENGINE_CHECK, WINDOWS, assert_engine, install_fake, powershell_argv, windows_env
 
-
-pytestmark = pytest.mark.skipif(os.name == "nt", reason="the fakes are POSIX sh scripts")
 
 # Dot-sources functions (and, for the enabler, its machine block) from the real
 # script, then runs $env:JHT_CASE_BODY. `exit N` inside them ends pwsh with N.
@@ -78,19 +76,22 @@ exit 0
 
 
 def _fake(directory: Path, name: str, cases: str) -> None:
-    path = directory / name
-    path.write_text(FAKE.format(cases=cases), encoding="utf-8")
-    path.chmod(0o755)
+    install_fake(directory, name, FAKE.format(cases=cases))
 
 
 def _run(tmp_path: Path, script: Path, imports: list[str], body: str, env: dict[str, str]):
     prelude = tmp_path / "prelude.ps1"
-    prelude.write_text(PRELUDE, encoding="utf-8")
+    # The engine check first: every case says which PowerShell ran it.
+    prelude.write_text(ENGINE_CHECK + PRELUDE, encoding="utf-8")
     log = tmp_path / "calls.log"
     log.touch()
+    engine = tmp_path / "engine.txt"
+    engine.unlink(missing_ok=True)
     run_env = {
-        "PATH": f"{tmp_path / 'bin'}{os.pathsep}/usr/bin{os.pathsep}/bin",
+        **(windows_env(tmp_path) if WINDOWS else {}),
+        "PATH": str(tmp_path / "bin") if WINDOWS else f"{tmp_path / 'bin'}{os.pathsep}/usr/bin{os.pathsep}/bin",
         "HOME": str(tmp_path),
+        "JHT_ENGINE_FILE": str(engine),
         "FAKE_LOG": str(log),
         "FAKE_STATE": str(tmp_path / "state"),
         "FAKE_DEFAULT": str(tmp_path / "default-connection"),
@@ -100,9 +101,10 @@ def _run(tmp_path: Path, script: Path, imports: list[str], body: str, env: dict[
         **env,
     }
     result = subprocess.run(
-        [_pwsh(), "-NoLogo", "-NoProfile", "-NonInteractive", "-File", str(prelude)],
+        [*powershell_argv(), "-File", str(prelude)],
         env=run_env, capture_output=True, text=True, timeout=120,
     )
+    assert_engine(engine, result.stderr)
     calls = [line for line in log.read_text(encoding="utf-8").splitlines() if line]
     return result, calls
 
