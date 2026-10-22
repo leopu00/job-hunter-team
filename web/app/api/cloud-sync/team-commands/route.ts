@@ -35,9 +35,12 @@ export async function GET(req: NextRequest) {
     100,
   );
 
+  // user_id goes back with the row: the box runs only its own user's commands
+  // and checks it itself (cli/src/lib/team-command-guard.js); requested_at is
+  // the database's now(), the age the box measures.
   const { data, error } = await admin
     .from("team_commands")
-    .select("id, action, payload, requested_at, status")
+    .select("id, user_id, action, payload, requested_at, status")
     .eq("user_id", userId)
     .eq("status", status)
     .order("requested_at", { ascending: true })
