@@ -167,9 +167,14 @@ if [ "$sender_trust" = "verified" ] && [ -f "$MAIL_LIB" ] && command -v python3 
   fi
 fi
 
+mail_nudge_held=0
 _mail_exit() {
   local rc="$1"
   trap - EXIT
+  if [ "$mail_nudge_held" = 1 ]; then
+    echo "jht-tmux-send: queued $mail_id in the mailbox of $session; nudge held, the terminal is not at its prompt (it will be repeated)"
+    exit 0
+  fi
   case "$rc" in
     0) echo "jht-tmux-send: queued $mail_id in the mailbox of $session (nudge delivered)" ;;
     3) echo "jht-tmux-send: queued $mail_id in the mailbox of $session, but the terminal does not respond (rc=3)" >&2
@@ -278,6 +283,14 @@ fi
 # Le stesse parole di `nudge_text(1)` in jht_mail.py (un test le tiene uguali).
 if [ -n "$mail_id" ]; then
   message="[MAIL] 1 new message(s) in your mailbox. Run: jht-mail drain"
+  # JHT-T09 fase 3b · il sollecito si digita SOLO se il terminale e' al prompt (stessa regola della
+  # chat dell'utente, `agent_chat.prompt_state`): durante un turno puo' comparire un menu o una domanda
+  # di permesso, e un tasto digitato sopra la risponde. Altrimenti non si digita niente: il messaggio
+  # resta in coda e il richiamo del watchdog ritenta.
+  if ! python3 "$MAIL_LIB" nudge "$session" "$mail_id" >/dev/null 2>&1; then
+    mail_nudge_held=1
+    exit 0
+  fi
 fi
 
 # Signature per la verify: testa E coda del messaggio. La testa basta per i
