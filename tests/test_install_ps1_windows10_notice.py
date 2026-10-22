@@ -132,7 +132,7 @@ def test_an_unreadable_edition_says_nothing_and_goes_on(tmp_path):
 )
 def test_the_edition_is_read_from_win32_operatingsystem(tmp_path, cim, expected):
     body = (
-        "function Get-CimInstance { param([string]$ClassName, $ErrorAction)\n"
+        "function Get-CimInstance { param([string]$ClassName, $OperationTimeoutSec, $ErrorAction)\n"
         "  if ($ClassName -ne 'Win32_OperatingSystem') { throw \"class $ClassName\" }\n"
         f"  {cim}\n}}\n"
         "$e = Get-JhtWindowsEdition\n"
@@ -141,6 +141,41 @@ def test_the_edition_is_read_from_win32_operatingsystem(tmp_path, cim, expected)
     result = _run(tmp_path, ["Get-JhtWindowsEdition"], body)
     assert result.returncode == 0, result.stderr
     assert result.stdout.strip() == expected
+
+
+# A fake CIM that says, outside the function's output, how it was called.
+SPY_CIM = (
+    "function Get-CimInstance { param([string]$ClassName, $OperationTimeoutSec, $ErrorAction)\n"
+    "  [Console]::Out.WriteLine(\"CIM class=$ClassName timeout=$OperationTimeoutSec erroraction=$ErrorAction\")\n"
+    "  if ($env:CIM_TIMES_OUT -eq '1') { throw 'The WS-Management service cannot complete the operation within the time specified in OperationTimeout.' }\n"
+    "  [pscustomobject]@{ ProductType = [uint32]1; BuildNumber = '19045' }\n}\n"
+)
+
+
+def test_the_cim_read_gives_up_after_10_seconds(tmp_path):
+    body = SPY_CIM + (
+        "$e = Get-JhtWindowsEdition\n"
+        "[Console]::Out.WriteLine(\"EDITION $($e.ProductType) $($e.Build)\")\n"
+    )
+    result = _run(tmp_path, ["Get-JhtWindowsEdition"], body)
+    assert result.returncode == 0, result.stderr
+    lines = result.stdout.splitlines()
+    assert "CIM class=Win32_OperatingSystem timeout=10 erroraction=Stop" in lines, result.stdout
+    assert "EDITION 1 19045" in lines, result.stdout
+
+
+def test_a_cim_read_that_times_out_says_nothing_and_the_setup_goes_on(tmp_path):
+    # The real Get-JhtWindowsEdition this time, behind the notice: a timeout is a failed read.
+    body = (
+        "$env:CIM_TIMES_OUT = '1'\n" + SPY_CIM +
+        "Show-WindowsSupportNotice\n[Console]::Out.WriteLine('SETUP_GOES_ON')\n"
+    )
+    result = _run(tmp_path, ["Get-JhtWindowsEdition", *NOTICE_FUNCTIONS], body)
+    assert result.returncode == 0, result.stderr
+    assert "CIM class=Win32_OperatingSystem timeout=10 erroraction=Stop" in result.stdout
+    assert "JHT_NOTICE" not in result.stdout
+    assert "Windows 10" not in result.stdout
+    assert result.stdout.splitlines()[-1] == "SETUP_GOES_ON"
 
 
 def _function_text(name: str) -> str:

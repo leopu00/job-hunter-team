@@ -200,7 +200,9 @@ function Test-System {
 # controller, 3 server. Windows 10 builds run from 10240 to 19045.
 function Get-JhtWindowsEdition {
   try {
-    $os = Get-CimInstance -ClassName Win32_OperatingSystem -ErrorAction Stop
+    # A WMI that does not answer must not hold the setup: after 10 s the read fails
+    # like any other, and the setup goes on without the notice.
+    $os = Get-CimInstance -ClassName Win32_OperatingSystem -OperationTimeoutSec 10 -ErrorAction Stop
     return @{ ProductType = [int]$os.ProductType; Build = [int]$os.BuildNumber }
   } catch {
     return $null
