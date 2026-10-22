@@ -20,6 +20,7 @@ export const NOTICE_SCRIPT = join(HERE, '../../../shared/skills/web_action_notic
 
 export const WEB_ACTION_CODES = Object.freeze([
   'apply_authorized_from_web',
+  'apply_revoked_from_web',
   'team_stopped_from_web',
   'team_started_from_web',
   'team_restarted_from_web',

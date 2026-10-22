@@ -27,6 +27,7 @@ import web_action_notice as wan  # noqa: E402
 def test_every_code_has_a_sentence_in_every_language_and_no_free_text():
     assert wan.CODES == {
         "apply_authorized_from_web",
+        "apply_revoked_from_web",
         "team_stopped_from_web",
         "team_started_from_web",
         "team_restarted_from_web",
@@ -36,8 +37,8 @@ def test_every_code_has_a_sentence_in_every_language_and_no_free_text():
         assert set(texts) == set(wan.LANGUAGES), code
         for lang, text in texts.items():
             # the only slot is the position's number, and only where there is a position
-            assert text.count("{") == (1 if code == "apply_authorized_from_web" else 0), (code, lang)
-            assert "{position}" in text or code != "apply_authorized_from_web"
+            assert text.count("{") == (1 if code in wan.POSITION_CODES else 0), (code, lang)
+            assert "{position}" in text or code not in wan.POSITION_CODES
     assert wan.body_for("apply_authorized_from_web", 42, "it").count("42") == 1
     # an unknown language falls back to English, not to an error
     assert wan.body_for("team_stopped_from_web", None, "xx") == wan.TEXTS["team_stopped_from_web"]["en"]
@@ -51,6 +52,7 @@ def test_every_code_has_a_sentence_in_every_language_and_no_free_text():
         ("team_stopped_from_web", "x" * 121, None, "key_invalid"),
         ("team_stopped_from_web", "k;rm", None, "key_invalid"),
         ("apply_authorized_from_web", "apply:1:2", None, "position_missing"),
+        ("apply_revoked_from_web", "revoke:1:2", None, "position_missing"),
         ("apply_authorized_from_web", "apply:1:2", 0, "position_invalid"),
         ("apply_authorized_from_web", "apply:1:2", True, "position_invalid"),
     ],
