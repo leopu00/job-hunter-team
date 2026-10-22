@@ -2392,10 +2392,22 @@ export function resolveRequest(local, cloud, flagCol, atCol, extraCols = []) {
   return pick(cloud, true);
 }
 
-/** [JHT-CLOSER] L'autorizzazione alla candidatura: `resolveRequest` con l'autore. */
+/**
+ * [JHT-CLOSER] L'autorizzazione alla candidatura: `resolveRequest` con l'autore.
+ *
+ * L'autore che il cloud dichiara non si crede: il canale lo sa il box. Desktop e
+ * Telegram scrivono sul DB locale, e il loro ritorno dal cloud (stesso istante)
+ * vince il locale. Un'autorizzazione che invece il pull prende DAL CLOUD, con il
+ * flag acceso, viene dal sito e vale `user_web` qualunque autore dichiari la
+ * riga: chi ha la sessione scrive `positions` via PostgREST fino alla 098, e
+ * con `user_local` aggirerebbe il tetto giornaliero delle candidature dal sito.
+ */
 export function resolveApplyRequest(local, cloud) {
   const r = resolveRequest(local, cloud, 'apply_requested', 'apply_requested_at', ['apply_requested_by']);
-  return { flag: r.flag, at: r.at, by: r.apply_requested_by };
+  const cloudMs = requestInstantMs(cloud?.apply_requested_at);
+  const localMs = requestInstantMs(local?.apply_requested_at);
+  const fromCloud = !Number.isNaN(cloudMs) && (Number.isNaN(localMs) || cloudMs > localMs);
+  return { flag: r.flag, at: r.at, by: fromCloud && r.flag === 1 ? 'user_web' : r.apply_requested_by };
 }
 
 async function handlePullDesiredState(options = {}) {
