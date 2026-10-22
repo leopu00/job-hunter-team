@@ -49,6 +49,8 @@ import pc from 'picocolors';
 import { tierInterval, errorBackoff, POLL_IDLE_MS } from './poll-tier.js';
 import { cloudSyncHeaders } from './client-identity.js';
 import {
+  capGroup,
+  capRefusal,
   commandRefusal,
   commandTarget,
   createDoneStore,
@@ -178,11 +180,12 @@ export async function processCommand(baseUrl, token, command, ctx) {
 
   // Untrusted input (P6): vocabulary, owner, age from the database's clock,
   // one run per id. A refused row is closed as error, never claimed or run.
+  // Then the door's cap per hour, on the commands this box ran (M1).
   const refusal = commandRefusal(command, {
     ownerId: ctx.ownerId,
     serverNow: ctx.serverNow(),
     done: ctx.done,
-  });
+  }) || capRefusal(command, ctx.done);
   if (refusal) {
     if (refusal !== 'malformed') {
       await apiPatch(baseUrl, token, `/api/cloud-sync/team-commands/${id}`, {
@@ -206,7 +209,7 @@ export async function processCommand(baseUrl, token, command, ctx) {
   // The id is written down BEFORE it runs: if the box stops halfway the
   // command is lost, never run twice. Unwritable = not run.
   try {
-    ctx.done.add(id);
+    ctx.done.add(id, capGroup(action));
   } catch (err) {
     await apiPatch(baseUrl, token, `/api/cloud-sync/team-commands/${id}`, {
       status: 'error',

@@ -233,6 +233,40 @@ describe("the daemon's executor of the site's team commands", () => {
     expect(patches.map((p) => [p.status, p.error])).toEqual([["error", "refused by the box: expired"]]);
   });
 
+  it("the door's cap holds on the box too: the seventh start or restart in an hour is refused, not run", async () => {
+    let clock = SERVER_NOW;
+    const store = () => createDoneStore(join(dir, "done.json"), { now: () => clock });
+    const ex = executor({ done: store() });
+    const ups = [row(), row(), row(), row({ action: "restart" }), row({ action: "restart", payload: { target: "scout" } }), row(), row()];
+    pending = ups;
+    await ex.run("realtime");
+    expect(runs).toHaveLength(6);
+    const seventh = ups[6];
+    expect(patches.filter((p) => p.id === seventh.id)).toEqual([
+      { id: seventh.id, status: "error", error: "refused by the box: rate_limited" },
+    ]);
+    expect(notices).toHaveLength(6);
+    expect(notices.some((n) => n.key === `cmd:${seventh.id}`)).toBe(false);
+
+    // Stops have their own cap (12), untouched by the starts.
+    pending = Array.from({ length: 13 }, () => row({ action: "stop" }));
+    const stops = [...pending];
+    await ex.run("realtime");
+    expect(runs.filter(([a]) => a === "stop")).toHaveLength(12);
+    expect(patches.filter((p) => p.id === stops[12].id).map((p) => p.error)).toEqual(["refused by the box: rate_limited"]);
+
+    // The count is kept on disk: a new executor (a restart of the daemon) still sees it.
+    pending = [row()];
+    await executor({ done: store() }).run("realtime");
+    expect(runs.filter(([a]) => a !== "stop")).toHaveLength(6);
+
+    // An hour later the share is back (the fake site keeps the rows fresh by the server's clock).
+    clock += 60 * 60_000 + 1;
+    pending = [row()];
+    await executor({ done: store() }).run("realtime");
+    expect(runs.filter(([a]) => a !== "stop")).toHaveLength(7);
+  });
+
   it("the halt gate stops the pass: nothing is read or run", async () => {
     const ex = executor({ haltGate: () => true });
     pending = [row()];
