@@ -42,9 +42,14 @@ describe("the box on team_state", () => {
   let dir: string;
   let runs: string[][];
 
+  let savedDb: string | undefined;
+
   beforeEach(() => {
     dir = mkdtempSync(join(tmpdir(), "team-state-guard-"));
     runs = [];
+    // The out-of-band notice of a stop (W7) writes in the box's database: never the real one here.
+    savedDb = process.env.JHT_DB;
+    process.env.JHT_DB = join(dir, "no-such.db");
     vi.stubGlobal(
       "fetch",
       vi.fn(async () => ({ ok: true, status: 200, json: async () => ({ ok: true }) })),
@@ -54,6 +59,8 @@ describe("the box on team_state", () => {
   });
 
   afterEach(() => {
+    if (savedDb === undefined) delete process.env.JHT_DB;
+    else process.env.JHT_DB = savedDb;
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
     vi.useRealTimers();
@@ -66,7 +73,7 @@ describe("the box on team_state", () => {
   };
   const store = () => createDoneStore(join(dir, "done.json"));
   function ctx(over: Record<string, unknown> = {}) {
-    return { ownerId: OWNER, serverNow: () => SERVER_NOW, done: store(), exec, ...over };
+    return { ownerId: OWNER, serverNow: () => SERVER_NOW, done: store(), exec, notice: async () => ({ notified: true }), ...over };
   }
   const converge = (row: object, c = ctx()) => reconcile("https://site", "tok", row, c);
 
