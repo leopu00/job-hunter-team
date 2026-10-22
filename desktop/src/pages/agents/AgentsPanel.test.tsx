@@ -47,6 +47,7 @@ let standby = { state: "off", until: null as string | null, weeklyReset: false }
 let burnIntent: Record<string, unknown> | undefined;
 let actionReply: Record<string, unknown> = { ok: true, data: { result: "stopped" } };
 let ownVps: string | undefined;
+let historyReply: Record<string, unknown> | null = null;
 const listReply = () => ({
   ok: true,
   data: { agents: AGENTS, roles: ROLES, states: true, target, where: "vps", label: "vps.example", ...(ownVps ? { ownVps } : {}) },
@@ -64,6 +65,12 @@ beforeEach(() => {
   burnIntent = undefined;
   actionReply = { ok: true, data: { result: "stopped" } };
   ownVps = undefined;
+  historyReply = null;
+  try {
+    window.localStorage.clear();
+  } catch {
+    // no storage in this environment: the panel starts on the list all the same
+  }
   native.invoke.mockReset();
   native.invoke.mockImplementation(async (command: string, args: { request: Record<string, unknown> }) => {
     if (command === "own_vps_claim") {
@@ -75,6 +82,7 @@ beforeEach(() => {
     if (op === "list") return listReply();
     if (op === "team") return { ok: true, data: { halted: false, standby, held, ...(burnIntent ? { burnIntent } : {}) } };
     if (op === "screen") return { ok: true, data: { name: args.request.session, up: true, text: "<b>not html</b>\nworking" } };
+    if (op === "history") return historyReply ?? { ok: false, error: "agent_control_unsupported" };
     return actionReply;
   });
   vi.stubGlobal("fetch", vi.fn(async () => { throw new Error("no network"); }));
@@ -257,7 +265,7 @@ describe("«Agenti», the agents' control panel", () => {
     }
     const nav = screen.getByRole("navigation", { name: "Navigazione app" });
     expect(within(nav).getByRole("link", { name: "Agenti" })).toHaveAttribute("aria-current", "page");
-    expect(ops().every((r) => ["list", "team", "screen"].includes(String(r.op)))).toBe(true);
+    expect(ops().every((r) => ["list", "team", "screen", "history"].includes(String(r.op)))).toBe(true);
     expect(fake.current!.calls).toEqual([]);
   });
 
@@ -787,5 +795,122 @@ describe("«Agenti», answering an agent's question from the panel", () => {
       expect(text.resultExpired, locale).toContain("{option}");
       for (const key of ["answering", "answerConfirmFirst", "resultAlreadyAnswered"] as const) expect(text[key], `${locale} ${key}`).toMatch(/\S/);
     }
+  });
+});
+
+// The previous sessions of the agents and the lanes of the last day (JHT-T43).
+describe("«Agenti», the previous sessions and the lanes of the last day", () => {  const day = (...firsts: number[]) => [...firsts, ...Array(24 - firsts.length).fill(0)];
+  const HISTORY = (extra: Record<string, unknown> = {}) => ({
+    ok: true,
+    data: {
+      since: null,
+      lanes: { scout: day(2, 0, 5), capitano: day(0) },
+      items: [
+        {
+          name: "SCOUT-1",
+          failed: [NOW_S - 5000],
+          sessions: [
+            { start: NOW_S - 3600, end: null, reason: "running" },
+            { start: NOW_S - 20000, end: NOW_S - 3700, reason: "restarted_by_user" },
+            { start: NOW_S - 90000, end: NOW_S - 30000, reason: "stopped_by_user" },
+            { start: NOW_S - 200000, end: null, reason: "unknown" },
+          ],
+        },
+        { name: "CAPITANO", failed: [], sessions: [{ start: NOW_S - 7200, end: null, reason: "running" }] },
+      ],
+      ...extra,
+    },
+  });
+
+  it("tells the previous sessions of the agent in view, how long each lasted and how it ended", async () => {
+    historyReply = HISTORY();
+    show("agent=SCOUT-1");
+    const list = await screen.findByTestId("panel-history-list");
+    const rows = within(list).getAllByRole("listitem");
+    expect(rows).toHaveLength(4);
+    expect(rows[0]).toHaveTextContent("1 h");
+    expect(rows[0]).toHaveTextContent("in corso");
+    expect(rows[1]).toHaveTextContent("4 h 31 min");
+    expect(rows[1]).toHaveTextContent("riavviata da te");
+    expect(rows[2]).toHaveTextContent("16 h 40 min");
+    expect(rows[2]).toHaveTextContent("spenta da te");
+    // an end nobody wrote has no length and no invented reason
+    expect(rows[3]).toHaveTextContent("—");
+    expect(rows[3]).toHaveTextContent("fine non registrata");
+    expect(screen.getByTestId("panel-history")).toHaveTextContent("1 avvio non riuscito");
+    // only this agent's: the captain's session is not here
+    expect(within(list).queryByText(/2 h/)).toBeNull();
+  });
+
+  it("says when the team has no history to give, instead of showing an empty list", async () => {
+    show("agent=SCOUT-1");
+    expect(await screen.findByTestId("panel-history-unavailable")).toHaveTextContent("non è disponibile su questa squadra");
+    cleanup();
+    historyReply = HISTORY();
+    show("agent=SCORER-1");
+    expect(await screen.findByTestId("panel-history")).toHaveTextContent("Nessuna sessione precedente registrata.");
+  });
+
+  it("says from when the trace is known when it was cut", async () => {
+    historyReply = HISTORY({ since: NOW_S - 86400 * 20 });
+    show("agent=SCOUT-1");
+    expect(await screen.findByTestId("panel-history")).toHaveTextContent("Lo storico parte da");
+  });
+
+  it("shows the lanes of the last day on request, one per role, the numbers written and not only coloured", async () => {
+    historyReply = HISTORY();
+    show();
+    fireEvent.click(await screen.findByTestId("panel-view-lanes"));
+    const scout = await screen.findByTestId("panel-lane-scout");
+    const cells = scout.querySelectorAll("[data-moves]");
+    expect(cells).toHaveLength(24);
+    // the last hour is the last box; 2 moves in the last hour, 5 two hours before
+    expect(cells[23]).toHaveAttribute("data-moves", "2");
+    expect(cells[21]).toHaveAttribute("data-moves", "5");
+    expect(cells[23]).toHaveTextContent("2");
+    expect(cells[0]).toHaveTextContent("·");
+    // the sessions say when an agent of the role was up (SCOUT-1 started an hour ago and is running)
+    expect(cells[23]).toHaveAttribute("data-up", "true");
+    // …and not between the end of the one that stopped (8 hours ago) and the start of the one before the running one
+    expect(cells[16]).toHaveAttribute("data-up", "false");
+    expect(screen.getByTestId("panel-lane-capitano")).toBeInTheDocument();
+    // the list is gone while the lanes are shown, and comes back
+    expect(screen.queryByTestId("panel-row-SCOUT-1")).toBeNull();
+    fireEvent.click(screen.getByTestId("panel-view-list"));
+    expect(await screen.findByTestId("panel-row-SCOUT-1")).toBeInTheDocument();
+  });
+
+  it("tells the moves are not known, never zero, when the team's database could not be read", async () => {
+    historyReply = HISTORY({ lanes: null });
+    show();
+    fireEvent.click(await screen.findByTestId("panel-view-lanes"));
+    expect(await screen.findByTestId("panel-lanes-unknown")).toHaveTextContent("non lo so, non è zero");
+    expect(screen.queryByTestId("panel-lane-scout")).toBeNull();
+  });
+
+  it("starts on the list when the browser keeps nothing, and the failed history never fails the list", async () => {
+    show();
+    expect(await screen.findByTestId("panel-summary")).toBeInTheDocument();
+    expect(screen.getByTestId("panel-view-list")).toHaveAttribute("aria-pressed", "true");
+    expect(screen.queryByTestId("panel-error")).toBeNull();
+  });
+
+  it("has the history, the reasons and the lanes in every language", () => {
+    for (const [locale, text] of Object.entries(AGENTS_PANEL_TEXT) as [Locale, AgentsPanelText][]) {
+      for (const key of [
+        "historyTitle", "historyReading", "historyUnavailable", "historyEmpty", "historyRunning", "historyRestarted", "historyStopped",
+        "historyContained", "historyRetired", "historyStartedAgain", "historyUnknown", "unitDay", "unitHour", "unitMin", "viewLabel",
+        "viewList", "viewLanes", "lanesTitle", "lanesHelp", "lanesUnknown", "lanesUp", "lanesDown", "lanesAxisStart", "lanesAxisEnd",
+      ] as const) {
+        expect(text[key], `${locale} ${key}`).toMatch(/\S/);
+      }
+      expect(text.historySince, locale).toContain("{time}");
+      for (const forms of [text.historyFailed, text.lanesMoves]) {
+        expect(forms.one, locale).toContain("{count}");
+        expect(forms.other, locale).toContain("{count}");
+      }
+    }
+    expect(pluralText("it", 1, AGENTS_PANEL_TEXT.it.historyFailed)).toBe("1 avvio non riuscito");
+    expect(pluralText("it", 3, AGENTS_PANEL_TEXT.it.historyFailed)).toBe("3 avvii non riusciti");
   });
 });
