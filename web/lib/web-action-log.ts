@@ -202,6 +202,8 @@ export function actionSubject(
 ): string | null {
   const text = WEB_ACTION_LOG_TEXT[locale] ?? WEB_ACTION_LOG_TEXT.en;
   if (row.action.startsWith("team.")) {
+    // The emergency stop takes no target: it is always the whole team.
+    if (row.action === "team.emergency_stop") return text.targetAll;
     if (!row.target) return null;
     return row.target.toLowerCase() === "all" ? text.targetAll : row.target;
   }

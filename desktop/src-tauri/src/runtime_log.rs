@@ -136,6 +136,22 @@ pub(crate) fn failure_cause(stdout: &[u8], stderr: &[u8]) -> Option<String> {
         })
 }
 
+/// PowerShell's «where» line, which comes in the language of the system: «At
+/// C:\x.ps1:473 char:60», «In C:\x.ps1:473 car:60», «In Zeile:473 Zeichen:60»,
+/// «At line:1 char:1». Always two numbers, the last one behind a word and a colon.
+fn is_position_line(line: &str) -> bool {
+    let numbered = |token: &str, labelled: bool| match token.rsplit_once(':') {
+        Some((head, digits)) => {
+            !digits.is_empty()
+                && digits.chars().all(|character| character.is_ascii_digit())
+                && (!labelled || (!head.is_empty() && head.chars().all(char::is_alphabetic)))
+        }
+        None => false,
+    };
+    let mut tokens = line.split_whitespace().rev();
+    matches!((tokens.next(), tokens.next()), (Some(last), Some(before)) if numbered(last, true) && numbered(before, false))
+}
+
 fn cause_line(line: &str) -> Option<String> {
     let line = line.trim();
     let decoration = line.is_empty()
@@ -143,6 +159,7 @@ fn cause_line(line: &str) -> Option<String> {
         || line.starts_with('~')
         || line.starts_with("At line:")
         || (line.starts_with("At ") && line.contains(" char:"))
+        || is_position_line(line)
         || line.starts_with("CategoryInfo")
         || line.starts_with("FullyQualifiedErrorId")
         || line.starts_with("JHT_PHASE ")
@@ -150,9 +167,9 @@ fn cause_line(line: &str) -> Option<String> {
     if decoration {
         return None;
     }
-    // «C:\…\install.ps1 : message» → «message».
+    // «C:\…\install.ps1 : message» and «Set-Acl : message» → «message».
     let line = match line.split_once(" : ") {
-        Some((script, message)) if script.ends_with(".ps1") => message,
+        Some((source, message)) if source.ends_with(".ps1") || !source.contains(char::is_whitespace) => message,
         _ => line,
     };
     let line = line.trim_start_matches(|character: char| matches!(character, '✗' | '!' | '*') || character.is_whitespace());
@@ -417,6 +434,67 @@ mod tests {
         assert_eq!(failure_cause(b"JHT_PHASE image_pull\nall good\n", b"+ ~~~\n\n"), None);
         let long = format!("{}\n", "y".repeat(400));
         assert_eq!(failure_cause(b"", long.as_bytes()).unwrap().chars().count(), 241);
+    }
+
+    /// The stderr of a failed step as PowerShell 5.1 prints it, one line each.
+    fn stderr(lines: &[&str]) -> Vec<u8> {
+        lines.iter().map(|line| format!("{line}\r\n")).collect::<String>().into_bytes()
+    }
+
+    #[test]
+    fn the_cause_is_the_exception_text_whatever_language_powershell_prints_its_position_in() {
+        // The real stderr of a non-elevated install.ps1 on an Italian Windows (profile replaced).
+        let italian = stderr(&[
+            "Set-Acl : Il processo non dispone del privilegio 'SeSecurityPrivilege' richiesto per questa operazione.",
+            "In C:\\Users\\<profilo>\\AppData\\Local\\Temp\\jht-install-1\\install.ps1:97 car:5",
+            "+     Set-Acl -LiteralPath $node.FullName -AclObject $acl",
+            "+     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~",
+            "    + CategoryInfo          : PermissionDenied: (C:\\Users\\<profilo>\\.jht:String) [Set-Acl], PrivilegeNotHeldException",
+            "    + FullyQualifiedErrorId : System.Security.AccessControl.PrivilegeNotHeldException,Microsoft.PowerShell.Commands.SetAclCommand",
+        ]);
+        assert_eq!(
+            failure_cause(b"", &italian).as_deref(),
+            Some("Il processo non dispone del privilegio 'SeSecurityPrivilege' richiesto per questa operazione.")
+        );
+        // The same error on an English Windows.
+        let english = stderr(&[
+            "Set-Acl : The process does not possess the 'SeSecurityPrivilege' privilege which is required for this operation.",
+            "At C:\\Users\\<profile>\\AppData\\Local\\Temp\\jht-install-1\\install.ps1:97 char:5",
+            "+     Set-Acl -LiteralPath $node.FullName -AclObject $acl",
+            "+     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~",
+            "    + CategoryInfo          : PermissionDenied: (C:\\Users\\<profile>\\.jht:String) [Set-Acl], PrivilegeNotHeldException",
+            "    + FullyQualifiedErrorId : System.Security.AccessControl.PrivilegeNotHeldException,Microsoft.PowerShell.Commands.SetAclCommand",
+        ]);
+        assert_eq!(
+            failure_cause(b"", &english).as_deref(),
+            Some("The process does not possess the 'SeSecurityPrivilege' privilege which is required for this operation.")
+        );
+        // A `throw` in the enabler: the message has no command before it, and the position line
+        // («…ps1:473 car:60») was what the screen used to show.
+        let message = "podman_other_user: winget reports Podman CLI as installed on this computer, but this Windows user reaches no podman.exe";
+        for (position, category) in [
+            ("In C:\\Users\\<profilo>\\Temp\\enable-podman-windows-runtime.ps1:473 car:60", "OperationStopped: (:) [], RuntimeException"),
+            ("At C:\\Users\\<profile>\\Temp\\enable-podman-windows-runtime.ps1:473 char:60", "OperationStopped: (:) [], RuntimeException"),
+            ("In Zeile:473 Zeichen:60", "OperationStopped: (:) [], RuntimeException"),
+        ] {
+            let thrown = stderr(&[
+                message,
+                position,
+                "+     throw \"$code: $detail\"",
+                "+     ~~~~~~~~~~~~~~~~~~~~~~~",
+                &format!("    + CategoryInfo          : {category}"),
+                &format!("    + FullyQualifiedErrorId : {message}"),
+            ]);
+            assert_eq!(failure_cause(b"", &thrown).as_deref(), Some(message), "{position}");
+        }
+    }
+
+    #[test]
+    fn the_cause_is_plain_text_and_a_message_ending_in_numbers_is_still_a_message() {
+        // PowerShell 7 colours its errors; the redaction already drops the sequences.
+        let coloured = b"\x1b[31;1mSet-Acl: access denied\x1b[0m\x07\r\n\x1b[31;1mAt /tmp/x.ps1:1 char:1\x1b[0m\r\n\x1b[31;1m+ ~~~\x1b[0m\r\n";
+        assert_eq!(failure_cause(b"", coloured).as_deref(), Some("Set-Acl: access denied"));
+        assert_eq!(failure_cause(b"", b"cannot reach 10 hosts, ports 80:81\n").as_deref(), Some("cannot reach 10 hosts, ports 80:81"));
     }
 
     #[test]
