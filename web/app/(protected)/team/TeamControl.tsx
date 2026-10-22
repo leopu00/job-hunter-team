@@ -3,6 +3,12 @@
 import { useCallback, useContext, useEffect, useRef, useState } from "react";
 import { makeT } from "@/lib/i18n-dict";
 import { useLocale } from "@/lib/use-locale";
+import { canReauth, currentUserId, startReauth } from "@/lib/reauth";
+import {
+  peekReauthTarget,
+  takeReauthIntent,
+  type ReauthTake,
+} from "@/lib/reauth-intent";
 import { T } from "./TeamControl.i18n";
 import { TeamStatusControls } from "./MobileTeamStatus";
 import {
@@ -55,6 +61,10 @@ export default function TeamControl() {
   const [waiting, setWaiting] = useState<Waiting | null>(null);
   const [follow, setFollow] = useState<Follow | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // The door wants a recent sign-in: for the whole team (the only one that waits for a confirmation) the
+  // person can sign in again from here and the first step restarts by itself (T63).
+  const [reauthFor, setReauthFor] = useState<TeamAction | null>(null);
+  const [reauthBusy, setReauthBusy] = useState(false);
   const alive = useRef(true);
 
   useEffect(() => {
@@ -98,6 +108,7 @@ export default function TeamControl() {
     ) => {
       setBusy(true);
       setError(null);
+      setReauthFor(null);
       setFollow(null);
       try {
         const res = await fetch(call.url, {
@@ -112,6 +123,13 @@ export default function TeamControl() {
         if (answer.kind === "refused") {
           setWaiting(null);
           setError(errorKey(answer.code));
+          // Only for the whole team: a single agent has no confirmation, so its first call is the
+          // command itself and must never restart on its own.
+          if (answer.code === "reauth_required" && forTarget === "all") {
+            void canReauth().then((can) => {
+              if (alive.current && can) setReauthFor(action);
+            });
+          }
         } else if (answer.kind === "confirm") {
           setWaiting({
             action,
@@ -133,6 +151,59 @@ export default function TeamControl() {
     },
     [poll],
   );
+
+  const reauthenticate = async (action: TeamAction) => {
+    setReauthBusy(true);
+    setError(null);
+    try {
+      const result = await startReauth({
+        kind: "team-command",
+        target: `${action}:all`,
+      });
+      if (result === "done") {
+        setReauthFor(null);
+        void send(firstCall(action, "all"), action, "all");
+      } else if (result === "changed") {
+        setReauthFor(null);
+        setError("err_other_account");
+      } else if (result === "unsupported" || result === "failed") {
+        setError("err_reauth_failed");
+      }
+      // "redirected": the page is leaving; "cancelled": the person gave up, the button stays.
+    } finally {
+      setReauthBusy(false);
+    }
+  };
+
+  // Back from the sign-in: if this page was asked to restart THIS command for the whole team, as the same
+  // account, the first step starts again (the confirmation still waits for a click). Read once.
+  useEffect(() => {
+    if (desktopControls || !teamControlEnabled()) return;
+    void (async () => {
+      let peeked: string | null = null;
+      let taken: ReauthTake = "none";
+      try {
+        peeked = peekReauthTarget(window.sessionStorage, "team-command");
+        if (!peeked) return;
+        taken = takeReauthIntent(
+          window.sessionStorage,
+          { kind: "team-command", target: peeked },
+          Date.now(),
+          await currentUserId(),
+        );
+      } catch {
+        taken = "none";
+      }
+      const match = /^(start|stop|restart):all$/.exec(peeked ?? "");
+      const action = match ? (match[1] as TeamAction) : null;
+      if (taken === "resume" && action) {
+        void send(firstCall(action, "all"), action, "all");
+      } else if (taken === "changed") {
+        setError("err_other_account");
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   if (desktopControls || !teamControlEnabled()) return null;
 
@@ -248,6 +319,17 @@ export default function TeamControl() {
         data-testid="team-control-status"
       >
         {error && <span className="text-red-300">{t(error)}</span>}
+        {error && reauthFor && (
+          <button
+            type="button"
+            data-testid="team-control-reauth"
+            disabled={reauthBusy}
+            onClick={() => void reauthenticate(reauthFor)}
+            className="ml-3 min-h-11 rounded-lg border border-[var(--color-border)] px-3 text-[12px] font-semibold text-[var(--color-white)] disabled:opacity-50"
+          >
+            {t("reauth_button")}
+          </button>
+        )}
         {!error && follow && (
           <span
             className={
