@@ -222,6 +222,24 @@ const TEAM_UNREACHABLE = copy(
   "The team cannot be reached.",
   "Check that the team’s computer or VPS is on and connected, then try again.",
 );
+const SECURE_LINK_FAILED = copy(
+  "L’app non è riuscita ad aprire il collegamento sicuro con la VPS da questo computer.",
+  "Riprova. Se si ripete, chiudi e riapri Job Hunter Team; se continua, segnalalo dall’app.",
+  "The app could not open the secure link to the VPS from this computer.",
+  "Try again. If it happens again, close and reopen Job Hunter Team; if it goes on, report it from the app.",
+);
+const SECURE_LINK_UNPREPARED = copy(
+  "Non riesco a preparare il collegamento sicuro al team su questo computer.",
+  "Chiudi e riapri Job Hunter Team e riprova. Se si ripete, segnalalo dall’app.",
+  "I cannot prepare the secure link to the team on this computer.",
+  "Close and reopen Job Hunter Team, then try again. If it happens again, report it from the app.",
+);
+const ASSISTANT_UNVERIFIED = copy(
+  "Il team risponde, ma non riesco a verificare che l’Assistente sia pronto per la chat.",
+  "Riprova tra poco. Se si ripete, apri il Pannello Agenti e controlla che il Capitano e l’Assistente siano accesi.",
+  "The team answers, but I cannot verify that the Assistant is ready to chat.",
+  "Try again in a moment. If it happens again, open the Agents panel and check that the Captain and the Assistant are on.",
+);
 const AGENT_NOT_READY = copy(
   "L’agente non può ricevere il messaggio adesso.",
   "Attendi qualche minuto e rimanda il messaggio.",
@@ -1239,9 +1257,11 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
   process_timeout: TIMEOUT,
 
   // ── Direct chat with the team ────────────────────────────────────────────
-  tunnel_start_failed: TEAM_UNREACHABLE,
-  tunnel_verify_failed: TEAM_UNREACHABLE,
-  tunnel_unavailable: TEAM_UNREACHABLE,
+  tunnel_start_failed: SECURE_LINK_FAILED,
+  tunnel_verify_failed: SECURE_LINK_FAILED,
+  tunnel_unavailable: SECURE_LINK_FAILED,
+  tunnel_path_unavailable: SECURE_LINK_UNPREPARED,
+  existing_team_assistant_unverified: ASSISTANT_UNVERIFIED,
   connect_failed: TEAM_UNREACHABLE,
   reconnect_failed: TEAM_UNREACHABLE,
   status_failed: TEAM_UNREACHABLE,

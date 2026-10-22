@@ -129,6 +129,32 @@ describe("ExistingTeamConnectModal", () => {
     expect(onConnected).toHaveBeenCalledWith(RESULT);
   });
 
+  it("says what failed after the team answered: the secure link of this computer, not «connecting did not succeed»", async () => {
+    const user = userEvent.setup();
+    const native = bridge();
+    // the team answered; the chat's tunnel from this computer did not open (a socket path too long on macOS)
+    const onConnected = vi.fn().mockRejectedValue({ code: "tunnel_verify_failed" });
+    render(<ExistingTeamConnectModal teamId="team-opaque-0001" bridge={native} onCancel={vi.fn()} onConnected={onConnected} onReadOnlyConnected={vi.fn()} />);
+    await fillHost(user);
+    await user.click(screen.getByRole("button", { name: /verifica vps/i }));
+    await screen.findByText(PROBE.fingerprint);
+    await user.click(screen.getByRole("button", { name: /conferma e collega/i }));
+    expect(await screen.findByText(/collegamento sicuro con la VPS da questo computer/i)).toBeInTheDocument();
+    expect(screen.queryByText(/collegamento al team non è riuscito/i)).not.toBeInTheDocument();
+  });
+
+  it("an Assistant that cannot be verified has its own sentence too", async () => {
+    const user = userEvent.setup();
+    const native = bridge();
+    const onConnected = vi.fn().mockRejectedValue({ code: "existing_team_assistant_unverified" });
+    render(<ExistingTeamConnectModal teamId="team-opaque-0001" bridge={native} onCancel={vi.fn()} onConnected={onConnected} onReadOnlyConnected={vi.fn()} />);
+    await fillHost(user);
+    await user.click(screen.getByRole("button", { name: /verifica vps/i }));
+    await screen.findByText(PROBE.fingerprint);
+    await user.click(screen.getByRole("button", { name: /conferma e collega/i }));
+    expect(await screen.findByText(/non riesco a verificare che l’Assistente sia pronto/i)).toBeInTheDocument();
+  });
+
   it("returns from confirmation to editable fields without pinning or attaching", async () => {
     const user = userEvent.setup();
     const native = bridge();

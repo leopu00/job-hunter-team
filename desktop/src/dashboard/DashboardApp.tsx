@@ -27,6 +27,7 @@ import {
 } from "../lib/local-profile";
 import { clearGoogleIdentitySelection, googleIdentitySelected } from "../lib/identity-choice";
 import {
+  directChatFailureCode,
   existingTeamBridge,
   type ExistingTeamConnectionResult,
   type ExistingTeamReadOnlyConnectionResult,
@@ -1139,7 +1140,8 @@ export default function DashboardApp() {
     const chat = await reconnectDirectChat();
     if (activeIdentityKeyRef.current !== identityKey) throw new Error("account-changed");
     const snapshot = { ...nativeSnapshot, directChatReady: chat.state === "ready" };
-    if (!isOnboardingAssistantReachable(snapshot)) throw new Error("assistant-unverified");
+    // A code the dialog knows, so it says what failed; a bare Error was «unknown» to the dialog.
+    if (!isOnboardingAssistantReachable(snapshot)) throw { code: directChatFailureCode(chat) };
     if (isOnboardingRuntimeReady(snapshot)) {
       markOnboardingReady(markerId, snapshot);
       setGate({ phase: "ready" });
