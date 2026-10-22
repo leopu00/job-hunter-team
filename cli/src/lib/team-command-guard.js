@@ -15,11 +15,7 @@
  *     older than 10 minutes is refused (a start queued while the box was off
  *     must not run the next day), and so is a row from the future;
  *   - one run per id: an id that already ran is refused even if it comes back
- *     as pending;
- *   - a cap per hour, the same as the door's (migration 099): start and
- *     restart 6 together, stop 12. The door has it too, but the box runs what
- *     reaches it, and before the door a session could write the table
- *     straight: past the cap the row is closed as `rate_limited`, not run.
+ *     as pending.
  *
  * No dependencies: the poller imports it, and so do the tests.
  */
@@ -33,35 +29,6 @@ export const FUTURE_SKEW_MS = 60 * 1000;
 export const DONE_KEEP_MS = 24 * 60 * 60 * 1000;
 
 export const VALID_ACTIONS = new Set(['start', 'stop', 'restart']);
-
-/** The door's caps (web_door.vocab, migration 099): per group, per hour, counted on the commands the box ran. */
-export const CAP_WINDOW_MS = 60 * 60 * 1000;
-export const COMMAND_CAPS = Object.freeze({
-  up: Object.freeze({ actions: Object.freeze(['start', 'restart']), max: 6 }),
-  down: Object.freeze({ actions: Object.freeze(['stop']), max: 12 }),
-});
-
-/** The cap group of an action: 'up' (start, restart), 'down' (stop), or null. */
-export function capGroup(action) {
-  for (const [group, cap] of Object.entries(COMMAND_CAPS)) {
-    if (cap.actions.includes(action)) return group;
-  }
-  return null;
-}
-
-/**
- * 'rate_limited' when the box already ran its hour's share of this command's
- * group, else null. Only the commands the box ran count: a refused row does not.
- * The hour is the box's own, on the store's clock (the one that stamped them).
- *
- * @param {object} command
- * @param {{ countWithin(group: string, windowMs: number): number }} done
- */
-export function capRefusal(command, done) {
-  const group = capGroup(command?.action);
-  if (!group) return null;
-  return done.countWithin(group, CAP_WINDOW_MS) >= COMMAND_CAPS[group].max ? 'rate_limited' : null;
-}
 export const VALID_TARGETS = new Set([
   'all',
   'assistente',
@@ -125,23 +92,16 @@ export function commandRefusal(command, { ownerId, serverNow, done }) {
  */
 export function createDoneStore(path, { keepMs = DONE_KEEP_MS, now = Date.now } = {}) {
   let ids = {};
-  // The cap group of each id (the file before the cap has none: those ids count for no group).
-  let groups = {};
   try {
     const parsed = JSON.parse(readFileSync(path, 'utf-8'));
     if (parsed && typeof parsed.ids === 'object' && parsed.ids !== null) ids = parsed.ids;
-    if (parsed && typeof parsed.groups === 'object' && parsed.groups !== null) groups = parsed.groups;
   } catch {
     ids = {};
-    groups = {};
   }
   const prune = () => {
     const limit = now() - keepMs;
     for (const [id, at] of Object.entries(ids)) {
       if (typeof at !== 'number' || at < limit) delete ids[id];
-    }
-    for (const id of Object.keys(groups)) {
-      if (!Object.prototype.hasOwnProperty.call(ids, id)) delete groups[id];
     }
   };
   prune();
@@ -149,24 +109,13 @@ export function createDoneStore(path, { keepMs = DONE_KEEP_MS, now = Date.now } 
     has(id) {
       return Object.prototype.hasOwnProperty.call(ids, id);
     },
-    /** @param {string} id  @param {string} [group]  the cap group, when the id is a team command */
-    add(id, group) {
+    add(id) {
       prune();
       ids[id] = now();
-      if (typeof group === 'string' && group) groups[id] = group;
       mkdirSync(dirname(path), { recursive: true });
       const tmp = `${path}.${process.pid}.tmp`;
-      writeFileSync(tmp, JSON.stringify({ ids, groups }), { mode: 0o600 });
+      writeFileSync(tmp, JSON.stringify({ ids }), { mode: 0o600 });
       renameSync(tmp, path);
-    },
-    /** How many ids of `group` were added in the last `windowMs`. */
-    countWithin(group, windowMs) {
-      const since = now() - windowMs;
-      let n = 0;
-      for (const [id, g] of Object.entries(groups)) {
-        if (g === group && typeof ids[id] === 'number' && ids[id] >= since) n += 1;
-      }
-      return n;
     },
   };
 }

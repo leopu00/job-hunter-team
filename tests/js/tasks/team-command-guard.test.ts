@@ -188,7 +188,7 @@ describe("team commands on the box", () => {
 
   it("does not run a command whose id cannot be written down", async () => {
     const ctx = context({
-      done: { has: () => false, countWithin: () => 0, add: () => { throw new Error("ENOSPC"); } },
+      done: { has: () => false, add: () => { throw new Error("ENOSPC"); } },
     });
     const command = row();
     await handle(command, ctx);

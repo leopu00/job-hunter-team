@@ -1276,11 +1276,9 @@ async function dispatch() {
   //     solo processo. Il poller standalone non parte più.
   //   • user-messages-poller → RITIRATO: la chat web→agente è solo-desktop (via
   //     tunnel arriva a tmux in locale); la lane cloud /api/messages è morta.
-  //   • team-commands-poller (realtime) → RITIRATO 2026-06-25: pollava a vuoto
-  //     ~ogni 5s (~150 req/h Vercel). Dalla porta (mig. 098) i comandi del sito
-  //     tornano in team_commands: li esegue il cloud daemon stesso
-  //     (createTeamCommandsExecutor), svegliato dall'INSERT realtime, con un
-  //     giro lento di recupero. Il poller standalone non riparte.
+  //   • team-commands-poller (realtime) → RITIRATO 2026-06-25: il feeder web è
+  //     morto (web read-only → /api/team/command 403 sul cloud, niente più
+  //     team_commands dal browser), pollava a vuoto ~ogni 5s (~150 req/h Vercel).
   //   • file-bridge-poller → RI-ABILITATO 2026-07-11 (default on su VPS): serve
   //     il download on-demand di CV/allegati dal web (pulsante "Scarica PDF"
   //     sulla pagina posizione + CV Preview del profilo). Poll adattivo
