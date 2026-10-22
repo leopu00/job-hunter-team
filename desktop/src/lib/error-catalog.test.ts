@@ -60,6 +60,8 @@ const NOT_ERRORS: Record<string, string> = {
   salary_low: "exclusion code (shared/feedback-reasons.json)",
   wrong_location: "exclusion code (shared/feedback-reasons.json)",
   wrong_stack: "exclusion code (shared/feedback-reasons.json)",
+  too_senior: "exclusion code (shared/feedback-reasons.json)",
+  too_junior: "exclusion code (shared/feedback-reasons.json)",
   created_at: "field of the jobs.db judgement read",
   decided_at: "field of the jobs.db exclusion read",
   legacy_id: "field of the jobs.db judgement read",

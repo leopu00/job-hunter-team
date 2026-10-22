@@ -67,7 +67,7 @@ import sys
 import os
 sys.path.insert(0, os.path.dirname(__file__))
 
-from _db import get_db, ensure_schema, active_categories
+from _db import get_db, ensure_schema, active_categories, SENIORITY_LEVELS
 # Importato, non ricopiato: una seconda regex per lo stesso id divergerebbe dalla
 # prima al primo cambio di formato degli URL — e' gia' successo con la copia
 # stale di `check_duplicate` dentro tests/test_scoring_logic.py.
@@ -122,7 +122,7 @@ AGENT_POSITION_COLUMNS = frozenset("""
     geocode_requested_at salary_precise_requested salary_precise_requested_at
     salary_precise created_at updated_at user_excluded_reason user_excluded_at
     user_excluded_prev_status recheck_requested recheck_requested_at
-    apply_requested apply_requested_at apply_requested_by scam_signals
+    apply_requested apply_requested_at apply_requested_by scam_signals seniority_level
 """.split())
 # Le colonne di `positions` che sono dell'utente e che nessun agente legge.
 USER_ONLY_POSITION_COLUMNS = frozenset({"user_excluded_note"})
@@ -550,6 +550,11 @@ def profile_exclusions_in_force(as_json=False):
             values = list(params.get('country_codes', []))
         elif code == 'salary_low':
             values = [f"{cur} up to {top}" for cur, top in sorted(params.get('ceilings', {}).items())]
+        elif code in ('too_senior', 'too_junior'):
+            # a word of the closed set of levels with a fixed phrase, never a stored string as it is
+            bound = params.get('min_level' if code == 'too_senior' else 'max_level')
+            values = ([f"{bound} {'and above' if code == 'too_senior' else 'and below'}"]
+                      if bound in SENIORITY_LEVELS else [])
         else:
             values = list(params.get('role_families', []))
         found.append({'code': code, 'label': rules.LABELS.get(code, code), 'values': values})

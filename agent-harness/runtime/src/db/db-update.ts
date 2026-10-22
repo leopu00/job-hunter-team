@@ -228,6 +228,13 @@ export function updatePosition(db: Database, a: Parsed, actor: string, userId: s
       set("jd_summary = ?", interpretEscapes(str("jd_summary")));
       changed.push("jd_summary");
     }
+    // The seniority the advert asks for (JHT-T45): a word of the closed set, `none` for NULL. The
+    // flag's choices are the gate, as argparse is in db_update.py.
+    if (a["seniority_level"] !== null && a["seniority_level"] !== undefined) {
+      const level = a["seniority_level"] === "none" ? null : str("seniority_level");
+      set("seniority_level = ?", level);
+      changed.push(`seniority_level=${level ?? "NULL"}`);
+    }
     if (pyTruthy(a["requirements"])) {
       set("requirements = ?", str("requirements"));
       changed.push("requirements");

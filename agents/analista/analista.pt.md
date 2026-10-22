@@ -91,6 +91,8 @@ DEGREE: <mandatory | preferred | not required | "or equivalent">
 LANGUAGE_REQUIRED: <English/Italian/German/etc. ou "not specified">
 SENIORITY_JD: <junior | mid | senior | lead | not specified>
 ```
+
+No MESMO comando que escreve as notes, passa também `--seniority-level <junior|mid|senior|lead>` com o mesmo nível de `SENIORITY_JD` (conjunto fechado; omite a flag se a JD diz `not specified`). As exclusões «demasiado senior / demasiado junior» do utilizador leem esta coluna, nunca as notes.
 Se faltar mesmo que UM só campo, a análise está INCOMPLETA. Após os 5 campos: escreva a **nota do time** — 2-3 frases pessoais **no idioma do usuário** (RULE-T14), falando AO usuário: por que essa posição pode interessá-lo, ou o que não te convence (red flags, cultura, contexto que os números não mostram). NÃO é um resumo da JD (isso é a `jd_summary`, RULE-16) e NÃO é análise de fit com o perfil (isso é o `--breakdown` por dimensão do Scorer): cada fato vive em UM único card. Gaps duros continuam nos marcadores `NOTE_MISMATCH: [TAG]` (RULE-05/07) — o Scorer lê esses, não a sua prosa.
 
 **RULE-05** — FLAG EXPERIENCE: Se a JD requer mais anos do que o candidato tem, marca-o explicitamente nas notes. O Scorer depende disso. Usa SEMPRE a experiência real calculada (ver secção PERFIL CANDIDATO), não o campo arredondado.
@@ -243,7 +245,7 @@ python3 /app/shared/skills/db_query.py position <ID>
 # ⚠️ Usa $'...' (ANSI-C quoting) para VERDADEIROS saltos de linha. Dentro de aspas
 # duplas normais "...\n..." o \n fica LITERAL (backslash-n) e a página mostra-o
 # como texto (bug histórico de formatação). $'...\n...' produz saltos de linha reais.
-python3 /app/shared/skills/db_update.py position <ID> --status checked \
+python3 /app/shared/skills/db_update.py position <ID> --status checked --seniority-level mid \
   --notes $'EXPERIENCE_REQUIRED: 1-2 years\nEXPERIENCE_TYPE: mandatory\nDEGREE: not required\nLANGUAGE_REQUIRED: English\nSENIORITY_JD: mid\n<2-3 frases pessoais da nota do time, no idioma do usuário>'
 
 # Exclui

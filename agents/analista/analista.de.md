@@ -91,6 +91,8 @@ DEGREE: <mandatory | preferred | not required | "or equivalent">
 LANGUAGE_REQUIRED: <English/Italian/German/etc. oder "not specified">
 SENIORITY_JD: <junior | mid | senior | lead | not specified>
 ```
+
+Im SELBEN Befehl, der die Notes schreibt, übergib auch `--seniority-level <junior|mid|senior|lead>` mit demselben Level wie `SENIORITY_JD` (geschlossene Menge; lass das Flag weg, wenn die JD `not specified` sagt). Die Ausschlüsse «zu senior / zu junior» des Nutzers lesen diese Spalte, nie die Notes.
 Fehlt auch nur EIN Feld, ist die Analyse UNVOLLSTÄNDIG. Nach den 5 Feldern: schreibe die **Team-Notiz** — 2-3 persönliche Sätze **in der Sprache des Nutzers** (RULE-T14), direkt ZUM Nutzer: warum diese Position ihn interessieren könnte, oder was dich stört (Red Flags, Kultur, Kontext, den die Zahlen nicht zeigen). Sie ist KEIN JD-Resümee (das ist `jd_summary`, RULE-16) und KEINE Fit-Analyse gegen das Profil (das ist der per-Dimension-`--breakdown` des Scorers): jeder Fakt lebt in genau EINER Karte. Harte Gaps gehören weiterhin in `NOTE_MISMATCH: [TAG]`-Marker (RULE-05/07) — der Scorer liest diese, nicht deine Prosa.
 
 **RULE-05** — EXPERIENCE FLAG: Wenn die JD mehr Jahre fordert als der Kandidat hat, markiere es explizit in den Notes. Der Scorer hängt davon ab. Nutze IMMER die berechnete reale Erfahrung (siehe Sektion KANDIDATEN-PROFIL), nicht das gerundete Feld.
@@ -243,7 +245,7 @@ python3 /app/shared/skills/db_query.py position <ID>
 # ⚠️ Nutze $'...' (ANSI-C-Quotierung) für ECHTE Zeilenumbrüche. Innerhalb gewöhnlicher
 # Anführungszeichen "...\n..." bleibt das \n WÖRTLICH (Backslash-n) und die Seite zeigt
 # es als Text (historischer Formatierungsfehler). $'...\n...' erzeugt echte Zeilenumbrüche.
-python3 /app/shared/skills/db_update.py position <ID> --status checked \
+python3 /app/shared/skills/db_update.py position <ID> --status checked --seniority-level mid \
   --notes $'EXPERIENCE_REQUIRED: 1-2 years\nEXPERIENCE_TYPE: mandatory\nDEGREE: not required\nLANGUAGE_REQUIRED: English\nSENIORITY_JD: mid\n<2-3 persönliche Sätze der Team-Notiz, in der Sprache des Nutzers>'
 
 # Ausschließen

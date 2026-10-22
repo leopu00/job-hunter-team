@@ -1,4 +1,4 @@
-import { exclusionProposals, isProposableReason } from "@/lib/feedback-reasons";
+import { exclusionProposals, isActingReason, isProposableReason } from "@/lib/feedback-reasons";
 import { json, type ApiFetch } from "../shell/api-bridge";
 import { acceptExclusion, readExclusions, withdrawExclusion, type ExclusionCode, type PanelExclusions } from "./agent-control";
 
@@ -13,7 +13,6 @@ import { acceptExclusion, readExclusions, withdrawExclusion, type ExclusionCode,
  * person's own VPS with a session the decision is also mirrored in the cloud, so the website and the
  * team's next pull say what the team already does.
  */
-const ACTING: readonly string[] = ["company", "wrong_location", "salary_low", "wrong_stack"];
 const MEMORY_KEY = "jht.profile-exclusion-dismissed.v1";
 
 type Session = { auth: { getSession: () => Promise<{ data: { session: unknown } }> } };
@@ -126,9 +125,11 @@ export function directExclusionsApi(
         ? body.positions
         : 0;
 
-    // A reason that does not act (the seniority) has no rule on the team: the app remembers the decision only.
+    // A reason that does not act has no rule on the team: the app remembers the decision only (today every
+    // proposable reason acts, and the vocabulary decides, not a list here).
     last = null;
-    if (ACTING.includes(reason)) {
+    const acting = isActingReason(reason);
+    if (acting) {
       const code = reason as ExclusionCode;
       const active = team.exclusions.some((row) => row.code === code && row.status === "active");
       if (body.status === "accepted" || active) {
@@ -136,7 +137,7 @@ export function directExclusionsApi(
         if (!done.ok) return json({ error: done.code }, 409);
       }
     }
-    if (!(ACTING.includes(reason) && body.status === "accepted")) writeMemory(store, team.target, reason, positions);
+    if (!(acting && body.status === "accepted")) writeMemory(store, team.target, reason, positions);
     // The person's own VPS with a cloud session: the cloud says what the team does.
     if (hasSession && team.ownVps !== null) {
       try {

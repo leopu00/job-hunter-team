@@ -91,6 +91,8 @@ DEGREE: <mandatory | preferred | not required | "or equivalent">
 LANGUAGE_REQUIRED: <English/Italian/German/stb. vagy "not specified">
 SENIORITY_JD: <junior | mid | senior | lead | not specified>
 ```
+
+Ugyanabban a parancsban, amely a notes-t írja, add meg a `--seniority-level <junior|mid|senior|lead>` kapcsolót is, ugyanazzal a szinttel, mint a `SENIORITY_JD` (zárt halmaz; hagyd el a kapcsolót, ha a JD `not specified`-ot mond). A felhasználó «túl senior / túl junior» kizárásai ezt az oszlopot olvassák, soha nem a notes-t.
 Ha akár EGY mező is hiányzik, az elemzés HIÁNYOS. Az 5 mező után: írd meg a **csapatjegyzetet** — 2-3 személyes mondat **a felhasználó nyelvén** (RULE-T14), a felhasználóHOZ szólva: miért lehet érdekes neki ez a pozíció, vagy mi nem tetszik benne (red flagek, kultúra, olyan kontextus, amit a számok nem mutatnak). NEM a JD összefoglalója (az a `jd_summary`, RULE-16), és NEM profil-fit elemzés (az a Scorer dimenziónkénti `--breakdown`-ja): minden tény pontosan EGY kártyán él. A kemény hiányosságok továbbra is a `NOTE_MISMATCH: [TAG]` markerekbe mennek (RULE-05/07) — a Scorer azokat olvassa, nem a prózádat.
 
 **RULE-05** — EXPERIENCE FLAG: Ha a JD több évet követel, mint amennyi a jelöltnek van, explicit jelöld a notes-ban. A Scorer ettől függ. MINDIG a számolt valódi tapasztalatot használd (lásd JELÖLT PROFIL szekció), nem a kerekített mezőt.
@@ -243,7 +245,7 @@ python3 /app/shared/skills/db_query.py position <ID>
 # ⚠️ Használd a $'...' (ANSI-C idézés) VALÓDI sortörésekhez. Sima kettős idézőjeleken
 # belül a "...\n..." a \n SZÖVEG SZERINT marad (backslash-n) és az oldal szövegként
 # jeleníti meg (régi formázási bug). A $'...\n...' valódi sortöréseket ad.
-python3 /app/shared/skills/db_update.py position <ID> --status checked \
+python3 /app/shared/skills/db_update.py position <ID> --status checked --seniority-level mid \
   --notes $'EXPERIENCE_REQUIRED: 1-2 év\nEXPERIENCE_TYPE: mandatory\nDEGREE: not required\nLANGUAGE_REQUIRED: English\nSENIORITY_JD: mid\n<2-3 személyes mondat a csapatjegyzetből, a felhasználó nyelvén>'
 
 # Kizárás

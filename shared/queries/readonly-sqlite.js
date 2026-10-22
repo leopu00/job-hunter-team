@@ -227,6 +227,7 @@ export const AGENT_POSITION_COLUMNS = Object.freeze(
     "apply_requested_at",
     "apply_requested_by",
     "scam_signals",
+    "seniority_level",
   ]),
 );
 

@@ -8,7 +8,6 @@
 
 import { useEffect, useState } from "react";
 import { useLocale } from "@/lib/use-locale";
-import { isActingReason } from "@/lib/feedback-reasons";
 import { useDesktopWrite } from "@/lib/desktop-write";
 import { REASON_LABELS } from "./[id]/exclusion-reasons";
 
@@ -17,7 +16,6 @@ const T: Record<
   {
     title: string;
     acts: string;
-    notYet: string;
     withdraw: string;
     withdrawn: string;
     desktopOnly: string;
@@ -26,7 +24,6 @@ const T: Record<
   it: {
     title: "Esclusioni attive",
     acts: "abbassa il punteggio di {points} punti",
-    notYet: "salvata, per ora non cambia nulla",
     withdraw: "Ritira",
     withdrawn: "Esclusione ritirata.",
     desktopOnly: "Si ritirano nell'app desktop.",
@@ -34,7 +31,6 @@ const T: Record<
   en: {
     title: "Active exclusions",
     acts: "lowers the score by {points}",
-    notYet: "saved, changes nothing yet",
     withdraw: "Withdraw",
     withdrawn: "Exclusion withdrawn.",
     desktopOnly: "You withdraw them in the desktop app.",
@@ -42,7 +38,6 @@ const T: Record<
   es: {
     title: "Exclusiones activas",
     acts: "baja la puntuación en {points}",
-    notYet: "guardada, por ahora no cambia nada",
     withdraw: "Retirar",
     withdrawn: "Exclusión retirada.",
     desktopOnly: "Se retiran en la aplicación de escritorio.",
@@ -50,7 +45,6 @@ const T: Record<
   fr: {
     title: "Exclusions actives",
     acts: "baisse la note de {points}",
-    notYet: "enregistrée, ne change rien pour l'instant",
     withdraw: "Retirer",
     withdrawn: "Exclusion retirée.",
     desktopOnly: "Elles se retirent dans l'application de bureau.",
@@ -58,7 +52,6 @@ const T: Record<
   de: {
     title: "Aktive Ausschlüsse",
     acts: "senkt die Bewertung um {points}",
-    notYet: "gespeichert, ändert vorerst nichts",
     withdraw: "Zurücknehmen",
     withdrawn: "Ausschluss zurückgenommen.",
     desktopOnly: "Du nimmst sie in der Desktop-App zurück.",
@@ -66,7 +59,6 @@ const T: Record<
   hu: {
     title: "Aktív kizárások",
     acts: "{points} ponttal csökkenti a pontszámot",
-    notYet: "elmentve, egyelőre nem változtat semmin",
     withdraw: "Visszavonás",
     withdrawn: "Kizárás visszavonva.",
     desktopOnly: "Az asztali alkalmazásban vonhatod vissza.",
@@ -74,7 +66,6 @@ const T: Record<
   pt: {
     title: "Exclusões ativas",
     acts: "baixa a pontuação em {points}",
-    notYet: "guardada, por agora não muda nada",
     withdraw: "Retirar",
     withdrawn: "Exclusão retirada.",
     desktopOnly: "Retiram-se na aplicação de ambiente de trabalho.",
@@ -87,6 +78,8 @@ const POINTS: Record<string, number> = {
   wrong_location: 15,
   salary_low: 15,
   wrong_stack: 15,
+  too_senior: 15,
+  too_junior: 15,
 };
 
 type Decision = {
@@ -185,9 +178,7 @@ export default function ActiveExclusions() {
               {labels[d.reason as keyof typeof labels] ?? d.reason}
               {" — "}
               <span style={{ color: "var(--color-muted)" }}>
-                {isActingReason(d.reason)
-                  ? t.acts.replace("{points}", String(POINTS[d.reason] ?? 15))
-                  : t.notYet}
+                {t.acts.replace("{points}", String(POINTS[d.reason] ?? 15))}
               </span>
             </span>
             {canChange && (

@@ -20,7 +20,7 @@
 //! - The exclusions of the profile (JHT-T24-b) are the same panel's: the user's decision to exclude
 //!   a kind of position, written straight in the team's jobs.db when the team has no cloud to carry
 //!   it. It goes through the same destination, the same full link (or the mark of the person's own
-//!   VPS) and the same prepared target as any other action; the code is one of four words.
+//!   VPS) and the same prepared target as any other action; the code is one of the words that act on the score.
 //!
 //! Transports. A VPS: the pinned container through `command` (a changed
 //! container is exit 70), with the reads run by the app's own copy of the
@@ -78,7 +78,7 @@ const EXITS: &[(i32, &str)] = &[
 ];
 
 /// The codes of the exclusions that act on the score (`acting` of shared/feedback-reasons.json).
-pub(crate) const EXCLUSION_CODES: &[&str] = &["company", "wrong_location", "salary_low", "wrong_stack"];
+pub(crate) const EXCLUSION_CODES: &[&str] = &["company", "wrong_location", "salary_low", "wrong_stack", "too_senior", "too_junior"];
 
 const RESULTS: &[&str] = &[
     "excluded", "exclusion_withdrawn",
@@ -871,17 +871,19 @@ mod tests {
 
     // ── JHT-T24-b: the exclusions of the profile ───────────────────────────────────────────────
     #[test]
-    fn the_exclusion_requests_are_closed_to_the_four_codes() {
+    fn the_exclusion_requests_are_closed_to_the_codes_that_act() {
         for (value, argv) in [
             (json!({"op":"exclusions"}), vec!["exclusions"]),
             (json!({"op":"exclusion_accept","code":"company","target":"t","confirmed":true}), vec!["exclusion-accept", "company"]),
             (json!({"op":"exclusion_withdraw","code":"wrong_location","target":"t","confirmed":true}), vec!["exclusion-withdraw", "wrong_location"]),
+            (json!({"op":"exclusion_accept","code":"too_senior","target":"t","confirmed":true}), vec!["exclusion-accept", "too_senior"]),
+            (json!({"op":"exclusion_withdraw","code":"too_junior","target":"t","confirmed":true}), vec!["exclusion-withdraw", "too_junior"]),
         ] {
             let request = req(value.clone());
             assert_eq!(request.and_then(|r| r.argv()), Some(argv.into_iter().map(String::from).collect()), "{value}");
         }
         for bad in [
-            json!({"op":"exclusion_accept","code":"too_senior","target":"t","confirmed":true}),
+            json!({"op":"exclusion_accept","code":"other","target":"t","confirmed":true}),
             json!({"op":"exclusion_accept","code":"company;id","target":"t","confirmed":true}),
             json!({"op":"exclusion_accept","code":"Company","target":"t","confirmed":true}),
             json!({"op":"exclusion_withdraw","code":"","target":"t","confirmed":true}),

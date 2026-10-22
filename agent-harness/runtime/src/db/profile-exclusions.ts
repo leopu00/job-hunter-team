@@ -10,10 +10,19 @@
 import type { Database } from "./jobs-db.ts";
 import { FEEDBACK_REASON_LABELS } from "../parity/skills/feedback-reasons.ts";
 
-export const EXCLUSION_CODES = ["company", "wrong_location", "salary_low", "wrong_stack"] as const;
+export const EXCLUSION_CODES = ["company", "wrong_location", "salary_low", "wrong_stack", "too_senior", "too_junior"] as const;
 export type ExclusionCode = (typeof EXCLUSION_CODES)[number];
 
-const PENALTY: Readonly<Record<ExclusionCode, number>> = { company: 30, wrong_location: 15, salary_low: 15, wrong_stack: 15 };
+const PENALTY: Readonly<Record<ExclusionCode, number>> = {
+  company: 30,
+  wrong_location: 15,
+  salary_low: 15,
+  wrong_stack: 15,
+  too_senior: 15,
+  too_junior: 15,
+};
+/** The seniority an advert asks for, lowest to highest (JHT-T45): the order the two seniority codes compare by. */
+export const SENIORITY_LEVELS = ["junior", "mid", "senior", "lead"] as const;
 const CAP = 30;
 
 type Params = Record<string, unknown>;
@@ -30,6 +39,7 @@ interface PositionFacts {
   salary_estimated_max: number | null;
   salary_estimated_currency: string | null;
   role_family: string | null;
+  seniority_level: string | null;
 }
 
 /** The exclusions in force, in the fixed order of the codes. */
@@ -69,8 +79,17 @@ export function exclusionMatches(position: PositionFacts, code: ExclusionCode, p
     const ceiling = Object.prototype.hasOwnProperty.call(ceilings, currency) ? ceilings[currency] : undefined;
     return position.salary_estimated_max !== null && typeof ceiling === "number" && position.salary_estimated_max <= ceiling;
   }
-  const family = (position.role_family ?? "").trim();
-  return family !== "" && list(params["role_families"]).includes(family);
+  if (code === "wrong_stack") {
+    const family = (position.role_family ?? "").trim();
+    return family !== "" && list(params["role_families"]).includes(family);
+  }
+  // too_senior: that level and every higher one; too_junior: that level and every lower one.
+  const levels: readonly unknown[] = SENIORITY_LEVELS;
+  const bound = params[code === "too_senior" ? "min_level" : "max_level"];
+  const at = levels.indexOf(position.seniority_level);
+  const edge = levels.indexOf(bound);
+  if (at < 0 || edge < 0) return false;
+  return code === "too_senior" ? at >= edge : at <= edge;
 }
 
 /** What to take off a position's total, and which codes matched; nothing when none does. */
@@ -79,7 +98,7 @@ export function exclusionPenalty(db: Database, positionId: number): { points: nu
   if (rules.length === 0) return { points: 0, codes: [] };
   const position = db
     .prepare(
-      "SELECT company_id, loc_country_code, remote_type, work_mode, salary_estimated_max, salary_estimated_currency, role_family FROM positions WHERE id = ?",
+      "SELECT company_id, loc_country_code, remote_type, work_mode, salary_estimated_max, salary_estimated_currency, role_family, seniority_level FROM positions WHERE id = ?",
     )
     .get(positionId) as PositionFacts | undefined;
   if (!position) return { points: 0, codes: [] };
