@@ -24,9 +24,11 @@ e un test che salta sempre non protegge niente.
 import os
 import re
 import shutil
+import signal
 import tempfile
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 import pytest
@@ -164,6 +166,74 @@ def test_the_parser_recognises_an_unanchored_target():
 
 # ── Comportamento: due sessioni con prefisso comune ──────────────────────────
 
+# Confini dei casi comportamentali. Con uno script `tmux` davanti al binario
+# vero nel PATH (un wrapper di sicurezza dell'host), il caso "real" prendeva lo
+# script come tmux vero: lo script cerca `tmux` nel PATH, trovava il NOSTRO
+# wrapper, che lo richiamava con un altro `-S`. Il loop non finiva mai, e i casi
+# rimasti orfani (ppid 1) hanno scritto gigabyte di calls.txt. Ora: PATH chiuso,
+# il wrapper rifiuta di richiamarsi, calls.txt ha un tetto, ogni caso ha un
+# timeout e il suo gruppo di processi muore a fine caso anche se fallisce.
+CASE_TIMEOUT_S = 30
+CALLS_CAP_BYTES = 1 << 20
+
+
+def _tmux_guard(calls: Path) -> str:
+    """Prime righe del tmux finto (stub o wrapper): un tmux che richiama se
+    stesso, o un calls.txt oltre il tetto, si fermano subito e lasciano un
+    segno che la fixture trasforma in un rosso."""
+    return (
+        'if [ -n "${JHT_TEST_TMUX_ACTIVE:-}" ]; then\n'
+        f'  : > "{calls}.loop"; echo "tmux finto richiamato da se stesso: $*" >&2; exit 97\n'
+        "fi\n"
+        "export JHT_TEST_TMUX_ACTIVE=1\n"
+        f'if [ -f "{calls}" ] && [ "$(wc -c < "{calls}")" -gt {CALLS_CAP_BYTES} ]; then\n'
+        f'  : > "{calls}.overcap"; echo "calls.txt oltre il tetto" >&2; exit 98\n'
+        "fi\n"
+    )
+
+
+def _real_tmux():
+    """Il binario di tmux, mai uno script `tmux` davanti a lui: lo script
+    cercherebbe `tmux` nel PATH e troverebbe il wrapper."""
+    for d in os.environ.get("PATH", "").split(os.pathsep):
+        candidate = Path(d or ".") / "tmux"
+        if candidate.is_file() and os.access(candidate, os.X_OK):
+            with candidate.open("rb") as fh:
+                if fh.read(2) != b"#!":
+                    return str(candidate)
+    return None
+
+
+def _closed_path(bin_dir: Path) -> str:
+    """Il PATH dei casi: prima il tmux finto, poi solo cartelle senza un altro
+    `tmux` (la cartella del binario vero resta: il finto la precede)."""
+    real = _real_tmux()
+    keep = [str(bin_dir)]
+    for d in os.environ.get("PATH", "").split(os.pathsep):
+        if not d or d in keep:
+            continue
+        candidate = Path(d) / "tmux"
+        if os.path.lexists(candidate) and str(candidate) != real:
+            continue
+        keep.append(d)
+    return os.pathsep.join(keep)
+
+
+def _kill_group(pgid: int):
+    for sig in (signal.SIGTERM, signal.SIGKILL):
+        try:
+            os.killpg(pgid, sig)
+        except (ProcessLookupError, PermissionError):
+            return
+        time.sleep(0.2)
+
+
+def _self_timer(seconds: int = CASE_TIMEOUT_S + 5) -> str:
+    """Prima riga di ogni caso: se pytest muore senza teardown, il caso uccide
+    da se' il proprio gruppo poco dopo il timeout."""
+    return f"( sleep {seconds}; kill -KILL -- -$$ ) </dev/null >/dev/null 2>&1 &\n"
+
+
 # Stub che riproduce la risoluzione MISURATA su tmux 3.6. Stato in un file:
 # una riga `NOME|pane_current_command|session_created` per sessione.
 STUB_TMUX = r"""#!/usr/bin/env bash
@@ -269,13 +339,16 @@ class _Tmux:
         self.sockdir = Path(tempfile.mkdtemp(prefix="jt-", dir="/tmp" if os.path.isdir("/tmp") else None))
         self.socket = self.sockdir / "s"
         wrapper = self.bin / "tmux"
+        guard = _tmux_guard(self.calls)
         if kind == "stub":
-            wrapper.write_text(STUB_TMUX, encoding="utf-8", newline="\n")
+            shebang, body = STUB_TMUX.split("\n", 1)
+            wrapper.write_text(shebang + "\n" + guard + body, encoding="utf-8", newline="\n")
         else:
-            real = shutil.which("tmux")
+            real = _real_tmux()
             wrapper.write_text(
                 "#!/usr/bin/env bash\n"
-                f'printf "%s\\n" "$*" >> "{self.calls}"\n'
+                + guard
+                + f'printf "%s\\n" "$*" >> "{self.calls}"\n'
                 f'exec "{real}" -S "{self.socket}" "$@"\n',
                 encoding="utf-8",
                 newline="\n",
@@ -300,42 +373,76 @@ class _Tmux:
                 subprocess.run(["codesign", "-f", "-s", "-", str(binary)],
                                capture_output=True, timeout=30)
         program = f"'{binary}' 300"
-        subprocess.run(
-            [str(self.bin / "tmux"), "new-session", "-d", "-s", name, program],
-            check=True,
-            timeout=15,
-        )
+        started = self.run([str(self.bin / "tmux"), "new-session", "-d", "-s", name, program], timeout=15)
+        assert started.returncode == 0, started.stderr
         # pane_current_command si aggiorna appena il processo e' partito
         for _ in range(50):
-            out = subprocess.run(
+            out = self.run(
                 [str(self.bin / "tmux"), "display-message", "-p", "-t", f"={name}:", "#{pane_current_command}"],
-                capture_output=True, text=True, timeout=5,
+                timeout=5,
             ).stdout.strip()
             if out == command:
                 return
-            subprocess.run(["sleep", "0.1"])
+            time.sleep(0.1)
 
     def env(self):
-        return {**os.environ, "T_SESSIONS": str(self.state), "T_CALLS": str(self.calls)}
+        env = {
+            **os.environ,
+            "PATH": _closed_path(self.bin),
+            "T_SESSIONS": str(self.state),
+            "T_CALLS": str(self.calls),
+        }
+        env.pop("JHT_TEST_TMUX_ACTIVE", None)
+        return env
+
+    def run(self, argv, timeout=CASE_TIMEOUT_S) -> subprocess.CompletedProcess:
+        """Un processo in un gruppo suo, col PATH chiuso. Alla fine, anche a
+        timeout o se il caso fallisce, muore tutto il gruppo: niente orfani.
+        Si uccide subito, non al teardown: un gruppo vuoto puo' riavere il suo
+        numero da un processo di altri."""
+        proc = subprocess.Popen(
+            argv, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+            env=self.env(), start_new_session=True,
+        )
+        timed_out = False
+        try:
+            out, err = proc.communicate(timeout=timeout)
+        except subprocess.TimeoutExpired:
+            timed_out = True
+            _kill_group(proc.pid)
+            try:
+                out, err = proc.communicate(timeout=5)
+            except subprocess.TimeoutExpired:
+                out, err = "", ""
+        finally:
+            _kill_group(proc.pid)
+        if timed_out:
+            pytest.fail(f"caso oltre {timeout} s, gruppo ucciso: {argv[:2]}\n{out}{err}")
+        return subprocess.CompletedProcess(argv, proc.returncode, out, err)
 
     def alive(self):
-        out = subprocess.run(
-            [str(self.bin / "tmux"), "list-sessions", "-F", "#{session_name}"],
-            capture_output=True, text=True, timeout=5, env=self.env(),
-        ).stdout
+        out = self.run([str(self.bin / "tmux"), "list-sessions", "-F", "#{session_name}"], timeout=5).stdout
         return sorted(line for line in out.splitlines() if line.strip())
 
     def close(self):
         if self.kind == "real":
-            subprocess.run([str(self.bin / "tmux"), "kill-server"], capture_output=True, timeout=10)
+            subprocess.run(
+                [_real_tmux() or "tmux", "-S", str(self.socket), "kill-server"],
+                capture_output=True, timeout=10,
+            )
         shutil.rmtree(self.sockdir, ignore_errors=True)
+        loop = self.calls.with_name(self.calls.name + ".loop")
+        overcap = self.calls.with_name(self.calls.name + ".overcap")
+        assert not loop.exists(), "il tmux finto si e' richiamato da solo (un altro tmux nel PATH?)"
+        assert not overcap.exists(), f"calls.txt oltre {CALLS_CAP_BYTES} byte"
+        assert not self.calls.exists() or self.calls.stat().st_size <= CALLS_CAP_BYTES * 2
 
 
 @pytest.fixture(params=["stub", "real"])
 def tmux(request, tmp_path):
     if sys.platform == "win32":
         pytest.skip("gli script del launcher girano nel container Linux")
-    if request.param == "real" and not shutil.which("tmux"):
+    if request.param == "real" and not _real_tmux():
         pytest.skip("tmux non installato: il caso stub copre la stessa risoluzione")
     t = _Tmux(request.param, tmp_path)
     yield t
@@ -346,7 +453,8 @@ def _run(capable_bash, tmux: _Tmux, body: str) -> subprocess.CompletedProcess:
     home = tmux.tmp / "home"
     (home / "logs").mkdir(parents=True, exist_ok=True)
     script = (
-        f"export JHT_HOME='{home}'\n"
+        _self_timer()
+        + f"export JHT_HOME='{home}'\n"
         f"export T_SESSIONS='{tmux.state}' T_CALLS='{tmux.calls}'\n"
         + _prelude()
         + f"\nexport PATH='{tmux.bin}':\"$PATH\"\n"
@@ -355,9 +463,7 @@ def _run(capable_bash, tmux: _Tmux, body: str) -> subprocess.CompletedProcess:
     )
     path = tmux.tmp / "case.sh"
     path.write_text(script, encoding="utf-8", newline="\n")
-    return subprocess.run(
-        [capable_bash, str(path)], capture_output=True, text=True, timeout=60
-    )
+    return tmux.run([capable_bash, str(path)])
 
 
 def test_a_dead_session_is_not_reported_alive_through_its_sibling(capable_bash, tmux):
@@ -424,13 +530,14 @@ def test_the_containment_capture_never_lands_on_a_sibling(capable_bash, tmux):
 
 def _tui_run(capable_bash, tmux: _Tmux, body: str) -> subprocess.CompletedProcess:
     script = (
-        f"export T_SESSIONS='{tmux.state}' T_CALLS='{tmux.calls}'\n"
+        _self_timer()
+        + f"export T_SESSIONS='{tmux.state}' T_CALLS='{tmux.calls}'\n"
         f"export PATH='{tmux.bin}':\"$PATH\"\n"
         f"source '{LAUNCHER / 'tui-helpers.sh'}'\n"
         + body
         + "\n"
     )
-    return subprocess.run([capable_bash, "-c", script], capture_output=True, text=True, timeout=60)
+    return tmux.run([capable_bash, "-c", script])
 
 
 def test_a_kickoff_is_never_typed_into_a_sibling_session(capable_bash, tmux):
@@ -445,10 +552,7 @@ def test_a_kickoff_is_never_typed_into_a_sibling_session(capable_bash, tmux):
     calls = tmux.calls.read_text(encoding="utf-8") if tmux.calls.exists() else ""
     assert "TYPED-INTO CRITICO-S1" not in calls, calls
     if tmux.kind == "real":
-        pane = subprocess.run(
-            [str(tmux.bin / "tmux"), "capture-pane", "-p", "-t", "=CRITICO-S1:"],
-            capture_output=True, text=True, timeout=5,
-        ).stdout
+        pane = tmux.run([str(tmux.bin / "tmux"), "capture-pane", "-p", "-t", "=CRITICO-S1:"], timeout=5).stdout
         assert "KICKOFF" not in pane, pane
 
 
@@ -478,17 +582,21 @@ def test_the_sentinel_worker_repl_probe_never_reads_a_sibling(capable_bash, tmp_
     if sys.platform == "win32":
         pytest.skip("il launcher gira nel container Linux")
     tmux = _Tmux("stub", tmp_path)
-    tmux.add("SENTINELLA-WORKER-OLD", "claude")
-    home = tmp_path / "home"
-    home.mkdir()
-    script = (
-        f"export T_SESSIONS='{tmux.state}' T_CALLS='{tmux.calls}' T_NEW=SENTINELLA-WORKER\n"
-        f"export PATH='{tmux.bin}':\"$PATH\" JHT_HOME='{home}'\n"
-        f"bash '{LAUNCHER / 'start-agent.sh'}' worker; echo \"rc=$?\"\n"
-    )
-    result = subprocess.run([capable_bash, "-c", script], capture_output=True, text=True, timeout=90)
-    out = result.stdout + result.stderr
-    assert "rc=1" in out, out
-    assert "SENTINELLA-WORKER started" not in out, out
-    assert "REPL did not start" in out, out
-    assert tmux.alive() == ["SENTINELLA-WORKER-OLD"], "la sorella non va toccata"
+    try:
+        tmux.add("SENTINELLA-WORKER-OLD", "claude")
+        home = tmp_path / "home"
+        home.mkdir()
+        script = (
+            _self_timer(95)
+            + f"export T_SESSIONS='{tmux.state}' T_CALLS='{tmux.calls}' T_NEW=SENTINELLA-WORKER\n"
+            f"export PATH='{tmux.bin}':\"$PATH\" JHT_HOME='{home}'\n"
+            f"bash '{LAUNCHER / 'start-agent.sh'}' worker; echo \"rc=$?\"\n"
+        )
+        result = tmux.run([capable_bash, "-c", script], timeout=90)
+        out = result.stdout + result.stderr
+        assert "rc=1" in out, out
+        assert "SENTINELLA-WORKER started" not in out, out
+        assert "REPL did not start" in out, out
+        assert tmux.alive() == ["SENTINELLA-WORKER-OLD"], "la sorella non va toccata"
+    finally:
+        tmux.close()
