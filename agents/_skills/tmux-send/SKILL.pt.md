@@ -67,6 +67,7 @@ Tipos padrao (veja `agents/_manual/communication-rules.md` para a taxonomia comp
 ## Codigos de saida
 
 - `0` — mensagem entregue **e submetida** (verificado: o turno arrancou)
+  - Se o destinatário usa a caixa (`mail_receivers`), `0` significa **em fila**: a mensagem é um ficheiro duradouro e o terminal só recebeu um aviso curto. Se o agente a *apanhou* diz-o `jht-mail status <agente> <id>`; uma mensagem que ninguém apanha a tempo é comunicada ao remetente.
 - `1` — argumentos ausentes
 - `2` — sessao de destino nao existe (verifique o nome com `tmux ls`)
 - `3` — texto nunca apareceu e o painel nao esta ocupado → TUI nao receptiva. **O unico codigo que sugere morta/encravada.**

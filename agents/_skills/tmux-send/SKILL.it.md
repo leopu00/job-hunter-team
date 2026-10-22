@@ -67,6 +67,7 @@ Tipi standard (vedi `agents/_manual/communication-rules.md` per la tassonomia co
 ## Codici di uscita
 
 - `0` — messaggio consegnato **e submittato** (verificato: il turno è partito)
+  - Se il destinatario usa la casella (`mail_receivers`), `0` vuol dire **in coda**: il messaggio è un file durevole e il terminale ha ricevuto solo un breve sollecito. Se l'agente lo ha *preso* lo dice `jht-mail status <agente> <id>`; un messaggio che nessuno prende in tempo viene segnalato al mittente.
 - `1` — argomenti mancanti
 - `2` — la sessione di destinazione non esiste (verifica il nome con `tmux ls`)
 - `3` — testo mai apparso e pane non occupato → TUI irricettiva. **L'unico codice che suggerisce morta/wedged.**

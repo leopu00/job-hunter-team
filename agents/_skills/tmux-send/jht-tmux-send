@@ -144,6 +144,44 @@ REFUSEDEOF
   exit 6
 fi
 
+# ── JHT-T09 · la posta con ack ───────────────────────────────────────────────
+# Per i destinatari elencati in `mail_receivers` (jht.config.json: vuoto o illeggibile
+# = nessuno), un messaggio FRA AGENTI diventa un file nella loro casella, con una
+# ricevuta; nel terminale si digita solo un sollecito corto, senza contenuto. Il
+# mittente lo decide `jht_mail.py route` dalla stessa parentela dei processi di
+# sopra: l'utente, i bridge, il watchdog e chiunque non sia verificabile restano sul
+# percorso di sempre (qui sotto, byte per byte). Il verdetto di impersonazione e'
+# gia' stato dato: il router non lo rivede.
+#
+# ⚠️ Da qui l'exit 0 vuol dire «IN CODA»: il messaggio e' durevole, non e' detto che
+# l'agente l'abbia preso. «Preso» lo dice `jht-mail status`. Gli exit del SOLLECITO
+# (4/5/6: pane vivo ma occupato o muto) non sono piu' un messaggio perso, quindi
+# escono 0; il 3 (pane che non risponde) resta 3, perche' autorizza la verifica di
+# vita. Il sollecito passa dal percorso di oggi, forzato: non rientra nel router.
+mail_id=""
+MAIL_LIB="/app/shared/skills/jht_mail.py"
+[ -f "$MAIL_LIB" ] || MAIL_LIB="${SCRIPT_DIR}/../../../shared/skills/jht_mail.py"
+if [ "$sender_trust" = "verified" ] && [ -f "$MAIL_LIB" ] && command -v python3 >/dev/null 2>&1; then
+  if routed=$(printf '%s' "$message" | python3 "$MAIL_LIB" route "$session" 2>/dev/null); then
+    mail_id=${routed%%$'\t'*}
+  fi
+fi
+
+_mail_exit() {
+  local rc="$1"
+  trap - EXIT
+  case "$rc" in
+    0) echo "jht-tmux-send: queued $mail_id in the mailbox of $session (nudge delivered)" ;;
+    3) echo "jht-tmux-send: queued $mail_id in the mailbox of $session, but the terminal does not respond (rc=3)" >&2
+       exit 3 ;;
+    *) echo "jht-tmux-send: queued $mail_id in the mailbox of $session; nudge unconfirmed (rc=$rc), it will be repeated" >&2
+       exit 0 ;;
+  esac
+}
+if [ -n "$mail_id" ]; then
+  trap '_mail_exit $?' EXIT
+fi
+
 # Provider attivo: serve a sapere se la TUI di destinazione è Kimi, che
 # accoda i messaggi inviati con solo Enter mentre l'agente è in mezzo a
 # tool calls in-flight (osservato live: SCOUT-1 con 4 throttle in coda
@@ -171,11 +209,12 @@ fi
 # Next legge questo file per animare il pallino tra i nodi del team chart.
 # Fallisce silenziosamente — il logging non deve mai bloccare l'invio.
 if command -v python3 >/dev/null 2>&1; then
-  python3 - "$session" "$message" "$sender_trust" "$sender_claimed" "$sender_origin" <<'PYEOF' 2>/dev/null || true
+  JHT_MAIL_ID="$mail_id" python3 - "$session" "$message" "$sender_trust" "$sender_claimed" "$sender_origin" <<'PYEOF' 2>/dev/null || true
 import json, os, re, sys
 from datetime import datetime, timezone
 session, msg = sys.argv[1], sys.argv[2]
 trust, claimed, origin = (sys.argv[3:6] + ["", "", ""])[:3]
+mail_id = os.environ.get("JHT_MAIL_ID", "")
 # 1) formato standard agente→agente: "[@from -> @to] [TYPE] ..."
 m = re.match(r'^\s*\[@([a-zA-Z0-9_-]+)\s*->\s*@([a-zA-Z0-9_-]+)\]\s*(?:\[([A-Z]+)\])?', msg)
 if m:
@@ -224,11 +263,21 @@ out = {
     "from_claimed": claimed,
     "from_verified": origin,
     "from_trust": trust,
-    "delivered": True,
+    # A message that went into a mailbox is queued, not delivered: «preso» is the mailbox's to say.
+    "delivered": not mail_id,
 }
+if mail_id:
+    out["mail_state"] = "queued"
+    out["mail_id"] = mail_id
 with open(os.path.join(log_dir, "messages.jsonl"), "a") as f:
     f.write(json.dumps(out, ensure_ascii=False) + "\n")
 PYEOF
+fi
+
+# Un messaggio in coda nella casella: quello che si digita e' solo il sollecito.
+# Le stesse parole di `nudge_text(1)` in jht_mail.py (un test le tiene uguali).
+if [ -n "$mail_id" ]; then
+  message="[MAIL] 1 new message(s) in your mailbox. Run: jht-mail drain"
 fi
 
 # Signature per la verify: testa E coda del messaggio. La testa basta per i

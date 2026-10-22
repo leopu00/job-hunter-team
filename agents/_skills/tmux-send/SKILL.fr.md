@@ -67,6 +67,7 @@ Types standards (voir `agents/_manual/communication-rules.md` pour la taxonomie 
 ## Codes de sortie
 
 - `0` — message delivre **et soumis** (verifie : le tour a demarre)
+  - Si le destinataire utilise la boîte (`mail_receivers`), `0` signifie **en file** : le message est un fichier durable et le terminal n'a reçu qu'un court rappel. Que l'agent l'ait *pris*, c'est `jht-mail status <agent> <id>` qui le dit ; un message que personne ne prend à temps est signalé à l'expéditeur.
 - `1` — arguments manquants
 - `2` — la session cible n'existe pas (verifiez le nom avec `tmux ls`)
 - `3` — le texte n'est jamais apparu et le panneau n'est pas occupe → TUI non receptive. **Le seul code qui suggere morte/bloquee.**
