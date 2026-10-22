@@ -1090,6 +1090,127 @@ def test_an_unreadable_db_keeps_the_scouts_brake(home, monkeypatch):
     assert _unit("scout-2", T0 + 660, "post-dedup-skip")["applied_sec"] == 660
 
 
+# ── Nel recupero dopo un congelamento la pausa del Capitano non si accorcia (22/10) ──
+# Su un team di prova uno SCOUT rimesso in piedi dopo il freeze ha preso il 69% del consumo a
+# 2,76 %/h: le sue unità vuote accorciavano a 60 s la pausa di 2460 s che il
+# Capitano gli aveva dato come freno. La regola è `keep_captains_pause` in
+# pause-rules.json; i segnali sono la traccia di un congelamento
+# (freeze_marker.py) e il report del pacing-bridge.
+def _freeze_marker():
+    return _load("freeze_marker_under_test", SKILLS_DIR / "freeze_marker.py")
+
+
+def _pacing_report(home: Path, team, target):
+    (home / "logs").mkdir(parents=True, exist_ok=True)
+    (home / "logs" / "pacing-bridge-state.json").write_text(
+        json.dumps({"last_report": {"vel_team": team, "vel_target": target}}),
+        encoding="utf-8")
+
+
+def _empty_scout_unit(home, monkeypatch):
+    set_config(home, **{"scout-2": 660})
+    _jobs_db(home, monkeypatch)
+    eng.register("scout-2", now=T0)
+    return _unit("scout-2", T0 + 660, "post-dedup-skip")
+
+
+def test_the_rule_names_both_signals_and_the_engine_reads_them():
+    rules = json.loads((REPO_ROOT / "agents" / "_skills" / "throttle"
+                        / "pause-rules.json").read_text(encoding="utf-8"))
+    keep = rules["empty_unit"]["keep_captains_pause"]
+    assert keep == {"after_freeze_sec": 7200, "over_pace_pct_h": 1.0}
+    assert eng.RECOVERY_AFTER_FREEZE_SEC == 7200 and eng.OVER_PACE_PCT_H == 1.0
+
+
+def test_after_a_freeze_an_empty_unit_keeps_the_captains_pause(home, monkeypatch):
+    _freeze_marker().mark("freeze", now=T0 + 600)
+    res = _empty_scout_unit(home, monkeypatch)
+    assert res["applied_sec"] == 660
+    assert res["empty_unit_kept"] == "after-freeze"
+    assert "shortened_from" not in res
+    assert events("armed")[-1]["empty_unit_kept"] == "after-freeze"
+    assert flag("scout-2")["empty_streak"] == 0
+
+
+def test_once_the_recovery_window_is_over_the_empty_unit_shortens_again(home, monkeypatch):
+    _freeze_marker().mark("freeze", now=T0 + 660 + 30 - eng.RECOVERY_AFTER_FREEZE_SEC - 1)
+    res = _empty_scout_unit(home, monkeypatch)
+    assert res["applied_sec"] == 60 and res["shortened_from"] == 660
+    assert "empty_unit_kept" not in res
+
+
+def test_a_team_over_its_target_pace_keeps_the_captains_pause(home, monkeypatch):
+    _pacing_report(home, team=3.5, target=1.4)
+    res = _empty_scout_unit(home, monkeypatch)
+    assert res["applied_sec"] == 660 and res["empty_unit_kept"] == "over-pace"
+
+
+def test_a_team_within_the_tolerance_of_its_target_still_shortens(home, monkeypatch):
+    _pacing_report(home, team=2.4, target=1.4)  # exactly the tolerance above: not over
+    assert _empty_scout_unit(home, monkeypatch)["applied_sec"] == 60
+
+
+@pytest.mark.parametrize("content", [None, "not json", "[]", '{"last_report": {"vel_team": "x"}}'])
+def test_no_signal_or_an_unreadable_one_is_the_rule_as_before(home, monkeypatch, content):
+    if content is not None:
+        (home / "logs").mkdir(parents=True, exist_ok=True)
+        (home / "logs" / "pacing-bridge-state.json").write_text(content, encoding="utf-8")
+        (home / "state").mkdir(parents=True, exist_ok=True)
+        (home / "state" / "last-freeze.json").write_text(content, encoding="utf-8")
+    assert _empty_scout_unit(home, monkeypatch)["applied_sec"] == 60
+
+
+def test_the_users_burn_intent_lifts_the_hold(home, burn, monkeypatch):
+    burn.grant(hours=5, reason="stanotte spremete")
+    _freeze_marker().mark("freeze", now=T0 + 600)
+    _pacing_report(home, team=3.5, target=1.4)
+    set_config(home, **{"scout-2": 660})
+    eng._MODULE_CACHE.clear()
+    tc = _load("throttle_config_burn_hold", SKILLS_DIR / "throttle-config.py")
+    tc._BURN_INTENT_MOD = burn
+    monkeypatch.setattr(eng, "_throttle_config", lambda: tc)
+    _jobs_db(home, monkeypatch)
+    # in burn intent the floor and the ladder are off: 660 stays 660, 60 is allowed
+    eng.register("scout-2", now=T0)
+    res = _unit("scout-2", T0 + 660, "post-dedup-skip")
+    assert res["applied_sec"] == 60 and "empty_unit_kept" not in res
+
+
+def test_a_hold_does_not_touch_the_other_rules(home, monkeypatch):
+    # the user's requests waiting for the Analista still shorten: not a Scout empty unit
+    _freeze_marker().mark("freeze", now=T0 + 600)
+    set_config(home, **{"analista-1": 780})
+    _jobs_db(home, monkeypatch, geocode_requested=1,
+             geocode_requested_at="2026-09-27 14:54:03")
+    res = eng.register("analista-1", now=T0)
+    assert res["applied_sec"] == 60 and res["shortened_from"] == 780
+
+
+def test_freeze_team_and_the_fatal_soft_pause_leave_the_marker(home, monkeypatch):
+    monkeypatch.syspath_prepend(str(SKILLS_DIR))
+    fm = _freeze_marker()
+    assert fm.seconds_since(now=T0) is None
+    ft = _load("freeze_team_under_test", SKILLS_DIR / "freeze_team.py")
+    monkeypatch.setattr(ft, "list_sessions", lambda: ["SCOUT-2", "CAPITANO"])
+    monkeypatch.setattr(ft, "send_esc", lambda s: True)
+    ft.main()
+    assert fm.seconds_since() is not None and fm.seconds_since() < 60
+    fm.marker_path().unlink()
+    sp = _load("soft_pause_team_under_test", SKILLS_DIR / "soft_pause_team.py")
+    monkeypatch.setattr(sp, "list_sessions", lambda: ["SCOUT-2", "CAPITANO"])
+    monkeypatch.setattr(sp, "send_message", lambda s, m: True)
+    sp.pause_all(include_core=True)  # the zero-spend standby is not a freeze
+    assert fm.seconds_since() is None
+    sp.pause_all()
+    assert fm.seconds_since() is not None
+    # nothing frozen, nothing marked
+    fm.marker_path().unlink()
+    monkeypatch.setattr(ft, "list_sessions", lambda: [])
+    with pytest.raises(SystemExit):
+        ft.main()
+    assert fm.seconds_since() is None
+
+
 # ── Un wait orfano non si prende la sveglia (27/09) ──────────────────────
 # Su una VPS l'ANALISTA-1 ha armato 300 s, ha ricevuto un ordine a metà pausa
 # e, nel turno che ne è seguito, ha lanciato `jht-throttle-check ||

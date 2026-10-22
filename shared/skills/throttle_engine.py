@@ -295,6 +295,56 @@ _USER_REQUEST_ROLES = frozenset((_RULES.get("user_requests") or {}).get("roles")
 _EMPTY_UNIT = _RULES.get("empty_unit") or {}
 _EMPTY_UNIT_ROLES = frozenset(_EMPTY_UNIT.get("roles") or ())
 EMPTY_UNIT_MAX_STREAK = int(_EMPTY_UNIT.get("max_streak") or 0)
+# Nel recupero dopo un congelamento la pausa del Capitano è un freno sulla
+# spesa (22/10, su un team di prova): uno Scout rimesso in piedi dopo il freeze ha preso il 69%
+# del consumo a 2,76 %/h perché le sue unità vuote accorciavano a 60 s la pausa
+# di 2460 s che il Capitano gli aveva dato per frenare. Finché dura il recupero
+# l'unità vuota NON accorcia (pause-rules.json, `keep_captains_pause`).
+_KEEP_PAUSE = _EMPTY_UNIT.get("keep_captains_pause") or {}
+RECOVERY_AFTER_FREEZE_SEC = int(_KEEP_PAUSE.get("after_freeze_sec") or 0)
+OVER_PACE_PCT_H = float(_KEEP_PAUSE.get("over_pace_pct_h") or 0)
+
+
+def pacing_state_path() -> Path:
+    return _home() / "logs" / "pacing-bridge-state.json"
+
+
+def captains_pause_stays(now: float):
+    """Perché la pausa del Capitano non si accorcia in questo momento, o None.
+
+    «after-freeze»: un congelamento (freeze_marker.py) negli ultimi
+    `after_freeze_sec`. «over-pace»: l'ultimo report del pacing-bridge dice che
+    il team brucia più di `over_pace_pct_h` %/h sopra il suo target
+    (vel_team vs vel_target, lo stesso segnale del sentinel-bridge). Un segnale
+    illeggibile o assente non è un segnale: si resta nella regola di prima. La
+    deroga a termine dell'utente (burn intent) toglie il freno, come toglie
+    floor e ladder."""
+    mod = _throttle_config()
+    try:
+        if mod is not None and mod._burn_intent_active():
+            return None
+    except Exception as exc:  # noqa: BLE001
+        _log("could not read the burn intent: %s" % exc)
+    if RECOVERY_AFTER_FREEZE_SEC > 0:
+        marker = _load_shared("freeze_marker", "freeze_marker.py")
+        try:
+            since = marker.seconds_since(now) if marker is not None else None
+        except Exception as exc:  # noqa: BLE001
+            _log("could not read the freeze marker: %s" % exc)
+            since = None
+        if since is not None and since < RECOVERY_AFTER_FREEZE_SEC:
+            return "after-freeze"
+    if OVER_PACE_PCT_H > 0:
+        try:
+            report = (json.loads(pacing_state_path().read_text(encoding="utf-8"))
+                      .get("last_report") or {})
+            team, target = report.get("vel_team"), report.get("vel_target")
+            if (isinstance(team, (int, float)) and isinstance(target, (int, float))
+                    and team > target + OVER_PACE_PCT_H):
+                return "over-pace"
+        except (OSError, ValueError, AttributeError):
+            pass
+    return None
 
 
 def _role_of(agent: str) -> str:
@@ -541,13 +591,16 @@ def register(agent: str, seconds=None, reason=None, session=None,
     previous = state["agents"].get(agent) or {}
     started = previous.get("timer_armed_at") or previous.get("since")
     empty_streak = 0
+    held = None
     if (not waiting and applied > USER_WORK_PAUSE_SEC
             and _role_of(agent) in _EMPTY_UNIT_ROLES
             and isinstance(started, (int, float))):
         streak = int(previous.get("empty_streak") or 0)
         if streak < EMPTY_UNIT_MAX_STREAK and inserted_since(agent, started) == 0:
-            shortened_from, applied = applied, USER_WORK_PAUSE_SEC
-            empty_streak = streak + 1
+            held = captains_pause_stays(now)
+            if held is None:
+                shortened_from, applied = applied, USER_WORK_PAUSE_SEC
+                empty_streak = streak + 1
     if applied <= 0:
         # Throttle 0 = nessuna pausa (il core interattivo ci sta per scelta:
         # deve restare reattivo per la chat dell'utente). L'agente resta ACTIVE
@@ -587,6 +640,8 @@ def register(agent: str, seconds=None, reason=None, session=None,
                   "user_requests_waiting": dict(waiting)} if waiting else
                  {"shortened_from": shortened_from, "empty_unit": empty_streak}
                  if shortened_from is not None else {})
+    if held is not None:
+        shortened = {"empty_unit_kept": held}
     emit("armed", agent=agent, ts=now, applied_sec=applied, until=until,
          reason=reason, **shortened)
     emit_pause("start", agent, now, id=pause_id,
