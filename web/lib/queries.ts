@@ -30,7 +30,7 @@ import {
 } from "@/lib/swipe-decks";
 import { parsePositionQuery } from "@/lib/position-search";
 import { publicPositionState } from "@/lib/position-state";
-import { filterByScamView } from "@/lib/scam-signals";
+import { filterByScamView, parseScamSignals } from "@/lib/scam-signals";
 import type { ApplicationTimelineEvent } from "@/lib/application-timeline";
 import {
   aggregateRoleFamilies,
@@ -373,7 +373,7 @@ export async function getPositions(
   let query = supabase
     .from("positions")
     .select(
-      "id, legacy_id, title, company, location, remote_type, salary_declared_min, salary_declared_max, salary_declared_currency, salary_estimated_min, salary_estimated_max, salary_estimated_currency, url, source, found_at, found_by, last_checked, deadline, status, notes, role_family, loc_country, loc_city, write_requested, scores ( total_score, stack_match, remote_fit, salary_fit, strategic_fit, scored_at, scored_by ), applications ( critic_score, critic_verdict, written_at, written_by, critic_reviewed_at, reviewed_by, applied_at, response_at )",
+      "id, legacy_id, title, company, location, remote_type, salary_declared_min, salary_declared_max, salary_declared_currency, salary_estimated_min, salary_estimated_max, salary_estimated_currency, url, source, found_at, found_by, last_checked, deadline, status, notes, role_family, loc_country, loc_city, write_requested, scam_signals, scores ( total_score, stack_match, remote_fit, salary_fit, strategic_fit, scored_at, scored_by ), applications ( critic_score, critic_verdict, written_at, written_by, critic_reviewed_at, reviewed_by, applied_at, response_at )",
     )
     .is("deleted_at", null)
     .is("scores.deleted_at", null)
@@ -445,6 +445,8 @@ export async function getPositions(
     ]);
     return {
       ...p,
+      // JHT-T44: the cloud keeps the skill's JSON as text; the page reads codes and bucket.
+      scam_signals: parseScamSignals(p.scam_signals),
       public_state: publicPositionState(p.status),
       has_open_ticket: false,
       ticket_indicator: "none" as const,
@@ -613,14 +615,23 @@ export async function getPositionsWindow(
 }
 
 /**
- * How many positions are in the «suspicious» section (JHT-T06) of a LOCAL
- * workspace. A team read by the desktop gets the count with its page
- * (`PositionsWindow.scamSection`); the cloud has no scam signals and says 0.
+ * How many positions are in the «suspicious» section (JHT-T06): a local
+ * workspace counts its own; the cloud counts the user's rows by the bucket the
+ * skill stored (migration 096). A team read by the desktop gets the count with
+ * its page (`PositionsWindow.scamSection`) and does not ask here.
  */
 export async function getScamSectionCount(): Promise<number> {
   if (await activeDemoPersona()) return 0;
   const w = await ws();
-  return w ? local.countScamSectionLocal(w) : 0;
+  if (w) return local.countScamSectionLocal(w);
+  if (!isSupabaseConfigured) return 0;
+  const supabase = await createClient();
+  const { count } = await supabase
+    .from("positions")
+    .select("id", { count: "exact", head: true })
+    .is("deleted_at", null)
+    .like("scam_signals", '%"bucket":"section"%');
+  return count ?? 0;
 }
 
 export async function getPositionById(
@@ -668,7 +679,10 @@ export async function getPositionById(
       .maybeSingle(),
   ]);
   if (posRes.error || !posRes.data) return null;
-  const position = posRes.data as Position;
+  const position = {
+    ...(posRes.data as Position),
+    scam_signals: parseScamSignals((posRes.data as any).scam_signals),
+  } as Position;
   let company: Company | null = null;
   if (position.company_id) {
     const { data: compData } = await supabase

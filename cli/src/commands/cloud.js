@@ -10,6 +10,7 @@ import { JHT_HOME, JHT_DB_PATH } from '../jht-paths.js';
 // in the local database and in the cloud's migration 095.
 const LOCATION_PRECISIONS = ['address', 'street', 'district', 'city', 'country', 'remote'];
 import { SupabaseAuthError } from '../lib/supabase-direct.js';
+import { canonicalScamSignals } from '../lib/scam-signals.js';
 import { getDirectReader } from '../lib/cloud-direct.js';
 import { realtimeSyncEnabled } from '../lib/cloud-realtime.js';
 import { writePrivateJson } from '../lib/secure-config-io.js';
@@ -464,6 +465,11 @@ async function handleRestore(options) {
     const restorePrecisionStmt = sqliteHasColumn(db, 'positions', 'location_precision')
       ? db.prepare('UPDATE positions SET location_precision = ? WHERE id = ?')
       : null;
+    // JHT-T44: the scam signals (migration 096). Written after the row like location_precision, only
+    // when the jobs.db has the column, and only the canonical form: codes and bucket, never a free text.
+    const restoreScamStmt = sqliteHasColumn(db, 'positions', 'scam_signals')
+      ? db.prepare('UPDATE positions SET scam_signals = ? WHERE id = ?')
+      : null;
     const posStmt = db.prepare(`
       INSERT OR REPLACE INTO positions (
         id, title, company, company_id, location, remote_type,
@@ -519,6 +525,7 @@ async function handleRestore(options) {
         );
         restoreWriteKindStmt?.run(p.write_request_kind ?? null, legacyId);
         restorePrecisionStmt?.run(LOCATION_PRECISIONS.includes(p.location_precision) ? p.location_precision : null, legacyId);
+        restoreScamStmt?.run(canonicalScamSignals(p.scam_signals), legacyId);
         inserted.positions++;
       }
 
@@ -1398,6 +1405,8 @@ async function performPush(options) {
           ? ['apply_requested', 'apply_requested_at', 'apply_requested_by'] : []),
         // JHT-T04: the level of precision of the place. Same degrade as the columns above.
         ...(sqliteHasColumn(db, 'positions', 'location_precision') ? ['location_precision'] : []),
+        // JHT-T44: the scam signals (migration 096). Same degrade as the columns above.
+        ...(sqliteHasColumn(db, 'positions', 'scam_signals') ? ['scam_signals'] : []),
         // Metadati location/categoria (Parte B sync, 2026-06-14): prodotti
         // dall'analista, alimentano i grafici categoria/mappa della dashboard
         // (che ESISTE gia' — va solo alimentata). Erano OMESSI dal push →
