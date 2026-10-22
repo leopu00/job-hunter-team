@@ -8,7 +8,10 @@ export interface ExistingTeamProfileText {
   staleWhileReading: string; // {time}
   failed: string;
   failedAt: string; // {time}
-  edit: string;
+  /** On the button inside an empty or failed state. */
+  retry: string;
+  /** Label of the error code, said after the sentence. */
+  errorCode: string;
   /** Under the page: what this view does not give. */
   limits: string;
   fileAbsent: string;
@@ -39,7 +42,8 @@ export const EXISTING_TEAM_PROFILE_TEXT: Record<Locale, ExistingTeamProfileText>
     staleWhileReading: "Dati della lettura delle {time}, aggiornamento in corso",
     failed: "Lettura non riuscita",
     failedAt: "Ultimo tentativo alle {time}. Nessun dato precedente viene mostrato come attuale.",
-    edit: "Modifica",
+    retry: "Riprova",
+    errorCode: "codice",
     limits: "Il CV e i documenti originali non si scaricano da questa vista; l’esportazione dei dati salva solo i dati del profilo mostrati qui.",
     fileAbsent: "Sulla squadra non c’è ancora un file di profilo: non c’è niente da mostrare.",
     fileTooLarge: "Il file del profilo è troppo grande per essere letto ({bytes} byte, il tetto è {max}): nessun campo è mostrato.",
@@ -67,7 +71,8 @@ export const EXISTING_TEAM_PROFILE_TEXT: Record<Locale, ExistingTeamProfileText>
     staleWhileReading: "Data from the read at {time}, updating",
     failed: "The read did not succeed",
     failedAt: "Last attempt at {time}. No earlier data is shown as current.",
-    edit: "Edit",
+    retry: "Retry",
+    errorCode: "code",
     limits: "The CV and the original documents cannot be downloaded from this view; the data export saves only the profile data shown here.",
     fileAbsent: "The team has no profile file yet: there is nothing to show.",
     fileTooLarge: "The profile file is too large to be read ({bytes} bytes, the cap is {max}): no field is shown.",
@@ -95,7 +100,8 @@ export const EXISTING_TEAM_PROFILE_TEXT: Record<Locale, ExistingTeamProfileText>
     staleWhileReading: "Daten vom Lesen um {time}, Aktualisierung läuft",
     failed: "Lesen fehlgeschlagen",
     failedAt: "Letzter Versuch um {time}. Frühere Daten werden nicht als aktuell angezeigt.",
-    edit: "Bearbeiten",
+    retry: "Erneut versuchen",
+    errorCode: "Code",
     limits: "Der Lebenslauf und die Originaldokumente lassen sich aus dieser Ansicht nicht herunterladen; der Datenexport speichert nur die hier gezeigten Profildaten.",
     fileAbsent: "Das Team hat noch keine Profildatei: Es gibt nichts anzuzeigen.",
     fileTooLarge: "Die Profildatei ist zu groß zum Lesen ({bytes} Byte, die Grenze ist {max}): Kein Feld wird angezeigt.",
@@ -123,7 +129,8 @@ export const EXISTING_TEAM_PROFILE_TEXT: Record<Locale, ExistingTeamProfileText>
     staleWhileReading: "Données de la lecture de {time}, mise à jour en cours",
     failed: "La lecture a échoué",
     failedAt: "Dernière tentative à {time}. Aucune donnée précédente n’est affichée comme actuelle.",
-    edit: "Modifier",
+    retry: "Réessayer",
+    errorCode: "code",
     limits: "Le CV et les documents d’origine ne se téléchargent pas depuis cette vue ; l’exportation des données n’enregistre que les données du profil affichées ici.",
     fileAbsent: "L’équipe n’a pas encore de fichier de profil : il n’y a rien à afficher.",
     fileTooLarge: "Le fichier de profil est trop grand pour être lu ({bytes} octets, la limite est {max}) : aucun champ n’est affiché.",
@@ -151,7 +158,8 @@ export const EXISTING_TEAM_PROFILE_TEXT: Record<Locale, ExistingTeamProfileText>
     staleWhileReading: "Datos de la lectura de las {time}, actualizando",
     failed: "La lectura no tuvo éxito",
     failedAt: "Último intento a las {time}. Ningún dato anterior se muestra como actual.",
-    edit: "Editar",
+    retry: "Reintentar",
+    errorCode: "código",
     limits: "El CV y los documentos originales no se descargan desde esta vista; la exportación de datos guarda solo los datos del perfil mostrados aquí.",
     fileAbsent: "El equipo aún no tiene archivo de perfil: no hay nada que mostrar.",
     fileTooLarge: "El archivo de perfil es demasiado grande para leerlo ({bytes} bytes, el límite es {max}): no se muestra ningún campo.",
@@ -179,7 +187,8 @@ export const EXISTING_TEAM_PROFILE_TEXT: Record<Locale, ExistingTeamProfileText>
     staleWhileReading: "Dados da leitura das {time}, a atualizar",
     failed: "A leitura não teve êxito",
     failedAt: "Última tentativa às {time}. Nenhum dado anterior é mostrado como atual.",
-    edit: "Editar",
+    retry: "Tentar novamente",
+    errorCode: "código",
     limits: "O CV e os documentos originais não se descarregam a partir desta vista; a exportação de dados guarda apenas os dados do perfil mostrados aqui.",
     fileAbsent: "A equipa ainda não tem ficheiro de perfil: não há nada para mostrar.",
     fileTooLarge: "O ficheiro de perfil é demasiado grande para ser lido ({bytes} bytes, o limite é {max}): nenhum campo é mostrado.",
@@ -207,7 +216,8 @@ export const EXISTING_TEAM_PROFILE_TEXT: Record<Locale, ExistingTeamProfileText>
     staleWhileReading: "A {time}-i olvasás adatai, frissítés folyamatban",
     failed: "Az olvasás nem sikerült",
     failedAt: "Utolsó kísérlet: {time}. Korábbi adat nem jelenik meg aktuálisként.",
-    edit: "Szerkesztés",
+    retry: "Újra",
+    errorCode: "kód",
     limits: "Az önéletrajz és az eredeti dokumentumok ebből a nézetből nem tölthetők le; az adatexport csak az itt látható profiladatokat menti.",
     fileAbsent: "A csapatnak még nincs profilfájlja: nincs mit mutatni.",
     fileTooLarge: "A profilfájl túl nagy az olvasáshoz ({bytes} bájt, a határ {max}): egyetlen mező sem jelenik meg.",

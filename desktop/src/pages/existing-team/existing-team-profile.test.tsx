@@ -96,17 +96,15 @@ describe("Profilo on an existing team read only", () => {
     expect(view).not.toHaveTextContent(/Chi sono/i);
   });
 
-  it("shows editing disabled with the reason, and no control that changes anything", async () => {
+  it("says why nothing changes in one note, and draws no editing control at all", async () => {
     await open();
     await screen.findByTestId("profile-view");
-    const edit = screen.getByTestId("profile-edit");
-    expect(edit).toBeDisabled();
-    expect(edit).toHaveAttribute("title", REASON);
+    expect(screen.queryByTestId("profile-edit")).toBeNull();
     expect(screen.getByTestId("profile-edit-reason")).toHaveTextContent(REASON);
-    // the web's own edit button (it asks the assistant) is not drawn: the only «Modifica» is the disabled one
-    const edits = screen.getAllByRole("button", { name: /modific/i });
-    expect(edits).toHaveLength(1);
-    expect(edits[0]).toBe(edit);
+    // neither the web's own edit button (it asks the assistant) nor a dead one: no «Modifica» button
+    expect(screen.queryAllByRole("button", { name: /modific/i })).toHaveLength(0);
+    // the reason and the limits are one note, not two lines apart
+    expect(screen.getByTestId("profile-edit-reason").parentElement).toBe(screen.getByTestId("profile-limits").parentElement);
     // The read command, and the header's read of which team this is (a local file, no SSH): nothing else.
     expect(
       native.invoke.mock.calls.map(([command]) => command).filter((c) => c !== COMMAND && c !== "existing_team_link_identity"),
@@ -165,8 +163,9 @@ describe("Profilo on an existing team read only", () => {
     answer = async () => ({ ok: false, error: "positions_unavailable" });
     await user.click(pageRefresh());
     const alert = await screen.findByTestId("profile-error");
-    expect(alert).toHaveTextContent("(positions_unavailable)");
+    expect(alert).toHaveTextContent(`${T.errorCode} positions_unavailable`);
     expect(alert).toHaveTextContent(T.failed);
+    expect(within(alert).getByRole("button", { name: T.retry })).toBeInTheDocument();
     expect(screen.queryByTestId("profile-view")).not.toBeInTheDocument();
     expect(screen.queryByText("Synthetic Persona")).not.toBeInTheDocument();
     answer = async () => profileReply();
@@ -178,7 +177,7 @@ describe("Profilo on an existing team read only", () => {
   it("calls a reply that is not whole a bad reply, not an empty profile", async () => {
     answer = async () => ({ ok: true, data: { profile: { state: "ok" } } });
     await open();
-    expect(await screen.findByTestId("profile-error")).toHaveTextContent("(desktop_bad_reply)");
+    expect(await screen.findByTestId("profile-error")).toHaveTextContent(`${T.errorCode} desktop_bad_reply`);
     expect(screen.queryByTestId("profile-view")).not.toBeInTheDocument();
   });
 
