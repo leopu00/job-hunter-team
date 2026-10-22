@@ -137,6 +137,8 @@ export interface OnboardingActivityState {
   lastSequence: number;
   current: OnboardingActivityEntry | null;
   events: OnboardingActivityEntry[];
+  /** Sentences the setup keeps on screen until it ends (install.ps1's notices), each once. */
+  notices?: string[];
 }
 
 /** Facts independently re-read from the selected runtime host. */

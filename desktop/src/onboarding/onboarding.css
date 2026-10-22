@@ -749,6 +749,43 @@
   line-height: 1.45;
 }
 
+/* A notice from the installer (Windows 10): not a failure, kept on screen for the whole setup. */
+.onboarding-runtime-notice {
+  margin: 18px 0 0;
+  padding: 13px 15px;
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr);
+  align-items: start;
+  gap: 11px;
+  border: 1px solid color-mix(in srgb, var(--color-yellow) 45%, var(--color-border));
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--color-yellow) 7%, var(--color-card));
+}
+
+.onboarding-runtime-notice__mark {
+  width: 24px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+  border-radius: 6px;
+  color: var(--color-yellow);
+  background: var(--color-row);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.onboarding-runtime-notice > div { min-width: 0; }
+
+.onboarding-runtime-notice p {
+  margin: 0;
+  color: var(--color-bright);
+  font-size: 12px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.onboarding-runtime-notice p + p { margin-top: 6px; }
+
 /* What to do now, under the failure sentence: the line the person acts on. */
 .onboarding-runtime-status .onboarding-runtime-status__action {
   color: var(--color-bright);

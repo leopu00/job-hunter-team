@@ -11,7 +11,8 @@ import { appLocale } from "./app-locale";
 import { RUNTIME_TEXT, runtimeText, type RuntimeTextKey } from "./onboarding-runtime.i18n";
 
 export type OnboardingNativeProgressStage = "engine" | "runtime" | "container" | "provider" | "login" | "team" | "assistant";
-export type OnboardingNativeProgressStatus = "start" | "progress" | "done" | "error";
+/** `notice`: a sentence the setup keeps on screen (install.ps1's JHT_NOTICE); the step goes on. */
+export type OnboardingNativeProgressStatus = "start" | "progress" | "done" | "error" | "notice";
 
 export interface OnboardingNativeProgress {
   stage: OnboardingNativeProgressStage;
@@ -48,7 +49,7 @@ export interface SshHostKeyProbe {
 function desktopOnly(): never { throw { code: "desktop_only" }; }
 
 const PROGRESS_STAGES = new Set<OnboardingNativeProgressStage>(["engine", "runtime", "container", "provider", "login", "team", "assistant"]);
-const PROGRESS_STATUSES = new Set<OnboardingNativeProgressStatus>(["start", "progress", "done", "error"]);
+const PROGRESS_STATUSES = new Set<OnboardingNativeProgressStatus>(["start", "progress", "done", "error", "notice"]);
 const SAFE_CODE = /^[a-z][a-z0-9_]{0,63}$/;
 const SAFE_INTERACTIVE_ID = /^[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}$/;
 const UNSAFE_ACTIVITY_TEXT = /[\r\n\0/\\]|https?:\/\/|\b(?:token|password|secret|credential|credenzial|bearer|authorization)\b|\b\d{1,3}(?:\.\d{1,3}){3}\b|\b(?:[a-f0-9]{0,4}:){2,}[a-f0-9:]+\b|\b(?:[a-z0-9-]+\.)+[a-z]{2,}\b|@/i;

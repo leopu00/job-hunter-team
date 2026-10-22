@@ -249,6 +249,9 @@ const NOT_ERRORS: Record<string, string> = {
   export_too_large: "CSV export failure, said by the page as export_failed",
   export_window: "CSV export failure, said by the page as export_failed",
   export_write_failed: "CSV export failure, said by the page as export_failed",
+  // install.ps1's notice id (windows_runtime.rs, INSTALL_NOTICES): not a failure, the setup
+  // goes on; the person reads ui_notice_windows10_unsupported (onboarding-runtime.i18n.ts).
+  windows10_unsupported: "id of install.ps1's JHT_NOTICE line, told as ui_notice_windows10_unsupported",
 };
 
 function compiledRustModules(): string[] {

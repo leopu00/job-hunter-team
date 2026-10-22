@@ -145,6 +145,12 @@ function Write-JhtPhase {
   )][string]$Id)
   [Console]::Out.WriteLine("JHT_PHASE $Id")
 }
+# A notice the desktop keeps on screen for the whole setup (a phase is replaced
+# by the next one). The install goes on after it.
+function Write-JhtNotice {
+  param([Parameter(Mandatory)][ValidateSet('windows10_unsupported')][string]$Id)
+  [Console]::Out.WriteLine("JHT_NOTICE $Id")
+}
 
 
 function Invoke-Action {
@@ -184,6 +190,35 @@ function Test-System {
     Write-Fail "PowerShell 5.1+ required (current version: $psVersion). Install PowerShell 7: https://aka.ms/PowerShell"
   }
   Write-Ok "Windows $($os.Version) / PowerShell $psVersion"
+  Show-WindowsSupportNotice
+}
+
+# Windows 11 is the supported system: Podman 6 removed Windows 10 support.
+# Windows 10 still installs, with a warning and no block. The product type is
+# read before the build, because Windows Server 2019 and 2022 also have builds
+# under 22000 and are not Windows 10. ProductType: 1 workstation, 2 domain
+# controller, 3 server. Windows 10 builds run from 10240 to 19045.
+function Get-JhtWindowsEdition {
+  try {
+    # A WMI that does not answer must not hold the setup: after 10 s the read fails
+    # like any other, and the setup goes on without the notice.
+    $os = Get-CimInstance -ClassName Win32_OperatingSystem -OperationTimeoutSec 10 -ErrorAction Stop
+    return @{ ProductType = [int]$os.ProductType; Build = [int]$os.BuildNumber }
+  } catch {
+    return $null
+  }
+}
+function Test-JhtWindows10Client {
+  param([int]$ProductType, [int]$Build)
+  return ($ProductType -eq 1 -and $Build -ge 10240 -and $Build -lt 22000)
+}
+function Show-WindowsSupportNotice {
+  $edition = Get-JhtWindowsEdition
+  if (-not $edition) { return }
+  if (Test-JhtWindows10Client -ProductType $edition.ProductType -Build $edition.Build) {
+    Write-Warn 'Podman no longer supports Windows 10: it may work, but we do not guarantee it. The supported system is Windows 11.'
+    Write-JhtNotice windows10_unsupported
+  }
 }
 
 # ── Step 2: WSL check ─────────────────────────────────────────────────────

@@ -283,6 +283,13 @@ function RuntimeView({ host, platform, t, locale, runtime, activity, onRetry, on
             tabIndex={failed ? -1 : undefined}
           >{failed ? failureTitle : actionRequired ? activeLabel : t.preparing(activeLabel)}</h2>
           {failed && status}
+          {activity?.notices?.length ? (
+            // What install.ps1 said and the person should know (Windows 10): kept for the whole setup.
+            <div className="onboarding-runtime-notice" role="note">
+              <span className="onboarding-runtime-notice__mark" aria-hidden="true">!</span>
+              <div>{activity.notices.map((notice) => <p key={notice}>{notice}</p>)}</div>
+            </div>
+          ) : null}
           <OnboardingArtwork name={runtimeArtwork(runtime)} />
           <section className="onboarding-runtime-progress" aria-label={t.progressAria}>
             <div className="onboarding-runtime-progress__heading">
