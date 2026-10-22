@@ -283,3 +283,25 @@ describe("the rendezvous read before and after migration 099", () => {
     vi.useRealTimers();
   });
 });
+
+describe("the daemon applies the settings in both of its loops", () => {
+  // The box with a Supabase session runs the Realtime loop, the one without the
+  // polling loop: a lane present in only one of them never runs on the other
+  // kind of box. The settings first lived only in the polling loop.
+  const src = readFileSync(join(__dirname, "../../../cli/src/commands/cloud.js"), "utf8");
+  const realtime = src.slice(src.indexOf("async function runRealtimeLoop"));
+  const polling = src.slice(src.indexOf("const chatCycleState = { lastPulledRequestedAt: null };"), src.indexOf("async function runRealtimeLoop"));
+
+  it("the Realtime loop: on the team_state UPDATE and in the slow round", () => {
+    expect(realtime).toMatch(/const runSettings = coalescingGuardedLane\(haltGate, 'settings'[\s\S]*?reconcileSettings\(config, state\)/);
+    const update = realtime.slice(realtime.indexOf("rt.subscribe('team-state'"), realtime.indexOf("rt.subscribe('tickets'"));
+    expect(update).toMatch(/void runSettings\('realtime', payload\?\.new \?\? null\);/);
+    const fallback = realtime.slice(realtime.indexOf("const pollFallback"), realtime.indexOf("const realtimeStatus"));
+    expect(fallback).toMatch(/await runSettings\('fallback', state\);/);
+  });
+
+  it("the polling loop: with the row it already read", () => {
+    expect(polling).toMatch(/await reconcileSettings\(config, rendezvousState\);/);
+  });
+});
+
