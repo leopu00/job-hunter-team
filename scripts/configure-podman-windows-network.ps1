@@ -339,16 +339,27 @@ for port in "$agent" "$broker" "$telegram"; do
   done
 done
 failed=0
+# A target the proxy refuses (403): for http:// the proxy answers the request
+# itself, so curl's http_code is the proxy's 403. For https:// curl first asks
+# the proxy for a tunnel (CONNECT): the proxy refuses THAT with 403, curl never
+# reaches the target and prints http_code 000 with http_connect 403. So a
+# refusal over https is read from http_connect; anything else there (000: no
+# answer to the CONNECT, 200: the tunnel was opened) is a wrong answer.
 check() {
   name=$1 port=$2 url=$3 expected=$4
-  got=$(curl --silent --output /dev/null --max-time 30 --write-out '%{http_code}' --proxy "http://127.0.0.1:$port" "$url" 2>/dev/null)
+  out=$(curl --silent --output /dev/null --max-time 30 --write-out '%{http_code} %{http_connect}' --proxy "http://127.0.0.1:$port" "$url" 2>/dev/null)
   status=$?
+  got=${out%% *}
+  connect=${out#* }
+  [ "$connect" != "$out" ] || connect=""
   [ -n "$got" ] || got=000
+  [ -n "$connect" ] || connect=000
   if [ "$expected" = reachable ]; then
     if [ "$status" -eq 0 ]; then result=$got; else result="curl-$status"; failed=1; fi
   else
     result=$got
-    [ "$got" = "$expected" ] || failed=1
+    case "$expected $url" in "403 https://"*) result=$connect ;; esac
+    [ "$result" = "$expected" ] || failed=1
   fi
   echo "JHT_PROXY_CHECK $name $port $url $expected $result"
 }
