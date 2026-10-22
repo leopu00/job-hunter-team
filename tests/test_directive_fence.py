@@ -123,3 +123,29 @@ def test_without_the_fence_module_the_banner_shows_no_body(home: Path) -> None:
     banner = mb.banner()
     assert "stop scouting" not in banner
     assert "[IGNORED: user text fence unavailable]" in banner
+
+
+# The Unicode format characters a directive can carry (any text the website accepts that is not a
+# control character). Those that rewrite the reading (bidi overrides and isolates) or hide where a
+# line may break (zero-width space, word joiner, ZWNBSP) are removed; U+2028 and U+2029 break a line
+# like `\n` and become the visible mark; the letters of a script (ZWNJ, ZWJ: a Persian or Hindi word
+# without them is another word) and the direction marks (LRM, RLM) stay as the user wrote them.
+FORMAT_REMOVED = [0x202A, 0x202B, 0x202C, 0x202D, 0x202E, 0x2066, 0x2067, 0x2068, 0x2069, 0x200B, 0x2060, 0xFEFF]
+FORMAT_BREAKS = [0x2028, 0x2029]
+FORMAT_KEPT = [0x200C, 0x200D, 0x200E, 0x200F]
+
+
+@pytest.mark.parametrize("code", FORMAT_REMOVED + FORMAT_BREAKS + FORMAT_KEPT, ids=lambda code: f"U+{code:04X}")
+def test_a_format_character_in_a_directive_is_removed_marked_or_kept(home: Path, code: int) -> None:
+    char = chr(code)
+    _cloud_row(home, f"first{char}second")
+    out = _board(home, "list")
+    assert out.returncode == 0, out.stderr
+    line = next(l for l in out.stdout.splitlines() if l.lstrip().startswith("#1 "))
+    body = _one_fence(line)
+    if code in FORMAT_REMOVED:
+        assert body == "firstsecond" and char not in out.stdout
+    elif code in FORMAT_BREAKS:
+        assert body == "first ⏎ second" and char not in out.stdout
+    else:
+        assert body == f"first{char}second"
