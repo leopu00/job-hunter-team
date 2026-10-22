@@ -429,7 +429,15 @@ describe("il bottone", () => {
     expect(await button.submitApplyRequest(7, true, ok)).toEqual({ ok: true });
     expect(await button.submitApplyRequest(7, false, ok)).toEqual({ ok: true });
     expect(calls).toEqual([
-      ["/api/positions/7/apply-request", { method: "POST" }],
+      // The POST says the dialog's confirmation: the desktop's link to a VPS team writes only with it.
+      [
+        "/api/positions/7/apply-request",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ confirmed: true }),
+        },
+      ],
       ["/api/positions/7/apply-request", { method: "DELETE" }],
     ]);
     const refused = (async () =>

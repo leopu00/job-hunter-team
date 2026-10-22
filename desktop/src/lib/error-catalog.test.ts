@@ -60,6 +60,12 @@ const NOT_ERRORS: Record<string, string> = {
   dislike: "position judgement value",
   hide: "position judgement value",
   clear: "position judgement value",
+  star: "position judgement value",
+  more_like_this: "position judgement direction (feedback_record)",
+  less_like_this: "position judgement direction (feedback_record)",
+  // What the Writer is asked for in a write request: the closed kinds of write_request.py.
+  cv: "write request kind",
+  cover_letter: "write request kind",
   // The exclusions of the profile decided from the panel (agent_control.rs): the codes with an underscore that act on
   // the score, the field names of the judgements the proposals are made of, and a result word.
   salary_low: "exclusion code (shared/feedback-reasons.json)",

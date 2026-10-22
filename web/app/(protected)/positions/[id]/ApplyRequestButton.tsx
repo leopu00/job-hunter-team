@@ -39,7 +39,15 @@ export async function submitApplyRequest(
 > {
   const outcome = await sendPositionRequest(
     `/api/positions/${legacyId}/apply-request`,
-    { method: requested ? "POST" : "DELETE" },
+    // The click is the authorisation, given in the dialog: it says so. The web route reads the
+    // session; the desktop's link to a VPS team asks for this word before it writes there.
+    requested
+      ? {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ confirmed: true }),
+        }
+      : { method: "DELETE" },
     (body) => body.apply_requested === requested,
     fetchImpl,
   );
