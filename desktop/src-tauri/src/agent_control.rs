@@ -127,6 +127,8 @@ pub(crate) enum PauseExit {
 pub(crate) enum ControlRequest {
     List {},
     Team {},
+    /// The previous sessions of the agents (JHT-T43): a read with no argument, from the files the team already writes.
+    History {},
     Screen { session: String },
     Start { session: String, target: String, confirmed: bool },
     Stop { session: String, target: String, confirmed: bool },
@@ -172,6 +174,7 @@ impl ControlRequest {
         match self {
             Self::List {} => Some(vec!["list".into()]),
             Self::Team {} => Some(vec!["team".into()]),
+            Self::History {} => Some(vec!["history".into()]),
             Self::Screen { session } => with("screen", session),
             Self::Start { session, .. } => with("start", session),
             Self::Stop { session, .. } => with("stop", session),
@@ -308,6 +311,7 @@ pub(crate) fn read_input(request: &ControlRequest) -> Option<Vec<u8>> {
     let read = match request {
         ControlRequest::List {} => json!({"op": "list"}),
         ControlRequest::Team {} => json!({"op": "team"}),
+        ControlRequest::History {} => json!({"op": "history"}),
         ControlRequest::Exclusions {} => json!({"op": "exclusions"}),
         ControlRequest::Screen { session } => json!({"op": "screen", "name": session}),
         _ => return None,
@@ -407,6 +411,80 @@ pub(crate) fn shape_exclusions(reply: &Value) -> Option<Value> {
     Some(json!({"ok": true, "data": {"exclusions": exclusions, "feedback": feedback}}))
 }
 
+/// How a session ended, as the container's `history` read says it: the closed words the page has a sentence for.
+const HISTORY_REASONS: &[&str] = &["running", "restarted_by_user", "stopped_by_user", "contained", "retired", "started_again", "unknown"];
+const HISTORY_AGENTS: usize = 100;
+const HISTORY_SESSIONS: usize = 20;
+const HISTORY_FAILED: usize = 5;
+/// The roles that have a lane, and the hours a lane counts (the last day).
+const LANE_ROLES: &[&str] = &[
+    "capitano", "scout", "analista", "scorer", "scrittore", "critico", "sentinella", "assistente", "mentor", "closer", "dottore", "mantenitore",
+];
+const LANE_HOURS: usize = 24;
+const LANE_MAX_COUNT: u64 = 1_000_000;
+
+/// The moves per role and hour: a role of the closed list with exactly one count for each hour, or nothing.
+/// `null` stays `null`: a database nobody could read is not a quiet day.
+fn shape_lanes(value: Option<&Value>) -> Value {
+    let Some(lanes) = value.and_then(Value::as_object) else { return Value::Null };
+    let mut out = serde_json::Map::new();
+    for (role, hours) in lanes {
+        let Some(hours) = hours.as_array().filter(|hours| hours.len() == LANE_HOURS && LANE_ROLES.contains(&role.as_str())) else { continue };
+        let counts: Option<Vec<u64>> = hours.iter().map(|count| count.as_u64().filter(|count| *count <= LANE_MAX_COUNT)).collect();
+        if let Some(counts) = counts {
+            out.insert(role.clone(), json!(counts));
+        }
+    }
+    Value::Object(out)
+}
+
+/// A moment as seconds since the epoch, within what a clock can say.
+fn epoch_seconds(value: Option<&Value>) -> Option<i64> {
+    value.and_then(Value::as_i64).filter(|seconds| (0..=4_102_444_800).contains(seconds))
+}
+
+/// The previous sessions of the agents, reduced to closed fields: only agents' sessions, a start that is a
+/// moment, an end that is a moment or nothing, and a reason from the closed words (anything else is «unknown»,
+/// never the container's text).
+pub(crate) fn shape_history(reply: &Value) -> Option<Value> {
+    if reply.get("ok") != Some(&Value::Bool(true)) {
+        return None;
+    }
+    let data = reply.get("data")?.as_object()?;
+    let items: Vec<Value> = data
+        .get("items")?
+        .as_array()?
+        .iter()
+        .filter_map(|item| {
+            let name = item.get("name")?.as_str()?;
+            crate::existing_team_agents::agent_session(name)?;
+            let sessions: Vec<Value> = item
+                .get("sessions")?
+                .as_array()?
+                .iter()
+                .filter_map(|session| {
+                    let start = epoch_seconds(session.get("start"))?;
+                    let reason = word(session.get("reason"), HISTORY_REASONS);
+                    Some(json!({
+                        "start": start,
+                        "end": epoch_seconds(session.get("end")).filter(|end| *end >= start),
+                        "reason": if reason.is_null() { json!("unknown") } else { reason },
+                    }))
+                })
+                .take(HISTORY_SESSIONS)
+                .collect();
+            let failed: Vec<Value> = item
+                .get("failed")
+                .and_then(Value::as_array)
+                .map(|failed| failed.iter().filter_map(|at| epoch_seconds(Some(at))).take(HISTORY_FAILED).map(|at| json!(at)).collect())
+                .unwrap_or_default();
+            Some(json!({"name": name, "sessions": sessions, "failed": failed}))
+        })
+        .take(HISTORY_AGENTS)
+        .collect();
+    Some(json!({"ok": true, "data": {"items": items, "since": epoch_seconds(data.get("since")), "lanes": shape_lanes(data.get("lanes"))}}))
+}
+
 /// The team's own state, reduced to the closed fields the page shows.
 pub(crate) fn shape_team(reply: &Value) -> Option<Value> {
     if reply.get("ok") != Some(&Value::Bool(true)) {
@@ -482,6 +560,12 @@ pub(crate) fn answer(request: &ControlRequest, output: &ProcessResult, target: &
                 return failure(code_of(output.code));
             }
             reply.as_ref().and_then(shape_team).unwrap_or_else(|| failure("agents_unavailable"))
+        }
+        ControlRequest::History {} => {
+            if output.code != 0 {
+                return failure(code_of(output.code));
+            }
+            reply.as_ref().and_then(shape_history).unwrap_or_else(|| failure("agents_unavailable"))
         }
         ControlRequest::Exclusions {} => {
             if output.code != 0 {
@@ -625,6 +709,7 @@ mod tests {
             json!({"op":"stop","session":"SCOUT-1","target":"t"}),
             json!({"op":"send","session":"SCOUT-1","text":"hi"}),
             json!({"op":"list","command":"rm"}),
+            json!({"op":"history","session":"SCOUT-1"}),
             json!({"op":"pause","exit":{"kind":"hours","hours":4,"extra":1},"target":"t","confirmed":true}),
         ] {
             assert!(req(bad.clone()).is_none(), "{bad}");
@@ -632,6 +717,7 @@ mod tests {
         for (value, argv) in [
             (json!({"op":"list"}), vec!["list"]),
             (json!({"op":"team"}), vec!["team"]),
+            (json!({"op":"history"}), vec!["history"]),
             (json!({"op":"screen","session":"CRITICO-S3"}), vec!["screen", "CRITICO-S3"]),
             (json!({"op":"stop","session":"SCOUT-1","target":"t","confirmed":true}), vec!["stop", "SCOUT-1"]),
             (json!({"op":"restart","session":"CLOSER-1","target":"t","confirmed":true}), vec!["restart", "CLOSER-1"]),
@@ -730,6 +816,49 @@ mod tests {
         assert_eq!(shaped["data"]["agents"][0]["name"], "SCOUT-1");
         let local = answer(&list, &out, "abc", None);
         assert_eq!(local["data"]["where"], "local");
+    }
+
+    #[test]
+    fn the_history_read_is_closed_and_never_carries_the_containers_words() {
+        let history = req(json!({"op":"history"})).unwrap();
+        assert!(read_input(&history).is_some());
+        let day = |first: u64| {
+            let mut hours = vec![0u64; 24];
+            hours[0] = first;
+            hours
+        };
+        let reply = json!({"ok":true,"data":{"since":1790000000,"now":1790090000,
+            "lanes":{"scout":day(3),"hacker":day(1),"scorer":[1,2,3],"analista":day(2000000),"mentor":day(0)},
+            "items":[
+            {"name":"SCOUT-1","failed":[1790000500, "x", -1, 1790000600],"sessions":[
+                {"start":1790001000,"end":null,"reason":"running"},
+                {"start":1790000100,"end":1790000900,"reason":"restarted_by_user"},
+                {"start":1790000050,"end":1790000040,"reason":"made up; rm -rf /"},
+                {"start":"yesterday","end":null,"reason":"running"}]},
+            {"name":"rm -rf","sessions":[{"start":1,"end":null,"reason":"running"}],"failed":[]},
+            {"name":"HQ-MASTER","sessions":[],"failed":[]}]}});
+        let shaped = answer(&history, &ProcessResult { code: 0, stdout: reply.to_string().into_bytes() }, "t", None);
+        assert_eq!(shaped, json!({"ok":true,"data":{"since":1790000000,"lanes":{"scout":day(3),"mentor":day(0)},"items":[
+            {"name":"SCOUT-1","failed":[1790000500,1790000600],"sessions":[
+                {"start":1790001000,"end":null,"reason":"running"},
+                {"start":1790000100,"end":1790000900,"reason":"restarted_by_user"},
+                {"start":1790000050,"end":null,"reason":"unknown"}]}]}}));
+        // a database nobody could read stays «not known»: null lanes, never an empty object
+        let unread = json!({"ok":true,"data":{"since":null,"now":1,"lanes":null,"items":[]}});
+        let shaped = answer(&history, &ProcessResult { code: 0, stdout: unread.to_string().into_bytes() }, "t", None);
+        assert_eq!(shaped, json!({"ok":true,"data":{"since":null,"lanes":null,"items":[]}}));
+        // a failed run, an image that cannot answer, a reply that is not one: closed errors, never an empty history
+        assert_eq!(answer(&history, &ProcessResult { code: 2, stdout: vec![] }, "t", None), failure("agent_control_unsupported"));
+        assert_eq!(answer(&history, &ProcessResult { code: 0, stdout: b"nope".to_vec() }, "t", None), failure("agents_unavailable"));
+        let refused = ProcessResult { code: 0, stdout: br#"{"ok":false,"error":"agents_unavailable"}"#.to_vec() };
+        assert_eq!(answer(&history, &refused, "t", None), failure("agents_unavailable"));
+    }
+
+    #[test]
+    fn the_history_is_a_read_so_it_needs_no_confirmation_and_the_read_only_link_may_ask_it() {
+        let history = req(json!({"op":"history"})).unwrap();
+        assert_eq!(action_refusal(&history, Some(VpsMode::ReadOnly), "print"), None);
+        assert!(history.action().is_none());
     }
 
     #[test]

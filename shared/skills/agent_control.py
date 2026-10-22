@@ -10,13 +10,13 @@ The desktop app reaches this file in two ways, and only these:
         agent_control.py start|stop|restart SESSION
         agent_control.py pause (--for-hours N | --until ISO | --wake-on-weekly)
         agent_control.py resume
-        agent_control.py list | screen SESSION | team
+        agent_control.py list | screen SESSION | team | history
         agent_control.py exclusions | exclusion-accept CODE | exclusion-withdraw CODE
         agent_control.py answer QUESTION_ID OPTION_ID
 
   * without arguments, with one JSON request on stdin, for the reads only
     (`{"op":"list"}`, `{"op":"screen","name":...}`, `{"op":"team"}`,
-    `{"op":"exclusions"}`). This is
+    `{"op":"history"}`, `{"op":"exclusions"}`). This is
     the read-only view's channel: on stdin an action is refused, always.
 
 Nothing here takes free text: no keys and no message ever reach an agent's
@@ -661,6 +661,200 @@ def read_team() -> dict:
     }}
 
 
+# ── the previous sessions of each agent (JHT-T43) ──────────────────────────
+# Read from what the team already writes: the launcher's trace of every start (spawn-attempts.jsonl),
+# the roster's holds and retirements, and this panel's own journal of what the person did. Nothing new
+# is collected. A session starts at a start that completed; it ends at the first sign of an end between
+# it and the next start, and a reason nobody wrote is «unknown», never a guess.
+HISTORY_DAYS = 30
+HISTORY_PER_AGENT = 20
+HISTORY_FAILED_PER_AGENT = 5
+# 100 agents of at most ~1.4 KB each stay far under the app's limit for one reply (256 KiB).
+HISTORY_AGENTS = 100
+HISTORY_TAIL_BYTES = 1024 * 1024
+# The text a restart leaves in the journal is written after the new session is up: the start it explains
+# is the one that follows within this many seconds.
+RESTART_JOURNAL_SLACK_S = START_TIMEOUT_S + 30
+HISTORY_REASONS = ("running", "restarted_by_user", "stopped_by_user", "contained", "retired", "started_again", "unknown")
+
+
+def _epoch(value) -> int | None:
+    """Seconds since the epoch of an ISO stamp, or None for anything else."""
+    if not isinstance(value, str) or len(value) > 40:
+        return None
+    try:
+        when = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if when.tzinfo is None:
+        when = when.replace(tzinfo=timezone.utc)
+    seconds = int(when.timestamp())
+    return seconds if 0 <= seconds <= 4_102_444_800 else None
+
+
+def _jsonl_tail(path: Path, max_bytes: int) -> tuple[list[dict], bool]:
+    """The objects of the last lines of a JSON-lines file, and whether the file is longer than what was read."""
+    try:
+        with path.open("rb") as handle:
+            size = handle.seek(0, os.SEEK_END)
+            handle.seek(max(0, size - max_bytes))
+            raw = handle.read()
+    except OSError:
+        return [], False
+    cut = size > max_bytes
+    lines = raw.decode("utf-8", "replace").split("\n")
+    if cut:
+        lines = lines[1:]  # the first line is most likely a piece
+    out = []
+    for line in lines:
+        try:
+            value = json.loads(line)
+        except ValueError:
+            continue
+        if isinstance(value, dict):
+            out.append(value)
+    return out, cut
+
+
+def _history_spawns(now: int) -> tuple[dict, dict, int | None]:
+    """(starts, failed, since): the completed starts per session as (epoch, by the panel), the failed ones, and
+    the oldest moment the trace is known from (None when the trace holds everything it ever had)."""
+    rows, cut = _jsonl_tail(jht_home() / "logs" / "spawn-attempts.jsonl", HISTORY_TAIL_BYTES)
+    horizon = now - HISTORY_DAYS * 86400
+    starts: dict[str, list[tuple[int, bool]]] = {}
+    failed: dict[str, list[int]] = {}
+    oldest = None
+    for row in rows:
+        at, session = _epoch(row.get("timestamp")), row.get("session")
+        if at is None or not isinstance(session, str) or not NAME.match(session):
+            continue
+        oldest = at if oldest is None else min(oldest, at)
+        if at < horizon:
+            continue
+        rc, stage = row.get("rc"), row.get("stage")
+        if not isinstance(rc, int) or isinstance(rc, bool):
+            continue
+        if rc == 0 and stage == "complete":
+            starts.setdefault(session, []).append((at, row.get("source") == SPAWN_SRC))
+        elif rc != 0 and stage != "already_active":
+            failed.setdefault(session, []).append(at)
+    return starts, failed, (oldest if cut else None)
+
+
+def _history_journal() -> dict:
+    """What the person did from this panel, per session: [(epoch, op)] for the stops and restarts that worked."""
+    out: dict[str, list[tuple[int, str]]] = {}
+    base = jht_home() / "logs" / "agent-control.jsonl"
+    for path in (base.with_name(base.name + ".1"), base):
+        rows, _ = _jsonl_tail(path, JOURNAL_MAX_BYTES)
+        for row in rows:
+            at, session, op = _epoch(row.get("at")), row.get("session"), row.get("op")
+            if (at is None or row.get("ok") is not True or op not in ("stop", "restart")
+                    or not isinstance(session, str) or not NAME.match(session)):
+                continue
+            if row.get("result") in ("stopped", "restarted"):
+                out.setdefault(session, []).append((at, op))
+    return out
+
+
+def _history_marks(session: str, entry: dict) -> list[tuple[int, str]]:
+    """The ends the roster wrote for a session: [(epoch, reason)]."""
+    marks = []
+    for event in entry.get("containment_history") or []:
+        if isinstance(event, dict) and event.get("action") == "contained":
+            at = _epoch(event.get("at"))
+            if at is not None:
+                marks.append((at, "stopped_by_user" if event.get("by") == USER else "contained"))
+    retired = _epoch(entry.get("retired_at"))
+    if retired is not None:
+        marks.append((retired, "retired"))
+    return marks
+
+
+def history_sessions(starts, journal, marks, live: bool | None) -> list[dict]:
+    """The sessions of one agent, newest first. `starts` is [(epoch, by_panel)], `journal` [(epoch, op)],
+    `marks` [(epoch, reason)], `live` whether the session is up now (None: not known)."""
+    starts = sorted(starts)
+    out = []
+    for index, (begin, _by_panel) in enumerate(starts):
+        following = starts[index + 1] if index + 1 < len(starts) else None
+        limit = following[0] if following else None
+        within = lambda at: at >= begin and (limit is None or at < limit)  # noqa: E731
+        ends = sorted([(at, "stopped_by_user") for at, op in journal if op == "stop" and within(at)]
+                      + [(at, why) for at, why in marks if within(at)])
+        if ends:
+            end, reason = ends[0]
+        elif following and following[1] and any(op == "restart" and abs(at - following[0]) <= RESTART_JOURNAL_SLACK_S
+                                                for at, op in journal):
+            end, reason = following[0], "restarted_by_user"
+        elif following:
+            end, reason = following[0], "started_again"
+        elif live:
+            end, reason = None, "running"
+        else:
+            end, reason = None, "unknown"
+        out.append({"start": begin, "end": end, "reason": reason})
+    return out[::-1][:HISTORY_PER_AGENT]
+
+
+LANE_HOURS = 24
+LANE_ROLES = frozenset(SINGLETONS.values()) | frozenset(NUMBERED.values()) | {"dottore", "mantenitore"}
+_LANE_ROLE = re.compile(r"^[a-z]+")
+
+
+def history_lanes(now: int) -> dict | None:
+    """How many moves of positions each role made in each of the last 24 hours: {role: [24 counts]}, the
+    first count being the last hour. From the transitions every move of a position already leaves in jobs.db
+    (db_update.py is their only writer). None when the database cannot be read: «not known» is not zero."""
+    db = Path(os.environ.get("JHT_DB") or (jht_home() / "jobs.db"))
+    if not db.is_file():
+        return None
+    try:
+        conn = sqlite3.connect(f"{db.resolve().as_uri()}?mode=ro", uri=True, timeout=5)
+        try:
+            rows = conn.execute(
+                "SELECT lower(by_agent), (? - CAST(strftime('%s', ts) AS INTEGER)) / 3600, count(*) "
+                "FROM position_state_transitions WHERE ts >= datetime(?, 'unixepoch') "
+                "AND CAST(strftime('%s', ts) AS INTEGER) <= ? GROUP BY 1, 2",
+                (now, now - LANE_HOURS * 3600, now)).fetchall()
+        finally:
+            conn.close()
+    except sqlite3.Error:
+        return None
+    lanes: dict[str, list[int]] = {}
+    for actor, hour, count in rows:
+        found = _LANE_ROLE.match(actor or "")
+        role = found.group(0) if found else ""
+        if role not in LANE_ROLES or not isinstance(hour, int) or not 0 <= hour < LANE_HOURS:
+            continue
+        lanes.setdefault(role, [0] * LANE_HOURS)[hour] += int(count)
+    return lanes
+
+
+def read_history(now: int | None = None) -> dict:
+    """The previous sessions of every agent that has a trace, from the files the team already writes."""
+    now = int(now if now is not None else datetime.now(timezone.utc).timestamp())
+    starts, failed, since = _history_spawns(now)
+    journal = _history_journal()
+    live = _sessions()
+    try:
+        agents = roster().load().get("agents") or {}
+    except Exception:  # noqa: BLE001 - no roster is «no holds known»
+        agents = {}
+    items = []
+    for name in sorted(set(starts) | set(failed))[:HISTORY_AGENTS]:
+        try:
+            parse_session(name)
+        except Refusal:
+            continue
+        entry = agents.get(name) if isinstance(agents.get(name), dict) else {}
+        sessions = history_sessions(starts.get(name, []), journal.get(name, []), _history_marks(name, entry),
+                                    None if live is None else name in live)
+        items.append({"name": name, "sessions": sessions,
+                      "failed": sorted(failed.get(name, []))[::-1][:HISTORY_FAILED_PER_AGENT]})
+    return {"ok": True, "data": {"items": items, "since": since, "now": now, "lanes": history_lanes(now)}}
+
+
 # ── the exclusions of the profile (JHT-T24-b) ──────────────────────────────
 # The user's decision to exclude a kind of position, written straight in this team's jobs.db
 # when the team has no cloud to carry it. profile_exclusions.py stays the only writer of the table
@@ -757,7 +951,8 @@ def answer_question(question: str, choice: str) -> str:
 READS = {"exclusions": lambda req: read_exclusions(),
          "list": lambda req: read_list(),
          "screen": lambda req: read_screen(req.get("name")),
-         "team": lambda req: read_team()}
+         "team": lambda req: read_team(),
+         "history": lambda req: read_history()}
 
 
 def from_stdin() -> int:
@@ -789,7 +984,7 @@ def _parser() -> argparse.ArgumentParser:
     exit_condition.add_argument("--for-hours", type=int)
     exit_condition.add_argument("--until")
     exit_condition.add_argument("--wake-on-weekly", action="store_true")
-    for op in ("resume", "list", "team", "exclusions"):
+    for op in ("resume", "list", "team", "history", "exclusions"):
         sub.add_parser(op, add_help=False)
     for op in ("exclusion-accept", "exclusion-withdraw"):
         sub.add_parser(op, add_help=False).add_argument("code")
@@ -836,6 +1031,9 @@ def main(argv: list[str]) -> int:
             return 0
         if op == "team":
             _emit(read_team())
+            return 0
+        if op == "history":
+            _emit(read_history())
             return 0
         with _one_at_a_time():
             if op == "start":

@@ -3,7 +3,7 @@
 //   jht agent-control start|stop|restart <SESSION>
 //   jht agent-control pause --for-hours <n> | --until <iso> | --wake-on-weekly
 //   jht agent-control resume
-//   jht agent-control list | screen <SESSION> | team
+//   jht agent-control list | screen <SESSION> | team | history
 //   jht agent-control exclusions | exclusion-accept <CODE> | exclusion-withdraw <CODE>
 //   jht agent-control answer <QUESTION_ID> <OPTION_ID>
 //
