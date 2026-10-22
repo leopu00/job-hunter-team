@@ -3473,20 +3473,27 @@ export async function readRendezvousState(config, options = {}) {
   const withSettings = [...withChat, 'desired_settings', 'desired_settings_at'];
 
   if (reader) {
+    // A read cut by the budget says nothing about the columns: it is not taken
+    // for a refusal of the settings (that would drop them for an hour), and the
+    // narrower reads are not tried on a budget already spent.
+    let settingsRead = false;
     if (Date.now() >= settingsColumnsMissingUntil) {
       try {
         return await reader.readTeamState(withSettings, { signal });
       } catch {
-        settingsColumnsMissingUntil = Date.now() + SETTINGS_COLUMNS_RETRY_MS;
+        settingsRead = true;
+        if (!signal.aborted) settingsColumnsMissingUntil = Date.now() + SETTINGS_COLUMNS_RETRY_MS;
       }
     }
-    try {
-      return await reader.readTeamState(withChat, { signal });
-    } catch {
+    if (!(settingsRead && signal.aborted)) {
       try {
-        return await reader.readTeamState(legacy, { signal });
-      } catch (err) {
-        if (!silent) console.error(pc.yellow(`  rendezvous (direct) warn: ${err.message} — fallback Vercel`));
+        return await reader.readTeamState(withChat, { signal });
+      } catch {
+        try {
+          return await reader.readTeamState(legacy, { signal });
+        } catch (err) {
+          if (!silent) console.error(pc.yellow(`  rendezvous (direct) warn: ${err.message} — fallback Vercel`));
+        }
       }
     }
   }

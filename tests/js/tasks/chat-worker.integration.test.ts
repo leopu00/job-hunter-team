@@ -252,8 +252,40 @@ describe("handleChatSync — worker completo", () => {
     });
     expect(state).toBeNull();
     expect(Date.now() - started).toBeLessThan(500);
-    expect(reads).toBe(2);
+    // One read: the budget was spent on it, and the narrower reads are not
+    // tried on a signal already aborted.
+    expect(reads).toBe(1);
     expect(httpSignal?.aborted).toBe(true);
+  });
+
+  it("una lettura tagliata dal budget non spegne le impostazioni per un'ora", async () => {
+    const asked: string[][] = [];
+    const hanging = {
+      async readTeamState(columns: string[], options?: { signal?: AbortSignal }) {
+        asked.push(columns);
+        const signal = options?.signal;
+        await new Promise((_resolve, reject) => {
+          if (signal?.aborted) return reject(signal.reason);
+          signal?.addEventListener("abort", () => reject(signal.reason), { once: true });
+        });
+      },
+    };
+    const refused = async () => {
+      throw new Error("expected aborted signal");
+    };
+    await readRendezvousState(CONFIG, { reader: hanging, timeoutMs: 20, fetchFn: refused });
+    // the next round, with a database that answers: the settings are asked again
+    const next: string[][] = [];
+    const answering = {
+      async readTeamState(columns: string[]) {
+        next.push(columns);
+        return { user_id: "u" };
+      },
+    };
+    await readRendezvousState(CONFIG, { reader: answering, timeoutMs: 1000, fetchFn: refused });
+    expect(asked[0]).toContain("desired_settings");
+    expect(next).toHaveLength(1);
+    expect(next[0]).toContain("desired_settings");
   });
 
   it("non lascia che l'ACK della richiesta A chiuda una richiesta B arrivata durante il push", async () => {
