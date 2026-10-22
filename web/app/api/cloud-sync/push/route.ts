@@ -17,6 +17,7 @@ import {
 } from "@/lib/sync-vocabulary";
 import { invalidJsonBody } from "@/app/api/_lib/error-body";
 import { effectivePrecision } from "@/lib/city-coords";
+import { canonicalScamSignals } from "@/lib/scam-signals";
 import { sanitizedError } from "@/lib/error-response";
 import {
   summarizeOutOfRange,
@@ -196,6 +197,8 @@ interface PositionIn {
   // JHT-T04: how precisely the place is known. Only the closed set reaches the cloud's CHECK
   // (migration 095); anything else, from a client newer than this server, is derived below.
   location_precision?: string | null;
+  // JHT-T44: the scam signals (migration 096). Only the canonical form reaches the column.
+  scam_signals?: string | null;
   // Expiry/lifecycle (mig 038): is_open BOOLEAN (SQLite 0|1, default TRUE),
   // expires_at DATE, last_open_check TIMESTAMPTZ. Alimenta "Scadute/Archivio".
   expires_at?: string | null;
@@ -914,6 +917,11 @@ export async function POST(req: NextRequest) {
             location_precision: p.location_precision,
             remote_type: p.remote_type ?? null,
           }),
+          // JHT-T44: the scam signals (migration 096): codes and bucket, canonical or NULL. A client
+          // older than the field does not send it, and the cloud's value stays as it is.
+          ...(Object.prototype.hasOwnProperty.call(p, "scam_signals")
+            ? { scam_signals: canonicalScamSignals(p.scam_signals) }
+            : {}),
           // Expiry/lifecycle (mig 038). is_open default TRUE (NOT NULL DEFAULT TRUE).
           expires_at: p.expires_at ?? null,
           is_open:

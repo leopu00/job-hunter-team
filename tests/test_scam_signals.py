@@ -331,3 +331,23 @@ def test_the_codes_may_reach_the_agents_in_all_three_readers():
     assert "scam_signals" in block.split()
     api = (ROOT / "shared" / "queries" / "readonly-sqlite.js").read_text(encoding="utf-8")
     assert '"scam_signals",' in api
+
+
+# ── il valore che va nel cloud (migrazione 096) ──
+
+# Le stesse stringhe sono fissate in tests/js/tasks/scam-signals.test.ts contro il
+# canonicalizzatore del web e quello della CLI: tre copie, un solo valore.
+def test_the_stored_value_is_the_string_the_cloud_copies_pin():
+    every_code = ["same_text_many_places", "advance_payment", "company_unverifiable", "private_chat_only"]
+    pinned = {
+        '{"bucket":"badge","codes":["advance_payment"],"v":1}': ["advance_payment"],
+        '{"bucket":"section","codes":["advance_payment","private_chat_only"],"v":1}': [
+            "advance_payment", "private_chat_only"],
+        '{"bucket":"section","codes":["same_text_many_places","advance_payment",'
+        '"company_unverifiable","private_chat_only"],"v":1}': every_code,
+    }
+    for expected, codes in pinned.items():
+        assert ss.stored_value({"codes": codes, "bucket": ss.bucket_of(codes)}) == expected
+    # the longest value the skill can write fits the column's CHECK (a JSON object, 400 characters)
+    longest = ss.stored_value({"codes": every_code, "bucket": "section"})
+    assert len(longest) <= 400 and longest.startswith("{") and longest.endswith("}")

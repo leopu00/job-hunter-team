@@ -21,13 +21,15 @@ ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / "scripts/check-live-schema.py"
 MANIFEST = ROOT / "supabase/live-schema/078-084.v3.json"
 QUERY = ROOT / "supabase/live-schema/078-084.v3.sql"
-# v11 is the contract in force (JHT-T04: positions.location_precision); v10 and its 43 receipts stand next to it, untouched.
+# v12 is the contract in force (JHT-T44: positions.scam_signals); v11 and v10 and their 43 receipts stand next to it, untouched.
 WEB_MANIFEST_V10 = ROOT / "supabase/live-schema/078-094.web.v10.json"
 WEB_QUERY_V10 = ROOT / "supabase/live-schema/078-094.web.v10.sql"
 WEB_MANIFEST_V11 = ROOT / "supabase/live-schema/078-095.web.v11.json"
 WEB_QUERY_V11 = ROOT / "supabase/live-schema/078-095.web.v11.sql"
-WEB_MANIFEST = WEB_MANIFEST_V11
-WEB_QUERY = WEB_QUERY_V11
+WEB_MANIFEST_V12 = ROOT / "supabase/live-schema/078-096.web.v12.json"
+WEB_QUERY_V12 = ROOT / "supabase/live-schema/078-096.web.v12.sql"
+WEB_MANIFEST = WEB_MANIFEST_V12
+WEB_QUERY = WEB_QUERY_V12
 PREFLIGHT_QUERY = ROOT / "supabase/live-schema/081-preflight.v1.sql"
 SNAPSHOT_SHA256 = "78269292299f3fe4324a0e7553afc1095a4d8814605677146b82c41d34849346"
 POSTGRES_READY_MARKER = "database system is ready to accept connections"
@@ -49,6 +51,7 @@ MIGRATIONS = [
     ROOT / "supabase/migrations/088_positions_apply_requested.sql",
     ROOT / "supabase/migrations/094_feedback_reasons_closed.sql",
     ROOT / "supabase/migrations/095_positions_location_precision.sql",
+    ROOT / "supabase/migrations/096_positions_scam_signals.sql",
 ]
 # I test di ri-applicazione parlano della 084: nominarla per posizione la
 # faceva cambiare sotto ai piedi al primo numero nuovo.
@@ -79,7 +82,13 @@ LEGACY_ARTIFACT_SHA256 = {
     "supabase/live-schema/078-084.web.v4.sql": (
         "4c42e7770efb2cc1e8cdf4fba221c52012dbd7ecd610fb31909a5bb201cb8b58"
     ),
-    # v10 is next to v11 and its 43 receipts are not touched: a receipt is a verification at one moment.
+    # v11 and v10 are next to v12 and their 43 receipts are not touched: a receipt is a verification at one moment.
+    "supabase/live-schema/078-095.web.v11.json": (
+        "c222cc2f96d32eb4f696f3438083aedb8818538e0838829e9a3bda6b767b5551"
+    ),
+    "supabase/live-schema/078-095.web.v11.sql": (
+        "b97bf34dffa5142190fc6dc20c6e15819bb505a86ed0097211a42b83e93e496a"
+    ),
     "supabase/live-schema/078-094.web.v10.json": (
         "f302ae50a7fdba93ba0184f83e388d76215897820b4801e6f7fa1a03d51c169e"
     ),
@@ -469,9 +478,9 @@ def test_additive_web_contract_exactly_receipts_every_mapped_rpc_and_column():
     )
 
     assert contract.phase == "web"
-    assert contract.contract_id == "release-0.4.0-web-schema-078-095-location-precision"
+    assert contract.contract_id == "release-0.4.0-web-schema-078-096-scam-signals"
     assert len(contract.expected_checks) == 43
-    assert manifest["query"]["path"] == "supabase/live-schema/078-095.web.v11.sql"
+    assert manifest["query"]["path"] == "supabase/live-schema/078-096.web.v12.sql"
     assert "\\n" not in WEB_QUERY.read_text()
 
     mapped_receipts = {
@@ -493,7 +502,7 @@ def test_cli_validates_only_the_pinned_additive_web_contract(capsys):
     assert output.err == ""
     assert output.out == (
         "LIVE-SCHEMA MANIFEST OK "
-        "contract=release-0.4.0-web-schema-078-095-location-precision checks=43\n"
+        "contract=release-0.4.0-web-schema-078-096-scam-signals checks=43\n"
     )
 
 
@@ -994,16 +1003,50 @@ def test_v11_is_v10_plus_two_columns_of_positions_and_the_095_migration():
     assert v11["migrations"][-1]["sha256"] == sha
 
 
+def test_v12_is_v11_plus_one_column_of_positions_and_the_096_migration():
+    v11, v12 = json.loads(WEB_MANIFEST_V11.read_text()), json.loads(WEB_MANIFEST_V12.read_text())
+    assert [check.replace("096.", "097.", 1) for check in v11["expected_checks"]] == v12["expected_checks"], (
+        "the same 43 receipts, by name, numbered after the last migration"
+    )
+    assert v12["clone_contract"]["ordered_migrations"] == v11["clone_contract"]["ordered_migrations"] + [
+        "supabase/migrations/096_positions_scam_signals.sql"
+    ]
+    assert v12["migrations"][: len(v11["migrations"])] == v11["migrations"], "v11's migrations, unchanged"
+    assert [m["path"] for m in v12["migrations"][len(v11["migrations"]):]] == [
+        "supabase/migrations/096_positions_scam_signals.sql"
+    ]
+    added = sorted(set(_positions_columns(WEB_QUERY_V12.read_text())) - set(_positions_columns(WEB_QUERY_V11.read_text())))
+    assert added == ["scam_signals"]
+    assert set(_positions_columns(WEB_QUERY_V11.read_text())) <= set(_positions_columns(WEB_QUERY_V12.read_text()))
+    # nothing but that column list and the receipts' number differs in the query's body
+    import re as _re
+
+    body = lambda text: text[text.index("WITH expected_web_tables"):]
+    flat = lambda text, number: " ".join(
+        _re.sub(r"ARRAY\[[^\]]*\]::text\[\]\)", "ARRAY[])", body(text)).replace(f"'{number}.web.", "'N.web.").split()
+    )
+    assert flat(WEB_QUERY_V12.read_text(), "097") == flat(WEB_QUERY_V11.read_text(), "096")
+    # the manifest pins the query it ships with
+    import hashlib
+
+    assert v12["query"] == {
+        "path": "supabase/live-schema/078-096.web.v12.sql",
+        "sha256": hashlib.sha256(WEB_QUERY_V12.read_bytes()).hexdigest(),
+    }
+    sha = hashlib.sha256((ROOT / "supabase/migrations/096_positions_scam_signals.sql").read_bytes()).hexdigest()
+    assert v12["migrations"][-1]["sha256"] == sha
+
+
 def test_pg16_additive_web_contract_passes_and_detects_column_and_rpc_drift():
     contract = canary.load_web_contract()
-    # Il contratto web copre 078-095: il clone deve arrivare alla 095, che porta
-    # `positions.location_precision` (prima, la 094 porta la nota privata del
+    # Il contratto web copre 078-096: il clone deve arrivare alla 096, che porta
+    # `positions.scam_signals` (prima, la 095 porta `positions.location_precision`, la 094 porta la nota privata del
     # feedback e la tabella delle preferenze sull'esclusione del profilo, la 088 porta le tre colonne
     # dell'autorizzazione alla candidatura (la 087 porta
     # il motivo di rifiuto e `mark_position_outcome` a cinque argomenti, la 086
     # le due RPC dell'esito, la 085 `applications.updated_at`). Il contratto
     # catalog resta fermo alla 084.
-    with pg16_schema_clone(migrated=True, through_version=95) as psql:
+    with pg16_schema_clone(migrated=True, through_version=96) as psql:
         baseline = receipt_rows(psql(WEB_QUERY.read_text()).stdout)
         column_drift = receipt_rows(
             psql(
@@ -1022,10 +1065,10 @@ def test_pg16_additive_web_contract_passes_and_detects_column_and_rpc_drift():
     assert tuple(sorted(baseline)) == contract.expected_checks
     assert all(baseline.values())
     assert [check for check, ok in column_drift.items() if not ok] == [
-        "096.web.columns.positions"
+        "097.web.columns.positions"
     ]
     assert [check for check, ok in rpc_drift.items() if not ok] == [
-        "096.web.rpc.increment_landing_hits"
+        "097.web.rpc.increment_landing_hits"
     ]
 
 

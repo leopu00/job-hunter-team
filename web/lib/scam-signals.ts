@@ -53,6 +53,18 @@ export function parseScamSignals(raw: unknown): ScamSignals | null {
 }
 
 /**
+ * The value the cloud stores (migration 096): the skill's own compact, key-sorted JSON of the
+ * known codes and the recomputed bucket, or null. Nothing else ever reaches the column, so its
+ * CHECK cannot refuse a push.
+ */
+export function canonicalScamSignals(raw: unknown): string | null {
+  const parsed = parseScamSignals(raw);
+  return parsed
+    ? JSON.stringify({ bucket: parsed.bucket, codes: parsed.codes, v: 1 })
+    : null;
+}
+
+/**
  * The list's view of the «suspicious» section: "hide" leaves it out of the normal
  * list, "only" shows nothing else. Nothing is deleted or re-statused either way.
  */
