@@ -773,6 +773,7 @@ impl PrivateTempFile {
             .map(|d| d.as_nanos())
             .unwrap_or(0);
         let path = std::env::temp_dir().join(format!("jht-ssh-{kind}-{}-{nanos}.tmp", std::process::id()));
+        debug_assert!(PIPE_FREE_FILE_KINDS.contains(&kind));
         fs::OpenOptions::new()
             .write(true)
             .create_new(true)
@@ -810,6 +811,77 @@ impl PrivateTempFile {
 impl Drop for PrivateTempFile {
     fn drop(&mut self) {
         let _ = fs::remove_file(&self.path);
+    }
+}
+
+/// The streams a pipe-free call keeps in files: `jht-ssh-<kind>-<pid>-<nanos>.tmp`.
+const PIPE_FREE_FILE_KINDS: [&str; 3] = ["in", "out", "messages"];
+/// Well past the longest pipe-free call (the chat's send, 105 s): a file this old belongs to no call.
+#[cfg_attr(not(windows), allow(dead_code))]
+const PIPE_FREE_FILE_STALE_AFTER: Duration = Duration::from_secs(600);
+
+/// Whether `name` is exactly the name of a file of a pipe-free call.
+#[cfg_attr(not(windows), allow(dead_code))]
+fn is_pipe_free_file_name(name: &str) -> bool {
+    let Some(rest) = name.strip_prefix("jht-ssh-").and_then(|rest| rest.strip_suffix(".tmp")) else {
+        return false;
+    };
+    let parts: Vec<&str> = rest.split('-').collect();
+    let number = |part: &str| !part.is_empty() && part.len() <= 40 && part.bytes().all(|byte| byte.is_ascii_digit());
+    parts.len() == 3 && PIPE_FREE_FILE_KINDS.contains(&parts[0]) && number(parts[1]) && number(parts[2])
+}
+
+/// Removes, in `dir`, the files of pipe-free calls older than `stale_after`: what a crash of the app
+/// left in the middle of a call (the input of a chat command among them). Only regular files with
+/// exactly that name: never a link, a reparse point or a folder.
+#[cfg_attr(not(windows), allow(dead_code))]
+fn remove_stale_pipe_free_files_in(dir: &Path, stale_after: Duration, now: std::time::SystemTime) -> usize {
+    let Ok(entries) = fs::read_dir(dir) else {
+        return 0;
+    };
+    let mut removed = 0;
+    for entry in entries.flatten() {
+        if !entry.file_name().to_str().is_some_and(is_pipe_free_file_name) {
+            continue;
+        }
+        let path = entry.path();
+        let Ok(metadata) = fs::symlink_metadata(&path) else {
+            continue;
+        };
+        if !metadata.file_type().is_file() || is_reparse_point(&metadata) {
+            continue;
+        }
+        let old = metadata
+            .modified()
+            .ok()
+            .and_then(|modified| now.duration_since(modified).ok())
+            .is_some_and(|age| age > stale_after);
+        if old && fs::remove_file(&path).is_ok() {
+            removed += 1;
+        }
+    }
+    removed
+}
+
+#[cfg(windows)]
+fn is_reparse_point(metadata: &fs::Metadata) -> bool {
+    use std::os::windows::fs::MetadataExt;
+    const FILE_ATTRIBUTE_REPARSE_POINT: u32 = 0x400;
+    metadata.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT != 0
+}
+
+#[cfg(not(windows))]
+#[allow(dead_code)]
+fn is_reparse_point(_metadata: &fs::Metadata) -> bool {
+    false
+}
+
+/// At start, on Windows only (the one place the pipe-free calls run), in the user's own temporary
+/// folder: never in a /tmp shared with other users.
+pub(crate) fn remove_stale_pipe_free_files() {
+    #[cfg(windows)]
+    {
+        let _ = remove_stale_pipe_free_files_in(&std::env::temp_dir(), PIPE_FREE_FILE_STALE_AFTER, std::time::SystemTime::now());
     }
 }
 
@@ -1597,6 +1669,59 @@ mod tests {
         // everything else is the same ssh every other call uses
         let base: Vec<_> = ssh_base_args(&host).unwrap().iter().map(|value| value.to_string_lossy().into_owned()).collect();
         assert_eq!(&values[2..values.len() - 1], &base[..]);
+    }
+
+    /// What a crash left, and only that: old files with exactly the name of a pipe-free call go;
+    /// young ones, other names, links and folders stay.
+    #[test]
+    fn at_start_only_old_files_of_pipe_free_calls_are_removed() {
+        use std::time::{Duration, SystemTime};
+        let dir = std::env::temp_dir().join(format!("jht-stale-test-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        let now = SystemTime::now();
+        let aged = |name: &str, age: u64| {
+            let path = dir.join(name);
+            fs::write(&path, b"synthetic").unwrap();
+            fs::File::options().write(true).open(&path).unwrap().set_modified(now - Duration::from_secs(age)).unwrap();
+            path
+        };
+        let gone = [aged("jht-ssh-in-123-456.tmp", 3600), aged("jht-ssh-out-1-2.tmp", 601), aged("jht-ssh-messages-9-9.tmp", 86400)];
+        let kept = [
+            aged("jht-ssh-in-123-457.tmp", 30),
+            aged("jht-ssh-in-123-456.log", 3600),
+            aged("jht-ssh-other-1-2.tmp", 3600),
+            aged("jht-ssh-in-1-2-3.tmp", 3600),
+            aged("jht-ssh-in-x-2.tmp", 3600),
+            aged("jht-ssh-in--2.tmp", 3600),
+            aged("xjht-ssh-in-1-2.tmp", 3600),
+        ];
+        fs::create_dir(dir.join("jht-ssh-out-5-5.tmp")).unwrap();
+        #[cfg(unix)]
+        {
+            let outside = aged("outside-target", 3600);
+            std::os::unix::fs::symlink(&outside, dir.join("jht-ssh-in-7-7.tmp")).unwrap();
+        }
+        assert_eq!(super::remove_stale_pipe_free_files_in(&dir, Duration::from_secs(600), now), gone.len());
+        for path in gone {
+            assert!(!path.exists(), "{path:?}");
+        }
+        for path in kept {
+            assert!(path.exists(), "{path:?}");
+        }
+        assert!(dir.join("jht-ssh-out-5-5.tmp").is_dir());
+        // a link with the name, however old (the link itself, not what it points to): never removed
+        #[cfg(unix)]
+        {
+            let link = dir.join("jht-ssh-in-7-7.tmp");
+            super::remove_stale_pipe_free_files_in(&dir, Duration::ZERO, now + Duration::from_secs(86_400));
+            assert!(fs::symlink_metadata(&link).is_ok_and(|meta| meta.file_type().is_symlink()), "the link stays");
+            assert!(dir.join("outside-target").exists());
+        }
+        assert_eq!(super::PIPE_FREE_FILE_STALE_AFTER, Duration::from_secs(600));
+        // and the app runs it at start, off the start's path
+        assert!(include_str!("lib.rs").split("generate_handler").next().unwrap().contains("std::thread::spawn(runtime_host::remove_stale_pipe_free_files);"));
+        let _ = fs::remove_dir_all(&dir);
     }
 
     /// The files of this process's pipe-free ssh calls still on disk.
