@@ -26,6 +26,18 @@ export const dynamic = "force-dynamic";
 const DEFAULT_LOOKBACK_MS = 30 * 24 * 60 * 60 * 1000; // le direttive vivono a lungo
 const ALLOWED_STATUS = new Set(["active", "archived"]);
 const ALLOWED_KIND = new Set(["order", "strategy", "formation", "note"]);
+type DirectivesRead = {
+  data: unknown[] | null;
+  error: { code?: string | null; message?: string | null } | null;
+};
+
+/** The database says the column `origin` is not there: migration 101 is not applied yet. */
+function missingOriginColumn(error: DirectivesRead["error"]): boolean {
+  if (!error) return false;
+  if (error.code === "42703") return true;
+  const message = String(error.message ?? "").toLowerCase();
+  return message.includes("origin") && message.includes("column");
+}
 
 interface DirectivePushIn {
   // id locale SQLite — eco per la correlazione lato CLI (id_map sugli INSERT).
@@ -75,16 +87,31 @@ export async function GET(req: NextRequest) {
 
   // Tutti gli status (active + archived) cambiati dopo il cursor: così un edit o
   // un'archiviazione fatta dalla dashboard arriva al VPS. Cursor su updated_at.
-  const { data, error } = await admin
+  // origin: who wrote the current text. The column is born with cloud migration 101, which goes on the
+  // cloud AFTER this web is deployed: until then the select without it. A directive with no origin is
+  // taken by the box as written on the website, and told to the user (the safe side).
+  // The two selects are written out in full, so the schema coverage of the web reads their columns.
+  let pulled: DirectivesRead = await admin
     .from("team_directives")
     .select(
-      // origin: who wrote the current text (cloud migration 101, to be applied before this web).
       "id, body, kind, status, sort_order, created_by, origin, created_at, updated_at, archived_at",
     )
     .eq("user_id", userId)
     .gt("updated_at", since.toISOString())
     .order("updated_at", { ascending: true })
     .limit(limit + 1);
+  if (missingOriginColumn(pulled.error)) {
+    pulled = await admin
+      .from("team_directives")
+      .select(
+        "id, body, kind, status, sort_order, created_by, created_at, updated_at, archived_at",
+      )
+      .eq("user_id", userId)
+      .gt("updated_at", since.toISOString())
+      .order("updated_at", { ascending: true })
+      .limit(limit + 1);
+  }
+  const { data, error } = pulled;
 
   if (error) {
     return sanitizedError(error, {
@@ -94,7 +121,7 @@ export async function GET(req: NextRequest) {
     });
   }
 
-  const rows = data || [];
+  const rows = (data ?? []) as Array<{ updated_at: string }>;
   const hasMore = rows.length > limit;
   const directives = hasMore ? rows.slice(0, limit) : rows;
   const cursor =
