@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/workspace";
+import { isCloudDeploy } from "@/lib/deploy-mode";
 import { shouldRejectBrowserMutation, strictMutationRefusal } from "@/lib/csrf";
 
 /**
@@ -60,6 +61,7 @@ export const DATABASE_REFUSALS: Record<string, number> = {
   confirm_used: 409,
   confirm_session_mismatch: 409,
   confirm_action_mismatch: 409,
+  level_mismatch: 500,
   position_not_ready: 409,
   already_submitted: 409,
 };
@@ -70,6 +72,7 @@ const ENTRY_REFUSALS = {
   cross_site: 403,
   origin_required: 403,
   origin_not_allowed: 403,
+  origin_not_configured: 503,
   unsupported_media_type: 415,
   payload_too_large: 413,
   invalid_request: 400,
@@ -251,6 +254,7 @@ export async function requestAction(
       secFetchSite: req.headers.get("sec-fetch-site"),
       hostOrigin: hostOriginOf(req),
       contentType,
+      requirePublicOrigin: isCloudDeploy(),
     });
     if (refusal) return refuse(refusal);
   }
@@ -285,6 +289,8 @@ export async function requestAction(
       p_action: spec.action,
       p_params: body.params,
       p_confirm_id: body.confirmId,
+      // Il livello che la route dichiara: il database lo confronta col suo PRIMA di scrivere l'effetto.
+      p_route_level: spec.level,
     });
   } catch {
     return refuse("action_failed");

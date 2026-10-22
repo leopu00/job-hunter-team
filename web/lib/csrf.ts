@@ -136,10 +136,16 @@ export type StrictRefusal =
   | "cross_site"
   | "origin_required"
   | "origin_not_allowed"
+  | "origin_not_configured"
   | "unsupported_media_type";
 
 export interface StrictMutationCheck extends MutationCheck {
   contentType?: string | null;
+  /**
+   * Sul deploy cloud l'origin pubblico DEVE essere configurato: senza, l'origin "giusto" si
+   * ricaverebbe da `X-Forwarded-Host`, che chi parla direttamente al server può inventare.
+   */
+  requirePublicOrigin?: boolean;
 }
 
 export function strictMutationRefusal(
@@ -156,6 +162,9 @@ export function strictMutationRefusal(
   if (!origin || origin === "null") return "origin_required";
 
   const configured = publicOrigin();
+  if (configured === null && params.requirePublicOrigin) {
+    return "origin_not_configured";
+  }
   if (configured !== null) {
     if (origin !== configured) return "origin_not_allowed";
   } else {

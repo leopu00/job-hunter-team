@@ -240,6 +240,32 @@ describe("the entry: strict origin for the actions that command the team", () =>
     ).toBeNull();
   });
 
+  it("hands the database the route's own level, so it can refuse BEFORE writing anything", async () => {
+    world.answer = () => queued({ level: "L1" });
+    await requestAction(post({ params: {} }), {
+      action: "position.apply_revoke",
+      level: "L1",
+    });
+    await requestAction(post({ params: {} }), L2);
+    expect(world.rpcs.map((r) => r.args.p_route_level)).toEqual(["L1", "L2"]);
+  });
+
+  it("on the cloud deploy the public origin is mandatory: without it nothing is let in, even with the right Origin", async () => {
+    vi.stubEnv("NEXT_PUBLIC_JHT_DEPLOY", "cloud");
+    const res = await requestAction(post({ params: {} }), L2);
+    expect(res.status).toBe(503);
+    expect(await json(res)).toEqual({
+      ok: false,
+      error: "origin_not_configured",
+    });
+    expect(world.rpcs).toEqual([]);
+    vi.stubEnv("JHT_PUBLIC_ORIGIN", SITE);
+    expect((await requestAction(post({ params: {} }), L2)).status).toBe(200);
+    vi.stubEnv("NEXT_PUBLIC_JHT_DEPLOY", "local");
+    vi.stubEnv("JHT_PUBLIC_ORIGIN", "");
+    expect((await requestAction(post({ params: {} }), L2)).status).toBe(200);
+  });
+
   it("an L1 action keeps the site's lenient rule (the middleware's) but still wants a JSON POST", async () => {
     world.answer = () => queued({ level: "L1" });
     const noOrigin = await requestAction(
@@ -322,6 +348,7 @@ describe("the body", () => {
       p_action: "team.restart",
       p_params: {},
       p_confirm_id: null,
+      p_route_level: "L2",
     });
   });
 
@@ -374,6 +401,7 @@ describe("the user and the database", () => {
           p_action: "team.restart",
           p_params: { target: "scout-1", note: "hello" },
           p_confirm_id: null,
+          p_route_level: "L2",
         },
       },
     ]);
@@ -386,7 +414,12 @@ describe("the user and the database", () => {
     expect(world.rpcs).toEqual([
       {
         fn: "request_action",
-        args: { p_action: "team.restart", p_params: {}, p_confirm_id: ROW },
+        args: {
+          p_action: "team.restart",
+          p_params: {},
+          p_confirm_id: ROW,
+          p_route_level: "L2",
+        },
       },
     ]);
   });
@@ -477,7 +510,7 @@ describe("what the person is shown", () => {
     ).toBe(false);
   });
 
-  it("the contract's 13 codes are the ones the library knows", () => {
+  it("the contract's 14 codes are the ones the library knows", () => {
     expect(Object.keys(DATABASE_REFUSALS).sort()).toEqual(
       [
         "already_submitted",
@@ -487,6 +520,7 @@ describe("what the person is shown", () => {
         "confirm_session_mismatch",
         "confirm_used",
         "invalid_params",
+        "level_mismatch",
         "not_found",
         "position_not_ready",
         "rate_limited",
