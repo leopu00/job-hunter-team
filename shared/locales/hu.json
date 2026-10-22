@@ -241,5 +241,12 @@
   "question.answer_already": "Erre a kérdésre már van válasz: „%s”.",
   "question.answer_invalid": "Ez nem tartozik a lehetőségek közé, ezért nem mentettem el. Válaszolj a lehetőség számával (például 2), vagy írd: „%s 2”.",
   "burn_intent.warning": "🔥 A full gőz mód körülbelül %d perc múlva véget ér (%s-kor): utána a csapat visszatér a normál tempóra, és óránként kevesebb új pozíciót fogsz látni. A folytatáshoz kérd meg a Kapitányt, hogy hosszabbítsa meg, például „full gőz még 4 órára”.",
-  "burn_intent.expired": "⏱️ A full gőz mód %s-kor véget ért: a csapat visszatért a normál tempóra, ezért óránként kevesebb új pozícióra számíts. Az újraindításhoz szólj a Kapitánynak, például „full gőz 5 órára”."
+  "burn_intent.expired": "⏱️ A full gőz mód %s-kor véget ért: a csapat visszatért a normál tempóra, ezért óránként kevesebb új pozícióra számíts. Az újraindításhoz szólj a Kapitánynak, például „full gőz 5 órára”.",
+  "web_action_notice.apply_authorized_from_web": "A weboldalról engedélyeztek egy jelentkezést ({position}. állás). Ha nem te voltál, vond vissza az engedélyt az alkalmazásban.",
+  "web_action_notice.apply_revoked_from_web": "A weboldalról visszavontak egy jelentkezési engedélyt ({position}. állás). Ha nem te voltál, ellenőrizd, ki fér hozzá a fiókodhoz.",
+  "web_action_notice.apply_revoked_many_from_web": "Az elmúlt órában a weboldalról több jelentkezési engedélyt is visszavontak. Ha nem te voltál, ellenőrizd, ki fér hozzá a fiókodhoz.",
+  "web_action_notice.team_stopped_from_web": "A csapatot a weboldalról leállították. Ha nem te voltál, ellenőrizd, ki fér hozzá a fiókodhoz.",
+  "web_action_notice.team_started_from_web": "A csapatot a weboldalról indították el. Ha nem te voltál, ellenőrizd, ki fér hozzá a fiókodhoz.",
+  "web_action_notice.team_restarted_from_web": "A csapatot a weboldalról újraindították. Ha nem te voltál, ellenőrizd, ki fér hozzá a fiókodhoz.",
+  "web_action_notice.directive_changed_from_web": "A weboldalról hozzáadtak vagy módosítottak egy állandó csapatutasítást. Ha nem te voltál, nézd meg a táblát az alkalmazásban."
 }

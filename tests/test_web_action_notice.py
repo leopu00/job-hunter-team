@@ -34,15 +34,22 @@ def test_every_code_has_a_sentence_in_every_language_and_no_free_text():
         "team_restarted_from_web",
         "directive_changed_from_web",
     }
-    for code, texts in wan.TEXTS.items():
-        assert set(texts) == set(wan.LANGUAGES), code
-        for lang, text in texts.items():
+    locales = REPO / "shared" / "locales"
+    english = json.loads((locales / "en.json").read_text(encoding="utf-8"))
+    for lang in wan.LANGUAGES:
+        # every language has its own sentence in the shared catalog, not the English fallback
+        own = json.loads((locales / f"{lang}.json").read_text(encoding="utf-8"))
+        for code in wan.CODES:
+            text = own.get(f"web_action_notice.{code}")
+            assert isinstance(text, str) and text.strip(), (code, lang)
+            assert lang == "en" or text != english[f"web_action_notice.{code}"], (code, lang)
             # the only slot is the position's number, and only where there is a position
             assert text.count("{") == (1 if code in wan.POSITION_CODES else 0), (code, lang)
             assert "{position}" in text or code not in wan.POSITION_CODES
+            assert wan.text_for(code, lang) == text
     assert wan.body_for("apply_authorized_from_web", 42, "it").count("42") == 1
     # an unknown language falls back to English, not to an error
-    assert wan.body_for("team_stopped_from_web", None, "xx") == wan.TEXTS["team_stopped_from_web"]["en"]
+    assert wan.body_for("team_stopped_from_web", None, "xx") == english["web_action_notice.team_stopped_from_web"]
 
 
 @pytest.mark.parametrize(

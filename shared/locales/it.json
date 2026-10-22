@@ -240,5 +240,12 @@
   "question.answer_already": "Questa domanda ha già una risposta: «%s».",
   "question.answer_invalid": "Non è una delle opzioni, quindi non l’ho salvata. Rispondi con il numero di un’opzione (ad esempio 2) o scrivi «%s 2».",
   "burn_intent.warning": "🔥 La modalità a tutto gas finisce tra circa %d minuti (alle %s): poi il team torna al ritmo normale e vedrai meno posizioni nuove all'ora. Per continuare, di' al Capitano di rinnovarla, ad esempio «a tutto gas per altre 4 ore».",
-  "burn_intent.expired": "⏱️ La modalità a tutto gas è finita alle %s: il team è tornato al ritmo normale, quindi aspettati meno posizioni nuove all'ora. Per ripartire, dillo al Capitano, ad esempio «a tutto gas per 5 ore»."
+  "burn_intent.expired": "⏱️ La modalità a tutto gas è finita alle %s: il team è tornato al ritmo normale, quindi aspettati meno posizioni nuove all'ora. Per ripartire, dillo al Capitano, ad esempio «a tutto gas per 5 ore».",
+  "web_action_notice.apply_authorized_from_web": "Dal sito è stata autorizzata una candidatura (posizione {position}). Se non sei stato tu, ritira l'autorizzazione dall'app.",
+  "web_action_notice.apply_revoked_from_web": "Dal sito è stata ritirata l'autorizzazione a una candidatura (posizione {position}). Se non sei stato tu, controlla chi può entrare nel tuo account.",
+  "web_action_notice.apply_revoked_many_from_web": "Nell'ultima ora dal sito sono state ritirate diverse autorizzazioni a candidature. Se non sei stato tu, controlla chi può entrare nel tuo account.",
+  "web_action_notice.team_stopped_from_web": "La squadra è stata fermata dal sito. Se non sei stato tu, controlla chi può entrare nel tuo account.",
+  "web_action_notice.team_started_from_web": "La squadra è stata avviata dal sito. Se non sei stato tu, controlla chi può entrare nel tuo account.",
+  "web_action_notice.team_restarted_from_web": "La squadra è stata riavviata dal sito. Se non sei stato tu, controlla chi può entrare nel tuo account.",
+  "web_action_notice.directive_changed_from_web": "Dal sito è stato aggiunto o cambiato un ordine permanente della squadra. Se non sei stato tu, controlla la bacheca nell'app."
 }

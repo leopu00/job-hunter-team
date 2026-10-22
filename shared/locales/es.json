@@ -240,5 +240,12 @@
   "question.answer_already": "Esta pregunta ya tiene una respuesta: «%s».",
   "question.answer_invalid": "No es una de las opciones, así que no la he guardado. Responde con el número de una opción (por ejemplo 2) o escribe «%s 2».",
   "burn_intent.warning": "🔥 El modo a todo gas termina en unos %d minutos (a las %s): después el equipo vuelve a su ritmo normal y verás menos posiciones nuevas por hora. Para seguir, dile al Capitán que lo renueve, por ejemplo «a todo gas otras 4 horas».",
-  "burn_intent.expired": "⏱️ El modo a todo gas terminó a las %s: el equipo ha vuelto a su ritmo normal, así que espera menos posiciones nuevas por hora. Para empezar de nuevo, díselo al Capitán, por ejemplo «a todo gas durante 5 horas»."
+  "burn_intent.expired": "⏱️ El modo a todo gas terminó a las %s: el equipo ha vuelto a su ritmo normal, así que espera menos posiciones nuevas por hora. Para empezar de nuevo, díselo al Capitán, por ejemplo «a todo gas durante 5 horas».",
+  "web_action_notice.apply_authorized_from_web": "Desde el sitio se autorizó una candidatura (puesto {position}). Si no fuiste tú, retira la autorización en la app.",
+  "web_action_notice.apply_revoked_from_web": "Desde el sitio se retiró la autorización de una candidatura (puesto {position}). Si no fuiste tú, revisa quién puede entrar en tu cuenta.",
+  "web_action_notice.apply_revoked_many_from_web": "En la última hora se retiraron desde el sitio varias autorizaciones de candidaturas. Si no fuiste tú, revisa quién puede entrar en tu cuenta.",
+  "web_action_notice.team_stopped_from_web": "El equipo se detuvo desde el sitio. Si no fuiste tú, revisa quién puede entrar en tu cuenta.",
+  "web_action_notice.team_started_from_web": "El equipo se inició desde el sitio. Si no fuiste tú, revisa quién puede entrar en tu cuenta.",
+  "web_action_notice.team_restarted_from_web": "El equipo se reinició desde el sitio. Si no fuiste tú, revisa quién puede entrar en tu cuenta.",
+  "web_action_notice.directive_changed_from_web": "Desde el sitio se añadió o cambió una orden permanente del equipo. Si no fuiste tú, revisa el tablón en la app."
 }
