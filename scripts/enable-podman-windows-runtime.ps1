@@ -328,15 +328,25 @@ function Install-JhtStartupTask {
 }
 
 # Where Podman is: PATH as the system and the user have it NOW (a winget install
-# of an earlier run is not in this process's PATH), then winget's own folder.
+# of an earlier run is not in this process's PATH), then the folders of Podman's
+# MSI, which installs for this user (%LocalAppData%\Programs\Podman) or for the
+# computer (%ProgramFiles%\Podman) and writes the folder it chose under
+# HKCU or HKLM\SOFTWARE\Podman, InstallDir. A podman.exe in another Windows
+# user's profile is not readable from here, so it is never «found».
 function Find-Podman {
   Update-ProcessPath
   $found = Get-Application 'podman.exe'
-  if (-not $found) {
-    $candidate = Join-Path $LocalAppData 'Programs\Podman\podman.exe'
-    if (Test-Path -LiteralPath $candidate -PathType Leaf) { $found = $candidate }
+  if ($found) { return $found }
+  $candidates = @(Join-Path $LocalAppData 'Programs\Podman\podman.exe')
+  foreach ($key in 'HKCU:\SOFTWARE\Podman', 'HKLM:\SOFTWARE\Podman') {
+    $dir = (Get-ItemProperty -LiteralPath $key -Name 'InstallDir' -ErrorAction SilentlyContinue).InstallDir
+    if ($dir) { $candidates += Join-Path ([string]$dir) 'podman.exe' }
   }
-  return $found
+  if ($env:ProgramFiles) { $candidates += Join-Path $env:ProgramFiles 'Podman\podman.exe' }
+  foreach ($candidate in $candidates) {
+    if (Test-Path -LiteralPath $candidate -PathType Leaf -ErrorAction SilentlyContinue) { return $candidate }
+  }
+  return $null
 }
 
 function Get-PodmanVersion {
@@ -374,18 +384,35 @@ $WingetUpdateNotApplicable = -1978335189
 
 if ($InstallDependencies) {
   Write-JhtPhase podman_install
+  $otherUser = $false
   try {
     if ((Get-PodmanVersion (Find-Podman)) -ne $PodmanCliVersion) {
       if (-not (Get-Command winget -ErrorAction SilentlyContinue)) { throw 'winget is required to install Podman dependencies.' }
-      & winget install --exact --source winget --version $PodmanCliVersion --silent --disable-interactivity --accept-package-agreements --accept-source-agreements --id Podman.CLI
-      $wingetCode = $LASTEXITCODE
-      if ($wingetCode -ne 0 -and $wingetCode -ne $WingetUpdateNotApplicable) {
-        throw "winget install Podman.CLI $PodmanCliVersion exited with $wingetCode."
+      # «Already installed» while this user reaches no podman.exe: on a computer
+      # with two Windows users the package is registered for the computer and
+      # podman.exe sits in the other user's profile. Then once more, for this
+      # user (--force: winget would stop at «already installed» again); what
+      # the second pass leaves decides, never its exit code alone.
+      foreach ($forThisUser in $false, $true) {
+        $scope = if ($forThisUser) { @('--scope', 'user', '--force') } else { @() }
+        & winget install --exact --source winget --version $PodmanCliVersion --silent --disable-interactivity --accept-package-agreements --accept-source-agreements --id Podman.CLI @scope
+        $wingetCode = $LASTEXITCODE
+        if ($forThisUser) { $otherUser = -not (Find-Podman); break }
+        if ($wingetCode -ne 0 -and $wingetCode -ne $WingetUpdateNotApplicable) {
+          throw "winget install Podman.CLI $PodmanCliVersion exited with $wingetCode."
+        }
+        if ($wingetCode -ne $WingetUpdateNotApplicable -or (Find-Podman)) { break }
       }
     }
   } catch {
     [Console]::Error.WriteLine("podman_not_installable: $($_.Exception.Message)")
     exit 21
+  }
+  # Not a download that failed: the network is not the cause, and Try again
+  # alone changes nothing.
+  if ($otherUser) {
+    [Console]::Error.WriteLine("podman_other_user: winget reports Podman CLI as installed on this computer, but this Windows user reaches no podman.exe (it is in another user's profile), and installing it for this user did not succeed (winget exited with $wingetCode).")
+    exit 25
   }
   $installedVersion = Get-PodmanVersion (Find-Podman)
   if ($installedVersion -and $installedVersion -ne $PodmanCliVersion) {

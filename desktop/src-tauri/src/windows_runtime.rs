@@ -222,7 +222,10 @@ pub(crate) fn wsl_state(
 /// Compose not installable, 22 the Podman machine missing, not creatable or
 /// not starting, 23 the machine's egress proxies not ready (which one and
 /// what it answered is on stderr), 24 another version of Podman installed
-/// than the one JHT pins. Any other failure is the caller's generic code.
+/// than the one JHT pins, 25 Podman registered for the computer by winget
+/// while this Windows user reaches no podman.exe (it sits in another user's
+/// profile) and installing it for this user did not succeed. Any other
+/// failure is the caller's generic code.
 pub(crate) fn exit_failure(code: i32) -> Option<&'static str> {
     match code {
         20 => Some("wsl_not_ready"),
@@ -230,6 +233,7 @@ pub(crate) fn exit_failure(code: i32) -> Option<&'static str> {
         22 => Some("podman_start_failed"),
         23 => Some("podman_network_unready"),
         24 => Some("podman_version_mismatch"),
+        25 => Some("podman_other_user"),
         _ => None,
     }
 }
@@ -565,7 +569,8 @@ mod tests {
         assert_eq!(exit_failure(22), Some("podman_start_failed"));
         assert_eq!(exit_failure(23), Some("podman_network_unready"));
         assert_eq!(exit_failure(24), Some("podman_version_mismatch"));
-        for generic in [0, 1, 2, 19, 25, 78, -1] {
+        assert_eq!(exit_failure(25), Some("podman_other_user"));
+        for generic in [0, 1, 2, 19, 26, 78, -1] {
             assert_eq!(exit_failure(generic), None, "{generic}");
         }
     }
@@ -579,7 +584,9 @@ mod tests {
         // the network script's own code, and a Podman of another version: never «check your internet»
         assert_eq!(installer_outcome(Ok(23)), Err("podman_network_unready"));
         assert_eq!(installer_outcome(Ok(24)), Err("podman_version_mismatch"));
-        assert_eq!(installer_outcome(Ok(25)), Err("runtime_install_failed"));
+        // Podman in another Windows user's profile: its own code, never «check your internet»
+        assert_eq!(installer_outcome(Ok(25)), Err("podman_other_user"));
+        assert_eq!(installer_outcome(Ok(26)), Err("runtime_install_failed"));
         assert_eq!(installer_outcome(Ok(1)), Err("runtime_install_failed"));
         assert_eq!(installer_outcome(Err("process_timeout")), Err("timeout"));
         assert_eq!(installer_outcome(Err("process_start_failed")), Err("runtime_install_failed"));

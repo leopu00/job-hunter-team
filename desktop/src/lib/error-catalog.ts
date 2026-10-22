@@ -385,6 +385,14 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
     "This computer has another version of Podman than the one the team uses.",
     "Uninstall Podman from Windows’ apps, then press Try again: the app installs the right version.",
   ),
+  // Not a download that failed: the network is not the cause, and Try again
+  // alone changes nothing while the other user's Podman holds the registration.
+  podman_other_user: copy(
+    "Podman risulta installato su questo computer, ma per un altro utente di Windows: questo utente non lo raggiunge, e installarlo anche per lui non è riuscito.",
+    "Dall’account di Windows che ha installato Podman, disinstalla «Podman CLI» dalle app di Windows, poi torna su questo account e premi Riprova: l’app lo installa per te.",
+    "Podman is installed on this computer, but for another Windows user: this user cannot reach it, and installing it for this user too did not succeed.",
+    "From the Windows account that installed Podman, uninstall “Podman CLI” from Windows’ apps, then come back to this account and press Try again: the app installs it for you.",
+  ),
   homebrew_missing: copy(
     "Su questo Mac manca Homebrew: l’app lo usa per installare Podman.",
     "Scarica il pacchetto di installazione di Homebrew (il file .pkg) dalla pagina ufficiale brew.sh, aprilo e completa l’installazione di macOS, poi torna qui e premi Riprova.",

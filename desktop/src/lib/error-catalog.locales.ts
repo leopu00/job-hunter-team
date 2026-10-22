@@ -295,6 +295,13 @@ const COPY_BY_ENGLISH_TEXT: Readonly<Record<string, ErrorTranslations>> = {
     hu: ["A csapat hálózata a Podman-gépen belül nem állt készen.", "Próbáld újra. Ha ismét megtörténik, indítsd újra a számítógépet, és próbáld újra: az előkészítés naplója megmondja, melyik ellenőrzés nem sikerült."],
     pt: ["A rede da equipa dentro da máquina Podman não ficou pronta.", "Tenta novamente. Se voltar a acontecer, reinicia o computador e tenta novamente: o registo da preparação diz qual verificação não passou."],
   },
+  "Podman is installed on this computer, but for another Windows user: this user cannot reach it, and installing it for this user too did not succeed.": {
+    de: ["Podman ist auf diesem Computer installiert, aber für einen anderen Windows-Benutzer: Dieser Benutzer erreicht es nicht, und die Installation auch für ihn ist nicht gelungen.", "Deinstalliere „Podman CLI“ im Windows-Konto, das Podman installiert hat, über die Windows-Apps, kehre dann zu diesem Konto zurück und drücke auf Erneut versuchen: Die App installiert es für dich."],
+    es: ["Podman está instalado en este ordenador, pero para otro usuario de Windows: este usuario no lo encuentra, y no se ha podido instalar también para él.", "Desde la cuenta de Windows que instaló Podman, desinstala «Podman CLI» en las aplicaciones de Windows, luego vuelve a esta cuenta y pulsa Reintentar: la aplicación lo instala para ti."],
+    fr: ["Podman est installé sur cet ordinateur, mais pour un autre utilisateur de Windows : cet utilisateur ne le trouve pas, et l’installer aussi pour lui n’a pas réussi.", "Depuis le compte Windows qui a installé Podman, désinstalle « Podman CLI » dans les applications de Windows, puis reviens sur ce compte et appuie sur Réessayer : l’application l’installe pour toi."],
+    hu: ["A Podman telepítve van ezen a számítógépen, de egy másik Windows-felhasználónak: ez a felhasználó nem éri el, és neki sem sikerült telepíteni.", "Abból a Windows-fiókból, amelyik a Podmant telepítette, távolítsd el a „Podman CLI”-t a Windows alkalmazásai közül, majd térj vissza ebbe a fiókba, és nyomd meg az Újra gombot: az alkalmazás telepíti neked."],
+    pt: ["O Podman está instalado neste computador, mas para outro utilizador do Windows: este utilizador não o encontra, e instalá-lo também para ele não resultou.", "Na conta do Windows que instalou o Podman, desinstala o «Podman CLI» nas aplicações do Windows, depois volta a esta conta e carrega em Tentar novamente: a aplicação instala-o para ti."],
+  },
   "This computer has another version of Podman than the one the team uses.": {
     de: ["Auf diesem Computer ist eine andere Podman-Version installiert als die, die das Team verwendet.", "Deinstalliere Podman in den Windows-Apps und drücke dann auf Erneut versuchen: Die App installiert die richtige Version."],
     es: ["En este ordenador hay otra versión de Podman, distinta de la que usa el equipo.", "Desinstala Podman desde las aplicaciones de Windows y pulsa Reintentar: la aplicación instala la versión correcta."],
@@ -1299,6 +1306,7 @@ export const ERROR_CATALOG_LOCALES: Readonly<Record<string, ErrorTranslations>> 
   homebrew_missing: translated("Homebrew is missing on this Mac: the app uses it to install Podman."),
   podman_network_unready: translated("The team’s network inside the Podman machine did not get ready."),
   podman_version_mismatch: translated("This computer has another version of Podman than the one the team uses."),
+  podman_other_user: translated("Podman is installed on this computer, but for another Windows user: this user cannot reach it, and installing it for this user too did not succeed."),
   podman_start_failed: translated("The container engine did not start."),
   podman_other_machine_running: translated("Another Podman machine is already running: on a Mac only one can run at a time."),
   podman_other_machine_running_named: translated("The Podman machine “{machine}” is already running: on a Mac only one can run at a time."),

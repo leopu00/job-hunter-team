@@ -12,6 +12,12 @@ podman_network_unready, exit 23.
 On a Try again winget answered 0x8A15002B (already installed, no applicable update) because the
 process did not see Podman in its PATH yet, and that was podman_not_installable: Podman is now
 found first, the installed version decides, and another version is podman_version_mismatch, 24.
+
+On a computer with two Windows users winget said «already installed» for the second one while
+podman.exe sat only in the first one's profile: exit 21, podman_not_installable, and a text that
+pointed at the network. Podman is now also looked for where its MSI installs it (this user's
+Programs, the InstallDir it registers, Program Files); then winget runs once more for this user,
+and if that leaves no podman.exe it is its own code, podman_other_user, 25.
 """
 
 from __future__ import annotations
@@ -206,6 +212,30 @@ def test_a_try_again_finds_podman_before_winget_and_the_version_decides():
     assert "podman_version_mismatch:" in block and "exit 24" in block
 
 
+def test_already_installed_for_another_user_is_installed_for_this_one_or_its_own_code():
+    enabler = _code(ENABLER)
+    block = enabler[enabler.index("if ($InstallDependencies) {") :]
+    block = block[: block.index("$Podman = Find-Podman")]
+    find = enabler[enabler.index("function Find-Podman {") :]
+    find = find[: find.index("\n}\n")]
+    # the MSI's two folders and the folder it registers, after PATH
+    for where in ("'HKCU:\\SOFTWARE\\Podman', 'HKLM:\\SOFTWARE\\Podman'", "-Name 'InstallDir'",
+                  "Join-Path $env:ProgramFiles 'Podman\\podman.exe'"):
+        assert find.index("Get-Application 'podman.exe'") < find.index(where), where
+    # still one winget command (inside the consent guard), its second pass for this user only
+    assert block.count("& winget install") == 1
+    assert "$scope = if ($forThisUser) { @('--scope', 'user', '--force') } else { @() }" in block
+    assert block.index("if ($wingetCode -ne $WingetUpdateNotApplicable -or (Find-Podman)) { break }") > block.index("& winget install")
+    # what the second pass leaves decides; then its own code, after the try and before the version check
+    assert "if ($forThisUser) { $otherUser = -not (Find-Podman); break }" in block
+    other = block[block.index("if ($otherUser) {") :]
+    other = other[: other.index("}") + 1]
+    assert "podman_other_user:" in other and "exit 25" in other
+    assert block.index("} catch {") < block.index("if ($otherUser) {") < block.index("$installedVersion =")
+    # not a download that failed: no network in the line the app keeps
+    assert not re.search(r"(?i)internet|network|connection|download", other)
+
+
 # ── the same block, run by PowerShell with a fake winget and a fake podman ──
 
 PWSH = shutil.which("pwsh")
@@ -264,6 +294,89 @@ def test_the_install_block_with_a_fake_winget(tmp_path, installed, winget_code, 
     if expected_line:
         assert expected_line in done.stderr
     assert calls.exists() == (winget_code is not None)
+
+
+def _run_block(tmp_path, winget_body, extra=""):
+    script = tmp_path / "block.ps1"
+    script.write_text(
+        "$ErrorActionPreference = 'Stop'\n"
+        f"$LocalAppData = '{tmp_path}'\n$PodmanCliVersion = '6.0.2'\n$InstallDependencies = $true\n"
+        "function Write-JhtPhase { }\n" + extra + "function winget {\n" + winget_body + "}\n"
+        + _enabler_install_block() + "\nexit 0\n",
+        encoding="utf-8",
+    )
+    return subprocess.run([PWSH, "-NoProfile", "-NonInteractive", "-File", str(script)], capture_output=True,
+                          text=True, timeout=60, env={"PATH": "/usr/bin:/bin", "HOME": str(tmp_path)})
+
+
+ALREADY = 0x8A15002B - 2**32
+
+
+# winget says «already installed» on its first pass and podman.exe is nowhere for this user; the
+# second pass (for this user) installs it, or does not.
+@pytest.mark.skipif(PWSH is None or os.name == "nt", reason="needs PowerShell off Windows")
+@pytest.mark.parametrize(("second_installs", "second_code", "expected_exit"), [
+    (True, 0, 0),
+    (False, 0x8A150006 - 2**32, 25),
+    (False, 0, 25),  # winget says it worked and there is still no podman.exe: the files decide
+])
+def test_already_installed_for_another_user_with_a_fake_winget(tmp_path, second_installs, second_code,
+                                                               expected_exit):
+    calls = tmp_path / "winget-calls"
+    fake_podman = tmp_path / "Programs" / "Podman" / "podman.exe"
+    fake_podman.parent.mkdir(parents=True)
+    install = (f"    Set-Content -LiteralPath '{fake_podman}' -Value \"#!/bin/sh`necho 'podman version 6.0.2'\"\n"
+               f"    & chmod 755 '{fake_podman}'\n") if second_installs else ""
+    winget = (
+        f"  Add-Content -LiteralPath '{calls}' -Value ($args -join ' ')\n"
+        "  if ($args -contains '--scope') {\n" + install + f"    $global:LASTEXITCODE = {second_code}\n"
+        f"  }} else {{ $global:LASTEXITCODE = {ALREADY} }}\n"
+    )
+    done = _run_block(tmp_path, winget)
+    assert done.returncode == expected_exit, done.stdout + done.stderr
+    lines = calls.read_text().splitlines()
+    assert len(lines) == 2
+    assert "--scope" not in lines[0] and lines[1].endswith("--id Podman.CLI --scope user --force")
+    assert lines[1].startswith("install --exact --source winget --version 6.0.2 --silent")
+    if expected_exit == 25:
+        assert "podman_other_user: winget reports Podman CLI as installed on this computer" in done.stderr
+        assert f"(winget exited with {second_code})" in done.stderr
+        assert "podman_not_installable" not in done.stderr
+        assert not re.search(r"(?i)internet|network|connection", done.stderr)
+    else:
+        assert done.stderr == ""
+
+
+@pytest.mark.skipif(PWSH is None or os.name == "nt", reason="needs PowerShell off Windows")
+def test_already_installed_and_reachable_needs_no_second_pass(tmp_path):
+    # the Try again after a later failure: «already installed», and this user's podman.exe is there
+    calls = tmp_path / "winget-calls"
+    fake_podman = tmp_path / "Programs" / "Podman" / "podman.exe"
+    fake_podman.parent.mkdir(parents=True)
+    winget = (
+        f"  Add-Content -LiteralPath '{calls}' -Value ($args -join ' ')\n"
+        f"  Set-Content -LiteralPath '{fake_podman}' -Value \"#!/bin/sh`necho 'podman version 6.0.2'\"\n"
+        f"  & chmod 755 '{fake_podman}'\n"
+        f"  $global:LASTEXITCODE = {ALREADY}\n"
+    )
+    done = _run_block(tmp_path, winget)
+    assert done.returncode == 0, done.stdout + done.stderr
+    assert len(calls.read_text().splitlines()) == 1
+
+
+@pytest.mark.skipif(PWSH is None or os.name == "nt", reason="needs PowerShell off Windows")
+def test_podman_installed_for_the_computer_is_found_without_winget(tmp_path):
+    # the MSI's machine scope puts it in %ProgramFiles%\Podman, outside this user's PATH here
+    calls = tmp_path / "winget-calls"
+    program_files = tmp_path / "ProgramFiles"
+    fake_podman = program_files / "Podman" / "podman.exe"
+    fake_podman.parent.mkdir(parents=True)
+    fake_podman.write_text("#!/bin/sh\necho 'podman version 6.0.2'\n", encoding="utf-8")
+    fake_podman.chmod(0o755)
+    winget = f"  Add-Content -LiteralPath '{calls}' -Value ($args -join ' ')\n  $global:LASTEXITCODE = 0\n"
+    done = _run_block(tmp_path, winget, extra=f"$env:ProgramFiles = '{program_files}'\n")
+    assert done.returncode == 0, done.stdout + done.stderr
+    assert not calls.exists()
 
 
 # ── no «Welcome to WSL» window over the app ──
