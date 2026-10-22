@@ -110,6 +110,8 @@ HISTORY_TAIL = 131072
 DEDUP_TAIL = 1048576
 # The ids already delivered, next to the chat: one short line each.
 DELIVERED_FILE = "chat-delivered.jsonl"
+# The codes a system line of the chat may carry to the app; the app has a sentence for each.
+SYSTEM_CODES = frozenset({"mail_not_taken"})
 LOCK_FILE = ".chat-send.lock"
 MAX_LINE = 65536
 PAGE_ROWS = 120
@@ -208,7 +210,7 @@ def read(agent: str, cursor_text: str | None) -> dict:
                 mid = str(row.get("message_id") or hashlib.sha256((agent + ":" + str(start) + ":").encode() + raw).hexdigest())
                 shown = {"id": mid, "role": role, "text": text, "at": at}
                 code = row.get("code")
-                if role == "system" and isinstance(code, str) and re.fullmatch(r"[a-z_]{1,40}", code):
+                if role == "system" and isinstance(code, str) and code in SYSTEM_CODES:
                     shown["code"] = code        # a closed code the app may say in its own language
                 messages.append(shown)
             cursor = handle.tell()

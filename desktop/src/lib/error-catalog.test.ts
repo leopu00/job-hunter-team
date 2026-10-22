@@ -29,6 +29,11 @@ const RUST = fileURLToPath(new URL("../../src-tauri/src/", import.meta.url));
 const NOT_ERRORS: Record<string, string> = {
   // What ssh prints when the server turns an address away; read to pick ssh_rate_limited.
   kex_exchange_identification: "text of ssh stderr, not a code",
+  // The direct chat's system lines (direct_chat.rs): a closed code on a line of the conversation, said by the
+  // chat page from its own catalog (direct-chat.i18n.ts), and the name of the serde function that lets only
+  // that list through. Neither is an error the person is told.
+  mail_not_taken: "closed code of a system line of the chat, not an error",
+  closed_code: "name of a serde function in direct_chat.rs, not a code",
   // Candidate profile fields validated by profile import and migration.
   birth_year: "profile field",
   candidate_profile: "profile artifact id",

@@ -1,7 +1,7 @@
 import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import DirectChatScreen, { newLineAt } from "./DirectChatScreen";
+import DirectChatScreen, { newLineAt, systemLineText } from "./DirectChatScreen";
 import type {
   VoiceInputBridge,
   VoiceInputSnapshot,
@@ -324,6 +324,104 @@ describe("DirectChatScreen: where the text goes, and when it is delivered", () =
     await act(async () => deliver({ clientMessageId: "", accepted: true, messageId: "remote-9", at: 3 }));
     await waitFor(() => expect(within(screen.getByText("Ci sei?").closest("article")!).getByTestId("direct-chat-delivered")).toHaveTextContent("Consegnato"));
     expect(screen.queryByTestId("direct-chat-in-flight")).toBeNull();
+  });
+
+  it("a turn that waits in the agent's mailbox is «In coda», never «Consegnato»", async () => {
+    viewport(1280, 800);
+    const { mock } = client();
+    mock.send = vi.fn(async ({ clientMessageId }): Promise<DirectChatReceipt> => ({
+      clientMessageId,
+      accepted: true,
+      messageId: "remote-queued-1",
+      at: 3,
+      state: "queued",
+    }));
+    const user = userEvent.setup();
+    render(<DirectChatScreen client={mock} />);
+    await screen.findByText("Messaggio dalla VPS");
+    await user.type(screen.getByRole("textbox", { name: "Scrivi a Capitano" }), "Mi senti?{Enter}");
+    const mine = (await screen.findByText("Mi senti?")).closest("article")!;
+    await waitFor(() => expect(within(mine).getByTestId("direct-chat-queued")).toHaveTextContent("In coda"));
+    expect(within(mine).queryByTestId("direct-chat-delivered")).toBeNull();
+    expect(mine).not.toHaveTextContent("Consegnato");
+    expect(screen.queryByTestId("direct-chat-in-flight")).toBeNull();
+  });
+
+  it("a receipt that carries no state is the typed turn: «Consegnato», as before", async () => {
+    viewport(1280, 800);
+    const { mock } = client();
+    const user = userEvent.setup();
+    render(<DirectChatScreen client={mock} />);
+    await screen.findByText("Messaggio dalla VPS");
+    await user.type(screen.getByRole("textbox", { name: "Scrivi a Capitano" }), "Ci sei?{Enter}");
+    const mine = (await screen.findByText("Ci sei?")).closest("article")!;
+    await waitFor(() => expect(within(mine).getByTestId("direct-chat-delivered")).toHaveTextContent("Consegnato"));
+    expect(within(mine).queryByTestId("direct-chat-queued")).toBeNull();
+  });
+
+  it.each([
+    ["it", "L'agente non ha ancora preso il messaggio."],
+    ["en", "The agent has not taken your message yet."],
+    ["de", "Der Agent hat deine Nachricht noch nicht abgeholt."],
+    ["fr", "L'agent n'a pas encore pris ton message."],
+    ["es", "El agente aún no ha tomado tu mensaje."],
+    ["pt", "O agente ainda não apanhou a tua mensagem."],
+    ["hu", "Az ügynök még nem vette át az üzenetedet."],
+  ])("a system line with the code mail_not_taken is said in %s, not in the backend's English", async (locale, sentence) => {
+    viewport(1280, 800);
+    document.cookie = `NEXT_LOCALE=${locale}; path=/`;
+    const { mock } = client();
+    mock.read = vi.fn(async (): Promise<DirectChatPage> => ({
+      messages: [
+        { id: "u1", role: "user", text: "Ciao", at: 1 },
+        { id: "nt-u1", role: "system", text: "The agent has not taken your message yet.", at: 2, code: "mail_not_taken" },
+      ],
+    }));
+    render(<DirectChatScreen client={mock} />);
+    const line = (await screen.findByText(sentence)).closest("article")!;
+    expect(line).toHaveTextContent(sentence);
+    if (locale !== "en") expect(screen.queryByText("The agent has not taken your message yet.")).toBeNull();
+  });
+
+  it.each(["__proto__", "constructor", "toString", "hasOwnProperty", "valueOf"])(
+    "a system line whose code is the name of something every object has (%s) keeps its words and the chat stays alive",
+    async (code) => {
+      viewport(1280, 800);
+      const { mock } = client();
+      mock.read = vi.fn(async (): Promise<DirectChatPage> => ({
+        messages: [
+          { id: "s1", role: "system", text: "Words from the backend", at: 1, code },
+          { id: "a1", role: "agent", text: "Still here", at: 2 },
+        ],
+      }));
+      render(<DirectChatScreen client={mock} />);
+      expect(await screen.findByText("Words from the backend")).toBeInTheDocument();
+      expect(screen.getByText("Still here")).toBeInTheDocument();
+    },
+  );
+
+  it("systemLineText finds only the catalog's own entries", () => {
+    const codes = { mail_not_taken: "Frase" };
+    const line = (code?: string) => ({ id: "s", role: "system" as const, text: "Testo", at: 1, code });
+    expect(systemLineText(line("mail_not_taken"), codes)).toBe("Frase");
+    for (const code of ["__proto__", "constructor", "toString", "x"]) expect(systemLineText(line(code), codes)).toBe("Testo");
+    expect(systemLineText(line(undefined), codes)).toBe("Testo");
+    expect(systemLineText({ ...line("mail_not_taken"), role: "agent" }, codes)).toBe("Testo");
+  });
+
+  it("a system line with a code the app does not know, or a code on another role, keeps the words it came with", async () => {
+    viewport(1280, 800);
+    const { mock } = client();
+    mock.read = vi.fn(async (): Promise<DirectChatPage> => ({
+      messages: [
+        { id: "s1", role: "system", text: "Something the backend said", at: 1, code: "not_in_the_catalog" },
+        { id: "a1", role: "agent", text: "I am the agent", at: 2, code: "mail_not_taken" },
+      ],
+    }));
+    render(<DirectChatScreen client={mock} />);
+    expect(await screen.findByText("Something the backend said")).toBeInTheDocument();
+    expect(screen.getByText("I am the agent")).toBeInTheDocument();
+    expect(screen.queryByText("L'agente non ha ancora preso il messaggio.")).toBeNull();
   });
 
   it("an agent away from its prompt: nothing is said delivered, the words go back to the composer, and the sentence says why", async () => {

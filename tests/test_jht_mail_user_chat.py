@@ -376,3 +376,21 @@ def test_a_full_box_refuses_and_the_chat_can_ask_again_with_the_same_id(jht_home
     assert caught.value.code == "send_failed"
     mail.drain("assistente-1", now=T0)
     assert chat.send("assistente", "client-8", "hello")["state"] == "queued", "the id was not spent by the refusal"
+
+
+@pytest.mark.parametrize("code", ["__proto__", "constructor", "toString", "unknown_code", "mail_not_taken_x", 7, None, ["mail_not_taken"]])
+def test_a_system_line_in_the_file_passes_only_a_closed_code_to_the_app(jht_home, code):
+    """chat.jsonl is a file an agent can write: the app is told a code only from the closed list."""
+    path = jht_home / "agents" / "assistente" / "chat.jsonl"
+    path.parent.mkdir(parents=True)
+    path.write_text(json.dumps({"role": "system", "text": "words", "code": code, "ts": 1, "message_id": "s1"}) + "\n")
+    [shown] = chat.read("assistente", None)["messages"]
+    assert "code" not in shown and shown["text"] == "words"
+
+
+def test_the_closed_code_of_the_not_taken_line_still_reaches_the_app(jht_home):
+    path = jht_home / "agents" / "assistente" / "chat.jsonl"
+    path.parent.mkdir(parents=True)
+    path.write_text(json.dumps({"role": "system", "text": "words", "code": "mail_not_taken", "ts": 1, "message_id": "s1"}) + "\n")
+    assert chat.read("assistente", None)["messages"][0]["code"] == "mail_not_taken"
+    assert mail.NOT_TAKEN_CODE in chat.SYSTEM_CODES, "the code the mailbox writes is one the chat passes on"

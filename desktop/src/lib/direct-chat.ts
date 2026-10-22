@@ -8,6 +8,8 @@ export interface DirectChatMessage {
   role: "user" | "agent" | "system";
   text: string;
   at: number;
+  /** A closed code on a system line, e.g. `mail_not_taken`: the page says it in the person's language. */
+  code?: string;
 }
 export interface DirectChatPage { messages: DirectChatMessage[]; cursor?: string }
 export interface DirectChatReceipt {
@@ -15,6 +17,8 @@ export interface DirectChatReceipt {
   accepted: true;
   messageId: string;
   at: number;
+  /** `queued`: the turn is in the agent's mailbox and nobody has taken it yet. Absent: it was typed. */
+  state?: string;
 }
 export type DirectChatEvent =
   | { kind: "status"; status: DirectChatStatus }
