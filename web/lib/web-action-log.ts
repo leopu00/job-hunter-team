@@ -177,18 +177,10 @@ export type WebActionLogRead =
   | { ok: true; rows: WebActionRow[] }
   | { ok: false; reason: "not_active" | "signed_out" | "unavailable" };
 
-type Query = {
-  select(columns: string): {
-    order(column: string, options: { ascending: boolean }): {
-      limit(count: number): PromiseLike<{ data: unknown; error: { code?: string; message?: string } | null }>;
-    };
-  };
-};
-
 /**
  * Structural on purpose: the web's and the desktop's Supabase clients both fit
  * as they are (their generated query types are too deep to compare), and a test
- * passes a fake. What the read needs of it is the `Query` above.
+ * passes a fake.
  */
 export type WebActionLogClient = {
   from(table: string): any;
@@ -206,8 +198,11 @@ const NOT_SIGNED_IN = new Set(["42501", "PGRST301", "PGRST302"]);
  */
 export async function readWebActionLog(client: WebActionLogClient, limit = WEB_ACTION_LOG_LIMIT): Promise<WebActionLogRead> {
   try {
-    const { data, error } = await (client.from(WEB_ACTION_LOG_TABLE) as Query)
-      .select(WEB_ACTION_LOG_COLUMNS)
+    // The table and the columns are written out here, not taken from the constants: the schema coverage check
+    // reads this call as it stands. A test pins that they are the constants' own.
+    const { data, error } = await client
+      .from("web_action_log")
+      .select("id, action, level, params, summary, status, created_at, expires_at, confirmed_at, result")
       .order("created_at", { ascending: false })
       .limit(limit);
     if (error) {
