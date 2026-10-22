@@ -393,8 +393,14 @@ if ($InstallDependencies) {
       # podman.exe sits in the other user's profile. Then once more, for this
       # user (--force: winget would stop at «already installed» again); what
       # the second pass leaves decides, never its exit code alone.
+      # Not `--scope user`: the manifest's one installer is Podman's dual-scope
+      # MSI with no scope declared, so winget finds «no applicable installer»
+      # (-1978335216). The MSI itself is asked for this user, the Windows way for
+      # a dual-scope package (ALLUSERS=2 MSIINSTALLPERUSER=1, into
+      # %LocalAppData%\Programs\Podman); winget still checks the manifest's hash.
+      # --override replaces winget's own switches, so the quiet ones are here too.
       foreach ($forThisUser in $false, $true) {
-        $scope = if ($forThisUser) { @('--scope', 'user', '--force') } else { @() }
+        $scope = if ($forThisUser) { @('--force', '--override', '/qn /norestart ALLUSERS=2 MSIINSTALLPERUSER=1') } else { @() }
         & winget install --exact --source winget --version $PodmanCliVersion --silent --disable-interactivity --accept-package-agreements --accept-source-agreements --id Podman.CLI @scope
         $wingetCode = $LASTEXITCODE
         if ($forThisUser) { $otherUser = -not (Find-Podman); break }

@@ -317,7 +317,10 @@ def test_already_installed_for_another_user_is_installed_for_this_one_or_its_own
         assert find.index("Get-Application 'podman.exe'") < find.index(where), where
     # still one winget command (inside the consent guard), its second pass for this user only
     assert block.count("& winget install") == 1
-    assert "$scope = if ($forThisUser) { @('--scope', 'user', '--force') } else { @() }" in block
+    # the MSI asked for this user (its dual scope), never winget's --scope: the manifest declares none
+    assert ("$scope = if ($forThisUser) { @('--force', '--override', '/qn /norestart ALLUSERS=2 MSIINSTALLPERUSER=1') }"
+            " else { @() }") in block
+    assert "'--scope'" not in block
     assert block.index("if ($wingetCode -ne $WingetUpdateNotApplicable -or (Find-Podman)) { break }") > block.index("& winget install")
     # what the second pass leaves decides; then its own code, after the try and before the version check
     assert "if ($forThisUser) { $otherUser = -not (Find-Podman); break }" in block
@@ -421,14 +424,17 @@ def test_already_installed_for_another_user_with_a_fake_winget(tmp_path, second_
                f"    & chmod 755 '{fake_podman}'\n") if second_installs else ""
     winget = (
         f"  Add-Content -LiteralPath '{calls}' -Value ($args -join ' ')\n"
-        "  if ($args -contains '--scope') {\n" + install + f"    $global:LASTEXITCODE = {second_code}\n"
+        # winget sees «installed» (the other user's Uninstall entry is in HKLM): without --force it does nothing
+        "  if (($args -contains '--override') -and ($args -contains '--force')) {\n" + install + f"    $global:LASTEXITCODE = {second_code}\n"
         f"  }} else {{ $global:LASTEXITCODE = {ALREADY} }}\n"
     )
     done = _run_block(tmp_path, winget)
     assert done.returncode == expected_exit, done.stdout + done.stderr
     lines = calls.read_text().splitlines()
     assert len(lines) == 2
-    assert "--scope" not in lines[0] and lines[1].endswith("--id Podman.CLI --scope user --force")
+    assert "--override" not in lines[0]
+    assert lines[1].endswith("--id Podman.CLI --force --override /qn /norestart ALLUSERS=2 MSIINSTALLPERUSER=1")
+    assert "--scope" not in lines[0] + lines[1]
     assert lines[1].startswith("install --exact --source winget --version 6.0.2 --silent")
     if expected_exit == 25:
         assert "podman_other_user: winget reports Podman CLI as installed on this computer" in done.stderr
