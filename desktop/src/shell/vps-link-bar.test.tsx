@@ -44,6 +44,13 @@ describe("the header of an existing team's VPS", () => {
     expect(bar()).toHaveAttribute("role", "status");
     expect(bar()).toHaveTextContent(VPS_LINK_TEXT.it.connected);
     expect(screen.getByTestId("vps-link-contact")).toHaveTextContent("ultimo contatto");
+    // the technical identity is not on the bar until the person asks for it
+    const toggle = await screen.findByRole("button", { name: VPS_LINK_TEXT.it.details });
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByTestId("vps-link-identity")).toBeNull();
+    expect(bar().textContent).not.toContain("a0936de");
+    await user.click(toggle);
+    expect(toggle).toHaveAttribute("aria-expanded", "true");
     const identity = await screen.findByTestId("vps-link-identity");
     expect(identity).toHaveTextContent("a0936de");
     expect(identity).not.toHaveTextContent(REVISION);
@@ -51,10 +58,14 @@ describe("the header of an existing team's VPS", () => {
     await user.click(within(identity).getByRole("button", { name: VPS_LINK_TEXT.it.copyRevision }));
     await user.click(within(identity).getByRole("button", { name: VPS_LINK_TEXT.it.copyDigest }));
     expect(writeText.mock.calls).toEqual([[REVISION], [DIGEST]]);
+    // the copy buttons say what they do in words
+    expect(within(identity).getAllByText(VPS_LINK_TEXT.it.copy)).toHaveLength(2);
+    await user.click(toggle);
+    expect(screen.queryByTestId("vps-link-identity")).toBeNull();
     vi.unstubAllGlobals();
   });
 
-  it("network: after its five tries by itself, the catalog's sentence with its code, and «Riprova»", async () => {
+  it("network: after its five tries by itself, the catalog's sentence, «Riprova», and the code behind the details", async () => {
     vi.useFakeTimers();
     try {
       native.invoke.mockImplementation(async (command: string) =>
@@ -70,7 +81,11 @@ describe("the header of an existing team's VPS", () => {
       expect(bar()).toHaveAttribute("data-state", "network");
       expect(bar()).toHaveAttribute("role", "alert");
       const described = describeError("ssh_unavailable", { locale: "it" });
-      expect(screen.getByTestId("vps-link-sentence")).toHaveTextContent(`${described.text} ${described.action} (ssh_unavailable)`);
+      expect(screen.getByTestId("vps-link-sentence")).toHaveTextContent(`${described.text} ${described.action}`);
+      expect(screen.getByTestId("vps-link-sentence").textContent).not.toContain("ssh_unavailable");
+      expect(screen.queryByTestId("vps-link-code")).toBeNull();
+      await act(async () => { screen.getByRole("button", { name: VPS_LINK_TEXT.it.details }).click(); });
+      expect(screen.getByTestId("vps-link-code")).toHaveTextContent("ssh_unavailable");
       expect(within(bar()).getByRole("button", { name: VPS_LINK_TEXT.it.retry })).toBeInTheDocument();
     } finally {
       vi.useRealTimers();
@@ -80,7 +95,7 @@ describe("the header of an existing team's VPS", () => {
   it.each([
     ["application", "existing_team_identity_mismatch"],
     ["version", "existing_team_runtime_changed"],
-  ])("%s: the catalog's sentence with its code, and «Riprova»", async (kind, code) => {
+  ])("%s: the catalog's sentence without its code, and «Riprova»", async (kind, code) => {
     render(<VpsLinkBar />);
     report({ ok: true, data: {} });
     report({ ok: false, error: code, kind });
@@ -88,7 +103,8 @@ describe("the header of an existing team's VPS", () => {
     expect(described.known).toBe(true);
     expect(bar()).toHaveAttribute("role", "alert");
     expect(bar()).toHaveAttribute("data-state", kind);
-    expect(screen.getByTestId("vps-link-sentence")).toHaveTextContent(`${described.text} ${described.action} (${code})`);
+    expect(screen.getByTestId("vps-link-sentence")).toHaveTextContent(`${described.text} ${described.action}`);
+    expect(screen.getByTestId("vps-link-sentence").textContent).not.toContain(code);
     expect(within(bar()).getByRole("button", { name: VPS_LINK_TEXT.it.retry })).toBeInTheDocument();
   });
 

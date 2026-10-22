@@ -17,6 +17,12 @@ export type VpsLinkCopy = {
   copyDigest: string;
   retry: string;
   reviewKey: string;
+  /** The control that opens the pinned revision and image, and the error code. */
+  details: string;
+  /** Visible label of the copy buttons inside the details. */
+  copy: string;
+  /** Label of the error code inside the details. */
+  errorCode: string;
   /** On a control that changes the team, while the link is not confirmed. */
   actionsWait: string;
 };
@@ -36,6 +42,9 @@ const it: VpsLinkCopy = {
   copyDigest: "Copia il digest dell’immagine",
   retry: "Riprova",
   reviewKey: "Torna alla configurazione",
+  details: "Dettagli tecnici",
+  copy: "Copia",
+  errorCode: "codice",
   actionsWait: "Le azioni sulla squadra partono solo quando risulta collegata.",
 };
 
@@ -54,6 +63,9 @@ const en: VpsLinkCopy = {
   copyDigest: "Copy the image digest",
   retry: "Retry",
   reviewKey: "Back to the setup",
+  details: "Technical details",
+  copy: "Copy",
+  errorCode: "code",
   actionsWait: "Actions on the team run only while it is connected.",
 };
 
@@ -72,6 +84,9 @@ const de: VpsLinkCopy = {
   copyDigest: "Image-Digest kopieren",
   retry: "Erneut versuchen",
   reviewKey: "Zurück zur Einrichtung",
+  details: "Technische Details",
+  copy: "Kopieren",
+  errorCode: "Code",
   actionsWait: "Aktionen im Team laufen nur, solange es verbunden ist.",
 };
 
@@ -90,6 +105,9 @@ const es: VpsLinkCopy = {
   copyDigest: "Copiar el digest de la imagen",
   retry: "Reintentar",
   reviewKey: "Volver a la configuración",
+  details: "Detalles técnicos",
+  copy: "Copiar",
+  errorCode: "código",
   actionsWait: "Las acciones en el equipo solo se ejecutan mientras está conectado.",
 };
 
@@ -108,6 +126,9 @@ const fr: VpsLinkCopy = {
   copyDigest: "Copier le digest de l’image",
   retry: "Réessayer",
   reviewKey: "Retour à la configuration",
+  details: "Détails techniques",
+  copy: "Copier",
+  errorCode: "code",
   actionsWait: "Les actions sur l’équipe ne partent que lorsqu’elle est connectée.",
 };
 
@@ -126,6 +147,9 @@ const hu: VpsLinkCopy = {
   copyDigest: "Képkivonat másolása",
   retry: "Újra",
   reviewKey: "Vissza a beállításhoz",
+  details: "Műszaki részletek",
+  copy: "Másolás",
+  errorCode: "kód",
   actionsWait: "A csapatot érintő műveletek csak akkor indulnak, ha csatlakoztatva van.",
 };
 
@@ -144,6 +168,9 @@ const pt: VpsLinkCopy = {
   copyDigest: "Copiar o digest da imagem",
   retry: "Tentar novamente",
   reviewKey: "Voltar à configuração",
+  details: "Detalhes técnicos",
+  copy: "Copiar",
+  errorCode: "código",
   actionsWait: "As ações na equipa só são executadas enquanto estiver ligada.",
 };
 
