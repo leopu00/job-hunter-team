@@ -302,12 +302,12 @@ const COPY_BY_ENGLISH_TEXT: Readonly<Record<string, ErrorTranslations>> = {
     hu: ["A Podman telepítve van ezen a számítógépen, de egy másik Windows-felhasználónak: ez a felhasználó nem éri el, és neki sem sikerült telepíteni.", "Abból a Windows-fiókból, amelyik a Podmant telepítette, távolítsd el a „Podman CLI”-t a Windows alkalmazásai közül, majd térj vissza ebbe a fiókba, és nyomd meg az Újra gombot: az alkalmazás telepíti neked."],
     pt: ["O Podman está instalado neste computador, mas para outro utilizador do Windows: este utilizador não o encontra, e instalá-lo também para ele não resultou.", "Na conta do Windows que instalou o Podman, desinstala o «Podman CLI» nas aplicações do Windows, depois volta a esta conta e carrega em Tentar novamente: a aplicação instala-o para ti."],
   },
-  "This computer has another version of Podman than the one the team uses.": {
-    de: ["Auf diesem Computer ist eine andere Podman-Version installiert als die, die das Team verwendet.", "Deinstalliere Podman in den Windows-Apps und drücke dann auf Erneut versuchen: Die App installiert die richtige Version."],
-    es: ["En este ordenador hay otra versión de Podman, distinta de la que usa el equipo.", "Desinstala Podman desde las aplicaciones de Windows y pulsa Reintentar: la aplicación instala la versión correcta."],
-    fr: ["Cet ordinateur a une autre version de Podman que celle qu’utilise l’équipe.", "Désinstalle Podman depuis les applications de Windows, puis appuie sur Réessayer : l’application installe la bonne version."],
-    hu: ["Ezen a számítógépen a Podman egy másik verziója van, nem az, amelyet a csapat használ.", "Távolítsd el a Podmant a Windows alkalmazásai közül, majd nyomd meg az Újra gombot: az alkalmazás a megfelelő verziót telepíti."],
-    pt: ["Este computador tem outra versão do Podman, diferente da que a equipa usa.", "Desinstala o Podman nas aplicações do Windows e depois carrega em Tentar novamente: a aplicação instala a versão certa."],
+  "This computer has a Podman version the team does not run on: it needs Podman 6, from 6.0.2 on.": {
+    de: ["Auf diesem Computer ist eine Podman-Version installiert, mit der das Team nicht läuft: Es braucht Podman 6, ab 6.0.2.", "Deinstalliere Podman in den Windows-Apps und drücke dann auf Erneut versuchen: Die App installiert die richtige Version. Ein Podman 6 ab 6.0.2 passt so, wie er ist."],
+    es: ["En este ordenador hay una versión de Podman con la que el equipo no funciona: necesita Podman 6, a partir de la 6.0.2.", "Desinstala Podman desde las aplicaciones de Windows y pulsa Reintentar: la aplicación instala la versión correcta. Un Podman 6 a partir de la 6.0.2 sirve tal como está."],
+    fr: ["Cet ordinateur a une version de Podman avec laquelle l’équipe ne tourne pas : il faut Podman 6, à partir de la 6.0.2.", "Désinstalle Podman depuis les applications de Windows, puis appuie sur Réessayer : l’application installe la bonne version. Un Podman 6 à partir de la 6.0.2 convient tel quel."],
+    hu: ["Ezen a számítógépen olyan Podman-verzió van, amellyel a csapat nem fut: Podman 6 kell, a 6.0.2-től felfelé.", "Távolítsd el a Podmant a Windows alkalmazásai közül, majd nyomd meg az Újra gombot: az alkalmazás a megfelelő verziót telepíti. Egy 6.0.2-es vagy újabb Podman 6 így is jó."],
+    pt: ["Este computador tem uma versão do Podman com que a equipa não funciona: precisa do Podman 6, a partir da 6.0.2.", "Desinstala o Podman nas aplicações do Windows e depois carrega em Tentar novamente: a aplicação instala a versão certa. Um Podman 6 a partir da 6.0.2 serve tal como está."],
   },
   "Homebrew is missing on this Mac: the app uses it to install Podman.": {
     de: ["Auf diesem Mac fehlt Homebrew: Die App installiert Podman damit.", "Lade das Installationspaket von Homebrew (die .pkg-Datei) von der offiziellen Seite brew.sh herunter, öffne es und schließe die macOS-Installation ab. Komm dann hierher zurück und klicke auf Erneut versuchen."],
@@ -1321,7 +1321,7 @@ export const ERROR_CATALOG_LOCALES: Readonly<Record<string, ErrorTranslations>> 
   uninstall_failed: translated("Removing JHT from this computer did not succeed."),
   homebrew_missing: translated("Homebrew is missing on this Mac: the app uses it to install Podman."),
   podman_network_unready: translated("The team’s network inside the Podman machine did not get ready."),
-  podman_version_mismatch: translated("This computer has another version of Podman than the one the team uses."),
+  podman_version_mismatch: translated("This computer has a Podman version the team does not run on: it needs Podman 6, from 6.0.2 on."),
   podman_other_user: translated("Podman is installed on this computer, but for another Windows user: this user cannot reach it, and installing it for this user too did not succeed."),
   podman_start_failed: translated("The container engine did not start."),
   podman_other_machine_running: translated("Another Podman machine is already running: on a Mac only one can run at a time."),

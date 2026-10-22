@@ -380,10 +380,10 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
     "Try again. If it happens again, restart the computer and try again: the setup log says which check did not pass.",
   ),
   podman_version_mismatch: copy(
-    "Su questo computer c’è un’altra versione di Podman, diversa da quella che il team usa.",
-    "Disinstalla Podman dalle app di Windows, poi premi Riprova: l’app installa la versione giusta.",
-    "This computer has another version of Podman than the one the team uses.",
-    "Uninstall Podman from Windows’ apps, then press Try again: the app installs the right version.",
+    "Su questo computer c’è Podman di una versione su cui il team non gira: serve Podman 6, dalla 6.0.2 in su.",
+    "Disinstalla Podman dalle app di Windows, poi premi Riprova: l’app installa la versione giusta. Un Podman 6 dalla 6.0.2 in su va bene così com’è.",
+    "This computer has a Podman version the team does not run on: it needs Podman 6, from 6.0.2 on.",
+    "Uninstall Podman from Windows’ apps, then press Try again: the app installs the right version. A Podman 6 from 6.0.2 on is fine as it is.",
   ),
   // Not a download that failed: the network is not the cause, and Try again
   // alone changes nothing while the other user's Podman holds the registration.

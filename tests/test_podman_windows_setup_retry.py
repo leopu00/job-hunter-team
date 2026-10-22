@@ -302,7 +302,11 @@ def test_a_try_again_finds_podman_before_winget_and_the_version_decides():
     assert "$wingetCode -ne 0 -and $wingetCode -ne $WingetUpdateNotApplicable" in block
     # after winget the installed version decides: another one is its own code, never «not installable»
     assert block.index("& winget install") < block.index("$installedVersion = Get-PodmanVersion (Find-Podman)")
-    assert "podman_version_mismatch:" in block and "exit 24" in block
+    assert "Write-PodmanMismatch $installedVersion\n    exit 24" in block
+    # JHT-T56: another major is refused before winget runs, so the person's Podman is never changed
+    assert block.index("Write-PodmanMismatch $foundVersion\n    exit 24") < block.index("& winget install")
+    mismatch = enabler[enabler.index("function Write-PodmanMismatch {") :]
+    assert "podman_version_mismatch:" in mismatch[: mismatch.index("\n}\n")]
 
 
 def test_already_installed_for_another_user_is_installed_for_this_one_or_its_own_code():
@@ -354,7 +358,7 @@ def _enabler_install_block() -> str:
     ("6.0.2", None, 0, None),                                  # already there: winget is not even run
     (None, 0, 0, None),                                        # first install
     ("6.0.2-late", 0x8A15002B - 2**32, 0, None),               # a Try again: already installed, the right one
-    ("5.4.0", 0x8A15002B - 2**32, 24, "podman_version_mismatch: Podman 5.4.0"),
+    ("5.4.0", None, 24, "podman_version_mismatch: Podman 5.4.0"),  # another major: left alone, winget not run
     (None, 0x8A150006 - 2**32, 21, "podman_not_installable: winget install Podman.CLI 6.0.2 exited with"),
 ])
 def test_the_install_block_with_a_fake_winget(tmp_path, installed, winget_code, expected_exit, expected_line):
@@ -389,6 +393,43 @@ def test_the_install_block_with_a_fake_winget(tmp_path, installed, winget_code, 
     if expected_line:
         assert expected_line in done.stderr
     assert calls.exists() == (winget_code is not None)
+
+
+# JHT-T56: the pin is what the app installs; a newer 6 is used with a warning, an older 6 is brought
+# to the pin, another major is podman_version_mismatch without touching it.
+@pytest.mark.skipif(PWSH is None or os.name == "nt", reason="needs PowerShell off Windows")
+@pytest.mark.parametrize(("before", "after", "expected_exit", "expected_line", "winget_runs"), [
+    ("6.0.2", None, 0, None, False),
+    ("6.1.4", None, 0, "JHT_WARNING podman_version_newer: Podman 6.1.4 is installed on this computer;", False),
+    ("6.1.0-rc1", None, 0, "JHT_WARNING podman_version_newer: Podman 6.1.0-rc1", False),
+    ("6.0.1", "6.0.2", 0, None, True),
+    ("6.0.0", "6.0.0", 24, "podman_version_mismatch: Podman 6.0.0", True),   # winget could not bring it to the pin
+    ("5.4.0", None, 24, "podman_version_mismatch: Podman 5.4.0 is installed on this computer, and JHT runs on Podman 6, from 6.0.2 on", False),
+    ("7.0.0", None, 24, "podman_version_mismatch: Podman 7.0.0", False),
+    ("6.x", None, 24, "podman_version_mismatch: Podman 6.x", False),       # a version it cannot read
+])
+def test_a_podman_of_another_version(tmp_path, before, after, expected_exit, expected_line, winget_runs):
+    calls = tmp_path / "winget-calls"
+    fake_podman = tmp_path / "Programs" / "Podman" / "podman.exe"
+    fake_podman.parent.mkdir(parents=True)
+    fake_podman.write_text(f"#!/bin/sh\necho 'podman version {before}'\n", encoding="utf-8")
+    fake_podman.chmod(0o755)
+    winget = f"  Add-Content -LiteralPath '{calls}' -Value ($args -join ' ')\n"
+    if after:
+        winget += (f"  Set-Content -LiteralPath '{fake_podman}' -Value \"#!/bin/sh`necho 'podman version {after}'\"\n"
+                   f"  & chmod 755 '{fake_podman}'\n")
+    winget += "  $global:LASTEXITCODE = 0\n"
+    done = _run_block(tmp_path, winget)
+    assert done.returncode == expected_exit, done.stdout + done.stderr
+    if expected_line:
+        assert expected_line in (done.stderr if expected_exit else done.stdout)
+    if expected_exit == 0 and before != "6.0.2" and after is None:
+        assert "podman_version_mismatch" not in done.stderr
+    if before == "6.0.2" or after == "6.0.2":
+        assert "JHT_WARNING" not in done.stdout
+    assert calls.exists() == winget_runs
+    if winget_runs:
+        assert calls.read_text().startswith("install --exact --source winget --version 6.0.2 --silent")
 
 
 def _run_block(tmp_path, winget_body, extra=""):
