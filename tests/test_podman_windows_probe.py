@@ -151,7 +151,7 @@ def test_probe_closes_the_atomic_config_rename_and_signal_regressions():
     assert 'stat -c %u /jht_home/jht.config.json' in source
     assert 'test ! -e /jht_home/.jht.config.tmp' in source
     assert "Assert-FileContains -Path (Join-Path $probeJhtHome 'jht.config.json')" in source
-    assert 'kill -TERM "$p"' in source
+    assert 'kill -TERM $p; wait $p' in source
     assert "/sys/module/apparmor/parameters/enabled" in source
 
 

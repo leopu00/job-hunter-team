@@ -305,7 +305,7 @@ def test_units_then_restart_when_systemd_asks_for_a_reload_then_start_then_readi
     install = code.index("$unitInstall +")
     enable = code.index("systemctl enable --no-reload $runtimeServices", install)
     need = code.index("systemctl show -p NeedDaemonReload --value", enable)
-    restart_flag = code.index("then units_changed=1; fi; done", need)
+    restart_flag = code.index("in yes) units_changed=1;; esac; done", need)
     restart = code.index("echo JHT_MACHINE_RESTART", restart_flag)
     start = code.index("systemctl start $runtimeServices", restart)
     machine_restart = code.index("'machine' 'stop' $MachineName", start)
