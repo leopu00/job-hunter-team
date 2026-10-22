@@ -2394,6 +2394,15 @@ export function resolveRequest(local, cloud, flagCol, atCol, extraCols = []) {
 }
 
 /**
+ * W7: how long a withdrawal from the website of an authorisation the box never
+ * received is still told. Inside it, given and withdrawn between two syncs is
+ * told; past it, a database recreated from scratch is not told old ones again.
+ */
+const REVOKE_NOTICE_WINDOW_MS = 24 * 3600 * 1000;
+/** W7: withdrawals told one by one in an hour; past it, one summary for the hour. */
+const REVOKE_NOTICES_PER_HOUR = 3;
+
+/**
  * [JHT-CLOSER] L'autorizzazione alla candidatura: `resolveRequest` con l'autore.
  *
  * L'autore che il cloud dichiara non si crede: il canale lo sa il box. Desktop e
@@ -2761,6 +2770,17 @@ async function handlePullDesiredState(options = {}) {
     `);
     // SELECT lo stato locale corrente: serve sia per il "missing" sia per la
     // sync NARROW dell'esclusione utente (sotto).
+    // W7: the withdrawals told in the last hour. A session in the wrong hands can
+    // withdraw position after position, and each one would be a message on the
+    // user's phone: past REVOKE_NOTICES_PER_HOUR there is one summary instead.
+    let revokesTold = 0;
+    try {
+      revokesTold = Number(db.prepare(
+        "SELECT count(*) AS n FROM pending_user_messages WHERE source_action = 'web_action_notice' " +
+          "AND source_id LIKE 'web-action:apply_revoked_from_web:%' AND created_at >= datetime('now', '-1 hour')",
+      ).get()?.n ?? 0);
+    } catch { /* no table yet: nothing told */ }
+    let revokesHeld = 0;
     const checkStmt = db.prepare(
       'SELECT status, user_excluded_at, user_excluded_prev_status, ' +
         'write_requested, write_requested_at, write_request_kind, geocode_requested, geocode_requested_at, ' +
@@ -2840,10 +2860,21 @@ async function handlePullDesiredState(options = {}) {
         if (apFlag === 1 && apBy === 'user_web' && at && (local.apply_requested_at ?? null) !== apAt) {
           webNotices.push({ code: 'apply_authorized_from_web', key: `apply:${legacyId}:${at}`, positionId: legacyId });
         }
-        // A withdrawal that arrives from the website takes an authorisation the
-        // box had: told too, since it cancels what the user may be waiting for.
-        if (apFlag === 0 && (local.apply_requested ?? 0) === 1 && at && (local.apply_requested_at ?? null) !== apAt) {
-          webNotices.push({ code: 'apply_revoked_from_web', key: `revoke:${legacyId}:${at}`, positionId: legacyId });
+        // A withdrawal that arrives from the website is told too: it cancels
+        // what the user may be waiting for. Also when the box never saw the
+        // authorisation (given and withdrawn between two syncs: the cloud row
+        // shows only the withdrawal, and a withdrawal has an instant only if an
+        // authorisation came before it), then only while it is recent, so a
+        // database recreated from scratch is not told the old ones again.
+        const hadIt = (local.apply_requested ?? 0) === 1;
+        const recent = Number(at) >= Date.now() - REVOKE_NOTICE_WINDOW_MS;
+        if (apFlag === 0 && at && (local.apply_requested_at ?? null) !== apAt && (hadIt || recent)) {
+          if (revokesTold < REVOKE_NOTICES_PER_HOUR) {
+            revokesTold++;
+            webNotices.push({ code: 'apply_revoked_from_web', key: `revoke:${legacyId}:${at}`, positionId: legacyId });
+          } else {
+            revokesHeld++;
+          }
         }
       }
 
@@ -2873,6 +2904,11 @@ async function handlePullDesiredState(options = {}) {
         transStmt.run(legacyId, 'excluded', restore, null);
         excludeChanges++;
       }
+    }
+    if (revokesHeld > 0) {
+      // One summary an hour, whatever the number: the key is the hour.
+      const hour = Math.floor(Date.now() / 3600_000);
+      webNotices.push({ code: 'apply_revoked_many_from_web', key: `revoke-many:${hour}` });
     }
     db.close();
   } catch (err) {
