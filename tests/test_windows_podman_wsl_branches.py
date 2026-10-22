@@ -121,6 +121,9 @@ if (-not $block) { throw 'machine block missing' }
 $Podman = $env:FAKE_PODMAN
 $MachineName = 'jht-podman'
 $InitializeMachine = ($env:INITIALIZE -eq '1')
+# The real one writes HKCU's Lxss key, which off Windows does not exist: here it
+# only says, in the same log as the podman calls, when the block asks for it.
+function Skip-WslWelcome { Add-Content -LiteralPath $env:FAKE_LOG -Value $env:WELCOME }
 . ([scriptblock]::Create($block.Extent.Text))
 """
 
@@ -132,6 +135,7 @@ PODMAN_CASES = """  "machine list --format json") printf '%s' "$FAKE_MACHINES"; 
 INIT = "machine init --update-connection=false --provider wsl --cpus 2 --memory 3072 --disk-size 30 jht-podman"
 START = "machine start --update-connection=false jht-podman"
 INFO = "--connection jht-podman info"
+WELCOME = "Skip-WslWelcome"
 
 
 def _machines(*entries: tuple[str, bool]) -> str:
@@ -149,6 +153,7 @@ def _enabler(tmp_path, *, machines: str, initialize: bool = True, fail: str = ""
             "FAKE_MACHINES": machines,
             "INITIALIZE": "1" if initialize else "0",
             "FAKE_FAIL": fail,
+            "WELCOME": WELCOME,
         },
     )
 
@@ -156,7 +161,7 @@ def _enabler(tmp_path, *, machines: str, initialize: bool = True, fail: str = ""
 def test_an_absent_machine_is_created_in_wsl_then_started_then_checked(tmp_path):
     result, calls = _enabler(tmp_path, machines=_machines())
     assert result.returncode == 0, result.stderr
-    assert calls == ["machine list --format json", INIT, START, INFO]
+    assert calls == ["machine list --format json", WELCOME, INIT, START, INFO]
     assert _phases(result.stdout) == ["podman_machine_init", "podman_machine_start"]
 
 
@@ -171,7 +176,7 @@ def test_install_preserves_an_existing_machine_and_default_connection(tmp_path):
     default.write_text("user-podman", encoding="utf-8")
     result, calls = _enabler(tmp_path, machines=_machines(("user-podman", True)))
     assert result.returncode == 0, result.stderr
-    assert calls == ["machine list --format json", INIT, START, INFO]
+    assert calls == ["machine list --format json", WELCOME, INIT, START, INFO]
     assert default.read_text(encoding="utf-8") == "user-podman"
     assert not any("system connection" in call for call in calls)
     assert not any("machine rm" in call for call in calls)
@@ -311,7 +316,7 @@ def test_the_private_compose_provider_is_installed_only_with_the_pinned_digest(
     ("machines", "initialize", "fail", "expected_calls"),
     [
         (_machines(), False, "", ["machine list --format json"]),
-        (_machines(), True, "init", ["machine list --format json", INIT]),
+        (_machines(), True, "init", ["machine list --format json", WELCOME, INIT]),
         (_machines(("jht-podman", False)), True, "start", ["machine list --format json", START]),
         (_machines(("jht-podman", True)), True, "info", ["machine list --format json", INFO]),
         ("not json", True, "", ["machine list --format json"]),
