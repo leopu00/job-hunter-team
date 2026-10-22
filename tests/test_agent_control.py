@@ -608,11 +608,29 @@ def test_the_read_gives_the_judgements_the_proposals_are_made_of_and_never_the_u
 
 def test_a_code_outside_the_vocabulary_or_without_evidence_is_refused_with_its_own_code(tmp_path, monkeypatch, capsys):
     _exclusion_db(tmp_path, monkeypatch)
-    for bad in ("COMPANY", "company;x", "x" * 40, "", "too_senior", "nonexistent"):
+    for bad in ("COMPANY", "company;x", "x" * 40, "", "other", "nonexistent"):
         code, reply = _run_tool(capsys, "exclusion-accept", bad)
         assert code == 100 and reply["error"] == "agent_control_invalid", bad
-    code, reply = _run_tool(capsys, "exclusion-accept", "wrong_stack")
-    assert (code, reply["error"]) == (115, "exclusion_no_evidence")
+    for no_evidence in ("wrong_stack", "too_senior", "too_junior"):
+        code, reply = _run_tool(capsys, "exclusion-accept", no_evidence)
+        assert (code, reply["error"]) == (115, "exclusion_no_evidence"), no_evidence
+
+
+def test_the_panel_accepts_the_seniority_exclusions_when_the_levels_are_there(tmp_path, monkeypatch, capsys):
+    import sqlite3
+
+    path = _exclusion_db(tmp_path, monkeypatch)
+    conn = sqlite3.connect(path)
+    conn.execute("UPDATE position_feedback SET reason = 'too_senior'")
+    conn.execute("UPDATE positions SET seniority_level = 'senior'")
+    conn.commit()
+    conn.close()
+    code, reply = _run_tool(capsys, "exclusion-accept", "too_senior")
+    assert (code, reply["ok"], reply["result"], reply["code"]) == (0, True, "excluded", "too_senior")
+    code, reply = _run_tool(capsys, "exclusions")
+    assert [(row["code"], row["status"]) for row in reply["exclusions"]] == [("too_senior", "active")]
+    code, reply = _run_tool(capsys, "exclusion-withdraw", "too_senior")
+    assert (code, reply["result"]) == (0, "exclusion_withdrawn")
 
 
 def test_an_agent_cannot_use_the_panel_to_decide_for_the_user(tmp_path, monkeypatch, capsys):
