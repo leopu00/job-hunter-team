@@ -1365,6 +1365,11 @@
           "099.web.columns.team_state"
         ]
       },
+      "team_state.emergency_stop_requested_at": {
+        "receipts": [
+          "099.web.columns.team_state"
+        ]
+      },
       "team_state.is_running": {
         "receipts": [
           "099.web.columns.team_state"
@@ -1381,6 +1386,16 @@
         ]
       },
       "team_state.last_heartbeat_at": {
+        "receipts": [
+          "099.web.columns.team_state"
+        ]
+      },
+      "team_state.last_user_activity_at": {
+        "receipts": [
+          "099.web.columns.team_state"
+        ]
+      },
+      "team_state.should_run": {
         "receipts": [
           "099.web.columns.team_state"
         ]

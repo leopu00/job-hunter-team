@@ -39,6 +39,25 @@ export interface ActionSpec {
   action: string;
   /** Il livello che la route dichiara; se il database ne risponde uno più alto, non passa niente. */
   level: ActionLevel;
+  /**
+   * TEMPORARY, only for the emergency stop: what to do when the database has no door yet (the web is
+   * deployed before migration 098 is applied). Called ONLY when the call fails because the function
+   * does not exist (PostgREST PGRST202, PostgreSQL 42883), never on any other error. To be removed once
+   * 098 is applied and verified on the cloud.
+   */
+  whenDoorMissing?: (ctx: {
+    supabase: Awaited<ReturnType<typeof createClient>>;
+    userId: string;
+  }) => Promise<NextResponse>;
+}
+
+/** The call failed because request_action does not exist in the database (not applied yet). */
+export function isMissingDoor(error: unknown): boolean {
+  const code =
+    error && typeof error === "object"
+      ? (error as Record<string, unknown>).code
+      : undefined;
+  return code === "PGRST202" || code === "42883";
 }
 
 const LEVEL_RANK: Record<ActionLevel, number> = { L1: 1, L2: 2, L3: 3 };
@@ -154,7 +173,7 @@ export function parseBody(text: string): ParsedBody | null {
 }
 
 interface Success {
-  state: "awaiting_confirm" | "queued";
+  state: "awaiting_confirm" | "queued" | "done";
   id: string;
   level: ActionLevel;
   summary: string;
@@ -167,8 +186,14 @@ function readSuccess(data: unknown, confirming: boolean): Success | null {
   if (data === null || typeof data !== "object") return null;
   const d = data as Record<string, unknown>;
   if (d.ok !== true) return null;
-  if (d.state !== "awaiting_confirm" && d.state !== "queued") return null;
-  if (confirming && d.state !== "queued") return null; // la seconda chiamata non può chiedere un'altra conferma
+  // "done": an effect the database finished at once (a setting written), with no command to follow.
+  if (
+    d.state !== "awaiting_confirm" &&
+    d.state !== "queued" &&
+    d.state !== "done"
+  )
+    return null;
+  if (confirming && d.state === "awaiting_confirm") return null; // la seconda chiamata non può chiedere un'altra conferma
   if (typeof d.id !== "string" || !UUID.test(d.id)) return null;
   if (d.level !== "L1" && d.level !== "L2" && d.level !== "L3") return null;
   const summary = typeof d.summary === "string" ? d.summary : "";
@@ -280,7 +305,11 @@ export async function requestAction(
   } catch {
     return refuse("action_failed");
   }
-  if (result.error) return refuse("action_failed"); // mai il testo dell'errore del database
+  if (result.error) {
+    if (spec.whenDoorMissing && isMissingDoor(result.error))
+      return spec.whenDoorMissing({ supabase, userId: user.id });
+    return refuse("action_failed"); // mai il testo dell'errore del database
+  }
 
   const data = result.data as Record<string, unknown> | null;
   if (data && typeof data === "object" && data.ok === false) {

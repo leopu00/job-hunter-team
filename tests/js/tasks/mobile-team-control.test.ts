@@ -53,19 +53,41 @@ describe("POST /api/team-state/emergency-stop", () => {
     door.requestAction.mockResolvedValue(Response.json({ ok: true, state: "queued" }));
   });
 
-  it("è la porta unica e basta: team.emergency_stop, livello 2, la richiesta passata intera", async () => {
+  it("è la porta unica: team.emergency_stop, livello 2, la richiesta passata intera, e il ripiego solo per la porta assente", async () => {
     const { POST } = await import("@/app/api/team-state/emergency-stop/route");
     const req = { method: "POST" } as never;
     const response = await POST(req);
     expect(door.requestAction).toHaveBeenCalledTimes(1);
-    expect(door.requestAction).toHaveBeenCalledWith(req, { action: "team.emergency_stop", level: "L2" });
+    const [passed, spec] = door.requestAction.mock.calls[0];
+    expect(passed).toBe(req);
+    expect(spec).toMatchObject({ action: "team.emergency_stop", level: "L2" });
+    expect(typeof spec.whenDoorMissing).toBe("function");
     expect(await response.json()).toEqual({ ok: true, state: "queued" });
   });
 
-  it("non tocca il database, i bucket in memoria né il corpo: tutto ciò che decide è del database", () => {
+  it("il gestore POST non tocca il database né il corpo: lo fa solo il ripiego, fuori dal gestore", () => {
     const source = readWeb("app/api/team-state/emergency-stop/route.ts");
-    expect(source).not.toMatch(/\.from\(|resolveUser|checkRateLimit|\.json\(\)|\.text\(\)|upsert|should_run\s*:/);
-    expect(source).toContain('action: "team.emergency_stop"');
+    const handler = source.slice(source.indexOf("export async function POST"), source.indexOf("async function stopWithoutTheDoor"));
+    expect(handler).toContain('action: "team.emergency_stop"');
+    expect(handler).not.toMatch(/\.from\(|resolveUser|checkRateLimit|\.json\(\)|\.text\(\)|upsert/);
+  });
+
+  it("il ripiego (porta assente) scrive SOLO lo stop di prima, sulla riga dell'utente, col suo tetto", async () => {
+    const { POST } = await import("@/app/api/team-state/emergency-stop/route");
+    await POST({ method: "POST" } as never);
+    const fallback = door.requestAction.mock.calls[0][1].whenDoorMissing;
+    const upsert = vi.fn(async () => ({ error: null }));
+    const from = vi.fn(() => ({ upsert }));
+    const ok = await fallback({ supabase: { from }, userId: "u1" });
+    expect(ok.status).toBe(200);
+    expect(from).toHaveBeenCalledWith("team_state");
+    const [row, options] = upsert.mock.calls[0] as unknown as [Record<string, unknown>, unknown];
+    expect(Object.keys(row).sort()).toEqual(["emergency_stop_requested_at", "last_user_activity_at", "should_run", "user_id"]);
+    expect(row).toMatchObject({ user_id: "u1", should_run: false });
+    expect(options).toEqual({ onConflict: "user_id" });
+    const failing = await fallback({ supabase: { from: () => ({ upsert: async () => ({ error: { message: "boom" } }) }) }, userId: "u1" });
+    expect(failing.status).toBe(502);
+    expect(await failing.text()).not.toContain("boom");
   });
 
   it("ripassa i rifiuti della porta così come sono (un limite resta un 429)", async () => {

@@ -29,6 +29,7 @@ type Waiting = {
   action: TeamAction;
   target: TeamTarget;
   id: string;
+  summary: string;
   expiresAt: string | null;
 };
 type Follow = CommandStatus | "lost";
@@ -115,6 +116,7 @@ export default function TeamControl() {
             action,
             target: forTarget,
             id: answer.id,
+            summary: answer.summary,
             expiresAt: answer.expiresAt,
           });
         } else {
@@ -200,6 +202,12 @@ export default function TeamControl() {
             className="text-[13px] font-bold text-[var(--color-white)]"
           >
             {fill(t(`confirm_${waiting.action}`), targetName(waiting.target))}
+          </p>
+          <p
+            data-testid="team-control-summary"
+            className="mt-1 font-mono text-[10px] text-[var(--color-dim)]"
+          >
+            {waiting.summary}
           </p>
           <p className="mt-1 text-[11px] text-[var(--color-muted)]">
             {t("expires")}

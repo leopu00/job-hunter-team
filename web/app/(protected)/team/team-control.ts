@@ -76,7 +76,7 @@ export function readDoorAnswer(status: number, body: unknown): DoorAnswer {
         expiresAt: typeof b.expiresAt === "string" ? b.expiresAt : null,
       };
     }
-    if (b.state === "queued") {
+    if (b.state === "queued" || b.state === "done") {
       return {
         kind: "queued",
         commandId: typeof b.commandId === "string" ? b.commandId : null,

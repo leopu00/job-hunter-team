@@ -57,6 +57,31 @@ describe("the /team routes in the desktop", () => {
     expect(tables()).not.toContain("team_state");
   });
 
+  it.each(["PGRST202", "42883"])(
+    "POST /api/team-state/emergency-stop without the door yet (%s): the stop of before, on the user's own row",
+    async (code) => {
+      fake.current!.rpcResults.request_action = { data: null, error: { code, message: "Could not find the function" } };
+      const res = await post("/api/team-state/emergency-stop", {});
+      expect(res.status).toBe(200);
+      const upsert = ops("team_state").find((o) => o.name === "upsert");
+      expect(Object.keys(upsert?.args[0] as object).sort()).toEqual([
+        "emergency_stop_requested_at",
+        "last_user_activity_at",
+        "should_run",
+        "user_id",
+      ]);
+      expect(upsert?.args[0]).toMatchObject({ user_id: "user-1", should_run: false });
+    },
+  );
+
+  it("POST /api/team-state/emergency-stop: any other error of the database is a 502 and writes nothing", async () => {
+    for (const error of [{ code: "42501", message: "denied" }, { message: "boom" }, { code: "PGRST2020" }]) {
+      fake.current!.rpcResults.request_action = { data: null, error };
+      expect((await post("/api/team-state/emergency-stop", {})).status).toBe(502);
+    }
+    expect(ops("team_state").some((o) => o.name === "upsert")).toBe(false);
+  });
+
   it("POST /api/team-state/emergency-stop passes on the door's refusals, and anything else is a 502", async () => {
     fake.current!.rpcResults.request_action = { data: { ok: false, error: "rate_limited" }, error: null };
     expect((await post("/api/team-state/emergency-stop", {})).status).toBe(429);

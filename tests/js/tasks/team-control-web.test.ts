@@ -80,6 +80,7 @@ describe("what the page sends and reads", () => {
     });
     expect(readDoorAnswer(200, { ok: true, state: "queued", commandId: "c" })).toEqual({ kind: "queued", commandId: "c" });
     expect(readDoorAnswer(200, { ok: true, state: "queued" })).toEqual({ kind: "queued", commandId: null });
+    expect(readDoorAnswer(200, { ok: true, state: "done" })).toEqual({ kind: "queued", commandId: null });
     expect(readDoorAnswer(401, { ok: false, error: "reauth_required" })).toEqual({ kind: "refused", code: "reauth_required" });
     expect(readDoorAnswer(200, { ok: true, state: "something" })).toEqual({ kind: "refused", code: "" });
     expect(readDoorAnswer(502, null)).toEqual({ kind: "refused", code: "" });
