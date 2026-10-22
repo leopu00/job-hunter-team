@@ -27,14 +27,13 @@ but this is not a five-minute task.
    is already selected: click macOS, Windows, or Linux once to start the
    current release download for that platform.
 2. **Open the download for your system.** On Windows, run
-   `job-hunter-team-windows-x64-setup.exe` to install the app, or open
-   `job-hunter-team-windows-x64-portable.exe` directly if you would rather not
-   install it; on macOS, unzip `job-hunter-team.zip` and open the
-   app; on Linux, extract `job-hunter-team-linux-x64.tar.gz`, verify that
-   `job-hunter-team.x86_64` is allowed to run, and enable its executable
-   permission before running it if needed. Windows and Linux can display a
-   platform warning: continue only when the download came from the official
-   site or its linked release.
+   `job-hunter-team-windows-x64-setup.exe`: it installs the app for your user.
+   On macOS, open `job-hunter-team-macos-universal.dmg` and drag the app into
+   Applications; it is signed and notarized by Apple. On Linux, allow
+   `job-hunter-team-linux-x64.AppImage` to run as a program and open it, or
+   install `job-hunter-team-linux-x64.deb` on Debian-based systems. Windows and
+   Linux can display a platform warning: continue only when the download came
+   from the official site or its linked release.
 3. **Enter the office.** On first launch, choose and confirm the interface
    language before the title screen: confirming a choice is required, English
    is preselected, and the app saves it for later openings. Then add your name
