@@ -3943,6 +3943,7 @@ pub(crate) fn onboarding_provider_login(
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());
+        crate::runtime_host::hide_console(&mut command);
         let mut child = command
             .spawn()
             .map_err(|_| failure("provider_login_start_failed"))?;

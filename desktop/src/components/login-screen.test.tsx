@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { InstalledBrowser } from "../lib/browsers";
 import { LoginError, type SignInOptions } from "../lib/supabase";
 import { LoginScreen } from "./login-screen";
+import { LOGIN_TEXT } from "./login-screen.i18n";
 import { ERROR_CATALOG } from "../lib/error-catalog";
 
 const CANARY: InstalledBrowser = { id: "chrome-canary", name: "Google Chrome Canary" };
@@ -65,6 +66,28 @@ describe("LoginScreen", () => {
     expect(createLocal).toHaveBeenCalledWith("Ada Locale");
     expect(signIn).not.toHaveBeenCalled();
     expect(onLocalReady).toHaveBeenCalledOnce();
+  });
+
+  it("says why «Continua in locale» is off while the name is empty, and says nothing once there is one", async () => {
+    const user = userEvent.setup();
+    render(<LoginScreen loadBrowsers={noBrowsers} configured readLocal={() => null} createLocal={vi.fn()} onLocalReady={vi.fn()} />);
+    await user.click(screen.getByRole("button", { name: "Usa in locale" }));
+    const button = screen.getByRole("button", { name: "Continua in locale" });
+    expect(button).toBeDisabled();
+    expect(button).toHaveAttribute("aria-describedby", "login-name-missing");
+    expect(document.getElementById("login-name-missing")).toHaveTextContent(LOGIN_TEXT.it.nameMissing);
+    // a name made only of spaces is still no name
+    await user.type(screen.getByRole("textbox", { name: "Nome visualizzato" }), "  ");
+    expect(button).toBeDisabled();
+    expect(document.getElementById("login-name-missing")).not.toBeNull();
+    await user.type(screen.getByRole("textbox", { name: "Nome visualizzato" }), "Ada");
+    expect(button).toBeEnabled();
+    expect(document.getElementById("login-name-missing")).toBeNull();
+    expect(button).not.toHaveAttribute("aria-describedby");
+  });
+
+  it.each(Object.keys(LOGIN_TEXT) as (keyof typeof LOGIN_TEXT)[])("%s: the empty-name sentence exists", (locale) => {
+    expect(LOGIN_TEXT[locale].nameMissing.trim()).not.toBe("");
   });
 
   it("reactivates a saved local profile without asking for its name again", async () => {

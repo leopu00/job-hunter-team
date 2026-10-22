@@ -778,15 +778,16 @@ fn read_capped(mut reader: impl Read) -> Vec<u8> {
 
 /// On Windows a console program started by the app (PowerShell, wsl.exe,
 /// curl.exe, ssh.exe) would open its own console window: the user must never
-/// see a terminal.
+/// see a terminal. The app itself has none either (main.rs), so every program
+/// it starts goes through here.
 #[cfg(windows)]
-fn hide_console(command: &mut Command) {
+pub(crate) fn hide_console(command: &mut Command) {
     use std::os::windows::process::CommandExt;
     const CREATE_NO_WINDOW: u32 = 0x0800_0000;
     command.creation_flags(CREATE_NO_WINDOW);
 }
 #[cfg(not(windows))]
-fn hide_console(_command: &mut Command) {}
+pub(crate) fn hide_console(_command: &mut Command) {}
 
 /// The longest stdout line run_program_lines hands over whole; a longer one
 /// arrives in pieces.
