@@ -68,6 +68,7 @@ const NOT_ERRORS: Record<string, string> = {
   exclusion_withdrawn: "result word of an exclusion withdrawn",
   exclusion_accept: "operation name of the panel's request",
   exclusion_withdraw: "operation name of the panel's request",
+  stop_team: "operation name of the panel's request (JHT-T54: «Ferma la squadra»)",
   // How a previous session of an agent ended (the panel's history read, agent_control.rs): a state of the session
   // the Agents page tells in its own words, not an error.
   restarted_by_user: "how a previous session ended",
@@ -206,6 +207,8 @@ const NOT_ERRORS: Record<string, string> = {
   already_stopped: "agent control outcome",
   already_answered: "agent control outcome: the question was answered elsewhere first (the page says it)",
   not_paused: "agent control outcome",
+  team_stopped: "agent control outcome",
+  team_already_stopped: "agent control outcome",
   existing_team_runtime_own_vps_invalid: "own-VPS mark: refused or unreadable, never shown (the setup says storage_unavailable)",
   existing_team_runtime_own_vps_missing: "own-VPS mark: absent, read as «not the person's own»",
   // Where a VPS of the person's own stands, as the agents list tells the page (own_vps_claim_* are the errors).

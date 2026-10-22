@@ -8,7 +8,7 @@
 
 export const AGENT_CONTROL_SCRIPT = '/app/shared/skills/agent_control.py';
 
-// The script's own codes are 100-112 and 115-120; these two are the command's.
+// The script's own codes are 100-112 and 115-121; these two are the command's.
 export const EXIT_INVALID = 100;
 export const EXIT_NO_TEAM = 113;
 export const EXIT_UNANSWERED = 114;
@@ -24,7 +24,7 @@ const HOURS = /^[1-9][0-9]{0,2}$/;
 const INSTANT = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?(?:Z|[+-]\d{2}:\d{2})$/;
 
 const WITH_SESSION = new Set(['start', 'stop', 'restart', 'screen']);
-const ALONE = new Set(['resume', 'list', 'team', 'history', 'exclusions']);
+const ALONE = new Set(['resume', 'stop-team', 'list', 'team', 'history', 'exclusions']);
 // A code of the exclusions' closed vocabulary (JHT-T24-b); the script checks it against the list.
 const WITH_CODE = new Set(['exclusion-accept', 'exclusion-withdraw']);
 const CODE = /^[a-z][a-z_]{0,31}$/;

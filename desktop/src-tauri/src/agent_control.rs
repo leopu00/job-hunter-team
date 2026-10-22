@@ -54,7 +54,7 @@ const READ_TIMEOUT: Duration = Duration::from_secs(25);
 const ACTION_TIMEOUT: Duration = Duration::from_secs(200);
 const MAX_REPLY: usize = 256 * 1024;
 
-/// The script's codes (100-112), the CLI's (113-114) and the pinned target's.
+/// The script's codes (100-112, 115-121), the CLI's (113-114) and the pinned target's.
 const EXITS: &[(i32, &str)] = &[
     (2, "agent_control_unsupported"),
     (70, "existing_team_runtime_changed"),
@@ -79,6 +79,7 @@ const EXITS: &[(i32, &str)] = &[
     (118, "answer_refused"),
     (119, "answer_failed"),
     (120, "questions_unsupported"),
+    (121, "team_stop_failed"),
 ];
 
 /// The codes of the exclusions that act on the score (`acting` of shared/feedback-reasons.json).
@@ -87,7 +88,7 @@ pub(crate) const EXCLUSION_CODES: &[&str] = &["company", "wrong_location", "sala
 const RESULTS: &[&str] = &[
     "excluded", "exclusion_withdrawn", "answered", "already_answered", "expired",
     "started", "already_running", "stopped", "already_stopped", "restarted", "paused",
-    "already_paused", "resumed", "not_paused",
+    "already_paused", "resumed", "not_paused", "team_stopped", "team_already_stopped",
 ];
 
 // ── how the VPS was linked ──────────────────────────────────────────────────
@@ -135,6 +136,9 @@ pub(crate) enum ControlRequest {
     Restart { session: String, target: String, confirmed: bool },
     Pause { exit: PauseExit, target: String, confirmed: bool },
     Resume { target: String, confirmed: bool },
+    /// «Ferma la squadra» (JHT-T54): what `jht team stop` does, on the team the panel controls.
+    #[serde(rename = "stop_team")]
+    StopTeam { target: String, confirmed: bool },
     Exclusions {},
     #[serde(rename = "exclusion_accept")]
     ExclusionAccept { code: String, target: String, confirmed: bool },
@@ -190,6 +194,7 @@ impl ControlRequest {
                 _ => None,
             },
             Self::Resume { .. } => Some(vec!["resume".into()]),
+            Self::StopTeam { .. } => Some(vec!["stop-team".into()]),
             Self::Exclusions {} => Some(vec!["exclusions".into()]),
             Self::ExclusionAccept { code, .. } => EXCLUSION_CODES.contains(&code.as_str()).then(|| vec!["exclusion-accept".to_owned(), code.clone()]),
             Self::ExclusionWithdraw { code, .. } => EXCLUSION_CODES.contains(&code.as_str()).then(|| vec!["exclusion-withdraw".to_owned(), code.clone()]),
@@ -209,7 +214,8 @@ impl ControlRequest {
             | Self::ExclusionAccept { target, confirmed, .. }
             | Self::ExclusionWithdraw { target, confirmed, .. }
             | Self::Answer { target, confirmed, .. }
-            | Self::Resume { target, confirmed } => Some((target.as_str(), *confirmed)),
+            | Self::Resume { target, confirmed }
+            | Self::StopTeam { target, confirmed } => Some((target.as_str(), *confirmed)),
             _ => None,
         }
     }
@@ -711,6 +717,10 @@ mod tests {
             json!({"op":"list","command":"rm"}),
             json!({"op":"history","session":"SCOUT-1"}),
             json!({"op":"pause","exit":{"kind":"hours","hours":4,"extra":1},"target":"t","confirmed":true}),
+            // the team's stop names no session and needs its target and its confirmation
+            json!({"op":"stop_team","session":"SCOUT-1","target":"t","confirmed":true}),
+            json!({"op":"stop_team","target":"t"}),
+            json!({"op":"stop-team","target":"t","confirmed":true}),
         ] {
             assert!(req(bad.clone()).is_none(), "{bad}");
         }
@@ -725,6 +735,7 @@ mod tests {
             (json!({"op":"pause","exit":{"kind":"until","until":"2026-10-20T06:00:00Z"},"target":"t","confirmed":true}), vec!["pause", "--until", "2026-10-20T06:00:00Z"]),
             (json!({"op":"pause","exit":{"kind":"weekly_reset"},"target":"t","confirmed":true}), vec!["pause", "--wake-on-weekly"]),
             (json!({"op":"resume","target":"t","confirmed":false}), vec!["resume"]),
+            (json!({"op":"stop_team","target":"t","confirmed":true}), vec!["stop-team"]),
         ] {
             assert_eq!(req(value).unwrap().argv().unwrap(), argv);
         }
@@ -757,6 +768,8 @@ mod tests {
         let command = vps_action_command(&runtime, &argv).unwrap();
         assert_eq!(command, crate::existing_team_runtime::command(&runtime, "docker exec -e JHT_SPAWN_SRC=desktop-panel \"$JHT_CID\" python3 /app/shared/skills/agent_control.py 'stop' 'SCOUT-1' </dev/null").unwrap());
         assert!(command.contains("|| exit 70"));
+        let argv = req(json!({"op":"stop_team","target":"t","confirmed":true})).unwrap().argv().unwrap();
+        assert_eq!(vps_action_command(&runtime, &argv).unwrap(), crate::existing_team_runtime::command(&runtime, "docker exec -e JHT_SPAWN_SRC=desktop-panel \"$JHT_CID\" python3 /app/shared/skills/agent_control.py 'stop-team' </dev/null").unwrap());
         // a word outside the grammar never reaches the shell
         assert!(vps_action_command(&runtime, &["stop".into(), "SCOUT-1'; rm -rf /'".into()]).is_err());
     }
@@ -771,6 +784,7 @@ mod tests {
         for action in [
             json!({"op":"stop","session":"SCOUT-1","target":"t","confirmed":true}),
             json!({"op":"resume","target":"t","confirmed":true}),
+            json!({"op":"stop_team","target":"t","confirmed":true}),
         ] {
             assert!(read_input(&req(action).unwrap()).is_none());
         }
@@ -791,6 +805,12 @@ mod tests {
             answer(&action, &out(0, "{\"ok\":true,\"op\":\"stop\",\"session\":\"SCOUT-1\",\"result\":\"stopped\"}\n"), "t", None),
             json!({"ok":true,"data":{"result":"stopped"}})
         );
+        let stop_team = req(json!({"op":"stop_team","target":"t","confirmed":true})).unwrap();
+        for result in ["team_stopped", "team_already_stopped"] {
+            let reply = format!("{{\"ok\":true,\"op\":\"stop-team\",\"session\":null,\"result\":\"{result}\"}}\n");
+            assert_eq!(answer(&stop_team, &out(0, &reply), "t", None), json!({"ok":true,"data":{"result":result}}));
+        }
+        assert_eq!(answer(&stop_team, &out(121, ""), "t", None), failure("team_stop_failed"));
         // never «done» without the script saying so
         assert_eq!(answer(&action, &out(0, ""), "t", None), failure("agent_control_unanswered"));
         assert_eq!(answer(&action, &out(0, "{\"ok\":true,\"result\":\"exploded\"}"), "t", None), failure("agent_control_unanswered"));
@@ -799,7 +819,7 @@ mod tests {
     #[test]
     fn the_script_and_the_module_agree_on_the_codes() {
         let script = AGENT_CONTROL_PY;
-        for (exit, code) in EXITS.iter().filter(|(exit, _)| (100..=112).contains(exit) || (115..=120).contains(exit)) {
+        for (exit, code) in EXITS.iter().filter(|(exit, _)| (100..=112).contains(exit) || (115..=121).contains(exit)) {
             assert!(script.contains(&format!("\"{code}\": {exit},")), "{code} {exit}");
         }
     }
@@ -908,9 +928,15 @@ mod tests {
             stop("abc", true),
             req(json!({"op":"resume","target":"abc","confirmed":true})).unwrap(),
             req(json!({"op":"pause","exit":{"kind":"weekly_reset"},"target":"abc","confirmed":true})).unwrap(),
+            req(json!({"op":"stop_team","target":"abc","confirmed":true})).unwrap(),
         ] {
             assert_eq!(action_refusal(&request, Some(VpsMode::ReadOnly), "abc"), Some("agent_control_read_only"));
         }
+        // the team's stop is an action like the others: confirmed, on the target it was prepared on
+        let stop_team = |target: &str, confirmed: bool| req(json!({"op":"stop_team","target":target,"confirmed":confirmed})).unwrap();
+        assert_eq!(action_refusal(&stop_team("abc", true), None, "abc"), None);
+        assert_eq!(action_refusal(&stop_team("abc", false), None, "abc"), Some("agent_control_not_confirmed"));
+        assert_eq!(action_refusal(&stop_team("abc", true), Some(VpsMode::Full), "def"), Some("existing_team_runtime_target_changed"));
         // the team on the screen is not the one the click would reach
         assert_eq!(action_refusal(&stop("abc", true), Some(VpsMode::Full), "def"), Some("existing_team_runtime_target_changed"));
         assert_eq!(action_refusal(&stop("abc", true), None, "def"), Some("existing_team_runtime_target_changed"));

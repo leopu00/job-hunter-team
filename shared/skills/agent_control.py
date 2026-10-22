@@ -9,7 +9,7 @@ The desktop app reaches this file in two ways, and only these:
 
         agent_control.py start|stop|restart SESSION
         agent_control.py pause (--for-hours N | --until ISO | --wake-on-weekly)
-        agent_control.py resume
+        agent_control.py resume | stop-team
         agent_control.py list | screen SESSION | team | history
         agent_control.py exclusions | exclusion-accept CODE | exclusion-withdraw CODE
         agent_control.py answer QUESTION_ID OPTION_ID
@@ -20,8 +20,8 @@ The desktop app reaches this file in two ways, and only these:
     the read-only view's channel: on stdin an action is refused, always.
 
 Nothing here takes free text: no keys and no message ever reach an agent's
-terminal. A session is a name from a closed grammar, an action is one of five
-words, and a pause needs an exit condition (`standby.py`: a standby without
+terminal. A session is a name from a closed grammar, an action is a word of a
+closed list, and a pause needs an exit condition (`standby.py`: a standby without
 one is not written).
 
 Every answer is one JSON line on stdout. An action exits with a closed code
@@ -78,6 +78,7 @@ EXIT = {
     "answer_refused": 118,
     "answer_failed": 119,
     "questions_unsupported": 120,
+    "team_stop_failed": 121,
 }
 
 # Who and why, as the roster's journal shows them: distinct from a safety
@@ -368,6 +369,50 @@ def restart(session: str) -> str:
 
 def _halted() -> bool:
     return (jht_home() / ".team-halted.flag").exists()
+
+
+# «Ferma la squadra» (JHT-T54): what `jht team stop` does without arguments
+# (cli/src/commands/team/stop.js), on the team the panel controls, instead of a
+# request to the cloud that only a team linked to it reads. The flag first: if
+# it cannot be written nothing is stopped, since the watchdog would bring the
+# agents back and «stopped» would be false. Then every session of the team
+# but the person's chat (ASSISTENTE), and the two scheduled ones; never
+# SENTINELLA-WORKER, which is the bridge's probe and not an agent.
+STOP_TEAM_KEEPS = {"ASSISTENTE"}
+STOP_TEAM_INFRASTRUCTURE = re.compile(r"^(?:DOTTORE|MANTENITORE)(?:-[A-Z0-9-]*)?$")
+
+
+def _stopped_by_team_stop(name: str) -> bool:
+    if name in STOP_TEAM_KEEPS:
+        return False
+    if STOP_TEAM_INFRASTRUCTURE.match(name):
+        return True
+    try:
+        parse_session(name)
+    except Refusal:
+        return False
+    return True
+
+
+def stop_team() -> str:
+    was_halted = _halted()
+    try:
+        flag = jht_home() / ".team-halted.flag"
+        flag.parent.mkdir(parents=True, exist_ok=True)
+        flag.touch()
+    except OSError:
+        raise Refusal("team_stop_failed")
+    # the flag is a file, as `jht team stop` writes it; anything else there is
+    # not a stop this script can vouch for
+    if not flag.is_file():
+        raise Refusal("team_stop_failed")
+    sessions = _sessions()
+    if sessions is None:
+        raise Refusal("team_stop_failed")
+    targets = sorted(name for name in sessions if _stopped_by_team_stop(name))
+    if not all([_kill(name) for name in targets]):
+        raise Refusal("team_stop_failed")
+    return "team_already_stopped" if was_halted and not targets else "team_stopped"
 
 
 def pause(for_hours: int | None, until: str | None, weekly: bool, now: datetime | None = None) -> str:
@@ -984,7 +1029,7 @@ def _parser() -> argparse.ArgumentParser:
     exit_condition.add_argument("--for-hours", type=int)
     exit_condition.add_argument("--until")
     exit_condition.add_argument("--wake-on-weekly", action="store_true")
-    for op in ("resume", "list", "team", "history", "exclusions"):
+    for op in ("resume", "stop-team", "list", "team", "history", "exclusions"):
         sub.add_parser(op, add_help=False)
     for op in ("exclusion-accept", "exclusion-withdraw"):
         sub.add_parser(op, add_help=False).add_argument("code")
@@ -994,7 +1039,8 @@ def _parser() -> argparse.ArgumentParser:
     return parser
 
 
-ACTIONS = {"start", "stop", "restart", "pause", "resume", "exclusion-accept", "exclusion-withdraw", "answer"}
+ACTIONS = {"start", "stop", "restart", "pause", "resume", "stop-team", "exclusion-accept", "exclusion-withdraw",
+           "answer"}
 
 
 def _answer_ids(question, choice) -> dict:
@@ -1048,6 +1094,8 @@ def main(argv: list[str]) -> int:
                 result = exclusion_action(op, args.code)
             elif op == "answer":
                 result = answer_question(args.question, args.choice)
+            elif op == "stop-team":
+                result = stop_team()
             else:
                 result = resume()
     except Refusal as refusal:

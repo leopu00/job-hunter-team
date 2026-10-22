@@ -53,7 +53,7 @@ const listReply = () => ({
   data: { agents: AGENTS, roles: ROLES, states: true, target, where: "vps", label: "vps.example", ...(ownVps ? { ownVps } : {}) },
 });
 const ops = () => native.invoke.mock.calls.filter(([c]) => c === COMMAND).map(([, a]) => (a as { request: Record<string, unknown> }).request);
-const ACTIONS = new Set(["start", "stop", "restart", "pause", "resume", "answer"]);
+const ACTIONS = new Set(["start", "stop", "restart", "pause", "resume", "stop_team", "answer"]);
 
 let restoreBridge: () => void;
 beforeEach(() => {
@@ -464,9 +464,10 @@ describe("«Agenti», each agent's health in small", () => {
 });
 
 describe("«Agenti», stopping the whole team", () => {
-  it("stops the team only after a confirmation that says what happens, with the Team page's request", async () => {
+  it("stops the team only after a confirmation that says what happens, on the team the panel controls", async () => {
     const fetchMock = vi.fn(async () => new Response(JSON.stringify({ ok: true }), { status: 200 }));
     vi.stubGlobal("fetch", fetchMock);
+    actionReply = { ok: true, data: { result: "team_stopped" } };
     show();
     await screen.findByTestId("panel-summary");
     // pause and stop side by side, and a line that tells them apart
@@ -477,16 +478,31 @@ describe("«Agenti», stopping the whole team", () => {
     const dialog = screen.getByTestId("panel-confirm");
     expect(dialog).toHaveTextContent("Fermare la squadra sulla VPS vps.example?");
     expect(dialog).toHaveTextContent("L’assistente resta acceso.");
-    expect(fetchMock).not.toHaveBeenCalled();
-    fireEvent.click(within(dialog).getByRole("button", { name: "Conferma" }));
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
-    const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
-    expect(url).toBe("/api/team-state/emergency-stop");
-    expect(init.method).toBe("POST");
-    expect(JSON.parse(String(init.body))).toEqual({ confirm: "STOP" });
-    expect(await screen.findByText("Stop chiesto: la squadra si ferma entro pochi secondi.")).toBeInTheDocument();
-    // no agent_control action: the stop is the cloud's intent
     expect(ops().filter((r) => ACTIONS.has(String(r.op)))).toEqual([]);
+    fireEvent.click(within(dialog).getByRole("button", { name: "Conferma" }));
+    // the native command, on the target the list gave: never the cloud's request, which only a
+    // team linked to the cloud reads (JHT-T54)
+    await waitFor(() => expect(ops().filter((r) => ACTIONS.has(String(r.op)))).toEqual([
+      { op: "stop_team", target: "T1", confirmed: true },
+    ]));
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(await screen.findByText("La squadra è ferma. L’assistente resta acceso.")).toBeInTheDocument();
+  });
+
+  it("says when the team was already stopped, and a stop that failed in the catalog's words", async () => {
+    actionReply = { ok: true, data: { result: "team_already_stopped" } };
+    show();
+    await screen.findByTestId("panel-summary");
+    fireEvent.click(screen.getByTestId("panel-stop-team"));
+    fireEvent.click(within(screen.getByTestId("panel-confirm")).getByRole("button", { name: "Conferma" }));
+    expect(await screen.findByText("La squadra era già ferma.")).toBeInTheDocument();
+    cleanup();
+    actionReply = { ok: false, error: "team_stop_failed" };
+    show();
+    await screen.findByTestId("panel-summary");
+    fireEvent.click(screen.getByTestId("panel-stop-team"));
+    fireEvent.click(within(screen.getByTestId("panel-confirm")).getByRole("button", { name: "Conferma" }));
+    expect(await screen.findByText(/Non è stato possibile fermare la squadra/)).toBeInTheDocument();
   });
 
   it("offers no stop in the read-only view, nor on a team already stopped", async () => {
