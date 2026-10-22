@@ -244,6 +244,15 @@ describe("the words", () => {
       actionSubject(row({ params: { target: "capitano" } } as never), "it"),
     ).toBe("capitano");
     expect(actionSubject(row({ params: {} } as never), "it")).toBeNull();
+    // the emergency stop takes no target and is always the whole team
+    for (const locale of ["it", "en", "de"] as const) {
+      expect(
+        actionSubject(
+          row({ action: "team.emergency_stop", params: {} } as never),
+          locale,
+        ),
+      ).toBe(WEB_ACTION_LOG_TEXT[locale].targetAll);
+    }
     // the summary of a team action is a machine phrase («restart all»): never shown
     expect(actionSubject(row(), "it")).not.toContain("restart");
     expect(
