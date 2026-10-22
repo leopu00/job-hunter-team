@@ -85,7 +85,10 @@ function Get-JhtPodmanMachineState {
     try {
       $raw = ((& $PodmanPath machine list --format json 2>$null) -join '')
       if ($LASTEXITCODE -eq 0 -and $raw) {
-        $machines = @($raw | ConvertFrom-Json)
+        # Windows PowerShell 5.1 gives a JSON array to the pipeline as ONE object: with two
+        # machines `[string]$_.Name` joined both names and the JHT one was «absent».
+        $parsed = ConvertFrom-Json -InputObject $raw
+        $machines = @(foreach ($machine in $parsed) { $machine })
         if (@($machines | Where-Object { ([string]$_.Name) -ceq $MachineName }).Count -gt 0) { return 'present' }
         return 'absent'
       }

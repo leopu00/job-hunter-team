@@ -22,6 +22,7 @@ and if that leaves no podman.exe it is its own code, podman_other_user, 25.
 
 from __future__ import annotations
 
+import json
 import os
 import re
 import shutil
@@ -302,7 +303,11 @@ def test_a_try_again_finds_podman_before_winget_and_the_version_decides():
     assert "$wingetCode -ne 0 -and $wingetCode -ne $WingetUpdateNotApplicable" in block
     # after winget the installed version decides: another one is its own code, never «not installable»
     assert block.index("& winget install") < block.index("$installedVersion = Get-PodmanVersion (Find-Podman)")
-    assert "podman_version_mismatch:" in block and "exit 24" in block
+    assert "Write-PodmanMismatch $installedVersion\n    exit 24" in block
+    # JHT-T56: another major is refused before winget runs, so the person's Podman is never changed
+    assert block.index("Write-PodmanMismatch $foundVersion\n    exit 24") < block.index("& winget install")
+    mismatch = enabler[enabler.index("function Write-PodmanMismatch {") :]
+    assert "podman_version_mismatch:" in mismatch[: mismatch.index("\n}\n")]
 
 
 def test_already_installed_for_another_user_is_installed_for_this_one_or_its_own_code():
@@ -317,7 +322,10 @@ def test_already_installed_for_another_user_is_installed_for_this_one_or_its_own
         assert find.index("Get-Application 'podman.exe'") < find.index(where), where
     # still one winget command (inside the consent guard), its second pass for this user only
     assert block.count("& winget install") == 1
-    assert "$scope = if ($forThisUser) { @('--scope', 'user', '--force') } else { @() }" in block
+    # the MSI asked for this user (its dual scope), never winget's --scope: the manifest declares none
+    assert ("$scope = if ($forThisUser) { @('--force', '--override', '/qn /norestart ALLUSERS=2 MSIINSTALLPERUSER=1') }"
+            " else { @() }") in block
+    assert "'--scope'" not in block
     assert block.index("if ($wingetCode -ne $WingetUpdateNotApplicable -or (Find-Podman)) { break }") > block.index("& winget install")
     # what the second pass leaves decides; then its own code, after the try and before the version check
     assert "if ($forThisUser) { $otherUser = -not (Find-Podman); break }" in block
@@ -351,7 +359,7 @@ def _enabler_install_block() -> str:
     ("6.0.2", None, 0, None),                                  # already there: winget is not even run
     (None, 0, 0, None),                                        # first install
     ("6.0.2-late", 0x8A15002B - 2**32, 0, None),               # a Try again: already installed, the right one
-    ("5.4.0", 0x8A15002B - 2**32, 24, "podman_version_mismatch: Podman 5.4.0"),
+    ("5.4.0", None, 24, "podman_version_mismatch: Podman 5.4.0"),  # another major: left alone, winget not run
     (None, 0x8A150006 - 2**32, 21, "podman_not_installable: winget install Podman.CLI 6.0.2 exited with"),
 ])
 def test_the_install_block_with_a_fake_winget(tmp_path, installed, winget_code, expected_exit, expected_line):
@@ -388,6 +396,43 @@ def test_the_install_block_with_a_fake_winget(tmp_path, installed, winget_code, 
     assert calls.exists() == (winget_code is not None)
 
 
+# JHT-T56: the pin is what the app installs; a newer 6 is used with a warning, an older 6 is brought
+# to the pin, another major is podman_version_mismatch without touching it.
+@pytest.mark.skipif(PWSH is None or os.name == "nt", reason="needs PowerShell off Windows")
+@pytest.mark.parametrize(("before", "after", "expected_exit", "expected_line", "winget_runs"), [
+    ("6.0.2", None, 0, None, False),
+    ("6.1.4", None, 0, "JHT_WARNING podman_version_newer: Podman 6.1.4 is installed on this computer;", False),
+    ("6.1.0-rc1", None, 0, "JHT_WARNING podman_version_newer: Podman 6.1.0-rc1", False),
+    ("6.0.1", "6.0.2", 0, None, True),
+    ("6.0.0", "6.0.0", 24, "podman_version_mismatch: Podman 6.0.0", True),   # winget could not bring it to the pin
+    ("5.4.0", None, 24, "podman_version_mismatch: Podman 5.4.0 is installed on this computer, and JHT runs on Podman 6, from 6.0.2 on", False),
+    ("7.0.0", None, 24, "podman_version_mismatch: Podman 7.0.0", False),
+    ("6.x", None, 24, "podman_version_mismatch: Podman 6.x", False),       # a version it cannot read
+])
+def test_a_podman_of_another_version(tmp_path, before, after, expected_exit, expected_line, winget_runs):
+    calls = tmp_path / "winget-calls"
+    fake_podman = tmp_path / "Programs" / "Podman" / "podman.exe"
+    fake_podman.parent.mkdir(parents=True)
+    fake_podman.write_text(f"#!/bin/sh\necho 'podman version {before}'\n", encoding="utf-8")
+    fake_podman.chmod(0o755)
+    winget = f"  Add-Content -LiteralPath '{calls}' -Value ($args -join ' ')\n"
+    if after:
+        winget += (f"  Set-Content -LiteralPath '{fake_podman}' -Value \"#!/bin/sh`necho 'podman version {after}'\"\n"
+                   f"  & chmod 755 '{fake_podman}'\n")
+    winget += "  $global:LASTEXITCODE = 0\n"
+    done = _run_block(tmp_path, winget)
+    assert done.returncode == expected_exit, done.stdout + done.stderr
+    if expected_line:
+        assert expected_line in (done.stderr if expected_exit else done.stdout)
+    if expected_exit == 0 and before != "6.0.2" and after is None:
+        assert "podman_version_mismatch" not in done.stderr
+    if before == "6.0.2" or after == "6.0.2":
+        assert "JHT_WARNING" not in done.stdout
+    assert calls.exists() == winget_runs
+    if winget_runs:
+        assert calls.read_text().startswith("install --exact --source winget --version 6.0.2 --silent")
+
+
 def _run_block(tmp_path, winget_body, extra=""):
     script = tmp_path / "block.ps1"
     script.write_text(
@@ -421,14 +466,17 @@ def test_already_installed_for_another_user_with_a_fake_winget(tmp_path, second_
                f"    & chmod 755 '{fake_podman}'\n") if second_installs else ""
     winget = (
         f"  Add-Content -LiteralPath '{calls}' -Value ($args -join ' ')\n"
-        "  if ($args -contains '--scope') {\n" + install + f"    $global:LASTEXITCODE = {second_code}\n"
+        # winget sees «installed» (the other user's Uninstall entry is in HKLM): without --force it does nothing
+        "  if (($args -contains '--override') -and ($args -contains '--force')) {\n" + install + f"    $global:LASTEXITCODE = {second_code}\n"
         f"  }} else {{ $global:LASTEXITCODE = {ALREADY} }}\n"
     )
     done = _run_block(tmp_path, winget)
     assert done.returncode == expected_exit, done.stdout + done.stderr
     lines = calls.read_text().splitlines()
     assert len(lines) == 2
-    assert "--scope" not in lines[0] and lines[1].endswith("--id Podman.CLI --scope user --force")
+    assert "--override" not in lines[0]
+    assert lines[1].endswith("--id Podman.CLI --force --override /qn /norestart ALLUSERS=2 MSIINSTALLPERUSER=1")
+    assert "--scope" not in lines[0] + lines[1]
     assert lines[1].startswith("install --exact --source winget --version 6.0.2 --silent")
     if expected_exit == 25:
         assert "podman_other_user: winget reports Podman CLI as installed on this computer" in done.stderr
@@ -489,3 +537,68 @@ def test_the_wsl_welcome_is_marked_shown_before_podman_registers_its_distributio
     # right before the machine is created, which registers the distribution
     init = enabler.index("Invoke-Checked $Podman 'machine' 'init'")
     assert enabler.rindex("Skip-WslWelcome", 0, init) > enabler.rindex("Write-JhtPhase podman_machine_init", 0, init)
+
+
+# ── the pulled image's digest, as Podman 6 reports it, in the shell the app runs ──
+# `podman image inspect --format '{{json .RepoDigests}}'` of an image pulled by its index digest:
+# the index AND the platform manifest, no tag. The app runs the script with Windows PowerShell 5.1,
+# whose ConvertFrom-Json gives a JSON array to the pipeline as ONE object; PowerShell 7 enumerates
+# it. The 5.1 shape is reproduced here with ConvertFrom-Json -NoEnumerate, the switch 7 added to keep it.
+INDEX = "sha256:" + "6c" * 32
+PLATFORM = "sha256:" + "40" * 32
+OTHER = "sha256:" + "77" * 32
+
+
+def _image_check_block() -> str:
+    source = ENABLER.read_text(encoding="utf-8")
+    return source[source.index("Write-JhtPhase image_pull") : source.index("$env:JHT_IMAGE = $canonicalImage")]
+
+
+WINDOWS_POWERSHELL_JSON = (
+    "function ConvertFrom-Json {\n"
+    "  param([Parameter(ValueFromPipeline = $true)]$InputObject)\n"
+    "  process { , (Microsoft.PowerShell.Utility\\ConvertFrom-Json -InputObject $InputObject -NoEnumerate) }\n"
+    "}\n"
+)
+
+
+@pytest.mark.skipif(PWSH is None or os.name == "nt", reason="needs PowerShell off Windows")
+@pytest.mark.parametrize("shell", ["windows-powershell-5.1", "powershell-7"])
+@pytest.mark.parametrize(("digests", "accepted"), [
+    ([f"ghcr.io/leopu00/jht@{PLATFORM}", f"ghcr.io/leopu00/jht@{INDEX}"], True),   # Podman 6, by index
+    ([f"ghcr.io/leopu00/jht@{INDEX}", f"ghcr.io/leopu00/jht@{PLATFORM}"], True),
+    ([f"ghcr.io/leopu00/jht@{INDEX}"], True),
+    ([f"ghcr.io/leopu00/jht@{OTHER}", f"ghcr.io/leopu00/jht@{PLATFORM}"], False),  # not the pinned image
+    ([], False),
+])
+def test_the_pulled_image_is_found_by_its_digest_among_all_its_digests(tmp_path, shell, digests, accepted):
+    inspect = json.dumps(digests) if digests else "null"
+    script = tmp_path / "image.ps1"
+    script.write_text(
+        "$ErrorActionPreference = 'Stop'\n"
+        + (WINDOWS_POWERSHELL_JSON if shell == "windows-powershell-5.1" else "")
+        + "function Write-JhtPhase { }\n"
+        "function Invoke-Checked { $global:LASTEXITCODE = 0 }\n"
+        f"function fake-podman {{ $global:LASTEXITCODE = 0; '{inspect}' }}\n"
+        "$Podman = 'fake-podman'; $MachineName = 'jht-podman'\n"
+        f"$RuntimeImage = 'ghcr.io/leopu00/jht@{INDEX}'; $ExpectedImageDigest = '{INDEX}'\n"
+        + _image_check_block()
+        + "\n$canonicalImage\nexit 0\n",
+        encoding="utf-8",
+    )
+    done = subprocess.run([PWSH, "-NoProfile", "-NonInteractive", "-File", str(script)], capture_output=True,
+                          text=True, timeout=60, env={"PATH": "/usr/bin:/bin", "HOME": str(tmp_path)})
+    if accepted:
+        assert done.returncode == 0, done.stdout + done.stderr
+        assert done.stdout.strip().splitlines()[-1] == f"ghcr.io/leopu00/jht@{INDEX}"
+    else:
+        assert done.returncode != 0
+        assert "Pulled runtime image does not expose the expected repository digest" in done.stdout + done.stderr
+
+
+@pytest.mark.skipif(PWSH is None or os.name == "nt", reason="needs PowerShell off Windows")
+def test_the_windows_powershell_shape_is_really_one_object():
+    # the harness reproduces what it claims: in the 5.1 shape a two-digest array is one pipeline object
+    probe = WINDOWS_POWERSHELL_JSON + "@('[\"a\",\"b\"]' | ConvertFrom-Json).Count; @('[\"a\",\"b\"]' | Microsoft.PowerShell.Utility\\ConvertFrom-Json).Count\n"
+    done = subprocess.run([PWSH, "-NoProfile", "-NonInteractive", "-Command", probe], capture_output=True, text=True, timeout=60)
+    assert done.stdout.split() == ["1", "2"], done.stdout + done.stderr

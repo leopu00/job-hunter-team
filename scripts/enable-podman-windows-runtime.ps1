@@ -382,19 +382,58 @@ function Skip-WslWelcome {
 # install decides, never the exit code alone.
 $WingetUpdateNotApplicable = -1978335189
 
+# Which Podman the team runs on. The pin is what the app installs, and what the
+# setup screen names. A Podman of the same major, as new as the pin or newer, is
+# used as it is, with a warning in the log: 6.1 changed nothing the team relies on
+# (its new port-forwarding option is for published ports, and the team publishes
+# none). An older 6 is brought to the pin by winget, as a missing one is. Another
+# major is left alone: 6.0 dropped BoltDB, CNI and slirp4netns, so moving the
+# person's Podman 5 to 6 could break what it already runs, and 7 is untested.
+# Both are podman_version_mismatch, 24, and nothing is installed.
+$PodmanSupportedMajor = 6
+
+function Get-PodmanFit {
+  param([string]$Version)
+  if (-not $Version) { return 'absent' }
+  if ($Version -eq $PodmanCliVersion) { return 'pinned' }
+  if ($Version -notmatch '^(\d+)\.(\d+)\.(\d+)') { return 'other' }
+  $have = [version]::new([int]$Matches[1], [int]$Matches[2], [int]$Matches[3])
+  if ($PodmanCliVersion -notmatch '^(\d+)\.(\d+)\.(\d+)$') { return 'other' }
+  $pin = [version]::new([int]$Matches[1], [int]$Matches[2], [int]$Matches[3])
+  if ($have.Major -ne $PodmanSupportedMajor) { return 'other' }
+  if ($have -ge $pin) { return 'newer' }
+  return 'older'
+}
+
+function Write-PodmanMismatch {
+  param([string]$Version)
+  [Console]::Error.WriteLine("podman_version_mismatch: Podman $Version is installed on this computer, and JHT runs on Podman $PodmanSupportedMajor, from $PodmanCliVersion on; the app does not change another Podman.")
+}
+
 if ($InstallDependencies) {
   Write-JhtPhase podman_install
   $otherUser = $false
+  $foundVersion = Get-PodmanVersion (Find-Podman)
+  if ((Get-PodmanFit $foundVersion) -eq 'other') {
+    Write-PodmanMismatch $foundVersion
+    exit 24
+  }
   try {
-    if ((Get-PodmanVersion (Find-Podman)) -ne $PodmanCliVersion) {
+    if ((Get-PodmanFit $foundVersion) -in 'absent', 'older') {
       if (-not (Get-Command winget -ErrorAction SilentlyContinue)) { throw 'winget is required to install Podman dependencies.' }
       # «Already installed» while this user reaches no podman.exe: on a computer
       # with two Windows users the package is registered for the computer and
       # podman.exe sits in the other user's profile. Then once more, for this
       # user (--force: winget would stop at «already installed» again); what
       # the second pass leaves decides, never its exit code alone.
+      # Not `--scope user`: the manifest's one installer is Podman's dual-scope
+      # MSI with no scope declared, so winget finds «no applicable installer»
+      # (-1978335216). The MSI itself is asked for this user, the Windows way for
+      # a dual-scope package (ALLUSERS=2 MSIINSTALLPERUSER=1, into
+      # %LocalAppData%\Programs\Podman); winget still checks the manifest's hash.
+      # --override replaces winget's own switches, so the quiet ones are here too.
       foreach ($forThisUser in $false, $true) {
-        $scope = if ($forThisUser) { @('--scope', 'user', '--force') } else { @() }
+        $scope = if ($forThisUser) { @('--force', '--override', '/qn /norestart ALLUSERS=2 MSIINSTALLPERUSER=1') } else { @() }
         & winget install --exact --source winget --version $PodmanCliVersion --silent --disable-interactivity --accept-package-agreements --accept-source-agreements --id Podman.CLI @scope
         $wingetCode = $LASTEXITCODE
         if ($forThisUser) { $otherUser = -not (Find-Podman); break }
@@ -415,9 +454,13 @@ if ($InstallDependencies) {
     exit 25
   }
   $installedVersion = Get-PodmanVersion (Find-Podman)
-  if ($installedVersion -and $installedVersion -ne $PodmanCliVersion) {
-    [Console]::Error.WriteLine("podman_version_mismatch: Podman $installedVersion is installed on this computer, and JHT needs Podman $PodmanCliVersion.")
+  $fit = Get-PodmanFit $installedVersion
+  if ($installedVersion -and $fit -notin 'pinned', 'newer') {
+    Write-PodmanMismatch $installedVersion
     exit 24
+  }
+  if ($fit -eq 'newer') {
+    [Console]::Out.WriteLine("JHT_WARNING podman_version_newer: Podman $installedVersion is installed on this computer; JHT installs $PodmanCliVersion and uses this one as it is.")
   }
 }
 $Podman = Find-Podman
@@ -428,7 +471,12 @@ try { Install-PrivateComposeProvider -Destination $ComposeProvider } catch {
 }
 
 try {
-  $machines = @((& $Podman machine list --format json | ConvertFrom-Json))
+  # Windows PowerShell 5.1 gives a JSON array to the pipeline as ONE object: with a
+  # second machine of this user, `$machine` was the whole list. Parse with -InputObject
+  # and enumerate with foreach, the same in 5.1 and in PowerShell 7.
+  $machinesJson = ((& $Podman machine list --format json) -join "`n")
+  $parsedMachines = if ($machinesJson) { ConvertFrom-Json -InputObject $machinesJson } else { $null }
+  $machines = @(foreach ($listed in $parsedMachines) { $listed })
   $machine = $machines | Where-Object Name -eq $MachineName | Select-Object -First 1
   if (-not $machine) {
     if (-not $InitializeMachine) { throw "Podman machine '$MachineName' is absent; re-run with -InitializeMachine." }
@@ -466,7 +514,13 @@ Write-JhtPhase image_pull
 Invoke-Checked $Podman '--connection' $MachineName 'pull' $RuntimeImage | Out-Null
 $repoDigestsJson = ((& $Podman --connection $MachineName image inspect $RuntimeImage --format '{{json .RepoDigests}}' 2>$null) -join '')
 if ($LASTEXITCODE -ne 0 -or -not $repoDigestsJson) { throw 'Cannot inspect the pulled runtime image digest.' }
-$repoDigests = @($repoDigestsJson | ConvertFrom-Json)
+# Windows PowerShell 5.1, the shell the app runs, does not enumerate a JSON
+# array through the pipeline: `@($json | ConvertFrom-Json)` was ONE element, the
+# whole array, so no digest ever equalled the expected one and every pull was
+# refused (Podman 6 lists two, the index and the platform manifest). foreach
+# enumerates the parsed array in 5.1 and in PowerShell 7 alike.
+$parsedRepoDigests = ConvertFrom-Json -InputObject $repoDigestsJson
+$repoDigests = @(foreach ($digest in $parsedRepoDigests) { [string]$digest })
 $matchingRepoDigests = @($repoDigests | Where-Object { $_ -match '^ghcr\.io/leopu00/jht@sha256:[0-9a-f]{64}$' })
 if ($ExpectedImageDigest) {
   $canonicalImage = "ghcr.io/leopu00/jht@$ExpectedImageDigest"

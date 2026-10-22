@@ -170,9 +170,12 @@ public static class DockerShim
 
 function Get-MachineState {
   param([Parameter(Mandatory)][string]$Name)
-  $json = & podman machine list --format json 2>$null
+  $json = ((& podman machine list --format json 2>$null) -join "`n")
   if ($LASTEXITCODE -ne 0 -or -not $json) { return $null }
-  $machines = @($json | ConvertFrom-Json)
+  # Windows PowerShell 5.1 gives a JSON array to the pipeline as ONE object: parse with
+  # -InputObject and enumerate with foreach, the same in 5.1 and in PowerShell 7.
+  $parsed = ConvertFrom-Json -InputObject $json
+  $machines = @(foreach ($machine in $parsed) { $machine })
   return $machines | Where-Object { $_.Name -eq $Name } | Select-Object -First 1
 }
 
@@ -302,8 +305,13 @@ try {
   $script:ProbeStartedContainer = $true
   Invoke-ProbeCompose 'up' '-d'
 
-  $containerInspect = @(& docker inspect jht 2>$null | ConvertFrom-Json)
-  if ($LASTEXITCODE -ne 0 -or $containerInspect.Count -ne 1) {
+  $inspectJson = ((& docker inspect jht 2>$null) -join "`n")
+  $inspectCode = $LASTEXITCODE
+  # Windows PowerShell 5.1 gives a JSON array to the pipeline as ONE object: parse with
+  # -InputObject and enumerate with foreach, the same in 5.1 and in PowerShell 7.
+  $parsedInspect = if ($inspectCode -eq 0 -and $inspectJson) { ConvertFrom-Json -InputObject $inspectJson } else { $null }
+  $containerInspect = @(foreach ($container in $parsedInspect) { $container })
+  if ($inspectCode -ne 0 -or $containerInspect.Count -ne 1) {
     throw "Cannot inspect the JHT probe container after compose up."
   }
   Invoke-NativeChecked 'docker' 'exec' 'jht' 'sh' '-lc' 'test -d /jht_home/runtime && test -d /jht_user'
