@@ -1,4 +1,16 @@
 /**
+ * Team commands: the executor of the start, stop and restart the site asks.
+ *
+ * Since the door (migration 098) the site's team actions are rows of
+ * `team_commands`, written only by the database. The executor lives INSIDE the
+ * cloud daemon (`createTeamCommandsLane`, wired in cli/src/commands/cloud.js):
+ * woken by the Realtime INSERT on team_commands, plus a slow recovery round
+ * that asks the site only when the user's own session says a row is pending.
+ * No polling of the site every few seconds: that is the cost that retired the
+ * standalone poller below (25/06), which stays only as a diagnostic command.
+ *
+ * --- The standalone poller (diagnostic) ---
+ *
  * Team commands poller (HTTP long-poll).
  *
  * Renamed 2026-05-31: precedente nome `realtime-subscriber.js` era
@@ -37,18 +49,44 @@ import pc from 'picocolors';
 import { tierInterval, errorBackoff, POLL_IDLE_MS } from './poll-tier.js';
 import { cloudSyncHeaders } from './client-identity.js';
 import {
+  capGroup,
+  capRefusal,
   commandRefusal,
   commandTarget,
   createDoneStore,
   serverClock,
 } from './team-command-guard.js';
+import { noticeWebAction } from './web-action-notice.js';
+import { coalescingGuardedLane } from './halt-gate.js';
 
 const JHT_HOME = process.env.JHT_HOME || join(process.env.HOME || '/jht_home', '.jht');
 const CLOUD_FILE = join(JHT_HOME, 'cloud.json');
 const WEEKLY_HALT_FLAG = join(JHT_HOME, '.weekly-halt.flag');
 const JHT_BIN = '/app/cli/bin/jht.js';
 // The ids already run (team-command-guard.js): a row put back to pending does not run twice.
-const DONE_FILE = join(JHT_HOME, 'team-commands-done.json');
+export const TEAM_COMMANDS_DONE_FILE = join(JHT_HOME, 'team-commands-done.json');
+const DONE_FILE = TEAM_COMMANDS_DONE_FILE;
+export const PENDING_COMMANDS_PATH = '/api/cloud-sync/team-commands?status=pending&limit=20';
+
+/**
+ * The box's own consent to run the start, stop and restart the site asks: OFF
+ * unless this variable is "1" on the box. Read once, when the daemon starts;
+ * nothing from the cloud can turn it on. Until the site's door is closed on the
+ * cloud (migration 098) a session can write team_commands straight, so a box
+ * runs them only after the operator says so. The emergency stop does not
+ * depend on it: it travels on team_state.
+ */
+export const TEAM_COMMANDS_SWITCH = 'JHT_TEAM_COMMANDS_FROM_SITE';
+export function teamCommandsEnabled(env = process.env) {
+  return env?.[TEAM_COMMANDS_SWITCH] === '1';
+}
+
+// W7: the notice out of band for each action, by the command's action.
+const NOTICE_CODES = {
+  start: 'team_started_from_web',
+  stop: 'team_stopped_from_web',
+  restart: 'team_restarted_from_web',
+};
 
 // Cadenza adattiva (vedi poll-tier.js): 5s solo dopo un comando, poi ≤30s.
 // I comandi (es. dalla pagina sentinella cloud) vengono raccolti entro ≤30s.
@@ -114,8 +152,8 @@ function execBusCommand(action, target) {
 }
 
 // The body, and the server's clock from the reply's Date (null without one).
-async function apiGet(baseUrl, token, path) {
-  const res = await fetch(`${baseUrl}${path}`, {
+async function apiGet(baseUrl, token, path, fetchFn = fetch) {
+  const res = await fetchFn(`${baseUrl}${path}`, {
     method: 'GET',
     headers: cloudSyncHeaders(token),
   });
@@ -124,8 +162,8 @@ async function apiGet(baseUrl, token, path) {
   return { body, serverNow: serverClock(res.headers?.get?.('date') ?? null) };
 }
 
-async function apiPatch(baseUrl, token, path, payload) {
-  const res = await fetch(`${baseUrl}${path}`, {
+async function apiPatchWith(baseUrl, token, path, payload, fetchFn = fetch) {
+  const res = await fetchFn(`${baseUrl}${path}`, {
     method: 'PATCH',
     headers: cloudSyncHeaders(token, { 'Content-Type': 'application/json' }),
     body: JSON.stringify(payload),
@@ -141,20 +179,26 @@ async function apiPatch(baseUrl, token, path, payload) {
  *   serverNow() the server's clock now (the reply's Date plus the time since)
  *   done        the ids already run (createDoneStore)
  *   exec        how the command runs (execBusCommand; the tests pass their own)
+ *   notice      W7, the out-of-band notice (noticeWebAction): only when given,
+ *               so a test never runs the real one
+ *   fetchFn     the network (fetch)
  */
 export async function processCommand(baseUrl, token, command, ctx) {
   const { id, action } = command || {};
   const target = commandTarget(command);
   const exec = ctx.exec || execBusCommand;
+  const f = ctx.fetchFn || fetch;
+  const apiPatch = (b, t, path, payload) => apiPatchWith(b, t, path, payload, f);
   log('info', 'command.received', { id, action, target });
 
   // Untrusted input (P6): vocabulary, owner, age from the database's clock,
   // one run per id. A refused row is closed as error, never claimed or run.
+  // Then the door's cap per hour, on the commands this box ran (M1).
   const refusal = commandRefusal(command, {
     ownerId: ctx.ownerId,
     serverNow: ctx.serverNow(),
     done: ctx.done,
-  });
+  }) || capRefusal(command, ctx.done);
   if (refusal) {
     if (refusal !== 'malformed') {
       await apiPatch(baseUrl, token, `/api/cloud-sync/team-commands/${id}`, {
@@ -178,7 +222,7 @@ export async function processCommand(baseUrl, token, command, ctx) {
   // The id is written down BEFORE it runs: if the box stops halfway the
   // command is lost, never run twice. Unwritable = not run.
   try {
-    ctx.done.add(id);
+    ctx.done.add(id, capGroup(action));
   } catch (err) {
     await apiPatch(baseUrl, token, `/api/cloud-sync/team-commands/${id}`, {
       status: 'error',
@@ -189,15 +233,13 @@ export async function processCommand(baseUrl, token, command, ctx) {
   }
 
   const res = await exec(action, target);
-  // jht team start stampa errori user-facing su stdout (colori ANSI),
-  // non su stderr. Quando exit != 0, prefer stdout per dare un messaggio
-  // utile alla UI ("✗ ASSISTENTE — claude non trovato..."), fallback su
-  // stderr e exit code. Strip ANSI per leggibilità.
-  const stripAnsi = (s) => s.replace(/\x1b\[[0-9;]*m/g, '');
+  // The error goes to the site, into the user's action log: a fixed sentence
+  // with the exit code, never the command's output (it can carry paths, a
+  // provider's message, a token). The output stays in the box's log.
   let errMsg;
   if (!res.ok) {
-    const raw = res.stdout?.trim() || res.stderr?.trim() || `exit code ${res.exitCode}`;
-    errMsg = stripAnsi(raw).slice(-2000);
+    errMsg = commandFailure(res.exitCode);
+    log('error', 'command.output', { id, stdout: String(res.stdout || '').slice(-2000), stderr: String(res.stderr || '').slice(-2000) });
   }
   await apiPatch(baseUrl, token, `/api/cloud-sync/team-commands/${id}`, {
     status: res.ok ? 'done' : 'error',
@@ -212,9 +254,144 @@ export async function processCommand(baseUrl, token, command, ctx) {
     ok: res.ok,
     exitCode: res.exitCode,
   });
+  // W7: the user hears of it on a channel the site does not hold. Once per
+  // command (the key is its id); best-effort, the action has already run.
+  if (res.ok && ctx.notice && NOTICE_CODES[action]) {
+    try {
+      await ctx.notice({ code: NOTICE_CODES[action], key: `cmd:${id}` }, {
+        log: (msg) => log('warn', 'web-action-notice', { msg }),
+      });
+    } catch (err) {
+      log('warn', 'web-action-notice', { err: err.message });
+    }
+  }
+}
+
+/** What the site is told when a command fails: fixed, short, no output. */
+export function commandFailure(exitCode) {
+  const code = Number.isInteger(exitCode) ? exitCode : -1;
+  return `the team command failed on the box (exit code ${code})`;
+}
+
+/**
+ * The executor inside the daemon: one pass over the pending rows.
+ *
+ * `wake(tag)`:
+ *   'realtime'  a row was just inserted: read the pending rows from the site
+ *               (its reply's Date is the server's clock for the age check);
+ *   any other   the slow recovery round: first ask the user's own session
+ *               (`hasPending`, Supabase, not the site) whether a row is
+ *               pending; only then read from the site. Without an answer
+ *               (no session, an error), the site is read at most once per
+ *               `slowMs`.
+ *
+ * @param {object} o
+ * @param {object} o.config   cloud.json
+ * @param {object} o.done     the ids already run (createDoneStore)
+ * @param {Function} [o.exec]       how the command runs
+ * @param {Function} [o.notice]     W7 (noticeWebAction)
+ * @param {Function} [o.hasPending] () => Promise<boolean|null>
+ * @param {Function} [o.fetchFn]
+ * @param {number}   [o.slowMs]     default 5 minutes
+ * @param {Function} [o.now]
+ */
+export function createTeamCommandsLane({
+  config, done, exec, notice, hasPending = null, fetchFn = fetch, slowMs = 5 * 60_000, now = Date.now,
+  enabled = teamCommandsEnabled(),
+}) {
+  // Off: nothing is read and nothing runs, whoever wakes the lane.
+  if (!enabled) return async function off() { return { status: 'off' }; };
+  let lastSiteRead = -Infinity;
+  return async function wake(tag = 'fallback') {
+    if (!config?.enabled) return { status: 'disabled' };
+    const baseUrl = (config.base_url || '').replace(/\/+$/, '');
+    const token = config.token;
+    if (!baseUrl || !token) return { status: 'no_credentials' };
+    if (tag !== 'realtime') {
+      let pending = null;
+      if (hasPending) {
+        try { pending = await hasPending(); } catch { pending = null; }
+      }
+      if (pending === false) return { status: 'idle' };
+      if (pending !== true && now() - lastSiteRead < slowMs) return { status: 'throttled' };
+    }
+    lastSiteRead = now();
+    const { body, serverNow: replyClock } = await apiGet(baseUrl, token, PENDING_COMMANDS_PATH, fetchFn);
+    const fetchedAt = performance.now();
+    const base = replyClock ?? now();
+    const serverNow = () => base + (performance.now() - fetchedAt);
+    const ownerId = typeof config.user_id === 'string' ? config.user_id : null;
+    const commands = Array.isArray(body?.commands) ? body.commands : [];
+    for (const cmd of commands) {
+      try {
+        await processCommand(baseUrl, token, cmd, { ownerId, serverNow, done, exec, notice, fetchFn });
+      } catch (err) {
+        log('error', 'process.crashed', { id: cmd?.id, err: err.message });
+      }
+    }
+    return { status: 'ok', seen: commands.length };
+  };
+}
+
+/**
+ * The executor as the daemon runs it (runRealtimeLoop in cli/src/commands/cloud.js):
+ * the lane above, behind the daemon's halt gate, coalescing (a row inserted while
+ * a pass runs gets one more pass), with the user's own session to ask whether a
+ * row is pending.
+ *
+ *   run(tag)       one pass: 'realtime' from the event, 'fallback' from the slow round
+ *   subscribe(rt)  the INSERT on team_commands (in the realtime publication since
+ *                  migration 012; the user's own rows only) wakes run('realtime')
+ */
+export function createTeamCommandsExecutor({
+  config,
+  haltGate,
+  slowMs,
+  getClient = () => null,
+  done = createDoneStore(TEAM_COMMANDS_DONE_FILE),
+  exec,
+  notice = noticeWebAction,
+  fetchFn = fetch,
+  now = Date.now,
+  enabled = teamCommandsEnabled(),
+  onError = (e) => log('error', 'lane.failed', { err: e.message }),
+}) {
+  // Off: no subscription to team_commands, no recovery round, nothing run.
+  if (!enabled) return { enabled: false, run: async () => false, subscribe: () => {} };
+  const lane = createTeamCommandsLane({
+    config,
+    done,
+    exec,
+    notice,
+    fetchFn,
+    slowMs,
+    now,
+    enabled: true,
+    hasPending: async () => {
+      const client = getClient();
+      if (!client) return null;
+      const { data, error } = await client
+        .from('team_commands').select('id').eq('status', 'pending').limit(1);
+      if (error || !Array.isArray(data)) return null;
+      return data.length > 0;
+    },
+  });
+  const run = coalescingGuardedLane(haltGate, 'team-commands', async (tag) => {
+    await lane(tag);
+  }, onError);
+  const subscribe = (rt) => rt.subscribe(
+    'team-commands',
+    { table: 'team_commands', event: 'INSERT' },
+    () => { void run('realtime'); },
+  );
+  return { enabled: true, run, subscribe };
 }
 
 export async function runTeamCommandsPoller() {
+  if (!teamCommandsEnabled()) {
+    log('warn', 'startup.skipped', { reason: `team commands from the site are off on this box (${TEAM_COMMANDS_SWITCH})` });
+    process.exit(0);
+  }
   const config = await loadCloudConfig();
   if (!config?.enabled) {
     log('warn', 'startup.skipped', { reason: 'cloud sync not enabled' });
@@ -291,7 +468,7 @@ export async function runTeamCommandsPoller() {
         log('info', 'poll.found-pending', { count: commands.length });
         for (const cmd of commands) {
           if (shuttingDown) break;
-          try { await processCommand(baseUrl, token, cmd, { ownerId, serverNow, done }); }
+          try { await processCommand(baseUrl, token, cmd, { ownerId, serverNow, done, notice: noticeWebAction }); }
           catch (err) {
             log('error', 'process.crashed', { id: cmd.id, err: err.message });
           }
