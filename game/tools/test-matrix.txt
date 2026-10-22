@@ -47,6 +47,10 @@
 nav_grid|script|gate|any|-|tools/nav_grid_selftest.gd|-
 speech_bubble|script|gate|any|-|tools/speech_bubble_selftest.gd|-
 pipeline_queue|script|gate|any|-|tools/pipeline_queue_selftest.gd|-
+# Il pin all'indirizzo della mappa: solo il livello `address` (o, senza
+# livello, office_verified) con le due coordinate; via, quartiere, città,
+# paese e remoto mai.
+location_precision|script|gate|any|-|tools/location_precision_selftest.gd|LOCATION-PRECISION-TEST PASS
 embedded_terminal|script|gate|any|-|tools/embedded_terminal_selftest.gd|-
 # Il pairing cloud non è più una console: il processo emette eventi sicuri,
 # il browser apre sul link completo e un errore rende visibile COPIA LINK.
