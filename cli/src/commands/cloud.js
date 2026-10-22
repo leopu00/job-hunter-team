@@ -57,7 +57,13 @@ import {
   saveAwaitingApplication,
 } from '../lib/cloud-push-awaiting.js';
 import { ReceiptKeyInvalid } from '../../../shared/cloud/receipt-ids.js';
-import { instantKey, noticeWebActions } from '../lib/web-action-notice.js';
+import { instantKey, noticeWebAction, noticeWebActions } from '../lib/web-action-notice.js';
+import {
+  createTeamCommandsExecutor,
+  createTeamCommandsLane as createLane,
+  TEAM_COMMANDS_DONE_FILE,
+} from '../lib/team-commands-poller.js';
+import { createDoneStore } from '../lib/team-command-guard.js';
 import {
   bootstrapLimits, decideBootstrapPush, nextBootstrapState,
   readBootstrapState, readFirstRunPhase, readLocalSignature, saveBootstrapState,
@@ -4315,6 +4321,16 @@ async function handleDaemon(options) {
     return;
   }
 
+  // The site's team commands without Realtime (no Supabase session on this
+  // box, or the opt-out): no event wakes the executor, so it reads the site at
+  // most once every 5 minutes, never at the fast round's pace.
+  const teamCommandsSlow = createLane({
+    config,
+    done: createDoneStore(TEAM_COMMANDS_DONE_FILE),
+    notice: noticeWebAction,
+    slowMs: Math.max(60, parseInt(process.env.JHT_PARACHUTE_SEC || '300', 10) || 300) * 1000,
+  });
+
   const chatCycleState = { lastPulledRequestedAt: null };
   let stoppedPollAttempt = 0;
   while (running) {
@@ -4420,6 +4436,13 @@ async function handleDaemon(options) {
         await reconcileSettings(config, rendezvousState);
       } catch (err) {
         console.error(pc.yellow(`  daemon settings error: ${err.message}`));
+      }
+
+      // The site's start, stop and restart: throttled inside (teamCommandsSlow).
+      try {
+        await teamCommandsSlow('fallback');
+      } catch (err) {
+        console.error(pc.yellow(`  daemon team-commands error: ${err.message}`));
       }
 
       // ── Heartbeat "VPS online": ogni intervalSec ── (reconcileOnce solo-heartbeat;
@@ -4565,6 +4588,15 @@ async function runRealtimeLoop({ config, isRunning }) {
     await reconcileEmergencyStop(config, state);
   }, (e) => console.error(pc.yellow(`  emergency-stop error: ${e.message}`)));
 
+  // [WEB-CAPACE fase 6] The settings the site asked (working hours, model and
+  // effort per role) travel on the same team_state row: the UPDATE event and
+  // the slow round, as in the loop without Realtime. Coalescing: a newer
+  // version that arrives while one is applied is applied next, not dropped.
+  const runSettings = coalescingGuardedLane(haltGate, 'settings', async (_tag, state) => {
+    const { reconcileSettings } = await import('../lib/team-state-reconciler.js');
+    await reconcileSettings(config, state);
+  }, (e) => console.error(pc.yellow(`  settings error: ${e.message}`)));
+
   let rt = null;
   let realtimeHealthy = false;
   let fallbackTimer = null;
@@ -4578,6 +4610,16 @@ async function runRealtimeLoop({ config, isRunning }) {
     fallbackMaxMs,
     (parseInt(process.env.JHT_PARACHUTE_SEC || '300', 10) || 300) * 1000,
   );
+  // The site's start, stop and restart (team_commands, written by the door):
+  // woken by the INSERT event, recovered by the slow round, which asks the
+  // user's own session whether a row is pending before it asks the site.
+  const teamCommands = createTeamCommandsExecutor({
+    config,
+    haltGate,
+    slowMs: parachuteMs,
+    getClient: () => rt?.client ?? null,
+    onError: (e) => console.error(pc.yellow(`  team-commands error: ${e.message}`)),
+  });
 
   const scheduleFallback = (delayMs) => {
     if (!isRunning()) return;
@@ -4593,6 +4635,8 @@ async function runRealtimeLoop({ config, isRunning }) {
       await runSync('fallback', state);
       await runChatSync('fallback', state);
       await runEmergencyStop('fallback', state);
+      await runSettings('fallback', state);
+      await teamCommands.run('fallback');
     } finally {
       fallbackBusy = false;
       const connected = realtimeHealthy && !!rt?.isConnected?.();
@@ -4635,6 +4679,8 @@ async function runRealtimeLoop({ config, isRunning }) {
       void runChatSync('realtime', payload?.new ?? null);
       // E lo STOP mobile viaggia nello stesso evento, senza un altro poller.
       void runEmergencyStop('realtime', payload?.new ?? null);
+      // And the settings the site asked, in the same row.
+      void runSettings('realtime', payload?.new ?? null);
     }, realtimeStatus);
 
     // ── Tappa 3: ticket → Realtime ── cambio su position_tickets → ticket-sync.
@@ -4642,7 +4688,11 @@ async function runRealtimeLoop({ config, isRunning }) {
     // IDENTITY FULL). La RLS consegna solo le righe dell'utente.
     rt.subscribe('tickets', { table: 'position_tickets', event: '*' }, () => { void runTicketSync('realtime'); });
 
-    log('info', 'realtime ready (team_state + position_tickets) — sync/ticket via websocket + active parachute.');
+    // ── The site's team commands ── INSERT on team_commands (in the realtime
+    // publication since 012; the user's own rows only) → one pass of the executor.
+    teamCommands.subscribe(rt);
+
+    log('info', 'realtime ready (team_state + position_tickets + team_commands) — sync/ticket/commands via websocket + active parachute.');
   } catch (e) {
     console.error(pc.yellow(`  cloud-realtime failed setup (${e.message}) — degradation to parachute polls only.`));
   }
