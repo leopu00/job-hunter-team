@@ -457,6 +457,8 @@ const S := {
 	"pos.office_verified": "von den Analysten verifiziert",
 	"pos.office_approx": "nicht verifiziert · Stadtzentrum",
 	"pos.office_street": "Straße, ohne Hausnummer",
+	"pos.office_district": "Stadtteil, ohne Straße",
+	"pos.office_rough": "nicht verifiziert · ungefähr",
 
 	"apps.ready": "CV fertig",
 	"apps.applied": "eingereicht",

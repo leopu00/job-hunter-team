@@ -136,35 +136,31 @@ func _rebuild_pins() -> void:
 	var data_state := SimBadge.current_state()
 	var visible_positions := SimBadge.visible_positions()
 	if not visible_positions.is_empty():
-		var clusters := {}  # città → {coord, count, best_score}
-		for p in visible_positions:
-			var coord := Vector2.INF
-			if p.get("office_lat") != null and p.get("office_lon") != null:
-				coord = Vector2(float(p["office_lon"]), float(p["office_lat"]))
-			else:
-				coord = _city_coord(str(p.get("loc_city", "") if p.get("loc_city") else ""))
-			if coord == Vector2.INF or coord.x < LON_MIN or coord.x > LON_MAX \
-					or coord.y < LAT_MIN or coord.y > LAT_MAX:
-				var where := str(p.get("loc_city", "") if p.get("loc_city") else "")
-				if where == "":
-					where = str(p.get("loc_country", "") if p.get("loc_country") else "?")
-				_no_coords.append("%s — %s · %s" % [str(p.get("title", "?")).left(48),
-						str(p.get("company", "?")), where])
+		# Gli stessi gruppi della mappa OSM (MapPins): un pin per indirizzo
+		# esatto, uno «≈ città» sulla città (mai sulla coordinata di una sua
+		# riga), le coordinate condivise da più aziende declassate.
+		var built := MapPins.build_from(visible_positions, {})
+		for p in built["no_coords"]:
+			_no_coords.append(_no_coords_line(p))
+		for c in built["clusters"]:
+			var coord: Vector2 = c["lonlat"]
+			if coord.x < LON_MIN or coord.x > LON_MAX or coord.y < LAT_MIN or coord.y > LAT_MAX:
+				for p in c["positions"]:
+					_no_coords.append(_no_coords_line(p))
 				continue
-			var city := str(p.get("loc_city", "?"))
-			if not clusters.has(city):
-				clusters[city] = {"coord": coord, "count": 0, "best": 0}
-			clusters[city]["count"] += 1
-			var sc := int(p.get("total_score") if p.get("total_score") != null else 0)
-			clusters[city]["best"] = maxi(clusters[city]["best"], sc)
-		for city in clusters:
-			var c: Dictionary = clusters[city]
+			var base := str(c["city"])
+			if bool(c["exact"]):
+				var company: Variant = (c["positions"][0] as Dictionary).get("company")
+				if company != null and str(company).strip_edges() != "":
+					base = str(company)
+			else:
+				base = "≈ " + base
 			_pins.append({
 				"pos_norm": Vector2(
-					(c["coord"].x - LON_MIN) / (LON_MAX - LON_MIN),
-					1.0 - (c["coord"].y - LAT_MIN) / (LAT_MAX - LAT_MIN)),
-				"label": "%s (%d)" % [city, c["count"]] if c["count"] > 1 else city,
-				"score": int(c["best"]),
+					(coord.x - LON_MIN) / (LON_MAX - LON_MIN),
+					1.0 - (coord.y - LAT_MIN) / (LAT_MAX - LAT_MIN)),
+				"label": "%s (%d)" % [base, int(c["count"])] if int(c["count"]) > 1 else base,
+				"score": int(c["best"]) if c["best"] != null else 0,
 			})
 	elif data_state == SimBadge.DataState.DEMO:
 		for p in TeamData.positions_today():
@@ -181,6 +177,12 @@ func _rebuild_pins() -> void:
 				"score": int(p.get("score", 0)),
 			})
 	queue_redraw()
+
+static func _no_coords_line(p: Dictionary) -> String:
+	var where := str(p.get("loc_city", "") if p.get("loc_city") else "")
+	if where == "":
+		where = str(p.get("loc_country", "") if p.get("loc_country") else "?")
+	return "%s — %s · %s" % [str(p.get("title", "?")).left(48), str(p.get("company", "?")), where]
 
 static func _city_coord(city: String) -> Vector2:
 	if city == "":
