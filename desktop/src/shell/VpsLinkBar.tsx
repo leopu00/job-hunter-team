@@ -28,9 +28,10 @@ function copy(value: string) {
 }
 
 /**
- * The header of the read-only view of an existing team: which team (pinned
- * revision and image, copyable), the link's state with the catalog's sentence,
- * and the last working read. «Riprova» only where nothing retries by itself;
+ * The header of the read-only view of an existing team: the link's state with
+ * the catalog's sentence and the last working read. Which team (pinned revision
+ * and image, copyable) and the error's code are for whoever has to report it:
+ * they sit behind «Dettagli tecnici». «Riprova» only where nothing retries by itself;
  * a changed SSH key sends the person back to the setup to look at it again.
  */
 export function VpsLinkBar({ onCloseReadOnly }: { onCloseReadOnly?: () => void }) {
@@ -38,6 +39,7 @@ export function VpsLinkBar({ onCloseReadOnly }: { onCloseReadOnly?: () => void }
   const t = VPS_LINK_TEXT[locale];
   const state = useVpsLink();
   const [identity, setIdentity] = useState<VpsLinkIdentity | null>(null);
+  const [open, setOpen] = useState(false);
 
   useEffect(() => {
     let live = true;
@@ -71,21 +73,43 @@ export function VpsLinkBar({ onCloseReadOnly }: { onCloseReadOnly?: () => void }
         </span>
       )}
       {failed && failure && (
-        <span data-testid="vps-link-sentence">{`${failure.text} ${failure.action} (${state.code})`}</span>
+        <span data-testid="vps-link-sentence">{`${failure.text} ${failure.action}`}</span>
       )}
-      {identity && (
-        <span className="flex items-center gap-2" data-testid="vps-link-identity">
-          <span>{t.revision} <code title={identity.revision}>{identity.revision.slice(0, 7)}</code></span>
-          <button type="button" aria-label={t.copyRevision} onClick={() => copy(identity.revision)} className="underline">⧉</button>
-          <span>{t.image} <code title={identity.digest}>{`${identity.digest.slice(0, 11)}…${identity.digest.slice(-4)}`}</code></span>
-          <button type="button" aria-label={t.copyDigest} onClick={() => copy(identity.digest)} className="underline">⧉</button>
-        </span>
+      {(identity || (failed && state.code)) && (
+        <button
+          type="button"
+          aria-expanded={open}
+          aria-controls="vps-link-details"
+          onClick={() => setOpen((value) => !value)}
+          className="underline px-2 py-1"
+        >
+          {t.details}
+        </button>
       )}
       {(state.status === "network" || state.status === "application" || state.status === "version") && (
         <button type="button" onClick={retryVpsLink} className="ml-auto underline text-[var(--color-bright)]">{t.retry}</button>
       )}
       {state.status === "blocked" && onCloseReadOnly && (
         <button type="button" onClick={onCloseReadOnly} className="ml-auto underline text-[var(--color-bright)]">{t.reviewKey}</button>
+      )}
+      {open && (
+        <div id="vps-link-details" data-testid="vps-link-details" className="basis-full flex flex-wrap items-center gap-x-4 gap-y-1">
+          {failed && state.code && (
+            <span data-testid="vps-link-code">{t.errorCode} <code>{state.code}</code></span>
+          )}
+          {identity && (
+            <span className="flex flex-wrap items-center gap-x-4 gap-y-1" data-testid="vps-link-identity">
+              <span className="flex items-center gap-2">
+                {t.revision} <code title={identity.revision}>{identity.revision.slice(0, 7)}</code>
+                <button type="button" aria-label={t.copyRevision} onClick={() => copy(identity.revision)} className="underline px-2 py-1">{t.copy}</button>
+              </span>
+              <span className="flex items-center gap-2">
+                {t.image} <code title={identity.digest}>{`${identity.digest.slice(0, 11)}…${identity.digest.slice(-4)}`}</code>
+                <button type="button" aria-label={t.copyDigest} onClick={() => copy(identity.digest)} className="underline px-2 py-1">{t.copy}</button>
+              </span>
+            </span>
+          )}
+        </div>
       )}
     </div>
   );

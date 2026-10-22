@@ -145,7 +145,7 @@ describe("Posizioni on an existing team read only", () => {
     // the disabled judgement controls say what they wait for, with the onboarding's own button
     expect(screen.getByTestId("existing-team-judgement-coming")).toHaveTextContent("«Conferma e collega»");
     const nav = screen.getByRole("navigation", { name: "Navigazione app" });
-    expect(within(nav).getAllByRole("link").map((link) => link.textContent)).toEqual(["JHT", "Dashboard", "Mappa", "Posizioni", "Squadra", "Profilo", "Ufficio", "Agenti"]);
+    expect(within(nav).getAllByRole("link").map((link) => link.textContent)).toEqual(["JHT", "Dashboard", "Mappa", "Posizioni", "Squadra", "Profilo", "Ufficio", "Agenti", "Impostazioni", "Guida"]);
     // The sidebar starts closed; opened, its dataset comes from the companion
     // through the web route, and its families are the team's own.
     await userEvent.setup().click(screen.getByRole("button", { name: /filtri/i }));
@@ -270,7 +270,10 @@ describe("Posizioni on an existing team read only", () => {
     const alert = await screen.findByRole("alert");
     // The core's own code, not a catch-all "cannot be reached", is what the person reads.
     expect(alert).toHaveTextContent(describeError("positions_unavailable", { locale: "it" }).text);
-    expect(alert).toHaveTextContent("(positions_unavailable)");
+    // the code is for whoever reports it: behind the bar's «Dettagli tecnici», not in the sentence
+    expect(alert).not.toHaveTextContent("positions_unavailable");
+    await userEvent.setup().click(within(alert).getByRole("button", { name: "Dettagli tecnici" }));
+    expect(alert).toHaveTextContent("codice positions_unavailable");
     expect(screen.queryByText("Synthetic role A")).not.toBeInTheDocument();
 
     native.invoke.mockImplementation(async (command: string, args?: { request: never }) => (command === POSITIONS ? companion(args!.request) : null));

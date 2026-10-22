@@ -19,6 +19,10 @@ export interface ExistingTeamReadOnlyText {
   office: string;
   /** The navigation entry of the agents' page (a desktop page, no web label). */
   agents: string;
+  /** The navigation entry of the settings page (a desktop page, no web label). */
+  settings: string;
+  /** The navigation entry of the guide (a desktop page, no web label). */
+  help: string;
   /** What a click on an agent of the office says: its moves are not in what the VPS reports. */
   officeAgentNoMoves: string;
   back: string;
@@ -37,6 +41,8 @@ export const EXISTING_TEAM_READONLY_TEXT: Record<Locale, ExistingTeamReadOnlyTex
     profile: "Profilo",
     office: "Ufficio",
     agents: "Agenti",
+    settings: "Impostazioni",
+    help: "Guida",
     officeAgentNoMoves: "Cosa ha fatto questo agente non si legge dalla VPS: qui si vede solo se la sua sessione è accesa.",
     back: "Torna alla configurazione",
     navAria: "Navigazione in sola lettura",
@@ -51,6 +57,8 @@ export const EXISTING_TEAM_READONLY_TEXT: Record<Locale, ExistingTeamReadOnlyTex
     profile: "Profile",
     office: "Office",
     agents: "Agents",
+    settings: "Settings",
+    help: "Help",
     officeAgentNoMoves: "What this agent has done cannot be read from the VPS: only whether its session is up shows here.",
     back: "Back to setup",
     navAria: "Read-only navigation",
@@ -65,6 +73,8 @@ export const EXISTING_TEAM_READONLY_TEXT: Record<Locale, ExistingTeamReadOnlyTex
     profile: "Profil",
     office: "Büro",
     agents: "Agenten",
+    settings: "Einstellungen",
+    help: "Hilfe",
     officeAgentNoMoves: "Was dieser Agent getan hat, lässt sich nicht von der VPS lesen: hier ist nur zu sehen, ob seine Sitzung läuft.",
     back: "Zurück zur Einrichtung",
     navAria: "Navigation im Lesemodus",
@@ -79,6 +89,8 @@ export const EXISTING_TEAM_READONLY_TEXT: Record<Locale, ExistingTeamReadOnlyTex
     profile: "Profil",
     office: "Bureau",
     agents: "Agents",
+    settings: "Paramètres",
+    help: "Aide",
     officeAgentNoMoves: "Ce que cet agent a fait ne se lit pas sur la VPS : on voit ici seulement si sa session est active.",
     back: "Retour à la configuration",
     navAria: "Navigation en lecture seule",
@@ -93,6 +105,8 @@ export const EXISTING_TEAM_READONLY_TEXT: Record<Locale, ExistingTeamReadOnlyTex
     profile: "Perfil",
     office: "Oficina",
     agents: "Agentes",
+    settings: "Ajustes",
+    help: "Ayuda",
     officeAgentNoMoves: "Lo que ha hecho este agente no se puede leer desde la VPS: aquí solo se ve si su sesión está activa.",
     back: "Volver a la configuración",
     navAria: "Navegación de solo lectura",
@@ -107,6 +121,8 @@ export const EXISTING_TEAM_READONLY_TEXT: Record<Locale, ExistingTeamReadOnlyTex
     profile: "Perfil",
     office: "Escritório",
     agents: "Agentes",
+    settings: "Configurações",
+    help: "Ajuda",
     officeAgentNoMoves: "O que este agente fez não se lê a partir da VPS: aqui só se vê se a sessão dele está ativa.",
     back: "Voltar à configuração",
     navAria: "Navegação só de leitura",
@@ -121,6 +137,8 @@ export const EXISTING_TEAM_READONLY_TEXT: Record<Locale, ExistingTeamReadOnlyTex
     profile: "Profil",
     office: "Iroda",
     agents: "Ügynökök",
+    settings: "Beállítások",
+    help: "Súgó",
     officeAgentNoMoves: "Azt, hogy mit csinált ez az ügynök, nem lehet kiolvasni a VPS-ről: itt csak az látszik, hogy fut-e a munkamenete.",
     back: "Vissza a beállításhoz",
     navAria: "Csak olvasható navigáció",

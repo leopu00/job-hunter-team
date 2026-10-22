@@ -12,6 +12,8 @@ import OfficePage from "../pages/office";
 import PositionPage from "../pages/position";
 import PositionsPage from "../pages/positions";
 import ProfilePage from "../pages/profile";
+import HelpPage from "../pages/help";
+import SettingsPage from "../pages/settings";
 import SwipePage from "../pages/swipe";
 import TeamPage from "../pages/team";
 import {
@@ -65,6 +67,8 @@ export const ROUTES: Route[] = [
   { path: "/agents", page: AgentsPanel },
   { path: "/office", page: OfficePage, fullBleed: true },
   { path: "/mail", page: MailPage },
+  { path: "/settings", page: SettingsPage },
+  { path: "/help", page: HelpPage },
   // «Remove JHT from this computer» (Windows): linked only where it can run.
   { path: "/computer", page: ComputerPage },
 ];
@@ -81,6 +85,10 @@ export const READ_ONLY_ROUTES: Route[] = [
   { path: "/office", page: ExistingTeamOfficePage, fullBleed: true },
   // The same agents' panel: here it reads, and the native side refuses every action.
   { path: "/agents", page: AgentsPanel },
+  // The app's own language and currency: local choices, nothing reaches the team.
+  { path: "/settings", page: SettingsPage },
+  // What the read-only view does: it says only that.
+  { path: "/help", page: HelpPage },
 ];
 
 /** The navigation of that view, in the order of the web's own bar. */
@@ -93,4 +101,6 @@ export const READ_ONLY_NAV = [
   // A desktop page, after the web's ones as in the full shell (DESKTOP_LINKS).
   { href: "/office", label: "own:office" },
   { href: "/agents", label: "own:agents" },
+  { href: "/settings", label: "own:settings" },
+  { href: "/help", label: "own:help" },
 ] as const;

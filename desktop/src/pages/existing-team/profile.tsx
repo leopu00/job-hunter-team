@@ -80,8 +80,8 @@ function notices(read: ExistingTeamProfileRead, built: Built, t: ExistingTeamPro
 /**
  * «Profilo» of an existing team that is only read: the candidate profile the
  * team's VPS holds, drawn by the same ProfileView the web draws, from the
- * fields the core's `profile` op returns. Editing is shown disabled with the
- * reason, nothing is downloaded but the profile data on screen, and whatever
+ * fields the core's `profile` op returns. There is no editing control: one
+ * note says why, nothing is downloaded but the profile data on screen, and whatever
  * the core could not read, cut or leave out is told, one thing at a time.
  */
 export default function ExistingTeamProfilePage(_props: PageProps) {
@@ -136,56 +136,46 @@ export default function ExistingTeamProfilePage(_props: PageProps) {
     <div style={{ animation: "fade-in 0.35s ease both" }}>
       {/* No px-5 here: MainChrome already pads the page (max-w-6xl px-5); a second one put this block one margin to the right of the cards below. */}
       <div className="max-w-6xl mx-auto pt-6">
-        <div className="flex items-start justify-between gap-4 mb-2">
-          <div>
-            {reading.kind === "read" && (
-              <p data-testid="profile-time" className="text-[11px]" style={{ color: "var(--color-muted)" }}>
-                {(busy ? t.staleWhileReading : t.readAt).replace("{time}", stamp(reading.at))}
-              </p>
-            )}
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              disabled
-              title={reason}
-              data-testid="profile-edit"
-              className="text-[10px] font-semibold tracking-widest uppercase px-3 py-1.5 rounded border border-[var(--color-border)] text-[var(--color-muted)] opacity-60 cursor-not-allowed"
-            >
-              {t.edit}
-            </button>
-            <button
-              type="button"
-              onClick={() => void read()}
-              disabled={busy}
-              className="text-[10px] font-semibold tracking-widest uppercase px-3 py-1.5 rounded border border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-bright)] disabled:opacity-60 disabled:cursor-wait"
-            >
-              {busy ? t.refreshing : t.refresh}
-            </button>
-          </div>
+        <div className="flex items-center justify-between gap-4 mb-2">
+          <p data-testid="profile-time" className="text-[11px]" style={{ color: "var(--color-muted)" }}>
+            {reading.kind === "read" ? (busy ? t.staleWhileReading : t.readAt).replace("{time}", stamp(reading.at)) : null}
+          </p>
+          <button
+            type="button"
+            onClick={() => void read()}
+            disabled={busy}
+            className="text-[11px] font-semibold tracking-widest uppercase px-3 py-1.5 rounded border border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-bright)] disabled:opacity-60 disabled:cursor-wait"
+          >
+            {busy ? t.refreshing : t.refresh}
+          </button>
         </div>
-        <p data-testid="profile-edit-reason" className="text-[11px] mb-2" style={{ color: "var(--color-muted)" }}>
-          {reason}
-        </p>
-        <p data-testid="profile-limits" className="text-[11px] mb-3" style={{ color: "var(--color-muted)" }}>
-          {t.limits}
+        {/* One note, not a column of lines and a dead button: why nothing here changes, and what is not downloaded. */}
+        <p className="text-[12px] mb-3 px-3 py-2 rounded border border-[var(--color-border)]" style={{ color: "var(--color-muted)" }}>
+          <span data-testid="profile-edit-reason">{reason}</span>{" "}
+          <span data-testid="profile-limits">{t.limits}</span>
         </p>
 
         {reading.kind === "unknown" && !busy && (
-          <p data-testid="profile-unknown" className="text-[12px]" style={{ color: "var(--color-muted)" }}>
-            {t.unknown}
-          </p>
+          <div data-testid="profile-unknown" className="flex flex-col items-start gap-2 text-[12px]" style={{ color: "var(--color-muted)" }}>
+            <p>{t.unknown}</p>
+            <button type="button" onClick={() => void read()} className="text-[11px] font-semibold tracking-widest uppercase px-3 py-1.5 rounded border border-[var(--color-border)] hover:text-[var(--color-bright)]">
+              {t.retry}
+            </button>
+          </div>
         )}
 
         {reading.kind === "error" && failure && (
-          <div role="alert" data-testid="profile-error" className="text-[12px]" style={{ color: "var(--color-red)" }}>
+          <div role="alert" data-testid="profile-error" className="flex flex-col items-start gap-1 text-[12px]" style={{ color: "var(--color-red)" }}>
             <strong>{t.failed}</strong>
             <p>
-              {failure.text} {failure.action} ({reading.code})
+              {failure.text} {failure.action}
             </p>
             <p className="text-[11px]" style={{ color: "var(--color-muted)" }}>
-              {t.failedAt.replace("{time}", stamp(reading.at))}
+              {t.errorCode} <code>{reading.code}</code> · {t.failedAt.replace("{time}", stamp(reading.at))}
             </p>
+            <button type="button" onClick={() => void read()} disabled={busy} className="mt-1 text-[11px] font-semibold tracking-widest uppercase px-3 py-1.5 rounded border border-current disabled:opacity-60">
+              {t.retry}
+            </button>
           </div>
         )}
 
@@ -195,7 +185,7 @@ export default function ExistingTeamProfilePage(_props: PageProps) {
               <li
                 key={notice.id}
                 data-testid={`profile-notice-${notice.id}`}
-                className="text-[11px]"
+                className="text-[12px]"
                 style={{ color: "var(--color-yellow)" }}
               >
                 {notice.text}
