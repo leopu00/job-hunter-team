@@ -1,4 +1,4 @@
-"""JHT web capace, phase 2-a — migration 098: the single door for the actions of the website.
+"""JHT web capace, phase 2-a — migrations 098 (the single door) and 099 (the door by families).
 
 The migration is run for real on PostgreSQL, from the file in supabase/migrations, twice (a migration
 the operator applies by hand has to be safe to apply again). The database is shaped like the live one
@@ -51,6 +51,7 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 MIGRATION = ROOT / "supabase" / "migrations" / "098_web_action_door.sql"
+MIGRATION_099 = ROOT / "supabase" / "migrations" / "099_web_action_families.sql"
 LEVEL_OF = {"team.start": "L2", "team.stop": "L2", "team.restart": "L2", "team.emergency_stop": "L2",
             "position.apply_authorize": "L3", "position.apply_revoke": "L1"}
 APPLY_RULE = json.loads((ROOT / "shared" / "cloud" / "apply-request-rule.json").read_text())
@@ -158,6 +159,51 @@ REVOKE INSERT, UPDATE, DELETE ON public.team_directives FROM anon, authenticated
 """
 
 
+# A family of the tests: it stands for the ones that 100 and 101 will add. It does what the contract says a
+# family may do, and what it must not, on request of the parameters.
+DEMO_FAMILY = """
+CREATE TABLE public.demo_effects (
+  id serial PRIMARY KEY, stage text, log_id uuid, params jsonb, body text, uid uuid);
+
+INSERT INTO web_door.vocab (action, family, level, recent, cap_group, cap_n, cap_window, takes_body, params_max_bytes) VALUES
+  ('demo.note',   'demo', 'L1', FALSE, 'demo.note',   50, INTERVAL '1 hour', TRUE,  1024),
+  ('demo.danger', 'demo', 'L2', FALSE, 'demo.danger', 50, INTERVAL '1 hour', TRUE,  256),
+  ('demo.sync',   'demo', 'L1', FALSE, 'demo.sync',   50, INTERVAL '1 hour', FALSE, 256),
+  ('ghost.act',   'ghost','L1', FALSE, 'ghost.act',   50, INTERVAL '1 hour', FALSE, 256);
+
+CREATE FUNCTION web_door.ext_demo(p_stage text, p_action text, p_uid uuid, p_params jsonb, p_body text, p_log_id uuid)
+RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path = '' AS $f$
+BEGIN
+  INSERT INTO public.demo_effects (stage, log_id, params, body, uid) VALUES (p_stage, p_log_id, p_params, p_body, p_uid);
+  IF p_stage = 'prepare' THEN
+    IF p_params ? 'fail' THEN RETURN jsonb_build_object('error', p_params ->> 'fail'); END IF;
+    IF p_params ? 'broken' THEN
+      IF p_params ->> 'broken' = 'nothing' THEN RETURN NULL; END IF;
+      IF p_params ->> 'broken' = 'array' THEN RETURN '[]'::jsonb; END IF;
+      IF p_params ->> 'broken' = 'nosummary' THEN RETURN jsonb_build_object('params', '{}'::jsonb, 'confirm', FALSE); END IF;
+      IF p_params ->> 'broken' = 'noconfirm' THEN RETURN jsonb_build_object('params', '{}'::jsonb, 'summary', 's'); END IF;
+      IF p_params ->> 'broken' = 'emptysummary' THEN RETURN jsonb_build_object('params', '{}'::jsonb, 'summary', '  ', 'confirm', FALSE); END IF;
+      IF p_params ->> 'broken' = 'bigparams' THEN
+        RETURN jsonb_build_object('params', jsonb_build_object('pad', repeat('x', 400)), 'summary', 's', 'confirm', FALSE);
+      END IF;
+      IF p_params ->> 'broken' = 'bodynottaken' THEN
+        RETURN jsonb_build_object('params', '{}'::jsonb, 'body', 'a text', 'summary', 's', 'confirm', FALSE);
+      END IF;
+    END IF;
+    RETURN jsonb_build_object(
+      'params', p_params,
+      'body', CASE WHEN p_body IS NULL THEN NULL ELSE btrim(p_body) END,
+      'summary', 'demo ' || COALESCE(left(p_body, 20), E'\nnothing'),
+      'confirm', p_action = 'demo.danger');
+  END IF;
+  IF p_params ? 'effect_error' THEN RETURN jsonb_build_object('error', p_params ->> 'effect_error'); END IF;
+  RETURN jsonb_build_object('status', CASE WHEN (p_params ->> 'done') = 't' THEN 'done' ELSE 'queued' END)
+      || CASE WHEN (p_params ->> 'cmd') = 't' THEN jsonb_build_object('command_id', gen_random_uuid()) ELSE '{}'::jsonb END;
+END $f$;
+REVOKE ALL ON FUNCTION web_door.ext_demo(text, text, uuid, jsonb, text, uuid) FROM PUBLIC, anon, authenticated;
+"""
+
+
 def _tool(name: str) -> str | None:
     found = shutil.which(name)
     if found:
@@ -192,8 +238,10 @@ def cluster(tmp_path_factory):
         psql = _runner([client, *PSQL_FLAGS, "-d", urlunparse(parsed._replace(path=f"/{database}"))], None)
         try:
             psql(BOOTSTRAP)
-            psql(file=MIGRATION)
-            psql(file=MIGRATION)         # applied by hand, possibly twice
+            for migration in (MIGRATION, MIGRATION_099):
+                psql(file=migration)
+                psql(file=migration)     # applied by hand, possibly twice
+            psql(DEMO_FAMILY)
             psql.work = work
             yield psql
         finally:
@@ -215,8 +263,10 @@ def cluster(tmp_path_factory):
     psql = _runner([tools["psql"], *PSQL_FLAGS], env)
     try:
         psql(BOOTSTRAP)
-        psql(file=MIGRATION)
-        psql(file=MIGRATION)             # applied by hand, possibly twice
+        for migration in (MIGRATION, MIGRATION_099):
+            psql(file=migration)
+            psql(file=migration)         # applied by hand, possibly twice
+        psql(DEMO_FAMILY)
         psql.work = work
         yield psql
     finally:
@@ -261,13 +311,14 @@ class Browser:
         return self.db(file=path, check=False)
 
     def act(self, action: str, params: dict | None = None, *, confirm: str | None = None,
-            route_level: str | None = "real", **claims_kw) -> dict:
+            route_level: str | None = "real", body: str | None = None, **claims_kw) -> dict:
         args = [f"$a${action}$a$"]
         args.append(f"$p${json.dumps(params if params is not None else {})}$p$::jsonb")
         args.append(f"'{confirm}'::uuid" if confirm else "NULL")
         if route_level == "real":
             route_level = LEVEL_OF.get(action, "L1")      # what a well-made route passes
         args.append(f"'{route_level}'" if route_level is not None else "NULL")
+        args.append(f"$b${body}$b$" if body is not None else "NULL")
         done = self.script(f"SELECT public.request_action({', '.join(args)});",
                            claims=self.claims(**claims_kw) if claims_kw else None)
         assert done.returncode == 0, done.stderr
@@ -310,13 +361,15 @@ def test_the_objects_exist_and_the_door_is_a_definer_with_a_fixed_search_path(cl
 
 def test_the_door_is_executable_by_the_signed_in_role_and_by_nobody_else(cluster):
     who = Browser(cluster)
-    assert _scalar(cluster, "SELECT has_function_privilege('authenticated', 'public.request_action(text,jsonb,uuid,text)', 'EXECUTE')") == "t"
-    assert _scalar(cluster, "SELECT has_function_privilege('anon', 'public.request_action(text,jsonb,uuid,text)', 'EXECUTE')") == "f"
+    assert _scalar(cluster, "SELECT has_function_privilege('authenticated', 'public.request_action(text,jsonb,uuid,text,text)', 'EXECUTE')") == "t"
+    assert _scalar(cluster, "SELECT has_function_privilege('anon', 'public.request_action(text,jsonb,uuid,text,text)', 'EXECUTE')") == "f"
     assert "permission denied for function request_action" in who.refused(
         "SELECT public.request_action('team.restart', '{}'::jsonb, NULL, 'L2');", role="anon")
-    # the rules of the vocabulary are private
-    assert "permission denied for function web_action_rule" in who.refused(
-        "SELECT * FROM public.web_action_rule('team.start');")
+    # the rules of the vocabulary and the functions of the families are private, in a schema no browser role can use
+    assert "permission denied for schema web_door" in who.refused("SELECT * FROM web_door.rule('team.start');")
+    assert "permission denied for schema web_door" in who.refused("SELECT * FROM web_door.vocab;")
+    assert "permission denied for schema web_door" in who.refused(
+        f"SELECT web_door.ext_team('effect', 'team.start', '{who.user}', '{{}}'::jsonb, NULL, NULL);")
     assert _scalar(cluster, "SELECT has_function_privilege('anon', 'public.web_action_log_follow_command()', 'EXECUTE')") == "f"
     assert _scalar(cluster, "SELECT has_function_privilege('authenticated', 'public.positions_guard_apply_requested()', 'EXECUTE')") == "f"
 
@@ -821,9 +874,10 @@ def test_the_authorisation_does_not_cross_to_another_users_position_through_a_co
 def test_the_log_refuses_anything_outside_its_closed_sets_even_to_its_owner(cluster):
     who = Browser(cluster)
     base = f"INSERT INTO public.web_action_log (user_id, action, level, summary, status) VALUES ('{who.user}', %s, %s, %s, %s)"
-    cases = [("'team.reboot'", "'L2'", "'x'", "'queued'", "web_action_log_action_closed"),
+    cases = [("'team.reboot'", "'L2'", "'x'", "'queued'", "web_action_log_action_in_vocab"),
              ("'team.start'", "'L9'", "'x'", "'queued'", "web_action_log_level_closed"),
              ("'team.start'", "'L2'", "'x'", "'running'", "web_action_log_status_closed"),
+             ("'team.reboot'", "'L2'", "'x'", "'queued'", "web_action_log_action_in_vocab"),
              ("'team.start'", "'L2'", f"'{'x' * 201}'", "'queued'", "web_action_log_summary_short")]
     for *values, constraint in cases:
         done = cluster(base % tuple(values), check=False)
@@ -960,3 +1014,177 @@ def test_the_emergency_stop_through_the_door_stamps_the_change_it_makes(cluster)
     time.sleep(0.05)
     assert who.act("team.emergency_stop")["ok"] is True
     assert _stamp(cluster, who.user) > before
+
+
+# --------------------------------------------------------------------------------------------------
+# 099: the door by families — what the door keeps, what a family may do, what it may not
+# --------------------------------------------------------------------------------------------------
+
+def _stages(db, who, stage: str | None = None) -> int:
+    where = f" AND stage = '{stage}'" if stage else ""
+    return int(_scalar(db, f"SELECT count(*) FROM public.demo_effects WHERE uid = '{who.user}'{where}"))
+
+
+def test_the_private_schema_holds_the_vocabulary_and_every_family_and_no_browser_role_reaches_it(cluster):
+    who = Browser(cluster)
+    assert _scalar(cluster, "SELECT has_schema_privilege('authenticated', 'web_door', 'USAGE') OR has_schema_privilege('anon', 'web_door', 'USAGE')") == "f"
+    functions = _scalar(cluster, """SELECT string_agg(p.oid::regprocedure::text, ',') FROM pg_proc AS p
+        WHERE p.pronamespace = 'web_door'::regnamespace""")
+    assert "web_door.ext_team" in functions and "web_door.ext_position" in functions and "web_door.ext_demo" in functions
+    for role in ("anon", "authenticated"):
+        assert _scalar(cluster, f"""SELECT bool_or(has_function_privilege('{role}', p.oid, 'EXECUTE')) FROM pg_proc AS p
+            WHERE p.pronamespace = 'web_door'::regnamespace""") == "f"
+    # a family function can not be called with another uid by a browser, whatever its own grants say
+    assert "permission denied for schema web_door" in who.refused(
+        f"SELECT web_door.ext_demo('effect', 'demo.sync', '{uuid.uuid4()}', '{{}}'::jsonb, NULL, NULL);")
+    assert "permission denied for schema web_door" in who.refused(
+        f"SELECT web_door.call_ext('demo', 'effect', 'demo.sync', '{uuid.uuid4()}', '{{}}'::jsonb, NULL, NULL);")
+
+
+def test_the_log_action_is_a_foreign_key_to_the_vocabulary(cluster):
+    who = Browser(cluster)
+    done = cluster(f"""INSERT INTO public.web_action_log (user_id, action, level, summary, status)
+        VALUES ('{who.user}', 'demo.nothing', 'L1', 'x', 'queued')""", check=False)
+    assert done.returncode != 0 and "web_action_log_action_in_vocab" in done.stderr, done.stderr
+    cluster(f"""INSERT INTO public.web_action_log (user_id, action, level, summary, status)
+        VALUES ('{who.user}', 'demo.sync', 'L1', 'x', 'queued')""")
+
+
+def test_the_vocabulary_keeps_its_shape_even_for_the_migrations(cluster):
+    for values in ("('nodot', 'nodot', 'L1', TRUE, 'g', 1, INTERVAL '1 hour', FALSE, 256)",
+                   "('a.b', 'other', 'L1', TRUE, 'g', 1, INTERVAL '1 hour', FALSE, 256)",
+                   "('a.b', 'a', 'L9', TRUE, 'g', 1, INTERVAL '1 hour', FALSE, 256)",
+                   "('a.b', 'a', 'L1', TRUE, 'g', 0, INTERVAL '1 hour', FALSE, 256)",
+                   "('a.b', 'a', 'L1', TRUE, 'g', 1, INTERVAL '1 hour', FALSE, 4096)"):
+        done = cluster(f"INSERT INTO web_door.vocab (action, family, level, recent, cap_group, cap_n, cap_window, takes_body, params_max_bytes) VALUES {values}", check=False)
+        assert done.returncode != 0 and "violates check constraint" in done.stderr, values
+
+
+def test_the_text_is_saved_normalised_by_the_family_and_the_confirmation_uses_the_saved_one(cluster):
+    who = Browser(cluster)
+    first = who.act("demo.danger", {}, route_level="L2", body="  first line\nsecond\tline  ")
+    assert first["ok"] and first["state"] == "awaiting_confirm", first
+    assert _scalar(cluster, f"SELECT body FROM public.web_action_log WHERE id = '{first['id']}'") == "first line\nsecond\tline"
+    assert _stages(cluster, who, "effect") == 0                      # nothing happens before the confirmation
+    # the second call can not bring another text, nor a parameter
+    assert who.act("demo.danger", confirm=first["id"], route_level="L2", body="another") == {"ok": False, "error": "invalid_params"}
+    assert _stages(cluster, who, "effect") == 0
+    second = who.act("demo.danger", confirm=first["id"], route_level="L2")
+    assert second["ok"] and second["state"] == "queued"
+    row = _scalar(cluster, f"SELECT stage, log_id = '{first['id']}', body FROM public.demo_effects WHERE uid = '{who.user}' AND stage = 'effect'")
+    assert row == "effect|t|first line\nsecond\tline"               # the saved text, with the id of the line
+
+
+@pytest.mark.parametrize("text, ok", [
+    ("x" * 2000, True), ("x" * 2001, False), ("a\x07b", False), ("tab\there\r\nline", True), ("", True), ("\x7f", False),
+])
+def test_the_text_has_a_size_and_no_control_character_but_the_line_break_and_the_tab(cluster, text, ok):
+    who = Browser(cluster)
+    answer = who.act("demo.note", {}, route_level="L1", body=text)
+    assert answer.get("ok") is ok, answer
+    if not ok:
+        assert answer == {"ok": False, "error": "invalid_params"}
+        assert _stages(cluster, who) == 0
+
+
+def test_only_an_action_that_takes_a_text_may_have_one(cluster):
+    who = Browser(cluster)
+    assert who.act("demo.sync", {}, route_level="L1", body="a text") == {"ok": False, "error": "invalid_params"}
+    assert who.act("team.restart", {"target": "scout"}, body="a text") == {"ok": False, "error": "invalid_params"}
+    assert who.act("position.apply_revoke", {"legacy_id": 1}, body="a text") == {"ok": False, "error": "invalid_params"}
+    assert _footprint(cluster, who) == "0/0/0/0" and _stages(cluster, who) == 0
+
+
+def test_a_family_that_answers_a_text_it_can_not_take_is_a_bug_and_goes_back(cluster):
+    who = Browser(cluster)
+    done = who.script("""SELECT public.request_action('demo.sync', '{"broken":"bodynottaken"}'::jsonb, NULL, 'L1', NULL);""")
+    assert done.returncode != 0 and "answered with a text it can not take" in done.stderr
+    assert _scalar(cluster, f"SELECT count(*) FROM public.web_action_log WHERE user_id = '{who.user}'") == "0"
+
+
+def test_the_room_of_the_parameters_is_the_one_of_the_action(cluster):
+    who = Browser(cluster)
+    assert who.act("demo.note", {"pad": "x" * 700}, route_level="L1")["ok"] is True            # 1024 for this one
+    assert who.act("demo.note", {"pad": "x" * 1100}, route_level="L1") == {"ok": False, "error": "invalid_params"}
+    assert who.act("demo.sync", {"pad": "x" * 300}, route_level="L1") == {"ok": False, "error": "invalid_params"}   # the default 256
+    assert who.act("team.restart", {"target": "scout", "pad": "x" * 300}) == {"ok": False, "error": "invalid_params"}
+    # a family that answers parameters beyond the room of its action is a bug
+    done = who.script("""SELECT public.request_action('demo.sync', '{"broken":"bigparams"}'::jsonb, NULL, 'L1', NULL);""")
+    assert done.returncode != 0 and "out of shape" in done.stderr
+    assert _scalar(cluster, f"SELECT count(*) FROM public.web_action_log WHERE user_id = '{who.user}' AND action = 'demo.sync'") == "0"
+
+
+def test_the_state_of_the_line_is_the_one_the_family_returns_and_the_bus_id_is_kept(cluster):
+    who = Browser(cluster)
+    plain = who.act("demo.sync", {}, route_level="L1")
+    done = who.act("demo.sync", {"done": "t"}, route_level="L1")
+    bus = who.act("demo.sync", {"cmd": "t"}, route_level="L1")
+    assert [plain["state"], done["state"], bus["state"]] == ["queued", "done", "queued"]   # the caller sees the state the family returned
+    assert _scalar(cluster, f"SELECT status FROM public.web_action_log WHERE id = '{plain['id']}'") == "queued"
+    assert _scalar(cluster, f"SELECT status FROM public.web_action_log WHERE id = '{done['id']}'") == "done"
+    assert "command_id" in bus and "command_id" not in done
+    assert _scalar(cluster, f"SELECT command_id = '{bus['command_id']}' FROM public.web_action_log WHERE id = '{bus['id']}'") == "t"
+    # a line that is done counts for the limit like any other
+    assert _scalar(cluster, f"SELECT count(*) FROM public.web_action_log WHERE user_id = '{who.user}' AND status = 'done'") == "1"
+
+
+@pytest.mark.parametrize("code", ["invalid_params", "not_found", "position_not_ready", "already_submitted"])
+def test_a_family_may_refuse_with_the_closed_codes_and_nothing_stays(cluster, code):
+    who = Browser(cluster)
+    assert who.act("demo.sync", {"fail": code}, route_level="L1") == {"ok": False, "error": code}
+    assert _scalar(cluster, f"SELECT count(*) FROM public.web_action_log WHERE user_id = '{who.user}'") == "0"
+    assert _stages(cluster, who, "effect") == 0
+
+
+def test_a_refusal_of_the_effect_cancels_the_line_and_says_the_code(cluster):
+    who = Browser(cluster)
+    answer = who.act("demo.sync", {"effect_error": "not_found"}, route_level="L1")
+    assert answer == {"ok": False, "error": "not_found"}
+    assert _scalar(cluster, f"SELECT status, result FROM public.web_action_log WHERE user_id = '{who.user}'") == "cancelled|not_found"
+
+
+@pytest.mark.parametrize("params, message", [
+    ({"fail": "a_code_nobody_knows"}, "outside the contract"),
+    ({"effect_error": "a_code_nobody_knows"}, "outside the contract"),
+    ({"broken": "nothing"}, "answered nothing usable"),
+    ({"broken": "array"}, "answered nothing usable"),
+    ({"broken": "nosummary"}, "out of shape"),
+    ({"broken": "noconfirm"}, "out of shape"),
+    ({"broken": "emptysummary"}, "without a summary"),
+])
+def test_a_family_that_breaks_the_contract_is_a_bug_the_transaction_goes_back_and_nothing_stays(cluster, params, message):
+    who = Browser(cluster)
+    done = who.script(f"SELECT public.request_action('demo.sync', $p${json.dumps(params)}$p$::jsonb, NULL, 'L1', NULL);")
+    assert done.returncode != 0 and message in done.stderr, done.stderr
+    assert _scalar(cluster, f"SELECT count(*) FROM public.web_action_log WHERE user_id = '{who.user}'") == "0"
+    assert _scalar(cluster, f"SELECT count(*) FROM public.demo_effects WHERE uid = '{who.user}' AND stage = 'effect'") == "0"
+
+
+def test_a_family_that_is_not_there_is_a_bug_and_goes_back(cluster):
+    who = Browser(cluster)
+    done = who.script("SELECT public.request_action('ghost.act', '{}'::jsonb, NULL, 'L1', NULL);")
+    assert done.returncode != 0 and "has no function" in done.stderr
+    assert _scalar(cluster, f"SELECT count(*) FROM public.web_action_log WHERE user_id = '{who.user}'") == "0"
+
+
+def test_the_family_is_reached_only_after_the_things_the_door_keeps(cluster):
+    """Level, session, parameters shape and the limit come first: the family hears nothing before them."""
+    who = Browser(cluster)
+    assert who.act("demo.danger", {}, route_level="L1") == {"ok": False, "error": "level_mismatch"}
+    assert who.act("demo.danger", {"pad": "x" * 300}, route_level="L2") == {"ok": False, "error": "invalid_params"}
+    assert who.act("demo.danger", {}, route_level="L2", body="x" * 3000) == {"ok": False, "error": "invalid_params"}
+    assert _stages(cluster, who) == 0
+    for _ in range(50):
+        who.act("demo.sync", {}, route_level="L1")
+    assert who.act("demo.sync", {}, route_level="L1")["error"] == "rate_limited"
+    assert _stages(cluster, who, "prepare") == 51          # the last one was asked, and refused by the limit
+    assert _stages(cluster, who, "effect") == 50
+
+
+def test_the_confirmation_of_a_family_action_asks_the_family_again_at_the_effect(cluster):
+    who = Browser(cluster)
+    first = who.act("demo.danger", {"effect_error": "already_submitted"}, route_level="L2", body="b")
+    assert first["state"] == "awaiting_confirm"
+    assert _stages(cluster, who, "prepare") == 1 and _stages(cluster, who, "effect") == 0
+    assert who.act("demo.danger", confirm=first["id"], route_level="L2") == {"ok": False, "error": "already_submitted"}
+    assert _scalar(cluster, f"SELECT status, result FROM public.web_action_log WHERE id = '{first['id']}'") == "cancelled|already_submitted"
