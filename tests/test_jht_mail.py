@@ -483,12 +483,16 @@ def test_the_tool_is_executable_and_lands_on_the_path_under_its_name_without_the
     assert helped.returncode == 0 and "mailbox" in helped.stdout
 
 
-def test_nothing_in_the_running_system_calls_the_mailbox_yet():
-    """Phase 1 has no caller: the files that start, send and watch agents do not mention it."""
-    for relative in (".launcher/start-agent.sh", ".launcher/agent-watchdog.sh", ".launcher/pacing-bridge.py",
-                     ".launcher/sentinel-bridge.py", "agents/_skills/tmux-send/jht-tmux-send",
-                     "shared/skills/agent_chat.py", "shared/skills/bridge_mailbox.py"):
-        assert "jht-mail" not in (ROOT / relative).read_text(encoding="utf-8"), relative
+def test_only_the_transport_and_the_watchdog_call_the_mailbox_and_the_user_and_bridge_paths_do_not():
+    """Phase 2 wires the transport (which routes) and the watchdog (which wakes again). The files that
+    carry the user's chat, the bridges and the spawn stay on the terminal path, byte for byte."""
+    for relative in (".launcher/start-agent.sh", ".launcher/pacing-bridge.py", ".launcher/sentinel-bridge.py",
+                     "shared/skills/agent_chat.py", "shared/skills/bridge_mailbox.py",
+                     "cli/src/lib/user-messages-poller.js", "web/app/api/team/send/route.ts"):
+        text = (ROOT / relative).read_text(encoding="utf-8")
+        assert "jht-mail" not in text and "jht_mail" not in text, relative
+    for relative in ("agents/_skills/tmux-send/jht-tmux-send", ".launcher/agent-watchdog.sh"):
+        assert "jht_mail" in (ROOT / relative).read_text(encoding="utf-8") or "jht-mail" in (ROOT / relative).read_text(encoding="utf-8")
 
 
 # -- review of phase 1: who may be a sender, what the clock may touch, how big the receipts get ----------------------

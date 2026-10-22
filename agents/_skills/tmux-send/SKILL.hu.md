@@ -67,6 +67,7 @@ Standard tipusok (lasd `agents/_manual/communication-rules.md` a teljes taxonomi
 ## Kilpesi kodok
 
 - `0` — uzenet kezbesitve **es elkuldve** (ellenorizve: a kor elindult)
+  - Ha a címzett a postaládát használja (`mail_receivers`), a `0` **sorba állítva** jelent: az üzenet tartós fájl, a terminál csak egy rövid figyelmeztetést kapott. Hogy az ügynök *átvette*-e, azt a `jht-mail status <ügynök> <id>` mondja meg; amit senki nem vesz át időben, azt jelzik a feladónak. Sorba állítás után a kilépési kód `0`, bármi is történik a figyelmeztetéssel, kivéve a `3`-at (nem válaszoló terminál); a sorba állítás után eltűnő munkamenet már nem `2`-t ad, az üzenet a postaládában vár.
 - `1` — hianyzo argumentumok
 - `2` — a celszessio nem letezik (ellenorizd a nevet a `tmux ls` paranccsal)
 - `3` — a szoveg soha nem jelent meg es a panel nem foglalt → nem fogado TUI. **Az egyetlen kod, ami halott/beragadt allapotra utal.**

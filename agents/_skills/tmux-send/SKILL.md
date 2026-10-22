@@ -81,6 +81,7 @@ Pipeline hand-offs (Scout→Analyst→Scorer→Writer) are **status flips**, not
 ## Exit codes
 
 - `0` — message delivered **and submitted** (verified: the turn started)
+  - If the receiver uses the mailbox (`mail_receivers`), `0` means **queued**: the message is a durable file and the terminal only got a short nudge. Whether the agent *took* it is `jht-mail status <agent> <id>`; a message nobody takes in time is reported back to the sender. Once queued, the exit is `0` whatever happens to the nudge, except `3` (a terminal that does not respond); a session that disappears after queueing no longer answers `2`, the message waits in the box.
 - `1` — missing arguments
 - `2` — target session does not exist (check the name with `tmux ls`)
 - `3` — text never appeared and the pane is not busy → unreceptive TUI. **The only code that suggests dead/wedged.**

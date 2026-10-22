@@ -29,9 +29,11 @@ The one exception is the mailbox's own "not taken" notice (trust `local`). All a
 one uid, so a file written by hand into `new/` cannot be told from one this module wrote;
 what the reader gets is bounded (see `_read_message`), not authenticated.
 
-Phase 1 has no caller in the running system: nothing here types into a terminal
-unless a nudge function is passed in. The pieces that need the clock take it as an
-argument, so the rules are tested without waiting.
+Phase 2 wires it to the transport (`agents/_skills/tmux-send/jht-tmux-send`) for the agents
+listed under `mail_receivers` in `$JHT_HOME/jht.config.json` (empty or unreadable means none:
+fail closed). For those, a message between two agents becomes a file and the terminal gets only a
+short nudge with no content; everybody else keeps today's path. The pieces that need the clock take
+it as an argument, so the rules are tested without waiting.
 """
 from __future__ import annotations
 
@@ -98,6 +100,7 @@ EXIT = {
     "expired": 11,
     "not_found": 12,
     "refused": 13,
+    "not_applicable": 20,
 }
 
 
@@ -192,16 +195,26 @@ class _Lock:
 
 # -- receipts ------------------------------------------------------------------
 
-def _receipt(agent: str, message_id: str, state: str, at: datetime, **extra) -> None:
+def _receipt(agent: str, message_id: str, state: str, at: datetime, *, held: bool = False, **extra) -> None:
+    """Append a receipt. Under the box lock, like `_trim_receipts`, so a rewrite never loses one;
+    `held` says the caller already holds it (the lock is not re-entrant)."""
     line = {"id": message_id, "state": state, "at": _iso(at), **extra}
     path = box_dir(agent) / "receipts.jsonl"
     path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
-    # One write of one line: appends of this size do not interleave.
-    fd = os.open(path, os.O_WRONLY | os.O_APPEND | os.O_CREAT | getattr(os, "O_NOFOLLOW", 0), 0o600)
-    try:
-        os.write(fd, (json.dumps(line, ensure_ascii=False) + "\n").encode("utf-8"))
-    finally:
-        os.close(fd)
+    payload = (json.dumps(line, ensure_ascii=False) + "\n").encode("utf-8")
+
+    def append() -> None:
+        fd = os.open(path, os.O_WRONLY | os.O_APPEND | os.O_CREAT | getattr(os, "O_NOFOLLOW", 0), 0o600)
+        try:
+            os.write(fd, payload)
+        finally:
+            os.close(fd)
+
+    if held:
+        append()
+    else:
+        with _Lock(agent):
+            append()
 
 
 def _read_tail(path: Path, cap: int) -> str:
@@ -405,7 +418,10 @@ def send(
         return {"id": mid, "state": state_of(recipient, mid), "created": False}
     finally:
         os.unlink(temp)
-    _receipt(recipient, mid, "queued", moment, kind=kind)
+    try:
+        _receipt(recipient, mid, "queued", moment, kind=kind)
+    except OSError:
+        pass  # the file is there: a message that exists is queued, with or without its first receipt
     return {"id": mid, "state": "queued", "created": True}
 
 
@@ -504,10 +520,10 @@ def drain(agent: str, now: datetime | None = None) -> list[dict]:
                     os.replace(path, folders["rejected"] / f"{digest}.json")
                 except OSError:
                     continue
-                _receipt(agent, digest, "rejected", moment)
+                _receipt(agent, digest, "rejected", moment, held=True)
                 continue
             os.replace(path, folders["taken"] / path.name)
-            _receipt(agent, name, "taken", moment)
+            _receipt(agent, name, "taken", moment, held=True)
             taken.append(record)
     return taken
 
@@ -569,12 +585,16 @@ def notice_targets(record: dict) -> list[str]:
     return [name for name in dict.fromkeys(names) if name != recipient]
 
 
-def sweep(agent: str, now: datetime | None = None) -> dict:
+def sweep(agent: str, now: datetime | None = None, receivers=None) -> dict:
     """Expire what was not taken in time, tell who must know, and forget what is old.
 
     A queued message expires when its own deadline passed or when it has waited longer than its
     kind allows since the last nudge (or since it was written). It is never deleted here: it goes
     to `expired/`, with a receipt. Messages taken or expired more than a week ago are removed.
+
+    The notices go into the mailbox of whoever is a mail receiver (`receivers`, or everybody when
+    it is None); for anybody else no folder is created and the notice comes back under "typed",
+    to be typed into that agent's terminal by the caller.
     """
     moment = _utc(now)
     folders = _ensure(agent)
@@ -592,7 +612,7 @@ def sweep(agent: str, now: datetime | None = None) -> dict:
             if not (late or (deadline and moment >= deadline)):
                 continue
             os.replace(path, folders["expired"] / path.name)
-            _receipt(agent, record["id"], "expired", moment)
+            _receipt(agent, record["id"], "expired", moment, held=True)
             expired.append(record["id"])
             if record.get("kind") != NOTICE_KIND:  # a notice that expires tells nobody: no loops
                 notices.append(record)
@@ -607,13 +627,18 @@ def sweep(agent: str, now: datetime | None = None) -> dict:
                     continue
         _trim_receipts(agent, moment)
     told = []
+    typed = []
     for record in notices:
         for target in notice_targets(record):
+            text = (f"Message {record['id']} to {record['to']} ({record['kind']}) was not taken "
+                    f"after {NOT_TAKEN_AFTER.get(record['kind'], NOT_TAKEN_AFTER_DEFAULT)} seconds.")
+            if receivers is not None and target not in receivers:
+                typed.append({"session": session_of(target), "text": f"[@watchdog -> @{target}] [MSG] {text}"})
+                continue
             try:
                 result = send(
                     target,
-                    f"Message {record['id']} to {record['to']} ({record['kind']}) was not taken "
-                    f"after {NOT_TAKEN_AFTER.get(record['kind'], NOT_TAKEN_AFTER_DEFAULT)} seconds.",
+                    text,
                     kind=NOTICE_KIND,
                     sender=(LOCAL_TRUST, LOCAL_SENDER, None),
                     message_id=f"nt-{record['id']}-{target}"[:64],
@@ -622,7 +647,139 @@ def sweep(agent: str, now: datetime | None = None) -> dict:
             except MailError:
                 continue  # a full or unreachable box must not stop the sweep
             told.append({"to": target, "id": result["id"]})
-    return {"expired": expired, "told": told}
+    return {"expired": expired, "told": told, "typed": typed}
+
+
+# -- the transport's side (phase 2) -------------------------------------------------------------------
+
+# The tmux session of an agent: the roles that run once have a bare session name.
+SINGLE_SESSIONS = {"capitano-1": "CAPITANO", "assistente-1": "ASSISTENTE", "mentor-1": "MENTOR",
+                   "critico-1": "CRITICO", "sentinella-1": "SENTINELLA"}
+# After the first nudge (which the transport gives), a queued message is nudged again this long
+# after the previous one, up to three times in all.
+RENEWAL_AFTER = (60, 300)
+_ENVELOPE_HEAD = re.compile(
+    r"^\s*\[@([A-Za-z0-9_-]+)\s*->\s*@([A-Za-z0-9_-]+)\]\s*(?:\[([A-Z][A-Z0-9_-]{0,15})\])?\s*(.*)\Z", re.DOTALL)
+
+
+def session_of(agent: str) -> str:
+    name = agent_id(agent)
+    return SINGLE_SESSIONS.get(name, name.upper())
+
+
+def load_receivers(path: Path | None = None) -> frozenset:
+    """The agents whose messages travel by mailbox: `mail_receivers` in the config file.
+    Missing file, unreadable file, wrong shape or an invalid name: nobody (fail closed)."""
+    config = path or (home() / "jht.config.json")
+    try:
+        info = os.lstat(config)
+        if not stat.S_ISREG(info.st_mode) or info.st_size > 262144:
+            return frozenset()
+        data = json.loads(config.read_text(encoding="utf-8"))
+        listed = data.get("mail_receivers") if isinstance(data, dict) else None
+        if not isinstance(listed, list) or not all(isinstance(name, str) for name in listed):
+            return frozenset()
+        return frozenset(agent_id(name) for name in listed)
+    except (OSError, ValueError, MailError):
+        return frozenset()
+
+
+def route(session: str, message: str, *, identity=None, receivers=None, now: datetime | None = None) -> dict | None:
+    """Turn a message addressed to `session` into a mailbox file, or say it does not apply (None).
+
+    It applies only when: the recipient is a mail receiver; the message is `[@a -> @b] [TYPE] text`
+    with `b` the recipient; and the sender is an agent that tmux can place in its own pane as `a`
+    (`identity` is `(trust, claimed, origin)` as message_origin works it out). Everything else keeps
+    to the terminal: the user, the bridges, the watchdog and any sender nobody can verify.
+    The first nudge is recorded here; the transport types it right after.
+    """
+    wanted = load_receivers() if receivers is None else receivers
+    try:
+        recipient = agent_id(session)
+    except MailError:
+        return None
+    if recipient not in wanted:
+        return None
+    found = _ENVELOPE_HEAD.match(message or "")
+    if not found:
+        return None
+    try:
+        claimed, addressed = agent_id(found.group(1)), agent_id(found.group(2))
+    except MailError:
+        return None
+    if addressed != recipient or claimed in RELAY_NAMES or claimed == recipient:
+        return None
+    trust, said, origin = identity if identity is not None else _identity(message)
+    if trust != "verified" or not origin:
+        return None
+    try:
+        if agent_id(origin) != claimed or agent_id(said or "") != claimed:
+            return None
+    except MailError:
+        return None
+    body = found.group(4)
+    if not body.strip():
+        return None
+    moment = _utc(now)
+    result = send(recipient, body, kind=found.group(3) or "MSG", sender=(VERIFIED_TRUST, claimed, claimed), now=moment)
+    if result["created"]:
+        try:
+            record_nudge(recipient, [result["id"]], now=moment)
+        except OSError:
+            pass  # the reminders restart the clock; a failure here must not make the transport type the text too
+    return {"id": result["id"], "state": result["state"], "recipient": recipient,
+            "session": session_of(recipient), "created": result["created"]}
+
+
+def _identity(message: str):
+    sys.path.insert(0, str(HERE))
+    try:
+        import message_origin as lib
+        return lib.inspect_message(os.getpid(), message)
+    except Exception:
+        return ("unverified", None, None)
+    finally:
+        sys.path.pop(0)
+
+
+def nudge_text(count: int) -> str:
+    """What is typed into a terminal to wake its agent: fixed words, no content of any message."""
+    return f"[MAIL] {int(count)} new message(s) in your mailbox. Run: jht-mail drain"
+
+
+def _nudges(agent: str, message_id: str) -> list[datetime]:
+    return sorted(t for t in (_parse(r.get("at")) for r in receipts(agent, message_id) if r.get("state") == "nudged") if t)
+
+
+def remind(receivers, now: datetime | None = None) -> list[dict]:
+    """Nudges that are due: a queued message is woken for again 60 seconds after its first nudge,
+    and 5 minutes after the second; never more than three times. One line per box."""
+    moment = _utc(now)
+    due = []
+    for agent in sorted(receivers):
+        if not box_dir(agent).is_dir():
+            continue  # no folder is created for a receiver nobody wrote to
+        waiting = []
+        for item in pending(agent, now=moment):
+            sent = _nudges(agent, item["id"])
+            if 1 <= len(sent) <= len(RENEWAL_AFTER) and (moment - sent[-1]).total_seconds() >= RENEWAL_AFTER[len(sent) - 1]:
+                waiting.append(item["id"])
+        if waiting:
+            record_nudge(agent, waiting, now=moment)
+            due.append({"session": session_of(agent), "text": nudge_text(len(pending(agent, now=moment)))})
+    return due
+
+
+def tick(receivers, now: datetime | None = None) -> list[dict]:
+    """What the watchdog does on each round: expire, tell, and wake again. Returns the lines to type."""
+    moment = _utc(now)
+    lines: list[dict] = []
+    for agent in sorted(receivers):
+        if not box_dir(agent).is_dir():
+            continue
+        lines.extend(sweep(agent, now=moment, receivers=receivers)["typed"])
+    lines.extend(remind(receivers, now=moment))
+    return lines
 
 
 # -- command line -----------------------------------------------------------------------
@@ -697,7 +854,9 @@ def build_parser() -> argparse.ArgumentParser:
     st.add_argument("message_id")
     p = sub.add_parser("pending", help="the queued messages of a box")
     p.add_argument("--agent")
-    sub.add_parser("sweep", help="expire what was not taken in time (the watchdog runs this)").add_argument("agents", nargs="*")
+    sub.add_parser("sweep", help="expire what was not taken in time").add_argument("agents", nargs="*")
+    sub.add_parser("tick", help="sweep and wake again; prints 'SESSION<TAB>TEXT' lines to type (the watchdog runs this)")
+    sub.add_parser("route", help="(the transport) queue the message on stdin when it applies").add_argument("session")
     return parser
 
 
@@ -705,6 +864,8 @@ def main(argv=None) -> int:
     args = build_parser().parse_args(argv)
     try:
         if args.command == "send":
+            if agent_id(args.to) not in load_receivers():
+                raise MailError("refused", "not a mail receiver")  # no folder for a name nobody listed
             origin = _verified_origin()
             if not origin:
                 raise MailError("refused", "the sender could not be verified from its tmux pane")
@@ -735,6 +896,17 @@ def main(argv=None) -> int:
         if args.command == "pending":
             _emit({"pending": pending(_reader(args.agent))})
             return EXIT["ok"]
+        if args.command == "route":
+            routed = route(args.session, sys.stdin.read(MAX_BODY * 4 + 512))
+            if routed is None:
+                return EXIT["not_applicable"]
+            print("\t".join((routed["id"], routed["session"], routed["recipient"], "new" if routed["created"] else "again")))
+            return EXIT["ok"]
+        if args.command == "tick":
+            for line in tick(load_receivers()):
+                text = " ".join(_LINE_BREAK.split(line["text"])).replace("\t", " ")
+                print(f"{line['session']}\t{text}")
+            return EXIT["ok"]
         if args.command == "sweep":
             names = args.agents or sorted(
                 p.name for p in (home() / "mailbox").glob("*")
@@ -742,7 +914,7 @@ def main(argv=None) -> int:
             report: dict = {}
             for name in names:
                 try:
-                    report[name] = sweep(name)
+                    report[name] = sweep(name, receivers=load_receivers())
                 except (MailError, OSError) as error:  # one bad box must not stop the others
                     report[name] = {"error": getattr(error, "code", "io_error")}
             _emit(report)

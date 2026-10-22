@@ -104,6 +104,11 @@ TMUX_SENDER="${JHT_TMUX_SENDER:-jht-tmux-send}"
 # il caso peggiore e' proprio quello in cui gli agenti non partono.
 # Iniettabile come le altre tre dipendenze: i test non chiamano il binario vero.
 NOTIFY_USER_BIN="${JHT_NOTIFY_USER_BIN:-jht-notify-user}"
+# La posta degli agenti (JHT-T09): ad ogni giro si fanno scadere i messaggi non presi, si
+# avvisa chi di dovere e si risveglia di nuovo chi ha posta in coda. `jht-mail tick` stampa
+# righe «SESSIONE<TAB>TESTO» e basta; si digitano col sender di sempre. Senza destinatari
+# in `mail_receivers` non stampa niente. Iniettabile come gli altri.
+MAIL_BIN="${JHT_MAIL_BIN:-jht-mail}"
 # TTL e refresh della Sentinella sono ricreazioni DECISIONALI, non morti da
 # misurare. Il prossimo ensure_agent consuma questo singolo marcatore.
 INTENTIONAL_RECREATE_SESSION=""
@@ -779,6 +784,16 @@ agent_is_contained() {
   JHT_HOME="$JHT_HOME" python3 "$ROSTER_TOOL" is-contained "$1" >/dev/null 2>&1
 }
 
+maybe_mail_tick() {
+  command -v "$MAIL_BIN" >/dev/null 2>&1 || return 0
+  local session text
+  "$MAIL_BIN" tick 2>/dev/null | while IFS=$'\t' read -r session text; do
+    [ -n "$session" ] && [ -n "$text" ] || continue
+    "$TMUX_SENDER" "$session" "$text" >/dev/null 2>&1 || true
+  done
+  return 0
+}
+
 maybe_respawn_workers() {
   # Rete deterministica sui worker numerati: fino al 2026-07-29 la lista
   # AGENTS copriva solo i core, quindi Scout/Analisti/Scorer/Scrittori —
@@ -1125,6 +1140,8 @@ while true; do
     # Worker numerati: respawn guidato dal roster atteso (gate orario +
     # cancello di attività + sonda a colpo singolo dentro team_roster.py).
     maybe_respawn_workers
+    # Posta degli agenti: scadenze, avvisi e solleciti (non fa niente senza `mail_receivers`).
+    maybe_mail_tick
     # Bridge/daemon detached (sentinel/pacing/heartbeat-bridge/window-ratio/
     # codex-auth-healer + tg-bridge): respawn se morti, con anti-flap. Sono
     # fuori dal respawn-on-crash di pid1 (setsid), questo è il loro recovery.
