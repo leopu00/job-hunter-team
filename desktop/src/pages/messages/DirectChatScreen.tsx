@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { appLocale } from "../../lib/app-locale";
 import { describeError } from "../../lib/error-catalog";
 import OwnVpsClaim from "../../components/OwnVpsClaim";
@@ -141,6 +141,15 @@ export default function DirectChatScreen({
   const [delivered, setDelivered] = useState<ReadonlySet<string>>(() => new Set());
   const [inFlight, setInFlight] = useState<string | null>(null);
   const composer = useRef<HTMLTextAreaElement>(null);
+  // Where the cursor goes once the new line is in the box: set in the same commit, before the next
+  // key is read, so a person typing fast keeps writing after the new line, not before it.
+  const cursorAfterNewLine = useRef<number | null>(null);
+  useLayoutEffect(() => {
+    const cursor = cursorAfterNewLine.current;
+    if (cursor === null) return;
+    cursorAfterNewLine.current = null;
+    composer.current?.setSelectionRange(cursor, cursor);
+  }, [text]);
   const transcript = useRef<HTMLDivElement>(null);
   const currentAgent = useRef(agentId);
   currentAgent.current = agentId;
@@ -440,8 +449,8 @@ export default function DirectChatScreen({
                   event.preventDefault();
                   const node = event.currentTarget;
                   const next = newLineAt(text, node.selectionStart, node.selectionEnd);
+                  cursorAfterNewLine.current = next.cursor;
                   setText(next.value);
-                  requestAnimationFrame(() => composer.current?.setSelectionRange(next.cursor, next.cursor));
                   return;
                 }
                 if (event.key === "Enter" && !event.shiftKey) {

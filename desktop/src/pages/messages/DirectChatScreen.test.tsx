@@ -364,6 +364,20 @@ describe("DirectChatScreen: where the text goes, and when it is delivered", () =
     );
   });
 
+  it("Ctrl+Enter in the middle: what is typed next, at once, goes after the new line", async () => {
+    viewport(1280, 800);
+    const { mock } = client();
+    const user = userEvent.setup();
+    render(<DirectChatScreen client={mock} />);
+    await screen.findByText("Messaggio dalla VPS");
+    const input = screen.getByRole("textbox", { name: "Scrivi a Capitano" });
+    await user.type(input, "abcd");
+    // no wait between the keys: a person typing fast
+    await user.keyboard("{ArrowLeft}{ArrowLeft}{Control>}{Enter}{/Control}XY");
+    expect(input).toHaveValue("ab\nXYcd");
+    expect(mock.send).not.toHaveBeenCalled();
+  });
+
   it("puts the new line where the cursor is, over a selection too", () => {
     expect(newLineAt("abcd", 2, 2)).toEqual({ value: "ab\ncd", cursor: 3 });
     expect(newLineAt("abcd", 1, 3)).toEqual({ value: "a\nd", cursor: 2 });
