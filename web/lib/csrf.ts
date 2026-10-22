@@ -114,3 +114,61 @@ export function shouldRejectBrowserMutation(params: MutationCheck): boolean {
   // Niente Origin né Referer: client non-browser. Pass-through.
   return false;
 }
+
+/**
+ * Controllo STRETTO per le azioni che comandano la squadra o escono verso l'esterno
+ * (L2/L3 di `lib/request-action.ts`, P1 della proposta «web capace»).
+ *
+ * Differisce da `shouldRejectBrowserMutation` in quattro punti, tutti voluti:
+ *   - solo POST;
+ *   - l'`Origin` è OBBLIGATORIO (l'assenza di Origin e Referer NON passa: un browser lo manda
+ *     sempre su un POST, e chi non è un browser non ha un cookie di sessione da sfruttare);
+ *   - il `Referer` non conta: solo l'Origin;
+ *   - il corpo è `application/json` (un form o un `text/plain` cross-site non lo è).
+ *
+ * L'Origin deve combaciare con l'origin pubblico del sito. Se `JHT_PUBLIC_ORIGIN` è impostato è
+ * l'UNICO ammesso: gli header `X-Forwarded-*` li scrive il proxy ma chi parla direttamente al
+ * server li può inventare, e l'elenco dei localhost è per lo sviluppo. Senza quella variabile
+ * valgono l'origin dedotto dal proxy e l'elenco dei localhost, come per il resto del sito.
+ */
+export type StrictRefusal =
+  | "method_not_allowed"
+  | "cross_site"
+  | "origin_required"
+  | "origin_not_allowed"
+  | "unsupported_media_type";
+
+export interface StrictMutationCheck extends MutationCheck {
+  contentType?: string | null;
+}
+
+export function strictMutationRefusal(
+  params: StrictMutationCheck,
+): StrictRefusal | null {
+  if (params.method.trim().toUpperCase() !== "POST")
+    return "method_not_allowed";
+
+  // Un browser dice da dove parte la richiesta: se non è questo stesso sito, basta.
+  const sfs = (params.secFetchSite ?? "").trim().toLowerCase();
+  if (sfs && sfs !== "same-origin") return "cross_site";
+
+  const origin = (params.origin ?? "").trim();
+  if (!origin || origin === "null") return "origin_required";
+
+  const configured = publicOrigin();
+  if (configured !== null) {
+    if (origin !== configured) return "origin_not_allowed";
+  } else {
+    const hostOrigin = (params.hostOrigin ?? "").trim();
+    const same = hostOrigin !== "" && origin === hostOrigin;
+    if (!same && !STATIC_ALLOWED.has(origin)) return "origin_not_allowed";
+  }
+
+  const mediaType = (params.contentType ?? "")
+    .split(";")[0]
+    .trim()
+    .toLowerCase();
+  if (mediaType !== "application/json") return "unsupported_media_type";
+
+  return null;
+}
