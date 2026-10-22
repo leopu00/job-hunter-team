@@ -551,7 +551,7 @@ fn t2_every_command_is_the_discovery_or_the_probe_of_a_validated_target() {
     assert_eq!(commands[0], DISCOVERY_SCRIPT);
     for command in &commands[1..] {
         assert!(allowed.contains(command));
-        assert_eq!(command.matches("docker exec").count(), 3, "the fixed probe script, nothing else");
+        assert_eq!(command.matches("\"$JHT_ENGINE\" exec").count(), 3, "the fixed probe script, nothing else");
     }
     // containers that are not the team's repository are never entered
     for command in &commands {
@@ -1867,7 +1867,7 @@ fn t28_with_nothing_selected_the_full_connection_saves_the_selection() {
     assert!(!sandbox.selection().exists());
     let target = runtime::candidate_for_request_at(&sandbox.root, &sandbox.scope, &host(), TEAM).expect("the candidate");
     assert_eq!(runtime::activate_or_keep_at(&sandbox.root, &sandbox.scope, &host(), &target), Ok(()));
-    assert_eq!(runtime::selected_at(&sandbox.root, &sandbox.scope, &host()), Ok(Some(target)));
+    assert!(runtime::selected_at(&sandbox.root, &sandbox.scope, &host()) == Ok(Some(target)), "the selection of this target");
 }
 
 #[test]
@@ -1880,4 +1880,39 @@ fn t28_the_full_connection_command_activates_through_the_one_that_keeps_the_same
         .expect("the full connection");
     assert!(body.contains("existing_team_runtime::activate_or_keep("));
     assert!(!body.contains("existing_team_runtime::activate("));
+}
+
+// ---- a team on rootless Podman
+
+#[test]
+fn t29_a_podman_discovery_gives_the_target_every_command_checks_again() {
+    // The lines the discovery prints on Podman (tests/test_existing_team_engine_podman.py runs the
+    // script itself): the image id with its `sha256:` added, the index as the image's only digest of
+    // the repository, the platform manifest as the container's descriptor.
+    let cid = "d9".repeat(32);
+    let image = format!("sha256:{}", "f4".repeat(32));
+    let index = format!("sha256:{}", "c9".repeat(32));
+    let platform = format!("sha256:{}", "40".repeat(32));
+    let revision = "9f".repeat(20);
+    let lines = vec![
+        format!("P|{cid}|{image}|true"),
+        format!("I|{image}|linux/amd64|{revision}|ghcr.io/leopu00/jht@{index},"),
+        format!("D|{cid}|{platform}"),
+        "END|1|1|1".to_owned(),
+    ];
+    let parsed = parse_discovery(&text(&lines)).expect("parsed");
+    let classified = classify(&parsed).expect("classified");
+    assert_eq!(classified.targets.len(), 1);
+    let target = &classified.targets[0];
+    assert_eq!(target.container_id, cid);
+    assert_eq!(target.image_id, image);
+    assert_eq!(target.platform_image_id, platform);
+    assert_eq!(target.digest, index);
+    assert_eq!(target.oci_revision, revision);
+    assert!(runtime::valid_target(target));
+    // and a container whose platform manifest could not be told apart is not a target
+    let lines = vec![lines[0].clone(), lines[1].clone(), format!("D|{cid}|-"), "END|1|1|1".to_owned()];
+    let classified = classify(&parse_discovery(&text(&lines)).expect("parsed")).expect("classified");
+    assert!(classified.targets.is_empty());
+    assert_eq!(classified.unusable, 1);
 }

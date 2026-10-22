@@ -204,7 +204,7 @@ impl JudgementRequest {
 /// The remote command: the pinned container's checks (`command`), then the fixed script.
 pub(crate) fn judgement_command(target: &RuntimeTarget, request: &JudgementRequest) -> Result<String, &'static str> {
     let args: Vec<String> = request.argv().into_iter().map(|arg| format!("'{arg}'")).collect();
-    command(target, &format!("exec docker exec -i \"$JHT_CID\" python3 {SCRIPT} {}", args.join(" ")))
+    command(target, &format!("exec \"$JHT_ENGINE\" exec -i \"$JHT_CID\" python3 {SCRIPT} {}", args.join(" ")))
 }
 
 fn failure(code: &'static str) -> Value {
@@ -469,7 +469,7 @@ mod tests {
         let remote = judgement_command(&target(), &request).unwrap();
         assert!(!remote.contains(SENTINEL));
         assert!(remote.ends_with(
-            "exec docker exec -i \"$JHT_CID\" python3 /app/shared/skills/position_judgement.py 'feedback' '12' '--value' 'dislike' '--reason' 'too_senior' '--note-on-stdin'"
+            "exec \"$JHT_ENGINE\" exec -i \"$JHT_CID\" python3 /app/shared/skills/position_judgement.py 'feedback' '12' '--value' 'dislike' '--reason' 'too_senior' '--note-on-stdin'"
         ));
         assert!(remote.contains("|| exit 70"), "the pinned container's checks come first");
         let stdin = request.stdin().unwrap();

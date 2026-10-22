@@ -305,7 +305,7 @@ pub(crate) fn vps_action_command(runtime: &RuntimeTarget, argv: &[String]) -> Re
     command(
         runtime,
         &format!(
-            "docker exec -e JHT_SPAWN_SRC=desktop-panel \"$JHT_CID\" python3 {IMAGE_SCRIPT} {} </dev/null",
+            "\"$JHT_ENGINE\" exec -e JHT_SPAWN_SRC=desktop-panel \"$JHT_CID\" python3 {IMAGE_SCRIPT} {} </dev/null",
             words.join(" ")
         ),
     )
@@ -769,10 +769,10 @@ mod tests {
         };
         let argv = req(json!({"op":"stop","session":"SCOUT-1","target":"t","confirmed":true})).unwrap().argv().unwrap();
         let command = vps_action_command(&runtime, &argv).unwrap();
-        assert_eq!(command, crate::existing_team_runtime::command(&runtime, "docker exec -e JHT_SPAWN_SRC=desktop-panel \"$JHT_CID\" python3 /app/shared/skills/agent_control.py 'stop' 'SCOUT-1' </dev/null").unwrap());
+        assert_eq!(command, crate::existing_team_runtime::command(&runtime, "\"$JHT_ENGINE\" exec -e JHT_SPAWN_SRC=desktop-panel \"$JHT_CID\" python3 /app/shared/skills/agent_control.py 'stop' 'SCOUT-1' </dev/null").unwrap());
         assert!(command.contains("|| exit 70"));
         let argv = req(json!({"op":"stop_team","target":"t","confirmed":true})).unwrap().argv().unwrap();
-        assert_eq!(vps_action_command(&runtime, &argv).unwrap(), crate::existing_team_runtime::command(&runtime, "docker exec -e JHT_SPAWN_SRC=desktop-panel \"$JHT_CID\" python3 /app/shared/skills/agent_control.py 'stop-team' </dev/null").unwrap());
+        assert_eq!(vps_action_command(&runtime, &argv).unwrap(), crate::existing_team_runtime::command(&runtime, "\"$JHT_ENGINE\" exec -e JHT_SPAWN_SRC=desktop-panel \"$JHT_CID\" python3 /app/shared/skills/agent_control.py 'stop-team' </dev/null").unwrap());
         // a word outside the grammar never reaches the shell
         assert!(vps_action_command(&runtime, &["stop".into(), "SCOUT-1'; rm -rf /'".into()]).is_err());
     }

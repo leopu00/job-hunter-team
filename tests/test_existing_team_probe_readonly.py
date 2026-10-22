@@ -60,6 +60,8 @@ def _function(name: str) -> str:
 
 TEMPLATE = _raw_string("pub(crate) fn command(")
 PROBE = _raw_string("pub(crate) fn team_probe_command(")
+# The engine choice every remote script starts with, as engine_selection(70) renders it.
+ENGINE = _raw_string("pub(crate) fn engine_selection(").replace("{exit}", "70")
 
 
 def render(target: dict) -> str:
@@ -68,9 +70,9 @@ def render(target: dict) -> str:
     text = TEMPLATE.replace("{{", "\0").replace("}}", "\1")
     for name, value in target.items():
         text = text.replace("{" + name + "}", value)
-    text = text.replace("{operation}", "\2")
+    text = text.replace("{engine}", "\3").replace("{operation}", "\2")
     assert "{" not in text and "}" not in text, "a placeholder the test does not know"
-    return text.replace("\0", "{").replace("\1", "}").replace("\2", PROBE)
+    return text.replace("\0", "{").replace("\1", "}").replace("\3", ENGINE).replace("\2", PROBE)
 
 
 FAKE_DOCKER = r"""#!/bin/sh
@@ -144,7 +146,9 @@ def test_the_probe_answers_through_the_fake_engine(shell, tmp_path):
     result, calls, _ = run_probe(shell, tmp_path)
     assert result.returncode == 0, result.stdout + result.stderr
     assert "captainRunning=1" in result.stdout and "assistantRunning=1" in result.stdout
-    assert len(calls) == 6, calls
+    # the engine's own --version (is this Docker or Podman's shim?), then the pinned checks and the probe
+    assert len(calls) == 7, calls
+    assert calls[0] == ["--version"], calls
 
 
 def test_the_team_id_travels_only_on_stdin(shell, tmp_path):
@@ -169,7 +173,7 @@ def test_the_probe_only_inspects_and_reads(shell, tmp_path):
     _, calls, _ = run_probe(shell, tmp_path)
     for call in calls:
         verb = call[0]
-        assert verb in ("inspect", "image", "exec"), call
+        assert verb in ("--version", "inspect", "image", "exec"), call
         if verb == "image":
             assert call[1] == "inspect", call
         if verb == "exec":
@@ -194,7 +198,7 @@ def test_the_only_interpolation_is_the_validated_target():
     assert "format!" not in probe_fn and probe_fn.count('r#"') == 1
     # command() names exactly the target's fields and the operation.
     names = set(re.findall(r"\{(\w+)\}", TEMPLATE.replace("{{", "").replace("}}", "")))
-    assert names == set(TARGET) | {"operation"}, names
+    assert names == set(TARGET) | {"engine", "operation"}, names
     # Two valid targets render the same script once their values are masked.
     def masked(target):
         text = render(target)
