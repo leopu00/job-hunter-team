@@ -170,6 +170,12 @@ export default defineConfig(({ mode }) => ({
     environment: "jsdom",
     globals: true,
     setupFiles: "./vitest.setup.ts",
+    // On a CI runner the whole machine can stop for some seconds: on Windows
+    // (run 39820154511) two workers froze in the same 6 s and the two tests
+    // they were running, under 1 s each, went past the 5 s default. The limit
+    // is there to catch a test that hangs, not to time a healthy one through a
+    // stall, so on CI it leaves room for one; locally it stays the default.
+    testTimeout: process.env.CI ? 20_000 : 5_000,
   },
   server: {
     strictPort: true,
