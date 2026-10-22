@@ -838,6 +838,12 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
     "The team could not be resumed.",
     "Try again. If it keeps happening, report the code shown next to it.",
   ),
+  team_stop_unsupported: copy(
+    "La squadra ha una versione che non si ferma dal pannello.",
+    "Aggiorna la squadra, poi riprova. Intanto puoi spegnere gli agenti uno per uno con «Spegni».",
+    "The team runs a version that cannot be stopped from the panel.",
+    "Update the team, then try again. Meanwhile you can stop the agents one by one with «Stop».",
+  ),
   team_stop_failed: copy(
     "Non è stato possibile fermare la squadra: lo stop non si è scritto, o un agente non si è spento.",
     "Riprova. Se si ripete, segnala il codice che vedi accanto.",
