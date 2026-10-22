@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   EFFORTS,
   MODEL_CLASSES,
@@ -42,9 +42,14 @@ export default function RoleModelsPanel({
   } | null>(null);
   const dirty = roleModelsChanged(saved, edited);
 
-  // A new version from the database replaces the form only while nothing is being edited.
+  // A new version from the database replaces the form only while nothing is
+  // being edited. «Nothing edited» is measured against the version the form
+  // showed (the previous one): against the new one, a version written elsewhere
+  // (the desktop, another tab) would always look like an edit and never show.
+  const shown = useRef(saved);
   useEffect(() => {
-    if (!dirty) setEdited(saved);
+    if (!roleModelsChanged(shown.current, edited)) setEdited(saved);
+    shown.current = saved;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [saved]);
 
