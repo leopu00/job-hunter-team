@@ -46,7 +46,29 @@ vi.mock("next/headers", () => ({
   cookies: vi.fn(async () => ({ get: vi.fn(), set: vi.fn() })),
 }));
 
+// La porta unica vera, con un Supabase dei cookie finto: nessun utente, e ogni chiamata registrata.
+const door = vi.hoisted(() => ({
+  user: null as { id: string } | null,
+  rpcs: [] as string[],
+  tables: [] as string[],
+}));
+vi.mock("@/lib/workspace", () => ({ isSupabaseConfigured: true }));
+vi.mock("@/lib/supabase/server", () => ({
+  createClient: async () => ({
+    auth: { getUser: async () => ({ data: { user: door.user } }) },
+    rpc: async (fn: string) => {
+      door.rpcs.push(fn);
+      return { data: null, error: null };
+    },
+    from: (table: string) => {
+      door.tables.push(table);
+      return { upsert: async () => ({ error: null }) };
+    },
+  }),
+}));
+
 import { POST } from "@/app/api/positions/[legacyId]/feedback/route";
+import { NextRequest } from "../../../web/node_modules/next/server.js";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const WEB = path.resolve(HERE, "../../../web");
@@ -92,6 +114,9 @@ const params = { params: Promise.resolve({ legacyId: "12345" }) };
 
 beforeEach(() => {
   vi.clearAllMocks();
+  door.user = null;
+  door.rpcs = [];
+  door.tables = [];
   demo.isDemoLegacyId.mockReturnValue(false);
   demo.activeDemoPersona.mockResolvedValue(false);
 });
@@ -243,7 +268,6 @@ describe("l'apertura riguarda SOLO questa POST", () => {
     "app/api/positions/[legacyId]/geocode-request/route.ts",
     "app/api/positions/[legacyId]/summary/route.ts",
     "app/api/team-directives/route.ts",
-    "app/api/team-state/emergency-stop/route.ts",
     "app/api/messages/route.ts",
   ];
 
@@ -264,6 +288,65 @@ describe("l'apertura riguarda SOLO questa POST", () => {
       return;
     }
     expect(source).toContain('source !== "session"');
+  });
+
+  // Lo stop della squadra è passato sulla porta unica (`requestAction`, fase 3): la route non ha più il
+  // guard in casa, e nemmeno `localFirstWrite`. La garanzia è la stessa — un token di dispositivo (anche
+  // quello del feedback) non ferma la squadra — ma ora la dà la porta: l'unico utente che conosce è
+  // quello dei cookie (`createClient` + `auth.getUser`), e senza risponde 401 PRIMA di `request_action`.
+  const DOOR_ROUTES = ["app/api/team-state/emergency-stop/route.ts"];
+  const DOOR = "lib/request-action.ts";
+
+  it.each(DOOR_ROUTES)("%s passa solo dalla porta, che conosce solo la sessione", (relative) => {
+    const route = fs.readFileSync(path.join(WEB, relative), "utf8");
+    expect(route).toContain('from "@/lib/request-action"');
+    expect(route).toContain("requestAction(req");
+    // Nessuna strada propria verso l'utente: niente risolutore di token nella route.
+    expect(route).not.toContain("resolveUser");
+    expect(route).not.toContain("team-state/auth");
+
+    const door = fs.readFileSync(path.join(WEB, DOOR), "utf8");
+    expect(door).not.toContain("resolveUser");
+    expect(door).not.toContain("team-state/auth");
+    expect(door.toLowerCase()).not.toContain("authorization");
+    expect(door.toLowerCase()).not.toContain("bearer");
+    // L'utente viene dai cookie, e senza si esce prima della chiamata al database.
+    expect(door).toContain('from "@/lib/supabase/server"');
+    const user = door.indexOf("supabase.auth.getUser()");
+    const refusal = door.indexOf('if (!user) return refuse("unauthenticated")');
+    const call = door.indexOf('supabase.rpc("request_action"');
+    expect(user).toBeGreaterThan(-1);
+    expect(refusal).toBeGreaterThan(user);
+    expect(call).toBeGreaterThan(refusal);
+  });
+
+  it("lo stop con un token di dispositivo e senza sessione è un 401, e il database non viene toccato", async () => {
+    // Il finto risolutore accetterebbe il token: se la porta (o la route) lo consultasse, passerebbe.
+    teamAuth.resolveUser.mockResolvedValue({
+      ok: true,
+      user: { source: "token", userId: "user-token", supabase: {}, token: {} },
+    });
+    door.user = null;
+    const { POST: stop } = await import("@/app/api/team-state/emergency-stop/route");
+    const res = await stop(
+      new NextRequest("https://jobhunter.example/api/team-state/emergency-stop", {
+        method: "POST",
+        headers: {
+          host: "jobhunter.example",
+          "x-forwarded-proto": "https",
+          origin: "https://jobhunter.example",
+          "sec-fetch-site": "same-origin",
+          "content-type": "application/json",
+          authorization: "Bearer jht_device_token_del_feedback",
+        },
+        body: "{}",
+      }),
+    );
+    expect(res.status).toBe(401);
+    expect(await res.json()).toEqual({ ok: false, error: "unauthenticated" });
+    expect(door.rpcs).toEqual([]);
+    expect(door.tables).toEqual([]);
+    expect(teamAuth.resolveUser).not.toHaveBeenCalled();
   });
 
   it("la route del feedback spiega perché il suo guard non c'è più", () => {
