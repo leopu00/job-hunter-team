@@ -4,6 +4,7 @@
  * shows the text the SERVER composed and sends only the confirmation id on the second call.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { join } from "node:path";
 
@@ -241,4 +242,86 @@ describe("the button's two steps", () => {
       expect(refusalText((k: string) => k, code)).toBe(key);
     },
   );
+});
+
+describe("two roads to the same route, chosen by the page", () => {
+  const ROW = "22222222-2222-4222-8222-222222222222";
+  const read = (p: string) =>
+    readFileSync(join(__dirname, "../../..", p), "utf8");
+  const button = read(
+    "web/app/(protected)/positions/[id]/ApplyRequestButton.tsx",
+  );
+  const page = read("web/app/(protected)/positions/[id]/page.tsx");
+
+  it("the page decides: the site (cloud deploy) takes the door, everywhere else keeps the one-step road", () => {
+    expect(page).toMatch(
+      /<ApplyRequestButton[^>]*twoStep=\{isCloudDeploy\(\)\}/s,
+    );
+  });
+
+  it("the button wires the door's three calls only when twoStep, and the one-step road otherwise", () => {
+    expect(button).toMatch(
+      /onAuthorise=\{\s*twoStep \? \(\) => void startTwoStep\(\) : \(\) => setConfirming\(true\)/,
+    );
+    expect(button).toMatch(
+      /onConfirm=\{twoStep \? \(\) => void confirmTwoStep\(\) : \(\) => void send\(true\)\}/,
+    );
+    expect(button).toMatch(
+      /onWithdraw=\{\s*twoStep \? \(\) => void withdrawTwoStep\(\) : \(\) => void send\(false\)/,
+    );
+  });
+
+  it("the door never accepts the desktop's word: {confirmed:true} is refused, so the two roads cannot be swapped", async () => {
+    const { parseBody } = await vi.importActual<
+      typeof import("@/lib/request-action")
+    >("@/lib/request-action");
+    expect(parseBody(JSON.stringify({ confirmed: true }))).toBeNull();
+    expect(
+      parseBody(JSON.stringify({ params: {}, confirmed: true })),
+    ).toBeNull();
+  });
+
+  it("the site's calls carry only what the door takes: '{}' first, then the confirmation id alone", async () => {
+    const { startAuthorisation, confirmAuthorisation, withdrawAuthorisation } =
+      await import("@/app/(protected)/positions/[id]/ApplyRequestButton");
+    const f = vi.fn(
+      async (..._a: unknown[]) =>
+        new Response(
+          JSON.stringify({
+            ok: true,
+            state: "awaiting_confirm",
+            id: ROW,
+            summary: "x",
+            expiresAt: null,
+          }),
+          { status: 200 },
+        ),
+    );
+    await startAuthorisation(7, f as unknown as typeof fetch);
+    await confirmAuthorisation(7, ROW, f as unknown as typeof fetch);
+    await withdrawAuthorisation(7, f as unknown as typeof fetch);
+    const bodies = f.mock.calls.map((c) =>
+      JSON.parse(((c as unknown[])[1] as RequestInit).body as string),
+    );
+    expect(bodies).toEqual([{}, { confirmId: ROW }, {}]);
+    for (const b of bodies) expect(Object.keys(b)).not.toContain("confirmed");
+  });
+
+  it("the one-step road (desktop and local web) never sends what the door reads, and may carry only the desktop's word", async () => {
+    const { submitApplyRequest } =
+      await import("@/app/(protected)/positions/[id]/ApplyRequestButton");
+    const f = vi.fn(
+      async (..._a: unknown[]) =>
+        new Response(JSON.stringify({ apply_requested: true }), {
+          status: 200,
+        }),
+    );
+    await submitApplyRequest(7, true, f as unknown as typeof fetch);
+    const init = (f.mock.calls[0] as unknown[])[1] as RequestInit;
+    expect(init.method).toBe("POST");
+    const body = init.body === undefined ? {} : JSON.parse(init.body as string);
+    for (const key of Object.keys(body)) expect(["confirmed"]).toContain(key);
+    expect(body).not.toHaveProperty("confirmId");
+    expect(body).not.toHaveProperty("params");
+  });
 });
