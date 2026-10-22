@@ -1,7 +1,7 @@
 use crate::account_scope::{AccountScope, AccountScopeState};
 use crate::existing_team_runtime::{self, ActivatedTarget, ChatOperation};
 use crate::runtime_host::{
-    run_program, run_ssh, run_ssh_command, run_ssh_command_stderr_free, set_private_dir_permissions, set_private_permissions, ssh_base_args,
+    run_program, run_ssh, run_ssh_command, run_ssh_command_without_pipes, set_private_dir_permissions, set_private_permissions, ssh_base_args,
     validate_host, ExecutionHost, ProcessResult, ValidatedHost,
 };
 use serde::{Deserialize, Serialize};
@@ -118,7 +118,7 @@ struct Connection {
 
 /// How the app talks to a VPS. `Master`: one ssh master (ControlMaster) that every command reuses.
 /// `PerCommand`: Windows' ssh (Win32-OpenSSH) has no ControlMaster (PowerShell/Win32-OpenSSH#405,
-/// T69), so every command is its own connection, and nothing reaches its stderr (T70).
+/// T69), so every command is its own connection, and ssh gets no pipe (its 9.5p1 hangs on one).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum VpsLink {
     Master,
@@ -730,7 +730,7 @@ fn run_connection(
             };
             match connection.link {
                 VpsLink::Master => run_ssh_command(&connection.validated, &command, input, timeout, connection.control_path.as_deref()),
-                VpsLink::PerCommand => run_ssh_command_stderr_free(&connection.validated, &command, input, timeout),
+                VpsLink::PerCommand => run_ssh_command_without_pipes(&connection.validated, &command, input, timeout),
             }
             .map_err(failure)
         }
@@ -779,7 +779,7 @@ fn connect_impl(
             ),
         ValidatedHost::Vps { .. } => {
             let (path, child) = open_vps_link(&validated, link, |host| {
-                run_ssh_command_stderr_free(host, VPS_LINK_CHECK, None, CONNECT_TIMEOUT)
+                run_ssh_command_without_pipes(host, VPS_LINK_CHECK, None, CONNECT_TIMEOUT)
             })?;
             (None, None, path, child)
         }

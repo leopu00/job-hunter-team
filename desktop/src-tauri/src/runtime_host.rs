@@ -759,27 +759,47 @@ pub(crate) fn run_ssh_command(
     result
 }
 
-/// The file ssh writes its own messages in (`-E`) instead of its stderr:
-/// private, used once, read after ssh ends and removed with this value.
-struct SshMessages {
+/// A file that stands in for one of ssh's streams: ssh's own messages (`-E`),
+/// its stdout, its stdin. Private (created exclusively, owner-only before
+/// anything is written in it), used once, removed with this value.
+struct PrivateTempFile {
     path: PathBuf,
 }
 
-impl SshMessages {
-    fn create() -> Result<Self, &'static str> {
+impl PrivateTempFile {
+    fn create(kind: &str) -> Result<Self, &'static str> {
         let nanos = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .map(|d| d.as_nanos())
             .unwrap_or(0);
-        let path = std::env::temp_dir().join(format!("jht-ssh-{}-{nanos}.log", std::process::id()));
+        let path = std::env::temp_dir().join(format!("jht-ssh-{kind}-{}-{nanos}.tmp", std::process::id()));
         fs::OpenOptions::new()
             .write(true)
             .create_new(true)
             .open(&path)
             .map_err(|_| "storage_unavailable")?;
-        let messages = Self { path };
-        set_private_permissions(&messages.path)?;
-        Ok(messages)
+        let file = Self { path };
+        set_private_permissions(&file.path)?;
+        Ok(file)
+    }
+
+    /// The file with `bytes` in it, written only once it is private.
+    fn with(kind: &str, bytes: &[u8]) -> Result<Self, &'static str> {
+        let file = Self::create(kind)?;
+        fs::OpenOptions::new()
+            .write(true)
+            .open(&file.path)
+            .and_then(|mut handle| handle.write_all(bytes))
+            .map_err(|_| "storage_unavailable")?;
+        Ok(file)
+    }
+
+    fn stdio_for_writing(&self) -> Result<Stdio, &'static str> {
+        fs::OpenOptions::new().write(true).open(&self.path).map(Stdio::from).map_err(|_| "storage_unavailable")
+    }
+
+    fn stdio_for_reading(&self) -> Result<Stdio, &'static str> {
+        fs::File::open(&self.path).map(Stdio::from).map_err(|_| "storage_unavailable")
     }
 
     fn read(&self) -> Vec<u8> {
@@ -787,10 +807,46 @@ impl SshMessages {
     }
 }
 
-impl Drop for SshMessages {
+impl Drop for PrivateTempFile {
     fn drop(&mut self) {
         let _ = fs::remove_file(&self.path);
     }
+}
+
+/// A program with no pipe at all: stdin from a private file (or the null
+/// device), stdout into a private file read once it has exited, stderr on the
+/// null device. Windows' ssh.exe (9.5p1) stays hung when data passes on any of
+/// its pipes, stdin, stdout or stderr alike, and exits with files (T69).
+fn run_program_without_pipes<I, S>(
+    program: &str,
+    args: I,
+    input: Option<&[u8]>,
+    timeout: Duration,
+) -> Result<ProcessResult, &'static str>
+where
+    I: IntoIterator<Item = S>,
+    S: AsRef<OsStr>,
+{
+    let stdout = PrivateTempFile::create("out")?;
+    let stdin = input.map(|bytes| PrivateTempFile::with("in", bytes)).transpose()?;
+    let mut command = Command::new(program);
+    command
+        .args(args)
+        .stdin(match &stdin {
+            Some(file) => file.stdio_for_reading()?,
+            None => Stdio::null(),
+        })
+        .stdout(stdout.stdio_for_writing()?)
+        .stderr(Stdio::null());
+    hide_console(&mut command);
+    let mut child = command.spawn().map_err(|error| spawn_failure(program, &error))?;
+    // the command holds this process's copies of the files: closed now, so only the child has them
+    drop(command);
+    let status = wait_until(&mut child, Instant::now(), timeout, Duration::from_millis(50))?;
+    Ok(ProcessResult {
+        code: status.code().unwrap_or(-1),
+        stdout: stdout.read(),
+    })
 }
 
 /// The remote command with its stderr left on the server: the VPS runs it in
@@ -799,9 +855,9 @@ fn without_remote_stderr(remote_command: &str) -> String {
     format!("exec 2>/dev/null; {remote_command}")
 }
 
-/// ssh's arguments when nothing may reach its stderr: its own messages go to
-/// `messages` (`-E`), the remote command's stderr stays on the server.
-fn stderr_free_ssh_args(
+/// ssh's arguments when it gets no pipe: its own messages go to `messages`
+/// (`-E`), the remote command's stderr stays on the server.
+fn pipe_free_ssh_args(
     host: &ValidatedHost,
     messages: &Path,
     remote_command: &str,
@@ -812,32 +868,36 @@ fn stderr_free_ssh_args(
     Ok(args)
 }
 
-/// `run_ssh_command` for Windows' ssh (Win32-OpenSSH), which can stay hung when
-/// anything reaches its stderr, its own messages or the remote command's: a race
-/// inside ssh.exe, with a pipe or a file alike (T70). So nothing ever does: the
-/// remote command's stderr stays on the server, ssh's own messages go to a
-/// private file (`-E`) read after it ends (for `ssh_rate_limited`) and removed,
-/// and its stderr is the null device. No ControlMaster either (T69): every call
-/// is its own connection.
-pub(crate) fn run_ssh_command_stderr_free(
+/// `run_ssh_command` for Windows' ssh (Win32-OpenSSH 9.5p1), which stays hung
+/// when data passes on any of its pipes (T69, measured live: a command that
+/// prints anything never returns). So ssh gets no pipe: its input comes from a
+/// private file, its output goes to one read after it ends, its own messages to
+/// a third (`-E`, read for `ssh_rate_limited`), its stderr is the null device,
+/// and the remote command's stderr stays on the server. The files are removed
+/// when the call ends. No ControlMaster either: every call is its own connection.
+///
+/// NEVER give it credentials as `input` (a provider key, a token, a password): the input is on disk
+/// for the length of the call. Its callers send the chat's probe, script, delivery and messages:
+/// personal data, not secrets. A new caller with a secret needs another way in.
+pub(crate) fn run_ssh_command_without_pipes(
     host: &ValidatedHost,
     remote_command: &str,
     input: Option<&[u8]>,
     timeout: Duration,
 ) -> Result<ProcessResult, &'static str> {
-    run_ssh_command_stderr_free_with("ssh", host, remote_command, input, timeout)
+    run_ssh_command_without_pipes_with("ssh", host, remote_command, input, timeout)
 }
 
-fn run_ssh_command_stderr_free_with(
+fn run_ssh_command_without_pipes_with(
     program: &str,
     host: &ValidatedHost,
     remote_command: &str,
     input: Option<&[u8]>,
     timeout: Duration,
 ) -> Result<ProcessResult, &'static str> {
-    let messages = SshMessages::create()?;
-    let args = stderr_free_ssh_args(host, &messages.path, remote_command)?;
-    let (result, _) = run_program_with_stderr(program, &args, input, timeout, StderrTo::Null);
+    let messages = PrivateTempFile::create("messages")?;
+    let args = pipe_free_ssh_args(host, &messages.path, remote_command)?;
+    let result = run_program_without_pipes(program, &args, input, timeout);
     if matches!(&result, Ok(value) if value.code == 255) && ssh_rejects_for_a_while(&messages.read()) {
         return Err("ssh_rate_limited");
     }
@@ -1073,34 +1133,11 @@ where
     I: IntoIterator<Item = S>,
     S: AsRef<OsStr>,
 {
-    run_program_with_stderr(program, args, input, timeout, StderrTo::Pipe)
-}
-
-/// Where a program's stderr goes.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) enum StderrTo {
-    /// A pipe, read while the program runs.
-    Pipe,
-    /// The null device (Windows' ssh, which must get nothing on stderr: T70).
-    Null,
-}
-
-fn run_program_with_stderr<I, S>(
-    program: &str,
-    args: I,
-    input: Option<&[u8]>,
-    timeout: Duration,
-    stderr_to: StderrTo,
-) -> (Result<ProcessResult, &'static str>, Vec<u8>)
-where
-    I: IntoIterator<Item = S>,
-    S: AsRef<OsStr>,
-{
     let mut command = Command::new(program);
-    command.args(args).stdout(Stdio::piped()).stderr(match stderr_to {
-        StderrTo::Pipe => Stdio::piped(),
-        StderrTo::Null => Stdio::null(),
-    });
+    command
+        .args(args)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
     hide_console(&mut command);
     if input.is_some() {
         command.stdin(Stdio::piped());
@@ -1111,17 +1148,11 @@ where
         Ok(child) => child,
         Err(error) => return (Err(spawn_failure(program, &error)), Vec::new()),
     };
-    let stderr = child.stderr.take();
-    let Some(stdout) = child.stdout.take() else {
+    let (Some(stdout), Some(stderr)) = (child.stdout.take(), child.stderr.take()) else {
         let _ = child.kill();
         let _ = child.wait();
         return (Err("process_pipe_failed"), Vec::new());
     };
-    if stderr_to == StderrTo::Pipe && stderr.is_none() {
-        let _ = child.kill();
-        let _ = child.wait();
-        return (Err("process_pipe_failed"), Vec::new());
-    }
     let stdin = if input.is_some() {
         match child.stdin.take() {
             Some(stdin) => Some(stdin),
@@ -1135,7 +1166,7 @@ where
         None
     };
     let stdout_reader = thread::spawn(move || read_capped(stdout));
-    let stderr_reader = stderr.map(|stderr| thread::spawn(move || read_capped(stderr)));
+    let stderr_reader = thread::spawn(move || read_capped(stderr));
     let started = Instant::now();
     // The input goes in on its own thread, and the clock starts before it: a
     // process that never reads (a server that accepts the connection and then
@@ -1160,9 +1191,7 @@ where
     // contain credentials or host data, and stable error codes are the public
     // contract. run_program drops it; only the local runtime's own log keeps
     // it, redacted.
-    let stderr = stderr_reader
-        .map(|reader| reader.join().unwrap_or_default())
-        .unwrap_or_default();
+    let stderr = stderr_reader.join().unwrap_or_default();
     let (status, input_written) = match outcome {
         Ok(done) => done,
         Err(code) => return (Err(code), stderr),
@@ -1495,7 +1524,10 @@ mod tests {
     #[cfg(unix)]
     fn fake_ssh(script: &str) -> (PathBuf, PathBuf) {
         use std::os::unix::fs::PermissionsExt;
-        let dir = std::env::temp_dir().join(format!("jht-fake-ssh-{}-{}", std::process::id(), script.len()));
+        // one folder per stand-in: two scripts of the same length, in tests running at once, would share it
+        static NEXT: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+        let n = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let dir = std::env::temp_dir().join(format!("jht-fake-ssh-{}-{}-{n}", std::process::id(), script.len()));
         fs::create_dir_all(&dir).unwrap();
         let path = dir.join("ssh");
         fs::write(&path, format!("#!/bin/sh\n{script}\n")).unwrap();
@@ -1543,10 +1575,10 @@ mod tests {
         let _ = fs::remove_dir_all(dir);
     }
 
-    /// Windows' ssh (T69, T70): no master, its own messages in `-E <file>`, the remote stderr left
-    /// on the server.
+    /// Windows' ssh (T69): no master, its own messages in `-E <file>`, the remote stderr left on the
+    /// server.
     #[test]
-    fn stderr_free_ssh_never_opens_a_master_and_keeps_the_remote_stderr_on_the_server() {
+    fn pipe_free_ssh_never_opens_a_master_and_keeps_the_remote_stderr_on_the_server() {
         let host = super::ValidatedHost::Vps {
             address: "test-host".into(),
             user: "test".into(),
@@ -1554,7 +1586,7 @@ mod tests {
             key_path: "/private/synthetic-key".into(),
             known_hosts: "/private/synthetic-known-hosts".into(),
         };
-        let args = super::stderr_free_ssh_args(&host, Path::new("/private/synthetic.log"), "jht desktop-chat probe").unwrap();
+        let args = super::pipe_free_ssh_args(&host, Path::new("/private/synthetic.log"), "jht desktop-chat probe").unwrap();
         let values: Vec<_> = args.iter().map(|value| value.to_string_lossy().into_owned()).collect();
         assert_eq!(&values[..2], ["-E", "/private/synthetic.log"]);
         assert_eq!(values.last().unwrap(), "exec 2>/dev/null; jht desktop-chat probe");
@@ -1567,12 +1599,26 @@ mod tests {
         assert_eq!(&values[2..values.len() - 1], &base[..]);
     }
 
-    /// The real process: its stderr is not a pipe (here, a stand-in for ssh asks its own fd 2), what
-    /// it says on stderr goes nowhere, and ssh's messages in the `-E` file still tell a server that
-    /// refuses this computer; the file is gone after.
+    /// The files of this process's pipe-free ssh calls still on disk.
+    fn pipe_free_files_left() -> Vec<PathBuf> {
+        let prefix = format!("-{}-", std::process::id());
+        fs::read_dir(std::env::temp_dir())
+            .unwrap()
+            .filter_map(|entry| entry.ok().map(|entry| entry.path()))
+            .filter(|path| {
+                let name = path.file_name().unwrap().to_string_lossy().into_owned();
+                name.starts_with("jht-ssh-") && name.contains(&prefix) && name.ends_with(".tmp")
+            })
+            .collect()
+    }
+
+    /// The real process (T69: Windows' ssh stays hung when data passes on any of its pipes): a
+    /// stand-in for ssh finds none of its fds 0, 1, 2 a pipe, gets its input whole from the file,
+    /// has its output read back, and its messages in the `-E` file still tell a server that refuses
+    /// this computer. Every file is gone after, the input's too, also after a failure and a timeout.
     #[cfg(unix)]
     #[test]
-    fn stderr_free_ssh_gets_no_stderr_pipe_and_reads_its_messages_from_the_file() {
+    fn pipe_free_ssh_gets_no_pipe_at_all_and_leaves_no_file_even_on_failure_or_timeout() {
         let host = super::ValidatedHost::Vps {
             address: "test-host".into(),
             user: "test".into(),
@@ -1581,25 +1627,32 @@ mod tests {
             known_hosts: "/private/synthetic-known-hosts".into(),
         };
         let (dir, program) = fake_ssh(
-            "printf '%s' \"$2\" > \"$(dirname \"$0\")/log-used\"\n\
-             if [ -p /dev/fd/2 ]; then echo pipe; else echo not-a-pipe; fi\n\
+            "for fd in 0 1 2; do if [ -p /dev/fd/$fd ]; then printf 'pipe%s ' $fd; fi; done\n\
              echo 'remote noise' >&2\n\
-             case \"$*\" in *refuse*) echo 'kex_exchange_identification: read: Connection reset by 192.0.2.10 port 22' >> \"$2\"; exit 255;; esac\n\
-             exit 0",
+             case \"$*\" in\n\
+             *refuse*) echo 'kex_exchange_identification: read: Connection reset by 192.0.2.10 port 22' >> \"$2\"; exit 255;;\n\
+             *echo-input*) printf 'no-pipe:'; cat; exit 0;;\n\
+             *fail*) exit 3;;\n\
+             *hang*) exec sleep 30;;\n\
+             esac\n\
+             echo no-pipe",
         );
         let program = program.to_str().unwrap();
-        let done = super::run_ssh_command_stderr_free_with(program, &host, "exit 0", None, std::time::Duration::from_secs(20)).unwrap();
-        assert_eq!((done.code, done.stdout_text().trim()), (0, "not-a-pipe"));
-        let used = PathBuf::from(fs::read_to_string(dir.join("log-used")).unwrap());
-        assert!(used.starts_with(std::env::temp_dir()) && !used.exists(), "{used:?}");
-        assert_eq!(
-            super::run_ssh_command_stderr_free_with(program, &host, "refuse", None, std::time::Duration::from_secs(20)).err(),
-            Some("ssh_rate_limited")
-        );
-        assert!(!PathBuf::from(fs::read_to_string(dir.join("log-used")).unwrap()).exists());
-        // the same stand-in with the usual runner does see a pipe: the probe tells them apart
-        let (piped, _) = super::run_program_keeping_stderr(program, ["-E", "/dev/null", "x"], None, std::time::Duration::from_secs(20));
-        assert_eq!(piped.unwrap().stdout_text().trim(), "pipe");
+        let run = |command: &str, input: Option<&[u8]>, seconds: u64| {
+            super::run_ssh_command_without_pipes_with(program, &host, command, input, std::time::Duration::from_secs(seconds))
+        };
+        let done = run("exit 0", None, 20).unwrap();
+        assert_eq!((done.code, done.stdout_text().trim()), (0, "no-pipe"));
+        let secret = b"synthetic message for the agent\nsecond line";
+        let echoed = run("echo-input", Some(secret), 20).unwrap();
+        assert_eq!(echoed.stdout, [b"no-pipe:".as_slice(), secret].concat());
+        assert_eq!(run("refuse", Some(secret), 20).err(), Some("ssh_rate_limited"));
+        assert_eq!(run("fail", Some(secret), 20).unwrap().code, 3);
+        assert_eq!(run("hang", Some(secret), 1).err(), Some("process_timeout"));
+        assert_eq!(pipe_free_files_left(), Vec::<PathBuf>::new(), "every file goes, on every path");
+        // the same stand-in with the usual runner does see its pipes: the probe tells them apart
+        let (piped, _) = super::run_program_keeping_stderr(program, ["-E", "/dev/null", "x"], Some(b"x".as_slice()), std::time::Duration::from_secs(20));
+        assert_eq!(piped.unwrap().stdout_text().trim(), "pipe0 pipe1 pipe2 no-pipe");
         let _ = fs::remove_dir_all(dir);
     }
 
