@@ -36,6 +36,24 @@ export interface ActionSpec {
   action: string;
   /** Il livello che la route dichiara; se il database ne risponde uno più alto, non passa niente. */
   level: ActionLevel;
+  /**
+   * I parametri che la ROUTE conosce dall'indirizzo (l'id della posizione): sono suoi, non del corpo.
+   * Se ci sono, il corpo non può portarne altri (`params` vuoto o assente) e la prima chiamata usa
+   * questi. Alla conferma non servono: il database ha quelli salvati.
+   */
+  params?: Record<string, unknown>;
+  /**
+   * Il metodo HTTP che la route accetta per questa azione; di base POST. Una route che ritira con DELETE
+   * lo dice qui: il resto dei controlli d'origine vale come per un POST.
+   */
+  method?: "POST" | "DELETE";
+  /**
+   * L'azione accetta un testo libero (una nota, una direttiva): il corpo può portare `body`, una stringa
+   * con questo tetto di caratteri (di base 2000), che alla prima chiamata va al database come `p_body`.
+   * Senza questa voce il corpo che porta `body` è rifiutato, e `p_body` non viene mai passato. Il testo lo
+   * pulisce, lo taglia e lo recinta il database: la libreria lo inoltra com'è.
+   */
+  body?: boolean | { max: number };
 }
 
 const LEVEL_RANK: Record<ActionLevel, number> = { L1: 1, L2: 2, L3: 3 };
@@ -44,6 +62,7 @@ const MAX_DEPTH = 4;
 const MAX_KEYS = 40;
 const MAX_STRING = 4000;
 const MAX_SUMMARY = 400;
+const DEFAULT_BODY_TEXT = 2000;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const ACTION_NAME = /^[a-z][a-z0-9_]{0,31}(\.[a-z][a-z0-9_]{0,31})?$/;
 const FORBIDDEN_KEYS = new Set(["__proto__", "constructor", "prototype"]);
@@ -136,9 +155,11 @@ export function isBoundedJson(value: unknown, depth = 0): boolean {
 interface ParsedBody {
   params: Record<string, unknown>;
   confirmId: string | null;
+  /** Il testo libero del corpo (`body`), solo alla prima chiamata. */
+  text: string | null;
 }
 
-/** La forma del corpo: `{params?}` oppure `{confirmId}`, mai altro, mai tutti e due. */
+/** La forma del corpo: `{params?, body?}` oppure `{confirmId}`, mai altro, mai la conferma con il resto. */
 export function parseBody(text: string): ParsedBody | null {
   let raw: unknown;
   try {
@@ -150,26 +171,32 @@ export function parseBody(text: string): ParsedBody | null {
     return null;
   const body = raw as Record<string, unknown>;
   for (const key of Object.keys(body)) {
-    if (key !== "params" && key !== "confirmId") return null;
+    if (key !== "params" && key !== "confirmId" && key !== "body") return null;
   }
   const hasParams = Object.prototype.hasOwnProperty.call(body, "params");
   const hasConfirm = Object.prototype.hasOwnProperty.call(body, "confirmId");
-  if (hasParams && hasConfirm) return null;
+  const hasText = Object.prototype.hasOwnProperty.call(body, "body");
+  if (hasConfirm && (hasParams || hasText)) return null;
   if (hasConfirm) {
     const id = body.confirmId;
     return typeof id === "string" && UUID.test(id)
-      ? { params: {}, confirmId: id.toLowerCase() }
+      ? { params: {}, confirmId: id.toLowerCase(), text: null }
       : null;
   }
+  if (hasText && typeof body.body !== "string") return null;
   const params = hasParams ? body.params : {};
   if (params === null || typeof params !== "object" || Array.isArray(params))
     return null;
   if (!isBoundedJson(params)) return null;
-  return { params: params as Record<string, unknown>, confirmId: null };
+  return {
+    params: params as Record<string, unknown>,
+    confirmId: null,
+    text: hasText ? (body.body as string) : null,
+  };
 }
 
 interface Success {
-  state: "awaiting_confirm" | "queued";
+  state: "awaiting_confirm" | "queued" | "done";
   id: string;
   level: ActionLevel;
   summary: string;
@@ -182,8 +209,13 @@ function readSuccess(data: unknown, confirming: boolean): Success | null {
   if (data === null || typeof data !== "object") return null;
   const d = data as Record<string, unknown>;
   if (d.ok !== true) return null;
-  if (d.state !== "awaiting_confirm" && d.state !== "queued") return null;
-  if (confirming && d.state !== "queued") return null; // la seconda chiamata non può chiedere un'altra conferma
+  if (
+    d.state !== "awaiting_confirm" &&
+    d.state !== "queued" &&
+    d.state !== "done"
+  )
+    return null;
+  if (confirming && d.state === "awaiting_confirm") return null; // la seconda chiamata non può chiedere un'altra conferma
   if (typeof d.id !== "string" || !UUID.test(d.id)) return null;
   if (d.level !== "L1" && d.level !== "L2" && d.level !== "L3") return null;
   const summary = typeof d.summary === "string" ? d.summary : "";
@@ -229,9 +261,10 @@ export async function requestAction(
 
   // 1. L'ingresso: l'origine prima di tutto, poi il resto. Niente di quanto segue vede una richiesta rifiutata.
   const contentType = req.headers.get("content-type");
+  if (req.method.toUpperCase() !== (spec.method ?? "POST")) {
+    return refuse("method_not_allowed");
+  }
   if (spec.level === "L1") {
-    if (req.method.toUpperCase() !== "POST")
-      return refuse("method_not_allowed");
     const lenient = shouldRejectBrowserMutation({
       method: req.method,
       origin: req.headers.get("origin"),
@@ -248,7 +281,7 @@ export async function requestAction(
     }
   } else {
     const refusal = strictMutationRefusal({
-      method: req.method,
+      method: "POST", // la regola stretta è quella del POST, anche per la route che ritira con DELETE
       origin: req.headers.get("origin"),
       referer: req.headers.get("referer"),
       secFetchSite: req.headers.get("sec-fetch-site"),
@@ -273,6 +306,28 @@ export async function requestAction(
     return refuse("payload_too_large");
   const body = parseBody(text);
   if (!body) return refuse("invalid_request");
+  if (spec.params !== undefined) {
+    if (!isBoundedJson(spec.params)) return refuse("action_failed");
+    // Le chiavi della route vincono: il corpo può aggiungerne di sue, mai ripetere quelle della route.
+    const repeated = Object.keys(spec.params).some((key) =>
+      Object.prototype.hasOwnProperty.call(body.params, key),
+    );
+    if (repeated) return refuse("invalid_request");
+    if (body.confirmId === null) {
+      body.params = { ...body.params, ...spec.params };
+    }
+  }
+  // Il testo libero: solo se la route lo dichiara, entro il suo tetto.
+  let bodyMax: number | null = null;
+  if (spec.body) {
+    bodyMax = spec.body === true ? DEFAULT_BODY_TEXT : spec.body.max;
+    if (!Number.isInteger(bodyMax) || bodyMax < 1 || bodyMax > MAX_BODY_BYTES) {
+      return refuse("action_failed");
+    }
+  }
+  if (body.text !== null && (bodyMax === null || body.text.length > bodyMax)) {
+    return refuse("invalid_request");
+  }
 
   // 3. L'utente: la sessione dei cookie. Chi decide se è RECENTE, e di chi è, è il database.
   if (!isSupabaseConfigured) return refuse("unavailable");
@@ -291,6 +346,11 @@ export async function requestAction(
       p_confirm_id: body.confirmId,
       // Il livello che la route dichiara: il database lo confronta col suo PRIMA di scrivere l'effetto.
       p_route_level: spec.level,
+      // Il testo libero va solo alla prima chiamata, e solo se la route lo accetta: alla conferma il
+      // database ha già quello salvato.
+      ...(bodyMax !== null && body.confirmId === null
+        ? { p_body: body.text }
+        : {}),
     });
   } catch {
     return refuse("action_failed");

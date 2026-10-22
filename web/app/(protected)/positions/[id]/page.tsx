@@ -31,6 +31,7 @@ import { MarkdownLite } from "@/lib/markdown-lite";
 import { locales, defaultLocale, type Locale } from "@/i18n/config";
 import { WriteRequestButton } from "./WriteRequestButton";
 import { ApplyRequestButton } from "./ApplyRequestButton";
+import { isCloudDeploy } from "@/lib/deploy-mode";
 import { applyRequestState } from "@/lib/apply-request-rule";
 import { getApplyRequestSignals } from "@/lib/apply-request-signals";
 import { CoverLetterRequestButton } from "./CoverLetterRequestButton";
@@ -1281,7 +1282,11 @@ export default async function PositionDetailPage({ params }: PageProps) {
           annuncio originale come ULTIMI elementi, più prev/next ripetuto. */}
       <div className="mt-6 space-y-4">
         {applyLegacyId != null && applyState.kind !== "hidden" && (
-          <ApplyRequestButton legacyId={applyLegacyId} state={applyState} />
+          <ApplyRequestButton
+            legacyId={applyLegacyId}
+            state={applyState}
+            twoStep={isCloudDeploy()}
+          />
         )}
         {position.legacy_id != null && (
           <div className="mt-4 flex items-center gap-3">
