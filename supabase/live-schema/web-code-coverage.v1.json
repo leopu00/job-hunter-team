@@ -5,9 +5,9 @@
     "web/lib"
   ],
   "canary": {
-    "path": "supabase/live-schema/078-098.web.v14.json",
-    "sha256": "88a2c4eb25e5f2bbfe8464468b2920a8f40af6d6e215e9d4dfac156c85a72329",
-    "contract_id": "release-0.4.0-web-schema-078-098-single-door"
+    "path": "supabase/live-schema/078-098.web.v15.json",
+    "sha256": "8dbc296d109c0da58e767c9984d177da8f9beb01fe3bb244e3f4d3f4596d2f65",
+    "contract_id": "release-0.4.0-web-schema-078-098-action-log"
   },
   "coverage": {
     "rpcs": {
@@ -231,6 +231,11 @@
       "user_to_agent_messages": {
         "receipts": [
           "099.web.columns.user_to_agent_messages"
+        ]
+      },
+      "web_action_log": {
+        "receipts": [
+          "099.web.columns.web_action_log"
         ]
       }
     },
@@ -1483,6 +1488,56 @@
       "user_to_agent_messages.user_id": {
         "receipts": [
           "099.web.columns.user_to_agent_messages"
+        ]
+      },
+      "web_action_log.action": {
+        "receipts": [
+          "099.web.columns.web_action_log"
+        ]
+      },
+      "web_action_log.confirmed_at": {
+        "receipts": [
+          "099.web.columns.web_action_log"
+        ]
+      },
+      "web_action_log.created_at": {
+        "receipts": [
+          "099.web.columns.web_action_log"
+        ]
+      },
+      "web_action_log.expires_at": {
+        "receipts": [
+          "099.web.columns.web_action_log"
+        ]
+      },
+      "web_action_log.id": {
+        "receipts": [
+          "099.web.columns.web_action_log"
+        ]
+      },
+      "web_action_log.level": {
+        "receipts": [
+          "099.web.columns.web_action_log"
+        ]
+      },
+      "web_action_log.params": {
+        "receipts": [
+          "099.web.columns.web_action_log"
+        ]
+      },
+      "web_action_log.result": {
+        "receipts": [
+          "099.web.columns.web_action_log"
+        ]
+      },
+      "web_action_log.status": {
+        "receipts": [
+          "099.web.columns.web_action_log"
+        ]
+      },
+      "web_action_log.summary": {
+        "receipts": [
+          "099.web.columns.web_action_log"
         ]
       }
     },

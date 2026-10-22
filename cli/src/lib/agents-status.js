@@ -221,12 +221,14 @@ export function agentsStatusPatch(source, agents) {
 }
 
 /**
- * How a box writes its source: direct to Supabase when it has a session
- * (`direct`, supabase-direct's patchTeamState), otherwise handed to the
- * `carrier` (createHeartbeatCarrier), which the heartbeat takes along.
+ * How a box writes its source: always handed to the `carrier`
+ * (createHeartbeatCarrier), which the heartbeat takes along in its PATCH
+ * /api/team-state. Never with the user's session: the database gives the browser
+ * roles no grant on the observed columns, so a direct write would turn the tags
+ * off without a word.
  */
-export function agentsStatusWriter({ source, direct, carrier }) {
-  return (map) => (direct ? direct.patchTeamState(agentsStatusPatch(source, map)) : carrier.hold(map));
+export function agentsStatusWriter({ carrier }) {
+  return (map) => carrier.hold(map);
 }
 
 /**

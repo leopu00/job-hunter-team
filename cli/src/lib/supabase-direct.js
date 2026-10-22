@@ -348,20 +348,6 @@ export function createSupabaseDirect({ supabaseUrl, anonKey, refreshToken, userI
     return Array.isArray(rows) && rows.length ? rows[0] : null;
   }
 
-  /**
-   * Aggiorna campi della propria riga team_state (es. ack `sync_completed_at`).
-   * Filtro user_id esplicito oltre alla RLS.
-   */
-  async function patchTeamState(fields, { signal } = {}) {
-    const filter = userId ? `user_id=eq.${userId}` : 'user_id=not.is.null';
-    await rest(`team_state?${filter}`, {
-      method: 'PATCH',
-      body: fields,
-      prefer: 'return=minimal',
-      signal,
-    });
-  }
-
   return {
     ensureToken,
     rest,
@@ -373,7 +359,6 @@ export function createSupabaseDirect({ supabaseUrl, anonKey, refreshToken, userI
     readUndeliveredUserChat,
     markUserChatDelivered,
     readTeamState,
-    patchTeamState,
     getRefreshToken: () => currentRefresh,
   };
 }

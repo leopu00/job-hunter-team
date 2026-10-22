@@ -197,35 +197,34 @@ describe("handleChatSync — worker completo", () => {
     expect({ reads, sends, acks }).toEqual({ reads: 3, sends: 1, acks: 1 });
   });
 
-  it("limita nel tempo la pubblicazione observed su direct e fallback HTTP", async () => {
-    let directSignal: AbortSignal | undefined;
+  it("limita nel tempo la pubblicazione observed, che va sempre dalla rotta col token", async () => {
     let httpSignal: AbortSignal | undefined;
+    let sessionUsed = false;
     const reader = {
-      patchTeamState: async (_fields: unknown, options?: { signal?: AbortSignal }) => {
-        directSignal = options?.signal;
-        await new Promise((_resolve, reject) => {
-          options?.signal?.addEventListener("abort", () => reject(options.signal?.reason), { once: true });
-        });
+      patchTeamState: async () => {
+        sessionUsed = true;
       },
     };
     const started = Date.now();
-    const published = await patchTeamStateBestEffort(
+    const published = await (patchTeamStateBestEffort as (...a: unknown[]) => Promise<boolean>)(
       CONFIG,
-      reader,
       { last_action: "sync:timeout", last_action_at: "2026-08-04T10:00:01Z" },
       {
+        reader,
         timeoutMs: 20,
         fetchFn: async (_url: string, init?: { signal?: AbortSignal }) => {
           httpSignal = init?.signal;
-          if (init?.signal?.aborted) throw init.signal.reason;
+          await new Promise((_resolve, reject) => {
+            init?.signal?.addEventListener("abort", () => reject(init.signal?.reason), { once: true });
+          });
           return { ok: true };
         },
       },
     );
     expect(published).toBe(false);
     expect(Date.now() - started).toBeLessThan(500);
-    expect(directSignal).toBeInstanceOf(AbortSignal);
-    expect(httpSignal).toBe(directSignal);
+    expect(sessionUsed).toBe(false);
+    expect(httpSignal).toBeInstanceOf(AbortSignal);
     expect(httpSignal?.aborted).toBe(true);
   });
 

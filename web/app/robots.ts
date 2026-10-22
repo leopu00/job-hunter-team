@@ -37,6 +37,7 @@ export default function robots(): MetadataRoute.Robots {
           "/rate-limiter",
           "/secrets",
           "/notifications",
+          "/action-log",
           "/channels",
           "/integrations",
           "/cron",
