@@ -21,6 +21,7 @@ This file is the ONLY writer of the table. It is the user's decision: it refuses
 (JHT_AGENT_NAME is set), as the user's own commands from the app never carry that variable.
 
     python3 profile_exclusions.py list [--json]
+    python3 profile_exclusions.py events               the user's last judgements (what the proposals are made of); a read
     python3 profile_exclusions.py accept CODE          derive the parameters from the local judgements
     python3 profile_exclusions.py withdraw CODE        it stops acting on the next score
     python3 profile_exclusions.py reconcile            stdin: JSON [{"reason": CODE, "status": "accepted"|"dismissed"}]
@@ -216,6 +217,24 @@ def listing(conn):
     return rows
 
 
+EVENTS_MAX = 2000
+
+
+def events(conn):
+    """The user's last judgements on positions, newest first, as the proposals read them: the position
+    (its id here is the legacy id the cloud knows), the action, the reason code (never the free text)."""
+    rows = []
+    for event_id, position_id, action, reason, created_at in conn.execute(
+        "SELECT id, position_id, action, reason, created_at FROM position_feedback "
+        "ORDER BY created_at DESC, id DESC LIMIT ?",
+        (EVENTS_MAX,),
+    ):
+        stamp = str(created_at or "").replace(" ", "T")
+        rows.append({"id": event_id, "legacy_id": position_id, "action": action, "reason": reason,
+                     "created_at": stamp + "Z" if stamp and "Z" not in stamp and "+" not in stamp else stamp})
+    return rows
+
+
 def reconcile(conn, decisions):
     """The user's decisions kept in the cloud, brought to the local table: accepted -> active (the
     parameters are derived here, from the local judgements), dismissed -> withdrawn. A code the cloud
@@ -253,18 +272,22 @@ def main(argv=None):
     sub = parser.add_subparsers(dest="op", required=True)
     lst = sub.add_parser("list")
     lst.add_argument("--json", action="store_true")
+    sub.add_parser("events")
     for name in ("accept", "withdraw"):
         sub.add_parser(name).add_argument("code")
     sub.add_parser("reconcile")
     args = parser.parse_args(argv)
 
-    if args.op != "list" and os.environ.get("JHT_AGENT_NAME", "").strip():
+    if args.op not in ("list", "events") and os.environ.get("JHT_AGENT_NAME", "").strip():
         return _refuse("user_only")
     conn = get_db()
     ensure_schema(conn)
     try:
         if args.op == "list":
             print(json.dumps({"ok": True, "exclusions": listing(conn)}, sort_keys=True))
+            return 0
+        if args.op == "events":
+            print(json.dumps({"ok": True, "feedback": events(conn)}, sort_keys=True))
             return 0
         if args.op == "accept":
             return accept(conn, args.code)

@@ -545,3 +545,104 @@ def test_a_refused_name_is_never_echoed_nor_journaled(team, capsys):
         code, answer = team.run("stop", bad, capsys=capsys)
         assert code in (100, 101) and answer["session"] is None
     assert all(entry["session"] is None for entry in team.journal())
+
+
+# ── JHT-T24-b: the exclusions of the profile, written straight in the team's jobs.db ─────────────────────
+# profile_exclusions.py stays the only writer; this panel asks it with a code of the closed vocabulary.
+def _exclusion_db(tmp_path, monkeypatch):
+    import sqlite3
+
+    sys.path.insert(0, str(ROOT / "shared" / "skills"))
+    import _db
+
+    path = tmp_path / "jobs.db"
+    conn = sqlite3.connect(path)
+    conn.row_factory = sqlite3.Row
+    _db.ensure_schema(conn)
+    conn.execute("INSERT INTO companies (name) VALUES ('Acme')")
+    for index in range(3):
+        conn.execute(
+            "INSERT INTO positions (title, company, company_id, status, url) VALUES (?, 'Acme', 1, 'checked', ?)",
+            (f"t{index}", f"https://x.example/{index}"),
+        )
+        conn.execute(
+            "INSERT INTO position_feedback (position_id, action, reason, note, created_at) VALUES (?, 'dislike', 'company', ?, ?)",
+            (index + 1, "SENTINEL-PRIVATE-WORDS", f"2026-10-0{index + 1} 10:00:00"),
+        )
+    conn.commit()
+    conn.close()
+    monkeypatch.setenv("JHT_DB", str(path))
+    monkeypatch.setenv("JHT_HOME", str(tmp_path))
+    monkeypatch.delenv("JHT_AGENT_NAME", raising=False)
+    return path
+
+
+def _run_tool(capsys, *argv):
+    tool = _load()
+    code = tool.main(list(argv))
+    out = capsys.readouterr().out.strip().splitlines()
+    return code, json.loads(out[-1])
+
+
+def test_the_panel_accepts_and_withdraws_an_exclusion_through_the_only_writer(tmp_path, monkeypatch, capsys):
+    _exclusion_db(tmp_path, monkeypatch)
+    code, reply = _run_tool(capsys, "exclusion-accept", "company")
+    assert (code, reply["ok"], reply["result"], reply["code"]) == (0, True, "excluded", "company")
+    code, reply = _run_tool(capsys, "exclusions")
+    assert code == 0 and reply["ok"] is True
+    assert [(row["code"], row["status"]) for row in reply["exclusions"]] == [("company", "active")]
+    code, reply = _run_tool(capsys, "exclusion-withdraw", "company")
+    assert (code, reply["result"]) == (0, "exclusion_withdrawn")
+    _, reply = _run_tool(capsys, "exclusions")
+    assert [(row["code"], row["status"]) for row in reply["exclusions"]] == [("company", "withdrawn")]
+
+
+def test_the_read_gives_the_judgements_the_proposals_are_made_of_and_never_the_users_words(tmp_path, monkeypatch, capsys):
+    _exclusion_db(tmp_path, monkeypatch)
+    _, reply = _run_tool(capsys, "exclusions")
+    assert [(e["legacy_id"], e["action"], e["reason"]) for e in reply["feedback"]] == [
+        (3, "dislike", "company"), (2, "dislike", "company"), (1, "dislike", "company")]
+    assert reply["feedback"][0]["created_at"] == "2026-10-03T10:00:00Z"
+    assert "SENTINEL" not in json.dumps(reply)
+
+
+def test_a_code_outside_the_vocabulary_or_without_evidence_is_refused_with_its_own_code(tmp_path, monkeypatch, capsys):
+    _exclusion_db(tmp_path, monkeypatch)
+    for bad in ("COMPANY", "company;x", "x" * 40, "", "too_senior", "nonexistent"):
+        code, reply = _run_tool(capsys, "exclusion-accept", bad)
+        assert code == 100 and reply["error"] == "agent_control_invalid", bad
+    code, reply = _run_tool(capsys, "exclusion-accept", "wrong_stack")
+    assert (code, reply["error"]) == (115, "exclusion_no_evidence")
+
+
+def test_an_agent_cannot_use_the_panel_to_decide_for_the_user(tmp_path, monkeypatch, capsys):
+    path = _exclusion_db(tmp_path, monkeypatch)
+    monkeypatch.setenv("JHT_AGENT_NAME", "scout-1")
+    code, reply = _run_tool(capsys, "exclusion-accept", "company")
+    assert (code, reply["error"]) == (101, "agent_control_refused")
+    import sqlite3
+
+    conn = sqlite3.connect(path)
+    assert conn.execute("SELECT COUNT(*) FROM profile_exclusions").fetchone()[0] == 0
+    conn.close()
+
+
+def test_the_stdin_channel_reads_the_exclusions_and_never_writes(tmp_path, monkeypatch, capsys):
+    _exclusion_db(tmp_path, monkeypatch)
+    tool = _load()
+    monkeypatch.setattr(sys, "stdin", io.StringIO('{"op":"exclusions"}\n'))
+    assert tool.from_stdin() == 0
+    assert json.loads(capsys.readouterr().out)["ok"] is True
+    monkeypatch.setattr(sys, "stdin", io.StringIO('{"op":"exclusion-accept","code":"company"}\n'))
+    assert tool.from_stdin() == 0
+    assert json.loads(capsys.readouterr().out) == {"ok": False, "error": "agents_unavailable"}
+
+
+def test_an_image_without_the_writer_answers_unavailable_not_a_crash(tmp_path, monkeypatch, capsys):
+    _exclusion_db(tmp_path, monkeypatch)
+    tool = _load()
+    monkeypatch.setattr(tool, "PROFILE_EXCLUSIONS", tmp_path / "missing.py")
+    assert tool.read_exclusions() == {"ok": False, "error": "exclusions_unavailable"}
+    with pytest.raises(tool.Refusal) as refusal:
+        tool.exclusion_action("exclusion-accept", "company")
+    assert refusal.value.code == "exclusion_failed"

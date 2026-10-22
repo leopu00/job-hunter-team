@@ -17,6 +17,10 @@
 //!   other windows (the LinkedIn login view, the live screen) load content
 //!   the app does not own.
 //! - `confirmed` is the page's guard against a wrong click, not a boundary.
+//! - The exclusions of the profile (JHT-T24-b) are the same panel's: the user's decision to exclude
+//!   a kind of position, written straight in the team's jobs.db when the team has no cloud to carry
+//!   it. It goes through the same destination, the same full link (or the mark of the person's own
+//!   VPS) and the same prepared target as any other action; the code is one of four words.
 //!
 //! Transports. A VPS: the pinned container through `command` (a changed
 //! container is exit 70), with the reads run by the app's own copy of the
@@ -69,9 +73,15 @@ const EXITS: &[(i32, &str)] = &[
     (112, "team_paused"),
     (113, "agent_control_no_team"),
     (114, "agent_control_unanswered"),
+    (115, "exclusion_no_evidence"),
+    (116, "exclusion_failed"),
 ];
 
+/// The codes of the exclusions that act on the score (`acting` of shared/feedback-reasons.json).
+pub(crate) const EXCLUSION_CODES: &[&str] = &["company", "wrong_location", "salary_low", "wrong_stack"];
+
 const RESULTS: &[&str] = &[
+    "excluded", "exclusion_withdrawn",
     "started", "already_running", "stopped", "already_stopped", "restarted", "paused",
     "already_paused", "resumed", "not_paused",
 ];
@@ -119,6 +129,11 @@ pub(crate) enum ControlRequest {
     Restart { session: String, target: String, confirmed: bool },
     Pause { exit: PauseExit, target: String, confirmed: bool },
     Resume { target: String, confirmed: bool },
+    Exclusions {},
+    #[serde(rename = "exclusion_accept")]
+    ExclusionAccept { code: String, target: String, confirmed: bool },
+    #[serde(rename = "exclusion_withdraw")]
+    ExclusionWithdraw { code: String, target: String, confirmed: bool },
 }
 
 fn failure(code: &str) -> Value {
@@ -164,6 +179,9 @@ impl ControlRequest {
                 _ => None,
             },
             Self::Resume { .. } => Some(vec!["resume".into()]),
+            Self::Exclusions {} => Some(vec!["exclusions".into()]),
+            Self::ExclusionAccept { code, .. } => EXCLUSION_CODES.contains(&code.as_str()).then(|| vec!["exclusion-accept".to_owned(), code.clone()]),
+            Self::ExclusionWithdraw { code, .. } => EXCLUSION_CODES.contains(&code.as_str()).then(|| vec!["exclusion-withdraw".to_owned(), code.clone()]),
         }
     }
 
@@ -174,6 +192,8 @@ impl ControlRequest {
             | Self::Stop { target, confirmed, .. }
             | Self::Restart { target, confirmed, .. }
             | Self::Pause { target, confirmed, .. }
+            | Self::ExclusionAccept { target, confirmed, .. }
+            | Self::ExclusionWithdraw { target, confirmed, .. }
             | Self::Resume { target, confirmed } => Some((target.as_str(), *confirmed)),
             _ => None,
         }
@@ -276,6 +296,7 @@ pub(crate) fn read_input(request: &ControlRequest) -> Option<Vec<u8>> {
     let read = match request {
         ControlRequest::List {} => json!({"op": "list"}),
         ControlRequest::Team {} => json!({"op": "team"}),
+        ControlRequest::Exclusions {} => json!({"op": "exclusions"}),
         ControlRequest::Screen { session } => json!({"op": "screen", "name": session}),
         _ => return None,
     };
@@ -329,6 +350,49 @@ fn word(value: Option<&Value>, allowed: &[&str]) -> Value {
 /// A timestamp the container wrote, as long as it is only the characters of one.
 fn stamp(value: Option<&Value>) -> Option<&str> {
     value.and_then(Value::as_str).filter(|text| text.len() <= 40 && text.bytes().all(|b| b.is_ascii_alphanumeric() || b"-:+.".contains(&b)))
+}
+
+/// A timestamp as the jobs.db writes it («2026-10-01 10:00:00.123») or as ISO: only the characters of one.
+fn db_stamp(value: Option<&Value>) -> Option<&str> {
+    value.and_then(Value::as_str).filter(|text| text.len() <= 40 && text.bytes().all(|b| b.is_ascii_alphanumeric() || b"-:+. ".contains(&b)))
+}
+
+/// A reason code: lowercase letters and underscores, never the user's words.
+fn code_word(value: Option<&Value>) -> Option<&str> {
+    value.and_then(Value::as_str).filter(|text| !text.is_empty() && text.len() <= 32 && text.bytes().all(|b| b.is_ascii_lowercase() || b == b'_'))
+}
+
+const FEEDBACK_ACTIONS: &[&str] = &["like", "dislike", "hide", "star", "clear"];
+const FEEDBACK_MAX: usize = 2000;
+
+/// The exclusions and the judgements the proposals are made of, reduced to closed fields.
+pub(crate) fn shape_exclusions(reply: &Value) -> Option<Value> {
+    if reply.get("ok") != Some(&Value::Bool(true)) {
+        return None;
+    }
+    let exclusions: Vec<Value> = reply
+        .get("exclusions")?
+        .as_array()?
+        .iter()
+        .filter_map(|row| {
+            let code = code_word(row.get("code")).filter(|code| EXCLUSION_CODES.contains(code))?;
+            let status = row.get("status").and_then(Value::as_str).filter(|status| ["active", "withdrawn"].contains(status))?;
+            Some(json!({"code": code, "status": status, "decidedAt": db_stamp(row.get("decided_at"))}))
+        })
+        .collect();
+    let feedback: Vec<Value> = reply
+        .get("feedback")?
+        .as_array()?
+        .iter()
+        .take(FEEDBACK_MAX)
+        .filter_map(|row| {
+            let id = row.get("id").and_then(Value::as_i64).filter(|id| *id >= 0)?;
+            let legacy = row.get("legacy_id").and_then(Value::as_i64).filter(|id| *id > 0)?;
+            let action = row.get("action").and_then(Value::as_str).filter(|action| FEEDBACK_ACTIONS.contains(action))?;
+            Some(json!({"id": id, "legacyId": legacy, "action": action, "reason": code_word(row.get("reason")), "createdAt": db_stamp(row.get("created_at"))}))
+        })
+        .collect();
+    Some(json!({"ok": true, "data": {"exclusions": exclusions, "feedback": feedback}}))
 }
 
 /// The team's own state, reduced to the closed fields the page shows.
@@ -407,6 +471,19 @@ pub(crate) fn answer(request: &ControlRequest, output: &ProcessResult, target: &
             }
             reply.as_ref().and_then(shape_team).unwrap_or_else(|| failure("agents_unavailable"))
         }
+        ControlRequest::Exclusions {} => {
+            if output.code != 0 {
+                return failure(code_of(output.code));
+            }
+            let Some(reply) = reply else { return failure("exclusions_unavailable") };
+            let Some(mut shaped) = shape_exclusions(&reply) else { return failure("exclusions_unavailable") };
+            if let Some(data) = shaped.get_mut("data").and_then(Value::as_object_mut) {
+                data.insert("target".into(), json!(target));
+                data.insert("where".into(), json!(if label.is_some() { "vps" } else { "local" }));
+                data.insert("label".into(), json!(label));
+            }
+            shaped
+        }
         _ => {
             if output.code != 0 {
                 return failure(code_of(output.code));
@@ -481,7 +558,7 @@ pub(crate) fn control_for_scope(app: &tauri::AppHandle, scope: &AccountScope, re
         Ok(output) => {
             let mut reply = answer(&request, &output, &print, label.as_deref());
             // Where the VPS of one's own stands, for the page to offer the claim (JHT-T30).
-            if let (Destination::OwnVps { state, .. }, ControlRequest::List {}) = (&destination, &request) {
+            if let (Destination::OwnVps { state, .. }, ControlRequest::List {} | ControlRequest::Exclusions {}) = (&destination, &request) {
                 if let Some(data) = reply.get_mut("data").and_then(Value::as_object_mut) {
                     data.insert("ownVps".into(), json!(state.word()));
                 }
@@ -624,7 +701,7 @@ mod tests {
     #[test]
     fn the_script_and_the_module_agree_on_the_codes() {
         let script = AGENT_CONTROL_PY;
-        for (exit, code) in EXITS.iter().filter(|(exit, _)| (100..=112).contains(exit)) {
+        for (exit, code) in EXITS.iter().filter(|(exit, _)| (100..=112).contains(exit) || (115..=116).contains(exit)) {
             assert!(script.contains(&format!("\"{code}\": {exit},")), "{code} {exit}");
         }
     }
@@ -790,5 +867,109 @@ mod tests {
         assert_ne!(a, fingerprint(&["vps", "key-2", "h", "u", "22", "team", "cid-1"]));
         assert_ne!(a, fingerprint(&["vps", "key-1", "h", "u", "22", "team", "cid-2"]));
         assert_ne!(a, fingerprint(&["local", "/path/jht"]));
+    }
+
+    // ── JHT-T24-b: the exclusions of the profile ───────────────────────────────────────────────
+    #[test]
+    fn the_exclusion_requests_are_closed_to_the_four_codes() {
+        for (value, argv) in [
+            (json!({"op":"exclusions"}), vec!["exclusions"]),
+            (json!({"op":"exclusion_accept","code":"company","target":"t","confirmed":true}), vec!["exclusion-accept", "company"]),
+            (json!({"op":"exclusion_withdraw","code":"wrong_location","target":"t","confirmed":true}), vec!["exclusion-withdraw", "wrong_location"]),
+        ] {
+            let request = req(value.clone());
+            assert_eq!(request.and_then(|r| r.argv()), Some(argv.into_iter().map(String::from).collect()), "{value}");
+        }
+        for bad in [
+            json!({"op":"exclusion_accept","code":"too_senior","target":"t","confirmed":true}),
+            json!({"op":"exclusion_accept","code":"company;id","target":"t","confirmed":true}),
+            json!({"op":"exclusion_accept","code":"Company","target":"t","confirmed":true}),
+            json!({"op":"exclusion_withdraw","code":"","target":"t","confirmed":true}),
+            json!({"op":"exclusion_accept","code":"company","target":"t","confirmed":true,"note":"free text"}),
+            json!({"op":"exclusion_accept","code":"company","confirmed":true}),
+            json!({"op":"exclusion_accept","code":"company","target":"t"}),
+            json!({"op":"exclusions","code":"company"}),
+        ] {
+            assert!(req(bad.clone()).and_then(|r| r.argv()).is_none(), "{bad}");
+        }
+    }
+
+    #[test]
+    fn the_codes_of_the_exclusions_are_the_ones_the_vocabulary_says_act() {
+        let file = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/../../shared/feedback-reasons.json")).unwrap();
+        let vocabulary: Value = serde_json::from_str(&file).unwrap();
+        let acting: Vec<&str> = vocabulary["acting"].as_array().unwrap().iter().map(|code| code.as_str().unwrap()).collect();
+        assert_eq!(acting, EXCLUSION_CODES);
+    }
+
+    #[test]
+    fn an_exclusion_is_an_action_with_the_gates_of_an_action() {
+        let accept = |target: &str, confirmed: bool| req(json!({"op":"exclusion_accept","code":"company","target":target,"confirmed":confirmed})).unwrap();
+        assert_eq!(action_refusal(&accept("abc", true), Some(VpsMode::Full), "abc"), None);
+        assert_eq!(action_refusal(&accept("abc", true), None, "abc"), None);
+        assert_eq!(action_refusal(&accept("abc", true), Some(VpsMode::ReadOnly), "abc"), Some("agent_control_read_only"));
+        assert_eq!(action_refusal(&accept("abc", true), Some(VpsMode::Full), "def"), Some("existing_team_runtime_target_changed"));
+        assert_eq!(action_refusal(&accept("abc", false), None, "abc"), Some("agent_control_not_confirmed"));
+        let withdraw = req(json!({"op":"exclusion_withdraw","code":"company","target":"abc","confirmed":true})).unwrap();
+        assert_eq!(action_refusal(&withdraw, Some(VpsMode::ReadOnly), "abc"), Some("agent_control_read_only"));
+        // the read passes on every link
+        let read = req(json!({"op":"exclusions"})).unwrap();
+        assert_eq!(action_refusal(&read, Some(VpsMode::ReadOnly), "x"), None);
+        // the read goes on the stdin channel, an action never does
+        assert!(read_input(&read).is_some());
+        assert!(read_input(&accept("abc", true)).is_none());
+    }
+
+    #[test]
+    fn the_exclusion_commands_on_the_own_vps_and_the_existing_team_carry_only_closed_words() {
+        let argv = req(json!({"op":"exclusion_accept","code":"salary_low","target":"t","confirmed":true})).unwrap().argv().unwrap();
+        let own = own_vps_action_command(&argv).unwrap();
+        assert!(own.contains("grep -Fqx 'JHT_AGENT_CONTROL_PROTOCOL=1' \"$JHT_BIN\" || exit 2"));
+        assert!(own.ends_with("exec \"$JHT_BIN\" agent-control 'exclusion-accept' 'salary_low' </dev/null"));
+        assert!(own_vps_action_command(&["exclusion-accept".into(), "company'; id #".into()]).is_err());
+    }
+
+    #[test]
+    fn the_exclusions_read_is_closed_and_tells_the_target() {
+        let read = req(json!({"op":"exclusions"})).unwrap();
+        let reply = json!({"ok":true,
+            "exclusions":[
+                {"code":"company","status":"active","decided_at":"2026-10-01 10:00:00.123"},
+                {"code":"too_senior","status":"active","decided_at":null},
+                {"code":"wrong_stack","status":"on fire","decided_at":null},
+                {"code":"salary_low","status":"withdrawn","decided_at":"x; rm -rf /"}],
+            "feedback":[
+                {"id":9,"legacy_id":3,"action":"dislike","reason":"company","created_at":"2026-10-03T10:00:00Z"},
+                {"id":8,"legacy_id":2,"action":"explode","reason":"company","created_at":null},
+                {"id":7,"legacy_id":0,"action":"like","reason":null,"created_at":null},
+                {"id":6,"legacy_id":1,"action":"hide","reason":"My own words; here","created_at":"Thu; rm"}]});
+        let out = ProcessResult { code: 0, stdout: reply.to_string().into_bytes() };
+        let shaped = answer(&read, &out, "abc", Some("vps.example"));
+        assert_eq!(shaped["data"]["target"], "abc");
+        assert_eq!(shaped["data"]["where"], "vps");
+        assert_eq!(shaped["data"]["exclusions"], json!([
+            {"code":"company","status":"active","decidedAt":"2026-10-01 10:00:00.123"},
+            {"code":"salary_low","status":"withdrawn","decidedAt":null}]));
+        assert_eq!(shaped["data"]["feedback"], json!([
+            {"id":9,"legacyId":3,"action":"dislike","reason":"company","createdAt":"2026-10-03T10:00:00Z"},
+            {"id":6,"legacyId":1,"action":"hide","reason":null,"createdAt":null}]));
+        assert_eq!(answer(&read, &out, "abc", None)["data"]["where"], "local");
+        // an image without the writer, an unreadable answer or a failed exit: closed errors
+        let unavailable = ProcessResult { code: 0, stdout: br#"{"ok":false,"error":"exclusions_unavailable"}"#.to_vec() };
+        assert_eq!(answer(&read, &unavailable, "abc", None), failure("exclusions_unavailable"));
+        assert_eq!(answer(&read, &ProcessResult { code: 0, stdout: b"nope".to_vec() }, "abc", None), failure("exclusions_unavailable"));
+        assert_eq!(answer(&read, &ProcessResult { code: 2, stdout: vec![] }, "abc", None), failure("agent_control_unsupported"));
+    }
+
+    #[test]
+    fn an_exclusion_action_answers_with_a_closed_word_or_a_closed_error() {
+        let accept = req(json!({"op":"exclusion_accept","code":"company","target":"t","confirmed":true})).unwrap();
+        let done = ProcessResult { code: 0, stdout: br#"{"ok":true,"op":"exclusion-accept","session":null,"result":"excluded","code":"company"}"#.to_vec() };
+        assert_eq!(answer(&accept, &done, "t", None), json!({"ok":true,"data":{"result":"excluded"}}));
+        let bare = ProcessResult { code: 0, stdout: br#"{"ok":true,"result":"anything else"}"#.to_vec() };
+        assert_eq!(answer(&accept, &bare, "t", None), failure("agent_control_unanswered"));
+        for (exit, code) in [(115, "exclusion_no_evidence"), (116, "exclusion_failed"), (101, "agent_control_refused"), (100, "agent_control_invalid")] {
+            assert_eq!(answer(&accept, &ProcessResult { code: exit, stdout: vec![] }, "t", None), failure(code));
+        }
     }
 }

@@ -48,6 +48,7 @@ export type ActionResult =
   | "already_paused"
   | "resumed"
   | "not_paused";
+export type ExclusionResult = "excluded" | "exclusion_withdrawn";
 
 export type Outcome<T> = { ok: true; at: number; value: T } | { ok: false; at: number; code: string };
 
@@ -148,6 +149,8 @@ const RESULTS = new Set<string>([
   "not_paused",
 ]);
 
+const EXCLUSION_RESULTS = new Set<string>(["excluded", "exclusion_withdrawn"]);
+
 async function act(request: Record<string, unknown>): Promise<Outcome<ActionResult>> {
   const done = await call({ ...request, confirmed: true });
   if (!done.ok) return done;
@@ -178,4 +181,65 @@ export function resumeTeam(target: string): Promise<Outcome<ActionResult>> {
 export function tomorrowAtEightUtc(now: Date = new Date()): string {
   const at = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 8, 0, 0, 0);
   return `${at.toISOString().slice(0, 19)}Z`;
+}
+
+// ── the exclusions of the profile (JHT-T24-b) ───────────────────────────────
+/** The four kinds of position whose exclusion acts on the score (shared/feedback-reasons.json, `acting`). */
+export type ExclusionCode = "company" | "wrong_location" | "salary_low" | "wrong_stack";
+
+export type PanelExclusions = {
+  /** opaque: the team this was read from; a decision sends it back */
+  target: string;
+  where: PanelWhere;
+  label: string | null;
+  ownVps: OwnVpsState | null;
+  exclusions: { code: string; status: "active" | "withdrawn"; decidedAt: string | null }[];
+  /** the user's judgements on positions, newest first: what the proposals are made of */
+  feedback: { id: number; legacyId: number; action: string; reason: string | null; createdAt: string | null }[];
+};
+
+export async function readExclusions(): Promise<Outcome<PanelExclusions>> {
+  const read = await call({ op: "exclusions" });
+  if (!read.ok) return read;
+  const data = read.value;
+  const where = data.where === "vps" || data.where === "local" ? data.where : null;
+  if (typeof data.target !== "string" || !where || !Array.isArray(data.exclusions) || !Array.isArray(data.feedback)) {
+    return { ok: false, at: read.at, code: "desktop_bad_reply" };
+  }
+  return {
+    ok: true,
+    at: read.at,
+    value: {
+      target: data.target,
+      where,
+      label: typeof data.label === "string" ? data.label : null,
+      ownVps: pickOwnVpsState(data.ownVps),
+      exclusions: data.exclusions.filter(
+        (row): row is PanelExclusions["exclusions"][number] =>
+          isRecord(row) && typeof row.code === "string" && (row.status === "active" || row.status === "withdrawn"),
+      ),
+      feedback: data.feedback.filter(
+        (row): row is PanelExclusions["feedback"][number] =>
+          isRecord(row) && typeof row.id === "number" && typeof row.legacyId === "number" && typeof row.action === "string",
+      ),
+    },
+  };
+}
+
+async function decide(request: Record<string, unknown>): Promise<Outcome<ExclusionResult>> {
+  const done = await call({ ...request, confirmed: true });
+  if (!done.ok) return done;
+  const result = done.value.result;
+  return typeof result === "string" && EXCLUSION_RESULTS.has(result)
+    ? { ok: true, at: done.at, value: result as ExclusionResult }
+    : { ok: false, at: done.at, code: "agent_control_unanswered" };
+}
+
+/** Only after the person decided it in the page. The native side asks for the full link or the mark of the VPS. */
+export function acceptExclusion(code: ExclusionCode, target: string): Promise<Outcome<ExclusionResult>> {
+  return decide({ op: "exclusion_accept", code, target });
+}
+
+export function withdrawExclusion(code: ExclusionCode, target: string): Promise<Outcome<ExclusionResult>> {
+  return decide({ op: "exclusion_withdraw", code, target });
 }

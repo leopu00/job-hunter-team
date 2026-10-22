@@ -11,9 +11,11 @@ The desktop app reaches this file in two ways, and only these:
         agent_control.py pause (--for-hours N | --until ISO | --wake-on-weekly)
         agent_control.py resume
         agent_control.py list | screen SESSION | team
+        agent_control.py exclusions | exclusion-accept CODE | exclusion-withdraw CODE
 
   * without arguments, with one JSON request on stdin, for the reads only
-    (`{"op":"list"}`, `{"op":"screen","name":...}`, `{"op":"team"}`). This is
+    (`{"op":"list"}`, `{"op":"screen","name":...}`, `{"op":"team"}`,
+    `{"op":"exclusions"}`). This is
     the read-only view's channel: on stdin an action is refused, always.
 
 Nothing here takes free text: no keys and no message ever reach an agent's
@@ -68,6 +70,8 @@ EXIT = {
     "team_resume_failed": 110,
     "agent_contained": 111,
     "team_paused": 112,
+    "exclusion_no_evidence": 115,
+    "exclusion_failed": 116,
 }
 
 # Who and why, as the roster's journal shows them: distinct from a safety
@@ -118,6 +122,7 @@ APPLY_GATE = _first(SKILLS / "apply_gate.py", HERE / "apply_gate.py")
 HOST_VITALS = _first(SKILLS / "host_vitals.py", HERE / "host_vitals.py")
 AGENT_STATE = _first(SKILLS / "agent_state.py", HERE / "agent_state.py")
 REDACTOR = _first(Path("/app/shared/redact-cli.mjs"), HERE.parent / "redact-cli.mjs")
+PROFILE_EXCLUSIONS = _first(SKILLS / "profile_exclusions.py", HERE / "profile_exclusions.py")
 START_TIMEOUT_S = 120
 KILL_TIMEOUT_S = 15
 
@@ -640,7 +645,52 @@ def read_team() -> dict:
     }}
 
 
-READS = {"list": lambda req: read_list(),
+# ── the exclusions of the profile (JHT-T24-b) ──────────────────────────────
+# The user's decision to exclude a kind of position, written straight in this team's jobs.db
+# when the team has no cloud to carry it. profile_exclusions.py stays the only writer of the table
+# (and refuses when an agent runs it): this panel only asks it, with a code of the closed vocabulary.
+CODE = re.compile(r"^[a-z][a-z_]{0,31}$")
+EXCLUSION_REFUSALS = {"code_invalid": "agent_control_invalid", "no_evidence": "exclusion_no_evidence",
+                      "user_only": "agent_control_refused"}
+
+
+def _exclusions_call(*args: str) -> dict | None:
+    """The one JSON line profile_exclusions.py answers, or None when it cannot answer."""
+    if not PROFILE_EXCLUSIONS.exists():
+        return None
+    try:
+        done = subprocess.run([sys.executable, str(PROFILE_EXCLUSIONS), *args], capture_output=True, text=True,
+                              timeout=20, env={**os.environ, "PYTHONDONTWRITEBYTECODE": "1"})
+        reply = json.loads(done.stdout.strip().splitlines()[-1])
+    except (OSError, subprocess.SubprocessError, ValueError, IndexError):
+        return None
+    return reply if isinstance(reply, dict) else None
+
+
+def read_exclusions() -> dict:
+    """The exclusions in force or withdrawn, and the user's judgements the proposals are made of."""
+    listed, events = _exclusions_call("list"), _exclusions_call("events")
+    if not listed or not events or not listed.get("ok") or not events.get("ok"):
+        return {"ok": False, "error": "exclusions_unavailable"}
+    return {"ok": True,
+            "exclusions": [{"code": row.get("code"), "status": row.get("status"), "decided_at": row.get("decided_at")}
+                           for row in listed.get("exclusions", [])],
+            "feedback": events.get("feedback", [])}
+
+
+def exclusion_action(op: str, code: str) -> str:
+    if not CODE.match(code or ""):
+        raise Refusal("agent_control_invalid")
+    reply = _exclusions_call("accept" if op == "exclusion-accept" else "withdraw", code)
+    if reply is None:
+        raise Refusal("exclusion_failed")
+    if not reply.get("ok"):
+        raise Refusal(EXCLUSION_REFUSALS.get(reply.get("code"), "exclusion_failed"))
+    return "excluded" if op == "exclusion-accept" else "exclusion_withdrawn"
+
+
+READS = {"exclusions": lambda req: read_exclusions(),
+         "list": lambda req: read_list(),
          "screen": lambda req: read_screen(req.get("name")),
          "team": lambda req: read_team()}
 
@@ -674,23 +724,29 @@ def _parser() -> argparse.ArgumentParser:
     exit_condition.add_argument("--for-hours", type=int)
     exit_condition.add_argument("--until")
     exit_condition.add_argument("--wake-on-weekly", action="store_true")
-    for op in ("resume", "list", "team"):
+    for op in ("resume", "list", "team", "exclusions"):
         sub.add_parser(op, add_help=False)
+    for op in ("exclusion-accept", "exclusion-withdraw"):
+        sub.add_parser(op, add_help=False).add_argument("code")
     return parser
 
 
-ACTIONS = {"start", "stop", "restart", "pause", "resume"}
+ACTIONS = {"start", "stop", "restart", "pause", "resume", "exclusion-accept", "exclusion-withdraw"}
 
 
 def main(argv: list[str]) -> int:
     if not argv:
         return from_stdin()
     op = argv[0] if argv[0] in ACTIONS | set(READS) else None
-    session = None
+    session = code = None
     try:
         args = _parser().parse_args(argv)
         op = args.op
         session = getattr(args, "session", None)
+        code = getattr(args, "code", None)
+        if op == "exclusions":
+            _emit(read_exclusions())
+            return 0
         if op == "list":
             _emit(read_list())
             return 0
@@ -709,6 +765,8 @@ def main(argv: list[str]) -> int:
                 result = restart(session)
             elif op == "pause":
                 result = pause(args.for_hours, args.until, args.wake_on_weekly)
+            elif op in ("exclusion-accept", "exclusion-withdraw"):
+                result = exclusion_action(op, args.code)
             else:
                 result = resume()
     except Refusal as refusal:
@@ -716,11 +774,15 @@ def main(argv: list[str]) -> int:
         # may carry anything.
         session = session if isinstance(session, str) and NAME.match(session) else None
         answer = {"ok": False, "op": op, "session": session, "error": refusal.code}
+        if isinstance(code, str) and CODE.match(code):
+            answer["code"] = code
         _emit(answer)
         if op in ACTIONS:
             _journal({"at": datetime.now(timezone.utc).isoformat(timespec="seconds"), **answer})
         return EXIT[refusal.code]
     answer = {"ok": True, "op": op, "session": session, "result": result}
+    if isinstance(code, str):
+        answer["code"] = code
     _emit(answer)
     _journal({"at": datetime.now(timezone.utc).isoformat(timespec="seconds"), **answer})
     return 0
