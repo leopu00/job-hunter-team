@@ -23,8 +23,7 @@
  * option, the script through a stub `pdf_layout_check` module.
  */
 
-import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 
@@ -34,7 +33,7 @@ import { openJobsDb, type Database } from "../src/db/jobs-db.ts";
 import { guarded, type ScriptResult } from "../src/db/tools.ts";
 import { createSkillTools } from "../src/parity/skills/index.ts";
 import { applicationAnswers, applyGate, type CloserOptions } from "../src/parity/skills/closer.ts";
-import { pythonSkills, RUNTIME, runPython, SOURCE_COMMIT } from "./helpers/python-skills.ts";
+import { pythonSkills, RUNTIME, runPython } from "./helpers/python-skills.ts";
 
 const skills = pythonSkills();
 const REPO = join(RUNTIME, "..", "..");
@@ -47,13 +46,29 @@ const REPO = join(RUNTIME, "..", "..");
 const pythonReady = skills !== null && runPython(skills, ["-c", "import yaml"]).status === 0;
 
 /**
- * Where apply_gate.py looks for the rule: `Path(__file__).resolve().parents[1]
- * / "cloud"`. The extraction carries only `shared/skills`, so the rule is put
- * there from the same commit; the port is pointed at the same file, resolved
- * the way `resolve()` resolves it, so a refusal's `path` is one string.
+ * The Python the gate is judged against is the one of THIS tree: the gate and
+ * its port gain the cap of the website's authorisations in the same commit, and
+ * the commit the other ports are pinned to cannot have it. A COPY of
+ * `shared/skills`, not the tree itself: apply_gate.py looks for its rule at
+ * `Path(__file__).resolve().parents[1] / "cloud"`, and a test that removes the
+ * rule must remove the copy's, never the repository's.
  */
-const RULE = skills === null ? "" : join(dirname(realpathSync(skills)), "cloud", "apply-request-rule.json");
-const RULE_TEXT = skills === null ? "" : execFileSync("git", ["show", `${SOURCE_COMMIT}:shared/cloud/apply-request-rule.json`], { cwd: REPO, encoding: "utf8" });
+const TREE = skills === null ? "" : mkdtempSync(join(tmpdir(), "jht-py-tree-"));
+if (skills !== null) {
+  cpSync(join(REPO, "shared", "skills"), join(TREE, "shared", "skills"), { recursive: true, filter: (from) => !/__pycache__|[\\/]tests?$/.test(from) });
+  mkdirSync(join(TREE, "shared", "cloud"), { recursive: true });
+  cpSync(join(REPO, "shared", "cloud", "apply-request-rule.json"), join(TREE, "shared", "cloud", "apply-request-rule.json"));
+  cpSync(join(REPO, "shared", "feedback-reasons.json"), join(TREE, "shared", "feedback-reasons.json"));
+}
+const TREE_SKILLS = skills === null ? null : join(TREE, "shared", "skills");
+
+/**
+ * The rule, put where the copy looks for it and resolved the way `resolve()`
+ * resolves it, so a refusal's `path` is one string; the port is pointed at the
+ * same file.
+ */
+const RULE = skills === null ? "" : join(realpathSync(TREE), "shared", "cloud", "apply-request-rule.json");
+const RULE_TEXT = skills === null ? "" : readFileSync(join(REPO, "shared", "cloud", "apply-request-rule.json"), "utf8");
 
 let root: string;
 let home: string;
@@ -120,12 +135,12 @@ function ours(tool: typeof applyGate, sequence: string[][], seed: Seed, extra: P
   }
 }
 
-function theirs(script: string, sequence: string[][], seed: Seed, layoutOk: boolean, snapshot?: (db: Database) => unknown): Side {
+function theirs(script: string, sequence: string[][], seed: Seed, layoutOk: boolean, snapshot?: (db: Database) => unknown, dir: string | null = skills): Side {
   fresh(seed);
   // Not HOME: PyYAML may live in the user's site-packages, which HOME locates.
   const env = { JHT_HOME: home, JHT_DB: dbPath };
   const runs = sequence.map((args): Run => {
-    const r = layoutOk ? runPython(skills!, ["-c", LAYOUT_OK, ...args], env) : runPython(skills!, [script, ...args], env);
+    const r = layoutOk ? runPython(dir!, ["-c", LAYOUT_OK, ...args], env) : runPython(dir!, [script, ...args], env);
     return [r.stdout, r.stderr, r.status];
   });
   if (!snapshot) return { runs, after: undefined };
@@ -140,7 +155,8 @@ function theirs(script: string, sequence: string[][], seed: Seed, layoutOk: bool
 /** `apply_gate`, the same sequence on both sides. */
 function compareGate(sequence: string[][], seed: Seed, layoutOk = false): Run[] {
   const a = ours(applyGate, sequence, seed, layoutOk ? { cvLayout: () => "" } : {});
-  const b = theirs("apply_gate.py", sequence, seed, layoutOk);
+  // The Python of THIS tree: the gate and its port gain the web cap in the same commit, which the pinned one cannot have.
+  const b = theirs("apply_gate.py", sequence, seed, layoutOk, undefined, TREE_SKILLS);
   expect(a.runs).toEqual(b.runs);
   return a.runs;
 }
@@ -258,7 +274,7 @@ describe.skipIf(skills === null || !pythonReady)("apply_gate against apply_gate.
     writeFileSync(RULE, RULE_TEXT);
   });
   afterAll(() => {
-    rmSync(RULE, { force: true });
+    rmSync(TREE, { recursive: true, force: true });
   });
 
   const ALL = [["consent"], ["consent", "--json"], ["position", "1"], ["position", "1", "--json"], ["queue"], ["queue", "--json"]];
@@ -448,6 +464,70 @@ describe.skipIf(skills === null || !pythonReady)("apply_gate against apply_gate.
       },
       true,
     );
+  });
+
+  it("the daily cap of the authorizations from the website: 5 by default, configurable, invalid closes — the same on both sides", () => {
+    const runs = compareGate([["consent", "--json"], ["consent"]], () => consent({ max_web_per_day: 3 }), true);
+    expect(runs[0]![0]).toContain('"max_web_per_day": 3');
+    compareGate([["consent", "--json"]], () => consent(), true);
+    for (const value of [0, -1, "3", true, null, 2.5]) {
+      const bad = compareGate([["consent", "--json"], ["position", "1", "--json"], ["queue", "--json"]], (db) => {
+        consent({ max_web_per_day: value });
+        position(db, { id: 1 });
+        application(db, 1);
+      });
+      expect(bad[0]![0]).toContain("consent_cap_invalid");
+    }
+    // A float is not an int here either.
+    const f = compareGate([["consent", "--json"]], () => writeConfig('{"applications": {"auto_apply": {"enabled": true, "max_web_per_day": 2.0}}}'));
+    expect(f[0]![0]).toContain("consent_cap_invalid");
+  });
+
+  it("the queue holds the authorizations from the website over the cap, and the ones from the desktop do not use it", () => {
+    const seed: Seed = (db) => {
+      consent({ max_web_per_day: 2, max_per_day: 50 });
+      for (let id = 1; id <= 4; id += 1) {
+        position(db, { id });
+        application(db, id);
+      }
+      position(db, { id: 5, by: "user_local" });
+      application(db, 5);
+      position(db, { id: 6, by: "user_telegram" });
+      application(db, 6);
+    };
+    const runs = compareGate([["queue", "--json"], ["queue"]], seed, true);
+    expect(runs[0]![0]).toContain('"reason": "daily_web_cap_reached"');
+    expect(runs[0]![0]).toContain('"remaining_web_today"');
+
+    // What the site already sent today uses the cap; what the person did on the desktop does not.
+    compareGate(
+      [["queue", "--json"], ["queue"]],
+      (db) => {
+        consent({ max_web_per_day: 2, max_per_day: 50 });
+        position(db, { id: 1, status: "applied" });
+        application(db, 1, null, 1, "agent_closer");
+        position(db, { id: 2, status: "applied", by: "user_local" });
+        application(db, 2, null, 1, "agent_closer");
+        position(db, { id: 3 });
+        application(db, 3);
+        position(db, { id: 4 });
+        application(db, 4);
+      },
+      true,
+    );
+    // Every one of them waiting for the cap: the reason says so, not "empty".
+    const all = compareGate(
+      [["queue", "--json"]],
+      (db) => {
+        consent({ max_web_per_day: 1 });
+        position(db, { id: 1, status: "applied" });
+        application(db, 1, null, 1, "agent_closer");
+        position(db, { id: 2 });
+        application(db, 2);
+      },
+      true,
+    );
+    expect(all[0]![0]).toContain('"reason": "daily_web_cap_reached"');
   });
 
   it("a rule it cannot read closes every position, and the queue says unreadable — not empty", () => {

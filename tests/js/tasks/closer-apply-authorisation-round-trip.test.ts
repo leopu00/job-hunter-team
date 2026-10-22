@@ -258,6 +258,64 @@ describe("dal cloud scende l'azione piu' recente, non la riga", () => {
     });
   });
 
+  it("l'autore che il cloud dichiara non si crede: user_local e user_telegram dal cloud valgono user_web", async () => {
+    // Fino alla 098 chi ha la sessione scrive `positions` con
+    // `apply_requested_by = 'user_local'` e un istante nuovo: senza questo il
+    // box la prenderebbe come autorizzazione dal desktop e il tetto giornaliero
+    // delle candidature dal sito non la conterebbe.
+    for (const dichiarato of ["user_local", "user_telegram", "user_web"]) {
+      const { dbPath } = box();
+      flagLocale(dbPath, "2026-09-12T09:00:00.000Z");
+      expect(
+        await pull(dbPath, [{ ...AUTORIZZATA, apply_requested_by: dichiarato }]),
+        dichiarato,
+      ).toEqual({
+        apply_requested: 1,
+        apply_requested_at: "2026-09-12T09:30:00+00:00",
+        apply_requested_by: "user_web",
+      });
+    }
+    // Su un box vuoto (nessun istante locale) vale lo stesso.
+    const { dbPath } = box();
+    expect(
+      await pull(dbPath, [{ ...AUTORIZZATA, apply_requested_by: "user_local" }]),
+    ).toMatchObject({ apply_requested_by: "user_web" });
+  });
+
+  it("ogni altro autore dal cloud resta com'e' e il gate lo rifiuta", async () => {
+    for (const dichiarato of ["agent_closer", null, "qualcuno"]) {
+      const { dbPath } = box();
+      flagLocale(dbPath, "2026-09-12T09:00:00.000Z");
+      expect(
+        await pull(dbPath, [{ ...AUTORIZZATA, apply_requested_by: dichiarato }]),
+        String(dichiarato),
+      ).toEqual({
+        apply_requested: 1,
+        apply_requested_at: "2026-09-12T09:30:00+00:00",
+        apply_requested_by: dichiarato,
+      });
+    }
+  });
+
+  it("quel che il box ha scritto lui resta del suo canale anche se il cloud lo riporta", async () => {
+    // Desktop e Telegram scrivono in locale; il ritorno dal cloud ha lo stesso
+    // istante (o uno precedente) e vince il locale: il canale non cambia.
+    for (const canale of ["user_local", "user_telegram"]) {
+      const { dbPath } = box();
+      flagLocale(dbPath, "2026-09-12T09:30:00.000Z", canale);
+      expect(
+        await pull(dbPath, [
+          { ...AUTORIZZATA, apply_requested_at: "2026-09-12T09:30:00+00:00", apply_requested_by: canale },
+        ]),
+        canale,
+      ).toEqual({
+        apply_requested: 1,
+        apply_requested_at: "2026-09-12T09:30:00.000Z",
+        apply_requested_by: canale,
+      });
+    }
+  });
+
   it("un ritiro dal web piu' recente spegne il flag", async () => {
     const { dbPath } = box();
     flagLocale(dbPath, "2026-09-12T09:00:00.000Z");

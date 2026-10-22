@@ -851,7 +851,9 @@ def _applied_by_closer(db, pids, cv):
 @pytest.mark.parametrize("auto", [{"enabled": True}, {"enabled": True, "max_per_day": None}])
 def test_senza_tetto_la_coda_non_si_chiude_mai_per_il_numero(tmp_path, auto):
     cv = cv_file(tmp_path)
-    cfg = {**CONSENT_ON, "applications": {"auto_apply": auto}}
+    # The cap of the applications authorised from the website is its own (see the tests at the end):
+    # lifted here, so that this one is about the general cap only.
+    cfg = {**CONSENT_ON, "applications": {"auto_apply": {**auto, "max_web_per_day": 1000}}}
     v = consent_verdict(path=write_config(tmp_path, cfg))
     assert v.allowed and v.context["max_per_day"] is None
     db = make_queue_db(tmp_path, [authorised(1)], [(1, cv, 0, None, None)])
@@ -865,7 +867,7 @@ def test_senza_tetto_la_coda_non_si_chiude_mai_per_il_numero(tmp_path, auto):
 
 def test_un_tetto_configurato_resta_un_muro(tmp_path):
     cv = cv_file(tmp_path)
-    cfg = {**CONSENT_ON, "applications": {"auto_apply": {"enabled": True, "max_per_day": 5}}}
+    cfg = {**CONSENT_ON, "applications": {"auto_apply": {"enabled": True, "max_per_day": 5, "max_web_per_day": 1000}}}
     db = make_queue_db(tmp_path, [authorised(1)], [(1, cv, 0, None, None)])
     _applied_by_closer(db, range(100, 104), cv)
     q = queue(tmp_path, db, cfg)
@@ -984,3 +986,185 @@ def test_la_richiesta_automatica_non_e_mai_manuale(rework_box):
     q = queue(home, db)
     assert q["cv_rework"] == [{"position_id": 1, "status": "not_needed", "reason": "cv_pdf_check_unavailable"}]
     assert _flag(db)[0] == 0
+
+
+# ── Il tetto giornaliero delle candidature autorizzate DAL SITO (22/10/2026) ──
+# Il sito autorizza con la sola sessione; finché non c'è la conferma a due tempi
+# (fase 5) il freno è qui, dove la candidatura parte. Vale per le sole posizioni
+# con `apply_requested_by = user_web`; oltre il tetto restano in attesa, ancora
+# autorizzate, fino a domani.
+def _web_cfg(max_web=None, **auto):
+    block = {"enabled": True, "mode": "authorised", **auto}
+    if max_web is not None:
+        block["max_web_per_day"] = max_web
+    return {**CONSENT_ON, "applications": {"auto_apply": block}}
+
+
+def _asked(n, by="user_web"):
+    """`n` authorised positions, asked one minute apart, ids 1..n."""
+    return [authorised(i, asked=f"2026-09-12T10:{i:02d}:00Z", by=by) for i in range(1, n + 1)]
+
+
+def _cvs(tmp_path, n):
+    cv = cv_file(tmp_path)
+    return [(i, cv, 0, None, None) for i in range(1, n + 1)]
+
+
+def test_il_tetto_del_sito_ha_un_default_prudente_e_si_configura(tmp_path):
+    from apply_gate import DEFAULT_MAX_WEB_PER_DAY
+
+    assert DEFAULT_MAX_WEB_PER_DAY == 5
+    assert consent_verdict(_web_cfg()).context["max_web_per_day"] == 5
+    assert consent_verdict(_web_cfg(max_web=2)).context["max_web_per_day"] == 2
+
+
+@pytest.mark.parametrize("bad", [0, -1, "3", 2.5, True, None])
+def test_un_tetto_del_sito_non_valido_chiude_il_cancello(tmp_path, bad):
+    import apply_gate
+
+    cfg = _web_cfg(max_per_day=None)
+    cfg["applications"]["auto_apply"]["max_web_per_day"] = bad
+    v = consent_verdict(cfg)
+    assert (v.allowed, v.reason) == (False, "consent_cap_invalid")
+    db = make_queue_db(tmp_path, _asked(1), _cvs(tmp_path, 1))
+    q = queue(tmp_path, db, cfg)
+    assert (q["ready"], q["reason"], q["positions"]) == (False, "consent_cap_invalid", [])
+    slot = apply_gate.reserve_daily_slot(1, "email", config_path=write_config(tmp_path, cfg), db_path=db)
+    assert (slot.allowed, slot.reason) == (False, "consent_cap_invalid")
+
+
+def test_la_coda_prende_solo_i_primi_del_tetto_e_tiene_gli_altri_in_attesa(tmp_path):
+    db = make_queue_db(tmp_path, _asked(7), _cvs(tmp_path, 7))
+    q = queue(tmp_path, db, _web_cfg(max_per_day=None))
+    assert q["ready"]
+    assert [p["position_id"] for p in q["positions"]] == [1, 2, 3, 4, 5]
+    assert q["held"] == [
+        {"position_id": 6, "reason": "daily_web_cap_reached"},
+        {"position_id": 7, "reason": "daily_web_cap_reached"},
+    ]
+    assert (q["max_web_per_day"], q["web_sent_today"], q["remaining_web_today"]) == (5, 0, 5)
+    # the authorisation is not touched: they keep waiting
+    conn = sqlite3.connect(db)
+    assert conn.execute("SELECT COUNT(*) FROM positions WHERE apply_requested = 1").fetchone()[0] == 7
+    conn.close()
+
+
+def test_le_inviate_di_oggi_dal_sito_consumano_il_tetto(tmp_path):
+    cv = cv_file(tmp_path)
+    db = make_queue_db(tmp_path, _asked(2), _cvs(tmp_path, 2))
+    _applied_by_closer(db, range(100, 104), cv)  # four sent today, authorised from the website
+    q = queue(tmp_path, db, _web_cfg(max_per_day=None))
+    assert [p["position_id"] for p in q["positions"]] == [1]
+    assert q["held"] == [{"position_id": 2, "reason": "daily_web_cap_reached"}]
+    assert (q["web_sent_today"], q["remaining_web_today"]) == (4, 1)
+
+
+def test_quelle_del_desktop_non_consumano_il_tetto_del_sito_e_non_ne_sono_fermate(tmp_path):
+    cv = cv_file(tmp_path)
+    positions = _asked(2) + [authorised(3, asked="2026-09-12T10:03:00Z", by="user_local")]
+    db = make_queue_db(tmp_path, positions, _cvs(tmp_path, 3))
+    conn = sqlite3.connect(db)
+    for pid in range(100, 105):  # five sent today, authorised from the desktop
+        conn.execute("INSERT INTO positions (id, status, url, apply_requested, apply_requested_at, apply_requested_by) "
+                     "VALUES (?, 'applied', ?, 1, ?, 'user_local')", (pid, URL, ASKED))
+        conn.execute("INSERT INTO applications (position_id, cv_pdf_path, applied, applied_via, applied_at) "
+                     "VALUES (?, ?, 1, 'agent_closer', datetime('now', 'localtime'))", (pid, cv))
+    conn.commit()
+    conn.close()
+    q = queue(tmp_path, db, _web_cfg(max_web=2, max_per_day=None))
+    assert q["web_sent_today"] == 0
+    assert [p["position_id"] for p in q["positions"]] == [1, 2, 3]
+    assert q["held"] == []
+
+
+def test_se_tutte_sono_ferme_per_il_tetto_del_sito_la_coda_lo_dice(tmp_path):
+    cv = cv_file(tmp_path)
+    db = make_queue_db(tmp_path, _asked(1), _cvs(tmp_path, 1))
+    _applied_by_closer(db, range(100, 105), cv)
+    q = queue(tmp_path, db, _web_cfg(max_per_day=None))
+    assert (q["ready"], q["reason"], q["positions"]) == (False, "daily_web_cap_reached", [])
+    assert q["held"] == [{"position_id": 1, "reason": "daily_web_cap_reached"}]
+
+
+def test_domani_il_tetto_riparte(tmp_path):
+    cv = cv_file(tmp_path)
+    db = make_queue_db(tmp_path, _asked(1), _cvs(tmp_path, 1))
+    _applied_by_closer(db, range(100, 105), cv)
+    conn = sqlite3.connect(db)
+    conn.execute("UPDATE applications SET applied_at = datetime('now', 'localtime', '-1 day') WHERE position_id >= 100")
+    conn.commit()
+    conn.close()
+    q = queue(tmp_path, db, _web_cfg(max_per_day=None))
+    assert q["ready"] and [p["position_id"] for p in q["positions"]] == [1]
+    assert q["web_sent_today"] == 0
+
+
+def test_la_prenotazione_rifiuta_la_sesta_dal_sito_e_lascia_passare_il_desktop(tmp_path):
+    import apply_gate
+
+    positions = _asked(6) + [authorised(7, asked="2026-09-12T10:07:00Z", by="user_local")]
+    db = make_queue_db(tmp_path, positions, _cvs(tmp_path, 7))
+    cfg_path = write_config(tmp_path, _web_cfg(max_per_day=None))
+    taken = [apply_gate.reserve_daily_slot(i, "browser", config_path=cfg_path, db_path=db) for i in range(1, 6)]
+    assert [(v.allowed, v.reason) for v in taken] == [(True, "cap_reserved")] * 5
+    sixth = apply_gate.reserve_daily_slot(6, "browser", config_path=cfg_path, db_path=db)
+    assert (sixth.allowed, sixth.reason) == (False, "daily_web_cap_reached")
+    assert (sixth.context["max_web_per_day"], sixth.context["web_sent_today"]) == (5, 5)
+    # the same run for a position authorised from the desktop is not stopped by it
+    seventh = apply_gate.reserve_daily_slot(7, "browser", config_path=cfg_path, db_path=db)
+    assert (seventh.allowed, seventh.reason) == (True, "cap_reserved")
+    # a slot given back (the send certainly did not happen) is a slot again
+    assert apply_gate.release_daily_slot(taken[0].context["token"], db_path=db)
+    assert apply_gate.reserve_daily_slot(6, "browser", config_path=cfg_path, db_path=db).allowed
+
+
+def test_la_prenotazione_conta_nella_stessa_transazione_chi_arriva_insieme(tmp_path):
+    import apply_gate
+
+    db = make_queue_db(tmp_path, _asked(2), _cvs(tmp_path, 2))
+    cfg_path = write_config(tmp_path, _web_cfg(max_web=1, max_per_day=None))
+    first = apply_gate.reserve_daily_slot(1, "email", config_path=cfg_path, db_path=db)
+    second = apply_gate.reserve_daily_slot(2, "email", config_path=cfg_path, db_path=db)
+    assert first.allowed and (second.allowed, second.reason) == (False, "daily_web_cap_reached")
+
+
+def _waiting_queue(n=2, cap=5):
+    return {"max_web_per_day": cap, "held": [{"position_id": i, "reason": "daily_web_cap_reached"} for i in range(n)] + [{"position_id": 99, "reason": "url_missing"}]}
+
+
+def test_l_avviso_del_tetto_del_sito_esce_una_volta_al_giorno(tmp_path):
+    from apply_gate import web_cap_notice
+
+    q = _waiting_queue(2, 5)
+    assert web_cap_notice(q, tmp_path, today="2026-10-22") == {"waiting": 2, "max_web_per_day": 5}
+    marker = tmp_path / "state" / "apply-web-cap-notified"
+    assert marker.read_text() == "2026-10-22"
+    assert web_cap_notice(q, tmp_path, today="2026-10-22") is None, "la seconda volta nello stesso giorno tace"
+    assert web_cap_notice(_waiting_queue(3, 5), tmp_path, today="2026-10-22") is None
+    assert web_cap_notice(q, tmp_path, today="2026-10-23") == {"waiting": 2, "max_web_per_day": 5}, "domani si riavvisa"
+
+
+def test_nessun_avviso_se_nessuna_attende_il_tetto_del_sito(tmp_path):
+    from apply_gate import web_cap_notice
+
+    assert web_cap_notice({"max_web_per_day": 5, "held": [{"position_id": 1, "reason": "url_missing"}]}, tmp_path, today="2026-10-22") is None
+    assert web_cap_notice({"held": []}, tmp_path, today="2026-10-22") is None
+    assert not (tmp_path / "state").exists(), "senza attese non si scrive niente"
+
+
+def test_l_avviso_non_si_ripete_se_il_segno_non_si_scrive(tmp_path):
+    from apply_gate import web_cap_notice
+
+    (tmp_path / "state").write_text("un file dove serve una cartella")
+    assert web_cap_notice(_waiting_queue(), tmp_path, today="2026-10-22") is None
+
+
+def test_la_cli_queue_porta_l_avviso_una_volta_sola(tmp_path):
+    db = make_queue_db(tmp_path, _asked(7), _cvs(tmp_path, 7))
+    cfg = write_config(tmp_path, _web_cfg(max_per_day=None))
+    env = {**os.environ, "JHT_HOME": str(tmp_path / "home")}
+    first = json.loads(run_cli("queue", "--json", "--config", str(cfg), "--db", db, env=env).stdout)
+    assert first["web_cap_notice"] == {"waiting": 2, "max_web_per_day": 5}
+    assert len(first["positions"]) == 5
+    second = json.loads(run_cli("queue", "--json", "--config", str(cfg), "--db", db, env=env).stdout)
+    assert "web_cap_notice" not in second and len(second["held"]) == 2
