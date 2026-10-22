@@ -555,3 +555,131 @@ describe("«Agenti», who an agent is", () => {
     expect(source.match(/identityLine\(t, /g)).toHaveLength(2);
   });
 });
+
+describe("«Agenti», the questions the agents asked the person", () => {
+  const asked = (id: string, tipo: string, fields: Record<string, unknown> = {}) => ({
+    id, tipo, oggetto: "CV per Acme", testo: "Quale CV uso per Acme?",
+    opzioni: [{ id: "breve", label: "CV breve", reversibile: true }, { id: "_rinvia", label: "Rinvia, non fare niente", reversibile: true }],
+    multipla: false, libera: false, scadenza: NOW_S + 3 * 3600 + 120, default: "_rinvia", at: NOW_S - 600, ...fields,
+  });
+  const free = (testo: string) => ({ id: null, tipo: null, oggetto: null, testo, opzioni: [], multipla: false, libera: true, scadenza: null, default: null, at: NOW_S - 900 });
+  let agents: Record<string, unknown>[];
+  beforeEach(() => {
+    agents = [
+      agent("CAPITANO", "capitano", null, "aspetta_umano", {
+        questions: { open: 2, unread: 3, items: [asked("aq:capitano:1790000000-ab12cd", "blocco"), free("<b>not html</b> procedo?")] },
+      }),
+      // read, and none: a known zero
+      agent("SCOUT-1", "scout", "1", "idle", { questions: { open: 0, unread: 0, items: [] } }),
+      agent("SCORER-1", "scorer", "1", "lavora", {
+        questions: { open: 1, unread: 150, items: [asked("aq:scorer:1790000000-cd34ef", "urgente", { scadenza: null, default: null })] },
+      }),
+      // an image older than this read: no questions at all
+      agent("ASSISTENTE", "assistente", null, "idle"),
+    ];
+    native.invoke.mockImplementation(async (command: string, args: { request: Record<string, unknown> }) => {
+      if (command !== COMMAND) return { ok: false, error: "not_in_test" };
+      if (args.request.op === "list") return { ...listReply(), data: { ...listReply().data, agents } };
+      if (args.request.op === "team") return { ok: true, data: { halted: false, standby, held } };
+      return { ok: true, data: { name: args.request.session, up: true, text: "" } };
+    });
+  });
+
+  it("counts the open questions at the top, and says when some agent does not say them", async () => {
+    show();
+    const summary = await screen.findByTestId("panel-questions-summary");
+    expect(summary).toHaveTextContent("3 domande aperte (di alcuni agenti non so)");
+    expect(summary.title).toContain("quelle di un agente spento non si contano");
+  });
+
+  it("says a known zero as zero, and «non so» when no agent says them", async () => {
+    agents = [agent("SCOUT-1", "scout", "1", "idle", { questions: { open: 0, unread: 0, items: [] } })];
+    show();
+    expect(await screen.findByTestId("panel-questions-summary")).toHaveTextContent("0 domande aperte");
+    cleanup();
+    agents = [agent("SCOUT-1", "scout", "1", "idle")];
+    show();
+    expect(await screen.findByTestId("panel-questions-summary")).toHaveTextContent("domande: non so");
+  });
+
+  it("marks the row with the most urgent type and the unread count, and nothing where it is not known", async () => {
+    show();
+    await screen.findByTestId("panel-summary");
+    const row = (session: string) => within(screen.getByTestId(`panel-row-${session}`));
+    expect(row("CAPITANO").getByTestId("panel-question-mark")).toHaveAttribute("data-type", "blocco");
+    expect(row("CAPITANO").getByTestId("panel-question-mark").title).toBe("2 domande aperte · blocco");
+    expect(row("CAPITANO").getByTestId("panel-unread")).toHaveTextContent(/^3$/);
+    expect(row("CAPITANO").getByTestId("panel-unread").title).toBe("3 messaggi non letti");
+    expect(row("SCORER-1").getByTestId("panel-question-mark")).toHaveAttribute("data-type", "urgente");
+    expect(row("SCORER-1").getByTestId("panel-question-mark")).toHaveStyle({ background: "var(--color-red)" });
+    expect(row("SCORER-1").getByTestId("panel-unread")).toHaveTextContent("99+");
+    for (const session of ["SCOUT-1", "ASSISTENTE", "ANALISTA-1"]) {
+      expect(row(session).queryByTestId("panel-question-mark")).toBeNull();
+      expect(row(session).queryByTestId("panel-unread")).toBeNull();
+    }
+  });
+
+  it("lists the agent's questions in its detail, the agent's own words as plain text", async () => {
+    show("agent=CAPITANO");
+    const list = await screen.findByTestId("panel-questions");
+    expect(list).toHaveTextContent(/^2 domande aperte · 3 messaggi non letti/);
+    const [first, second] = within(list).getAllByTestId("panel-question");
+    expect(first).toHaveAttribute("data-type", "blocco");
+    expect(first).toHaveTextContent("blocco");
+    expect(first).toHaveTextContent("CV per Acme");
+    expect(first).toHaveTextContent("Quale CV uso per Acme?");
+    expect(within(first).getByTestId("panel-question-options")).toHaveTextContent("CV breve · Rinvia, non fare niente");
+    expect(within(first).getByTestId("panel-question-expiry")).toHaveTextContent("scade fra 3 h, poi: Rinvia, non fare niente");
+    expect(second).toHaveAttribute("data-type", "none");
+    expect(second).toHaveTextContent("senza tipo");
+    expect(second).toHaveTextContent("<b>not html</b> procedo?");
+    expect(second.querySelector("b")).toBeNull();
+    expect(within(list).getByTestId("panel-questions-messages")).toHaveAttribute("href", "#/messages");
+  });
+
+  it("says «none» for a known zero and «non so» for an agent that does not say them", async () => {
+    show("agent=SCOUT-1");
+    expect(await screen.findByTestId("panel-questions")).toHaveTextContent(/^Nessuna domanda aperta$/);
+    cleanup();
+    show("agent=ASSISTENTE");
+    const unknown = await screen.findByTestId("panel-questions");
+    expect(unknown).toHaveTextContent("Domande: non so");
+    expect(unknown.title).toContain("non vuol dire nessuna");
+  });
+
+  it("in the read-only view: no link to answer, it says where to answer", async () => {
+    enterExistingTeamReadOnly(false);
+    navigate("/agents?agent=CAPITANO", { replace: true });
+    render(<Shell />);
+    const list = await screen.findByTestId("panel-questions");
+    expect(within(list).queryByTestId("panel-questions-messages")).toBeNull();
+    expect(list).toHaveTextContent("rispondi da Telegram o dal web");
+  });
+
+  it("has every sentence and every type in every language", () => {
+    for (const [locale, text] of Object.entries(AGENTS_PANEL_TEXT) as [Locale, AgentsPanelText][]) {
+      for (const forms of [text.questionsOpen, text.unreadMessages, text.questionsMore]) {
+        expect(forms.one, locale).not.toBe("");
+        expect(forms.other, locale).toContain("{count}");
+      }
+      expect(text.questionsOpen.one, locale).toContain("{count}");
+      expect(Object.keys(text.questionTypes).sort(), locale).toEqual(["blocco", "completamento", "comunicazione", "domanda", "urgente"]);
+      expect(new Set(Object.values(text.questionTypes)).size, locale).toBe(5);
+      expect(text.questionAskedAt, locale).toContain("{time}");
+      expect(text.questionExpiresAt, locale).toContain("{time}");
+      expect(text.questionExpiresMinutes, locale).toContain("{minutes}");
+      expect(text.questionExpiresHours, locale).toContain("{hours}");
+      expect(text.questionThen, locale).toContain("{option}");
+      for (const key of ["questionsUnknown", "questionsPartlyUnknown", "questionsSummaryHelp", "questionTypeNone", "questionsUnknownDetail", "questionsUnknownWhy", "questionsNone", "questionsAnswerInMessages", "questionsAnswerElsewhere"] as const) {
+        expect(text[key], `${locale} ${key}`).toMatch(/\S/);
+      }
+    }
+  });
+
+  it("only shows them: the panel's source names the questions only where it shows them", () => {
+    const source = readFileSync("src/pages/agents/AgentsPanel.tsx", "utf8");
+    const lines = source.split("\n").filter((line) => /questions/i.test(line));
+    const allowed = [/from "\.\/AgentQuestions"/, /questionsSummary\(t, /, /<QuestionMarks t=\{t\} questions=/, /<QuestionList t=\{t\} questions=/, /counts\.questions/, /title=\{t\.questionsSummaryHelp\}/, /data-testid="panel-questions-summary"/, /the questions of the agents that are up/];
+    for (const line of lines) expect(allowed.some((re) => re.test(line)), line).toBe(true);
+  });
+});

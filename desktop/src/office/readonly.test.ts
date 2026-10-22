@@ -136,7 +136,7 @@ describe("officeFromTeamProbe", () => {
 
 describe("officeFromTeamProbe with the team's agents (the Agents page's read)", () => {
   const agent = (name: string, role: string, state: TeamAgent["state"] = { state: "sconosciuto" }): TeamAgent => ({
-    name, role, instance: null, created: null, activity: null, identity: null, state, usage: pickUsage(null),
+    name, role, instance: null, created: null, activity: null, identity: null, state, usage: pickUsage(null), questions: null,
   });
   const agentsRead = (agents: TeamAgent[], statesKnown = true): TeamAgentsReading => ({
     kind: "read", at: AT, read: { agents, roles: [], statesKnown },

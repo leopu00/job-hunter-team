@@ -40,8 +40,12 @@ window they fill. Codex writes the window (model_context_window), Kimi the share
 (context_usage); Claude writes neither, so its percentage is not known (None),
 never guessed from the model's name.
 
+Beside them, the questions the agent asked the user and that are still open,
+and how many of its messages are unread (`questions`), for the agents' panel
+only; null when jobs.db cannot be read.
+
 CLI:
-    python3 agent_state.py          # {session-lower: {state, reason?, since, until?, context?}}
+    python3 agent_state.py          # {session-lower: {state, reason?, since, until?, context?, questions}}
 """
 from __future__ import annotations
 
@@ -620,6 +624,171 @@ def read_questions(db_path: str, now: float) -> dict[str, dict]:
     return out
 
 
+# ── the questions an agent asked the user, for the agents' panel ─────────
+#
+# Only to be shown: no state, count or decision reads them. They come from the
+# same read-only opening of jobs.db as the wait above. What the agent wrote
+# (subject, text, labels) is data: one line, no invisible commands, cut short.
+
+QUESTION_TIPI = ("urgente", "blocco", "domanda", "completamento", "comunicazione")
+QUESTIONS_PER_AGENT = 5
+QUESTIONS_PER_LIST = 20
+QUESTION_TEXT_MAX = 280
+_ANSWER_PREFIX = "ans:"
+
+
+def _question_contract():
+    """agent_questions.py beside this file, or None (an image without it)."""
+    try:
+        import importlib.util
+        path = Path(__file__).resolve().parent / "agent_questions.py"
+        spec = importlib.util.spec_from_file_location("agent_questions_for_state", path)
+        module = importlib.util.module_from_spec(spec)
+        sys.modules[spec.name] = module  # its dataclasses look themselves up there
+        spec.loader.exec_module(module)
+        return module
+    except Exception:
+        sys.modules.pop("agent_questions_for_state", None)
+        return None
+
+
+def _created_ts(created_at) -> float | None:
+    try:
+        return datetime.strptime(str(created_at)[:19].replace("T", " "), "%Y-%m-%d %H:%M:%S") \
+            .replace(tzinfo=timezone.utc).timestamp()
+    except ValueError:
+        return None
+
+
+def _shown(aq, value, limit: int) -> str:
+    text = aq.flatten_to_one_line(value)
+    return text if len(text) <= limit else text[: limit - 1].rstrip() + "…"
+
+
+def read_agent_questions(db_path: str, now: float) -> dict[str, dict] | None:
+    """{agent lower: {"count": n, "open": [item, ...newest first], "unread": n}} from jobs.db.
+
+    Open, with the rule of the wait above: an agent's question with no reply,
+    no older than QUESTION_MAX_AGE_S (read or not). A structured one
+    (agent_questions.py) also needs no answer and its expiry still ahead; one
+    whose payload breaks the contract is not shown, and is never taken for a
+    question written before the contract.
+
+    The counts are SQL's, and the rows are at most QUESTIONS_PER_AGENT per
+    agent: nothing loads the whole table. None when it cannot be said: the
+    database cannot be read, or the image has no question contract to check a
+    stored question against. An empty dict is a read that found nothing.
+    """
+    aq = _question_contract()
+    if aq is None:
+        return None
+    since = datetime.fromtimestamp(now - QUESTION_MAX_AGE_S, tz=timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+    now_iso = datetime.fromtimestamp(now, tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    tipi = ",".join("?" * len(QUESTION_TIPI))
+    open_rows = (
+        "WITH q AS ("
+        "  SELECT id, lower(agent) AS agent, kind, body, source_action, source_id, created_at,"
+        "         CASE WHEN source_action = ? AND json_valid(source_payload) THEN source_payload END AS payload"
+        "  FROM pending_user_messages"
+        "  WHERE author = 'agent' AND user_reply IS NULL AND (source_action = ? OR kind = 'question')"
+        "    AND replace(substr(created_at, 1, 19), 'T', ' ') >= ?"
+        "), open AS ("
+        "  SELECT * FROM q WHERE"
+        "   (source_action = ? AND payload IS NOT NULL"
+        "    AND json_extract(payload, '$.v') = 1"
+        f"    AND json_extract(payload, '$.tipo') IN ({tipi})"
+        "    AND (json_extract(payload, '$.scadenza') IS NULL OR json_extract(payload, '$.scadenza') > ?)"
+        "    AND NOT EXISTS (SELECT 1 FROM pending_user_messages a WHERE a.source_id = ? || q.source_id))"
+        "   OR (source_action IS NOT ? AND kind = 'question')"
+        ") "
+    )
+    args = [aq.SOURCE_ACTION, aq.SOURCE_ACTION, since, aq.SOURCE_ACTION, *QUESTION_TIPI, now_iso,
+            _ANSWER_PREFIX, aq.SOURCE_ACTION]
+    try:
+        con = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True, timeout=1.0)
+        try:
+            counts = con.execute(open_rows + "SELECT agent, COUNT(*) FROM open GROUP BY agent", args).fetchall()
+            rows = con.execute(
+                open_rows +
+                "SELECT id, agent, body, source_action, source_id, payload, created_at FROM ("
+                "  SELECT *, ROW_NUMBER() OVER (PARTITION BY agent ORDER BY id DESC) AS n FROM open"
+                ") WHERE n <= ? ORDER BY id DESC", [*args, QUESTIONS_PER_AGENT]).fetchall()
+            unread = con.execute(
+                "SELECT lower(agent), COUNT(*) FROM pending_user_messages "
+                "WHERE author = 'agent' AND acknowledged_at IS NULL GROUP BY lower(agent)").fetchall()
+        finally:
+            con.close()
+    except sqlite3.Error:
+        return None
+
+    out: dict[str, dict] = {}
+
+    def slot(agent) -> dict:
+        return out.setdefault(str(agent), {"count": 0, "open": [], "unread": 0})
+
+    for agent, count in counts:
+        slot(agent)["count"] = int(count)
+    for agent, count in unread:
+        slot(agent)["unread"] = int(count)
+    for row_id, agent, body, action, source_id, payload_json, created_at in rows:
+        at = _created_ts(created_at)
+        if at is None:
+            continue
+        if action == aq.SOURCE_ACTION:
+            try:
+                payload = aq.validate_question_payload(json.loads(payload_json or ""))
+                expiry = aq.parse_iso(payload["scadenza"]).timestamp() if payload["scadenza"] else None
+            except (ValueError, TypeError, aq.QuestionRejected):
+                continue  # counted by SQL's coarser check, but never shown
+            if not (isinstance(source_id, str) and aq.QUESTION_ID_RE.fullmatch(source_id)):
+                continue
+            slot(agent)["open"].append({
+                "id": source_id, "row": row_id, "tipo": payload["tipo"],
+                "oggetto": _shown(aq, payload["oggetto"], aq.MAX_OBJECT),
+                "testo": _shown(aq, payload["testo"], QUESTION_TEXT_MAX),
+                # reversible only with the boolean true: anything else asks for a confirmation
+                "opzioni": [{"id": o["id"], "label": _shown(aq, o["label"], aq.MAX_LABEL),
+                             "reversibile": o.get("reversibile") is True} for o in payload["opzioni"]],
+                "multipla": payload["multipla"], "libera": payload["libera"],
+                "scadenza": expiry, "default": payload["default"], "at": at,
+            })
+            continue
+        # A question written before the contract: no type, no buttons.
+        slot(agent)["open"].append({
+            "id": None, "row": row_id, "tipo": None, "oggetto": None,
+            "testo": _shown(aq, body, QUESTION_TEXT_MAX), "opzioni": [],
+            "multipla": False, "libera": True, "scadenza": None, "default": None, "at": at,
+        })
+    return out
+
+
+def questions_of(uid: str, table: dict[str, dict] | None) -> dict | None:
+    """The panel's questions of one agent: its own rows and, for the first
+    instance, its role's (the rule of question_for). None when not known."""
+    if table is None:
+        return None
+    entries = [table[uid]] if uid in table else []
+    m = re.match(r"^(.+)-1$", uid)
+    if m and m.group(1) in table:
+        entries.append(table[m.group(1)])
+    items = sorted((item for entry in entries for item in entry["open"]),
+                   key=lambda item: (item["at"], item["row"]), reverse=True)
+    return {"open": sum(entry["count"] for entry in entries),
+            "unread": sum(entry["unread"] for entry in entries),
+            "items": items[:QUESTIONS_PER_AGENT]}
+
+
+def trim_questions(out: dict[str, dict], limit: int = QUESTIONS_PER_LIST) -> None:
+    """At most `limit` questions in the whole list, the newest; the counts stay whole."""
+    shown = sorted(((item["at"], item["row"], uid) for uid, v in out.items()
+                    if isinstance(v.get("questions"), dict) for item in v["questions"]["items"]),
+                   reverse=True)[:limit]
+    keep = {(uid, row) for _at, row, uid in shown}
+    for uid, v in out.items():
+        if isinstance(v.get("questions"), dict):
+            v["questions"]["items"] = [item for item in v["questions"]["items"] if (uid, item["row"]) in keep]
+
+
 def question_for(uid: str, questions: dict[str, dict]) -> dict | None:
     """A question names the role (capitano, scout); an instance answers to its
     role only when it is the first one."""
@@ -676,6 +845,7 @@ def main() -> None:
     now = time.time()
     db = os.environ.get("JHT_DB") or str(home / "jobs.db")
     questions = read_questions(db, now)
+    asked = read_agent_questions(db, now)
     out = {}
     for uid, created in tmux_sessions().items():
         if agent_dir(home, uid) is None:  # not an agent of the team
@@ -683,7 +853,9 @@ def main() -> None:
         v = derive(uid, home, created, now, questions)
         if "since" in v:
             v["since"] = round(v["since"], 3)
+        v["questions"] = questions_of(uid, asked)
         out[uid] = v
+    trim_questions(out)
     print(json.dumps(out, ensure_ascii=False))
 
 

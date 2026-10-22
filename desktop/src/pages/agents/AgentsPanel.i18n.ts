@@ -113,6 +113,25 @@ export interface AgentsPanelText {
   usageHourUnknown: string;
   usageHowCounted: string;
   usageUnknownWhy: string;
+  // the questions an agent asked the person (agent_state.py), and its unread messages
+  questionsOpen: PluralForms; // {count}
+  questionsUnknown: string;
+  questionsPartlyUnknown: string;
+  questionsSummaryHelp: string;
+  unreadMessages: PluralForms; // {count}
+  questionTypes: Record<"urgente" | "blocco" | "domanda" | "completamento" | "comunicazione", string>;
+  questionTypeNone: string;
+  questionAskedAt: string; // {time}
+  questionExpiresMinutes: string; // {minutes}
+  questionExpiresHours: string; // {hours}
+  questionExpiresAt: string; // {time}
+  questionThen: string; // {option}
+  questionsUnknownDetail: string;
+  questionsUnknownWhy: string;
+  questionsNone: string;
+  questionsMore: PluralForms; // {count}
+  questionsAnswerInMessages: string;
+  questionsAnswerElsewhere: string;
 }
 
 const it: AgentsPanelText = {
@@ -223,6 +242,24 @@ const it: AgentsPanelText = {
   usageHourUnknown: "token dell'ultima ora: non so",
   usageHowCounted: "I token sono quelli nuovi, input e output: la parte già in cache non conta.",
   usageUnknownWhy: "«Non so» non vuol dire zero: la squadra non lo dice per questo agente (log non leggibili, immagine più vecchia, o la Sentinella non ha contato nell'ultimo quarto d'ora).",
+  questionsOpen: { one: "{count} domanda aperta", other: "{count} domande aperte" },
+  questionsUnknown: "domande: non so",
+  questionsPartlyUnknown: "(di alcuni agenti non so)",
+  questionsSummaryHelp: "Le domande aperte degli agenti accesi: quelle di un agente spento non si contano.",
+  unreadMessages: { one: "{count} messaggio non letto", other: "{count} messaggi non letti" },
+  questionTypes: { urgente: "urgente", blocco: "blocco", domanda: "domanda", completamento: "completamento", comunicazione: "comunicazione" },
+  questionTypeNone: "senza tipo",
+  questionAskedAt: "chiesta: {time}",
+  questionExpiresMinutes: "scade fra {minutes} min",
+  questionExpiresHours: "scade fra {hours} h",
+  questionExpiresAt: "scade: {time}",
+  questionThen: "poi: {option}",
+  questionsUnknownDetail: "Domande: non so",
+  questionsUnknownWhy: "«Non so» non vuol dire nessuna: la squadra non lo dice (un'immagine più vecchia, o il suo database non si legge).",
+  questionsNone: "Nessuna domanda aperta",
+  questionsMore: { one: "e un'altra: la trovi nei Messaggi", other: "e altre {count}: le trovi nei Messaggi" },
+  questionsAnswerInMessages: "Rispondi dai Messaggi",
+  questionsAnswerElsewhere: "Qui si legge soltanto: rispondi da Telegram o dal web.",
 };
 
 const en: AgentsPanelText = {
@@ -332,6 +369,24 @@ const en: AgentsPanelText = {
   usageHourUnknown: "tokens of the last hour: not known",
   usageHowCounted: "These are the new tokens, input and output: the part already cached does not count.",
   usageUnknownWhy: "“Not known” is not zero: the team does not say it for this agent (logs not readable, an older image, or the Sentinella has not counted in the last quarter of an hour).",
+  questionsOpen: { one: "{count} open question", other: "{count} open questions" },
+  questionsUnknown: "questions: not known",
+  questionsPartlyUnknown: "(not known for some agents)",
+  questionsSummaryHelp: "The open questions of the agents that are up: those of an agent that is off are not counted.",
+  unreadMessages: { one: "{count} unread message", other: "{count} unread messages" },
+  questionTypes: { urgente: "urgent", blocco: "blocker", domanda: "question", completamento: "completion", comunicazione: "notice" },
+  questionTypeNone: "no type",
+  questionAskedAt: "asked: {time}",
+  questionExpiresMinutes: "expires in {minutes} min",
+  questionExpiresHours: "expires in {hours} h",
+  questionExpiresAt: "expires: {time}",
+  questionThen: "then: {option}",
+  questionsUnknownDetail: "Questions: not known",
+  questionsUnknownWhy: "“Not known” does not mean none: the team does not say it (an older image, or its database cannot be read).",
+  questionsNone: "No open question",
+  questionsMore: { one: "and one more: you find it in Messages", other: "and {count} more: you find them in Messages" },
+  questionsAnswerInMessages: "Answer from Messages",
+  questionsAnswerElsewhere: "This view only reads: answer from Telegram or the web.",
 };
 
 const de: AgentsPanelText = {
@@ -442,6 +497,24 @@ const de: AgentsPanelText = {
   usageHourUnknown: "Token der letzten Stunde: unbekannt",
   usageHowCounted: "Gezählt werden die neuen Token, Eingabe und Ausgabe: der bereits zwischengespeicherte Teil zählt nicht.",
   usageUnknownWhy: "„Unbekannt“ heißt nicht null: Das Team sagt es für diesen Agenten nicht (Logs nicht lesbar, ein älteres Image, oder die Sentinella hat in der letzten Viertelstunde nicht gezählt).",
+  questionsOpen: { one: "{count} offene Frage", other: "{count} offene Fragen" },
+  questionsUnknown: "Fragen: unbekannt",
+  questionsPartlyUnknown: "(bei einigen Agenten unbekannt)",
+  questionsSummaryHelp: "Die offenen Fragen der laufenden Agenten: die eines ausgeschalteten Agenten werden nicht gezählt.",
+  unreadMessages: { one: "{count} ungelesene Nachricht", other: "{count} ungelesene Nachrichten" },
+  questionTypes: { urgente: "dringend", blocco: "blockiert", domanda: "Frage", completamento: "Abschluss", comunicazione: "Mitteilung" },
+  questionTypeNone: "ohne Typ",
+  questionAskedAt: "gefragt: {time}",
+  questionExpiresMinutes: "läuft in {minutes} Min. ab",
+  questionExpiresHours: "läuft in {hours} Std. ab",
+  questionExpiresAt: "läuft ab: {time}",
+  questionThen: "dann: {option}",
+  questionsUnknownDetail: "Fragen: unbekannt",
+  questionsUnknownWhy: "„Unbekannt“ heißt nicht keine: Das Team sagt es nicht (ein älteres Image, oder seine Datenbank lässt sich nicht lesen).",
+  questionsNone: "Keine offene Frage",
+  questionsMore: { one: "und eine weitere: du findest sie unter Nachrichten", other: "und {count} weitere: du findest sie unter Nachrichten" },
+  questionsAnswerInMessages: "Unter Nachrichten antworten",
+  questionsAnswerElsewhere: "Diese Ansicht liest nur: antworte über Telegram oder das Web.",
 };
 
 const es: AgentsPanelText = {
@@ -552,6 +625,24 @@ const es: AgentsPanelText = {
   usageHourUnknown: "tokens de la última hora: no lo sé",
   usageHowCounted: "Son los tokens nuevos, de entrada y de salida: la parte que ya estaba en caché no cuenta.",
   usageUnknownWhy: "«No lo sé» no quiere decir cero: el equipo no lo dice para este agente (registros ilegibles, una imagen más antigua, o la Sentinella no ha contado en el último cuarto de hora).",
+  questionsOpen: { one: "{count} pregunta abierta", other: "{count} preguntas abiertas" },
+  questionsUnknown: "preguntas: no lo sé",
+  questionsPartlyUnknown: "(de algunos agentes no lo sé)",
+  questionsSummaryHelp: "Las preguntas abiertas de los agentes encendidos: las de un agente apagado no se cuentan.",
+  unreadMessages: { one: "{count} mensaje sin leer", other: "{count} mensajes sin leer" },
+  questionTypes: { urgente: "urgente", blocco: "bloqueo", domanda: "pregunta", completamento: "finalización", comunicazione: "aviso" },
+  questionTypeNone: "sin tipo",
+  questionAskedAt: "preguntada: {time}",
+  questionExpiresMinutes: "caduca en {minutes} min",
+  questionExpiresHours: "caduca en {hours} h",
+  questionExpiresAt: "caduca: {time}",
+  questionThen: "luego: {option}",
+  questionsUnknownDetail: "Preguntas: no lo sé",
+  questionsUnknownWhy: "«No lo sé» no quiere decir ninguna: el equipo no lo dice (una imagen más antigua, o su base de datos no se puede leer).",
+  questionsNone: "Ninguna pregunta abierta",
+  questionsMore: { one: "y otra más: la encuentras en Mensajes", other: "y {count} más: las encuentras en Mensajes" },
+  questionsAnswerInMessages: "Responder desde Mensajes",
+  questionsAnswerElsewhere: "Esta vista solo lee: responde desde Telegram o la web.",
 };
 
 const fr: AgentsPanelText = {
@@ -662,6 +753,24 @@ const fr: AgentsPanelText = {
   usageHourUnknown: "jetons de la dernière heure : inconnu",
   usageHowCounted: "Ce sont les nouveaux jetons, en entrée et en sortie : la part déjà en cache ne compte pas.",
   usageUnknownWhy: "« Inconnu » ne veut pas dire zéro : l’équipe ne le dit pas pour cet agent (journaux illisibles, image plus ancienne, ou la Sentinella n’a pas compté dans le dernier quart d’heure).",
+  questionsOpen: { one: "{count} question ouverte", other: "{count} questions ouvertes" },
+  questionsUnknown: "questions : inconnu",
+  questionsPartlyUnknown: "(inconnu pour certains agents)",
+  questionsSummaryHelp: "Les questions ouvertes des agents allumés : celles d’un agent éteint ne sont pas comptées.",
+  unreadMessages: { one: "{count} message non lu", other: "{count} messages non lus" },
+  questionTypes: { urgente: "urgent", blocco: "blocage", domanda: "question", completamento: "achèvement", comunicazione: "annonce" },
+  questionTypeNone: "sans type",
+  questionAskedAt: "posée : {time}",
+  questionExpiresMinutes: "expire dans {minutes} min",
+  questionExpiresHours: "expire dans {hours} h",
+  questionExpiresAt: "expire : {time}",
+  questionThen: "puis : {option}",
+  questionsUnknownDetail: "Questions : inconnu",
+  questionsUnknownWhy: "« Inconnu » ne veut pas dire aucune : l’équipe ne le dit pas (une image plus ancienne, ou sa base de données ne se lit pas).",
+  questionsNone: "Aucune question ouverte",
+  questionsMore: { one: "et une autre : tu la trouves dans Messages", other: "et {count} autres : tu les trouves dans Messages" },
+  questionsAnswerInMessages: "Répondre depuis Messages",
+  questionsAnswerElsewhere: "Cette vue ne fait que lire : réponds depuis Telegram ou le web.",
 };
 
 const hu: AgentsPanelText = {
@@ -772,6 +881,24 @@ const hu: AgentsPanelText = {
   usageHourUnknown: "az elmúlt óra tokenjei: nem tudom",
   usageHowCounted: "Az új tokenek számítanak, bemenet és kimenet: a gyorsítótárban már meglévő rész nem.",
   usageUnknownWhy: "A „nem tudom” nem nulla: a csapat ezt nem adja meg ehhez az ügynökhöz (olvashatatlan naplók, régebbi image, vagy a Sentinella nem számolt az elmúlt negyedórában).",
+  questionsOpen: { one: "{count} nyitott kérdés", other: "{count} nyitott kérdés" },
+  questionsUnknown: "kérdések: nem tudom",
+  questionsPartlyUnknown: "(néhány ügynöknél nem tudom)",
+  questionsSummaryHelp: "A bekapcsolt ügynökök nyitott kérdései: a kikapcsolt ügynökéi nem számítanak.",
+  unreadMessages: { one: "{count} olvasatlan üzenet", other: "{count} olvasatlan üzenet" },
+  questionTypes: { urgente: "sürgős", blocco: "elakadás", domanda: "kérdés", completamento: "befejezés", comunicazione: "közlés" },
+  questionTypeNone: "típus nélkül",
+  questionAskedAt: "kérdezte: {time}",
+  questionExpiresMinutes: "lejár {minutes} perc múlva",
+  questionExpiresHours: "lejár {hours} óra múlva",
+  questionExpiresAt: "lejár: {time}",
+  questionThen: "utána: {option}",
+  questionsUnknownDetail: "Kérdések: nem tudom",
+  questionsUnknownWhy: "A „nem tudom” nem azt jelenti, hogy nincs: a csapat nem mondja meg (régebbi image, vagy az adatbázisa nem olvasható).",
+  questionsNone: "Nincs nyitott kérdés",
+  questionsMore: { one: "és még egy: az Üzenetek között találod", other: "és még {count}: az Üzenetek között találod" },
+  questionsAnswerInMessages: "Válasz az Üzenetek oldalon",
+  questionsAnswerElsewhere: "Ez a nézet csak olvas: válaszolj Telegramon vagy a weben.",
 };
 
 const pt: AgentsPanelText = {
@@ -882,6 +1009,24 @@ const pt: AgentsPanelText = {
   usageHourUnknown: "tokens da última hora: não sei",
   usageHowCounted: "São os tokens novos, de entrada e de saída: a parte que já estava em cache não conta.",
   usageUnknownWhy: "«Não sei» não quer dizer zero: a equipa não o diz para este agente (registos ilegíveis, uma imagem mais antiga, ou a Sentinella não contou no último quarto de hora).",
+  questionsOpen: { one: "{count} pergunta aberta", other: "{count} perguntas abertas" },
+  questionsUnknown: "perguntas: não sei",
+  questionsPartlyUnknown: "(de alguns agentes não sei)",
+  questionsSummaryHelp: "As perguntas abertas dos agentes ligados: as de um agente desligado não contam.",
+  unreadMessages: { one: "{count} mensagem por ler", other: "{count} mensagens por ler" },
+  questionTypes: { urgente: "urgente", blocco: "bloqueio", domanda: "pergunta", completamento: "conclusão", comunicazione: "aviso" },
+  questionTypeNone: "sem tipo",
+  questionAskedAt: "perguntada: {time}",
+  questionExpiresMinutes: "expira dentro de {minutes} min",
+  questionExpiresHours: "expira dentro de {hours} h",
+  questionExpiresAt: "expira: {time}",
+  questionThen: "depois: {option}",
+  questionsUnknownDetail: "Perguntas: não sei",
+  questionsUnknownWhy: "«Não sei» não quer dizer nenhuma: a equipa não o diz (uma imagem mais antiga, ou a sua base de dados não se lê).",
+  questionsNone: "Nenhuma pergunta aberta",
+  questionsMore: { one: "e mais uma: encontras-a em Mensagens", other: "e mais {count}: encontras-as em Mensagens" },
+  questionsAnswerInMessages: "Responder em Mensagens",
+  questionsAnswerElsewhere: "Esta vista só lê: responde pelo Telegram ou pela web.",
 };
 
 export const AGENTS_PANEL_TEXT: Record<Locale, AgentsPanelText> = { it, en, de, es, fr, hu, pt };

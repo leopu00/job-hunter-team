@@ -457,6 +457,29 @@ def test_the_list_tells_each_agents_context_and_tokens_and_unknown_is_never_zero
     assert usage["SCOUT-2"]["tokens_1h"] is None
 
 
+STATE_WITH_QUESTIONS = (
+    "import json\n"
+    "print(json.dumps({'capitano': {'state': 'aspetta_umano', 'since': 1, 'questions': "
+    "{'open': 1, 'unread': 3, 'items': [{'id': 'aq:capitano:1-ab', 'tipo': 'blocco'}]}},"
+    " 'scout-1': {'state': 'idle', 'since': 1, 'questions': None},"
+    " 'scout-2': {'state': 'idle', 'since': 1, 'questions': 'tante'}}))\n"
+)
+
+
+def test_the_list_passes_the_questions_of_each_agent_and_unknown_is_none(team, capsys):
+    """Only to be shown: agent_state.py's questions go through as they are (the app
+    closes their shape); not read, an older image or a wrong shape is None."""
+    team.up("CAPITANO", "SCOUT-1", "SCOUT-2", "SCOUT-3")
+    team.tool.AGENT_STATE = _script(team.tmp / "agent_state.py", STATE_WITH_QUESTIONS)
+
+    questions = {item["name"]: item["questions"] for item in team.run("list", capsys=capsys)[1]["data"]["items"]}
+
+    assert questions["CAPITANO"] == {"open": 1, "unread": 3, "items": [{"id": "aq:capitano:1-ab", "tipo": "blocco"}]}
+    assert questions["SCOUT-1"] is None
+    assert questions["SCOUT-2"] is None
+    assert questions["SCOUT-3"] is None  # not in the state at all
+
+
 @pytest.mark.parametrize("written", ["stale", "missing", "older image", "not json"])
 def test_an_hour_the_bridge_did_not_count_lately_is_not_known(team, capsys, written):
     team.up("CAPITANO")

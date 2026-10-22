@@ -27,6 +27,7 @@ import { useRefresh } from "../../shell/router";
 import type { PageProps } from "../types";
 import { AGENTS_PANEL_TEXT, type AgentsPanelText } from "./AgentsPanel.i18n";
 import { UsageLine, UsageShort } from "./AgentUsage";
+import { QuestionList, QuestionMarks, questionsSummary } from "./AgentQuestions";
 
 // The chat with the three agents the person talks to is its own component,
 // mounted here when it exists in the build (it is optional, as the office's
@@ -465,8 +466,10 @@ export default function AgentsPanel({ search }: PageProps) {
       working: up.filter((row) => row.agent?.state.state === "lavora").length,
       up: up.length,
       total: rows.length,
+      // only to be shown: the questions of the agents that are up, null where the team does not say them
+      questions: questionsSummary(t, up.map((row) => row.agent!.questions)),
     };
-  }, [rows]);
+  }, [rows, t]);
 
   const teamLine = (() => {
     if (!team) return null;
@@ -535,6 +538,14 @@ export default function AgentsPanel({ search }: PageProps) {
                 pluralText(appLocale(), counts.working, t.summaryWorking),
                 pluralText(appLocale(), counts.up, t.summaryUp, { total: counts.total }),
               ].join(" · ")}
+              {counts.up > 0 && (
+                <>
+                  {" · "}
+                  <span data-testid="panel-questions-summary" title={t.questionsSummaryHelp}>
+                    {counts.questions}
+                  </span>
+                </>
+              )}
               {teamLine && (
                 <>
                   {" · "}
@@ -613,6 +624,7 @@ export default function AgentsPanel({ search }: PageProps) {
                       <span className="text-[11px] min-w-0 leading-snug break-words" style={{ color: "var(--color-muted)" }}>
                         {stateLine(t, row)}
                         {isUp(row) && <UsageShort t={t} usage={row.agent!.usage} />}
+                        {isUp(row) && <QuestionMarks t={t} questions={row.agent!.questions} />}
                       </span>
                     </button>
                     {notices[row.session] && !notices[row.session].ok && (
@@ -665,6 +677,7 @@ export default function AgentsPanel({ search }: PageProps) {
                       </p>
                     )}
                     {isUp(current) && <UsageLine t={t} usage={current.agent!.usage} />}
+                    {isUp(current) && <QuestionList t={t} questions={current.agent!.questions} readOnly={readOnly} now={now} />}
                     {SCHEDULED.has(current.session) && <p className="text-[11px] mt-1 text-[var(--color-dim)]">{t.maintenance}</p>}
                     {REVIEWER.test(current.session) && <p className="text-[11px] mt-1 text-[var(--color-dim)]">{t.reviewer}</p>}
                   </div>
