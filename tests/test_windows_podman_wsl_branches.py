@@ -46,7 +46,7 @@ SELFTEST = SCRIPTS / "windows-config-acl-selftest.ps1"
 WINDOWS_RUNTIME_RS = ROOT / "desktop" / "src-tauri" / "src" / "windows_runtime.rs"
 
 
-from windows_native_fakes import ENGINE_CHECK, WINDOWS, assert_engine, install_fake, powershell, windows_env
+from windows_native_fakes import ENGINE_CHECK, WINDOWS, assert_engine, install_fake, powershell_argv, windows_env
 
 
 # Dot-sources functions (and, for the enabler, its machine block) from the real
@@ -101,7 +101,7 @@ def _run(tmp_path: Path, script: Path, imports: list[str], body: str, env: dict[
         **env,
     }
     result = subprocess.run(
-        [powershell(), "-NoLogo", "-NoProfile", "-NonInteractive", "-File", str(prelude)],
+        [*powershell_argv(), "-File", str(prelude)],
         env=run_env, capture_output=True, text=True, timeout=120,
     )
     assert_engine(engine, result.stderr)

@@ -65,6 +65,13 @@ def powershell() -> str:
     pytest.skip("PowerShell not installed")
 
 
+def powershell_argv() -> list[str]:
+    """The PowerShell under test with its flags. On Windows also -ExecutionPolicy Bypass: on a
+    client Windows the default policy (Restricted) refuses the case scripts the tests write."""
+    argv = [powershell(), "-NoLogo", "-NoProfile", "-NonInteractive"]
+    return argv + ["-ExecutionPolicy", "Bypass"] if WINDOWS else argv
+
+
 def expected_engine() -> str:
     return "5.1" if WINDOWS and _shell_name() == "powershell" else "7"
 
