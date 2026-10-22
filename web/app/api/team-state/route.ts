@@ -52,6 +52,9 @@ const OBSERVED_FIELDS = [
   // Ack del solo rendezvous STOP mobile. Il device non può creare richieste:
   // emergency_stop_requested_at è scritto esclusivamente dalla route browser.
   "emergency_stop_completed_at",
+  // Fase 6: la versione delle impostazioni chieste dal sito (desired_settings_at)
+  // che il box ha applicato al suo config. La scrive solo il box, con il token.
+  "settings_applied_at",
   // O-66: osservazione minimale del push automatico. La firma SQLite resta
   // locale; il browser riceve soltanto current/errore + timestamp.
   "cloud_push_status",
