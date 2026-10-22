@@ -3,7 +3,7 @@ import { DashboardI18nProvider, useDashboardT } from "@/app/components/Dashboard
 import MainChrome from "@/app/components/MainChrome";
 import NavLinks from "@/app/components/NavLinks";
 import Link from "../web-shims/next-link";
-import { ProfileExclusionControlProvider } from "@/lib/profile-exclusion-control";
+import { DesktopWriteProvider } from "@/lib/desktop-write";
 import { ReadOnlyActionsProvider } from "@/lib/read-only-actions";
 import { signOut } from "../lib/supabase";
 import { appLocale } from "../lib/app-locale";
@@ -232,7 +232,7 @@ export default function Shell({ onLogout, onCloseReadOnly }: ShellProps) {
   if (match?.route.fullBleed) {
     return (
       <DashboardI18nProvider>
-        <ProfileExclusionControlProvider value={{ canChange: true }}>
+        <DesktopWriteProvider value={{ canChange: true }}>
           <div style={FULL_BLEED_COLUMN}>
             <Navbar onLogout={onLogout} />
             <MailRotationBanner />
@@ -240,19 +240,19 @@ export default function Shell({ onLogout, onCloseReadOnly }: ShellProps) {
               {page}
             </main>
           </div>
-        </ProfileExclusionControlProvider>
+        </DesktopWriteProvider>
       </DashboardI18nProvider>
     );
   }
   return (
     <DashboardI18nProvider>
-      <ProfileExclusionControlProvider value={{ canChange: true }}>
+      <DesktopWriteProvider value={{ canChange: true }}>
         <div style={{ position: "relative", zIndex: 1 }}>
         <Navbar onLogout={onLogout} />
           <MailRotationBanner />
           <MainChrome>{page}</MainChrome>
         </div>
-      </ProfileExclusionControlProvider>
+      </DesktopWriteProvider>
     </DashboardI18nProvider>
   );
 }

@@ -36,6 +36,15 @@ export const T = {
     hu: "Új direktíva… (pl. Karbantartó mód: nincs új pozíció, önéletrajz csak 90+)",
     pt: "Nova diretiva… (ex. Modo manutenção: parar novas posições, CV só 90+)",
   },
+  desktopOnly: {
+    it: "Gli ordini permanenti si scrivono dall'app desktop: qui li vedi.",
+    en: "Standing orders are written from the desktop app: here you can see them.",
+    es: "Las órdenes permanentes se escriben desde la app de escritorio: aquí las ves.",
+    fr: "Les ordres permanents s'écrivent depuis l'application de bureau : ici tu les vois.",
+    de: "Dauerhafte Anweisungen schreibst du in der Desktop-App: hier siehst du sie.",
+    hu: "Az állandó utasításokat az asztali alkalmazásból írod: itt csak látod őket.",
+    pt: "As ordens permanentes escrevem-se na app de ambiente de trabalho: aqui só as vês.",
+  },
   add: {
     it: "Aggiungi",
     en: "Add",

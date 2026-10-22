@@ -9,7 +9,7 @@
 import { useEffect, useState } from "react";
 import { useLocale } from "@/lib/use-locale";
 import { isActingReason } from "@/lib/feedback-reasons";
-import { useProfileExclusionControl } from "@/lib/profile-exclusion-control";
+import { useDesktopWrite } from "@/lib/desktop-write";
 import { REASON_LABELS } from "./[id]/exclusion-reasons";
 
 const T: Record<
@@ -99,7 +99,7 @@ export default function ActiveExclusions() {
   const locale = useLocale();
   const t = T[locale] ?? T.en;
   const labels = REASON_LABELS[locale] ?? REASON_LABELS.en;
-  const { canChange } = useProfileExclusionControl();
+  const { canChange } = useDesktopWrite();
   const [accepted, setAccepted] = useState<Decision[]>([]);
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState(false);

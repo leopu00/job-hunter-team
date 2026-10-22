@@ -31,4 +31,18 @@ describe("routes that reach requireLocalWrite in the desktop", () => {
     );
     expect(reaching).toEqual(["team/send"]);
   });
+
+  it("the desktop's own writes pass requireDesktopWrite: only the standing orders of the captain", async () => {
+    const routes = new Set<string>();
+    for (const file of files(src)) {
+      for (const m of readFileSync(file, "utf-8").matchAll(/from "@\/app\/api\/([^"]+)\/route"/g)) routes.add(m[1]);
+    }
+    const reaching = [...routes].filter((r) =>
+      readFileSync(join(repo, "web/app/api", r, "route.ts"), "utf-8").includes("requireDesktopWrite"),
+    );
+    expect(reaching).toEqual(["team-directives"]);
+    const { requireDesktopWrite, requireLocalWrite } = await import("./auth");
+    expect(await requireDesktopWrite()).toBeNull();
+    expect((await requireLocalWrite())?.status).toBe(403);
+  });
 });

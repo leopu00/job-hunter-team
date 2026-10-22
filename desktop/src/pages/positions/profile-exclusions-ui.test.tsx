@@ -1,7 +1,7 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import type { ReactElement } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { ProfileExclusionControlProvider } from "@/lib/profile-exclusion-control";
+import { DesktopWriteProvider } from "@/lib/desktop-write";
 import ActiveExclusions from "@/app/(protected)/positions/ActiveExclusions";
 import ExclusionProposalCard from "@/app/(protected)/positions/ExclusionProposalCard";
 
@@ -45,7 +45,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-const asDesktop = (ui: ReactElement) => <ProfileExclusionControlProvider value={{ canChange: true }}>{ui}</ProfileExclusionControlProvider>;
+const asDesktop = (ui: ReactElement) => <DesktopWriteProvider value={{ canChange: true }}>{ui}</DesktopWriteProvider>;
 
 describe("the proposal to exclude a kind of position", () => {
   it("on the website is shown and not decided: no button, and it says where", async () => {

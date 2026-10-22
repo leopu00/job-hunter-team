@@ -13,7 +13,7 @@
 import { useEffect, useState } from "react";
 import { useLocale } from "@/lib/use-locale";
 import { isActingReason } from "@/lib/feedback-reasons";
-import { useProfileExclusionControl } from "@/lib/profile-exclusion-control";
+import { useDesktopWrite } from "@/lib/desktop-write";
 import {
   visibleProposals,
   type ExclusionDecision,
@@ -127,7 +127,7 @@ type FeedbackRow = {
 export default function ExclusionProposalCard() {
   const locale = useLocale();
   const t = T[locale] ?? T.en;
-  const { canChange } = useProfileExclusionControl();
+  const { canChange } = useDesktopWrite();
   const labels = REASON_LABELS[locale] ?? REASON_LABELS.en;
   const [proposals, setProposals] = useState<ExclusionProposal[]>([]);
   const [saved, setSaved] = useState(false);

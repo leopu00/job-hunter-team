@@ -6,7 +6,10 @@ import { join } from "node:path";
 
 const state = vi.hoisted(() => ({ dbPath: "" }));
 
-vi.mock("@/lib/auth", () => ({ requireAuth: vi.fn(async () => null) }));
+vi.mock("@/lib/auth", () => ({
+  requireAuth: vi.fn(async () => null),
+  requireDesktopWrite: vi.fn(async () => null),
+}));
 vi.mock("@/lib/deploy-mode", () => ({ isCloudDeploy: () => false }));
 vi.mock("@/lib/jht-paths", () => ({
   get JHT_DB_PATH() {

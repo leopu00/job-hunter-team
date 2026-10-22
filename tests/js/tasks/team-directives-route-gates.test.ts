@@ -6,7 +6,7 @@ const root = resolve(__dirname, "../../..");
 const read = (path: string) => readFileSync(resolve(root, path), "utf8");
 
 describe("team directive route deployment and identity gates", () => {
-  it("mounts the writable panel on the web team page", () => {
+  it("mounts the panel on the web team page, writable only where the desktop says so", () => {
     const page = read("web/app/(protected)/team/page.tsx");
     expect(page).toContain("<DirectivesPanel />");
     expect(page).not.toContain("<DirectivesPanel readOnly />");
