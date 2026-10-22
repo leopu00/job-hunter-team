@@ -13,8 +13,8 @@ import type { Locale } from "@/i18n/config";
 import { WEB_ACTION_LOG_TEXT } from "@/lib/web-action-log.i18n";
 
 /**
- * The closed vocabulary of actions the log names (the table's own CHECK). A row with another code, from a
- * later migration, is kept as «other action».
+ * The vocabulary of actions the log names: the rows of web_door.vocab that the migrations insert (098 had them
+ * in a CHECK, 099 made them data). A row with another code, from a later migration, is kept as «other action».
  */
 export const WEB_ACTION_CODES = [
   "team.start",
@@ -23,6 +23,7 @@ export const WEB_ACTION_CODES = [
   "team.emergency_stop",
   "position.apply_authorize",
   "position.apply_revoke",
+  "settings.update",
 ] as const;
 export type WebActionCode = (typeof WEB_ACTION_CODES)[number];
 
@@ -63,6 +64,8 @@ export type WebActionRow = {
   /** The code as the log wrote it: a known one or not. */
   action: string;
   target: string | null;
+  /** The settings a settings action changed, by key, in the order the vocabulary knows them. */
+  settings: WebActionSetting[];
   summary: string;
   level: WebActionLevel | null;
   status: WebActionStatus | null;
@@ -126,6 +129,17 @@ function paramsTarget(params: unknown): string | null {
   );
 }
 
+/** The settings keys the site may change (migration 100), in the order they are named. */
+export const WEB_ACTION_SETTINGS = ["working_hours", "role_models"] as const;
+export type WebActionSetting = (typeof WEB_ACTION_SETTINGS)[number];
+
+function paramsSettings(params: unknown): WebActionSetting[] {
+  if (!params || typeof params !== "object" || Array.isArray(params)) return [];
+  return WEB_ACTION_SETTINGS.filter((key) =>
+    Object.prototype.hasOwnProperty.call(params, key),
+  );
+}
+
 /** One row of the table, or null when it has no id, no action or no time (it cannot be placed in a list). */
 export function parseWebActionRow(raw: unknown): WebActionRow | null {
   if (!raw || typeof raw !== "object") return null;
@@ -146,6 +160,7 @@ export function parseWebActionRow(raw: unknown): WebActionRow | null {
     id,
     action,
     target: paramsTarget(row.params),
+    settings: paramsSettings(row.params),
     summary: cleanLogText(row.summary, SUMMARY_MAX),
     level: level(row.level),
     status,
@@ -177,8 +192,9 @@ export function actionTitle(row: WebActionRow, locale: Locale): string {
 }
 
 /**
- * What names the thing an action is about: for a team action the agent or the whole team (its summary is a
- * machine phrase, never shown); for an application the summary is the position («title @ company»).
+ * What names the thing an action is about: for a team action the agent or the whole team, for a settings
+ * action what it changed, in the person's language (the summary of both is a machine phrase in English,
+ * never shown); for an application the summary is the position («title @ company»).
  */
 export function actionSubject(
   row: WebActionRow,
@@ -188,6 +204,11 @@ export function actionSubject(
   if (row.action.startsWith("team.")) {
     if (!row.target) return null;
     return row.target.toLowerCase() === "all" ? text.targetAll : row.target;
+  }
+  if (row.action.startsWith("settings.")) {
+    return row.settings.length
+      ? row.settings.map((key) => text.setting[key]).join(", ")
+      : null;
   }
   return row.summary || null;
 }
