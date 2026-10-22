@@ -1349,6 +1349,8 @@ mod tests {
         }
     }
 
+    // The preamble runs on the VPS (a POSIX shell) and the test drives it with `sh` and a mode bit.
+    #[cfg(unix)]
     #[test]
     fn the_remote_preamble_tells_a_wrapper_without_the_chat_marker_by_name_and_never_by_the_scripts_exit() {
         use std::os::unix::fs::PermissionsExt;
