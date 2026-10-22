@@ -193,7 +193,7 @@ CONFIRMATION_MARKERS = (
     "thanks for reaching out",
 )
 # Only words that name a finished submission: "thanks", "danke", "merci" are
-# ordinary path words on a company site (review R3, HQ-BACKEND). The flow
+# ordinary path words on a company site (review R3). The flow
 # still requires a changed URL and no submit on the page.
 CONFIRMATION_URL_MARKERS = ("confirmation", "confirmed", "success", "submitted", "thank-you", "thank_you")
 # Phrases of a form that is still there: next to one, a marker is page copy
@@ -526,7 +526,7 @@ def contact_application_topic(form: Mapping[str, Any]) -> tuple[Mapping[str, Any
     if contact_message_id(form) is None:
         # Without the one field that carries the letter the contact form is not
         # the application: nothing would say who applies and why (review of
-        # fb4d15b76, HQ-FULLSTACK-2: two unnamed notes boxes went out empty).
+        # fb4d15b76: two unnamed notes boxes went out empty).
         return None
     found = []
     for question in questions:
@@ -553,7 +553,7 @@ def contact_message_id(form: Mapping[str, Any]) -> str | None:
     """The one textarea of a contact form that carries the letter.
 
     The only textarea; with several, the one labelled as the message.  Any
-    other textarea is an ordinary question (review m2, HQ-FULLSTACK-2).
+    other textarea is an ordinary question (review m2).
     """
     areas = [q for q in form.get("questions") or [] if q.get("type") == "textarea"]
     if len(areas) == 1:

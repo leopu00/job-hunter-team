@@ -1,6 +1,6 @@
 // Registro delle schermate della guida.
 //
-// Gli id sono quelli del contratto di HQ-DOCS
+// Gli id sono quelli del contratto del team docs
 // (`docs/internal/2026-08-07-setup-guide-content-contract.md`): `G00`,
 // `S01`–`S17`, `W01`–`W04`. Adottarli alla radice, invece di mappare due
 // nomenclature, fa sì che i file consegnati dai collaudatori si aggancino
@@ -51,7 +51,7 @@ const SCREEN_LIST: GuideScreen[] = [
     },
     assets: {},
     nativeSurface:
-      "Superficie nativa: l'indice dei capitoli e il selettore OS sono dal vivo in cima alla pagina. HQ-DOCS ha cancellato la richiesta PNG il 7 agosto 2026 — niente screenshot della pagina dentro sé stessa e niente duplicato mobile. Nessuna ripresa da fare per E2E.",
+      "Superficie nativa: l'indice dei capitoli e il selettore OS sono dal vivo in cima alla pagina. Il team docs ha cancellato la richiesta PNG il 7 agosto 2026 — niente screenshot della pagina dentro sé stessa e niente duplicato mobile. Nessuna ripresa da fare per E2E.",
   },
   {
     id: "S01-prerequisites",
@@ -75,7 +75,7 @@ const SCREEN_LIST: GuideScreen[] = [
     },
     assets: {},
     nativeSurface:
-      "Superficie nativa: la scheda è `RequirementsCard`, costruita nella pagina. HQ-DOCS ha cancellato la richiesta PNG il 7 agosto 2026 — resta la fase, non l'immagine. Nessuna ripresa da fare per E2E.",
+      "Superficie nativa: la scheda è `RequirementsCard`, costruita nella pagina. Il team docs ha cancellato la richiesta PNG il 7 agosto 2026 — resta la fase, non l'immagine. Nessuna ripresa da fare per E2E.",
   },
   {
     id: "S02-docker-download",

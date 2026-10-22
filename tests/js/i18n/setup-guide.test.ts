@@ -2,7 +2,7 @@
  * Rete di sicurezza della guida di setup.
  *
  * La guida è fatta di dati: capitoli, fasi e un registro di schermate, con
- * gli id del contratto di HQ-DOCS. I modi in cui si rompe sono tutti
+ * gli id del contratto del team docs. I modi in cui si rompe sono tutti
  * silenziosi — una fase che punta a una schermata inesistente non mostra
  * nulla, una traduzione mancante mostra la chiave, un file rinominato
  * lascia un rettangolo vuoto. Il type-check prende solo le sette lingue; il
@@ -151,7 +151,7 @@ describe("guida di setup — struttura", () => {
         c.phases.flatMap((p) => screensOf(p).map((s) => s.screenId)),
       ),
     );
-    // Fanno eccezione le superfici native (`G00`, `S01`): HQ-DOCS ha
+    // Fanno eccezione le superfici native (`G00`, `S01`): il team docs ha
     // cancellato la loro richiesta PNG, ma l'id logico resta per l'audit.
     const orphans = Object.keys(SCREENS).filter(
       (id) => !used.has(id) && !SCREENS[id].nativeSurface,
@@ -304,7 +304,7 @@ describe("guida di setup — schermate", () => {
   });
 });
 
-describe("guida di setup — contratto di HQ-DOCS", () => {
+describe("guida di setup — contratto del team docs", () => {
   it("i requisiti non dichiarano un minimo di disco in nessuna lingua", () => {
     // Regola dell'operatore: se un numero non è stato misurato, non si
     // scrive. Il minimo di disco non è mai stato misurato, e la frase che

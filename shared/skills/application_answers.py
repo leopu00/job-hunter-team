@@ -545,7 +545,7 @@ def _open_requests(conn: sqlite3.Connection) -> list[tuple]:
     ).fetchall()
 
 
-# ── The LinkedIn verification code (HQ-BACKEND-2's linkedin_apply) ───────────
+# ── The LinkedIn verification code (the backend team's linkedin_apply) ───────────
 #
 # Not an answer to a form: never saved, never an authorisation. The code never
 # touches jobs.db either — pending_user_messages is pushed to the cloud on every

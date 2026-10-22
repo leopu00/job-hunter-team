@@ -1,4 +1,4 @@
-"""Red probes from HQ-BACKEND's review of apply_generic.py / closer_notices.py (6ccf8543a). Synthetic only."""
+"""Red probes from the backend review of apply_generic.py / closer_notices.py (6ccf8543a). Synthetic only."""
 import sys
 from pathlib import Path
 

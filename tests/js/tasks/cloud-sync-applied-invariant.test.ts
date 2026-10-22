@@ -635,7 +635,7 @@ describe("push sync di una candidatura", () => {
   });
 
   /**
-   * La causa che teneva ferma la coda OGGI, misurata da HQ-VPS sulla macchina
+   * La causa che teneva ferma la coda OGGI, misurata dal team VPS sulla macchina
    * e riprodotta qui: `chat_ts` è `double precision` e PostgREST legge con
    * `extra_float_digits = 0`, quindi il cloud rende quindici cifre
    * significative. `1786999449.694782` torna `1786999449.69478`, e non è lo
@@ -726,7 +726,7 @@ describe("push sync di una candidatura", () => {
   });
 
   /**
-   * L'indizio di HQ-VPS, chiuso per misura: il cloud ha 11 righe in più del
+   * L'indizio del team VPS, chiuso per misura: il cloud ha 11 righe in più del
    * box, nate sul web. Se il server emettesse ricevute anche per quelle, il
    * multiset non combacerebbe MAI — sarebbe un difetto diverso, con un fix
    * diverso. Non è così: la rilettura filtra sui `legacy_id` che il client ha

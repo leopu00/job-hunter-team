@@ -21,7 +21,7 @@ This suite holds:
      carry the same base CSS and margins, and the margins match the gate's;
   3. the image bakes pandoc + wkhtmltopdf and fails the build on cv_pdf_render;
   4. the CLOSER skill names `cv_pdf_layout_bad` and `cv_pdf_check_unavailable`
-     in every language (the send-code hook is HQ-BACKEND's and HQ-BACKEND-2's).
+     in every language (the send-code hook belongs to the backend team).
 """
 
 from __future__ import annotations

@@ -14,7 +14,7 @@ export const SOCIAL_PROFILES: readonly SocialProfile[] = [
   },
   {
     network: "tiktok",
-    // Handle confermato da HQ-SOCIAL sullo screenshot del profilo (2026-08-10):
+    // Handle confermato dal team social sullo screenshot del profilo (2026-08-10):
     // un HTTP 302 non prova nulla, TikTok lo restituisce anche per un handle
     // inventato. Il glifo è locale, quindi accendere il flag non fa partire
     // richieste verso TikTok da parte di chi visita il sito.

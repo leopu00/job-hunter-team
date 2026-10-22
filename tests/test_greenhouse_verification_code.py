@@ -291,7 +291,7 @@ def test_the_code_is_read_only_when_the_email_names_exactly_one(text, code):
 
 
 def test_the_real_bridge_hands_an_eight_character_code_to_the_flow(page, tmp_path, cv_path, db):
-    """HQ-BACKEND's resolve_login_code (alnum8): the user replies to the request with the code."""
+    """The backend team's resolve_login_code (alnum8): the user replies to the request with the code."""
     page.set_content(code_page())
 
     def notifier(*, position_id, message, source_id, payload):

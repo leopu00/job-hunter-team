@@ -601,7 +601,7 @@ def test_recipe_contract_matches_the_other_recipes():
 # languages: test_closer_wiring.py::test_la_skill_apply_flow_nomina_ogni_motivo_di_blocco.
 
 
-# ── review R3 (HQ-BACKEND): a confirmation is proved, not read off the page ─
+# ── review R3: a confirmation is proved, not read off the page ─
 
 
 class _TextPage:

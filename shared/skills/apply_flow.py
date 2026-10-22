@@ -2636,7 +2636,7 @@ class GreenhouseRecipe:
         ):
             # A required consent or survey control outside the questions: the
             # browser would refuse the click and nothing would be sent (the
-            # same hole HQ-FULLSTACK-2 found in the Lever recipe).
+            # same hole a fullstack developer found in the Lever recipe).
             raise BlockedHuman(
                 "required_field_unanswered",
                 "A required Greenhouse control outside the application questions is empty or invalid",
@@ -3254,7 +3254,7 @@ def _recipe_class(platform: str):
         module = _linkedin_module()
         return module.LinkedInEasyApplyRecipe if module is not None else None
     if platform == "generic":
-        # A company's own careers form (HQ-FULLSTACK-2's apply_generic).
+        # A company's own careers form (the fullstack team's apply_generic).
         module = _optional_module("apply_generic")
         return module.GenericRecipe if module is not None else None
     if platform == "workday":
