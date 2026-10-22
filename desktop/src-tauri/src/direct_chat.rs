@@ -130,6 +130,21 @@ pub(crate) struct DirectChatStatus {
     code: Option<&'static str>,
 }
 
+/// The codes a system line of the chat may carry. The page has a sentence for each, in every language.
+const CHAT_SYSTEM_CODES: [&str; 1] = ["mail_not_taken"];
+
+fn closed_code<'de, D>(deserializer: D) -> Result<Option<String>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    // Anything that is not one of the closed codes (a number, a name every object has) is no code.
+    let raw = Option::<Value>::deserialize(deserializer)?;
+    Ok(match raw {
+        Some(Value::String(code)) if CHAT_SYSTEM_CODES.contains(&code.as_str()) => Some(code),
+        _ => None,
+    })
+}
+
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct DirectChatMessage {
@@ -138,7 +153,8 @@ pub(crate) struct DirectChatMessage {
     text: String,
     at: f64,
     /// A closed code on a system line (`mail_not_taken`): the page says it in the person's language.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    /// Only a code of the closed list passes; anything else is dropped here, whatever the host wrote.
+    #[serde(default, deserialize_with = "closed_code", skip_serializing_if = "Option::is_none")]
     code: Option<String>,
 }
 
@@ -1445,12 +1461,18 @@ mod tests {
 
     #[test]
     fn a_system_line_keeps_its_closed_code_and_a_receipt_keeps_its_state() {
+        use super::DirectChatReceipt;
         let page: DirectChatPage = serde_json::from_str(
             r#"{"messages":[{"id":"s1","role":"system","text":"x","at":1.0,"code":"mail_not_taken"},{"id":"a1","role":"agent","text":"ok","at":2.0}],"cursor":"3"}"#,
         )
         .unwrap();
         assert_eq!(page.messages[0].code.as_deref(), Some("mail_not_taken"));
         assert_eq!(page.messages[1].code, None);
+        let forged: DirectChatPage = serde_json::from_str(
+            r#"{"messages":[{"id":"1","role":"system","text":"a","at":1.0,"code":"__proto__"},{"id":"2","role":"system","text":"b","at":2.0,"code":"constructor"},{"id":"3","role":"system","text":"c","at":3.0,"code":7},{"id":"4","role":"system","text":"d","at":4.0,"code":"unknown_code"}]}"#,
+        )
+        .unwrap();
+        assert!(forged.messages.iter().all(|message| message.code.is_none()));
         let shown = serde_json::to_value(&page).unwrap();
         assert_eq!(shown["messages"][0]["code"], "mail_not_taken");
         assert!(shown["messages"][1].get("code").is_none());

@@ -1,7 +1,7 @@
 import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import DirectChatScreen, { newLineAt } from "./DirectChatScreen";
+import DirectChatScreen, { newLineAt, systemLineText } from "./DirectChatScreen";
 import type {
   VoiceInputBridge,
   VoiceInputSnapshot,
@@ -381,6 +381,32 @@ describe("DirectChatScreen: where the text goes, and when it is delivered", () =
     const line = (await screen.findByText(sentence)).closest("article")!;
     expect(line).toHaveTextContent(sentence);
     if (locale !== "en") expect(screen.queryByText("The agent has not taken your message yet.")).toBeNull();
+  });
+
+  it.each(["__proto__", "constructor", "toString", "hasOwnProperty", "valueOf"])(
+    "a system line whose code is the name of something every object has (%s) keeps its words and the chat stays alive",
+    async (code) => {
+      viewport(1280, 800);
+      const { mock } = client();
+      mock.read = vi.fn(async (): Promise<DirectChatPage> => ({
+        messages: [
+          { id: "s1", role: "system", text: "Words from the backend", at: 1, code },
+          { id: "a1", role: "agent", text: "Still here", at: 2 },
+        ],
+      }));
+      render(<DirectChatScreen client={mock} />);
+      expect(await screen.findByText("Words from the backend")).toBeInTheDocument();
+      expect(screen.getByText("Still here")).toBeInTheDocument();
+    },
+  );
+
+  it("systemLineText finds only the catalog's own entries", () => {
+    const codes = { mail_not_taken: "Frase" };
+    const line = (code?: string) => ({ id: "s", role: "system" as const, text: "Testo", at: 1, code });
+    expect(systemLineText(line("mail_not_taken"), codes)).toBe("Frase");
+    for (const code of ["__proto__", "constructor", "toString", "x"]) expect(systemLineText(line(code), codes)).toBe("Testo");
+    expect(systemLineText(line(undefined), codes)).toBe("Testo");
+    expect(systemLineText({ ...line("mail_not_taken"), role: "agent" }, codes)).toBe("Testo");
   });
 
   it("a system line with a code the app does not know, or a code on another role, keeps the words it came with", async () => {

@@ -55,6 +55,19 @@ export function newLineAt(value: string, start: number, end: number): { value: s
   return { value: `${value.slice(0, start)}\n${value.slice(end)}`, cursor: start + 1 };
 }
 
+/**
+ * What a system line says: its closed code in the person's language when the catalog has that code as
+ * its OWN entry, else the words it came with. `codes` is a plain object, so a code that is the name of
+ * something every object has (`__proto__`, `constructor`) must not find it.
+ */
+export function systemLineText(message: DirectChatMessage, codes: Record<string, string>): string {
+  const code = message.role === "system" ? message.code : undefined;
+  if (code && Object.prototype.hasOwnProperty.call(codes, code) && typeof codes[code] === "string") {
+    return codes[code];
+  }
+  return message.text;
+}
+
 function clientMessageId(): string {
   return globalThis.crypto?.randomUUID?.() ?? `local-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
@@ -394,7 +407,7 @@ export default function DirectChatScreen({
                 <div className="mb-1 text-[8px] font-semibold uppercase tracking-wider text-[var(--color-dim)]">
                   {message.role === "user" ? t.you : message.role === "system" ? t.system : selected.label}
                 </div>
-                {message.role === "system" && message.code && t.codes[message.code] ? t.codes[message.code] : message.text}
+                {systemLineText(message, t.codes)}
                 {message.role === "user" && (message.id === inFlight || queued.has(message.id) || delivered.has(message.id)) && (
                   <div
                     data-testid={
