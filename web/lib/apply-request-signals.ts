@@ -80,40 +80,40 @@ export async function getWebSendsRecent(): Promise<string[]> {
   const since = Date.now() - 2 * 24 * 3600 * 1000;
   try {
     const supabase = await createClient();
-    // The positions the website authorised, with their application, newest first. The rest (sent, by an
-    // automated channel, in the last two days) is decided here: a filter on a column of the embedded
-    // application would be a dotted column name the schema census cannot read.
-    const { data, error } = await supabase
+    // Two plain reads, so the window is exactly right and the schema census reads every column:
+    // 1. the user's automated sends of the last two days (a cancelled application does not count);
+    const sent = await supabase
+      .from("applications")
+      .select("position_id, applied_at")
+      .eq("applied", true)
+      .in("applied_via", [...AUTOMATED_APPLIED_VIA])
+      .is("deleted_at", null)
+      .gte("applied_at", new Date(since).toISOString())
+      .limit(100);
+    if (sent.error || !Array.isArray(sent.data)) return [];
+    const recent = (sent.data as Array<Record<string, unknown>>).filter(
+      (row) =>
+        typeof row.position_id === "string" &&
+        typeof row.applied_at === "string" &&
+        !Number.isNaN(Date.parse(row.applied_at)),
+    );
+    if (recent.length === 0) return [];
+    // 2. which of those positions the website authorised: the only ones that use its cap. Asked by id, so
+    //    it does not depend on how many positions the user has or on which was touched last.
+    const ids = [...new Set(recent.map((row) => row.position_id as string))];
+    const web = await supabase
       .from("positions")
-      .select(
-        "apply_requested_by, applications(applied, applied_at, applied_via)",
-      )
+      .select("id")
+      .in("id", ids)
       .eq("apply_requested_by", WEB_ORIGIN)
-      .order("updated_at", { ascending: false })
-      .limit(200);
-    if (error || !Array.isArray(data)) return [];
-    const sends: string[] = [];
-    for (const row of data as Array<{ applications?: unknown }>) {
-      const apps = Array.isArray(row.applications)
-        ? row.applications
-        : row.applications
-          ? [row.applications]
-          : [];
-      for (const app of apps as Array<Record<string, unknown>>) {
-        if (app.applied !== true) continue;
-        if (
-          typeof app.applied_via !== "string" ||
-          !AUTOMATED_APPLIED_VIA.includes(app.applied_via)
-        ) {
-          continue;
-        }
-        if (typeof app.applied_at !== "string") continue;
-        const at = Date.parse(app.applied_at);
-        if (Number.isNaN(at) || at < since) continue;
-        sends.push(app.applied_at);
-      }
-    }
-    return sends;
+      .limit(ids.length);
+    if (web.error || !Array.isArray(web.data)) return [];
+    const byWeb = new Set(
+      (web.data as Array<Record<string, unknown>>).map((row) => row.id),
+    );
+    return recent
+      .filter((row) => byWeb.has(row.position_id))
+      .map((row) => row.applied_at as string);
   } catch {
     return [];
   }

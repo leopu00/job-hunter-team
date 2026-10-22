@@ -28,7 +28,7 @@ const world = {
   local: false,
   workspace: null as string | null,
   supabase: true,
-  rows: [] as Array<{ applied_at?: unknown }>,
+  tables: {} as Record<string, Array<Record<string, unknown>>>,
   error: null as unknown,
   chain: [] as Array<[string, unknown[]]>,
 };
@@ -42,18 +42,44 @@ vi.mock("@/lib/workspace", () => ({
   },
 }));
 vi.mock("@/lib/supabase/server", () => ({
-  createClient: async () => {
-    const q: Record<string, unknown> = {};
-    for (const name of ["from", "select", "eq", "order", "limit"]) {
-      q[name] = (...args: unknown[]) => {
-        world.chain.push([name, args]);
-        return name === "limit"
-          ? Promise.resolve({ data: world.rows, error: world.error })
-          : q;
-      };
-    }
-    return q;
-  },
+  createClient: async () => ({
+    from(table: string) {
+      const filters: Array<[string, string, unknown]> = [];
+      const q: Record<string, unknown> = {};
+      world.chain.push(["from", [table]]);
+      for (const name of ["select", "eq", "in", "is", "gte", "limit"]) {
+        q[name] = (...args: unknown[]) => {
+          world.chain.push([name, args]);
+          if (
+            name === "eq" ||
+            name === "in" ||
+            name === "is" ||
+            name === "gte"
+          ) {
+            filters.push([name, String(args[0]), args[1]]);
+          }
+          if (name !== "limit") return q;
+          if (world.error)
+            return Promise.resolve({ data: null, error: world.error });
+          let rows = world.tables[table] ?? [];
+          for (const [kind, column, value] of filters) {
+            rows = rows.filter((row) => {
+              const cell = (row as Record<string, unknown>)[column];
+              if (kind === "eq") return cell === value;
+              if (kind === "in") return (value as unknown[]).includes(cell);
+              if (kind === "is") return (cell ?? null) === value;
+              return typeof cell === "string" && cell >= String(value); // gte on ISO instants
+            });
+          }
+          return Promise.resolve({
+            data: rows.slice(0, Number(args[0])),
+            error: null,
+          });
+        };
+      }
+      return q;
+    },
+  }),
 }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh() {} }) }));
 vi.mock("next/link", () => ({
@@ -300,48 +326,131 @@ describe("where the sends come from", () => {
     );
   });
 
-  it("on the cloud: the user's positions the website authorised, with their application; the rest is decided here", async () => {
-    world.local = false;
-    world.workspace = null;
-    world.chain = [];
+  describe("on the cloud: two plain reads", () => {
     const base = Date.now(); // one instant, so the same hour gives the same string everywhere
     const ago = (h: number) => new Date(base - h * 3600_000).toISOString();
-    const sent = (via: string, when: unknown, applied: unknown = true) => ({
-      applied,
-      applied_via: via,
+    const app = (
+      position: string,
+      when: unknown,
+      extra: Record<string, unknown> = {},
+    ) => ({
+      position_id: position,
+      applied: true,
+      applied_via: "agent_closer",
       applied_at: when,
+      deleted_at: null,
+      ...extra,
     });
-    world.rows = [
-      { applications: sent("agent_closer", ago(1)) }, // counts (one-to-one embed: an object)
-      { applications: [sent("agent_closer_email", ago(30))] }, // counts (a list)
-      { applications: sent("manual", ago(1)) }, // sent by the person
-      { applications: sent("agent_closer", ago(1), false) }, // not sent
-      { applications: sent("agent_closer", ago(24 * 5)) }, // too old
-      { applications: sent("agent_closer", 7) }, // not an instant
-      { applications: sent("agent_closer", "not a date") },
-      { applications: sent(7 as never, ago(1)) }, // not a channel
-      { applications: null }, // no application yet
-      {},
-    ];
-    world.error = null;
-    expect((await signals.getWebSendsRecent()).sort()).toEqual(
-      [ago(1), ago(30)].sort(),
-    );
-    expect(world.chain.map(([n]) => n)).toEqual([
-      "from",
-      "select",
-      "eq",
-      "order",
-      "limit",
-    ]);
-    const by = Object.fromEntries(world.chain.map(([n, a]) => [n, a]));
-    expect(by.from).toEqual(["positions"]);
-    expect(by.eq).toEqual(["apply_requested_by", "user_web"]);
-    expect(by.select[0]).toBe(
-      "apply_requested_by, applications(applied, applied_at, applied_via)",
-    );
-    // no dotted column name, which the schema census cannot read
-    expect(JSON.stringify(world.chain)).not.toMatch(/"[a-z_]+\.[a-z_]+"/);
+    const reset = () => {
+      world.local = false;
+      world.workspace = null;
+      world.chain = [];
+      world.error = null;
+      world.tables = {};
+    };
+
+    it("counts the automated sends of the last two days of positions the website authorised, and nothing else", async () => {
+      reset();
+      world.tables.applications = [
+        app("p1", ago(1)), // counts
+        app("p2", ago(30), { applied_via: "agent_closer_email" }), // counts: email is automated too
+        app("p3", ago(1), { applied_via: "manual" }), // sent by the person
+        app("p4", ago(1), { applied: false }), // not sent
+        app("p5", ago(24 * 5)), // too old
+        app("p6", ago(1)), // authorised from the desktop: its own cap
+        app("p7", 7), // not an instant
+        app("p8", "not a date"),
+        app("p1", ago(1), { deleted_at: ago(0.5) }), // cancelled after the send: not a send any more
+      ];
+      world.tables.positions = [
+        { id: "p1", apply_requested_by: "user_web" },
+        { id: "p2", apply_requested_by: "user_web" },
+        { id: "p3", apply_requested_by: "user_web" },
+        { id: "p4", apply_requested_by: "user_web" },
+        { id: "p5", apply_requested_by: "user_web" },
+        { id: "p6", apply_requested_by: "user_local" },
+        { id: "p7", apply_requested_by: "user_web" },
+        { id: "p8", apply_requested_by: "user_web" },
+      ];
+      expect((await signals.getWebSendsRecent()).sort()).toEqual(
+        [ago(1), ago(30)].sort(),
+      );
+      const names = world.chain.map(([n]) => n);
+      expect(names).toEqual([
+        "from",
+        "select",
+        "eq",
+        "in",
+        "is",
+        "gte",
+        "limit",
+        "from",
+        "select",
+        "in",
+        "eq",
+        "limit",
+      ]);
+      // no dotted column name, which the schema census cannot read
+      expect(JSON.stringify(world.chain)).not.toMatch(/"[a-z_]+\.[a-z_]+"/);
+    });
+
+    it("a cancelled application is not counted: the first read asks for the ones that are not deleted", async () => {
+      reset();
+      world.tables.applications = [
+        app("p1", ago(1), { deleted_at: ago(0.5) }),
+        app("p2", ago(2)),
+      ];
+      world.tables.positions = [
+        { id: "p1", apply_requested_by: "user_web" },
+        { id: "p2", apply_requested_by: "user_web" },
+      ];
+      expect(await signals.getWebSendsRecent()).toEqual([ago(2)]);
+      expect(
+        world.chain.some(
+          ([n, a]) => n === "is" && a[0] === "deleted_at" && a[1] === null,
+        ),
+      ).toBe(true);
+    });
+
+    it("does not depend on how many positions the user has or which was touched last: it asks by id", async () => {
+      reset();
+      // 201 positions authorised from the website; the recent send is on the one touched longest ago
+      world.tables.positions = Array.from({ length: 201 }, (_, i) => ({
+        id: `p${i}`,
+        apply_requested_by: "user_web",
+        updated_at: new Date(base - i * 1000).toISOString(),
+      }));
+      world.tables.applications = [app("p200", ago(1))];
+      expect(await signals.getWebSendsRecent()).toEqual([ago(1)]);
+      const ask = world.chain.filter(([n]) => n === "in").map(([, a]) => a);
+      expect(ask[1]).toEqual(["id", ["p200"]]);
+    });
+
+    it("asks only for what it needs: the channels, the window and a cap on the rows", async () => {
+      reset();
+      world.tables.applications = [app("p1", ago(1))];
+      world.tables.positions = [{ id: "p1", apply_requested_by: "user_web" }];
+      await signals.getWebSendsRecent();
+      const by = (n: string, i = 0) =>
+        world.chain.filter(([x]) => x === n).map(([, a]) => a)[i];
+      expect(by("eq", 0)).toEqual(["applied", true]);
+      expect(by("in", 0)).toEqual([
+        "applied_via",
+        [...cap.AUTOMATED_APPLIED_VIA],
+      ]);
+      expect(by("eq", 1)).toEqual(["apply_requested_by", "user_web"]);
+      const since = Date.parse(String(by("gte")[1]));
+      expect(base - since).toBeGreaterThan(47 * 3600_000);
+      expect(base - since).toBeLessThan(49 * 3600_000);
+      expect(Number(by("limit", 0)[0])).toBeLessThanOrEqual(100);
+    });
+
+    it("nothing sent means no second read", async () => {
+      reset();
+      world.tables.applications = [];
+      expect(await signals.getWebSendsRecent()).toEqual([]);
+      expect(world.chain.filter(([n]) => n === "from")).toHaveLength(1);
+    });
   });
 
   it("a failing read is no sends at all: the page says «authorised», never «queued for tomorrow»", async () => {
