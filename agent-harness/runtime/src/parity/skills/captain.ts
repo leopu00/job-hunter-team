@@ -16,6 +16,7 @@ import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync } from
 import { join } from "node:path";
 
 import { parseArgv, pyRepr } from "../../db/argv.ts";
+import { Fence } from "../../db/external-content.ts";
 import type { Database } from "../../db/jobs-db.ts";
 import { PY_SPACE_CLASS, pyStr } from "../../db/py-format.ts";
 import { refused, type ScriptResult } from "../../db/tools.ts";
@@ -267,7 +268,15 @@ export function forPrompt(text: unknown): string {
   return `${sanitized} ${NOTICE}`;
 }
 
-export function teamDirectives(db: () => Database, argv: string[]): ScriptResult {
+/** `MAX_PROMPT_BODY` of team_directives.py: the website's own limit for one directive. */
+export const MAX_DIRECTIVE_PROMPT_BODY = 2000;
+
+/**
+ * The board, read side. Every body is the user's text inside the user's fence (`fence_user_turn`,
+ * capped), whichever read: a directive can be written from the website, and past its route, so it
+ * reaches the agent as the user's chat turn does, never as a line of the system. One fence per call.
+ */
+export function teamDirectives(db: () => Database, argv: string[], fence: Fence = new Fence()): ScriptResult {
   const subs = ["active", "list", "add", "edit", "archive", "show"];
   const sub = argv[0];
   const usage = (message: string): ScriptResult => ({ stdout: "", stderr: `usage: team_directives.py [-h] ...\nteam_directives.py: error: ${message}\n`, exitCode: 2 });
@@ -276,7 +285,8 @@ export function teamDirectives(db: () => Database, argv: string[]): ScriptResult
   // The board is the person's standing orders: the team reads it, the person writes it.
   if (["add", "edit", "archive"].includes(sub)) return refused("team_directives", sub, ["active", "list", "show"]);
   type Row = { id: number; kind: string; body: string; status: string; created_by: string; created_at: string; updated_at: string };
-  const fmt = (d: Row, indent = "  ", safe = false) => `${indent}#${d.id} [${d.kind}] ${safe ? forPrompt(d.body) : d.body}`;
+  const fmt = (d: Row, indent = "  ", safe = false) =>
+    `${indent}#${d.id} [${d.kind}] ${fence.userTurn(safe ? forPrompt(d.body) : d.body, MAX_DIRECTIVE_PROMPT_BODY)}`;
   const active = () => db().prepare("SELECT * FROM team_directives WHERE status = 'active' ORDER BY sort_order ASC, created_at ASC").all() as Row[];
   if (sub === "active") {
     parseArgv({ prog: "team_directives.py active", mainProg: "team_directives.py" }, argv.slice(1));

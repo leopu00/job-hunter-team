@@ -24,17 +24,31 @@ import argparse
 import sys
 
 from _db import get_db, ensure_schema
+from external_content import fence_user_turn
 from provider_directive_policy import for_prompt, is_provider_instruction
 
 KINDS = ("order", "strategy", "formation", "note")
 AUTHORS = ("user", "capitano", "assistente")
 
+# A directive read by an agent is the user's text: it arrives inside the same
+# fence as the user's chat turn, never as a line of the system. The board can
+# be written from the website and, through PostgREST, past its route: the
+# fence and the cap stand where the agent reads it, whoever wrote the row.
+# The cap is the website's own limit for one directive.
+MAX_PROMPT_BODY = 2000
+
 
 def _fmt(d, indent="  ", prompt_safe: bool = False) -> str:
+    """One directive on one line, its body inside the user's fence.
+
+    Every read is fenced and capped (`active`, `list`, `show`): an agent may
+    run any of them. `prompt_safe` also drops a provider or model choice
+    (RULE-T19): it is the board as the Capitano loads it at every wake.
+    """
     body = d["body"]
     if prompt_safe:
         body, _ignored = for_prompt(body)
-    return f"{indent}#{d['id']} [{d['kind']}] {body}"
+    return f"{indent}#{d['id']} [{d['kind']}] {fence_user_turn(body, limit=MAX_PROMPT_BODY)}"
 
 
 def _active_rows(conn):

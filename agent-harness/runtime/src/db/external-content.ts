@@ -151,4 +151,53 @@ export class Fence {
     const header = label ? `⟦EXT·${this.nonce}⟧[${label}]` : `⟦EXT·${this.nonce}⟧`;
     return `${header}${text}⟦/EXT·${this.nonce}⟧`;
   }
+
+  /**
+   * `fence_user_turn`: the user's own text, inside the user's fence, on one line. With `limit` the
+   * cleaned text is cut to that many characters (code points, as Python counts them) with «…»,
+   * inside the fence, so the closing marker is always there.
+   */
+  userTurn(text: unknown, limit?: number): string {
+    let safe = sanitizeUserText(text);
+    const chars = Array.from(safe);
+    if (limit !== undefined && chars.length > limit) {
+      safe = `${chars.slice(0, Math.max(0, limit - 1)).join("").trimEnd()}…`;
+    }
+    return [`⟦UTENTE·${this.nonce}⟧`, safe, `⟦/UTENTE·${this.nonce}⟧`].filter(Boolean).join(" ");
+  }
+}
+
+export const ESCAPED_USER_OPEN = "⟦MARCATORE_UTENTE_ESCAPED⟧";
+export const ESCAPED_USER_CLOSE = "⟦/MARCATORE_UTENTE_ESCAPED⟧";
+
+/** `LINE_BREAK_MARK`: a line break inside the user's text, made visible. */
+export const LINE_BREAK_MARK = "⏎";
+
+/** `_LINE_BREAKS`. */
+const LINE_BREAKS = /\r\n|[\n\r\v\f\u001c-\u001e\u0085\u2028\u2029]/u;
+
+/** `_USER_MARKER_SHAPE`: the user's marker needs its middle dot, so «[utente 1]» in a sentence is left alone. */
+const USER_MARKER_SHAPE = new RegExp(
+  MARKER_BRACKETS.map(
+    ([open, close]) =>
+      `${escapeRe(open)}${PY_SPACE}*\\/?${PY_SPACE}*${word("UTENTE")}${PY_SPACE}*·[^${escapeRe(close[0]!)}]*${escapeRe(close)}`,
+  ).join("|"),
+  "gu",
+);
+
+/** `flatten_user_turn`: one line, each line break a visible `⏎`, commanding invisibles removed. */
+export function flattenUserTurn(text: unknown): string {
+  return pyText(text)
+    .split(LINE_BREAKS)
+    .map(flattenToOneLine)
+    .filter(Boolean)
+    .join(` ${LINE_BREAK_MARK} `);
+}
+
+/** `sanitize_user_text`: half of the fence. It cleans, it does not say whose the text is. */
+export function sanitizeUserText(text: unknown): string {
+  const flat = flattenUserTurn(text).replace(USER_MARKER_SHAPE, (match) =>
+    match.includes("/") ? ESCAPED_USER_CLOSE : ESCAPED_USER_OPEN,
+  );
+  return defangMarkers(flat);
 }
