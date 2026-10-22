@@ -19,8 +19,11 @@ import { join } from "node:path";
 import { createDoneStore } from "../../../cli/src/lib/team-command-guard.js";
 import {
   PENDING_COMMANDS_PATH,
+  TEAM_COMMANDS_SWITCH,
   commandFailure,
   createTeamCommandsExecutor,
+  createTeamCommandsLane,
+  teamCommandsEnabled,
 } from "../../../cli/src/lib/team-commands-poller.js";
 
 const OWNER = "11111111-1111-4111-8111-111111111111";
@@ -78,6 +81,8 @@ describe("the daemon's executor of the site's team commands", () => {
     return createTeamCommandsExecutor({
       config: CONFIG,
       haltGate: () => false,
+      // The box's consent, given here: the tests below are about what it does when on.
+      enabled: true,
       slowMs: 300_000,
       done: createDoneStore(join(dir, "done.json")),
       fetchFn,
@@ -116,6 +121,7 @@ describe("the daemon's executor of the site's team commands", () => {
     vi.spyOn(console, "error").mockImplementation(() => {});
   });
   afterEach(() => {
+    vi.unstubAllEnvs();
     vi.restoreAllMocks();
     rmSync(dir, { recursive: true, force: true });
   });
@@ -138,7 +144,7 @@ describe("the daemon's executor of the site's team commands", () => {
     subs[0].handler();
     await vi.waitFor(() => expect(patches).toHaveLength(3));
     await createTeamCommandsExecutor({
-      config: CONFIG, haltGate: () => false, slowMs: 300_000, fetchFn,
+      config: CONFIG, haltGate: () => false, slowMs: 300_000, fetchFn, enabled: true,
       done: createDoneStore(join(dir, "done.json")),
       exec: async () => { throw new Error("must not run"); },
       notice: async () => ({ notified: true }),
@@ -273,6 +279,95 @@ describe("the daemon's executor of the site's team commands", () => {
     await ex.run("realtime");
     expect(fetchFn).not.toHaveBeenCalled();
     expect(runs).toEqual([]);
+  });
+
+  describe("off by default: only the box's own switch turns it on", () => {
+    it("the switch is the box's variable, and only «1» turns it on", () => {
+      expect(TEAM_COMMANDS_SWITCH).toBe("JHT_TEAM_COMMANDS_FROM_SITE");
+      expect(teamCommandsEnabled({})).toBe(false);
+      for (const v of ["", "0", "true", "yes", "on", " 1", "1 "]) {
+        expect(teamCommandsEnabled({ [TEAM_COMMANDS_SWITCH]: v })).toBe(false);
+      }
+      expect(teamCommandsEnabled({ [TEAM_COMMANDS_SWITCH]: "1" })).toBe(true);
+    });
+
+    it("without the switch: no subscription, and a pending row is never read or run, by the event or the recovery round", async () => {
+      vi.stubEnv(TEAM_COMMANDS_SWITCH, "");
+      const ex = createTeamCommandsExecutor({
+        config: CONFIG,
+        haltGate: () => false,
+        slowMs: 300_000,
+        done: createDoneStore(join(dir, "done.json")),
+        fetchFn,
+        getClient: () => session(true),
+        exec: async (action: string, target: string) => {
+          runs.push([action, target]);
+          return { ok: true, exitCode: 0, stdout: "", stderr: "" };
+        },
+        notice: async (n: { code: string; key: string }) => {
+          notices.push(n);
+          return { notified: true };
+        },
+      } as never);
+      expect(ex.enabled).toBe(false);
+      ex.subscribe(rt);
+      expect(subs).toEqual([]);
+      pending = [row(), row({ action: "stop" })];
+      await ex.run("realtime");
+      await ex.run("fallback");
+      expect(fetchFn).not.toHaveBeenCalled();
+      expect(runs).toEqual([]);
+      expect(notices).toEqual([]);
+      expect(patches).toEqual([]);
+    });
+
+    it("the lane alone, without the switch, reads nothing", async () => {
+      vi.stubEnv(TEAM_COMMANDS_SWITCH, "0");
+      const lane = createTeamCommandsLane({ config: CONFIG, done: createDoneStore(join(dir, "done.json")), fetchFn } as never);
+      pending = [row()];
+      expect(await lane("realtime")).toEqual({ status: "off" });
+      expect(await lane("fallback")).toEqual({ status: "off" });
+      expect(fetchFn).not.toHaveBeenCalled();
+    });
+
+    it("with the switch at «1» on the box: today's behaviour, the row runs once", async () => {
+      vi.stubEnv(TEAM_COMMANDS_SWITCH, "1");
+      const ex = createTeamCommandsExecutor({
+        config: CONFIG,
+        haltGate: () => false,
+        slowMs: 300_000,
+        done: createDoneStore(join(dir, "done.json")),
+        fetchFn,
+        exec: async (action: string, target: string) => {
+          runs.push([action, target]);
+          return { ok: true, exitCode: 0, stdout: "", stderr: "" };
+        },
+        notice: async () => ({ notified: true }),
+      } as never);
+      expect(ex.enabled).toBe(true);
+      ex.subscribe(rt);
+      expect(subs.map((x) => x.opts.table)).toEqual(["team_commands"]);
+      pending = [row()];
+      subs[0].handler();
+      await vi.waitFor(() => expect(runs).toEqual([["start", "all"]]));
+    });
+
+    it("the daemon says it once per start, in both loops, and the emergency stop does not depend on it", () => {
+      const src = readFileSync(join(__dirname, "../../../cli/src/commands/cloud.js"), "utf8");
+      const loop = src.slice(src.indexOf("async function runRealtimeLoop"));
+      const polling = src.slice(src.indexOf("const teamCommandsSlow = createLane("), src.indexOf("async function runRealtimeLoop"));
+      expect(loop).toMatch(/if \(!teamCommands\.enabled\) logTeamCommandsOff\(\);/);
+      expect(polling).toMatch(/if \(!teamCommandsEnabled\(\)\) logTeamCommandsOff\(\);/);
+      expect(src.match(/logTeamCommandsOff\(\);/g)).toHaveLength(2);
+      // the line is outside any loop: written where the executor is built, once
+      expect(polling.indexOf("logTeamCommandsOff();")).toBeLessThan(polling.indexOf("while (running)"));
+      // the emergency stop stays on team_state, on the event and in the slow round, with no switch
+      const update = loop.slice(loop.indexOf("rt.subscribe('team-state'"), loop.indexOf("rt.subscribe('tickets'"));
+      expect(update).toMatch(/void runEmergencyStop\('realtime', payload\?\.new \?\? null\);/);
+      const fallback = loop.slice(loop.indexOf("const pollFallback"), loop.indexOf("const realtimeStatus"));
+      expect(fallback).toMatch(/await runEmergencyStop\('fallback', state\);/);
+      expect(src).not.toMatch(/teamCommandsEnabled\(\)[^\n]*runEmergencyStop|runEmergencyStop[^\n]*teamCommandsEnabled/);
+    });
   });
 
   it("the daemon builds it: the realtime loop subscribes it and runs it in the slow round, the loop without realtime too", () => {

@@ -68,6 +68,19 @@ export const TEAM_COMMANDS_DONE_FILE = join(JHT_HOME, 'team-commands-done.json')
 const DONE_FILE = TEAM_COMMANDS_DONE_FILE;
 export const PENDING_COMMANDS_PATH = '/api/cloud-sync/team-commands?status=pending&limit=20';
 
+/**
+ * The box's own consent to run the start, stop and restart the site asks: OFF
+ * unless this variable is "1" on the box. Read once, when the daemon starts;
+ * nothing from the cloud can turn it on. Until the site's door is closed on the
+ * cloud (migration 098) a session can write team_commands straight, so a box
+ * runs them only after the operator says so. The emergency stop does not
+ * depend on it: it travels on team_state.
+ */
+export const TEAM_COMMANDS_SWITCH = 'JHT_TEAM_COMMANDS_FROM_SITE';
+export function teamCommandsEnabled(env = process.env) {
+  return env?.[TEAM_COMMANDS_SWITCH] === '1';
+}
+
 // W7: the notice out of band for each action, by the command's action.
 const NOTICE_CODES = {
   start: 'team_started_from_web',
@@ -284,7 +297,10 @@ export function commandFailure(exitCode) {
  */
 export function createTeamCommandsLane({
   config, done, exec, notice, hasPending = null, fetchFn = fetch, slowMs = 5 * 60_000, now = Date.now,
+  enabled = teamCommandsEnabled(),
 }) {
+  // Off: nothing is read and nothing runs, whoever wakes the lane.
+  if (!enabled) return async function off() { return { status: 'off' }; };
   let lastSiteRead = -Infinity;
   return async function wake(tag = 'fallback') {
     if (!config?.enabled) return { status: 'disabled' };
@@ -337,8 +353,11 @@ export function createTeamCommandsExecutor({
   notice = noticeWebAction,
   fetchFn = fetch,
   now = Date.now,
+  enabled = teamCommandsEnabled(),
   onError = (e) => log('error', 'lane.failed', { err: e.message }),
 }) {
+  // Off: no subscription to team_commands, no recovery round, nothing run.
+  if (!enabled) return { enabled: false, run: async () => false, subscribe: () => {} };
   const lane = createTeamCommandsLane({
     config,
     done,
@@ -347,6 +366,7 @@ export function createTeamCommandsExecutor({
     fetchFn,
     slowMs,
     now,
+    enabled: true,
     hasPending: async () => {
       const client = getClient();
       if (!client) return null;
@@ -364,10 +384,14 @@ export function createTeamCommandsExecutor({
     { table: 'team_commands', event: 'INSERT' },
     () => { void run('realtime'); },
   );
-  return { run, subscribe };
+  return { enabled: true, run, subscribe };
 }
 
 export async function runTeamCommandsPoller() {
+  if (!teamCommandsEnabled()) {
+    log('warn', 'startup.skipped', { reason: `team commands from the site are off on this box (${TEAM_COMMANDS_SWITCH})` });
+    process.exit(0);
+  }
   const config = await loadCloudConfig();
   if (!config?.enabled) {
     log('warn', 'startup.skipped', { reason: 'cloud sync not enabled' });

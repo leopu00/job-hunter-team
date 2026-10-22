@@ -62,7 +62,14 @@ import {
   createTeamCommandsExecutor,
   createTeamCommandsLane as createLane,
   TEAM_COMMANDS_DONE_FILE,
+  TEAM_COMMANDS_SWITCH,
+  teamCommandsEnabled,
 } from '../lib/team-commands-poller.js';
+
+/** One line, once per daemon start: the site's team commands are off on this box, and how to turn them on. */
+function logTeamCommandsOff() {
+  console.log(pc.dim(`  team commands from the site: off on this box (${TEAM_COMMANDS_SWITCH}=1 turns them on; the emergency stop is not affected)`));
+}
 import { createDoneStore } from '../lib/team-command-guard.js';
 import {
   bootstrapLimits, decideBootstrapPush, nextBootstrapState,
@@ -4337,6 +4344,7 @@ async function handleDaemon(options) {
     notice: noticeWebAction,
     slowMs: Math.max(60, parseInt(process.env.JHT_PARACHUTE_SEC || '300', 10) || 300) * 1000,
   });
+  if (!teamCommandsEnabled()) logTeamCommandsOff();
 
   const chatCycleState = { lastPulledRequestedAt: null };
   let stoppedPollAttempt = 0;
@@ -4627,6 +4635,7 @@ async function runRealtimeLoop({ config, isRunning }) {
     getClient: () => rt?.client ?? null,
     onError: (e) => console.error(pc.yellow(`  team-commands error: ${e.message}`)),
   });
+  if (!teamCommands.enabled) logTeamCommandsOff();
 
   const scheduleFallback = (delayMs) => {
     if (!isRunning()) return;
