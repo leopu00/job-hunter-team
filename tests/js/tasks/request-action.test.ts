@@ -424,6 +424,78 @@ describe("the user and the database", () => {
     ]);
   });
 
+  it("parameters the route knows from the address are the route's: the body cannot add or change them", async () => {
+    const spec = {
+      action: "position.apply_authorize",
+      level: "L3" as const,
+      params: { legacy_id: 7 },
+    };
+    world.answer = () => awaiting({ level: "L3" });
+    expect((await requestAction(post({}), spec)).status).toBe(200);
+    expect(world.rpcs[0].args).toMatchObject({
+      p_params: { legacy_id: 7 },
+      p_confirm_id: null,
+      p_route_level: "L3",
+    });
+    for (const body of [
+      { params: { legacy_id: 8 } },
+      { params: { extra: 1 } },
+    ]) {
+      world.rpcs = [];
+      expect((await requestAction(post(body), spec)).status).toBe(400);
+      expect(world.rpcs).toEqual([]);
+    }
+    world.rpcs = [];
+    world.answer = () => queued({ level: "L3" });
+    expect((await requestAction(post({ confirmId: ROW }), spec)).status).toBe(
+      200,
+    );
+    expect(world.rpcs[0].args).toMatchObject({
+      p_params: {},
+      p_confirm_id: ROW,
+    });
+    world.rpcs = [];
+    expect(
+      (
+        await requestAction(post({}), {
+          ...spec,
+          params: { text: "x".repeat(4001) },
+        })
+      ).status,
+    ).toBe(502);
+    expect(world.rpcs).toEqual([]);
+  });
+
+  it("a route that withdraws with DELETE says so: DELETE is its method and POST is not, the origin checks are the same", async () => {
+    const spec = {
+      action: "position.apply_revoke",
+      level: "L1" as const,
+      method: "DELETE" as const,
+      params: { legacy_id: 7 },
+    };
+    world.answer = () => queued({ level: "L1" });
+    expect((await requestAction(post({}, {}, "DELETE"), spec)).status).toBe(
+      200,
+    );
+    expect((await requestAction(post({}, {}, "POST"), spec)).status).toBe(405);
+    const strictDelete = { ...spec, level: "L2" as const };
+    expect(
+      (await requestAction(post({}, {}, "DELETE"), strictDelete)).status,
+    ).toBe(200);
+    expect(
+      (await requestAction(post({}, { origin: "" }, "DELETE"), strictDelete))
+        .status,
+    ).toBe(403);
+    expect(
+      (
+        await requestAction(
+          post({}, { "sec-fetch-site": "cross-site" }, "DELETE"),
+          strictDelete,
+        )
+      ).status,
+    ).toBe(403);
+  });
+
   it("a client cannot choose the action: it is the route's", async () => {
     await requestAction(post({ params: { action: "team.stop" } }), L2);
     expect(world.rpcs[0].args.p_action).toBe("team.restart");

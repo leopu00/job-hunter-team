@@ -17,8 +17,14 @@ import {
 // route without a guard, or a new write method on a listed route, is red until someone decides.
 const API = resolve(__dirname, "../../../web/app/api");
 
-/** The write handlers that keep their guard in a local helper (none today). */
-const HELPERS: Record<string, Partial<Record<WriteMethod, string>>> = {};
+/** The write handlers that keep their guard (or their requestAction gate) in a local helper. */
+const HELPERS: Record<string, Partial<Record<WriteMethod, string>>> = {
+  // both handlers delegate to one helper, which opens with the gate
+  "positions/[legacyId]/apply-request": {
+    POST: "handleToggle",
+    DELETE: "handleToggle",
+  },
+};
 
 type Level = "L1" | "L2" | "L3";
 
@@ -59,7 +65,8 @@ const EXCEPTIONS: Record<string, Exception> = {
   "account/delete": {
     methods: ["POST"],
     kind: "own-account",
-    reason: "deletes the signed-in user's own account, after the exact email is typed; never another user's",
+    reason:
+      "deletes the signed-in user's own account, after the exact email is typed; never another user's",
   },
   "ai-assistant": {
     methods: ["POST"],
@@ -69,12 +76,14 @@ const EXCEPTIONS: Record<string, Exception> = {
   "cloud-sync/chat": {
     methods: ["POST"],
     kind: "device-channel",
-    reason: "the box's chat channel, authenticated with its sync token like the push (see the note in the file)",
+    reason:
+      "the box's chat channel, authenticated with its sync token like the push (see the note in the file)",
   },
   "cloud-sync/device-confirm": {
     methods: ["POST"],
     kind: "device-pairing",
-    reason: "the signed-in user approves the code of a box they are pairing to their own account",
+    reason:
+      "the signed-in user approves the code of a box they are pairing to their own account",
   },
   "cloud-sync/device-init": {
     methods: ["POST"],
@@ -119,7 +128,8 @@ const EXCEPTIONS: Record<string, Exception> = {
   "cloud-sync/team-commands/[id]": {
     methods: ["PATCH"],
     kind: "device-channel",
-    reason: "the box reports the outcome of a command it ran, with its sync token",
+    reason:
+      "the box reports the outcome of a command it ran, with its sync token",
   },
   "cloud-sync/team-directives": {
     methods: ["POST"],
@@ -134,12 +144,14 @@ const EXCEPTIONS: Record<string, Exception> = {
   "cloud-sync/tokens": {
     methods: ["POST", "DELETE"],
     kind: "own-account",
-    reason: "the signed-in user mints and revokes the sync tokens of their own account",
+    reason:
+      "the signed-in user mints and revokes the sync tokens of their own account",
   },
   demo: {
     methods: ["POST", "DELETE"],
     kind: "public",
-    reason: "turns the static demo dataset on and off with a cookie of the caller; cloud only, writes no data",
+    reason:
+      "turns the static demo dataset on and off with a cookie of the caller; cloud only, writes no data",
   },
   feedback: {
     methods: ["POST"],
@@ -149,35 +161,41 @@ const EXCEPTIONS: Record<string, Exception> = {
   i18n: {
     methods: ["POST"],
     kind: "public",
-    reason: "the landing stores the visitor's language in a cookie; open on purpose (see the note in the file)",
+    reason:
+      "the landing stores the visitor's language in a cookie; open on purpose (see the note in the file)",
   },
   "local/sync": {
     methods: ["POST"],
     kind: "cloud-refuses",
-    reason: "does nothing without a local jobs.db, which a cloud deploy does not have",
+    reason:
+      "does nothing without a local jobs.db, which a cloud deploy does not have",
   },
   messages: {
     methods: ["PATCH"],
     kind: "device-channel",
-    reason: "only the box (a sync token) updates the status of a message; a session gets 403",
+    reason:
+      "only the box (a sync token) updates the status of a message; a session gets 403",
   },
   "pending-messages": {
     methods: ["POST"],
     kind: "request-lane",
     level: "L1",
-    reason: "the chat written from the site, also from a phone: confirmed by the operator (22/10/2026); the message travels to the box as an async request",
+    reason:
+      "the chat written from the site, also from a phone: confirmed by the operator (22/10/2026); the message travels to the box as an async request",
   },
   "pending-messages/[id]/ack": {
     methods: ["POST"],
     kind: "request-lane",
     level: "L1",
-    reason: "the chat written from the site, confirmed by the operator (22/10/2026): the user acknowledges a message of the team, an async request",
+    reason:
+      "the chat written from the site, confirmed by the operator (22/10/2026): the user acknowledges a message of the team, an async request",
   },
   "pending-messages/[id]/reply": {
     methods: ["POST"],
     kind: "request-lane",
     level: "L1",
-    reason: "the chat written from the site, confirmed by the operator (22/10/2026): the user's answer to a question of the team",
+    reason:
+      "the chat written from the site, confirmed by the operator (22/10/2026): the user's answer to a question of the team",
   },
   "positions/[legacyId]/feedback": {
     methods: ["POST"],
@@ -195,26 +213,30 @@ const EXCEPTIONS: Record<string, Exception> = {
     methods: ["POST", "DELETE"],
     kind: "request-lane",
     level: "L3",
-    todo: "phase 5: request_action with confirmation, daily cap and undo; open today, as it was before the desktop-only guard was tried",
-    reason: "the authorisation to apply: the Closer then acts toward a company, so it is the highest-impact write of the site",
+    gate: "requestAction",
+    reason:
+      "the authorisation to apply: the Closer then acts toward a company, so it is the highest-impact write of the site",
   },
   "positions/[legacyId]/mark-applied": {
     methods: ["POST", "DELETE"],
     kind: "request-lane",
     level: "L1",
-    reason: "the user's own 'I applied' mark and its undo, on their own row; back on the site by the operator's decision (22/10/2026)",
+    reason:
+      "the user's own 'I applied' mark and its undo, on their own row; back on the site by the operator's decision (22/10/2026)",
   },
   "positions/[legacyId]/outcome": {
     methods: ["POST", "DELETE"],
     kind: "request-lane",
     level: "L1",
-    reason: "the user's own outcome of an application (rejected, interview) and its undo; it only feeds statistics",
+    reason:
+      "the user's own outcome of an application (rejected, interview) and its undo; it only feeds statistics",
   },
   "positions/[legacyId]/user-note": {
     methods: ["POST", "DELETE"],
     kind: "request-lane",
     level: "L1",
-    reason: "the user's private note on a position, on their own row; no agent reads it",
+    reason:
+      "the user's private note on a position, on their own row; no agent reads it",
   },
   "positions/[legacyId]/recheck-request": {
     methods: ["POST", "DELETE"],
@@ -232,7 +254,8 @@ const EXCEPTIONS: Record<string, Exception> = {
     methods: ["POST", "DELETE"],
     kind: "request-lane",
     level: "L1",
-    reason: "the user's exclusion of a position, an async request the box applies",
+    reason:
+      "the user's exclusion of a position, an async request the box applies",
   },
   "positions/[legacyId]/write-request": {
     methods: ["POST", "DELETE"],
@@ -244,29 +267,34 @@ const EXCEPTIONS: Record<string, Exception> = {
     methods: ["POST"],
     kind: "request-lane",
     level: "L1",
-    reason: "the seen mark of a position: insert only, on the signed-in user's own row",
+    reason:
+      "the seen mark of a position: insert only, on the signed-in user's own row",
   },
   preferences: {
     methods: ["PATCH", "DELETE"],
     kind: "public",
-    reason: "chrome preferences (theme, language, sounds); open on purpose (see the note in the file)",
+    reason:
+      "chrome preferences (theme, language, sounds); open on purpose (see the note in the file)",
   },
   "profile-exclusions": {
     methods: ["POST"],
     kind: "request-lane",
     level: "L1",
-    reason: "the user's decision on a proposal to exclude a kind of position, on their own row; session only, never a device token",
+    reason:
+      "the user's decision on a proposal to exclude a kind of position, on their own row; session only, never a device token",
   },
   "profile/files/request": {
     methods: ["POST"],
     kind: "request-lane",
     level: "L1",
-    reason: "the user asks the team for a file of the profile, an async request",
+    reason:
+      "the user asks the team for a file of the profile, an async request",
   },
   "team-state": {
     methods: ["PATCH"],
     kind: "device-channel",
-    reason: "the box writes the observed state with its sync token; a session writes only the non-control fields",
+    reason:
+      "the box writes the observed state with its sync token; a session writes only the non-control fields",
   },
   "team-state/claim": {
     methods: ["POST"],
@@ -278,7 +306,8 @@ const EXCEPTIONS: Record<string, Exception> = {
     kind: "request-lane",
     level: "L2",
     todo: "phase 2: request_action (today a session may only set should_run to false, never start)",
-    reason: "the one declared exception to the control of the team: a stop, never a start",
+    reason:
+      "the one declared exception to the control of the team: a stop, never a start",
   },
   "team-state/sync-observed": {
     methods: ["POST"],
@@ -288,7 +317,8 @@ const EXCEPTIONS: Record<string, Exception> = {
   "team/command": {
     methods: ["POST"],
     kind: "cloud-refuses",
-    reason: "the dispatch to the team bus answers 403 on the cloud deploy (enqueueIfRemote), before any insert",
+    reason:
+      "the dispatch to the team bus answers 403 on the cloud deploy (enqueueIfRemote), before any insert",
   },
 };
 
@@ -296,7 +326,9 @@ const census = censusOf(API, (route) => HELPERS[route] ?? {});
 const open = census
   .map((r) => ({
     route: r.route,
-    methods: r.handlers.filter((h) => h.state !== "guard-first").map((h) => h.method),
+    methods: r.handlers
+      .filter((h) => h.state !== "guard-first")
+      .map((h) => h.method),
   }))
   .filter((r) => r.methods.length > 0);
 
@@ -310,7 +342,9 @@ describe("the write routes of web/app/api", () => {
     const unlisted = open
       .map((r) => ({
         ...r,
-        missing: r.methods.filter((m) => !EXCEPTIONS[r.route]?.methods.includes(m)),
+        missing: r.methods.filter(
+          (m) => !EXCEPTIONS[r.route]?.methods.includes(m),
+        ),
       }))
       .filter((r) => r.missing.length > 0)
       .map((r) => `${r.route}: ${r.missing.join(", ")}`);
@@ -323,7 +357,9 @@ describe("the write routes of web/app/api", () => {
 
   it("a guard that comes after the body, the database or a process does not count", () => {
     const late = census.flatMap((r) =>
-      r.handlers.filter((h) => h.state === "guard-late").map((h) => `${r.route} ${h.method}`),
+      r.handlers
+        .filter((h) => h.state === "guard-late")
+        .map((h) => `${r.route} ${h.method}`),
     );
     expect(late).toEqual([]);
   });
@@ -333,37 +369,60 @@ describe("the write routes of web/app/api", () => {
     const stale: string[] = [];
     for (const [route, exception] of Object.entries(EXCEPTIONS)) {
       const actual = byRoute.get(route);
-      if (!actual) stale.push(`${route}: no unguarded write handler any more (guarded, removed or moved): drop the entry`);
-      else if ([...actual].sort().join() !== [...exception.methods].sort().join())
-        stale.push(`${route}: the entry lists ${exception.methods.join(",")} and the route has ${actual.join(",")}`);
-      if (exception.reason.trim().length < 20) stale.push(`${route}: the reason is missing or too short`);
+      if (!actual)
+        stale.push(
+          `${route}: no unguarded write handler any more (guarded, removed or moved): drop the entry`,
+        );
+      else if (
+        [...actual].sort().join() !== [...exception.methods].sort().join()
+      )
+        stale.push(
+          `${route}: the entry lists ${exception.methods.join(",")} and the route has ${actual.join(",")}`,
+        );
+      if (exception.reason.trim().length < 20)
+        stale.push(`${route}: the reason is missing or too short`);
     }
     expect(stale).toEqual([]);
   });
 });
 
 describe("the levels of the request lane (web capace)", () => {
-  const lane = Object.entries(EXCEPTIONS).filter(([, e]) => e.kind === "request-lane");
+  const lane = Object.entries(EXCEPTIONS).filter(
+    ([, e]) => e.kind === "request-lane",
+  );
 
   it("every request-lane exception says its level: L1, L2 or L3", () => {
     const wrong = lane
       .filter(([, e]) => !["L1", "L2", "L3"].includes(e.level ?? ""))
       .map(([route]) => route);
-    expect(wrong, "a request-lane route needs level L1 (own data), L2 (commands the team) or L3 (acts outside)").toEqual([]);
+    expect(
+      wrong,
+      "a request-lane route needs level L1 (own data), L2 (commands the team) or L3 (acts outside)",
+    ).toEqual([]);
   });
 
   it("a level only belongs to the request lane", () => {
     const stray = Object.entries(EXCEPTIONS)
-      .filter(([, e]) => e.kind !== "request-lane" && (e.level || e.gate || e.todo))
+      .filter(
+        ([, e]) => e.kind !== "request-lane" && (e.level || e.gate || e.todo),
+      )
       .map(([route]) => route);
     expect(stray).toEqual([]);
   });
 
   it("L2 and L3 go through requestAction, or name the phase that adds it", () => {
     const open = lane
-      .filter(([, e]) => e.level !== "L1" && e.gate !== "requestAction" && !(e.todo ?? "").trim())
+      .filter(
+        ([, e]) =>
+          e.level !== "L1" &&
+          e.gate !== "requestAction" &&
+          !(e.todo ?? "").trim(),
+      )
       .map(([route]) => route);
-    expect(open, "an L2/L3 route needs gate: requestAction (checked) or a todo naming the phase").toEqual([]);
+    expect(
+      open,
+      "an L2/L3 route needs gate: requestAction (checked) or a todo naming the phase",
+    ).toEqual([]);
   });
 
   it("a route with a requestAction gate calls it before any write", () => {
@@ -372,13 +431,19 @@ describe("the levels of the request lane (web capace)", () => {
       if (e.gate !== "requestAction") continue;
       const source = readFileSync(resolve(API, route, "route.ts"), "utf8");
       const states = writeHandlers(source, HELPERS[route] ?? {}, ACTION_GATES);
-      for (const h of states) if (e.methods.includes(h.method) && h.state !== "guard-first") late.push(`${route} ${h.method}`);
+      for (const h of states)
+        if (e.methods.includes(h.method) && h.state !== "guard-first")
+          late.push(`${route} ${h.method}`);
     }
     expect(late).toEqual([]);
   });
 
   it("an L1 route never carries a todo", () => {
-    expect(lane.filter(([, e]) => e.level === "L1" && e.todo).map(([route]) => route)).toEqual([]);
+    expect(
+      lane
+        .filter(([, e]) => e.level === "L1" && e.todo)
+        .map(([route]) => route),
+    ).toEqual([]);
   });
 });
 
@@ -390,17 +455,31 @@ ${order}
     }`;
 
   it("the call before the body and the database passes", () => {
-    const source = route(`      const r = await requestAction({ action: "x" });\n      const body = await req.json();`);
-    expect(writeHandlers(source, {}, ACTION_GATES)).toEqual([{ method: "POST", state: "guard-first" }]);
+    const source = route(
+      `      const r = await requestAction({ action: "x" });\n      const body = await req.json();`,
+    );
+    expect(writeHandlers(source, {}, ACTION_GATES)).toEqual([
+      { method: "POST", state: "guard-first" },
+    ]);
   });
 
   it("the call after the body is late, and a route without it is open", () => {
-    expect(writeHandlers(route(`      const body = await req.json();\n      await requestAction({});`), {}, ACTION_GATES)).toEqual([
-      { method: "POST", state: "guard-late" },
-    ]);
-    expect(writeHandlers(route(`      const body = await req.json();`), {}, ACTION_GATES)).toEqual([
-      { method: "POST", state: "unguarded" },
-    ]);
+    expect(
+      writeHandlers(
+        route(
+          `      const body = await req.json();\n      await requestAction({});`,
+        ),
+        {},
+        ACTION_GATES,
+      ),
+    ).toEqual([{ method: "POST", state: "guard-late" }]);
+    expect(
+      writeHandlers(
+        route(`      const body = await req.json();`),
+        {},
+        ACTION_GATES,
+      ),
+    ).toEqual([{ method: "POST", state: "unguarded" }]);
   });
 });
 
@@ -414,7 +493,9 @@ describe("the census catches what it is for", () => {
     }`;
 
   it("a handler that starts with the guard passes", () => {
-    expect(writeHandlers(guarded)).toEqual([{ method: "POST", state: "guard-first" }]);
+    expect(writeHandlers(guarded)).toEqual([
+      { method: "POST", state: "guard-first" },
+    ]);
   });
 
   it("a new route without a guard is red", () => {
@@ -440,7 +521,9 @@ describe("the census catches what it is for", () => {
         if (ro) return ro;
         return Response.json({ body });
       }`;
-    expect(writeHandlers(route)).toEqual([{ method: "PATCH", state: "guard-late" }]);
+    expect(writeHandlers(route)).toEqual([
+      { method: "PATCH", state: "guard-late" },
+    ]);
   });
 
   it("the session check and a static reply may come before the guard", () => {
@@ -454,7 +537,9 @@ describe("the census catches what it is for", () => {
         if (ro) return ro;
         return NextResponse.json(await req.json());
       }`;
-    expect(writeHandlers(route)).toEqual([{ method: "POST", state: "guard-first" }]);
+    expect(writeHandlers(route)).toEqual([
+      { method: "POST", state: "guard-first" },
+    ]);
   });
 
   it("a guard that stands in another handler of the file does not cover this one", () => {
@@ -475,7 +560,9 @@ describe("the census catches what it is for", () => {
   });
 
   it("a handler built as a constant is found, and is open until listed", () => {
-    expect(writeHandlers("export const PUT = handler;")).toEqual([{ method: "PUT", state: "unguarded" }]);
+    expect(writeHandlers("export const PUT = handler;")).toEqual([
+      { method: "PUT", state: "unguarded" },
+    ]);
   });
 
   it("the guard kept in a local helper is looked for in the helper", () => {
@@ -488,7 +575,11 @@ describe("the census catches what it is for", () => {
       export async function POST(req) {
         return handle(req);
       }`;
-    expect(writeHandlers(route, { POST: "handle" })).toEqual([{ method: "POST", state: "guard-first" }]);
-    expect(writeHandlers(route)).toEqual([{ method: "POST", state: "unguarded" }]);
+    expect(writeHandlers(route, { POST: "handle" })).toEqual([
+      { method: "POST", state: "guard-first" },
+    ]);
+    expect(writeHandlers(route)).toEqual([
+      { method: "POST", state: "unguarded" },
+    ]);
   });
 });

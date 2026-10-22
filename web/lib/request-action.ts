@@ -36,6 +36,17 @@ export interface ActionSpec {
   action: string;
   /** Il livello che la route dichiara; se il database ne risponde uno più alto, non passa niente. */
   level: ActionLevel;
+  /**
+   * I parametri che la ROUTE conosce dall'indirizzo (l'id della posizione): sono suoi, non del corpo.
+   * Se ci sono, il corpo non può portarne altri (`params` vuoto o assente) e la prima chiamata usa
+   * questi. Alla conferma non servono: il database ha quelli salvati.
+   */
+  params?: Record<string, unknown>;
+  /**
+   * Il metodo HTTP che la route accetta per questa azione; di base POST. Una route che ritira con DELETE
+   * lo dice qui: il resto dei controlli d'origine vale come per un POST.
+   */
+  method?: "POST" | "DELETE";
 }
 
 const LEVEL_RANK: Record<ActionLevel, number> = { L1: 1, L2: 2, L3: 3 };
@@ -229,9 +240,10 @@ export async function requestAction(
 
   // 1. L'ingresso: l'origine prima di tutto, poi il resto. Niente di quanto segue vede una richiesta rifiutata.
   const contentType = req.headers.get("content-type");
+  if (req.method.toUpperCase() !== (spec.method ?? "POST")) {
+    return refuse("method_not_allowed");
+  }
   if (spec.level === "L1") {
-    if (req.method.toUpperCase() !== "POST")
-      return refuse("method_not_allowed");
     const lenient = shouldRejectBrowserMutation({
       method: req.method,
       origin: req.headers.get("origin"),
@@ -248,7 +260,7 @@ export async function requestAction(
     }
   } else {
     const refusal = strictMutationRefusal({
-      method: req.method,
+      method: "POST", // la regola stretta è quella del POST, anche per la route che ritira con DELETE
       origin: req.headers.get("origin"),
       referer: req.headers.get("referer"),
       secFetchSite: req.headers.get("sec-fetch-site"),
@@ -273,6 +285,11 @@ export async function requestAction(
     return refuse("payload_too_large");
   const body = parseBody(text);
   if (!body) return refuse("invalid_request");
+  if (spec.params !== undefined) {
+    if (!isBoundedJson(spec.params)) return refuse("action_failed");
+    if (Object.keys(body.params).length > 0) return refuse("invalid_request");
+    if (body.confirmId === null) body.params = spec.params;
+  }
 
   // 3. L'utente: la sessione dei cookie. Chi decide se è RECENTE, e di chi è, è il database.
   if (!isSupabaseConfigured) return refuse("unavailable");
