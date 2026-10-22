@@ -9,8 +9,12 @@
  *
  * Storage: jht.config.json via /api/team/working-hours. Lo stesso file
  * che legge il CLI (`jht wh`) e il pacing-bridge.
+ *
+ * Modalità cloud (prop `cloud`): il sito non scrive il config. Mostra
+ * l'ultimo orario chiesto dal sito e salva con `cloud.save`, che lo chiede
+ * alla porta; il computer lo applica (pagina /settings/team).
  */
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useToast } from "@/app/components/Toast";
 import { useLocale } from "@/lib/use-locale";
 import { attemptWrite, writeFailureReason } from "@/lib/write-failure";
@@ -261,8 +265,25 @@ function computeWeeklyHours(cfg: WorkingHoursConfig | null): number {
 
 /* ─── Component ─────────────────────────────────────────────────────── */
 
-export default function WorkHoursPicker() {
+export type WorkHoursCloud = {
+  /** L'ultimo orario chiesto dal sito: undefined = mai chiesto, null = 24/7. */
+  workingHours: WorkingHoursConfig | null | undefined;
+  /** Chiede l'orario alla porta: null se passata, altrimenti la frase del rifiuto. */
+  save: (next: WorkingHoursConfig | null) => Promise<string | null>;
+  /** La frase quando la porta prende la richiesta: è chiesta, non ancora applicata. */
+  sentMessage: string;
+};
+
+export default function WorkHoursPicker({
+  cloud,
+}: { cloud?: WorkHoursCloud } = {}) {
   const { toast } = useToast();
+  const cloudMode = cloud !== undefined;
+  const cloudHours = cloud?.workingHours;
+  const cloudSave = useRef(cloud?.save);
+  cloudSave.current = cloud?.save;
+  const cloudSent = useRef(cloud?.sentMessage);
+  cloudSent.current = cloud?.sentMessage;
   const locale = useLocale();
   const tr = makeT(T, locale);
   const [loading, setLoading] = useState(true);
@@ -279,6 +300,14 @@ export default function WorkHoursPicker() {
   const [editSched, setEditSched] = useState<DaySched[] | null>(null);
 
   const loadState = useCallback(async () => {
+    if (cloudMode) {
+      // Sul sito niente anteprima: il calcolo del ritmo vive sul computer.
+      setCfg(cloudHours ?? null);
+      setPreview(null);
+      setEditable(true);
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     try {
       const r = await fetch("/api/team/working-hours", { cache: "no-store" });
@@ -292,7 +321,7 @@ export default function WorkHoursPicker() {
       setLoading(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [toast, locale]);
+  }, [toast, locale, cloudMode, cloudHours]);
 
   useEffect(() => {
     loadState();
@@ -301,6 +330,20 @@ export default function WorkHoursPicker() {
   const save = useCallback(
     async (next: WorkingHoursConfig | null) => {
       setSaving(true);
+      if (cloudSave.current) {
+        // The hours change only when the door takes the request; a refusal
+        // keeps what was there and says why.
+        const refusal = await cloudSave.current(next);
+        if (refusal === null) {
+          setCfg(next);
+          setEditSched(null);
+          toast(cloudSent.current ?? tr("toast_saved"), "success");
+        } else {
+          toast(tr("toast_err").replace("{msg}", refusal), "error");
+        }
+        setSaving(false);
+        return;
+      }
       // The hours change only with the route's answer ({ saved: true }): a
       // refused or failed save keeps what was there and says why.
       const result = await attemptWrite(locale, "/api/team/working-hours", {
@@ -372,6 +415,10 @@ export default function WorkHoursPicker() {
   }
 
   const isCustom = preset === "custom" || editSched !== null;
+  // On the site, before any request from it, the computer's hours are not
+  // known here: no preset is shown as the current one, and no total.
+  const unknownHours =
+    cloudMode && cloudHours === undefined && editSched === null;
   const sched = editSched ?? schedFromConfig(cfg);
   const badDays = invalidDays(sched);
   const noDayOn = sched.every((s) => !s.on);
@@ -419,7 +466,9 @@ export default function WorkHoursPicker() {
           <p className="text-xs opacity-60 mt-1">{tr("wh_desc")}</p>
         </div>
         <div className="text-right">
-          <div className="text-2xl font-mono">{weeklyHours}h</div>
+          <div className="text-2xl font-mono">
+            {unknownHours ? "—" : `${weeklyHours}h`}
+          </div>
           <div className="text-xs opacity-60">{tr("per_week")}</div>
         </div>
       </div>
@@ -439,7 +488,7 @@ export default function WorkHoursPicker() {
             onClick={() => editable && applyPreset(k as PresetKey)}
             className={
               "px-3 py-1.5 rounded-md border text-sm transition " +
-              (preset === k && !editSched
+              (preset === k && !editSched && !unknownHours
                 ? "border-orange-500 bg-orange-500/10 text-orange-300"
                 : "border-[var(--color-border)] hover:border-orange-500/50")
             }

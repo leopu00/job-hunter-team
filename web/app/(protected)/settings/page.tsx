@@ -19,6 +19,7 @@ import { useLocale } from "@/lib/use-locale";
 import { useIsCloud } from "@/app/hooks/useIsCloud";
 import { makeT } from "@/lib/i18n-dict";
 import { T } from "./page.i18n";
+import { T as TEAM_T } from "./team/page.i18n";
 
 type NotifKey = "telegram" | "email" | "desktop";
 type Settings = {
@@ -157,6 +158,7 @@ export default function SettingsPage() {
   const { toast } = useToast();
   const locale = useLocale();
   const tr = makeT(T, locale);
+  const teamTr = makeT(TEAM_T, locale);
   // [JHT-DASHBOARD-SPLIT rivisto 20/07] La pagina non è più desktop-only:
   // sul cloud si riduce alle sole sezioni che lì funzionano davvero (tema,
   // client-side, + link a cloud-sync). Le tab di config locale (jht.config,
@@ -304,6 +306,35 @@ export default function SettingsPage() {
                 style={{ color: "var(--color-dim)" }}
               >
                 {tr("web_notifications_desc")}
+              </p>
+            </div>
+            <span className="text-[10px] font-semibold tracking-widest uppercase shrink-0 text-[var(--color-green)]">
+              {tr("open")}
+            </span>
+          </Link>
+
+          {/* Orari e modelli per ruolo: il sito li chiede alla porta, il
+              computer li applica (fase 6). */}
+          <Link
+            href="/settings/team"
+            className="flex items-center justify-between gap-4 px-4 py-3 rounded-lg no-underline transition-colors hover:border-[var(--color-border-glow)]"
+            style={{
+              border: "1px solid var(--color-border)",
+              background: "var(--color-card)",
+            }}
+          >
+            <div>
+              <p
+                className="m-0 text-[11px] font-semibold"
+                style={{ color: "var(--color-muted)" }}
+              >
+                {teamTr("title")}
+              </p>
+              <p
+                className="m-0 text-[10px]"
+                style={{ color: "var(--color-dim)" }}
+              >
+                {teamTr("card_desc")}
               </p>
             </div>
             <span className="text-[10px] font-semibold tracking-widest uppercase shrink-0 text-[var(--color-green)]">
