@@ -597,7 +597,7 @@ fn run_connection(
                 return Err(failure("existing_team_runtime_target_changed"));
             }
             let command = match (selected.as_ref(), remote_operation) {
-                (Some(target), RemoteOperation::Probe) => existing_team_runtime::command(&target.runtime, "docker inspect --type container --format '{{.State.Running}}' \"$JHT_CID\"").map_err(failure)?,
+                (Some(target), RemoteOperation::Probe) => existing_team_runtime::command(&target.runtime, "\"$JHT_ENGINE\" inspect --type container --format '{{.State.Running}}' \"$JHT_CID\"").map_err(failure)?,
                 (Some(target), RemoteOperation::Python) => existing_team_runtime::python_command(&target.runtime).map_err(failure)?,
                 (Some(target), RemoteOperation::Delivery(session)) => existing_team_runtime::delivery_command(&target.runtime, session).map_err(failure)?,
                 (Some(target), RemoteOperation::Chat(operation)) => existing_team_runtime::chat_command(&target.runtime, &operation).map_err(failure)?,

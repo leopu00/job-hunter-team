@@ -200,11 +200,43 @@ export default function ExistingTeamConnectModal({
     setStage("receipt");
   }
 
+  /** The full connection («Confirm and connect»), with the target this profile has saved. */
+  async function connectFull(request: ExistingTeamRequest) {
+    setStage("attaching");
+    const result = await bridge.connect(request, (progress) => setAttachProgress(progress.stage));
+    resultRef.current = result;
+    await notify(result);
+  }
+
+  /**
+   * «Confirm and connect» on a profile with no saved target: the same steps as the read-only
+   * opening (what the server declares, the person's confirmation, the saved target), then the full
+   * connection. With a target already saved it connects at once, as it always did.
+   */
+  async function openFull(request: ExistingTeamRequest) {
+    try {
+      await connectFull(request);
+      return;
+    } catch (error) {
+      if (existingTeamErrorCode(error) !== "existing_team_runtime_candidate_required") throw error;
+    }
+    setStage("discovering");
+    try {
+      setReceipt(await bridge.discover(request));
+    } catch (error) {
+      if (!targetAlreadySaved(error)) throw error;
+      await connectFull(request);
+      return;
+    }
+    setStage("receipt");
+  }
+
   async function registerReceipt() {
     if (!receipt || stage !== "receipt" || registerInFlight.current) return;
     registerInFlight.current = true;
     const request = { teamId: expectedTeamId, host: cleanHost(host) };
-    setReadOnlyRequested(true);
+    // the button the person pressed decides what follows the saved target: read only, or in full
+    const readOnly = readOnlyRequested;
     setStage("registering");
     setErrorCode(null);
     setFailedOperation(null);
@@ -213,10 +245,12 @@ export default function ExistingTeamConnectModal({
         await bridge.register(receipt.candidateSha256);
       } catch (error) {
         if (!targetAlreadySaved(error)) throw error;
-        await openSavedTarget(request);
+        if (readOnly) await openSavedTarget(request);
+        else await connectFull(request);
         return;
       }
-      onReadOnlyConnected(await bridge.connectReadOnly(request));
+      if (readOnly) onReadOnlyConnected(await bridge.connectReadOnly(request));
+      else await connectFull(request);
     } catch (error) {
       setErrorCode(existingTeamErrorCode(error));
       setFailedOperation("attach");
@@ -239,9 +273,7 @@ export default function ExistingTeamConnectModal({
         await openReadOnly(request);
         return;
       }
-      const result = await bridge.connect(request, (progress) => setAttachProgress(progress.stage));
-      resultRef.current = result;
-      await notify(result);
+      await openFull(request);
     } catch (error) {
       setErrorCode(existingTeamErrorCode(error));
       setFailedOperation("attach");
@@ -350,17 +382,17 @@ export default function ExistingTeamConnectModal({
               <div><dt>{r.digest}</dt><dd>{shortId(receipt.digest)}</dd></div>
               <div><dt>{r.assistant}</dt><dd>{receipt.readiness ? r.assistantUp : r.assistantDown}</dd></div>
             </dl>
-            <p className="existing-team-modal__warning">{r.caution}</p>
+            <p className="existing-team-modal__warning">{readOnlyRequested ? r.caution : r.cautionFull}</p>
             <div className="existing-team-modal__actions">
               <button type="button" className="existing-team-modal__secondary" onClick={backToFields}>{r.cancel}</button>
-              <button type="button" className="existing-team-modal__primary" onClick={() => void registerReceipt()}>{r.confirm}</button>
+              <button type="button" className="existing-team-modal__primary" onClick={() => void registerReceipt()}>{readOnlyRequested ? r.confirm : t.existingTeam.confirmAndLink}</button>
             </div>
           </section>
         )}
 
         {stage === "registering" && (
           <section className="existing-team-modal__status" role="status" aria-live="polite">
-            <span aria-hidden="true">••</span><div><strong>{r.registering}</strong><p>{r.registeringDetail}</p></div>
+            <span aria-hidden="true">••</span><div><strong>{r.registering}</strong><p>{readOnlyRequested ? r.registeringDetail : r.registeringDetailFull}</p></div>
           </section>
         )}
 

@@ -142,8 +142,8 @@ describe("Posizioni on an existing team read only", () => {
     expect(screen.queryByText(/Cloud row, must never show/)).not.toBeInTheDocument();
     // The honest banner, and one navigation entry: no page that reads the cloud or the box.
     expect(screen.getByTestId("existing-team-readonly-banner")).toHaveTextContent(REASON);
-    // the disabled judgement controls say the positions are only read here
-    expect(screen.getByTestId("existing-team-judgement-coming")).toHaveTextContent("gli annunci si leggono soltanto");
+    // the disabled judgement controls say where judging is done, with the onboarding's own button
+    expect(screen.getByTestId("existing-team-judgement-how")).toHaveTextContent("«Conferma e collega»");
     const nav = screen.getByRole("navigation", { name: "Navigazione app" });
     expect(within(nav).getAllByRole("link").map((link) => link.textContent)).toEqual(["JHT", "Dashboard", "Mappa", "Posizioni", "Squadra", "Profilo", "Ufficio", "Agenti", "Impostazioni", "Guida"]);
     // The sidebar starts closed; opened, its dataset comes from the companion

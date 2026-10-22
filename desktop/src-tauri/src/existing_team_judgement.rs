@@ -36,6 +36,7 @@ pub(crate) enum FeedbackValue {
     Like,
     Dislike,
     Hide,
+    Star,
     Clear,
 }
 
@@ -45,7 +46,42 @@ impl FeedbackValue {
             Self::Like => "like",
             Self::Dislike => "dislike",
             Self::Hide => "hide",
+            Self::Star => "star",
             Self::Clear => "clear",
+        }
+    }
+}
+
+/// The page's «more like this» / «less like this», as feedback_record takes it.
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub(crate) enum FeedbackDirection {
+    MoreLikeThis,
+    LessLikeThis,
+}
+
+impl FeedbackDirection {
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::MoreLikeThis => "more_like_this",
+            Self::LessLikeThis => "less_like_this",
+        }
+    }
+}
+
+/// What the Writer is asked for: the CV, or the cover letter (which needs an application).
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub(crate) enum WriteKind {
+    Cv,
+    CoverLetter,
+}
+
+impl WriteKind {
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::Cv => "cv",
+            Self::CoverLetter => "cover_letter",
         }
     }
 }
@@ -56,6 +92,11 @@ pub(crate) enum JudgementRequest {
     Feedback {
         id: String,
         value: FeedbackValue,
+        /// The page's verdict as a score from 1 to 5, when it sends one.
+        #[serde(default)]
+        score: Option<u8>,
+        #[serde(default)]
+        direction: Option<FeedbackDirection>,
         reason: Option<String>,
         note: Option<String>,
         #[serde(rename = "connectionKey")]
@@ -82,6 +123,8 @@ pub(crate) enum JudgementRequest {
     WriteRequest {
         id: String,
         on: bool,
+        #[serde(default)]
+        kind: Option<WriteKind>,
         #[serde(rename = "connectionKey")]
         connection_key: String,
     },
@@ -152,6 +195,9 @@ impl JudgementRequest {
                 return Err("reason_invalid")
             }
             Self::ApplyRequest { on: true, confirmed: false, .. } => return Err("position_write_not_confirmed"),
+            Self::Feedback { score: Some(score), .. } if !(1..=5).contains(score) => {
+                return Err("position_write_request_invalid")
+            }
             _ => {}
         }
         if self.note().is_some_and(|note| note.len() > NOTE_MAX_BYTES) {
@@ -164,8 +210,14 @@ impl JudgementRequest {
     pub(crate) fn argv(&self) -> Vec<String> {
         let switch = |on: bool| if on { "--on" } else { "--off" }.to_owned();
         let mut argv = match self {
-            Self::Feedback { id, value, reason, note, .. } => {
+            Self::Feedback { id, value, score, direction, reason, note, .. } => {
                 let mut argv = vec!["feedback".into(), id.clone(), "--value".into(), value.as_str().into()];
+                if let Some(score) = score {
+                    argv.extend(["--score".into(), score.to_string()]);
+                }
+                if let Some(direction) = direction {
+                    argv.extend(["--direction".into(), direction.as_str().into()]);
+                }
                 if let Some(reason) = reason {
                     argv.extend(["--reason".into(), reason.clone()]);
                 }
@@ -183,7 +235,13 @@ impl JudgementRequest {
             }
             Self::Restore { id, .. } => vec!["restore".into(), id.clone()],
             Self::Note { id, .. } => vec!["note".into(), id.clone()],
-            Self::WriteRequest { id, on, .. } => vec!["write-request".into(), id.clone(), switch(*on)],
+            Self::WriteRequest { id, on, kind, .. } => {
+                let mut argv = vec!["write-request".into(), id.clone(), switch(*on)];
+                if let Some(kind) = kind {
+                    argv.extend(["--kind".into(), kind.as_str().into()]);
+                }
+                argv
+            }
             Self::ApplyRequest { id, on, .. } => vec!["apply-request".into(), id.clone(), switch(*on)],
             Self::Recheck { id, on, .. } => vec!["recheck".into(), id.clone(), switch(*on)],
         };
@@ -204,7 +262,7 @@ impl JudgementRequest {
 /// The remote command: the pinned container's checks (`command`), then the fixed script.
 pub(crate) fn judgement_command(target: &RuntimeTarget, request: &JudgementRequest) -> Result<String, &'static str> {
     let args: Vec<String> = request.argv().into_iter().map(|arg| format!("'{arg}'")).collect();
-    command(target, &format!("exec docker exec -i \"$JHT_CID\" python3 {SCRIPT} {}", args.join(" ")))
+    command(target, &format!("exec \"$JHT_ENGINE\" exec -i \"$JHT_CID\" python3 {SCRIPT} {}", args.join(" ")))
 }
 
 fn failure(code: &'static str) -> Value {
@@ -290,6 +348,68 @@ pub(crate) fn position_write_with(
         return failure(code);
     }
     reply(run(&request))
+}
+
+/// What the page asks before it sends a judgement: whether the team it shows may be judged from
+/// here, and the key every write must carry. Local files only, no network. The page never decides
+/// it: a write that comes anyway meets the same gate in `existing_team_position_write`.
+pub(crate) fn position_write_target_with(
+    window_is_main: bool,
+    current_key: impl FnOnce() -> Result<String, &'static str>,
+    full: impl FnOnce(&str) -> Result<(), &'static str>,
+) -> Value {
+    if !window_is_main {
+        return failure("position_write_window_refused");
+    }
+    let key = match current_key() {
+        Ok(key) => key,
+        Err(code) => return failure(code),
+    };
+    match full(&key) {
+        Ok(()) => json!({ "ok": true, "connectionKey": key }),
+        Err(code) => failure(code),
+    }
+}
+
+#[tauri::command]
+pub(crate) async fn existing_team_position_write_target(
+    app: tauri::AppHandle,
+    window: tauri::Window,
+    scopes: State<'_, AccountScopeState>,
+) -> Result<Value, String> {
+    let expected = match scopes.active() {
+        Ok(scope) => scope,
+        Err(_) => return Ok(failure("account_scope_unavailable")),
+    };
+    let window_is_main = window.label() == "main";
+    let scope_state = scopes.inner().clone();
+    let worker_expected = expected.clone();
+    let result = tauri::async_runtime::spawn_blocking(move || {
+        let _scope = scope_state.lock_expected(&worker_expected).map_err(|_| "account_scope_changed")?;
+        let scope = &worker_expected;
+        let target: std::cell::RefCell<Option<ActivatedTarget>> = std::cell::RefCell::new(None);
+        Ok(position_write_target_with(
+            window_is_main,
+            || {
+                let host = direct_chat::load_persisted_host(&app, scope)?;
+                crate::runtime_host::validate_host_for_scope(&app, &host, scope)?;
+                let found = selected(&app, scope, &host)?.ok_or("existing_team_runtime_required")?;
+                let key = connection_key(scope, &found);
+                *target.borrow_mut() = Some(found);
+                Ok(key)
+            },
+            |_key| match target.borrow().as_ref() {
+                Some(found) => full_connection(scope, found),
+                None => Err("existing_team_unavailable"),
+            },
+        ))
+    })
+    .await
+    .unwrap_or_else(|_| Err("existing_team_unavailable"));
+    if scopes.lock_expected(&expected).is_err() {
+        return Ok(failure("account_scope_changed"));
+    }
+    Ok(result.unwrap_or_else(failure))
 }
 
 #[tauri::command]
@@ -445,7 +565,10 @@ mod tests {
         for (request, code) in [
             (json!({"op":"feedback","id":"01","value":"like","connectionKey":KEY}), "position_write_request_invalid"),
             (json!({"op":"feedback","id":"1;rm","value":"like","connectionKey":KEY}), "position_write_request_invalid"),
-            (json!({"op":"feedback","id":"1","value":"star","connectionKey":KEY}), "position_write_request_invalid"),
+            (json!({"op":"feedback","id":"1","value":"superb","connectionKey":KEY}), "position_write_request_invalid"),
+            (json!({"op":"feedback","id":"1","value":"star","score":6,"connectionKey":KEY}), "position_write_request_invalid"),
+            (json!({"op":"feedback","id":"1","value":"like","direction":"sideways","connectionKey":KEY}), "position_write_request_invalid"),
+            (json!({"op":"write_request","id":"1","on":true,"kind":"poem","connectionKey":KEY}), "position_write_request_invalid"),
             (json!({"op":"feedback","id":"1","value":"like","host":"x","connectionKey":KEY}), "position_write_request_invalid"),
             (json!({"op":"run","id":"1","connectionKey":KEY}), "position_write_request_invalid"),
             (json!({"op":"exclude","id":"1","reason":"Too Senior","connectionKey":KEY}), "reason_invalid"),
@@ -469,7 +592,7 @@ mod tests {
         let remote = judgement_command(&target(), &request).unwrap();
         assert!(!remote.contains(SENTINEL));
         assert!(remote.ends_with(
-            "exec docker exec -i \"$JHT_CID\" python3 /app/shared/skills/position_judgement.py 'feedback' '12' '--value' 'dislike' '--reason' 'too_senior' '--note-on-stdin'"
+            "exec \"$JHT_ENGINE\" exec -i \"$JHT_CID\" python3 /app/shared/skills/position_judgement.py 'feedback' '12' '--value' 'dislike' '--reason' 'too_senior' '--note-on-stdin'"
         ));
         assert!(remote.contains("|| exit 70"), "the pinned container's checks come first");
         let stdin = request.stdin().unwrap();
@@ -494,10 +617,42 @@ mod tests {
             (json!({"op":"apply_request","id":"4","on":true,"confirmed":true,"connectionKey":KEY}), vec!["apply-request", "4", "--on"]),
             (json!({"op":"recheck","id":"4","on":false,"connectionKey":KEY}), vec!["recheck", "4", "--off"]),
             (json!({"op":"feedback","id":"4","value":"clear","connectionKey":KEY}), vec!["feedback", "4", "--value", "clear"]),
+            (
+                json!({"op":"feedback","id":"4","value":"star","score":5,"direction":"more_like_this","connectionKey":KEY}),
+                vec!["feedback", "4", "--value", "star", "--score", "5", "--direction", "more_like_this"],
+            ),
+            (
+                json!({"op":"write_request","id":"4","on":false,"kind":"cover_letter","connectionKey":KEY}),
+                vec!["write-request", "4", "--off", "--kind", "cover_letter"],
+            ),
         ] {
             let request: JudgementRequest = serde_json::from_value(request).unwrap();
             assert_eq!(request.argv(), argv);
         }
+    }
+
+    #[test]
+    fn the_target_gives_the_key_only_for_the_team_confirmed_in_full() {
+        assert_eq!(
+            position_write_target_with(true, || Ok(KEY.into()), |_| Ok(())),
+            json!({"ok": true, "connectionKey": KEY})
+        );
+        assert_eq!(
+            position_write_target_with(true, || Ok(KEY.into()), |_| Err("position_write_read_only")),
+            json!({"ok": false, "error": "position_write_read_only"})
+        );
+        // no existing team on this profile: the page writes as it always did
+        assert_eq!(
+            position_write_target_with(true, || Err("existing_team_runtime_required"), |_| Ok(())),
+            json!({"ok": false, "error": "existing_team_runtime_required"})
+        );
+        let asked = Cell::new(false);
+        let out = position_write_target_with(false, || {
+            asked.set(true);
+            Ok(KEY.into())
+        }, |_| Ok(()));
+        assert_eq!(out["error"], "position_write_window_refused");
+        assert!(!asked.get(), "another window reads nothing");
     }
 
     #[test]

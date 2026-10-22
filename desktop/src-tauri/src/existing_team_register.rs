@@ -87,7 +87,10 @@ pub(crate) const SELECTION_MISMATCH: &str = "existing_team_saved_selection_misma
 /// authority: every field is validated again there.
 pub(crate) const DISCOVERY_SCRIPT: &str = r#"set -u
 set -f
-IDS="$(docker ps --no-trunc --quiet)" || exit 71
+if command -v docker >/dev/null 2>&1 && ! docker --version 2>/dev/null | grep -qi podman; then JHT_ENGINE=docker
+elif command -v podman >/dev/null 2>&1; then JHT_ENGINE=podman
+else exit 71; fi
+IDS="$("$JHT_ENGINE" ps --no-trunc --quiet)" || exit 71
 N=0
 for JHT_ID in $IDS; do
   case "$JHT_ID" in ""|*[!0-9a-f]*) exit 71 ;; esac
@@ -95,11 +98,13 @@ for JHT_ID in $IDS; do
   N=$((N + 1))
   if [ "$N" -gt 32 ]; then printf 'OVERFLOW|%s\n' "$N"; exit 0; fi
 done
-NP=0; NI=0; ND=0; PAIRS=""; IMAGES=" "; GHCR=" "
+NP=0; NI=0; ND=0; PAIRS=""; IMAGES=" "; GHCR=" "; PLATFORMS=" "
 for JHT_ID in $IDS; do
-  JHT_ROW="$(docker inspect --type container --format '{{.Image}}|{{.State.Running}}' "$JHT_ID")" || exit 71
+  JHT_ROW="$("$JHT_ENGINE" inspect --type container --format '{{.Image}}|{{.State.Running}}' "$JHT_ID")" || exit 71
   JHT_IMAGE="${JHT_ROW%%|*}"
   JHT_RUNNING="${JHT_ROW#*|}"
+  # Podman prints the image id bare
+  if [ "$JHT_ENGINE" = podman ]; then case "$JHT_IMAGE" in sha256:*) ;; *) JHT_IMAGE="sha256:$JHT_IMAGE" ;; esac; fi
   JHT_HASH="${JHT_IMAGE#sha256:}"
   case "$JHT_IMAGE" in sha256:*) ;; *) exit 71 ;; esac
   case "$JHT_HASH" in ""|*[!0-9a-f]*) exit 71 ;; esac
@@ -111,7 +116,14 @@ for JHT_ID in $IDS; do
   case "$IMAGES" in *" $JHT_IMAGE "*) ;; *) IMAGES="$IMAGES$JHT_IMAGE " ;; esac
 done
 for JHT_IMAGE in $IMAGES; do
-  JHT_INFO="$(docker image inspect --format '{{.Id}}|{{.Os}}/{{.Architecture}}|{{index .Config.Labels "org.opencontainers.image.revision"}}|{{range .RepoDigests}}{{.}},{{end}}' "$JHT_IMAGE" 2>/dev/null)" || JHT_INFO=""
+  JHT_INDEX=-
+  if [ "$JHT_ENGINE" = podman ]; then
+    JHT_INFO="$(podman image inspect --format '{{.Id}}|{{.Os}}/{{.Architecture}}|{{index .Config.Labels "org.opencontainers.image.revision"}}|{{range .RepoDigests}}{{.}},{{end}}|{{.Digest}}' "${JHT_IMAGE#sha256:}" 2>/dev/null)" || JHT_INFO=""
+    JHT_INDEX="${JHT_INFO##*|}"; JHT_INFO="${JHT_INFO%|*}"
+    case "$JHT_INFO" in sha256:*|"") ;; *) JHT_INFO="sha256:$JHT_INFO" ;; esac
+  else
+    JHT_INFO="$(docker image inspect --format '{{.Id}}|{{.Os}}/{{.Architecture}}|{{index .Config.Labels "org.opencontainers.image.revision"}}|{{range .RepoDigests}}{{.}},{{end}}' "$JHT_IMAGE" 2>/dev/null)" || JHT_INFO=""
+  fi
   JHT_GOOD=1
   JHT_F1="${JHT_INFO%%|*}"; JHT_REST="${JHT_INFO#*|}"
   JHT_OSARCH="${JHT_REST%%|*}"; JHT_REST="${JHT_REST#*|}"
@@ -123,6 +135,24 @@ for JHT_IMAGE in $IMAGES; do
   [ -n "$JHT_DIGESTS" ] || JHT_DIGESTS=-
   case "$JHT_DIGESTS" in *[!A-Za-z0-9.:/@_,-]*) JHT_GOOD=0 ;; esac
   [ "${#JHT_DIGESTS}" -le 1024 ] || JHT_GOOD=0
+  # Podman: the index is the image's .Digest, the platform manifest its other digest of the
+  # repository. Only the index is listed as the image's digest, the other one is its descriptor.
+  if [ "$JHT_ENGINE" = podman ] && [ "$JHT_GOOD" -eq 1 ]; then
+    JHT_OWN=""; JHT_PLATFORM_DIGEST=""; JHT_OTHERS=0; JHT_HAS_INDEX=0
+    JHT_IFS="$IFS"; IFS=,
+    for JHT_ENTRY in $JHT_DIGESTS; do
+      case "$JHT_ENTRY" in
+        ghcr.io/leopu00/jht@sha256:*)
+          if [ "${JHT_ENTRY#*@}" = "$JHT_INDEX" ]; then JHT_HAS_INDEX=1; JHT_OWN="$JHT_ENTRY,"
+          else JHT_OTHERS=$((JHT_OTHERS + 1)); JHT_PLATFORM_DIGEST="${JHT_ENTRY#*@}"; fi ;;
+      esac
+    done
+    IFS="$JHT_IFS"
+    if [ "$JHT_HAS_INDEX" -eq 1 ]; then
+      JHT_DIGESTS="$JHT_OWN"
+      [ "$JHT_OTHERS" -eq 1 ] && PLATFORMS="$PLATFORMS$JHT_IMAGE=$JHT_PLATFORM_DIGEST "
+    fi
+  fi
   if [ "$JHT_GOOD" -eq 1 ]; then
     printf 'I|%s|%s|%s|%s\n' "$JHT_IMAGE" "$JHT_OSARCH" "$JHT_REV" "$JHT_DIGESTS"
     case ",$JHT_DIGESTS" in *,ghcr.io/leopu00/jht@sha256:*) GHCR="$GHCR$JHT_IMAGE " ;; esac
@@ -135,7 +165,12 @@ for JHT_PAIR in $PAIRS; do
   JHT_ID="${JHT_PAIR%%=*}"
   JHT_IMAGE="${JHT_PAIR#*=}"
   case "$GHCR" in *" $JHT_IMAGE "*) ;; *) continue ;; esac
-  JHT_DESC="$(docker inspect --type container --format '{{index .ImageManifestDescriptor "digest"}}' "$JHT_ID" 2>/dev/null)" || JHT_DESC=-
+  if [ "$JHT_ENGINE" = podman ]; then
+    JHT_DESC=-
+    case "$PLATFORMS" in *" $JHT_IMAGE="*) JHT_DESC="${PLATFORMS#*" $JHT_IMAGE="}"; JHT_DESC="${JHT_DESC%% *}" ;; esac
+  else
+    JHT_DESC="$(docker inspect --type container --format '{{index .ImageManifestDescriptor "digest"}}' "$JHT_ID" 2>/dev/null)" || JHT_DESC=-
+  fi
   JHT_DH="${JHT_DESC#sha256:}"
   case "$JHT_DESC" in sha256:*) ;; *) JHT_DESC=- ;; esac
   case "$JHT_DH" in ""|*[!0-9a-f]*) JHT_DESC=- ;; esac

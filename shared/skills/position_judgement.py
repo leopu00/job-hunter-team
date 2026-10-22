@@ -10,12 +10,14 @@ argument, so it is in no process list and in no SSH command line.
 This file holds no rule of its own: each operation calls today's writer, with
 its refusals.
 
-  feedback ID --value like|dislike|hide|clear [--reason CODE] [--note-on-stdin]
+  feedback ID --value like|dislike|hide|star|clear [--score 1-5]
+           [--direction more_like_this|less_like_this] [--reason CODE] [--note-on-stdin]
                                                    feedback_record.record
   exclude ID --reason CODE [--note-on-stdin]       user_exclude.exclude
   restore ID                                       user_exclude.restore
   note ID                                          the private note box (stdin)
-  write-request ID --on|--off                      write_request.request_cv
+  write-request ID --on|--off [--kind cv|cover_letter]
+                                                   write_request.request_cv
   apply-request ID --on|--off                      apply_gate consent, then
                                                    apply_request.toggle
   recheck ID --on|--off                            positions.recheck_requested
@@ -44,7 +46,9 @@ from feedback_reasons import NOTE_MAX, REASONS, clean_note  # noqa: E402
 # 4 KiB is room for any of them in UTF-8 and nothing more is ever read.
 STDIN_MAX_BYTES = 4096
 BOX_NOTE_MAX = 4000  # the web route's limit for the private note box
-FEEDBACK_VALUES = ("like", "dislike", "hide", "clear")
+FEEDBACK_VALUES = ("like", "dislike", "hide", "star", "clear")
+FEEDBACK_DIRECTIONS = ("more_like_this", "less_like_this")
+WRITE_KINDS = ("cv", "cover_letter")
 
 
 class Refused(Exception):
@@ -90,10 +94,12 @@ def do_feedback(args):
     if not position_exists(args.id):
         raise Refused("position_not_found")
     from feedback_record import record
-    out = record(str(args.id), args.value, reason=args.reason, note=note or None)
+    out = record(str(args.id), args.value, reason=args.reason, note=note or None,
+                 score=args.score, direction=args.direction)
     if not out.get("ok"):
         raise Refused("feedback_refused", out.get("error"))
-    return {"value": args.value, "reason": args.reason, "cloud_synced": out.get("cloud_synced")}
+    return {"value": args.value, "reason": args.reason, "score": args.score, "direction": args.direction,
+            "cloud_synced": out.get("cloud_synced")}
 
 
 def do_exclude(args):
@@ -144,12 +150,14 @@ def do_note(args):
 
 def do_write_request(args):
     from write_request import request_cv
-    out = request_cv(args.id, "on" if args.on else "off")
+    out = request_cv(args.id, "on" if args.on else "off", args.kind)
     if not out.get("ok"):
         code = {"NOT_FOUND": "position_not_found", "BAD_STATUS": "bad_status",
-                "ALREADY_APPLIED": "already_applied"}.get(out.get("status_code"), "write_request_refused")
+                "ALREADY_APPLIED": "already_applied",
+                "APPLICATION_REQUIRED": "cover_letter_requires_application"}.get(
+                    out.get("status_code"), "write_request_refused")
         raise Refused(code, out.get("error"))
-    return {"write_requested": bool(out.get("current"))}
+    return {"write_requested": bool(out.get("current")), "write_request_kind": out.get("kind")}
 
 
 def do_apply_request(args):
@@ -200,6 +208,8 @@ def parser():
     fb = sub.add_parser("feedback")
     fb.add_argument("id", type=position_id)
     fb.add_argument("--value", required=True, choices=FEEDBACK_VALUES)
+    fb.add_argument("--score", type=int, choices=range(1, 6))
+    fb.add_argument("--direction", choices=FEEDBACK_DIRECTIONS)
     fb.add_argument("--reason")
     fb.add_argument("--note-on-stdin", action="store_true")
     ex = sub.add_parser("exclude")
@@ -214,6 +224,8 @@ def parser():
         switch = one.add_mutually_exclusive_group(required=True)
         switch.add_argument("--on", action="store_true")
         switch.add_argument("--off", action="store_true")
+        if name == "write-request":
+            one.add_argument("--kind", choices=WRITE_KINDS, default="cv")
     return p
 
 

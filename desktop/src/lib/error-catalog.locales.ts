@@ -1007,11 +1007,11 @@ const COPY_BY_ENGLISH_TEXT: Readonly<Record<string, ErrorTranslations>> = {
     pt: ["Para pedir à equipa que se candidate por ti é preciso a tua confirmação.", "Confirma o pedido de candidatura e tenta novamente."],
   },
   "This team is connected read only: nothing is written from here.": {
-    de: ["Dieses Team ist nur lesend verbunden: Von hier wird nichts geschrieben.", "Die Stellen dieses Teams lassen sich in der App vorerst nur lesen."],
-    es: ["Este equipo está conectado en solo lectura: desde aquí no se escribe nada.", "Por ahora, las ofertas de este equipo solo se pueden leer desde la aplicación."],
-    fr: ["Cette équipe est reliée en lecture seule : rien ne s’écrit d’ici.", "Pour l’instant, les offres de cette équipe se lisent seulement depuis l’application."],
-    hu: ["Ez a csapat csak olvasható módon csatlakozik: innen semmi sem íródik.", "Egyelőre a csapat pozíciói az alkalmazásból csak olvashatók."],
-    pt: ["Esta equipa está ligada só em leitura: daqui não se escreve nada.", "Por agora, as vagas desta equipa só se podem ler na aplicação."],
+    de: ["Dieses Team ist nur lesend verbunden: Von hier wird nichts geschrieben.", "Um Stellen in der App zu bewerten, verbinde das Team mit „Bestätigen und verbinden“."],
+    es: ["Este equipo está conectado en solo lectura: desde aquí no se escribe nada.", "Para valorar ofertas desde la aplicación, conecta el equipo con «Confirmar y conectar»."],
+    fr: ["Cette équipe est reliée en lecture seule : rien ne s’écrit d’ici.", "Pour juger les offres depuis l’application, relie l’équipe avec « Confirmer et relier »."],
+    hu: ["Ez a csapat csak olvasható módon csatlakozik: innen semmi sem íródik.", "Ha az alkalmazásból szeretnéd értékelni a pozíciókat, csatlakoztasd a csapatot a „Megerősítés és csatlakozás” gombbal."],
+    pt: ["Esta equipa está ligada só em leitura: daqui não se escreve nada.", "Para avaliar vagas na aplicação, liga a equipa com «Confirmar e ligar»."],
   },
   "The request is not valid and was not sent to the team.": {
     de: ["Die Anfrage ist ungültig und wurde nicht an das Team geschickt.", "Lade die Seite neu und versuche es erneut."],

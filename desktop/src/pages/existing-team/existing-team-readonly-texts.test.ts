@@ -40,7 +40,7 @@ describe("the read-only texts of an existing team", () => {
 });
 
 describe("the disabled judgement controls of the read-only view", () => {
-  // Said before: judging «arrives in an update» / is done by connecting with «Confirm and connect». Neither is true yet.
+  // Said once: judging «arrives in an update». It is done now, on a team connected with «Confirm and connect».
   const PROMISE: Record<string, RegExp> = {
     it: /aggiornament|arriva con/i,
     en: /update|arrives/i,
@@ -51,18 +51,19 @@ describe("the disabled judgement controls of the read-only view", () => {
     hu: /frissít|érkezik/i,
   };
 
-  it.each(Object.keys(ASSISTANT))("%s: say that the positions are only read and judging is not available yet, with no button to press and no promised update", (locale) => {
-    const text = EXISTING_TEAM_READONLY_TEXT[locale as keyof typeof EXISTING_TEAM_READONLY_TEXT].judgementComing;
+  it.each(Object.keys(ASSISTANT))("%s: say that judging is done on a team connected with the onboarding's own button, with no promised update", (locale) => {
+    const text = EXISTING_TEAM_READONLY_TEXT[locale as keyof typeof EXISTING_TEAM_READONLY_TEXT].judgementHow;
     const button = ONBOARDING_TEXT[locale as keyof typeof ONBOARDING_TEXT].existingTeam.confirmAndLink;
-    expect(text, `${locale}: ${text}`).not.toContain(button);
+    // the exact label the person clicks, so the sentence points at something that exists
+    expect(text, `${locale}: ${text}`).toContain(button);
     expect(text, `${locale}: ${text}`).not.toMatch(PROMISE[locale]);
     expect(text, locale).not.toMatch(/\d/);
   });
 
-  it.each(Object.keys(ASSISTANT))("%s: the refusal of a write in a read-only team does not send the person to a button either", (locale) => {
+  it.each(Object.keys(ASSISTANT))("%s: the refusal of a write in a team not connected in full points at the same button", (locale) => {
     const copy = describeError("position_write_read_only", { locale: locale as never });
     const button = ONBOARDING_TEXT[locale as keyof typeof ONBOARDING_TEXT].existingTeam.confirmAndLink;
-    expect(copy.action, `${locale}: ${copy.action}`).not.toContain(button);
+    expect(copy.action, `${locale}: ${copy.action}`).toContain(button);
     expect(copy.action, `${locale}: ${copy.action}`).not.toMatch(PROMISE[locale]);
     expect(copy.text.trim(), locale).not.toBe("");
   });
@@ -75,8 +76,10 @@ describe("the disabled judgement controls of the read-only view", () => {
     });
   }
 
-  it("holds only while the renderer does not call the native judgement command: the day it does, the sentence must change", () => {
+  it("holds only while the renderer sends judgements to the native command: the day it stops, the sentences must change", () => {
     const callers = sources("src").filter((file) => readFileSync(file, "utf8").includes("existing_team_position_write"));
-    expect(callers, "the renderer now writes judgements on a VPS: rewrite judgementComing (and this test)").toEqual([]);
+    expect(callers, "the renderer no longer writes judgements on a VPS: rewrite judgementHow, position_write_read_only (and this test)").toEqual([
+      "src/lib/vps-judgement-api.ts",
+    ]);
   });
 });

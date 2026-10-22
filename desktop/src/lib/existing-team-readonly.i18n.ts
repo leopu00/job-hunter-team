@@ -7,12 +7,11 @@ export interface ExistingTeamReadOnlyText {
   connectionReadOnly: string;
   banner: string;
   /**
-   * Why the judgement controls are disabled in this view: a team on a VPS is only read from the app. Judging
-   * (like, exclusion, notes, CV and application requests) is not wired in the renderer yet, so no sentence may
-   * send the person to a button that would not enable it (the test below fails the day the renderer calls the
-   * native command, to bring this text back in line).
+   * Why the judgement controls are disabled in this view, and where judging is done: a team on a VPS
+   * connected in full with the onboarding's «Confirm and connect», whose writes the renderer sends to the
+   * native command (lib/vps-judgement-api.ts). The test of these texts fails the day it no longer does.
    */
-  judgementComing: string;
+  judgementHow: string;
   /** The navigation entry of the page that tells the team's state. */
   team: string;
   /** The navigation entry of the page that shows the candidate profile. */
@@ -38,7 +37,7 @@ export const EXISTING_TEAM_READONLY_TEXT: Record<Locale, ExistingTeamReadOnlyTex
     assistantOff: "Solo lettura: assistente non attivo",
     connectionReadOnly: "Solo lettura: questa connessione non modifica i dati",
     banner: "Stai consultando gli annunci della squadra esistente in sola lettura. Le azioni che modificano i dati restano disabilitate; l’avvio dell’assistente è separato e chiede una conferma.",
-    judgementComing: "Su una squadra in VPS gli annunci si leggono soltanto: mi piace, esclusione, note e richieste di CV e di candidatura non sono ancora disponibili dall’app.",
+    judgementHow: "Per giudicare gli annunci dall’app (mi piace, esclusione, note, richieste di CV e di candidatura) collega la squadra con «Conferma e collega»: questa vista li legge soltanto.",
     team: "Squadra",
     profile: "Profilo",
     office: "Ufficio",
@@ -54,7 +53,7 @@ export const EXISTING_TEAM_READONLY_TEXT: Record<Locale, ExistingTeamReadOnlyTex
     assistantOff: "Read only: assistant not active",
     connectionReadOnly: "Read only: this connection does not change data",
     banner: "You are browsing the existing team's positions read only. Actions that change data stay disabled; starting the assistant is separate and asks for a confirmation.",
-    judgementComing: "For a team on a VPS the positions can only be read: like, exclude, notes, and CV and application requests are not available from the app yet.",
+    judgementHow: "To judge positions from the app (like, exclude, notes, CV and application requests), connect the team with “Confirm and connect”: this view only reads them.",
     team: "Team",
     profile: "Profile",
     office: "Office",
@@ -70,7 +69,7 @@ export const EXISTING_TEAM_READONLY_TEXT: Record<Locale, ExistingTeamReadOnlyTex
     assistantOff: "Nur Lesen: Assistent nicht aktiv",
     connectionReadOnly: "Nur Lesen: Diese Verbindung ändert keine Daten",
     banner: "Du siehst die Stellen des vorhandenen Teams nur lesend. Aktionen, die Daten ändern, bleiben deaktiviert; das Starten des Assistenten ist davon getrennt und verlangt eine Bestätigung.",
-    judgementComing: "Bei einem Team auf einem VPS lassen sich die Stellen nur lesen: Gefällt mir, Ausschließen, Notizen sowie Anfragen für Lebenslauf und Bewerbung sind in der App noch nicht verfügbar.",
+    judgementHow: "Um Stellen in der App zu bewerten (Gefällt mir, Ausschließen, Notizen, Anfragen für Lebenslauf und Bewerbung), verbinde das Team mit „Bestätigen und verbinden“: Diese Ansicht liest sie nur.",
     team: "Team",
     profile: "Profil",
     office: "Büro",
@@ -86,7 +85,7 @@ export const EXISTING_TEAM_READONLY_TEXT: Record<Locale, ExistingTeamReadOnlyTex
     assistantOff: "Lecture seule : assistant inactif",
     connectionReadOnly: "Lecture seule : cette connexion ne modifie pas les données",
     banner: "Vous consultez les offres de l’équipe existante en lecture seule. Les actions qui modifient les données restent désactivées ; le démarrage de l’assistant est distinct et demande une confirmation.",
-    judgementComing: "Pour une équipe sur un VPS, les offres se lisent seulement : j’aime, exclure, notes, demandes de CV et de candidature ne sont pas encore disponibles dans l’app.",
+    judgementHow: "Pour juger les offres depuis l’app (j’aime, exclure, notes, demandes de CV et de candidature), relie l’équipe avec « Confirmer et relier » : cette vue ne fait que les lire.",
     team: "Équipe",
     profile: "Profil",
     office: "Bureau",
@@ -102,7 +101,7 @@ export const EXISTING_TEAM_READONLY_TEXT: Record<Locale, ExistingTeamReadOnlyTex
     assistantOff: "Solo lectura: asistente no activo",
     connectionReadOnly: "Solo lectura: esta conexión no modifica los datos",
     banner: "Estás consultando las ofertas del equipo existente en solo lectura. Las acciones que modifican datos siguen desactivadas; el inicio del asistente es aparte y pide una confirmación.",
-    judgementComing: "En un equipo en un VPS las ofertas solo se leen: me gusta, excluir, notas y solicitudes de CV y de candidatura aún no están disponibles en la app.",
+    judgementHow: "Para valorar las ofertas desde la app (me gusta, excluir, notas, solicitudes de CV y de candidatura), conecta el equipo con «Confirmar y conectar»: esta vista solo las lee.",
     team: "Equipo",
     profile: "Perfil",
     office: "Oficina",
@@ -118,7 +117,7 @@ export const EXISTING_TEAM_READONLY_TEXT: Record<Locale, ExistingTeamReadOnlyTex
     assistantOff: "Só leitura: assistente não ativo",
     connectionReadOnly: "Só leitura: esta ligação não altera os dados",
     banner: "Está a consultar as vagas da equipa existente só em leitura. As ações que alteram dados continuam desativadas; o arranque do assistente é separado e pede uma confirmação.",
-    judgementComing: "Numa equipa num VPS as vagas só se leem: gosto, excluir, notas e pedidos de CV e de candidatura ainda não estão disponíveis na app.",
+    judgementHow: "Para avaliar as vagas na app (gosto, excluir, notas, pedidos de CV e de candidatura), liga a equipa com «Confirmar e ligar»: esta vista só as lê.",
     team: "Equipa",
     profile: "Perfil",
     office: "Escritório",
@@ -134,7 +133,7 @@ export const EXISTING_TEAM_READONLY_TEXT: Record<Locale, ExistingTeamReadOnlyTex
     assistantOff: "Csak olvasható: az asszisztens nem aktív",
     connectionReadOnly: "Csak olvasható: ez a kapcsolat nem módosítja az adatokat",
     banner: "A meglévő csapat pozícióit csak olvasható módban nézi. Az adatokat módosító műveletek le vannak tiltva; az asszisztens indítása külön dolog, és megerősítést kér.",
-    judgementComing: "A VPS-en futó csapatnál a pozíciók csak olvashatók: a tetszik, a kizárás, a jegyzetek, valamint az önéletrajz- és jelentkezéskérések az alkalmazásban még nem érhetők el.",
+    judgementHow: "A pozíciók alkalmazásbeli értékeléséhez (tetszik, kizárás, jegyzetek, önéletrajz- és jelentkezéskérés) csatlakoztasd a csapatot a „Megerősítés és csatlakozás” gombbal: ez a nézet csak olvassa őket.",
     team: "Csapat",
     profile: "Profil",
     office: "Iroda",

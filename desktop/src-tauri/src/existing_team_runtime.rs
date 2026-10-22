@@ -1452,6 +1452,33 @@ pub(crate) fn activate_at(
     write_selection_at(root, scope, &candidate, &hash)
 }
 
+/// The full connection («Confirm and connect») of a team this profile may have selected already:
+/// opening the same team read only saves the selection first. The same target is kept as it is;
+/// a selection of another one is `existing_team_runtime_target_changed`, never replaced.
+pub(crate) fn activate_or_keep(
+    app: &tauri::AppHandle,
+    scope: &AccountScope,
+    host: &ExecutionHost,
+    probed: &ActivatedTarget,
+) -> Result<(), &'static str> {
+    activate_or_keep_at(&root(app)?, scope, host, probed)
+}
+
+pub(crate) fn activate_or_keep_at(
+    root: &Path,
+    scope: &AccountScope,
+    host: &ExecutionHost,
+    probed: &ActivatedTarget,
+) -> Result<(), &'static str> {
+    match activate_at(root, scope, host, probed) {
+        Err("existing_team_runtime_already_selected") => match selected_at(root, scope, host)? {
+            Some(selected) if selected == *probed => Ok(()),
+            _ => Err("existing_team_runtime_target_changed"),
+        },
+        other => other,
+    }
+}
+
 /// The one parser of a selection's bytes, for `selected_at` and the
 /// registration gate alike: canonical JSON, schema 1, a valid team id and the
 /// SHA-256 of a candidate.
@@ -1585,8 +1612,26 @@ pub(crate) fn selected_at(
     }))
 }
 
+/// The container engine of the VPS, chosen the same way by every remote script: Docker when it is
+/// there and is Docker, otherwise Podman (a VPS can run the team on rootless Podman, with no
+/// `docker` at all; a `docker` that is Podman's shim answers with Podman's shapes, so it is Podman).
+/// None of the two: the script stops with `$1`, the exit code the caller reads as «not reachable».
+pub(crate) fn engine_selection(exit: u8) -> String {
+    format!(
+        r#"if command -v docker >/dev/null 2>&1 && ! docker --version 2>/dev/null | grep -qi podman; then JHT_ENGINE=docker
+elif command -v podman >/dev/null 2>&1; then JHT_ENGINE=podman
+else exit {exit}; fi"#
+    )
+}
+
 /// Prefixes a source-owned operation with a fresh CID/index/manifest check.
 /// The descriptor is intentionally distinct from the container image index.
+///
+/// Docker (containerd store): the container's image is the index, the descriptor is the platform
+/// manifest and `image inspect --platform` names it. Podman has neither: its image id is the
+/// config (`sha256:` added, Podman prints it bare), the index is the image's `.Digest` (the one
+/// the container records as `.ImageDigest`) and the platform manifest is the image's other
+/// RepoDigest of the fixed repository. The same five values are checked again by every command.
 pub(crate) fn command(target: &RuntimeTarget, operation: &str) -> Result<String, &'static str> {
     if !valid_target(target) {
         return Err("existing_team_runtime_candidate_invalid");
@@ -1594,13 +1639,23 @@ pub(crate) fn command(target: &RuntimeTarget, operation: &str) -> Result<String,
     Ok(format!(
         r#"set -eu
 JHT_CID='{cid}'; JHT_IMAGE='{image}'; JHT_PLATFORM_IMAGE='{platform}'; JHT_REVISION='{revision}'; JHT_DIGEST='{digest}'; JHT_PLATFORM='{os}/{architecture}'
+{engine}
+if [ "$JHT_ENGINE" = podman ]; then
+JHT_CONTAINER="$(podman inspect --type container --format '{{{{.Id}}}}|{{{{.Image}}}}|{{{{.State.Running}}}}|{{{{index .Config.Labels "org.opencontainers.image.revision"}}}}|{{{{.ImageDigest}}}}' "$JHT_CID")" || exit 70
+[ "$JHT_CONTAINER" = "$JHT_CID|${{JHT_IMAGE#sha256:}}|true|$JHT_REVISION|$JHT_DIGEST" ] || exit 70
+JHT_DEFAULT="$(podman image inspect --format '{{{{.Id}}}}|{{{{.Os}}}}/{{{{.Architecture}}}}|{{{{index .Config.Labels "org.opencontainers.image.revision"}}}}|{{{{.Digest}}}}|,{{{{range .RepoDigests}}}}{{{{.}}}},{{{{end}}}}' "${{JHT_IMAGE#sha256:}}")" || exit 70
+case "$JHT_DEFAULT" in "${{JHT_IMAGE#sha256:}}|"$JHT_PLATFORM"|$JHT_REVISION|$JHT_DIGEST|"*",ghcr.io/leopu00/jht@$JHT_DIGEST,"*) ;; *) exit 70 ;; esac
+case "$JHT_DEFAULT" in *",ghcr.io/leopu00/jht@$JHT_PLATFORM_IMAGE,"*) ;; *) exit 70 ;; esac
+else
 JHT_CONTAINER="$(docker inspect --type container --format '{{{{.Id}}}}|{{{{.Image}}}}|{{{{.State.Running}}}}|{{{{index .Config.Labels "org.opencontainers.image.revision"}}}}|{{{{index .ImageManifestDescriptor "digest"}}}}' "$JHT_CID")" || exit 70
 [ "$JHT_CONTAINER" = "$JHT_CID|$JHT_IMAGE|true|$JHT_REVISION|$JHT_PLATFORM_IMAGE" ] || exit 70
 JHT_DEFAULT="$(docker image inspect --format '{{{{.Id}}}}|{{{{.Os}}}}/{{{{.Architecture}}}}|{{{{index .Config.Labels "org.opencontainers.image.revision"}}}}|{{{{range .RepoDigests}}}}{{{{.}}}},{{{{end}}}}' "$JHT_IMAGE")" || exit 70
 case "$JHT_DEFAULT" in "$JHT_IMAGE|"$JHT_PLATFORM"|$JHT_REVISION|"*"@$JHT_DIGEST"*) ;; *) exit 70 ;; esac
 JHT_EXPLICIT="$(docker image inspect --platform "$JHT_PLATFORM" --format '{{{{.Id}}}}|{{{{.Os}}}}/{{{{.Architecture}}}}|{{{{index .Config.Labels "org.opencontainers.image.revision"}}}}|{{{{range .RepoDigests}}}}{{{{.}}}},{{{{end}}}}' "$JHT_IMAGE")" || exit 70
 case "$JHT_EXPLICIT" in "$JHT_PLATFORM_IMAGE|"$JHT_PLATFORM"|$JHT_REVISION|"*"@$JHT_DIGEST"*) ;; *) exit 70 ;; esac
+fi
 {operation}"#,
+        engine = engine_selection(70),
         cid = target.container_id,
         image = target.image_id,
         platform = target.platform_image_id,
@@ -1612,7 +1667,7 @@ case "$JHT_EXPLICIT" in "$JHT_PLATFORM_IMAGE|"$JHT_PLATFORM"|$JHT_REVISION|"*"@$
 }
 
 /// The team id (the account's user id) arrives on stdin and stays on stdin: `printf` is a
-/// builtin of the VPS shell, so the pipe into `docker exec -i` puts it on no argument list,
+/// builtin of the VPS shell, so the pipe into the engine's `exec -i` puts it on no argument list,
 /// which anyone who lists the host's processes could read.
 pub(crate) fn team_probe_command(target: &RuntimeTarget) -> Result<String, &'static str> {
     command(
@@ -1620,7 +1675,7 @@ pub(crate) fn team_probe_command(target: &RuntimeTarget) -> Result<String, &'sta
         r#"IFS= read -r JHT_EXPECTED_TEAM
 [ "${#JHT_EXPECTED_TEAM}" -ge 16 ] && [ "${#JHT_EXPECTED_TEAM}" -le 128 ] || exit 64
 case "$JHT_EXPECTED_TEAM" in *[!A-Za-z0-9_-]*) exit 64 ;; esac
-printf '%s\n' "$JHT_EXPECTED_TEAM" | docker exec -i "$JHT_CID" node -e '
+printf '%s\n' "$JHT_EXPECTED_TEAM" | "$JHT_ENGINE" exec -i "$JHT_CID" node -e '
 const fs=require("fs"), expected=fs.readFileSync(0,"utf8").replace(/\n$/,"");
 let cloud; try { cloud=JSON.parse(fs.readFileSync("/jht_home/cloud.json","utf8")); } catch { process.exit(72); }
 if (typeof cloud.user_id!=="string" || cloud.user_id!==expected) process.exit(72);
@@ -1630,8 +1685,8 @@ const configured=["claude","anthropic","codex","openai","kimi","moonshot"].inclu
 const marker={claude:"/jht_home/.claude/.credentials.json",anthropic:"/jht_home/.claude/.credentials.json",codex:"/jht_home/.codex/auth.json",openai:"/jht_home/.codex/auth.json",kimi:"/jht_home/.kimi/credentials/kimi-code.json",moonshot:"/jht_home/.kimi/credentials/kimi-code.json"}[provider];
 console.log("runtimeInstalled=1"); console.log("containerRunning=1"); console.log("providerConfigured="+(configured?"1":"0")); console.log("providerAuthenticated="+(marker&&fs.existsSync(marker)?"1":"0")); console.log("profileReady="+(fs.existsSync("/jht_home/profile/ready.flag")?"1":"0")); console.log("assistantWelcomed="+(fs.existsSync("/jht_home/profile/welcomed.flag")?"1":"0"));
 ' || exit $?
-if docker exec "$JHT_CID" tmux has-session -t CAPITANO 2>/dev/null; then JHT_CAPTAIN=1; else JHT_CAPTAIN=0; fi
-if docker exec "$JHT_CID" tmux has-session -t ASSISTENTE 2>/dev/null; then JHT_ASSISTANT=1; else JHT_ASSISTANT=0; fi
+if "$JHT_ENGINE" exec "$JHT_CID" tmux has-session -t CAPITANO 2>/dev/null; then JHT_CAPTAIN=1; else JHT_CAPTAIN=0; fi
+if "$JHT_ENGINE" exec "$JHT_CID" tmux has-session -t ASSISTENTE 2>/dev/null; then JHT_ASSISTANT=1; else JHT_ASSISTANT=0; fi
 printf 'captainRunning=%s\nassistantRunning=%s\n' "$JHT_CAPTAIN" "$JHT_ASSISTANT""#,
     )
 }
@@ -1645,12 +1700,12 @@ printf 'captainRunning=%s\nassistantRunning=%s\n' "$JHT_CAPTAIN" "$JHT_ASSISTANT
 pub(crate) fn assistant_start_command(target: &RuntimeTarget) -> Result<String, &'static str> {
     command(
         target,
-        "docker exec -e JHT_SPAWN_SRC=desktop-existing-team \"$JHT_CID\" bash /app/.launcher/start-agent.sh assistente </dev/null",
+        "\"$JHT_ENGINE\" exec -e JHT_SPAWN_SRC=desktop-existing-team \"$JHT_CID\" bash /app/.launcher/start-agent.sh assistente </dev/null",
     )
 }
 
 pub(crate) fn python_command(target: &RuntimeTarget) -> Result<String, &'static str> {
-    command(target, "exec docker exec -i \"$JHT_CID\" python3 -c 'import sys;exec(bytes.fromhex(sys.stdin.buffer.readline().decode()).decode())'")
+    command(target, "exec \"$JHT_ENGINE\" exec -i \"$JHT_CID\" python3 -c 'import sys;exec(bytes.fromhex(sys.stdin.buffer.readline().decode()).decode())'")
 }
 
 pub(crate) fn delivery_command(
@@ -1665,7 +1720,7 @@ pub(crate) fn delivery_command(
     command(
         target,
         &format!(
-            "docker exec -i \"$JHT_CID\" sh -c 'msg=$(cat); exec jht-tmux-send {session} \"$msg\"'"
+            "\"$JHT_ENGINE\" exec -i \"$JHT_CID\" sh -c 'msg=$(cat); exec jht-tmux-send {session} \"$msg\"'"
         ),
     )
 }
@@ -1744,7 +1799,7 @@ pub(crate) fn chat_command(
     let arguments = quoted(&chat_arguments(operation)?);
     command(
         target,
-        &format!("exec docker exec -i \"$JHT_CID\" python3 -I /app/shared/skills/agent_chat.py {arguments}"),
+        &format!("exec \"$JHT_ENGINE\" exec -i \"$JHT_CID\" python3 -I /app/shared/skills/agent_chat.py {arguments}"),
     )
 }
 
@@ -1792,7 +1847,7 @@ pub(crate) fn revoke_full_link() {
 pub(crate) static FULL_LINK_TEST_LOCK: Mutex<()> = Mutex::new(());
 
 pub(crate) fn snapshot_command(target: &RuntimeTarget) -> Result<String, &'static str> {
-    command(target, "docker exec \"$JHT_CID\" node -e 'const fs=require(\"fs\"); let c={}; try{c=JSON.parse(fs.readFileSync(\"/jht_home/jht.config.json\",\"utf8\"))}catch{}; const p=String(c.active_provider||\"\").toLowerCase(); const marker={claude:\"/jht_home/.claude/.credentials.json\",anthropic:\"/jht_home/.claude/.credentials.json\",codex:\"/jht_home/.codex/auth.json\",openai:\"/jht_home/.codex/auth.json\",kimi:\"/jht_home/.kimi/credentials/kimi-code.json\",moonshot:\"/jht_home/.kimi/credentials/kimi-code.json\"}[p]; const ok=[\"claude\",\"anthropic\",\"codex\",\"openai\",\"kimi\",\"moonshot\"].includes(p); console.log(\"runtimeInstalled=1\\ncontainerRunning=1\\nproviderConfigured=\"+(ok?\"1\":\"0\")+\"\\nproviderAuthenticated=\"+(marker&&fs.existsSync(marker)?\"1\":\"0\")+\"\\nprofileReady=\"+(fs.existsSync(\"/jht_home/profile/ready.flag\")?\"1\":\"0\")+\"\\nassistantWelcomed=\"+(fs.existsSync(\"/jht_home/profile/welcomed.flag\")?\"1\":\"0\"));'")
+    command(target, "\"$JHT_ENGINE\" exec \"$JHT_CID\" node -e 'const fs=require(\"fs\"); let c={}; try{c=JSON.parse(fs.readFileSync(\"/jht_home/jht.config.json\",\"utf8\"))}catch{}; const p=String(c.active_provider||\"\").toLowerCase(); const marker={claude:\"/jht_home/.claude/.credentials.json\",anthropic:\"/jht_home/.claude/.credentials.json\",codex:\"/jht_home/.codex/auth.json\",openai:\"/jht_home/.codex/auth.json\",kimi:\"/jht_home/.kimi/credentials/kimi-code.json\",moonshot:\"/jht_home/.kimi/credentials/kimi-code.json\"}[p]; const ok=[\"claude\",\"anthropic\",\"codex\",\"openai\",\"kimi\",\"moonshot\"].includes(p); console.log(\"runtimeInstalled=1\\ncontainerRunning=1\\nproviderConfigured=\"+(ok?\"1\":\"0\")+\"\\nproviderAuthenticated=\"+(marker&&fs.existsSync(marker)?\"1\":\"0\")+\"\\nprofileReady=\"+(fs.existsSync(\"/jht_home/profile/ready.flag\")?\"1\":\"0\")+\"\\nassistantWelcomed=\"+(fs.existsSync(\"/jht_home/profile/welcomed.flag\")?\"1\":\"0\"));'")
 }
 
 pub(crate) fn hex_encode(bytes: &[u8]) -> String {
@@ -2146,7 +2201,7 @@ mod tests {
         let checks = command.find("exit 70").expect("the pin is checked");
         let script = command.find("bash /app/.launcher/start-agent.sh assistente").expect("the one script");
         assert!(checks < script, "the container is verified before anything runs in it");
-        assert!(command.contains("docker exec -e JHT_SPAWN_SRC=desktop-existing-team \"$JHT_CID\" bash"));
+        assert!(command.contains("\"$JHT_ENGINE\" exec -e JHT_SPAWN_SRC=desktop-existing-team \"$JHT_CID\" bash"));
         assert!(command.contains(&format!("JHT_CID='{}'", runtime.container_id)));
         assert!(!command.contains("docker exec jht"));
         assert_eq!(command.matches("start-agent.sh").count(), 1);
@@ -2258,7 +2313,7 @@ mod tests {
     #[test]
     fn the_chat_command_is_the_fixed_script_in_the_verified_container_with_only_checked_tokens() {
         let read = chat_command(&target(), &ChatOperation::Read { agent: "capitano", cursor: Some("123") }).expect("a read");
-        assert!(read.contains("exec docker exec -i \"$JHT_CID\" python3 -I /app/shared/skills/agent_chat.py read 'capitano' '123'"));
+        assert!(read.contains("exec \"$JHT_ENGINE\" exec -i \"$JHT_CID\" python3 -I /app/shared/skills/agent_chat.py read 'capitano' '123'"));
         assert!(read.contains("|| exit 70") && read.starts_with("set -eu\nJHT_CID='"), "the pinned container is verified first");
         let first = chat_command(&target(), &ChatOperation::Read { agent: "mentor", cursor: None }).expect("a first page");
         assert!(first.ends_with("agent_chat.py read 'mentor'"));
@@ -2290,15 +2345,15 @@ mod tests {
         let last = |command: String| command.lines().last().expect("a last line").to_owned();
         assert_eq!(
             last(chat_command(&target(), &ChatOperation::Read { agent: "capitano", cursor: Some("4096") }).unwrap()),
-            "exec docker exec -i \"$JHT_CID\" python3 -I /app/shared/skills/agent_chat.py read 'capitano' '4096'"
+            "exec \"$JHT_ENGINE\" exec -i \"$JHT_CID\" python3 -I /app/shared/skills/agent_chat.py read 'capitano' '4096'"
         );
         assert_eq!(
             last(chat_command(&target(), &ChatOperation::Read { agent: "mentor", cursor: None }).unwrap()),
-            "exec docker exec -i \"$JHT_CID\" python3 -I /app/shared/skills/agent_chat.py read 'mentor'"
+            "exec \"$JHT_ENGINE\" exec -i \"$JHT_CID\" python3 -I /app/shared/skills/agent_chat.py read 'mentor'"
         );
         assert_eq!(
             last(chat_command(&target(), &ChatOperation::Send { agent: "assistente", client_message_id: "0b1c2d3e-4f50-6172-8394-a5b6c7d8e9f0" }).unwrap()),
-            "exec docker exec -i \"$JHT_CID\" python3 -I /app/shared/skills/agent_chat.py send 'assistente' '0b1c2d3e-4f50-6172-8394-a5b6c7d8e9f0'"
+            "exec \"$JHT_ENGINE\" exec -i \"$JHT_CID\" python3 -I /app/shared/skills/agent_chat.py send 'assistente' '0b1c2d3e-4f50-6172-8394-a5b6c7d8e9f0'"
         );
     }
 

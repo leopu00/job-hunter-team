@@ -84,6 +84,7 @@ pub fn run() {
             closer_desktop::closer_desktop_request,
             existing_team_runtime::existing_team_positions_read,
             existing_team_judgement::existing_team_position_write,
+            existing_team_judgement::existing_team_position_write_target,
             existing_team_runtime::existing_team_link_identity,
             existing_team_agents::existing_team_agents_read,
             agent_control::agent_control,

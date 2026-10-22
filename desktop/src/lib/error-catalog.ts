@@ -1021,9 +1021,9 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
   ),
   position_write_read_only: copy(
     "Questa squadra è collegata in sola lettura: da qui non si scrive niente.",
-    "Per ora, dall’app, gli annunci di questa squadra si leggono soltanto.",
+    "Per giudicare gli annunci dall’app, collega la squadra con «Conferma e collega».",
     "This team is connected read only: nothing is written from here.",
-    "For now the positions of this team can only be read from the app.",
+    "To judge positions from the app, connect the team with “Confirm and connect”.",
   ),
   position_write_request_invalid: copy(
     "La richiesta non è valida e non è stata mandata alla squadra.",

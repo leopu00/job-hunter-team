@@ -102,6 +102,24 @@ def test_a_cv_request_and_a_recheck(home):
     assert code == 0 and row(db, "SELECT recheck_requested FROM positions WHERE id = 3") == (1,)
 
 
+def test_a_star_with_its_score_and_direction(home):
+    db, env, _ = home
+    code, out = run(env, "feedback", "1", "--value", "star", "--score", "5", "--direction", "more_like_this")
+    assert code == 0 and out["value"] == "star" and out["score"] == 5 and out["direction"] == "more_like_this"
+    assert row(db, "SELECT action, score, direction FROM position_feedback WHERE position_id = 1") == \
+        ("star", 5, "more_like_this")
+
+
+def test_a_cover_letter_needs_an_application_first(home):
+    db, env, _ = home
+    code, out = run(env, "write-request", "1", "--on", "--kind", "cover_letter")
+    assert code == 1 and out["code"] == "cover_letter_requires_application"
+    assert row(db, "SELECT write_requested, write_request_kind FROM positions WHERE id = 1") == (0, None)
+    # the CV is still the default, and the answer says which one was asked
+    code, out = run(env, "write-request", "1", "--on")
+    assert code == 0 and out["write_request_kind"] == "cv"
+
+
 # ── the application: consent first, then the gate ──
 
 def test_without_consent_an_application_is_not_authorised_and_nothing_is_written(home):
@@ -141,7 +159,11 @@ def test_a_reason_outside_the_vocabulary_is_refused_and_writes_nothing(home):
 
 @pytest.mark.parametrize("args", [
     ("feedback", "1", "--value", "dislike", "--note", "free text"),  # no note argument exists
-    ("feedback", "1", "--value", "star"),
+    ("feedback", "1", "--value", "superb"),
+    ("feedback", "1", "--value", "star", "--score", "6"),
+    ("feedback", "1", "--value", "star", "--score", "five"),
+    ("feedback", "1", "--value", "like", "--direction", "sideways"),
+    ("write-request", "1", "--on", "--kind", "poem"),
     ("feedback", "1;rm", "--value", "like"),
     ("feedback", "-1", "--value", "like"),
     ("recheck", "1"),

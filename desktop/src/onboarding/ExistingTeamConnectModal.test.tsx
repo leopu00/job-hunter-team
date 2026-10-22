@@ -177,7 +177,7 @@ describe("ExistingTeamConnectModal", () => {
     expect(native.connect).not.toHaveBeenCalled();
   });
 
-  it("explains when the verified existing-team configuration is missing", async () => {
+  it("with no saved configuration «Confirm and connect» asks the server instead of failing", async () => {
     const user = userEvent.setup();
     const native = bridge({ connect: vi.fn().mockRejectedValue({ code: "existing_team_runtime_candidate_required" }) });
     render(<ExistingTeamConnectModal teamId="team-opaque-0001" bridge={native} onCancel={vi.fn()} onConnected={vi.fn()} onReadOnlyConnected={vi.fn()} />);
@@ -185,8 +185,9 @@ describe("ExistingTeamConnectModal", () => {
     await user.click(screen.getByRole("button", { name: /verifica vps/i }));
     await user.click(await screen.findByRole("button", { name: /conferma e collega/i }));
 
-    expect(await screen.findByRole("alert")).toHaveTextContent(ERROR_CATALOG.existing_team_runtime_candidate_required.text.it);
-    expect(screen.getByRole("alert")).toHaveTextContent(ERROR_CATALOG.existing_team_runtime_candidate_required.action.it);
+    expect(await screen.findByText(/ciò che il server dichiara/i, { selector: "p" })).toBeInTheDocument();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(native.discover).toHaveBeenCalledOnce();
   });
 
   it("never renders the full key path and keeps cancel explicit", async () => {
@@ -484,4 +485,84 @@ describe("ExistingTeamConnectModal", () => {
     }
   });
 
+});
+
+describe("«Confirm and connect» on a profile with no saved target", () => {
+  async function toFullClick(user: ReturnType<typeof userEvent.setup>) {
+    await fillHost(user);
+    await user.click(screen.getByRole("button", { name: /verifica vps/i }));
+    await user.click(await screen.findByRole("button", { name: /conferma e collega/i }));
+  }
+
+  it("reads what the server declares, saves the target only once confirmed, then connects in full", async () => {
+    const user = userEvent.setup();
+    const connect = vi.fn().mockRejectedValueOnce(CANDIDATE_REQUIRED).mockResolvedValueOnce(RESULT);
+    const native = bridge({ connect });
+    const onConnected = vi.fn().mockResolvedValue(undefined);
+    const onReadOnlyConnected = vi.fn();
+    render(<ExistingTeamConnectModal teamId="team-opaque-0001" bridge={native} onCancel={vi.fn()} onConnected={onConnected} onReadOnlyConnected={onReadOnlyConnected} />);
+    await toFullClick(user);
+
+    const receipt = await screen.findByText(/ciò che il server dichiara/i, { selector: "p" });
+    const section = receipt.closest("section") as HTMLElement;
+    expect(within(section).getByText("team-opaque-0001")).toBeInTheDocument();
+    // the caution of the full connection, never the read-only one
+    expect(section).toHaveTextContent(EXISTING_TEAM_RECEIPT_TEXT.it.cautionFull);
+    expect(section).not.toHaveTextContent(EXISTING_TEAM_RECEIPT_TEXT.it.caution);
+    expect(within(section).queryByRole("button", { name: /sola lettura/i })).not.toBeInTheDocument();
+    expect(native.register).not.toHaveBeenCalled();
+    expect(connect).toHaveBeenCalledOnce();
+
+    await user.click(within(section).getByRole("button", { name: /^conferma e collega$/i }));
+    await waitFor(() => expect(onConnected).toHaveBeenCalledWith(RESULT));
+    expect(native.register).toHaveBeenCalledWith(RECEIPT.candidateSha256);
+    expect(connect).toHaveBeenCalledTimes(2);
+    expect(native.connectReadOnly).not.toHaveBeenCalled();
+    expect(onReadOnlyConnected).not.toHaveBeenCalled();
+  });
+
+  it("with a target saved in the meantime it connects in full and replaces nothing", async () => {
+    for (const where of ["discover", "register"] as const) {
+      const user = userEvent.setup();
+      const connect = vi.fn().mockRejectedValueOnce(CANDIDATE_REQUIRED).mockResolvedValue(RESULT);
+      const native = bridge({
+        connect,
+        ...(where === "discover"
+          ? { discover: vi.fn().mockRejectedValue({ code: "existing_team_runtime_candidate_exists" }) }
+          : { register: vi.fn().mockRejectedValue({ code: "existing_team_runtime_already_selected" }) }),
+      });
+      const onConnected = vi.fn().mockResolvedValue(undefined);
+      const view = render(<ExistingTeamConnectModal teamId="team-opaque-0001" bridge={native} onCancel={vi.fn()} onConnected={onConnected} onReadOnlyConnected={vi.fn()} />);
+      await toFullClick(user);
+      if (where === "register") await user.click(await screen.findByRole("button", { name: /^conferma e collega$/i }));
+      await waitFor(() => expect(onConnected).toHaveBeenCalledWith(RESULT));
+      expect(connect).toHaveBeenCalledTimes(2);
+      expect(native.connectReadOnly).not.toHaveBeenCalled();
+      view.unmount();
+    }
+  });
+
+  it("any other refusal of the full connection is shown as before, with no discovery", async () => {
+    const user = userEvent.setup();
+    const native = bridge({ connect: vi.fn().mockRejectedValue({ code: "existing_team_not_active" }) });
+    render(<ExistingTeamConnectModal teamId="team-opaque-0001" bridge={native} onCancel={vi.fn()} onConnected={vi.fn()} onReadOnlyConnected={vi.fn()} />);
+    await toFullClick(user);
+    expect(await screen.findByRole("alert")).toHaveTextContent(ERROR_CATALOG.existing_team_not_active.text.it);
+    expect(native.discover).not.toHaveBeenCalled();
+    expect(native.register).not.toHaveBeenCalled();
+  });
+
+  it("each language says what the full connection does, and that it starts no agent", () => {
+    const agents: Record<string, RegExp> = {
+      it: /agenti/i, en: /agents/i, de: /Agenten/, fr: /agent/i, es: /agentes/i, pt: /agentes/i, hu: /ügynök/i,
+    };
+    const lines = new Set<string>();
+    for (const [locale, text] of Object.entries(EXISTING_TEAM_RECEIPT_TEXT)) {
+      expect(text.cautionFull, locale).toMatch(agents[locale]);
+      expect(text.cautionFull, locale).not.toBe(text.caution);
+      expect(text.registeringDetailFull, locale).not.toBe(text.registeringDetail);
+      lines.add(text.cautionFull);
+    }
+    expect(lines.size).toBe(Object.keys(EXISTING_TEAM_RECEIPT_TEXT).length);
+  });
 });
