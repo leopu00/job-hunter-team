@@ -185,12 +185,37 @@ describe("the box on team_state", () => {
     expect(runs).toEqual([]);
   });
 
-  it("does not run an emergency stop it cannot write down", async () => {
+  it("tries a failed emergency stop again at the next round, and stops then", async () => {
+    const done = store();
+    const results = [false, true];
+    const flaky = async (args: string[]) => {
+      runs.push(args);
+      const ok = results.shift() ?? true;
+      return { ok, code: ok ? 0 : 1, stdout: "", stderr: ok ? "" : "tmux busy" };
+    };
+    expect(await reconcileEmergencyStop(CONFIG, emergency(), { done, exec: flaky })).toMatchObject({
+      ok: false,
+      action: "stopped",
+    });
+    // completed_at stayed empty: the next round must stop, not answer already_executed
+    expect(await reconcileEmergencyStop(CONFIG, emergency(), { done, exec: flaky })).toMatchObject({
+      ok: true,
+      action: "stopped",
+    });
+    // and once it has worked, the same request does not stop again
+    expect(await reconcileEmergencyStop(CONFIG, emergency(), { done, exec: flaky })).toMatchObject({
+      refused: "already_executed",
+    });
+    expect(runs).toEqual([["team", "stop"], ["team", "stop"]]);
+  });
+
+  it("stops even when it cannot write the request down: the stop is not undone by the store", async () => {
     const done = { has: () => false, add: () => { throw new Error("ENOSPC"); } };
     expect(await reconcileEmergencyStop(CONFIG, emergency(), { done, exec })).toMatchObject({
-      refused: "done_store_unwritable",
+      ok: true,
+      action: "stopped",
     });
-    expect(runs).toEqual([]);
+    expect(runs).toEqual([["team", "stop"]]);
   });
 
   it("reads user_id with the row the emergency stop is decided on", async () => {

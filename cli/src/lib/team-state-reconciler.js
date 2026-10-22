@@ -363,21 +363,15 @@ export async function reconcileEmergencyStop(config, state, { done = doneStore()
   if (!baseUrl || !token) return { ok: false, skipped: 'missing-credentials' };
 
   // However old the request (stopping late is the safe direction): only the
-  // paired user's row, and once per request even if completed_at is put back.
+  // paired user's row, and once a stop of that request has succeeded, never
+  // again, even if completed_at is put back. A failed stop is tried again at
+  // the next round, as before: it is the safe direction that must not stall.
   const ownerId = typeof config.user_id === 'string' ? config.user_id : null;
   const refusal = emergencyStopRefusal(state, { ownerId, done });
   if (refusal) {
     sayRefusal('emergency-stop', refusal, state.emergency_stop_requested_at);
     return { ok: false, refused: refusal };
   }
-  // Written down before it runs: at most once. Unwritable = not run.
-  try {
-    done.add(desiredKey('emergency-stop', state));
-  } catch (err) {
-    log('error', 'emergency-stop.done-store-failed', { err: err.message });
-    return { ok: false, refused: 'done_store_unwritable' };
-  }
-
   log('warn', 'reconcile.emergency-stop');
   // Nessun valore proveniente dal web entra negli argomenti: questa è una
   // capacità stop-only, non la riapertura del command bus generico.
@@ -390,6 +384,12 @@ export async function reconcileEmergencyStop(config, state, { done = doneStore()
   );
   if (r.ok) {
     updates.emergency_stop_completed_at = state.emergency_stop_requested_at;
+    // Written down after the stop has worked: an unwritable store does not undo a stop.
+    try {
+      done.add(desiredKey('emergency-stop', state));
+    } catch (err) {
+      log('error', 'emergency-stop.done-store-failed', { err: err.message });
+    }
   }
   await apiCall('PATCH', baseUrl, token, '/api/team-state', updates).catch((err) =>
     log('error', 'emergency-stop.observe-write-failed', { err: err.message })
