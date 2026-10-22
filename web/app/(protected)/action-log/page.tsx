@@ -32,7 +32,10 @@ export default function ActionLogPage() {
           <span className="text-[var(--color-border)]" aria-hidden="true">
             /
           </span>
-          <span className="text-[10px] text-[var(--color-muted)]" aria-current="page">
+          <span
+            className="text-[10px] text-[var(--color-muted)]"
+            aria-current="page"
+          >
             {t.title}
           </span>
         </nav>

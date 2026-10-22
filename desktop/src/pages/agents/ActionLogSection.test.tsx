@@ -30,12 +30,13 @@ type Answer = { data?: unknown; error?: { code?: string; message?: string } | nu
 function row(over: Record<string, unknown> = {}) {
   return {
     id: "r1",
-    action: "team_restart",
-    target: null,
-    summary: "Restart of the team",
+    action: "team.restart",
+    params: { target: "all" },
+    summary: "restart all",
     level: "L2",
     status: "done",
     created_at: new Date(Date.now() - 5 * 60_000).toISOString(),
+    expires_at: null,
     confirmed_at: null,
     result: null,
     ...over,
@@ -81,8 +82,8 @@ describe("the action log in the agents panel", () => {
   it("opens onto the person's rows, newest first, each with its action, its state in words and its level", async () => {
     const { stand } = client({
       data: [
-        row({ id: "old", action: "apply_request", level: "L3", status: "queued", created_at: new Date(Date.now() - 3 * 3600_000).toISOString() }),
-        row({ id: "new", action: "team_stop", level: "L2", status: "error", result: "box unreachable" }),
+        row({ id: "old", action: "position.apply_authorize", params: { legacy_id: 5 }, summary: "Synthetic role @ Synthetic Co", level: "L3", status: "queued", created_at: new Date(Date.now() - 3 * 3600_000).toISOString() }),
+        row({ id: "new", action: "team.stop", params: { target: "capitano" }, level: "L2", status: "error", result: "box unreachable" }),
       ],
     });
     render(<ActionLogSection locale="it" loadClient={async () => stand} />);
@@ -90,11 +91,11 @@ describe("the action log in the agents panel", () => {
     const list = await screen.findByTestId("action-log-list");
     const items = within(list).getAllByRole("listitem");
     expect(items.map((item) => item.getAttribute("data-testid"))).toEqual(["action-log-row-new", "action-log-row-old"]);
-    expect(items[0]).toHaveTextContent("Arresto della squadra");
+    expect(items[0]).toHaveTextContent("Arresto · capitano");
     expect(items[0]).toHaveTextContent("Non riuscita");
     expect(items[0]).toHaveTextContent("Esito: box unreachable");
     expect(items[0]).toHaveTextContent("Comando alla squadra");
-    expect(items[1]).toHaveTextContent("Candidatura autorizzata");
+    expect(items[1]).toHaveTextContent("Candidatura autorizzata · Synthetic role @ Synthetic Co");
     expect(items[1]).toHaveTextContent("In coda");
     expect(items[1]).toHaveTextContent("Verso l’esterno");
   });
@@ -120,12 +121,12 @@ describe("the action log in the agents panel", () => {
     let release!: (answer: Answer) => void;
     const slow = new Promise<Answer>((resolve) => (release = resolve));
     const first = client(slow).stand;
-    const second = client({ data: [row({ id: "fresh", action: "team_start" })] }).stand;
+    const second = client({ data: [row({ id: "fresh", action: "team.start" })] }).stand;
     const view = render(<ActionLogPanel client={first} locale="it" />);
     expect(screen.getByText("Leggo il registro…")).toBeInTheDocument();
     view.rerender(<ActionLogPanel client={second} locale="it" />);
     await screen.findByTestId("action-log-row-fresh");
-    release({ data: [row({ id: "stale", action: "team_stop" })] });
+    release({ data: [row({ id: "stale", action: "team.stop" })] });
     await new Promise((resolve) => setTimeout(resolve, 20));
     expect(screen.queryByTestId("action-log-row-stale")).toBeNull();
     expect(screen.getByTestId("action-log-row-fresh")).toBeInTheDocument();
@@ -133,7 +134,7 @@ describe("the action log in the agents panel", () => {
 
   it("shows markup, hidden characters and a code it does not know as plain, readable text", async () => {
     const { stand } = client({
-      data: [row({ summary: `<img src=x onerror=alert(1)>${RLO}evil`, action: "make_coffee", status: "teleported" })],
+      data: [row({ summary: `<img src=x onerror=alert(1)>${RLO}evil`, action: "make.coffee", status: "teleported" })],
     });
     const { container } = render(<ActionLogSection locale="it" loadClient={async () => stand} />);
     open();
@@ -141,7 +142,7 @@ describe("the action log in the agents panel", () => {
     expect(container.querySelector("img")).toBeNull();
     expect(item).toHaveTextContent("<img src=x onerror=alert(1)> evil");
     expect(item.textContent).not.toContain(RLO);
-    expect(item).toHaveTextContent("Altra azione (make_coffee)");
+    expect(item).toHaveTextContent("Altra azione (make.coffee)");
     expect(item).toHaveTextContent("Stato non noto");
     expect(item).toHaveAttribute("data-status", "unknown");
   });
@@ -181,13 +182,14 @@ describe("the action log in the agents panel", () => {
   });
 
   it("speaks the person's language", async () => {
-    const { stand } = client({ data: [row({ action: "directive_create", status: "awaiting_confirm", level: "L2" })] });
+    const { stand } = client({ data: [row({ action: "team.emergency_stop", params: {}, status: "awaiting_confirm", expires_at: new Date(Date.now() + 120_000).toISOString(), level: "L2" })] });
     render(<ActionLogSection locale="de" loadClient={async () => stand} />);
     expect(screen.getByText("Aktionsprotokoll")).toBeInTheDocument();
     open();
     const item = await screen.findByTestId("action-log-row-r1");
-    expect(item).toHaveTextContent("Neue Dauerweisung");
+    expect(item).toHaveTextContent("Notstopp");
     expect(item).toHaveTextContent("Wartet auf Bestätigung");
+    expect(item).toHaveTextContent("läuft ab");
   });
 });
 

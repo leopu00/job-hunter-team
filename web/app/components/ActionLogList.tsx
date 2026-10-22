@@ -1,6 +1,7 @@
 import type { Locale } from "@/i18n/config";
 import { formatRelative } from "@/lib/message-display";
 import {
+  actionSubject,
   actionTitle,
   statusLabel,
   statusTone,
@@ -38,6 +39,7 @@ export default function ActionLogList({
     >
       {rows.map((row) => {
         const tone = statusTone(row.status);
+        const subject = actionSubject(row, locale);
         return (
           <li
             key={row.id}
@@ -49,8 +51,11 @@ export default function ActionLogList({
             <div className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5">
               <span className="text-[12px] font-semibold text-[var(--color-bright)] break-words min-w-0">
                 {actionTitle(row, locale)}
-                {row.target && (
-                  <span className="font-normal text-[var(--color-muted)]"> · {row.target}</span>
+                {subject && (
+                  <span className="font-normal text-[var(--color-muted)]">
+                    {" "}
+                    · {subject}
+                  </span>
                 )}
               </span>
               <span
@@ -79,19 +84,28 @@ export default function ActionLogList({
                 {formatRelative(row.createdAt, locale)}
               </time>
             </div>
-            {row.summary && (
-              <p className="text-[11px] text-[var(--color-muted)] break-words">{row.summary}</p>
-            )}
             {row.result && (
               <p className="text-[11px] text-[var(--color-muted)] break-words">
                 {t.result}: {row.result}
+              </p>
+            )}
+            {row.status === "awaiting_confirm" && row.expiresAt && (
+              <p className="text-[11px] text-[var(--color-dim)]">
+                {t.expires.replace(
+                  "{time}",
+                  new Date(row.expiresAt).toLocaleTimeString(locale, {
+                    timeStyle: "short",
+                  }),
+                )}
               </p>
             )}
             {row.confirmedAt && (
               <p className="text-[11px] text-[var(--color-dim)]">
                 {t.confirmed.replace(
                   "{time}",
-                  new Date(row.confirmedAt).toLocaleTimeString(locale, { timeStyle: "short" }),
+                  new Date(row.confirmedAt).toLocaleTimeString(locale, {
+                    timeStyle: "short",
+                  }),
                 )}
               </p>
             )}

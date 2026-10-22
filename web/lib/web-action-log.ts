@@ -12,29 +12,17 @@
 import type { Locale } from "@/i18n/config";
 import { WEB_ACTION_LOG_TEXT } from "@/lib/web-action-log.i18n";
 
-/** The closed vocabulary of actions the log names. A row with another code is kept, as «other action». */
+/**
+ * The closed vocabulary of actions the log names (the table's own CHECK). A row with another code, from a
+ * later migration, is kept as «other action».
+ */
 export const WEB_ACTION_CODES = [
-  "team_start",
-  "team_stop",
-  "team_restart",
-  "agent_start",
-  "agent_stop",
-  "agent_restart",
-  "directive_create",
-  "directive_update",
-  "directive_archive",
-  "apply_request",
-  "apply_cancel",
-  "message_send",
-  "exclusion_add",
-  "exclusion_remove",
-  "setting_update",
-  "working_hours_update",
-  "position_applied",
-  "position_outcome",
-  "position_note",
-  "file_upload",
-  "file_delete",
+  "team.start",
+  "team.stop",
+  "team.restart",
+  "team.emergency_stop",
+  "position.apply_authorize",
+  "position.apply_revoke",
 ] as const;
 export type WebActionCode = (typeof WEB_ACTION_CODES)[number];
 
@@ -52,7 +40,7 @@ export type WebActionTone = "good" | "bad" | "wait" | "neutral";
  * `session_id`: the owner is the viewer, and a session is not for the eye.
  */
 export const WEB_ACTION_LOG_TABLE = "web_action_log";
-export const WEB_ACTION_LOG_COLUMNS = "id, action, target, summary, level, status, created_at, confirmed_at, result";
+export const WEB_ACTION_LOG_COLUMNS = "id, action, level, params, summary, status, created_at, expires_at, confirmed_at, result";
 
 /** How many rows one read brings, newest first. */
 export const WEB_ACTION_LOG_LIMIT = 100;
@@ -72,6 +60,8 @@ export type WebActionRow = {
   status: WebActionStatus | null;
   /** ISO time, from the database's own clock. */
   createdAt: string;
+  /** Until when a request that waits for the person's confirmation can be confirmed. */
+  expiresAt: string | null;
   confirmedAt: string | null;
   result: string | null;
 };
@@ -110,6 +100,12 @@ function level(value: unknown): WebActionLevel | null {
   return text === "1" || text === "2" || text === "3" ? (`L${text}` as WebActionLevel) : null;
 }
 
+/** The agent a team action is about, when the action names one: `params.target`, a role or «all». */
+function paramsTarget(params: unknown): string | null {
+  if (!params || typeof params !== "object") return null;
+  return cleanLogText((params as Record<string, unknown>).target, TARGET_MAX) || null;
+}
+
 /** One row of the table, or null when it has no id, no action or no time (it cannot be placed in a list). */
 export function parseWebActionRow(raw: unknown): WebActionRow | null {
   if (!raw || typeof raw !== "object") return null;
@@ -122,11 +118,12 @@ export function parseWebActionRow(raw: unknown): WebActionRow | null {
   return {
     id,
     action,
-    target: cleanLogText(row.target, TARGET_MAX) || null,
+    target: paramsTarget(row.params),
     summary: cleanLogText(row.summary, SUMMARY_MAX),
     level: level(row.level),
     status,
     createdAt,
+    expiresAt: isoTime(row.expires_at),
     confirmedAt: isoTime(row.confirmed_at),
     result: cleanLogText(row.result, RESULT_MAX) || null,
   };
@@ -148,6 +145,19 @@ export function isKnownAction(code: string): code is WebActionCode {
 export function actionTitle(row: WebActionRow, locale: Locale): string {
   const text = WEB_ACTION_LOG_TEXT[locale] ?? WEB_ACTION_LOG_TEXT.en;
   return isKnownAction(row.action) ? text.action[row.action] : text.unknownAction.replace("{code}", row.action);
+}
+
+/**
+ * What names the thing an action is about: for a team action the agent or the whole team (its summary is a
+ * machine phrase, never shown); for an application the summary is the position («title @ company»).
+ */
+export function actionSubject(row: WebActionRow, locale: Locale): string | null {
+  const text = WEB_ACTION_LOG_TEXT[locale] ?? WEB_ACTION_LOG_TEXT.en;
+  if (row.action.startsWith("team.")) {
+    if (!row.target) return null;
+    return row.target.toLowerCase() === "all" ? text.targetAll : row.target;
+  }
+  return row.summary || null;
 }
 
 export function statusLabel(row: WebActionRow, locale: Locale): string {

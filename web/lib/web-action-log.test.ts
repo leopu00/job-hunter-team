@@ -1,6 +1,8 @@
+import { readdirSync, readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { locales } from "@/i18n/config";
 import {
+  actionSubject,
   actionTitle,
   cleanLogText,
   isKnownAction,
@@ -20,12 +22,13 @@ import { WEB_ACTION_LOG_TEXT } from "./web-action-log.i18n";
 
 const raw = (over: Record<string, unknown> = {}) => ({
   id: "a1",
-  action: "team_restart",
-  target: null,
-  summary: "Restart of the team",
+  action: "team.restart",
+  params: { target: "all" },
+  summary: "restart all",
   level: "L2",
   status: "done",
   created_at: "2026-10-22T10:00:00Z",
+  expires_at: "2026-10-22T10:02:00Z",
   confirmed_at: "2026-10-22T10:00:20Z",
   result: null,
   ...over,
@@ -35,12 +38,13 @@ describe("one row of the log", () => {
   it("is read field by field, with the times in ISO", () => {
     expect(parseWebActionRow(raw())).toEqual({
       id: "a1",
-      action: "team_restart",
-      target: null,
-      summary: "Restart of the team",
+      action: "team.restart",
+      target: "all",
+      summary: "restart all",
       level: "L2",
       status: "done",
       createdAt: "2026-10-22T10:00:00.000Z",
+      expiresAt: "2026-10-22T10:02:00.000Z",
       confirmedAt: "2026-10-22T10:00:20.000Z",
       result: null,
     });
@@ -71,6 +75,13 @@ describe("one row of the log", () => {
     expect(parseWebActionRow(raw({ level: "l1" }))!.level).toBe("L1");
     expect(parseWebActionRow(raw({ level: "L9" }))!.level).toBeNull();
     expect(parseWebActionRow(raw({ level: null }))!.level).toBeNull();
+  });
+
+  it("reads the target only from a text in the params, and takes no target from anything else", () => {
+    expect(parseWebActionRow(raw({ params: {} }))!.target).toBeNull();
+    expect(parseWebActionRow(raw({ params: null }))!.target).toBeNull();
+    expect(parseWebActionRow(raw({ params: { target: 7 } }))!.target).toBeNull();
+    expect(parseWebActionRow(raw({ params: { legacy_id: 12 } }))!.target).toBeNull();
   });
 
   it("takes a numeric id", () => {
@@ -105,7 +116,7 @@ describe("the text of a row is cleaned before anyone sees it", () => {
   });
 
   it("clips the target and the result too", () => {
-    const row = parseWebActionRow(raw({ target: "t".repeat(200), result: "r".repeat(500) }))!;
+    const row = parseWebActionRow(raw({ params: { target: "t".repeat(200) }, result: "r".repeat(500) }))!;
     expect(Array.from(row.target!)).toHaveLength(64);
     expect(Array.from(row.result!)).toHaveLength(200);
   });
@@ -191,8 +202,17 @@ describe("the words", () => {
   const row = (over: Partial<WebActionRow> = {}) => parseWebActionRow(raw(over as Record<string, unknown>))!;
 
   it("name a known action in the person's language and an unknown one by its code", () => {
-    expect(actionTitle(row({ action: "apply_request" } as never), "it")).toBe("Candidatura autorizzata");
+    expect(actionTitle(row({ action: "position.apply_authorize" } as never), "it")).toBe("Candidatura autorizzata");
     expect(actionTitle(row({ action: "make_coffee" } as never), "en")).toBe("Other action (make_coffee)");
+  });
+
+  it("name the subject of an action: the agent or the whole team for the team's, the position for an application's", () => {
+    expect(actionSubject(row(), "it")).toBe("tutta la squadra");
+    expect(actionSubject(row({ params: { target: "capitano" } } as never), "it")).toBe("capitano");
+    expect(actionSubject(row({ params: {} } as never), "it")).toBeNull();
+    // the summary of a team action is a machine phrase («restart all»): never shown
+    expect(actionSubject(row(), "it")).not.toContain("restart");
+    expect(actionSubject(row({ action: "position.apply_authorize", summary: "Synthetic role @ Synthetic Co", params: { legacy_id: 5 } } as never), "it")).toBe("Synthetic role @ Synthetic Co");
   });
 
   it("name a state, or say it is not known", () => {
@@ -221,6 +241,8 @@ describe("the words", () => {
     expect(t.unknownAction).toContain("{code}");
     expect(t.limitNote).toContain("{n}");
     expect(t.confirmed).toContain("{time}");
+    expect(t.expires).toContain("{time}");
+    expect(t.targetAll.trim()).not.toBe("");
   });
 
   it.each(locales.filter((locale) => locale !== "it"))("%s: is a translation, not the Italian text left in", (locale) => {
@@ -230,5 +252,42 @@ describe("the words", () => {
     expect(t.intro).not.toBe(it.intro);
     expect(t.empty).not.toBe(it.empty);
     expect(t.status.done).not.toBe(it.status.done);
+  });
+});
+
+describe("the screen and the table say the same thing", () => {
+  // The migration that creates the log: the vocabulary, the columns and the grants are read from it, so a new action
+  // or a renamed column in the table fails here instead of showing as «other action» or as an empty list.
+  const dir = new URL("../../supabase/migrations/", import.meta.url);
+  const file = readdirSync(dir).find((name) => readFileSync(new URL(name, dir), "utf8").includes("CREATE TABLE IF NOT EXISTS public.web_action_log"));
+  const sql = file ? readFileSync(new URL(file, dir), "utf8") : "";
+  const table = sql.slice(sql.indexOf("CREATE TABLE IF NOT EXISTS public.web_action_log"), sql.indexOf("ALTER TABLE public.web_action_log ENABLE"));
+  const closedList = (constraint: string) => {
+    const at = table.indexOf(constraint);
+    const quoted = table.slice(at, table.indexOf("))", at)).match(/'[^']+'/g) ?? [];
+    return quoted.map((item) => item.slice(1, -1));
+  };
+
+  it("finds the table's migration", () => {
+    expect(file, "the migration that creates web_action_log").toBeTruthy();
+    expect(table.length).toBeGreaterThan(200);
+  });
+
+  it("names the same actions, states and levels as the table's own CHECKs", () => {
+    expect([...WEB_ACTION_CODES].sort()).toEqual(closedList("web_action_log_action_closed").sort());
+    expect([...WEB_ACTION_STATUSES].sort()).toEqual(closedList("web_action_log_status_closed").sort());
+    expect(closedList("web_action_log_level_closed")).toEqual(["L1", "L2", "L3"]);
+  });
+
+  it("reads columns the table has, and never its owner or its session", () => {
+    const columns = new Set([...table.matchAll(/^ {4}([a-z_]+)\s+[A-Z]/gm)].map((match) => match[1]));
+    for (const name of WEB_ACTION_LOG_COLUMNS.split(",").map((item) => item.trim())) expect(columns.has(name), name).toBe(true);
+    expect(WEB_ACTION_LOG_COLUMNS).not.toMatch(/user_id|session_id|command_id/);
+  });
+
+  it("gives the browser roles the read and nothing else", () => {
+    expect(sql).toMatch(/REVOKE ALL ON TABLE public\.web_action_log FROM PUBLIC, anon, authenticated;/);
+    expect(sql).toMatch(/GRANT SELECT ON TABLE public\.web_action_log TO authenticated;/);
+    expect(sql).not.toMatch(/GRANT (INSERT|UPDATE|DELETE|ALL)[^;]*web_action_log/);
   });
 });

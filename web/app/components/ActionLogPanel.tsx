@@ -46,7 +46,9 @@ export default function ActionLogPanel({
 
   let body;
   if (!client) {
-    body = <p className="text-[12px] text-[var(--color-muted)]">{t.localCopy}</p>;
+    body = (
+      <p className="text-[12px] text-[var(--color-muted)]">{t.localCopy}</p>
+    );
   } else if (read === null) {
     body = (
       <p role="status" className="text-[12px] text-[var(--color-muted)]">
@@ -54,7 +56,11 @@ export default function ActionLogPanel({
       </p>
     );
   } else if (!read.ok) {
-    const sentence = { not_active: t.notYet, signed_out: t.signedOut, unavailable: t.unavailable }[read.reason];
+    const sentence = {
+      not_active: t.notYet,
+      signed_out: t.signedOut,
+      unavailable: t.unavailable,
+    }[read.reason];
     body = (
       <p
         role={read.reason === "unavailable" ? "alert" : "status"}
@@ -67,7 +73,10 @@ export default function ActionLogPanel({
     );
   } else if (read.rows.length === 0) {
     body = (
-      <p data-testid="action-log-empty" className="text-[12px] text-[var(--color-muted)]">
+      <p
+        data-testid="action-log-empty"
+        className="text-[12px] text-[var(--color-muted)]"
+      >
         {t.empty}
       </p>
     );
@@ -87,7 +96,9 @@ export default function ActionLogPanel({
   return (
     <div data-testid="action-log">
       <div className="flex items-center justify-between gap-3 mb-2">
-        <p className="text-[12px] text-[var(--color-muted)] max-w-prose">{t.intro}</p>
+        <p className="text-[12px] text-[var(--color-muted)] max-w-prose">
+          {t.intro}
+        </p>
         {client && (
           <button
             type="button"
