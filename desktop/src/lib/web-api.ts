@@ -8,8 +8,7 @@ import { json, notInDesktop, type ApiFetch } from "../shell/api-bridge";
  * dell'utente (anon key + JWT, RLS): i componenti del web chiamano
  * `fetch("/api/...")` e il ponte del guscio (shell/api-bridge.ts) passa qui
  * le chiamate same-origin. Una sola tabella, `ROUTES`; tutto il resto
- * risponde 404 `not_in_desktop` (`notInDesktop` del guscio; le rotte non portabili sono in
- * banda/piani/D02-azioni-da-decidere.md).
+ * risponde 404 `not_in_desktop` (`notInDesktop` del guscio).
  *
  * Ogni voce riproduce il ramo di SESSIONE della rotta del web, con gli
  * stessi controlli e la stessa forma di risposta. Niente service_role: se

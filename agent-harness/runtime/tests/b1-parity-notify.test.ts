@@ -1,5 +1,5 @@
 /**
- * B1-T3 (banda/piani/B1-parita-ruoli.md): a message of a role to the person.
+ * B1 (the role parity suite), notify: a message of a role to the person.
  *
  * In the TUI `jht-notify-user` writes it into `pending_user_messages`, which
  * the chat sync and `jht cloud push` carry to the web. The API roles wrote it

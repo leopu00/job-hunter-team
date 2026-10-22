@@ -1,9 +1,10 @@
 /**
- * B1 (banda/piani/JHT-API-TEST.md), CAPITANO and CLOSER, and the ANALISTA's
+ * B1 (the role parity suite), CAPITANO and CLOSER, and the ANALISTA's
  * tickets and taxonomy: the same commands their prompts give, run by the TUI
  * script of this tree and by the tool the API role gets, on twin databases,
  * and the two compared (helpers/b1-twins). What only one side can write (the
- * CLOSER's send, the CAPITANO's CV rework) is in banda/piani/B1-parita-ruoli.md.
+ * CLOSER's send, the CAPITANO's CV rework) is not compared here: each such
+ * difference is written in the other B1 test files with its reason.
  */
 
 import { mkdtempSync, rmSync } from "node:fs";

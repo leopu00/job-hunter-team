@@ -318,7 +318,7 @@ def test_the_real_bridge_hands_an_eight_character_code_to_the_flow(page, tmp_pat
 
 def test_the_typed_code_is_hidden_from_a_stop_screenshot(page):
     """A stop between typing the code and confirming it photographs the live
-    page: the boxes must be fields `secrets_hidden` hides (SICUREZZA P2, 20/09)."""
+    page: the boxes must be fields `secrets_hidden` hides."""
     page.set_content(code_page())
     page.evaluate("() => { document.querySelector('#security').hidden = false; }")
 

@@ -3,7 +3,7 @@
 
 Why. Workday (backend-3), iCIMS and Oracle Recruiting Cloud (backend-4), 14/09:
 the operator decided that when a portal OBLIGES a candidate account, the
-CLOSER creates it (piani/closer-workday-decision-master-2-res.txt). One module
+CLOSER creates it. One module
 for every recipe, so the rules are written once:
 
 - email = the profile's contact email; password generated strong, one per

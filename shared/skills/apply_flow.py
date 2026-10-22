@@ -3187,7 +3187,7 @@ def _fill_secret(control: Any, value: str) -> None:
 
     A stop can fire with the code still in the box, and the stop screenshot is
     taken from the live page: a field nobody marked is a field `_secrets_hidden`
-    does not hide (SICUREZZA P2, 20/09). The marking comes first — a page that
+    does not hide. The marking comes first — a page that
     cannot be marked is a page nothing is typed into.
     """
     module = _optional_module("ats_account")

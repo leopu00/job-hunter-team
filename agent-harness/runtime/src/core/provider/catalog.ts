@@ -9,7 +9,7 @@
  * Prices are USD per million tokens at standard (non-batch) rates, first-party
  * API. Sources and dates are per block below. They go stale, and the cap is
  * only as right as they are: a run stopped at a fifth of its budget is as
- * wrong as one let past it (JHT-API-TEST A2, A5). `npm run spend -- reconcile`
+ * wrong as one let past it. `npm run spend -- reconcile`
  * checks them against what OpenAI billed.
  */
 

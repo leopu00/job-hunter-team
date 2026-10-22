@@ -374,7 +374,7 @@ function toToolSet(specs: ToolSpec[]): ToolSet {
  * `search`, `open_page` or `find_in_page`: «Search actions incur a tool call
  * cost» (developers.openai.com/api/docs/guides/tools-web-search). Under
  * `max_tool_calls: 1` it often returns TWO search items for one request, and
- * bills one: the searches OpenAI billed on a day of the JHT-API-TEST A2 week
+ * bills one: the searches OpenAI billed on a day of the spend week
  * were the responses that searched, not their items (the key proxy's log
  * against the usage console). So: the search items, at most
  * MAX_SEARCHES_PER_CALL per call. Counting every item had billed the runs for
