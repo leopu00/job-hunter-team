@@ -407,6 +407,13 @@ function enableExactPodmanHarness(sb: Sandbox): PodmanHarness {
   };
 }
 
+// A run of the real wrapper that goes through apply, verify or rollback is
+// hundreds of processes. Measured on the dev Mac (22/10): 2.8-3.5 s alone, and
+// with four copies of this file side by side, as in a full suite, up to 5.6 s
+// (the 8% case, red at vitest's 5 s in a full suite while green alone). Same
+// rule as the Podman case below: about three times the worst measured.
+const WRAPPER_RUN_MS = 15_000;
+
 function run(
   sb: Sandbox,
   extra: Record<string, string> = {},
@@ -499,7 +506,7 @@ posixOnly("jht upgrade — runtime image atomico", () => {
       calls.filter((line) => line.includes("inspect --type container aaaaaaaaaaaa"))
         .length,
     ).toBeGreaterThanOrEqual(3);
-  });
+  }, WRAPPER_RUN_MS);
 
   it("sotto il 3% di disco libero rifiuta con disk_low prima di scaricare qualunque cosa", () => {
     for (const args of [["upgrade", "--json"], ["upgrade", "--check", "--json"]]) {
@@ -518,7 +525,7 @@ posixOnly("jht upgrade — runtime image atomico", () => {
       expect(sb.compose()).toContain("example/old");
       expect(sb.dockerCalls().filter((line) => / pull /.test(line))).toEqual([]);
     }
-  });
+  }, WRAPPER_RUN_MS);
 
   it("all'8% l'upgrade parte (l'avviso e' un'altra cosa: non ferma niente)", () => {
     const sb = makeSandbox();
@@ -526,7 +533,7 @@ posixOnly("jht upgrade — runtime image atomico", () => {
 
     expect(result.code).toBe(0);
     expect(JSON.parse(result.stdout)).toMatchObject({ ok: true, phase: "complete" });
-  });
+  }, WRAPPER_RUN_MS);
 
   // Cinque esecuzioni del wrapper vero (upgrade, poi chat e snapshot prima e
   // dopo un config-hash cambiato): ognuna riverifica proprietario, permessi e
@@ -604,7 +611,7 @@ posixOnly("jht upgrade — runtime image atomico", () => {
     expect(sb.state()).toBe("sha256:old");
     expect(sb.compose()).toContain("example/old");
     expect(sb.journal()).toBe(false);
-  });
+  }, WRAPPER_RUN_MS);
 
   // JHT_UPGRADE_VERIFY_TRIES arriva come testo: `08` passa il controllo delle
   // cifre, ma l'aritmetica di Bash lo leggerebbe in ottale e con `set -e` il
@@ -723,7 +730,7 @@ posixOnly("jht upgrade — runtime image atomico", () => {
     expect(sb.state()).toBe("sha256:old");
     expect(sb.compose()).toContain("example/old");
     expect(sb.journal()).toBe(false);
-  });
+  }, WRAPPER_RUN_MS);
 
   it("rifiuta fail-closed un journal con rollback path traversal senza toccare il runtime", () => {
     const sb = makeSandbox();

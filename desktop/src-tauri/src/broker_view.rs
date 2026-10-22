@@ -362,13 +362,14 @@ fn spawn_tunnel(
     args: Vec<OsString>,
     local_port: u16,
 ) -> Result<(Child, mpsc::Receiver<TunnelSignal>), &'static str> {
-    let mut child = Command::new(program)
+    let mut command = Command::new(program);
+    command
         .args(args)
         .stdin(Stdio::null())
         .stdout(Stdio::null())
-        .stderr(Stdio::piped())
-        .spawn()
-        .map_err(|_| "tunnel_start_failed")?;
+        .stderr(Stdio::piped());
+    crate::runtime_host::hide_console(&mut command);
+    let mut child = command.spawn().map_err(|_| "tunnel_start_failed")?;
     let stderr = child.stderr.take().ok_or("tunnel_start_failed")?;
     Ok((child, watch_tunnel_output(stderr, local_port)))
 }

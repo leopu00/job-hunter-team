@@ -231,7 +231,8 @@ export function LoginScreen({
               />
             </label>
             <p className="login-card__note">{t.localNote}</p>
-            <button className="primary-button" type="submit" disabled={!localName.trim() || localBusy}>
+            {!localName.trim() && <p className="login-card__note" id="login-name-missing" role="status">{t.nameMissing}</p>}
+            <button className="primary-button" type="submit" disabled={!localName.trim() || localBusy} aria-describedby={!localName.trim() ? "login-name-missing" : undefined}>
               {localBusy ? t.preparing : t.continueLocal}
             </button>
             <button className="login-card__secondary" type="button" onClick={() => setLocalSetup(false)} disabled={localBusy}>
