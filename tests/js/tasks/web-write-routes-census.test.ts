@@ -147,6 +147,12 @@ const EXCEPTIONS: Record<string, Exception> = {
     reason:
       "the signed-in user mints and revokes the sync tokens of their own account",
   },
+  "csp-report": {
+    methods: ["POST"],
+    kind: "public",
+    reason:
+      "where the browser reports what the strict CSP would block (Report-Only); no cookie, writes nothing but one sanitised log line, rate limited",
+  },
   demo: {
     methods: ["POST", "DELETE"],
     kind: "public",
