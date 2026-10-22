@@ -1,0 +1,132 @@
+{
+  "schema_version": 1,
+  "contract_id": "release-0.4.0-web-schema-078-096-scam-signals",
+  "clone_contract": {
+    "baseline": "live-schema-only-pg-dump",
+    "contains_user_rows": false,
+    "postgres_major": 16,
+    "ordered_migrations": [
+      "supabase/migrations/078_positions_write_request_kind.sql",
+      "supabase/migrations/079_team_directive_events_atomic.sql",
+      "supabase/migrations/080_profile_snapshot_atomic.sql",
+      "supabase/migrations/081_live_schema_reconciliation.sql",
+      "supabase/migrations/082_download_clicks_tiktok_source.sql",
+      "supabase/migrations/083_position_ticket_state_model.sql",
+      "supabase/migrations/084_cloud_sync_pairing_attempts.sql",
+      "supabase/migrations/085_applications_updated_at.sql",
+      "supabase/migrations/086_position_outcome.sql",
+      "supabase/migrations/087_rejection_reason.sql",
+      "supabase/migrations/088_positions_apply_requested.sql",
+      "supabase/migrations/094_feedback_reasons_closed.sql",
+      "supabase/migrations/095_positions_location_precision.sql",
+      "supabase/migrations/096_positions_scam_signals.sql"
+    ]
+  },
+  "migrations": [
+    {
+      "path": "supabase/migrations/078_positions_write_request_kind.sql",
+      "sha256": "2cb2a780c2a3c8ad23ac57d9c8274e1b2247a8cf973917f2de48b492b41b6e4e"
+    },
+    {
+      "path": "supabase/migrations/079_team_directive_events_atomic.sql",
+      "sha256": "81f6892a63d8e4c371aff6279788194a8b814e49a4065f48be52b52d441565eb"
+    },
+    {
+      "path": "supabase/migrations/080_profile_snapshot_atomic.sql",
+      "sha256": "7d63d60cd191f172641778e5010708d8b535865c7696b947bb2ab3c2f9f116c7"
+    },
+    {
+      "path": "supabase/migrations/081_live_schema_reconciliation.sql",
+      "sha256": "f3b04aa2ab769101fcb4ec38bc6b1748e2dc59776ca2f2881b03f14638f583d7"
+    },
+    {
+      "path": "supabase/migrations/082_download_clicks_tiktok_source.sql",
+      "sha256": "7a18ff3b21d38274841471e7b245d2b9ad0d1beb406344548b8fee0625667da3"
+    },
+    {
+      "path": "supabase/migrations/083_position_ticket_state_model.sql",
+      "sha256": "c486ef29cd93cc110d42b1caf41acddb38a0a0e28e428a570f2a067916038012"
+    },
+    {
+      "path": "supabase/migrations/084_cloud_sync_pairing_attempts.sql",
+      "sha256": "9bbfdfa73a5c21fa85911267a4ab69ba4e84e2f7738e13b48ae0463a2ce1189b"
+    },
+    {
+      "path": "supabase/migrations/085_applications_updated_at.sql",
+      "sha256": "67b35c17323fb31f4ce1b6296848d961ba7c6fa757bbd13ac435d0dd685e19ef"
+    },
+    {
+      "path": "supabase/migrations/086_position_outcome.sql",
+      "sha256": "575ba7b56fd063e8e10f4a43414ab9029f947e9616694e7392850385c8e45b53"
+    },
+    {
+      "path": "supabase/migrations/087_rejection_reason.sql",
+      "sha256": "e6f2e27cfa38d5939deae859f0a996f4b6b0b6a3b1d7a081ae8e29976db21f74"
+    },
+    {
+      "path": "supabase/migrations/088_positions_apply_requested.sql",
+      "sha256": "972d135f8227ace0b8ca918dacd2ba1613f5b1f42da695d5ad8ff5285d7f5f99"
+    },
+    {
+      "path": "supabase/migrations/094_feedback_reasons_closed.sql",
+      "sha256": "b1bc27cb78416b425a5278699c7c16ec9c076217bdbf59df0bcce1cdfaf57a7f"
+    },
+    {
+      "path": "supabase/migrations/095_positions_location_precision.sql",
+      "sha256": "97cb10e3a635b8003cce178600d8dd2fc1bc68abd95ddec5aac1dc35f5f699e3"
+    },
+    {
+      "path": "supabase/migrations/096_positions_scam_signals.sql",
+      "sha256": "d4f17e0a8dd8736460b35309eb7fc4f62f82030b002f5c3b00be804dd6d64b57"
+    }
+  ],
+  "query": {
+    "path": "supabase/live-schema/078-096.web.v12.sql",
+    "sha256": "8764391fac442ded2457e942fd36d1b96713da483dcd2bd0211a12e1543854e2"
+  },
+  "expected_checks": [
+    "097.web.columns.applications",
+    "097.web.columns.candidate_blocks",
+    "097.web.columns.candidate_contacts",
+    "097.web.columns.candidate_files",
+    "097.web.columns.candidate_profiles",
+    "097.web.columns.cloud_sync_pairing_sessions",
+    "097.web.columns.cloud_sync_tokens",
+    "097.web.columns.companies",
+    "097.web.columns.file_bridge_requests",
+    "097.web.columns.notification_prefs",
+    "097.web.columns.pending_user_messages",
+    "097.web.columns.position_feedback",
+    "097.web.columns.position_highlights",
+    "097.web.columns.position_tickets",
+    "097.web.columns.position_transitions",
+    "097.web.columns.position_user_notes",
+    "097.web.columns.position_views",
+    "097.web.columns.positions",
+    "097.web.columns.profile_exclusions",
+    "097.web.columns.scores",
+    "097.web.columns.sentinel_ticks",
+    "097.web.columns.team_commands",
+    "097.web.columns.team_directives",
+    "097.web.columns.team_state",
+    "097.web.columns.user_onboarding_state",
+    "097.web.columns.user_settings",
+    "097.web.columns.user_to_agent_messages",
+    "097.web.rpc.consume_pairing_attempt",
+    "097.web.rpc.create_position_ticket",
+    "097.web.rpc.delete_account_data",
+    "097.web.rpc.increment_download_clicks",
+    "097.web.rpc.increment_landing_hits",
+    "097.web.rpc.mark_position_applied",
+    "097.web.rpc.mark_position_outcome",
+    "097.web.rpc.mutate_team_directive_with_event",
+    "097.web.rpc.redeem_cloud_sync_pairing",
+    "097.web.rpc.sync_candidate_profile_atomic",
+    "097.web.rpc.sync_confirm_positions_applied",
+    "097.web.rpc.sync_create_position_ticket",
+    "097.web.rpc.sync_upsert_applications",
+    "097.web.rpc.undo_manual_position_application",
+    "097.web.rpc.undo_position_outcome",
+    "097.web.rpc.upsert_pending_user_messages_merge"
+  ]
+}

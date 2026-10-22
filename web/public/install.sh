@@ -622,6 +622,11 @@ check_podman_linux() {
   step 2 "$TOTAL_STEPS_DOCKER" "Container runtime (Podman rootless)"
   [ "$OS" = "linux" ] \
     || podman_refuse podman_unsupported_host 1 "--runtime podman is for Linux and macOS; this system is $OS."
+  # Podman on Linux answers for this user unless something turns its remote
+  # mode on: CONTAINER_HOST or CONTAINER_CONNECTION do, a default system
+  # connection alone does not. The wrapper unsets both too, so every check
+  # below asks the Podman the team will run on.
+  unset CONTAINER_HOST CONTAINER_CONNECTION
   if [ "$DRY_RUN" -eq 1 ]; then
     printf "  ${DIM}[dry-run]${RESET} would install with sudo -n what is missing of: podman podman-compose uidmap (never Docker)\n"
     printf "  ${DIM}[dry-run]${RESET} would give the user a subuid/subgid range and enable linger if missing\n"

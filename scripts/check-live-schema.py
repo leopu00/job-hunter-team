@@ -24,7 +24,7 @@ from typing import Callable, ContextManager, Protocol
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_MANIFEST = ROOT / "supabase/live-schema/078-084.v3.json"
-WEB_MANIFEST = ROOT / "supabase/live-schema/078-095.web.v11.json"
+WEB_MANIFEST = ROOT / "supabase/live-schema/078-096.web.v12.json"
 PREFLIGHT_QUERY = ROOT / "supabase/live-schema/081-preflight.v1.sql"
 PREFLIGHT_MANIFEST = ROOT / "supabase/live-schema/081-preflight.v1.json"
 CATALOG_ORDERED_MIGRATIONS = [
@@ -56,6 +56,8 @@ WEB_ORDERED_MIGRATIONS = CATALOG_ORDERED_MIGRATIONS + [
     "supabase/migrations/094_feedback_reasons_closed.sql",
     # 095 (JHT-T04): positions.location_precision.
     "supabase/migrations/095_positions_location_precision.sql",
+    # 096 (JHT-T44): positions.scam_signals.
+    "supabase/migrations/096_positions_scam_signals.sql",
 ]
 API_ORIGIN = "https://api.supabase.com"
 MAX_RESPONSE_BYTES = 64 * 1024
