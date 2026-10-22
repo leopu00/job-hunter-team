@@ -1,5 +1,5 @@
 import { readdirSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import { posix } from "node:path";
 import { expect, it } from "vitest";
 
 // The agents' panel and the office's panel are read at a glance, in a window
@@ -12,7 +12,8 @@ const DIRS = ["src/pages/agents", "src/office/panel"];
 const sources = DIRS.flatMap((dir) =>
   readdirSync(dir)
     .filter((f) => /\.tsx?$/.test(f) && !/\.test\./.test(f))
-    .map((f) => join(dir, f)),
+    // posix: the same «src/pages/agents/…» on Windows, where join would write backslashes
+    .map((f) => posix.join(dir, f)),
 );
 
 it("reads the panels' sources", () => {
