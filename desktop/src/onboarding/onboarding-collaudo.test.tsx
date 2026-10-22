@@ -369,10 +369,20 @@ describe("Continue says why it is off", () => {
     expect(missing()).toBeNull();
   });
 
-  it("does not add a second line to a local profile on a VPS: the Google note already says what to do", async () => {
-    await vps({ account: { displayName: "Ada", identity: "local" } });
+  it("names both reasons for a local profile on a VPS: the form's gaps and the Google account, and keeps the account once the form is full", async () => {
+    const user = await vps({ account: { displayName: "Ada", identity: "local" } });
+    const next = () => screen.getByRole("button", { name: /^continua(?! con google)/i });
+    expect(missing()).toHaveTextContent("l’indirizzo VPS, l’utente SSH e il file della chiave privata");
+    expect(screen.getByRole("note")).toBeInTheDocument();
+    expect(next()).toBeDisabled();
+    expect(next()).toHaveAttribute("aria-describedby", "onboarding-vps-missing onboarding-vps-account");
+    await user.type(screen.getByLabelText(t.vpsAddress), "host.example.invalid");
+    await user.type(screen.getByLabelText(t.sshUser), "ubuntu");
+    await user.click(screen.getByRole("button", { name: /scegli chiave SSH/i }));
     expect(missing()).toBeNull();
     expect(screen.getByRole("note")).toBeInTheDocument();
+    expect(next()).toBeDisabled();
+    expect(next()).toHaveAttribute("aria-describedby", "onboarding-vps-account");
   });
 
   it.each(Object.keys(ONBOARDING_TEXT) as (keyof typeof ONBOARDING_TEXT)[])("%s: the sentence has its slot and all four items are named", (locale) => {
