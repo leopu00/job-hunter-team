@@ -950,3 +950,82 @@ describe("the library reads the database through one door only", () => {
     );
   });
 });
+
+// -- the temporary fallback of the emergency stop: only when the door does not exist --------------------------
+
+describe("whenDoorMissing: only when request_action does not exist in the database", () => {
+  const spec = (calls: string[]) => ({
+    action: "team.emergency_stop",
+    level: "L2" as const,
+    whenDoorMissing: async ({ userId }: { userId: string }) => {
+      calls.push(userId);
+      return Response.json({ ok: true, state: "queued", fallback: true }) as never;
+    },
+  });
+
+  it.each([
+    ["PostgREST does not know the function", "PGRST202"],
+    ["PostgreSQL does not know the function", "42883"],
+  ])("%s (%s): the fallback runs, with the signed-in user", async (_label, code) => {
+    world.answer = () => ({ data: null, error: { code, message: "Could not find the function" } });
+    const calls: string[] = [];
+    const res = await requestAction(post({}), spec(calls));
+    expect(res.status).toBe(200);
+    expect(calls).toEqual([USER]);
+  });
+
+  it.each([
+    ["a permission error", { code: "42501", message: "permission denied" }],
+    ["a timeout", { code: "57014", message: "canceling statement" }],
+    ["an error without a code", { message: "boom" }],
+    ["a code that only looks alike", { code: "PGRST2020" }],
+  ])("%s is NOT a missing door: 502, and the fallback never runs", async (_label, error) => {
+    world.answer = () => ({ data: null, error });
+    const calls: string[] = [];
+    const res = await requestAction(post({}), spec(calls));
+    expect(res.status).toBe(502);
+    expect(await json(res)).toEqual({ ok: false, error: "action_failed" });
+    expect(calls).toEqual([]);
+  });
+
+  it("a refusal of the door, or an answer, never runs the fallback", async () => {
+    const calls: string[] = [];
+    world.answer = () => ({ data: { ok: false, error: "rate_limited" }, error: null });
+    expect((await requestAction(post({}), spec(calls))).status).toBe(429);
+    world.answer = () => queued();
+    expect((await requestAction(post({}), spec(calls))).status).toBe(200);
+    expect(calls).toEqual([]);
+  });
+
+  it("the origin, the body and the session come first: a refused request never reaches the fallback", async () => {
+    world.answer = () => ({ data: null, error: { code: "PGRST202" } });
+    const calls: string[] = [];
+    expect((await requestAction(post({}, { origin: "https://evil.example" }), spec(calls))).status).toBe(403);
+    world.user = null;
+    expect((await requestAction(post({}), spec(calls))).status).toBe(401);
+    expect(calls).toEqual([]);
+  });
+
+  it("without whenDoorMissing a missing door is a 502 like any other failure", async () => {
+    world.answer = () => ({ data: null, error: { code: "PGRST202" } });
+    const res = await requestAction(post({}), L2);
+    expect(res.status).toBe(502);
+  });
+});
+
+describe("an effect the database finished at once answers done", () => {
+  it("passes done through, on the first call and on the confirmation", async () => {
+    world.answer = () => queued({ state: "done" });
+    const first = await requestAction(post({ params: {} }), L2);
+    expect(first.status).toBe(200);
+    expect((await json(first)).state).toBe("done");
+    const second = await requestAction(post({ confirmId: ROW }), L2);
+    expect((await json(second)).state).toBe("done");
+  });
+
+  it("a confirmation that answers awaiting_confirm again is still refused", async () => {
+    world.answer = () => awaiting();
+    const res = await requestAction(post({ confirmId: ROW }), L2);
+    expect(res.status).toBe(502);
+  });
+});

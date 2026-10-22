@@ -4,6 +4,7 @@ import RangePicker from "./RangePicker";
 import { ActivityPageHeader } from "./ActivityHeader";
 import DirectivesPanel from "./DirectivesPanel";
 import MobileTeamStatus from "./MobileTeamStatus";
+import TeamControl from "./TeamControl";
 
 export const dynamic = "force-dynamic";
 
@@ -31,6 +32,8 @@ export default async function TeamActivityPage({ searchParams }: PageProps) {
       />
 
       <MobileTeamStatus />
+
+      <TeamControl />
 
       <RangePicker from={activity.from} to={activity.to} days={activity.days} />
 

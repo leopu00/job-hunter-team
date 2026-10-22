@@ -1370,11 +1370,6 @@
           "099.web.columns.team_state"
         ]
       },
-      "team_state.emergency_stop_completed_at": {
-        "receipts": [
-          "099.web.columns.team_state"
-        ]
-      },
       "team_state.emergency_stop_requested_at": {
         "receipts": [
           "099.web.columns.team_state"
@@ -1391,16 +1386,6 @@
         ]
       },
       "team_state.last_action_at": {
-        "receipts": [
-          "099.web.columns.team_state"
-        ]
-      },
-      "team_state.last_error": {
-        "receipts": [
-          "099.web.columns.team_state"
-        ]
-      },
-      "team_state.last_error_at": {
         "receipts": [
           "099.web.columns.team_state"
         ]

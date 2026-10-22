@@ -1,61 +1,20 @@
 /**
- * M2 mobile team safety: route stretta, UI touch-friendly e decisione daemon.
+ * M2 mobile team safety: la porta unica, UI touch-friendly e decisione daemon.
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
-import { validateEmergencyStopBody } from "@/lib/team-state/emergency-stop";
 import { emergencyStopRequired } from "../../../cli/src/lib/team-state-reconciler.js";
 import { mobileTeamStatus } from "@/app/(protected)/team/MobileTeamStatus";
 
-const mocks = vi.hoisted(() => ({
-  resolveUser: vi.fn(),
-  checkRateLimit: vi.fn(),
-  sanitizedError: vi.fn(),
-}));
-
-vi.mock("@/lib/team-state/auth", () => ({
-  resolveUser: mocks.resolveUser,
-}));
-vi.mock("@/lib/rate-limit", () => ({
-  checkRateLimit: mocks.checkRateLimit,
-}));
-vi.mock("@/lib/error-response", () => ({
-  sanitizedError: mocks.sanitizedError,
-}));
+const door = vi.hoisted(() => ({ requestAction: vi.fn() }));
+vi.mock("@/lib/request-action", () => ({ requestAction: door.requestAction }));
 
 const WEB = path.resolve(__dirname, "../../../web");
 const readWeb = (relative: string) =>
   fs.readFileSync(path.join(WEB, relative), "utf8").replace(/\r\n/g, "\n");
 
-function request(body: unknown) {
-  return { json: vi.fn().mockResolvedValue(body) } as never;
-}
-
-function sessionDb(state = { should_run: false, is_running: true }) {
-  const single = vi.fn().mockResolvedValue({ data: state, error: null });
-  const select = vi.fn(() => ({ single }));
-  const upsert = vi.fn(() => ({ select }));
-  const from = vi.fn(() => ({ upsert }));
-  return { supabase: { from }, from, upsert, select, single };
-}
-
-describe("contratto stop-only", () => {
-  it("accetta solo la conferma esatta, senza action/target/args", () => {
-    expect(validateEmergencyStopBody({ confirm: "STOP" })).toEqual({
-      ok: true,
-    });
-    for (const bad of [
-      null,
-      {},
-      { confirm: "stop" },
-      { confirm: "STOP", action: "restart" },
-      { action: "stop", target: "all" },
-    ]) {
-      expect(validateEmergencyStopBody(bad).ok).toBe(false);
-    }
-  });
-
+describe("contratto stop-only: il daemon", () => {
   it("il daemon decide fail-closed su un rendezvous nuovo", () => {
     const requested = "2026-08-03T19:00:00.000Z";
     expect(
@@ -91,93 +50,54 @@ describe("contratto stop-only", () => {
 describe("POST /api/team-state/emergency-stop", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.checkRateLimit.mockResolvedValue({
-      allowed: true,
-      remaining: 2,
-      resetAtMs: Date.now() + 60_000,
-      retryAfterSec: 0,
-    });
+    door.requestAction.mockResolvedValue(Response.json({ ok: true, state: "queued" }));
   });
 
-  it("richiede una sessione browser: il token device non basta", async () => {
-    const db = sessionDb();
-    mocks.resolveUser.mockResolvedValue({
-      ok: true,
-      user: { source: "token", userId: "u1", token: {}, supabase: db.supabase },
-    });
+  it("è la porta unica: team.emergency_stop, livello 2, la richiesta passata intera, e il ripiego solo per la porta assente", async () => {
     const { POST } = await import("@/app/api/team-state/emergency-stop/route");
-    const response = await POST(request({ confirm: "STOP" }));
-    expect(response.status).toBe(403);
-    expect(db.from).not.toHaveBeenCalled();
+    const req = { method: "POST" } as never;
+    const response = await POST(req);
+    expect(door.requestAction).toHaveBeenCalledTimes(1);
+    const [passed, spec] = door.requestAction.mock.calls[0];
+    expect(passed).toBe(req);
+    expect(spec).toMatchObject({ action: "team.emergency_stop", level: "L2" });
+    expect(typeof spec.whenDoorMissing).toBe("function");
+    expect(await response.json()).toEqual({ ok: true, state: "queued" });
   });
 
-  it("rifiuta payload ampliati prima di toccare DB o rate bucket", async () => {
-    const db = sessionDb();
-    mocks.resolveUser.mockResolvedValue({
-      ok: true,
-      user: { source: "session", userId: "u1", supabase: db.supabase },
-    });
-    const { POST } = await import("@/app/api/team-state/emergency-stop/route");
-    const response = await POST(request({ confirm: "STOP", target: "scout" }));
-    expect(response.status).toBe(400);
-    expect(mocks.checkRateLimit).not.toHaveBeenCalled();
-    expect(db.from).not.toHaveBeenCalled();
+  it("il gestore POST non tocca il database né il corpo: lo fa solo il ripiego, fuori dal gestore", () => {
+    const source = readWeb("app/api/team-state/emergency-stop/route.ts");
+    const handler = source.slice(source.indexOf("export async function POST"), source.indexOf("async function stopWithoutTheDoor"));
+    expect(handler).toContain('action: "team.emergency_stop"');
+    expect(handler).not.toMatch(/\.from\(|resolveUser|checkRateLimit|\.json\(\)|\.text\(\)|upsert/);
   });
 
-  it("ha un bucket dedicato e scrive solo desired=false + presenza", async () => {
-    const db = sessionDb();
-    mocks.resolveUser.mockResolvedValue({
-      ok: true,
-      user: { source: "session", userId: "u1", supabase: db.supabase },
-    });
+  it("il ripiego (porta assente) scrive SOLO lo stop di prima, sulla riga dell'utente, col suo tetto", async () => {
     const { POST } = await import("@/app/api/team-state/emergency-stop/route");
-    const response = await POST(request({ confirm: "STOP" }));
-    expect(response.status).toBe(200);
-    expect(mocks.checkRateLimit).toHaveBeenCalledWith(
-      "team-state",
-      "emergency-stop",
-      "u1",
-      3,
-      60_000,
-    );
-    expect(db.from).toHaveBeenCalledWith("team_state");
-    const row = db.upsert.mock.calls[0][0];
+    await POST({ method: "POST" } as never);
+    const fallback = door.requestAction.mock.calls[0][1].whenDoorMissing;
+    const upsert = vi.fn(async () => ({ error: null }));
+    const from = vi.fn(() => ({ upsert }));
+    const ok = await fallback({ supabase: { from }, userId: "u1" });
+    expect(ok.status).toBe(200);
+    expect(from).toHaveBeenCalledWith("team_state");
+    const [row, options] = upsert.mock.calls[0] as unknown as [Record<string, unknown>, unknown];
+    expect(Object.keys(row).sort()).toEqual(["emergency_stop_requested_at", "last_user_activity_at", "should_run", "user_id"]);
     expect(row).toMatchObject({ user_id: "u1", should_run: false });
-    expect(Object.keys(row).sort()).toEqual([
-      "emergency_stop_requested_at",
-      "last_user_activity_at",
-      "should_run",
-      "user_id",
-    ]);
-    expect(row).not.toHaveProperty("action");
-    expect(row).not.toHaveProperty("target");
-    // Lo stop non deve far sparire falsamente l'avviso chat: la risposta
-    // conserva insieme classificazione e timestamp già presenti.
-    expect(db.select).toHaveBeenCalledWith(
-      expect.stringContaining("last_error"),
-    );
-    expect(db.select).toHaveBeenCalledWith(
-      expect.stringContaining("last_error_at"),
-    );
+    expect(options).toEqual({ onConflict: "user_id" });
+    const failing = await fallback({ supabase: { from: () => ({ upsert: async () => ({ error: { message: "boom" } }) }) }, userId: "u1" });
+    expect(failing.status).toBe(502);
+    expect(await failing.text()).not.toContain("boom");
   });
 
-  it("risponde 429 senza scrivere quando il bucket utente è esaurito", async () => {
-    const db = sessionDb();
-    mocks.resolveUser.mockResolvedValue({
-      ok: true,
-      user: { source: "session", userId: "u1", supabase: db.supabase },
-    });
-    mocks.checkRateLimit.mockResolvedValue({
-      allowed: false,
-      remaining: 0,
-      resetAtMs: Date.now() + 12_000,
-      retryAfterSec: 12,
-    });
+  it("ripassa i rifiuti della porta così come sono (un limite resta un 429)", async () => {
+    door.requestAction.mockResolvedValue(
+      Response.json({ ok: false, error: "rate_limited" }, { status: 429, headers: { "Retry-After": "12" } }),
+    );
     const { POST } = await import("@/app/api/team-state/emergency-stop/route");
-    const response = await POST(request({ confirm: "STOP" }));
+    const response = await POST({ method: "POST" } as never);
     expect(response.status).toBe(429);
     expect(response.headers.get("Retry-After")).toBe("12");
-    expect(db.from).not.toHaveBeenCalled();
   });
 });
 
@@ -211,6 +131,9 @@ describe("/team mobile read-only", () => {
     expect(page).toContain("<MobileTeamStatus />");
     expect(page).toContain("<DirectivesPanel />");
     expect(ui).toContain('fetch("/api/team-state/emergency-stop"');
+    expect(ui).toContain("body: JSON.stringify({})");
+    expect(ui).not.toContain('confirm: "STOP"');
+    expect(page).toContain("<TeamControl />");
     expect(ui).toContain("min-h-12");
     expect(ui).toContain('role="alertdialog"');
   });

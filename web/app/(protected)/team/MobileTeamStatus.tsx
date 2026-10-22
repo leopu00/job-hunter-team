@@ -344,19 +344,18 @@ export default function MobileTeamStatus() {
     setBusy(true);
     setNotice(null);
     try {
+      // The single door: a level 2 action with no body of its own. The confirmation above is the
+      // user's last look; the door answers {ok, state: "queued"} and the state is read again.
       const response = await fetch("/api/team-state/emergency-stop", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ confirm: "STOP" }),
+        body: JSON.stringify({}),
       });
-      const data = (await response.json().catch(() => ({}))) as {
-        state?: TeamState;
-      };
       if (!response.ok) {
         setNotice("error");
         return;
       }
-      if (data.state) setState(data.state);
+      await load();
       setConfirming(false);
       setNotice("ok");
     } catch {

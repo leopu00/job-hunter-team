@@ -318,20 +318,34 @@ const EXCEPTIONS: Record<string, Exception> = {
     methods: ["POST"],
     kind: "request-lane",
     level: "L2",
-    todo: "phase 2: request_action (today a session may only set should_run to false, never start)",
-    reason:
-      "the one declared exception to the control of the team: a stop, never a start",
+    gate: "requestAction",
+    reason: "the stop of the team that needs no confirmation, and never a start: the door writes should_run = false for the signed-in user and nothing else",
   },
   "team-state/sync-observed": {
     methods: ["POST"],
     kind: "device-channel",
     reason: "the box syncs what it observed, with its sync token",
   },
-  "team/command": {
+  "team/command/restart": {
     methods: ["POST"],
-    kind: "cloud-refuses",
-    reason:
-      "the dispatch to the team bus answers 403 on the cloud deploy (enqueueIfRemote), before any insert",
+    kind: "request-lane",
+    level: "L2",
+    gate: "requestAction",
+    reason: "restart the team or one agent from the site: the door queues the command on the bus, the paired box runs it; the whole team asks for a confirmation first",
+  },
+  "team/command/start": {
+    methods: ["POST"],
+    kind: "request-lane",
+    level: "L2",
+    gate: "requestAction",
+    reason: "start the team or one agent from the site: the door queues the command on the bus, the paired box runs it; the whole team asks for a confirmation first",
+  },
+  "team/command/stop": {
+    methods: ["POST"],
+    kind: "request-lane",
+    level: "L2",
+    gate: "requestAction",
+    reason: "stop the team or one agent from the site: the door queues the command on the bus, the paired box runs it; the whole team asks for a confirmation first",
   },
 };
 

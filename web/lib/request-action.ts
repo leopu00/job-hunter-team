@@ -3,6 +3,9 @@ import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/workspace";
 import { isCloudDeploy } from "@/lib/deploy-mode";
 import { shouldRejectBrowserMutation, strictMutationRefusal } from "@/lib/csrf";
+import { DATABASE_REFUSALS } from "@/lib/request-action-codes";
+
+export { DATABASE_REFUSALS };
 
 /**
  * La porta unica delle azioni che il sito fa per conto dell'utente (JHT «web capace», fase 2-b).
@@ -54,6 +57,25 @@ export interface ActionSpec {
    * pulisce, lo taglia e lo recinta il database: la libreria lo inoltra com'è.
    */
   body?: boolean | { max: number };
+  /**
+   * TEMPORARY, only for the emergency stop: what to do when the database has no door yet (the web is
+   * deployed before migration 098 is applied). Called ONLY when the call fails because the function
+   * does not exist (PostgREST PGRST202, PostgreSQL 42883), never on any other error. To be removed once
+   * 098 is applied and verified on the cloud.
+   */
+  whenDoorMissing?: (ctx: {
+    supabase: Awaited<ReturnType<typeof createClient>>;
+    userId: string;
+  }) => Promise<NextResponse>;
+}
+
+/** The call failed because request_action does not exist in the database (not applied yet). */
+export function isMissingDoor(error: unknown): boolean {
+  const code =
+    error && typeof error === "object"
+      ? (error as Record<string, unknown>).code
+      : undefined;
+  return code === "PGRST202" || code === "42883";
 }
 
 const LEVEL_RANK: Record<ActionLevel, number> = { L1: 1, L2: 2, L3: 3 };
@@ -66,24 +88,6 @@ const DEFAULT_BODY_TEXT = 2000;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const ACTION_NAME = /^[a-z][a-z0-9_]{0,31}(\.[a-z][a-z0-9_]{0,31})?$/;
 const FORBIDDEN_KEYS = new Set(["__proto__", "constructor", "prototype"]);
-
-/** I codici del contratto e la risposta HTTP di ciascuno. Qualsiasi altro codice è un errore del server. */
-export const DATABASE_REFUSALS: Record<string, number> = {
-  unauthenticated: 401,
-  reauth_required: 401,
-  rate_limited: 429,
-  unknown_action: 400,
-  invalid_params: 400,
-  not_found: 404,
-  confirm_not_found: 404,
-  confirm_expired: 410,
-  confirm_used: 409,
-  confirm_session_mismatch: 409,
-  confirm_action_mismatch: 409,
-  level_mismatch: 500,
-  position_not_ready: 409,
-  already_submitted: 409,
-};
 
 /** I rifiuti dell'ingresso (prima del database) e la risposta HTTP di ciascuno. */
 const ENTRY_REFUSALS = {
@@ -355,7 +359,11 @@ export async function requestAction(
   } catch {
     return refuse("action_failed");
   }
-  if (result.error) return refuse("action_failed"); // mai il testo dell'errore del database
+  if (result.error) {
+    if (spec.whenDoorMissing && isMissingDoor(result.error))
+      return spec.whenDoorMissing({ supabase, userId: user.id });
+    return refuse("action_failed"); // mai il testo dell'errore del database
+  }
 
   const data = result.data as Record<string, unknown> | null;
   if (data && typeof data === "object" && data.ok === false) {
