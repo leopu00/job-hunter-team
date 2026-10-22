@@ -231,6 +231,25 @@ export async function reconcileOnce({
   return { ok: true, action: null, beat };
 }
 
+const refusalsLogged = new Set();
+
+/**
+ * The statuses' refusal, said once per start: a route older than the field
+ * (a box on a newer image than the site, 22/10) refuses them on every attempt,
+ * every REFUSED_RETRY_MS, and a warning per attempt is 48 identical lines a
+ * day for something the box already handles. Each distinct reason is said once.
+ * Returns whether it logged.
+ *
+ * @param {{ status?: number, message?: string }} err
+ */
+export function logAgentsStatusRefusal(err) {
+  const key = `${err?.status}:${err?.message}`;
+  if (refusalsLogged.has(key)) return false;
+  refusalsLogged.add(key);
+  log('warn', 'agents-status.refused-with-heartbeat', { status: err?.status, err: err?.message });
+  return true;
+}
+
 /**
  * The heartbeat through PATCH /api/team-state, with the agents' statuses in
  * the same body when the box has no Supabase session (createHeartbeatCarrier):
@@ -246,7 +265,7 @@ async function beatThroughRoute({ baseUrl, token, fields, signal }) {
   } catch (err) {
     if (!('agents_status' in carried) || (err?.status !== 400 && err?.status !== 403)) return false;
     agentsStatusCarrier.refused();
-    log('warn', 'agents-status.refused-with-heartbeat', { status: err.status, err: err.message });
+    logAgentsStatusRefusal(err);
     return apiCall('PATCH', baseUrl, token, '/api/team-state', fields, { signal }).then(() => true, () => false);
   }
 }

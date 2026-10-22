@@ -72,6 +72,12 @@ def main():
         if send_esc(s):
             frozen.append(s)
 
+    if frozen:
+        try:
+            from freeze_marker import mark
+            mark("freeze")
+        except ImportError:
+            pass
     print(f"frozen={len(frozen)} sessions={','.join(frozen) if frozen else 'none'}")
     if skipped:
         print(f"skipped={','.join(skipped)}")
