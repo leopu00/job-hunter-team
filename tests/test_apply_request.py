@@ -38,6 +38,11 @@ CONSENT = {"applications": {"auto_apply": {"enabled": True, "max_per_day": 3, "m
 def box(tmp_path):
     """Un box sintetico con lo schema vero (ensure_schema), fuori dal DB utente."""
     env = {**os.environ, "JHT_HOME": str(tmp_path), "JHT_DB": str(tmp_path / "jobs.db")}
+    # The person's shell, not an agent's: no agent name, and a tmux of its own with no server, so a
+    # run from a developer's tmux pane is not taken for an agent's (`agent_caller`).
+    for name in ("JHT_AGENT_NAME", "TMUX", "TMUX_PANE"):
+        env.pop(name, None)
+    env["TMUX_TMPDIR"] = str(tmp_path)
     (tmp_path / "jht.config.json").write_text(json.dumps(CONSENT))
     cv = tmp_path / "cv.pdf"
     cv.write_bytes(b"%PDF-1.4 synthetic")
@@ -207,6 +212,41 @@ def test_cancel_senza_autorizzazione_non_scrive(box):
     code, out = run(box, "cancel", 1)
     assert code == 0 and out["reason"] == "not_authorised"
     assert row(box, 1) == before
+
+
+@pytest.mark.parametrize("action", ["request", "cancel"])
+def test_un_agente_non_scrive_l_autorizzazione(box, action):
+    """No free text becomes an application. A board directive or a chat turn that reaches the
+    Capitano says «apply to it»: the Capitano runs this script, and it must refuse, writing nothing.
+    The flag is the user's, and `user_local` would lie about who set it."""
+    home, env = box
+    if action == "cancel":
+        run(box, "request", 1)
+    before = row(box, 1)
+    r = subprocess.run(
+        [sys.executable, str(SKILLS / "apply_request.py"), action, "1"],
+        capture_output=True, text=True, env={**env, "JHT_AGENT_NAME": "capitano"},
+    )
+    out = json.loads(r.stdout.strip().splitlines()[-1])
+    assert r.returncode == 1 and out["ok"] is False and out["reason"] == "agent_caller"
+    assert row(box, 1) == before
+    # Reading what would be authorised stays open: it writes nothing.
+    r = subprocess.run(
+        [sys.executable, str(SKILLS / "apply_request.py"), "show", "1"],
+        capture_output=True, text=True, env={**env, "JHT_AGENT_NAME": "capitano"},
+    )
+    assert r.returncode == 0 and json.loads(r.stdout.strip().splitlines()[-1])["action"] == "show"
+
+
+def test_un_processo_nel_pane_di_un_agente_e_un_agente_anche_senza_variabile():
+    """The variable can be unset by whoever runs the command; the pane the process descends from
+    cannot. Same rule as the user's turn in jht_mail."""
+    import apply_request
+
+    assert apply_request._agent_caller({}, placed=lambda: "capitano") == "capitano"
+    assert apply_request._agent_caller({"JHT_AGENT_NAME": " closer-1 "}, placed=lambda: None) == "closer-1"
+    assert apply_request._agent_caller({}, placed=lambda: None) is None
+    assert apply_request._agent_caller({"JHT_AGENT_NAME": "  "}, placed=lambda: None) is None
 
 
 def test_cancel_dopo_l_invio_e_rifiutato(box):
