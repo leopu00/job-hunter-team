@@ -18,6 +18,7 @@ import {
 import { invalidJsonBody } from "@/app/api/_lib/error-body";
 import { effectivePrecision } from "@/lib/city-coords";
 import { canonicalScamSignals } from "@/lib/scam-signals";
+import { canonicalSeniorityLevel } from "@/lib/seniority-level";
 import { sanitizedError } from "@/lib/error-response";
 import {
   summarizeOutOfRange,
@@ -199,6 +200,8 @@ interface PositionIn {
   location_precision?: string | null;
   // JHT-T44: the scam signals (migration 096). Only the canonical form reaches the column.
   scam_signals?: string | null;
+  // JHT-T45: the seniority the advert asks for (migration 097). Only a word of the closed set reaches the column.
+  seniority_level?: string | null;
   // Expiry/lifecycle (mig 038): is_open BOOLEAN (SQLite 0|1, default TRUE),
   // expires_at DATE, last_open_check TIMESTAMPTZ. Alimenta "Scadute/Archivio".
   expires_at?: string | null;
@@ -921,6 +924,11 @@ export async function POST(req: NextRequest) {
           // older than the field does not send it, and the cloud's value stays as it is.
           ...(Object.prototype.hasOwnProperty.call(p, "scam_signals")
             ? { scam_signals: canonicalScamSignals(p.scam_signals) }
+            : {}),
+          // JHT-T45: the seniority level (migration 097): a word of the closed set or NULL. A client
+          // older than the field does not send it, and the cloud's value stays as it is.
+          ...(Object.prototype.hasOwnProperty.call(p, "seniority_level")
+            ? { seniority_level: canonicalSeniorityLevel(p.seniority_level) }
             : {}),
           // Expiry/lifecycle (mig 038). is_open default TRUE (NOT NULL DEFAULT TRUE).
           expires_at: p.expires_at ?? null,
