@@ -676,6 +676,8 @@ const S := {
 	"pos.office_verified": "verificato dagli Analisti",
 	"pos.office_approx": "non verificato · centro città",
 	"pos.office_street": "via, senza civico",
+	"pos.office_district": "quartiere, senza via",
+	"pos.office_rough": "non verificato · approssimato",
 
 	# ── Candidature e Notifiche (dati reali) ──────────────────────
 	"apps.ready": "CV pronto",

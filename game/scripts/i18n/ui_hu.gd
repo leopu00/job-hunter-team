@@ -457,6 +457,8 @@ const S := {
 	"pos.office_verified": "az Elemzők ellenőrizték",
 	"pos.office_approx": "nem ellenőrzött · városközpont",
 	"pos.office_street": "utca, házszám nélkül",
+	"pos.office_district": "városrész, utca nélkül",
+	"pos.office_rough": "nem ellenőrzött · hozzávetőleges",
 
 	"apps.ready": "önéletrajz kész",
 	"apps.applied": "elküldve",

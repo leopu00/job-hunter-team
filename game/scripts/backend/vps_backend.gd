@@ -112,12 +112,19 @@ const POLL_CMD := "docker exec jht sh -lc 'exec 2>&1; tmux ls 2>/dev/null; echo 
 ## argomento si corrompono SEMPRE. Ricetta obbligata per i comandi
 ## remoti: solo apici singoli, una riga sola, e le stringhe che
 ## servirebbero allo script python passate via sys.argv.
+##
+## Il livello di precisione del luogo (location_precision, migrazione 095) c'è
+## solo nei jobs.db di un'immagine recente: una VPS con un'immagine vecchia non
+## ha la colonna, e un SELECT che la nomina farebbe cadere TUTTO lo snapshot.
+## Lo script guarda le colonne di positions (PRAGMA, argv 8) e sceglie la query
+## con il livello (argv 2) o quella senza (argv 6).
 const POSITIONS_PY := "import sys,sqlite3,json; db=sqlite3.connect(sys.argv[1]); " \
 		+ "db.row_factory=sqlite3.Row; q=lambda s: [dict(r) for r in db.execute(s)]; " \
-		+ "print(json.dumps(dict(p=q(sys.argv[2]),h=q(sys.argv[3]),t=q(sys.argv[4])," \
-		+ "tr=q(sys.argv[5]))))"
+		+ "cols=[r[1] for r in db.execute(sys.argv[8])]; " \
+		+ "print(json.dumps(dict(p=q(sys.argv[2] if sys.argv[7] in cols else sys.argv[6])," \
+		+ "h=q(sys.argv[3]),t=q(sys.argv[4]),tr=q(sys.argv[5]))))"
 ## La lista serve i facet, il dettaglio tutto il resto (mai jd_text: enorme).
-const POSITIONS_SELECT := "SELECT p.id,p.title,p.company,p.status,p.role_family," \
+const POSITIONS_COLUMNS := "SELECT p.id,p.title,p.company,p.status,p.role_family," \
 		+ "p.loc_country,p.loc_city,p.work_mode,p.source,p.url,p.jd_summary," \
 		+ "p.found_by,p.found_at,p.last_checked,p.deadline,p.is_open,p.created_at," \
 		+ "p.write_requested,p.geocode_requested,p.recheck_requested," \
@@ -129,10 +136,14 @@ const POSITIONS_SELECT := "SELECT p.id,p.title,p.company,p.status,p.role_family,
 		+ "s.strategic_fit,s.scored_by,s.scored_at,s.notes AS score_notes," \
 		+ "a.critic_score,a.critic_verdict,a.critic_notes,a.written_by,a.written_at," \
 		+ "a.status AS application_status,a.cv_path,a.cv_pdf_path,a.cl_path,a.cl_pdf_path," \
-		+ "a.reviewed_by,a.critic_reviewed_at,a.applied_at " \
-		+ "FROM positions p LEFT JOIN scores s ON s.position_id=p.id " \
+		+ "a.reviewed_by,a.critic_reviewed_at,a.applied_at"
+const POSITIONS_FROM := " FROM positions p LEFT JOIN scores s ON s.position_id=p.id " \
 		+ "LEFT JOIN applications a ON a.position_id=p.id " \
 		+ "ORDER BY p.created_at DESC"
+const LEVEL_COLUMN := "location_precision"
+const POSITIONS_SELECT := POSITIONS_COLUMNS + ",p." + LEVEL_COLUMN + POSITIONS_FROM
+const POSITIONS_SELECT_NO_LEVEL := POSITIONS_COLUMNS + POSITIONS_FROM
+const POSITIONS_COLUMNS_PRAGMA := "PRAGMA table_info(positions)"
 const HIGHLIGHTS_SELECT := "SELECT position_id,type,text FROM position_highlights ORDER BY id"
 const TICKETS_SELECT := "SELECT position_id,request_text,kind,status,assigned_agent," \
 		+ "response_text,created_at FROM position_tickets ORDER BY id"
@@ -406,7 +417,8 @@ func _fetch_positions() -> void:
 	var res := _ssh("docker exec -i jht python3 -c '" + POSITIONS_PY \
 			+ "' /jht_home/jobs.db '" + POSITIONS_SELECT + "' '" \
 			+ HIGHLIGHTS_SELECT + "' '" + TICKETS_SELECT + "' '" \
-			+ TRANSITIONS_SELECT + "'")
+			+ TRANSITIONS_SELECT + "' '" + POSITIONS_SELECT_NO_LEVEL + "' '" \
+			+ LEVEL_COLUMN + "' '" + POSITIONS_COLUMNS_PRAGMA + "'")
 	if _stop or res["code"] != 0:
 		if not _stop:
 			Log.call_deferred("debug", "backend", "fetch posizioni KO: code=%s %s" % [

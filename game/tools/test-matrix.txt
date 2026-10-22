@@ -47,6 +47,11 @@
 nav_grid|script|gate|any|-|tools/nav_grid_selftest.gd|-
 speech_bubble|script|gate|any|-|tools/speech_bubble_selftest.gd|-
 pipeline_queue|script|gate|any|-|tools/pipeline_queue_selftest.gd|-
+# Il pin all'indirizzo della mappa: solo il livello `address` (o, senza
+# livello o con uno sconosciuto, office_verified) con le due coordinate; via,
+# quartiere, città, paese e remoto mai. Il pin «≈ città» sulla città, mai sulla
+# coordinata di una riga; una coordinata di tre aziende non è un ufficio.
+location_precision|script|gate|any|-|tools/location_precision_selftest.gd|LOCATION-PRECISION-TEST PASS
 embedded_terminal|script|gate|any|-|tools/embedded_terminal_selftest.gd|-
 # Il pairing cloud non è più una console: il processo emette eventi sicuri,
 # il browser apre sul link completo e un errore rende visibile COPIA LINK.
@@ -183,6 +188,11 @@ title_artifact_contract|python|gate|any|-|tools/title_artifact_contract_selftest
 # root documenti canoniche, nessuna traversal/symlink, tipo dichiarato e PDF
 # attestato prima che un byte possa raggiungere cache o viewer dell'host.
 artifact_fetch|python|gate|posix|-|tools/artifact_fetch_selftest.py|ARTIFACT-FETCH-SECURITY-TEST PASS
+# Lo snapshot delle posizioni legge location_precision, e un jobs.db di
+# un'immagine vecchia senza la colonna da' ancora tutto lo snapshot: il
+# comando vero di _fetch_positions, ricostruito dal sorgente ed eseguito con
+# sh su due DB sintetici. `posix` per lo sh che fa da trasporto.
+positions_snapshot|python|gate|posix|-|tools/positions_snapshot_selftest.py|POSITIONS-SNAPSHOT-TEST PASS
 character_sheets|python|gate|any|-|tools/audit_character_sheets.py|-
 instance_portraits|python|gate|any|-|tools/audit_instance_portraits.py|-
 # Il runner sorveglia se stesso: il 21/09 `run.sh test gate` eseguiva 4 test su

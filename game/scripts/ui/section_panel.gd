@@ -3657,11 +3657,11 @@ func _build_pos_detail() -> void:
 	var addr_v: Variant = p.get("office_address")
 	var addr := str(addr_v).strip_edges() if addr_v != null else ""
 	if addr != "" and addr != "<null>":
-		var exact := MapPins.is_exact(p)
-		var tag := UIStrings.t("pos.office_verified") if exact \
-				else UIStrings.t("pos.office_approx")
-		if str(p.get("location_precision", "")) == "street":
-			tag = UIStrings.t("pos.office_street")
+		# Lo stesso giudizio della mappa: un indirizzo su una coordinata
+		# condivisa da più aziende non è verificato, e ogni livello dice il suo.
+		var generic := MapPins.generic_coords(SimBadge.visible_positions())
+		var exact := MapPins.is_exact_among(p, generic)
+		var tag := UIStrings.t(MapPins.office_tag_key(p, generic))
 		var arow := HBoxContainer.new()
 		arow.add_theme_constant_override("separation", 10)
 		hero.add_child(arow)
