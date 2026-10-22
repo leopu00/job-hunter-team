@@ -17,7 +17,7 @@
  *     after the box was off is what the user wants (the one difference from P6).
  *
  * Then `team.working_hours` and `team.role_models` are written to jht.config.json
- * (atomic, private), and `settings_applied_at` tells the site it is applied.
+ * (atomic, private; role_models role by role), and `settings_applied_at` tells the site it is applied.
  */
 import { readFileSync } from 'node:fs';
 import { FUTURE_SKEW_MS } from './team-command-guard.js';
@@ -119,7 +119,13 @@ export function settingsRefusal(state, { ownerId, serverNow, lastApplied }) {
   return null;
 }
 
-/** The config with the settings applied: only team.working_hours and team.role_models move. */
+/**
+ * The config with the settings applied: only team.working_hours and team.role_models move.
+ *
+ * role_models is merged role by role: the site replaces only the roles it sends, so a
+ * role set on the desktop and never touched from the site stays. An empty entry ({})
+ * puts that role back on the default.
+ */
 export function applySettings(config, desired) {
   const next = isPlainObject(config) ? structuredClone(config) : {};
   if (!isPlainObject(next.team)) next.team = {};
@@ -127,7 +133,15 @@ export function applySettings(config, desired) {
     if (desired.working_hours === null) delete next.team.working_hours;
     else next.team.working_hours = desired.working_hours;
   }
-  if ('role_models' in desired) next.team.role_models = desired.role_models;
+  if ('role_models' in desired) {
+    const roles = isPlainObject(next.team.role_models) ? next.team.role_models : {};
+    for (const [role, entry] of Object.entries(desired.role_models)) {
+      if (Object.keys(entry).length === 0) delete roles[role];
+      else roles[role] = structuredClone(entry);
+    }
+    if (Object.keys(roles).length === 0) delete next.team.role_models;
+    else next.team.role_models = roles;
+  }
   return next;
 }
 

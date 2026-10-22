@@ -100,6 +100,35 @@ describe("the settings' closed lists", () => {
     expect(config.team).toEqual({ local_scorer: { enabled: false } });
     expect(applySettings(next, { working_hours: null }).team).toEqual({ local_scorer: { enabled: false }, role_models: { scout: { model: "luna" } } });
   });
+
+  it("merges role_models role by role: a role set on the desktop and not sent stays", () => {
+    const config = { team: { role_models: { capitano: { model: "sol", effort: "high" }, scout: { model: "terra" } } } };
+    const next = applySettings(config, { role_models: { scout: { model: "luna", effort: "low" }, critico: { effort: "medium" } } });
+    expect(next.team.role_models).toEqual({
+      capitano: { model: "sol", effort: "high" },
+      scout: { model: "luna", effort: "low" },
+      critico: { effort: "medium" },
+    });
+    expect(config.team.role_models).toEqual({ capitano: { model: "sol", effort: "high" }, scout: { model: "terra" } });
+  });
+
+  it("replaces the whole entry of a role it sends: a field not sent goes back to the default", () => {
+    const config = { team: { role_models: { scout: { model: "luna", effort: "high" } } } };
+    expect(applySettings(config, { role_models: { scout: { model: "terra" } } }).team.role_models).toEqual({ scout: { model: "terra" } });
+  });
+
+  it("an empty entry puts the role back on the default, and no roles left drops role_models", () => {
+    const config = { team: { local_scorer: { enabled: false }, role_models: { capitano: { model: "sol" }, scout: { model: "luna" } } } };
+    const one = applySettings(config, { role_models: { scout: {} } });
+    expect(one.team.role_models).toEqual({ capitano: { model: "sol" } });
+    expect(applySettings(one, { role_models: { capitano: {} } }).team).toEqual({ local_scorer: { enabled: false } });
+    expect(applySettings({}, { role_models: { scout: {} } }).team).toEqual({});
+  });
+
+  it("an empty role_models changes nothing", () => {
+    const config = { team: { role_models: { capitano: { model: "sol" } } } };
+    expect(applySettings(config, { role_models: {} }).team.role_models).toEqual({ capitano: { model: "sol" } });
+  });
 });
 
 describe("settingsRefusal", () => {
