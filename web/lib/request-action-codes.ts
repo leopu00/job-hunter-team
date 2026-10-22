@@ -18,4 +18,5 @@ export const DATABASE_REFUSALS: Record<string, number> = {
   level_mismatch: 500,
   position_not_ready: 409,
   already_submitted: 409,
+  action_disabled: 403,
 };
