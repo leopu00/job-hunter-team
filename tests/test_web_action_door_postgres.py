@@ -384,6 +384,28 @@ def test_the_presence_the_sync_and_the_chat_bell_stay_writable_by_column_and_not
             ON CONFLICT (user_id) DO UPDATE SET should_run = true;""")
 
 
+def test_the_chat_bell_and_sync_now_are_upserts_of_supabase_js_and_set_every_column_of_the_payload_the_key_too(cluster):
+    """The shape PostgREST gives to `.upsert({user_id, chat_requested_at}, {onConflict: 'user_id'})`:
+    DO UPDATE SET for each column of the payload, user_id included."""
+    who = Browser(cluster)
+    bell = (f"INSERT INTO public.team_state (user_id, chat_requested_at) VALUES ('{who.user}', now()) "
+            "ON CONFLICT (user_id) DO UPDATE SET user_id = EXCLUDED.user_id, chat_requested_at = EXCLUDED.chat_requested_at;")
+    sync = (f"INSERT INTO public.team_state (user_id, sync_requested_at, last_user_activity_at) VALUES ('{who.user}', now(), now()) "
+            "ON CONFLICT (user_id) DO UPDATE SET user_id = EXCLUDED.user_id, sync_requested_at = EXCLUDED.sync_requested_at, "
+            "last_user_activity_at = EXCLUDED.last_user_activity_at;")
+    for statement in (bell, bell, sync):                    # the first inserts, the others update
+        done = who.script(statement)
+        assert done.returncode == 0, done.stderr
+    assert _scalar(cluster, f"SELECT chat_requested_at IS NOT NULL AND sync_requested_at IS NOT NULL FROM public.team_state WHERE user_id = '{who.user}'") == "t"
+    # the key still moves nobody: another user's row is neither reached nor taken
+    other = Browser(cluster)
+    cluster(f"INSERT INTO public.team_state (user_id) VALUES ('{other.user}')")
+    assert who.script(f"UPDATE public.team_state SET user_id = '{other.user}' WHERE user_id = '{who.user}';").returncode != 0
+    assert "row-level security" in who.refused(
+        f"INSERT INTO public.team_state (user_id, chat_requested_at) VALUES ('{other.user}', now()) "
+        "ON CONFLICT (user_id) DO UPDATE SET user_id = EXCLUDED.user_id, chat_requested_at = EXCLUDED.chat_requested_at;")
+
+
 def test_the_box_keeps_its_rights_the_service_role_writes_the_bus_and_the_control_fields(cluster):
     who = Browser(cluster)
     done = who.script(f"""INSERT INTO public.team_commands (user_id, action) VALUES ('{who.user}', 'start');
@@ -514,7 +536,7 @@ def test_only_a_method_that_logs_in_counts_as_a_login(cluster):
     who = Browser(cluster)
     for method in ("token_refresh", "anonymous", "something_new", ""):
         assert who.act("team.restart", {"target": "scout"}, method=method) == {"ok": False, "error": "reauth_required"}, method
-    for method in ("password", "oauth", "otp", "magiclink", "sso/saml", "mfa/totp"):
+    for method in ("password", "oauth", "otp", "magiclink", "sso/saml", "totp", "mfa/totp"):
         assert who.act("team.stop", {"target": "scout"}, method=method)["ok"] is True, method
 
 

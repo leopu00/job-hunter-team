@@ -329,7 +329,7 @@ BEGIN
                AND jsonb_typeof(e -> 'timestamp') = 'number'
                AND (e ->> 'method') IN ('password', 'oauth', 'otp', 'magiclink', 'sso/saml',
                                         'recovery', 'invite', 'email/signup',
-                                        'mfa/totp', 'mfa/phone', 'mfa/webauthn');
+                                        'totp', 'mfa/totp', 'mfa/phone', 'mfa/webauthn');
             IF v_login IS NULL AND v_session IS NOT NULL THEN
                 SELECT s.created_at INTO v_login
                   FROM auth.sessions AS s
@@ -528,7 +528,11 @@ REVOKE ALL ON TABLE public.team_state FROM anon, authenticated;
 GRANT SELECT ON TABLE public.team_state TO authenticated;
 GRANT INSERT (user_id, last_user_activity_at, sync_requested_at, chat_requested_at)
     ON TABLE public.team_state TO authenticated;
-GRANT UPDATE (last_user_activity_at, sync_requested_at, chat_requested_at)
+-- user_id is in the list on purpose: an upsert of supabase-js writes `DO UPDATE SET` for EVERY column
+-- of the payload, the key included (`SET user_id = EXCLUDED.user_id, ...`), and the chat bell and
+-- «sync now» of the website are upserts. It lets nobody move a row: the update policy checks the
+-- new row against auth.uid() too, and the key is the user's own.
+GRANT UPDATE (user_id, last_user_activity_at, sync_requested_at, chat_requested_at)
     ON TABLE public.team_state TO authenticated;
 
 -- positions.apply_requested*: only the door (a function owned by the migration role), or the box.

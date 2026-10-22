@@ -87,7 +87,7 @@
     },
     {
       "path": "supabase/migrations/098_web_action_door.sql",
-      "sha256": "aa89278b402c8cbb743c87e7d69bad3776bb9a6bf5c096218d1e488540d8101a"
+      "sha256": "520b957e64714606422eb4345a1cdc18cb0cd8b423789f726f5b7135693b7d0e"
     }
   ],
   "query": {
