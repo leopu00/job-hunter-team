@@ -3,8 +3,9 @@
  * and can be written from the website; a chat turn too. Neither may send a CV to a company: only the
  * per-position flag the user sets (`positions.apply_requested`, with a user channel as its author) opens
  * the CLOSER's gate. The rule is said where the two agents that could act on such a text read it, the
- * Capitano and the Closer, in all seven languages, and it holds in code: `apply_request.py` refuses an
- * agent. A prompt that loses the sentence, or a script that writes `user_local` for an agent, is red here.
+ * Capitano and the Closer, in all seven languages, and the code adds a brake: `apply_request.py` refuses
+ * a call from an agent's terminal (a brake, not a boundary: the fence, the prompts and the gate are).
+ * A prompt that loses the sentence, or a script that writes `user_local` for an agent, is red here.
  */
 
 import { mkdtempSync, rmSync } from "node:fs";

@@ -234,8 +234,13 @@ def _agent_caller(environ=None, placed=None) -> str | None:
     turn, a page it read), the one thing that must never happen. The person
     runs this through `jht apply`, from a terminal or the app, and neither
     carries `JHT_AGENT_NAME`; every agent's terminal exports it. The tmux pane
-    the process descends from is asked too, because a variable can be unset
-    and the ancestry cannot: the same check as the user's turn in `jht_mail`.
+    the process descends from is asked too, because a variable is easy to
+    unset: the same check as the user's turn in `jht_mail`.
+
+    A brake on an agent that follows a text, not a boundary: a process that
+    detaches (setsid, a double fork) loses the ancestry, and an agent can write
+    jobs.db directly. What keeps a text from becoming an application is the
+    user's fence, the prompts and the Closer's gate.
     """
     env = os.environ if environ is None else environ
     named = str(env.get("JHT_AGENT_NAME") or "").strip()

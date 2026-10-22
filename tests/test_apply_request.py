@@ -17,9 +17,13 @@ Eseguire con: pytest tests/test_apply_request.py -v
 
 import json
 import os
+import shlex
+import shutil
 import sqlite3
 import subprocess
 import sys
+import tempfile
+import time
 from pathlib import Path
 
 import pytest
@@ -239,8 +243,8 @@ def test_un_agente_non_scrive_l_autorizzazione(box, action):
 
 
 def test_un_processo_nel_pane_di_un_agente_e_un_agente_anche_senza_variabile():
-    """The variable can be unset by whoever runs the command; the pane the process descends from
-    cannot. Same rule as the user's turn in jht_mail."""
+    """The variable can be unset by whoever runs the command, so the pane the process descends from
+    is asked too. Same rule as the user's turn in jht_mail; a brake, not a boundary."""
     import apply_request
 
     assert apply_request._agent_caller({}, placed=lambda: "capitano") == "capitano"
@@ -368,3 +372,48 @@ def test_piu_flag_insieme_fanno_un_messaggio_solo(box, live):
         _set_flag(box, pid, _now_iso(minutes=1))
     assert len(_poll(box)) == 3
     assert len(live["sent"]) == 1 and "#1, #5, #6" in live["sent"][0][1]
+
+
+@pytest.mark.skipif(shutil.which("tmux") is None, reason="needs tmux")
+def test_a_tmux_with_agent_panes_does_not_make_the_persons_command_an_agent(box):
+    """The app reaches this script with an exec into the container, where the agents' panes are up:
+    a tmux server WITH agent sessions, and a process that does not descend from any of them. That is
+    the person's command and must pass (otherwise the desktop could no longer authorise on a VPS). The
+    same command started inside an agent's pane is refused: the check is not vacuous. A private tmux
+    server, in a short folder (the socket path has a length limit), always killed at the end."""
+    home, env = box
+    sockets = tempfile.mkdtemp(prefix="jt", dir="/tmp")
+    env = {**env, "TMUX_TMPDIR": sockets}
+    # -f /dev/null: the server reads no tmux.conf of the machine (hooks, default-command).
+    tmux = lambda *args: subprocess.run(
+        ["tmux", "-f", "/dev/null", *args], env=env, capture_output=True, text=True, timeout=30
+    )
+    inside, errors = home / "inside.json", home / "inside.err"
+    script = str(SKILLS / "apply_request.py")
+    try:
+        assert tmux("new-session", "-d", "-s", "CAPITANO", "sleep 120").returncode == 0
+        # the server has an agent's pane to be asked about
+        assert "CAPITANO" in tmux("list-panes", "-a", "-F", "#{session_name}").stdout
+        r = subprocess.run([sys.executable, script, "request", "1"], capture_output=True, text=True, env=env, timeout=60)
+        out = json.loads(r.stdout.strip().splitlines()[-1])
+        # passing means the authorisation is written, not only «not refused as an agent»
+        assert r.returncode == 0 and out["ok"] and out["reason"] == "authorised", (out, r.stderr)
+        assert row(box, 1)[0] == 1 and row(box, 1)[2] == "user_local"
+        # the same command, typed in an agent's pane, with no agent name in its environment
+        before = row(box, 2)
+        command = (
+            f"{shlex.quote(sys.executable)} {shlex.quote(script)} request 2"
+            f" > {shlex.quote(str(inside))} 2> {shlex.quote(str(errors))}"
+        )
+        assert tmux("new-session", "-d", "-s", "SCOUT-1", command).returncode == 0
+        # the pane closes when the command exits: its output is complete then
+        deadline = time.monotonic() + 30
+        while time.monotonic() < deadline and tmux("has-session", "-t", "=SCOUT-1").returncode == 0:
+            time.sleep(0.2)
+        text = inside.read_text() if inside.exists() else ""
+        assert text.strip(), errors.read_text() if errors.exists() else "the pane wrote nothing"
+        assert json.loads(text.strip().splitlines()[-1])["reason"] == "agent_caller", text
+        assert row(box, 2) == before
+    finally:
+        tmux("kill-server")
+        shutil.rmtree(sockets, ignore_errors=True)
