@@ -102,7 +102,7 @@
     },
     {
       "path": "supabase/migrations/101_web_action_exclusions_directives.sql",
-      "sha256": "edacfbf70cfec323e53c8de770c94e5768600be233cc67e6fcab2d69fbaa617c"
+      "sha256": "35238bf2bf310603e6f860caecaff3a4b2b541ac52ea1fe7bc7a2c50537103dd"
     }
   ],
   "query": {
