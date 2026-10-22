@@ -217,6 +217,34 @@ describe("the report route", () => {
     expect(warn).not.toHaveBeenCalled();
   });
 
+  it("reads at most 16 KiB: a valid report over the cap is dropped, one just under it is logged", async () => {
+    warn.mockClear();
+    const report = (pad: number) =>
+      JSON.stringify({
+        "csp-report": {
+          "effective-directive": "img-src",
+          "blocked-uri": "inline",
+          "document-uri": "https://site.example/",
+          pad: "x".repeat(pad),
+        },
+      });
+    const base = report(0).length;
+    const under = report(16 * 1024 - base);
+    const over = report(16 * 1024 - base + 1);
+    expect(under.length).toBe(16 * 1024);
+    expect(over.length).toBe(16 * 1024 + 1);
+    expect((await send(over)).status).toBe(204);
+    expect(warn).not.toHaveBeenCalled();
+    expect((await send(under)).status).toBe(204);
+    expect(warn).toHaveBeenCalledTimes(1);
+    // the declared length counts too, before the body is read
+    warn.mockClear();
+    expect(
+      (await send(report(0), { "content-length": String(1024 * 1024) })).status,
+    ).toBe(204);
+    expect(warn).not.toHaveBeenCalled();
+  });
+
   it("is rate limited per sender", async () => {
     let last = 0;
     for (let i = 0; i < 70; i++)
