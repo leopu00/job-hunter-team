@@ -3354,8 +3354,9 @@ export async function readRendezvousState(config, options = {}) {
   // Lo stesso budget copre direct moderno, direct legacy e fallback HTTP:
   // tre timeout consecutivi bloccherebbero il giro veloce e quindi anche chat.
   const signal = options.signal || AbortSignal.timeout(timeoutMs);
+  // user_id: the emergency stop runs only on the paired user's row (team-state-guard.js).
   const stopState = [
-    'should_run', 'is_running',
+    'user_id', 'should_run', 'is_running',
     'emergency_stop_requested_at', 'emergency_stop_completed_at',
   ];
   const withChat = [
