@@ -483,15 +483,16 @@ def test_the_tool_is_executable_and_lands_on_the_path_under_its_name_without_the
     assert helped.returncode == 0 and "mailbox" in helped.stdout
 
 
-def test_only_the_transport_and_the_watchdog_call_the_mailbox_and_the_user_and_bridge_paths_do_not():
-    """Phase 2 wires the transport (which routes) and the watchdog (which wakes again). The files that
-    carry the user's chat, the bridges and the spawn stay on the terminal path, byte for byte."""
+def test_only_the_transport_the_watchdog_and_the_app_chat_call_the_mailbox_and_the_other_paths_do_not():
+    """Phase 2 wires the transport (which routes) and the watchdog (which wakes again); phase 3c, the app's
+    chat. Telegram, the web chat through the cloud, the console, the bridges and the spawn stay on the
+    terminal path, byte for byte."""
     for relative in (".launcher/start-agent.sh", ".launcher/pacing-bridge.py", ".launcher/sentinel-bridge.py",
-                     "shared/skills/agent_chat.py", "shared/skills/bridge_mailbox.py",
+                     "shared/skills/bridge_mailbox.py",
                      "cli/src/lib/user-messages-poller.js", "web/app/api/team/send/route.ts"):
         text = (ROOT / relative).read_text(encoding="utf-8")
         assert "jht-mail" not in text and "jht_mail" not in text, relative
-    for relative in ("agents/_skills/tmux-send/jht-tmux-send", ".launcher/agent-watchdog.sh"):
+    for relative in ("agents/_skills/tmux-send/jht-tmux-send", ".launcher/agent-watchdog.sh", "shared/skills/agent_chat.py"):
         assert "jht_mail" in (ROOT / relative).read_text(encoding="utf-8") or "jht-mail" in (ROOT / relative).read_text(encoding="utf-8")
 
 
@@ -599,7 +600,7 @@ def test_the_text_is_cleaned_by_the_shared_rules_and_keeps_what_a_language_needs
 
 def test_reading_a_box_nobody_wrote_to_creates_no_folder(jht_home):
     assert mail.drain("assistente-1") == []
-    assert mail.sweep("mentor-1") == {"expired": [], "told": [], "typed": []}
+    assert mail.sweep("mentor-1") == {"expired": [], "told": [], "typed": [], "chat": []}
     assert mail.pending("assistente-1") == []
     assert mail.recent("assistente-1") == []
     assert not (jht_home / "mailbox").exists()

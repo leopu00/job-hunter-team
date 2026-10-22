@@ -206,7 +206,11 @@ def read(agent: str, cursor_text: str | None) -> dict:
                 except (TypeError, ValueError):
                     at = 0.0
                 mid = str(row.get("message_id") or hashlib.sha256((agent + ":" + str(start) + ":").encode() + raw).hexdigest())
-                messages.append({"id": mid, "role": role, "text": text, "at": at})
+                shown = {"id": mid, "role": role, "text": text, "at": at}
+                code = row.get("code")
+                if role == "system" and isinstance(code, str) and re.fullmatch(r"[a-z_]{1,40}", code):
+                    shown["code"] = code        # a closed code the app may say in its own language
+                messages.append(shown)
             cursor = handle.tell()
     except OSError:
         raise Refusal("read_failed")
@@ -349,8 +353,11 @@ def _found(path: Path, client_id: str) -> dict | None:
     return None
 
 
-def _receipt(client_id: str, message_id, at) -> dict:
-    return {"accepted": True, "clientMessageId": client_id, "messageId": message_id, "at": at}
+def _receipt(client_id: str, message_id, at, state: str | None = None) -> dict:
+    out = {"accepted": True, "clientMessageId": client_id, "messageId": message_id, "at": at}
+    if state:
+        out["state"] = state        # "queued": the turn is in the agent's mailbox, not yet taken
+    return out
 
 
 def persist(agent: str, client_id: str, text: str) -> dict:
@@ -463,6 +470,59 @@ def deliver(agent: str, session: str, text: str) -> None:
         raise Refusal(DELIVERY_EXIT.get(done.returncode, "send_failed"))
 
 
+def _mail_module():
+    """The mailbox of this image (shared/skills/jht_mail.py), or None when the image does not have it."""
+    for candidate in (Path(__file__).resolve().parent / "jht_mail.py", Path("/app/shared/skills/jht_mail.py")):
+        if candidate.is_file():
+            spec = importlib.util.spec_from_file_location("agent_chat_jht_mail", candidate)
+            module = importlib.util.module_from_spec(spec)
+            assert spec.loader is not None
+            spec.loader.exec_module(module)
+            return module
+    return None
+
+
+def mail_for(agent: str):
+    """The mailbox module when `agent` is a mail receiver (the team's config says so), else None: the
+    turn then goes to the terminal as it always did. Anything that cannot be shown is «not a receiver»."""
+    try:
+        mail = _mail_module()
+        if mail is not None and mail.agent_id(agent) in mail.load_receivers():
+            return mail
+    except Exception:
+        pass
+    return None
+
+
+def require_mail_fence(agent: str, text: str) -> None:
+    """The mailbox fences the user's words when the agent reads them; refuse, writing nothing, unless the
+    fence of this image is shown to fence this very turn (the same proof the terminal path asks for)."""
+    module = _origin_module()
+    envelope = envelope_of(agent, text)
+    try:
+        if module is None or module.prepare_message(envelope) == envelope:
+            raise Refusal("fence_missing")
+    except Refusal:
+        raise
+    except Exception:
+        raise Refusal("fence_missing")
+
+
+def deliver_by_mail(mail, agent: str, session: str, row: dict, text: str) -> dict:
+    """Queue the turn in the agent's mailbox and wake the agent if its terminal is at its prompt."""
+    try:
+        queued = mail.send_user(agent, str(row.get("client_message_id")), str(row.get("text") or text))
+    except mail.MailError:
+        raise Refusal("send_failed")
+    if queued.get("created"):
+        try:
+            binary = _delivery_binary()
+        except Refusal:
+            return queued
+        mail.nudge_through(binary, session, queued["id"])
+    return queued
+
+
 class _AgentLock:
     """One send at a time per agent: two asks with the same id cannot both deliver."""
 
@@ -501,19 +561,30 @@ def send(agent: str, client_id: str, raw_text: str) -> dict:
         return _receipt(client_id, done.get("message_id"), done.get("at"))
     # The checks come before anything is created, the lock's folder included: a refusal leaves nothing behind.
     check_session(session)
-    require_fence(agent, text)
-    require_prompt(session)
+    # A receiver of the mailbox is sent the turn as a file, whatever its terminal shows: nothing is typed
+    # over a menu or a sign-in, because what is typed is a nudge, and only at the prompt. Every other
+    # agent is sent the turn as it always was, and only at its prompt.
+    mail = mail_for(agent)
+    if mail is None:
+        require_fence(agent, text)
+        require_prompt(session)
+    else:
+        require_mail_fence(agent, text)
     with _AgentLock(agent):
         done = _found(delivered, client_id)         # another ask with this id may have finished while we waited
         if done is not None:
             return _receipt(client_id, done.get("message_id"), done.get("at"))
-        # Another send may have started a turn while this one waited for the lock: look again.
-        require_prompt(session)
+        if mail is None:
+            # Another send may have started a turn while this one waited for the lock: look again.
+            require_prompt(session)
         row = persist(agent, client_id, text)
-        # A line already there is what the agent is sent, not this ask's text: the id is the message.
-        deliver(agent, session, str(row.get("text") or text))
+        if mail is None:
+            # A line already there is what the agent is sent, not this ask's text: the id is the message.
+            deliver(agent, session, str(row.get("text") or text))
+        else:
+            deliver_by_mail(mail, agent, session, row, text)
         mark_delivered(agent, row)
-        return _receipt(client_id, row.get("message_id"), row.get("ts"))
+        return _receipt(client_id, row.get("message_id"), row.get("ts"), "queued" if mail is not None else None)
 
 
 # ── entry ───────────────────────────────────────────────────────────────────

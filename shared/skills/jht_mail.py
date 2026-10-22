@@ -43,6 +43,7 @@ import json
 import os
 import re
 import stat
+import subprocess
 import sys
 import time
 import uuid
@@ -70,6 +71,8 @@ MAX_PENDING = 200
 RECEIPTS_READ_CAP = 1048576
 RECEIPTS_TRIM_AT = 262144
 RETENTION = timedelta(days=7)
+# The user's chat turns (and whatever was set aside as not a message) are forgotten after a day.
+CHAT_RETENTION = timedelta(days=1)
 # How long a message may stay queued after its last nudge (or its creation), by kind.
 NOT_TAKEN_AFTER = {"URG": 120, "CHAT": 120}
 NOT_TAKEN_AFTER_DEFAULT = 600
@@ -383,6 +386,14 @@ def send(
     elif not (trust == LOCAL_TRUST and kind == NOTICE_KIND and claimed == LOCAL_SENDER and origin is None):
         raise MailError("refused", "only agents write to an agent's mailbox")
     mid = message_id or default_id(origin or claimed or trust, recipient, text, moment)
+    return _queue(recipient, mid, kind, trust, claimed, origin, text, moment,
+                  requires_done=kind in NEEDS_DONE if requires_done is None else bool(requires_done),
+                  ttl_seconds=ttl_seconds)
+
+
+def _queue(recipient: str, mid: str, kind: str, trust: str, claimed, origin, text: str, moment: datetime,
+           *, requires_done: bool, ttl_seconds: int | None = None) -> dict:
+    """Write the message file, once per id. The caller has decided who may write it: nothing here does."""
     if not MESSAGE_ID.match(mid):
         raise MailError("refused", "bad id")
 
@@ -403,7 +414,7 @@ def send(
         "trust": trust,
         "body": text,
         "created_at": _iso(moment),
-        "requires_done": kind in NEEDS_DONE if requires_done is None else bool(requires_done),
+        "requires_done": requires_done,
     }
     if ttl_seconds:
         record["expires_at"] = _iso(moment + timedelta(seconds=int(ttl_seconds)))
@@ -424,6 +435,42 @@ def send(
     except OSError:
         pass  # the file is there: a message that exists is queued, with or without its first receipt
     return {"id": mid, "state": "queued", "created": True}
+
+
+# The user's chat turn (phase 3c). The user is not an agent and nobody can verify them: the file says
+# so with the least trust there is, and the reader gets it fenced. `send_user` is the only door; `send`,
+# `route` and the command refuse this form.
+USER_SENDER = "utente"
+USER_KIND = "CHAT"
+USER_TRUST = "unverified"
+
+
+def is_user_turn(record: dict) -> bool:
+    return (record.get("kind") == USER_KIND and record.get("from_claimed") == USER_SENDER
+            and record.get("trust") == USER_TRUST and record.get("from_verified") is None
+            and not record.get("requires_done"))
+
+
+def send_user(agent: str, client_id: str, text: str, *, now: datetime | None = None, origin_of=None) -> dict:
+    """Queue the user's chat turn for `agent`, which must be a mail receiver. The id is the chat's
+    `client_id`: asking twice leaves one message. Refused when the caller is a process that tmux can
+    place in an agent's pane (a filter: the real limit is the one every file of the team has).
+    The text arrives already cleaned by the chat; it is cleaned again here."""
+    recipient = agent_id(agent)
+    if recipient not in load_receivers():
+        raise MailError("refused", "not a mail receiver")
+    placed = (origin_of or _verified_origin)()
+    if placed:
+        raise MailError("refused", "the user's turn is not written from an agent's terminal")
+    if not MESSAGE_ID.match(str(client_id)):
+        raise MailError("refused", "bad id")
+    cleaned = strip_controls(text)
+    if not cleaned.strip():
+        raise MailError("refused", "empty message")
+    if len(cleaned) > MAX_BODY or len(cleaned.encode("utf-8")) > MAX_BODY_BYTES:
+        raise MailError("refused", f"message longer than {MAX_BODY} characters")
+    return _queue(recipient, str(client_id), USER_KIND, USER_TRUST, USER_SENDER, None, cleaned, _utc(now),
+                  requires_done=False)
 
 
 def state_of(agent: str, message_id: str) -> str:
@@ -466,7 +513,10 @@ def render(record: dict, *, reread: bool = False) -> str:
     """One message as the agent reads it: our header, then the sender's text, every line quoted.
     Every field of the header passes a closed shape first; the text never reaches it."""
     named = record.get("from_verified")
-    if record.get("trust") == VERIFIED_TRUST and isinstance(named, str) and CANONICAL_AGENT.match(named):
+    user_turn = is_user_turn(record)
+    if user_turn:
+        who, trust = USER_SENDER, USER_TRUST
+    elif record.get("trust") == VERIFIED_TRUST and isinstance(named, str) and CANONICAL_AGENT.match(named):
         who, trust = named, VERIFIED_TRUST
     elif record.get("trust") == LOCAL_TRUST:
         who, trust = LOCAL_SENDER, LOCAL_TRUST
@@ -478,10 +528,34 @@ def render(record: dict, *, reread: bool = False) -> str:
     header = f"[from {who} - {trust} - {kind} - id={mid} - {_iso(created) if created else 'unknown time'}]"
     if reread:
         header += " [re-read]"
+    if user_turn:
+        header += " [!UNVERIFIED SENDER]"
+        return header + "\n> " + _fenced_user_text(record)
     if record.get("requires_done"):
         header += f" [answer needed: jht-mail ack {mid}]"
     lines = _LINE_BREAK.split(str(record.get("body", "")))
     return header + "\n" + "\n".join("> " + _defuse(line) for line in lines)
+
+
+def _fenced_user_text(record: dict) -> str:
+    """The user's words as the team has always read them: on one line between the user-text markers,
+    commands and look-alike markers taken out. The same functions the transport fences a chat turn with
+    (`message_origin.prepare_message`), run here at the reading, after the cleaning. If the fence cannot
+    be shown to have fenced, the text is not shown."""
+    withheld = "[the text of this message is withheld: the fence is not available]"
+    try:
+        sys.path.insert(0, str(HERE))
+        try:
+            import message_origin
+        finally:
+            sys.path.pop(0)
+        head = f"[@{USER_SENDER} -> @{record.get('to')}] [{USER_KIND}]"
+        fenced = message_origin.prepare_message(f"{head} {record.get('body', '')}")
+        if not fenced.startswith(head) or fenced == f"{head} {record.get('body', '')}" or "[!UNFENCED]" in fenced:
+            return withheld
+        return fenced[len(head):].strip() or withheld
+    except Exception:
+        return withheld
 
 
 def _shape_ok(agent: str, record: dict, name: str) -> bool:
@@ -496,6 +570,8 @@ def _shape_ok(agent: str, record: dict, name: str) -> bool:
     if not isinstance(record.get("body"), str) or not KIND.match(str(record.get("kind", ""))):
         return False
     trust, verified, claimed = record.get("trust"), record.get("from_verified"), record.get("from_claimed")
+    if trust == USER_TRUST:
+        return is_user_turn(record)
     if trust == VERIFIED_TRUST:
         return (isinstance(verified, str) and CANONICAL_AGENT.match(verified) is not None
                 and claimed == verified)
@@ -591,6 +667,33 @@ def notice_targets(record: dict) -> list[str]:
     return [name for name in dict.fromkeys(names) if name != recipient]
 
 
+NOT_TAKEN_CODE = "mail_not_taken"
+
+
+def _chat_system_line(agent: str, client_id: str, moment: datetime) -> bool:
+    """Say in the user's chat with `agent` that the turn was not taken: a system line with a closed
+    code and the id it refers to, never the user's words. Once per turn (the id is the line's id)."""
+    name = agent_id(agent)
+    if not name.endswith("-1"):
+        return False
+    path = home() / "agents" / name[:-2] / "chat.jsonl"
+    line_id = f"nt-{client_id}"[:64]
+    try:
+        if path.exists() and line_id in _read_tail(path, 262144):
+            return False
+        path.parent.mkdir(parents=True, exist_ok=True)
+        row = {"role": "system", "text": "The agent has not taken your message yet.", "code": NOT_TAKEN_CODE,
+               "refs": client_id, "ts": moment.timestamp(), "done": True, "message_id": line_id}
+        fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_APPEND | getattr(os, "O_NOFOLLOW", 0), 0o600)
+        try:
+            os.write(fd, (json.dumps(row, ensure_ascii=False, separators=(",", ":")) + "\n").encode("utf-8"))
+        finally:
+            os.close(fd)
+    except OSError:
+        return False
+    return True
+
+
 def sweep(agent: str, now: datetime | None = None, receivers=None) -> dict:
     """Expire what was not taken in time, tell who must know, and forget what is old.
 
@@ -604,7 +707,7 @@ def sweep(agent: str, now: datetime | None = None, receivers=None) -> dict:
     """
     moment = _utc(now)
     if not box_dir(agent).is_dir():
-        return {"expired": [], "told": [], "typed": []}
+        return {"expired": [], "told": [], "typed": [], "chat": []}
     folders = _ensure(agent)
     expired: list[str] = []
     notices: list[dict] = []
@@ -629,14 +732,30 @@ def sweep(agent: str, now: datetime | None = None, receivers=None) -> dict:
                 try:
                     info = path.lstat()
                     # Only plain files are forgotten; a folder or a link that got here is left for a person.
-                    if stat.S_ISREG(info.st_mode) and moment - datetime.fromtimestamp(info.st_mtime, timezone.utc) > RETENTION:
+                    if not stat.S_ISREG(info.st_mode):
+                        continue
+                    keep_for = RETENTION
+                    if name == "rejected":
+                        keep_for = CHAT_RETENTION  # what is not a message of ours is not kept long
+                    else:
+                        held = _read_message(path)
+                        if held and held.get("kind") == USER_KIND:
+                            keep_for = CHAT_RETENTION  # the user's words stay a day, not a week
+                    if moment - datetime.fromtimestamp(info.st_mtime, timezone.utc) > keep_for:
                         path.unlink()
                 except OSError:
                     continue
         _trim_receipts(agent, moment)
     told = []
     typed = []
+    said = []
     for record in notices:
+        if is_user_turn(record):
+            # The user's turn that was not taken: one system line in the user's own chat, no text of
+            # the message, nothing to the agents (the sender is the user).
+            if _chat_system_line(record["to"], record["id"], moment):
+                said.append(record["id"])
+            continue
         for target in notice_targets(record):
             text = (f"Message {record['id']} to {record['to']} ({record['kind']}) was not taken "
                     f"after {NOT_TAKEN_AFTER.get(record['kind'], NOT_TAKEN_AFTER_DEFAULT)} seconds.")
@@ -655,7 +774,7 @@ def sweep(agent: str, now: datetime | None = None, receivers=None) -> dict:
             except MailError:
                 continue  # a full or unreachable box must not stop the sweep
             told.append({"to": target, "id": result["id"]})
-    return {"expired": expired, "told": told, "typed": typed}
+    return {"expired": expired, "told": told, "typed": typed, "chat": said}
 
 
 # -- the transport's side (phase 2) -------------------------------------------------------------------
@@ -780,6 +899,19 @@ def nudge(session: str, message_id: str, *, now: datetime | None = None, capture
     except OSError:
         pass  # the receipt is bookkeeping; the nudge itself is still worth typing
     return True
+
+
+def nudge_through(binary: str, session: str, message_id: str, *, timeout: int = 100) -> str:
+    """For a caller that is not the transport (the chat): type the nudge with the transport's own
+    typing, if the terminal is at its prompt. "nudged" or "held"; a failure of the typing is "held"
+    too, because the message is safe and the watchdog will wake the agent again."""
+    if not nudge(session, message_id):
+        return "held"
+    try:
+        done = subprocess.run([binary, session, nudge_text(1)], capture_output=True, timeout=timeout, check=False)
+    except (OSError, subprocess.SubprocessError):
+        return "held"
+    return "nudged" if done.returncode == 0 else "held"
 
 
 def nudge_text(count: int) -> str:
