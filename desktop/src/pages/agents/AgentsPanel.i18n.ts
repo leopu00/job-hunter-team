@@ -90,8 +90,8 @@ export interface AgentsPanelText {
   teamControlsHelp: string;
   confirmStopTeam: string; // {where}
   bodyStopTeam: string;
-  resultStopRequested: string;
-  stopTeamFailed: string;
+  resultTeamStopped: string;
+  resultTeamAlreadyStopped: string;
   pauseHours1: string;
   pauseHours4: string;
   pauseTomorrow: string;
@@ -258,8 +258,8 @@ const it: AgentsPanelText = {
   teamControlsHelp: "Pausa: la squadra si ferma per il tempo che scegli e riparte da sola. Ferma: la squadra si spegne (l’assistente resta acceso) e non riparte finché non riaccendi gli agenti da qui.",
   confirmStopTeam: "Fermare la squadra {where}?",
   bodyStopTeam: "Gli agenti si spengono: quello che stavano facendo si interrompe, le posizioni restano dove sono. La squadra non riparte da sola: riaccendi gli agenti uno per uno con «Accendi». L’assistente resta acceso.",
-  resultStopRequested: "Stop chiesto: la squadra si ferma entro pochi secondi.",
-  stopTeamFailed: "Non sono riuscito a chiedere lo stop. Riprova.",
+  resultTeamStopped: "La squadra è ferma. L’assistente resta acceso.",
+  resultTeamAlreadyStopped: "La squadra era già ferma.",
   pauseHours1: "Per 1 ora",
   pauseHours4: "Per 4 ore",
   pauseTomorrow: "Fino a domani alle 8",
@@ -422,8 +422,8 @@ const en: AgentsPanelText = {
   teamControlsHelp: "Pause: the team stops for the time you choose and starts again by itself. Stop: the team shuts down (the assistant stays on) and does not start again until you start the agents from here.",
   confirmStopTeam: "Stop the team {where}?",
   bodyStopTeam: "The agents shut down: what they were doing is interrupted, the positions stay where they are. The team does not start again by itself: start the agents one by one with “Start”. The assistant stays on.",
-  resultStopRequested: "Stop requested: the team stops within a few seconds.",
-  stopTeamFailed: "The stop request failed. Try again.",
+  resultTeamStopped: "The team is stopped. The assistant stays on.",
+  resultTeamAlreadyStopped: "The team was already stopped.",
   pauseHours1: "For 1 hour",
   pauseHours4: "For 4 hours",
   pauseTomorrow: "Until tomorrow at 8",
@@ -585,8 +585,8 @@ const de: AgentsPanelText = {
   teamControlsHelp: "Pause: Das Team hält für die gewählte Zeit an und startet dann von selbst wieder. Stoppen: Das Team wird ausgeschaltet (der Assistent bleibt an) und startet erst wieder, wenn du die Agenten hier startest.",
   confirmStopTeam: "Das Team {where} stoppen?",
   bodyStopTeam: "Die Agenten werden ausgeschaltet: Was sie gerade tun, wird unterbrochen, die Stellen bleiben, wo sie sind. Das Team startet nicht von selbst wieder: Starte die Agenten einzeln mit „Starten“. Der Assistent bleibt an.",
-  resultStopRequested: "Stopp angefordert: Das Team hält in wenigen Sekunden an.",
-  stopTeamFailed: "Die Stopp-Anfrage ist fehlgeschlagen. Versuche es erneut.",
+  resultTeamStopped: "Das Team ist gestoppt. Der Assistent bleibt an.",
+  resultTeamAlreadyStopped: "Das Team war bereits gestoppt.",
   pauseHours1: "Für 1 Stunde",
   pauseHours4: "Für 4 Stunden",
   pauseTomorrow: "Bis morgen um 8 Uhr",
@@ -749,8 +749,8 @@ const es: AgentsPanelText = {
   teamControlsHelp: "Pausa: el equipo se detiene el tiempo que elijas y vuelve a arrancar solo. Detener: el equipo se apaga (el asistente sigue encendido) y no vuelve a arrancar hasta que enciendas los agentes desde aquí.",
   confirmStopTeam: "¿Detener el equipo {where}?",
   bodyStopTeam: "Los agentes se apagan: lo que estaban haciendo se interrumpe y las ofertas se quedan donde están. El equipo no vuelve a arrancar solo: enciende los agentes uno a uno con «Encender». El asistente sigue encendido.",
-  resultStopRequested: "Parada solicitada: el equipo se detiene en pocos segundos.",
-  stopTeamFailed: "No se pudo solicitar la parada. Inténtalo de nuevo.",
+  resultTeamStopped: "El equipo está detenido. El asistente sigue encendido.",
+  resultTeamAlreadyStopped: "El equipo ya estaba detenido.",
   pauseHours1: "Durante 1 hora",
   pauseHours4: "Durante 4 horas",
   pauseTomorrow: "Hasta mañana a las 8",
@@ -913,8 +913,8 @@ const fr: AgentsPanelText = {
   teamControlsHelp: "Pause : l’équipe s’arrête pendant la durée choisie puis repart seule. Arrêter : l’équipe s’éteint (l’assistant reste allumé) et ne repart pas tant que vous ne redémarrez pas les agents d’ici.",
   confirmStopTeam: "Arrêter l’équipe {where} ?",
   bodyStopTeam: "Les agents s’éteignent : ce qu’ils faisaient s’interrompt, les offres restent où elles sont. L’équipe ne repart pas seule : redémarrez les agents un par un avec « Démarrer ». L’assistant reste allumé.",
-  resultStopRequested: "Arrêt demandé : l’équipe s’arrête dans quelques secondes.",
-  stopTeamFailed: "La demande d’arrêt a échoué. Réessayez.",
+  resultTeamStopped: "L’équipe est arrêtée. L’assistant reste allumé.",
+  resultTeamAlreadyStopped: "L’équipe était déjà arrêtée.",
   pauseHours1: "Pendant 1 heure",
   pauseHours4: "Pendant 4 heures",
   pauseTomorrow: "Jusqu’à demain à 8 h",
@@ -1077,8 +1077,8 @@ const hu: AgentsPanelText = {
   teamControlsHelp: "Szünet: a csapat a választott ideig megáll, aztán magától újraindul. Leállítás: a csapat kikapcsol (az asszisztens bekapcsolva marad), és addig nem indul újra, amíg innen be nem kapcsolod az ügynököket.",
   confirmStopTeam: "Leállítod a csapatot {where}?",
   bodyStopTeam: "Az ügynökök kikapcsolnak: amit éppen csináltak, megszakad, az állások ott maradnak, ahol vannak. A csapat nem indul újra magától: kapcsold be az ügynököket egyenként a „Bekapcsolás” gombbal. Az asszisztens bekapcsolva marad.",
-  resultStopRequested: "Leállítás kérve: a csapat néhány másodpercen belül megáll.",
-  stopTeamFailed: "A leállítási kérés nem sikerült. Próbáld újra.",
+  resultTeamStopped: "A csapat leállt. Az asszisztens bekapcsolva marad.",
+  resultTeamAlreadyStopped: "A csapat már le volt állítva.",
   pauseHours1: "1 órára",
   pauseHours4: "4 órára",
   pauseTomorrow: "Holnap 8 óráig",
@@ -1241,8 +1241,8 @@ const pt: AgentsPanelText = {
   teamControlsHelp: "Pausa: a equipa para durante o tempo que escolheres e volta a arrancar sozinha. Parar: a equipa desliga-se (o assistente fica ligado) e não volta a arrancar até ligares os agentes aqui.",
   confirmStopTeam: "Parar a equipa {where}?",
   bodyStopTeam: "Os agentes desligam-se: o que estavam a fazer é interrompido e as vagas ficam onde estão. A equipa não volta a arrancar sozinha: liga os agentes um a um com «Ligar». O assistente fica ligado.",
-  resultStopRequested: "Paragem pedida: a equipa para dentro de poucos segundos.",
-  stopTeamFailed: "O pedido de paragem falhou. Tenta novamente.",
+  resultTeamStopped: "A equipa está parada. O assistente fica ligado.",
+  resultTeamAlreadyStopped: "A equipa já estava parada.",
   pauseHours1: "Durante 1 hora",
   pauseHours4: "Durante 4 horas",
   pauseTomorrow: "Até amanhã às 8",

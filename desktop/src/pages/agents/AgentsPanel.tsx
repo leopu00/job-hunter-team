@@ -4,7 +4,6 @@ import { appLocale } from "../../lib/app-locale";
 import { describeError } from "../../lib/error-catalog";
 import { formatRelative } from "@/lib/message-display";
 import { pluralText } from "../../lib/plural";
-import { requestTeamStop } from "./team-stop";
 import { useExistingTeamReadOnly } from "../../lib/existing-team-readonly";
 import {
   answerQuestion,
@@ -15,6 +14,7 @@ import {
   readPanelScreen,
   readTeamState,
   resumeTeam,
+  stopTeam,
   tomorrowAtEightUtc,
   type ActionResult,
   type AnswerResult,
@@ -188,6 +188,8 @@ function resultText(t: AgentsPanelText, result: ActionResult, name: string): str
     already_paused: t.resultAlreadyPaused,
     resumed: t.resultResumed,
     not_paused: t.resultNotPaused,
+    team_stopped: t.resultTeamStopped,
+    team_already_stopped: t.resultTeamAlreadyStopped,
   }[result];
   return fill(key, { name });
 }
@@ -490,19 +492,13 @@ export default function AgentsPanel({ search }: PageProps) {
       setPending(null);
       return;
     }
-    if (pending.kind === "stop-team") {
-      const stopped = await requestTeamStop();
-      setNotices((all) => ({ ...all, team: { ok: stopped.ok, text: stopped.ok ? t.resultStopRequested : t.stopTeamFailed } }));
-      setActing(false);
-      setPending(null);
-      await read();
-      return;
-    }
     if (pending.kind === "agent") {
       key = pending.row.session;
       done = await controlAgent(pending.op, pending.row.session, target);
     } else if (pending.kind === "pause") {
       done = exit ? await pauseTeam(exit, target) : { ok: false, at: Date.now(), code: "agent_control_invalid" };
+    } else if (pending.kind === "stop-team") {
+      done = await stopTeam(target);
     } else {
       done = await resumeTeam(target);
     }

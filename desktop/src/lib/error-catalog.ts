@@ -838,6 +838,12 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
     "The team could not be resumed.",
     "Try again. If it keeps happening, report the code shown next to it.",
   ),
+  team_stop_failed: copy(
+    "Non è stato possibile fermare la squadra: lo stop non si è scritto, o un agente non si è spento.",
+    "Riprova. Se si ripete, segnala il codice che vedi accanto.",
+    "The team could not be stopped: the stop could not be written, or an agent did not shut down.",
+    "Try again. If it keeps happening, report the code shown next to it.",
+  ),
   desktop_transport_unavailable: copy(
     "L’app non è riuscita a parlare con il suo nucleo nativo.",
     "Riprova con Aggiorna. Se si ripete, chiudi Job Hunter Team del tutto e riaprilo.",

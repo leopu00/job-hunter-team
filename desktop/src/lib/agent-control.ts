@@ -74,7 +74,9 @@ export type ActionResult =
   | "paused"
   | "already_paused"
   | "resumed"
-  | "not_paused";
+  | "not_paused"
+  | "team_stopped"
+  | "team_already_stopped";
 export type ExclusionResult = "excluded" | "exclusion_withdrawn";
 
 export type Outcome<T> = { ok: true; at: number; value: T } | { ok: false; at: number; code: string };
@@ -220,6 +222,8 @@ const RESULTS = new Set<string>([
   "already_paused",
   "resumed",
   "not_paused",
+  "team_stopped",
+  "team_already_stopped",
 ]);
 
 const EXCLUSION_RESULTS = new Set<string>(["excluded", "exclusion_withdrawn"]);
@@ -244,6 +248,15 @@ export function pauseTeam(exit: PauseExit, target: string): Promise<Outcome<Acti
 
 export function resumeTeam(target: string): Promise<Outcome<ActionResult>> {
   return act({ op: "resume", target });
+}
+
+/**
+ * «Ferma la squadra»: `jht team stop` on the team the panel controls (this
+ * computer, or the VPS it is linked to), through the same native command as
+ * the pause. Never the cloud's request: only a team linked to the cloud reads it.
+ */
+export function stopTeam(target: string): Promise<Outcome<ActionResult>> {
+  return act({ op: "stop_team", target });
 }
 
 /**

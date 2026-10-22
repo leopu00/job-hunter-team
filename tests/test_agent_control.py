@@ -347,6 +347,70 @@ def test_resume_of_a_team_the_user_stopped_is_refused_and_changes_nothing(team, 
     assert (team.home / ".team-standby.flag").exists()
 
 
+# ── Ferma la squadra (JHT-T54) ──────────────────────────────────────────────
+TEAM_UP = ("CAPITANO", "ASSISTENTE", "MENTOR", "SENTINELLA", "CRITICO", "SCOUT-1", "SCOUT-10", "SCRITTORE-1",
+           "CRITICO-S2", "CLOSER-1", "DOTTORE", "MANTENITORE", "SENTINELLA-WORKER", "HQ-MASTER")
+
+
+def test_stop_team_is_jht_team_stop_from_the_panel(team, capsys):
+    team.up(*TEAM_UP)
+    code, answer = team.run("stop-team", capsys=capsys)
+    assert (code, answer) == (0, {"ok": True, "op": "stop-team", "session": None, "result": "team_stopped"})
+    # the flag the watchdog obeys, so nothing comes back
+    assert (team.home / ".team-halted.flag").exists()
+    # the person's chat, the bridge's probe and a session that is not the team's stay
+    assert sorted(p.name for p in team.sessions.iterdir()) == ["ASSISTENTE", "HQ-MASTER", "SENTINELLA-WORKER"]
+    assert team.spawns() == []
+    assert team.journal()[-1]["op"] == "stop-team" and team.journal()[-1]["result"] == "team_stopped"
+
+
+def test_stop_team_writes_the_flag_first_and_without_it_stops_nothing(team, capsys):
+    team.up("CAPITANO", "SCOUT-1")
+    (team.home / ".team-halted.flag").mkdir()  # a flag that cannot be written
+    code, answer = team.run("stop-team", capsys=capsys)
+    assert (code, answer["error"]) == (121, "team_stop_failed")
+    assert team.alive("CAPITANO") and team.alive("SCOUT-1")
+    log = team.tmp / "tmux.log"
+    assert not log.exists() or "kill-session" not in log.read_text()
+
+
+def test_stop_team_says_when_the_team_was_already_stopped(team, capsys):
+    (team.home / ".team-halted.flag").write_text("halted_by=user\n")
+    team.up("ASSISTENTE")
+    assert team.run("stop-team", capsys=capsys)[1]["result"] == "team_already_stopped"
+    assert team.alive("ASSISTENTE")
+    # stopped, but an agent started alone since: it is stopped again, and said so
+    team.up("SCOUT-1")
+    assert team.run("stop-team", capsys=capsys)[1]["result"] == "team_stopped"
+    assert not team.alive("SCOUT-1")
+
+
+def test_stop_team_that_cannot_kill_a_session_says_so(team, capsys, monkeypatch):
+    team.up("SCOUT-1")
+    monkeypatch.setenv("FAKE_TMUX_UNKILLABLE", "1")
+    code, answer = team.run("stop-team", capsys=capsys)
+    assert (code, answer["error"]) == (121, "team_stop_failed")
+
+
+def test_stop_team_takes_no_argument(team, capsys):
+    team.up("SCOUT-1")
+    for argv in (("stop-team", "SCOUT-1"), ("stop-team", "--all")):
+        code, answer = team.run(*argv, capsys=capsys)
+        assert (code, answer["error"]) == (100, "agent_control_invalid")
+    assert team.alive("SCOUT-1") and not (team.home / ".team-halted.flag").exists()
+
+
+def test_stop_team_keeps_what_jht_team_stop_keeps():
+    # the same rule as cli/src/commands/team/stop.js without arguments
+    stop_js = (ROOT / "cli" / "src" / "commands" / "team" / "stop.js").read_text(encoding="utf-8")
+    assert "const KEEP_ALIVE_ON_STOP_ALL = new Set(['ASSISTENTE']);" in stop_js
+    assert "/^(?:JHT-)?DOTTORE(?:[-_].*)?$/" in stop_js and "/^(?:JHT-)?MANTENITORE(?:[-_].*)?$/" in stop_js
+    tool = _load()
+    assert tool.STOP_TEAM_KEEPS == {"ASSISTENTE"}
+    assert all(tool._stopped_by_team_stop(name) for name in ("DOTTORE", "MANTENITORE", "CRITICO-S3", "CLOSER-2"))
+    assert not any(tool._stopped_by_team_stop(name) for name in ("ASSISTENTE", "SENTINELLA-WORKER", "SCOUT-01"))
+
+
 # ── the closed request ──────────────────────────────────────────────────────
 @pytest.mark.parametrize("argv", [
     ("stop",),
@@ -404,13 +468,14 @@ def _stdin(team, monkeypatch, capsys, request):
 
 @pytest.mark.parametrize("request_", [
     {"op": "stop", "name": "SCOUT-1"}, {"op": "start", "name": "SCOUT-2"},
-    {"op": "restart", "name": "SCOUT-1"}, {"op": "pause"}, {"op": "resume"},
+    {"op": "restart", "name": "SCOUT-1"}, {"op": "pause"}, {"op": "resume"}, {"op": "stop-team"},
 ])
 def test_on_stdin_an_action_is_refused(team, capsys, monkeypatch, request_):
     team.up("SCOUT-1")
     assert _stdin(team, monkeypatch, capsys, request_) == {"ok": False, "error": "agents_unavailable"}
     assert team.alive("SCOUT-1") and team.spawns() == []
     assert not (team.home / ".team-standby.flag").exists()
+    assert not (team.home / ".team-halted.flag").exists()
 
 
 def test_on_stdin_the_list_reads(team, capsys, monkeypatch):
