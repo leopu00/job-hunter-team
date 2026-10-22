@@ -471,7 +471,12 @@ try { Install-PrivateComposeProvider -Destination $ComposeProvider } catch {
 }
 
 try {
-  $machines = @((& $Podman machine list --format json | ConvertFrom-Json))
+  # Windows PowerShell 5.1 gives a JSON array to the pipeline as ONE object: with a
+  # second machine of this user, `$machine` was the whole list. Parse with -InputObject
+  # and enumerate with foreach, the same in 5.1 and in PowerShell 7.
+  $machinesJson = ((& $Podman machine list --format json) -join "`n")
+  $parsedMachines = if ($machinesJson) { ConvertFrom-Json -InputObject $machinesJson } else { $null }
+  $machines = @(foreach ($listed in $parsedMachines) { $listed })
   $machine = $machines | Where-Object Name -eq $MachineName | Select-Object -First 1
   if (-not $machine) {
     if (-not $InitializeMachine) { throw "Podman machine '$MachineName' is absent; re-run with -InitializeMachine." }
