@@ -47,6 +47,10 @@ jobs:
             & wsl.exe @wslArgs 2>&1 | ForEach-Object { "  $_" }
             "  exit=$LASTEXITCODE"
           }
+          # Only a report: a fresh image has no distribution, `wsl --list` then
+          # exits 1, and that code ended the job here, before the step below
+          # ever booted one (runs 37889120887 and 38837735880).
+          exit 0
       - name: A WSL2 distribution boots
         id: wsl2
         continue-on-error: true
