@@ -28,7 +28,7 @@ const it = {
   },
   readOnlyTitle: "Sola lettura",
   readOnly: [
-    "Con una squadra esistente l’app non modifica nulla: puoi guardare posizioni, profilo e stato, ma non cambiarli. I pulsanti che modificherebbero qualcosa restano disattivati e dicono perché.",
+    "Con una squadra esistente l’app non modifica nulla: puoi guardare posizioni, profilo e stato, ma non cambiarli. Ciò che modificherebbe qualcosa non c’è, oppure resta disattivato e dice perché.",
     "Avviare l’assistente è separato e chiede sempre una conferma.",
   ],
   troubleTitle: "Se una pagina non si carica",
@@ -58,7 +58,7 @@ export const HELP_TEXT: Record<Locale, HelpText> = {
     },
     readOnlyTitle: "Read only",
     readOnly: [
-      "With an existing team the app changes nothing: you can look at positions, profile and state, but not change them. Buttons that would change something stay disabled and say why.",
+      "With an existing team the app changes nothing: you can look at positions, profile and state, but not change them. What would change something is not there, or stays disabled and says why.",
       "Starting the assistant is separate and always asks for a confirmation.",
     ],
     troubleTitle: "If a page does not load",
@@ -83,7 +83,7 @@ export const HELP_TEXT: Record<Locale, HelpText> = {
     },
     readOnlyTitle: "Nur lesen",
     readOnly: [
-      "Bei einem vorhandenen Team ändert die App nichts: Du kannst Stellen, Profil und Zustand ansehen, aber nicht ändern. Schaltflächen, die etwas ändern würden, bleiben deaktiviert und nennen den Grund.",
+      "Bei einem vorhandenen Team ändert die App nichts: Du kannst Stellen, Profil und Zustand ansehen, aber nicht ändern. Was etwas ändern würde, gibt es nicht, oder es bleibt deaktiviert und nennt den Grund.",
       "Das Starten des Assistenten ist davon getrennt und verlangt immer eine Bestätigung.",
     ],
     troubleTitle: "Wenn eine Seite nicht lädt",
@@ -108,7 +108,7 @@ export const HELP_TEXT: Record<Locale, HelpText> = {
     },
     readOnlyTitle: "Lecture seule",
     readOnly: [
-      "Avec une équipe existante, l’app ne modifie rien : tu peux consulter les postes, le profil et l’état, mais pas les changer. Les boutons qui modifieraient quelque chose restent désactivés et en donnent la raison.",
+      "Avec une équipe existante, l’app ne modifie rien : tu peux consulter les postes, le profil et l’état, mais pas les changer. Ce qui modifierait quelque chose n’y est pas, ou reste désactivé et en donne la raison.",
       "Démarrer l’assistant est distinct et demande toujours une confirmation.",
     ],
     troubleTitle: "Si une page ne se charge pas",
@@ -133,7 +133,7 @@ export const HELP_TEXT: Record<Locale, HelpText> = {
     },
     readOnlyTitle: "Solo lectura",
     readOnly: [
-      "Con un equipo existente la app no cambia nada: puedes mirar posiciones, perfil y estado, pero no modificarlos. Los botones que cambiarían algo siguen desactivados y dicen por qué.",
+      "Con un equipo existente la app no cambia nada: puedes mirar posiciones, perfil y estado, pero no modificarlos. Lo que cambiaría algo no está, o sigue desactivado y dice por qué.",
       "Iniciar el asistente es aparte y siempre pide una confirmación.",
     ],
     troubleTitle: "Si una página no carga",
@@ -158,7 +158,7 @@ export const HELP_TEXT: Record<Locale, HelpText> = {
     },
     readOnlyTitle: "Só leitura",
     readOnly: [
-      "Com uma equipa existente, a app não altera nada: podes ver vagas, perfil e estado, mas não os mudar. Os botões que alterariam algo ficam desativados e dizem porquê.",
+      "Com uma equipa existente, a app não altera nada: podes ver vagas, perfil e estado, mas não os mudar. O que alteraria algo não existe, ou fica desativado e diz porquê.",
       "Iniciar o assistente é à parte e pede sempre uma confirmação.",
     ],
     troubleTitle: "Se uma página não carrega",
@@ -183,7 +183,7 @@ export const HELP_TEXT: Record<Locale, HelpText> = {
     },
     readOnlyTitle: "Csak olvasható",
     readOnly: [
-      "Meglévő csapatnál az app nem módosít semmit: megnézheted az állásokat, a profilt és az állapotot, de nem változtathatod meg őket. Az olyan gombok, amelyek módosítanának valamit, letiltva maradnak, és megmondják az okot.",
+      "Meglévő csapatnál az app nem módosít semmit: megnézheted az állásokat, a profilt és az állapotot, de nem változtathatod meg őket. Ami módosítana valamit, vagy nincs ott, vagy letiltva marad, és megmondja az okot.",
       "Az asszisztens indítása külön dolog, és mindig megerősítést kér.",
     ],
     troubleTitle: "Ha egy oldal nem töltődik be",
