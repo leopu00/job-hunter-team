@@ -593,3 +593,27 @@ def test_the_text_is_cleaned_by_the_shared_rules_and_keeps_what_a_language_needs
     one, two = mail.drain("capitano")
     assert one["body"] == "red colour end  tag mark ok"
     assert "\u200c" in two["body"], "a joiner a language needs stays"
+
+
+# -- an agent that is not a receiver leaves nothing behind -------------------------------------------------------------
+
+def test_reading_a_box_nobody_wrote_to_creates_no_folder(jht_home):
+    assert mail.drain("assistente-1") == []
+    assert mail.sweep("mentor-1") == {"expired": [], "told": [], "typed": []}
+    assert mail.pending("assistente-1") == []
+    assert mail.recent("assistente-1") == []
+    assert not (jht_home / "mailbox").exists()
+
+
+def test_the_command_drain_for_a_box_nobody_wrote_to_says_so_and_makes_no_folder(tmp_path):
+    for command in (["drain", "--agent", "assistente"], ["recent", "--agent", "mentor"], ["pending", "--agent", "mentor"]):
+        done = run_cli(tmp_path, *command)
+        assert done.returncode == 0, done.stderr
+    assert not (tmp_path / "mailbox").exists()
+
+
+def test_the_mailbox_skill_is_not_on_any_roles_list_until_the_role_is_switched_on():
+    for skills_list in (ROOT / "agents").glob("*/skills.list"):
+        names = [line.strip() for line in skills_list.read_text(encoding="utf-8").splitlines()
+                 if line.strip() and not line.lstrip().startswith("#")]
+        assert "mailbox" not in names, f"{skills_list.parent.name} lists the skill without being a receiver"
