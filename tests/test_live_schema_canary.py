@@ -21,7 +21,7 @@ ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / "scripts/check-live-schema.py"
 MANIFEST = ROOT / "supabase/live-schema/078-084.v3.json"
 QUERY = ROOT / "supabase/live-schema/078-084.v3.sql"
-# v17 is the contract in force (web capace, phase 6: the settings the site asks, in team_state); v16, v15, v14, v13, v12, v11 and v10 and their receipts stand next to it, untouched.
+# v18 is the contract in force (web capace, phase 4: exclusions and standing orders through the door, team_directives.origin); v17, v16, v15, v14, v13, v12, v11 and v10 and their receipts stand next to it, untouched.
 WEB_MANIFEST_V10 = ROOT / "supabase/live-schema/078-094.web.v10.json"
 WEB_QUERY_V10 = ROOT / "supabase/live-schema/078-094.web.v10.sql"
 WEB_MANIFEST_V11 = ROOT / "supabase/live-schema/078-095.web.v11.json"
@@ -38,8 +38,10 @@ WEB_MANIFEST_V16 = ROOT / "supabase/live-schema/078-099.web.v16.json"
 WEB_QUERY_V16 = ROOT / "supabase/live-schema/078-099.web.v16.sql"
 WEB_MANIFEST_V17 = ROOT / "supabase/live-schema/078-100.web.v17.json"
 WEB_QUERY_V17 = ROOT / "supabase/live-schema/078-100.web.v17.sql"
-WEB_MANIFEST = WEB_MANIFEST_V17
-WEB_QUERY = WEB_QUERY_V17
+WEB_MANIFEST_V18 = ROOT / "supabase/live-schema/078-101.web.v18.json"
+WEB_QUERY_V18 = ROOT / "supabase/live-schema/078-101.web.v18.sql"
+WEB_MANIFEST = WEB_MANIFEST_V18
+WEB_QUERY = WEB_QUERY_V18
 PREFLIGHT_QUERY = ROOT / "supabase/live-schema/081-preflight.v1.sql"
 SNAPSHOT_SHA256 = "78269292299f3fe4324a0e7553afc1095a4d8814605677146b82c41d34849346"
 POSTGRES_READY_MARKER = "database system is ready to accept connections"
@@ -66,6 +68,7 @@ MIGRATIONS = [
     ROOT / "supabase/migrations/098_web_action_door.sql",
     ROOT / "supabase/migrations/099_web_action_families.sql",
     ROOT / "supabase/migrations/100_web_action_settings.sql",
+    ROOT / "supabase/migrations/101_web_action_exclusions_directives.sql",
 ]
 # I test di ri-applicazione parlano della 084: nominarla per posizione la
 # faceva cambiare sotto ai piedi al primo numero nuovo.
@@ -96,7 +99,13 @@ LEGACY_ARTIFACT_SHA256 = {
     "supabase/live-schema/078-084.web.v4.sql": (
         "4c42e7770efb2cc1e8cdf4fba221c52012dbd7ecd610fb31909a5bb201cb8b58"
     ),
-    # v16, v15, v14, v13, v12, v11 and v10 are next to v17 and their receipts are not touched: a receipt is a verification at one moment.
+    # v17, v16, v15, v14, v13, v12, v11 and v10 are next to v18 and their receipts are not touched: a receipt is a verification at one moment.
+    "supabase/live-schema/078-100.web.v17.json": (
+        "c6c34ad8bf6bbc760ca907ef32920df1e56fc7e20ec3fb7c19d7e7494dc8926f"
+    ),
+    "supabase/live-schema/078-100.web.v17.sql": (
+        "0270559a30a7cd93ef93a2f79064b922cf0eed65a1eb942ae93cffaef394d7c0"
+    ),
     "supabase/live-schema/078-099.web.v16.json": (
         "cdb3b234080ab1145a3e455602b753cf50d3ad17b1a15817f19e2c78900bd0dc"
     ),
@@ -522,9 +531,9 @@ def test_additive_web_contract_exactly_receipts_every_mapped_rpc_and_column():
     )
 
     assert contract.phase == "web"
-    assert contract.contract_id == "release-0.4.0-web-schema-078-100-settings"
+    assert contract.contract_id == "release-0.4.0-web-schema-078-101-exclusions-directives"
     assert len(contract.expected_checks) == 45
-    assert manifest["query"]["path"] == "supabase/live-schema/078-100.web.v17.sql"
+    assert manifest["query"]["path"] == "supabase/live-schema/078-101.web.v18.sql"
     assert "\\n" not in WEB_QUERY.read_text()
 
     mapped_receipts = {
@@ -546,7 +555,7 @@ def test_cli_validates_only_the_pinned_additive_web_contract(capsys):
     assert output.err == ""
     assert output.out == (
         "LIVE-SCHEMA MANIFEST OK "
-        "contract=release-0.4.0-web-schema-078-100-settings checks=45\n"
+        "contract=release-0.4.0-web-schema-078-101-exclusions-directives checks=45\n"
     )
 
 
@@ -1239,16 +1248,50 @@ def test_v17_is_v16_with_the_100_migration_and_the_settings_columns_of_team_stat
     assert v17["migrations"][-1]["sha256"] == sha, "100 changed after the contract pinned it: regenerate v17"
 
 
+def test_v18_is_v17_with_the_101_migration_and_the_two_columns_of_team_directives():
+    v17, v18 = json.loads(WEB_MANIFEST_V17.read_text()), json.loads(WEB_MANIFEST_V18.read_text())
+    assert sorted(check.replace("101.", "102.", 1) for check in v17["expected_checks"]) == v18["expected_checks"], (
+        "the 45 receipts of v17, by name, numbered after the last migration"
+    )
+    assert v18["clone_contract"]["ordered_migrations"] == v17["clone_contract"]["ordered_migrations"] + [
+        "supabase/migrations/101_web_action_exclusions_directives.sql"
+    ]
+    assert v18["migrations"][: len(v17["migrations"])] == v17["migrations"], "v17's migrations, unchanged"
+    assert [m["path"] for m in v18["migrations"][len(v17["migrations"]):]] == [
+        "supabase/migrations/101_web_action_exclusions_directives.sql"
+    ]
+    import re as _re
+
+    body = lambda text: text[text.index("WITH expected_web_tables"):]
+    directives = _re.compile(r"    \('\d{3}\.web\.columns\.team_directives'[^\n]*\n")
+    flat = lambda text, number: " ".join(directives.sub("", body(text)).replace(f"'{number}.web.", "'N.web.").split())
+    assert flat(WEB_QUERY_V18.read_text(), "102") == flat(WEB_QUERY_V17.read_text(), "101"), "only the team_directives row changes"
+    columns = lambda text: _re.search(r"'team_directives', ARRAY\[([^\]]*)\]", text).group(1)
+    v17_cols = {c.strip().strip("'") for c in columns(WEB_QUERY_V17.read_text()).split(",")}
+    v18_cols = [c.strip().strip("'") for c in columns(WEB_QUERY_V18.read_text()).split(",")]
+    assert v18_cols == sorted(v18_cols)
+    assert set(v18_cols) - v17_cols == {"origin", "source_id"}
+    assert v17_cols <= set(v18_cols)
+    import hashlib
+
+    assert v18["query"] == {
+        "path": "supabase/live-schema/078-101.web.v18.sql",
+        "sha256": hashlib.sha256(WEB_QUERY_V18.read_bytes()).hexdigest(),
+    }
+    sha = hashlib.sha256((ROOT / "supabase/migrations/101_web_action_exclusions_directives.sql").read_bytes()).hexdigest()
+    assert v18["migrations"][-1]["sha256"] == sha, "101 changed after the contract pinned it: regenerate v18"
+
+
 def test_pg16_additive_web_contract_passes_and_detects_column_and_rpc_drift():
     contract = canary.load_web_contract()
-    # Il contratto web copre 078-100: il clone deve arrivare alla 100, che porta le impostazioni
-    # chieste dal sito in team_state (prima, la 099 dà alla porta `request_action` il quinto argomento, la 098 porta la porta, la 097 porta `positions.seniority_level`, la 096 porta `positions.scam_signals`, la 095 porta `positions.location_precision`, la 094 porta la nota privata del
+    # Il contratto web copre 078-101: il clone deve arrivare alla 101, che porta team_directives.origin
+    # (prima, la 100 porta le impostazioni chieste dal sito in team_state, la 099 dà alla porta `request_action` il quinto argomento, la 098 porta la porta, la 097 porta `positions.seniority_level`, la 096 porta `positions.scam_signals`, la 095 porta `positions.location_precision`, la 094 porta la nota privata del
     # feedback e la tabella delle preferenze sull'esclusione del profilo, la 088 porta le tre colonne
     # dell'autorizzazione alla candidatura (la 087 porta
     # il motivo di rifiuto e `mark_position_outcome` a cinque argomenti, la 086
     # le due RPC dell'esito, la 085 `applications.updated_at`). Il contratto
     # catalog resta fermo alla 084.
-    with pg16_schema_clone(migrated=True, through_version=100) as psql:
+    with pg16_schema_clone(migrated=True, through_version=101) as psql:
         baseline = receipt_rows(psql(WEB_QUERY.read_text()).stdout)
         column_drift = receipt_rows(
             psql(
@@ -1267,10 +1310,10 @@ def test_pg16_additive_web_contract_passes_and_detects_column_and_rpc_drift():
     assert tuple(sorted(baseline)) == contract.expected_checks
     assert all(baseline.values())
     assert [check for check, ok in column_drift.items() if not ok] == [
-        "101.web.columns.positions"
+        "102.web.columns.positions"
     ]
     assert [check for check, ok in rpc_drift.items() if not ok] == [
-        "101.web.rpc.increment_landing_hits"
+        "102.web.rpc.increment_landing_hits"
     ]
 
 
