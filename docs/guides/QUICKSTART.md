@@ -2,7 +2,7 @@
 
 Choose the supported path for your operating system and complete its checks in
 order.
-The native office and CLI are two clients of the same containerized team; you
+The desktop app and the CLI are two clients of the same containerized team; you
 do not need to install both.
 
 ---
@@ -24,14 +24,15 @@ You need an active subscription to **one** of:
 For comfortable local use on macOS or Linux, keep about **8 GB of RAM available
 before starting the team**. This is a measured recommendation, not a universal
 minimum. No universal local disk minimum has been measured; leave room for the
-Docker image and persistent data. The desktop releases support Windows x64,
-Linux x64 and macOS (Intel: 11+; Apple silicon: 13+). On Windows 0.4 the team
-runs on your computer in Podman inside WSL, installed by the app; Docker Desktop
-is not needed, but WSL must already be enabled.
+team's image and persistent data. The desktop releases support Windows x64,
+Linux x64 and macOS (one universal build for Intel and Apple silicon). On
+Windows 0.4 the team runs on your computer in Podman inside WSL, installed by
+the app; Docker Desktop is not needed, but WSL must already be enabled.
 
 Before installing, use [Choose where to run Job Hunter Team](CHOOSE-WHERE-TO-RUN.md)
 to compare a local PC, dedicated Linux PC on the LAN and VPS. The team itself
-runs in Docker; the native office guides that runtime setup before activation.
+runs in a container; the desktop app prepares that runtime during its first
+setup.
 
 ---
 
@@ -41,7 +42,7 @@ Pick the path that fits how you work:
 
 |     | Path                                                      | Best for                                                |
 | --- | --------------------------------------------------------- | ------------------------------------------------------- |
-| 🖥️  | [Native app](#%EF%B8%8F-path-1-native-app)                | The complete visual office                              |
+| 🖥️  | [Native app](#%EF%B8%8F-path-1-native-app)                | The guided setup and the team's control panel           |
 | 📦  | [CLI installer](#-path-2-cli-installer)                   | Terminal, automation, remote administration             |
 | 🦞  | [AI agent drives JHT](#-path-3-let-your-ai-agent-do-it)   | You already use Claude Code / OpenClaw / Codex / Cursor |
 | 🛠️  | [From source](#%EF%B8%8F-path-4-from-source-contributors) | Contributors                                            |
@@ -50,28 +51,43 @@ Pick the path that fits how you work:
 
 ## 🖥️ Path 1 — Native app
 
-The desktop application is the game-like Godot office. It exposes onboarding, provider login, runtime and VPS controls, profile, email, Telegram, cloud sync, agents and job data without an Electron or external-terminal wrapper.
+The desktop application is the team's control panel. It guides the first setup
+(environment, provider and sign-in), then shows the office, the agents, the
+positions, the messages and your profile.
 
 Download the current release from
 [GitHub Releases](https://github.com/leopu00/job-hunter-team/releases/latest):
 
-| System      | Release asset                           | First launch                                                                                                                                                                                                                                                            |
-| ----------- | --------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Windows x64 | `job-hunter-team-windows-x64-setup.exe` | Run the per-user installer. The optional standalone build is `job-hunter-team-windows-x64-portable.exe`. Both are unsigned, so Windows may show **Windows protected your PC**; use **More info → Run anyway** only for files from this release that match `SHA256SUMS`. |
-| macOS       | `job-hunter-team.zip`                   | Unzip and open the app. The release is signed and notarized by Apple.                                                                                                                                                                                                   |
-| Linux x64   | `job-hunter-team-linux-x64.tar.gz`      | Extract it, then run `./job-hunter-team.x86_64`. The archive preserves the executable bit.                                                                                                                                                                              |
+| System      | Release asset                           | First launch |
+| ----------- | --------------------------------------- | ------------ |
+| Windows x64 | `job-hunter-team-windows-x64-setup.exe` | Run the per-user installer. It is unsigned, so Windows may show **Windows protected your PC**; use **More info → Run anyway** only for a file from this release that matches `SHA256SUMS`. |
+| macOS       | `job-hunter-team-macos-universal.dmg`   | Open the disk image and drag the app into Applications. It is signed with an Apple Developer ID and notarized by Apple. |
+| Linux x64   | `job-hunter-team-linux-x64.AppImage` or `job-hunter-team-linux-x64.deb` | Make the AppImage executable (`chmod +x`) and open it, or install the `.deb` on Debian-based systems. |
 
-The office is visible immediately. Select **Activate team** and complete all
-four required gates: a local container or connected VPS runtime, provider login
-in the embedded console with a plan selected, candidate profile, and working
-hours. On macOS and Linux, the office can launch the local runtime installer.
-On Windows 0.4, onboarding installs the local runtime too: Podman inside WSL. Optional email, Telegram, account sync and VPS setup live under
-**Settings**.
+On first launch, choose **Continue with Google** or **Use locally**; setting up
+a new team on a VPS needs the Google sign-in. The setup then has four steps:
+**Welcome**, **Environment** (this computer or a VPS server), **Provider**
+(Codex, Claude or Kimi, through your subscription) and **Confirm**. Select
+**Prepare the team** and keep the app open: it prepares the runtime and the
+container, installs the provider's tool, asks you to sign in to the provider,
+starts the agents and opens the chat with the Assistant. How long it takes
+depends on your connection and your computer.
 
-> The office is the interaction cockpit. The web dashboard reflects synced
+- **Windows 0.4:** the team runs on your computer in Podman inside WSL,
+  installed by the app. WSL must already be enabled; Docker Desktop is not
+  needed. The **Confirm** step lists everything the app installs and how to
+  remove it. Kimi is not available in the Windows app yet.
+- **macOS:** the app installs Podman with Homebrew, which must already be
+  installed; without it, the app says so before installing anything.
+- **Linux:** the app uses Docker. Install Docker Engine and its Compose plugin
+  before you start, because installing them needs administrator rights.
+
+If a step fails, the screen gives its cause with **Retry the preparation** and
+**Show the log file**. If the app closes halfway, the next launch offers
+**Resume the setup** or **Start over**.
+
+> The desktop app is the interaction cockpit. The web dashboard reflects synced
 > data; the CLI remains available for automation and recovery.
-
-To run the office from source instead, use the contributor path below.
 
 ---
 
@@ -237,32 +253,23 @@ See [`CLI-REFERENCE.md`](CLI-REFERENCE.md) for the full CLI reference.
 
 ---
 
-## 🚀 First run in the native office
+## 🚀 First run in the desktop app
 
 If you chose the native app:
 
-1. **Open the Godot office.** The office and its agents are immediately
-   explorable; setup never traps you in a blocking wizard.
-2. **Talk to Assistant, Coordinator and Mentor.** Their first-run conversations
-   are authored in the app and require neither an LLM nor network access. Use
-   the suggested replies to prepare your profile, choose local/VPS runtime and
-   provider, and set search preferences.
-3. **Complete the native checklist.** On macOS or Linux, bring up the local
-   container or connect a VPS. On Windows 0.4, the local container runs in
-   Podman inside WSL, or connect a VPS. Authorize Codex (recommended), Claude or Kimi (Kimi is
-   not supported yet when the team runs on Windows) in the embedded
-   console and select its plan, fill the Profile page, and configure working
-   hours. Provider links may open in your browser, but codes and terminal
-   interaction remain wrapped inside the office.
-4. **Activate the team.** Once all four gates — runtime, provider login and
-   plan, profile, and working hours — are ready, the Coordinator starts the
-   agents. Free-text chat then becomes available next to the authored replies.
-5. **Review the output.** CVs marked "Ready to submit" land in
-   `~/Documents/Job Hunter Team/cv/`; reviews, attachments and final packets
-   use sibling folders. You decide what to send.
+1. **Finish the guided setup.** Follow the steps in
+   [Path 1](#%EF%B8%8F-path-1-native-app) until the app says the team is ready.
+   For a VPS, the app first shows the server's SSH fingerprint: confirm it only
+   if it matches the one your VPS provider shows.
+2. **Talk to the Assistant.** The app opens its chat when the team is ready.
+   The Assistant learns your goals and preferences by talking with you.
+3. **Follow the team.** The office and the agents panel show who is working and
+   on what; positions arrive as the agents find and assess them.
+4. **Review the output.** On a team that runs on this computer, CVs and the
+   other documents land in `~/Documents/Job Hunter Team/`. You decide what to
+   send.
 
-See the detailed [first-run contract](../../game/docs/FIRST-RUN.md) and the
-[native VPS setup guide](VPS-SETUP-WIZARD.md).
+See the [native VPS setup guide](VPS-SETUP-WIZARD.md) for the VPS path.
 
 If you chose the CLI, `jht setup` is the first-run flow: it selects the
 provider, installs its official CLI, waits for subscription login, and starts
