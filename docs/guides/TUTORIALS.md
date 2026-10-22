@@ -4,10 +4,10 @@ These are the complete text-first tutorials for the public `/tutorials` page.
 Read the path that matches the interface you use; the video after each path is
 an optional alternative, not a requirement.
 
-## Game
+## Desktop app
 
-The game tutorial helps you explore the native office, understand how work
-moves through the team, and inspect a result before you decide what to do.
+This tutorial follows the desktop app: it sets up the team, shows how work
+moves through it, and how to inspect a result before you decide what to do.
 
 ### Plan the setup
 
@@ -45,8 +45,9 @@ Keep the app open while it works.
    Homebrew, which must already be installed; without it, the app says so
    before installing anything. On Linux the app uses Docker: install Docker
    Engine and its Compose plugin before you start, because installing them
-   needs administrator rights. For a VPS, enter its address, the SSH user, the
-   port and the private key file, which stays on this computer.
+   needs administrator rights. The Linux release is built, but this setup has
+   not been tested yet. For a VPS, enter its address, the SSH user, the port
+   and the private key file, which stays on this computer.
 5. **Choose the provider.** Select Codex (recommended), Claude or Kimi, then
    **Review the setup**. You sign in with your subscription later in the setup:
    no API key is needed. Kimi is not available in the Windows app yet.

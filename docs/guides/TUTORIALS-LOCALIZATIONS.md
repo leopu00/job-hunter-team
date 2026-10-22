@@ -8,11 +8,10 @@ the public videos are not yet published.
 
 ## Italiano (`it`)
 
-### Gioco (`#game`)
+### App desktop (`#game`)
 
-Il tutorial di gioco ti aiuta a esplorare l'ufficio nativo, a capire come il
-lavoro attraversa il team e a controllare un risultato prima di decidere cosa
-fare.
+Questo tutorial segue l'app desktop: prepara il team, mostra come il lavoro
+attraversa il team e come controllare un risultato prima di decidere cosa fare.
 
 #### Pianifica il setup
 
@@ -50,8 +49,9 @@ mentre lavora.
    deve essere già installato; se manca, l'app lo dice prima di installare
    qualsiasi cosa. Su Linux l'app usa Docker: installa Docker Engine e il suo
    plugin Compose prima di iniziare, perché per installarli servono i permessi
-   di amministratore. Per una VPS inserisci indirizzo, utente SSH, porta e file
-   della chiave privata, che resta su questo computer.
+   di amministratore. La release per Linux è costruita, ma questo setup non è
+   ancora stato collaudato. Per una VPS inserisci indirizzo, utente SSH, porta
+   e file della chiave privata, che resta su questo computer.
 5. **Scegli il provider.** Seleziona Codex (consigliato), Claude o Kimi, poi
    **Rivedi il setup**. Accedi con il tuo abbonamento più avanti nel setup: non
    serve una chiave API. Kimi non è ancora disponibile nell'app per Windows.
@@ -192,11 +192,11 @@ Quando il video sarà disponibile, potrai guardarlo come alternativa.
 
 ## Español (`es`)
 
-### Juego (`#game`)
+### Aplicación de escritorio (`#game`)
 
-El tutorial de juego te ayuda a explorar la oficina nativa, entender cómo el
-trabajo avanza por el equipo e inspeccionar un resultado antes de decidir qué
-hacer.
+Este tutorial sigue la aplicación de escritorio: prepara el equipo, muestra
+cómo avanza el trabajo por el equipo y cómo revisar un resultado antes de
+decidir qué hacer.
 
 #### Planifica la configuración
 
@@ -235,9 +235,10 @@ trabaja.
    instala Podman con Homebrew, que ya debe estar instalado; si falta, la
    aplicación lo dice antes de instalar nada. En Linux la aplicación usa
    Docker: instala Docker Engine y su plugin Compose antes de empezar, porque
-   instalarlos requiere permisos de administrador. Para un VPS, introduce su
-   dirección, el usuario SSH, el puerto y el archivo de la clave privada, que
-   se queda en este ordenador.
+   instalarlos requiere permisos de administrador. La versión para Linux está
+   compilada, pero esta configuración todavía no se ha probado. Para un VPS,
+   introduce su dirección, el usuario SSH, el puerto y el archivo de la clave
+   privada, que se queda en este ordenador.
 5. **Elige el proveedor.** Selecciona Codex (recomendado), Claude o Kimi y
    luego **Revisar la configuración**. Inicias sesión con tu suscripción más
    adelante en la configuración: no hace falta una clave API. Kimi todavía no
@@ -386,11 +387,11 @@ Cuando el vídeo esté disponible, podrás verlo como alternativa.
 
 ## Français (`fr`)
 
-### Jeu (`#game`)
+### Application de bureau (`#game`)
 
-Le tutoriel de jeu vous aide à explorer le bureau natif, à comprendre comment
-le travail circule dans l'équipe et à examiner un résultat avant de décider de
-la suite.
+Ce tutoriel suit l'application de bureau : il prépare l'équipe, montre comment
+le travail traverse l'équipe et comment examiner un résultat avant de décider
+quoi faire.
 
 #### Planifiez la configuration
 
@@ -432,8 +433,10 @@ ordinateur. Gardez l'application ouverte pendant qu'elle travaille.
    installé ; s'il manque, l'application le dit avant d'installer quoi que ce
    soit. Sous Linux, l'application utilise Docker : installez Docker Engine et
    son plugin Compose avant de commencer, car leur installation demande des
-   droits d'administrateur. Pour un VPS, saisissez son adresse, l'utilisateur
-   SSH, le port et le fichier de la clé privée, qui reste sur cet ordinateur.
+   droits d'administrateur. La version Linux est construite, mais cette
+   configuration n'a pas encore été testée. Pour un VPS, saisissez son adresse,
+   l'utilisateur SSH, le port et le fichier de la clé privée, qui reste sur cet
+   ordinateur.
 5. **Choisissez le fournisseur.** Sélectionnez Codex (recommandé), Claude ou
    Kimi, puis **Vérifier la configuration**. Vous vous connectez avec votre
    abonnement plus tard dans la configuration : aucune clé API n'est
@@ -587,11 +590,11 @@ Lorsque la vidéo sera disponible, vous pourrez la regarder comme alternative.
 
 ## Deutsch (`de`)
 
-### Spiel (`#game`)
+### Desktop-App (`#game`)
 
-Das Spiel-Tutorial hilft dir, das native Büro zu erkunden, den Ablauf der
-Arbeit im Team zu verstehen und ein Ergebnis zu prüfen, bevor du entscheidest,
-was als Nächstes geschieht.
+Dieses Tutorial folgt der Desktop-App: Es richtet das Team ein, zeigt, wie die
+Arbeit durch das Team läuft, und wie du ein Ergebnis prüfst, bevor du
+entscheidest, was als Nächstes geschieht.
 
 #### Plane die Einrichtung
 
@@ -631,9 +634,10 @@ geöffnet, während sie arbeitet.
    die App Podman mit Homebrew, das bereits installiert sein muss; fehlt es,
    sagt die App das, bevor sie etwas installiert. Unter Linux verwendet die App
    Docker: Installiere Docker Engine und sein Compose-Plugin vor dem Start,
-   denn dafür sind Administratorrechte nötig. Für einen VPS gibst du seine
-   Adresse, den SSH-Benutzer, den Port und die Datei des privaten Schlüssels
-   ein, der auf diesem Computer bleibt.
+   denn dafür sind Administratorrechte nötig. Die Linux-Version ist gebaut,
+   aber diese Einrichtung wurde noch nicht getestet. Für einen VPS gibst du
+   seine Adresse, den SSH-Benutzer, den Port und die Datei des privaten
+   Schlüssels ein, der auf diesem Computer bleibt.
 5. **Wähle den Anbieter.** Wähle Codex (empfohlen), Claude oder Kimi, dann
    **Einrichtung prüfen**. Du meldest dich später in der Einrichtung mit deinem
    Abo an: Ein API-Schlüssel ist nicht nötig. Kimi ist in der Windows-App noch
@@ -788,11 +792,11 @@ Sobald das Video verfügbar ist, kannst du es als Alternative ansehen.
 
 ## Português (`pt`)
 
-### Jogo (`#game`)
+### Aplicação de ambiente de trabalho (`#game`)
 
-O tutorial de jogo ajuda-te a explorar o escritório nativo, a compreender como
-o trabalho avança pela equipa e a inspecionar um resultado antes de decidires o
-que fazer.
+Este tutorial segue a aplicação de ambiente de trabalho: prepara a equipa,
+mostra como o trabalho passa pela equipa e como verificar um resultado antes de
+decidires o que fazer.
 
 #### Planeia a configuração
 
@@ -831,9 +835,10 @@ trabalha.
    instala o Podman com o Homebrew, que já tem de estar instalado; se faltar, a
    aplicação diz isso antes de instalar o que quer que seja. No Linux a
    aplicação usa o Docker: instala o Docker Engine e o seu plugin Compose antes
-   de começar, porque instalá-los exige permissões de administrador. Para uma
-   VPS, introduz o endereço, o utilizador SSH, a porta e o ficheiro da chave
-   privada, que fica neste computador.
+   de começar, porque instalá-los exige permissões de administrador. A versão
+   para Linux está compilada, mas esta configuração ainda não foi testada. Para
+   uma VPS, introduz o endereço, o utilizador SSH, a porta e o ficheiro da
+   chave privada, que fica neste computador.
 5. **Escolhe o fornecedor.** Seleciona Codex (recomendado), Claude ou Kimi e
    depois **Rever a configuração**. Inicias sessão com a tua subscrição mais à
    frente na configuração: não é precisa uma chave API. O Kimi ainda não está
@@ -981,11 +986,11 @@ Quando o vídeo estiver disponível, poderás vê-lo como alternativa.
 
 ## Magyar (`hu`)
 
-### Játék (`#game`)
+### Asztali alkalmazás (`#game`)
 
-A játék oktatóanyaga segít felfedezni a natív irodát, megérteni, hogyan halad
-át a munka a csapaton, és ellenőrizni egy eredményt, mielőtt eldöntenéd, mi
-legyen a következő lépés.
+Ez az oktatóanyag az asztali alkalmazást követi: beállítja a csapatot,
+megmutatja, hogyan halad a munka a csapaton át, és hogyan ellenőrizz egy
+eredményt, mielőtt eldöntöd, mi legyen a következő lépés.
 
 #### Tervezd meg a beállítást
 
@@ -1027,9 +1032,10 @@ számítógépedtől függ. Hagyd nyitva az alkalmazást, amíg dolgozik.
    telepíti a Podmant; a Homebrew-nak már telepítve kell lennie, és ha
    hiányzik, az alkalmazás ezt még a telepítés előtt jelzi. Linuxon az
    alkalmazás Dockert használ: kezdés előtt telepítsd a Docker Engine-t és a
-   Compose bővítményét, mert a telepítésükhöz rendszergazdai jogok kellenek.
-   VPS esetén add meg a címét, az SSH-felhasználót, a portot és a privát kulcs
-   fájlját, amely ezen a számítógépen marad.
+   Compose bővítményét, mert a telepítésükhöz rendszergazdai jogok kellenek. A
+   linuxos kiadás elkészült, de ezt a beállítást még nem tesztelték. VPS esetén
+   add meg a címét, az SSH-felhasználót, a portot és a privát kulcs fájlját,
+   amely ezen a számítógépen marad.
 5. **Válaszd ki a szolgáltatót.** Válaszd a Codexet (ajánlott), a Claude-ot
    vagy a Kimit, majd **A beállítás áttekintése** gombot. Az előfizetéseddel a
    beállítás egy későbbi lépésében jelentkezel be: API-kulcsra nincs szükség. A
