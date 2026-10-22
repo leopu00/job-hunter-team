@@ -36,11 +36,19 @@ import { join } from 'node:path';
 import pc from 'picocolors';
 import { tierInterval, errorBackoff, POLL_IDLE_MS } from './poll-tier.js';
 import { cloudSyncHeaders } from './client-identity.js';
+import {
+  commandRefusal,
+  commandTarget,
+  createDoneStore,
+  serverClock,
+} from './team-command-guard.js';
 
 const JHT_HOME = process.env.JHT_HOME || join(process.env.HOME || '/jht_home', '.jht');
 const CLOUD_FILE = join(JHT_HOME, 'cloud.json');
 const WEEKLY_HALT_FLAG = join(JHT_HOME, '.weekly-halt.flag');
 const JHT_BIN = '/app/cli/bin/jht.js';
+// The ids already run (team-command-guard.js): a row put back to pending does not run twice.
+const DONE_FILE = join(JHT_HOME, 'team-commands-done.json');
 
 // Cadenza adattiva (vedi poll-tier.js): 5s solo dopo un comando, poi ≤30s.
 // I comandi (es. dalla pagina sentinella cloud) vengono raccolti entro ≤30s.
@@ -64,20 +72,6 @@ async function loadCloudConfig() {
     return null;
   }
 }
-
-const VALID_TARGETS = new Set([
-  'all',
-  'assistente',
-  'capitano',
-  'sentinella',
-  'scout',
-  'scorer',
-  'analista',
-  'scrittore',
-  'critico',
-  'mentor',
-  'bridge',
-]);
 
 // Map (action, target) → { cmd, args } per spawn.
 // 'all' = team-wide via `jht team <action>`.
@@ -119,6 +113,7 @@ function execBusCommand(action, target) {
   });
 }
 
+// The body, and the server's clock from the reply's Date (null without one).
 async function apiGet(baseUrl, token, path) {
   const res = await fetch(`${baseUrl}${path}`, {
     method: 'GET',
@@ -126,7 +121,7 @@ async function apiGet(baseUrl, token, path) {
   });
   const body = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(`${path} → HTTP ${res.status}: ${body.error || 'unknown'}`);
-  return body;
+  return { body, serverNow: serverClock(res.headers?.get?.('date') ?? null) };
 }
 
 async function apiPatch(baseUrl, token, path, payload) {
@@ -140,12 +135,36 @@ async function apiPatch(baseUrl, token, path, payload) {
   return body;
 }
 
-async function processCommand(baseUrl, token, command) {
-  const { id, action, payload } = command;
-  const target = ((payload && typeof payload === 'object' && payload.target) || 'all')
-    .toString()
-    .toLowerCase();
+/**
+ * One command from the poll. `ctx`:
+ *   ownerId     user_id of cloud.json
+ *   serverNow() the server's clock now (the reply's Date plus the time since)
+ *   done        the ids already run (createDoneStore)
+ *   exec        how the command runs (execBusCommand; the tests pass their own)
+ */
+export async function processCommand(baseUrl, token, command, ctx) {
+  const { id, action } = command || {};
+  const target = commandTarget(command);
+  const exec = ctx.exec || execBusCommand;
   log('info', 'command.received', { id, action, target });
+
+  // Untrusted input (P6): vocabulary, owner, age from the database's clock,
+  // one run per id. A refused row is closed as error, never claimed or run.
+  const refusal = commandRefusal(command, {
+    ownerId: ctx.ownerId,
+    serverNow: ctx.serverNow(),
+    done: ctx.done,
+  });
+  if (refusal) {
+    if (refusal !== 'malformed') {
+      await apiPatch(baseUrl, token, `/api/cloud-sync/team-commands/${id}`, {
+        status: 'error',
+        error: `refused by the box: ${refusal}`,
+      }).catch(() => {});
+    }
+    log('error', 'command.refused', { id, action, target, reason: refusal });
+    return;
+  }
 
   // Atomic claim: pending → running. Se altro subscriber ha gia'
   // preso, 404 → skip senza errore.
@@ -156,33 +175,20 @@ async function processCommand(baseUrl, token, command) {
     return;
   }
 
-  const validActions = new Set(['start', 'stop', 'restart']);
-  if (!validActions.has(action)) {
+  // The id is written down BEFORE it runs: if the box stops halfway the
+  // command is lost, never run twice. Unwritable = not run.
+  try {
+    ctx.done.add(id);
+  } catch (err) {
     await apiPatch(baseUrl, token, `/api/cloud-sync/team-commands/${id}`, {
       status: 'error',
-      error: `invalid action: ${action}`,
+      error: 'refused by the box: done_store_unwritable',
     }).catch(() => {});
-    log('error', 'command.invalid-action', { id, action });
-    return;
-  }
-  if (!VALID_TARGETS.has(target)) {
-    await apiPatch(baseUrl, token, `/api/cloud-sync/team-commands/${id}`, {
-      status: 'error',
-      error: `invalid target: ${target}`,
-    }).catch(() => {});
-    log('error', 'command.invalid-target', { id, target });
-    return;
-  }
-  // bridge non ha restart; mappiamo a stop+start sarebbe out-of-scope qui.
-  if (target === 'bridge' && action === 'restart') {
-    await apiPatch(baseUrl, token, `/api/cloud-sync/team-commands/${id}`, {
-      status: 'error',
-      error: 'bridge does not support restart; use stop+start',
-    }).catch(() => {});
+    log('error', 'command.done-store-failed', { id, err: err.message });
     return;
   }
 
-  const res = await execBusCommand(action, target);
+  const res = await exec(action, target);
   // jht team start stampa errori user-facing su stdout (colori ANSI),
   // non su stderr. Quando exit != 0, prefer stdout per dare un messaggio
   // utile alla UI ("✗ ASSISTENTE — claude non trovato..."), fallback su
@@ -225,6 +231,11 @@ export async function runTeamCommandsPoller() {
   }
 
   log('info', 'startup.begin', { baseUrl, userId: config.user_id });
+  const ownerId = typeof config.user_id === 'string' ? config.user_id : null;
+  if (!ownerId) {
+    log('error', 'startup.no-owner', { reason: 'cloud.json has no user_id: every command will be refused' });
+  }
+  const done = createDoneStore(DONE_FILE);
 
   let shuttingDown = false;
   let consecutiveErrors = 0;
@@ -265,8 +276,13 @@ export async function runTeamCommandsPoller() {
 
     let backoff = tierInterval(lastActivityAt, { allowDeepIdle: false });
     try {
-      const r = await apiGet(baseUrl, token, '/api/cloud-sync/team-commands?status=pending&limit=20');
+      const { body: r, serverNow: replyClock } = await apiGet(baseUrl, token, '/api/cloud-sync/team-commands?status=pending&limit=20');
       consecutiveErrors = 0;
+      // The server's clock as it moves on while earlier commands run; the
+      // box's own clock only when the reply had no Date.
+      const fetchedAt = performance.now();
+      const base = replyClock ?? Date.now();
+      const serverNow = () => base + (performance.now() - fetchedAt);
       const commands = Array.isArray(r.commands) ? r.commands : [];
       if (commands.length > 0) {
         // Attività confermata: torna a tier active (5s) per i comandi seguenti.
@@ -275,7 +291,7 @@ export async function runTeamCommandsPoller() {
         log('info', 'poll.found-pending', { count: commands.length });
         for (const cmd of commands) {
           if (shuttingDown) break;
-          try { await processCommand(baseUrl, token, cmd); }
+          try { await processCommand(baseUrl, token, cmd, { ownerId, serverNow, done }); }
           catch (err) {
             log('error', 'process.crashed', { id: cmd.id, err: err.message });
           }
