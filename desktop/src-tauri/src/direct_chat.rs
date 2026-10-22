@@ -848,6 +848,9 @@ fn chat_failure(code: i32, default: &'static str) -> &'static str {
     match code {
         2 => "chat_runtime_outdated",
         70 => "existing_team_runtime_target_changed",
+        // The agent's terminal is not at its prompt (a menu, a sign-in, a permission question, text
+        // already typed): nothing was written, and the text was never typed over it.
+        119 => "agent_not_at_prompt",
         120 => "invalid_request",
         121 => "team_not_running",
         122 => "agent_not_running",
@@ -1321,6 +1324,7 @@ mod tests {
         for (code, expected) in [
             (2, "chat_runtime_outdated"),
             (70, "existing_team_runtime_target_changed"),
+            (119, "agent_not_at_prompt"),
             (120, "invalid_request"),
             (121, "team_not_running"),
             (122, "agent_not_running"),
@@ -1344,7 +1348,7 @@ mod tests {
         let answered = |code: i32| ProcessResult { code, stdout: b"{}".to_vec() };
         assert!(matches!(wrapper_outcome(answered(0), "read_failed"), Ok(Some(_))), "the script ran");
         assert!(matches!(wrapper_outcome(answered(64), "read_failed"), Ok(None)), "64: no chat actions, keep the older path");
-        for (code, expected) in [(2, "chat_runtime_outdated"), (124, "agent_busy"), (122, "agent_not_running"), (129, "chat_runtime_outdated"), (1, "read_failed"), (255, "tunnel_unavailable")] {
+        for (code, expected) in [(2, "chat_runtime_outdated"), (124, "agent_busy"), (122, "agent_not_running"), (119, "agent_not_at_prompt"), (129, "chat_runtime_outdated"), (1, "read_failed"), (255, "tunnel_unavailable")] {
             assert_eq!(wrapper_outcome(answered(code), "read_failed").err().map(|error| error.code), Some(expected), "exit {code}");
         }
     }

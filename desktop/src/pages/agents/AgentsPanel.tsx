@@ -45,6 +45,11 @@ const chatModules = import.meta.glob<{ AgentChatPane?: ComponentType<{ role: Cha
 const AgentChatPane = Object.values(chatModules)[0]?.AgentChatPane ?? null;
 const CHAT_ROLES = new Set<string>(["capitano", "assistente", "mentor"]);
 
+/** The chat is the role's own, so only its first session has one. */
+function hasChat(row: PanelRow): boolean {
+  return CHAT_ROLES.has(row.role) && row.session === row.role.toUpperCase();
+}
+
 /** The terminal of the agent in view is read again this often, only while it is open. */
 export const SCREEN_REFRESH_MS = 10_000;
 /** A terminal that changed this recently says the agent is doing something (the second source). */
@@ -242,7 +247,7 @@ function stateLine(t: AgentsPanelText, row: PanelRow): string {
 }
 
 /** The terminal of the agent in view: read when shown, then again while it stays shown. */
-function Terminal({ row, t }: { row: PanelRow; t: AgentsPanelText }) {
+function Terminal({ row, t, chat }: { row: PanelRow; t: AgentsPanelText; chat: boolean }) {
   const [screen, setScreen] = useState<Outcome<{ up: boolean; text: string | null }> | null>(null);
   const session = row.session;
   useEffect(() => {
@@ -271,6 +276,11 @@ function Terminal({ row, t }: { row: PanelRow; t: AgentsPanelText }) {
   if (!screen.value.up) return <p className="text-[11px] text-[var(--color-muted)]">{t.screenDown}</p>;
   return (
     <>
+      {/* Two channels: the terminal is watched, the chat is written to. */}
+      <p data-testid="panel-terminal-destination" className="text-[11px] mb-1 text-[var(--color-muted)]">
+        {t.terminalWatchOnly}
+        {chat && ` ${fill(t.terminalWriteInChat, { name: displayName(row.session) })}`}
+      </p>
       <p className="text-[11px] mb-1 text-[var(--color-muted)]">{fill(t.screenAt, { time: stamp(screen.at) })}</p>
       {/* Text only: React escapes it, nothing in it is ever HTML. */}
       <pre
@@ -813,7 +823,7 @@ export default function AgentsPanel({ search }: PageProps) {
                   )}
 
                   <div role="tablist" className="flex gap-3 mt-3 mb-2 border-b" style={{ borderColor: "var(--color-border)" }}>
-                    {(["terminal", ...(CHAT_ROLES.has(current.role) && current.session === current.role.toUpperCase() ? ["chat"] : [])] as const).map((name) => (
+                    {(["terminal", ...(hasChat(current) ? ["chat"] : [])] as const).map((name) => (
                       <button
                         key={name}
                         role="tab"
@@ -834,7 +844,7 @@ export default function AgentsPanel({ search }: PageProps) {
                       <p className="text-[11px] text-[var(--color-muted)]">{fill(t.chatSoon, { name: displayName(current.session) })}</p>
                     )
                   ) : current.agent ? (
-                    <Terminal key={current.session} row={current} t={t} />
+                    <Terminal key={current.session} row={current} t={t} chat={hasChat(current) && AgentChatPane !== null} />
                   ) : (
                     <p className="text-[11px] text-[var(--color-muted)]">{t.screenDown}</p>
                   )}

@@ -7,6 +7,9 @@ with an interpreter that runs what it is given. What must hold:
 - a turn goes to the terminal in the user's envelope, and the real transport fences it;
 - an agent that is off, or a team that is off, is a closed code with NOTHING written and
   nothing started;
+- the text goes only to an agent waiting at its prompt: a menu, a sign-in, a permission
+  question, text already typed or a running turn is a closed code with NOTHING written and
+  nothing typed (JHT-T39);
 - control characters are cleaned, a repeated client id is one line, anything outside the
   closed alphabets is refused before it touches a file.
 
@@ -45,6 +48,9 @@ case "$cmd" in
     exit 1 ;;
   list-panes) exit 0 ;;
   capture-pane)
+    [ "${FAKE_TMUX_CAPTURE_FAILS:-0}" = 1 ] && exit 1
+    # A screen chosen by the test: the agent is somewhere other than its prompt.
+    if [ -f "$S/screen" ]; then cat "$S/screen"; exit 0; fi
     [ -f "$S/transcript" ] && cat "$S/transcript"
     printf '❯ %s\n' "$(cat "$S/composer" 2>/dev/null)" ;;
   send-keys)
@@ -366,3 +372,240 @@ def test_it_runs_no_shell_and_starts_no_agent():
     source = SCRIPT.read_text(encoding="utf-8")
     for forbidden in ("shell=True", "os.system", "os.popen", "start-agent", "kill-session", "new-session", "send-keys"):
         assert forbidden not in source, forbidden
+
+
+# ── send: only at the prompt (JHT-T39) ───────────────────────────────────────
+
+CLAUDE_PERMISSION = """\
+● Bash(rm -rf build)
+╭──────────────────────────────────────────────╮
+│ Bash command                                 │
+│                                              │
+│   rm -rf build                               │
+│                                              │
+│ Do you want to proceed?                      │
+│ ❯ 1. Yes                                     │
+│   2. Yes, and don't ask again for rm         │
+│   3. No, and tell Claude what to do (esc)    │
+╰──────────────────────────────────────────────╯
+"""
+CODEX_APPROVAL = """\
+• Running cargo test
+  Allow command?
+  › 1. Yes, proceed (y)
+    2. Yes, and don't ask again for these files (a)
+    3. No, and tell Codex what to do differently (esc)
+"""
+LOGIN_METHOD = """\
+ Select login method:
+
+ ❯ 1. Claude account with subscription · Pro, Max, Team, or Enterprise
+   2. Anthropic Console account · API usage billing
+"""
+PASTE_CODE = """\
+ Browser didn't open? Use the url below to sign in:
+
+ Paste code here if prompted >
+"""
+TRUST_FOLDER = """\
+ Do you trust the files in this folder?
+
+ /app/agents/capitano
+
+ ❯ 1. Yes, proceed
+   2. No, exit
+"""
+TEXT_ALREADY_TYPED = """\
+● Fatto: 3 posizioni nuove.
+
+╭──────────────────────────────────────────────╮
+│ > rispondi allo scout appena puoi            │
+╰──────────────────────────────────────────────╯
+  ? for shortcuts
+"""
+A_SHELL = """\
+Killed
+root@jht:/app/agents/capitano# 
+"""
+STARTING = """\
+ Welcome to Claude Code!
+"""
+RUNNING = """\
+● Leggo le posizioni nuove.
+✻ Pondering… (12s · ↑ 1.2k tokens · esc to interrupt)
+
+╭──────────────────────────────────────────────╮
+│ >                                            │
+╰──────────────────────────────────────────────╯
+"""
+RUNNING_CODEX = """\
+• Working (16s • esc to interrupt)
+
+▌ Ask Codex to do anything
+"""
+READY_CLAUDE = """\
+● Fatto. Tutti e tre i worker sono al prompt (nessuno spinner, niente "esc to interrupt").
+
+╭──────────────────────────────────────────────╮
+│ >                                            │
+╰──────────────────────────────────────────────╯
+  ? for shortcuts
+"""
+READY_CODEX = """\
+• Done.
+
+› Ask Codex to do anything
+
+  ⏎ send   ⇧⏎ newline   ⌃T transcript
+"""
+READY_NUMBERED_PROSE = """\
+● Ecco il piano:
+  1. leggere le posizioni
+  2. scrivere i CV
+
+❯ 
+"""
+
+READY_CLAUDE_RULES = """\
+● Fatto.
+
+────────────────────────────────────────────────
+❯
+────────────────────────────────────────────────
+  ? for shortcuts                       Context left until auto-compact: 12%
+"""
+READY_CODEX_EXAMPLE = """\
+› Write tests for @filename
+
+  100% context left
+"""
+# A quoted "> " of the transcript, and under it a shell: the CLI has exited.
+QUOTE_THEN_SHELL = """\
+● Ecco cosa mi hai scritto:
+>
+user@host:~$
+"""
+MENU_TRY_AGAIN = """\
+ Login failed.
+ ❯ Try again
+   Cancel
+"""
+MENU_SEND_FEEDBACK = """\
+ How was this session?
+ › Send feedback
+   Skip
+"""
+TYPED_WRITE = """\
+╭──────────────────────────────────────────────╮
+│ > write the CV now please                    │
+╰──────────────────────────────────────────────╯
+"""
+# The menu's mark on its last option: the composer's line holds the option itself.
+MENU_MARK_ON_LAST = """\
+ How was this session?
+   Skip
+ › Send feedback
+"""
+NUMBERED_TRY_AGAIN = """\
+ ❯ 1. Try again
+"""
+# A bare ">" is not a composer: bash waiting for the rest of a line, node's REPL.
+BASH_CONTINUATION = """\
+user@host:~$ echo "abc
+>
+"""
+NODE_REPL = """\
+Welcome to Node.js v20.11.1.
+Type ".help" for more information.
+>
+"""
+UNKNOWN_PLACEHOLDER = """\
+› Plan a trip to the moon
+"""
+
+
+def _module():
+    spec = importlib.util.spec_from_file_location("t39_agent_chat", SCRIPT)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+@pytest.mark.parametrize("screen", [
+    READY_CLAUDE, READY_CODEX, READY_NUMBERED_PROSE, "❯ \n", "│ ❯ Try \"edit cv.md\" │\n",
+    READY_CLAUDE_RULES, READY_CODEX_EXAMPLE, READY_CLAUDE + "\n" * 30,
+], ids=["claude", "codex", "numbered-prose-above", "bare-mark", "placeholder", "claude-rules-and-footer",
+        "codex-example-placeholder", "blank-rows-under"])
+def test_the_prompt_is_shown_by_an_empty_composer(screen):
+    assert _module().prompt_state(screen) == "ready"
+
+
+@pytest.mark.parametrize("screen", [RUNNING, RUNNING_CODEX], ids=["claude", "codex"])
+def test_a_running_turn_is_busy(screen):
+    assert _module().prompt_state(screen) == "busy"
+
+
+@pytest.mark.parametrize("screen", [
+    CLAUDE_PERMISSION, CODEX_APPROVAL, LOGIN_METHOD, PASTE_CODE, TRUST_FOLDER, TEXT_ALREADY_TYPED, A_SHELL, STARTING, "",
+    QUOTE_THEN_SHELL, MENU_TRY_AGAIN, MENU_SEND_FEEDBACK, MENU_MARK_ON_LAST, TYPED_WRITE, NUMBERED_TRY_AGAIN,
+    UNKNOWN_PLACEHOLDER, BASH_CONTINUATION, NODE_REPL,
+], ids=["permission", "approval", "login", "paste-code", "trust-folder", "typed", "shell", "starting", "empty",
+        "quote-then-shell", "menu-try-again", "menu-send-feedback", "menu-mark-on-last", "typed-write",
+        "numbered-try-again", "unknown-placeholder", "bash-continuation", "node-repl"])
+def test_anything_else_is_not_the_prompt(screen):
+    assert _module().prompt_state(screen) == "not_at_prompt"
+
+
+def _nothing_happened(box, agent="capitano"):
+    assert box.chat(agent) == [] and not (box.home / "agents" / agent).exists(), "nothing written"
+    assert box.envelopes() == [], "nothing handed to the transport"
+    assert not any(call.startswith("send-keys") for call in box.calls()), "nothing typed"
+
+
+@pytest.mark.parametrize("screen", [
+    CLAUDE_PERMISSION, CODEX_APPROVAL, LOGIN_METHOD, PASTE_CODE, TEXT_ALREADY_TYPED, A_SHELL, QUOTE_THEN_SHELL, MENU_TRY_AGAIN,
+    BASH_CONTINUATION,
+], ids=["permission", "approval", "login", "paste-code", "typed", "shell", "quote-then-shell", "menu-try-again",
+        "bash-continuation"])
+def test_a_screen_that_is_not_the_prompt_is_a_closed_code_with_nothing_written_or_typed(box, screen):
+    box.stub_delivery()
+    (box.state / "screen").write_text(screen, encoding="utf-8")
+    # «1» would choose «Yes» on a menu: it must never reach the terminal.
+    code, answer = box.run("send", "capitano", "id-20", stdin="1")
+    assert (code, answer) == (119, {"error": "agent_not_at_prompt"})
+    _nothing_happened(box)
+    assert "capture-pane -p -t =CAPITANO:" in box.calls(), "it looked at the agent's own pane"
+
+
+def test_a_running_turn_is_agent_busy_with_nothing_written_or_typed(box):
+    box.stub_delivery()
+    (box.state / "screen").write_text(RUNNING, encoding="utf-8")
+    code, answer = box.run("send", "capitano", "id-21", stdin="ci sei?")
+    assert (code, answer) == (124, {"error": "agent_busy"})
+    _nothing_happened(box)
+
+
+def test_a_pane_that_cannot_be_read_is_agent_unavailable_with_nothing_written(box):
+    box.stub_delivery()
+    code, answer = box.run("send", "capitano", "id-22", stdin="ci sei?", FAKE_TMUX_CAPTURE_FAILS="1")
+    assert (code, answer) == (123, {"error": "agent_unavailable"})
+    _nothing_happened(box)
+
+
+def test_back_at_the_prompt_the_same_id_is_delivered(box):
+    box.stub_delivery()
+    (box.state / "screen").write_text(CLAUDE_PERMISSION, encoding="utf-8")
+    assert box.run("send", "capitano", "id-23", stdin="eccomi")[0] == 119
+    (box.state / "screen").unlink()
+    code, receipt = box.run("send", "capitano", "id-23", stdin="eccomi")
+    assert code == 0 and receipt["clientMessageId"] == "id-23"
+    assert [row["text"] for row in box.chat("capitano")] == ["eccomi"]
+    assert box.envelopes() == ["[@utente -> @capitano] [CHAT] eccomi"], "handed to the transport once, at the prompt"
+
+
+def test_delivered_is_said_only_after_the_cli_took_the_text(box):
+    # The transport typed it and the composer kept it: no receipt, and no line marked delivered.
+    box.stub_delivery()
+    code, answer = box.run("send", "capitano", "id-24", stdin="ciao", FAKE_DELIVERY_RC="5")
+    assert (code, answer) == (125, {"error": "agent_stuck"})
+    assert not (box.home / "agents" / "capitano" / "chat-delivered.jsonl").exists()

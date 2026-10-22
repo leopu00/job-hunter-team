@@ -1317,7 +1317,19 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
     "Update the team to the latest version, then try again.",
   ),
   agent_unavailable: AGENT_NOT_READY,
-  agent_busy: AGENT_NOT_READY,
+  // The chat never types over a running turn and keeps no queue: the person sends again.
+  agent_busy: copy(
+    "L’agente sta lavorando: il messaggio non è partito.",
+    "Rimandalo quando ha finito il turno; lo vedi dal suo terminale nella pagina Agenti.",
+    "The agent is working: the message was not sent.",
+    "Send it again once its turn is over; you can see that in its terminal on the Agents page.",
+  ),
+  agent_not_at_prompt: copy(
+    "L’agente non è al prompt: sul suo terminale c’è un menu, un accesso, una domanda di permesso o del testo già scritto.",
+    "Guarda il suo terminale nella pagina Agenti; quando è tornato al prompt, rimanda il messaggio.",
+    "The agent is not at its prompt: its terminal shows a menu, a sign-in, a permission question or text already typed.",
+    "Look at its terminal on the Agents page; when it is back at the prompt, send the message again.",
+  ),
   agent_stuck: copy(
     "L’agente non risponde.",
     "Attendi qualche minuto: il team lo riavvia da solo. Poi rimanda il messaggio.",

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { appLocale } from "../../lib/app-locale";
 import { describeError } from "../../lib/error-catalog";
 import OwnVpsClaim from "../../components/OwnVpsClaim";
@@ -45,6 +45,14 @@ function mergeMessages(
   const byId = new Map(current.map((message) => [message.id, message]));
   for (const message of page.messages) byId.set(message.id, message);
   return [...byId.values()].sort((left, right) => left.at - right.at);
+}
+
+/**
+ * Ctrl+Enter starts a new line where the cursor is (a textarea does not do it by itself); Enter
+ * alone sends, and Shift+Enter keeps the textarea's own new line.
+ */
+export function newLineAt(value: string, start: number, end: number): { value: string; cursor: number } {
+  return { value: `${value.slice(0, start)}\n${value.slice(end)}`, cursor: start + 1 };
 }
 
 function clientMessageId(): string {
@@ -129,6 +137,19 @@ export default function DirectChatScreen({
   const [loading, setLoading] = useState(false);
   const [reconnecting, setReconnecting] = useState(false);
   const [operationError, setOperationError] = useState<string | null>(null);
+  // The person's messages of this view that the agent's CLI took: only a receipt says so.
+  const [delivered, setDelivered] = useState<ReadonlySet<string>>(() => new Set());
+  const [inFlight, setInFlight] = useState<string | null>(null);
+  const composer = useRef<HTMLTextAreaElement>(null);
+  // Where the cursor goes once the new line is in the box: set in the same commit, before the next
+  // key is read, so a person typing fast keeps writing after the new line, not before it.
+  const cursorAfterNewLine = useRef<number | null>(null);
+  useLayoutEffect(() => {
+    const cursor = cursorAfterNewLine.current;
+    if (cursor === null) return;
+    cursorAfterNewLine.current = null;
+    composer.current?.setSelectionRange(cursor, cursor);
+  }, [text]);
   const transcript = useRef<HTMLDivElement>(null);
   const currentAgent = useRef(agentId);
   currentAgent.current = agentId;
@@ -191,6 +212,7 @@ export default function DirectChatScreen({
 
   useEffect(() => {
     setMessages([]);
+    setDelivered(new Set());
     setOperationError(null);
     setLoading(false);
     if (status.state !== "ready") return;
@@ -249,6 +271,7 @@ export default function DirectChatScreen({
     const optimistic: DirectChatMessage = { id, role: "user", text: body, at: Date.now() };
     setText("");
     setSending(true);
+    setInFlight(id);
     setOperationError(null);
     setMessages((current) => mergeMessages(current, { messages: [optimistic] }));
     try {
@@ -260,12 +283,15 @@ export default function DirectChatScreen({
             : message,
         ),
       );
+      setDelivered((current) => new Set(current).add(receipt.messageId));
     } catch (error) {
+      // Not delivered: the words go back to the composer, and the status bar says why.
       setMessages((current) => current.filter((message) => message.id !== id));
       setText(body);
       setOperationError(errorCode(error) ?? "send_failed");
     } finally {
       setSending(false);
+      setInFlight(null);
     }
   }
 
@@ -365,6 +391,14 @@ export default function DirectChatScreen({
                   {message.role === "user" ? t.you : message.role === "system" ? t.system : selected.label}
                 </div>
                 {message.text}
+                {message.role === "user" && (message.id === inFlight || delivered.has(message.id)) && (
+                  <div
+                    data-testid={message.id === inFlight ? "direct-chat-in-flight" : "direct-chat-delivered"}
+                    className="mt-1 text-right text-[11px] text-[var(--color-muted)]"
+                  >
+                    {message.id === inFlight ? t.sending : t.delivered}
+                  </div>
+                )}
               </article>
             ))}
           </div>
@@ -396,14 +430,29 @@ export default function DirectChatScreen({
             void send();
           }}
         >
+          <p
+            data-testid="direct-chat-destination"
+            className="mx-auto max-w-4xl m-0 mb-1.5 text-[11px] text-[var(--color-muted)]"
+          >
+            {withName(t.destination, selected.label)}
+          </p>
           <div
             className="mx-auto max-w-4xl flex flex-wrap items-end gap-2 rounded-xl border border-[var(--color-border)] bg-[var(--color-card)] px-3 py-2 focus-within:border-[var(--color-border-glow)]"
             data-testid="direct-chat-composer-row"
           >
             <textarea
+              ref={composer}
               value={text}
               onChange={(event) => setText(event.target.value)}
               onKeyDown={(event) => {
+                if (event.key === "Enter" && event.ctrlKey) {
+                  event.preventDefault();
+                  const node = event.currentTarget;
+                  const next = newLineAt(text, node.selectionStart, node.selectionEnd);
+                  cursorAfterNewLine.current = next.cursor;
+                  setText(next.value);
+                  return;
+                }
                 if (event.key === "Enter" && !event.shiftKey) {
                   event.preventDefault();
                   void send();
@@ -436,6 +485,9 @@ export default function DirectChatScreen({
               {sending ? t.sending : t.send}
             </button>
           </div>
+          <p data-testid="direct-chat-keys" className="mx-auto max-w-4xl m-0 mt-1 text-[11px] text-[var(--color-dim)]">
+            {t.keysHint}
+          </p>
         </form>
       </section>
     </div>

@@ -45,6 +45,10 @@ export interface AgentsPanelText {
   screenReading: string;
   screenAt: string; // {time}
   screenDown: string;
+  /** Over the terminal: it is only to be watched; writing is the Chat tab's. */
+  terminalWatchOnly: string;
+  /** After it, for the agents with a chat: where writing goes instead. */
+  terminalWriteInChat: string; // {name}
   screenEmpty: string;
   start: string;
   stop: string;
@@ -210,6 +214,8 @@ const it: AgentsPanelText = {
   screenReading: "Leggo il terminale…",
   screenAt: "Ultime righe, lette alle {time}. Si aggiornano da sole finché il terminale è aperto.",
   screenDown: "La sessione non è accesa.",
+  terminalWatchOnly: "Nel terminale non si scrive: è solo da guardare.",
+  terminalWriteInChat: "Per scrivere a {name} usa la scheda Chat.",
   screenEmpty: "Il terminale è vuoto.",
   start: "Accendi",
   stop: "Spegni",
@@ -372,6 +378,8 @@ const en: AgentsPanelText = {
   screenReading: "Reading the terminal…",
   screenAt: "Last lines, read at {time}. They refresh by themselves while the terminal is open.",
   screenDown: "The session is not up.",
+  terminalWatchOnly: "You do not write in the terminal: it is only to be watched.",
+  terminalWriteInChat: "To write to {name}, use the Chat tab.",
   screenEmpty: "The terminal is empty.",
   start: "Start",
   stop: "Stop",
@@ -533,6 +541,8 @@ const de: AgentsPanelText = {
   screenReading: "Ich lese das Terminal…",
   screenAt: "Letzte Zeilen, gelesen um {time}. Sie aktualisieren sich von selbst, solange das Terminal offen ist.",
   screenDown: "Die Sitzung ist nicht aktiv.",
+  terminalWatchOnly: "Ins Terminal wird nicht geschrieben: Es ist nur zum Ansehen.",
+  terminalWriteInChat: "Um {name} zu schreiben, nutze den Tab Chat.",
   screenEmpty: "Das Terminal ist leer.",
   start: "Starten",
   stop: "Stoppen",
@@ -695,6 +705,8 @@ const es: AgentsPanelText = {
   screenReading: "Leyendo el terminal…",
   screenAt: "Últimas líneas, leídas a las {time}. Se actualizan solas mientras el terminal está abierto.",
   screenDown: "La sesión no está activa.",
+  terminalWatchOnly: "En el terminal no se escribe: solo se mira.",
+  terminalWriteInChat: "Para escribir a {name}, usa la pestaña Chat.",
   screenEmpty: "El terminal está vacío.",
   start: "Encender",
   stop: "Apagar",
@@ -857,6 +869,8 @@ const fr: AgentsPanelText = {
   screenReading: "Je lis le terminal…",
   screenAt: "Dernières lignes, lues à {time}. Elles se mettent à jour toutes seules tant que le terminal est ouvert.",
   screenDown: "La session n’est pas active.",
+  terminalWatchOnly: "On n’écrit pas dans le terminal : il sert seulement à regarder.",
+  terminalWriteInChat: "Pour écrire à {name}, utilise l’onglet Chat.",
   screenEmpty: "Le terminal est vide.",
   start: "Démarrer",
   stop: "Arrêter",
@@ -1019,6 +1033,8 @@ const hu: AgentsPanelText = {
   screenReading: "Beolvasom a terminált…",
   screenAt: "Utolsó sorok, beolvasva: {time}. Amíg a terminál nyitva van, maguktól frissülnek.",
   screenDown: "A munkamenet nem aktív.",
+  terminalWatchOnly: "A terminálba nem lehet írni: csak megtekintésre szolgál.",
+  terminalWriteInChat: "Ha írni szeretnél neki ({name}), használd a Chat fület.",
   screenEmpty: "A terminál üres.",
   start: "Bekapcsolás",
   stop: "Kikapcsolás",
@@ -1181,6 +1197,8 @@ const pt: AgentsPanelText = {
   screenReading: "A ler o terminal…",
   screenAt: "Últimas linhas, lidas às {time}. Atualizam-se sozinhas enquanto o terminal estiver aberto.",
   screenDown: "A sessão não está ativa.",
+  terminalWatchOnly: "No terminal não se escreve: é só para ver.",
+  terminalWriteInChat: "Para escrever a {name}, usa o separador Chat.",
   screenEmpty: "O terminal está vazio.",
   start: "Ligar",
   stop: "Desligar",

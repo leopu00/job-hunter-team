@@ -34,6 +34,11 @@ export interface DirectChatText {
   readOnlyConnect: string;
   sending: string;
   send: string;
+  /** Over the composer: where the text goes. The chat, never the keys of the agent's terminal. */
+  destination: string; // {name}
+  /** Under a message of the person's: the agent's CLI took it (seen in its composer, then sent). */
+  delivered: string;
+  keysHint: string;
 }
 
 export const DIRECT_CHAT_TEXT: Record<Locale, DirectChatText> = {
@@ -63,6 +68,9 @@ export const DIRECT_CHAT_TEXT: Record<Locale, DirectChatText> = {
     readOnlyConnect: "Collega il team",
     sending: "Invio…",
     send: "Invia",
+    destination: "Destinazione: la chat di {name}. Il testo gli arriva come messaggio, non come tasti nel suo terminale.",
+    delivered: "Consegnato",
+    keysHint: "Invio manda · Ctrl+Invio va a capo",
   },
   en: {
     agents: { capitano: "Captain", assistente: "Assistant", mentor: "Mentor", scout: "Scout", analista: "Analyst", scorer: "Scorer", scrittore: "Writer", critico: "Critic" },
@@ -90,6 +98,9 @@ export const DIRECT_CHAT_TEXT: Record<Locale, DirectChatText> = {
     readOnlyConnect: "Connect the team",
     sending: "Sending…",
     send: "Send",
+    destination: "Goes to: the chat with {name}. The text reaches it as a message, not as keys in its terminal.",
+    delivered: "Delivered",
+    keysHint: "Enter sends · Ctrl+Enter starts a new line",
   },
   de: {
     agents: { capitano: "Kapitän", assistente: "Assistent", mentor: "Mentor", scout: "Scout", analista: "Analyst", scorer: "Scorer", scrittore: "Schreiber", critico: "Kritiker" },
@@ -117,6 +128,9 @@ export const DIRECT_CHAT_TEXT: Record<Locale, DirectChatText> = {
     readOnlyConnect: "Team verbinden",
     sending: "Senden…",
     send: "Senden",
+    destination: "Ziel: der Chat mit {name}. Der Text kommt als Nachricht an, nicht als Tasten in seinem Terminal.",
+    delivered: "Zugestellt",
+    keysHint: "Enter sendet · Strg+Enter für eine neue Zeile",
   },
   fr: {
     agents: { capitano: "Capitaine", assistente: "Assistant", mentor: "Mentor", scout: "Scout", analista: "Analyste", scorer: "Scorer", scrittore: "Rédacteur", critico: "Critique" },
@@ -144,6 +158,9 @@ export const DIRECT_CHAT_TEXT: Record<Locale, DirectChatText> = {
     readOnlyConnect: "Relier l’équipe",
     sending: "Envoi…",
     send: "Envoyer",
+    destination: "Destination : la discussion avec {name}. Le texte lui arrive comme un message, pas comme des touches dans son terminal.",
+    delivered: "Remis",
+    keysHint: "Entrée envoie · Ctrl+Entrée pour aller à la ligne",
   },
   es: {
     agents: { capitano: "Capitán", assistente: "Asistente", mentor: "Mentor", scout: "Scout", analista: "Analista", scorer: "Scorer", scrittore: "Redactor", critico: "Crítico" },
@@ -171,6 +188,9 @@ export const DIRECT_CHAT_TEXT: Record<Locale, DirectChatText> = {
     readOnlyConnect: "Conectar el equipo",
     sending: "Enviando…",
     send: "Enviar",
+    destination: "Destino: el chat con {name}. El texto le llega como mensaje, no como teclas en su terminal.",
+    delivered: "Entregado",
+    keysHint: "Intro envía · Ctrl+Intro salta de línea",
   },
   pt: {
     agents: { capitano: "Capitão", assistente: "Assistente", mentor: "Mentor", scout: "Scout", analista: "Analista", scorer: "Scorer", scrittore: "Redator", critico: "Crítico" },
@@ -198,6 +218,9 @@ export const DIRECT_CHAT_TEXT: Record<Locale, DirectChatText> = {
     readOnlyConnect: "Ligar a equipa",
     sending: "A enviar…",
     send: "Enviar",
+    destination: "Destino: o chat com {name}. O texto chega-lhe como mensagem, não como teclas no terminal.",
+    delivered: "Entregue",
+    keysHint: "Enter envia · Ctrl+Enter muda de linha",
   },
   hu: {
     agents: { capitano: "Kapitány", assistente: "Asszisztens", mentor: "Mentor", scout: "Felderítő", analista: "Elemző", scorer: "Pontozó", scrittore: "Író", critico: "Kritikus" },
@@ -225,6 +248,9 @@ export const DIRECT_CHAT_TEXT: Record<Locale, DirectChatText> = {
     readOnlyConnect: "Csapat csatlakoztatása",
     sending: "Küldés…",
     send: "Küldés",
+    destination: "Cél: a csevegés vele: {name}. A szöveg üzenetként érkezik, nem billentyűként a termináljában.",
+    delivered: "Kézbesítve",
+    keysHint: "Enter: küldés · Ctrl+Enter: új sor",
   },
 };
 
