@@ -221,8 +221,9 @@ def _enabler_install_block() -> str:
     return functions + block
 
 
-# PowerShell off Windows: a fake podman.exe can be a shell script there, and Join-Path keeps the
-# installer's «Programs\Podman\podman.exe» as one file name, which is where the fake goes.
+# PowerShell off Windows: a fake podman.exe can be a shell script there, and PowerShell reads the
+# installer's «Programs\Podman\podman.exe» with \ as a separator (Join-Path gives
+# Programs/Podman/podman.exe), so the fake goes in real Programs/Podman folders.
 @pytest.mark.skipif(PWSH is None or os.name == "nt", reason="needs PowerShell off Windows")
 @pytest.mark.parametrize(("installed", "winget_code", "expected_exit", "expected_line"), [
     ("6.0.2", None, 0, None),                                  # already there: winget is not even run
@@ -237,7 +238,8 @@ def test_the_install_block_with_a_fake_winget(tmp_path, installed, winget_code, 
     # «6.0.2-late»: Podman appears only once winget ran (what PATH did not show before)
     present_before = installed is not None and not installed.endswith("-late")
     version = (installed or "6.0.2").replace("-late", "")
-    fake_podman = tmp_path / "Programs\\Podman\\podman.exe"
+    fake_podman = tmp_path / "Programs" / "Podman" / "podman.exe"
+    fake_podman.parent.mkdir(parents=True)
     podman_body = f"#!/bin/sh\necho 'podman version {version}'\n"
     if present_before:
         fake_podman.write_text(podman_body, encoding="utf-8")
