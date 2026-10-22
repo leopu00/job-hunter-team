@@ -1833,3 +1833,51 @@ fn t16_the_outcomes_and_the_receipt_after_a_mismatch() {
     }
     // the mismatch is not retried: the server must change first (checked above, retryable false)
 }
+
+// ---- the full connection after a read-only opening of the same team
+
+#[test]
+fn t28_the_full_connection_keeps_the_selection_a_read_only_opening_of_the_same_team_saved() {
+    let sandbox = Sandbox::new();
+    let (_world, _) = connected_once(&sandbox);
+    let before = fs::read(sandbox.selection()).expect("the selection of the read-only opening");
+    let target = runtime::candidate_for_request_at(&sandbox.root, &sandbox.scope, &host(), TEAM).expect("the candidate");
+    // the plain activation of the full connection used to stop here
+    assert_eq!(
+        runtime::activate_at(&sandbox.root, &sandbox.scope, &host(), &target),
+        Err("existing_team_runtime_already_selected")
+    );
+    assert_eq!(runtime::activate_or_keep_at(&sandbox.root, &sandbox.scope, &host(), &target), Ok(()));
+    assert_eq!(fs::read(sandbox.selection()).expect("still there"), before, "kept as it was, not rewritten");
+
+    // another target is never taken for the saved one
+    let mut other = target.clone();
+    other.runtime.oci_revision = "f".repeat(40);
+    assert!(runtime::activate_or_keep_at(&sandbox.root, &sandbox.scope, &host(), &other).is_err());
+    assert_eq!(fs::read(sandbox.selection()).expect("still there"), before);
+}
+
+#[test]
+fn t28_with_nothing_selected_the_full_connection_saves_the_selection() {
+    let sandbox = Sandbox::new();
+    write_pin(&sandbox);
+    let server = team_server(&team_world());
+    let found = discover(&sandbox, &server, Duration::from_secs(40)).expect("found");
+    register(&sandbox, &server, &receipt_of(&sandbox, &found)).expect("registered");
+    assert!(!sandbox.selection().exists());
+    let target = runtime::candidate_for_request_at(&sandbox.root, &sandbox.scope, &host(), TEAM).expect("the candidate");
+    assert_eq!(runtime::activate_or_keep_at(&sandbox.root, &sandbox.scope, &host(), &target), Ok(()));
+    assert_eq!(runtime::selected_at(&sandbox.root, &sandbox.scope, &host()), Ok(Some(target)));
+}
+
+#[test]
+fn t28_the_full_connection_command_activates_through_the_one_that_keeps_the_same_target() {
+    let onboarding = include_str!("onboarding.rs").split("mod existing_team_assistant_tests").next().unwrap();
+    let body = onboarding
+        .split("pub(crate) async fn onboarding_existing_team_connect(")
+        .nth(1)
+        .and_then(|rest| rest.split("\n}\n").next())
+        .expect("the full connection");
+    assert!(body.contains("existing_team_runtime::activate_or_keep("));
+    assert!(!body.contains("existing_team_runtime::activate("));
+}

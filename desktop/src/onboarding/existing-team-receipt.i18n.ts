@@ -21,10 +21,13 @@ export interface ExistingTeamReceiptText {
   assistantUp: string;
   assistantDown: string;
   caution: string;
+  /** The caution of the same step when the person chose «Confirm and connect»: the team is connected in full. */
+  cautionFull: string;
   confirm: string;
   cancel: string;
   registering: string;
   registeringDetail: string;
+  registeringDetailFull: string;
 }
 
 export const EXISTING_TEAM_RECEIPT_TEXT: Record<Locale, ExistingTeamReceiptText> = {
@@ -44,10 +47,12 @@ export const EXISTING_TEAM_RECEIPT_TEXT: Record<Locale, ExistingTeamReceiptText>
     assistantUp: "attivo",
     assistantDown: "non attivo",
     caution: "Confermando, l’app salva questo collegamento sul tuo profilo e apre la squadra in sola lettura. Non avvia agenti e non modifica nulla sulla VPS.",
+    cautionFull: "Confermando, l’app salva questo collegamento sul tuo profilo e collega la squadra: da qui l’app potrà scriverle (la chat e i tuoi giudizi sugli annunci). Non avvia agenti.",
     confirm: "Conferma e apri in sola lettura",
     cancel: "Annulla",
     registering: "Salvo il collegamento",
     registeringDetail: "Rileggo la VPS, salvo il collegamento e apro la squadra in sola lettura.",
+    registeringDetailFull: "Rileggo la VPS, salvo il collegamento e collego la squadra.",
   },
   en: {
     discovering: "Reading what the server declares",
@@ -65,10 +70,12 @@ export const EXISTING_TEAM_RECEIPT_TEXT: Record<Locale, ExistingTeamReceiptText>
     assistantUp: "running",
     assistantDown: "not running",
     caution: "By confirming, the app saves this connection on your profile and opens the team read only. It starts no agents and changes nothing on the VPS.",
+    cautionFull: "By confirming, the app saves this connection on your profile and connects the team: from here the app can write to it (the chat and your judgements on positions). It starts no agents.",
     confirm: "Confirm and open read only",
     cancel: "Cancel",
     registering: "Saving the connection",
     registeringDetail: "Reading the VPS again, saving the connection and opening the team read only.",
+    registeringDetailFull: "Reading the VPS again, saving the connection and connecting the team.",
   },
   de: {
     discovering: "Ich lese, was der Server angibt",
@@ -86,10 +93,12 @@ export const EXISTING_TEAM_RECEIPT_TEXT: Record<Locale, ExistingTeamReceiptText>
     assistantUp: "läuft",
     assistantDown: "läuft nicht",
     caution: "Mit der Bestätigung speichert die App diese Verbindung in deinem Profil und öffnet das Team nur lesend. Es werden keine Agenten gestartet und auf der VPS wird nichts verändert.",
+    cautionFull: "Mit der Bestätigung speichert die App diese Verbindung in deinem Profil und verbindet das Team: Von hier aus kann die App ihm schreiben (der Chat und deine Bewertungen der Stellen). Es werden keine Agenten gestartet.",
     confirm: "Bestätigen und nur lesend öffnen",
     cancel: "Abbrechen",
     registering: "Verbindung wird gespeichert",
     registeringDetail: "Ich lese die VPS erneut, speichere die Verbindung und öffne das Team nur lesend.",
+    registeringDetailFull: "Ich lese die VPS erneut, speichere die Verbindung und verbinde das Team.",
   },
   fr: {
     discovering: "Lecture de ce que déclare le serveur",
@@ -107,10 +116,12 @@ export const EXISTING_TEAM_RECEIPT_TEXT: Record<Locale, ExistingTeamReceiptText>
     assistantUp: "actif",
     assistantDown: "inactif",
     caution: "En confirmant, l’application enregistre cette connexion dans ton profil et ouvre l’équipe en lecture seule. Elle ne lance aucun agent et ne modifie rien sur le VPS.",
+    cautionFull: "En confirmant, l’application enregistre cette connexion dans ton profil et relie l’équipe : d’ici, l’application pourra lui écrire (le chat et tes avis sur les offres). Elle ne lance aucun agent.",
     confirm: "Confirmer et ouvrir en lecture seule",
     cancel: "Annuler",
     registering: "Enregistrement de la connexion",
     registeringDetail: "Je relis le VPS, j’enregistre la connexion et j’ouvre l’équipe en lecture seule.",
+    registeringDetailFull: "Je relis le VPS, j’enregistre la connexion et je relie l’équipe.",
   },
   es: {
     discovering: "Leyendo lo que declara el servidor",
@@ -128,10 +139,12 @@ export const EXISTING_TEAM_RECEIPT_TEXT: Record<Locale, ExistingTeamReceiptText>
     assistantUp: "activo",
     assistantDown: "no activo",
     caution: "Al confirmar, la aplicación guarda esta conexión en tu perfil y abre el equipo en solo lectura. No inicia agentes ni modifica nada en el VPS.",
+    cautionFull: "Al confirmar, la aplicación guarda esta conexión en tu perfil y conecta el equipo: desde aquí la aplicación podrá escribirle (el chat y tus valoraciones de las ofertas). No inicia agentes.",
     confirm: "Confirmar y abrir en solo lectura",
     cancel: "Cancelar",
     registering: "Guardando la conexión",
     registeringDetail: "Vuelvo a leer el VPS, guardo la conexión y abro el equipo en solo lectura.",
+    registeringDetailFull: "Vuelvo a leer el VPS, guardo la conexión y conecto el equipo.",
   },
   pt: {
     discovering: "A ler o que o servidor declara",
@@ -149,10 +162,12 @@ export const EXISTING_TEAM_RECEIPT_TEXT: Record<Locale, ExistingTeamReceiptText>
     assistantUp: "ativo",
     assistantDown: "não ativo",
     caution: "Ao confirmar, a aplicação guarda esta ligação no teu perfil e abre a equipa só em leitura. Não inicia agentes nem altera nada na VPS.",
+    cautionFull: "Ao confirmar, a aplicação guarda esta ligação no teu perfil e liga a equipa: daqui a aplicação poderá escrever-lhe (o chat e as tuas avaliações das vagas). Não inicia agentes.",
     confirm: "Confirmar e abrir só em leitura",
     cancel: "Cancelar",
     registering: "A guardar a ligação",
     registeringDetail: "Volto a ler a VPS, guardo a ligação e abro a equipa só em leitura.",
+    registeringDetailFull: "Volto a ler a VPS, guardo a ligação e ligo a equipa.",
   },
   hu: {
     discovering: "A szerver állításának beolvasása",
@@ -170,9 +185,11 @@ export const EXISTING_TEAM_RECEIPT_TEXT: Record<Locale, ExistingTeamReceiptText>
     assistantUp: "fut",
     assistantDown: "nem fut",
     caution: "A megerősítéssel az alkalmazás elmenti ezt a kapcsolatot a profilodra, és csak olvasható módban megnyitja a csapatot. Nem indít ügynököket, és semmit nem módosít a VPS-en.",
+    cautionFull: "A megerősítéssel az alkalmazás elmenti ezt a kapcsolatot a profilodra, és csatlakoztatja a csapatot: innen az alkalmazás írhat neki (a chat és a pozíciókról adott értékeléseid). Nem indít ügynököket.",
     confirm: "Megerősítés és megnyitás csak olvasásra",
     cancel: "Mégse",
     registering: "A kapcsolat mentése",
     registeringDetail: "Újra beolvasom a VPS-t, elmentem a kapcsolatot, és csak olvasható módban megnyitom a csapatot.",
+    registeringDetailFull: "Újra beolvasom a VPS-t, elmentem a kapcsolatot, és csatlakoztatom a csapatot.",
   },
 };

@@ -1452,6 +1452,33 @@ pub(crate) fn activate_at(
     write_selection_at(root, scope, &candidate, &hash)
 }
 
+/// The full connection («Confirm and connect») of a team this profile may have selected already:
+/// opening the same team read only saves the selection first. The same target is kept as it is;
+/// a selection of another one is `existing_team_runtime_target_changed`, never replaced.
+pub(crate) fn activate_or_keep(
+    app: &tauri::AppHandle,
+    scope: &AccountScope,
+    host: &ExecutionHost,
+    probed: &ActivatedTarget,
+) -> Result<(), &'static str> {
+    activate_or_keep_at(&root(app)?, scope, host, probed)
+}
+
+pub(crate) fn activate_or_keep_at(
+    root: &Path,
+    scope: &AccountScope,
+    host: &ExecutionHost,
+    probed: &ActivatedTarget,
+) -> Result<(), &'static str> {
+    match activate_at(root, scope, host, probed) {
+        Err("existing_team_runtime_already_selected") => match selected_at(root, scope, host)? {
+            Some(selected) if selected == *probed => Ok(()),
+            _ => Err("existing_team_runtime_target_changed"),
+        },
+        other => other,
+    }
+}
+
 /// The one parser of a selection's bytes, for `selected_at` and the
 /// registration gate alike: canonical JSON, schema 1, a valid team id and the
 /// SHA-256 of a candidate.
