@@ -8,6 +8,7 @@ import { createClient } from "@/lib/supabase/client";
 import { useIsCloud } from "@/app/hooks/useIsCloud";
 import { useLocale } from "@/lib/use-locale";
 import type { Locale } from "@/i18n/config";
+import { WEB_ACTION_LOG_TEXT } from "@/lib/web-action-log.i18n";
 
 // Caricato solo quando serve: il modulo di segnalazione non deve pesare sul
 // primo caricamento della dashboard di chi non lo aprirà mai.
@@ -125,7 +126,8 @@ export default function UserMenu({
   const [supporto, setSupporto] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const router = useRouter();
-  const t = T[useLocale()];
+  const locale = useLocale();
+  const t = T[locale];
   // [JHT-DASHBOARD-SPLIT] Sul cloud le voci di controllo/config sono redirette
   // dal layout: qui le nascondiamo dal menu per non offrire vicoli ciechi.
   // (null/false = locale → mostra tutto; true = cloud → nascondi.)
@@ -242,6 +244,18 @@ export default function UserMenu({
           >
             {t.settings}
           </Link>
+          {/* Il registro delle azioni sta sul sito (tabella nel cloud): in
+              locale non c'è, quindi la voce c'è solo sul cloud. */}
+          {isCloud === true && (
+            <Link
+              href="/action-log"
+              role="menuitem"
+              onClick={() => setOpen(false)}
+              className="block px-4 py-2 text-[11px] text-[var(--color-muted)] hover:bg-[var(--color-card)] transition-colors no-underline"
+            >
+              {WEB_ACTION_LOG_TEXT[locale].title}
+            </Link>
+          )}
           {/* Export legge i file locali di JHT_HOME: sul cloud produrrebbe
               solo dataset vuoti → nascosto come Backup (niente vicoli ciechi). */}
           {isCloud !== true && (
