@@ -30,6 +30,7 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 NETWORK = ROOT / "scripts" / "configure-podman-windows-network.ps1"
 ENABLER = ROOT / "scripts" / "enable-podman-windows-runtime.ps1"
+PWSH = shutil.which("pwsh")
 
 
 def _proxy_check() -> str:
@@ -38,22 +39,34 @@ def _proxy_check() -> str:
     return source[start : source.index("\n'@", start)] + "\n"
 
 
-# A fake curl: the answer for "<port> <url>" from the table, else 000 and exit 7.
+# A fake curl that answers as curl does through an http proxy. For http:// the proxy answers the
+# request itself: its code is http_code. For https:// curl first asks the proxy for a tunnel
+# (CONNECT), and http_connect is the proxy's answer to that. The table gives, for "<port> <url>":
+#   NNN          what came back (for https, through a tunnel the proxy opened: CONNECT 200)
+#   connect-NNN  the proxy refused the CONNECT with NNN: http_code 000, exit 56, as curl does
+#   (no row)     nothing answered: both 000, exit 7
+# Until 22/10 the fake printed the refusal's 403 as http_code, which real curl never does: the
+# check read http_code, stayed green here, and failed on every clean Windows PC.
 FAKE_CURL = r"""#!/bin/sh
-port=""; url=""
+port=""; url=""; format=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --proxy) port="${2##*:}"; shift 2 ;;
-    --output|--max-time|--write-out) shift 2 ;;
+    --write-out) format="$2"; shift 2 ;;
+    --output|--max-time) shift 2 ;;
     --*) shift ;;
     *) url="$1"; shift ;;
   esac
 done
 answer="$(awk -v key="$port $url" '$1" "$2 == key { print $3; exit }' "$CURL_TABLE")"
-if [ -z "$answer" ]; then printf 000; exit 7; fi
-printf %s "$answer"
-case "$answer" in 403) exit 56 ;; esac
-exit 0
+code=000; connect=000; rc=0
+case "$answer" in
+  "") rc=7 ;;
+  connect-*) connect="${answer#connect-}"; rc=56 ;;
+  *) code="$answer"; case "$url" in https://*) connect=200 ;; esac ;;
+esac
+printf %s "$format" | sed -e "s/%{http_code}/$code/" -e "s/%{http_connect}/$connect/"
+exit $rc
 """
 
 def _listen():
@@ -75,7 +88,9 @@ def machine(tmp_path):
     ports = [s.getsockname()[1] for s in sockets]
     table = tmp_path / "curl-table"
 
-    def answers(agent_ghcr=401, broker_ghcr=401, telegram=200, agent_imap=403, broker_http=403, telegram_other=403):
+    # the two https refusals are refused CONNECTs; the http one is the proxy's own 403
+    def answers(agent_ghcr=401, broker_ghcr=401, telegram=200, agent_imap="connect-403", broker_http=403,
+                telegram_other="connect-403"):
         rows = [
             (ports[0], "https://ghcr.io/v2/", agent_ghcr), (ports[1], "https://ghcr.io/v2/", broker_ghcr),
             (ports[2], "https://api.telegram.org/", telegram), (ports[0], "https://example.com:993/", agent_imap),
@@ -125,6 +140,84 @@ def test_a_wrong_answer_is_named_with_its_proxy_and_the_other_checks_still_run(m
     done, _ = machine.run()
     assert done.returncode == 1
     assert ["telegram", str(machine.ports[2]), "https://api.telegram.org/", "reachable", "curl-7"] in _checks(done.stdout)
+
+
+def test_an_https_refusal_is_the_proxys_answer_to_the_connect(machine):
+    agent, broker, telegram = map(str, machine.ports)
+    # no answer to the CONNECT (000 for both codes): not a refusal, a wrong answer
+    machine.answers(telegram_other=None)
+    done, _ = machine.run()
+    assert done.returncode == 1
+    assert ["telegram", telegram, "https://example.com/", "403", "000"] in _checks(done.stdout)
+    # the proxy opened the tunnel and the target itself said 403: the proxy did not refuse
+    machine.answers(agent_imap=403)
+    done, _ = machine.run()
+    assert done.returncode == 1
+    assert ["agent", agent, "https://example.com:993/", "403", "200"] in _checks(done.stdout)
+    # an http target is still read from http_code: the proxy's own 403 passes, a 200 does not
+    machine.answers(broker_http=200)
+    done, _ = machine.run()
+    assert done.returncode == 1
+    assert ["broker", broker, "http://example.com/", "403", "200"] in _checks(done.stdout)
+    # the positive https checks still read the target's answer through the tunnel
+    machine.answers(agent_ghcr="connect-403")
+    done, _ = machine.run()
+    assert done.returncode == 1
+    assert ["agent", agent, "https://ghcr.io/v2/", "401", "000"] in _checks(done.stdout)
+
+
+def _network_check_block() -> str:
+    """The trap and the check of configure-podman-windows-network.ps1, as PowerShell runs them."""
+    source = NETWORK.read_text(encoding="utf-8")
+    trap = source[source.index("trap {") :]
+    trap = trap[: trap.index("\n}\n") + 3]
+    check = source[source.index("$proxyCheck = @'") : source.index("Invoke-Checked $Podman '--connection'")]
+    return trap + check
+
+
+# The machine is a fake podman whose `machine ssh` runs the command with bash here, so the real
+# base64 hand-off, the real check and the real parsing of its lines run end to end.
+FAKE_PODMAN = r"""#!/bin/sh
+[ "$1 $2" = "machine ssh" ] || exit 9
+shift 3
+exec bash -c "$1"
+"""
+
+
+@pytest.mark.skipif(PWSH is None or os.name == "nt", reason="needs PowerShell off Windows")
+@pytest.mark.parametrize(("change", "expected_exit", "expected_line"), [
+    ({}, 0, None),
+    ({"telegram_other": None}, 23,
+     "podman_network_unready: the telegram proxy on 127.0.0.1:{telegram} answered 000 for https://example.com/, "
+     "expected 403"),
+    ({"agent_imap": 403}, 23,
+     "podman_network_unready: the agent proxy on 127.0.0.1:{agent} answered 200 for https://example.com:993/, "
+     "expected 403"),
+])
+def test_the_network_script_passes_a_refused_connect_and_names_a_missing_one(machine, tmp_path, change,
+                                                                              expected_exit, expected_line):
+    podman = tmp_path / "bin" / "podman"
+    podman.write_text(FAKE_PODMAN, encoding="utf-8")
+    podman.chmod(0o755)
+    agent, broker, telegram = machine.ports
+    machine.answers(**change)
+    script = tmp_path / "network-check.ps1"
+    script.write_text(
+        "$ErrorActionPreference = 'Stop'\n"
+        f"$Podman = '{podman}'\n$MachineName = 'jht-podman'\n"
+        f"$Port = {agent}\n$BrokerPort = {broker}\n$TelegramPort = {telegram}\n"
+        + _network_check_block() + "\nexit 0\n",
+        encoding="utf-8",
+    )
+    env = {"PATH": f"{tmp_path / 'bin'}:/usr/bin:/bin", "HOME": str(tmp_path),
+           "CURL_TABLE": str(tmp_path / "curl-table"), "JHT_PROXY_READY_SECONDS": "5"}
+    done = subprocess.run([PWSH, "-NoProfile", "-NonInteractive", "-File", str(script)], capture_output=True,
+                          text=True, timeout=120, env=env)
+    assert done.returncode == expected_exit, done.stdout + done.stderr
+    if expected_line:
+        assert expected_line.format(agent=agent, telegram=telegram) in done.stderr
+    else:
+        assert "JHT_PROXY_CHECK telegram" in done.stdout and done.stderr == ""
 
 
 def test_a_proxy_that_starts_late_is_awaited_and_one_that_never_listens_is_named(machine):
@@ -208,7 +301,6 @@ def test_a_try_again_finds_podman_before_winget_and_the_version_decides():
 
 # ── the same block, run by PowerShell with a fake winget and a fake podman ──
 
-PWSH = shutil.which("pwsh")
 
 
 def _enabler_install_block() -> str:
