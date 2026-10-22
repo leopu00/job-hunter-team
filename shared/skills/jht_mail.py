@@ -503,8 +503,13 @@ def _shape_ok(agent: str, record: dict, name: str) -> bool:
 
 
 def drain(agent: str, now: datetime | None = None) -> list[dict]:
-    """Take every queued message, oldest first. The take is the acknowledgement."""
+    """Take every queued message, oldest first. The take is the acknowledgement.
+
+    A box that nobody wrote to does not exist, and reading it does not create it: only a send to a
+    mail receiver makes a folder, so an agent that is not one leaves nothing behind by draining."""
     moment = _utc(now)
+    if not box_dir(agent).is_dir():
+        return []
     folders = _ensure(agent)
     taken: list[dict] = []
     with _Lock(agent):
@@ -597,6 +602,8 @@ def sweep(agent: str, now: datetime | None = None, receivers=None) -> dict:
     to be typed into that agent's terminal by the caller.
     """
     moment = _utc(now)
+    if not box_dir(agent).is_dir():
+        return {"expired": [], "told": [], "typed": []}
     folders = _ensure(agent)
     expired: list[str] = []
     notices: list[dict] = []

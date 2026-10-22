@@ -43,6 +43,3 @@ db-query
 # rate-budget: read-only `plan` mode only — never `live`.
 # Useful only if the user asks "how is the team doing?" out of curiosity.
 rate-budget
-
-# T09: the agents' mailbox (drain first in every turn). Dormant until the team lists a receiver.
-mailbox
