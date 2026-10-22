@@ -11,7 +11,7 @@ How to install, run, and operate Job Hunter Team. User-facing — for the
 | [🧭 CHOOSE-WHERE-TO-RUN](CHOOSE-WHERE-TO-RUN.md) | Everyone — choose a local PC, dedicated LAN host or VPS before installing |
 | [🚀 QUICKSTART](QUICKSTART.md) | Everyone — the 4 install paths, then your first run |
 | [🖥️ DESKTOP](DESKTOP.md) | Desktop-app users — every page, the office and what each object means, what the app cannot do |
-| [🎓 TUTORIALS](TUTORIALS.md) | Everyone — text-first game and web walkthroughs, with optional videos |
+| [🎓 TUTORIALS](TUTORIALS.md) | Everyone — text-first desktop-app and web walkthroughs, with optional videos |
 | [🌍 TUTORIALS-LOCALIZATIONS](TUTORIALS-LOCALIZATIONS.md) | UI maintainers — Italian, Spanish, French, German, Portuguese and Hungarian tutorial copy matching the canonical guide |
 | [📦 CLI-INSTALL](CLI-INSTALL.md) | CLI users — deep dive on the `install.sh` one-liner |
 | [⌨️ CLI-REFERENCE](CLI-REFERENCE.md) | CLI users — full `jht` command reference |
@@ -30,7 +30,7 @@ How to install, run, and operate Job Hunter Team. User-facing — for the
 
 | Guide | For whom |
 |---|---|
-| [🖥️ VPS-SETUP-WIZARD](VPS-SETUP-WIZARD.md) | Native-office users — guided setup for an existing VPS |
+| [🖥️ VPS-SETUP-WIZARD](VPS-SETUP-WIZARD.md) | Desktop app users — guided setup for an existing VPS |
 | [☁️ VPS-SETUP](VPS-SETUP.md) | CLI users — manual setup for an existing Linux VPS |
 
 ## 🔌 API team (in rehearsal)
