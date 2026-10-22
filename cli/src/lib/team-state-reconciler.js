@@ -35,6 +35,8 @@ import { observeTeam as observeBoxTeam } from './team-observed.js';
 import { cloudSyncHeaders } from './client-identity.js';
 import { agentsStatusWriter, createAgentsStatusReader, createHeartbeatCarrier, startAgentsStatusPublisher } from './agents-status.js';
 import { createApiAgentsStatusReader } from './agents-status-traces.js';
+import { createDoneStore, serverClock } from './team-command-guard.js';
+import { desiredKey, desiredRefusal, emergencyStopRefusal, stopRefusal } from './team-state-guard.js';
 
 const JHT_HOME = process.env.JHT_HOME || join(process.env.HOME || '/jht_home', '.jht');
 const CLOUD_FILE = join(JHT_HOME, 'cloud.json');
@@ -47,6 +49,22 @@ const WEEKLY_HALT_FLAG = join(JHT_HOME, '.weekly-halt.flag');
 const TEAM_HALTED_FLAG = join(JHT_HOME, '.team-halted.flag');
 const JHT_BIN = '/app/cli/bin/jht.js';
 const DEFAULT_BASE_URL = 'https://jobhunterteam.ai';
+// The starts, restarts and emergency stops already run (team-state-guard.js).
+const DONE_FILE = join(JHT_HOME, 'team-state-done.json');
+let defaultDone = null;
+function doneStore() {
+  if (!defaultDone) defaultDone = createDoneStore(DONE_FILE);
+  return defaultDone;
+}
+
+// A refusal is said once per reason and desire, not at every poll.
+const refusalsSaid = new Set();
+function sayRefusal(what, reason, key) {
+  const said = `${what}:${reason}:${key}`;
+  if (refusalsSaid.has(said)) return;
+  refusalsSaid.add(said);
+  log('error', `reconcile.${what}-refused`, { reason });
+}
 
 // Cadenza adattiva (vedi poll-tier.js): 5s solo dopo un cambio di should_run,
 // poi backoff ≤30s (cap a idle: il controllo start/stop resta reattivo).
@@ -114,7 +132,7 @@ function execJht(args) {
   });
 }
 
-async function applyAction(baseUrl, token, command, args) {
+async function applyAction(baseUrl, token, command, args, exec = execJht) {
   // Gate centrale .team-halted.flag: cancello PRIMA di start (così
   // watchdog/spawner possono partire) e creo DOPO stop (così watchdog
   // smette di respawn). Ordine importante: il flag deve essere coerente
@@ -122,7 +140,7 @@ async function applyAction(baseUrl, token, command, args) {
   if (command === 'started' || command === 'restarted') {
     try { await unlink(TEAM_HALTED_FLAG); } catch { /* not present */ }
   }
-  const r = await execJht(args);
+  const r = await exec(args);
   if (command === 'stopped' && r.ok) {
     try {
       await writeFile(
@@ -148,32 +166,59 @@ async function applyAction(baseUrl, token, command, args) {
   return { r, updates };
 }
 
-async function reconcile(baseUrl, token, state) {
+/**
+ * The full desired-state convergence (only in runTeamStateReconciler). `ctx`:
+ *   ownerId     user_id of cloud.json
+ *   serverNow() the server's clock (the poll reply's Date plus the time since)
+ *   done        the starts and restarts already run (createDoneStore)
+ *   exec        how `jht` runs (execJht; the tests pass their own)
+ */
+export async function reconcile(baseUrl, token, state, ctx) {
+  const exec = ctx.exec || execJht;
+  const check = { ownerId: ctx.ownerId, serverNow: ctx.serverNow(), done: ctx.done };
+
   // Priorità 1: restart (token cambiato)
   if (state.restart_token && state.restart_token !== state.last_restart_token) {
-    log('info', 'reconcile.restart', { token: state.restart_token });
-    const { updates } = await applyAction(baseUrl, token, 'restarted', ['team', 'restart']);
-    updates.last_restart_token = state.restart_token;
-    await apiCall('PATCH', baseUrl, token, '/api/team-state', updates).catch((err) =>
-      log('error', 'reconcile.observe-write-failed', { err: err.message })
-    );
-    return 'restarted';
+    const refusal = desiredRefusal('restart', state, check);
+    if (refusal) {
+      sayRefusal('restart', refusal, state.restart_token);
+    } else {
+      log('info', 'reconcile.restart', { token: state.restart_token });
+      ctx.done.add(desiredKey('restart', state));
+      const { updates } = await applyAction(baseUrl, token, 'restarted', ['team', 'restart'], exec);
+      updates.last_restart_token = state.restart_token;
+      await apiCall('PATCH', baseUrl, token, '/api/team-state', updates).catch((err) =>
+        log('error', 'reconcile.observe-write-failed', { err: err.message })
+      );
+      return 'restarted';
+    }
   }
 
   // Priorità 2: start (desired true, observed false)
-  if (state.should_run && !state.is_running) {
+  if (state.should_run === true && !state.is_running) {
+    const refusal = desiredRefusal('start', state, check);
+    if (refusal) {
+      sayRefusal('start', refusal, state.desired_changed_at);
+      return null;
+    }
     log('info', 'reconcile.start');
-    const { updates } = await applyAction(baseUrl, token, 'started', ['team', 'start']);
+    ctx.done.add(desiredKey('start', state));
+    const { updates } = await applyAction(baseUrl, token, 'started', ['team', 'start'], exec);
     await apiCall('PATCH', baseUrl, token, '/api/team-state', updates).catch((err) =>
       log('error', 'reconcile.observe-write-failed', { err: err.message })
     );
     return 'started';
   }
 
-  // Priorità 3: stop (desired false, observed true)
-  if (!state.should_run && state.is_running) {
+  // Priorità 3: stop (desired false, observed true) — the safe direction: owner and closed field only.
+  if (state.should_run === false && state.is_running) {
+    const refusal = stopRefusal(state, ctx.ownerId);
+    if (refusal) {
+      sayRefusal('stop', refusal, 'stop');
+      return null;
+    }
     log('info', 'reconcile.stop');
-    const { updates } = await applyAction(baseUrl, token, 'stopped', ['team', 'stop']);
+    const { updates } = await applyAction(baseUrl, token, 'stopped', ['team', 'stop'], exec);
     await apiCall('PATCH', baseUrl, token, '/api/team-state', updates).catch((err) =>
       log('error', 'reconcile.observe-write-failed', { err: err.message })
     );
@@ -307,7 +352,7 @@ export function emergencyStopRequired(state) {
     && (!Number.isFinite(completed) || requested > completed);
 }
 
-export async function reconcileEmergencyStop(config, state) {
+export async function reconcileEmergencyStop(config, state, { done = doneStore(), exec = execJht } = {}) {
   if (!emergencyStopRequired(state)) {
     return { ok: true, action: null };
   }
@@ -317,6 +362,16 @@ export async function reconcileEmergencyStop(config, state) {
   const token = config.token;
   if (!baseUrl || !token) return { ok: false, skipped: 'missing-credentials' };
 
+  // However old the request (stopping late is the safe direction): only the
+  // paired user's row, and once a stop of that request has succeeded, never
+  // again, even if completed_at is put back. A failed stop is tried again at
+  // the next round, as before: it is the safe direction that must not stall.
+  const ownerId = typeof config.user_id === 'string' ? config.user_id : null;
+  const refusal = emergencyStopRefusal(state, { ownerId, done });
+  if (refusal) {
+    sayRefusal('emergency-stop', refusal, state.emergency_stop_requested_at);
+    return { ok: false, refused: refusal };
+  }
   log('warn', 'reconcile.emergency-stop');
   // Nessun valore proveniente dal web entra negli argomenti: questa è una
   // capacità stop-only, non la riapertura del command bus generico.
@@ -325,9 +380,16 @@ export async function reconcileEmergencyStop(config, state) {
     token,
     'stopped',
     ['team', 'stop'],
+    exec,
   );
   if (r.ok) {
     updates.emergency_stop_completed_at = state.emergency_stop_requested_at;
+    // Written down after the stop has worked: an unwritable store does not undo a stop.
+    try {
+      done.add(desiredKey('emergency-stop', state));
+    } catch (err) {
+      log('error', 'emergency-stop.done-store-failed', { err: err.message });
+    }
   }
   await apiCall('PATCH', baseUrl, token, '/api/team-state', updates).catch((err) =>
     log('error', 'emergency-stop.observe-write-failed', { err: err.message })
@@ -349,6 +411,11 @@ export async function runTeamStateReconciler() {
   }
 
   log('info', 'startup.begin', { baseUrl, userId: config.user_id });
+  const ownerId = typeof config.user_id === 'string' ? config.user_id : null;
+  if (!ownerId) {
+    log('error', 'startup.no-owner', { reason: 'cloud.json has no user_id: nothing will be started, restarted or stopped' });
+  }
+  const done = doneStore();
 
   let shuttingDown = false;
 
@@ -410,8 +477,14 @@ export async function runTeamStateReconciler() {
 
     let backoff = tierInterval(lastActivityAt, { allowDeepIdle: false });
     try {
-      const r = await apiCall('GET', baseUrl, token, '/api/team-state');
+      const reply = await fetch(`${baseUrl}/api/team-state`, { headers: cloudSyncHeaders(token) });
+      const r = await reply.json().catch(() => ({}));
+      if (!reply.ok) throw new Error(`GET /api/team-state → HTTP ${reply.status}: ${r.error || 'unknown'}`);
       consecutiveErrors = 0;
+      // The server's clock: the reply's Date, moved on while the actions run.
+      const fetchedAt = performance.now();
+      const base = serverClock(reply.headers?.get?.('date') ?? null) ?? Date.now();
+      const serverNow = () => base + (performance.now() - fetchedAt);
       const state = r.state;
       if (state) {
         if (state.should_run !== lastShouldRun) {
@@ -419,7 +492,7 @@ export async function runTeamStateReconciler() {
           lastActivityAt = Date.now();
           backoff = tierInterval(lastActivityAt, { allowDeepIdle: false });
         }
-        await reconcile(baseUrl, token, state);
+        await reconcile(baseUrl, token, state, { ownerId, serverNow, done });
         if (Date.now() - lastHeartbeatAt >= HEARTBEAT_EVERY_MS) {
           await apiCall('PATCH', baseUrl, token, '/api/team-state', {
             last_heartbeat_at: new Date().toISOString(),

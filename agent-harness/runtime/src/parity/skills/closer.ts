@@ -35,7 +35,7 @@
  */
 
 import { createHash } from "node:crypto";
-import { readFileSync, statSync } from "node:fs";
+import { mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
 import { ArgvError, parseArgv, pyRepr, type CommandSpec } from "../../db/argv.ts";
@@ -359,6 +359,15 @@ function loadRule(path: string): Rule {
 
 /** The two modes the CLOSER can run in; anything else is refused, not guessed. */
 export const AUTO_APPLY_MODES = ["authorised", "dry_run"] as const;
+
+/**
+ * The cap of the applications authorised from the website (`apply_gate.py`,
+ * 22/10): its own count, a prudent default of 5 a day, `applications.auto_apply.
+ * max_web_per_day` to change it. Only a position whose flag was turned on with
+ * `apply_requested_by = user_web` counts toward it.
+ */
+export const DEFAULT_MAX_WEB_PER_DAY = 5;
+export const WEB_ORIGIN = "user_web";
 const HELD_CHECKPOINT_STATES = ["blocked_human", "dry_run"];
 const RETRY_LATER_STATE = "retry_later";
 const EMAIL_UNRESOLVED_STATES = ["send_started", "send_outcome_unknown", "receipt_incomplete"];
@@ -445,7 +454,17 @@ export function consentVerdict(options: CloserOptions): Verdict {
       { max_per_day: pyReprValue(cap) },
     );
   }
-  return verdict(true, "consent_granted", "the user consented to auto-apply", { mode, max_per_day: cap });
+  // There is no "no cap" here: the cap of the website is a brake, a positive int.
+  const webCap = Object.hasOwn(auto, "max_web_per_day") ? auto["max_web_per_day"] : DEFAULT_MAX_WEB_PER_DAY;
+  if (!(typeof webCap === "number" && Number.isInteger(webCap) && webCap >= 1)) {
+    return verdict(
+      false,
+      "consent_cap_invalid",
+      "`applications.auto_apply.max_web_per_day` is neither absent nor a positive integer: refusing rather than guessing the cap of the applications authorised from the website",
+      { max_web_per_day: pyReprValue(webCap) },
+    );
+  }
+  return verdict(true, "consent_granted", "the user consented to auto-apply", { mode, max_per_day: cap, max_web_per_day: webCap });
 }
 
 interface PositionRow {
@@ -540,7 +559,7 @@ function tableExists(db: Database, name: string): boolean {
  * email together, one per position — a recorded send, an email whose outcome
  * is still open, a reservation not released. The SQL is the script's.
  */
-function sentToday(db: Database, rule: Rule): number {
+function sentToday(db: Database, rule: Rule, webOnly = false): number {
   if (rule.automatedError) throw new Error(`automated channels unreadable: ${rule.automatedError}`);
   const marks = rule.automated.map(() => "?").join(",");
   const parts = [
@@ -558,7 +577,9 @@ function sentToday(db: Database, rule: Rule): number {
   if (tableExists(db, "apply_cap_reservations")) {
     parts.push(`SELECT position_id FROM apply_cap_reservations WHERE state = 'reserved' AND date(reserved_at, 'localtime') = date('now', 'localtime')`);
   }
-  const row = db.prepare(`SELECT COUNT(*) AS n FROM (${parts.join(" UNION ")})`).get(...params) as { n: number };
+  const where = webOnly ? " WHERE u.position_id IN (SELECT id FROM positions WHERE apply_requested_by = ?)" : "";
+  if (webOnly) params.push(WEB_ORIGIN);
+  const row = db.prepare(`SELECT COUNT(*) AS n FROM (${parts.join(" UNION ")}) u${where}`).get(...params) as { n: number };
   return Number(row.n);
 }
 
@@ -720,6 +741,9 @@ export interface Queue {
   max_per_day: unknown;
   sent_today: number | null;
   remaining_today: number | null;
+  max_web_per_day: unknown;
+  web_sent_today: number | null;
+  remaining_web_today: number | null;
   positions: QueueItem[];
   held: Array<{ position_id: number; reason: string }>;
 }
@@ -731,26 +755,42 @@ export interface Queue {
  * says `queue_unreadable`, never `queue_empty` (CL-04).
  */
 export function applicationQueue(options: CloserOptions): { queue: Queue; stderr: string } {
-  const out: Queue = { ready: false, reason: "", detail: "", mode: null, max_per_day: null, sent_today: null, remaining_today: null, positions: [], held: [] };
+  const out: Queue = {
+    ready: false,
+    reason: "",
+    detail: "",
+    mode: null,
+    max_per_day: null,
+    sent_today: null,
+    remaining_today: null,
+    max_web_per_day: null,
+    web_sent_today: null,
+    remaining_web_today: null,
+    positions: [],
+    held: [],
+  };
   const consent = consentVerdict(options);
   if (!consent.allowed) return { queue: { ...out, reason: consent.reason, detail: consent.detail }, stderr: "" };
   out.mode = consent.context["mode"];
   out.max_per_day = consent.context["max_per_day"];
+  out.max_web_per_day = consent.context["max_web_per_day"];
   const rulePath = options.rulePath ?? RULE_COPY;
   const rule = loadRule(rulePath);
   const db = options.db();
-  let rows: Array<{ id: number; url: unknown; apply_requested_at: unknown; cv_pdf_path: unknown }>;
+  let rows: Array<{ id: number; url: unknown; apply_requested_at: unknown; cv_pdf_path: unknown; apply_requested_by: unknown }>;
   let sent: number;
+  let webSent: number;
   try {
     rows = db
       .prepare(
-        "SELECT p.id, p.url, p.apply_requested_at, a.cv_pdf_path FROM positions p LEFT JOIN applications a ON a.position_id = p.id " +
+        "SELECT p.id, p.url, p.apply_requested_at, a.cv_pdf_path, p.apply_requested_by FROM positions p LEFT JOIN applications a ON a.position_id = p.id " +
           "WHERE p.apply_requested = 1 AND p.status = ? ORDER BY p.apply_requested_at, p.id",
       )
       .all(rule.authorisable) as typeof rows;
     // The cap counts only what the automation sent: a send by the person
     // themselves does not use its quota.
     sent = sentToday(db, rule);
+    webSent = sentToday(db, rule, true);
   } catch (error) {
     return { queue: { ...out, reason: "queue_unreadable", detail: `cannot read the application queue: ${(error as Error).message}` }, stderr: "" };
   }
@@ -758,7 +798,9 @@ export function applicationQueue(options: CloserOptions): { queue: Queue; stderr
   const held: Queue["held"] = [];
   const essentials = essentialsHold(options, db);
   const layout = options.cvLayout ?? (() => "cv_pdf_check_unavailable" as const);
-  for (const { id: pid, url, apply_requested_at: askedAt, cv_pdf_path: cvPdf } of rows) {
+  const webCap = out.max_web_per_day as number | null;
+  let webTaken = 0;
+  for (const { id: pid, url, apply_requested_at: askedAt, cv_pdf_path: cvPdf, apply_requested_by: origin } of rows) {
     const v = positionVerdict(db, rule, rulePath, pid);
     if (!v.allowed) {
       held.push({ position_id: pid, reason: v.reason });
@@ -787,12 +829,27 @@ export function applicationQueue(options: CloserOptions): { queue: Queue; stderr
       held.push({ position_id: pid, reason: hold });
       continue;
     }
+    // The applications authorised from the website have a cap of their own: the
+    // first of them that fit today are taken, the others wait, still authorised.
+    if (origin === WEB_ORIGIN && webCap !== null) {
+      if (webSent + webTaken >= webCap) {
+        held.push({ position_id: pid, reason: "daily_web_cap_reached" });
+        continue;
+      }
+      webTaken += 1;
+    }
     positions.push({ position_id: pid, url: pyStrip(pyStrValue(url)), cv_pdf_path: cv });
   }
   const cap = out.max_per_day as number | null;
   const remaining = cap === null ? null : Math.max(0, cap - sent);
-  const queue: Queue = { ...out, sent_today: sent, remaining_today: remaining, positions, held };
-  if (positions.length === 0) Object.assign(queue, { reason: "queue_empty", detail: "no authorised position can be taken now" });
+  const remainingWeb = webCap === null ? null : Math.max(0, webCap - webSent);
+  const queue: Queue = { ...out, sent_today: sent, remaining_today: remaining, web_sent_today: webSent, remaining_web_today: remainingWeb, positions, held };
+  if (positions.length === 0 && held.some((h) => h.reason === "daily_web_cap_reached")) {
+    Object.assign(queue, {
+      reason: "daily_web_cap_reached",
+      detail: "the daily cap of applications authorised from the website is reached; those wait for tomorrow, still authorised",
+    });
+  } else if (positions.length === 0) Object.assign(queue, { reason: "queue_empty", detail: "no authorised position can be taken now" });
   else if (remaining !== null && remaining <= 0) {
     Object.assign(queue, { reason: "daily_cap_reached", detail: "the daily cap of automated applications is reached; the queue waits for tomorrow" });
   } else Object.assign(queue, { ready: true, reason: "queue_ready", detail: `${positions.length} authorised position(s) can be taken` });
@@ -882,6 +939,36 @@ function emit(v: Verdict, asJson: boolean): ScriptResult {
   return v.allowed ? { stdout: `${logLine(v)}\n`, exitCode: 0 } : { stdout: "", stderr: `${logLine(v)}\n`, exitCode: 1 };
 }
 
+const WEB_CAP_NOTICE_MARKER = "apply-web-cap-notified";
+
+/**
+ * `web_cap_notice`: the one notice a day that applications authorised from the
+ * website wait for the cap. The day (the LOCAL one) is written to
+ * `state/apply-web-cap-notified` BEFORE the notice is handed over: a notice lost
+ * is better than the same one at every iteration of the queue.
+ */
+export function webCapNotice(q: Queue, options: CloserOptions, today?: string): { waiting: number; max_web_per_day: number | null } | null {
+  const waiting = q.held.filter((h) => h.reason === "daily_web_cap_reached").length;
+  if (!waiting) return null;
+  const now = options.now?.() ?? new Date();
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const day = today ?? `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+  const dir = pyPath(options.jhtHome, "state");
+  const marker = pyPath(options.jhtHome, "state", WEB_CAP_NOTICE_MARKER);
+  try {
+    if (readFileSync(marker, "utf8").trim() === day) return null;
+  } catch {
+    // no marker yet
+  }
+  try {
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(marker, day, "utf8");
+  } catch {
+    return null; // without a record the notice would repeat at every iteration
+  }
+  return { waiting, max_web_per_day: q.max_web_per_day as number | null };
+}
+
 /** `apply_gate.py {consent,position,queue} [position_id] [--json]`. */
 export function applyGate(args: string[], options: CloserOptions): ScriptResult {
   const refusal = pathFlagRefusal("apply_gate", args, ["--db", "--config"], ["--json"]);
@@ -896,7 +983,8 @@ export function applyGate(args: string[], options: CloserOptions): ScriptResult 
   if (check === "queue") {
     const { queue: q, stderr } = applicationQueue(options);
     const code = q.ready ? 0 : 1;
-    if (asJson) return { stdout: `${pyJson(q, { ensureAscii: false })}\n`, stderr, exitCode: code };
+    const notice = webCapNotice(q, options);
+    if (asJson) return { stdout: `${pyJson(notice ? { ...q, web_cap_notice: notice } : q, { ensureAscii: false })}\n`, stderr, exitCode: code };
     if (q.ready) return { stdout: `[apply-gate] QUEUE ${q.reason} — ${q.detail} (remaining_today=${pyStrValue(q.remaining_today)})\n`, stderr, exitCode: 0 };
     return { stdout: "", stderr: `${stderr}[apply-gate] QUEUE ${q.reason} — ${q.detail}\n`, exitCode: 1 };
   }
