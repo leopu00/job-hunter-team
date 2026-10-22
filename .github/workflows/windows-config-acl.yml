@@ -13,6 +13,7 @@ on:
       - 'web/public/install.ps1'
       - 'tests/test_windows_native_runtime_pieces.py'
       - 'tests/test_podman_windows_probe.py'
+      - 'tests/test_windows_powershell51_json.py'
       - 'tests/conftest.py'
       - 'tests/requirements-ci.txt'
       - '.github/workflows/windows-config-acl.yml'
@@ -42,8 +43,11 @@ jobs:
       - name: Install pytest
         run: pip install --require-hashes -r tests/requirements-ci.txt
       # A skip here is a failure: with a shell missing the step would be green
-      # having proved nothing. 43 = 41 cases of the native file (its shim only
-      # under Windows PowerShell 5.1) + the probe's shim under powershell and pwsh; the count may grow, never shrink.
+      # having proved nothing. 57 = 41 cases of the native file (its shim only
+      # under Windows PowerShell 5.1) + the probe's shim under powershell and pwsh
+      # + 14 cases of the JSON the scripts read from Podman, under both shells:
+      # the app runs them with Windows PowerShell 5.1, whose ConvertFrom-Json
+      # does not enumerate an array. The count may grow, never shrink.
       - name: Native Windows pieces of the Podman runtime
         shell: pwsh
         env:
@@ -51,10 +55,11 @@ jobs:
         run: |
           $out = python -m pytest tests/test_windows_native_runtime_pieces.py `
             'tests/test_podman_windows_probe.py::test_native_shim_compiles_and_propagates_backend_exit_code' `
+            tests/test_windows_powershell51_json.py `
             -n 4 -p no:cacheprovider -rs 2>&1
           $code = $LASTEXITCODE
           $out | ForEach-Object { "$_" }
           if ($code -ne 0) { exit $code }
           $summary = "$($out[-1])"
           if ($summary -notmatch '^=+ (\d+) passed(, \d+ warnings?)? in [0-9.]+s') { throw "unexpected pytest summary: $summary" }
-          if ([int]$Matches[1] -lt 43) { throw "only $($Matches[1]) native Windows tests ran, expected at least 43" }
+          if ([int]$Matches[1] -lt 57) { throw "only $($Matches[1]) native Windows tests ran, expected at least 57" }
