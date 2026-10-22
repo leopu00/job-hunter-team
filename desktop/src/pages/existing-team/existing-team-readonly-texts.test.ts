@@ -1,6 +1,7 @@
 // @vitest-environment node
 import { readdirSync, readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
+import { describeError } from "../../lib/error-catalog";
 import { EXISTING_TEAM_READONLY_TEXT } from "../../lib/existing-team-readonly.i18n";
 import { EXISTING_TEAM_STATUS_TEXT } from "./existing-team-status.i18n";
 import { ONBOARDING_TEXT } from "../../onboarding/onboarding.i18n";
@@ -56,6 +57,14 @@ describe("the disabled judgement controls of the read-only view", () => {
     expect(text, `${locale}: ${text}`).not.toContain(button);
     expect(text, `${locale}: ${text}`).not.toMatch(PROMISE[locale]);
     expect(text, locale).not.toMatch(/\d/);
+  });
+
+  it.each(Object.keys(ASSISTANT))("%s: the refusal of a write in a read-only team does not send the person to a button either", (locale) => {
+    const copy = describeError("position_write_read_only", { locale: locale as never });
+    const button = ONBOARDING_TEXT[locale as keyof typeof ONBOARDING_TEXT].existingTeam.confirmAndLink;
+    expect(copy.action, `${locale}: ${copy.action}`).not.toContain(button);
+    expect(copy.action, `${locale}: ${copy.action}`).not.toMatch(PROMISE[locale]);
+    expect(copy.text.trim(), locale).not.toBe("");
   });
 
   function sources(dir: string): string[] {
