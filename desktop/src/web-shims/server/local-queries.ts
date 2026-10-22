@@ -54,6 +54,7 @@ export const getSourceDistributionLocal = localOnly("getSourceDistributionLocal"
 export const getTeamActivityLocal = localOnly("getTeamActivityLocal");
 export const getTeamActivityLogLocal = localOnly("getTeamActivityLogLocal");
 export const getApplyRequestSignalsLocal = localOnly("getApplyRequestSignalsLocal");
+export const getWebSendsRecentLocal = localOnly("getWebSendsRecentLocal");
 export const sendUserChatLocal = localOnly("sendUserChatLocal");
 export const getScoutActivityLocal = localOnly("getScoutActivityLocal");
 export const getScorerActivityLocal = localOnly("getScorerActivityLocal");

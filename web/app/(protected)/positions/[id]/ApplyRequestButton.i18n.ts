@@ -78,6 +78,15 @@ export const T = {
     fr: "Autorisée : le CLOSER l'enverra à son prochain passage.",
     pt: "Autorizada: o CLOSER vai enviá-la na próxima ronda.",
   },
+  queued_tomorrow_desc: {
+    it: "In coda: parte domani. Oggi sono già partite {cap} candidature autorizzate dal sito, il limite giornaliero: questa resta autorizzata e parte domani. Non è un errore, e puoi ritirarla finché non parte.",
+    en: "Queued: it goes out tomorrow. {cap} applications authorised from the site have already gone out today, the daily limit: this one stays authorised and goes out tomorrow. It is not an error, and you can withdraw it until it goes.",
+    hu: "Sorban áll: holnap indul. Ma már {cap} a webről engedélyezett jelentkezés elment, ez a napi korlát: ez engedélyezve marad, és holnap megy el. Nem hiba, és visszavonhatod, amíg el nem megy.",
+    es: "En cola: sale mañana. Hoy ya han salido {cap} candidaturas autorizadas desde el sitio, el límite diario: esta sigue autorizada y sale mañana. No es un error, y puedes retirarla hasta que salga.",
+    de: "In der Warteschlange: geht morgen raus. Heute sind schon {cap} vom Web freigegebene Bewerbungen rausgegangen, das Tageslimit: Diese bleibt freigegeben und geht morgen raus. Das ist kein Fehler, und du kannst sie zurückziehen, bis sie rausgeht.",
+    fr: "En file d'attente : elle part demain. {cap} candidatures autorisées depuis le site sont déjà parties aujourd'hui, la limite quotidienne : celle-ci reste autorisée et part demain. Ce n'est pas une erreur, et tu peux la retirer tant qu'elle n'est pas partie.",
+    pt: "Em fila: sai amanhã. Hoje já saíram {cap} candidaturas autorizadas pelo site, o limite diário: esta continua autorizada e sai amanhã. Não é um erro, e podes retirá-la até sair.",
+  },
   withdraw: {
     it: "Ritira",
     en: "Withdraw",

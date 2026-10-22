@@ -33,7 +33,11 @@ import { WriteRequestButton } from "./WriteRequestButton";
 import { ApplyRequestButton } from "./ApplyRequestButton";
 import { isCloudDeploy } from "@/lib/deploy-mode";
 import { applyRequestState } from "@/lib/apply-request-rule";
-import { getApplyRequestSignals } from "@/lib/apply-request-signals";
+import {
+  getApplyRequestSignals,
+  getWebSendsRecent,
+} from "@/lib/apply-request-signals";
+import { WEB_ORIGIN } from "@/lib/apply-web-cap";
 import { CoverLetterRequestButton } from "./CoverLetterRequestButton";
 import { ExcludeButton } from "./ExcludeButton";
 import { RecheckButton } from "./RecheckButton";
@@ -304,6 +308,13 @@ export default async function PositionDetailPage({ params }: PageProps) {
       : null,
     ...(await getApplyRequestSignals(data.position.id)),
   });
+  // Il tetto giornaliero delle candidature autorizzate dal sito: solo se questa lo è e aspetta, si legge
+  // quante ne sono già partite oggi (il giorno lo decide il browser, che conosce quello dell'utente).
+  const webSentAt =
+    applyState.kind === "authorised" &&
+    data.position.apply_requested_by === WEB_ORIGIN
+      ? await getWebSendsRecent()
+      : [];
   // Sul cloud l'id del box è `legacy_id`; nel jobs.db la colonna non esiste e
   // l'id della riga È l'id del box, quello che la route si aspetta.
   const applyLegacyId =
@@ -1286,6 +1297,8 @@ export default async function PositionDetailPage({ params }: PageProps) {
             legacyId={applyLegacyId}
             state={applyState}
             twoStep={isCloudDeploy()}
+            authorisedBy={data.position.apply_requested_by ?? null}
+            webSentAt={webSentAt}
           />
         )}
         {position.legacy_id != null && (

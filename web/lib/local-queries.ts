@@ -3,6 +3,7 @@ import path from "path";
 import { getDb } from "./db";
 import { JHT_HOME } from "./jht-paths";
 import type { ApplyRequestSignals } from "./apply-request-rule";
+import { AUTOMATED_APPLIED_VIA, WEB_ORIGIN } from "./apply-web-cap";
 import { resolveCityPins } from "./city-coords";
 import { salaryPreference } from "./salary-source";
 import { likePattern, parsePositionQuery } from "./position-search";
@@ -1440,6 +1441,32 @@ export function getScrittoreActivityLocal(ws: string) {
     completed_today,
     avg_critic_score,
   };
+}
+
+// [JHT-CLOSER] Gli istanti delle candidature automatiche partite negli ultimi due giorni la cui
+// autorizzazione l'ha data il sito (`apply_requested_by = user_web`): servono a dire se il tetto
+// giornaliero del sito è pieno. Gli stessi canali automatici del gate (dal JSON condiviso).
+export function getWebSendsRecentLocal(ws: string): string[] {
+  const db = getDb(ws);
+  const marks = AUTOMATED_APPLIED_VIA.map(() => "?").join(",");
+  if (!marks) return [];
+  const rows = db
+    .prepare(
+      `SELECT a.applied_at AS applied_at
+         FROM applications a
+         JOIN positions p ON p.id = a.position_id
+        WHERE a.applied = 1
+          AND a.applied_via IN (${marks})
+          AND p.apply_requested_by = ?
+          AND datetime(a.applied_at) >= datetime('now', '-2 days')
+        LIMIT 100`,
+    )
+    .all(...AUTOMATED_APPLIED_VIA, WEB_ORIGIN) as Array<{
+    applied_at: string | null;
+  }>;
+  return rows
+    .map((r) => r.applied_at)
+    .filter((v): v is string => typeof v === "string");
 }
 
 // [JHT-CLOSER] Cosa sa il box di una candidatura autorizzata: l'ultima

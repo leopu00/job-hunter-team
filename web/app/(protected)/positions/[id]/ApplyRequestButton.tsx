@@ -8,6 +8,7 @@ import { useLocale } from "@/lib/use-locale";
 import { makeT } from "@/lib/i18n-dict";
 import { useReadOnlyActions } from "@/lib/read-only-actions";
 import type { ApplyRequestState } from "@/lib/apply-request-rule";
+import { WEB_DAILY_CAP, queuedTomorrowAt } from "@/lib/apply-web-cap";
 import {
   requestFailureMessage,
   requestFailureReason,
@@ -172,6 +173,7 @@ export function ApplyRequestView({
   error = null,
   confirming = false,
   confirmation = null,
+  queuedTomorrow = false,
   onAuthorise,
   onConfirm,
   onDismiss,
@@ -186,6 +188,8 @@ export function ApplyRequestView({
   confirming?: boolean;
   /** Il testo che il server ha composto per questa conferma (il ruolo e l'azienda) e fin quando vale. */
   confirmation?: { summary: string; expiresText: string | null } | null;
+  /** Autorizzata dal sito, ma il tetto di oggi è pieno: parte domani. Non è partita e non è un errore. */
+  queuedTomorrow?: boolean;
   onAuthorise?: () => void;
   onConfirm?: () => void;
   onDismiss?: () => void;
@@ -227,8 +231,10 @@ export function ApplyRequestView({
       actions.push(button(t("authorise"), onAuthorise, "primary", "authorise"));
       break;
     case "authorised":
-      description = t("authorised_desc");
-      accent = "var(--color-green)";
+      description = queuedTomorrow
+        ? t("queued_tomorrow_desc").replace("{cap}", String(WEB_DAILY_CAP))
+        : t("authorised_desc");
+      accent = queuedTomorrow ? "var(--color-yellow)" : "var(--color-green)";
       actions.push(button(t("withdraw"), onWithdraw, "quiet", "withdraw"));
       break;
     case "sending":
@@ -273,6 +279,9 @@ export function ApplyRequestView({
   return (
     <section
       data-apply-state={state.kind}
+      data-queued-tomorrow={
+        state.kind === "authorised" && queuedTomorrow ? "true" : undefined
+      }
       className="rounded-lg border p-3"
       style={{ borderColor: accent }}
     >
@@ -365,9 +374,15 @@ export function ApplyRequestButton({
   legacyId,
   state,
   twoStep = false,
+  authorisedBy = null,
+  webSentAt = [],
 }: {
   legacyId: number;
   state: ApplyRequestState;
+  /** Chi ha acceso il flag (`apply_requested_by`): il tetto giornaliero vale per il sito. */
+  authorisedBy?: string | null;
+  /** Gli istanti delle candidature automatiche partite di recente per autorizzazione del sito. */
+  webSentAt?: readonly string[];
   /** Sul sito: l'autorizzazione è a due tempi e il testo della conferma lo compone il server. */
   twoStep?: boolean;
 }) {
@@ -383,6 +398,16 @@ export function ApplyRequestButton({
     expiresAt: string | null;
   } | null>(null);
   const [isPending, startTransition] = useTransition();
+
+  // «Oggi» è il giorno dell'utente: si decide nel browser, dopo il montaggio, così il server e il client
+  // mostrano lo stesso testo alla prima resa.
+  const [now, setNow] = useState<Date | null>(null);
+  useEffect(() => setNow(new Date()), []);
+  const queuedTomorrow = queuedTomorrowAt(now, {
+    state,
+    authorisedBy,
+    sentAt: webSentAt,
+  });
 
   const fail = (
     action: "authorise" | "withdraw",
@@ -486,6 +511,7 @@ export function ApplyRequestButton({
       t={t}
       busy={sending || isPending}
       error={error}
+      queuedTomorrow={queuedTomorrow}
       confirming={twoStep ? pending !== null : confirming}
       confirmation={
         twoStep && pending ? { summary: pending.summary, expiresText } : null
