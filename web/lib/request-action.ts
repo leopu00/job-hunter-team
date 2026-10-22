@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/workspace";
-import { isCloudDeploy } from "@/lib/deploy-mode";
+import { requiresPublicOrigin } from "@/lib/deploy-mode";
 import { shouldRejectBrowserMutation, strictMutationRefusal } from "@/lib/csrf";
 import { DATABASE_REFUSALS } from "@/lib/request-action-codes";
 
@@ -291,7 +291,7 @@ export async function requestAction(
       secFetchSite: req.headers.get("sec-fetch-site"),
       hostOrigin: hostOriginOf(req),
       contentType,
-      requirePublicOrigin: isCloudDeploy(),
+      requirePublicOrigin: requiresPublicOrigin(),
     });
     if (refusal) return refuse(refusal);
   }

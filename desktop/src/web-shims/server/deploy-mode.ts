@@ -17,3 +17,12 @@ export function isCloudDeploy(): boolean {
 export function isLocalDeploy(): boolean {
   return false;
 }
+
+/**
+ * The single door's strict origin check wants `JHT_PUBLIC_ORIGIN` on a public cloud deploy. The desktop is
+ * "cloud" above only to read with the user's session: its calls to the routes never leave the app, so
+ * there is no public address to configure.
+ */
+export function requiresPublicOrigin(): boolean {
+  return false;
+}
