@@ -80,7 +80,8 @@ depends on your connection and your computer.
 - **macOS:** the app installs Podman with Homebrew, which must already be
   installed; without it, the app says so before installing anything.
 - **Linux:** the app uses Docker. Install Docker Engine and its Compose plugin
-  before you start, because installing them needs administrator rights.
+  before you start, because installing them needs administrator rights. The
+  Linux release is built, but this setup has not been tested yet.
 
 If a step fails, the screen gives its cause with **Retry the preparation** and
 **Show the log file**. If the app closes halfway, the next launch offers
@@ -94,7 +95,7 @@ If a step fails, the screen gives its cause with **Retry the preparation** and
 ## 📦 Path 2 — CLI installer
 
 Use this path for terminal-first setup, automation or remote administration.
-It installs the runtime and `jht` command, not the native office.
+It installs the runtime and `jht` command, not the desktop app.
 
 **Recommended: download, inspect, and preview before running (macOS / Linux /
 WSL2):**
@@ -207,7 +208,8 @@ the user-confirmation boundaries.
 ## 🛠️ Path 4 — From source (contributors)
 
 For contributors hacking on the repo. Install Docker with Compose, Node 24,
-Python 3.10 or newer and Godot 4.7, then follow
+Python 3.10 or newer, and Rust with the Tauri 2 prerequisites for your system
+for the desktop app, then follow
 [`.github/CONTRIBUTING.md`](../../.github/CONTRIBUTING.md) for the full PR
 workflow and conventions.
 
@@ -222,8 +224,11 @@ docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build
 # 3. Configure the dev container
 docker exec -it jht node /app/cli/bin/jht.js setup
 
-# 4. Open the native office (requires Godot 4.7)
-./game/tools/run.sh play
+# 4. Run the desktop app from source (see desktop/README.md); the root
+#    install provides what shared/ imports
+npm ci
+npm --prefix desktop ci
+npm --prefix desktop run tauri:dev
 
 # Or work in host mode if you're iterating on the web UI
 npm --prefix web run dev:host
@@ -242,7 +247,7 @@ For dev tasks specifically:
 # Start the team using the local source
 docker exec -it jht node /app/cli/bin/jht.js team start
 
-# Interaction happens in the desktop app (the game). For web-dev only,
+# Interaction happens in the desktop app (desktop/). For web-dev only,
 # run the cloud app on the host: cd web && npm run dev:host (:3001)
 
 # Tail logs
