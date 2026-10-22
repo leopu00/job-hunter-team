@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { readdirSync, readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { EXISTING_TEAM_READONLY_TEXT } from "../../lib/existing-team-readonly.i18n";
 import { EXISTING_TEAM_STATUS_TEXT } from "./existing-team-status.i18n";
@@ -38,12 +39,35 @@ describe("the read-only texts of an existing team", () => {
 });
 
 describe("the disabled judgement controls of the read-only view", () => {
-  it.each(Object.keys(ASSISTANT))("%s: say they come with an update, for a team connected with the onboarding's own button", (locale) => {
+  // Said before: judging «arrives in an update» / is done by connecting with «Confirm and connect». Neither is true yet.
+  const PROMISE: Record<string, RegExp> = {
+    it: /aggiornament|arriva con/i,
+    en: /update|arrives/i,
+    de: /update|kommt mit/i,
+    fr: /mise à jour|arrive avec/i,
+    es: /actualizaci|llega con/i,
+    pt: /atualiza|chega com/i,
+    hu: /frissít|érkezik/i,
+  };
+
+  it.each(Object.keys(ASSISTANT))("%s: say that the positions are only read and judging is not available yet, with no button to press and no promised update", (locale) => {
     const text = EXISTING_TEAM_READONLY_TEXT[locale as keyof typeof EXISTING_TEAM_READONLY_TEXT].judgementComing;
     const button = ONBOARDING_TEXT[locale as keyof typeof ONBOARDING_TEXT].existingTeam.confirmAndLink;
-    // the exact label the person clicks, so the sentence points at something that exists
-    expect(text, `${locale}: ${text}`).toContain(button);
-    // a coming feature, not a broken one: never a date, never "now"
+    expect(text, `${locale}: ${text}`).not.toContain(button);
+    expect(text, `${locale}: ${text}`).not.toMatch(PROMISE[locale]);
     expect(text, locale).not.toMatch(/\d/);
+  });
+
+  function sources(dir: string): string[] {
+    return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+      const path = `${dir}/${entry.name}`;
+      if (entry.isDirectory()) return sources(path);
+      return /\.(ts|tsx)$/.test(entry.name) && !/\.test\.|error-catalog/.test(entry.name) ? [path] : [];
+    });
+  }
+
+  it("holds only while the renderer does not call the native judgement command: the day it does, the sentence must change", () => {
+    const callers = sources("src").filter((file) => readFileSync(file, "utf8").includes("existing_team_position_write"));
+    expect(callers, "the renderer now writes judgements on a VPS: rewrite judgementComing (and this test)").toEqual([]);
   });
 });
