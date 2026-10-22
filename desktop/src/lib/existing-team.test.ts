@@ -2,6 +2,7 @@ import { Channel, invoke } from "@tauri-apps/api/core";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { confirmOnboardingSshHostKey, probeOnboardingSshHostKey } from "./onboarding-runtime";
 import {
+  directChatFailureCode,
   existingTeamBridge,
   existingTeamErrorCode,
   isTerminalExistingTeamError,
@@ -101,5 +102,19 @@ describe("existing team native bridge", () => {
     expect(existingTeamErrorCode("existing_team_identity_mismatch")).toBe("existing_team_identity_mismatch");
     expect(isTerminalExistingTeamError("existing_team_identity_mismatch")).toBe(true);
     expect(isTerminalExistingTeamError("ssh_auth_failed")).toBe(false);
+  });
+});
+
+describe("the direct chat after the team answered", () => {
+  it("passes the tunnel's own code to the dialog, and a bare not-ready becomes the Assistant not verified", () => {
+    for (const code of ["tunnel_start_failed", "tunnel_verify_failed", "tunnel_unavailable", "tunnel_path_unavailable"]) {
+      expect(directChatFailureCode({ state: "error", code })).toBe(code);
+      expect(existingTeamErrorCode({ code })).toBe(code);
+    }
+    expect(directChatFailureCode({ state: "error" })).toBe("existing_team_assistant_unverified");
+    expect(directChatFailureCode({ state: "error", code: "something_else" })).toBe("existing_team_assistant_unverified");
+    // ready, but the snapshot is still not reachable (a session down): not a tunnel
+    expect(directChatFailureCode({ state: "ready", code: "tunnel_verify_failed" })).toBe("existing_team_assistant_unverified");
+    expect(existingTeamErrorCode({ code: "existing_team_assistant_unverified" })).toBe("existing_team_assistant_unverified");
   });
 });

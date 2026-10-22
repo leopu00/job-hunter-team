@@ -129,6 +129,13 @@ export const EXISTING_TEAM_ERROR_CODES: ReadonlySet<string> = new Set([
   "existing_team_identity_mismatch",
   "existing_team_not_active",
   "existing_team_unavailable",
+  // The direct chat the connection opens after the team answers (direct_chat.rs): its own codes
+  // reach the dialog, not «unknown». A tunnel the app cannot open is not a team that cannot be reached.
+  "tunnel_start_failed",
+  "tunnel_verify_failed",
+  "tunnel_unavailable",
+  "tunnel_path_unavailable",
+  "existing_team_assistant_unverified",
   "existing_team_runtime_candidate_required",
   "existing_team_runtime_candidate_invalid",
   "existing_team_runtime_candidate_mismatch",
@@ -160,6 +167,16 @@ export function existingTeamErrorCode(error: unknown): string {
   if (!error || typeof error !== "object") return "unknown";
   const code = (error as { code?: unknown }).code;
   return typeof code === "string" && EXISTING_TEAM_ERROR_CODES.has(code) ? code : "unknown";
+}
+
+/**
+ * Why a connected team cannot be chatted with yet, as a code the dialog knows: the direct chat's
+ * own one (a tunnel the app could not open) when it gave one, else the Assistant not verified.
+ */
+export function directChatFailureCode(chat: { state: string; code?: string }): string {
+  return chat.state !== "ready" && chat.code && EXISTING_TEAM_ERROR_CODES.has(chat.code)
+    ? chat.code
+    : "existing_team_assistant_unverified";
 }
 
 export function isTerminalExistingTeamError(code: string): boolean {
