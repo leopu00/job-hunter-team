@@ -10,6 +10,7 @@ import {
   answerQuestion,
   controlAgent,
   pauseTeam,
+  readPanelHistory,
   readPanelList,
   readPanelScreen,
   readTeamState,
@@ -19,6 +20,7 @@ import {
   type AnswerResult,
   type AgentAction,
   type Outcome,
+  type PanelHistory,
   type PanelList,
   type PauseExit,
   type TeamControlState,
@@ -30,6 +32,7 @@ import type { PageProps } from "../types";
 import { AGENTS_PANEL_TEXT, type AgentsPanelText } from "./AgentsPanel.i18n";
 import { UsageLine, UsageShort } from "./AgentUsage";
 import { QuestionList, QuestionMarks, questionsSummary } from "./AgentQuestions";
+import { Lanes, SessionHistory } from "./AgentHistory";
 
 // The chat with the three agents the person talks to is its own component,
 // mounted here when it exists in the build (it is optional, as the office's
@@ -392,6 +395,25 @@ function Confirm({
   );
 }
 
+const VIEW_KEY = "jht.agents.view";
+
+/** The view the person chose last, a convenience only: without storage the list is shown. */
+function readView(): "list" | "lanes" {
+  try {
+    return window.localStorage.getItem(VIEW_KEY) === "lanes" ? "lanes" : "list";
+  } catch {
+    return "list";
+  }
+}
+
+function rememberView(view: "list" | "lanes"): void {
+  try {
+    window.localStorage.setItem(VIEW_KEY, view);
+  } catch {
+    // Not remembered: the next time starts on the list.
+  }
+}
+
 /**
  * «Agenti»: the team's agents on this computer or on its VPS, sorted by who
  * needs the person first, with their state, their terminal and, outside the
@@ -410,15 +432,19 @@ export default function AgentsPanel({ search }: PageProps) {
   const [acting, setActing] = useState(false);
   const [notices, setNotices] = useState<Record<string, Notice>>({});
   const [now, setNow] = useState(() => Date.now());
+  // The previous sessions and the last day's lanes: read with the list, and never a reason to fail it.
+  const [history, setHistory] = useState<Outcome<PanelHistory> | null>(null);
+  const [view, setView] = useState<"list" | "lanes">(readView);
   const latest = useRef(0);
 
   const read = useCallback(async () => {
     const mine = ++latest.current;
     setBusy(true);
-    const [listed, state] = await Promise.all([readPanelList(), readTeamState()]);
+    const [listed, state, past] = await Promise.all([readPanelList(), readTeamState(), readPanelHistory()]);
     if (latest.current !== mine) return;
     setList(listed);
     setTeam(state.ok ? state.value : null);
+    setHistory(past);
     setNow(Date.now());
     setBusy(false);
   }, []);
@@ -638,160 +664,185 @@ export default function AgentsPanel({ search }: PageProps) {
             </p>
           )}
           <p className="text-[11px] mb-2 text-[var(--color-muted)]">{fill(t.readAt, { time: stamp(list.at) })}</p>
+          <div role="group" aria-label={t.viewLabel} className="flex gap-2 mb-2">
+            {(["list", "lanes"] as const).map((name) => (
+              <button
+                key={name}
+                type="button"
+                data-testid={`panel-view-${name}`}
+                aria-pressed={view === name}
+                onClick={() => {
+                  setView(name);
+                  rememberView(name);
+                }}
+                className="text-[11px] font-semibold uppercase tracking-widest px-3 py-1 rounded border"
+                style={{
+                  borderColor: view === name ? "var(--color-white)" : "var(--color-border)",
+                  color: view === name ? "var(--color-white)" : "var(--color-muted)",
+                }}
+              >
+                {name === "list" ? t.viewList : t.viewLanes}
+              </button>
+            ))}
+          </div>
 
-          <div className="flex flex-col md:flex-row gap-3 min-h-0">
-            <ul aria-label={t.title} className="md:w-[260px] shrink-0 flex flex-col gap-px rounded border overflow-hidden" style={{ borderColor: "var(--color-border)", opacity: busy ? 0.6 : 1 }}>
-              {rows.map((row) => {
-                const active = current?.session === row.session;
-                return (
-                  <li key={row.session}>
-                    <button
-                      type="button"
-                      data-testid={`panel-row-${row.session}`}
-                      data-state={row.agent ? row.agent.state.state : "down"}
-                      title={row.agent ? identityLine(t, row.agent.identity, where) : undefined}
-                      aria-current={active ? "true" : undefined}
-                      onClick={() => {
-                        setSelected(row.session);
-                        setTab("terminal");
-                      }}
-                      className="w-full text-left px-3 py-1.5 flex items-center gap-2"
-                      style={{ background: active ? "var(--color-card)" : "transparent" }}
-                    >
-                      <Led row={row} />
-                      <span className="text-[11px] font-semibold tracking-wider w-[110px] shrink-0" style={{ color: isUp(row) ? "var(--color-white)" : "var(--color-muted)" }}>
-                        {row.session}
-                      </span>
-                      <span className="text-[11px] min-w-0 leading-snug break-words" style={{ color: "var(--color-muted)" }}>
-                        {stateLine(t, row)}
-                        {isUp(row) && <UsageShort t={t} usage={row.agent!.usage} />}
-                        {isUp(row) && <QuestionMarks t={t} questions={row.agent!.questions} />}
-                      </span>
-                    </button>
-                    {notices[row.session] && !notices[row.session].ok && (
-                      <p role="alert" className="px-3 pb-1 text-[11px] text-[var(--color-red)]">
-                        {notices[row.session].text}
-                      </p>
-                    )}
-                  </li>
-                );
-              })}
-            </ul>
-
-            {current && (
-              <section className="flex-1 min-w-0 rounded border p-3" style={{ borderColor: "var(--color-border)" }} aria-label={current.session}>
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2">
-                      <Led row={current} />
-                      <span className="text-[13px] font-bold tracking-widest" style={{ color: "var(--color-white)" }}>
-                        {current.session}
-                      </span>
-                      <span className="text-[11px] uppercase tracking-widest" style={{ color: current.agent ? "var(--color-green)" : "var(--color-dim)" }}>
-                        {isUp(current) ? t.up : current.heldByUser ? t.heldByUser : t.down}
-                      </span>
-                    </div>
-                    <p
-                      data-testid="panel-state"
-                      className="text-[11px] mt-1"
-                      style={{ color: current.agent ? TONE[describeAgentState(current.agent.state, appLocale()).tone] : "var(--color-dim)" }}
-                    >
-                      {stateLine(t, current)}
-                    </p>
-                    {current.agent && (
-                      <p data-testid="panel-identity" className="text-[11px] mt-0.5 text-[var(--color-muted)]">
-                        {identityLine(t, current.agent.identity, where)}
-                      </p>
-                    )}
-                    {current.agent && (
-                      <p
-                        data-testid="panel-times"
-                        className="text-[11px] mt-0.5 text-[var(--color-muted)]"
-                        title={`${fill(t.started, { time: current.agent.created === null ? "—" : fullStamp(current.agent.created * 1000) })} · ${fill(t.activity, { time: current.agent.activity === null ? "—" : fullStamp(current.agent.activity * 1000) })}`}
-                      >
-                        {fill(t.started, { time: clock(current.agent.created) })} · {fill(t.activity, { time: ago(current.agent.activity) })}
-                        {current.agent.activity !== null &&
-                          current.agent.state.state !== "lavora" &&
-                          now - current.agent.activity * 1000 < MOVING_MS && (
-                            <span data-testid="panel-moving"> · {fill(t.screenMoving, { seconds: Math.max(0, Math.round((now - current.agent.activity * 1000) / 1000)) })}</span>
-                          )}
-                      </p>
-                    )}
-                    {isUp(current) && <UsageLine t={t} usage={current.agent!.usage} />}
-                    {isUp(current) && (
-                      <QuestionList
-                        t={t}
-                        questions={current.agent!.questions}
-                        readOnly={readOnly}
-                        now={now}
-                        answering={answering}
-                        onAnswer={readOnly ? undefined : (question, option) => chooseOption(current, question, option)}
-                      />
-                    )}
-                    {SCHEDULED.has(current.session) && <p className="text-[11px] mt-1 text-[var(--color-dim)]">{t.maintenance}</p>}
-                    {REVIEWER.test(current.session) && <p className="text-[11px] mt-1 text-[var(--color-dim)]">{t.reviewer}</p>}
-                  </div>
-                  <div className="flex items-center gap-2">
-                    {rowActions(current, readOnly).map((op) => (
+          {view === "lanes" && <Lanes t={t} history={history} roles={list.value.roles.map((item) => item.role)} nowS={Math.floor(now / 1000)} />}
+          {view === "list" && (
+            <div className="flex flex-col md:flex-row gap-3 min-h-0">
+              <ul aria-label={t.title} className="md:w-[260px] shrink-0 flex flex-col gap-px rounded border overflow-hidden" style={{ borderColor: "var(--color-border)", opacity: busy ? 0.6 : 1 }}>
+                {rows.map((row) => {
+                  const active = current?.session === row.session;
+                  return (
+                    <li key={row.session}>
                       <button
-                        key={op}
                         type="button"
-                        data-testid={`panel-${op}`}
-                        onClick={() => setPending({ kind: "agent", op, row: current })}
-                        className={`text-[11px] font-semibold uppercase tracking-widest px-3 py-1 rounded border ${op === "stop" ? "ml-3" : ""}`}
-                        style={
-                          op === "stop"
-                            ? { color: "var(--color-red)", borderColor: "var(--color-red)" }
-                            : op === "start"
-                              ? { color: "var(--color-green)", borderColor: "var(--color-green)" }
-                              : { color: "var(--color-bright)", borderColor: "var(--color-border)" }
-                        }
+                        data-testid={`panel-row-${row.session}`}
+                        data-state={row.agent ? row.agent.state.state : "down"}
+                        title={row.agent ? identityLine(t, row.agent.identity, where) : undefined}
+                        aria-current={active ? "true" : undefined}
+                        onClick={() => {
+                          setSelected(row.session);
+                          setTab("terminal");
+                        }}
+                        className="w-full text-left px-3 py-1.5 flex items-center gap-2"
+                        style={{ background: active ? "var(--color-card)" : "transparent" }}
                       >
-                        {{ start: t.start, stop: t.stop, restart: t.restart }[op]}
+                        <Led row={row} />
+                        <span className="text-[11px] font-semibold tracking-wider w-[110px] shrink-0" style={{ color: isUp(row) ? "var(--color-white)" : "var(--color-muted)" }}>
+                          {row.session}
+                        </span>
+                        <span className="text-[11px] min-w-0 leading-snug break-words" style={{ color: "var(--color-muted)" }}>
+                          {stateLine(t, row)}
+                          {isUp(row) && <UsageShort t={t} usage={row.agent!.usage} />}
+                          {isUp(row) && <QuestionMarks t={t} questions={row.agent!.questions} />}
+                        </span>
+                      </button>
+                      {notices[row.session] && !notices[row.session].ok && (
+                        <p role="alert" className="px-3 pb-1 text-[11px] text-[var(--color-red)]">
+                          {notices[row.session].text}
+                        </p>
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
+
+              {current && (
+                <section className="flex-1 min-w-0 rounded border p-3" style={{ borderColor: "var(--color-border)" }} aria-label={current.session}>
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <Led row={current} />
+                        <span className="text-[13px] font-bold tracking-widest" style={{ color: "var(--color-white)" }}>
+                          {current.session}
+                        </span>
+                        <span className="text-[11px] uppercase tracking-widest" style={{ color: current.agent ? "var(--color-green)" : "var(--color-dim)" }}>
+                          {isUp(current) ? t.up : current.heldByUser ? t.heldByUser : t.down}
+                        </span>
+                      </div>
+                      <p
+                        data-testid="panel-state"
+                        className="text-[11px] mt-1"
+                        style={{ color: current.agent ? TONE[describeAgentState(current.agent.state, appLocale()).tone] : "var(--color-dim)" }}
+                      >
+                        {stateLine(t, current)}
+                      </p>
+                      {current.agent && (
+                        <p data-testid="panel-identity" className="text-[11px] mt-0.5 text-[var(--color-muted)]">
+                          {identityLine(t, current.agent.identity, where)}
+                        </p>
+                      )}
+                      {current.agent && (
+                        <p
+                          data-testid="panel-times"
+                          className="text-[11px] mt-0.5 text-[var(--color-muted)]"
+                          title={`${fill(t.started, { time: current.agent.created === null ? "—" : fullStamp(current.agent.created * 1000) })} · ${fill(t.activity, { time: current.agent.activity === null ? "—" : fullStamp(current.agent.activity * 1000) })}`}
+                        >
+                          {fill(t.started, { time: clock(current.agent.created) })} · {fill(t.activity, { time: ago(current.agent.activity) })}
+                          {current.agent.activity !== null &&
+                            current.agent.state.state !== "lavora" &&
+                            now - current.agent.activity * 1000 < MOVING_MS && (
+                              <span data-testid="panel-moving"> · {fill(t.screenMoving, { seconds: Math.max(0, Math.round((now - current.agent.activity * 1000) / 1000)) })}</span>
+                            )}
+                        </p>
+                      )}
+                      {isUp(current) && <UsageLine t={t} usage={current.agent!.usage} />}
+                      {isUp(current) && (
+                        <QuestionList
+                          t={t}
+                          questions={current.agent!.questions}
+                          readOnly={readOnly}
+                          now={now}
+                          answering={answering}
+                          onAnswer={readOnly ? undefined : (question, option) => chooseOption(current, question, option)}
+                        />
+                      )}
+                      {SCHEDULED.has(current.session) && <p className="text-[11px] mt-1 text-[var(--color-dim)]">{t.maintenance}</p>}
+                      {REVIEWER.test(current.session) && <p className="text-[11px] mt-1 text-[var(--color-dim)]">{t.reviewer}</p>}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {rowActions(current, readOnly).map((op) => (
+                        <button
+                          key={op}
+                          type="button"
+                          data-testid={`panel-${op}`}
+                          onClick={() => setPending({ kind: "agent", op, row: current })}
+                          className={`text-[11px] font-semibold uppercase tracking-widest px-3 py-1 rounded border ${op === "stop" ? "ml-3" : ""}`}
+                          style={
+                            op === "stop"
+                              ? { color: "var(--color-red)", borderColor: "var(--color-red)" }
+                              : op === "start"
+                                ? { color: "var(--color-green)", borderColor: "var(--color-green)" }
+                                : { color: "var(--color-bright)", borderColor: "var(--color-border)" }
+                          }
+                        >
+                          {{ start: t.start, stop: t.stop, restart: t.restart }[op]}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  {notices[current.session] && (
+                    <p
+                      role={notices[current.session].ok ? "status" : "alert"}
+                      data-testid="panel-notice"
+                      className="text-[11px] mt-2"
+                      style={{ color: notices[current.session].ok ? "var(--color-green)" : "var(--color-red)" }}
+                    >
+                      {notices[current.session].text}
+                    </p>
+                  )}
+
+                  <div role="tablist" className="flex gap-3 mt-3 mb-2 border-b" style={{ borderColor: "var(--color-border)" }}>
+                    {(["terminal", ...(CHAT_ROLES.has(current.role) && current.session === current.role.toUpperCase() ? ["chat"] : [])] as const).map((name) => (
+                      <button
+                        key={name}
+                        role="tab"
+                        type="button"
+                        aria-selected={tab === name}
+                        onClick={() => setTab(name as "terminal" | "chat")}
+                        className="text-[11px] font-semibold uppercase tracking-widest pb-1"
+                        style={{ color: tab === name ? "var(--color-white)" : "var(--color-muted)", borderBottom: tab === name ? "2px solid var(--color-white)" : "2px solid transparent" }}
+                      >
+                        {name === "terminal" ? t.tabTerminal : t.tabChat}
                       </button>
                     ))}
                   </div>
-                </div>
-                {notices[current.session] && (
-                  <p
-                    role={notices[current.session].ok ? "status" : "alert"}
-                    data-testid="panel-notice"
-                    className="text-[11px] mt-2"
-                    style={{ color: notices[current.session].ok ? "var(--color-green)" : "var(--color-red)" }}
-                  >
-                    {notices[current.session].text}
-                  </p>
-                )}
-
-                <div role="tablist" className="flex gap-3 mt-3 mb-2 border-b" style={{ borderColor: "var(--color-border)" }}>
-                  {(["terminal", ...(CHAT_ROLES.has(current.role) && current.session === current.role.toUpperCase() ? ["chat"] : [])] as const).map((name) => (
-                    <button
-                      key={name}
-                      role="tab"
-                      type="button"
-                      aria-selected={tab === name}
-                      onClick={() => setTab(name as "terminal" | "chat")}
-                      className="text-[11px] font-semibold uppercase tracking-widest pb-1"
-                      style={{ color: tab === name ? "var(--color-white)" : "var(--color-muted)", borderBottom: tab === name ? "2px solid var(--color-white)" : "2px solid transparent" }}
-                    >
-                      {name === "terminal" ? t.tabTerminal : t.tabChat}
-                    </button>
-                  ))}
-                </div>
-                {tab === "chat" && CHAT_ROLES.has(current.role) ? (
-                  AgentChatPane ? (
-                    <AgentChatPane role={current.role as ChatRole} />
+                  {tab === "chat" && CHAT_ROLES.has(current.role) ? (
+                    AgentChatPane ? (
+                      <AgentChatPane role={current.role as ChatRole} />
+                    ) : (
+                      <p className="text-[11px] text-[var(--color-muted)]">{fill(t.chatSoon, { name: displayName(current.session) })}</p>
+                    )
+                  ) : current.agent ? (
+                    <Terminal key={current.session} row={current} t={t} />
                   ) : (
-                    <p className="text-[11px] text-[var(--color-muted)]">{fill(t.chatSoon, { name: displayName(current.session) })}</p>
-                  )
-                ) : current.agent ? (
-                  <Terminal key={current.session} row={current} t={t} />
-                ) : (
-                  <p className="text-[11px] text-[var(--color-muted)]">{t.screenDown}</p>
-                )}
-              </section>
-            )}
-          </div>
+                    <p className="text-[11px] text-[var(--color-muted)]">{t.screenDown}</p>
+                  )}
+                  <SessionHistory t={t} history={history} session={current.session} nowS={Math.floor(now / 1000)} />
+                </section>
+              )}
+            </div>
+          )}
         </>
       )}
 

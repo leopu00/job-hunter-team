@@ -687,3 +687,211 @@ def test_an_image_without_the_writer_answers_unavailable_not_a_crash(tmp_path, m
     with pytest.raises(tool.Refusal) as refusal:
         tool.exclusion_action("exclusion-accept", "company")
     assert refusal.value.code == "exclusion_failed"
+
+
+# ── the previous sessions of each agent (JHT-T43) ───────────────────────────
+NOW = 1_790_000_000
+
+
+def _iso(epoch: int) -> str:
+    return datetime.fromtimestamp(epoch, timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def _now() -> int:
+    return int(datetime.now(timezone.utc).timestamp())
+
+
+def _spawn_line(epoch: int, session: str, *, rc: int = 0, stage: str = "complete", source: str = "CAPITANO") -> str:
+    return json.dumps({"timestamp": _iso(epoch), "session": session, "role": session.split("-")[0].lower(),
+                       "source": source, "flock_wait_s": 0, "stage": stage, "rc": rc, "duration_s": 5})
+
+
+def _trace(team, *lines: str) -> None:
+    logs = team.home / "logs"
+    logs.mkdir(exist_ok=True)
+    (logs / "spawn-attempts.jsonl").write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def _history(team, session: str, now: int = NOW) -> dict:
+    items = {item["name"]: item for item in team.tool.read_history(now)["data"]["items"]}
+    return items[session]
+
+
+def test_a_session_ends_where_the_team_wrote_it_and_the_reason_is_a_closed_word(team):
+    sessions = team.tool.history_sessions
+    # restarted from the panel: the next start is the panel's and the journal has the restart
+    assert sessions([(100, False), (500, True)], [(498, "restart")], [], True) == [
+        {"start": 500, "end": None, "reason": "running"},
+        {"start": 100, "end": 500, "reason": "restarted_by_user"}]
+    # the panel's start after a stop: the stop is the end, not the start that follows
+    assert sessions([(100, False), (900, True)], [(300, "stop")], [(299, "stopped_by_user")], False)[1] == {
+        "start": 100, "end": 299, "reason": "stopped_by_user"}
+    # held by a safety agent, retired by the team
+    assert sessions([(100, False)], [], [(400, "contained")], False) == [{"start": 100, "end": 400, "reason": "contained"}]
+    assert sessions([(100, False)], [], [(400, "retired")], False) == [{"start": 100, "end": 400, "reason": "retired"}]
+    # a next start nobody explains: it came back, we do not say why
+    assert sessions([(100, False), (500, False)], [], [], True)[1] == {"start": 100, "end": 500, "reason": "started_again"}
+    # a restart in the journal without the panel's start after it explains nothing
+    assert sessions([(100, False), (500, False)], [(498, "restart")], [], True)[1]["reason"] == "started_again"
+    # the last one: up, down with no sign, or tmux not answering (never «running» by assumption)
+    assert sessions([(100, False)], [], [], True)[0]["reason"] == "running"
+    assert sessions([(100, False)], [], [], False)[0] == {"start": 100, "end": None, "reason": "unknown"}
+    assert sessions([(100, False)], [], [], None)[0] == {"start": 100, "end": None, "reason": "unknown"}
+    assert {s["reason"] for s in sessions([(100, False)], [], [], True)} <= set(team.tool.HISTORY_REASONS)
+
+
+def test_a_mark_at_the_moment_of_the_next_start_belongs_to_the_next_session(team):
+    result = team.tool.history_sessions([(100, False), (500, False)], [], [(500, "contained")], False)
+    assert result == [{"start": 500, "end": 500, "reason": "contained"},
+                      {"start": 100, "end": 500, "reason": "started_again"}]
+
+
+def test_only_the_last_twenty_sessions_of_an_agent_are_given_newest_first(team):
+    starts = [(1000 + 10 * n, False) for n in range(45)]
+    result = team.tool.history_sessions(starts, [], [], True)
+    assert len(result) == team.tool.HISTORY_PER_AGENT == 20
+    assert result[0]["start"] == 1440 and result[-1]["start"] == 1250
+
+
+def test_the_read_counts_only_starts_that_completed_and_keeps_the_failed_ones_apart(team):
+    team.up("SCOUT-1")
+    _trace(team,
+           _spawn_line(NOW - 7200, "SCOUT-1"),
+           _spawn_line(NOW - 6000, "SCOUT-1", stage="already_active"),                 # nothing was started
+           _spawn_line(NOW - 5000, "SCOUT-1", rc=1, stage="worker_repl_wait"),         # a start that failed
+           "this is not json",
+           json.dumps(["not", "an", "object"]),
+           _spawn_line(NOW - 4000, "SCOUT-1", rc=True),                               # a boolean is no exit code
+           _spawn_line(NOW - 3000, "NOT A SESSION"),
+           _spawn_line(NOW - 2000, "SCOUT-1", source="desktop-panel"))
+    item = _history(team, "SCOUT-1")
+    assert [(s["start"], s["reason"]) for s in item["sessions"]] == [
+        (NOW - 2000, "running"), (NOW - 7200, "started_again")]
+    assert item["failed"] == [NOW - 5000]
+    assert "NOT A SESSION" not in {i["name"] for i in team.tool.read_history(NOW)["data"]["items"]}
+
+
+def test_a_start_older_than_thirty_days_is_left_out(team):
+    _trace(team, _spawn_line(NOW - 31 * 86400, "MENTOR"), _spawn_line(NOW - 86400, "MENTOR"))
+    assert [s["start"] for s in _history(team, "MENTOR")["sessions"]] == [NOW - 86400]
+
+
+def test_a_stop_from_the_panel_is_the_end_of_the_session_it_stopped(team, capsys, monkeypatch):
+    team.up("SCOUT-1")
+    start = int(datetime.now(timezone.utc).timestamp()) - 3600
+    _trace(team, _spawn_line(start, "SCOUT-1"))
+    team.run("stop", "SCOUT-1", capsys=capsys)
+    now = int(datetime.now(timezone.utc).timestamp())
+    [session] = _history(team, "SCOUT-1", now)["sessions"]
+    assert session["start"] == start and session["reason"] == "stopped_by_user"
+    assert abs(session["end"] - now) <= 5
+
+
+def test_a_restart_from_the_panel_ends_the_session_it_replaced(team, capsys):
+    team.up("SCOUT-1")
+    start = int(datetime.now(timezone.utc).timestamp()) - 3600
+    _trace(team, _spawn_line(start, "SCOUT-1"))
+    team.run("restart", "SCOUT-1", capsys=capsys)
+    now = int(datetime.now(timezone.utc).timestamp())
+    # the launcher's own line for the start the panel made
+    with (team.home / "logs" / "spawn-attempts.jsonl").open("a") as trace:
+        trace.write(_spawn_line(now, "SCOUT-1", source="desktop-panel") + "\n")
+    old, new = _history(team, "SCOUT-1", now)["sessions"][::-1]
+    assert (old["start"], old["reason"]) == (start, "restarted_by_user")
+    assert new["reason"] == "running"
+
+
+def test_a_safety_hold_of_another_agent_is_not_the_users_stop(team):
+    team.up("SCRITTORE-2")
+    start = int(datetime.now(timezone.utc).timestamp()) - 600
+    _trace(team, _spawn_line(start, "SCRITTORE-2"))
+    roster = team.roster()
+    roster.record("scrittore", 2, src="test")
+    roster.contain("SCRITTORE-2", "SENTINELLA", "runaway spend", "/evidence")
+    [session] = _history(team, "SCRITTORE-2", int(datetime.now(timezone.utc).timestamp()))["sessions"]
+    assert session["reason"] == "contained"
+
+
+def test_a_big_trace_is_read_from_its_tail_and_says_from_when_it_knows(team, monkeypatch):
+    monkeypatch.setattr(team.tool, "HISTORY_TAIL_BYTES", 600)
+    team.up("CAPITANO")
+    _trace(team, *[_spawn_line(NOW - 3000 + 100 * n, "CAPITANO") for n in range(20)])
+    answer = team.tool.read_history(NOW)["data"]
+    kept = [s["start"] for s in answer["items"][0]["sessions"]]
+    assert 0 < len(kept) < 20 and kept == sorted(kept, reverse=True)
+    assert answer["since"] == min(kept)
+    # a trace that fits has no «since»: it holds everything it ever had
+    monkeypatch.setattr(team.tool, "HISTORY_TAIL_BYTES", 1 << 20)
+    assert team.tool.read_history(NOW)["data"]["since"] is None
+
+
+def test_without_a_trace_the_read_is_empty_not_an_error(team):
+    assert team.tool.read_history(NOW) == {"ok": True, "data": {"items": [], "since": None, "now": NOW, "lanes": None}}
+
+
+def test_on_stdin_the_history_reads_and_writes_nothing(team, capsys, monkeypatch):
+    team.up("CAPITANO")
+    _trace(team, _spawn_line(_now() - 100, "CAPITANO"))
+    before = sorted(p.name for p in (team.home / "logs").iterdir())
+    answer = _stdin(team, monkeypatch, capsys, {"op": "history"})
+    assert answer["ok"] and answer["data"]["items"][0]["name"] == "CAPITANO"
+    assert sorted(p.name for p in (team.home / "logs").iterdir()) == before
+    assert team.journal() == [] and team.spawns() == []
+
+
+def test_the_history_is_also_a_command_of_the_wrapper(team, capsys):
+    team.up("CAPITANO")
+    started = _now() - 100
+    _trace(team, _spawn_line(started, "CAPITANO"))
+    code, answer = team.run("history", capsys=capsys)
+    assert code == 0 and answer["ok"] and answer["data"]["items"][0]["sessions"][0]["start"] == started
+    assert team.journal() == []                          # a read leaves no line in the journal of actions
+
+
+def _moves_db(team, rows: list[tuple[str, int]]) -> None:
+    """A jobs.db of the team with the moves of positions: (by_agent, seconds before NOW)."""
+    import sqlite3
+
+    sys.path.insert(0, str(ROOT / "shared" / "skills"))
+    import _db
+
+    conn = sqlite3.connect(team.home / "jobs.db")
+    conn.row_factory = sqlite3.Row
+    _db.ensure_schema(conn)
+    conn.execute("INSERT INTO companies (name) VALUES ('Acme')")
+    conn.execute("INSERT INTO positions (title, company, company_id, status, url) VALUES ('t', 'Acme', 1, 'new', 'https://x.example/1')")
+    for actor, before in rows:
+        conn.execute("INSERT INTO position_state_transitions (position_id, from_state, to_state, by_agent, ts) "
+                     "VALUES (1, 'new', 'checked', ?, datetime(?, 'unixepoch'))", (actor, NOW - before))
+    conn.commit()
+    conn.close()
+
+
+def test_the_lanes_count_the_moves_of_each_role_per_hour_of_the_last_day(team):
+    _moves_db(team, [("scout-1", 60), ("scout-2", 3000), ("scout-1 (codex)", 3700), ("analista-1", 7300),
+                     ("scorer-1", 86400 - 1), ("scout-1", 86400 + 10),      # the last one is older than a day
+                     ("user", 100), ("hacker; rm", 100), ("SCOUT-3", 30)])  # not a role / a role in capitals
+    lanes = team.tool.read_history(NOW)["data"]["lanes"]
+    assert set(lanes) == {"scout", "analista", "scorer"}
+    assert lanes["scout"][0] == 3 and lanes["scout"][1] == 1 and sum(lanes["scout"]) == 4
+    assert lanes["analista"][2] == 1 and lanes["scorer"][23] == 1
+    assert all(len(hours) == 24 for hours in lanes.values())
+
+
+def test_lanes_without_a_readable_database_are_not_known_instead_of_zero(team):
+    assert team.tool.read_history(NOW)["data"]["lanes"] is None
+    (team.home / "jobs.db").write_text("this is not a database")
+    assert team.tool.read_history(NOW)["data"]["lanes"] is None
+
+
+def test_a_database_with_no_moves_has_lanes_that_are_known_and_empty(team):
+    _moves_db(team, [])
+    assert team.tool.read_history(NOW)["data"]["lanes"] == {}
+
+
+def test_the_lanes_read_never_writes_the_database(team):
+    _moves_db(team, [("scout-1", 60)])
+    path = team.home / "jobs.db"
+    before = (path.stat().st_mtime_ns, path.read_bytes())
+    team.tool.read_history(NOW)
+    assert (path.stat().st_mtime_ns, path.read_bytes()) == before

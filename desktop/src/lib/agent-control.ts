@@ -36,6 +36,33 @@ export type TeamControlState = {
   burnIntent: { state: "off" | "active" | "expired" | "unknown" | null; expiresAt: string | null; remainingMin: number | null };
 };
 
+/** How a previous session of an agent ended, in the closed words the team's files allow; `unknown` is «not recorded». */
+export type SessionEnd = "running" | "restarted_by_user" | "stopped_by_user" | "contained" | "retired" | "started_again" | "unknown";
+
+export type PastSession = {
+  /** epoch s */
+  start: number;
+  /** epoch s: when it ended, or at the latest; null while it runs and when nobody wrote it */
+  end: number | null;
+  reason: SessionEnd;
+};
+
+export type AgentHistory = {
+  /** sessions that completed, newest first */
+  sessions: PastSession[];
+  /** starts that did not complete (epoch s), newest first */
+  failed: number[];
+};
+
+export type PanelHistory = {
+  /** agent session name → its history; an agent the team never traced is absent */
+  agents: Record<string, AgentHistory>;
+  /** epoch s: the trace is only known from here on (a long one was cut); null when it holds everything it had */
+  since: number | null;
+  /** moves of positions per role in each of the last 24 hours, the first being the last hour; null: the team's database could not be read */
+  lanes: Record<string, number[]> | null;
+};
+
 export type AgentAction = "start" | "stop" | "restart";
 export type PauseExit = { kind: "hours"; hours: number } | { kind: "until"; until: string } | { kind: "weekly_reset" };
 export type ActionResult =
@@ -125,6 +152,52 @@ export async function readTeamState(): Promise<Outcome<TeamControlState>> {
       },
     },
   };
+}
+
+const SESSION_ENDS = new Set<string>(["running", "restarted_by_user", "stopped_by_user", "contained", "retired", "started_again", "unknown"]);
+export const LANE_HOURS = 24;
+
+const seconds = (value: unknown): number | null =>
+  typeof value === "number" && Number.isInteger(value) && value >= 0 && value <= 4_102_444_800 ? value : null;
+
+/** The history the native side shaped, checked once more: anything off the closed shape is left out, not repaired. */
+export function pickHistory(data: Record<string, unknown>): PanelHistory | null {
+  if (!Array.isArray(data.items)) return null;
+  const agents: Record<string, AgentHistory> = {};
+  for (const item of data.items) {
+    if (!isRecord(item) || typeof item.name !== "string" || !Array.isArray(item.sessions)) continue;
+    const sessions: PastSession[] = [];
+    for (const raw of item.sessions) {
+      if (!isRecord(raw)) continue;
+      const start = seconds(raw.start);
+      if (start === null) continue;
+      const end = seconds(raw.end);
+      sessions.push({
+        start,
+        end: end !== null && end >= start ? end : null,
+        reason: typeof raw.reason === "string" && SESSION_ENDS.has(raw.reason) ? (raw.reason as SessionEnd) : "unknown",
+      });
+    }
+    const failed = Array.isArray(item.failed) ? item.failed.map(seconds).filter((at): at is number => at !== null) : [];
+    agents[item.name] = { sessions, failed };
+  }
+  let lanes: PanelHistory["lanes"] = null;
+  if (isRecord(data.lanes)) {
+    lanes = {};
+    for (const [role, hours] of Object.entries(data.lanes)) {
+      if (Array.isArray(hours) && hours.length === LANE_HOURS && hours.every((n) => typeof n === "number" && Number.isInteger(n) && n >= 0)) {
+        lanes[role] = hours as number[];
+      }
+    }
+  }
+  return { agents, since: seconds(data.since), lanes };
+}
+
+export async function readPanelHistory(): Promise<Outcome<PanelHistory>> {
+  const read = await call({ op: "history" });
+  if (!read.ok) return read;
+  const history = pickHistory(read.value);
+  return history ? { ok: true, at: read.at, value: history } : { ok: false, at: read.at, code: "desktop_bad_reply" };
 }
 
 export async function readPanelScreen(session: string): Promise<Outcome<{ up: boolean; text: string | null }>> {
