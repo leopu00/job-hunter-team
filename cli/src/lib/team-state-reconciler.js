@@ -26,7 +26,7 @@
 
 import { spawn } from 'node:child_process';
 import { readFile, writeFile, unlink } from 'node:fs/promises';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import pc from 'picocolors';
 import { tierInterval, errorBackoff, POLL_IDLE_MS } from './poll-tier.js';
@@ -37,6 +37,8 @@ import { agentsStatusWriter, createAgentsStatusReader, createHeartbeatCarrier, s
 import { createApiAgentsStatusReader } from './agents-status-traces.js';
 import { createDoneStore, serverClock } from './team-command-guard.js';
 import { desiredKey, desiredRefusal, emergencyStopRefusal, stopRefusal } from './team-state-guard.js';
+import { applySettings, readLastApplied, settingsRefusal } from './team-settings.js';
+import { writePrivateJson } from './secure-config-io.js';
 
 const JHT_HOME = process.env.JHT_HOME || join(process.env.HOME || '/jht_home', '.jht');
 const CLOUD_FILE = join(JHT_HOME, 'cloud.json');
@@ -51,6 +53,9 @@ const JHT_BIN = '/app/cli/bin/jht.js';
 const DEFAULT_BASE_URL = 'https://jobhunterteam.ai';
 // The starts, restarts and emergency stops already run (team-state-guard.js).
 const DONE_FILE = join(JHT_HOME, 'team-state-done.json');
+// The box's own config, and the stamp of the last settings version applied to it (team-settings.js).
+const CONFIG_FILE = join(JHT_HOME, 'jht.config.json');
+const SETTINGS_APPLIED_FILE = join(JHT_HOME, 'team-settings-applied.json');
 let defaultDone = null;
 function doneStore() {
   if (!defaultDone) defaultDone = createDoneStore(DONE_FILE);
@@ -395,6 +400,57 @@ export async function reconcileEmergencyStop(config, state, { done = doneStore()
     log('error', 'emergency-stop.observe-write-failed', { err: err.message })
   );
   return { ok: r.ok, action: 'stopped' };
+}
+
+/**
+ * The settings the site asked for (team_state.desired_settings, phase 6),
+ * applied to this box's jht.config.json once per version: team-settings.js
+ * holds the rules. Read with the same row as the emergency stop, no query of
+ * its own. The box's clock only decides whether a stamp is in the future: a
+ * box behind the database applies a fresh version as soon as its clock passes
+ * the stamp, never early.
+ */
+export async function reconcileSettings(config, state, {
+  configPath = CONFIG_FILE,
+  appliedPath = SETTINGS_APPLIED_FILE,
+  serverNow = Date.now(),
+  write = writePrivateJson,
+} = {}) {
+  if (!config?.enabled) return { applied: false, skipped: 'cloud-not-enabled' };
+  const ownerId = typeof config.user_id === 'string' ? config.user_id : null;
+  const refusal = settingsRefusal(state, {
+    ownerId,
+    serverNow,
+    lastApplied: readLastApplied(appliedPath),
+  });
+  if (refusal === 'nothing_desired' || refusal === 'already_applied') {
+    return { applied: false, skipped: refusal };
+  }
+  if (refusal) {
+    sayRefusal('settings', refusal, state?.desired_settings_at);
+    return { applied: false, refused: refusal };
+  }
+  // A config that is there but cannot be read is never overwritten: it may be the user's.
+  let current = {};
+  try {
+    current = JSON.parse(readFileSync(configPath, 'utf-8'));
+  } catch (err) {
+    if (err.code !== 'ENOENT') {
+      sayRefusal('settings', 'config_unreadable', state.desired_settings_at);
+      return { applied: false, refused: 'config_unreadable' };
+    }
+  }
+  write(configPath, applySettings(current, state.desired_settings));
+  write(appliedPath, { applied_at: state.desired_settings_at });
+  log('info', 'settings.applied', { keys: Object.keys(state.desired_settings), at: state.desired_settings_at });
+
+  const baseUrl = (config.base_url || DEFAULT_BASE_URL).replace(/\/+$/, '');
+  if (config.token) {
+    await apiCall('PATCH', baseUrl, config.token, '/api/team-state', {
+      settings_applied_at: state.desired_settings_at,
+    }).catch((err) => log('warn', 'settings.ack-failed', { err: err.message }));
+  }
+  return { applied: true };
 }
 
 export async function runTeamStateReconciler() {

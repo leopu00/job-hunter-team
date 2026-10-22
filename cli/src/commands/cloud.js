@@ -3347,6 +3347,10 @@ async function handleDirectiveSync(options = {}) {
  * Best-effort: 1 GET /api/team-state per tick (lettura singola riga per user,
  * economica); push + PATCH ack solo quando c'è davvero una richiesta.
  */
+// After the settings columns were refused (before migration 099): when to try them again.
+const SETTINGS_COLUMNS_RETRY_MS = 60 * 60 * 1000;
+let settingsColumnsMissingUntil = 0;
+
 /**
  * La riga `team_state` che serve ai due rendezvous del giro veloce: "Sync
  * now" (dati) e chat. Si legge UNA volta e si passa a entrambi — sono la
@@ -3386,8 +3390,20 @@ export async function readRendezvousState(config, options = {}) {
     'last_action', 'last_action_at',
     ...stopState,
   ];
+  // The settings the site asked for (migration 099, phase 6). Before 099 the
+  // columns are not there and PostgREST refuses the whole select: after one
+  // refusal the read goes on without them for an hour, not one extra failing
+  // request at every fast round.
+  const withSettings = [...withChat, 'desired_settings', 'desired_settings_at'];
 
   if (reader) {
+    if (Date.now() >= settingsColumnsMissingUntil) {
+      try {
+        return await reader.readTeamState(withSettings, { signal });
+      } catch {
+        settingsColumnsMissingUntil = Date.now() + SETTINGS_COLUMNS_RETRY_MS;
+      }
+    }
     try {
       return await reader.readTeamState(withChat, { signal });
     } catch {
@@ -4327,6 +4343,16 @@ async function handleDaemon(options) {
         await reconcileEmergencyStop(config, rendezvousState);
       } catch (err) {
         console.error(pc.yellow(`  daemon emergency-stop error: ${err.message}`));
+      }
+
+      // [WEB-CAPACE fase 6] Le impostazioni chieste dal sito (orari, modello ed
+      // effort per ruolo): stessa riga, nessuna query in più. Le regole stanno
+      // in team-settings.js; una versione si applica una volta sola.
+      try {
+        const { reconcileSettings } = await import('../lib/team-state-reconciler.js');
+        await reconcileSettings(config, rendezvousState);
+      } catch (err) {
+        console.error(pc.yellow(`  daemon settings error: ${err.message}`));
       }
 
       // ── Heartbeat "VPS online": ogni intervalSec ── (reconcileOnce solo-heartbeat;
