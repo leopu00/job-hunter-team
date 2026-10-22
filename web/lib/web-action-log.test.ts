@@ -40,6 +40,7 @@ describe("one row of the log", () => {
       id: "a1",
       action: "team.restart",
       target: "all",
+      settings: [],
       summary: "restart all",
       level: "L2",
       status: "done",
@@ -257,6 +258,26 @@ describe("the words", () => {
     ).toBe("Synthetic role @ Synthetic Co");
   });
 
+  it("name what a settings action changed in the person's language, never its English summary", () => {
+    const settings = (params: unknown) =>
+      row({
+        action: "settings.update",
+        params,
+        summary: "working hours: 2 blocks, Europe/Rome; models: 1 roles",
+      } as never);
+    expect(
+      actionSubject(settings({ role_models: {}, working_hours: null }), "it"),
+    ).toBe("orari di lavoro, modelli dei ruoli");
+    expect(actionSubject(settings({ role_models: {} }), "de")).toBe(
+      "Modelle der Rollen",
+    );
+    expect(actionSubject(settings({ other: 1 }), "it")).toBeNull();
+    expect(actionSubject(settings(null), "en")).toBeNull();
+    expect(actionTitle(settings({ working_hours: null }), "it")).toBe(
+      "Impostazioni cambiate",
+    );
+  });
+
   it("name a state, or say it is not known", () => {
     expect(statusLabel(row(), "it")).toBe("Eseguita");
     expect(statusLabel(row({ status: "nope" } as never), "it")).toBe(
@@ -335,9 +356,26 @@ describe("the screen and the table say the same thing", () => {
     expect(table.length).toBeGreaterThan(200);
   });
 
-  it("names the same actions, states and levels as the table's own CHECKs", () => {
+  // 098 named the actions in a CHECK; 099 dropped it for a vocabulary table that every later migration
+  // fills with INSERTs. The screen must know every action any migration puts there.
+  const vocabulary = readdirSync(dir)
+    .filter((name) => name.endsWith(".sql"))
+    .flatMap((name) => {
+      const text = readFileSync(new URL(name, dir), "utf8");
+      return [...text.matchAll(/INSERT INTO web_door\.vocab\b[^;]*;/g)].flatMap(
+        (insert) =>
+          [
+            ...insert[0].matchAll(
+              /\(\s*'([a-z][a-z0-9_]*\.[a-z][a-z0-9_]*)'\s*,/g,
+            ),
+          ].map((row) => row[1]),
+      );
+    });
+
+  it("names every action the migrations put in the door's vocabulary, and the table's states and levels", () => {
+    expect(vocabulary.length).toBeGreaterThan(6);
     expect([...WEB_ACTION_CODES].sort()).toEqual(
-      closedList("web_action_log_action_closed").sort(),
+      [...new Set(vocabulary)].sort(),
     );
     expect([...WEB_ACTION_STATUSES].sort()).toEqual(
       closedList("web_action_log_status_closed").sort(),

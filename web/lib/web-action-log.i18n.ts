@@ -2,11 +2,13 @@
 // page «Registro delle azioni» of the web and the same section of the desktop's
 // agents panel). Italian is the type source: a language missing a word does not
 // compile. Every action and status is a closed code of the log's vocabulary (the
-// CHECKs of the table); a code this file does not know, from a later migration, is
-// shown as «other action» with the code, never hidden.
+// rows the migrations put in web_door.vocab, and the state CHECK of the table); a code
+// this file does not know, from a later migration, is shown as «other action» with
+// the code, never hidden.
 import type { Locale } from "@/i18n/config";
 import type {
   WebActionCode,
+  WebActionSetting,
   WebActionLevel,
   WebActionStatus,
 } from "@/lib/web-action-log";
@@ -29,6 +31,10 @@ const IT = {
   listLabel: "Azioni chieste dal sito",
   confirmed: "confermata {time}",
   targetAll: "tutta la squadra",
+  setting: {
+    working_hours: "orari di lavoro",
+    role_models: "modelli dei ruoli",
+  } satisfies Record<WebActionSetting, string>,
   expires: "scade {time}",
   result: "Esito",
   level: {
@@ -58,6 +64,7 @@ const IT = {
     "team.emergency_stop": "Arresto di emergenza",
     "position.apply_authorize": "Candidatura autorizzata",
     "position.apply_revoke": "Autorizzazione a candidarsi ritirata",
+    "settings.update": "Impostazioni cambiate",
   } satisfies Record<WebActionCode, string>,
 };
 
@@ -83,6 +90,10 @@ export const WEB_ACTION_LOG_TEXT: Record<Locale, WebActionLogText> = {
     listLabel: "Actions asked by the site",
     confirmed: "confirmed {time}",
     targetAll: "the whole team",
+    setting: {
+      working_hours: "working hours",
+      role_models: "role models",
+    },
     expires: "expires {time}",
     result: "Result",
     level: { L1: "Note", L2: "Command to the team", L3: "Towards the outside" },
@@ -108,6 +119,7 @@ export const WEB_ACTION_LOG_TEXT: Record<Locale, WebActionLogText> = {
       "team.emergency_stop": "Emergency stop",
       "position.apply_authorize": "Application authorised",
       "position.apply_revoke": "Authorisation to apply withdrawn",
+      "settings.update": "Settings changed",
     },
   },
   de: {
@@ -130,6 +142,10 @@ export const WEB_ACTION_LOG_TEXT: Record<Locale, WebActionLogText> = {
     listLabel: "Von der Website angeforderte Aktionen",
     confirmed: "bestätigt {time}",
     targetAll: "das ganze Team",
+    setting: {
+      working_hours: "Arbeitszeiten",
+      role_models: "Modelle der Rollen",
+    },
     expires: "läuft ab {time}",
     result: "Ergebnis",
     level: { L1: "Notiz", L2: "Befehl an das Team", L3: "Nach außen" },
@@ -155,6 +171,7 @@ export const WEB_ACTION_LOG_TEXT: Record<Locale, WebActionLogText> = {
       "team.emergency_stop": "Notstopp",
       "position.apply_authorize": "Bewerbung freigegeben",
       "position.apply_revoke": "Freigabe zur Bewerbung zurückgezogen",
+      "settings.update": "Einstellungen geändert",
     },
   },
   es: {
@@ -175,6 +192,10 @@ export const WEB_ACTION_LOG_TEXT: Record<Locale, WebActionLogText> = {
     listLabel: "Acciones pedidas por el sitio",
     confirmed: "confirmada {time}",
     targetAll: "todo el equipo",
+    setting: {
+      working_hours: "horario de trabajo",
+      role_models: "modelos de los roles",
+    },
     expires: "caduca {time}",
     result: "Resultado",
     level: { L1: "Nota", L2: "Orden al equipo", L3: "Hacia el exterior" },
@@ -200,6 +221,7 @@ export const WEB_ACTION_LOG_TEXT: Record<Locale, WebActionLogText> = {
       "team.emergency_stop": "Parada de emergencia",
       "position.apply_authorize": "Candidatura autorizada",
       "position.apply_revoke": "Autorización de candidatura retirada",
+      "settings.update": "Ajustes cambiados",
     },
   },
   fr: {
@@ -221,6 +243,10 @@ export const WEB_ACTION_LOG_TEXT: Record<Locale, WebActionLogText> = {
     listLabel: "Actions demandées par le site",
     confirmed: "confirmée {time}",
     targetAll: "toute l’équipe",
+    setting: {
+      working_hours: "horaires de travail",
+      role_models: "modèles des rôles",
+    },
     expires: "expire {time}",
     result: "Résultat",
     level: { L1: "Note", L2: "Ordre à l’équipe", L3: "Vers l’extérieur" },
@@ -246,6 +272,7 @@ export const WEB_ACTION_LOG_TEXT: Record<Locale, WebActionLogText> = {
       "team.emergency_stop": "Arrêt d’urgence",
       "position.apply_authorize": "Candidature autorisée",
       "position.apply_revoke": "Autorisation de candidature retirée",
+      "settings.update": "Réglages modifiés",
     },
   },
   hu: {
@@ -267,6 +294,10 @@ export const WEB_ACTION_LOG_TEXT: Record<Locale, WebActionLogText> = {
     listLabel: "A webhely által kért műveletek",
     confirmed: "megerősítve: {time}",
     targetAll: "az egész csapat",
+    setting: {
+      working_hours: "munkaidő",
+      role_models: "szerepkörök modelljei",
+    },
     expires: "lejár: {time}",
     result: "Eredmény",
     level: { L1: "Jegyzet", L2: "Parancs a csapatnak", L3: "Kifelé" },
@@ -292,6 +323,7 @@ export const WEB_ACTION_LOG_TEXT: Record<Locale, WebActionLogText> = {
       "team.emergency_stop": "Vészleállítás",
       "position.apply_authorize": "Jelentkezés engedélyezve",
       "position.apply_revoke": "Jelentkezési engedély visszavonva",
+      "settings.update": "Beállítások módosítva",
     },
   },
   pt: {
@@ -312,6 +344,10 @@ export const WEB_ACTION_LOG_TEXT: Record<Locale, WebActionLogText> = {
     listLabel: "Ações pedidas pelo site",
     confirmed: "confirmada {time}",
     targetAll: "toda a equipa",
+    setting: {
+      working_hours: "horário de trabalho",
+      role_models: "modelos das funções",
+    },
     expires: "expira {time}",
     result: "Resultado",
     level: { L1: "Nota", L2: "Comando à equipa", L3: "Para o exterior" },
@@ -337,6 +373,7 @@ export const WEB_ACTION_LOG_TEXT: Record<Locale, WebActionLogText> = {
       "team.emergency_stop": "Paragem de emergência",
       "position.apply_authorize": "Candidatura autorizada",
       "position.apply_revoke": "Autorização de candidatura retirada",
+      "settings.update": "Definições alteradas",
     },
   },
 };
