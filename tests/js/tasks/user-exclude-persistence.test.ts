@@ -110,12 +110,17 @@ describe("user exclusion on the local source of truth", () => {
 });
 
 type DbResult = { data: unknown; error: { message: string } | null };
+type RpcResult = { data: unknown; error: { code?: string; message?: string } | null };
 
-function cloudDb(selectResult: DbResult, updateResult: DbResult) {
+// The database without migration 101: PostgREST does not find the door with p_body (099 absent).
+const NO_DOOR: RpcResult = { data: null, error: { code: "PGRST202", message: "not found" } };
+
+function cloudDb(selectResult: DbResult, updateResult: DbResult, rpcResult: RpcResult = NO_DOOR) {
   const calls = {
     table: [] as string[],
     filters: [] as Array<[string, unknown]>,
     update: null as Record<string, unknown> | null,
+    rpc: [] as Array<[string, Record<string, unknown>]>,
   };
   let writing = false;
   const builder = {
@@ -138,11 +143,15 @@ function cloudDb(selectResult: DbResult, updateResult: DbResult) {
         calls.table.push(table);
         return builder;
       }),
+      rpc: vi.fn(async (name: string, args: Record<string, unknown>) => {
+        calls.rpc.push([name, args]);
+        return rpcResult;
+      }),
     },
   };
 }
 
-describe("user exclusion on the Supabase source of truth", () => {
+describe("user exclusion on the Supabase source of truth, the way of before (database without 101)", () => {
   it("scopes both reads and writes to the authenticated tenant", async () => {
     const db = cloudDb(
       {
@@ -233,5 +242,106 @@ describe("user exclusion on the Supabase source of truth", () => {
         "company",
       ),
     ).resolves.toMatchObject({ ok: false, status: 404 });
+  });
+});
+
+describe("user exclusion on the Supabase source of truth, through the single door (migration 101)", () => {
+  const DONE: RpcResult = {
+    data: {
+      ok: true,
+      state: "done",
+      id: "0b9c2a52-3f7e-4d0e-9a51-6f2b8c1d4e77",
+      level: "L1",
+      summary: "exclude #1170 company",
+    },
+    error: null,
+  };
+  const SAVED: DbResult = {
+    data: { status: "excluded", user_excluded_reason: "company", user_excluded_prev_status: "scored" },
+    error: null,
+  };
+
+  it("asks the door, never writes the row itself, and reads the row back for the user's tenant", async () => {
+    const db = cloudDb(SAVED, { data: null, error: null }, DONE);
+    await expect(
+      applyCloud(db.client as never, "authenticated-user", 1170, "exclude", "company", "a note"),
+    ).resolves.toMatchObject({
+      ok: true,
+      outcome: { status: "excluded", user_excluded_reason: "company", user_excluded_prev_status: "scored" },
+    });
+    expect(db.calls.rpc).toEqual([
+      [
+        "request_action",
+        {
+          p_action: "exclusion.decide",
+          p_params: { legacy_id: 1170, reason: "company" },
+          p_confirm_id: null,
+          p_route_level: "L1",
+          p_body: "a note",
+        },
+      ],
+    ]);
+    expect(db.calls.update).toBeNull();
+    expect(db.calls.filters).toEqual([
+      ["user_id", "authenticated-user"],
+      ["legacy_id", 1170],
+    ]);
+  });
+
+  it("withdraws with the legacy id only, and no text", async () => {
+    const db = cloudDb(
+      { data: { status: "scored", user_excluded_reason: null, user_excluded_prev_status: null }, error: null },
+      { data: null, error: null },
+      DONE,
+    );
+    await applyCloud(db.client as never, "authenticated-user", 1170, "unexclude");
+    expect(db.calls.rpc[0][1]).toEqual({
+      p_action: "exclusion.withdraw",
+      p_params: { legacy_id: 1170 },
+      p_confirm_id: null,
+      p_route_level: "L1",
+    });
+    expect(db.calls.update).toBeNull();
+  });
+
+  it("says what the door said: not found is 404, a limit is 429, an unknown answer is 502", async () => {
+    const notFound = cloudDb(SAVED, SAVED, { data: { ok: false, error: "not_found" }, error: null });
+    await expect(
+      applyCloud(notFound.client as never, "u", 1170, "exclude", "company"),
+    ).resolves.toMatchObject({ ok: false, status: 404 });
+    const limited = cloudDb(SAVED, SAVED, { data: { ok: false, error: "rate_limited" }, error: null });
+    await expect(
+      applyCloud(limited.client as never, "u", 1170, "exclude", "company"),
+    ).resolves.toMatchObject({ ok: false, status: 429, body: { error: "rate_limited" } });
+    const sent = cloudDb(SAVED, SAVED, { data: { ok: false, error: "already_submitted" }, error: null });
+    await expect(
+      applyCloud(sent.client as never, "u", 1170, "exclude", "company"),
+    ).resolves.toMatchObject({ ok: false, status: 409, body: { error: "already_submitted" } });
+    const odd = cloudDb(SAVED, SAVED, { data: { ok: false, error: "a_code_nobody_knows" }, error: null });
+    await expect(
+      applyCloud(odd.client as never, "u", 1170, "exclude", "company"),
+    ).resolves.toMatchObject({ ok: false, status: 502 });
+    // and on none of them the row was written directly
+    for (const db of [notFound, limited, sent, odd]) expect(db.calls.update).toBeNull();
+  });
+
+  it("an error of the database that is not «no door» is a failure, never the way of before", async () => {
+    const db = cloudDb(SAVED, SAVED, { data: null, error: { code: "42501", message: "permission denied" } });
+    await expect(
+      applyCloud(db.client as never, "u", 1170, "exclude", "company"),
+    ).resolves.toMatchObject({ ok: false, status: 502 });
+    expect(db.calls.update).toBeNull();
+  });
+
+  it("a door that does not know the action yet (099 without 101) takes the way of before", async () => {
+    const db = cloudDb(
+      { data: { status: "scored", user_excluded_prev_status: null }, error: null },
+      SAVED,
+      { data: { ok: false, error: "unknown_action" }, error: null },
+    );
+    await expect(
+      applyCloud(db.client as never, "u", 1170, "exclude", "company"),
+    ).resolves.toMatchObject({ ok: true });
+    expect(db.calls.update).toMatchObject({ status: "excluded", user_excluded_reason: "company" });
   });
 });

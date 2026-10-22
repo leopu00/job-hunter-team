@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { DOOR_REFUSAL_STATUS, callDoor } from "@/lib/door-rpc";
 
 // Esclusione manuale su Supabase, con il client che si ha: la sessione
 // dell'utente (RLS) nel web cloud e nella desktop. Estratto da
@@ -20,7 +21,85 @@ export type ExcludeStepResult =
   | { ok: false; status: number; body: Record<string, unknown> };
 
 // ── Path B: Supabase unica source (cloud-mode) ─────────────────────
+// La decisione dell'utente (motivo, nota, data, stato di prima) la scrive solo la porta unica
+// (`exclusion.decide` / `exclusion.withdraw`, migrazione 101): un trigger rifiuta le scritture dirette di
+// un ruolo del browser su quelle colonne. Qui si chiede alla porta e poi si rilegge la riga.
 export async function applyCloud(
+  supabase: SupabaseClient,
+  userId: string,
+  legacyId: number,
+  action: "exclude" | "unexclude",
+  reason?: string,
+  note?: string,
+): Promise<ExcludeStepResult> {
+  const door = await callDoor(supabase, {
+    action: action === "exclude" ? "exclusion.decide" : "exclusion.withdraw",
+    level: "L1",
+    params:
+      action === "exclude"
+        ? { legacy_id: legacyId, reason }
+        : { legacy_id: legacyId },
+    body: action === "exclude" && note ? note : null,
+  });
+  if (door.kind === "door_missing") {
+    // TEMPORANEO (O1, 22/10): il database non ha ancora la 101. Si va per la strada di prima, che la 101
+    // stessa chiude: dopo la migrazione questo ramo non si apre più, e si toglie.
+    return applyCloudBeforeTheDoor(
+      supabase,
+      userId,
+      legacyId,
+      action,
+      reason,
+      note,
+    );
+  }
+  if (door.kind === "failed") {
+    console.error("[positions/user-exclude] 502 door_failed");
+    return { ok: false, status: 502, body: { error: "action_failed" } };
+  }
+  if (door.kind === "refused") {
+    if (door.error === "not_found") {
+      return {
+        ok: false,
+        status: 404,
+        body: { error: `Posizione #${legacyId} non trovata` },
+      };
+    }
+    return {
+      ok: false,
+      status: DOOR_REFUSAL_STATUS[door.error] ?? 500,
+      body: { error: door.error },
+    };
+  }
+  const { data: saved, error: readErr } = await supabase
+    .from("positions")
+    .select("status, user_excluded_reason, user_excluded_prev_status")
+    .eq("user_id", userId)
+    .eq("legacy_id", legacyId)
+    .maybeSingle();
+  if (readErr || !saved) {
+    console.error("[positions/user-exclude] 500 reread_failed");
+    return { ok: false, status: 500, body: { error: "query_failed" } };
+  }
+  const row = saved as {
+    status: string | null;
+    user_excluded_reason: string | null;
+    user_excluded_prev_status: string | null;
+  };
+  return {
+    ok: true,
+    outcome: {
+      id: String(legacyId),
+      status: row.status,
+      user_excluded_reason: row.user_excluded_reason,
+      user_excluded_prev_status: row.user_excluded_prev_status,
+    },
+  };
+}
+
+// La strada di prima della porta: lettura, poi update diretto con la sessione dell'utente.
+// TEMPORANEA (O1): solo quando la porta non conosce ancora l'azione.
+async function applyCloudBeforeTheDoor(
   supabase: SupabaseClient,
   userId: string,
   legacyId: number,

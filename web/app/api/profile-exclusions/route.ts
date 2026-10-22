@@ -4,6 +4,10 @@ import { isSupabaseConfigured } from "@/lib/workspace";
 import { sanitizedError } from "@/lib/error-response";
 import { invalidJsonBody } from "@/app/api/_lib/error-body";
 import { isProposableReason } from "@/lib/feedback-reasons";
+import {
+  PROFILE_EXCLUSION_COLUMNS,
+  decideProfileExclusion,
+} from "@/lib/profile-exclusions-cloud";
 
 export const dynamic = "force-dynamic";
 
@@ -12,8 +16,8 @@ export const dynamic = "force-dynamic";
 // punteggio delle posizioni di quel tipo (il team la porta nella sua jobs.db).
 //
 // SCRIVERE si fa anche dal sito (decisione dell'operatore, 22/10/2026: il sito
-// fa ciò che serve all'utente): è un'azione L1 della corsia delle richieste,
-// una riga dell'utente sulla sua riga, senza effetto fuori. Il desktop non
+// fa ciò che serve all'utente): è un'azione L1 della porta unica
+// (`exclusion.profile_set`, migrazione 101), una riga dell'utente, senza effetto fuori. Il desktop non
 // passa da qui: scrive con la sessione dell'utente dal suo ponte
 // (`desktop/src/lib/web-api.ts`). Il censimento delle route di scrittura
 // (`web-write-routes-census`) la elenca come `request-lane` L1.
@@ -23,7 +27,7 @@ export const dynamic = "force-dynamic";
 // al posto suo. Il filtro su user_id è esplicito e non delegato alla RLS.
 
 const SESSION_ONLY = { error: "session_only" };
-const COLUMNS = "reason, status, positions_at_decision, decided_at";
+const COLUMNS = PROFILE_EXCLUSION_COLUMNS;
 
 export async function GET(req: NextRequest) {
   if (!isSupabaseConfigured) return NextResponse.json({ exclusions: [] });
@@ -75,22 +79,19 @@ export async function POST(req: NextRequest) {
       ? body.positions
       : 0;
 
-  const { data, error } = await supabase
-    .from("profile_exclusions")
-    .upsert(
-      {
-        user_id: userId,
-        reason,
-        status: body.status,
-        positions_at_decision: positions,
-        decided_at: new Date().toISOString(),
-      },
-      { onConflict: "user_id,reason" },
-    )
-    .select(COLUMNS)
-    .single();
-  if (error) {
-    return sanitizedError(error, { status: 500, scope: "profile-exclusions" });
+  // The decision goes through the single door (exclusion.profile_set, migration 101).
+  const decided = await decideProfileExclusion(
+    supabase,
+    userId,
+    reason,
+    body.status,
+    positions,
+  );
+  if (!decided.ok) {
+    return NextResponse.json(
+      { error: decided.error },
+      { status: decided.status },
+    );
   }
-  return NextResponse.json({ exclusion: data });
+  return NextResponse.json({ exclusion: decided.exclusion });
 }

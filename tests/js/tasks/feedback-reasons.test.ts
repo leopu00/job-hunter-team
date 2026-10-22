@@ -144,7 +144,11 @@ vi.mock("@/lib/workspace", () => ({ isSupabaseConfigured: true }));
 import { POST as postFeedback } from "@/app/api/positions/[legacyId]/feedback/route";
 import { GET as getProfileExclusions, POST as postProfileExclusion } from "@/app/api/profile-exclusions/route";
 
-function recordingDb() {
+// The answer of the single door; by default the database without 101 (PostgREST does not find the door).
+function recordingDb(
+  door: { data: unknown; error: { code?: string } | null } = { data: null, error: { code: "PGRST202" } },
+) {
+  const rpc: Array<[string, Record<string, unknown>]> = [];
   const inserted: Record<string, unknown>[] = [];
   const upserted: Record<string, unknown>[] = [];
   const selects: string[] = [];
@@ -162,9 +166,26 @@ function recordingDb() {
       upserted.push(row);
       return builder;
     }),
-    eq: vi.fn(() => Promise.resolve({ data: [], error: null })),
+    eq: vi.fn(() => builder),
+    maybeSingle: vi.fn(async () => ({
+      data: { reason: "too_senior", status: "dismissed", positions_at_decision: 4, decided_at: "2026-10-22T00:00:00Z" },
+      error: null,
+    })),
+    then: (resolve: (v: unknown) => unknown) => Promise.resolve({ data: [], error: null }).then(resolve),
   };
-  return { supabase: { from: vi.fn(() => builder) }, inserted, upserted, selects };
+  return {
+    supabase: {
+      from: vi.fn(() => builder),
+      rpc: vi.fn(async (name: string, args: Record<string, unknown>) => {
+        rpc.push([name, args]);
+        return door;
+      }),
+    },
+    inserted,
+    upserted,
+    selects,
+    rpc,
+  };
 }
 
 function as(source: "session" | "token", db: ReturnType<typeof recordingDb>) {
@@ -243,5 +264,36 @@ describe("la preferenza sull'esclusione del profilo", () => {
       expect((await postProfileExclusion(req({ reason, status: "accepted" }))).status, reason).toBe(400);
     }
     expect((await postProfileExclusion(req({ reason: "too_senior", status: "maybe" }))).status).toBe(400);
+  });
+
+  it("with migration 101 the decision goes through the single door, and the table is not written directly", async () => {
+    const db = recordingDb({
+      data: { ok: true, state: "done", id: "0b9c2a52-3f7e-4d0e-9a51-6f2b8c1d4e77", level: "L1", summary: "profile too_senior dismissed" },
+      error: null,
+    });
+    as("session", db);
+    const ok = await postProfileExclusion(req({ reason: "too_senior", status: "dismissed", positions: 4 }));
+    expect(ok.status).toBe(200);
+    expect(await ok.json()).toMatchObject({ exclusion: { reason: "too_senior", status: "dismissed" } });
+    expect(db.rpc).toEqual([
+      [
+        "request_action",
+        {
+          p_action: "exclusion.profile_set",
+          p_params: { reason: "too_senior", status: "dismissed", positions: 4 },
+          p_confirm_id: null,
+          p_route_level: "L1",
+        },
+      ],
+    ]);
+    expect(db.upserted).toEqual([]);
+  });
+
+  it("a refusal of the door is the user's answer, never the way of before", async () => {
+    const db = recordingDb({ data: { ok: false, error: "rate_limited" }, error: null });
+    as("session", db);
+    const res = await postProfileExclusion(req({ reason: "too_senior", status: "accepted", positions: 1 }));
+    expect(res.status).toBe(429);
+    expect(db.upserted).toEqual([]);
   });
 });

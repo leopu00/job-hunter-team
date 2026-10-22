@@ -5,6 +5,8 @@
 // Capitano le rilegge a ogni riavvio (team_directives.py active) e le rispetta
 // come policy che vince sui default. CRUD via /api/team-directives (SQLite
 // locale nel container; il daemon `jht cloud sync-directives` fa il mirror cloud).
+// Sul sito e dalla desktop senza box si passa dalla porta unica: creare e modificare chiedono una
+// conferma (la route risponde 202 col riassunto del database), archiviare vale subito.
 
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useLocale } from "@/lib/use-locale";
@@ -12,11 +14,12 @@ import { useToast } from "../../components/Toast";
 import { makeT } from "@/lib/i18n-dict";
 import { T } from "./DirectivesPanel.i18n";
 import { IconClipboard } from "@/app/components/PanelIcons";
-import { useDesktopWrite } from "@/lib/desktop-write";
+import { useReadOnlyActions } from "@/lib/read-only-actions";
 import {
   type DirectiveAction,
   directiveErrorTranslationKey,
   isDirectiveAcknowledgement,
+  isDirectiveConfirmationRequest,
   retainDirectiveRequest,
 } from "@/lib/team-directive-request";
 
@@ -78,10 +81,10 @@ export default function DirectivesPanel({
 }: {
   readOnly?: boolean;
 }) {
-  // The orders to the captain are written by the desktop app (the route says
-  // 403 read_only to the website): the site shows them, nothing to edit.
-  const { canChange } = useDesktopWrite();
-  const readOnly = readOnlyProp || !canChange;
+  // Written from the desktop and, through the single door, from the website (phase 4). Read only in an
+  // informative embed (`readOnly`) and in the desktop's read-only view of an existing team.
+  const readOnlyActions = useReadOnlyActions();
+  const readOnly = readOnlyProp || readOnlyActions.readOnly;
   const locale = useLocale();
   const { toast } = useToast();
   const t = makeT(T, locale);
@@ -100,6 +103,17 @@ export default function DirectivesPanel({
     Record<string, "queued" | "error">
   >({});
   const pendingRequests = useRef(new Map());
+  // The order waiting for the user's confirmation: what the database will write, said by the database.
+  const [pendingConfirm, setPendingConfirm] = useState<{
+    confirmId: string;
+    summary: string;
+    method: "POST" | "PATCH";
+    key: string;
+    requestId: string;
+    action: DirectiveAction;
+    expectedId?: number;
+    onDone: () => void;
+  } | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -118,12 +132,75 @@ export default function DirectivesPanel({
     load();
   }, [load]);
 
+  // The answer that closes an operation: the toast and the board read again.
+  const acknowledged = async (
+    data: Record<string, unknown>,
+    payloadId: number | undefined,
+    okMsg?: string,
+  ) => {
+    const event = data.captain_event as
+      | { status?: "queued" | "error" }
+      | undefined;
+    const target = payloadId ?? (data.id ? Number(data.id) : undefined);
+    if (event && target !== undefined)
+      setEventStatus((old) => ({
+        ...old,
+        [String(target)]: event.status === "queued" ? "queued" : "error",
+      }));
+    if (event?.status === "error") toast(t("captainError"), "error");
+    else if (event?.status === "queued") toast(t("captainQueued"), "success");
+    else if (okMsg) toast(okMsg, "success");
+    // L'ACK conclude l'operazione. Un refresh best-effort fallito non deve
+    // trasformarlo in un retry con un nuovo request_id e un secondo effetto.
+    await load().catch(() => undefined);
+  };
+
+  const confirmPending = async () => {
+    const pending = pendingConfirm;
+    if (!pending) return;
+    setBusy(true);
+    try {
+      const res = await fetch("/api/team-directives", {
+        method: pending.method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          confirm_id: pending.confirmId,
+          request_id: pending.requestId,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (
+        !res.ok ||
+        !isDirectiveAcknowledgement(data, {
+          requestId: pending.requestId,
+          action: pending.action,
+          id: pending.expectedId,
+        })
+      ) {
+        toast(t(directiveErrorTranslationKey(data)), "error");
+        // A confirmation that expired or was used cannot be retried: the order is sent again.
+        setPendingConfirm(null);
+        pendingRequests.current.delete(pending.key);
+        return;
+      }
+      pendingRequests.current.delete(pending.key);
+      setPendingConfirm(null);
+      pending.onDone();
+      await acknowledged(data, pending.expectedId);
+    } catch {
+      toast(t("errGeneric"), "error");
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const post = async (
     payload: object,
     key: string,
     action: DirectiveAction,
     expectedId?: number,
     okMsg?: string,
+    onDone: () => void = () => undefined,
   ) => {
     const pending = retainDirectiveRequest(
       pendingRequests.current,
@@ -140,6 +217,25 @@ export default function DirectivesPanel({
       });
       const data = await res.json().catch(() => ({}));
       if (
+        res.status === 202 &&
+        isDirectiveConfirmationRequest(data, {
+          requestId: pending.requestId,
+          action,
+        })
+      ) {
+        setPendingConfirm({
+          confirmId: data.confirm_id,
+          summary: data.summary,
+          method,
+          key,
+          requestId: pending.requestId,
+          action,
+          expectedId,
+          onDone,
+        });
+        return false;
+      }
+      if (
         !res.ok ||
         !isDirectiveAcknowledgement(data, {
           requestId: pending.requestId,
@@ -151,25 +247,8 @@ export default function DirectivesPanel({
         return false;
       }
       pendingRequests.current.delete(key);
-      const event = data.captain_event as
-        | { status?: "queued" | "error" }
-        | undefined;
-      if ("id" in payload && event)
-        setEventStatus((old) => ({
-          ...old,
-          [String(payload.id)]: event.status === "queued" ? "queued" : "error",
-        }));
-      else if (event && data.id)
-        setEventStatus((old) => ({
-          ...old,
-          [String(data.id)]: event.status === "queued" ? "queued" : "error",
-        }));
-      if (event?.status === "error") toast(t("captainError"), "error");
-      else if (event?.status === "queued") toast(t("captainQueued"), "success");
-      else if (okMsg) toast(okMsg, "success");
-      // L'ACK conclude l'operazione. Un refresh best-effort fallito non deve
-      // trasformarlo in un retry con un nuovo request_id e un secondo effetto.
-      await load().catch(() => undefined);
+      onDone();
+      await acknowledged(data, "id" in payload ? expectedId : undefined, okMsg);
       return true;
     } catch {
       toast(t("errGeneric"), "error");
@@ -182,27 +261,26 @@ export default function DirectivesPanel({
   const add = async () => {
     const body = newBody.trim();
     if (!body) return;
-    if (
-      await post(
-        { body, kind: newKind },
-        "create",
-        "created",
-        undefined,
-        t("added"),
-      )
-    ) {
-      setNewBody("");
-      setNewKind("order");
-    }
+    await post(
+      { body, kind: newKind },
+      "create",
+      "created",
+      undefined,
+      t("added"),
+      () => {
+        setNewBody("");
+        setNewKind("order");
+      },
+    );
   };
 
   const saveEdit = async (id: number) => {
     const body = editText.trim();
     if (!body) return;
-    if (await post({ id, body }, `edit:${id}`, "edited", id)) {
+    await post({ id, body }, `edit:${id}`, "edited", id, undefined, () => {
       setEditId(null);
       setEditText("");
-    }
+    });
   };
 
   const archive = (id: number) =>
@@ -229,15 +307,48 @@ export default function DirectivesPanel({
         {t("subtitle")}
       </p>
 
-      {!readOnlyProp && !canChange && (
-        <p className="mb-4 text-[12px] text-[var(--color-dim)]">
-          {t("desktopOnly")}
-        </p>
+      {pendingConfirm && (
+        <div
+          role="alertdialog"
+          aria-labelledby="directive-confirm-title"
+          className="mb-5 rounded-lg border border-[var(--color-blue)] bg-[var(--color-bg)] p-3"
+        >
+          <p
+            id="directive-confirm-title"
+            className="text-[13px] font-semibold text-[var(--color-white)]"
+          >
+            {t("confirmTitle")}
+          </p>
+          {/* The summary is the database's, the text that will be written: shown as text, never as markup. */}
+          <p className="mt-1 whitespace-pre-wrap break-words text-[12px] text-[var(--color-white)]">
+            {pendingConfirm.summary}
+          </p>
+          <p className="mt-1 text-[11px] text-[var(--color-muted)]">
+            {t("confirmHint")}
+          </p>
+          <div className="mt-2 flex gap-2">
+            <button
+              type="button"
+              onClick={confirmPending}
+              disabled={busy}
+              className="rounded-lg bg-[var(--color-blue)] px-3 py-1.5 text-[12px] font-semibold text-white disabled:opacity-50"
+            >
+              {t("confirmButton")}
+            </button>
+            <button
+              type="button"
+              onClick={() => setPendingConfirm(null)}
+              disabled={busy}
+              className="rounded-lg border border-[var(--color-border)] px-3 py-1.5 text-[12px] text-[var(--color-muted)] disabled:opacity-50"
+            >
+              {t("cancelButton")}
+            </button>
+          </div>
+        </div>
       )}
 
-      {/* Si scrive solo dalla desktop (`canChange`): il sito mostra la bacheca
-          e `readOnly` copre gli embed informativi. */}
-      {!readOnly && (
+      {/* `readOnly` copre gli embed informativi e la vista in sola lettura della desktop. */}
+      {!readOnly && !pendingConfirm && (
         <div className="mb-5 flex flex-col gap-2 sm:flex-row">
           <textarea
             value={newBody}

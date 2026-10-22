@@ -24,6 +24,12 @@ export const WEB_ACTION_CODES = [
   "position.apply_authorize",
   "position.apply_revoke",
   "settings.update",
+  "exclusion.decide",
+  "exclusion.withdraw",
+  "exclusion.profile_set",
+  "directive.create",
+  "directive.update",
+  "directive.archive",
 ] as const;
 export type WebActionCode = (typeof WEB_ACTION_CODES)[number];
 
@@ -66,6 +72,10 @@ export type WebActionRow = {
   target: string | null;
   /** The settings a settings action changed, by key, in the order the vocabulary knows them. */
   settings: WebActionSetting[];
+  /** The number an action is about, from its params: a position (legacy_id) or a standing order (id). */
+  ref: number | null;
+  /** The kind of a new standing order, when the action names one. */
+  directiveKind: WebActionDirectiveKind | null;
   summary: string;
   level: WebActionLevel | null;
   status: WebActionStatus | null;
@@ -133,6 +143,35 @@ function paramsTarget(params: unknown): string | null {
 export const WEB_ACTION_SETTINGS = ["working_hours", "role_models"] as const;
 export type WebActionSetting = (typeof WEB_ACTION_SETTINGS)[number];
 
+/** The kinds of standing order the board knows (team_directives.kind). */
+export const WEB_ACTION_DIRECTIVE_KINDS = [
+  "order",
+  "strategy",
+  "formation",
+  "note",
+] as const;
+export type WebActionDirectiveKind =
+  (typeof WEB_ACTION_DIRECTIVE_KINDS)[number];
+
+function paramsRef(params: unknown): number | null {
+  if (!params || typeof params !== "object" || Array.isArray(params))
+    return null;
+  const record = params as Record<string, unknown>;
+  const value = record.legacy_id ?? record.id;
+  return typeof value === "number" && Number.isSafeInteger(value) && value > 0
+    ? value
+    : null;
+}
+
+function paramsDirectiveKind(params: unknown): WebActionDirectiveKind | null {
+  if (!params || typeof params !== "object" || Array.isArray(params))
+    return null;
+  const kind = (params as Record<string, unknown>).kind;
+  return (WEB_ACTION_DIRECTIVE_KINDS as readonly unknown[]).includes(kind)
+    ? (kind as WebActionDirectiveKind)
+    : null;
+}
+
 function paramsSettings(params: unknown): WebActionSetting[] {
   if (!params || typeof params !== "object" || Array.isArray(params)) return [];
   return WEB_ACTION_SETTINGS.filter((key) =>
@@ -161,6 +200,8 @@ export function parseWebActionRow(raw: unknown): WebActionRow | null {
     action,
     target: paramsTarget(row.params),
     settings: paramsSettings(row.params),
+    ref: paramsRef(row.params),
+    directiveKind: paramsDirectiveKind(row.params),
     summary: cleanLogText(row.summary, SUMMARY_MAX),
     level: level(row.level),
     status,
@@ -211,6 +252,15 @@ export function actionSubject(
     return row.settings.length
       ? row.settings.map((key) => text.setting[key]).join(", ")
       : null;
+  }
+  // Exclusions and standing orders are named by their number (and a new order by its kind): their
+  // summary is a machine phrase, and an order's carries the start of its text, never shown here.
+  if (row.action.startsWith("exclusion.")) {
+    return row.ref ? text.positionRef.replace("{n}", String(row.ref)) : null;
+  }
+  if (row.action.startsWith("directive.")) {
+    if (row.ref) return text.directiveRef.replace("{n}", String(row.ref));
+    return row.directiveKind ? text.directiveKind[row.directiveKind] : null;
   }
   return row.summary || null;
 }

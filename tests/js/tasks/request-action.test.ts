@@ -718,9 +718,10 @@ describe("what the person is shown", () => {
     ).toBe(false);
   });
 
-  it("the contract's 14 codes are the ones the library knows", () => {
+  it("the contract's 15 codes are the ones the library knows", () => {
     expect(Object.keys(DATABASE_REFUSALS).sort()).toEqual(
       [
+        "action_disabled",
         "already_submitted",
         "confirm_action_mismatch",
         "confirm_expired",
