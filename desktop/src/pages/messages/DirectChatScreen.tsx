@@ -139,6 +139,8 @@ export default function DirectChatScreen({
   const [operationError, setOperationError] = useState<string | null>(null);
   // The person's messages of this view that the agent's CLI took: only a receipt says so.
   const [delivered, setDelivered] = useState<ReadonlySet<string>>(() => new Set());
+  // A receipt that says `queued`: the turn is in the agent's mailbox, and nobody has said it was taken.
+  const [queued, setQueued] = useState<ReadonlySet<string>>(() => new Set());
   const [inFlight, setInFlight] = useState<string | null>(null);
   const composer = useRef<HTMLTextAreaElement>(null);
   // Where the cursor goes once the new line is in the box: set in the same commit, before the next
@@ -213,6 +215,7 @@ export default function DirectChatScreen({
   useEffect(() => {
     setMessages([]);
     setDelivered(new Set());
+    setQueued(new Set());
     setOperationError(null);
     setLoading(false);
     if (status.state !== "ready") return;
@@ -283,7 +286,8 @@ export default function DirectChatScreen({
             : message,
         ),
       );
-      setDelivered((current) => new Set(current).add(receipt.messageId));
+      if (receipt.state === "queued") setQueued((current) => new Set(current).add(receipt.messageId));
+      else setDelivered((current) => new Set(current).add(receipt.messageId));
     } catch (error) {
       // Not delivered: the words go back to the composer, and the status bar says why.
       setMessages((current) => current.filter((message) => message.id !== id));
@@ -390,13 +394,19 @@ export default function DirectChatScreen({
                 <div className="mb-1 text-[8px] font-semibold uppercase tracking-wider text-[var(--color-dim)]">
                   {message.role === "user" ? t.you : message.role === "system" ? t.system : selected.label}
                 </div>
-                {message.text}
-                {message.role === "user" && (message.id === inFlight || delivered.has(message.id)) && (
+                {message.role === "system" && message.code && t.codes[message.code] ? t.codes[message.code] : message.text}
+                {message.role === "user" && (message.id === inFlight || queued.has(message.id) || delivered.has(message.id)) && (
                   <div
-                    data-testid={message.id === inFlight ? "direct-chat-in-flight" : "direct-chat-delivered"}
+                    data-testid={
+                      message.id === inFlight
+                        ? "direct-chat-in-flight"
+                        : queued.has(message.id)
+                          ? "direct-chat-queued"
+                          : "direct-chat-delivered"
+                    }
                     className="mt-1 text-right text-[11px] text-[var(--color-muted)]"
                   >
-                    {message.id === inFlight ? t.sending : t.delivered}
+                    {message.id === inFlight ? t.sending : queued.has(message.id) ? t.queued : t.delivered}
                   </div>
                 )}
               </article>

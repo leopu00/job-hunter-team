@@ -137,6 +137,9 @@ pub(crate) struct DirectChatMessage {
     role: String,
     text: String,
     at: f64,
+    /// A closed code on a system line (`mail_not_taken`): the page says it in the person's language.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    code: Option<String>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
@@ -153,6 +156,10 @@ pub(crate) struct DirectChatReceipt {
     accepted: bool,
     message_id: String,
     at: f64,
+    /// `queued` when the agent's mailbox holds the turn and nobody has taken it yet; absent when the
+    /// turn was typed into the agent's terminal, which is the only way a receipt says «delivered».
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    state: Option<String>,
 }
 
 #[derive(Clone, Serialize)]
@@ -1434,6 +1441,30 @@ mod tests {
         .unwrap();
         assert_eq!(page.messages[0].id, "m1");
         assert_eq!(page.cursor.as_deref(), Some("9"));
+    }
+
+    #[test]
+    fn a_system_line_keeps_its_closed_code_and_a_receipt_keeps_its_state() {
+        let page: DirectChatPage = serde_json::from_str(
+            r#"{"messages":[{"id":"s1","role":"system","text":"x","at":1.0,"code":"mail_not_taken"},{"id":"a1","role":"agent","text":"ok","at":2.0}],"cursor":"3"}"#,
+        )
+        .unwrap();
+        assert_eq!(page.messages[0].code.as_deref(), Some("mail_not_taken"));
+        assert_eq!(page.messages[1].code, None);
+        let shown = serde_json::to_value(&page).unwrap();
+        assert_eq!(shown["messages"][0]["code"], "mail_not_taken");
+        assert!(shown["messages"][1].get("code").is_none());
+
+        let queued: DirectChatReceipt = serde_json::from_str(
+            r#"{"clientMessageId":"c","accepted":true,"messageId":"m","at":2.0,"state":"queued"}"#,
+        )
+        .unwrap();
+        assert_eq!(serde_json::to_value(&queued).unwrap()["state"], "queued");
+        let typed: DirectChatReceipt = serde_json::from_str(
+            r#"{"clientMessageId":"c","accepted":true,"messageId":"m","at":2.0}"#,
+        )
+        .unwrap();
+        assert!(serde_json::to_value(&typed).unwrap().get("state").is_none());
     }
 
     #[test]

@@ -38,6 +38,10 @@ export interface DirectChatText {
   destination: string; // {name}
   /** Under a message of the person's: the agent's CLI took it (seen in its composer, then sent). */
   delivered: string;
+  /** Under a message of the person's that waits in the agent's mailbox: sent, not yet taken. */
+  queued: string;
+  /** What a system line with a closed code says, by code (the backend's English text is the fallback). */
+  codes: Record<string, string>;
   keysHint: string;
 }
 
@@ -70,6 +74,8 @@ export const DIRECT_CHAT_TEXT: Record<Locale, DirectChatText> = {
     send: "Invia",
     destination: "Destinazione: la chat di {name}. Il testo gli arriva come messaggio, non come tasti nel suo terminale.",
     delivered: "Consegnato",
+    queued: "In coda",
+    codes: { mail_not_taken: "L'agente non ha ancora preso il messaggio." },
     keysHint: "Invio manda · Ctrl+Invio va a capo",
   },
   en: {
@@ -100,6 +106,8 @@ export const DIRECT_CHAT_TEXT: Record<Locale, DirectChatText> = {
     send: "Send",
     destination: "Goes to: the chat with {name}. The text reaches it as a message, not as keys in its terminal.",
     delivered: "Delivered",
+    queued: "Queued",
+    codes: { mail_not_taken: "The agent has not taken your message yet." },
     keysHint: "Enter sends · Ctrl+Enter starts a new line",
   },
   de: {
@@ -130,6 +138,8 @@ export const DIRECT_CHAT_TEXT: Record<Locale, DirectChatText> = {
     send: "Senden",
     destination: "Ziel: der Chat mit {name}. Der Text kommt als Nachricht an, nicht als Tasten in seinem Terminal.",
     delivered: "Zugestellt",
+    queued: "In der Warteschlange",
+    codes: { mail_not_taken: "Der Agent hat deine Nachricht noch nicht abgeholt." },
     keysHint: "Enter sendet · Strg+Enter für eine neue Zeile",
   },
   fr: {
@@ -160,6 +170,8 @@ export const DIRECT_CHAT_TEXT: Record<Locale, DirectChatText> = {
     send: "Envoyer",
     destination: "Destination : la discussion avec {name}. Le texte lui arrive comme un message, pas comme des touches dans son terminal.",
     delivered: "Remis",
+    queued: "En attente",
+    codes: { mail_not_taken: "L'agent n'a pas encore pris ton message." },
     keysHint: "Entrée envoie · Ctrl+Entrée pour aller à la ligne",
   },
   es: {
@@ -190,6 +202,8 @@ export const DIRECT_CHAT_TEXT: Record<Locale, DirectChatText> = {
     send: "Enviar",
     destination: "Destino: el chat con {name}. El texto le llega como mensaje, no como teclas en su terminal.",
     delivered: "Entregado",
+    queued: "En cola",
+    codes: { mail_not_taken: "El agente aún no ha tomado tu mensaje." },
     keysHint: "Intro envía · Ctrl+Intro salta de línea",
   },
   pt: {
@@ -220,6 +234,8 @@ export const DIRECT_CHAT_TEXT: Record<Locale, DirectChatText> = {
     send: "Enviar",
     destination: "Destino: o chat com {name}. O texto chega-lhe como mensagem, não como teclas no terminal.",
     delivered: "Entregue",
+    queued: "Em fila",
+    codes: { mail_not_taken: "O agente ainda não apanhou a tua mensagem." },
     keysHint: "Enter envia · Ctrl+Enter muda de linha",
   },
   hu: {
@@ -250,6 +266,8 @@ export const DIRECT_CHAT_TEXT: Record<Locale, DirectChatText> = {
     send: "Küldés",
     destination: "Cél: a csevegés vele: {name}. A szöveg üzenetként érkezik, nem billentyűként a termináljában.",
     delivered: "Kézbesítve",
+    queued: "Sorban",
+    codes: { mail_not_taken: "Az ügynök még nem vette át az üzenetedet." },
     keysHint: "Enter: küldés · Ctrl+Enter: új sor",
   },
 };
