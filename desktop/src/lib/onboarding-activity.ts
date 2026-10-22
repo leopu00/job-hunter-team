@@ -46,6 +46,15 @@ export function applyOnboardingProgress(
 ): OnboardingActivityState {
   const initial = current ?? beginOnboardingActivityInvocation(null, now);
   if (progress.sequence <= initial.lastSequence) return initial;
+  // A notice is not a step: it stays on screen and leaves the step as it is.
+  if (progress.status === "notice") {
+    const notices = initial.notices ?? [];
+    return {
+      ...initial,
+      lastSequence: progress.sequence,
+      notices: notices.includes(progress.message) ? notices : [...notices, progress.message],
+    };
+  }
   const view = STAGE_VIEW[progress.stage];
   const existingIndex = initial.events.findIndex((event) =>
     event.invocation === initial.invocation && event.nativeStage === progress.stage,

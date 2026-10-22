@@ -270,6 +270,28 @@ pub(crate) fn phase_message(line: &str) -> Option<&'static str> {
         .map(|(_, message)| *message)
 }
 
+/// install.ps1's notices (`JHT_NOTICE <id>`), with the key of what the
+/// onboarding keeps on screen for the rest of the setup. A notice is not a
+/// failure: the install goes on.
+pub(crate) const INSTALL_NOTICES: [(&str, &str); 1] =
+    [("windows10_unsupported", "ui_notice_windows10_unsupported")];
+
+/// The key of a `JHT_NOTICE <id>` line of install.ps1's stdout, exactly, with
+/// a known id.
+#[cfg_attr(not(windows), allow(dead_code))]
+pub(crate) fn notice_message(line: &str) -> Option<&'static str> {
+    let id = line.trim_end_matches(['\r', '\n']).strip_prefix("JHT_NOTICE ")?;
+    INSTALL_NOTICES
+        .iter()
+        .find(|(known, _)| *known == id)
+        .map(|(_, message)| *message)
+}
+
+/// Whether a key the setup reports is one of install.ps1's notices.
+pub(crate) fn is_install_notice(message: &str) -> bool {
+    INSTALL_NOTICES.iter().any(|(_, known)| *known == message)
+}
+
 /// The line a jht.ps1 that can remove JHT from this computer carries
 /// (`jht.ps1 uninstall --confirm`, the contract with the PowerShell side).
 pub(crate) const UNINSTALL_PROTOCOL: &str = "$JHT_UNINSTALL_PROTOCOL = 1";
@@ -641,6 +663,45 @@ mod tests {
             .collect();
         let known: std::collections::BTreeSet<String> =
             INSTALL_PHASES.iter().map(|(id, _)| (*id).to_owned()).collect();
+        assert_eq!(printed, known);
+    }
+
+    #[test]
+    fn only_install_ps1s_own_notice_lines_are_kept() {
+        assert_eq!(
+            notice_message("JHT_NOTICE windows10_unsupported\r\n"),
+            Some("ui_notice_windows10_unsupported")
+        );
+        assert!(is_install_notice("ui_notice_windows10_unsupported"));
+        assert!(!is_install_notice("ui_phase_wsl_check"));
+        for other in [
+            "",
+            "JHT_NOTICE",
+            "JHT_NOTICE unknown",
+            "JHT_NOTICE windows10_unsupported extra",
+            " JHT_NOTICE windows10_unsupported",
+            "JHT_PHASE windows10_unsupported",
+            "  ! Podman no longer supports Windows 10",
+        ] {
+            assert_eq!(notice_message(other), None, "{other:?}");
+        }
+        // A notice is never a phase, and a phase never a notice.
+        for (_, phase) in INSTALL_PHASES {
+            assert!(!is_install_notice(phase), "{phase}");
+        }
+    }
+
+    /// The notice ids install.ps1 prints are exactly the ones the app keeps.
+    #[test]
+    fn the_notice_ids_are_the_ones_install_ps1_prints() {
+        let source = include_str!("../../../scripts/install.ps1");
+        let printed: std::collections::BTreeSet<String> = source
+            .lines()
+            .filter_map(|line| line.trim().strip_prefix("Write-JhtNotice "))
+            .map(|id| id.trim().to_owned())
+            .collect();
+        let known: std::collections::BTreeSet<String> =
+            INSTALL_NOTICES.iter().map(|(id, _)| (*id).to_owned()).collect();
         assert_eq!(printed, known);
     }
 

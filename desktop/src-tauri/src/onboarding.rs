@@ -257,6 +257,9 @@ enum OnboardingProgressStatus {
     Progress,
     Done,
     Error,
+    /// Something the screen keeps for the rest of the setup (install.ps1's
+    /// JHT_NOTICE): not a failure, the step goes on.
+    Notice,
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq, Serialize)]
@@ -882,16 +885,26 @@ impl ProgressReporter {
 
     /// A phase of the running step, shown at once with the step's elapsed
     /// time and repeated by its heartbeat. Outside a step it is dropped.
+    /// install.ps1's notices come through here too: sent once as a notice,
+    /// they never take the phase's place in the heartbeat.
     fn phase(&self, message: &'static str) {
+        let notice = crate::windows_runtime::is_install_notice(message);
         let running = {
             let mut current = self.current.lock().unwrap_or_else(|e| e.into_inner());
             current.as_mut().map(|(stage, started, shown)| {
-                *shown = message;
+                if !notice {
+                    *shown = message;
+                }
                 (*stage, *started)
             })
         };
         if let Some((stage, started)) = running {
-            self.send(stage, OnboardingProgressStatus::Progress, message, started, None);
+            let status = if notice {
+                OnboardingProgressStatus::Notice
+            } else {
+                OnboardingProgressStatus::Progress
+            };
+            self.send(stage, status, message, started, None);
         }
     }
 
@@ -1612,8 +1625,8 @@ fn install_local_windows(
     phase: &dyn Fn(&'static str),
 ) -> Result<PathBuf, OnboardingError> {
     use crate::windows_runtime::{
-        installer_invocation, installer_outcome, phase_message, powershell_path, wsl_path,
-        wsl_state, INSTALL_PS1_SHA256,
+        installer_invocation, installer_outcome, notice_message, phase_message, powershell_path,
+        wsl_path, wsl_state, INSTALL_PS1_SHA256,
     };
     let wsl = wsl_path(std::env::var_os("SystemRoot"));
     let started = Instant::now();
@@ -1667,7 +1680,7 @@ fn install_local_windows(
                 installer_invocation(&script, &channel_args),
                 PREPARE_TIMEOUT,
                 |line| {
-                    if let Some(message) = phase_message(line) {
+                    if let Some(message) = phase_message(line).or_else(|| notice_message(line)) {
                         phase(message);
                     }
                     if stdout.len() < INSTALL_STDOUT_KEPT {
@@ -5160,11 +5173,12 @@ mod tests {
             OnboardingProgressStatus::Progress,
             OnboardingProgressStatus::Done,
             OnboardingProgressStatus::Error,
+            OnboardingProgressStatus::Notice,
         ]
         .into_iter()
         .map(|status| serde_json::to_value(status).unwrap())
         .collect::<Vec<_>>();
-        assert_eq!(statuses, ["start", "progress", "done", "error"]);
+        assert_eq!(statuses, ["start", "progress", "done", "error", "notice"]);
     }
 
     #[test]
@@ -5276,6 +5290,63 @@ mod tests {
         ] {
             assert!(!serialized.contains(forbidden));
         }
+    }
+
+    /// install.ps1's Windows 10 notice reaches the screen as a notice of the
+    /// running step, once, and the heartbeat keeps repeating the phase: the
+    /// setup goes on and ends done.
+    #[test]
+    fn an_install_notice_is_sent_once_and_never_replaces_the_phase() {
+        let events = Arc::new(Mutex::new(Vec::<OnboardingProgress>::new()));
+        let captured = Arc::clone(&events);
+        let reporter = ProgressReporter::with_emitter(move |event| {
+            captured.lock().unwrap().push(event);
+        });
+        let inside = reporter.clone();
+        let observed = Arc::clone(&events);
+        reporter
+            .run_with_interval(
+                OnboardingProgressStage::Engine,
+                "ui_engine_start",
+                "ui_engine_progress",
+                "ui_engine_done",
+                Duration::from_millis(2),
+                move || {
+                    inside.phase("ui_phase_wsl_check");
+                    inside.phase("ui_notice_windows10_unsupported");
+                    // until a heartbeat after the notice is out
+                    let deadline = Instant::now() + Duration::from_secs(5);
+                    while Instant::now() < deadline
+                        && !observed.lock().unwrap().iter().skip_while(|event| {
+                            event.status != OnboardingProgressStatus::Notice
+                        }).skip(1).any(|event| event.status == OnboardingProgressStatus::Progress)
+                    {
+                        thread::sleep(Duration::from_millis(1));
+                    }
+                    Ok::<_, super::OnboardingError>(())
+                },
+            )
+            .unwrap();
+        let events = events.lock().unwrap();
+        let notices: Vec<_> = events
+            .iter()
+            .filter(|event| event.status == OnboardingProgressStatus::Notice)
+            .collect();
+        assert_eq!(notices.len(), 1);
+        assert_eq!(notices[0].message, "ui_notice_windows10_unsupported");
+        assert_eq!(notices[0].stage, OnboardingProgressStage::Engine);
+        assert!(notices[0].code.is_none() && notices[0].retryable.is_none());
+        let after: Vec<_> = events
+            .iter()
+            .skip_while(|event| event.status != OnboardingProgressStatus::Notice)
+            .skip(1)
+            .filter(|event| event.status == OnboardingProgressStatus::Progress)
+            .collect();
+        assert!(!after.is_empty());
+        assert!(after.iter().all(|event| event.message == "ui_phase_wsl_check"), "{after:?}");
+        assert_eq!(events.last().unwrap().status, OnboardingProgressStatus::Done);
+        let value = serde_json::to_value(notices[0]).unwrap();
+        assert_eq!(value["status"], "notice");
     }
 
     #[test]
