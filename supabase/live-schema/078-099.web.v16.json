@@ -1,0 +1,149 @@
+{
+  "schema_version": 1,
+  "contract_id": "release-0.4.0-web-schema-078-099-door-families",
+  "clone_contract": {
+    "baseline": "live-schema-only-pg-dump",
+    "contains_user_rows": false,
+    "postgres_major": 16,
+    "ordered_migrations": [
+      "supabase/migrations/078_positions_write_request_kind.sql",
+      "supabase/migrations/079_team_directive_events_atomic.sql",
+      "supabase/migrations/080_profile_snapshot_atomic.sql",
+      "supabase/migrations/081_live_schema_reconciliation.sql",
+      "supabase/migrations/082_download_clicks_tiktok_source.sql",
+      "supabase/migrations/083_position_ticket_state_model.sql",
+      "supabase/migrations/084_cloud_sync_pairing_attempts.sql",
+      "supabase/migrations/085_applications_updated_at.sql",
+      "supabase/migrations/086_position_outcome.sql",
+      "supabase/migrations/087_rejection_reason.sql",
+      "supabase/migrations/088_positions_apply_requested.sql",
+      "supabase/migrations/094_feedback_reasons_closed.sql",
+      "supabase/migrations/095_positions_location_precision.sql",
+      "supabase/migrations/096_positions_scam_signals.sql",
+      "supabase/migrations/097_positions_seniority_level.sql",
+      "supabase/migrations/098_web_action_door.sql",
+      "supabase/migrations/099_web_action_families.sql"
+    ]
+  },
+  "migrations": [
+    {
+      "path": "supabase/migrations/078_positions_write_request_kind.sql",
+      "sha256": "2cb2a780c2a3c8ad23ac57d9c8274e1b2247a8cf973917f2de48b492b41b6e4e"
+    },
+    {
+      "path": "supabase/migrations/079_team_directive_events_atomic.sql",
+      "sha256": "81f6892a63d8e4c371aff6279788194a8b814e49a4065f48be52b52d441565eb"
+    },
+    {
+      "path": "supabase/migrations/080_profile_snapshot_atomic.sql",
+      "sha256": "7d63d60cd191f172641778e5010708d8b535865c7696b947bb2ab3c2f9f116c7"
+    },
+    {
+      "path": "supabase/migrations/081_live_schema_reconciliation.sql",
+      "sha256": "f3b04aa2ab769101fcb4ec38bc6b1748e2dc59776ca2f2881b03f14638f583d7"
+    },
+    {
+      "path": "supabase/migrations/082_download_clicks_tiktok_source.sql",
+      "sha256": "7a18ff3b21d38274841471e7b245d2b9ad0d1beb406344548b8fee0625667da3"
+    },
+    {
+      "path": "supabase/migrations/083_position_ticket_state_model.sql",
+      "sha256": "c486ef29cd93cc110d42b1caf41acddb38a0a0e28e428a570f2a067916038012"
+    },
+    {
+      "path": "supabase/migrations/084_cloud_sync_pairing_attempts.sql",
+      "sha256": "9bbfdfa73a5c21fa85911267a4ab69ba4e84e2f7738e13b48ae0463a2ce1189b"
+    },
+    {
+      "path": "supabase/migrations/085_applications_updated_at.sql",
+      "sha256": "67b35c17323fb31f4ce1b6296848d961ba7c6fa757bbd13ac435d0dd685e19ef"
+    },
+    {
+      "path": "supabase/migrations/086_position_outcome.sql",
+      "sha256": "575ba7b56fd063e8e10f4a43414ab9029f947e9616694e7392850385c8e45b53"
+    },
+    {
+      "path": "supabase/migrations/087_rejection_reason.sql",
+      "sha256": "e6f2e27cfa38d5939deae859f0a996f4b6b0b6a3b1d7a081ae8e29976db21f74"
+    },
+    {
+      "path": "supabase/migrations/088_positions_apply_requested.sql",
+      "sha256": "972d135f8227ace0b8ca918dacd2ba1613f5b1f42da695d5ad8ff5285d7f5f99"
+    },
+    {
+      "path": "supabase/migrations/094_feedback_reasons_closed.sql",
+      "sha256": "b1bc27cb78416b425a5278699c7c16ec9c076217bdbf59df0bcce1cdfaf57a7f"
+    },
+    {
+      "path": "supabase/migrations/095_positions_location_precision.sql",
+      "sha256": "97cb10e3a635b8003cce178600d8dd2fc1bc68abd95ddec5aac1dc35f5f699e3"
+    },
+    {
+      "path": "supabase/migrations/096_positions_scam_signals.sql",
+      "sha256": "d4f17e0a8dd8736460b35309eb7fc4f62f82030b002f5c3b00be804dd6d64b57"
+    },
+    {
+      "path": "supabase/migrations/097_positions_seniority_level.sql",
+      "sha256": "a0715fba8c4d228f24b721de8389a4461214d1097dfe13ad1303e7acd123fec1"
+    },
+    {
+      "path": "supabase/migrations/098_web_action_door.sql",
+      "sha256": "520b957e64714606422eb4345a1cdc18cb0cd8b423789f726f5b7135693b7d0e"
+    },
+    {
+      "path": "supabase/migrations/099_web_action_families.sql",
+      "sha256": "0574b4e350f6c60854903c699d4a3a84ce0a4ac7c1556b688809550a7501ddf4"
+    }
+  ],
+  "query": {
+    "path": "supabase/live-schema/078-099.web.v16.sql",
+    "sha256": "06f7d0dfe6bb783681c36427d353093ce37dc0646576c0fb5193477f3985ad23"
+  },
+  "expected_checks": [
+    "100.web.columns.applications",
+    "100.web.columns.candidate_blocks",
+    "100.web.columns.candidate_contacts",
+    "100.web.columns.candidate_files",
+    "100.web.columns.candidate_profiles",
+    "100.web.columns.cloud_sync_pairing_sessions",
+    "100.web.columns.cloud_sync_tokens",
+    "100.web.columns.companies",
+    "100.web.columns.file_bridge_requests",
+    "100.web.columns.notification_prefs",
+    "100.web.columns.pending_user_messages",
+    "100.web.columns.position_feedback",
+    "100.web.columns.position_highlights",
+    "100.web.columns.position_tickets",
+    "100.web.columns.position_transitions",
+    "100.web.columns.position_user_notes",
+    "100.web.columns.position_views",
+    "100.web.columns.positions",
+    "100.web.columns.profile_exclusions",
+    "100.web.columns.scores",
+    "100.web.columns.sentinel_ticks",
+    "100.web.columns.team_commands",
+    "100.web.columns.team_directives",
+    "100.web.columns.team_state",
+    "100.web.columns.user_onboarding_state",
+    "100.web.columns.user_settings",
+    "100.web.columns.user_to_agent_messages",
+    "100.web.columns.web_action_log",
+    "100.web.rpc.consume_pairing_attempt",
+    "100.web.rpc.create_position_ticket",
+    "100.web.rpc.delete_account_data",
+    "100.web.rpc.increment_download_clicks",
+    "100.web.rpc.increment_landing_hits",
+    "100.web.rpc.mark_position_applied",
+    "100.web.rpc.mark_position_outcome",
+    "100.web.rpc.mutate_team_directive_with_event",
+    "100.web.rpc.redeem_cloud_sync_pairing",
+    "100.web.rpc.request_action",
+    "100.web.rpc.sync_candidate_profile_atomic",
+    "100.web.rpc.sync_confirm_positions_applied",
+    "100.web.rpc.sync_create_position_ticket",
+    "100.web.rpc.sync_upsert_applications",
+    "100.web.rpc.undo_manual_position_application",
+    "100.web.rpc.undo_position_outcome",
+    "100.web.rpc.upsert_pending_user_messages_merge"
+  ]
+}
