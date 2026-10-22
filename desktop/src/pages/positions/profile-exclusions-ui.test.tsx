@@ -48,12 +48,14 @@ afterEach(() => {
 const asDesktop = (ui: ReactElement) => <DesktopWriteProvider value={{ canChange: true }}>{ui}</DesktopWriteProvider>;
 
 describe("the proposal to exclude a kind of position", () => {
-  it("on the website is shown and not decided: no button, and it says where", async () => {
+  it("on the website is shown and decided too (JHT-T46 reopened, 22/10): the buttons are there, no word about the desktop", async () => {
     feedback = rejections("company");
     const { container } = render(<ExclusionProposalCard />);
     await waitFor(() => expect(container.querySelector("[data-exclusion-proposal='company']")).not.toBeNull());
-    expect(screen.queryByRole("button")).toBeNull();
-    expect(container).toHaveTextContent("Questa scelta si fa nell'app desktop.");
+    expect(screen.getByRole("button", { name: "Escludi questo tipo" })).toBeInTheDocument();
+    expect(container).not.toHaveTextContent("app desktop");
+    fireEvent.click(screen.getByRole("button", { name: "Escludi questo tipo" }));
+    await waitFor(() => expect(posted).toEqual([{ reason: "company", status: "accepted", positions: 3 }]));
   });
 
   it("in the desktop says what it does for a reason that acts, and decides with the number of positions", async () => {
@@ -94,7 +96,7 @@ describe("the active exclusions", () => {
     ];
   });
 
-  it("lists the accepted ones with what each does, and on the website only reads them", async () => {
+  it("lists the accepted ones with what each does, and on the website withdraws them too", async () => {
     const { container } = render(<ActiveExclusions />);
     await waitFor(() => expect(container.querySelector("[data-active-exclusions]")).not.toBeNull());
     expect([...container.querySelectorAll("[data-exclusion]")].map((e) => e.getAttribute("data-exclusion"))).toEqual([
@@ -106,8 +108,8 @@ describe("the active exclusions", () => {
     expect(container.querySelector("[data-exclusion='wrong_location']")).toHaveTextContent("abbassa il punteggio di 15 punti");
     expect(container.querySelector("[data-exclusion='too_senior']")).toHaveTextContent("abbassa il punteggio di 15 punti");
     expect(container).not.toHaveTextContent("per ora non cambia nulla");
-    expect(screen.queryByRole("button")).toBeNull();
-    expect(container).toHaveTextContent("Si ritirano nell'app desktop.");
+    expect(screen.getAllByRole("button")).toHaveLength(3);
+    expect(container).not.toHaveTextContent("app desktop");
   });
 
   it("in the desktop withdraws one: dismissed, with the number it was decided on, and it leaves the list", async () => {

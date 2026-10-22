@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireLocalWrite } from "@/lib/auth";
 import { resolveUser } from "@/lib/team-state/auth";
 import { isSupabaseConfigured } from "@/lib/workspace";
 import { sanitizedError } from "@/lib/error-response";
@@ -12,12 +11,12 @@ export const dynamic = "force-dynamic";
 // (JHT-T05, JHT-T24, mig 094): codice, stato, data. Accettata, fa abbassare il
 // punteggio delle posizioni di quel tipo (il team la porta nella sua jobs.db).
 //
-// SCRIVERE si fa solo dall'app desktop (JHT-T46): il sito cloud è in sola
-// lettura, quindi la POST passa da `requireLocalWrite` come ogni scrittura di
-// config/dati e sul deploy cloud risponde 403 `read_only`, anche con una
-// sessione valida. Il desktop non passa da qui: scrive con la sessione
-// dell'utente dal suo ponte (`desktop/src/lib/web-api.ts`). LEGGERE (GET) resta
-// aperto: il sito mostra la proposta e l'elenco delle esclusioni attive.
+// SCRIVERE si fa anche dal sito (decisione dell'operatore, 22/10/2026: il sito
+// fa ciò che serve all'utente): è un'azione L1 della corsia delle richieste,
+// una riga dell'utente sulla sua riga, senza effetto fuori. Il desktop non
+// passa da qui: scrive con la sessione dell'utente dal suo ponte
+// (`desktop/src/lib/web-api.ts`). Il censimento delle route di scrittura
+// (`web-write-routes-census`) la elenca come `request-lane` L1.
 //
 // Solo la sessione dell'utente: è una sua decisione, e un token di
 // dispositivo (cioè un agente, o la CLI guidata da un agente) non la prende
@@ -45,9 +44,6 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  // Prima di tutto, prima di leggere sessione e corpo: sul sito non si scrive.
-  const readOnly = await requireLocalWrite();
-  if (readOnly) return readOnly;
   if (!isSupabaseConfigured) {
     return NextResponse.json({ error: "cloud_unavailable" }, { status: 503 });
   }
