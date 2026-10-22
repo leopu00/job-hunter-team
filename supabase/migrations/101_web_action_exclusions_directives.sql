@@ -59,7 +59,7 @@ BEGIN
 END $$;
 
 COMMENT ON COLUMN public.team_directives.origin IS
-    'web when the single door wrote the current text (web_door.ext_directive), desktop otherwise. For the record and the notice of the website; the agents do not read it.';
+    'web when the single door wrote or archived the directive last (web_door.ext_directive), desktop otherwise. For the record and the notice of the website; the agents do not read it.';
 
 -- ---------------------------------------------------------------------------------------------
 -- 2. The decision on a position: door only
@@ -323,6 +323,32 @@ REVOKE ALL ON FUNCTION web_door.ext_exclusion(TEXT, TEXT, UUID, JSONB, TEXT, UUI
 -- text, and the effect writes the text saved at the first call (the door passes it, not the caller). Archiving is L1. The effect does what
 -- 079 did, in the same transaction: the row, the wake-up event of the Captain ([TEAM-DIRECTIVE] <verb>,
 -- whose text the Captain never executes: it reads the board again, fenced), and the chat request.
+-- Archiving marks the directive `web` too: the box tells the user of every change that does not come
+-- from the desktop (W7), and an order of the app archived from the website, L1 and without a
+-- confirmation, is such a change.
+
+-- One line of plain text for the summary of the log, which the website and the desktop show the user:
+-- the same rule as flatten_to_one_line of shared/skills/external_content.py, with its list. Removed with
+-- no space (they are not letters, and a space would split a word): the bidi embeddings, overrides and
+-- isolates, the zero-width space, word joiner and ZWNBSP, the soft hyphen, the interlinear annotations
+-- and the tag characters (an ASCII sentence nobody sees). A space for the control characters and the
+-- line and paragraph separators U+2028/U+2029. Kept: ZWNJ, ZWJ, LRM, RLM and ALM, letters of a script
+-- and marks of direction that rewrite nothing. Spaces in a row become one. The ranges are written out,
+-- not [[:cntrl:]]: under the C collation that class stops at U+007F. A test runs both on every control
+-- and format character and on the two separators, and wants the same text.
+CREATE OR REPLACE FUNCTION web_door.one_line(p_text TEXT, p_max INTEGER)
+RETURNS TEXT
+LANGUAGE sql
+IMMUTABLE
+SET search_path = ''
+AS $$
+    SELECT left(btrim(regexp_replace(regexp_replace(regexp_replace(COALESCE(p_text, ''),
+               '[\u00AD\u200B\u2060\uFEFF\u202A-\u202E\u2066-\u2069\uFFF9-\uFFFB\U000E0000-\U000E007F]', '', 'g'),
+               '[\u0001-\u001F\u007F-\u009F\u2028\u2029]', ' ', 'g'),
+               ' {2,}', ' ', 'g')), GREATEST(p_max, 0));
+$$;
+
+REVOKE ALL ON FUNCTION web_door.one_line(TEXT, INTEGER) FROM PUBLIC, anon, authenticated, service_role;
 
 CREATE OR REPLACE FUNCTION web_door.ext_directive(
     p_stage   TEXT,
@@ -403,8 +429,8 @@ BEGIN
                            ELSE jsonb_build_object('id', v_id) END,
             'body', v_text,
             'summary', CASE p_action
-                           WHEN 'directive.create'  THEN v_kind || ': ' || left(v_text, 180)
-                           WHEN 'directive.update'  THEN '#' || v_id || ': ' || left(v_text, 180)
+                           WHEN 'directive.create'  THEN v_kind || ': ' || web_door.one_line(v_text, 180)
+                           WHEN 'directive.update'  THEN '#' || v_id || ': ' || web_door.one_line(v_text, 180)
                            ELSE 'archive #' || v_id END,
             'confirm', p_action <> 'directive.archive');
     END IF;
@@ -428,7 +454,7 @@ BEGIN
     ELSE
         v_verb := 'archived';
         UPDATE public.team_directives
-           SET status = 'archived', archived_at = now(), updated_at = now()
+           SET status = 'archived', archived_at = now(), origin = 'web', updated_at = now()
          WHERE id = v_id AND user_id = p_uid AND status = 'active';
         GET DIAGNOSTICS v_changed = ROW_COUNT;
         IF v_changed <> 1 THEN
@@ -487,6 +513,9 @@ BEGIN
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns
                     WHERE table_schema = 'public' AND table_name = 'team_directives' AND column_name = 'origin') THEN
         RAISE EXCEPTION '101: team_directives.origin is missing';
+    END IF;
+    IF web_door.one_line('a' || U&'\202E' || 'b' || U&'\2028' || 'c', 10) IS DISTINCT FROM 'ab c' THEN
+        RAISE EXCEPTION '101: the summary of a standing order would keep a bidi override or a line separator';
     END IF;
     FOREACH r IN ARRAY ARRAY['anon', 'authenticated']
     LOOP

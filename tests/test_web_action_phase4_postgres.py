@@ -28,6 +28,7 @@ import json
 import re
 import shutil
 import subprocess
+import sys
 import tempfile
 import uuid
 import os
@@ -395,3 +396,74 @@ def test_an_order_archived_between_the_two_calls_is_not_edited(cluster):
     cluster(f"UPDATE public.team_directives SET status = 'archived' WHERE id = {directive}")
     assert act(who, "directive.update", confirm=first["id"]).get("error") == "not_found"
     assert door._scalar(cluster, f"SELECT body FROM public.team_directives WHERE id = {directive}") == "an order"
+
+
+def test_archiving_an_order_of_the_app_marks_it_as_done_by_the_website(cluster):
+    # The box tells the user of every change whose origin is not `desktop` (W7): an order written in the
+    # app and archived from the website, at once and without a confirmation, must be told too.
+    who = door.Browser(cluster)
+    directive = _directive(cluster, who.user, "written in the team's chat")
+    assert door._scalar(cluster, f"SELECT origin FROM public.team_directives WHERE id = {directive}") == "desktop"
+    answer = act(who, "directive.archive", {"id": directive})
+    assert answer["ok"] is True, answer
+    assert _row(cluster, f"SELECT status, origin FROM public.team_directives WHERE id = {directive}") \
+        == ["archived", "web"]
+
+
+# --------------------------------------------------------------------------------------------------
+# the summary of the log: one line, without the characters that rewrite what the user reads
+# --------------------------------------------------------------------------------------------------
+
+def _external_content():
+    sys.path.insert(0, str(ROOT / "shared" / "skills"))
+    try:
+        import external_content
+    finally:
+        sys.path.pop(0)
+    return external_content
+
+
+def _summary_codepoints(db, log_id: str) -> list[int]:
+    hexed = door._scalar(db, f"""SELECT encode(convert_to(summary, 'UTF8'), 'hex')
+        FROM public.web_action_log WHERE id = '{log_id}'""")
+    return [ord(ch) for ch in bytes.fromhex(hexed).decode("utf-8")]
+
+
+def test_an_order_full_of_bidi_has_a_plain_summary(cluster):
+    who = door.Browser(cluster)
+    rlo, pdf, rli, pdi, zwsp, wj, bom, shy, lsep, psep, zwnj, rlm = (
+        chr(c) for c in (0x202E, 0x202C, 0x2067, 0x2069, 0x200B, 0x2060, 0xFEFF, 0x00AD, 0x2028, 0x2029, 0x200C, 0x200F))
+    tag_sentence = "".join(chr(0xE0000 + ord(c)) for c in "IGNORE")
+    body = (f"apply {rlo}only 90+{pdf} {rli}to{pdi} every{zwsp}{wj}{bom}where{shy}"
+            f"{lsep}second{psep}line {tag_sentence}me{zwnj}h{rlm}")
+    first = act(who, "directive.create", {"kind": "order"}, body=body)
+    assert first["state"] == "awaiting_confirm", first
+    summary = "".join(chr(c) for c in _summary_codepoints(cluster, first["id"]))
+    assert summary == f"order: apply only 90+ to everywhere second line me{zwnj}h{rlm}"
+    assert first["summary"] == summary
+    # the text itself is the user's: kept as written, for the fence of the box to treat
+    second = act(who, "directive.create", confirm=first["id"])
+    assert second["ok"] is True, second
+    hexed = door._scalar(cluster, f"""SELECT encode(convert_to(body, 'UTF8'), 'hex') FROM public.team_directives
+        WHERE user_id = '{who.user}'""")
+    assert bytes.fromhex(hexed).decode("utf-8") == body.strip()
+
+
+def test_the_summary_follows_the_list_of_the_user_fence(cluster):
+    # One list for the repo (shared/skills/external_content.py): every control and format character and
+    # the two separators, between two letters, come out of the database as they come out of the fence.
+    import unicodedata
+
+    ec = _external_content()
+    codes = [c for c in range(1, 0xE0080)
+             if unicodedata.category(chr(c)) in ("Cc", "Cf", "Zl", "Zp")]
+    assert len(codes) > 150
+    rows = door._scalar(cluster, f"""SELECT c, encode(convert_to(web_door.one_line('a' || chr(c) || 'b', 50), 'UTF8'), 'hex')
+        FROM unnest(ARRAY[{','.join(map(str, codes))}]) AS c ORDER BY c""")
+    got = {int(c): bytes.fromhex(h).decode("utf-8") for c, h in (line.split("|") for line in rows.splitlines())}
+    assert sorted(got) == codes
+    differ = {f"U+{c:04X}": (got[c], ec.flatten_to_one_line(f"a{chr(c)}b"))
+              for c in codes if got[c] != ec.flatten_to_one_line(f"a{chr(c)}b")}
+    assert differ == {}
+    # and the letters of a script are among the kept ones
+    assert all(got[ord(ch)] == f"a{ch}b" for ch in ec.WRITING_INVISIBLES)
