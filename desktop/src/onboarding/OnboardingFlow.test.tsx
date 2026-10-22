@@ -153,6 +153,8 @@ describe("OnboardingFlow technical setup", () => {
     // every package winget installs: the script's one winget line, `& winget install ... --id <package>`
     const packages = [...script.matchAll(/& winget install [^\n]*--id ([A-Za-z.]+)/g)].map((match) => match[1]);
     expect(packages).toEqual(["Podman.CLI"]);
+    // the consent names the version the script installs, not winget's latest: the install is pinned to it
+    expect(script).toMatch(/& winget install [^\n]*--version \$PodmanCliVersion /);
     // Compose is the runtime's own binary, from the release of that version.
     expect(script).toContain(`/releases/download/v${WINDOWS_SETUP.composeVersion}/docker-compose-windows-x86_64.exe'`);
 
@@ -161,7 +163,7 @@ describe("OnboardingFlow technical setup", () => {
     await reachProviderLocal(user);
     await user.click(screen.getByRole("button", { name: /rivedi il setup/i }));
     const installs = screen.getByRole("note", { name: /cosa installa l’app/i });
-    expect(installs).toHaveTextContent(`Podman ${WINDOWS_SETUP.podmanVersion}, con winget (pacchetto Podman.CLI)`);
+    expect(installs).toHaveTextContent(`Podman ${WINDOWS_SETUP.podmanVersion}, con winget (pacchetto Podman.CLI, proprio questa versione e non la più recente)`);
     expect(installs).toHaveTextContent(`Docker Compose ${WINDOWS_SETUP.composeVersion}, scaricato dalla sua release ufficiale e verificato, privato nel runtime di JHT`);
     expect(installs).toHaveTextContent(`${cpus} CPU, ${Number(memoryMb) / 1024} GB di memoria, fino a ${diskGb} GB di disco`);
     for (const id of packages) expect(installs).toHaveTextContent(id);
