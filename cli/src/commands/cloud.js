@@ -3326,6 +3326,15 @@ async function handleDirectiveSync(options = {}) {
         `UPDATE team_directives SET body = ?, kind = ?, status = ?, sort_order = ?,
            updated_at = ?, archived_at = ? WHERE cloud_id = ?`
       );
+      // Who wrote the current text ('web' = the door of the website, cloud migration 101). It goes in
+      // its own column and never into created_by, which team_directives.py reads. A database whose
+      // schema does not have the column yet keeps working without it.
+      const hasOrigin = db
+        .prepare("SELECT 1 FROM pragma_table_info('team_directives') WHERE name = 'origin'")
+        .get();
+      const setOrigin = hasOrigin
+        ? db.prepare('UPDATE team_directives SET origin = ? WHERE cloud_id = ?')
+        : null;
       for (const cd of pullResult.directives) {
         const cloudId = Number(cd.id);
         if (!Number.isInteger(cloudId) || !cd.body) continue;
@@ -3343,6 +3352,9 @@ async function handleDirectiveSync(options = {}) {
           ins.run(cd.body, kind, status, so, cd.created_by || 'user', cloudId,
                   cd.created_at || null, cd.updated_at || null, cd.archived_at || null);
           if (cd.origin !== 'desktop') directiveNotices.push(directiveNotice(cloudId, cd));
+        }
+        if (setOrigin && (cd.origin === 'web' || cd.origin === 'desktop')) {
+          setOrigin.run(cd.origin, cloudId);
         }
         imported++;
       }

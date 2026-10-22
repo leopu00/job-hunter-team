@@ -475,6 +475,10 @@ def ensure_schema(conn: sqlite3.Connection):
         sort_order INTEGER NOT NULL DEFAULT 0,
         created_by TEXT NOT NULL DEFAULT 'user',   -- user | capitano | assistente
         cloud_id INTEGER,                          -- gemello Supabase (round-trip dashboard); NULL = solo locale
+        -- Chi ha scritto il testo attuale: 'web' se è arrivato dalla porta del sito
+        -- (migrazione cloud 101), 'desktop' altrimenti. Lo porta il pull; la lettura
+        -- degli agenti non lo usa (il recinto vale per tutte).
+        origin TEXT NOT NULL DEFAULT 'desktop' CHECK (origin IN ('desktop','web')),
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         archived_at TIMESTAMP
@@ -928,6 +932,7 @@ def _run_migrations(conn: sqlite3.Connection) -> None:
     _migrate_application_answers(conn)
     _migrate_closer_wakes(conn)
     _migrate_apply_cap_reservations(conn)
+    _migrate_team_directives_origin(conn)
 
 
 def _migrate_application_answers(conn: sqlite3.Connection) -> None:
@@ -1347,6 +1352,23 @@ def _migrate_positions_url_unique(conn: sqlite3.Connection) -> None:
             "Deduplication still relies on the transaction in db_insert.py.",
             file=sys.stderr,
         )
+
+
+def _migrate_team_directives_origin(conn: sqlite3.Connection) -> None:
+    """team_directives.origin: 'web' se il testo attuale l'ha scritto la porta del sito
+    (migrazione cloud 101), 'desktop' altrimenti.
+
+    Additiva: ADD COLUMN con un default costante, quindi le righe esistenti valgono
+    'desktop' (prima della 101 il sito non aveva una porta sua). Idempotente.
+    """
+    if not _table_exists(conn, 'team_directives'):
+        return
+    if _column_exists(conn, 'team_directives', 'origin'):
+        return
+    conn.execute(
+        "ALTER TABLE team_directives ADD COLUMN origin TEXT NOT NULL DEFAULT 'desktop' "
+        "CHECK (origin IN ('desktop','web'))"
+    )
 
 
 def _migrate_position_user_notes_origin(conn: sqlite3.Connection) -> None:

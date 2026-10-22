@@ -8,7 +8,10 @@ export type PendingDirectiveRequest = {
 export type DirectiveErrorTranslationKey =
   | "errGeneric"
   | "errMismatch"
-  | "errNotFound";
+  | "errNotFound"
+  | "errExpired"
+  | "errNotYet"
+  | "errRateLimited";
 
 export function directiveErrorTranslationKey(
   value: unknown,
@@ -17,7 +20,31 @@ export function directiveErrorTranslationKey(
   const code = (value as { error?: unknown }).error;
   if (code === "request_id_mismatch") return "errMismatch";
   if (code === "directive_not_found") return "errNotFound";
+  // The confirmation in two steps of the single door (migration 101).
+  if (code === "confirm_expired" || code === "confirm_used" || code === "confirm_not_found")
+    return "errExpired";
+  if (code === "not_available_yet") return "errNotYet";
+  if (code === "rate_limited") return "errRateLimited";
   return "errGeneric";
+}
+
+/** The first call of a create or an edit through the door: the order waits for the user's confirmation. */
+export function isDirectiveConfirmationRequest(
+  value: unknown,
+  expected: { requestId: string; action: DirectiveAction },
+): value is { confirm_id: string; summary: string; expires_at: string } {
+  if (!value || typeof value !== "object") return false;
+  const r = value as Record<string, unknown>;
+  return (
+    r.ok === true &&
+    r.state === "awaiting_confirm" &&
+    r.request_id === expected.requestId &&
+    r.action === expected.action &&
+    typeof r.confirm_id === "string" &&
+    /^[0-9a-f-]{36}$/i.test(r.confirm_id) &&
+    typeof r.summary === "string" &&
+    typeof r.expires_at === "string"
+  );
 }
 
 export function retainDirectiveRequest(

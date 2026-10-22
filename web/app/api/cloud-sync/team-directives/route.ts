@@ -78,7 +78,8 @@ export async function GET(req: NextRequest) {
   const { data, error } = await admin
     .from("team_directives")
     .select(
-      "id, body, kind, status, sort_order, created_by, created_at, updated_at, archived_at",
+      // origin: who wrote the current text (cloud migration 101, to be applied before this web).
+      "id, body, kind, status, sort_order, created_by, origin, created_at, updated_at, archived_at",
     )
     .eq("user_id", userId)
     .gt("updated_at", since.toISOString())

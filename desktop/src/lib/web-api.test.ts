@@ -190,3 +190,54 @@ describe("the rest", () => {
     restore();
   });
 });
+
+describe("through the single door (migration 101)", () => {
+  const DONE = {
+    data: { ok: true, state: "done", id: "0b9c2a52-3f7e-4d0e-9a51-6f2b8c1d4e77", level: "L1", summary: "s" },
+    error: null,
+  };
+
+  it("an exclusion is asked to the door, and the row is only read back", async () => {
+    const { client, queries, rpcCalls } = fakeSupabase(
+      () => ok({ status: "excluded", user_excluded_reason: "other", user_excluded_prev_status: "scored" }),
+      undefined,
+      () => DONE,
+    );
+    const res = await createWebApiFetch(client)("/api/positions/9/user-exclude", post({ reason: "other", note: " a note " }));
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({ id: "9", status: "excluded", source: "cloud" });
+    expect(rpcCalls).toEqual([
+      [
+        "request_action",
+        {
+          p_action: "exclusion.decide",
+          p_params: { legacy_id: 9, reason: "other" },
+          p_confirm_id: null,
+          p_route_level: "L1",
+          p_body: "a note",
+        },
+      ],
+    ]);
+    expect(queries.some((q) => q.op("update"))).toBe(false);
+  });
+
+  it("a decision of the profile is asked to the door, never upserted", async () => {
+    const { client, queries, rpcCalls } = fakeSupabase(
+      () => ok({ reason: "too_senior", status: "dismissed", positions_at_decision: 4 }),
+      undefined,
+      () => DONE,
+    );
+    const res = await createWebApiFetch(client)(
+      "/api/profile-exclusions",
+      post({ reason: "too_senior", status: "dismissed", positions: 4 }),
+    );
+    expect(res.status).toBe(200);
+    expect(rpcCalls[0][1]).toEqual({
+      p_action: "exclusion.profile_set",
+      p_params: { reason: "too_senior", status: "dismissed", positions: 4 },
+      p_confirm_id: null,
+      p_route_level: "L1",
+    });
+    expect(queries.some((q) => q.op("upsert"))).toBe(false);
+  });
+});

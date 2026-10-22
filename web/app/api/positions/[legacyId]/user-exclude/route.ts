@@ -185,33 +185,18 @@ async function handle(
     local: (db) => applyLocal(db, legacyId, action, reason, note),
     cloud: (supabase, userId) =>
       applyCloud(supabase, userId, legacyId, action, reason, note),
-    mirror: async (supabase, userId, outcome) => {
-      const update =
-        action === "exclude"
-          ? {
-              status: "excluded",
-              user_excluded_reason: reason,
-              user_excluded_note: note ?? null,
-              user_excluded_at: new Date().toISOString(),
-              user_excluded_prev_status: outcome.user_excluded_prev_status,
-              last_actor: "user",
-            }
-          : {
-              // Allinea anche lo status (= quello ripristinato in locale), così
-              // il cloud esce subito da 'excluded' senza attendere il push.
-              status: outcome.status,
-              user_excluded_reason: null,
-              user_excluded_note: null,
-              user_excluded_at: null,
-              user_excluded_prev_status: null,
-              last_actor: "user",
-            };
-      const { error } = await supabase
-        .from("positions")
-        .update(update)
-        .eq("user_id", userId)
-        .eq("legacy_id", legacyId);
-      if (error) throw new Error(error.message);
+    // Il cloud segue il locale passando dalla porta (migrazione 101), come il ramo cloud: la decisione
+    // dell'utente sulle colonne user_excluded_* la scrive solo lei.
+    mirror: async (supabase, userId) => {
+      const mirrored = await applyCloud(
+        supabase,
+        userId,
+        legacyId,
+        action,
+        reason,
+        note,
+      );
+      if (!mirrored.ok) throw new Error(String(mirrored.body.error ?? "mirror_failed"));
     },
   });
 }

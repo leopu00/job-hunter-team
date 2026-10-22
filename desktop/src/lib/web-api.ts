@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { NOTE_MAX, acceptReason, cleanNote, isProposableReason } from "@/lib/feedback-reasons";
 import { applyCloud } from "@/lib/positions/user-exclude-cloud";
+import { decideProfileExclusion } from "@/lib/profile-exclusions-cloud";
 import { json, notInDesktop, type ApiFetch } from "../shell/api-bridge";
 
 /**
@@ -149,22 +150,10 @@ async function postProfileExclusion({ client, body, userId }: Call): Promise<Res
     payload.positions <= 100_000
       ? payload.positions
       : 0;
-  const { data, error } = await client
-    .from("profile_exclusions")
-    .upsert(
-      {
-        user_id: user,
-        reason,
-        status: payload.status,
-        positions_at_decision: positions,
-        decided_at: new Date().toISOString(),
-      },
-      { onConflict: "user_id,reason" },
-    )
-    .select(PROFILE_EXCLUSION_COLUMNS)
-    .single();
-  if (error) return internal("profile-exclusions", error);
-  return json({ exclusion: data });
+  // The decision goes through the single door (exclusion.profile_set, migration 101), as on the site.
+  const decided = await decideProfileExclusion(client, user, reason, payload.status, positions);
+  if (!decided.ok) return json({ error: decided.error }, decided.status);
+  return json({ exclusion: decided.exclusion });
 }
 
 async function getFeedback({ client, params, userId }: Call): Promise<Response> {
