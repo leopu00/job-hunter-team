@@ -96,6 +96,8 @@ exec env -i HOME="$FAKE_REMOTE_HOME" PATH="$FAKE_REMOTE_PATH" \
   FAKE_STATE="${FAKE_STATE:-}" FAKE_SUDO_PASSWORD="${FAKE_SUDO_PASSWORD:-}" \
   FAKE_APT_INSTALLS_PODMAN="${FAKE_APT_INSTALLS_PODMAN:-}" FAKE_LINGER_STUCK="${FAKE_LINGER_STUCK:-}" \
   FAKE_USERMOD_STUCK="${FAKE_USERMOD_STUCK:-}" JHT_RUN_USER_DIR="${JHT_RUN_USER_DIR:-}" FAKE_APT_LOCKED="${FAKE_APT_LOCKED:-}" \
+  FAKE_REMOTE_ROOTLESS="${FAKE_REMOTE_ROOTLESS:-}" \
+  ${CONTAINER_HOST+"CONTAINER_HOST=$CONTAINER_HOST"} ${CONTAINER_CONNECTION+"CONTAINER_CONNECTION=$CONTAINER_CONNECTION"} \
   /bin/bash -c "$cmd"
 """
 
@@ -174,10 +176,16 @@ exec /bin/df "$@"
 # Rootless Podman as the server's administrator left it: podman, podman-compose
 # and loginctl answer like the real ones, from variables the test sets.
 FAKE_PODMAN = r"""#!/bin/bash
-echo "podman $*" >> "$FAKE_LOG"
+# Podman's own rule (cmd/podman/registry): CONTAINER_HOST or CONTAINER_CONNECTION
+# in the environment, set even empty, makes the client talk to a remote service.
+remote=""
+[ -n "${CONTAINER_HOST+x}" ] && remote=1
+[ -n "${CONTAINER_CONNECTION+x}" ] && remote=1
+echo "podman $*${remote:+ [remote]}" >> "$FAKE_LOG"
 case "$1" in
   --version) echo "podman version ${FAKE_PODMAN_VERSION:-5.7.0}" ;;
-  info) [ "${FAKE_PODMAN_INFO:-ok}" = fail ] && exit 125; echo "${FAKE_ROOTLESS:-true}" ;;
+  info) [ -n "$remote" ] && { echo "${FAKE_REMOTE_ROOTLESS:-false}"; exit 0; }
+    [ "${FAKE_PODMAN_INFO:-ok}" = fail ] && exit 125; echo "${FAKE_ROOTLESS:-true}" ;;
   *) exit 0 ;;
 esac
 """
@@ -744,6 +752,21 @@ def test_what_the_install_cannot_fix_leaves_with_its_own_code_before_anything_is
     assert not sudo_calls(server)
     assert not (server.home / ".local").exists()
     assert not (server.home / ".jht").exists()
+
+
+@pytest.mark.parametrize("inherited", [
+    {"CONTAINER_HOST": "ssh://other@192.0.2.20/run/user/0/podman/podman.sock"},
+    {"CONTAINER_CONNECTION": "another-server"},
+    {"CONTAINER_HOST": "", "CONTAINER_CONNECTION": ""},
+])
+def test_a_remote_podman_in_the_users_environment_is_not_the_one_the_install_checks(server, source, inherited):
+    # the remote service is rootful: asking it would refuse a server whose own Podman is rootless
+    with_podman(server)
+    done = install_podman(server, source, FAKE_REMOTE_ROOTLESS="false", **inherited)
+    assert done.returncode == 0, done.stderr.decode()
+    podman_calls = [c for c in server.calls() if c.startswith("podman ")]
+    assert any(c.startswith("podman info") for c in podman_calls)
+    assert not [c for c in podman_calls if c.endswith("[remote]")]
 
 
 def test_a_second_install_without_the_option_keeps_podman(server, source):
