@@ -25,7 +25,38 @@ export type TeamAgent = {
   state: AgentStateInfo;
   /** how full its context is and its tokens of the last hour: each null when the team does not say it, never 0 */
   usage: AgentUsage;
+  /** the questions it asked the user and its unread messages; null when the team does not say them, never 0 */
+  questions: AgentQuestions | null;
 };
+
+export type QuestionType = "urgente" | "blocco" | "domanda" | "completamento" | "comunicazione";
+
+export type QuestionOption = { id: string; label: string; reversible: boolean };
+
+/**
+ * One open question an agent asked the user. A structured one (agent_questions.py)
+ * has an id, a type and its options; one written before the contract has neither
+ * (it is answered in words, from the messages). Every text is the agent's, as it
+ * wrote it: shown as plain text, never translated, never HTML.
+ */
+export type AgentQuestion = {
+  id: string | null;
+  type: QuestionType | null;
+  subject: string | null;
+  text: string;
+  options: QuestionOption[];
+  multiple: boolean;
+  free: boolean;
+  /** epoch ms; null without an expiry */
+  expiresAt: number | null;
+  /** the option taken when it expires */
+  fallback: string | null;
+  /** when it was asked, epoch ms */
+  at: number;
+};
+
+/** Only to be shown: nothing decides on it. */
+export type AgentQuestions = { open: number; unread: number; items: AgentQuestion[] };
 
 export type AgentUsage = {
   /** 0-100, from the CLI's own window or share; null for a CLI that writes neither (Claude) */
@@ -88,6 +119,71 @@ export function pickIdentity(value: unknown): AgentIdentity | null {
   };
 }
 
+export const QUESTION_TYPES: readonly QuestionType[] = ["urgente", "blocco", "domanda", "completamento", "comunicazione"];
+const QUESTION_ID = /^aq:[a-z0-9][a-z0-9_-]{0,39}:[0-9]{1,20}-[a-z0-9]{1,16}$/;
+const OPTION_ID = /^(_rinvia|[a-z0-9][a-z0-9_]{0,23})$/;
+// one line, no control character nor invisible command (external_content.py, INVISIBLE_COMMANDS)
+const NOT_ONE_LINE = /[\u0000-\u001f\u007f-\u009f\u00ad\u200b\u2028\u2029\u202a-\u202e\u2060\u2066-\u2069\ufeff\ufff9-\ufffb]|\udb40[\udc00-\udc7f]/;
+/** At most this many per agent and in the whole list, as agent_state.py and the native side cut them. */
+export const QUESTIONS_PER_AGENT = 5;
+export const QUESTIONS_PER_LIST = 20;
+
+function oneLine(value: unknown, max: number): string | null {
+  if (typeof value !== "string" || !value.trim() || [...value].length > max || NOT_ONE_LINE.test(value)) return null;
+  return value;
+}
+
+function pickQuestion(value: unknown): AgentQuestion | null {
+  if (!isRecord(value)) return null;
+  const structured = value.id !== null;
+  if (structured && (typeof value.id !== "string" || !QUESTION_ID.test(value.id))) return null;
+  const type = value.tipo === null ? null : QUESTION_TYPES.find((tipo) => tipo === value.tipo);
+  if (type === undefined || structured !== (type !== null) || !Array.isArray(value.opzioni)) return null;
+  const options: QuestionOption[] = [];
+  for (const option of value.opzioni) {
+    if (!isRecord(option) || typeof option.id !== "string" || !OPTION_ID.test(option.id)) return null;
+    if (options.some((seen) => seen.id === option.id)) return null;
+    const label = oneLine(option.label, 60);
+    if (label === null) return null;
+    // reversible only with the boolean true: anything else asks for a confirmation
+    options.push({ id: option.id, label, reversible: option.reversibile === true });
+  }
+  if (structured ? options.length < 2 || options.length > 8 : options.length > 0) return null;
+  const subject = structured ? oneLine(value.oggetto, 120) : null;
+  const text = oneLine(value.testo, 280);
+  const at = epoch(value.at);
+  if ((structured && subject === null) || text === null || at === null) return null;
+  const fallback = value.default === null || value.default === undefined ? null : value.default;
+  if (fallback !== null && !options.some((option) => option.id === fallback)) return null;
+  const expires = epoch(value.scadenza);
+  return {
+    id: structured ? (value.id as string) : null,
+    type,
+    subject,
+    text,
+    options,
+    multiple: structured && value.multipla === true,
+    free: !structured || value.libera === true,
+    expiresAt: expires === null ? null : expires * 1000,
+    fallback: fallback as string | null,
+    at: at * 1000,
+  };
+}
+
+/** The same closed shape the native side lets through (shape_questions), checked once more. */
+export function pickQuestions(value: unknown): AgentQuestions | null {
+  if (!isRecord(value) || !Array.isArray(value.items)) return null;
+  const whole = (n: unknown) => (typeof n === "number" && Number.isInteger(n) && n >= 0 && n <= 9999 ? n : null);
+  const open = whole(value.open);
+  const unread = whole(value.unread);
+  if (open === null || unread === null) return null;
+  const items = value.items
+    .slice(0, QUESTIONS_PER_AGENT)
+    .map(pickQuestion)
+    .filter((item): item is AgentQuestion => item !== null);
+  return { open, unread, items };
+}
+
 const count = (value: unknown) => (typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : null);
 
 export function pickUsage(value: unknown): AgentUsage {
@@ -129,6 +225,7 @@ function pickAgent(value: unknown, statesKnown: boolean): TeamAgent | null {
     identity: pickIdentity(value.identity),
     state,
     usage: pickUsage(value.usage),
+    questions: pickQuestions(value.questions),
   };
 }
 
@@ -139,6 +236,12 @@ export function pickAgentsRead(data: unknown): TeamAgentsRead | null {
   const statesKnown = data.states;
   const agents = data.agents.map((agent) => pickAgent(agent, statesKnown));
   if (agents.some((agent) => agent === null)) return null;
+  let left = QUESTIONS_PER_LIST;
+  for (const agent of agents as TeamAgent[]) {
+    if (!agent.questions) continue;
+    agent.questions.items = agent.questions.items.slice(0, left);
+    left -= agent.questions.items.length;
+  }
   const roles = data.roles.filter(
     (role): role is TeamRole => isRecord(role) && typeof role.role === "string" && typeof role.multi === "boolean",
   );

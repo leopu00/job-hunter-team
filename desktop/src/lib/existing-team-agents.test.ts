@@ -89,3 +89,65 @@ describe("an agent's health in small (pickUsage)", () => {
     expect(read?.agents[0].usage).toEqual(UNKNOWN);
   });
 });
+
+describe("the questions an agent asked the person (pickQuestions)", () => {
+  const asked = (fields: Record<string, unknown> = {}) => ({
+    id: "aq:scout:1790000000-ab12cd", tipo: "blocco", oggetto: "CV per Acme", testo: "Quale CV uso?",
+    opzioni: [{ id: "breve", label: "CV breve", reversibile: true }, { id: "_rinvia", label: "Rinvia" }],
+    multipla: false, libera: false, scadenza: 1_790_003_600, default: "_rinvia", at: 1_790_000_000, ...fields,
+  });
+  const free = { id: null, tipo: null, oggetto: null, testo: "Procedo?", opzioni: [], multipla: false, libera: true, scadenza: null, default: null, at: 1_790_000_001 };
+
+  it("keeps the closed shape, with milliseconds, and «reversible» only when it is true", async () => {
+    const { pickQuestions } = await import("./existing-team-agents");
+    const picked = pickQuestions({ open: 2, unread: 3, items: [asked(), free] });
+    expect(picked).toEqual({
+      open: 2,
+      unread: 3,
+      items: [
+        {
+          id: "aq:scout:1790000000-ab12cd", type: "blocco", subject: "CV per Acme", text: "Quale CV uso?",
+          options: [{ id: "breve", label: "CV breve", reversible: true }, { id: "_rinvia", label: "Rinvia", reversible: false }],
+          multiple: false, free: false, expiresAt: 1_790_003_600_000, fallback: "_rinvia", at: 1_790_000_000_000,
+        },
+        { id: null, type: null, subject: null, text: "Procedo?", options: [], multiple: false, free: true, expiresAt: null, fallback: null, at: 1_790_000_001_000 },
+      ],
+    });
+  });
+
+  it("every type passes, and a zero that was read stays zero", async () => {
+    const { pickQuestions, QUESTION_TYPES } = await import("./existing-team-agents");
+    for (const tipo of QUESTION_TYPES) expect(pickQuestions({ open: 1, unread: 0, items: [asked({ tipo })] })?.items[0].type).toBe(tipo);
+    expect(pickQuestions({ open: 0, unread: 0, items: [] })).toEqual({ open: 0, unread: 0, items: [] });
+  });
+
+  it("is «not known» when the counts are not counts, and leaves out a question out of shape", async () => {
+    const { pickQuestions } = await import("./existing-team-agents");
+    for (const bad of [null, undefined, "2", { open: -1, unread: 0, items: [] }, { open: 1, unread: 1.5, items: [] }, { open: 1, unread: 0 }]) {
+      expect(pickQuestions(bad)).toBeNull();
+    }
+    const out = [
+      asked({ tipo: "ordine" }),
+      asked({ id: "AQ:scout:1-x" }),
+      asked({ oggetto: "riga\nfinta" }),
+      asked({ testo: "CV‮otnemucod" }),
+      asked({ testo: "x".repeat(281) }),
+      asked({ opzioni: [{ id: "Rm -rf", label: "x" }, { id: "b", label: "y" }] }),
+      asked({ opzioni: [{ id: "a", label: "x" }] }),
+      asked({ default: "altro" }),
+      { ...free, tipo: "domanda" },
+      { ...free, opzioni: [{ id: "a", label: "x" }] },
+    ];
+    expect(pickQuestions({ open: 10, unread: 0, items: out })).toEqual({ open: 10, unread: 0, items: [] });
+  });
+
+  it("keeps five per agent and twenty in the whole list, and an older image has none", async () => {
+    const { pickAgentsRead, pickQuestions } = await import("./existing-team-agents");
+    const seven = Array.from({ length: 7 }, (_, n) => asked({ id: `aq:scout:1790000000-q${n}` }));
+    expect(pickQuestions({ open: 7, unread: 0, items: seven })?.items).toHaveLength(5);
+    const agents = Array.from({ length: 5 }, (_, n) => ({ name: `SCOUT-${n + 1}`, role: "scout", state: "idle", questions: { open: 7, unread: 0, items: seven } }));
+    const read = pickAgentsRead({ agents: [...agents, { name: "CAPITANO", role: "capitano", state: "idle" }], roles: [], states: true })!;
+    expect(read.agents.map((agent) => agent.questions?.items.length ?? null)).toEqual([5, 5, 5, 5, 0, null]);
+    expect(read.agents[4].questions?.open).toBe(7);
+  });
+});

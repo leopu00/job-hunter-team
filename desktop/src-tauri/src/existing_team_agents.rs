@@ -134,7 +134,7 @@ if req.get('op')=='list':
   created,activity=live[name]
   known=states.get(name.lower()) if states is not None else None
   known=known if isinstance(known,dict) else {}
-  items.append({'name':name,'created':created,'activity':activity,'state':text(known.get('state')),'reason':text(known.get('reason')),'since':number(known.get('since')),'until':number(known.get('until')),'identity':ids.get(name),'usage':usage(name,known,hour)})
+  items.append({'name':name,'created':created,'activity':activity,'state':text(known.get('state')),'reason':text(known.get('reason')),'since':number(known.get('since')),'until':number(known.get('until')),'identity':ids.get(name),'usage':usage(name,known,hour),'questions':known.get('questions') if isinstance(known.get('questions'),dict) else None})
  emit({'ok':True,'data':{'items':items,'states':states is not None}})
 if req.get('op')=='screen':
  name=req.get('name')
@@ -330,6 +330,148 @@ fn shape_usage(value: Option<&Value>) -> Value {
     })
 }
 
+/// The questions an agent asked the user: at most this many per agent, and in the whole list.
+const QUESTIONS_PER_AGENT: usize = 5;
+const QUESTIONS_PER_LIST: usize = 20;
+/// The lengths agent_state.py cuts to, in characters: subject, text, option label.
+const QUESTION_SUBJECT_MAX: usize = 120;
+const QUESTION_TEXT_MAX: usize = 280;
+const QUESTION_LABEL_MAX: usize = 60;
+const QUESTION_TIPI: &[&str] = &["urgente", "blocco", "domanda", "completamento", "comunicazione"];
+
+/// The shape agent_questions.py gives a question id: aq:<agent>:<seconds>-<nonce>.
+pub(crate) fn question_id_ok(text: &str) -> bool {
+    let Some(rest) = text.strip_prefix("aq:") else {
+        return false;
+    };
+    let Some((agent, stamp)) = rest.split_once(':') else {
+        return false;
+    };
+    let Some((seconds, nonce)) = stamp.split_once('-') else {
+        return false;
+    };
+    let mut agent_bytes = agent.bytes();
+    agent.len() <= 40
+        && agent_bytes.next().is_some_and(|b| b.is_ascii_lowercase() || b.is_ascii_digit())
+        && agent_bytes.all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'_' || b == b'-')
+        && !seconds.is_empty()
+        && seconds.len() <= 20
+        && seconds.bytes().all(|b| b.is_ascii_digit())
+        && (1..=16).contains(&nonce.len())
+        && nonce.bytes().all(|b| b.is_ascii_lowercase() || b.is_ascii_digit())
+}
+
+/// An option id of a question: the code's own «_rinvia», or [a-z0-9][a-z0-9_]{0,23}.
+pub(crate) fn option_id_ok(text: &str) -> bool {
+    let mut bytes = text.bytes();
+    text == "_rinvia"
+        || (text.len() <= 24
+            && bytes.next().is_some_and(|b| b.is_ascii_lowercase() || b.is_ascii_digit())
+            && bytes.all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'_'))
+}
+
+/// The invisible characters that command a text (shared/skills/external_content.py, INVISIBLE_COMMANDS).
+fn invisible_command(ch: char) -> bool {
+    matches!(ch, '\u{ad}' | '\u{200b}' | '\u{2060}' | '\u{feff}' | '\u{202a}'..='\u{202e}' | '\u{2066}'..='\u{2069}'
+        | '\u{fff9}'..='\u{fffb}' | '\u{e0000}'..='\u{e007f}')
+}
+
+/// Text the agent wrote, as agent_state.py gives it: one line, no control nor
+/// invisible command, within its length. Anything else is not shown.
+fn one_line(value: Option<&Value>, max: usize) -> Option<String> {
+    let text = value?.as_str()?;
+    let ok = !text.trim().is_empty()
+        && text.chars().count() <= max
+        && !text.chars().any(|ch| ch.is_control() || invisible_command(ch) || ch == '\u{2028}' || ch == '\u{2029}');
+    ok.then(|| text.to_owned())
+}
+
+/// One open question: a structured one (id, type, 2-8 options) or one written
+/// before the contract (no id, no type, no option). A question that is neither
+/// is left out: nothing is shown from a shape the script does not write.
+fn shape_question(value: &Value) -> Option<Value> {
+    let item = value.as_object()?;
+    let id = match item.get("id")? {
+        Value::Null => None,
+        Value::String(id) if question_id_ok(id) => Some(id.clone()),
+        _ => return None,
+    };
+    let tipo = match item.get("tipo")? {
+        Value::Null => None,
+        Value::String(tipo) if QUESTION_TIPI.contains(&tipo.as_str()) => Some(tipo.clone()),
+        _ => return None,
+    };
+    let raw_options = item.get("opzioni")?.as_array()?;
+    let mut options = Vec::new();
+    for option in raw_options {
+        let option = option.as_object()?;
+        let option_id = option.get("id")?.as_str().filter(|text| option_id_ok(text))?;
+        if options.iter().any(|seen: &Value| seen["id"] == option_id) {
+            return None;
+        }
+        let label = one_line(option.get("label"), QUESTION_LABEL_MAX)?;
+        // reversible only with the boolean true: anything else asks for a confirmation
+        let reversible = option.get("reversibile") == Some(&Value::Bool(true));
+        options.push(json!({"id": option_id, "label": label, "reversibile": reversible}));
+    }
+    let structured = id.is_some();
+    if structured != tipo.is_some() || (structured && !(2..=8).contains(&options.len())) || (!structured && !options.is_empty()) {
+        return None;
+    }
+    let subject = match item.get("oggetto") {
+        Some(Value::Null) | None if !structured => Value::Null,
+        value => json!(one_line(value, QUESTION_SUBJECT_MAX)?),
+    };
+    let text = one_line(item.get("testo"), QUESTION_TEXT_MAX)?;
+    let default = match item.get("default") {
+        None | Some(Value::Null) => Value::Null,
+        Some(Value::String(default)) if options.iter().any(|option| option["id"] == default.as_str()) => json!(default),
+        _ => return None,
+    };
+    let at = epoch_number(item.get("at"));
+    if at.is_null() {
+        return None;
+    }
+    Some(json!({
+        "id": id,
+        "tipo": tipo,
+        "oggetto": subject,
+        "testo": text,
+        "opzioni": options,
+        "multipla": structured && item.get("multipla") == Some(&Value::Bool(true)),
+        // a question without options is answered in words, from the messages
+        "libera": !structured || item.get("libera") == Some(&Value::Bool(true)),
+        "scadenza": epoch_number(item.get("scadenza")),
+        "default": default,
+        "at": at,
+    }))
+}
+
+/// The questions an agent asked the user and its unread messages
+/// (agent_state.py): only to be shown, never decided on. Null when the team
+/// does not say them (an older image, a jobs.db it cannot read): never 0.
+/// `budget` is what is left of the list's QUESTIONS_PER_LIST.
+fn shape_questions(value: Option<&Value>, budget: &mut usize) -> Value {
+    let Some(questions) = value.and_then(Value::as_object) else {
+        return Value::Null;
+    };
+    let count = |key: &str| questions.get(key).and_then(Value::as_u64).filter(|n| *n <= 9999);
+    let (Some(open), Some(unread)) = (count("open"), count("unread")) else {
+        return Value::Null;
+    };
+    let Some(raw) = questions.get("items").and_then(Value::as_array) else {
+        return Value::Null;
+    };
+    let items: Vec<Value> = raw
+        .iter()
+        .take(QUESTIONS_PER_AGENT)
+        .filter_map(shape_question)
+        .take(*budget)
+        .collect();
+    *budget -= items.len();
+    json!({"open": open, "unread": unread, "items": items})
+}
+
 /// The reply of the container, reduced to what the page shows: only the
 /// agents' sessions, only the closed list of fields.
 pub(crate) fn shape_reply(request: &AgentsRequest, reply: &Value) -> Option<Value> {
@@ -345,6 +487,7 @@ pub(crate) fn shape_reply(request: &AgentsRequest, reply: &Value) -> Option<Valu
                 return None;
             }
             let mut agents = Vec::new();
+            let mut question_budget = QUESTIONS_PER_LIST;
             for item in items {
                 let item = item.as_object()?;
                 let name = item.get("name")?.as_str()?;
@@ -365,6 +508,7 @@ pub(crate) fn shape_reply(request: &AgentsRequest, reply: &Value) -> Option<Valu
                 agent.insert("since".into(), if states { epoch_number(item.get("since")) } else { Value::Null });
                 agent.insert("until".into(), if states { epoch_number(item.get("until")) } else { Value::Null });
                 agent.insert("usage".into(), shape_usage(item.get("usage")));
+                agent.insert("questions".into(), shape_questions(item.get("questions"), &mut question_budget));
                 agents.push(Value::Object(agent));
             }
             let roles: Vec<Value> = ROLE_ORDER
@@ -609,6 +753,86 @@ mod tests {
         assert_eq!(usage(3), unknown);
     }
 
+    fn asked(id: &str, tipo: &str) -> Value {
+        json!({"id": id, "row": 7, "tipo": tipo, "oggetto": "CV per Acme", "testo": "Quale CV uso?",
+            "opzioni": [{"id": "breve", "label": "CV breve", "reversibile": true}, {"id": "_rinvia", "label": "Rinvia"}],
+            "multipla": false, "libera": false, "scadenza": 1_760_100_000.0, "default": "_rinvia", "at": 1_760_000_000.0})
+    }
+
+    #[test]
+    fn the_questions_of_an_agent_pass_only_in_their_closed_shape() {
+        let mut reply = list_reply(&["CAPITANO", "SCOUT-1", "SCOUT-2", "SCORER-1", "MENTOR"]);
+        let free = json!({"id": null, "row": 8, "tipo": null, "oggetto": null, "testo": "Procedo?", "opzioni": [],
+            "multipla": false, "libera": true, "scadenza": null, "default": null, "at": 1_760_000_001.0});
+        reply["data"]["items"][0]["questions"] = json!({"open": 2, "unread": 3, "items": [asked("aq:capitano:1760000000-ab12cd", "blocco"), free]});
+        // a known zero stays zero
+        reply["data"]["items"][1]["questions"] = json!({"open": 0, "unread": 0, "items": []});
+        // counts that are not counts: not known
+        reply["data"]["items"][2]["questions"] = json!({"open": -1, "unread": "3", "items": []});
+        // SCORER-1: an image older than this read sends no questions at all
+        let mut out_of_shape = vec![asked("aq:mentor:1-x", "ordine"), asked("AQ:mentor:1-x", "domanda")];
+        for (nonce, pointer, value) in [
+            ("a", "/oggetto", json!("riga\nfinta")),
+            ("b", "/testo", json!("CV\u{202e}otnemucod")),
+            ("c", "/opzioni/0/id", json!("Rm -rf")),
+            ("d", "/testo", json!("x".repeat(281))),
+            ("e", "/default", json!("altro")),
+            ("f", "/at", json!("ieri")),
+        ] {
+            let mut question = asked(&format!("aq:mentor:1-{nonce}"), "domanda");
+            *question.pointer_mut(pointer).unwrap() = value;
+            out_of_shape.push(question);
+        }
+        reply["data"]["items"][4]["questions"] = json!({"open": 9, "unread": 0, "items": out_of_shape});
+        let shaped = shape_reply(&AgentsRequest::List {}, &reply).unwrap();
+        let questions = |n: usize| shaped["data"]["agents"][n]["questions"].clone();
+        let captain = questions(0);
+        assert_eq!((captain["open"].clone(), captain["unread"].clone()), (json!(2), json!(3)));
+        assert_eq!(captain["items"][0]["tipo"], "blocco");
+        assert_eq!(captain["items"][0]["opzioni"][0], json!({"id": "breve", "label": "CV breve", "reversibile": true}));
+        // reversible only with the boolean true
+        assert_eq!(captain["items"][0]["opzioni"][1]["reversibile"], false);
+        assert_eq!(captain["items"][0]["default"], "_rinvia");
+        assert_eq!(captain["items"][1], json!({"id": null, "tipo": null, "oggetto": null, "testo": "Procedo?", "opzioni": [],
+            "multipla": false, "libera": true, "scadenza": null, "default": null, "at": 1_760_000_001.0}));
+        assert_eq!(questions(1), json!({"open": 0, "unread": 0, "items": []}));
+        assert_eq!(questions(2), Value::Null);
+        assert_eq!(questions(3), Value::Null);
+        // the counts stay, the questions out of shape are not shown
+        assert_eq!(questions(4), json!({"open": 9, "unread": 0, "items": []}));
+    }
+
+    #[test]
+    fn at_most_twenty_questions_reach_the_page_five_per_agent() {
+        let names = ["SCOUT-1", "SCOUT-2", "SCOUT-3", "SCOUT-4", "SCOUT-5"];
+        let mut reply = list_reply(&names);
+        for n in 0..names.len() {
+            let items: Vec<Value> = (0..7).map(|i| asked(&format!("aq:scout-{}:1760000000-q{i}", n + 1), "domanda")).collect();
+            reply["data"]["items"][n]["questions"] = json!({"open": 7, "unread": 0, "items": items});
+        }
+        let shaped = shape_reply(&AgentsRequest::List {}, &reply).unwrap();
+        let shown: Vec<usize> = (0..names.len())
+            .map(|n| shaped["data"]["agents"][n]["questions"]["items"].as_array().unwrap().len())
+            .collect();
+        assert_eq!(shown, vec![5, 5, 5, 5, 0]);
+        assert!(shaped["data"]["agents"].as_array().unwrap().iter().all(|agent| agent["questions"]["open"] == 7));
+    }
+
+    #[test]
+    fn a_question_id_and_an_option_id_have_the_contracts_shape() {
+        assert!(question_id_ok("aq:scout-1:1760000000-ab12cd"));
+        assert!(question_id_ok("aq:capitano:1-a"));
+        for bad in ["", "aq:", "aq:Scout:1-a", "aq:scout:x-a", "aq:scout:1-", "aq:scout:1-AB", "aq:scout:1-a b", "ans:aq:scout:1-a",
+            "aq:scout:1-a\n", "aq:-:1-a"] {
+            assert!(!question_id_ok(bad), "{bad:?}");
+        }
+        assert!(option_id_ok("breve") && option_id_ok("_rinvia") && option_id_ok("cv_2"));
+        let long = "x".repeat(25);
+        for bad in ["", "_altro", "Breve", "a-b", "a b", "--help", long.as_str()] {
+            assert!(!option_id_ok(bad), "{bad:?}");
+        }
+    }
+
     #[test]
     fn only_a_complete_reply_is_shown() {
         assert!(shape_reply(&AgentsRequest::List {}, &json!({"ok":false,"error":"agents_unavailable"})).is_none());
@@ -767,7 +991,7 @@ mod tests {
         assert_eq!(stale["data"]["agents"][0]["usage"]["tokensAt"], Value::Null);
         // with agent_state.py there (a stand-in that answers as the real one does), its states come through
         let state = dir.join("agent_state.py");
-        std::fs::write(&state, "import json\nprint(json.dumps({'capitano':{'state':'lavora','since':1760000050,'context':{'at':1760000090,'tokens':109820,'window':258400,'pct':42.5}},'critico-s3':{'state':'bloccato','reason':'limite_5h','until':1760003600}}))\n").unwrap();
+        std::fs::write(&state, "import json\nprint(json.dumps({'capitano':{'state':'lavora','since':1760000050,'context':{'at':1760000090,'tokens':109820,'window':258400,'pct':42.5},'questions':{'open':1,'unread':2,'items':[]}},'critico-s3':{'state':'bloccato','reason':'limite_5h','until':1760003600}}))\n").unwrap();
         let with_state = script.replace("/nonexistent/agent_state.py", &state.display().to_string());
         let stated = shape_reply(&AgentsRequest::List {}, &run_script(&with_state, &AgentsRequest::List {})).unwrap();
         assert_eq!(stated["data"]["states"], true);
@@ -778,6 +1002,9 @@ mod tests {
         assert_eq!(stated["data"]["agents"][0]["usage"]["contextPct"], 42.5);
         assert_eq!(stated["data"]["agents"][0]["usage"]["contextWindow"], 258_400);
         assert_eq!(stated["data"]["agents"][1]["usage"]["contextPct"], Value::Null);
+        // the questions come through as the state says them; an agent it says none of is not known
+        assert_eq!(stated["data"]["agents"][0]["questions"], json!({"open": 1, "unread": 2, "items": []}));
+        assert_eq!(stated["data"]["agents"][1]["questions"], Value::Null);
         let shaped = shape_reply(&AgentsRequest::List {}, &list).unwrap();
         assert_eq!(names(&shaped), ["CAPITANO", "CRITICO-S3"]);
         assert_eq!(shaped["data"]["agents"][1]["activity"], 1_760_000_200);

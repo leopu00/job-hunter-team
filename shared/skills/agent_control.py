@@ -535,6 +535,14 @@ def _usage(name: str, known: dict, hour: tuple[dict, float] | None) -> dict:
             "tokens_at": hour[1] if hour else None}
 
 
+def _questions(known: dict):
+    """The questions the agent asked the user and its unread messages
+    (agent_state.py), only to be shown: the app closes their shape again.
+    None when not known (an older image, a jobs.db that cannot be read)."""
+    value = known.get("questions")
+    return value if isinstance(value, dict) else None
+
+
 def read_list() -> dict:
     live = _sessions()
     if live is None:
@@ -559,7 +567,8 @@ def read_list() -> dict:
                       "state": _text(known.get("state")), "reason": _text(known.get("reason")),
                       "since": _number(known.get("since")), "until": _number(known.get("until")),
                       "identity": identities.get(name),
-                      "usage": _usage(name, known, hour)})
+                      "usage": _usage(name, known, hour),
+                      "questions": _questions(known)})
     return {"ok": True, "data": {"items": items, "states": states is not None}}
 
 
