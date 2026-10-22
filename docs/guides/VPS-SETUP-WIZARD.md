@@ -1,131 +1,83 @@
-# VPS setup from the native office
+# VPS setup from the desktop app
 
-This is the current non-terminal path for running Job Hunter Team on an
-always-on VPS. The desktop application is the Godot office; the retired
-Electron wizard is not involved.
+This is the guided, non-terminal path for running Job Hunter Team on an
+always-on Linux VPS from the desktop app. The terminal-first path is in
+[`VPS-SETUP.md`](VPS-SETUP.md).
+
+JHT does not create, bill or delete a VPS. Choose and provision the machine
+with your infrastructure provider before you start.
 
 ## What you need
 
-- A Linux host reachable over SSH as `root`, with passwordless `sudo`, or with
-  an account already allowed to run Docker. Automated migration involving a
-  remote host still requires the root-owned path layout described below.
-- SSH available on the standard port 22. The native host field currently
-  accepts a hostname or IPv4 address, not a custom port or IPv6 address.
-- The SSH private key matching a public key installed on the VPS.
-- A dedicated Codex (recommended), Claude or Kimi subscription.
-- Optionally, three Telegram bots and a dedicated job-alert mailbox.
-
-The native app can generate a dedicated Ed25519 key under
-`~/.jht/ssh/id_ed25519`. The **Copy public key** button copies only the `.pub`
-line expected by Hetzner; **Open folder** reveals both files and the UI shows
-the fingerprint. The private file never needs to leave the computer and is
-explicitly excluded from migrations.
+- A Linux VPS reachable over SSH with key authentication, and a normal user
+  that is not `root`. The team runs in rootless Podman: the app refuses to
+  install it as the administrator.
+- Passwordless `sudo` for that user, so the installer can add what is missing:
+  `podman`, `podman-compose`, `uidmap`, a subordinate ID range in
+  `/etc/subuid` and `/etc/subgid`, and linger for the user. Without it, ask the
+  server's administrator to prepare those before you start.
+- An ed25519 SSH host key on the server: the app confirms the server's
+  identity with its fingerprint.
+- The SSH private key file on this computer, matching a public key installed
+  on the VPS. It stays on this computer: the app only uses it to connect.
+- A Google sign-in in the app. A new team on a VPS is paired with your
+  account during the preparation; a local profile has no account to pair it
+  with.
+- A dedicated Codex (recommended), Claude or Kimi subscription. Kimi is not
+  available in the Windows app yet.
 
 ## Guided path
 
-1. Open the application. It always opens directly into the office.
-2. Click **Attiva team**, then talk to the **Coordinator** and choose
-   **The team will run on a VPS**. The same settings are available directly
-   under **Settings → Connect VPS**.
-3. Generate or select the SSH key, copy the public key into the provider's
-   server-creation form and enter the new server IP.
-4. Choose **Verify SSH**. The app verifies key authentication and either root,
-   passwordless `sudo`, or working Docker access before changing the server.
-5. Choose **Prepare and connect automatically**. It installs the host runtime,
-   writes VPS host mode, pulls and starts the container, saves the connection
-   and switches the office to the remote backend. **Advanced console** keeps a
-   visible recovery path for troubleshooting.
-6. In the Coordinator conversation, choose Codex (recommended), Claude or Kimi and open
-   subscription login. The provider CLI runs in the embedded console. A
-   browser may open only for provider authorization; codes and prompts remain
-   visible in the app.
-7. Complete **Profile**. This is a native form and does not require an LLM.
-   The scripted Assistant can prefill role, experience and geographic scope.
-8. Optionally configure **Telegram**, **Email** and **Account**. Telegram
-   verifies each token and detects the chat after you press Start in the bot.
-9. Return to **Attiva team** and start the team. Agents appear in the office as
-   their real remote sessions come online.
+1. Open the app and choose **Continue with Google**.
+2. Select **Start the setup**, then **VPS server**. Enter the VPS address
+   (hostname or IP address), the SSH user and the SSH port, and choose the
+   private key file. While something is missing, **Continue** stays off and
+   the screen says what.
+3. Choose the provider, then select **Review the setup** and **Prepare the
+   team**. Keep the app open while it works.
+4. The app reads the server's SSH fingerprint. Compare it with the one your
+   VPS provider shows: confirm only if it is the same, and cancel if it
+   differs, because you may not be connected to your own server.
+5. The app prepares the server: it runs the official installer with rootless
+   Podman, starts the container and installs the provider's tool. When the
+   server lacks something, the screen says what to ask its administrator,
+   with **Retry the preparation**.
+6. Sign in to the provider when the screen says it is your turn: follow the
+   sign-in link, code or answer field it shows.
+7. When provider, container and agents are verified, the app opens the chat
+   with the Assistant. The team keeps running on the VPS after you close the
+   app.
 
-## Move an existing team
+## A team or a profile that already exists
 
-**Settings → Connect VPS → Complete migration** supports these host changes
-when every remote source or destination uses the current root-owned layout:
+- **A team already running on a VPS.** With **VPS server** selected, the
+  Environment step offers **Check VPS** under «Do you already have a team
+  running on a VPS?». It connects this app to that team without reinstalling
+  or restarting it, after the same fingerprint check. Host and key stay only
+  on this computer.
+- **A VPS that already runs the team with Docker**, for example from an
+  earlier installation: the app does not move it to Podman. Nothing on the VPS
+  is moved or deleted. Connect to the existing team instead, or choose
+  another VPS.
+- **A profile on a VPS, for a local team.** With a local profile and **This
+  computer** selected, **Import profile** copies the confirmed profile from
+  the VPS without linking Google. Keys, databases and settings stay where they
+  are.
 
-- this computer → a new VPS;
-- the currently saved VPS → a new VPS; or
-- the currently saved VPS → this computer.
-
-A fresh prepare/connect flow supports non-root accounts with passwordless
-`sudo` or Docker access, but the automated migration scripts still use paths
-under `/root`. Migration to or from a non-root remote account is therefore not
-implemented. A successful **Verify SSH** result does not remove this limit.
-
-For a VPS destination, enter its IP/key, select the source and confirm. For a
-local destination, use **Migrate from VPS to this computer**. The app:
-
-1. verifies and provisions the destination;
-2. stops the source so SQLite and session files form one coherent snapshot;
-3. transfers `~/.jht` and `~/Documents/Job Hunter Team`, including database,
-   profile, outputs, team configuration, provider login and cloud pairing;
-4. excludes SSH private keys, runtime files and the source `host.env`;
-5. verifies the archive checksum after every network transfer;
-6. extracts into a staging directory and validates the payload before touching
-   the destination;
-7. creates and verifies a timestamped backup on the destination;
-8. atomically replaces the destination state instead of merging stale files;
-9. enforces the destination host mode, checks SQLite integrity and starts the
-   container (and the team if it was active);
-10. archives and verifies the old source cloud token, then connects the office
-    to the destination.
-
-If snapshot, checksum, backup, extraction, database validation, team startup or
-cloud handoff fails, both source and destination are rolled back. Nothing is
-deleted automatically; the destination backup path is shown in the result.
-
-SSH host keys are pinned in an app-owned known-hosts file before login. A key
-change is rejected instead of being accepted silently. **Verify SSH** shows the
-fingerprint to compare with the server provider.
-
-This single-source handoff is important: do not restart the old team after a
-successful migration unless you are intentionally rolling back.
-
-## Google account and local-only mode
-
-Under **Settings → Account**, **Sign in with Google** starts the cloud device
-flow inside the embedded console. The browser is used only to authenticate and
-approve the displayed code. Google passwords/cookies never enter the game;
-the team stores a revocable `jht_sync_…` device token in `~/.jht/cloud.json`
-with restricted permissions.
-
-Pairing automatically performs the initial push when a database exists. The
-same page exposes status, one-shot sync, profile recovery and pipeline disaster
-recovery (positions, scores and applications). **Stop sync and continue locally** revokes the current device token
-on the server and removes it from the running computer/VPS. Local database,
-profile and generated files are retained and the team continues to work.
-
-## First-run conversations
-
-Assistant, Coordinator and Mentor have persistent scripted conversations that
-work before a provider is connected. They never consume tokens. Once the
-provider and the relevant agent are online, the same panel keeps suggested
-replies and enables free text to the real agent.
-
-See [`game/docs/FIRST-RUN.md`](../../game/docs/FIRST-RUN.md) for the state and
-security contract.
+The desktop app does not move a team from one host to another.
 
 ## Troubleshooting
 
-- **SSH does not connect:** verify the hostname or IPv4 address, SSH user, key
-  path, port 22 and server firewall, then confirm that
-  `ssh -i <key> <user>@<host>` works.
-- **Install console fails:** keep the console open and use its Copy button;
-  then run **Advanced → Diagnostics**.
-- **Provider stays disconnected:** finish the browser authorization, return to
-  the embedded console and wait for the provider CLI to exit. Use **Recheck**.
-- **Profile gate stays yellow:** all eight fields are required: name, email,
-  target role, location, experience, seniority, at least two skills and one
-  language.
-- **Telegram chat is not detected:** open the bot link, press Start, then retry
-  **Save and detect chat**.
+- **SSH does not connect:** check the address, the port, the SSH user and the
+  key file, then the server firewall. `ssh -i <key> -p <port> <user>@<host>`
+  should work from this computer.
+- **The fingerprint does not match:** cancel and check with your VPS provider
+  before connecting.
+- **The server is missing Podman, sudo or linger:** the error screen names
+  what is missing and what to ask the administrator. Press **Retry the
+  preparation** once it is in place.
+- **Something else fails:** the error screen gives the cause and its code.
+  From a terminal, the CLI recovery path below reads the server directly.
 
-The CLI recovery path remains documented in [`VPS-SETUP.md`](VPS-SETUP.md).
+The CLI path, and recovery from a terminal, are documented in
+[`VPS-SETUP.md`](VPS-SETUP.md).
