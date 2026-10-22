@@ -9,6 +9,8 @@ import { makeT } from "@/lib/i18n-dict";
 import { useReadOnlyActions } from "@/lib/read-only-actions";
 import type { ApplyRequestState } from "@/lib/apply-request-rule";
 import { WEB_DAILY_CAP, queuedTomorrowAt } from "@/lib/apply-web-cap";
+import { canReauth, currentUserId, startReauth } from "@/lib/reauth";
+import { takeReauthIntent, type ReauthTake } from "@/lib/reauth-intent";
 import {
   requestFailureMessage,
   requestFailureReason,
@@ -174,6 +176,7 @@ export function ApplyRequestView({
   confirming = false,
   confirmation = null,
   queuedTomorrow = false,
+  reauth = null,
   onAuthorise,
   onConfirm,
   onDismiss,
@@ -190,6 +193,8 @@ export function ApplyRequestView({
   confirmation?: { summary: string; expiresText: string | null } | null;
   /** Autorizzata dal sito, ma il tetto di oggi è pieno: parte domani. Non è partita e non è un errore. */
   queuedTomorrow?: boolean;
+  /** La porta ha chiesto un accesso recente: il pulsante per rifarlo, e se è in corso. */
+  reauth?: { onClick: () => void; busy: boolean } | null;
   onAuthorise?: () => void;
   onConfirm?: () => void;
   onDismiss?: () => void;
@@ -308,6 +313,23 @@ export function ApplyRequestView({
           {error}
         </p>
       )}
+      {reauth && (
+        <div className="mt-2">
+          <button
+            type="button"
+            data-action="reauth"
+            onClick={reauth.onClick}
+            disabled={reauth.busy || readOnly.readOnly}
+            className="rounded-lg border px-3 py-1.5 text-[11px] font-semibold transition-colors hover:bg-[var(--color-row)] disabled:cursor-not-allowed disabled:opacity-60"
+            style={{
+              borderColor: "var(--color-green)",
+              color: "var(--color-green)",
+            }}
+          >
+            {t("reauth_button")}
+          </button>
+        </div>
+      )}
       {confirming &&
         (portal ?? ((dialog: ReactNode) => dialog))(
           <div
@@ -398,6 +420,9 @@ export function ApplyRequestButton({
     expiresAt: string | null;
   } | null>(null);
   const [isPending, startTransition] = useTransition();
+  // La porta vuole un accesso degli ultimi 15 minuti: l'utente può rifarlo da qui (T63).
+  const [needsReauth, setNeedsReauth] = useState(false);
+  const [reauthBusy, setReauthBusy] = useState(false);
 
   // «Oggi» è il giorno dell'utente: si decide nel browser, dopo il montaggio, così il server e il client
   // mostrano lo stesso testo alla prima resa.
@@ -417,11 +442,18 @@ export function ApplyRequestButton({
       refusalText(t, outcome.error) ??
       requestFailureReason(locale, outcome.status);
     setError(requestFailureMessage(locale, action, reason));
+    // «Accedi di nuovo» solo se questo account può ripeterlo da qui (sul desktop, solo Google).
+    if (twoStep && outcome.error === "reauth_required") {
+      void canReauth().then(setNeedsReauth);
+    } else {
+      setNeedsReauth(false);
+    }
   };
 
   // Primo tempo: il server compone il testo e lo legge l'utente; nessuna autorizzazione ancora.
   const startTwoStep = async () => {
     setError(null);
+    setNeedsReauth(false);
     setSending(true);
     try {
       const outcome = await startAuthorisation(legacyId);
@@ -459,6 +491,55 @@ export function ApplyRequestButton({
       setSending(false);
     }
   };
+
+  // «Accedi di nuovo»: sul sito si esce per il provider e si torna qui, dove l'intenzione salvata fa
+  // ripartire il PRIMO tempo; sul desktop il login finisce senza ricaricare e si riparte subito. Il secondo
+  // tempo (la conferma) resta sempre un clic dell'utente.
+  const reauthenticate = async () => {
+    setReauthBusy(true);
+    setError(null);
+    try {
+      const result = await startReauth({
+        kind: "apply-authorise",
+        target: String(legacyId),
+      });
+      if (result === "done") {
+        setNeedsReauth(false);
+        await startTwoStep();
+      } else if (result === "changed") {
+        // Un altro account ha preso il posto di quello che chiedeva: niente riparte.
+        setNeedsReauth(false);
+        setError(t("reauth_other_account"));
+      } else if (result === "unsupported" || result === "failed") {
+        setError(t("reauth_failed"));
+      }
+      // "redirected": la pagina sta per lasciare; "cancelled": l'utente ha annullato, resta il pulsante.
+    } finally {
+      setReauthBusy(false);
+    }
+  };
+
+  // Tornati dal login: se questa pagina doveva riprendere QUESTA autorizzazione, riparte il primo tempo.
+  // L'intenzione si legge una volta sola (si cancella subito) e vale dieci minuti.
+  useEffect(() => {
+    if (!twoStep) return;
+    void (async () => {
+      let taken: ReauthTake = "none";
+      try {
+        taken = takeReauthIntent(
+          window.sessionStorage,
+          { kind: "apply-authorise", target: String(legacyId) },
+          Date.now(),
+          await currentUserId(),
+        );
+      } catch {
+        taken = "none";
+      }
+      if (taken === "resume") void startTwoStep();
+      else if (taken === "changed") setError(t("reauth_other_account"));
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const expiresText =
     pending?.expiresAt && !Number.isNaN(Date.parse(pending.expiresAt))
@@ -512,6 +593,11 @@ export function ApplyRequestButton({
       busy={sending || isPending}
       error={error}
       queuedTomorrow={queuedTomorrow}
+      reauth={
+        needsReauth
+          ? { onClick: () => void reauthenticate(), busy: reauthBusy }
+          : null
+      }
       confirming={twoStep ? pending !== null : confirming}
       confirmation={
         twoStep && pending ? { summary: pending.summary, expiresText } : null
