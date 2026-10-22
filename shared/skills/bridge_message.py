@@ -206,7 +206,10 @@ def render(v):
 
     # ── ⏱ FINESTRA 5H ──
     fh = v.get("fivehh") or {}
-    lines.append("⏱  5H WINDOW")
+    # A plan with one weekly window has no 5h one: the section carries the weekly and
+    # says so, since at 100% the wait is days, not hours.
+    lines.append("⏱  SINGLE WEEKLY WINDOW (this plan has no 5h window)" if fh.get("single_weekly")
+                 else "⏱  5H WINDOW")
     u = fh.get("usage")
     t = fh.get("target")
     close = fh.get("reset_str") or "?"

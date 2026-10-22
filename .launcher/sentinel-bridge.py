@@ -1686,8 +1686,14 @@ def _build_tick_message(entry, parsed, status, proj, usage, reset_str, dyn_targe
     target5 = float(dyn_target) if isinstance(dyn_target, (int, float)) and dyn_target else 92.0
     reset_unix = entry.get("reset_at_unix")
     vel_now5 = vel_tgt5 = reset_in5 = None
+    # Piano a finestra unica settimanale (fetch_codex_rollout: usage_is_weekly): la
+    # sezione «corta» porta la settimanale e si chiama così, e la velocità si misura
+    # dall'inizio della settimana. Mostrarla come 5H direbbe a chi legge che a
+    # saturazione si aspetta qualche ora, mentre si aspettano giorni.
+    single_weekly = isinstance(parsed, dict) and parsed.get("usage_is_weekly") is True
+    window_h = 7 * 24 if single_weekly else 5
     if isinstance(reset_unix, (int, float)):
-        elapsed_h = (now_ts - (reset_unix - 5 * 3600)) / 3600.0   # finestra 5h
+        elapsed_h = (now_ts - (reset_unix - window_h * 3600)) / 3600.0
         if elapsed_h > 0 and isinstance(usage, (int, float)):
             vel_now5 = round(usage / elapsed_h, 1)
         rem_h = (reset_unix - now_ts) / 3600.0
@@ -1702,6 +1708,7 @@ def _build_tick_message(entry, parsed, status, proj, usage, reset_str, dyn_targe
         "status": status,
         "reset_str": reset_str if (reset_str and reset_str != "?") else (entry.get("reset_at") or "?"),
         "reset_in": reset_in5, "vel_now": vel_now5, "vel_target": vel_tgt5,
+        "single_weekly": single_weekly,
     }
     now_dt = datetime.fromtimestamp(now_ts, tz=timezone.utc)
     daily = None
