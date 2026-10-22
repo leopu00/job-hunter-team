@@ -32,7 +32,7 @@ What it will not do:
 - try a captcha: a visible hCaptcha challenge stops the run at once, with no
   attempt (operator's decision, 14/09);
 - reset a password, or keep the account object anywhere it could be
-  serialised — a checkpoint, a receipt, a notice (SICUREZZA, 20/09).
+  serialised — a checkpoint, a receipt, a notice.
 """
 
 from __future__ import annotations

@@ -411,7 +411,7 @@ describe("il messaggio di errore non promette cose false", () => {
 
 describe("cancellazione — i file orfani non sopravvivono", () => {
   it("cancella un oggetto che non ha piu' la sua riga", async () => {
-    // Il caso reale trovato da HQ-DOCS: un file nel bucket senza riga in
+    // Il caso reale trovato dal team docs: un file nel bucket senza riga in
     // `file_bridge_requests`. Fidarsi delle righe lo avrebbe lasciato lì.
     const { client, removedPaths } = fakeAdmin({
       storagePaths: [],
@@ -426,8 +426,8 @@ describe("cancellazione — i file orfani non sopravvivono", () => {
     // `expired` col percorso ancora dentro. Se quel percorso finisse nella
     // `remove`, Supabase non lo elencherebbe fra i cancellati — non
     // esiste — e il confronto lo direbbe non rimosso, bloccando per sempre
-    // la cancellazione dell'account dopo un purge riuscito. Trovato da
-    // HQ-BACKEND.
+    // la cancellazione dell'account dopo un purge riuscito. Trovato
+    // dal team backend.
     const { client, removedPaths, deletedUsers } = fakeAdmin({
       storagePaths: ["user-1/req-vecchio/purgato.pdf"],
       storageTree: {},
@@ -495,7 +495,7 @@ describe("cancellazione — non si cancellano file di altri", () => {
     // Pre-migration `file_bridge_requests` accepted INSERT with only an owner
     // check and an unvalidated `storage_path`. Reading historical rows as a
     // source with service_role would reopen cross-account deletion. Reported
-    // by HQ-BACKEND.
+    // by the backend team.
     const { client, removedPaths } = fakeAdmin({
       storagePaths: ["vittima-2/req/cv.pdf", "user-1/req/mio.pdf"],
       storageTree: { "user-1/req/mio.pdf": true },

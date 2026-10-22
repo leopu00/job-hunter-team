@@ -476,7 +476,7 @@ export type CreateOfficeEngine = (
 export type LoadOfficeSnapshot = (client: import("@supabase/supabase-js").SupabaseClient) => Promise<OfficeSnapshot>;
 export type DiffOfficeSnapshots = (prev: OfficeSnapshot | null, next: OfficeSnapshot) => OfficeEvent[];
 
-// ─── The scene's API (sadie) ─────────────────────────────────────────────
+// ─── The scene's API ─────────────────────────────────────────────────────
 
 /** What a click in the office means; the page turns it into a route. */
 /**

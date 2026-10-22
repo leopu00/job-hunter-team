@@ -56,7 +56,7 @@ describe("social link del footer pubblico", () => {
     );
   });
 
-  it("espone TikTok con l'handle confermato da HQ-SOCIAL", () => {
+  it("espone TikTok con l'handle confermato dal team social", () => {
     const tiktok = SOCIAL_PROFILES.find(
       (profile) => profile.network === "tiktok",
     );

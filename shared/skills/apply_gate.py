@@ -1123,7 +1123,7 @@ def _cap_value(consent: Verdict) -> int | None:
 
 
 def _request_cv_rework(position_id: int, conn: sqlite3.Connection, jht_home: Path | None) -> dict[str, str]:
-    """Ask the Scrittore for this CV again (HQ-BACKEND-2's `application_rework`), once.
+    """Ask the Scrittore for this CV again (the backend team's `application_rework`), once.
 
     Idempotent there (`already_requested`), never raising here: a queue read
     must keep answering whatever the request does. The request opens its own

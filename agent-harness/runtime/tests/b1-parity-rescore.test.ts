@@ -1,5 +1,5 @@
 /**
- * B1-T2 (banda/piani/B1-parita-ruoli.md): the SCORER scores a position again
+ * B1 (the role parity suite), rescore: the SCORER scores a position again
  * on the person's request.
  *
  * In the TUI a rescore ticket goes to a SCORER (capitano.md C-15,

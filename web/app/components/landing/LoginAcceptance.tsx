@@ -5,7 +5,7 @@
 // Prima non c'era nulla: si arrivava su «Login with Google» senza un
 // riferimento ai due documenti, e l'accettazione era del tutto implicita.
 //
-// Testo inglese di HQ-DOCS (`docs/internal/2026-08-07-LEGAL-COPY-DRAFT.md`,
+// Testo inglese del team docs (`docs/internal/2026-08-07-LEGAL-COPY-DRAFT.md`,
 // microcopy login). Due scelte sue che vanno rispettate anche traducendo:
 // si **accettano** i Termini e si **prende atto** della Privacy — sono due
 // verbi diversi di proposito, non sinonimi da uniformare. E i due link

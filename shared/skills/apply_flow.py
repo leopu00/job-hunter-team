@@ -2636,7 +2636,7 @@ class GreenhouseRecipe:
         ):
             # A required consent or survey control outside the questions: the
             # browser would refuse the click and nothing would be sent (the
-            # same hole HQ-FULLSTACK-2 found in the Lever recipe).
+            # same hole a fullstack developer found in the Lever recipe).
             raise BlockedHuman(
                 "required_field_unanswered",
                 "A required Greenhouse control outside the application questions is empty or invalid",
@@ -3187,7 +3187,7 @@ def _fill_secret(control: Any, value: str) -> None:
 
     A stop can fire with the code still in the box, and the stop screenshot is
     taken from the live page: a field nobody marked is a field `_secrets_hidden`
-    does not hide (SICUREZZA P2, 20/09). The marking comes first — a page that
+    does not hide. The marking comes first — a page that
     cannot be marked is a page nothing is typed into.
     """
     module = _optional_module("ats_account")
@@ -3254,7 +3254,7 @@ def _recipe_class(platform: str):
         module = _linkedin_module()
         return module.LinkedInEasyApplyRecipe if module is not None else None
     if platform == "generic":
-        # A company's own careers form (HQ-FULLSTACK-2's apply_generic).
+        # A company's own careers form (the fullstack team's apply_generic).
         module = _optional_module("apply_generic")
         return module.GenericRecipe if module is not None else None
     if platform == "workday":

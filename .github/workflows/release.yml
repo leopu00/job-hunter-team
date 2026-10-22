@@ -432,7 +432,7 @@ jobs:
         with:
           name: "Job Hunter Team ${{ github.ref_name }}"
           body_path: release-assets/RELEASE-NOTES.md
-          # Gli asset restano invisibili al pubblico finche' HQ-MASTER non li
+          # Gli asset restano invisibili al pubblico finche' la verifica di rilascio non li
           # riscarica dalla draft e passa `release_artifacts.py audit`.
           draft: true
           prerelease: ${{ contains(github.ref_name, '-') }}

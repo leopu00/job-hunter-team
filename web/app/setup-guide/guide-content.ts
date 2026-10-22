@@ -1,6 +1,6 @@
 // Capitoli e fasi della guida di setup.
 //
-// FONTE UNICA: il contratto di HQ-DOCS,
+// FONTE UNICA: il contratto del team docs,
 // `docs/internal/2026-08-07-setup-guide-content-contract.md`. Id, titoli,
 // corpi, link e id delle schermate sono i suoi, adottati alla radice: non
 // esiste una seconda nomenclatura da mappare, e i file che i collaudatori
@@ -78,7 +78,7 @@ export const GUIDE_CHAPTERS: GuideChapter[] = [
         // Nessuna schermata: il selettore OS e l'indice dei capitoli sono
         // dal vivo appena sopra questa fase. Mostrare qui una foto della
         // pagina che il lettore sta già guardando non aggiungerebbe nulla
-        // — decisione di HQ-DOCS del 7 agosto 2026, che ha cancellato la
+        // — decisione del team docs del 7 agosto 2026, che ha cancellato la
         // richiesta PNG di `G00` e il suo duplicato mobile.
       },
       {
@@ -102,7 +102,7 @@ export const GUIDE_CHAPTERS: GuideChapter[] = [
           pt: "No macOS e no Linux o Docker é obrigatório; no Windows a aplicação instala o Podman dentro do WSL. Para uma utilização local confortável, mantém cerca de 8 GB de RAM disponíveis antes de iniciares a equipa. Num teste de 30 minutos no Windows, medido com o Docker Desktop na v0.3.9, uma máquina com 12 GB manteve mais de 4 GB livres com a equipa e o Job Hunter Team Desktop ativos; o seu processador de 2013, com 2 núcleos e 4 threads, concluiu o teste sem saturar. Garante que o motor de contentores tem espaço para a imagem da equipa; não é indicado um mínimo universal de espaço em disco porque não foi medido. Também precisas de acesso à Internet e de uma subscrição junto de um fornecedor suportado. Uma VPS dedicada utiliza uma base de referência separada e validada: Ubuntu 24.04, 4 GB de RAM total, 2 vCPU, SSD de 80 GB e 2 GB de swap preventivo.",
           hu: "macOS-en és Linuxon a Docker szükséges; Windowson az alkalmazás Podmant telepít a WSL-be. A kényelmes helyi használathoz a csapat indítása előtt legyen körülbelül 8 GB szabad RAM. Egy 30 perces, a v0.3.9 Docker Desktopjával mért Windows-futtatás során egy 12 GB-os gépen több mint 4 GB maradt szabadon, miközben a csapat és a Job Hunter Team Desktop aktív volt; a gép 2013-as, 2 magos, 4 szálas processzora telítődés nélkül teljesítette a futtatást. Gondoskodj róla, hogy a konténermotornak legyen elegendő helye a csapat image-éhez; általános minimális lemezterület nincs megadva, mert ilyet nem mértek. Internet-hozzáférésre és egy támogatott szolgáltatónál fennálló előfizetésre is szükséged van. Egy dedikált VPS-re külön, validált alapérték vonatkozik: Ubuntu 24.04, összesen 4 GB RAM, 2 vCPU, 80 GB-os SSD és 2 GB megelőző célú swap.",
         },
-        // Superficie nativa: HQ-DOCS ha cancellato la richiesta PNG di S01.
+        // Superficie nativa: Il team docs ha cancellato la richiesta PNG di S01.
         // Il contenuto resta responsive e traducibile nella RequirementsCard.
         card: "requirements",
         links: [

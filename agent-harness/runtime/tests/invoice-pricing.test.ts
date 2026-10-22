@@ -1,5 +1,5 @@
 /**
- * The runtime's cost must be what OpenAI bills (JHT-API-TEST A1, A4, A5).
+ * The runtime's cost must be what OpenAI bills.
  *
  * Until 2026-09-27 the tokens were right and the price was not: cached input
  * at the full input price, luna's long-context rates on every request, cache

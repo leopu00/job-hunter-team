@@ -1,5 +1,5 @@
 /**
- * `npm run spend` (JHT-API-TEST A2, A3): the spend repriced from the key
+ * `npm run spend`: the spend repriced from the key
  * proxy's log or the team's ledger, and reconciled with OpenAI's Costs API.
  * Synthetic lines only: the real week lives outside the repo.
  */

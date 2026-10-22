@@ -6,7 +6,7 @@ taken for the session), and `--all` killed `SENTINELLA-WORKER`, which is not an 
 the bridge's `/usage` probe.
 
 These tests run the real command against a PRIVATE tmux server: its own TMUX_TMPDIR, no TMUX/TMUX_PANE
-inherited (inside FLEET's tmux a command would reach the FLEET server whatever TMUX_TMPDIR says), and the
+inherited (inside the operator's own tmux a command would reach that server whatever TMUX_TMPDIR says), and the
 sessions run `sleep`. Nothing here can touch a session of the team that is running on this machine.
 
 - the container path (IS_CONTAINER=1: the CLI runs where tmux is) for the single stops;

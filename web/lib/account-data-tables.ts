@@ -26,7 +26,7 @@ export const MANUAL_DELETE_ORDER = [
  *  comprenderle.
  *
  *  ⚠️ Questo elenco è scritto a mano e per due volte ha perso una tabella
- *  (`candidate_skills` e `sentinel_ticks`, trovate da HQ-MASTER in
+ *  (`candidate_skills` e `sentinel_ticks`, trovate in
  *  review). Il test `account-tables-census` lo confronta con le
  *  MIGRATION, non con l'altro elenco di questo file: un censimento che
  *  guarda solo sé stesso tace proprio quando entrambe le liste

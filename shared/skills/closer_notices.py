@@ -13,7 +13,7 @@ readable.
    host.env), saying why and what the user can do. The technical reason and
    detail stay at the end, in brackets, for support.
 2. `defer(position_id, reason, url)` — every stop that is not a form question
-   (HQ-BACKEND-3, 14/09): nothing is sent now, the stop joins the pending
+   (14/09): nothing is sent now, the stop joins the pending
    list, one line per position (the latest stop wins). `flush()` sends ONE message for all
    of them; the CLOSER runs `closer_notices.py flush` when it ends its round.
    If a stop waits longer than FLUSH_AFTER (the CLOSER died before the end of
@@ -89,7 +89,7 @@ KNOWN_REASONS = (
     "page_not_found",
     "bot_protection",
     "page_temporarily_unavailable",
-    # Every stop goes to the summary now (HQ-BACKEND-3, 14/09): the live round
+    # Every stop goes to the summary now (14/09): the live round
     # had 8 separate notices, 6 of them linkedin_credentials_missing. A sent or
     # probably sent email must never read as "nothing was sent".
     "receipt_incomplete",

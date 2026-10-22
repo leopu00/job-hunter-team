@@ -704,7 +704,7 @@ def test_a_cv_that_fails_the_layout_check_is_never_attached(box, monkeypatch, an
     assert sql(box, "SELECT applied FROM applications WHERE position_id = 1") == [(0,)]
 
 
-# ── cross-review (HQ-BACKEND-2): C1 and C2 ──────────────────────────────────
+# ── cross-review: C1 and C2 ──────────────────────────────────
 
 
 def test_a_regenerated_cv_is_not_held_by_the_email_stop_of_the_old_one(box, monkeypatch):

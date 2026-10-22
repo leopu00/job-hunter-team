@@ -1,6 +1,6 @@
 """1967 after patch 19: the resume ran, and the same field came back as a text question.
 
-Built on the checkpoint HQ-VPS copied from the box (profile values masked):
+Built on the checkpoint copied from the box (profile values masked):
 country, text, no options, asked; the user authorised again at
 2026-09-14T15:18:36.164Z. Synthetic Greenhouse page whose Country options
 load a moment after the click, as React boards fetch them. No real site.

@@ -17,8 +17,8 @@
  *   and coding-agent logins, the run's MCP config — cannot be opened.
  * - **The internet stays on, this machine does not.** Scouting is the job,
  *   but a process outside the sandbox runs with the user's full authority:
- *   a tmux server whose sessions are other agents, the FLEET daemon on
- *   localhost. Reaching one is leaving the sandbox, so local sockets and
+ *   a tmux server whose sessions are other agents, the operator's panel
+ *   daemon on localhost. Reaching one is leaving the sandbox, so local sockets and
  *   loopback are shut, as `web_fetch` refuses private addresses.
  *
  * On macOS the sandbox is Seatbelt (`sandbox-exec`), on Linux bubblewrap
@@ -234,7 +234,7 @@ export function seatbeltProfile(options: { writableRoots: string[]; home: string
     // tmux, the Docker daemon, an SSH agent: servers that run outside the sandbox.
     "(deny network-outbound (remote unix-socket))",
     `(allow network-outbound (remote unix-socket (path-literal ${q(DNS_SOCKET)})))`,
-    // The FLEET daemon and every other localhost service.
+    // The operator's panel daemon and every other localhost service.
     `(deny network-outbound (remote ip4 ${q("localhost:*")}))`,
     // All of IPv6: ::1 and ::ffff:127.0.0.1 cannot be named apart from the rest.
     `(deny network-outbound (remote ip6 ${q("*:*")}))`,
