@@ -307,6 +307,13 @@ const EXCEPTIONS: Record<string, Exception> = {
     kind: "device-channel",
     reason: "the box claims the team state of its account, with its sync token",
   },
+  "team/settings": {
+    methods: ["POST"],
+    kind: "request-lane",
+    level: "L2",
+    gate: "requestAction",
+    reason: "working hours and model and effort per role, as a desire the box applies to its own config (phase 6)",
+  },
   "team-state/emergency-stop": {
     methods: ["POST"],
     kind: "request-lane",
