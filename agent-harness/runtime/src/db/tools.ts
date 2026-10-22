@@ -712,6 +712,7 @@ const POSITION_UPDATE: CommandSpec = {
     { flag: "--office-geocoded", choices: ["true", "false"] },
     { flag: "--office-verified", choices: ["true", "false"] },
     { flag: "--location-precision", choices: ["address", "street", "district", "city", "country", "remote"] },
+    { flag: "--seniority-level", choices: ["junior", "mid", "senior", "lead", "none"] },
     { flag: "--action", choices: ["liveness_check", "geocode", "logo_fetch", "website_fetch", "jd_refresh", "exclude", "rescore"] },
     { flag: "--outcome", choices: ["confirmed_open", "confirmed_closed", "inconclusive", "updated", "unchanged", "unreachable", "skipped", "failed"] },
     { flag: "--evidence-kind", choices: ["http", "api", "manual", "none"] },

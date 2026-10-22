@@ -16,7 +16,7 @@
   ],
   "factual": ["scam_or_gone", "closed", "already_applied"],
   "proposable": ["too_senior", "too_junior", "wrong_location", "salary_low", "wrong_stack", "company"],
-  "acting": ["company", "wrong_location", "salary_low", "wrong_stack"],
+  "acting": ["company", "wrong_location", "salary_low", "wrong_stack", "too_senior", "too_junior"],
   "legacy": {
     "closed": "closed",
     "already_applied": "already_applied",

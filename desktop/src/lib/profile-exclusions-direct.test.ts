@@ -145,14 +145,23 @@ describe("a decision", () => {
     expect(exclusions[0]).toMatchObject({ reason: "company", status: "dismissed", positions_at_decision: 3 });
   });
 
-  it("putting a proposal off, or deciding a reason that does not act, writes nothing on the team", async () => {
+  it("putting a proposal off writes nothing on the team and is remembered by the app", async () => {
     read.mockResolvedValue(team());
     const store = memory();
     await api(false, store)("/api/profile-exclusions", post({ reason: "company", status: "dismissed", positions: 3 }));
-    await api(false, store)("/api/profile-exclusions", post({ reason: "too_senior", status: "accepted", positions: 4 }));
+    await api(false, store)("/api/profile-exclusions", post({ reason: "too_senior", status: "dismissed", positions: 4 }));
     expect(accept).not.toHaveBeenCalled();
     expect(withdraw).not.toHaveBeenCalled();
     expect(JSON.parse(store.getItem("jht.profile-exclusion-dismissed.v1")!)).toEqual({ "team-1": { company: 3, too_senior: 4 } });
+  });
+
+  it("the seniority acts now: accepting it goes to the team like the others, and remembers nothing", async () => {
+    read.mockResolvedValue(team());
+    const store = memory();
+    const res = await api(false, store)("/api/profile-exclusions", post({ reason: "too_senior", status: "accepted", positions: 4 }));
+    expect(res.status).toBe(200);
+    expect(accept).toHaveBeenCalledWith("too_senior", "team-1");
+    expect(store.getItem("jht.profile-exclusion-dismissed.v1")).toBeNull();
   });
 
   it("a refusal of the team (no link, no mark, no evidence) is said and nothing is remembered or mirrored", async () => {

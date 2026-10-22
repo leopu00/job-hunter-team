@@ -23,7 +23,7 @@ import sys
 import os
 sys.path.insert(0, os.path.dirname(__file__))
 
-from _db import get_db, ensure_schema, resolve_company_id, _column_exists, LOCATION_PRECISIONS
+from _db import get_db, ensure_schema, resolve_company_id, _column_exists, LOCATION_PRECISIONS, SENIORITY_LEVELS
 from external_content import normalize_external_inline_fields
 import role_taxonomy
 import maintenance_log
@@ -338,6 +338,13 @@ def update_position(args):
         updates.append("jd_summary = ?")
         params.append(interpret_escapes(args.jd_summary))
         changed.append("jd_summary")
+    # The seniority the advert asks for (JHT-T45): a word of the closed set, or `none` to say the
+    # advert does not state one (NULL). The argparse choices are the gate; this is the write.
+    if getattr(args, 'seniority_level', None) is not None:
+        level = None if args.seniority_level == 'none' else args.seniority_level
+        updates.append("seniority_level = ?")
+        params.append(level)
+        changed.append(f"seniority_level={level or 'NULL'}")
     if args.requirements:
         updates.append("requirements = ?")
         params.append(args.requirements)
@@ -1153,6 +1160,9 @@ def main():
     p.add_argument('--location-precision', choices=list(LOCATION_PRECISIONS),
                    help='How precisely the place is known: address (street number, checked) | street (no number) | '
                         'district | city | country | remote. office_verified follows it (true only for address).')
+    p.add_argument('--seniority-level', choices=[*SENIORITY_LEVELS, 'none'],
+                   help='Seniority the advert asks for (Analyst, with SENIORITY_JD in the notes): junior | mid | senior | lead, '
+                        'or none when the advert does not say. A closed set: the exclusions of the profile read it.')
     # Storico dei controlli: --action registra il giro, --outcome ne dice l'esito.
     maintenance_log.add_cli_args(p)
 

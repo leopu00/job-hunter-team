@@ -1,5 +1,6 @@
 """Modulo DB condiviso — connessione e schema V2 per jobs.db"""
 
+import re
 import sqlite3
 import os
 import sys
@@ -417,7 +418,7 @@ def ensure_schema(conn: sqlite3.Connection):
     -- Non viaggia sul cloud: il cloud tiene la decisione (profile_exclusions, mig 094), qui sta la regola.
     CREATE TABLE IF NOT EXISTS profile_exclusions (
         code TEXT PRIMARY KEY CHECK (code IN (
-            'company','wrong_location','salary_low','wrong_stack'
+            'company','wrong_location','salary_low','wrong_stack','too_senior','too_junior'
         )),
         status TEXT NOT NULL CHECK (status IN ('active','withdrawn')),
         params TEXT NOT NULL DEFAULT '{}',
@@ -908,6 +909,8 @@ def _run_migrations(conn: sqlite3.Connection) -> None:
     _migrate_positions_apply_requested(conn)
     _migrate_positions_jd_summary(conn)
     _migrate_positions_scam_signals(conn)
+    _migrate_positions_seniority_level(conn)
+    _migrate_profile_exclusions_seniority(conn)
     _migrate_role_family_registry(conn)
     _migrate_position_tickets_cloud_id(conn)
     _migrate_position_tickets_active_rescore(conn)
@@ -2012,6 +2015,99 @@ def _migrate_positions_scam_signals(conn: sqlite3.Connection) -> None:
     if _column_exists(conn, 'positions', 'scam_signals'):
         return
     conn.execute("ALTER TABLE positions ADD COLUMN scam_signals TEXT")
+
+
+# The seniority an advert asks for (JHT-T45), lowest to highest. Closed set, the same as the CHECK of
+# the cloud's positions_seniority_level_check (supabase migration 097). NULL is «not declared».
+SENIORITY_LEVELS = ('junior', 'mid', 'senior', 'lead')
+_SENIORITY_JD_LINE = re.compile(r'^[ \t]*SENIORITY_JD:[ \t]*([A-Za-z]+)[ \t]*$', re.MULTILINE)
+
+
+def seniority_from_notes(notes) -> str | None:
+    """The level the Analyst declared in the `SENIORITY_JD:` line of a position's notes, or None.
+
+    Only a word of the closed set counts (`not specified`, anything else, no line: None). It is the
+    one place that reads that line, for the rows written before the column existed.
+    """
+    for found in _SENIORITY_JD_LINE.finditer(str(notes or '')):
+        word = found.group(1).lower()
+        if word in SENIORITY_LEVELS:
+            return word
+    return None
+
+
+def _migrate_positions_seniority_level(conn: sqlite3.Connection) -> None:
+    """Aggiunge `positions.seniority_level` e lo ricava dalle note già scritte (JHT-T45).
+
+    La seniority che l'annuncio chiede stava solo nel testo di `notes` (`SENIORITY_JD: senior`).
+    Un filtro deterministico non legge testo libero: ora è una colonna di un insieme chiuso
+    (junior|mid|senior|lead), NULL = non dichiarata. Il CHECK sta nella colonna stessa.
+
+    Backfill, solo righe senza livello (idempotente, non riscrive mai un livello già scritto): la
+    riga `SENIORITY_JD:` delle note, se dice una parola dell'insieme. Il resto resta NULL: il
+    livello lo scrive l'Analista, nello stesso comando delle note.
+    """
+    if not _table_exists(conn, 'positions'):
+        return
+    if not _column_exists(conn, 'positions', 'seniority_level'):
+        levels = ", ".join(f"'{level}'" for level in SENIORITY_LEVELS)
+        conn.execute(
+            "ALTER TABLE positions ADD COLUMN seniority_level TEXT "
+            f"CHECK (seniority_level IS NULL OR seniority_level IN ({levels}))"
+        )
+    if not _column_exists(conn, 'positions', 'notes'):
+        return
+    pending = conn.execute(
+        "SELECT id, notes FROM positions WHERE seniority_level IS NULL AND notes LIKE '%SENIORITY_JD:%'"
+    ).fetchall()
+    for row in pending:
+        level = seniority_from_notes(row[1])
+        if level is not None:
+            conn.execute(
+                "UPDATE positions SET seniority_level = ? WHERE id = ? AND seniority_level IS NULL",
+                (level, row[0]),
+            )
+
+
+def _migrate_profile_exclusions_seniority(conn: sqlite3.Connection) -> None:
+    """`profile_exclusions` accetta anche `too_senior` e `too_junior` (JHT-T45).
+
+    Il CHECK di una colonna non si cambia con un ALTER: se la tabella ha il vecchio elenco, si
+    ricrea. Come per le note: si conta prima, si copia, si riconta, e se il totale non coincide ci
+    si ferma PRIMA di toccare la vecchia. Idempotente: con il nuovo elenco non fa niente.
+    """
+    if not _table_exists(conn, 'profile_exclusions'):
+        return
+    sql = conn.execute(
+        "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'profile_exclusions'"
+    ).fetchone()[0] or ''
+    if "'too_senior'" in sql:
+        return
+    before = conn.execute("SELECT COUNT(*) FROM profile_exclusions").fetchone()[0]
+    conn.execute("DROP TABLE IF EXISTS profile_exclusions_new")
+    conn.execute("""
+        CREATE TABLE profile_exclusions_new (
+            code TEXT PRIMARY KEY CHECK (code IN (
+                'company','wrong_location','salary_low','wrong_stack','too_senior','too_junior'
+            )),
+            status TEXT NOT NULL CHECK (status IN ('active','withdrawn')),
+            params TEXT NOT NULL DEFAULT '{}',
+            decided_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+    conn.execute(
+        "INSERT INTO profile_exclusions_new (code, status, params, decided_at) "
+        "SELECT code, status, params, decided_at FROM profile_exclusions"
+    )
+    after = conn.execute("SELECT COUNT(*) FROM profile_exclusions_new").fetchone()[0]
+    if after != before:
+        conn.execute("DROP TABLE profile_exclusions_new")
+        raise RuntimeError(
+            "profile_exclusions migration aborted: "
+            f"{before} rows before, {after} copied. Nothing was dropped."
+        )
+    conn.execute("DROP TABLE profile_exclusions")
+    conn.execute("ALTER TABLE profile_exclusions_new RENAME TO profile_exclusions")
 
 
 def _migrate_companies_logo(conn: sqlite3.Connection) -> None:

@@ -22,6 +22,20 @@ import { demoCompanyFor } from "@/lib/demo/seeds/companies";
 export const RECORDING_PROFILE_ALIASES = [...DEMO_PERSONA_KEYS] as const;
 export type RecordingProfileAlias = (typeof RECORDING_PROFILE_ALIASES)[number];
 
+const SENIORITY_LEVELS = ["junior", "mid", "senior", "lead"] as const;
+
+/** The level the Analyst declared in the `SENIORITY_JD:` line of a position's notes, or null: the rule of
+ *  `_db.seniority_from_notes`, which the first boot applies to every row that has no level yet. */
+function seniorityFromNotes(notes: string | null | undefined): string | null {
+  for (const found of String(notes ?? "").matchAll(
+    /^[ \t]*SENIORITY_JD:[ \t]*([A-Za-z]+)[ \t]*$/gm,
+  )) {
+    const word = found[1].toLowerCase();
+    if ((SENIORITY_LEVELS as readonly string[]).includes(word)) return word;
+  }
+  return null;
+}
+
 /** Guardia fail-closed prima di qualunque reset distruttivo sul cloud. */
 export function isRecordingAccountMetadata(
   metadata: unknown,
@@ -265,6 +279,9 @@ export function buildRecordingProfileDataset(
               !(p.loc_country ?? "").trim()
             ? "remote"
             : null,
+      // The level the first boot would write itself from the SENIORITY_JD line of the notes
+      // (_migrate_positions_seniority_level, JHT-T45).
+      seniority_level: seniorityFromNotes(p.notes),
       is_remote: p.remote_type === "full_remote",
       is_open: p.is_open,
       deleted_at: null,

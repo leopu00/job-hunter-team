@@ -40,6 +40,7 @@ MIGRATION_ADDED = [
     # invece che come una migrazione mancante.
     'apply_requested', 'apply_requested_at', 'apply_requested_by',
     'role_family', 'role_family_proposed', 'jd_summary', 'scam_signals',
+    'seniority_level',
 ]
 
 _ONE_CALL = """

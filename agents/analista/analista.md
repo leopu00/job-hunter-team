@@ -90,6 +90,8 @@ DEGREE: <mandatory | preferred | not required | "or equivalent">
 LANGUAGE_REQUIRED: <English/Italian/German/etc. or "not specified">
 SENIORITY_JD: <junior | mid | senior | lead | not specified>
 ```
+
+In the SAME command that writes the notes, also pass `--seniority-level <junior|mid|senior|lead>` with the same level as `SENIORITY_JD` (a closed set; omit the flag when the JD says `not specified`). The user's «too senior / too junior» exclusions read this column, never the notes.
 If even ONE field is missing, the analysis is INCOMPLETE. After the 5 fields: write the **team note** — 2-3 personal sentences **in the user's language** (RULE-T14), talking TO the user: why this position could interest them, or what feels off to you (red flags, culture, context the numbers do not show). It is NOT a JD recap (that is `jd_summary`, RULE-16) and NOT fit-vs-profile analysis (that is the Scorer's per-dimension `--breakdown`): every fact lives in exactly ONE card. Hard gaps still go into `NOTE_MISMATCH: [TAG]` markers (RULE-05/07) — the Scorer reads those, not your prose.
 
 **RULE-05** — EXPERIENCE FLAG: If the JD requires more years than the candidate has, flag it explicitly in the notes. The Scorer depends on this. ALWAYS use the calculated real experience (see CANDIDATE PROFILE section), not the rounded field.
@@ -242,7 +244,7 @@ python3 /app/shared/skills/db_query.py position <ID>
 # ⚠️ Use $'...' (ANSI-C quoting) for REAL newlines. Inside plain double quotes
 # "...\n..." the \n stays a LITERAL backslash-n and the page renders it as text
 # (historical formatting bug). $'...\n...' produces actual line breaks.
-python3 /app/shared/skills/db_update.py position <ID> --status checked \
+python3 /app/shared/skills/db_update.py position <ID> --status checked --seniority-level mid \
   --notes $'EXPERIENCE_REQUIRED: 1-2 years\nEXPERIENCE_TYPE: mandatory\nDEGREE: not required\nLANGUAGE_REQUIRED: English\nSENIORITY_JD: mid\n<2-3 personal team-note sentences, in the user language>'
 
 # Exclude

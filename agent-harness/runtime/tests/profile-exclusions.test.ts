@@ -36,17 +36,17 @@ function home(): string {
   return dir;
 }
 
-/** Positions: 1 Acme/FR/Backend/EUR 30000, 2 Globex/DE/Data/EUR 90000, 3 Acme/FR/remote, 4 Acme/FR/Other. */
+/** Positions: 1 Acme/FR/Backend/EUR 30000/senior, 2 Globex/DE/Data/EUR 90000/mid, 3 Acme/FR/remote/lead, 4 Acme/FR/Other/no level. */
 function seeded(path: string, rules: Array<[string, string, string]>): Database {
   const db = openJobsDb(path);
   db.exec("INSERT INTO companies (name) VALUES ('Acme'), ('Globex')");
   const add = db.prepare(
-    "INSERT INTO positions (title, company, company_id, url, status, loc_country_code, role_family, remote_type, work_mode, salary_estimated_max, salary_estimated_currency) VALUES (?, ?, ?, ?, 'checked', ?, ?, ?, ?, ?, ?)",
+    "INSERT INTO positions (title, company, company_id, url, status, loc_country_code, role_family, remote_type, work_mode, salary_estimated_max, salary_estimated_currency, seniority_level) VALUES (?, ?, ?, ?, 'checked', ?, ?, ?, ?, ?, ?, ?)",
   );
-  add.run("One", "Acme", 1, "https://a.example/1", "FR", "Backend", null, null, 30000, "EUR");
-  add.run("Two", "Globex", 2, "https://g.example/2", "DE", "Data", null, null, 90000, "EUR");
-  add.run("Three", "Acme", 1, "https://a.example/3", "FR", "Backend", "full_remote", "remote", null, null);
-  add.run("Four", "Acme", 1, "https://a.example/4", "FR", "Other", null, null, 30000, "USD");
+  add.run("One", "Acme", 1, "https://a.example/1", "FR", "Backend", null, null, 30000, "EUR", "senior");
+  add.run("Two", "Globex", 2, "https://g.example/2", "DE", "Data", null, null, 90000, "EUR", "mid");
+  add.run("Three", "Acme", 1, "https://a.example/3", "FR", "Backend", "full_remote", "remote", null, null, "lead");
+  add.run("Four", "Acme", 1, "https://a.example/4", "FR", "Other", null, null, 30000, "USD", null);
   const rule = db.prepare("INSERT INTO profile_exclusions (code, status, params) VALUES (?, ?, ?)");
   for (const [code, status, params] of rules) rule.run(code, status, params);
   return db;
@@ -56,6 +56,8 @@ const COMPANY: [string, string, string] = ["company", "active", '{"company_ids":
 const LOCATION: [string, string, string] = ["wrong_location", "active", '{"country_codes":["FR"]}'];
 const SALARY: [string, string, string] = ["salary_low", "active", '{"ceilings":{"EUR":40000}}'];
 const STACK: [string, string, string] = ["wrong_stack", "active", '{"role_families":["Backend"]}'];
+const SENIOR: [string, string, string] = ["too_senior", "active", '{"min_level":"senior"}'];
+const JUNIOR: [string, string, string] = ["too_junior", "active", '{"max_level":"mid"}'];
 
 function tool(db: Database, name: "db_insert" | "db_query", agent: string, homeDir: string) {
   const list = createDbTools({ db: () => db, agent, profilePath: join(homeDir, "profile", "candidate_profile.yml"), nonce: () => NONCE });
@@ -79,6 +81,10 @@ const SCENARIOS: Array<{ label: string; rules: Array<[string, string, string]>; 
   { label: "wrong location -15, and not on a fully remote position", rules: [LOCATION], ids: [1, 3, 2] },
   { label: "salary too low by currency", rules: [SALARY], ids: [1, 2, 4] },
   { label: "wrong stack, never the catch-all", rules: [STACK], ids: [1, 4, 2] },
+  { label: "too senior: that level and every higher one, none on a mid or on a position with no level", rules: [SENIOR], ids: [1, 2, 3, 4] },
+  { label: "too junior: that level and every lower one, none on a senior or on a position with no level", rules: [JUNIOR], ids: [1, 2, 3, 4] },
+  { label: "a seniority code with a bound outside the closed set acts as none", rules: [["too_senior", "active", '{"min_level":"principal"}']], ids: [1, 3] },
+  { label: "the company and the seniority together: the sum stops at 30", rules: [COMPANY, SENIOR], ids: [1, 2] },
   { label: "several codes: the sum stops at 30", rules: [LOCATION, SALARY, STACK], ids: [1] },
   { label: "a withdrawn rule does not act", rules: [["company", "withdrawn", '{"company_ids":[1]}']], ids: [1] },
   { label: "never below zero", rules: [COMPANY], ids: [1], total: 10 },
@@ -119,8 +125,8 @@ describe("db_insert score with exclusions, against db_insert.py", () => {
 describe("db_query profile-exclusions, against db_query.py", () => {
   it.skipIf(skills === null).each([[[]], [["--json"]]])("the Scout's hint %j", (flags) => {
     const pyPath = join(root, "py.db");
-    const pyDb = seeded(pyPath, [COMPANY, LOCATION, SALARY, STACK]);
-    const ourDb = seeded(join(root, "ours.db"), [COMPANY, LOCATION, SALARY, STACK]);
+    const pyDb = seeded(pyPath, [COMPANY, LOCATION, SALARY, STACK, SENIOR, JUNIOR]);
+    const ourDb = seeded(join(root, "ours.db"), [COMPANY, LOCATION, SALARY, STACK, SENIOR, JUNIOR]);
     const py = runPython(skills!, ["db_query.py", "profile-exclusions", ...flags], { JHT_DB: pyPath, JHT_AGENT_NAME: "scout-1", JHT_EXTERNAL_CONTENT_NONCE: NONCE });
     return tool(ourDb, "db_query", "scout-1", home())(["profile-exclusions", ...flags]).then((ours) => {
       expect(py.status).toBe(0);

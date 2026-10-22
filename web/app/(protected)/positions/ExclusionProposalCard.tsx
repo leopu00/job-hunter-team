@@ -6,13 +6,12 @@
 // posizioni DIVERSE (la regola è `exclusionProposals`, la stessa di Python).
 // Decide l'utente, e solo dall'app desktop: «Escludi questo tipo» o «Non ora».
 // Sul sito la proposta si vede ma non si decide. Il testo dice in chiaro cosa
-// succede: per i quattro motivi che agiscono (azienda, località, stipendio,
-// stack) il team ABBASSA il punteggio di quelle posizioni (non le nasconde);
-// per la seniority la preferenza si salva e per ora non cambia niente.
+// succede: per ogni motivo proponibile (azienda, località, stipendio, stack,
+// seniority troppo alta o troppo bassa) il team ABBASSA il punteggio di quelle
+// posizioni (non le nasconde).
 
 import { useEffect, useState } from "react";
 import { useLocale } from "@/lib/use-locale";
-import { isActingReason } from "@/lib/feedback-reasons";
 import { useDesktopWrite } from "@/lib/desktop-write";
 import {
   visibleProposals,
@@ -30,7 +29,6 @@ const T: Record<
     title: string;
     question: string;
     acts: string;
-    notYet: string;
     desktopOnly: string;
     save: string;
     later: string;
@@ -41,8 +39,6 @@ const T: Record<
     title: "{n} posizioni scartate come «{reason}»",
     question: "Vuoi escludere questo tipo di posizioni dal tuo profilo?",
     acts: "Se accetti, il team abbassa il punteggio delle posizioni di questo tipo (−15, −30 per un'azienda): non le nasconde e non smette di cercarle. Puoi ritirare la scelta quando vuoi.",
-    notYet:
-      "Per ora salviamo solo la tua preferenza: per la seniority non cambia ancora quello che il team cerca né come valuta le posizioni.",
     desktopOnly: "Questa scelta si fa nell'app desktop.",
     save: "Escludi questo tipo",
     later: "Non ora",
@@ -52,8 +48,6 @@ const T: Record<
     title: "{n} positions rejected as “{reason}”",
     question: "Do you want to exclude this kind of position from your profile?",
     acts: "If you accept, the team lowers the score of positions like these (−15, −30 for a company): it does not hide them or stop finding them. You can withdraw the choice at any time.",
-    notYet:
-      "For now we only save your preference: for seniority it does not yet change what the team looks for or how it scores positions.",
     desktopOnly: "You make this choice in the desktop app.",
     save: "Exclude this kind",
     later: "Not now",
@@ -63,8 +57,6 @@ const T: Record<
     title: "{n} posiciones descartadas como «{reason}»",
     question: "¿Quieres excluir este tipo de posiciones de tu perfil?",
     acts: "Si aceptas, el equipo baja la puntuación de las posiciones de este tipo (−15, −30 para una empresa): no las oculta ni deja de buscarlas. Puedes retirar la elección cuando quieras.",
-    notYet:
-      "Por ahora solo guardamos tu preferencia: para la seniority todavía no cambia lo que busca el equipo ni cómo valora las posiciones.",
     desktopOnly: "Esta elección se hace en la aplicación de escritorio.",
     save: "Excluir este tipo",
     later: "Ahora no",
@@ -74,8 +66,6 @@ const T: Record<
     title: "{n} postes écartés comme « {reason} »",
     question: "Voulez-vous exclure ce type de postes de votre profil ?",
     acts: "Si vous acceptez, l'équipe baisse la note des postes de ce type (−15, −30 pour une entreprise) : elle ne les cache pas et continue de les trouver. Vous pouvez retirer ce choix à tout moment.",
-    notYet:
-      "Pour l'instant nous enregistrons seulement votre préférence : pour la séniorité elle ne change pas encore ce que l'équipe cherche ni comment elle note les postes.",
     desktopOnly: "Ce choix se fait dans l'application de bureau.",
     save: "Exclure ce type",
     later: "Pas maintenant",
@@ -86,8 +76,6 @@ const T: Record<
     question:
       "Möchtest du diese Art von Stellen aus deinem Profil ausschließen?",
     acts: "Wenn du zustimmst, senkt das Team die Bewertung solcher Stellen (−15, −30 bei einem Unternehmen): Es blendet sie nicht aus und sucht weiter. Du kannst die Entscheidung jederzeit zurücknehmen.",
-    notYet:
-      "Vorerst speichern wir nur deine Präferenz: Bei der Seniorität ändert sie noch nicht, wonach das Team sucht oder wie es Stellen bewertet.",
     desktopOnly: "Diese Entscheidung triffst du in der Desktop-App.",
     save: "Diesen Typ ausschließen",
     later: "Nicht jetzt",
@@ -97,8 +85,6 @@ const T: Record<
     title: "{n} pozíció elutasítva ezzel az okkal: „{reason}”",
     question: "Ki szeretnéd zárni ezt a fajta pozíciót a profilodból?",
     acts: "Ha elfogadod, a csapat csökkenti az ilyen pozíciók pontszámát (−15, cég esetén −30): nem rejti el őket, és tovább keresi őket. A döntést bármikor visszavonhatod.",
-    notYet:
-      "Egyelőre csak a preferenciádat mentjük: a szenioritásnál ez még nem változtatja meg, mit keres a csapat, és hogyan értékeli a pozíciókat.",
     desktopOnly: "Ezt a döntést az asztali alkalmazásban hozhatod meg.",
     save: "Ezt a típust kizárom",
     later: "Most nem",
@@ -108,8 +94,6 @@ const T: Record<
     title: "{n} vagas rejeitadas como «{reason}»",
     question: "Quer excluir este tipo de vaga do seu perfil?",
     acts: "Se aceitar, a equipa baixa a pontuação das vagas deste tipo (−15, −30 para uma empresa): não as esconde nem deixa de as encontrar. Pode retirar a escolha quando quiser.",
-    notYet:
-      "Por agora só guardamos a sua preferência: para a senioridade ainda não muda o que a equipa procura nem como avalia as vagas.",
     desktopOnly: "Esta escolha faz-se na aplicação de ambiente de trabalho.",
     save: "Excluir este tipo",
     later: "Agora não",
@@ -224,7 +208,7 @@ export default function ExclusionProposalCard() {
         {t.question}
       </p>
       <p className="text-[11px] mt-1" style={{ color: "var(--color-muted)" }}>
-        {isActingReason(proposal.reason) ? t.acts : t.notYet}
+        {t.acts}
       </p>
       {!canChange && (
         <p

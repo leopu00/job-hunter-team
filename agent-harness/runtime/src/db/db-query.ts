@@ -26,7 +26,7 @@ import { extractLinkedinJobId } from "./dedup.ts";
 import { Fence, flattenExternalValue } from "./external-content.ts";
 import type { EnrichmentPolicy } from "./enrichment-policy.ts";
 import type { Database } from "./jobs-db.ts";
-import { activeExclusions } from "./profile-exclusions.ts";
+import { activeExclusions, SENIORITY_LEVELS } from "./profile-exclusions.ts";
 import { FEEDBACK_REASON_LABELS } from "../parity/skills/feedback-reasons.ts";
 import { pyFixed, pyJson, pyPad, pySlice, pyStr, pyStrip, pyTruthy } from "./py-format.ts";
 import type { ScriptResult } from "./tools.ts";
@@ -758,6 +758,13 @@ export function dbQuery(db: () => Database, argv: string[], options: DbQueryOpti
         values = Object.entries((params["ceilings"] ?? {}) as Record<string, number>)
           .sort(([x], [y]) => (x < y ? -1 : x > y ? 1 : 0))
           .map(([currency, top]) => `${currency} up to ${top}`);
+      } else if (code === "too_senior" || code === "too_junior") {
+        // a word of the closed set of levels with a fixed phrase, never a stored string as it is
+        const bound = params[code === "too_senior" ? "min_level" : "max_level"];
+        values =
+          typeof bound === "string" && (SENIORITY_LEVELS as readonly string[]).includes(bound)
+            ? [`${bound} ${code === "too_senior" ? "and above" : "and below"}`]
+            : [];
       } else {
         values = (Array.isArray(params["role_families"]) ? params["role_families"] : []) as string[];
       }
@@ -966,7 +973,7 @@ export const AGENT_POSITION_COLUMNS: ReadonlySet<string> = new Set(
     geocode_requested_at salary_precise_requested salary_precise_requested_at
     salary_precise created_at updated_at user_excluded_reason user_excluded_at
     user_excluded_prev_status recheck_requested recheck_requested_at
-    apply_requested apply_requested_at apply_requested_by scam_signals
+    apply_requested apply_requested_at apply_requested_by scam_signals seniority_level
   `
     .split(/\s+/)
     .filter(Boolean),

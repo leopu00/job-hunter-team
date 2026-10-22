@@ -184,8 +184,8 @@ export function tomorrowAtEightUtc(now: Date = new Date()): string {
 }
 
 // ── the exclusions of the profile (JHT-T24-b) ───────────────────────────────
-/** The four kinds of position whose exclusion acts on the score (shared/feedback-reasons.json, `acting`). */
-export type ExclusionCode = "company" | "wrong_location" | "salary_low" | "wrong_stack";
+/** The kinds of position whose exclusion acts on the score (shared/feedback-reasons.json, `acting`). */
+export type ExclusionCode = "company" | "wrong_location" | "salary_low" | "wrong_stack" | "too_senior" | "too_junior";
 
 export type PanelExclusions = {
   /** opaque: the team this was read from; a decision sends it back */

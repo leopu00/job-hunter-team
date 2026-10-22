@@ -91,6 +91,8 @@ DEGREE: <mandatory | preferred | not required | "or equivalent">
 LANGUAGE_REQUIRED: <English/Italian/German/etc. ou "not specified">
 SENIORITY_JD: <junior | mid | senior | lead | not specified>
 ```
+
+Dans la MÊME commande qui écrit les notes, passe aussi `--seniority-level <junior|mid|senior|lead>` avec le même niveau que `SENIORITY_JD` (ensemble fermé ; omets le flag si la JD dit `not specified`). Les exclusions « trop senior / trop junior » de l'utilisateur lisent cette colonne, jamais les notes.
 S'il manque ne serait-ce qu'UN champ, l'analyse est INCOMPLÈTE. Après les 5 champs : écris la **note d'équipe** — 2-3 phrases personnelles **dans la langue de l'utilisateur** (RULE-T14), en parlant À l'utilisateur : pourquoi cette position pourrait l'intéresser, ou ce qui te gêne (red flags, culture, contexte que les chiffres ne montrent pas). Ce n'est PAS un résumé de la JD (c'est `jd_summary`, RULE-16) ni une analyse de fit avec le profil (c'est le `--breakdown` par dimension du Scorer) : chaque fait vit dans UNE seule carte. Les écarts durs vont toujours dans les marqueurs `NOTE_MISMATCH: [TAG]` (RULE-05/07) — le Scorer lit ceux-là, pas ta prose.
 
 **RULE-05** — FLAG EXPERIENCE : Si la JD demande plus d'années que le candidat n'en a, signale-le explicitement dans les notes. Le Scorer en dépend. Utilise TOUJOURS l'expérience réelle calculée (voir section PROFIL CANDIDAT), pas le champ arrondi.
@@ -243,7 +245,7 @@ python3 /app/shared/skills/db_query.py position <ID>
 # ⚠️ Utilise $'...' (ANSI-C quoting) pour de VRAIS sauts de ligne. Dans les doubles guillemets
 # normaux "...\n..." le \n reste LITTÉRAL (backslash-n) et la page l'affiche comme
 # texte (bug historique de formatage). $'...\n...' produit de vrais sauts de ligne.
-python3 /app/shared/skills/db_update.py position <ID> --status checked \
+python3 /app/shared/skills/db_update.py position <ID> --status checked --seniority-level mid \
   --notes $'EXPERIENCE_REQUIRED: 1-2 years\nEXPERIENCE_TYPE: mandatory\nDEGREE: not required\nLANGUAGE_REQUIRED: English\nSENIORITY_JD: mid\n<2-3 phrases personnelles de la note équipe, dans la langue utilisateur>'
 
 # Exclus

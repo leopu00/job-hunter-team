@@ -11,11 +11,17 @@ text an agent reads:
   wrong_location    loc_country_code of those positions (not fully remote)       -15
   salary_low        the highest salary_estimated_max among them, per currency    -15
   wrong_stack       role_family of those positions (never «Other»)               -15
+  too_senior        seniority_level of those positions: the lowest one they had   -15
+                    (junior < mid < senior < lead); it matches that level and every higher one
+  too_junior        seniority_level of those positions: the highest one they had  -15
+                    it matches that level and every lower one
+
+A position with no seniority_level never matches the two seniority codes. A rule that would match every
+position (too_senior frozen at `junior`, too_junior at `lead`) says nothing: it is refused as no evidence.
 
 `db_insert.py score` subtracts the penalties of the exclusions a position matches (at most CAP in all)
 and writes one line with the reasons at the top of the breakdown. The Scout only gets them as a search
 hint (`db_query.py profile-exclusions`): it never skips a position because of them (SC-04).
-too_senior and too_junior are not here: the seniority is not a column yet (JHT-T45).
 
 This file is the ONLY writer of the table. It is the user's decision: it refuses when an agent runs it
 (JHT_AGENT_NAME is set), as the user's own commands from the app never carry that variable.
@@ -35,12 +41,12 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from _db import ensure_schema, get_db  # noqa: E402
+from _db import SENIORITY_LEVELS, ensure_schema, get_db  # noqa: E402
 from feedback_reasons import ACTING, LABELS  # noqa: E402
 
 CODES = ACTING
 # What each code takes off the total, once per matching exclusion; the sum never takes off more than CAP.
-PENALTY = {"company": 30, "wrong_location": 15, "salary_low": 15, "wrong_stack": 15}
+PENALTY = {"company": 30, "wrong_location": 15, "salary_low": 15, "wrong_stack": 15, "too_senior": 15, "too_junior": 15}
 CAP = 30
 ACTIVE, WITHDRAWN = "active", "withdrawn"
 # The catch-all of the role-family registry says nothing about the stack.
@@ -101,6 +107,18 @@ def derive_params(conn, code):
         )
         values = sorted(r[0] for r in rows)
         return {"role_families": values} if values else {}
+    if code in ("too_senior", "too_junior"):
+        rows = conn.execute(
+            f"SELECT DISTINCT seniority_level FROM positions WHERE {where} AND seniority_level IS NOT NULL", ids
+        )
+        found = [SENIORITY_LEVELS.index(r[0]) for r in rows if r[0] in SENIORITY_LEVELS]
+        if not found:
+            return {}
+        if code == "too_senior":
+            floor = min(found)
+            return {"min_level": SENIORITY_LEVELS[floor]} if floor > 0 else {}
+        ceiling = max(found)
+        return {"max_level": SENIORITY_LEVELS[ceiling]} if ceiling < len(SENIORITY_LEVELS) - 1 else {}
     return {}
 
 
@@ -120,6 +138,13 @@ def matches(position, code, params):
     if code == "wrong_stack":
         family = (position.get("role_family") or "").strip()
         return bool(family) and family in params.get("role_families", [])
+    if code in ("too_senior", "too_junior"):
+        level = position.get("seniority_level")
+        bound = params.get("min_level" if code == "too_senior" else "max_level")
+        if level not in SENIORITY_LEVELS or bound not in SENIORITY_LEVELS:
+            return False
+        at, edge = SENIORITY_LEVELS.index(level), SENIORITY_LEVELS.index(bound)
+        return at >= edge if code == "too_senior" else at <= edge
     return False
 
 
@@ -149,13 +174,13 @@ def penalty_for(conn, position_id):
         return 0, []
     row = conn.execute(
         "SELECT company_id, loc_country_code, remote_type, work_mode, salary_estimated_max, "
-        "salary_estimated_currency, role_family FROM positions WHERE id = ?",
+        "salary_estimated_currency, role_family, seniority_level FROM positions WHERE id = ?",
         (position_id,),
     ).fetchone()
     if row is None:
         return 0, []
     names = ("company_id", "loc_country_code", "remote_type", "work_mode", "salary_estimated_max",
-             "salary_estimated_currency", "role_family")
+             "salary_estimated_currency", "role_family", "seniority_level")
     position = dict(zip(names, tuple(row)))
     hit = [code for code, params in rules if matches(position, code, params)]
     return min(CAP, sum(PENALTY[code] for code in hit)), hit
@@ -243,7 +268,7 @@ def reconcile(conn, decisions):
     for decision in decisions:
         code, status = decision.get("reason"), decision.get("status")
         if code not in CODES:
-            continue  # seniority and the like: not here yet
+            continue  # a reason that is not one of the acting codes
         if status == "accepted":
             current = conn.execute("SELECT status FROM profile_exclusions WHERE code = ?", (code,)).fetchone()
             if current is not None and current[0] == ACTIVE:

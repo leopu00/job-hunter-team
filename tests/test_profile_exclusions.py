@@ -171,7 +171,7 @@ def test_without_structured_evidence_there_is_nothing_to_accept(db):
     _reject(db, [_position(db, f"n{i}", company_id=1) for i in range(3)], "wrong_location")  # no country on any
     code, answer = _accept(db, "wrong_location")
     assert (code, answer["code"]) == (1, "no_evidence")
-    assert _accept(db, "too_senior")[1]["code"] == "code_invalid", "the seniority is not here yet"
+    assert _accept(db, "too_senior")[1]["code"] == "no_evidence", "no rejected position has a seniority level"
     assert _accept(db, "other")[1]["code"] == "code_invalid"
 
 
@@ -189,11 +189,12 @@ def test_the_cloud_decisions_are_brought_to_the_table_and_what_cannot_be_a_rule_
     decisions = [
         {"reason": "company", "status": "accepted"},
         {"reason": "wrong_location", "status": "accepted"},  # no country anywhere: cannot act
-        {"reason": "too_senior", "status": "accepted"},  # not in this release: ignored
+        {"reason": "too_senior", "status": "accepted"},  # nothing turned down as too senior: cannot act
+        {"reason": "scam_or_gone", "status": "accepted"},  # not a code that acts: ignored
         {"reason": "salary_low", "status": "dismissed"},
     ]
     done = _run("profile_exclusions.py", db, "reconcile", stdin=json.dumps(decisions))
-    assert done.returncode == 0 and json.loads(done.stdout) == {"ok": True, "unusable": ["wrong_location"]}
+    assert done.returncode == 0 and json.loads(done.stdout) == {"ok": True, "unusable": ["too_senior", "wrong_location"]}
     listed = {r["code"]: r["status"] for r in json.loads(_run("profile_exclusions.py", db, "list").stdout)["exclusions"]}
     assert listed == {"company": "active"}
     # the user withdraws it from the app: the cloud says dismissed, the rule stops
@@ -241,8 +242,7 @@ def test_the_codes_that_act_are_the_ones_the_json_names_and_the_table_accepts(db
     table = conn.execute("SELECT sql FROM sqlite_master WHERE name = 'profile_exclusions'").fetchone()[0]
     for code in rules.CODES:
         assert f"'{code}'" in table
-    for code in set(data["proposable"]) - set(rules.CODES):
-        assert f"'{code}'" not in table, "a seniority code has no row in the table yet"
+    assert set(data["proposable"]) == set(rules.CODES), "every kind the app proposes acts on the score"
 
 
 def test_a_database_without_the_table_scores_as_before(tmp_path):

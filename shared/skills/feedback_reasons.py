@@ -36,7 +36,7 @@ _DATA = _load()
 REASONS = tuple(_DATA["reasons"])
 FACTUAL = frozenset(_DATA["factual"])
 PROPOSABLE = frozenset(_DATA["proposable"])
-# The proposable reasons whose accepted exclusion ACTS on the score (JHT-T24); the seniority ones do not yet.
+# The proposable reasons whose accepted exclusion ACTS on the score (JHT-T24, the seniority ones JHT-T45).
 ACTING = tuple(_DATA["acting"])
 LEGACY = dict(_DATA["legacy"])
 LABELS = dict(_DATA["labels"])

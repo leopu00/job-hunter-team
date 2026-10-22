@@ -53,7 +53,7 @@ export function isProposableReason(reason: string | null | undefined): boolean {
 
 /**
  * I motivi proponibili la cui esclusione, una volta accettata, AGISCE sul punteggio del team
- * (JHT-T24). Gli altri (la seniority) l'utente può accettarli, ma per ora non cambiano niente.
+ * (JHT-T24, la seniority JHT-T45). Oggi sono tutti i motivi proponibili; l'elenco è quello del vocabolario.
  */
 export function isActingReason(reason: string | null | undefined): boolean {
   return !!reason && catalog.acting.includes(reason);

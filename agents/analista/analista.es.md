@@ -91,6 +91,8 @@ DEGREE: <mandatory | preferred | not required | "or equivalent">
 LANGUAGE_REQUIRED: <English/Italian/German/etc. o "not specified">
 SENIORITY_JD: <junior | mid | senior | lead | not specified>
 ```
+
+En el MISMO comando que escribe las notes, pasa también `--seniority-level <junior|mid|senior|lead>` con el mismo nivel que `SENIORITY_JD` (conjunto cerrado; omite el flag si la JD dice `not specified`). Las exclusiones «demasiado senior / demasiado junior» del usuario leen esta columna, nunca las notes.
 Si falta aunque sea UN campo, el análisis está INCOMPLETO. Tras los 5 campos: escribe la **nota del equipo** — 2-3 frases personales **en el idioma del usuario** (RULE-T14), hablando AL usuario: por qué esta posición podría interesarle, o qué no te convence (red flags, cultura, contexto que los números no muestran). NO es un resumen de la JD (eso es `jd_summary`, RULE-16) y NO es análisis de fit con el perfil (eso es el `--breakdown` por dimensión del Scorer): cada hecho vive en UNA sola tarjeta. Los gaps duros van igualmente en los marcadores `NOTE_MISMATCH: [TAG]` (RULE-05/07) — el Scorer lee esos, no tu prosa.
 
 **RULE-05** — FLAG DE EXPERIENCE: Si la JD requiere más años de los que tiene el candidato, márcalo explícitamente en las notes. El Scorer depende de esto. SIEMPRE usa la experiencia real calculada (ver sección PERFIL DEL CANDIDATO), no el campo redondeado.
@@ -243,7 +245,7 @@ python3 /app/shared/skills/db_query.py position <ID>
 # ⚠️ Usa $'...' (ANSI-C quoting) para saltos de línea REALES. Dentro de las comillas
 # dobles normales "...\n..." el \n queda LITERAL (backslash-n) y la página lo muestra
 # como texto (bug histórico de formato). $'...\n...' produce saltos de línea reales.
-python3 /app/shared/skills/db_update.py position <ID> --status checked \
+python3 /app/shared/skills/db_update.py position <ID> --status checked --seniority-level mid \
   --notes $'EXPERIENCE_REQUIRED: 1-2 years\nEXPERIENCE_TYPE: mandatory\nDEGREE: not required\nLANGUAGE_REQUIRED: English\nSENIORITY_JD: mid\n<2-3 frases personales de la nota del equipo, en el idioma del usuario>'
 
 # Excluye

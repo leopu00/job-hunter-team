@@ -65,6 +65,10 @@ const ANALISTA: Step[] = [
   ["analista-1", "db_update.py", "db_update", ["position", "1", "--location-precision", "street"]],
   ["analista-1", "db_update.py", "db_update", ["position", "1", "--office-verified", "true"]],
   ["analista-1", "db_update.py", "db_update", ["position", "1", "--office-verified", "false"]],
+  // JHT-T45: the seniority the advert asks for, in the closed set; `none` says the advert states none.
+  ["analista-1", "db_update.py", "db_update", ["position", "1", "--seniority-level", "senior"]],
+  ["analista-1", "db_update.py", "db_update", ["position", "1", "--seniority-level", "none"]],
+  ["analista-1", "db_update.py", "db_update", ["position", "1", "--seniority-level", "lead", "--notes", "SENIORITY_JD: lead"]],
   // RULE-08: the company, and the highlights.
   ["analista-1", "db_insert.py", "db_insert", [
     "company", "--name", "Globex", "--website", "https://globex.example", "--hq-country", "DE", "--sector", "retail", "--size", "10k+",
@@ -99,6 +103,23 @@ describe.skipIf(PYTHON_SKILLS === null)("B1 · the same refusals, and the compan
       const db = openJobsDb(path);
       try {
         expect(db.prepare("SELECT notes, location_precision FROM positions WHERE id = 1").get()).toEqual({ notes: null, location_precision: null });
+      } finally {
+        db.close();
+      }
+    }
+  });
+
+  it("JHT-T45: refuses a seniority outside the closed set on both sides, and writes nothing", async () => {
+    const t = twins(root, pipelineSeed);
+    const [refused] = await play(t, [["analista-1", "db_update.py", "db_update", [
+      "position", "1", "--seniority-level", "principal", "--notes", "must not land",
+    ]]]);
+    expect(refused).toMatchObject({ tui: false, api: false });
+    expect(strictDiff(t)).toEqual([]);
+    for (const path of [t.tui, t.api]) {
+      const db = openJobsDb(path);
+      try {
+        expect(db.prepare("SELECT notes, seniority_level FROM positions WHERE id = 1").get()).toEqual({ notes: null, seniority_level: null });
       } finally {
         db.close();
       }

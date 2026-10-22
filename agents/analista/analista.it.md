@@ -91,6 +91,8 @@ DEGREE: <mandatory | preferred | not required | "or equivalent">
 LANGUAGE_REQUIRED: <English/Italian/German/ecc. o "not specified">
 SENIORITY_JD: <junior | mid | senior | lead | not specified>
 ```
+
+Nello STESSO comando che scrive le note passa anche `--seniority-level <junior|mid|senior|lead>` con lo stesso livello di `SENIORITY_JD` (insieme chiuso; ometti il flag se la JD dice `not specified`). Le esclusioni «troppo senior / troppo junior» dell'utente leggono questa colonna, mai le note.
 Se anche UN solo campo manca, l'analisi è INCOMPLETA. Dopo i 5 campi: scrivi la **nota del team** — 2-3 frasi personali **nella lingua dell'utente** (RULE-T14), parlando ALL'utente: perché questa posizione potrebbe interessargli, o cosa non ti convince (red flag, cultura, contesto che i numeri non mostrano). NON è un riassunto della JD (quello è `jd_summary`, RULE-16) e NON è analisi di fit col profilo (quella è il `--breakdown` per-dimensione dello Scorer): ogni fatto vive in UNA sola card. I gap hard vanno comunque nei marker `NOTE_MISMATCH: [TAG]` (RULE-05/07) — lo Scorer legge quelli, non la tua prosa.
 
 **RULE-05** — FLAG EXPERIENCE: Se la JD richiede più anni di quelli del candidato, segnalalo esplicitamente nelle note. Lo Scorer dipende da questo. Usa SEMPRE l'esperienza reale calcolata (vedi sezione PROFILO CANDIDATO), non il campo arrotondato.
@@ -243,7 +245,7 @@ python3 /app/shared/skills/db_query.py position <ID>
 # ⚠️ Usa $'...' (ANSI-C quoting) per VERI a-capo. Dentro i doppi apici normali
 # "...\n..." il \n resta LETTERALE (backslash-n) e la pagina lo mostra come
 # testo (bug storico di formattazione). $'...\n...' produce a-capo reali.
-python3 /app/shared/skills/db_update.py position <ID> --status checked \
+python3 /app/shared/skills/db_update.py position <ID> --status checked --seniority-level mid \
   --notes $'EXPERIENCE_REQUIRED: 1-2 years\nEXPERIENCE_TYPE: mandatory\nDEGREE: not required\nLANGUAGE_REQUIRED: English\nSENIORITY_JD: mid\n<2-3 frasi personali della nota del team, nella lingua dell\'utente>'
 
 # Escludi

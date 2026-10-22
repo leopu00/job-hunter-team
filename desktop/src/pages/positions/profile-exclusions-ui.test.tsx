@@ -61,18 +61,19 @@ describe("the proposal to exclude a kind of position", () => {
     const { container } = render(asDesktop(<ExclusionProposalCard />));
     await waitFor(() => expect(container.querySelector("[data-exclusion-proposal='company']")).not.toBeNull());
     expect(container).toHaveTextContent("il team abbassa il punteggio");
-    expect(container).not.toHaveTextContent("Per ora salviamo solo");
     fireEvent.click(screen.getByRole("button", { name: "Escludi questo tipo" }));
     await waitFor(() => expect(posted).toEqual([{ reason: "company", status: "accepted", positions: 3 }]));
     expect(await screen.findByText("Esclusione salvata.")).toBeInTheDocument();
   });
 
-  it("says the truth for the seniority: saved, and nothing changes yet", async () => {
+  it("says the truth for the seniority too: the team lowers the score, it no longer only saves the preference", async () => {
     feedback = rejections("too_senior");
     const { container } = render(asDesktop(<ExclusionProposalCard />));
     await waitFor(() => expect(container.querySelector("[data-exclusion-proposal='too_senior']")).not.toBeNull());
-    expect(container).toHaveTextContent("Per ora salviamo solo la tua preferenza");
-    expect(container).not.toHaveTextContent("il team abbassa il punteggio");
+    expect(container).toHaveTextContent("il team abbassa il punteggio");
+    expect(container).not.toHaveTextContent("Per ora salviamo solo");
+    fireEvent.click(screen.getByRole("button", { name: "Escludi questo tipo" }));
+    await waitFor(() => expect(posted).toEqual([{ reason: "too_senior", status: "accepted", positions: 3 }]));
   });
 
   it("'not now' sends dismissed", async () => {
@@ -103,7 +104,8 @@ describe("the active exclusions", () => {
     ]);
     expect(container.querySelector("[data-exclusion='company']")).toHaveTextContent("abbassa il punteggio di 30 punti");
     expect(container.querySelector("[data-exclusion='wrong_location']")).toHaveTextContent("abbassa il punteggio di 15 punti");
-    expect(container.querySelector("[data-exclusion='too_senior']")).toHaveTextContent("salvata, per ora non cambia nulla");
+    expect(container.querySelector("[data-exclusion='too_senior']")).toHaveTextContent("abbassa il punteggio di 15 punti");
+    expect(container).not.toHaveTextContent("per ora non cambia nulla");
     expect(screen.queryByRole("button")).toBeNull();
     expect(container).toHaveTextContent("Si ritirano nell'app desktop.");
   });
