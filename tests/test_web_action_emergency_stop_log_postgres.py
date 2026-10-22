@@ -13,7 +13,9 @@ What must hold:
 - a completion that does not move (the same value, or null) and any other write closes nothing;
 - the lines of another user are not touched;
 - a stop asked after the completion stays `queued` until the box completes it too;
-- a browser role can neither execute the function nor write the completion.
+- a browser role can neither execute the function nor write the completion;
+- (ext_position, again in 102) withdrawing an authorisation that is not there writes nothing, so the box
+  sends no false notice of a withdrawn authorisation; a real withdrawal still moves the instant.
 """
 
 from __future__ import annotations
@@ -204,3 +206,30 @@ def test_every_foreign_key_of_the_log_has_an_index_under_it(cluster):
          WHERE c.contype = 'f' AND c.conrelid = 'public.web_action_log'::regclass""")
     assert "web_action_log_action_in_vocab=true" in keys.split(","), keys
     assert "=false" not in keys, keys
+
+
+def test_withdrawing_what_is_not_authorised_writes_nothing_so_the_box_sends_no_notice(cluster):
+    """The box tells the user «authorisation withdrawn» when the instant moves with apply_requested false.
+    A withdrawal of a position never authorised, or withdrawn already, must not touch the row: from a
+    stolen session it would be one false notice per call."""
+    who = door.Browser(cluster)
+    door._position(cluster, who.user, 54)
+
+    def row():
+        return door._scalar(cluster, f"SELECT xmin::text || '|' || apply_requested || '|' || COALESCE(apply_requested_at::text, 'null') "
+                                     f"FROM public.positions WHERE user_id = '{who.user}' AND legacy_id = 54")
+
+    never = row()
+    assert never.endswith("|false|null")
+    answer = who.act("position.apply_revoke", {"legacy_id": 54})
+    assert answer["ok"] and answer["state"] == "done"
+    assert row() == never, "a position never authorised was written"
+    assert _status(cluster, answer["id"]) == "done"
+
+    first = who.act("position.apply_authorize", {"legacy_id": 54})
+    assert who.act("position.apply_authorize", confirm=first["id"])["state"] == "queued"
+    assert who.act("position.apply_revoke", {"legacy_id": 54})["state"] == "queued"
+    withdrawn = row()
+    assert "|false|" in withdrawn and not withdrawn.endswith("|null"), "a real withdrawal moves the instant"
+    assert who.act("position.apply_revoke", {"legacy_id": 54})["state"] == "done"
+    assert row() == withdrawn, "a position withdrawn already was written again"
