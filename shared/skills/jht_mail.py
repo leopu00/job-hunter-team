@@ -418,7 +418,10 @@ def send(
         return {"id": mid, "state": state_of(recipient, mid), "created": False}
     finally:
         os.unlink(temp)
-    _receipt(recipient, mid, "queued", moment, kind=kind)
+    try:
+        _receipt(recipient, mid, "queued", moment, kind=kind)
+    except OSError:
+        pass  # the file is there: a message that exists is queued, with or without its first receipt
     return {"id": mid, "state": "queued", "created": True}
 
 
@@ -720,7 +723,10 @@ def route(session: str, message: str, *, identity=None, receivers=None, now: dat
     moment = _utc(now)
     result = send(recipient, body, kind=found.group(3) or "MSG", sender=(VERIFIED_TRUST, claimed, claimed), now=moment)
     if result["created"]:
-        record_nudge(recipient, [result["id"]], now=moment)
+        try:
+            record_nudge(recipient, [result["id"]], now=moment)
+        except OSError:
+            pass  # the reminders restart the clock; a failure here must not make the transport type the text too
     return {"id": result["id"], "state": result["state"], "recipient": recipient,
             "session": session_of(recipient), "created": result["created"]}
 

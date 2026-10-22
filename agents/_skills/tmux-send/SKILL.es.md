@@ -67,7 +67,7 @@ Tipos estandar (consulta `agents/_manual/communication-rules.md` para la taxonom
 ## Codigos de salida
 
 - `0` — mensaje entregado **y enviado** (verificado: el turno arranco)
-  - Si el destinatario usa el buzón (`mail_receivers`), `0` significa **en cola**: el mensaje es un archivo duradero y el terminal solo recibió un aviso corto. Si el agente lo *tomó* lo dice `jht-mail status <agente> <id>`; un mensaje que nadie toma a tiempo se comunica al remitente.
+  - Si el destinatario usa el buzón (`mail_receivers`), `0` significa **en cola**: el mensaje es un archivo duradero y el terminal solo recibió un aviso corto. Si el agente lo *tomó* lo dice `jht-mail status <agente> <id>`; un mensaje que nadie toma a tiempo se comunica al remitente. Una vez en cola, la salida es `0` pase lo que pase con el aviso, salvo `3` (un terminal que no responde); una sesión que desaparece tras encolar ya no responde `2`, el mensaje espera en el buzón.
 - `1` — argumentos faltantes
 - `2` — la sesion de destino no existe (verifica el nombre con `tmux ls`)
 - `3` — el texto nunca aparecio y el panel no esta ocupado → TUI no receptiva. **El unico codigo que sugiere muerta/bloqueada.**

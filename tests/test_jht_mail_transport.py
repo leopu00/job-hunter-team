@@ -391,3 +391,50 @@ def test_the_captain_s_skill_drains_the_mailbox_and_the_sender_s_skill_says_what
     assert "jht-mail drain" in bridge and "jht-mail ack" in bridge and "Bash(jht-mail *)" in bridge
     sender = (ROOT / "agents" / "_skills" / "tmux-send" / f"SKILL{locale}.md").read_text(encoding="utf-8")
     assert "mail_receivers" in sender and "jht-mail status" in sender
+
+
+# -- once the file is written the route answers "queued", whatever fails after it ------------------------------------
+
+def test_a_receipt_that_cannot_be_written_after_the_file_does_not_make_the_route_fail(monkeypatch):
+    def broken(*args, **kwargs):
+        raise OSError("disk full")
+
+    monkeypatch.setattr(mail, "_receipt", broken)
+    routed = route()
+    assert routed is not None and routed["created"] is True
+    assert len(list((mail.box_dir("capitano-1") / "new").glob("*.json"))) == 1
+
+
+def test_a_nudge_receipt_that_cannot_be_written_does_not_make_the_route_fail(monkeypatch):
+    def broken(*args, **kwargs):
+        raise OSError("read-only")
+
+    monkeypatch.setattr(mail, "record_nudge", broken)
+    assert route() is not None
+    assert len(list((mail.box_dir("capitano-1") / "new").glob("*.json"))) == 1
+
+
+def test_the_command_route_exits_zero_when_the_file_is_there(jht_home, monkeypatch):
+    """The transport types the text itself whenever `route` exits with anything else: a second copy."""
+    enable(jht_home, "capitano")
+    env = {**os.environ, "JHT_HOME": str(jht_home), "TMUX": "fake"}
+    bin_dir = jht_home / "bin"
+    bin_dir.mkdir()
+    (bin_dir / "tmux").write_text(FAKE_TMUX, encoding="utf-8")
+    (bin_dir / "tmux").chmod(0o755)
+    state = jht_home / "state"
+    state.mkdir()
+    env.update(PATH=f"{bin_dir}:{Path(sys.executable).parent}:/usr/bin:/bin", FAKE_TMUX_STATE=str(state),
+               FAKE_PANE_PID=str(os.getpid()), FAKE_PANE_SESSION="scout-1")
+    wrapper = jht_home / "wrap.py"
+    wrapper.write_text(
+        "import importlib.util, sys\n"
+        f"spec = importlib.util.spec_from_file_location('m', {str(MODULE)!r})\n"
+        "m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\n"
+        "def broken(*a, **k): raise OSError('read-only')\n"
+        "m.record_nudge = broken\n"
+        "sys.exit(m.main(['route', 'CAPITANO']))\n", encoding="utf-8")
+    done = subprocess.run([sys.executable, str(wrapper)], input=envelope(), capture_output=True, text=True, env=env, timeout=60)
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.split("\t")[1] == "CAPITANO"
+    assert len(list((jht_home / "mailbox" / "capitano-1" / "new").glob("*.json"))) == 1
