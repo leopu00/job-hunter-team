@@ -586,6 +586,9 @@ pub(crate) fn answer(request: &ControlRequest, output: &ProcessResult, target: &
             }
             shaped
         }
+        // The app sends `stop-team` only in its one closed shape, so a script or a CLI that calls it
+        // invalid is one older than the action (JHT-T54): «update the team», not «invalid request».
+        ControlRequest::StopTeam { .. } if output.code == 100 => failure("team_stop_unsupported"),
         _ => {
             if output.code != 0 {
                 return failure(code_of(output.code));
@@ -811,6 +814,12 @@ mod tests {
             assert_eq!(answer(&stop_team, &out(0, &reply), "t", None), json!({"ok":true,"data":{"result":result}}));
         }
         assert_eq!(answer(&stop_team, &out(121, ""), "t", None), failure("team_stop_failed"));
+        // an image older than the action calls it invalid: the page says «update the team»
+        assert_eq!(answer(&stop_team, &out(100, "{\"ok\":false,\"error\":\"agent_control_invalid\"}\n"), "t", None), failure("team_stop_unsupported"));
+        // no script at all is still the panel's own «update the team»
+        assert_eq!(answer(&stop_team, &out(2, ""), "t", None), failure("agent_control_unsupported"));
+        // the other actions keep their own invalid
+        assert_eq!(answer(&action, &out(100, ""), "t", None), failure("agent_control_invalid"));
         // never «done» without the script saying so
         assert_eq!(answer(&action, &out(0, ""), "t", None), failure("agent_control_unanswered"));
         assert_eq!(answer(&action, &out(0, "{\"ok\":true,\"result\":\"exploded\"}"), "t", None), failure("agent_control_unanswered"));
