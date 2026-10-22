@@ -2394,6 +2394,13 @@ export function resolveRequest(local, cloud, flagCol, atCol, extraCols = []) {
 }
 
 /**
+ * W7: how long a withdrawal from the website of an authorisation the box never
+ * received is still told. Inside it, given and withdrawn between two syncs is
+ * told; past it, a database recreated from scratch is not told old ones again.
+ */
+const REVOKE_NOTICE_WINDOW_MS = 24 * 3600 * 1000;
+
+/**
  * [JHT-CLOSER] L'autorizzazione alla candidatura: `resolveRequest` con l'autore.
  *
  * L'autore che il cloud dichiara non si crede: il canale lo sa il box. Desktop e
@@ -2840,9 +2847,15 @@ async function handlePullDesiredState(options = {}) {
         if (apFlag === 1 && apBy === 'user_web' && at && (local.apply_requested_at ?? null) !== apAt) {
           webNotices.push({ code: 'apply_authorized_from_web', key: `apply:${legacyId}:${at}`, positionId: legacyId });
         }
-        // A withdrawal that arrives from the website takes an authorisation the
-        // box had: told too, since it cancels what the user may be waiting for.
-        if (apFlag === 0 && (local.apply_requested ?? 0) === 1 && at && (local.apply_requested_at ?? null) !== apAt) {
+        // A withdrawal that arrives from the website is told too: it cancels
+        // what the user may be waiting for. Also when the box never saw the
+        // authorisation (given and withdrawn between two syncs: the cloud row
+        // shows only the withdrawal, and a withdrawal has an instant only if an
+        // authorisation came before it), then only while it is recent, so a
+        // database recreated from scratch is not told the old ones again.
+        const hadIt = (local.apply_requested ?? 0) === 1;
+        const recent = Number(at) >= Date.now() - REVOKE_NOTICE_WINDOW_MS;
+        if (apFlag === 0 && at && (local.apply_requested_at ?? null) !== apAt && (hadIt || recent)) {
           webNotices.push({ code: 'apply_revoked_from_web', key: `revoke:${legacyId}:${at}`, positionId: legacyId });
         }
       }

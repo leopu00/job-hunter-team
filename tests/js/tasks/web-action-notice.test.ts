@@ -157,10 +157,28 @@ describe("an application authorised from the website", () => {
       { code: "apply_authorized_from_web", position_id: 7 },
       { code: "apply_revoked_from_web", position_id: 7 },
     ]);
-    // a withdrawal of something the box did not have authorised says nothing
-    const other = box();
-    await pull(other.dbPath, [REVOKED]);
-    expect(notices(other.dbPath)).toEqual([]);
+  });
+
+  it("authorised and withdrawn between two syncs: the withdrawal is told even if the box never saw the authorisation", async () => {
+    const { dbPath } = box();
+    const at = new Date(Date.now() - 60_000).toISOString();
+    const REVOKED = { legacy_id: 7, apply_requested: false, apply_requested_at: at, apply_requested_by: null };
+    await pull(dbPath, [REVOKED]);
+    await pull(dbPath, [REVOKED]);
+    expect(notices(dbPath).map((r) => r.payload)).toEqual([{ code: "apply_revoked_from_web", position_id: 7 }]);
+  });
+
+  it("an old withdrawal the box never saw (a database recreated from scratch) is not told again", async () => {
+    const { dbPath } = box();
+    const at = new Date(Date.now() - 3 * 24 * 3600_000).toISOString();
+    await pull(dbPath, [{ legacy_id: 7, apply_requested: false, apply_requested_at: at, apply_requested_by: null }]);
+    expect(notices(dbPath)).toEqual([]);
+  });
+
+  it("a position never authorised (no instant in the cloud) says nothing", async () => {
+    const { dbPath } = box();
+    await pull(dbPath, [{ legacy_id: 7, apply_requested: false, apply_requested_at: null, apply_requested_by: null }]);
+    expect(notices(dbPath)).toEqual([]);
   });
 });
 
