@@ -4552,6 +4552,15 @@ async function runRealtimeLoop({ config, isRunning }) {
     await reconcileEmergencyStop(config, state);
   }, (e) => console.error(pc.yellow(`  emergency-stop error: ${e.message}`)));
 
+  // [WEB-CAPACE fase 6] The settings the site asked (working hours, model and
+  // effort per role) travel on the same team_state row: the UPDATE event and
+  // the slow round, as in the loop without Realtime. Coalescing: a newer
+  // version that arrives while one is applied is applied next, not dropped.
+  const runSettings = coalescingGuardedLane(haltGate, 'settings', async (_tag, state) => {
+    const { reconcileSettings } = await import('../lib/team-state-reconciler.js');
+    await reconcileSettings(config, state);
+  }, (e) => console.error(pc.yellow(`  settings error: ${e.message}`)));
+
   let rt = null;
   let realtimeHealthy = false;
   let fallbackTimer = null;
@@ -4590,6 +4599,7 @@ async function runRealtimeLoop({ config, isRunning }) {
       await runSync('fallback', state);
       await runChatSync('fallback', state);
       await runEmergencyStop('fallback', state);
+      await runSettings('fallback', state);
       await teamCommands.run('fallback');
     } finally {
       fallbackBusy = false;
@@ -4633,6 +4643,8 @@ async function runRealtimeLoop({ config, isRunning }) {
       void runChatSync('realtime', payload?.new ?? null);
       // E lo STOP mobile viaggia nello stesso evento, senza un altro poller.
       void runEmergencyStop('realtime', payload?.new ?? null);
+      // And the settings the site asked, in the same row.
+      void runSettings('realtime', payload?.new ?? null);
     }, realtimeStatus);
 
     // ── Tappa 3: ticket → Realtime ── cambio su position_tickets → ticket-sync.
