@@ -509,7 +509,13 @@ Write-JhtPhase image_pull
 Invoke-Checked $Podman '--connection' $MachineName 'pull' $RuntimeImage | Out-Null
 $repoDigestsJson = ((& $Podman --connection $MachineName image inspect $RuntimeImage --format '{{json .RepoDigests}}' 2>$null) -join '')
 if ($LASTEXITCODE -ne 0 -or -not $repoDigestsJson) { throw 'Cannot inspect the pulled runtime image digest.' }
-$repoDigests = @($repoDigestsJson | ConvertFrom-Json)
+# Windows PowerShell 5.1, the shell the app runs, does not enumerate a JSON
+# array through the pipeline: `@($json | ConvertFrom-Json)` was ONE element, the
+# whole array, so no digest ever equalled the expected one and every pull was
+# refused (Podman 6 lists two, the index and the platform manifest). foreach
+# enumerates the parsed array in 5.1 and in PowerShell 7 alike.
+$parsedRepoDigests = ConvertFrom-Json -InputObject $repoDigestsJson
+$repoDigests = @(foreach ($digest in $parsedRepoDigests) { [string]$digest })
 $matchingRepoDigests = @($repoDigests | Where-Object { $_ -match '^ghcr\.io/leopu00/jht@sha256:[0-9a-f]{64}$' })
 if ($ExpectedImageDigest) {
   $canonicalImage = "ghcr.io/leopu00/jht@$ExpectedImageDigest"

@@ -22,6 +22,7 @@ and if that leaves no podman.exe it is its own code, podman_other_user, 25.
 
 from __future__ import annotations
 
+import json
 import os
 import re
 import shutil
@@ -536,3 +537,68 @@ def test_the_wsl_welcome_is_marked_shown_before_podman_registers_its_distributio
     # right before the machine is created, which registers the distribution
     init = enabler.index("Invoke-Checked $Podman 'machine' 'init'")
     assert enabler.rindex("Skip-WslWelcome", 0, init) > enabler.rindex("Write-JhtPhase podman_machine_init", 0, init)
+
+
+# ── the pulled image's digest, as Podman 6 reports it, in the shell the app runs ──
+# `podman image inspect --format '{{json .RepoDigests}}'` of an image pulled by its index digest:
+# the index AND the platform manifest, no tag. The app runs the script with Windows PowerShell 5.1,
+# whose ConvertFrom-Json gives a JSON array to the pipeline as ONE object; PowerShell 7 enumerates
+# it. The 5.1 shape is reproduced here with ConvertFrom-Json -NoEnumerate, the switch 7 added to keep it.
+INDEX = "sha256:" + "6c" * 32
+PLATFORM = "sha256:" + "40" * 32
+OTHER = "sha256:" + "77" * 32
+
+
+def _image_check_block() -> str:
+    source = ENABLER.read_text(encoding="utf-8")
+    return source[source.index("Write-JhtPhase image_pull") : source.index("$env:JHT_IMAGE = $canonicalImage")]
+
+
+WINDOWS_POWERSHELL_JSON = (
+    "function ConvertFrom-Json {\n"
+    "  param([Parameter(ValueFromPipeline = $true)]$InputObject)\n"
+    "  process { , (Microsoft.PowerShell.Utility\\ConvertFrom-Json -InputObject $InputObject -NoEnumerate) }\n"
+    "}\n"
+)
+
+
+@pytest.mark.skipif(PWSH is None or os.name == "nt", reason="needs PowerShell off Windows")
+@pytest.mark.parametrize("shell", ["windows-powershell-5.1", "powershell-7"])
+@pytest.mark.parametrize(("digests", "accepted"), [
+    ([f"ghcr.io/leopu00/jht@{PLATFORM}", f"ghcr.io/leopu00/jht@{INDEX}"], True),   # Podman 6, by index
+    ([f"ghcr.io/leopu00/jht@{INDEX}", f"ghcr.io/leopu00/jht@{PLATFORM}"], True),
+    ([f"ghcr.io/leopu00/jht@{INDEX}"], True),
+    ([f"ghcr.io/leopu00/jht@{OTHER}", f"ghcr.io/leopu00/jht@{PLATFORM}"], False),  # not the pinned image
+    ([], False),
+])
+def test_the_pulled_image_is_found_by_its_digest_among_all_its_digests(tmp_path, shell, digests, accepted):
+    inspect = json.dumps(digests) if digests else "null"
+    script = tmp_path / "image.ps1"
+    script.write_text(
+        "$ErrorActionPreference = 'Stop'\n"
+        + (WINDOWS_POWERSHELL_JSON if shell == "windows-powershell-5.1" else "")
+        + "function Write-JhtPhase { }\n"
+        "function Invoke-Checked { $global:LASTEXITCODE = 0 }\n"
+        f"function fake-podman {{ $global:LASTEXITCODE = 0; '{inspect}' }}\n"
+        "$Podman = 'fake-podman'; $MachineName = 'jht-podman'\n"
+        f"$RuntimeImage = 'ghcr.io/leopu00/jht@{INDEX}'; $ExpectedImageDigest = '{INDEX}'\n"
+        + _image_check_block()
+        + "\n$canonicalImage\nexit 0\n",
+        encoding="utf-8",
+    )
+    done = subprocess.run([PWSH, "-NoProfile", "-NonInteractive", "-File", str(script)], capture_output=True,
+                          text=True, timeout=60, env={"PATH": "/usr/bin:/bin", "HOME": str(tmp_path)})
+    if accepted:
+        assert done.returncode == 0, done.stdout + done.stderr
+        assert done.stdout.strip().splitlines()[-1] == f"ghcr.io/leopu00/jht@{INDEX}"
+    else:
+        assert done.returncode != 0
+        assert "Pulled runtime image does not expose the expected repository digest" in done.stdout + done.stderr
+
+
+@pytest.mark.skipif(PWSH is None or os.name == "nt", reason="needs PowerShell off Windows")
+def test_the_windows_powershell_shape_is_really_one_object():
+    # the harness reproduces what it claims: in the 5.1 shape a two-digest array is one pipeline object
+    probe = WINDOWS_POWERSHELL_JSON + "@('[\"a\",\"b\"]' | ConvertFrom-Json).Count; @('[\"a\",\"b\"]' | Microsoft.PowerShell.Utility\\ConvertFrom-Json).Count\n"
+    done = subprocess.run([PWSH, "-NoProfile", "-NonInteractive", "-Command", probe], capture_output=True, text=True, timeout=60)
+    assert done.stdout.split() == ["1", "2"], done.stdout + done.stderr
