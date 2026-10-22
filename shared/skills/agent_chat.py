@@ -231,9 +231,10 @@ def check_session(session: str) -> None:
 
 
 # ── at the prompt ───────────────────────────────────────────────────────────
-# The composer's line: the input mark of the CLIs (❯ Claude Code and Kimi, › Codex, > older builds,
-# ▌ a block cursor), maybe inside the border of a box.
-_COMPOSER = re.compile(r"^\s*[│┃╎|]?\s*[❯›>▌]\s?(.*?)\s*[│┃╎|]?\s*$")
+# The composer's line: the input mark of the CLIs (❯ Claude Code and Kimi, › Codex, ▌ a block
+# cursor), maybe inside the border of a box. A bare ">" is a shell's continuation or a REPL's
+# prompt (bash's PS2, node): it counts only inside the box the older Claude Code builds draw.
+_COMPOSER = re.compile(r"^\s*(?:[│┃╎|]\s*[❯›>▌]|[❯›▌])\s?(.*?)\s*[│┃╎|]?\s*$")
 # Under the composer the CLIs draw only these: a border or a rule, and a footer of hints.
 _BORDER = re.compile(r"^\s*[╭╰┌└├]?[─━═┄╌]+[╮╯┐┘┤]?\s*$")
 _FOOTER = re.compile(

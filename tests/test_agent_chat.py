@@ -509,6 +509,16 @@ MENU_MARK_ON_LAST = """\
 NUMBERED_TRY_AGAIN = """\
  ❯ 1. Try again
 """
+# A bare ">" is not a composer: bash waiting for the rest of a line, node's REPL.
+BASH_CONTINUATION = """\
+user@host:~$ echo "abc
+>
+"""
+NODE_REPL = """\
+Welcome to Node.js v20.11.1.
+Type ".help" for more information.
+>
+"""
 UNKNOWN_PLACEHOLDER = """\
 › Plan a trip to the moon
 """
@@ -538,10 +548,10 @@ def test_a_running_turn_is_busy(screen):
 @pytest.mark.parametrize("screen", [
     CLAUDE_PERMISSION, CODEX_APPROVAL, LOGIN_METHOD, PASTE_CODE, TRUST_FOLDER, TEXT_ALREADY_TYPED, A_SHELL, STARTING, "",
     QUOTE_THEN_SHELL, MENU_TRY_AGAIN, MENU_SEND_FEEDBACK, MENU_MARK_ON_LAST, TYPED_WRITE, NUMBERED_TRY_AGAIN,
-    UNKNOWN_PLACEHOLDER,
+    UNKNOWN_PLACEHOLDER, BASH_CONTINUATION, NODE_REPL,
 ], ids=["permission", "approval", "login", "paste-code", "trust-folder", "typed", "shell", "starting", "empty",
         "quote-then-shell", "menu-try-again", "menu-send-feedback", "menu-mark-on-last", "typed-write",
-        "numbered-try-again", "unknown-placeholder"])
+        "numbered-try-again", "unknown-placeholder", "bash-continuation", "node-repl"])
 def test_anything_else_is_not_the_prompt(screen):
     assert _module().prompt_state(screen) == "not_at_prompt"
 
@@ -554,7 +564,9 @@ def _nothing_happened(box, agent="capitano"):
 
 @pytest.mark.parametrize("screen", [
     CLAUDE_PERMISSION, CODEX_APPROVAL, LOGIN_METHOD, PASTE_CODE, TEXT_ALREADY_TYPED, A_SHELL, QUOTE_THEN_SHELL, MENU_TRY_AGAIN,
-], ids=["permission", "approval", "login", "paste-code", "typed", "shell", "quote-then-shell", "menu-try-again"])
+    BASH_CONTINUATION,
+], ids=["permission", "approval", "login", "paste-code", "typed", "shell", "quote-then-shell", "menu-try-again",
+        "bash-continuation"])
 def test_a_screen_that_is_not_the_prompt_is_a_closed_code_with_nothing_written_or_typed(box, screen):
     box.stub_delivery()
     (box.state / "screen").write_text(screen, encoding="utf-8")
