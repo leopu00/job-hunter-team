@@ -5,6 +5,7 @@
 //   jht agent-control resume
 //   jht agent-control list | screen <SESSION> | team
 //   jht agent-control exclusions | exclusion-accept <CODE> | exclusion-withdraw <CODE>
+//   jht agent-control answer <QUESTION_ID> <OPTION_ID>
 //
 // One JSON line on stdout and a closed exit code, both from
 // shared/skills/agent_control.py, which holds every rule (see its header).

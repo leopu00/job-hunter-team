@@ -12,6 +12,7 @@ The desktop app reaches this file in two ways, and only these:
         agent_control.py resume
         agent_control.py list | screen SESSION | team
         agent_control.py exclusions | exclusion-accept CODE | exclusion-withdraw CODE
+        agent_control.py answer QUESTION_ID OPTION_ID
 
   * without arguments, with one JSON request on stdin, for the reads only
     (`{"op":"list"}`, `{"op":"screen","name":...}`, `{"op":"team"}`,
@@ -41,6 +42,7 @@ import importlib.util
 import json
 import os
 import re
+import sqlite3
 import subprocess
 import sys
 from datetime import datetime, timedelta, timezone
@@ -72,6 +74,10 @@ EXIT = {
     "team_paused": 112,
     "exclusion_no_evidence": 115,
     "exclusion_failed": 116,
+    "question_unknown": 117,
+    "answer_refused": 118,
+    "answer_failed": 119,
+    "questions_unsupported": 120,
 }
 
 # Who and why, as the roster's journal shows them: distinct from a safety
@@ -123,6 +129,7 @@ HOST_VITALS = _first(SKILLS / "host_vitals.py", HERE / "host_vitals.py")
 AGENT_STATE = _first(SKILLS / "agent_state.py", HERE / "agent_state.py")
 REDACTOR = _first(Path("/app/shared/redact-cli.mjs"), HERE.parent / "redact-cli.mjs")
 PROFILE_EXCLUSIONS = _first(SKILLS / "profile_exclusions.py", HERE / "profile_exclusions.py")
+AGENT_QUESTIONS = _first(SKILLS / "agent_questions.py", HERE / "agent_questions.py")
 START_TIMEOUT_S = 120
 KILL_TIMEOUT_S = 15
 
@@ -698,6 +705,55 @@ def exclusion_action(op: str, code: str) -> str:
     return "excluded" if op == "exclusion-accept" else "exclusion_withdrawn"
 
 
+# ── the answer to an agent's question (JHT-T38) ────────────────────────────
+# One option of a structured question, by the ids agent_questions.py gave them: never text.
+# agent_questions.record_answer stays the only writer of an answer, and checks that the option
+# is the question's, that the first answer wins and that an expired question takes its default.
+# The channel is this file's, not the request's.
+QUESTION_ID = re.compile(r"^aq:[a-z0-9][a-z0-9_-]{0,39}:[0-9]{1,20}-[a-z0-9]{1,16}\Z")
+OPTION_ID = re.compile(r"^(?:_rinvia|[a-z0-9][a-z0-9_]{0,23})\Z")
+ANSWER_CHANNEL = "desktop"
+ANSWER_RESULTS = {"recorded": "answered", "already_answered": "already_answered", "expired": "expired"}
+UNKNOWN_QUESTION = {"question_invalid", "question_unknown"}
+
+
+def _agent_questions():
+    """agent_questions.py of the image, or None (an image older than the questions)."""
+    if not AGENT_QUESTIONS.exists():
+        return None
+    try:
+        spec = importlib.util.spec_from_file_location("agent_control_questions", AGENT_QUESTIONS)
+        module = importlib.util.module_from_spec(spec)
+        sys.modules[spec.name] = module  # its dataclasses look themselves up there
+        spec.loader.exec_module(module)
+        return module
+    except Exception:  # noqa: BLE001 - a module that does not load is a module that is not there
+        sys.modules.pop("agent_control_questions", None)
+        return None
+
+
+def answer_question(question: str, choice: str) -> str:
+    if not QUESTION_ID.match(question or "") or not OPTION_ID.match(choice or ""):
+        raise Refusal("agent_control_invalid")
+    aq = _agent_questions()
+    if aq is None:
+        raise Refusal("questions_unsupported")
+    db = Path(os.environ.get("JHT_DB") or (jht_home() / "jobs.db"))
+    if not db.is_file():
+        raise Refusal("answer_failed")
+    try:
+        conn = sqlite3.connect(str(db), timeout=5)
+        try:
+            done = aq.record_answer(conn, question, [choice], canale=ANSWER_CHANNEL)
+        finally:
+            conn.close()
+    except aq.AnswerRejected as rejected:
+        raise Refusal("question_unknown" if rejected.code in UNKNOWN_QUESTION else "answer_refused") from None
+    except sqlite3.Error:
+        raise Refusal("answer_failed") from None
+    return ANSWER_RESULTS.get(done.status) or "answered"
+
+
 READS = {"exclusions": lambda req: read_exclusions(),
          "list": lambda req: read_list(),
          "screen": lambda req: read_screen(req.get("name")),
@@ -737,22 +793,38 @@ def _parser() -> argparse.ArgumentParser:
         sub.add_parser(op, add_help=False)
     for op in ("exclusion-accept", "exclusion-withdraw"):
         sub.add_parser(op, add_help=False).add_argument("code")
+    answer_parser = sub.add_parser("answer", add_help=False)
+    answer_parser.add_argument("question")
+    answer_parser.add_argument("choice")
     return parser
 
 
-ACTIONS = {"start", "stop", "restart", "pause", "resume", "exclusion-accept", "exclusion-withdraw"}
+ACTIONS = {"start", "stop", "restart", "pause", "resume", "exclusion-accept", "exclusion-withdraw", "answer"}
+
+
+def _answer_ids(question, choice) -> dict:
+    """What the reply and the journal say of an answer: the ids, when they have their shape.
+    Never the question's subject, text or labels: those are the agent's words, and may be the person's data."""
+    out = {}
+    if isinstance(question, str) and QUESTION_ID.match(question):
+        out["question"] = question
+    if isinstance(choice, str) and OPTION_ID.match(choice):
+        out["choice"] = choice
+    return out
 
 
 def main(argv: list[str]) -> int:
     if not argv:
         return from_stdin()
     op = argv[0] if argv[0] in ACTIONS | set(READS) else None
-    session = code = None
+    session = code = question = choice = None
     try:
         args = _parser().parse_args(argv)
         op = args.op
         session = getattr(args, "session", None)
         code = getattr(args, "code", None)
+        question = getattr(args, "question", None)
+        choice = getattr(args, "choice", None)
         if op == "exclusions":
             _emit(read_exclusions())
             return 0
@@ -776,6 +848,8 @@ def main(argv: list[str]) -> int:
                 result = pause(args.for_hours, args.until, args.wake_on_weekly)
             elif op in ("exclusion-accept", "exclusion-withdraw"):
                 result = exclusion_action(op, args.code)
+            elif op == "answer":
+                result = answer_question(args.question, args.choice)
             else:
                 result = resume()
     except Refusal as refusal:
@@ -785,6 +859,7 @@ def main(argv: list[str]) -> int:
         answer = {"ok": False, "op": op, "session": session, "error": refusal.code}
         if isinstance(code, str) and CODE.match(code):
             answer["code"] = code
+        answer.update(_answer_ids(question, choice))
         _emit(answer)
         if op in ACTIONS:
             _journal({"at": datetime.now(timezone.utc).isoformat(timespec="seconds"), **answer})
@@ -792,6 +867,7 @@ def main(argv: list[str]) -> int:
     answer = {"ok": True, "op": op, "session": session, "result": result}
     if isinstance(code, str):
         answer["code"] = code
+    answer.update(_answer_ids(question, choice))
     _emit(answer)
     _journal({"at": datetime.now(timezone.utc).isoformat(timespec="seconds"), **answer})
     return 0

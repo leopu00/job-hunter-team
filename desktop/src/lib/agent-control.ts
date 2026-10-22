@@ -243,3 +243,25 @@ export function acceptExclusion(code: ExclusionCode, target: string): Promise<Ou
 export function withdrawExclusion(code: ExclusionCode, target: string): Promise<Outcome<ExclusionResult>> {
   return decide({ op: "exclusion_withdraw", code, target });
 }
+
+// ── the answer to an agent's question (JHT-T38) ─────────────────────────────
+export type AnswerResult = "answered" | "already_answered" | "expired";
+const ANSWER_RESULTS = new Set<string>(["answered", "already_answered", "expired"]);
+const QUESTION_ID = /^aq:[a-z0-9][a-z0-9_-]{0,39}:[0-9]{1,20}-[a-z0-9]{1,16}$/;
+const OPTION_ID = /^(?:_rinvia|[a-z0-9][a-z0-9_]{0,23})$/;
+
+/**
+ * One option of an agent's structured question, by the ids the question carries: never text.
+ * Only after the person chose it in the page (with a confirmation when the option does not
+ * say it can be undone). The native side asks for the full link or the mark of the VPS, and
+ * the team's agent_questions decides whether the option is the question's: the first answer wins.
+ */
+export async function answerQuestion(question: string, choice: string, target: string): Promise<Outcome<AnswerResult>> {
+  if (!QUESTION_ID.test(question) || !OPTION_ID.test(choice)) return { ok: false, at: Date.now(), code: "agent_control_invalid" };
+  const done = await call({ op: "answer", question, choice, target, confirmed: true });
+  if (!done.ok) return done;
+  const result = done.value.result;
+  return typeof result === "string" && ANSWER_RESULTS.has(result)
+    ? { ok: true, at: done.at, value: result as AnswerResult }
+    : { ok: false, at: done.at, code: "agent_control_unanswered" };
+}

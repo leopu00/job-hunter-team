@@ -75,13 +75,17 @@ const EXITS: &[(i32, &str)] = &[
     (114, "agent_control_unanswered"),
     (115, "exclusion_no_evidence"),
     (116, "exclusion_failed"),
+    (117, "question_unknown"),
+    (118, "answer_refused"),
+    (119, "answer_failed"),
+    (120, "questions_unsupported"),
 ];
 
 /// The codes of the exclusions that act on the score (`acting` of shared/feedback-reasons.json).
 pub(crate) const EXCLUSION_CODES: &[&str] = &["company", "wrong_location", "salary_low", "wrong_stack"];
 
 const RESULTS: &[&str] = &[
-    "excluded", "exclusion_withdrawn",
+    "excluded", "exclusion_withdrawn", "answered", "already_answered", "expired",
     "started", "already_running", "stopped", "already_stopped", "restarted", "paused",
     "already_paused", "resumed", "not_paused",
 ];
@@ -134,6 +138,10 @@ pub(crate) enum ControlRequest {
     ExclusionAccept { code: String, target: String, confirmed: bool },
     #[serde(rename = "exclusion_withdraw")]
     ExclusionWithdraw { code: String, target: String, confirmed: bool },
+    /// One option of an agent's structured question (JHT-T38), by the ids the
+    /// question carries: never text. agent_questions.record_answer in the
+    /// container decides whether the option is the question's.
+    Answer { question: String, choice: String, target: String, confirmed: bool },
 }
 
 fn failure(code: &str) -> Value {
@@ -182,6 +190,9 @@ impl ControlRequest {
             Self::Exclusions {} => Some(vec!["exclusions".into()]),
             Self::ExclusionAccept { code, .. } => EXCLUSION_CODES.contains(&code.as_str()).then(|| vec!["exclusion-accept".to_owned(), code.clone()]),
             Self::ExclusionWithdraw { code, .. } => EXCLUSION_CODES.contains(&code.as_str()).then(|| vec!["exclusion-withdraw".to_owned(), code.clone()]),
+            Self::Answer { question, choice, .. } => (crate::existing_team_agents::question_id_ok(question)
+                && crate::existing_team_agents::option_id_ok(choice))
+            .then(|| vec!["answer".to_owned(), question.clone(), choice.clone()]),
         }
     }
 
@@ -194,6 +205,7 @@ impl ControlRequest {
             | Self::Pause { target, confirmed, .. }
             | Self::ExclusionAccept { target, confirmed, .. }
             | Self::ExclusionWithdraw { target, confirmed, .. }
+            | Self::Answer { target, confirmed, .. }
             | Self::Resume { target, confirmed } => Some((target.as_str(), *confirmed)),
             _ => None,
         }
@@ -701,7 +713,7 @@ mod tests {
     #[test]
     fn the_script_and_the_module_agree_on_the_codes() {
         let script = AGENT_CONTROL_PY;
-        for (exit, code) in EXITS.iter().filter(|(exit, _)| (100..=112).contains(exit) || (115..=116).contains(exit)) {
+        for (exit, code) in EXITS.iter().filter(|(exit, _)| (100..=112).contains(exit) || (115..=120).contains(exit)) {
             assert!(script.contains(&format!("\"{code}\": {exit},")), "{code} {exit}");
         }
     }
@@ -970,6 +982,72 @@ mod tests {
         assert_eq!(answer(&accept, &bare, "t", None), failure("agent_control_unanswered"));
         for (exit, code) in [(115, "exclusion_no_evidence"), (116, "exclusion_failed"), (101, "agent_control_refused"), (100, "agent_control_invalid")] {
             assert_eq!(answer(&accept, &ProcessResult { code: exit, stdout: vec![] }, "t", None), failure(code));
+        }
+    }
+
+
+    const QUESTION: &str = "aq:scrittore:1790000000-ab12cd";
+
+    #[test]
+    fn an_answer_request_is_closed_to_the_ids_of_a_question_and_of_an_option() {
+        for (choice, argv) in [("breve", vec!["answer", QUESTION, "breve"]), ("_rinvia", vec!["answer", QUESTION, "_rinvia"])] {
+            let value = json!({"op":"answer","question":QUESTION,"choice":choice,"target":"t","confirmed":true});
+            assert_eq!(req(value.clone()).and_then(|r| r.argv()), Some(argv.into_iter().map(String::from).collect()), "{value}");
+        }
+        for bad in [
+            json!({"op":"answer","question":QUESTION,"choice":"CV breve","target":"t","confirmed":true}),
+            json!({"op":"answer","question":QUESTION,"choice":"--json","target":"t","confirmed":true}),
+            json!({"op":"answer","question":QUESTION,"choice":"breve;id","target":"t","confirmed":true}),
+            json!({"op":"answer","question":"ans:aq:scrittore:1-a","choice":"breve","target":"t","confirmed":true}),
+            json!({"op":"answer","question":"aq:scrittore:1-a b","choice":"breve","target":"t","confirmed":true}),
+            json!({"op":"answer","question":QUESTION,"choice":"breve","text":"free words","target":"t","confirmed":true}),
+            json!({"op":"answer","question":QUESTION,"choice":"breve","channel":"telegram","target":"t","confirmed":true}),
+            json!({"op":"answer","question":QUESTION,"choices":["breve","lungo"],"target":"t","confirmed":true}),
+            json!({"op":"answer","question":QUESTION,"choice":"breve","confirmed":true}),
+            json!({"op":"answer","question":QUESTION,"choice":"breve","target":"t"}),
+        ] {
+            assert!(req(bad.clone()).and_then(|r| r.argv()).is_none(), "{bad}");
+        }
+    }
+
+    #[test]
+    fn an_answer_is_an_action_with_the_gates_of_an_action() {
+        let answer_ = |target: &str, confirmed: bool| {
+            req(json!({"op":"answer","question":QUESTION,"choice":"breve","target":target,"confirmed":confirmed})).unwrap()
+        };
+        assert_eq!(action_refusal(&answer_("abc", true), Some(VpsMode::Full), "abc"), None);
+        assert_eq!(action_refusal(&answer_("abc", true), None, "abc"), None);
+        // the read-only view of an existing team, or a VPS of one's own without its mark
+        assert_eq!(action_refusal(&answer_("abc", true), Some(VpsMode::ReadOnly), "abc"), Some("agent_control_read_only"));
+        assert_eq!(action_refusal(&answer_("abc", true), Some(VpsMode::Full), "def"), Some("existing_team_runtime_target_changed"));
+        assert_eq!(action_refusal(&answer_("abc", false), None, "abc"), Some("agent_control_not_confirmed"));
+        // an action, never on the reads' stdin channel
+        assert!(read_input(&answer_("abc", true)).is_none());
+        for state in [OwnVpsState::Claimable, OwnVpsState::KeyChanged, OwnVpsState::NotOwn] {
+            let unmarked = Destination::OwnVps { validated: validated_vps(), label: "vps.example".into(), state };
+            assert_eq!(action_refusal(&answer_("t", true), destination_mode(&unmarked), "t"), Some("agent_control_read_only"), "{state:?}");
+        }
+    }
+
+    #[test]
+    fn the_answer_command_carries_only_closed_words() {
+        let argv = req(json!({"op":"answer","question":QUESTION,"choice":"_rinvia","target":"t","confirmed":true})).unwrap().argv().unwrap();
+        let own = own_vps_action_command(&argv).unwrap();
+        assert!(own.ends_with(&format!("exec \"$JHT_BIN\" agent-control 'answer' '{QUESTION}' '_rinvia' </dev/null")));
+        assert!(own_vps_action_command(&["answer".into(), QUESTION.into(), "x'; id #".into()]).is_err());
+    }
+
+    #[test]
+    fn an_answer_says_what_happened_with_a_closed_word_or_a_closed_error() {
+        let answer_ = req(json!({"op":"answer","question":QUESTION,"choice":"breve","target":"t","confirmed":true})).unwrap();
+        for result in ["answered", "already_answered", "expired"] {
+            let done = ProcessResult { code: 0, stdout: format!(r#"{{"ok":true,"op":"answer","session":null,"result":"{result}","question":"{QUESTION}","choice":"breve"}}"#).into_bytes() };
+            assert_eq!(answer(&answer_, &done, "t", None), json!({"ok":true,"data":{"result":result}}));
+        }
+        let bare = ProcessResult { code: 0, stdout: br#"{"ok":true,"result":"CV breve"}"#.to_vec() };
+        assert_eq!(answer(&answer_, &bare, "t", None), failure("agent_control_unanswered"));
+        for (exit, code) in [(117, "question_unknown"), (118, "answer_refused"), (119, "answer_failed"), (120, "questions_unsupported"), (100, "agent_control_invalid"), (102, "agent_control_busy")] {
+            assert_eq!(answer(&answer_, &ProcessResult { code: exit, stdout: vec![] }, "t", None), failure(code));
         }
     }
 }

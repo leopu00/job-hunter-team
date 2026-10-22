@@ -764,6 +764,30 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
     "The exclusion was not saved on the team.",
     "Try again. If it keeps happening, report the code shown next to it.",
   ),
+  question_unknown: copy(
+    "La domanda non c’è più sulla squadra: forse ha già avuto risposta o è scaduta.",
+    "Premi Aggiorna per vedere le domande aperte.",
+    "The question is no longer on the team: it may have been answered or have expired.",
+    "Press Refresh to see the open questions.",
+  ),
+  answer_refused: copy(
+    "La squadra non accetta questa risposta per questa domanda.",
+    "Premi Aggiorna e rispondi con una delle scelte mostrate.",
+    "The team does not accept this answer to this question.",
+    "Press Refresh and answer with one of the choices shown.",
+  ),
+  answer_failed: copy(
+    "La risposta non è stata salvata sulla squadra.",
+    "Riprova. Se si ripete, rispondi dai Messaggi.",
+    "The answer was not saved on the team.",
+    "Try again. If it keeps happening, answer from Messages.",
+  ),
+  questions_unsupported: copy(
+    "La squadra ha una versione che non riceve risposte dall’app.",
+    "Aggiorna la squadra, oppure rispondi dai Messaggi.",
+    "The team runs a version that does not take answers from the app.",
+    "Update the team, or answer from Messages.",
+  ),
   exclusions_unavailable: copy(
     "La squadra non risponde sulle esclusioni del profilo: ha una versione più vecchia.",
     "Aggiorna la squadra e riprova.",

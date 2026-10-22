@@ -293,5 +293,6 @@ def test_no_decision_reads_the_panels_questions():
     read_questions); in agent_control.py only the list passes them on."""
     state = _functions_naming(SKILLS / "agent_state.py", r"read_agent_questions|questions_of|trim_questions|_question_contract|\"questions\"")
     assert state == {"_question_contract", "read_agent_questions", "questions_of", "trim_questions", "main"}
-    control = _functions_naming(SKILLS / "agent_control.py", r"questions")
+    # the list's key; the answer to a question (agent_questions.py) is an action of its own
+    control = _functions_naming(SKILLS / "agent_control.py", r'"questions"')
     assert control == {"_questions", "read_list"}
