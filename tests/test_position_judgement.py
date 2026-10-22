@@ -25,6 +25,11 @@ SENTINEL = "SENTINELLA-nota-privata-7f3a"
 def home(tmp_path):
     db = str(tmp_path / "jobs.db")
     env = {**os.environ, "JHT_DB": db, "JHT_HOME": str(tmp_path), "PYTHONDONTWRITEBYTECODE": "1"}
+    # The person's command, as the app runs it: no agent name, and a tmux with no server
+    # (these tests may run inside an agent's own pane).
+    for name in ("JHT_AGENT_NAME", "TMUX", "TMUX_PANE"):
+        env.pop(name, None)
+    env["TMUX_TMPDIR"] = str(tmp_path)
     seed = subprocess.run([sys.executable, "-c", f"""
 import sys
 sys.path.insert(0, {SKILLS_DIR!r})
@@ -143,6 +148,18 @@ def test_with_consent_the_gate_still_decides(home):
     code, out = run(env, "apply-request", "1", "--on")  # scored, not ready: the gate refuses
     assert code == 1 and out["code"] not in ("consent_absent", "consent_disabled")
     assert row(db, "SELECT apply_requested FROM positions WHERE id = 1") == (0,)
+
+
+def test_an_agent_can_neither_authorise_nor_withdraw_an_application(home):
+    db, env, tmp_path = home
+    consent(tmp_path, True)
+    agent = {**env, "JHT_AGENT_NAME": "capitano"}
+    for switch in ("--on", "--off"):
+        code, out = run(agent, "apply-request", "2", switch)
+        assert code == 1 and out["code"] == "agent_caller", switch
+    assert row(db, "SELECT apply_requested, apply_requested_by FROM positions WHERE id = 2") == (0, None)
+    # the person's own request still goes through
+    assert run(env, "apply-request", "2", "--on")[0] == 0
 
 
 # ── closed arguments, the note only on stdin ──

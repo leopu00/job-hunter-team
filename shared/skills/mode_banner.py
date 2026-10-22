@@ -1124,8 +1124,17 @@ def _lines(snap: dict) -> list:
     elif not snap["directives"]:
         out.append("ACTIVE DIRECTIVES: none")
     else:
-        shown = "; ".join("#%s [%s] %s" % (d["id"], d["kind"], d["body"])
-                          for d in snap["directives"])
+        # Each body is the user's text, inside the user's fence, as the chat
+        # turn is: a directive written on the website (or straight into the
+        # cloud) cannot pass for a line of this banner. Without the fence
+        # module the bodies are not shown at all: fail closed.
+        fence = _sibling("external_content")
+        if fence is None or not hasattr(fence, "fence_user_turn"):
+            bodies = ["[IGNORED: user text fence unavailable]" for _ in snap["directives"]]
+        else:
+            bodies = [fence.fence_user_turn(d["body"]) for d in snap["directives"]]
+        shown = "; ".join("#%s [%s] %s" % (d["id"], d["kind"], body)
+                          for d, body in zip(snap["directives"], bodies))
         extra = snap["directives_total"] - len(snap["directives"])
         out.append("ACTIVE DIRECTIVES (%d): %s%s"
                    % (snap["directives_total"], shown,

@@ -415,13 +415,18 @@ def sanitize_user_text(text):
     return _defang_markers(_defang_user_markers(flatten_user_turn(text)))
 
 
-def fence_user_turn(text):
+def fence_user_turn(text, limit=None):
     """Il testo scritto dall'utente, dentro il suo confine, su una riga sola.
 
     Presentazione e basta: il testo che l'utente vede (cronologia, web, gioco)
     resta quello che ha scritto.
+
+    Con `limit` il testo ripulito si taglia a quel numero di caratteri, con «…»:
+    il taglio sta dentro il confine, quindi il marcatore di chiusura c'è sempre.
     """
     safe = sanitize_user_text(text)
+    if limit is not None and len(safe) > limit:
+        safe = safe[: max(0, limit - 1)].rstrip() + "…"
     return " ".join(part for part in (USER_OPEN_MARKER, safe, USER_CLOSE_MARKER) if part)
 
 

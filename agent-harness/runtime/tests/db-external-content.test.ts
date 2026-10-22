@@ -80,3 +80,25 @@ print(json.dumps(out))
     CORPUS.forEach((value, i) => expect(ours[i], JSON.stringify(value)).toEqual(expected[i]));
   });
 });
+
+// The user's fence against the Unicode format characters a text from the website can carry, as
+// `fence_user_turn` treats them (tests/test_directive_fence.py has the same list, through the board):
+// what rewrites the reading or hides a line break goes, U+2028 and U+2029 become the visible mark,
+// the letters of a script (ZWNJ, ZWJ) and the direction marks (LRM, RLM) stay.
+describe("the user's fence and the format characters", () => {
+  const removed = [0x202a, 0x202b, 0x202c, 0x202d, 0x202e, 0x2066, 0x2067, 0x2068, 0x2069, 0x200b, 0x2060, 0xfeff];
+  const breaks = [0x2028, 0x2029];
+  const kept = [0x200c, 0x200d, 0x200e, 0x200f];
+  const fenced = (body: string) => `⟦UTENTE·abcd1234⟧ ${body} ⟦/UTENTE·abcd1234⟧`;
+
+  for (const code of [...removed, ...breaks, ...kept]) {
+    const name = `U+${code.toString(16).toUpperCase().padStart(4, "0")}`;
+    it(`${name} is ${removed.includes(code) ? "removed" : breaks.includes(code) ? "a line break" : "kept"}`, () => {
+      const char = String.fromCodePoint(code);
+      const out = new Fence("abcd1234").userTurn(`first${char}second`);
+      if (removed.includes(code)) expect(out).toBe(fenced("firstsecond"));
+      else if (breaks.includes(code)) expect(out).toBe(fenced("first ⏎ second"));
+      else expect(out).toBe(fenced(`first${char}second`));
+    });
+  }
+});

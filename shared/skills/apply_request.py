@@ -10,6 +10,9 @@ route writes the same columns with `user_web`; both decide with
 and submits the application without a second click. That is why this module
 never picks positions, never flags more than the one id it is given, and
 refuses anything that is not `ready` or has already gone out.
+`request` and `cancel` also refuse to run for an agent (`agent_caller`): no
+text an agent reads, a board directive or a chat turn included, becomes an
+application.
 
 Usage::
 
@@ -24,6 +27,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 from datetime import datetime, timedelta, timezone
 
@@ -222,11 +226,55 @@ def toggle(pid: int, requested: bool) -> tuple[dict, int]:
     return out, 0
 
 
+def _agent_caller(environ=None, placed=None) -> str | None:
+    """The agent this command runs for, or None when it is the person's.
+
+    `user_local` says the person authorised: written from an agent it would be
+    an agent's text turned into an application (a board directive, a chat
+    turn, a page it read), the one thing that must never happen. The person
+    runs this through `jht apply`, from a terminal or the app, and neither
+    carries `JHT_AGENT_NAME`; every agent's terminal exports it. The tmux pane
+    the process descends from is asked too, because a variable is easy to
+    unset: the same check as the user's turn in `jht_mail`.
+
+    A brake on an agent that follows a text, not a boundary: a process that
+    detaches (setsid, a double fork) loses the ancestry, and an agent can write
+    jobs.db directly. What keeps a text from becoming an application is the
+    user's fence, the prompts and the Closer's gate.
+    """
+    env = os.environ if environ is None else environ
+    named = str(env.get("JHT_AGENT_NAME") or "").strip()
+    if named:
+        return named
+    if placed is not None:
+        return placed() or None
+    try:
+        import message_origin
+
+        panes = message_origin.tmux_pane_owners()
+        if not panes:
+            return None
+        return message_origin.session_from_ancestry(os.getpid(), message_origin.parent_of, panes.get)
+    except Exception:  # noqa: BLE001 — no tmux to ask: the variable was the check
+        return None
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Authorise or withdraw one application (user_local).")
     parser.add_argument("action", choices=("show", "request", "cancel"))
     parser.add_argument("position_id", type=int)
     args = parser.parse_args(argv)
+    if args.action != "show":
+        agent = _agent_caller()
+        if agent:
+            print(json.dumps({
+                "ok": False,
+                "action": args.action,
+                "reason": "agent_caller",
+                "detail": "an application is authorised or withdrawn by the user only, "
+                          "never from an agent's terminal",
+            }, ensure_ascii=False))
+            return 1
     try:
         if args.action == "show":
             out, code = show(args.position_id)

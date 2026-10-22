@@ -161,6 +161,13 @@ def do_write_request(args):
 
 
 def do_apply_request(args):
+    # The app reaches this script for the person; an agent never does. Written from an
+    # agent's terminal, `user_local` would turn an agent's text into an application:
+    # the same refusal as apply_request.py's own command, before consent or the gate.
+    # A brake, not a boundary (see apply_request._agent_caller).
+    from apply_request import _agent_caller
+    if _agent_caller():
+        raise Refused("agent_caller", "an application is authorised or withdrawn by the user only")
     if args.on:
         # Authorising an application needs the user's consent first: without it
         # nothing is written, with the gate's own reason.
