@@ -318,7 +318,8 @@ try {
 
   $hostSentinel = Join-Path $probeUserDir 'host-to-container.txt'
   [IO.File]::WriteAllText($hostSentinel, 'host-to-container')
-  Invoke-NativeChecked 'docker' 'exec' 'jht' 'sh' '-lc' 'test "$(cat /jht_user/host-to-container.txt)" = host-to-container'
+  # No double quote inside a native argument here: Windows PowerShell 5.1 drops it (T71).
+  Invoke-NativeChecked 'docker' 'exec' 'jht' 'sh' '-lc' 'case $(cat /jht_user/host-to-container.txt) in host-to-container) ;; *) exit 1;; esac'
   Invoke-NativeChecked 'docker' 'exec' 'jht' 'sh' '-lc' 'printf container-to-host > /jht_user/container-to-host.txt'
   Assert-FileContains -Path (Join-Path $probeUserDir 'container-to-host.txt') -Expected 'container-to-host'
 
@@ -327,22 +328,22 @@ try {
   # failed. Exercise the same write-then-rename boundary under keep-id and
   # prove that the resulting file is the container user, never root.
   Invoke-NativeChecked 'docker' 'exec' 'jht' 'node' '-e' `
-    'const fs=require("fs");const t="/jht_home/.jht.config.tmp";const p="/jht_home/jht.config.json";fs.writeFileSync(t,"{\"atomic\":true}\n");fs.renameSync(t,p)'
+    'const fs=require(''fs'');const t=''/jht_home/.jht.config.tmp'';const p=''/jht_home/jht.config.json'';fs.writeFileSync(t,JSON.stringify({atomic:true})+''\n'');fs.renameSync(t,p)'
   Invoke-NativeChecked 'docker' 'exec' 'jht' 'sh' '-lc' `
-    'test "$(stat -c %u /jht_home/jht.config.json)" = 1001 && test ! -e /jht_home/.jht.config.tmp'
+    'test $(stat -c %u /jht_home/jht.config.json) = 1001 && test ! -e /jht_home/.jht.config.tmp'
   Assert-FileContains -Path (Join-Path $probeJhtHome 'jht.config.json') -Expected '{"atomic":true}'
 
   # Ubuntu 26.04 can stack AppArmor with crun and deny signals between sibling
   # processes. The Podman WSL machine is measured directly instead of assuming
   # that its kernel/security profile behaves like the host's Ubuntu distro.
   Invoke-NativeChecked 'docker' 'exec' 'jht' 'sh' '-lc' `
-    'sleep 2 & p=$!; kill -TERM "$p"; wait "$p"; rc=$?; test "$rc" -eq 143'
+    'sleep 2 & p=$!; kill -TERM $p; wait $p; rc=$?; test $rc -eq 143'
   $apparmorState = (& docker exec jht sh -lc 'if [ -r /sys/module/apparmor/parameters/enabled ]; then cat /sys/module/apparmor/parameters/enabled; else printf disabled; fi' 2>$null | Select-Object -First 1)
   Write-ProbeStep "Container AppArmor state: $(([string]$apparmorState).Trim())"
 
   Invoke-NativeChecked 'docker' 'exec' 'jht' 'sh' '-lc' 'getent hosts host.docker.internal >/dev/null'
   Invoke-NativeChecked 'docker' 'exec' 'jht' 'sh' '-lc' `
-    'test "$(curl --silent --show-error --output /dev/null --write-out ''%{http_code}'' https://ghcr.io/v2/)" = 401'
+    'test $(curl --silent --show-error --output /dev/null --write-out ''%{http_code}'' https://ghcr.io/v2/) = 401'
   foreach ($destination in @('/opt/jht-deps', '/jht_home/runtime')) {
     $mount = @($containerInspect[0].Mounts) |
       Where-Object { $_.Destination -eq $destination -and $_.Type -eq 'volume' } |

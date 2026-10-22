@@ -806,15 +806,25 @@ function Get-RunningComposeServiceId {
   $found = $null
   foreach ($id in $ids) {
     if ($id -notmatch '^[0-9a-fA-F]{12,64}$') { return $null }
-    $details = ((& docker inspect --type container $id --format '{{.State.Running}}|{{index .Config.Labels "com.docker.compose.project"}}|{{index .Config.Labels "com.docker.compose.service"}}' 2>$null | Select-Object -First 1) -as [string])
+    # No double quote inside a native argument: Windows PowerShell 5.1 drops it, and
+    # `{{index .Config.Labels "com.docker.compose.project"}}` reached docker as `... com.docker...`
+    # (T71). The labels come whole as JSON, read here.
+    $details = ((& docker inspect --type container $id --format '{{.State.Running}}|{{json .Config.Labels}}' 2>$null | Select-Object -First 1) -as [string])
     if (-not $details) { return $null }
-    $parts = $details.Trim().Split('|')
-    if ($parts.Count -ne 3 -or $parts[1] -ne $expectedProject) { return $null }
-    if ($parts[2] -ne $Service) {
-      if ($ContainerRuntime -eq 'podman' -and $parts[2] -in @($Container, $BrokerContainer, $TelegramContainer)) { continue }
+    $cut = $details.IndexOf('|')
+    if ($cut -lt 0) { return $null }
+    $running = $details.Substring(0, $cut).Trim()
+    $labels = $null
+    try { $labels = ConvertFrom-Json -InputObject $details.Substring($cut + 1) } catch { return $null }
+    if (-not $labels) { return $null }
+    $project = [string]$labels.'com.docker.compose.project'
+    $serviceName = [string]$labels.'com.docker.compose.service'
+    if ($project -ne $expectedProject) { return $null }
+    if ($serviceName -ne $Service) {
+      if ($ContainerRuntime -eq 'podman' -and $serviceName -in @($Container, $BrokerContainer, $TelegramContainer)) { continue }
       return $null
     }
-    if ($parts[0] -ne 'true' -or $found) { return $null }
+    if ($running -ne 'true' -or $found) { return $null }
     $found = $id
   }
   return $found
@@ -929,7 +939,9 @@ function Invoke-DesktopChat {
       if ($ChatArgs.Count -ne 2 -or $ChatArgs[1] -notin @(
         'CAPITANO', 'ASSISTENTE', 'MENTOR', 'SCOUT-1', 'ANALISTA-1', 'SCORER-1', 'SCRITTORE-1', 'CRITICO'
       )) { $script:DesktopChatExitCode = 2; return }
-      & docker exec -i $containerId sh -c 'msg=$(cat); exec jht-tmux-send "$1" "$msg"' sh $ChatArgs[1]
+      # No double quote inside a native argument (5.1 drops it, T71): an empty IFS keeps the message
+      # one word without quotes, and set -f keeps its * and ? from matching file names.
+      & docker exec -i $containerId sh -c 'IFS=; set -f; msg=$(cat); exec jht-tmux-send $1 $msg' sh $ChatArgs[1]
       $script:DesktopChatExitCode = $LASTEXITCODE
     }
     default { $script:DesktopChatExitCode = 2 }

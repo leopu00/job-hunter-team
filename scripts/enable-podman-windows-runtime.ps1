@@ -631,8 +631,17 @@ $env:JHT_CONTAINER_RUNTIME = 'podman'
 $env:JHT_PODMAN_MACHINE = $MachineName
 $env:PATH = "$RuntimeShimDir$([IO.Path]::PathSeparator)$env:PATH"
 
-[string]$existingProject = (& $Podman --connection $MachineName inspect jht --format '{{index .Config.Labels "com.docker.compose.project"}}' 2>$null | Select-Object -First 1)
-$existingProject = $existingProject.Trim()
+# No double quote inside a native argument: Windows PowerShell 5.1, the shell the app runs, drops it,
+# and `{{index .Config.Labels "com.docker.compose.project"}}` reached Podman as
+# `index .Config.Labels com.docker...` (function "com" not defined: the setup stopped, T71). The
+# labels come whole as JSON and the project is read here.
+[string]$existingLabelsJson = (& $Podman --connection $MachineName inspect jht --format '{{json .Config.Labels}}' 2>$null | Select-Object -First 1)
+$existingProject = ''
+if ($existingLabelsJson.Trim()) {
+  $existingLabels = $null
+  try { $existingLabels = ConvertFrom-Json -InputObject $existingLabelsJson } catch { $existingLabels = $null }
+  if ($existingLabels) { $existingProject = ([string]$existingLabels.'com.docker.compose.project').Trim() }
+}
 [string]$existingCgroupManager = (& $Podman --connection $MachineName inspect jht --format '{{.HostConfig.CgroupManager}}' 2>$null | Select-Object -First 1)
 $existingCgroupManager = $existingCgroupManager.Trim()
 $containerNeedsMigration = $existingProject -and ($existingProject -ne 'jht' -or $existingCgroupManager -ne 'cgroupfs')

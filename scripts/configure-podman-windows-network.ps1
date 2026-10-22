@@ -294,7 +294,7 @@ $machineOutput = @(Invoke-MachineShell ("set -e; units_changed=0; proxy_changed=
   "sudo timeout 60 systemctl disable --no-reload --now jht-rootless-podman.socket 2>/dev/null || true; " +
   "sudo rm -f /etc/systemd/system/jht-rootless-podman.socket /etc/systemd/system/sockets.target.wants/jht-rootless-podman.socket /etc/systemd/system/multi-user.target.wants/jht-rootless-podman.socket; " +
   "sudo timeout 60 systemctl enable --no-reload $runtimeServices; " +
-  "for unit in $runtimeServices; do if [ `"`$(sudo timeout 20 systemctl show -p NeedDaemonReload --value `$unit 2>/dev/null)`" = yes ]; then units_changed=1; fi; done; " +
+  "for unit in $runtimeServices; do case `$(sudo timeout 20 systemctl show -p NeedDaemonReload --value `$unit 2>/dev/null) in yes) units_changed=1;; esac; done; " +
   "if [ `$units_changed = 1 ]; then echo JHT_MACHINE_RESTART; exit 0; fi; " +
   "if [ `$proxy_changed = 1 ]; then sudo timeout 90 systemctl restart $egressServices; fi; " +
   "sudo timeout 90 systemctl start $runtimeServices"))
