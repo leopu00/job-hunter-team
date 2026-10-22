@@ -250,7 +250,7 @@ describe("«Agenti», the agents' control panel", () => {
     show("agent=CAPITANO");
     await screen.findByTestId("panel-terminal-CAPITANO");
     expect(screen.getByTestId("panel-terminal-destination")).toHaveTextContent(
-      "Il terminale qui è solo da guardare: da questa pagina non ci arriva niente di quello che scrivi. Per scrivere a Capitano usa la scheda Chat.",
+      "Nel terminale non si scrive: è solo da guardare. Per scrivere a Capitano usa la scheda Chat.",
     );
     // the terminal has no field to write in: writing is the chat's
     expect(screen.queryByRole("textbox")).toBeNull();
@@ -266,7 +266,7 @@ describe("«Agenti», the agents' control panel", () => {
     await screen.findByTestId("panel-terminal-SCOUT-1");
     expect(screen.getAllByRole("tab").map((tab) => tab.textContent)).toEqual(["Terminale"]);
     expect(screen.getByTestId("panel-terminal-destination")).toHaveTextContent(
-      "Il terminale qui è solo da guardare: da questa pagina non ci arriva niente di quello che scrivi.",
+      "Nel terminale non si scrive: è solo da guardare.",
     );
     expect(screen.getByTestId("panel-terminal-destination")).not.toHaveTextContent("Chat");
   });

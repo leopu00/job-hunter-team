@@ -45,7 +45,7 @@ export interface AgentsPanelText {
   screenReading: string;
   screenAt: string; // {time}
   screenDown: string;
-  /** Over the terminal: it is only to be watched, nothing typed here reaches it. */
+  /** Over the terminal: it is only to be watched; writing is the Chat tab's. */
   terminalWatchOnly: string;
   /** After it, for the agents with a chat: where writing goes instead. */
   terminalWriteInChat: string; // {name}
@@ -185,7 +185,7 @@ const it: AgentsPanelText = {
   screenReading: "Leggo il terminale…",
   screenAt: "Ultime righe, lette alle {time}. Si aggiornano da sole finché il terminale è aperto.",
   screenDown: "La sessione non è accesa.",
-  terminalWatchOnly: "Il terminale qui è solo da guardare: da questa pagina non ci arriva niente di quello che scrivi.",
+  terminalWatchOnly: "Nel terminale non si scrive: è solo da guardare.",
   terminalWriteInChat: "Per scrivere a {name} usa la scheda Chat.",
   screenEmpty: "Il terminale è vuoto.",
   start: "Accendi",
@@ -322,7 +322,7 @@ const en: AgentsPanelText = {
   screenReading: "Reading the terminal…",
   screenAt: "Last lines, read at {time}. They refresh by themselves while the terminal is open.",
   screenDown: "The session is not up.",
-  terminalWatchOnly: "The terminal here is only to be watched: nothing you write on this page reaches it.",
+  terminalWatchOnly: "You do not write in the terminal: it is only to be watched.",
   terminalWriteInChat: "To write to {name}, use the Chat tab.",
   screenEmpty: "The terminal is empty.",
   start: "Start",
@@ -458,7 +458,7 @@ const de: AgentsPanelText = {
   screenReading: "Ich lese das Terminal…",
   screenAt: "Letzte Zeilen, gelesen um {time}. Sie aktualisieren sich von selbst, solange das Terminal offen ist.",
   screenDown: "Die Sitzung ist nicht aktiv.",
-  terminalWatchOnly: "Das Terminal ist hier nur zum Ansehen: Nichts, was du auf dieser Seite schreibst, kommt dort an.",
+  terminalWatchOnly: "Ins Terminal wird nicht geschrieben: Es ist nur zum Ansehen.",
   terminalWriteInChat: "Um {name} zu schreiben, nutze den Tab Chat.",
   screenEmpty: "Das Terminal ist leer.",
   start: "Starten",
@@ -595,7 +595,7 @@ const es: AgentsPanelText = {
   screenReading: "Leyendo el terminal…",
   screenAt: "Últimas líneas, leídas a las {time}. Se actualizan solas mientras el terminal está abierto.",
   screenDown: "La sesión no está activa.",
-  terminalWatchOnly: "Aquí el terminal solo se mira: nada de lo que escribes en esta página le llega.",
+  terminalWatchOnly: "En el terminal no se escribe: solo se mira.",
   terminalWriteInChat: "Para escribir a {name}, usa la pestaña Chat.",
   screenEmpty: "El terminal está vacío.",
   start: "Encender",
@@ -732,7 +732,7 @@ const fr: AgentsPanelText = {
   screenReading: "Je lis le terminal…",
   screenAt: "Dernières lignes, lues à {time}. Elles se mettent à jour toutes seules tant que le terminal est ouvert.",
   screenDown: "La session n’est pas active.",
-  terminalWatchOnly: "Ici, le terminal sert seulement à regarder : rien de ce que tu écris sur cette page n’y arrive.",
+  terminalWatchOnly: "On n’écrit pas dans le terminal : il sert seulement à regarder.",
   terminalWriteInChat: "Pour écrire à {name}, utilise l’onglet Chat.",
   screenEmpty: "Le terminal est vide.",
   start: "Démarrer",
@@ -869,7 +869,7 @@ const hu: AgentsPanelText = {
   screenReading: "Beolvasom a terminált…",
   screenAt: "Utolsó sorok, beolvasva: {time}. Amíg a terminál nyitva van, maguktól frissülnek.",
   screenDown: "A munkamenet nem aktív.",
-  terminalWatchOnly: "A terminál itt csak megtekintésre szolgál: semmi, amit ezen az oldalon írsz, nem jut el hozzá.",
+  terminalWatchOnly: "A terminálba nem lehet írni: csak megtekintésre szolgál.",
   terminalWriteInChat: "Ha írni szeretnél neki ({name}), használd a Chat fület.",
   screenEmpty: "A terminál üres.",
   start: "Bekapcsolás",
@@ -1006,7 +1006,7 @@ const pt: AgentsPanelText = {
   screenReading: "A ler o terminal…",
   screenAt: "Últimas linhas, lidas às {time}. Atualizam-se sozinhas enquanto o terminal estiver aberto.",
   screenDown: "A sessão não está ativa.",
-  terminalWatchOnly: "Aqui o terminal é só para ver: nada do que escreves nesta página lhe chega.",
+  terminalWatchOnly: "No terminal não se escreve: é só para ver.",
   terminalWriteInChat: "Para escrever a {name}, usa o separador Chat.",
   screenEmpty: "O terminal está vazio.",
   start: "Ligar",
