@@ -3722,7 +3722,7 @@ export async function handleChatSync(options = {}) {
     // Va DOPO tutti i passi, perché solo qui si sa cosa è davvero passato.
     // Non è gated da `silent`: è l'unico punto in cui un guasto della chat
     // può farsi vedere da fuori, e nel daemon `silent` è sempre true.
-    await reportChatLane(chat, config, reader, chat.diagnoseChatLane({
+    await reportChatLane(chat, config, chat.diagnoseChatLane({
       pending,
       requestedAt: state?.chat_requested_at ?? null,
       // `channel`, non `reader`: da quando il pull ha il ripiego via Vercel
@@ -3786,26 +3786,17 @@ export async function handleChatSync(options = {}) {
 let chatLaneAlert = null;
 
 /**
- * Scrive campi su `team_state` per la via disponibile. Supabase diretto se
- * c'è, altrimenti PATCH Vercel col token del box (`source=token` → i campi
- * OBSERVED, `last_error` incluso, sono ammessi). Il fallback NON è un
- * dettaglio: il guasto che questa funzione racconta più spesso è proprio
- * "manca il canale diretto", e senza la seconda strada la segnalazione
- * morirebbe insieme a ciò che segnala.
+ * Scrive campi OBSERVED su `team_state` con PATCH /api/team-state, col token del
+ * box (`source=token`, `last_error` incluso). Mai con la sessione dell'utente:
+ * il database non dà ai ruoli browser nessun grant su queste colonne.
  */
-export async function patchTeamStateBestEffort(config, reader, fields, options = {}) {
+export async function patchTeamStateBestEffort(config, fields, options = {}) {
   const timeoutMs = Math.max(
     1,
     Number(options.timeoutMs ?? process.env.JHT_SYNC_OBSERVED_TIMEOUT_MS ?? 15_000) || 15_000,
   );
   const signal = options.signal || AbortSignal.timeout(timeoutMs);
   const fetchFn = options.fetchFn || fetch;
-  if (reader) {
-    try {
-      await reader.patchTeamState(fields, { signal });
-      return true;
-    } catch { /* canale diretto rotto: si prova da Vercel */ }
-  }
   const baseUrl = (config.base_url || DEFAULT_BASE_URL).replace(/\/+$/, '');
   try {
     const res = await fetchFn(`${baseUrl}/api/team-state`, {
@@ -3831,21 +3822,21 @@ export async function patchTeamStateBestEffort(config, reader, fields, options =
  * rosso su un guasto finito è disinformazione, e alla lunga si impara a
  * ignorarlo.
  */
-async function reportChatLane(chat, config, reader, stall) {
+async function reportChatLane(chat, config, stall) {
   const now = Date.now();
 
   if (!stall) {
     if (!chatLaneAlert) return;
     console.log(pc.green(`✓ chat: lane again operational (was: ${chatLaneAlert.summary})`));
     chatLaneAlert = null;
-    await patchTeamStateBestEffort(config, reader, { last_error: null });
+    await patchTeamStateBestEffort(config, { last_error: null });
     return;
   }
 
   if (!chat.shouldAnnounceStall(chatLaneAlert, stall.summary, { now })) return;
   console.error(pc.red(`  ${stall.message}`));
   chatLaneAlert = { summary: stall.summary, at: now };
-  await patchTeamStateBestEffort(config, reader, {
+  await patchTeamStateBestEffort(config, {
     last_error: stall.summary,
     last_error_at: new Date(now).toISOString(),
   });

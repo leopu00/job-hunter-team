@@ -10,7 +10,7 @@ import {
 } from "@/lib/local-token";
 import { JHT_DB_PATH } from "@/lib/jht-paths";
 import { isCloudDeploy } from "@/lib/deploy-mode";
-import { sanitizedError } from "@/lib/error-response";
+import { requestAction } from "@/lib/request-action";
 import {
   AUTHORISABLE_STATUS,
   applyToggleVerdict,
@@ -28,12 +28,15 @@ export const dynamic = "force-dynamic";
 // fermarsi su un secondo bottone. Fra questo POST e la casella di un recruiter
 // resta solo il gate (`shared/skills/apply_gate.py`) e le difese della fase C.
 //
-// Doppio path identico a write-request / recheck-request / geocode-request, e
-// deliberatamente una COPIA di quella forma invece di un meccanismo nuovo:
-//   A) SQLite locale source-of-truth (+ best-effort cloud)
-//   B) cloud-only (container fermo) → applicato al boot da pull-desired-state.
-// L'operatore sta su una VPS e flagga dal browser: senza il path B il flag
-// resterebbe sul cloud e il box non lo saprebbe mai.
+// Due strade, secondo dove gira il web:
+//   - sul sito (deploy cloud): la porta unica `requestAction`. Autorizzare è L3: prima
+//     chiamata = conferma con il ruolo e l'azienda composti dal database dalla riga vera, seconda
+//     chiamata = l'id della conferma, entro 2 minuti, dalla stessa sessione; sessione recente e
+//     tetto giornaliero stanno nel database. Ritirare è L1 e vale subito (è l'annullo).
+//   - accanto alla macchina dell'utente (desktop nativo o web nel container): SQLite locale è la
+//     source of truth, e il push delta porta il flag al cloud.
+// L'operatore sta su una VPS e flagga dal browser: il flag arriva alla macchina con
+// pull-desired-state, dopo che `request_action` l'ha scritto sul cloud.
 //
 // ⚠️ Vale la regola di [APPLIED-STATE-NEVER-COMES-HOME] (#186): dal cloud si
 // prende l'AZIONE DELL'UTENTE, mai lo stato generico. Per questo la route
@@ -79,6 +82,32 @@ async function handleToggle(
   legacyIdParam: string,
   requested: boolean,
 ): Promise<NextResponse> {
+  // Sul sito (deploy cloud) l'autorizzazione passa dalla porta unica: autorizzare è L3 (conferma a due
+  // tempi col ruolo e l'azienda composti dal database, sessione recente, tetto giornaliero), ritirare è L1
+  // e vale subito. Qui non si legge né si scrive niente prima della porta, e nessun client scrive più la
+  // posizione: è `request_action` che lo fa, per l'utente della sessione.
+  if (isCloudDeploy()) {
+    if (!/^[1-9][0-9]{0,9}$/.test(legacyIdParam)) {
+      return NextResponse.json(
+        { error: "legacyId non valido" },
+        { status: 400 },
+      );
+    }
+    const params = { legacy_id: Number(legacyIdParam) };
+    return requested
+      ? requestAction(req, {
+          action: "position.apply_authorize",
+          level: "L3",
+          params,
+        })
+      : requestAction(req, {
+          action: "position.apply_revoke",
+          level: "L1",
+          method: "DELETE",
+          params,
+        });
+  }
+
   const denied = await requireAuth();
   if (denied) return denied;
   const legacyId = Number.parseInt(legacyIdParam, 10);
@@ -125,111 +154,23 @@ async function handleToggle(
       { status: 403 },
     );
   }
-  const { userId, supabase } = resolved.user;
 
+  // Qui non si è sul sito: il web gira accanto alla macchina dell'utente, che ha il suo SQLite. Il cloud
+  // lo raggiunge il push delta della macchina, non questa route (nessun client scrive più la posizione
+  // sul cloud: sta dietro `request_action`).
   const hasLocal = !isCloudDeploy() && fs.existsSync(JHT_DB_PATH);
-
-  if (hasLocal) {
-    const outcome = toggleViaLocal(legacyId, requested, "user_web");
-    if (!outcome.ok) return outcome.res;
-    // Best-effort cloud: SQLite resta la source-of-truth in-process, e il push
-    // delta recupera la coerenza al prossimo giro se questa UPDATE non passa.
-    let cloudOk: boolean | null = null;
-    try {
-      const { error } = await supabase
-        .from("positions")
-        .update({
-          apply_requested: requested,
-          apply_requested_at: outcome.at,
-          apply_requested_by: outcome.by,
-        })
-        .eq("user_id", userId)
-        .eq("legacy_id", legacyId);
-      cloudOk = !error;
-    } catch {
-      cloudOk = false;
-    }
-    return NextResponse.json({
-      id: String(legacyId),
-      apply_requested: requested,
-      apply_requested_at: outcome.at,
-      apply_requested_by: outcome.by,
-      cloud_synced: cloudOk,
-      source: "local",
-    });
+  if (!hasLocal) {
+    return NextResponse.json({ error: "DB locale assente" }, { status: 503 });
   }
-
-  // Cloud-mode: il container applica al boot via pull-desired-state.
-  const { data: row, error } = await supabase
-    .from("positions")
-    .select("id, status, apply_requested, apply_requested_at")
-    .eq("user_id", userId)
-    .eq("legacy_id", legacyId)
-    .maybeSingle();
-  if (error) {
-    return sanitizedError(error, {
-      status: 500,
-      scope: "positions/[legacyId]/apply-request",
-      publicMessage: "query_failed",
-    });
-  }
-  if (!row) {
-    return NextResponse.json(
-      { error: `Posizione #${legacyId} non trovata` },
-      { status: 404 },
-    );
-  }
-  // Lo stato si controlla anche qui e non solo nel path locale: in cloud-mode
-  // questa è l'unica source disponibile, e una guardia che vive su un solo
-  // ramo è una guardia che il ramo dell'operatore non incontra mai.
-  const { data: app, error: appErr } = await supabase
-    .from("applications")
-    .select("applied")
-    .eq("position_id", row.id)
-    .is("deleted_at", null)
-    .maybeSingle();
-  if (appErr) {
-    return sanitizedError(appErr, {
-      status: 500,
-      scope: "positions/[legacyId]/apply-request",
-      publicMessage: "query_failed",
-    });
-  }
-  const verdict = applyToggleVerdict({
-    status: row.status,
-    applied: app?.applied === true,
-    requested,
-  });
-  if (!verdict.ok) return refused(legacyId, row.status, verdict.reason);
-
-  // Anche lo SPEGNIMENTO avanza il timestamp: il pull filtra le righe per
-  // `updated_at > cursor`, e un annullamento che non muove niente sarebbe
-  // invisibile al box — l'utente revocherebbe dal sito e il CLOSER partirebbe
-  // lo stesso. È lo stesso motivo per cui write-request avanza il suo.
-  const at = nextApplyInstant(row.apply_requested_at);
-  const { error: upErr } = await supabase
-    .from("positions")
-    .update({
-      apply_requested: requested,
-      apply_requested_at: at,
-      apply_requested_by: requested ? "user_web" : null,
-    })
-    .eq("user_id", userId)
-    .eq("legacy_id", legacyId);
-  if (upErr) {
-    return sanitizedError(upErr, {
-      status: 500,
-      scope: "positions/[legacyId]/apply-request",
-      publicMessage: "update_failed",
-    });
-  }
+  const outcome = toggleViaLocal(legacyId, requested, "user_web");
+  if (!outcome.ok) return outcome.res;
   return NextResponse.json({
     id: String(legacyId),
     apply_requested: requested,
-    apply_requested_at: at,
-    apply_requested_by: requested ? "user_web" : null,
-    cloud_synced: true,
-    source: "cloud",
+    apply_requested_at: outcome.at,
+    apply_requested_by: outcome.by,
+    cloud_synced: null,
+    source: "local",
   });
 }
 

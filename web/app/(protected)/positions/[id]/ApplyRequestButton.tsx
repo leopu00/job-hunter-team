@@ -47,10 +47,113 @@ export async function submitApplyRequest(
   return { ok: false, error: outcome.code, status: outcome.status };
 }
 
+// Sul sito l'autorizzazione è a due tempi (porta unica `request_action`): la prima chiamata crea la
+// conferma e il database ne compone il testo dalla riga vera (il ruolo e l'azienda); la seconda porta
+// solo l'id di quella conferma. Il testo mostrato è SEMPRE quello della risposta, mai uno costruito qui.
+const JSON_HEADERS = { "Content-Type": "application/json" };
+
+export type AuthorisationStep =
+  | {
+      ok: true;
+      step: "confirm";
+      id: string;
+      summary: string;
+      expiresAt: string | null;
+    }
+  | { ok: true; step: "done" }
+  | { ok: false; error: string | null; status: number | null };
+
+async function twoStepCall(
+  legacyId: number,
+  init: RequestInit,
+  expected: "awaiting_confirm" | "queued",
+  fetchImpl: typeof fetch,
+): Promise<AuthorisationStep> {
+  const outcome = await sendPositionRequest(
+    `/api/positions/${legacyId}/apply-request`,
+    { ...init, headers: JSON_HEADERS },
+    (body) =>
+      body.ok === true &&
+      (body.state === expected ||
+        (expected === "queued" && body.state === "done")),
+    fetchImpl,
+  );
+  if (!outcome.ok) {
+    return { ok: false, error: outcome.code, status: outcome.status };
+  }
+  if (expected === "queued") return { ok: true, step: "done" };
+  const { id, summary, expiresAt } = outcome.body;
+  if (
+    typeof id !== "string" ||
+    typeof summary !== "string" ||
+    !summary.trim()
+  ) {
+    return { ok: false, error: null, status: 500 };
+  }
+  return {
+    ok: true,
+    step: "confirm",
+    id,
+    summary,
+    expiresAt: typeof expiresAt === "string" ? expiresAt : null,
+  };
+}
+
+/** Primo tempo: chiede la conferma. Non autorizza niente. */
+export function startAuthorisation(
+  legacyId: number,
+  fetchImpl: typeof fetch = fetch,
+) {
+  return twoStepCall(
+    legacyId,
+    { method: "POST", body: "{}" },
+    "awaiting_confirm",
+    fetchImpl,
+  );
+}
+
+/** Secondo tempo: porta solo l'id della conferma ricevuta. */
+export function confirmAuthorisation(
+  legacyId: number,
+  confirmId: string,
+  fetchImpl: typeof fetch = fetch,
+) {
+  return twoStepCall(
+    legacyId,
+    { method: "POST", body: JSON.stringify({ confirmId }) },
+    "queued",
+    fetchImpl,
+  );
+}
+
+/** Il ritiro (l'annullo): vale subito, senza conferma. */
+export function withdrawAuthorisation(
+  legacyId: number,
+  fetchImpl: typeof fetch = fetch,
+) {
+  return twoStepCall(
+    legacyId,
+    { method: "DELETE", body: "{}" },
+    "queued",
+    fetchImpl,
+  );
+}
+
 /** La frase per un rifiuto che la route motiva con un codice noto. */
 export function refusalText(t: Translate, error: string | null): string | null {
   if (error === "already_submitted") return t("refused_already_submitted");
   if (error === "position_not_ready") return t("refused_position_not_ready");
+  if (error === "reauth_required") return t("refused_reauth_required");
+  if (error === "rate_limited") return t("refused_rate_limited");
+  if (
+    error === "confirm_expired" ||
+    error === "confirm_used" ||
+    error === "confirm_not_found" ||
+    error === "confirm_session_mismatch" ||
+    error === "confirm_action_mismatch"
+  ) {
+    return t("refused_confirm_stale");
+  }
   return null;
 }
 
@@ -60,6 +163,7 @@ export function ApplyRequestView({
   busy = false,
   error = null,
   confirming = false,
+  confirmation = null,
   onAuthorise,
   onConfirm,
   onDismiss,
@@ -72,6 +176,8 @@ export function ApplyRequestView({
   busy?: boolean;
   error?: string | null;
   confirming?: boolean;
+  /** Il testo che il server ha composto per questa conferma (il ruolo e l'azienda) e fin quando vale. */
+  confirmation?: { summary: string; expiresText: string | null } | null;
   onAuthorise?: () => void;
   onConfirm?: () => void;
   onDismiss?: () => void;
@@ -211,6 +317,25 @@ export function ApplyRequestView({
               >
                 {t("confirm_title")}
               </h2>
+              {confirmation && (
+                <div
+                  data-server-summary
+                  className="mt-2 rounded-lg border p-2"
+                  style={{ borderColor: "var(--color-border)" }}
+                >
+                  <div className="text-[10px] text-[var(--color-muted)]">
+                    {t("confirm_summary_label")}
+                  </div>
+                  <div className="mt-0.5 break-words text-[12px] font-semibold text-[var(--color-white)]">
+                    {confirmation.summary}
+                  </div>
+                  {confirmation.expiresText && (
+                    <div className="mt-1 text-[10px] text-[var(--color-muted)]">
+                      {confirmation.expiresText}
+                    </div>
+                  )}
+                </div>
+              )}
               <p
                 id="apply-request-confirm-body"
                 className="mt-2 text-[12px] leading-relaxed text-[var(--color-muted)]"
@@ -231,9 +356,12 @@ export function ApplyRequestView({
 export function ApplyRequestButton({
   legacyId,
   state,
+  twoStep = false,
 }: {
   legacyId: number;
   state: ApplyRequestState;
+  /** Sul sito: l'autorizzazione è a due tempi e il testo della conferma lo compone il server. */
+  twoStep?: boolean;
 }) {
   const locale = useLocale();
   const t = makeT(T, locale);
@@ -241,7 +369,74 @@ export function ApplyRequestButton({
   const [confirming, setConfirming] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
+  const [pending, setPending] = useState<{
+    id: string;
+    summary: string;
+    expiresAt: string | null;
+  } | null>(null);
   const [isPending, startTransition] = useTransition();
+
+  const fail = (
+    action: "authorise" | "withdraw",
+    outcome: { error: string | null; status: number | null },
+  ) => {
+    const reason =
+      refusalText(t, outcome.error) ??
+      requestFailureReason(locale, outcome.status);
+    setError(requestFailureMessage(locale, action, reason));
+  };
+
+  // Primo tempo: il server compone il testo e lo legge l'utente; nessuna autorizzazione ancora.
+  const startTwoStep = async () => {
+    setError(null);
+    setSending(true);
+    try {
+      const outcome = await startAuthorisation(legacyId);
+      if (!outcome.ok) return fail("authorise", outcome);
+      if (outcome.step === "confirm") setPending(outcome);
+    } finally {
+      setSending(false);
+    }
+  };
+
+  // Secondo tempo: solo l'id della conferma, entro la sua scadenza.
+  const confirmTwoStep = async () => {
+    if (!pending) return;
+    const { id } = pending;
+    setPending(null);
+    setError(null);
+    setSending(true);
+    try {
+      const outcome = await confirmAuthorisation(legacyId, id);
+      if (!outcome.ok) return fail("authorise", outcome);
+      startTransition(() => router.refresh());
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const withdrawTwoStep = async () => {
+    setError(null);
+    setSending(true);
+    try {
+      const outcome = await withdrawAuthorisation(legacyId);
+      if (!outcome.ok) return fail("withdraw", outcome);
+      startTransition(() => router.refresh());
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const expiresText =
+    pending?.expiresAt && !Number.isNaN(Date.parse(pending.expiresAt))
+      ? t("confirm_expires").replace(
+          "{time}",
+          new Date(pending.expiresAt).toLocaleTimeString(locale, {
+            hour: "2-digit",
+            minute: "2-digit",
+          }),
+        )
+      : null;
 
   // Mentre il CLOSER lavora lo stato cambia senza che l'utente tocchi niente:
   // si rilegge dal server finché la candidatura non parte o non si ferma.
@@ -283,11 +478,18 @@ export function ApplyRequestButton({
       t={t}
       busy={sending || isPending}
       error={error}
-      confirming={confirming}
-      onAuthorise={() => setConfirming(true)}
-      onConfirm={() => void send(true)}
-      onDismiss={() => setConfirming(false)}
-      onWithdraw={() => void send(false)}
+      confirming={twoStep ? pending !== null : confirming}
+      confirmation={
+        twoStep && pending ? { summary: pending.summary, expiresText } : null
+      }
+      onAuthorise={
+        twoStep ? () => void startTwoStep() : () => setConfirming(true)
+      }
+      onConfirm={twoStep ? () => void confirmTwoStep() : () => void send(true)}
+      onDismiss={twoStep ? () => setPending(null) : () => setConfirming(false)}
+      onWithdraw={
+        twoStep ? () => void withdrawTwoStep() : () => void send(false)
+      }
       // Il dialogo esce dall'albero della pagina: un antenato con `transform`
       // (l'animazione d'ingresso) farebbe di `fixed` un riquadro, non lo schermo.
       portal={(dialog) => createPortal(dialog, document.body)}

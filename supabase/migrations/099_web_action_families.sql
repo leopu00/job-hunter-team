@@ -572,7 +572,7 @@ BEGIN
      WHERE id = v_new_id;
 
     RETURN jsonb_strip_nulls(jsonb_build_object(
-        'ok', TRUE, 'state', 'queued', 'id', v_new_id, 'level', v_rule.level,
+        'ok', TRUE, 'state', v_status, 'id', v_new_id, 'level', v_rule.level,
         'summary', v_summary, 'command_id', v_command));
 END;
 $$;

@@ -21,7 +21,7 @@ ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / "scripts/check-live-schema.py"
 MANIFEST = ROOT / "supabase/live-schema/078-084.v3.json"
 QUERY = ROOT / "supabase/live-schema/078-084.v3.sql"
-# v14 is the contract in force (web capace: the single door request_action); v13, v12, v11 and v10 and their 43 receipts stand next to it, untouched.
+# v15 is the contract in force (web capace: the reading of the action log); v14, v13, v12, v11 and v10 and their receipts stand next to it, untouched.
 WEB_MANIFEST_V10 = ROOT / "supabase/live-schema/078-094.web.v10.json"
 WEB_QUERY_V10 = ROOT / "supabase/live-schema/078-094.web.v10.sql"
 WEB_MANIFEST_V11 = ROOT / "supabase/live-schema/078-095.web.v11.json"
@@ -32,8 +32,10 @@ WEB_MANIFEST_V13 = ROOT / "supabase/live-schema/078-097.web.v13.json"
 WEB_QUERY_V13 = ROOT / "supabase/live-schema/078-097.web.v13.sql"
 WEB_MANIFEST_V14 = ROOT / "supabase/live-schema/078-098.web.v14.json"
 WEB_QUERY_V14 = ROOT / "supabase/live-schema/078-098.web.v14.sql"
-WEB_MANIFEST = WEB_MANIFEST_V14
-WEB_QUERY = WEB_QUERY_V14
+WEB_MANIFEST_V15 = ROOT / "supabase/live-schema/078-098.web.v15.json"
+WEB_QUERY_V15 = ROOT / "supabase/live-schema/078-098.web.v15.sql"
+WEB_MANIFEST = WEB_MANIFEST_V15
+WEB_QUERY = WEB_QUERY_V15
 PREFLIGHT_QUERY = ROOT / "supabase/live-schema/081-preflight.v1.sql"
 SNAPSHOT_SHA256 = "78269292299f3fe4324a0e7553afc1095a4d8814605677146b82c41d34849346"
 POSTGRES_READY_MARKER = "database system is ready to accept connections"
@@ -88,7 +90,13 @@ LEGACY_ARTIFACT_SHA256 = {
     "supabase/live-schema/078-084.web.v4.sql": (
         "4c42e7770efb2cc1e8cdf4fba221c52012dbd7ecd610fb31909a5bb201cb8b58"
     ),
-    # v13, v12, v11 and v10 are next to v14 and their 43 receipts are not touched: a receipt is a verification at one moment.
+    # v14, v13, v12, v11 and v10 are next to v15 and their receipts are not touched: a receipt is a verification at one moment.
+    "supabase/live-schema/078-098.web.v14.json": (
+        "88a2c4eb25e5f2bbfe8464468b2920a8f40af6d6e215e9d4dfac156c85a72329"
+    ),
+    "supabase/live-schema/078-098.web.v14.sql": (
+        "1fbfbf5e0dc858050d4fe4da7ed5177ee20d7b99126f30bc618b6d92660c5f62"
+    ),
     "supabase/live-schema/078-097.web.v13.json": (
         "bf1e989c4df6e9b253cebb2f5240943e58b7a75d255d406bfc35e9f3191c28e9"
     ),
@@ -496,9 +504,9 @@ def test_additive_web_contract_exactly_receipts_every_mapped_rpc_and_column():
     )
 
     assert contract.phase == "web"
-    assert contract.contract_id == "release-0.4.0-web-schema-078-098-single-door"
-    assert len(contract.expected_checks) == 44
-    assert manifest["query"]["path"] == "supabase/live-schema/078-098.web.v14.sql"
+    assert contract.contract_id == "release-0.4.0-web-schema-078-098-action-log"
+    assert len(contract.expected_checks) == 45
+    assert manifest["query"]["path"] == "supabase/live-schema/078-098.web.v15.sql"
     assert "\\n" not in WEB_QUERY.read_text()
 
     mapped_receipts = {
@@ -520,7 +528,7 @@ def test_cli_validates_only_the_pinned_additive_web_contract(capsys):
     assert output.err == ""
     assert output.out == (
         "LIVE-SCHEMA MANIFEST OK "
-        "contract=release-0.4.0-web-schema-078-098-single-door checks=44\n"
+        "contract=release-0.4.0-web-schema-078-098-action-log checks=45\n"
     )
 
 
@@ -1122,6 +1130,33 @@ def test_v14_is_v13_plus_the_request_action_receipt_and_the_098_migration():
     }
     sha = hashlib.sha256((ROOT / "supabase/migrations/098_web_action_door.sql").read_bytes()).hexdigest()
     assert v14["migrations"][-1]["sha256"] == sha, "098 changed after the contract pinned it: regenerate v14"
+
+
+def test_v15_is_v14_plus_the_web_action_log_columns_receipt():
+    v14, v15 = json.loads(WEB_MANIFEST_V14.read_text()), json.loads(WEB_MANIFEST_V15.read_text())
+    assert sorted(v14["expected_checks"] + ["099.web.columns.web_action_log"]) == v15["expected_checks"], (
+        "the 44 receipts of v14, by name and number, and the one of the log's columns"
+    )
+    assert v15["clone_contract"] == v14["clone_contract"], "no new migration: v15 is v14's, plus a receipt"
+    assert v15["migrations"] == v14["migrations"]
+    import re as _re
+
+    log_row = _re.compile(r"    \('099\.web\.columns\.web_action_log'[^\n]*\n")
+    assert len(log_row.findall(WEB_QUERY_V15.read_text())) == 1
+    body = lambda text: text[text.index("WITH expected_web_tables"):]
+    flat = lambda text: " ".join(body(text).replace("user_to_agent_messages', ARRAY['agent', 'id', 'message', 'payload', 'sent_at', 'user_id']::text[]),", "user_to_agent_messages', ARRAY['agent', 'id', 'message', 'payload', 'sent_at', 'user_id']::text[])").split())
+    assert flat(log_row.sub("", WEB_QUERY_V15.read_text())) == flat(WEB_QUERY_V14.read_text())
+    # the ten columns the web names, and never the owner, the session or the command
+    assert (
+        "('099.web.columns.web_action_log', 'web_action_log', ARRAY['action', 'confirmed_at', 'created_at', 'expires_at', 'id', 'level', "
+        "'params', 'result', 'status', 'summary']::text[])"
+    ) in WEB_QUERY_V15.read_text()
+    import hashlib
+
+    assert v15["query"] == {
+        "path": "supabase/live-schema/078-098.web.v15.sql",
+        "sha256": hashlib.sha256(WEB_QUERY_V15.read_bytes()).hexdigest(),
+    }
 
 
 def test_pg16_additive_web_contract_passes_and_detects_column_and_rpc_drift():

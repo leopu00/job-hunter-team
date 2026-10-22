@@ -33,6 +33,7 @@ import { AGENTS_PANEL_TEXT, type AgentsPanelText } from "./AgentsPanel.i18n";
 import { UsageLine, UsageShort } from "./AgentUsage";
 import { QuestionList, QuestionMarks, questionsSummary } from "./AgentQuestions";
 import { Lanes, SessionHistory } from "./AgentHistory";
+import ActionLogSection from "./ActionLogSection";
 
 // The chat with the three agents the person talks to is its own component,
 // mounted here when it exists in the build (it is optional, as the office's
@@ -851,6 +852,8 @@ export default function AgentsPanel({ search }: PageProps) {
           )}
         </>
       )}
+
+      <ActionLogSection />
 
       {pending && list?.ok && (
         <Confirm t={t} pending={pending} where={where} busy={acting} onCancel={() => setPending(null)} onConfirm={(exit) => void runPending(exit)} />

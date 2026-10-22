@@ -622,8 +622,12 @@ describe("le tre colonne sono nominate ovunque servano", () => {
     // con il gate del box, attraverso `web/lib/apply-request-rule.ts`.
     expect(src).not.toContain('"ready"');
     expect(src).toContain('from "@/lib/apply-request-rule"');
-    // La guardia deve stare su ENTRAMBI i rami: quello locale e quello
-    // cloud-only, che e' proprio quello dell'operatore su VPS.
-    expect(src.match(/applyToggleVerdict\(/g)?.length ?? 0).toBe(2);
+    // La guardia sta sul ramo locale (SQLite accanto alla macchina). Il ramo del sito, quello
+    // dell'operatore su VPS, non ha piu' una guardia nella route: passa dalla porta unica, e
+    // `request_action` applica la stessa regola (stessa sequenza del gate) sulla posizione vera,
+    // provata contro ogni stato in `tests/test_web_action_door_postgres.py`.
+    expect(src.match(/applyToggleVerdict\(/g)?.length ?? 0).toBe(1);
+    expect(src).toContain('action: "position.apply_authorize"');
+    expect(src).not.toMatch(/supabase\s*\.from\(/);
   });
 });

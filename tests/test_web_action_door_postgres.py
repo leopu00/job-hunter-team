@@ -1119,7 +1119,7 @@ def test_the_state_of_the_line_is_the_one_the_family_returns_and_the_bus_id_is_k
     plain = who.act("demo.sync", {}, route_level="L1")
     done = who.act("demo.sync", {"done": "t"}, route_level="L1")
     bus = who.act("demo.sync", {"cmd": "t"}, route_level="L1")
-    assert [plain["state"], done["state"], bus["state"]] == ["queued"] * 3        # the website sees queued
+    assert [plain["state"], done["state"], bus["state"]] == ["queued", "done", "queued"]   # the caller sees the state the family returned
     assert _scalar(cluster, f"SELECT status FROM public.web_action_log WHERE id = '{plain['id']}'") == "queued"
     assert _scalar(cluster, f"SELECT status FROM public.web_action_log WHERE id = '{done['id']}'") == "done"
     assert "command_id" in bus and "command_id" not in done

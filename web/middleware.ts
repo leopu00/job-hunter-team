@@ -24,6 +24,7 @@
  * Restano: refresh della sessione Supabase, CORS + rate limit + guard CSRF
  * su /api/*, CSP nonce-based sulle risposte HTML.
  */
+import { buildCsp, buildStrictCspReportOnly } from "@/lib/csp-policy";
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { getSupabaseConfig } from "@/lib/supabase/config";
@@ -74,27 +75,6 @@ function generateNonce(): string {
   let binary = "";
   for (const b of bytes) binary += String.fromCharCode(b);
   return btoa(binary);
-}
-
-function buildCsp(nonce: string, isDevelopment: boolean): string {
-  const scriptSrc = isDevelopment
-    ? `script-src 'self' 'unsafe-inline' 'unsafe-eval'`
-    : `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'`;
-
-  return [
-    "default-src 'self'",
-    scriptSrc,
-    "style-src 'self' 'unsafe-inline'",
-    "img-src 'self' data: blob: https://lh3.googleusercontent.com https://avatars.githubusercontent.com https://basemaps.cartocdn.com https://*.basemaps.cartocdn.com",
-    "font-src 'self' data: https://basemaps.cartocdn.com https://*.basemaps.cartocdn.com",
-    "connect-src 'self' https://*.supabase.co https://basemaps.cartocdn.com https://*.basemaps.cartocdn.com",
-    "worker-src 'self' blob:",
-    "child-src 'self' blob:",
-    "frame-src 'none'",
-    "object-src 'none'",
-    "base-uri 'self'",
-    "form-action 'self'",
-  ].join("; ");
 }
 
 // --- CORS Config ---
@@ -395,6 +375,14 @@ export async function middleware(request: NextRequest) {
       "Content-Security-Policy",
       buildCsp(nonce, isDevelopment),
     );
+    // La politica più stretta, solo da osservare: segnala a /api/csp-report, non blocca. Non in
+    // sviluppo (l'HMR vuole 'unsafe-*' e riempirebbe i rapporti di rumore).
+    if (!isDevelopment) {
+      supabaseResponse.headers.set(
+        "Content-Security-Policy-Report-Only",
+        buildStrictCspReportOnly(nonce, process.env.NEXT_PUBLIC_SUPABASE_URL),
+      );
+    }
   }
 
   return supabaseResponse;
