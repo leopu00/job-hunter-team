@@ -2,8 +2,8 @@
 // guida propone all'utente.
 //
 // Perché in un file solo: i link di download sono in corso di revisione
-// insieme ai comandi CLI (HQ-BACKEND) e lo slug della pagina è in attesa
-// della scelta di naming (HQ-DOCS). Tenerli qui significa che entrambe le
+// insieme ai comandi CLI (team backend) e lo slug della pagina è in attesa
+// della scelta di naming (team docs). Tenerli qui significa che entrambe le
 // decisioni si applicano in un punto solo, senza rileggere le fasi.
 //
 // ⚠️ La guida NON è ancora pubblica: la route non è linkata dal menu e la
@@ -11,7 +11,7 @@
 
 import type { OsId } from "./guide-types";
 
-/** Slug della pagina. PROVVISORIO: la scelta di naming è di HQ-DOCS —
+/** Slug della pagina. PROVVISORIO: la scelta di naming è del team docs —
  *  vincoli noti: non «tutorial» per la pagina, non «videogioco» per
  *  l'artefatto installabile. Cambiando questa costante e la cartella della
  *  route, tutti i riferimenti interni seguono. */
@@ -47,7 +47,7 @@ export function downloadUrlFor(os: OsId, asset?: string): string {
 export const DOWNLOAD_PAGE = "/download";
 
 /** «Se non hai Docker, scaricalo da qui» — pagina ufficiale per sistema.
- *  Indirizzi presi dal contratto di HQ-DOCS. */
+ *  Indirizzi presi dal contratto del team docs. */
 export const DOCKER_URL: Record<OsId, string> = {
   macos: "https://docs.docker.com/desktop/setup/install/mac-install/",
   windows: "https://docs.docker.com/desktop/setup/install/windows-install/",

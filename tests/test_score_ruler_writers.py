@@ -31,8 +31,10 @@ fenomeno e' potuto crescere per mesi senza un colpevole.
 
 from __future__ import annotations
 
+import functools
 import re
 import subprocess
+import warnings
 import sys
 from pathlib import Path
 
@@ -78,12 +80,15 @@ WRITE = re.compile(
 # database sintetici in cartelle temporanee, mai quello dell'utente — e va
 # nominato a parte perche' il prefisso `tests/` non lo copre. Escluso l'albero
 # dei test, non l'harness: i suoi sorgenti restano sorvegliati (sopra).
+# `desktop/app-payload/` non c'e' piu': e' stato tolto dal repo e dal contesto
+# dell'immagine (#177). Se tornasse, va sorvegliato come il resto, quindi non
+# sta qui; il test sulle voci morte sotto impedisce che ci rientri un albero
+# che non esiste.
 SKIP = (
     "tests/",
     "agent-harness/runtime/tests/",
     "archive/",
     "docs/",
-    "desktop/app-payload/",
     ".git/",
 )
 SEARCHED = ("*.py", "*.js", "*.ts", "*.tsx", "*.sql", "*.mjs")
@@ -92,6 +97,24 @@ SEARCHED = ("*.py", "*.js", "*.ts", "*.tsx", "*.sql", "*.mjs")
 # dell'utente. Si escludono per suffisso, non per cartella, cosi' il codice
 # che sta accanto a loro resta sorvegliato.
 TEST_SUFFIXES = (".test.ts", ".test.tsx", ".test.js", ".test.mjs")
+
+
+# Escluderli per suffisso regge solo se il codice di prodotto non li IMPORTA:
+# uno scrittore vero chiamato `*.test.ts` e importato da una rotta sparirebbe
+# dal censimento. Si cerca la forma dell'import (from, import, require,
+# import(), import.meta.glob), non il nome: molti commenti citano i test per
+# nome. L'estensione puo' mancare (`./x.test`) e la query di Vite (`?raw`) pure.
+JS_SOURCES = ("*.js", "*.mjs", "*.cjs", "*.jsx", "*.ts", "*.tsx")
+_TEST_MODULE = (
+    r"[^'\"`\n]*\.test(?:"
+    + "|".join(re.escape(s[len(".test"):]) for s in TEST_SUFFIXES)
+    + r")?(?:\?[^'\"`\n]*)?"
+)
+TEST_IMPORT = re.compile(
+    r"(?:\b(?:from|import)\s*['\"]" + _TEST_MODULE + r"['\"]"
+    r"|\b(?:require|import|import\.meta\.glob)\s*\(\s*['\"`]" + _TEST_MODULE + r"['\"`])"
+)
+ANY_IMPORT = re.compile(r"\b(?:from|import)\s*['\"]|\brequire\s*\(\s*['\"]")
 
 
 def _tracked(pattern: str) -> list[str]:
@@ -104,14 +127,34 @@ def _tracked(pattern: str) -> list[str]:
     ]
 
 
+# File tracciati che non stanno sul disco (checkout parziale, sparse): si
+# leggono dall'indice di git e si contano, mai si saltano. Un file saltato e'
+# un file che il censimento non ha visto, e il verde direbbe il contrario.
+ABSENT: dict[str, int] = {}
+
+
+@functools.lru_cache(maxsize=None)
+def _read(rel: str) -> str:
+    try:
+        return (ROOT / rel).read_text(encoding="utf-8", errors="ignore")
+    except OSError:
+        pass
+    shown = subprocess.run(
+        ["git", "-C", str(ROOT), "show", f":{rel}"], capture_output=True
+    )
+    assert shown.returncode == 0, (
+        f"{rel} e' tracciato ma non si legge ne' dal disco ne' dall'indice: "
+        f"il censimento non puo' dire di averlo visto"
+    )
+    ABSENT[rel] = len(shown.stdout)
+    return shown.stdout.decode("utf-8", errors="ignore")
+
+
 def _writers_found() -> set[str]:
     found = set()
     for pattern in SEARCHED:
         for rel in _tracked(pattern):
-            try:
-                body = (ROOT / rel).read_text(encoding="utf-8", errors="ignore")
-            except OSError:
-                continue
+            body = _read(rel)
             if WRITE.search(body):
                 found.add(rel)
     return found
@@ -137,10 +180,94 @@ def test_nessuno_scrive_su_scores_senza_essere_censito():
     )
 
 
+def test_lo_skip_non_nomina_alberi_che_non_esistono_piu():
+    """Una voce morta nello SKIP e' un buco pronto: l'albero torna, e nessuno lo guarda.
+
+    E' successo con `desktop/app-payload/`, tolto dal repo il 17/08 e rimasto
+    escluso qui per due mesi. `.git/` non e' mai tracciato: resta come guardia.
+    """
+    tracciati = subprocess.check_output(
+        ["git", "-C", str(ROOT), "ls-files"], text=True
+    ).splitlines()
+    morte = [
+        voce for voce in SKIP
+        if voce != ".git/" and not any(p.startswith(voce) for p in tracciati)
+    ]
+    assert not morte, f"lo SKIP esclude alberi che non esistono: {morte}"
+
+
+def test_i_file_assenti_dal_disco_sono_letti_e_dichiarati():
+    """Su un checkout parziale il censimento legge dall'indice, e lo dice."""
+    for pattern in sorted(set(SEARCHED) | set(JS_SOURCES)):
+        for rel in _tracked(pattern):
+            _read(rel)
+    if ABSENT:
+        esempi = ", ".join(sorted(ABSENT)[:5])
+        warnings.warn(
+            f"{len(ABSENT)} file tracciati non sono sul disco e il censimento "
+            f"li ha letti dall'indice di git (per esempio {esempi})",
+            stacklevel=1,
+        )
+
+
+def test_un_file_che_non_si_legge_ferma_il_censimento():
+    """Ne' sul disco ne' nell'indice: rosso, non un file in meno."""
+    with pytest.raises(AssertionError, match="non si legge"):
+        _read.__wrapped__("shared/skills/non-esiste-davvero.py")
+
+
 def test_il_censimento_non_nomina_scrittori_che_non_esistono_piu():
     """Una riga di censimento stantia sorveglia un file che nessuno esegue."""
     spariti = sorted(set(WRITERS) - FOUND)
     assert not spariti, spariti
+
+
+def test_nessun_file_di_prodotto_importa_un_modulo_di_test():
+    """L'esclusione per suffisso vale solo se i `*.test.*` restano test.
+
+    Se un file di prodotto ne importa uno, quel modulo gira nel prodotto ma
+    il censimento non lo legge: uno scrittore di `scores` li' dentro non
+    comparirebbe mai sopra.
+    """
+    importatori = {}
+    import_letti = 0
+    for pattern in JS_SOURCES:
+        for rel in _tracked(pattern):
+            body = _read(rel)
+            import_letti += len(ANY_IMPORT.findall(body))
+            trovati = [m.group(0) for m in TEST_IMPORT.finditer(body)]
+            if trovati:
+                importatori[rel] = trovati
+    # Senza import letti il controllo sarebbe verde su un albero vuoto.
+    assert import_letti >= 100, import_letti
+    assert not importatori, (
+        f"codice di prodotto che importa moduli di test: {importatori}. "
+        f"Il censimento degli scrittori salta i `*.test.*` "
+        f"({', '.join(TEST_SUFFIXES)}): quel che serve al prodotto va in un "
+        f"file senza il suffisso."
+    )
+
+
+@pytest.mark.parametrize(
+    "riga, importa",
+    [
+        ('import { scrivi } from "./scores.test";', True),
+        ("import { scrivi } from './scores.test.ts';", True),
+        ('export * from "../lib/scores.test.tsx";', True),
+        ('import "./setup.test.js";', True),
+        ('const m = await import("./scores.test.mjs");', True),
+        ("const m = require('./scores.test');", True),
+        ('const all = import.meta.glob("./**/*.test.ts");', True),
+        ('import raw from "./scores.test.ts?raw";', True),
+        ("// la guardia sta in `tests/js/tasks/scores.test.ts`", False),
+        ('import { a } from "./scores.testing";', False),
+        ('import { a } from "./latest";', False),
+        ('include: ["../../web/lib/**/*.test.ts"],', False),
+    ],
+)
+def test_la_forma_dell_import_di_un_test(riga, importa):
+    """Le forme che il controllo sopra riconosce, e i commenti che non deve prendere."""
+    assert bool(TEST_IMPORT.search(riga)) is importa
 
 
 @pytest.mark.parametrize(
@@ -153,7 +280,7 @@ def test_ogni_specchio_conta_cio_che_lascia_passare(path):
     sappiamo quanti ne passano»: la prima e' una decisione, la seconda e' il
     motivo per cui il ticket e' rimasto senza numeri per mesi.
     """
-    body = (ROOT / path).read_text(encoding="utf-8")
+    body = _read(path)
     # La CHIAMATA, non il nome: l'`import` da solo passerebbe un controllo di
     # sottostringa, e uno specchio che importa il righello senza usarlo e'
     # indistinguibile da uno che non ce l'ha. Verificato per mutazione.
@@ -179,7 +306,7 @@ def test_i_trigger_dello_schema_non_toccano_una_dimensione(path):
     """
     from score_ranges import COMPONENT_LIMITS
 
-    body = (ROOT / path).read_text(encoding="utf-8")
+    body = _read(path)
     for statement in re.findall(r"UPDATE scores\s+SET(.*?)WHERE", body, re.S):
         toccate = set(re.findall(r"(\w+)\s*=", statement))
         fuori = toccate - {"created_at", "updated_at"}
@@ -194,7 +321,7 @@ def test_l_unico_writer_che_valida_copre_ogni_dimensione():
     aggiungere una dimensione al righello non l'avrebbe validata, e nessuno
     se ne sarebbe accorto.
     """
-    body = (ROOT / "shared/skills/db_insert.py").read_text(encoding="utf-8")
+    body = _read("shared/skills/db_insert.py")
     assert "for column, maximum in COMPONENT_LIMITS.items():" in body
     assert "_validate_score_range(getattr(args, column), column, 0, maximum)" in body
     assert "from score_ranges import" in body, (
@@ -216,7 +343,7 @@ def test_il_writer_dell_harness_ha_lo_STESSO_righello_e_lo_copre_tutto():
     """
     from score_ranges import COMPONENT_LIMITS, TOTAL_LIMIT
 
-    body = (ROOT / "agent-harness/runtime/src/db/tools.ts").read_text(encoding="utf-8")
+    body = _read("agent-harness/runtime/src/db/tools.ts")
     totale = re.search(r"const SCORE_TOTAL_LIMIT = (\d+);", body)
     blocco = re.search(r"const SCORE_COMPONENT_LIMITS = \{(.*?)\}", body, re.S)
     assert totale and blocco, "i tetti dell'harness non si leggono piu': il gate non sorveglia piu' niente"

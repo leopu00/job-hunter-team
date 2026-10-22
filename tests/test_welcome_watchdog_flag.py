@@ -15,7 +15,7 @@ Ora (`tui_welcome_watchdog` in `.launcher/tui-helpers.sh`):
     (anche in `tui_send_verified`, che lo fa per chiunque lo chiami).
 
 Il tmux e' finto (lo stesso di test_tui_send_verified_submit.py, PATH di
-test): non tocca MAI il tmux di FLEET. Gira con dash (la /bin/sh del container
+test): non tocca MAI il tmux dell'operatore. Gira con dash (la /bin/sh del container
 dove il watchdog gira davvero, `setsid sh -c`) e con bash.
 """
 

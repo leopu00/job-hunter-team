@@ -1,6 +1,6 @@
 /** Timestamps as the agents page shows them. «—» when there is none. */
 
-/** In a list row: the time if today, the day otherwise (as FLEET's quandoElenco). */
+/** In a list row: the time if today, the day otherwise (as in the operator's panel). */
 export function whenShort(iso: string | null | undefined, now: number): string {
   const t = iso ? Date.parse(iso) : NaN;
   if (Number.isNaN(t)) return "—";

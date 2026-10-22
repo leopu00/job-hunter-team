@@ -344,7 +344,7 @@ def test_summary_is_capped(home):
 
 @pytest.mark.parametrize("lang", LANGS)
 def test_an_expired_linkedin_session_has_its_own_words(lang):
-    # 35ddb27f3 (HQ-BACKEND-3): the hand-made session expired; the default text
+    # 35ddb27f3: the hand-made session expired; the default text
     # would not say to sign in again in the CLOSER's browser.
     catalog = _catalog(lang)
     assert "linkedin_session_expired" in notices.KNOWN_REASONS
@@ -366,7 +366,7 @@ def test_every_summary_line_says_what_to_do(home, lang):
 @pytest.mark.parametrize("lang", LANGS)
 @pytest.mark.parametrize("reason", ["submit_outcome_unknown", "receipt_incomplete", "send_outcome_unknown"])
 def test_a_sent_or_maybe_sent_application_never_reads_as_nothing_sent(home, lang, reason):
-    # Every stop now reaches the summary (HQ-BACKEND-3), email ones included:
+    # Every stop now reaches the summary, email ones included:
     # the old footer "Nothing was sent for these" read them the wrong way round.
     _set_lang(home, lang)
     catalog = _catalog(lang)
@@ -415,7 +415,7 @@ def test_closer_flushes_the_summary_when_its_round_ends(lang):
         assert f"`{reason}`" in skill
 
 
-# ── localized prose never breaks the parsers (HQ-BACKEND's conditions) ─────
+# ── localized prose never breaks the parsers (the backend review's conditions) ─────
 
 import application_answers as aa  # noqa: E402
 import _db  # noqa: E402

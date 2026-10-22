@@ -1,10 +1,10 @@
 # Audit compliance — web
 
-**7 agosto 2026 · HQ-FRONTEND**
+**7 agosto 2026 · team frontend**
 
 > ⚠️ Questo è un audit **tecnico**: dice cosa il codice fa e cosa non fa.
 > Non è un parere legale e non dichiara il prodotto conforme. I testi dei
-> documenti sono di HQ-DOCS e l'approvazione è dell'operatore.
+> documenti sono del team docs e l'approvazione è dell'operatore.
 
 ## Riepilogo
 
@@ -43,14 +43,14 @@ Il footer con Privacy e Termini è su tutte le pagine pubbliche, ma l'area
 riservata non ha footer: da dentro non esisteva alcun percorso. Aggiunta la
 voce nel menu utente, in tutte e sette le lingue.
 
-## Aperto — richiede testo di HQ-DOCS
+## Aperto — richiede testo del team docs
 
 ### 3 · Nessuna accettazione al login → aggiunta
 
 Il pulsante diceva «Login with Google» senza alcun riferimento ai due
 documenti: l'accettazione era del tutto implicita.
 
-Aggiunta la formula di HQ-DOCS sotto i pulsanti, in sette lingue
+Aggiunta la formula del team docs sotto i pulsanti, in sette lingue
 (`components/landing/LoginAcceptance.tsx`). Due scelte del testo da
 rispettare anche traducendo: si **accettano** i Termini e si **prende atto**
 della Privacy, verbi diversi di proposito. I link sono raggiungibili prima
@@ -79,7 +79,7 @@ sempre una destinazione dei dati.
 
 L'errore è nato dal fermarmi alla funzione `openIssue` e alla nota su
 `/contact`, senza risalire al valore che il dialog manda davvero. Segnalato
-da HQ-DOCS, verificato nel codice prima di accettarlo.
+dal team docs, verificato nel codice prima di accettarlo.
 
 **Conseguenza pratica**: sul web la frase «apre una issue pubblica» non va
 messa, sarebbe falsa. Serve sulla superficie desktop, che non è mia.
@@ -99,7 +99,7 @@ ridatati.
 
 ### Terze parti: chi contatta chi, davvero
 
-Segnalate dall'audit di HQ-DOCS, verificate nel codice:
+Segnalate dall'audit del team docs, verificate nel codice:
 
 - **CARTO** (`basemaps.cartocdn.com`) — le mappe. È l'unico dei tre che il
   browser contatta davvero, e **non per ogni visitatore**: il globo arriva
@@ -116,8 +116,8 @@ Segnalate dall'audit di HQ-DOCS, verificate nel codice:
   l'utente clicca.
 
 Una prima versione elencava tutti e tre come «contattati dal browser prima
-del consenso». Era sbagliato per due su tre: correzione dopo la review di
-HQ-MASTER, verificata nel codice.
+del consenso». Era sbagliato per due su tre: correzione dopo la review,
+verificata nel codice.
 
 Non ho messo il globo dietro consenso: è l'elemento centrale della home, e
 spegnerlo per chi non ha risposto è una scelta di prodotto.
@@ -167,5 +167,5 @@ irreversibile e la decisione su *cosa* si cancella, *in quanto tempo* e
 ## Non verificato
 
 - Il **gioco** ha i suoi flussi di consenso: coordinamento aperto con
-  HQ-GAME-2, perché web e gioco devono dire la stessa cosa.
+  il team gioco, perché web e gioco devono dire la stessa cosa.
 - Non ho verificato i contenuti legali nel merito: non è il mio ruolo.

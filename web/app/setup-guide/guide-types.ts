@@ -22,8 +22,8 @@ export type GuideText = Record<Lang, string>;
 /**
  * Un testo canonico inglese che **non è ancora tradotto**.
  *
- * Il copy delle fasi è di HQ-DOCS e arriva in inglese; la traduzione nelle
- * altre sei lingue è un lavoro a parte (HQ-FULLSTACK-1). Nel frattempo il
+ * Il copy delle fasi è del team docs e arriva in inglese; la traduzione nelle
+ * altre sei lingue è un lavoro a parte (un fullstack). Nel frattempo il
  * tipo pretende comunque sette valori, e riempirli a mano di inglese
  * renderebbe indistinguibile «tradotto» da «ancora da tradurre».
  *
@@ -86,7 +86,7 @@ export interface GuideScreen {
    * non esiste alcuna ripresa da fare, perché quel contenuto è costruito
    * nella pagina.
    *
-   * Deciso da HQ-DOCS il 7 agosto 2026 per `S01` (scheda requisiti) e
+   * Deciso dal team docs il 7 agosto 2026 per `S01` (scheda requisiti) e
    * `G00` (indice + selettore OS dal vivo): niente PNG di una tabella che
    * a 390 px non si legge, niente screenshot della pagina dentro sé
    * stessa, niente duplicato mobile. L'id non si cancella — serve

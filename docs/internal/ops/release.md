@@ -17,8 +17,8 @@ Do not promote, tag or publish until all of these are true for the exact SHA:
 - onboarding is complete and verified on the supported subscription path;
 - direct desktop chat uses the native SSH/VPS tunnel, never an API/database
   message transport; the composer remains visible and the message list scrolls;
-- Hosea has issued `PUBBLICABILE @ <SHA>`;
-- HQ-SICUREZZA is green for the same SHA;
+- the publication review has issued `PUBBLICABILE @ <SHA>`;
+- the security review is green for the same SHA;
 - required `master` checks and the Tauri distribution matrix are green;
 - the release bundle login gate proves that `VITE_SUPABASE_URL` and the public
   `VITE_SUPABASE_ANON_KEY` reached the frontend bundle and that no service-role
@@ -68,7 +68,8 @@ provenance, so filenames and checksums have one authority.
 ## Pre-release checklist
 
 - [ ] Integrate onboarding, then the native SSH/VPS chat bridge and UI.
-- [ ] Obtain Hosea and HQ-SICUREZZA verdicts for the exact integration SHA.
+- [ ] Obtain the publication review and the security review verdicts for the
+      exact integration SHA.
 - [ ] Configure repository variables `VITE_SUPABASE_URL` and
       `VITE_SUPABASE_ANON_KEY`; never add their values to the repository or
       logs, and never supply a service-role/private/admin key.
@@ -77,7 +78,7 @@ provenance, so filenames and checksums have one authority.
 - [ ] Freeze and verify the runtime image manifest.
 - [ ] Run `scripts/check-release-version.sh vX.Y.Z` locally.
 - [ ] Run the relevant local suites through the shared-machine build turn.
-- [ ] Push only the SHA approved by Hosea and follow all CI runs to green.
+- [ ] Push only the SHA approved by the publication review and follow all CI runs to green.
 
 ## Promotion and publication
 

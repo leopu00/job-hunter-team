@@ -888,7 +888,7 @@ def test_tetto_non_valido_chiude_anche_coda_e_prenotazione(tmp_path):
     assert (slot.allowed, slot.reason) == (False, "consent_cap_invalid")
 
 
-# ── un CV bocciato chiede da solo di essere rifatto (application_rework, HQ-BACKEND-2) ──
+# ── un CV bocciato chiede da solo di essere rifatto (application_rework) ──
 
 
 @pytest.fixture

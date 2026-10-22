@@ -12,13 +12,24 @@
     "short_pause_sec, not the Capitano's pause. After max_streak short pauses in a row",
     "the Capitano's pause comes back: a Scout that finds nothing new is on a dry",
     "list, and the brake is his.",
+    "keep_captains_pause (TUI only for now: the signals are the TUI's): while the team is",
+    "recovering from a freeze the Capitano's pause is a brake on the spend, not only a guard",
+    "against empty rounds, so an empty unit does not shorten it. Two signals: a freeze or a",
+    "soft pause in the last after_freeze_sec seconds (freeze_marker.py writes it), or the",
+    "pacing report saying the team burns more than over_pace_pct_h %/h above its target",
+    "(vel_team vs vel_target). An unreadable signal is no signal; a user's burn intent",
+    "(burn_intent) lifts the hold, as it lifts the floor and the ladder.",
     "user_requests (TUI only for now): an Analista with the user's requests waiting",
     "(db_query.USER_REQUEST_QUEUES) pauses short_pause_sec."
   ],
   "short_pause_sec": 60,
   "empty_unit": {
     "roles": ["scout"],
-    "max_streak": 10
+    "max_streak": 10,
+    "keep_captains_pause": {
+      "after_freeze_sec": 7200,
+      "over_pace_pct_h": 1.0
+    }
   },
   "user_requests": {
     "roles": ["analista"]

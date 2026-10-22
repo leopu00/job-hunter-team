@@ -172,7 +172,7 @@ export async function deleteAccountData(
  * un'assunzione sbagliata. I file veri stanno in
  * `${userId}/${requestId}/${nome}` — tre segmenti — quindi al primo
  * livello si trovavano solo cartelle, e `remove()` su una cartella non
- * cancella nulla. Segnalato da HQ-DOCS con il percorso reale alla mano.
+ * cancella nulla. Segnalato dal team docs con il percorso reale alla mano.
  */
 async function listRecursive(
   admin: SupabaseClient,
@@ -240,8 +240,8 @@ async function deleteStorageObjects(
   // quel percorso fossile veniva rimesso nella `remove`; Supabase risponde
   // elencando solo i file davvero cancellati, quindi non compariva, e il
   // confronto lo dichiarava non rimosso — bloccando per sempre la
-  // cancellazione dell'account dopo un purge riuscito. Trovato da
-  // HQ-BACKEND.
+  // cancellazione dell'account dopo un purge riuscito. Trovato
+  // dal team backend.
   //
   // Le righe cadono comunque per cascata insieme all'utente: non c'è
   // niente da recuperare da lì.
@@ -254,7 +254,7 @@ async function deleteStorageObjects(
   // 5000 in una sola chiamata, e il test da 2500 la dava per buona solo
   // perché il doppio non rifiutava i lotti troppo grandi: l'ennesimo caso
   // di un finto client che conferma l'assunzione invece di controllarla.
-  // Segnalato da HQ-DOCS con la fonte, confermato da HQ-BACKEND.
+  // Segnalato dal team docs con la fonte, confermato dal team backend.
   //
   // Al primo errore ci si ferma senza lanciare i lotti successivi: se il
   // bucket sta rifiutando, insistere allarga il danno invece di ridurlo.

@@ -185,6 +185,14 @@ def pause_all(include_core=False, reason=""):
             msg = MSG_CAPITANO if s == CAPITANO else MSG_OPERATIVO
         if send_message(s, msg):
             paused.append(s)
+    if paused and not include_core:
+        # La pausa per FATAL usage è un congelamento: chi riparte dopo il
+        # [RIPRENDI] è in recupero (freeze_marker.py; throttle_engine lo legge).
+        try:
+            from freeze_marker import mark
+            mark("soft-pause")
+        except ImportError:
+            pass
     return paused, skipped
 
 

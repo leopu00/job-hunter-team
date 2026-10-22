@@ -172,7 +172,7 @@ def test_no_agent_prompt_tells_the_model_to_open_a_credentials_file():
     assert offenders == []
 
 
-# ── hosea R1 and R2 (08/10) ───────────────────────────────────────────────
+# ── publication review, R1 and R2 (08/10) ─────────────────────────────────
 
 NON_ASCII_CANARY = "CANARY-pässwörd-è-7c2d"
 

@@ -1,5 +1,5 @@
 /**
- * B1 of banda/piani/JHT-API-TEST.md: for each role, the same input at the
+ * B1, the role parity suite: for each role, the same input at the
  * level that writes — the script the TUI role runs, the tool the API role
  * gets — and the two databases compared. No model is called.
  *

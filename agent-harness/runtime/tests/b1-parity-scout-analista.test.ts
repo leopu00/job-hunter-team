@@ -1,9 +1,9 @@
 /**
- * B1 (banda/piani/JHT-API-TEST.md), SCOUT and ANALISTA: the same commands
+ * B1 (the role parity suite), SCOUT and ANALISTA: the same commands
  * their skills give, run by the TUI script of this tree and by the tool the
  * API role gets, on twin databases — then the two compared (helpers/b1-twins).
  * Every difference that is meant is listed here with its reason; anything else
- * is red. The table of all roles is banda/piani/B1-parita-ruoli.md.
+ * is red. The other roles are in the other `b1-parity-*` test files.
  */
 
 import { mkdtempSync, rmSync } from "node:fs";

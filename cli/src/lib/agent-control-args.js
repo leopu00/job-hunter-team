@@ -24,7 +24,7 @@ const HOURS = /^[1-9][0-9]{0,2}$/;
 const INSTANT = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?(?:Z|[+-]\d{2}:\d{2})$/;
 
 const WITH_SESSION = new Set(['start', 'stop', 'restart', 'screen']);
-const ALONE = new Set(['resume', 'list', 'team', 'exclusions']);
+const ALONE = new Set(['resume', 'list', 'team', 'history', 'exclusions']);
 // A code of the exclusions' closed vocabulary (JHT-T24-b); the script checks it against the list.
 const WITH_CODE = new Set(['exclusion-accept', 'exclusion-withdraw']);
 const CODE = /^[a-z][a-z_]{0,31}$/;

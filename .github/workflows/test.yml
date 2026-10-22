@@ -357,6 +357,34 @@ jobs:
       # La toolchain PDF del job `pytest`: parity-pdf-layout (poppler) e
       # render-pdf (pandoc, wkhtmltopdf) saltano senza. Il 27/09 erano 21 dei
       # 22 saltati in CI, contro 1 in locale.
+      #
+      # Its .deb files and bubblewrap's come from the Actions cache, as in the
+      # `pytest` job (the reason is there): the same mirror that took 22
+      # minutes there can serve this job too. apt checks every restored file
+      # against the signed index and downloads only what is missing, newer or
+      # does not match.
+      - name: Name the apt package cache
+        id: apt-debs
+        run: echo "image=${ImageOS:-unknown}-${ImageVersion:-unknown}" >> "$GITHUB_OUTPUT"
+
+      - name: Restore the apt packages
+        id: apt-debs-restore
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: ${{ runner.temp }}/apt-debs
+          key: agent-harness-apt-debs-${{ runner.arch }}-${{ steps.apt-debs.outputs.image }}-${{ hashFiles('.github/workflows/test.yml') }}
+          restore-keys: |
+            agent-harness-apt-debs-${{ runner.arch }}-${{ steps.apt-debs.outputs.image }}-
+            agent-harness-apt-debs-${{ runner.arch }}-
+
+      - name: Hand the restored packages to apt
+        run: |
+          dir="$RUNNER_TEMP/apt-debs"
+          mkdir -p "$dir"
+          n=$(find "$dir" -maxdepth 1 -name '*.deb' | wc -l | tr -d ' ')
+          echo "restored $n .deb files"
+          if [ "$n" -gt 0 ]; then sudo cp "$dir"/*.deb /var/cache/apt/archives/; fi
+
       - name: Install CV PDF toolchain (parity with pdf_layout_check.py)
         run: |
           sudo apt-get update
@@ -376,6 +404,34 @@ jobs:
           sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true
           bwrap --version
           bwrap --ro-bind / / --dev /dev --proc /proc true && echo "bwrap starts" || echo "bwrap does NOT start"
+
+      # Same collection as in the `pytest` job: only the versions now
+      # installed, saved before the tests, never an empty folder.
+      - name: Collect the apt packages for the next run
+        id: apt-debs-collect
+        if: steps.apt-debs-restore.outputs.cache-hit != 'true'
+        run: |
+          dir="$RUNNER_TEMP/apt-debs"
+          mkdir -p "$dir"
+          rm -f "$dir"/*.deb
+          for deb in /var/cache/apt/archives/*.deb; do
+            [ -e "$deb" ] || continue
+            pkg=$(dpkg-deb -f "$deb" Package)
+            ver=$(dpkg-deb -f "$deb" Version)
+            if [ "$(dpkg-query -W -f='${Version}' "$pkg" 2>/dev/null)" = "$ver" ]; then
+              cp "$deb" "$dir/"
+            fi
+          done
+          n=$(find "$dir" -maxdepth 1 -name '*.deb' | wc -l | tr -d ' ')
+          echo "keeping $n .deb files"
+          echo "count=$n" >> "$GITHUB_OUTPUT"
+
+      - name: Save the apt packages
+        if: steps.apt-debs-restore.outputs.cache-hit != 'true' && steps.apt-debs-collect.outputs.count != '0'
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: ${{ runner.temp }}/apt-debs
+          key: ${{ steps.apt-debs-restore.outputs.cache-primary-key }}
 
       - name: Install agent runtime dependencies
         working-directory: agent-harness/runtime
@@ -543,6 +599,40 @@ jobs:
           pip install --require-hashes -r tests/requirements-app-ci.txt
           pip install --no-index -r requirements.txt
 
+      # The apt packages of the next two steps (Playwright's system libraries
+      # and the CV PDF toolchain, about 80 MB) come from the runner's Ubuntu
+      # mirror, and its speed changes from runner to runner: on 22/10 one got
+      # them at 25-50 kB/s, 8 + 22 minutes, and the job was cancelled at its
+      # 40-minute ceiling before pytest finished, while the next job of the
+      # same run fetched the same toolchain in 16 s. So the .deb files come
+      # from the Actions cache: put in apt's archive directory, apt checks
+      # each one against the hashes of the signed index it has just fetched,
+      # and downloads only what is missing, newer or does not match. The key
+      # follows the runner image (its package versions) and this file (the
+      # package lists); the restore keys reuse an older image's files for
+      # every package that did not change.
+      - name: Name the apt package cache
+        id: apt-debs
+        run: echo "image=${ImageOS:-unknown}-${ImageVersion:-unknown}" >> "$GITHUB_OUTPUT"
+
+      - name: Restore the apt packages
+        id: apt-debs-restore
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: ${{ runner.temp }}/apt-debs
+          key: pytest-apt-debs-${{ runner.arch }}-${{ steps.apt-debs.outputs.image }}-${{ hashFiles('.github/workflows/test.yml') }}
+          restore-keys: |
+            pytest-apt-debs-${{ runner.arch }}-${{ steps.apt-debs.outputs.image }}-
+            pytest-apt-debs-${{ runner.arch }}-
+
+      - name: Hand the restored packages to apt
+        run: |
+          dir="$RUNNER_TEMP/apt-debs"
+          mkdir -p "$dir"
+          n=$(find "$dir" -maxdepth 1 -name '*.deb' | wc -l | tr -d ' ')
+          echo "restored $n .deb files"
+          if [ "$n" -gt 0 ]; then sudo cp "$dir"/*.deb /var/cache/apt/archives/; fi
+
       # `tests/test_apply_flow.py` ([JHT-CLOSER]) lancia un Chromium vero: sono
       # i test degli invarianti della candidatura — ricevuta obbligatoria,
       # captcha → blocked_human, nessun dato inventato. Senza browser falliscono
@@ -559,6 +649,37 @@ jobs:
       # enter the repo, and skipping here would leave the layout gate untested.
       - name: Install CV PDF toolchain (layout gate)
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends pandoc wkhtmltopdf poppler-utils
+
+      # Only the files of the versions now installed are kept: one replaced by
+      # a newer version is dropped, so the cache does not grow at every image.
+      # Saved before pytest, so a red run still leaves them for the next one.
+      - name: Collect the apt packages for the next run
+        id: apt-debs-collect
+        if: steps.apt-debs-restore.outputs.cache-hit != 'true'
+        run: |
+          dir="$RUNNER_TEMP/apt-debs"
+          mkdir -p "$dir"
+          rm -f "$dir"/*.deb
+          for deb in /var/cache/apt/archives/*.deb; do
+            [ -e "$deb" ] || continue
+            pkg=$(dpkg-deb -f "$deb" Package)
+            ver=$(dpkg-deb -f "$deb" Version)
+            if [ "$(dpkg-query -W -f='${Version}' "$pkg" 2>/dev/null)" = "$ver" ]; then
+              cp "$deb" "$dir/"
+            fi
+          done
+          n=$(find "$dir" -maxdepth 1 -name '*.deb' | wc -l | tr -d ' ')
+          echo "keeping $n .deb files"
+          echo "count=$n" >> "$GITHUB_OUTPUT"
+
+      # An empty folder is not saved: the key would be taken, and no later run
+      # with the same image could fill it.
+      - name: Save the apt packages
+        if: steps.apt-debs-restore.outputs.cache-hit != 'true' && steps.apt-debs-collect.outputs.count != '0'
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: ${{ runner.temp }}/apt-debs
+          key: ${{ steps.apt-debs-restore.outputs.cache-primary-key }}
 
       # `-m "not production"`: 38 dei 806 test (tests/test_vercel_pages.py e
       # tests/test_missing_pages.py) fanno HTTP su https://jobhunterteam.ai e

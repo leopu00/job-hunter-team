@@ -68,6 +68,11 @@ const NOT_ERRORS: Record<string, string> = {
   exclusion_withdrawn: "result word of an exclusion withdrawn",
   exclusion_accept: "operation name of the panel's request",
   exclusion_withdraw: "operation name of the panel's request",
+  // How a previous session of an agent ended (the panel's history read, agent_control.rs): a state of the session
+  // the Agents page tells in its own words, not an error.
+  restarted_by_user: "how a previous session ended",
+  stopped_by_user: "how a previous session ended",
+  started_again: "how a previous session ended",
   // The outcome of «Attiva assistente» when the assistant was already running: a result, not an error.
   already_active: "assistant start outcome",
   // The outcome of the in-app registration of a team's target: a result, not an error.

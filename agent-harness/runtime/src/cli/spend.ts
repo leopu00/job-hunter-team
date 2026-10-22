@@ -1,6 +1,6 @@
 /**
  * `npm run spend` — what the runs cost, priced as OpenAI bills them, and
- * checked against what OpenAI billed (JHT-API-TEST A2, A3).
+ * checked against what OpenAI billed.
  *
  *   npm run spend -- reprice <requests.jsonl|openai-spesa.tsv>
  *       the spend per day at the catalog's prices: the key proxy's log

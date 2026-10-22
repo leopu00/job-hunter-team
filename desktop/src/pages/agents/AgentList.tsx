@@ -8,9 +8,9 @@ import { whenShort } from "./when";
 /**
  * The list of the team's agents, one row each: icon with the led, name, time
  * of the last thing it did, a preview (its last chat message, or its last
- * move) and the unread badge. Adapted from FLEET's chat list
- * (tmux-paradise app/src/components/ElencoChat.tsx: the wa-row row with icon,
- * name, time, preview and badge; a click opens the conversation on the right).
+ * move) and the unread badge. Adapted from the operator's panel chat list
+ * (a row with icon, name, time, preview and badge; a click opens the
+ * conversation on the right).
  * Here every agent has a row, with or without messages: the team is fixed.
  */
 export default function AgentList({
@@ -105,7 +105,7 @@ export const LED_LABEL: Record<Led, string> = {
   unknown: "stato mai arrivato",
 };
 
-/** The role's emoji in its colour ring, with the led in the corner (FLEET's IconaAgente with stato). */
+/** The role's emoji in its colour ring, with the led in the corner (adapted from the operator's panel, with its state). */
 export function AgentIcon({ agent, led, size = 34 }: { agent: AgentDef; led: Led; size?: number }) {
   return (
     <span

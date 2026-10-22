@@ -69,7 +69,7 @@ describe("O-101 — un turno consegnato che nessuno raccoglie", () => {
   });
 
   it("tace per il Capitano che aveva risposto cinquanta secondi dopo", () => {
-    // Il falso positivo misurato da HQ-VPS: senza questa correlazione
+    // Il falso positivo misurato dal team VPS: senza questa correlazione
     // l'allarme sbaglierebbe una volta su due.
     const verdetti = turnPickupVerdicts({
       turns: [{ legacyId: 401, agent: "capitano", deliveredAt: consegna }],
