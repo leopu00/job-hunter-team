@@ -44,7 +44,7 @@ vi.mock("@/lib/workspace", () => ({
 vi.mock("@/lib/supabase/server", () => ({
   createClient: async () => {
     const q: Record<string, unknown> = {};
-    for (const name of ["from", "select", "eq", "in", "is", "gte", "limit"]) {
+    for (const name of ["from", "select", "eq", "order", "limit"]) {
       q[name] = (...args: unknown[]) => {
         world.chain.push([name, args]);
         return name === "limit"
@@ -300,42 +300,48 @@ describe("where the sends come from", () => {
     );
   });
 
-  it("on the cloud: the user's own applications joined to the position, with the web origin and the automated channels", async () => {
+  it("on the cloud: the user's positions the website authorised, with their application; the rest is decided here", async () => {
     world.local = false;
     world.workspace = null;
     world.chain = [];
+    const base = Date.now(); // one instant, so the same hour gives the same string everywhere
+    const ago = (h: number) => new Date(base - h * 3600_000).toISOString();
+    const sent = (via: string, when: unknown, applied: unknown = true) => ({
+      applied,
+      applied_via: via,
+      applied_at: when,
+    });
     world.rows = [
-      { applied_at: "2026-10-23T09:00:00Z" },
-      { applied_at: 7 },
-      { applied_at: null },
+      { applications: sent("agent_closer", ago(1)) }, // counts (one-to-one embed: an object)
+      { applications: [sent("agent_closer_email", ago(30))] }, // counts (a list)
+      { applications: sent("manual", ago(1)) }, // sent by the person
+      { applications: sent("agent_closer", ago(1), false) }, // not sent
+      { applications: sent("agent_closer", ago(24 * 5)) }, // too old
+      { applications: sent("agent_closer", 7) }, // not an instant
+      { applications: sent("agent_closer", "not a date") },
+      { applications: sent(7 as never, ago(1)) }, // not a channel
+      { applications: null }, // no application yet
+      {},
     ];
     world.error = null;
-    expect(await signals.getWebSendsRecent()).toEqual(["2026-10-23T09:00:00Z"]);
-    const names = world.chain.map(([n]) => n);
-    expect(names).toEqual([
+    expect((await signals.getWebSendsRecent()).sort()).toEqual(
+      [ago(1), ago(30)].sort(),
+    );
+    expect(world.chain.map(([n]) => n)).toEqual([
       "from",
       "select",
       "eq",
-      "in",
-      "eq",
-      "is",
-      "gte",
+      "order",
       "limit",
     ]);
-    const by = Object.fromEntries(
-      world.chain.map(([n, a]) => [n + ":" + String(a[0]), a]),
+    const by = Object.fromEntries(world.chain.map(([n, a]) => [n, a]));
+    expect(by.from).toEqual(["positions"]);
+    expect(by.eq).toEqual(["apply_requested_by", "user_web"]);
+    expect(by.select[0]).toBe(
+      "apply_requested_by, applications(applied, applied_at, applied_via)",
     );
-    expect(by["from:applications"]).toBeTruthy();
-    expect(by["eq:applied"][1]).toBe(true);
-    expect(by["in:applied_via"][1]).toEqual([...cap.AUTOMATED_APPLIED_VIA]);
-    expect(by["eq:positions.apply_requested_by"][1]).toBe("user_web");
-    expect(
-      String(
-        by["select:applied_at, positions!inner(apply_requested_by)"]
-          ? "joined"
-          : "",
-      ),
-    ).toBe("joined");
+    // no dotted column name, which the schema census cannot read
+    expect(JSON.stringify(world.chain)).not.toMatch(/"[a-z_]+\.[a-z_]+"/);
   });
 
   it("a failing read is no sends at all: the page says «authorised», never «queued for tomorrow»", async () => {

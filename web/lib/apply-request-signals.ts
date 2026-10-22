@@ -77,22 +77,43 @@ export async function getWebSendsRecent(): Promise<string[]> {
     }
   }
   if (!isSupabaseConfigured) return [];
-  const since = new Date(Date.now() - 2 * 24 * 3600 * 1000).toISOString();
+  const since = Date.now() - 2 * 24 * 3600 * 1000;
   try {
     const supabase = await createClient();
+    // The positions the website authorised, with their application, newest first. The rest (sent, by an
+    // automated channel, in the last two days) is decided here: a filter on a column of the embedded
+    // application would be a dotted column name the schema census cannot read.
     const { data, error } = await supabase
-      .from("applications")
-      .select("applied_at, positions!inner(apply_requested_by)")
-      .eq("applied", true)
-      .in("applied_via", [...AUTOMATED_APPLIED_VIA])
-      .eq("positions.apply_requested_by", WEB_ORIGIN)
-      .is("deleted_at", null)
-      .gte("applied_at", since)
-      .limit(100);
+      .from("positions")
+      .select(
+        "apply_requested_by, applications(applied, applied_at, applied_via)",
+      )
+      .eq("apply_requested_by", WEB_ORIGIN)
+      .order("updated_at", { ascending: false })
+      .limit(200);
     if (error || !Array.isArray(data)) return [];
-    return data
-      .map((row: { applied_at?: unknown }) => row.applied_at)
-      .filter((value): value is string => typeof value === "string");
+    const sends: string[] = [];
+    for (const row of data as Array<{ applications?: unknown }>) {
+      const apps = Array.isArray(row.applications)
+        ? row.applications
+        : row.applications
+          ? [row.applications]
+          : [];
+      for (const app of apps as Array<Record<string, unknown>>) {
+        if (app.applied !== true) continue;
+        if (
+          typeof app.applied_via !== "string" ||
+          !AUTOMATED_APPLIED_VIA.includes(app.applied_via)
+        ) {
+          continue;
+        }
+        if (typeof app.applied_at !== "string") continue;
+        const at = Date.parse(app.applied_at);
+        if (Number.isNaN(at) || at < since) continue;
+        sends.push(app.applied_at);
+      }
+    }
+    return sends;
   } catch {
     return [];
   }
