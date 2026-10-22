@@ -22,6 +22,7 @@ a missing shell is a failure, not a skip.
 
 import json
 import os
+import re
 from pathlib import Path
 import shutil
 import subprocess
@@ -172,6 +173,13 @@ def test_each_shell_is_the_one_named(shell):
         assert major >= 7 and items == 2, result.stdout
 
 
+def _canonical(stdout: str):
+    """The whole value: under 5.1 a non-enumerated array prints as every digest joined by
+    a space, and a substring check would still find the first one in it."""
+    found = re.findall(r"^CANONICAL=(.*)$", stdout, flags=re.MULTILINE)
+    return found[-1].strip() if found else None
+
+
 def _digest_case(tmp_path, shell, *, expected: str, old_parse: bool = False):
     image = f"{IMAGE}@{expected}" if expected else f"{IMAGE}:test"
     return _run(
@@ -190,7 +198,7 @@ def _digest_case(tmp_path, shell, *, expected: str, old_parse: bool = False):
 def test_the_pull_is_accepted_whichever_of_podman_6s_two_digests_is_expected(tmp_path, shell, expected):
     result, calls = _digest_case(tmp_path, shell, expected=expected)
     assert result.returncode == 0, result.stdout + result.stderr
-    assert f"CANONICAL={IMAGE}@{expected}" in result.stdout, result.stdout
+    assert _canonical(result.stdout) == f"{IMAGE}@{expected}", result.stdout
     assert calls[0] == ["--connection", "jht-podman", "pull", f"{IMAGE}@{expected}"]
     assert calls[1][:4] == ["--connection", "jht-podman", "image", "inspect"]
 
@@ -199,7 +207,7 @@ def test_the_pull_is_accepted_whichever_of_podman_6s_two_digests_is_expected(tmp
 def test_a_tag_pull_takes_the_first_canonical_digest(tmp_path, shell):
     result, _ = _digest_case(tmp_path, shell, expected="")
     assert result.returncode == 0, result.stdout + result.stderr
-    assert f"CANONICAL={IMAGE}@{INDEX_DIGEST}" in result.stdout, result.stdout
+    assert _canonical(result.stdout) == f"{IMAGE}@{INDEX_DIGEST}", result.stdout
 
 
 @pytest.mark.parametrize("shell", SHELLS)
