@@ -180,9 +180,14 @@ export default defineConfig(({ mode }) => ({
     // preview serves is listed. Modules the app imports are granted by Vite as
     // it resolves them; what a stylesheet points at (the fonts) is not, so the
     // font leaves are named one by one.
-    // The reused web files live in ../web, and the web imports a shared
-    // baseline rule: permit that one file before the import graph is warmed,
-    // without exposing the rest of shared/ or the repo.
+    // The reused web files in ../web are not listed either: Vite grants each
+    // one when a page's import graph reaches it, so a web file no page
+    // imports (package.json, next.config.ts, the API routes, server-only
+    // code) gets a 403. Nothing else is read from ../web over HTTP: the web
+    // stylesheet is inlined by dashboard.css's @import, and the web/public
+    // files are served by webPublicAssets().
+    // The web imports a shared baseline rule: permit that one file before the
+    // import graph is warmed, without exposing the rest of shared/ or the repo.
     fs: {
       allow: [
         fromHere("./src"),
@@ -190,7 +195,6 @@ export default defineConfig(({ mode }) => ({
         fromHere("./index.html"),
         fromHere("./dashboard.html"),
         fromHere("./live-screen.html"),
-        fromHere("../web"),
         fromHere("../shared/cloud/apply-request-rule.json"),
         ...previewFontLeaves(),
       ],
