@@ -120,10 +120,11 @@ describe("web code → live-schema receipt coverage", () => {
     expect(first).toMatch(
       // 40 → 42 con la ricevuta 078-086.web.v6, che aggiunge le due RPC
       // dell'esito (#187); 42 → 43 con la v10 (078-094), che aggiunge la nota
-      // del feedback e le preferenze di esclusione (T05). Il pin è sul CONTEGGIO e non su `\d+` di proposito:
+      // del feedback e le preferenze di esclusione (T05); 43 → 44 con la v14 (078-098), che aggiunge la
+      // ricevuta della porta `request_action`. Il pin è sul CONTEGGIO e non su `\d+` di proposito:
       // deve muoversi solo quando qualcuno emette una ricevuta nuova e lo
       // dichiara, non ogni volta che il censimento cambia da sé.
-      /^WEB-SCHEMA-COVERAGE PASS rpcs=\d+ tables=\d+ columns=\d+ ambiguous=\d+ receipts=43\n$/,
+      /^WEB-SCHEMA-COVERAGE PASS rpcs=\d+ tables=\d+ columns=\d+ ambiguous=\d+ receipts=44\n$/,
     );
   });
 
