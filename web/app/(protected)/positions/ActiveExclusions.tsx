@@ -8,7 +8,6 @@
 
 import { useEffect, useState } from "react";
 import { useLocale } from "@/lib/use-locale";
-import { useDesktopWrite } from "@/lib/desktop-write";
 import { REASON_LABELS } from "./[id]/exclusion-reasons";
 
 const T: Record<
@@ -18,7 +17,6 @@ const T: Record<
     acts: string;
     withdraw: string;
     withdrawn: string;
-    desktopOnly: string;
   }
 > = {
   it: {
@@ -26,49 +24,42 @@ const T: Record<
     acts: "abbassa il punteggio di {points} punti",
     withdraw: "Ritira",
     withdrawn: "Esclusione ritirata.",
-    desktopOnly: "Si ritirano nell'app desktop.",
   },
   en: {
     title: "Active exclusions",
     acts: "lowers the score by {points}",
     withdraw: "Withdraw",
     withdrawn: "Exclusion withdrawn.",
-    desktopOnly: "You withdraw them in the desktop app.",
   },
   es: {
     title: "Exclusiones activas",
     acts: "baja la puntuación en {points}",
     withdraw: "Retirar",
     withdrawn: "Exclusión retirada.",
-    desktopOnly: "Se retiran en la aplicación de escritorio.",
   },
   fr: {
     title: "Exclusions actives",
     acts: "baisse la note de {points}",
     withdraw: "Retirer",
     withdrawn: "Exclusion retirée.",
-    desktopOnly: "Elles se retirent dans l'application de bureau.",
   },
   de: {
     title: "Aktive Ausschlüsse",
     acts: "senkt die Bewertung um {points}",
     withdraw: "Zurücknehmen",
     withdrawn: "Ausschluss zurückgenommen.",
-    desktopOnly: "Du nimmst sie in der Desktop-App zurück.",
   },
   hu: {
     title: "Aktív kizárások",
     acts: "{points} ponttal csökkenti a pontszámot",
     withdraw: "Visszavonás",
     withdrawn: "Kizárás visszavonva.",
-    desktopOnly: "Az asztali alkalmazásban vonhatod vissza.",
   },
   pt: {
     title: "Exclusões ativas",
     acts: "baixa a pontuação em {points}",
     withdraw: "Retirar",
     withdrawn: "Exclusão retirada.",
-    desktopOnly: "Retiram-se na aplicação de ambiente de trabalho.",
   },
 };
 
@@ -92,7 +83,6 @@ export default function ActiveExclusions() {
   const locale = useLocale();
   const t = T[locale] ?? T.en;
   const labels = REASON_LABELS[locale] ?? REASON_LABELS.en;
-  const { canChange } = useDesktopWrite();
   const [accepted, setAccepted] = useState<Decision[]>([]);
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState(false);
@@ -116,7 +106,7 @@ export default function ActiveExclusions() {
   }, []);
 
   const withdraw = async (decision: Decision) => {
-    if (busy || !canChange) return;
+    if (busy) return;
     setBusy(true);
     try {
       const res = await fetch("/api/profile-exclusions", {
@@ -181,28 +171,21 @@ export default function ActiveExclusions() {
                 {t.acts.replace("{points}", String(POINTS[d.reason] ?? 15))}
               </span>
             </span>
-            {canChange && (
-              <button
-                type="button"
-                disabled={busy}
-                onClick={() => withdraw(d)}
-                className="px-2 py-1 rounded-lg border text-[11px] disabled:opacity-60"
-                style={{
-                  borderColor: "var(--color-border)",
-                  color: "var(--color-muted)",
-                }}
-              >
-                {t.withdraw}
-              </button>
-            )}
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => withdraw(d)}
+              className="px-2 py-1 rounded-lg border text-[11px] disabled:opacity-60"
+              style={{
+                borderColor: "var(--color-border)",
+                color: "var(--color-muted)",
+              }}
+            >
+              {t.withdraw}
+            </button>
           </li>
         ))}
       </ul>
-      {!canChange && (
-        <p className="text-[11px] mt-1" style={{ color: "var(--color-muted)" }}>
-          {t.desktopOnly}
-        </p>
-      )}
     </section>
   );
 }

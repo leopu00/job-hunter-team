@@ -140,10 +140,6 @@ vi.mock("@/lib/demo/mode", () => ({
 }));
 vi.mock("next/headers", () => ({ cookies: vi.fn(async () => ({ get: vi.fn(), set: vi.fn() })) }));
 vi.mock("@/lib/workspace", () => ({ isSupabaseConfigured: true }));
-// JHT-T46: the write of the decision is the desktop's (the website's session is refused: see
-// profile-exclusions-write-desktop-only.test.ts). Here the gate lets the write through, so the rules
-// of the route (codes, states, the user's own row) are what is tested.
-vi.mock("@/lib/auth", () => ({ requireLocalWrite: async () => null }));
 
 import { POST as postFeedback } from "@/app/api/positions/[legacyId]/feedback/route";
 import { GET as getProfileExclusions, POST as postProfileExclusion } from "@/app/api/profile-exclusions/route";

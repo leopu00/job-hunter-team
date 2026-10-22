@@ -12,7 +12,6 @@
 
 import { useEffect, useState } from "react";
 import { useLocale } from "@/lib/use-locale";
-import { useDesktopWrite } from "@/lib/desktop-write";
 import {
   visibleProposals,
   type ExclusionDecision,
@@ -29,7 +28,6 @@ const T: Record<
     title: string;
     question: string;
     acts: string;
-    desktopOnly: string;
     save: string;
     later: string;
     saved: string;
@@ -39,7 +37,6 @@ const T: Record<
     title: "{n} posizioni scartate come «{reason}»",
     question: "Vuoi escludere questo tipo di posizioni dal tuo profilo?",
     acts: "Se accetti, il team abbassa il punteggio delle posizioni di questo tipo (−15, −30 per un'azienda): non le nasconde e non smette di cercarle. Puoi ritirare la scelta quando vuoi.",
-    desktopOnly: "Questa scelta si fa nell'app desktop.",
     save: "Escludi questo tipo",
     later: "Non ora",
     saved: "Esclusione salvata.",
@@ -48,7 +45,6 @@ const T: Record<
     title: "{n} positions rejected as “{reason}”",
     question: "Do you want to exclude this kind of position from your profile?",
     acts: "If you accept, the team lowers the score of positions like these (−15, −30 for a company): it does not hide them or stop finding them. You can withdraw the choice at any time.",
-    desktopOnly: "You make this choice in the desktop app.",
     save: "Exclude this kind",
     later: "Not now",
     saved: "Exclusion saved.",
@@ -57,7 +53,6 @@ const T: Record<
     title: "{n} posiciones descartadas como «{reason}»",
     question: "¿Quieres excluir este tipo de posiciones de tu perfil?",
     acts: "Si aceptas, el equipo baja la puntuación de las posiciones de este tipo (−15, −30 para una empresa): no las oculta ni deja de buscarlas. Puedes retirar la elección cuando quieras.",
-    desktopOnly: "Esta elección se hace en la aplicación de escritorio.",
     save: "Excluir este tipo",
     later: "Ahora no",
     saved: "Exclusión guardada.",
@@ -66,7 +61,6 @@ const T: Record<
     title: "{n} postes écartés comme « {reason} »",
     question: "Voulez-vous exclure ce type de postes de votre profil ?",
     acts: "Si vous acceptez, l'équipe baisse la note des postes de ce type (−15, −30 pour une entreprise) : elle ne les cache pas et continue de les trouver. Vous pouvez retirer ce choix à tout moment.",
-    desktopOnly: "Ce choix se fait dans l'application de bureau.",
     save: "Exclure ce type",
     later: "Pas maintenant",
     saved: "Exclusion enregistrée.",
@@ -76,7 +70,6 @@ const T: Record<
     question:
       "Möchtest du diese Art von Stellen aus deinem Profil ausschließen?",
     acts: "Wenn du zustimmst, senkt das Team die Bewertung solcher Stellen (−15, −30 bei einem Unternehmen): Es blendet sie nicht aus und sucht weiter. Du kannst die Entscheidung jederzeit zurücknehmen.",
-    desktopOnly: "Diese Entscheidung triffst du in der Desktop-App.",
     save: "Diesen Typ ausschließen",
     later: "Nicht jetzt",
     saved: "Ausschluss gespeichert.",
@@ -85,7 +78,6 @@ const T: Record<
     title: "{n} pozíció elutasítva ezzel az okkal: „{reason}”",
     question: "Ki szeretnéd zárni ezt a fajta pozíciót a profilodból?",
     acts: "Ha elfogadod, a csapat csökkenti az ilyen pozíciók pontszámát (−15, cég esetén −30): nem rejti el őket, és tovább keresi őket. A döntést bármikor visszavonhatod.",
-    desktopOnly: "Ezt a döntést az asztali alkalmazásban hozhatod meg.",
     save: "Ezt a típust kizárom",
     later: "Most nem",
     saved: "Kizárás elmentve.",
@@ -94,7 +86,6 @@ const T: Record<
     title: "{n} vagas rejeitadas como «{reason}»",
     question: "Quer excluir este tipo de vaga do seu perfil?",
     acts: "Se aceitar, a equipa baixa a pontuação das vagas deste tipo (−15, −30 para uma empresa): não as esconde nem deixa de as encontrar. Pode retirar a escolha quando quiser.",
-    desktopOnly: "Esta escolha faz-se na aplicação de ambiente de trabalho.",
     save: "Excluir este tipo",
     later: "Agora não",
     saved: "Exclusão guardada.",
@@ -111,7 +102,6 @@ type FeedbackRow = {
 export default function ExclusionProposalCard() {
   const locale = useLocale();
   const t = T[locale] ?? T.en;
-  const { canChange } = useDesktopWrite();
   const labels = REASON_LABELS[locale] ?? REASON_LABELS.en;
   const [proposals, setProposals] = useState<ExclusionProposal[]>([]);
   const [saved, setSaved] = useState(false);
@@ -163,7 +153,7 @@ export default function ExclusionProposalCard() {
   if (!proposal) return null;
 
   const decide = async (status: "accepted" | "dismissed") => {
-    if (busy || !canChange) return;
+    if (busy) return;
     setBusy(true);
     try {
       const res = await fetch("/api/profile-exclusions", {
@@ -210,42 +200,32 @@ export default function ExclusionProposalCard() {
       <p className="text-[11px] mt-1" style={{ color: "var(--color-muted)" }}>
         {t.acts}
       </p>
-      {!canChange && (
-        <p
-          className="text-[11px] mt-1 font-semibold"
-          style={{ color: "var(--color-muted)" }}
+      <div className="flex gap-2 mt-2">
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => decide("accepted")}
+          className="px-3 py-1.5 rounded-lg border text-[11px] font-semibold disabled:opacity-60"
+          style={{
+            borderColor: "var(--color-border)",
+            color: "var(--color-text)",
+          }}
         >
-          {t.desktopOnly}
-        </p>
-      )}
-      {canChange && (
-        <div className="flex gap-2 mt-2">
-          <button
-            type="button"
-            disabled={busy}
-            onClick={() => decide("accepted")}
-            className="px-3 py-1.5 rounded-lg border text-[11px] font-semibold disabled:opacity-60"
-            style={{
-              borderColor: "var(--color-border)",
-              color: "var(--color-text)",
-            }}
-          >
-            {t.save}
-          </button>
-          <button
-            type="button"
-            disabled={busy}
-            onClick={() => decide("dismissed")}
-            className="px-3 py-1.5 rounded-lg border text-[11px] disabled:opacity-60"
-            style={{
-              borderColor: "var(--color-border)",
-              color: "var(--color-muted)",
-            }}
-          >
-            {t.later}
-          </button>
-        </div>
-      )}
+          {t.save}
+        </button>
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => decide("dismissed")}
+          className="px-3 py-1.5 rounded-lg border text-[11px] disabled:opacity-60"
+          style={{
+            borderColor: "var(--color-border)",
+            color: "var(--color-muted)",
+          }}
+        >
+          {t.later}
+        </button>
+      </div>
     </section>
   );
 }
