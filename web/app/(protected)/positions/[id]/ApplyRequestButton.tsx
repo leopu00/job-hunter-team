@@ -72,7 +72,10 @@ async function twoStepCall(
   const outcome = await sendPositionRequest(
     `/api/positions/${legacyId}/apply-request`,
     { ...init, headers: JSON_HEADERS },
-    (body) => body.ok === true && body.state === expected,
+    (body) =>
+      body.ok === true &&
+      (body.state === expected ||
+        (expected === "queued" && body.state === "done")),
     fetchImpl,
   );
   if (!outcome.ok) {

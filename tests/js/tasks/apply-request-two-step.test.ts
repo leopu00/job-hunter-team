@@ -176,6 +176,26 @@ describe("the button's two steps", () => {
     ).toBe(false);
   });
 
+  it("a 'done' counts as done for the second call and for the withdrawal", async () => {
+    const { confirmAuthorisation, withdrawAuthorisation } =
+      await import("@/app/(protected)/positions/[id]/ApplyRequestButton");
+    const done = () =>
+      reply(200, {
+        ok: true,
+        state: "done",
+        id: ROW,
+        level: "L3",
+        summary: "",
+        expiresAt: null,
+      });
+    expect(
+      await confirmAuthorisation(7, ROW, done() as unknown as typeof fetch),
+    ).toEqual({ ok: true, step: "done" });
+    expect(
+      await withdrawAuthorisation(7, done() as unknown as typeof fetch),
+    ).toEqual({ ok: true, step: "done" });
+  });
+
   it("withdrawing is a DELETE that counts only when the door says 'queued'", async () => {
     const { withdrawAuthorisation } =
       await import("@/app/(protected)/positions/[id]/ApplyRequestButton");

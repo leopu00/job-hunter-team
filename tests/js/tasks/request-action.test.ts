@@ -192,6 +192,19 @@ describe("the entry: strict origin for the actions that command the team", () =>
     },
   );
 
+  it.each(["GET", "PUT", "DELETE", "PATCH"])(
+    "an L1 action accepts nothing but POST either (%s)",
+    async (method) => {
+      world.answer = () => queued({ level: "L1" });
+      const res = await requestAction(post({ params: {} }, {}, method), {
+        action: "position.apply_revoke",
+        level: "L1",
+      });
+      expect(res.status).toBe(405);
+      expect(world.rpcs).toEqual([]);
+    },
+  );
+
   it("accepts a JSON content type with a charset", async () => {
     const res = await requestAction(
       post(
@@ -439,7 +452,7 @@ describe("the user and the database", () => {
     });
     for (const body of [
       { params: { legacy_id: 8 } },
-      { params: { extra: 1 } },
+      { params: { legacy_id: 7 } },
     ]) {
       world.rpcs = [];
       expect((await requestAction(post(body), spec)).status).toBe(400);
@@ -464,6 +477,129 @@ describe("the user and the database", () => {
       ).status,
     ).toBe(502);
     expect(world.rpcs).toEqual([]);
+  });
+
+  it("the body's own parameters are added to the route's, which win and cannot be repeated", async () => {
+    const spec = {
+      action: "exclusion.decide",
+      level: "L1" as const,
+      params: { legacy_id: 7 },
+    };
+    world.answer = () => queued({ level: "L1" });
+    expect(
+      (await requestAction(post({ params: { reason: "salary" } }), spec))
+        .status,
+    ).toBe(200);
+    expect(world.rpcs[0].args.p_params).toEqual({
+      reason: "salary",
+      legacy_id: 7,
+    });
+  });
+
+  describe("the free text of the body", () => {
+    const withText = {
+      action: "directive.create",
+      level: "L2" as const,
+      body: true as const,
+    };
+    it("goes to the database as p_body on the first call, untouched, and only if the route takes one", async () => {
+      expect(
+        (
+          await requestAction(
+            post({ params: { kind: "note" }, body: "Prefer remote roles" }),
+            withText,
+          )
+        ).status,
+      ).toBe(200);
+      expect(world.rpcs[0].args).toEqual({
+        p_action: "directive.create",
+        p_params: { kind: "note" },
+        p_confirm_id: null,
+        p_route_level: "L2",
+        p_body: "Prefer remote roles",
+      });
+      world.rpcs = [];
+      expect((await requestAction(post({ params: {} }), withText)).status).toBe(
+        200,
+      );
+      expect(world.rpcs[0].args.p_body).toBeNull();
+      world.rpcs = [];
+      expect((await requestAction(post({ body: "x" }), L2)).status).toBe(400);
+      expect(world.rpcs).toEqual([]);
+      expect((await requestAction(post({ params: {} }), L2)).status).toBe(200);
+      expect("p_body" in world.rpcs[0].args).toBe(false);
+    });
+    it("is a string within the cap, never with the confirmation", async () => {
+      world.rpcs = [];
+      expect(
+        (await requestAction(post({ body: "x".repeat(2000) }), withText))
+          .status,
+      ).toBe(200);
+      expect(
+        (await requestAction(post({ body: "x".repeat(2001) }), withText))
+          .status,
+      ).toBe(400);
+      expect(
+        (await requestAction(post({ body: { a: 1 } }), withText)).status,
+      ).toBe(400);
+      expect((await requestAction(post({ body: null }), withText)).status).toBe(
+        400,
+      );
+      expect(
+        (await requestAction(post({ confirmId: ROW, body: "x" }), withText))
+          .status,
+      ).toBe(400);
+      expect(
+        (
+          await requestAction(post({ body: "x".repeat(41) }), {
+            ...withText,
+            body: { max: 40 },
+          })
+        ).status,
+      ).toBe(400);
+      expect(world.rpcs).toHaveLength(1);
+    });
+    it("the confirmation call does not carry it again", async () => {
+      world.rpcs = [];
+      world.answer = () => queued({ level: "L2" });
+      await requestAction(post({ confirmId: ROW }), withText);
+      expect("p_body" in world.rpcs[0].args).toBe(false);
+    });
+    it("a cap that is not a sane number is the route's mistake", async () => {
+      for (const max of [0, -1, 1.5, 9000, Number.NaN]) {
+        expect(
+          (
+            await requestAction(post({ body: "x" }), {
+              ...withText,
+              body: { max },
+            })
+          ).status,
+        ).toBe(502);
+      }
+    });
+  });
+
+  it("a family that finishes at once answers 'done', on the first call or on the confirmation", async () => {
+    world.answer = () => ({
+      data: {
+        ok: true,
+        state: "done",
+        id: ROW,
+        level: "L1",
+        summary: "",
+        expires_at: null,
+      },
+      error: null,
+    });
+    const first = await requestAction(post({ params: {} }), L2);
+    expect(await json(first)).toMatchObject({ ok: true, state: "done" });
+    expect((await requestAction(post({ confirmId: ROW }), L2)).status).toBe(
+      200,
+    );
+    world.answer = () => awaiting();
+    expect((await requestAction(post({ confirmId: ROW }), L2)).status).toBe(
+      502,
+    );
   });
 
   it("a route that withdraws with DELETE says so: DELETE is its method and POST is not, the origin checks are the same", async () => {
@@ -660,7 +796,7 @@ describe("what the person is shown", () => {
       "a state outside the contract",
       {
         ok: true,
-        state: "done",
+        state: "finished",
         id: ROW,
         level: "L2",
         summary: "x",
