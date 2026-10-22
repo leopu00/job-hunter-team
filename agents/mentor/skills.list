@@ -36,3 +36,6 @@ mentor-output
 # prodotto nulla negli ultimi N giorni). Post-mortem
 # 2026-05-18-capitano-zombie-night.
 spawn-doctor
+
+# T09: the agents' mailbox (drain first in every turn). Dormant until the team lists a receiver.
+mailbox
