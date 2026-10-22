@@ -84,21 +84,30 @@ def route(session="CAPITANO", message=None, identity=VERIFIED, receivers=frozens
     return mail.route(session, message or envelope(), identity=identity, receivers=receivers, now=now)
 
 
-def test_a_verified_agent_to_a_receiver_becomes_a_file_with_the_first_nudge_recorded():
+READY = "some output\n❯ \n"
+ALWAYS = lambda session: True
+
+
+def first_nudge(routed, now=T0):
+    """What the transport does after `route`: ask for the nudge, which is recorded when the terminal is ready."""
+    assert mail.nudge(routed["session"], routed["id"], now=now, capture=lambda s: READY) is True
+
+
+def test_a_verified_agent_to_a_receiver_becomes_a_file_and_the_route_alone_records_no_nudge():
     routed = route()
     assert routed["session"] == "CAPITANO" and routed["recipient"] == "capitano-1" and routed["created"] is True
     [record] = mail.drain("capitano-1", now=T0)
     assert record["body"] == "please look at position 7" and record["kind"] == "REQ"
     assert record["from_verified"] == "scout-1" and record["trust"] == "verified"
-    assert [r["state"] for r in mail.receipts("capitano-1", routed["id"])] == ["queued", "nudged", "taken"]
+    assert [r["state"] for r in mail.receipts("capitano-1", routed["id"])] == ["queued", "taken"]
 
 
-def test_the_same_message_twice_in_ten_seconds_is_one_file_and_one_nudge():
+def test_the_same_message_twice_in_ten_seconds_is_one_file():
     start = T0 - timedelta(seconds=T0.timestamp() % 10)
     first = route(now=start)
     again = route(now=start + timedelta(seconds=2))
     assert again["id"] == first["id"] and again["created"] is False
-    assert [r["state"] for r in mail.receipts("capitano-1", first["id"])].count("nudged") == 1
+    assert len(list((mail.box_dir("capitano-1") / "new").glob("*.json"))) == 1
 
 
 @pytest.mark.parametrize("name,kwargs", [
@@ -138,25 +147,26 @@ def test_the_command_to_send_refuses_a_name_that_is_not_a_receiver(jht_home):
 
 def test_a_queued_message_is_woken_for_again_after_a_minute_then_after_five_and_no_more():
     routed = route(now=T0)
+    first_nudge(routed)
     receivers = frozenset({"capitano-1"})
-    assert mail.remind(receivers, now=T0 + timedelta(seconds=59)) == []
-    [second] = mail.remind(receivers, now=T0 + timedelta(seconds=60))
+    assert mail.remind(receivers, now=T0 + timedelta(seconds=59), ready=ALWAYS) == []
+    [second] = mail.remind(receivers, now=T0 + timedelta(seconds=60), ready=ALWAYS)
     assert second == {"session": "CAPITANO", "text": mail.nudge_text(1)}
-    assert mail.remind(receivers, now=T0 + timedelta(seconds=60 + 299)) == []
-    assert len(mail.remind(receivers, now=T0 + timedelta(seconds=60 + 300))) == 1
-    assert mail.remind(receivers, now=T0 + timedelta(days=1)) == [], "three nudges, no more"
+    assert mail.remind(receivers, now=T0 + timedelta(seconds=60 + 299), ready=ALWAYS) == []
+    assert len(mail.remind(receivers, now=T0 + timedelta(seconds=60 + 300), ready=ALWAYS)) == 1
+    assert mail.remind(receivers, now=T0 + timedelta(days=1), ready=ALWAYS) == [], "three nudges, no more"
     assert [r["state"] for r in mail.receipts("capitano-1", routed["id"])].count("nudged") == 3
 
 
 def test_a_message_that_was_taken_is_not_woken_for():
-    route(now=T0)
+    first_nudge(route(now=T0))
     mail.drain("capitano-1", now=T0 + timedelta(seconds=5))
-    assert mail.remind(frozenset({"capitano-1"}), now=T0 + timedelta(seconds=120)) == []
+    assert mail.remind(frozenset({"capitano-1"}), now=T0 + timedelta(seconds=120), ready=ALWAYS) == []
 
 
 def test_the_nudge_carries_no_content_of_any_message():
-    route(message=envelope(text="the secret words of the message"), now=T0)
-    [line] = mail.remind(frozenset({"capitano-1"}), now=T0 + timedelta(seconds=61))
+    first_nudge(route(message=envelope(text="the secret words of the message"), now=T0))
+    [line] = mail.remind(frozenset({"capitano-1"}), now=T0 + timedelta(seconds=61), ready=ALWAYS)
     assert "secret" not in line["text"] and "[@" not in line["text"], "no envelope: it can never be routed itself"
 
 
@@ -167,11 +177,12 @@ def test_the_words_the_transport_types_are_the_ones_the_library_would():
 
 def test_the_tick_expires_tells_and_wakes_and_makes_no_folder_for_those_who_are_not_receivers(jht_home):
     receivers = frozenset({"capitano-1"})
-    route(now=T0)  # an ordinary request, 10 minutes of patience
+    first_nudge(route(now=T0))  # an ordinary request, 10 minutes of patience
     urgent = mail.route("CAPITANO", envelope(kind="URG", text="stop now"), identity=VERIFIED, receivers=receivers, now=T0)
-    lines = mail.tick(receivers, now=T0 + timedelta(seconds=60))
+    first_nudge(urgent)
+    lines = mail.tick(receivers, now=T0 + timedelta(seconds=60), ready=ALWAYS)
     assert [l for l in lines if "new message" in l["text"]] == [{"session": "CAPITANO", "text": mail.nudge_text(2)}]
-    lines = mail.tick(receivers, now=T0 + timedelta(seconds=60 + 120))
+    lines = mail.tick(receivers, now=T0 + timedelta(seconds=60 + 120), ready=ALWAYS)
     expired = mail.state_of("capitano-1", urgent["id"])
     assert expired == "expired"
     typed = [l for l in lines if "was not taken" in l["text"]]
@@ -185,13 +196,79 @@ def test_the_sessions_of_the_agents_that_run_once_have_a_bare_name():
         "CAPITANO", "SCOUT-2", "SENTINELLA", "ANALISTA-1"]
 
 
+def fake_tmux_env(home, **extra):
+    """A fake `tmux` first in the PATH, whose pane is a prompt waiting empty unless `extra` says otherwise."""
+    bin_dir = home / "fake-bin"
+    state = home / "fake-state"
+    bin_dir.mkdir(exist_ok=True)
+    state.mkdir(exist_ok=True)
+    (bin_dir / "tmux").write_text(FAKE_TMUX, encoding="utf-8")
+    (bin_dir / "tmux").chmod(0o755)
+    return {**os.environ, "JHT_HOME": str(home), "FAKE_TMUX_STATE": str(state),
+            "FAKE_PANE_PID": str(os.getpid()), "FAKE_PANE_SESSION": "scout-1", "TMUX": "fake",
+            "PATH": f"{bin_dir}:{Path(sys.executable).parent}:/usr/bin:/bin", **extra}
+
+
 def test_the_command_tick_prints_session_tab_text_and_nothing_else(jht_home):
     enable(jht_home, "capitano")
-    route(now=datetime.now(timezone.utc) - timedelta(seconds=90))
-    env = {**os.environ, "JHT_HOME": str(jht_home)}
-    done = subprocess.run([sys.executable, str(MODULE), "tick"], capture_output=True, text=True, env=env)
+    past = datetime.now(timezone.utc) - timedelta(seconds=90)
+    first_nudge(route(now=past), now=past)
+    done = subprocess.run([sys.executable, str(MODULE), "tick"], capture_output=True, text=True, env=fake_tmux_env(jht_home))
     assert done.returncode == 0, done.stderr
     assert done.stdout.splitlines() == [f"CAPITANO\t{mail.nudge_text(1)}"]
+
+
+# -- phase 3b: the nudge is typed only at the prompt ------------------------------------------------------------------------
+
+BUSY = "✻ Working… (12s · esc to interrupt)\n❯ \n"
+MENU = "Do you want to proceed?\n❯ 1. Yes\n  2. No\n"
+SIGNIN = "Please sign in to continue\n$ \n"
+
+
+@pytest.mark.parametrize("name,pane", [("busy", BUSY), ("a menu", MENU), ("a shell", SIGNIN), ("no pane at all", None)])
+def test_the_nudge_is_held_unless_the_terminal_is_shown_to_wait_at_its_prompt(name, pane):
+    routed = route()
+    assert mail.nudge(routed["session"], routed["id"], now=T0, capture=lambda s: pane) is False, name
+    assert [r["state"] for r in mail.receipts("capitano-1", routed["id"])] == ["queued"], "nothing is recorded for a nudge not typed"
+    assert mail.nudge(routed["session"], routed["id"], now=T0, capture=lambda s: READY) is True
+    assert [r["state"] for r in mail.receipts("capitano-1", routed["id"])] == ["queued", "nudged"]
+
+
+def test_a_capture_that_raises_is_not_ready():
+    routed = route()
+
+    def broken(session):
+        raise OSError("tmux is gone")
+
+    assert mail.nudge(routed["session"], routed["id"], capture=broken) is False
+
+
+def test_the_reminders_wait_for_the_prompt_and_come_back_when_it_is_there():
+    routed = route(now=T0)
+    first_nudge(routed)
+    receivers = frozenset({"capitano-1"})
+    assert mail.remind(receivers, now=T0 + timedelta(seconds=90), ready=lambda s: False) == []
+    assert [r["state"] for r in mail.receipts("capitano-1", routed["id"])].count("nudged") == 1, "a held reminder is not counted"
+    [line] = mail.remind(receivers, now=T0 + timedelta(seconds=95), ready=ALWAYS)
+    assert line["session"] == "CAPITANO"
+
+
+def test_the_expiry_does_not_wait_for_a_prompt_that_never_comes():
+    urgent = mail.route("CAPITANO", envelope(kind="URG", text="stop now"), identity=VERIFIED,
+                        receivers=frozenset({"capitano-1"}), now=T0)
+    assert mail.nudge(urgent["session"], urgent["id"], now=T0, capture=lambda s: BUSY) is False
+    swept = mail.sweep("capitano-1", now=T0 + timedelta(seconds=120), receivers=frozenset({"capitano-1"}))
+    assert swept["expired"] == [urgent["id"]], "not taken is counted from the message, held nudges included"
+
+
+def test_the_command_tick_types_nothing_while_the_terminal_is_busy(jht_home):
+    enable(jht_home, "capitano")
+    past = datetime.now(timezone.utc) - timedelta(seconds=90)
+    first_nudge(route(now=past), now=past)
+    done = subprocess.run([sys.executable, str(MODULE), "tick"], capture_output=True, text=True,
+                          env=fake_tmux_env(jht_home, FAKE_SCREEN="✻ Working… (12s · esc to interrupt)"))
+    assert done.returncode == 0, done.stderr
+    assert done.stdout == ""
 
 
 # -- no receipt is lost while another process trims the file ----------------------------------------------------------
@@ -230,7 +307,7 @@ case "$cmd" in
   has-session) exit 0 ;;
   list-panes) printf '%s %s\n' "$FAKE_PANE_PID" "$FAKE_PANE_SESSION"; printf '99999 capitano\n99998 analista-1\n'; exit 0 ;;
   show-options) exit 0 ;;
-  capture-pane) printf '%s\n' "${FAKE_SCREEN:-}"; printf '❯ %s\n' "$(cat "$S/composer" 2>/dev/null)"; exit 0 ;;
+  capture-pane) printf '%s\n' "${FAKE_SCREEN:-}"; printf '❯ %s%s\n' "$(cat "$S/composer" 2>/dev/null)" "${FAKE_COMPOSER_EXTRA:-}"; exit 0 ;;
   send-keys)
     while [ "$1" = "-t" ]; do shift 2; done
     if [ "$1" = "-l" ]; then
@@ -438,3 +515,44 @@ def test_the_command_route_exits_zero_when_the_file_is_there(jht_home, monkeypat
     assert done.returncode == 0, done.stderr
     assert done.stdout.split("\t")[1] == "CAPITANO"
     assert len(list((jht_home / "mailbox" / "capitano-1" / "new").glob("*.json"))) == 1
+
+
+# -- phase 3b through the real script ----------------------------------------------------------------------------------------
+
+@pytest.mark.parametrize("name,extra", [
+    ("busy", {"FAKE_SCREEN": "✻ Working… (12s · esc to interrupt)"}),
+    ("a menu", {"FAKE_SCREEN": "Do you want to proceed?", "FAKE_COMPOSER_EXTRA": "1. Yes"}),
+])
+def test_the_transport_queues_but_types_nothing_when_the_terminal_is_not_at_its_prompt(wire, jht_home, name, extra):
+    run, typed, _ = wire
+    enable(jht_home, "capitano")
+    done = run("CAPITANO", envelope(), **extra)
+    assert done.returncode == 0, done.stderr
+    assert "nudge held" in done.stdout, name
+    assert typed() == [], "not a key reaches a terminal that may be showing a menu"
+    [file] = queued_files(jht_home)
+    states = [r["state"] for r in mail.receipts("capitano-1", json.loads(file.read_text())["id"])]
+    assert states == ["queued"], "a nudge not typed is not recorded"
+
+
+def test_the_transport_records_the_nudge_it_types(wire, jht_home):
+    run, typed, _ = wire
+    enable(jht_home, "capitano")
+    assert run("CAPITANO", envelope()).returncode == 0
+    [file] = queued_files(jht_home)
+    states = [r["state"] for r in mail.receipts("capitano-1", json.loads(file.read_text())["id"])]
+    assert states == ["queued", "nudged"] and typed() == [mail.nudge_text(1)]
+
+
+def test_a_first_nudge_held_because_the_terminal_was_busy_goes_as_soon_as_it_is_ready():
+    """The case phase 3b creates: busy at the moment of sending. Nobody may ever send the sender a
+    «not taken» for a message whose agent was merely working."""
+    routed = route(now=T0)
+    assert mail.nudge(routed["session"], routed["id"], now=T0, capture=lambda s: BUSY) is False
+    receivers = frozenset({"capitano-1"})
+    assert mail.remind(receivers, now=T0 + timedelta(seconds=30), ready=lambda s: False) == []
+    [line] = mail.remind(receivers, now=T0 + timedelta(seconds=40), ready=ALWAYS)
+    assert line == {"session": "CAPITANO", "text": mail.nudge_text(1)}
+    assert [r["state"] for r in mail.receipts("capitano-1", routed["id"])] == ["queued", "nudged"]
+    assert mail.remind(receivers, now=T0 + timedelta(seconds=41), ready=ALWAYS) == [], "then the schedule: 60 s after this one"
+    assert len(mail.remind(receivers, now=T0 + timedelta(seconds=40 + 60), ready=ALWAYS)) == 1

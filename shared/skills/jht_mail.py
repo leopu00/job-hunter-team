@@ -101,6 +101,7 @@ EXIT = {
     "not_found": 12,
     "refused": 13,
     "not_applicable": 20,
+    "held": 21,
 }
 
 
@@ -698,7 +699,8 @@ def route(session: str, message: str, *, identity=None, receivers=None, now: dat
     with `b` the recipient; and the sender is an agent that tmux can place in its own pane as `a`
     (`identity` is `(trust, claimed, origin)` as message_origin works it out). Everything else keeps
     to the terminal: the user, the bridges, the watchdog and any sender nobody can verify.
-    The first nudge is recorded here; the transport types it right after.
+    The nudge is NOT recorded here: the transport asks `nudge` for it, which records it only when the
+    terminal is at its prompt.
     """
     wanted = load_receivers() if receivers is None else receivers
     try:
@@ -729,11 +731,6 @@ def route(session: str, message: str, *, identity=None, receivers=None, now: dat
         return None
     moment = _utc(now)
     result = send(recipient, body, kind=found.group(3) or "MSG", sender=(VERIFIED_TRUST, claimed, claimed), now=moment)
-    if result["created"]:
-        try:
-            record_nudge(recipient, [result["id"]], now=moment)
-        except OSError:
-            pass  # the reminders restart the clock; a failure here must not make the transport type the text too
     return {"id": result["id"], "state": result["state"], "recipient": recipient,
             "session": session_of(recipient), "created": result["created"]}
 
@@ -749,6 +746,42 @@ def _identity(message: str):
         sys.path.pop(0)
 
 
+def _agent_chat():
+    sys.path.insert(0, str(HERE))
+    try:
+        import agent_chat
+    finally:
+        sys.path.pop(0)
+    return agent_chat
+
+
+def session_ready(session: str, capture=None) -> bool:
+    """True only when the terminal of `session` is shown to wait at its prompt, by the rule the user's
+    chat already uses (`agent_chat.prompt_state`: imported, not copied). A busy terminal is not ready
+    either: a menu or a permission question can open during a turn, and a key typed over it answers it.
+    Anything that cannot be shown is "no"."""
+    try:
+        chat = _agent_chat()
+        pane = (capture or chat.capture_pane)(session)
+        return pane is not None and chat.prompt_state(pane) == "ready"
+    except Exception:
+        return False
+
+
+def nudge(session: str, message_id: str, *, now: datetime | None = None, capture=None) -> bool:
+    """Whether the transport may type the nudge for this message now. If so, the nudge is recorded
+    (the not-taken clock and the schedule of the next ones start from here); if not, nothing is
+    recorded and nothing is typed: the message waits in the box and the next round tries again."""
+    agent = agent_id(session)
+    if not MESSAGE_ID.match(str(message_id)) or not session_ready(session, capture):
+        return False
+    try:
+        record_nudge(agent, [message_id], now=now)
+    except OSError:
+        pass  # the receipt is bookkeeping; the nudge itself is still worth typing
+    return True
+
+
 def nudge_text(count: int) -> str:
     """What is typed into a terminal to wake its agent: fixed words, no content of any message."""
     return f"[MAIL] {int(count)} new message(s) in your mailbox. Run: jht-mail drain"
@@ -758,26 +791,33 @@ def _nudges(agent: str, message_id: str) -> list[datetime]:
     return sorted(t for t in (_parse(r.get("at")) for r in receipts(agent, message_id) if r.get("state") == "nudged") if t)
 
 
-def remind(receivers, now: datetime | None = None) -> list[dict]:
-    """Nudges that are due: a queued message is woken for again 60 seconds after its first nudge,
-    and 5 minutes after the second; never more than three times. One line per box."""
+def remind(receivers, now: datetime | None = None, ready=None) -> list[dict]:
+    """Nudges that are due: a queued message that has none yet (the first was held) as soon as the
+    terminal is ready; then 60 seconds after its first nudge, and 5 minutes after the second; never
+    more than three times. One line per box, and only when the
+    terminal is at its prompt (`ready(session)`; the real check when None): otherwise nothing is
+    recorded and the next round looks again."""
     moment = _utc(now)
     due = []
+    gate = ready or session_ready
     for agent in sorted(receivers):
         if not box_dir(agent).is_dir():
             continue  # no folder is created for a receiver nobody wrote to
         waiting = []
         for item in pending(agent, now=moment):
             sent = _nudges(agent, item["id"])
-            if 1 <= len(sent) <= len(RENEWAL_AFTER) and (moment - sent[-1]).total_seconds() >= RENEWAL_AFTER[len(sent) - 1]:
+            # No nudge yet (the first was held: the terminal was busy): it goes as soon as the terminal is
+            # ready. After one or two, the schedule; after three, no more.
+            if not sent or (len(sent) <= len(RENEWAL_AFTER)
+                            and (moment - sent[-1]).total_seconds() >= RENEWAL_AFTER[len(sent) - 1]):
                 waiting.append(item["id"])
-        if waiting:
+        if waiting and gate(session_of(agent)):
             record_nudge(agent, waiting, now=moment)
             due.append({"session": session_of(agent), "text": nudge_text(len(pending(agent, now=moment)))})
     return due
 
 
-def tick(receivers, now: datetime | None = None) -> list[dict]:
+def tick(receivers, now: datetime | None = None, ready=None) -> list[dict]:
     """What the watchdog does on each round: expire, tell, and wake again. Returns the lines to type."""
     moment = _utc(now)
     lines: list[dict] = []
@@ -785,7 +825,7 @@ def tick(receivers, now: datetime | None = None) -> list[dict]:
         if not box_dir(agent).is_dir():
             continue
         lines.extend(sweep(agent, now=moment, receivers=receivers)["typed"])
-    lines.extend(remind(receivers, now=moment))
+    lines.extend(remind(receivers, now=moment, ready=ready))
     return lines
 
 
@@ -864,6 +904,9 @@ def build_parser() -> argparse.ArgumentParser:
     sub.add_parser("sweep", help="expire what was not taken in time").add_argument("agents", nargs="*")
     sub.add_parser("tick", help="sweep and wake again; prints 'SESSION<TAB>TEXT' lines to type (the watchdog runs this)")
     sub.add_parser("route", help="(the transport) queue the message on stdin when it applies").add_argument("session")
+    n = sub.add_parser("nudge", help="(the transport) may the nudge for this message be typed now?")
+    n.add_argument("session")
+    n.add_argument("message_id")
     return parser
 
 
@@ -909,6 +952,8 @@ def main(argv=None) -> int:
                 return EXIT["not_applicable"]
             print("\t".join((routed["id"], routed["session"], routed["recipient"], "new" if routed["created"] else "again")))
             return EXIT["ok"]
+        if args.command == "nudge":
+            return EXIT["ok"] if nudge(args.session, args.message_id) else EXIT["held"]
         if args.command == "tick":
             for line in tick(load_receivers()):
                 text = " ".join(_LINE_BREAK.split(line["text"])).replace("\t", " ")

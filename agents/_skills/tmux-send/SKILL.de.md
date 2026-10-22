@@ -67,7 +67,7 @@ Standardtypen (siehe `agents/_manual/communication-rules.md` fuer die vollstaend
 ## Exit-Codes
 
 - `0` — Nachricht zugestellt **und abgeschickt** (verifiziert: der Zug ist gestartet)
-  - Nutzt der Empfänger das Postfach (`mail_receivers`), bedeutet `0` **eingereiht**: die Nachricht ist eine dauerhafte Datei, das Terminal bekam nur einen kurzen Anstoß. Ob der Agent sie *abgeholt* hat, sagt `jht-mail status <Agent> <id>`; eine Nachricht, die niemand rechtzeitig abholt, wird dem Absender gemeldet. Ist die Nachricht eingereiht, ist der Exit-Code `0`, was auch mit dem Anstoß geschieht, außer `3` (ein Terminal, das nicht antwortet); eine Sitzung, die nach dem Einreihen verschwindet, meldet nicht mehr `2`, die Nachricht wartet im Postfach.
+  - Nutzt der Empfänger das Postfach (`mail_receivers`), bedeutet `0` **eingereiht**: die Nachricht ist eine dauerhafte Datei, das Terminal bekam nur einen kurzen Anstoß. Ob der Agent sie *abgeholt* hat, sagt `jht-mail status <Agent> <id>`; eine Nachricht, die niemand rechtzeitig abholt, wird dem Absender gemeldet. Ist die Nachricht eingereiht, ist der Exit-Code `0`, was auch mit dem Anstoß geschieht, außer `3` (ein Terminal, das nicht antwortet); eine Sitzung, die nach dem Einreihen verschwindet, meldet nicht mehr `2`, die Nachricht wartet im Postfach. Der Anstoß wird nur getippt, wenn das Terminal am Prompt wartet; sonst wird er zurückgehalten (der Exit-Code bleibt `0`) und der Watchdog wiederholt ihn.
 - `1` — fehlende Argumente
 - `2` — Zielsitzung existiert nicht (pruefe den Namen mit `tmux ls`)
 - `3` — Text nie erschienen und Panel nicht beschaeftigt → TUI nicht empfangsbereit. **Der einzige Code, der tot/verklemmt nahelegt.**
