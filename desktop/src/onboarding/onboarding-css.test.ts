@@ -116,19 +116,28 @@ describe("OnboardingFlow JHT palette", () => {
 });
 
 describe("the onboarding's error frames", () => {
-  function rule(selector: string) {
+  // A Windows checkout gives the stylesheet CRLF line ends: the rules are read with the line ends made
+  // \n first, so a selector written over two lines is found on every platform.
+  function rule(source: string, selector: string) {
+    const css = source.replace(/\r\n?/g, "\n");
     const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    const body = onboardingStyles.match(new RegExp(`(?:^|\\n)${escaped}\\s*\\{([^}]*)\\}`))?.[1];
+    const body = css.match(new RegExp(`(?:^|\\n)${escaped}\\s*\\{([^}]*)\\}`))?.[1];
     expect(body, `missing rule ${selector}`).toBeDefined();
     return body!;
   }
 
-  it("keep a long log path, an error code or a long cause inside the red frame", () => {
+  // The stylesheet as it is here, and the same text with Windows line ends.
+  const checkouts = [
+    ["as checked out here", onboardingStyles],
+    ["with Windows line ends", onboardingStyles.replace(/\r?\n/g, "\r\n")],
+  ] as const;
+
+  it.each(checkouts)("keep a long log path, an error code or a long cause inside the red frame (%s)", (_, source) => {
     // the text column may shrink below its longest word, and the words longer than the line break
-    expect(rule(".onboarding-runtime-status")).toMatch(/grid-template-columns:\s*38px\s+minmax\(0,\s*1fr\)/);
-    expect(rule(".onboarding-runtime-status > div")).toMatch(/min-width:\s*0/);
-    expect(rule(".onboarding-runtime-status strong,\n.onboarding-runtime-status small")).toMatch(/overflow-wrap:\s*anywhere/);
-    expect(rule(".onboarding-runtime-status code")).toMatch(/word-break:\s*break-all/);
-    expect(rule(".onboarding-error")).toMatch(/overflow-wrap:\s*anywhere/);
+    expect(rule(source, ".onboarding-runtime-status")).toMatch(/grid-template-columns:\s*38px\s+minmax\(0,\s*1fr\)/);
+    expect(rule(source, ".onboarding-runtime-status > div")).toMatch(/min-width:\s*0/);
+    expect(rule(source, ".onboarding-runtime-status strong,\n.onboarding-runtime-status small")).toMatch(/overflow-wrap:\s*anywhere/);
+    expect(rule(source, ".onboarding-runtime-status code")).toMatch(/word-break:\s*break-all/);
+    expect(rule(source, ".onboarding-error")).toMatch(/overflow-wrap:\s*anywhere/);
   });
 });
