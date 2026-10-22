@@ -224,9 +224,9 @@ docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build
 # 3. Configure the dev container
 docker exec -it jht node /app/cli/bin/jht.js setup
 
-# 4. Run the desktop app from source (see desktop/README.md); the root
-#    install provides what shared/ imports
-npm ci
+# 4. Run the desktop app from source (see desktop/README.md); shared/
+#    dependencies first, as the release workflow installs them
+npm --prefix shared ci --ignore-scripts
 npm --prefix desktop ci
 npm --prefix desktop run tauri:dev
 
