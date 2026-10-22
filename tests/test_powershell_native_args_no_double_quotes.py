@@ -149,6 +149,29 @@ def test_the_chat_send_line_keeps_the_message_whole(tmp_path):
     assert _send(tmp_path, line, MESSAGE + "\n") == ["CAPITANO", MESSAGE]
 
 
+TMUX_SEND = ROOT / "agents" / "_skills" / "tmux-send" / "jht-tmux-send"
+
+
+@pytest.mark.skipif(os.name == "nt" or not shutil.which("bash"), reason="needs a POSIX sh and bash, like the container's")
+@pytest.mark.parametrize("message", ["", "\n\n"], ids=["empty", "only-new-lines"])
+def test_an_empty_message_is_refused_by_jht_tmux_send_not_sent(tmp_path, message):
+    """Without quotes an empty $msg is no argument at all (before, it was ""). The app refuses an
+    empty or blank text before this (direct_chat_send: invalid_request); called directly, the real
+    jht-tmux-send gets the session alone and stops with its usage, before any tmux call."""
+    assert _send(tmp_path, _chat_line(), message) == ["CAPITANO"]
+    bin_dir = tmp_path / "real-bin"
+    bin_dir.mkdir()
+    real = bin_dir / "jht-tmux-send"
+    shutil.copyfile(TMUX_SEND, real)
+    real.chmod(0o755)
+    done = subprocess.run(
+        ["sh", "-c", _chat_line(), "sh", "CAPITANO"], input=message, text=True, capture_output=True, timeout=30,
+        env={**os.environ, "PATH": f"{bin_dir}{os.pathsep}{os.environ.get('PATH', '')}"},
+    )
+    assert done.returncode == 1, done.stdout + done.stderr
+    assert "Usage: jht-tmux-send <session> <message>" in done.stderr
+
+
 @pytest.mark.skipif(os.name == "nt" or not shutil.which("sh"), reason="needs a POSIX sh, like the container's")
 def test_the_old_chat_send_line_as_51_delivered_it_split_and_globbed_the_message(tmp_path):
     """The defect the quote-free line removes: 5.1 dropped the quotes of `"$1" "$msg"`."""
