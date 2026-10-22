@@ -8,7 +8,7 @@
 
 export const AGENT_CONTROL_SCRIPT = '/app/shared/skills/agent_control.py';
 
-// The script's own codes are 100-112; these two are the command's.
+// The script's own codes are 100-112 and 115-116; these two are the command's.
 export const EXIT_INVALID = 100;
 export const EXIT_NO_TEAM = 113;
 export const EXIT_UNANSWERED = 114;
@@ -24,7 +24,10 @@ const HOURS = /^[1-9][0-9]{0,2}$/;
 const INSTANT = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?(?:Z|[+-]\d{2}:\d{2})$/;
 
 const WITH_SESSION = new Set(['start', 'stop', 'restart', 'screen']);
-const ALONE = new Set(['resume', 'list', 'team']);
+const ALONE = new Set(['resume', 'list', 'team', 'exclusions']);
+// A code of the exclusions' closed vocabulary (JHT-T24-b); the script checks it against the list.
+const WITH_CODE = new Set(['exclusion-accept', 'exclusion-withdraw']);
+const CODE = /^[a-z][a-z_]{0,31}$/;
 
 /** The argv for the script, or null when `args` is not one of the shapes. */
 export function agentControlArgv(args) {
@@ -32,6 +35,9 @@ export function agentControlArgv(args) {
   const [op, ...rest] = args;
   if (WITH_SESSION.has(op)) {
     return rest.length === 1 && SESSION.test(rest[0]) ? [op, rest[0]] : null;
+  }
+  if (WITH_CODE.has(op)) {
+    return rest.length === 1 && CODE.test(rest[0]) ? [op, rest[0]] : null;
   }
   if (ALONE.has(op)) return rest.length === 0 ? [op] : null;
   if (op !== 'pause') return null;

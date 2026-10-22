@@ -4,6 +4,7 @@
 //   jht agent-control pause --for-hours <n> | --until <iso> | --wake-on-weekly
 //   jht agent-control resume
 //   jht agent-control list | screen <SESSION> | team
+//   jht agent-control exclusions | exclusion-accept <CODE> | exclusion-withdraw <CODE>
 //
 // One JSON line on stdout and a closed exit code, both from
 // shared/skills/agent_control.py, which holds every rule (see its header).

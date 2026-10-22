@@ -55,6 +55,17 @@ const NOT_ERRORS: Record<string, string> = {
   dislike: "position judgement value",
   hide: "position judgement value",
   clear: "position judgement value",
+  // The exclusions of the profile decided from the panel (agent_control.rs): the codes with an underscore that act on
+  // the score, the field names of the judgements the proposals are made of, and a result word.
+  salary_low: "exclusion code (shared/feedback-reasons.json)",
+  wrong_location: "exclusion code (shared/feedback-reasons.json)",
+  wrong_stack: "exclusion code (shared/feedback-reasons.json)",
+  created_at: "field of the jobs.db judgement read",
+  decided_at: "field of the jobs.db exclusion read",
+  legacy_id: "field of the jobs.db judgement read",
+  exclusion_withdrawn: "result word of an exclusion withdrawn",
+  exclusion_accept: "operation name of the panel's request",
+  exclusion_withdraw: "operation name of the panel's request",
   // The outcome of «Attiva assistente» when the assistant was already running: a result, not an error.
   already_active: "assistant start outcome",
   // The outcome of the in-app registration of a team's target: a result, not an error.

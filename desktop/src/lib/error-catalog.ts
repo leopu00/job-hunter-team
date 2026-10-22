@@ -752,6 +752,24 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
     "The agent is still running after the stop.",
     "Try again in a few seconds.",
   ),
+  exclusion_no_evidence: copy(
+    "Per questa esclusione mancano le posizioni scartate con questo motivo: la squadra non può ancora farne una regola.",
+    "Scarta altre posizioni con questo motivo e riprova.",
+    "There are no positions turned down with this reason to build the rule from.",
+    "Turn down more positions with this reason, then try again.",
+  ),
+  exclusion_failed: copy(
+    "L’esclusione non è stata salvata sulla squadra.",
+    "Riprova. Se si ripete, segnala il codice che vedi accanto.",
+    "The exclusion was not saved on the team.",
+    "Try again. If it keeps happening, report the code shown next to it.",
+  ),
+  exclusions_unavailable: copy(
+    "La squadra non risponde sulle esclusioni del profilo: ha una versione più vecchia.",
+    "Aggiorna la squadra e riprova.",
+    "The team cannot answer about the profile exclusions: it runs an older version.",
+    "Update the team and try again.",
+  ),
   agent_contained: copy(
     "La squadra ha messo questo agente in sicurezza (per esempio la sentinella o il dottore): dall’app non si riaccende.",
     "Aspetta che la squadra lo rilasci; il motivo è nel registro della squadra.",
