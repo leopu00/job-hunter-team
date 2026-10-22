@@ -31,5 +31,16 @@ export class NextRequest extends Request {
   constructor(input: RequestInfo | URL, init?: RequestInit) {
     super(input, init);
     this.nextUrl = new URL(this.url);
+    // A call from the page to its own routes is same-origin by construction. A webview does not let a script
+    // set Origin, Host or Sec-Fetch-Site (a Request built here drops them), and the routes that command the
+    // team through the single door want them. So the headers the routes read are a copy that says what is
+    // true: this origin, this host, same-origin. They come from the page's location, never from the caller.
+    const headers = new Headers(this.headers);
+    if (typeof window !== "undefined" && this.nextUrl.origin === window.location.origin) {
+      headers.set("origin", window.location.origin);
+      headers.set("host", window.location.host);
+      headers.set("sec-fetch-site", "same-origin");
+    }
+    Object.defineProperty(this, "headers", { value: headers, enumerable: true });
   }
 }

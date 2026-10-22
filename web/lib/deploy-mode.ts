@@ -45,6 +45,15 @@ export function isCloudDeploy(): boolean {
   return getDeployMode() === "cloud";
 }
 
+/**
+ * Whether the strict origin check of the single door (`lib/request-action.ts`) needs `JHT_PUBLIC_ORIGIN`.
+ * A public cloud deploy does: without it the right origin would come from a forwarded header that anyone
+ * talking directly to the server can invent. The desktop's stand-in says no: its calls never leave the app.
+ */
+export function requiresPublicOrigin(): boolean {
+  return isCloudDeploy();
+}
+
 export function isLocalDeploy(): boolean {
   return getDeployMode() === "local";
 }
