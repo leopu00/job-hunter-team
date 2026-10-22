@@ -937,7 +937,7 @@ mod tests {
         let reply = json!({"ok":true,
             "exclusions":[
                 {"code":"company","status":"active","decided_at":"2026-10-01 10:00:00.123"},
-                {"code":"too_senior","status":"active","decided_at":null},
+                {"code":"other","status":"active","decided_at":null},
                 {"code":"wrong_stack","status":"on fire","decided_at":null},
                 {"code":"salary_low","status":"withdrawn","decided_at":"x; rm -rf /"}],
             "feedback":[
