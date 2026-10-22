@@ -37,7 +37,7 @@ from pathlib import Path
 import pytest
 
 from windows_native_fakes import (
-    ENGINE_CHECK, WINDOWS, assert_engine, git_bash, install_fake, launcher, powershell_argv, windows_env,
+    ENGINE_CHECK, WINDOWS, assert_engine, expected_engine, git_bash, install_fake, launcher, powershell_argv, windows_env,
 )
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -465,7 +465,7 @@ def test_the_install_block_with_a_fake_winget(tmp_path, installed, winget_code, 
 
 # JHT-T56: the pin is what the app installs; a newer 6 is used with a warning, an older 6 is brought
 # to the pin, another major is podman_version_mismatch without touching it.
-@pytest.mark.skipif(PWSH is None or os.name == "nt", reason="needs PowerShell off Windows")
+@needs_powershell
 @pytest.mark.parametrize(("before", "after", "expected_exit", "expected_line", "winget_runs"), [
     ("6.0.2", None, 0, None, False),
     ("6.1.4", None, 0, "JHT_WARNING podman_version_newer: Podman 6.1.4 is installed on this computer;", False),
@@ -480,12 +480,10 @@ def test_a_podman_of_another_version(tmp_path, before, after, expected_exit, exp
     calls = tmp_path / "winget-calls"
     fake_podman = tmp_path / "Programs" / "Podman" / "podman.exe"
     fake_podman.parent.mkdir(parents=True)
-    fake_podman.write_text(f"#!/bin/sh\necho 'podman version {before}'\n", encoding="utf-8")
-    fake_podman.chmod(0o755)
+    install_fake(fake_podman.parent, "podman.exe", f"#!/bin/sh\necho 'podman version {before}'\n")
     winget = f"  Add-Content -LiteralPath '{calls}' -Value ($args -join ' ')\n"
     if after:
-        winget += (f"  Set-Content -LiteralPath '{fake_podman}' -Value \"#!/bin/sh`necho 'podman version {after}'\"\n"
-                   f"  & chmod 755 '{fake_podman}'\n")
+        winget += _ps_make_podman(fake_podman, after)
     winget += "  $global:LASTEXITCODE = 0\n"
     done = _run_block(tmp_path, winget)
     assert done.returncode == expected_exit, done.stdout + done.stderr
@@ -624,7 +622,7 @@ WINDOWS_POWERSHELL_JSON = (
 )
 
 
-@pytest.mark.skipif(PWSH is None or os.name == "nt", reason="needs PowerShell off Windows")
+@needs_powershell
 @pytest.mark.parametrize("shell", ["windows-powershell-5.1", "powershell-7"])
 @pytest.mark.parametrize(("digests", "accepted"), [
     ([f"ghcr.io/leopu00/jht@{PLATFORM}", f"ghcr.io/leopu00/jht@{INDEX}"], True),   # Podman 6, by index
@@ -635,10 +633,12 @@ WINDOWS_POWERSHELL_JSON = (
 ])
 def test_the_pulled_image_is_found_by_its_digest_among_all_its_digests(tmp_path, shell, digests, accepted):
     inspect = json.dumps(digests) if digests else "null"
-    script = tmp_path / "image.ps1"
-    script.write_text(
+    # Under the real Windows PowerShell 5.1 the 5.1 shape is the engine's own (and -NoEnumerate does not exist).
+    imitate = shell == "windows-powershell-5.1" and expected_engine() != "5.1"
+    done = _ps(
+        tmp_path,
         "$ErrorActionPreference = 'Stop'\n"
-        + (WINDOWS_POWERSHELL_JSON if shell == "windows-powershell-5.1" else "")
+        + (WINDOWS_POWERSHELL_JSON if imitate else "")
         + "function Write-JhtPhase { }\n"
         "function Invoke-Checked { $global:LASTEXITCODE = 0 }\n"
         f"function fake-podman {{ $global:LASTEXITCODE = 0; '{inspect}' }}\n"
@@ -646,10 +646,7 @@ def test_the_pulled_image_is_found_by_its_digest_among_all_its_digests(tmp_path,
         f"$RuntimeImage = 'ghcr.io/leopu00/jht@{INDEX}'; $ExpectedImageDigest = '{INDEX}'\n"
         + _image_check_block()
         + "\n$canonicalImage\nexit 0\n",
-        encoding="utf-8",
     )
-    done = subprocess.run([PWSH, "-NoProfile", "-NonInteractive", "-File", str(script)], capture_output=True,
-                          text=True, timeout=60, env={"PATH": "/usr/bin:/bin", "HOME": str(tmp_path)})
     if accepted:
         assert done.returncode == 0, done.stdout + done.stderr
         assert done.stdout.strip().splitlines()[-1] == f"ghcr.io/leopu00/jht@{INDEX}"
@@ -658,9 +655,14 @@ def test_the_pulled_image_is_found_by_its_digest_among_all_its_digests(tmp_path,
         assert "Pulled runtime image does not expose the expected repository digest" in done.stdout + done.stderr
 
 
-@pytest.mark.skipif(PWSH is None or os.name == "nt", reason="needs PowerShell off Windows")
-def test_the_windows_powershell_shape_is_really_one_object():
-    # the harness reproduces what it claims: in the 5.1 shape a two-digest array is one pipeline object
+@needs_powershell
+def test_the_windows_powershell_shape_is_really_one_object(tmp_path):
+    # the harness reproduces what it claims: in the 5.1 shape a two-digest array is one pipeline object.
+    # Under the real 5.1 the engine itself is checked: that is the shape the imitation reproduces.
+    if expected_engine() == "5.1":
+        done = _ps(tmp_path, "@('[\"a\",\"b\"]' | ConvertFrom-Json).Count\n")
+        assert done.stdout.split() == ["1"], done.stdout + done.stderr
+        return
     probe = WINDOWS_POWERSHELL_JSON + "@('[\"a\",\"b\"]' | ConvertFrom-Json).Count; @('[\"a\",\"b\"]' | Microsoft.PowerShell.Utility\\ConvertFrom-Json).Count\n"
-    done = subprocess.run([PWSH, "-NoProfile", "-NonInteractive", "-Command", probe], capture_output=True, text=True, timeout=60)
+    done = _ps(tmp_path, probe)
     assert done.stdout.split() == ["1", "2"], done.stdout + done.stderr
