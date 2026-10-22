@@ -947,6 +947,15 @@ mod tests {
             .replace("/app/shared/skills/agent_state.py", "/nonexistent/agent_state.py")
             .replace("/app/shared/skills", &format!("{repo}/shared/skills"))
             .replace("/app/shared/redact-cli.mjs", &format!("{repo}/shared/redact-cli.mjs"));
+        // This test is about what the terminal shows, not how long the redactor
+        // may take: that budget is the product's and is held by
+        // the_longest_path_of_each_operation_fits_in_the_read. Here node starts
+        // cold while hundreds of other tests run, and once it took more than the
+        // 4 s, which turned the reply into agent_screen_unfiltered and the
+        // screen below into a None. The bound stays, wide enough for a cold start.
+        let redactor_step = "REDACTOR,'--secrets'],input=raw.encode('utf-8'),capture_output=True,timeout=";
+        assert_eq!(script.matches(&format!("{redactor_step}4)")).count(), 1, "the redactor step changed: update this test");
+        let script = script.replace(&format!("{redactor_step}4)"), &format!("{redactor_step}60)"));
         let run_script = |script: &str, request: &AgentsRequest| {
             let input = script_input_for(script, request).unwrap();
             let mut child = std::process::Command::new("python3")
@@ -1014,7 +1023,9 @@ mod tests {
         assert_eq!(shaped["data"]["agents"][1]["identity"], Value::Null);
         assert_eq!(shaped["data"]["agents"][0]["created"], 1_760_000_000);
         let screen = AgentsRequest::Screen { name: "CRITICO-S3".into() };
-        let shaped = shape_reply(&screen, &run(&screen)).unwrap();
+        // the script's own reply in the message, so a red says which step refused
+        let reply = run(&screen);
+        let shaped = shape_reply(&screen, &reply).unwrap_or_else(|| panic!("the terminal was not shown: {reply}"));
         let text = shaped["data"]["text"].as_str().unwrap();
         assert!(text.starts_with("working on it\nkey "), "{text}");
         // the key the CLI printed is gone, and nothing turns the line around
