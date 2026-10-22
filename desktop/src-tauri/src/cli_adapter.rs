@@ -88,8 +88,13 @@ fn execute(app: &tauri::AppHandle, request: AdapterRequest) -> (i32, Value) {
         Err(error) => return fail("scope", error),
     };
     match request {
+        // As the app: the team is connected, then its direct chat must open (the step that failed on
+        // macOS while the connection itself said ready). The chat is closed again before the answer.
         AdapterRequest::Connect { team_id, .. } => match onboarding::cli_existing_team_connect(app, &scope, &team_id) {
-            Ok(result) => (0, json!({"ok":true,"phase":"connect","code":0,"readiness":result.readiness,"snapshot":result.snapshot})),
+            Ok(result) => match crate::direct_chat::cli_open_and_close(app, &scope) {
+                Ok(()) => (0, json!({"ok":true,"phase":"connect","code":0,"readiness":result.readiness,"directChat":"ready","snapshot":result.snapshot})),
+                Err(error) => fail("chat", error),
+            },
             Err(error) => fail("connect", error),
         },
         AdapterRequest::List { filters, .. } => {
@@ -150,6 +155,19 @@ pub fn run() -> i32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn connect_opens_and_closes_the_direct_chat_after_the_team_as_the_app_does() {
+        // The app connects the team, then opens its direct chat: on macOS the second step failed
+        // (the tunnel's socket path too long) while the first said ready, and the CLI never saw it.
+        let source = include_str!("cli_adapter.rs").split("#[cfg(test)]").next().unwrap();
+        let connect = source.split("AdapterRequest::Connect { team_id, .. } =>").nth(1).unwrap();
+        let connect = connect.split("AdapterRequest::List").next().unwrap();
+        let team = connect.find("onboarding::cli_existing_team_connect(").expect("the team first");
+        let chat = connect.find("direct_chat::cli_open_and_close(").expect("then the chat");
+        assert!(team < chat);
+        assert!(connect.contains(r#"fail("chat", error)"#), "a chat that does not open fails the connect");
+    }
 
     fn decoded(input: &str) -> AdapterRequest {
         serde_json::from_str(input).expect("exact Node request must decode")

@@ -500,17 +500,82 @@ fn check_tunnel(host: &ValidatedHost, control_path: &Path) -> bool {
         .is_some_and(|result| result.success())
 }
 
+/// The longest path a Unix socket can have on macOS (its sun_path holds 104 bytes with the NUL;
+/// Linux holds 108): the shorter limit is the one for every platform.
+const SOCKET_PATH_MAX: usize = 103;
+/// ssh creates the master's socket as `ControlPath` + "." + 16 random characters, then renames it
+/// into place: the temporary name is the one that must fit.
+const SSH_SOCKET_SUFFIX: usize = 17;
+/// The folder of a tunnel's socket starts with this, so closing removes only a folder of ours.
+const TUNNEL_DIR_PREFIX: &str = "jc";
+
+/// Whether ssh can create the master socket at `path`, its temporary name included.
+fn control_path_fits(path: &Path) -> bool {
+    path.as_os_str().len() + SSH_SOCKET_SUFFIX <= SOCKET_PATH_MAX
+}
+
+/// The socket of a tunnel: `s`, alone in a folder made for it (0700 on Unix, a random name,
+/// created exclusively, so nobody can have prepared it or reach the socket), in the first of
+/// `bases` where it fits. The old name in TMPDIR was 95 characters on macOS (112 with ssh's
+/// suffix): ssh could never open the tunnel there.
+fn tunnel_socket_path(bases: &[PathBuf], mut name: impl FnMut() -> String) -> Result<PathBuf, &'static str> {
+    for base in bases {
+        for _ in 0..8 {
+            let dir = base.join(format!("{TUNNEL_DIR_PREFIX}{}", name()));
+            let socket = dir.join("s");
+            if !control_path_fits(&socket) {
+                break;
+            }
+            let mut builder = fs::DirBuilder::new();
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::DirBuilderExt;
+                builder.mode(0o700);
+            }
+            match builder.create(&dir) {
+                Ok(()) => return Ok(socket),
+                Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => continue,
+                Err(_) => break,
+            }
+        }
+    }
+    Err("tunnel_path_unavailable")
+}
+
+fn tunnel_dir_name() -> String {
+    use std::hash::{BuildHasher, Hasher};
+    // A fresh RandomState has random keys: with the pid and the time, a name nobody can guess.
+    let mut hasher = std::collections::hash_map::RandomState::new().build_hasher();
+    hasher.write_u32(std::process::id());
+    hasher.write_u128(SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_nanos());
+    format!("{:010x}", hasher.finish() & 0xff_ffff_ffff)
+}
+
+/// On Unix /tmp first: the private folder keeps the socket ours there too, and the path stays
+/// far from the limit (/tmp/jc<10>/s is 19 characters, 36 with ssh's suffix, where macOS's
+/// TMPDIR alone is 49). The user's temporary folder is the fallback, and the only one elsewhere.
+fn tunnel_socket_bases() -> Vec<PathBuf> {
+    let mut bases = Vec::new();
+    #[cfg(unix)]
+    bases.push(PathBuf::from("/tmp"));
+    bases.push(std::env::temp_dir());
+    bases
+}
+
+/// Removes a tunnel's socket and the folder made for it.
+fn remove_tunnel_socket(path: &Path) {
+    let _ = fs::remove_file(path);
+    if let Some(dir) = path.parent() {
+        if dir.file_name().and_then(|name| name.to_str()).is_some_and(|name| name.starts_with(TUNNEL_DIR_PREFIX)) {
+            let _ = fs::remove_dir(dir);
+        }
+    }
+}
+
 fn open_tunnel(host: &ValidatedHost) -> Result<(PathBuf, Child), DirectChatError> {
     let mut args = ssh_base_args(host).map_err(failure)?;
     let target = args.pop().ok_or_else(|| failure("invalid_host"))?;
-    let stamp = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_nanos();
-    let control_path = std::env::temp_dir().join(format!(
-        "jht-direct-chat-{}-{stamp}.sock",
-        std::process::id()
-    ));
+    let control_path = tunnel_socket_path(&tunnel_socket_bases(), tunnel_dir_name).map_err(failure)?;
     args.extend([
         "-M".into(),
         "-N".into(),
@@ -531,7 +596,10 @@ fn open_tunnel(host: &ValidatedHost) -> Result<(PathBuf, Child), DirectChatError
         .stdout(Stdio::null())
         .stderr(Stdio::null());
     crate::runtime_host::hide_console(&mut command);
-    let child = command.spawn().map_err(|_| failure("tunnel_start_failed"))?;
+    let child = command.spawn().map_err(|_| failure("tunnel_start_failed")).map_err(|error| {
+        remove_tunnel_socket(&control_path);
+        error
+    })?;
     for _ in 0..40 {
         if check_tunnel(host, &control_path) {
             return Ok((control_path, child));
@@ -541,7 +609,7 @@ fn open_tunnel(host: &ValidatedHost) -> Result<(PathBuf, Child), DirectChatError
     let mut child = child;
     let _ = child.kill();
     let _ = child.wait();
-    let _ = fs::remove_file(&control_path);
+    remove_tunnel_socket(&control_path);
     Err(failure("tunnel_verify_failed"))
 }
 
@@ -552,7 +620,7 @@ fn close_connection(connection: &mut Connection) {
         if let Ok(args) = control_args(&connection.validated, path, "exit") {
             let _ = run_program("ssh", &args, None, Duration::from_secs(5));
         }
-        let _ = fs::remove_file(path);
+        remove_tunnel_socket(path);
     }
     if let Some(mut child) = connection.tunnel.take() {
         let _ = child.kill();
@@ -675,6 +743,16 @@ fn connect_impl(
     }
     persist_host(app, &scope, &connection.host)?;
     Ok(connection)
+}
+
+/// What the app does right after connecting an existing team, for the CLI: open the direct chat
+/// on the host the connection persisted (as direct_chat_reconnect does), then close it again.
+/// Dropping the connection closes the tunnel and removes its socket.
+pub(crate) fn cli_open_and_close(app: &tauri::AppHandle, scope: &AccountScope) -> Result<(), &'static str> {
+    let host = load_host(app, scope).map_err(|error| error.code)?;
+    let connection = connect_impl(app, scope.clone(), host).map_err(|error| error.code)?;
+    drop(connection);
+    Ok(())
 }
 
 async fn connect_scoped(
@@ -1339,9 +1417,80 @@ mod tests {
         chat_failure, connection_config_path_at, remote_wrapper_command, wrapper_outcome, delivery_command, hex_encode, link_allows_writing,
         parse_json, probe, session_for, status, valid_agent, verify_migration_local_host_at, window_may_write,
         Connection, DirectChatPage, ProcessResult, REMOTE_CONTAINER_PROBE, REMOTE_PYTHON_STDIN, UNKNOWN_ACTION,
+        control_path_fits, remove_tunnel_socket, tunnel_dir_name, tunnel_socket_bases, tunnel_socket_path,
+        SOCKET_PATH_MAX, SSH_SOCKET_SUFFIX,
     };
     use crate::runtime_host::{ExecutionHost, ValidatedHost};
     use std::{fs, process::Command};
+
+    /// The shape and length of macOS's per-user temporary folder (getconf DARWIN_USER_TEMP_DIR):
+    /// /var/folders/<2>/<30>/T/, 49 characters. Placeholders, not a real one.
+    const MACOS_TMPDIR: &str = "/var/folders/xx/xxxxxxxxxxxxxxxxxxxxxxxx0000gn/T/";
+
+    #[test]
+    fn the_tunnel_socket_fits_with_sshs_temporary_name_even_in_macos_long_tmpdir() {
+        assert_eq!(MACOS_TMPDIR.len(), 49);
+        // the old name, in a macOS TMPDIR: 95 characters, 112 with ssh's suffix
+        let old = std::path::Path::new(MACOS_TMPDIR).join("jht-direct-chat-12345-1792703033508090000.sock");
+        assert!(!control_path_fits(&old), "the old socket path must be the one that does not fit");
+        // the new one, made of the same pieces open_tunnel uses
+        let new = std::path::Path::new(MACOS_TMPDIR).join(format!("jc{}", tunnel_dir_name())).join("s");
+        assert!(control_path_fits(&new), "{} characters", new.as_os_str().len());
+        assert!(new.as_os_str().len() + SSH_SOCKET_SUFFIX <= SOCKET_PATH_MAX);
+        assert_eq!(SOCKET_PATH_MAX, 103, "macOS: sun_path is 104 bytes with its NUL");
+    }
+
+    #[test]
+    fn on_unix_the_tunnel_socket_stays_under_half_the_limit_in_tmp_before_the_tmpdir() {
+        let bases = tunnel_socket_bases();
+        #[cfg(unix)]
+        {
+            assert_eq!(bases[0], std::path::Path::new("/tmp"));
+            let socket = bases[0].join(format!("jc{}", tunnel_dir_name())).join("s");
+            assert!(socket.as_os_str().len() + SSH_SOCKET_SUFFIX <= SOCKET_PATH_MAX / 2, "{}", socket.display());
+        }
+        assert_eq!(bases.last().unwrap(), &std::env::temp_dir(), "the user's temporary folder is the fallback");
+    }
+
+    #[test]
+    fn the_tunnel_socket_is_alone_in_a_private_folder_of_its_own_and_goes_with_it() {
+        let base = std::env::temp_dir().join(format!("jht-tunnel-test-{}", std::process::id()));
+        fs::create_dir_all(&base).unwrap();
+        let socket = tunnel_socket_path(std::slice::from_ref(&base), tunnel_dir_name).expect("a socket path");
+        let dir = socket.parent().unwrap().to_owned();
+        assert_eq!(dir.parent().unwrap(), base);
+        assert!(socket.ends_with("s") && control_path_fits(&socket));
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            assert_eq!(fs::metadata(&dir).unwrap().permissions().mode() & 0o777, 0o700);
+        }
+        // a folder someone prepared with the same name is never used: another name is tried
+        let mut names = vec!["taken000".to_owned(), "free0000".to_owned()].into_iter();
+        fs::create_dir(base.join("jctaken000")).unwrap();
+        let other = tunnel_socket_path(std::slice::from_ref(&base), || names.next().unwrap()).unwrap();
+        assert_eq!(other, base.join("jcfree0000").join("s"));
+        // closing removes the socket and its folder, never a folder that is not ours
+        fs::write(&socket, b"").unwrap();
+        remove_tunnel_socket(&socket);
+        assert!(!dir.exists());
+        let foreign = base.join("other").join("s");
+        fs::create_dir_all(foreign.parent().unwrap()).unwrap();
+        remove_tunnel_socket(&foreign);
+        assert!(foreign.parent().unwrap().exists());
+        let _ = fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn a_base_too_long_for_a_socket_is_skipped_for_the_next_one() {
+        let long = std::path::PathBuf::from(format!("/{}", "x".repeat(100)));
+        let base = std::env::temp_dir().join(format!("jht-tunnel-next-{}", std::process::id()));
+        fs::create_dir_all(&base).unwrap();
+        let socket = tunnel_socket_path(&[long.clone(), base.clone()], tunnel_dir_name).unwrap();
+        assert!(socket.starts_with(&base));
+        assert_eq!(tunnel_socket_path(&[long], tunnel_dir_name), Err("tunnel_path_unavailable"));
+        let _ = fs::remove_dir_all(&base);
+    }
 
     #[test]
     fn every_exit_of_the_chat_script_is_a_code_of_the_catalog_and_the_link_losing_is_its_own() {
