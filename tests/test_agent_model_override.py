@@ -15,6 +15,7 @@ ne esce, cosi' il rosso segue il difetto e non la forma della riga.
 
 from __future__ import annotations
 
+import json
 import os
 import re
 import shutil
@@ -170,3 +171,177 @@ def test_an_unmapped_alias_refuses_to_start_instead_of_guessing() -> None:
     assert result.returncode != 0
     assert "NON DOVEVA" not in result.stdout
     assert "no Codex model mapping" in result.stderr
+
+
+# ── team.role_models: modello ed effort per ruolo dal config ────────────────
+#
+# Il default non cambia: senza la chiave il comando e' quello di sempre (i
+# test sopra). Con la chiave, il ruolo parte sulla classe chiesta — luna
+# compresa, che nella mappa ruoli non ha un alias — e un valore sbagliato
+# ferma l'avvio invece di cadere sul modello di punta.
+
+
+def _between(source: str, start: str, end: str) -> str:
+    begin = source.index(start)
+    return source[begin:source.index(end, begin)]
+
+
+def _override_block(source: str) -> str:
+    return _between(source, "# Override per ruolo dal config", "# Nessun default implicito")
+
+
+def _claude_branch(source: str) -> str:
+    match = re.search(
+        r"^  anthropic\|claude\)\n(.*?)^    ;;$",
+        source,
+        re.DOTALL | re.MULTILINE,
+    )
+    assert match, "il ramo anthropic|claude non e' piu' in start-agent.sh"
+    return match.group(1)
+
+
+def _write_config(tmp_path: Path, role_models: object | None) -> Path:
+    cfg: dict[str, object] = {"active_provider": "openai", "providers": {"openai": {}}}
+    if role_models is not None:
+        cfg["team"] = {"role_models": role_models}
+    path = tmp_path / "jht.config.json"
+    path.write_text(json.dumps(cfg), encoding="utf-8")
+    return path
+
+
+def _spawn_command(
+    tmp_path: Path,
+    role: str,
+    role_models: object | None,
+    provider: str = "openai",
+    mode: str = "",
+) -> subprocess.CompletedProcess[str]:
+    """La catena vera fino al comando: mappa, override del config, ramo del provider."""
+    source = START_AGENT.read_text(encoding="utf-8")
+    branch = _codex_branch(source) if provider == "openai" else _claude_branch(source)
+    script = "\n".join(
+        [
+            _function(source, "get_agent_info"),
+            _function(source, "resolve_codex_model"),
+            _function(source, "jht_role_model_override"),
+            f"ROLE={role}",
+            f"MODE={mode}",
+            f"PROVIDER={provider}",
+            f"JHT_CONFIG_FILE='{_write_config(tmp_path, role_models)}'",
+            f'IFS="|" read -r session_prefix effort model_override '
+            f'<<< "$(get_agent_info {role})"',
+            'if [ "$MODE" = "fast" ]; then effort="low"; fi',
+            _override_block(source),
+            "AUTH_METHOD=subscription",
+            "API_KEY=",
+            branch,
+            'printf "CMD %s %s\\n" "$CLI_BIN" "$CLI_ARGS"',
+        ]
+    )
+    return subprocess.run(
+        [_bash(), "-c", script], capture_output=True, text=True, check=False
+    )
+
+
+def _command(result: subprocess.CompletedProcess[str]) -> str:
+    assert result.returncode == 0, result.stderr
+    lines = [line for line in result.stdout.splitlines() if line.startswith("CMD ")]
+    assert len(lines) == 1, result.stdout
+    return lines[0][4:]
+
+
+def test_the_codex_classes_include_luna() -> None:
+    result = _run_model_map(
+        "resolve_codex_model sol\nresolve_codex_model terra\nresolve_codex_model luna",
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.splitlines() == ["gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna"]
+
+
+@pytest.mark.parametrize("role_models", [None, {}, {"scorer": {"model": "luna"}}, {"scout": None}])
+def test_without_an_entry_for_the_role_the_command_is_unchanged(
+    tmp_path: Path, role_models: object
+) -> None:
+    command = _command(_spawn_command(tmp_path, "scout", role_models))
+
+    assert "--model gpt-5.6-terra" in command
+    assert "-c model_reasoning_effort=high" in command
+
+
+@pytest.mark.parametrize(
+    ("role", "entry", "model", "effort"),
+    [
+        ("scout", {"model": "luna", "effort": "medium"}, "gpt-5.6-luna", "medium"),
+        ("scout", {"model": "luna"}, "gpt-5.6-luna", "high"),
+        ("capitano", {"model": "terra", "effort": "low"}, "gpt-5.6-terra", "low"),
+        ("scorer", {"effort": "medium"}, "gpt-5.6-terra", "medium"),
+        ("analista", {"model": "sol"}, "gpt-5.6-sol", "high"),
+    ],
+)
+def test_the_config_moves_that_role_to_the_class_and_effort_it_asks(
+    tmp_path: Path, role: str, entry: dict[str, str], model: str, effort: str
+) -> None:
+    command = _command(_spawn_command(tmp_path, role, {role: entry}))
+
+    assert command.startswith("codex ")
+    assert f"--model {model}" in command
+    assert f"-c model_reasoning_effort={effort}" in command
+
+
+def test_fast_mode_keeps_its_low_effort_over_the_config(tmp_path: Path) -> None:
+    command = _command(
+        _spawn_command(tmp_path, "scout", {"scout": {"model": "luna", "effort": "high"}}, mode="fast")
+    )
+
+    assert "--model gpt-5.6-luna" in command
+    assert "-c model_reasoning_effort=low" in command
+
+
+def test_on_claude_the_class_is_declared_not_applied_and_the_effort_applies(
+    tmp_path: Path,
+) -> None:
+    result = _spawn_command(
+        tmp_path, "scout", {"scout": {"model": "luna", "effort": "medium"}}, provider="claude"
+    )
+    command = _command(result)
+
+    assert command.startswith("claude ")
+    assert "--model sonnet" in command
+    assert "--effort medium" in command
+    assert "applies to Codex and pi only" in result.stdout
+
+
+@pytest.mark.parametrize(
+    ("entry", "message"),
+    [
+        ({"model": "gpt-5.6-luna"}, "is not one of sol, terra, luna"),
+        ({"model": "haiku"}, "is not one of sol, terra, luna"),
+        ({"effort": "max"}, "is not one of low, medium, high"),
+        ({"model": "luna", "efort": "low"}, "unknown keys ['efort']"),
+        ("luna", "must be an object"),
+    ],
+)
+def test_a_wrong_value_refuses_to_start_instead_of_falling_back(
+    tmp_path: Path, entry: object, message: str
+) -> None:
+    result = _spawn_command(tmp_path, "scout", {"scout": entry})
+
+    assert result.returncode != 0
+    assert "CMD " not in result.stdout
+    assert message in result.stderr
+
+
+def test_the_launcher_and_the_config_schema_allow_the_same_values() -> None:
+    """Due elenchi in due lingue: se divergono, l'app salva un valore che il launcher rifiuta."""
+    launcher = _function(START_AGENT.read_text(encoding="utf-8"), "jht_role_model_override")
+    schema = (ROOT / "shared" / "config" / "schema.ts").read_text(encoding="utf-8")
+    block = _between(schema, "export const RoleModelSchema", "export const TeamSettingsSchema")
+
+    for key in ("model", "effort"):
+        in_launcher = re.search(rf'"{key}": \(([^)]*)\)', launcher)
+        in_schema = re.search(rf"{key}: z\.enum\(\[([^\]]*)\]\)", block)
+        assert in_launcher and in_schema, key
+        assert re.findall(r'"(\w+)"', in_launcher.group(1)) == re.findall(
+            r'"(\w+)"', in_schema.group(1)
+        ), key

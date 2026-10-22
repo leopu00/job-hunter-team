@@ -164,6 +164,37 @@ describe("validateConfig — config valide", () => {
     }
   });
 
+  it("accetta modello ed effort per ruolo, luna compresa, e non li toglie al salvataggio", () => {
+    const r = validateConfig({
+      ...validOpenAIConfig,
+      team: {
+        role_models: {
+          scout: { model: "luna", effort: "medium" },
+          scorer: { effort: "low" },
+          capitano: { model: "terra" },
+        },
+      },
+    });
+    expect(r.success).toBe(true);
+    if (r.success) {
+      expect(r.data.team?.role_models).toEqual({
+        scout: { model: "luna", effort: "medium" },
+        scorer: { effort: "low" },
+        capitano: { model: "terra" },
+      });
+    }
+  });
+
+  it.each([
+    ["un id di modello al posto della classe", { scout: { model: "gpt-5.6-luna" } }],
+    ["un effort fuori elenco", { scout: { effort: "max" } }],
+    ["un ruolo che non esiste", { scot: { model: "luna" } }],
+    ["una chiave sconosciuta", { scout: { model: "luna", efort: "low" } }],
+  ])("rifiuta in role_models %s", (_label, roleModels) => {
+    const r = validateConfig({ ...validOpenAIConfig, team: { role_models: roleModels } });
+    expect(r.success).toBe(false);
+  });
+
   it("accetta canale telegram con 3 bot configurati", () => {
     const r = validateConfig({
       ...validClaudeConfig,

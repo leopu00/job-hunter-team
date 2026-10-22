@@ -976,18 +976,69 @@ IFS='|' read -r PROVIDER AUTH_METHOD API_KEY <<< "$(extract_provider_info "$JHT_
 # Traduce gli alias semantici della mappa ruoli nei modelli Codex:
 #   opus   == gpt-5.6-sol
 #   sonnet == gpt-5.6-terra
+# e le classi che `team.role_models` puo' chiedere (sol, terra, luna). Luna
+# non ha un alias nella mappa ruoli: ci si arriva solo dalla config.
 resolve_codex_model() {
   local alias="$1"
   local resolved=""
   case "$alias" in
-    ""|opus) resolved="gpt-5.6-sol" ;;
-    sonnet) resolved="gpt-5.6-terra" ;;
+    ""|opus|sol) resolved="gpt-5.6-sol" ;;
+    sonnet|terra) resolved="gpt-5.6-terra" ;;
+    luna) resolved="gpt-5.6-luna" ;;
   esac
   if [ -z "$resolved" ]; then
     echo "Error: no Codex model mapping for role alias '$alias'." >&2
     return 1
   fi
   printf '%s\n' "$resolved"
+}
+
+# Modello ed effort di QUESTO ruolo da `team.role_models.<ruolo>` del config:
+# stampa «classe|effort», vuoti se non c'e' niente (allora vale la mappa
+# ruoli, invariata). La classe e' sol/terra/luna, l'effort low/medium/high:
+# gli stessi elenchi di shared/config/schema.ts. Un valore fuori elenco, o una
+# chiave sconosciuta, ferma l'avvio: un refuso non deve diventare consumo sul
+# modello sbagliato con l'aria di aver funzionato.
+jht_role_model_override() {
+  local cfg="$1" role="$2"
+  if [ ! -f "$cfg" ] || ! command -v python3 >/dev/null 2>&1; then
+    printf '|\n'
+    return 0
+  fi
+  python3 - "$cfg" "$role" <<'PYEOF'
+import json, sys
+path, role = sys.argv[1], sys.argv[2]
+try:
+    with open(path, encoding="utf-8") as handle:
+        cfg = json.load(handle)
+except (OSError, ValueError):
+    # Il config illeggibile lo rifiuta gia' la scelta del provider.
+    print("|")
+    raise SystemExit(0)
+team = cfg.get("team") if isinstance(cfg, dict) else None
+models = team.get("role_models") if isinstance(team, dict) else None
+entry = models.get(role) if isinstance(models, dict) else None
+if entry is None:
+    print("|")
+    raise SystemExit(0)
+where = f"team.role_models.{role}"
+allowed = {"model": ("sol", "terra", "luna"), "effort": ("low", "medium", "high")}
+if not isinstance(entry, dict):
+    print(f"Error: {where} must be an object with model and/or effort.", file=sys.stderr)
+    raise SystemExit(1)
+unknown = sorted(set(entry) - set(allowed))
+if unknown:
+    print(f"Error: {where} has unknown keys {unknown}; allowed: model, effort.", file=sys.stderr)
+    raise SystemExit(1)
+values = []
+for key, choices in allowed.items():
+    value = entry.get(key)
+    if value is not None and value not in choices:
+        print(f"Error: {where}.{key} '{value}' is not one of {', '.join(choices)}.", file=sys.stderr)
+        raise SystemExit(1)
+    values.append(value or "")
+print("|".join(values))
+PYEOF
 }
 
 # Chi è l'agente, per il Pannello Agenti: «cli|modello|effort» dei valori
@@ -1009,6 +1060,24 @@ jht_agent_identity() {
   [[ "$model" =~ ^[A-Za-z0-9][A-Za-z0-9._:-]{0,39}$ ]] || model=""
   printf '%s|%s|%s\n' "$cli" "$model" "$eff"
 }
+
+# Override per ruolo dal config (team.role_models). L'effort lo cambia per ogni
+# CLI che lo riceve, ma non in modalita' fast, che e' una richiesta esplicita
+# di QUESTO avvio. La classe vale solo per Codex e pi: Claude e Kimi tengono la
+# mappa ruoli, e lo si dice invece di ignorarlo in silenzio.
+if ! _role_override="$(jht_role_model_override "$JHT_CONFIG_FILE" "$ROLE")"; then
+  exit 1
+fi
+IFS='|' read -r role_model role_effort <<< "$_role_override"
+if [ -n "$role_effort" ] && [ "$MODE" != "fast" ]; then
+  effort="$role_effort"
+fi
+if [ -n "$role_model" ]; then
+  case "$PROVIDER" in
+    openai|codex) ;;
+    *) echo "  Note: team.role_models.$ROLE.model applies to Codex and pi only; provider '$PROVIDER' keeps the role map." ;;
+  esac
+fi
 
 # Nessun default implicito: il provider e' configurazione utente. Se il file
 # manca, e' illeggibile o contiene un valore sconosciuto, avviare un CLI
@@ -1038,7 +1107,7 @@ case "$PROVIDER" in
     ;;
   openai|codex)
     CLI_BIN="codex"
-    if ! codex_model="$(resolve_codex_model "$model_override")"; then
+    if ! codex_model="$(resolve_codex_model "${role_model:-$model_override}")"; then
       exit 1
     fi
     # --yolo è alias di --dangerously-bypass-approvals-and-sandbox:
@@ -1122,7 +1191,7 @@ if [ "$AGENT_HARNESS" = "pi" ]; then
   if ! jht_pi_provider_check "$PROVIDER" "$AUTH_METHOD"; then
     exit 1
   fi
-  if ! pi_model="$(resolve_codex_model "$model_override")"; then
+  if ! pi_model="$(resolve_codex_model "${role_model:-$model_override}")"; then
     exit 1
   fi
   CLI_BIN="pi"

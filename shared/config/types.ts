@@ -92,9 +92,31 @@ export interface LocalScorerConfig {
   poll_seconds: number;
 }
 
+/** Model class and effort of one role; absent = the launcher's role map. */
+export interface RoleModelConfig {
+  /** Codex model class; applies only with active_provider openai (Codex and pi). */
+  model?: "sol" | "terra" | "luna";
+  effort?: "low" | "medium" | "high";
+}
+
 export interface TeamSettings {
   working_hours?: WorkingHoursConfig;
   local_scorer?: LocalScorerConfig;
+  role_models?: Partial<
+    Record<
+      | "capitano"
+      | "scout"
+      | "analista"
+      | "scorer"
+      | "scrittore"
+      | "critico"
+      | "sentinella"
+      | "assistente"
+      | "mentor"
+      | "closer",
+      RoleModelConfig
+    >
+  >;
 }
 
 // --- Candidature (CLOSER) ---

@@ -155,9 +155,36 @@ export const LocalScorerSchema = z.object({
   poll_seconds: z.number().int().min(5).max(3600).default(120),
 });
 
+// Modello ed effort di un ruolo, per provarlo su un'altra classe senza toccare
+// la mappa del launcher (`get_agent_info` in `.launcher/start-agent.sh`).
+// Assente = la mappa di sempre. Il modello e' una classe Codex (sol, terra,
+// luna) e vale solo con active_provider openai, cioe' per Codex e pi; l'effort
+// vale per ogni CLI che lo riceve. Il launcher rifiuta l'avvio su un valore
+// fuori da queste liste, quindi le due liste vanno cambiate insieme.
+export const AGENT_ROLES = [
+  "capitano",
+  "scout",
+  "analista",
+  "scorer",
+  "scrittore",
+  "critico",
+  "sentinella",
+  "assistente",
+  "mentor",
+  "closer",
+] as const;
+
+export const RoleModelSchema = z
+  .object({
+    model: z.enum(["sol", "terra", "luna"]).optional(),
+    effort: z.enum(["low", "medium", "high"]).optional(),
+  })
+  .strict();
+
 export const TeamSettingsSchema = z.object({
   working_hours: WorkingHoursSchema.optional(),
   local_scorer: LocalScorerSchema.optional(),
+  role_models: z.partialRecord(z.enum(AGENT_ROLES), RoleModelSchema).optional(),
 });
 
 // Candidature automatiche [JHT-CLOSER]. Il consenso generale dell'utente: la
