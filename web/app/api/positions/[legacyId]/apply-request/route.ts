@@ -158,7 +158,8 @@ async function handleToggle(
   // Qui non si è sul sito: il web gira accanto alla macchina dell'utente, che ha il suo SQLite. Il cloud
   // lo raggiunge il push delta della macchina, non questa route (nessun client scrive più la posizione
   // sul cloud: sta dietro `request_action`).
-  if (!fs.existsSync(JHT_DB_PATH)) {
+  const hasLocal = !isCloudDeploy() && fs.existsSync(JHT_DB_PATH);
+  if (!hasLocal) {
     return NextResponse.json({ error: "DB locale assente" }, { status: 503 });
   }
   const outcome = toggleViaLocal(legacyId, requested, "user_web");
