@@ -26,7 +26,14 @@ export const WEB_ACTION_CODES = [
 ] as const;
 export type WebActionCode = (typeof WEB_ACTION_CODES)[number];
 
-export const WEB_ACTION_STATUSES = ["awaiting_confirm", "queued", "done", "error", "cancelled", "expired"] as const;
+export const WEB_ACTION_STATUSES = [
+  "awaiting_confirm",
+  "queued",
+  "done",
+  "error",
+  "cancelled",
+  "expired",
+] as const;
 export type WebActionStatus = (typeof WEB_ACTION_STATUSES)[number];
 
 export type WebActionLevel = "L1" | "L2" | "L3";
@@ -40,7 +47,8 @@ export type WebActionTone = "good" | "bad" | "wait" | "neutral";
  * `session_id`: the owner is the viewer, and a session is not for the eye.
  */
 export const WEB_ACTION_LOG_TABLE = "web_action_log";
-export const WEB_ACTION_LOG_COLUMNS = "id, action, level, params, summary, status, created_at, expires_at, confirmed_at, result";
+export const WEB_ACTION_LOG_COLUMNS =
+  "id, action, level, params, summary, status, created_at, expires_at, confirmed_at, result";
 
 /** How many rows one read brings, newest first. */
 export const WEB_ACTION_LOG_LIMIT = 100;
@@ -82,10 +90,16 @@ function hiddenCharacter(code: number): boolean {
 export function cleanLogText(value: unknown, max: number): string {
   if (typeof value !== "string") return "";
   let out = "";
-  for (const char of value) out += hiddenCharacter(char.codePointAt(0) ?? 0) ? " " : char;
+  for (const char of value)
+    out += hiddenCharacter(char.codePointAt(0) ?? 0) ? " " : char;
   out = out.replace(/ {2,}/g, " ").trim();
   const chars = Array.from(out);
-  return chars.length > max ? `${chars.slice(0, max - 1).join("").trimEnd()}…` : out;
+  return chars.length > max
+    ? `${chars
+        .slice(0, max - 1)
+        .join("")
+        .trimEnd()}…`
+    : out;
 }
 
 function isoTime(value: unknown): string | null {
@@ -95,26 +109,39 @@ function isoTime(value: unknown): string | null {
 }
 
 function level(value: unknown): WebActionLevel | null {
-  const text = String(value ?? "").trim().toUpperCase();
+  const text = String(value ?? "")
+    .trim()
+    .toUpperCase();
   if (text === "L1" || text === "L2" || text === "L3") return text;
-  return text === "1" || text === "2" || text === "3" ? (`L${text}` as WebActionLevel) : null;
+  return text === "1" || text === "2" || text === "3"
+    ? (`L${text}` as WebActionLevel)
+    : null;
 }
 
 /** The agent a team action is about, when the action names one: `params.target`, a role or «all». */
 function paramsTarget(params: unknown): string | null {
   if (!params || typeof params !== "object") return null;
-  return cleanLogText((params as Record<string, unknown>).target, TARGET_MAX) || null;
+  return (
+    cleanLogText((params as Record<string, unknown>).target, TARGET_MAX) || null
+  );
 }
 
 /** One row of the table, or null when it has no id, no action or no time (it cannot be placed in a list). */
 export function parseWebActionRow(raw: unknown): WebActionRow | null {
   if (!raw || typeof raw !== "object") return null;
   const row = raw as Record<string, unknown>;
-  const id = typeof row.id === "string" || typeof row.id === "number" ? String(row.id).trim() : "";
+  const id =
+    typeof row.id === "string" || typeof row.id === "number"
+      ? String(row.id).trim()
+      : "";
   const action = cleanLogText(row.action, CODE_MAX);
   const createdAt = isoTime(row.created_at);
   if (!id || !action || !createdAt) return null;
-  const status = (WEB_ACTION_STATUSES as readonly string[]).includes(String(row.status)) ? (row.status as WebActionStatus) : null;
+  const status = (WEB_ACTION_STATUSES as readonly string[]).includes(
+    String(row.status),
+  )
+    ? (row.status as WebActionStatus)
+    : null;
   return {
     id,
     action,
@@ -144,14 +171,19 @@ export function isKnownAction(code: string): code is WebActionCode {
 
 export function actionTitle(row: WebActionRow, locale: Locale): string {
   const text = WEB_ACTION_LOG_TEXT[locale] ?? WEB_ACTION_LOG_TEXT.en;
-  return isKnownAction(row.action) ? text.action[row.action] : text.unknownAction.replace("{code}", row.action);
+  return isKnownAction(row.action)
+    ? text.action[row.action]
+    : text.unknownAction.replace("{code}", row.action);
 }
 
 /**
  * What names the thing an action is about: for a team action the agent or the whole team (its summary is a
  * machine phrase, never shown); for an application the summary is the position («title @ company»).
  */
-export function actionSubject(row: WebActionRow, locale: Locale): string | null {
+export function actionSubject(
+  row: WebActionRow,
+  locale: Locale,
+): string | null {
   const text = WEB_ACTION_LOG_TEXT[locale] ?? WEB_ACTION_LOG_TEXT.en;
   if (row.action.startsWith("team.")) {
     if (!row.target) return null;
@@ -196,13 +228,18 @@ const NOT_SIGNED_IN = new Set(["42501", "PGRST301", "PGRST302"]);
  * filter on the user is passed, none could widen it). A failure is a reason,
  * never an exception and never the database's message.
  */
-export async function readWebActionLog(client: WebActionLogClient, limit = WEB_ACTION_LOG_LIMIT): Promise<WebActionLogRead> {
+export async function readWebActionLog(
+  client: WebActionLogClient,
+  limit = WEB_ACTION_LOG_LIMIT,
+): Promise<WebActionLogRead> {
   try {
     // The table and the columns are written out here, not taken from the constants: the schema coverage check
     // reads this call as it stands. A test pins that they are the constants' own.
     const { data, error } = await client
       .from("web_action_log")
-      .select("id, action, level, params, summary, status, created_at, expires_at, confirmed_at, result")
+      .select(
+        "id, action, level, params, summary, status, created_at, expires_at, confirmed_at, result",
+      )
       .order("created_at", { ascending: false })
       .limit(limit);
     if (error) {

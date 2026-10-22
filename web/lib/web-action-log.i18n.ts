@@ -5,7 +5,11 @@
 // CHECKs of the table); a code this file does not know, from a later migration, is
 // shown as «other action» with the code, never hidden.
 import type { Locale } from "@/i18n/config";
-import type { WebActionCode, WebActionLevel, WebActionStatus } from "@/lib/web-action-log";
+import type {
+  WebActionCode,
+  WebActionLevel,
+  WebActionStatus,
+} from "@/lib/web-action-log";
 
 const IT = {
   title: "Registro delle azioni",
@@ -15,11 +19,13 @@ const IT = {
   refresh: "Aggiorna",
   empty: "Dal sito non è stata chiesta nessuna azione, per ora.",
   unavailable: "Non riesco a leggere il registro. Riprova tra poco.",
-  notYet: "Il registro non è ancora attivo su questo account: comparirà qui quando il sito inizierà a usarlo.",
+  notYet:
+    "Il registro non è ancora attivo su questo account: comparirà qui quando il sito inizierà a usarlo.",
   signedOut: "Accedi con il tuo account per vedere il registro.",
   localCopy: "Il registro sta sul sito, non su questa copia: aprilo da lì.",
   limitNote: "Sono mostrate le ultime {n} azioni.",
-  footnote: "Di ogni azione c’è solo un riassunto: mai chiavi, password o testi interi.",
+  footnote:
+    "Di ogni azione c’è solo un riassunto: mai chiavi, password o testi interi.",
   listLabel: "Azioni chieste dal sito",
   confirmed: "confermata {time}",
   targetAll: "tutta la squadra",
@@ -67,11 +73,13 @@ export const WEB_ACTION_LOG_TEXT: Record<Locale, WebActionLogText> = {
     refresh: "Refresh",
     empty: "The site has asked for no action yet.",
     unavailable: "I cannot read the log. Try again in a moment.",
-    notYet: "The log is not active on this account yet: it will show here once the site starts using it.",
+    notYet:
+      "The log is not active on this account yet: it will show here once the site starts using it.",
     signedOut: "Sign in with your account to see the log.",
     localCopy: "The log lives on the site, not on this copy: open it there.",
     limitNote: "The last {n} actions are shown.",
-    footnote: "Each action has only a summary: never keys, passwords or whole texts.",
+    footnote:
+      "Each action has only a summary: never keys, passwords or whole texts.",
     listLabel: "Actions asked by the site",
     confirmed: "confirmed {time}",
     targetAll: "the whole team",
@@ -109,12 +117,16 @@ export const WEB_ACTION_LOG_TEXT: Record<Locale, WebActionLogText> = {
     reading: "Ich lese das Protokoll …",
     refresh: "Aktualisieren",
     empty: "Die Website hat bisher keine Aktion angefordert.",
-    unavailable: "Ich kann das Protokoll nicht lesen. Versuche es gleich noch einmal.",
-    notYet: "Das Protokoll ist für dieses Konto noch nicht aktiv: Es erscheint hier, sobald die Website es benutzt.",
+    unavailable:
+      "Ich kann das Protokoll nicht lesen. Versuche es gleich noch einmal.",
+    notYet:
+      "Das Protokoll ist für dieses Konto noch nicht aktiv: Es erscheint hier, sobald die Website es benutzt.",
     signedOut: "Melde dich mit deinem Konto an, um das Protokoll zu sehen.",
-    localCopy: "Das Protokoll liegt auf der Website, nicht auf dieser Kopie: Öffne es dort.",
+    localCopy:
+      "Das Protokoll liegt auf der Website, nicht auf dieser Kopie: Öffne es dort.",
     limitNote: "Angezeigt werden die letzten {n} Aktionen.",
-    footnote: "Von jeder Aktion gibt es nur eine Zusammenfassung: nie Schlüssel, Passwörter oder ganze Texte.",
+    footnote:
+      "Von jeder Aktion gibt es nur eine Zusammenfassung: nie Schlüssel, Passwörter oder ganze Texte.",
     listLabel: "Von der Website angeforderte Aktionen",
     confirmed: "bestätigt {time}",
     targetAll: "das ganze Team",
@@ -153,11 +165,13 @@ export const WEB_ACTION_LOG_TEXT: Record<Locale, WebActionLogText> = {
     refresh: "Actualizar",
     empty: "El sitio todavía no ha pedido ninguna acción.",
     unavailable: "No puedo leer el registro. Inténtalo de nuevo en un momento.",
-    notYet: "El registro aún no está activo en esta cuenta: aparecerá aquí cuando el sitio empiece a usarlo.",
+    notYet:
+      "El registro aún no está activo en esta cuenta: aparecerá aquí cuando el sitio empiece a usarlo.",
     signedOut: "Inicia sesión con tu cuenta para ver el registro.",
     localCopy: "El registro está en el sitio, no en esta copia: ábrelo allí.",
     limitNote: "Se muestran las últimas {n} acciones.",
-    footnote: "De cada acción solo hay un resumen: nunca claves, contraseñas ni textos enteros.",
+    footnote:
+      "De cada acción solo hay un resumen: nunca claves, contraseñas ni textos enteros.",
     listLabel: "Acciones pedidas por el sitio",
     confirmed: "confirmada {time}",
     targetAll: "todo el equipo",
@@ -196,11 +210,14 @@ export const WEB_ACTION_LOG_TEXT: Record<Locale, WebActionLogText> = {
     refresh: "Actualiser",
     empty: "Le site n’a encore demandé aucune action.",
     unavailable: "Je ne peux pas lire le journal. Réessaie dans un instant.",
-    notYet: "Le journal n’est pas encore actif sur ce compte : il apparaîtra ici quand le site commencera à l’utiliser.",
+    notYet:
+      "Le journal n’est pas encore actif sur ce compte : il apparaîtra ici quand le site commencera à l’utiliser.",
     signedOut: "Connecte-toi avec ton compte pour voir le journal.",
-    localCopy: "Le journal est sur le site, pas sur cette copie : ouvre-le là-bas.",
+    localCopy:
+      "Le journal est sur le site, pas sur cette copie : ouvre-le là-bas.",
     limitNote: "Les {n} dernières actions sont affichées.",
-    footnote: "De chaque action il n’y a qu’un résumé : jamais de clés, de mots de passe ni de textes entiers.",
+    footnote:
+      "De chaque action il n’y a qu’un résumé : jamais de clés, de mots de passe ni de textes entiers.",
     listLabel: "Actions demandées par le site",
     confirmed: "confirmée {time}",
     targetAll: "toute l’équipe",
@@ -238,12 +255,15 @@ export const WEB_ACTION_LOG_TEXT: Record<Locale, WebActionLogText> = {
     reading: "A napló olvasása…",
     refresh: "Frissítés",
     empty: "A webhely eddig nem kért semmilyen műveletet.",
-    unavailable: "Nem tudom elolvasni a naplót. Próbáld újra egy pillanat múlva.",
-    notYet: "A napló ezen a fiókon még nem aktív: itt jelenik meg, amint a webhely használni kezdi.",
+    unavailable:
+      "Nem tudom elolvasni a naplót. Próbáld újra egy pillanat múlva.",
+    notYet:
+      "A napló ezen a fiókon még nem aktív: itt jelenik meg, amint a webhely használni kezdi.",
     signedOut: "Jelentkezz be a fiókoddal a napló megtekintéséhez.",
     localCopy: "A napló a webhelyen van, nem ezen a példányon: ott nyisd meg.",
     limitNote: "Az utolsó {n} művelet látható.",
-    footnote: "Minden műveletről csak egy összefoglaló van: soha kulcsok, jelszavak vagy teljes szövegek.",
+    footnote:
+      "Minden műveletről csak egy összefoglaló van: soha kulcsok, jelszavak vagy teljes szövegek.",
     listLabel: "A webhely által kért műveletek",
     confirmed: "megerősítve: {time}",
     targetAll: "az egész csapat",
@@ -282,11 +302,13 @@ export const WEB_ACTION_LOG_TEXT: Record<Locale, WebActionLogText> = {
     refresh: "Atualizar",
     empty: "O site ainda não pediu nenhuma ação.",
     unavailable: "Não consigo ler o registo. Tenta de novo daqui a pouco.",
-    notYet: "O registo ainda não está ativo nesta conta: aparecerá aqui quando o site começar a usá-lo.",
+    notYet:
+      "O registo ainda não está ativo nesta conta: aparecerá aqui quando o site começar a usá-lo.",
     signedOut: "Entra com a tua conta para ver o registo.",
     localCopy: "O registo está no site, não nesta cópia: abre-o lá.",
     limitNote: "São mostradas as últimas {n} ações.",
-    footnote: "De cada ação há só um resumo: nunca chaves, palavras-passe ou textos inteiros.",
+    footnote:
+      "De cada ação há só um resumo: nunca chaves, palavras-passe ou textos inteiros.",
     listLabel: "Ações pedidas pelo site",
     confirmed: "confirmada {time}",
     targetAll: "toda a equipa",
