@@ -371,6 +371,25 @@ describe("export — nessun segreto esce", () => {
     }
   });
 
+  it("il registro delle azioni del sito esce senza la sessione e senza l'errore del box", async () => {
+    // web_action_log (mig 098) è dell'utente ed esce nell'export, ma:
+    //  - session_id è l'identificativo di una sessione di autenticazione, non un suo dato;
+    //  - result è il testo d'errore che il box riporta, e può contenere percorsi della macchina.
+    // Il nome «result» non va fra i campi proibiti per tutti: in team_directive_request_ledger è
+    // l'esito di una richiesta dell'utente, ed esce.
+    const { EXPORT_COLUMNS } = await import("@/lib/account-export-columns");
+    const { CASCADE_TABLES } = await import("@/lib/account-data-tables");
+    expect(CASCADE_TABLES).toContain("web_action_log");
+    const cols = EXPORT_COLUMNS.web_action_log;
+    expect(cols).toBeDefined();
+    expect(cols).not.toContain("session_id");
+    expect(cols).not.toContain("result");
+    expect(cols).not.toContain("user_id");
+    expect(cols).toEqual(
+      expect.arrayContaining(["id", "action", "level", "params", "summary", "status", "created_at"]),
+    );
+  });
+
   it("ogni tabella dei dati utente ha la sua allowlist", async () => {
     // Una tabella senza allowlist non viene esportata: va bene, ma deve
     // essere una scelta, non una dimenticanza. Qui si pretende che ci sia.

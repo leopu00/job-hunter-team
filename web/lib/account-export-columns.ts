@@ -382,6 +382,22 @@ export const EXPORT_COLUMNS: Record<string, readonly string[]> = {
     "processed_at",
     "status",
   ],
+  // Mig 098: the record of the website's actions. Without `session_id` (the identifier of an auth
+  // session: security material, not a datum of the user), without `result` (the box's error text, which
+  // can carry paths of the machine) and without `body` (it arrives with 099 and is added here when 099 is
+  // on the cloud: a column that does not exist yet would fail the whole export).
+  web_action_log: [
+    "id",
+    "action",
+    "level",
+    "params",
+    "summary",
+    "status",
+    "created_at",
+    "expires_at",
+    "confirmed_at",
+    "command_id",
+  ],
   team_directives: [
     "id",
     "body",
@@ -470,6 +486,8 @@ export const FORBIDDEN_EXPORT_FIELDS = [
   "last_restart_token",
   // Bearer-like: con questo un dispositivo reclama la sessione di pairing.
   "device_code",
+  // L'identificativo della sessione di autenticazione che ha chiesto un'azione (web_action_log).
+  "session_id",
   // Lo storico dei cambi di stato può contenere il valore di
   // `restart_token`: fuori i valori, resta il nome del campo.
   "old_value",

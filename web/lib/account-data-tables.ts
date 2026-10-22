@@ -72,6 +72,9 @@ export const CASCADE_TABLES = [
   "user_onboarding_state",
   "user_settings",
   "user_to_agent_messages",
+  // Mig 098: the record of the actions the user asked through the website's single door. Cascade on
+  // auth.users; written only by the database, readable by its owner, and the user's like the rest.
+  "web_action_log",
 ] as const;
 
 /** Tutto ciò che è dell'utente. */
