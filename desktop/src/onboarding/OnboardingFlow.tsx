@@ -456,7 +456,8 @@ export function OnboardingFlow({ account, platform, runtime, activity, onSubmit,
   // instead of starting a setup that fails at the runtime stage (pairing_token_missing).
   const vpsNeedsAccount = account.identity === "local" && host.kind === "vps";
   // What a VPS still lacks before Continue works, in the words of the form, so a disabled button says why.
-  const missingVps = host.kind === "vps" && !vpsNeedsAccount
+  // Also with a local profile: the Google note below says why the account matters, not what the form lacks.
+  const missingVps = host.kind === "vps"
     ? ([
         !host.address.trim() && t.vpsMissingItems.address,
         !host.user.trim() && t.vpsMissingItems.user,
@@ -550,11 +551,11 @@ export function OnboardingFlow({ account, platform, runtime, activity, onSubmit,
             {missingVps.length > 0 && <p className="onboarding-hint" id="onboarding-vps-missing" role="status">
               {fill(t.vpsMissing, { list: new Intl.ListFormat(locale, { style: "long", type: "conjunction" }).format(missingVps) })}
             </p>}
-            {vpsNeedsAccount && <div className="onboarding-aside" role="note">
+            {vpsNeedsAccount && <div className="onboarding-aside" role="note" id="onboarding-vps-account">
               <p>{t.vpsNeedsGoogle}</p>
               {onSignInWithGoogle && <button className="onboarding-secondary" type="button" onClick={() => void onSignInWithGoogle()}>{LOGIN_TEXT[locale].google}</button>}
             </div>}
-            <div className="onboarding-actions"><button className="onboarding-secondary" type="button" onClick={() => setStep(0)}>{t.back}</button><button className="onboarding-primary" type="submit" disabled={!hostIsValid} aria-describedby={missingVps.length > 0 ? "onboarding-vps-missing" : undefined}>{t.continue} <span aria-hidden="true">→</span></button></div>
+            <div className="onboarding-actions"><button className="onboarding-secondary" type="button" onClick={() => setStep(0)}>{t.back}</button><button className="onboarding-primary" type="submit" disabled={!hostIsValid} aria-describedby={[missingVps.length > 0 && "onboarding-vps-missing", vpsNeedsAccount && "onboarding-vps-account"].filter(Boolean).join(" ") || undefined}>{t.continue} <span aria-hidden="true">→</span></button></div>
           </form>
           {host.kind === "vps" && onConnectExistingTeam && <section className="onboarding-aside" aria-label={t.existingTeam.title}>
             <h3>{t.existingTeam.title}</h3>

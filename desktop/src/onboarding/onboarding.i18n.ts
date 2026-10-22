@@ -88,7 +88,7 @@ const it = {
   installsAria: "Cosa installa l’app",
   installsIntro: "Confermando, su questo computer l’app installa, se mancano:",
   installs: (s: WindowsSetup) => [
-    `Podman ${s.podmanVersion}, con winget (pacchetto Podman.CLI), e Docker Compose ${s.composeVersion}, scaricato dalla sua release ufficiale e verificato, privato nel runtime di JHT`,
+    `Podman ${s.podmanVersion}, con winget (pacchetto Podman.CLI, proprio questa versione e non la più recente), e Docker Compose ${s.composeVersion}, scaricato dalla sua release ufficiale e verificato, privato nel runtime di JHT`,
     `una macchina Podman in WSL: ${s.cpus} CPU, ${s.memoryGb} GB di memoria, fino a ${s.diskGb} GB di disco`,
     "un servizio in quella macchina che tiene acceso il team anche ad app chiusa",
     "un’attività pianificata, «Job Hunter Team - Start runtime», che all’accesso a Windows riaccende la macchina Podman di JHT",
@@ -329,7 +329,7 @@ const en: OnboardingCopy = {
   installsAria: "What the app installs",
   installsIntro: "When you confirm, the app installs on this computer, if they are missing:",
   installs: (s) => [
-    `Podman ${s.podmanVersion}, with winget (package Podman.CLI), and Docker Compose ${s.composeVersion}, downloaded from its official release and verified, private to the JHT runtime`,
+    `Podman ${s.podmanVersion}, with winget (package Podman.CLI, exactly this version, not the latest), and Docker Compose ${s.composeVersion}, downloaded from its official release and verified, private to the JHT runtime`,
     `a Podman machine in WSL: ${s.cpus} CPUs, ${s.memoryGb} GB of memory, up to ${s.diskGb} GB of disk`,
     "a service in that machine that keeps the team running even when the app is closed",
     "a scheduled task, “Job Hunter Team - Start runtime”, that turns the JHT Podman machine back on when you sign in to Windows",
@@ -568,7 +568,7 @@ const de: OnboardingCopy = {
   installsAria: "Was die App installiert",
   installsIntro: "Mit deiner Bestätigung installiert die App auf diesem Computer, falls sie fehlen:",
   installs: (s) => [
-    `Podman ${s.podmanVersion}, mit winget (Paket Podman.CLI), und Docker Compose ${s.composeVersion}, aus seinem offiziellen Release geladen und geprüft, privat in der JHT-Laufzeitumgebung`,
+    `Podman ${s.podmanVersion}, mit winget (Paket Podman.CLI, genau diese Version, nicht die neueste), und Docker Compose ${s.composeVersion}, aus seinem offiziellen Release geladen und geprüft, privat in der JHT-Laufzeitumgebung`,
     `eine Podman-Maschine in WSL: ${s.cpus} CPUs, ${s.memoryGb} GB Arbeitsspeicher, bis zu ${s.diskGb} GB Speicherplatz`,
     "einen Dienst in dieser Maschine, der das Team auch bei geschlossener App laufen lässt",
     "eine geplante Aufgabe, „Job Hunter Team - Start runtime“, die die Podman-Maschine von JHT bei der Anmeldung an Windows wieder startet",
@@ -807,7 +807,7 @@ const es: OnboardingCopy = {
   installsAria: "Qué instala la aplicación",
   installsIntro: "Al confirmar, la aplicación instala en este ordenador, si faltan:",
   installs: (s) => [
-    `Podman ${s.podmanVersion}, con winget (paquete Podman.CLI), y Docker Compose ${s.composeVersion}, descargado de su versión oficial y verificado, privado en el runtime de JHT`,
+    `Podman ${s.podmanVersion}, con winget (paquete Podman.CLI, exactamente esta versión, no la más reciente), y Docker Compose ${s.composeVersion}, descargado de su versión oficial y verificado, privado en el runtime de JHT`,
     `una máquina Podman en WSL: ${s.cpus} CPU, ${s.memoryGb} GB de memoria, hasta ${s.diskGb} GB de disco`,
     "un servicio en esa máquina que mantiene el equipo en marcha aunque la aplicación esté cerrada",
     "una tarea programada, «Job Hunter Team - Start runtime», que vuelve a encender la máquina Podman de JHT al iniciar sesión en Windows",
@@ -1046,7 +1046,7 @@ const fr: OnboardingCopy = {
   installsAria: "Ce que l’application installe",
   installsIntro: "Si tu confirmes, l’application installe sur cet ordinateur, s’ils manquent :",
   installs: (s) => [
-    `Podman ${s.podmanVersion}, avec winget (paquet Podman.CLI), et Docker Compose ${s.composeVersion}, téléchargé depuis sa version officielle et vérifié, privé dans le runtime de JHT`,
+    `Podman ${s.podmanVersion}, avec winget (paquet Podman.CLI, exactement cette version, pas la plus récente), et Docker Compose ${s.composeVersion}, téléchargé depuis sa version officielle et vérifié, privé dans le runtime de JHT`,
     `une machine Podman dans WSL : ${s.cpus} CPU, ${s.memoryGb} Go de mémoire, jusqu’à ${s.diskGb} Go de disque`,
     "un service dans cette machine qui garde l’équipe en marche même quand l’application est fermée",
     "une tâche planifiée, « Job Hunter Team - Start runtime », qui rallume la machine Podman de JHT à l’ouverture de session Windows",
@@ -1285,7 +1285,7 @@ const hu: OnboardingCopy = {
   installsAria: "Mit telepít az alkalmazás",
   installsIntro: "Ha megerősíted, az alkalmazás ezen a számítógépen telepíti, ha hiányoznak:",
   installs: (s) => [
-    `Podman ${s.podmanVersion} a winget segítségével (Podman.CLI csomag), és Docker Compose ${s.composeVersion}, a hivatalos kiadásából letöltve és ellenőrizve, a JHT futtatókörnyezetében, csak annak a számára`,
+    `Podman ${s.podmanVersion} a winget segítségével (Podman.CLI csomag, pontosan ez a verzió, nem a legfrissebb), és Docker Compose ${s.composeVersion}, a hivatalos kiadásából letöltve és ellenőrizve, a JHT futtatókörnyezetében, csak annak a számára`,
     `egy Podman-gép a WSL-ben: ${s.cpus} CPU, ${s.memoryGb} GB memória, legfeljebb ${s.diskGb} GB lemezterület`,
     "egy szolgáltatás ebben a gépben, amely akkor is működésben tartja a csapatot, ha az alkalmazás be van zárva",
     "egy ütemezett feladat, a „Job Hunter Team - Start runtime”, amely a Windowsba való bejelentkezéskor újra elindítja a JHT Podman-gépét",
@@ -1524,7 +1524,7 @@ const pt: OnboardingCopy = {
   installsAria: "O que a aplicação instala",
   installsIntro: "Ao confirmares, a aplicação instala neste computador, se faltarem:",
   installs: (s) => [
-    `Podman ${s.podmanVersion}, com o winget (pacote Podman.CLI), e Docker Compose ${s.composeVersion}, descarregado da sua versão oficial e verificado, privado no runtime do JHT`,
+    `Podman ${s.podmanVersion}, com o winget (pacote Podman.CLI, exatamente esta versão, não a mais recente), e Docker Compose ${s.composeVersion}, descarregado da sua versão oficial e verificado, privado no runtime do JHT`,
     `uma máquina Podman no WSL: ${s.cpus} CPU, ${s.memoryGb} GB de memória, até ${s.diskGb} GB de disco`,
     "um serviço nessa máquina que mantém a equipa a funcionar mesmo com a aplicação fechada",
     "uma tarefa agendada, «Job Hunter Team - Start runtime», que volta a ligar a máquina Podman do JHT quando inicias sessão no Windows",

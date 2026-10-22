@@ -524,13 +524,14 @@ fn open_tunnel(host: &ValidatedHost) -> Result<(PathBuf, Child), DirectChatError
         control_path.as_os_str().to_owned(),
         target,
     ]);
-    let child = Command::new("ssh")
+    let mut command = Command::new("ssh");
+    command
         .args(args)
         .stdin(Stdio::null())
         .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .spawn()
-        .map_err(|_| failure("tunnel_start_failed"))?;
+        .stderr(Stdio::null());
+    crate::runtime_host::hide_console(&mut command);
+    let child = command.spawn().map_err(|_| failure("tunnel_start_failed"))?;
     for _ in 0..40 {
         if check_tunnel(host, &control_path) {
             return Ok((control_path, child));
