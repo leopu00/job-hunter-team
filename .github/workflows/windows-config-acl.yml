@@ -14,6 +14,7 @@ on:
       - 'tests/test_windows_native_runtime_pieces.py'
       - 'tests/test_podman_windows_probe.py'
       - 'tests/test_windows_powershell51_json.py'
+      - 'tests/test_windows_podman_wsl_branches.py'
       - 'tests/conftest.py'
       - 'tests/requirements-ci.txt'
       - '.github/workflows/windows-config-acl.yml'
@@ -63,3 +64,24 @@ jobs:
           $summary = "$($out[-1])"
           if ($summary -notmatch '^=+ (\d+) passed(, \d+ warnings?)? in [0-9.]+s') { throw "unexpected pytest summary: $summary" }
           if ([int]$Matches[1] -lt 57) { throw "only $($Matches[1]) native Windows tests ran, expected at least 57" }
+
+      # The sh-faked branches of the Podman-in-WSL setup, once under each shell:
+      # the app runs Windows PowerShell 5.1, the ubuntu pytest job PowerShell 7.
+      # The fakes run under Git for Windows' bash behind a native launcher;
+      # every case checks the engine it ran under. A missing shell, bash or
+      # compiler fails, and a skip fails the count. 39 = the whole file.
+      - name: Podman-in-WSL branches under Windows PowerShell 5.1 and pwsh
+        shell: pwsh
+        env:
+          JHT_REQUIRE_WINDOWS_SHELLS: "1"
+        run: |
+          foreach ($shell in 'powershell', 'pwsh') {
+            $env:JHT_TEST_SHELL = $shell
+            $out = python -m pytest tests/test_windows_podman_wsl_branches.py -n 4 -p no:cacheprovider -rs 2>&1
+            $code = $LASTEXITCODE
+            $out | ForEach-Object { "$_" }
+            if ($code -ne 0) { exit $code }
+            $summary = "$($out[-1])"
+            if ($summary -notmatch '^=+ (\d+) passed(, \d+ warnings?)? in [0-9.]+s') { throw "unexpected pytest summary under ${shell}: $summary" }
+            if ([int]$Matches[1] -lt 39) { throw "only $($Matches[1]) tests ran under $shell, expected at least 39" }
+          }

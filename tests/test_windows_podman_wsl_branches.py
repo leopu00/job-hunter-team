@@ -17,7 +17,14 @@ this runs in the pytest job, where WSL does not exist. What needs a real WSL2
 and a real Podman machine is in the collaudo script, not here.
 
 The fakes are POSIX sh scripts: pwsh on Linux and macOS finds a file named
-podman.exe as an application. On Windows this file is skipped.
+podman.exe as an application. On Windows the same scripts run under Git for
+Windows' bash, behind a small native launcher named like the real program
+(wsl.exe, podman.exe, docker.exe): the scripts look them up with Get-Command
+-CommandType Application and run them as native processes. There the file runs
+under the shell named by JHT_TEST_SHELL (`powershell`, Windows PowerShell 5.1,
+the one the app uses; or `pwsh`), and every run checks that the engine was the
+one named: 5.1 does not enumerate a JSON array through the pipeline, 7 does. A
+missing shell, bash or compiler on Windows is a failure, never a skip.
 """
 
 from __future__ import annotations
@@ -27,6 +34,8 @@ import os
 import re
 import shutil
 import subprocess
+import tempfile
+from functools import lru_cache
 from pathlib import Path
 
 import pytest
@@ -40,16 +49,100 @@ SELFTEST = SCRIPTS / "windows-config-acl-selftest.ps1"
 WINDOWS_RUNTIME_RS = ROOT / "desktop" / "src-tauri" / "src" / "windows_runtime.rs"
 
 
+WINDOWS = os.name == "nt"
+
+
+def _windows_shell() -> str:
+    """The shell named by JHT_TEST_SHELL; Windows PowerShell 5.1, the app's, by default."""
+    name = os.environ.get("JHT_TEST_SHELL", "powershell")
+    if name == "powershell":
+        path = Path(os.environ.get("SystemRoot", r"C:\Windows")) / "System32" / "WindowsPowerShell" / "v1.0" / "powershell.exe"
+        return str(path) if path.is_file() else ""
+    if name == "pwsh":
+        return shutil.which("pwsh") or ""
+    pytest.fail(f"JHT_TEST_SHELL={name}: expected powershell or pwsh")
+
+
 def _pwsh() -> str:
-    found = os.environ.get("JHT_TEST_PWSH") or shutil.which("pwsh")
+    found = _windows_shell() if WINDOWS else (os.environ.get("JHT_TEST_PWSH") or shutil.which("pwsh"))
     if found:
         return found
-    if os.environ.get("CI"):
-        pytest.fail("pwsh is missing on the CI runner: these branches would go untested")
-    pytest.skip("pwsh not installed")
+    if os.environ.get("CI") or os.environ.get("JHT_REQUIRE_WINDOWS_SHELLS") == "1":
+        pytest.fail("the PowerShell under test is missing: these branches would go untested")
+    pytest.skip("PowerShell not installed")
 
 
-pytestmark = pytest.mark.skipif(os.name == "nt", reason="the fakes are POSIX sh scripts")
+def _expected_engine() -> str:
+    if WINDOWS and os.environ.get("JHT_TEST_SHELL", "powershell") == "powershell":
+        return "5.1"
+    return "7"
+
+
+def _git_bash() -> Path:
+    """Git for Windows' bash, which runs the sh fakes there. Missing is a failure."""
+    override = os.environ.get("JHT_TEST_BASH")
+    candidates = [override] if override else []
+    git = shutil.which("git")
+    if git and not override:
+        candidates.append(str(Path(git).resolve().parents[1] / "usr" / "bin" / "bash.exe"))
+    if not override:
+        candidates.append(r"C:\Program Files\Git\usr\bin\bash.exe")
+    for candidate in candidates:
+        if candidate and Path(candidate).is_file():
+            return Path(candidate)
+    pytest.fail("Git for Windows' bash is missing: the sh fakes cannot run, and a skip would prove nothing")
+
+
+# A native program named like the real one (podman.exe, wsl.exe, docker.exe):
+# it runs <its own name>.sh next to it with Git's bash, every argument quoted
+# as one word, and gives back its exit code. Standard input and output are
+# inherited, as a real child process would.
+LAUNCHER = r"""
+using System;
+using System.Diagnostics;
+using System.IO;
+using System.Text;
+public static class FakeLauncher {
+  static string Quote(string arg) {
+    var sb = new StringBuilder("\"");
+    int slashes = 0;
+    foreach (char c in arg) {
+      if (c == '\\') { slashes++; continue; }
+      if (c == '"') { sb.Append('\\', slashes * 2 + 1); sb.Append('"'); slashes = 0; continue; }
+      sb.Append('\\', slashes); slashes = 0; sb.Append(c);
+    }
+    sb.Append('\\', slashes * 2);
+    return sb.Append('"').ToString();
+  }
+  public static int Main(string[] args) {
+    string self = Process.GetCurrentProcess().MainModule.FileName;
+    var psi = new ProcessStartInfo(Environment.GetEnvironmentVariable("JHT_FAKE_BASH"));
+    var line = new StringBuilder(Quote(Path.ChangeExtension(self, ".sh")));
+    foreach (string arg in args) { line.Append(' ').Append(Quote(arg)); }
+    psi.Arguments = line.ToString();
+    psi.UseShellExecute = false;
+    using (var child = Process.Start(psi)) { child.WaitForExit(); return child.ExitCode; }
+  }
+}
+"""
+
+
+@lru_cache(maxsize=1)
+def _launcher() -> Path:
+    root = Path(os.environ.get("SystemRoot", r"C:\Windows")) / "Microsoft.NET"
+    compilers = [root / "Framework64" / "v4.0.30319" / "csc.exe", root / "Framework" / "v4.0.30319" / "csc.exe"]
+    csc = next((c for c in compilers if c.is_file()), None)
+    if csc is None:
+        pytest.fail("the .NET Framework C# compiler is missing: the native fakes cannot be built")
+    out = Path(tempfile.mkdtemp(prefix="jht-fake-launcher-"))
+    (out / "launcher.cs").write_text(LAUNCHER, encoding="utf-8")
+    built = subprocess.run(
+        [str(csc), "/nologo", "/target:exe", f"/out:{out / 'launcher.exe'}", str(out / "launcher.cs")],
+        capture_output=True, text=True, timeout=120,
+    )
+    if built.returncode != 0:
+        pytest.fail(f"the fake launcher does not compile:\n{built.stdout}{built.stderr}")
+    return out / "launcher.exe"
 
 # Dot-sources functions (and, for the enabler, its machine block) from the real
 # script, then runs $env:JHT_CASE_BODY. `exit N` inside them ends pwsh with N.
@@ -58,6 +151,9 @@ $ErrorActionPreference = 'Stop'
 $tokens = $null; $errors = $null
 $ast = [System.Management.Automation.Language.Parser]::ParseFile($env:JHT_UNDER_TEST, [ref]$tokens, [ref]$errors)
 if ($errors.Count) { throw "parse: $($errors[0])" }
+# Which engine runs the case: 5.1 hands a JSON array to the pipeline as ONE object, 7 enumerates it.
+$engine = if ($PSVersionTable.PSVersion.Major -eq 5 -and @('[1,2]' | ConvertFrom-Json).Count -eq 1) { '5.1' } elseif ($PSVersionTable.PSVersion.Major -ge 7 -and @('[1,2]' | ConvertFrom-Json).Count -eq 2) { '7' } else { 'unknown' }
+[IO.File]::WriteAllText($env:JHT_ENGINE_FILE, $engine)
 foreach ($name in ($env:JHT_IMPORT -split ',')) {
   if (-not $name) { continue }
   $fn = $ast.Find({ param($n) $n -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -eq $name }, $true)
@@ -78,9 +174,33 @@ exit 0
 
 
 def _fake(directory: Path, name: str, cases: str) -> None:
-    path = directory / name
-    path.write_text(FAKE.format(cases=cases), encoding="utf-8")
-    path.chmod(0o755)
+    if not WINDOWS:
+        path = directory / name
+        path.write_text(FAKE.format(cases=cases), encoding="utf-8")
+        path.chmod(0o755)
+        return
+    stem = name[:-4] if name.endswith(".exe") else name
+    # MSYS bash starts with the caller's PATH, which here has no /usr/bin.
+    script = FAKE.format(cases=cases).replace("#!/bin/sh\n", '#!/bin/sh\nPATH="/usr/bin:$PATH"\n', 1)
+    (directory / f"{stem}.sh").write_text(script, encoding="utf-8", newline="\n")
+    shutil.copyfile(_launcher(), directory / f"{stem}.exe")
+
+
+def _windows_env(tmp_path: Path) -> dict[str, str]:
+    """What Windows needs to start a shell, and the person's folders moved into the test's:
+    nothing the scripts touch through them is real. PATH has no System32, so the real
+    wsl.exe or podman.exe can never answer instead of a fake."""
+    home = tmp_path / "user"
+    for sub in ("AppData/Roaming", "AppData/Local", "Temp"):
+        (home / sub).mkdir(parents=True, exist_ok=True)
+    env = {key: os.environ[key] for key in ("SystemRoot", "windir", "SystemDrive", "ComSpec", "PATHEXT",
+                                            "NUMBER_OF_PROCESSORS", "PROCESSOR_ARCHITECTURE", "OS") if key in os.environ}
+    env.update({
+        "USERPROFILE": str(home), "APPDATA": str(home / "AppData" / "Roaming"),
+        "LOCALAPPDATA": str(home / "AppData" / "Local"), "TEMP": str(home / "Temp"), "TMP": str(home / "Temp"),
+        "JHT_FAKE_BASH": str(_git_bash()),
+    })
+    return env
 
 
 def _run(tmp_path: Path, script: Path, imports: list[str], body: str, env: dict[str, str]):
@@ -88,9 +208,13 @@ def _run(tmp_path: Path, script: Path, imports: list[str], body: str, env: dict[
     prelude.write_text(PRELUDE, encoding="utf-8")
     log = tmp_path / "calls.log"
     log.touch()
+    engine = tmp_path / "engine.txt"
+    engine.unlink(missing_ok=True)
     run_env = {
-        "PATH": f"{tmp_path / 'bin'}{os.pathsep}/usr/bin{os.pathsep}/bin",
+        **(_windows_env(tmp_path) if WINDOWS else {}),
+        "PATH": str(tmp_path / "bin") if WINDOWS else f"{tmp_path / 'bin'}{os.pathsep}/usr/bin{os.pathsep}/bin",
         "HOME": str(tmp_path),
+        "JHT_ENGINE_FILE": str(engine),
         "FAKE_LOG": str(log),
         "FAKE_STATE": str(tmp_path / "state"),
         "FAKE_DEFAULT": str(tmp_path / "default-connection"),
@@ -103,6 +227,8 @@ def _run(tmp_path: Path, script: Path, imports: list[str], body: str, env: dict[
         [_pwsh(), "-NoLogo", "-NoProfile", "-NonInteractive", "-File", str(prelude)],
         env=run_env, capture_output=True, text=True, timeout=120,
     )
+    ran = engine.read_text(encoding="utf-8").strip() if engine.exists() else "none"
+    assert ran == _expected_engine(), f"the case ran under PowerShell {ran}, not {_expected_engine()}: {result.stderr[-400:]}"
     calls = [line for line in log.read_text(encoding="utf-8").splitlines() if line]
     return result, calls
 
