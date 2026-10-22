@@ -41,6 +41,8 @@ describe("one row of the log", () => {
       action: "team.restart",
       target: "all",
       settings: [],
+      ref: null,
+      directiveKind: null,
       summary: "restart all",
       level: "L2",
       status: "done",
@@ -287,6 +289,50 @@ describe("the words", () => {
     );
   });
 
+  it("name an exclusion by its position and a standing order by its number or kind, never by the order's text", () => {
+    const of = (action: string, params: unknown, summary = "") =>
+      actionSubject(row({ action, params, summary } as never), "it");
+    expect(
+      of(
+        "exclusion.decide",
+        { legacy_id: 42, reason: "too_senior" },
+        "exclude #42 too_senior",
+      ),
+    ).toBe("posizione 42");
+    expect(of("exclusion.withdraw", { legacy_id: 42 })).toBe("posizione 42");
+    expect(
+      of(
+        "exclusion.profile_set",
+        { reason: "company", status: "accepted", positions: 3 },
+        "profile company accepted",
+      ),
+    ).toBeNull();
+    const secret = "Candidati a tutte le posizioni di Synthetic Co";
+    expect(
+      of("directive.create", { kind: "strategy" }, `strategy: ${secret}`),
+    ).toBe("strategia");
+    expect(of("directive.update", { id: 7 }, `#7: ${secret}`)).toBe("ordine 7");
+    expect(of("directive.archive", { id: 7 }, "archive #7")).toBe("ordine 7");
+    expect(
+      of("directive.create", { kind: "anything" }, `x: ${secret}`),
+    ).toBeNull();
+    // a number that is not a positive whole number names nothing
+    expect(of("exclusion.decide", { legacy_id: "42" })).toBeNull();
+    expect(of("directive.update", { id: -1 })).toBeNull();
+    expect(
+      actionSubject(
+        row({ action: "directive.create", params: { kind: "order" } } as never),
+        "de",
+      ),
+    ).toBe("Weisung");
+    expect(
+      actionTitle(
+        row({ action: "exclusion.withdraw", params: {} } as never),
+        "en",
+      ),
+    ).toBe("Exclusion withdrawn");
+  });
+
   it("name a state, or say it is not known", () => {
     expect(statusLabel(row(), "it")).toBe("Eseguita");
     expect(statusLabel(row({ status: "nope" } as never), "it")).toBe(
@@ -323,6 +369,10 @@ describe("the words", () => {
       expect(t.confirmed).toContain("{time}");
       expect(t.expires).toContain("{time}");
       expect(t.targetAll.trim()).not.toBe("");
+      expect(t.positionRef).toContain("{n}");
+      expect(t.directiveRef).toContain("{n}");
+      for (const kind of ["order", "strategy", "formation", "note"] as const)
+        expect(t.directiveKind[kind].trim(), kind).not.toBe("");
     },
   );
 
