@@ -509,6 +509,7 @@
   background: color-mix(in srgb, var(--color-red) 8%, var(--color-panel));
   font-size: 12px;
   line-height: 1.5;
+  overflow-wrap: anywhere;
 }
 
 .onboarding-choice-grid {
@@ -693,11 +694,15 @@
 .onboarding-runtime-progress__indeterminate { height: 4px; margin-top: 11px; overflow: hidden; border-radius: 99px; background: var(--color-row); }
 .onboarding-runtime-progress__indeterminate i { width: 34%; height: 100%; display: block; border-radius: inherit; background: var(--color-blue); animation: onboarding-indeterminate 1.25s ease-in-out infinite; }
 
+/* The text column may shrink below its longest word: a log path, an error code or an English cause
+   from the catalog has no place to break, and with a plain 1fr the column took its width and ran
+   past the red frame (TEST 4 on Windows, even maximised). minmax(0, 1fr) and min-width: 0 keep it
+   inside; overflow-wrap breaks the words that are longer than the line. */
 .onboarding-runtime-status {
   margin: 26px 0 21px;
   padding: 17px;
   display: grid;
-  grid-template-columns: 38px 1fr;
+  grid-template-columns: 38px minmax(0, 1fr);
   align-items: center;
   gap: 14px;
   border: 1px solid var(--color-border-glow);
@@ -717,9 +722,19 @@
   animation: onboarding-pulse 1.5s ease-in-out infinite;
 }
 
+.onboarding-runtime-status > div {
+  min-width: 0;
+}
+
 .onboarding-runtime-status strong,
 .onboarding-runtime-status small {
   display: block;
+  overflow-wrap: anywhere;
+}
+
+.onboarding-runtime-status code {
+  overflow-wrap: anywhere;
+  word-break: break-all;
 }
 
 .onboarding-runtime-status strong {

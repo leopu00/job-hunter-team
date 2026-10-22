@@ -114,3 +114,21 @@ describe("OnboardingFlow JHT palette", () => {
     }
   });
 });
+
+describe("the onboarding's error frames", () => {
+  function rule(selector: string) {
+    const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const body = onboardingStyles.match(new RegExp(`(?:^|\\n)${escaped}\\s*\\{([^}]*)\\}`))?.[1];
+    expect(body, `missing rule ${selector}`).toBeDefined();
+    return body!;
+  }
+
+  it("keep a long log path, an error code or a long cause inside the red frame", () => {
+    // the text column may shrink below its longest word, and the words longer than the line break
+    expect(rule(".onboarding-runtime-status")).toMatch(/grid-template-columns:\s*38px\s+minmax\(0,\s*1fr\)/);
+    expect(rule(".onboarding-runtime-status > div")).toMatch(/min-width:\s*0/);
+    expect(rule(".onboarding-runtime-status strong,\n.onboarding-runtime-status small")).toMatch(/overflow-wrap:\s*anywhere/);
+    expect(rule(".onboarding-runtime-status code")).toMatch(/word-break:\s*break-all/);
+    expect(rule(".onboarding-error")).toMatch(/overflow-wrap:\s*anywhere/);
+  });
+});
