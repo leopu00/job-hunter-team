@@ -246,6 +246,31 @@ describe("«Agenti», the agents' control panel", () => {
     expect(ops().filter((r) => r.op === "screen")).toEqual([{ op: "screen", session: "SCOUT-1" }]);
   });
 
+  it("two channels: the terminal says it is only watched, and the chat tab says where the text goes", async () => {
+    show("agent=CAPITANO");
+    await screen.findByTestId("panel-terminal-CAPITANO");
+    expect(screen.getByTestId("panel-terminal-destination")).toHaveTextContent(
+      "Il terminale qui è solo da guardare: da questa pagina non ci arriva niente di quello che scrivi. Per scrivere a Capitano usa la scheda Chat.",
+    );
+    // the terminal has no field to write in: writing is the chat's
+    expect(screen.queryByRole("textbox")).toBeNull();
+    const tabs = screen.getAllByRole("tab");
+    expect(tabs.map((tab) => tab.textContent)).toEqual(["Terminale", "Chat"]);
+    fireEvent.click(tabs[1]);
+    expect(await screen.findByTestId("direct-chat-destination")).toHaveTextContent("Destinazione: la chat di Capitano.");
+    expect(screen.queryByTestId("panel-terminal-CAPITANO")).toBeNull();
+  });
+
+  it("an agent with no chat has the terminal alone, and is not sent to a chat tab", async () => {
+    show("agent=SCOUT-1");
+    await screen.findByTestId("panel-terminal-SCOUT-1");
+    expect(screen.getAllByRole("tab").map((tab) => tab.textContent)).toEqual(["Terminale"]);
+    expect(screen.getByTestId("panel-terminal-destination")).toHaveTextContent(
+      "Il terminale qui è solo da guardare: da questa pagina non ci arriva niente di quello che scrivi.",
+    );
+    expect(screen.getByTestId("panel-terminal-destination")).not.toHaveTextContent("Chat");
+  });
+
   it("in the read-only view: no control at all, and only reads reach the native side", async () => {
     enterExistingTeamReadOnly(false);
     navigate("/agents?agent=SCOUT-1", { replace: true });
