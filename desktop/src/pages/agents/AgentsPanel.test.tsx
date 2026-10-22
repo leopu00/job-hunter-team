@@ -19,6 +19,9 @@ import { AGENTS_PANEL_TEXT, type AgentsPanelText } from "./AgentsPanel.i18n";
 const native = vi.hoisted(() => ({ invoke: vi.fn(), isTauri: vi.fn(() => true) }));
 const fake = vi.hoisted(() => ({ current: null as ReturnType<typeof createPermissiveSupabase> | null }));
 vi.mock("@tauri-apps/api/core", () => native);
+// The Chat tab mounts the chat's composer, whose dictation listens to native events: with
+// isTauri() true and no native side, the real listen would reject outside any test.
+vi.mock("@tauri-apps/api/event", () => ({ listen: vi.fn(async () => () => undefined) }));
 vi.mock("../../lib/supabase", () => ({
   get supabase() {
     return fake.current!.client;
