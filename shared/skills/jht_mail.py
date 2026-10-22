@@ -792,8 +792,9 @@ def _nudges(agent: str, message_id: str) -> list[datetime]:
 
 
 def remind(receivers, now: datetime | None = None, ready=None) -> list[dict]:
-    """Nudges that are due: a queued message is woken for again 60 seconds after its first nudge,
-    and 5 minutes after the second; never more than three times. One line per box, and only when the
+    """Nudges that are due: a queued message that has none yet (the first was held) as soon as the
+    terminal is ready; then 60 seconds after its first nudge, and 5 minutes after the second; never
+    more than three times. One line per box, and only when the
     terminal is at its prompt (`ready(session)`; the real check when None): otherwise nothing is
     recorded and the next round looks again."""
     moment = _utc(now)
@@ -805,7 +806,10 @@ def remind(receivers, now: datetime | None = None, ready=None) -> list[dict]:
         waiting = []
         for item in pending(agent, now=moment):
             sent = _nudges(agent, item["id"])
-            if 1 <= len(sent) <= len(RENEWAL_AFTER) and (moment - sent[-1]).total_seconds() >= RENEWAL_AFTER[len(sent) - 1]:
+            # No nudge yet (the first was held: the terminal was busy): it goes as soon as the terminal is
+            # ready. After one or two, the schedule; after three, no more.
+            if not sent or (len(sent) <= len(RENEWAL_AFTER)
+                            and (moment - sent[-1]).total_seconds() >= RENEWAL_AFTER[len(sent) - 1]):
                 waiting.append(item["id"])
         if waiting and gate(session_of(agent)):
             record_nudge(agent, waiting, now=moment)

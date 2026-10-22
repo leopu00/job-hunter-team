@@ -542,3 +542,17 @@ def test_the_transport_records_the_nudge_it_types(wire, jht_home):
     [file] = queued_files(jht_home)
     states = [r["state"] for r in mail.receipts("capitano-1", json.loads(file.read_text())["id"])]
     assert states == ["queued", "nudged"] and typed() == [mail.nudge_text(1)]
+
+
+def test_a_first_nudge_held_because_the_terminal_was_busy_goes_as_soon_as_it_is_ready():
+    """The case phase 3b creates: busy at the moment of sending. Nobody may ever send the sender a
+    «not taken» for a message whose agent was merely working."""
+    routed = route(now=T0)
+    assert mail.nudge(routed["session"], routed["id"], now=T0, capture=lambda s: BUSY) is False
+    receivers = frozenset({"capitano-1"})
+    assert mail.remind(receivers, now=T0 + timedelta(seconds=30), ready=lambda s: False) == []
+    [line] = mail.remind(receivers, now=T0 + timedelta(seconds=40), ready=ALWAYS)
+    assert line == {"session": "CAPITANO", "text": mail.nudge_text(1)}
+    assert [r["state"] for r in mail.receipts("capitano-1", routed["id"])] == ["queued", "nudged"]
+    assert mail.remind(receivers, now=T0 + timedelta(seconds=41), ready=ALWAYS) == [], "then the schedule: 60 s after this one"
+    assert len(mail.remind(receivers, now=T0 + timedelta(seconds=40 + 60), ready=ALWAYS)) == 1
