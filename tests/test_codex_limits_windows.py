@@ -147,3 +147,38 @@ def test_the_real_shape_of_a_single_window_plan_has_no_invented_five_hour(bridge
     assert parsed["usage"] == 14 and parsed["weekly_usage"] == 14
     assert parsed["reset_at_unix"] == parsed["weekly_reset_at_unix"] == float(WEEKLY_RESET)
     assert parsed["usage_is_weekly"] is True
+
+
+# ── the bridge's tick to the team: the single window is not called a 5h one ──
+
+def _tick(bridge, parsed):
+    entry = dict(parsed, provider="openai", weekly_remaining_pct=100.0 - parsed["weekly_usage"])
+    return bridge._build_tick_message(entry, parsed, "SOTTOUTILIZZO", 40, parsed["usage"], "?", 92,
+                                      "ON", None, False, "10:00:00", NOW)
+
+
+def test_the_tick_names_the_single_window_weekly_and_measures_it_over_the_week(bridge):
+    _rollout(bridge, {
+        "primary": {"used_percent": 24.0, "window_minutes": 10080, "resets_at": WEEKLY_RESET},
+        "secondary": None,
+        "plan_type": "prolite",
+    })
+    msg = _tick(bridge, bridge.fetch_codex_rollout())
+    assert "SINGLE WEEKLY WINDOW (this plan has no 5h window)" in msg
+    assert "5H WINDOW" not in msg
+    # 3 days of the week gone (the reset is 4 days away): 24% / 72h = 0.3%/h
+    first = msg.split("SINGLE WEEKLY WINDOW", 1)[1].split("\n\n", 1)[0]
+    assert "velocity  0.3 %/h" in first
+
+
+def test_a_plan_with_two_windows_keeps_its_5h_section(bridge):
+    _rollout(bridge, {
+        "primary": {"used_percent": 14.0, "window_minutes": 300, "resets_at": FIVE_HOUR_RESET},
+        "secondary": {"used_percent": 41.0, "window_minutes": 10080, "resets_at": WEEKLY_RESET},
+    })
+    msg = _tick(bridge, bridge.fetch_codex_rollout())
+    assert "⏱  5H WINDOW" in msg
+    assert "SINGLE WEEKLY WINDOW" not in msg
+    # 3 hours of the 5 gone (the reset is 2 hours away): 14% / 3h = 4.7%/h
+    first = msg.split("5H WINDOW", 1)[1].split("\n\n", 1)[0]
+    assert "velocity  4.7 %/h" in first

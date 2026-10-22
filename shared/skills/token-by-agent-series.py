@@ -507,7 +507,10 @@ def provider_windows(sample, now_ts: float) -> dict:
     """Inizio delle finestre del provider dall'ultimo sample del bridge
     (sentinel-data.jsonl): 5h = reset_at_unix - 5h, settimana =
     weekly_reset_at_unix - 7gg. Una finestra senza reset noto, o il cui
-    inizio cade nel futuro, non c'è (meglio niente che un numero inventato)."""
+    inizio cade nel futuro, non c'è (meglio niente che un numero inventato).
+    Un reset settimanale uguale a quello 5h è la stessa finestra: Kimi, che
+    resetta entro 5h, non ha una settimana a parte; un piano a finestra unica
+    settimanale (Codex), il cui reset è più lontano di 5h, ha solo la settimana."""
     out = {}
     if not isinstance(sample, dict):
         return out
@@ -517,7 +520,7 @@ def provider_windows(sample, now_ts: float) -> dict:
         if since <= now_ts:
             out["5h"] = since
     rw = sample.get("weekly_reset_at_unix")
-    if isinstance(rw, (int, float)) and rw != r5:
+    if isinstance(rw, (int, float)) and (rw != r5 or float(rw) - now_ts > 5 * 3600):
         since = float(rw) - 7 * 86400
         if since <= now_ts:
             out["week"] = since

@@ -138,6 +138,16 @@ def test_provider_windows_from_bridge_sample():
     assert series.provider_windows(None, NOW) == {}
 
 
+def test_a_single_weekly_window_counts_as_the_week():
+    """A Codex plan with one weekly window: the bridge gives the same reset on both axes, days
+    away. There is no 5h window, and the week is that single one (not dropped as Kimi's is)."""
+    single = {"provider": "openai", "reset_at_unix": NOW + 3 * DAY, "weekly_reset_at_unix": NOW + 3 * DAY}
+    assert series.provider_windows(single, NOW) == {"week": pytest.approx(NOW - 4 * DAY)}
+    # the edge: a reset just past 5h away cannot be a 5h window's
+    edge = {"reset_at_unix": NOW + 5 * HOUR + 1, "weekly_reset_at_unix": NOW + 5 * HOUR + 1}
+    assert set(series.provider_windows(edge, NOW)) == {"week"}
+
+
 def test_role_usage_splits_three_providers_by_role_and_window(home):
     data = series.role_usage(series.provider_windows(SAMPLE, NOW), NOW, provider="openai")
     five, week = data["windows"]["5h"], data["windows"]["week"]
