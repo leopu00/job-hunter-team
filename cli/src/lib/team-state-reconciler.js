@@ -30,7 +30,6 @@ import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import pc from 'picocolors';
 import { tierInterval, errorBackoff, POLL_IDLE_MS } from './poll-tier.js';
-import { getDirectReader } from './cloud-direct.js';
 import { observeTeam as observeBoxTeam } from './team-observed.js';
 import { cloudSyncHeaders } from './client-identity.js';
 import { agentsStatusWriter, createAgentsStatusReader, createHeartbeatCarrier, startAgentsStatusPublisher } from './agents-status.js';
@@ -216,18 +215,15 @@ export async function reconcileOnce({
   if (!baseUrl || !token) return { ok: false, skipped: 'missing-credentials' };
   if (existsSync(WEEKLY_HALT_FLAG)) return { ok: true, skipped: 'weekly-halt' };
 
-  // Heartbeat "VPS online" — diretto su Supabase, fallback PATCH Vercel.
+  // Heartbeat "VPS online": sempre dalla rotta col token (PATCH /api/team-state).
+  // Gli osservati di team_state non si scrivono più con la sessione dell'utente
+  // (JWT del refresh_token): il database non dà ai ruoli browser nessun grant su
+  // queste colonne, le scrive solo la rotta.
   const fields = { last_heartbeat_at: new Date().toISOString() };
   const running = await observeTeam();
   if (running !== null) fields.is_running = running;
-  const reader = getDirectReader(config);
-  let beat = false;
-  if (reader) {
-    try { await reader.patchTeamState(fields, { signal }); beat = true; }
-    catch (err) { log('warn', 'heartbeat.direct-failed', { err: err.message }); }
-  }
-  if (!beat) beat = await beatThroughRoute({ baseUrl, token, fields, signal });
-  ensureAgentsStatusPublisher({ reader });
+  ensureAgentsStatusPublisher();
+  const beat = await beatThroughRoute({ baseUrl, token, fields, signal });
   return { ok: true, action: null, beat };
 }
 
@@ -271,24 +267,23 @@ async function beatThroughRoute({ baseUrl, token, fields, signal }) {
 }
 
 // Each agent's status for the desktop office's tags (agents-status.js):
-// started once, at the first heartbeat of the daemon. Written direct to
-// Supabase when this box has a session (JHT_SUPABASE_DIRECT), otherwise
-// carried by the heartbeat's own PATCH /api/team-state (beatThroughRoute).
+// started once, at the first heartbeat of the daemon. Always carried by the
+// heartbeat's own PATCH /api/team-state (beatThroughRoute).
 // The source is the TUI team's panes, or with JHT_API_TRACES_DIR the JHT API
 // executor's traces (agents-status-traces.js; the test box, own account).
 // JHT_AGENTS_STATUS=0 turns it off.
 let stopAgentsStatus = null;
 let agentsStatusCarrier = null;
-function ensureAgentsStatusPublisher({ reader }) {
+function ensureAgentsStatusPublisher() {
   if (stopAgentsStatus || process.env.JHT_AGENTS_STATUS === '0') return;
   const tracesDir = process.env.JHT_API_TRACES_DIR;
   const source = tracesDir ? 'api' : 'tui';
-  if (!reader) agentsStatusCarrier = createHeartbeatCarrier({ source });
+  agentsStatusCarrier = createHeartbeatCarrier({ source });
   stopAgentsStatus = startAgentsStatusPublisher({
     reader: tracesDir
       ? createApiAgentsStatusReader({ logsDir: tracesDir, log })
       : createAgentsStatusReader({ jhtHome: JHT_HOME, log }),
-    write: agentsStatusWriter({ source, direct: reader, carrier: agentsStatusCarrier }),
+    write: agentsStatusWriter({ carrier: agentsStatusCarrier }),
     log,
   });
 }

@@ -221,17 +221,18 @@ describe("the reader and the publisher", () => {
     }
   });
 
-  it("writes direct with a session, hands the map to the heartbeat without one, only its own source", async () => {
+  it("hands the map to the heartbeat carrier, only its own source, and never writes with a session", async () => {
     const map = { "scout-1": { status: "working", since: "x" } };
-    const direct = { patchTeamState: vi.fn(async () => {}) };
     const carrier = createHeartbeatCarrier({ source: "api" });
     const hold = vi.spyOn(carrier, "hold");
-    await agentsStatusWriter({ source: "tui", direct, carrier })(map);
-    expect(direct.patchTeamState).toHaveBeenCalledWith({ agents_status: { tui: { agents: map } } });
-    expect(hold).not.toHaveBeenCalled();
-    expect(carrier.fields()).toEqual({});
-    await agentsStatusWriter({ source: "api", direct: null, carrier })(map);
+    const write = agentsStatusWriter({ carrier });
+    await write(map);
+    expect(hold).toHaveBeenCalledWith(map);
     expect(carrier.fields()).toEqual({ agents_status: { api: { agents: map } } });
+    // a writer given a direct channel (the old shape) still does not use it
+    const direct = { patchTeamState: vi.fn(async () => {}) };
+    await (agentsStatusWriter as (o: unknown) => (m: unknown) => Promise<void>)({ source: "tui", direct, carrier })(map);
+    expect(direct.patchTeamState).not.toHaveBeenCalled();
   });
 
   it("the heartbeat carrier gives the last map, and nothing for a while after a refusal", async () => {
