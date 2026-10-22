@@ -134,18 +134,33 @@ describe("an application authorised from the website", () => {
     for (const row of authorised) expect(told.has(row.id), `position ${row.id}`).toBe(true);
   });
 
-  it("an authorisation given on the box itself, or a withdrawal, is not one", async () => {
+  it("an authorisation given on the box itself is not one", async () => {
     const { dbPath } = box();
     const db = new DatabaseSync(dbPath);
     db.exec(
       "UPDATE positions SET apply_requested = 1, apply_requested_at = '2026-09-12T10:00:00.000Z', apply_requested_by = 'user_local' WHERE id = 7",
     );
     db.close();
-    // the cloud brings back the box's own authorisation (same instant, older): nothing to tell
+    // the cloud brings back the box's own authorisation (older instant): nothing to tell
     await pull(dbPath, [{ ...FROM_WEB, apply_requested_at: "2026-09-12T09:00:00+00:00", apply_requested_by: "user_local" }]);
-    // a withdrawal from the website
-    await pull(dbPath, [{ legacy_id: 7, apply_requested: false, apply_requested_at: "2026-09-12T12:00:00+00:00", apply_requested_by: null }]);
     expect(notices(dbPath)).toEqual([]);
+  });
+
+  it("a withdrawal from the website of an authorisation the box had is told, once", async () => {
+    const { dbPath } = box();
+    await pull(dbPath, [FROM_WEB]);
+    const REVOKED = { legacy_id: 7, apply_requested: false, apply_requested_at: "2026-09-12T12:00:00+00:00", apply_requested_by: null };
+    await pull(dbPath, [REVOKED]);
+    await pull(dbPath, [REVOKED]);
+    const rows = notices(dbPath);
+    expect(rows.map((r) => r.payload)).toEqual([
+      { code: "apply_authorized_from_web", position_id: 7 },
+      { code: "apply_revoked_from_web", position_id: 7 },
+    ]);
+    // a withdrawal of something the box did not have authorised says nothing
+    const other = box();
+    await pull(other.dbPath, [REVOKED]);
+    expect(notices(other.dbPath)).toEqual([]);
   });
 });
 

@@ -2840,6 +2840,11 @@ async function handlePullDesiredState(options = {}) {
         if (apFlag === 1 && apBy === 'user_web' && at && (local.apply_requested_at ?? null) !== apAt) {
           webNotices.push({ code: 'apply_authorized_from_web', key: `apply:${legacyId}:${at}`, positionId: legacyId });
         }
+        // A withdrawal that arrives from the website takes an authorisation the
+        // box had: told too, since it cancels what the user may be waiting for.
+        if (apFlag === 0 && (local.apply_requested ?? 0) === 1 && at && (local.apply_requested_at ?? null) !== apAt) {
+          webNotices.push({ code: 'apply_revoked_from_web', key: `revoke:${legacyId}:${at}`, positionId: legacyId });
+        }
       }
 
       // ── Sync NARROW dell'esclusione utente ──

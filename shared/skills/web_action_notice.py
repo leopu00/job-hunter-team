@@ -42,6 +42,15 @@ TEXTS: dict[str, dict[str, str]] = {
         "pt": "Foi autorizada uma candidatura a partir do site (vaga {position}). Se não foste tu, retira a autorização na app.",
         "hu": "A weboldalról engedélyeztek egy jelentkezést ({position}. állás). Ha nem te voltál, vond vissza az engedélyt az alkalmazásban.",
     },
+    "apply_revoked_from_web": {
+        "en": "An application authorisation was withdrawn from the website (position {position}). If it was not you, check who can access your account.",
+        "it": "Dal sito è stata ritirata l'autorizzazione a una candidatura (posizione {position}). Se non sei stato tu, controlla chi può entrare nel tuo account.",
+        "de": "Über die Website wurde eine Bewerbungsfreigabe zurückgenommen (Stelle {position}). Wenn du das nicht warst, prüfe, wer Zugriff auf dein Konto hat.",
+        "fr": "Une autorisation de candidature a été retirée depuis le site (poste {position}). Si ce n'était pas toi, vérifie qui peut accéder à ton compte.",
+        "es": "Desde el sitio se retiró la autorización de una candidatura (puesto {position}). Si no fuiste tú, revisa quién puede entrar en tu cuenta.",
+        "pt": "Foi retirada a autorização de uma candidatura a partir do site (vaga {position}). Se não foste tu, verifica quem consegue entrar na tua conta.",
+        "hu": "A weboldalról visszavontak egy jelentkezési engedélyt ({position}. állás). Ha nem te voltál, ellenőrizd, ki fér hozzá a fiókodhoz.",
+    },
     "team_stopped_from_web": {
         "en": "The team was stopped from the website. If it was not you, check who can access your account.",
         "it": "La squadra è stata fermata dal sito. Se non sei stato tu, controlla chi può entrare nel tuo account.",
@@ -80,6 +89,7 @@ TEXTS: dict[str, dict[str, str]] = {
     },
 }
 CODES = frozenset(TEXTS)
+POSITION_CODES = frozenset({"apply_authorized_from_web", "apply_revoked_from_web"})
 
 
 def user_language() -> str:
@@ -116,7 +126,7 @@ def notify(code: str, key: str, position_id: int | None = None, *, lang: str | N
         return {"notified": False, "reason": "key_invalid"}
     if position_id is not None and (isinstance(position_id, bool) or not isinstance(position_id, int) or position_id <= 0):
         return {"notified": False, "reason": "position_invalid"}
-    if code == "apply_authorized_from_web" and position_id is None:
+    if code in POSITION_CODES and position_id is None:
         return {"notified": False, "reason": "position_missing"}
     tool = notify_tool()
     if tool is None:
