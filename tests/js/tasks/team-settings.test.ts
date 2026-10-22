@@ -44,6 +44,11 @@ describe("the settings' closed lists", () => {
   it.each([
     ["a timezone that does not exist", { ...OFFICE, timezone: "Mars/Olympus" }],
     ["a timezone with a path in it", { ...OFFICE, timezone: "../../etc" }],
+    // The timezone never reaches a command line, and shell characters never pass the list.
+    ["a timezone with a command after it", { ...OFFICE, timezone: "Europe/Rome; touch /tmp/x" }],
+    ["a timezone with a command substitution", { ...OFFICE, timezone: "$(id)" }],
+    ["a timezone with backticks", { ...OFFICE, timezone: "`id`" }],
+    ["a timezone with a space", { ...OFFICE, timezone: "Europe/Rome x" }],
     ["a day twice", { timezone: "UTC", windows: [{ days: ["mon"], start: "09:00", end: "18:00" }, { days: ["mon"], start: "19:00", end: "23:30" }] }],
     ["a block under four hours", { timezone: "UTC", windows: [{ days: ["mon"], start: "09:00", end: "12:00" }] }],
     ["start equal to end", { timezone: "UTC", windows: [{ days: ["mon"], start: "09:00", end: "09:00" }] }],
@@ -87,6 +92,9 @@ describe("the settings' closed lists", () => {
     [{ role_models: { scout: { model: "gpt-5.6-luna" } } }, false],
     [{ role_models: { scot: { model: "luna" } } }, false],
     [{ role_models: { scout: { model: "luna", efort: "low" } } }, false],
+    // model and effort go on the agent's command line: only the list's words pass.
+    [{ role_models: { scout: { effort: "high -c sandbox=off" } } }, false],
+    [{ role_models: { scout: { model: "luna$(id)" } } }, false],
     [{ working_hours: OFFICE, api_key: "x" }, false],
     ["working_hours", false],
   ])("validSettings(%j) is %s", (desired, ok) => {
