@@ -966,7 +966,7 @@ export const AGENT_POSITION_COLUMNS: ReadonlySet<string> = new Set(
     geocode_requested_at salary_precise_requested salary_precise_requested_at
     salary_precise created_at updated_at user_excluded_reason user_excluded_at
     user_excluded_prev_status recheck_requested recheck_requested_at
-    apply_requested apply_requested_at apply_requested_by
+    apply_requested apply_requested_at apply_requested_by scam_signals
   `
     .split(/\s+/)
     .filter(Boolean),
