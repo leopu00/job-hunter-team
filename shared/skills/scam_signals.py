@@ -1,33 +1,35 @@
 #!/usr/bin/env python3
-"""scam_signals.py — segnali anti-truffa DETERMINISTICI su un annuncio.
+"""scam_signals.py — deterministic scam signals on a job ad. A warning, never an exclusion.
 
-Un avviso, mai un'esclusione. Il codice calcola solo fatti verificabili sul testo
-dell'annuncio e sul DB, senza rete e senza LLM, PRIMA del parere dell'Analista:
-stessi dati, stesso esito. Il risultato sta in `positions.scam_signals` (JSON) e
-la posizione resta dov'è: lo `status` non si tocca, niente si cancella.
+The code computes only facts that can be verified on the ad's text and in the
+database, with no network and no model, BEFORE the Analista's opinion: the same
+data gives the same answer. The result is stored in `positions.scam_signals`
+(JSON) and the position stays where it is: its `status` is never touched and
+nothing is deleted.
 
-  1 segnale                       → bucket "badge"   (badge «sospetto» col motivo)
-  2+ segnali di famiglie diverse  → bucket "section" (sezione «sospette», sempre visibile)
+  1 signal                          → bucket "badge"   ("suspicious" badge with its reason)
+  2+ signals of different families  → bucket "section" ("suspicious" section, always visible)
 
-Segnali (codici chiusi) e famiglie:
-  same_text_many_places  [testo]    stesso testo normalizzato in >=2 ALTRE posizioni di
-                                    aziende DIVERSE (la stessa azienda in più città non conta)
-  advance_payment        [testo]    frase da lista chiusa: quota/kit/formazione a pagamento,
-                                    pagamento anticipato, carte regalo… (non se negata: «no fees»)
-  company_unverifiable   [azienda]  nessun sito registrato per l'azienda E il link della
-                                    posizione non è un portale/ATS noto né il suo dominio
-  private_chat_only      [contatto] ci si candida scrivendo su WhatsApp/Telegram/WeChat e non
-                                    c'è altro modo (né email nel testo né un link a un portale)
+Signals (closed codes) and families:
+  same_text_many_places  [text]     the same normalised text in >=2 OTHER positions of
+                                    DIFFERENT companies (the same company in more cities
+                                    does not count)
+  advance_payment        [text]     a phrase from a closed list: fee/kit/paid training,
+                                    payment in advance, gift cards… (not when denied: "no fees")
+  company_unverifiable   [company]  no website recorded for the company AND the position's
+                                    link is neither a known portal/ATS nor its own domain
+  private_chat_only      [contact]  one applies by writing on WhatsApp/Telegram/WeChat and
+                                    there is no other way (no email in the text, no portal link)
 
-Le liste (portali noti, frasi, negazioni) stanno in scam_signals_data.json.
+The lists (known portals, phrases, negations) live in scam_signals_data.json.
 
-Il testo dell'annuncio è dato esterno: questo script non lo stampa mai. Dove mostra
-una frase trovata la mette in un recinto inline (external_content); nel DB va solo
-l'elenco dei codici, mai il testo.
+The ad's text is external data: this script never prints it. Where it shows a matched
+phrase it puts it in an inline fence (external_content); the database only gets the
+list of codes, never the text.
 
-Uso:
-  python3 scam_signals.py check --id N [--dry-run]    # calcola, scrive se cambia, stampa JSON
-  python3 scam_signals.py sweep [--all] [--limit N]   # backlog: le posizioni mai controllate
+Usage:
+  python3 scam_signals.py check --id N [--dry-run]    # compute, write if changed, print JSON
+  python3 scam_signals.py sweep [--all] [--limit N]   # backlog: positions never checked
 """
 from __future__ import annotations
 
@@ -336,7 +338,7 @@ def main(argv=None) -> int:
     check.add_argument("--id", type=int, required=True)
     check.add_argument("--dry-run", action="store_true")
     sweep = sub.add_parser("sweep")
-    sweep.add_argument("--all", action="store_true", help="anche quelle già controllate")
+    sweep.add_argument("--all", action="store_true", help="also the positions already checked")
     sweep.add_argument("--limit", type=int, default=0)
     args = parser.parse_args(argv)
 

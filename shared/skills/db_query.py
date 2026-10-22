@@ -122,7 +122,7 @@ AGENT_POSITION_COLUMNS = frozenset("""
     geocode_requested_at salary_precise_requested salary_precise_requested_at
     salary_precise created_at updated_at user_excluded_reason user_excluded_at
     user_excluded_prev_status recheck_requested recheck_requested_at
-    apply_requested apply_requested_at apply_requested_by
+    apply_requested apply_requested_at apply_requested_by scam_signals
 """.split())
 # Le colonne di `positions` che sono dell'utente e che nessun agente legge.
 USER_ONLY_POSITION_COLUMNS = frozenset({"user_excluded_note"})

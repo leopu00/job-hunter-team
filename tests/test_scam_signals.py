@@ -316,3 +316,18 @@ def test_the_portal_list_lives_in_the_data_file_not_in_the_code():
     assert "greenhouse.io" in DATA["known_portals"]
     source = (SKILLS / "scam_signals.py").read_text(encoding="utf-8")
     assert "greenhouse" not in source and "myworkdayjobs" not in source
+
+
+def test_the_codes_may_reach_the_agents_in_all_three_readers():
+    """`scam_signals` holds codes and a bucket, never the ad's text: the analyst reads
+    it back with db_query, and the harness's native reader and the team API's reader
+    list it the same way."""
+    import db_query
+
+    assert "scam_signals" in db_query.AGENT_POSITION_COLUMNS
+    assert "scam_signals" not in db_query.USER_ONLY_POSITION_COLUMNS
+    native = (ROOT / "agent-harness" / "runtime" / "src" / "db" / "db-query.ts").read_text(encoding="utf-8")
+    block = native[native.index("export const AGENT_POSITION_COLUMNS"):native.index(".split(/\\s+/)")]
+    assert "scam_signals" in block.split()
+    api = (ROOT / "shared" / "queries" / "readonly-sqlite.js").read_text(encoding="utf-8")
+    assert '"scam_signals",' in api
