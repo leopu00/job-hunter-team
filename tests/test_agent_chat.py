@@ -466,6 +466,53 @@ READY_NUMBERED_PROSE = """\
 ❯ 
 """
 
+READY_CLAUDE_RULES = """\
+● Fatto.
+
+────────────────────────────────────────────────
+❯
+────────────────────────────────────────────────
+  ? for shortcuts                       Context left until auto-compact: 12%
+"""
+READY_CODEX_EXAMPLE = """\
+› Write tests for @filename
+
+  100% context left
+"""
+# A quoted "> " of the transcript, and under it a shell: the CLI has exited.
+QUOTE_THEN_SHELL = """\
+● Ecco cosa mi hai scritto:
+>
+user@host:~$
+"""
+MENU_TRY_AGAIN = """\
+ Login failed.
+ ❯ Try again
+   Cancel
+"""
+MENU_SEND_FEEDBACK = """\
+ How was this session?
+ › Send feedback
+   Skip
+"""
+TYPED_WRITE = """\
+╭──────────────────────────────────────────────╮
+│ > write the CV now please                    │
+╰──────────────────────────────────────────────╯
+"""
+# The menu's mark on its last option: the composer's line holds the option itself.
+MENU_MARK_ON_LAST = """\
+ How was this session?
+   Skip
+ › Send feedback
+"""
+NUMBERED_TRY_AGAIN = """\
+ ❯ 1. Try again
+"""
+UNKNOWN_PLACEHOLDER = """\
+› Plan a trip to the moon
+"""
+
 
 def _module():
     spec = importlib.util.spec_from_file_location("t39_agent_chat", SCRIPT)
@@ -474,8 +521,11 @@ def _module():
     return module
 
 
-@pytest.mark.parametrize("screen", [READY_CLAUDE, READY_CODEX, READY_NUMBERED_PROSE, "❯ \n", "│ ❯ Try \"edit cv.md\" │\n"],
-                         ids=["claude", "codex", "numbered-prose-above", "bare-mark", "placeholder"])
+@pytest.mark.parametrize("screen", [
+    READY_CLAUDE, READY_CODEX, READY_NUMBERED_PROSE, "❯ \n", "│ ❯ Try \"edit cv.md\" │\n",
+    READY_CLAUDE_RULES, READY_CODEX_EXAMPLE, READY_CLAUDE + "\n" * 30,
+], ids=["claude", "codex", "numbered-prose-above", "bare-mark", "placeholder", "claude-rules-and-footer",
+        "codex-example-placeholder", "blank-rows-under"])
 def test_the_prompt_is_shown_by_an_empty_composer(screen):
     assert _module().prompt_state(screen) == "ready"
 
@@ -487,7 +537,11 @@ def test_a_running_turn_is_busy(screen):
 
 @pytest.mark.parametrize("screen", [
     CLAUDE_PERMISSION, CODEX_APPROVAL, LOGIN_METHOD, PASTE_CODE, TRUST_FOLDER, TEXT_ALREADY_TYPED, A_SHELL, STARTING, "",
-], ids=["permission", "approval", "login", "paste-code", "trust-folder", "typed", "shell", "starting", "empty"])
+    QUOTE_THEN_SHELL, MENU_TRY_AGAIN, MENU_SEND_FEEDBACK, MENU_MARK_ON_LAST, TYPED_WRITE, NUMBERED_TRY_AGAIN,
+    UNKNOWN_PLACEHOLDER,
+], ids=["permission", "approval", "login", "paste-code", "trust-folder", "typed", "shell", "starting", "empty",
+        "quote-then-shell", "menu-try-again", "menu-send-feedback", "menu-mark-on-last", "typed-write",
+        "numbered-try-again", "unknown-placeholder"])
 def test_anything_else_is_not_the_prompt(screen):
     assert _module().prompt_state(screen) == "not_at_prompt"
 
@@ -498,8 +552,9 @@ def _nothing_happened(box, agent="capitano"):
     assert not any(call.startswith("send-keys") for call in box.calls()), "nothing typed"
 
 
-@pytest.mark.parametrize("screen", [CLAUDE_PERMISSION, CODEX_APPROVAL, LOGIN_METHOD, PASTE_CODE, TEXT_ALREADY_TYPED, A_SHELL],
-                         ids=["permission", "approval", "login", "paste-code", "typed", "shell"])
+@pytest.mark.parametrize("screen", [
+    CLAUDE_PERMISSION, CODEX_APPROVAL, LOGIN_METHOD, PASTE_CODE, TEXT_ALREADY_TYPED, A_SHELL, QUOTE_THEN_SHELL, MENU_TRY_AGAIN,
+], ids=["permission", "approval", "login", "paste-code", "typed", "shell", "quote-then-shell", "menu-try-again"])
 def test_a_screen_that_is_not_the_prompt_is_a_closed_code_with_nothing_written_or_typed(box, screen):
     box.stub_delivery()
     (box.state / "screen").write_text(screen, encoding="utf-8")

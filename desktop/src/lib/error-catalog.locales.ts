@@ -666,6 +666,13 @@ const COPY_BY_ENGLISH_TEXT: Readonly<Record<string, ErrorTranslations>> = {
     hu: ["Az ügynök nem fut.", "Indítsd el a csapatot, majd küldd el újra az üzenetet."],
     pt: ["O agente não está em execução.", "Inicia a equipa e volta a enviar a mensagem."],
   },
+  "The agent is working: the message was not sent.": {
+    de: ["Der Agent arbeitet gerade: Die Nachricht wurde nicht gesendet.", "Sende sie erneut, wenn sein Durchgang vorbei ist; das siehst du in seinem Terminal auf der Seite Agenten."],
+    es: ["El agente está trabajando: el mensaje no se ha enviado.", "Vuelve a enviarlo cuando termine su turno; lo ves en su terminal, en la página Agentes."],
+    fr: ["L’agent est en train de travailler : le message n’est pas parti.", "Renvoie-le quand son tour est fini ; tu le vois dans son terminal, sur la page Agents."],
+    hu: ["Az ügynök éppen dolgozik: az üzenet nem ment el.", "Küldd el újra, amikor végzett a körével; ezt a termináljában látod az Ügynökök oldalon."],
+    pt: ["O agente está a trabalhar: a mensagem não foi enviada.", "Volta a enviá-la quando terminar o turno; vês isso no terminal dele, na página Agentes."],
+  },
   "The agent is not at its prompt: its terminal shows a menu, a sign-in, a permission question or text already typed.": {
     de: ["Der Agent ist nicht an seiner Eingabeaufforderung: Sein Terminal zeigt ein Menü, eine Anmeldung, eine Berechtigungsfrage oder bereits geschriebenen Text.", "Sieh dir sein Terminal auf der Seite Agenten an; sobald er wieder an der Eingabeaufforderung ist, sende die Nachricht erneut."],
     es: ["El agente no está en su prompt: su terminal muestra un menú, un inicio de sesión, una pregunta de permiso o texto ya escrito.", "Mira su terminal en la página Agentes; cuando vuelva al prompt, envía el mensaje otra vez."],
@@ -1402,7 +1409,7 @@ export const ERROR_CATALOG_LOCALES: Readonly<Record<string, ErrorTranslations>> 
   own_vps_claim_not_confirmed: translated("The confirmation was not given."),
   chat_runtime_outdated: translated("The team does not have this chat yet."),
   agent_unavailable: translated("The agent cannot receive the message right now."),
-  agent_busy: translated("The agent cannot receive the message right now."),
+  agent_busy: translated("The agent is working: the message was not sent."),
   agent_not_at_prompt: translated("The agent is not at its prompt: its terminal shows a menu, a sign-in, a permission question or text already typed."),
   agent_stuck: translated("The agent is not responding."),
   pairing_token_missing: translated("A team on a VPS needs your Google account."),

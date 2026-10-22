@@ -234,10 +234,27 @@ def check_session(session: str) -> None:
 # The composer's line: the input mark of the CLIs (❯ Claude Code and Kimi, › Codex, > older builds,
 # ▌ a block cursor), maybe inside the border of a box.
 _COMPOSER = re.compile(r"^\s*[│┃╎|]?\s*[❯›>▌]\s?(.*?)\s*[│┃╎|]?\s*$")
-# A menu's option under the mark: a permission question, a sign-in, a folder to trust.
-_OPTION = re.compile(r"^\d{1,2}[.)]\s")
-# What an empty composer shows in grey; anything else there is text already typed.
-_PLACEHOLDER = re.compile(r"^(?:try\s|ask\s|type\s|write\s|send\s|scrivi\s|\?\s*for\s|/\s*for\s)", re.I)
+# Under the composer the CLIs draw only these: a border or a rule, and a footer of hints.
+_BORDER = re.compile(r"^\s*[╭╰┌└├]?[─━═┄╌]+[╮╯┐┘┤]?\s*$")
+_FOOTER = re.compile(
+    r"^\s*(?:\? for shortcuts\b"                       # Claude Code, Codex
+    r"|⏵⏵ |⏸ "                                          # Claude Code's mode line
+    r"|⏎ send\b"                                        # Codex
+    r"|\d{1,3}% context left\b"                         # Codex
+    r"|Context left until auto-compact: \d{1,3}%\s*$)"  # Claude Code
+)
+# What an empty composer shows in grey, whole: Claude Code's «Try "…"» and Codex's own lines.
+# Anything else on the composer's line is text already typed, or a menu's option.
+_PLACEHOLDER_CLAUDE = re.compile(r'^Try "[^"]{1,120}"$')
+_PLACEHOLDERS = frozenset({
+    "Ask Codex to do anything",
+    "Explain this codebase",
+    "Summarize recent commits",
+    "Implement {feature}",
+    "Find and fix a bug in @filename",
+    "Write tests for @filename",
+    "Improve documentation in @filename",
+})
 
 
 def _status_line_busy(line: str) -> bool:
@@ -254,27 +271,39 @@ def _status_line_busy(line: str) -> bool:
     return rest == "" or rest[0] in "·•|,-"
 
 
+def _placeholder(content: str) -> bool:
+    return content in _PLACEHOLDERS or bool(_PLACEHOLDER_CLAUDE.match(content))
+
+
 def prompt_state(pane: str) -> str:
     """`ready`, `busy` or `not_at_prompt`, from the text of the agent's pane.
 
-    Ready is shown, never assumed: the last composer line of the tail, empty or with its
-    placeholder, and no turn running. Everything else is not at the prompt: no composer (a
-    sign-in, a shell, a CLI still starting), a menu's option under the mark, text already typed.
+    Ready is shown, never assumed. From the bottom of the pane only empty lines, the box's
+    borders and the known footers are passed over; the first other line must be the composer,
+    empty or with one of the known placeholders, and no turn may be running. Everything else is
+    not at the prompt:
+      - no composer at the bottom: a sign-in, a shell or a CLI that exited (even under a quoted
+        "> " of the transcript), a CLI still starting, a menu whose last option is below the mark;
+      - something on the composer's line: a menu's option under the mark («❯ 1. Yes», «❯ Try
+        again»), text already typed, a placeholder this file does not know.
+    The pane is read, then the transport types: a dialog that opens in between is not seen. That
+    window is the one left (the transport sends Esc when the text does not show; its own rule).
     """
     lines = [line.rstrip() for line in (pane or "").splitlines()]
+    # A pane is as tall as its window: what is drawn may end well above its last row.
     while lines and not lines[-1].strip():
         lines.pop()
     tail = lines[-PROMPT_TAIL:]
     if any(_status_line_busy(line) for line in tail[-10:]):
         return "busy"
     for line in reversed(tail):
+        if not line.strip() or _BORDER.match(line) or _FOOTER.match(line):
+            continue
         match = _COMPOSER.match(line)
         if not match:
-            continue
+            return "not_at_prompt"
         content = match.group(1).strip()
-        if not content or _PLACEHOLDER.match(content):
-            return "ready"
-        return "not_at_prompt"
+        return "ready" if not content or _placeholder(content) else "not_at_prompt"
     return "not_at_prompt"
 
 
