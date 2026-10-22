@@ -270,5 +270,12 @@
   "question.answer_already": "This question already has an answer: “%s”.",
   "question.answer_invalid": "That is not one of the options, so I did not save it. Reply with the number of an option (for example 2) or write “%s 2”.",
   "burn_intent.warning": "🔥 Full-throttle mode ends in about %d minutes (at %s): after that the team goes back to its normal pace and you will see fewer new positions per hour. To keep going, tell the Captain to renew it, for example “full throttle for 4 more hours”.",
-  "burn_intent.expired": "⏱️ Full-throttle mode ended at %s: the team is back at its normal pace, so expect fewer new positions per hour. To start again, tell the Captain, for example “full throttle for 5 hours”."
+  "burn_intent.expired": "⏱️ Full-throttle mode ended at %s: the team is back at its normal pace, so expect fewer new positions per hour. To start again, tell the Captain, for example “full throttle for 5 hours”.",
+  "web_action_notice.apply_authorized_from_web": "An application was authorised from the website (position {position}). If it was not you, withdraw the authorisation in the app.",
+  "web_action_notice.apply_revoked_from_web": "An application authorisation was withdrawn from the website (position {position}). If it was not you, check who can access your account.",
+  "web_action_notice.apply_revoked_many_from_web": "Several application authorisations were withdrawn from the website in the last hour. If it was not you, check who can access your account.",
+  "web_action_notice.team_stopped_from_web": "The team was stopped from the website. If it was not you, check who can access your account.",
+  "web_action_notice.team_started_from_web": "The team was started from the website. If it was not you, check who can access your account.",
+  "web_action_notice.team_restarted_from_web": "The team was restarted from the website. If it was not you, check who can access your account.",
+  "web_action_notice.directive_changed_from_web": "A standing order for the team was added or changed from the website. If it was not you, check the board in the app."
 }

@@ -240,5 +240,12 @@
   "question.answer_already": "Diese Frage hat bereits eine Antwort: „%s“.",
   "question.answer_invalid": "Das ist keine der Optionen, daher habe ich es nicht gespeichert. Antworte mit der Nummer einer Option (zum Beispiel 2) oder schreib „%s 2“.",
   "burn_intent.warning": "🔥 Der Vollgas-Modus endet in etwa %d Minuten (um %s): danach arbeitet das Team wieder im normalen Tempo und du siehst weniger neue Stellen pro Stunde. Um weiterzumachen, sag dem Kapitän, dass er ihn verlängern soll, zum Beispiel „Vollgas für weitere 4 Stunden“.",
-  "burn_intent.expired": "⏱️ Der Vollgas-Modus ist um %s zu Ende gegangen: das Team arbeitet wieder im normalen Tempo, du siehst also weniger neue Stellen pro Stunde. Um neu zu starten, sag es dem Kapitän, zum Beispiel „Vollgas für 5 Stunden“."
+  "burn_intent.expired": "⏱️ Der Vollgas-Modus ist um %s zu Ende gegangen: das Team arbeitet wieder im normalen Tempo, du siehst also weniger neue Stellen pro Stunde. Um neu zu starten, sag es dem Kapitän, zum Beispiel „Vollgas für 5 Stunden“.",
+  "web_action_notice.apply_authorized_from_web": "Über die Website wurde eine Bewerbung freigegeben (Stelle {position}). Wenn du das nicht warst, nimm die Freigabe in der App zurück.",
+  "web_action_notice.apply_revoked_from_web": "Über die Website wurde eine Bewerbungsfreigabe zurückgenommen (Stelle {position}). Wenn du das nicht warst, prüfe, wer Zugriff auf dein Konto hat.",
+  "web_action_notice.apply_revoked_many_from_web": "In der letzten Stunde wurden über die Website mehrere Bewerbungsfreigaben zurückgenommen. Wenn du das nicht warst, prüfe, wer Zugriff auf dein Konto hat.",
+  "web_action_notice.team_stopped_from_web": "Das Team wurde über die Website gestoppt. Wenn du das nicht warst, prüfe, wer Zugriff auf dein Konto hat.",
+  "web_action_notice.team_started_from_web": "Das Team wurde über die Website gestartet. Wenn du das nicht warst, prüfe, wer Zugriff auf dein Konto hat.",
+  "web_action_notice.team_restarted_from_web": "Das Team wurde über die Website neu gestartet. Wenn du das nicht warst, prüfe, wer Zugriff auf dein Konto hat.",
+  "web_action_notice.directive_changed_from_web": "Über die Website wurde eine dauerhafte Anweisung für das Team hinzugefügt oder geändert. Wenn du das nicht warst, prüfe die Pinnwand in der App."
 }

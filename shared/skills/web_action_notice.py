@@ -32,72 +32,18 @@ AGENT = "assistente"
 KEY = re.compile(r"^[A-Za-z0-9_.:-]{1,120}$")
 LANGUAGES = ("en", "it", "de", "fr", "es", "pt", "hu")
 
-TEXTS: dict[str, dict[str, str]] = {
-    "apply_authorized_from_web": {
-        "en": "An application was authorised from the website (position {position}). If it was not you, withdraw the authorisation in the app.",
-        "it": "Dal sito è stata autorizzata una candidatura (posizione {position}). Se non sei stato tu, ritira l'autorizzazione dall'app.",
-        "de": "Über die Website wurde eine Bewerbung freigegeben (Stelle {position}). Wenn du das nicht warst, nimm die Freigabe in der App zurück.",
-        "fr": "Une candidature a été autorisée depuis le site (poste {position}). Si ce n'était pas toi, retire l'autorisation dans l'app.",
-        "es": "Desde el sitio se autorizó una candidatura (puesto {position}). Si no fuiste tú, retira la autorización en la app.",
-        "pt": "Foi autorizada uma candidatura a partir do site (vaga {position}). Se não foste tu, retira a autorização na app.",
-        "hu": "A weboldalról engedélyeztek egy jelentkezést ({position}. állás). Ha nem te voltál, vond vissza az engedélyt az alkalmazásban.",
-    },
-    "apply_revoked_from_web": {
-        "en": "An application authorisation was withdrawn from the website (position {position}). If it was not you, check who can access your account.",
-        "it": "Dal sito è stata ritirata l'autorizzazione a una candidatura (posizione {position}). Se non sei stato tu, controlla chi può entrare nel tuo account.",
-        "de": "Über die Website wurde eine Bewerbungsfreigabe zurückgenommen (Stelle {position}). Wenn du das nicht warst, prüfe, wer Zugriff auf dein Konto hat.",
-        "fr": "Une autorisation de candidature a été retirée depuis le site (poste {position}). Si ce n'était pas toi, vérifie qui peut accéder à ton compte.",
-        "es": "Desde el sitio se retiró la autorización de una candidatura (puesto {position}). Si no fuiste tú, revisa quién puede entrar en tu cuenta.",
-        "pt": "Foi retirada a autorização de uma candidatura a partir do site (vaga {position}). Se não foste tu, verifica quem consegue entrar na tua conta.",
-        "hu": "A weboldalról visszavontak egy jelentkezési engedélyt ({position}. állás). Ha nem te voltál, ellenőrizd, ki fér hozzá a fiókodhoz.",
-    },
-    "apply_revoked_many_from_web": {
-        "en": "Several application authorisations were withdrawn from the website in the last hour. If it was not you, check who can access your account.",
-        "it": "Nell'ultima ora dal sito sono state ritirate diverse autorizzazioni a candidature. Se non sei stato tu, controlla chi può entrare nel tuo account.",
-        "de": "In der letzten Stunde wurden über die Website mehrere Bewerbungsfreigaben zurückgenommen. Wenn du das nicht warst, prüfe, wer Zugriff auf dein Konto hat.",
-        "fr": "Plusieurs autorisations de candidature ont été retirées depuis le site au cours de la dernière heure. Si ce n'était pas toi, vérifie qui peut accéder à ton compte.",
-        "es": "En la última hora se retiraron desde el sitio varias autorizaciones de candidaturas. Si no fuiste tú, revisa quién puede entrar en tu cuenta.",
-        "pt": "Na última hora foram retiradas a partir do site várias autorizações de candidaturas. Se não foste tu, verifica quem consegue entrar na tua conta.",
-        "hu": "Az elmúlt órában a weboldalról több jelentkezési engedélyt is visszavontak. Ha nem te voltál, ellenőrizd, ki fér hozzá a fiókodhoz.",
-    },
-    "team_stopped_from_web": {
-        "en": "The team was stopped from the website. If it was not you, check who can access your account.",
-        "it": "La squadra è stata fermata dal sito. Se non sei stato tu, controlla chi può entrare nel tuo account.",
-        "de": "Das Team wurde über die Website gestoppt. Wenn du das nicht warst, prüfe, wer Zugriff auf dein Konto hat.",
-        "fr": "L'équipe a été arrêtée depuis le site. Si ce n'était pas toi, vérifie qui peut accéder à ton compte.",
-        "es": "El equipo se detuvo desde el sitio. Si no fuiste tú, revisa quién puede entrar en tu cuenta.",
-        "pt": "A equipa foi parada a partir do site. Se não foste tu, verifica quem consegue entrar na tua conta.",
-        "hu": "A csapatot a weboldalról leállították. Ha nem te voltál, ellenőrizd, ki fér hozzá a fiókodhoz.",
-    },
-    "team_started_from_web": {
-        "en": "The team was started from the website. If it was not you, check who can access your account.",
-        "it": "La squadra è stata avviata dal sito. Se non sei stato tu, controlla chi può entrare nel tuo account.",
-        "de": "Das Team wurde über die Website gestartet. Wenn du das nicht warst, prüfe, wer Zugriff auf dein Konto hat.",
-        "fr": "L'équipe a été démarrée depuis le site. Si ce n'était pas toi, vérifie qui peut accéder à ton compte.",
-        "es": "El equipo se inició desde el sitio. Si no fuiste tú, revisa quién puede entrar en tu cuenta.",
-        "pt": "A equipa foi iniciada a partir do site. Se não foste tu, verifica quem consegue entrar na tua conta.",
-        "hu": "A csapatot a weboldalról indították el. Ha nem te voltál, ellenőrizd, ki fér hozzá a fiókodhoz.",
-    },
-    "team_restarted_from_web": {
-        "en": "The team was restarted from the website. If it was not you, check who can access your account.",
-        "it": "La squadra è stata riavviata dal sito. Se non sei stato tu, controlla chi può entrare nel tuo account.",
-        "de": "Das Team wurde über die Website neu gestartet. Wenn du das nicht warst, prüfe, wer Zugriff auf dein Konto hat.",
-        "fr": "L'équipe a été redémarrée depuis le site. Si ce n'était pas toi, vérifie qui peut accéder à ton compte.",
-        "es": "El equipo se reinició desde el sitio. Si no fuiste tú, revisa quién puede entrar en tu cuenta.",
-        "pt": "A equipa foi reiniciada a partir do site. Se não foste tu, verifica quem consegue entrar na tua conta.",
-        "hu": "A csapatot a weboldalról újraindították. Ha nem te voltál, ellenőrizd, ki fér hozzá a fiókodhoz.",
-    },
-    "directive_changed_from_web": {
-        "en": "A standing order for the team was added or changed from the website. If it was not you, check the board in the app.",
-        "it": "Dal sito è stato aggiunto o cambiato un ordine permanente della squadra. Se non sei stato tu, controlla la bacheca nell'app.",
-        "de": "Über die Website wurde eine dauerhafte Anweisung für das Team hinzugefügt oder geändert. Wenn du das nicht warst, prüfe die Pinnwand in der App.",
-        "fr": "Une consigne permanente de l'équipe a été ajoutée ou modifiée depuis le site. Si ce n'était pas toi, vérifie le tableau dans l'app.",
-        "es": "Desde el sitio se añadió o cambió una orden permanente del equipo. Si no fuiste tú, revisa el tablón en la app.",
-        "pt": "Foi adicionada ou alterada uma ordem permanente da equipa a partir do site. Se não foste tu, verifica o quadro na app.",
-        "hu": "A weboldalról hozzáadtak vagy módosítottak egy állandó csapatutasítást. Ha nem te voltál, nézd meg a táblát az alkalmazásban.",
-    },
-}
-CODES = frozenset(TEXTS)
+# The codes; each one's sentence lives in the shared catalogs, under
+# `web_action_notice.<code>` in shared/locales/<lang>.json, with the rest of the
+# user-facing copy of the box.
+CODES = frozenset({
+    "apply_authorized_from_web",
+    "apply_revoked_from_web",
+    "apply_revoked_many_from_web",
+    "team_stopped_from_web",
+    "team_started_from_web",
+    "team_restarted_from_web",
+    "directive_changed_from_web",
+})
 POSITION_CODES = frozenset({"apply_authorized_from_web", "apply_revoked_from_web"})
 
 
@@ -115,9 +61,24 @@ def user_language() -> str:
     return lang if lang in LANGUAGES else "en"
 
 
+def _catalog(lang: str) -> dict:
+    """The shared catalog of `lang` over the English one (shared/i18n.py)."""
+    sys.path.insert(0, str(HERE.parent))
+    try:
+        import i18n
+
+        return i18n._load_catalog(lang if lang in LANGUAGES else "en")
+    finally:
+        sys.path.pop(0)
+
+
+def text_for(code: str, lang: str) -> str:
+    """The sentence of `code` in `lang`; English when that language has none."""
+    return _catalog(lang)[f"web_action_notice.{code}"]
+
+
 def body_for(code: str, position_id: int | None, lang: str) -> str:
-    text = TEXTS[code][lang if lang in LANGUAGES else "en"]
-    return text.format(position=position_id if position_id is not None else "")
+    return text_for(code, lang).format(position=position_id if position_id is not None else "")
 
 
 def notify_tool() -> Path | None:
