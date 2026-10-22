@@ -82,7 +82,9 @@ export async function callDoor(
     result = await client.rpc("request_action", {
       p_action: call.action,
       p_params: confirming ? {} : (call.params ?? {}),
-      p_confirm_id: confirming ? (call.confirmId as string).toLowerCase() : null,
+      p_confirm_id: confirming
+        ? (call.confirmId as string).toLowerCase()
+        : null,
       p_route_level: call.level,
       // The text goes with the first call only: at the confirmation the database has the saved one.
       ...(!confirming && typeof call.body === "string"

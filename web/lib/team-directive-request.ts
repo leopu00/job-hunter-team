@@ -21,7 +21,11 @@ export function directiveErrorTranslationKey(
   if (code === "request_id_mismatch") return "errMismatch";
   if (code === "directive_not_found") return "errNotFound";
   // The confirmation in two steps of the single door (migration 101).
-  if (code === "confirm_expired" || code === "confirm_used" || code === "confirm_not_found")
+  if (
+    code === "confirm_expired" ||
+    code === "confirm_used" ||
+    code === "confirm_not_found"
+  )
     return "errExpired";
   if (code === "not_available_yet") return "errNotYet";
   if (code === "rate_limited") return "errRateLimited";

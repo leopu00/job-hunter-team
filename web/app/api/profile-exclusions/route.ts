@@ -88,7 +88,10 @@ export async function POST(req: NextRequest) {
     positions,
   );
   if (!decided.ok) {
-    return NextResponse.json({ error: decided.error }, { status: decided.status });
+    return NextResponse.json(
+      { error: decided.error },
+      { status: decided.status },
+    );
   }
   return NextResponse.json({ exclusion: decided.exclusion });
 }

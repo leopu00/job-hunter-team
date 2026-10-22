@@ -44,7 +44,14 @@ export async function applyCloud(
   if (door.kind === "door_missing") {
     // TEMPORANEO (O1, 22/10): il database non ha ancora la 101. Si va per la strada di prima, che la 101
     // stessa chiude: dopo la migrazione questo ramo non si apre più, e si toglie.
-    return applyCloudBeforeTheDoor(supabase, userId, legacyId, action, reason, note);
+    return applyCloudBeforeTheDoor(
+      supabase,
+      userId,
+      legacyId,
+      action,
+      reason,
+      note,
+    );
   }
   if (door.kind === "failed") {
     console.error("[positions/user-exclude] 502 door_failed");

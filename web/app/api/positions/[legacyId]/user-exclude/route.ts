@@ -196,7 +196,8 @@ async function handle(
         reason,
         note,
       );
-      if (!mirrored.ok) throw new Error(String(mirrored.body.error ?? "mirror_failed"));
+      if (!mirrored.ok)
+        throw new Error(String(mirrored.body.error ?? "mirror_failed"));
     },
   });
 }

@@ -172,7 +172,8 @@ async function viaDoor(
     return NextResponse.json({ error: "action_failed" }, { status: 502 });
   }
   if (door.kind === "refused") {
-    const error = door.error === "not_found" ? "directive_not_found" : door.error;
+    const error =
+      door.error === "not_found" ? "directive_not_found" : door.error;
     return NextResponse.json(
       { error, request_id: requestId },
       { status: DOOR_REFUSAL_STATUS[door.error] ?? 500 },
@@ -355,13 +356,18 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
         NextResponse.json({ error: "not_available_yet" }, { status: 503 }),
     );
   }
-  return viaDoor(supabase, userId, requestId, { op: "create", text, kind }, () =>
-    legacyMutation(supabase, requestId, {
-      p_id: 0,
-      p_action: "created",
-      p_body: text,
-      p_kind: kind,
-    }),
+  return viaDoor(
+    supabase,
+    userId,
+    requestId,
+    { op: "create", text, kind },
+    () =>
+      legacyMutation(supabase, requestId, {
+        p_id: 0,
+        p_action: "created",
+        p_body: text,
+        p_kind: kind,
+      }),
   );
 }
 
