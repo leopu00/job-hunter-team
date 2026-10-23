@@ -153,7 +153,7 @@ def test_a_desktop_record_cannot_get_ahead_of_the_broker_clock(broker, monkeypat
     # A web withdrawal stamped just after the broker clock is after the stored
     # local authorisation, rather than before the host's future input.
     assert ask(broker, "apply.revoke", role="", position_id=42,
-               instant="2026-10-23T18:05:00.001Z") == {"ok": True, "status": "revoked"}
+               instant="2026-10-23T18:00:00.001Z") == {"ok": True, "status": "revoked"}
     assert claim(broker, pid=42)["claimed"] is False
 
 
