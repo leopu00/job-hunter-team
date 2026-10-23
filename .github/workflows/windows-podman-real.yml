@@ -1,0 +1,150 @@
+name: Windows real Podman install (not blocking)
+# The user's path on Windows, end to end, with the real Podman and the real
+# WSL2 of the windows-2025 runner (the WSL2 probe, run 39873784113, booted a
+# distribution there): install.ps1 under Windows PowerShell 5.1, the shell the
+# desktop app runs it with, then `jht up`, then install.ps1 again over the
+# running container (an app update). The Windows defects of pushes 4 to 8
+# (T60, T71) passed every gate with shell-faked Podman and were found only by
+# the hand test after the build: this job runs what those gates fake.
+# Not a required check: its result and times are for reading, not for
+# stopping a merge, until it has shown it is stable.
+on:
+  push:
+    branches:
+      - master-arthur
+    paths:
+      - 'web/public/install.ps1'
+      - 'scripts/jht-wrapper.ps1'
+      - 'scripts/windows-private-acl.ps1'
+      - 'scripts/enable-podman-windows-runtime.ps1'
+      - 'scripts/configure-podman-windows-network.ps1'
+      - 'scripts/podman-windows-probe.ps1'
+      - 'scripts/wsl-interop-connect-proxy.py'
+      - 'docker-compose.yml'
+      - 'docker-compose.podman.yml'
+      - 'scripts/ci/windows_podman_real_run.ps1'
+      - '.github/workflows/windows-podman-real.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-podman-real-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  real-podman:
+    name: install, start, update, counter-check (windows-2025, PowerShell 5.1)
+    runs-on: windows-2025
+    timeout-minutes: 90
+    permissions:
+      contents: read
+    defaults:
+      run:
+        # Windows PowerShell 5.1: the shell the app runs install.ps1 and jht.ps1 with.
+        shell: powershell
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        with:
+          python-version: "3.12"
+
+      # install.ps1 downloads the runtime files from JHT_RAW_BASE when it is set:
+      # here a server on loopback with this commit's files, so the job installs
+      # what was pushed, not the published release. A copy, so the counter-check
+      # below can change one file without touching the checkout.
+      - name: Serve this commit's runtime files on loopback
+        run: |
+          $ErrorActionPreference = 'Stop'
+          "PowerShell $($PSVersionTable.PSVersion) $($PSVersionTable.PSEdition)"
+          if ($PSVersionTable.PSVersion.Major -ne 5) { throw 'this job must run under Windows PowerShell 5.1' }
+          $env:SERVED = Join-Path $env:RUNNER_TEMP 'served'
+          $env:TIMES = Join-Path $env:RUNNER_TEMP 'times.tsv'
+          "SERVED=$env:SERVED" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding ascii
+          "TIMES=$env:TIMES" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding ascii
+          New-Item -ItemType Directory -Path "$env:SERVED\scripts" -Force | Out-Null
+          foreach ($relative in 'docker-compose.yml', 'docker-compose.podman.yml', 'scripts\jht-wrapper.ps1',
+                               'scripts\windows-private-acl.ps1', 'scripts\enable-podman-windows-runtime.ps1',
+                               'scripts\configure-podman-windows-network.ps1', 'scripts\wsl-interop-connect-proxy.py') {
+            Copy-Item -LiteralPath $relative -Destination (Join-Path $env:SERVED $relative)
+          }
+          $server = Start-Process -FilePath python -ArgumentList @('-m', 'http.server', '8765', '--bind', '127.0.0.1', '--directory', $env:SERVED) -WindowStyle Hidden -PassThru
+          for ($i = 0; $i -lt 30; $i++) {
+            try { Invoke-WebRequest -UseBasicParsing -Uri 'http://127.0.0.1:8765/docker-compose.yml' | Out-Null; break } catch { Start-Sleep -Seconds 1 }
+          }
+          Invoke-WebRequest -UseBasicParsing -Uri 'http://127.0.0.1:8765/docker-compose.yml' | Out-Null
+          "server pid $($server.Id)"
+          "JHT_RAW_BASE=http://127.0.0.1:8765" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding ascii
+          "step`tseconds`texit" | Out-File -FilePath $env:TIMES -Encoding ascii
+          & wsl.exe --version 2>&1 | ForEach-Object { "  $_" }
+          & winget --version 2>&1 | ForEach-Object { "  winget $_" }
+
+      # Every run of a script goes through the same runner: powershell.exe 5.1
+      # with the app's arguments, its output timestamped (JHT_PHASE lines show
+      # where the time goes), its exit code and duration kept for the summary.
+      - name: Install (first, fresh machine)
+        run: |
+          $ErrorActionPreference = 'Continue'
+          . "$env:GITHUB_WORKSPACE\scripts\ci\windows_podman_real_run.ps1"
+          $code = Invoke-Timed 'install (first)' 'web\public\install.ps1' @('-SkipOnboard')
+          exit $code
+
+      - name: Start the container (jht up) and read its status
+        run: |
+          $ErrorActionPreference = 'Continue'
+          . "$env:GITHUB_WORKSPACE\scripts\ci\windows_podman_real_run.ps1"
+          $wrapper = Join-Path $env:USERPROFILE '.local\bin\jht.ps1'
+          $code = Invoke-Timed 'jht up' $wrapper @('up')
+          if ($code -ne 0) { exit $code }
+          $code = Invoke-Timed 'jht status' $wrapper @('status')
+          exit $code
+
+      - name: Install again over the running container (an app update)
+        run: |
+          $ErrorActionPreference = 'Continue'
+          . "$env:GITHUB_WORKSPACE\scripts\ci\windows_podman_real_run.ps1"
+          $code = Invoke-Timed 'install (update)' 'web\public\install.ps1' @('-SkipOnboard')
+          if ($code -ne 0) { exit $code }
+          $code = Invoke-Timed 'jht status (after update)' (Join-Path $env:USERPROFILE '.local\bin\jht.ps1') @('status')
+          exit $code
+
+      # The counter-check this job carries with it: the enabler served again with
+      # the template of before T71 (a double quote inside a native argument, which
+      # Windows PowerShell 5.1 drops). install.ps1 must fail on it the way the hand
+      # test saw it; if it passes, this job cannot see that class of defect.
+      - name: Counter-check - the T71 template makes the install fail under 5.1
+        run: |
+          $ErrorActionPreference = 'Continue'
+          . "$env:GITHUB_WORKSPACE\scripts\ci\windows_podman_real_run.ps1"
+          $enabler = Join-Path $env:SERVED 'scripts\enable-podman-windows-runtime.ps1'
+          $text = [IO.File]::ReadAllText($enabler)
+          # The block T71 wrote, its comment included, gives way to the two lines of before.
+          $fixed = $text.IndexOf('[string]$existingLabelsJson = ')
+          $start = $text.LastIndexOf('# No double quote inside a native argument', [Math]::Max($fixed, 0))
+          $end = $text.IndexOf('[string]$existingCgroupManager = ')
+          if ($fixed -lt 0 -or $start -lt 0 -or $fixed - $start -gt 600 -or $end -lt $fixed) { throw 'counter-check: the fixed block is not where expected; update this step' }
+          $nl = if ($text.Contains("`r`n")) { "`r`n" } else { "`n" }
+          $old = '[string]$existingProject = (& $Podman --connection $MachineName inspect jht --format ''{{index .Config.Labels "com.docker.compose.project"}}'' 2>$null | Select-Object -First 1)' + $nl + '$existingProject = $existingProject.Trim()' + $nl
+          [IO.File]::WriteAllText($enabler, $text.Substring(0, $start) + $old + $text.Substring($end), (New-Object Text.UTF8Encoding $false))
+          $code = Invoke-Timed 'counter-check T71' 'web\public\install.ps1' @('-SkipOnboard')
+          $seen = Select-String -LiteralPath $script:LastLog -SimpleMatch 'function "com" not defined' -Quiet
+          [IO.File]::WriteAllText($enabler, $text, (New-Object Text.UTF8Encoding $false))
+          if ($code -eq 0) { throw 'counter-check: install.ps1 passed with the T71 template, so this job does not see that defect' }
+          if (-not $seen) { throw "counter-check: install.ps1 failed ($code) but not with the T71 error (function ""com"" not defined)" }
+          "counter-check: red as expected (exit $code, Podman refused the template without its quotes)"
+
+      - name: Times
+        if: always()
+        run: |
+          $ErrorActionPreference = 'Continue'
+          if (Test-Path -LiteralPath $env:TIMES) {
+            $rows = @(Import-Csv -LiteralPath $env:TIMES -Delimiter "`t")
+            $lines = @('| step | seconds | exit |', '|---|---:|---:|') + @($rows | ForEach-Object { "| $($_.step) | $($_.seconds) | $($_.exit) |" })
+            $lines | ForEach-Object { $_ }
+            $lines | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+          }
+          & podman machine list 2>&1 | ForEach-Object { "  $_" }
+          & wsl.exe --list --verbose 2>&1 | ForEach-Object { "  $_" }

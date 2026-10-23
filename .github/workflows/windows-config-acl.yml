@@ -71,6 +71,24 @@ jobs:
           if ($summary -notmatch '^=+ (\d+) passed(, \d+ warnings?)? in [0-9.]+s') { throw "unexpected pytest summary: $summary" }
           if ([int]$Matches[1] -lt 65) { throw "only $($Matches[1]) native Windows tests ran, expected at least 65" }
 
+      # Measures for T80: under 5.1 the step below takes 12.5 minutes here and
+      # 2 on a real Windows PC, under pwsh 44 s. What one start of each shell
+      # costs on this runner, cold and warm (each test of the step starts one).
+      - name: Shell start-up cost (powershell.exe 5.1 and pwsh)
+        shell: pwsh
+        run: |
+          foreach ($exe in 'powershell', 'pwsh') {
+            $times = foreach ($i in 1..5) {
+              $clock = [Diagnostics.Stopwatch]::StartNew()
+              & $exe -NoLogo -NoProfile -NonInteractive -Command 'exit 0'
+              $clock.Stop()
+              [Math]::Round($clock.Elapsed.TotalMilliseconds)
+            }
+            $line = "$exe start-up ms: $($times -join ', ')"
+            $line
+            $line | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+          }
+
       # The sh-faked tests of the Podman-in-WSL setup, once under each shell:
       # the app runs Windows PowerShell 5.1, the ubuntu pytest job PowerShell 7.
       # The fakes run under Git for Windows' bash behind a native launcher
@@ -86,7 +104,7 @@ jobs:
           foreach ($shell in 'powershell', 'pwsh') {
             $env:JHT_TEST_SHELL = $shell
             $out = python -m pytest tests/test_windows_podman_wsl_branches.py tests/test_podman_windows_setup_retry.py `
-              -n 4 -p no:cacheprovider -rs 2>&1
+              -n 4 -p no:cacheprovider -rs --durations=15 --durations-min=1 2>&1
             $code = $LASTEXITCODE
             $out | ForEach-Object { "$_" }
             if ($code -ne 0) { exit $code }
