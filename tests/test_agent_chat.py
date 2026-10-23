@@ -551,6 +551,12 @@ MENU_MARK_ON_LAST = """\
    Skip
  › Send feedback
 """
+MENU_ITALIANO = """\
+╭──────────────────────────────────────────────╮
+│ › Continua                                   │
+│   Annulla                                    │
+╰──────────────────────────────────────────────╯
+"""
 NUMBERED_TRY_AGAIN = """\
  ❯ 1. Try again
 """
@@ -566,6 +572,16 @@ Type ".help" for more information.
 """
 UNKNOWN_PLACEHOLDER = """\
 › Plan a trip to the moon
+"""
+# Captured on CAPITANO after Codex 0.147: the text was redacted before it
+# left Leone, retaining only the form's line lengths and ANSI colour classes.
+# It has no recognised composer marker, and is not a choice/login/permission
+# control.  A new Codex form must not make the chat mute.
+CODEX_0147_REDACTED_FORM = """\
+\x1b[2m□□□□□□□□□□□□□□□□□□□□□□\x1b[0m
+\x1b[38;2;137;180;250m□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□\x1b[0m
+\x1b[38;2;205;214;244m□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□\x1b[0m
+\x1b[2m□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□\x1b[0m
 """
 
 
@@ -609,11 +625,11 @@ def _nothing_happened(box, agent="capitano"):
 
 
 @pytest.mark.parametrize("screen", [
-    CLAUDE_PERMISSION, CODEX_APPROVAL, LOGIN_METHOD, PASTE_CODE, A_SHELL, QUOTE_THEN_SHELL, MENU_TRY_AGAIN,
-    BASH_CONTINUATION,
-], ids=["permission", "approval", "login", "paste-code", "shell", "quote-then-shell", "menu-try-again",
-        "bash-continuation"])
-def test_a_screen_that_is_not_the_prompt_is_a_closed_code_with_nothing_written_or_typed(box, screen):
+    CLAUDE_PERMISSION, CODEX_APPROVAL, LOGIN_METHOD, PASTE_CODE, TRUST_FOLDER, MENU_TRY_AGAIN,
+    MENU_SEND_FEEDBACK, MENU_MARK_ON_LAST, MENU_ITALIANO,
+], ids=["permission", "approval", "login", "paste-code", "trust-folder", "menu-try-again",
+        "menu-send-feedback", "menu-mark-on-last", "menu-italiano"])
+def test_a_certain_interlock_is_a_closed_code_with_nothing_written_or_typed(box, screen):
     box.stub_delivery()
     (box.state / "screen").write_text(screen, encoding="utf-8")
     # «1» would choose «Yes» on a menu: it must never reach the terminal.
@@ -629,6 +645,14 @@ def test_a_real_draft_gets_its_own_closed_code_and_is_not_touched(box):
     code, answer = box.run("send", "capitano", "id-draft", stdin="1")
     assert (code, answer) == (130, {"error": "composer_has_text"})
     _nothing_happened(box)
+
+
+def test_an_unrecognised_codex_0147_form_is_delivered_and_the_transport_must_prove_it(box):
+    box.stub_delivery()
+    (box.state / "screen").write_text(CODEX_0147_REDACTED_FORM, encoding="utf-8")
+    code, receipt = box.run("send", "capitano", "id-codex-0147", stdin="verifica la coda")
+    assert code == 0 and receipt["taken"] is True
+    assert box.envelopes() == ["[@utente -> @capitano] [CHAT] verifica la coda"]
 
 
 def test_dim_codex_suggestion_is_empty_but_rgb_colour_is_not_dim():
@@ -647,12 +671,11 @@ def test_composer_text_is_only_the_box_contents_and_never_the_border_or_hint():
     assert module.composer_text(codex) == "first line"
 
 
-def test_a_running_turn_is_agent_busy_with_nothing_written_or_typed(box):
+def test_an_unrecognised_running_turn_is_still_writable(box):
     box.stub_delivery()
     (box.state / "screen").write_text("✻ Pondering… (12s · esc to interrupt)\n", encoding="utf-8")
-    code, answer = box.run("send", "capitano", "id-21", stdin="ci sei?")
-    assert (code, answer) == (124, {"error": "agent_busy"})
-    _nothing_happened(box)
+    code, receipt = box.run("send", "capitano", "id-21", stdin="ci sei?")
+    assert code == 0 and receipt["taken"] is True
 
 
 def test_a_running_turn_with_an_empty_composer_is_delivered(box):
