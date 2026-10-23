@@ -224,3 +224,82 @@ def test_a_terminal_held_by_another_writer_is_busy_and_nothing_is_recorded_as_de
                           capture_output=True, text=True, env=env, timeout=60)
     assert (done.returncode, json.loads(done.stdout)) == (124, {"error": "agent_busy"})
     assert not (box.home / "agents" / "capitano" / "chat-delivered.jsonl").exists()
+
+
+# -- «enter» (C7): only Enter, once, and only on THAT message still in the composer ------------------------------------
+
+STUB_WITH_SIGNATURE = """#!/bin/sh
+# Like the real transport, hands every message to message_origin.py (the fence).
+printf '%s\\n' "$*" >> "$FAKE_TMUX_STATE/transport.calls"
+if [ "$1" = "--enter" ]; then
+  [ -n "${FAKE_ENTER_SAYS:-}" ] && printf '%s\\n' "$FAKE_ENTER_SAYS"
+  exit "${FAKE_ENTER_RC:-0}"
+fi
+[ "${FAKE_DELIVERY_RC:-0}" = 5 ] && printf 'JHT_SIGNATURE %s\\n' "${FAKE_SIGNATURE:-e29fa755}"
+exit "${FAKE_DELIVERY_RC:-0}"
+"""
+
+
+def _stuck(box):
+    """A send whose Enter the CLI swallowed: taken false, and the transport's signature recorded."""
+    stub = Path(box.env["PATH"].split(":", 1)[0]) / "jht-tmux-send"
+    stub.write_text(STUB_WITH_SIGNATURE, encoding="utf-8")
+    env = {**box.env, "FAKE_DELIVERY_RC": "5", "FAKE_SIGNATURE": "e29fa755"}
+    done = subprocess.run([sys.executable, "-I", str(SCRIPT), "send", "capitano", "c-enter"], input="ciao",
+                          capture_output=True, text=True, env=env, timeout=60)
+    assert done.returncode == 0, done.stdout + done.stderr
+    receipt = json.loads(done.stdout)
+    assert receipt["taken"] is False and "reason" not in receipt
+    return receipt
+
+
+def _enter(box, message_id, **extra):
+    done = subprocess.run([sys.executable, "-I", str(SCRIPT), "enter", "capitano", message_id],
+                          capture_output=True, text=True, env={**box.env, **extra}, timeout=60)
+    return done.returncode, json.loads(done.stdout)
+
+
+def _transport_calls(box):
+    return (box.state / "transport.calls").read_text(encoding="utf-8").splitlines()
+
+
+def test_enter_asks_the_transport_for_enter_only_on_that_signature_and_then_answers_what_was_recorded(box):
+    receipt = _stuck(box)
+    rc, first = _enter(box, receipt["messageId"])
+    assert rc == 0 and first["taken"] is True and first["messageId"] == receipt["messageId"]
+    calls = _transport_calls(box)
+    assert len(calls) == 2 and calls[1] == "--enter CAPITANO e29fa755", "Enter on that signature, the text never again"
+    rc, again = _enter(box, receipt["messageId"])
+    assert (rc, again) == (0, first) and len(_transport_calls(box)) == 2, "taken: never pressed again"
+
+
+@pytest.mark.parametrize("reason", ["menu", "empty_unseen", "not_ours"])
+def test_enter_that_finds_something_else_pressed_nothing_and_says_why(box, reason):
+    receipt = _stuck(box)
+    rc, answer = _enter(box, receipt["messageId"], FAKE_ENTER_RC="9", FAKE_ENTER_SAYS=f"JHT_REASON {reason}")
+    assert rc == 0 and answer["taken"] is None and answer["reason"] == reason
+    rc, again = _enter(box, receipt["messageId"])
+    assert again == answer and len(_transport_calls(box)) == 2, "no second try once the composer held something else"
+
+
+def test_enter_still_swallowed_stays_taken_false_and_may_be_asked_again(box):
+    receipt = _stuck(box)
+    rc, answer = _enter(box, receipt["messageId"], FAKE_ENTER_RC="5")
+    assert rc == 0 and answer["taken"] is False
+    rc, answer = _enter(box, receipt["messageId"])
+    assert answer["taken"] is True and _transport_calls(box)[1:] == ["--enter CAPITANO e29fa755"] * 2
+
+
+def test_enter_on_a_message_taken_or_unknown_never_calls_the_transport(box):
+    stub = Path(box.env["PATH"].split(":", 1)[0]) / "jht-tmux-send"
+    stub.write_text(STUB_WITH_SIGNATURE, encoding="utf-8")
+    done = subprocess.run([sys.executable, "-I", str(SCRIPT), "send", "capitano", "c-ok"], input="ciao",
+                          capture_output=True, text=True, env=box.env, timeout=60)
+    taken = json.loads(done.stdout)
+    assert taken["taken"] is True
+    assert _enter(box, taken["messageId"]) == (0, taken)
+    rc, refused = _enter(box, "nessun-messaggio")
+    assert refused == {"error": "chat_invalid"} and rc != 0
+    rc, refused = _enter(box, "../etc")
+    assert refused == {"error": "chat_invalid"}
+    assert len(_transport_calls(box)) == 1, "only the send typed; enter pressed nothing"

@@ -63,10 +63,29 @@
 #       Invio. NON e' un guasto e NON autorizza respawn; il chiamante guarda prima di riscrivere.
 #   8 → LOCK OCCUPATO: un'altra consegna alla stessa sessione e' ancora in corso dopo JHT_TMUX_LOCK_WAIT
 #       secondi (12). Non e' stato digitato niente: si puo' ritentare.
+#   9 → (solo con --enter) nella casella NON c'e' la firma di quel messaggio: non e' stato premuto niente.
+#       Su stdout una riga «JHT_REASON <menu|empty_unseen|not_ours>».
+#
+# jht-tmux-send --enter <session> <firma-hex>: preme SOLO l'Invio, una volta, e solo se nella casella
+# c'e' ancora la firma di quel messaggio (la coda con il nonce, che un exit 5 stampa su stdout come
+# «JHT_SIGNATURE <hex>»). Mai il testo; stesso lock; esiti 0/5/7 come sopra, oppure 9.
 #   (il 3 resta il solo segnale «forse morto» su cui conta pacing-bridge: nessuna casella a schermo, o
 #    testo digitato una volta e MAI comparso nella casella)
 
 set -euo pipefail
+
+enter_mode=0
+enter_signature=""
+if [ "${1:-}" = "--enter" ]; then
+  # Solo l'Invio sul testo rimasto nella casella: niente da recintare, niente posta, niente testo.
+  if [ $# -ne 3 ] || ! printf '%s' "$3" | grep -Eq '^([0-9a-f]{2}){1,64}$'; then
+    echo "Usage: jht-tmux-send --enter <session> <firma-hex>" >&2
+    exit 1
+  fi
+  enter_mode=1
+  enter_signature=$(printf '%b' "$(printf '%s' "$3" | sed 's/../\\x&/g')")
+  set -- "$2" ""
+fi
 
 if [ $# -lt 2 ]; then
   echo "Usage: jht-tmux-send <session> <message>" >&2
@@ -108,7 +127,7 @@ ORIGIN_LIB="/app/shared/skills/message_origin.py"
 sender_trust="unverified"
 sender_claimed=""
 sender_origin=""
-if [ -f "$ORIGIN_LIB" ] && command -v python3 >/dev/null 2>&1; then
+if [ "$enter_mode" -eq 0 ] && [ -f "$ORIGIN_LIB" ] && command -v python3 >/dev/null 2>&1; then
   if verdict=$(python3 "$ORIGIN_LIB" "$message" 2>/dev/null); then
     # La prima riga senza una pipe verso `head`: con `set -o pipefail` il
     # printf a sinistra prende SIGPIPE se head e' gia' uscito, e lo script
@@ -308,6 +327,11 @@ fi
 # (`set -o pipefail` lo trasformerebbe in un exit 141 muto, come al verdetto).
 signature_head=$(head -c 30 < <(printf '%s' "$message"))
 signature_tail=$(printf '%s' "$message" | tail -c 30)
+if [ "$enter_mode" -eq 1 ]; then
+  # La firma di QUEL messaggio (la coda con il nonce): solo lei conta, mai un segnaposto «Pasted».
+  signature_head=$enter_signature
+  signature_tail=$enter_signature
+fi
 
 # Busy-detection: codex / claude / kimi mostrano "esc to interrupt" mentre
 # l'agente e' a meta' turno. Un pane occupato e' un agente VIVO: il messaggio
@@ -579,6 +603,44 @@ if ! _acquire_session_lock; then
   exit 8
 fi
 
+# ── C7 · --enter: solo l'Invio, solo sulla firma di quel messaggio ────────────────
+if [ "$enter_mode" -eq 1 ]; then
+  pane=$(_pane)
+  placeholder_before=1
+  occ_tail_before=$(_occurrences "$pane" "$signature_tail")
+  # Un menu di scelta disegna «❯ 1. Yes» con lo stesso marcatore della casella: non e' una casella.
+  if [ -z "$(_composer_line "$pane")" ] \
+    || printf '%s\n' "$(_composer_line "$pane")" | head -n 1 | grep -qE '(❯|›|>|▌)[[:space:]]*[0-9]+[.)][[:space:]]'; then
+    echo "JHT_REASON menu"
+    echo "jht-tmux-send: $session: nessuna casella a schermo (menu, domanda o accesso): non premo niente (rc=9)" >&2
+    exit 9
+  fi
+  if ! _in_composer "$pane"; then
+    if _composer_empty "$pane"; then echo "JHT_REASON empty_unseen"; else echo "JHT_REASON not_ours"; fi
+    echo "jht-tmux-send: $session: nella casella non c'e' piu' quel messaggio: non premo niente (rc=9)" >&2
+    exit 9
+  fi
+  busy_pre=0
+  _pane_busy "$pane" && busy_pre=1
+  _tmux send-keys -t "$session" Enter
+  if [ "$provider" = "kimi" ]; then
+    sleep 0.2
+    _tmux send-keys -t "$session" C-s
+  fi
+  sleep 1.2
+  pane=$(_pane)
+  if _submitted "$pane"; then
+    echo "jht-tmux-send: Invio a $session (preso)"
+    exit 0
+  fi
+  if _text_pending "$pane"; then
+    echo "jht-tmux-send: $session: l'Invio non e' stato preso, il testo e' ancora nella casella (rc=5)" >&2
+    exit 5
+  fi
+  echo "jht-tmux-send: $session: il testo e' uscito dalla casella ma non c'e' prova che sia stato preso (rc=7)" >&2
+  exit 7
+fi
+
 # ── C1 · il testo si scrive UNA volta ─────────────────────────────────────────
 # Prima si GUARDA lo schermo, poi si digita, una sola volta; se non si vede, non si riscrive e non si
 # preme niente. Un Escape parte solo se non c'e' nessuna casella (una finestra modale di primo avvio
@@ -679,6 +741,8 @@ done
 # ma non c'e' prova che sia stato preso: exit 7, «non so» (il chiamante guarda prima di riscrivere).
 if _text_pending "$pane"; then
   _record_stuck
+  # La firma con cui un «invia di nuovo» (--enter) riconoscera' QUESTO testo nella casella.
+  echo "JHT_SIGNATURE $(printf '%s' "$signature_tail" | od -An -tx1 | tr -d ' \n')"
   echo "jht-tmux-send: $session ha accettato il testo ma NON lo ha submittato dopo ${submit_tries} Enter — riga appesa nel composer, agente VIVO ma muto: riprova, NON respawnare" >&2
   exit 5
 fi

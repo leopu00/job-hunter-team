@@ -99,6 +99,14 @@ DELIVERY_EXIT = {2: "agent_not_running", 3: "agent_unavailable", 4: "agent_busy"
 # 0: the transport saw the CLI take the text (a proof). 7: the text left the composer but nothing proves
 # the CLI took it. Both are delivered, and never typed again with the same id; the second says «not sure».
 DELIVERY_UNCONFIRMED = 7
+# 5 is the text left in the composer (taken false): the transport prints the signature of THAT text,
+# with which «enter» later presses only Enter on it. 9 (only with --enter): that text is not there.
+DELIVERY_PENDING = 5
+DELIVERY_NOT_THERE = 9
+ENTER_REASONS = frozenset({"menu", "empty_unseen", "not_ours"})
+SIGNATURE = re.compile(r"^JHT_SIGNATURE ((?:[0-9a-f]{2}){1,64})$", re.M)
+ENTER_REASON = re.compile(r"^JHT_REASON ([a-z_]{1,20})$", re.M)
+MESSAGE_ID = re.compile(r"^[A-Za-z0-9-]{1,64}$")
 
 # The ids are the roles' keys; the value is the tmux session.
 AGENTS = {
@@ -363,6 +371,7 @@ def _found(path: Path, client_id: str) -> dict | None:
     if not path.is_file():
         return None
     size = path.stat().st_size
+    found = None
     with open(path, "rb") as handle:
         handle.seek(max(0, size - DEDUP_TAIL))
         if handle.tell():
@@ -373,8 +382,8 @@ def _found(path: Path, client_id: str) -> dict | None:
             except Exception:
                 continue
             if isinstance(row, dict) and row.get("client_message_id") == client_id:
-                return row
-    return None
+                found = row             # the last record wins: «enter» appends the new outcome
+    return found
 
 
 def _receipt(client_id: str, message_id, at, state: str | None = None, taken: str | None = None) -> dict:
@@ -383,9 +392,14 @@ def _receipt(client_id: str, message_id, at, state: str | None = None, taken: st
         out["state"] = state        # "queued": the turn is in the agent's mailbox, not yet taken
     if taken == "taken":
         out["taken"] = True         # the transport saw the CLI take it
+    elif taken == "pending":
+        out["taken"] = False        # still in the composer: «enter» may press Enter on it
     elif taken == "unconfirmed":
         out["taken"] = None         # typed once, gone from the composer, no proof it was taken
         out["reason"] = "unconfirmed"
+    elif taken in ENTER_REASONS:
+        out["taken"] = None         # «enter» found something else in the composer and pressed nothing
+        out["reason"] = taken
     return out
 
 
@@ -411,12 +425,14 @@ def persist(agent: str, client_id: str, text: str) -> dict:
     return row
 
 
-def mark_delivered(agent: str, row: dict, taken: str | None = None) -> None:
+def mark_delivered(agent: str, row: dict, taken: str | None = None, signature: str | None = None) -> None:
     """The id is delivered. A failure to say so is not a failure to deliver: the text is already typed."""
     line = {"client_message_id": row.get("client_message_id"), "message_id": row.get("message_id"),
             "at": row.get("ts"), "delivered_at": time.time()}
     if taken:
         line["taken"] = taken
+    if signature:
+        line["signature"] = signature
     try:
         fd = os.open(chat_path(agent).parent / DELIVERED_FILE, os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o600)
         try:
@@ -489,7 +505,7 @@ def require_fence(agent: str, text: str) -> str:
     return binary
 
 
-def deliver(agent: str, session: str, text: str) -> str:
+def deliver(agent: str, session: str, text: str) -> tuple[str, str | None]:
     binary = require_fence(agent, text)
     envelope = envelope_of(agent, text)
     try:
@@ -498,9 +514,13 @@ def deliver(agent: str, session: str, text: str) -> str:
     except (OSError, subprocess.SubprocessError):
         raise Refusal("send_failed")
     if done.returncode == 0:
-        return "taken"
+        return "taken", None
     if done.returncode == DELIVERY_UNCONFIRMED:
-        return "unconfirmed"
+        return "unconfirmed", None
+    if done.returncode == DELIVERY_PENDING:
+        found = SIGNATURE.search(done.stdout.decode("utf-8", "replace"))
+        if found:
+            return "pending", found.group(1)
     raise Refusal(DELIVERY_EXIT.get(done.returncode, "send_failed"))
 
 
@@ -614,12 +634,90 @@ def send(agent: str, client_id: str, raw_text: str) -> dict:
         row = persist(agent, client_id, text)
         if mail is None:
             # A line already there is what the agent is sent, not this ask's text: the id is the message.
-            taken = deliver(agent, session, str(row.get("text") or text))
+            taken, signature = deliver(agent, session, str(row.get("text") or text))
         else:
             deliver_by_mail(mail, agent, session, row, text)
-            taken = None
-        mark_delivered(agent, row, taken)
+            taken, signature = None, None
+        mark_delivered(agent, row, taken, signature)
         return _receipt(client_id, row.get("message_id"), row.get("ts"), "queued" if mail is not None else None, taken)
+
+
+def enter(agent: str, message_id: str) -> dict:
+    """«Send again»: only Enter, once, and only on THAT message still in the agent's composer.
+
+    The transport looks for the signature of that text (its tail, with the fence's nonce) in the
+    composer; anything else there (a menu, another text, an empty composer) and it presses nothing.
+    The text is never typed again. A message already taken, or not sure, answers what was recorded.
+    """
+    if not MESSAGE_ID.match(message_id or ""):
+        raise Refusal("chat_invalid")
+    session = AGENTS[agent]
+    delivered = chat_path(agent).parent / DELIVERED_FILE
+    signal.signal(signal.SIGHUP, signal.SIG_IGN)
+    signal.signal(signal.SIGPIPE, signal.SIG_IGN)
+    with _AgentLock(agent):
+        record = _record_by_message(delivered, message_id)
+        if record is None:
+            raise Refusal("chat_invalid")
+        client_id = str(record.get("client_message_id") or "")
+        receipt = lambda taken: _receipt(client_id, record.get("message_id"), record.get("at"), taken=taken)  # noqa: E731
+        if record.get("taken") != "pending" or not record.get("signature"):
+            return receipt(record.get("taken"))
+        check_session(session)
+        binary = _delivery_binary()
+        try:
+            done = subprocess.run([binary, "--enter", session, str(record["signature"])], capture_output=True,
+                                  timeout=DELIVERY_TIMEOUT_S, check=False)
+        except (OSError, subprocess.SubprocessError):
+            raise Refusal("send_failed")
+        if done.returncode == 0:
+            outcome = "taken"
+        elif done.returncode == DELIVERY_PENDING:
+            outcome = "pending"
+        elif done.returncode == DELIVERY_UNCONFIRMED:
+            outcome = "unconfirmed"
+        elif done.returncode == DELIVERY_NOT_THERE:
+            said = ENTER_REASON.search(done.stdout.decode("utf-8", "replace"))
+            outcome = said.group(1) if said and said.group(1) in ENTER_REASONS else "not_ours"
+        else:
+            raise Refusal(DELIVERY_EXIT.get(done.returncode, "send_failed"))
+        updated = dict(record, taken=outcome)
+        if outcome != "pending":
+            updated.pop("signature", None)
+        _append_record(delivered, updated)
+        return receipt(outcome)
+
+
+def _record_by_message(path: Path, message_id: str) -> dict | None:
+    """The last delivery record of this message id."""
+    if not path.is_file():
+        return None
+    found = None
+    size = path.stat().st_size
+    with open(path, "rb") as handle:
+        handle.seek(max(0, size - DEDUP_TAIL))
+        if handle.tell():
+            handle.readline()
+        for raw in handle:
+            try:
+                row = json.loads(raw.decode("utf-8"))
+            except Exception:
+                continue
+            if isinstance(row, dict) and row.get("message_id") == message_id:
+                found = row
+    return found
+
+
+def _append_record(path: Path, record: dict) -> None:
+    try:
+        fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o600)
+        try:
+            os.write(fd, (json.dumps(record, separators=(",", ":")) + "\n").encode("utf-8"))
+            os.fsync(fd)
+        finally:
+            os.close(fd)
+    except OSError:
+        pass
 
 
 # ── entry ───────────────────────────────────────────────────────────────────
@@ -864,6 +962,8 @@ def run(argv: list[str]) -> dict:
     if len(argv) == 3 and argv[0] == "send":
         agent = agent_of(argv[1])
         return send(agent, argv[2], _stdin_text())
+    if len(argv) == 3 and argv[0] == "enter":
+        return enter(agent_of(argv[1]), argv[2])
     if len(argv) == 3 and argv[0] == "answer":
         return answer(agent_of(argv[1]), argv[2], _answer_stdin())
     raise Refusal("chat_invalid")

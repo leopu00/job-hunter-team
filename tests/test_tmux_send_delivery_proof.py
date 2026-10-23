@@ -277,3 +277,82 @@ def test_the_header_documents_the_new_codes_and_keeps_the_old_contract():
     for line in ("#   3 →", "#   5 →", "#   6 → IMPERSONAZIONE", "#   7 →", "#   8 →"):
         assert line in text, line
     assert "_submitted" in text and "_composer_line" in text
+
+
+# -- C7 · --enter: solo l'Invio, solo sulla firma di QUEL messaggio --------------------------------------------------------
+
+def _enter(box, signature_hex, session="CAPITANO"):
+    full = {
+        **os.environ,
+        "FT": str(box.state),
+        "PATH": f"{box.state.parent / 'bin'}:{Path(sys.executable).parent}:/usr/bin:/bin",
+        "JHT_HOME": str(box.home),
+        "PYTHONDONTWRITEBYTECODE": "1",
+    }
+    full.pop("TMUX", None)
+    return subprocess.run([str(TRANSPORT), "--enter", session, signature_hex], capture_output=True, text=True, timeout=60, env=full)
+
+
+def _stuck_signature(box):
+    """A delivery whose Enter is swallowed: exit 5, and the signature of that text on stdout."""
+    box.put("enter_ignored")
+    done = box.run()
+    assert done.returncode == 5, done.stderr
+    line = [l for l in done.stdout.splitlines() if l.startswith("JHT_SIGNATURE ")]
+    assert len(line) == 1, done.stdout
+    (box.state / "enter_ignored").unlink()
+    return line[0].split(" ", 1)[1]
+
+
+def test_enter_presses_only_enter_once_on_that_message_and_it_is_taken(box):
+    signature = _stuck_signature(box)
+    assert bytes.fromhex(signature).decode("utf-8") in MESSAGE[-40:], "the signature is the tail of that text"
+    typed_before, enters_before = len(box.typed()), len(box.keys("Enter"))
+    done = _enter(box, signature)
+    assert done.returncode == 0, done.stderr
+    assert len(box.typed()) == typed_before, "the text is never typed again"
+    assert len(box.keys("Enter")) == enters_before + 1
+
+
+def test_enter_presses_nothing_when_another_text_is_in_the_composer(box):
+    signature = _stuck_signature(box)
+    box.put("composer", "un testo che ha scritto qualcun altro")
+    enters_before = len(box.keys("Enter"))
+    done = _enter(box, signature)
+    assert done.returncode == 9 and "JHT_REASON not_ours" in done.stdout
+    assert len(box.keys("Enter")) == enters_before
+
+
+def test_enter_presses_nothing_on_an_empty_composer(box):
+    signature = _stuck_signature(box)
+    box.put("composer", "")
+    enters_before = len(box.keys("Enter"))
+    done = _enter(box, signature)
+    assert done.returncode == 9 and "JHT_REASON empty_unseen" in done.stdout
+    assert len(box.keys("Enter")) == enters_before
+
+
+def test_enter_presses_nothing_over_a_menu(box):
+    signature = _stuck_signature(box)
+    box.put("mode", "menu")
+    enters_before = len(box.keys("Enter"))
+    done = _enter(box, signature)
+    assert done.returncode == 9 and "JHT_REASON menu" in done.stdout
+    assert len(box.keys("Enter")) == enters_before
+
+
+def test_enter_presses_at_most_once_per_call(box):
+    signature = _stuck_signature(box)
+    box.put("enter_ignored")
+    enters_before, spaces_before, typed_before = len(box.keys("Enter")), len(box.keys("Space")), len(box.typed())
+    done = _enter(box, signature)
+    assert done.returncode == 5, "still in the composer: taken false, and no repeated Enter"
+    assert len(box.keys("Enter")) == enters_before + 1
+    assert len(box.keys("Space")) == spaces_before and len(box.typed()) == typed_before
+
+
+@pytest.mark.parametrize("bad", ["", "zz", "abc", "41" * 65, "4141; rm -rf /"])
+def test_enter_refuses_a_signature_that_is_not_hex_and_touches_nothing(box, bad):
+    done = _enter(box, bad)
+    assert done.returncode == 1
+    assert [c for c in box.calls() if c.startswith("send-keys")] == []
