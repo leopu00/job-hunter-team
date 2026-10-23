@@ -233,9 +233,12 @@ fn status(state: &'static str, code: Option<&'static str>) -> DirectChatStatus {
 
 /// A connection that answered, with the way its commands reach the VPS when that costs a connection each.
 fn ready_for(connection: &Connection) -> DirectChatStatus {
+    ready_status(&connection.validated, connection.link)
+}
+
+fn ready_status(validated: &ValidatedHost, link: VpsLink) -> DirectChatStatus {
     DirectChatStatus {
-        link: (matches!(connection.validated, ValidatedHost::Vps { .. }) && connection.link == VpsLink::PerCommand)
-            .then_some("per-command"),
+        link: (matches!(validated, ValidatedHost::Vps { .. }) && link == VpsLink::PerCommand).then_some("per-command"),
         ..status("ready", None)
     }
 }
@@ -1483,7 +1486,7 @@ mod tests {
         Connection, DirectChatPage, ProcessResult, REMOTE_CONTAINER_PROBE, REMOTE_PYTHON_STDIN, UNKNOWN_ACTION,
         control_path_fits, remove_tunnel_socket, tunnel_dir_name, tunnel_socket_bases, tunnel_socket_path,
         SOCKET_PATH_MAX, SSH_SOCKET_SUFFIX,
-        open_vps_link, ready_for, vps_link_for, VpsLink, VPS_LINK_CHECK,
+        open_vps_link, ready_status, vps_link_for, VpsLink, VPS_LINK_CHECK,
     };
     use crate::runtime_host::{ExecutionHost, ValidatedHost};
     use std::{fs, process::Command};
@@ -1616,30 +1619,37 @@ mod tests {
     /// The page reads every 5 s instead of 1.5 only when each read is a new ssh connection.
     #[test]
     fn only_a_vps_reached_per_command_is_ready_with_a_slow_link() {
-        let connection = |validated: ValidatedHost, link: VpsLink| Connection {
-            app: None,
-            scope: crate::account_scope::AccountScope::synthetic(b"synthetic-account-link"),
-            host: ExecutionHost::Local,
-            validated,
-            runtime: None,
-            local_wrapper: None,
-            local_owner_marker: None,
-            control_path: None,
-            tunnel: None,
-            link,
-        };
         assert_eq!(
-            serde_json::to_value(ready_for(&connection(synthetic_vps(), VpsLink::PerCommand))).unwrap(),
+            serde_json::to_value(ready_status(&synthetic_vps(), VpsLink::PerCommand)).unwrap(),
             serde_json::json!({"state": "ready", "link": "per-command"})
         );
+        assert_eq!(serde_json::to_value(ready_status(&synthetic_vps(), VpsLink::Master)).unwrap(), serde_json::json!({"state": "ready"}));
         assert_eq!(
-            serde_json::to_value(ready_for(&connection(synthetic_vps(), VpsLink::Master))).unwrap(),
+            serde_json::to_value(ready_status(&ValidatedHost::Local, VpsLink::PerCommand)).unwrap(),
             serde_json::json!({"state": "ready"})
         );
-        assert_eq!(
-            serde_json::to_value(ready_for(&connection(ValidatedHost::Local, VpsLink::PerCommand))).unwrap(),
-            serde_json::json!({"state": "ready"})
-        );
+        // the status of a ready connection is this one
+        let source = include_str!("direct_chat.rs").split("mod tests {").next().unwrap();
+        assert!(source.contains("fn ready_for(connection: &Connection) -> DirectChatStatus {\n    ready_status(&connection.validated, connection.link)\n}"));
+    }
+
+    /// A test that builds a `Connection` drops it, and with it its `Option<AppHandle>`: that drop glue
+    /// links Tauri's window runtime into the test binary, whose comctl32 v6 imports a test binary
+    /// (no application manifest) cannot resolve on Windows. The binary died at start with
+    /// STATUS_ENTRYPOINT_NOT_FOUND (0xc0000139) and no test ran. So a test that builds one runs on Unix only.
+    #[test]
+    fn only_unix_tests_build_a_connection() {
+        let tests = include_str!("direct_chat.rs").split_once("mod tests {").unwrap().1;
+        let mut built = 0;
+        // the needle in two pieces, so this very test is not one of the places it finds
+        for (at, _) in tests.match_indices(concat!("Connection", " {")) {
+            built += 1;
+            let test_start = tests[..at].rfind("#[test]").expect("inside a test");
+            let attributes = &tests[..test_start];
+            let attributes = &attributes[attributes.rfind('\n').map_or(0, |line| attributes[..line].rfind('\n').unwrap_or(0))..];
+            assert!(attributes.contains("#[cfg(unix)]"), "a Connection built outside a Unix-only test, before byte {at}");
+        }
+        assert!(built >= 1, "the Unix probe test builds one");
     }
 
     #[test]

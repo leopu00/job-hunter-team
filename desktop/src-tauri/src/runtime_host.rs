@@ -1725,6 +1725,7 @@ mod tests {
     }
 
     /// The files of this process's pipe-free ssh calls still on disk.
+    #[cfg(unix)]
     fn pipe_free_files_left() -> Vec<PathBuf> {
         let prefix = format!("-{}-", std::process::id());
         fs::read_dir(std::env::temp_dir())
