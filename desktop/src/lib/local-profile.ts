@@ -130,6 +130,19 @@ export async function activateSavedLocalProfile(
 }
 
 /**
+ * Chooses a saved profile before moving to the dashboard. The dashboard is the
+ * single owner of the native scope activation once its page has loaded.
+ */
+export function selectSavedLocalProfile(
+  store: LocalProfileStore = localStorage,
+): LocalProfile {
+  const profile = readLocalProfile(store);
+  if (!profile) throw new Error("local-profile-missing");
+  selectLocalIdentity(store);
+  return profile;
+}
+
+/**
  * Product entrypoint for the DEV onboarding playground reset. Native scope and
  * runtime ownership are released first; renderer identity/checkpoint data is
  * forgotten only after the backend confirms teardown.
