@@ -115,9 +115,13 @@ def _repair(tmp_path: Path, preown: bool = False) -> dict[str, str]:
     harness = tmp_path / "harness.ps1"
     harness.write_text(ENGINE_CHECK + HARNESS, encoding="utf-8")
     engine = tmp_path / "engine.txt"
+    # Without the caller's PSModulePath: the CI step runs in pwsh 7, and Windows PowerShell 5.1 that
+    # inherits it loads pwsh's Microsoft.PowerShell.Security, so Get-Acl "could not be loaded".
+    # Each shell rebuilds its own when the variable is absent.
+    inherited = {key: value for key, value in os.environ.items() if key.upper() != "PSMODULEPATH"}
     done = subprocess.run(
         [*powershell_argv(), "-File", str(harness)],
-        env={**os.environ, "JHT_ENGINE_FILE": str(engine), "JHT_UNDER_TEST": str(ENABLER),
+        env={**inherited, "JHT_ENGINE_FILE": str(engine), "JHT_UNDER_TEST": str(ENABLER),
              "JHT_ACL_HELPER": str(ACL_HELPER), "JHT_FILE": str(target), "JHT_PREOWN": "1" if preown else "0"},
         capture_output=True, text=True, timeout=120,
     )
