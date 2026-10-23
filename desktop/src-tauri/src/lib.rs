@@ -30,6 +30,7 @@ mod release_channel;
 mod release_channel_rules;
 mod runtime_host;
 mod runtime_log;
+mod saved_vps;
 mod text_file_export;
 mod voice_input;
 mod vps_link;
@@ -123,6 +124,10 @@ pub fn run() {
             onboarding::onboarding_local_uninstall,
             runtime_log::onboarding_runtime_log,
             runtime_log::onboarding_runtime_log_open,
+            saved_vps::saved_vps_list,
+            saved_vps::saved_vps_add,
+            saved_vps::saved_vps_rename,
+            saved_vps::saved_vps_remove,
             onboarding::onboarding_prepare,
             onboarding::onboarding_provider_login,
             onboarding::onboarding_provider_login_close,

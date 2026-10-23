@@ -3,6 +3,7 @@ import { appLocale } from "../../lib/app-locale";
 import { useConnectTeam } from "../../lib/connect-team";
 import { describeError, errorCodeOf } from "../../lib/error-catalog";
 import { vpsLinkStatusBridge, type VpsLinkStatus } from "../../lib/vps-link-status";
+import { savedVpsBridge, type SavedVps } from "../../lib/saved-vps";
 import type { PageProps } from "../types";
 import { VPS_CONNECTION_TEXT } from "../settings/settings.i18n";
 
@@ -42,14 +43,15 @@ export function VpsConnectionScreen() {
   const [unlinking, setUnlinking] = useState(false);
   const [unlinked, setUnlinked] = useState(false);
   const [operationCode, setOperationCode] = useState<string | null>(null);
+  const [saved, setSaved] = useState<SavedVps[]>([]);
   const request = useRef(0);
 
   const read = useCallback(async () => {
     const mine = ++request.current;
     setReading({ kind: "loading" });
     try {
-      const status = await vpsLinkStatusBridge.status();
-      if (request.current === mine) setReading({ kind: "ready", status });
+      const [status, savedVps] = await Promise.all([vpsLinkStatusBridge.status(), savedVpsBridge.list().catch(() => [])]);
+      if (request.current === mine) { setReading({ kind: "ready", status }); setSaved(savedVps); }
     } catch (error) {
       if (request.current === mine) setReading({ kind: "error", code: errorCodeOf(error) });
     }
@@ -142,6 +144,10 @@ export function VpsConnectionScreen() {
           </div>
         </>
       )}
+      {saved.length > 0 && <section className="mt-5" aria-label={t.link}>
+        <h2 className="text-[13px] font-semibold">{t.link}</h2>
+        <ul className="mt-2 grid gap-2">{saved.map((row) => <li key={row.id} className="rounded border border-[var(--color-border)] px-3 py-2"><strong>{shortDeclaration(row.name)}</strong><span className="ml-2 text-[var(--color-muted)]">{maskAddress(row.address)}</span></li>)}</ul>
+      </section>}
 
       {connectTeam && (
         <div className="mt-5 flex flex-wrap gap-2">

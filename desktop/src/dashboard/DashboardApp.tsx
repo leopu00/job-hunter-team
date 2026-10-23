@@ -24,6 +24,7 @@ import {
   finalizeLocalProfileMigration,
   localIdentitySelected,
   readLocalProfile,
+  renameLocalProfile,
 } from "../lib/local-profile";
 import { clearGoogleIdentitySelection, googleIdentitySelected } from "../lib/identity-choice";
 import {
@@ -358,6 +359,7 @@ function mergeProviderLoginAction(
  * the direct-chat connection have been independently verified.
  */
 export default function DashboardApp() {
+  const [, setLocalProfileRevision] = useState(0);
   const localProfile = localIdentitySelected() ? readLocalProfile() : null;
   const savedLocalProfile = localProfile ? null : readLocalProfile();
   const { session, loading } = useSession(
@@ -1601,6 +1603,10 @@ export default function DashboardApp() {
       <OnboardingFlow
         key={`${identityKey}:${onboardingUiVersion}`}
         account={gate.account}
+        onRenameLocalProfile={gate.account.identity === "local" ? (displayName) => {
+          renameLocalProfile(displayName);
+          setLocalProfileRevision((revision) => revision + 1);
+        } : undefined}
         onConnectExistingTeam={gate.account.identity === "local" ? (host) => {
           if (activeIdentityKeyRef.current === identityKey) setManualExistingTeam({ identityKey, host });
         } : undefined}

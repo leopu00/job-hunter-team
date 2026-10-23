@@ -50,6 +50,14 @@ async function reachProviderLocal(user: ReturnType<typeof userEvent.setup>) {
 }
 
 describe("OnboardingFlow technical setup", () => {
+  it("lets a local profile change its on-device label before setup", async () => {
+    const user = userEvent.setup();
+    const rename = vi.fn();
+    renderFlow({ account: { displayName: "Ada", identity: "local" }, onRenameLocalProfile: rename });
+    const name = screen.getByRole("textbox", { name: "Nome del profilo" });
+    await user.clear(name); await user.type(name, "Bea"); await user.tab();
+    expect(rename).toHaveBeenCalledWith("Bea");
+  });
   it("uses the Google name only in the greeting and never asks personal questions", async () => {
     const user = userEvent.setup();
     renderFlow();
