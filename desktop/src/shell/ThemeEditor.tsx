@@ -17,6 +17,7 @@ import {
 } from "./theme-custom";
 import { THEMES, deleteCustomTheme, readStoredCustom, saveCustomTheme, type Theme } from "./theme";
 import { THEME_EDITOR_TEXT } from "./theme-editor.i18n";
+import { THEME_FILE_MAX_BYTES, readThemeFile, writeThemeFile } from "./theme-file";
 import { THEME_TEXT } from "./theme.i18n";
 
 type Props = {
@@ -28,7 +29,16 @@ type Props = {
   initialStart?: Theme;
 };
 
-const FOCUSABLE = 'button:not([disabled]), select, input, [tabindex]:not([tabindex="-1"])';
+const FOCUSABLE = 'button:not([disabled]), select, input:not([hidden]), textarea, [tabindex]:not([tabindex="-1"])';
+
+/** The text of a file, with the reader every webview has (Blob.text is newer than some of them). */
+const readAsText = (file: File) =>
+  new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result));
+    reader.onerror = () => reject(reader.error);
+    reader.readAsText(file);
+  });
 
 /** What a failed pair is told as: the two names and the numbers, never only a colour. */
 function describe(failure: Failure, names: Record<string, string>, text: (typeof THEME_EDITOR_TEXT)["it"]) {
@@ -50,6 +60,9 @@ export default function ThemeEditor({ onClose, onChanged, initialStart = "dark" 
   const [touched, setTouched] = useState<SeedKey | undefined>();
   const [note, setNote] = useState("");
   const [asking, setAsking] = useState(false);
+  const [pasteOpen, setPasteOpen] = useState(false);
+  const [pasteText, setPasteText] = useState("");
+  const fileInput = useRef<HTMLInputElement>(null);
 
   const dialogRef = useRef<HTMLDivElement>(null);
   const titleId = useId();
@@ -103,6 +116,56 @@ export default function ThemeEditor({ onClose, onChanged, initialStart = "dark" 
     if (out.seeds === seeds) return setNote(text.nothingToFix);
     setNote(SEED_KEYS.filter((k) => seeds[k] !== out.seeds[k]).map((k) => fill(text.fixed, { seed: text.seeds[k], before: seeds[k], after: out.seeds[k] })).join(" · "));
     adopt(out.seeds);
+  };
+
+  // A theme from outside is only ever a draft: it lands in the editor, where the guard lists what is wrong and
+  // nothing is saved until Save passes.
+  const importText = (raw: string): boolean => {
+    const result = readThemeFile(raw);
+    if (!result.ok) {
+      setNote(
+        result.reason === "too_big"
+          ? text.importTooBig
+          : result.reason === "not_json"
+            ? text.importNotJson
+            : result.reason === "newer"
+              ? text.importNewer
+              : fill(text.importInvalid, { field: result.field }),
+      );
+      return false;
+    }
+    setStart(result.file.start);
+    adopt(result.file.seeds);
+    setTouched(undefined);
+    setNote(fill(text.imported, { name: result.file.name }));
+    return true;
+  };
+
+  const importFile = async (file: File | undefined) => {
+    if (!file) return;
+    // the size of the file object is asked before its content is read
+    if (file.size > THEME_FILE_MAX_BYTES) return setNote(text.importTooBig);
+    let raw: string;
+    try {
+      raw = await readAsText(file);
+    } catch {
+      return setNote(text.importNotJson);
+    }
+    importText(raw);
+  };
+
+  const copyTheme = async () => {
+    if (blocked) return setNote(text.exportBlocked);
+    const out = writeThemeFile(text.title, start, seeds);
+    try {
+      await navigator.clipboard.writeText(out);
+      setNote(text.copied);
+    } catch {
+      // no clipboard here: the text goes in the box, to be copied by hand
+      setPasteText(out);
+      setPasteOpen(true);
+      setNote(text.copyFailed);
+    }
   };
 
   const save = () => {
@@ -216,6 +279,47 @@ export default function ThemeEditor({ onClose, onChanged, initialStart = "dark" 
             </button>
           )}
         </section>
+
+        <div className="theme-editor__actions" role="group" aria-label={text.title}>
+          <button type="button" aria-disabled={blocked} onClick={copyTheme}>
+            {text.copy}
+          </button>
+          <button type="button" onClick={() => fileInput.current?.click()}>
+            {text.importFile}
+          </button>
+          <input
+            ref={fileInput}
+            type="file"
+            hidden
+            accept=".json,application/json"
+            data-testid="theme-file-input"
+            onChange={(event) => {
+              const file = event.target.files?.[0];
+              event.target.value = "";
+              void importFile(file);
+            }}
+          />
+          <button type="button" aria-expanded={pasteOpen} onClick={() => setPasteOpen((open) => !open)}>
+            {text.pasteOpen}
+          </button>
+        </div>
+
+        {pasteOpen && (
+          <div className="theme-editor__paste">
+            <label>
+              <span>{text.pasteLabel}</span>
+              <textarea rows={6} spellCheck={false} value={pasteText} onChange={(event) => setPasteText(event.target.value)} />
+            </label>
+            <button
+              type="button"
+              onClick={() => {
+                if (importText(pasteText)) setPasteOpen(false);
+              }}
+            >
+              {text.pasteApply}
+            </button>
+          </div>
+        )}
 
         <div className="theme-editor__actions">
           <button

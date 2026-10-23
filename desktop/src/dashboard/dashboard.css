@@ -518,3 +518,16 @@
 .theme-editor__preview p { margin: 0; }
 .theme-editor__preview-card { padding: 0.5rem; border-radius: 0.25rem; background: var(--color-card); color: var(--color-bright); }
 .theme-editor__preview-button { justify-self: start; padding: 0.25rem 0.7rem; border-radius: 0.25rem; background: var(--color-green); color: var(--color-void); }
+.theme-editor__paste { display: grid; gap: 0.4rem; margin-top: 0.5rem; }
+.theme-editor__paste label { display: grid; gap: 0.25rem; }
+.theme-editor textarea {
+  padding: 0.35rem 0.5rem;
+  border: 1px solid var(--color-border);
+  border-radius: 0.25rem;
+  background: var(--color-card);
+  color: var(--color-base);
+  font: inherit;
+  resize: vertical;
+}
+.theme-editor textarea:focus-visible { outline: 2px solid var(--color-green); outline-offset: 2px; }
+.theme-editor button[aria-disabled="true"] { opacity: 0.55; cursor: not-allowed; }

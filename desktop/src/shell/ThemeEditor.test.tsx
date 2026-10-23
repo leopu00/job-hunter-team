@@ -2,11 +2,12 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { cleanup, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import ThemePicker from "./ThemePicker";
 import { CUSTOM_STORAGE_KEY, THEMES, THEME_STORAGE_KEY, readStoredCustom } from "./theme";
 import { PRESETS } from "./theme-presets";
 import { STATUS_TOKENS, TOKEN_NAMES } from "./theme-custom";
+import { readThemeFile, writeThemeFile } from "./theme-file";
 
 const css = readFileSync(join(process.cwd(), "src/dashboard/dashboard.css"), "utf8").replace(/\r\n?/g, "\n");
 
@@ -197,5 +198,102 @@ describe("the editor of the personal theme", { timeout: 60_000 }, () => {
     await user.clear(within(dialog).getByRole("textbox", { name: "Text: colour code" }));
     await user.type(within(dialog).getByRole("textbox", { name: "Text: colour code" }), "#303040");
     expect(within(dialog).getAllByRole("listitem")[0].textContent).toMatch(/Text on .+: \d\.\d : 1, at least 4\.5 : 1 is needed/);
+  });
+});
+
+describe("a theme that comes in and goes out as text", { timeout: 60_000 }, () => {
+  const GOOD_FILE = { jhtTheme: 1, name: "Il mio tema", start: "ocean", seeds: { background: "#0b1020", panel: "#11172b", text: "#c8d0ea", border: "#2a3558", accent: "#7cc4ff" } };
+  const asFile = (value: unknown, name = "tema.json") => new File([typeof value === "string" ? value : JSON.stringify(value)], name, { type: "application/json" });
+  const noteOf = (dialog: HTMLElement) => dialog.querySelector(".theme-editor__note")!.textContent;
+  const clipboard = (writeText: () => Promise<void>) => Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
+
+  it("imports a file as a DRAFT: the editor takes its palette and colours, and nothing is saved or applied", async () => {
+    const { user, dialog } = await openEditor();
+    await user.upload(screen.getByTestId("theme-file-input"), asFile(GOOD_FILE));
+    await vi.waitFor(() => expect(noteOf(dialog)).toBe("Importato: Il mio tema. Controlla l'anteprima e salva se va bene."));
+    expect(textField("Accento")).toHaveValue("#7cc4ff");
+    expect(within(dialog).getByRole("combobox", { name: "Parti da" })).toHaveValue("ocean");
+    expect(localStorage.getItem(CUSTOM_STORAGE_KEY)).toBeNull();
+    expect(document.documentElement.style.getPropertyValue("--color-green")).toBe("");
+    expect(screen.getByTestId("theme-preview").style.getPropertyValue("--color-green")).toBe("#7cc4ff");
+  });
+
+  it("does not even read a file over 4 KiB, and says why", async () => {
+    const { user, dialog } = await openEditor();
+    const big = asFile("x".repeat(4097));
+    const read = vi.spyOn(FileReader.prototype, "readAsText");
+    await user.upload(screen.getByTestId("theme-file-input"), big);
+    await vi.waitFor(() => expect(noteOf(dialog)).toBe("Il file è troppo grande per essere un tema (al massimo 4 KB)."));
+    expect(read).not.toHaveBeenCalled();
+    expect(textField("Accento")).toHaveValue(PRESETS.dark.seeds.accent);
+  });
+
+  it.each([
+    ["not JSON", "{", "Il file non è un tema: non si legge come testo JSON."],
+    ["a version from the future", { ...GOOD_FILE, jhtTheme: 2 }, "Il file è stato creato da una versione più nuova dell'app."],
+    ["a colour name", { ...GOOD_FILE, seeds: { ...GOOD_FILE.seeds, accent: "red" } }, "Il file non è un tema valido (campo: seeds.accent)."],
+    ["an extra key", { ...GOOD_FILE, look: {} }, "Il file non è un tema valido (campo: keys)."],
+  ])("refuses a file with %s, tells the person, and leaves the editor as it was", async (_name, content, message) => {
+    const { user, dialog } = await openEditor();
+    await user.upload(screen.getByTestId("theme-file-input"), asFile(content as unknown));
+    await vi.waitFor(() => expect(noteOf(dialog)).toBe(message));
+    expect(textField("Accento")).toHaveValue(PRESETS.dark.seeds.accent);
+    expect(within(dialog).getByRole("combobox", { name: "Parti da" })).toHaveValue("dark");
+  });
+
+  it("brings a well-formed but unreadable palette into the editor with the list of why, and Save stays off", async () => {
+    const { user, dialog } = await openEditor();
+    const unreadable = { ...GOOD_FILE, seeds: { ...GOOD_FILE.seeds, text: "#11172b" } };
+    await user.upload(screen.getByTestId("theme-file-input"), asFile(unreadable));
+    await vi.waitFor(() => expect(within(dialog).queryAllByRole("listitem").length).toBeGreaterThan(0));
+    expect(save()).toHaveAttribute("aria-disabled", "true");
+    await user.click(save());
+    expect(localStorage.getItem(CUSTOM_STORAGE_KEY)).toBeNull();
+  });
+
+  it("copies the theme as text the app reads back to the same colours; a theme that does not read well is not copied", async () => {
+    const writeText = vi.fn(async () => {});
+    const { user, dialog } = await openEditor();
+    clipboard(writeText);
+    await type(user, "Accento", "#e0a030");
+    await user.click(screen.getByRole("button", { name: "Copia il tema" }));
+    await vi.waitFor(() => expect(noteOf(dialog)).toBe("Tema copiato negli appunti."));
+    const out = (writeText.mock.calls[0] as unknown as [string])[0];
+    expect(readThemeFile(out)).toEqual({ ok: true, file: { jhtTheme: 1, name: "Tema personale", start: "dark", seeds: { ...PRESETS.dark.seeds, accent: "#e0a030" } } });
+    expect(out).toBe(writeThemeFile("Tema personale", "dark", { ...PRESETS.dark.seeds, accent: "#e0a030" }));
+
+    await type(user, "Testo", "#303040");
+    writeText.mockClear();
+    await user.click(screen.getByRole("button", { name: "Copia il tema" }));
+    expect(noteOf(dialog)).toBe("Un tema che non si legge bene non si esporta: correggi prima ciò che non va.");
+    expect(writeText).not.toHaveBeenCalled();
+  });
+
+  it("puts the text in the box to be copied by hand when there is no clipboard", async () => {
+    const { user, dialog } = await openEditor();
+    clipboard(async () => {
+      throw new Error("denied");
+    });
+    await user.click(screen.getByRole("button", { name: "Copia il tema" }));
+    const box = await within(dialog).findByRole("textbox", { name: "Testo del tema" });
+    expect((box as HTMLTextAreaElement).value).toContain('"jhtTheme": 1');
+    expect(noteOf(dialog)).toBe("Appunti non disponibili: il testo del tema è nella casella, copialo a mano.");
+  });
+
+  it("imports a pasted text the same way, closes the box, and a text that is not a theme leaves it open", async () => {
+    const { user, dialog } = await openEditor();
+    await user.click(screen.getByRole("button", { name: "Incolla un tema" }));
+    const box = within(dialog).getByRole("textbox", { name: "Testo del tema" });
+    await user.click(box);
+    await user.paste("non è un tema");
+    await user.click(within(dialog).getByRole("button", { name: "Importa" }));
+    expect(noteOf(dialog)).toBe("Il file non è un tema: non si legge come testo JSON.");
+    expect(within(dialog).getByRole("textbox", { name: "Testo del tema" })).toBeInTheDocument();
+    await user.clear(box);
+    await user.click(box);
+    await user.paste(JSON.stringify(GOOD_FILE));
+    await user.click(within(dialog).getByRole("button", { name: "Importa" }));
+    expect(textField("Accento")).toHaveValue("#7cc4ff");
+    expect(within(dialog).queryByRole("textbox", { name: "Testo del tema" })).toBeNull();
   });
 });
