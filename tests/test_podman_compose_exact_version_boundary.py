@@ -1033,11 +1033,14 @@ def test_up_rejects_untrusted_existing_container_before_any_mutation(
     expected_provider_calls = [(MACHINE, PS_Q_CHILD)]
     if inspect_expected:
         expected_provider_calls.append((MACHINE, HASH_PROBE_CHILD))
+        # The refusal then looks, read-only, for a container of the same project that
+        # only changed its config-hash (stale_config_hint): one more id listing.
+        expected_provider_calls.append((MACHINE, PS_Q_CHILD))
     assert _provider_podman_calls(podman_log) == expected_provider_calls
     compose_calls = _actual_compose_calls(env)
     _assert_literal_project(compose_calls)
     ps_calls = [call for call in compose_calls if call[1][-2:] == ["ps", "-q"]]
-    assert len(ps_calls) == 1
+    assert len(ps_calls) == (2 if inspect_expected else 1)
     assert not any("up" in args and "--dry-run" not in args for _, args in compose_calls)
     inspect_calls = [
         args
