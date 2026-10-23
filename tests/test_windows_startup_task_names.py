@@ -3,7 +3,7 @@
 The setup registers "Job Hunter Team - Start runtime" with the user's SID and reads it back to check
 it. Windows gives the user back as a name, never as the SID: "COMPUTER\\user" in the trigger and
 "user" in the principal (Windows 10 Pro with a local account, under 5.1 and 7, in a console and in
-session 0; seen by hand and with a throwaway task of the test user on the ThinkPad, 23/10). The fake
+session 0; seen in a hand test of the setup and with a throwaway task on a Windows 10 test PC, 23/10). The fake
 Task Scheduler of test_windows_podman_wsl_branches.py gave the SID back, so the check passed there
 and failed on every real Windows: «JHT startup task verification failed», and the Podman setup never
 finished.
