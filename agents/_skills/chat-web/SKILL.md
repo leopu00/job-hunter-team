@@ -83,6 +83,16 @@ Rules:
 - **Quotes**: pass the body as a single positional arg. Single quotes preserve `$`, `"`, emoji, accents verbatim. For a body containing a literal `'`, use double quotes (`jht-send "non c'è problema"`) — but inside `"..."` shell will expand `$var`, so be careful.
 - **Multi-line**: bash `$'riga1\nriga2'`, or use `\n` inside the string and let Python preserve it.
 
+## Message kind (`--kind`)
+
+`jht-send --kind <kind> '...'` tags the message (default `info`, which writes nothing extra). The kind is yours to declare: the tool takes it as you give it and writes it as is, nothing checks it. It only applies to a final message: not with `--partial` and not with `--role system`.
+- `urgent` — you need the user right now;
+- `blocked` — you are stuck and cannot go on without them;
+- `completed` — a job is finished;
+- `info` — everything else.
+
+Questions with choices are not a kind: use `jht-notify-user --option id="Label"`; `--kind question` is refused. When in doubt between a question and `blocked`: if you can do something else meanwhile, it is a question. After a question do not stop: carry on with what you can do until the answer arrives.
+
 ## When to use `--partial`
 
 Use it whenever a user-facing operation will take more than ~3 seconds and you do not have the answer yet. Without `--partial` between user message and final reply, the frontend hides the typing dots and the chat looks dead.

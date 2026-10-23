@@ -7,24 +7,22 @@
 # vanno inviati in step separati, e il submit deve arrivare DOPO che il
 # testo e' effettivamente apparso nel pane.
 #
-# Schema:
-#   0. capture-pane            se la TUI e' a META' TURNO ("esc to interrupt")
-#                              NON e' morta: e' VIVA e occupata. Aspetta che
-#                              torni idle PRIMA di digitare — non si typea mai
-#                              dentro un composer occupato (codex accoda+non
-#                              eco-a il testo → la verify fallirebbe a vuoto).
-#   1. send -l "$message"      tmux typea il testo carattere per carattere
-#   2. sleep 1                 lascia respirare il render Ink
-#   3. capture-pane            verifica che la signature sia nel pane
-#   4. se NO → retry (fino a 3 volte; la TUI potrebbe stare bootando,
-#              avere un modal aperto, o aver perso focus)
-#   5. se SI → send Enter      submit del prompt
-#   6. capture-pane            VERIFICA che il submit sia avvenuto: il testo
-#                              deve essere sparito dal composer, oppure il pane
-#                              deve essere passato in stato occupato. Se e'
-#                              ancora li', l'Enter e' stato ingoiato: si rimanda
-#                              (escalation), e se non parte comunque si esce con
-#                              5 — MAI 0. Vedi "vivo ma muto" qui sotto.
+# Schema (rivisto il 23/10: il testo si scrive UNA volta, «preso» ha bisogno di una prova):
+#   0. lock per sessione       una consegna alla volta verso lo stesso pane (flock su un file per
+#                              sessione, tenuto fino alla verifica; cade con il processo)
+#   1. capture-pane            si GUARDA prima di digitare: serve una casella di input. Senza (modale
+#                              di primo avvio o shell nuda) un solo Escape, poi si guarda di nuovo;
+#                              ancora niente = exit 3, senza aver digitato
+#   2. send -l "$message"      tmux typea il testo, UNA volta. Se la casella contiene gia' il nostro
+#                              testo (una chiamata precedente) non si riscrive: si preme solo l'Invio
+#   3. capture-pane (poll)     la firma si cerca SOLO nella casella (non nella conversazione); se non
+#                              compare entro il tempo del render: exit 3, senza riscrivere e senza
+#                              premere niente
+#   4. send Enter              submit; dal secondo tentativo Space+Enter, ma solo se nella casella c'e'
+#                              ancora il nostro testo (mai un Invio su una domanda di permesso)
+#   5. capture-pane            «PRESO» = una PROVA: il testo era nella casella e adesso la casella e'
+#                              disegnata e vuota, oppure ha una ricorrenza in piu' nella conversazione,
+#                              oppure il turno e' partito adesso. Pane occupato da solo NON prova niente.
 #
 # ⚠️ "VIVO MA MUTO" (delia 28-30/07, 4 occorrenze in 3 giorni, Capitano incluso).
 # Fino al 30/07 lo step 6 non esisteva: bastava vedere il testo nel composer per
@@ -60,8 +58,34 @@
 #       correggere. Il tentativo resta scritto in messages.jsonl con
 #       delivered=false, cosi' chi indaga trova una traccia invece del nulla
 #       (#198).
+#   7 → NON SO: il testo e' uscito dalla casella ma non c'e' prova che sia stato preso (nessuna
+#       ricorrenza in piu' nella conversazione, turno non partito), o non e' piu' nella casella dopo un
+#       Invio. NON e' un guasto e NON autorizza respawn; il chiamante guarda prima di riscrivere.
+#   8 → LOCK OCCUPATO: un'altra consegna alla stessa sessione e' ancora in corso dopo JHT_TMUX_LOCK_WAIT
+#       secondi (12). Non e' stato digitato niente: si puo' ritentare.
+#   9 → (solo con --enter) nella casella NON c'e' la firma di quel messaggio: non e' stato premuto niente.
+#       Su stdout una riga «JHT_REASON <menu|empty_unseen|not_ours>».
+#
+# jht-tmux-send --enter <session> <firma-hex>: preme SOLO l'Invio, una volta, e solo se nella casella
+# c'e' ancora la firma di quel messaggio (la coda con il nonce, che un exit 5 stampa su stdout come
+# «JHT_SIGNATURE <hex>»). Mai il testo; stesso lock; esiti 0/5/7 come sopra, oppure 9.
+#   (il 3 resta il solo segnale «forse morto» su cui conta pacing-bridge: nessuna casella a schermo, o
+#    testo digitato una volta e MAI comparso nella casella)
 
 set -euo pipefail
+
+enter_mode=0
+enter_signature=""
+if [ "${1:-}" = "--enter" ]; then
+  # Solo l'Invio sul testo rimasto nella casella: niente da recintare, niente posta, niente testo.
+  if [ $# -ne 3 ] || ! printf '%s' "$3" | grep -Eq '^([0-9a-f]{2}){1,64}$'; then
+    echo "Usage: jht-tmux-send --enter <session> <firma-hex>" >&2
+    exit 1
+  fi
+  enter_mode=1
+  enter_signature=$(printf '%b' "$(printf '%s' "$3" | sed 's/../\\x&/g')")
+  set -- "$2" ""
+fi
 
 if [ $# -lt 2 ]; then
   echo "Usage: jht-tmux-send <session> <message>" >&2
@@ -103,7 +127,7 @@ ORIGIN_LIB="/app/shared/skills/message_origin.py"
 sender_trust="unverified"
 sender_claimed=""
 sender_origin=""
-if [ -f "$ORIGIN_LIB" ] && command -v python3 >/dev/null 2>&1; then
+if [ "$enter_mode" -eq 0 ] && [ -f "$ORIGIN_LIB" ] && command -v python3 >/dev/null 2>&1; then
   if verdict=$(python3 "$ORIGIN_LIB" "$message" 2>/dev/null); then
     # La prima riga senza una pipe verso `head`: con `set -o pipefail` il
     # printf a sinistra prende SIGPIPE se head e' gia' uscito, e lo script
@@ -303,6 +327,11 @@ fi
 # (`set -o pipefail` lo trasformerebbe in un exit 141 muto, come al verdetto).
 signature_head=$(head -c 30 < <(printf '%s' "$message"))
 signature_tail=$(printf '%s' "$message" | tail -c 30)
+if [ "$enter_mode" -eq 1 ]; then
+  # La firma di QUEL messaggio (la coda con il nonce): solo lei conta, mai un segnaposto «Pasted».
+  signature_head=$enter_signature
+  signature_tail=$enter_signature
+fi
 
 # Busy-detection: codex / claude / kimi mostrano "esc to interrupt" mentre
 # l'agente e' a meta' turno. Un pane occupato e' un agente VIVO: il messaggio
@@ -403,19 +432,93 @@ _composer_line() {
   printf '%s\n' "$1" | tail -n "+$start" || true
 }
 
-# Il submit e' avvenuto se il turno e' partito (pane occupato) OPPURE il testo
-# non e' piu' nel composer (consumato dall'invio). Conservativo: nel dubbio
-# risponde "non submittato" e il chiamante ritenta, che e' l'errore innocuo.
+# ── La prova (C2/C3 del 23/10) ─────────────────────────────────────────────────
+# Una casella vuota da sola non prova niente: il 21/10 un messaggio e' sparito cosi'
+# (i tasti si erano persi, la firma stava gia' nella conversazione sopra, l'Invio e' partito
+# su una casella vuota e `_submitted` ha detto «consegnato»). Qui la firma si cerca SOLO
+# nella casella, e «preso» ha bisogno di una prova:
+#   A. il testo era NELLA casella prima dell'Invio e dopo la casella e' ancora disegnata, vuota di lui;
+#   B. il testo non e' piu' nella casella e nella conversazione ha UNA ricorrenza in piu' di prima;
+#   C. il pane non era occupato prima dell'Invio, lo e' dopo, e il testo non e' piu' nella casella.
+# «Pane occupato» da solo NON e' una prova: un CLI a meta' turno accoda, e il testo puo' essere
+# ancora li'.
+
+# Quante volte `$2` compare in `$1` (senza sovrapposizioni).
+_occurrences() {
+  [ -n "$2" ] || { echo 0; return 0; }
+  local rest=${1//"$2"/}
+  echo $(( (${#1} - ${#rest}) / ${#2} ))
+}
+
+# Il NOSTRO testo e' nella casella: testa o coda della firma, anche se la TUI ha mandato a capo il
+# testo (si guarda la casella anche senza gli a capo), oppure il segnaposto di un incolla collassato
+# ("Pasted text", "Pasted Content") quando prima non c'era.
+_in_composer() {
+  local line flat
+  line=$(_composer_line "$1")
+  [ -n "$line" ] || return 1
+  flat=${line//$'\n'/}
+  case "$line$flat" in
+    *"$signature_tail"*|*"$signature_head"*) return 0 ;;
+  esac
+  if [ "$placeholder_before" -eq 0 ]; then
+    case "$line" in
+      *"Pasted text"*|*"pasted text"*|*"Pasted Content"*|*"pasted content"*) return 0 ;;
+    esac
+  fi
+  return 1
+}
+
+# Il nostro testo e' in attesa di essere inviato. Di norma e' nella casella; ma un testo LUNGO fa
+# scorrere fuori dal pane la riga col marcatore (resta visibile solo la coda, accanto al cursore):
+# allora vale la coda della firma negli ultimi righi dello schermo, a patto che sia una ricorrenza
+# IN PIU' di prima di digitare (una firma gia' presente nella conversazione non conta).
+_text_pending() {
+  _in_composer "$1" && return 0
+  [ -z "$(_composer_line "$1")" ] || return 1
+  [ "$(_occurrences "$1" "$signature_tail")" -gt "$occ_tail_before" ] || return 1
+  case "$(printf '%s\n' "$1" | tail -n 4)" in
+    *"$signature_tail"*) return 0 ;;
+  esac
+  return 1
+}
+
+# La riga della casella non porta niente dopo il marcatore (a parte i bordi del box). Un menu
+# («❯ 1. Yes») o un suggerimento grigio NON sono una casella vuota.
+_composer_empty() {
+  local line first best m rest
+  line=$(_composer_line "$1")
+  [ -n "$line" ] || return 1
+  first=${line%%$'\n'*}
+  best=""
+  for m in '❯' '›' '▌' '>'; do
+    case "$first" in
+      *"$m"*) rest=${first#*"$m"}; [ "${#rest}" -gt "${#best}" ] && best=$rest ;;
+    esac
+  done
+  best=${best//[│┃╎| ]/}
+  best=${best//$'\t'/}
+  [ -z "$best" ]
+}
+
+# Il submit e' PROVATO (A, B o C qui sopra). `$1` e' lo schermo dopo l'Invio.
 _submitted() {
-  if _pane_busy "$1"; then
+  if _text_pending "$1"; then
+    return 1
+  fi
+  # A. casella disegnata, vuota
+  if _composer_empty "$1"; then
     return 0
   fi
-  local line
-  line=$(_composer_line "$1")
-  case "$line" in
-    *"$submit_probe"*) return 1 ;;
-    *) return 0 ;;
-  esac
+  # B. senza casella: il testo e' passato nella conversazione (una ricorrenza in piu')
+  if [ "$(_occurrences "$1" "$signature_tail")" -gt "$occ_tail_before" ]; then
+    return 0
+  fi
+  # C. il turno e' partito adesso
+  if [ "$busy_pre" -eq 0 ] && _pane_busy "$1"; then
+    return 0
+  fi
+  return 1
 }
 
 # Il testo e' rimasto appeso nel composer: annotalo dove il Dottore lo cerca,
@@ -447,115 +550,201 @@ PYEOF
 
 # Quanti Enter mandare prima di arrendersi e dichiarare "vivo ma muto" (exit 5).
 submit_tries="${JHT_TMUX_SUBMIT_TRIES:-3}"
+# Pazienza prima di digitare (mezzi secondi, per veder comparire una casella) e dopo
+# (mezzi secondi in piu' al secondo di render, per veder comparire il testo).
+composer_polls="${JHT_TMUX_COMPOSER_POLLS:-6}"
+render_polls="${JHT_TMUX_RENDER_POLLS:-6}"
 
-attempts=3
-for try in $(seq 1 "$attempts"); do
-  pane=$(tmux capture-pane -t "$session" -p 2>/dev/null || true)
-  busy_typed=0
+# ── C4 · un lock per sessione ────────────────────────────────────────────────
+# I programmi che scrivono in un pane sono una ventina (bridge, watchdog, throttle, posta,
+# chat…): due scritture insieme si spezzano, o l'Invio dell'una parte con il testo dell'altra.
+# Il lock sta DENTRO il trasporto, tenuto dalla prima occhiata allo schermo fino alla
+# verifica; cade quando il processo finisce, anche se ucciso (e' un flock sul descrittore 9).
+# Senza python3 non si puo' bloccare: si consegna lo stesso, e si dice.
+lock_wait="${JHT_TMUX_LOCK_WAIT:-12}"
+lock_dir="${JHT_TMUX_LOCK_DIR:-${JHT_HOME:-$HOME/.jht}/locks}"
 
-  # Busy non e' un prerequisito per digitare: accoda subito e non droppa.
-  if _pane_busy "$pane"; then
-    tmux send-keys -t "$session" -l "$message"
-    sleep 1
-    pane=$(tmux capture-pane -t "$session" -p 2>/dev/null || true)
-    case "$pane" in
-      *"$signature_tail"*|*"$signature_head"*|*"Pasted text"*|*"Pasted Content"*)
-        busy_typed=1
-        ;;
-      *)
-        _record_stuck
-        echo "jht-tmux-send: $session queued/delivery unverified (pane busy)" >&2
-        exit 6
-        ;;
+# tmux senza il descrittore del lock: un server tmux avviato da qui lo terrebbe per sempre.
+_tmux() { tmux "$@" 9>&-; }
+_pane() { _tmux capture-pane -t "$session" -p 2>/dev/null || true; }
+
+_acquire_session_lock() {
+  local name polls=0 max status
+  command -v python3 >/dev/null 2>&1 || { echo "jht-tmux-send: without python3 the session $session cannot be locked" >&2; return 0; }
+  name=$(printf '%s' "$session" | tr -c 'A-Za-z0-9_.-' '_')
+  mkdir -p "$lock_dir" 2>/dev/null || { echo "jht-tmux-send: cannot create $lock_dir: delivering without the lock" >&2; return 0; }
+  # Il gruppo { …; } 2>/dev/null limita il silenzio all'apertura: `exec 9>>file 2>/dev/null` da solo
+  # reindirizzerebbe lo stderr dell'INTERO script per sempre.
+  if ! { exec 9>>"$lock_dir/tmux-send-$name.lock"; } 2>/dev/null; then
+    echo "jht-tmux-send: cannot open the lock of $session: delivering without the lock" >&2
+    return 0
+  fi
+  max=$(( lock_wait * 5 ))
+  while :; do
+    status=0
+    python3 -c 'import fcntl, sys
+try:
+    fcntl.flock(9, fcntl.LOCK_EX | fcntl.LOCK_NB)
+except BlockingIOError:
+    sys.exit(11)' 2>/dev/null || status=$?
+    case "$status" in
+      0) return 0 ;;
+      11) ;;
+      *) echo "jht-tmux-send: the lock of $session does not work (python3 rc=$status): delivering without the lock" >&2; return 0 ;;
     esac
-  fi
+    polls=$(( polls + 1 ))
+    [ "$polls" -le "$max" ] || return 1
+    sleep 0.2
+  done
+}
 
-  if [ "$busy_typed" -eq 0 ]; then
-    tmux send-keys -t "$session" -l "$message"
-  fi
-  sleep 1
-  pane=$(tmux capture-pane -t "$session" -p 2>/dev/null || true)
-  # Che cosa cercare nel composer per sapere se il testo e' ancora li'. Il
-  # match diretto e' la signature; ma la TUI puo' aver COLLASSATO un paste
-  # multi-riga in un placeholder — Claude Code lo chiama "[Pasted text +N
-  # lines]", OpenAI Codex "[Pasted Content N chars]" — e in quel caso la
-  # signature non comparirebbe mai (senza questi rami l'Enter non verrebbe
-  # inviato e il messaggio resterebbe appeso nel composer, con l'agente che non
-  # parte mai — onboarding Codex rotto, Leone 24/07). La probe deve essere
-  # QUELLO CHE SI VEDE, altrimenti lo step 6 crede sempre di aver submittato.
-  submit_probe=""
-  case "$pane" in
-    *"$signature_tail"*)  submit_probe="$signature_tail" ;;
-    *"$signature_head"*)  submit_probe="$signature_head" ;;
-    *"Pasted text"*)      submit_probe="Pasted text" ;;
-    *"pasted text"*)      submit_probe="pasted text" ;;
-    *"Pasted Content"*)   submit_probe="Pasted Content" ;;
-    *"pasted content"*)   submit_probe="pasted content" ;;
-  esac
+if ! _acquire_session_lock; then
+  echo "jht-tmux-send: another delivery to $session is still running after ${lock_wait} s: nothing was typed (rc=8)" >&2
+  exit 8
+fi
 
-  if [ -n "$submit_probe" ]; then
-    # Il testo è nel buffer di input → submit, POI verifica. Un Enter ingoiato
-    # non lascia traccia: l'unica prova che il turno è partito è rileggere il
-    # pane. Escalation: fino a submit_tries Enter, poi exit 5 (vivo ma muto).
-    for s_try in $(seq 1 "$submit_tries"); do
-      sleep 0.3
-      # `Space` PRIMA di `Enter`, dal secondo tentativo in poi: una TUI Ink
-      # rimasta indietro ignora un Enter "a freddo": non ha nulla da
-      # committare finche' un carattere qualunque non la riporta a disegnare
-      # il composer. Sequenza verificata sul campo (dev7, 29/07) e coperta da
-      # test_throttle_engine::test_5b — senza, la sveglia di un prompt con
-      # testo pendente non parte MAI e l'agente resta muto.
-      #
-      # Solo dai ritentativi: al primo giro il testo e' appena stato digitato,
-      # la TUI e' sveglia per definizione, e uno Space in piu' finirebbe in
-      # coda al messaggio.
-      if [ "$s_try" -gt 1 ]; then
-        tmux send-keys -t "$session" Space
-        sleep 0.1
-      fi
-      tmux send-keys -t "$session" Enter
-      # Kimi: con solo Enter il messaggio puo' restare accodato in pending
-      # input fino a fine batch di tool calls; Ctrl-S forza il submit
-      # immediato del prompt. Innocuo se la TUI ha gia' processato Enter.
-      if [ "$provider" = "kimi" ]; then
-        sleep 0.2
-        tmux send-keys -t "$session" C-s
-      fi
-      # Il render Ink dopo un submit non e' istantaneo: leggere troppo presto
-      # produce un falso "non submittato" e un Enter di troppo (che sul prompt
-      # ormai vuoto e' innocuo, ma allunga inutilmente).
-      sleep 1.2
-      pane=$(tmux capture-pane -t "$session" -p 2>/dev/null || true)
-      if _submitted "$pane"; then
-        echo "jht-tmux-send: ${#message} chars to $session (try $try, submit $s_try)"
-        exit 0
-      fi
-    done
-    # Testo accettato, Enter ignorati: e' lo stato "vivo ma muto". NON e' rc=3
-    # (quello autorizza il respawn) e non e' rc=0: il chiamante deve ritentare.
-    _record_stuck
-    echo "jht-tmux-send: $session ha accettato il testo ma NON lo ha submittato dopo ${submit_tries} Enter — riga appesa nel composer, agente VIVO ma muto: riprova, NON respawnare" >&2
+# ── C7 · --enter: solo l'Invio, solo sulla firma di quel messaggio ────────────────
+if [ "$enter_mode" -eq 1 ]; then
+  pane=$(_pane)
+  placeholder_before=1
+  occ_tail_before=$(_occurrences "$pane" "$signature_tail")
+  # Un menu di scelta disegna «❯ 1. Yes» con lo stesso marcatore della casella: non e' una casella.
+  if [ -z "$(_composer_line "$pane")" ] \
+    || printf '%s\n' "$(_composer_line "$pane")" | head -n 1 | grep -qE '(❯|›|>|▌)[[:space:]]*[0-9]+[.)][[:space:]]'; then
+    echo "JHT_REASON menu"
+    echo "jht-tmux-send: $session: no composer on screen (a menu, a question or a sign-in): nothing pressed (rc=9)" >&2
+    exit 9
+  fi
+  if ! _in_composer "$pane"; then
+    if _composer_empty "$pane"; then echo "JHT_REASON empty_unseen"; else echo "JHT_REASON not_ours"; fi
+    echo "jht-tmux-send: $session: that message is no longer in the composer: nothing pressed (rc=9)" >&2
+    exit 9
+  fi
+  busy_pre=0
+  _pane_busy "$pane" && busy_pre=1
+  _tmux send-keys -t "$session" Enter
+  if [ "$provider" = "kimi" ]; then
+    sleep 0.2
+    _tmux send-keys -t "$session" C-s
+  fi
+  sleep 1.2
+  pane=$(_pane)
+  if _submitted "$pane"; then
+    echo "jht-tmux-send: Enter to $session (taken)"
+    exit 0
+  fi
+  if _text_pending "$pane"; then
+    echo "jht-tmux-send: $session: Enter was not taken, the text is still in the composer (rc=5)" >&2
     exit 5
   fi
-  # Testo perso. Casi: (a) il typing ha fatto partire un turno → il busy-check
-  # in cima alla prossima iterazione lo cattura e aspetta; (b) la TUI e' in boot
-  # o ha un modal aperto che ha mangiato i keystroke. Pausa e ritenta.
-  #
-  # Modal di primo avvio che mangia i keystroke (es. Claude Code v2.1.x "Try
-  # the new fullscreen renderer?", theme-picker, "what's new", update-prompt):
-  # il pane NON e' busy e il testo non compare. Mandiamo Esc — il "cancel"
-  # generico che chiude QUALSIASI prompt senza confermarne una scelta (MAI
-  # Enter, che selezionerebbe il default: sul fullscreen sarebbe "Yes" → attiva
-  # l'alternate screen e rompe capture-pane). Poi il typing riparte alla
-  # prossima iterazione. Robusto e future-proof per claude/codex/kimi, a
-  # prescindere da quale nuovo prompt introducano (Leone 24/07).
-  if ! _pane_busy "$pane"; then
-    tmux send-keys -t "$session" Escape 2>/dev/null || true
-  fi
-  sleep 1.5
-done
+  echo "jht-tmux-send: $session: the text left the composer but there is no proof it was taken (rc=7)" >&2
+  exit 7
+fi
 
-# Retry esauriti e pane NON occupato → genuinamente irricettivo (bash nudo
-# post-crash, modal bloccato): unico vero segnale "forse morto" (exit 3).
-echo "jht-tmux-send: $session non ricettivo dopo $attempts tentativi (testo mai apparso, pane non occupato)" >&2
-exit 3
+# ── C1 · il testo si scrive UNA volta ─────────────────────────────────────────
+# Prima si GUARDA lo schermo, poi si digita, una sola volta; se non si vede, non si riscrive e non si
+# preme niente. Un Escape parte solo se non c'e' nessuna casella (una finestra modale di primo avvio
+# che mangia i tasti, 24/07), mai su un testo «non visto»: puo' fermare un turno appena partito.
+pane=$(_pane)
+waited=0
+while [ -z "$(_composer_line "$pane")" ] && ! _pane_busy "$pane" && [ "$waited" -lt "$composer_polls" ]; do
+  sleep 0.5
+  waited=$(( waited + 1 ))
+  pane=$(_pane)
+done
+if [ -z "$(_composer_line "$pane")" ] && ! _pane_busy "$pane"; then
+  # Nessuna casella: o una finestra modale, o una shell nuda. Un solo Escape (non conferma
+  # niente), poi si guarda un'ultima volta. Senza casella non si digita: il testo finirebbe in
+  # una shell, o in un modale che lo ingoia.
+  _tmux send-keys -t "$session" Escape 2>/dev/null || true
+  sleep 1.5
+  pane=$(_pane)
+  if [ -z "$(_composer_line "$pane")" ] && ! _pane_busy "$pane"; then
+    echo "jht-tmux-send: $session not receptive (no input composer on screen, pane not busy): nothing typed" >&2
+    exit 3
+  fi
+fi
+
+# Com'era lo schermo PRIMA: serve a provare, dopo, che qualcosa e' cambiato per merito nostro.
+occ_tail_before=$(_occurrences "$pane" "$signature_tail")
+busy_before=0
+_pane_busy "$pane" && busy_before=1
+placeholder_before=0
+case "$(_composer_line "$pane")" in
+  *"Pasted text"*|*"pasted text"*|*"Pasted Content"*|*"pasted content"*) placeholder_before=1 ;;
+esac
+
+# Il nostro testo e' gia' nella casella (una chiamata precedente lo ha digitato e non e' stata vista
+# in tempo): non si riscrive, si preme solo l'Invio.
+if _in_composer "$pane"; then
+  echo "jht-tmux-send: il testo e' gia' nella casella di $session: non lo riscrivo, premo solo l'Invio" >&2
+else
+  _tmux send-keys -t "$session" -l "$message"
+  sleep 1
+  seen=0
+  poll=0
+  while :; do
+    pane=$(_pane)
+    if _text_pending "$pane"; then seen=1; break; fi
+    [ "$poll" -lt "$render_polls" ] || break
+    poll=$(( poll + 1 ))
+    sleep 0.5
+  done
+  if [ "$seen" -eq 0 ]; then
+    # Digitato una volta, mai comparso nella casella: la TUI non lo ha preso. NON si riscrive e NON si
+    # preme niente (un Invio o un Escape su un turno appena partito lo rompono). Resta 3, come sempre:
+    # e' l'unico segnale «forse morto» su cui conta il pacing-bridge.
+    echo "jht-tmux-send: $session not receptive: typed once, never shown in the composer (pane not busy or text not seen): nothing pressed" >&2
+    exit 3
+  fi
+fi
+
+# ── C3 · il submit, con la prova ──────────────────────────────────────────────
+for s_try in $(seq 1 "$submit_tries"); do
+  sleep 0.3
+  # `Space` PRIMA di `Enter`, dal secondo tentativo in poi: una TUI Ink rimasta indietro ignora un
+  # Enter "a freddo" (dev7, 29/07; coperto da test_throttle_engine::test_5b). Solo dai ritentativi.
+  # Prima di ogni Invio ripetuto (C8) si guarda che nella casella ci sia ancora il NOSTRO testo:
+  # se si e' aperta una domanda di permesso, un Invio sceglierebbe l'opzione proposta.
+  if [ "$s_try" -gt 1 ]; then
+    pane=$(_pane)
+    if _submitted "$pane"; then
+      echo "jht-tmux-send: ${#message} chars to $session (submit $((s_try - 1)), confirmed after the wait)"
+      exit 0
+    fi
+    if ! _text_pending "$pane"; then
+      echo "jht-tmux-send: $session: the text is no longer in the composer and is not in the conversation: nothing more pressed (rc=7)" >&2
+      exit 7
+    fi
+    _tmux send-keys -t "$session" Space
+    sleep 0.1
+  fi
+  busy_pre=0
+  _pane_busy "$pane" && busy_pre=1
+  _tmux send-keys -t "$session" Enter
+  # Kimi: con solo Enter il messaggio puo' restare accodato in pending input fino a fine batch di
+  # tool calls; Ctrl-S forza il submit immediato. Innocuo se la TUI ha gia' processato Enter.
+  if [ "$provider" = "kimi" ]; then
+    sleep 0.2
+    _tmux send-keys -t "$session" C-s
+  fi
+  # Il render Ink dopo un submit non e' istantaneo: leggere troppo presto da' un falso «non submittato».
+  sleep 1.2
+  pane=$(_pane)
+  if _submitted "$pane"; then
+    echo "jht-tmux-send: ${#message} chars to $session (submit $s_try)"
+    exit 0
+  fi
+done
+# Nessuna prova. Se il testo e' ancora nella casella gli Invio sono stati ingoiati: "vivo ma muto"
+# (exit 5: il chiamante deve ritentare, MAI respawnare). Altrimenti il testo e' sparito dalla casella
+# ma non c'e' prova che sia stato preso: exit 7, «non so» (il chiamante guarda prima di riscrivere).
+if _text_pending "$pane"; then
+  _record_stuck
+  # La firma con cui un «invia di nuovo» (--enter) riconoscera' QUESTO testo nella casella.
+  echo "JHT_SIGNATURE $(printf '%s' "$signature_tail" | od -An -tx1 | tr -d ' \n')"
+  echo "jht-tmux-send: $session ha accettato il testo ma NON lo ha submittato dopo ${submit_tries} Enter — riga appesa nel composer, agente VIVO ma muto: riprova, NON respawnare" >&2
+  exit 5
+fi
+echo "jht-tmux-send: $session: the text left the composer but there is no proof it was taken (no new occurrence in the conversation, pane did not start): unknown (rc=7)" >&2
+exit 7
