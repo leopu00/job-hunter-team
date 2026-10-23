@@ -2627,16 +2627,18 @@ function Test-UpgradeDockerReady {
   return $LASTEXITCODE -eq 0
 }
 
+# All the lines, then the first: after Select-Object -First 1 the exit code is not the native
+# command's (-1 in Windows PowerShell 5.1, the previous command's in 7), see Get-RunningComposeServiceId.
 function Get-UpgradeImage {
-  $value = (& { $ErrorActionPreference = 'Continue'; & docker inspect $Container --format '{{.Image}}' 2>$null } | Select-Object -First 1)
-  if ($LASTEXITCODE -ne 0) { return '' }
-  return ([string]$value).Trim()
+  $lines = @(& { $ErrorActionPreference = 'Continue'; & docker inspect $Container --format '{{.Image}}' 2>$null })
+  if ($LASTEXITCODE -ne 0 -or -not $lines.Count) { return '' }
+  return ([string]$lines[0]).Trim()
 }
 
 function Get-UpgradeVersion {
-  $value = (& { $ErrorActionPreference = 'Continue'; & docker exec $Container node $NodeEntry --version 2>$null } | Select-Object -First 1)
-  if ($LASTEXITCODE -ne 0) { return '' }
-  return ([string]$value).Trim()
+  $lines = @(& { $ErrorActionPreference = 'Continue'; & docker exec $Container node $NodeEntry --version 2>$null })
+  if ($LASTEXITCODE -ne 0 -or -not $lines.Count) { return '' }
+  return ([string]$lines[0]).Trim()
 }
 
 function Test-UpgradeRunning {
