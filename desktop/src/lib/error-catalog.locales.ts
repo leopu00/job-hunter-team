@@ -1146,6 +1146,13 @@ const COPY_BY_ENGLISH_TEXT: Readonly<Record<string, ErrorTranslations>> = {
     hu: ["A VPS-en a felhasználódnak nincsenek alárendelt azonosítói, amelyekre a jogosultságok nélküli Podmannek szüksége van.", "Kérd meg a VPS üzemeltetőjét, hogy vegye fel a felhasználódat az /etc/subuid és az /etc/subgid fájlba, majd próbáld újra."],
     pt: ["Na VPS o teu utilizador não tem os IDs subordinados de que o Podman sem privilégios precisa.", "Pede a quem gere a VPS que adicione o teu utilizador a /etc/subuid e /etc/subgid e tenta novamente."],
   },
+  "Job Hunter Team is running on this VPS: installing it again now would change its configuration while it runs.": {
+    de: ["Auf dieser VPS läuft Job Hunter Team: Eine erneute Installation würde jetzt seine Konfiguration ändern, während es läuft.", "Nichts wurde geändert. Verbinde dich mit dem Team, das schon da ist, ohne es neu zu installieren; oder stoppe es auf der VPS mit «jht down» und versuche es erneut."],
+    es: ["En este VPS Job Hunter Team está encendido: instalarlo de nuevo ahora cambiaría su configuración mientras funciona.", "No se ha cambiado nada. Conéctate al equipo que ya está, sin reinstalarlo; o detenlo en el VPS con «jht down» y vuelve a intentarlo."],
+    fr: ["Sur ce VPS, Job Hunter Team est allumé : le réinstaller maintenant changerait sa configuration pendant qu’il tourne.", "Rien n’a été changé. Connecte-toi à l’équipe déjà présente, sans la réinstaller ; ou arrête-la sur le VPS avec «jht down» et réessaie."],
+    hu: ["Ezen a VPS-en a Job Hunter Team fut: ha most újratelepíted, működés közben változna meg a beállítása.", "Semmi sem változott. Csatlakozz a már ott lévő csapathoz újratelepítés nélkül; vagy állítsd le a VPS-en a «jht down» paranccsal, és próbáld újra."],
+    pt: ["Nesta VPS o Job Hunter Team está ligado: instalá-lo de novo agora mudaria a sua configuração enquanto corre.", "Nada foi alterado. Liga-te à equipa que já lá está, sem a reinstalar; ou para-a na VPS com «jht down» e tenta de novo."],
+  },
   "This VPS already runs Job Hunter Team with Docker. Moving it to Podman needs a migration, which the app cannot do by itself yet.": {
     de: ["Auf dieser VPS läuft Job Hunter Team bereits mit Docker. Der Wechsel zu Podman braucht eine Migration, die die App noch nicht selbst durchführen kann.", "Die Daten des Teams bleiben, wo sie sind, auf der VPS: Nichts wurde verschoben oder gelöscht. Verbinde dich mit dem Team, das schon da ist, ohne es neu zu installieren, oder wähle eine andere VPS."],
     es: ["En este VPS Job Hunter Team ya funciona con Docker. Pasarlo a Podman requiere una migración que la app todavía no puede hacer sola.", "Los datos del equipo se quedan donde están, en el VPS: no se ha movido ni borrado nada. Conéctate al equipo que ya está, sin reinstalarlo, o elige otro VPS."],
@@ -1567,6 +1574,7 @@ export const ERROR_CATALOG_LOCALES: Readonly<Record<string, ErrorTranslations>> 
   podman_linger_missing: translated("On the VPS your user cannot keep the team running after you disconnect."),
   podman_subuid_missing: translated("On the VPS your user has no subordinate IDs, which Podman without privileges needs."),
   vps_runtime_change_requires_migration: translated("This VPS already runs Job Hunter Team with Docker. Moving it to Podman needs a migration, which the app cannot do by itself yet."),
+  vps_team_running: translated("Job Hunter Team is running on this VPS: installing it again now would change its configuration while it runs."),
   host_key_missing: translated("The VPS SSH identity has not been confirmed yet."),
   host_key_mismatch: translated("The server’s SSH key has CHANGED from the one you confirmed: it may be a different server. The connection is blocked."),
   host_key_changed: translated("The server’s SSH key has CHANGED from the one you confirmed: it may be a different server. The connection is blocked."),

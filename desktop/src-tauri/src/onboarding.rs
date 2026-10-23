@@ -2047,6 +2047,10 @@ const REMOTE_INSTALL_DIGEST_MISMATCH_EXIT: i32 = 87;
 /// install.sh: the VPS already runs its team on another engine (Docker, from an
 /// install before Podman), and the volumes cannot move to Podman yet.
 const REMOTE_INSTALL_RUNTIME_CHANGE_EXIT: i32 = 85;
+/// install.sh: the VPS's team is running. Installing over it would change its
+/// configuration under it, so the install stopped before changing anything.
+const REMOTE_INSTALL_TEAM_RUNNING_EXIT: i32 = 84;
+const VPS_TEAM_RUNNING: &str = "vps_team_running";
 /// The runtime of every VPS: rootless Podman, a fixed choice.
 const REMOTE_INSTALL_RUNTIME: &str = " --runtime podman";
 /// What install.sh says, with its own exit, when the VPS cannot run rootless
@@ -2117,6 +2121,9 @@ fn ensure_remote_install_success(
         }
         Ok(value) if value.code == REMOTE_INSTALL_RUNTIME_CHANGE_EXIT => {
             return Err(failure(VPS_RUNTIME_CHANGE_REQUIRES_MIGRATION))
+        }
+        Ok(value) if value.code == REMOTE_INSTALL_TEAM_RUNNING_EXIT => {
+            return Err(failure(VPS_TEAM_RUNNING))
         }
         Ok(value) => {
             if let Some((_, code)) = REMOTE_INSTALL_PODMAN_EXITS
@@ -6135,6 +6142,7 @@ mod tests {
             (exited(87), "installer_digest_mismatch"),
             (exited(86), "installer_digest_missing"),
             (exited(85), "vps_runtime_change_requires_migration"),
+            (exited(84), "vps_team_running"),
             (exited(88), "podman_install_failed"),
             (exited(89), "podman_sudo_required"),
             (exited(90), "vps_podman_missing"),
