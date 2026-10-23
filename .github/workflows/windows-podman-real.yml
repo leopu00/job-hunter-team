@@ -101,6 +101,47 @@ jobs:
           }
           exit $code
 
+      # T103: the wrapper refuses its runtime with one message for four causes («untrusted host runtime
+      # path, owner, reparse point or SHA-256»). When the install fails, what that check reads: who runs
+      # (the runner's user is an elevated administrator, the app's is not), and for the runtime folder
+      # and every file of the bundle its owner, whether that owner is the current user, and reparse points.
+      - name: Diagnose a refused runtime bundle (T103)
+        if: failure()
+        run: |
+          $ErrorActionPreference = 'Continue'
+          $me = [Security.Principal.WindowsIdentity]::GetCurrent()
+          $elevated = ([Security.Principal.WindowsPrincipal]$me).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+          "user $($me.Name) $($me.User.Value), elevated administrator: $elevated"
+          $runtime = Join-Path $env:LOCALAPPDATA 'Job Hunter Team\host-runtime'
+          $bin = Join-Path $env:USERPROFILE '.local\bin'
+          $nodes = @(Get-Item -LiteralPath $runtime, $bin -Force -ErrorAction SilentlyContinue)
+          $nodes += @(Get-ChildItem -LiteralPath $runtime -Force -File -ErrorAction SilentlyContinue)
+          $nodes += @(Get-ChildItem -LiteralPath (Join-Path $runtime 'bin') -Force -File -ErrorAction SilentlyContinue)
+          $nodes += @(Get-ChildItem -LiteralPath $bin -Force -File -ErrorAction SilentlyContinue)
+          foreach ($node in $nodes) {
+            $owner = (Get-Acl -LiteralPath $node.FullName).Owner
+            $ownerSid = try { ([Security.Principal.NTAccount]$owner).Translate([Security.Principal.SecurityIdentifier]).Value } catch { '?' }
+            $reparse = ($node.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0
+            "{0,-5} owner={1} ({2}) reparse={3}  {4}" -f $(if ($ownerSid -eq $me.User.Value) { 'OK' } else { 'OTHER' }), $owner, $ownerSid, $reparse, $node.FullName
+          }
+          if (-not (Test-Path -LiteralPath $runtime)) { "no runtime folder: $runtime"; exit 0 }
+          "runtime folder access:"
+          foreach ($rule in @((Get-Acl -LiteralPath $runtime).Access)) {
+            "  $($rule.IdentityReference) $($rule.AccessControlType) $($rule.FileSystemRights) inherited=$($rule.IsInherited)"
+          }
+          $manifest = Join-Path $runtime '.runtime-integrity'
+          if (Test-Path -LiteralPath $manifest) {
+            "manifest against the files:"
+            foreach ($line in Get-Content -LiteralPath $manifest) {
+              $key, $value = $line -split '=', 2
+              # the wrapper is installed as jht.ps1, next to its ACL helper
+              $name = if ($key -eq 'jht-wrapper.ps1') { 'jht.ps1' } else { $key }
+              $file = @((Join-Path $runtime $name), (Join-Path $bin $name), (Join-Path $runtime "bin\$name")) | Where-Object { Test-Path -LiteralPath $_ -PathType Leaf } | Select-Object -First 1
+              $actual = if ($file) { (Get-FileHash -Algorithm SHA256 -LiteralPath $file).Hash.ToLowerInvariant() } else { '(no file)' }
+              "  {0,-5} {1}" -f $(if ($key -eq 'version' -or $actual -eq $value) { 'OK' } else { 'DIFF' }), $key
+            }
+          }
+
       - name: Start the container (jht up) and read its status
         run: |
           $ErrorActionPreference = 'Continue'
