@@ -70,6 +70,7 @@ case "$1" in
     if [ ! -f "$FAKE_STATE/$name.details" ]; then echo "Error: no such object: \"$name\"" >&2; exit 125; fi
     case "$6" in
       *State.Running*) if [ -f "$FAKE_STATE/$name.running" ]; then echo true; else echo false; fi ;;
+      *CgroupManager*) if [ -f "$FAKE_STATE/$name.cgroups" ]; then cat "$FAKE_STATE/$name.cgroups"; else echo cgroupfs; fi ;;
       *Config.Labels*) if [ -f "$FAKE_STATE/$name.labels" ]; then cat "$FAKE_STATE/$name.labels"; else echo '{"com.docker.compose.project":"jht","com.docker.compose.service":"'"$name"'"}'; fi ;;
       *) cat "$FAKE_STATE/$name.details" ;;
     esac ;;
@@ -109,11 +110,15 @@ def _run(tmp_path: Path, env: dict[str, str]):
     return done
 
 
-def _machine(tmp_path: Path, containers: dict[str, tuple[str, bool]], rm_fails: bool = False, labels: dict[str, str] | None = None):
+def _machine(tmp_path: Path, containers: dict[str, tuple[str, bool]], rm_fails: bool = False,
+             labels: dict[str, str] | None = None, cgroups: dict[str, str] | None = None):
     """containers: name -> (details, running); labels: name -> its labels JSON (default: of the jht
-    project). Returns the result, podman's calls, and whether jht up ran."""
+    project); cgroups: name -> its cgroup manager (default: cgroupfs). Returns the result, podman's
+    calls, and whether jht up ran."""
     state = tmp_path / "state"
     state.mkdir()
+    for name, manager in (cgroups or {}).items():
+        _write(state / f"{name}.cgroups", manager + "\n")
     for name, raw in (labels or {}).items():
         _write(state / f"{name}.labels", raw + "\n")
     for name, (details, running) in containers.items():
@@ -207,3 +212,23 @@ def test_a_container_with_the_same_name_that_is_not_of_the_jht_project_is_left_a
     assert done.returncode == 0, done.stdout + done.stderr
     assert not any(call.startswith(("rm", "stop")) for call in calls), calls
     assert "not of the jht project" in done.stdout and "REMOVED=False" in done.stdout
+
+
+def test_a_service_created_under_systemd_is_recreated_under_cgroupfs(tmp_path):
+    # T87: under systemd it has a pids limit, and the WSL machine has no pids controller to give it
+    done, calls, up = _machine(
+        tmp_path,
+        {"jht-broker": (_details("1002:1002", FULL), False), "jht-telegram": (_details("1003:1003", FULL), False)},
+        cgroups={"jht-broker": "systemd"},
+    )
+    assert done.returncode == 0, done.stdout + done.stderr
+    assert "rm jht-broker" in calls and "rm jht-telegram" not in calls
+    assert "Recreating jht-broker: it was created under the systemd cgroup manager, not cgroupfs" in done.stdout
+    assert up == ["jht", "up"]
+
+
+def test_a_service_whose_cgroup_manager_cannot_be_read_is_not_judged_on_it(tmp_path):
+    done, calls, up = _machine(tmp_path, {"jht-broker": (_details("1002:1002", FULL), False)}, cgroups={"jht-broker": ""})
+    assert done.returncode == 0, done.stdout + done.stderr
+    assert not any(call.startswith(("rm", "stop")) for call in calls), calls
+    assert "REMOVED=False" in done.stdout

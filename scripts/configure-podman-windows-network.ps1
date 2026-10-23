@@ -210,6 +210,13 @@ WantedBy=multi-user.target
 $unit = New-JhtProxyUnit -Description 'JHT Windows agent egress proxy' -Policy agent -ListenPort $Port
 $brokerUnit = New-JhtProxyUnit -Description 'JHT Windows broker egress proxy' -Policy broker -ListenPort $BrokerPort
 $telegramUnit = New-JhtProxyUnit -Description 'JHT Windows Telegram egress proxy' -Policy telegram -ListenPort $TelegramPort
+# The containers are created by this service under the cgroupfs manager, given as Podman's own flag.
+# In Podman's WSL machine every cgroup systemd holds sits under /non-systemd with no controller at
+# all (the root of the WSL VM, shared with the user's other distributions, enables none), and
+# under the systemd manager rootless Podman gives each container a pids limit of 2048: crun then
+# refuses to start it, "controller pids is not available" (T87). Under cgroupfs rootless Podman
+# sets no pids limit. The variable CONTAINERS_CGROUP_MANAGER, used here before, is not a Podman
+# setting: the service ran under systemd all along.
 $apiService = @"
 [Unit]
 Requires=jht-windows-egress-proxy.service
@@ -229,7 +236,6 @@ Delegate=true
 KillMode=process
 Environment="HOME=/home/user"
 Environment="XDG_RUNTIME_DIR=/run/user/1000"
-Environment="CONTAINERS_CGROUP_MANAGER=cgroupfs"
 Environment="HTTP_PROXY=$proxyUrl"
 Environment="HTTPS_PROXY=$proxyUrl"
 Environment="NO_PROXY=localhost,127.0.0.1,::1,host.containers.internal"
@@ -238,7 +244,7 @@ Environment="https_proxy=$proxyUrl"
 Environment="no_proxy=localhost,127.0.0.1,::1,host.containers.internal"
 ExecStartPre=+/usr/bin/install -d -o user -g user -m 0755 /run/user/1000/podman
 ExecStartPre=+/usr/bin/rm -f /run/user/1000/podman/podman.sock
-ExecStart=/usr/bin/podman --log-level=info system service --time=0 unix:///run/user/1000/podman/podman.sock
+ExecStart=/usr/bin/podman --cgroup-manager=cgroupfs --log-level=info system service --time=0 unix:///run/user/1000/podman/podman.sock
 
 [Install]
 WantedBy=multi-user.target
@@ -400,7 +406,12 @@ if ($checkCode -ne 0) {
   if ($wrong.Count -gt 0) { throw ($wrong -join '; ') }
   throw "the proxy check exited with $checkCode."
 }
-Invoke-Checked $Podman '--connection' $MachineName 'info' '--format' 'rootless={{.Host.Security.Rootless}} cgroups={{.Host.CgroupManager}}' | Out-Null
+# The service must answer under cgroupfs (see $apiService): under systemd no container would start,
+# and the setup would recreate jht at every run (enable-podman-windows-runtime.ps1).
+$hostInfo = ((Invoke-Checked $Podman '--connection' $MachineName 'info' '--format' 'rootless={{.Host.Security.Rootless}} cgroups={{.Host.CgroupManager}}') -join ' ').Trim()
+if ($hostInfo -notmatch '(^|\s)cgroups=cgroupfs(\s|$)') {
+  throw "podman_cgroup_manager: the JHT Podman service does not run under cgroupfs ($hostInfo); its containers would not start."
+}
 
 Write-Host "PODMAN WINDOWS NETWORK READY ($MachineName via agent=$Port broker=$BrokerPort telegram=$TelegramPort)" -ForegroundColor Green
 exit 0
