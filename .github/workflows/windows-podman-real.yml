@@ -138,8 +138,14 @@ jobs:
 
       - name: Times
         if: always()
+        # Only here: the app does not set it, so the install steps run without it.
+        env:
+          WSL_UTF8: "1"
         run: |
           $ErrorActionPreference = 'Continue'
+          # Podman's directory went in the machine or user PATH during the install,
+          # not in this step's environment.
+          $env:PATH = @($env:PATH, [Environment]::GetEnvironmentVariable('Path', 'Machine'), [Environment]::GetEnvironmentVariable('Path', 'User')) -join ';'
           if (Test-Path -LiteralPath $env:TIMES) {
             $rows = @(Import-Csv -LiteralPath $env:TIMES -Delimiter "`t")
             $lines = @('| step | seconds | exit |', '|---|---:|---:|') + @($rows | ForEach-Object { "| $($_.step) | $($_.seconds) | $($_.exit) |" })
