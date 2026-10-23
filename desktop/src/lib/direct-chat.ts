@@ -2,7 +2,8 @@ import { Channel, invoke, isTauri } from "@tauri-apps/api/core";
 import type { ExecutionHost } from "./onboarding";
 
 export type DirectChatState = "disconnected" | "connecting" | "ready" | "error";
-export interface DirectChatStatus { state: DirectChatState; code?: string }
+/** `link: "per-command"`: every read is a new ssh connection (Windows to a VPS), so the page reads less often. */
+export interface DirectChatStatus { state: DirectChatState; code?: string; link?: "per-command" }
 export interface DirectChatMessage {
   id: string;
   role: "user" | "agent" | "system";

@@ -26,6 +26,15 @@ export function isDirectChatAgentId(value: string | null): value is DirectChatAg
 const INITIAL_STATUS: DirectChatStatus = { state: "connecting" };
 const MAX_MESSAGE_LENGTH = 4_000;
 const HISTORY_POLL_MS = 1_500;
+// When every read is a new ssh connection (Windows to a VPS: no ControlMaster there), each read
+// counts against the server's limits on new connections. So the page reads every 10 s, every 2 s for
+// the 30 s after the person sends, not at all while the window is hidden or not focused (one read
+// as soon as it is back), and after `ssh_rate_limited` it waits twice as long each time, up to 60 s,
+// until a read gets through.
+const SLOW_LINK_IDLE_MS = 10_000;
+const SLOW_LINK_AFTER_SEND_MS = 2_000;
+const AFTER_SEND_FAST_MS = 30_000;
+const RATE_LIMITED_MAX_MS = 60_000;
 
 function safeCode(value: unknown): string | null {
   return typeof value === "string" && /^[a-z0-9_-]{1,48}$/i.test(value)
@@ -156,6 +165,10 @@ export default function DirectChatScreen({
   const [queued, setQueued] = useState<ReadonlySet<string>>(() => new Set());
   const [inFlight, setInFlight] = useState<string | null>(null);
   const composer = useRef<HTMLTextAreaElement>(null);
+  const slowLink = status.state === "ready" && status.link === "per-command";
+  const lastSentAt = useRef(0);
+  // Set by the reading loop: the next read comes soon after a send, not up to 5 s later.
+  const readSoon = useRef<(() => void) | null>(null);
   // Where the cursor goes once the new line is in the box: set in the same commit, before the next
   // key is read, so a person typing fast keeps writing after the new line, not before it.
   const cursorAfterNewLine = useRef<number | null>(null);
@@ -235,32 +248,94 @@ export default function DirectChatScreen({
     let active = true;
     let reading = false;
 
-    async function readHistory(initial: boolean) {
-      if (!active || reading) return;
+    // The failure code of the read, null when it got through, undefined when it did not run.
+    async function readHistory(initial: boolean): Promise<string | null | undefined> {
+      if (!active || reading) return undefined;
       reading = true;
       if (initial) setLoading(true);
       try {
         // The native bridge returns the latest bounded page. Re-read it in full
         // and merge by id: its historical cursor skips the first appended line.
         const page = await client.read({ agentId });
-        if (!active) return;
+        if (!active) return undefined;
         setMessages((current) => mergeMessages(current, page));
         setOperationError(null);
+        return null;
       } catch (error) {
-        if (active) setOperationError(errorCode(error) ?? "read_failed");
+        const code = errorCode(error) ?? "read_failed";
+        if (active) setOperationError(code);
+        return code;
       } finally {
         reading = false;
         if (active && initial) setLoading(false);
       }
     }
 
-    void readHistory(true);
-    const interval = setInterval(() => void readHistory(false), HISTORY_POLL_MS);
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    // Slow link only: the wait after ssh_rate_limited (0: none), and whether the window can be seen.
+    let backoff = 0;
+    let visible = document.visibilityState !== "hidden";
+    let focused = true;
+    let waitingForWindow = false;
+    const paused = () => slowLink && !(visible && focused);
+    const pace = () => {
+      if (!slowLink) return HISTORY_POLL_MS;
+      return Date.now() - lastSentAt.current > AFTER_SEND_FAST_MS ? SLOW_LINK_IDLE_MS : SLOW_LINK_AFTER_SEND_MS;
+    };
+    const delay = () => (slowLink && backoff ? backoff : pace());
+    const tick = async () => {
+      if (paused()) {
+        waitingForWindow = true;
+        return;
+      }
+      settle(await readHistory(false));
+    };
+    // After a read: the next one at the pace, or later and later while the server turns this computer away:
+    // 20, 40, then 60 s, from the idle pace even right after a send.
+    const settle = (failed: string | null | undefined) => {
+      if (!active) return;
+      if (slowLink && failed !== undefined) {
+        backoff = failed === "ssh_rate_limited" ? Math.min(RATE_LIMITED_MAX_MS, (backoff || SLOW_LINK_IDLE_MS) * 2) : failed ? backoff : 0;
+      }
+      schedule(delay());
+    };
+    const schedule = (after: number) => {
+      clearTimeout(timer);
+      timer = setTimeout(() => void tick(), after);
+    };
+    const windowChanged = () => {
+      visible = document.visibilityState !== "hidden";
+      if (waitingForWindow && !paused()) {
+        waitingForWindow = false;
+        // back in view: a read now, unless the server is turning this computer away
+        schedule(backoff ? backoff : 0);
+      }
+    };
+    const onFocus = () => {
+      focused = true;
+      windowChanged();
+    };
+    const onBlur = () => {
+      focused = false;
+    };
+    document.addEventListener("visibilitychange", windowChanged);
+    window.addEventListener("focus", onFocus);
+    window.addEventListener("blur", onBlur);
+    readSoon.current = () => schedule(delay());
+    schedule(delay());
+    // the first read keeps the pace set at mount; only a refused one pushes the next read back
+    void readHistory(true).then((failed) => {
+      if (slowLink && failed === "ssh_rate_limited") settle(failed);
+    });
     return () => {
       active = false;
-      clearInterval(interval);
+      readSoon.current = null;
+      clearTimeout(timer);
+      document.removeEventListener("visibilitychange", windowChanged);
+      window.removeEventListener("focus", onFocus);
+      window.removeEventListener("blur", onBlur);
     };
-  }, [agentId, client, status.state]);
+  }, [agentId, client, status.state, slowLink]);
 
   useEffect(() => {
     const node = transcript.current;
@@ -288,6 +363,8 @@ export default function DirectChatScreen({
     setText("");
     setSending(true);
     setInFlight(id);
+    lastSentAt.current = Date.now();
+    readSoon.current?.();
     setOperationError(null);
     setMessages((current) => mergeMessages(current, { messages: [optimistic] }));
     try {

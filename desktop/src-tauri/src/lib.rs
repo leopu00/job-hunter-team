@@ -56,6 +56,8 @@ pub fn run() {
             // inside the work area of its monitor, at any scale
             window_fit::fit_main_window(app.handle());
             voice_input::attach(app.handle())?;
+            // what a crash left of the pipe-free ssh calls (Windows only), off the start's path
+            std::thread::spawn(runtime_host::remove_stale_pipe_free_files);
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![

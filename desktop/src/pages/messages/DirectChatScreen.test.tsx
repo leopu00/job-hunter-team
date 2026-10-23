@@ -1,4 +1,4 @@
-import { act, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import DirectChatScreen, { newLineAt, systemLineText } from "./DirectChatScreen";
@@ -263,6 +263,136 @@ describe("DirectChatScreen", () => {
     });
     expect(screen.getByText("Risposta asincrona")).toBeInTheDocument();
     expect(mock.read).toHaveBeenLastCalledWith({ agentId: "assistente" });
+  });
+
+  // A slow link (Windows to a VPS: one ssh connection per read). Fake timers; `after` advances the
+  // clock and lets the reads that came due settle.
+  async function slowLinkPage(status: DirectChatStatus = { state: "ready", link: "per-command" }) {
+    vi.useFakeTimers();
+    const { mock } = client(status);
+    const flush = () => act(async () => {
+      for (let i = 0; i < 6; i += 1) await Promise.resolve();
+    });
+    const after = async (ms: number) => {
+      await act(async () => {
+        vi.advanceTimersByTime(ms);
+      });
+      await flush();
+    };
+    render(<DirectChatScreen client={mock} initialAgentId="assistente" />);
+    await flush();
+    const reads = () => vi.mocked(mock.read).mock.calls.length;
+    return { mock, flush, after, reads };
+  }
+
+  function setVisibility(state: "visible" | "hidden") {
+    Object.defineProperty(document, "visibilityState", { configurable: true, get: () => state });
+    act(() => {
+      document.dispatchEvent(new Event("visibilitychange"));
+    });
+  }
+
+  afterEach(() => {
+    Object.defineProperty(document, "visibilityState", { configurable: true, get: () => "visible" });
+  });
+
+  it("on a slow link reads every 10 s, and every 2 s for the 30 s after a send", async () => {
+    const { mock, flush, after, reads } = await slowLinkPage();
+    expect(reads()).toBe(1);
+    await after(9_999);
+    expect(reads()).toBe(1);
+    await after(1);
+    expect(reads()).toBe(2);
+
+    const input = screen.getByRole("textbox", { name: "Scrivi a Assistente" });
+    fireEvent.change(input, { target: { value: "Ci sei?" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+    await flush();
+    expect(mock.send).toHaveBeenCalledTimes(1);
+    await after(1_999);
+    expect(reads()).toBe(2);
+    await after(1);
+    expect(reads()).toBe(3);
+    await after(1_999);
+    expect(reads()).toBe(3);
+    await after(1);
+    expect(reads()).toBe(4);
+
+    // past the 30 s, back to 10 s
+    await after(30_000);
+    const settled = reads();
+    await after(9_999);
+    expect(reads()).toBe(settled);
+    await after(1);
+    expect(reads()).toBe(settled + 1);
+  });
+
+  it("on a slow link does not read while the window is hidden or not focused, and reads at once when it is back", async () => {
+    const { after, reads } = await slowLinkPage();
+    setVisibility("hidden");
+    await after(120_000);
+    expect(reads()).toBe(1);
+    setVisibility("visible");
+    await after(0);
+    expect(reads()).toBe(2);
+    await after(10_000);
+    expect(reads()).toBe(3);
+
+    act(() => {
+      window.dispatchEvent(new Event("blur"));
+    });
+    await after(120_000);
+    expect(reads()).toBe(3);
+    act(() => {
+      window.dispatchEvent(new Event("focus"));
+    });
+    await after(0);
+    expect(reads()).toBe(4);
+  });
+
+  it("on a slow link waits twice as long after each ssh_rate_limited, up to 60 s, and is back to 10 s after a read", async () => {
+    const { mock, after, reads } = await slowLinkPage();
+    vi.mocked(mock.read).mockRejectedValue({ code: "ssh_rate_limited" });
+    await after(10_000); // refused: the next in 20 s
+    expect(reads()).toBe(2);
+    for (const wait of [20_000, 40_000, 60_000, 60_000]) {
+      const before = reads();
+      await after(wait - 1);
+      expect(reads(), `no read before ${wait} ms`).toBe(before);
+      await after(1);
+      expect(reads(), `a read at ${wait} ms`).toBe(before + 1);
+    }
+    vi.mocked(mock.read).mockResolvedValue({ messages: [] });
+    await after(60_000); // this one gets through
+    const through = reads();
+    await after(10_000);
+    expect(reads()).toBe(through + 1);
+  });
+
+  it("on a slow link a refusal right after a send still waits 20 s, not twice the 2 s of the send", async () => {
+    const { mock, flush, after, reads } = await slowLinkPage();
+    const input = screen.getByRole("textbox", { name: "Scrivi a Assistente" });
+    fireEvent.change(input, { target: { value: "Ci sei?" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+    await flush();
+    vi.mocked(mock.read).mockRejectedValue({ code: "ssh_rate_limited" });
+    await after(2_000); // refused, 2 s after the send
+    const refused = reads();
+    await after(19_999);
+    expect(reads(), "no read before 20 s").toBe(refused);
+    await after(1);
+    expect(reads()).toBe(refused + 1);
+  });
+
+  it("on a VPS reached through the ssh master (macOS, Linux) keeps reading every 1.5 s, hidden or refused", async () => {
+    const { mock, after, reads } = await slowLinkPage({ state: "ready" });
+    setVisibility("hidden");
+    await after(1_500);
+    expect(reads()).toBe(2);
+    vi.mocked(mock.read).mockRejectedValue({ code: "ssh_rate_limited" });
+    await after(1_500);
+    await after(1_500);
+    expect(reads()).toBe(4);
   });
 
   it("speaks the language of the app, and dictates in it", async () => {
