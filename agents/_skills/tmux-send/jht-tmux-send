@@ -553,11 +553,12 @@ _submitted() {
 
 # A new Codex form can be writable without exposing a parseable composer.  In
 # that case the only sufficient receipt is a new occurrence of OUR signature
-# in the transcript after Enter; an empty-looking unknown form alone proves
-# nothing.
+# *after Enter*.  The baseline is deliberately captured immediately before
+# Enter: some TUIs echo a bracketed paste into their transcript before taking
+# it, and a pre-paste baseline would falsely call that echo a submit.
 _submitted_from_unknown_form() {
   if [ "${preflight_gate:-empty}" = "none" ] \
-     && [ "$(_occurrences "$1" "$signature_tail")" -gt "$occ_tail_before" ]; then
+     && [ "$(_occurrences "$1" "$signature_tail")" -gt "${occ_tail_before_enter:-999999}" ]; then
     return 0
   fi
   _submitted "$1"
@@ -807,6 +808,7 @@ for s_try in $(seq 1 "$submit_tries"); do
     echo "jht-tmux-send: $session changed before Enter: no Enter (rc=130)" >&2
     exit 130
   fi
+  occ_tail_before_enter=$(_occurrences "$pane" "$signature_tail")
   busy_pre=0
   _pane_busy "$pane" && busy_pre=1
   _tmux send-keys -t "$session" Enter

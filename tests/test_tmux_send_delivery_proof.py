@@ -29,7 +29,15 @@ case "$cmd" in
     case "$mode" in
       shell) printf 'user@host ~ $ \n'; exit 0 ;;
       menu) [ -f "$S/transcript" ] && cat "$S/transcript"; printf '❯ 1. Yes\n  2. No\n'; exit 0 ;;
-      unknown) [ -f "$S/transcript" ] && cat "$S/transcript"; printf '\033[2m□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□\033[0m\n'; exit 0 ;;
+      unknown|unknown-echo)
+        [ -f "$S/transcript" ] && cat "$S/transcript"
+        printf '\033[2m□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□\033[0m\n'
+        exit 0 ;;
+      pondering-it)
+        [ -f "$S/transcript" ] && cat "$S/transcript"
+        printf '◦ Elaborazione (12s · esc to interrupt)\n\033[2m□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□\033[0m\n'
+        exit 0 ;;
+      menu-it) printf '╭──────────────────╮\n│ › Continua       │\n│   Annulla        │\n╰──────────────────╯\n'; exit 0 ;;
     esac
     [ -f "$S/transcript" ] && cat "$S/transcript"
     [ "$mode" = busy ] && echo '◦ Working (3s • esc to interrupt)'
@@ -51,6 +59,7 @@ case "$cmd" in
     [ -f "$S/mute" ] && exit 0
     if [ -f "$S/lag" ]; then (sleep "$(cat "$S/lag")"; cat "$S/buffer.$name" >> "$S/composer") & exit 0; fi
     cat "$S/buffer.$name" > "$S/pasted.$name"
+    [ -f "$S/echo_on_paste" ] && { cat "$S/buffer.$name" >> "$S/transcript"; echo >> "$S/transcript"; }
     cat "$S/buffer.$name" >> "$S/composer"; rm -f "$S/buffer.$name" ;;
   send-keys)
     while [ "$1" = "-t" ]; do shift 2; done
@@ -144,6 +153,29 @@ def test_a_certain_menu_on_screen_types_nothing_and_never_sends_escape(box):
 
 def test_an_unrecognised_codex_form_is_pasted_once_and_proven_after_enter(box):
     box.put("mode", "unknown")
+    done = box.run()
+    assert done.returncode == 0, done.stderr
+    assert len(box.typed()) == 1 and len(box.keys("Enter")) == 1
+
+
+def test_an_echo_of_paste_before_an_ignored_enter_is_not_a_submit_receipt(box):
+    box.put("mode", "unknown-echo")
+    box.put("echo_on_paste")
+    box.put("enter_ignored")
+    done = box.run()
+    assert done.returncode != 0, done.stderr
+    assert len(box.typed()) == 1 and len(box.keys("Enter")) == 1
+
+
+def test_a_localized_structural_menu_receives_no_paste_or_enter(box):
+    box.put("mode", "menu-it")
+    done = box.run()
+    assert done.returncode == 3
+    assert box.typed() == [] and box.keys("Enter") == []
+
+
+def test_a_localized_pondering_form_is_queued_and_proven_after_enter(box):
+    box.put("mode", "pondering-it")
     done = box.run()
     assert done.returncode == 0, done.stderr
     assert len(box.typed()) == 1 and len(box.keys("Enter")) == 1

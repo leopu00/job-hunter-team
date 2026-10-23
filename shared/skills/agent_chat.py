@@ -451,7 +451,8 @@ def _certain_interlock(pane: str) -> bool:
     other than writing to the conversation: numbered choices, sign-in, and
     permission prompts.
     """
-    lines = [strip_terminal_codes(line).strip().casefold() for line in (pane or "").splitlines()]
+    raw_lines = [strip_terminal_codes(line).rstrip().casefold() for line in (pane or "").splitlines()]
+    lines = [line.strip() for line in raw_lines]
     text = "\n".join(line for line in lines if line)
 
     # A selected numbered row plus another numbered row is a choice list even
@@ -461,6 +462,25 @@ def _certain_interlock(pane: str) -> bool:
     selected_numbered = any(re.match(r"^[›❯]\s*\d+[.)]\s+\S", line) for line in lines)
     if selected_numbered and len(numbered) >= 2:
         return True
+
+    # Localized action lists are often unnumbered, but their geometry is
+    # still stable: one cursor row and another short sibling row, commonly
+    # inside a box.  Inspect that structure, never the translated labels.
+    def choice_body(line: str) -> str:
+        return line.strip().strip("│┃╎|").strip()
+
+    for index, raw in enumerate(raw_lines):
+        selected = choice_body(raw)
+        if not re.match(r"^[›❯]\s+\S", selected):
+            continue
+        for sibling_raw in raw_lines[max(0, index - 3):index + 4]:
+            sibling = choice_body(sibling_raw)
+            if not sibling or sibling == selected or sibling.startswith(("›", "❯", "╭", "╰", "─")):
+                continue
+            # A short, adjacent peer is an option.  Long prose below a
+            # composer is not: it cannot turn an unknown form into a menu.
+            if len(sibling) <= 80:
+                return True
 
     # These are controls with no reliable numbered second row in the capture.
     # They are deliberately pairs/complete prompts rather than broad words in

@@ -551,6 +551,12 @@ MENU_MARK_ON_LAST = """\
    Skip
  › Send feedback
 """
+MENU_ITALIANO = """\
+╭──────────────────────────────────────────────╮
+│ › Continua                                   │
+│   Annulla                                    │
+╰──────────────────────────────────────────────╯
+"""
 NUMBERED_TRY_AGAIN = """\
  ❯ 1. Try again
 """
@@ -620,9 +626,9 @@ def _nothing_happened(box, agent="capitano"):
 
 @pytest.mark.parametrize("screen", [
     CLAUDE_PERMISSION, CODEX_APPROVAL, LOGIN_METHOD, PASTE_CODE, TRUST_FOLDER, MENU_TRY_AGAIN,
-    MENU_SEND_FEEDBACK, MENU_MARK_ON_LAST,
+    MENU_SEND_FEEDBACK, MENU_MARK_ON_LAST, MENU_ITALIANO,
 ], ids=["permission", "approval", "login", "paste-code", "trust-folder", "menu-try-again",
-        "menu-send-feedback", "menu-mark-on-last"])
+        "menu-send-feedback", "menu-mark-on-last", "menu-italiano"])
 def test_a_certain_interlock_is_a_closed_code_with_nothing_written_or_typed(box, screen):
     box.stub_delivery()
     (box.state / "screen").write_text(screen, encoding="utf-8")
