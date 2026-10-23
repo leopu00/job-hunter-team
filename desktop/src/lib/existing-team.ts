@@ -64,11 +64,16 @@ export interface ExistingTeamReceipt {
   candidateSha256: string;
   /** Whether the assistant session is up; informative. */
   readiness: boolean;
+  /**
+   * Present when the team was updated: the runtime of the connection this profile saved, which the
+   * confirmation replaces. Same host, same pinned key, same team; only the runtime differs.
+   */
+  previous?: { imageId: string; ociRevision: string; digest: string };
 }
 
 export interface ExistingTeamRegisterResult {
-  /** `restored`: a saved selection got back the candidate it was made from. */
-  outcome: "registered" | "already_registered" | "restored";
+  /** `restored`: a saved selection got back the candidate it was made from. `rebound`: an updated team's saved connection was replaced. */
+  outcome: "registered" | "already_registered" | "restored" | "rebound";
 }
 
 export interface ExistingTeamBridge {
@@ -148,6 +153,8 @@ export const EXISTING_TEAM_ERROR_CODES: ReadonlySet<string> = new Set([
   "existing_team_identity_mismatch",
   "existing_team_not_active",
   "existing_team_unavailable",
+  // The saved target no longer matches what the VPS runs (the team was updated, or it is off): the dialog offers to rebind it.
+  "existing_team_runtime_changed",
   // The direct chat the connection opens after the team answers (direct_chat.rs): its own codes
   // reach the dialog, not «unknown». A tunnel the app cannot open is not a team that cannot be reached.
   "tunnel_start_failed",
