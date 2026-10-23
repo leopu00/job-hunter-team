@@ -1731,11 +1731,31 @@ const CHAT_AGENTS: [&str; 8] = [
     "capitano", "assistente", "mentor", "scout", "analista", "scorer", "scrittore", "critico",
 ];
 
-/// What the app asks of the chat in a pinned container: two operations, each with its few
-/// arguments. The user's text is never one of them: it goes on standard input.
+/// What the app asks of the chat in a pinned container: four operations, each with its few
+/// arguments. The user's text is never one of them: it goes on standard input (the words of an
+/// answer too, with the options taken).
 pub(crate) enum ChatOperation<'a> {
     Read { agent: &'a str, cursor: Option<&'a str> },
     Send { agent: &'a str, client_message_id: &'a str },
+    /// The person's answer to one of the agent's questions.
+    Answer { agent: &'a str, question_id: &'a str },
+    /// Enter pressed once more on a message still in the agent's composer: never the text again.
+    Enter { agent: &'a str, message_id: &'a str },
+}
+
+impl ChatOperation<'_> {
+    /// Answer and Enter came after the first chat actions: a host's wrapper must say it has them.
+    pub(crate) fn needs_answer_actions(&self) -> bool {
+        matches!(self, ChatOperation::Answer { .. } | ChatOperation::Enter { .. })
+    }
+}
+
+/// The id of a question as the chat's read gives it (`aq:<agent>:<seconds>-<hex>`): letters,
+/// digits, `:`, `_` and `-`, at most 96.
+pub(crate) fn chat_question_id(value: &str) -> bool {
+    !value.is_empty()
+        && value.len() <= 96
+        && value.bytes().all(|b| b.is_ascii_alphanumeric() || matches!(b, b':' | b'_' | b'-'))
 }
 
 fn chat_token(value: &str, max: usize, digits_only: bool) -> bool {
@@ -1776,6 +1796,24 @@ fn chat_arguments(operation: &ChatOperation<'_>) -> Result<Vec<String>, &'static
             }
             Ok(vec!["send".to_owned(), (*agent).to_owned(), (*client_message_id).to_owned()])
         }
+        ChatOperation::Answer { agent, question_id } => {
+            if !CHAT_AGENTS.contains(agent) {
+                return Err("invalid_agent");
+            }
+            if !chat_question_id(question_id) {
+                return Err("invalid_request");
+            }
+            Ok(vec!["answer".to_owned(), (*agent).to_owned(), (*question_id).to_owned()])
+        }
+        ChatOperation::Enter { agent, message_id } => {
+            if !CHAT_AGENTS.contains(agent) {
+                return Err("invalid_agent");
+            }
+            if !chat_token(message_id, 64, false) {
+                return Err("invalid_request");
+            }
+            Ok(vec!["enter".to_owned(), (*agent).to_owned(), (*message_id).to_owned()])
+        }
     }
 }
 
@@ -1804,12 +1842,13 @@ pub(crate) fn chat_command(
 }
 
 /// The same operation through the host's `jht` wrapper (a local team, a VPS that was never
-/// pinned): `desktop-chat read|chat-send ...`. The wrapper runs the same script in the container.
-/// An older wrapper answers 2 to an action it does not know, and the caller keeps the older path.
+/// pinned): `desktop-chat read|chat-send|chat-answer|chat-enter ...`. The wrapper runs the same
+/// script in the container. An older wrapper answers 2 to an action it does not know: for read
+/// and send the caller keeps the older path, answer and enter have none.
 pub(crate) fn chat_wrapper_arguments(operation: &ChatOperation<'_>) -> Result<Vec<String>, &'static str> {
     let mut arguments = chat_arguments(operation)?;
-    if arguments[0] == "send" {
-        arguments[0] = "chat-send".to_owned();
+    if matches!(arguments[0].as_str(), "send" | "answer" | "enter") {
+        arguments[0] = format!("chat-{}", arguments[0]);
     }
     arguments.insert(0, "desktop-chat".to_owned());
     Ok(arguments)
@@ -2338,6 +2377,42 @@ mod tests {
             chat_wrapper_arguments(&ChatOperation::Read { agent: "root", cursor: None }),
             Err("invalid_agent")
         );
+    }
+
+    #[test]
+    fn an_answer_and_an_enter_carry_only_their_checked_ids_and_never_the_persons_words() {
+        let answer = ChatOperation::Answer { agent: "capitano", question_id: "aq:capitano:1792700000-a1b2c3" };
+        assert!(answer.needs_answer_actions());
+        assert!(chat_command(&target(), &answer).unwrap().ends_with("agent_chat.py answer 'capitano' 'aq:capitano:1792700000-a1b2c3'"));
+        assert_eq!(
+            chat_wrapper_arguments(&answer).unwrap(),
+            ["desktop-chat", "chat-answer", "capitano", "aq:capitano:1792700000-a1b2c3"]
+        );
+        let enter = ChatOperation::Enter { agent: "mentor", message_id: "0b1c2d3e-4f50" };
+        assert!(enter.needs_answer_actions());
+        assert!(chat_command(&target(), &enter).unwrap().ends_with("agent_chat.py enter 'mentor' '0b1c2d3e-4f50'"));
+        assert_eq!(chat_wrapper_arguments(&enter).unwrap(), ["desktop-chat", "chat-enter", "mentor", "0b1c2d3e-4f50"]);
+        assert!(!ChatOperation::Read { agent: "capitano", cursor: None }.needs_answer_actions());
+        assert!(!ChatOperation::Send { agent: "capitano", client_message_id: "id" }.needs_answer_actions());
+        // anything a shell could read as more than one word, or longer than the ids are, never enters
+        let long_question = "q".repeat(97);
+        for id in ["", "a b", "a'b", "a;b", "$(x)", "a\nb", "\u{e9}", long_question.as_str()] {
+            assert_eq!(
+                chat_wrapper_arguments(&ChatOperation::Answer { agent: "capitano", question_id: id }),
+                Err("invalid_request"),
+                "{id:?}"
+            );
+        }
+        let long_message = "m".repeat(65);
+        for id in ["", "a:b", "a_b", "a b", long_message.as_str()] {
+            assert_eq!(
+                chat_wrapper_arguments(&ChatOperation::Enter { agent: "capitano", message_id: id }),
+                Err("invalid_request"),
+                "{id:?}"
+            );
+        }
+        assert_eq!(chat_wrapper_arguments(&ChatOperation::Answer { agent: "root", question_id: "q1" }), Err("invalid_agent"));
+        assert_eq!(chat_wrapper_arguments(&ChatOperation::Enter { agent: "root", message_id: "m1" }), Err("invalid_agent"));
     }
 
     #[test]

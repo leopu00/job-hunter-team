@@ -153,7 +153,7 @@ pub(crate) struct DirectChatStatus {
 }
 
 /// The codes a system line of the chat may carry. The page has a sentence for each, in every language.
-const CHAT_SYSTEM_CODES: [&str; 1] = ["mail_not_taken"];
+const CHAT_SYSTEM_CODES: [&str; 2] = ["mail_not_taken", "message_too_long"];
 
 fn closed_code<'de, D>(deserializer: D) -> Result<Option<String>, D::Error>
 where
@@ -167,6 +167,98 @@ where
     })
 }
 
+/// The kinds an agent may give a message. `question` belongs to the questions only.
+const MESSAGE_KINDS: [&str; 4] = ["urgent", "blocked", "completed", "info"];
+/// The kinds of a question: the kinds of a message, and `question`.
+const QUESTION_KINDS: [&str; 5] = ["urgent", "blocked", "question", "completed", "info"];
+const QUESTION_STATES: [&str; 3] = ["open", "answered", "expired"];
+/// Who gave an answer: the person, or the question's safe option when nobody answered in time.
+/// Any other origin the team writes is `unknown`, and never said as the person's.
+const ANSWER_ORIGINS: [&str; 2] = ["user", "expiry"];
+const MAX_SUBJECT_CHARS: usize = 200;
+const MAX_QUESTION_CHARS: usize = 4000;
+const MAX_LABEL_CHARS: usize = 200;
+const MAX_ANSWER_CHARS: usize = 2000;
+const MAX_OPTIONS: usize = 8;
+const MAX_QUESTIONS: usize = 50;
+
+fn string_in<'a>(value: Option<&'a Value>, list: &[&str]) -> Option<&'a str> {
+    value.and_then(Value::as_str).filter(|v| list.contains(v))
+}
+
+/// A closed code of the team's: lower-case letters, digits, `_` and `-`, at most 64. The page says
+/// only the codes its catalog has; this keeps anything else (a sentence, markup) from reaching it.
+fn closed_token(value: &str) -> bool {
+    !value.is_empty()
+        && value.len() <= 64
+        && value.bytes().all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || matches!(b, b'_' | b'-'))
+}
+
+/// The id of an option: the same alphabet as a closed code, at most 32.
+fn option_id(value: &str) -> bool {
+    closed_token(value) && value.len() <= 32
+}
+
+/// A time in seconds since the epoch, as the chat's read gives every time.
+fn seconds(value: Option<&Value>) -> Option<f64> {
+    value.and_then(Value::as_f64).filter(|v| v.is_finite() && *v >= 0.0)
+}
+
+fn short_text(value: Option<&Value>, max: usize) -> Option<String> {
+    value.and_then(Value::as_str).filter(|v| v.chars().count() <= max).map(str::to_owned)
+}
+
+fn message_kind<'de, D>(deserializer: D) -> Result<Option<String>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    // Outside the list (an older image, a typo, `question`) the row has no kind: the page shows it as info.
+    let raw = Option::<Value>::deserialize(deserializer)?;
+    Ok(string_in(raw.as_ref(), &MESSAGE_KINDS).map(str::to_owned))
+}
+
+const MAX_SUGGESTIONS: usize = 5;
+const MAX_SUGGESTION_CHARS: usize = 240;
+
+fn suggestions<'de, D>(deserializer: D) -> Result<Option<Vec<String>>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    // The replies an agent suggests to its message: one line each, at most 5, and a list only from two
+    // up (one is no choice). Anything out of that shape is left out.
+    let raw = Option::<Value>::deserialize(deserializer)?;
+    let Some(Value::Array(items)) = raw else { return Ok(None) };
+    let labels: Vec<String> = items
+        .iter()
+        .take(MAX_SUGGESTIONS)
+        .filter_map(Value::as_str)
+        .filter(|l| !l.trim().is_empty() && l.chars().count() <= MAX_SUGGESTION_CHARS && !l.contains(['\n', '\r']))
+        .map(str::to_owned)
+        .collect();
+    Ok((labels.len() >= 2).then_some(labels))
+}
+
+fn taken_flag<'de, D>(deserializer: D) -> Result<Option<Option<bool>>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    // Present: true, false, or null for «not known». Anything else is «not known» too, never «taken».
+    let raw = Value::deserialize(deserializer)?;
+    Ok(Some(raw.as_bool()))
+}
+
+/// Why the team does not know whether the agent's CLI took a text: what it saw in the terminal.
+/// `unconfirmed`: the text went, and nothing on the screen proved it was taken.
+const TAKEN_REASONS: [&str; 8] = ["menu", "permission", "login", "busy", "not_ours", "empty_unseen", "unreadable", "unconfirmed"];
+
+fn closed_reason<'de, D>(deserializer: D) -> Result<Option<String>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let raw = Option::<Value>::deserialize(deserializer)?;
+    Ok(string_in(raw.as_ref(), &TAKEN_REASONS).map(str::to_owned))
+}
+
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct DirectChatMessage {
@@ -178,6 +270,124 @@ pub(crate) struct DirectChatMessage {
     /// Only a code of the closed list passes; anything else is dropped here, whatever the host wrote.
     #[serde(default, deserialize_with = "closed_code", skip_serializing_if = "Option::is_none")]
     code: Option<String>,
+    /// The kind the agent gave the message, on the agent's rows only; outside the list, none.
+    #[serde(default, deserialize_with = "message_kind", skip_serializing_if = "Option::is_none")]
+    kind: Option<String>,
+    /// The replies the agent suggests, on its rows only: the page offers them as buttons.
+    #[serde(default, deserialize_with = "suggestions", skip_serializing_if = "Option::is_none")]
+    suggestions: Option<Vec<String>>,
+}
+
+#[derive(Clone, Debug, Serialize, PartialEq)]
+pub(crate) struct DirectChatOption {
+    id: String,
+    label: String,
+}
+
+#[derive(Clone, Debug, Serialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct DirectChatAnswer {
+    choices: Vec<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    text: Option<String>,
+    at: f64,
+    origin: &'static str,
+    /// When the agent's tool took the answer; null until then.
+    seen_at: Option<f64>,
+}
+
+/// One of the agent's questions, as the page shows it. Built field by field from what the host
+/// wrote: a question with one field out of its shape is left out whole, never half shown.
+#[derive(Clone, Debug, Serialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct DirectChatQuestion {
+    id: String,
+    at: f64,
+    kind: &'static str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    subject: Option<String>,
+    text: String,
+    options: Vec<DirectChatOption>,
+    multiple: bool,
+    free: bool,
+    expires_at: Option<f64>,
+    state: &'static str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    answer: Option<DirectChatAnswer>,
+}
+
+fn closed_static(value: Option<&Value>, list: &[&'static str]) -> Option<&'static str> {
+    let value = value.and_then(Value::as_str)?;
+    list.iter().copied().find(|item| *item == value)
+}
+
+impl DirectChatQuestion {
+    fn from_value(value: &Value) -> Option<Self> {
+        let id = value.get("id").and_then(Value::as_str).filter(|v| existing_team_runtime::chat_question_id(v))?;
+        let options = value.get("options").and_then(Value::as_array)?;
+        if options.len() > MAX_OPTIONS {
+            return None;
+        }
+        let mut seen = Vec::with_capacity(options.len());
+        for option in options {
+            let option_key = option.get("id").and_then(Value::as_str).filter(|v| option_id(v))?;
+            let label = short_text(option.get("label"), MAX_LABEL_CHARS)?;
+            if seen.iter().any(|o: &DirectChatOption| o.id == option_key) {
+                return None;
+            }
+            seen.push(DirectChatOption { id: option_key.to_owned(), label });
+        }
+        let state = closed_static(value.get("state"), &QUESTION_STATES)?;
+        let answer = match value.get("answer") {
+            None | Some(Value::Null) => None,
+            Some(answer) => Some(DirectChatAnswer::from_value(answer, &seen)?),
+        };
+        Some(DirectChatQuestion {
+            id: id.to_owned(),
+            at: seconds(value.get("at"))?,
+            // A kind outside the list is a question that still waits for its answer: shown plain.
+            kind: closed_static(value.get("kind"), &QUESTION_KINDS).unwrap_or("question"),
+            subject: short_text(value.get("subject"), MAX_SUBJECT_CHARS),
+            text: short_text(value.get("text"), MAX_QUESTION_CHARS)?,
+            options: seen,
+            multiple: value.get("multiple").and_then(Value::as_bool).unwrap_or(false),
+            free: value.get("free").and_then(Value::as_bool).unwrap_or(false),
+            expires_at: seconds(value.get("expiresAt")),
+            state,
+            answer,
+        })
+    }
+}
+
+impl DirectChatAnswer {
+    fn from_value(value: &Value, options: &[DirectChatOption]) -> Option<Self> {
+        let choices = value.get("choices").and_then(Value::as_array)?;
+        let mut taken = Vec::with_capacity(choices.len());
+        for choice in choices {
+            let choice = choice.as_str().filter(|c| options.iter().any(|o| o.id == *c))?;
+            taken.push(choice.to_owned());
+        }
+        Some(DirectChatAnswer {
+            choices: taken,
+            text: short_text(value.get("text"), MAX_ANSWER_CHARS),
+            at: seconds(value.get("at"))?,
+            origin: closed_static(value.get("origin"), &ANSWER_ORIGINS).unwrap_or("unknown"),
+            seen_at: seconds(value.get("seenAt")),
+        })
+    }
+}
+
+fn questions<'de, D>(deserializer: D) -> Result<Option<Vec<DirectChatQuestion>>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    // Absent (an older image): none, and the page shows no buttons. A list: every question in its
+    // shape, the others left out.
+    let raw = Option::<Value>::deserialize(deserializer)?;
+    Ok(match raw {
+        Some(Value::Array(items)) => Some(items.iter().take(MAX_QUESTIONS).filter_map(DirectChatQuestion::from_value).collect()),
+        _ => None,
+    })
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
@@ -185,10 +395,13 @@ pub(crate) struct DirectChatPage {
     messages: Vec<DirectChatMessage>,
     #[serde(skip_serializing_if = "Option::is_none")]
     cursor: Option<String>,
+    /// The agent's open questions and its latest closed ones; absent from an older image.
+    #[serde(default, deserialize_with = "questions", skip_serializing_if = "Option::is_none")]
+    questions: Option<Vec<DirectChatQuestion>>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", from = "ReceiptAsWritten")]
 pub(crate) struct DirectChatReceipt {
     client_message_id: String,
     accepted: bool,
@@ -198,6 +411,55 @@ pub(crate) struct DirectChatReceipt {
     /// turn was typed into the agent's terminal, which is the only way a receipt says «delivered».
     #[serde(default, skip_serializing_if = "Option::is_none")]
     state: Option<String>,
+    /// Whether the agent's CLI took the text, with proof: true, false (still in its composer: only
+    /// Enter may be pressed again) or null (not known: nothing may be pressed). Absent from an older
+    /// image. Anything but a boolean is null: a receipt never says «taken» by mistake.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    taken: Option<Option<bool>>,
+    /// With `taken: null`, why it is not known: one of TAKEN_REASONS, or none.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    reason: Option<String>,
+}
+
+/// A receipt as the team wrote it, before the one rule that ties two of its fields: a reason is said
+/// only for a text whose fate is not known (`taken: null`).
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ReceiptAsWritten {
+    client_message_id: String,
+    accepted: bool,
+    message_id: String,
+    at: f64,
+    #[serde(default)]
+    state: Option<String>,
+    #[serde(default, deserialize_with = "taken_flag")]
+    taken: Option<Option<bool>>,
+    #[serde(default, deserialize_with = "closed_reason")]
+    reason: Option<String>,
+}
+
+impl From<ReceiptAsWritten> for DirectChatReceipt {
+    fn from(raw: ReceiptAsWritten) -> Self {
+        let reason = if raw.taken == Some(None) { raw.reason } else { None };
+        DirectChatReceipt {
+            client_message_id: raw.client_message_id,
+            accepted: raw.accepted,
+            message_id: raw.message_id,
+            at: raw.at,
+            state: raw.state,
+            taken: raw.taken,
+            reason,
+        }
+    }
+}
+
+/// The receipt of an answer: the question it answered, and when the team wrote it.
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct DirectChatAnswerReceipt {
+    question_id: String,
+    accepted: bool,
+    at: f64,
 }
 
 #[derive(Clone, Serialize)]
@@ -804,6 +1066,7 @@ fn run_connection(
                 (Some(target), RemoteOperation::Chat(operation)) => existing_team_runtime::chat_command(&target.runtime, &operation).map_err(failure)?,
                 (None, RemoteOperation::Chat(operation)) => remote_wrapper_command(
                     &existing_team_runtime::chat_wrapper_arguments(&operation).map_err(failure)?,
+                    operation.needs_answer_actions(),
                 ),
                 (None, RemoteOperation::Probe) => REMOTE_CONTAINER_PROBE.to_owned(),
                 (None, RemoteOperation::Python) => REMOTE_PYTHON_STDIN.to_owned(),
@@ -1064,14 +1327,20 @@ fn run_python(
 /// The host's wrapper, run on a VPS that was never pinned: the checks of `REMOTE_PYTHON_STDIN`
 /// (the wrapper is there, executable, not a link, and speaks the chat protocol), then the wrapper
 /// with the arguments given. Every one was checked by the chat's argument list, and is quoted.
-fn remote_wrapper_command(arguments: &[String]) -> String {
+fn remote_wrapper_command(arguments: &[String], answer_actions: bool) -> String {
     let checks = REMOTE_PYTHON_STDIN.strip_suffix("desktop-chat python").unwrap_or(REMOTE_PYTHON_STDIN);
     let checks = checks.strip_suffix(r#"exec "$JHT_BIN" "#).unwrap_or(checks);
     let quoted: Vec<String> = arguments.iter().map(|argument| format!("'{argument}'")).collect();
     // A wrapper without the chat marker does not know the actions: 64 says exactly that, and only 64
     // sends the caller back to the older path. Any other exit (2 included, which python3 gives when the
-    // image has no agent_chat.py) is the script's, and is told as such.
-    format!(r#"{checks}grep -Fqx 'JHT_DESKTOP_CHAT_FIXED=1' "$JHT_BIN" || exit {UNKNOWN_ACTION}; exec "$JHT_BIN" {}"#, quoted.join(" "))
+    // image has no agent_chat.py) is the script's, and is told as such. Answer and Enter came later:
+    // they need a marker of their own, and have no older path.
+    let answer = if answer_actions {
+        format!(r#"grep -Fqx 'JHT_DESKTOP_CHAT_ANSWER=1' "$JHT_BIN" || exit {UNKNOWN_ACTION}; "#)
+    } else {
+        String::new()
+    };
+    format!(r#"{checks}grep -Fqx 'JHT_DESKTOP_CHAT_FIXED=1' "$JHT_BIN" || exit {UNKNOWN_ACTION}; {answer}exec "$JHT_BIN" {}"#, quoted.join(" "))
 }
 
 /// The exit that says «the host's wrapper does not have the chat actions».
@@ -1105,6 +1374,15 @@ fn chat_failure(code: i32, default: &'static str) -> &'static str {
         128 => "persist_failed",
         // The image has no fence for the user's words: older than the chat, the same «update the team».
         129 => "chat_runtime_outdated",
+        // An answer the team did not take: the question is no longer open (answered, expired), an
+        // option it does not have or words it does not take, a question it does not know, or a write
+        // that failed. The page has a sentence for each.
+        // The image has no questions to answer (no agent_questions, no database): update the team.
+        114 => "chat_runtime_outdated",
+        115 => "answer_failed",
+        116 => "not_found",
+        117 => "invalid_choice",
+        118 => "question_closed",
         255 => "tunnel_unavailable",
         _ => default,
     }
@@ -1391,16 +1669,7 @@ fn send_impl(
         .lock()
         .map_err(|_| failure("state_failed"))?;
     let connection = slot.as_ref().ok_or_else(|| failure("disconnected"))?;
-    let own_refusal = own_vps_write_refusal(connection);
-    if !link_allows_writing(connection.runtime.as_ref(), own_refusal.is_none(), |target| {
-        existing_team_runtime::full_link_granted(&connection.scope, target)
-    }) {
-        let code = own_refusal.unwrap_or("read_only_link");
-        if let Some(log) = connection.app.as_ref().and_then(crate::runtime_log::RuntimeLog::new) {
-            log.record_chat_refusal(code);
-        }
-        return Err(failure(code));
-    }
+    refuse_writing(connection)?;
     if let Some(receipt) = send_fixed(connection, &agent, &text, &client_id)? {
         return Ok(receipt);
     }
@@ -1543,6 +1812,196 @@ pub(crate) async fn direct_chat_send(
     }
 }
 
+/// The one gate of every write to an agent (a message, an answer, an Enter): an existing team needs
+/// the full link made in this run of the app, a VPS of the person's own needs its mark. A refusal is
+/// written to the runtime log, as the read-only view's own steps are.
+fn refuse_writing(connection: &Connection) -> Result<(), DirectChatError> {
+    let own_refusal = own_vps_write_refusal(connection);
+    if link_allows_writing(connection.runtime.as_ref(), own_refusal.is_none(), |target| {
+        existing_team_runtime::full_link_granted(&connection.scope, target)
+    }) {
+        return Ok(());
+    }
+    let code = own_refusal.unwrap_or("read_only_link");
+    if let Some(log) = connection.app.as_ref().and_then(crate::runtime_log::RuntimeLog::new) {
+        log.record_chat_refusal(code);
+    }
+    Err(failure(code))
+}
+
+/// Answer and Enter, in a pinned container or through the host's wrapper. They have no older path:
+/// a wrapper without them (64 on a VPS, 2 on this computer) is a team to update.
+fn run_answer_action(
+    connection: &Connection,
+    operation: ChatOperation<'_>,
+    input: Option<&[u8]>,
+    timeout: Duration,
+    default: &'static str,
+) -> Result<ProcessResult, DirectChatError> {
+    if uses_pinned_chat(connection) {
+        return run_chat(connection, operation, input, timeout, default);
+    }
+    run_wrapper_chat(connection, operation, input, timeout, default)?.ok_or_else(|| failure("chat_runtime_outdated"))
+}
+
+/// The options and the words of an answer, checked before they leave: at most 8 distinct option
+/// ids of the closed alphabet, at least one of them or some words, the words at most 2000
+/// characters and without NUL. The team checks them again against the question itself.
+fn answer_input(choices: &[String], text: Option<&str>) -> Result<Zeroizing<Vec<u8>>, DirectChatError> {
+    let words = text.map(str::trim).filter(|t| !t.is_empty());
+    let distinct = choices.iter().enumerate().all(|(i, c)| !choices[..i].contains(c));
+    if choices.len() > MAX_OPTIONS
+        || !distinct
+        || !choices.iter().all(|c| option_id(c))
+        || (choices.is_empty() && words.is_none())
+        || words.is_some_and(|w| w.chars().count() > MAX_ANSWER_CHARS || w.contains('\0'))
+    {
+        return Err(failure("invalid_request"));
+    }
+    let line = serde_json::to_vec(&json!({"choices": choices, "text": words})).map_err(|_| failure("invalid_request"))?;
+    Ok(Zeroizing::new(line))
+}
+
+fn answer_impl(
+    inner: &DirectChatInner,
+    agent: &str,
+    question_id: &str,
+    input: &[u8],
+) -> Result<DirectChatAnswerReceipt, DirectChatError> {
+    let _serial = inner.send_lock.lock().map_err(|_| failure("state_failed"))?;
+    let slot = inner.connection.lock().map_err(|_| failure("state_failed"))?;
+    let connection = slot.as_ref().ok_or_else(|| failure("disconnected"))?;
+    refuse_writing(connection)?;
+    let result = run_answer_action(
+        connection,
+        ChatOperation::Answer { agent, question_id },
+        Some(input),
+        READ_TIMEOUT,
+        "answer_failed",
+    )?;
+    let receipt: DirectChatAnswerReceipt = parse_json(result, "answer_failed")?;
+    // A receipt for another question, or one that does not say it was taken, is no answer.
+    if receipt.question_id != question_id || !receipt.accepted || !receipt.at.is_finite() {
+        return Err(failure("answer_failed"));
+    }
+    Ok(receipt)
+}
+
+fn enter_impl(inner: &DirectChatInner, agent: &str, message_id: &str) -> Result<DirectChatReceipt, DirectChatError> {
+    let _serial = inner.send_lock.lock().map_err(|_| failure("state_failed"))?;
+    let slot = inner.connection.lock().map_err(|_| failure("state_failed"))?;
+    let connection = slot.as_ref().ok_or_else(|| failure("disconnected"))?;
+    refuse_writing(connection)?;
+    // The ids were checked here: a 120 from the script is an image without the operation.
+    let result = run_answer_action(connection, ChatOperation::Enter { agent, message_id }, None, SEND_TIMEOUT, "send_failed")
+        .map_err(|error| if error.code == "invalid_request" { failure("chat_runtime_outdated") } else { error })?;
+    let receipt: DirectChatReceipt = parse_json(result, "send_verify_failed")?;
+    // The receipt of another message, or one that says nothing of the composer, proves nothing.
+    if receipt.message_id != message_id || !receipt.accepted || receipt.taken.is_none() {
+        return Err(failure("send_verify_failed"));
+    }
+    Ok(receipt)
+}
+
+/// Runs a write of the chat on the worker, in the account scope the page asked it in.
+async fn chat_write<T: Send + 'static>(
+    state: &State<'_, DirectChatState>,
+    scopes: &State<'_, AccountScopeState>,
+    work: impl FnOnce(&DirectChatInner) -> Result<T, DirectChatError> + Send + 'static,
+    default: &'static str,
+) -> Result<T, DirectChatError> {
+    let expected = scopes.active().map_err(failure)?;
+    let scope_state = scopes.inner().clone();
+    let worker_expected = expected.clone();
+    let inner = Arc::clone(&state.inner);
+    let result = tauri::async_runtime::spawn_blocking(move || {
+        let scope = scope_state.lock_expected(&worker_expected).map_err(failure)?;
+        {
+            let slot = inner.connection.lock().map_err(|_| failure("state_failed"))?;
+            let connection = slot.as_ref().ok_or_else(|| failure("disconnected"))?;
+            if &connection.scope != scope.scope() {
+                return Err(failure("account_scope_mismatch"));
+            }
+        }
+        work(&inner)
+    })
+    .await
+    .map_err(|_| failure(default))?;
+    let _scope = scopes.lock_expected(&expected).map_err(failure)?;
+    result
+}
+
+/// What an answer may ask, checked before anything else: first the window (only the app's own may
+/// write to an agent), then the agent, the question and the options and words.
+fn answer_request(
+    window: &str,
+    agent: &str,
+    question_id: &str,
+    choices: &[String],
+    text: Option<&str>,
+) -> Result<Zeroizing<Vec<u8>>, DirectChatError> {
+    if !window_may_write(window) || !valid_agent(agent) || !existing_team_runtime::chat_question_id(question_id) {
+        return Err(failure("invalid_request"));
+    }
+    answer_input(choices, text)
+}
+
+/// The same for an Enter: the window first, then the agent and the message's id.
+fn enter_request(window: &str, agent: &str, message_id: &str) -> Result<(), DirectChatError> {
+    let well_formed = !message_id.is_empty()
+        && message_id.len() <= 64
+        && message_id.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-');
+    if !window_may_write(window) || !valid_agent(agent) || !well_formed {
+        return Err(failure("invalid_request"));
+    }
+    Ok(())
+}
+
+/// The person's answer to one of the agent's questions: the ids of the options taken and, where the
+/// question takes them, words. Only the app's own window may answer, as only it may send.
+#[tauri::command]
+pub(crate) async fn direct_chat_answer(
+    window: tauri::Window,
+    state: State<'_, DirectChatState>,
+    scopes: State<'_, AccountScopeState>,
+    agent_id: String,
+    question_id: String,
+    choices: Vec<String>,
+    text: Option<String>,
+) -> Result<DirectChatAnswerReceipt, DirectChatError> {
+    let input = answer_request(window.label(), &agent_id, &question_id, &choices, text.as_deref())?;
+    let result = chat_write(
+        &state,
+        &scopes,
+        move |inner| answer_impl(inner, &agent_id, &question_id, &input),
+        "answer_failed",
+    )
+    .await;
+    if let Err(error) = &result {
+        emit(&state.inner, DirectChatEvent::Error { operation: "answer", code: error.code });
+    }
+    result
+}
+
+/// Enter pressed once more on a message the agent's CLI did not take, never the text again: the
+/// team presses only if that message is still in the composer, and says what it saw.
+#[tauri::command]
+pub(crate) async fn direct_chat_enter(
+    window: tauri::Window,
+    state: State<'_, DirectChatState>,
+    scopes: State<'_, AccountScopeState>,
+    agent_id: String,
+    message_id: String,
+) -> Result<DirectChatReceipt, DirectChatError> {
+    enter_request(window.label(), &agent_id, &message_id)?;
+    let result = chat_write(&state, &scopes, move |inner| enter_impl(inner, &agent_id, &message_id), "send_failed").await;
+    match &result {
+        Ok(receipt) => emit(&state.inner, DirectChatEvent::Send { receipt: receipt.clone() }),
+        Err(error) => emit(&state.inner, DirectChatEvent::Error { operation: "enter", code: error.code }),
+    }
+    result
+}
+
 #[tauri::command]
 pub(crate) fn direct_chat_close(
     state: State<'_, DirectChatState>,
@@ -1587,7 +2046,7 @@ pub(crate) fn teardown(state: &DirectChatState) {
 #[cfg(test)]
 mod tests {
     use super::{
-        chat_failure, connection_config_path_at, remote_wrapper_command, wrapper_outcome, delivery_command, hex_encode, link_allows_writing,
+        answer_input, answer_request, enter_request, chat_failure, connection_config_path_at, remote_wrapper_command, wrapper_outcome, delivery_command, hex_encode, link_allows_writing,
         parse_json, probe, session_for, status, valid_agent, verify_migration_local_host_at, window_may_write,
         Connection, DirectChatPage, ProcessResult, REMOTE_CONTAINER_PROBE, REMOTE_PYTHON_STDIN, UNKNOWN_ACTION,
         control_path_fits, remove_tunnel_socket, tunnel_dir_name, tunnel_socket_bases, tunnel_socket_path,
@@ -1863,7 +2322,7 @@ mod tests {
         let mut answers = answers.iter();
         let result = small_read(cursor, &mut |sent: Option<&str>| -> Result<DirectChatPage, DirectChatError> {
             asked.push(sent.unwrap_or("none").to_owned());
-            Ok(DirectChatPage { messages: Vec::new(), cursor: answers.next().expect("one answer per read").map(str::to_owned) })
+            Ok(DirectChatPage { messages: Vec::new(), cursor: answers.next().expect("one answer per read").map(str::to_owned), questions: None })
         });
         (result.map(|page| page.cursor).map_err(|error| error.code), asked)
     }
@@ -1934,6 +2393,11 @@ mod tests {
             (127, "read_failed"),
             (128, "persist_failed"),
             (129, "chat_runtime_outdated"),
+            (114, "chat_runtime_outdated"),
+            (115, "answer_failed"),
+            (116, "not_found"),
+            (117, "invalid_choice"),
+            (118, "question_closed"),
             (255, "tunnel_unavailable"),
             (1, "the_default"),
             (137, "the_default"),
@@ -1964,23 +2428,38 @@ mod tests {
             NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
         ));
         fs::create_dir_all(&dir).unwrap();
-        let command = remote_wrapper_command(&["desktop-chat".to_owned(), "read".to_owned(), "capitano".to_owned()]);
-        let run_with = |wrapper: &str| {
+        let command = remote_wrapper_command(&["desktop-chat".to_owned(), "read".to_owned(), "capitano".to_owned()], false);
+        let answer_command = remote_wrapper_command(
+            &["desktop-chat".to_owned(), "chat-answer".to_owned(), "capitano".to_owned(), "q1".to_owned()],
+            true,
+        );
+        let run_command_with = |command: &str, wrapper: &str| {
             let binary = dir.join("jht");
             let _ = fs::remove_file(&binary);
             fs::write(&binary, wrapper).unwrap();
             fs::set_permissions(&binary, fs::Permissions::from_mode(0o700)).unwrap();
             let done = Command::new("sh")
                 .arg("-c")
-                .arg(&command)
+                .arg(command)
                 .env("PATH", format!("{}:/usr/bin:/bin", dir.display()))
                 .env("HOME", &dir)
                 .output()
                 .unwrap();
             (done.status.code(), String::from_utf8_lossy(&done.stdout).into_owned())
         };
+        let run_with = |wrapper: &str| run_command_with(&command, wrapper);
         let protocol = "JHT_DESKTOP_CHAT_PROTOCOL=1\n";
         let marker = "JHT_DESKTOP_CHAT_FIXED=1\n";
+        let answer_marker = "JHT_DESKTOP_CHAT_ANSWER=1\n";
+        // answer and enter need their own marker too: a wrapper with only the first chat actions is 64
+        assert_eq!(
+            run_command_with(&answer_command, &format!("#!/bin/sh\n{protocol}{marker}printf 'ran'\n")),
+            (Some(UNKNOWN_ACTION), String::new())
+        );
+        assert_eq!(
+            run_command_with(&answer_command, &format!("#!/bin/sh\n{protocol}{marker}{answer_marker}printf 'ran:%s' \"$*\"\n")),
+            (Some(0), "ran:desktop-chat chat-answer capitano q1".to_owned())
+        );
         // a wrapper with the chat actions runs, with exactly the arguments given
         assert_eq!(
             run_with(&format!("#!/bin/sh\n{protocol}{marker}printf 'ran:%s' \"$*\"\n")),
@@ -1991,6 +2470,46 @@ mod tests {
         // the script's own 2 (python3: no such file, an image older than the chat) is not «no chat actions»
         assert_eq!(run_with(&format!("#!/bin/sh\n{protocol}{marker}exit 2\n")), (Some(2), String::new()));
         let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn an_answer_and_an_enter_from_another_window_are_refused_before_anything_else() {
+        let yes = ["yes".to_owned()];
+        assert!(answer_request("main", "capitano", "aq:capitano:1-a1", &yes, None).is_ok());
+        assert!(enter_request("main", "capitano", "0b1c2d3e").is_ok());
+        for label in ["live-screen", "broker-login", "", "main2", "Main"] {
+            assert_eq!(answer_request(label, "capitano", "aq:capitano:1-a1", &yes, None).unwrap_err().code, "invalid_request", "{label:?}");
+            assert_eq!(enter_request(label, "capitano", "0b1c2d3e").unwrap_err().code, "invalid_request", "{label:?}");
+        }
+    }
+
+    // Unix only, like every test that builds a Connection (only_unix_tests_build_a_connection).
+    #[cfg(unix)]
+    #[test]
+    fn an_answer_and_an_enter_never_go_through_the_read_only_link() {
+        use super::{answer_impl, enter_impl, DirectChatInner};
+        // An existing team opened in the read-only view: a pinned target, and no full link made for it.
+        let inner = DirectChatInner::default();
+        *inner.connection.lock().unwrap() = Some(Connection {
+            app: None,
+            scope: crate::account_scope::AccountScope::synthetic(b"synthetic-account-read-only"),
+            host: ExecutionHost::Local,
+            validated: ValidatedHost::Local,
+            runtime: Some(crate::existing_team_runtime::ActivatedTarget::synthetic_for_tests()),
+            local_wrapper: None,
+            local_owner_marker: None,
+            control_path: None,
+            tunnel: None,
+            link: VpsLink::PerCommand,
+        });
+        // the gate answers before any command: a command would have failed with its own code
+        assert_eq!(answer_impl(&inner, "capitano", "aq:capitano:1-a1", br#"{"choices":["yes"],"text":null}"#).unwrap_err().code, "read_only_link");
+        assert_eq!(enter_impl(&inner, "capitano", "0b1c2d3e").unwrap_err().code, "read_only_link");
+        // the same connection with no pinned target is this computer's own team: the gate lets it by,
+        // and what stops it is the next step (here, no wrapper of the person's own)
+        inner.connection.lock().unwrap().as_mut().unwrap().runtime = None;
+        assert_ne!(answer_impl(&inner, "capitano", "aq:capitano:1-a1", br#"{"choices":["yes"],"text":null}"#).unwrap_err().code, "read_only_link");
+        assert_ne!(enter_impl(&inner, "capitano", "0b1c2d3e").unwrap_err().code, "read_only_link");
     }
 
     #[test]
@@ -2063,6 +2582,129 @@ mod tests {
         )
         .unwrap();
         assert!(serde_json::to_value(&typed).unwrap().get("state").is_none());
+    }
+
+    #[test]
+    fn a_message_keeps_only_a_kind_of_its_list_and_a_page_from_an_older_image_has_no_questions() {
+        let page: DirectChatPage = serde_json::from_str(
+            r#"{"messages":[{"id":"a1","role":"agent","text":"x","at":1.0,"kind":"urgent"},{"id":"a2","role":"agent","text":"y","at":2.0,"kind":"question"},{"id":"a3","role":"agent","text":"z","at":3.0,"kind":"URGENT"},{"id":"a4","role":"agent","text":"w","at":4.0,"kind":7},{"id":"a5","role":"agent","text":"v","at":5.0}]}"#,
+        )
+        .unwrap();
+        let suggested: DirectChatPage = serde_json::from_str(
+            r#"{"messages":[{"id":"a1","role":"agent","text":"x","at":1.0,"suggestions":["Sì","No",7,"","a\nb","Dopo","Mai","Forse","Oltre"]},{"id":"a2","role":"agent","text":"y","at":2.0,"suggestions":["Solo una"]},{"id":"s1","role":"system","text":"z","at":3.0,"code":"message_too_long"}]}"#,
+        )
+        .unwrap();
+        // the first five, of which the out-of-shape ones are left out; a single one is no choice
+        assert_eq!(suggested.messages[0].suggestions.as_deref(), Some(&["Sì".to_owned(), "No".to_owned()][..]));
+        assert_eq!(suggested.messages[1].suggestions, None);
+        assert_eq!(suggested.messages[2].code.as_deref(), Some("message_too_long"));
+        let kinds: Vec<Option<&str>> = page.messages.iter().map(|m| m.kind.as_deref()).collect();
+        assert_eq!(kinds, [Some("urgent"), None, None, None, None]);
+        let shown = serde_json::to_value(&page).unwrap();
+        assert_eq!(shown["messages"][0]["kind"], "urgent");
+        assert!(shown["messages"][1].get("kind").is_none());
+        // no `questions` in what the host wrote: none in what the page gets, so it offers no answer
+        assert!(shown.get("questions").is_none());
+        let empty: DirectChatPage = serde_json::from_str(r#"{"messages":[],"questions":[]}"#).unwrap();
+        assert_eq!(serde_json::to_value(&empty).unwrap()["questions"], serde_json::json!([]));
+        let not_a_list: DirectChatPage = serde_json::from_str(r#"{"messages":[],"questions":{"id":"q"}}"#).unwrap();
+        assert!(serde_json::to_value(&not_a_list).unwrap().get("questions").is_none());
+    }
+
+    #[test]
+    fn a_question_reaches_the_page_in_its_shape_or_not_at_all() {
+        let good = serde_json::json!({
+            "id": "aq:capitano:1792700000-a1b2c3", "at": 1792700000.5, "kind": "blocked", "subject": "Il CV",
+            "text": "Mando il CV a Acme?", "options": [{"id": "yes", "label": "Sì"}, {"id": "later", "label": "Dopo"}],
+            "multiple": false, "free": true, "expiresAt": 1792703600.0, "state": "answered",
+            "answer": {"choices": ["yes"], "text": "va bene", "at": 1792700100.0, "origin": "user", "seenAt": null}
+        });
+        let page = |question: serde_json::Value| -> serde_json::Value {
+            let page: DirectChatPage = serde_json::from_value(serde_json::json!({"messages": [], "questions": [question]})).unwrap();
+            serde_json::to_value(&page).unwrap()["questions"].clone()
+        };
+        let shown = page(good.clone());
+        assert_eq!(shown[0], good, "a question in its shape passes as it is");
+        // one field out of its shape: the question is left out whole
+        for (field, value) in [
+            ("id", serde_json::json!("aq capitano")),
+            ("id", serde_json::json!(7)),
+            ("state", serde_json::json!("closed")),
+            ("text", serde_json::json!("x".repeat(4001))),
+            ("at", serde_json::json!(-1)),
+            ("options", serde_json::json!([{"id": "Yes!", "label": "Sì"}])),
+            ("options", serde_json::json!([{"id": "a", "label": "A"}, {"id": "a", "label": "B"}])),
+            ("options", serde_json::json!((0..9).map(|i| serde_json::json!({"id": format!("o{i}"), "label": "x"})).collect::<Vec<_>>())),
+            ("answer", serde_json::json!({"choices": ["maybe"], "at": 1.0, "origin": "user", "seenAt": null})),
+        ] {
+            let mut bad = good.clone();
+            bad[field] = value;
+            assert_eq!(page(bad), serde_json::json!([]), "{field}");
+        }
+        // a kind or an origin outside its list is the plain one, never another person's answer
+        let mut odd = good.clone();
+        odd["kind"] = serde_json::json!("urgentissimo");
+        odd["answer"]["origin"] = serde_json::json!("scadenza");
+        let shown = page(odd);
+        assert_eq!(shown[0]["kind"], "question");
+        assert_eq!(shown[0]["answer"]["origin"], "unknown");
+        // a subject too long is no subject; the question stays
+        let mut long = good;
+        long["subject"] = serde_json::json!("s".repeat(201));
+        assert!(page(long)[0].get("subject").is_none());
+    }
+
+    #[test]
+    fn a_receipt_says_taken_only_with_a_boolean_and_a_reason_only_when_it_is_not_known() {
+        use super::DirectChatReceipt;
+        let receipt = |extra: &str| -> serde_json::Value {
+            let parsed: DirectChatReceipt =
+                serde_json::from_str(&format!(r#"{{"clientMessageId":"c","accepted":true,"messageId":"m","at":2.0{extra}}}"#)).unwrap();
+            serde_json::to_value(&parsed).unwrap()
+        };
+        assert!(receipt("").get("taken").is_none(), "an older image says nothing of the composer");
+        assert_eq!(receipt(r#","taken":true"#)["taken"], true);
+        assert_eq!(receipt(r#","taken":false"#)["taken"], false);
+        let unknown = receipt(r#","taken":null,"reason":"menu""#);
+        assert!(unknown["taken"].is_null() && unknown.get("taken").is_some());
+        assert_eq!(unknown["reason"], "menu");
+        assert_eq!(receipt(r#","taken":null,"reason":"unconfirmed""#)["reason"], "unconfirmed");
+        // anything but a boolean is «not known», never «taken»
+        for odd in [r#","taken":"yes""#, r#","taken":1"#, r#","taken":{}"#] {
+            let shown = receipt(odd);
+            assert!(shown.get("taken").is_some() && shown["taken"].is_null(), "{odd}");
+        }
+        // a reason outside the list, or with a known outcome, is not said
+        assert!(receipt(r#","taken":null,"reason":"<b>menu</b>""#).get("reason").is_none());
+        assert!(receipt(r#","taken":null,"reason":"agent_busy""#).get("reason").is_none());
+        assert!(receipt(r#","taken":false,"reason":"menu""#).get("reason").is_none());
+        assert!(receipt(r#","reason":"menu""#).get("reason").is_none());
+    }
+
+    #[test]
+    fn an_answer_leaves_with_checked_options_and_words_on_standard_input_only() {
+        let line = |choices: &[&str], text: Option<&str>| {
+            let owned: Vec<String> = choices.iter().map(|c| (*c).to_owned()).collect();
+            answer_input(&owned, text).map(|bytes| serde_json::from_slice::<serde_json::Value>(&bytes).unwrap())
+        };
+        assert_eq!(line(&["yes"], None).unwrap(), serde_json::json!({"choices": ["yes"], "text": null}));
+        assert_eq!(line(&[], Some("  ci penso io  ")).unwrap(), serde_json::json!({"choices": [], "text": "ci penso io"}));
+        assert_eq!(line(&["a", "b"], Some("e anche")).unwrap()["choices"], serde_json::json!(["a", "b"]));
+        let long = "w".repeat(2001);
+        let nine: Vec<String> = (0..9).map(|i| format!("o{i}")).collect();
+        let nine: Vec<&str> = nine.iter().map(String::as_str).collect();
+        for (choices, text) in [
+            (&[][..], None),
+            (&[][..], Some("   ")),
+            (&["Yes"][..], None),
+            (&["a b"][..], None),
+            (&["a", "a"][..], None),
+            (&nine[..], None),
+            (&["yes"][..], Some(long.as_str())),
+            (&["yes"][..], Some("a\0b")),
+        ] {
+            assert_eq!(line(choices, text).unwrap_err().code, "invalid_request", "{choices:?} {text:?}");
+        }
     }
 
     #[test]
