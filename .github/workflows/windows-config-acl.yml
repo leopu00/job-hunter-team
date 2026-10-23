@@ -102,7 +102,7 @@ jobs:
       # (tests/windows_native_fakes.py); every case checks the engine it ran
       # under. A missing shell, bash or compiler fails, and so does a real
       # Podman visible to Find-Podman here (CI is set). A skip fails the count.
-      # 80 = the two whole files (39 + 41).
+      # 82 = the two whole files (41 + 41).
       - name: Podman-in-WSL setup tests under Windows PowerShell 5.1 and pwsh
         shell: pwsh
         env:
@@ -117,5 +117,5 @@ jobs:
             if ($code -ne 0) { exit $code }
             $summary = "$($out[-1])"
             if ($summary -notmatch '^=+ (\d+) passed(, \d+ warnings?)? in [0-9.]+s') { throw "unexpected pytest summary under ${shell}: $summary" }
-            if ([int]$Matches[1] -lt 80) { throw "only $($Matches[1]) tests ran under $shell, expected at least 80" }
+            if ([int]$Matches[1] -lt 82) { throw "only $($Matches[1]) tests ran under $shell, expected at least 82" }
           }
