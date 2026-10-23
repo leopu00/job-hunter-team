@@ -552,7 +552,7 @@ function Invoke-JhtAppUninstall {
     }
     if (Test-JhtStartupTaskPresent) { Add-JhtReportLine $report $t.Task $t.Kept '' }
     foreach ($kept in @(
-      @($t.Runtime, $plan.RuntimeRoot), @($t.Commands, $plan.Bin), @($t.AppData, $plan.AppData[0]),
+      @($t.Runtime, $plan.Runtime), @($t.Commands, $plan.Bin), @($t.AppData, $plan.AppData[0]),
       @($t.AppData, $plan.AppData[1]), @($t.JhtHome, $plan.JhtHome), @($t.Documents, $plan.Documents)
     )) {
       if (Test-JhtPathPresent $kept[1]) { Add-JhtReportLine $report $kept[0] $t.Kept $kept[1] }
@@ -561,9 +561,11 @@ function Invoke-JhtAppUninstall {
     $report.Add($t.Podman)
     $report.Add($t.Vps)
     $report.Add($t.Later)
-    # Next to what stays; if the runtime's folder is not there, it is not created for this.
+    # Next to the runtime that stays. %LOCALAPPDATA%\Job Hunter Team is also where the app
+    # itself is installed (Tauri's $INSTDIR for one user): without a runtime there, a report
+    # in it would keep that folder alive after the app is gone, so it goes to %TEMP%.
     $where = $plan.KeepReport
-    if (-not [IO.Directory]::Exists($plan.RuntimeRoot)) { $where = $plan.RemoveReport }
+    if (-not [IO.Directory]::Exists($plan.Runtime)) { $where = $plan.RemoveReport }
     [void](Write-JhtReport -Path $where -Lines $report)
     if ($failed) { return 24 }
     return 0
@@ -602,7 +604,9 @@ function Invoke-JhtAppUninstall {
 
   # While the start task or our machine is left, everything else stays too: the
   # runtime proves the machine is ours, and a later uninstall retries from there.
-  $items = @(, @('runtime', $t.Runtime, $plan.RuntimeRoot))
+  # host-runtime, never its parent: %LOCALAPPDATA%\Job Hunter Team holds the app's own files
+  # too, which the uninstaller removes right after this, and then the empty folder.
+  $items = @(, @('runtime', $t.Runtime, $plan.Runtime))
   foreach ($command in $ownCommands) { $items += , @('command', $t.Commands, $command) }
   $items += , @('appdata', $t.AppData, $plan.AppData[0])
   $items += , @('appdata', $t.AppData, $plan.AppData[1])

@@ -464,6 +464,12 @@ class User:
         self.mydocs = self.docs / "Job Hunter Team"
         for folder in (self.temp, self.roaming, self.bin, self.jht / "profile", self.mydocs, *self.appdata):
             folder.mkdir(parents=True, exist_ok=True)
+        # Tauri installs the app for one user in %LOCALAPPDATA%\\<productName>: the same folder as
+        # the runtime's. These are the uninstaller's to remove, after the hook.
+        self.runtime_root.mkdir(parents=True, exist_ok=True)
+        self.app_files = [self.runtime_root / name for name in ("jht-desktop.exe", "uninstall.exe", "jht-uninstall-windows.ps1")]
+        for app_file in self.app_files:
+            app_file.write_bytes(b"the app")
         (self.bin / "jht.ps1").write_text(WRAPPER_TEXT, encoding="utf-8")
         (self.bin / "windows-private-acl.ps1").write_text(HELPER_TEXT, encoding="utf-8")
         shim = SCRIPT.read_text(encoding="utf-8-sig")
@@ -611,12 +617,24 @@ def test_keep_stops_only_our_machine_and_says_what_stays(tmp_path, two_users):
 
 @needs_powershell
 def test_keep_writes_the_report_in_temp_when_nothing_of_the_runtime_is_there(tmp_path):
+    """Only the app in %LOCALAPPDATA%\\Job Hunter Team (its install folder): a report there would
+    keep the folder alive after the uninstaller removed the app, and call it a runtime."""
     user = User(tmp_path / "a", runtime=False)
-    shutil.rmtree(user.runtime_root, ignore_errors=True)
+    before = _snapshot(user.runtime_root)
     run = _run(tmp_path, user, mode="Keep", machine_state="")
     assert run.code == 0, run.stdout + run.stderr
-    assert not user.runtime_root.exists(), "the report must not create the runtime's folder"
-    assert user.remove_report.is_file()
+    assert _snapshot(user.runtime_root) == before, "the report must not go in the app's folder"
+    report = user.remove_report.read_text(encoding="utf-8-sig")
+    assert "Job Hunter Team local runtime" not in report
+
+
+@needs_powershell
+def test_keep_names_the_runtime_folder_that_stays(tmp_path):
+    user = User(tmp_path / "a")
+    run = _run(tmp_path, user, mode="Keep", machine_state="")
+    assert run.code == 0, run.stdout + run.stderr
+    report = user.keep_report.read_text(encoding="utf-8-sig")
+    assert f"Job Hunter Team local runtime: stays ({user.runtime})" in report
 
 
 @needs_powershell
@@ -656,9 +674,11 @@ def test_remove_takes_the_closed_list_and_nothing_else(tmp_path, two_users):
     assert run.podman_calls() == ["machine list --format json", "machine rm --force jht-podman", "machine list --format json"]
     assert run.calls.index("unregister Job Hunter Team - Start runtime") < run.calls.index("machine rm --force jht-podman")
     assert run.task == "False"
-    for gone in (user.runtime_root, user.jht, *user.appdata, user.bin / "jht.ps1", user.bin / "jht.cmd",
+    for gone in (user.runtime, user.jht, *user.appdata, user.bin / "jht.ps1", user.bin / "jht.cmd",
                  user.bin / "windows-private-acl.ps1"):
         assert not gone.exists() and not gone.is_symlink(), gone
+    # the app's own files are left to the uninstaller, which then removes the empty folder
+    assert sorted(p.name for p in user.runtime_root.iterdir()) == sorted(f.name for f in user.app_files)
     # never followed: the junction went as a link, its target stays
     assert (outside / "keep.txt").read_text(encoding="utf-8") == "not ours"
     assert (user.mydocs / "cv.pdf").read_bytes() == b"%PDF"
@@ -716,7 +736,7 @@ def test_remove_with_the_game_keeps_its_data_and_says_why(tmp_path):
     assert run.code == 0, run.stdout + run.stderr
     assert (user.jht / "jobs.db").read_bytes() == b"jobs"
     assert ("jht_home", "kept_for_game") in run.items
-    assert not user.runtime_root.exists()
+    assert not user.runtime.exists()
     assert GAME_TEXT_IT in user.remove_report.read_text(encoding="utf-8-sig")
 
 
