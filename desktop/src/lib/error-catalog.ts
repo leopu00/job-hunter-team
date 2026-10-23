@@ -1433,6 +1433,12 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
     "The agent is not at its prompt: its terminal shows a menu, a sign-in, a permission question or text already typed.",
     "Look at its terminal on the Agents page; when it is back at the prompt, send the message again.",
   ),
+  composer_has_text: copy(
+    "Nella casella dell’agente c’è un testo non inviato.",
+    "Decidi prima se inviarlo o cancellarlo nel terminale dell’agente; il tuo messaggio non è stato inviato.",
+    "There is unsent text in the agent’s composer.",
+    "First decide whether to send or clear it in the agent’s terminal; your message was not sent.",
+  ),
   agent_stuck: copy(
     "L’agente non risponde.",
     "Attendi qualche minuto: il team lo riavvia da solo. Poi rimanda il messaggio.",

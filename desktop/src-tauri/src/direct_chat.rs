@@ -1374,6 +1374,9 @@ fn chat_failure(code: i32, default: &'static str) -> &'static str {
         128 => "persist_failed",
         // The image has no fence for the user's words: older than the chat, the same «update the team».
         129 => "chat_runtime_outdated",
+        // The agent is at an otherwise ready prompt, but has a draft. The transport left both
+        // that draft and the user's message untouched.
+        130 => "composer_has_text",
         // An answer the team did not take: the question is no longer open (answered, expired), an
         // option it does not have or words it does not take, a question it does not know, or a write
         // that failed. The page has a sentence for each.
@@ -2414,6 +2417,7 @@ mod tests {
             (127, "read_failed"),
             (128, "persist_failed"),
             (129, "chat_runtime_outdated"),
+            (130, "composer_has_text"),
             (114, "chat_runtime_outdated"),
             (115, "answer_failed"),
             (116, "not_found"),
@@ -2432,7 +2436,7 @@ mod tests {
         let answered = |code: i32| ProcessResult { code, stdout: b"{}".to_vec() };
         assert!(matches!(wrapper_outcome(answered(0), "read_failed"), Ok(Some(_))), "the script ran");
         assert!(matches!(wrapper_outcome(answered(64), "read_failed"), Ok(None)), "64: no chat actions, keep the older path");
-        for (code, expected) in [(2, "chat_runtime_outdated"), (124, "agent_busy"), (122, "agent_not_running"), (119, "agent_not_at_prompt"), (129, "chat_runtime_outdated"), (1, "read_failed"), (255, "tunnel_unavailable")] {
+        for (code, expected) in [(2, "chat_runtime_outdated"), (124, "agent_busy"), (122, "agent_not_running"), (119, "agent_not_at_prompt"), (129, "chat_runtime_outdated"), (130, "composer_has_text"), (1, "read_failed"), (255, "tunnel_unavailable")] {
             assert_eq!(wrapper_outcome(answered(code), "read_failed").err().map(|error| error.code), Some(expected), "exit {code}");
         }
     }

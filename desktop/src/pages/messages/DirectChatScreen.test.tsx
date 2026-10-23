@@ -675,6 +675,25 @@ describe("DirectChatScreen: where the text goes, and when it is delivered", () =
     expect(within(screen.getByTestId("direct-chat-transcript")).queryByText("Tu")).toBeNull();
   });
 
+  it("an agent with a draft: preserves both drafts and explains that the message was not delivered", async () => {
+    viewport(1280, 800);
+    const { mock } = client();
+    mock.send = vi.fn(async () => {
+      throw { code: "composer_has_text" };
+    });
+    const user = userEvent.setup();
+    render(<DirectChatScreen client={mock} />);
+    await screen.findByText("Messaggio dalla VPS");
+    await user.type(screen.getByRole("textbox", { name: "Scrivi a Capitano" }), "non sovrascrivere{Enter}");
+    await waitFor(() =>
+      expect(screen.getByTestId("direct-chat-status")).toHaveTextContent(ERROR_CATALOG.composer_has_text.text.it),
+    );
+    expect(screen.getByTestId("direct-chat-status")).not.toHaveTextContent("composer_has_text");
+    expect(screen.getByRole("textbox", { name: "Scrivi a Capitano" })).toHaveValue("non sovrascrivere");
+    expect(screen.queryByTestId("direct-chat-sent")).toBeNull();
+    expect(within(screen.getByTestId("direct-chat-transcript")).queryByText("Tu")).toBeNull();
+  });
+
   it("Ctrl+Enter starts a new line and sends nothing; Enter sends the lines together", async () => {
     viewport(1280, 800);
     const { mock } = client();
