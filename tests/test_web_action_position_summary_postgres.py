@@ -14,6 +14,8 @@ What must hold:
 - the summary is at most 200 characters;
 - the withdrawal of 102 is unchanged: nothing to withdraw writes nothing;
 - the door is still the one of 103 (porta_103): team.start is refused with action_disabled;
+- 104 can be applied again after a later migration opens team.* again: its final block checks that the
+  switch of 103 is there, not its values;
 - web_door.one_line, run for real, removes exactly the characters of external_content.INVISIBLE_COMMANDS
   among every format, separator and tag character (counter-check: a one_line without the soft hyphen is
   seen);
@@ -223,3 +225,31 @@ def test_counter_check_a_one_line_without_the_soft_hyphen_is_seen(cluster):
     finally:
         cluster(file=restore)
     assert _removed_by_one_line(cluster) == copies._python_list()
+
+
+def test_104_applies_again_after_team_commands_are_opened_again(cluster):
+    """What a later migration (105+) will do: team.* switched on. 104 applied after it must not stop, and the
+    door must still be the one of 103 (the switch is there)."""
+    off = ("team.start", "team.stop", "team.restart")
+    names = ", ".join(f"'{action}'" for action in off)
+    try:
+        cluster(f"UPDATE web_door.vocab SET enabled = true WHERE action IN ({names})")
+        again = cluster(file=M104, check=False)
+        assert again.returncode == 0, again.stderr
+    finally:
+        cluster(f"UPDATE web_door.vocab SET enabled = false WHERE action IN ({names})")
+    still = door._scalar(cluster, f"SELECT count(*) FROM web_door.vocab WHERE action IN ({names}) AND NOT enabled")
+    assert still == "3"
+
+
+def test_the_final_block_of_104_stops_when_the_switch_of_103_is_missing(cluster):
+    """Counter-check of porta_103 by presence: without the column, the final block refuses."""
+    final_block = M104.read_text(encoding="utf-8").rsplit("DO $$", 1)[1]
+    script = cluster.work / "104_without_switch.sql"
+    script.write_text("BEGIN;\nALTER TABLE web_door.vocab DROP COLUMN enabled CASCADE;\nDO $$" + final_block
+                      + "\nROLLBACK;\n", encoding="utf-8")
+    stopped = cluster(file=script, check=False)
+    assert stopped.returncode != 0 and "has no switch" in stopped.stderr, stopped.stderr
+    present = door._scalar(cluster, "SELECT count(*) FROM pg_attribute WHERE attrelid = 'web_door.vocab'::regclass "
+                                    "AND attname = 'enabled' AND NOT attisdropped")
+    assert present == "1", "the counter-check ran in a transaction rolled back"

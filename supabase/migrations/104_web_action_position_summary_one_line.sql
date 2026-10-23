@@ -143,8 +143,11 @@ BEGIN
               to_regprocedure('public.request_action(text, jsonb, uuid, text, text)'))) = 0 THEN
         RAISE EXCEPTION '104: request_action is not the door of 103 (porta_103)';
     END IF;
-    IF (SELECT count(*) FROM web_door.vocab
-         WHERE action IN ('team.start', 'team.stop', 'team.restart') AND NOT enabled) <> 3 THEN
-        RAISE EXCEPTION '104: team.start, team.stop and team.restart are not all switched off (porta_103)';
+    -- The switch of 103 must be there; its values are not this migration's business: a later migration
+    -- that opens team.* again must not stop a new application of 104.
+    IF NOT EXISTS (SELECT 1 FROM pg_attribute
+                    WHERE attrelid = to_regclass('web_door.vocab') AND attname = 'enabled'
+                      AND NOT attisdropped) THEN
+        RAISE EXCEPTION '104: web_door.vocab has no switch (enabled): the door is not the one of 103 (porta_103)';
     END IF;
 END $$;
