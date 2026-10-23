@@ -18,11 +18,37 @@ import time
 from pathlib import Path
 
 import pytest
+import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
 WRAPPER = ROOT / "scripts" / "jht-wrapper.sh"
 DIGEST = "ab" * 32
 INSTANT = "2026-10-23T18:04:05.123Z"
+
+
+def test_jht_has_no_engine_socket_or_broker_secret_mount_and_team_commands_stay_closed():
+    """The application box cannot administer its runtime or the broker.
+
+    Overrides may add jht settings, but none may reintroduce an engine socket,
+    engine endpoint or the broker's Telegram/state/secrets volumes.  The only
+    command vocabulary accepted from the website remains the three team
+    lifecycle verbs, never a broker administration command.
+    """
+    compose_files = (ROOT / "docker-compose.yml", ROOT / "docker-compose.podman.yml", ROOT / "docker-compose.dev.yml")
+    forbidden_volumes = ("jht-broker-telegram-sock", "jht-telegram-broker-sock", "jht-broker-state", "jht-secrets")
+    for path in compose_files:
+        service = (yaml.safe_load(path.read_text(encoding="utf-8")).get("services", {}).get("jht", {}))
+        rendered = json.dumps(service, sort_keys=True)
+        assert "docker.sock" not in rendered and "podman.sock" not in rendered, path.name
+        assert not any(name in rendered for name in forbidden_volumes), path.name
+        environment = service.get("environment", {})
+        names = environment.keys() if isinstance(environment, dict) else [str(item).split("=", 1)[0] for item in environment]
+        assert "DOCKER_HOST" not in names and "CONTAINER_HOST" not in names, path.name
+
+    guard = (ROOT / "cli" / "src" / "lib" / "team-command-guard.js").read_text(encoding="utf-8")
+    executor = (ROOT / "cli" / "src" / "lib" / "team-commands-poller.js").read_text(encoding="utf-8")
+    assert "new Set(['start', 'stop', 'restart'])" in guard
+    assert "apply.record" not in guard and "jht-broker-admin" not in executor
 
 FAKE_DOCKER = r"""#!/bin/sh
 printf 'ARGV %s\n' "$*" >> "$FAKE_LOG"
