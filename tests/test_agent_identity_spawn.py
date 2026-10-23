@@ -13,10 +13,11 @@ import os
 import re
 import shutil
 import subprocess
-import tempfile
 from pathlib import Path
 
 import pytest
+
+from private_tmux import close_dir, private_dir
 
 ROOT = Path(__file__).resolve().parents[1]
 START_AGENT = ROOT / ".launcher" / "start-agent.sh"
@@ -82,7 +83,7 @@ def private_tmux(tmp_path):
     if real is None:
         pytest.skip("tmux is not installed")
     # short: the socket path must fit in a sun_path
-    root = Path(tempfile.mkdtemp(prefix="jid-", dir="/tmp"))
+    root = private_dir("identity")
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir()
     shim = bin_dir / "tmux"
@@ -91,11 +92,14 @@ def private_tmux(tmp_path):
     env = {k: v for k, v in os.environ.items() if k not in ("TMUX", "TMUX_PANE")}
     env.update(PATH=f"{bin_dir}{os.pathsep}{env['PATH']}", ORIGINAL_PATH=env["PATH"], TMUX_TMPDIR=str(root))
     run = lambda *a: subprocess.run([str(shim), *a], capture_output=True, text=True, env=env, check=False)
-    for name in ("SCOUT-1", "SCOUT-12"):
-        assert run("new-session", "-d", "-s", name, "sleep 600").returncode == 0
-    yield env, run
-    run("kill-server")
-    shutil.rmtree(root, ignore_errors=True)
+    # The server goes on every path: a session that does not start, a red
+    # test, a timeout. Not only after a green one.
+    try:
+        for name in ("SCOUT-1", "SCOUT-12"):
+            assert run("new-session", "-d", "-s", name, "sleep 600").returncode == 0
+        yield env, run
+    finally:
+        close_dir(root)
 
 
 def _spawn_block(env: dict, **values: str) -> subprocess.CompletedProcess:
