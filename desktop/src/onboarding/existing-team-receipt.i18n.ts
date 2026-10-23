@@ -28,6 +28,15 @@ export interface ExistingTeamReceiptText {
   registering: string;
   registeringDetail: string;
   registeringDetailFull: string;
+  /** The same step when the team was updated: it shows what the saved connection is replaced by. */
+  rebindEyebrow: string;
+  rebindIntro: string;
+  rebindBefore: string;
+  rebindNow: string;
+  rebindCaution: string;
+  rebindConfirm: string;
+  rebindRegistering: string;
+  rebindRegisteringDetail: string;
 }
 
 export const EXISTING_TEAM_RECEIPT_TEXT: Record<Locale, ExistingTeamReceiptText> = {
@@ -53,6 +62,14 @@ export const EXISTING_TEAM_RECEIPT_TEXT: Record<Locale, ExistingTeamReceiptText>
     registering: "Salvo il collegamento",
     registeringDetail: "Rileggo la VPS, salvo il collegamento e apro la squadra in sola lettura.",
     registeringDetailFull: "Rileggo la VPS, salvo il collegamento e collego la squadra.",
+    rebindEyebrow: "Squadra aggiornata",
+    rebindIntro: "È la stessa squadra, sulla stessa VPS e con la stessa impronta SSH, ma ora gira un’altra versione: il collegamento salvato era quello di prima. Controlla che l’aggiornamento sia tuo.",
+    rebindBefore: "Versione collegata finora",
+    rebindNow: "Versione sulla VPS ora",
+    rebindCaution: "Confermando, l’app sostituisce il collegamento salvato con questo e riapre la squadra. Non avvia agenti e non cancella nessun dato.",
+    rebindConfirm: "Ricollega",
+    rebindRegistering: "Ricollego la squadra",
+    rebindRegisteringDetail: "Rileggo la VPS, sostituisco il collegamento salvato e riapro la squadra.",
   },
   en: {
     discovering: "Reading what the server declares",
@@ -76,6 +93,14 @@ export const EXISTING_TEAM_RECEIPT_TEXT: Record<Locale, ExistingTeamReceiptText>
     registering: "Saving the connection",
     registeringDetail: "Reading the VPS again, saving the connection and opening the team read only.",
     registeringDetailFull: "Reading the VPS again, saving the connection and connecting the team.",
+    rebindEyebrow: "Team updated",
+    rebindIntro: "It is the same team, on the same VPS and with the same SSH fingerprint, but another version runs now: the saved connection was the previous one. Check that the update is yours.",
+    rebindBefore: "Version connected so far",
+    rebindNow: "Version on the VPS now",
+    rebindCaution: "By confirming, the app replaces the saved connection with this one and reopens the team. It starts no agents and deletes no data.",
+    rebindConfirm: "Reconnect",
+    rebindRegistering: "Reconnecting the team",
+    rebindRegisteringDetail: "Reading the VPS again, replacing the saved connection and reopening the team.",
   },
   de: {
     discovering: "Ich lese, was der Server angibt",
@@ -99,6 +124,14 @@ export const EXISTING_TEAM_RECEIPT_TEXT: Record<Locale, ExistingTeamReceiptText>
     registering: "Verbindung wird gespeichert",
     registeringDetail: "Ich lese die VPS erneut, speichere die Verbindung und öffne das Team nur lesend.",
     registeringDetailFull: "Ich lese die VPS erneut, speichere die Verbindung und verbinde das Team.",
+    rebindEyebrow: "Team aktualisiert",
+    rebindIntro: "Es ist dasselbe Team auf derselben VPS mit demselben SSH-Fingerabdruck, aber jetzt läuft eine andere Version: Die gespeicherte Verbindung gehörte zur vorherigen. Prüfe, ob das Update von dir stammt.",
+    rebindBefore: "Bisher verbundene Version",
+    rebindNow: "Version auf der VPS jetzt",
+    rebindCaution: "Mit der Bestätigung ersetzt die App die gespeicherte Verbindung durch diese und öffnet das Team neu. Sie startet keine Agenten und löscht keine Daten.",
+    rebindConfirm: "Neu verbinden",
+    rebindRegistering: "Ich verbinde das Team neu",
+    rebindRegisteringDetail: "Ich lese die VPS erneut, ersetze die gespeicherte Verbindung und öffne das Team neu.",
   },
   fr: {
     discovering: "Lecture de ce que déclare le serveur",
@@ -122,6 +155,14 @@ export const EXISTING_TEAM_RECEIPT_TEXT: Record<Locale, ExistingTeamReceiptText>
     registering: "Enregistrement de la connexion",
     registeringDetail: "Je relis le VPS, j’enregistre la connexion et j’ouvre l’équipe en lecture seule.",
     registeringDetailFull: "Je relis le VPS, j’enregistre la connexion et je relie l’équipe.",
+    rebindEyebrow: "Équipe mise à jour",
+    rebindIntro: "C’est la même équipe, sur le même VPS et avec la même empreinte SSH, mais une autre version tourne maintenant : la connexion enregistrée était celle d’avant. Vérifie que la mise à jour est bien la tienne.",
+    rebindBefore: "Version connectée jusqu’ici",
+    rebindNow: "Version sur le VPS maintenant",
+    rebindCaution: "En confirmant, l’application remplace la connexion enregistrée par celle-ci et rouvre l’équipe. Elle ne démarre aucun agent et ne supprime aucune donnée.",
+    rebindConfirm: "Reconnecter",
+    rebindRegistering: "Je reconnecte l’équipe",
+    rebindRegisteringDetail: "Je relis le VPS, je remplace la connexion enregistrée et je rouvre l’équipe.",
   },
   es: {
     discovering: "Leyendo lo que declara el servidor",
@@ -145,6 +186,14 @@ export const EXISTING_TEAM_RECEIPT_TEXT: Record<Locale, ExistingTeamReceiptText>
     registering: "Guardando la conexión",
     registeringDetail: "Vuelvo a leer el VPS, guardo la conexión y abro el equipo en solo lectura.",
     registeringDetailFull: "Vuelvo a leer el VPS, guardo la conexión y conecto el equipo.",
+    rebindEyebrow: "Equipo actualizado",
+    rebindIntro: "Es el mismo equipo, en el mismo VPS y con la misma huella SSH, pero ahora se ejecuta otra versión: la conexión guardada era la anterior. Comprueba que la actualización es tuya.",
+    rebindBefore: "Versión conectada hasta ahora",
+    rebindNow: "Versión en el VPS ahora",
+    rebindCaution: "Al confirmar, la aplicación sustituye la conexión guardada por esta y vuelve a abrir el equipo. No inicia agentes ni borra ningún dato.",
+    rebindConfirm: "Reconectar",
+    rebindRegistering: "Reconecto el equipo",
+    rebindRegisteringDetail: "Vuelvo a leer el VPS, sustituyo la conexión guardada y vuelvo a abrir el equipo.",
   },
   pt: {
     discovering: "A ler o que o servidor declara",
@@ -168,6 +217,14 @@ export const EXISTING_TEAM_RECEIPT_TEXT: Record<Locale, ExistingTeamReceiptText>
     registering: "A guardar a ligação",
     registeringDetail: "Volto a ler a VPS, guardo a ligação e abro a equipa só em leitura.",
     registeringDetailFull: "Volto a ler a VPS, guardo a ligação e ligo a equipa.",
+    rebindEyebrow: "Equipa atualizada",
+    rebindIntro: "É a mesma equipa, na mesma VPS e com a mesma impressão digital SSH, mas agora corre outra versão: a ligação guardada era a anterior. Confirma que a atualização é tua.",
+    rebindBefore: "Versão ligada até agora",
+    rebindNow: "Versão na VPS agora",
+    rebindCaution: "Ao confirmar, a aplicação substitui a ligação guardada por esta e volta a abrir a equipa. Não inicia agentes nem apaga dados.",
+    rebindConfirm: "Religar",
+    rebindRegistering: "Volto a ligar a equipa",
+    rebindRegisteringDetail: "Volto a ler a VPS, substituo a ligação guardada e volto a abrir a equipa.",
   },
   hu: {
     discovering: "A szerver állításának beolvasása",
@@ -191,5 +248,13 @@ export const EXISTING_TEAM_RECEIPT_TEXT: Record<Locale, ExistingTeamReceiptText>
     registering: "A kapcsolat mentése",
     registeringDetail: "Újra beolvasom a VPS-t, elmentem a kapcsolatot, és csak olvasható módban megnyitom a csapatot.",
     registeringDetailFull: "Újra beolvasom a VPS-t, elmentem a kapcsolatot, és csatlakoztatom a csapatot.",
+    rebindEyebrow: "A csapat frissült",
+    rebindIntro: "Ugyanaz a csapat, ugyanazon a VPS-en és ugyanazzal az SSH-ujjlenyomattal, de most másik verzió fut: a mentett kapcsolat a korábbié volt. Ellenőrizd, hogy a frissítés a tiéd.",
+    rebindBefore: "Eddig csatlakoztatott verzió",
+    rebindNow: "A VPS-en most futó verzió",
+    rebindCaution: "A megerősítéssel az alkalmazás lecseréli a mentett kapcsolatot erre, és újra megnyitja a csapatot. Nem indít ügynököket, és nem töröl adatot.",
+    rebindConfirm: "Újracsatlakoztatás",
+    rebindRegistering: "Újracsatlakoztatom a csapatot",
+    rebindRegisteringDetail: "Újra beolvasom a VPS-t, lecserélem a mentett kapcsolatot, és újra megnyitom a csapatot.",
   },
 };

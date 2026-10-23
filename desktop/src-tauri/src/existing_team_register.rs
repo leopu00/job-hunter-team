@@ -19,10 +19,13 @@
 //! `existing_team_saved_selection_mismatch`, decided locally where it can be.
 //!
 //! Known limits, by design:
-//! - the candidate is immutable and there is no way out in the app: after the VPS
-//!   updates the JHT image every use ends in exit 70 for good and `register`
-//!   refuses (a candidate exists). Replacing it would be an explicit, confirmed
-//!   step that removes candidate and selection together, never a silent overwrite;
+//! - the candidate is immutable: after the VPS updates the JHT image every use
+//!   ends in exit 70 and `register` refuses (a candidate exists). The way out is
+//!   a rebind, never a silent overwrite: the same discovery, run on the same
+//!   host with the same pinned key, for the same team, finding only another
+//!   runtime, shows what it replaces; the person's confirmation removes
+//!   candidate and selection together and publishes the new candidate. Another
+//!   host, user, key path or team keeps the refusal;
 //! - a selection made from a candidate the custodial producer wrote with another
 //!   JSON layout (spaces, key order) is never restored: the app recomposes its own
 //!   bytes, whose hash differs, so it answers the mismatch (fail closed);
@@ -540,6 +543,9 @@ pub(crate) struct Found {
     /// The scope has a valid selection and no candidate: these bytes are the ones
     /// it attests, and writing them back restores the saved pair.
     pub(crate) restores: bool,
+    /// The saved candidate this one would replace: the team was updated, its host
+    /// and team are the same and only the runtime is not.
+    pub(crate) replaces: Option<runtime::RebindBase>,
 }
 
 fn run_call(
@@ -575,14 +581,24 @@ pub(crate) fn discover_with(
         return Err("invalid_team_id");
     }
     // Every local refusal comes before the pin is read and before any SSH call.
-    let restoring = match runtime::registration_gate_at(root, scope)? {
-        RegistrationGate::Fresh => None,
-        RegistrationGate::Restore(selection) => {
+    let mut rebinding = None;
+    let restoring = match runtime::registration_gate_at(root, scope) {
+        Ok(RegistrationGate::Fresh) => None,
+        Ok(RegistrationGate::Restore(selection)) => {
             if selection.host != *host || selection.team_id != team_id {
                 return Err(SELECTION_MISMATCH);
             }
             Some(selection.candidate_sha256)
         }
+        // A saved candidate of this very host and team may be replaced by what the VPS runs now.
+        Err("existing_team_runtime_candidate_exists") => {
+            rebinding = Some(
+                runtime::rebind_base_at(root, scope, host, team_id)
+                    .ok_or("existing_team_runtime_candidate_exists")?,
+            );
+            None
+        }
+        Err(code) => return Err(code),
     };
     let validated = validate_host()?;
     let timeout = budget.call(DISCOVERY_CALL)?;
@@ -627,6 +643,10 @@ pub(crate) fn discover_with(
     if restoring.as_ref().is_some_and(|attested| *attested != candidate_sha256) {
         return Err(SELECTION_MISMATCH);
     }
+    // The saved candidate is still the one the VPS runs: nothing to rebind, the refusal stands.
+    if rebinding.as_ref().is_some_and(|base| base.candidate_sha256 == candidate_sha256) {
+        return Err("existing_team_runtime_candidate_exists");
+    }
     budget.check()?;
     Ok(Found {
         runtime: target,
@@ -635,6 +655,7 @@ pub(crate) fn discover_with(
         candidate_sha256,
         fingerprint: pinned_host_fingerprint(&validated).ok(),
         restores: restoring.is_some(),
+        replaces: rebinding,
     })
 }
 
@@ -647,6 +668,8 @@ pub(crate) enum Registered {
     /// A selection without its candidate: the candidate it attests is back, and
     /// the pair reads back as one (`selected_at`). Written or Identical alike.
     Restored,
+    /// The saved candidate of an updated team was replaced by the one the VPS runs now.
+    Rebound(CandidateWrite),
 }
 
 /// Re-discovers and compares with what the person confirmed, then publishes the
@@ -683,10 +706,18 @@ pub(crate) fn register_hooked(
         run,
         budget,
     )?;
-    if found.candidate_sha256 != receipt.candidate_sha256 {
+    if found.candidate_sha256 != receipt.candidate_sha256
+        || found.replaces.as_ref().map(|base| &base.candidate_sha256) != receipt.replaces_sha256.as_ref()
+    {
         return Err("existing_team_target_changed");
     }
+    if let Some(base) = &found.replaces {
+        runtime::clear_for_rebind_at(root, scope, &receipt.host, &receipt.team_id, &base.candidate_sha256)?;
+    }
     let written = runtime::write_candidate_hooked(root, scope, &found.candidate, before_link)?;
+    if found.replaces.is_some() {
+        return Ok(Registered::Rebound(written));
+    }
     if !found.restores {
         return Ok(Registered::New(written));
     }
@@ -712,6 +743,8 @@ pub(crate) struct Receipt {
     pub(crate) host: ExecutionHost,
     pub(crate) team_id: String,
     pub(crate) candidate_sha256: String,
+    /// The SHA-256 of the saved candidate the person was shown being replaced, if any.
+    pub(crate) replaces_sha256: Option<String>,
     pub(crate) at: Instant,
 }
 
@@ -780,6 +813,17 @@ pub(crate) struct ExistingTeamReceipt {
     digest: String,
     candidate_sha256: String,
     readiness: bool,
+    /// What an updated team replaces: the runtime of the saved candidate. Absent for a first link.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    previous: Option<ExistingTeamPrevious>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct ExistingTeamPrevious {
+    image_id: String,
+    oci_revision: String,
+    digest: String,
 }
 
 #[derive(Debug, Serialize, PartialEq, Eq)]
@@ -793,6 +837,7 @@ pub(crate) fn register_outcome(registered: &Registered) -> &'static str {
         Registered::New(CandidateWrite::Written) => "registered",
         Registered::New(CandidateWrite::Identical) => "already_registered",
         Registered::Restored => "restored",
+        Registered::Rebound(_) => "rebound",
     }
 }
 
@@ -813,6 +858,11 @@ fn receipt_view(request: &ExistingTeamDiscoverRequest, found: &Found) -> Existin
         digest: found.runtime.digest.clone(),
         candidate_sha256: found.candidate_sha256.clone(),
         readiness: found.readiness,
+        previous: found.replaces.as_ref().map(|base| ExistingTeamPrevious {
+            image_id: base.runtime.image_id.clone(),
+            oci_revision: base.runtime.oci_revision.clone(),
+            digest: base.runtime.digest.clone(),
+        }),
     }
 }
 
@@ -821,11 +871,16 @@ fn receipt_view(request: &ExistingTeamDiscoverRequest, found: &Found) -> Existin
 /// except an in-memory receipt.
 #[tauri::command]
 pub(crate) async fn onboarding_existing_team_discover(
+    window: tauri::Window,
     app: tauri::AppHandle,
     state: State<'_, OnboardingNativeState>,
     scopes: State<'_, AccountScopeState>,
     request: ExistingTeamDiscoverRequest,
 ) -> Result<ExistingTeamReceipt, OnboardingError> {
+    // Reading is the first half of a write (a rebind replaces the saved connection): the app's own window only.
+    if !crate::direct_chat::window_may_write(window.label()) {
+        return Err(failure("window_not_allowed"));
+    }
     let expected = scopes.active().map_err(failure)?;
     if !matches!(&request.host, ExecutionHost::Vps { .. }) {
         return Err(failure("existing_team_vps_required"));
@@ -877,6 +932,7 @@ pub(crate) async fn onboarding_existing_team_discover(
             host: request.host.clone(),
             team_id: request.team_id.clone(),
             candidate_sha256: found.candidate_sha256.clone(),
+            replaces_sha256: found.replaces.as_ref().map(|base| base.candidate_sha256.clone()),
             at: Instant::now(),
         },
     );
@@ -891,20 +947,32 @@ pub(crate) async fn onboarding_existing_team_discover(
 /// control, not a defence against a hostile renderer.
 #[tauri::command]
 pub(crate) async fn onboarding_existing_team_register(
+    window: tauri::Window,
     app: tauri::AppHandle,
     state: State<'_, OnboardingNativeState>,
     scopes: State<'_, AccountScopeState>,
     request: ExistingTeamRegisterRequest,
 ) -> Result<ExistingTeamRegisterReply, OnboardingError> {
+    if !crate::direct_chat::window_may_write(window.label()) {
+        return Err(failure("window_not_allowed"));
+    }
     let expected = scopes.active().map_err(failure)?;
     if !request.confirmed {
         return Err(failure("existing_team_register_not_confirmed"));
     }
     let root = runtime::root(&app).map_err(failure)?;
-    runtime::registration_gate_at(&root, &expected).map_err(failure)?;
+    // A saved candidate stops the registration, unless the receipt shown is a rebind of exactly it.
+    let candidate_saved = match runtime::registration_gate_at(&root, &expected) {
+        Ok(_) => false,
+        Err("existing_team_runtime_candidate_exists") => true,
+        Err(code) => return Err(failure(code)),
+    };
     // (the same gate runs again inside the discovery, with the selection read there)
     let receipt = receipt_for(&state.receipt, &expected, &request.candidate_sha256, Instant::now())
         .map_err(failure)?;
+    if candidate_saved && receipt.replaces_sha256.is_none() {
+        return Err(failure("existing_team_runtime_candidate_exists"));
+    }
     if !state.try_begin() {
         return Err(failure("operation_in_progress"));
     }
