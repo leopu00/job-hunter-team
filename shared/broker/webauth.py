@@ -119,7 +119,16 @@ def _fetch(token: str, since: str | None) -> dict:
             if response.status != 200:
                 raise WebAuthRefusal("web_sync_unavailable")
             payload = response.read(512 * 1024 + 1)
-    except (HTTPError, URLError, TimeoutError, OSError):
+    except HTTPError as error:
+        if error.code == 409:
+            try:
+                body = json.loads(error.read(4096).decode("utf-8"))
+            except (UnicodeDecodeError, json.JSONDecodeError, OSError):
+                body = None
+            if isinstance(body, dict) and body.get("error") == "re_pair_required":
+                raise WebAuthRefusal("web_repair_required") from None
+        raise WebAuthRefusal("web_sync_unavailable") from None
+    except (URLError, TimeoutError, OSError):
         raise WebAuthRefusal("web_sync_unavailable") from None
     if len(payload) > 512 * 1024:
         raise WebAuthRefusal("web_response_too_large")

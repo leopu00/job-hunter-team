@@ -53,9 +53,9 @@ export async function GET(req: NextRequest) {
 
   const { data: deviceRows, error: deviceError } = await admin
     .from("cloud_sync_tokens")
-    .select("pairing_session_id")
+    .select("pairing_session_id, expires_at")
     .eq("user_id", userId)
-    .not("pairing_session_id", "is", null);
+    .is("revoked_at", null);
   if (deviceError) {
     return sanitizedError(deviceError, {
       status: 500,
@@ -63,8 +63,23 @@ export async function GET(req: NextRequest) {
       publicMessage: "query_failed",
     });
   }
+  const activeDeviceRows = ((deviceRows ?? []) as Array<{
+    pairing_session_id?: unknown;
+    expires_at?: unknown;
+  }>).filter((row) => {
+    if (row.expires_at === null || row.expires_at === undefined) return true;
+    return typeof row.expires_at === "string" && Date.parse(row.expires_at) > Date.now();
+  });
+  // Tokens created before pairing_session_id existed cannot be tied to a
+  // browser session. Do not hand a box any L3 receipt until it pairs again.
+  if (activeDeviceRows.some((row) => row.pairing_session_id === null)) {
+    return NextResponse.json(
+      { ok: false, error: "re_pair_required" },
+      { status: 409 },
+    );
+  }
   const deviceSessions = new Set(
-    ((deviceRows ?? []) as Array<{ pairing_session_id?: unknown }>)
+    activeDeviceRows
       .map((row) => row.pairing_session_id)
       .filter((id): id is string => typeof id === "string"),
   );

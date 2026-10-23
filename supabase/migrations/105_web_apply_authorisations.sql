@@ -61,17 +61,24 @@ BEGIN
     v_legacy := (p_params ->> 'legacy_id')::INTEGER;
 
     -- Device sessions may operate cloud sync but cannot authorise an external
-    -- application.  Return the same closed refusal as an inaccessible row.
+    -- application. A legacy active token has no pairing session to compare,
+    -- so it closes this L3 door until the box is paired again. Return the same
+    -- closed refusal as an inaccessible row.
     IF p_action = 'position.apply_authorize' THEN
         BEGIN
             v_session := NULLIF(auth.jwt() ->> 'session_id', '')::UUID;
         EXCEPTION WHEN invalid_text_representation THEN
             v_session := NULL;
         END;
-        IF v_session IS NOT NULL AND EXISTS (
+        IF EXISTS (
             SELECT 1 FROM public.cloud_sync_tokens AS t
              WHERE t.user_id = p_uid
-               AND t.pairing_session_id = v_session
+               AND t.revoked_at IS NULL
+               AND (t.expires_at IS NULL OR t.expires_at > now())
+               AND (
+                   t.pairing_session_id IS NULL
+                   OR (v_session IS NOT NULL AND t.pairing_session_id = v_session)
+               )
         ) THEN
             RETURN jsonb_build_object('error', 'not_found');
         END IF;

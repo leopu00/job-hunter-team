@@ -345,6 +345,21 @@ def test_web_status_reports_the_last_result_for_host_diagnosis(broker):
     })
 
 
+def test_a_legacy_web_token_requires_repair_and_records_no_authorisation(broker, monkeypatch):
+    account = "11111111-1111-4111-8111-111111111111"
+    broker.webauth.set_account(account)
+    broker.webauth.set_token(b"jht_sync_abcdefghijklmnopqrstuvwxyz")
+
+    def repair_required(*_args):
+        raise broker.webauth.WebAuthRefusal("web_repair_required")
+
+    monkeypatch.setattr(broker.webauth, "_fetch", repair_required)
+    with pytest.raises(broker.webauth.WebAuthRefusal, match="web_repair_required"):
+        broker.webauth.sync()
+    assert broker.webauth.show()["last_result"] == "web_repair_required"
+    assert ask(broker, "apply.check", position_id=42) == {"ok": True, "proven": False}
+
+
 def test_web_receipt_for_another_account_records_no_authorisation(broker, monkeypatch):
     account = "11111111-1111-4111-8111-111111111111"
     broker.webauth.set_account(account)

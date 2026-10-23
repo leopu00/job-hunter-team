@@ -12,7 +12,9 @@ vi.mock("@/lib/cloud-sync/rate-limit", () => ({
   checkCloudSyncRateLimit: mocks.checkCloudSyncRateLimit,
 }));
 
-function cloud(rows: unknown[]) {
+function cloud(rows: unknown[], deviceRows: unknown[] = [
+  { pairing_session_id: "00000000-0000-4000-8000-000000000099", expires_at: null },
+]) {
   const limit = vi.fn(async () => ({ data: rows, error: null }));
   const order = vi.fn(() => ({ limit }));
   const gte = vi.fn(() => ({ order }));
@@ -20,10 +22,8 @@ function cloud(rows: unknown[]) {
   const actions = vi.fn(() => ({ in: statuses }));
   const user = vi.fn(() => ({ in: actions }));
   const select = vi.fn(() => ({ eq: user }));
-  const deviceNot = vi.fn(async () => ({ data: [
-    { pairing_session_id: "00000000-0000-4000-8000-000000000099" },
-  ], error: null }));
-  const deviceUser = vi.fn(() => ({ not: deviceNot }));
+  const deviceActive = vi.fn(async () => ({ data: deviceRows, error: null }));
+  const deviceUser = vi.fn(() => ({ is: deviceActive }));
   const deviceSelect = vi.fn(() => ({ eq: deviceUser }));
   return {
     admin: { from: vi.fn((table: string) => table === "cloud_sync_tokens" ? { select: deviceSelect } : { select }) },
@@ -31,6 +31,7 @@ function cloud(rows: unknown[]) {
     actions,
     statuses,
     deviceUser,
+    deviceActive,
   };
 }
 
@@ -97,6 +98,7 @@ describe("apply authorizations cloud route", () => {
 
     expect(fake.user).toHaveBeenCalledWith("user_id", "11111111-1111-4111-8111-111111111111");
     expect(fake.deviceUser).toHaveBeenCalledWith("user_id", "11111111-1111-4111-8111-111111111111");
+    expect(fake.deviceActive).toHaveBeenCalledWith("revoked_at", null);
     expect(fake.actions).toHaveBeenCalledWith("action", ["position.apply_authorize", "position.apply_revoke"]);
     expect(fake.statuses).toHaveBeenCalledWith("status", ["queued", "done"]);
     await expect(response.json()).resolves.toMatchObject({
@@ -131,5 +133,30 @@ describe("apply authorizations cloud route", () => {
     const response = await GET(new Request("http://localhost/api/cloud-sync/apply-authorizations") as never);
 
     await expect(response.json()).resolves.toMatchObject({ has_more: true });
+  });
+
+  it("fails closed until a legacy device token is paired again", async () => {
+    const fake = cloud([
+      {
+        id: "00000000-0000-4000-8000-000000000001",
+        action: "position.apply_authorize",
+        status: "done",
+        created_at: "2026-10-23T18:00:00.000Z",
+        summary: "Synthetic role @ Synthetic company · example.com",
+        params: { legacy_id: 42 },
+        session_id: null,
+      },
+    ], [{ pairing_session_id: null, expires_at: null }]);
+    mocks.verifyBearerToken.mockResolvedValue({
+      ok: true,
+      data: { userId: "11111111-1111-4111-8111-111111111111", tokenId: "legacy-device", admin: fake.admin },
+    });
+    const { GET } = await import("@/app/api/cloud-sync/apply-authorizations/route");
+
+    const response = await GET(new Request("http://localhost/api/cloud-sync/apply-authorizations") as never);
+
+    expect(response.status).toBe(409);
+    await expect(response.json()).resolves.toEqual({ ok: false, error: "re_pair_required" });
+    expect(fake.user).not.toHaveBeenCalled();
   });
 });

@@ -51,7 +51,8 @@ CREATE TABLE public.cloud_sync_tokens (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   token_hash text NOT NULL,
-  revoked_at timestamptz
+  revoked_at timestamptz,
+  expires_at timestamptz
 );
 """
 
@@ -181,6 +182,26 @@ def test_a_pairing_session_cannot_open_an_application_authorisation(cluster):
     )
     # The no-row answer is intentional: the door does not reveal why that
     # session cannot act, and creates neither confirmation nor desired-state.
+    assert who.act("position.apply_authorize", {"legacy_id": 81}) == {"ok": False, "error": "not_found"}
+    assert door._scalar(
+        cluster,
+        f"SELECT count(*) FROM public.web_action_log WHERE user_id = '{who.user}'",
+    ) == "0"
+    assert door._scalar(
+        cluster,
+        f"SELECT coalesce(apply_requested, false) FROM public.positions WHERE user_id = '{who.user}' AND legacy_id = 81",
+    ) == "f"
+
+
+def test_a_legacy_active_token_without_a_pairing_session_closes_the_application_door(cluster):
+    who = door.Browser(cluster)
+    door._position(cluster, who.user, 81)
+    cluster(
+        f"INSERT INTO public.cloud_sync_tokens (user_id, token_hash) "
+        f"VALUES ('{who.user}', 'synthetic-legacy')"
+    )
+    # A pre-pairing token has no browser session to compare. It must be
+    # re-paired before any L3 authorisation can be recorded.
     assert who.act("position.apply_authorize", {"legacy_id": 81}) == {"ok": False, "error": "not_found"}
     assert door._scalar(
         cluster,
