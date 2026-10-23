@@ -2,6 +2,86 @@ $ErrorActionPreference = 'Stop'
 $root = Join-Path $env:RUNNER_TEMP ("jht-acl-selftest-" + [guid]::NewGuid().ToString('N'))
 . (Join-Path $PSScriptRoot 'windows-private-acl.ps1')
 New-Item -ItemType Directory -Path $root -Force | Out-Null
+
+function Get-JhtAclProcessSnapshot {
+  # A child that E03 left alive is the useful suspect here.  Do not log its
+  # command line: a real runner can have unrelated secrets in it.
+  return @(Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | ForEach-Object {
+    [pscustomobject]@{
+      ProcessId = $_.ProcessId
+      ParentProcessId = $_.ParentProcessId
+      Name = $_.Name
+      ExecutablePath = $_.ExecutablePath
+      CreationDate = $_.CreationDate
+    }
+  })
+}
+
+function Write-JhtAclNodeDiagnostic {
+  param([Parameter(Mandatory)][string]$Path)
+  try {
+    $acl = Get-Acl -LiteralPath $Path -ErrorAction Stop
+    Write-Host "ACL_REPAIR_NODE path=$Path owner=$($acl.Owner) protected=$($acl.AreAccessRulesProtected)"
+    foreach ($rule in @($acl.Access)) {
+      Write-Host "ACL_REPAIR_ACE path=$Path identity=$($rule.IdentityReference.Value) type=$($rule.AccessControlType) rights=$($rule.FileSystemRights) inherited=$($rule.IsInherited)"
+    }
+  } catch {
+    Write-Host "ACL_REPAIR_NODE_UNREADABLE path=$Path error=$($_.Exception.GetType().FullName): $($_.Exception.Message)"
+  }
+}
+
+function Write-JhtAclRepairFailure {
+  param(
+    [Parameter(Mandatory)][string]$Path,
+    [Parameter(Mandatory)]$Failure,
+    [Parameter(Mandatory)][object[]]$BaselineProcesses,
+    [Parameter(Mandatory)][int]$Attempt
+  )
+  $message = $Failure.Exception.Message
+  Write-Host "ACL_REPAIR_FAILURE attempt=$Attempt type=$($Failure.Exception.GetType().FullName) message=$message"
+  $failedPath = [string]$Failure.TargetObject
+  if (-not $failedPath -or -not (Test-Path -LiteralPath $failedPath -ErrorAction SilentlyContinue)) {
+    $pathMatch = [regex]::Match($message, "(?i)(?:path|directory) '([^']+)'")
+    $failedPath = if ($pathMatch.Success) { $pathMatch.Groups[1].Value } else { $Path }
+  }
+  # Start at the refused node and retain enough ancestry to show whether the
+  # repair made the parent unreadable before it reached the child.
+  $node = $failedPath
+  while ($node) {
+    Write-JhtAclNodeDiagnostic -Path $node
+    if ($node -ieq $Path) { break }
+    $parent = Split-Path -LiteralPath $node -Parent
+    if (-not $parent -or $parent -ieq $node) { break }
+    $node = $parent
+  }
+  $baselineIds = @($BaselineProcesses | ForEach-Object { $_.ProcessId })
+  $remaining = @(Get-JhtAclProcessSnapshot | Where-Object { $baselineIds -notcontains $_.ProcessId })
+  if ($remaining.Count -eq 0) {
+    Write-Host 'ACL_REPAIR_E03_PROCESSES none'
+  } else {
+    foreach ($process in $remaining) {
+      Write-Host "ACL_REPAIR_E03_PROCESS pid=$($process.ProcessId) parent=$($process.ParentProcessId) name=$($process.Name) created=$($process.CreationDate) image=$($process.ExecutablePath)"
+    }
+  }
+}
+
+function Invoke-ProtectJhtHomeAclWithDiagnosis {
+  param([Parameter(Mandatory)][string]$Path, [Parameter(Mandatory)][object[]]$BaselineProcesses)
+  for ($attempt = 1; $attempt -le 2; $attempt++) {
+    try {
+      Protect-JhtHomeAcl -Path $Path
+      if ($attempt -eq 2) { Write-Host 'ACL_REPAIR_RETRY_PASS attempt=2' }
+      return
+    } catch {
+      # The hosted runner gives no stable typed access-denied exception here:
+      # diagnose, then retry every failure once rather than hiding a transient.
+      Write-JhtAclRepairFailure -Path $Path -Failure $_ -BaselineProcesses $BaselineProcesses -Attempt $attempt
+      if ($attempt -eq 2) { throw }
+      Write-Host 'ACL_REPAIR_RETRY attempt=2 after_ms=750'
+      Start-Sleep -Milliseconds 750
+    }
+  }
+}
 try {
   $owner = [Security.Principal.WindowsIdentity]::GetCurrent().Name
   $foreign = New-Object System.Security.Principal.SecurityIdentifier('S-1-5-32-545')
@@ -35,6 +115,7 @@ try {
   # deliberately stronger than checking that three destination paths exist:
   # the regression was a syntactically valid install whose first `jht up`
   # failed while dot-sourcing an omitted sibling helper.
+  $beforeCleanStartProcesses = Get-JhtAclProcessSnapshot
   $getRuntimeFiles = $ast.Find({ param($n) $n -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -eq 'Get-RuntimeFiles' }, $true)
   if (-not $getRuntimeFiles) { throw 'standalone Get-RuntimeFiles function missing' }
   . ([scriptblock]::Create($getRuntimeFiles.Extent.Text))
@@ -321,7 +402,7 @@ exit /b 0
   $acl.AddAccessRule((New-Object System.Security.AccessControl.FileSystemAccessRule($foreign, 'FullControl', 'Allow')))
   Set-Acl $root $acl
 
-  Protect-JhtHomeAcl -Path $root
+  Invoke-ProtectJhtHomeAclWithDiagnosis -Path $root -BaselineProcesses $beforeCleanStartProcesses
   $effective = Get-Acl $root
   $allowed = @($owner, 'NT AUTHORITY\SYSTEM', 'BUILTIN\Administrators')
   if (-not $effective.AreAccessRulesProtected) { throw 'inheritance still enabled' }
