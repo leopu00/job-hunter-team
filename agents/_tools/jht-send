@@ -110,11 +110,11 @@ def main() -> int:
         "--kind",
         default=DEFAULT_KIND,
         help=(
-            "Tipo del messaggio: urgent (serve l'utente subito), blocked (sei fermo), "
-            "completed (un lavoro finito), info (il resto, default). "
-            "Una domanda NON e' un tipo: usa jht-notify-user --option. "
-            "Il tipo lo dichiari tu e lo strumento lo scrive cosi' com'e', senza verificarlo. "
-            "Vale solo per i messaggi finali dell'assistente: non con --partial ne' con --role system."
+            "Kind of the message: urgent (the user is needed now), blocked (you are stuck), "
+            "completed (a finished piece of work), info (anything else, default). "
+            "A question is NOT a kind: use jht-notify-user --option. "
+            "You declare the kind and the tool writes it as given, without checking it. "
+            "Only for the assistant's final messages: not with --partial nor with --role system."
         ),
     )
     args = parser.parse_args()
@@ -128,8 +128,8 @@ def main() -> int:
         return 2
     if args.kind != DEFAULT_KIND and (args.role != "assistant" or args.partial):
         print(
-            f"jht-send: --kind {args.kind} vale solo per un messaggio finale dell'assistente: "
-            "non con --partial ne' con --role system. Non ho scritto niente.",
+            f"jht-send: --kind {args.kind} is only for a final message of the assistant: "
+            "not with --partial nor with --role system. Nothing was written.",
             file=sys.stderr,
         )
         return 2
@@ -151,8 +151,8 @@ def main() -> int:
         with chat_file.open("a", encoding="utf-8") as f:
             f.write(json.dumps(notice, ensure_ascii=False) + "\n")
         print(
-            f"jht-send: il testo supera {MAX_TEXT_BYTES} byte: non l'ho scritto. "
-            "Accorcialo o dividilo in piu' messaggi.",
+            f"jht-send: the text is over {MAX_TEXT_BYTES} bytes: it was not written. "
+            "Shorten it or split it into several messages.",
             file=sys.stderr,
         )
         return 2

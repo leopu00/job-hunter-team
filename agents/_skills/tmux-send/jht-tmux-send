@@ -570,13 +570,13 @@ _pane() { _tmux capture-pane -t "$session" -p 2>/dev/null || true; }
 
 _acquire_session_lock() {
   local name polls=0 max status
-  command -v python3 >/dev/null 2>&1 || { echo "jht-tmux-send: senza python3 non posso bloccare la sessione $session" >&2; return 0; }
+  command -v python3 >/dev/null 2>&1 || { echo "jht-tmux-send: without python3 the session $session cannot be locked" >&2; return 0; }
   name=$(printf '%s' "$session" | tr -c 'A-Za-z0-9_.-' '_')
-  mkdir -p "$lock_dir" 2>/dev/null || { echo "jht-tmux-send: non posso creare $lock_dir: consegno senza lock" >&2; return 0; }
+  mkdir -p "$lock_dir" 2>/dev/null || { echo "jht-tmux-send: cannot create $lock_dir: delivering without the lock" >&2; return 0; }
   # Il gruppo { …; } 2>/dev/null limita il silenzio all'apertura: `exec 9>>file 2>/dev/null` da solo
   # reindirizzerebbe lo stderr dell'INTERO script per sempre.
   if ! { exec 9>>"$lock_dir/tmux-send-$name.lock"; } 2>/dev/null; then
-    echo "jht-tmux-send: non posso aprire il lock di $session: consegno senza lock" >&2
+    echo "jht-tmux-send: cannot open the lock of $session: delivering without the lock" >&2
     return 0
   fi
   max=$(( lock_wait * 5 ))
@@ -590,7 +590,7 @@ except BlockingIOError:
     case "$status" in
       0) return 0 ;;
       11) ;;
-      *) echo "jht-tmux-send: il lock di $session non funziona (python3 rc=$status): consegno senza lock" >&2; return 0 ;;
+      *) echo "jht-tmux-send: the lock of $session does not work (python3 rc=$status): delivering without the lock" >&2; return 0 ;;
     esac
     polls=$(( polls + 1 ))
     [ "$polls" -le "$max" ] || return 1
@@ -599,7 +599,7 @@ except BlockingIOError:
 }
 
 if ! _acquire_session_lock; then
-  echo "jht-tmux-send: un'altra consegna a $session e' ancora in corso dopo ${lock_wait} s: non ho digitato niente (rc=8)" >&2
+  echo "jht-tmux-send: another delivery to $session is still running after ${lock_wait} s: nothing was typed (rc=8)" >&2
   exit 8
 fi
 
@@ -612,12 +612,12 @@ if [ "$enter_mode" -eq 1 ]; then
   if [ -z "$(_composer_line "$pane")" ] \
     || printf '%s\n' "$(_composer_line "$pane")" | head -n 1 | grep -qE '(❯|›|>|▌)[[:space:]]*[0-9]+[.)][[:space:]]'; then
     echo "JHT_REASON menu"
-    echo "jht-tmux-send: $session: nessuna casella a schermo (menu, domanda o accesso): non premo niente (rc=9)" >&2
+    echo "jht-tmux-send: $session: no composer on screen (a menu, a question or a sign-in): nothing pressed (rc=9)" >&2
     exit 9
   fi
   if ! _in_composer "$pane"; then
     if _composer_empty "$pane"; then echo "JHT_REASON empty_unseen"; else echo "JHT_REASON not_ours"; fi
-    echo "jht-tmux-send: $session: nella casella non c'e' piu' quel messaggio: non premo niente (rc=9)" >&2
+    echo "jht-tmux-send: $session: that message is no longer in the composer: nothing pressed (rc=9)" >&2
     exit 9
   fi
   busy_pre=0
@@ -630,14 +630,14 @@ if [ "$enter_mode" -eq 1 ]; then
   sleep 1.2
   pane=$(_pane)
   if _submitted "$pane"; then
-    echo "jht-tmux-send: Invio a $session (preso)"
+    echo "jht-tmux-send: Enter to $session (taken)"
     exit 0
   fi
   if _text_pending "$pane"; then
-    echo "jht-tmux-send: $session: l'Invio non e' stato preso, il testo e' ancora nella casella (rc=5)" >&2
+    echo "jht-tmux-send: $session: Enter was not taken, the text is still in the composer (rc=5)" >&2
     exit 5
   fi
-  echo "jht-tmux-send: $session: il testo e' uscito dalla casella ma non c'e' prova che sia stato preso (rc=7)" >&2
+  echo "jht-tmux-send: $session: the text left the composer but there is no proof it was taken (rc=7)" >&2
   exit 7
 fi
 
@@ -660,7 +660,7 @@ if [ -z "$(_composer_line "$pane")" ] && ! _pane_busy "$pane"; then
   sleep 1.5
   pane=$(_pane)
   if [ -z "$(_composer_line "$pane")" ] && ! _pane_busy "$pane"; then
-    echo "jht-tmux-send: $session non ricettivo (nessuna casella di input a schermo, pane non occupato): non ho digitato" >&2
+    echo "jht-tmux-send: $session not receptive (no input composer on screen, pane not busy): nothing typed" >&2
     exit 3
   fi
 fi
@@ -694,7 +694,7 @@ else
     # Digitato una volta, mai comparso nella casella: la TUI non lo ha preso. NON si riscrive e NON si
     # preme niente (un Invio o un Escape su un turno appena partito lo rompono). Resta 3, come sempre:
     # e' l'unico segnale «forse morto» su cui conta il pacing-bridge.
-    echo "jht-tmux-send: $session non ricettivo: digitato una volta, mai comparso nella casella (pane non occupato o testo non visto): non ho premuto niente" >&2
+    echo "jht-tmux-send: $session not receptive: typed once, never shown in the composer (pane not busy or text not seen): nothing pressed" >&2
     exit 3
   fi
 fi
@@ -709,11 +709,11 @@ for s_try in $(seq 1 "$submit_tries"); do
   if [ "$s_try" -gt 1 ]; then
     pane=$(_pane)
     if _submitted "$pane"; then
-      echo "jht-tmux-send: ${#message} chars to $session (submit $((s_try - 1)), confermato dopo l'attesa)"
+      echo "jht-tmux-send: ${#message} chars to $session (submit $((s_try - 1)), confirmed after the wait)"
       exit 0
     fi
     if ! _text_pending "$pane"; then
-      echo "jht-tmux-send: $session: il testo non e' piu' nella casella e non lo trovo nella conversazione: non premo altro (rc=7)" >&2
+      echo "jht-tmux-send: $session: the text is no longer in the composer and is not in the conversation: nothing more pressed (rc=7)" >&2
       exit 7
     fi
     _tmux send-keys -t "$session" Space
@@ -746,5 +746,5 @@ if _text_pending "$pane"; then
   echo "jht-tmux-send: $session ha accettato il testo ma NON lo ha submittato dopo ${submit_tries} Enter — riga appesa nel composer, agente VIVO ma muto: riprova, NON respawnare" >&2
   exit 5
 fi
-echo "jht-tmux-send: $session: il testo e' uscito dalla casella ma non c'e' prova che sia stato preso (nessuna ricorrenza in piu' nella conversazione, pane non partito): non so (rc=7)" >&2
+echo "jht-tmux-send: $session: the text left the composer but there is no proof it was taken (no new occurrence in the conversation, pane did not start): unknown (rc=7)" >&2
 exit 7
