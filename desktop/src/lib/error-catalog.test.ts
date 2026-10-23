@@ -174,6 +174,8 @@ const NOT_ERRORS: Record<string, string> = {
   start_failed: "debug trace event",
   snapshot_not_ready: "debug trace event",
   snapshot_not_configured: "debug trace event",
+  // Name of a local runtime-log step, never an error returned to the person.
+  provider_login: "runtime log step label",
   // Written only to the local diagnostics file, never returned.
   diagnostic_encode_failed: "diagnostics file only",
   diagnostic_path_invalid: "diagnostics file only",
