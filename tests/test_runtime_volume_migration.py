@@ -276,15 +276,18 @@ def test_powershell_fake_engines_publish_only_a_fully_verified_marker(
     engine = tmp_path / ("engine.cmd" if os.name == "nt" else "engine")
     if os.name == "nt":
         engine.write_text(
+            # `exit /b 130` inside a parenthesised block came back as exit code 0
+            # on Windows 10, so the interruption was never seen: keep it outside.
             "@echo off\r\n"
             "echo %*| %SystemRoot%\\System32\\findstr.exe /c:\"-cf -\" >nul\r\n"
-            "if not errorlevel 1 (\r\n"
-            "  <nul set /p =partial\r\n"
-            "  if \"%JHT_PS_MIGRATION_SCENARIO%\"==\"interrupt\" exit /b 130\r\n"
-            "  exit /b 0\r\n"
-            ")\r\n"
+            "if errorlevel 1 goto other\r\n"
+            "<nul set /p =partial\r\n"
+            "if \"%JHT_PS_MIGRATION_SCENARIO%\"==\"interrupt\" exit /b 130\r\n"
+            "exit /b 0\r\n"
+            ":other\r\n"
             "echo %*| %SystemRoot%\\System32\\findstr.exe /c:\"-xf -\" >nul\r\n"
-            "if not errorlevel 1 (more >nul & exit /b 0)\r\n"
+            "if errorlevel 1 exit /b 0\r\n"
+            "more >nul\r\n"
             "exit /b 0\r\n",
             encoding="ascii",
         )
