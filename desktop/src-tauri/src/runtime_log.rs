@@ -445,11 +445,13 @@ pub(crate) fn onboarding_support_report_save(
 /// report that the UI presents as ready to attach.
 fn redact_support_draft(markdown: String) -> String {
     let text = crate::onboarding::redact(markdown);
+    let labelled_secret = Regex::new(r#"(?i)\b(token|api[_-]?key|apikey|secret|password|passwd|pwd|credential|bearer)s?\b\s*[:=]\s*["']?([^\s"',;}\]]{6,})"#).expect("constant secret pattern");
     let public_ip = Regex::new(r"\b(?:\d{1,3}\.){3}\d{1,3}\b").expect("constant public IP pattern");
     let windows_home = Regex::new(r#"(?i)((?:[A-Z]:[\\/]|\\)Users[\\/])[^/\\\r\n\t"':;,)\]]+"#).expect("constant Windows home pattern");
     let posix_home = Regex::new(r#"(?i)((?:/Users|/home)/)[^/\s"':;,)\]]+"#).expect("constant POSIX home pattern");
     let labelled_host = Regex::new(r"(?i)\b(host|hostname|server|address)\s*[:=]\s*[^\s,;]+").expect("constant host pattern");
     let labelled_id = Regex::new(r"(?i)\b(?:user[_-]?id|account[_-]?id|team[_-]?id|profile[_-]?id|client[_-]?id|id)\s*[:=]\s*[^\s,;]+").expect("constant id pattern");
+    let text = labelled_secret.replace_all(&text, "$1: [secret]");
     let text = public_ip.replace_all(&text, "[ip]");
     let text = windows_home.replace_all(&text, "$1[user]");
     let text = posix_home.replace_all(&text, "$1[user]");
@@ -827,7 +829,7 @@ mod tests {
         for sensitive in ["203.0.113.70", "synthetic-secret-value", "/Users/ada", "customer-vps.example.invalid", "person-123"] {
             assert!(!saved.contains(sensitive), "saved draft exposed {sensitive}");
         }
-        assert!(saved.contains("[ip]") && saved.contains("[REDACTED]") && saved.contains("/Users/[user]") && saved.contains("[host]") && saved.contains("[id]"));
+        assert!(saved.contains("[ip]") && saved.contains("[secret]") && saved.contains("/Users/[user]") && saved.contains("[host]") && saved.contains("[id]"));
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
