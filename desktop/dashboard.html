@@ -7,14 +7,23 @@
     <title>Job Hunter Team</title>
     <script>
       (() => {
-        const allowed = ["dark", "light", "graphite", "ocean", "paper"];
-        let theme = "dark";
+        // The same table as src/shell/theme.ts (a test runs this script against it).
+        const families = { dark: "dark", light: "light", graphite: "dark", ocean: "dark", paper: "light", midnight: "dark", forest: "dark", dusk: "dark", contrast: "dark", sage: "light", lavender: "light" };
+        let theme;
         try {
           const stored = localStorage.getItem("jht-desktop-theme");
-          if (allowed.includes(stored)) theme = stored;
+          if (Object.prototype.hasOwnProperty.call(families, stored)) theme = stored;
         } catch {}
+        if (!theme) {
+          // Nothing valid chosen, or «follow the system»: the system's light or dark.
+          let light = false;
+          try {
+            light = window.matchMedia("(prefers-color-scheme: light)").matches === true;
+          } catch {}
+          theme = light ? "light" : "dark";
+        }
         document.documentElement.dataset.jhtTheme = theme;
-        document.documentElement.dataset.theme = theme === "light" || theme === "paper" ? "light" : "dark";
+        document.documentElement.dataset.theme = families[theme];
       })();
     </script>
   </head>

@@ -4,13 +4,26 @@ import { fill } from "../lib/text-slots";
 import {
   applyTheme,
   persistTheme,
-  readStoredTheme,
+  readStoredPreference,
+  resolveTheme,
+  SYSTEM_THEME,
   THEMES,
+  watchSystemTheme,
   type Theme,
+  type ThemePreference,
 } from "./theme";
 import { THEME_TEXT } from "./theme.i18n";
 
 const MENU_ID = "desktop-theme-menu";
+
+/** The menu's entries in the order they are shown: «follow the system», then the dark palettes, then the light ones. */
+const DARK_THEMES = THEMES.filter((entry) => entry.family === "dark");
+const LIGHT_THEMES = THEMES.filter((entry) => entry.family === "light");
+const CHOICES: readonly ThemePreference[] = [
+  SYSTEM_THEME,
+  ...DARK_THEMES.map((entry) => entry.value),
+  ...LIGHT_THEMES.map((entry) => entry.value),
+];
 
 function GearIcon() {
   return (
@@ -36,17 +49,30 @@ function GearIcon() {
 }
 
 export default function ThemePicker() {
-  const [theme, setTheme] = useState<Theme>(() =>
-    readStoredTheme(window.localStorage),
+  // What was chosen (a palette, or «follow the system», which is also what nobody chose yet) and the
+  // palette in force now. The second only differs from the first while the system decides.
+  const [preference, setPreference] = useState<ThemePreference>(() =>
+    readStoredPreference(window.localStorage),
   );
+  const [theme, setTheme] = useState<Theme>(() => resolveTheme(preference));
   const [open, setOpen] = useState(false);
   const pickerRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
 
   const text = THEME_TEXT[appLocale()];
-  const label = text.names[theme];
+  const label =
+    preference === SYSTEM_THEME
+      ? `${text.names[theme]} (${text.systemShort})`
+      : text.names[theme];
 
   useEffect(() => applyTheme(theme), [theme]);
+
+  // While the system decides, a change of its light/dark applies at once.
+  useEffect(() => {
+    if (preference !== SYSTEM_THEME) return;
+    setTheme(resolveTheme(SYSTEM_THEME));
+    return watchSystemTheme(setTheme);
+  }, [preference]);
 
   useEffect(() => {
     if (!open) return;
@@ -73,21 +99,21 @@ export default function ThemePicker() {
     };
   }, [open]);
 
-  const choose = (next: Theme) => {
-    setTheme(next);
-    persistTheme(next);
+  const choose = (next: ThemePreference) => {
+    setPreference(next);
+    setTheme(persistTheme(next));
     setOpen(false);
     triggerRef.current?.focus();
   };
 
   const moveFocus = (event: KeyboardEvent<HTMLButtonElement>, index: number) => {
     let next: number | undefined;
-    if (event.key === "ArrowDown") next = (index + 1) % THEMES.length;
+    if (event.key === "ArrowDown") next = (index + 1) % CHOICES.length;
     if (event.key === "ArrowUp") {
-      next = (index - 1 + THEMES.length) % THEMES.length;
+      next = (index - 1 + CHOICES.length) % CHOICES.length;
     }
     if (event.key === "Home") next = 0;
-    if (event.key === "End") next = THEMES.length - 1;
+    if (event.key === "End") next = CHOICES.length - 1;
     if (next === undefined) return;
     event.preventDefault();
     pickerRef.current
@@ -95,6 +121,30 @@ export default function ThemePicker() {
       .item(next)
       .focus();
   };
+
+  const option = (value: ThemePreference, name: string) => (
+    <button
+      key={value}
+      type="button"
+      role="menuitemradio"
+      aria-checked={preference === value}
+      className="theme-picker__option"
+      onClick={() => choose(value)}
+      onKeyDown={(event) => moveFocus(event, CHOICES.indexOf(value))}
+    >
+      <span
+        className="theme-picker__swatch"
+        data-theme-preview={value}
+        aria-hidden="true"
+      >
+        <i />
+      </span>
+      <span>{name}</span>
+      <span className="theme-picker__check" aria-hidden="true">
+        {preference === value ? "✓" : ""}
+      </span>
+    </button>
+  );
 
   return (
     <div className="theme-picker" ref={pickerRef}>
@@ -118,29 +168,11 @@ export default function ThemePicker() {
           aria-label={text.menu}
         >
           <span className="theme-picker__heading">{text.heading}</span>
-          {THEMES.map((option, index) => (
-            <button
-              key={option.value}
-              type="button"
-              role="menuitemradio"
-              aria-checked={theme === option.value}
-              className="theme-picker__option"
-              onClick={() => choose(option.value)}
-              onKeyDown={(event) => moveFocus(event, index)}
-            >
-              <span
-                className="theme-picker__swatch"
-                data-theme-preview={option.value}
-                aria-hidden="true"
-              >
-                <i />
-              </span>
-              <span>{text.names[option.value]}</span>
-              <span className="theme-picker__check" aria-hidden="true">
-                {theme === option.value ? "✓" : ""}
-              </span>
-            </button>
-          ))}
+          {option(SYSTEM_THEME, text.system)}
+          <span className="theme-picker__heading">{text.groupDark}</span>
+          {DARK_THEMES.map((entry) => option(entry.value, text.names[entry.value]))}
+          <span className="theme-picker__heading">{text.groupLight}</span>
+          {LIGHT_THEMES.map((entry) => option(entry.value, text.names[entry.value]))}
         </div>
       )}
     </div>

@@ -13,7 +13,7 @@ import { PAGE_STATES_TEXT } from "./page-states.i18n";
 const LOCALES = ["it", "en", "de", "fr", "es", "pt", "hu"];
 
 // Role names that are the same word in several languages.
-const SAME_AS_ITALIAN = new Set(["Mentor", "Scout", "Scorer", "Sistema", "Team", "Assistente", "Analista", "Agente", "Capitano", "Tu", "pass", "Tema", "Grafite", "Oceano"]);
+const SAME_AS_ITALIAN = new Set(["Mentor", "Scout", "Scorer", "Sistema", "Team", "Assistente", "Analista", "Agente", "Capitano", "Tu", "pass", "Tema", "Grafite", "Oceano", "Salvia", "Lavanda", "sistema"]);
 
 /** Every leaf string of a dictionary, with its path. */
 function leaves(value: unknown, path = ""): [string, string][] {
