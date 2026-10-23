@@ -135,7 +135,7 @@ def wrapper(tmp_path):
     calls = tmp_path / "compose-calls.txt"
 
     def run(body: str, *, running_hash: str = OLD_HASH, working_dir: str | None = None, down_stderr: str = "",
-            down_exit: int = 0):
+            down_exit: int = 0, left_after_down: bool = False):
         compose_file = runtime / "docker-compose.yml"
         override = runtime / "podman-native-override.yml"
         details = "|".join([
@@ -163,7 +163,7 @@ docker() {{ printf '%s\\n' '{details}'; }}
 compose_file() {{
   shift
   case "$1" in
-    ps) echo 0123456789ab ;;
+    ps) if [ "{int(not left_after_down)}" = 1 ] && grep -qx down "{calls}" 2>/dev/null; then return 0; fi; echo 0123456789ab ;;
     down) echo "down" >> "{calls}"; printf '%b' '{down_stderr}' >&2; return {down_exit} ;;
     *) echo "$*" >> "{calls}" ;;
   esac
@@ -215,6 +215,18 @@ def test_the_rootless_netns_eperm_after_down_is_a_note_not_an_error(wrapper):
     assert "rc=0" in done.stdout
     assert "Error:" not in done.stderr and "permission denied" in done.stderr
     assert done.stderr.startswith("nota: ")
+
+
+def test_podman_failing_with_only_the_netns_eperm_exits_ok_once_no_container_is_left(wrapper):
+    # The real podman exits non-zero with that one error even though the containers are gone.
+    done = wrapper.run("container_down; echo rc=$?", running_hash=NEW_HASH, down_stderr=NETNS, down_exit=1)
+    assert "rc=0" in done.stdout and "il team e' fermo" in done.stderr
+
+
+def test_the_netns_note_does_not_turn_a_failed_down_with_a_container_left_into_success(wrapper):
+    done = wrapper.run("container_down; echo rc=$?", running_hash=NEW_HASH, down_stderr=NETNS, down_exit=1,
+                       left_after_down=True)
+    assert "rc=1" in done.stdout
 
 
 def test_any_other_down_error_passes_as_it_is_with_its_exit(wrapper):
