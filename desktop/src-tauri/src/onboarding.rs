@@ -2831,9 +2831,11 @@ pub(crate) struct ExistingTeamReadiness {
     pub(crate) connection_key: Option<String>,
 }
 
-/// Validates the immutable target and team identity, then reports whether its
-/// assistant is active. A missing assistant is a degraded read-only state;
-/// it never authorizes messages, starts, or provider work.
+/// Validates the immutable target and team identity, then reports which of its
+/// sessions are running. The identity is enough to connect (the pinned host, the
+/// team's own cloud.json, one container): a captain or an assistant that is off,
+/// or held down, is shown by the app, which can start it. `readiness` says whether
+/// the assistant is up; it never authorizes messages, starts, or provider work.
 pub(crate) fn existing_team_readonly_probe_with(
     team_id: &str,
     run: impl FnOnce(&[u8]) -> Result<ProcessResult, &'static str>,
@@ -2859,9 +2861,6 @@ pub(crate) fn existing_team_readonly_probe_with(
     if !snapshot.runtime_installed || !snapshot.container_running {
         return Err(failure("existing_team_unavailable"));
     }
-    if !snapshot.captain_running {
-        return Err(failure("existing_team_not_active"));
-    }
     Ok(ExistingTeamReadiness {
         readiness: snapshot.assistant_running,
         snapshot,
@@ -2869,16 +2868,13 @@ pub(crate) fn existing_team_readonly_probe_with(
     })
 }
 
-/// GUI onboarding retains its existing policy: it needs both team sessions.
+/// The full connection («Confirm and connect») probes the same way: the identity is the condition,
+/// the sessions are what the snapshot reports. Agents that are off are started from the app.
 fn existing_team_probe_with(
     team_id: &str,
     run: impl FnOnce(&[u8]) -> Result<ProcessResult, &'static str>,
 ) -> Result<OnboardingSnapshot, OnboardingError> {
-    let result = existing_team_readonly_probe_with(team_id, run)?;
-    if !result.readiness {
-        return Err(failure("existing_team_not_active"));
-    }
-    Ok(result.snapshot)
+    existing_team_readonly_probe_with(team_id, run).map(|result| result.snapshot)
 }
 
 /// Activates only the exact target just validated by the caller. Reusing an
@@ -6595,7 +6591,7 @@ mod tests {
     }
 
     #[test]
-    fn existing_team_probe_result_requires_identity_and_live_sessions() {
+    fn existing_team_probe_requires_the_identity_and_reports_the_sessions() {
         let team_id = "00000000-0000-4000-8000-000000000001";
         let active = existing_team_probe_with(team_id, |input| {
             assert_eq!(input, format!("{team_id}\n").as_bytes());
@@ -6619,14 +6615,21 @@ mod tests {
         assert!(!degraded.readiness);
         assert!(degraded.snapshot.captain_running);
         assert!(!degraded.snapshot.assistant_running);
+        // T124: a team whose captain and assistant are both off connects, and says so
+        let asleep = b"runtimeInstalled=1\ncontainerRunning=1\ncaptainRunning=0\nassistantRunning=0\n".to_vec();
+        let connected = existing_team_probe_with(team_id, |_| Ok(ProcessResult { code: 0, stdout: asleep.clone() })).unwrap();
+        assert!(connected.container_running && !connected.captain_running && !connected.assistant_running);
+        let read_only = existing_team_readonly_probe_with(team_id, |_| Ok(ProcessResult { code: 0, stdout: asleep.clone() })).unwrap();
+        assert!(!read_only.readiness && !read_only.snapshot.captain_running);
+        // the container itself is still a condition
         assert_eq!(
             existing_team_probe_with(team_id, |_| Ok(ProcessResult {
                 code: 0,
-                stdout: b"runtimeInstalled=1\ncontainerRunning=1\ncaptainRunning=1\nassistantRunning=0\n".to_vec(),
+                stdout: b"runtimeInstalled=1\ncontainerRunning=0\ncaptainRunning=1\nassistantRunning=1\n".to_vec(),
             }))
             .unwrap_err()
             .code,
-            "existing_team_not_active"
+            "existing_team_unavailable"
         );
 
         let mismatch = existing_team_probe_with(team_id, |_| {
@@ -7376,10 +7379,11 @@ mod existing_team_assistant_tests {
             assert_eq!(script.calls.borrow().len(), 1);
             assert_eq!(script.starts(), 0);
         }
-        // a team with no captain is not one this action starts anything on
-        let script = Script::new(vec![probe_reply(false, false)], exit(0));
-        assert_eq!(code(script.run(true, true)), "existing_team_not_active");
-        assert_eq!(script.starts(), 0);
+        // T124: a team whose captain is off is the same team; the person may start its assistant
+        let script = Script::new(vec![probe_reply(false, false), probe_reply(false, true)], exit(0));
+        let reply = script.run(true, true).expect("started with the captain off");
+        assert_eq!((reply.outcome, reply.captain_running, reply.assistant_running), ("started", false, true));
+        assert_eq!(script.starts(), 1);
     }
 
     #[test]
