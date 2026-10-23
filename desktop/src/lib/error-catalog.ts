@@ -790,6 +790,12 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
     "No provider (Claude, Codex or Kimi) is set up on the team: its agents cannot start.",
     "Choose the provider on the VPS with «jht setup», then try again.",
   ),
+  provider_not_configured_local: copy(
+    "Sulla squadra di questo computer non è configurato nessun provider (Claude, Codex o Kimi): gli agenti non possono partire.",
+    "Scegli il provider da un terminale di questo computer con «jht setup», poi riprova.",
+    "No provider (Claude, Codex or Kimi) is set up on this computer's team: its agents cannot start.",
+    "Choose the provider from a terminal on this computer with «jht setup», then try again.",
+  ),
   agent_stop_failed: copy(
     "L’agente è ancora acceso dopo lo spegnimento.",
     "Riprova tra qualche secondo.",

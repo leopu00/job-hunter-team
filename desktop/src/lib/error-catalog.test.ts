@@ -839,3 +839,19 @@ describe("the limits, said apart", () => {
     }
   });
 });
+
+describe("the provider that is not set up", () => {
+  it("tells the VPS and this computer apart in every language: the action never sends this computer's team to a VPS", () => {
+    const vps: Record<string, RegExp> = { it: /VPS/, en: /VPS/, de: /VPS/, fr: /VPS/, es: /VPS/, pt: /VPS/, hu: /VPS/ };
+    for (const locale of Object.keys(vps)) {
+      const remote = describeError("provider_not_configured", { locale });
+      const local = describeError("provider_not_configured_local", { locale });
+      expect(remote.known && local.known, locale).toBe(true);
+      expect(remote.action, locale).toMatch(vps[locale]);
+      expect(local.action, locale).not.toMatch(/VPS/);
+      expect(local.text, locale).not.toMatch(/VPS/);
+      expect(local.action, locale).toMatch(/jht setup/);
+      expect(local.text, locale).not.toBe(remote.text);
+    }
+  });
+});
