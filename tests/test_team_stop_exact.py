@@ -22,10 +22,11 @@ import os
 import re
 import shutil
 import subprocess
-import tempfile
 from pathlib import Path
 
 import pytest
+
+import private_tmux
 
 ROOT = Path(__file__).resolve().parents[1]
 STOP = ROOT / "cli" / "src" / "commands" / "team" / "stop.js"
@@ -42,7 +43,7 @@ class PrivateTmux:
     def __init__(self):
         # A short path: the socket's own path is limited to ~100 characters.
         # resolve(): on macOS /tmp is a link to /private/tmp, and tmux reports the real path.
-        self.dir = Path(tempfile.mkdtemp(prefix="jts", dir="/tmp")).resolve()
+        self.dir = private_tmux.private_dir("stop").resolve()
         self.bin = self.dir / "bin"
         self.bin.mkdir()
         self.log = self.dir / "tmux.log"
@@ -89,11 +90,9 @@ class PrivateTmux:
         return self.log.read_text().splitlines() if self.log.exists() else []
 
     def close(self) -> None:
-        # Only the private server: the socket must be under our own folder, or nothing is killed.
-        socket = self.tmux("display-message", "-p", "#{socket_path}").stdout.strip()
-        if socket.startswith(str(self.dir)):
-            self.tmux("kill-server")
-        shutil.rmtree(self.dir, ignore_errors=True)
+        # Only the private server: private_tmux kills what answers on a socket under our own
+        # folder (never another server), then removes the folder.
+        private_tmux.close_dir(self.dir)
 
 
 @pytest.fixture
