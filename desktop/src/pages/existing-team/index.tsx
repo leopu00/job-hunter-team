@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { appLocale } from "../../lib/app-locale";
 import { describeError } from "../../lib/error-catalog";
-import { useExistingTeamReadOnly } from "../../lib/existing-team-readonly";
+import { useExistingTeamView } from "../../lib/existing-team-readonly";
 import {
   CONNECTION_STATUS_FIELDS,
   readTeamStatus,
@@ -45,7 +45,7 @@ export default function ExistingTeamStatusPage(_props: PageProps) {
   const [reading, setReading] = useState<TeamStatusReading>({ kind: "unknown" });
   const [busy, setBusy] = useState(false);
   const latest = useRef(0);
-  const readOnly = useExistingTeamReadOnly();
+  const readOnly = useExistingTeamView();
   const connection = readOnly?.connection ?? null;
 
   const read = useCallback(async () => {
@@ -178,7 +178,9 @@ export default function ExistingTeamStatusPage(_props: PageProps) {
             })}
           </ul>
           <p data-testid="team-status-actions" className="mt-4 text-[11px]" style={{ color: "var(--color-muted)" }}>
-            {(connection?.source === "assistant_start"
+            {(readOnly?.full
+              ? t.actionsFullLink
+              : connection?.source === "assistant_start"
               ? t.actionsAfterStart
               : (connection ? connection.assistantRunning : readOnly?.assistantActive)
                 ? t.actionsReadOnly

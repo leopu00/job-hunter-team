@@ -14,7 +14,7 @@ import { loadAgentStatuses, stateOf } from "../../office/status";
 import { officeSummary } from "../../office/summary";
 import { withStatusAgents } from "../../office/data/load";
 import { appLocale } from "../../lib/app-locale";
-import { useExistingTeamReadOnly } from "../../lib/existing-team-readonly";
+import { useExistingTeamView } from "../../lib/existing-team-readonly";
 import { EXISTING_TEAM_READONLY_TEXT } from "../../lib/existing-team-readonly.i18n";
 import { officeText } from "../../office/office.i18n";
 import { PAGE_STATES_TEXT } from "../../lib/page-states.i18n";
@@ -219,7 +219,7 @@ function Office({ ready, source }: { ready: Ready; source: OfficeSource }) {
   // once the page is open and again when «Aggiorna» asks, no timer of its own.
   // The connection's own values (the two sessions) can change without a new
   // read, so the office is drawn again from the last reading when they do.
-  const readOnly = useExistingTeamReadOnly();
+  const readOnly = useExistingTeamView();
   const connection = readOnly?.connection ?? null;
   const reading = useRef<Awaited<ReturnType<typeof readTeamStatus>>>({ kind: "unknown" });
   // the piles' counts from the team's positions, read with the probe while the container is up

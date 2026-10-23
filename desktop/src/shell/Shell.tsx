@@ -11,6 +11,7 @@ import {
   existingTeamReadOnlyReason,
   useExistingTeamReadNotice,
   useExistingTeamReadOnly,
+  useExistingTeamView,
 } from "../lib/existing-team-readonly";
 import { EXISTING_TEAM_READONLY_TEXT } from "../lib/existing-team-readonly.i18n";
 import { LeaveReadOnlyContext } from "../lib/leave-read-only";
@@ -169,9 +170,12 @@ const FULL_BLEED_COLUMN: CSSProperties = {
 
 export default function Shell({ onLogout, onCloseReadOnly }: ShellProps) {
   const { path, search } = useLocation();
+  // The existing team's VPS is what the pages read, in either kind of link; only the read-only one
+  // disables what writes (a team connected in full has the same pages, with their controls on).
+  const linkedTeam = useExistingTeamView();
   const readOnlyTeam = useExistingTeamReadOnly();
   const readNotice = useExistingTeamReadNotice();
-  const readOnly = readOnlyTeam !== null;
+  const readOnly = linkedTeam !== null;
   const match = matchRoute(readOnly ? READ_ONLY_ROUTES : ROUTES, path);
   const params = useMemo(() => new URLSearchParams(search), [search]);
 
@@ -182,19 +186,21 @@ export default function Shell({ onLogout, onCloseReadOnly }: ShellProps) {
 
   const Page = match?.route.page;
   const page = Page && <Page key={path} params={match.params} search={params} />;
-  if (readOnlyTeam) {
+  if (linkedTeam) {
     const text = EXISTING_TEAM_READONLY_TEXT[appLocale()];
     const bars = (
       <>
         <Navbar onLogout={onLogout} onCloseReadOnly={onCloseReadOnly} readOnly />
-        <p
-          role="status"
-          data-testid="existing-team-readonly-banner"
-          className="px-4 py-2 text-[11px] border-b border-[var(--color-border)] text-[var(--color-muted)]"
-        >
-          <strong className="text-[var(--color-bright)]">{existingTeamReadOnlyReason(readOnlyTeam)}.</strong>{" "}
-          {text.banner} <span data-testid="existing-team-judgement-how">{text.judgementHow}</span>
-        </p>
+        {readOnlyTeam && (
+          <p
+            role="status"
+            data-testid="existing-team-readonly-banner"
+            className="px-4 py-2 text-[11px] border-b border-[var(--color-border)] text-[var(--color-muted)]"
+          >
+            <strong className="text-[var(--color-bright)]">{existingTeamReadOnlyReason(readOnlyTeam)}.</strong>{" "}
+            {text.banner} <span data-testid="existing-team-judgement-how">{text.judgementHow}</span>
+          </p>
+        )}
         {readNotice === "sort_last_action" && (
           <p role="status" data-testid="existing-team-readonly-notice" className="px-4 py-2 text-[11px] text-[var(--color-muted)]">
             {text.sortLastAction}
@@ -205,7 +211,7 @@ export default function Shell({ onLogout, onCloseReadOnly }: ShellProps) {
     );
     return (
       <DashboardI18nProvider>
-        <ReadOnlyActionsProvider value={{ readOnly: true, reason: existingTeamReadOnlyReason(readOnlyTeam) }}>
+        <ReadOnlyActionsProvider value={readOnlyTeam ? { readOnly: true, reason: existingTeamReadOnlyReason(readOnlyTeam) } : { readOnly: false, reason: "" }}>
           <LeaveReadOnlyContext.Provider value={onCloseReadOnly ?? null}>
           {match?.route.fullBleed ? (
             // the office: the same window-tall column as in the full shell, the read-only bars under the navbar

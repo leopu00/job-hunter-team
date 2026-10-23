@@ -1,4 +1,4 @@
-import { existingTeamReadOnly } from "../../lib/existing-team-readonly";
+import { existingTeamView } from "../../lib/existing-team-readonly";
 import { supabase } from "../../lib/supabase";
 import { inertSupabase } from "./inert-supabase";
 
@@ -7,5 +7,5 @@ import { inertSupabase } from "./inert-supabase";
  * client, with the user's session. Typed `any` like the web's own.
  */
 export function createClient(): any {
-  return existingTeamReadOnly() ? inertSupabase : supabase;
+  return existingTeamView() ? inertSupabase : supabase;
 }

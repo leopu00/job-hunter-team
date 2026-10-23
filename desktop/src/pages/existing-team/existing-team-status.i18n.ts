@@ -22,6 +22,7 @@ export interface ExistingTeamStatusText {
   failed: string;
   failedAt: string; // {time}
   actionsAssistantOff: string; // {time}: the connection's
+  actionsFullLink: string; // the team connected in full: where its actions are
   actionsReadOnly: string; // {time}: the connection's
   /** Under the captain and assistant rows: their value is the connection's, not this refresh's. */
   atConnection: string; // {time}
@@ -49,6 +50,7 @@ export const EXISTING_TEAM_STATUS_TEXT: Record<Locale, ExistingTeamStatusText> =
     failedAt: "Ultimo tentativo alle {time}. Nessun valore precedente viene mostrato come attuale.",
     actionsAssistantOff: "Al collegamento delle {time} l’assistente non era attivo: le azioni sono disabilitate, e questa connessione è comunque in sola lettura.",
     actionsReadOnly: "Al collegamento delle {time} l’assistente era attivo, ma questa connessione è in sola lettura: le azioni restano disabilitate.",
+    actionsFullLink: "Questa squadra è collegata in modo completo: le azioni sono nella pagina Agenti (avvio, arresto, chat) e in quelle degli annunci (giudizi); questa pagina mostra soltanto lo stato.",
     atConnection: "Valore del collegamento delle {time}, non riletto da questo aggiornamento.",
     noConnectionValue: "Il collegamento non ha dato un valore per questa riga; questo aggiornamento non lo legge.",
     atAssistantStart: "Valore della verifica dopo l’avvio dell’assistente, delle {time}, non riletto da questo aggiornamento.",
@@ -79,6 +81,7 @@ export const EXISTING_TEAM_STATUS_TEXT: Record<Locale, ExistingTeamStatusText> =
     failedAt: "Last attempt at {time}. No earlier value is shown as current.",
     actionsAssistantOff: "At the connection at {time} the assistant was not running: actions are disabled, and this connection is read only anyway.",
     actionsReadOnly: "At the connection at {time} the assistant was running, but this connection is read only: actions stay disabled.",
+    actionsFullLink: "This team is connected in full: its actions are on the Agents page (start, stop, chat) and on the positions pages (judgements); this page only shows the state.",
     atConnection: "Value from the connection at {time}, not read again by this refresh.",
     noConnectionValue: "The connection gave no value for this row; this refresh does not read it.",
     atAssistantStart: "Value from the check after the assistant was started, at {time}, not read again by this refresh.",
@@ -109,6 +112,7 @@ export const EXISTING_TEAM_STATUS_TEXT: Record<Locale, ExistingTeamStatusText> =
     failedAt: "Letzter Versuch um {time}. Frühere Werte werden nicht als aktuell angezeigt.",
     actionsAssistantOff: "Beim Verbinden um {time} lief der Assistent nicht: Aktionen sind deaktiviert; diese Verbindung ist ohnehin schreibgeschützt.",
     actionsReadOnly: "Beim Verbinden um {time} lief der Assistent, aber diese Verbindung ist schreibgeschützt: Aktionen bleiben deaktiviert.",
+    actionsFullLink: "Dieses Team ist vollständig verbunden: Aktionen finden Sie auf der Seite Agenten (Starten, Stoppen, Chat) und bei den Stellen (Bewertungen); diese Seite zeigt nur den Status.",
     atConnection: "Wert vom Verbinden um {time}, von dieser Aktualisierung nicht neu gelesen.",
     noConnectionValue: "Die Verbindung hat für diese Zeile keinen Wert geliefert; diese Aktualisierung liest ihn nicht.",
     atAssistantStart: "Wert der Prüfung nach dem Start des Assistenten um {time}, von dieser Aktualisierung nicht neu gelesen.",
@@ -139,6 +143,7 @@ export const EXISTING_TEAM_STATUS_TEXT: Record<Locale, ExistingTeamStatusText> =
     failedAt: "Dernière tentative à {time}. Aucune valeur antérieure n’est présentée comme actuelle.",
     actionsAssistantOff: "À la connexion de {time}, l’assistant n’était pas actif : les actions sont désactivées, et cette connexion est de toute façon en lecture seule.",
     actionsReadOnly: "À la connexion de {time}, l’assistant était actif, mais cette connexion est en lecture seule : les actions restent désactivées.",
+    actionsFullLink: "Cette équipe est connectée en plein : les actions sont dans la page Agents (démarrage, arrêt, chat) et dans celles des offres (avis) ; cette page n’affiche que l’état.",
     atConnection: "Valeur de la connexion de {time}, non relue par cette mise à jour.",
     noConnectionValue: "La connexion n’a donné aucune valeur pour cette ligne ; cette mise à jour ne la lit pas.",
     atAssistantStart: "Valeur de la vérification après le démarrage de l’assistant, à {time}, non relue par cette mise à jour.",
@@ -169,6 +174,7 @@ export const EXISTING_TEAM_STATUS_TEXT: Record<Locale, ExistingTeamStatusText> =
     failedAt: "Último intento a las {time}. Ningún valor anterior se muestra como actual.",
     actionsAssistantOff: "En la conexión de las {time} el asistente no estaba activo: las acciones están desactivadas, y esta conexión es de solo lectura de todos modos.",
     actionsReadOnly: "En la conexión de las {time} el asistente estaba activo, pero esta conexión es de solo lectura: las acciones siguen desactivadas.",
+    actionsFullLink: "Este equipo está conectado por completo: las acciones están en la página Agentes (arranque, parada, chat) y en las de las ofertas (valoraciones); esta página solo muestra el estado.",
     atConnection: "Valor de la conexión de las {time}, no releído por esta actualización.",
     noConnectionValue: "La conexión no dio ningún valor para esta fila; esta actualización no lo lee.",
     atAssistantStart: "Valor de la comprobación tras el arranque del asistente, a las {time}, no releído por esta actualización.",
@@ -199,6 +205,7 @@ export const EXISTING_TEAM_STATUS_TEXT: Record<Locale, ExistingTeamStatusText> =
     failedAt: "Última tentativa às {time}. Nenhum valor anterior é mostrado como atual.",
     actionsAssistantOff: "Na ligação das {time} o assistente não estava ativo: as ações estão desativadas, e esta ligação é só de leitura de qualquer forma.",
     actionsReadOnly: "Na ligação das {time} o assistente estava ativo, mas esta ligação é só de leitura: as ações continuam desativadas.",
+    actionsFullLink: "Esta equipa está ligada por completo: as ações estão na página Agentes (arranque, paragem, chat) e nas das ofertas (avaliações); esta página só mostra o estado.",
     atConnection: "Valor da ligação das {time}, não relido por esta atualização.",
     noConnectionValue: "A ligação não deu nenhum valor para esta linha; esta atualização não o lê.",
     atAssistantStart: "Valor da verificação após o arranque do assistente, às {time}, não relido por esta atualização.",
@@ -229,6 +236,7 @@ export const EXISTING_TEAM_STATUS_TEXT: Record<Locale, ExistingTeamStatusText> =
     failedAt: "Utolsó kísérlet: {time}. Korábbi érték nem jelenik meg aktuálisként.",
     actionsAssistantOff: "A {time}-i kapcsolódáskor az asszisztens nem futott: a műveletek le vannak tiltva, és ez a kapcsolat amúgy is csak olvasható.",
     actionsReadOnly: "A {time}-i kapcsolódáskor az asszisztens futott, de ez a kapcsolat csak olvasható: a műveletek le maradnak tiltva.",
+    actionsFullLink: "Ez a csapat teljes körűen csatlakoztatva van: a műveletek az Ügynökök oldalon (indítás, leállítás, csevegés) és az állások oldalain (értékelések) vannak; ez az oldal csak az állapotot mutatja.",
     atConnection: "A {time}-i kapcsolódás értéke, ez a frissítés nem olvasta újra.",
     noConnectionValue: "A kapcsolódás nem adott értéket ehhez a sorhoz; ez a frissítés nem olvassa.",
     atAssistantStart: "Az asszisztens indítása utáni ellenőrzés értéke, {time}, ez a frissítés nem olvasta újra.",

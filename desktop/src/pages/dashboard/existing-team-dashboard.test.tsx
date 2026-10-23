@@ -256,3 +256,23 @@ describe("Dashboard on an existing team read only", () => {
     expect(await screen.findByText("12 posizioni totali · 1 escluse · 11 attive")).toBeInTheDocument();
   });
 });
+
+describe("Dashboard on an existing team connected in full", () => {
+  it("draws the core's numbers like the read-only view, asks the cloud for nothing, and shows no read-only banner", async () => {
+    // «Conferma e collega» in this run: the same pages and the same source, with what writes turned on
+    enterExistingTeamReadOnly(true, null, "account:full-link|full", true);
+    navigate("/dashboard", { replace: true });
+    render(<Shell />);
+
+    expect(await screen.findByRole("heading", { name: "Dashboard" })).toBeInTheDocument();
+    expect(await screen.findByText("12 posizioni totali · 1 escluse · 11 attive")).toBeInTheDocument();
+    expect(opsAsked()).toContain("stats");
+    expect(fake.current!.calls).toEqual([]);
+    expect(fake.current!.rpc).toEqual([]);
+    expect(screen.queryByTestId("existing-team-readonly-banner")).not.toBeInTheDocument();
+    // no way «back» to a setup that is done, and the team's own pages stay in the navigation
+    expect(screen.queryByRole("button", { name: /torna alla configurazione/i })).not.toBeInTheDocument();
+    const nav = screen.getByRole("navigation", { name: "Navigazione app" });
+    expect(within(nav).getByRole("link", { name: "Agenti" })).toBeInTheDocument();
+  });
+});

@@ -155,6 +155,15 @@ describe("Squadra on an existing team read only", () => {
     expect(value("assistantRunning")).toBe("yes");
   });
 
+  it("says where the actions are, not that they are disabled, when the team is connected in full", async () => {
+    leaveExistingTeamReadOnly();
+    enterExistingTeamReadOnly(true, { ...CONNECTION, assistantRunning: true }, "account:status|full", true);
+    navigate("/team", { replace: true });
+    render(<Shell />);
+    expect(await screen.findByTestId("team-status-actions")).toHaveTextContent(T.actionsFullLink);
+    expect(screen.getByTestId("team-status-actions")).not.toHaveTextContent("sola lettura");
+  });
+
   it("shows the time of the read, and a newer one after Aggiorna", async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
     vi.setSystemTime(new Date("2026-10-14T12:00:00Z"));

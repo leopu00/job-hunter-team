@@ -12,7 +12,7 @@ import {
   type ExistingTeamProfileView,
   type SummaryState,
 } from "../../lib/existing-team-profile";
-import { existingTeamReadOnlyReason, useExistingTeamReadOnly } from "../../lib/existing-team-readonly";
+import { existingTeamReadOnlyReason, useExistingTeamView } from "../../lib/existing-team-readonly";
 import { useRefresh } from "../../shell/router";
 import type { PageProps } from "../types";
 import { EXISTING_TEAM_PROFILE_TEXT, type ExistingTeamProfileText } from "./existing-team-profile.i18n";
@@ -86,7 +86,7 @@ function notices(read: ExistingTeamProfileRead, built: Built, t: ExistingTeamPro
  */
 export default function ExistingTeamProfilePage(_props: PageProps) {
   const t = EXISTING_TEAM_PROFILE_TEXT[appLocale()];
-  const readOnly = useExistingTeamReadOnly();
+  const readOnly = useExistingTeamView();
   const [reading, setReading] = useState<ExistingTeamProfileReading>({ kind: "unknown" });
   const [busy, setBusy] = useState(false);
   const latest = useRef(0);
