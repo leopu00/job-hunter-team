@@ -999,6 +999,18 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
     "I cannot tell which single container on this VPS belongs to this team.",
     "I will not pick one for you. Ask whoever manages the VPS to leave only one container for the team.",
   ),
+  existing_team_choice_gone: copy(
+    "Il container che hai scelto non risponde più come questa squadra.",
+    "Non è stato salvato nulla. Rileggi la VPS e scegli di nuovo.",
+    "The container you picked no longer answers as this team.",
+    "Nothing was saved. Read the VPS again and pick again.",
+  ),
+  invalid_container_choice: copy(
+    "Il container scelto non è valido.",
+    "Non è stato salvato nulla. Rileggi la VPS e scegli di nuovo.",
+    "The container picked is not valid.",
+    "Nothing was saved. Read the VPS again and pick again.",
+  ),
   existing_team_image_unattested: copy(
     "Un container di Job Hunter Team su questa VPS non ha un’immagine ufficiale ben identificata.",
     "Chiedi a chi gestisce la VPS di aggiornare la squadra con l’immagine ufficiale, poi riprova.",

@@ -2,6 +2,7 @@ import { Channel, invoke } from "@tauri-apps/api/core";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { confirmOnboardingSshHostKey, probeOnboardingSshHostKey } from "./onboarding-runtime";
 import {
+  ambiguousContainerChoices,
   directChatFailureCode,
   existingTeamBridge,
   existingTeamErrorCode,
@@ -116,5 +117,62 @@ describe("the direct chat after the team answered", () => {
     // ready, but the snapshot is still not reachable (a session down): not a tunnel
     expect(directChatFailureCode({ state: "ready", code: "tunnel_verify_failed" })).toBe("existing_team_assistant_unverified");
     expect(existingTeamErrorCode({ code: "existing_team_assistant_unverified" })).toBe("existing_team_assistant_unverified");
+  });
+});
+
+describe("more than one container of the team (T123)", () => {
+  const choice = (n: number, startedAt: string | null, name: string | null = `jht-${n}`) => ({
+    containerId: `c0${n}`.padEnd(64, "a"),
+    name,
+    startedAt,
+    ociRevision: "7071".repeat(10),
+    digest: `sha256:${"9d".repeat(32)}`,
+    readiness: n === 1,
+  });
+
+  it("reads the list of an ambiguous refusal, newest first, and the dates it cannot read last", () => {
+    const list = ambiguousContainerChoices({
+      code: "existing_team_ambiguous",
+      choices: [
+        choice(1, "2026-09-01T10:00:00+02:00"),
+        choice(2, null, null),
+        choice(3, "2026-10-20T08:00:00.123456789Z"),
+        choice(4, "0001-01-01T00:00:00Z"),
+      ],
+    });
+    expect(list?.map((c) => c.containerId.slice(0, 3))).toEqual(["c03", "c01", "c02", "c04"]);
+    expect(list?.[2]).toEqual(choice(2, null, null));
+  });
+
+  it("refuses the whole list when one entry is not exactly a container the native side could have sent", () => {
+    const ok = [choice(1, null), choice(2, null)];
+    const bad: unknown[] = [
+      undefined,
+      "not a list",
+      [ok[0]],
+      [...ok, choice(3, null), choice(4, null), choice(5, null)],
+      [ok[0], { ...ok[1], containerId: ok[0].containerId }],
+      [ok[0], { ...ok[1], containerId: "C0".repeat(32) }],
+      [ok[0], { ...ok[1], name: "<img src=x>" }],
+      [ok[0], { ...ok[1], name: "jht old" }],
+      [ok[0], { ...ok[1], startedAt: "yesterday" }],
+      [ok[0], { ...ok[1], ociRevision: "short" }],
+      [ok[0], { ...ok[1], digest: "sha256:zz" }],
+      [ok[0], { ...ok[1], readiness: "yes" }],
+    ];
+    for (const choices of bad) {
+      expect(ambiguousContainerChoices({ code: "existing_team_ambiguous", choices }), JSON.stringify(choices)).toBeNull();
+    }
+    // only the ambiguous refusal carries a list
+    expect(ambiguousContainerChoices({ code: "existing_team_not_found", choices: ok })).toBeNull();
+    expect(ambiguousContainerChoices("existing_team_ambiguous")).toBeNull();
+    expect(ambiguousContainerChoices({ code: "existing_team_ambiguous", choices: ok })).toHaveLength(2);
+  });
+
+  it("knows the codes of a pick that is gone or malformed, which a new reading can fix", () => {
+    for (const code of ["existing_team_choice_gone", "invalid_container_choice"]) {
+      expect(existingTeamErrorCode({ code })).toBe(code);
+      expect(isTerminalExistingTeamError(code)).toBe(false);
+    }
   });
 });

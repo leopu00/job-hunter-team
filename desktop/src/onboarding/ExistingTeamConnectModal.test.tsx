@@ -11,6 +11,7 @@ import type {
 import ExistingTeamConnectModal from "./ExistingTeamConnectModal";
 import { ERROR_CATALOG } from "../lib/error-catalog";
 import { EXISTING_TEAM_RECEIPT_TEXT } from "./existing-team-receipt.i18n";
+import { EXISTING_TEAM_CHOICE_TEXT } from "./existing-team-choice.i18n";
 
 vi.mock("../components/SshKeyPicker", () => ({
   default: ({ value, onChange, disabled }: { value: string; onChange: (path: string) => void; disabled?: boolean }) => (
@@ -463,6 +464,89 @@ describe("ExistingTeamConnectModal", () => {
     expect(native.register).not.toHaveBeenCalled();
   });
 
+  const OLD_ID = "c0b2".repeat(16);
+  const AMBIGUOUS = {
+    code: "existing_team_ambiguous",
+    message: "raw docker output",
+    choices: [
+      { containerId: OLD_ID, name: "jht-old", startedAt: "2026-09-01T10:00:00Z", ociRevision: "6061".repeat(10), digest: `sha256:${"8d".repeat(32)}`, readiness: false },
+      { containerId: RECEIPT.containerId, name: "jht", startedAt: "2026-10-20T08:00:00Z", ociRevision: RECEIPT.ociRevision, digest: RECEIPT.digest, readiness: true },
+    ],
+  };
+
+  it("lists the containers the team answers from, picks none, and saves only the one picked and confirmed (T123)", async () => {
+    const user = userEvent.setup();
+    const discover = vi.fn().mockRejectedValueOnce(AMBIGUOUS).mockResolvedValueOnce(RECEIPT);
+    const native = bridge({ connectReadOnly: vi.fn().mockRejectedValueOnce(CANDIDATE_REQUIRED).mockResolvedValue(READONLY_RESULT), discover });
+    const onReadOnlyConnected = vi.fn();
+    render(<ExistingTeamConnectModal teamId="team-opaque-0001" bridge={native} onCancel={vi.fn()} onConnected={vi.fn()} onReadOnlyConnected={onReadOnlyConnected} />);
+    await toReadOnlyClick(user);
+    const c = EXISTING_TEAM_CHOICE_TEXT.it;
+    const group = await screen.findByRole("radiogroup", { name: c.listLabel });
+    expect(screen.getByText(c.intro.replace("{count}", "2"))).toBeInTheDocument();
+    expect(screen.getByText(c.cause)).toBeInTheDocument();
+    const radios = within(group).getAllByRole("radio");
+    expect(radios).toHaveLength(2);
+    // newest first, marked; nothing preselected and nothing to confirm yet
+    expect(radios[0].closest("label")).toHaveTextContent("jht");
+    expect(radios[0].closest("label")).toHaveTextContent(c.newest);
+    expect(radios[0].closest("label")).toHaveTextContent(c.assistantUp);
+    expect(radios[1].closest("label")).toHaveTextContent("jht-old");
+    expect(radios[1].closest("label")).not.toHaveTextContent(c.newest);
+    expect(radios[1].closest("label")).toHaveTextContent(OLD_ID.slice(0, 12));
+    expect(radios.every((radio) => !(radio as HTMLInputElement).checked)).toBe(true);
+    expect(screen.getByRole("button", { name: c.pick })).toBeDisabled();
+    expect(screen.queryByText(/raw docker output/i)).not.toBeInTheDocument();
+    expect(native.register).not.toHaveBeenCalled();
+    // the pick is a narrower reading, then the usual receipt to confirm
+    await user.click(radios[0]);
+    await user.click(screen.getByRole("button", { name: c.pick }));
+    expect(discover).toHaveBeenLastCalledWith(expect.objectContaining({ teamId: "team-opaque-0001", containerId: RECEIPT.containerId }));
+    expect(await screen.findByText(EXISTING_TEAM_RECEIPT_TEXT.it.intro)).toBeInTheDocument();
+    expect(native.register).not.toHaveBeenCalled();
+    await user.click(screen.getByRole("button", { name: EXISTING_TEAM_RECEIPT_TEXT.it.confirm }));
+    await waitFor(() => expect(onReadOnlyConnected).toHaveBeenCalled());
+    expect(native.register).toHaveBeenCalledTimes(1);
+    expect(native.register).toHaveBeenCalledWith(RECEIPT.candidateSha256);
+  });
+
+  it("leaves the list without saving anything, and a pick that is gone can be read again (T123)", async () => {
+    const user = userEvent.setup();
+    const discover = vi.fn()
+      .mockRejectedValueOnce(AMBIGUOUS)
+      .mockRejectedValueOnce(AMBIGUOUS)
+      .mockRejectedValueOnce({ code: "existing_team_choice_gone" })
+      .mockRejectedValueOnce(AMBIGUOUS);
+    const native = bridge({ connectReadOnly: vi.fn().mockRejectedValue(CANDIDATE_REQUIRED), discover });
+    render(<ExistingTeamConnectModal teamId="team-opaque-0001" bridge={native} onCancel={vi.fn()} onConnected={vi.fn()} onReadOnlyConnected={vi.fn()} />);
+    const c = EXISTING_TEAM_CHOICE_TEXT.it;
+    await toReadOnlyClick(user);
+    await screen.findByRole("radiogroup", { name: c.listLabel });
+    await user.click(screen.getByRole("button", { name: c.cancel }));
+    expect(screen.queryByRole("radiogroup")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /verifica vps/i })).toBeInTheDocument();
+    // again, and the container picked stopped meanwhile
+    await user.click(screen.getByRole("button", { name: /verifica vps/i }));
+    await user.click(await screen.findByRole("button", { name: /visualizza annunci in sola lettura/i }));
+    await user.click(within(await screen.findByRole("radiogroup")).getAllByRole("radio")[1]);
+    await user.click(screen.getByRole("button", { name: c.pick }));
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent(ERROR_CATALOG.existing_team_choice_gone.text.it);
+    await user.click(within(alert).getByRole("button", { name: /riprova/i }));
+    expect(await screen.findByRole("radiogroup")).toBeInTheDocument();
+    expect(discover).toHaveBeenCalledTimes(4);
+    expect(native.register).not.toHaveBeenCalled();
+  });
+
+  it("has the words of the list in every language, with the placeholders kept", () => {
+    expect(Object.keys(EXISTING_TEAM_CHOICE_TEXT).sort()).toEqual(Object.keys(EXISTING_TEAM_RECEIPT_TEXT).sort());
+    for (const [locale, text] of Object.entries(EXISTING_TEAM_CHOICE_TEXT)) {
+      for (const [key, value] of Object.entries(text)) expect(value, `${locale}.${key}`).toMatch(/\S/);
+      expect(text.intro, locale).toContain("{count}");
+      expect(text.runningSince, locale).toContain("{date}");
+    }
+  });
+
   it("after a registration that worked but a connection that did not, Riprova connects again and never registers twice", async () => {
     const user = userEvent.setup();
     const connectReadOnly = vi.fn()
@@ -691,5 +775,37 @@ describe("a saved team that was updated on the VPS", () => {
       }
       expect(text.rebindConfirm, locale).not.toBe(text.confirm);
     }
+  });
+});
+
+describe("an updated team that answers from more than one container (T123 with a rebind)", () => {
+  it("lists them, and the rebind shown after the pick is the one confirmed", async () => {
+    const user = userEvent.setup();
+    const previous = { imageId: `sha256:${"2c3d".repeat(16)}`, ociRevision: "5051".repeat(10), digest: `sha256:${"8e5f".repeat(16)}` };
+    const ambiguous = {
+      code: "existing_team_ambiguous",
+      choices: [
+        { containerId: RECEIPT.containerId, name: "jht", startedAt: "2026-10-20T08:00:00Z", ociRevision: RECEIPT.ociRevision, digest: RECEIPT.digest, readiness: true },
+        { containerId: "c0b2".repeat(16), name: "jht-2", startedAt: "2026-10-19T08:00:00Z", ociRevision: RECEIPT.ociRevision, digest: RECEIPT.digest, readiness: false },
+      ],
+    };
+    const connect = vi.fn().mockRejectedValueOnce({ code: "existing_team_runtime_changed" }).mockResolvedValueOnce(RESULT);
+    const discover = vi.fn().mockRejectedValueOnce(ambiguous).mockResolvedValueOnce({ ...RECEIPT, previous });
+    const register = vi.fn().mockResolvedValue({ outcome: "rebound" });
+    const onConnected = vi.fn().mockResolvedValue(undefined);
+    render(<ExistingTeamConnectModal teamId="team-opaque-0001" bridge={bridge({ connect, discover, register })} onCancel={vi.fn()} onConnected={onConnected} onReadOnlyConnected={vi.fn()} />);
+    await fillHost(user);
+    await user.click(screen.getByRole("button", { name: /verifica vps/i }));
+    await user.click(await screen.findByRole("button", { name: /conferma e collega/i }));
+    const c = EXISTING_TEAM_CHOICE_TEXT.it;
+    const group = await screen.findByRole("radiogroup", { name: c.listLabel });
+    await user.click(within(group).getAllByRole("radio")[0]);
+    await user.click(screen.getByRole("button", { name: c.pick }));
+    expect(discover).toHaveBeenLastCalledWith(expect.objectContaining({ containerId: RECEIPT.containerId }));
+    const heading = await screen.findByText(EXISTING_TEAM_RECEIPT_TEXT.it.rebindEyebrow, { selector: "p" });
+    expect(register).not.toHaveBeenCalled();
+    await user.click(within(heading.closest("section") as HTMLElement).getByRole("button", { name: EXISTING_TEAM_RECEIPT_TEXT.it.rebindConfirm }));
+    await waitFor(() => expect(onConnected).toHaveBeenCalledWith(RESULT));
+    expect(register).toHaveBeenCalledOnce();
   });
 });

@@ -127,6 +127,24 @@
 .existing-team-modal__confirm dt { color: var(--color-dim, #7f8881); font-size: 0.7rem; font-weight: 800; text-transform: uppercase; }
 .existing-team-modal__confirm dd { overflow-wrap: anywhere; margin: 5px 0 0; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.86rem; }
 
+/* T123: one card per container the team answers from; the whole card is the radio's label. */
+.existing-team-modal__choices { display: grid; gap: 12px; }
+.existing-team-modal__choice {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+  border: 1px solid var(--color-border, #303731);
+  border-radius: 12px;
+  padding: 12px;
+  cursor: pointer;
+}
+.existing-team-modal__choice.is-picked { border-color: var(--color-accent, #bbf246); }
+.existing-team-modal__choice input { margin-top: 4px; accent-color: var(--color-accent, #bbf246); }
+.existing-team-modal__choice input:focus-visible { outline: 3px solid var(--color-accent, #bbf246); outline-offset: 2px; }
+.existing-team-modal__choice dl { grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); }
+.existing-team-modal__choice em { color: var(--color-accent, #bbf246); font-style: normal; }
+
 .existing-team-modal__warning,
 .existing-team-modal__failure,
 .existing-team-modal__status {

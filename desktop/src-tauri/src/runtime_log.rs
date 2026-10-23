@@ -90,6 +90,7 @@ impl RuntimeLog {
                 | "existing_team_runtime_candidate_exists" | "existing_team_runtime_candidate_conflict"
                 | "existing_team_target_changed" | "existing_team_image_unattested" | "existing_team_too_many_containers"
                 | "existing_team_ambiguous" | "existing_team_not_found" | "existing_team_container_not_found"
+                | "existing_team_choice_gone" | "invalid_container_choice"
                 | "existing_team_discovery_timeout" | "existing_team_receipt_required"
                 | "existing_team_register_not_confirmed" => code,
                 _ => "io_error_other",
