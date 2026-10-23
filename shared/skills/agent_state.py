@@ -96,6 +96,9 @@ CPU_BUSY_PCT = 8.0
 CPU_FRESH_S = 60.0
 # Slack when comparing a log's clock with the session's.
 CLOCK_SLACK_S = 5.0
+# How many of the team's Codex rollouts written since the session started are looked at for the
+# agent's own (one line each): a whole day of a busy team, not the four newest.
+CODEX_ROLLOUTS_SCANNED = 400
 # How much of a log's end is read.
 TAIL_BYTES = 2 * 1024 * 1024
 # A question older than this is not a wait any more.
@@ -546,8 +549,12 @@ def collect(src: Sources, cwd: str, created: float) -> tuple[list[Ev], bool, boo
             day0 = datetime.fromtimestamp(since).strftime("%Y/%m/%d")
             files = [p for p in src.codex.glob("*/*/*/rollout-*.jsonl")
                      if "/".join(p.parts[-4:-1]) >= day0]
-            for f in _newer(files, since)[:4]:
-                head = next(_objects(f.open(encoding="utf-8", errors="replace")), {})
+            # Every agent of the team writes its rollouts in the same folders: the agent's own is
+            # found by the cwd of its first line, newest first. Only that line is read of the
+            # others, so an agent that writes rarely is found behind the busy ones.
+            for f in _newer(files, since)[:CODEX_ROLLOUTS_SCANNED]:
+                with f.open(encoding="utf-8", errors="replace") as handle:
+                    head = next(_objects(handle), {})
                 if (head.get("payload") or {}).get("cwd") == cwd:
                     take(parse_codex(tail_lines(f)))
                     break

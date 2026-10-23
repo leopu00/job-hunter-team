@@ -109,6 +109,14 @@ impl RuntimeLog {
         let _ = append(&self.path, &entry, LOG_MAX_BYTES);
     }
 
+    /// A read or a send of the chat that failed, by its closed code only: no agent, text, host or
+    /// account. The page clears its own error at the next «connected»: this is what stays.
+    pub(crate) fn record_chat_failure(&self, operation: &str, code: &str) {
+        let operation = if operation == "send" { "send" } else { "read" };
+        let entry = format!("=== {} direct_chat.{operation}: {}\n", utc(SystemTime::now()), chat_failure_code(code));
+        let _ = append(&self.path, &entry, LOG_MAX_BYTES);
+    }
+
     /// One step: its name, how it ended, its output. A log that cannot be
     /// written never stops the step it describes.
     pub(crate) fn record(&self, step: &str, ended: Result<i32, &str>, stdout: &[u8], stderr: &[u8], elapsed: Duration) {
@@ -328,6 +336,20 @@ fn rotate(path: &Path) -> Result<(), &'static str> {
 }
 
 /// `2026-10-09T06:55:01Z`.
+/// The codes a failed chat read or send may leave in the log; any other is `io_error_other`.
+fn chat_failure_code(code: &str) -> &str {
+    match code {
+        "read_failed" | "send_failed" | "persist_failed" | "disconnected" | "state_failed"
+        | "account_scope_mismatch" | "invalid_request" | "read_only_link" | "own_vps_claim_required"
+        | "own_vps_key_changed" | "own_vps_claim_refused" | "chat_runtime_outdated"
+        | "existing_team_runtime_target_changed" | "agent_not_at_prompt" | "team_not_running"
+        | "agent_not_running" | "agent_unavailable" | "agent_busy" | "agent_stuck" | "tunnel_unavailable"
+        | "tunnel_start_failed" | "tunnel_verify_failed" | "ssh_unavailable" | "ssh_auth_failed"
+        | "ssh_rate_limited" | "process_timeout" | "host_key_changed" | "host_key_mismatch" => code,
+        _ => "io_error_other",
+    }
+}
+
 fn utc(at: SystemTime) -> String {
     let seconds = at.duration_since(UNIX_EPOCH).map(|elapsed| elapsed.as_secs()).unwrap_or(0);
     let (days, rest) = ((seconds / 86_400) as i64, seconds % 86_400);
@@ -444,6 +466,10 @@ mod tests {
         log.record_chat_refusal("read_only_link");
         log.record_chat_refusal("own_vps_key_changed");
         log.record_chat_refusal("capitano says hello from 203.0.113.7");
+        log.record_chat_failure("read", "read_failed");
+        log.record_chat_failure("send", "agent_not_at_prompt");
+        log.record_chat_failure("read", "mentor at 203.0.113.7 said no");
+        log.record_chat_failure("delete everything", "send_failed");
         // why the saved team did not open at start-up: its own code, never io_error_other
         for code in [
             "existing_team_saved_incomplete", "existing_team_saved_selection_mismatch", "existing_team_runtime_required",
@@ -458,6 +484,12 @@ mod tests {
         }
         assert!(!text.contains(" existing_team.read_only_open: io_error_other\n"));
         assert!(text.contains(" existing_team.read_only_open: exit 0\n"));
+        // a failed read or send of the chat: its closed code, never what the host or the agent said
+        assert!(text.contains(" direct_chat.read: read_failed\n"));
+        assert!(text.contains(" direct_chat.send: agent_not_at_prompt\n"));
+        assert!(text.contains(" direct_chat.read: io_error_other\n"));
+        assert!(text.contains(" direct_chat.read: send_failed\n"), "an unknown operation is a read");
+        assert!(!text.contains("mentor") && !text.contains("delete"));
         assert!(text.contains(" existing_team.candidate: existing_team_reconfirm_setup\n"));
         assert!(text.contains(" existing_team.scope: window_not_allowed\n"));
         assert!(text.contains(" direct_chat.send: read_only_link\n"));

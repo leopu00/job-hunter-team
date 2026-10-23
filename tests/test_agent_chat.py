@@ -194,6 +194,20 @@ def test_a_cursor_reads_only_what_came_after(box):
     assert code == 0 and [m["id"] for m in later["messages"]] == ["m2", "m3"]
 
 
+def test_a_long_chat_opens_on_its_newest_messages_not_on_the_oldest_of_its_tail(box):
+    # More rows in the tail than one page: the first read is the LAST page, ending with the newest.
+    rows = [{"role": "user" if n % 2 else "assistant", "text": f"riga {n}", "ts": n, "message_id": f"m{n}"} for n in range(300)]
+    _write_chat(box, "mentor", rows)
+    code, page = box.run("read", "mentor")
+    assert code == 0
+    ids = [m["id"] for m in page["messages"]]
+    assert len(ids) == 120 and ids[0] == "m180" and ids[-1] == "m299"
+    assert page["cursor"] == str((box.home / "agents" / "mentor" / "chat.jsonl").stat().st_size)
+    # a read from a cursor still goes on forward, one page at a time
+    code, later = box.run("read", "mentor", "0")
+    assert code == 0 and [m["id"] for m in later["messages"]][:2] == ["m0", "m1"] and len(later["messages"]) == 120
+
+
 # ── send: the turn, the envelope, the fence ──────────────────────────────────
 
 

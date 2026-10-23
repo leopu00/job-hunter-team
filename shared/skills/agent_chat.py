@@ -47,6 +47,7 @@ older than this chat, which the app says as «update the team».
 """
 from __future__ import annotations
 
+import collections
 import hashlib
 import importlib.util
 import json
@@ -203,13 +204,16 @@ def read(agent: str, cursor_text: str | None) -> dict:
         cursor = max(0, size - HISTORY_TAIL)
     else:
         cursor = max(0, min(size, int(cursor_text)))
-    messages = []
+    # A first read (no cursor) is the newest page: the tail is read to its end and only its last
+    # PAGE_ROWS rows are kept. A read from a cursor goes on from there, at most PAGE_ROWS rows.
+    newest = cursor_text in (None, "")
+    messages = collections.deque(maxlen=PAGE_ROWS) if newest else []
     try:
         with open(path, "rb") as handle:
             handle.seek(cursor)
             if cursor:
                 handle.readline()
-            while len(messages) < PAGE_ROWS:
+            while newest or len(messages) < PAGE_ROWS:
                 start = handle.tell()
                 raw = handle.readline()
                 if not raw:
@@ -242,7 +246,7 @@ def read(agent: str, cursor_text: str | None) -> dict:
             cursor = handle.tell()
     except OSError:
         raise Refusal("read_failed")
-    page = {"messages": messages, "cursor": str(cursor)}
+    page = {"messages": list(messages), "cursor": str(cursor)}
     found = questions_of(agent)
     if found is not None:
         page["questions"] = found       # absent: an image without the questions (the app shows no answer)
