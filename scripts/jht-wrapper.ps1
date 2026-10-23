@@ -747,16 +747,23 @@ function Get-ComposeImage {
 
 function Repair-MountOwnership {
   param([string]$Image)
-  # Podman con keep-id mappa gia' i mount sull'utente: niente da riparare.
-  if ($ContainerRuntime -ne 'docker') { return $true }
-  if (-not $Image) { $Image = Get-ComposeImage $ComposeFile }
-  # Le stesse cartelle del compose (${HOME}/.jht e ${HOME}/Documents/...),
-  # create qui prima che le crei il daemon, che le farebbe di root.
+  # Le stesse cartelle del compose (${HOME}/.jht e ${HOME}/Documents/...), create qui prima di ogni
+  # up e con ogni motore, senza toccarle se ci sono: Docker le creerebbe da solo (e di root), Podman
+  # no, e il container non si crea ("statfs ... no such file or directory", T83).
   $homeMount = Join-Path $env:HOME '.jht'
   $userMount = Join-Path $env:HOME 'Documents\Job Hunter Team'
   foreach ($dir in @($homeMount, $userMount)) {
-    if (-not (Test-Path -LiteralPath $dir -PathType Container)) { New-Item -ItemType Directory -Path $dir -Force | Out-Null }
+    if (-not (Test-Path -LiteralPath $dir -PathType Container)) {
+      try { New-Item -ItemType Directory -Path $dir -Force -ErrorAction Stop | Out-Null }
+      catch {
+        Write-Err "user_dir_unavailable: non riesco a creare la cartella $dir, che il team usa."
+        return $false
+      }
+    }
   }
+  # Podman con keep-id mappa gia' i mount sull'utente: niente da riparare.
+  if ($ContainerRuntime -ne 'docker') { return $true }
+  if (-not $Image) { $Image = Get-ComposeImage $ComposeFile }
   $out = @(& { $ErrorActionPreference = 'Continue'; & docker run --rm --user '0:0' --cap-drop ALL --cap-add CHOWN --network none `
       --security-opt no-new-privileges `
       -v "${homeMount}:/jht_home" -v "${userMount}:/jht_user" `
