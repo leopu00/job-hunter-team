@@ -47,33 +47,53 @@ const POWERSHELL_FLAGS: [&str; 6] = [
 
 pub(crate) const AUTOSTART_TASK_NAME: &str = "Job Hunter Team - Start runtime";
 
-/// The task is created by the non-elevated desktop process. With no `/RU`,
-/// schtasks uses that current user's interactive token.
-pub(crate) fn autostart_create_args(wrapper: &Path, system_root: Option<OsString>) -> Vec<OsString> {
+/// The task is created by the non-elevated desktop process, explicitly bound
+/// to its current interactive user. `/IT` refuses a password-backed task.
+pub(crate) fn autostart_create_args(wrapper: &Path, system_root: Option<OsString>, user: &str) -> Vec<OsString> {
     let shell = powershell_path(system_root);
     let action = format!(
         "\"{}\" -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File \"{}\" up",
         shell.display(), wrapper.display(),
     );
-    ["/Create", "/TN", AUTOSTART_TASK_NAME, "/SC", "ONLOGON", "/TR", &action, "/RL", "LIMITED", "/F"]
+    ["/Create", "/TN", AUTOSTART_TASK_NAME, "/SC", "ONLOGON", "/TR", &action, "/RL", "LIMITED", "/RU", user, "/IT", "/F"]
         .into_iter().map(OsString::from).collect()
 }
 
 fn autostart_query_args() -> Vec<OsString> {
-    ["/Query", "/TN", AUTOSTART_TASK_NAME].into_iter().map(OsString::from).collect()
+    ["/Query", "/TN", AUTOSTART_TASK_NAME, "/XML"].into_iter().map(OsString::from).collect()
 }
 
-fn autostart_registered(mut invoke: impl FnMut(&[OsString]) -> bool, create: &[OsString]) -> bool {
-    invoke(create) && invoke(&autostart_query_args())
+fn autostart_contract(xml: &str, user: &str, shell: &Path, wrapper: &Path) -> bool {
+    xml.contains("<LogonTrigger>")
+        && xml.contains(&format!("<UserId>{user}</UserId>"))
+        && xml.contains("<LogonType>InteractiveToken</LogonType>")
+        && xml.contains("<RunLevel>LeastPrivilege</RunLevel>")
+        && xml.contains("<Enabled>true</Enabled>")
+        && xml.contains(&format!("<Command>{}</Command>", shell.display()))
+        && xml.contains(&format!("-File &quot;{}&quot; up", wrapper.display()))
 }
 
 #[cfg(windows)]
 pub(crate) fn register_autostart(wrapper: &Path) -> bool {
-    use std::process::Command;
     let root = std::env::var_os("SystemRoot").unwrap_or_else(|| OsString::from(r"C:\Windows"));
     let schtasks = PathBuf::from(root.clone()).join("System32").join("schtasks.exe");
-    let create = autostart_create_args(wrapper, Some(root));
-    autostart_registered(|args| Command::new(&schtasks).args(args).status().is_ok_and(|s| s.success()), &create)
+    let user = match crate::runtime_host::run_program("whoami.exe", std::iter::empty::<&str>(), None, std::time::Duration::from_secs(10)) {
+        Ok(result) if result.success() => String::from_utf8_lossy(&result.stdout).trim().to_owned(),
+        _ => return false,
+    };
+    if user.is_empty() { return false; }
+    let create = autostart_create_args(wrapper, Some(root.clone()), &user);
+    let created = crate::runtime_host::run_program(
+        schtasks.to_string_lossy().as_ref(), create, None, std::time::Duration::from_secs(15),
+    );
+    if !created.is_ok_and(|result| result.success()) { return false; }
+    let queried = crate::runtime_host::run_program(
+        schtasks.to_string_lossy().as_ref(), autostart_query_args(), None, std::time::Duration::from_secs(15),
+    );
+    let Ok(result) = queried else { return false; };
+    result.success() && autostart_contract(
+        &String::from_utf8_lossy(&result.stdout), &user, &powershell_path(Some(root)), wrapper,
+    )
 }
 
 /// Windows PowerShell 5.1, which every Windows 10/11 has, by absolute path:
@@ -410,22 +430,24 @@ mod tests {
         let args: Vec<String> = autostart_create_args(
             Path::new(r"C:\Users\someone\.local\bin\jht.ps1"),
             Some(OsString::from(r"D:\Win")),
+            r"JHTPC\someone",
         ).into_iter().map(|arg| arg.to_string_lossy().into_owned()).collect();
         assert!(args.windows(2).any(|pair| pair == ["/SC", "ONLOGON"]));
         assert!(args.windows(2).any(|pair| pair == ["/RL", "LIMITED"]));
-        assert!(!args.iter().any(|arg| arg.eq_ignore_ascii_case("/RU") || arg.eq_ignore_ascii_case("HIGHEST")));
+        assert!(args.windows(2).any(|pair| pair == ["/RU", r"JHTPC\someone"]));
+        assert!(args.iter().any(|arg| arg.eq_ignore_ascii_case("/IT")));
+        assert!(!args.iter().any(|arg| arg.eq_ignore_ascii_case("HIGHEST")));
         assert!(args.iter().any(|arg| arg.contains("jht.ps1") && arg.ends_with(" up")));
     }
 
     #[test]
-    fn autostart_registration_failure_is_nonfatal_to_the_caller() {
-        let create = autostart_create_args(Path::new("jht.ps1"), None);
-        let mut calls = 0;
-        assert!(!autostart_registered(|_| { calls += 1; false }, &create));
-        assert_eq!(calls, 1);
-        let mut calls = 0;
-        assert!(!autostart_registered(|_| { calls += 1; calls == 1 }, &create));
-        assert_eq!(calls, 2);
+    fn autostart_read_back_requires_the_current_interactive_user_and_exact_action() {
+        let shell = Path::new(r"C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe");
+        let wrapper = Path::new(r"C:\Users\someone\.local\bin\jht.ps1");
+        let xml = r#"<LogonTrigger><Enabled>true</Enabled><UserId>JHTPC\someone</UserId></LogonTrigger><Principals><Principal><UserId>JHTPC\someone</UserId><LogonType>InteractiveToken</LogonType><RunLevel>LeastPrivilege</RunLevel></Principal></Principals><Actions><Exec><Command>C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe</Command><Arguments>-File &quot;C:\Users\someone\.local\bin\jht.ps1&quot; up</Arguments></Exec></Actions>"#;
+        assert!(autostart_contract(xml, r"JHTPC\someone", shell, wrapper));
+        assert!(!autostart_contract(xml, r"JHTPC\other", shell, wrapper));
+        assert!(!autostart_contract(&xml.replace("InteractiveToken", "Password"), r"JHTPC\someone", shell, wrapper));
     }
 
     #[test]

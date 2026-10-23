@@ -14,7 +14,7 @@ def test_desktop_creates_a_limited_current_user_logon_task():
     assert '"/SC", "ONLOGON"' in RUNTIME
     assert '"/RL", "LIMITED"' in RUNTIME
     create = RUNTIME[RUNTIME.index("pub(crate) fn autostart_create_args"):RUNTIME.index("fn autostart_query_args")]
-    assert '"/RU"' not in create
+    assert '"/RU", user, "/IT"' in create
 
 
 def test_install_keeps_running_when_the_desktop_cannot_register_autostart():
