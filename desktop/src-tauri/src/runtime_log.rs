@@ -83,7 +83,15 @@ impl RuntimeLog {
                 | "ssh_unavailable" | "ssh_client_missing" | "ssh_rate_limited" | "ssh_auth_failed" | "process_start_failed" | "process_timeout"
                 | "process_write_failed" | "process_wait_failed" | "process_output_unavailable"
                 | "process_input_failed" | "process_pipe_failed"
-                | "window_not_allowed" | "existing_team_reconfirm_setup" => code,
+                | "window_not_allowed" | "existing_team_reconfirm_setup"
+                // The opening of the saved team and the discovery: why it did not open, by name.
+                | "existing_team_saved_incomplete" | "existing_team_saved_selection_mismatch"
+                | "existing_team_runtime_required" | "existing_team_runtime_changed" | "existing_team_runtime_outdated"
+                | "existing_team_runtime_candidate_exists" | "existing_team_runtime_candidate_conflict"
+                | "existing_team_target_changed" | "existing_team_image_unattested" | "existing_team_too_many_containers"
+                | "existing_team_ambiguous" | "existing_team_not_found" | "existing_team_container_not_found"
+                | "existing_team_discovery_timeout" | "existing_team_receipt_required"
+                | "existing_team_register_not_confirmed" => code,
                 _ => "io_error_other",
             }.to_owned(),
         };
@@ -436,7 +444,19 @@ mod tests {
         log.record_chat_refusal("read_only_link");
         log.record_chat_refusal("own_vps_key_changed");
         log.record_chat_refusal("capitano says hello from 203.0.113.7");
+        // why the saved team did not open at start-up: its own code, never io_error_other
+        for code in [
+            "existing_team_saved_incomplete", "existing_team_saved_selection_mismatch", "existing_team_runtime_required",
+            "existing_team_target_changed", "existing_team_image_unattested", "existing_team_too_many_containers",
+            "existing_team_ambiguous", "existing_team_not_found", "existing_team_runtime_changed",
+        ] {
+            log.record_existing_team_status(super::ExistingTeamPhase::ReadOnlyOpen, Err(code));
+        }
         let text = fs::read_to_string(log.path()).unwrap();
+        for code in ["existing_team_saved_incomplete", "existing_team_saved_selection_mismatch", "existing_team_not_found"] {
+            assert!(text.contains(&format!(" existing_team.read_only_open: {code}\n")), "{code}");
+        }
+        assert!(!text.contains(" existing_team.read_only_open: io_error_other\n"));
         assert!(text.contains(" existing_team.read_only_open: exit 0\n"));
         assert!(text.contains(" existing_team.candidate: existing_team_reconfirm_setup\n"));
         assert!(text.contains(" existing_team.scope: window_not_allowed\n"));

@@ -596,9 +596,9 @@ pub(crate) fn discover_with(
             "existing_team_container_not_found"
         });
     }
-    // Identity first, captain second: two containers of the same team are
-    // ambiguous even if only one has the captain up.
-    let mut matches: Vec<(RuntimeTarget, Option<bool>)> = Vec::new();
+    // The identity decides: two containers of the same team are ambiguous whatever
+    // their sessions. A team whose agents are off is found, and the app starts them.
+    let mut matches: Vec<(RuntimeTarget, bool)> = Vec::new();
     for target in &classified.targets {
         let command = runtime::team_probe_command(target)?;
         let timeout = budget.call(PROBE_CALL)?;
@@ -610,10 +610,9 @@ pub(crate) fn discover_with(
             Ok(result)
         });
         match outcome {
-            Ok(readiness) => matches.push((target.clone(), Some(readiness.readiness))),
+            Ok(readiness) => matches.push((target.clone(), readiness.readiness)),
             Err(error) => match error.code {
                 "existing_team_identity_mismatch" => {}
-                "existing_team_not_active" => matches.push((target.clone(), None)),
                 _ => return Err(UNAVAILABLE),
             },
         }
@@ -623,9 +622,6 @@ pub(crate) fn discover_with(
     }
     let Some((target, readiness)) = matches.pop() else {
         return Err("existing_team_not_found");
-    };
-    let Some(readiness) = readiness else {
-        return Err("existing_team_not_active");
     };
     let (candidate, candidate_sha256) = runtime::candidate_bytes(host, team_id, &target)?;
     if restoring.as_ref().is_some_and(|attested| *attested != candidate_sha256) {

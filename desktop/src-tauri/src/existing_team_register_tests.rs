@@ -526,13 +526,15 @@ fn t1_the_whole_cycle_of_a_new_profile_reaches_a_selection_and_a_read() {
 }
 
 #[test]
-fn t1_a_missing_captain_registers_nothing() {
+fn t1_a_team_with_its_agents_off_is_found_and_registers_nothing_by_itself() {
+    // T124: the identity is enough; the sessions are reported, never required.
     let sandbox = Sandbox::new();
     write_pin(&sandbox);
     let world = team_world();
     let server = Server::new(&world).probe(1, probe_ok(false, false));
-    assert_eq!(discover(&sandbox, &server, Duration::from_secs(40)).expect_err("no captain"), "existing_team_not_active");
-    assert_eq!(sandbox.entries(), vec!["pin".to_owned()]);
+    let found = discover(&sandbox, &server, Duration::from_secs(40)).expect("found with its agents off");
+    assert!(!found.readiness);
+    assert_eq!(sandbox.entries(), vec!["pin".to_owned()], "a discovery writes nothing");
 }
 
 #[test]
@@ -595,10 +597,10 @@ fn t3_choosing_the_container_is_unambiguous_or_refused() {
     let (result, server) = go(world, server);
     assert_eq!(result.expect_err("70"), "existing_team_unavailable");
     assert_eq!(server.count(), 2, "stopped at the failing probe");
-    // identity passes but no captain: not active
+    // identity passes with no captain: found all the same (T124)
     let world = World::default().jht(1);
     let (result, _) = go(world.clone(), Server::new(&world).probe(1, probe_ok(false, false)));
-    assert_eq!(result.expect_err("inactive"), "existing_team_not_active");
+    assert_eq!(result.expect("found with its agents off").runtime.container_id, container_id(1));
     // four JHT containers are examined, a fifth is refused without entering any
     let mut world = World::default();
     for n in 1..=4 {

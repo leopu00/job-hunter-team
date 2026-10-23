@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { appLocale } from "../app-locale";
-import { existingTeamConnectionKey, useExistingTeamReadOnly } from "../existing-team-readonly";
+import { existingTeamConnectionKey, useExistingTeamView } from "../existing-team-readonly";
 import { readDesktopVpsNewestPositions } from "../existing-team-positions";
 import { supabase } from "../supabase";
 import { notificationsFor, type FoundPosition } from "./fresh";
@@ -25,7 +25,7 @@ export function NewPositionNotifier() {
       window.removeEventListener("storage", onStorage);
     };
   }, []);
-  const readOnly = useExistingTeamReadOnly();
+  const readOnly = useExistingTeamView();
   // the view's opening and its connection: a new one starts a new watch, a closed one stops it
   const vpsKey = readOnly ? existingTeamConnectionKey() : null;
 

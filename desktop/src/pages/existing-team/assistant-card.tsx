@@ -2,7 +2,7 @@ import { useRef, useState } from "react";
 import { appLocale } from "../../lib/app-locale";
 import { describeError } from "../../lib/error-catalog";
 import { startExistingTeamAssistant, type AssistantStartOutcome } from "../../lib/existing-team-assistant";
-import { enterExistingTeamReadOnly, useExistingTeamReadOnly } from "../../lib/existing-team-readonly";
+import { enterExistingTeamReadOnly, useExistingTeamView } from "../../lib/existing-team-readonly";
 import { EXISTING_TEAM_ASSISTANT_TEXT } from "./existing-team-assistant.i18n";
 import { linkAllowsActions, useVpsLink } from "../../lib/vps-link";
 import { VPS_LINK_TEXT } from "../../lib/vps-link.i18n";
@@ -22,7 +22,7 @@ type Phase = "idle" | "confirming" | "starting";
  */
 export function AssistantCard() {
   const t = EXISTING_TEAM_ASSISTANT_TEXT[appLocale()];
-  const readOnly = useExistingTeamReadOnly();
+  const readOnly = useExistingTeamView();
   const connection = readOnly?.connection ?? null;
   const [phase, setPhase] = useState<Phase>("idle");
   const [outcome, setOutcome] = useState<AssistantStartOutcome | null>(null);

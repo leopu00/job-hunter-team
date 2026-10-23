@@ -20,7 +20,7 @@ import { clearGoogleIdentitySelection, googleIdentitySelected } from "../lib/ide
 import { readDesktopPlatform } from "../lib/desktop-platform";
 import { openRuntimeLog, runtimeLogPath } from "../lib/runtime-log";
 import { describeError, ERROR_CATALOG } from "../lib/error-catalog";
-import { existingTeamReadOnly } from "../lib/existing-team-readonly";
+import { existingTeamReadOnly, existingTeamView } from "../lib/existing-team-readonly";
 import type { ExistingTeamConnectModalProps } from "../onboarding/ExistingTeamConnectModal";
 import {
   loadOnboardingGate,
@@ -232,6 +232,7 @@ vi.mock("../onboarding/ExistingTeamConnectModal", () => ({
         <button type="button" onClick={props.onCancel}>cancel-existing-team</button>
         <button type="button" onClick={() => void props.onConnected(result(false))}>connect-existing-team-incomplete</button>
         <button type="button" onClick={() => void props.onConnected(result(true))}>connect-existing-team-ready</button>
+        <button type="button" onClick={() => void props.onConnected({ ...result(false), captainRunning: false, assistantRunning: false })}>connect-existing-team-agents-off</button>
         <button type="button" onClick={() => props.onReadOnlyConnected({ readiness: false, snapshot: result(false) })}>connect-existing-team-read-only</button>
       </section>
     );
@@ -659,6 +660,83 @@ describe("DashboardApp onboarding router", () => {
       expect.objectContaining({ profileReady: true, directChatReady: true }),
     );
     expect(markOnboardingStarted).not.toHaveBeenCalled();
+    expect(screen.queryByTestId("assistant-chat")).not.toBeInTheDocument();
+    // connected in full: the pages read the team's VPS (not the cloud), nothing is disabled, and there is no way «back»
+    expect(existingTeamView()).toMatchObject({ full: true, assistantActive: true });
+    expect(existingTeamReadOnly()).toBeNull();
+    expect(screen.queryByRole("button", { name: "close-read-only" })).not.toBeInTheDocument();
+  });
+
+  it("a set-up account with a saved existing team opens on that team's VPS, never on the cloud Shell", async () => {
+    vi.mocked(useSession).mockReturnValue(signedInAs("set-up-with-team"));
+    vi.mocked(loadOnboardingGate).mockResolvedValue({ phase: "ready" });
+    vi.mocked(existingTeamBridge.reopen).mockResolvedValue({
+      readiness: true,
+      snapshot: TEAM_READY,
+      connectionKey: "k".repeat(16),
+    });
+
+    render(<DashboardApp />);
+
+    expect(await screen.findByTestId("shell")).toBeInTheDocument();
+    expect(existingTeamBridge.reopen).toHaveBeenCalledOnce();
+    // read-only until «Collega il team» is confirmed in this run; the setup is done, so no way back to it
+    expect(existingTeamReadOnly()).not.toBeNull();
+    expect(existingTeamView()?.full).toBeUndefined();
+    expect(screen.queryByRole("button", { name: "close-read-only" })).not.toBeInTheDocument();
+  });
+
+  it("a set-up account with no saved team opens the usual Shell on the cloud", async () => {
+    vi.mocked(useSession).mockReturnValue(signedInAs("set-up-no-team"));
+    vi.mocked(loadOnboardingGate).mockResolvedValue({ phase: "ready" });
+
+    render(<DashboardApp />);
+
+    expect(await screen.findByTestId("shell")).toBeInTheDocument();
+    expect(existingTeamBridge.reopen).toHaveBeenCalledOnce();
+    expect(existingTeamView()).toBeNull();
+  });
+
+  it("a set-up account whose saved team cannot be reached says so and retries, and never falls back to the cloud Shell", async () => {
+    vi.mocked(useSession).mockReturnValue(signedInAs("set-up-unreachable"));
+    vi.mocked(loadOnboardingGate).mockResolvedValue({ phase: "ready" });
+    vi.mocked(existingTeamBridge.reopen)
+      .mockRejectedValueOnce({ code: "existing_team_unavailable" })
+      .mockResolvedValue({ readiness: true, snapshot: TEAM_READY, connectionKey: "k".repeat(16) });
+
+    const user = userEvent.setup();
+    render(<DashboardApp />);
+
+    expect(await screen.findByRole("alert")).toBeInTheDocument();
+    expect(screen.queryByTestId("shell")).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /retry|riprova/i }));
+    expect(await screen.findByTestId("shell")).toBeInTheDocument();
+    expect(existingTeamBridge.reopen).toHaveBeenCalledTimes(2);
+    expect(existingTeamView()).not.toBeNull();
+  });
+
+  it("opens an existing team connected with its agents off in the full Shell, on its agents, with the onboarding still open", async () => {
+    vi.mocked(useSession).mockReturnValue(signedInAs("existing-agents-off"));
+    vi.mocked(loadOnboardingGate).mockResolvedValue({
+      phase: "required",
+      account: { displayName: "Owner Person" },
+      resumeAvailable: false,
+      existingTeam: { teamId: "team-opaque-0005", status: "available" },
+      runtime: { status: "collecting", stage: "host" },
+    });
+
+    const user = userEvent.setup();
+    render(<DashboardApp />);
+    await user.click(await screen.findByRole("button", { name: "connect-existing-team-agents-off" }));
+
+    expect(await screen.findByTestId("shell")).toBeInTheDocument();
+    // the team's VPS is what the pages read, with what writes turned on: never the cloud
+    expect(existingTeamReadOnly()).toBeNull();
+    expect(existingTeamView()).toMatchObject({ full: true });
+    expect(navigate).toHaveBeenCalledWith("/agents", { replace: true });
+    expect(markOnboardingStarted).toHaveBeenCalledWith("existing-agents-off");
+    expect(markOnboardingReady).not.toHaveBeenCalled();
+    expect(screen.queryByTestId("existing-team-modal")).not.toBeInTheDocument();
     expect(screen.queryByTestId("assistant-chat")).not.toBeInTheDocument();
   });
 
@@ -1372,7 +1450,8 @@ describe("DashboardApp onboarding router", () => {
       "conversation-account",
       expect.objectContaining({ profileReady: true, directChatReady: true }),
     ), { timeout: 3_500 });
-    expect(screen.getByTestId("shell")).toBeInTheDocument();
+    // the Shell opens once the saved team (none here) has been looked for
+    expect(await screen.findByTestId("shell")).toBeInTheDocument();
     expect(markOnboardingStarted).toHaveBeenCalledWith("conversation-account");
     expect(openOnboardingAssistant).toHaveBeenCalledWith(SUBMISSION.host, expect.any(Function));
   });

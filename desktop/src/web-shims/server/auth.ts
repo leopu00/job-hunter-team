@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { existingTeamReadOnly } from "../../lib/existing-team-readonly";
+import { existingTeamView } from "../../lib/existing-team-readonly";
 import { createClient } from "./supabase-server";
 
 /**
@@ -20,7 +20,7 @@ export async function isLocalRequest(..._request: unknown[]): Promise<boolean> {
 export async function requireAuth(): Promise<NextResponse | null> {
   // Reading an existing team's VPS: the account-scoped native binding is the
   // authority, there is no cloud session to ask (and none is wanted).
-  if (existingTeamReadOnly()) return null;
+  if (existingTeamView()) return null;
   const supabase = await createClient();
   const {
     data: { user },
