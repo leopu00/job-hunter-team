@@ -9,12 +9,14 @@ socket's SO_PEERCRED check runs in the live test.
 Run with: pytest tests/test_broker_notary.py -v
 """
 
+import importlib
 import io
 import json
 import sys
 from pathlib import Path
 
 import pytest
+import tldextract
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "shared"))
@@ -217,6 +219,26 @@ def test_the_registrable_part_of_a_host(broker):
     assert reg("apply.example.unknown-suffix") is None
     for bad in ("localhost", "com", "co.uk", "github.io", "10.0.0.1", "exa_mple.com", "-a.com", ""):
         assert reg(bad) is None, bad
+
+
+def test_registrable_ignores_an_artificial_tldextract_cache(broker, monkeypatch, tmp_path):
+    cache_dir = tmp_path / "poisoned-psl-cache"
+    cache = tldextract.cache.DiskCache(str(cache_dir))
+    cache.set(
+        "publicsuffix.org-tlds",
+        {"urls": (), "fallback_to_snapshot": True},
+        (["io"], []),
+    )
+    # This cache would collapse tenants under github.io if a notary read it.
+    poisoned = tldextract.TLDExtract(
+        cache_dir=str(cache_dir), suffix_list_urls=(), include_psl_private_domains=True,
+    )
+    assert poisoned("acme.github.io").top_domain_under_public_suffix == "github.io"
+    monkeypatch.setenv("TLDEXTRACT_CACHE", str(cache_dir))
+
+    reloaded = importlib.reload(broker.notary)
+    assert reloaded._PSL._cache.enabled is False
+    assert reloaded.registrable("acme.github.io") == "acme.github.io"
 
 
 @pytest.mark.parametrize("shown,claimed", [

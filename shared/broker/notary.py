@@ -46,7 +46,11 @@ DOMAIN = re.compile(rf"^(?:{LABEL}\.)+[a-z]{{2,63}}$")
 # time. The private PSL section is essential here: `acme.github.io` and
 # `other.github.io` are distinct registrable domains, as are similar tenant
 # hosts maintained in the list.
-_PSL = tldextract.TLDExtract(suffix_list_urls=(), include_psl_private_domains=True)
+_PSL = tldextract.TLDExtract(
+    cache_dir=None,
+    suffix_list_urls=(),
+    include_psl_private_domains=True,
+)
 MAX_POSITION_ID = 2_147_483_647
 MAX_POSITIONS = 20_000
 
