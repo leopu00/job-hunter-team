@@ -101,7 +101,7 @@ def cluster(request, tmp_path_factory):
     data, sock = root / "data", root / "sock"
     sock.mkdir()
     env = {**os.environ, "LC_ALL": "C", "PGHOST": str(sock), "PGUSER": "postgres", "PGDATABASE": "postgres"}
-    subprocess.run([tools["initdb"], "-D", str(data), "-A", "trust", "-U", "postgres", "--no-sync"],
+    subprocess.run([tools["initdb"], "-D", str(data), "-A", "trust", "-U", "postgres", "--no-sync", "-E", "UTF8"],
                    check=True, capture_output=True, env=env, timeout=120)
     subprocess.run([tools["pg_ctl"], "-D", str(data), "-l", str(root / "postgres.log"), "-w", "-s",
                     "-o", f"-c listen_addresses='' -k {sock} -c fsync=off", "start"],
