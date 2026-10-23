@@ -20,7 +20,7 @@ import sys
 import threading
 from pathlib import Path
 
-from . import mailops
+from . import mailops, notary, store
 from .protocol import MAX_REQUEST_BYTES, SOCKET_NAME, ProtocolError, encode, parse_request
 
 CLIENT_UID = int(os.environ.get("JHT_BROKER_CLIENT_UID", "1001"))
@@ -43,6 +43,9 @@ HANDLERS = {
     "mail.count": mailops.count,
     "mail.poll": mailops.poll,
     "mail.send": mailops.send,
+    "apply.check": lambda args, _role: notary.check(args["position_id"]),
+    "apply.claim": lambda args, _role: notary.claim(args["position_id"], args["destination"]),
+    "apply.revoke": lambda args, _role: notary.revoke(args["position_id"], args["instant"]),
 }
 
 
@@ -53,7 +56,7 @@ def handle(raw: bytes) -> dict:
         return {"ok": False, "reason": err.code}
     try:
         return HANDLERS[req["op"]](req["args"], req["role"])
-    except mailops.BrokerRefusal as err:
+    except (mailops.BrokerRefusal, notary.NotaryRefusal, store.StoreError) as err:
         return {"ok": False, "reason": err.code}
     except Exception:  # noqa: BLE001 — never a traceback toward the agents
         return {"ok": False, "reason": "broker_internal_error"}

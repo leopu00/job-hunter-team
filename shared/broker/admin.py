@@ -14,6 +14,8 @@ value, length or hash of a secret.
     mailbox admission allowlist|whole_mailbox
     mailbox allow add|remove <address|@domain>
     mail drafts | mail approve <id> | mail discard <id> | mail journal [--limit N]
+    apply record <position_id> <instant> <destination> | apply revoke <position_id> <instant>
+    apply show <position_id>
 """
 
 from __future__ import annotations
@@ -23,9 +25,10 @@ import base64
 import binascii
 import hashlib
 import json
+import re
 import sys
 
-from . import mailops, store
+from . import mailops, notary, store
 from .mailfilter import ADMISSION_POLICIES
 
 # The repo's one list of characters that reorder or hide text (mailops has
@@ -383,8 +386,31 @@ def main(argv: list[str]) -> int:
     ml.add_parser("discard").add_argument("draft_id")
     ml.add_parser("journal").add_argument("--limit", type=int, default=50)
 
+    # An authorisation to apply, recorded by the person from the host (the desktop app runs this
+    # through SSH): the only way one is recorded for `user_local` (notary.py). Every argument is
+    # closed: a position number, an instant in the box's fixed format and a destination in its
+    # closed form (`web:<domain>`, `email:<domain>`, `portal:<name>`), nothing else.
+    ap = sub.add_parser("apply").add_subparsers(dest="cmd", required=True)
+    rec = ap.add_parser("record")
+    rec.add_argument("position_id")
+    rec.add_argument("instant")
+    rec.add_argument("destination")
+    rev = ap.add_parser("revoke")
+    rev.add_argument("position_id")
+    rev.add_argument("instant")
+    ap.add_parser("show").add_argument("position_id")
+
     args = p.parse_args(argv)
     try:
+        if args.area == "apply":
+            if not re.fullmatch(r"[1-9][0-9]{0,9}", args.position_id):
+                raise AdminError("position_invalid")
+            pid = int(args.position_id)
+            if args.cmd == "record":
+                return _out(notary.record(pid, args.instant, "user_local", args.destination))
+            if args.cmd == "revoke":
+                return _out(notary.revoke(pid, args.instant))
+            return _out(notary.show(pid))
         if args.area == "secrets":
             if args.cmd == "status":
                 return _out(secrets_status())
@@ -419,6 +445,6 @@ def main(argv: list[str]) -> int:
                 return _out(mail_discard(args.draft_id))
             if args.cmd == "journal":
                 return _out(mail_journal(max(1, min(args.limit, 1000))))
-    except (AdminError, store.StoreError) as err:
+    except (AdminError, store.StoreError, notary.NotaryRefusal) as err:
         return _out({"ok": False, "reason": err.code})
     return 2
