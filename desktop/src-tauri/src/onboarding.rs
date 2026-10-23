@@ -2408,6 +2408,23 @@ fn start_and_verify_local_container_with(
     }
 }
 
+/// The Container step after the start: the snapshot is the check, on this computer as on a VPS.
+/// It is the strict one (a trusted runtime, the container of the team's own project, running);
+/// `jht status` only finds a container named «jht». A container that is not running stops the
+/// step, and the error says why: the snapshot's answer, and the wrapper's own reason when it gave
+/// one (runtime_untrusted, container_not_found, container_stopped, error).
+fn container_step_verdict(snapshot: &OnboardingSnapshot, reason: Option<String>) -> Result<(), OnboardingError> {
+    if snapshot.container_running {
+        return Ok(());
+    }
+    trace_local_runtime("container", "snapshot_not_ready");
+    let detail = match reason {
+        Some(reason) => format!("jht onboarding-snapshot: containerRunning=0 ({reason})"),
+        None => "jht onboarding-snapshot: containerRunning=0".to_owned(),
+    };
+    Err(OnboardingError { detail: Some(detail), ..failure("container_not_ready") })
+}
+
 fn prepare_impl(
     app: tauri::AppHandle,
     scope: AccountScope,
@@ -2533,16 +2550,16 @@ fn prepare_impl(
         "ui_container_done",
         || {
             let started = Instant::now();
-            let snapshot_result = snapshot_impl(&app, &scope, &validated);
+            let snapshot_result = snapshot_logged(&app, &scope, &validated, runtime_log.as_ref())
+                .map_err(|error| with_cause(error, runtime_log.as_ref()));
+            let (snapshot_result, reason) = match snapshot_result {
+                Ok((snapshot, reason)) => (Ok(snapshot), reason),
+                Err(error) => (Err(error), None),
+            };
             if let Some(diagnostics) = diagnostics.as_ref() {
                 diagnostics.record_snapshot("container-snapshot", started, &snapshot_result);
             }
-            let snapshot = snapshot_result?;
-            if !snapshot.container_running {
-                trace_local_runtime("container", "snapshot_not_ready");
-                return Err(failure("container_not_ready"));
-            }
-            Ok(())
+            container_step_verdict(&snapshot_result?, reason)
         },
     )?;
 
@@ -2731,6 +2748,29 @@ fn snapshot_impl(
     scope: &AccountScope,
     host: &ValidatedHost,
 ) -> Result<OnboardingSnapshot, OnboardingError> {
+    snapshot_logged(app, scope, host, None).map(|(snapshot, _)| snapshot)
+}
+
+/// Why the wrapper's snapshot says the container is not running: its one line on stderr,
+/// «onboarding_snapshot: <code>: <detail>» (the code, then ids, project and service names, no
+/// path). One line, without control characters, redacted, at most 240 characters.
+fn snapshot_reason(stderr: &[u8]) -> Option<String> {
+    let text = String::from_utf8_lossy(stderr);
+    let line = text.lines().rev().find_map(|line| line.trim().strip_prefix("onboarding_snapshot: "))?;
+    let clean: String = line.chars().filter(|c| !c.is_control()).take(240).collect();
+    let clean = redact(clean.trim().to_owned());
+    (!clean.is_empty()).then_some(clean)
+}
+
+/// The snapshot, and on this computer also its command, exit, lines and stderr in the runtime log
+/// when a log is given (the setup's own snapshot is a step of the setup), with the wrapper's
+/// reason when it gave one.
+fn snapshot_logged(
+    app: &tauri::AppHandle,
+    scope: &AccountScope,
+    host: &ValidatedHost,
+    log: Option<&RuntimeLog>,
+) -> Result<(OnboardingSnapshot, Option<String>), OnboardingError> {
     match host {
         ValidatedHost::Vps { .. } => {
             let result =
@@ -2738,24 +2778,28 @@ fn snapshot_impl(
             if !result.success() {
                 return Err(failure("snapshot_failed"));
             }
-            Ok(parse_snapshot(&result.stdout_text()))
+            Ok((parse_snapshot(&result.stdout_text()), None))
         }
         ValidatedHost::Local => {
             let Some(wrapper) = wrapper_path(app) else {
-                return Ok(OnboardingSnapshot::default());
+                return Ok((OnboardingSnapshot::default(), None));
             };
-            let result = run_scoped_local(
-                app,
-                scope,
-                &wrapper,
-                LocalCliOperation::Snapshot,
-                SNAPSHOT_TIMEOUT,
-            )
-            .map_err(failure)?;
+            let (result, reason) = match log {
+                Some(log) => {
+                    crate::account_scope::validate_local_runtime(app, scope).map_err(failure)?;
+                    let args = LocalCliOperation::Snapshot.argv();
+                    let started = Instant::now();
+                    let (result, stderr) = run_verified_local_wrapper_keeping_stderr(&wrapper, &args, None, SNAPSHOT_TIMEOUT);
+                    log.record_result(&format!("jht {}", args.join(" ")), &result, &stderr, started.elapsed());
+                    (refuse_broad_podman_machine(result), snapshot_reason(&stderr))
+                }
+                None => (run_scoped_local(app, scope, &wrapper, LocalCliOperation::Snapshot, SNAPSHOT_TIMEOUT), None),
+            };
+            let result = result.map_err(failure)?;
             if !result.success() {
                 return Err(failure("snapshot_failed"));
             }
-            Ok(parse_snapshot(&result.stdout_text()))
+            Ok((parse_snapshot(&result.stdout_text()), reason))
         }
     }
 }
@@ -6739,6 +6783,33 @@ esac
             "{text}"
         );
         let _ = fs::remove_dir_all(&dir);
+    }
+
+    /// T79: the snapshot is the Container step's check. A runtime that is not trusted, or a «jht»
+    /// of another project, stops the setup even when `jht status` found a container of that name,
+    /// and the error carries the wrapper's reason as its cause.
+    #[test]
+    fn the_container_step_stops_on_a_snapshot_that_is_not_running_and_says_the_wrappers_reason() {
+        let not_running = super::OnboardingSnapshot { runtime_installed: true, ..super::OnboardingSnapshot::default() };
+        let stderr = b"warning: something else\r\nonboarding_snapshot: runtime_untrusted: the wrapper's runtime folder is not the one installed\r\n";
+        let error = super::container_step_verdict(&not_running, super::snapshot_reason(stderr)).unwrap_err();
+        assert_eq!(error.code, "container_not_ready");
+        assert_eq!(
+            serde_json::to_value(&error).unwrap()["detail"],
+            "jht onboarding-snapshot: containerRunning=0 (runtime_untrusted: the wrapper's runtime folder is not the one installed)"
+        );
+        // without a reason (an older wrapper) the cause still says what the snapshot answered
+        let error = super::container_step_verdict(&not_running, super::snapshot_reason(b"")).unwrap_err();
+        assert_eq!(serde_json::to_value(&error).unwrap()["detail"], "jht onboarding-snapshot: containerRunning=0");
+        // a running container passes
+        let running = super::OnboardingSnapshot { runtime_installed: true, container_running: true, ..super::OnboardingSnapshot::default() };
+        assert!(super::container_step_verdict(&running, None).is_ok());
+        // the reason is one line of the wrapper's own, never anything else it printed
+        assert_eq!(super::snapshot_reason(b"onboarding_snapshot: error: a\x1b[31mb\n"), Some("error: ab".to_owned()));
+        assert_eq!(super::snapshot_reason(b"no reason here\n"), None);
+        assert_eq!(super::snapshot_reason(b"onboarding_snapshot:    \n"), None);
+        let long = format!("onboarding_snapshot: error: {}\n", "x".repeat(400));
+        assert_eq!(super::snapshot_reason(long.as_bytes()).unwrap().chars().count(), 240);
     }
 
     /// A failed local step gives its error the cause it printed, once; the
