@@ -414,6 +414,9 @@ def main() -> int:
         # Un'azione presa dal sito con la sessione dell'utente: se non e' stato
         # lui, deve saperlo prima che il box la esegua, non domattina.
         "web_action_notice",
+        # The box can no longer reach the website: a row held for the web would
+        # never be seen there, since that is exactly what does not sync.
+        "cloud_sync_notice",
     ) and _is_off_hours()
     should_deliver = created or args.existing_id is not None
     if should_deliver and (

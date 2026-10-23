@@ -285,10 +285,13 @@ describe("Squadra on an existing team read only", () => {
     const read = await screen.findByTestId("team-status-read");
     const page = read.parentElement!;
     expect(within(page).getAllByRole("button").map((button) => button.textContent)).toEqual([T.refresh, EXISTING_TEAM_ASSISTANT_TEXT.it.activate]);
-    // The read command, and the header's read of which team this is (a local file, no SSH): nothing else.
+    // The read command, the header's read of which team this is (a local file, no SSH), and the
+    // read of how the box's sync is going (the reader's closed op, read only): nothing else.
     expect(
-      native.invoke.mock.calls.map(([command]) => command).filter((c) => c !== COMMAND && c !== "existing_team_link_identity"),
-    ).toEqual([]);
+      native.invoke.mock.calls
+        .filter(([command]) => command !== COMMAND && command !== "existing_team_link_identity")
+        .map(([command, args]) => [command, args]),
+    ).toEqual([["existing_team_positions_read", { request: { op: "cloud_sync" } }]]);
     expect(fake.current!.calls).toEqual([]);
   });
 

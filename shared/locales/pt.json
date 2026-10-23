@@ -247,5 +247,6 @@
   "web_action_notice.team_stopped_from_web": "A equipa foi parada a partir do site. Se não foste tu, verifica quem consegue entrar na tua conta.",
   "web_action_notice.team_started_from_web": "A equipa foi iniciada a partir do site. Se não foste tu, verifica quem consegue entrar na tua conta.",
   "web_action_notice.team_restarted_from_web": "A equipa foi reiniciada a partir do site. Se não foste tu, verifica quem consegue entrar na tua conta.",
-  "web_action_notice.directive_changed_from_web": "Foi adicionada ou alterada uma ordem permanente da equipa a partir do site. Se não foste tu, verifica o quadro na app."
+  "web_action_notice.directive_changed_from_web": "Foi adicionada ou alterada uma ordem permanente da equipa a partir do site. Se não foste tu, verifica o quadro na app.",
+  "cloud_sync_notice.token_rejected": "A máquina já não consegue sincronizar com o site: o site recusa o seu token de sincronização (expirado ou revogado) e as posições novas já não chegam lá. Gera um token novo no site (Definições › Cloud sync) e executa «jht cloud enable --token …» na máquina, ou volta a ligar a equipa a partir da app."
 }

@@ -13,6 +13,7 @@ import {
 import { useRefresh } from "../../shell/router";
 import type { PageProps } from "../types";
 import { AssistantCard } from "./assistant-card";
+import { CloudSyncCard } from "./cloud-sync-card";
 import { EXISTING_TEAM_STATUS_TEXT } from "./existing-team-status.i18n";
 
 function stamp(at: number): string {
@@ -105,6 +106,7 @@ export default function ExistingTeamStatusPage(_props: PageProps) {
       )}
 
       <AssistantCard />
+      <CloudSyncCard />
 
       {reading.kind === "unknown" && (
         <p data-testid="team-status-unknown" className="text-[12px]" style={{ color: "var(--color-muted)" }}>

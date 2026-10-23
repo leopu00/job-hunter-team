@@ -247,5 +247,6 @@
   "web_action_notice.team_stopped_from_web": "La squadra è stata fermata dal sito. Se non sei stato tu, controlla chi può entrare nel tuo account.",
   "web_action_notice.team_started_from_web": "La squadra è stata avviata dal sito. Se non sei stato tu, controlla chi può entrare nel tuo account.",
   "web_action_notice.team_restarted_from_web": "La squadra è stata riavviata dal sito. Se non sei stato tu, controlla chi può entrare nel tuo account.",
-  "web_action_notice.directive_changed_from_web": "Dal sito è stato aggiunto o cambiato un ordine permanente della squadra. Se non sei stato tu, controlla la bacheca nell'app."
+  "web_action_notice.directive_changed_from_web": "Dal sito è stato aggiunto o cambiato un ordine permanente della squadra. Se non sei stato tu, controlla la bacheca nell'app.",
+  "cloud_sync_notice.token_rejected": "Il box non riesce più a sincronizzarsi con il sito: il sito rifiuta il suo token di sincronizzazione (scaduto o revocato), e le posizioni nuove non arrivano più. Genera un token nuovo dal sito (Impostazioni › Cloud sync) e lancialo sul box con «jht cloud enable --token …», oppure ricollega la squadra dall'app."
 }

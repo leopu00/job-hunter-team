@@ -11,6 +11,7 @@ import { activeDemoPersona } from "@/lib/demo/mode";
 import { hasSyncedData } from "@/lib/demo/pairing";
 import DemoBanner from "@/app/components/demo/DemoBanner";
 import UpdateBanner from "@/app/components/UpdateBanner";
+import SyncTokenBanner from "@/app/components/SyncTokenBanner";
 import { getRequestLocale } from "@/lib/request-locale";
 import Navbar from "@/app/components/NavbarChrome";
 import MainChrome from "@/app/components/MainChrome";
@@ -131,6 +132,9 @@ export default async function ProtectedLayout({
           in una pagina sola: chi ha una versione vecchia deve incontrare
           la notizia dove già guarda, non andarla a cercare. Si mostra da
           sé solo quando c'è un divario vero (vedi UpdateBanner). */}
+      {/* A box that no longer syncs because of its token: said on every page,
+          like the update band (see SyncTokenBanner). */}
+      {!demoPersona && <SyncTokenBanner />}
       {!demoPersona && <UpdateBanner />}
       <div className="flex items-stretch">
         <div className="flex-1 min-w-0">

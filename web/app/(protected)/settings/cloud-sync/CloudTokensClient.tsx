@@ -12,6 +12,7 @@ import Link from "next/link";
 import { useLocale } from "@/lib/use-locale";
 import type { Locale } from "@/i18n/config";
 import { TokenExpiryNotice } from "./TokenExpiryNotice";
+import { tokenExpiry } from "@/lib/cloud-sync/token-expiry";
 import { TokenInactivityNotice } from "./TokenInactivityNotice";
 
 // Breadcrumb: senza, dalla pagina token non si tornava alle Impostazioni
@@ -65,6 +66,10 @@ const T: Record<
     copyBtn: string;
     copied: string;
     existingTitle: string;
+    /** The tokens past their expiry: their box no longer syncs. */
+    expiredTitle: string;
+    expiredHint: string;
+    renew: string;
     none: string;
     created: string;
     lastUsed: string;
@@ -105,6 +110,10 @@ const T: Record<
     copyBtn: "Copia",
     copied: "Copiato ✓",
     existingTitle: "Token attivi",
+    expiredTitle: "Token scaduti: il loro box è scollegato",
+    expiredHint:
+      "Il sito rifiuta questi token: il box non sincronizza più. Rinnova genera un token nuovo con lo stesso nome; poi lancialo sul box e revoca quello scaduto.",
+    renew: "Rinnova",
     none: "Nessun token attivo.",
     created: "Creato",
     lastUsed: "Ultimo uso",
@@ -142,6 +151,10 @@ const T: Record<
     copyBtn: "Copy",
     copied: "Copied ✓",
     existingTitle: "Active tokens",
+    expiredTitle: "Expired tokens: their box is disconnected",
+    expiredHint:
+      "The website refuses these tokens: the box no longer syncs. Renew generates a new token with the same name; then run it on the box and revoke the expired one.",
+    renew: "Renew",
     none: "No active tokens.",
     created: "Created",
     lastUsed: "Last used",
@@ -178,6 +191,10 @@ const T: Record<
     copyBtn: "Copiar",
     copied: "Copiado ✓",
     existingTitle: "Tokens activos",
+    expiredTitle: "Tokens caducados: su equipo está desconectado",
+    expiredHint:
+      "El sitio rechaza estos tokens: el equipo ya no se sincroniza. Renovar genera un token nuevo con el mismo nombre; luego ejecútalo en el equipo y revoca el caducado.",
+    renew: "Renovar",
     none: "No hay tokens activos.",
     created: "Creado",
     lastUsed: "Último uso",
@@ -215,6 +232,10 @@ const T: Record<
     copyBtn: "Copier",
     copied: "Copié ✓",
     existingTitle: "Tokens actifs",
+    expiredTitle: "Jetons expirés : leur machine est déconnectée",
+    expiredHint:
+      "Le site refuse ces jetons : la machine ne se synchronise plus. Renouveler génère un nouveau jeton avec le même nom ; lance-le ensuite sur la machine et révoque celui qui a expiré.",
+    renew: "Renouveler",
     none: "Aucun token actif.",
     created: "Créé",
     lastUsed: "Dernière utilisation",
@@ -252,6 +273,10 @@ const T: Record<
     copyBtn: "Kopieren",
     copied: "Kopiert ✓",
     existingTitle: "Aktive Tokens",
+    expiredTitle: "Abgelaufene Tokens: ihr Gerät ist getrennt",
+    expiredHint:
+      "Die Website lehnt diese Tokens ab: Das Gerät synchronisiert nicht mehr. Erneuern erzeugt ein neues Token mit demselben Namen; führe es danach auf dem Gerät aus und widerrufe das abgelaufene.",
+    renew: "Erneuern",
     none: "Keine aktiven Tokens.",
     created: "Erstellt",
     lastUsed: "Zuletzt verwendet",
@@ -290,6 +315,10 @@ const T: Record<
     copyBtn: "Másolás",
     copied: "Másolva ✓",
     existingTitle: "Aktív tokenek",
+    expiredTitle: "Lejárt tokenek: a gépük nincs csatlakoztatva",
+    expiredHint:
+      "A webhely elutasítja ezeket a tokeneket: a gép már nem szinkronizál. A Megújítás új tokent generál ugyanazzal a névvel; utána futtasd a gépen, és vond vissza a lejártat.",
+    renew: "Megújítás",
     none: "Nincs aktív token.",
     created: "Létrehozva",
     lastUsed: "Utolsó használat",
@@ -328,6 +357,10 @@ const T: Record<
     copyBtn: "Copiar",
     copied: "Copiado ✓",
     existingTitle: "Tokens ativos",
+    expiredTitle: "Tokens expirados: a máquina deles está desligada",
+    expiredHint:
+      "O site recusa estes tokens: a máquina já não sincroniza. Renovar gera um token novo com o mesmo nome; depois executa-o na máquina e revoga o expirado.",
+    renew: "Renovar",
     none: "Nenhum token ativo.",
     created: "Criado",
     lastUsed: "Último uso",
@@ -486,6 +519,91 @@ export default function CloudTokensClient() {
     }
   }
 
+  // An expired token is not an active one: the website refuses it and its box
+  // no longer syncs. It gets its own list, with what to do.
+  const isExpired = (tok: TokenRow) =>
+    tokenExpiry(tok.expires_at).kind === "expired";
+  const activeTokens = tokens?.filter((tok) => !isExpired(tok)) ?? [];
+  const expiredTokens = tokens?.filter(isExpired) ?? [];
+
+  // «Rinnova»: the form, with the expired token's name, ready to generate.
+  function renew(tokenName: string) {
+    setName(tokenName);
+    setCreateState({ kind: "idle" });
+    const input = document.getElementById("token_name");
+    input?.scrollIntoView?.({ block: "center" });
+    input?.focus();
+  }
+
+  const row = (tok: TokenRow, expired: boolean) => (
+    <li
+      key={tok.id}
+      className="flex items-center justify-between gap-3 p-3 border border-[var(--color-border)] bg-[var(--color-card)]"
+    >
+      <div className="min-w-0">
+        <div className="text-[12px] text-[var(--color-bright)] font-medium truncate">
+          {tok.name}
+          <span className="ml-2 font-mono text-[10px] text-[var(--color-dim)]">
+            {tok.token_prefix}…
+          </span>
+        </div>
+        <div className="text-[10px] text-[var(--color-dim)] mt-0.5">
+          {t.created} {tok.created_at.slice(0, 10)} · {t.lastUsed}:{" "}
+          {tok.last_used_at ? tok.last_used_at.slice(0, 10) : t.never}
+        </div>
+        <div className="text-[10px] text-[var(--color-dim)] mt-0.5">
+          {t.clientBuild}:{" "}
+          {tok.client_version ? (
+            <span className="font-mono text-[var(--color-muted)]">
+              {tok.client_version}
+              {tok.client_platform ? ` · ${tok.client_platform}` : ""}
+            </span>
+          ) : (
+            t.clientUnknown
+          )}
+          {tok.client_capabilities && tok.client_capabilities.length > 0 && (
+            <>
+              {" · "}
+              {t.clientCapabilities}:{" "}
+              <span className="font-mono text-[var(--color-muted)]">
+                {tok.client_capabilities.join(", ")}
+              </span>
+            </>
+          )}
+        </div>
+        <TokenExpiryNotice locale={locale} expiresAt={tok.expires_at} />
+        <TokenInactivityNotice locale={locale} token={tok} />
+        {revokeError?.id === tok.id && (
+          <div
+            role="alert"
+            className="mt-1 text-[11px]"
+            style={{ color: "var(--color-red)" }}
+          >
+            {revokeError.message}
+          </div>
+        )}
+      </div>
+      <div className="flex flex-col gap-1.5 shrink-0">
+        {expired && (
+          <button
+            type="button"
+            onClick={() => renew(tok.name)}
+            className="px-3 py-1.5 border border-[var(--color-green)] text-[10px] text-[var(--color-green)] hover:bg-[var(--color-green)] hover:text-[var(--color-bg)] transition-colors cursor-pointer whitespace-nowrap"
+          >
+            {t.renew}
+          </button>
+        )}
+        <button
+          onClick={() => handleRevoke(tok.id)}
+          disabled={revokingId === tok.id}
+          className="px-3 py-1.5 border border-[var(--color-border)] text-[10px] text-[var(--color-dim)] hover:border-[var(--color-red)] hover:text-[var(--color-red)] transition-colors cursor-pointer whitespace-nowrap disabled:opacity-50"
+        >
+          {revokingId === tok.id ? t.revoking : t.revoke}
+        </button>
+      </div>
+    </li>
+  );
+
   return (
     <div className="min-h-screen px-5 py-8 max-w-2xl mx-auto">
       <header className="mb-8">
@@ -608,75 +726,33 @@ export default function CloudTokensClient() {
         {tokens === null && !loadError && (
           <div className="text-[11px] text-[var(--color-dim)]">{t.loading}</div>
         )}
-        {tokens !== null && tokens.length === 0 && (
+        {tokens !== null && activeTokens.length === 0 && (
           <div className="text-[11px] text-[var(--color-dim)]">{t.none}</div>
         )}
-        {tokens !== null && tokens.length > 0 && (
+        {tokens !== null && activeTokens.length > 0 && (
           <ul className="space-y-2">
-            {tokens.map((tok) => (
-              <li
-                key={tok.id}
-                className="flex items-center justify-between gap-3 p-3 border border-[var(--color-border)] bg-[var(--color-card)]"
-              >
-                <div className="min-w-0">
-                  <div className="text-[12px] text-[var(--color-bright)] font-medium truncate">
-                    {tok.name}
-                    <span className="ml-2 font-mono text-[10px] text-[var(--color-dim)]">
-                      {tok.token_prefix}…
-                    </span>
-                  </div>
-                  <div className="text-[10px] text-[var(--color-dim)] mt-0.5">
-                    {t.created} {tok.created_at.slice(0, 10)} · {t.lastUsed}:{" "}
-                    {tok.last_used_at ? tok.last_used_at.slice(0, 10) : t.never}
-                  </div>
-                  <div className="text-[10px] text-[var(--color-dim)] mt-0.5">
-                    {t.clientBuild}:{" "}
-                    {tok.client_version ? (
-                      <span className="font-mono text-[var(--color-muted)]">
-                        {tok.client_version}
-                        {tok.client_platform ? ` · ${tok.client_platform}` : ""}
-                      </span>
-                    ) : (
-                      t.clientUnknown
-                    )}
-                    {tok.client_capabilities &&
-                      tok.client_capabilities.length > 0 && (
-                        <>
-                          {" · "}
-                          {t.clientCapabilities}:{" "}
-                          <span className="font-mono text-[var(--color-muted)]">
-                            {tok.client_capabilities.join(", ")}
-                          </span>
-                        </>
-                      )}
-                  </div>
-                  <TokenExpiryNotice
-                    locale={locale}
-                    expiresAt={tok.expires_at}
-                  />
-                  <TokenInactivityNotice locale={locale} token={tok} />
-                  {revokeError?.id === tok.id && (
-                    <div
-                      role="alert"
-                      className="mt-1 text-[11px]"
-                      style={{ color: "var(--color-red)" }}
-                    >
-                      {revokeError.message}
-                    </div>
-                  )}
-                </div>
-                <button
-                  onClick={() => handleRevoke(tok.id)}
-                  disabled={revokingId === tok.id}
-                  className="px-3 py-1.5 border border-[var(--color-border)] text-[10px] text-[var(--color-dim)] hover:border-[var(--color-red)] hover:text-[var(--color-red)] transition-colors cursor-pointer whitespace-nowrap disabled:opacity-50"
-                >
-                  {revokingId === tok.id ? t.revoking : t.revoke}
-                </button>
-              </li>
-            ))}
+            {activeTokens.map((tok) => row(tok, false))}
           </ul>
         )}
       </div>
+
+      {expiredTokens.length > 0 && (
+        <section className="mt-6" aria-labelledby="expired_tokens_title">
+          <h2
+            id="expired_tokens_title"
+            className="text-[10px] uppercase tracking-wider mb-1"
+            style={{ color: "var(--color-red)" }}
+          >
+            {t.expiredTitle}
+          </h2>
+          <p className="text-[11px] text-[var(--color-dim)] mb-2">
+            {t.expiredHint}
+          </p>
+          <ul className="space-y-2">
+            {expiredTokens.map((tok) => row(tok, true))}
+          </ul>
+        </section>
+      )}
     </div>
   );
 }
