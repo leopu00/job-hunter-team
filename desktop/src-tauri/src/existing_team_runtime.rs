@@ -156,10 +156,30 @@ try: req=json.loads(sys.stdin.readline())
 except Exception: fail('positions_request_invalid')
 if not isinstance(req,dict) or set(req)-{'op','filters','id'}: fail('positions_request_invalid')
 op=req.get('op')
-if op not in ('list','detail','facets','stats','profile'): fail('positions_request_invalid')
+if op not in ('list','detail','facets','stats','profile','cloud_sync'): fail('positions_request_invalid')
 if op=='detail' and (set(req)!={'op','id'} or not isinstance(req['id'],str) or not req['id'].isdigit() or len(req['id'])>20): fail('positions_request_invalid')
-if op in ('facets','stats','profile') and set(req)!={'op'}: fail('positions_request_invalid')
+if op in ('facets','stats','profile','cloud_sync') and set(req)!={'op'}: fail('positions_request_invalid')
 if op=='list' and (set(req)-{'op','filters'} or (req.get('filters') is not None and not isinstance(req.get('filters'),dict))): fail('positions_request_invalid')
+if op=='cloud_sync':
+ # How the box's push to the website is going: its periodic push keeps the last outcome in
+ # /jht_home/.cloud-periodic-push.json. Only these fields leave the team, each checked; the status
+ # from a closed list. The box's cloud configuration, with its secret, is never opened.
+ import os,stat
+ STATUSES=('completed','idle','partial','timeout','auth_failed','failed','signature_unavailable')
+ def when(value): return value if isinstance(value,str) and re.match(r'^\d{4}-\d{2}-\d{2}T[0-9:.]+Z$',value) and len(value)<=32 else None
+ try: fd=os.open('/jht_home/.cloud-periodic-push.json',os.O_RDONLY|os.O_NOFOLLOW|os.O_NONBLOCK)
+ except FileNotFoundError: emit({'ok':True,'data':{'state':'absent'}})
+ except OSError: emit({'ok':True,'data':{'state':'unreadable'}})
+ try:
+  info=os.fstat(fd)
+  raw=os.read(fd,65537) if stat.S_ISREG(info.st_mode) else None
+ except OSError: raw=None
+ finally: os.close(fd)
+ try: found=json.loads(raw) if raw is not None and len(raw)<=65536 else None
+ except ValueError: found=None
+ if not isinstance(found,dict): emit({'ok':True,'data':{'state':'unreadable'}})
+ status=found.get('status'); failures=found.get('consecutive_failures')
+ emit({'ok':True,'data':{'state':'ok','status':status if status in STATUSES else 'other','last_success_at':when(found.get('last_success_at')),'last_attempt_at':when(found.get('last_attempt_at')),'consecutive_failures':failures if type(failures) is int and 0<=failures<=10**9 else 0}})
 if op=='profile':
  # The candidate's profile is two things on the team's VPS and nothing else is read: the file
  # candidate_profile.yml and the narrative summaries/*.md. Its neighbours in the same folder (the
@@ -340,6 +360,9 @@ enum PositionsRequest {
     Facets,
     Stats,
     Profile,
+    /// How the box's push to the website is going (its periodic push's last outcome).
+    #[serde(rename = "cloud_sync")]
+    CloudSync,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -469,7 +492,7 @@ impl PositionsRequest {
             Self::Detail { id } => {
                 (1..=20).contains(&id.len()) && id.bytes().all(|byte| byte.is_ascii_digit())
             }
-            Self::Facets | Self::Stats | Self::Profile => true,
+            Self::Facets | Self::Stats | Self::Profile | Self::CloudSync => true,
         }
     }
 }
@@ -516,6 +539,26 @@ fn valid_positions_reply(request: &PositionsRequest, reply: &Value) -> bool {
                             && part.get("of").is_some_and(Value::is_u64)
                     })
                 })
+        }),
+        PositionsRequest::CloudSync => data.as_object().is_some_and(|data| {
+            let text_or_null = |key: &str| data.get(key).is_some_and(|value| value.is_null() || value.is_string());
+            match data.get("state").and_then(Value::as_str) {
+                Some("absent" | "unreadable") => data.len() == 1,
+                Some("ok") => {
+                    data.len() == 5
+                        && data.get("status").and_then(Value::as_str).is_some_and(|status| {
+                            matches!(
+                                status,
+                                "completed" | "idle" | "partial" | "timeout" | "auth_failed" | "failed"
+                                    | "signature_unavailable" | "other"
+                            )
+                        })
+                        && text_or_null("last_success_at")
+                        && text_or_null("last_attempt_at")
+                        && data.get("consecutive_failures").is_some_and(Value::is_u64)
+                }
+                _ => false,
+            }
         }),
         PositionsRequest::Profile => data.as_object().is_some_and(|data| {
             data.len() == 2
@@ -2259,6 +2302,36 @@ mod tests {
         let mut broken = runtime.clone();
         broken.platform_image_id = broken.image_id.clone();
         assert_eq!(assistant_start_command(&broken), Err("existing_team_runtime_candidate_invalid"));
+    }
+
+    #[test]
+    fn the_cloud_sync_read_is_a_closed_request_and_a_closed_reply() {
+        assert!(matches!(parse_positions_request(json!({"op": "cloud_sync"})), Ok(PositionsRequest::CloudSync)));
+        assert!(POSITIONS_READ_PY.contains("if op=='cloud_sync':"));
+        // the token lives in cloud.json: the reader never names it
+        let reader = POSITIONS_READ_PY.split("if op=='cloud_sync':").nth(1).unwrap().split("if op=='profile':").next().unwrap();
+        assert!(!reader.contains("cloud.json") && !reader.contains("token"));
+        let ok = |data: Value| json!({"ok": true, "data": data});
+        for good in [
+            json!({"state": "absent"}),
+            json!({"state": "unreadable"}),
+            json!({"state": "ok", "status": "auth_failed", "last_success_at": "2026-10-07T12:12:46.425Z", "last_attempt_at": null, "consecutive_failures": 45000}),
+            json!({"state": "ok", "status": "other", "last_success_at": null, "last_attempt_at": null, "consecutive_failures": 0}),
+        ] {
+            assert!(valid_positions_reply(&PositionsRequest::CloudSync, &ok(good.clone())), "{good}");
+        }
+        for broken in [
+            json!({"state": "absent", "status": "idle"}),
+            json!({"state": "ok", "status": "auth_failed", "last_success_at": null, "last_attempt_at": null}),
+            json!({"state": "ok", "status": "exploded", "last_success_at": null, "last_attempt_at": null, "consecutive_failures": 0}),
+            json!({"state": "ok", "status": "idle", "last_success_at": 1, "last_attempt_at": null, "consecutive_failures": 0}),
+            json!({"state": "ok", "status": "idle", "last_success_at": null, "last_attempt_at": null, "consecutive_failures": -1}),
+            json!({"state": "ok", "status": "idle", "last_success_at": null, "last_attempt_at": null, "consecutive_failures": 0, "token": "x"}),
+            json!({"state": "other"}),
+            json!(null),
+        ] {
+            assert!(!valid_positions_reply(&PositionsRequest::CloudSync, &ok(broken.clone())), "{broken}");
+        }
     }
 
     #[test]

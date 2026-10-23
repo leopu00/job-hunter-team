@@ -29,6 +29,16 @@ const RUST = fileURLToPath(new URL("../../src-tauri/src/", import.meta.url));
 const NOT_ERRORS: Record<string, string> = {
   // What ssh prints when the server turns an address away; read to pick ssh_rate_limited.
   kex_exchange_identification: "text of ssh stderr, not a code",
+  // The reader's op cloud_sync and the fields of its reply (existing_team_runtime.rs): the page
+  // shows them in its own words (cloud-sync-card), they are never a code to describe.
+  cloud_sync: "op of the existing team's reader, not a code",
+  absent: "state of the cloud_sync reply, shown by the team page's card",
+  ok: "state of the cloud_sync reply, shown by the team page's card",
+  auth_failed: "status of the box's periodic push in the cloud_sync reply, shown by the card",
+  signature_unavailable: "status of the box's periodic push in the cloud_sync reply, shown by the card",
+  consecutive_failures: "field of the cloud_sync reply, not a code",
+  last_attempt_at: "field of the cloud_sync reply, not a code",
+  last_success_at: "field of the cloud_sync reply, not a code",
   // The direct chat's system lines (direct_chat.rs): a closed code on a line of the conversation, said by the
   // chat page from its own catalog (direct-chat.i18n.ts), and the name of the serde function that lets only
   // that list through. Neither is an error the person is told.
