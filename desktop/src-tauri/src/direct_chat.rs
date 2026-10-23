@@ -2322,7 +2322,7 @@ mod tests {
         let mut answers = answers.iter();
         let result = small_read(cursor, &mut |sent: Option<&str>| -> Result<DirectChatPage, DirectChatError> {
             asked.push(sent.unwrap_or("none").to_owned());
-            Ok(DirectChatPage { messages: Vec::new(), cursor: answers.next().expect("one answer per read").map(str::to_owned) })
+            Ok(DirectChatPage { messages: Vec::new(), cursor: answers.next().expect("one answer per read").map(str::to_owned), questions: None })
         });
         (result.map(|page| page.cursor).map_err(|error| error.code), asked)
     }
@@ -2483,6 +2483,8 @@ mod tests {
         }
     }
 
+    // Unix only, like every test that builds a Connection (only_unix_tests_build_a_connection).
+    #[cfg(unix)]
     #[test]
     fn an_answer_and_an_enter_never_go_through_the_read_only_link() {
         use super::{answer_impl, enter_impl, DirectChatInner};
