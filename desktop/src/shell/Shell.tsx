@@ -201,7 +201,8 @@ export default function Shell({ onLogout, onCloseReadOnly }: ShellProps) {
             {text.banner} <span data-testid="existing-team-judgement-how">{text.judgementHow}</span>
           </p>
         )}
-        {readNotice === "sort_last_action" && (
+        {/* the sort the VPS cannot do is told only on the read-only link: a team connected in full is not «read only» */}
+        {readOnlyTeam && readNotice === "sort_last_action" && (
           <p role="status" data-testid="existing-team-readonly-notice" className="px-4 py-2 text-[11px] text-[var(--color-muted)]">
             {text.sortLastAction}
           </p>

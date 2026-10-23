@@ -269,14 +269,18 @@ describe("the office of an existing team, over its VPS", () => {
     expect(cloud.touched).toEqual([]);
   });
 
-  it("an agent has no panel here: a speech bubble over it says why, in the person's language, and nothing is read", async () => {
+  it("an agent has no panel here: one line above the scene says why, in the person's language, and nothing is read", async () => {
     mount();
     await waitFor(() => expect(entered()).toHaveLength(2));
     const click: OfficeClick = { kind: "agent", uid: "capitano", role: "capitano" };
     act(() => scene.options!.onClick(click));
     expect(screen.queryByRole("complementary")).toBeNull();
-    const said = applied.filter((e): e is Extract<OfficeEvent, { type: "say" }> => e.type === "say");
-    expect(said).toEqual([{ type: "say", uid: "capitano", text: EXISTING_TEAM_READONLY_TEXT.it.officeAgentNoMoves, seconds: 8 }]);
+    expect(screen.getByTestId("office-agent-note")).toHaveTextContent(EXISTING_TEAM_READONLY_TEXT.it.officeAgentNoMoves);
+    // no speech bubble is drawn over the agents: two of them covered each other
+    expect(applied.filter((e) => e.type === "say")).toEqual([]);
+    // a second click replaces the line, it does not add one
+    act(() => scene.options!.onClick({ kind: "agent", uid: "assistente", role: "assistente" }));
+    expect(screen.getAllByTestId("office-agent-note")).toHaveLength(1);
     expect(positionReads()).toHaveLength(1); // only the office's own, none for a panel
     expect(cloud.touched).toEqual([]);
   });
