@@ -215,10 +215,16 @@ def record(position_id: object, instant: object, origin: object, to: object) -> 
     """The person authorised `position_id` at `instant`, on the channel `origin`, to `to`."""
     pid = valid_position(position_id)
     at = valid_instant(instant)
-    if _instant_time(at) > _broker_now() + MAX_FUTURE_INSTANT:
+    clock = _broker_now()
+    if _instant_time(at) > clock + MAX_FUTURE_INSTANT:
         raise NotaryRefusal("instant_too_future")
     if origin not in ORIGINS:
         raise NotaryRefusal("origin_invalid")
+    # A local click can arrive with a modestly fast host clock.  The broker is
+    # the authority for that instant: otherwise a web withdrawal stamped at
+    # its own current time could remain before a still-valid local record.
+    if origin == "user_local" and _instant_time(at) > clock:
+        at = clock.strftime("%Y-%m-%dT%H:%M:%S.") + f"{clock.microsecond // 1000:03d}Z"
     where = destination(to)
     with store.locked(STATE):
         data = _load()
