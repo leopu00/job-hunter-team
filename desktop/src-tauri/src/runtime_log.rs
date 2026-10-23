@@ -35,6 +35,8 @@ pub(crate) enum ExistingTeamPhase {
     Ssh,
     Activation,
     Final,
+    /// The read-only opening of the saved team at start-up (no permission to write).
+    ReadOnlyOpen,
 }
 
 impl RuntimeLog {
@@ -62,6 +64,7 @@ impl RuntimeLog {
             ExistingTeamPhase::Ssh => "ssh",
             ExistingTeamPhase::Activation => "activation",
             ExistingTeamPhase::Final => "final",
+            ExistingTeamPhase::ReadOnlyOpen => "read_only_open",
         };
         let ended = match result {
             Ok(code) => format!("exit {code}"),
@@ -79,11 +82,22 @@ impl RuntimeLog {
                 | "host_key_confirmation_invalid" | "host_key_unwritable"
                 | "ssh_unavailable" | "ssh_client_missing" | "ssh_rate_limited" | "ssh_auth_failed" | "process_start_failed" | "process_timeout"
                 | "process_write_failed" | "process_wait_failed" | "process_output_unavailable"
-                | "process_input_failed" | "process_pipe_failed" => code,
+                | "process_input_failed" | "process_pipe_failed"
+                | "window_not_allowed" | "existing_team_reconfirm_setup" => code,
                 _ => "io_error_other",
             }.to_owned(),
         };
         let entry = format!("=== {} existing_team.{phase}: {ended}\n", utc(SystemTime::now()));
+        let _ = append(&self.path, &entry, LOG_MAX_BYTES);
+    }
+
+    /// A message the chat refused to send, by its closed code only: no agent, text, host or account.
+    pub(crate) fn record_chat_refusal(&self, code: &str) {
+        let code = match code {
+            "read_only_link" | "own_vps_claim_required" | "own_vps_key_changed" | "own_vps_claim_refused" => code,
+            _ => "io_error_other",
+        };
+        let entry = format!("=== {} direct_chat.send: {code}\n", utc(SystemTime::now()));
         let _ = append(&self.path, &entry, LOG_MAX_BYTES);
     }
 
@@ -409,6 +423,27 @@ mod tests {
         let blocked = RuntimeLog::in_dir(&root.join("not-a-directory"));
         blocked.record_existing_team_status(super::ExistingTeamPhase::Final, Ok(0));
         assert_eq!(fs::read(root.join("not-a-directory")).unwrap(), b"preserve");
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn the_read_only_opening_and_the_chats_refusal_are_written_by_code_only() {
+        let root = dir("read-only");
+        let log = RuntimeLog::in_dir(&root.join("logs"));
+        log.record_existing_team_status(super::ExistingTeamPhase::ReadOnlyOpen, Ok(0));
+        log.record_existing_team_status(super::ExistingTeamPhase::Candidate, Err("existing_team_reconfirm_setup"));
+        log.record_existing_team_status(super::ExistingTeamPhase::Scope, Err("window_not_allowed"));
+        log.record_chat_refusal("read_only_link");
+        log.record_chat_refusal("own_vps_key_changed");
+        log.record_chat_refusal("capitano says hello from 203.0.113.7");
+        let text = fs::read_to_string(log.path()).unwrap();
+        assert!(text.contains(" existing_team.read_only_open: exit 0\n"));
+        assert!(text.contains(" existing_team.candidate: existing_team_reconfirm_setup\n"));
+        assert!(text.contains(" existing_team.scope: window_not_allowed\n"));
+        assert!(text.contains(" direct_chat.send: read_only_link\n"));
+        assert!(text.contains(" direct_chat.send: own_vps_key_changed\n"));
+        assert!(text.contains(" direct_chat.send: io_error_other\n"));
+        assert!(!text.contains("203.0.113.7") && !text.contains("capitano"));
         let _ = fs::remove_dir_all(root);
     }
 

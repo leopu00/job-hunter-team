@@ -194,6 +194,7 @@ const NOT_ERRORS: Record<string, string> = {
   // runtime_log.rs: an existing-team connection's phases and outcomes, written only to the private log.
   scope: "runtime log phase name",
   validate_host: "runtime log phase name",
+  read_only_open: "runtime log phase name",
   candidate: "runtime log phase name",
   ssh: "runtime log phase name",
   activation: "runtime log phase name",

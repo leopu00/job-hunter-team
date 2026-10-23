@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
 import DashboardSkeleton from "@/app/(protected)/_components/DashboardSkeleton";
 import { appLocale } from "../lib/app-locale";
@@ -84,6 +84,7 @@ import { DASHBOARD_PAGE, goTo, LOGIN_PAGE } from "../lib/pages";
 import { supabase, supabaseConfig, useSession } from "../lib/supabase";
 import { OnboardingFlow } from "../onboarding";
 import ExistingTeamConnectModal from "../onboarding/ExistingTeamConnectModal";
+import { ReconfirmExistingTeamContext } from "../lib/reconfirm-existing-team";
 import MessagesPage from "../pages/messages";
 import { NewPositionNotifier } from "../lib/notify/NewPositionNotifier";
 import Shell from "../shell/Shell";
@@ -1160,6 +1161,26 @@ export default function DashboardApp() {
   }, [identityKey]);
 
   /**
+   * The chat's «Collega il team»: the full connection was confirmed from the chat, for the saved
+   * host and team. The read-only view ends and the team opens in full, as after the setup's modal.
+   * When what was saved no longer matches, the read-only view ends WITHOUT dismissing the existing
+   * team, so the setup's modal can ask again (the chat's button never leads to a dead end).
+   */
+  const reconfirmExistingTeam = useMemo(() => ({
+    accountLabel: gate.phase === "required" ? gate.account.displayName : null,
+    onConnected: async (result: ExistingTeamConnectionResult) => {
+      leaveExistingTeamReadOnly();
+      setReadOnlyExistingTeamKey(null);
+      await connectExistingTeam(result);
+    },
+    onSetup: () => {
+      leaveExistingTeamReadOnly();
+      setReadOnlyExistingTeamKey(null);
+      setManualExistingTeam(null);
+    },
+  }), [connectExistingTeam, gate]);
+
+  /**
    * The first thing a started identity does: reopen the saved existing team, whatever
    * the legacy onboarding marker says (a new connection in read-only mode does not
    * write it). With nothing saved, a profile whose own setup was started goes on to
@@ -1355,7 +1376,9 @@ export default function DashboardApp() {
     if (readOnlyExistingTeamKey === identityKey) {
       return (
         <>
-          <Shell key={identityKey} onLogout={logout} onCloseReadOnly={closeReadOnlyExistingTeam} />
+          <ReconfirmExistingTeamContext.Provider value={reconfirmExistingTeam}>
+            <Shell key={identityKey} onLogout={logout} onCloseReadOnly={closeReadOnlyExistingTeam} />
+          </ReconfirmExistingTeamContext.Provider>
           <NewPositionNotifier key={`notify:${identityKey}`} />
         </>
       );

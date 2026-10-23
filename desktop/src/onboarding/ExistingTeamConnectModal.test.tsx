@@ -73,6 +73,7 @@ function bridge(overrides: Partial<ExistingTeamBridge> = {}): ExistingTeamBridge
     reopen: vi.fn(),
     discover: vi.fn().mockResolvedValue(RECEIPT),
     register: vi.fn().mockResolvedValue({ outcome: "registered" }),
+    reconfirmSummary: vi.fn(),
     ...overrides,
   };
 }
