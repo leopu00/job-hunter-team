@@ -160,7 +160,10 @@ const NOT_ERRORS: Record<string, string> = {
   // Names, attributes and non-error states.
   snake_case: "serde attribute",
   known_hosts: "file name",
+  jht: "compose project and service name",
   jht_voice_input: "native library name",
+  runtime_untrusted: "detail of the generic container-not-ready diagnostic, not its error code",
+  team_state: "runtime log step label",
   confirmation_required: "SSH host key probe status, not a failure",
   // Debug-only trace events (trace_local_runtime / trace_auth_store).
   cache_initialized: "debug trace event",
