@@ -251,11 +251,7 @@ def test_windows_logon_starts_machine_then_systemd_restores_the_whole_team():
     enabler = ENABLER.read_text(encoding="utf-8")
     network = PODMAN_NETWORK.read_text(encoding="utf-8")
     install_service = enabler.index("Install-JhtContainerService -PodmanPath")
-    install_task = enabler.index("Install-JhtStartupTask -PodmanPath", install_service)
-    assert install_service < install_task
-    assert "New-ScheduledTaskTrigger -AtLogOn -User $UserId" in enabler
-    assert "New-ScheduledTaskPrincipal -UserId $UserId -LogonType Interactive -RunLevel Limited" in enabler
-    assert '"machine start --update-connection=false $MachineName"' in enabler
+    assert "Install-JhtStartupTask" not in enabler
     assert "start --sig-proxy=false jht-broker jht-telegram jht" in enabler
     assert "stop --time 30 jht jht-telegram jht-broker" in enabler
     assert "systemctl enable --no-reload $runtimeServices" in network
