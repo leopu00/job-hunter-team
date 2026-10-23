@@ -114,6 +114,151 @@ Var JhtGameKept
   ${EndIf}
 !macroend
 
+; ── Uninstall: the team and its data ───────────────────────────────────
+; Before the template deletes the app's files, scripts/jht-uninstall-windows.ps1
+; (a resource of this app, same version) decides about the team and its data:
+; - never when the updater runs this uninstaller (/UPDATE): nothing is touched;
+; - silent (/S) or passive (/P): Keep. The data stays, our Podman machine is
+;   stopped normally, a report says what stays and how to remove it;
+; - with the wizard, a question with No as the default. No = Keep; Yes =
+;   Remove, with the list of what goes and what stays in the question itself.
+; The template's checkbox «Delete the application data» follows the answer:
+; it is set to 0 when silent or passive, and to 1 only by a Yes.
+!define JHT_UNINSTALL_SCRIPT "jht-uninstall-windows.ps1"
+!define JHT_REMOVE_REPORT "$TEMP\Job Hunter Team - disinstallazione.txt"
+Var JhtUninstallMode
+
+; Sets $R6 to the script's code for the uninstaller's language.
+!macro JHT_LANGUAGE_CODE
+  StrCpy $R6 "en"
+  ${If} $LANGUAGE = ${LANG_ITALIAN}
+    StrCpy $R6 "it"
+  ${ElseIf} $LANGUAGE = ${LANG_GERMAN}
+    StrCpy $R6 "de"
+  ${ElseIf} $LANGUAGE = ${LANG_SPANISH}
+    StrCpy $R6 "es"
+  ${ElseIf} $LANGUAGE = ${LANG_FRENCH}
+    StrCpy $R6 "fr"
+  ${ElseIf} $LANGUAGE = ${LANG_HUNGARIAN}
+    StrCpy $R6 "hu"
+  ${ElseIf} $LANGUAGE = ${LANG_PORTUGUESE}
+    StrCpy $R6 "pt"
+  ${EndIf}
+!macroend
+
+; $R0 = 0 when the app is running (as the template's CheckIfAppIsRunning reads it).
+!macro JHT_FIND_APP
+  !if "${INSTALLMODE}" == "currentUser"
+    nsis_tauri_utils::FindProcessCurrentUser "${MAINBINARYNAME}.exe"
+  !else
+    nsis_tauri_utils::FindProcess "${MAINBINARYNAME}.exe"
+  !endif
+  Pop $R0
+!macroend
+
+!macro NSIS_HOOK_PREUNINSTALL
+  ${If} $UpdateMode <> 1
+    ; The app is closed first, as the template does right after this hook: a
+    ; Cancel stops the uninstall before anything of the team is touched.
+    !insertmacro JHT_FIND_APP
+    ${If} $R0 = 0
+      ${If} $PassiveMode <> 1
+      ${AndIfNot} ${Silent}
+        nsis_tauri_utils::StrReplace "$(appRunningOkKill)" "{{product_name}}" "${PRODUCTNAME}"
+        Pop $R2
+        ${IfNot} ${Cmd} `MessageBox MB_OKCANCEL|MB_ICONEXCLAMATION "$R2" IDOK`
+          Abort
+        ${EndIf}
+      ${EndIf}
+      !if "${INSTALLMODE}" == "currentUser"
+        nsis_tauri_utils::KillProcessCurrentUser "${MAINBINARYNAME}.exe"
+      !else
+        nsis_tauri_utils::KillProcess "${MAINBINARYNAME}.exe"
+      !endif
+      Pop $R0
+      Sleep 500
+      !insertmacro JHT_FIND_APP
+      ${If} $R0 = 0
+        nsis_tauri_utils::StrReplace "$(failedToKillApp)" "{{product_name}}" "${PRODUCTNAME}"
+        Pop $R2
+        DetailPrint "$R2"
+        ${IfNot} ${Silent}
+          MessageBox MB_OK|MB_ICONSTOP "$R2"
+        ${EndIf}
+        Abort
+      ${EndIf}
+    ${EndIf}
+
+    StrCpy $JhtUninstallMode "Keep"
+    StrCpy $DeleteAppDataCheckboxState 0
+    ${If} $PassiveMode <> 1
+    ${AndIfNot} ${Silent}
+      ReadRegStr $R0 HKCU "${JHT_GAME_UNINSTKEY}" "UninstallString"
+      ${If} $R0 != ""
+        !insertmacro JHT_TEXT \
+          "Vuoi togliere anche la squadra e i dati di Job Hunter Team?$\n$\nCon Sì spariscono: la macchina Podman jht-podman con i suoi volumi, il runtime locale, i comandi jht, l’avvio automatico, le impostazioni e le credenziali salvate dall’app (password della posta, sessione LinkedIn, token di Telegram).$\n$\nRestano sempre: i tuoi documenti (Documenti › Job Hunter Team), Podman e la squadra su una VPS. Con il gioco v0.3.9 installato, la cartella dei dati resta perché la usa anche il gioco: per toglierla disinstalla anche il gioco (~/.jht).$\n$\nCon No (la scelta predefinita) i dati restano e la squadra locale si ferma. La casella della pagina precedente segue questa risposta." \
+          "Do you also want to remove the Job Hunter Team team and its data?$\n$\nWith Yes these go: the Podman machine jht-podman with its volumes, the local runtime, the jht commands, the automatic start, the settings and credentials saved by the app (mail password, LinkedIn session, Telegram tokens).$\n$\nAlways kept: your documents (Documents › Job Hunter Team), Podman and a team on a VPS. With the game v0.3.9 installed, the data folder stays because the game uses it too: to remove it, uninstall the game as well (~/.jht).$\n$\nWith No (the default) the data stays and the local team stops. The checkbox on the previous page follows this answer." \
+          "Möchtest du auch das Team und die Daten von Job Hunter Team entfernen?$\n$\nMit Ja wird entfernt: die Podman-Maschine jht-podman mit ihren Volumes, die lokale Laufzeit, die jht-Befehle, der automatische Start, die von der App gespeicherten Einstellungen und Zugangsdaten (Mail-Passwort, LinkedIn-Sitzung, Telegram-Tokens).$\n$\nImmer bleiben: deine Dokumente (Dokumente › Job Hunter Team), Podman und ein Team auf einem VPS. Mit dem installierten Spiel v0.3.9 bleibt der Datenordner, weil ihn auch das Spiel verwendet: Um ihn zu entfernen, deinstalliere auch das Spiel (~/.jht).$\n$\nMit Nein (Standard) bleiben die Daten, und das lokale Team wird angehalten. Das Kontrollkästchen der vorigen Seite folgt dieser Antwort." \
+          "¿Quieres quitar también el equipo y los datos de Job Hunter Team?$\n$\nCon Sí se eliminan: la máquina Podman jht-podman con sus volúmenes, el entorno local, los comandos jht, el inicio automático, los ajustes y credenciales guardados por la aplicación (contraseña del correo, sesión de LinkedIn, tokens de Telegram).$\n$\nSiempre se quedan: tus documentos (Documentos › Job Hunter Team), Podman y un equipo en un VPS. Con el juego v0.3.9 instalado, la carpeta de datos se queda porque también la usa el juego: para quitarla, desinstala también el juego (~/.jht).$\n$\nCon No (predeterminado) los datos se quedan y el equipo local se detiene. La casilla de la página anterior sigue esta respuesta." \
+          "Veux-tu aussi retirer l’équipe et les données de Job Hunter Team ?$\n$\nAvec Oui, sont supprimés : la machine Podman jht-podman avec ses volumes, l’environnement local, les commandes jht, le démarrage automatique, les réglages et identifiants enregistrés par l’application (mot de passe de la messagerie, session LinkedIn, jetons Telegram).$\n$\nRestent toujours : tes documents (Documents › Job Hunter Team), Podman et une équipe sur un VPS. Avec le jeu v0.3.9 installé, le dossier de données reste car le jeu l’utilise aussi : pour le retirer, désinstalle aussi le jeu (~/.jht).$\n$\nAvec Non (par défaut), les données restent et l’équipe locale s’arrête. La case de la page précédente suit cette réponse." \
+          "Eltávolítod a Job Hunter Team csapatát és adatait is?$\n$\nIgen esetén törlődik: a jht-podman Podman-gép a köteteivel, a helyi futtatókörnyezet, a jht parancsok, az automatikus indítás, az alkalmazás által mentett beállítások és hitelesítő adatok (levelezési jelszó, LinkedIn-munkamenet, Telegram-tokenek).$\n$\nMindig megmarad: a dokumentumaid (Dokumentumok › Job Hunter Team), a Podman és a VPS-en futó csapat. A telepített v0.3.9-es játék mellett az adatmappa marad, mert a játék is használja: az eltávolításához a játékot is távolítsd el (~/.jht).$\n$\nNem esetén (alapértelmezett) az adatok megmaradnak, és a helyi csapat leáll. Az előző oldal jelölőnégyzete ezt a választ követi." \
+          "Queres remover também a equipa e os dados do Job Hunter Team?$\n$\nCom Sim são removidos: a máquina Podman jht-podman com os seus volumes, o ambiente local, os comandos jht, o arranque automático, as definições e credenciais guardadas pela aplicação (palavra-passe do correio, sessão do LinkedIn, tokens do Telegram).$\n$\nFicam sempre: os teus documentos (Documentos › Job Hunter Team), o Podman e uma equipa numa VPS. Com o jogo v0.3.9 instalado, a pasta de dados fica porque o jogo também a usa: para a remover, desinstala também o jogo (~/.jht).$\n$\nCom Não (predefinido) os dados ficam e a equipa local para. A caixa da página anterior segue esta resposta."
+      ${Else}
+        !insertmacro JHT_TEXT \
+          "Vuoi togliere anche la squadra e i dati di Job Hunter Team?$\n$\nCon Sì spariscono: la macchina Podman jht-podman con i suoi volumi, il runtime locale, i comandi jht, l’avvio automatico, le impostazioni e le credenziali salvate dall’app (password della posta, sessione LinkedIn, token di Telegram) e la cartella dei dati ~/.jht.$\n$\nRestano sempre: i tuoi documenti (Documenti › Job Hunter Team), Podman e la squadra su una VPS.$\n$\nCon No (la scelta predefinita) i dati restano e la squadra locale si ferma. La casella della pagina precedente segue questa risposta." \
+          "Do you also want to remove the Job Hunter Team team and its data?$\n$\nWith Yes these go: the Podman machine jht-podman with its volumes, the local runtime, the jht commands, the automatic start, the settings and credentials saved by the app (mail password, LinkedIn session, Telegram tokens) and the data folder ~/.jht.$\n$\nAlways kept: your documents (Documents › Job Hunter Team), Podman and a team on a VPS.$\n$\nWith No (the default) the data stays and the local team stops. The checkbox on the previous page follows this answer." \
+          "Möchtest du auch das Team und die Daten von Job Hunter Team entfernen?$\n$\nMit Ja wird entfernt: die Podman-Maschine jht-podman mit ihren Volumes, die lokale Laufzeit, die jht-Befehle, der automatische Start, die von der App gespeicherten Einstellungen und Zugangsdaten (Mail-Passwort, LinkedIn-Sitzung, Telegram-Tokens) und der Datenordner ~/.jht.$\n$\nImmer bleiben: deine Dokumente (Dokumente › Job Hunter Team), Podman und ein Team auf einem VPS.$\n$\nMit Nein (Standard) bleiben die Daten, und das lokale Team wird angehalten. Das Kontrollkästchen der vorigen Seite folgt dieser Antwort." \
+          "¿Quieres quitar también el equipo y los datos de Job Hunter Team?$\n$\nCon Sí se eliminan: la máquina Podman jht-podman con sus volúmenes, el entorno local, los comandos jht, el inicio automático, los ajustes y credenciales guardados por la aplicación (contraseña del correo, sesión de LinkedIn, tokens de Telegram) y la carpeta de datos ~/.jht.$\n$\nSiempre se quedan: tus documentos (Documentos › Job Hunter Team), Podman y un equipo en un VPS.$\n$\nCon No (predeterminado) los datos se quedan y el equipo local se detiene. La casilla de la página anterior sigue esta respuesta." \
+          "Veux-tu aussi retirer l’équipe et les données de Job Hunter Team ?$\n$\nAvec Oui, sont supprimés : la machine Podman jht-podman avec ses volumes, l’environnement local, les commandes jht, le démarrage automatique, les réglages et identifiants enregistrés par l’application (mot de passe de la messagerie, session LinkedIn, jetons Telegram) et le dossier de données ~/.jht.$\n$\nRestent toujours : tes documents (Documents › Job Hunter Team), Podman et une équipe sur un VPS.$\n$\nAvec Non (par défaut), les données restent et l’équipe locale s’arrête. La case de la page précédente suit cette réponse." \
+          "Eltávolítod a Job Hunter Team csapatát és adatait is?$\n$\nIgen esetén törlődik: a jht-podman Podman-gép a köteteivel, a helyi futtatókörnyezet, a jht parancsok, az automatikus indítás, az alkalmazás által mentett beállítások és hitelesítő adatok (levelezési jelszó, LinkedIn-munkamenet, Telegram-tokenek) és a ~/.jht adatmappa.$\n$\nMindig megmarad: a dokumentumaid (Dokumentumok › Job Hunter Team), a Podman és a VPS-en futó csapat.$\n$\nNem esetén (alapértelmezett) az adatok megmaradnak, és a helyi csapat leáll. Az előző oldal jelölőnégyzete ezt a választ követi." \
+          "Queres remover também a equipa e os dados do Job Hunter Team?$\n$\nCom Sim são removidos: a máquina Podman jht-podman com os seus volumes, o ambiente local, os comandos jht, o arranque automático, as definições e credenciais guardadas pela aplicação (palavra-passe do correio, sessão do LinkedIn, tokens do Telegram) e a pasta de dados ~/.jht.$\n$\nFicam sempre: os teus documentos (Documentos › Job Hunter Team), o Podman e uma equipa numa VPS.$\n$\nCom Não (predefinido) os dados ficam e a equipa local para. A caixa da página anterior segue esta resposta."
+      ${EndIf}
+      ${If} ${Cmd} `MessageBox MB_YESNO|MB_ICONQUESTION|MB_DEFBUTTON2 "$R9" IDYES`
+        StrCpy $JhtUninstallMode "Remove"
+        StrCpy $DeleteAppDataCheckboxState 1
+      ${EndIf}
+    ${EndIf}
+
+    ; Windows PowerShell 5.1, the 64-bit one on 64-bit Windows (this uninstaller is 32-bit).
+    !insertmacro JHT_LANGUAGE_CODE
+    DetailPrint "Job Hunter Team: $JhtUninstallMode"
+    ${If} ${RunningX64}
+      ${DisableX64FSRedirection}
+    ${EndIf}
+    nsExec::ExecToLog '"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "$INSTDIR\${JHT_UNINSTALL_SCRIPT}" -Mode $JhtUninstallMode -Language $R6'
+    Pop $R0
+    ${If} ${RunningX64}
+      ${EnableX64FSRedirection}
+    ${EndIf}
+    DetailPrint "${JHT_UNINSTALL_SCRIPT}: $R0"
+
+    ; After a Yes, the last window says where the report is (its folder is gone).
+    ${If} $JhtUninstallMode == "Remove"
+      ${If} $R0 == "0"
+        !insertmacro JHT_TEXT \
+          "Fatto: Job Hunter Team è stato tolto, con la squadra e i dati.$\n$\nIl resoconto, voce per voce, è in:$\n${JHT_REMOVE_REPORT}" \
+          "Done: Job Hunter Team was removed, with the team and the data.$\n$\nThe report, item by item, is in:$\n${JHT_REMOVE_REPORT}" \
+          "Fertig: Job Hunter Team wurde entfernt, mit dem Team und den Daten.$\n$\nDer Bericht, Eintrag für Eintrag, liegt in:$\n${JHT_REMOVE_REPORT}" \
+          "Hecho: Job Hunter Team se ha quitado, con el equipo y los datos.$\n$\nEl informe, entrada por entrada, está en:$\n${JHT_REMOVE_REPORT}" \
+          "Terminé : Job Hunter Team a été retiré, avec l’équipe et les données.$\n$\nLe compte rendu, élément par élément, est dans :$\n${JHT_REMOVE_REPORT}" \
+          "Kész: a Job Hunter Team eltávolítva, a csapattal és az adatokkal együtt.$\n$\nA tételenkénti jelentés itt található:$\n${JHT_REMOVE_REPORT}" \
+          "Feito: o Job Hunter Team foi removido, com a equipa e os dados.$\n$\nO relatório, item a item, está em:$\n${JHT_REMOVE_REPORT}"
+        MessageBox MB_OK|MB_ICONINFORMATION "$R9"
+      ${Else}
+        !insertmacro JHT_TEXT \
+          "Qualcosa non è stato tolto. Le voci rimaste sono nel resoconto, con il loro percorso:$\n${JHT_REMOVE_REPORT}" \
+          "Something was not removed. The items left are in the report, with their path:$\n${JHT_REMOVE_REPORT}" \
+          "Etwas wurde nicht entfernt. Die verbliebenen Einträge stehen mit ihrem Pfad im Bericht:$\n${JHT_REMOVE_REPORT}" \
+          "Algo no se ha quitado. Las entradas que quedan están en el informe, con su ruta:$\n${JHT_REMOVE_REPORT}" \
+          "Quelque chose n’a pas été retiré. Les éléments restants sont dans le compte rendu, avec leur chemin :$\n${JHT_REMOVE_REPORT}" \
+          "Valami nem lett eltávolítva. A megmaradt tételek az elérési útjukkal együtt a jelentésben vannak:$\n${JHT_REMOVE_REPORT}" \
+          "Algo não foi removido. Os itens que ficaram estão no relatório, com o seu caminho:$\n${JHT_REMOVE_REPORT}"
+        MessageBox MB_OK|MB_ICONEXCLAMATION "$R9"
+      ${EndIf}
+    ${EndIf}
+  ${EndIf}
+!macroend
+
 ; The shortcuts this app made next to the game: only its own names. The
 ; template removes its usual ones only when they point at this app.
 !macro NSIS_HOOK_POSTUNINSTALL

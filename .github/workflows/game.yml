@@ -233,6 +233,75 @@ jobs:
           while ((Test-Path -LiteralPath $key) -and (Get-Date) -lt $deadline) { Start-Sleep -Seconds 2 }
           if (Test-Path -LiteralPath $key) { throw 'the uninstaller left its entry in App e funzionalità' }
 
+      # The app's uninstaller and the team (T72): installer-hooks.nsi runs
+      # scripts/jht-uninstall-windows.ps1, shipped next to the app. The
+      # updater's /UPDATE touches nothing of the team and writes no report; /S
+      # keeps every data folder and writes the report of what stays. There is
+      # no team runtime on this runner: the report goes to %TEMP%, and
+      # %LOCALAPPDATA%\Job Hunter Team is not created for it.
+      - name: Uninstall with /UPDATE and with /S keeps the team's data
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $setup = Get-ChildItem desktop/src-tauri/target/release/bundle/nsis -Filter '*-setup.exe' | Select-Object -First 1
+          $key = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\Job Hunter Team'
+          $folders = @(
+            (Join-Path $env:USERPROFILE '.jht'),
+            (Join-Path $env:USERPROFILE 'Documents\Job Hunter Team'),
+            (Join-Path $env:APPDATA 'ai.jobhunterteam.desktop'),
+            (Join-Path $env:LOCALAPPDATA 'ai.jobhunterteam.desktop')
+          )
+          foreach ($folder in $folders) {
+            if (Test-Path -LiteralPath $folder) { throw "already there before the test: $folder" }
+            New-Item -ItemType Directory -Path $folder | Out-Null
+            Set-Content -LiteralPath (Join-Path $folder 'data.txt') -Value 'the person''s data' -NoNewline
+          }
+          $report = Join-Path ([IO.Path]::GetTempPath()) 'Job Hunter Team - disinstallazione.txt'
+          $runtimeRoot = Join-Path $env:LOCALAPPDATA 'Job Hunter Team'
+          Remove-Item -LiteralPath $report -Force -ErrorAction SilentlyContinue
+          function Install-App {
+            $installed = Start-Process -FilePath $setup.FullName -ArgumentList '/S' -Wait -PassThru
+            if ($installed.ExitCode -ne 0) { throw "setup exited $($installed.ExitCode)" }
+            $location = (Get-ItemProperty -LiteralPath $key).InstallLocation
+            if (-not (Test-Path -LiteralPath (Join-Path $location 'jht-uninstall-windows.ps1') -PathType Leaf)) {
+              throw "jht-uninstall-windows.ps1 is not next to the app: $location"
+            }
+          }
+          function Uninstall-App([string]$Arguments) {
+            $location = (Get-ItemProperty -LiteralPath $key).InstallLocation
+            Start-Process -FilePath (Join-Path $location 'uninstall.exe') -ArgumentList $Arguments -Wait | Out-Null
+            # The uninstaller copies itself and returns: wait for its entry to go.
+            $deadline = (Get-Date).AddSeconds(90)
+            while ((Test-Path -LiteralPath $key) -and (Get-Date) -lt $deadline) { Start-Sleep -Seconds 2 }
+            if (Test-Path -LiteralPath $key) { throw "the uninstaller ($Arguments) left its entry" }
+          }
+          function Assert-DataKept([string]$When) {
+            foreach ($folder in $folders) {
+              $file = Join-Path $folder 'data.txt'
+              if (-not (Test-Path -LiteralPath $file) -or (Get-Content -LiteralPath $file -Raw) -ne 'the person''s data') {
+                throw "${When}: $file was touched"
+              }
+            }
+          }
+
+          Install-App
+          Uninstall-App '/S /UPDATE'
+          Assert-DataKept '/UPDATE'
+          if (Test-Path -LiteralPath $report) { throw '/UPDATE wrote the uninstall report' }
+
+          Install-App
+          Uninstall-App '/S'
+          Assert-DataKept '/S'
+          if (Test-Path -LiteralPath $runtimeRoot) { throw "/S created $runtimeRoot" }
+          if (-not (Test-Path -LiteralPath $report)) { throw '/S wrote no report' }
+          $text = [IO.File]::ReadAllText($report)
+          Write-Host $text
+          if (-not $text.Contains($folders[1])) { throw 'the report does not say where the documents are' }
+          if (-not $text.Contains($folders[0])) { throw 'the report does not say where the data folder is' }
+          foreach ($folder in $folders) { Remove-Item -LiteralPath $folder -Recurse -Force }
+          Remove-Item -LiteralPath $report -Force
+
       # Next to the v0.3.9 game (a stand-in with its uninstall entry, folder and
       # desktop shortcut): silent, the setup keeps it untouched and names its
       # own shortcuts «Job Hunter Team App»; its uninstaller removes only those.

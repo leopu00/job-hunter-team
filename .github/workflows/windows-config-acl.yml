@@ -20,6 +20,9 @@ on:
       - 'tests/test_windows_powershell51_native_quotes.py'
       - 'tests/test_windows_powershell51_native_stderr.py'
       - 'tests/test_windows_powershell51_wrapper_native_stderr.py'
+      - 'scripts/jht-uninstall-windows.ps1'
+      - 'desktop/src-tauri/windows/installer-hooks.nsi'
+      - 'tests/test_windows_app_uninstall.py'
       - 'tests/conftest.py'
       - 'tests/requirements-ci.txt'
       - '.github/workflows/windows-config-acl.yml'
@@ -118,4 +121,26 @@ jobs:
             $summary = "$($out[-1])"
             if ($summary -notmatch '^=+ (\d+) passed(, \d+ warnings?)? in [0-9.]+s') { throw "unexpected pytest summary under ${shell}: $summary" }
             if ([int]$Matches[1] -lt 82) { throw "only $($Matches[1]) tests ran under $shell, expected at least 82" }
+          }
+
+      # The desktop app's Windows uninstaller and the team (T72): its NSIS hook
+      # run by an interpreter, and jht-uninstall-windows.ps1 on two fake
+      # profiles with a fake podman.exe (the sh fakes above), fake scheduled
+      # tasks and a fake HKCU\Environment, plus the real HKCU\Environment on a
+      # scratch value. Once under each shell: the uninstaller runs the script
+      # with Windows PowerShell 5.1. A skip fails the count. 164 = the whole file.
+      - name: The app's uninstaller script under Windows PowerShell 5.1 and pwsh
+        shell: pwsh
+        env:
+          JHT_REQUIRE_WINDOWS_SHELLS: "1"
+        run: |
+          foreach ($shell in 'powershell', 'pwsh') {
+            $env:JHT_TEST_SHELL = $shell
+            $out = python -m pytest tests/test_windows_app_uninstall.py -n 4 -p no:cacheprovider -rs 2>&1
+            $code = $LASTEXITCODE
+            $out | ForEach-Object { "$_" }
+            if ($code -ne 0) { exit $code }
+            $summary = "$($out[-1])"
+            if ($summary -notmatch '^=+ (\d+) passed(, \d+ warnings?)? in [0-9.]+s') { throw "unexpected pytest summary under ${shell}: $summary" }
+            if ([int]$Matches[1] -lt 164) { throw "only $($Matches[1]) tests ran under $shell, expected at least 164" }
           }
