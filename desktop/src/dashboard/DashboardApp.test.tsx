@@ -746,7 +746,7 @@ describe("DashboardApp onboarding router", () => {
   });
 
   describe("a set-up account whose saved team was updated on its VPS", () => {
-    const SAVED_HOST = { address: "host.example.invalid", user: "ubuntu", port: 22, keyPath: "/synthetic/key" };
+    const SAVED_HOST = { kind: "vps" as const, address: "host.example.invalid", user: "ubuntu", port: 22, keyPath: "/synthetic/key" };
 
     it.each(["existing_team_runtime_changed", "existing_team_unavailable"])(
       "%s offers «Ricollega la squadra»: the dialog opens on the saved team and host, and the team opens again from it",

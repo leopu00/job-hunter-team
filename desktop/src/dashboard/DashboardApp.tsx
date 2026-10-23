@@ -1399,6 +1399,28 @@ export default function DashboardApp() {
     goTo(LOGIN_PAGE);
   } : undefined;
 
+  const openConnectDialog = useCallback(async () => {
+    if (!identityKey) return;
+    let seed: { teamId?: string; host?: ExistingTeamVpsHost } = {};
+    try {
+      const summary = await existingTeamBridge.reconfirmSummary();
+      seed = { teamId: summary.teamId, host: summary.host };
+    } catch {
+      // Nothing readable is saved: the dialog asks for the host and the team, as in the setup.
+    }
+    if (activeIdentityKeyRef.current === identityKey) setConnectDialog({ identityKey, ...seed });
+  }, [identityKey]);
+  const connectTeamEntry = useMemo<ConnectTeamEntry>(() => ({
+    open: () => void openConnectDialog(),
+    reopen: async () => (await reopenExistingTeam()) === "opened",
+    unlinked: () => {
+      leaveExistingTeamReadOnly();
+      setReadOnlyExistingTeamKey(null);
+      setConnectDialog(null);
+      if (identityKey) setSavedTeamOpening({ identityKey, phase: "done" });
+    },
+  }), [identityKey, openConnectDialog, reopenExistingTeam]);
+
   if (migrationProfile && localMigration?.identityKey === identityKey) {
     if (localMigration.phase === "checking") {
       return <DashboardSkeleton label={stateText().verifyingLocalProfile} />;
@@ -1459,27 +1481,6 @@ export default function DashboardApp() {
       </main>
     );
   }
-  const openConnectDialog = useCallback(async () => {
-    if (!identityKey) return;
-    let seed: { teamId?: string; host?: ExistingTeamVpsHost } = {};
-    try {
-      const summary = await existingTeamBridge.reconfirmSummary();
-      seed = { teamId: summary.teamId, host: summary.host };
-    } catch {
-      // Nothing readable is saved: the dialog asks for the host and the team, as in the setup.
-    }
-    if (activeIdentityKeyRef.current === identityKey) setConnectDialog({ identityKey, ...seed });
-  }, [identityKey]);
-  const connectTeamEntry = useMemo<ConnectTeamEntry>(() => ({
-    open: () => void openConnectDialog(),
-    reopen: async () => (await reopenExistingTeam()) === "opened",
-    unlinked: () => {
-      leaveExistingTeamReadOnly();
-      setReadOnlyExistingTeamKey(null);
-      setConnectDialog(null);
-      if (identityKey) setSavedTeamOpening({ identityKey, phase: "done" });
-    },
-  }), [identityKey, openConnectDialog, reopenExistingTeam]);
   const connectDialogElement = connectDialog && connectDialog.identityKey === identityKey ? (
     <ExistingTeamConnectModal
       key={`${identityKey}:connect`}
