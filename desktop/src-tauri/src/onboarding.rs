@@ -1387,10 +1387,21 @@ fn file_digest(path: &Path) -> Option<String> {
 }
 
 #[cfg(target_os = "macos")]
+fn protected_runtime_node(path: &Path, directory: bool) -> bool {
+    use std::os::unix::fs::{MetadataExt, PermissionsExt};
+    let Ok(metadata) = fs::symlink_metadata(path) else { return false };
+    (if directory { metadata.file_type().is_dir() } else { metadata.file_type().is_file() })
+        && !metadata.file_type().is_symlink()
+        && metadata.uid() == unsafe { libc::geteuid() }
+        && metadata.permissions().mode() & 0o022 == 0
+}
+
+#[cfg(target_os = "macos")]
 pub(crate) fn runtime_bundle_manifest_valid(runtime_dir: &Path, wrapper: &Path) -> bool {
     use std::collections::BTreeMap;
 
     let manifest = runtime_dir.join(".runtime-integrity");
+    if !protected_runtime_node(runtime_dir, true) || ![&manifest, &runtime_dir.join("docker-compose.yml"), &runtime_dir.join("host-setup.sh"), wrapper, &runtime_dir.join("container-runtime"), &runtime_dir.join("podman-machine"), &runtime_dir.join("bin/docker")].into_iter().all(|path| protected_runtime_node(path, false)) || !protected_runtime_node(&runtime_dir.join("bin"), true) { return false; }
     let Ok(source) = fs::read_to_string(manifest) else {
         return false;
     };
@@ -1442,9 +1453,7 @@ pub(crate) fn runtime_bundle_manifest_valid(runtime_dir: &Path, wrapper: &Path) 
     {
         return false;
     }
-    artifacts
-        .into_iter()
-        .all(|(key, path)| file_digest(&path).is_some_and(|digest| digest == entries[key]))
+    artifacts.into_iter().all(|(key, path)| protected_runtime_node(&path, false) && file_digest(&path).is_some_and(|digest| digest == entries[key]))
 }
 
 #[cfg(target_os = "macos")]

@@ -1,7 +1,7 @@
 use crate::account_scope::{AccountScope, AccountScopeState};
 use crate::existing_team_runtime::{self, ActivatedTarget, ChatOperation};
 use crate::runtime_host::{
-    run_program, run_program_without_env, run_ssh, run_ssh_command, run_ssh_command_without_pipes,
+    run_program, run_program_keeping_stderr_with_environment, run_program_without_env, run_ssh, run_ssh_command, run_ssh_command_without_pipes,
     set_private_dir_permissions, set_private_permissions, ssh_base_args, validate_host,
     ExecutionHost, ProcessResult, ValidatedHost,
 };
@@ -1363,7 +1363,38 @@ fn podman_systemd_unit() -> String {
     ["podman-compose", "jht.service"].join("@")
 }
 
-fn podman_container_labels_are_attested(labels: &Value, runtime: &Path) -> bool {
+#[cfg(target_os = "macos")]
+fn mac_config_hash(runtime: &Path, timeout: Duration) -> Option<String> {
+    let search = |name: &str| {
+        #[cfg(test)]
+        {
+            let fixture = runtime.join("bin").join(name);
+            if fs::symlink_metadata(&fixture).is_ok_and(|metadata| metadata.file_type().is_file()) {
+                return Some(fixture);
+            }
+        }
+        let mut candidates: Vec<PathBuf> = std::env::var_os("PATH").into_iter().flat_map(|path| std::env::split_paths(&path).collect::<Vec<_>>()).map(|dir| dir.join(name)).collect();
+        candidates.extend([PathBuf::from("/opt/homebrew/bin").join(name), PathBuf::from("/usr/local/bin").join(name), PathBuf::from("/opt/podman/bin").join(name)]);
+        candidates.into_iter().find(|path| fs::symlink_metadata(path).is_ok_and(|m| m.file_type().is_file() && !m.file_type().is_symlink()))
+    };
+    let podman = search("podman")?;
+    let compose = search("podman-compose")?;
+    let version = |path: &Path, expected: &str| path.to_str().is_some_and(|program| run_program(program, ["--version"], None, timeout).is_ok_and(|result| result.success() && std::str::from_utf8(&result.stdout).is_ok_and(|value| value.trim() == expected)));
+    if !version(&podman, "podman version 6.1.3") || !version(&compose, "podman-compose version 1.6.0") { return None; }
+    let machine = fs::read_to_string(runtime.join("podman-machine")).ok()?;
+    let machine = machine.strip_suffix('\n')?;
+    if machine.is_empty() || !machine.bytes().all(|b| b.is_ascii_alphanumeric() || matches!(b, b'.' | b'_' | b'-')) { return None; }
+    let args = vec![OsString::from("--verbose"), OsString::from("--dry-run"), OsString::from("--project-name"), OsString::from("jht"), OsString::from("--podman-path"), podman.into_os_string(), OsString::from("-f"), runtime.join("docker-compose.yml").into_os_string(), OsString::from("up"), OsString::from("-d"), OsString::from("--force-recreate"), OsString::from("jht")];
+    let (result, stderr) = run_program_keeping_stderr_with_environment(compose.to_str()?, args, None, timeout, runtime, &["CONTAINER_HOST", "CONTAINER_CONNECTION"], &[("CONTAINER_CONNECTION", machine), ("PODMAN_COMPOSE_WARNING_LOGS", "false")]);
+    let mut output = result.ok().filter(ProcessResult::success)?.stdout;
+    output.extend_from_slice(&stderr);
+    let output = std::str::from_utf8(&output).ok()?;
+    let mut hash = None;
+    for line in output.lines() { for (at, _) in line.match_indices("io.podman.compose.config-hash=") { let value = &line[at + "io.podman.compose.config-hash=".len()..]; let value: String = value.chars().take_while(|b| b.is_ascii_hexdigit()).collect(); if value.len() != 64 || !value.bytes().all(|b| b.is_ascii_lowercase() || b.is_ascii_digit()) { return None; } match hash.as_deref() { None => hash = Some(value), Some(old) if old == value => {}, Some(_) => return None } } }
+    hash
+}
+
+fn podman_container_labels_are_attested(labels: &Value, runtime: &Path, expected_config_hash: Option<&str>) -> bool {
     let runtime_text = runtime.to_string_lossy();
     let systemd_unit = podman_systemd_unit();
     if label(labels, "com.docker.compose.project") != Some("jht")
@@ -1382,7 +1413,8 @@ fn podman_container_labels_are_attested(labels: &Value, runtime: &Path) -> bool 
         return label(labels, "com.docker.compose.project.config_files")
             == Some(runtime.join("docker-compose.yml").to_string_lossy().as_ref())
             && label(labels, "io.podman.compose.version") == Some("1.6.0")
-            && label(labels, "PODMAN_SYSTEMD_UNIT") == Some(systemd_unit.as_str());
+            && label(labels, "PODMAN_SYSTEMD_UNIT") == Some(systemd_unit.as_str())
+            && expected_config_hash == label(labels, "io.podman.compose.config-hash");
     }
     #[cfg(all(unix, not(target_os = "macos")))]
     {
@@ -1416,6 +1448,10 @@ fn local_chat_container(
     runtime: &Path,
     timeout: Duration,
 ) -> Result<String, &'static str> {
+    #[cfg(target_os = "macos")]
+    let expected_config_hash = engine.podman.then(|| mac_config_hash(runtime, timeout)).flatten();
+    #[cfg(not(target_os = "macos"))]
+    let expected_config_hash: Option<String> = None;
     let listed = run_local_engine(engine, local_compose_args(engine, runtime), None, timeout)?;
     let ids: Vec<&str> = std::str::from_utf8(&listed.stdout)
         .map_err(|_| "container_unavailable")?
@@ -1454,7 +1490,7 @@ fn local_chat_container(
             continue;
         };
         let service = label(&labels, "com.docker.compose.service");
-        let podman_labels_are_jht = !engine.podman || podman_container_labels_are_attested(&labels, runtime);
+        let podman_labels_are_jht = !engine.podman || podman_container_labels_are_attested(&labels, runtime, expected_config_hash.as_deref());
         if running != "true" || service != Some("jht") || !podman_labels_are_jht {
             continue;
         }
@@ -3305,6 +3341,12 @@ mod tests {
         )
         .unwrap();
         fs::set_permissions(&engine, fs::Permissions::from_mode(0o700)).unwrap();
+        #[cfg(target_os = "macos")]
+        {
+            fs::write(bin.join("podman"), "#!/bin/sh\n[ \"${1:-}\" = --version ] && { echo 'podman version 6.1.3'; exit 0; }\nexit 91\n").unwrap();
+            fs::write(bin.join("podman-compose"), format!("#!/bin/sh\n[ \"${{1:-}}\" = --version ] && {{ echo 'podman-compose version 1.6.0'; exit 0; }}\nprintf 'io.podman.compose.config-hash={}\\n' >&2\n", "a".repeat(64))).unwrap();
+            for helper in [bin.join("podman"), bin.join("podman-compose")] { fs::set_permissions(helper, fs::Permissions::from_mode(0o700)).unwrap(); }
+        }
         write_valid_local_podman_manifest(&runtime, &wrapper);
 
         let words = "àèé € 🧭";
