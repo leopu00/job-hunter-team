@@ -585,6 +585,32 @@ CODEX_0147_REDACTED_FORM = """\
 """
 
 
+def _p24_redacted_line(chars: int, *sgr: str) -> str:
+    return "".join(f"\x1b[{params}m" for params in sgr) + "□" * chars + "\x1b[0m"
+
+
+# The current CAPITANO form on Leone P24, captured as row length + SGR only.
+# The only retained glyphs are the composer marker and Codex's structural dot
+# in its footer; no pane text is present in this fixture.
+P24_CODEX_0147_FORM = "\n".join((
+    _p24_redacted_line(1, "0", "39", "49", "2"),
+    "",
+    _p24_redacted_line(52, "0;1", "38;5;2", "49", "0", "39", "49", "1", "0", "39", "49", "38;2;137;180;250", "38;2;205;214;244"),
+    _p24_redacted_line(58, "2", "39", "0", "38;2;137;180;250", "49", "38;2;205;214;244", "38;2;166;227;161"),
+    _p24_redacted_line(51, "2", "39"),
+    "",
+    _p24_redacted_line(10, "0", "39", "49", "1"),
+    _p24_redacted_line(20, "0;2", "39", "49", "0", "38;5;6", "49", "39"),
+    "",
+    _p24_redacted_line(126, "38;5;1"),
+    "",
+    "",
+    "\x1b[1m\x1b[39m› \x1b[0m\x1b[39m\x1b[49m\x1b[2m" + "□" * 24 + "\x1b[0m",
+    "",
+    "\x1b[0m\x1b[39m\x1b[49m\x1b[38;2;246;226;183m\x1b[2m " + "□" * 17 + "·" + "□" * 18 + "\x1b[39m\x1b[0m\x1b[38;2;171;223;167m\x1b[49m",
+)) + "\n"
+
+
 def _module():
     spec = importlib.util.spec_from_file_location("t39_agent_chat", SCRIPT)
     module = importlib.util.module_from_spec(spec)
@@ -653,6 +679,17 @@ def test_an_unrecognised_codex_0147_form_is_delivered_and_the_transport_must_pro
     code, receipt = box.run("send", "capitano", "id-codex-0147", stdin="verifica la coda")
     assert code == 0 and receipt["taken"] is True
     assert box.envelopes() == ["[@utente -> @capitano] [CHAT] verifica la coda"]
+
+
+def test_the_exact_redacted_p24_codex_composer_and_footer_are_writable(box):
+    module = _module()
+    assert module.composer_snapshot(P24_CODEX_0147_FORM) == ("empty", False)
+    assert module.delivery_gate(P24_CODEX_0147_FORM) == "empty"
+    assert module.delivery_gate(CODEX_APPROVAL) == "blocked", "a real Codex choice stays closed"
+    box.stub_delivery()
+    (box.state / "screen").write_text(P24_CODEX_0147_FORM, encoding="utf-8")
+    code, receipt = box.run("send", "capitano", "id-p24-codex-form", stdin="riprendi la coda")
+    assert code == 0 and receipt["taken"] is True
 
 
 def test_dim_codex_suggestion_is_empty_but_rgb_colour_is_not_dim():

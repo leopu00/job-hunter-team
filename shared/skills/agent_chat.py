@@ -454,12 +454,34 @@ def _certain_interlock(pane: str) -> bool:
     raw_lines = [strip_terminal_codes(line).rstrip().casefold() for line in (pane or "").splitlines()]
     lines = [line.strip() for line in raw_lines]
     text = "\n".join(line for line in lines if line)
+    rows = list(zip(raw_lines, raw_lines))
+
+    # A recognised composer and its Codex footer are UI chrome, never menu
+    # choices.  In particular, a freshly changed Codex footer can be short
+    # and adjacent to ``›``: counting it as a sibling would silence chat.
+    composer_rows: set[int] = set()
+    footer_rows: set[int] = set()
+    for index, (_raw, plain) in enumerate(rows):
+        if _CODEX_DOT_FOOTER.match(plain) or _CODEX_HINT.search(plain):
+            footer_rows.add(index)
+        match = _composer_match(plain)
+        if not match or _NUMBERED_OPTION.match(match.group(2)):
+            continue
+        marker = match.group(1)
+        boxed = bool(_BOXED_COMPOSER.match(plain))
+        if ((marker == "›" and _codex_footer(rows, index))
+                or (marker != "›" and _claude_box(rows, index, boxed))):
+            composer_rows.add(index)
 
     # A selected numbered row plus another numbered row is a choice list even
     # when its wording is new or localized.  Do not mistake ordinary numbered
     # prose for one: it needs the live selection mark as well.
-    numbered = [line for line in lines if re.match(r"^(?:[›❯]\s*)?\d+[.)]\s+\S", line)]
-    selected_numbered = any(re.match(r"^[›❯]\s*\d+[.)]\s+\S", line) for line in lines)
+    numbered = [line for index, line in enumerate(lines)
+                if index not in composer_rows and index not in footer_rows
+                and re.match(r"^(?:[›❯]\s*)?\d+[.)]\s+\S", line)]
+    selected_numbered = any(index not in composer_rows and index not in footer_rows
+                            and re.match(r"^[›❯]\s*\d+[.)]\s+\S", line)
+                            for index, line in enumerate(lines))
     if selected_numbered and len(numbered) >= 2:
         return True
 
@@ -469,17 +491,26 @@ def _certain_interlock(pane: str) -> bool:
     def choice_body(line: str) -> str:
         return line.strip().strip("│┃╎|").strip()
 
+    def option_shape(raw: str) -> str:
+        return "boxed" if raw.strip().startswith(("│", "┃", "╎", "|")) else "plain"
+
     for index, raw in enumerate(raw_lines):
+        if index in composer_rows or index in footer_rows:
+            continue
         selected = choice_body(raw)
         if not re.match(r"^[›❯]\s+\S", selected):
             continue
-        for sibling_raw in raw_lines[max(0, index - 3):index + 4]:
+        for sibling_index in range(max(0, index - 3), min(len(raw_lines), index + 4)):
+            if sibling_index in composer_rows or sibling_index in footer_rows:
+                continue
+            sibling_raw = raw_lines[sibling_index]
             sibling = choice_body(sibling_raw)
             if not sibling or sibling == selected or sibling.startswith(("›", "❯", "╭", "╰", "─")):
                 continue
-            # A short, adjacent peer is an option.  Long prose below a
-            # composer is not: it cannot turn an unknown form into a menu.
-            if len(sibling) <= 80:
+            # A true localized menu has two option rows of the same form.  A
+            # recognised composer/footer pair is excluded above before this
+            # structural check can make it a false menu.
+            if len(sibling) <= 80 and option_shape(sibling_raw) == option_shape(raw):
                 return True
 
     # These are controls with no reliable numbered second row in the capture.
