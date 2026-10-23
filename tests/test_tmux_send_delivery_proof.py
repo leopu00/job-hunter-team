@@ -43,6 +43,10 @@ case "$cmd" in
       if [ "$1" = "-b" ]; then name="$2"; shift 2; continue; fi
       shift
     done
+    # The screen can change after the preflight capture and before this paste.
+    # These switches model a new menu or a human draft winning that small race.
+    [ -f "$S/menu_on_paste" ] && { printf 'menu\n' > "$S/mode"; exit 0; }
+    [ -f "$S/draft_on_paste" ] && { cat "$S/draft_on_paste" > "$S/composer"; exit 0; }
     [ -f "$S/mute" ] && exit 0
     if [ -f "$S/lag" ]; then (sleep "$(cat "$S/lag")"; cat "$S/buffer.$name" >> "$S/composer") & exit 0; fi
     cat "$S/buffer.$name" >> "$S/composer"; rm -f "$S/buffer.$name" ;;
@@ -141,6 +145,18 @@ def test_any_real_text_already_in_the_box_is_never_typed_over_or_submitted(box):
     done = box.run()
     assert done.returncode == 130, done.stderr
     assert box.typed() == [] and box.keys("Enter") == []
+
+
+@pytest.mark.parametrize(("switch", "content"), [
+    ("menu_on_paste", ""),
+    ("draft_on_paste", "a human draft won the race"),
+], ids=["menu", "draft"])
+def test_a_change_between_preflight_and_paste_never_gets_an_enter(box, switch, content):
+    box.put(switch, content)
+    done = box.run()
+    assert done.returncode != 0, done.stderr
+    assert len(box.typed()) == 1, "the one bracketed paste may race, but is never retried"
+    assert box.keys("Enter") == [] and box.keys("Escape") == [] and box.keys("Space") == []
 
 
 # -- C2 · la firma si cerca solo nella casella ------------------------------------------------------------------------
