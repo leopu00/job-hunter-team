@@ -10,18 +10,20 @@ uid or its gid, and that is of the jht compose project, is removed (volumes stay
 when jht is already running.
 
 The code is the enabler's own, read through the PowerShell AST and run under 'Stop' against a fake
-podman that answers as Podman does (a container that is not there: stderr and 125).
+podman that answers as Podman does (a container that is not there: stderr and 125). On Windows the
+fake is a native program (tests/windows_native_fakes.py) and the shell is the one JHT_TEST_SHELL
+names, Windows PowerShell 5.1 by default: every case checks the engine that ran it.
 """
 
 from __future__ import annotations
 
 import json
 import os
-import shutil
 import subprocess
 from pathlib import Path
 
 import pytest
+from windows_native_fakes import ENGINE_CHECK, WINDOWS, assert_engine, install_fake, powershell_argv, windows_env
 
 ROOT = Path(__file__).resolve().parent.parent
 ENABLER = ROOT / "scripts" / "enable-podman-windows-runtime.ps1"
@@ -71,7 +73,7 @@ case "$1" in
       *Config.Labels*) if [ -f "$FAKE_STATE/$name.labels" ]; then cat "$FAKE_STATE/$name.labels"; else echo '{"com.docker.compose.project":"jht","com.docker.compose.service":"'"$name"'"}'; fi ;;
       *) cat "$FAKE_STATE/$name.details" ;;
     esac ;;
-  ps) for f in "$FAKE_STATE"/*.running; do [ -f "$f" ] && basename "$f" .running; done; exit 0 ;;
+  ps) for n in jht jht-broker jht-telegram; do [ -f "$FAKE_STATE/$n.running" ] && echo "$n"; done; exit 0 ;;
   rm) [ -n "$FAKE_RM_FAILS" ] && { echo "Error: rm refused" >&2; exit 2; }; rm -f "$FAKE_STATE/$2.details" ;;
   stop) rm -f "$FAKE_STATE/$4.running" ;;
 esac
@@ -79,26 +81,32 @@ exit 0
 """
 
 
-def _pwsh() -> str:
-    found = os.environ.get("JHT_TEST_PWSH") or shutil.which("pwsh")
-    if found:
-        return found
-    if os.environ.get("CI"):
-        pytest.fail("pwsh is missing on the CI runner: the sidecar repair would go untested")
-    pytest.skip("pwsh not installed")
-
-
 def _details(user: str, mappings) -> str:
     return f"{user}|{json.dumps(mappings)}"
 
 
+def _write(path: Path, text: str) -> None:
+    # LF on Windows too: what the fake prints is what Podman would print
+    path.write_text(text, encoding="utf-8", newline="\n")
+
+
 def _run(tmp_path: Path, env: dict[str, str]):
     harness = tmp_path / "harness.ps1"
-    harness.write_text(HARNESS, encoding="utf-8")
-    return subprocess.run(
-        [_pwsh(), "-NoLogo", "-NoProfile", "-NonInteractive", "-File", str(harness)],
-        env={**os.environ, "JHT_UNDER_TEST": str(ENABLER), **env}, capture_output=True, text=True, timeout=120,
+    harness.write_text(ENGINE_CHECK + HARNESS, encoding="utf-8")
+    engine = tmp_path / "engine.txt"
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir(exist_ok=True)
+    base = {
+        **(windows_env(tmp_path) if WINDOWS else os.environ),
+        "PATH": str(bin_dir) if WINDOWS else f"{bin_dir}{os.pathsep}/usr/bin{os.pathsep}/bin",
+    }
+    done = subprocess.run(
+        [*powershell_argv(), "-File", str(harness)],
+        env={**base, "JHT_ENGINE_FILE": str(engine), "JHT_UNDER_TEST": str(ENABLER), **env},
+        capture_output=True, text=True, timeout=120,
     )
+    assert_engine(engine, done.stderr)
+    return done
 
 
 def _machine(tmp_path: Path, containers: dict[str, tuple[str, bool]], rm_fails: bool = False, labels: dict[str, str] | None = None):
@@ -107,16 +115,14 @@ def _machine(tmp_path: Path, containers: dict[str, tuple[str, bool]], rm_fails: 
     state = tmp_path / "state"
     state.mkdir()
     for name, raw in (labels or {}).items():
-        (state / f"{name}.labels").write_text(raw + "\n", encoding="utf-8")
+        _write(state / f"{name}.labels", raw + "\n")
     for name, (details, running) in containers.items():
-        (state / f"{name}.details").write_text(details + "\n", encoding="utf-8")
+        _write(state / f"{name}.details", details + "\n")
         if running:
-            (state / f"{name}.running").write_text("", encoding="utf-8")
-    podman = tmp_path / "podman"
-    podman.write_text(FAKE_PODMAN, encoding="utf-8")
-    podman.chmod(0o755)
+            _write(state / f"{name}.running", "")
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir()
+    podman = install_fake(bin_dir, "podman.exe", FAKE_PODMAN)
     (bin_dir / "jht.ps1").write_text(
         "Add-Content -LiteralPath (Join-Path $env:FAKE_STATE 'up.log') -Value \"jht $args\"\nexit 0\n", encoding="utf-8"
     )
