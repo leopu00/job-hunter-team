@@ -7,7 +7,10 @@ does not. `podman inspect jht` answers "no such object" on a new machine, so the
 enabler stopped at every first installation (T82); the probe's `docker inspect jht`
 and install.ps1's `wsl --status 2>&1` had the same form.
 
-So every `& native ... 2>...` runs where the preference is 'Continue': in its own
+So every native call whose stderr is redirected (2>, 2>&1, *>) runs where the
+preference is 'Continue': a call with `&`, a program called by its name (not a
+Verb-Noun cmdlet, not a function of the file), or a function of the file that
+runs one of those, called with its stderr redirected. It runs in its own
 block, `& { $ErrorActionPreference = 'Continue'; & $exe ... 2>$null }`, or after
 an assignment of 'Continue' in a block that holds it (the network script's waits).
 Where the failure must stop, the script reads $LASTEXITCODE.
@@ -69,17 +72,41 @@ function Get-Preference([System.Management.Automation.Language.Ast]$node) {
   }
   return ''
 }
+$C = [System.Management.Automation.Language.CommandAst]
+function Test-ProgramName([string]$name, $functions) {
+  # a program called by its name: not a function of the file, not a Verb-Noun cmdlet
+  return $name -and -not $functions.ContainsKey($name) -and $name -notmatch '^[A-Za-z]+-[A-Za-z]+$'
+}
 $scanned = 0
 foreach ($path in ($env:JHT_GATE_FILES -split [IO.Path]::PathSeparator)) {
   if (-not $path) { continue }
   $tokens = $null; $errors = $null
   $ast = [System.Management.Automation.Language.Parser]::ParseFile($path, [ref]$tokens, [ref]$errors)
   if ($errors.Count) { throw "parse ${path}: $($errors[0])" }
-  foreach ($command in $ast.FindAll({ param($n) $n -is [System.Management.Automation.Language.CommandAst] }, $true)) {
-    if ($command.InvocationOperator -ne 'Ampersand') { continue }
+  # The functions of the file that run a native program, directly or through another such function.
+  $functions = @{}
+  $definitions = @($ast.FindAll({ param($n) $n -is [System.Management.Automation.Language.FunctionDefinitionAst] }, $true))
+  foreach ($fn in $definitions) { $functions[$fn.Name] = $false }
+  do {
+    $changed = $false
+    foreach ($fn in $definitions) {
+      if ($functions[$fn.Name]) { continue }
+      $runs = $fn.Body.Find({ param($n)
+        if ($n -isnot $C) { return $false }
+        if ($n.InvocationOperator -eq 'Ampersand') { return $n.CommandElements[0] -isnot [System.Management.Automation.Language.ScriptBlockExpressionAst] }
+        $name = $n.GetCommandName()
+        return (Test-ProgramName $name $functions) -or ($name -and $functions.ContainsKey($name) -and $functions[$name]) }, $true)
+      if ($runs) { $functions[$fn.Name] = $true; $changed = $true }
+    }
+  } while ($changed)
+  foreach ($command in $ast.FindAll({ param($n) $n -is $C }, $true)) {
     if ($command.CommandElements[0] -is [System.Management.Automation.Language.ScriptBlockExpressionAst]) { continue }
-    $errorRedirected = @($command.Redirections | Where-Object { $_.FromStream -eq 'Error' }).Count -gt 0
+    $errorRedirected = @($command.Redirections | Where-Object { $_.FromStream -in 'Error', 'All' }).Count -gt 0
     if (-not $errorRedirected) { continue }
+    $name = $command.GetCommandName()
+    $native = ($command.InvocationOperator -eq 'Ampersand') -or (Test-ProgramName $name $functions) -or
+      ($name -and $functions.ContainsKey($name) -and $functions[$name])
+    if (-not $native) { continue }
     $scanned++
     $preference = Get-Preference $command
     if ($preference -ne 'Continue') {
@@ -140,10 +167,21 @@ def test_the_gate_sees_the_old_lines_and_nothing_else(tmp_path):
         "$previous = $ErrorActionPreference\n"
         "$ErrorActionPreference = 'Continue'\n"
         "try { & $Podman machine ssh m 'true' 2>$null | Out-Null } finally { $ErrorActionPreference = $previous }\n"
-        "& $Podman inspect jht 2>$null\n",
+        "& $Podman inspect jht 2>$null\n"
+        "& docker compose down --volumes *> $null\n"
+        "$null = docker info 2>&1\n"
+        "function Invoke-Legacy { param($a) Invoke-Inner $a }\n"
+        "function Invoke-Inner { param($a) & docker @a }\n"
+        "$rows = @(Invoke-Legacy inventory 2>$null)\n"
+        "$rows = & { $ErrorActionPreference = 'Continue'; Invoke-Legacy inventory 2>$null }\n"
+        "Write-Output 'a cmdlet' 2>$null\n"
+        "function Format-Row { param($r) \"$r\" }\n"
+        "Format-Row x 2>$null\n",
         encoding="utf-8",
     )
     found, scanned = _gate(tmp_path, [old])
-    # lines 2, 4, 6 and 12 run under 'Stop' (12: after the finally put 'Stop' back); 7 and 11 under 'Continue'
-    assert found == ["old.ps1:12", "old.ps1:2", "old.ps1:4", "old.ps1:6"]
-    assert scanned == 6
+    # under 'Stop': 2, 4, 6, 12 (after the finally put 'Stop' back), 13 (*>), 14 (a program by its name), 17 (a
+    # function that runs one through another); 7, 11 and 18 under 'Continue'; a cmdlet and a function that runs
+    # no program are not native calls
+    assert found == ["old.ps1:12", "old.ps1:13", "old.ps1:14", "old.ps1:17", "old.ps1:2", "old.ps1:4", "old.ps1:6"]
+    assert scanned == 10

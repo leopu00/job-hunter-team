@@ -223,8 +223,9 @@ function Invoke-ProbeCompose {
 function Remove-ProbeResources {
   if ($script:ProbeStartedContainer -and (Get-Command docker -ErrorAction SilentlyContinue)) {
     Write-ProbeStep 'Removing probe container and named volumes'
-    & docker compose -f $ComposeFile -f $PodmanComposeFile `
-      --project-directory (Split-Path -Parent $ComposeFile) down --volumes *> $null
+    # best effort, and under 'Stop' Windows PowerShell 5.1 would stop on a line of its stderr (T82)
+    & { $ErrorActionPreference = 'Continue'; & docker compose -f $ComposeFile -f $PodmanComposeFile `
+      --project-directory (Split-Path -Parent $ComposeFile) down --volumes *> $null }
   }
   if (-not $Keep -and $script:ProbeRoot -and (Test-Path -LiteralPath $script:ProbeRoot)) {
     Remove-Item -LiteralPath $script:ProbeRoot -Recurse -Force
