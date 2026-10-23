@@ -2,7 +2,8 @@
 
 Podman 6 removed Windows 10 support. Windows 11 is the supported system;
 Windows 10 still installs, with the sentence «Podman no longer supports
-Windows 10: it may work, but we do not guarantee it» and the line
+Windows 10: it may work, but we do not guarantee it. The supported system is
+Windows 11» and the line
 `JHT_NOTICE windows10_unsupported`, which the desktop keeps on the setup
 screen (windows_runtime.rs, INSTALL_NOTICES).
 
@@ -29,7 +30,7 @@ INSTALLER = ROOT / "scripts" / "install.ps1"
 PUBLIC_INSTALLER = ROOT / "web" / "public" / "install.ps1"
 DIGEST = ROOT / "desktop" / "src-tauri" / "installer-windows.sha256"
 NOTICE = "JHT_NOTICE windows10_unsupported"
-WARNING = "Podman no longer supports Windows 10: it may work, but we do not guarantee it."
+WARNING = "Podman no longer supports Windows 10: it may work, but we do not guarantee it. The supported system is Windows 11."
 
 
 def _pwsh() -> str:
@@ -56,7 +57,7 @@ foreach ($name in ($env:JHT_IMPORT -split ',')) {
 exit 0
 """
 
-NOTICE_FUNCTIONS = ["Show-WindowsSupportNotice", "Test-JhtWindows10Client", "Write-JhtNotice", "Write-Warn"]
+NOTICE_FUNCTIONS = ["Show-WindowsSupportNotice", "Test-JhtWindows10Client", "Get-Windows10SupportWarning", "Write-JhtNotice", "Write-Warn"]
 
 
 def _run(tmp_path: Path, imports: list[str], body: str):
@@ -76,8 +77,13 @@ def _run(tmp_path: Path, imports: list[str], body: str):
 
 
 def _with_edition(tmp_path: Path, edition: str):
-    # The fake edition replaces the CIM read; what follows the notice must still run.
-    body = f"function Get-JhtWindowsEdition {{ return {edition} }}\nShow-WindowsSupportNotice\n[Console]::Out.WriteLine('SETUP_GOES_ON')\n"
+    # The fake edition replaces the CIM read; the fixed language makes these
+    # OS-detection tests independent of the test machine's console locale.
+    body = (
+        f"function Get-JhtWindowsEdition {{ return {edition} }}\n"
+        f"function Get-Windows10SupportWarning {{ return '{WARNING}' }}\n"
+        "Show-WindowsSupportNotice\n[Console]::Out.WriteLine('SETUP_GOES_ON')\n"
+    )
     return _run(tmp_path, NOTICE_FUNCTIONS, body)
 
 
@@ -192,11 +198,44 @@ def test_the_system_check_shows_the_notice_and_never_stops_for_it():
 
 
 def test_the_installer_text_says_podman_and_may_work_never_microsoft():
-    notice = _function_text("Show-WindowsSupportNotice")
-    assert WARNING in notice
-    assert "Microsoft" not in notice
+    warning = _function_text("Get-Windows10SupportWarning")
+    assert WARNING in warning
+    assert "Microsoft" not in warning
     # Windows PowerShell 5.1 reads a BOM-less script as ANSI: the sentence stays ASCII.
-    assert notice.isascii()
+    assert warning.isascii()
+
+
+@pytest.mark.parametrize(
+    ("language", "expected"),
+    [
+        ("it", "Podman non supporta piu' Windows 10: puo' funzionare, ma non lo garantiamo. Il sistema supportato e' Windows 11."),
+        ("en", WARNING),
+        ("de", "Podman unterstuetzt Windows 10 nicht mehr: Es kann funktionieren, aber wir garantieren es nicht. Unterstuetzt wird Windows 11."),
+        ("es", "Podman ya no es compatible con Windows 10: puede funcionar, pero no lo garantizamos. El sistema compatible es Windows 11."),
+        ("fr", "Podman ne prend plus en charge Windows 10 : cela peut fonctionner, mais nous ne le garantissons pas. Le systeme pris en charge est Windows 11."),
+        ("hu", "A Podman mar nem tamogatja a Windows 10-et: mukodhet, de nem garantaljuk. A tamogatott rendszer a Windows 11."),
+        ("pt", "O Podman ja nao suporta o Windows 10: pode funcionar, mas nao o garantimos. O sistema suportado e o Windows 11."),
+        ("unknown", WARNING),
+    ],
+)
+def test_the_terminal_warning_uses_the_console_language(tmp_path, language, expected):
+    result = _run(
+        tmp_path,
+        ["Get-Windows10SupportWarning"],
+        f"[Console]::Out.WriteLine((Get-Windows10SupportWarning -Language '{language}'))\n",
+    )
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == expected
+
+
+def test_the_notice_only_switch_reads_no_runtime_or_network():
+    source = INSTALLER.read_text(encoding="utf-8")
+    switch = source.index("if ($WindowsSupportNoticeOnly) {")
+    main = source.index("Show-Header", switch)
+    assert switch < main
+    block = source[switch:main]
+    assert "Show-WindowsSupportNotice" in block
+    assert "Get-RuntimeFiles" not in block
 
 
 def test_the_two_installers_and_the_compiled_digest_are_the_same_file():

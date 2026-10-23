@@ -23,6 +23,7 @@ $RuntimeDir = if ($env:JHT_RUNTIME_DIR) { $env:JHT_RUNTIME_DIR } else { Join-Pat
 $BinDir = if ($env:JHT_BIN_DIR) { $env:JHT_BIN_DIR } else { Join-Path $env:USERPROFILE '.local\bin' }
 $RuntimeShimDir = Join-Path $RuntimeDir 'bin'
 $JhtHome = Join-Path $env:USERPROFILE '.jht'
+$PodmanRegistryPaths = @('HKCU:\SOFTWARE\Podman', 'HKLM:\SOFTWARE\Podman')
 $PodmanCliVersion = '6.0.2'
 $ComposeProviderVersion = '5.1.2'
 # JHT's own docker-compose.exe, private to the runtime: never one found in
@@ -42,10 +43,15 @@ function Write-JhtPhase {
 }
 
 function Update-ProcessPath {
+  param(
+    [string]$MachinePath = [Environment]::GetEnvironmentVariable('Path', 'Machine'),
+    [string]$UserPath = [Environment]::GetEnvironmentVariable('Path', 'User'),
+    [string]$ProcessPath = $env:PATH
+  )
   $env:PATH = @(
-    [Environment]::GetEnvironmentVariable('Path', 'Machine'),
-    [Environment]::GetEnvironmentVariable('Path', 'User'),
-    $env:PATH
+    $MachinePath,
+    $UserPath,
+    $ProcessPath
   ) -join [IO.Path]::PathSeparator
 }
 
@@ -426,15 +432,26 @@ function Install-JhtStartupTask {
 # HKCU or HKLM\SOFTWARE\Podman, InstallDir. A podman.exe in another Windows
 # user's profile is not readable from here, so it is never «found».
 function Find-Podman {
-  Update-ProcessPath
+  param(
+    # These are parameters, rather than ambient reads throughout the function,
+    # so the lookup can be exercised on a Windows runner without seeing that
+    # runner's installed Podman. The defaults are the production sources.
+    [string]$MachinePath = [Environment]::GetEnvironmentVariable('Path', 'Machine'),
+    [string]$UserPath = [Environment]::GetEnvironmentVariable('Path', 'User'),
+    [string]$ProcessPath = $env:PATH,
+    [string]$LocalAppDataPath = $LocalAppData,
+    [string[]]$RegistryPaths = $PodmanRegistryPaths,
+    [string]$ProgramFilesPath = $env:ProgramFiles
+  )
+  Update-ProcessPath -MachinePath $MachinePath -UserPath $UserPath -ProcessPath $ProcessPath
   $found = Get-Application 'podman.exe'
   if ($found) { return $found }
-  $candidates = @(Join-Path $LocalAppData 'Programs\Podman\podman.exe')
-  foreach ($key in 'HKCU:\SOFTWARE\Podman', 'HKLM:\SOFTWARE\Podman') {
+  $candidates = @(Join-Path $LocalAppDataPath 'Programs\Podman\podman.exe')
+  foreach ($key in $RegistryPaths) {
     $dir = (Get-ItemProperty -LiteralPath $key -Name 'InstallDir' -ErrorAction SilentlyContinue).InstallDir
     if ($dir) { $candidates += Join-Path ([string]$dir) 'podman.exe' }
   }
-  if ($env:ProgramFiles) { $candidates += Join-Path $env:ProgramFiles 'Podman\podman.exe' }
+  if ($ProgramFilesPath) { $candidates += Join-Path $ProgramFilesPath 'Podman\podman.exe' }
   foreach ($candidate in $candidates) {
     if (Test-Path -LiteralPath $candidate -PathType Leaf -ErrorAction SilentlyContinue) { return $candidate }
   }
