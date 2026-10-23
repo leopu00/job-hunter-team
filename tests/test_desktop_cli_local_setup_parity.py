@@ -42,6 +42,12 @@ def _function(source: str, name: str) -> str:
     return _rust_item(source, f"fn {name}(")
 
 
+def _local_snapshot(desktop: str) -> str:
+    """snapshot_impl reads the snapshot through snapshot_logged, without a runtime log (T79)."""
+    assert "snapshot_logged(app, scope, host, None)" in _function(desktop, "snapshot_impl")
+    return _function(desktop, "snapshot_logged")
+
+
 def _in_order(source: str, *needles: str) -> None:
     cursor = -1
     for needle in needles:
@@ -245,7 +251,7 @@ def test_local_commands_are_scoped_exit_checked_and_effect_verified():
     wrapper_command = _function(desktop, "local_wrapper_command")
     scoped = _function(desktop, "run_scoped_local")
     ensure_success = _function(desktop, "ensure_success")
-    snapshot = _function(desktop, "snapshot_impl")
+    snapshot = _local_snapshot(desktop)
     verify_team = _function(desktop, "verified_team_snapshot")
     team_command = _function(desktop, "onboarding_team_start")
     resume_command = _function(desktop, "onboarding_resume_team_start")
@@ -255,7 +261,9 @@ def test_local_commands_are_scoped_exit_checked_and_effect_verified():
         assert path in wrapper_command
     assert "validate_local_runtime(app, scope)?" in scoped
     assert "value.success()" in ensure_success
-    assert "LocalCliOperation::Snapshot" in snapshot
+    assert "validate_local_runtime(app, scope)" in snapshot
+    assert "run_scoped_local(app, scope, &wrapper, LocalCliOperation::Snapshot," in snapshot
+    assert "!result.success()" in snapshot
     assert "!snapshot.assistant_running || !snapshot.captain_running" in verify_team
     for command in (team_command, resume_command):
         _in_order(command, "start_team_impl(", "verified_team_snapshot(")
@@ -292,7 +300,7 @@ def test_status_and_gui_probes_cannot_start_a_stopped_runtime():
     service_probe = _shell_function(wrapper, "read_only_service_id")
     onboarding_probe = _shell_function(wrapper, "onboarding_snapshot")
     reachable = _shell_function(wrapper, "docker_reachable")
-    snapshot = _function(desktop, "snapshot_impl")
+    snapshot = _local_snapshot(desktop)
 
     for read_only in map(
         _without_shell_comments,
@@ -312,7 +320,8 @@ def test_status_and_gui_probes_cannot_start_a_stopped_runtime():
     assert "read_only_service_id" in _without_shell_comments(runtime_probe)
     assert "docker_reachable" in _without_shell_comments(service_probe)
     assert "read_only_container_id" in onboarding_probe
-    assert "LocalCliOperation::Snapshot" in snapshot
+    # both ways of reading it, with and without the runtime log, ask the wrapper for the snapshot only
+    assert snapshot.count("LocalCliOperation::Snapshot") == 2
     assert "compose up -d" in up
 
     # Only two explicit mutators may wake Podman: `up`, and the destructive

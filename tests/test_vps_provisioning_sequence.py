@@ -370,7 +370,7 @@ def test_the_vps_arm_runs_install_then_up_then_snapshot_then_provider(source):
     order = [
         arm.index("remote_install_command(channel_args)"),  # REMOTE_INSTALL, plus the channel's arguments
         arm.index("REMOTE_JHT_UP"),
-        arm.index("snapshot_impl(&app, &scope, &validated)"),
+        arm.index("snapshot_logged(&app, &scope, &validated, "),  # the Container step, its snapshot in the runtime log
         arm.index("REMOTE_USE_CLAUDE"),
         arm.index("REMOTE_UPDATE_CLAUDE"),
     ]
