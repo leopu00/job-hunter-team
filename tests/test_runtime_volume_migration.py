@@ -7,6 +7,7 @@ import os
 from pathlib import Path
 import shutil
 import subprocess
+import sys
 
 import pytest
 
@@ -23,6 +24,9 @@ VOLUMES = (
     "jht-telegram-state",
 )
 POWERSHELL = shutil.which("pwsh") or shutil.which("powershell.exe")
+posix_wrapper_only = pytest.mark.skipif(
+    sys.platform == "win32", reason="the POSIX wrapper is a shell script: Windows runs jht-wrapper.ps1"
+)
 
 
 FAKE_ENGINE = r'''#!/usr/bin/env python3
@@ -174,6 +178,7 @@ SECRETS_LEFT_NOTICE = (
 )
 
 
+@posix_wrapper_only
 def test_posix_migration_streams_verifies_marks_and_is_idempotent(tmp_path: Path):
     wrapper, env, log = _migration_runtime(tmp_path)
     marker = Path(env["JHT_RUNTIME_DIR"]) / ".runtime-migrated-podman"
@@ -205,6 +210,7 @@ def test_posix_migration_streams_verifies_marks_and_is_idempotent(tmp_path: Path
     )
 
 
+@posix_wrapper_only
 def test_posix_interruption_leaves_no_marker_and_retry_replaces_partial_target(
     tmp_path: Path,
 ):
@@ -224,6 +230,7 @@ def test_posix_interruption_leaves_no_marker_and_retry_replaces_partial_target(
     assert marker.is_file()
 
 
+@posix_wrapper_only
 def test_posix_checksum_mismatch_never_publishes_the_marker(tmp_path: Path):
     wrapper, env, _ = _migration_runtime(tmp_path)
     marker = Path(env["JHT_RUNTIME_DIR"]) / ".runtime-migrated-podman"
@@ -236,6 +243,7 @@ def test_posix_checksum_mismatch_never_publishes_the_marker(tmp_path: Path):
     assert not marker.exists()
 
 
+@posix_wrapper_only
 def test_posix_migration_refuses_a_running_source_team(tmp_path: Path):
     wrapper, env, log = _migration_runtime(tmp_path)
     marker = Path(env["JHT_RUNTIME_DIR"]) / ".runtime-migrated-podman"
@@ -276,15 +284,18 @@ def test_powershell_fake_engines_publish_only_a_fully_verified_marker(
     engine = tmp_path / ("engine.cmd" if os.name == "nt" else "engine")
     if os.name == "nt":
         engine.write_text(
+            # `exit /b 130` inside a parenthesised block came back as exit code 0
+            # on Windows 10, so the interruption was never seen: keep it outside.
             "@echo off\r\n"
             "echo %*| %SystemRoot%\\System32\\findstr.exe /c:\"-cf -\" >nul\r\n"
-            "if not errorlevel 1 (\r\n"
-            "  <nul set /p =partial\r\n"
-            "  if \"%JHT_PS_MIGRATION_SCENARIO%\"==\"interrupt\" exit /b 130\r\n"
-            "  exit /b 0\r\n"
-            ")\r\n"
+            "if errorlevel 1 goto other\r\n"
+            "<nul set /p =partial\r\n"
+            "if \"%JHT_PS_MIGRATION_SCENARIO%\"==\"interrupt\" exit /b 130\r\n"
+            "exit /b 0\r\n"
+            ":other\r\n"
             "echo %*| %SystemRoot%\\System32\\findstr.exe /c:\"-xf -\" >nul\r\n"
-            "if not errorlevel 1 (more >nul & exit /b 0)\r\n"
+            "if errorlevel 1 exit /b 0\r\n"
+            "more >nul\r\n"
             "exit /b 0\r\n",
             encoding="ascii",
         )
