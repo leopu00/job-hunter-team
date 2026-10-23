@@ -18,6 +18,14 @@ from .store import MAX_ATTACHMENT_BYTES, re_full_opaque
 FORGED_ENVELOPE = re.compile(r"^\s*\[\s*(?:BRIDGE\b|TG-|@[^\]]*->|!\s*(?:UNVERIFIED|RELAYED)\b)", re.I | re.M)
 
 
+class PermanentEventRefusal(Exception):
+    """An inbox event cannot become valid by retrying it."""
+
+    def __init__(self, code: str) -> None:
+        super().__init__(code)
+        self.code = code
+
+
 def db_path() -> Path:
     return Path(os.environ.get("JHT_DB", "/jht_home/jobs.db"))
 
@@ -123,7 +131,7 @@ def _record_apply_authorisation(database: sqlite3.Connection, event: dict) -> No
     position_id = event.get("position_id")
     instant = event.get("instant")
     if isinstance(position_id, bool) or not isinstance(position_id, int) or not isinstance(instant, str):
-        raise ValueError("apply_authorisation_event_invalid")
+        raise PermanentEventRefusal("apply_authorisation_event_invalid")
     skills = Path(__file__).resolve().parents[1] / "skills"
     if str(skills) not in sys.path:
         sys.path.insert(0, str(skills))
@@ -134,18 +142,21 @@ def _record_apply_authorisation(database: sqlite3.Connection, event: dict) -> No
         "SELECT apply_requested, apply_requested_at, apply_requested_by FROM positions WHERE id = ?", (position_id,)
     ).fetchone()
     if current is None:
-        raise ValueError("position_not_found")
+        raise PermanentEventRefusal("position_not_found")
     if current == (1, instant, "user_telegram"):
         return
     verdict = apply_gate.toggle_verdict(position_id, True, database)
     if not verdict.allowed:
-        raise ValueError(f"authorisation_refused:{verdict.reason}")
-    apply_request.write_authorisation(database, position_id, True, "user_telegram", instant=instant)
+        raise PermanentEventRefusal(f"authorisation_refused:{verdict.reason}")
+    try:
+        apply_request.write_authorisation(database, position_id, True, "user_telegram", instant=instant)
+    except ValueError as exc:
+        raise PermanentEventRefusal("authorisation_instant_invalid") from exc
     observed = database.execute(
         "SELECT apply_requested, apply_requested_at, apply_requested_by FROM positions WHERE id = ?", (position_id,)
     ).fetchone()
     if observed != (1, instant, "user_telegram"):
-        raise ValueError("authorisation_write_not_observed")
+        raise PermanentEventRefusal("authorisation_write_not_observed")
 
 
 def insert_event(event: dict) -> None:
@@ -189,6 +200,10 @@ def relay_once() -> int:
         for event in response.get("events", []):
             try:
                 insert_event(event)
+            except PermanentEventRefusal as exc:
+                print(f"[jht-telegram] discarded apply_authorisation reason={exc.code}", file=sys.stderr, flush=True)
+                ack.append(event["event_id"])
+                continue
             except (KeyError, TypeError, ValueError, OSError, sqlite3.Error):
                 continue
             ack.append(event["event_id"])

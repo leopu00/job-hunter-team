@@ -475,6 +475,62 @@ def test_apply_authorisation_event_sets_only_the_local_ui_flag(tmp_path: Path, m
         sys.path.remove(str(skills))
 
 
+def test_permanently_refused_authorisation_events_do_not_starve_normal_messages(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    skills = ROOT / "shared" / "skills"
+    sys.path.insert(0, str(skills))
+    try:
+        import _db
+
+        database_path = tmp_path / "jobs.db"
+        with sqlite3.connect(database_path) as database:
+            database.row_factory = sqlite3.Row
+            _db.ensure_schema(database)
+            database.commit()
+        monkeypatch.setenv("JHT_DB", str(database_path))
+        rejected = [
+            {
+                "event_id": f"telegram:assistente:{number}", "agent": "assistente",
+                "kind": "apply_authorisation", "position_id": number, "instant": "2026-10-23T18:04:05.123Z",
+                "created_at": "2026-10-23 18:04:05",
+            }
+            for number in range(1, 12)
+        ]
+        ordinary = {
+            "event_id": "telegram:assistente:12", "agent": "assistente", "body": "normal message",
+            "created_at": "2026-10-23 18:04:05",
+        }
+        acknowledgements: list[list[str]] = []
+        pending = [*rejected, ordinary]
+
+        def call(op: str, args: dict, role: str = "") -> dict:
+            if op == "telegram.inbox.pull":
+                return {"ok": True, "events": pending[:args["limit"]] if args["bot_role"] == "assistente" else []}
+            if op == "telegram.inbox.ack":
+                acknowledgements.append(args["event_ids"])
+                acknowledged = set(args["event_ids"])
+                pending[:] = [event for event in pending if event["event_id"] not in acknowledged]
+                return {"ok": True}
+            raise AssertionError(op)
+
+        monkeypatch.setattr(relay, "call", call)
+        assert relay.relay_once() == 0
+        assert relay.relay_once() == 1
+        assert acknowledgements == [
+            [*(f"telegram:assistente:{number}" for number in range(1, 11))],
+            ["telegram:assistente:11", "telegram:assistente:12"],
+        ]
+        with sqlite3.connect(database_path) as database:
+            delivered = database.execute("SELECT body FROM pending_user_messages WHERE source_id = ?", (ordinary["event_id"],)).fetchone()
+        assert delivered == ("normal message",)
+        lines = capsys.readouterr().err.splitlines()
+        assert len(lines) == 11
+        assert all(line == "[jht-telegram] discarded apply_authorisation reason=position_not_found" for line in lines)
+    finally:
+        sys.path.remove(str(skills))
+
+
 def test_service_imports_from_its_entrypoint_path_outside_the_repo(tmp_path: Path) -> None:
     entry = ROOT / "shared" / "telegram_service" / "bin" / "jht-telegram-service.py"
     script = (
