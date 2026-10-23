@@ -113,6 +113,8 @@ pub fn run() {
             onboarding::existing_team_assistant_start,
             onboarding::onboarding_existing_team_connect,
             onboarding::existing_team_reconfirm_summary,
+            onboarding::existing_team_link_status,
+            onboarding::existing_team_unlink,
             onboarding::onboarding_existing_team_readonly_connect,
             onboarding::onboarding_existing_team_reopen,
             onboarding::onboarding_podman_machine_recreate,

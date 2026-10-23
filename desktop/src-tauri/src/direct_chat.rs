@@ -756,6 +756,19 @@ pub(crate) fn persist_onboarding_host(
     persist_host(app, scope, host).map_err(|error| error.code)
 }
 
+/// Removes only this account's persisted connection configuration. It is used
+/// after the existing-team selection and candidate have been cleared.
+pub(crate) fn clear_persisted_host_at(
+    root: &Path,
+    scope: &AccountScope,
+) -> Result<(), &'static str> {
+    match fs::remove_file(connection_config_path_at(root, scope)) {
+        Ok(()) => Ok(()),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(_) => Err("storage_unavailable"),
+    }
+}
+
 fn load_host(
     app: &tauri::AppHandle,
     scope: &AccountScope,

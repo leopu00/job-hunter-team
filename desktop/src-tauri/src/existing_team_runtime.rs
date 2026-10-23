@@ -1267,6 +1267,20 @@ pub(crate) fn clear_for_rebind_at(
     Ok(())
 }
 
+/// Removes the account's persisted existing-team binding. The selection goes
+/// first, so an interruption can only leave a candidate to be reconnected,
+/// never a selection whose candidate has already gone away.
+pub(crate) fn clear_link_at(root: &Path, scope: &AccountScope) -> Result<(), &'static str> {
+    for name in [SELECTION_FILE, CANDIDATE_FILE] {
+        match fs::remove_file(path(root, scope, name)) {
+            Ok(()) => {}
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(_) => return Err("existing_team_runtime_unavailable"),
+        }
+    }
+    Ok(())
+}
+
 /// The host and team of the candidate this scope has, for the backend's own use
 /// (reopening a saved team). It never leaves the backend: no command returns it.
 pub(crate) fn candidate_identity_at(
