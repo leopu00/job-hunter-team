@@ -69,6 +69,18 @@ describe("Shell", () => {
     expect(currentLocation().path).toBe("/dashboard");
   });
 
+  it("ignores a dashboard read that settles after the Shell unmounts", async () => {
+    let resolve!: (value: ReturnType<typeof fixtureData>) => void;
+    vi.mocked(loadDashboard).mockReturnValueOnce(new Promise((done) => { resolve = done; }));
+    navigate("/dashboard", { replace: true });
+    const calls = vi.mocked(loadDashboard).mock.calls.length;
+    const page = render(<Shell />);
+
+    page.unmount();
+    await act(async () => { resolve(fixtureData()); });
+    expect(vi.mocked(loadDashboard)).toHaveBeenCalledTimes(calls + 1);
+  });
+
   it("has the web's navigation, in the app's language, and moves between pages", async () => {
     navigate("/dashboard", { replace: true });
     const user = userEvent.setup();
