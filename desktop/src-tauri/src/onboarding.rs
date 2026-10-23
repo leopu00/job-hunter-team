@@ -1675,6 +1675,58 @@ fn local_install_args(base: &[&str], channel_args: &[String]) -> Vec<String> {
 /// temporary file, through Windows PowerShell by its absolute path; each
 /// `JHT_PHASE` line it prints goes to the screen through `phase`.
 #[cfg(windows)]
+fn show_windows_support_notice_for_reused_runtime(phase: &dyn Fn(&'static str)) {
+    use crate::windows_runtime::{
+        installer_invocation, notice_message, powershell_path, INSTALL_PS1_SHA256,
+    };
+
+    // A production runtime is normally reused without fetching or executing
+    // install.ps1. That used to hide the Windows 10 support notice after the
+    // first run. This probe is advisory: an unavailable network, an outdated
+    // release, or a slow WMI read must never prevent a verified runtime from
+    // starting.
+    let Ok(channel) = release_channel::current() else { return };
+    let Ok(expected) = expected_installer_digest(release_channel::install_ps1_digest(
+        channel.as_ref(),
+        INSTALL_PS1_SHA256,
+    )) else { return };
+    let Ok(bytes) = download_verified_bytes(&release_channel::install_ps1_url(channel.as_ref()), expected) else {
+        return;
+    };
+    let channel_args = release_channel::install_ps1_args(channel.as_ref());
+    let _ = attest_then(bytes, expected, |installer| {
+        let dir = std::env::temp_dir().join(format!(
+            "jht-windows-notice-{}-{}",
+            std::process::id(),
+            SESSION_SEQUENCE.fetch_add(1, Ordering::Relaxed)
+        ));
+        fs::create_dir(&dir).map_err(|_| failure("storage_failed"))?;
+        let result = (|| {
+            crate::private_acl::protect_dir(&dir).map_err(|_| failure("permissions_failed"))?;
+            let script = dir.join("install.ps1");
+            fs::write(&script, installer.bytes()).map_err(|_| failure("storage_failed"))?;
+            crate::private_acl::protect_file(&script).map_err(|_| failure("permissions_failed"))?;
+            let shell = powershell_path(std::env::var_os("SystemRoot"));
+            let mut args = installer_invocation(&script, &channel_args);
+            args.push("-WindowsSupportNoticeOnly".into());
+            let (ended, _) = crate::runtime_host::run_program_lines_keeping_stderr(
+                shell.to_str().ok_or_else(|| failure("runtime_install_failed"))?,
+                args,
+                Duration::from_secs(15),
+                |line| {
+                    if let Some(message) = notice_message(line) {
+                        phase(message);
+                    }
+                },
+            );
+            installer_outcome(ended).map_err(failure)
+        })();
+        let _ = fs::remove_dir_all(&dir);
+        result
+    });
+}
+
+#[cfg(windows)]
 fn install_local_windows(
     app: &tauri::AppHandle,
     log: Option<&RuntimeLog>,
@@ -1703,6 +1755,7 @@ fn install_local_windows(
         if crate::windows_runtime::runtime_dir(std::env::var_os("LOCALAPPDATA"))
             .is_some_and(|dir| release_channel::installed_runtime_reusable(channel.as_ref(), &dir))
         {
+            show_windows_support_notice_for_reused_runtime(phase);
             trace_local_runtime("runtime", "install_reused");
             return Ok(wrapper);
         }

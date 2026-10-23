@@ -41,6 +41,7 @@
 # ║    -Branch <name>    Source branch (default: production)                 ║
 # ║    -PairingToken     Opaque token for VPS pairing (skips the wizard)     ║
 # ║    -SkipOnboard      Noninteractive install; do not launch the wizard    ║
+# ║    -WindowsSupportNoticeOnly  Read the Windows support warning only      ║
 # ║    -SourceSha        Test channel source commit (with next two options)  ║
 # ║    -Image            Test channel image reference                        ║
 # ║    -ExpectedImageDigest  Expected test image sha256                      ║
@@ -54,6 +55,7 @@ param(
   [string]$Branch = $(if ($env:JHT_BRANCH) { $env:JHT_BRANCH } else { 'production' }),
   [string]$PairingToken = '',
   [switch]$SkipOnboard,
+  [switch]$WindowsSupportNoticeOnly,
   [string]$SourceSha = '',
   [string]$Image = '',
   [string]$ExpectedImageDigest = ''
@@ -212,11 +214,26 @@ function Test-JhtWindows10Client {
   param([int]$ProductType, [int]$Build)
   return ($ProductType -eq 1 -and $Build -ge 10240 -and $Build -lt 22000)
 }
+function Get-Windows10SupportWarning {
+  # install.ps1 deliberately stays ASCII: Windows PowerShell 5.1 reads a
+  # BOM-less script in the legacy console encoding. The desktop has the full
+  # translated copy; this is what a person sees through iwr | iex.
+  param([string]$Language = [Globalization.CultureInfo]::CurrentUICulture.TwoLetterISOLanguageName)
+  switch ($Language.ToLowerInvariant()) {
+    'it' { return 'Podman non supporta piu Windows 10: puo funzionare, ma non lo garantiamo. Il sistema supportato e Windows 11.' }
+    'de' { return 'Podman unterstuetzt Windows 10 nicht mehr: Es kann funktionieren, aber wir garantieren es nicht. Unterstuetzt wird Windows 11.' }
+    'es' { return 'Podman ya no es compatible con Windows 10: puede funcionar, pero no lo garantizamos. El sistema compatible es Windows 11.' }
+    'fr' { return 'Podman ne prend plus en charge Windows 10 : cela peut fonctionner, mais nous ne le garantissons pas. Le systeme pris en charge est Windows 11.' }
+    'hu' { return 'A Podman mar nem tamogatja a Windows 10-et: mukodhet, de nem garantaljuk. A tamogatott rendszer a Windows 11.' }
+    'pt' { return 'O Podman ja nao suporta o Windows 10: pode funcionar, mas nao o garantimos. O sistema suportado e o Windows 11.' }
+    default { return 'Podman no longer supports Windows 10: it may work, but we do not guarantee it. The supported system is Windows 11.' }
+  }
+}
 function Show-WindowsSupportNotice {
   $edition = Get-JhtWindowsEdition
   if (-not $edition) { return }
   if (Test-JhtWindows10Client -ProductType $edition.ProductType -Build $edition.Build) {
-    Write-Warn 'Podman no longer supports Windows 10: it may work, but we do not guarantee it. The supported system is Windows 11.'
+    Write-Warn (Get-Windows10SupportWarning)
     Write-JhtNotice windows10_unsupported
   }
 }
@@ -579,6 +596,10 @@ function Invoke-Onboard {
 }
 
 # ── Main ──────────────────────────────────────────────────────────────────
+if ($WindowsSupportNoticeOnly) {
+  Show-WindowsSupportNotice
+  exit 0
+}
 Show-Header
 Test-System
 Test-WindowsSubsystem

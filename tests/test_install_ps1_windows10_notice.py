@@ -56,7 +56,7 @@ foreach ($name in ($env:JHT_IMPORT -split ',')) {
 exit 0
 """
 
-NOTICE_FUNCTIONS = ["Show-WindowsSupportNotice", "Test-JhtWindows10Client", "Write-JhtNotice", "Write-Warn"]
+NOTICE_FUNCTIONS = ["Show-WindowsSupportNotice", "Test-JhtWindows10Client", "Get-Windows10SupportWarning", "Write-JhtNotice", "Write-Warn"]
 
 
 def _run(tmp_path: Path, imports: list[str], body: str):
@@ -192,11 +192,44 @@ def test_the_system_check_shows_the_notice_and_never_stops_for_it():
 
 
 def test_the_installer_text_says_podman_and_may_work_never_microsoft():
-    notice = _function_text("Show-WindowsSupportNotice")
-    assert WARNING in notice
-    assert "Microsoft" not in notice
+    warning = _function_text("Get-Windows10SupportWarning")
+    assert WARNING in warning
+    assert "Microsoft" not in warning
     # Windows PowerShell 5.1 reads a BOM-less script as ANSI: the sentence stays ASCII.
-    assert notice.isascii()
+    assert warning.isascii()
+
+
+@pytest.mark.parametrize(
+    ("language", "expected"),
+    [
+        ("it", "Podman non supporta piu Windows 10"),
+        ("en", WARNING),
+        ("de", "Podman unterstuetzt Windows 10 nicht mehr"),
+        ("es", "Podman ya no es compatible con Windows 10"),
+        ("fr", "Podman ne prend plus en charge Windows 10"),
+        ("hu", "A Podman mar nem tamogatja a Windows 10-et"),
+        ("pt", "O Podman ja nao suporta o Windows 10"),
+        ("unknown", WARNING),
+    ],
+)
+def test_the_terminal_warning_uses_the_console_language(tmp_path, language, expected):
+    result = _run(
+        tmp_path,
+        ["Get-Windows10SupportWarning"],
+        f"[Console]::Out.WriteLine((Get-Windows10SupportWarning -Language '{language}'))\n",
+    )
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == expected
+
+
+def test_the_notice_only_switch_reads_no_runtime_or_network():
+    source = INSTALLER.read_text(encoding="utf-8")
+    switch = source.index("if ($WindowsSupportNoticeOnly) {")
+    main = source.index("Show-Header", switch)
+    assert switch < main
+    block = source[switch:main]
+    assert "Show-WindowsSupportNotice" in block
+    assert "Get-RuntimeFiles" not in block
 
 
 def test_the_two_installers_and_the_compiled_digest_are_the_same_file():
