@@ -649,6 +649,16 @@ function Invoke-Compose {
   & docker compose @files --project-directory $RuntimeDir @Args
 }
 
+# A failed `docker compose up` is the failure of the command that asked for it. What runs after it
+# (the broker's migration) calls native programs too, and $LASTEXITCODE would then say the start
+# went well: the setup went on to systemctl after "statfs ... no such file or directory" (T83).
+function Stop-OnFailedComposeUp {
+  param([int]$Code)
+  if ($Code -eq 0) { return }
+  Write-Err "compose_up_failed: il team non si e' avviato (docker compose up, codice $Code). Controlla 'jht logs'."
+  exit $Code
+}
+
 function Test-DockerReachable {
   # Docker c'e' ED e' raggiungibile? A differenza di Require-Docker NON esce:
   # serve a DECIDERE, non a pretendere.
@@ -1771,6 +1781,7 @@ function Ensure-Up {
       exit 1
     }
     Invoke-Compose 'up' '-d'
+    Stop-OnFailedComposeUp $LASTEXITCODE
     # Attendi che il container sia in stato running.
     $tries = 20
     while (-not (Test-ContainerUp)) {
@@ -2895,6 +2906,7 @@ switch ($Sub) {
       exit 1
     }
     Invoke-Compose 'up' '-d'
+    Stop-OnFailedComposeUp $LASTEXITCODE
     $null = Invoke-BrokerMigrateLegacyOnce
     break
   }
@@ -2923,6 +2935,7 @@ switch ($Sub) {
       exit 1
     }
     Invoke-Compose 'up' '-d'
+    Stop-OnFailedComposeUp $LASTEXITCODE
     $null = Invoke-BrokerMigrateLegacyOnce
     break
   }

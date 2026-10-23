@@ -757,7 +757,7 @@ def test_only_the_enabler_and_the_opt_in_probe_compile_a_docker_shim():
 # ---------------------------------------------------------------------------
 
 # Like Podman: a bind whose source folder is missing is refused, the container is not created.
-COMPOSE_UP_CASES = """  "compose "*" up -d") [ -d "$HOME/.jht" ] && [ -d "$HOME/Documents/Job Hunter Team" ] || { echo 'Error response from daemon: container create: statfs /mnt/c/Users/x/Documents/Job Hunter Team: no such file or directory' >&2; exit 1; } ;;"""
+COMPOSE_UP_CASES = """  "compose "*" up -d") [ "$FAKE_FAIL" = up ] && { echo 'Error: compose up failed' >&2; exit 3; }; [ -d "$HOME/.jht" ] && [ -d "$HOME/Documents/Job Hunter Team" ] || { echo 'Error response from daemon: container create: statfs /mnt/c/Users/x/Documents/Job Hunter Team: no such file or directory' >&2; exit 1; } ;;"""
 
 UP_FOLDERS_BODY = r"""
 function Test-PrivateJhtHomeAcl { $true }
@@ -767,17 +767,22 @@ $ComposeFile = 'docker-compose.yml'; $PodmanComposeFile = 'docker-compose.podman
 if (-not (Repair-MountOwnership)) { Add-Content -LiteralPath $env:FAKE_LOG -Value 'repair-refused'; exit 1 }
 Invoke-Compose 'up' '-d'
 Add-Content -LiteralPath $env:FAKE_LOG -Value "up-exit=$LASTEXITCODE"
+Stop-OnFailedComposeUp $LASTEXITCODE
+Add-Content -LiteralPath $env:FAKE_LOG -Value 'after-up'
 """
 
 
-def _up_with_folders(tmp_path, *, documents: bool):
+def _up_with_folders(tmp_path, *, documents: bool, fail: str = ""):
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir()
     _fake(bin_dir, "docker", COMPOSE_UP_CASES)
     if documents:
         (tmp_path / "Documents" / "Job Hunter Team").mkdir(parents=True)
         (tmp_path / "Documents" / "Job Hunter Team" / "cv.pdf").write_bytes(b"keep me")
-    return _run(tmp_path, WRAPPER, ["Repair-MountOwnership", "Invoke-Compose", "Write-Err"], UP_FOLDERS_BODY, {"RUNTIME": "podman"})
+    return _run(
+        tmp_path, WRAPPER, ["Repair-MountOwnership", "Invoke-Compose", "Stop-OnFailedComposeUp", "Write-Err"], UP_FOLDERS_BODY,
+        {"RUNTIME": "podman", "FAKE_FAIL": fail},
+    )
 
 
 def test_with_podman_up_creates_the_folders_the_compose_binds_on_a_new_machine(tmp_path):
@@ -785,11 +790,27 @@ def test_with_podman_up_creates_the_folders_the_compose_binds_on_a_new_machine(t
     result, calls = _up_with_folders(tmp_path, documents=False)
     assert result.returncode == 0, result.stdout + result.stderr
     assert (tmp_path / ".jht").is_dir() and (tmp_path / "Documents" / "Job Hunter Team").is_dir()
-    assert calls[-1] == "up-exit=0", calls
+    assert calls[-2:] == ["up-exit=0", "after-up"], calls
 
 
 def test_with_podman_up_leaves_an_existing_documents_folder_as_it_is(tmp_path):
     result, calls = _up_with_folders(tmp_path, documents=True)
     assert result.returncode == 0, result.stdout + result.stderr
     assert (tmp_path / "Documents" / "Job Hunter Team" / "cv.pdf").read_bytes() == b"keep me"
-    assert calls[-1] == "up-exit=0", calls
+    assert calls[-2:] == ["up-exit=0", "after-up"], calls
+
+
+def test_a_failed_compose_up_stops_jht_with_its_code_and_nothing_after_it_runs(tmp_path):
+    # before, the broker's migration ran after it and its own exit code said the start went well
+    result, calls = _up_with_folders(tmp_path, documents=True, fail="up")
+    assert result.returncode == 3, result.stdout + result.stderr
+    assert "compose_up_failed" in result.stdout + result.stderr
+    assert calls[-1] == "up-exit=3" and "after-up" not in calls, calls
+
+
+def test_every_compose_up_of_the_wrapper_is_followed_by_its_exit_code_check():
+    lines = WRAPPER.read_text(encoding="utf-8").splitlines()
+    ups = [i for i, line in enumerate(lines) if line.strip() == "Invoke-Compose 'up' '-d'"]
+    assert len(ups) == 3
+    for i in ups:
+        assert lines[i + 1].strip() == "Stop-OnFailedComposeUp $LASTEXITCODE", lines[i + 1]
