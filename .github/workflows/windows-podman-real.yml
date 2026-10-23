@@ -85,11 +85,20 @@ jobs:
       # Every run of a script goes through the same runner: powershell.exe 5.1
       # with the app's arguments, its output timestamped (JHT_PHASE lines show
       # where the time goes), its exit code and duration kept for the summary.
-      - name: Install (first, fresh machine)
+      # A new Windows user has no Documents\Job Hunter Team: the compose mounts it,
+      # and Podman, unlike Docker, does not create a missing bind-mount source (T83).
+      # The job checks it runs that case, and that the install leaves the folder.
+      - name: Install (first, fresh machine, a user with no Documents\Job Hunter Team)
         run: |
           $ErrorActionPreference = 'Continue'
           . "$env:GITHUB_WORKSPACE\scripts\ci\windows_podman_real_run.ps1"
+          $documents = Join-Path $env:USERPROFILE 'Documents\Job Hunter Team'
+          if (Test-Path -LiteralPath $documents) { throw "the runner already has $documents: this job would not see T83" }
           $code = Invoke-Timed 'install (first)' 'web\public\install.ps1' @('-SkipOnboard')
+          if ($code -eq 0 -and -not (Test-Path -LiteralPath $documents -PathType Container)) {
+            Write-Host "install.ps1 passed but left no $documents"
+            $code = 1
+          }
           exit $code
 
       - name: Start the container (jht up) and read its status
