@@ -128,6 +128,36 @@ function Quote-Sh {
   return "'$Value'"
 }
 
+# $true when $Id falls in one of the "container:host:size" ranges of a Podman ID map. An empty map
+# is the host's own IDs, and a form not known here is not judged: both count as mapped.
+function Test-IdInMap {
+  param($Entries, $Id)
+  if ($null -eq $Id) { return $true }
+  $list = @(foreach ($entry in @($Entries)) { if ($entry) { [string]$entry } })
+  if ($list.Count -eq 0) { return $true }
+  foreach ($entry in $list) {
+    if ($entry -notmatch '^(\d+):(\d+):(\d+)$') { return $true }
+    $start = [long]$Matches[1]
+    if ($Id -ge $start -and $Id -lt ($start + [long]$Matches[3])) { return $true }
+  }
+  return $false
+}
+
+# $Details is "<Config.User>|<json HostConfig.IDMappings>" of a container. $false only when the user
+# is numeric and its user namespace leaves out its uid or its gid: such a container never starts.
+function Test-ContainerMapsItsUser {
+  param([Parameter(Mandatory)][string]$Details)
+  $cut = $Details.IndexOf('|')
+  if ($cut -lt 0) { return $true }
+  if ($Details.Substring(0, $cut).Trim() -notmatch '^(\d+)(?::(\d+))?$') { return $true }
+  $uid = [long]$Matches[1]
+  $gid = if ($Matches[2]) { [long]$Matches[2] } else { $null }
+  $mappings = $null
+  try { $mappings = ConvertFrom-Json -InputObject $Details.Substring($cut + 1) } catch { return $true }
+  if (-not $mappings) { return $true }
+  return (Test-IdInMap -Entries $mappings.UidMap -Id $uid) -and (Test-IdInMap -Entries $mappings.GidMap -Id $gid)
+}
+
 function New-DockerShim {
   param(
     [Parameter(Mandatory)][string]$Destination,
@@ -662,7 +692,33 @@ if ($containerNeedsMigration) {
   Write-Host "  Migrated existing JHT container (project='$existingProject', cgroups='$existingCgroupManager'); volumes retained." -ForegroundColor Yellow
 }
 
-if ($metadataRepaired -or -not (& $Podman --connection $MachineName ps --format '{{.Names}}' | Where-Object { $_ -eq 'jht' })) {
+# A service whose user namespace does not map its own user never starts: Podman refuses it at every
+# start, "container uses ID mappings ... but doesn't map UID 1003" (T85, jht-telegram with the map
+# 1001:0:1 alone). Compose does not recreate a service whose configuration did not change, so a
+# container created so stayed so at every setup. As jht above: it is removed, its volumes stay, and
+# `jht up` creates it again.
+$sidecarRemoved = $false
+foreach ($sidecar in @('jht-broker', 'jht-telegram')) {
+  # No double quote inside a native argument (T71). A container that is not there: empty, and skipped.
+  [string]$sidecarDetails = (& { $ErrorActionPreference = 'Continue'; & $Podman --connection $MachineName inspect --type container $sidecar --format '{{.Config.User}}|{{json .HostConfig.IDMappings}}' 2>$null } | Select-Object -First 1)
+  if (-not $sidecarDetails.Trim() -or (Test-ContainerMapsItsUser -Details $sidecarDetails)) { continue }
+  # Only a container of our compose project: one with the same name made by something else is not ours
+  # to remove. The labels come whole as JSON, read here (T71).
+  [string]$sidecarLabelsJson = (& { $ErrorActionPreference = 'Continue'; & $Podman --connection $MachineName inspect --type container $sidecar --format '{{json .Config.Labels}}' 2>$null } | Select-Object -First 1)
+  $sidecarProject = ''
+  try { $sidecarProject = [string](ConvertFrom-Json -InputObject $sidecarLabelsJson).'com.docker.compose.project' } catch { $sidecarProject = '' }
+  if ($sidecarProject.Trim() -ne 'jht') {
+    Write-Host "  ${sidecar} does not map its own user, but it is not of the jht project: left as it is." -ForegroundColor Yellow
+    continue
+  }
+  [string]$sidecarRunning = (& { $ErrorActionPreference = 'Continue'; & $Podman --connection $MachineName inspect --type container $sidecar --format '{{.State.Running}}' 2>$null } | Select-Object -First 1)
+  if ($sidecarRunning.Trim() -eq 'true') { Invoke-Checked $Podman '--connection' $MachineName 'stop' '--time' '30' $sidecar | Out-Null }
+  Invoke-Checked $Podman '--connection' $MachineName 'rm' $sidecar | Out-Null
+  $sidecarRemoved = $true
+  Write-Host "  Recreating ${sidecar}: its user namespace did not map its own user; volumes retained." -ForegroundColor Yellow
+}
+
+if ($metadataRepaired -or $sidecarRemoved -or -not (& $Podman --connection $MachineName ps --format '{{.Names}}' | Where-Object { $_ -eq 'jht' })) {
   & (Join-Path $BinDir 'jht.ps1') up
   if ($LASTEXITCODE -ne 0) { throw 'The migrated JHT container did not start.' }
 }
