@@ -1668,6 +1668,44 @@ fn local_install_args(base: &[&str], channel_args: &[String]) -> Vec<String> {
         .collect()
 }
 
+/// `CurrentBuildNumber` is a numeric registry value stored as a string. Keep
+/// its parsing pure so the boundary for the Windows registry read is narrow.
+fn windows_build_number(value: &str) -> Option<u32> {
+    value.trim_end_matches('\0').parse().ok()
+}
+
+#[cfg(windows)]
+fn current_windows_build() -> Option<u32> {
+    use std::{ffi::c_void, mem::size_of};
+    use windows_sys::Win32::System::Registry::{
+        RegGetValueW, HKEY_LOCAL_MACHINE, RRF_RT_REG_SZ,
+    };
+
+    let subkey = "SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\0"
+        .encode_utf16()
+        .collect::<Vec<_>>();
+    let value = "CurrentBuildNumber\0".encode_utf16().collect::<Vec<_>>();
+    let mut buffer = [0u16; 16];
+    let mut bytes = (buffer.len() * size_of::<u16>()) as u32;
+    let status = unsafe {
+        RegGetValueW(
+            HKEY_LOCAL_MACHINE,
+            subkey.as_ptr(),
+            value.as_ptr(),
+            RRF_RT_REG_SZ,
+            std::ptr::null_mut(),
+            buffer.as_mut_ptr().cast::<c_void>(),
+            &mut bytes,
+        )
+    };
+    if status != 0 || bytes as usize > buffer.len() * size_of::<u16>() {
+        return None;
+    }
+    String::from_utf16(&buffer[..bytes as usize / size_of::<u16>()])
+        .ok()
+        .and_then(|value| windows_build_number(&value))
+}
+
 /// Windows: WSL first (the Podman machine runs in it), then the runtime that
 /// install.ps1 publishes, installed only when no verified wrapper is there:
 /// install.ps1 installs Podman when missing and creates the JHT machine.
@@ -1679,6 +1717,12 @@ fn show_windows_support_notice_for_reused_runtime(phase: &dyn Fn(&'static str)) 
     use crate::windows_runtime::{
         installer_invocation, notice_message, powershell_path, INSTALL_PS1_SHA256,
     };
+
+    // The Windows 11 (build 22000+) path cannot produce this Windows 10-only
+    // notice, so do not download or start a second PowerShell process there.
+    if current_windows_build().is_some_and(|build| build >= 22000) {
+        return;
+    }
 
     // A production runtime is normally reused without fetching or executing
     // install.ps1. That used to hide the Windows 10 support notice after the
@@ -5563,6 +5607,14 @@ mod tests {
         assert_eq!(events.last().unwrap().status, OnboardingProgressStatus::Done);
         let value = serde_json::to_value(notices[0]).unwrap();
         assert_eq!(value["status"], "notice");
+    }
+
+    #[test]
+    fn the_native_windows_build_reader_accepts_only_a_build_number() {
+        assert_eq!(super::windows_build_number("22000\0"), Some(22000));
+        assert_eq!(super::windows_build_number("19045"), Some(19045));
+        assert_eq!(super::windows_build_number("22000.1"), None);
+        assert_eq!(super::windows_build_number("not-a-build"), None);
     }
 
     #[test]

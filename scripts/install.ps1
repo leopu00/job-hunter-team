@@ -220,7 +220,7 @@ function Get-Windows10SupportWarning {
   # translated copy; this is what a person sees through iwr | iex.
   param([string]$Language = [Globalization.CultureInfo]::CurrentUICulture.TwoLetterISOLanguageName)
   switch ($Language.ToLowerInvariant()) {
-    'it' { return 'Podman non supporta piu Windows 10: puo funzionare, ma non lo garantiamo. Il sistema supportato e Windows 11.' }
+    'it' { return "Podman non supporta piu' Windows 10: puo' funzionare, ma non lo garantiamo. Il sistema supportato e' Windows 11." }
     'de' { return 'Podman unterstuetzt Windows 10 nicht mehr: Es kann funktionieren, aber wir garantieren es nicht. Unterstuetzt wird Windows 11.' }
     'es' { return 'Podman ya no es compatible con Windows 10: puede funcionar, pero no lo garantizamos. El sistema compatible es Windows 11.' }
     'fr' { return 'Podman ne prend plus en charge Windows 10 : cela peut fonctionner, mais nous ne le garantissons pas. Le systeme pris en charge est Windows 11.' }

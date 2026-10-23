@@ -202,7 +202,7 @@ def test_the_installer_text_says_podman_and_may_work_never_microsoft():
 @pytest.mark.parametrize(
     ("language", "expected"),
     [
-        ("it", "Podman non supporta piu Windows 10"),
+        ("it", "Podman non supporta piu' Windows 10: puo' funzionare, ma non lo garantiamo. Il sistema supportato e' Windows 11."),
         ("en", WARNING),
         ("de", "Podman unterstuetzt Windows 10 nicht mehr"),
         ("es", "Podman ya no es compatible con Windows 10"),
