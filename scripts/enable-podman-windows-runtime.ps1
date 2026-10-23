@@ -36,7 +36,7 @@ $ComposeProvider = Join-Path $RuntimeShimDir 'docker-compose.exe'
 function Write-JhtPhase {
   param([Parameter(Mandatory)][ValidateSet(
     'wsl_check', 'podman_install', 'podman_machine_init',
-    'podman_machine_start', 'runtime_download', 'image_pull'
+    'podman_machine_start', 'runtime_download', 'image_pull', 'team_restart'
   )][string]$Id)
   [Console]::Out.WriteLine("JHT_PHASE $Id")
 }
@@ -754,10 +754,20 @@ foreach ($sidecar in @('jht-broker', 'jht-telegram')) {
   Write-Host "  Recreating ${sidecar}: $sidecarReason; volumes retained." -ForegroundColor Yellow
 }
 
-if ($metadataRepaired -or $sidecarRemoved -or -not (& $Podman --connection $MachineName ps --format '{{.Names}}' | Where-Object { $_ -eq 'jht' })) {
-  & (Join-Path $BinDir 'jht.ps1') up
-  if ($LASTEXITCODE -ne 0) { throw 'The migrated JHT container did not start.' }
+# The setup always runs jht up (T102). Compose leaves what did not change as it is (same image, same
+# containers: a second setup on a Windows computer kept the very same jht) and recreates what did, a
+# new image above all, and the team restarts on it: what running the setup asks for. Before, jht up
+# ran only when jht was not running, so the image the setup had just pulled waited, unused, for a
+# later setup that found jht stopped (the desktop app never runs `jht upgrade`).
+# A team running on another image is told it restarts, in the log and in the app (JHT_PHASE).
+[string]$runningImage = (& { $ErrorActionPreference = 'Continue'; & $Podman --connection $MachineName inspect --type container jht --format '{{.ImageName}}' 2>$null } | Select-Object -First 1)
+$runningImage = $runningImage.Trim()
+if ($runningImage -and $runningImage -ne $canonicalImage) {
+  Write-JhtPhase team_restart
+  Write-Host "  The team restarts on the new runtime image: $canonicalImage (it ran on $runningImage)." -ForegroundColor Yellow
 }
+& (Join-Path $BinDir 'jht.ps1') up
+if ($LASTEXITCODE -ne 0) { throw 'The migrated JHT container did not start.' }
 
 Install-JhtContainerService -PodmanPath $Podman -UnitPath $containerUnitFile
 $currentUserSid = [Security.Principal.WindowsIdentity]::GetCurrent().User.Value

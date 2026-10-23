@@ -30,13 +30,16 @@ ENABLER = ROOT / "scripts" / "enable-podman-windows-runtime.ps1"
 
 FULL = {"UidMap": ["0:1:1001", "1001:0:1", "1002:1002:998999"], "GidMap": ["0:1:1001", "1001:0:1", "1002:1002:998999"]}
 SHORT = {"UidMap": ["1001:0:1"], "GidMap": ["1001:0:1"]}
+# The image the setup has just pulled ($canonicalImage), and the one a team may still run on.
+WANTED = "ghcr.io/leopu00/jht@sha256:" + "a" * 64
+OLDER = "ghcr.io/leopu00/jht@sha256:" + "b" * 64
 
 HARNESS = r"""
 $ErrorActionPreference = 'Stop'
 $tokens = $null; $errors = $null
 $ast = [System.Management.Automation.Language.Parser]::ParseFile($env:JHT_UNDER_TEST, [ref]$tokens, [ref]$errors)
 if ($errors.Count) { throw "parse: $($errors[0])" }
-$wanted = @('Test-IdInMap', 'Test-ContainerMapsItsUser', 'Invoke-Checked')
+$wanted = @('Test-IdInMap', 'Test-ContainerMapsItsUser', 'Invoke-Checked', 'Write-JhtPhase')
 $found = @($ast.FindAll({ param($n) $n -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $wanted -contains $n.Name }, $true))
 if ($found.Count -ne $wanted.Count) { throw 'functions not found' }
 foreach ($fn in $found) { Invoke-Expression $fn.Extent.Text }
@@ -49,13 +52,14 @@ $first = -1; $last = -1
 for ($i = 0; $i -lt $statements.Count; $i++) {
   $text = $statements[$i].Extent.Text
   if ($first -lt 0 -and $text -match '^\$sidecarRemoved = ') { $first = $i }
-  if ($first -ge 0 -and $text -match '^if \(\$metadataRepaired ') { $last = $i; break }
+  if ($first -ge 0 -and $text -match "^if \(\`$LASTEXITCODE -ne 0\) \{ throw 'The migrated JHT container") { $last = $i; break }
 }
 if ($first -lt 0 -or $last -lt $first) { throw 'sidecar block missing' }
 $Podman = $env:FAKE_PODMAN
 $MachineName = 'jht-podman'
 $BinDir = $env:FAKE_BIN
 $metadataRepaired = $false
+$canonicalImage = $env:FAKE_IMAGE_WANTED
 . ([scriptblock]::Create((@($statements[$first..$last]) | ForEach-Object { $_.Extent.Text }) -join "`n"))
 [Console]::Out.WriteLine("REMOVED=$sidecarRemoved")
 """
@@ -70,6 +74,7 @@ case "$1" in
     if [ ! -f "$FAKE_STATE/$name.details" ]; then echo "Error: no such object: \"$name\"" >&2; exit 125; fi
     case "$6" in
       *State.Running*) if [ -f "$FAKE_STATE/$name.running" ]; then echo true; else echo false; fi ;;
+      *ImageName*) if [ -f "$FAKE_STATE/$name.image" ]; then cat "$FAKE_STATE/$name.image"; else echo "$FAKE_IMAGE_WANTED"; fi ;;
       *CgroupManager*) if [ -f "$FAKE_STATE/$name.cgroups" ]; then cat "$FAKE_STATE/$name.cgroups"; else echo cgroupfs; fi ;;
       *Config.Labels*) if [ -f "$FAKE_STATE/$name.labels" ]; then cat "$FAKE_STATE/$name.labels"; else echo '{"com.docker.compose.project":"jht","com.docker.compose.service":"'"$name"'"}'; fi ;;
       *) cat "$FAKE_STATE/$name.details" ;;
@@ -111,7 +116,8 @@ def _run(tmp_path: Path, env: dict[str, str]):
 
 
 def _machine(tmp_path: Path, containers: dict[str, tuple[str, bool]], rm_fails: bool = False,
-             labels: dict[str, str] | None = None, cgroups: dict[str, str] | None = None):
+             labels: dict[str, str] | None = None, cgroups: dict[str, str] | None = None,
+             images: dict[str, str] | None = None):
     """containers: name -> (details, running); labels: name -> its labels JSON (default: of the jht
     project); cgroups: name -> its cgroup manager (default: cgroupfs). Returns the result, podman's
     calls, and whether jht up ran."""
@@ -119,6 +125,8 @@ def _machine(tmp_path: Path, containers: dict[str, tuple[str, bool]], rm_fails: 
     state.mkdir()
     for name, manager in (cgroups or {}).items():
         _write(state / f"{name}.cgroups", manager + "\n")
+    for name, image in (images or {}).items():
+        _write(state / f"{name}.image", image + "\n")
     for name, raw in (labels or {}).items():
         _write(state / f"{name}.labels", raw + "\n")
     for name, (details, running) in containers.items():
@@ -131,7 +139,7 @@ def _machine(tmp_path: Path, containers: dict[str, tuple[str, bool]], rm_fails: 
     (bin_dir / "jht.ps1").write_text(
         "Add-Content -LiteralPath (Join-Path $env:FAKE_STATE 'up.log') -Value \"jht $args\"\nexit 0\n", encoding="utf-8"
     )
-    env = {"FAKE_STATE": str(state), "FAKE_PODMAN": str(podman), "FAKE_BIN": str(bin_dir)}
+    env = {"FAKE_STATE": str(state), "FAKE_PODMAN": str(podman), "FAKE_BIN": str(bin_dir), "FAKE_IMAGE_WANTED": WANTED}
     if rm_fails:
         env["FAKE_RM_FAILS"] = "1"
     done = _run(tmp_path, env)
@@ -188,7 +196,9 @@ def test_services_that_map_their_users_are_left_alone(tmp_path):
     })
     assert done.returncode == 0, done.stdout + done.stderr
     assert not any(call.startswith(("rm", "stop")) for call in calls), calls
-    assert "REMOVED=False" in done.stdout and up == []
+    # jht up runs at every setup (T102): compose leaves sound, unchanged containers as they are
+    assert "REMOVED=False" in done.stdout and up == ["jht", "up"]
+    assert "team_restart" not in done.stdout
 
 
 def test_a_new_machine_without_the_services_goes_on_and_runs_jht_up(tmp_path):
@@ -196,7 +206,7 @@ def test_a_new_machine_without_the_services_goes_on_and_runs_jht_up(tmp_path):
     done, calls, up = _machine(tmp_path, {})
     assert done.returncode == 0, done.stdout + done.stderr
     assert not any(call.startswith(("rm", "stop")) for call in calls), calls
-    assert up == ["jht", "up"]
+    assert up == ["jht", "up"] and "team_restart" not in done.stdout
 
 
 def test_a_removal_that_fails_stops_the_setup(tmp_path):
@@ -232,3 +242,19 @@ def test_a_service_whose_cgroup_manager_cannot_be_read_is_not_judged_on_it(tmp_p
     assert done.returncode == 0, done.stdout + done.stderr
     assert not any(call.startswith(("rm", "stop")) for call in calls), calls
     assert "REMOVED=False" in done.stdout
+
+
+def test_a_team_on_another_image_is_told_it_restarts_on_the_new_one(tmp_path):
+    # T102: before, jht up ran only when jht was not running, and the image just pulled waited
+    done, calls, up = _machine(tmp_path, {"jht": (_details("", FULL), True)}, images={"jht": OLDER})
+    assert done.returncode == 0, done.stdout + done.stderr
+    assert "JHT_PHASE team_restart" in done.stdout
+    assert f"The team restarts on the new runtime image: {WANTED} (it ran on {OLDER})." in done.stdout
+    assert up == ["jht", "up"]
+
+
+def test_a_team_on_the_same_image_gets_jht_up_and_no_restart_notice(tmp_path):
+    done, calls, up = _machine(tmp_path, {"jht": (_details("", FULL), True)}, images={"jht": WANTED})
+    assert done.returncode == 0, done.stdout + done.stderr
+    assert "team_restart" not in done.stdout and "restarts" not in done.stdout
+    assert up == ["jht", "up"]
