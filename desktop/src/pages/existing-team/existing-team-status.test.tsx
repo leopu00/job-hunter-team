@@ -162,6 +162,9 @@ describe("Squadra on an existing team read only", () => {
     render(<Shell />);
     expect(await screen.findByTestId("team-status-actions")).toHaveTextContent(T.actionsFullLink);
     expect(screen.getByTestId("team-status-actions")).not.toHaveTextContent("sola lettura");
+    // the page's intro does not call the view read only either
+    expect(screen.getByText(T.introFullLink)).toBeInTheDocument();
+    expect(screen.queryByText(T.intro)).not.toBeInTheDocument();
   });
 
   it("shows the time of the read, and a newer one after Aggiorna", async () => {

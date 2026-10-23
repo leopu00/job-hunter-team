@@ -90,7 +90,7 @@ export default function ExistingTeamStatusPage(_props: PageProps) {
         </button>
       </div>
       <p className="text-[11px] mb-5" style={{ color: "var(--color-muted)" }}>
-        {t.intro}
+        {readOnly?.full ? t.introFullLink : t.intro}
       </p>
 
       {reading.kind === "read" && !reading.fields.containerRunning && (
