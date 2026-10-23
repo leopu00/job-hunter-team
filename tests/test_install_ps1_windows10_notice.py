@@ -78,7 +78,7 @@ def _run(tmp_path: Path, imports: list[str], body: str):
 
 def _with_edition(tmp_path: Path, edition: str):
     # The fake edition replaces the CIM read; the fixed language makes these
-    # OS-detection tests independent of the ThinkPad's console locale.
+    # OS-detection tests independent of the test machine's console locale.
     body = (
         f"function Get-JhtWindowsEdition {{ return {edition} }}\n"
         f"function Get-Windows10SupportWarning {{ return '{WARNING}' }}\n"
