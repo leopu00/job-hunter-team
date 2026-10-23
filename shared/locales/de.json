@@ -247,5 +247,6 @@
   "web_action_notice.team_stopped_from_web": "Das Team wurde über die Website gestoppt. Wenn du das nicht warst, prüfe, wer Zugriff auf dein Konto hat.",
   "web_action_notice.team_started_from_web": "Das Team wurde über die Website gestartet. Wenn du das nicht warst, prüfe, wer Zugriff auf dein Konto hat.",
   "web_action_notice.team_restarted_from_web": "Das Team wurde über die Website neu gestartet. Wenn du das nicht warst, prüfe, wer Zugriff auf dein Konto hat.",
-  "web_action_notice.directive_changed_from_web": "Über die Website wurde eine dauerhafte Anweisung für das Team hinzugefügt oder geändert. Wenn du das nicht warst, prüfe die Pinnwand in der App."
+  "web_action_notice.directive_changed_from_web": "Über die Website wurde eine dauerhafte Anweisung für das Team hinzugefügt oder geändert. Wenn du das nicht warst, prüfe die Pinnwand in der App.",
+  "cloud_sync_notice.token_rejected": "Das Gerät kann nicht mehr mit der Website synchronisieren: Die Website lehnt sein Sync-Token ab (abgelaufen oder widerrufen), und neue Stellen kommen dort nicht mehr an. Erzeuge auf der Website ein neues Token (Einstellungen › Cloud sync) und führe auf dem Gerät «jht cloud enable --token …» aus, oder verbinde das Team erneut über die App."
 }

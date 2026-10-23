@@ -247,5 +247,6 @@
   "web_action_notice.team_stopped_from_web": "El equipo se detuvo desde el sitio. Si no fuiste tú, revisa quién puede entrar en tu cuenta.",
   "web_action_notice.team_started_from_web": "El equipo se inició desde el sitio. Si no fuiste tú, revisa quién puede entrar en tu cuenta.",
   "web_action_notice.team_restarted_from_web": "El equipo se reinició desde el sitio. Si no fuiste tú, revisa quién puede entrar en tu cuenta.",
-  "web_action_notice.directive_changed_from_web": "Desde el sitio se añadió o cambió una orden permanente del equipo. Si no fuiste tú, revisa el tablón en la app."
+  "web_action_notice.directive_changed_from_web": "Desde el sitio se añadió o cambió una orden permanente del equipo. Si no fuiste tú, revisa el tablón en la app.",
+  "cloud_sync_notice.token_rejected": "El equipo ya no puede sincronizarse con el sitio: el sitio rechaza su token de sincronización (caducado o revocado) y las posiciones nuevas ya no llegan. Genera un token nuevo en el sitio (Ajustes › Cloud sync) y ejecuta «jht cloud enable --token …» en el equipo, o vuelve a conectar el equipo desde la app."
 }

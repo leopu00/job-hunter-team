@@ -58,6 +58,7 @@ import {
 } from '../lib/cloud-push-awaiting.js';
 import { ReceiptKeyInvalid } from '../../../shared/cloud/receipt-ids.js';
 import { instantKey, noticeWebAction, noticeWebActions } from '../lib/web-action-notice.js';
+import { noticeRefusedToken } from '../lib/cloud-sync-notice.js';
 import {
   createTeamCommandsExecutor,
   createTeamCommandsLane as createLane,
@@ -4210,6 +4211,17 @@ export async function maybePeriodicPush(options = {}) {
     console.error(pc.yellow(
       `  periodic-push ${outcome.state?.status || 'failed'}; retry automatico (${outcome.state?.consecutive_failures || 1} fallimenti consecutivi).`
     ));
+  }
+
+  // A token the website refuses (expired, revoked) fails every push from now on,
+  // and the website cannot say so: the box tells the user, once per token.
+  if (outcome.state?.status === 'auth_failed') {
+    try {
+      const config = options.config || (await loadCloudConfig());
+      outcome.tokenNotice = await (options.noticeRefusedToken || noticeRefusedToken)(outcome.state, config?.token, {
+        log: (msg) => { if (!silent) console.error(pc.yellow(`  ${msg}`)); },
+      });
+    } catch { /* best-effort: the push's own outcome stands */ }
   }
   return outcome;
 }
