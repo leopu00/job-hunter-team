@@ -1826,6 +1826,9 @@ fn chat_failure(code: i32, default: &'static str) -> &'static str {
         128 => "persist_failed",
         // The image has no fence for the user's words: older than the chat, the same «update the team».
         129 => "chat_runtime_outdated",
+        // The agent is at an otherwise ready prompt, but has a draft. The transport left both
+        // that draft and the user's message untouched.
+        130 => "composer_has_text",
         // An answer the team did not take: the question is no longer open (answered, expired), an
         // option it does not have or words it does not take, a question it does not know, or a write
         // that failed. The page has a sentence for each.
@@ -2993,6 +2996,7 @@ mod tests {
             (127, "read_failed"),
             (128, "persist_failed"),
             (129, "chat_runtime_outdated"),
+            (130, "composer_has_text"),
             (114, "chat_runtime_outdated"),
             (115, "answer_failed"),
             (116, "not_found"),
@@ -3033,6 +3037,7 @@ mod tests {
             (122, "agent_not_running"),
             (119, "agent_not_at_prompt"),
             (129, "chat_runtime_outdated"),
+            (130, "composer_has_text"),
             (1, "read_failed"),
             (255, "tunnel_unavailable"),
         ] {

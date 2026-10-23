@@ -30,6 +30,7 @@ const MAX_WRAPPER_BYTES: u64 = 2 * 1024 * 1024;
 const PREPARE_TIMEOUT: Duration = Duration::from_secs(30 * 60);
 const COMMAND_TIMEOUT: Duration = Duration::from_secs(8 * 60);
 pub(crate) const SNAPSHOT_TIMEOUT: Duration = Duration::from_secs(25);
+const TEAM_START_ATTEMPTS: usize = 2;
 const LOCAL_CONTAINER_VERIFY_TIMEOUT: Duration = Duration::from_secs(10);
 const LOCAL_CONTAINER_VERIFY_ATTEMPTS: usize = 6;
 const LOCAL_CONTAINER_VERIFY_INTERVAL: Duration = Duration::from_secs(2);
@@ -536,15 +537,15 @@ impl OnboardingDiagnosticSink {
         });
     }
 
-    fn record_boundary(
+    fn record_boundary<T>(
         &self,
         request_id: &'static str,
         stage: OnboardingProgressStage,
         started: Instant,
-        result: &Result<(), OnboardingError>,
+        result: &Result<T, OnboardingError>,
     ) {
         let (status, code, retryable, exit_category) = match result {
-            Ok(()) => (
+            Ok(_) => (
                 OnboardingProgressStatus::Done,
                 None,
                 None,
@@ -554,7 +555,11 @@ impl OnboardingDiagnosticSink {
                 OnboardingProgressStatus::Error,
                 Some(error.code.to_owned()),
                 Some(error.retryable),
-                OnboardingDiagnosticExitCategory::Unavailable,
+                if error.code.contains("timeout") {
+                    OnboardingDiagnosticExitCategory::Timeout
+                } else {
+                    OnboardingDiagnosticExitCategory::Unavailable
+                },
             ),
         };
         self.record(OnboardingDiagnosticRecord {
@@ -1721,7 +1726,7 @@ fn current_windows_build() -> Option<u32> {
 #[cfg(windows)]
 fn show_windows_support_notice_for_reused_runtime(phase: &dyn Fn(&'static str)) {
     use crate::windows_runtime::{
-        installer_invocation, notice_message, powershell_path, INSTALL_PS1_SHA256,
+        installer_invocation, installer_outcome, notice_message, powershell_path, INSTALL_PS1_SHA256,
     };
 
     // The Windows 11 (build 22000+) path cannot produce this Windows 10-only
@@ -4169,7 +4174,19 @@ pub(crate) fn onboarding_provider_login(
         }
     }
     *slot = None;
-    let reporter = ProgressReporter::new(on_progress);
+    let diagnostics = OnboardingDiagnosticSink::new(
+        &app,
+        scope.scope(),
+        OnboardingDiagnosticHostKind::from_host(&host),
+    );
+    let progress_diagnostics = diagnostics.clone();
+    let reporter = ProgressReporter::with_emitter(move |event| {
+        let _ = on_progress.send(event.clone());
+        if let Some(diagnostics) = progress_diagnostics.as_ref() {
+            diagnostics.record_progress(&event);
+        }
+    });
+    let runtime_log = RuntimeLog::new(&app);
     let login_started = Instant::now();
     reporter.send(
         OnboardingProgressStage::Login,
@@ -4258,6 +4275,9 @@ pub(crate) fn onboarding_provider_login(
     let (child, stdin, stdout, stderr, id, provider) = match setup {
         Ok(value) => value,
         Err(error) => {
+            if let Some(log) = runtime_log.as_ref() {
+                log.record_onboarding_status("provider_login", Err(error.code), login_started.elapsed());
+            }
             reporter.send(
                 OnboardingProgressStage::Login,
                 OnboardingProgressStatus::Error,
@@ -4286,6 +4306,7 @@ pub(crate) fn onboarding_provider_login(
     let waiter = Arc::clone(&child);
     let exit_channel = on_event.clone();
     let exit_pending_input = Arc::clone(&pending_input);
+    let login_runtime_log = runtime_log.clone();
     thread::spawn(move || {
         let mut next_heartbeat = PROGRESS_HEARTBEAT_INTERVAL;
         loop {
@@ -4306,6 +4327,13 @@ pub(crate) fn onboarding_provider_login(
                     let _ = exit_channel.send(InteractiveEvent::Exit {
                         code: status.code(),
                     });
+                    if let Some(log) = login_runtime_log.as_ref() {
+                        log.record_onboarding_status(
+                            "provider_login",
+                            Ok(status.code().unwrap_or(-1)),
+                            login_started.elapsed(),
+                        );
+                    }
                     if status.success() {
                         reporter.send(
                             OnboardingProgressStage::Login,
@@ -4331,6 +4359,13 @@ pub(crate) fn onboarding_provider_login(
                         *pending = None;
                     }
                     let _ = exit_channel.send(InteractiveEvent::Exit { code: None });
+                    if let Some(log) = login_runtime_log.as_ref() {
+                        log.record_onboarding_status(
+                            "provider_login",
+                            Err(error.code),
+                            login_started.elapsed(),
+                        );
+                    }
                     reporter.send(
                         OnboardingProgressStage::Login,
                         OnboardingProgressStatus::Error,
@@ -4475,16 +4510,18 @@ fn start_team_impl(
     app: &tauri::AppHandle,
     scope: &AccountScope,
     validated: &ValidatedHost,
+    log: Option<&RuntimeLog>,
 ) -> Result<(), OnboardingError> {
     match validated {
         ValidatedHost::Local => {
             let wrapper = wrapper_path(app).ok_or_else(|| failure("runtime_missing"))?;
-            ensure_team_started(run_scoped_local(
+            ensure_team_started(run_scoped_local_logged(
                 app,
                 scope,
                 &wrapper,
                 LocalCliOperation::TeamStart,
                 PREPARE_TIMEOUT,
+                log,
             ))
         }
         ValidatedHost::Vps { .. } => ensure_team_started(run_ssh(
@@ -4605,12 +4642,26 @@ fn verified_team_snapshot(
     app: &tauri::AppHandle,
     scope: &AccountScope,
     validated: &ValidatedHost,
+    log: Option<&RuntimeLog>,
 ) -> Result<OnboardingSnapshot, OnboardingError> {
-    let snapshot = snapshot_impl(app, scope, validated)?;
+    let snapshot = snapshot_logged(app, scope, validated, log)?.0;
     if !snapshot.assistant_running || !snapshot.captain_running {
         return Err(failure("team_verify_failed"));
     }
     Ok(snapshot)
+}
+
+/// On a cold Windows runtime an agent spawn can exhaust the wrapper's own
+/// short guard while it keeps warming the provider. `jht team start` is
+/// idempotent, so one native retry is safe and keeps the setup in its working
+/// state instead of showing a red failure for work that is still progressing.
+fn retry_cold_windows_team_start(is_windows: bool, is_local: bool, code: &str) -> bool {
+    is_windows
+        && is_local
+        && matches!(
+            code,
+            "timeout" | "team_start_failed" | "snapshot_failed" | "team_verify_failed"
+        )
 }
 
 #[tauri::command]
@@ -4631,11 +4682,23 @@ pub(crate) async fn onboarding_team_start(
     }
     let scope_state = scopes.inner().clone();
     let worker_expected = expected.clone();
+    let diagnostics = OnboardingDiagnosticSink::new(
+        &app,
+        &expected,
+        OnboardingDiagnosticHostKind::from_host(&host),
+    );
+    let runtime_log = RuntimeLog::new(&app);
     let result = tauri::async_runtime::spawn_blocking(move || {
         let _scope = scope_state
             .lock_expected(&worker_expected)
             .map_err(failure)?;
-        let reporter = ProgressReporter::new(on_progress);
+        let progress_diagnostics = diagnostics.clone();
+        let reporter = ProgressReporter::with_emitter(move |event| {
+            let _ = on_progress.send(event.clone());
+            if let Some(diagnostics) = progress_diagnostics.as_ref() {
+                diagnostics.record_progress(&event);
+            }
+        });
         reporter.run(
             OnboardingProgressStage::Team,
             "ui_team_start",
@@ -4645,9 +4708,59 @@ pub(crate) async fn onboarding_team_start(
                 let validated = validate_host(&app, &host).map_err(failure)?;
                 let limits =
                     start_limits_gate(read_start_limits(&app, &worker_expected, &validated))?;
-                start_team_impl(&app, &worker_expected, &validated)?;
-                let snapshot = verified_team_snapshot(&app, &worker_expected, &validated)?;
-                Ok(with_start_limits(snapshot, limits))
+                let is_local = matches!(&validated, ValidatedHost::Local);
+                for attempt in 0..TEAM_START_ATTEMPTS {
+                    let started = Instant::now();
+                    let start = start_team_impl(
+                        &app,
+                        &worker_expected,
+                        &validated,
+                        runtime_log.as_ref(),
+                    );
+                    if let Some(diagnostics) = diagnostics.as_ref() {
+                        diagnostics.record_boundary(
+                            if attempt == 0 { "team-start-command" } else { "team-start-retry" },
+                            OnboardingProgressStage::Team,
+                            started,
+                            &start,
+                        );
+                    }
+                    if let Err(error) = start {
+                        if attempt + 1 < TEAM_START_ATTEMPTS
+                            && retry_cold_windows_team_start(cfg!(windows), is_local, error.code)
+                        {
+                            reporter.phase("ui_team_wait");
+                            continue;
+                        }
+                        return Err(error);
+                    }
+                    let started = Instant::now();
+                    let snapshot = verified_team_snapshot(
+                        &app,
+                        &worker_expected,
+                        &validated,
+                        runtime_log.as_ref(),
+                    );
+                    if let Some(diagnostics) = diagnostics.as_ref() {
+                        diagnostics.record_boundary(
+                            if attempt == 0 { "team-start-verify" } else { "team-retry-verify" },
+                            OnboardingProgressStage::Team,
+                            started,
+                            &snapshot,
+                        );
+                    }
+                    match snapshot {
+                        Ok(snapshot) => return Ok(with_start_limits(snapshot, limits)),
+                        Err(error)
+                            if attempt + 1 < TEAM_START_ATTEMPTS
+                                && retry_cold_windows_team_start(cfg!(windows), is_local, error.code) =>
+                        {
+                            reporter.phase("ui_team_wait");
+                        }
+                        Err(error) => return Err(error),
+                    }
+                }
+                Err(failure("team_start_failed"))
             },
         )
     })
@@ -5016,8 +5129,9 @@ pub(crate) async fn onboarding_resume_team_start(
                 resume_team_prerequisite(&before)?;
                 let limits =
                     start_limits_gate(read_start_limits(&app, &worker_expected, &validated))?;
-                start_team_impl(&app, &worker_expected, &validated)?;
-                let snapshot = verified_team_snapshot(&app, &worker_expected, &validated)?;
+                let runtime_log = RuntimeLog::new(&app);
+                start_team_impl(&app, &worker_expected, &validated, runtime_log.as_ref())?;
+                let snapshot = verified_team_snapshot(&app, &worker_expected, &validated, runtime_log.as_ref())?;
                 Ok(with_start_limits(snapshot, limits))
             },
         )
@@ -5668,6 +5782,13 @@ mod tests {
             std::time::Instant::now(),
             &Ok(snapshot),
         );
+        let team_timeout = Err::<(), _>(failure("timeout"));
+        sink.record_boundary(
+            "team-start-command",
+            OnboardingProgressStage::Team,
+            std::time::Instant::now(),
+            &team_timeout,
+        );
         let bytes = fs::read(&sink.path).unwrap();
         assert!(bytes.len() <= DIAGNOSTIC_MAX_BYTES);
         let source = String::from_utf8(bytes).unwrap();
@@ -5691,6 +5812,8 @@ mod tests {
         }
         assert!(source.contains("\"code\":\"container_not_ready\""));
         assert!(source.contains("\"exitCategory\":\"nonzero\""));
+        assert!(source.contains("\"code\":\"timeout\""));
+        assert!(source.contains("\"exitCategory\":\"timeout\""));
         assert!(
             source.contains("\"snapshot\":{\"runtimeInstalled\":true,\"containerRunning\":false")
         );
@@ -7112,6 +7235,18 @@ exit 0
         }
         assert!(failure("team_start_failed").retryable);
         assert!(failure("team_verify_failed").retryable);
+    }
+
+    #[test]
+    fn only_the_retryable_cold_windows_team_outcomes_start_once_more() {
+        for code in ["timeout", "team_start_failed", "snapshot_failed", "team_verify_failed"] {
+            assert!(super::retry_cold_windows_team_start(true, true, code), "{code}");
+        }
+        for code in ["disk_low", "provider_limits_exhausted", "runtime_missing"] {
+            assert!(!super::retry_cold_windows_team_start(true, true, code), "{code}");
+        }
+        assert!(!super::retry_cold_windows_team_start(false, true, "timeout"));
+        assert!(!super::retry_cold_windows_team_start(true, false, "timeout"));
     }
 
     #[test]

@@ -14,6 +14,7 @@ import {
   localIdentitySelected,
   readLocalProfile,
   resetPlaygroundLocalProfile,
+  selectSavedLocalProfile,
 } from "./local-profile";
 
 vi.mock("./desktop-account-scope", () => ({
@@ -121,6 +122,20 @@ describe("local identity persistence", () => {
     clearLocalIdentitySelection();
     expect(localIdentitySelected()).toBe(false);
     expect(readLocalProfile()?.displayName).toBe("Ada Locale");
+  });
+
+  it("selects a saved profile without reopening its native scope", async () => {
+    vi.mocked(createDesktopLocalProfile).mockResolvedValue({ profileId: "opaque-profile-a" });
+    await createAndActivateLocalProfile("Ada Locale");
+    clearLocalIdentitySelection();
+    vi.clearAllMocks();
+
+    expect(selectSavedLocalProfile()).toEqual({
+      profileId: "opaque-profile-a",
+      displayName: "Ada Locale",
+    });
+    expect(localIdentitySelected()).toBe(true);
+    expect(activateDesktopLocalScope).not.toHaveBeenCalled();
   });
 
   it("forgets renderer-local profile state only after native migration committed", async () => {

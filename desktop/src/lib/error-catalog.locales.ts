@@ -22,6 +22,13 @@ function tr(
 }
 
 const COPY_BY_ENGLISH_TEXT: Readonly<Record<string, ErrorTranslations>> = {
+  "There is unsent text in the agent’s composer.": {
+    de: ["Im Eingabefeld des Agenten steht noch nicht gesendeter Text.", "Entscheide zuerst im Terminal des Agenten, ob du ihn senden oder löschen möchtest; deine Nachricht wurde nicht gesendet."],
+    es: ["Hay texto sin enviar en el cuadro de redacción del agente.", "Decide primero en el terminal del agente si enviarlo o borrarlo; tu mensaje no se ha enviado."],
+    fr: ["Du texte non envoyé se trouve dans la zone de saisie de l’agent.", "Décide d’abord dans le terminal de l’agent s’il faut l’envoyer ou l’effacer ; ton message n’a pas été envoyé."],
+    hu: ["Az ügynök beviteli mezőjében elküldetlen szöveg van.", "Előbb az ügynök termináljában döntsd el, elküldöd vagy törlöd-e; az üzeneted nem lett elküldve."],
+    pt: ["Há texto por enviar na caixa de escrita do agente.", "Decide primeiro no terminal do agente se o envias ou apagas; a tua mensagem não foi enviada."],
+  },
   "This VPS was set up before the app marked it as yours: you can read it from here, but not write to it.": {
     de: ["Dieser VPS wurde eingerichtet, bevor die App ihn als deinen markiert hat: Du kannst ihn von hier lesen, aber nicht beschreiben.", "Bestätige mit „Das ist mein VPS“, dass er dir gehört, und versuche es dann erneut."],
     es: ["Este VPS se creó antes de que la app lo marcara como tuyo: desde aquí se puede leer, pero no escribir.", "Confirma que es tuyo con «Es mi VPS» y vuelve a intentarlo."],
@@ -1490,6 +1497,7 @@ export const ERROR_CATALOG_LOCALES: Readonly<Record<string, ErrorTranslations>> 
   agent_unavailable: translated("The agent cannot receive the message right now."),
   agent_busy: translated("The agent is working: the message was not sent."),
   agent_not_at_prompt: translated("The agent is not at its prompt: its terminal shows a menu, a sign-in, a permission question or text already typed."),
+  composer_has_text: translated("There is unsent text in the agent’s composer."),
   agent_stuck: translated("The agent is not responding."),
   pairing_token_missing: translated("A team on a VPS needs your Google account."),
   pairing_token_invalid: translated("Your account session is no longer valid."),

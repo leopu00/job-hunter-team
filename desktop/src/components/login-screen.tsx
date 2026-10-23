@@ -15,9 +15,9 @@ import {
   type SignInOptions,
 } from "../lib/supabase";
 import {
-  activateSavedLocalProfile,
   createAndActivateLocalProfile,
   readLocalProfile,
+  selectSavedLocalProfile,
   type LocalProfile,
 } from "../lib/local-profile";
 import { describeError } from "../lib/error-catalog";
@@ -41,7 +41,7 @@ export interface LoginScreenProps {
   configured?: boolean;
   readLocal?: () => LocalProfile | null;
   createLocal?: (displayName: string) => Promise<LocalProfile>;
-  activateLocal?: () => Promise<LocalProfile>;
+  selectLocal?: () => LocalProfile;
   onLocalReady?: () => void;
   onChooseGoogle?: () => boolean | Promise<boolean>;
   onResetLocalPlayground?: () => Promise<void>;
@@ -65,7 +65,7 @@ export function LoginScreen({
   configured = supabaseConfigured,
   readLocal = readLocalProfile,
   createLocal = createAndActivateLocalProfile,
-  activateLocal = activateSavedLocalProfile,
+  selectLocal = selectSavedLocalProfile,
   onLocalReady = () => goTo(DASHBOARD_PAGE),
   onChooseGoogle,
   onResetLocalPlayground,
@@ -151,14 +151,16 @@ export function LoginScreen({
     }
     setLocalBusy(true);
     try {
-      await activateLocal();
+      // Do not carry an IPC scope transition across a WebView navigation.
+      // DashboardApp activates and validates this saved capability.
+      selectLocal();
       onLocalReady();
     } catch {
       setLocalError(true);
     } finally {
       setLocalBusy(false);
     }
-  }, [activateLocal, onLocalReady, readLocal]);
+  }, [onLocalReady, readLocal, selectLocal]);
 
   const createLocalIdentity = useCallback(async (event: React.FormEvent) => {
     event.preventDefault();

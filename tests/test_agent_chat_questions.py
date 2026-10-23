@@ -45,7 +45,7 @@ def box(tmp_path):
     home.mkdir()
     db = home / "jobs.db"
     base = {**os.environ, "JHT_DB": str(db), "JHT_HOME": str(home), "PYTHONDONTWRITEBYTECODE": "1",
-            "JHT_EXTERNAL_CONTENT_NONCE": NONCE, "JHT_LANG": "it"}
+            "JHT_EXTERNAL_CONTENT_NONCE": NONCE, "JHT_LANG": "it", "JHT_CHAT_PROMPT_WAIT": "0"}
     seed = subprocess.run([sys.executable, "-c", "from _db import get_db, ensure_schema; c=get_db(); ensure_schema(c); c.commit(); c.close()"],
                           cwd=SKILLS, env=base, capture_output=True, text=True)
     assert seed.returncode == 0, seed.stderr

@@ -864,7 +864,18 @@ export default function AgentsPanel({ search }: PageProps) {
                   </div>
                   {tab === "chat" && CHAT_ROLES.has(current.role) ? (
                     AgentChatPane ? (
-                      <AgentChatPane role={current.role as ChatRole} />
+                      <div
+                        data-testid="panel-chat-pane"
+                        className="mt-2 min-w-0 overflow-hidden rounded-md border"
+                        style={{
+                          height: "min(46rem, calc(100svh / var(--zoom, 1) - 12rem))",
+                          minHeight: "28rem",
+                          background: "var(--color-void)",
+                          borderColor: "var(--color-border)",
+                        }}
+                      >
+                        <AgentChatPane role={current.role as ChatRole} />
+                      </div>
                     ) : (
                       <p className="text-[11px] text-[var(--color-muted)]">{fill(t.chatSoon, { name: displayName(current.session) })}</p>
                     )

@@ -1,7 +1,7 @@
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import DirectChatScreen, { newLineAt, systemLineText } from "./DirectChatScreen";
+import DirectChatScreen, { groupRepeatedMessages, newLineAt, renderChatText, systemLineText } from "./DirectChatScreen";
 import type {
   VoiceInputBridge,
   VoiceInputSnapshot,
@@ -640,6 +640,39 @@ describe("DirectChatScreen: where the text goes, and when it is delivered", () =
     expect(systemLineText({ ...line("mail_not_taken"), role: "agent" }, codes)).toBe("Testo");
   });
 
+  it("renders the harmless emphasis from old auto-reports and drops all other HTML tags", () => {
+    const { container } = render(<>{renderChatText('Auto-report <i>Captain</i> <script>ignored</script>')}</>);
+    expect(container.querySelector("i")).toBeNull();
+    expect(container.querySelector("em")).toHaveTextContent("Captain");
+    expect(container).toHaveTextContent("Auto-report Captain ignored");
+    expect(container.textContent).not.toContain("<script>");
+  });
+
+  it("groups consecutive automatic updates into one latest bubble with a count", () => {
+    const messages = [
+      { id: "u1", role: "agent" as const, text: "Captain update — Hi! I'm here", at: 1, kind: "info" as const },
+      { id: "u2", role: "agent" as const, text: "Captain update — Hi! I'm here", at: 2, kind: "info" as const },
+      { id: "u3", role: "agent" as const, text: "Captain update — Hi! I'm here", at: 3, kind: "info" as const },
+      { id: "u4", role: "agent" as const, text: "Captain update — Hi! I'm here", at: 4, kind: "info" as const },
+    ];
+    const grouped = groupRepeatedMessages(messages.map((message) => ({ type: "message" as const, at: message.at, key: `m:${message.id}`, message })));
+    expect(grouped).toHaveLength(1);
+    expect(grouped[0]).toMatchObject({ key: "m:u4", repeated: 4 });
+  });
+
+  it("keeps repeated updates apart when their suggested replies differ", () => {
+    const messages = [
+      { id: "u1", role: "agent" as const, text: "Captain update", at: 1, kind: "info" as const, suggestions: ["Read it", "Later"] },
+      { id: "u2", role: "agent" as const, text: "Captain update", at: 2, kind: "info" as const, suggestions: ["Open details", "Later"] },
+    ];
+    const grouped = groupRepeatedMessages(messages.map((message) => ({ type: "message" as const, at: message.at, key: `m:${message.id}`, message })));
+    expect(grouped).toHaveLength(2);
+    expect(grouped.map((item) => item.type === "message" ? item.message.suggestions : [])).toEqual([
+      ["Read it", "Later"],
+      ["Open details", "Later"],
+    ]);
+  });
+
   it("a system line with a code the app does not know, or a code on another role, keeps the words it came with", async () => {
     viewport(1280, 800);
     const { mock } = client();
@@ -672,6 +705,25 @@ describe("DirectChatScreen: where the text goes, and when it is delivered", () =
     expect(screen.getByRole("textbox", { name: "Scrivi a Capitano" })).toHaveValue("1");
     expect(screen.queryByTestId("direct-chat-sent")).toBeNull();
     // the message the composer showed for a moment is gone from the transcript: it was never delivered
+    expect(within(screen.getByTestId("direct-chat-transcript")).queryByText("Tu")).toBeNull();
+  });
+
+  it("an agent with a draft: preserves both drafts and explains that the message was not delivered", async () => {
+    viewport(1280, 800);
+    const { mock } = client();
+    mock.send = vi.fn(async () => {
+      throw { code: "composer_has_text" };
+    });
+    const user = userEvent.setup();
+    render(<DirectChatScreen client={mock} />);
+    await screen.findByText("Messaggio dalla VPS");
+    await user.type(screen.getByRole("textbox", { name: "Scrivi a Capitano" }), "non sovrascrivere{Enter}");
+    await waitFor(() =>
+      expect(screen.getByTestId("direct-chat-status")).toHaveTextContent(ERROR_CATALOG.composer_has_text.text.it),
+    );
+    expect(screen.getByTestId("direct-chat-status")).not.toHaveTextContent("composer_has_text");
+    expect(screen.getByRole("textbox", { name: "Scrivi a Capitano" })).toHaveValue("non sovrascrivere");
+    expect(screen.queryByTestId("direct-chat-sent")).toBeNull();
     expect(within(screen.getByTestId("direct-chat-transcript")).queryByText("Tu")).toBeNull();
   });
 

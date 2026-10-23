@@ -52,7 +52,21 @@ case "$cmd" in
     # A screen chosen by the test: the agent is somewhere other than its prompt.
     if [ -f "$S/screen" ]; then cat "$S/screen"; exit 0; fi
     [ -f "$S/transcript" ] && cat "$S/transcript"
-    printf '❯ %s\n' "$(cat "$S/composer" 2>/dev/null)" ;;
+    printf '╭──────────────────────────────────────────────╮\n│ ❯ %s │\n╰──────────────────────────────────────────────╯\n  ? for shortcuts\n' "$(cat "$S/composer" 2>/dev/null)" ;;
+  load-buffer)
+    while [ "$1" != "-b" ] && [ $# -gt 0 ]; do shift; done
+    [ "$1" = "-b" ] && shift
+    name="$1"; shift
+    cat > "$S/buffer.$name" ;;
+  paste-buffer)
+    while [ $# -gt 0 ]; do
+      if [ "$1" = "-b" ]; then name="$2"; shift 2; continue; fi
+      shift
+    done
+    n=$(ls "$S" | grep -c '^typed\\.')
+    cat "$S/buffer.$name" > "$S/typed.$((n + 1))"
+    cat "$S/buffer.$name" >> "$S/composer"
+    rm -f "$S/buffer.$name" ;;
   send-keys)
     [ "$1" = "-t" ] && shift 2
     case "$1" in
@@ -111,6 +125,7 @@ def box(tmp_path):
         "FAKE_TMUX_SESSIONS": "CAPITANO ASSISTENTE MENTOR",
         "JHT_HOME": str(home),
         "JHT_EXTERNAL_CONTENT_NONCE": NONCE,
+        "JHT_CHAT_PROMPT_WAIT": "0",
         "PYTHONDONTWRITEBYTECODE": "1",
     }
     env.pop("TMUX", None)
@@ -335,6 +350,7 @@ def test_a_transport_that_does_not_fence_is_refused_before_anything_is_written(b
 @pytest.mark.parametrize(("rc", "code", "error"), [
     (2, 122, "agent_not_running"), (3, 123, "agent_unavailable"), (4, 124, "agent_busy"),
     (5, 125, "agent_stuck"), (6, 126, "send_failed"), (1, 126, "send_failed"),
+    (130, 130, "composer_has_text"),
 ])
 def test_a_delivery_that_did_not_happen_says_why(box, rc, code, error):
     box.stub_delivery()
@@ -468,16 +484,18 @@ READY_CLAUDE = """\
 READY_CODEX = """\
 • Done.
 
-› Ask Codex to do anything
+› \x1b[2mAsk Codex to do anything\x1b[0m
 
-  ⏎ send   ⇧⏎ newline   ⌃T transcript
+  gpt-5.6-sol · ~/capitano
 """
 READY_NUMBERED_PROSE = """\
 ● Ecco il piano:
   1. leggere le posizioni
   2. scrivere i CV
 
+────────────────────────────────────────────────
 ❯ 
+────────────────────────────────────────────────
 """
 
 READY_CLAUDE_RULES = """\
@@ -494,17 +512,17 @@ READY_CODEX_TRANSCRIPT = """\
 
 › 
 
-  ctrl + t to view transcript
+  ? for shortcuts
 """
 TYPED_CODEX_TRANSCRIPT = """\
 › scrivi allo scout
 
-  ctrl + t to view transcript
+  ? for shortcuts
 """
 READY_CODEX_EXAMPLE = """\
-› Write tests for @filename
+› \x1b[2mWrite tests for @filename\x1b[0m
 
-  100% context left
+  gpt-5.6-sol · ~/capitano
 """
 # A quoted "> " of the transcript, and under it a shell: the CLI has exited.
 QUOTE_THEN_SHELL = """\
@@ -559,9 +577,9 @@ def _module():
 
 
 @pytest.mark.parametrize("screen", [
-    READY_CLAUDE, READY_CODEX, READY_NUMBERED_PROSE, "❯ \n", "│ ❯ Try \"edit cv.md\" │\n",
+    READY_CLAUDE, READY_CODEX, READY_NUMBERED_PROSE, READY_CLAUDE_RULES, "│ ❯ \x1b[2mTry \"edit cv.md\"\x1b[0m │\n",
     READY_CLAUDE_RULES, READY_CODEX_EXAMPLE, READY_CLAUDE + "\n" * 30, READY_CODEX_TRANSCRIPT,
-], ids=["claude", "codex", "numbered-prose-above", "bare-mark", "placeholder", "claude-rules-and-footer",
+], ids=["claude", "codex", "numbered-prose-above", "claude-rules-again", "placeholder", "claude-rules-and-footer",
         "codex-example-placeholder", "blank-rows-under", "codex-transcript-hint"])
 def test_the_prompt_is_shown_by_an_empty_composer(screen):
     assert _module().prompt_state(screen) == "ready"
@@ -591,9 +609,9 @@ def _nothing_happened(box, agent="capitano"):
 
 
 @pytest.mark.parametrize("screen", [
-    CLAUDE_PERMISSION, CODEX_APPROVAL, LOGIN_METHOD, PASTE_CODE, TEXT_ALREADY_TYPED, A_SHELL, QUOTE_THEN_SHELL, MENU_TRY_AGAIN,
+    CLAUDE_PERMISSION, CODEX_APPROVAL, LOGIN_METHOD, PASTE_CODE, A_SHELL, QUOTE_THEN_SHELL, MENU_TRY_AGAIN,
     BASH_CONTINUATION,
-], ids=["permission", "approval", "login", "paste-code", "typed", "shell", "quote-then-shell", "menu-try-again",
+], ids=["permission", "approval", "login", "paste-code", "shell", "quote-then-shell", "menu-try-again",
         "bash-continuation"])
 def test_a_screen_that_is_not_the_prompt_is_a_closed_code_with_nothing_written_or_typed(box, screen):
     box.stub_delivery()
@@ -602,15 +620,46 @@ def test_a_screen_that_is_not_the_prompt_is_a_closed_code_with_nothing_written_o
     code, answer = box.run("send", "capitano", "id-20", stdin="1")
     assert (code, answer) == (119, {"error": "agent_not_at_prompt"})
     _nothing_happened(box)
-    assert "capture-pane -p -t =CAPITANO:" in box.calls(), "it looked at the agent's own pane"
+    assert "capture-pane -e -p -t =CAPITANO:" in box.calls(), "it looked at the agent's own pane"
+
+
+def test_a_real_draft_gets_its_own_closed_code_and_is_not_touched(box):
+    box.stub_delivery()
+    (box.state / "screen").write_text(TEXT_ALREADY_TYPED, encoding="utf-8")
+    code, answer = box.run("send", "capitano", "id-draft", stdin="1")
+    assert (code, answer) == (130, {"error": "composer_has_text"})
+    _nothing_happened(box)
+
+
+def test_dim_codex_suggestion_is_empty_but_rgb_colour_is_not_dim():
+    module = _module()
+    dim = "› \x1b[2mexample prompt\x1b[0m\n\n  gpt-5.6-sol · ~/capitano\n"
+    coloured_draft = "› \x1b[38;2;147;147;147mexample prompt\x1b[0m\n\n  gpt-5.6-sol · ~/capitano\n"
+    assert module.composer_state(dim) == "empty"
+    assert module.composer_state(coloured_draft) == "text"
+
+
+def test_composer_text_is_only_the_box_contents_and_never_the_border_or_hint():
+    module = _module()
+    boxed = "╭────╮\n│ > first line │\n│ second line │\n╰────╯\n  ? for shortcuts\n"
+    codex = "› first line\n\n  ? for shortcuts\n"
+    assert module.composer_text(boxed) == "first linesecond line"
+    assert module.composer_text(codex) == "first line"
 
 
 def test_a_running_turn_is_agent_busy_with_nothing_written_or_typed(box):
     box.stub_delivery()
-    (box.state / "screen").write_text(RUNNING, encoding="utf-8")
+    (box.state / "screen").write_text("✻ Pondering… (12s · esc to interrupt)\n", encoding="utf-8")
     code, answer = box.run("send", "capitano", "id-21", stdin="ci sei?")
     assert (code, answer) == (124, {"error": "agent_busy"})
     _nothing_happened(box)
+
+
+def test_a_running_turn_with_an_empty_composer_is_delivered(box):
+    box.stub_delivery()
+    (box.state / "screen").write_text(RUNNING, encoding="utf-8")
+    code, receipt = box.run("send", "capitano", "id-running", stdin="ci sei?")
+    assert code == 0 and receipt["accepted"] is True
 
 
 def test_a_pane_that_cannot_be_read_is_agent_unavailable_with_nothing_written(box):
