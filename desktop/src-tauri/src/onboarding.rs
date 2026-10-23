@@ -2432,6 +2432,22 @@ fn container_step_verdict(snapshot: &OnboardingSnapshot, reason: Option<String>)
     Err(OnboardingError { detail: Some(detail), ..failure("container_not_ready") })
 }
 
+/// The Provider step after `providers use` and `providers update`: the snapshot must see the
+/// provider set up, or the step stops and says why (the snapshot's answer, and the wrapper's own
+/// reason when it gave one: provider_unreadable). Never «Provider configurato» on a provider the
+/// next screen asks for again.
+fn provider_step_verdict(snapshot: &OnboardingSnapshot, reason: Option<String>) -> Result<(), OnboardingError> {
+    if snapshot.provider_configured {
+        return Ok(());
+    }
+    trace_local_runtime("provider", "snapshot_not_configured");
+    let detail = match reason {
+        Some(reason) => format!("jht onboarding-snapshot: providerConfigured=0 ({reason})"),
+        None => "jht onboarding-snapshot: providerConfigured=0".to_owned(),
+    };
+    Err(OnboardingError { detail: Some(detail), ..failure("provider_config_failed") })
+}
+
 fn prepare_impl(
     app: tauri::AppHandle,
     scope: AccountScope,
@@ -2620,7 +2636,11 @@ fn prepare_impl(
                     )?;
                 }
             }
-            let snapshot = snapshot_impl(&app, &scope, &validated)?;
+            // The snapshot is the check here too, in the runtime log with its command, exit and stderr:
+            // `providers use` exiting 0 is not the provider set up (T106).
+            let (snapshot, reason) = snapshot_logged(&app, &scope, &validated, runtime_log.as_ref())
+                .map_err(|error| with_cause(error, runtime_log.as_ref()))?;
+            provider_step_verdict(&snapshot, reason)?;
             crate::direct_chat::persist_onboarding_host(&app, &scope, &submission.host)
                 .map_err(failure)?;
             // The VPS the app has just set up and pinned is the person's own: the positive mark (this
@@ -2758,7 +2778,8 @@ fn snapshot_impl(
     snapshot_logged(app, scope, host, None).map(|(snapshot, _)| snapshot)
 }
 
-/// Why the wrapper's snapshot says the container is not running: its one line on stderr,
+/// Why the wrapper's snapshot says the container is not running, or the provider not set up: its
+/// line on stderr (the last one),
 /// «onboarding_snapshot: <code>: <detail>» (the code, then ids, project and service names, no
 /// path). One line, without control characters, redacted, at most 240 characters.
 fn snapshot_reason(stderr: &[u8]) -> Option<String> {
@@ -6791,6 +6812,25 @@ esac
             "{text}"
         );
         let _ = fs::remove_dir_all(&dir);
+    }
+
+    /// T106: the snapshot is the Provider step's check too. `providers use` exiting 0 with a snapshot
+    /// that does not see the provider (on Windows PowerShell 5.1 the provider check in the container
+    /// failed) stops the step with its cause, instead of «Provider configurato» and the step again.
+    #[test]
+    fn the_provider_step_stops_on_a_snapshot_without_the_provider_and_says_the_wrappers_reason() {
+        let running = super::OnboardingSnapshot { runtime_installed: true, container_running: true, ..super::OnboardingSnapshot::default() };
+        let stderr = b"onboarding_snapshot: provider_unreadable: the provider check in the container exited 1\r\n";
+        let error = super::provider_step_verdict(&running, super::snapshot_reason(stderr)).unwrap_err();
+        assert_eq!(error.code, "provider_config_failed");
+        assert_eq!(
+            serde_json::to_value(&error).unwrap()["detail"],
+            "jht onboarding-snapshot: providerConfigured=0 (provider_unreadable: the provider check in the container exited 1)"
+        );
+        let error = super::provider_step_verdict(&running, None).unwrap_err();
+        assert_eq!(serde_json::to_value(&error).unwrap()["detail"], "jht onboarding-snapshot: providerConfigured=0");
+        let configured = super::OnboardingSnapshot { provider_configured: true, ..running };
+        assert!(super::provider_step_verdict(&configured, None).is_ok());
     }
 
     /// T79: the snapshot is the Container step's check. A runtime that is not trusted, or a «jht»
