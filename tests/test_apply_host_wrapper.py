@@ -207,6 +207,7 @@ def test_the_wrapper_routes_only_request_and_cancel_to_the_host():
     source = WRAPPER.read_text(encoding="utf-8")
     branch = source[source.index("\n  apply)\n"):]
     branch = branch[: branch.index("\n    ;;\n")]
+    assert source.count("\n  apply)\n") == 1, "one branch only: a second one would never run"
     assert 'request|cancel) apply_host_command "$2" "${3:-}"; exit $? ;;' in branch
     assert 'node "$NODE_ENTRY" "$@"' in branch
 
@@ -233,6 +234,7 @@ def test_the_windows_wrapper_closes_the_same_fields_in_the_same_order():
     assert positions == sorted(positions)
     # every refusal after the write withdraws it again
     assert body.count("$null = Invoke-ApplySkill $containerId @('cancel', $id)") == 2
+    assert source.count("\n  'apply' {\n") == 1, "one branch only: PowerShell runs every matching one"
     dispatch = source[source.index("\n  'apply' {\n"):]
     dispatch = dispatch[: dispatch.index("\n  }\n")]
     assert "@('request', 'cancel') -ccontains [string]$Rest[0]" in dispatch

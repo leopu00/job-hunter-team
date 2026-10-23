@@ -40,16 +40,24 @@ M100 = MIGRATIONS / "100_web_action_settings.sql"
 M101 = MIGRATIONS / "101_web_action_exclusions_directives.sql"
 M102 = MIGRATIONS / "102_web_action_log_follows_emergency_stop.sql"
 M103 = MIGRATIONS / "103_web_door_action_switch.sql"
+M104 = MIGRATIONS / "104_web_apply_authorisations.sql"
 SWITCHED_OFF = ("team.start", "team.stop", "team.restart")
 
 # What the cloud has and the door's bootstrap does not: the columns 101 and 102 sit on.
 EXTRA = phase4.EXTRA + """
 ALTER TABLE public.team_state ADD COLUMN emergency_stop_completed_at timestamptz;
+ALTER TABLE public.positions ADD COLUMN url text NOT NULL DEFAULT 'https://example.com/apply';
+CREATE TABLE public.cloud_sync_tokens (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  token_hash text NOT NULL,
+  revoked_at timestamptz
+);
 """
 
 CHAINS = {
-    "first-deploy": (door.MIGRATION, door.MIGRATION_099, M100, M103),
-    "then-101-102": (door.MIGRATION, door.MIGRATION_099, M100, M103, M101, M102),
+    "first-deploy": (door.MIGRATION, door.MIGRATION_099, M100, M103, M104),
+    "then-101-102": (door.MIGRATION, door.MIGRATION_099, M100, M103, M101, M102, M104),
 }
 
 
@@ -162,6 +170,61 @@ def test_the_emergency_stop_and_the_other_actions_pass(cluster):
     first = who.act("position.apply_authorize", {"legacy_id": 81})
     assert first["state"] == "awaiting_confirm"
     assert who.act("position.apply_authorize", confirm=first["id"])["state"] == "queued"
+
+
+def test_a_pairing_session_cannot_open_an_application_authorisation(cluster):
+    who = door.Browser(cluster)
+    door._position(cluster, who.user, 81)
+    cluster(
+        f"INSERT INTO public.cloud_sync_tokens (user_id, token_hash, pairing_session_id) "
+        f"VALUES ('{who.user}', 'synthetic', '{who.session}')"
+    )
+    # The no-row answer is intentional: the door does not reveal why that
+    # session cannot act, and creates neither confirmation nor desired-state.
+    assert who.act("position.apply_authorize", {"legacy_id": 81}) == {"ok": False, "error": "not_found"}
+    assert door._scalar(
+        cluster,
+        f"SELECT count(*) FROM public.web_action_log WHERE user_id = '{who.user}'",
+    ) == "0"
+    assert door._scalar(
+        cluster,
+        f"SELECT coalesce(apply_requested, false) FROM public.positions WHERE user_id = '{who.user}' AND legacy_id = 81",
+    ) == "f"
+
+
+def test_the_web_summary_keeps_a_valid_host_and_refuses_invalid_ones(cluster):
+    who = door.Browser(cluster)
+    for legacy, url in ((81, "https://acme.com/apply"), (82, "https://jobs.acme-company.com/apply"),
+                        (83, "https://127.0.0.1/apply"), (84, "")):
+        door._position(cluster, who.user, legacy)
+        cluster(f"UPDATE public.positions SET url = $u${url}$u$ WHERE user_id = '{who.user}' AND legacy_id = {legacy}")
+    assert who.act("position.apply_authorize", {"legacy_id": 81})["summary"].endswith(" · acme.com")
+    assert who.act("position.apply_authorize", {"legacy_id": 82})["summary"].endswith(" · jobs.acme-company.com")
+    assert who.act("position.apply_authorize", {"legacy_id": 83}) == {"ok": False, "error": "not_found"}
+    assert who.act("position.apply_authorize", {"legacy_id": 84}) == {"ok": False, "error": "not_found"}
+
+
+def test_a_long_title_never_truncates_the_host_in_the_web_summary(cluster):
+    who = door.Browser(cluster)
+    door._position(cluster, who.user, 81)
+    cluster(f"UPDATE public.positions SET title = repeat('x', 300), url = 'https://acme.com/apply' "
+            f"WHERE user_id = '{who.user}' AND legacy_id = 81")
+    summary = who.act("position.apply_authorize", {"legacy_id": 81})["summary"]
+    assert summary.endswith(" · acme.com")
+    assert len(summary) <= 200
+
+
+def test_a_revoke_without_an_authorisation_leaves_the_position_untouched(cluster):
+    who = door.Browser(cluster)
+    door._position(cluster, who.user, 81)
+    before = door._scalar(cluster, f"""SELECT xmin::text || '|' || coalesce(apply_requested::text, 'null') || '|'
+        || coalesce(apply_requested_at::text, 'null')
+        FROM public.positions WHERE user_id = '{who.user}' AND legacy_id = 81""")
+    assert who.act("position.apply_revoke", {"legacy_id": 81})["state"] == "done"
+    after = door._scalar(cluster, f"""SELECT xmin::text || '|' || coalesce(apply_requested::text, 'null') || '|'
+        || coalesce(apply_requested_at::text, 'null')
+        FROM public.positions WHERE user_id = '{who.user}' AND legacy_id = 81""")
+    assert after == before
 
 
 def test_the_refusals_count_in_the_limit_so_they_cannot_fill_the_log(cluster):

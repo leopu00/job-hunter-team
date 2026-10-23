@@ -20,13 +20,15 @@ import sys
 import threading
 from pathlib import Path
 
-from . import mailops, notary, store, telegram_protocol
+from . import mailops, notary, store, telegram_protocol, webauth
 from .protocol import MAX_REQUEST_BYTES, SOCKET_NAME, ProtocolError, encode, parse_request
 
 CLIENT_UID = int(os.environ.get("JHT_BROKER_CLIENT_UID", "1001"))
 TELEGRAM_CLIENT_UID = int(os.environ.get("JHT_TELEGRAM_BROKER_CLIENT_UID", "1003"))
 MAX_CONCURRENT = 8
 READ_TIMEOUT = 10
+WEB_SYNC_INTERVAL = 120
+WEB_SYNC_ERROR_INTERVAL = 300
 
 
 def socket_dir() -> Path:
@@ -131,6 +133,21 @@ class _TelegramHandler(_RequestHandler):
     dispatch = staticmethod(handle_telegram)
 
 
+def _web_sync_loop(stopping: threading.Event) -> None:
+    """The website is polled by the broker, never by an agent request.  An
+    unavailable route waits longer; the notary remains fail-closed meanwhile."""
+    delay = WEB_SYNC_INTERVAL
+    while not stopping.wait(delay):
+        if not webauth.configured():
+            delay = WEB_SYNC_INTERVAL
+            continue
+        try:
+            webauth.sync()
+            delay = WEB_SYNC_INTERVAL
+        except Exception:  # noqa: BLE001 — a later retry must survive every failed poll
+            delay = WEB_SYNC_ERROR_INTERVAL
+
+
 def _listen(directory: Path, handler: type[_RequestHandler]) -> tuple[_Server, Path]:
     path = directory / SOCKET_NAME
     try:
@@ -149,11 +166,16 @@ def _listen(directory: Path, handler: type[_RequestHandler]) -> tuple[_Server, P
 def serve() -> int:
     server, path = _listen(socket_dir(), _Handler)
     telegram_server, telegram_path = _listen(telegram_socket_dir(), _TelegramHandler)
-    signal.signal(signal.SIGTERM, lambda *_: (
-        threading.Thread(target=server.shutdown).start(),
-        threading.Thread(target=telegram_server.shutdown).start(),
-    ))
+    stopping = threading.Event()
+
+    def shutdown(*_args: object) -> None:
+        stopping.set()
+        threading.Thread(target=server.shutdown).start()
+        threading.Thread(target=telegram_server.shutdown).start()
+
+    signal.signal(signal.SIGTERM, shutdown)
     threading.Thread(target=telegram_server.serve_forever, daemon=True, name="broker-telegram-socket").start()
+    threading.Thread(target=_web_sync_loop, args=(stopping,), daemon=True, name="broker-web-sync").start()
     print("[jht-broker] listening", flush=True)
     try:
         server.serve_forever()

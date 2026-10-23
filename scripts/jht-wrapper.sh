@@ -1794,6 +1794,47 @@ broker_migrate_legacy_once() {
   return 0
 }
 
+# The broker owns the polling credential.  At first pairing only, the account
+# id is read from cloud.json in the box: that file is box-writable, so this is
+# a bootstrap residual.  Once present, the broker account is never replaced
+# automatically; changing it requires `jht apply relink-account` on the host.
+broker_configure_web_authorisations() {
+  local agent_id broker_id state account
+  agent_id="$(read_only_container_id)" || return 0
+  broker_id="$(read_only_service_id "$BROKER_SERVICE")" || return 0
+  state="$(docker exec "$broker_id" jht-broker-admin apply web-status 2>/dev/null)" || return 0
+  docker exec -u 1001 "$agent_id" node -e '
+    const fs=require("fs"); try { const c=JSON.parse(fs.readFileSync("/jht_home/cloud.json","utf8"));
+      if (typeof c.token === "string") process.stdout.write(c.token); } catch {}
+  ' | docker exec -i "$broker_id" jht-broker-admin apply web-token >/dev/null 2>&1 || true
+  case "$state" in
+    *'"account_id": null'*)
+      account="$(docker exec -u 1001 "$agent_id" node -e '
+        const fs=require("fs"); try { const c=JSON.parse(fs.readFileSync("/jht_home/cloud.json","utf8"));
+          if (typeof c.user_id === "string" && /^[0-9a-f-]{36}$/i.test(c.user_id)) process.stdout.write(c.user_id); } catch {}
+      ' 2>/dev/null)"
+      [ -z "$account" ] || docker exec "$broker_id" jht-broker-admin apply account "$account" >/dev/null 2>&1 || true
+      ;;
+  esac
+}
+
+# This is deliberately separate from normal startup: the cloud file is
+# box-writable, so replacing the fixed account needs an explicit host command.
+broker_relink_web_account() {
+  local agent_id broker_id account
+  agent_id="$(read_only_container_id)" || return 1
+  broker_id="$(read_only_service_id "$BROKER_SERVICE")" || return 1
+  account="$(docker exec -u 1001 "$agent_id" node -e '
+    const fs=require("fs"); try { const c=JSON.parse(fs.readFileSync("/jht_home/cloud.json","utf8"));
+      if (typeof c.user_id === "string" && /^[0-9a-f-]{36}$/i.test(c.user_id)) process.stdout.write(c.user_id); } catch {}
+  ' 2>/dev/null)"
+  if [ -z "$account" ]; then
+    err "apply relink-account: cloud account non disponibile. Esegui prima jht cloud pair."
+    return 1
+  fi
+  docker exec "$broker_id" jht-broker-admin apply account "$account"
+}
+
 # The CLI owns the existing reset preview and confirmation. Only its internal
 # exit 20 means that confirmation completed; cancellation (0) and errors must
 # leave the Compose volumes untouched.
@@ -4643,6 +4684,7 @@ case "$SUB" in
     compose up -d
     container_postcheck_running || exit 1
     broker_migrate_legacy_once
+    broker_configure_web_authorisations
     ;;
 
   start-container)
@@ -4657,6 +4699,7 @@ case "$SUB" in
     compose up -d
     container_postcheck_running || exit 1
     broker_migrate_legacy_once
+    broker_configure_web_authorisations
     ;;
 
   down|stop-container)
@@ -4694,6 +4737,7 @@ case "$SUB" in
     compose up -d
     container_postcheck_running || exit 1
     broker_migrate_legacy_once
+    broker_configure_web_authorisations
     ;;
 
   upgrade)
@@ -4710,6 +4754,24 @@ case "$SUB" in
     require_docker
     mail_command "${@:2}"
     exit $?
+    ;;
+
+  apply)
+    require_compose_file
+    require_docker
+    ensure_up
+    if [ "${2:-}" = relink-account ]; then
+      if [ $# -ne 2 ]; then
+        err "uso: jht apply relink-account"
+        exit 2
+      fi
+      broker_relink_web_account
+      exit $?
+    fi
+    case "${2:-}" in
+      request|cancel) apply_host_command "$2" "${3:-}"; exit $? ;;
+    esac
+    docker exec $EXEC_FLAGS -e JHT_HOST_TYPE="$JHT_HOST_TYPE" "$ATTESTED_CONTAINER_ID" node "$NODE_ENTRY" "$@"
     ;;
 
   telegram)
@@ -4829,6 +4891,9 @@ case "$SUB" in
     JHT_HOST_TYPE="${JHT_HOST_TYPE:-unknown}"
     ensure_up
     docker exec $EXEC_FLAGS -e JHT_HOST_TYPE="$JHT_HOST_TYPE" "$ATTESTED_CONTAINER_ID" node "$NODE_ENTRY" "$@"
+    rc=$?
+    if [ "${1:-}" = cloud ] && [ "${2:-}" = pair ] && [ "$rc" -eq 0 ]; then broker_configure_web_authorisations; fi
+    exit "$rc"
     ;;
 
   # Download verificato dal CLI nel container, pubblicato atomically sul path
@@ -4841,16 +4906,6 @@ case "$SUB" in
     ;;
 
   # ── Operativita': delegata al CLI Node nel container ───────────────────
-  apply)
-    require_compose_file
-    require_docker
-    ensure_up
-    case "${2:-}" in
-      request|cancel) apply_host_command "$2" "${3:-}"; exit $? ;;
-    esac
-    docker exec $EXEC_FLAGS -e JHT_HOST_TYPE="$JHT_HOST_TYPE" "$ATTESTED_CONTAINER_ID" node "$NODE_ENTRY" "$@"
-    ;;
-
   *)
     require_compose_file
     require_docker
