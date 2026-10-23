@@ -34,6 +34,9 @@ JHT_DESKTOP_CHAT_PROTOCOL=1
 # This wrapper has the chat actions `desktop-chat read` and `desktop-chat chat-send`. The app asks for this
 # marker before it calls them, so a wrapper without it is told apart by name, never by an exit code.
 JHT_DESKTOP_CHAT_FIXED=1
+# And `desktop-chat chat-answer` and `desktop-chat chat-enter`, which came later: the app asks for this
+# second marker before it calls them.
+JHT_DESKTOP_CHAT_ANSWER=1
 JHT_ONBOARDING_SNAPSHOT_PROTOCOL=1
 # Il pannello agenti del desktop chiama `agent-control` solo se trova questa
 # riga: un wrapper che non la ha passerebbe il comando al ramo generico, che
@@ -2315,6 +2318,17 @@ desktop_chat() {
     chat-send)
       [ "$#" -eq 3 ] || return 2
       docker exec -i "$container_id" python3 -I /app/shared/skills/agent_chat.py send "$2" "$3"
+      ;;
+    # `chat-answer AGENT QUESTION_ID`, the options and the words on standard input as one JSON line;
+    # `chat-enter AGENT MESSAGE_ID`, nothing on standard input. The app calls them only on a wrapper
+    # that carries JHT_DESKTOP_CHAT_ANSWER=1.
+    chat-answer)
+      [ "$#" -eq 3 ] || return 2
+      docker exec -i "$container_id" python3 -I /app/shared/skills/agent_chat.py answer "$2" "$3"
+      ;;
+    chat-enter)
+      [ "$#" -eq 3 ] || return 2
+      docker exec -i "$container_id" python3 -I /app/shared/skills/agent_chat.py enter "$2" "$3"
       ;;
     *) return 2 ;;
   esac

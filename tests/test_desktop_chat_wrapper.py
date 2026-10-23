@@ -400,6 +400,9 @@ SCRIPT = "python3 -I /app/shared/skills/agent_chat.py"
         (("read", "capitano"), f"docker exec -i aaaaaaaaaaaa {SCRIPT} read capitano"),
         (("read", "mentor", "4096"), f"docker exec -i aaaaaaaaaaaa {SCRIPT} read mentor 4096"),
         (("chat-send", "assistente", "0b1c2d3e-4f50"), f"docker exec -i aaaaaaaaaaaa {SCRIPT} send assistente 0b1c2d3e-4f50"),
+        (("chat-answer", "capitano", "aq:capitano:1792700000-a1b2c3"),
+         f"docker exec -i aaaaaaaaaaaa {SCRIPT} answer capitano aq:capitano:1792700000-a1b2c3"),
+        (("chat-enter", "mentor", "0b1c2d3e-4f50"), f"docker exec -i aaaaaaaaaaaa {SCRIPT} enter mentor 0b1c2d3e-4f50"),
     ),
 )
 def test_the_chat_actions_run_the_one_script_of_the_container_with_the_arguments_given(
@@ -424,6 +427,10 @@ def test_the_chat_actions_run_the_one_script_of_the_container_with_the_arguments
         ("chat-send",),
         ("chat-send", "capitano"),
         ("chat-send", "capitano", "id", "extra"),
+        ("chat-answer", "capitano"),
+        ("chat-answer", "capitano", "q1", "extra"),
+        ("chat-enter", "capitano"),
+        ("chat-enter", "capitano", "m1", "extra"),
         ("write", "capitano", "id"),
     ),
 )
@@ -445,6 +452,9 @@ def test_the_wrapper_with_the_chat_actions_says_so_by_a_marker_the_app_asks_for_
     assert lines.count("JHT_DESKTOP_CHAT_FIXED=1") == 1, "one marker, on a line of its own, as the app greps it"
     # the marker and the actions go together: a wrapper without one has no other
     assert "    chat-send)" in text and "    read)" in text
+    # answer and enter have their own marker, with the same rule
+    assert lines.count("JHT_DESKTOP_CHAT_ANSWER=1") == 1
+    assert "    chat-answer)" in text and "    chat-enter)" in text
 
 
 def test_an_image_without_the_script_gives_the_scripts_own_2_and_the_wrapper_does_not_turn_it_into_anything(tmp_path: Path):
@@ -453,7 +463,7 @@ def test_an_image_without_the_script_gives_the_scripts_own_2_and_the_wrapper_doe
     wrapper, env, log = _runtime(tmp_path)
     env["JHT_TEST_RUNTIME_READY"] = "1"
     env["JHT_TEST_NO_SCRIPT"] = "1"
-    for args in (("read", "capitano"), ("chat-send", "capitano", "id-1")):
+    for args in (("read", "capitano"), ("chat-send", "capitano", "id-1"), ("chat-answer", "capitano", "q1"), ("chat-enter", "capitano", "m1")):
         done = subprocess.run(
             [str(wrapper), "desktop-chat", *args], env=env, input="ciao", text=True, capture_output=True, timeout=10, check=False
         )

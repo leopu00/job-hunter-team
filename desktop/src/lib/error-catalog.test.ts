@@ -33,7 +33,19 @@ const NOT_ERRORS: Record<string, string> = {
   // chat page from its own catalog (direct-chat.i18n.ts), and the name of the serde function that lets only
   // that list through. Neither is an error the person is told.
   mail_not_taken: "closed code of a system line of the chat, not an error",
+  message_too_long: "closed code of a system line of the chat, not an error",
   closed_code: "name of a serde function in direct_chat.rs, not a code",
+  closed_reason: "name of a serde function in direct_chat.rs, not a code",
+  message_kind: "name of a serde function in direct_chat.rs, not a code",
+  taken_flag: "name of a serde function in direct_chat.rs, not a code",
+  // The answer to an agent's question (direct_chat.rs, direct_chat_answer): the refusals the chat page
+  // says next to the question, from its own catalog (direct-chat.i18n.ts, answerErrors).
+  question_closed: "refusal of an answer, said by the chat page next to the question",
+  invalid_choice: "refusal of an answer, said by the chat page next to the question",
+  // Why the team does not know whether the agent's CLI took a text (TAKEN_REASONS): said by the chat page
+  // next to the message, from its own catalog, never as an error.
+  not_ours: "reason of a receipt with taken null, said by the chat page",
+  empty_unseen: "reason of a receipt with taken null, said by the chat page",
   // Candidate profile fields validated by profile import and migration.
   birth_year: "profile field",
   candidate_profile: "profile artifact id",
