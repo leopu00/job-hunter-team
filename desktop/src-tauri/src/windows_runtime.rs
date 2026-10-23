@@ -167,6 +167,10 @@ fn file_digest(path: &Path) -> Option<String> {
 /// install.ps1 recorded it, on the Podman runtime.
 #[cfg_attr(not(windows), allow(dead_code))]
 pub(crate) fn wrapper_bundle_valid(wrapper: &Path, runtime_dir: &Path) -> bool {
+    #[cfg(windows)]
+    if !runtime_paths_are_attested(wrapper, runtime_dir) {
+        return false;
+    }
     let Some(bin) = wrapper.parent() else {
         return false;
     };
@@ -194,6 +198,57 @@ pub(crate) fn wrapper_bundle_valid(wrapper: &Path, runtime_dir: &Path) -> bool {
         return false;
     }
     manifest_matches(&manifest, &required, (IMAGE_PIN, file_digest(&pin)))
+}
+
+/// The byte manifest is not an authority when an untrusted account can replace
+/// its directory or lead us through a reparse point. This mirrors the checked
+/// Windows wrapper before the Rust chat path selects its private engine.
+#[cfg(windows)]
+fn runtime_paths_are_attested(wrapper: &Path, runtime_dir: &Path) -> bool {
+    use std::os::windows::fs::MetadataExt;
+
+    const FILE_ATTRIBUTE_REPARSE_POINT: u32 = 0x0400;
+    let protected_node = |path: &Path, directory: bool| {
+        let Ok(metadata) = std::fs::symlink_metadata(path) else { return false };
+        let kind = metadata.file_type();
+        let expected_kind = if directory { kind.is_dir() } else { kind.is_file() };
+        expected_kind
+            && !kind.is_symlink()
+            && metadata.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT == 0
+            && crate::private_acl::owned_by_current_user(path)
+            && crate::private_acl::current_user_sid().ok().is_some_and(|user| {
+                crate::private_acl::read_acl(path)
+                    .is_ok_and(|acl| crate::private_acl::is_runtime_owner_only(&acl, &user))
+            })
+    };
+    let ancestors_are_plain = |path: &Path| {
+        let mut current = Some(path);
+        while let Some(node) = current {
+            let Ok(metadata) = std::fs::symlink_metadata(node) else { return false };
+            if metadata.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT != 0 {
+                return false;
+            }
+            current = node.parent();
+        }
+        true
+    };
+    let Some(bin) = wrapper.parent() else { return false };
+    let manifest = runtime_dir.join(".runtime-integrity");
+    let all_manifest_nodes_are_protected = MANIFEST_FILES.iter().all(|(key, place, file)| {
+        let path = match place {
+            Place::Runtime => runtime_dir.join(file),
+            Place::Bin if *key == "jht-wrapper.ps1" => wrapper.to_path_buf(),
+            Place::Bin => bin.join(file),
+        };
+        protected_node(&path, false)
+    });
+    let pin = runtime_dir.join(IMAGE_PIN);
+    ancestors_are_plain(runtime_dir)
+        && ancestors_are_plain(wrapper)
+        && protected_node(runtime_dir, true)
+        && protected_node(&manifest, false)
+        && all_manifest_nodes_are_protected
+        && (!std::fs::symlink_metadata(&pin).is_ok() || protected_node(&pin, false))
 }
 
 /// `%SystemRoot%\System32\wsl.exe`, by absolute path like PowerShell.

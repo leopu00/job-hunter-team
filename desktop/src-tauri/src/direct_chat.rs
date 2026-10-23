@@ -1,7 +1,7 @@
 use crate::account_scope::{AccountScope, AccountScopeState};
 use crate::existing_team_runtime::{self, ActivatedTarget, ChatOperation};
 use crate::runtime_host::{
-    run_program, run_ssh, run_ssh_command, run_ssh_command_without_pipes,
+    run_program, run_program_without_env, run_ssh, run_ssh_command, run_ssh_command_without_pipes,
     set_private_dir_permissions, set_private_permissions, ssh_base_args, validate_host,
     ExecutionHost, ProcessResult, ValidatedHost,
 };
@@ -1153,10 +1153,19 @@ fn unix_runtime_path_is_safe(runtime: &Path, wrapper: &Path) -> bool {
         return false;
     }
     let Some(home) = std::env::var_os("HOME").map(PathBuf::from) else { return false };
-    !runtime.starts_with(home.join(".jht"))
-        && !runtime.starts_with(home.join("Documents").join("Job Hunter Team"))
-        && !wrapper.starts_with(home.join(".jht"))
-        && !wrapper.starts_with(home.join("Documents").join("Job Hunter Team"))
+    let Ok(home) = fs::canonicalize(home) else { return false };
+    // The declared HOME can itself be a link. Compare only physical paths so
+    // a legacy bind below its real location cannot become a new trust root.
+    let physical_child = |parts: &[&str]| {
+        let candidate = parts.iter().fold(home.clone(), |path, part| path.join(part));
+        fs::canonicalize(&candidate).unwrap_or(candidate)
+    };
+    let legacy = physical_child(&[".jht"]);
+    let user_data = physical_child(&["Documents", "Job Hunter Team"]);
+    !runtime_real.starts_with(&legacy)
+        && !runtime_real.starts_with(&user_data)
+        && !wrapper_real.starts_with(&legacy)
+        && !wrapper_real.starts_with(&user_data)
 }
 
 /// Linux's protected host bundle, ported from jht-wrapper.sh. It has no engine side effect: a
@@ -1169,9 +1178,25 @@ fn unix_runtime_bundle_valid(wrapper: &Path, runtime: &Path) -> bool {
     let manifest = runtime.join(".runtime-integrity");
     let compose = runtime.join("docker-compose.yml");
     let setup = runtime.join("host-setup.sh");
-    if ![&manifest, &compose, &setup, wrapper]
+    let bin = runtime.join("bin");
+    if !unix_runtime_node_is_safe(&bin, true)
+        || ![&manifest, &compose, &setup, wrapper]
         .into_iter()
         .all(|path| unix_runtime_node_is_safe(path, false))
+    {
+        return false;
+    }
+    if !fs::read_to_string(&compose).is_ok_and(|source| {
+        source.lines().any(|line| {
+            line.trim_start()
+                .strip_prefix("- jht-runtime-mask:/jht_home/runtime")
+                .is_some_and(|rest| rest.trim().is_empty())
+        })
+    })
+        || !fs::read_to_string(&setup)
+            .is_ok_and(|source| source.lines().any(|line| line == "JHT_HOST_SETUP_PROTOCOL=1"))
+        || !fs::read_to_string(wrapper)
+            .is_ok_and(|source| source.lines().any(|line| line == "JHT_HOST_RUNTIME_PROTOCOL=1"))
     {
         return false;
     }
@@ -1240,6 +1265,40 @@ fn unix_runtime_bundle_valid(wrapper: &Path, runtime: &Path) -> bool {
         }
         _ => false,
     }
+}
+
+/// Native Linux Podman honors these inherited connection selectors. The
+/// checked runtime shim is local-only, so inherit neither selector for any
+/// of its discovery, inspect, or exec calls.
+fn local_engine_removed_environment(engine: &LocalChatEngine) -> &'static [&'static str] {
+    #[cfg(all(unix, not(target_os = "macos")))]
+    if engine.podman {
+        return &["CONTAINER_HOST", "CONTAINER_CONNECTION"];
+    }
+    &[]
+}
+
+fn run_local_engine<I, S>(
+    engine: &LocalChatEngine,
+    args: I,
+    input: Option<&[u8]>,
+    timeout: Duration,
+) -> Result<ProcessResult, &'static str>
+where
+    I: IntoIterator<Item = S>,
+    S: AsRef<std::ffi::OsStr>,
+{
+    let program = engine.program.to_str().ok_or("runtime_missing")?;
+    if !local_engine_removed_environment(engine).is_empty() {
+        return run_program_without_env(
+            program,
+            args,
+            input,
+            timeout,
+            local_engine_removed_environment(engine),
+        );
+    }
+    run_program(program, args, input, timeout)
 }
 
 /// The desktop's local trust root. This is intentionally separate from process launch: all
@@ -1357,8 +1416,7 @@ fn local_chat_container(
     runtime: &Path,
     timeout: Duration,
 ) -> Result<String, &'static str> {
-    let program = engine.program.to_str().ok_or("runtime_missing")?;
-    let listed = run_program(program, local_compose_args(engine, runtime), None, timeout)?;
+    let listed = run_local_engine(engine, local_compose_args(engine, runtime), None, timeout)?;
     let ids: Vec<&str> = std::str::from_utf8(&listed.stdout)
         .map_err(|_| "container_unavailable")?
         .lines()
@@ -1370,8 +1428,8 @@ fn local_chat_container(
     }
     let mut found = None;
     for id in ids {
-        let inspected = run_program(
-            program,
+        let inspected = run_local_engine(
+            engine,
             [
                 "inspect",
                 "--type",
@@ -1443,10 +1501,9 @@ fn run_local_chat(
         return Err("runtime_missing");
     }
     let engine = local_chat_engine(runtime)?;
-    let program = engine.program.to_str().ok_or("runtime_missing")?;
     let container = local_chat_container(&engine, runtime, timeout)?;
-    run_program(
-        program,
+    run_local_engine(
+        &engine,
         local_chat_exec_args(&container, &operation)?,
         input,
         timeout,
@@ -2547,7 +2604,8 @@ mod tests {
         control_path_fits, remove_tunnel_socket, tunnel_dir_name, tunnel_socket_bases, tunnel_socket_path,
         SOCKET_PATH_MAX, SSH_SOCKET_SUFFIX,
         open_vps_link, ready_status, small_read, vps_link_for, VpsLink, VPS_LINK_CHECK, SMALL_READ_OVERLAP,
-        SMALL_READ_SIZE_PROBE, SMALL_READ_TAIL, DirectChatError, local_chat_exec_args, podman_systemd_unit,
+        SMALL_READ_SIZE_PROBE, SMALL_READ_TAIL, DirectChatError, local_chat_exec_args,
+        local_chat_runtime_valid, local_engine_removed_environment, LocalChatEngine, podman_systemd_unit,
         run_connection, run_local_chat, RemoteOperation,
         master_to_lend,
     };
@@ -2557,10 +2615,15 @@ mod tests {
 
     #[cfg(unix)]
     fn write_valid_local_podman_manifest(runtime: &Path, wrapper: &Path) {
+        fs::write(runtime.join("host-setup.sh"), "#!/bin/sh\nJHT_HOST_SETUP_PROTOCOL=1\nexit 0\n").unwrap();
+        write_local_podman_manifest(runtime, wrapper);
+    }
+
+    #[cfg(unix)]
+    fn write_local_podman_manifest(runtime: &Path, wrapper: &Path) {
         use sha2::{Digest, Sha256};
 
         let digest = |path: &Path| format!("{:x}", Sha256::digest(fs::read(path).unwrap()));
-        fs::write(runtime.join("host-setup.sh"), "#!/bin/sh\nexit 0\n").unwrap();
         let mut lines = vec![
             "version=1".to_owned(),
             format!("docker-compose.yml={}", digest(&runtime.join("docker-compose.yml"))),
@@ -3128,6 +3191,63 @@ mod tests {
         .is_err());
     }
 
+    #[test]
+    fn only_native_linux_podman_drops_remote_connection_selectors() {
+        let podman = LocalChatEngine { program: PathBuf::from("private-engine"), podman: true };
+        let docker = LocalChatEngine { program: PathBuf::from("private-engine"), podman: false };
+        #[cfg(all(unix, not(target_os = "macos")))]
+        assert_eq!(
+            local_engine_removed_environment(&podman),
+            ["CONTAINER_HOST", "CONTAINER_CONNECTION"]
+        );
+        #[cfg(not(all(unix, not(target_os = "macos"))))]
+        assert!(local_engine_removed_environment(&podman).is_empty());
+        assert!(local_engine_removed_environment(&docker).is_empty());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn local_chat_refuses_rehashed_compose_or_host_setup_without_starting_an_engine() {
+        use std::os::unix::fs::PermissionsExt;
+
+        static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+        let root = std::env::temp_dir().canonicalize().unwrap().join(format!(
+            "jht-local-chat-protocol-{}-{}",
+            std::process::id(),
+            NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+        ));
+        let runtime = root.join("host-runtime");
+        fs::create_dir_all(runtime.join("bin")).unwrap();
+        fs::write(runtime.join("container-runtime"), "podman\n").unwrap();
+        fs::write(
+            runtime.join("docker-compose.yml"),
+            "services:\n  jht:\n    volumes:\n      - jht-runtime-mask:/jht_home/runtime\n",
+        )
+        .unwrap();
+        fs::write(runtime.join("bin/docker"), "#!/bin/sh\n# JHT_PODMAN_DOCKER_SHIM=1\nexit 91\n").unwrap();
+        fs::set_permissions(runtime.join("bin/docker"), fs::Permissions::from_mode(0o700)).unwrap();
+        let wrapper = root.join("jht-wrapper.sh");
+        fs::write(&wrapper, "#!/bin/sh\nJHT_HOST_RUNTIME_PROTOCOL=1\n").unwrap();
+        fs::set_permissions(&wrapper, fs::Permissions::from_mode(0o700)).unwrap();
+        write_valid_local_podman_manifest(&runtime, &wrapper);
+        assert!(local_chat_runtime_valid(&wrapper, &runtime));
+
+        fs::write(runtime.join("docker-compose.yml"), "services: {}\n").unwrap();
+        write_local_podman_manifest(&runtime, &wrapper);
+        assert!(!local_chat_runtime_valid(&wrapper, &runtime));
+
+        fs::write(
+            runtime.join("docker-compose.yml"),
+            "services:\n  jht:\n    volumes:\n      - jht-runtime-mask:/jht_home/runtime\n",
+        )
+        .unwrap();
+        fs::write(runtime.join("host-setup.sh"), "#!/bin/sh\nexit 0\n").unwrap();
+        write_local_podman_manifest(&runtime, &wrapper);
+        assert!(!local_chat_runtime_valid(&wrapper, &runtime));
+
+        fs::remove_dir_all(root).unwrap();
+    }
+
     // The direct local path is a normal native process on both systems where this test runs. The
     // fake private Podman shim proves the container discovery, exact exec argv, and non-ASCII stdin
     // all survive without asking a shell or a PowerShell wrapper to reconstruct the text.
@@ -3147,7 +3267,7 @@ mod tests {
         let bin = runtime.join("bin");
         fs::create_dir_all(&bin).unwrap();
         fs::write(runtime.join("container-runtime"), "podman\n").unwrap();
-        fs::write(runtime.join("docker-compose.yml"), "services: {}\n").unwrap();
+        fs::write(runtime.join("docker-compose.yml"), "services:\n  jht:\n    volumes:\n      - jht-runtime-mask:/jht_home/runtime\n").unwrap();
         let wrapper = root.join("jht-wrapper.sh");
         fs::write(
             &wrapper,
@@ -3224,7 +3344,7 @@ mod tests {
         let bin = runtime.join("bin");
         fs::create_dir_all(&bin).unwrap();
         fs::write(runtime.join("container-runtime"), "podman\n").unwrap();
-        fs::write(runtime.join("docker-compose.yml"), "services: {}\n").unwrap();
+        fs::write(runtime.join("docker-compose.yml"), "services:\n  jht:\n    volumes:\n      - jht-runtime-mask:/jht_home/runtime\n").unwrap();
         let started = root.join("engine-was-called");
         let engine = bin.join("docker");
         fs::write(&engine, format!("#!/bin/sh\n# JHT_PODMAN_DOCKER_SHIM=1\ntouch '{}'\n", started.display())).unwrap();
@@ -3270,7 +3390,7 @@ mod tests {
         let bin = runtime.join("bin");
         fs::create_dir_all(&bin).unwrap();
         fs::write(runtime.join("container-runtime"), "podman\n").unwrap();
-        fs::write(runtime.join("docker-compose.yml"), "services: {}\n").unwrap();
+        fs::write(runtime.join("docker-compose.yml"), "services:\n  jht:\n    volumes:\n      - jht-runtime-mask:/jht_home/runtime\n").unwrap();
         let wrapper = root.join("jht-wrapper.sh");
         fs::write(&wrapper, "#!/bin/sh\nJHT_HOST_RUNTIME_PROTOCOL=1\nJHT_DESKTOP_CHAT_PROTOCOL=1\nJHT_ONBOARDING_SNAPSHOT_PROTOCOL=1\n").unwrap();
         fs::set_permissions(&wrapper, fs::Permissions::from_mode(0o700)).unwrap();

@@ -23,7 +23,8 @@ use windows_sys::{
             },
             GetAce, GetAclInformation, GetSecurityDescriptorControl, GetSecurityDescriptorDacl,
             GetTokenInformation, TokenUser, ACCESS_ALLOWED_ACE, ACE_HEADER, ACL,
-            ACL_SIZE_INFORMATION, DACL_SECURITY_INFORMATION, PROTECTED_DACL_SECURITY_INFORMATION,
+            ACL_SIZE_INFORMATION, DACL_SECURITY_INFORMATION, OWNER_SECURITY_INFORMATION,
+            PROTECTED_DACL_SECURITY_INFORMATION,
             PSECURITY_DESCRIPTOR, PSID, SE_DACL_PROTECTED, TOKEN_QUERY, TOKEN_USER,
         },
         System::Threading::{GetCurrentProcess, OpenProcessToken},
@@ -31,6 +32,7 @@ use windows_sys::{
 };
 
 const LOCAL_SYSTEM_SID: &str = "S-1-5-18";
+const BUILTIN_ADMINS_SID: &str = "S-1-5-32-544";
 // winnt.h ACE types: an allow ACE is checked against the owner-only policy, a
 // deny ACE can only take access away. Every other type (object, callback,
 // audit) is unexpected in a DACL written here and fails the check.
@@ -169,6 +171,54 @@ pub(crate) fn grants_only_owner(report: &AclReport, user_sid: &str) -> bool {
             .allowed_sids
             .iter()
             .all(|sid| sid == user_sid || sid == LOCAL_SYSTEM_SID)
+}
+
+/// The runtime installer deliberately permits local Administrators in addition
+/// to its owner and SYSTEM. This is the exact read-only check used when an
+/// installed runtime is later trusted; it never repairs an open ACL.
+pub(crate) fn is_runtime_owner_only(report: &AclReport, user_sid: &str) -> bool {
+    report.inheritance_disabled
+        && report.allowed_sids.iter().any(|sid| sid == user_sid)
+        && report.allowed_sids.iter().all(|sid| {
+            sid == user_sid || sid == LOCAL_SYSTEM_SID || sid == BUILTIN_ADMINS_SID
+        })
+}
+
+/// The manifest's hashes establish bytes, while ownership establishes whose
+/// bytes they are. Fail closed if either the owner or its SID cannot be read.
+pub(crate) fn owned_by_current_user(path: &Path) -> bool {
+    let Ok(user) = current_user_sid() else { return false };
+    let target = match wide(path.as_os_str()) {
+        Ok(target) => target,
+        Err(_) => return false,
+    };
+    let mut owner: PSID = ptr::null_mut();
+    let mut descriptor: PSECURITY_DESCRIPTOR = ptr::null_mut();
+    // SAFETY: `target` is NUL-terminated. The owner points into the returned
+    // descriptor and is converted before the descriptor is released.
+    let result = unsafe {
+        GetNamedSecurityInfoW(
+            target.as_ptr(),
+            SE_FILE_OBJECT,
+            OWNER_SECURITY_INFORMATION,
+            &mut owner,
+            ptr::null_mut(),
+            ptr::null_mut(),
+            ptr::null_mut(),
+            &mut descriptor,
+        )
+    };
+    if result != ERROR_SUCCESS || owner.is_null() || descriptor.is_null() {
+        if !descriptor.is_null() {
+            // SAFETY: the descriptor came from GetNamedSecurityInfoW.
+            unsafe { LocalFree(descriptor) };
+        }
+        return false;
+    }
+    let matches = sid_string(owner).is_ok_and(|owner| owner == user);
+    // SAFETY: allocated by GetNamedSecurityInfoW.
+    unsafe { LocalFree(descriptor) };
+    matches
 }
 
 /// Test fixture: a DACL that opens `path` to Everyone, Users and
