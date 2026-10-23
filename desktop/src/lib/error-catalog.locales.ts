@@ -694,6 +694,13 @@ const COPY_BY_ENGLISH_TEXT: Readonly<Record<string, ErrorTranslations>> = {
     hu: ["Az ügynök nem fut.", "Indítsd el a csapatot, majd küldd el újra az üzenetet."],
     pt: ["O agente não está em execução.", "Inicia a equipa e volta a enviar a mensagem."],
   },
+  "The saved connection no longer matches this team.": {
+    de: ["Die gespeicherte Verbindung passt nicht mehr zu diesem Team.", "Verbinde das Team in der Einrichtung neu: Dort bestätigst du den VPS noch einmal."],
+    es: ["La conexión guardada ya no corresponde a este equipo.", "Vuelve a conectar el equipo desde la configuración: te pedirá de nuevo que confirmes el VPS."],
+    fr: ["La connexion enregistrée ne correspond plus à cette équipe.", "Relie de nouveau l’équipe depuis la configuration : elle te demandera de confirmer à nouveau le VPS."],
+    hu: ["A mentett kapcsolat már nem ehhez a csapathoz tartozik.", "Csatlakoztasd újra a csapatot a beállításban: újra megkér, hogy erősítsd meg a VPS-t."],
+    pt: ["A ligação guardada já não corresponde a esta equipa.", "Volta a ligar a equipa a partir da configuração: vai pedir-te de novo que confirmes o VPS."],
+  },
   "The agent is working: the message was not sent.": {
     de: ["Der Agent arbeitet gerade: Die Nachricht wurde nicht gesendet.", "Sende sie erneut, wenn sein Durchgang vorbei ist; das siehst du in seinem Terminal auf der Seite Agenten."],
     es: ["El agente está trabajando: el mensaje no se ha enviado.", "Vuelve a enviarlo cuando termine su turno; lo ves en su terminal, en la página Agentes."],
@@ -1457,6 +1464,8 @@ export const ERROR_CATALOG_LOCALES: Readonly<Record<string, ErrorTranslations>> 
   agents_unavailable: translated("The VPS did not return the list of agents."),
   agent_screen_unfiltered: translated("This agent's terminal cannot be shown: the VPS lacks the filter that removes keys and codes from the text."),
   agent_control_not_confirmed: translated("The action was not confirmed."),
+  window_not_allowed: translated("This can be done only from the app’s main window."),
+  existing_team_reconfirm_setup: translated("The saved connection no longer matches this team."),
   agent_control_read_only: translated("The team is open in read-only view: agents cannot be controlled from here."),
   agent_control_no_team: translated("There is no running team to control here."),
   agent_control_unsupported: translated("The team runs a version without the agent control panel."),

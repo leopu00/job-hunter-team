@@ -109,6 +109,7 @@ pub fn run() {
             existing_team_runtime::own_vps_claim,
             onboarding::existing_team_assistant_start,
             onboarding::onboarding_existing_team_connect,
+            onboarding::existing_team_reconfirm_summary,
             onboarding::onboarding_existing_team_readonly_connect,
             onboarding::onboarding_existing_team_reopen,
             onboarding::onboarding_podman_machine_recreate,

@@ -1,8 +1,10 @@
-import { act, render, screen, waitFor } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { enterExistingTeamReadOnly, leaveExistingTeamReadOnly } from "../../lib/existing-team-readonly";
+import type { ExistingTeamBridge } from "../../lib/existing-team";
 import { LeaveReadOnlyContext } from "../../lib/leave-read-only";
+import { ReconfirmExistingTeamContext, type ReconfirmExistingTeam } from "../../lib/reconfirm-existing-team";
 import { AgentChatPane } from "./AgentChatPane";
 import type { DirectChatClient, DirectChatPage, DirectChatStatus } from "./direct-chat-contract";
 
@@ -115,5 +117,86 @@ describe("AgentChatPane", () => {
     const status = await screen.findByTestId("direct-chat-status");
     await waitFor(() => expect(status.textContent).toMatch(/This view is read only: the message was not sent\./));
     expect(box.value).toBe("Scrivo lo stesso");
+  });
+
+  describe("«Collega il team» in the read-only view", () => {
+    const HOST = { kind: "vps" as const, address: "203.0.113.7", user: "jht", port: 2222, keyPath: "/synthetic/key" };
+    const SUMMARY = { teamId: "team-opaque-0007", host: HOST, fingerprint: "SHA256:synthetic-pinned" };
+    const RESULT = {
+      runtimeInstalled: true, containerRunning: true, providerConfigured: true, providerAuthenticated: true,
+      assistantRunning: true, captainRunning: true, profileReady: true, assistantWelcomed: false, directChatReady: false,
+    };
+
+    function bridge(overrides: Partial<ExistingTeamBridge> = {}): ExistingTeamBridge {
+      return {
+        probe: vi.fn(), confirm: vi.fn(), connectReadOnly: vi.fn(), reopen: vi.fn(), discover: vi.fn(), register: vi.fn(),
+        reconfirmSummary: vi.fn().mockResolvedValue(SUMMARY),
+        connect: vi.fn().mockResolvedValue(RESULT),
+        ...overrides,
+      };
+    }
+
+    function context(): ReconfirmExistingTeam {
+      return { accountLabel: "Reader Person", onConnected: vi.fn(async () => undefined), onSetup: vi.fn() };
+    }
+
+    function mount(reconfirm: ReconfirmExistingTeam, teamBridge: ExistingTeamBridge, leave = vi.fn()) {
+      act(() => enterExistingTeamReadOnly(false));
+      render(
+        <LeaveReadOnlyContext.Provider value={leave}>
+          <ReconfirmExistingTeamContext.Provider value={reconfirm}>
+            <AgentChatPane role="capitano" client={client()} reconfirmBridge={teamBridge} />
+          </ReconfirmExistingTeamContext.Provider>
+        </LeaveReadOnlyContext.Provider>,
+      );
+    }
+
+    it("opens only on the click, in the chat, with what the setup shows and nothing read from the server", async () => {
+      const reconfirm = context();
+      const teamBridge = bridge();
+      const leave = vi.fn();
+      mount(reconfirm, teamBridge, leave);
+      await screen.findByText("Tre posizioni nuove.");
+      expect(screen.queryByRole("dialog")).toBeNull();
+      expect(teamBridge.reconfirmSummary).not.toHaveBeenCalled();
+
+      await userEvent.click(screen.getByRole("button", { name: "Connect the team" }));
+      const dialog = await screen.findByRole("dialog");
+      expect(await screen.findByText("team-opaque-0007")).toBeTruthy();
+      expect(dialog.textContent).toContain("203.0.113.7:2222");
+      expect(dialog.textContent).toContain("SHA256:synthetic-pinned");
+      expect(dialog.textContent).toContain("Reader Person");
+      expect(leave).not.toHaveBeenCalled();
+      expect(teamBridge.probe).not.toHaveBeenCalled();
+      expect(teamBridge.connect).not.toHaveBeenCalled();
+    });
+
+    it("«Confirm and connect» asks the native side for the full connection of the saved host and team", async () => {
+      const reconfirm = context();
+      const teamBridge = bridge();
+      mount(reconfirm, teamBridge);
+      await userEvent.click(await screen.findByRole("button", { name: "Connect the team" }));
+      await userEvent.click(await screen.findByRole("button", { name: "Confirm and connect" }));
+      await waitFor(() => expect(reconfirm.onConnected).toHaveBeenCalledWith(RESULT));
+      expect(vi.mocked(teamBridge.connect).mock.calls[0][0]).toEqual({ teamId: "team-opaque-0007", host: HOST, reconfirm: true });
+    });
+
+    it("what no longer matches goes back to the setup, before and after the confirmation", async () => {
+      const before = context();
+      mount(before, bridge({ reconfirmSummary: vi.fn().mockRejectedValue({ code: "existing_team_reconfirm_setup" }) }));
+      await userEvent.click(await screen.findByRole("button", { name: "Connect the team" }));
+      await waitFor(() => expect(before.onSetup).toHaveBeenCalledTimes(1));
+    });
+
+    it("a confirmation that fails stays read-only and says why in the catalog's words", async () => {
+      const reconfirm = context();
+      mount(reconfirm, bridge({ connect: vi.fn().mockRejectedValue({ code: "host_key_changed" }) }));
+      await userEvent.click(await screen.findByRole("button", { name: "Connect the team" }));
+      await userEvent.click(await screen.findByRole("button", { name: "Confirm and connect" }));
+      expect(await within(screen.getByRole("dialog")).findByRole("alert")).toBeTruthy();
+      expect(reconfirm.onConnected).not.toHaveBeenCalled();
+      expect(reconfirm.onSetup).not.toHaveBeenCalled();
+      expect((screen.getByRole("textbox") as HTMLTextAreaElement).disabled).toBe(true);
+    });
   });
 });

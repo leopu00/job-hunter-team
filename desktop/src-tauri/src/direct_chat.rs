@@ -1286,7 +1286,11 @@ fn send_impl(
     if !link_allows_writing(connection.runtime.as_ref(), own_refusal.is_none(), |target| {
         existing_team_runtime::full_link_granted(&connection.scope, target)
     }) {
-        return Err(failure(own_refusal.unwrap_or("read_only_link")));
+        let code = own_refusal.unwrap_or("read_only_link");
+        if let Some(log) = connection.app.as_ref().and_then(crate::runtime_log::RuntimeLog::new) {
+            log.record_chat_refusal(code);
+        }
+        return Err(failure(code));
     }
     if let Some(receipt) = send_fixed(connection, &agent, &text, &client_id)? {
         return Ok(receipt);

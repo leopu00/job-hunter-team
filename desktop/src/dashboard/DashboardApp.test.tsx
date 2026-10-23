@@ -118,15 +118,28 @@ vi.mock("../lib/runtime-log", () => ({
   openRuntimeLog: vi.fn(async () => true),
 }));
 vi.mock("../lib/desktop-platform", () => ({ readDesktopPlatform: vi.fn() }));
-vi.mock("../shell/Shell", () => ({
-  default: ({ onLogout, onCloseReadOnly }: { onLogout?: () => Promise<void>; onCloseReadOnly?: () => void }) => (
-    <main data-testid="shell">
-      Shell
-      {onLogout && <button type="button" onClick={() => void onLogout()}>local-logout</button>}
-      {onCloseReadOnly && <button type="button" onClick={onCloseReadOnly}>close-read-only</button>}
-    </main>
-  ),
-}));
+vi.mock("../shell/Shell", async () => {
+  const { useReconfirmExistingTeam } = await import("../lib/reconfirm-existing-team");
+  const ready = (profileReady: boolean) => ({
+    runtimeInstalled: true, containerRunning: true, providerConfigured: true, providerAuthenticated: true,
+    assistantRunning: true, captainRunning: true, profileReady, assistantWelcomed: false, directChatReady: false,
+  });
+  function MockShell({ onLogout, onCloseReadOnly }: { onLogout?: () => Promise<void>; onCloseReadOnly?: () => void }) {
+    // What the chat's «Collega il team» reaches in the read-only view (AgentChatPane uses the same context).
+    const reconfirm = useReconfirmExistingTeam();
+    return (
+      <main data-testid="shell">
+        Shell
+        {onLogout && <button type="button" onClick={() => void onLogout()}>local-logout</button>}
+        {onCloseReadOnly && <button type="button" onClick={onCloseReadOnly}>close-read-only</button>}
+        {reconfirm && <p>reconfirm-account:{reconfirm.accountLabel}</p>}
+        {reconfirm && <button type="button" onClick={() => void reconfirm.onConnected(ready(true))}>reconfirm-connected</button>}
+        {reconfirm && <button type="button" onClick={reconfirm.onSetup}>reconfirm-setup</button>}
+      </main>
+    );
+  }
+  return { default: MockShell };
+});
 vi.mock("../pages/messages", () => ({ default: () => <section data-testid="assistant-chat">Assistente</section> }));
 vi.mock("../onboarding", () => ({
   OnboardingFlow: (props: OnboardingFlowProps) => {
@@ -682,6 +695,52 @@ describe("DashboardApp onboarding router", () => {
     expect(await screen.findByTestId("onboarding")).toBeInTheDocument();
     expect(existingTeamReadOnly()).toBeNull();
     expect(screen.queryByTestId("shell")).not.toBeInTheDocument();
+  });
+
+  it("a Google account in the read-only view reaches the full connection from the chat, and then writes", async () => {
+    vi.mocked(useSession).mockReturnValue(signedInAs("existing-reconfirm"));
+    vi.mocked(loadOnboardingGate).mockResolvedValue({
+      phase: "required",
+      account: { displayName: "Reader Person", identity: "google" },
+      resumeAvailable: false,
+      existingTeam: { teamId: "team-opaque-0005", status: "available" },
+      runtime: { status: "collecting", stage: "host" },
+    });
+    vi.mocked(reconnectDirectChat).mockResolvedValue({ state: "ready" });
+
+    const user = userEvent.setup();
+    render(<DashboardApp />);
+    await user.click(await screen.findByRole("button", { name: "connect-existing-team-read-only" }));
+    expect(await screen.findByText("reconfirm-account:Reader Person")).toBeInTheDocument();
+    expect(existingTeamReadOnly()).not.toBeNull();
+
+    await user.click(screen.getByRole("button", { name: "reconfirm-connected" }));
+    await waitFor(() => expect(existingTeamReadOnly()).toBeNull());
+    expect(reconnectDirectChat).toHaveBeenCalledTimes(1);
+    expect(markOnboardingReady).toHaveBeenCalledWith("existing-reconfirm", expect.objectContaining({ directChatReady: true }));
+    expect(await screen.findByTestId("shell")).toBeInTheDocument();
+    // Out of the read-only view: no confirmation to offer any more.
+    expect(screen.queryByRole("button", { name: "reconfirm-connected" })).not.toBeInTheDocument();
+  });
+
+  it("when what was saved no longer matches, the chat leads back to the setup's modal, never to a dead end", async () => {
+    vi.mocked(useSession).mockReturnValue(signedInAs("existing-reconfirm-setup"));
+    vi.mocked(loadOnboardingGate).mockResolvedValue({
+      phase: "required",
+      account: { displayName: "Reader Person", identity: "google" },
+      resumeAvailable: false,
+      existingTeam: { teamId: "team-opaque-0006", status: "available" },
+      runtime: { status: "collecting", stage: "host" },
+    });
+
+    const user = userEvent.setup();
+    render(<DashboardApp />);
+    await user.click(await screen.findByRole("button", { name: "connect-existing-team-read-only" }));
+    await user.click(await screen.findByRole("button", { name: "reconfirm-setup" }));
+    expect(await screen.findByTestId("existing-team-modal")).toBeInTheDocument();
+    expect(screen.getByText("team:team-opaque-0006")).toBeInTheDocument();
+    expect(existingTeamReadOnly()).toBeNull();
+    expect(markOnboardingReady).not.toHaveBeenCalled();
   });
 
   it("maps preparing, Podman, container and provider progress without optimistic completion", async () => {

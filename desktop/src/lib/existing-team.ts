@@ -11,6 +11,18 @@ export type ExistingTeamVpsHost = Extract<ExecutionHost, { kind: "vps" }>;
 export interface ExistingTeamRequest {
   teamId: string;
   host: ExistingTeamVpsHost;
+  /**
+   * The chat's «Collega il team»: the same full connection, which the native side allows only for
+   * the host and team this profile saved (`existing_team_reconfirm_setup` otherwise).
+   */
+  reconfirm?: boolean;
+}
+
+/** What the chat's confirmation shows: the saved host and team and the key pinned for that host. */
+export interface ExistingTeamReconfirmSummary {
+  teamId: string;
+  host: ExistingTeamVpsHost;
+  fingerprint: string;
 }
 
 export type { SshHostKeyProbe };
@@ -75,6 +87,8 @@ export interface ExistingTeamBridge {
   discover(request: ExistingTeamRequest): Promise<ExistingTeamReceipt>;
   /** Saves the target the person was shown. Host and team come from the native receipt. */
   register(candidateSha256: string): Promise<ExistingTeamRegisterResult>;
+  /** Reads what the chat's confirmation shows, from what this profile saved. Grants nothing. */
+  reconfirmSummary(): Promise<ExistingTeamReconfirmSummary>;
 }
 
 export const existingTeamBridge: ExistingTeamBridge = {
@@ -106,6 +120,9 @@ export const existingTeamBridge: ExistingTeamBridge = {
       request: { candidateSha256, confirmed: true },
     });
   },
+  reconfirmSummary() {
+    return invoke<ExistingTeamReconfirmSummary>("existing_team_reconfirm_summary");
+  },
 };
 
 /** Codes the existing-team flow shows; error-catalog.test.ts checks each has a catalog entry. */
@@ -126,6 +143,8 @@ export const EXISTING_TEAM_ERROR_CODES: ReadonlySet<string> = new Set([
   "invalid_port",
   "invalid_team_id",
   "existing_team_vps_required",
+  "existing_team_reconfirm_setup",
+  "window_not_allowed",
   "existing_team_identity_mismatch",
   "existing_team_not_active",
   "existing_team_unavailable",
