@@ -99,6 +99,8 @@ class Team:
                                         f"import sys; sys.exit(int(open({str(self.disk_rc)!r}).read()))\n")
         self.gate_rc.write_text("0")
         self.disk_rc.write_text("0")
+        # a team with its provider chosen, as after `jht setup`
+        (self.home / "jht.config.json").write_text('{"active_provider": "claude"}')
 
     def up(self, *names: str) -> None:
         for name in names:
@@ -249,6 +251,34 @@ def test_start_refusals_leave_the_users_hold_in_place(team, capsys):
 def test_a_closer_gate_that_cannot_answer_answers_no(team, capsys, tmp_path):
     team.tool.APPLY_GATE = tmp_path / "missing.py"
     assert team.run("start", "CLOSER-1", capsys=capsys)[1]["error"] == "closer_not_consented"
+
+
+@pytest.mark.parametrize("config", [None, "{}", '{"active_provider": ""}', '{"active_provider": "gemini"}', "not json", "[]"])
+def test_without_a_provider_start_and_restart_say_so_and_spawn_nothing(team, capsys, config, monkeypatch, tmp_path):
+    # the fallback ~/.jht of start-agent.sh, pointed away from this computer's own
+    monkeypatch.setenv("HOME", str(tmp_path / "no-home"))
+    path = team.home / "jht.config.json"
+    if config is None:
+        path.unlink()
+    else:
+        path.write_text(config)
+    code, answer = team.run("start", "CAPITANO", capsys=capsys)
+    assert (code, answer["error"]) == (122, "provider_not_configured")
+    team.up("SCOUT-1")
+    code, answer = team.run("restart", "SCOUT-1", capsys=capsys)
+    assert (code, answer["error"]) == (122, "provider_not_configured")
+    assert team.alive("SCOUT-1")
+    assert team.spawns() == []
+
+
+def test_the_providers_are_the_ones_start_agent_knows(team):
+    text = START_AGENT.read_text(encoding="utf-8")
+    body = text[text.index('case "$PROVIDER" in'):]
+    body = body[:body.index("\nesac")]
+    known = set()
+    for labels in re.findall(r"^  ([a-z|]+)\)", body, re.M):
+        known |= set(labels.split("|"))
+    assert set(team.tool.PROVIDERS) == known
 
 
 def test_a_start_that_leaves_no_session_is_a_failure(team, capsys, monkeypatch):

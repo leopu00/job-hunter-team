@@ -784,6 +784,12 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
     "The agent did not start.",
     "Try again. If it keeps happening, look at its terminal and report the code shown next to it.",
   ),
+  provider_not_configured: copy(
+    "Sulla squadra non è configurato nessun provider (Claude, Codex o Kimi): gli agenti non possono partire.",
+    "Scegli il provider sulla VPS con «jht setup», poi riprova.",
+    "No provider (Claude, Codex or Kimi) is set up on the team: its agents cannot start.",
+    "Choose the provider on the VPS with «jht setup», then try again.",
+  ),
   agent_stop_failed: copy(
     "L’agente è ancora acceso dopo lo spegnimento.",
     "Riprova tra qualche secondo.",
