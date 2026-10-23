@@ -48,3 +48,42 @@ export function toOklch(hex: string): Oklch {
 export function lightnessGap(first: string, second: string): number {
   return Math.abs(toOklch(first).l - toOklch(second).l);
 }
+
+const toGamma = (linear: number) => (linear <= 0.0031308 ? 12.92 * linear : 1.055 * linear ** (1 / 2.4) - 0.055);
+
+/** The linear sRGB of an OKLCH colour, not yet clipped to the gamut. */
+function linearRgb(lightness: number, chroma: number, hue: number): [number, number, number] {
+  const a = chroma * Math.cos((hue * Math.PI) / 180);
+  const b = chroma * Math.sin((hue * Math.PI) / 180);
+  const l = (lightness + 0.3963377774 * a + 0.2158037573 * b) ** 3;
+  const m = (lightness - 0.1055613458 * a - 0.0638541728 * b) ** 3;
+  const s = (lightness - 0.0894841775 * a - 1.291485548 * b) ** 3;
+  return [
+    4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s,
+    -1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s,
+    -0.0041960863 * l - 0.7034186147 * m + 1.707614701 * s,
+  ];
+}
+
+/**
+ * The #rrggbb of an OKLCH colour. Lightness is held; a colour outside the sRGB gamut loses chroma (hue
+ * kept) until it fits, so asking for a vivid colour at an extreme lightness still returns a real one.
+ */
+export function fromOklch({ l, c, h }: Oklch): string {
+  const lightness = Math.min(1, Math.max(0, l));
+  const fits = (chroma: number) => linearRgb(lightness, chroma, h).every((v) => v >= -1e-6 && v <= 1 + 1e-6);
+  let chroma = Math.max(0, c);
+  if (!fits(chroma)) {
+    let [low, high] = [0, chroma];
+    for (let i = 0; i < 24; i += 1) {
+      const middle = (low + high) / 2;
+      if (fits(middle)) low = middle;
+      else high = middle;
+    }
+    chroma = low;
+  }
+  return `#${linearRgb(lightness, chroma, h)
+    .map((v) => Math.round(Math.min(1, Math.max(0, toGamma(Math.min(1, Math.max(0, v))))) * 255))
+    .map((v) => v.toString(16).padStart(2, "0"))
+    .join("")}`;
+}
