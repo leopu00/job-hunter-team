@@ -607,6 +607,10 @@ $selectionFile = Join-Path $RuntimeDir 'container-runtime'
 $machineFile = Join-Path $RuntimeDir 'podman-machine'
 [IO.File]::WriteAllText($machineFile, "$MachineName`n", [Text.UTF8Encoding]::new($false))
 $containerUnitFile = Join-Path $RuntimeDir 'jht-container.service'
+# Environment=CONTAINERS_CGROUP_MANAGER in this unit sets nothing: it is not a Podman setting, and
+# these are `podman --remote` calls, where the cgroup manager is the service's. The service gets it
+# as its own flag, --cgroup-manager=cgroupfs (configure-podman-windows-network.ps1, T87). The line
+# stays so the installed unit does not change.
 $containerUnit = @'
 [Unit]
 Description=Job Hunter Team container
