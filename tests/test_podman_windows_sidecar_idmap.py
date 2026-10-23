@@ -6,7 +6,7 @@ broker had the whole one (0:1:1001, 1001:0:1, 1002:1002:998999): Podman refused 
 whose configuration did not change, and the setup recreated only jht, so it stayed so at every setup.
 
 The setup now reads User and IDMappings of jht-broker and jht-telegram; one whose map leaves out its
-uid or its gid is removed (volumes stay: `podman rm` without -v) and `jht up` creates it again, also
+uid or its gid, and that is of the jht compose project, is removed (volumes stay: `podman rm` without -v) and `jht up` creates it again, also
 when jht is already running.
 
 The code is the enabler's own, read through the PowerShell AST and run under 'Stop' against a fake
@@ -68,6 +68,7 @@ case "$1" in
     if [ ! -f "$FAKE_STATE/$name.details" ]; then echo "Error: no such object: \"$name\"" >&2; exit 125; fi
     case "$6" in
       *State.Running*) if [ -f "$FAKE_STATE/$name.running" ]; then echo true; else echo false; fi ;;
+      *Config.Labels*) if [ -f "$FAKE_STATE/$name.labels" ]; then cat "$FAKE_STATE/$name.labels"; else echo '{"com.docker.compose.project":"jht","com.docker.compose.service":"'"$name"'"}'; fi ;;
       *) cat "$FAKE_STATE/$name.details" ;;
     esac ;;
   ps) for f in "$FAKE_STATE"/*.running; do [ -f "$f" ] && basename "$f" .running; done; exit 0 ;;
@@ -100,10 +101,13 @@ def _run(tmp_path: Path, env: dict[str, str]):
     )
 
 
-def _machine(tmp_path: Path, containers: dict[str, tuple[str, bool]], rm_fails: bool = False):
-    """containers: name -> (details, running). Returns the result, podman's calls, and whether jht up ran."""
+def _machine(tmp_path: Path, containers: dict[str, tuple[str, bool]], rm_fails: bool = False, labels: dict[str, str] | None = None):
+    """containers: name -> (details, running); labels: name -> its labels JSON (default: of the jht
+    project). Returns the result, podman's calls, and whether jht up ran."""
     state = tmp_path / "state"
     state.mkdir()
+    for name, raw in (labels or {}).items():
+        (state / f"{name}.labels").write_text(raw + "\n", encoding="utf-8")
     for name, (details, running) in containers.items():
         (state / f"{name}.details").write_text(details + "\n", encoding="utf-8")
         if running:
@@ -188,3 +192,12 @@ def test_a_removal_that_fails_stops_the_setup(tmp_path):
     done, calls, up = _machine(tmp_path, {"jht-telegram": (_details("1003:1003", SHORT), False)}, rm_fails=True)
     assert done.returncode != 0
     assert "REMOVED=" not in done.stdout and up == []
+
+
+@pytest.mark.parametrize("raw", ['{"com.docker.compose.project":"other","com.docker.compose.service":"jht-telegram"}', "null", ""])
+def test_a_container_with_the_same_name_that_is_not_of_the_jht_project_is_left_alone(tmp_path, raw):
+    # a deletion filter by name alone would remove someone else's container
+    done, calls, up = _machine(tmp_path, {"jht-telegram": (_details("1003:1003", SHORT), True)}, labels={"jht-telegram": raw})
+    assert done.returncode == 0, done.stdout + done.stderr
+    assert not any(call.startswith(("rm", "stop")) for call in calls), calls
+    assert "not of the jht project" in done.stdout and "REMOVED=False" in done.stdout

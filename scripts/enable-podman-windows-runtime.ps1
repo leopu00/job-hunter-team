@@ -702,6 +702,15 @@ foreach ($sidecar in @('jht-broker', 'jht-telegram')) {
   # No double quote inside a native argument (T71). A container that is not there: empty, and skipped.
   [string]$sidecarDetails = (& { $ErrorActionPreference = 'Continue'; & $Podman --connection $MachineName inspect --type container $sidecar --format '{{.Config.User}}|{{json .HostConfig.IDMappings}}' 2>$null } | Select-Object -First 1)
   if (-not $sidecarDetails.Trim() -or (Test-ContainerMapsItsUser -Details $sidecarDetails)) { continue }
+  # Only a container of our compose project: one with the same name made by something else is not ours
+  # to remove. The labels come whole as JSON, read here (T71).
+  [string]$sidecarLabelsJson = (& { $ErrorActionPreference = 'Continue'; & $Podman --connection $MachineName inspect --type container $sidecar --format '{{json .Config.Labels}}' 2>$null } | Select-Object -First 1)
+  $sidecarProject = ''
+  try { $sidecarProject = [string](ConvertFrom-Json -InputObject $sidecarLabelsJson).'com.docker.compose.project' } catch { $sidecarProject = '' }
+  if ($sidecarProject.Trim() -ne 'jht') {
+    Write-Host "  ${sidecar} does not map its own user, but it is not of the jht project: left as it is." -ForegroundColor Yellow
+    continue
+  }
   [string]$sidecarRunning = (& { $ErrorActionPreference = 'Continue'; & $Podman --connection $MachineName inspect --type container $sidecar --format '{{.State.Running}}' 2>$null } | Select-Object -First 1)
   if ($sidecarRunning.Trim() -eq 'true') { Invoke-Checked $Podman '--connection' $MachineName 'stop' '--time' '30' $sidecar | Out-Null }
   Invoke-Checked $Podman '--connection' $MachineName 'rm' $sidecar | Out-Null
