@@ -659,6 +659,25 @@ function Stop-OnFailedComposeUp {
   exit $Code
 }
 
+# Podman only: the broker and the Telegram service get a compose up each, one after the other, before
+# the whole one. Compose creates the services in parallel (COMPOSE_PARALLEL_LIMIT and --parallel do not
+# change that), and Podman's API service, 6.0.2 included, reads the subordinate ranges through
+# libsubid, which is not thread safe: of two creates at once one finds no range, Podman ignores the
+# error, and that container's keep-id map is the user alone. The Telegram service was created so, 0.4
+# ms after the broker, and never started: "doesn't map UID 1003" (T85; podman #29848, fixed in
+# containers/storage on 02/10/2026). A service already there and unchanged is left as it is.
+# The exit code of the first up that fails, 0 otherwise.
+function Invoke-PodmanServicesUpInTurn {
+  if ($ContainerRuntime -ne 'podman') { return 0 }
+  $definition = Get-Content -LiteralPath $ComposeFile -Raw
+  foreach ($service in @($BrokerContainer, $TelegramContainer)) {
+    if ($definition -notmatch "(?m)^  $([regex]::Escape($service)):") { continue }
+    Invoke-Compose 'up' '-d' $service | Out-Host
+    if ($LASTEXITCODE -ne 0) { return $LASTEXITCODE }
+  }
+  return 0
+}
+
 function Test-DockerReachable {
   # Docker c'e' ED e' raggiungibile? A differenza di Require-Docker NON esce:
   # serve a DECIDERE, non a pretendere.
@@ -1780,6 +1799,7 @@ function Ensure-Up {
       Write-Err 'legacy_inventory_failed: il team resta fermo perché l''inventario Telegram host non è stato conservato.'
       exit 1
     }
+    Stop-OnFailedComposeUp (Invoke-PodmanServicesUpInTurn)
     Invoke-Compose 'up' '-d'
     Stop-OnFailedComposeUp $LASTEXITCODE
     # Attendi che il container sia in stato running.
@@ -2905,6 +2925,7 @@ switch ($Sub) {
       Write-Err 'legacy_inventory_failed: il team resta fermo perché l''inventario Telegram host non è stato conservato.'
       exit 1
     }
+    Stop-OnFailedComposeUp (Invoke-PodmanServicesUpInTurn)
     Invoke-Compose 'up' '-d'
     Stop-OnFailedComposeUp $LASTEXITCODE
     $null = Invoke-BrokerMigrateLegacyOnce
@@ -2934,6 +2955,7 @@ switch ($Sub) {
       Write-Err 'legacy_inventory_failed: il team resta fermo perché l''inventario Telegram host non è stato conservato.'
       exit 1
     }
+    Stop-OnFailedComposeUp (Invoke-PodmanServicesUpInTurn)
     Invoke-Compose 'up' '-d'
     Stop-OnFailedComposeUp $LASTEXITCODE
     $null = Invoke-BrokerMigrateLegacyOnce
