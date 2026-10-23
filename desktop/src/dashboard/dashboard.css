@@ -427,3 +427,10 @@
 .flex-1.overflow-x-auto:has(> div > svg)::-webkit-scrollbar {
   display: none;
 }
+
+/* The person's own palette: a selection in its accent, with the button label's colour on it (that pair is
+   held to the contrast bar by the guard that lets the palette be saved). */
+:root[data-jht-theme="custom"] ::selection {
+  background: var(--color-green);
+  color: var(--color-void);
+}

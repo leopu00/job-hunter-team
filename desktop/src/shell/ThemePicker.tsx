@@ -3,12 +3,14 @@ import { appLocale } from "../lib/app-locale";
 import { fill } from "../lib/text-slots";
 import {
   applyTheme,
+  CUSTOM_THEME,
   persistTheme,
   readStoredPreference,
   resolveTheme,
   SYSTEM_THEME,
   THEMES,
   watchSystemTheme,
+  type AppliedTheme,
   type Theme,
   type ThemePreference,
 } from "./theme";
@@ -54,7 +56,7 @@ export default function ThemePicker() {
   const [preference, setPreference] = useState<ThemePreference>(() =>
     readStoredPreference(window.localStorage),
   );
-  const [theme, setTheme] = useState<Theme>(() => resolveTheme(preference));
+  const [theme, setTheme] = useState<AppliedTheme>(() => resolveTheme(preference));
   const [open, setOpen] = useState(false);
   const pickerRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -62,8 +64,10 @@ export default function ThemePicker() {
   const text = THEME_TEXT[appLocale()];
   const label =
     preference === SYSTEM_THEME
-      ? `${text.names[theme]} (${text.systemShort})`
-      : text.names[theme];
+      ? `${text.names[theme as Theme]} (${text.systemShort})`
+      : theme === CUSTOM_THEME
+        ? text.custom
+        : text.names[theme];
 
   useEffect(() => applyTheme(theme), [theme]);
 

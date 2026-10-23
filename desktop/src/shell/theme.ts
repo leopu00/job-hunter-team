@@ -1,3 +1,5 @@
+import { SEED_KEYS, TOKEN_NAMES, checkTokens, isHexColour, seedFamily, type Seeds, type Tokens } from "./theme-custom";
+
 export const THEME_STORAGE_KEY = "jht-desktop-theme";
 
 /**
@@ -23,9 +25,20 @@ export const THEMES = [
 export type Theme = (typeof THEMES)[number]["value"];
 export type ThemeFamily = (typeof THEMES)[number]["family"];
 
-/** What is stored and chosen: one of the palettes, or «follow the system» (also what nobody chose yet). */
+/** What is stored and chosen: one of the palettes, the person's own palette, or «follow the system» (also what nobody chose yet). */
 export const SYSTEM_THEME = "system";
-export type ThemePreference = Theme | typeof SYSTEM_THEME;
+export const CUSTOM_THEME = "custom";
+export type ThemePreference = Theme | typeof SYSTEM_THEME | typeof CUSTOM_THEME;
+/** What can be on the page: a palette of the table, or the person's own. The own one is NOT in THEMES. */
+export type AppliedTheme = Theme | typeof CUSTOM_THEME;
+
+/**
+ * The person's palette, kept whole: the five colours they chose, the 21 tokens computed from them at the moment
+ * of saving (the page's first drawing uses these and does no maths), the palette they started from (it decides
+ * the 7:1 bar) and the base, light or dark, that the panel's lightness gave.
+ */
+export const CUSTOM_STORAGE_KEY = "jht-desktop-theme-custom";
+export type CustomTheme = { v: 1; start: Theme; family: ThemeFamily; seeds: Seeds; vars: Tokens };
 
 export const DEFAULT_THEME: Theme = "dark";
 
@@ -39,12 +52,57 @@ export function themeFamily(theme: Theme): ThemeFamily {
 
 type ThemeStorage = Pick<Storage, "getItem" | "setItem">;
 
+const GRID = /^rgba\((\d{1,3}), (\d{1,3}), (\d{1,3}), 0\.\d{1,3}\)$/;
+const isTokenValue = (name: string, value: unknown) => {
+  if (typeof value !== "string") return false;
+  if (name !== "--color-grid") return isHexColour(value);
+  const channels = GRID.exec(value);
+  return channels !== null && channels.slice(1).every((c) => Number(c) <= 255);
+};
+const hasExactlyKeys = (value: object, keys: readonly string[]) => {
+  const own = Object.keys(value);
+  return own.length === keys.length && keys.every((key) => Object.prototype.hasOwnProperty.call(value, key));
+};
+const isPlainObject = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+/**
+ * The stored text read as a custom palette, or null at the first thing that is not exactly right: any extra
+ * or missing key, a colour that is not #rrggbb, a base that is not the one the panel gives, a palette the
+ * contrast guard would refuse. Nothing is repaired: a doubtful palette is not used.
+ */
+export function parseCustomTheme(raw: unknown): CustomTheme | null {
+  let value: unknown;
+  try {
+    value = typeof raw === "string" ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+  if (!isPlainObject(value) || !hasExactlyKeys(value, ["v", "start", "family", "seeds", "vars"])) return null;
+  const { v, start, family, seeds, vars } = value;
+  if (v !== 1 || !isTheme(start) || (family !== "dark" && family !== "light")) return null;
+  if (!isPlainObject(seeds) || !hasExactlyKeys(seeds, SEED_KEYS) || !SEED_KEYS.every((key) => isHexColour(seeds[key]))) return null;
+  if (!isPlainObject(vars) || !hasExactlyKeys(vars, TOKEN_NAMES) || !TOKEN_NAMES.every((name) => isTokenValue(name, vars[name]))) return null;
+  if (seedFamily(seeds as Seeds) !== family) return null;
+  if (checkTokens(vars as Tokens, { strict: start === "contrast" }).length > 0) return null;
+  return value as CustomTheme;
+}
+
+/** The person's palette as stored, or null when nothing valid is stored. */
+export function readStoredCustom(storage: ThemeStorage): CustomTheme | null {
+  try {
+    return parseCustomTheme(storage.getItem(CUSTOM_STORAGE_KEY));
+  } catch {
+    return null;
+  }
+}
+
 export function isTheme(value: unknown): value is Theme {
   return THEMES.some((theme) => theme.value === value);
 }
 
 export function isThemePreference(value: unknown): value is ThemePreference {
-  return value === SYSTEM_THEME || isTheme(value);
+  return value === SYSTEM_THEME || value === CUSTOM_THEME || isTheme(value);
 }
 
 /** Does the system ask for light? A webview without `matchMedia` (or one that throws) asks for dark. */
@@ -58,10 +116,14 @@ export function systemPrefersLight(
   }
 }
 
-/** What was chosen: a stored palette, or «follow the system» when nothing valid is stored. */
+/**
+ * What was chosen: a stored palette, or «follow the system» when nothing valid is stored. The person's own palette
+ * counts only while a valid one is stored with it.
+ */
 export function readStoredPreference(storage: ThemeStorage): ThemePreference {
   try {
     const stored = storage.getItem(THEME_STORAGE_KEY);
+    if (stored === CUSTOM_THEME) return readStoredCustom(storage) ? CUSTOM_THEME : SYSTEM_THEME;
     return isThemePreference(stored) ? stored : SYSTEM_THEME;
   } catch {
     return SYSTEM_THEME;
@@ -72,7 +134,7 @@ export function readStoredPreference(storage: ThemeStorage): ThemePreference {
 export function resolveTheme(
   preference: ThemePreference,
   prefersLight: boolean = systemPrefersLight(),
-): Theme {
+): AppliedTheme {
   if (preference !== SYSTEM_THEME) return preference;
   return prefersLight ? SYSTEM_LIGHT_THEME : SYSTEM_DARK_THEME;
 }
@@ -81,26 +143,38 @@ export function resolveTheme(
 export function readStoredTheme(
   storage: ThemeStorage,
   prefersLight: boolean = systemPrefersLight(),
-): Theme {
+): AppliedTheme {
   return resolveTheme(readStoredPreference(storage), prefersLight);
 }
 
+/** Puts the palette on the page; for the person's own it reads it from `storage` and, if it is not valid, dresses the system's. */
 export function applyTheme(
-  theme: Theme,
+  theme: AppliedTheme,
   root: HTMLElement = document.documentElement,
+  storage: ThemeStorage = window.localStorage,
 ) {
-  root.dataset.jhtTheme = theme;
+  // the own palette is inline variables: any other theme must not inherit them
+  for (const name of TOKEN_NAMES) root.style?.removeProperty(name);
+  const custom = theme === CUSTOM_THEME ? readStoredCustom(storage) : null;
+  if (custom) {
+    for (const name of TOKEN_NAMES) root.style.setProperty(name, custom.vars[name]);
+    root.dataset.jhtTheme = CUSTOM_THEME;
+    root.dataset.theme = custom.family;
+    return;
+  }
+  const palette = theme === CUSTOM_THEME ? resolveTheme(SYSTEM_THEME) : theme;
+  root.dataset.jhtTheme = palette;
   // Reused web views understand only light/dark. Keep that contract while
   // data-jht-theme carries the desktop's richer palette.
-  root.dataset.theme = themeFamily(theme);
+  root.dataset.theme = themeFamily(palette as Theme);
 }
 
 export function initializeTheme(
   storage: ThemeStorage = window.localStorage,
   root: HTMLElement = document.documentElement,
-): Theme {
+): AppliedTheme {
   const theme = readStoredTheme(storage);
-  applyTheme(theme, root);
+  applyTheme(theme, root, storage);
   return theme;
 }
 
@@ -109,15 +183,38 @@ export function persistTheme(
   preference: ThemePreference,
   storage: ThemeStorage = window.localStorage,
   root: HTMLElement = document.documentElement,
-): Theme {
-  const theme = resolveTheme(preference);
-  applyTheme(theme, root);
+): AppliedTheme {
+  // «custom» is chosen only while a valid own palette is stored: otherwise it is the system's
+  const chosen = preference === CUSTOM_THEME && !readStoredCustom(storage) ? SYSTEM_THEME : preference;
+  const theme = resolveTheme(chosen);
+  applyTheme(theme, root, storage);
   try {
-    storage.setItem(THEME_STORAGE_KEY, preference);
+    storage.setItem(THEME_STORAGE_KEY, chosen);
   } catch {
     // A denied/full localStorage must not prevent the in-memory choice.
   }
   return theme;
+}
+
+/**
+ * Keeps the person's palette and chooses it. Refuses (false, nothing written) what `parseCustomTheme` would
+ * not read back, so the contrast guard is the same here and at every start.
+ */
+export function saveCustomTheme(
+  custom: CustomTheme,
+  storage: ThemeStorage = window.localStorage,
+  root: HTMLElement = document.documentElement,
+): boolean {
+  const text = JSON.stringify(custom);
+  if (!parseCustomTheme(text)) return false;
+  try {
+    storage.setItem(CUSTOM_STORAGE_KEY, text);
+    storage.setItem(THEME_STORAGE_KEY, CUSTOM_THEME);
+  } catch {
+    // A denied/full localStorage must not prevent the in-memory choice.
+  }
+  applyTheme(CUSTOM_THEME, root, { getItem: (key) => (key === CUSTOM_STORAGE_KEY ? text : null), setItem: () => {} });
+  return true;
 }
 
 /**
@@ -136,7 +233,7 @@ export function watchSystemTheme(
   }
   if (!query?.addEventListener) return () => {};
   const listener = (event: MediaQueryListEvent) =>
-    onChange(resolveTheme(SYSTEM_THEME, event.matches));
+    onChange(event.matches ? SYSTEM_LIGHT_THEME : SYSTEM_DARK_THEME);
   query.addEventListener("change", listener);
   return () => query?.removeEventListener("change", listener);
 }

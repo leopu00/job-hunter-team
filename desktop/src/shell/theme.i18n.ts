@@ -13,6 +13,7 @@ export interface ThemeText {
   names: Record<Theme, string>;
   system: string; // the «follow the system» entry
   systemShort: string; // appended to the current theme's name when it comes from the system
+  custom: string; // the name of the person's own palette
   groupDark: string;
   groupLight: string;
 }
@@ -25,6 +26,7 @@ export const THEME_TEXT: Record<Locale, ThemeText> = {
     names: { dark: "Scuro", light: "Chiaro", graphite: "Grafite", ocean: "Oceano", paper: "Carta", midnight: "Mezzanotte", forest: "Foresta", dusk: "Crepuscolo", contrast: "Alto contrasto", sage: "Salvia", lavender: "Lavanda" },
     system: "Segui il sistema",
     systemShort: "sistema",
+    custom: "Personale",
     groupDark: "Scuri",
     groupLight: "Chiari",
   },
@@ -35,6 +37,7 @@ export const THEME_TEXT: Record<Locale, ThemeText> = {
     names: { dark: "Dark", light: "Light", graphite: "Graphite", ocean: "Ocean", paper: "Paper", midnight: "Midnight", forest: "Forest", dusk: "Dusk", contrast: "High contrast", sage: "Sage", lavender: "Lavender" },
     system: "Match system",
     systemShort: "system",
+    custom: "Custom",
     groupDark: "Dark themes",
     groupLight: "Light themes",
   },
@@ -45,6 +48,7 @@ export const THEME_TEXT: Record<Locale, ThemeText> = {
     names: { dark: "Dunkel", light: "Hell", graphite: "Graphit", ocean: "Ozean", paper: "Papier", midnight: "Mitternacht", forest: "Wald", dusk: "Dämmerung", contrast: "Hoher Kontrast", sage: "Salbei", lavender: "Lavendel" },
     system: "Wie im System",
     systemShort: "System",
+    custom: "Benutzerdefiniert",
     groupDark: "Dunkle Designs",
     groupLight: "Helle Designs",
   },
@@ -55,6 +59,7 @@ export const THEME_TEXT: Record<Locale, ThemeText> = {
     names: { dark: "Sombre", light: "Clair", graphite: "Graphite", ocean: "Océan", paper: "Papier", midnight: "Minuit", forest: "Forêt", dusk: "Crépuscule", contrast: "Contraste élevé", sage: "Sauge", lavender: "Lavande" },
     system: "Suivre le système",
     systemShort: "système",
+    custom: "Personnalisé",
     groupDark: "Sombres",
     groupLight: "Clairs",
   },
@@ -65,6 +70,7 @@ export const THEME_TEXT: Record<Locale, ThemeText> = {
     names: { dark: "Oscuro", light: "Claro", graphite: "Grafito", ocean: "Océano", paper: "Papel", midnight: "Medianoche", forest: "Bosque", dusk: "Crepúsculo", contrast: "Alto contraste", sage: "Salvia", lavender: "Lavanda" },
     system: "Seguir el sistema",
     systemShort: "sistema",
+    custom: "Personalizado",
     groupDark: "Oscuros",
     groupLight: "Claros",
   },
@@ -75,6 +81,7 @@ export const THEME_TEXT: Record<Locale, ThemeText> = {
     names: { dark: "Escuro", light: "Claro", graphite: "Grafite", ocean: "Oceano", paper: "Papel", midnight: "Meia-noite", forest: "Floresta", dusk: "Crepúsculo", contrast: "Alto contraste", sage: "Sálvia", lavender: "Lavanda" },
     system: "Seguir o sistema",
     systemShort: "sistema",
+    custom: "Personalizado",
     groupDark: "Escuros",
     groupLight: "Claros",
   },
@@ -85,6 +92,7 @@ export const THEME_TEXT: Record<Locale, ThemeText> = {
     names: { dark: "Sötét", light: "Világos", graphite: "Grafit", ocean: "Óceán", paper: "Papír", midnight: "Éjfél", forest: "Erdő", dusk: "Alkony", contrast: "Nagy kontrasztú", sage: "Zsálya", lavender: "Levendula" },
     system: "Rendszer szerint",
     systemShort: "rendszer",
+    custom: "Egyéni",
     groupDark: "Sötét",
     groupLight: "Világos",
   },
