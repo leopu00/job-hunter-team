@@ -102,8 +102,8 @@ def _instant(value: object) -> str | None:
 def _destination(summary: object) -> str | None:
     if not isinstance(summary, str):
         return None
-    _before, separator, host = summary.rpartition(" · ")
-    if not separator or not _before or not host:
+    _before, separator, host = summary.rpartition("\nDestinazione: ")
+    if not separator or not _before or not host or "\n" in host:
         return None
     try:
         return notary.destination("web:" + host)

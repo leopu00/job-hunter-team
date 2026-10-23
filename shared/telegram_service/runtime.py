@@ -382,8 +382,8 @@ class Runtime:
         the closed destination. A pending question is reused to avoid turning
         agent retries into a stream of prompts.
         """
-        title = _display_field(args.get("title"), MAX_AUTH_TITLE)
-        company = _display_field(args.get("company"), MAX_AUTH_COMPANY)
+        title = _display_field(args.get("title"), MAX_AUTH_TITLE).replace("·", " ")
+        company = _display_field(args.get("company"), MAX_AUTH_COMPANY).replace("·", " ")
         host, destination = _question_destination(args.get("url"))
         position_id = args["position_id"]
         now = int(time.time())
@@ -409,7 +409,7 @@ class Runtime:
             secret, api = self._bot("assistente")
             text = (
                 "🔐 JHT · autorizzazione candidatura\n\n"
-                f"Vuoi candidarti a:\n{title} @ {company} · {host}\n\n"
+                f"Vuoi candidarti a:\n{title} @ {company}\nDestinazione: {host}\n\n"
                 "L'autorizzazione vale una sola volta per questa destinazione."
             )
             message_id = api.send_message(

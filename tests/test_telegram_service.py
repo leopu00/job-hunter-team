@@ -386,7 +386,7 @@ def test_apply_question_is_fixed_clean_and_records_only_its_button(
     assert answer == {"ok": True, "status": "asked", "question_id": "a" * 32}
     assert api.sent[-1][1] == (
         "🔐 JHT · autorizzazione candidatura\n\n"
-        "Vuoi candidarti a:\nRole @ Example Co · jobs.example.co.uk\n\n"
+        "Vuoi candidarti a:\nRole @ Example Co\nDestinazione: jobs.example.co.uk\n\n"
         "L'autorizzazione vale una sola volta per questa destinazione."
     )
     assert api.markups[-1] == {"inline_keyboard": [[{

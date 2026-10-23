@@ -1,4 +1,7 @@
--- 104: application authorisations from the website are receipts of a person, not of a box.
+-- 105: application authorisations from the website are receipts of a person, not of a box.
+--
+-- Needs the approved 104, which makes web_door.one_line the fence around
+-- vacancy text shown by an application confirmation.
 --
 -- A cloud-sync pairing exchanges a refresh token for a bearer token.  Keep the
 -- session that made that exchange on the server, so the action door can refuse
@@ -35,6 +38,9 @@ DECLARE
     v_title   TEXT;
     v_company TEXT;
 BEGIN
+    IF to_regprocedure('web_door.one_line(text, integer)') IS NULL THEN
+        RAISE EXCEPTION '105: needs 104 (web_door.one_line)';
+    END IF;
     IF p_action NOT IN ('position.apply_authorize', 'position.apply_revoke') THEN
         RAISE EXCEPTION 'web_door.ext_position: not an action of this family: %', p_action;
     END IF;
@@ -101,20 +107,22 @@ BEGIN
                OR char_length(v_host) > 194 THEN
                 RETURN jsonb_build_object('error', 'not_found');
             END IF;
-            -- The host is the destination: clip the human labels first, and
-            -- never slice a destination into another domain.
-            v_title := left(regexp_replace(COALESCE(v_pos.title, ''), '[[:cntrl:]]', ' ', 'g'), 80);
-            v_company := left(regexp_replace(COALESCE(v_pos.company, ''), '[[:cntrl:]]', ' ', 'g'),
-                              GREATEST(0, 194 - char_length(v_host) - char_length(v_title)));
+            -- Vacancy text is fenced before the confirmation.  A middle dot
+            -- belongs to neither label: it used to be confused with the old
+            -- host delimiter, so it is removed rather than parsed later.
+            v_title := web_door.one_line(regexp_replace(COALESCE(v_pos.title, ''), '·', ' ', 'g'), 80);
+            v_company := web_door.one_line(
+                regexp_replace(COALESCE(v_pos.company, ''), '·', ' ', 'g'),
+                GREATEST(0, 182 - char_length(v_host) - char_length(v_title)));
         ELSE
-            v_title := COALESCE(v_pos.title, '');
-            v_company := COALESCE(v_pos.company, '');
+            v_title := web_door.one_line(regexp_replace(COALESCE(v_pos.title, ''), '·', ' ', 'g'), 96);
+            v_company := web_door.one_line(regexp_replace(COALESCE(v_pos.company, ''), '·', ' ', 'g'), 100);
         END IF;
         RETURN jsonb_build_object(
             'params', jsonb_build_object('legacy_id', v_legacy),
             'summary', CASE WHEN p_action = 'position.apply_authorize'
-                            THEN v_title || ' @ ' || v_company || ' · ' || v_host
-                            ELSE left(regexp_replace(v_title || ' @ ' || v_company, '[[:cntrl:]]', ' ', 'g'), 200)
+                            THEN v_title || ' @ ' || v_company || E'\nDestinazione: ' || v_host
+                            ELSE web_door.one_line(v_title || ' @ ' || v_company, 200)
                        END,
             'confirm', p_action = 'position.apply_authorize');
     END IF;

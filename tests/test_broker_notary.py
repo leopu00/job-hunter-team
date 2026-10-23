@@ -316,7 +316,7 @@ def test_web_receipts_are_bound_to_the_host_account_and_consumed_once(broker, mo
             "id": "22222222-2222-4222-8222-222222222222",
             "legacy_id": 42,
             "created_at": T1,
-            "summary": "Synthetic role @ Synthetic company · example.com",
+            "summary": "Synthetic role @ Synthetic company\nDestinazione: example.com",
             "action": "position.apply_authorize",
             "status": "done",
         }],
@@ -367,7 +367,7 @@ def test_a_later_web_withdrawal_wins_over_the_same_position(broker, monkeypatch)
     broker.webauth.set_token(b"jht_sync_abcdefghijklmnopqrstuvwxyz")
     rows = [
         {"id": "22222222-2222-4222-8222-222222222222", "legacy_id": 42, "created_at": T1,
-         "summary": "Synthetic role @ Synthetic company · example.com", "action": "position.apply_authorize", "status": "done"},
+         "summary": "Synthetic role @ Synthetic company\nDestinazione: example.com", "action": "position.apply_authorize", "status": "done"},
         {"id": "33333333-3333-4333-8333-333333333333", "legacy_id": 42, "created_at": T2,
          "summary": "Synthetic role @ Synthetic company", "action": "position.apply_revoke", "status": "queued"},
     ]
@@ -390,9 +390,9 @@ def test_a_stale_web_row_is_marked_used_and_does_not_block_later_rows(broker, mo
     broker.notary.record(42, T2, "user_local", WEB)
     rows = [
         {"id": "22222222-2222-4222-8222-222222222222", "legacy_id": 42, "created_at": T1,
-         "summary": "Synthetic role @ Synthetic company · example.com", "action": "position.apply_authorize", "status": "done"},
+         "summary": "Synthetic role @ Synthetic company\nDestinazione: example.com", "action": "position.apply_authorize", "status": "done"},
         {"id": "33333333-3333-4333-8333-333333333333", "legacy_id": 7, "created_at": T2,
-         "summary": "Synthetic role @ Synthetic company · example.com", "action": "position.apply_authorize", "status": "done"},
+         "summary": "Synthetic role @ Synthetic company\nDestinazione: example.com", "action": "position.apply_authorize", "status": "done"},
     ]
 
     class Reply:
@@ -414,11 +414,11 @@ def test_a_full_web_page_is_followed_without_waiting_for_the_next_poll(broker, m
     pages = iter([
         {"ok": True, "account_id": account, "has_more": True, "cursor": T1, "authorizations": [
             {"id": "22222222-2222-4222-8222-222222222222", "legacy_id": 42, "created_at": T1,
-             "summary": "Synthetic role @ Synthetic company · example.com", "action": "position.apply_authorize", "status": "done"},
+             "summary": "Synthetic role @ Synthetic company\nDestinazione: example.com", "action": "position.apply_authorize", "status": "done"},
         ]},
         {"ok": True, "account_id": account, "has_more": False, "cursor": T2, "authorizations": [
             {"id": "33333333-3333-4333-8333-333333333333", "legacy_id": 7, "created_at": T2,
-             "summary": "Synthetic role @ Synthetic company · example.com", "action": "position.apply_authorize", "status": "done"},
+                 "summary": "Synthetic role @ Synthetic company\nDestinazione: example.com", "action": "position.apply_authorize", "status": "done"},
         ]},
     ])
     cursors = []
