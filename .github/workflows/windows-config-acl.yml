@@ -18,6 +18,7 @@ on:
       - 'tests/test_podman_windows_setup_retry.py'
       - 'tests/windows_native_fakes.py'
       - 'tests/test_windows_powershell51_native_quotes.py'
+      - 'tests/test_windows_powershell51_native_stderr.py'
       - 'tests/conftest.py'
       - 'tests/requirements-ci.txt'
       - '.github/workflows/windows-config-acl.yml'
@@ -47,13 +48,15 @@ jobs:
       - name: Install pytest
         run: pip install --require-hashes -r tests/requirements-ci.txt
       # A skip here is a failure: with a shell missing the step would be green
-      # having proved nothing. 65 = 41 cases of the native file (its shim only
+      # having proved nothing. 75 = 41 cases of the native file (its shim only
       # under Windows PowerShell 5.1) + the probe's shim under powershell and pwsh
       # + 14 cases of the JSON the scripts read from Podman, under both shells:
       # the app runs them with Windows PowerShell 5.1, whose ConvertFrom-Json
       # does not enumerate an array + 8 cases of the arguments handed to Podman
       # and Docker, under both shells: 5.1 drops the double quotes inside a
-      # native argument. The count may grow, never shrink.
+      # native argument + 10 cases of a native program writing on stderr under
+      # 'Stop', which 5.1 turns into an error that stops the script. The count
+      # may grow, never shrink.
       - name: Native Windows pieces of the Podman runtime
         shell: pwsh
         env:
@@ -63,13 +66,14 @@ jobs:
             'tests/test_podman_windows_probe.py::test_native_shim_compiles_and_propagates_backend_exit_code' `
             tests/test_windows_powershell51_json.py `
             tests/test_windows_powershell51_native_quotes.py `
+            tests/test_windows_powershell51_native_stderr.py `
             -n 4 -p no:cacheprovider -rs 2>&1
           $code = $LASTEXITCODE
           $out | ForEach-Object { "$_" }
           if ($code -ne 0) { exit $code }
           $summary = "$($out[-1])"
           if ($summary -notmatch '^=+ (\d+) passed(, \d+ warnings?)? in [0-9.]+s') { throw "unexpected pytest summary: $summary" }
-          if ([int]$Matches[1] -lt 65) { throw "only $($Matches[1]) native Windows tests ran, expected at least 65" }
+          if ([int]$Matches[1] -lt 75) { throw "only $($Matches[1]) native Windows tests ran, expected at least 75" }
 
       # Measures for T80: under 5.1 the step below takes 12.5 minutes here and
       # 2 on a real Windows PC, under pwsh 44 s. What one start of each shell

@@ -129,10 +129,13 @@ function Skip-WslWelcome { Add-Content -LiteralPath $env:FAKE_LOG -Value $env:WE
 . ([scriptblock]::Create($block.Extent.Text))
 """
 
+# Like the real Podman, a refusal says why on stderr: under 'Stop', Windows PowerShell 5.1 turns a
+# line of a native program's stderr into an error when the script redirects it (T82).
 PODMAN_CASES = """  "machine list --format json") printf '%s' "$FAKE_MACHINES"; exit "${FAKE_LIST_EXIT:-0}" ;;
-  "machine init "*) [ "$FAKE_FAIL" = init ] && exit 125; case "$*" in *"--update-connection=false"*) ;; *) printf '%s' jht-podman > "$FAKE_DEFAULT" ;; esac ;;
-  "machine start "*) [ "$FAKE_FAIL" = start ] && exit 125; case "$*" in *"--update-connection=false"*) ;; *) printf '%s' jht-podman > "$FAKE_DEFAULT" ;; esac ;;
-  "--connection jht-podman info") [ "$FAKE_FAIL" = info ] && exit 125 ;;"""
+  "machine init "*) [ "$FAKE_FAIL" = init ] && { echo 'Error: machine init failed' >&2; exit 125; }; case "$*" in *"--update-connection=false"*) ;; *) printf '%s' jht-podman > "$FAKE_DEFAULT" ;; esac ;;
+  "machine start "*) [ "$FAKE_FAIL" = start ] && { echo 'Error: machine start failed' >&2; exit 125; }; case "$*" in *"--update-connection=false"*) ;; *) printf '%s' jht-podman > "$FAKE_DEFAULT" ;; esac ;;
+  "--connection jht-podman info") [ "$FAKE_FAIL" = info ] && { echo 'Error: cannot connect to Podman' >&2; exit 125; } ;;
+  "--connection jht-podman inspect jht "*) echo 'Error: no such object: "jht"' >&2; exit 125 ;;"""
 
 INIT = "machine init --update-connection=false --provider wsl --cpus 2 --memory 3072 --disk-size 30 jht-podman"
 START = "machine start --update-connection=false jht-podman"
@@ -419,7 +422,7 @@ Start-PodmanMachineForUp
 
 # docker answers only once the machine started (the state file), unless told otherwise.
 DOCKER_CASES = """  "info") [ "$DOCKER" = up ] && exit 0; [ "$DOCKER" = after-start ] && [ -f "$FAKE_STATE" ] && exit 0; exit 1 ;;"""
-UP_PODMAN_CASES = """  "machine start "*) [ "$FAKE_FAIL" = start ] && exit 125; case "$*" in *"--update-connection=false"*) ;; *) printf '%s' jht-podman > "$FAKE_DEFAULT" ;; esac; : > "$FAKE_STATE" ;;"""
+UP_PODMAN_CASES = """  "machine start "*) [ "$FAKE_FAIL" = start ] && { echo 'Error: machine start failed' >&2; exit 125; }; case "$*" in *"--update-connection=false"*) ;; *) printf '%s' jht-podman > "$FAKE_DEFAULT" ;; esac; : > "$FAKE_STATE" ;;"""
 
 
 def _up(tmp_path, *, runtime="podman", docker="after-start", podman=True, fail=""):
@@ -474,7 +477,7 @@ $code = Invoke-JhtWindowsUninstall -UninstallArgs @('--confirm') `
 UNINSTALL_PODMAN_CASES = """  "machine list --format json") if [ -f "$FAKE_STATE" ]; then printf '%s' '[{"Name":"jht-podman"},{"Name":"user-podman"}]'; else printf '%s' '[{"Name":"user-podman"}]'; fi ;;
   "machine rm --force jht-podman") rm -f "$FAKE_STATE" ;;
   "system connection "*) printf '%s' changed > "$FAKE_DEFAULT" ;;
-  "machine rm "*) exit 125 ;;"""
+  "machine rm "*) echo 'Error: machine rm failed' >&2; exit 125 ;;"""
 
 
 def test_uninstall_removes_only_jht_and_preserves_the_users_default_connection(tmp_path):

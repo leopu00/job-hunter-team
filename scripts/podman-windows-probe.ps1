@@ -170,7 +170,7 @@ public static class DockerShim
 
 function Get-MachineState {
   param([Parameter(Mandatory)][string]$Name)
-  $json = ((& podman machine list --format json 2>$null) -join "`n")
+  $json = ((& { $ErrorActionPreference = 'Continue'; & podman machine list --format json 2>$null }) -join "`n")
   if ($LASTEXITCODE -ne 0 -or -not $json) { return $null }
   # Windows PowerShell 5.1 gives a JSON array to the pipeline as ONE object: parse with
   # -InputObject and enumerate with foreach, the same in 5.1 and in PowerShell 7.
@@ -296,7 +296,8 @@ try {
     exit 0
   }
 
-  $existing = & docker inspect jht 2>$null
+  # no container jht yet: "no such object" on stderr, which under 'Stop' Windows PowerShell 5.1 turns into an error (T82)
+  $existing = & { $ErrorActionPreference = 'Continue'; & docker inspect jht 2>$null }
   if ($LASTEXITCODE -eq 0 -and $existing) {
     throw "The selected Podman machine already contains a container named 'jht'; refusing to replace it."
   }
@@ -305,7 +306,7 @@ try {
   $script:ProbeStartedContainer = $true
   Invoke-ProbeCompose 'up' '-d'
 
-  $inspectJson = ((& docker inspect jht 2>$null) -join "`n")
+  $inspectJson = ((& { $ErrorActionPreference = 'Continue'; & docker inspect jht 2>$null }) -join "`n")
   $inspectCode = $LASTEXITCODE
   # Windows PowerShell 5.1 gives a JSON array to the pipeline as ONE object: parse with
   # -InputObject and enumerate with foreach, the same in 5.1 and in PowerShell 7.
@@ -338,7 +339,7 @@ try {
   # that its kernel/security profile behaves like the host's Ubuntu distro.
   Invoke-NativeChecked 'docker' 'exec' 'jht' 'sh' '-lc' `
     'sleep 2 & p=$!; kill -TERM $p; wait $p; rc=$?; test $rc -eq 143'
-  $apparmorState = (& docker exec jht sh -lc 'if [ -r /sys/module/apparmor/parameters/enabled ]; then cat /sys/module/apparmor/parameters/enabled; else printf disabled; fi' 2>$null | Select-Object -First 1)
+  $apparmorState = (& { $ErrorActionPreference = 'Continue'; & docker exec jht sh -lc 'if [ -r /sys/module/apparmor/parameters/enabled ]; then cat /sys/module/apparmor/parameters/enabled; else printf disabled; fi' 2>$null } | Select-Object -First 1)
   Write-ProbeStep "Container AppArmor state: $(([string]$apparmorState).Trim())"
 
   Invoke-NativeChecked 'docker' 'exec' 'jht' 'sh' '-lc' 'getent hosts host.docker.internal >/dev/null'
@@ -356,7 +357,7 @@ try {
 
   Write-ProbeStep 'Restarting the workload and checking that it returns running'
   Invoke-ProbeCompose 'restart'
-  $running = (& docker inspect jht --format '{{.State.Running}}' 2>$null | Select-Object -First 1).Trim()
+  $running = ([string](& { $ErrorActionPreference = 'Continue'; & docker inspect jht --format '{{.State.Running}}' 2>$null } | Select-Object -First 1)).Trim()
   if ($LASTEXITCODE -ne 0 -or $running -ne 'true') {
     throw "Container did not return running after compose restart (state: '$running')."
   }
