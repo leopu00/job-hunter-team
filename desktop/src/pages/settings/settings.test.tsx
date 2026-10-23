@@ -61,4 +61,11 @@ describe("the settings page", () => {
     await user.selectOptions(screen.getByRole("combobox"), "USD");
     expect(document.cookie).toContain(`${DISPLAY_CURRENCY_COOKIE}=USD`);
   });
+
+  it("opens the VPS connection details from settings", async () => {
+    const user = userEvent.setup();
+    render(<SettingsPage {...props} />);
+    await user.click(screen.getByRole("button", { name: /VPS connection/ }));
+    expect(window.location.hash).toBe("#/settings/vps-connection");
+  });
 });
