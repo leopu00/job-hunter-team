@@ -50,7 +50,7 @@ describe("apply authorizations cloud route", () => {
         status: "done",
         created_at: "2026-10-23T18:00:00.000Z",
         summary: "Synthetic role @ Synthetic company · example.com",
-        params: { legacy_id: 42 },
+        params: { legacy_id: 42, host: "example.com" },
       },
       {
         id: "00000000-0000-4000-8000-000000000002",
@@ -66,7 +66,7 @@ describe("apply authorizations cloud route", () => {
         status: "done",
         created_at: "2026-10-23T18:02:00.000Z",
         summary: "Another role @ Another company · example.com",
-        params: { legacy_id: 45 },
+        params: { legacy_id: 45, host: "example.com" },
         session_id: null,
       },
       {
@@ -120,7 +120,7 @@ describe("apply authorizations cloud route", () => {
       status: "done",
       created_at: `2026-10-23T18:${String(Math.floor(index / 60)).padStart(2, "0")}:${String(index % 60).padStart(2, "0")}.000Z`,
       summary: "Synthetic role @ Synthetic company · example.com",
-      params: { legacy_id: index + 1 },
+      params: { legacy_id: index + 1, host: "example.com" },
       session_id: null,
     }));
     const fake = cloud(rows);
@@ -143,7 +143,7 @@ describe("apply authorizations cloud route", () => {
         status: "done",
         created_at: "2026-10-23T18:00:00.000Z",
         summary: "Synthetic role @ Synthetic company · example.com",
-        params: { legacy_id: 42 },
+        params: { legacy_id: 42, host: "example.com" },
         session_id: null,
       },
     ], [{ pairing_session_id: null, expires_at: null }]);
