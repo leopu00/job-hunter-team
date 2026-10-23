@@ -87,24 +87,51 @@ export type WebActionRow = {
   result: string | null;
 };
 
-/** Controls, line and paragraph separators, zero-width and bidirectional marks: nothing the eye should not see. */
-function hiddenCharacter(code: number): boolean {
+/**
+ * The invisible commands taken OUT of a log text, with no space in their place: the repo's one list,
+ * `INVISIBLE_COMMANDS` of shared/skills/external_content.py (a test keeps the two equal): soft hyphen,
+ * ZWSP, word joiner, BOM, the bidi embeddings, overrides and isolates, the interlinear annotations and
+ * the tag characters (which can write a whole sentence nobody sees).
+ */
+export const LOG_INVISIBLE_COMMANDS: readonly (readonly [number, number])[] = [
+  [0x00ad, 0x00ad],
+  [0x200b, 0x200b],
+  [0x2060, 0x2060],
+  [0xfeff, 0xfeff],
+  [0x202a, 0x202e],
+  [0x2066, 0x2069],
+  [0xfff9, 0xfffb],
+  [0xe0000, 0xe007f],
+];
+
+function invisibleCommand(code: number): boolean {
+  return LOG_INVISIBLE_COMMANDS.some(
+    ([first, last]) => code >= first && code <= last,
+  );
+}
+
+/** Where a word really ends: the controls and the line and paragraph separators become a space. */
+function lineBreaker(code: number): boolean {
   return (
     code <= 0x1f ||
     (code >= 0x7f && code <= 0x9f) ||
-    (code >= 0x200b && code <= 0x200f) ||
-    (code >= 0x2028 && code <= 0x202e) ||
-    (code >= 0x2060 && code <= 0x2069) ||
-    code === 0xfeff
+    code === 0x2028 ||
+    code === 0x2029
   );
 }
+
+// ZWNJ, ZWJ, LRM, RLM and ALM are NOT touched: with them Persian, Hindi, Arabic, Hebrew and the
+// composed emoji are written (external_content.py's WRITING_INVISIBLES).
 
 /** One line of plain text, at most `max` characters; empty when there is nothing readable. */
 export function cleanLogText(value: unknown, max: number): string {
   if (typeof value !== "string") return "";
   let out = "";
-  for (const char of value)
-    out += hiddenCharacter(char.codePointAt(0) ?? 0) ? " " : char;
+  for (const char of value) {
+    const code = char.codePointAt(0) ?? 0;
+    if (invisibleCommand(code)) continue;
+    out += lineBreaker(code) ? " " : char;
+  }
   out = out.replace(/ {2,}/g, " ").trim();
   const chars = Array.from(out);
   return chars.length > max
