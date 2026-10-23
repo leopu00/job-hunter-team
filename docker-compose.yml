@@ -179,6 +179,9 @@ services:
       - jht-secrets:/jht_secrets
       - jht-broker-state:/jht_broker_state
       - jht-broker-sock:/run/jht-broker
+      # The Telegram authorisation socket is absent from jht. Its own volume,
+      # rather than a caller-controlled field, separates recording from agents.
+      - jht-telegram-broker-sock:/run/jht-broker-telegram
     read_only: true
     # The image declares VOLUME /jht_home and /jht_user: without a mount there,
     # every new broker container gets two anonymous volumes, and a compose
@@ -211,6 +214,7 @@ services:
       - JHT_TELEGRAM_STATE=/jht_telegram_state
       - JHT_TELEGRAM_SOCKET_DIR=/run/jht-telegram
       - JHT_TELEGRAM_INBOX=/jht_telegram_inbox
+      - JHT_TELEGRAM_BROKER_SOCKET_DIR=/run/jht-broker-telegram
       - JHT_TELEGRAM_CLIENT_UID=1001
       - JHT_TELEGRAM_BURST_LIMIT=${JHT_TELEGRAM_BURST_LIMIT:-10}
       - JHT_TELEGRAM_DAILY_LIMIT=${JHT_TELEGRAM_DAILY_LIMIT:-300}
@@ -219,6 +223,7 @@ services:
       - jht-telegram-state:/jht_telegram_state
       - jht-telegram-sock:/run/jht-telegram
       - jht-telegram-inbox:/jht_telegram_inbox
+      - jht-telegram-broker-sock:/run/jht-broker-telegram
     read_only: true
     tmpfs:
       - /tmp:size=16m,mode=1777
@@ -238,6 +243,7 @@ volumes:
   jht-secrets:
   jht-broker-state:
   jht-broker-sock:
+  jht-telegram-broker-sock:
   jht-telegram-secrets:
   jht-telegram-state:
   jht-telegram-sock:

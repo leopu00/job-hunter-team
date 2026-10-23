@@ -25,8 +25,8 @@ short code, or — only when exactly one request is open and it was delivered
 on Telegram — the next message. Two open requests and no code resolve
 nothing. The reply is validated by the same rule as the dashboard
 (`validate_reply`, pinned against `web/lib/application-answer-request.ts` by
-`shared/cloud/application-answer-cases.json`), and a valid one renews the
-position's authorisation as `user_telegram`.
+`shared/cloud/application-answer-cases.json`). The local flag is UI state;
+the broker is the proof used by the CLOSER before sending.
 
 Commands (one JSON line on stdout)::
 
@@ -62,7 +62,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import apply_gate  # noqa: E402
 
 SOURCE_ACTION = "closer_application_answer"
-TELEGRAM_ORIGIN = "user_telegram"
 INFERRED_CHANNEL = "agent_inferred"
 INFERENCE_BASES = ("profile", "cv", "vacancy", "judgement")
 # What the CLOSER works out per company: a motivation is written for one
@@ -834,8 +833,6 @@ def resolve_telegram_reply(
     except ValueError:
         return Resolution("rejected", "closer_answer_payload_invalid", message_id, position_id, body)
 
-    import apply_request
-
     verdict = apply_gate.toggle_verdict(position_id, True, conn)
     essential = str(source_id).startswith("closer-essential:")
     if not verdict.allowed and not essential:
@@ -852,12 +849,10 @@ def resolve_telegram_reply(
     ).rowcount
     if changed != 1:
         return Resolution("not_an_answer")
-    # An answer renews an authorisation that is on; it never turns a withdrawn
-    # one back on. The answer is still kept for the next time the user asks.
+    # The answer remains available for the next time the person asks. A local
+    # flag is UI state only and cannot record proof in the broker.
     flag = conn.execute("SELECT apply_requested FROM positions WHERE id = ?", (position_id,)).fetchone()
     withdrawn = not (flag and flag[0] == 1)
-    if verdict.allowed and not withdrawn:
-        apply_request.write_authorisation(conn, position_id, True, TELEGRAM_ORIGIN)
     save_answer(
         conn,
         key=normalise_label(payload["key"]),

@@ -6,8 +6,9 @@ answered there, and nothing happened — the bridge stored the reply as ordinary
 chat, only a dashboard reply unblocked the application, and the answers that
 did arrive lived in the YAML profile, where a new session never looked. These
 tests pin the loop that replaces it: a Telegram reply resolves THAT request
-with the dashboard's own rule, renews the position as `user_telegram`, lands in
-`jobs.db`, and is never asked again — nor are the essential facts.
+with the dashboard's own rule, lands in `jobs.db`, and is never asked again —
+nor are the essential facts. The broker, not this local database, proves an
+authorisation to the CLOSER.
 
 Synthetic only: no bot, no network (the feedback sender is replaced), a
 temporary jobs.db, fictitious answers.
@@ -126,15 +127,14 @@ def test_user_telegram_is_a_user_channel_for_the_gate():
 # ── Telegram reply → the same outcome as a dashboard reply ───────────────────
 
 
-def test_a_reply_to_the_question_resolves_it_and_renews_the_position(db, bridge):
+def test_a_reply_to_the_question_resolves_it_without_local_reauthorisation(db, bridge):
     mod = bridge()
     qid, body, _ = ask(db, 7, "which work model can you accept", "Which work model can you accept?")
     assert telegram(mod, db, 1, "Hybrid", reply_to=body) == 1
 
     assert row(db, "SELECT user_reply FROM pending_user_messages WHERE id = ?", (qid,)) == [("Hybrid",)]
     flag, at, by = row(db, "SELECT apply_requested, apply_requested_at, apply_requested_by FROM positions WHERE id = 7")[0]
-    assert (flag, by) == (1, "user_telegram")
-    assert apply_gate._parse_instant(at) > apply_gate._parse_instant("2026-09-13T10:00:00.000Z")
+    assert (flag, at, by) == (1, "2026-09-13T10:00:00.000Z", "user_web")
     assert row(db, "SELECT key, answer_json, channel, source_message_id FROM application_answers") == [
         ("which work model can you accept", '"Hybrid"', "telegram", qid)
     ]
@@ -172,7 +172,7 @@ def test_two_open_questions_and_no_code_resolve_nothing(db, bridge):
     assert row(db, "SELECT id, user_reply FROM pending_user_messages WHERE user_reply IS NOT NULL") == [
         (second, "two months")
     ]
-    assert row(db, "SELECT apply_requested_by FROM positions WHERE id = 8") == [("user_telegram",)]
+    assert row(db, "SELECT apply_requested_by FROM positions WHERE id = 8") == [("user_web",)]
     assert row(db, "SELECT apply_requested_by FROM positions WHERE id = 7") == [("user_web",)]
 
 

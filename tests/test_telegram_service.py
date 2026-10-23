@@ -125,12 +125,18 @@ def test_foreign_peer_is_refused_before_request_bytes_are_read(
 class FakeAPI:
     def __init__(self) -> None:
         self.sent: list[tuple[str, str]] = []
+        self.markups: list[dict | None] = []
+        self.callbacks: list[tuple[str, str]] = []
         self.next_id = 100
 
-    def send_message(self, chat_id: str, text: str) -> int:
+    def send_message(self, chat_id: str, text: str, reply_markup: dict | None = None) -> int:
         self.sent.append((chat_id, text))
+        self.markups.append(reply_markup)
         self.next_id += 1
         return self.next_id
+
+    def answer_callback_query(self, callback_id: str, text: str) -> None:
+        self.callbacks.append((callback_id, text))
 
     def file_meta(self, _file_id: str) -> dict:
         return {"file_path": "documents/file.bin", "file_size": 3}
@@ -362,6 +368,75 @@ def test_numeric_reply_to_open_question_is_not_discarded(
     )
     pulled = transport.pull({"bot_role": "assistente", "limit": 10})
     assert [event["body"] for event in pulled["events"]] == ["45000"]
+
+
+def test_apply_question_is_fixed_clean_and_records_only_its_button(
+    telegram_store: dict[str, Path], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    transport, api = configured_runtime(telegram_store, monkeypatch)
+    monkeypatch.setattr(runtime.secrets, "token_hex", lambda _length: "a" * 32)
+    recorded: list[tuple[int, str, str]] = []
+    monkeypatch.setattr(runtime.telegram_client, "record", lambda pid, instant, destination: (
+        recorded.append((pid, instant, destination)) or {"ok": True, "status": "recorded"}
+    ))
+    parsed = protocol.parse_request(request("telegram.apply.request", {
+        "position_id": 77, "title": "Role", "company": "Example Co", "url": "https://jobs.example.co.uk/open",
+    }))
+    answer = transport.dispatch(parsed)
+    assert answer == {"ok": True, "status": "asked", "question_id": "a" * 32}
+    assert api.sent[-1][1] == (
+        "🔐 JHT · autorizzazione candidatura\n\n"
+        "Vuoi candidarti a:\nRole @ Example Co · jobs.example.co.uk\n\n"
+        "L'autorizzazione vale una sola volta per questa destinazione."
+    )
+    assert api.markups[-1] == {"inline_keyboard": [[{
+        "text": "Sì, candidati", "callback_data": f"jhta:{'a' * 32}:yes",
+    }]]}
+    transport.process_update("assistente", {
+        "update_id": 71,
+        "callback_query": {"id": "callback-1", "data": f"jhta:{'a' * 32}:yes", "message": {
+            "message_id": api.next_id, "chat": {"id": 42},
+        }},
+    }, {"bot_token": "unused", "chat_id": "42"}, api)
+    assert recorded and recorded[0][0] == 77 and recorded[0][2] == "web:example.co.uk"
+    assert api.callbacks[-1] == ("callback-1", "Autorizzazione registrata.")
+    transport.process_update("assistente", {
+        "update_id": 72,
+        "callback_query": {"id": "callback-2", "data": f"jhta:{'a' * 32}:yes", "message": {
+            "message_id": api.next_id, "chat": {"id": 42},
+        }},
+    }, {"bot_token": "unused", "chat_id": "42"}, api)
+    assert len(recorded) == 1
+    assert "non è più disponibile" in api.callbacks[-1][1]
+
+
+def test_apply_question_refuses_hidden_agent_text(telegram_store: dict[str, Path], monkeypatch: pytest.MonkeyPatch) -> None:
+    transport, _api = configured_runtime(telegram_store, monkeypatch)
+    parsed = protocol.parse_request(request("telegram.apply.request", {
+        "position_id": 77, "title": "Role\u202e", "company": "Example", "url": "https://example.org/jobs",
+    }))
+    with pytest.raises(runtime.TransportRefusal, match="apply_question_invalid"):
+        transport.dispatch(parsed)
+
+
+def test_apply_question_fails_closed_when_the_broker_does_not_answer(
+    telegram_store: dict[str, Path], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    transport, api = configured_runtime(telegram_store, monkeypatch)
+    monkeypatch.setattr(runtime.secrets, "token_hex", lambda _length: "b" * 32)
+    monkeypatch.setattr(runtime.telegram_client, "record", lambda *_args: {"ok": False, "reason": "broker_unavailable"})
+    transport.dispatch(protocol.parse_request(request("telegram.apply.request", {
+        "position_id": 78, "title": "Role", "company": "Example", "url": "https://example.org/jobs",
+    })))
+    transport.process_update("assistente", {
+        "update_id": 73,
+        "callback_query": {"id": "callback-3", "data": f"jhta:{'b' * 32}:yes", "message": {
+            "message_id": api.next_id, "chat": {"id": 42},
+        }},
+    }, {"bot_token": "unused", "chat_id": "42"}, api)
+    assert api.callbacks[-1] == ("callback-3", "Autorizzazione non verificata: candidatura non inviata.")
+    question = store.read_state(runtime.AUTH_QUESTION_STATE, {})["b" * 32]
+    assert question["state"] == "pending"
 
 
 def test_unprompted_otp_is_consumed_without_entering_inbox(
