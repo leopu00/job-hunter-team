@@ -204,11 +204,19 @@ def test_web_receipts_are_bound_to_the_host_account_and_consumed_once(broker, mo
         def read(self, *_): return json.dumps(payload).encode()
 
     monkeypatch.setattr(broker.webauth, "urlopen", lambda *_args, **_kwargs: Reply())
-    assert admin(broker, "apply", "sync-web") == (0, {"ok": True, "processed": 1, "status": "synced"})
+    assert admin(broker, "apply", "sync-web") == (0, {"ok": True, "processed": 1, "skipped": {}, "status": "synced"})
     assert claim(broker)["claimed"] is True
     # A replay of the same row id does not widen the register again.
-    assert admin(broker, "apply", "sync-web") == (0, {"ok": True, "processed": 0, "status": "synced"})
+    assert admin(broker, "apply", "sync-web") == (0, {"ok": True, "processed": 0, "skipped": {}, "status": "synced"})
     assert claim(broker)["claimed"] is False
+
+
+def test_web_status_reports_the_last_result_for_host_diagnosis(broker):
+    account = "11111111-1111-4111-8111-111111111111"
+    broker.webauth.set_account(account)
+    assert admin(broker, "apply", "web-status") == (0, {
+        "ok": True, "account_id": account, "token": "absent", "last_result": "account_set",
+    })
 
 
 def test_web_receipt_for_another_account_records_no_authorisation(broker, monkeypatch):
@@ -245,5 +253,56 @@ def test_a_later_web_withdrawal_wins_over_the_same_position(broker, monkeypatch)
         def read(self, *_): return json.dumps({"ok": True, "account_id": account, "authorizations": rows, "cursor": T2}).encode()
 
     monkeypatch.setattr(broker.webauth, "urlopen", lambda *_args, **_kwargs: Reply())
-    assert broker.webauth.sync() == {"ok": True, "processed": 2, "status": "synced"}
+    assert broker.webauth.sync() == {"ok": True, "processed": 2, "skipped": {}, "status": "synced"}
     assert ask(broker, "apply.check", position_id=42) == {"ok": True, "proven": False}
+
+
+def test_a_stale_web_row_is_marked_used_and_does_not_block_later_rows(broker, monkeypatch):
+    account = "11111111-1111-4111-8111-111111111111"
+    broker.webauth.set_account(account)
+    broker.webauth.set_token(b"jht_sync_abcdefghijklmnopqrstuvwxyz")
+    broker.notary.record(42, T2, "user_local", WEB)
+    rows = [
+        {"id": "22222222-2222-4222-8222-222222222222", "legacy_id": 42, "created_at": T1,
+         "summary": "Synthetic role @ Synthetic company · example.com", "action": "position.apply_authorize", "status": "done"},
+        {"id": "33333333-3333-4333-8333-333333333333", "legacy_id": 7, "created_at": T2,
+         "summary": "Synthetic role @ Synthetic company · example.com", "action": "position.apply_authorize", "status": "done"},
+    ]
+
+    class Reply:
+        status = 200
+        def __enter__(self): return self
+        def __exit__(self, *_): return False
+        def read(self, *_): return json.dumps({"ok": True, "account_id": account, "authorizations": rows, "cursor": T2}).encode()
+
+    monkeypatch.setattr(broker.webauth, "urlopen", lambda *_args, **_kwargs: Reply())
+    assert broker.webauth.sync() == {"ok": True, "processed": 1, "skipped": {"instant_not_newer": 1}, "status": "synced"}
+    assert broker.webauth.sync() == {"ok": True, "processed": 0, "skipped": {}, "status": "synced"}
+    assert ask(broker, "apply.check", position_id=7)["proven"] is True
+
+
+def test_a_full_web_page_is_followed_without_waiting_for_the_next_poll(broker, monkeypatch):
+    account = "11111111-1111-4111-8111-111111111111"
+    broker.webauth.set_account(account)
+    broker.webauth.set_token(b"jht_sync_abcdefghijklmnopqrstuvwxyz")
+    pages = iter([
+        {"ok": True, "account_id": account, "has_more": True, "cursor": T1, "authorizations": [
+            {"id": "22222222-2222-4222-8222-222222222222", "legacy_id": 42, "created_at": T1,
+             "summary": "Synthetic role @ Synthetic company · example.com", "action": "position.apply_authorize", "status": "done"},
+        ]},
+        {"ok": True, "account_id": account, "has_more": False, "cursor": T2, "authorizations": [
+            {"id": "33333333-3333-4333-8333-333333333333", "legacy_id": 7, "created_at": T2,
+             "summary": "Synthetic role @ Synthetic company · example.com", "action": "position.apply_authorize", "status": "done"},
+        ]},
+    ])
+    cursors = []
+
+    def fetch(_token, cursor):
+        cursors.append(cursor)
+        return next(pages)
+
+    monkeypatch.setattr(broker.webauth, "_fetch", fetch)
+    assert broker.webauth.sync() == {"ok": True, "processed": 2, "skipped": {}, "status": "synced"}
+    assert cursors == [None, T1]
+    assert ask(broker, "apply.check", position_id=42)["proven"] is True
+    assert ask(broker, "apply.check", position_id=7)["proven"] is True

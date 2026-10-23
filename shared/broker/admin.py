@@ -15,7 +15,7 @@ value, length or hash of a secret.
     mailbox allow add|remove <address|@domain>
     mail drafts | mail approve <id> | mail discard <id> | mail journal [--limit N]
     apply record <position_id> <instant> <destination> | apply revoke <position_id> <instant>
-    apply show <position_id> | apply account <uuid> | apply web-token | apply sync-web
+    apply show <position_id> | apply account <uuid> | apply web-token | apply web-status | apply sync-web
 """
 
 from __future__ import annotations
@@ -401,6 +401,7 @@ def main(argv: list[str]) -> int:
     ap.add_parser("show").add_argument("position_id")
     ap.add_parser("account").add_argument("account_id")
     ap.add_parser("web-token")
+    ap.add_parser("web-status")
     ap.add_parser("sync-web")
 
     args = p.parse_args(argv)
@@ -410,6 +411,8 @@ def main(argv: list[str]) -> int:
                 return _out(webauth.set_account(args.account_id))
             if args.cmd == "web-token":
                 return _out(webauth.set_token(_stdin_bytes()))
+            if args.cmd == "web-status":
+                return _out(webauth.show())
             if args.cmd == "sync-web":
                 return _out(webauth.sync())
             if not re.fullmatch(r"[1-9][0-9]{0,9}", args.position_id):

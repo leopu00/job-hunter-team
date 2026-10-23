@@ -120,14 +120,19 @@ export async function GET(req: NextRequest) {
   const latestByPosition = new Map<number, (typeof validRows)[number]>();
   for (const row of validRows) latestByPosition.set(row.legacy_id, row);
   const authorizations = [...latestByPosition.values()];
+  const cursor = validRows.reduce<string | null>(
+    (latest, row) =>
+      latest === null || Date.parse(row.created_at) > Date.parse(latest)
+        ? row.created_at
+        : latest,
+    null,
+  );
 
   return NextResponse.json({
     ok: true,
     account_id: userId,
     authorizations,
-    cursor:
-      authorizations.length > 0
-        ? authorizations[authorizations.length - 1].created_at
-        : since.toISOString(),
+    cursor: cursor ?? since.toISOString(),
+    has_more: (data ?? []).length === 1000,
   });
 }

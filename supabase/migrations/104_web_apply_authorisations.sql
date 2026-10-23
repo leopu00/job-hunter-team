@@ -10,7 +10,7 @@ ALTER TABLE public.cloud_sync_tokens
 
 CREATE INDEX IF NOT EXISTS idx_cloud_sync_tokens_pairing_session_active
   ON public.cloud_sync_tokens (pairing_session_id)
-  WHERE pairing_session_id IS NOT NULL AND revoked_at IS NULL;
+  WHERE pairing_session_id IS NOT NULL;
 
 COMMENT ON COLUMN public.cloud_sync_tokens.pairing_session_id IS
   'The Supabase session which exchanged the pairing refresh token for this device token. The application action door refuses L3 authorisations from it.';
@@ -32,6 +32,8 @@ DECLARE
     v_at      TIMESTAMPTZ;
     v_session UUID;
     v_host    TEXT;
+    v_title   TEXT;
+    v_company TEXT;
 BEGIN
     IF p_action NOT IN ('position.apply_authorize', 'position.apply_revoke') THEN
         RAISE EXCEPTION 'web_door.ext_position: not an action of this family: %', p_action;
@@ -64,13 +66,14 @@ BEGIN
             SELECT 1 FROM public.cloud_sync_tokens AS t
              WHERE t.user_id = p_uid
                AND t.pairing_session_id = v_session
-               AND t.revoked_at IS NULL
         ) THEN
             RETURN jsonb_build_object('error', 'not_found');
         END IF;
     END IF;
 
-    SELECT p.id, p.title, p.company, p.url, p.status, p.apply_requested_at
+    -- The position belongs to the user, or does not exist (the same answer). At the effect it is read
+    -- again, and locked: during the two minutes of a confirmation it can have left.
+    SELECT p.id, p.title, p.company, p.url, p.status, p.apply_requested, p.apply_requested_at
       INTO v_pos
       FROM public.positions AS p
      WHERE p.user_id = p_uid AND p.legacy_id = v_legacy AND p.deleted_at IS NULL
@@ -81,6 +84,8 @@ BEGIN
     SELECT COALESCE(bool_or(a.applied), FALSE) INTO v_applied
       FROM public.applications AS a
      WHERE a.position_id = v_pos.id AND a.user_id = p_uid AND a.deleted_at IS NULL;
+    -- The same order as the gate (shared/cloud/apply-request-rule.json): an application that already
+    -- left is neither authorised nor withdrawn; only `ready` is authorised.
     IF v_applied OR v_pos.status IN ('applied', 'response') THEN
         RETURN jsonb_build_object('error', 'already_submitted');
     END IF;
@@ -91,19 +96,39 @@ BEGIN
     IF p_stage = 'prepare' THEN
         IF p_action = 'position.apply_authorize' THEN
             v_host := lower(substring(COALESCE(v_pos.url, '') FROM '^[A-Za-z][A-Za-z0-9+.-]*://([^/?#:]+)'));
-            IF v_host IS NULL OR v_host !~ '^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+$' THEN
+            IF v_host IS NULL OR v_host !~ '^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)+$'
+               OR v_host ~ '^[0-9]{1,3}(\.[0-9]{1,3}){3}$'
+               OR char_length(v_host) > 194 THEN
                 RETURN jsonb_build_object('error', 'not_found');
             END IF;
+            -- The host is the destination: clip the human labels first, and
+            -- never slice a destination into another domain.
+            v_title := left(regexp_replace(COALESCE(v_pos.title, ''), '[[:cntrl:]]', ' ', 'g'), 80);
+            v_company := left(regexp_replace(COALESCE(v_pos.company, ''), '[[:cntrl:]]', ' ', 'g'),
+                              GREATEST(0, 194 - char_length(v_host) - char_length(v_title)));
+        ELSE
+            v_title := COALESCE(v_pos.title, '');
+            v_company := COALESCE(v_pos.company, '');
         END IF;
         RETURN jsonb_build_object(
             'params', jsonb_build_object('legacy_id', v_legacy),
-            'summary', left(regexp_replace(COALESCE(v_pos.title, '') || ' @ ' || COALESCE(v_pos.company, '') ||
-                                            CASE WHEN p_action = 'position.apply_authorize' THEN ' · ' || v_host ELSE '' END,
-                                           '[[:cntrl:]]', ' ', 'g'), 200),
+            'summary', CASE WHEN p_action = 'position.apply_authorize'
+                            THEN v_title || ' @ ' || v_company || ' · ' || v_host
+                            ELSE left(regexp_replace(v_title || ' @ ' || v_company, '[[:cntrl:]]', ' ', 'g'), 200)
+                       END,
             'confirm', p_action = 'position.apply_authorize');
     END IF;
 
-    v_at := GREATEST(now(), COALESCE(v_pos.apply_requested_at, '-infinity'::TIMESTAMPTZ) + INTERVAL '1 millisecond');
+    -- Nothing to withdraw: the position was never authorised, or already withdrawn. No new instant, so
+    -- the box sees no change and sends no notice of a withdrawn authorisation.
+    IF p_action = 'position.apply_revoke' AND v_pos.apply_requested IS NOT TRUE THEN
+        RETURN jsonb_build_object('status', 'done');
+    END IF;
+
+    -- The pull of the box filters on `updated_at > cursor`: the instant always moves forward, also
+    -- when the authorisation is withdrawn.
+    v_at := GREATEST(now(),
+                     COALESCE(v_pos.apply_requested_at, '-infinity'::TIMESTAMPTZ) + INTERVAL '1 millisecond');
     UPDATE public.positions
        SET apply_requested    = (p_action = 'position.apply_authorize'),
            apply_requested_at = v_at,

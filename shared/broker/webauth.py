@@ -81,6 +81,11 @@ def show() -> dict:
     }
 
 
+def configured() -> bool:
+    state = _read()
+    return isinstance(state.get("account_id"), str) and isinstance(state.get("token"), str)
+
+
 def _instant(value: object) -> str | None:
     if not isinstance(value, str):
         return None
@@ -127,7 +132,7 @@ def _fetch(token: str, since: str | None) -> dict:
     return parsed
 
 
-def sync() -> dict:
+def sync(_pages: int = 0) -> dict:
     """Fetch website receipts and narrow the notary state.  No input from the
     agent socket reaches this function; all retryable state belongs to broker."""
     with store.locked(STATE):
@@ -158,6 +163,7 @@ def sync() -> dict:
     if not isinstance(rows, list) or len(rows) > 1000:
         raise WebAuthRefusal("web_response_invalid")
     processed = 0
+    skipped: dict[str, int] = {}
     with store.locked(STATE):
         state = _read()
         used = [item for item in state.get("used_ids", []) if isinstance(item, str) and UUID.fullmatch(item)]
@@ -175,20 +181,35 @@ def sync() -> dict:
                     or instant is None or action not in ("position.apply_authorize", "position.apply_revoke")
                     or status not in ("queued", "done")):
                 continue
-            if action == "position.apply_authorize":
-                destination = _destination(row.get("summary"))
-                if destination is None:
-                    continue
-                notary.record(legacy_id, instant, "user_web", destination)
-            else:
-                notary.revoke(legacy_id, instant)
+            try:
+                if action == "position.apply_authorize":
+                    destination = _destination(row.get("summary"))
+                    if destination is None:
+                        continue
+                    notary.record(legacy_id, instant, "user_web", destination)
+                else:
+                    notary.revoke(legacy_id, instant)
+            except notary.NotaryRefusal as err:
+                known.add(row_id)
+                used.append(row_id)
+                skipped[err.code] = skipped.get(err.code, 0) + 1
+                continue
             known.add(row_id)
             used.append(row_id)
             processed += 1
         state["used_ids"] = used[-MAX_USED_IDS:]
         cursor = body.get("cursor")
-        if _instant(cursor) is not None:
+        cursor_valid = _instant(cursor) is not None
+        if cursor_valid:
             state["cursor"] = cursor
         state["last_result"] = "synced"
         _write(state)
-    return {"ok": True, "processed": processed, "status": "synced"}
+    result = {"ok": True, "processed": processed, "skipped": skipped, "status": "synced"}
+    # A full page is followed immediately with the cursor just persisted above;
+    # no later polling interval leaves a withdrawal behind a full first page.
+    if body.get("has_more") is True and cursor_valid and _pages < 20:
+        next_page = sync(_pages + 1)
+        result["processed"] += next_page["processed"]
+        for code, count in next_page.get("skipped", {}).items():
+            result["skipped"][code] = result["skipped"].get(code, 0) + count
+    return result

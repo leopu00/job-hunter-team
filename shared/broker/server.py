@@ -20,12 +20,14 @@ import sys
 import threading
 from pathlib import Path
 
-from . import mailops, notary, store
+from . import mailops, notary, store, webauth
 from .protocol import MAX_REQUEST_BYTES, SOCKET_NAME, ProtocolError, encode, parse_request
 
 CLIENT_UID = int(os.environ.get("JHT_BROKER_CLIENT_UID", "1001"))
 MAX_CONCURRENT = 8
 READ_TIMEOUT = 10
+WEB_SYNC_INTERVAL = 120
+WEB_SYNC_ERROR_INTERVAL = 300
 
 
 def socket_dir() -> Path:
@@ -96,6 +98,21 @@ class _Server(socketserver.ThreadingMixIn, socketserver.UnixStreamServer):
     daemon_threads = True
 
 
+def _web_sync_loop(stopping: threading.Event) -> None:
+    """The website is polled by the broker, never by an agent request.  An
+    unavailable route waits longer; the notary remains fail-closed meanwhile."""
+    delay = WEB_SYNC_INTERVAL
+    while not stopping.wait(delay):
+        if not webauth.configured():
+            delay = WEB_SYNC_INTERVAL
+            continue
+        try:
+            webauth.sync()
+            delay = WEB_SYNC_INTERVAL
+        except Exception:  # noqa: BLE001 — a later retry must survive every failed poll
+            delay = WEB_SYNC_ERROR_INTERVAL
+
+
 def serve() -> int:
     directory = socket_dir()
     path = directory / SOCKET_NAME
@@ -111,7 +128,12 @@ def serve() -> int:
     # The agents connect as another uid: they need write on the socket. Who
     # may talk is decided by SO_PEERCRED above, not by this mode.
     os.chmod(path, 0o666)
-    signal.signal(signal.SIGTERM, lambda *_: threading.Thread(target=server.shutdown).start())
+    stopping = threading.Event()
+    def shutdown(*_args: object) -> None:
+        stopping.set()
+        threading.Thread(target=server.shutdown).start()
+    signal.signal(signal.SIGTERM, shutdown)
+    threading.Thread(target=_web_sync_loop, args=(stopping,), daemon=True).start()
     print("[jht-broker] listening", flush=True)
     try:
         server.serve_forever()

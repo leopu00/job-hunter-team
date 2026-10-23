@@ -1452,6 +1452,31 @@ function Invoke-BrokerMigrateLegacyOnce {
   return 0
 }
 
+# First pairing may take user_id from cloud.json in the box, a box-writable
+# file.  This is a bootstrap residual only: once the broker has an account,
+# normal starts refresh its token but never replace that account automatically;
+# replacement requires the explicit host command `jht apply relink-account`.
+function Initialize-BrokerWebAuthorisations {
+  $agentId = Get-RunningComposeServiceId 'jht'
+  $brokerId = Get-RunningComposeServiceId $BrokerContainer
+  if (-not $agentId -or -not $brokerId) { return }
+  $state = (& docker exec $brokerId jht-broker-admin apply web-status 2>$null) -join "`n"
+  $token = (& docker exec -u 1001 $agentId node -e 'const fs=require("fs");try{const c=JSON.parse(fs.readFileSync("/jht_home/cloud.json","utf8"));if(typeof c.token==="string")process.stdout.write(c.token)}catch{}' 2>$null) -join ''
+  if ($token) { $null = Invoke-BrokerAdmin -InputText $token apply web-token }
+  if ($state -match '"account_id": null') {
+    $account = (& docker exec -u 1001 $agentId node -e 'const fs=require("fs");try{const c=JSON.parse(fs.readFileSync("/jht_home/cloud.json","utf8"));if(typeof c.user_id==="string"&&/^[0-9a-f-]{36}$/i.test(c.user_id))process.stdout.write(c.user_id)}catch{}' 2>$null) -join ''
+    if ($account) { $null = Invoke-BrokerAdmin apply account $account }
+  }
+}
+
+function Reset-BrokerWebAccount {
+  $agentId = Get-RunningComposeServiceId 'jht'
+  if (-not $agentId) { Write-Err 'apply relink-account: container non attivo.'; return 1 }
+  $account = (& docker exec -u 1001 $agentId node -e 'const fs=require("fs");try{const c=JSON.parse(fs.readFileSync("/jht_home/cloud.json","utf8"));if(typeof c.user_id==="string"&&/^[0-9a-f-]{36}$/i.test(c.user_id))process.stdout.write(c.user_id)}catch{}' 2>$null) -join ''
+  if (-not $account) { Write-Err 'apply relink-account: cloud account non disponibile. Esegui prima jht cloud pair.'; return 1 }
+  return Invoke-BrokerAdmin apply account $account
+}
+
 function Remove-BrokerResetData {
   $project = Get-ComposeProjectName
   if (-not $project) {
@@ -2993,6 +3018,7 @@ switch ($Sub) {
     Invoke-Compose 'up' '-d'
     Stop-OnFailedComposeUp $LASTEXITCODE
     $null = Invoke-BrokerMigrateLegacyOnce
+    Initialize-BrokerWebAuthorisations
     # The up went well (a failed one has already stopped jht with its code): 0, not the code of
     # whichever native ran last. The setup reads it (enable-podman-windows-runtime.ps1, T89).
     exit 0
@@ -3025,6 +3051,7 @@ switch ($Sub) {
     Invoke-Compose 'up' '-d'
     Stop-OnFailedComposeUp $LASTEXITCODE
     $null = Invoke-BrokerMigrateLegacyOnce
+    Initialize-BrokerWebAuthorisations
     # The up went well (a failed one has already stopped jht with its code): 0, not the code of
     # whichever native ran last. The setup reads it (enable-podman-windows-runtime.ps1, T89).
     exit 0
@@ -3039,6 +3066,18 @@ switch ($Sub) {
     Require-ComposeFile
     Require-Docker
     exit (Invoke-MailCommand $Rest)
+  }
+
+  'apply' {
+    Require-ComposeFile
+    Require-Docker
+    Ensure-Up
+    if ($Rest.Count -gt 0 -and $Rest[0] -eq 'relink-account') {
+      if ($Rest.Count -ne 1) { Write-Err 'uso: jht apply relink-account'; exit 2 }
+      exit (Reset-BrokerWebAccount)
+    }
+    & docker exec @ExecFlags -e "JHT_HOST_TYPE=$env:JHT_HOST_TYPE" $Container node $NodeEntry $Sub @Rest
+    exit $LASTEXITCODE
   }
 
   'telegram' {
@@ -3135,6 +3174,9 @@ switch ($Sub) {
     Require-Docker
     Ensure-Up
     & docker exec @ExecFlags -e "JHT_HOST_TYPE=$env:JHT_HOST_TYPE" $Container node $NodeEntry $Sub @Rest
+    $code = $LASTEXITCODE
+    if ($Sub -eq 'cloud' -and $Rest.Count -gt 0 -and $Rest[0] -eq 'pair' -and $code -eq 0) { Initialize-BrokerWebAuthorisations }
+    exit $code
     break
   }
 }

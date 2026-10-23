@@ -192,6 +192,41 @@ def test_a_pairing_session_cannot_open_an_application_authorisation(cluster):
     ) == "f"
 
 
+def test_the_web_summary_keeps_a_valid_host_and_refuses_invalid_ones(cluster):
+    who = door.Browser(cluster)
+    for legacy, url in ((81, "https://acme.com/apply"), (82, "https://jobs.acme-company.com/apply"),
+                        (83, "https://127.0.0.1/apply"), (84, "")):
+        door._position(cluster, who.user, legacy)
+        cluster(f"UPDATE public.positions SET url = $u${url}$u$ WHERE user_id = '{who.user}' AND legacy_id = {legacy}")
+    assert who.act("position.apply_authorize", {"legacy_id": 81})["summary"].endswith(" · acme.com")
+    assert who.act("position.apply_authorize", {"legacy_id": 82})["summary"].endswith(" · jobs.acme-company.com")
+    assert who.act("position.apply_authorize", {"legacy_id": 83}) == {"ok": False, "error": "not_found"}
+    assert who.act("position.apply_authorize", {"legacy_id": 84}) == {"ok": False, "error": "not_found"}
+
+
+def test_a_long_title_never_truncates_the_host_in_the_web_summary(cluster):
+    who = door.Browser(cluster)
+    door._position(cluster, who.user, 81)
+    cluster(f"UPDATE public.positions SET title = repeat('x', 300), url = 'https://acme.com/apply' "
+            f"WHERE user_id = '{who.user}' AND legacy_id = 81")
+    summary = who.act("position.apply_authorize", {"legacy_id": 81})["summary"]
+    assert summary.endswith(" · acme.com")
+    assert len(summary) <= 200
+
+
+def test_a_revoke_without_an_authorisation_leaves_the_position_untouched(cluster):
+    who = door.Browser(cluster)
+    door._position(cluster, who.user, 81)
+    before = door._scalar(cluster, f"""SELECT xmin::text || '|' || coalesce(apply_requested::text, 'null') || '|'
+        || coalesce(apply_requested_at::text, 'null')
+        FROM public.positions WHERE user_id = '{who.user}' AND legacy_id = 81""")
+    assert who.act("position.apply_revoke", {"legacy_id": 81})["state"] == "done"
+    after = door._scalar(cluster, f"""SELECT xmin::text || '|' || coalesce(apply_requested::text, 'null') || '|'
+        || coalesce(apply_requested_at::text, 'null')
+        FROM public.positions WHERE user_id = '{who.user}' AND legacy_id = 81""")
+    assert after == before
+
+
 def test_the_refusals_count_in_the_limit_so_they_cannot_fill_the_log(cluster):
     who = door.Browser(cluster)
     calls = "\n".join("SELECT public.request_action('team.stop', '{\"target\": \"scout\"}'::jsonb, NULL, 'L2');" for _ in range(14))
