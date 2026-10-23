@@ -53,7 +53,9 @@ describe("the table the editor starts from", () => {
   });
 });
 
-describe("the editor of the personal theme", () => {
+// Each test types into real fields and the fix ones search the palette's lightness: beside the whole suite
+// under load the default 5 s is not enough, so the bound is explicit for the whole group.
+describe("the editor of the personal theme", { timeout: 60_000 }, () => {
   it("opens from the theme menu as a dialog with a name, puts the focus inside and gives it back on Escape", async () => {
     const { user, dialog } = await openEditor();
     expect(dialog).toHaveAttribute("aria-modal", "true");
