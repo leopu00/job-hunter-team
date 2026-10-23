@@ -695,27 +695,39 @@ if ($containerNeedsMigration) {
 # A service whose user namespace does not map its own user never starts: Podman refuses it at every
 # start, "container uses ID mappings ... but doesn't map UID 1003" (T85, jht-telegram with the map
 # 1001:0:1 alone). Compose does not recreate a service whose configuration did not change, so a
-# container created so stayed so at every setup. As jht above: it is removed, its volumes stay, and
+# container created so stayed so at every setup. The same for one created under another cgroup
+# manager than cgroupfs: under systemd it has a pids limit, and in Podman's WSL machine no cgroup has
+# the pids controller, so it never starts either (T87; the service runs under cgroupfs, see
+# configure-podman-windows-network.ps1). As jht above: it is removed, its volumes stay, and
 # `jht up` creates it again.
 $sidecarRemoved = $false
 foreach ($sidecar in @('jht-broker', 'jht-telegram')) {
   # No double quote inside a native argument (T71). A container that is not there: empty, and skipped.
   [string]$sidecarDetails = (& { $ErrorActionPreference = 'Continue'; & $Podman --connection $MachineName inspect --type container $sidecar --format '{{.Config.User}}|{{json .HostConfig.IDMappings}}' 2>$null } | Select-Object -First 1)
-  if (-not $sidecarDetails.Trim() -or (Test-ContainerMapsItsUser -Details $sidecarDetails)) { continue }
+  if (-not $sidecarDetails.Trim()) { continue }
+  [string]$sidecarCgroups = (& { $ErrorActionPreference = 'Continue'; & $Podman --connection $MachineName inspect --type container $sidecar --format '{{.HostConfig.CgroupManager}}' 2>$null } | Select-Object -First 1)
+  $sidecarCgroups = $sidecarCgroups.Trim()
+  $sidecarReason = ''
+  if (-not (Test-ContainerMapsItsUser -Details $sidecarDetails)) {
+    $sidecarReason = 'its user namespace did not map its own user'
+  } elseif ($sidecarCgroups -and $sidecarCgroups -ne 'cgroupfs') {
+    $sidecarReason = "it was created under the $sidecarCgroups cgroup manager, not cgroupfs"
+  }
+  if (-not $sidecarReason) { continue }
   # Only a container of our compose project: one with the same name made by something else is not ours
   # to remove. The labels come whole as JSON, read here (T71).
   [string]$sidecarLabelsJson = (& { $ErrorActionPreference = 'Continue'; & $Podman --connection $MachineName inspect --type container $sidecar --format '{{json .Config.Labels}}' 2>$null } | Select-Object -First 1)
   $sidecarProject = ''
   try { $sidecarProject = [string](ConvertFrom-Json -InputObject $sidecarLabelsJson).'com.docker.compose.project' } catch { $sidecarProject = '' }
   if ($sidecarProject.Trim() -ne 'jht') {
-    Write-Host "  ${sidecar} does not map its own user, but it is not of the jht project: left as it is." -ForegroundColor Yellow
+    Write-Host "  ${sidecar}: $sidecarReason, but it is not of the jht project: left as it is." -ForegroundColor Yellow
     continue
   }
   [string]$sidecarRunning = (& { $ErrorActionPreference = 'Continue'; & $Podman --connection $MachineName inspect --type container $sidecar --format '{{.State.Running}}' 2>$null } | Select-Object -First 1)
   if ($sidecarRunning.Trim() -eq 'true') { Invoke-Checked $Podman '--connection' $MachineName 'stop' '--time' '30' $sidecar | Out-Null }
   Invoke-Checked $Podman '--connection' $MachineName 'rm' $sidecar | Out-Null
   $sidecarRemoved = $true
-  Write-Host "  Recreating ${sidecar}: its user namespace did not map its own user; volumes retained." -ForegroundColor Yellow
+  Write-Host "  Recreating ${sidecar}: $sidecarReason; volumes retained." -ForegroundColor Yellow
 }
 
 if ($metadataRepaired -or $sidecarRemoved -or -not (& $Podman --connection $MachineName ps --format '{{.Names}}' | Where-Object { $_ -eq 'jht' })) {
