@@ -373,7 +373,7 @@ fn chat_failure_code(code: &str) -> &str {
         "read_failed" | "send_failed" | "persist_failed" | "disconnected" | "state_failed"
         | "account_scope_mismatch" | "invalid_request" | "read_only_link" | "own_vps_claim_required"
         | "own_vps_key_changed" | "own_vps_claim_refused" | "chat_runtime_outdated"
-        | "existing_team_runtime_target_changed" | "agent_not_at_prompt" | "team_not_running"
+        | "existing_team_runtime_target_changed" | "agent_not_at_prompt" | "composer_has_text" | "team_not_running"
         | "agent_not_running" | "agent_unavailable" | "agent_busy" | "agent_stuck" | "tunnel_unavailable"
         | "tunnel_start_failed" | "tunnel_verify_failed" | "ssh_unavailable" | "ssh_auth_failed"
         | "ssh_rate_limited" | "process_timeout" | "host_key_changed" | "host_key_mismatch" => code,
@@ -499,6 +499,7 @@ mod tests {
         log.record_chat_refusal("capitano says hello from 203.0.113.7");
         log.record_chat_failure("read", "read_failed");
         log.record_chat_failure("send", "agent_not_at_prompt");
+        log.record_chat_failure("send", "composer_has_text");
         log.record_chat_failure("read", "mentor at 203.0.113.7 said no");
         log.record_chat_failure("delete everything", "send_failed");
         // why the saved team did not open at start-up: its own code, never io_error_other
@@ -518,6 +519,7 @@ mod tests {
         // a failed read or send of the chat: its closed code, never what the host or the agent said
         assert!(text.contains(" direct_chat.read: read_failed\n"));
         assert!(text.contains(" direct_chat.send: agent_not_at_prompt\n"));
+        assert!(text.contains(" direct_chat.send: composer_has_text\n"));
         assert!(text.contains(" direct_chat.read: io_error_other\n"));
         assert!(text.contains(" direct_chat.read: send_failed\n"), "an unknown operation is a read");
         assert!(!text.contains("mentor") && !text.contains("delete"));

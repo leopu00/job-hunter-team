@@ -271,7 +271,20 @@ case "$cmd" in
   has-session) exit "${FAKE_HAS_SESSION_RC:-0}" ;;
   list-panes) exit 0 ;;
   show-options) exit 0 ;;
-  capture-pane) printf '%s\n' "${FAKE_SCREEN:-}"; printf '❯ %s%s\n' "$(cat "$S/composer" 2>/dev/null)" "${FAKE_COMPOSER_EXTRA:-}"; exit 0 ;;
+  capture-pane) printf '%s\n' "${FAKE_SCREEN:-}"; printf '╭──────────────────────────────────────────────╮\n│ ❯ %s%s │\n╰──────────────────────────────────────────────╯\n  ? for shortcuts\n' "$(cat "$S/composer" 2>/dev/null)" "${FAKE_COMPOSER_EXTRA:-}"; exit 0 ;;
+  load-buffer)
+    while [ "$1" != "-b" ] && [ $# -gt 0 ]; do shift; done
+    [ "$1" = "-b" ] && shift
+    name="$1"; shift
+    cat > "$S/buffer.$name"; exit 0 ;;
+  paste-buffer)
+    while [ $# -gt 0 ]; do
+      if [ "$1" = "-b" ]; then name="$2"; shift 2; continue; fi
+      shift
+    done
+    cat "$S/buffer.$name" >> "$S/composer"
+    cat "$S/buffer.$name" >> "$S/typed"; printf '\0' >> "$S/typed"
+    rm -f "$S/buffer.$name"; exit 0 ;;
   send-keys)
     while [ "$1" = "-t" ]; do shift 2; done
     if [ "$1" = "-l" ]; then printf '%s' "$2" >> "$S/composer"; printf '%s\0' "$2" >> "$S/typed"; exit 0; fi
@@ -338,20 +351,19 @@ def test_when_the_agent_waits_at_its_prompt_it_is_woken_once_with_words_that_car
     assert len(box_files(jht_home)) == 1
 
 
-def test_an_agent_that_is_not_a_receiver_is_still_sent_the_turn_only_at_its_prompt(jht_home, terminal, monkeypatch):
+def test_an_agent_with_an_empty_composer_is_sent_even_while_its_turn_is_running(jht_home, terminal, monkeypatch):
     enable(jht_home, "assistente")
     monkeypatch.setenv("FAKE_SCREEN", BUSY_SCREEN)
-    with pytest.raises(chat.Refusal) as caught:
-        chat.send("scout", "client-4", "hello")
-    assert caught.value.code == "agent_busy"
-    assert not (jht_home / "agents" / "scout").exists() and not (jht_home / "mailbox").exists()
+    receipt = chat.send("scout", "client-4", "hello")
+    assert receipt["accepted"] is True and receipt["taken"] is True
+    assert terminal(), "the turn may be queued by the CLI"
 
 
-def test_with_nobody_listed_the_chat_behaves_exactly_as_before(jht_home, terminal, monkeypatch):
+def test_with_nobody_listed_the_empty_composer_rule_is_the_same(jht_home, terminal, monkeypatch):
     monkeypatch.setenv("FAKE_SCREEN", BUSY_SCREEN)
-    with pytest.raises(chat.Refusal) as caught:
-        chat.send("assistente", "client-5", "hello")
-    assert caught.value.code == "agent_busy" and not (jht_home / "mailbox").exists()
+    receipt = chat.send("assistente", "client-5", "hello")
+    assert receipt["accepted"] is True and receipt["taken"] is True
+    assert not (jht_home / "mailbox").exists()
 
 
 def test_a_session_that_is_not_there_refuses_before_anything_is_written(jht_home, terminal, monkeypatch):
