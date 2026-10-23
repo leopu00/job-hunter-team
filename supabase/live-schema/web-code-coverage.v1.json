@@ -510,6 +510,11 @@
           "102.web.columns.cloud_sync_tokens"
         ]
       },
+      "cloud_sync_tokens.pairing_session_id": {
+        "receipts": [
+          "102.web.columns.cloud_sync_tokens"
+        ]
+      },
       "cloud_sync_tokens.revoked_at": {
         "receipts": [
           "102.web.columns.cloud_sync_tokens"
@@ -1540,12 +1545,22 @@
           "102.web.columns.web_action_log"
         ]
       },
+      "web_action_log.session_id": {
+        "receipts": [
+          "102.web.columns.web_action_log"
+        ]
+      },
       "web_action_log.status": {
         "receipts": [
           "102.web.columns.web_action_log"
         ]
       },
       "web_action_log.summary": {
+        "receipts": [
+          "102.web.columns.web_action_log"
+        ]
+      },
+      "web_action_log.user_id": {
         "receipts": [
           "102.web.columns.web_action_log"
         ]
@@ -1649,9 +1664,6 @@
         "exception": "reviewed_dynamic_schema_use"
       },
       "sha256:414d5900739e769575efdbb5599747c7eb60b42054cf235ab22a0c4088314e36": {
-        "exception": "reviewed_dynamic_schema_use"
-      },
-      "sha256:45ee8b3692916dd1741af46c9d1b1faf15b6fd5307475230505f8b251ed62719": {
         "exception": "reviewed_dynamic_schema_use"
       },
       "sha256:46d68782366476e2cd6ab3b4bafdc4cf510a5029a2255c2d5b56ba417f2cbd0b": {
@@ -1802,6 +1814,9 @@
         "exception": "reviewed_dynamic_schema_use"
       },
       "sha256:d08387873c317f64d800b7bd808ac339f939974019acaade49dd56e04b31d6b7": {
+        "exception": "reviewed_dynamic_schema_use"
+      },
+      "sha256:d2076159e9002bfe686d458d0a9f2a1ceeaf824550dc3f513dbe6126a34898ce": {
         "exception": "reviewed_dynamic_schema_use"
       },
       "sha256:d78c2b1e53aa010cee4b007cca5dd3ab5bdd7ae61089d874bd20fb30c9a1c290": {

@@ -32,9 +32,9 @@ def broker(tmp_path, monkeypatch):
         (tmp_path / name).mkdir(mode=0o700)
     monkeypatch.setenv("JHT_BROKER_SECRETS", str(tmp_path / "secrets"))
     monkeypatch.setenv("JHT_BROKER_STATE", str(tmp_path / "state"))
-    from broker import admin, notary, protocol, server
+    from broker import admin, notary, protocol, server, webauth
 
-    return type("B", (), {"admin": admin, "notary": notary, "protocol": protocol, "server": server})
+    return type("B", (), {"admin": admin, "notary": notary, "protocol": protocol, "server": server, "webauth": webauth})
 
 
 def admin(broker, *argv):
@@ -175,3 +175,75 @@ def test_the_registrable_part_of_a_host(broker):
 def test_the_origins_are_closed(broker):
     with pytest.raises(broker.notary.NotaryRefusal):
         broker.notary.record(42, T1, "agent_closer", WEB)
+
+
+def test_web_receipts_are_bound_to_the_host_account_and_consumed_once(broker, monkeypatch):
+    account = "11111111-1111-4111-8111-111111111111"
+    assert admin(broker, "apply", "account", account) == (0, {"ok": True, "account_id": account})
+    monkeypatch.setattr(sys, "stdin", type("I", (), {"buffer": io.BytesIO(b"jht_sync_abcdefghijklmnopqrstuvwxyz")})())
+    assert admin(broker, "apply", "web-token") == (0, {"ok": True, "token": "stored"})
+
+    payload = {
+        "ok": True,
+        "account_id": account,
+        "authorizations": [{
+            "id": "22222222-2222-4222-8222-222222222222",
+            "legacy_id": 42,
+            "created_at": T1,
+            "summary": "Synthetic role @ Synthetic company · example.com",
+            "action": "position.apply_authorize",
+            "status": "done",
+        }],
+        "cursor": T1,
+    }
+
+    class Reply:
+        status = 200
+        def __enter__(self): return self
+        def __exit__(self, *_): return False
+        def read(self, *_): return json.dumps(payload).encode()
+
+    monkeypatch.setattr(broker.webauth, "urlopen", lambda *_args, **_kwargs: Reply())
+    assert admin(broker, "apply", "sync-web") == (0, {"ok": True, "processed": 1, "status": "synced"})
+    assert claim(broker)["claimed"] is True
+    # A replay of the same row id does not widen the register again.
+    assert admin(broker, "apply", "sync-web") == (0, {"ok": True, "processed": 0, "status": "synced"})
+    assert claim(broker)["claimed"] is False
+
+
+def test_web_receipt_for_another_account_records_no_authorisation(broker, monkeypatch):
+    account = "11111111-1111-4111-8111-111111111111"
+    broker.webauth.set_account(account)
+    broker.webauth.set_token(b"jht_sync_abcdefghijklmnopqrstuvwxyz")
+
+    class Reply:
+        status = 200
+        def __enter__(self): return self
+        def __exit__(self, *_): return False
+        def read(self, *_): return json.dumps({"ok": True, "account_id": "33333333-3333-4333-8333-333333333333", "authorizations": [], "cursor": T1}).encode()
+
+    monkeypatch.setattr(broker.webauth, "urlopen", lambda *_args, **_kwargs: Reply())
+    assert broker.webauth.sync() == {"ok": True, "processed": 0, "status": "account_mismatch"}
+    assert ask(broker, "apply.check", position_id=42) == {"ok": True, "proven": False}
+
+
+def test_a_later_web_withdrawal_wins_over_the_same_position(broker, monkeypatch):
+    account = "11111111-1111-4111-8111-111111111111"
+    broker.webauth.set_account(account)
+    broker.webauth.set_token(b"jht_sync_abcdefghijklmnopqrstuvwxyz")
+    rows = [
+        {"id": "22222222-2222-4222-8222-222222222222", "legacy_id": 42, "created_at": T1,
+         "summary": "Synthetic role @ Synthetic company · example.com", "action": "position.apply_authorize", "status": "done"},
+        {"id": "33333333-3333-4333-8333-333333333333", "legacy_id": 42, "created_at": T2,
+         "summary": "Synthetic role @ Synthetic company", "action": "position.apply_revoke", "status": "queued"},
+    ]
+
+    class Reply:
+        status = 200
+        def __enter__(self): return self
+        def __exit__(self, *_): return False
+        def read(self, *_): return json.dumps({"ok": True, "account_id": account, "authorizations": rows, "cursor": T2}).encode()
+
+    monkeypatch.setattr(broker.webauth, "urlopen", lambda *_args, **_kwargs: Reply())
+    assert broker.webauth.sync() == {"ok": True, "processed": 2, "status": "synced"}
+    assert ask(broker, "apply.check", position_id=42) == {"ok": True, "proven": False}
