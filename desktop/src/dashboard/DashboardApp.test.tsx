@@ -533,6 +533,26 @@ describe("DashboardApp onboarding router", () => {
     expect(await screen.findByTestId("shell")).toBeInTheDocument();
   });
 
+  it("keeps the setup where it is when the same account's session comes back as a new object", async () => {
+    // supabase-js publishes the session again, as a new object, every time the window comes back to the
+    // foreground: the setup must not start over and lose what the person typed.
+    vi.mocked(useSession).mockReturnValue(signedInAs("same-account"));
+    requireOnboarding();
+    const view = render(<DashboardApp />);
+    expect(await screen.findByTestId("onboarding")).toHaveTextContent("collecting:host");
+    expect(loadOnboardingGate).toHaveBeenCalledTimes(1);
+
+    vi.mocked(loadOnboardingGate).mockResolvedValue({ phase: "ready" });
+    vi.mocked(useSession).mockReturnValue(signedInAs("same-account"));
+    view.rerender(<DashboardApp />);
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)); });
+
+    expect(screen.getByTestId("onboarding")).toHaveTextContent("collecting:host");
+    expect(screen.queryByTestId("shell")).not.toBeInTheDocument();
+    expect(loadOnboardingGate).toHaveBeenCalledTimes(1);
+    expect(activateDesktopAccountScope).toHaveBeenCalledTimes(1);
+  });
+
   it("mounts no onboarding, Shell or chat before backend account scope is confirmed", async () => {
     let confirmScope!: () => void;
     vi.mocked(activateDesktopAccountScope).mockReturnValue(new Promise<void>((resolve) => {

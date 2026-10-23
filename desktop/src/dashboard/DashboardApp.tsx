@@ -367,6 +367,10 @@ export default function DashboardApp() {
     ? `local:${localProfile.profileId}`
     : session ? `google:${session.user.id}` : null;
   const markerId = localProfile ? `local:${localProfile.profileId}` : session?.user.id ?? null;
+  // supabase-js publishes the same session again as a new object (on every return of the window to the
+  // foreground, on every token refresh): what starts the account over is the account, never that object.
+  const sessionRef = useRef(session);
+  sessionRef.current = session;
   const [gate, setGate] = useState<OnboardingGateState>({ phase: "loading" });
   const [platform, setPlatform] = useState<DesktopPlatform | null>(null);
   const [previousLocalData, setPreviousLocalData] = useState(false);
@@ -440,13 +444,13 @@ export default function DashboardApp() {
     try {
       const next = localProfile
         ? loadLocalOnboardingGate(localProfile.profileId, localProfile.displayName)
-        : session ? await loadOnboardingGate(supabase, session.user) : null;
+        : sessionRef.current ? await loadOnboardingGate(supabase, sessionRef.current.user) : null;
       if (next && activeIdentityKeyRef.current === initializingKey) setGate(next);
     } catch {
       if (activeIdentityKeyRef.current !== initializingKey) return;
       setGate({ phase: "error", message: stateText().gateError });
     }
-  }, [identityKey, localProfile?.displayName, localProfile?.profileId, markerId, migrationReady, session]);
+  }, [identityKey, localProfile?.displayName, localProfile?.profileId, markerId, migrationReady]);
 
   useEffect(() => {
     if (!identityKey || !migrationProfile) {
