@@ -41,7 +41,7 @@
 }
 
 .ssh-key-picker__actions button:focus-visible {
-  outline: 3px solid var(--accent, #bbf246);
+  outline: 3px solid var(--color-white, #bbf246);
   outline-offset: 2px;
 }
 
