@@ -93,7 +93,7 @@ jobs:
           $ErrorActionPreference = 'Continue'
           . "$env:GITHUB_WORKSPACE\scripts\ci\windows_podman_real_run.ps1"
           $documents = Join-Path $env:USERPROFILE 'Documents\Job Hunter Team'
-          if (Test-Path -LiteralPath $documents) { throw "the runner already has $documents: this job would not see T83" }
+          if (Test-Path -LiteralPath $documents) { throw "the runner already has ${documents}: this job would not see T83" }
           $code = Invoke-Timed 'install (first)' 'web\public\install.ps1' @('-SkipOnboard')
           if ($code -eq 0 -and -not (Test-Path -LiteralPath $documents -PathType Container)) {
             Write-Host "install.ps1 passed but left no $documents"
