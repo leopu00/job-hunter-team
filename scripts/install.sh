@@ -668,7 +668,9 @@ check_podman_linux() {
   [ "$rootless" = "true" ] \
     || podman_refuse podman_rootful_refused 91 "podman answers as rootful for $user (Rootless=$rootless): JHT needs Podman rootless."
   have_podman="$(podman --version 2>/dev/null | awk '{ print $NF }' | sed 's/[^0-9.].*$//')"
-  have_compose="$(podman-compose --version 2>/dev/null | awk '/^podman-compose version/ { print $3; exit }' | sed 's/[^0-9.].*$//')"
+  # awk reads every line: exiting at the first would close the pipe while podman-compose still
+  # writes its "podman version" line, and under pipefail that SIGPIPE (141) stops the install.
+  have_compose="$(podman-compose --version 2>/dev/null | awk '/^podman-compose version/ && v == "" { v = $3 } END { print v }' | sed 's/[^0-9.].*$//')"
   { [ -n "$have_podman" ] && version_at_least "$have_podman" "$PODMAN_MIN_VERSION"; } \
     || podman_refuse podman_version_unsupported 93 "podman ${have_podman:-of unknown version} is older than $PODMAN_MIN_VERSION. Ask the administrator of this server for a newer podman."
   { [ -n "$have_compose" ] && version_at_least "$have_compose" "$PODMAN_COMPOSE_MIN_VERSION"; } \

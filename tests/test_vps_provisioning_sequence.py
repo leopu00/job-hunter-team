@@ -91,7 +91,7 @@ exec env -i HOME="$FAKE_REMOTE_HOME" PATH="$FAKE_REMOTE_PATH" \
   FAKE_APT_INSTALLS_DOCKER="${FAKE_APT_INSTALLS_DOCKER:-1}" \
   FAKE_FREE_KB="${FAKE_FREE_KB:-}" TERM=dumb \
   XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-}" JHT_ETC_DIR="${JHT_ETC_DIR:-}" FAKE_UID="${FAKE_UID:-}" FAKE_UID_1001="${FAKE_UID_1001:-}" \
-  FAKE_PODMAN_VERSION="${FAKE_PODMAN_VERSION:-}" FAKE_COMPOSE_VERSION="${FAKE_COMPOSE_VERSION:-}" \
+  FAKE_PODMAN_VERSION="${FAKE_PODMAN_VERSION:-}" FAKE_COMPOSE_VERSION="${FAKE_COMPOSE_VERSION:-}" FAKE_COMPOSE_PAUSE="${FAKE_COMPOSE_PAUSE:-}" \
   FAKE_ROOTLESS="${FAKE_ROOTLESS:-}" FAKE_PODMAN_INFO="${FAKE_PODMAN_INFO:-}" FAKE_LINGER="${FAKE_LINGER:-}" \
   FAKE_STATE="${FAKE_STATE:-}" FAKE_SUDO_PASSWORD="${FAKE_SUDO_PASSWORD:-}" \
   FAKE_APT_INSTALLS_PODMAN="${FAKE_APT_INSTALLS_PODMAN:-}" FAKE_LINGER_STUCK="${FAKE_LINGER_STUCK:-}" \
@@ -193,6 +193,8 @@ esac
 FAKE_PODMAN_COMPOSE = r"""#!/bin/bash
 echo "podman-compose $*" >> "$FAKE_LOG"
 echo "podman-compose version ${FAKE_COMPOSE_VERSION:-1.6.0}"
+# The real one asks podman for its version before the second line: FAKE_COMPOSE_PAUSE makes it late.
+[ -z "${FAKE_COMPOSE_PAUSE:-}" ] || sleep "$FAKE_COMPOSE_PAUSE"
 echo "podman version ${FAKE_PODMAN_VERSION:-5.7.0}"
 """
 
@@ -642,6 +644,16 @@ def install_podman(server: Server, source: str, **extra: str):
         **extra,
     }
     return server.ssh(command, server.installer_input(), **env)
+
+
+def test_a_podman_compose_that_writes_its_second_line_late_does_not_stop_the_install(server, source):
+    # podman-compose --version prints its own version, then podman's. The installer read only the
+    # first line and closed the pipe: the late second line got SIGPIPE, and under pipefail the
+    # install stopped at step 2 with 141 (seen at random in CI, in every Podman test of this file).
+    with_podman(server)
+    done = install_podman(server, source, FAKE_COMPOSE_PAUSE="0.3")
+    assert done.returncode == 0, done.stderr.decode() + done.stdout.decode()
+    assert "podman-compose 1.6.0" in done.stdout.decode() + done.stderr.decode()
 
 
 def sudo_calls(server: Server) -> list[str]:
