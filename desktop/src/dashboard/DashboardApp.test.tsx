@@ -229,6 +229,7 @@ vi.mock("../onboarding/ExistingTeamConnectModal", () => ({
     return (
       <section data-testid="existing-team-modal">
         <p>team:{props.teamId}</p>
+        {props.savedTeamNotice && <p>notice:{props.savedTeamNotice.title}|{props.savedTeamNotice.message}</p>}
         <button type="button" onClick={props.onCancel}>cancel-existing-team</button>
         <button type="button" onClick={() => void props.onConnected(result(false))}>connect-existing-team-incomplete</button>
         <button type="button" onClick={() => void props.onConnected(result(true))}>connect-existing-team-ready</button>
@@ -636,6 +637,40 @@ describe("DashboardApp onboarding router", () => {
     expect(await screen.findByTestId("onboarding")).toBeInTheDocument();
     expect(reconnectDirectChat).not.toHaveBeenCalled();
     expect(markOnboardingStarted).not.toHaveBeenCalled();
+  });
+
+  it("says why the saved existing team did not open, in the window that offers the registered team", async () => {
+    vi.mocked(useSession).mockReturnValue(signedInAs("existing-saved-down"));
+    vi.mocked(loadOnboardingGate).mockResolvedValue({
+      phase: "required",
+      account: { displayName: "Existing Person" },
+      resumeAvailable: false,
+      existingTeam: { teamId: "team-opaque-0009", status: "available" },
+      runtime: { status: "collecting", stage: "host" },
+    });
+    vi.mocked(existingTeamBridge.reopen).mockRejectedValue({ code: "existing_team_unavailable" });
+
+    render(<DashboardApp />);
+    const modal = await screen.findByTestId("existing-team-modal");
+    await waitFor(() => expect(modal).toHaveTextContent(/notice:Squadra esistente salvata: non raggiungibile ora\|\S/));
+    expect(existingTeamBridge.reopen).toHaveBeenCalled();
+  });
+
+  it("shows no notice when nothing was saved on the profile", async () => {
+    vi.mocked(useSession).mockReturnValue(signedInAs("existing-nothing-saved"));
+    vi.mocked(loadOnboardingGate).mockResolvedValue({
+      phase: "required",
+      account: { displayName: "Existing Person" },
+      resumeAvailable: false,
+      existingTeam: { teamId: "team-opaque-0010", status: "available" },
+      runtime: { status: "collecting", stage: "host" },
+    });
+
+    render(<DashboardApp />);
+    const modal = await screen.findByTestId("existing-team-modal");
+    await waitFor(() => expect(existingTeamBridge.reopen).toHaveBeenCalled());
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)); });
+    expect(modal).not.toHaveTextContent("notice:");
   });
 
   it("keeps an attached existing team in confined Assistant chat until its profile is ready", async () => {

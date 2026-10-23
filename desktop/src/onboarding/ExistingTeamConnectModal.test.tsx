@@ -85,6 +85,19 @@ async function fillHost(user: ReturnType<typeof userEvent.setup>) {
 }
 
 describe("ExistingTeamConnectModal", () => {
+  it("says above the form why the saved team did not open, and only there", async () => {
+    const notice = { title: "Squadra salvata: non raggiungibile", message: "La VPS non risponde.", action: "Controlla l’indirizzo e riprova." };
+    const view = render(<ExistingTeamConnectModal teamId="team-opaque-0001" bridge={bridge()} savedTeamNotice={notice} onCancel={vi.fn()} onConnected={vi.fn()} onReadOnlyConnected={vi.fn()} />);
+    const alert = screen.getByRole("alert");
+    expect(alert).toHaveTextContent(notice.title);
+    expect(alert).toHaveTextContent(notice.message);
+    expect(alert).toHaveTextContent(notice.action);
+    view.unmount();
+
+    render(<ExistingTeamConnectModal teamId="team-opaque-0001" bridge={bridge()} onCancel={vi.fn()} onConnected={vi.fn()} onReadOnlyConnected={vi.fn()} />);
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
   it("keeps host data local and does nothing before the user starts the probe", async () => {
     const native = bridge();
     render(<ExistingTeamConnectModal teamId="team-opaque-0001" bridge={native} onCancel={vi.fn()} onConnected={vi.fn()} onReadOnlyConnected={vi.fn()} />);

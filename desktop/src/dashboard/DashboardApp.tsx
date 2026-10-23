@@ -380,6 +380,11 @@ export default function DashboardApp() {
   const [activity, setActivity] = useState<OnboardingActivityState | null>(null);
   const [assistantChatIdentityKey, setAssistantChatIdentityKey] = useState<string | null>(null);
   const [existingTeamDismissedIdentityKey, setExistingTeamDismissedIdentityKey] = useState<string | null>(null);
+  // Why the saved existing team did not open at start-up, for the «existing team» window that the
+  // account's registered team opens on top of everything: without it the person sees an empty form.
+  const [savedTeamNotice, setSavedTeamNotice] = useState<
+    { identityKey: string; title: string; message: string; action?: string } | null
+  >(null);
   const [manualExistingTeam, setManualExistingTeam] = useState<{ identityKey: string; host: ExistingTeamVpsHost } | null>(null);
   // The account is reading an existing team's VPS and nothing else: the Shell
   // shows its positions (lib/existing-team-readonly.ts), the setup waits.
@@ -564,6 +569,7 @@ export default function DashboardApp() {
       : Promise.resolve();
     setAssistantChatIdentityKey(null);
     setExistingTeamDismissedIdentityKey(null);
+    setSavedTeamNotice(null);
     setAccountScope(null);
     setSshHostKey(null);
     setActivity(null);
@@ -1048,6 +1054,7 @@ export default function DashboardApp() {
     savedTeamFailureRef.current = false;
     try {
       const result = await existingTeamBridge.reopen();
+      setSavedTeamNotice(null);
       // Closing the read-only view goes back to the setup's first step, not to a spinner.
       setRuntime({ status: "collecting", stage: "host" });
       openReadOnlyExistingTeam(result);
@@ -1057,22 +1064,29 @@ export default function DashboardApp() {
       // «None» means exactly this: neither a candidate nor a selection is saved. One without
       // the other is an incomplete saved connection, and any other refusal a saved team that
       // cannot be reached: both are shown as such and never lead to the team-start action.
-      if (code === "existing_team_runtime_candidate_required") return "none";
+      if (code === "existing_team_runtime_candidate_required") {
+        setSavedTeamNotice(null);
+        return "none";
+      }
       savedTeamFailureRef.current = true;
       const described = describeError(code, { locale: appLocale() });
+      const title = code === "existing_team_saved_incomplete"
+        ? stateText().savedTeamIncompleteTitle
+        : stateText().savedTeamUnreachableTitle;
+      if (identityKey) {
+        setSavedTeamNotice({ identityKey, title, message: described.text, ...(described.action ? { action: described.action } : {}) });
+      }
       return {
         status: "failed",
         stage: "runtime",
-        title: code === "existing_team_saved_incomplete"
-          ? stateText().savedTeamIncompleteTitle
-          : stateText().savedTeamUnreachableTitle,
+        title,
         message: described.text,
         action: described.action,
         ...(code ? { code } : {}),
         retryable: true,
       };
     }
-  }, [openReadOnlyExistingTeam, setRuntime]);
+  }, [identityKey, openReadOnlyExistingTeam, setRuntime]);
 
   const resumeAssistant = useCallback(async (options?: { reopened?: boolean }) => {
     if (!identityKey) throw new Error("identity-missing");
@@ -1510,6 +1524,7 @@ export default function DashboardApp() {
           key={identityKey}
           teamId={gate.existingTeam?.teamId}
           initialHost={manualExistingHost}
+          savedTeamNotice={savedTeamNotice?.identityKey === identityKey ? savedTeamNotice : undefined}
           onCancel={() => {
             setExistingTeamDismissedIdentityKey(identityKey);
             setManualExistingTeam(null);
