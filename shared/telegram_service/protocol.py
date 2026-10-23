@@ -48,6 +48,9 @@ OPERATIONS: dict[str, tuple[dict[str, type], dict[str, type]]] = {
     ),
     "telegram.inbox.pull": ({"bot_role": str}, {"limit": int}),
     "telegram.inbox.ack": ({"bot_role": str, "event_ids": list}, {}),
+    # The agents request a question but never supply its rendered text,
+    # callback, chat, or the broker operation; the transport owns those.
+    "telegram.apply.request": ({"position_id": int, "title": str, "company": str, "url": str}, {}),
 }
 
 
@@ -121,6 +124,9 @@ def parse_request(raw: bytes) -> dict[str, Any]:
             isinstance(item, str) and EVENT_ID_RE.fullmatch(item) for item in ids
         ):
             raise ProtocolError("event_ids_invalid")
+    elif operation == "telegram.apply.request":
+        if isinstance(args["position_id"], bool) or args["position_id"] < 1:
+            raise ProtocolError("position_id_invalid")
     return {"op": operation, "args": args, "role": role.strip().lower()}
 
 

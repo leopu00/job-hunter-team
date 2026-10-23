@@ -75,7 +75,7 @@ def _next_instant(previous) -> str:
     return now.strftime("%Y-%m-%dT%H:%M:%S.") + f"{now.microsecond // 1000:03d}Z"
 
 
-def write_authorisation(conn, pid: int, requested: bool, origin: str) -> str:
+def write_authorisation(conn, pid: int, requested: bool, origin: str, *, instant: str | None = None) -> str:
     """Write the flag, its instant and its author. The caller holds the transaction
     and has already asked `toggle_verdict`.
 
@@ -88,7 +88,14 @@ def write_authorisation(conn, pid: int, requested: bool, origin: str) -> str:
     previous = conn.execute(
         "SELECT apply_requested_at FROM positions WHERE id = ?", (pid,)
     ).fetchone()
-    at = _next_instant(previous[0] if previous else None)
+    if instant is None:
+        at = _next_instant(previous[0] if previous else None)
+    else:
+        parsed = _parse_instant(instant)
+        previous_at = _parse_instant(previous[0] if previous else None)
+        if parsed is None or (previous_at is not None and parsed <= previous_at):
+            raise ValueError("authorisation instant is not newer")
+        at = instant
     conn.execute(
         "UPDATE positions "
         "   SET apply_requested = ?, "

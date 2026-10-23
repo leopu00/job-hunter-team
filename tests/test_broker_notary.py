@@ -91,6 +91,43 @@ def test_the_agents_socket_has_no_way_to_record(broker):
     assert broker.server.handle(raw.encode()) == {"ok": False, "reason": "unexpected_field"}
 
 
+def test_telegram_socket_has_only_the_record_operation(broker):
+    record = json.dumps({"op": "apply.record", "args": {
+        "position_id": 42, "instant": T1, "destination": WEB,
+    }}).encode()
+    assert broker.server.handle_telegram(record) == {"ok": True, "status": "recorded"}
+    assert claim(broker)["claimed"] is True
+    for op in ("apply.check", "apply.claim", "apply.revoke", "mail.status"):
+        assert broker.server.handle_telegram(json.dumps({"op": op, "args": {}}).encode()) == {
+            "ok": False, "reason": "unknown_operation",
+        }
+    # The normal socket remains the only one agents can reach, and it still
+    # rejects widening the register.
+    assert ask(broker, "apply.record", position_id=42, instant=T2, destination=WEB) == {
+        "ok": False, "reason": "unknown_operation",
+    }
+
+
+def test_telegram_socket_refuses_a_non_telegram_peer_before_reading(broker, monkeypatch):
+    class Connection:
+        def __init__(self):
+            self.sent = b""
+            self.read = False
+
+        def sendall(self, value):
+            self.sent += value
+
+        def recv(self, _size):
+            self.read = True
+            raise AssertionError("the request must not be read")
+
+    connection = Connection()
+    monkeypatch.setattr(broker.server, "peer_uid", lambda _conn: 1001)
+    broker.server._TelegramHandler(connection, ("local", 0), object())
+    assert connection.read is False
+    assert json.loads(connection.sent) == {"ok": False, "reason": "peer_not_allowed"}
+
+
 def test_never_back(broker):
     admin(broker, "apply", "record", "42", T1, WEB)
     assert claim(broker)["claimed"] is True

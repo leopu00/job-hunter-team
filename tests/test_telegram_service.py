@@ -125,12 +125,18 @@ def test_foreign_peer_is_refused_before_request_bytes_are_read(
 class FakeAPI:
     def __init__(self) -> None:
         self.sent: list[tuple[str, str]] = []
+        self.markups: list[dict | None] = []
+        self.callbacks: list[tuple[str, str]] = []
         self.next_id = 100
 
-    def send_message(self, chat_id: str, text: str) -> int:
+    def send_message(self, chat_id: str, text: str, reply_markup: dict | None = None) -> int:
         self.sent.append((chat_id, text))
+        self.markups.append(reply_markup)
         self.next_id += 1
         return self.next_id
+
+    def answer_callback_query(self, callback_id: str, text: str) -> None:
+        self.callbacks.append((callback_id, text))
 
     def file_meta(self, _file_id: str) -> dict:
         return {"file_path": "documents/file.bin", "file_size": 3}
@@ -362,6 +368,184 @@ def test_numeric_reply_to_open_question_is_not_discarded(
     )
     pulled = transport.pull({"bot_role": "assistente", "limit": 10})
     assert [event["body"] for event in pulled["events"]] == ["45000"]
+
+
+def test_apply_question_is_fixed_clean_and_records_only_its_button(
+    telegram_store: dict[str, Path], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    transport, api = configured_runtime(telegram_store, monkeypatch)
+    monkeypatch.setattr(runtime.secrets, "token_hex", lambda _length: "a" * 32)
+    recorded: list[tuple[int, str, str]] = []
+    monkeypatch.setattr(runtime.telegram_client, "record", lambda pid, instant, destination: (
+        recorded.append((pid, instant, destination)) or {"ok": True, "status": "recorded"}
+    ))
+    parsed = protocol.parse_request(request("telegram.apply.request", {
+        "position_id": 77, "title": "Role", "company": "Example Co", "url": "https://jobs.example.co.uk/open",
+    }))
+    answer = transport.dispatch(parsed)
+    assert answer == {"ok": True, "status": "asked", "question_id": "a" * 32}
+    assert api.sent[-1][1] == (
+        "🔐 JHT · autorizzazione candidatura\n\n"
+        "Vuoi candidarti a:\nRole @ Example Co · jobs.example.co.uk\n\n"
+        "L'autorizzazione vale una sola volta per questa destinazione."
+    )
+    assert api.markups[-1] == {"inline_keyboard": [[{
+        "text": "Sì, candidati", "callback_data": f"jhta:{'a' * 32}:yes",
+    }]]}
+    transport.process_update("assistente", {
+        "update_id": 71,
+        "callback_query": {"id": "callback-1", "data": f"jhta:{'a' * 32}:yes", "message": {
+            "message_id": api.next_id, "chat": {"id": 42},
+        }},
+    }, {"bot_token": "unused", "chat_id": "42"}, api)
+    assert recorded and recorded[0][0] == 77 and recorded[0][2] == "web:example.co.uk"
+    assert api.callbacks[-1] == ("callback-1", "Autorizzazione registrata.")
+    events = store.read_state("events-assistente", [])
+    assert events == [{
+        "event_id": "telegram:assistente:71", "agent": "assistente", "kind": "apply_authorisation",
+        "position_id": 77, "instant": recorded[0][1], "created_at": events[0]["created_at"],
+    }]
+    transport.process_update("assistente", {
+        "update_id": 72,
+        "callback_query": {"id": "callback-2", "data": f"jhta:{'a' * 32}:yes", "message": {
+            "message_id": api.next_id, "chat": {"id": 42},
+        }},
+    }, {"bot_token": "unused", "chat_id": "42"}, api)
+    assert len(recorded) == 1
+    assert "non è più disponibile" in api.callbacks[-1][1]
+
+
+def test_apply_question_refuses_hidden_agent_text(telegram_store: dict[str, Path], monkeypatch: pytest.MonkeyPatch) -> None:
+    transport, _api = configured_runtime(telegram_store, monkeypatch)
+    parsed = protocol.parse_request(request("telegram.apply.request", {
+        "position_id": 77, "title": "Role\u202e", "company": "Example", "url": "https://example.org/jobs",
+    }))
+    with pytest.raises(runtime.TransportRefusal, match="apply_question_invalid"):
+        transport.dispatch(parsed)
+
+
+def test_apply_question_fails_closed_when_the_broker_does_not_answer(
+    telegram_store: dict[str, Path], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    transport, api = configured_runtime(telegram_store, monkeypatch)
+    monkeypatch.setattr(runtime.secrets, "token_hex", lambda _length: "b" * 32)
+    monkeypatch.setattr(runtime.telegram_client, "record", lambda *_args: {"ok": False, "reason": "broker_unavailable"})
+    transport.dispatch(protocol.parse_request(request("telegram.apply.request", {
+        "position_id": 78, "title": "Role", "company": "Example", "url": "https://example.org/jobs",
+    })))
+    transport.process_update("assistente", {
+        "update_id": 73,
+        "callback_query": {"id": "callback-3", "data": f"jhta:{'b' * 32}:yes", "message": {
+            "message_id": api.next_id, "chat": {"id": 42},
+        }},
+    }, {"bot_token": "unused", "chat_id": "42"}, api)
+    assert api.callbacks[-1] == ("callback-3", "Autorizzazione non verificata: candidatura non inviata.")
+    question = store.read_state(runtime.AUTH_QUESTION_STATE, {})["b" * 32]
+    assert question["state"] == "pending"
+    assert store.read_state("events-assistente", []) == []
+
+
+def test_apply_authorisation_event_sets_only_the_local_ui_flag(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    skills = ROOT / "shared" / "skills"
+    sys.path.insert(0, str(skills))
+    try:
+        import _db
+
+        database_path = tmp_path / "jobs.db"
+        with sqlite3.connect(database_path) as database:
+            database.row_factory = sqlite3.Row
+            _db.ensure_schema(database)
+            database.execute(
+                "INSERT INTO positions (id, title, company, url, status) VALUES (77, 'Role', 'Example', ?, 'ready')",
+                ("https://example.org/jobs",),
+            )
+            database.commit()
+        monkeypatch.setenv("JHT_DB", str(database_path))
+        instant = "2026-10-23T18:04:05.123Z"
+        relay.insert_event({
+            "event_id": "telegram:assistente:71", "agent": "assistente", "kind": "apply_authorisation",
+            "position_id": 77, "instant": instant, "created_at": "2026-10-23 18:04:05",
+        })
+        with sqlite3.connect(database_path) as database:
+            observed = database.execute(
+                "SELECT apply_requested, apply_requested_at, apply_requested_by FROM positions WHERE id = 77"
+            ).fetchone()
+        assert observed == (1, instant, "user_telegram")
+    finally:
+        sys.path.remove(str(skills))
+
+
+def test_permanently_refused_authorisation_events_do_not_starve_normal_messages(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    skills = ROOT / "shared" / "skills"
+    sys.path.insert(0, str(skills))
+    try:
+        import _db
+
+        database_path = tmp_path / "jobs.db"
+        with sqlite3.connect(database_path) as database:
+            database.row_factory = sqlite3.Row
+            _db.ensure_schema(database)
+            database.commit()
+        monkeypatch.setenv("JHT_DB", str(database_path))
+        rejected = [
+            {
+                "event_id": f"telegram:assistente:{number}", "agent": "assistente",
+                "kind": "apply_authorisation", "position_id": number, "instant": "2026-10-23T18:04:05.123Z",
+                "created_at": "2026-10-23 18:04:05",
+            }
+            for number in range(1, 12)
+        ]
+        ordinary = {
+            "event_id": "telegram:assistente:12", "agent": "assistente", "body": "normal message",
+            "created_at": "2026-10-23 18:04:05",
+        }
+        acknowledgements: list[list[str]] = []
+        pending = [*rejected, ordinary]
+
+        def call(op: str, args: dict, role: str = "") -> dict:
+            if op == "telegram.inbox.pull":
+                return {"ok": True, "events": pending[:args["limit"]] if args["bot_role"] == "assistente" else []}
+            if op == "telegram.inbox.ack":
+                acknowledgements.append(args["event_ids"])
+                acknowledged = set(args["event_ids"])
+                pending[:] = [event for event in pending if event["event_id"] not in acknowledged]
+                return {"ok": True}
+            raise AssertionError(op)
+
+        monkeypatch.setattr(relay, "call", call)
+        assert relay.relay_once() == 0
+        assert relay.relay_once() == 1
+        assert acknowledgements == [
+            [*(f"telegram:assistente:{number}" for number in range(1, 11))],
+            ["telegram:assistente:11", "telegram:assistente:12"],
+        ]
+        with sqlite3.connect(database_path) as database:
+            delivered = database.execute("SELECT body FROM pending_user_messages WHERE source_id = ?", (ordinary["event_id"],)).fetchone()
+        assert delivered == ("normal message",)
+        lines = capsys.readouterr().err.splitlines()
+        assert len(lines) == 11
+        assert all(line == "[jht-telegram] discarded apply_authorisation reason=position_not_found" for line in lines)
+    finally:
+        sys.path.remove(str(skills))
+
+
+def test_service_imports_from_its_entrypoint_path_outside_the_repo(tmp_path: Path) -> None:
+    entry = ROOT / "shared" / "telegram_service" / "bin" / "jht-telegram-service.py"
+    script = (
+        "import os, sys\n"
+        "entry = sys.argv[1]\n"
+        "cwd = sys.argv[2]\n"
+        "os.chdir(cwd)\n"
+        "sys.path.insert(0, os.path.normpath(os.path.join(os.path.dirname(entry), '..', '..', '..')))\n"
+        "from shared.telegram_service import runtime\n"
+        "assert runtime.telegram_client.socket_path().name == 'broker.sock'\n"
+        "print('imports-ok')\n"
+    )
+    done = subprocess.run([sys.executable, "-c", script, str(entry), str(tmp_path)], capture_output=True, text=True)
+    assert done.returncode == 0, done.stderr
+    assert done.stdout == "imports-ok\n"
 
 
 def test_unprompted_otp_is_consumed_without_entering_inbox(

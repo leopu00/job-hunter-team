@@ -370,7 +370,7 @@ RUN useradd --create-home --shell /bin/bash jht \
 RUN useradd --uid 1002 --user-group --no-create-home --home-dir /nonexistent \
         --shell /usr/sbin/nologin jhtbroker \
     && install -d -o jhtbroker -g jhtbroker -m 0700 /jht_secrets /jht_broker_state \
-    && install -d -o jhtbroker -g jhtbroker -m 0711 /run/jht-broker \
+    && install -d -o jhtbroker -g jhtbroker -m 0711 /run/jht-broker /run/jht-broker-telegram \
     && ln -sf /app/shared/broker/bin/jht-broker.py /usr/local/bin/jht-broker \
     && ln -sf /app/shared/broker/bin/jht-broker-admin.py /usr/local/bin/jht-broker-admin
 
