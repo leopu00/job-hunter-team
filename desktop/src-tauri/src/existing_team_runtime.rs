@@ -211,8 +211,19 @@ if op=='profile':
   if not heavy: break
   victim=max(heavy,key=lambda item:len(item['text'])); victim['text']=None; victim['state']='over_budget'
  emit({'ok':True,'data':data})
+import os
 try:
- db=sqlite3.connect('file:/jht_home/jobs.db?mode=ro',uri=True); db.row_factory=sqlite3.Row; db.execute('PRAGMA query_only=ON'); db.execute('SELECT 1 FROM positions LIMIT 1')
+ # A team that has never run has no jobs.db yet: that is no positions, not a failure. Only a file
+ # missing from the team's home counts; a jobs.db that is there and cannot be read stays a failure,
+ # and so does a missing home. The reads below then run on an empty database, as for a team with none.
+ try: os.lstat('/jht_home/jobs.db'); absent=False
+ except FileNotFoundError: absent=os.path.isdir('/jht_home')
+ if absent:
+  db=sqlite3.connect(':memory:'); db.row_factory=sqlite3.Row
+  db.executescript('CREATE TABLE positions(id INTEGER PRIMARY KEY,status TEXT,title TEXT,company TEXT,role_family TEXT,loc_country TEXT,loc_city TEXT,source TEXT,found_at TEXT);CREATE TABLE scores(position_id INTEGER,total_score INTEGER);CREATE TABLE applications(position_id INTEGER,critic_score INTEGER);')
+ else:
+  db=sqlite3.connect('file:/jht_home/jobs.db?mode=ro',uri=True); db.row_factory=sqlite3.Row; db.execute('PRAGMA query_only=ON')
+ db.execute('SELECT 1 FROM positions LIMIT 1')
 except Exception: fail('positions_unavailable')
 if op=='detail': emit({'ok':True,'data':position_detail(int(req['id']))})
 def trunc(value,size): return value[:size] if isinstance(value,str) else value
@@ -1146,6 +1157,71 @@ pub(crate) fn forget_team_at(root: &Path, scope: &AccountScope) -> Result<(), &'
         }
     }
     outcome
+}
+
+/// The saved pair that an updated team may replace: its runtime and the SHA-256 of the candidate's bytes.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct RebindBase {
+    pub(crate) runtime: RuntimeTarget,
+    pub(crate) candidate_sha256: String,
+}
+
+/// What a rebind starts from: a valid candidate for exactly this host (same user, port and key) and
+/// this team, and a selection that is absent or attests exactly that candidate. Anything else, an
+/// invalid file, another host or team, a selection of other bytes, is `None`: no rebind, and the
+/// registration refuses as it always did.
+pub(crate) fn rebind_base_at(
+    root: &Path,
+    scope: &AccountScope,
+    host: &ExecutionHost,
+    team: &str,
+) -> Option<RebindBase> {
+    let (candidate, candidate_sha256) = read_candidate_at(root, scope).ok()?;
+    if candidate.host != *host || candidate.team_id != team {
+        return None;
+    }
+    match fs::symlink_metadata(path(root, scope, SELECTION_FILE)) {
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+        Err(_) => return None,
+        Ok(_) => {
+            let selection = read_selection_at(root, scope).ok()?;
+            if selection.host != *host
+                || selection.team_id != team
+                || selection.candidate_sha256 != candidate_sha256
+            {
+                return None;
+            }
+        }
+    }
+    Some(RebindBase {
+        runtime: candidate.runtime,
+        candidate_sha256,
+    })
+}
+
+/// The first half of a rebind: removes the selection and then the candidate, and only if the candidate
+/// is still the very one the person was shown being replaced. The order matters: a stop in between
+/// leaves a candidate without selection (rebindable again), never a selection without its candidate.
+/// The new candidate is then written by the ordinary, never-replacing write.
+pub(crate) fn clear_for_rebind_at(
+    root: &Path,
+    scope: &AccountScope,
+    host: &ExecutionHost,
+    team: &str,
+    expected_sha256: &str,
+) -> Result<(), &'static str> {
+    match rebind_base_at(root, scope, host, team) {
+        Some(base) if base.candidate_sha256 == expected_sha256 => {}
+        _ => return Err("existing_team_runtime_target_changed"),
+    }
+    for name in [SELECTION_FILE, CANDIDATE_FILE] {
+        match fs::remove_file(path(root, scope, name)) {
+            Ok(()) => {}
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(_) => return Err("existing_team_runtime_unavailable"),
+        }
+    }
+    Ok(())
 }
 
 /// The host and team of the candidate this scope has, for the backend's own use

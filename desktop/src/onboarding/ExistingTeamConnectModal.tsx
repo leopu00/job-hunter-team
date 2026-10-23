@@ -31,6 +31,8 @@ export interface ExistingTeamConnectModalProps {
   onConnected: (result: ExistingTeamConnectionResult) => Promise<void>;
   /** The team was connected to read only: the app shows its positions in place of this dialog. */
   onReadOnlyConnected: (result: ExistingTeamReadOnlyConnectionResult) => void;
+  /** Why the team saved on this profile did not open at start-up: shown above the form. */
+  savedTeamNotice?: { title: string; message: string; action?: string };
   bridge?: ExistingTeamBridge;
 }
 
@@ -45,6 +47,15 @@ function targetAlreadySaved(error: unknown): boolean {
   return code === "existing_team_runtime_candidate_exists" ||
     code === "existing_team_runtime_candidate_conflict" ||
     code === "existing_team_runtime_already_selected";
+}
+
+/**
+ * A saved target the VPS no longer matches shows as one of these: the container was replaced
+ * (the team was updated), or the team is off. The discovery tells them apart.
+ */
+function runtimeMayBeReplaced(error: unknown): boolean {
+  const code = existingTeamErrorCode(error);
+  return code === "existing_team_runtime_changed" || code === "existing_team_unavailable";
 }
 
 /** A short form of an identifier for the person to compare; the full value stays in the app. */
@@ -78,6 +89,7 @@ export default function ExistingTeamConnectModal({
   onCancel,
   onConnected,
   onReadOnlyConnected,
+  savedTeamNotice,
   bridge = existingTeamBridge,
 }: ExistingTeamConnectModalProps) {
   const t = ONBOARDING_TEXT[appLocale()];
@@ -187,7 +199,10 @@ export default function ExistingTeamConnectModal({
       onReadOnlyConnected(await bridge.connectReadOnly(request));
       return;
     } catch (error) {
-      if (existingTeamErrorCode(error) !== "existing_team_runtime_candidate_required") throw error;
+      if (existingTeamErrorCode(error) !== "existing_team_runtime_candidate_required") {
+        if (runtimeMayBeReplaced(error) && (await offerRebind(request))) return;
+        throw error;
+      }
     }
     setStage("discovering");
     try {
@@ -198,6 +213,24 @@ export default function ExistingTeamConnectModal({
       return;
     }
     setStage("receipt");
+  }
+
+  /**
+   * The saved target no longer matches the VPS. Reads what it runs now: only if it is the same
+   * team on the same host with another runtime does the receipt show what it replaces, and the
+   * person's confirmation rebinds it. Any other answer leaves the original failure to be shown.
+   */
+  async function offerRebind(request: ExistingTeamRequest): Promise<boolean> {
+    setStage("discovering");
+    try {
+      const found = await bridge.discover(request);
+      if (!found.previous) return false;
+      setReceipt(found);
+    } catch {
+      return false;
+    }
+    setStage("receipt");
+    return true;
   }
 
   /** The full connection («Confirm and connect»), with the target this profile has saved. */
@@ -218,7 +251,10 @@ export default function ExistingTeamConnectModal({
       await connectFull(request);
       return;
     } catch (error) {
-      if (existingTeamErrorCode(error) !== "existing_team_runtime_candidate_required") throw error;
+      if (existingTeamErrorCode(error) !== "existing_team_runtime_candidate_required") {
+        if (runtimeMayBeReplaced(error) && (await offerRebind(request))) return;
+        throw error;
+      }
     }
     setStage("discovering");
     try {
@@ -316,6 +352,14 @@ export default function ExistingTeamConnectModal({
           <p id={descriptionId}>{t.existingTeam.description}</p>
         </header>
 
+        {savedTeamNotice && stage === "fields" && (
+          <section className="existing-team-modal__failure" role="alert">
+            <strong>{savedTeamNotice.title}</strong>
+            <p>{savedTeamNotice.message}</p>
+            {savedTeamNotice.action && <p>{savedTeamNotice.action}</p>}
+          </section>
+        )}
+
         <OnboardingArtwork name="environmentVps" className="existing-team-modal__artwork" />
 
         <ol className="existing-team-modal__steps" aria-label={t.existingTeam.stepsAria}>
@@ -370,8 +414,8 @@ export default function ExistingTeamConnectModal({
 
         {stage === "receipt" && receipt && (
           <section className="existing-team-modal__confirm" aria-live="polite">
-            <p className="existing-team-modal__eyebrow">{r.eyebrow}</p>
-            <p>{r.intro}</p>
+            <p className="existing-team-modal__eyebrow">{receipt.previous ? r.rebindEyebrow : r.eyebrow}</p>
+            <p>{receipt.previous ? r.rebindIntro : r.intro}</p>
             <dl>
               <div><dt>{r.team}</dt><dd>{receipt.teamId}</dd></div>
               <div><dt>{r.vps}</dt><dd>{receipt.hostAddress}:{receipt.hostPort}</dd></div>
@@ -381,18 +425,24 @@ export default function ExistingTeamConnectModal({
               <div><dt>{r.revision}</dt><dd>{shortId(receipt.ociRevision)}</dd></div>
               <div><dt>{r.digest}</dt><dd>{shortId(receipt.digest)}</dd></div>
               <div><dt>{r.assistant}</dt><dd>{receipt.readiness ? r.assistantUp : r.assistantDown}</dd></div>
+              {receipt.previous && (
+                <>
+                  <div><dt>{r.rebindBefore}</dt><dd>{shortId(receipt.previous.ociRevision)} · {shortId(receipt.previous.digest)}</dd></div>
+                  <div><dt>{r.rebindNow}</dt><dd>{shortId(receipt.ociRevision)} · {shortId(receipt.digest)}</dd></div>
+                </>
+              )}
             </dl>
-            <p className="existing-team-modal__warning">{readOnlyRequested ? r.caution : r.cautionFull}</p>
+            <p className="existing-team-modal__warning">{receipt.previous ? r.rebindCaution : readOnlyRequested ? r.caution : r.cautionFull}</p>
             <div className="existing-team-modal__actions">
               <button type="button" className="existing-team-modal__secondary" onClick={backToFields}>{r.cancel}</button>
-              <button type="button" className="existing-team-modal__primary" onClick={() => void registerReceipt()}>{readOnlyRequested ? r.confirm : t.existingTeam.confirmAndLink}</button>
+              <button type="button" className="existing-team-modal__primary" onClick={() => void registerReceipt()}>{receipt.previous ? r.rebindConfirm : readOnlyRequested ? r.confirm : t.existingTeam.confirmAndLink}</button>
             </div>
           </section>
         )}
 
         {stage === "registering" && (
           <section className="existing-team-modal__status" role="status" aria-live="polite">
-            <span aria-hidden="true">••</span><div><strong>{r.registering}</strong><p>{readOnlyRequested ? r.registeringDetail : r.registeringDetailFull}</p></div>
+            <span aria-hidden="true">••</span><div><strong>{receipt?.previous ? r.rebindRegistering : r.registering}</strong><p>{receipt?.previous ? r.rebindRegisteringDetail : readOnlyRequested ? r.registeringDetail : r.registeringDetailFull}</p></div>
           </section>
         )}
 

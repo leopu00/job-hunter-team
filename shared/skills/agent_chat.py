@@ -278,6 +278,7 @@ _FOOTER = re.compile(
     r"|⏵⏵ |⏸ "                                          # Claude Code's mode line
     r"|⏎ send\b"                                        # Codex
     r"|\d{1,3}% context left\b"                         # Codex
+    r"|ctrl \+ t to view transcript\b"                  # Codex 0.164 (the key and its hint, drawn apart)
     r"|Context left until auto-compact: \d{1,3}%\s*$)"  # Claude Code
 )
 # What an empty composer shows in grey, whole: Claude Code's «Try "…"» and Codex's own lines.

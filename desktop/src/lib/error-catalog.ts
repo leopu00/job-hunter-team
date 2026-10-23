@@ -784,6 +784,12 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
     "The agent did not start.",
     "Try again. If it keeps happening, look at its terminal and report the code shown next to it.",
   ),
+  provider_not_configured: copy(
+    "Sulla squadra non è configurato nessun provider (Claude, Codex o Kimi): gli agenti non possono partire.",
+    "Scegli il provider sulla VPS con «jht setup», poi riprova.",
+    "No provider (Claude, Codex or Kimi) is set up on the team: its agents cannot start.",
+    "Choose the provider on the VPS with «jht setup», then try again.",
+  ),
   agent_stop_failed: copy(
     "L’agente è ancora acceso dopo lo spegnimento.",
     "Riprova tra qualche secondo.",
@@ -1244,6 +1250,14 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
     "I dati del team restano dove sono, sulla VPS: non è stato spostato né cancellato nulla. Collegati al team che c’è già, senza reinstallarlo, oppure scegli un’altra VPS.",
     "This VPS already runs Job Hunter Team with Docker. Moving it to Podman needs a migration, which the app cannot do by itself yet.",
     "The team’s data stays where it is, on the VPS: nothing was moved or deleted. Connect to the team that is already there, without reinstalling it, or choose another VPS.",
+  ),
+  // install.sh on a VPS whose team is running (exit 84): installing over it would change its
+  // configuration under it. The install stopped before changing anything.
+  vps_team_running: copy(
+    "Su questa VPS Job Hunter Team è acceso: installarlo di nuovo ora cambierebbe la sua configurazione mentre gira.",
+    "Non è stato cambiato nulla. Collegati al team che c’è già, senza reinstallarlo; oppure fermalo sulla VPS con «jht down» e riprova.",
+    "Job Hunter Team is running on this VPS: installing it again now would change its configuration while it runs.",
+    "Nothing was changed. Connect to the team that is already there, without reinstalling it; or stop it on the VPS with «jht down» and try again.",
   ),
   host_key_missing: copy(
     "L’identità SSH della VPS non è ancora stata confermata.",

@@ -9,7 +9,7 @@ import DashboardScreen from "./DashboardScreen";
 import { appLocale } from "../../lib/app-locale";
 import { describeError } from "../../lib/error-catalog";
 import { ExistingTeamDashboardError, loadExistingTeamDashboard } from "../../lib/existing-team-dashboard";
-import { useExistingTeamReadOnly } from "../../lib/existing-team-readonly";
+import { useExistingTeamView } from "../../lib/existing-team-readonly";
 import { PAGE_STATES_TEXT } from "../../lib/page-states.i18n";
 import { loadDashboard, type DashboardData } from "./load-dashboard";
 
@@ -23,7 +23,7 @@ export default function DashboardPage(_props: PageProps) {
   const [locale] = useState<Locale>(readLocaleCookie);
   const [load, setLoad] = useState<Load>({ state: "loading" });
   // An existing team that is only read: its own VPS answers, the cloud is not asked.
-  const existingTeam = useExistingTeamReadOnly() !== null;
+  const existingTeam = useExistingTeamView() !== null;
 
   const read = useCallback(() => {
     (existingTeam ? loadExistingTeamDashboard() : loadDashboard(supabase))

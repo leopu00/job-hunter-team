@@ -389,6 +389,7 @@ fn receipt_of(sandbox: &Sandbox, found: &Found) -> Receipt {
         host: host(),
         team_id: TEAM.to_owned(),
         candidate_sha256: found.candidate_sha256.clone(),
+        replaces_sha256: found.replaces.as_ref().map(|base| base.candidate_sha256.clone()),
         at: Instant::now(),
     }
 }
@@ -526,13 +527,15 @@ fn t1_the_whole_cycle_of_a_new_profile_reaches_a_selection_and_a_read() {
 }
 
 #[test]
-fn t1_a_missing_captain_registers_nothing() {
+fn t1_a_team_with_its_agents_off_is_found_and_registers_nothing_by_itself() {
+    // T124: the identity is enough; the sessions are reported, never required.
     let sandbox = Sandbox::new();
     write_pin(&sandbox);
     let world = team_world();
     let server = Server::new(&world).probe(1, probe_ok(false, false));
-    assert_eq!(discover(&sandbox, &server, Duration::from_secs(40)).expect_err("no captain"), "existing_team_not_active");
-    assert_eq!(sandbox.entries(), vec!["pin".to_owned()]);
+    let found = discover(&sandbox, &server, Duration::from_secs(40)).expect("found with its agents off");
+    assert!(!found.readiness);
+    assert_eq!(sandbox.entries(), vec!["pin".to_owned()], "a discovery writes nothing");
 }
 
 #[test]
@@ -595,10 +598,10 @@ fn t3_choosing_the_container_is_unambiguous_or_refused() {
     let (result, server) = go(world, server);
     assert_eq!(result.expect_err("70"), "existing_team_unavailable");
     assert_eq!(server.count(), 2, "stopped at the failing probe");
-    // identity passes but no captain: not active
+    // identity passes with no captain: found all the same (T124)
     let world = World::default().jht(1);
     let (result, _) = go(world.clone(), Server::new(&world).probe(1, probe_ok(false, false)));
-    assert_eq!(result.expect_err("inactive"), "existing_team_not_active");
+    assert_eq!(result.expect("found with its agents off").runtime.container_id, container_id(1));
     // four JHT containers are examined, a fifth is refused without entering any
     let mut world = World::default();
     for n in 1..=4 {
@@ -975,6 +978,7 @@ fn t10_the_receipt_in_memory_is_the_only_authority_for_register() {
         host: host(),
         team_id: TEAM.to_owned(),
         candidate_sha256: sha.to_owned(),
+        replaces_sha256: None,
         at,
     };
     let now = Instant::now();
@@ -1355,6 +1359,7 @@ fn t11_the_commands_share_one_gate_and_teardown_empties_the_receipt() {
             host: host(),
             team_id: TEAM.to_owned(),
             candidate_sha256: "a".repeat(64),
+            replaces_sha256: None,
             at: Instant::now(),
         },
     );
@@ -1694,12 +1699,17 @@ fn t16_a_selection_that_is_not_a_valid_private_one_still_owns_the_scope_with_no_
         assert_eq!(server.count(), 0, "{label}: no SSH");
         assert_eq!(sandbox.entries(), before, "{label}: nothing written");
     }
-    // a candidate with its selection, or a candidate alone: the existing path, as before
+    // a coherent pair of this host and team may be rebound, so the VPS is read (the discovery and the
+    // team probes, nothing else); when it runs the very same runtime the refusal is the same as ever
     let sandbox = Sandbox::new();
     connected_once(&sandbox);
+    let before = (fs::read(sandbox.candidate()).unwrap(), fs::read(sandbox.selection()).unwrap());
     let server = team_server(&world);
     assert_eq!(discover(&sandbox, &server, Duration::from_secs(40)).expect_err("pair"), "existing_team_runtime_candidate_exists");
-    assert_eq!(server.count(), 0);
+    for command in server.commands() {
+        assert!(command == DISCOVERY_SCRIPT || command.contains("JHT_CID="), "unexpected command: {command}");
+    }
+    assert_eq!((fs::read(sandbox.candidate()).unwrap(), fs::read(sandbox.selection()).unwrap()), before);
 }
 
 #[test]
@@ -1801,16 +1811,19 @@ fn t16_the_outcomes_and_the_receipt_after_a_mismatch() {
     assert_eq!(register_outcome(&Registered::New(CandidateWrite::Written)), "registered");
     assert_eq!(register_outcome(&Registered::New(CandidateWrite::Identical)), "already_registered");
     assert_eq!(register_outcome(&Registered::Restored), "restored");
+    assert_eq!(register_outcome(&Registered::Rebound(CandidateWrite::Written)), "rebound");
 
     let receipt = || Receipt {
         scope_digest: "d".repeat(64),
         host: host(),
         team_id: TEAM.to_owned(),
         candidate_sha256: "a".repeat(64),
+        replaces_sha256: None,
         at: Instant::now(),
     };
     for (label, result, clears) in [
         ("restored", Ok(Registered::Restored), true),
+        ("rebound", Ok(Registered::Rebound(CandidateWrite::Written)), true),
         (SELECTION_MISMATCH, Err(SELECTION_MISMATCH), true),
         ("existing_team_target_changed", Err("existing_team_target_changed"), true),
         ("existing_team_runtime_target_changed", Err("existing_team_runtime_target_changed"), true),
@@ -1915,4 +1928,232 @@ fn t29_a_podman_discovery_gives_the_target_every_command_checks_again() {
     let classified = classify(&parse_discovery(&text(&lines)).expect("parsed")).expect("classified");
     assert!(classified.targets.is_empty());
     assert_eq!(classified.unusable, 1);
+}
+
+// ----------------------------------------------------- rebind of an updated team
+
+/// The VPS updated the team: its container is another one (5) of another image, same team, same host.
+fn updated_world() -> World {
+    World::default().jht(5).jht(2).other(3, &["docker.io/library/redis@sha256:aaaa"])
+}
+
+fn updated_server() -> Server {
+    Server::new(&updated_world()).probe(5, probe_ok(true, false))
+}
+
+fn pair_of(sandbox: &Sandbox) -> (Vec<u8>, Vec<u8>) {
+    (fs::read(sandbox.candidate()).unwrap(), fs::read(sandbox.selection()).unwrap())
+}
+
+#[test]
+fn t30_an_updated_team_shows_what_it_replaces_and_replaces_nothing_until_it_is_confirmed() {
+    let sandbox = Sandbox::new();
+    let (old_world, _) = connected_once(&sandbox);
+    let (candidate, selection) = pair_of(&sandbox);
+    let server = updated_server();
+    let found = discover(&sandbox, &server, Duration::from_secs(40)).expect("rebind found");
+    assert_eq!(found.runtime, target_of(&updated_world(), 5));
+    let base = found.replaces.as_ref().expect("it says what it replaces");
+    assert_eq!(base.runtime, target_of(&old_world, 1));
+    assert_eq!(base.candidate_sha256, runtime::sha256(&candidate));
+    assert_ne!(found.candidate_sha256, base.candidate_sha256);
+    assert_eq!(pair_of(&sandbox), (candidate, selection), "discover writes and removes nothing");
+}
+
+#[test]
+fn t30_the_confirmed_rebind_replaces_candidate_and_selection_together_and_the_team_opens_again() {
+    let sandbox = Sandbox::new();
+    connected_once(&sandbox);
+    let server = updated_server();
+    let found = discover(&sandbox, &server, Duration::from_secs(40)).expect("rebind found");
+    let receipt = receipt_of(&sandbox, &found);
+    assert!(receipt.replaces_sha256.is_some());
+    assert_eq!(register(&sandbox, &server, &receipt), Ok(Registered::Rebound(CandidateWrite::Written)));
+    assert_eq!(fs::read(sandbox.candidate()).unwrap(), found.candidate);
+    assert!(!sandbox.selection().exists(), "the selection is the connection's, written after the identity probe");
+    assert_eq!(sandbox.entries(), vec!["existing-team-runtime-candidate.json".to_owned(), "pin".to_owned()]);
+    // the ordinary read-only connection then selects the new candidate, as after a first link
+    existing_team_readonly_connect_with(
+        &sandbox.root, &sandbox.scope, &host(), TEAM,
+        &mut || Ok(validated(&sandbox)), &mut || Ok(()),
+        &mut |_, c, i, t| server.answer(c, i, t),
+    )
+    .expect("connected again");
+    let selected = runtime::selected_at(&sandbox.root, &sandbox.scope, &host()).unwrap().unwrap();
+    assert_eq!(selected.runtime, found.runtime);
+}
+
+#[test]
+fn t30_a_rebind_never_applies_to_another_host_user_key_or_team() {
+    let other_hosts = [
+        ExecutionHost::Vps { address: "203.0.113.8".into(), user: "jht".into(), port: 22, key_path: "/tmp/synthetic-key".into() },
+        ExecutionHost::Vps { address: "203.0.113.7".into(), user: "root".into(), port: 22, key_path: "/tmp/synthetic-key".into() },
+        ExecutionHost::Vps { address: "203.0.113.7".into(), user: "jht".into(), port: 2222, key_path: "/tmp/synthetic-key".into() },
+        ExecutionHost::Vps { address: "203.0.113.7".into(), user: "jht".into(), port: 22, key_path: "/tmp/another-key".into() },
+    ];
+    let sandbox = Sandbox::new();
+    connected_once(&sandbox);
+    let before = pair_of(&sandbox);
+    for other in &other_hosts {
+        let server = updated_server();
+        let clock = || server.clock.get();
+        let refused = discover_with(
+            &sandbox.root, &sandbox.scope, other, TEAM,
+            &mut || Ok(validated(&sandbox)),
+            &mut |_, c, i, t| server.answer(c, i, t),
+            &budget_of(Duration::from_secs(40), &clock),
+        );
+        assert_eq!(refused.expect_err("other host"), "existing_team_runtime_candidate_exists");
+        assert_eq!(server.count(), 0, "refused before any call");
+    }
+    let server = updated_server();
+    let clock = || server.clock.get();
+    let other_team = discover_with(
+        &sandbox.root, &sandbox.scope, &host(), "synthetic-team-id-0002",
+        &mut || Ok(validated(&sandbox)),
+        &mut |_, c, i, t| server.answer(c, i, t),
+        &budget_of(Duration::from_secs(40), &clock),
+    );
+    assert_eq!(other_team.expect_err("other team"), "existing_team_runtime_candidate_exists");
+    assert_eq!(server.count(), 0);
+    assert_eq!(pair_of(&sandbox), before);
+}
+
+#[test]
+fn t30_a_team_that_answers_for_another_identity_is_not_a_rebind() {
+    let sandbox = Sandbox::new();
+    connected_once(&sandbox);
+    let before = pair_of(&sandbox);
+    // the updated container answers as another team: nothing is found, nothing is replaced
+    let server = Server::new(&updated_world());
+    assert_eq!(discover(&sandbox, &server, Duration::from_secs(40)).expect_err("other team"), "existing_team_not_found");
+    assert_eq!(pair_of(&sandbox), before);
+}
+
+#[test]
+fn t30_the_same_runtime_is_no_rebind_and_keeps_the_refusal() {
+    let sandbox = Sandbox::new();
+    let (world, server) = connected_once(&sandbox);
+    let before = pair_of(&sandbox);
+    assert_eq!(
+        discover(&sandbox, &server, Duration::from_secs(40)).expect_err("current"),
+        "existing_team_runtime_candidate_exists"
+    );
+    let _ = world;
+    assert_eq!(pair_of(&sandbox), before);
+}
+
+#[test]
+fn t30_a_selection_of_other_bytes_or_a_broken_pair_is_no_rebind() {
+    for label in ["selection of other bytes", "selection not valid", "selection symlink"] {
+        let sandbox = Sandbox::new();
+        connected_once(&sandbox);
+        match label {
+            "selection of other bytes" => {
+                let text = String::from_utf8(fs::read(sandbox.selection()).unwrap()).unwrap();
+                let hash = text.split("\"candidate_sha256\":\"").nth(1).unwrap()[..64].to_owned();
+                write_private(&sandbox.selection(), text.replace(&hash, &"0".repeat(64)).as_bytes());
+            }
+            "selection not valid" => write_private(&sandbox.selection(), b"{}"),
+            _ => {
+                fs::remove_file(sandbox.selection()).unwrap();
+                std::os::unix::fs::symlink("/nonexistent/synthetic", sandbox.selection()).unwrap();
+            }
+        }
+        let server = updated_server();
+        assert_eq!(
+            discover(&sandbox, &server, Duration::from_secs(40)).expect_err(label),
+            "existing_team_runtime_candidate_exists",
+            "{label}"
+        );
+        assert_eq!(server.count(), 0, "{label}: refused before any call");
+    }
+}
+
+#[test]
+fn t30_a_register_only_replaces_exactly_what_the_person_was_shown() {
+    // a receipt of a first link never replaces a saved candidate
+    let sandbox = Sandbox::new();
+    connected_once(&sandbox);
+    let before = pair_of(&sandbox);
+    let server = updated_server();
+    let found = discover(&sandbox, &server, Duration::from_secs(40)).expect("rebind found");
+    let mut first_link = receipt_of(&sandbox, &found);
+    first_link.replaces_sha256 = None;
+    assert_eq!(register(&sandbox, &server, &first_link), Err("existing_team_target_changed"));
+    // a receipt that names another saved candidate neither
+    let mut other = receipt_of(&sandbox, &found);
+    other.replaces_sha256 = Some("0".repeat(64));
+    assert_eq!(register(&sandbox, &server, &other), Err("existing_team_target_changed"));
+    // another runtime found at register time than the one shown
+    let mut shown = receipt_of(&sandbox, &found);
+    shown.candidate_sha256 = "1".repeat(64);
+    assert_eq!(register(&sandbox, &server, &shown), Err("existing_team_target_changed"));
+    assert_eq!(pair_of(&sandbox), before, "nothing was removed or written");
+}
+
+#[test]
+fn t30_the_saved_pair_changed_after_the_receipt_is_not_replaced() {
+    let sandbox = Sandbox::new();
+    connected_once(&sandbox);
+    let server = updated_server();
+    let found = discover(&sandbox, &server, Duration::from_secs(40)).expect("rebind found");
+    // between the receipt and the confirmation another writer replaced the saved selection's bytes
+    let candidate = fs::read(sandbox.candidate()).unwrap();
+    let selection = String::from_utf8(fs::read(sandbox.selection()).unwrap()).unwrap();
+    let hash = selection.split("\"candidate_sha256\":\"").nth(1).unwrap()[..64].to_owned();
+    write_private(&sandbox.selection(), selection.replace(&hash, &"0".repeat(64)).as_bytes());
+    let result = register(&sandbox, &server, &receipt_of(&sandbox, &found));
+    assert_eq!(result, Err("existing_team_runtime_candidate_exists"));
+    assert_eq!(fs::read(sandbox.candidate()).unwrap(), candidate);
+    assert!(sandbox.selection().exists());
+}
+
+#[test]
+fn t30_the_rebind_removes_the_selection_before_the_candidate() {
+    let sandbox = Sandbox::new();
+    connected_once(&sandbox);
+    let base = runtime::rebind_base_at(&sandbox.root, &sandbox.scope, &host(), TEAM).expect("pair");
+    // the rule the clearing keeps: never a selection left without its candidate
+    runtime::clear_for_rebind_at(&sandbox.root, &sandbox.scope, &host(), TEAM, &base.candidate_sha256).expect("cleared");
+    assert!(!sandbox.selection().exists() && !sandbox.candidate().exists());
+    // once cleared the scope is empty (a first link), and clearing twice is refused as changed
+    assert_eq!(
+        runtime::clear_for_rebind_at(&sandbox.root, &sandbox.scope, &host(), TEAM, &base.candidate_sha256),
+        Err("existing_team_runtime_target_changed")
+    );
+    assert_eq!(runtime::registration_gate_at(&sandbox.root, &sandbox.scope), Ok(runtime::RegistrationGate::Fresh));
+}
+
+fn window_gate_of(name: &str) {
+    let source = include_str!("existing_team_register.rs");
+    let body = source.split(name).nth(1).expect(name).split("\n}\n").next().unwrap();
+    let window = body.find("window_may_write(window.label())").unwrap_or_else(|| panic!("{name}: the window is checked"));
+    assert!(body.contains("window_not_allowed"), "{name}");
+    for later in ["scopes.active()", "state.try_begin()", "runtime::root("] {
+        if let Some(at) = body.find(later) {
+            assert!(window < at, "{name}: the window comes before {later}");
+        }
+    }
+    assert!(body.find("scopes.active()").is_some(), "{name}: the scope is still read after the gate");
+}
+
+// `register` removes and writes the saved connection and `discover` is its first half: both are writes, and
+// the permission file grants the commands to windows that must never write.
+#[test]
+fn t31_discover_refuses_every_window_but_the_apps_own_before_anything_else() {
+    window_gate_of("pub(crate) async fn onboarding_existing_team_discover(");
+}
+
+#[test]
+fn t31_register_refuses_every_window_but_the_apps_own_before_anything_else() {
+    window_gate_of("pub(crate) async fn onboarding_existing_team_register(");
+}
+
+#[test]
+fn t31_only_the_apps_own_window_is_one_that_writes() {
+    assert!(crate::direct_chat::window_may_write("main"));
+    for label in ["live-screen", "broker-login", "other"] {
+        assert!(!crate::direct_chat::window_may_write(label), "{label}");
+    }
 }

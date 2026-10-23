@@ -79,6 +79,7 @@ EXIT = {
     "answer_failed": 119,
     "questions_unsupported": 120,
     "team_stop_failed": 121,
+    "provider_not_configured": 122,
 }
 
 # Who and why, as the roster's journal shows them: distinct from a safety
@@ -273,6 +274,26 @@ def _disk_low() -> bool:
         return False
 
 
+# The providers start-agent.sh knows (its `case "$PROVIDER"`): any other value,
+# or none, ends its preflight with «active_provider is missing or unsupported».
+PROVIDERS = frozenset({"anthropic", "claude", "openai", "codex", "kimi", "moonshot"})
+
+
+def _provider_configured() -> bool:
+    # The same reading as start-agent.sh: the config under JHT_HOME when it is
+    # there, else ~/.jht; a config that cannot be read answers no, as there.
+    home = os.environ.get("JHT_HOME")
+    config = Path(home) / "jht.config.json" if home else None
+    if config is None or not config.is_file():
+        config = Path.home() / ".jht" / "jht.config.json"
+    try:
+        found = json.loads(config.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return False
+    active = found.get("active_provider") if isinstance(found, dict) else None
+    return isinstance(active, str) and active in PROVIDERS
+
+
 def _paused() -> bool:
     try:
         return standby().status().get("state") == "active"
@@ -287,6 +308,10 @@ def _start_gates(role: str, instance: str | None) -> None:
     # the one agent starts, and the watchdog still respawns nobody.
     if _paused():
         raise Refusal("team_paused")
+    # Without a provider start-agent.sh stops at its preflight and the agent
+    # never comes up: say so before trying, not «the agent did not start».
+    if not _provider_configured():
+        raise Refusal("provider_not_configured")
     if role == "closer" and not _closer_consented():
         raise Refusal("closer_not_consented")
     if _disk_low():

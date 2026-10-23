@@ -10,6 +10,7 @@ from pathlib import Path
 from urllib.parse import urlparse, urlunparse
 
 import pytest
+from pg_roles import roles_in_turn
 
 ROOT = Path(__file__).parents[1]
 IDENTITY_MIGRATION = ROOT / "supabase/migrations/076_application_sync_identity.sql"
@@ -104,14 +105,15 @@ def pg16():
         _run(["docker", "rm", "--force", "--volumes", name], check=False)
 
 
-SCHEMA = """
-CREATE SCHEMA auth;
+SCHEMA = roles_in_turn("""
 DO $$ BEGIN CREATE ROLE authenticated NOLOGIN;
   EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN CREATE ROLE anon NOLOGIN;
   EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN CREATE ROLE service_role NOLOGIN;
   EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+""") + """
+CREATE SCHEMA auth;
 CREATE FUNCTION auth.uid() RETURNS uuid LANGUAGE sql STABLE AS $$ SELECT nullif(current_setting('request.jwt.claim.sub', true), '')::uuid $$;
 CREATE TABLE public.positions (id uuid PRIMARY KEY, user_id uuid NOT NULL, legacy_id integer UNIQUE NOT NULL, status text, last_actor text);
 CREATE TABLE public.applications (id serial PRIMARY KEY, user_id uuid NOT NULL, position_id uuid UNIQUE NOT NULL, status text, applied boolean, applied_at timestamptz, applied_via text, critic_notes text, cv_path text, cv_pdf_path text);

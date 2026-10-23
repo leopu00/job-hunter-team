@@ -1140,7 +1140,71 @@ container_mutation_preflight() {
   fi
   [ "$status" -eq 3 ] && return 0
   err "Container JHT esistente non attestabile; operazione interrotta."
+  stale_config_hint
   return 1
+}
+
+# Il team gira con la configurazione di prima di una reinstallazione: si puo'
+# solo fermare (jht down) e riavviare con quella nuova (jht up).
+stale_config_hint() {
+  [ "$CONTAINER_RUNTIME" = podman ] || return 0
+  read_only_service_id "$CONTAINER_SERVICE" any-config >/dev/null 2>&1 || return 0
+  err "config_changed_while_running: il team e' stato avviato con la configurazione di prima della reinstallazione. Fermalo con «jht down», poi avvialo con «jht up»."
+}
+
+# `jht down`: il container attestato, oppure quello avviato prima di una
+# reinstallazione (stesso progetto, solo la config-hash e' cambiata): fermarlo
+# e' l'unica strada per ripartire con la configurazione nuova.
+container_down() {
+  if ! container_up >/dev/null; then
+    if [ "$CONTAINER_RUNTIME" = podman ] && read_only_service_id "$CONTAINER_SERVICE" any-config >/dev/null; then
+      warn "config_changed_while_running: il team era stato avviato con la configurazione di prima della reinstallazione; lo fermo."
+    else
+      err "Container JHT non attestabile; arresto negato."
+      return 1
+    fi
+  fi
+  local status=0 errors
+  errors="$(mktemp "${TMPDIR:-/tmp}/jht-down.XXXXXX")" || { compose down; return $?; }
+  compose down 2>"$errors" || status=$?
+  local shown left
+  shown="$(rootless_netns_noise_filter <"$errors")"
+  [ -z "$shown" ] || printf '%s\n' "$shown" >&2
+  rm -f "$errors"
+  # Podman exits non-zero with only that error even though the containers are gone:
+  # what «fermo» says is then what exit says, once the project has no container left.
+  if [ "$status" -ne 0 ] && [ "$(printf '%s\n' "$shown" | wc -l)" -eq 1 ]; then
+    case "$shown" in
+      "nota: il processo di rete del team era gia' chiuso"*)
+        # podman-compose lists every container of the project (broker and telegram too):
+        # an empty answer, and not a failed one, is «nothing left».
+        left="$(compose ps -q 2>/dev/null)" && [ -z "$left" ] && return 0
+        ;;
+    esac
+  fi
+  return "$status"
+}
+
+# Podman rootless, alla rimozione dell'ultimo container, manda SIGTERM al pid
+# salvato del processo di rete (pasta). Se quel processo era gia' finito e il
+# pid e' passato a un processo di un altro utente, kill risponde EPERM e podman
+# stampa un errore a container gia' tolto: la rete e' gia' chiusa, non c'e'
+# niente da fare. Solo quel blocco, quando e' l'unico errore, diventa una nota;
+# ogni altra riga passa com'e'.
+rootless_netns_noise_filter() {
+  awk -v note="nota: il processo di rete del team era gia' chiuso (podman: rootless netns, permission denied); il team e' fermo." '
+    held != "" {
+      if ($0 ~ /^[[:space:]]*\* rootless netns: kill network process: permission denied$/) {
+        held = ""; skip_blank = 1; if (!noted) { print note; noted = 1 }; next
+      }
+      print held; held = ""
+    }
+    skip_blank && $0 ~ /^[[:space:]]*$/ { next }
+    { skip_blank = 0 }
+    /^Error: removing container [0-9a-f]+ network: 1 error occurred:$/ { held = $0; next }
+    { print }
+    END { if (held != "") print held }
+  '
 }
 
 container_postcheck_running() {
@@ -2122,8 +2186,11 @@ podman_expected_config_hash() {
 # senza bootstrap, wake o auto-up. Un container omonimo non e' mai sufficiente.
 # Il progetto ha due servizi: `jht` (agenti) e `jht-broker` (segreti dei
 # portali, P1 del 08/10). 3 = servizio assente, 1 = non attestabile.
+# Secondo argomento `any-config` (solo per fermare): accetta un container del
+# progetto JHT la cui config-hash non e' piu' quella del compose attuale, cioe'
+# avviato prima di una reinstallazione. Ogni altra etichetta resta obbligatoria.
 read_only_service_id() {
-  local service="$1"
+  local service="$1" config_check="${2:-exact}"
   runtime_bundle_trusted || return 1
   docker_reachable || return 1
   local ids container_id details expected_hash expected_project expected_unit found="" seen_service
@@ -2144,7 +2211,9 @@ read_only_service_id() {
   if [ "$CONTAINER_RUNTIME" = podman ]; then
     expected_project="$(compose_project_name)" || return 1
     expected_unit="$(printf 'podman-compose\100%s.service' "$expected_project")"
-    expected_hash="$(podman_expected_config_hash "$COMPOSE_FILE" "$service")" || return 1
+    if [ "$config_check" != any-config ]; then
+      expected_hash="$(podman_expected_config_hash "$COMPOSE_FILE" "$service")" || return 1
+    fi
     if [ "$PODMAN_RUNTIME_MODE" = "native" ]; then
       # Il provider installato (>= 1.1.0) e i due file passati a `up`.
       expected_version="$(podman_compose_version_number "$(podman_compose_binary)")" || return 1
@@ -2164,6 +2233,10 @@ read_only_service_id() {
         return 1
       fi
       [ -z "$found" ] || return 1
+      if [ "$config_check" = any-config ]; then
+        expected_hash="${details##*|}"
+        printf '%s' "$expected_hash" | grep -Eq '^[0-9a-f]{64}$' || return 1
+      fi
       [ "$details" = "$service|true|$expected_project|$expected_project|$service|$service|1|$RUNTIME_DIR|$expected_files|$expected_version|$expected_unit|$expected_hash" ] \
         || return 1
     else
@@ -2538,6 +2611,7 @@ ensure_up() {
   fi
   [ "$status" -eq 3 ] || {
     err "Container JHT esistente non attestabile; avvio automatico negato."
+    stale_config_hint
     exit 1
   }
   info "Container '$CONTAINER_SERVICE' non attivo, lo avvio..."
@@ -4519,11 +4593,7 @@ case "$SUB" in
   down|stop-container)
     require_compose_file
     require_docker
-    container_up >/dev/null || {
-      err "Container JHT non attestabile; arresto negato."
-      exit 1
-    }
-    compose down
+    container_down || exit 1
     ;;
 
   restart)
@@ -4531,6 +4601,7 @@ case "$SUB" in
     require_docker
     container_up >/dev/null || {
       err "Container JHT non attestabile; riavvio negato."
+      stale_config_hint
       exit 1
     }
     compose restart "$CONTAINER_SERVICE"
@@ -4542,6 +4613,7 @@ case "$SUB" in
     require_docker
     container_up >/dev/null || {
       err "Container JHT non attestabile; ricreazione negata."
+      stale_config_hint
       exit 1
     }
     ensure_bind_owner

@@ -197,7 +197,7 @@ CASES = {
     "reachable": (["Test-DockerReachable"], REACHABLE, "& docker info 2>&1", "docker info 2>&1", "REACHABLE=False"),
     "machine": (["Get-JhtPodmanMachineState"], MACHINE, "& $PodmanPath machine list --format json 2>$null",
                 "& $PodmanPath machine list --format json 2>$null", "MACHINE=present"),
-    "service": (["Get-RunningComposeServiceId", "Get-ComposeProjectName"], SERVICE, "& docker @composeArgs 2>$null",
+    "service": (["Get-RunningComposeServiceId", "Get-ComposeProjectName", "Get-ComposeLabel"], SERVICE, "& docker @composeArgs 2>$null",
                 "& docker @composeArgs 2>$null", f"ID={CONTAINER_ID}"),
     "telegram": (["Invoke-TelegramLegacy", "Get-ComposeImage"], TELEGRAM, "Invoke-TelegramLegacy remaining 2>$null",
                  "Invoke-TelegramLegacy remaining 2>$null", "REMAINING=[capitano] CODE=1"),

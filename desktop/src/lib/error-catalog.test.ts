@@ -103,6 +103,7 @@ const NOT_ERRORS: Record<string, string> = {
   registered: "target registration outcome",
   already_registered: "target registration outcome",
   restored: "target registration outcome",
+  rebound: "target registration outcome",
   target_role: "profile field",
   target_role_category_id: "profile field",
   target_specialty: "profile field",

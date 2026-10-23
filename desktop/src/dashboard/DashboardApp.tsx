@@ -36,6 +36,7 @@ import {
 import {
   enterExistingTeamReadOnly,
   leaveExistingTeamReadOnly,
+  useExistingTeamView,
 } from "../lib/existing-team-readonly";
 import {
   isOnboardingAssistantReachable,
@@ -81,7 +82,7 @@ import {
   createOnboardingActivity,
 } from "../lib/onboarding-activity";
 import { DASHBOARD_PAGE, goTo, LOGIN_PAGE } from "../lib/pages";
-import { supabase, supabaseConfig, useSession } from "../lib/supabase";
+import { signOut, supabase, supabaseConfig, useSession } from "../lib/supabase";
 import { OnboardingFlow } from "../onboarding";
 import ExistingTeamConnectModal from "../onboarding/ExistingTeamConnectModal";
 import { ReconfirmExistingTeamContext } from "../lib/reconfirm-existing-team";
@@ -149,6 +150,12 @@ function actionWithCause(code: string, action: string, cause: string | null): st
   const said = text.failureCause.replace("{cause}", cause);
   const sentence = /[.!?…]$/.test(said) ? said : `${said}.`;
   return CAUSE_REPLACES_ACTION.has(code) ? `${sentence} ${text.failureCauseRetry}` : `${action} ${sentence}`;
+}
+
+/** The team's container runs, and its captain or its assistant is off: a team to open, not a failure. */
+function existingTeamAgentsOff(snapshot: OnboardingRuntimeSnapshot): boolean {
+  return Boolean(snapshot.runtimeInstalled && snapshot.containerRunning &&
+    (!snapshot.captainRunning || !snapshot.assistantRunning));
 }
 
 /** The action to tell, and the raw cause for the technical details when it is not a sentence. */
@@ -360,6 +367,10 @@ export default function DashboardApp() {
     ? `local:${localProfile.profileId}`
     : session ? `google:${session.user.id}` : null;
   const markerId = localProfile ? `local:${localProfile.profileId}` : session?.user.id ?? null;
+  // supabase-js publishes the same session again as a new object (on every return of the window to the
+  // foreground, on every token refresh): what starts the account over is the account, never that object.
+  const sessionRef = useRef(session);
+  sessionRef.current = session;
   const [gate, setGate] = useState<OnboardingGateState>({ phase: "loading" });
   const [platform, setPlatform] = useState<DesktopPlatform | null>(null);
   const [previousLocalData, setPreviousLocalData] = useState(false);
@@ -369,10 +380,24 @@ export default function DashboardApp() {
   const [activity, setActivity] = useState<OnboardingActivityState | null>(null);
   const [assistantChatIdentityKey, setAssistantChatIdentityKey] = useState<string | null>(null);
   const [existingTeamDismissedIdentityKey, setExistingTeamDismissedIdentityKey] = useState<string | null>(null);
+  // Why the saved existing team did not open at start-up, for the «existing team» window that the
+  // account's registered team opens on top of everything: without it the person sees an empty form.
+  const [savedTeamNotice, setSavedTeamNotice] = useState<
+    { identityKey: string; title: string; message: string; action?: string } | null
+  >(null);
   const [manualExistingTeam, setManualExistingTeam] = useState<{ identityKey: string; host: ExistingTeamVpsHost } | null>(null);
   // The account is reading an existing team's VPS and nothing else: the Shell
   // shows its positions (lib/existing-team-readonly.ts), the setup waits.
   const [readOnlyExistingTeamKey, setReadOnlyExistingTeamKey] = useState<string | null>(null);
+  // An existing team connected in full whose onboarding is not finished (agents off, T124, or the
+  // Assistant's chat still to ready): its view is open on the agents' panel while the profile check runs.
+  const [connectedExistingTeamKey, setConnectedExistingTeamKey] = useState<string | null>(null);
+  // A profile that is already set up opens on the team it saved, if it saved one, before any page
+  // reads: the pages take their data from the team's VPS, never from the cloud, once it is open.
+  const [savedTeamOpening, setSavedTeamOpening] = useState<
+    { identityKey: string; phase: "pending" | "done" | "failed"; failure?: OnboardingRuntimeState } | null
+  >(null);
+  const linkedView = useExistingTeamView();
   const [onboardingUiVersion, setOnboardingUiVersion] = useState(0);
   const [accountScope, setAccountScope] = useState<{
     identityKey: string;
@@ -391,6 +416,10 @@ export default function DashboardApp() {
   const resumeAttemptedIdentityRef = useRef<string | null>(null);
   // The screen shows a saved existing team that could not be reopened: «Riprova» asks again to reopen it.
   const savedTeamFailureRef = useRef(false);
+  // The account whose existing team was connected in full in this run, and the function that opens
+  // its view (set below): the profile check that admits the Shell runs in an effect declared earlier.
+  const connectedExistingTeamRef = useRef<string | null>(null);
+  const openFullExistingTeamRef = useRef<((snapshot: OnboardingRuntimeSnapshot) => void) | null>(null);
   const activeIdentityKeyRef = useRef<string | null>(identityKey);
   activeIdentityKeyRef.current = identityKey;
   const signedOut = !loading && !identityKey;
@@ -420,13 +449,13 @@ export default function DashboardApp() {
     try {
       const next = localProfile
         ? loadLocalOnboardingGate(localProfile.profileId, localProfile.displayName)
-        : session ? await loadOnboardingGate(supabase, session.user) : null;
+        : sessionRef.current ? await loadOnboardingGate(supabase, sessionRef.current.user) : null;
       if (next && activeIdentityKeyRef.current === initializingKey) setGate(next);
     } catch {
       if (activeIdentityKeyRef.current !== initializingKey) return;
       setGate({ phase: "error", message: stateText().gateError });
     }
-  }, [identityKey, localProfile?.displayName, localProfile?.profileId, markerId, migrationReady, session]);
+  }, [identityKey, localProfile?.displayName, localProfile?.profileId, markerId, migrationReady]);
 
   useEffect(() => {
     if (!identityKey || !migrationProfile) {
@@ -527,6 +556,10 @@ export default function DashboardApp() {
       setReadOnlyExistingTeamKey(null);
     }
   }, [identityKey, readOnlyExistingTeamKey]);
+  // The same for a team connected with its agents off: it is this account's.
+  useEffect(() => {
+    if (connectedExistingTeamKey && connectedExistingTeamKey !== identityKey) setConnectedExistingTeamKey(null);
+  }, [connectedExistingTeamKey, identityKey]);
   useEffect(() => leaveExistingTeamReadOnly, []);
 
   useEffect(() => {
@@ -536,11 +569,13 @@ export default function DashboardApp() {
       : Promise.resolve();
     setAssistantChatIdentityKey(null);
     setExistingTeamDismissedIdentityKey(null);
+    setSavedTeamNotice(null);
     setAccountScope(null);
     setSshHostKey(null);
     setActivity(null);
     setOnboardingUiVersion(0);
     resumeAttemptedIdentityRef.current = null;
+    setSavedTeamOpening(null);
     submissionRef.current = null;
     providerAttemptRef.current += 1;
     providerSessionRef.current = null;
@@ -563,7 +598,8 @@ export default function DashboardApp() {
   }, [identityKey, initializeAccount, migrationReady]);
 
   useEffect(() => {
-    if (!identityKey || !markerId || assistantChatIdentityKey !== identityKey) return;
+    if (!identityKey || !markerId) return;
+    if (assistantChatIdentityKey !== identityKey && connectedExistingTeamKey !== identityKey) return;
     let active = true;
     let timeout: ReturnType<typeof setTimeout> | undefined;
 
@@ -579,6 +615,8 @@ export default function DashboardApp() {
         const snapshot = { ...nativeSnapshot, directChatReady: chat.state === "ready" };
         if (isOnboardingRuntimeReady(snapshot)) {
           markOnboardingReady(markerId, snapshot);
+          // A team connected in full (its Assistant chat first) opens on its own VPS, not on the cloud.
+          if (connectedExistingTeamRef.current === identityKey) openFullExistingTeamRef.current?.(snapshot);
           setGate({ phase: "ready" });
           return;
         }
@@ -593,7 +631,7 @@ export default function DashboardApp() {
       active = false;
       if (timeout) clearTimeout(timeout);
     };
-  }, [assistantChatIdentityKey, identityKey, markerId]);
+  }, [assistantChatIdentityKey, connectedExistingTeamKey, identityKey, markerId]);
 
   const setRuntime = useCallback((runtime: OnboardingRuntimeState) => {
     setGate((current) => current.phase === "required" ? { ...current, runtime } : current);
@@ -988,6 +1026,22 @@ export default function DashboardApp() {
   }, [identityKey]);
 
   /**
+   * The team connected in full («Conferma e collega» in this run): the same pages as the read-only
+   * view, reading its VPS, with what writes turned on. The native side still refuses a write that
+   * the connection did not grant (full_link_granted, the main window).
+   */
+  const openFullExistingTeam = useCallback((snapshot: OnboardingRuntimeSnapshot) => {
+    if (!identityKey || activeIdentityKeyRef.current !== identityKey) return;
+    enterExistingTeamReadOnly(snapshot.assistantRunning === true, {
+      at: Date.now(),
+      captainRunning: snapshot.captainRunning === true,
+      assistantRunning: snapshot.assistantRunning === true,
+    }, `account:${identityKey}|full`, true);
+    setReadOnlyExistingTeamKey(identityKey);
+  }, [identityKey]);
+  openFullExistingTeamRef.current = openFullExistingTeam;
+
+  /**
    * After a restart, a profile that already saved an existing team (candidate and
    * selection) goes back to its read-only view: the native side takes the saved
    * host and team, checks the pin and the identity again and starts nothing.
@@ -1000,6 +1054,7 @@ export default function DashboardApp() {
     savedTeamFailureRef.current = false;
     try {
       const result = await existingTeamBridge.reopen();
+      setSavedTeamNotice(null);
       // Closing the read-only view goes back to the setup's first step, not to a spinner.
       setRuntime({ status: "collecting", stage: "host" });
       openReadOnlyExistingTeam(result);
@@ -1009,22 +1064,29 @@ export default function DashboardApp() {
       // «None» means exactly this: neither a candidate nor a selection is saved. One without
       // the other is an incomplete saved connection, and any other refusal a saved team that
       // cannot be reached: both are shown as such and never lead to the team-start action.
-      if (code === "existing_team_runtime_candidate_required") return "none";
+      if (code === "existing_team_runtime_candidate_required") {
+        setSavedTeamNotice(null);
+        return "none";
+      }
       savedTeamFailureRef.current = true;
       const described = describeError(code, { locale: appLocale() });
+      const title = code === "existing_team_saved_incomplete"
+        ? stateText().savedTeamIncompleteTitle
+        : stateText().savedTeamUnreachableTitle;
+      if (identityKey) {
+        setSavedTeamNotice({ identityKey, title, message: described.text, ...(described.action ? { action: described.action } : {}) });
+      }
       return {
         status: "failed",
         stage: "runtime",
-        title: code === "existing_team_saved_incomplete"
-          ? stateText().savedTeamIncompleteTitle
-          : stateText().savedTeamUnreachableTitle,
+        title,
         message: described.text,
         action: described.action,
         ...(code ? { code } : {}),
         retryable: true,
       };
     }
-  }, [openReadOnlyExistingTeam, setRuntime]);
+  }, [identityKey, openReadOnlyExistingTeam, setRuntime]);
 
   const resumeAssistant = useCallback(async (options?: { reopened?: boolean }) => {
     if (!identityKey) throw new Error("identity-missing");
@@ -1141,17 +1203,29 @@ export default function DashboardApp() {
     const chat = await reconnectDirectChat();
     if (activeIdentityKeyRef.current !== identityKey) throw new Error("account-changed");
     const snapshot = { ...nativeSnapshot, directChatReady: chat.state === "ready" };
+    connectedExistingTeamRef.current = identityKey;
+    if (!isOnboardingAssistantReachable(snapshot) && existingTeamAgentsOff(snapshot)) {
+      // Connected, with the captain or the assistant off (T124): the team opens in full, on its
+      // agents' panel, where they are started. The onboarding is done when the chat is ready.
+      markOnboardingStarted(markerId);
+      setConnectedExistingTeamKey(identityKey);
+      openFullExistingTeam(snapshot);
+      navigate("/agents", { replace: true });
+      return;
+    }
     // A code the dialog knows, so it says what failed; a bare Error was «unknown» to the dialog.
     if (!isOnboardingAssistantReachable(snapshot)) throw { code: directChatFailureCode(chat) };
     if (isOnboardingRuntimeReady(snapshot)) {
       markOnboardingReady(markerId, snapshot);
+      openFullExistingTeam(snapshot);
       setGate({ phase: "ready" });
       return;
     }
     markOnboardingStarted(markerId);
+    setConnectedExistingTeamKey(identityKey);
     setAssistantChatIdentityKey(identityKey);
     navigate("/messages?agent=assistente", { replace: true });
-  }, [identityKey, markerId]);
+  }, [identityKey, markerId, openFullExistingTeam]);
 
   const closeReadOnlyExistingTeam = useCallback(() => {
     leaveExistingTeamReadOnly();
@@ -1214,6 +1288,23 @@ export default function DashboardApp() {
     // Whatever answered in under 300 ms never set a spinner, but the old failure is still on screen.
     if (showed || retryingSavedFailure) setRuntime({ status: "collecting", stage: "host" });
   }, [identityKey, reopenExistingTeam, resumeAssistant, setRuntime]);
+
+  // A set-up profile (the gate admits the Shell) that saved an existing team opens on that team's VPS
+  // before the first page reads, like after the setup's own reopening. Without a saved team the
+  // native side refuses before any SSH call and the Shell opens as it always did.
+  useEffect(() => {
+    if (!identityKey || gate.phase !== "ready" || readOnlyExistingTeamKey === identityKey) return;
+    if (savedTeamOpening?.identityKey === identityKey) return;
+    setSavedTeamOpening({ identityKey, phase: "pending" });
+    void reopenExistingTeam().then((outcome) => {
+      if (activeIdentityKeyRef.current !== identityKey) return;
+      setSavedTeamOpening(
+        outcome === "opened" || outcome === "none"
+          ? { identityKey, phase: "done" }
+          : { identityKey, phase: "failed", failure: outcome },
+      );
+    });
+  }, [gate.phase, identityKey, readOnlyExistingTeamKey, reopenExistingTeam, savedTeamOpening]);
 
   useEffect(() => {
     if (!identityKey || gate.phase !== "required" ||
@@ -1372,17 +1463,52 @@ export default function DashboardApp() {
       </main>
     );
   }
-  if (gate.phase === "required") {
-    if (readOnlyExistingTeamKey === identityKey) {
+  // An existing team's VPS is what the pages read while its view is open, whatever the gate says:
+  // read-only after a reopening, in full after «Conferma e collega» (the same pages, controls on).
+  if (readOnlyExistingTeamKey === identityKey) {
+    const shell = (
+      <Shell
+        key={identityKey}
+        onLogout={logout}
+        // A team connected in full has no way «back»; a read-only one of a set-up profile neither
+        // (its setup is done: the chat's «Collega il team» opens the full connection).
+        onCloseReadOnly={linkedView?.full || gate.phase === "ready" ? undefined : closeReadOnlyExistingTeam}
+      />
+    );
+    return (
+      <>
+        {/* Nothing to confirm once the connection is full. */}
+        {linkedView?.full ? shell : (
+          <ReconfirmExistingTeamContext.Provider value={reconfirmExistingTeam}>{shell}</ReconfirmExistingTeamContext.Provider>
+        )}
+        <NewPositionNotifier key={`notify:${identityKey}`} />
+      </>
+    );
+  }
+  if (gate.phase === "ready") {
+    if (savedTeamOpening?.identityKey !== identityKey || savedTeamOpening.phase === "pending") {
+      return <DashboardSkeleton label={stateText().loadingDashboard} />;
+    }
+    if (savedTeamOpening.phase === "failed" && savedTeamOpening.failure?.status === "failed") {
+      const failure = savedTeamOpening.failure;
       return (
-        <>
-          <ReconfirmExistingTeamContext.Provider value={reconfirmExistingTeam}>
-            <Shell key={identityKey} onLogout={logout} onCloseReadOnly={closeReadOnlyExistingTeam} />
-          </ReconfirmExistingTeamContext.Provider>
-          <NewPositionNotifier key={`notify:${identityKey}`} />
-        </>
+        <main role="alert">
+          <p>{failure.title}</p>
+          <p>{failure.message}</p>
+          {failure.action && <p>{failure.action}</p>}
+          <button type="button" onClick={() => setSavedTeamOpening(null)}>{stateText().retry}</button>
+          {/* A team that stays down must not lock the person out: they can leave the account, or go on without it. */}
+          <button type="button" onClick={() => setSavedTeamOpening({ identityKey, phase: "done" })}>
+            {stateText().continueWithoutTeam}
+          </button>
+          <button type="button" onClick={() => void Promise.resolve((logout ?? signOut)()).catch(() => undefined)}>
+            {stateText().signOut}
+          </button>
+        </main>
       );
     }
+  }
+  if (gate.phase === "required") {
     if (assistantChatIdentityKey === identityKey) {
       return (
         <main data-testid="onboarding-assistant-chat" aria-label={stateText().assistantOnboardingAria}>
@@ -1398,6 +1524,7 @@ export default function DashboardApp() {
           key={identityKey}
           teamId={gate.existingTeam?.teamId}
           initialHost={manualExistingHost}
+          savedTeamNotice={savedTeamNotice?.identityKey === identityKey ? savedTeamNotice : undefined}
           onCancel={() => {
             setExistingTeamDismissedIdentityKey(identityKey);
             setManualExistingTeam(null);

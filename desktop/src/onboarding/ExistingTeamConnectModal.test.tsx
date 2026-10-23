@@ -85,6 +85,19 @@ async function fillHost(user: ReturnType<typeof userEvent.setup>) {
 }
 
 describe("ExistingTeamConnectModal", () => {
+  it("says above the form why the saved team did not open, and only there", async () => {
+    const notice = { title: "Squadra salvata: non raggiungibile", message: "La VPS non risponde.", action: "Controlla l’indirizzo e riprova." };
+    const view = render(<ExistingTeamConnectModal teamId="team-opaque-0001" bridge={bridge()} savedTeamNotice={notice} onCancel={vi.fn()} onConnected={vi.fn()} onReadOnlyConnected={vi.fn()} />);
+    const alert = screen.getByRole("alert");
+    expect(alert).toHaveTextContent(notice.title);
+    expect(alert).toHaveTextContent(notice.message);
+    expect(alert).toHaveTextContent(notice.action);
+    view.unmount();
+
+    render(<ExistingTeamConnectModal teamId="team-opaque-0001" bridge={bridge()} onCancel={vi.fn()} onConnected={vi.fn()} onReadOnlyConnected={vi.fn()} />);
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
   it("keeps host data local and does nothing before the user starts the probe", async () => {
     const native = bridge();
     render(<ExistingTeamConnectModal teamId="team-opaque-0001" bridge={native} onCancel={vi.fn()} onConnected={vi.fn()} onReadOnlyConnected={vi.fn()} />);
@@ -591,5 +604,92 @@ describe("«Confirm and connect» on a profile with no saved target", () => {
       lines.add(text.cautionFull);
     }
     expect(lines.size).toBe(Object.keys(EXISTING_TEAM_RECEIPT_TEXT).length);
+  });
+});
+
+describe("a saved team that was updated on the VPS", () => {
+  const PREVIOUS = { imageId: `sha256:${"2c3d".repeat(16)}`, ociRevision: "5051".repeat(10), digest: `sha256:${"8e5f".repeat(16)}` };
+  const REBIND_RECEIPT: ExistingTeamReceipt = { ...RECEIPT, previous: PREVIOUS };
+  const STALE = { code: "existing_team_runtime_changed" };
+
+  async function toFullClick(user: ReturnType<typeof userEvent.setup>) {
+    await fillHost(user);
+    await user.click(screen.getByRole("button", { name: /verifica vps/i }));
+    await user.click(await screen.findByRole("button", { name: /conferma e collega/i }));
+  }
+
+  it("shows what the saved connection is replaced by and rebinds only after the person confirms", async () => {
+    const user = userEvent.setup();
+    const connect = vi.fn().mockRejectedValueOnce(STALE).mockResolvedValueOnce(RESULT);
+    const discover = vi.fn().mockResolvedValue(REBIND_RECEIPT);
+    const register = vi.fn().mockResolvedValue({ outcome: "rebound" });
+    const native = bridge({ connect, discover, register });
+    const onConnected = vi.fn().mockResolvedValue(undefined);
+    render(<ExistingTeamConnectModal teamId="team-opaque-0001" bridge={native} onCancel={vi.fn()} onConnected={onConnected} onReadOnlyConnected={vi.fn()} />);
+    await toFullClick(user);
+
+    const heading = await screen.findByText(EXISTING_TEAM_RECEIPT_TEXT.it.rebindEyebrow, { selector: "p" });
+    const section = heading.closest("section") as HTMLElement;
+    expect(section).toHaveTextContent(EXISTING_TEAM_RECEIPT_TEXT.it.rebindIntro);
+    // before and now, side by side, each as revision and digest
+    expect(within(section).getByText("505150515051 · 8e5f8e5f8e5f")).toBeInTheDocument();
+    expect(within(section).getByText("707170717071 · 9d4c9d4c9d4c")).toBeInTheDocument();
+    expect(section).toHaveTextContent(EXISTING_TEAM_RECEIPT_TEXT.it.rebindCaution);
+    expect(section).not.toHaveTextContent(EXISTING_TEAM_RECEIPT_TEXT.it.cautionFull);
+    // nothing is saved or replaced before the confirmation
+    expect(register).not.toHaveBeenCalled();
+    expect(onConnected).not.toHaveBeenCalled();
+
+    await user.click(within(section).getByRole("button", { name: EXISTING_TEAM_RECEIPT_TEXT.it.rebindConfirm }));
+    await waitFor(() => expect(onConnected).toHaveBeenCalledWith(RESULT));
+    expect(register).toHaveBeenCalledOnce();
+    expect(register).toHaveBeenCalledWith(REBIND_RECEIPT.candidateSha256);
+    expect(connect).toHaveBeenCalledTimes(2);
+  });
+
+  it("opens read only after a rebind, with the same steps", async () => {
+    const user = userEvent.setup();
+    const connectReadOnly = vi.fn().mockRejectedValueOnce(STALE).mockResolvedValueOnce(READONLY_RESULT);
+    const native = bridge({ connectReadOnly, discover: vi.fn().mockResolvedValue(REBIND_RECEIPT), register: vi.fn().mockResolvedValue({ outcome: "rebound" }) });
+    const onReadOnlyConnected = vi.fn();
+    render(<ExistingTeamConnectModal teamId="team-opaque-0001" bridge={native} onCancel={vi.fn()} onConnected={vi.fn()} onReadOnlyConnected={onReadOnlyConnected} />);
+    await fillHost(user);
+    await user.click(screen.getByRole("button", { name: /verifica vps/i }));
+    await user.click(await screen.findByRole("button", { name: /visualizza annunci in sola lettura/i }));
+    const heading = await screen.findByText(EXISTING_TEAM_RECEIPT_TEXT.it.rebindEyebrow, { selector: "p" });
+    await user.click(within(heading.closest("section") as HTMLElement).getByRole("button", { name: EXISTING_TEAM_RECEIPT_TEXT.it.rebindConfirm }));
+    await waitFor(() => expect(onReadOnlyConnected).toHaveBeenCalledOnce());
+    expect(native.register).toHaveBeenCalledOnce();
+  });
+
+  it("when the VPS runs the same version it shows the original failure and offers no rebind", async () => {
+    const user = userEvent.setup();
+    const native = bridge({
+      connect: vi.fn().mockRejectedValue(STALE),
+      discover: vi.fn().mockRejectedValue({ code: "existing_team_runtime_candidate_exists" }),
+    });
+    render(<ExistingTeamConnectModal teamId="team-opaque-0001" bridge={native} onCancel={vi.fn()} onConnected={vi.fn()} onReadOnlyConnected={vi.fn()} />);
+    await toFullClick(user);
+    expect(await screen.findByRole("alert")).toHaveTextContent(ERROR_CATALOG.existing_team_runtime_changed.text.it);
+    expect(screen.queryByText(EXISTING_TEAM_RECEIPT_TEXT.it.rebindEyebrow)).not.toBeInTheDocument();
+    expect(native.register).not.toHaveBeenCalled();
+  });
+
+  it("a discovery without a previous runtime is a first link, never a rebind", async () => {
+    const user = userEvent.setup();
+    const native = bridge({ connect: vi.fn().mockRejectedValue(STALE), discover: vi.fn().mockResolvedValue(RECEIPT) });
+    render(<ExistingTeamConnectModal teamId="team-opaque-0001" bridge={native} onCancel={vi.fn()} onConnected={vi.fn()} onReadOnlyConnected={vi.fn()} />);
+    await toFullClick(user);
+    expect(await screen.findByRole("alert")).toHaveTextContent(ERROR_CATALOG.existing_team_runtime_changed.text.it);
+    expect(native.register).not.toHaveBeenCalled();
+  });
+
+  it("every language says what the rebind does, and none promises to delete or start anything", () => {
+    for (const [locale, text] of Object.entries(EXISTING_TEAM_RECEIPT_TEXT)) {
+      for (const key of ["rebindEyebrow", "rebindIntro", "rebindBefore", "rebindNow", "rebindCaution", "rebindConfirm", "rebindRegistering", "rebindRegisteringDetail"] as const) {
+        expect(text[key], `${locale}.${key}`).toMatch(/\S/);
+      }
+      expect(text.rebindConfirm, locale).not.toBe(text.confirm);
+    }
   });
 });

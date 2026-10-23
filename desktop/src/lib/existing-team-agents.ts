@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { isAgentState, isKnownReason, type AgentStateInfo } from "@/lib/agent-state";
-import { existingTeamReadOnly, type ExistingTeamReadOnly } from "./existing-team-readonly";
+import { existingTeamView, type ExistingTeamReadOnly } from "./existing-team-readonly";
 import { teamStatusErrorCode } from "./existing-team-status";
 
 /**
@@ -277,10 +277,10 @@ let shared: { at: number; view: ExistingTeamReadOnly | null; read: Promise<TeamA
  * is told the target changed, as the shared positions read does.
  */
 export function readTeamAgentsShared(now = Date.now()): Promise<TeamAgentsReading> {
-  const view = existingTeamReadOnly();
+  const view = existingTeamView();
   if (shared && shared.view === view && now - shared.at < SHARED_AGENTS_MS) return shared.read;
   const read = readTeamAgents().then((result): TeamAgentsReading =>
-    existingTeamReadOnly() === view ? result : { kind: "error", at: Date.now(), code: "existing_team_target_changed" });
+    existingTeamView() === view ? result : { kind: "error", at: Date.now(), code: "existing_team_target_changed" });
   shared = { at: now, view, read };
   return read;
 }

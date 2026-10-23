@@ -185,6 +185,8 @@ jobs:
           if ($code -eq 0) { throw 'counter-check: install.ps1 passed with the T71 template, so this job does not see that defect' }
           if (-not $seen) { throw "counter-check: install.ps1 failed ($code) but not with the T71 error (function ""com"" not defined)" }
           "counter-check: red as expected (exit $code, Podman refused the template without its quotes)"
+          # The runner ends a powershell step with `exit $LASTEXITCODE`: still the install's 1 here.
+          exit 0
 
       - name: Times
         if: always()

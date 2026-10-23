@@ -20,7 +20,7 @@ import { clearGoogleIdentitySelection, googleIdentitySelected } from "../lib/ide
 import { readDesktopPlatform } from "../lib/desktop-platform";
 import { openRuntimeLog, runtimeLogPath } from "../lib/runtime-log";
 import { describeError, ERROR_CATALOG } from "../lib/error-catalog";
-import { existingTeamReadOnly } from "../lib/existing-team-readonly";
+import { existingTeamReadOnly, existingTeamView } from "../lib/existing-team-readonly";
 import type { ExistingTeamConnectModalProps } from "../onboarding/ExistingTeamConnectModal";
 import {
   loadOnboardingGate,
@@ -47,7 +47,7 @@ import {
   startOnboardingTeam,
 } from "../lib/onboarding-runtime";
 import { DASHBOARD_PAGE, goTo, LOGIN_PAGE } from "../lib/pages";
-import { useSession } from "../lib/supabase";
+import { signOut, useSession } from "../lib/supabase";
 import { navigate } from "../shell/router";
 import { existingTeamBridge } from "../lib/existing-team";
 import DashboardApp from "./DashboardApp";
@@ -229,9 +229,11 @@ vi.mock("../onboarding/ExistingTeamConnectModal", () => ({
     return (
       <section data-testid="existing-team-modal">
         <p>team:{props.teamId}</p>
+        {props.savedTeamNotice && <p>notice:{props.savedTeamNotice.title}|{props.savedTeamNotice.message}</p>}
         <button type="button" onClick={props.onCancel}>cancel-existing-team</button>
         <button type="button" onClick={() => void props.onConnected(result(false))}>connect-existing-team-incomplete</button>
         <button type="button" onClick={() => void props.onConnected(result(true))}>connect-existing-team-ready</button>
+        <button type="button" onClick={() => void props.onConnected({ ...result(false), captainRunning: false, assistantRunning: false })}>connect-existing-team-agents-off</button>
         <button type="button" onClick={() => props.onReadOnlyConnected({ readiness: false, snapshot: result(false) })}>connect-existing-team-read-only</button>
       </section>
     );
@@ -532,6 +534,26 @@ describe("DashboardApp onboarding router", () => {
     expect(await screen.findByTestId("shell")).toBeInTheDocument();
   });
 
+  it("keeps the setup where it is when the same account's session comes back as a new object", async () => {
+    // supabase-js publishes the session again, as a new object, every time the window comes back to the
+    // foreground: the setup must not start over and lose what the person typed.
+    vi.mocked(useSession).mockReturnValue(signedInAs("same-account"));
+    requireOnboarding();
+    const view = render(<DashboardApp />);
+    expect(await screen.findByTestId("onboarding")).toHaveTextContent("collecting:host");
+    expect(loadOnboardingGate).toHaveBeenCalledTimes(1);
+
+    vi.mocked(loadOnboardingGate).mockResolvedValue({ phase: "ready" });
+    vi.mocked(useSession).mockReturnValue(signedInAs("same-account"));
+    view.rerender(<DashboardApp />);
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)); });
+
+    expect(screen.getByTestId("onboarding")).toHaveTextContent("collecting:host");
+    expect(screen.queryByTestId("shell")).not.toBeInTheDocument();
+    expect(loadOnboardingGate).toHaveBeenCalledTimes(1);
+    expect(activateDesktopAccountScope).toHaveBeenCalledTimes(1);
+  });
+
   it("mounts no onboarding, Shell or chat before backend account scope is confirmed", async () => {
     let confirmScope!: () => void;
     vi.mocked(activateDesktopAccountScope).mockReturnValue(new Promise<void>((resolve) => {
@@ -617,6 +639,40 @@ describe("DashboardApp onboarding router", () => {
     expect(markOnboardingStarted).not.toHaveBeenCalled();
   });
 
+  it("says why the saved existing team did not open, in the window that offers the registered team", async () => {
+    vi.mocked(useSession).mockReturnValue(signedInAs("existing-saved-down"));
+    vi.mocked(loadOnboardingGate).mockResolvedValue({
+      phase: "required",
+      account: { displayName: "Existing Person" },
+      resumeAvailable: false,
+      existingTeam: { teamId: "team-opaque-0009", status: "available" },
+      runtime: { status: "collecting", stage: "host" },
+    });
+    vi.mocked(existingTeamBridge.reopen).mockRejectedValue({ code: "existing_team_unavailable" });
+
+    render(<DashboardApp />);
+    const modal = await screen.findByTestId("existing-team-modal");
+    await waitFor(() => expect(modal).toHaveTextContent(/notice:Squadra esistente salvata: non raggiungibile ora\|\S/));
+    expect(existingTeamBridge.reopen).toHaveBeenCalled();
+  });
+
+  it("shows no notice when nothing was saved on the profile", async () => {
+    vi.mocked(useSession).mockReturnValue(signedInAs("existing-nothing-saved"));
+    vi.mocked(loadOnboardingGate).mockResolvedValue({
+      phase: "required",
+      account: { displayName: "Existing Person" },
+      resumeAvailable: false,
+      existingTeam: { teamId: "team-opaque-0010", status: "available" },
+      runtime: { status: "collecting", stage: "host" },
+    });
+
+    render(<DashboardApp />);
+    const modal = await screen.findByTestId("existing-team-modal");
+    await waitFor(() => expect(existingTeamBridge.reopen).toHaveBeenCalled());
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)); });
+    expect(modal).not.toHaveTextContent("notice:");
+  });
+
   it("keeps an attached existing team in confined Assistant chat until its profile is ready", async () => {
     vi.mocked(useSession).mockReturnValue(signedInAs("existing-incomplete"));
     vi.mocked(loadOnboardingGate).mockResolvedValue({
@@ -659,6 +715,107 @@ describe("DashboardApp onboarding router", () => {
       expect.objectContaining({ profileReady: true, directChatReady: true }),
     );
     expect(markOnboardingStarted).not.toHaveBeenCalled();
+    expect(screen.queryByTestId("assistant-chat")).not.toBeInTheDocument();
+    // connected in full: the pages read the team's VPS (not the cloud), nothing is disabled, and there is no way «back»
+    expect(existingTeamView()).toMatchObject({ full: true, assistantActive: true });
+    expect(existingTeamReadOnly()).toBeNull();
+    expect(screen.queryByRole("button", { name: "close-read-only" })).not.toBeInTheDocument();
+  });
+
+  it("a set-up account with a saved existing team opens on that team's VPS, never on the cloud Shell", async () => {
+    vi.mocked(useSession).mockReturnValue(signedInAs("set-up-with-team"));
+    vi.mocked(loadOnboardingGate).mockResolvedValue({ phase: "ready" });
+    vi.mocked(existingTeamBridge.reopen).mockResolvedValue({
+      readiness: true,
+      snapshot: TEAM_READY,
+      connectionKey: "k".repeat(16),
+    });
+
+    render(<DashboardApp />);
+
+    expect(await screen.findByTestId("shell")).toBeInTheDocument();
+    expect(existingTeamBridge.reopen).toHaveBeenCalledOnce();
+    // read-only until «Collega il team» is confirmed in this run; the setup is done, so no way back to it
+    expect(existingTeamReadOnly()).not.toBeNull();
+    expect(existingTeamView()?.full).toBeUndefined();
+    expect(screen.queryByRole("button", { name: "close-read-only" })).not.toBeInTheDocument();
+  });
+
+  it("a set-up account with no saved team opens the usual Shell on the cloud", async () => {
+    vi.mocked(useSession).mockReturnValue(signedInAs("set-up-no-team"));
+    vi.mocked(loadOnboardingGate).mockResolvedValue({ phase: "ready" });
+
+    render(<DashboardApp />);
+
+    expect(await screen.findByTestId("shell")).toBeInTheDocument();
+    expect(existingTeamBridge.reopen).toHaveBeenCalledOnce();
+    expect(existingTeamView()).toBeNull();
+  });
+
+  it("a set-up account whose saved team cannot be reached says so and retries, and never falls back to the cloud Shell", async () => {
+    vi.mocked(useSession).mockReturnValue(signedInAs("set-up-unreachable"));
+    vi.mocked(loadOnboardingGate).mockResolvedValue({ phase: "ready" });
+    vi.mocked(existingTeamBridge.reopen)
+      .mockRejectedValueOnce({ code: "existing_team_unavailable" })
+      .mockResolvedValue({ readiness: true, snapshot: TEAM_READY, connectionKey: "k".repeat(16) });
+
+    const user = userEvent.setup();
+    render(<DashboardApp />);
+
+    expect(await screen.findByRole("alert")).toBeInTheDocument();
+    expect(screen.queryByTestId("shell")).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /retry|riprova/i }));
+    expect(await screen.findByTestId("shell")).toBeInTheDocument();
+    expect(existingTeamBridge.reopen).toHaveBeenCalledTimes(2);
+    expect(existingTeamView()).not.toBeNull();
+  });
+
+  it("a team that stays down does not lock the person out: they can go on without it, or leave the account", async () => {
+    vi.mocked(useSession).mockReturnValue(signedInAs("set-up-down"));
+    vi.mocked(loadOnboardingGate).mockResolvedValue({ phase: "ready" });
+    vi.mocked(existingTeamBridge.reopen).mockRejectedValue({ code: "existing_team_unavailable" });
+    vi.mocked(signOut).mockResolvedValue();
+
+    const user = userEvent.setup();
+    const first = render(<DashboardApp />);
+    expect(await screen.findByRole("alert")).toBeInTheDocument();
+
+    // leaving the account is offered, and is the app's own sign-out
+    await user.click(screen.getByRole("button", { name: /esci dall.account/i }));
+    expect(signOut).toHaveBeenCalledOnce();
+    expect(screen.queryByTestId("shell")).not.toBeInTheDocument();
+    first.unmount();
+
+    // going on without the team is the Shell as it was, with no team's view and no new ask of the VPS
+    render(<DashboardApp />);
+    await user.click(await screen.findByRole("button", { name: /continua senza la squadra/i }));
+    expect(await screen.findByTestId("shell")).toBeInTheDocument();
+    expect(existingTeamView()).toBeNull();
+    expect(existingTeamBridge.reopen).toHaveBeenCalledTimes(2);
+  });
+
+  it("opens an existing team connected with its agents off in the full Shell, on its agents, with the onboarding still open", async () => {
+    vi.mocked(useSession).mockReturnValue(signedInAs("existing-agents-off"));
+    vi.mocked(loadOnboardingGate).mockResolvedValue({
+      phase: "required",
+      account: { displayName: "Owner Person" },
+      resumeAvailable: false,
+      existingTeam: { teamId: "team-opaque-0005", status: "available" },
+      runtime: { status: "collecting", stage: "host" },
+    });
+
+    const user = userEvent.setup();
+    render(<DashboardApp />);
+    await user.click(await screen.findByRole("button", { name: "connect-existing-team-agents-off" }));
+
+    expect(await screen.findByTestId("shell")).toBeInTheDocument();
+    // the team's VPS is what the pages read, with what writes turned on: never the cloud
+    expect(existingTeamReadOnly()).toBeNull();
+    expect(existingTeamView()).toMatchObject({ full: true });
+    expect(navigate).toHaveBeenCalledWith("/agents", { replace: true });
+    expect(markOnboardingStarted).toHaveBeenCalledWith("existing-agents-off");
+    expect(markOnboardingReady).not.toHaveBeenCalled();
+    expect(screen.queryByTestId("existing-team-modal")).not.toBeInTheDocument();
     expect(screen.queryByTestId("assistant-chat")).not.toBeInTheDocument();
   });
 
@@ -1372,7 +1529,8 @@ describe("DashboardApp onboarding router", () => {
       "conversation-account",
       expect.objectContaining({ profileReady: true, directChatReady: true }),
     ), { timeout: 3_500 });
-    expect(screen.getByTestId("shell")).toBeInTheDocument();
+    // the Shell opens once the saved team (none here) has been looked for
+    expect(await screen.findByTestId("shell")).toBeInTheDocument();
     expect(markOnboardingStarted).toHaveBeenCalledWith("conversation-account");
     expect(openOnboardingAssistant).toHaveBeenCalledWith(SUBMISSION.host, expect.any(Function));
   });

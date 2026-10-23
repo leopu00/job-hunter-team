@@ -2047,6 +2047,10 @@ const REMOTE_INSTALL_DIGEST_MISMATCH_EXIT: i32 = 87;
 /// install.sh: the VPS already runs its team on another engine (Docker, from an
 /// install before Podman), and the volumes cannot move to Podman yet.
 const REMOTE_INSTALL_RUNTIME_CHANGE_EXIT: i32 = 85;
+/// install.sh: the VPS's team is running. Installing over it would change its
+/// configuration under it, so the install stopped before changing anything.
+const REMOTE_INSTALL_TEAM_RUNNING_EXIT: i32 = 84;
+const VPS_TEAM_RUNNING: &str = "vps_team_running";
 /// The runtime of every VPS: rootless Podman, a fixed choice.
 const REMOTE_INSTALL_RUNTIME: &str = " --runtime podman";
 /// What install.sh says, with its own exit, when the VPS cannot run rootless
@@ -2117,6 +2121,9 @@ fn ensure_remote_install_success(
         }
         Ok(value) if value.code == REMOTE_INSTALL_RUNTIME_CHANGE_EXIT => {
             return Err(failure(VPS_RUNTIME_CHANGE_REQUIRES_MIGRATION))
+        }
+        Ok(value) if value.code == REMOTE_INSTALL_TEAM_RUNNING_EXIT => {
+            return Err(failure(VPS_TEAM_RUNNING))
         }
         Ok(value) => {
             if let Some((_, code)) = REMOTE_INSTALL_PODMAN_EXITS
@@ -2408,6 +2415,23 @@ fn start_and_verify_local_container_with(
     }
 }
 
+/// The Container step after the start: the snapshot is the check, on this computer as on a VPS.
+/// It is the strict one (a trusted runtime, the container of the team's own project, running);
+/// `jht status` only finds a container named «jht». A container that is not running stops the
+/// step, and the error says why: the snapshot's answer, and the wrapper's own reason when it gave
+/// one (runtime_untrusted, container_not_found, container_stopped, error).
+fn container_step_verdict(snapshot: &OnboardingSnapshot, reason: Option<String>) -> Result<(), OnboardingError> {
+    if snapshot.container_running {
+        return Ok(());
+    }
+    trace_local_runtime("container", "snapshot_not_ready");
+    let detail = match reason {
+        Some(reason) => format!("jht onboarding-snapshot: containerRunning=0 ({reason})"),
+        None => "jht onboarding-snapshot: containerRunning=0".to_owned(),
+    };
+    Err(OnboardingError { detail: Some(detail), ..failure("container_not_ready") })
+}
+
 fn prepare_impl(
     app: tauri::AppHandle,
     scope: AccountScope,
@@ -2533,16 +2557,16 @@ fn prepare_impl(
         "ui_container_done",
         || {
             let started = Instant::now();
-            let snapshot_result = snapshot_impl(&app, &scope, &validated);
+            let snapshot_result = snapshot_logged(&app, &scope, &validated, runtime_log.as_ref())
+                .map_err(|error| with_cause(error, runtime_log.as_ref()));
+            let (snapshot_result, reason) = match snapshot_result {
+                Ok((snapshot, reason)) => (Ok(snapshot), reason),
+                Err(error) => (Err(error), None),
+            };
             if let Some(diagnostics) = diagnostics.as_ref() {
                 diagnostics.record_snapshot("container-snapshot", started, &snapshot_result);
             }
-            let snapshot = snapshot_result?;
-            if !snapshot.container_running {
-                trace_local_runtime("container", "snapshot_not_ready");
-                return Err(failure("container_not_ready"));
-            }
-            Ok(())
+            container_step_verdict(&snapshot_result?, reason)
         },
     )?;
 
@@ -2731,6 +2755,29 @@ fn snapshot_impl(
     scope: &AccountScope,
     host: &ValidatedHost,
 ) -> Result<OnboardingSnapshot, OnboardingError> {
+    snapshot_logged(app, scope, host, None).map(|(snapshot, _)| snapshot)
+}
+
+/// Why the wrapper's snapshot says the container is not running: its one line on stderr,
+/// «onboarding_snapshot: <code>: <detail>» (the code, then ids, project and service names, no
+/// path). One line, without control characters, redacted, at most 240 characters.
+fn snapshot_reason(stderr: &[u8]) -> Option<String> {
+    let text = String::from_utf8_lossy(stderr);
+    let line = text.lines().rev().find_map(|line| line.trim().strip_prefix("onboarding_snapshot: "))?;
+    let clean: String = line.chars().filter(|c| !c.is_control()).take(240).collect();
+    let clean = redact(clean.trim().to_owned());
+    (!clean.is_empty()).then_some(clean)
+}
+
+/// The snapshot, and on this computer also its command, exit, lines and stderr in the runtime log
+/// when a log is given (the setup's own snapshot is a step of the setup), with the wrapper's
+/// reason when it gave one.
+fn snapshot_logged(
+    app: &tauri::AppHandle,
+    scope: &AccountScope,
+    host: &ValidatedHost,
+    log: Option<&RuntimeLog>,
+) -> Result<(OnboardingSnapshot, Option<String>), OnboardingError> {
     match host {
         ValidatedHost::Vps { .. } => {
             let result =
@@ -2738,24 +2785,28 @@ fn snapshot_impl(
             if !result.success() {
                 return Err(failure("snapshot_failed"));
             }
-            Ok(parse_snapshot(&result.stdout_text()))
+            Ok((parse_snapshot(&result.stdout_text()), None))
         }
         ValidatedHost::Local => {
             let Some(wrapper) = wrapper_path(app) else {
-                return Ok(OnboardingSnapshot::default());
+                return Ok((OnboardingSnapshot::default(), None));
             };
-            let result = run_scoped_local(
-                app,
-                scope,
-                &wrapper,
-                LocalCliOperation::Snapshot,
-                SNAPSHOT_TIMEOUT,
-            )
-            .map_err(failure)?;
+            let (result, reason) = match log {
+                Some(log) => {
+                    crate::account_scope::validate_local_runtime(app, scope).map_err(failure)?;
+                    let args = LocalCliOperation::Snapshot.argv();
+                    let started = Instant::now();
+                    let (result, stderr) = run_verified_local_wrapper_keeping_stderr(&wrapper, &args, None, SNAPSHOT_TIMEOUT);
+                    log.record_result(&format!("jht {}", args.join(" ")), &result, &stderr, started.elapsed());
+                    (refuse_broad_podman_machine(result), snapshot_reason(&stderr))
+                }
+                None => (run_scoped_local(app, scope, &wrapper, LocalCliOperation::Snapshot, SNAPSHOT_TIMEOUT), None),
+            };
+            let result = result.map_err(failure)?;
             if !result.success() {
                 return Err(failure("snapshot_failed"));
             }
-            Ok(parse_snapshot(&result.stdout_text()))
+            Ok((parse_snapshot(&result.stdout_text()), reason))
         }
     }
 }
@@ -2831,9 +2882,11 @@ pub(crate) struct ExistingTeamReadiness {
     pub(crate) connection_key: Option<String>,
 }
 
-/// Validates the immutable target and team identity, then reports whether its
-/// assistant is active. A missing assistant is a degraded read-only state;
-/// it never authorizes messages, starts, or provider work.
+/// Validates the immutable target and team identity, then reports which of its
+/// sessions are running. The identity is enough to connect (the pinned host, the
+/// team's own cloud.json, one container): a captain or an assistant that is off,
+/// or held down, is shown by the app, which can start it. `readiness` says whether
+/// the assistant is up; it never authorizes messages, starts, or provider work.
 pub(crate) fn existing_team_readonly_probe_with(
     team_id: &str,
     run: impl FnOnce(&[u8]) -> Result<ProcessResult, &'static str>,
@@ -2859,9 +2912,6 @@ pub(crate) fn existing_team_readonly_probe_with(
     if !snapshot.runtime_installed || !snapshot.container_running {
         return Err(failure("existing_team_unavailable"));
     }
-    if !snapshot.captain_running {
-        return Err(failure("existing_team_not_active"));
-    }
     Ok(ExistingTeamReadiness {
         readiness: snapshot.assistant_running,
         snapshot,
@@ -2869,16 +2919,13 @@ pub(crate) fn existing_team_readonly_probe_with(
     })
 }
 
-/// GUI onboarding retains its existing policy: it needs both team sessions.
+/// The full connection («Confirm and connect») probes the same way: the identity is the condition,
+/// the sessions are what the snapshot reports. Agents that are off are started from the app.
 fn existing_team_probe_with(
     team_id: &str,
     run: impl FnOnce(&[u8]) -> Result<ProcessResult, &'static str>,
 ) -> Result<OnboardingSnapshot, OnboardingError> {
-    let result = existing_team_readonly_probe_with(team_id, run)?;
-    if !result.readiness {
-        return Err(failure("existing_team_not_active"));
-    }
-    Ok(result.snapshot)
+    existing_team_readonly_probe_with(team_id, run).map(|result| result.snapshot)
 }
 
 /// Activates only the exact target just validated by the caller. Reusing an
@@ -3187,17 +3234,33 @@ fn existing_team_assistant_start_with(
     Err(failure("assistant_verify_timeout"))
 }
 
+/// The read-only view selects the team too, and never holds the full link: it starts nothing. The
+/// same refusal as the agents' panel (agent_control_read_only). No selection is the start's own
+/// error (existing_team_runtime_required), said by `existing_team_assistant_start_with`.
+fn assistant_start_link_refusal(
+    scope: &AccountScope,
+    target: Option<&crate::existing_team_runtime::ActivatedTarget>,
+) -> Option<&'static str> {
+    let target = target?;
+    (!crate::existing_team_runtime::full_link_granted(scope, target)).then_some("agent_control_read_only")
+}
+
 /// «Attiva assistente» on an existing VPS team: only on the person's explicit, confirmed request.
 /// The host is the account's persisted one and the target the verified selection (the same
 /// binding the reads use); there is no fallback to another container, and nothing here runs at
 /// connect, refresh or retry. It starts the one session and probes again; it stops nothing.
 #[tauri::command]
 pub(crate) async fn existing_team_assistant_start(
+    window: tauri::Window,
     app: tauri::AppHandle,
     state: State<'_, OnboardingNativeState>,
     scopes: State<'_, AccountScopeState>,
     request: ExistingTeamAssistantStartRequest,
 ) -> Result<ExistingTeamAssistantStartReply, OnboardingError> {
+    // A start is a write to the team: the app's own window only, like the agents' panel.
+    if let Some(code) = crate::agent_control::window_refusal(window.label()) {
+        return Err(failure(code));
+    }
     if !request.confirmed {
         return Err(failure("assistant_start_not_confirmed"));
     }
@@ -3216,6 +3279,9 @@ pub(crate) async fn existing_team_assistant_start(
         let validated =
             crate::runtime_host::validate_host_for_scope(&app, &host, &worker_expected).map_err(failure)?;
         let target = crate::existing_team_runtime::selected(&app, &worker_expected, &host).map_err(failure)?;
+        if let Some(code) = assistant_start_link_refusal(&worker_expected, target.as_ref()) {
+            return Err(failure(code));
+        }
         existing_team_assistant_start_with(
             true,
             target.as_ref().map(|target| (target.team_id.as_str(), &target.runtime)),
@@ -6120,6 +6186,7 @@ mod tests {
             (exited(87), "installer_digest_mismatch"),
             (exited(86), "installer_digest_missing"),
             (exited(85), "vps_runtime_change_requires_migration"),
+            (exited(84), "vps_team_running"),
             (exited(88), "podman_install_failed"),
             (exited(89), "podman_sudo_required"),
             (exited(90), "vps_podman_missing"),
@@ -6595,7 +6662,7 @@ mod tests {
     }
 
     #[test]
-    fn existing_team_probe_result_requires_identity_and_live_sessions() {
+    fn existing_team_probe_requires_the_identity_and_reports_the_sessions() {
         let team_id = "00000000-0000-4000-8000-000000000001";
         let active = existing_team_probe_with(team_id, |input| {
             assert_eq!(input, format!("{team_id}\n").as_bytes());
@@ -6619,14 +6686,21 @@ mod tests {
         assert!(!degraded.readiness);
         assert!(degraded.snapshot.captain_running);
         assert!(!degraded.snapshot.assistant_running);
+        // T124: a team whose captain and assistant are both off connects, and says so
+        let asleep = b"runtimeInstalled=1\ncontainerRunning=1\ncaptainRunning=0\nassistantRunning=0\n".to_vec();
+        let connected = existing_team_probe_with(team_id, |_| Ok(ProcessResult { code: 0, stdout: asleep.clone() })).unwrap();
+        assert!(connected.container_running && !connected.captain_running && !connected.assistant_running);
+        let read_only = existing_team_readonly_probe_with(team_id, |_| Ok(ProcessResult { code: 0, stdout: asleep.clone() })).unwrap();
+        assert!(!read_only.readiness && !read_only.snapshot.captain_running);
+        // the container itself is still a condition
         assert_eq!(
             existing_team_probe_with(team_id, |_| Ok(ProcessResult {
                 code: 0,
-                stdout: b"runtimeInstalled=1\ncontainerRunning=1\ncaptainRunning=1\nassistantRunning=0\n".to_vec(),
+                stdout: b"runtimeInstalled=1\ncontainerRunning=0\ncaptainRunning=1\nassistantRunning=1\n".to_vec(),
             }))
             .unwrap_err()
             .code,
-            "existing_team_not_active"
+            "existing_team_unavailable"
         );
 
         let mismatch = existing_team_probe_with(team_id, |_| {
@@ -6717,6 +6791,33 @@ esac
             "{text}"
         );
         let _ = fs::remove_dir_all(&dir);
+    }
+
+    /// T79: the snapshot is the Container step's check. A runtime that is not trusted, or a «jht»
+    /// of another project, stops the setup even when `jht status` found a container of that name,
+    /// and the error carries the wrapper's reason as its cause.
+    #[test]
+    fn the_container_step_stops_on_a_snapshot_that_is_not_running_and_says_the_wrappers_reason() {
+        let not_running = super::OnboardingSnapshot { runtime_installed: true, ..super::OnboardingSnapshot::default() };
+        let stderr = b"warning: something else\r\nonboarding_snapshot: runtime_untrusted: the wrapper's runtime folder is not the one installed\r\n";
+        let error = super::container_step_verdict(&not_running, super::snapshot_reason(stderr)).unwrap_err();
+        assert_eq!(error.code, "container_not_ready");
+        assert_eq!(
+            serde_json::to_value(&error).unwrap()["detail"],
+            "jht onboarding-snapshot: containerRunning=0 (runtime_untrusted: the wrapper's runtime folder is not the one installed)"
+        );
+        // without a reason (an older wrapper) the cause still says what the snapshot answered
+        let error = super::container_step_verdict(&not_running, super::snapshot_reason(b"")).unwrap_err();
+        assert_eq!(serde_json::to_value(&error).unwrap()["detail"], "jht onboarding-snapshot: containerRunning=0");
+        // a running container passes
+        let running = super::OnboardingSnapshot { runtime_installed: true, container_running: true, ..super::OnboardingSnapshot::default() };
+        assert!(super::container_step_verdict(&running, None).is_ok());
+        // the reason is one line of the wrapper's own, never anything else it printed
+        assert_eq!(super::snapshot_reason(b"onboarding_snapshot: error: a\x1b[31mb\n"), Some("error: ab".to_owned()));
+        assert_eq!(super::snapshot_reason(b"no reason here\n"), None);
+        assert_eq!(super::snapshot_reason(b"onboarding_snapshot:    \n"), None);
+        let long = format!("onboarding_snapshot: error: {}\n", "x".repeat(400));
+        assert_eq!(super::snapshot_reason(long.as_bytes()).unwrap().chars().count(), 240);
     }
 
     /// A failed local step gives its error the cause it printed, once; the
@@ -7376,10 +7477,48 @@ mod existing_team_assistant_tests {
             assert_eq!(script.calls.borrow().len(), 1);
             assert_eq!(script.starts(), 0);
         }
-        // a team with no captain is not one this action starts anything on
-        let script = Script::new(vec![probe_reply(false, false)], exit(0));
-        assert_eq!(code(script.run(true, true)), "existing_team_not_active");
-        assert_eq!(script.starts(), 0);
+        // T124: a team whose captain is off is the same team; the person may start its assistant
+        let script = Script::new(vec![probe_reply(false, false), probe_reply(false, true)], exit(0));
+        let reply = script.run(true, true).expect("started with the captain off");
+        assert_eq!((reply.outcome, reply.captain_running, reply.assistant_running), ("started", false, true));
+        assert_eq!(script.starts(), 1);
+    }
+
+    #[test]
+    fn the_read_only_view_starts_nothing_only_the_full_link_does() {
+        use crate::existing_team_runtime::{grant_full_link, revoke_full_link, ActivatedTarget, FULL_LINK_TEST_LOCK};
+        let _serial = FULL_LINK_TEST_LOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+        let scope = crate::account_scope::AccountScope::synthetic(b"synthetic-assistant-start");
+        let team = ActivatedTarget::synthetic_for_tests();
+        // the read-only view selected the team and holds no full link: refused, as on the agents' panel
+        revoke_full_link();
+        assert_eq!(super::assistant_start_link_refusal(&scope, Some(&team)), Some("agent_control_read_only"));
+        // «Conferma e collega» on this team, for this account: it may start
+        grant_full_link(&scope, &team);
+        assert_eq!(super::assistant_start_link_refusal(&scope, Some(&team)), None);
+        // another account's grant is not this one's
+        let other = crate::account_scope::AccountScope::synthetic(b"synthetic-assistant-start-other");
+        assert_eq!(super::assistant_start_link_refusal(&other, Some(&team)), Some("agent_control_read_only"));
+        revoke_full_link();
+        // no selection is the start's own refusal, before any command
+        assert_eq!(super::assistant_start_link_refusal(&scope, None), None);
+    }
+
+    #[test]
+    fn a_start_is_asked_only_from_the_apps_own_window_and_checked_before_anything_else() {
+        let source = include_str!("onboarding.rs");
+        let function = source
+            .split("pub(crate) async fn existing_team_assistant_start(")
+            .nth(1)
+            .and_then(|rest| rest.split("\n}\n").next())
+            .expect("the command");
+        let window = function.find("window_refusal(window.label())").expect("the window is checked");
+        let confirmed = function.find("request.confirmed").expect("the confirmation is checked");
+        let link = function.find("assistant_start_link_refusal(").expect("the full link is checked");
+        let start = function.find("existing_team_assistant_start_with(").expect("the start");
+        assert!(window < confirmed && confirmed < link && link < start, "window, confirmation, link, then the start");
+        assert_eq!(crate::agent_control::window_refusal("live-screen"), Some("agent_control_window"));
+        assert_eq!(crate::agent_control::window_refusal("main"), None);
     }
 
     #[test]

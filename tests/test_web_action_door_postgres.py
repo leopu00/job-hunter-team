@@ -48,6 +48,7 @@ from pathlib import Path
 from urllib.parse import urlparse, urlunparse
 
 import pytest
+from pg_roles import roles_in_turn
 
 ROOT = Path(__file__).resolve().parents[1]
 MIGRATION = ROOT / "supabase" / "migrations" / "098_web_action_door.sql"
@@ -62,9 +63,7 @@ PSQL_FLAGS = ["-X", "-q", "-A", "-t", "-v", "ON_ERROR_STOP=1"]
 # So the roles are made in a transaction of their own that first takes pg_authid, a catalog shared by all
 # the databases of the cluster: the bootstraps take turns (an advisory lock would not do: its keys are
 # per database).
-ROLES = """
-BEGIN;
-LOCK TABLE pg_catalog.pg_authid IN SHARE ROW EXCLUSIVE MODE;
+ROLES = roles_in_turn("""
 DO $$
 DECLARE r TEXT;
 BEGIN
@@ -75,8 +74,7 @@ BEGIN
   END LOOP;
 END $$;
 ALTER ROLE service_role BYPASSRLS;       -- as on the project: the box is not held back by the row policies
-COMMIT;
-"""
+""")
 
 BOOTSTRAP = ROLES + """
 CREATE SCHEMA auth;

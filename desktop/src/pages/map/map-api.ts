@@ -8,7 +8,7 @@ import {
   type PositionNoCoord,
 } from "@/lib/queries";
 import type { PositionWithScore } from "@/lib/types";
-import { existingTeamReadOnly } from "../../lib/existing-team-readonly";
+import { existingTeamView } from "../../lib/existing-team-readonly";
 import { readVpsPositionsShared, resetVpsPositionsShared } from "../../lib/existing-team-positions-shared";
 import { apiPath, json, type ApiFetch } from "../../shell/api-bridge";
 
@@ -141,7 +141,7 @@ export function mapApi(next: ApiFetch): ApiFetch {
     const path = apiPath(input) ?? "";
     const read = ROUTES[path];
     if (!read || method !== "GET") return next(input, init);
-    if (existingTeamReadOnly()) return json(VPS_ROUTES[path](await vpsRows()));
+    if (existingTeamView()) return json(VPS_ROUTES[path](await vpsRows()));
     return json(await read());
   };
 }

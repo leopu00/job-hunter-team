@@ -233,8 +233,15 @@ exit /b 0
 
   # The fake compose deliberately returns no service id: the desktop must get
   # the exact eight-line, exit-zero inactive snapshot without starting again.
-  $snapshotOutput = @(& $windowsPowerShell -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $installedWrapper onboarding-snapshot 2>&1)
-  if ($LASTEXITCODE -ne 0) { throw "desktop onboarding snapshot failed: $($snapshotOutput | Out-String)" }
+  # Why it is inactive goes to stderr, one line: kept apart, never in the eight.
+  $snapshotStreams = @(& { $ErrorActionPreference = 'Continue'; & $windowsPowerShell -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $installedWrapper onboarding-snapshot 2>&1 })
+  $snapshotCode = $LASTEXITCODE
+  $snapshotOutput = @($snapshotStreams | Where-Object { $_ -isnot [System.Management.Automation.ErrorRecord] } | ForEach-Object { "$_" })
+  $snapshotReason = ($snapshotStreams | Where-Object { $_ -is [System.Management.Automation.ErrorRecord] } | ForEach-Object { "$_" }) -join "`n"
+  if ($snapshotCode -ne 0) { throw "desktop onboarding snapshot failed: $($snapshotStreams | Out-String)" }
+  if ($snapshotReason -notmatch '(?m)^onboarding_snapshot: container_not_found: ') {
+    throw "desktop onboarding snapshot does not say why the container is not running: $snapshotReason"
+  }
   $expectedSnapshot = @(
     'runtimeInstalled=1', 'containerRunning=0', 'providerConfigured=0', 'providerAuthenticated=0',
     'assistantWelcomed=0', 'assistantRunning=0', 'captainRunning=0', 'profileReady=0'

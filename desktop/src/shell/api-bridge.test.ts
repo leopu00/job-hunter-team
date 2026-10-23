@@ -76,6 +76,14 @@ describe("shellApi, the language the person picks", () => {
     expect(await other.json()).toEqual({ error: "read_only" });
     expect(next).not.toHaveBeenCalled();
   });
+
+  it("lets the writes through once the existing team is connected in full (the judgement bridge answers them)", async () => {
+    enterExistingTeamReadOnly(true, null, "account:full-link|full", true);
+    const next = vi.fn(notInDesktop);
+    const other = await shellApi(next)("/api/positions/7/summary", { method: "POST" });
+    expect(other.status).not.toBe(403);
+    expect(next).toHaveBeenCalledOnce();
+  });
 });
 
 describe("webRoutes", () => {
