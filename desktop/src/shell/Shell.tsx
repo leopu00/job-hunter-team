@@ -15,6 +15,7 @@ import {
 } from "../lib/existing-team-readonly";
 import { EXISTING_TEAM_READONLY_TEXT } from "../lib/existing-team-readonly.i18n";
 import { LeaveReadOnlyContext } from "../lib/leave-read-only";
+import { ConnectInFull } from "./ConnectInFull";
 import { VpsLinkBar } from "./VpsLinkBar";
 import { localUninstallAvailable } from "../lib/local-uninstall";
 import { COMPUTER_TEXT } from "../pages/computer/computer.i18n";
@@ -192,14 +193,17 @@ export default function Shell({ onLogout, onCloseReadOnly }: ShellProps) {
       <>
         <Navbar onLogout={onLogout} onCloseReadOnly={onCloseReadOnly} readOnly />
         {readOnlyTeam && (
-          <p
-            role="status"
-            data-testid="existing-team-readonly-banner"
-            className="px-4 py-2 text-[11px] border-b border-[var(--color-border)] text-[var(--color-muted)]"
-          >
-            <strong className="text-[var(--color-bright)]">{existingTeamReadOnlyReason(readOnlyTeam)}.</strong>{" "}
-            {text.banner} <span data-testid="existing-team-judgement-how">{text.judgementHow}</span>
-          </p>
+          <div className="flex items-center gap-3 px-4 py-2 border-b border-[var(--color-border)]">
+            <p
+              role="status"
+              data-testid="existing-team-readonly-banner"
+              className="min-w-0 flex-1 text-[11px] text-[var(--color-muted)]"
+            >
+              <strong className="text-[var(--color-bright)]">{existingTeamReadOnlyReason(readOnlyTeam)}.</strong>{" "}
+              {text.banner} <span data-testid="existing-team-judgement-how">{text.judgementHow}</span>
+            </p>
+            <ConnectInFull />
+          </div>
         )}
         {readNotice === "sort_last_action" && (
           <p role="status" data-testid="existing-team-readonly-notice" className="px-4 py-2 text-[11px] text-[var(--color-muted)]">
