@@ -1167,8 +1167,21 @@ container_down() {
   local status=0 errors
   errors="$(mktemp "${TMPDIR:-/tmp}/jht-down.XXXXXX")" || { compose down; return $?; }
   compose down 2>"$errors" || status=$?
-  rootless_netns_noise_filter <"$errors" >&2
+  local shown left
+  shown="$(rootless_netns_noise_filter <"$errors")"
+  [ -z "$shown" ] || printf '%s\n' "$shown" >&2
   rm -f "$errors"
+  # Podman exits non-zero with only that error even though the containers are gone:
+  # what «fermo» says is then what exit says, once the project has no container left.
+  if [ "$status" -ne 0 ] && [ "$(printf '%s\n' "$shown" | wc -l)" -eq 1 ]; then
+    case "$shown" in
+      "nota: il processo di rete del team era gia' chiuso"*)
+        # podman-compose lists every container of the project (broker and telegram too):
+        # an empty answer, and not a failed one, is «nothing left».
+        left="$(compose ps -q 2>/dev/null)" && [ -z "$left" ] && return 0
+        ;;
+    esac
+  fi
   return "$status"
 }
 

@@ -135,7 +135,7 @@ def wrapper(tmp_path):
     calls = tmp_path / "compose-calls.txt"
 
     def run(body: str, *, running_hash: str = OLD_HASH, working_dir: str | None = None, down_stderr: str = "",
-            down_exit: int = 0):
+            down_exit: int = 0, left_after_down: bool = False, broker_left: bool = False):
         compose_file = runtime / "docker-compose.yml"
         override = runtime / "podman-native-override.yml"
         details = "|".join([
@@ -159,11 +159,20 @@ podman_compose_binary() {{ echo /fake/podman-compose; }}
 podman_compose_version_number() {{ echo 1.5.0; }}
 podman_native_override_path() {{ echo "{override}"; }}
 podman_expected_config_hash() {{ echo {NEW_HASH}; }}
-docker() {{ printf '%s\\n' '{details}'; }}
+docker() {{
+  case "$*" in
+    *fedcba987654*) printf '%s\\n' 'jht-broker|true|jht|jht|jht-broker|jht-broker|1|x|x|1.5.0|x|{NEW_HASH}' ;;
+    *) printf '%s\\n' '{details}' ;;
+  esac
+}}
 compose_file() {{
   shift
   case "$1" in
-    ps) echo 0123456789ab ;;
+    ps) if grep -qx down "{calls}" 2>/dev/null; then
+          if [ "{int(broker_left)}" = 1 ]; then echo fedcba987654; return 0; fi
+          if [ "{int(not left_after_down)}" = 1 ]; then return 0; fi
+        fi
+        echo 0123456789ab ;;
     down) echo "down" >> "{calls}"; printf '%b' '{down_stderr}' >&2; return {down_exit} ;;
     *) echo "$*" >> "{calls}" ;;
   esac
@@ -215,6 +224,25 @@ def test_the_rootless_netns_eperm_after_down_is_a_note_not_an_error(wrapper):
     assert "rc=0" in done.stdout
     assert "Error:" not in done.stderr and "permission denied" in done.stderr
     assert done.stderr.startswith("nota: ")
+
+
+def test_podman_failing_with_only_the_netns_eperm_exits_ok_once_no_container_is_left(wrapper):
+    # The real podman exits non-zero with that one error even though the containers are gone.
+    done = wrapper.run("container_down; echo rc=$?", running_hash=NEW_HASH, down_stderr=NETNS, down_exit=1)
+    assert "rc=0" in done.stdout and "il team e' fermo" in done.stderr
+
+
+def test_a_broker_left_standing_keeps_the_failed_exit_even_though_the_jht_service_is_gone(wrapper):
+    # `ps -q` lists the whole project: the id left is the broker's, whose inspect says another service.
+    done = wrapper.run("container_down; echo rc=$?", running_hash=NEW_HASH, down_stderr=NETNS, down_exit=1,
+                       broker_left=True)
+    assert "rc=1" in done.stdout
+
+
+def test_the_netns_note_does_not_turn_a_failed_down_with_a_container_left_into_success(wrapper):
+    done = wrapper.run("container_down; echo rc=$?", running_hash=NEW_HASH, down_stderr=NETNS, down_exit=1,
+                       left_after_down=True)
+    assert "rc=1" in done.stdout
 
 
 def test_any_other_down_error_passes_as_it_is_with_its_exit(wrapper):
