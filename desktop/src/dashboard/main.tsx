@@ -8,11 +8,15 @@ import { mapApi } from "../pages/map/map-api";
 import { messagesApi } from "../pages/messages/messages-api";
 import { positionsApi } from "../pages/positions/positions-api";
 import { teamApi } from "../pages/team/team-api";
+import { installCookieMirror } from "../lib/cookie-mirror";
 import { installCsvExport } from "../lib/export-csv";
 import { installApiBridge, shellApi } from "../shell/api-bridge";
 import { initializeTheme } from "../shell/theme";
 import { DashboardEntrypoint } from "./DashboardEntrypoint";
 import "./dashboard.css";
+
+// The page cookies (columns, currency, language) survive where WKWebView drops them (lib/cookie-mirror.ts).
+installCookieMirror();
 
 // Before the first render: the web components may call /api at mount.
 // Each link answers its routes and hands the rest on; the last one
