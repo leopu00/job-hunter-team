@@ -1721,7 +1721,7 @@ fn current_windows_build() -> Option<u32> {
 #[cfg(windows)]
 fn show_windows_support_notice_for_reused_runtime(phase: &dyn Fn(&'static str)) {
     use crate::windows_runtime::{
-        installer_invocation, notice_message, powershell_path, INSTALL_PS1_SHA256,
+        installer_invocation, installer_outcome, notice_message, powershell_path, INSTALL_PS1_SHA256,
     };
 
     // The Windows 11 (build 22000+) path cannot produce this Windows 10-only
