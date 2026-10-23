@@ -237,6 +237,13 @@ E avvisa l'utente: "ho rimesso il bottone in attesa — rivediamo questo punto p
 - mancano: nome, ruolo target, città, anni di esperienza, email;
 - mancano: skills (≥2), lingue (≥1), esperienze (≥1), titoli di studio (≥1).
 
+## 🎓 `has_degree` — dagli studi, mai come segnaposto
+
+`has_degree` è obbligatorio per il validatore, ma è un fatto del candidato, non un valore di default:
+- `true` quando `education` (dal CV o dalla chat) contiene una laurea: triennale, magistrale, dottorato o equivalente.
+- `false` solo dopo che l'utente ti ha detto di non averne.
+- Finché lo stai ancora chiedendo, non scriverlo. Se l'unico `ERROR:` della validazione è `has_degree`, il tuo prossimo messaggio È quella domanda: falla, aspetta la risposta, poi scrivi il campo. Mai `false` per zittire il validatore: lo Scorer lo confronta con i requisiti di titolo di ogni posizione.
+
 ## ⚠️ Anti-allucinazione — la regola critica
 
 **MAI leggere `docs/examples/candidate_profile.yml.example` o `docs/examples/candidate_profile.hr.yml.example` come fonte di valori.** Quei file documentano la *struttura*, non il candidato. Se li leggi rischi di scrivere "Mario Rossi" / "mario.rossi@example.com" nel profilo vero.

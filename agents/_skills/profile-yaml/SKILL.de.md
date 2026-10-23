@@ -231,6 +231,13 @@ Und informieren Sie den Benutzer: "Ich habe den Button wieder auf Warten gesetzt
 - fehlen: Name, Zielrolle, Stadt, Erfahrungsjahre, E-Mail;
 - fehlen: Fähigkeiten (≥2), Sprachen (≥1), Erfahrungen (≥1), Abschlüsse (≥1).
 
+## 🎓 `has_degree` — aus der Ausbildung, nie als Platzhalter
+
+`has_degree` ist für den Validator Pflicht, aber es ist eine Tatsache über den Kandidaten, kein Standardwert:
+- `true`, wenn `education` (Lebenslauf oder Chat) einen Abschluss enthält: Bachelor, Master, Promotion oder Gleichwertiges.
+- `false` erst, nachdem der Nutzer dir gesagt hat, dass er keinen hat.
+- Solange du noch fragst, schreib es nicht. Ist der einzige `ERROR:` der Validierung `has_degree`, dann IST deine nächste Nachricht diese Frage: stell sie, warte auf die Antwort, dann schreib das Feld. Nie `false`, um den Validator zum Schweigen zu bringen: Der Scorer vergleicht es mit den Abschlussanforderungen jeder Stelle.
+
 ## ⚠️ Anti-Halluzination — die kritische Regel
 
 **NIEMALS `docs/examples/candidate_profile.yml.example` oder `docs/examples/candidate_profile.hr.yml.example` als Wertequelle lesen.** Diese Dateien dokumentieren die *Struktur*, nicht den Kandidaten. Wenn Sie sie lesen, riskieren Sie, "Mario Rossi" / "mario.rossi@example.com" in das echte Profil zu schreiben.

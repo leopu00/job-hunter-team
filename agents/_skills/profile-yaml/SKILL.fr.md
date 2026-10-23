@@ -231,6 +231,13 @@ Et informez l'utilisateur : "j'ai remis le bouton en attente — revoyons ce poi
 - il manque : nom, rôle cible, ville, années d'expérience, email ;
 - il manque : compétences (≥2), langues (≥1), expériences (≥1), diplômes (≥1).
 
+## 🎓 `has_degree` — d'après les études, jamais comme valeur d'attente
+
+`has_degree` est obligatoire pour le validateur, mais c'est un fait sur le candidat, pas une valeur par défaut :
+- `true` quand `education` (CV ou chat) contient un diplôme : licence, master, doctorat ou équivalent.
+- `false` seulement après que l'utilisateur t'a dit qu'il n'en a pas.
+- Tant que tu poses encore la question, ne l'écris pas. Si la seule `ERROR:` de la validation est `has_degree`, ton prochain message EST cette question : pose-la, attends la réponse, puis écris le champ. Jamais `false` pour faire taire le validateur : le Scorer le compare aux exigences de diplôme de chaque poste.
+
 ## ⚠️ Anti-hallucination — la règle critique
 
 **NE JAMAIS lire `docs/examples/candidate_profile.yml.example` ou `docs/examples/candidate_profile.hr.yml.example` comme source de valeurs.** Ces fichiers documentent la *structure*, pas le candidat. Si vous les lisez, vous risquez d'écrire "Mario Rossi" / "mario.rossi@example.com" dans le profil réel.

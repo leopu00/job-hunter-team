@@ -231,6 +231,13 @@ Es ertesitsd a felhasznalot: "visszaallitottam a gombot varakozasra — tekintsu
 - hianyzik: nev, cel pozicio, varos, tapasztalati evek, email;
 - hianyzik: kepessegek (≥2), nyelvek (≥1), tapasztalatok (≥1), vegzettsegek (≥1).
 
+## 🎓 `has_degree` — a vegzettsegbol, soha nem helykitoltonek
+
+A `has_degree` a validatornak kotelezo, de ez egy teny a jeloltrol, nem alapertelmezett ertek:
+- `true`, ha az `education` (oneletrajz vagy chat) tartalmaz diplomat: BSc, MSc, PhD vagy egyenerteku.
+- `false` csak azutan, hogy a felhasznalo megmondta, hogy nincs diplomaja.
+- Amig meg kerdezed, ne ird be. Ha a validacio egyetlen `ERROR:` sora a `has_degree`, a kovetkezo uzeneted EZ a kerdes: tedd fel, vard meg a valaszt, aztan ird be a mezot. Soha ne irj `false`-t, hogy elhallgattasd a validatort: a Scorer minden allas vegzettsegi kovetelmenyevel osszeveti.
+
 ## ⚠️ Anti-hallucinacio — a kritikus szabaly
 
 **SOHA ne olvasd a `docs/examples/candidate_profile.yml.example` vagy `docs/examples/candidate_profile.hr.yml.example` fajlt ertekforrasnak.** Ezek a fajlok a *strukturat* dokumentaljak, nem a jeloltet. Ha elolvasod oket, kockaztatod, hogy "Mario Rossi" / "mario.rossi@example.com" kerul a valos profilba.
