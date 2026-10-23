@@ -1670,6 +1670,7 @@ fn local_install_args(base: &[&str], channel_args: &[String]) -> Vec<String> {
 
 /// `CurrentBuildNumber` is a numeric registry value stored as a string. Keep
 /// its parsing pure so the boundary for the Windows registry read is narrow.
+#[cfg(any(windows, test))]
 fn windows_build_number(value: &str) -> Option<u32> {
     value.trim_end_matches('\0').parse().ok()
 }
