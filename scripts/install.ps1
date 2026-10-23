@@ -228,7 +228,8 @@ function Test-WindowsSubsystem {
   if ($DryRun) { Write-Dry 'wsl.exe --status'; return }
   $wsl = Get-Command wsl.exe -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
   if (-not $wsl) { [Console]::Error.WriteLine('wsl_not_ready: wsl.exe is unavailable'); exit 20 }
-  $null = & $wsl.Source --status 2>&1
+  # under 'Stop', Windows PowerShell 5.1 would turn a line of wsl's stderr into an error, not exit 20 (T82)
+  $null = & { $ErrorActionPreference = 'Continue'; & $wsl.Source --status 2>&1 }
   if ($LASTEXITCODE -ne 0) { [Console]::Error.WriteLine('wsl_not_ready: WSL is not usable'); exit 20 }
   Write-Ok 'WSL is ready'
 }

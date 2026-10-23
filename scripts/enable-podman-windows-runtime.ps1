@@ -13,6 +13,10 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+# Under 'Stop', Windows PowerShell 5.1 (the shell the app runs) turns ANY line a native program writes on
+# stderr into an error that stops the script, even with 2>$null: `podman inspect jht` saying "no such
+# object" stopped every first installation (T82). So a native call whose stderr is dropped runs in its
+# own block with 'Continue', and where its failure must stop the setup, $LASTEXITCODE says so.
 $RepoRoot = Split-Path -Parent $PSScriptRoot
 $LocalAppData = if ($env:LOCALAPPDATA) { $env:LOCALAPPDATA } else { [Environment]::GetFolderPath('LocalApplicationData') }
 $RuntimeDir = if ($env:JHT_RUNTIME_DIR) { $env:JHT_RUNTIME_DIR } else { Join-Path $LocalAppData 'Job Hunter Team\host-runtime' }
@@ -81,8 +85,8 @@ function Report-LegacyDockerVolumes {
   $visible = @()
   if ($DockerPath) {
     try {
-      $visible = @(& $DockerPath volume ls --format '{{.Name}}' `
-        --filter 'label=com.docker.compose.project=host-runtime' 2>$null |
+      $visible = @(& { $ErrorActionPreference = 'Continue'; & $DockerPath volume ls --format '{{.Name}}' `
+        --filter 'label=com.docker.compose.project=host-runtime' 2>$null } |
         ForEach-Object { ([string]$_).Trim() } | Where-Object { $_ })
       if ($LASTEXITCODE -ne 0) { $visible = @() }
     } catch { $visible = @() }
@@ -241,7 +245,8 @@ function Test-LegacyWslOwner {
   param([Parameter(Mandatory)][string]$WindowsPath, [Parameter(Mandatory)][string]$PodmanPath)
   if (-not (Test-Path -LiteralPath $WindowsPath)) { return $false }
   $wslPath = ConvertTo-WslPath $WindowsPath
-  $owner = (& $PodmanPath machine ssh $MachineName "stat -c '%u' $(Quote-Sh $wslPath)" 2>$null | Select-Object -Last 1)
+  $owner = (& { $ErrorActionPreference = 'Continue'; & $PodmanPath machine ssh $MachineName "stat -c '%u' $(Quote-Sh $wslPath)" 2>$null } | Select-Object -Last 1)
+  if ($LASTEXITCODE -ne 0) { throw "Cannot read the owner of '$WindowsPath' in the Podman machine." }
   return ([string]$owner).Trim() -ne '1000'
 }
 
@@ -252,7 +257,7 @@ function Repair-LegacyBindMetadata {
     Where-Object { Test-LegacyWslOwner -WindowsPath $_ -PodmanPath $PodmanPath }
   if (-not $targets) { return $false }
 
-  $running = (& $PodmanPath --connection $MachineName inspect jht --format '{{.State.Running}}' 2>$null | Select-Object -First 1)
+  $running = (& { $ErrorActionPreference = 'Continue'; & $PodmanPath --connection $MachineName inspect jht --format '{{.State.Running}}' 2>$null } | Select-Object -First 1)
   if (([string]$running).Trim() -eq 'true') { Invoke-Checked $PodmanPath '--connection' $MachineName 'stop' 'jht' | Out-Null }
 
   $backup = Join-Path $JhtHome ('podman-metadata-backup-' + [DateTimeOffset]::UtcNow.ToUnixTimeSeconds())
@@ -352,7 +357,7 @@ function Find-Podman {
 function Get-PodmanVersion {
   param([string]$Path)
   if (-not $Path) { return $null }
-  $line = @(& $Path --version 2>$null) | Select-Object -First 1
+  $line = @(& { $ErrorActionPreference = 'Continue'; & $Path --version 2>$null }) | Select-Object -First 1
   if ([string]$line -match '^podman(?:\.exe)? version (\S+)$') { return $Matches[1] }
   return $null
 }
@@ -512,7 +517,7 @@ if ($RuntimeImage -match '@(sha256:[0-9a-f]{64})$' -and $Matches[1] -ne $Expecte
 }
 Write-JhtPhase image_pull
 Invoke-Checked $Podman '--connection' $MachineName 'pull' $RuntimeImage | Out-Null
-$repoDigestsJson = ((& $Podman --connection $MachineName image inspect $RuntimeImage --format '{{json .RepoDigests}}' 2>$null) -join '')
+$repoDigestsJson = ((& { $ErrorActionPreference = 'Continue'; & $Podman --connection $MachineName image inspect $RuntimeImage --format '{{json .RepoDigests}}' 2>$null }) -join '')
 if ($LASTEXITCODE -ne 0 -or -not $repoDigestsJson) { throw 'Cannot inspect the pulled runtime image digest.' }
 # Windows PowerShell 5.1, the shell the app runs, does not enumerate a JSON
 # array through the pipeline: `@($json | ConvertFrom-Json)` was ONE element, the
@@ -635,18 +640,19 @@ $env:PATH = "$RuntimeShimDir$([IO.Path]::PathSeparator)$env:PATH"
 # and `{{index .Config.Labels "com.docker.compose.project"}}` reached Podman as
 # `index .Config.Labels com.docker...` (function "com" not defined: the setup stopped, T71). The
 # labels come whole as JSON and the project is read here.
-[string]$existingLabelsJson = (& $Podman --connection $MachineName inspect jht --format '{{json .Config.Labels}}' 2>$null | Select-Object -First 1)
+# On a new machine there is no container jht yet: Podman says "no such object" on stderr and the output is empty.
+[string]$existingLabelsJson = (& { $ErrorActionPreference = 'Continue'; & $Podman --connection $MachineName inspect jht --format '{{json .Config.Labels}}' 2>$null } | Select-Object -First 1)
 $existingProject = ''
 if ($existingLabelsJson.Trim()) {
   $existingLabels = $null
   try { $existingLabels = ConvertFrom-Json -InputObject $existingLabelsJson } catch { $existingLabels = $null }
   if ($existingLabels) { $existingProject = ([string]$existingLabels.'com.docker.compose.project').Trim() }
 }
-[string]$existingCgroupManager = (& $Podman --connection $MachineName inspect jht --format '{{.HostConfig.CgroupManager}}' 2>$null | Select-Object -First 1)
+[string]$existingCgroupManager = (& { $ErrorActionPreference = 'Continue'; & $Podman --connection $MachineName inspect jht --format '{{.HostConfig.CgroupManager}}' 2>$null } | Select-Object -First 1)
 $existingCgroupManager = $existingCgroupManager.Trim()
 $containerNeedsMigration = $existingProject -and ($existingProject -ne 'jht' -or $existingCgroupManager -ne 'cgroupfs')
 if ($containerNeedsMigration) {
-  [string]$existingRunning = (& $Podman --connection $MachineName inspect jht --format '{{.State.Running}}' 2>$null | Select-Object -First 1)
+  [string]$existingRunning = (& { $ErrorActionPreference = 'Continue'; & $Podman --connection $MachineName inspect jht --format '{{.State.Running}}' 2>$null } | Select-Object -First 1)
   $existingRunning = $existingRunning.Trim()
   if ($existingRunning -eq 'true') { Invoke-Checked $Podman '--connection' $MachineName 'stop' '--time' '30' 'jht' | Out-Null }
   # The container has only bind mounts and named volumes. Removing the stopped
