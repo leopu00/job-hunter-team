@@ -841,16 +841,16 @@ describe("the limits, said apart", () => {
 });
 
 describe("the provider that is not set up", () => {
-  it("tells the VPS and this computer apart in every language: the action never sends this computer's team to a VPS", () => {
-    const vps: Record<string, RegExp> = { it: /VPS/, en: /VPS/, de: /VPS/, fr: /VPS/, es: /VPS/, pt: /VPS/, hu: /VPS/ };
-    for (const locale of Object.keys(vps)) {
+  it("tells the VPS and this computer apart in every language: the action never sends this computer's team to a VPS or a terminal", () => {
+    // the name of the step in the app's own setup (onboarding.i18n.ts `steps`), per language
+    const step: Record<string, string> = { it: "Provider", en: "Provider", de: "Anbieter", es: "Proveedor", fr: "Fournisseur", pt: "Fornecedor", hu: "Szolgáltató" };
+    for (const locale of Object.keys(step)) {
       const remote = describeError("provider_not_configured", { locale });
       const local = describeError("provider_not_configured_local", { locale });
       expect(remote.known && local.known, locale).toBe(true);
-      expect(remote.action, locale).toMatch(vps[locale]);
-      expect(local.action, locale).not.toMatch(/VPS/);
-      expect(local.text, locale).not.toMatch(/VPS/);
-      expect(local.action, locale).toMatch(/jht setup/);
+      expect(remote.action, locale).toMatch(/VPS/);
+      for (const part of [local.text, local.action]) expect(part, locale).not.toMatch(/VPS|jht setup|terminal|Terminal/);
+      expect(local.action, locale).toContain(step[locale]);
       expect(local.text, locale).not.toBe(remote.text);
     }
   });
