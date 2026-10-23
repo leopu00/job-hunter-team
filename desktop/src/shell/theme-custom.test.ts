@@ -250,6 +250,17 @@ describe("the suggestion moves the colour at fault by the smallest step that cur
     expect(Math.abs(toOklch(out.seeds.accent).h - toOklch(messy.accent).h)).toBeLessThan(12);
   });
 
+  it("looks beyond the colour touched last when that one cannot cure the fault alone", () => {
+    const grey = { ...dark.seeds, background: "#777777", panel: "#777777", text: "#808080" };
+    const failure = checkSeeds(grey, dark.context).failures.find((f) => f.rule === "layer")!;
+    expect(failure).toBeDefined();
+    // text is the colour touched last, but a layer gap is cured only by moving a surface
+    const fixed = suggestFix(grey, dark.context, failure, "text")!;
+    expect(fixed).not.toBeNull();
+    expect(fixed.text).toBe(grey.text);
+    expect(fixed.panel !== grey.panel || fixed.background !== grey.background).toBe(true);
+  });
+
   it("returns the seeds untouched when the palette already passes", () => {
     expect(fixAll(dark.seeds, dark.context)).toEqual({ seeds: dark.seeds, failures: [] });
   });

@@ -223,6 +223,16 @@ describe("Posizioni on an existing team read only", () => {
     expect(listRequests()[0].filters).toMatchObject({ sort: "found_at", dir: "asc" });
   });
 
+  it("does not say «not available read only» on a team connected in full, whose list is sorted the same way", async () => {
+    enterExistingTeamReadOnly(false, null, undefined, true);
+    navigate("/positions?sort=last_action_at&dir=asc", { replace: true });
+    render(<Shell />);
+    await screen.findAllByText("Synthetic role A");
+    expect(listRequests()[0].filters).toMatchObject({ sort: "found_at", dir: "asc" });
+    expect(screen.queryByTestId("existing-team-readonly-notice")).not.toBeInTheDocument();
+    expect(screen.queryByText(EXISTING_TEAM_READONLY_TEXT.it.sortLastAction)).not.toBeInTheDocument();
+  });
+
   it("tells an empty team's list in one sentence, not «no results with these filters», and keeps the sort notice off it", async () => {
     emptyTeam = true;
     navigate("/positions?sort=last_action_at&dir=asc", { replace: true });

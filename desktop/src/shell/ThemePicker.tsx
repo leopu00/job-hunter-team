@@ -1,10 +1,11 @@
-import { useEffect, useRef, useState, type KeyboardEvent } from "react";
+import { useEffect, useRef, useState, type CSSProperties, type KeyboardEvent } from "react";
 import { appLocale } from "../lib/app-locale";
 import { fill } from "../lib/text-slots";
 import {
   applyTheme,
   CUSTOM_THEME,
   persistTheme,
+  readStoredCustom,
   readStoredPreference,
   resolveTheme,
   SYSTEM_THEME,
@@ -15,17 +16,18 @@ import {
   type ThemePreference,
 } from "./theme";
 import { THEME_TEXT } from "./theme.i18n";
+import { THEME_EDITOR_TEXT } from "./theme-editor.i18n";
+import ThemeEditor from "./ThemeEditor";
 
 const MENU_ID = "desktop-theme-menu";
 
-/** The menu's entries in the order they are shown: «follow the system», then the dark palettes, then the light ones. */
+/** The menu's palettes in the order they are shown: «follow the system», [the person's own], the dark ones, the light ones. */
 const DARK_THEMES = THEMES.filter((entry) => entry.family === "dark");
 const LIGHT_THEMES = THEMES.filter((entry) => entry.family === "light");
-const CHOICES: readonly ThemePreference[] = [
-  SYSTEM_THEME,
-  ...DARK_THEMES.map((entry) => entry.value),
-  ...LIGHT_THEMES.map((entry) => entry.value),
-];
+
+/** The swatch of the person's palette, from its five colours. */
+const swatchOf = (seeds: { panel: string; border: string; accent: string }) =>
+  ({ "--preview-bg": seeds.panel, "--preview-border": seeds.border, "--preview-accent": seeds.accent }) as CSSProperties;
 
 function GearIcon() {
   return (
@@ -58,10 +60,13 @@ export default function ThemePicker() {
   );
   const [theme, setTheme] = useState<AppliedTheme>(() => resolveTheme(preference));
   const [open, setOpen] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [custom, setCustom] = useState(() => readStoredCustom(window.localStorage));
   const pickerRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
 
   const text = THEME_TEXT[appLocale()];
+  const editorText = THEME_EDITOR_TEXT[appLocale()];
   const label =
     preference === SYSTEM_THEME
       ? `${text.names[theme as Theme]} (${text.systemShort})`
@@ -110,20 +115,17 @@ export default function ThemePicker() {
     triggerRef.current?.focus();
   };
 
-  const moveFocus = (event: KeyboardEvent<HTMLButtonElement>, index: number) => {
+  const moveFocus = (event: KeyboardEvent<HTMLButtonElement>) => {
+    const items = [...(pickerRef.current?.querySelectorAll<HTMLButtonElement>('[role^="menuitem"]') ?? [])];
+    const index = items.indexOf(event.currentTarget);
     let next: number | undefined;
-    if (event.key === "ArrowDown") next = (index + 1) % CHOICES.length;
-    if (event.key === "ArrowUp") {
-      next = (index - 1 + CHOICES.length) % CHOICES.length;
-    }
+    if (event.key === "ArrowDown") next = (index + 1) % items.length;
+    if (event.key === "ArrowUp") next = (index - 1 + items.length) % items.length;
     if (event.key === "Home") next = 0;
-    if (event.key === "End") next = CHOICES.length - 1;
+    if (event.key === "End") next = items.length - 1;
     if (next === undefined) return;
     event.preventDefault();
-    pickerRef.current
-      ?.querySelectorAll<HTMLButtonElement>('[role="menuitemradio"]')
-      .item(next)
-      .focus();
+    items[next].focus();
   };
 
   const option = (value: ThemePreference, name: string) => (
@@ -134,11 +136,12 @@ export default function ThemePicker() {
       aria-checked={preference === value}
       className="theme-picker__option"
       onClick={() => choose(value)}
-      onKeyDown={(event) => moveFocus(event, CHOICES.indexOf(value))}
+      onKeyDown={moveFocus}
     >
       <span
         className="theme-picker__swatch"
         data-theme-preview={value}
+        style={value === CUSTOM_THEME && custom ? swatchOf(custom.seeds) : undefined}
         aria-hidden="true"
       >
         <i />
@@ -173,11 +176,39 @@ export default function ThemePicker() {
         >
           <span className="theme-picker__heading">{text.heading}</span>
           {option(SYSTEM_THEME, text.system)}
+          {custom && option(CUSTOM_THEME, text.custom)}
           <span className="theme-picker__heading">{text.groupDark}</span>
           {DARK_THEMES.map((entry) => option(entry.value, text.names[entry.value]))}
           <span className="theme-picker__heading">{text.groupLight}</span>
           {LIGHT_THEMES.map((entry) => option(entry.value, text.names[entry.value]))}
+          <button
+            type="button"
+            role="menuitem"
+            className="theme-picker__option theme-picker__edit"
+            onClick={() => {
+              setOpen(false);
+              setEditing(true);
+            }}
+            onKeyDown={moveFocus}
+          >
+            <span>{editorText.open}</span>
+          </button>
         </div>
+      )}
+      {editing && (
+        <ThemeEditor
+          initialStart={theme === CUSTOM_THEME ? undefined : theme}
+          onClose={() => {
+            setEditing(false);
+            triggerRef.current?.focus();
+          }}
+          onChanged={() => {
+            const next = readStoredPreference(window.localStorage);
+            setCustom(readStoredCustom(window.localStorage));
+            setPreference(next);
+            setTheme(resolveTheme(next));
+          }}
+        />
       )}
     </div>
   );

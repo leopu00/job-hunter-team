@@ -102,12 +102,21 @@ function Office({ ready, source }: { ready: Ready; source: OfficeSource }) {
   const locale = useLocale();
   const [status, setStatus] = useState<string | null>(null);
   const [statusIsAlert, setStatusIsAlert] = useState(false);
+  // What a click on an agent says where there is no panel: ONE line above the scene, never a bubble over it
+  // (two clicks made two bubbles that covered each other and the agents).
+  const [note, setNote] = useState<string | null>(null);
+  const noteTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => {
+    if (noteTimer.current) clearTimeout(noteTimer.current);
+  }, []);
   const { assets, parts } = ready;
   // A click or a key on the office. Over an existing team's VPS an agent has no panel (its moves
-  // are not in what the VPS reports): a speech bubble over it says so, never a panel with nothing in it.
+  // are not in what the VPS reports): a line above the scene says so, never a panel with nothing in it.
   const openPanel = (click: OfficeClick | null, button?: HTMLButtonElement) => {
     if (click && source === "team-probe" && click.kind === "agent") {
-      engineRef.current?.apply({ type: "say", uid: click.uid, text: EXISTING_TEAM_READONLY_TEXT[appLocale()].officeAgentNoMoves, seconds: 8 });
+      if (noteTimer.current) clearTimeout(noteTimer.current);
+      setNote(EXISTING_TEAM_READONLY_TEXT[appLocale()].officeAgentNoMoves);
+      noteTimer.current = setTimeout(() => setNote(null), 8000);
       setPanel(null);
       return;
     }
@@ -311,6 +320,15 @@ function Office({ ready, source }: { ready: Ready; source: OfficeSource }) {
           className="m-0 shrink-0 border-b border-[var(--color-border)] px-4 py-1.5 text-[11px] text-[var(--color-muted)]"
         >
           {status}
+        </p>
+      )}
+      {note && (
+        <p
+          role="status"
+          data-testid="office-agent-note"
+          className="m-0 shrink-0 border-b border-[var(--color-border)] px-4 py-1.5 text-[11px] text-[var(--color-muted)]"
+        >
+          {note}
         </p>
       )}
       <div className="relative min-h-0 flex-1" data-testid="office-stage">
