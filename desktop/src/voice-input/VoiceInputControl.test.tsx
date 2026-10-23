@@ -74,7 +74,10 @@ describe("VoiceInputControl", () => {
     render(<Harness bridge={bridge} />);
     await flush();
 
-    expect(screen.getByRole("alert")).toHaveTextContent(/non è disponibile/i);
+    // only an icon with the hint: no red box in the composer
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(screen.getByTestId("voice-input-unavailable")).toHaveAttribute("title", expect.stringMatching(/non è disponibile/i));
+    expect(screen.getByTestId("voice-input-unavailable")).toHaveAccessibleName(/non è disponibile/i);
     expect(screen.queryByRole("button", { name: /detta un messaggio/i })).not.toBeInTheDocument();
     expect(bridge.start).not.toHaveBeenCalled();
   });
@@ -151,9 +154,28 @@ describe("VoiceInputControl", () => {
       error: "microphone_permission_denied",
     }));
 
-    expect(screen.getByRole("alert")).toHaveTextContent(ERROR_CATALOG.microphone_permission_denied.text.it);
-    expect(screen.getByRole("alert")).toHaveTextContent(ERROR_CATALOG.microphone_permission_denied.action.it);
+    // the sentence is the icon's hint, not a red box; a refused permission offers no retry
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    const icon = screen.getByTestId("voice-input-unavailable");
+    expect(icon).toHaveAttribute("title", expect.stringContaining(ERROR_CATALOG.microphone_permission_denied.text.it));
+    expect(icon).toHaveAttribute("title", expect.stringContaining(ERROR_CATALOG.microphone_permission_denied.action.it));
+    expect(icon).toHaveAttribute("aria-disabled", "true");
+    await userEvent.click(icon);
+    expect(bridge.start).not.toHaveBeenCalled();
     expect(screen.queryByRole("button", { name: /riprova/i })).not.toBeInTheDocument();
+  });
+
+  it("offers a failed dictation as the icon with the hint, and the icon tries again", async () => {
+    const bridge = new FakeBridge();
+    render(<Harness bridge={bridge} />);
+    await flush();
+    act(() => bridge.state({ ...IDLE, phase: "error", error: "native_failed" }));
+
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    const icon = screen.getByTestId("voice-input-unavailable");
+    expect(icon).toHaveAttribute("title", expect.stringMatching(/riprova/i));
+    await userEvent.click(icon);
+    expect(bridge.start).toHaveBeenCalledOnce();
   });
 
   it("fails closed when on-device recognition is unavailable", async () => {
@@ -162,7 +184,8 @@ describe("VoiceInputControl", () => {
     await flush();
     act(() => bridge.state({ ...IDLE, available: false, phase: "error", error: "on_device_unsupported" }));
 
-    expect(screen.getByRole("alert")).toHaveTextContent(ERROR_CATALOG.on_device_unsupported.text.it);
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(screen.getByTestId("voice-input-unavailable")).toHaveAttribute("title", expect.stringContaining(ERROR_CATALOG.on_device_unsupported.text.it));
     expect(screen.queryByRole("button", { name: /detta un messaggio/i })).not.toBeInTheDocument();
     expect(bridge.start).not.toHaveBeenCalled();
   });

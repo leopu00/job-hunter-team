@@ -14,6 +14,9 @@
 .voice-input__spinner { width: 12px; height: 12px; border: 2px solid #343b33; border-top-color: var(--accent, #bbf246); border-radius: 50%; animation: voice-spin .8s linear infinite; }
 .voice-input__preview { max-width: 260px; margin: 0; overflow: hidden; color: var(--muted, #9ea49e); font-size: 9px; font-style: italic; text-overflow: ellipsis; white-space: nowrap; }
 .voice-input__error { min-height: 36px; padding: 7px 9px; display: flex; align-items: center; gap: 9px; border: 1px solid rgba(236, 105, 83, .28); border-radius: 7px; color: #eab0a6; background: rgba(236, 105, 83, .055); font-size: 8px; line-height: 1.4; }
+.voice-input__mic--off { position: relative; opacity: .55; cursor: help; }
+.voice-input__mic--off:not([aria-disabled="true"]) { cursor: pointer; }
+.voice-input__mic--off::after { content: ""; position: absolute; width: 20px; height: 2px; background: currentColor; transform: rotate(-45deg); border-radius: 1px; }
 .voice-input__hint { color: var(--dim, #6e756f); font-size: 8px; }
 .voice-input__sr-status { width: 1px; height: 1px; padding: 0; position: absolute; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
 @keyframes voice-pulse { 0%, 100% { opacity: .55; } 50% { opacity: 1; } }

@@ -32,6 +32,8 @@ export interface DirectChatText {
   readOnlyInvite: string;
   /** The button under the invitation: it leaves the read-only view, towards «Conferma e collega». */
   readOnlyConnect: string;
+  /** The connection to the team is taking too long: said once, with the retry. */
+  connectingSlow: string;
   sending: string;
   send: string;
   /** Over the composer: where the text goes. The chat, never the keys of the agent's terminal. */
@@ -114,7 +116,8 @@ export const DIRECT_CHAT_TEXT: Record<Locale, DirectChatText> = {
     writeToPlaceholder: "Scrivi a {name}…",
     connectToWrite: "Collega il team per scrivere",
     readOnlyInvite: "Vista in sola lettura: vedi lo storico e le risposte. Per scrivere collega il team con «Conferma e collega».",
-    readOnlyConnect: "Collega il team",
+    readOnlyConnect: "Collega in scrittura",
+    connectingSlow: "La connessione al team non risponde: la chat non può né mostrare lo storico né inviare. Riprova.",
     sending: "Invio…",
     send: "Invia",
     destination: "Destinazione: la chat di {name}. Il testo gli arriva come messaggio, non come tasti nel suo terminale.",
@@ -169,7 +172,8 @@ export const DIRECT_CHAT_TEXT: Record<Locale, DirectChatText> = {
     writeToPlaceholder: "Write to {name}…",
     connectToWrite: "Connect the team to write",
     readOnlyInvite: "Read-only view: you can see the history and the replies. To write, connect the team with “Confirm and connect”.",
-    readOnlyConnect: "Connect the team",
+    readOnlyConnect: "Connect with write access",
+    connectingSlow: "The connection to the team is not answering: the chat can neither show its history nor send. Try again.",
     sending: "Sending…",
     send: "Send",
     destination: "Goes to: the chat with {name}. The text reaches it as a message, not as keys in its terminal.",
@@ -224,7 +228,8 @@ export const DIRECT_CHAT_TEXT: Record<Locale, DirectChatText> = {
     writeToPlaceholder: "Schreibe an {name}…",
     connectToWrite: "Verbinde das Team, um zu schreiben",
     readOnlyInvite: "Schreibgeschützte Ansicht: Du siehst Verlauf und Antworten. Zum Schreiben verbinde das Team mit „Bestätigen und verbinden“.",
-    readOnlyConnect: "Team verbinden",
+    readOnlyConnect: "Mit Schreibzugriff verbinden",
+    connectingSlow: "Die Verbindung zum Team antwortet nicht: Der Chat kann weder den Verlauf zeigen noch senden. Versuche es erneut.",
     sending: "Senden…",
     send: "Senden",
     destination: "Ziel: der Chat mit {name}. Der Text kommt als Nachricht an, nicht als Tasten in seinem Terminal.",
@@ -279,7 +284,8 @@ export const DIRECT_CHAT_TEXT: Record<Locale, DirectChatText> = {
     writeToPlaceholder: "Écrire à {name}…",
     connectToWrite: "Connecte l’équipe pour écrire",
     readOnlyInvite: "Vue en lecture seule : tu vois l’historique et les réponses. Pour écrire, relie l’équipe avec « Confirmer et relier ».",
-    readOnlyConnect: "Relier l’équipe",
+    readOnlyConnect: "Connecter en écriture",
+    connectingSlow: "La connexion à l’équipe ne répond pas : le chat ne peut ni afficher l’historique ni envoyer. Réessaie.",
     sending: "Envoi…",
     send: "Envoyer",
     destination: "Destination : la discussion avec {name}. Le texte lui arrive comme un message, pas comme des touches dans son terminal.",
@@ -334,7 +340,8 @@ export const DIRECT_CHAT_TEXT: Record<Locale, DirectChatText> = {
     writeToPlaceholder: "Escribe a {name}…",
     connectToWrite: "Conecta el equipo para escribir",
     readOnlyInvite: "Vista de solo lectura: ves el historial y las respuestas. Para escribir, conecta el equipo con «Confirmar y conectar».",
-    readOnlyConnect: "Conectar el equipo",
+    readOnlyConnect: "Conectar con escritura",
+    connectingSlow: "La conexión con el equipo no responde: el chat no puede mostrar el historial ni enviar. Reinténtalo.",
     sending: "Enviando…",
     send: "Enviar",
     destination: "Destino: el chat con {name}. El texto le llega como mensaje, no como teclas en su terminal.",
@@ -389,7 +396,8 @@ export const DIRECT_CHAT_TEXT: Record<Locale, DirectChatText> = {
     writeToPlaceholder: "Escreve a {name}…",
     connectToWrite: "Liga a equipa para escrever",
     readOnlyInvite: "Vista só de leitura: vês o histórico e as respostas. Para escrever, liga a equipa com «Confirmar e ligar».",
-    readOnlyConnect: "Ligar a equipa",
+    readOnlyConnect: "Ligar com escrita",
+    connectingSlow: "A ligação à equipa não responde: o chat não pode mostrar o histórico nem enviar. Tenta de novo.",
     sending: "A enviar…",
     send: "Enviar",
     destination: "Destino: o chat com {name}. O texto chega-lhe como mensagem, não como teclas no terminal.",
@@ -444,7 +452,8 @@ export const DIRECT_CHAT_TEXT: Record<Locale, DirectChatText> = {
     writeToPlaceholder: "Írj neki: {name}…",
     connectToWrite: "Csatlakoztasd a csapatot az íráshoz",
     readOnlyInvite: "Csak olvasható nézet: látod az előzményeket és a válaszokat. Íráshoz csatlakoztasd a csapatot a „Megerősítés és csatlakozás” gombbal.",
-    readOnlyConnect: "Csapat csatlakoztatása",
+    readOnlyConnect: "Csatlakozás írási joggal",
+    connectingSlow: "A csapathoz való kapcsolat nem válaszol: a csevegés sem az előzményeket nem tudja mutatni, sem küldeni. Próbáld újra.",
     sending: "Küldés…",
     send: "Küldés",
     destination: "Cél: a csevegés vele: {name}. A szöveg üzenetként érkezik, nem billentyűként a termináljában.",

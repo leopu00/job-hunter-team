@@ -96,7 +96,7 @@ describe("AgentChatPane", () => {
       </LeaveReadOnlyContext.Provider>,
     );
     await screen.findByText("Tre posizioni nuove.");
-    await userEvent.click(screen.getByRole("button", { name: "Connect the team" }));
+    await userEvent.click(screen.getByRole("button", { name: "Connect with write access" }));
     expect(leave).toHaveBeenCalledTimes(1);
   });
 
@@ -160,7 +160,7 @@ describe("AgentChatPane", () => {
       expect(screen.queryByRole("dialog")).toBeNull();
       expect(teamBridge.reconfirmSummary).not.toHaveBeenCalled();
 
-      await userEvent.click(screen.getByRole("button", { name: "Connect the team" }));
+      await userEvent.click(screen.getByRole("button", { name: "Connect with write access" }));
       const dialog = await screen.findByRole("dialog");
       expect(await screen.findByText("team-opaque-0007")).toBeTruthy();
       expect(dialog.textContent).toContain("203.0.113.7:2222");
@@ -175,7 +175,7 @@ describe("AgentChatPane", () => {
       const reconfirm = context();
       const teamBridge = bridge();
       mount(reconfirm, teamBridge);
-      await userEvent.click(await screen.findByRole("button", { name: "Connect the team" }));
+      await userEvent.click(await screen.findByRole("button", { name: "Connect with write access" }));
       await userEvent.click(await screen.findByRole("button", { name: "Confirm and connect" }));
       await waitFor(() => expect(reconfirm.onConnected).toHaveBeenCalledWith(RESULT));
       expect(vi.mocked(teamBridge.connect).mock.calls[0][0]).toEqual({ teamId: "team-opaque-0007", host: HOST, reconfirm: true });
@@ -184,14 +184,14 @@ describe("AgentChatPane", () => {
     it("what no longer matches goes back to the setup, before and after the confirmation", async () => {
       const before = context();
       mount(before, bridge({ reconfirmSummary: vi.fn().mockRejectedValue({ code: "existing_team_reconfirm_setup" }) }));
-      await userEvent.click(await screen.findByRole("button", { name: "Connect the team" }));
+      await userEvent.click(await screen.findByRole("button", { name: "Connect with write access" }));
       await waitFor(() => expect(before.onSetup).toHaveBeenCalledTimes(1));
     });
 
     it("a confirmation that fails stays read-only and says why in the catalog's words", async () => {
       const reconfirm = context();
       mount(reconfirm, bridge({ connect: vi.fn().mockRejectedValue({ code: "host_key_changed" }) }));
-      await userEvent.click(await screen.findByRole("button", { name: "Connect the team" }));
+      await userEvent.click(await screen.findByRole("button", { name: "Connect with write access" }));
       await userEvent.click(await screen.findByRole("button", { name: "Confirm and connect" }));
       expect(await within(screen.getByRole("dialog")).findByRole("alert")).toBeTruthy();
       expect(reconfirm.onConnected).not.toHaveBeenCalled();

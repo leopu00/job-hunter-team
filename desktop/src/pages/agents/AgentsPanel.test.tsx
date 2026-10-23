@@ -866,6 +866,16 @@ describe("«Agenti», the previous sessions and the lanes of the last day", () =
     },
   });
 
+  it("keeps the previous sessions closed until asked for, so a long list does not push the chat away", async () => {
+    historyReply = HISTORY();
+    show("agent=SCOUT-1");
+    const details = (await screen.findByTestId("panel-history-details")) as HTMLDetailsElement;
+    expect(details.open).toBe(false);
+    expect(within(details).getByText(/sessioni precedenti/i)).toBeInTheDocument();
+    fireEvent.click(details.querySelector("summary")!);
+    expect(details.open).toBe(true);
+  });
+
   it("tells the previous sessions of the agent in view, how long each lasted and how it ended", async () => {
     historyReply = HISTORY();
     show("agent=SCOUT-1");

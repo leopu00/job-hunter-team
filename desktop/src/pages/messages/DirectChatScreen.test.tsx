@@ -220,13 +220,91 @@ describe("DirectChatScreen", () => {
     await waitFor(() => expect(status).toHaveTextContent("Team collegato"));
   });
 
+  it("says the connection does not answer when it stays in «connecting», with the retry, instead of waiting in silence", async () => {
+    viewport(1000, 500);
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      const { mock } = client({ state: "connecting" });
+      render(<DirectChatScreen client={mock} />);
+      const status = await screen.findByTestId("direct-chat-status");
+      expect(status).toHaveTextContent("Connessione sicura al team");
+      expect(within(status).queryByRole("button", { name: "Riprova" })).toBeNull();
+
+      await act(async () => { vi.advanceTimersByTime(8_100); });
+      expect(status).toHaveTextContent("La connessione al team non risponde");
+      expect(status).toHaveAttribute("role", "alert");
+      await userEvent.setup({ advanceTimers: vi.advanceTimersByTime }).click(within(status).getByRole("button", { name: "Riprova" }));
+      expect(mock.reconnect).toHaveBeenCalledOnce();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("keeps a failed read on the bar when a «ready» follows, and clears it when a later read gets through", async () => {
+    viewport(1000, 500);
+    const { mock, emit } = client({ state: "ready" });
+    vi.mocked(mock.read).mockRejectedValueOnce({ code: "read_failed" });
+    render(<DirectChatScreen client={mock} />);
+    const status = await screen.findByTestId("direct-chat-status");
+    await waitFor(() => expect(status).toHaveAttribute("role", "alert"));
+
+    // the connection says «ready» again: it did not read, so the failure is still there
+    act(() => emit({ kind: "status", status: { state: "ready" } }));
+    expect(status).toHaveAttribute("role", "alert");
+
+    // the next read gets through: the bar is calm again
+    await waitFor(() => expect(status).toHaveAttribute("role", "status"), { timeout: 8_000 });
+  }, 12_000);
+
+  it("still ends a connection error when the connection comes back", async () => {
+    viewport(1000, 500);
+    const { mock, emit } = client({ state: "ready" });
+    render(<DirectChatScreen client={mock} />);
+    const status = await screen.findByTestId("direct-chat-status");
+    await waitFor(() => expect(status).toHaveAttribute("role", "status"));
+    act(() => emit({ kind: "error", operation: "connect", code: "tunnel_unavailable" }));
+    expect(status).toHaveAttribute("role", "alert");
+    act(() => emit({ kind: "status", status: { state: "ready" } }));
+    expect(status).toHaveAttribute("role", "status");
+  });
+
+  it("keeps a failure the native side reports for a read or a send when a «ready» follows", async () => {
+    viewport(1000, 500);
+    const { mock, emit } = client({ state: "ready" });
+    render(<DirectChatScreen client={mock} />);
+    const status = await screen.findByTestId("direct-chat-status");
+    await waitFor(() => expect(status).toHaveAttribute("role", "status"));
+    act(() => emit({ kind: "error", operation: "send", code: "tunnel_unavailable" }));
+    expect(status).toHaveAttribute("role", "alert");
+    act(() => emit({ kind: "status", status: { state: "ready" } }));
+    expect(status).toHaveAttribute("role", "alert");
+  });
+
+  it("does not say it while the connection is made in time", async () => {
+    viewport(1000, 500);
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      const { mock, emit } = client({ state: "connecting" });
+      render(<DirectChatScreen client={mock} />);
+      const status = await screen.findByTestId("direct-chat-status");
+      await act(async () => { vi.advanceTimersByTime(3_000); });
+      act(() => emit({ kind: "status", status: { state: "ready" } }));
+      await act(async () => { vi.advanceTimersByTime(10_000); });
+      expect(status).toHaveTextContent("Team collegato");
+      expect(status).not.toHaveTextContent("non risponde");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("tells a known error with the app's sentence and action, never the raw code", async () => {
     viewport(1000, 500);
     const { mock } = client({ state: "error", code: "tunnel_unavailable" });
     render(<DirectChatScreen client={mock} />);
 
     const status = await screen.findByTestId("direct-chat-status");
-    expect(status).toHaveTextContent(ERROR_CATALOG.tunnel_unavailable.text.it);
+    // the bar exists while the status is still «connecting»: wait for the error it is told with
+    await waitFor(() => expect(status).toHaveTextContent(ERROR_CATALOG.tunnel_unavailable.text.it));
     expect(status).toHaveTextContent(ERROR_CATALOG.tunnel_unavailable.action.it);
     expect(status).not.toHaveTextContent("tunnel_unavailable");
     expect(status).not.toHaveTextContent("Codice");

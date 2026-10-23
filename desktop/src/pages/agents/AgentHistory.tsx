@@ -83,10 +83,16 @@ export function SessionHistory({ t, history, session, nowS }: { t: AgentsPanelTe
   }
   return (
     <section data-testid="panel-history" aria-label={t.historyTitle} className="mt-3">
-      <h2 className="text-[11px] font-semibold uppercase tracking-widest mb-1" style={{ color: "var(--color-bright)" }}>
-        {t.historyTitle}
-      </h2>
-      {body}
+      {/* Closed until asked for: a long list of sessions must not push the chat out of the page. */}
+      <details data-testid="panel-history-details">
+        <summary
+          className="cursor-pointer select-none text-[11px] font-semibold uppercase tracking-widest"
+          style={{ color: "var(--color-bright)" }}
+        >
+          {t.historyTitle}
+        </summary>
+        <div className="mt-1">{body}</div>
+      </details>
     </section>
   );
 }

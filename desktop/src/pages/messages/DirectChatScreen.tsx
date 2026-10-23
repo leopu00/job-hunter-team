@@ -99,6 +99,9 @@ function clientMessageId(): string {
   return globalThis.crypto?.randomUUID?.() ?? `local-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
 
+/** How long «connecting» may last before the bar says so and offers the retry (never a silent wait). */
+const CONNECTING_SLOW_MS = 8_000;
+
 function StatusBar({
   status,
   operationError,
@@ -112,9 +115,18 @@ function StatusBar({
 }) {
   const locale = appLocale();
   const t = DIRECT_CHAT_TEXT[locale];
-  const failed = status.state === "error" || status.state === "disconnected";
+  const [slow, setSlow] = useState(false);
+  const connecting = status.state === "connecting";
+  useEffect(() => {
+    setSlow(false);
+    if (!connecting) return;
+    const timer = setTimeout(() => setSlow(true), CONNECTING_SLOW_MS);
+    return () => clearTimeout(timer);
+  }, [connecting]);
+  const stuck = connecting && slow && !reconnecting;
+  const failed = status.state === "error" || status.state === "disconnected" || stuck;
   const code = safeCode(operationError ?? status.code);
-  let text = t.connecting;
+  let text = stuck ? t.connectingSlow : t.connecting;
   if (status.state === "ready") text = t.connected;
   if (status.state === "disconnected") text = t.disconnected;
   if (status.state === "error") text = t.unavailable;
@@ -184,6 +196,13 @@ export default function DirectChatScreen({
   const [loading, setLoading] = useState(false);
   const [reconnecting, setReconnecting] = useState(false);
   const [operationError, setOperationError] = useState<string | null>(null);
+  // Where the error on the bar came from: the connection (a «ready» that follows ends it) or a read or a
+  // send that failed (it stays on the bar until a later read or send gets through, whatever the status says).
+  const connectionError = useRef(false);
+  const failOperation = (code: string) => {
+    connectionError.current = false;
+    setOperationError(code);
+  };
   // Why an answer written in the composer did not go: it stays in the box.
   const [answerRefusal, setAnswerRefusal] = useState<string | null>(null);
   // What the receipt said of each message of the person's in this view; only a receipt says it.
@@ -227,7 +246,10 @@ export default function DirectChatScreen({
       if (!active) return;
       if (event.kind === "status") {
         setStatus(event.status);
-        if (event.status.state === "ready") setOperationError(null);
+        if (event.status.state === "ready" && connectionError.current) {
+          connectionError.current = false;
+          setOperationError(null);
+        }
       } else if (event.kind === "messages" && event.agentId === currentAgent.current) {
         setMessages((current) => sameAsBefore(current, mergeMessages(current, event.page)));
         if (Array.isArray(event.page.questions)) {
@@ -235,6 +257,8 @@ export default function DirectChatScreen({
           setQuestions((current) => sameAsBefore(current, questionsOf(event.page)));
         }
       } else if (event.kind === "error") {
+        // The native side says which operation failed: a «ready» ends a failed connection or stream only.
+        connectionError.current = event.operation === "connect" || event.operation === "stream";
         setOperationError(safeCode(event.code) ?? "unknown");
       }
     };
@@ -314,7 +338,7 @@ export default function DirectChatScreen({
         return null;
       } catch (error) {
         const code = errorCode(error) ?? "read_failed";
-        if (active) setOperationError(code);
+        if (active) failOperation(code);
         return code;
       } finally {
         reading = false;
@@ -474,7 +498,7 @@ export default function DirectChatScreen({
       setMessages((current) => current.filter((message) => message.id !== id));
       // what was typed goes back to the composer; a suggestion leaves the composer as it is
       if (suggested === undefined) setText(typed);
-      setOperationError(errorCode(error) ?? "send_failed");
+      failOperation(errorCode(error) ?? "send_failed");
     } finally {
       setSending(false);
       setInFlight(null);
@@ -492,7 +516,7 @@ export default function DirectChatScreen({
       const receipt = await client.enter({ agentId, messageId });
       setOutcomes((current) => new Map(current).set(messageId, outcomeOf(receipt, before.presses + 1)));
     } catch (error) {
-      setOperationError(errorCode(error) ?? "send_failed");
+      failOperation(errorCode(error) ?? "send_failed");
     } finally {
       setPressing(null);
     }
@@ -518,7 +542,7 @@ export default function DirectChatScreen({
       }
       // why the chat could not take it (an older image, the read-only link, a fallen connection): the
       // status bar says it with the app's sentence, the card that the answer did not go
-      if (code) setOperationError(code);
+      if (code) failOperation(code);
       return t.answerErrors.answer_failed;
     }
   }

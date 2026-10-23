@@ -81,12 +81,25 @@ export function VoiceInputControl(props: VoiceInputControlProps) {
 
       {voice.preview && <p className="voice-input__preview" aria-live="polite">{voice.preview}</p>}
 
-      {(state.phase === "error" || unavailable) && (
-        <div className="voice-input__error" role="alert">
-          <span>{voiceErrorCopy(state.error, language)}</span>
-          {!unavailable && !permissionDenied && <button type="button" onClick={() => void voice.start()} disabled={props.disabled}>{t.retry}</button>}
-        </div>
-      )}
+      {(state.phase === "error" || unavailable) && (() => {
+        // Only an icon with the hint (title and accessible name): the sentence is not a red box in the composer.
+        const retryable = !unavailable && !permissionDenied;
+        const hint = voiceErrorCopy(state.error, language);
+        const title = retryable ? `${hint} ${t.retry}` : hint;
+        return (
+          <button
+            className="voice-input__mic voice-input__mic--off"
+            type="button"
+            data-testid="voice-input-unavailable"
+            title={title}
+            aria-label={title}
+            aria-disabled={!retryable || props.disabled ? true : undefined}
+            onClick={retryable && !props.disabled ? () => void voice.start() : undefined}
+          >
+            <span aria-hidden="true">●</span>
+          </button>
+        );
+      })()}
 
       {state.phase === "idle" && state.available && state.transcript && (
         <span className="voice-input__hint" role="status">{t.transcriptInserted}</span>
