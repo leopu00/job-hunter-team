@@ -118,6 +118,13 @@ export function renderChatText(text: string): ReactNode[] {
 type ConversationItem = ReturnType<typeof conversationItems>[number];
 type GroupedConversationItem = ConversationItem & { repeated?: number };
 
+/** Two bubbles are interchangeable only when they keep the same clickable replies too. */
+function sameSuggestions(left: DirectChatMessage, right: DirectChatMessage): boolean {
+  const leftLines = left.suggestions ?? [];
+  const rightLines = right.suggestions ?? [];
+  return leftLines.length === rightLines.length && leftLines.every((line, index) => line === rightLines[index]);
+}
+
 /** A run of identical automatic updates is one readable bubble with its count. */
 export function groupRepeatedMessages(items: ConversationItem[]): GroupedConversationItem[] {
   const grouped: GroupedConversationItem[] = [];
@@ -130,6 +137,7 @@ export function groupRepeatedMessages(items: ConversationItem[]): GroupedConvers
       previous.message.role === item.message.role &&
       item.message.text === previous.message.text &&
       item.message.kind === previous.message.kind &&
+      sameSuggestions(previous.message, item.message) &&
       dayKey(item.at) === dayKey(previous.at);
     if (sameMessage) {
       grouped[grouped.length - 1] = { ...item, repeated: (previous.repeated ?? 1) + 1 };

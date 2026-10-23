@@ -660,6 +660,19 @@ describe("DirectChatScreen: where the text goes, and when it is delivered", () =
     expect(grouped[0]).toMatchObject({ key: "m:u4", repeated: 4 });
   });
 
+  it("keeps repeated updates apart when their suggested replies differ", () => {
+    const messages = [
+      { id: "u1", role: "agent" as const, text: "Captain update", at: 1, kind: "info" as const, suggestions: ["Read it", "Later"] },
+      { id: "u2", role: "agent" as const, text: "Captain update", at: 2, kind: "info" as const, suggestions: ["Open details", "Later"] },
+    ];
+    const grouped = groupRepeatedMessages(messages.map((message) => ({ type: "message" as const, at: message.at, key: `m:${message.id}`, message })));
+    expect(grouped).toHaveLength(2);
+    expect(grouped.map((item) => item.type === "message" ? item.message.suggestions : [])).toEqual([
+      ["Read it", "Later"],
+      ["Open details", "Later"],
+    ]);
+  });
+
   it("a system line with a code the app does not know, or a code on another role, keeps the words it came with", async () => {
     viewport(1280, 800);
     const { mock } = client();
