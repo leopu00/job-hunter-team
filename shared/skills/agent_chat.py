@@ -54,6 +54,7 @@ import os
 import re
 import shutil
 import signal
+import sqlite3
 import subprocess
 import sys
 import time
@@ -82,6 +83,13 @@ EXIT = {
     "fence_missing": 129,
     # Below 120: from 128 up an exit is also a signal's (130 is an interrupt).
     "agent_not_at_prompt": 119,
+    # The answer to an agent's question (`answer`): the four codes the app knows, and an image
+    # without the questions module or its database.
+    "question_closed": 118,
+    "invalid_choice": 117,
+    "question_not_found": 116,
+    "answer_failed": 115,
+    "answer_unavailable": 114,
 }
 
 # jht-tmux-send's own exits: 2 no session, 3 the terminal never took the text,
@@ -111,7 +119,7 @@ DEDUP_TAIL = 1048576
 # The ids already delivered, next to the chat: one short line each.
 DELIVERED_FILE = "chat-delivered.jsonl"
 # The codes a system line of the chat may carry to the app; the app has a sentence for each.
-SYSTEM_CODES = frozenset({"mail_not_taken"})
+SYSTEM_CODES = frozenset({"mail_not_taken", "message_too_long"})
 LOCK_FILE = ".chat-send.lock"
 MAX_LINE = 65536
 PAGE_ROWS = 120
@@ -173,7 +181,11 @@ def read(agent: str, cursor_text: str | None) -> dict:
         raise Refusal("chat_invalid")
     path = chat_path(agent)
     if not path.is_file():
-        return {"messages": [], "cursor": "0"}
+        page = {"messages": [], "cursor": "0"}
+        found = questions_of(agent)
+        if found is not None:
+            page["questions"] = found
+        return page
     size = path.stat().st_size
     if cursor_text in (None, ""):
         cursor = max(0, size - HISTORY_TAIL)
@@ -209,6 +221,8 @@ def read(agent: str, cursor_text: str | None) -> dict:
                     at = 0.0
                 mid = str(row.get("message_id") or hashlib.sha256((agent + ":" + str(start) + ":").encode() + raw).hexdigest())
                 shown = {"id": mid, "role": role, "text": text, "at": at}
+                if role == "agent":
+                    shown.update(_agent_fields(row))
                 code = row.get("code")
                 if role == "system" and isinstance(code, str) and code in SYSTEM_CODES:
                     shown["code"] = code        # a closed code the app may say in its own language
@@ -216,7 +230,11 @@ def read(agent: str, cursor_text: str | None) -> dict:
             cursor = handle.tell()
     except OSError:
         raise Refusal("read_failed")
-    return {"messages": messages, "cursor": str(cursor)}
+    page = {"messages": messages, "cursor": str(cursor)}
+    found = questions_of(agent)
+    if found is not None:
+        page["questions"] = found       # absent: an image without the questions (the app shows no answer)
+    return page
 
 
 # ── send ────────────────────────────────────────────────────────────────────
@@ -600,12 +618,239 @@ def _stdin_text() -> str:
         raise Refusal("chat_invalid")
 
 
+# ── the contract with the app, in one place (tests/test_agent_chat_contract.py holds it) ──────
+# A message of the agent may carry a kind (jht-send --kind); a question carries the tipo of
+# agent_questions, in Italian, and its answer an origin. The app only ever gets these codes.
+MESSAGE_KINDS = frozenset({"urgent", "blocked", "completed", "info"})
+QUESTION_KIND_OF_TIPO = {
+    "urgente": "urgent",
+    "blocco": "blocked",
+    "domanda": "question",
+    "completamento": "completed",
+    "comunicazione": "info",
+}
+ORIGIN_OF = {"utente": "user", "scadenza": "expiry"}      # anything else is "unknown", never "user"
+MAX_SUGGESTIONS = 5
+MAX_SUGGESTION = 240
+QUESTIONS_SHOWN = 40
+QUESTION_ID = re.compile(r"^[A-Za-z0-9:_-]{1,96}$")
+CHOICE_ID = re.compile(r"^[a-z0-9_-]{1,32}$")
+MAX_CHOICES = 8
+MAX_ANSWER_TEXT = 2000
+MAX_ANSWER_STDIN = MAX_ANSWER_TEXT * 4 + 1024
+# What agent_questions refuses, said as the four codes of the app; any other code is answer_failed.
+ANSWER_REFUSAL = {
+    "choices_invalid": "invalid_choice",
+    "choice_unknown": "invalid_choice",
+    "choice_duplicate": "invalid_choice",
+    "single_choice_only": "invalid_choice",
+    "postpone_goes_alone": "invalid_choice",
+    "text_invalid": "invalid_choice",
+    "free_text_not_allowed": "invalid_choice",
+    "text_too_long": "invalid_choice",
+    "empty_answer": "invalid_choice",
+    "question_unknown": "question_not_found",
+    "question_invalid": "question_not_found",
+}
+# The one line the agent gets when its question is answered: fixed words, nothing the person wrote.
+ANSWER_WAKE = "[ANSWER] The user answered one of your questions. Run: jht-check-user-replies --agent {agent}"
+
+
+def _agent_fields(row: dict) -> dict:
+    """The kind and the suggested replies of an agent's line, only from the closed lists."""
+    out: dict = {}
+    kind = row.get("kind")
+    if isinstance(kind, str) and kind in MESSAGE_KINDS and kind != "info":
+        out["kind"] = kind
+    choices = row.get("choices")
+    if isinstance(choices, list):
+        labels = []
+        for choice in choices[:MAX_SUGGESTIONS]:
+            label = choice.get("label") if isinstance(choice, dict) else None
+            if isinstance(label, str) and label.strip() and len(label) <= MAX_SUGGESTION and "\n" not in label:
+                labels.append(clean_text(label))
+        if len(labels) >= 2:
+            out["suggestions"] = labels
+    return out
+
+
+def _seconds(value) -> float | None:
+    """An instant of jobs.db (ISO with Z, or SQLite's UTC «YYYY-MM-DD HH:MM:SS») in UTC seconds."""
+    if not isinstance(value, str) or not value.strip():
+        return None
+    from datetime import datetime, timezone
+    text = value.strip().replace("Z", "+00:00")
+    try:
+        moment = datetime.fromisoformat(text)
+    except ValueError:
+        return None
+    if moment.tzinfo is None:
+        moment = moment.replace(tzinfo=timezone.utc)
+    return moment.timestamp()
+
+
+def _questions_module():
+    """shared/skills/agent_questions.py of this image, or None (an older image)."""
+    for directory in (Path(__file__).resolve().parent, Path("/app/shared/skills")):
+        if (directory / "agent_questions.py").is_file():
+            if str(directory) not in sys.path:
+                sys.path.insert(0, str(directory))
+            try:
+                import agent_questions  # noqa: PLC0415
+            except Exception:
+                return None
+            return agent_questions
+    return None
+
+
+def _db_path() -> Path:
+    return Path(os.environ.get("JHT_DB") or (jht_home() / "jobs.db"))
+
+
+def _question_view(aq, conn, source_id: str, created_at) -> dict | None:
+    try:
+        found = aq.load_question(conn, source_id)
+    except Exception:
+        return None
+    if not found:
+        return None
+    payload = found["payload"]
+    options = [{"id": o["id"], "label": o["label"]} for o in payload.get("opzioni", [])
+               if isinstance(o, dict) and isinstance(o.get("id"), str) and isinstance(o.get("label"), str)]
+    expires = _seconds(payload.get("scadenza"))
+    view = {
+        "id": source_id,
+        "at": _seconds(created_at) or 0.0,
+        "kind": QUESTION_KIND_OF_TIPO.get(payload.get("tipo"), "info"),
+        "subject": payload.get("oggetto") or "",
+        "text": payload.get("testo") or "",
+        "options": options,
+        "multiple": bool(payload.get("multipla")),
+        "free": bool(payload.get("libera")),
+        "expiresAt": expires,
+        "state": "open",
+    }
+    stored = aq.existing_answer(conn, source_id)
+    if stored:
+        origin = ORIGIN_OF.get(stored.get("origine"), "unknown")
+        seen = conn.execute("SELECT agent_seen_reply_at FROM pending_user_messages WHERE source_id = ?",
+                            (aq.ANSWER_PREFIX + source_id,)).fetchone()
+        answer = {
+            "choices": [c for c in stored.get("scelte", []) if isinstance(c, str)],
+            "at": _seconds(stored.get("ts")) or 0.0,
+            "origin": origin,
+            "seenAt": _seconds(seen[0]) if seen else None,
+        }
+        if isinstance(stored.get("testo"), str) and stored["testo"]:
+            answer["text"] = stored["testo"]
+        view["answer"] = answer
+        view["state"] = "expired" if origin == "expiry" else "answered"
+    elif expires is not None and expires <= time.time():
+        view["state"] = "expired"
+    return view
+
+
+def questions_of(agent: str) -> list | None:
+    """The agent's latest questions, newest first, read-only. None when this image has none to give."""
+    aq = _questions_module()
+    path = _db_path()
+    if aq is None or not path.is_file():
+        return None
+    try:
+        conn = sqlite3.connect(f"file:{path}?mode=ro", uri=True, timeout=5)
+    except sqlite3.Error:
+        return None
+    try:
+        rows = conn.execute(
+            "SELECT source_id, created_at FROM pending_user_messages WHERE agent = ? AND source_action = ? "
+            "ORDER BY id DESC LIMIT ?",
+            (agent, aq.SOURCE_ACTION, QUESTIONS_SHOWN),
+        ).fetchall()
+        return [view for view in (_question_view(aq, conn, sid, at) for sid, at in rows) if view]
+    except sqlite3.Error:
+        return None
+    finally:
+        conn.close()
+
+
+def _wake_for_answer(agent: str, session: str) -> None:
+    """Best effort: one fixed line, only with the terminal at its prompt. The agent also looks by itself."""
+    try:
+        pane = capture_pane(session)
+        if pane is None or prompt_state(pane) != "ready":
+            return
+        binary = _delivery_binary()
+        subprocess.run([binary, session, ANSWER_WAKE.format(agent=agent)], capture_output=True,
+                       timeout=DELIVERY_TIMEOUT_S, check=False)
+    except (Refusal, OSError, subprocess.SubprocessError):
+        return
+
+
+def answer(agent: str, question_id: str, raw: str) -> dict:
+    """The person's answer to one of this agent's questions, from the app. The first answer wins."""
+    if not QUESTION_ID.match(question_id or ""):
+        raise Refusal("chat_invalid")
+    try:
+        request = json.loads(raw)
+    except (ValueError, TypeError):
+        raise Refusal("chat_invalid")
+    if not isinstance(request, dict):
+        raise Refusal("chat_invalid")
+    choices = request.get("choices", [])
+    text = request.get("text")
+    if (not isinstance(choices, list) or len(choices) > MAX_CHOICES
+            or not all(isinstance(c, str) and CHOICE_ID.match(c) for c in choices)):
+        raise Refusal("invalid_choice")
+    if text is not None and (not isinstance(text, str) or len(text) > MAX_ANSWER_TEXT or "\x00" in text):
+        raise Refusal("invalid_choice")
+    aq = _questions_module()
+    path = _db_path()
+    if aq is None or not path.is_file():
+        raise Refusal("answer_unavailable")
+    try:
+        conn = sqlite3.connect(str(path), timeout=10)
+    except sqlite3.Error:
+        raise Refusal("answer_failed")
+    try:
+        try:
+            found = aq.load_question(conn, question_id)
+        except aq.QuestionRejected:
+            raise Refusal("question_not_found")
+        if not found or found["row"].get("agent") != agent:
+            raise Refusal("question_not_found")
+        try:
+            recorded = aq.record_answer(conn, question_id, choices, clean_text(text) if text else "", canale="desktop")
+        except aq.AnswerRejected as error:
+            raise Refusal(ANSWER_REFUSAL.get(error.code, "answer_failed"))
+        if recorded.status != "recorded":
+            raise Refusal("question_closed")      # answered already, or expired with its default
+        at = _seconds(recorded.answer.get("ts")) or time.time()
+    except sqlite3.Error:
+        raise Refusal("answer_failed")
+    finally:
+        conn.close()
+    _wake_for_answer(agent, AGENTS[agent])
+    return {"questionId": question_id, "accepted": True, "at": at}
+
+
+def _answer_stdin() -> str:
+    data = sys.stdin.buffer.read(MAX_ANSWER_STDIN + 1)
+    if len(data) > MAX_ANSWER_STDIN:
+        raise Refusal("invalid_choice")
+    try:
+        return data.decode("utf-8")
+    except UnicodeDecodeError:
+        raise Refusal("chat_invalid")
+
+
 def run(argv: list[str]) -> dict:
     if len(argv) >= 2 and argv[0] == "read" and len(argv) in (2, 3):
         return read(agent_of(argv[1]), argv[2] if len(argv) == 3 else None)
     if len(argv) == 3 and argv[0] == "send":
         agent = agent_of(argv[1])
         return send(agent, argv[2], _stdin_text())
+    if len(argv) == 3 and argv[0] == "answer":
+        return answer(agent_of(argv[1]), argv[2], _answer_stdin())
     raise Refusal("chat_invalid")
 
 
