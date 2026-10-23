@@ -1251,6 +1251,14 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
     "This VPS already runs Job Hunter Team with Docker. Moving it to Podman needs a migration, which the app cannot do by itself yet.",
     "The team’s data stays where it is, on the VPS: nothing was moved or deleted. Connect to the team that is already there, without reinstalling it, or choose another VPS.",
   ),
+  // install.sh on a VPS whose team is running (exit 84): installing over it would change its
+  // configuration under it. The install stopped before changing anything.
+  vps_team_running: copy(
+    "Su questa VPS Job Hunter Team è acceso: installarlo di nuovo ora cambierebbe la sua configurazione mentre gira.",
+    "Non è stato cambiato nulla. Collegati al team che c’è già, senza reinstallarlo; oppure fermalo sulla VPS con «jht down» e riprova.",
+    "Job Hunter Team is running on this VPS: installing it again now would change its configuration while it runs.",
+    "Nothing was changed. Connect to the team that is already there, without reinstalling it; or stop it on the VPS with «jht down» and try again.",
+  ),
   host_key_missing: copy(
     "L’identità SSH della VPS non è ancora stata confermata.",
     "Conferma l’impronta della VPS prima di continuare.",

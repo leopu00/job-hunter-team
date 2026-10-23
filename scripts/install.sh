@@ -2194,19 +2194,61 @@ check_free_disk() {
 # Test channel: pull the image and refuse it unless its RepoDigests carry the
 # expected digest, before anything of the runtime is published. A tag can
 # move; the digest cannot.
+# The engine the runtime will run on, in RUNTIME_ENGINE. On the Mac's Podman
+# path DOCKER_CLI stays "docker" (no Docker client is resolved there): the JHT
+# machine is reached through its own connection, never through another Docker
+# that happens to be installed.
+set_runtime_engine() {
+  RUNTIME_ENGINE=("$DOCKER_CLI")
+  if podman_machine_mode; then
+    RUNTIME_ENGINE=(podman --connection "$PODMAN_MACHINE_NAME")
+  elif podman_native_mode; then
+    RUNTIME_ENGINE=(podman)
+  fi
+}
+
+# ── A team already running (re-install) ──────────────────────────────────
+# A re-install publishes a new compose (and, on the test channel, a new image
+# pin). The wrapper attests the running team against them: a team started
+# with the previous ones no longer matches, and `jht up`, `restart` and
+# `recreate` refuse it. So the installer stops before changing anything while
+# the team's containers run, and says how to go on. It never stops the agents
+# by itself. Its own exit, like 85, so the app can say what it means: a line
+# `JHT_ERROR team_running` on stderr, then exit 84.
+TEAM_RUNNING_EXIT=84
+TEAM_CONTAINERS="jht jht-broker jht-telegram"
+refuse_running_team() {
+  set_runtime_engine
+  if [ "$DRY_RUN" -eq 1 ]; then
+    printf "  ${DIM}[dry-run]${RESET} would refuse if %s run (%s ps)\n" "$TEAM_CONTAINERS" "${RUNTIME_ENGINE[*]}"
+    return 0
+  fi
+  local names name running=""
+  if ! names="$("${RUNTIME_ENGINE[@]}" ps --format '{{.Names}}' 2>/dev/null)"; then
+    # Nothing of JHT published here before: no team of ours can be running.
+    [ -e "$RUNTIME_DIR/.runtime-integrity" ] || [ -L "$RUNTIME_DIR/.runtime-integrity" ] || return 0
+    # Docker on Linux without the docker group yet: the same sudo as verify_docker_works.
+    if [ "${RUNTIME_ENGINE[0]}" != podman ] && { [ "$OS" = "linux" ] || [ "$OS" = "wsl" ]; }; then
+      names="$(sudo docker ps --format '{{.Names}}' 2>/dev/null)" \
+        || fail "Cannot list the running containers with docker: nothing was installed."
+    else
+      fail "Cannot list the running containers with ${RUNTIME_ENGINE[*]}: nothing was installed."
+    fi
+  fi
+  for name in $TEAM_CONTAINERS; do
+    printf '%s\n' "$names" | grep -Fqx "$name" && running="${running:+$running, }$name"
+  done
+  [ -z "$running" ] && return 0
+  printf 'JHT_ERROR %s\n' team_running >&2
+  printf "  ${RED}✗${RESET} %s\n" "team_running: Job Hunter Team is running on this computer ($running). Installing now would change its configuration under it, and jht could no longer start or restart it. Stop it with «jht down», run the installer again, then start it with «jht up». Nothing was changed: your profile and documents in ~/.jht and ~/Documents/Job Hunter Team stay where they are." >&2
+  exit "$TEAM_RUNNING_EXIT"
+}
+
 verify_test_image() {
   [ "$TEST_CHANNEL" -eq 1 ] || return 0
   local wanted="ghcr.io/leopu00/jht@$EXPECTED_IMAGE_DIGEST" digests
-  # The engine the runtime will run on. On the Mac's Podman path DOCKER_CLI
-  # stays "docker" (no Docker client is resolved there): the image must be
-  # pulled and checked inside the JHT machine, through its own connection,
-  # never in another Docker that happens to be installed.
-  local engine=("$DOCKER_CLI")
-  if podman_machine_mode; then
-    engine=(podman --connection "$PODMAN_MACHINE_NAME")
-  elif podman_native_mode; then
-    engine=(podman)
-  fi
+  set_runtime_engine
+  local engine=("${RUNTIME_ENGINE[@]}")
   if [ "$DRY_RUN" -eq 1 ]; then
     printf "  ${DIM}[dry-run]${RESET} would pull %s with %s and require %s\n" "$IMAGE" "${engine[*]}" "$wanted"
     return 0
@@ -2225,6 +2267,7 @@ main_docker() {
   check_free_disk
   install_container_runtime
   verify_docker_works
+  refuse_running_team
   verify_test_image
   download_runtime_files
 }
