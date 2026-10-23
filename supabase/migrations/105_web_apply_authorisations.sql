@@ -111,7 +111,10 @@ BEGIN
             v_host := lower(substring(COALESCE(v_pos.url, '') FROM '^[A-Za-z][A-Za-z0-9+.-]*://([^/?#:]+)'));
             IF v_host IS NULL OR v_host !~ '^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)+$'
                OR v_host ~ '^[0-9]{1,3}(\.[0-9]{1,3}){3}$'
-               OR char_length(v_host) > 194 THEN
+               -- The door caps the summary at 200 characters.  Keep the
+               -- complete destination at its beginning, never a clipped
+               -- prefix whose registrable domain may be at the far right.
+               OR char_length(v_host) > 120 THEN
                 RETURN jsonb_build_object('error', 'not_found');
             END IF;
             -- Vacancy text is fenced before the confirmation.  A middle dot
@@ -120,7 +123,7 @@ BEGIN
             v_title := web_door.one_line(regexp_replace(COALESCE(v_pos.title, ''), '·', ' ', 'g'), 80);
             v_company := web_door.one_line(
                 regexp_replace(COALESCE(v_pos.company, ''), '·', ' ', 'g'),
-                GREATEST(0, 182 - char_length(v_host) - char_length(v_title)));
+                GREATEST(0, 180 - char_length(v_host) - char_length(v_title)));
         ELSE
             v_title := web_door.one_line(regexp_replace(COALESCE(v_pos.title, ''), '·', ' ', 'g'), 96);
             v_company := web_door.one_line(regexp_replace(COALESCE(v_pos.company, ''), '·', ' ', 'g'), 100);
@@ -131,7 +134,7 @@ BEGIN
                            ELSE jsonb_build_object('legacy_id', v_legacy)
                       END,
             'summary', CASE WHEN p_action = 'position.apply_authorize'
-                            THEN v_title || ' @ ' || v_company || ' · Destinazione: ' || v_host
+                            THEN 'Destinazione: ' || v_host || ' · ' || v_title || ' @ ' || v_company
                             ELSE web_door.one_line(v_title || ' @ ' || v_company, 200)
                        END,
             'confirm', p_action = 'position.apply_authorize');

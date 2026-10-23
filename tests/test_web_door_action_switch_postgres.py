@@ -219,8 +219,8 @@ def test_the_web_summary_keeps_a_valid_host_and_refuses_invalid_ones(cluster):
                         (83, "https://127.0.0.1/apply"), (84, "")):
         door._position(cluster, who.user, legacy)
         cluster(f"UPDATE public.positions SET url = $u${url}$u$ WHERE user_id = '{who.user}' AND legacy_id = {legacy}")
-    assert who.act("position.apply_authorize", {"legacy_id": 81})["summary"].endswith("\nDestinazione: acme.com")
-    assert who.act("position.apply_authorize", {"legacy_id": 82})["summary"].endswith("\nDestinazione: jobs.acme-company.com")
+    assert who.act("position.apply_authorize", {"legacy_id": 81})["summary"].startswith("Destinazione: acme.com · ")
+    assert who.act("position.apply_authorize", {"legacy_id": 82})["summary"].startswith("Destinazione: jobs.acme-company.com · ")
     assert who.act("position.apply_authorize", {"legacy_id": 83}) == {"ok": False, "error": "not_found"}
     assert who.act("position.apply_authorize", {"legacy_id": 84}) == {"ok": False, "error": "not_found"}
 
@@ -231,7 +231,7 @@ def test_a_long_title_never_truncates_the_host_in_the_web_summary(cluster):
     cluster(f"UPDATE public.positions SET title = repeat('x', 300), url = 'https://acme.com/apply' "
             f"WHERE user_id = '{who.user}' AND legacy_id = 81")
     summary = who.act("position.apply_authorize", {"legacy_id": 81})["summary"]
-    assert summary.endswith("\nDestinazione: acme.com")
+    assert summary.startswith("Destinazione: acme.com · ")
     assert len(summary) <= 200
 
 
@@ -244,7 +244,18 @@ def test_the_destination_is_its_own_line_after_one_line_labels(cluster):
                       url = 'https://jobs.real-company.example/apply'
                 WHERE user_id = '%s' AND legacy_id = 85""" % who.user)
     summary = who.act("position.apply_authorize", {"legacy_id": 85})["summary"]
-    assert summary == "Role title @ Acme acme.com Srl\nDestinazione: jobs.real-company.example"
+    assert summary == "Destinazione: jobs.real-company.example · Role title @ Acme acme.com Srl"
+
+
+def test_a_maximum_length_host_is_complete_at_the_start_of_the_summary(cluster):
+    who = door.Browser(cluster)
+    host = "a" * 57 + "." + "b" * 57 + ".com"
+    door._position(cluster, who.user, 86)
+    cluster(f"UPDATE public.positions SET title = repeat('t', 80), company = repeat('c', 80), "
+            f"url = 'https://{host}/apply' WHERE user_id = '{who.user}' AND legacy_id = 86")
+    summary = who.act("position.apply_authorize", {"legacy_id": 86})["summary"]
+    assert summary.startswith(f"Destinazione: {host} · ")
+    assert len(summary) <= 200
 
 
 def test_a_revoke_without_an_authorisation_leaves_the_position_untouched(cluster):
