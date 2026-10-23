@@ -323,7 +323,7 @@ class Box:
         p.write_text("\n".join(json.dumps(o) for o in objs) + "\n")
         self._touch(p, mtime)
 
-    def codex(self, objs, cwd=None, name="rollout-2026-10-18T10-00-00-aaa"):
+    def codex(self, objs, cwd=None, name="rollout-2026-10-18T10-00-00-aaa", mtime=None):
         day = datetime.fromtimestamp(NOW).strftime("%Y/%m/%d")
         d = self.src.codex / day
         d.mkdir(parents=True, exist_ok=True)
@@ -331,7 +331,7 @@ class Box:
                 "payload": {"id": "s", "cwd": cwd or str(self.cwd)}}
         p = d / f"{name}.jsonl"
         p.write_text("\n".join(json.dumps(o) for o in [meta] + objs) + "\n")
-        self._touch(p, None)
+        self._touch(p, mtime)
 
     def kimi(self, objs, log_lines=()):
         d = self.src.kimi / hashlib.md5(str(self.cwd).encode()).hexdigest() / KIMI_SESSION
@@ -377,6 +377,18 @@ def test_another_agents_log_is_not_mine(tmp_path):
     # and a Codex rollout of another cwd
     box.codex([x_event(T, "task_started"), x_item(NOW - 5)], cwd=str(other))
     assert box.derive()["state"] == "avviato_mai_partito"
+
+
+def test_a_codex_agent_that_wrote_less_recently_than_the_others_is_still_found(tmp_path):
+    """The Mentor answered once, then the busy agents wrote their rollouts after it: it ran."""
+    box = Box(tmp_path, uid="mentor")
+    box.codex([x_event(T, "task_started"), x_event(T + 9, "task_complete")], name="rollout-mentor", mtime=T + 9)
+    for n in range(6):
+        other = box.home / "agents" / f"scout-{n}"
+        other.mkdir()
+        box.codex([x_event(T, "task_started"), x_item(NOW - 5)], cwd=str(other), name=f"rollout-scout-{n}")
+    v = box.derive()
+    assert v["state"] == "idle", v
 
 
 def test_the_15_october_case_started_but_never_ran(tmp_path):
