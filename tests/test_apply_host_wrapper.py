@@ -9,6 +9,7 @@ before it reaches a command line. Synthetic only: a fake `docker`, no container,
 from __future__ import annotations
 
 import errno
+import json
 import os
 import pty
 import re
