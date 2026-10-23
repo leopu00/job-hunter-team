@@ -18,7 +18,8 @@ its refusals.
   note ID                                          the private note box (stdin)
   write-request ID --on|--off [--kind cv|cover_letter]
                                                    write_request.request_cv
-  apply-request ID --on|--off                      apply_gate consent, then
+  apply-preview ID                                 what the person confirms (no write)
+  apply-request ID --on --expect DIGEST|--off      apply_gate consent, then
                                                    apply_request.toggle
   recheck ID --on|--off                            positions.recheck_requested
 
@@ -176,10 +177,33 @@ def do_apply_request(args):
         if not consent.allowed:
             raise Refused(consent.reason, consent.detail)
     from apply_request import toggle
-    out, status = toggle(args.id, bool(args.on))
+    out, status = toggle(args.id, bool(args.on), args.expect)
     if status != 0:
         raise Refused(out.get("reason") or "apply_request_refused", out.get("detail"))
-    return {"apply_requested": bool(args.on), "result": out.get("reason")}
+    result = {"apply_requested": bool(args.on), "result": out.get("reason")}
+    if args.on:
+        # What the app records in the broker, from the host: the instant of this write and the
+        # destination of the preview the person confirmed.
+        result.update(instant=out.get("apply_requested_at"), destination=out.get("destination"))
+    else:
+        result["broker"] = out.get("broker")
+    return result
+
+
+def do_apply_preview(args):
+    """What the person confirms before authorising: «title @ company · host», and the digest a
+    confirmation must carry back. Nothing is written."""
+    from apply_request import _agent_caller, show
+    if _agent_caller():
+        raise Refused("agent_caller", "an application is authorised or withdrawn by the user only")
+    from apply_gate import consent_verdict
+    consent = consent_verdict()
+    if not consent.allowed:
+        raise Refused(consent.reason, consent.detail)
+    out, _status = show(args.id)
+    if not out.get("ok"):
+        raise Refused(out.get("reason") or "apply_request_refused", out.get("detail"))
+    return {"summary": out["summary"], "confirm": out["confirm"], "destination": out["destination"]}
 
 
 def do_recheck(args):
@@ -200,6 +224,7 @@ def do_recheck(args):
 OPS = {
     "feedback": do_feedback, "exclude": do_exclude, "restore": do_restore, "note": do_note,
     "write-request": do_write_request, "apply-request": do_apply_request, "recheck": do_recheck,
+    "apply-preview": do_apply_preview,
 }
 
 
@@ -233,7 +258,16 @@ def parser():
         switch.add_argument("--off", action="store_true")
         if name == "write-request":
             one.add_argument("--kind", choices=WRITE_KINDS, default="cv")
+        if name == "apply-request":
+            one.add_argument("--expect", type=confirm_digest)
+    sub.add_parser("apply-preview").add_argument("id", type=position_id)
     return p
+
+
+def confirm_digest(value):
+    if len(value) != 64 or any(ch not in "0123456789abcdef" for ch in value):
+        raise argparse.ArgumentTypeError("a sha-256 hex digest")
+    return value
 
 
 def main(argv=None):

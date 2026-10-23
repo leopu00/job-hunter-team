@@ -1649,6 +1649,75 @@ telegram_pair_all() {
   telegram_pair_finish "$was_enabled"
 }
 
+# ── Autorizzare una candidatura dall'host (T68) ───────────────────────────
+# Il CLOSER invia solo cio' che il broker ha registrato, e il broker registra
+# solo da canali che gli agenti non hanno: questo terminale dell'host e' uno.
+# Il container mostra l'anteprima («titolo @ azienda · host») con il suo
+# digest, la persona conferma qui, il container scrive il flag solo se la
+# posizione e' ancora quella vista, e l'host registra nel broker istante e
+# destinazione. Ogni campo che arriva dal container e' chiuso e ricontrollato
+# qui prima di finire in una riga di comando. Ritirare restringe e basta.
+apply_skill() {
+  docker exec -i "$ATTESTED_CONTAINER_ID" python3 /app/shared/skills/apply_request.py "$@" --host </dev/null
+}
+
+apply_host_command() {
+  local action="$1" id="${2:-}" line ok reason confirm destination instant summary answer
+  case "$id" in ''|0*|*[!0-9]*) err "uso: jht apply request|cancel <id>"; return 2 ;; esac
+  [ "${#id}" -le 10 ] || { err "uso: jht apply request|cancel <id>"; return 2; }
+  if [ "$action" = cancel ]; then
+    line="$(apply_skill cancel "$id")" || true
+    IFS=$'\t' read -r ok reason confirm destination instant summary <<<"$line"
+    if [ "$ok" != 1 ]; then
+      err "Ritiro non riuscito: ${reason:-nessuna risposta}."
+      return 1
+    fi
+    info "Ritirata #$id: non verra' inviata."
+    return 0
+  fi
+  line="$(apply_skill show "$id")" || true
+  IFS=$'\t' read -r ok reason confirm destination instant summary <<<"$line"
+  if [ "$ok" != 1 ]; then
+    err "Non autorizzabile: ${reason:-nessuna risposta dal container}."
+    return 1
+  fi
+  if ! printf '%s' "$confirm" | grep -Eq '^[0-9a-f]{64}$' \
+    || ! printf '%s' "$destination" | grep -Eq '^((web|email):[a-z0-9.-]{3,253}|portal:[a-z]{2,20})$'; then
+    err "Anteprima non valida: niente autorizzato."
+    return 1
+  fi
+  if [ ! -t 0 ]; then
+    err "Serve un terminale: l'autorizzazione si conferma a mano."
+    return 1
+  fi
+  printf '\n  #%s  %s\n\n' "$id" "$summary"
+  printf '  Con l'"'"'invio automatico acceso il team compila e INVIA la candidatura,\n'
+  printf '  senza un'"'"'altra conferma. Una volta partita non si richiama.\n'
+  printf '  Autorizzi questa candidatura? [s/N] '
+  IFS= read -r answer || answer=""
+  case "$answer" in s|S|si|SI|Si|sì|y|Y|yes) ;; *) info "Annullato: niente autorizzato."; return 1 ;; esac
+
+  local shown="$destination"
+  line="$(apply_skill request "$id" --expect "$confirm")" || true
+  IFS=$'\t' read -r ok reason confirm destination instant summary <<<"$line"
+  if [ "$ok" != 1 ]; then
+    err "Non autorizzata: ${reason:-nessuna risposta dal container}."
+    return 1
+  fi
+  if [ "$destination" != "$shown" ] || ! printf '%s' "$instant" | grep -Eq '^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\.[0-9]{3}Z$'; then
+    apply_skill cancel "$id" >/dev/null || true
+    err "Risposta del container non valida: autorizzazione ritirata, niente partira'."
+    return 1
+  fi
+  if ! broker_admin apply record "$id" "$instant" "$destination" >/dev/null; then
+    apply_skill cancel "$id" >/dev/null || true
+    err "Il broker non ha registrato l'autorizzazione: ritirata, niente partira'."
+    return 1
+  fi
+  info "Autorizzata #$id, verso $destination: il CLOSER la prendera' al prossimo giro."
+  return 0
+}
+
 telegram_command() {
   local action="${1:-status}"
   shift || true
@@ -4772,6 +4841,16 @@ case "$SUB" in
     ;;
 
   # ── Operativita': delegata al CLI Node nel container ───────────────────
+  apply)
+    require_compose_file
+    require_docker
+    ensure_up
+    case "${2:-}" in
+      request|cancel) apply_host_command "$2" "${3:-}"; exit $? ;;
+    esac
+    docker exec $EXEC_FLAGS -e JHT_HOST_TYPE="$JHT_HOST_TYPE" "$ATTESTED_CONTAINER_ID" node "$NODE_ENTRY" "$@"
+    ;;
+
   *)
     require_compose_file
     require_docker

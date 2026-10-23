@@ -12,7 +12,11 @@ import { apiPath, json, type ApiFetch } from "../shell/api-bridge";
  *   POST   user-exclude      exclude with a reason (and a note); DELETE puts it back
  *   POST   user-note         the private note; DELETE clears it
  *   POST   write-request     ask for the CV or the cover letter (`kind`); DELETE withdraws it
- *   POST   apply-request     authorise the application, only with `confirmed: true`; DELETE withdraws
+ *   POST   apply-request     authorise the application in two steps, as the website's door does:
+ *                            `{}` asks the team for the preview («title @ company · host») and its
+ *                            digest; `{confirmId}` carries that digest back and authorises exactly
+ *                            what was shown (the native side then records it in the team's broker,
+ *                            which the CLOSER checks before it sends). DELETE withdraws.
  *   POST   recheck-request   ask for a new analysis; DELETE withdraws it
  *
  * Before each write the native side is asked which team this is (`..._target`, local files only):
@@ -28,7 +32,7 @@ const WRITE = "existing_team_position_write";
 /** The native target says there is no existing team here: the page writes as it always did. */
 const NOT_AN_EXISTING_TEAM = new Set(["existing_team_runtime_required", "existing_team_runtime_selection_required"]);
 
-type Op = "feedback" | "exclude" | "restore" | "note" | "write_request" | "apply_request" | "recheck";
+type Op = "feedback" | "exclude" | "restore" | "note" | "write_request" | "apply_request" | "apply_preview" | "recheck";
 type NativeRequest = { op: Op; id: string } & Record<string, unknown>;
 type Body = Record<string, unknown>;
 type Build = (id: string, body: Body) => NativeRequest | Response;
@@ -50,6 +54,8 @@ function text(value: unknown): string | undefined {
 const FEEDBACK_ACTIONS = new Set(["like", "dislike", "hide", "star", "clear"]);
 const DIRECTIONS = new Set(["more_like_this", "less_like_this"]);
 const WRITE_KINDS = new Set(["cv", "cover_letter"]);
+/** The preview's digest (sha-256, lowercase hex), the only thing a confirmation carries. */
+const DIGEST = /^[0-9a-f]{64}$/;
 
 const ROUTES: Route[] = [
   {
@@ -133,15 +139,25 @@ const ROUTES: Route[] = [
   ...(["POST", "DELETE"] as const).map((method): Route => ({
     method,
     path: /^\/api\/positions\/(\d+)\/apply-request$/,
-    // The click that authorises is the authorisation to send: the page asks for it in its own
-    // dialog and says so with `confirmed`. Without it nothing is asked of the VPS.
-    build: (id, body) =>
-      method === "POST"
-        ? body.confirmed === true
-          ? { op: "apply_request", id, on: true, confirmed: true }
-          : json({ error: "position_write_not_confirmed" }, 400)
-        : { op: "apply_request", id, on: false, confirmed: false },
-    shape: (id, request) => ({ id, apply_requested: request.on === true, source: "vps" }),
+    // The click that authorises is the authorisation to send. The page's dialog shows the preview
+    // the team composed, and its confirmation carries the preview's digest back: an authorisation
+    // without one (the old `confirmed: true`) is not asked of the VPS.
+    build: (id, body) => {
+      if (method === "DELETE") return { op: "apply_request", id, on: false, confirmed: false };
+      if (body.confirmId === undefined && body.confirmed === undefined) return { op: "apply_preview", id };
+      if (typeof body.confirmId === "string" && DIGEST.test(body.confirmId)) {
+        return { op: "apply_request", id, on: true, confirmed: true, confirm: body.confirmId };
+      }
+      return json({ error: "position_write_not_confirmed" }, 400);
+    },
+    shape: (id, request, reply) => {
+      if (request.op === "apply_preview") {
+        const preview = typeof reply.summary === "string" && reply.summary.trim() && typeof reply.confirm === "string" && DIGEST.test(reply.confirm);
+        // A preview that cannot be shown is no state the dialog reads: it says the refusal.
+        return preview ? { ok: true, state: "awaiting_confirm", id: reply.confirm, summary: reply.summary, expiresAt: null, source: "vps" } : { ok: false, source: "vps" };
+      }
+      return { ok: true, state: "queued", id, apply_requested: request.on === true, source: "vps" };
+    },
   })),
   ...(["POST", "DELETE"] as const).map((method): Route => ({
     method,
@@ -162,7 +178,7 @@ function statusOf(code: string): number {
   if (code === "position_not_found") return 404;
   if (["position_write_read_only", "position_write_window_refused", "account_scope_unavailable", "account_scope_changed"].includes(code)) return 403;
   if (
-    ["position_write_request_invalid", "position_write_not_confirmed", "reason_invalid", "note_too_long", "note_invalid", "request_kind_invalid"].includes(code)
+    ["position_write_request_invalid", "position_write_not_confirmed", "reason_invalid", "note_too_long", "note_invalid", "request_kind_invalid", "confirmation_required"].includes(code)
   ) {
     return 400;
   }

@@ -1095,6 +1095,109 @@ function Invoke-BrokerAdmin {
   return $LASTEXITCODE
 }
 
+# Autorizzare una candidatura dall'host (T68). Il CLOSER invia solo cio' che il
+# broker ha registrato, e il broker registra solo da canali che gli agenti non
+# hanno: questo terminale dell'host e' uno. Il container mostra l'anteprima
+# («titolo @ azienda · host») con il suo digest, la persona conferma qui, il
+# container scrive il flag solo se la posizione e' ancora quella vista, e
+# l'host registra nel broker istante e destinazione. Ogni campo del container
+# e' chiuso e ricontrollato qui prima di finire in una riga di comando.
+function Read-ApplyFields {
+  param([AllowNull()] [string]$Line)
+  if ([string]::IsNullOrEmpty($Line)) { return $null }
+  $fields = $Line -split "`t"
+  if ($fields.Count -ne 6) { return $null }
+  return ,$fields
+}
+
+function Invoke-ApplySkill {
+  param([string]$ContainerId, [string[]]$SkillArgs)
+  $previous = [Console]::OutputEncoding
+  [Console]::OutputEncoding = [Text.UTF8Encoding]::new($false)
+  try {
+    # Tutte le righe, poi l'ultima: con `| Select-Object -First 1` $LASTEXITCODE
+    # non e' piu' quello di docker.
+    $lines = @(& docker exec $ContainerId python3 /app/shared/skills/apply_request.py @SkillArgs --host 2>$null)
+  } finally {
+    [Console]::OutputEncoding = $previous
+  }
+  if ($lines.Count -eq 0) { return $null }
+  return Read-ApplyFields ([string]$lines[$lines.Count - 1])
+}
+
+function Get-ApplyReason {
+  param($Fields)
+  if ($null -eq $Fields) { return 'nessuna risposta dal container' }
+  return [string]$Fields[1]
+}
+
+function Invoke-ApplyHostCommand {
+  param([string[]]$ApplyArgs)
+  $action = [string]$ApplyArgs[0]
+  $id = ''
+  if ($ApplyArgs.Count -ge 2) { $id = [string]$ApplyArgs[1] }
+  if ($id -cnotmatch '^[1-9][0-9]{0,9}$') { Write-Err 'uso: jht apply request|cancel <id>'; return 2 }
+  $containerId = Get-RunningComposeServiceId $Container
+  if (-not $containerId) { Write-Err 'Container JHT non attestabile.'; return 1 }
+
+  if ($action -ceq 'cancel') {
+    $withdrawn = Invoke-ApplySkill $containerId @('cancel', $id)
+    if ($null -eq $withdrawn -or $withdrawn[0] -cne '1') {
+      Write-Err "Ritiro non riuscito: $(Get-ApplyReason $withdrawn)."
+      return 1
+    }
+    Write-Info "Ritirata #${id}: non verra' inviata."
+    return 0
+  }
+
+  $shown = Invoke-ApplySkill $containerId @('show', $id)
+  if ($null -eq $shown -or $shown[0] -cne '1') {
+    Write-Err "Non autorizzabile: $(Get-ApplyReason $shown)."
+    return 1
+  }
+  $confirm = [string]$shown[2]
+  $shownDestination = [string]$shown[3]
+  if ($confirm -cnotmatch '^[0-9a-f]{64}$' -or $shownDestination -cnotmatch '^((web|email):[a-z0-9.-]{3,253}|portal:[a-z]{2,20})$') {
+    Write-Err 'Anteprima non valida: niente autorizzato.'
+    return 1
+  }
+  if ([Console]::IsInputRedirected -or -not [Environment]::UserInteractive) {
+    Write-Err "Serve un terminale: l'autorizzazione si conferma a mano."
+    return 1
+  }
+  Write-Host ''
+  Write-Host "  #${id}  $([string]$shown[5])"
+  Write-Host ''
+  Write-Host "  Con l'invio automatico acceso il team compila e INVIA la candidatura,"
+  Write-Host "  senza un'altra conferma. Una volta partita non si richiama."
+  $answer = Read-Host '  Autorizzi questa candidatura? [s/N]'
+  if (@('s', 'si', 'sì', 'y', 'yes') -notcontains ([string]$answer).Trim().ToLowerInvariant()) {
+    Write-Info 'Annullato: niente autorizzato.'
+    return 1
+  }
+
+  $written = Invoke-ApplySkill $containerId @('request', $id, '--expect', $confirm)
+  if ($null -eq $written -or $written[0] -cne '1') {
+    Write-Err "Non autorizzata: $(Get-ApplyReason $written)."
+    return 1
+  }
+  $destination = [string]$written[3]
+  $instant = [string]$written[4]
+  if ($destination -cne $shownDestination -or $instant -cnotmatch '^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\.[0-9]{3}Z$') {
+    $null = Invoke-ApplySkill $containerId @('cancel', $id)
+    Write-Err "Risposta del container non valida: autorizzazione ritirata, niente partira'."
+    return 1
+  }
+  $recorded = Invoke-BrokerAdmin -InputText '' apply record $id $instant $destination
+  if ($recorded -ne 0) {
+    $null = Invoke-ApplySkill $containerId @('cancel', $id)
+    Write-Err "Il broker non ha registrato l'autorizzazione: ritirata, niente partira'."
+    return 1
+  }
+  Write-Info "Autorizzata #${id}, verso ${destination}: il CLOSER la prendera' al prossimo giro."
+  return 0
+}
+
 function Invoke-TelegramAdmin {
   param([string]$InputText = $null, [Parameter(ValueFromRemainingArguments)] [string[]]$AdminArgs)
   $telegramId = Get-RunningComposeServiceId $TelegramContainer
@@ -3127,6 +3230,17 @@ switch ($Sub) {
     Ensure-Up
     Invoke-HostDownload $Rest
     exit $script:HostDownloadExitCode
+  }
+
+  'apply' {
+    Require-ComposeFile
+    Require-Docker
+    Ensure-Up
+    if ($Rest.Count -ge 1 -and @('request', 'cancel') -ccontains [string]$Rest[0]) {
+      exit (Invoke-ApplyHostCommand $Rest)
+    }
+    & docker exec @ExecFlags -e "JHT_HOST_TYPE=$env:JHT_HOST_TYPE" $Container node $NodeEntry $Sub @Rest
+    break
   }
 
   # Tutto il resto: delegato al CLI Node nel container.
