@@ -392,6 +392,48 @@ def _enabler_functions() -> str:
     )
 
 
+@needs_powershell
+@pytest.mark.parametrize("source", ["machine-path", "user-path", "current-path", "local-app-data", "hkcu", "hklm", "program-files"])
+def test_find_podman_reads_only_the_injected_sources(tmp_path, source):
+    """The Windows cases do not see a Podman installed on the runner itself (T65)."""
+    roots = {name: tmp_path / name for name in ("machine-path", "user-path", "current-path", "local-app-data", "hkcu", "hklm", "program-files")}
+    if source in {"machine-path", "user-path", "current-path"}:
+        executable = roots[source] / "podman.exe"
+    elif source == "local-app-data":
+        executable = roots[source] / "Programs" / "Podman" / "podman.exe"
+    elif source in {"hkcu", "hklm"}:
+        executable = roots[source] / "podman.exe"
+    else:
+        executable = roots[source] / "Podman" / "podman.exe"
+    executable.parent.mkdir(parents=True)
+    install_fake(executable.parent, "podman.exe", "#!/bin/sh\necho 'podman version 6.0.2'\n")
+
+    registry = "function Get-ItemProperty { param($LiteralPath, $Name, $ErrorAction)\n"
+    for name in ("hkcu", "hklm"):
+        key = "HKCU:\\SOFTWARE\\Podman" if name == "hkcu" else "HKLM:\\SOFTWARE\\Podman"
+        value = roots[name] if source == name else ""
+        registry += f"  if ($LiteralPath -eq '{key}') {{ return [pscustomobject]@{{ InstallDir = '{value}' }} }}\n"
+    registry += "  return $null\n}\n"
+
+    paths = {name: str(roots[name]) if source == name else "" for name in ("machine-path", "user-path", "current-path")}
+    local = roots["local-app-data"]
+    program_files = roots["program-files"] if source == "program-files" else ""
+    body = (
+        "$ErrorActionPreference = 'Stop'\n"
+        + registry
+        + _enabler_functions()
+        + "[Console]::Out.WriteLine('FOUND=' + (Find-Podman "
+          f"-MachinePath '{paths['machine-path']}' -UserPath '{paths['user-path']}' -ProcessPath '{paths['current-path']}' "
+          f"-LocalAppDataPath '{local}' -RegistryPaths @('HKCU:\\SOFTWARE\\Podman', 'HKLM:\\SOFTWARE\\Podman') "
+          f"-ProgramFilesPath '{program_files}'))\n"
+        + "exit 0\n"
+    )
+    done = _ps(tmp_path, body)
+    assert done.returncode == 0, done.stdout + done.stderr
+    expected = f"FOUND={executable}".replace("\\", "/")
+    assert expected in done.stdout.replace("\\", "/"), done.stdout + done.stderr
+
+
 def _enabler_install_block() -> str:
     source = ENABLER.read_text(encoding="utf-8")
     block = source[source.index("$WingetUpdateNotApplicable = ") : source.index("$Podman = Find-Podman")]
