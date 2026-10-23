@@ -122,13 +122,35 @@ describe("the Windows installer and the v0.3.9 game", () => {
   });
 
   it("says it in the 7 languages, each text its own", () => {
-    const calls = [...hooks.matchAll(/!insertmacro JHT_TEXT((?: \\\r?\n\s+"[^"\n]*")+)/g)].map((m) => [...m[1].matchAll(/"([^"\n]*)"/g)].map((t) => t[1]));
-    expect(calls).toHaveLength(3);
-    for (const texts of calls) {
-      expect(texts).toHaveLength(7);
-      for (const text of texts) expect(text.trim()).not.toBe("");
-      expect(new Set(texts).size).toBe(7);
+    // Each JHT_TEXT call: its texts in the order of the macro (IT EN DE ES FR HU PT).
+    const texts = (source: string) =>
+      [...source.matchAll(/!insertmacro JHT_TEXT((?: \\\r?\n\s+"[^"\n]*")+)/g)].map((m) => [...m[1].matchAll(/"([^"\n]*)"/g)].map((t) => t[1]));
+    const calls = texts(hooks);
+    for (const call of calls) {
+      expect(call).toHaveLength(7);
+      for (const text of call) expect(text.trim()).not.toBe("");
+      expect(new Set(call).size).toBe(7);
     }
+    // Where each text is said, by its Italian text: no call outside these hooks, none missing.
+    const italian = (source: string) => texts(source).map((call) => call[0]);
+    const preUninstall = hook(hooks, "NSIS_HOOK_PREUNINSTALL") ?? "";
+    expect(italian(preInstall).map((text) => text.slice(0, 40))).toEqual([
+      "Su questo computer c’è Job Hunter Team v",
+      "Job Hunter Team v0.3.9 non è stato disin",
+    ]);
+    expect(italian(postInstall).map((text) => text.slice(0, 40))).toEqual(["Job Hunter Team è installato accanto al "]);
+    const uninstall = italian(preUninstall);
+    // the question about the data with the game and without, then the last window after a Yes
+    expect(uninstall.map((text) => text.slice(0, 40))).toEqual([
+      "Vuoi togliere anche la squadra e i dati ",
+      "Vuoi togliere anche la squadra e i dati ",
+      "Fatto: Job Hunter Team è stato tolto, co",
+      "Qualcosa non è stato tolto. Le voci rima",
+    ]);
+    // with the game, its data folder stays, and the question says why
+    expect(uninstall[0]).toContain("la cartella dei dati resta perché la usa anche il gioco: per toglierla disinstalla anche il gioco");
+    expect(uninstall[1]).toContain("e la cartella dei dati ~/.jht.");
+    expect(calls).toHaveLength(italian(preInstall).length + italian(postInstall).length + uninstall.length);
     expect(hooks).toMatch(/!macro JHT_TEXT IT EN DE ES FR HU PT/);
     for (const language of ["ITALIAN", "GERMAN", "SPANISH", "FRENCH", "HUNGARIAN", "PORTUGUESE"]) {
       expect(hooks).toContain(`$LANGUAGE = \${LANG_${language}}`);
