@@ -31,6 +31,8 @@ export interface ExistingTeamConnectModalProps {
   onConnected: (result: ExistingTeamConnectionResult) => Promise<void>;
   /** The team was connected to read only: the app shows its positions in place of this dialog. */
   onReadOnlyConnected: (result: ExistingTeamReadOnlyConnectionResult) => void;
+  /** Why the team saved on this profile did not open at start-up: shown above the form. */
+  savedTeamNotice?: { title: string; message: string; action?: string };
   bridge?: ExistingTeamBridge;
 }
 
@@ -78,6 +80,7 @@ export default function ExistingTeamConnectModal({
   onCancel,
   onConnected,
   onReadOnlyConnected,
+  savedTeamNotice,
   bridge = existingTeamBridge,
 }: ExistingTeamConnectModalProps) {
   const t = ONBOARDING_TEXT[appLocale()];
@@ -315,6 +318,14 @@ export default function ExistingTeamConnectModal({
           <h2 id={titleId} ref={headingRef} tabIndex={-1}>{t.existingTeam.title}</h2>
           <p id={descriptionId}>{t.existingTeam.description}</p>
         </header>
+
+        {savedTeamNotice && stage === "fields" && (
+          <section className="existing-team-modal__failure" role="alert">
+            <strong>{savedTeamNotice.title}</strong>
+            <p>{savedTeamNotice.message}</p>
+            {savedTeamNotice.action && <p>{savedTeamNotice.action}</p>}
+          </section>
+        )}
 
         <OnboardingArtwork name="environmentVps" className="existing-team-modal__artwork" />
 

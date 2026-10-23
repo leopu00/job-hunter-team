@@ -61,7 +61,7 @@ const MAX_REPLY: usize = 256 * 1024;
 const SCREEN_LIVE_MS: u64 = 2_000;
 const SCREEN_SLOW_MS: u64 = 10_000;
 
-/// The script's codes (100-112, 115-121), the CLI's (113-114) and the pinned target's.
+/// The script's codes (100-112, 115-122), the CLI's (113-114) and the pinned target's.
 const EXITS: &[(i32, &str)] = &[
     (2, "agent_control_unsupported"),
     (70, "existing_team_runtime_changed"),
@@ -87,6 +87,7 @@ const EXITS: &[(i32, &str)] = &[
     (119, "answer_failed"),
     (120, "questions_unsupported"),
     (121, "team_stop_failed"),
+    (122, "provider_not_configured"),
 ];
 
 /// The codes of the exclusions that act on the score (`acting` of shared/feedback-reasons.json).
@@ -876,7 +877,7 @@ mod tests {
     #[test]
     fn the_script_and_the_module_agree_on_the_codes() {
         let script = AGENT_CONTROL_PY;
-        for (exit, code) in EXITS.iter().filter(|(exit, _)| (100..=112).contains(exit) || (115..=121).contains(exit)) {
+        for (exit, code) in EXITS.iter().filter(|(exit, _)| (100..=112).contains(exit) || (115..=122).contains(exit)) {
             assert!(script.contains(&format!("\"{code}\": {exit},")), "{code} {exit}");
         }
     }
