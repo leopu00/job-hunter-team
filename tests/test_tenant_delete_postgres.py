@@ -19,6 +19,7 @@ from pathlib import Path
 from urllib.parse import unquote, urlparse
 
 import pytest
+from pg_roles import roles_in_turn
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -204,14 +205,14 @@ def postgres_cluster(tmp_path_factory):
         else:
             raise AssertionError(f"temporary PostgreSQL did not start: {last_error}")
         psql(
-            """
+            roles_in_turn("""
             DO $$ BEGIN CREATE ROLE anon NOLOGIN;
               EXCEPTION WHEN duplicate_object THEN NULL; END $$;
             DO $$ BEGIN CREATE ROLE authenticated NOLOGIN;
               EXCEPTION WHEN duplicate_object THEN NULL; END $$;
             DO $$ BEGIN CREATE ROLE service_role NOLOGIN;
               EXCEPTION WHEN duplicate_object THEN NULL; END $$;
-            """
+            """)
         )
         yield {"psql": psql, "env": env, "bin": binaries}
     finally:

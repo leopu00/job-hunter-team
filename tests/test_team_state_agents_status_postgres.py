@@ -27,6 +27,7 @@ from pathlib import Path
 from urllib.parse import urlparse, urlunparse
 
 import pytest
+from pg_roles import roles_in_turn
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -37,11 +38,12 @@ USER_1 = "00000000-0000-0000-0000-000000000001"
 CONSTRAINT = "team_state_agents_status_shape"
 STAMP = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$")
 
-BOOTSTRAP = """
+BOOTSTRAP = roles_in_turn("""
 DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'anon') THEN CREATE ROLE anon; END IF;
   IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticated') THEN CREATE ROLE authenticated; END IF;
 END $$;
+""") + """
 CREATE TABLE public.team_state (
   user_id UUID PRIMARY KEY,
   last_heartbeat_at TIMESTAMPTZ

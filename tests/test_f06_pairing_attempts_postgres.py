@@ -12,6 +12,7 @@ from pathlib import Path
 from urllib.parse import urlparse, urlunparse
 
 import pytest
+from pg_roles import roles_in_turn
 
 ROOT = Path(__file__).resolve().parents[1]
 MIGRATION = ROOT / "supabase/migrations/084_cloud_sync_pairing_attempts.sql"
@@ -168,13 +169,15 @@ def test_f06_pg16_apply_reapply_and_export_schema_oracle(pg16):
     # PostgreSQL test shares one server, and under pytest-xdist another file may
     # have created them first. Same guard as test_manual_application_rpc_pg16.py.
     pg16(
-        """
+        roles_in_turn("""
         DO $$ BEGIN CREATE ROLE anon NOLOGIN;
           EXCEPTION WHEN duplicate_object THEN NULL; END $$;
         DO $$ BEGIN CREATE ROLE authenticated NOLOGIN;
           EXCEPTION WHEN duplicate_object THEN NULL; END $$;
         DO $$ BEGIN CREATE ROLE service_role NOLOGIN;
           EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+        """)
+        + """
         CREATE SCHEMA auth;
         CREATE TABLE auth.users (id uuid PRIMARY KEY);
         """
