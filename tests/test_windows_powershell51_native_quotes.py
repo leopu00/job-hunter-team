@@ -226,7 +226,7 @@ def test_the_old_template_is_refused_under_51_only(tmp_path, shell, fake_engine)
 @pytest.mark.parametrize("shell", SHELLS)
 def test_the_wrapper_finds_the_running_compose_service_in_both_shells(tmp_path, shell, fake_engine):
     result, calls = _run(
-        tmp_path, shell, WRAPPER, ["Get-RunningComposeServiceId"], WRAPPER_SERVICE, fake_engine, {},
+        tmp_path, shell, WRAPPER, ["Get-RunningComposeServiceId", "Get-ComposeLabel"], WRAPPER_SERVICE, fake_engine, {},
     )
     assert result.returncode == 0, result.stdout + result.stderr
     assert f"ID={CONTAINER_ID}" in result.stdout, result.stdout + result.stderr
