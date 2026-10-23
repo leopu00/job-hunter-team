@@ -47,7 +47,7 @@ import {
   startOnboardingTeam,
 } from "../lib/onboarding-runtime";
 import { DASHBOARD_PAGE, goTo, LOGIN_PAGE } from "../lib/pages";
-import { useSession } from "../lib/supabase";
+import { signOut, useSession } from "../lib/supabase";
 import { navigate } from "../shell/router";
 import { existingTeamBridge } from "../lib/existing-team";
 import DashboardApp from "./DashboardApp";
@@ -713,6 +713,30 @@ describe("DashboardApp onboarding router", () => {
     expect(await screen.findByTestId("shell")).toBeInTheDocument();
     expect(existingTeamBridge.reopen).toHaveBeenCalledTimes(2);
     expect(existingTeamView()).not.toBeNull();
+  });
+
+  it("a team that stays down does not lock the person out: they can go on without it, or leave the account", async () => {
+    vi.mocked(useSession).mockReturnValue(signedInAs("set-up-down"));
+    vi.mocked(loadOnboardingGate).mockResolvedValue({ phase: "ready" });
+    vi.mocked(existingTeamBridge.reopen).mockRejectedValue({ code: "existing_team_unavailable" });
+    vi.mocked(signOut).mockResolvedValue();
+
+    const user = userEvent.setup();
+    const first = render(<DashboardApp />);
+    expect(await screen.findByRole("alert")).toBeInTheDocument();
+
+    // leaving the account is offered, and is the app's own sign-out
+    await user.click(screen.getByRole("button", { name: /esci dall.account/i }));
+    expect(signOut).toHaveBeenCalledOnce();
+    expect(screen.queryByTestId("shell")).not.toBeInTheDocument();
+    first.unmount();
+
+    // going on without the team is the Shell as it was, with no team's view and no new ask of the VPS
+    render(<DashboardApp />);
+    await user.click(await screen.findByRole("button", { name: /continua senza la squadra/i }));
+    expect(await screen.findByTestId("shell")).toBeInTheDocument();
+    expect(existingTeamView()).toBeNull();
+    expect(existingTeamBridge.reopen).toHaveBeenCalledTimes(2);
   });
 
   it("opens an existing team connected with its agents off in the full Shell, on its agents, with the onboarding still open", async () => {

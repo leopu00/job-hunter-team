@@ -82,7 +82,7 @@ import {
   createOnboardingActivity,
 } from "../lib/onboarding-activity";
 import { DASHBOARD_PAGE, goTo, LOGIN_PAGE } from "../lib/pages";
-import { supabase, supabaseConfig, useSession } from "../lib/supabase";
+import { signOut, supabase, supabaseConfig, useSession } from "../lib/supabase";
 import { OnboardingFlow } from "../onboarding";
 import ExistingTeamConnectModal from "../onboarding/ExistingTeamConnectModal";
 import { ReconfirmExistingTeamContext } from "../lib/reconfirm-existing-team";
@@ -1479,6 +1479,13 @@ export default function DashboardApp() {
           <p>{failure.message}</p>
           {failure.action && <p>{failure.action}</p>}
           <button type="button" onClick={() => setSavedTeamOpening(null)}>{stateText().retry}</button>
+          {/* A team that stays down must not lock the person out: they can leave the account, or go on without it. */}
+          <button type="button" onClick={() => setSavedTeamOpening({ identityKey, phase: "done" })}>
+            {stateText().continueWithoutTeam}
+          </button>
+          <button type="button" onClick={() => void Promise.resolve((logout ?? signOut)()).catch(() => undefined)}>
+            {stateText().signOut}
+          </button>
         </main>
       );
     }
