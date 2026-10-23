@@ -30,6 +30,7 @@ mod release_channel;
 mod release_channel_rules;
 mod runtime_host;
 mod runtime_log;
+mod text_file_export;
 mod voice_input;
 mod vps_link;
 mod window_fit;
@@ -132,6 +133,7 @@ pub fn run() {
             onboarding::onboarding_team_start,
             podman::check_podman,
             profile_import::profile_import_vps_to_local,
+            text_file_export::save_text_file,
             voice_input::voice_input_cancel,
             voice_input::voice_input_start,
             voice_input::voice_input_status,

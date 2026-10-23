@@ -724,6 +724,25 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
     "This can be done only from the app’s main window.",
     "Go back to the main window and try again.",
   ),
+  // «Save as» of a small text the page made (text_file_export.rs: a personal theme).
+  save_text_too_large: copy(
+    "Il file è troppo grande per essere salvato da qui.",
+    "Togli qualcosa e riprova, oppure usa «Copia».",
+    "The file is too large to be saved from here.",
+    "Remove something and try again, or use «Copy».",
+  ),
+  save_text_invalid: copy(
+    "Il nome proposto per il file non è valido.",
+    "Scegli un altro nome nella finestra di salvataggio, oppure usa «Copia».",
+    "The suggested file name is not valid.",
+    "Choose another name in the save window, or use «Copy».",
+  ),
+  save_text_failed: copy(
+    "Il file non è stato salvato.",
+    "Scegli un'altra cartella e riprova, oppure usa «Copia».",
+    "The file was not saved.",
+    "Choose another folder and try again, or use «Copy».",
+  ),
   existing_team_reconfirm_setup: copy(
     "Il collegamento salvato non corrisponde più a questa squadra.",
     "Rifai il collegamento dal setup: ti chiederà di nuovo di confermare la VPS.",
@@ -789,6 +808,12 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
     "Scegli il provider sulla VPS con «jht setup», poi riprova.",
     "No provider (Claude, Codex or Kimi) is set up on the team: its agents cannot start.",
     "Choose the provider on the VPS with «jht setup», then try again.",
+  ),
+  provider_not_configured_local: copy(
+    "Sulla squadra di questo computer non è configurato nessun provider (Claude, Codex o Kimi): gli agenti non possono partire.",
+    "Riapri la configurazione dell’app, scegli il provider al passo «Provider» e riprova.",
+    "No provider (Claude, Codex or Kimi) is set up on this computer's team: its agents cannot start.",
+    "Reopen the app’s setup, choose the provider at the «Provider» step, then try again.",
   ),
   agent_stop_failed: copy(
     "L’agente è ancora acceso dopo lo spegnimento.",

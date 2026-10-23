@@ -300,6 +300,25 @@ def test_windows_install_never_needs_an_elevated_token_to_write_acls():
     assert "@('Set-JhtAccessControl', 'Protect-JhtHomeAcl', 'Set-JhtNodeOwner')" in selftest
 
 
+def test_windows_acl_selftest_reports_the_refused_node_then_retries_once():
+    """A transient hosted-runner ACL denial must be measurable, never silently green."""
+    selftest = ACL_SELFTEST.read_text(encoding="utf-8")
+    for seam in (
+        "function Get-JhtAclProcessSnapshot",
+        "function Write-JhtAclNodeDiagnostic",
+        "function Write-JhtAclRepairFailure",
+        "function Invoke-ProtectJhtHomeAclWithDiagnosis",
+        "ACL_REPAIR_FAILURE attempt=$Attempt",
+        "ACL_REPAIR_NODE path=$Path owner=$($acl.Owner) protected=$($acl.AreAccessRulesProtected)",
+        "ACL_REPAIR_E03_PROCESS pid=$($process.ProcessId)",
+        "ACL_REPAIR_RETRY attempt=2 after_ms=750",
+        "ACL_REPAIR_RETRY_PASS attempt=2",
+        "for ($attempt = 1; $attempt -le 2; $attempt++)",
+        "Invoke-ProtectJhtHomeAclWithDiagnosis -Path $root -BaselineProcesses $beforeCleanStartProcesses",
+    ):
+        assert seam in selftest
+
+
 def test_windows_install_never_reloads_systemd_inside_the_machine():
     # On a Windows 10 test PC (09/10/2026) the reload implied by
     # `systemctl enable` never finished inside the Podman WSL machine: systemd
