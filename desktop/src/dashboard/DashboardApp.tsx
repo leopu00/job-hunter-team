@@ -151,6 +151,12 @@ function actionWithCause(code: string, action: string, cause: string | null): st
   return CAUSE_REPLACES_ACTION.has(code) ? `${sentence} ${text.failureCauseRetry}` : `${action} ${sentence}`;
 }
 
+/** The team's container runs, and its captain or its assistant is off: a team to open, not a failure. */
+function existingTeamAgentsOff(snapshot: OnboardingRuntimeSnapshot): boolean {
+  return Boolean(snapshot.runtimeInstalled && snapshot.containerRunning &&
+    (!snapshot.captainRunning || !snapshot.assistantRunning));
+}
+
 /** The action to tell, and the raw cause for the technical details when it is not a sentence. */
 function causeParts(code: string, action: string, cause: string | null): { action: string; cause?: string } {
   if (!cause) return { action };
@@ -373,6 +379,9 @@ export default function DashboardApp() {
   // The account is reading an existing team's VPS and nothing else: the Shell
   // shows its positions (lib/existing-team-readonly.ts), the setup waits.
   const [readOnlyExistingTeamKey, setReadOnlyExistingTeamKey] = useState<string | null>(null);
+  // An existing team connected in full with its agents off (T124): the whole Shell, with its agents'
+  // panel to start them, while the onboarding stays open until the Assistant's chat is ready.
+  const [connectedExistingTeamKey, setConnectedExistingTeamKey] = useState<string | null>(null);
   const [onboardingUiVersion, setOnboardingUiVersion] = useState(0);
   const [accountScope, setAccountScope] = useState<{
     identityKey: string;
@@ -527,6 +536,10 @@ export default function DashboardApp() {
       setReadOnlyExistingTeamKey(null);
     }
   }, [identityKey, readOnlyExistingTeamKey]);
+  // The same for a team connected with its agents off: it is this account's.
+  useEffect(() => {
+    if (connectedExistingTeamKey && connectedExistingTeamKey !== identityKey) setConnectedExistingTeamKey(null);
+  }, [connectedExistingTeamKey, identityKey]);
   useEffect(() => leaveExistingTeamReadOnly, []);
 
   useEffect(() => {
@@ -563,7 +576,8 @@ export default function DashboardApp() {
   }, [identityKey, initializeAccount, migrationReady]);
 
   useEffect(() => {
-    if (!identityKey || !markerId || assistantChatIdentityKey !== identityKey) return;
+    if (!identityKey || !markerId) return;
+    if (assistantChatIdentityKey !== identityKey && connectedExistingTeamKey !== identityKey) return;
     let active = true;
     let timeout: ReturnType<typeof setTimeout> | undefined;
 
@@ -593,7 +607,7 @@ export default function DashboardApp() {
       active = false;
       if (timeout) clearTimeout(timeout);
     };
-  }, [assistantChatIdentityKey, identityKey, markerId]);
+  }, [assistantChatIdentityKey, connectedExistingTeamKey, identityKey, markerId]);
 
   const setRuntime = useCallback((runtime: OnboardingRuntimeState) => {
     setGate((current) => current.phase === "required" ? { ...current, runtime } : current);
@@ -1141,6 +1155,14 @@ export default function DashboardApp() {
     const chat = await reconnectDirectChat();
     if (activeIdentityKeyRef.current !== identityKey) throw new Error("account-changed");
     const snapshot = { ...nativeSnapshot, directChatReady: chat.state === "ready" };
+    if (!isOnboardingAssistantReachable(snapshot) && existingTeamAgentsOff(snapshot)) {
+      // Connected, with the captain or the assistant off (T124): the team opens in full, on its
+      // agents' panel, where they are started. The onboarding is done when the chat is ready.
+      markOnboardingStarted(markerId);
+      setConnectedExistingTeamKey(identityKey);
+      navigate("/agents", { replace: true });
+      return;
+    }
     // A code the dialog knows, so it says what failed; a bare Error was «unknown» to the dialog.
     if (!isOnboardingAssistantReachable(snapshot)) throw { code: directChatFailureCode(chat) };
     if (isOnboardingRuntimeReady(snapshot)) {
@@ -1379,6 +1401,14 @@ export default function DashboardApp() {
           <ReconfirmExistingTeamContext.Provider value={reconfirmExistingTeam}>
             <Shell key={identityKey} onLogout={logout} onCloseReadOnly={closeReadOnlyExistingTeam} />
           </ReconfirmExistingTeamContext.Provider>
+          <NewPositionNotifier key={`notify:${identityKey}`} />
+        </>
+      );
+    }
+    if (connectedExistingTeamKey === identityKey) {
+      return (
+        <>
+          <Shell key={identityKey} onLogout={logout} />
           <NewPositionNotifier key={`notify:${identityKey}`} />
         </>
       );

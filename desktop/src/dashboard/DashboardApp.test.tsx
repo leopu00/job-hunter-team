@@ -232,6 +232,7 @@ vi.mock("../onboarding/ExistingTeamConnectModal", () => ({
         <button type="button" onClick={props.onCancel}>cancel-existing-team</button>
         <button type="button" onClick={() => void props.onConnected(result(false))}>connect-existing-team-incomplete</button>
         <button type="button" onClick={() => void props.onConnected(result(true))}>connect-existing-team-ready</button>
+        <button type="button" onClick={() => void props.onConnected({ ...result(false), captainRunning: false, assistantRunning: false })}>connect-existing-team-agents-off</button>
         <button type="button" onClick={() => props.onReadOnlyConnected({ readiness: false, snapshot: result(false) })}>connect-existing-team-read-only</button>
       </section>
     );
@@ -659,6 +660,29 @@ describe("DashboardApp onboarding router", () => {
       expect.objectContaining({ profileReady: true, directChatReady: true }),
     );
     expect(markOnboardingStarted).not.toHaveBeenCalled();
+    expect(screen.queryByTestId("assistant-chat")).not.toBeInTheDocument();
+  });
+
+  it("opens an existing team connected with its agents off in the full Shell, on its agents, with the onboarding still open", async () => {
+    vi.mocked(useSession).mockReturnValue(signedInAs("existing-agents-off"));
+    vi.mocked(loadOnboardingGate).mockResolvedValue({
+      phase: "required",
+      account: { displayName: "Owner Person" },
+      resumeAvailable: false,
+      existingTeam: { teamId: "team-opaque-0005", status: "available" },
+      runtime: { status: "collecting", stage: "host" },
+    });
+
+    const user = userEvent.setup();
+    render(<DashboardApp />);
+    await user.click(await screen.findByRole("button", { name: "connect-existing-team-agents-off" }));
+
+    expect(await screen.findByTestId("shell")).toBeInTheDocument();
+    expect(existingTeamReadOnly()).toBeNull();
+    expect(navigate).toHaveBeenCalledWith("/agents", { replace: true });
+    expect(markOnboardingStarted).toHaveBeenCalledWith("existing-agents-off");
+    expect(markOnboardingReady).not.toHaveBeenCalled();
+    expect(screen.queryByTestId("existing-team-modal")).not.toBeInTheDocument();
     expect(screen.queryByTestId("assistant-chat")).not.toBeInTheDocument();
   });
 
