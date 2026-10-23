@@ -320,6 +320,22 @@ function Install-JhtContainerService {
   Invoke-Checked $PodmanPath 'machine' 'ssh' $MachineName $install
 }
 
+# The SID of a Windows account given as a SID or as a name ("COMPUTER\user", "user"); '' when it
+# cannot be resolved. Get-ScheduledTask gives the task's user back as a name, not as the SID it was
+# registered with (T100): the identities are compared, not the strings.
+function ConvertTo-JhtSid {
+  param([string]$Identity)
+  $value = ([string]$Identity).Trim()
+  if (-not $value) { return '' }
+  try {
+    # A SID is already the identity (and needs no Windows API, so the tests read it anywhere).
+    if ($value -match '^[Ss]-1-\d+(-\d+)+$') { return $value.ToUpperInvariant() }
+    return ([Security.Principal.NTAccount]::new($value)).Translate([Security.Principal.SecurityIdentifier]).Value
+  } catch {
+    return ''
+  }
+}
+
 function Install-JhtStartupTask {
   param(
     [Parameter(Mandatory)][string]$PodmanPath,
@@ -344,6 +360,9 @@ function Install-JhtStartupTask {
   # Registration is part of the reboot contract, not a best-effort hint. Check
   # the exact executable, machine and user before publishing a successful install.
   $registered = Get-ScheduledTask -TaskName $taskName -ErrorAction Stop
+  # On a Windows 10 with a local account the trigger reads "COMPUTER\user" and the principal "user":
+  # both are compared as SIDs, and a user that does not resolve is not the same user.
+  $expectedSid = ConvertTo-JhtSid $UserId
   $registeredActions = @($registered.Actions)
   $registeredTriggers = @($registered.Triggers)
   $sameExecutable = $registeredActions.Count -eq 1 -and
@@ -352,8 +371,9 @@ function Install-JhtStartupTask {
   if (-not $sameExecutable -or
       ([string]$registeredActions[0].Arguments) -cne $arguments -or
       $registeredTriggers.Count -ne 1 -or
-      ([string]$registeredTriggers[0].UserId) -cne $UserId -or
-      ([string]$registered.Principal.UserId) -cne $UserId -or
+      -not $expectedSid -or
+      (ConvertTo-JhtSid ([string]$registeredTriggers[0].UserId)) -ne $expectedSid -or
+      (ConvertTo-JhtSid ([string]$registered.Principal.UserId)) -ne $expectedSid -or
       ([string]$registered.Principal.LogonType) -notmatch '^Interactive' -or
       ([string]$registered.Principal.RunLevel) -cne 'Limited' -or
       [bool]$registered.Settings.Hidden -or

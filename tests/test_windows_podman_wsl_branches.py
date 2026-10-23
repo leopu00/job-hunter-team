@@ -572,7 +572,7 @@ function Register-ScheduledTask {
 }
 function Get-ScheduledTask { param($TaskName, $ErrorAction) $script:Registered }
 Install-JhtStartupTask -PodmanPath 'C:\Program Files\RedHat\Podman\podman.exe' `
-  -MachineName 'jht-podman' -UserId 'S-1-5-21-test'
+  -MachineName 'jht-podman' -UserId 'S-1-5-21-1111-2222-3333-1001'
 [Console]::Out.WriteLine("TASK=$($script:Registered.TaskName)")
 [Console]::Out.WriteLine("EXEC=$($script:Registered.Actions[0].Execute)")
 [Console]::Out.WriteLine("ARGS=$($script:Registered.Actions[0].Arguments)")
@@ -599,7 +599,7 @@ def test_logon_task_is_visible_named_and_described_in_task_scheduler():
 
 def test_logon_task_starts_only_the_named_jht_machine_as_the_current_user(tmp_path):
     result, calls = _run(
-        tmp_path, ENABLER, ["Install-JhtStartupTask"], STARTUP_TASK_BODY,
+        tmp_path, ENABLER, ["ConvertTo-JhtSid", "Install-JhtStartupTask"], STARTUP_TASK_BODY,
         {"REGISTER_FAIL": "0"},
     )
     assert result.returncode == 0, result.stderr
@@ -607,7 +607,7 @@ def test_logon_task_starts_only_the_named_jht_machine_as_the_current_user(tmp_pa
     assert "TASK=Job Hunter Team - Start runtime" in result.stdout
     assert "EXEC=C:\\Program Files\\RedHat\\Podman\\podman.exe" in result.stdout
     assert "ARGS=machine start --update-connection=false jht-podman" in result.stdout
-    assert "USER=S-1-5-21-test" in result.stdout
+    assert "USER=S-1-5-21-1111-2222-3333-1001" in result.stdout
     assert "HIDDEN=False" in result.stdout
     assert (
         "DESCRIPTION=Starts the dedicated Job Hunter Team Podman machine at sign-in "
@@ -617,7 +617,7 @@ def test_logon_task_starts_only_the_named_jht_machine_as_the_current_user(tmp_pa
 
 def test_install_fails_if_the_logon_task_cannot_be_published(tmp_path):
     result, _ = _run(
-        tmp_path, ENABLER, ["Install-JhtStartupTask"], STARTUP_TASK_BODY,
+        tmp_path, ENABLER, ["ConvertTo-JhtSid", "Install-JhtStartupTask"], STARTUP_TASK_BODY,
         {"REGISTER_FAIL": "1"},
     )
     assert result.returncode != 0
