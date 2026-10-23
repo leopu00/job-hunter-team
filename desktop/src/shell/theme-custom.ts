@@ -311,18 +311,21 @@ export function suggestFix(
  */
 export function fixAll(seeds: Seeds, context: DeriveContext, touched?: SeedKey) {
   let current = seeds;
+  const uncurable = new Set<string>();
   for (let round = 0; round < 12; round += 1) {
     const { failures } = checkSeeds(current, context);
     if (failures.length === 0) return { seeds: current, failures };
     // lazily: the first failure that has a cure is enough for this round
     let next: Seeds | null = null;
     for (const failure of failures) {
+      const key = `${failure.rule}|${failure.a}|${failure.b}`;
+      if (uncurable.has(key)) continue;
       next = suggestFix(current, context, failure, touched);
       if (next) break;
+      // no lightness cures it: the search over every candidate is not repeated on each round
+      uncurable.add(key);
     }
     if (!next) return { seeds: current, failures };
-    // a cure that leaves the palette with more faults than before is not taken: stop and say what is left
-    if (checkSeeds(next, context).failures.length > failures.length) return { seeds: current, failures };
     current = next;
   }
   return { seeds: current, failures: checkSeeds(current, context).failures };

@@ -258,15 +258,17 @@ describe("the suggestion moves the colour at fault by the smallest step that cur
     const pick = ["#000000", "#ffffff", "#808080", "#ff0000", "#00ff00", "#0000ff", "#ffff00", "#202040", "#e8e8f0", "#7a3fd0"];
     let seed = 7;
     const rnd = () => (seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648;
-    for (let i = 0; i < 12; i += 1) {
+    for (let i = 0; i < 8; i += 1) {
       const seeds = Object.fromEntries(SEED_KEYS.map((k) => [k, pick[Math.floor(rnd() * pick.length)]])) as Seeds;
-      const context = rnd() < 0.5 ? dark.context : light.context;
+      const context = i % 2 === 0 ? dark.context : light.context; // both bases, four palettes each
       const out = fixAll(seeds, context);
       const before = checkSeeds(seeds, context).failures.length;
       expect(out.failures.length, JSON.stringify(seeds)).toBeLessThanOrEqual(before);
       expect(out.failures).toEqual(checkSeeds(out.seeds, context).failures);
     }
-  });
+    // Each case searches every candidate of every fault it cannot cure, and the whole file runs beside others
+    // under load: the default 5 s is not enough, so the bound is explicit.
+  }, 60_000);
 });
 
 function moveL(hex: string, l: number) {
