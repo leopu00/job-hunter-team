@@ -36,7 +36,7 @@ $ComposeProvider = Join-Path $RuntimeShimDir 'docker-compose.exe'
 function Write-JhtPhase {
   param([Parameter(Mandatory)][ValidateSet(
     'wsl_check', 'podman_install', 'podman_machine_init',
-    'podman_machine_start', 'runtime_download', 'image_pull'
+    'podman_machine_start', 'runtime_download', 'image_pull', 'team_restart'
   )][string]$Id)
   [Console]::Out.WriteLine("JHT_PHASE $Id")
 }
@@ -320,6 +320,22 @@ function Install-JhtContainerService {
   Invoke-Checked $PodmanPath 'machine' 'ssh' $MachineName $install
 }
 
+# The SID of a Windows account given as a SID or as a name ("COMPUTER\user", "user"); '' when it
+# cannot be resolved. Get-ScheduledTask gives the task's user back as a name, not as the SID it was
+# registered with (T100): the identities are compared, not the strings.
+function ConvertTo-JhtSid {
+  param([string]$Identity)
+  $value = ([string]$Identity).Trim()
+  if (-not $value) { return '' }
+  try {
+    # A SID is already the identity (and needs no Windows API, so the tests read it anywhere).
+    if ($value -match '^[Ss]-1-\d+(-\d+)+$') { return $value.ToUpperInvariant() }
+    return ([Security.Principal.NTAccount]::new($value)).Translate([Security.Principal.SecurityIdentifier]).Value
+  } catch {
+    return ''
+  }
+}
+
 function Install-JhtStartupTask {
   param(
     [Parameter(Mandatory)][string]$PodmanPath,
@@ -344,6 +360,9 @@ function Install-JhtStartupTask {
   # Registration is part of the reboot contract, not a best-effort hint. Check
   # the exact executable, machine and user before publishing a successful install.
   $registered = Get-ScheduledTask -TaskName $taskName -ErrorAction Stop
+  # On a Windows 10 with a local account the trigger reads "COMPUTER\user" and the principal "user":
+  # both are compared as SIDs, and a user that does not resolve is not the same user.
+  $expectedSid = ConvertTo-JhtSid $UserId
   $registeredActions = @($registered.Actions)
   $registeredTriggers = @($registered.Triggers)
   $sameExecutable = $registeredActions.Count -eq 1 -and
@@ -352,8 +371,9 @@ function Install-JhtStartupTask {
   if (-not $sameExecutable -or
       ([string]$registeredActions[0].Arguments) -cne $arguments -or
       $registeredTriggers.Count -ne 1 -or
-      ([string]$registeredTriggers[0].UserId) -cne $UserId -or
-      ([string]$registered.Principal.UserId) -cne $UserId -or
+      -not $expectedSid -or
+      (ConvertTo-JhtSid ([string]$registeredTriggers[0].UserId)) -ne $expectedSid -or
+      (ConvertTo-JhtSid ([string]$registered.Principal.UserId)) -ne $expectedSid -or
       ([string]$registered.Principal.LogonType) -notmatch '^Interactive' -or
       ([string]$registered.Principal.RunLevel) -cne 'Limited' -or
       [bool]$registered.Settings.Hidden -or
@@ -734,10 +754,20 @@ foreach ($sidecar in @('jht-broker', 'jht-telegram')) {
   Write-Host "  Recreating ${sidecar}: $sidecarReason; volumes retained." -ForegroundColor Yellow
 }
 
-if ($metadataRepaired -or $sidecarRemoved -or -not (& $Podman --connection $MachineName ps --format '{{.Names}}' | Where-Object { $_ -eq 'jht' })) {
-  & (Join-Path $BinDir 'jht.ps1') up
-  if ($LASTEXITCODE -ne 0) { throw 'The migrated JHT container did not start.' }
+# The setup always runs jht up (T102). Compose leaves what did not change as it is (same image, same
+# containers: a second setup on a Windows computer kept the very same jht) and recreates what did, a
+# new image above all, and the team restarts on it: what running the setup asks for. Before, jht up
+# ran only when jht was not running, so the image the setup had just pulled waited, unused, for a
+# later setup that found jht stopped (the desktop app never runs `jht upgrade`).
+# A team running on another image is told it restarts, in the log and in the app (JHT_PHASE).
+[string]$runningImage = (& { $ErrorActionPreference = 'Continue'; & $Podman --connection $MachineName inspect --type container jht --format '{{.ImageName}}' 2>$null } | Select-Object -First 1)
+$runningImage = $runningImage.Trim()
+if ($runningImage -and $runningImage -ne $canonicalImage) {
+  Write-JhtPhase team_restart
+  Write-Host "  The team restarts on the new runtime image: $canonicalImage (it ran on $runningImage)." -ForegroundColor Yellow
 }
+& (Join-Path $BinDir 'jht.ps1') up
+if ($LASTEXITCODE -ne 0) { throw 'The migrated JHT container did not start.' }
 
 Install-JhtContainerService -PodmanPath $Podman -UnitPath $containerUnitFile
 $currentUserSid = [Security.Principal.WindowsIdentity]::GetCurrent().User.Value

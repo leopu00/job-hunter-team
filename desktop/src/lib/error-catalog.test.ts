@@ -188,6 +188,7 @@ const NOT_ERRORS: Record<string, string> = {
   podman_machine_start: "install.ps1 phase id",
   runtime_download: "install.ps1 phase id",
   image_pull: "install.ps1 phase id",
+  team_restart: "enable-podman-windows-runtime.ps1 phase id",
   // runtime_log.rs: a log that cannot be written never stops the step it describes (RuntimeLog::record drops it).
   runtime_log_failed: "runtime log write, never surfaced",
   runtime_log_invalid: "runtime log write, never surfaced",

@@ -18,6 +18,7 @@ on:
       - 'tests/test_podman_windows_setup_retry.py'
       - 'tests/test_podman_windows_sidecar_idmap.py'
       - 'tests/test_podman_windows_cgroupfs.py'
+      - 'tests/test_windows_startup_task_sid.py'
       - 'tests/windows_native_fakes.py'
       - 'tests/test_windows_powershell51_native_quotes.py'
       - 'tests/test_windows_powershell51_native_stderr.py'
@@ -107,8 +108,9 @@ jobs:
       # (tests/windows_native_fakes.py); every case checks the engine it ran
       # under. A missing shell, bash or compiler fails, and so does a real
       # Podman visible to Find-Podman here (CI is set). A skip fails the count.
-      # 107 = the four whole files (48 + 41 + 11 + 7): the setup's repair of a broker
-      # or Telegram service (T85, T87) and the cgroup manager of the Podman service (T87).
+      # 112 = the five whole files (48 + 41 + 11 + 7 + 5): the setup's repair of a broker
+      # or Telegram service (T85, T87), the cgroup manager of the Podman service (T87),
+      # and the logon task's user compared as a SID on this Windows (T100).
       - name: Podman-in-WSL setup tests under Windows PowerShell 5.1 and pwsh
         shell: pwsh
         env:
@@ -116,14 +118,14 @@ jobs:
         run: |
           foreach ($shell in 'powershell', 'pwsh') {
             $env:JHT_TEST_SHELL = $shell
-            $out = python -m pytest tests/test_windows_podman_wsl_branches.py tests/test_podman_windows_setup_retry.py tests/test_podman_windows_sidecar_idmap.py tests/test_podman_windows_cgroupfs.py `
+            $out = python -m pytest tests/test_windows_podman_wsl_branches.py tests/test_podman_windows_setup_retry.py tests/test_podman_windows_sidecar_idmap.py tests/test_podman_windows_cgroupfs.py tests/test_windows_startup_task_sid.py `
               -n 4 -p no:cacheprovider -rs --durations=15 --durations-min=1 2>&1
             $code = $LASTEXITCODE
             $out | ForEach-Object { "$_" }
             if ($code -ne 0) { exit $code }
             $summary = "$($out[-1])"
             if ($summary -notmatch '^=+ (\d+) passed(, \d+ warnings?)? in [0-9.]+s') { throw "unexpected pytest summary under ${shell}: $summary" }
-            if ([int]$Matches[1] -lt 107) { throw "only $($Matches[1]) tests ran under $shell, expected at least 107" }
+            if ([int]$Matches[1] -lt 112) { throw "only $($Matches[1]) tests ran under $shell, expected at least 112" }
           }
 
       # The desktop app's Windows uninstaller and the team (T72): its NSIS hook
