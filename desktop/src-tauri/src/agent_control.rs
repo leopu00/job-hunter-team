@@ -339,6 +339,8 @@ pub(crate) fn read_input(request: &ControlRequest) -> Option<Vec<u8>> {
 /// `shared`: the chat's ssh master, lent for a read of the terminal (see `screen_master`); None opens
 /// a connection of its own, as every other read and every action does.
 fn run(destination: &Destination, request: &ControlRequest, argv: &[String], shared: Option<&Path>) -> Result<ProcessResult, &'static str> {
+    // checked again right before ssh starts: the master's folder must still be the chat's
+    let shared = shared.filter(|socket| direct_chat::lent_socket_still_ours(socket));
     let read = request.action().is_none();
     let timeout = if read { READ_TIMEOUT } else { ACTION_TIMEOUT };
     match destination {
