@@ -1270,9 +1270,9 @@ fn unix_runtime_bundle_valid(wrapper: &Path, runtime: &Path) -> bool {
 /// Native Linux Podman honors these inherited connection selectors. The
 /// checked runtime shim is local-only, so inherit neither selector for any
 /// of its discovery, inspect, or exec calls.
-fn local_engine_removed_environment(engine: &LocalChatEngine) -> &'static [&'static str] {
+fn local_engine_removed_environment(_engine: &LocalChatEngine) -> &'static [&'static str] {
     #[cfg(all(unix, not(target_os = "macos")))]
-    if engine.podman {
+    if _engine.podman {
         return &["CONTAINER_HOST", "CONTAINER_CONNECTION"];
     }
     &[]
@@ -1895,8 +1895,6 @@ fn chat_failure(code: i32, default: &'static str) -> &'static str {
         116 => "not_found",
         117 => "invalid_choice",
         118 => "question_closed",
-        // The person's words were never pasted over text already in the agent's composer.
-        130 => "composer_has_text",
         255 => "tunnel_unavailable",
         _ => default,
     }
@@ -3205,7 +3203,7 @@ mod tests {
         assert!(local_engine_removed_environment(&docker).is_empty());
     }
 
-    #[cfg(unix)]
+    #[cfg(all(unix, not(target_os = "macos")))]
     #[test]
     fn local_chat_refuses_rehashed_compose_or_host_setup_without_starting_an_engine() {
         use std::os::unix::fs::PermissionsExt;
