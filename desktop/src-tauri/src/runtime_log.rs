@@ -5,10 +5,12 @@
 //! is private to the user and rotated (runtime.log, .1, .2).
 
 use crate::runtime_host::{set_private_dir_permissions, set_private_permissions, ProcessResult};
+use serde::{Deserialize, Serialize};
 use std::{
     fs,
     io::Write,
     path::{Path, PathBuf},
+    sync::atomic::{AtomicU64, Ordering},
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
 use tauri::Manager;
@@ -19,6 +21,9 @@ const LOG_MAX_BYTES: u64 = 256 * 1024;
 const LOG_KEPT: u32 = 2;
 /// What is kept of each stream of a step: its end, where the error is.
 const STREAM_TAIL_BYTES: usize = 16 * 1024;
+const SUPPORT_LOG_TAIL_LINES: usize = 120;
+const SUPPORT_REPORT_MAX_BYTES: usize = 128 * 1024;
+static SUPPORT_REPORT_SEQUENCE: AtomicU64 = AtomicU64::new(1);
 
 #[derive(Clone)]
 pub(crate) struct RuntimeLog {
@@ -392,6 +397,72 @@ pub(crate) fn onboarding_runtime_log_open(app: tauri::AppHandle) -> bool {
     reveal(log.path()).is_ok()
 }
 
+/// The renderer receives a bounded in-memory log tail and the package version,
+/// then applies the shared JS redactor before it can preview or transmit it.
+/// No absolute path crosses this command.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct OnboardingSupportContext {
+    app_version: &'static str,
+    log_tail: String,
+}
+
+#[tauri::command]
+pub(crate) fn onboarding_support_context(app: tauri::AppHandle) -> OnboardingSupportContext {
+    let log_tail = RuntimeLog::new(&app)
+        .and_then(|log| fs::read_to_string(log.path()).ok())
+        .map(|contents| {
+            let tail = contents.lines().rev().take(SUPPORT_LOG_TAIL_LINES).collect::<Vec<_>>();
+            crate::onboarding::redact(tail.into_iter().rev().collect::<Vec<_>>().join("\n"))
+        })
+        .unwrap_or_default();
+    OnboardingSupportContext { app_version: env!("CARGO_PKG_VERSION"), log_tail }
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub(crate) struct OnboardingSupportDraft {
+    markdown: String,
+}
+
+/// Saves the already-redacted long report for a manual mail attachment. The
+/// UI gets only this logical path, never the user-specific filesystem path.
+#[tauri::command]
+pub(crate) fn onboarding_support_report_save(
+    app: tauri::AppHandle,
+    draft: OnboardingSupportDraft,
+) -> Option<String> {
+    if draft.markdown.is_empty() || draft.markdown.len() > SUPPORT_REPORT_MAX_BYTES || draft.markdown.contains('\0') {
+        return None;
+    }
+    let root = app.path().app_local_data_dir().ok()?;
+    save_onboarding_support_draft(&root.join("support-reports"), &draft.markdown)
+}
+
+fn save_onboarding_support_draft(directory: &Path, markdown: &str) -> Option<String> {
+    match fs::symlink_metadata(&directory) {
+        Ok(metadata) if metadata.file_type().is_dir() => {}
+        Ok(_) => return None,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => fs::create_dir_all(&directory).ok()?,
+        Err(_) => return None,
+    }
+    set_private_dir_permissions(&directory).ok()?;
+    let file_name = format!("desktop-setup-{}.md", SUPPORT_REPORT_SEQUENCE.fetch_add(1, Ordering::Relaxed));
+    let path = directory.join(&file_name);
+    let mut options = fs::OpenOptions::new();
+    options.write(true).create_new(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.mode(0o600);
+    }
+    let mut file = options.open(&path).ok()?;
+    file.write_all(markdown.as_bytes()).ok()?;
+    file.sync_all().ok()?;
+    set_private_permissions(&path).ok()?;
+    Some(format!("Job Hunter Team/Support reports/{file_name}"))
+}
+
 #[cfg(windows)]
 pub(crate) fn reveal(path: &Path) -> std::io::Result<()> {
     let root = std::env::var_os("SystemRoot").map(PathBuf::from).unwrap_or_else(|| PathBuf::from(r"C:\Windows"));
@@ -413,7 +484,7 @@ pub(crate) fn reveal(path: &Path) -> std::io::Result<()> {
 
 #[cfg(test)]
 mod tests {
-    use super::{append, entry, failure_cause, utc, RuntimeLog};
+    use super::{append, entry, failure_cause, save_onboarding_support_draft, utc, RuntimeLog};
     use std::{
         fs,
         time::{Duration, UNIX_EPOCH},
@@ -712,6 +783,23 @@ mod tests {
         assert_eq!(log.take_cause(), None, "a later step that worked clears it");
         log.record("jht up", Err("process_timeout"), b"", b"still pulling the image\n", Duration::ZERO);
         assert_eq!(log.take_cause().as_deref(), Some("still pulling the image"));
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn a_long_support_report_is_saved_privately_but_returns_only_a_logical_path() {
+        let root = dir("support-draft");
+        let actual = root.join("Ada").join("support-reports");
+        let logical = save_onboarding_support_draft(&actual, "# redacted report\n[ip] [secret]\n").unwrap();
+        assert!(logical.starts_with("Job Hunter Team/Support reports/desktop-setup-") && logical.ends_with(".md"));
+        assert!(!logical.contains("Ada") && !logical.contains(&actual.display().to_string()));
+        let file = fs::read_dir(&actual).unwrap().next().unwrap().unwrap().path();
+        assert_eq!(fs::read_to_string(&file).unwrap(), "# redacted report\n[ip] [secret]\n");
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            assert_eq!(fs::metadata(file).unwrap().permissions().mode() & 0o777, 0o600);
+        }
         let _ = fs::remove_dir_all(&root);
     }
 
