@@ -1,6 +1,8 @@
 import { useEffect, useId, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent } from "react";
 import { createPortal } from "react-dom";
 import { appLocale } from "../lib/app-locale";
+import { describeError } from "../lib/error-catalog";
+import { canSaveTextFile, saveTextFile } from "../lib/save-text-file";
 import { fill } from "../lib/text-slots";
 import { PRESETS } from "./theme-presets";
 import {
@@ -168,6 +170,15 @@ export default function ThemeEditor({ onClose, onChanged, initialStart = "dark" 
     }
   };
 
+  const saveAsFile = async () => {
+    if (blocked) return setNote(text.exportBlocked);
+    const result = await saveTextFile("jht-theme.json", writeThemeFile(text.title, start, seeds));
+    if (result.outcome === "saved") return setNote(text.fileSaved);
+    if (result.outcome === "cancelled") return setNote("");
+    const failure = describeError(result.code, { locale: appLocale() });
+    setNote(`${failure.text} ${failure.action}`);
+  };
+
   const save = () => {
     if (blocked) return;
     const done = saveCustomTheme({ v: 1, start, family: seedFamily(seeds), seeds, vars: tokens });
@@ -284,6 +295,11 @@ export default function ThemeEditor({ onClose, onChanged, initialStart = "dark" 
           <button type="button" aria-disabled={blocked} onClick={copyTheme}>
             {text.copy}
           </button>
+          {canSaveTextFile() && (
+            <button type="button" aria-disabled={blocked} onClick={saveAsFile}>
+              {text.saveFile}
+            </button>
+          )}
           <button type="button" onClick={() => fileInput.current?.click()}>
             {text.importFile}
           </button>

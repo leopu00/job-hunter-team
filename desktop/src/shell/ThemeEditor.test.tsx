@@ -3,6 +3,9 @@ import { join } from "node:path";
 import { cleanup, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+const native = vi.hoisted(() => ({ invoke: vi.fn(), isTauri: vi.fn(() => false) }));
+vi.mock("@tauri-apps/api/core", () => native);
 import ThemePicker from "./ThemePicker";
 import { CUSTOM_STORAGE_KEY, THEMES, THEME_STORAGE_KEY, readStoredCustom } from "./theme";
 import { PRESETS } from "./theme-presets";
@@ -16,6 +19,8 @@ function setLocale(locale: string) {
 }
 
 beforeEach(() => {
+  native.invoke.mockReset();
+  native.isTauri.mockReturnValue(false);
   setLocale("it");
   localStorage.clear();
   document.documentElement.removeAttribute("style");
@@ -295,5 +300,52 @@ describe("a theme that comes in and goes out as text", { timeout: 60_000 }, () =
     await user.click(within(dialog).getByRole("button", { name: "Importa" }));
     expect(textField("Accento")).toHaveValue("#7cc4ff");
     expect(within(dialog).queryByRole("textbox", { name: "Testo del tema" })).toBeNull();
+  });
+});
+
+describe("saving the theme in a file with the system's window", { timeout: 60_000 }, () => {
+  const noteOf = (dialog: HTMLElement) => dialog.querySelector(".theme-editor__note")!.textContent;
+
+  it("offers the button only in the desktop app", async () => {
+    await openEditor();
+    expect(screen.queryByRole("button", { name: "Salva come file…" })).toBeNull();
+    cleanup();
+    native.isTauri.mockReturnValue(true);
+    await openEditor();
+    expect(screen.getByRole("button", { name: "Salva come file…" })).toBeInTheDocument();
+  });
+
+  it("hands the native command a fixed name and the theme's text, and tells when it was saved", async () => {
+    native.isTauri.mockReturnValue(true);
+    native.invoke.mockResolvedValue({ outcome: "saved" });
+    const { user, dialog } = await openEditor();
+    await type(user, "Accento", "#e0a030");
+    await user.click(screen.getByRole("button", { name: "Salva come file…" }));
+    await vi.waitFor(() => expect(noteOf(dialog)).toBe("File salvato."));
+    expect(native.invoke).toHaveBeenCalledWith("save_text_file", {
+      suggestedName: "jht-theme.json",
+      contents: writeThemeFile("Tema personale", "dark", { ...PRESETS.dark.seeds, accent: "#e0a030" }),
+    });
+  });
+
+  it("says nothing when the person closes the window, and tells a refusal in the catalog's words with what to do", async () => {
+    native.isTauri.mockReturnValue(true);
+    native.invoke.mockResolvedValueOnce({ outcome: "cancelled" });
+    const { user, dialog } = await openEditor();
+    await user.click(screen.getByRole("button", { name: "Salva come file…" }));
+    await vi.waitFor(() => expect(native.invoke).toHaveBeenCalledTimes(1));
+    expect(noteOf(dialog)).toBe("");
+    native.invoke.mockRejectedValueOnce({ code: "save_text_failed" });
+    await user.click(screen.getByRole("button", { name: "Salva come file…" }));
+    await vi.waitFor(() => expect(noteOf(dialog)).toBe("Il file non è stato salvato. Scegli un'altra cartella e riprova, oppure usa «Copia»."));
+  });
+
+  it("does not hand over a theme that does not read well", async () => {
+    native.isTauri.mockReturnValue(true);
+    const { user, dialog } = await openEditor();
+    await type(user, "Testo", "#303040");
+    await user.click(screen.getByRole("button", { name: "Salva come file…" }));
+    expect(noteOf(dialog)).toBe("Un tema che non si legge bene non si esporta: correggi prima ciò che non va.");
+    expect(native.invoke).not.toHaveBeenCalled();
   });
 });

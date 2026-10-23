@@ -26,6 +26,8 @@ export interface ThemeEditorText {
   saveBlocked: string;
   exportBlocked: string;
   copy: string; // copies the theme's text
+  saveFile: string; // saves it with the system's window
+  fileSaved: string;
   copied: string;
   copyFailed: string;
   importFile: string;
@@ -70,6 +72,8 @@ export const THEME_EDITOR_TEXT: Record<Locale, ThemeEditorText> = {
     saveBlocked: "Per salvare correggi prima ciò che non va.",
     exportBlocked: "Un tema che non si legge bene non si esporta: correggi prima ciò che non va.",
     copy: "Copia il tema",
+    saveFile: "Salva come file…",
+    fileSaved: "File salvato.",
     copied: "Tema copiato negli appunti.",
     copyFailed: "Appunti non disponibili: il testo del tema è nella casella, copialo a mano.",
     importFile: "Importa da file…",
@@ -118,6 +122,8 @@ export const THEME_EDITOR_TEXT: Record<Locale, ThemeEditorText> = {
     saveBlocked: "To save, first fix what is wrong.",
     exportBlocked: "A theme that is hard to read is not exported: first fix what is wrong.",
     copy: "Copy the theme",
+    saveFile: "Save as a file…",
+    fileSaved: "File saved.",
     copied: "Theme copied to the clipboard.",
     copyFailed: "Clipboard not available: the theme's text is in the box, copy it by hand.",
     importFile: "Import from a file…",
@@ -166,6 +172,8 @@ export const THEME_EDITOR_TEXT: Record<Locale, ThemeEditorText> = {
     saveBlocked: "Zum Speichern erst korrigieren, was nicht stimmt.",
     exportBlocked: "Ein schlecht lesbares Design wird nicht exportiert: erst korrigieren, was nicht stimmt.",
     copy: "Design kopieren",
+    saveFile: "Als Datei speichern…",
+    fileSaved: "Datei gespeichert.",
     copied: "Design in die Zwischenablage kopiert.",
     copyFailed: "Zwischenablage nicht verfügbar: der Text des Designs steht im Feld, kopiere ihn von Hand.",
     importFile: "Aus Datei importieren…",
@@ -214,6 +222,8 @@ export const THEME_EDITOR_TEXT: Record<Locale, ThemeEditorText> = {
     saveBlocked: "Pour enregistrer, corrige d'abord ce qui ne va pas.",
     exportBlocked: "Un thème peu lisible ne s'exporte pas : corrige d'abord ce qui ne va pas.",
     copy: "Copier le thème",
+    saveFile: "Enregistrer comme fichier…",
+    fileSaved: "Fichier enregistré.",
     copied: "Thème copié dans le presse-papiers.",
     copyFailed: "Presse-papiers indisponible : le texte du thème est dans la zone, copie-le à la main.",
     importFile: "Importer depuis un fichier…",
@@ -262,6 +272,8 @@ export const THEME_EDITOR_TEXT: Record<Locale, ThemeEditorText> = {
     saveBlocked: "Para guardar, corrige antes lo que falla.",
     exportBlocked: "Un tema que se lee mal no se exporta: corrige antes lo que falla.",
     copy: "Copiar el tema",
+    saveFile: "Guardar como archivo…",
+    fileSaved: "Archivo guardado.",
     copied: "Tema copiado al portapapeles.",
     copyFailed: "Portapapeles no disponible: el texto del tema está en el cuadro, cópialo a mano.",
     importFile: "Importar desde un archivo…",
@@ -310,6 +322,8 @@ export const THEME_EDITOR_TEXT: Record<Locale, ThemeEditorText> = {
     saveBlocked: "Para guardar, corrige primeiro o que não está bem.",
     exportBlocked: "Um tema que se lê mal não se exporta: corrige primeiro o que não está bem.",
     copy: "Copiar o tema",
+    saveFile: "Guardar como ficheiro…",
+    fileSaved: "Ficheiro guardado.",
     copied: "Tema copiado para a área de transferência.",
     copyFailed: "Área de transferência indisponível: o texto do tema está na caixa, copia-o à mão.",
     importFile: "Importar de um ficheiro…",
@@ -358,6 +372,8 @@ export const THEME_EDITOR_TEXT: Record<Locale, ThemeEditorText> = {
     saveBlocked: "A mentéshez előbb javítsd, ami nem jó.",
     exportBlocked: "A rosszul olvasható témát nem lehet exportálni: előbb javítsd, ami nem jó.",
     copy: "Téma másolása",
+    saveFile: "Mentés fájlként…",
+    fileSaved: "A fájl elmentve.",
     copied: "A téma a vágólapra másolva.",
     copyFailed: "A vágólap nem érhető el: a téma szövege a mezőben van, másold ki kézzel.",
     importFile: "Importálás fájlból…",
