@@ -211,8 +211,19 @@ if op=='profile':
   if not heavy: break
   victim=max(heavy,key=lambda item:len(item['text'])); victim['text']=None; victim['state']='over_budget'
  emit({'ok':True,'data':data})
+import os
 try:
- db=sqlite3.connect('file:/jht_home/jobs.db?mode=ro',uri=True); db.row_factory=sqlite3.Row; db.execute('PRAGMA query_only=ON'); db.execute('SELECT 1 FROM positions LIMIT 1')
+ # A team that has never run has no jobs.db yet: that is no positions, not a failure. Only a file
+ # missing from the team's home counts; a jobs.db that is there and cannot be read stays a failure,
+ # and so does a missing home. The reads below then run on an empty database, as for a team with none.
+ try: os.lstat('/jht_home/jobs.db'); absent=False
+ except FileNotFoundError: absent=os.path.isdir('/jht_home')
+ if absent:
+  db=sqlite3.connect(':memory:'); db.row_factory=sqlite3.Row
+  db.executescript('CREATE TABLE positions(id INTEGER PRIMARY KEY,status TEXT,title TEXT,company TEXT,role_family TEXT,loc_country TEXT,loc_city TEXT,source TEXT,found_at TEXT);CREATE TABLE scores(position_id INTEGER,total_score INTEGER);CREATE TABLE applications(position_id INTEGER,critic_score INTEGER);')
+ else:
+  db=sqlite3.connect('file:/jht_home/jobs.db?mode=ro',uri=True); db.row_factory=sqlite3.Row; db.execute('PRAGMA query_only=ON')
+ db.execute('SELECT 1 FROM positions LIMIT 1')
 except Exception: fail('positions_unavailable')
 if op=='detail': emit({'ok':True,'data':position_detail(int(req['id']))})
 def trunc(value,size): return value[:size] if isinstance(value,str) else value
