@@ -47,14 +47,35 @@ const POWERSHELL_FLAGS: [&str; 6] = [
 
 pub(crate) const AUTOSTART_TASK_NAME: &str = "Job Hunter Team - Start runtime";
 
+fn xml_section<'a>(xml: &'a str, name: &str) -> Option<&'a str> {
+    let open = format!("<{name}");
+    let close = format!("</{name}>");
+    let openings: Vec<usize> = xml.match_indices(&open)
+        .filter_map(|(at, _)| matches!(xml.as_bytes().get(at + open.len()), Some(b'>') | Some(b' ') | Some(b'\t') | Some(b'\r') | Some(b'\n')).then_some(at))
+        .collect();
+    if openings.len() != 1 || xml.matches(&close).count() != 1 { return None; }
+    let open_end = xml[openings[0]..].find('>')? + openings[0];
+    let start = open_end + 1;
+    let end = xml[start..].find(&close)? + start;
+    Some(&xml[start..end])
+}
+
+fn xml_text(xml: &str, name: &str) -> Option<&str> {
+    xml_section(xml, name).filter(|value| !value.contains('<'))
+}
+
+fn autostart_action(shell: &Path, wrapper: &Path) -> String {
+    format!(
+        "\"{}\" -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File \"{}\" up",
+        shell.display(), wrapper.display(),
+    )
+}
+
 /// The task is created by the non-elevated desktop process, explicitly bound
 /// to its current interactive user. `/IT` refuses a password-backed task.
 pub(crate) fn autostart_create_args(wrapper: &Path, system_root: Option<OsString>, user: &str) -> Vec<OsString> {
     let shell = powershell_path(system_root);
-    let action = format!(
-        "\"{}\" -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File \"{}\" up",
-        shell.display(), wrapper.display(),
-    );
+    let action = autostart_action(&shell, wrapper);
     ["/Create", "/TN", AUTOSTART_TASK_NAME, "/SC", "ONLOGON", "/TR", &action, "/RL", "LIMITED", "/RU", user, "/IT", "/F"]
         .into_iter().map(OsString::from).collect()
 }
@@ -64,20 +85,30 @@ fn autostart_query_args() -> Vec<OsString> {
 }
 
 fn autostart_contract(xml: &str, user: &str, shell: &Path, wrapper: &Path) -> bool {
-    xml.contains("<LogonTrigger>")
-        && xml.contains(&format!("<UserId>{user}</UserId>"))
-        && xml.contains("<LogonType>InteractiveToken</LogonType>")
-        && xml.contains("<RunLevel>LeastPrivilege</RunLevel>")
-        && xml.contains("<Enabled>true</Enabled>")
-        && xml.contains(&format!("<Command>{}</Command>", shell.display()))
-        && xml.contains(&format!("-File &quot;{}&quot; up", wrapper.display()))
+    let no_other_triggers = ["BootTrigger", "CalendarTrigger", "EventTrigger", "IdleTrigger", "RegistrationTrigger", "SessionStateChangeTrigger", "TimeTrigger"]
+        .iter().all(|tag| !xml.contains(&format!("<{tag}")));
+    let no_other_actions = ["ComHandler", "SendEmail", "ShowMessage"]
+        .iter().all(|tag| !xml.contains(&format!("<{tag}")));
+    let expected_arguments = autostart_action(shell, wrapper)
+        .split_once(' ').map(|(_, args)| args.replace('"', "&quot;"));
+    no_other_triggers && no_other_actions
+        && xml_section(xml, "LogonTrigger").is_some()
+        && xml_section(xml, "Exec").is_some()
+        && xml_section(xml, "LogonTrigger").and_then(|part| xml_text(part, "UserId")) == Some(user)
+        && xml_section(xml, "Principal").and_then(|part| xml_text(part, "UserId")) == Some(user)
+        && xml_section(xml, "Principal").and_then(|part| xml_text(part, "LogonType")) == Some("InteractiveToken")
+        && xml_section(xml, "Principal").and_then(|part| xml_text(part, "RunLevel")) == Some("LeastPrivilege")
+        && xml_section(xml, "Settings").and_then(|part| xml_text(part, "Enabled")) == Some("true")
+        && xml_section(xml, "Exec").and_then(|part| xml_text(part, "Command")) == shell.to_str()
+        && xml_section(xml, "Exec").and_then(|part| xml_text(part, "Arguments")) == expected_arguments.as_deref()
 }
 
 #[cfg(windows)]
 pub(crate) fn register_autostart(wrapper: &Path) -> bool {
     let root = std::env::var_os("SystemRoot").unwrap_or_else(|| OsString::from(r"C:\Windows"));
     let schtasks = PathBuf::from(root.clone()).join("System32").join("schtasks.exe");
-    let user = match crate::runtime_host::run_program("whoami.exe", std::iter::empty::<&str>(), None, std::time::Duration::from_secs(10)) {
+    let whoami = PathBuf::from(&root).join("System32").join("whoami.exe");
+    let user = match crate::runtime_host::run_program(whoami.to_string_lossy().as_ref(), std::iter::empty::<&str>(), None, std::time::Duration::from_secs(10)) {
         Ok(result) if result.success() => String::from_utf8_lossy(&result.stdout).trim().to_owned(),
         _ => return false,
     };
@@ -444,10 +475,11 @@ mod tests {
     fn autostart_read_back_requires_the_current_interactive_user_and_exact_action() {
         let shell = Path::new(r"C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe");
         let wrapper = Path::new(r"C:\Users\someone\.local\bin\jht.ps1");
-        let xml = r#"<LogonTrigger><Enabled>true</Enabled><UserId>JHTPC\someone</UserId></LogonTrigger><Principals><Principal><UserId>JHTPC\someone</UserId><LogonType>InteractiveToken</LogonType><RunLevel>LeastPrivilege</RunLevel></Principal></Principals><Actions><Exec><Command>C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe</Command><Arguments>-File &quot;C:\Users\someone\.local\bin\jht.ps1&quot; up</Arguments></Exec></Actions>"#;
+        let xml = r#"<LogonTrigger><Enabled>true</Enabled><UserId>JHTPC\someone</UserId></LogonTrigger><Principal><UserId>JHTPC\someone</UserId><LogonType>InteractiveToken</LogonType><RunLevel>LeastPrivilege</RunLevel></Principal><Settings><Enabled>true</Enabled></Settings><Exec><Command>C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe</Command><Arguments>-NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File &quot;C:\Users\someone\.local\bin\jht.ps1&quot; up</Arguments></Exec>"#;
         assert!(autostart_contract(xml, r"JHTPC\someone", shell, wrapper));
         assert!(!autostart_contract(xml, r"JHTPC\other", shell, wrapper));
         assert!(!autostart_contract(&xml.replace("InteractiveToken", "Password"), r"JHTPC\someone", shell, wrapper));
+        assert!(!autostart_contract(&format!("{xml}<Exec></Exec>"), r"JHTPC\someone", shell, wrapper));
     }
 
     #[test]

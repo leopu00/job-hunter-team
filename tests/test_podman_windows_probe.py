@@ -220,8 +220,8 @@ def test_runtime_enabler_installs_persistent_container_lifecycle():
     assert "WantedBy=multi-user.target" in source
     assert "systemctl enable --no-reload jht-container.service" in source
     assert "sudo timeout 120 systemctl start jht-container.service" in source
-    assert "New-ScheduledTaskTrigger -AtLogOn -User $UserId" in source
-    assert "Install-JhtStartupTask -PodmanPath $Podman" in source
+    assert "New-ScheduledTaskTrigger -AtLogOn -User $UserId" not in source
+    assert "Install-JhtStartupTask -PodmanPath $Podman" not in source
 
 
 @pytest.mark.skipif(shutil.which("pwsh") is None, reason="PowerShell is unavailable")
