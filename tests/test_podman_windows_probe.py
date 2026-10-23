@@ -101,7 +101,9 @@ def test_persistent_network_config_uses_native_connector_and_localhost_proxy():
     assert "jht-rootless-podman.service" in source
     assert "system service --time=0 unix:///run/user/1000/podman/podman.sock" in source
     assert "Requires=user-runtime-dir@1000.service" in source
-    assert "CONTAINERS_CGROUP_MANAGER=cgroupfs" in source
+    # the manager is Podman's own flag: the variable used before is not a Podman setting (T87)
+    assert "podman --cgroup-manager=cgroupfs --log-level=info system service" in source
+    assert 'Environment="CONTAINERS_CGROUP_MANAGER' not in source
     assert "sudo timeout 90 systemctl restart $egressServices" in source
     assert "jht-windows-egress-proxy.service jht-windows-egress-proxy-broker.service" in source
     assert "-Policy agent -ListenPort $Port" in source
