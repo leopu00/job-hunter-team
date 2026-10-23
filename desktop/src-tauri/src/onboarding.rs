@@ -1806,6 +1806,9 @@ fn install_local_windows(
             .is_some_and(|dir| release_channel::installed_runtime_reusable(channel.as_ref(), &dir))
         {
             show_windows_support_notice_for_reused_runtime(phase);
+            if !crate::windows_runtime::register_autostart(&wrapper) {
+                phase("ui_notice_autostart_inactive");
+            }
             trace_local_runtime("runtime", "install_reused");
             return Ok(wrapper);
         }
@@ -1855,7 +1858,11 @@ fn install_local_windows(
         let _ = fs::remove_dir_all(&dir);
         result
     })?;
-    wrapper_path(app).ok_or_else(|| failure("runtime_missing"))
+    let wrapper = wrapper_path(app).ok_or_else(|| failure("runtime_missing"))?;
+    if !crate::windows_runtime::register_autostart(&wrapper) {
+        phase("ui_notice_autostart_inactive");
+    }
+    Ok(wrapper)
 }
 
 /// A file from `url`, at most MAX_INSTALLER_BYTES, refused before the network

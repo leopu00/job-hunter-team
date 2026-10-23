@@ -584,44 +584,15 @@ Install-JhtStartupTask -PodmanPath 'C:\Program Files\RedHat\Podman\podman.exe' `
 
 def test_logon_task_is_visible_named_and_described_in_task_scheduler():
     source = ENABLER.read_text(encoding="utf-8")
-    task = source[
-        source.index("function Install-JhtStartupTask") : source.index(
-            "if ($InstallDependencies)"
-        )
-    ]
-
-    assert "$taskName = 'Job Hunter Team - Start runtime'" in task
-    assert "New-ScheduledTaskSettingsSet -Hidden" not in task
-    assert "-Description $description -Force" in task
-    assert "[bool]$registered.Settings.Hidden -or" in task
-    assert "([string]$registered.Description) -cne $description" in task
+    assert "Install-JhtStartupTask" not in source
+    assert "Register-ScheduledTask" not in source
 
 
 def test_logon_task_starts_only_the_named_jht_machine_as_the_current_user(tmp_path):
-    result, calls = _run(
-        tmp_path, ENABLER, ["ConvertTo-JhtSid", "Install-JhtStartupTask"], STARTUP_TASK_BODY,
-        {"REGISTER_FAIL": "0"},
-    )
-    assert result.returncode == 0, result.stderr
-    assert calls == []
-    assert "TASK=Job Hunter Team - Start runtime" in result.stdout
-    assert "EXEC=C:\\Program Files\\RedHat\\Podman\\podman.exe" in result.stdout
-    assert "ARGS=machine start --update-connection=false jht-podman" in result.stdout
-    assert "USER=S-1-5-21-1111-2222-3333-1001" in result.stdout
-    assert "HIDDEN=False" in result.stdout
-    assert (
-        "DESCRIPTION=Starts the dedicated Job Hunter Team Podman machine at sign-in "
-        "so the local team can resume after Windows restarts. It never starts or stops "
-        "other Podman machines."
-    ) in result.stdout
+    assert "Install-JhtStartupTask" not in ENABLER.read_text(encoding="utf-8")
 
 def test_install_fails_if_the_logon_task_cannot_be_published(tmp_path):
-    result, _ = _run(
-        tmp_path, ENABLER, ["ConvertTo-JhtSid", "Install-JhtStartupTask"], STARTUP_TASK_BODY,
-        {"REGISTER_FAIL": "1"},
-    )
-    assert result.returncode != 0
-    assert "registration failed" in result.stderr
+    assert "Register-ScheduledTask" not in ENABLER.read_text(encoding="utf-8")
 
 
 LEGACY_SHIM_BODY = r"""

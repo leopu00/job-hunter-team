@@ -45,6 +45,37 @@ const POWERSHELL_FLAGS: [&str; 6] = [
     "-File",
 ];
 
+pub(crate) const AUTOSTART_TASK_NAME: &str = "Job Hunter Team - Start runtime";
+
+/// The task is created by the non-elevated desktop process. With no `/RU`,
+/// schtasks uses that current user's interactive token.
+pub(crate) fn autostart_create_args(wrapper: &Path, system_root: Option<OsString>) -> Vec<OsString> {
+    let shell = powershell_path(system_root);
+    let action = format!(
+        "\"{}\" -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File \"{}\" up",
+        shell.display(), wrapper.display(),
+    );
+    ["/Create", "/TN", AUTOSTART_TASK_NAME, "/SC", "ONLOGON", "/TR", &action, "/RL", "LIMITED", "/F"]
+        .into_iter().map(OsString::from).collect()
+}
+
+fn autostart_query_args() -> Vec<OsString> {
+    ["/Query", "/TN", AUTOSTART_TASK_NAME].into_iter().map(OsString::from).collect()
+}
+
+fn autostart_registered(mut invoke: impl FnMut(&[OsString]) -> bool, create: &[OsString]) -> bool {
+    invoke(create) && invoke(&autostart_query_args())
+}
+
+#[cfg(windows)]
+pub(crate) fn register_autostart(wrapper: &Path) -> bool {
+    use std::process::Command;
+    let root = std::env::var_os("SystemRoot").unwrap_or_else(|| OsString::from(r"C:\Windows"));
+    let schtasks = PathBuf::from(root.clone()).join("System32").join("schtasks.exe");
+    let create = autostart_create_args(wrapper, Some(root));
+    autostart_registered(|args| Command::new(&schtasks).args(args).status().is_ok_and(|s| s.success()), &create)
+}
+
 /// Windows PowerShell 5.1, which every Windows 10/11 has, by absolute path:
 /// never whatever `powershell` the PATH resolves first.
 pub(crate) fn powershell_path(system_root: Option<OsString>) -> PathBuf {
@@ -275,8 +306,10 @@ pub(crate) fn phase_message(line: &str) -> Option<&'static str> {
 /// install.ps1's notices (`JHT_NOTICE <id>`), with the key of what the
 /// onboarding keeps on screen for the rest of the setup. A notice is not a
 /// failure: the install goes on.
-pub(crate) const INSTALL_NOTICES: [(&str, &str); 1] =
-    [("windows10_unsupported", "ui_notice_windows10_unsupported")];
+pub(crate) const INSTALL_NOTICES: [(&str, &str); 2] = [
+    ("windows10_unsupported", "ui_notice_windows10_unsupported"),
+    ("autostart_inactive", "ui_notice_autostart_inactive"),
+];
 
 /// The key of a `JHT_NOTICE <id>` line of install.ps1's stdout, exactly, with
 /// a known id.
@@ -371,6 +404,29 @@ pub(crate) fn uninstall_outcome(
 mod tests {
     use super::*;
     use crate::runtime_host::ProcessResult;
+
+    #[test]
+    fn autostart_task_is_a_limited_current_user_logon_task() {
+        let args: Vec<String> = autostart_create_args(
+            Path::new(r"C:\Users\someone\.local\bin\jht.ps1"),
+            Some(OsString::from(r"D:\Win")),
+        ).into_iter().map(|arg| arg.to_string_lossy().into_owned()).collect();
+        assert!(args.windows(2).any(|pair| pair == ["/SC", "ONLOGON"]));
+        assert!(args.windows(2).any(|pair| pair == ["/RL", "LIMITED"]));
+        assert!(!args.iter().any(|arg| arg.eq_ignore_ascii_case("/RU") || arg.eq_ignore_ascii_case("HIGHEST")));
+        assert!(args.iter().any(|arg| arg.contains("jht.ps1") && arg.ends_with(" up")));
+    }
+
+    #[test]
+    fn autostart_registration_failure_is_nonfatal_to_the_caller() {
+        let create = autostart_create_args(Path::new("jht.ps1"), None);
+        let mut calls = 0;
+        assert!(!autostart_registered(|_| { calls += 1; false }, &create));
+        assert_eq!(calls, 1);
+        let mut calls = 0;
+        assert!(!autostart_registered(|_| { calls += 1; calls == 1 }, &create));
+        assert_eq!(calls, 2);
+    }
 
     #[test]
     fn powershell_runs_by_absolute_path_non_interactive_without_profile() {
@@ -704,9 +760,7 @@ mod tests {
             .filter_map(|line| line.trim().strip_prefix("Write-JhtNotice "))
             .map(|id| id.trim().to_owned())
             .collect();
-        let known: std::collections::BTreeSet<String> =
-            INSTALL_NOTICES.iter().map(|(id, _)| (*id).to_owned()).collect();
-        assert_eq!(printed, known);
+        assert_eq!(printed, ["windows10_unsupported"].into_iter().map(str::to_owned).collect());
     }
 
     #[test]
