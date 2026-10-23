@@ -7,14 +7,48 @@
     <title>Job Hunter Team</title>
     <script>
       (() => {
-        const allowed = ["dark", "light", "graphite", "ocean", "paper"];
-        let theme = "dark";
+        // The same table as src/shell/theme.ts (a test runs this script against it).
+        const families = { dark: "dark", light: "light", graphite: "dark", ocean: "dark", paper: "light", midnight: "dark", forest: "dark", dusk: "dark", contrast: "dark", sage: "light", lavender: "light" };
+        // The person's own palette: the 21 variables saved with it, checked here one by one (a name from this list,
+        // a #rrggbb value; the grid veil an rgba of three numbers). One wrong thing and all of it is ignored.
+        const names = ["--color-void", "--color-deep", "--color-panel", "--color-card", "--color-row", "--color-border", "--color-border-glow", "--color-white", "--color-bright", "--color-base", "--color-muted", "--color-dim", "--color-grid", "--color-green", "--color-ready", "--color-yellow", "--color-blue", "--color-red", "--color-orange", "--color-purple", "--sync-warn"];
+        try {
+          if (localStorage.getItem("jht-desktop-theme") === "custom") {
+            const custom = JSON.parse(localStorage.getItem("jht-desktop-theme-custom"));
+            const vars = custom && custom.vars;
+            const okValue = (name, value) => {
+              if (typeof value !== "string") return false;
+              if (name !== "--color-grid") return /^#[0-9a-f]{6}$/i.test(value);
+              const m = /^rgba\((\d{1,3}), (\d{1,3}), (\d{1,3}), 0\.\d{1,3}\)$/.exec(value);
+              return m !== null && Number(m[1]) <= 255 && Number(m[2]) <= 255 && Number(m[3]) <= 255;
+            };
+            if (
+              custom.v === 1 && (custom.family === "dark" || custom.family === "light") &&
+              Object.keys(vars).length === names.length &&
+              names.every((name) => Object.prototype.hasOwnProperty.call(vars, name) && okValue(name, vars[name]))
+            ) {
+              names.forEach((name) => document.documentElement.style.setProperty(name, vars[name]));
+              document.documentElement.dataset.jhtTheme = "custom";
+              document.documentElement.dataset.theme = custom.family;
+              return;
+            }
+          }
+        } catch {}
+        let theme;
         try {
           const stored = localStorage.getItem("jht-desktop-theme");
-          if (allowed.includes(stored)) theme = stored;
+          if (Object.prototype.hasOwnProperty.call(families, stored)) theme = stored;
         } catch {}
+        if (!theme) {
+          // Nothing valid chosen, or «follow the system»: the system's light or dark.
+          let light = false;
+          try {
+            light = window.matchMedia("(prefers-color-scheme: light)").matches === true;
+          } catch {}
+          theme = light ? "light" : "dark";
+        }
         document.documentElement.dataset.jhtTheme = theme;
-        document.documentElement.dataset.theme = theme === "light" || theme === "paper" ? "light" : "dark";
+        document.documentElement.dataset.theme = families[theme];
       })();
     </script>
   </head>

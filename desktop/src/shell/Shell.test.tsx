@@ -110,7 +110,7 @@ describe("Shell", () => {
       navigate("/dashboard", { replace: true });
       const user = userEvent.setup();
       render(<Shell />);
-      await user.click(screen.getByRole("button", { name: "Theme: Dark. Change theme" }));
+      await user.click(screen.getByRole("button", { name: "Theme: Dark (system). Change theme" }));
       const menu = screen.getByRole("menu", { name: "App theme" });
       expect(within(menu).getByRole("menuitemradio", { name: "Ocean" })).toBeInTheDocument();
       expect(menu).not.toHaveTextContent(/Scuro|Chiaro|Oceano|Carta|Tema/);
@@ -219,10 +219,11 @@ describe("Shell", () => {
     const first = render(<Shell />);
 
     await user.click(
-      screen.getByRole("button", { name: "Tema: Scuro. Cambia tema" }),
+      screen.getByRole("button", { name: "Tema: Scuro (sistema). Cambia tema" }),
     );
     const menu = screen.getByRole("menu", { name: "Tema dell'app" });
-    expect(within(menu).getAllByRole("menuitemradio")).toHaveLength(5);
+    // «follow the system» and the eleven palettes
+    expect(within(menu).getAllByRole("menuitemradio")).toHaveLength(12);
     await user.click(within(menu).getByRole("menuitemradio", { name: "Oceano" }));
 
     expect(localStorage.getItem(THEME_STORAGE_KEY)).toBe("ocean");
