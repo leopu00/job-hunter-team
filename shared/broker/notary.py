@@ -25,6 +25,8 @@ import re
 from datetime import datetime, timezone
 from urllib.parse import urlsplit
 
+import tldextract
+
 from . import store
 
 STATE = "authorisations"
@@ -38,9 +40,13 @@ PORTALS = ("linkedin", "indeed", "infojobs", "glassdoor", "greenhouse", "lever",
            "smartrecruiters", "ashby", "personio", "recruitee", "teamtailor")
 LABEL = r"[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?"
 DOMAIN = re.compile(rf"^(?:{LABEL}\.)+[a-z]{{2,63}}$")
-# Second-level labels under a two-letter country domain that are not a registrant's own
-# (`example.co.uk`): an approximation of eTLD+1 without the public suffix list.
-SHARED_SECOND_LEVEL = frozenset({"co", "com", "org", "net", "ac", "gov", "edu"})
+# The bundled Public Suffix List is the only authority for reducing a host to a
+# registrable domain. Network refresh is deliberately disabled: an unavailable
+# or altered remote list must never decide an authorisation boundary at claim
+# time. The private PSL section is essential here: `acme.github.io` and
+# `other.github.io` are distinct registrable domains, as are similar tenant
+# hosts maintained in the list.
+_PSL = tldextract.TLDExtract(suffix_list_urls=(), include_psl_private_domains=True)
 MAX_POSITION_ID = 2_147_483_647
 MAX_POSITIONS = 20_000
 
@@ -57,15 +63,17 @@ def _now() -> str:
 
 
 def registrable(host: str) -> str | None:
-    """The registrable part of a host (`apply.jobs.example.co.uk` -> `example.co.uk`), or None."""
+    """The PSL registrable part of a host, or None when the PSL cannot prove one."""
     host = host.lower()
     host = host[:-1] if host.endswith(".") else host
     if len(host) > 253 or not DOMAIN.fullmatch(host):
         return None
-    labels = host.split(".")
-    keep = 3 if len(labels[-1]) == 2 and labels[-2] in SHARED_SECOND_LEVEL else 2
-    # `co.uk` alone is the shared suffix, not somebody's domain.
-    return ".".join(labels[-keep:]) if len(labels) >= keep else None
+    parsed = _PSL(host)
+    # tldextract leaves `suffix` empty for an unknown final label. Never fall
+    # back to splitting dots: an unknown public suffix may be multi-tenant.
+    if not parsed.suffix or not parsed.domain:
+        return None
+    return f"{parsed.domain}.{parsed.suffix}".lower()
 
 
 def destination(value: object) -> str:

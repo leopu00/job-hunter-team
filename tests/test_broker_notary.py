@@ -205,8 +205,31 @@ def test_the_registrable_part_of_a_host(broker):
     assert reg("Apply.Example.CO.UK.") == "example.co.uk"
     assert reg("example.com.au") == "example.com.au"
     assert reg("a.b.example.de") == "example.de"
-    for bad in ("localhost", "com", "co.uk", "10.0.0.1", "exa_mple.com", "-a.com", ""):
+    # PSL private suffixes are tenant boundaries: never collapse two unrelated
+    # pages merely because the hosting provider has a shared parent domain.
+    assert reg("acme.github.io") == "acme.github.io"
+    assert reg("other.github.io") == "other.github.io"
+    assert reg("acme.pages.dev") == "acme.pages.dev"
+    assert reg("acme.gitlab.io") == "acme.gitlab.io"
+    assert reg("acme.netlify.app") == "acme.netlify.app"
+    assert reg("acme.vercel.app") == "acme.vercel.app"
+    # An unknown suffix must refuse instead of guessing from the last labels.
+    assert reg("apply.example.unknown-suffix") is None
+    for bad in ("localhost", "com", "co.uk", "github.io", "10.0.0.1", "exa_mple.com", "-a.com", ""):
         assert reg(bad) is None, bad
+
+
+@pytest.mark.parametrize("shown,claimed", [
+    ("web:acme.github.io", "web:other.github.io"),
+    ("web:acme.pages.dev", "web:other.pages.dev"),
+    ("web:acme.gitlab.io", "web:other.gitlab.io"),
+    ("web:acme.netlify.app", "web:other.netlify.app"),
+    ("web:acme.vercel.app", "web:other.vercel.app"),
+    ("email:acme.github.io", "email:other.github.io"),
+])
+def test_a_private_psl_tenant_can_never_claim_another_tenant(broker, shown, claimed):
+    assert admin(broker, "apply", "record", "42", T1, shown) == (0, {"ok": True, "status": "recorded"})
+    assert claim(broker, to=claimed) == {"ok": True, "claimed": False, "reason": "destination_mismatch"}
 
 
 def test_the_origins_are_closed(broker):
