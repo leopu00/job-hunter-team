@@ -19,7 +19,7 @@ TRANSPORT = ROOT / "agents" / "_skills" / "tmux-send" / "jht-tmux-send"
 
 FAKE_TMUX = r"""#!/bin/bash
 # Finto tmux. Stato in $FT: composer (la casella), transcript (la conversazione), mode, e file-interruttore:
-# mute (i tasti si perdono), lag (secondi prima che il testo compaia), enter_ignored, enter_needs_space.
+# mute (l'incolla si perde), lag (secondi prima che il testo compaia), enter_ignored.
 S="$FT"; echo "$*" >> "$S/calls"
 cmd="$1"; shift
 case "$cmd" in
@@ -32,22 +32,31 @@ case "$cmd" in
     esac
     [ -f "$S/transcript" ] && cat "$S/transcript"
     [ "$mode" = busy ] && echo '◦ Working (3s • esc to interrupt)'
-    printf '❯ %s\n' "$(cat "$S/composer" 2>/dev/null)" ;;
+    printf '╭──────────────────────────────────────────────╮\n│ ❯ %s │\n╰──────────────────────────────────────────────╯\n  ? for shortcuts\n' "$(cat "$S/composer" 2>/dev/null)" ;;
+  load-buffer)
+    while [ "$1" != "-b" ] && [ $# -gt 0 ]; do shift; done
+    [ "$1" = "-b" ] && shift
+    name="$1"; shift
+    cat > "$S/buffer.$name" ;;
+  paste-buffer)
+    while [ $# -gt 0 ]; do
+      if [ "$1" = "-b" ]; then name="$2"; shift 2; continue; fi
+      shift
+    done
+    [ -f "$S/mute" ] && exit 0
+    if [ -f "$S/lag" ]; then (sleep "$(cat "$S/lag")"; cat "$S/buffer.$name" >> "$S/composer") & exit 0; fi
+    cat "$S/buffer.$name" >> "$S/composer"; rm -f "$S/buffer.$name" ;;
   send-keys)
     while [ "$1" = "-t" ]; do shift 2; done
     key="$1"
     if [ "$key" = "-l" ]; then
-      [ -f "$S/mute" ] && exit 0
-      if [ -f "$S/lag" ]; then (sleep "$(cat "$S/lag")"; printf '%s' "$2" >> "$S/composer") & exit 0; fi
       printf '%s' "$2" >> "$S/composer"; exit 0
     fi
     if [ "$key" = "Enter" ]; then
       [ -f "$S/enter_ignored" ] && exit 0
-      if [ -f "$S/enter_needs_space" ] && [ ! -f "$S/space_seen" ]; then exit 0; fi
       if [ -s "$S/composer" ]; then cat "$S/composer" >> "$S/transcript"; echo >> "$S/transcript"; fi
       : > "$S/composer"; exit 0
     fi
-    [ "$key" = "Space" ] && : > "$S/space_seen"
     exit 0 ;;
 esac
 exit 0
@@ -76,8 +85,7 @@ def box(tmp_path):
             "FT": str(state),
             "PATH": f"{bin_dir}:{Path(sys.executable).parent}:/usr/bin:/bin",
             "JHT_HOME": str(tmp_path / "home"),
-            "JHT_TMUX_RENDER_POLLS": "4",
-            "JHT_TMUX_COMPOSER_POLLS": "2",
+            "JHT_TMUX_PROMPT_WAIT": "0",
             "PYTHONDONTWRITEBYTECODE": "1",
             **env,
         }
@@ -91,7 +99,7 @@ def box(tmp_path):
         return [line for line in calls() if line.startswith("send-keys") and line.endswith(name)]
 
     def typed():
-        return [line for line in calls() if line.startswith("send-keys") and " -l " in line]
+        return [line for line in calls() if line.startswith("paste-buffer")]
 
     return type("Box", (), {"put": staticmethod(put), "run": staticmethod(run), "calls": staticmethod(calls),
                             "keys": staticmethod(keys), "typed": staticmethod(typed), "state": state, "home": tmp_path / "home"})
@@ -121,18 +129,18 @@ def test_a_text_that_never_shows_is_typed_once_and_nothing_is_pressed(box):
     assert box.keys("Enter") == [] and box.keys("Escape") == [] and box.keys("Space") == []
 
 
-def test_no_input_box_on_screen_types_nothing_and_sends_one_escape(box):
+def test_no_input_box_on_screen_types_nothing_and_never_sends_escape(box):
     box.put("mode", "shell")
     done = box.run()
     assert done.returncode == 3
-    assert box.typed() == [] and len(box.keys("Escape")) == 1 and box.keys("Enter") == []
+    assert box.typed() == [] and box.keys("Escape") == [] and box.keys("Enter") == []
 
 
-def test_our_own_text_already_in_the_box_is_not_typed_again(box):
+def test_any_real_text_already_in_the_box_is_never_typed_over_or_submitted(box):
     box.put("composer", MESSAGE)
     done = box.run()
-    assert done.returncode == 0, done.stderr
-    assert box.typed() == [] and len(box.keys("Enter")) == 1
+    assert done.returncode == 130, done.stderr
+    assert box.typed() == [] and box.keys("Enter") == []
 
 
 # -- C2 · la firma si cerca solo nella casella ------------------------------------------------------------------------
@@ -185,11 +193,11 @@ def test_a_busy_pane_whose_box_empties_is_taken(box):
     assert done.returncode == 0, done.stderr
 
 
-def test_a_cold_first_enter_is_recovered_with_space_and_enter(box):
-    box.put("enter_needs_space")
+def test_an_enter_that_is_ignored_is_retried_with_enter_only(box):
+    box.put("enter_ignored")
     done = box.run()
-    assert done.returncode == 0, done.stderr
-    assert len(box.keys("Space")) == 1 and len(box.keys("Enter")) == 2
+    assert done.returncode == 5, done.stderr
+    assert box.keys("Space") == [] and len(box.keys("Enter")) == 3
 
 
 def test_a_menu_under_the_mark_is_not_an_empty_box(box):
@@ -215,9 +223,9 @@ def test_two_deliveries_to_the_same_session_do_not_mix(box):
     for thread in threads:
         thread.join()
     assert results[1].returncode == 0 and results[2].returncode == 0
-    sequence = [("-l" if " -l " in line else "Enter") for line in box.calls()
-                if line.startswith("send-keys") and (" -l " in line or line.endswith("Enter"))]
-    assert sequence == ["-l", "Enter", "-l", "Enter"], sequence
+    sequence = [("paste" if line.startswith("paste-buffer") else "Enter") for line in box.calls()
+                if line.startswith("paste-buffer") or (line.startswith("send-keys") and line.endswith("Enter"))]
+    assert sequence == ["paste", "Enter", "paste", "Enter"], sequence
 
 
 def test_deliveries_to_different_sessions_do_not_wait_for_each_other(box, tmp_path):

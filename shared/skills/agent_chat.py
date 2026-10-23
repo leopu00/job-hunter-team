@@ -24,10 +24,10 @@ screen of the terminal.
      read the message twice;
   3. the agent's session is not there -> a closed code, NOTHING written and
      nothing started (this file never starts an agent);
-  4. the agent's terminal must be at its prompt: an empty composer and no turn
-     running. A menu, a sign-in, a permission question or text already typed
-     there is a closed code, a running turn another; NOTHING written. The text
-     is never typed over something that would take it as a choice;
+  4. the agent's terminal must show an empty composer. A menu, sign-in,
+     permission question or text already typed there is a closed code; a turn
+     with an empty composer may receive the message in its queue. NOTHING is
+     typed over something that could take it as a choice or overwrite a draft;
   5. the turn is written once per client id (a repeat is not a second line),
      and one that was written but never delivered is delivered again from the
      line already there, with no new line;
@@ -83,6 +83,9 @@ EXIT = {
     "persist_failed": 128,
     "fence_missing": 129,
     # Below 120: from 128 up an exit is also a signal's (130 is an interrupt).
+    # 130 is deliberately the one exception: the app needs to tell the person
+    # that somebody has an unsent draft, rather than writing over it.
+    "composer_has_text": 130,
     "agent_not_at_prompt": 119,
     # The answer to an agent's question (`answer`): the four codes the app knows, and an image
     # without the questions module or its database.
@@ -96,7 +99,7 @@ EXIT = {
 # jht-tmux-send's own exits: 2 no session, 3 the terminal never took the text,
 # 4 busy (alive: try again), 5 text taken but never submitted (alive, stuck).
 DELIVERY_EXIT = {2: "agent_not_running", 3: "agent_unavailable", 4: "agent_busy", 5: "agent_stuck",
-                 8: "agent_busy"}   # 8: another writer held the terminal too long; nothing was typed
+                 8: "agent_busy", 130: "composer_has_text"}   # 8: another writer held the terminal too long; nothing was typed
 # 0: the transport saw the CLI take the text (a proof). 7: the text left the composer but nothing proves
 # the CLI took it. Both are delivered, and never typed again with the same id; the second says «not sure».
 DELIVERY_UNCONFIRMED = 7
@@ -138,8 +141,10 @@ MAX_LINE = 65536
 PAGE_ROWS = 120
 TMUX_TIMEOUT_S = 10
 # The prompt is looked for in the last lines of the pane: the transcript scrolls above it.
-PROMPT_TAIL = 14
+PROMPT_TAIL = 15
 DELIVERY_TIMEOUT_S = 100
+PROMPT_WAIT_S = float(os.environ.get("JHT_CHAT_PROMPT_WAIT", "100"))
+PROMPT_POLL_S = float(os.environ.get("JHT_CHAT_PROMPT_POLL", "2"))
 
 # Direction marks and zero-width characters read as nothing and rewrite what
 # is around them. ZWNJ/ZWJ (U+200C/D) stay: Persian and emoji need them.
@@ -271,32 +276,69 @@ def check_session(session: str) -> None:
 
 
 # ── at the prompt ───────────────────────────────────────────────────────────
-# The composer's line: the input mark of the CLIs (❯ Claude Code and Kimi, › Codex, ▌ a block
-# cursor), maybe inside the border of a box. A bare ">" is a shell's continuation or a REPL's
-# prompt (bash's PS2, node): it counts only inside the box the older Claude Code builds draw.
-_COMPOSER = re.compile(r"^\s*(?:[│┃╎|]\s*[❯›>▌]|[❯›▌])\s?(.*?)\s*[│┃╎|]?\s*$")
-# Under the composer the CLIs draw only these: a border or a rule, and a footer of hints.
-_BORDER = re.compile(r"^\s*[╭╰┌└├]?[─━═┄╌]+[╮╯┐┘┤]?\s*$")
-_FOOTER = re.compile(
-    r"^\s*(?:\? for shortcuts\b"                       # Claude Code, Codex
-    r"|⏵⏵ |⏸ "                                          # Claude Code's mode line
-    r"|⏎ send\b"                                        # Codex
-    r"|\d{1,3}% context left\b"                         # Codex
-    r"|ctrl \+ t to view transcript\b"                  # Codex 0.164 (the key and its hint, drawn apart)
-    r"|Context left until auto-compact: \d{1,3}%\s*$)"  # Claude Code
-)
-# What an empty composer shows in grey, whole: Claude Code's «Try "…"» and Codex's own lines.
-# Anything else on the composer's line is text already typed, or a menu's option.
-_PLACEHOLDER_CLAUDE = re.compile(r'^Try "[^"]{1,120}"$')
-_PLACEHOLDERS = frozenset({
-    "Ask Codex to do anything",
-    "Explain this codebase",
-    "Summarize recent commits",
-    "Implement {feature}",
-    "Find and fix a bug in @filename",
-    "Write tests for @filename",
-    "Improve documentation in @filename",
-})
+# This is intentionally a *shape* reader.  Words in an empty composer change
+# with every CLI release, whereas SGR dim is the terminal's explicit promise
+# that the words are a suggestion rather than an unsent draft.
+_CSI = re.compile(r"\x1b\[([0-?]*)([ -/]*)([@-~])")
+_BORDER = re.compile(r"^\s*[╭╰┌└├]?[─━═┄╌]{20,}[╮╯┐┘┤]?\s*$")
+_BOXED_COMPOSER = re.compile(r"^\s*[│┃╎|]\s*([❯›>▌])(.*?)(?:[│┃╎|]\s*)?$")
+_PLAIN_COMPOSER = re.compile(r"^\s*([❯›▌])(.*?)\s*$")
+_CODEX_HINT = re.compile(r"(?:\? for shortcuts\b|← for agents\b)")
+_CODEX_DOT_FOOTER = re.compile(r"^\s+.*·.*$")
+_NUMBERED_OPTION = re.compile(r"^\s*\d{1,3}[.)]\s+")
+
+
+def strip_terminal_codes(value: str) -> str:
+    """Visible text of a capture-pane -e screen, without changing its rows."""
+    return _CSI.sub("", value or "")
+
+
+def _sgr_sets_dim(params: str, dim: bool) -> bool:
+    """Apply an SGR parameter list, not mistaking RGB's colour-space ``2`` for dim."""
+    pieces = params.split(";") if params else ["0"]
+    at = 0
+    while at < len(pieces):
+        whole = pieces[at]
+        code = whole.split(":", 1)[0] or "0"
+        if code in {"38", "48", "58"}:
+            # Semicolon RGB is 38;2;R;G;B; colon RGB is one parameter.  In
+            # both forms its 2 is a colour-space selector, never SGR faint.
+            if ":" in whole:
+                at += 1
+            elif at + 1 < len(pieces) and pieces[at + 1] == "2":
+                at += 5
+            elif at + 1 < len(pieces) and pieces[at + 1] == "5":
+                at += 3
+            else:
+                at += 1
+            continue
+        if code == "0":
+            dim = False
+        elif code == "2":
+            dim = True
+        elif code == "22":
+            dim = False
+        at += 1
+    return dim
+
+
+def _visible_with_dim(raw: str) -> tuple[str, list[bool]]:
+    """Return visible characters and whether each was drawn faint (SGR 2)."""
+    visible: list[str] = []
+    faint: list[bool] = []
+    dim = False
+    at = 0
+    for match in _CSI.finditer(raw or ""):
+        chunk = (raw or "")[at:match.start()]
+        visible.extend(chunk)
+        faint.extend([dim] * len(chunk))
+        if match.group(3) == "m":
+            dim = _sgr_sets_dim(match.group(1), dim)
+        at = match.end()
+    chunk = (raw or "")[at:]
+    visible.extend(chunk)
+    faint.extend([dim] * len(chunk))
+    return "".join(visible), faint
 
 
 def _status_line_busy(line: str) -> bool:
@@ -313,45 +355,103 @@ def _status_line_busy(line: str) -> bool:
     return rest == "" or rest[0] in "·•|,-"
 
 
-def _placeholder(content: str) -> bool:
-    return content in _PLACEHOLDERS or bool(_PLACEHOLDER_CLAUDE.match(content))
+def _composer_match(line: str):
+    return _BOXED_COMPOSER.match(line) or _PLAIN_COMPOSER.match(line)
+
+
+def _only_faint_content(raw: str, plain: str, marker_at: int, boxed: bool) -> bool:
+    """True for an empty marker or a suggestion whose visible glyphs are all dim."""
+    _, faint = _visible_with_dim(raw)
+    end = len(plain)
+    if boxed:
+        while end > marker_at + 1 and plain[end - 1].isspace():
+            end -= 1
+        if end > marker_at + 1 and plain[end - 1] in "│┃╎|":
+            end -= 1
+    start = marker_at + 1
+    while start < end and plain[start].isspace():
+        start += 1
+    while end > start and plain[end - 1].isspace():
+        end -= 1
+    if start == end:
+        return True
+    return all(faint[index] for index in range(start, end) if not plain[index].isspace())
+
+
+def _codex_footer(lines: list[tuple[str, str]], index: int) -> bool:
+    """Codex puts an indented model/path or a recognised hint below ``›``."""
+    footers: list[str] = []
+    for _raw, plain in lines[index + 1:]:
+        if not plain.strip():
+            continue
+        footers.append(plain)
+        if len(footers) > 3:
+            return False
+    if not footers:
+        return False
+    first = footers[0]
+    return bool(_CODEX_DOT_FOOTER.match(first) or _CODEX_HINT.search(first))
+
+
+def _claude_box(lines: list[tuple[str, str]], index: int, boxed: bool) -> bool:
+    """Claude's input mark lives in a box/rule; a menu never earns that shape."""
+    if boxed:
+        return True
+    above = next((plain for _raw, plain in reversed(lines[:index]) if plain.strip()), "")
+    below = next((plain for _raw, plain in lines[index + 1:] if plain.strip()), "")
+    return bool(_BORDER.match(above) and _BORDER.match(below))
+
+
+def composer_snapshot(pane: str) -> tuple[str, bool]:
+    """Return ``(empty|text|none, busy)`` from the last coloured pane rows.
+
+    ``busy`` is presentation/status only.  A visible empty composer remains
+    safe to paste into while a CLI is processing a previous turn.
+    """
+    raw_lines = (pane or "").splitlines()
+    rows = [(raw, strip_terminal_codes(raw).rstrip()) for raw in raw_lines]
+    while rows and not rows[-1][1].strip():
+        rows.pop()
+    rows = rows[-PROMPT_TAIL:]
+    busy = any(_status_line_busy(plain) for _raw, plain in rows[-10:])
+    for index in range(len(rows) - 1, -1, -1):
+        raw, plain = rows[index]
+        match = _composer_match(plain)
+        if not match:
+            continue
+        marker = match.group(1)
+        # A permission/list option can be drawn inside a Claude box and has
+        # the same glyph as the composer.  Its number is structural, never a
+        # user draft (and never a safe target for paste or Enter).
+        if _NUMBERED_OPTION.match(match.group(2)):
+            continue
+        marker_at = plain.index(marker)
+        boxed = bool(_BOXED_COMPOSER.match(plain))
+        if marker == "›":
+            if not _codex_footer(rows, index):
+                continue
+        elif not _claude_box(rows, index, boxed):
+            continue
+        return ("empty" if _only_faint_content(raw, plain, marker_at, boxed) else "text"), busy
+    return "none", busy
+
+
+def composer_state(pane: str) -> str:
+    """The guarded send gate: ``empty``, ``text`` or ``none``."""
+    return composer_snapshot(pane)[0]
 
 
 def prompt_state(pane: str) -> str:
-    """`ready`, `busy` or `not_at_prompt`, from the text of the agent's pane.
-
-    Ready is shown, never assumed. From the bottom of the pane only empty lines, the box's
-    borders and the known footers are passed over; the first other line must be the composer,
-    empty or with one of the known placeholders, and no turn may be running. Everything else is
-    not at the prompt:
-      - no composer at the bottom: a sign-in, a shell or a CLI that exited (even under a quoted
-        "> " of the transcript), a CLI still starting, a menu whose last option is below the mark;
-      - something on the composer's line: a menu's option under the mark («❯ 1. Yes», «❯ Try
-        again»), text already typed, a placeholder this file does not know.
-    The pane is read, then the transport types: a dialog that opens in between is not seen. That
-    window is the one left (the transport sends Esc when the text does not show; its own rule).
-    """
-    lines = [line.rstrip() for line in (pane or "").splitlines()]
-    # A pane is as tall as its window: what is drawn may end well above its last row.
-    while lines and not lines[-1].strip():
-        lines.pop()
-    tail = lines[-PROMPT_TAIL:]
-    if any(_status_line_busy(line) for line in tail[-10:]):
+    """Compatibility view for mail nudges and callers that display activity."""
+    state, busy = composer_snapshot(pane)
+    if busy:
         return "busy"
-    for line in reversed(tail):
-        if not line.strip() or _BORDER.match(line) or _FOOTER.match(line):
-            continue
-        match = _COMPOSER.match(line)
-        if not match:
-            return "not_at_prompt"
-        content = match.group(1).strip()
-        return "ready" if not content or _placeholder(content) else "not_at_prompt"
-    return "not_at_prompt"
+    return "ready" if state == "empty" else "not_at_prompt"
 
 
 def capture_pane(session: str) -> str | None:
     try:
-        done = subprocess.run(["tmux", "capture-pane", "-p", "-t", "=" + session + ":"],
+        done = subprocess.run(["tmux", "capture-pane", "-e", "-p", "-t", "=" + session + ":"],
                               capture_output=True, timeout=TMUX_TIMEOUT_S, check=False)
     except (OSError, subprocess.SubprocessError):
         return None
@@ -360,16 +460,23 @@ def capture_pane(session: str) -> str | None:
     return done.stdout.decode("utf-8", errors="replace")
 
 
-def require_prompt(session: str) -> None:
-    """Refuses, writing nothing, unless the agent's terminal waits at its prompt."""
-    pane = capture_pane(session)
-    if pane is None:
-        raise Refusal("agent_unavailable")
-    state = prompt_state(pane)
-    if state == "busy":
-        raise Refusal("agent_busy")
-    if state != "ready":
-        raise Refusal("agent_not_at_prompt")
+def require_prompt(session: str, *, wait: bool = True) -> None:
+    """Wait outside the writer lock for an empty composer; never overwrite a draft."""
+    deadline = time.monotonic() + (PROMPT_WAIT_S if wait else 0)
+    saw_busy = False
+    while True:
+        pane = capture_pane(session)
+        if pane is None:
+            raise Refusal("agent_unavailable")
+        state, busy = composer_snapshot(pane)
+        saw_busy = saw_busy or busy
+        if state == "empty":
+            return
+        if state == "text":
+            raise Refusal("composer_has_text")
+        if not wait or time.monotonic() >= deadline:
+            raise Refusal("agent_busy" if saw_busy else "agent_not_at_prompt")
+        time.sleep(PROMPT_POLL_S)
 
 
 def _found(path: Path, client_id: str) -> dict | None:
@@ -626,25 +733,43 @@ def send(agent: str, client_id: str, raw_text: str) -> dict:
     mail = mail_for(agent)
     if mail is None:
         require_fence(agent, text)
-        require_prompt(session)
     else:
         require_mail_fence(agent, text)
-    with _AgentLock(agent):
-        done = _found(delivered, client_id)         # another ask with this id may have finished while we waited
-        if done is not None:
-            return _receipt(client_id, done.get("message_id"), done.get("at"), taken=done.get("taken"))
-        if mail is None:
-            # Another send may have started a turn while this one waited for the lock: look again.
-            require_prompt(session)
-        row = persist(agent, client_id, text)
-        if mail is None:
-            # A line already there is what the agent is sent, not this ask's text: the id is the message.
-            taken, signature = deliver(agent, session, str(row.get("text") or text))
-        else:
+    if mail is not None:
+        with _AgentLock(agent):
+            done = _found(delivered, client_id)
+            if done is not None:
+                return _receipt(client_id, done.get("message_id"), done.get("at"), taken=done.get("taken"))
+            row = persist(agent, client_id, text)
             deliver_by_mail(mail, agent, session, row, text)
-            taken, signature = None, None
-        mark_delivered(agent, row, taken, signature)
-        return _receipt(client_id, row.get("message_id"), row.get("ts"), "queued" if mail is not None else None, taken)
+            mark_delivered(agent, row)
+            return _receipt(client_id, row.get("message_id"), row.get("ts"), "queued")
+
+    # The potentially long wait happens before acquiring the writer lock.  If
+    # another writer changes the pane while we waited, release and start that
+    # wait again instead of holding every other sender behind a busy terminal.
+    while True:
+        require_prompt(session)
+        retry_outside_lock = False
+        with _AgentLock(agent):
+            done = _found(delivered, client_id)
+            if done is not None:
+                return _receipt(client_id, done.get("message_id"), done.get("at"), taken=done.get("taken"))
+            pane = capture_pane(session)
+            if pane is None:
+                raise Refusal("agent_unavailable")
+            state, _busy = composer_snapshot(pane)
+            if state == "text":
+                raise Refusal("composer_has_text")
+            if state != "empty":
+                retry_outside_lock = True
+            else:
+                row = persist(agent, client_id, text)
+                taken, signature = deliver(agent, session, str(row.get("text") or text))
+                mark_delivered(agent, row, taken, signature)
+                return _receipt(client_id, row.get("message_id"), row.get("ts"), taken=taken)
+        if retry_outside_lock:
+            continue
 
 
 def enter(agent: str, message_id: str) -> dict:
