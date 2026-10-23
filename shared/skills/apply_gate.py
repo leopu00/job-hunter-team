@@ -77,6 +77,7 @@ __all__ = [
     "Verdict",
     "application_queue",
     "apply_verdict",
+    "claim_verdict",
     "toggle_verdict",
     "consent_verdict",
     "daily_cap_verdict",
@@ -522,11 +523,69 @@ def position_verdict(
             {"position_id": pid, "by": repr(by)},
         )
 
+    # The flag is written where the agents can write too: the authorisation is proven only by the
+    # broker's register (`shared/broker/notary.py`), which records it from the person's own
+    # channels. Read only here; `claim_verdict` spends it right before the send.
+    proven, why, held = _notary().check(pid)
+    if not proven:
+        return Verdict(
+            False,
+            "authorisation_unproven",
+            "the broker does not hold an authorisation for this position ("
+            + why
+            + "): the flag alone is not one, so nothing goes out",
+            {"position_id": pid, "broker": why},
+        )
+
     return Verdict(
         True,
         "position_authorised",
         "the user authorised this position",
-        {"position_id": pid, "status": status, "by": by, "at": at},
+        {"position_id": pid, "status": status, "by": by, "at": at, "destination": held.get("destination")},
+    )
+
+
+def _notary():
+    try:
+        import apply_notary
+    except ImportError:
+        from shared.skills import apply_notary  # type: ignore
+    return apply_notary
+
+
+def claim_verdict(position_id: int, *, url: str | None = None, address: str | None = None) -> Verdict:
+    """The last decision before the send: the broker gives the authorisation once, and only for
+    the destination the person saw. `url` is the page the application is about to be submitted
+    on, after every redirect; `address` the mailbox a mail application goes to."""
+    try:
+        pid = int(position_id)
+    except (TypeError, ValueError):
+        return Verdict(False, "position_id_invalid", "position id is not an integer", {"position_id": repr(position_id)})
+    notary = _notary()
+    if (url is None) == (address is None):
+        return Verdict(False, "destination_invalid", "the send names neither a page nor an address", {"position_id": pid})
+    destination = notary.destination_of_url(url) if url is not None else notary.destination_of_address(address)
+    if destination is None:
+        return Verdict(
+            False,
+            "destination_invalid",
+            "the application would go to a place with no closed destination",
+            {"position_id": pid},
+        )
+    claimed, why, held = notary.claim(pid, destination)
+    if not claimed:
+        reason = "destination_not_authorised" if why == "destination_mismatch" else "authorisation_unproven"
+        return Verdict(
+            False,
+            reason,
+            "the broker did not give the authorisation for this send (" + why + "): nothing goes out",
+            {"position_id": pid, "destination": destination, "broker": why},
+        )
+    return Verdict(
+        True,
+        "authorisation_claimed",
+        "the broker gave the authorisation for this send, once",
+        {"position_id": pid, "destination": destination, **held},
     )
 
 

@@ -1,4 +1,5 @@
-"""Test-only: placeholder PDFs pass the CV layout check in subprocess CLIs.
+"""Test-only: placeholder PDFs pass the CV layout check in subprocess CLIs, and the broker's
+register of authorisations answers as tests/fixtures/pdf_layout_pass/suite_notary.py says.
 
 tests/conftest.py puts this directory on PYTHONPATH for the run, so a CLI the
 suite spawns (`apply_gate.py queue`, `apply_request.py`) sees the same pass as
@@ -14,6 +15,13 @@ try:
     import pdf_layout_check
 
     pdf_layout_check.analyze = lambda _path, **_kw: {"ok": True, "reasons": []}
+except ImportError:
+    pass
+try:
+    import apply_notary
+    import suite_notary
+
+    apply_notary.call = suite_notary.call
 except ImportError:
     pass
 finally:

@@ -73,8 +73,8 @@ def test_the_destination_binds_the_authorisation(broker):
     admin(broker, "apply", "record", "42", T1, "web:https-is-not-here.example.co.uk")
     shown = admin(broker, "apply", "show", "42")[1]
     assert shown["destination"] == "web:example.co.uk"
-    # another site, a lookalike, the email of the same company: not where the person saw it go
-    for elsewhere in ("web:example.com", "web:example.co.uk.attacker.net", "email:example.co.uk", "portal:linkedin"):
+    # another site, a lookalike, another company's mailbox, a portal: not where the person saw it go
+    for elsewhere in ("web:example.com", "web:example.co.uk.attacker.net", "email:example.com", "portal:linkedin"):
         assert claim(broker, to=elsewhere) == {"ok": True, "claimed": False, "reason": "destination_mismatch"}
     # a mismatch does not spend it; the right destination after the redirects does
     assert claim(broker, to="web:careers.apply.example.co.uk")["claimed"] is True
@@ -175,3 +175,32 @@ def test_the_registrable_part_of_a_host(broker):
 def test_the_origins_are_closed(broker):
     with pytest.raises(broker.notary.NotaryRefusal):
         broker.notary.record(42, T1, "agent_closer", WEB)
+
+
+def test_where_a_page_or_a_mail_sends_the_application(broker):
+    n = broker.notary
+    assert n.destination_of_url("https://boards.greenhouse.io/acme/jobs/1") == "portal:greenhouse"
+    assert n.destination_of_url("https://acme.wd3.myworkdayjobs.com/en/job/1") == "portal:workday"
+    assert n.destination_of_url("https://www.linkedin.com/jobs/view/1") == "portal:linkedin"
+    assert n.destination_of_url("http://careers.example.co.uk/apply?x=1") == "web:example.co.uk"
+    # the same portal reached by its name or by its domain is the same destination
+    assert n.destination("web:jobs.lever.co") == "portal:lever" == n.destination("portal:lever")
+    # a lookalike of a portal is its own domain, never the portal
+    assert n.destination_of_url("https://indeed.xyz/apply") == "web:indeed.xyz"
+    assert n.destination_of_address("hr@" + "mail.example.com") == "email:example.com"
+    for url in ("ftp://example.com/", "https://10.0.0.1/", "https://localhost/", "javascript:alert(1)", "", None):
+        with pytest.raises(n.NotaryRefusal):
+            n.destination_of_url(url)
+    for address in ("a@b@example.com", "hr" + "@co.uk", "hr@example.com\n", "hr@", "hr", 7):
+        with pytest.raises(n.NotaryRefusal):
+            n.destination_of_address(address)
+
+
+def test_the_company_by_mail_is_the_same_place_as_its_website(broker):
+    admin(broker, "apply", "record", "42", T1, "web:careers.example.com")
+    assert claim(broker, to="email:other.com")["reason"] == "destination_mismatch"
+    assert claim(broker, to="email:hr.example.com")["claimed"] is True
+    # a portal is only itself: a recruiter's own mailbox is not the portal
+    admin(broker, "apply", "record", "43", T1, "portal:linkedin")
+    assert claim(broker, pid=43, to="email:linkedin.com")["reason"] == "destination_mismatch"
+    assert claim(broker, pid=43, to="email:gmail.com")["reason"] == "destination_mismatch"

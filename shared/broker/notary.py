@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import re
 from datetime import datetime, timezone
+from urllib.parse import urlsplit
 
 from . import store
 
@@ -69,17 +70,86 @@ def registrable(host: str) -> str | None:
 
 def destination(value: object) -> str:
     """The closed form of a destination: `web:<registrable domain>`, `email:<domain>`,
-    `portal:<name>`. The same function makes the recorded one and the claimed one."""
+    `portal:<name>`. The same function makes the recorded one and the claimed one, and a portal's
+    own domain is the portal (`web:jobs.lever.co` is `portal:lever`)."""
     if not isinstance(value, str) or len(value) > 300:
         raise NotaryRefusal("destination_invalid")
     kind, _, rest = value.partition(":")
     if kind == "portal" and rest in PORTALS:
         return value
-    if kind in ("web", "email"):
+    if kind == "web":
+        return destination_of_host(rest)
+    if kind == "email":
         domain = registrable(rest)
         if domain:
-            return f"{kind}:{domain}"
+            return f"email:{domain}"
     raise NotaryRefusal("destination_invalid")
+
+
+# The portals' own domains: an application on one of them is bound to the portal, not to the
+# company. Exact registrable domains only: `indeed.xyz` is somebody else's.
+PORTAL_DOMAINS = {
+    "linkedin.com": "linkedin",
+    "indeed.com": "indeed", "indeed.it": "indeed", "indeed.co.uk": "indeed", "indeed.de": "indeed",
+    "indeed.fr": "indeed", "indeed.es": "indeed",
+    "infojobs.it": "infojobs", "infojobs.net": "infojobs",
+    "glassdoor.com": "glassdoor", "glassdoor.it": "glassdoor", "glassdoor.co.uk": "glassdoor",
+    "glassdoor.de": "glassdoor",
+    "greenhouse.io": "greenhouse",
+    "lever.co": "lever",
+    "myworkdayjobs.com": "workday", "workday.com": "workday",
+    "smartrecruiters.com": "smartrecruiters",
+    "ashbyhq.com": "ashby",
+    "personio.de": "personio", "personio.com": "personio",
+    "recruitee.com": "recruitee",
+    "teamtailor.com": "teamtailor",
+}
+assert set(PORTAL_DOMAINS.values()) <= set(PORTALS)
+
+
+def destination_of_host(host: object) -> str:
+    """Where a page on `host` sends the application: its portal, or the company's own domain."""
+    domain = registrable(host) if isinstance(host, str) else None
+    if domain is None:
+        raise NotaryRefusal("destination_invalid")
+    portal = PORTAL_DOMAINS.get(domain)
+    return f"portal:{portal}" if portal else f"web:{domain}"
+
+
+def destination_of_url(url: object) -> str:
+    """The destination of an http(s) page, by its host (after the redirects, for the CLOSER)."""
+    if not isinstance(url, str) or len(url) > 4096:
+        raise NotaryRefusal("destination_invalid")
+    parts = urlsplit(url)
+    if parts.scheme not in ("http", "https") or not parts.hostname:
+        raise NotaryRefusal("destination_invalid")
+    return destination_of_host(parts.hostname)
+
+
+def destination_of_address(address: object) -> str:
+    """The destination of a mail: the domain of the address it goes to."""
+    if not isinstance(address, str) or len(address) > 320 or address.count("@") != 1:
+        raise NotaryRefusal("destination_invalid")
+    domain = address.rsplit("@", 1)[1].lower()
+    domain = domain[:-1] if domain.endswith(".") else domain
+    if len(domain) > 253 or not DOMAIN.fullmatch(domain):
+        raise NotaryRefusal("destination_invalid")
+    registered = registrable(domain)
+    if registered is None:
+        raise NotaryRefusal("destination_invalid")
+    return f"email:{registered}"
+
+
+def same_place(recorded: object, claimed: str) -> bool:
+    """The send goes where the person saw it would go: the same destination, or the company's own
+    domain by mail instead of by its website (`web:example.com` and `email:example.com`). A portal is
+    only itself."""
+    if recorded == claimed:
+        return True
+    if not isinstance(recorded, str):
+        return False
+    kinds = {recorded.partition(":")[0], claimed.partition(":")[0]}
+    return kinds == {"web", "email"} and recorded.partition(":")[2] == claimed.partition(":")[2]
 
 
 def valid_position(value: object) -> int:
@@ -149,7 +219,7 @@ def claim(position_id: object, to: object) -> dict:
         entry = _entry(data, pid)
         if entry.get("state") != "valid":
             return {"ok": True, "claimed": False, "reason": "not_authorised"}
-        if entry.get("destination") != where:
+        if not same_place(entry.get("destination"), where):
             return {"ok": True, "claimed": False, "reason": "destination_mismatch"}
         _store(data, pid, {**entry, "state": "claimed", "claimed_at": _now(),
                            "floor": max(entry.get("floor") or "", entry["instant"])})

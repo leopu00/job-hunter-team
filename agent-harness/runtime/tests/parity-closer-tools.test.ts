@@ -111,6 +111,24 @@ const LAYOUT_OK = [
   "runpy.run_path('apply_gate.py', run_name='__main__')",
 ].join("\n");
 
+/**
+ * The broker's register is the other seam: neither side has a broker here. Both are given the
+ * same answer to `apply.check`: the port through its `notary` option, the script by replacing
+ * `apply_notary.call` (the real `apply_notary`, so its reading of the answer is compared too).
+ */
+const PROVEN = { ok: true, proven: true, destination: "web:jobs.example", origin: "user_web", instant: "2026-09-20T10:00:00.000Z" };
+
+function withNotary(layoutOk: boolean): string {
+  return [
+    "import json, os, runpy, sys, types",
+    ...(layoutOk ? LAYOUT_OK.split("\n").filter((line) => !line.startsWith("import ") && !line.startsWith("sys.argv") && !line.startsWith("runpy.")) : []),
+    "import apply_notary",
+    "apply_notary.call = lambda op, args: json.loads(os.environ['PARITY_NOTARY_ANSWER'])",
+    "sys.argv = ['apply_gate.py'] + sys.argv[1:]",
+    "runpy.run_path('apply_gate.py', run_name='__main__')",
+  ].join("\n");
+}
+
 interface Side {
   runs: Run[];
   /** What the database holds afterwards, when the case asks for it. */
@@ -135,12 +153,26 @@ function ours(tool: typeof applyGate, sequence: string[][], seed: Seed, extra: P
   }
 }
 
-function theirs(script: string, sequence: string[][], seed: Seed, layoutOk: boolean, snapshot?: (db: Database) => unknown, dir: string | null = skills): Side {
+function theirs(
+  script: string,
+  sequence: string[][],
+  seed: Seed,
+  layoutOk: boolean,
+  snapshot?: (db: Database) => unknown,
+  dir: string | null = skills,
+  notaryAnswer?: unknown,
+): Side {
   fresh(seed);
   // Not HOME: PyYAML may live in the user's site-packages, which HOME locates.
-  const env = { JHT_HOME: home, JHT_DB: dbPath };
+  const env: Record<string, string> = { JHT_HOME: home, JHT_DB: dbPath };
+  if (notaryAnswer !== undefined) env["PARITY_NOTARY_ANSWER"] = JSON.stringify(notaryAnswer);
   const runs = sequence.map((args): Run => {
-    const r = layoutOk ? runPython(dir!, ["-c", LAYOUT_OK, ...args], env) : runPython(dir!, [script, ...args], env);
+    const r =
+      notaryAnswer !== undefined
+        ? runPython(dir!, ["-c", withNotary(layoutOk), ...args], env)
+        : layoutOk
+          ? runPython(dir!, ["-c", LAYOUT_OK, ...args], env)
+          : runPython(dir!, [script, ...args], env);
     return [r.stdout, r.stderr, r.status];
   });
   if (!snapshot) return { runs, after: undefined };
@@ -153,10 +185,11 @@ function theirs(script: string, sequence: string[][], seed: Seed, layoutOk: bool
 }
 
 /** `apply_gate`, the same sequence on both sides. */
-function compareGate(sequence: string[][], seed: Seed, layoutOk = false): Run[] {
-  const a = ours(applyGate, sequence, seed, layoutOk ? { cvLayout: () => "" } : {});
+function compareGate(sequence: string[][], seed: Seed, layoutOk = false, broker: unknown = PROVEN): Run[] {
+  const notary = () => broker;
+  const a = ours(applyGate, sequence, seed, layoutOk ? { cvLayout: () => "", notary } : { notary });
   // The Python of THIS tree: the gate and its port gain the web cap in the same commit, which the pinned one cannot have.
-  const b = theirs("apply_gate.py", sequence, seed, layoutOk, undefined, TREE_SKILLS);
+  const b = theirs("apply_gate.py", sequence, seed, layoutOk, undefined, TREE_SKILLS, broker);
   expect(a.runs).toEqual(b.runs);
   return a.runs;
 }
@@ -342,6 +375,29 @@ describe.skipIf(skills === null || !pythonReady)("apply_gate against apply_gate.
       seed,
     );
     expect(runs[0]).toEqual([expect.stringContaining('"reason": "apply_allowed"'), "", 0]);
+  });
+
+  it("the broker's register: a flag it does not hold is no authorisation, on both sides", () => {
+    const seed: Seed = (db) => {
+      consent({ max_per_day: 3 });
+      position(db, { id: 1 });
+      application(db, 1);
+    };
+    const answers = [
+      { ok: false, reason: "broker_unavailable" },
+      { ok: false, reason: "unknown_operation" },
+      { ok: false, reason: "Not A Code" },
+      { ok: true, proven: false },
+      { ok: true, proven: "yes" },
+      { ok: true },
+      "not a dict",
+      { ok: true, proven: true },
+    ];
+    for (const answer of answers) {
+      const runs = compareGate([["position", "1", "--json"], ["position", "1"], ["queue", "--json"]], seed, true, answer);
+      const yes = typeof answer === "object" && answer.ok === true && (answer as { proven?: unknown }).proven === true;
+      expect(runs[0]![0]).toContain(yes ? '"reason": "apply_allowed"' : '"reason": "authorisation_unproven"');
+    }
   });
 
   it("the queue: a CV that cannot be measured holds its position, and the queue is empty — not unreadable", () => {

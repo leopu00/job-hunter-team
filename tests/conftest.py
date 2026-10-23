@@ -280,6 +280,27 @@ def placeholder_pdfs_pass_the_layout_check(request, monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def every_flag_is_recorded_in_the_broker(request, monkeypatch):
+    """The suite has no broker: by default the register says yes to every flag the tests write
+    (tests/fixtures/pdf_layout_pass/suite_notary.py). The tests of the register and of the gate's
+    use of it talk to a real notary; they are left untouched."""
+    if request.node.module.__name__.endswith(("test_apply_notary_gate", "test_broker_notary")):
+        yield
+        return
+    import sys
+
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    for path in (os.path.join(root, "shared", "skills"), os.path.join(root, "tests", "fixtures", "pdf_layout_pass")):
+        if path not in sys.path:
+            sys.path.insert(0, path)
+    import apply_notary
+    import suite_notary
+
+    monkeypatch.setattr(apply_notary, "call", suite_notary.call)
+    yield
+
+
+@pytest.fixture(autouse=True)
 def company_pages_wait_three_seconds_for_a_form(monkeypatch):
     """The CLOSER gives a company page 10 s to build its form; tests give it 3.
 
