@@ -29,6 +29,7 @@ case "$cmd" in
     case "$mode" in
       shell) printf 'user@host ~ $ \n'; exit 0 ;;
       menu) [ -f "$S/transcript" ] && cat "$S/transcript"; printf '❯ 1. Yes\n  2. No\n'; exit 0 ;;
+      unknown) [ -f "$S/transcript" ] && cat "$S/transcript"; printf '\033[2m□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□\033[0m\n'; exit 0 ;;
     esac
     [ -f "$S/transcript" ] && cat "$S/transcript"
     [ "$mode" = busy ] && echo '◦ Working (3s • esc to interrupt)'
@@ -134,11 +135,18 @@ def test_a_text_that_never_shows_is_typed_once_and_nothing_is_pressed(box):
     assert box.keys("Enter") == [] and box.keys("Escape") == [] and box.keys("Space") == []
 
 
-def test_no_input_box_on_screen_types_nothing_and_never_sends_escape(box):
-    box.put("mode", "shell")
+def test_a_certain_menu_on_screen_types_nothing_and_never_sends_escape(box):
+    box.put("mode", "menu")
     done = box.run()
     assert done.returncode == 3
     assert box.typed() == [] and box.keys("Escape") == [] and box.keys("Enter") == []
+
+
+def test_an_unrecognised_codex_form_is_pasted_once_and_proven_after_enter(box):
+    box.put("mode", "unknown")
+    done = box.run()
+    assert done.returncode == 0, done.stderr
+    assert len(box.typed()) == 1 and len(box.keys("Enter")) == 1
 
 
 def test_any_real_text_already_in_the_box_is_never_typed_over_or_submitted(box):

@@ -139,12 +139,15 @@ import agent_chat
 pane = sys.stdin.read()
 if sys.argv[2] == "state":
     print(agent_chat.composer_state(pane))
+elif sys.argv[2] == "gate":
+    print(agent_chat.delivery_gate(pane))
 else:
     sys.stdout.write(agent_chat.strip_terminal_codes(pane))
 ' "$CHAT_SKILLS" "$operation"
 }
 _plain() { printf '%s' "$1" | _chat_parse plain; }
 _composer_state() { printf '%s' "$1" | _chat_parse state; }
+_delivery_gate() { printf '%s' "$1" | _chat_parse gate; }
 # The complete expected message stays on stdin, never in argv. Seeing just a
 # signature is insufficient after paste: another draft might be immediately
 # before it, and Enter would submit both texts.
@@ -548,6 +551,18 @@ _submitted() {
   return 1
 }
 
+# A new Codex form can be writable without exposing a parseable composer.  In
+# that case the only sufficient receipt is a new occurrence of OUR signature
+# in the transcript after Enter; an empty-looking unknown form alone proves
+# nothing.
+_submitted_from_unknown_form() {
+  if [ "${preflight_gate:-empty}" = "none" ] \
+     && [ "$(_occurrences "$1" "$signature_tail")" -gt "$occ_tail_before" ]; then
+    return 0
+  fi
+  _submitted "$1"
+}
+
 # Il testo e' rimasto appeso nel composer: annotalo dove il Dottore lo cerca,
 # cosi' la fase di sblocco (skill `agent-unblock`) sa gia' QUALE pane e'
 # ostaggio e di QUALE messaggio, invece di doverlo dedurre dal pane.
@@ -596,16 +611,19 @@ _tmux() { tmux "$@" 9>&-; }
 _pane() { _tmux capture-pane -e -t "=$session:" -p 2>/dev/null || true; }
 
 _wait_for_empty_composer() {
-  local pane state waited=0 limit
+  local pane gate waited=0 limit
   limit=$(python3 -c 'import sys; print(max(0, int(float(sys.argv[1]) / float(sys.argv[2]))))' "$prompt_wait_s" "$prompt_poll_s")
   while :; do
     pane=$(_pane)
-    state=$(_composer_state "$pane")
-    case "$state" in
-      empty) return 0 ;;
+    gate=$(_delivery_gate "$pane")
+    case "$gate" in
+      empty|none) return 0 ;;
       text)
         echo "jht-tmux-send: $session has text in its composer: nothing pasted or pressed (rc=130)" >&2
         return 130 ;;
+      blocked)
+        echo "jht-tmux-send: $session shows a menu, login, or permission request: nothing pasted or pressed (rc=3)" >&2
+        return 3 ;;
     esac
     [ "$waited" -ge "$limit" ] && {
       echo "jht-tmux-send: $session not receptive (no empty composer before deadline): nothing typed" >&2
@@ -656,11 +674,15 @@ if [ "$enter_mode" -eq 0 ]; then
       exit 8
     fi
     pane=$(_pane)
-    case "$(_composer_state "$pane")" in
-      empty) break ;;
+    preflight_gate=$(_delivery_gate "$pane")
+    case "$preflight_gate" in
+      empty|none) break ;;
       text)
         echo "jht-tmux-send: $session has text in its composer: nothing pasted or pressed (rc=130)" >&2
         exit 130 ;;
+      blocked)
+        echo "jht-tmux-send: $session shows a menu, login, or permission request: nothing pasted or pressed (rc=3)" >&2
+        exit 3 ;;
       *) exec 9>&- ;;
     esac
   done
@@ -693,7 +715,7 @@ esac
 
 # Il nostro testo e' gia' nella casella (una chiamata precedente lo ha digitato e non e' stata vista
 # in tempo): non si riscrive, si preme solo l'Invio.
-if _in_composer "$pane"; then
+if [ "${preflight_gate:-empty}" = "empty" ] && _in_composer "$pane"; then
   echo "jht-tmux-send: il testo e' gia' nella casella di $session: non lo riscrivo, premo solo l'Invio" >&2
 else
   # ``load-buffer`` reads stdin: no user text appears in argv or in tmux's
@@ -717,7 +739,20 @@ else
   poll=0
   while :; do
     pane=$(_pane)
-    if _text_pending "$pane"; then
+    gate=$(_delivery_gate "$pane")
+    if [ "$gate" = "blocked" ]; then
+      echo "jht-tmux-send: $session changed to a menu, login, or permission request while paste rendered: no Enter (rc=3)" >&2
+      exit 3
+    fi
+    if [ "${preflight_gate:-empty}" = "none" ] && [ "$gate" = "none" ]; then
+      # The form remains unknown after paste.  Do not reinterpret incidental
+      # glyphs in that new layout as an old composer; submit once, then demand
+      # the ordinary post-Enter proof below.
+      if [ "$poll" -ge "$settle_polls" ]; then
+        seen=1
+        break
+      fi
+    elif _text_pending "$pane"; then
       if _composer_is_only_ours "$pane"; then seen=1; break; fi
       echo "jht-tmux-send: $session changed while the paste rendered: no Enter (rc=130)" >&2
       exit 130
@@ -745,7 +780,7 @@ for s_try in $(seq 1 "$submit_tries"); do
   # NOSTRO testo: menu, login e un altro draft non ricevono mai un tasto.
   if [ "$s_try" -gt 1 ]; then
     pane=$(_pane)
-    if _submitted "$pane"; then
+    if _submitted_from_unknown_form "$pane"; then
       echo "jht-tmux-send: ${#message} chars to $session (submit $((s_try - 1)), confirmed after the wait)"
       exit 0
     fi
@@ -758,7 +793,17 @@ for s_try in $(seq 1 "$submit_tries"); do
       exit 130
     fi
   fi
-  if ! _composer_is_only_ours "$pane"; then
+  if [ "${preflight_gate:-empty}" = "none" ]; then
+    gate=$(_delivery_gate "$pane")
+    if [ "$gate" = "blocked" ]; then
+      echo "jht-tmux-send: $session changed to a menu, login, or permission request before Enter: no Enter (rc=3)" >&2
+      exit 3
+    fi
+    if [ "$gate" = "text" ]; then
+      echo "jht-tmux-send: $session changed to a typed composer before Enter: no Enter (rc=130)" >&2
+      exit 130
+    fi
+  elif ! _composer_is_only_ours "$pane"; then
     echo "jht-tmux-send: $session changed before Enter: no Enter (rc=130)" >&2
     exit 130
   fi
@@ -776,7 +821,7 @@ for s_try in $(seq 1 "$submit_tries"); do
   for post_poll in $(seq 1 7); do
     sleep 0.3
     pane=$(_pane)
-    if _submitted "$pane"; then
+    if _submitted_from_unknown_form "$pane"; then
       echo "jht-tmux-send: ${#message} chars to $session (submit $s_try)"
       exit 0
     fi

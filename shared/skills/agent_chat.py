@@ -441,6 +441,60 @@ def composer_state(pane: str) -> str:
     return composer_snapshot(pane)[0]
 
 
+def _certain_interlock(pane: str) -> bool:
+    """True only for a UI that is certainly asking the human to choose or sign in.
+
+    The composer is presentation, not an authority.  A new Codex layout can
+    legitimately have no marker that this parser knows; treating that as a
+    refusal made chat unavailable every time the CLI changed its chrome.  We
+    retain a closed gate for controls on which a paste or Enter has a meaning
+    other than writing to the conversation: numbered choices, sign-in, and
+    permission prompts.
+    """
+    lines = [strip_terminal_codes(line).strip().casefold() for line in (pane or "").splitlines()]
+    text = "\n".join(line for line in lines if line)
+
+    # A selected numbered row plus another numbered row is a choice list even
+    # when its wording is new or localized.  Do not mistake ordinary numbered
+    # prose for one: it needs the live selection mark as well.
+    numbered = [line for line in lines if re.match(r"^(?:[›❯]\s*)?\d+[.)]\s+\S", line)]
+    selected_numbered = any(re.match(r"^[›❯]\s*\d+[.)]\s+\S", line) for line in lines)
+    if selected_numbered and len(numbered) >= 2:
+        return True
+
+    # These are controls with no reliable numbered second row in the capture.
+    # They are deliberately pairs/complete prompts rather than broad words in
+    # the transcript: an agent may discuss "login" or "permission" normally.
+    if any(marker in text for marker in (
+        "do you want to proceed?",
+        "allow command?",
+        "select login method:",
+        "paste code here if prompted",
+        "do you trust the files in this folder?",
+    )):
+        return True
+    # Short action menus can insert a line between the heading and the
+    # highlighted choice, so match both indispensable parts rather than their
+    # adjacency.
+    return (("login failed." in text and "try again" in text and "cancel" in text)
+            or ("how was this session?" in text and "send feedback" in text))
+
+
+def delivery_gate(pane: str) -> str:
+    """Return ``empty``, ``none``, ``text`` or ``blocked`` for a chat send.
+
+    ``none`` intentionally stays writable: after paste the transport must
+    prove the submit, but an unknown Codex form is not itself a menu.  A real
+    draft still wins over all other states and is never overwritten.
+    """
+    state, _busy = composer_snapshot(pane)
+    if state == "text":
+        return "text"
+    if _certain_interlock(pane):
+        return "blocked"
+    return state
+
+
 def composer_text(pane: str) -> str | None:
     """The visible draft in the last recognised composer, or ``None``.
 
@@ -512,7 +566,7 @@ def capture_pane(session: str) -> str | None:
 
 
 def require_prompt(session: str, *, wait: bool = True) -> None:
-    """Wait outside the writer lock for an empty composer; never overwrite a draft."""
+    """Wait only for a known transient control; unknown Codex forms are writable."""
     deadline = time.monotonic() + (PROMPT_WAIT_S if wait else 0)
     saw_busy = False
     while True:
@@ -520,11 +574,14 @@ def require_prompt(session: str, *, wait: bool = True) -> None:
         if pane is None:
             raise Refusal("agent_unavailable")
         state, busy = composer_snapshot(pane)
+        gate = delivery_gate(pane)
         saw_busy = saw_busy or busy
-        if state == "empty":
+        if gate in {"empty", "none"}:
             return
-        if state == "text":
+        if gate == "text":
             raise Refusal("composer_has_text")
+        if gate == "blocked":
+            raise Refusal("agent_not_at_prompt")
         if not wait or time.monotonic() >= deadline:
             raise Refusal("agent_busy" if saw_busy else "agent_not_at_prompt")
         time.sleep(PROMPT_POLL_S)
@@ -809,10 +866,12 @@ def send(agent: str, client_id: str, raw_text: str) -> dict:
             pane = capture_pane(session)
             if pane is None:
                 raise Refusal("agent_unavailable")
-            state, _busy = composer_snapshot(pane)
-            if state == "text":
+            gate = delivery_gate(pane)
+            if gate == "text":
                 raise Refusal("composer_has_text")
-            if state != "empty":
+            if gate == "blocked":
+                raise Refusal("agent_not_at_prompt")
+            if gate not in {"empty", "none"}:
                 retry_outside_lock = True
             else:
                 row = persist(agent, client_id, text)
