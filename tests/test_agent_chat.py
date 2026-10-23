@@ -639,6 +639,14 @@ def test_dim_codex_suggestion_is_empty_but_rgb_colour_is_not_dim():
     assert module.composer_state(coloured_draft) == "text"
 
 
+def test_composer_text_is_only_the_box_contents_and_never_the_border_or_hint():
+    module = _module()
+    boxed = "╭────╮\n│ > first line │\n│ second line │\n╰────╯\n  ? for shortcuts\n"
+    codex = "› first line\n\n  ? for shortcuts\n"
+    assert module.composer_text(boxed) == "first linesecond line"
+    assert module.composer_text(codex) == "first line"
+
+
 def test_a_running_turn_is_agent_busy_with_nothing_written_or_typed(box):
     box.stub_delivery()
     (box.state / "screen").write_text("✻ Pondering… (12s · esc to interrupt)\n", encoding="utf-8")

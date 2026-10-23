@@ -46,9 +46,10 @@ case "$cmd" in
     # The screen can change after the preflight capture and before this paste.
     # These switches model a new menu or a human draft winning that small race.
     [ -f "$S/menu_on_paste" ] && { printf 'menu\n' > "$S/mode"; exit 0; }
-    [ -f "$S/draft_on_paste" ] && { cat "$S/draft_on_paste" > "$S/composer"; exit 0; }
+    [ -f "$S/draft_on_paste" ] && cat "$S/draft_on_paste" >> "$S/composer"
     [ -f "$S/mute" ] && exit 0
     if [ -f "$S/lag" ]; then (sleep "$(cat "$S/lag")"; cat "$S/buffer.$name" >> "$S/composer") & exit 0; fi
+    cat "$S/buffer.$name" > "$S/pasted.$name"
     cat "$S/buffer.$name" >> "$S/composer"; rm -f "$S/buffer.$name" ;;
   send-keys)
     while [ "$1" = "-t" ]; do shift 2; done
@@ -157,6 +158,10 @@ def test_a_change_between_preflight_and_paste_never_gets_an_enter(box, switch, c
     assert done.returncode != 0, done.stderr
     assert len(box.typed()) == 1, "the one bracketed paste may race, but is never retried"
     assert box.keys("Enter") == [] and box.keys("Escape") == [] and box.keys("Space") == []
+    if switch == "draft_on_paste":
+        pasted = next(box.state.glob("pasted.*")).read_text(encoding="utf-8")
+        assert pasted.endswith(MESSAGE.rsplit(" ", 1)[-1])
+        assert (box.state / "composer").read_text(encoding="utf-8") == content + pasted
 
 
 # -- C2 · la firma si cerca solo nella casella ------------------------------------------------------------------------

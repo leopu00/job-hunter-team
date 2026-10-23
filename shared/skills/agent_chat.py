@@ -441,6 +441,57 @@ def composer_state(pane: str) -> str:
     return composer_snapshot(pane)[0]
 
 
+def composer_text(pane: str) -> str | None:
+    """The visible draft in the last recognised composer, or ``None``.
+
+    The transport uses this after paste and before Enter: the signature alone
+    cannot prove that another draft did not join the paste in the meantime.
+    """
+    raw_lines = (pane or "").splitlines()
+    rows = [(raw, strip_terminal_codes(raw).rstrip()) for raw in raw_lines]
+    while rows and not rows[-1][1].strip():
+        rows.pop()
+    rows = rows[-PROMPT_TAIL:]
+    for index in range(len(rows) - 1, -1, -1):
+        _raw, plain = rows[index]
+        match = _composer_match(plain)
+        if not match or _NUMBERED_OPTION.match(match.group(2)):
+            continue
+        marker = match.group(1)
+        marker_at = plain.index(marker)
+        boxed = bool(_BOXED_COMPOSER.match(plain))
+        if marker == "›":
+            if not _codex_footer(rows, index):
+                continue
+        elif not _claude_box(rows, index, boxed):
+            continue
+
+        def fragment(value: str, *, first: bool = False) -> str:
+            value = value[marker_at + len(marker):] if first else value.strip()
+            if boxed:
+                value = value.rstrip()
+                if value.endswith(("│", "┃", "╎", "|")):
+                    value = value[:-1]
+            return value.strip()
+
+        parts = [fragment(plain, first=True)]
+        for _following_raw, following in rows[index + 1:]:
+            if boxed:
+                if _BORDER.match(following):
+                    break
+                stripped = following.strip()
+                if not stripped.startswith(("│", "┃", "╎", "|")):
+                    break
+                parts.append(fragment(stripped[1:]))
+            else:
+                if _CODEX_DOT_FOOTER.match(following) or _CODEX_HINT.search(following):
+                    break
+                if following.strip():
+                    parts.append(following.strip())
+        return "".join(parts)
+    return None
+
+
 def prompt_state(pane: str) -> str:
     """Compatibility view for mail nudges and callers that display activity."""
     state, busy = composer_snapshot(pane)

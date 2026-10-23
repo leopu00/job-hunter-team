@@ -145,6 +145,19 @@ else:
 }
 _plain() { printf '%s' "$1" | _chat_parse plain; }
 _composer_state() { printf '%s' "$1" | _chat_parse state; }
+# The complete expected message stays on stdin, never in argv. Seeing just a
+# signature is insufficient after paste: another draft might be immediately
+# before it, and Enter would submit both texts.
+_composer_is_only_ours() {
+  printf '%s\0%s' "$1" "$message" | python3 -I -c '
+import sys
+sys.path.insert(0, sys.argv[1])
+import agent_chat
+pane, expected = sys.stdin.buffer.read().decode("utf-8", "replace").split("\0", 1)
+actual = agent_chat.composer_text(pane)
+sys.exit(0 if actual is not None and actual.replace("\n", "") == expected.replace("\n", "") else 1)
+' "$CHAT_SKILLS"
+}
 
 sender_trust="unverified"
 sender_claimed=""
@@ -731,7 +744,11 @@ else
   poll=0
   while :; do
     pane=$(_pane)
-    if _text_pending "$pane"; then seen=1; break; fi
+    if _text_pending "$pane"; then
+      if _composer_is_only_ours "$pane"; then seen=1; break; fi
+      echo "jht-tmux-send: $session changed while the paste rendered: no Enter (rc=130)" >&2
+      exit 130
+    fi
     [ "$poll" -lt "$render_polls" ] || break
     poll=$(( poll + 1 ))
     sleep 0.05
@@ -763,6 +780,14 @@ for s_try in $(seq 1 "$submit_tries"); do
       echo "jht-tmux-send: $session: the text is no longer in the composer and is not in the conversation: nothing more pressed (rc=7)" >&2
       exit 7
     fi
+    if ! _composer_is_only_ours "$pane"; then
+      echo "jht-tmux-send: $session changed while the paste was pending: no Enter (rc=130)" >&2
+      exit 130
+    fi
+  fi
+  if ! _composer_is_only_ours "$pane"; then
+    echo "jht-tmux-send: $session changed before Enter: no Enter (rc=130)" >&2
+    exit 130
   fi
   busy_pre=0
   _pane_busy "$pane" && busy_pre=1
