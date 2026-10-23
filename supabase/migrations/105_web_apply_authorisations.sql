@@ -126,9 +126,12 @@ BEGIN
             v_company := web_door.one_line(regexp_replace(COALESCE(v_pos.company, ''), '·', ' ', 'g'), 100);
         END IF;
         RETURN jsonb_build_object(
-            'params', jsonb_build_object('legacy_id', v_legacy),
+            'params', CASE WHEN p_action = 'position.apply_authorize'
+                           THEN jsonb_build_object('legacy_id', v_legacy, 'host', v_host)
+                           ELSE jsonb_build_object('legacy_id', v_legacy)
+                      END,
             'summary', CASE WHEN p_action = 'position.apply_authorize'
-                            THEN v_title || ' @ ' || v_company || E'\nDestinazione: ' || v_host
+                            THEN v_title || ' @ ' || v_company || ' · Destinazione: ' || v_host
                             ELSE web_door.one_line(v_title || ' @ ' || v_company, 200)
                        END,
             'confirm', p_action = 'position.apply_authorize');

@@ -99,11 +99,8 @@ def _instant(value: object) -> str | None:
     return utc.strftime("%Y-%m-%dT%H:%M:%S.") + f"{utc.microsecond // 1000:03d}Z"
 
 
-def _destination(summary: object) -> str | None:
-    if not isinstance(summary, str):
-        return None
-    _before, separator, host = summary.rpartition("\nDestinazione: ")
-    if not separator or not _before or not host or "\n" in host:
+def _destination(host: object) -> str | None:
+    if not isinstance(host, str):
         return None
     try:
         return notary.destination("web:" + host)
@@ -192,7 +189,7 @@ def sync(_pages: int = 0) -> dict:
                 continue
             try:
                 if action == "position.apply_authorize":
-                    destination = _destination(row.get("summary"))
+                    destination = _destination(row.get("host"))
                     if destination is None:
                         continue
                     notary.record(legacy_id, instant, "user_web", destination)

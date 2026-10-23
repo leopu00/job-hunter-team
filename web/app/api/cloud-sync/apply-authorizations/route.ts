@@ -15,7 +15,7 @@ type ActionRow = {
   status: string;
   created_at: string;
   summary: string;
-  params: { legacy_id?: unknown } | null;
+  params: { legacy_id?: unknown; host?: unknown } | null;
   session_id: string | null;
 };
 
@@ -105,6 +105,7 @@ export async function GET(req: NextRequest) {
 
   const validRows = ((data ?? []) as ActionRow[]).flatMap((row) => {
     const legacyId = row.params?.legacy_id;
+    const host = row.params?.host;
     if (
       typeof row.id !== "string" ||
       !ACTIONS.includes(row.action) ||
@@ -114,6 +115,7 @@ export async function GET(req: NextRequest) {
       typeof row.created_at !== "string" ||
       Number.isNaN(Date.parse(row.created_at)) ||
       typeof row.summary !== "string"
+      || (row.action === "position.apply_authorize" && typeof host !== "string")
       || (typeof row.session_id === "string" && deviceSessions.has(row.session_id))
     ) {
       return [];
@@ -124,6 +126,7 @@ export async function GET(req: NextRequest) {
         legacy_id: legacyId,
         created_at: row.created_at,
         summary: row.summary,
+        ...(row.action === "position.apply_authorize" ? { host } : {}),
         action: row.action,
         status: row.status,
       },
