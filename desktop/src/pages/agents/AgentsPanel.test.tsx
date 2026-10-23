@@ -11,7 +11,7 @@ import Shell from "../../shell/Shell";
 import { createPermissiveSupabase } from "../../test-support/permissive-supabase";
 import type { Locale } from "@/i18n/config";
 import { pluralText } from "../../lib/plural";
-import AgentsPanel, { identityLine } from "./AgentsPanel";
+import AgentsPanel, { identityLine, TerminalText } from "./AgentsPanel";
 import { AGENTS_PANEL_TEXT, type AgentsPanelText } from "./AgentsPanel.i18n";
 
 // «Agenti»: the agents' control panel, against a stand-in native side
@@ -956,5 +956,110 @@ describe("«Agenti», the previous sessions and the lanes of the last day", () =
     }
     expect(pluralText("it", 1, AGENTS_PANEL_TEXT.it.historyFailed)).toBe("1 avvio non riuscito");
     expect(pluralText("it", 3, AGENTS_PANEL_TEXT.it.historyFailed)).toBe("3 avvii non riusciti");
+  });
+});
+
+describe("«Agenti»: the terminal, read at the pace the native side says", () => {
+  let screenReads = 0;
+  let screenReply: (n: number) => unknown = () => ({ ok: true, data: { name: "SCOUT-1", up: true, text: "x" } });
+  const screens = () => ops().filter((r) => r.op === "screen").length;
+  const setVisibility = (state: "visible" | "hidden") => {
+    Object.defineProperty(document, "visibilityState", { configurable: true, get: () => state });
+    document.dispatchEvent(new Event("visibilitychange"));
+  };
+
+  beforeEach(() => {
+    screenReads = 0;
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"], shouldAdvanceTime: true });
+    const base = native.invoke.getMockImplementation()!;
+    native.invoke.mockImplementation(async (command: string, args: { request: Record<string, unknown> }) => {
+      if (command === COMMAND && args.request.op === "screen") {
+        screenReads += 1;
+        return screenReply(screenReads);
+      }
+      return base(command, args);
+    });
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+    setVisibility("visible");
+  });
+
+  const at = (refreshMs?: unknown) => () => ({
+    ok: true,
+    data: { name: "SCOUT-1", up: true, text: "working", ...(refreshMs === undefined ? {} : { refreshMs }) },
+  });
+
+  it("live: again after 2 s when the native side says so", async () => {
+    screenReply = at(2_000);
+    show("agent=SCOUT-1");
+    await screen.findByTestId("panel-terminal-SCOUT-1");
+    expect(screens()).toBe(1);
+    await vi.advanceTimersByTimeAsync(2_000);
+    expect(screens()).toBe(2);
+    await vi.advanceTimersByTimeAsync(2_000);
+    expect(screens()).toBe(3);
+  });
+
+  it("an older native side that says no pace: every 10 s, as before", async () => {
+    screenReply = at();
+    show("agent=SCOUT-1");
+    await screen.findByTestId("panel-terminal-SCOUT-1");
+    await vi.advanceTimersByTimeAsync(9_000);
+    expect(screens()).toBe(1);
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(screens()).toBe(2);
+  });
+
+  it("never two reads at once: the next waits for the last to come back, even when the window is seen again", async () => {
+    screenReply = (n) => (n === 1 ? at(2_000)() : new Promise(() => undefined));
+    show("agent=SCOUT-1");
+    await screen.findByTestId("panel-terminal-SCOUT-1");
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(screens()).toBe(2);
+    // the second read is still out: the window coming back does not start a third
+    setVisibility("visible");
+    await vi.advanceTimersByTimeAsync(0);
+    expect(screens()).toBe(2);
+  });
+
+  it("a server that turns this computer away: 20 s, then 40 s, then the pace again after a good read", async () => {
+    screenReply = (n) => (n <= 2 ? { ok: false, error: "ssh_rate_limited" } : at(10_000)());
+    show("agent=SCOUT-1");
+    await screen.findByRole("alert");
+    await vi.advanceTimersByTimeAsync(19_000);
+    expect(screens()).toBe(1);
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(screens()).toBe(2);
+    await vi.advanceTimersByTimeAsync(39_000);
+    expect(screens()).toBe(2);
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(screens()).toBe(3);
+    await screen.findByTestId("panel-terminal-SCOUT-1");
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(screens()).toBe(4);
+  });
+
+  it("a hidden window reads nothing, and reads at once when it is seen again", async () => {
+    screenReply = at(2_000);
+    show("agent=SCOUT-1");
+    await screen.findByTestId("panel-terminal-SCOUT-1");
+    setVisibility("hidden");
+    await vi.advanceTimersByTimeAsync(30_000);
+    expect(screens()).toBe(1);
+    setVisibility("visible");
+    await vi.advanceTimersByTimeAsync(0);
+    expect(screens()).toBe(2);
+  });
+
+  it("the lines are a memo: a read that brings the same text does not draw them again", async () => {
+    expect((TerminalText as unknown as { $$typeof: symbol }).$$typeof).toBe(Symbol.for("react.memo"));
+    screenReply = (n) => ({ ok: true, data: { name: "SCOUT-1", up: true, text: n < 3 ? "same" : "new line", refreshMs: 2_000 } });
+    show("agent=SCOUT-1");
+    expect((await screen.findByTestId("panel-terminal-SCOUT-1")).textContent).toBe("same");
+    await vi.advanceTimersByTimeAsync(2_000);
+    expect(screen.getByTestId("panel-terminal-SCOUT-1").textContent).toBe("same");
+    await vi.advanceTimersByTimeAsync(2_000);
+    expect(screen.getByTestId("panel-terminal-SCOUT-1").textContent).toBe("new line");
   });
 });

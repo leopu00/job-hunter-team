@@ -668,6 +668,84 @@ fn open_vps_link(
 
 const VPS_LINK_CHECK: &str = "exit 0";
 
+/// The same VPS, field by field: address, user, port, the key the app uses and the file with the
+/// host key it pinned for this account.
+fn same_vps(a: &ValidatedHost, b: &ValidatedHost) -> bool {
+    match (a, b) {
+        (
+            ValidatedHost::Vps { address, user, port, key_path, known_hosts },
+            ValidatedHost::Vps { address: address_b, user: user_b, port: port_b, key_path: key_b, known_hosts: known_b },
+        ) => address == address_b && user == user_b && port == port_b && key_path == key_b && known_hosts == known_b,
+        _ => false,
+    }
+}
+
+/// The chat's ssh master, if it may be lent to another read of the same team: the chat is
+/// connected in this account, on the master link, to exactly this VPS and to the same team (the
+/// pinned container, or none for the VPS the app set up). Its socket comes only from the chat's
+/// own connection, never from what a page sends.
+fn master_to_lend(
+    connection: Option<&Connection>,
+    scope: &AccountScope,
+    host: &ValidatedHost,
+    team: Option<(&str, &crate::existing_team_runtime::RuntimeTarget)>,
+) -> Option<PathBuf> {
+    let connection = connection?;
+    if &connection.scope != scope || connection.link != VpsLink::Master || !same_vps(&connection.validated, host) {
+        return None;
+    }
+    if connection.runtime.as_ref().map(|target| (target.team_id.as_str(), &target.runtime)) != team {
+        return None;
+    }
+    connection.control_path.clone()
+}
+
+/// The folder of a master's socket, as the chat makes it: a real folder (not a link), of `uid`,
+/// open to its owner only (0700), named with the chat's prefix. Once the chat closes its master the
+/// name can be free again, and ssh does not look at who owns a socket: a folder that is not
+/// still ours could hold another local user's socket.
+#[cfg(unix)]
+fn socket_folder_owned_by(socket: &Path, uid: u32) -> bool {
+    use std::os::unix::fs::{MetadataExt, PermissionsExt};
+    let Some(dir) = socket.parent() else { return false };
+    if !dir.file_name().and_then(|name| name.to_str()).is_some_and(|name| name.starts_with(TUNNEL_DIR_PREFIX)) {
+        return false;
+    }
+    match fs::symlink_metadata(dir) {
+        Ok(meta) => meta.file_type().is_dir() && meta.uid() == uid && meta.permissions().mode() & 0o777 == 0o700,
+        Err(_) => false,
+    }
+}
+
+/// Whether a lent socket's folder is still the chat's, checked right before each use of it.
+#[cfg(unix)]
+pub(crate) fn lent_socket_still_ours(socket: &Path) -> bool {
+    // SAFETY: geteuid has no arguments or pointers.
+    socket_folder_owned_by(socket, unsafe { libc::geteuid() })
+}
+
+/// No master on this platform: nothing is ever lent.
+#[cfg(not(unix))]
+pub(crate) fn lent_socket_still_ours(_socket: &Path) -> bool {
+    false
+}
+
+/// The chat's master for a read of the agents' panel (the terminal of an agent), so that the read
+/// opens no ssh connection of its own: the socket of `master_to_lend`, only while its folder is
+/// still the chat's and the master answers. None means «open a connection as before».
+pub(crate) fn shared_master(
+    state: &DirectChatState,
+    scope: &AccountScope,
+    host: &ValidatedHost,
+    team: Option<(&str, &crate::existing_team_runtime::RuntimeTarget)>,
+) -> Option<PathBuf> {
+    let path = {
+        let slot = state.inner.connection.lock().ok()?;
+        master_to_lend(slot.as_ref(), scope, host, team)?
+    };
+    (lent_socket_still_ours(&path) && check_tunnel(host, &path)).then_some(path)
+}
+
 fn close_connection(connection: &mut Connection) {
     if let (Some(path), ValidatedHost::Vps { .. }) =
         (&connection.control_path, &connection.validated)
@@ -1487,9 +1565,11 @@ mod tests {
         control_path_fits, remove_tunnel_socket, tunnel_dir_name, tunnel_socket_bases, tunnel_socket_path,
         SOCKET_PATH_MAX, SSH_SOCKET_SUFFIX,
         open_vps_link, ready_status, vps_link_for, VpsLink, VPS_LINK_CHECK,
+        master_to_lend,
     };
+    use crate::existing_team_runtime::ActivatedTarget;
     use crate::runtime_host::{ExecutionHost, ValidatedHost};
-    use std::{fs, process::Command};
+    use std::{fs, path::{Path, PathBuf}, process::Command};
 
     /// The shape and length of macOS's per-user temporary folder (getconf DARWIN_USER_TEMP_DIR):
     /// /var/folders/<2>/<30>/T/, 49 characters. Placeholders, not a real one.
@@ -1614,6 +1694,121 @@ mod tests {
         }
         // the check is a command every remote shell runs the same way
         assert_eq!(VPS_LINK_CHECK, "exit 0");
+    }
+
+    /// A lent socket is used only while its folder is still the chat's: a real folder of this user,
+    /// 0700, with the chat's prefix. Another owner, a folder open to others, a link or another name:
+    /// a connection of its own.
+    #[cfg(unix)]
+    #[test]
+    fn a_lent_socket_must_sit_in_a_folder_still_the_chats() {
+        use super::{lent_socket_still_ours, socket_folder_owned_by};
+        use std::os::unix::fs::PermissionsExt;
+        let base = std::env::temp_dir().join(format!("jht-lend-test-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&base);
+        fs::create_dir_all(&base).unwrap();
+        // SAFETY: geteuid has no arguments or pointers.
+        let me = unsafe { libc::geteuid() };
+        let ours = base.join("jcabcdef0123");
+        fs::create_dir(&ours).unwrap();
+        fs::set_permissions(&ours, fs::Permissions::from_mode(0o700)).unwrap();
+        let socket = ours.join("s");
+        assert!(socket_folder_owned_by(&socket, me));
+        assert!(lent_socket_still_ours(&socket));
+        assert!(!socket_folder_owned_by(&socket, me.wrapping_add(1)), "another owner");
+
+        fs::set_permissions(&ours, fs::Permissions::from_mode(0o755)).unwrap();
+        assert!(!lent_socket_still_ours(&socket), "a folder others can read");
+        fs::set_permissions(&ours, fs::Permissions::from_mode(0o700)).unwrap();
+
+        let link = base.join("jclinkxyz");
+        std::os::unix::fs::symlink(&ours, &link).unwrap();
+        assert!(!lent_socket_still_ours(&link.join("s")), "a link to a folder of ours");
+
+        let named = base.join("other0123");
+        fs::create_dir(&named).unwrap();
+        fs::set_permissions(&named, fs::Permissions::from_mode(0o700)).unwrap();
+        assert!(!lent_socket_still_ours(&named.join("s")), "not the chat's name");
+
+        assert!(!lent_socket_still_ours(&base.join("jcgone").join("s")), "a folder that is gone");
+        assert!(!lent_socket_still_ours(Path::new("s")), "no folder");
+        fs::remove_dir_all(&base).unwrap();
+    }
+
+    /// The terminal of the agents' panel reads through the chat's master only when the chat is
+    /// connected in the same account, on the master link, to the very same VPS and team. Unix only:
+    /// a test that builds a Connection does (see only_unix_tests_build_a_connection), and the chat
+    /// has no master to lend on Windows.
+    #[cfg(unix)]
+    #[test]
+    fn the_chats_master_is_lent_only_to_the_same_account_vps_and_team() {
+        let scope = crate::account_scope::AccountScope::synthetic(b"synthetic-account-lend");
+        let other_scope = crate::account_scope::AccountScope::synthetic(b"synthetic-account-other");
+        let socket = PathBuf::from("/nonexistent-jht-test/master.sock");
+        let team = ActivatedTarget::synthetic_for_tests();
+        let chat = |runtime: Option<ActivatedTarget>, link: VpsLink, validated: ValidatedHost| Connection {
+            app: None,
+            scope: scope.clone(),
+            host: ExecutionHost::Local,
+            validated,
+            runtime,
+            local_wrapper: None,
+            local_owner_marker: None,
+            control_path: Some(socket.clone()),
+            tunnel: None,
+            link,
+        };
+        let same_team = Some((team.team_id.as_str(), &team.runtime));
+        let mut connections = Vec::new();
+
+        // the VPS the app set up: no pinned team on either side
+        let own = chat(None, VpsLink::Master, synthetic_vps());
+        assert_eq!(master_to_lend(Some(&own), &scope, &synthetic_vps(), None), Some(socket.clone()));
+        assert_eq!(master_to_lend(Some(&own), &other_scope, &synthetic_vps(), None), None, "another account");
+        assert_eq!(master_to_lend(Some(&own), &scope, &synthetic_vps(), same_team), None, "the chat is not on that team");
+        assert_eq!(master_to_lend(None, &scope, &synthetic_vps(), None), None, "no chat");
+        assert_eq!(master_to_lend(Some(&own), &scope, &ValidatedHost::Local, None), None, "this computer");
+        let changed = |edit: &dyn Fn(&mut String, &mut String, &mut u16, &mut PathBuf, &mut PathBuf)| {
+            let ValidatedHost::Vps { mut address, mut user, mut port, mut key_path, mut known_hosts } = synthetic_vps() else { unreachable!() };
+            edit(&mut address, &mut user, &mut port, &mut key_path, &mut known_hosts);
+            ValidatedHost::Vps { address, user, port, key_path, known_hosts }
+        };
+        for (what, host) in [
+            ("address", changed(&|a, _, _, _, _| *a = "other-host".into())),
+            ("user", changed(&|_, u, _, _, _| *u = "root".into())),
+            ("port", changed(&|_, _, p, _, _| *p = 2222)),
+            ("key", changed(&|_, _, _, k, _| *k = "/private/other-key".into())),
+            ("pinned host key", changed(&|_, _, _, _, h| *h = "/private/other-known-hosts".into())),
+        ] {
+            assert_eq!(master_to_lend(Some(&own), &scope, &host, None), None, "another {what}");
+        }
+        connections.push(own);
+
+        // an existing team: the same pinned container, or nothing
+        let existing = chat(Some(team.clone()), VpsLink::Master, synthetic_vps());
+        assert_eq!(master_to_lend(Some(&existing), &scope, &synthetic_vps(), same_team), Some(socket.clone()));
+        assert_eq!(master_to_lend(Some(&existing), &scope, &synthetic_vps(), None), None);
+        let other_id = "u".repeat(16);
+        assert_eq!(master_to_lend(Some(&existing), &scope, &synthetic_vps(), Some((other_id.as_str(), &team.runtime))), None);
+        let mut other_runtime = team.runtime.clone();
+        other_runtime.container_id = "9".repeat(64);
+        assert_eq!(master_to_lend(Some(&existing), &scope, &synthetic_vps(), Some((team.team_id.as_str(), &other_runtime))), None);
+        connections.push(existing);
+
+        // Windows: no master to lend
+        let per_command = chat(None, VpsLink::PerCommand, synthetic_vps());
+        assert_eq!(master_to_lend(Some(&per_command), &scope, &synthetic_vps(), None), None);
+        connections.push(per_command);
+        // a chat without its socket lends nothing
+        let mut no_socket = chat(None, VpsLink::Master, synthetic_vps());
+        no_socket.control_path = None;
+        assert_eq!(master_to_lend(Some(&no_socket), &scope, &synthetic_vps(), None), None);
+        connections.push(no_socket);
+
+        // nothing to close: these masters never existed
+        for mut connection in connections {
+            connection.control_path = None;
+        }
     }
 
     /// The page reads every 5 s instead of 1.5 only when each read is a new ssh connection.

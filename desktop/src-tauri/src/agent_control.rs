@@ -42,8 +42,11 @@ use crate::{
 use serde::Deserialize;
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
-use std::{path::PathBuf, time::Duration};
-use tauri::State;
+use std::{
+    path::{Path, PathBuf},
+    time::Duration,
+};
+use tauri::{Manager, State};
 
 /// The container side, as the app ships it: the reads run this copy on a VPS.
 pub(crate) const AGENT_CONTROL_PY: &str = include_str!("../../../shared/skills/agent_control.py");
@@ -53,6 +56,10 @@ const READ_TIMEOUT: Duration = Duration::from_secs(25);
 /// A start waits for start-agent.sh (120 s in the script).
 const ACTION_TIMEOUT: Duration = Duration::from_secs(200);
 const MAX_REPLY: usize = 256 * 1024;
+/// How often the page reads the terminal of the agent in view: live when the read costs no ssh
+/// connection of its own (this computer, or the chat's master lent for it), else as before.
+const SCREEN_LIVE_MS: u64 = 2_000;
+const SCREEN_SLOW_MS: u64 = 10_000;
 
 /// The script's codes (100-112, 115-121), the CLI's (113-114) and the pinned target's.
 const EXITS: &[(i32, &str)] = &[
@@ -224,7 +231,7 @@ impl ControlRequest {
 // ── where the team is ───────────────────────────────────────────────────────
 enum Destination {
     /// An existing team, linked: its pinned container.
-    Vps { validated: ValidatedHost, runtime: RuntimeTarget, mode: VpsMode, label: String },
+    Vps { validated: ValidatedHost, team_id: String, runtime: RuntimeTarget, mode: VpsMode, label: String },
     /// The VPS the app set up itself (no existing team registered): its host's jht wrapper.
     OwnVps { validated: ValidatedHost, label: String, state: OwnVpsState },
     Local { wrapper: PathBuf },
@@ -281,7 +288,7 @@ fn destination(app: &tauri::AppHandle, scope: &AccountScope) -> Result<(Destinat
         let target = selected(app, scope, &host)?.ok_or("existing_team_runtime_required")?;
         let mode = vps_mode(scope, &target);
         let print = fingerprint(&["vps", &connection_key(scope, &target), &address, &user, &port, &target.team_id, &target.runtime.container_id]);
-        return Ok((Destination::Vps { validated, runtime: target.runtime, mode, label: address }, print));
+        return Ok((Destination::Vps { validated, team_id: target.team_id, runtime: target.runtime, mode, label: address }, print));
     }
     crate::account_scope::validate_local_runtime(app, scope).map_err(|_| "agent_control_no_team")?;
     let wrapper = crate::onboarding::verified_local_wrapper_path(app).map_err(|_| "agent_control_no_team")?;
@@ -329,14 +336,18 @@ pub(crate) fn read_input(request: &ControlRequest) -> Option<Vec<u8>> {
     Some(input)
 }
 
-fn run(destination: &Destination, request: &ControlRequest, argv: &[String]) -> Result<ProcessResult, &'static str> {
+/// `shared`: the chat's ssh master, lent for a read of the terminal (see `screen_master`); None opens
+/// a connection of its own, as every other read and every action does.
+fn run(destination: &Destination, request: &ControlRequest, argv: &[String], shared: Option<&Path>) -> Result<ProcessResult, &'static str> {
+    // checked again right before ssh starts: the master's folder must still be the chat's
+    let shared = shared.filter(|socket| direct_chat::lent_socket_still_ours(socket));
     let read = request.action().is_none();
     let timeout = if read { READ_TIMEOUT } else { ACTION_TIMEOUT };
     match destination {
         Destination::Vps { validated, runtime, .. } => {
             if read {
                 let input = read_input(request).ok_or("agent_control_invalid")?;
-                run_ssh_command(validated, &python_command(runtime)?, Some(&input), timeout, None)
+                run_ssh_command(validated, &python_command(runtime)?, Some(&input), timeout, shared)
             } else {
                 run_ssh_command(validated, &vps_action_command(runtime, argv)?, None, timeout, None)
             }
@@ -344,7 +355,7 @@ fn run(destination: &Destination, request: &ControlRequest, argv: &[String]) -> 
         Destination::OwnVps { validated, .. } => {
             if read {
                 let input = read_input(request).ok_or("agent_control_invalid")?;
-                run_ssh_command(validated, &own_vps_read_command(), Some(&input), timeout, None)
+                run_ssh_command(validated, &own_vps_read_command(), Some(&input), timeout, shared)
             } else {
                 run_ssh_command(validated, &own_vps_action_command(argv)?, None, timeout, None)
             }
@@ -354,6 +365,37 @@ fn run(destination: &Destination, request: &ControlRequest, argv: &[String]) -> 
             args.extend(argv.iter().map(String::as_str));
             crate::onboarding::run_verified_local_wrapper(wrapper, &args, None, timeout)
         }
+    }
+}
+
+/// The chat's master for the terminal of an agent, and only for that read: the chat must be
+/// connected in this account to the same VPS and the same team (direct_chat::shared_master).
+fn screen_master(app: &tauri::AppHandle, scope: &AccountScope, request: &ControlRequest, destination: &Destination) -> Option<PathBuf> {
+    if !borrows_chat_master(request) {
+        return None;
+    }
+    let (validated, team) = match destination {
+        Destination::Vps { validated, team_id, runtime, .. } => (validated, Some((team_id.as_str(), runtime))),
+        Destination::OwnVps { validated, .. } => (validated, None),
+        Destination::Local { .. } => return None,
+    };
+    let chat = app.try_state::<direct_chat::DirectChatState>()?;
+    direct_chat::shared_master(chat.inner(), scope, validated, team)
+}
+
+/// Only the read of a terminal borrows the chat's master; the other reads and every action keep
+/// a connection of their own.
+fn borrows_chat_master(request: &ControlRequest) -> bool {
+    matches!(request, ControlRequest::Screen { .. })
+}
+
+/// The pace of the terminal the page reads: live on this computer or through the chat's master,
+/// as before when every read is an ssh connection of its own (Windows, or no chat open).
+fn screen_refresh_ms(local: bool, shared: bool) -> u64 {
+    if local || shared {
+        SCREEN_LIVE_MS
+    } else {
+        SCREEN_SLOW_MS
     }
 }
 
@@ -659,9 +701,15 @@ pub(crate) fn control_for_scope(app: &tauri::AppHandle, scope: &AccountScope, re
         Destination::Vps { label, .. } | Destination::OwnVps { label, .. } => Some(label.clone()),
         Destination::Local { .. } => None,
     };
-    match run(&destination, &request, &argv) {
+    let shared = screen_master(app, scope, &request, &destination);
+    match run(&destination, &request, &argv, shared.as_deref()) {
         Ok(output) => {
             let mut reply = answer(&request, &output, &print, label.as_deref());
+            // The terminal tells the page how soon to read it again.
+            if let (ControlRequest::Screen { .. }, Some(data)) = (&request, reply.get_mut("data").and_then(Value::as_object_mut)) {
+                let local = matches!(destination, Destination::Local { .. });
+                data.insert("refreshMs".into(), json!(screen_refresh_ms(local, shared.is_some())));
+            }
             // Where the VPS of one's own stands, for the page to offer the claim (JHT-T30).
             if let (Destination::OwnVps { state, .. }, ControlRequest::List {} | ControlRequest::Exclusions {}) = (&destination, &request) {
                 if let Some(data) = reply.get_mut("data").and_then(Value::as_object_mut) {
@@ -977,6 +1025,28 @@ mod tests {
         assert_eq!(vps_mode(&scope, &team), VpsMode::ReadOnly);
     }
 
+    #[test]
+    fn the_terminal_is_live_only_where_a_read_costs_no_connection_of_its_own() {
+        assert_eq!(screen_refresh_ms(true, false), 2_000, "this computer");
+        assert_eq!(screen_refresh_ms(false, true), 2_000, "through the chat's master");
+        assert_eq!(screen_refresh_ms(false, false), 10_000, "a connection per read, as before");
+    }
+
+    #[test]
+    fn only_the_terminal_borrows_the_chats_master() {
+        for request in [
+            json!({"op":"list"}),
+            json!({"op":"team"}),
+            json!({"op":"history"}),
+            json!({"op":"exclusions"}),
+            json!({"op":"stop","session":"SCOUT-1","target":"t","confirmed":true}),
+            json!({"op":"restart","session":"CAPITANO","target":"t","confirmed":true}),
+        ] {
+            assert!(!borrows_chat_master(&req(request.clone()).unwrap()), "{request}");
+        }
+        assert!(borrows_chat_master(&req(json!({"op":"screen","session":"CAPITANO"})).unwrap()));
+    }
+
     fn validated_vps() -> ValidatedHost {
         ValidatedHost::Vps {
             address: "vps.example".into(),
@@ -1007,6 +1077,7 @@ mod tests {
         let team = ActivatedTarget::synthetic_for_tests();
         let existing = Destination::Vps {
             validated: validated_vps(),
+            team_id: team.team_id.clone(),
             runtime: team.runtime.clone(),
             mode: vps_mode(&scope, &team),
             label: "vps.example".into(),

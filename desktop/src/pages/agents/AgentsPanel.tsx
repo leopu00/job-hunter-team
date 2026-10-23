@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ComponentType } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState, type ComponentType } from "react";
 import { describeAgentState, type AgentState, type AgentStateTone } from "@/lib/agent-state";
 import { appLocale } from "../../lib/app-locale";
 import { describeError } from "../../lib/error-catalog";
@@ -28,6 +28,7 @@ import {
 import type { AgentIdentity, AgentQuestion, QuestionOption, TeamAgent } from "../../lib/existing-team-agents";
 import OwnVpsClaim from "../../components/OwnVpsClaim";
 import { useRefresh } from "../../shell/router";
+import { nextScreenWait, SCREEN_SLOW_MS, screenPace } from "./terminal-pace";
 import type { PageProps } from "../types";
 import { AGENTS_PANEL_TEXT, type AgentsPanelText } from "./AgentsPanel.i18n";
 import { UsageLine, UsageShort } from "./AgentUsage";
@@ -51,8 +52,6 @@ function hasChat(row: PanelRow): boolean {
   return CHAT_ROLES.has(row.role) && row.session === row.role.toUpperCase();
 }
 
-/** The terminal of the agent in view is read again this often, only while it is open. */
-export const SCREEN_REFRESH_MS = 10_000;
 /** A terminal that changed this recently says the agent is doing something (the second source). */
 const MOVING_MS = 30_000;
 
@@ -249,24 +248,46 @@ function stateLine(t: AgentsPanelText, row: PanelRow): string {
   return describeAgentState(row.agent.state, appLocale()).line;
 }
 
-/** The terminal of the agent in view: read when shown, then again while it stays shown. */
+/**
+ * The terminal of the agent in view: read when shown, then again while it stays shown and the
+ * window is visible, at the pace the native side says (terminal-pace.ts). One read at a time: the
+ * next one is set only once the last is back.
+ */
 function Terminal({ row, t, chat }: { row: PanelRow; t: AgentsPanelText; chat: boolean }) {
-  const [screen, setScreen] = useState<Outcome<{ up: boolean; text: string | null }> | null>(null);
+  const [screen, setScreen] = useState<Outcome<{ up: boolean; text: string | null; refreshMs: unknown }> | null>(null);
   const session = row.session;
   useEffect(() => {
     let live = true;
+    let reading = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let wait = SCREEN_SLOW_MS;
     setScreen(null);
-    const read = () =>
-      readPanelScreen(session).then((result) => {
-        if (live) setScreen(result);
-      });
-    void read();
-    const timer = window.setInterval(() => {
+    const read = async () => {
+      if (!live || reading) return;
+      clearTimeout(timer);
+      reading = true;
+      const result = await readPanelScreen(session);
+      reading = false;
+      if (!live) return;
+      setScreen(result);
+      wait = nextScreenWait(wait, result.ok ? { ok: true, pace: screenPace(result.value.refreshMs) } : { ok: false, code: result.code });
+      schedule();
+    };
+    // a hidden window reads nothing; it reads at once when it is seen again
+    const schedule = () => {
+      timer = setTimeout(() => {
+        if (document.visibilityState === "visible") void read();
+      }, wait);
+    };
+    const seen = () => {
       if (document.visibilityState === "visible") void read();
-    }, SCREEN_REFRESH_MS);
+    };
+    document.addEventListener("visibilitychange", seen);
+    void read();
     return () => {
       live = false;
-      window.clearInterval(timer);
+      clearTimeout(timer);
+      document.removeEventListener("visibilitychange", seen);
     };
   }, [session]);
   if (screen === null) return <p className="text-[11px] text-[var(--color-muted)]">{t.screenReading}</p>;
@@ -285,17 +306,24 @@ function Terminal({ row, t, chat }: { row: PanelRow; t: AgentsPanelText; chat: b
         {chat && ` ${fill(t.terminalWriteInChat, { name: displayName(row.session) })}`}
       </p>
       <p className="text-[11px] mb-1 text-[var(--color-muted)]">{fill(t.screenAt, { time: stamp(screen.at) })}</p>
-      {/* Text only: React escapes it, nothing in it is ever HTML. */}
-      <pre
-        data-testid={`panel-terminal-${session}`}
-        className="text-[11px] leading-snug whitespace-pre-wrap break-words max-h-[55vh] overflow-auto rounded p-2"
-        style={{ background: "var(--color-deep)", color: "var(--color-bright)" }}
-      >
-        {screen.value.text === "" ? t.screenEmpty : screen.value.text}
-      </pre>
+      <TerminalText session={session} text={screen.value.text === "" ? t.screenEmpty : (screen.value.text ?? "")} />
     </>
   );
 }
+
+/** The lines of the terminal: drawn again only when they change, not at every read. */
+export const TerminalText = memo(function TerminalText({ session, text }: { session: string; text: string }) {
+  return (
+    // Text only: React escapes it, nothing in it is ever HTML.
+    <pre
+      data-testid={`panel-terminal-${session}`}
+      className="text-[11px] leading-snug whitespace-pre-wrap break-words max-h-[55vh] overflow-auto rounded p-2"
+      style={{ background: "var(--color-deep)", color: "var(--color-bright)" }}
+    >
+      {text}
+    </pre>
+  );
+});
 
 function Confirm({
   t,
