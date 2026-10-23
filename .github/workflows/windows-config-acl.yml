@@ -109,7 +109,7 @@ jobs:
       # (tests/windows_native_fakes.py); every case checks the engine it ran
       # under. A missing shell, bash or compiler fails, and so does a real
       # Podman visible to Find-Podman here (CI is set). A skip fails the count.
-      # 116 = the six whole files (48 + 41 + 11 + 7 + 5 + 4): the setup's repair of a broker
+      # 118 = the six whole files (48 + 41 + 11 + 7 + 5 + 6): the setup's repair of a broker
       # or Telegram service (T85, T87), the cgroup manager of the Podman service (T87),
       # the logon task's user compared as a SID on this Windows (T100), and the bundle's files
       # given to the user by an elevated setup, as this runner is (T103).
@@ -127,7 +127,7 @@ jobs:
             if ($code -ne 0) { exit $code }
             $summary = "$($out[-1])"
             if ($summary -notmatch '^=+ (\d+) passed(, \d+ warnings?)? in [0-9.]+s') { throw "unexpected pytest summary under ${shell}: $summary" }
-            if ([int]$Matches[1] -lt 116) { throw "only $($Matches[1]) tests ran under $shell, expected at least 116" }
+            if ([int]$Matches[1] -lt 118) { throw "only $($Matches[1]) tests ran under $shell, expected at least 118" }
           }
 
       # The desktop app's Windows uninstaller and the team (T72): its NSIS hook

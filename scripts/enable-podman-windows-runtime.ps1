@@ -256,11 +256,28 @@ function Copy-NodeWithoutWslMetadata {
 # written (Set-JhtAccessControl), never the SACL that Set-Acl would need SeSecurityPrivilege for.
 function Set-JhtOwnerToCurrentUser {
   param([Parameter(Mandatory)][string]$Path)
+  # Elevated, on paths in the user's own folders: a file, or a folder above it, replaced by a link
+  # would carry the change of owner outside the bundle. Refused before anything is read or written,
+  # as install.ps1 refuses a reparse-point ancestor of the runtime folder.
+  $node = Get-Item -LiteralPath $Path -Force -ErrorAction Stop
+  while ($node) {
+    if (($node.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) { throw "A runtime file or a folder above it is a reparse point: $Path" }
+    $parent = if ($node.PSIsContainer) { $node.Parent } else { $node.Directory }
+    if (-not $parent -or $parent.FullName -eq $node.FullName) { break }
+    $node = $parent
+  }
   $user = [Security.Principal.WindowsIdentity]::GetCurrent().User
   $acl = Get-Acl -LiteralPath $Path -ErrorAction Stop
-  if (([Security.Principal.NTAccount]$acl.Owner).Translate([Security.Principal.SecurityIdentifier]).Value -eq $user.Value) { return }
+  # Not only a write saved: a user who is not elevated may not write an owner at all, not even itself
+  # ("unauthorized operation", measured under 5.1 and 7), so this return is what lets a normal setup go on.
+  $owner = $acl.Owner
+  if (([Security.Principal.NTAccount]$owner).Translate([Security.Principal.SecurityIdentifier]).Value -eq $user.Value) { return }
   $acl.SetOwner($user)
-  Set-JhtAccessControl -Path $Path -Acl $acl
+  try {
+    Set-JhtAccessControl -Path $Path -Acl $acl
+  } catch {
+    throw "Cannot make a runtime file owned by the current user (it is owned by $owner): $Path. $($_.Exception.Message)"
+  }
   $after = (Get-Acl -LiteralPath $Path -ErrorAction Stop).Owner
   if (([Security.Principal.NTAccount]$after).Translate([Security.Principal.SecurityIdentifier]).Value -ne $user.Value) {
     throw "The owner is not the current user: $Path"
