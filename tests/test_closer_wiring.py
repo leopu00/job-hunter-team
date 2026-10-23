@@ -186,6 +186,8 @@ def test_prompt_del_closer_intestazione_e_invarianti(lang):
         assert text.index(f"**{rule}") < text.index("apply_gate.py queue"), (lang, rule)
     assert "applied_via = agent_closer" in text
     assert "apply_gate.py queue" in text and "apply_flow.py" in text
+    assert "authorisation_unproven_notices" in text, lang
+    assert "jht apply request" in text and "Telegram" in text, lang
     # A page down for now (exit 5) is not a stop and is never re-run: the queue
     # gives it back after retry_after (checkpoint_retry_later).
     step4 = text[text.index("STEP 4"):text.index("STEP 5")]

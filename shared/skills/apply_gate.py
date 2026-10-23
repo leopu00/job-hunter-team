@@ -74,6 +74,7 @@ __all__ = [
     "USER_REQUEST_ORIGINS",
     "WEB_ORIGIN",
     "web_cap_notice",
+    "authorisation_unproven_notices",
     "Verdict",
     "application_queue",
     "apply_verdict",
@@ -1420,6 +1421,7 @@ def application_queue(
 
 
 WEB_CAP_NOTICE_MARKER = "apply-web-cap-notified"
+AUTHORISATION_UNPROVEN_NOTICE_MARKER = "apply-authorisation-unproven-notified.json"
 
 
 def web_cap_notice(queue: dict[str, Any], jht_home: Path | None = None, today: str | None = None) -> dict[str, Any] | None:
@@ -1449,6 +1451,66 @@ def web_cap_notice(queue: dict[str, Any], jht_home: Path | None = None, today: s
     except OSError:
         return None  # without a record the notice would repeat at every iteration
     return {"waiting": waiting, "max_web_per_day": queue.get("max_web_per_day")}
+
+
+def authorisation_unproven_notices(
+    queue: dict[str, Any], jht_home: Path | None = None, db_path: str | None = None,
+) -> list[dict[str, Any]]:
+    """Return each unproven authorisation only once for its position and instant.
+
+    A stale or locally written flag is deliberately not enough for the broker.
+    The queue therefore tells the person which position needs a real
+    authorisation, but records the (position, flag instant) before handing it
+    to the CLOSER: a polling loop cannot repeat the same notice forever.  A
+    newer flag is a new choice by the person and is announced again.
+    """
+    ids = []
+    for held in queue.get("held", []):
+        if not isinstance(held, dict) or held.get("reason") != "authorisation_unproven":
+            continue
+        try:
+            position_id = int(held.get("position_id"))
+        except (TypeError, ValueError):
+            continue
+        if position_id > 0:
+            ids.append(position_id)
+    if not ids:
+        return []
+    try:
+        with sqlite3.connect(db_path or _db_path()) as conn:
+            rows = conn.execute(
+                "SELECT id, apply_requested_at FROM positions WHERE id IN (" + ",".join("?" for _ in ids) + ")",
+                ids,
+            ).fetchall()
+    except sqlite3.Error:
+        return []
+    instants = {int(row[0]): str(row[1] or "") for row in rows}
+    candidates = [
+        {"position_id": position_id, "apply_requested_at": instants.get(position_id, "")}
+        for position_id in ids if instants.get(position_id)
+    ]
+    if not candidates:
+        return []
+    marker = (jht_home or _jht_home()) / "state" / AUTHORISATION_UNPROVEN_NOTICE_MARKER
+    try:
+        recorded = json.loads(marker.read_text(encoding="utf-8"))
+        if not isinstance(recorded, list) or not all(isinstance(key, str) for key in recorded):
+            return []
+    except FileNotFoundError:
+        recorded = []
+    except (OSError, ValueError):
+        return []
+    known = set(recorded)
+    fresh = [item for item in candidates if f"{item['position_id']}:{item['apply_requested_at']}" not in known]
+    if not fresh:
+        return []
+    try:
+        marker.parent.mkdir(parents=True, exist_ok=True)
+        marker.write_text(json.dumps(recorded + [f"{item['position_id']}:{item['apply_requested_at']}" for item in fresh]),
+                          encoding="utf-8")
+    except OSError:
+        return []  # without a marker this warning would repeat at every queue read
+    return fresh
 
 
 # ── CLI ──────────────────────────────────────────────────────────────────────
@@ -1496,6 +1558,9 @@ def main(argv: list[str] | None = None) -> int:
         notice = web_cap_notice(q)
         if notice:
             q["web_cap_notice"] = notice
+        unproven = authorisation_unproven_notices(q, db_path=args.db)
+        if unproven:
+            q["authorisation_unproven_notices"] = unproven
         if args.json:
             print(json.dumps(q, ensure_ascii=False))
         elif q["ready"]:

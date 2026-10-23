@@ -994,6 +994,7 @@ function emit(v: Verdict, asJson: boolean): ScriptResult {
 }
 
 const WEB_CAP_NOTICE_MARKER = "apply-web-cap-notified";
+const AUTHORISATION_UNPROVEN_NOTICE_MARKER = "apply-authorisation-unproven-notified.json";
 
 /**
  * `web_cap_notice`: the one notice a day that applications authorised from the
@@ -1023,6 +1024,49 @@ export function webCapNotice(q: Queue, options: CloserOptions, today?: string): 
   return { waiting, max_web_per_day: q.max_web_per_day as number | null };
 }
 
+/**
+ * `authorisation_unproven_notices`: each (position, flag instant) that the
+ * broker does not hold is announced once.  The marker is written before the
+ * queue hands the notice over, so a polling CLOSER cannot repeat it forever;
+ * a newer flag instant is a new choice and earns one new notice.
+ */
+export function authorisationUnprovenNotices(q: Queue, options: CloserOptions): Array<{ position_id: number; apply_requested_at: string }> {
+  const ids = q.held.filter((h) => h.reason === "authorisation_unproven").map((h) => h.position_id).filter((id) => Number.isInteger(id) && id > 0);
+  if (ids.length === 0) return [];
+  let rows: Array<{ id: unknown; apply_requested_at: unknown }>;
+  try {
+    rows = options.db().prepare(`SELECT id, apply_requested_at FROM positions WHERE id IN (${ids.map(() => "?").join(",")})`).all(...ids) as typeof rows;
+  } catch {
+    return [];
+  }
+  const instants = new Map(rows.map((row) => [Number(row.id), pyStrValue(row.apply_requested_at ?? "")]));
+  const candidates = ids.flatMap((position_id) => {
+    const apply_requested_at = instants.get(position_id) ?? "";
+    return apply_requested_at ? [{ position_id, apply_requested_at }] : [];
+  });
+  if (candidates.length === 0) return [];
+  const marker = pyPath(options.jhtHome, "state", AUTHORISATION_UNPROVEN_NOTICE_MARKER);
+  let recorded: string[];
+  try {
+    const parsed: unknown = JSON.parse(readFileSync(marker, "utf8"));
+    if (!Array.isArray(parsed) || parsed.some((key) => typeof key !== "string")) return [];
+    recorded = parsed;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") return [];
+    recorded = [];
+  }
+  const known = new Set(recorded);
+  const fresh = candidates.filter((item) => !known.has(`${item.position_id}:${item.apply_requested_at}`));
+  if (fresh.length === 0) return [];
+  try {
+    mkdirSync(pyPath(options.jhtHome, "state"), { recursive: true });
+    writeFileSync(marker, JSON.stringify([...recorded, ...fresh.map((item) => `${item.position_id}:${item.apply_requested_at}`)]), "utf8");
+  } catch {
+    return [];
+  }
+  return fresh;
+}
+
 /** `apply_gate.py {consent,position,queue} [position_id] [--json]`. */
 export function applyGate(args: string[], options: CloserOptions): ScriptResult {
   const refusal = pathFlagRefusal("apply_gate", args, ["--db", "--config"], ["--json"]);
@@ -1038,7 +1082,15 @@ export function applyGate(args: string[], options: CloserOptions): ScriptResult 
     const { queue: q, stderr } = applicationQueue(options);
     const code = q.ready ? 0 : 1;
     const notice = webCapNotice(q, options);
-    if (asJson) return { stdout: `${pyJson(notice ? { ...q, web_cap_notice: notice } : q, { ensureAscii: false })}\n`, stderr, exitCode: code };
+    const unproven = authorisationUnprovenNotices(q, options);
+    if (asJson) {
+      const withNotices = {
+        ...q,
+        ...(notice ? { web_cap_notice: notice } : {}),
+        ...(unproven.length ? { authorisation_unproven_notices: unproven } : {}),
+      };
+      return { stdout: `${pyJson(withNotices, { ensureAscii: false })}\n`, stderr, exitCode: code };
+    }
     if (q.ready) return { stdout: `[apply-gate] QUEUE ${q.reason} — ${q.detail} (remaining_today=${pyStrValue(q.remaining_today)})\n`, stderr, exitCode: 0 };
     return { stdout: "", stderr: `${stderr}[apply-gate] QUEUE ${q.reason} — ${q.detail}\n`, exitCode: 1 };
   }

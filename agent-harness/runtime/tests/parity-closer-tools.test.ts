@@ -123,7 +123,8 @@ function withNotary(layoutOk: boolean): string {
     "import json, os, runpy, sys, types",
     ...(layoutOk ? LAYOUT_OK.split("\n").filter((line) => !line.startsWith("import ") && !line.startsWith("sys.argv") && !line.startsWith("runpy.")) : []),
     "import apply_notary",
-    "apply_notary.call = lambda op, args: json.loads(os.environ['PARITY_NOTARY_ANSWER'])",
+    "answer = json.loads(os.environ['PARITY_NOTARY_ANSWER'])",
+    "apply_notary.call = lambda op, args: answer if isinstance(answer, dict) else {'ok': False, 'reason': 'broker_bad_answer'}",
     "sys.argv = ['apply_gate.py'] + sys.argv[1:]",
     "runpy.run_path('apply_gate.py', run_name='__main__')",
   ].join("\n");
@@ -725,7 +726,7 @@ describe("what the CLOSER's tools refuse, and what they never write", () => {
   beforeEach(() => {
     mkdirSync(join(home, "profile"), { recursive: true });
     db = openJobsDb(dbPath);
-    options = { db: () => db, jhtHome: home, profileDir: join(home, "profile"), cvRoots: [join(home, "cv")] };
+    options = { db: () => db, jhtHome: home, profileDir: join(home, "profile"), cvRoots: [join(home, "cv")], notary: () => PROVEN };
   });
   afterEach(() => db.close());
 

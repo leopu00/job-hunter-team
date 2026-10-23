@@ -102,7 +102,10 @@ describe("apply authorizations cloud route", () => {
     await expect(response.json()).resolves.toMatchObject({
       ok: true,
       account_id: "11111111-1111-4111-8111-111111111111",
-      authorizations: [{ legacy_id: 42, action: "position.apply_revoke", status: "queued" }],
+      authorizations: [
+        { legacy_id: 42, action: "position.apply_revoke", status: "queued" },
+        { legacy_id: 45, action: "position.apply_authorize", status: "done" },
+      ],
       cursor: "2026-10-23T18:03:00.000Z",
       has_more: false,
     });
