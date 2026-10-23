@@ -1473,6 +1473,7 @@ fn parse_json<T: for<'de> Deserialize<'de>>(
 
 #[tauri::command]
 pub(crate) async fn direct_chat_read(
+    app: tauri::AppHandle,
     state: State<'_, DirectChatState>,
     scopes: State<'_, AccountScopeState>,
     agent_id: String,
@@ -1522,6 +1523,7 @@ pub(crate) async fn direct_chat_read(
             Ok(page)
         }
         Err(error) => {
+            log_chat_failure(&app, "read", error.code);
             emit(
                 &state.inner,
                 DirectChatEvent::Error {
@@ -1736,6 +1738,7 @@ fn send_impl(
 
 #[tauri::command]
 pub(crate) async fn direct_chat_send(
+    app: tauri::AppHandle,
     window: tauri::Window,
     state: State<'_, DirectChatState>,
     scopes: State<'_, AccountScopeState>,
@@ -1800,6 +1803,7 @@ pub(crate) async fn direct_chat_send(
             Ok(receipt)
         }
         Err(error) => {
+            log_chat_failure(&app, "send", error.code);
             emit(
                 &state.inner,
                 DirectChatEvent::Error {
@@ -1809,6 +1813,23 @@ pub(crate) async fn direct_chat_send(
             );
             Err(error)
         }
+    }
+}
+
+/// The last failure of each operation written to the runtime log: a read that fails every two
+/// seconds writes one line, and a new one only when its code changes.
+static LOGGED_CHAT_FAILURE: Mutex<[Option<&'static str>; 2]> = Mutex::new([None, None]);
+
+fn log_chat_failure(app: &tauri::AppHandle, operation: &'static str, code: &'static str) {
+    let slot = usize::from(operation == "send");
+    if let Ok(mut last) = LOGGED_CHAT_FAILURE.lock() {
+        if last[slot] == Some(code) {
+            return;
+        }
+        last[slot] = Some(code);
+    }
+    if let Some(log) = crate::runtime_log::RuntimeLog::new(app) {
+        log.record_chat_failure(operation, code);
     }
 }
 
