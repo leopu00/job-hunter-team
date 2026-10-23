@@ -830,38 +830,77 @@ function Get-ComposeProjectName {
   } catch { return $null }
 }
 
+# One label of a container's Config.Labels JSON, '' when it is not there. ConvertFrom-Json first; when
+# it cannot read the labels (Windows PowerShell 5.1 refuses two keys that differ only in case), the
+# label is read from the text: only its own key and its string value.
+function Get-ComposeLabel {
+  param([string]$Json, [string]$Key)
+  try {
+    $labels = ConvertFrom-Json -InputObject $Json -ErrorAction Stop
+    if ($labels) { return [string]$labels.$Key }
+    return ''
+  } catch {
+    $match = [regex]::Match($Json, '"' + [regex]::Escape($Key) + '"\s*:\s*"((?:[^"\\]|\\.)*)"')
+    if ($match.Success) { return $match.Groups[1].Value }
+    return ''
+  }
+}
+
+# The id of the one running container of a service of this compose project, or $null. Why the last
+# lookup found none is in $script:ServiceLookupReason, for whoever has to say it (T79: the desktop's
+# onboarding snapshot said containerRunning=0 with jht running, and nothing said why). A container of
+# another project or service is skipped, not a reason to give up; a line that is not an id, or two
+# running containers of the service, still are.
 function Get-RunningComposeServiceId {
   param([string]$Service)
+  $script:ServiceLookupReason = ''
   $expectedProject = Get-ComposeProjectName
-  if (-not $expectedProject) { return $null }
+  if (-not $expectedProject) { $script:ServiceLookupReason = 'the compose project name could not be read'; return $null }
   $files = @('-f', $ComposeFile)
   if ($ContainerRuntime -eq 'podman') { $files += @('-f', $PodmanComposeFile) }
   $composeArgs = @('compose') + $files + @('--project-directory', $RuntimeDir, 'ps', '-q')
   if ($ContainerRuntime -ne 'podman') { $composeArgs += $Service }
   $ids = @(& { $ErrorActionPreference = 'Continue'; & docker @composeArgs 2>$null } | ForEach-Object { "$($_)".Trim() } | Where-Object { $_ })
+  $psCode = $LASTEXITCODE
+  if ($ids.Count -eq 0) {
+    $script:ServiceLookupReason = "compose ps listed no running container of project $expectedProject (exit $psCode)"
+    return $null
+  }
   $found = $null
+  $notes = @()
   foreach ($id in $ids) {
-    if ($id -notmatch '^[0-9a-fA-F]{12,64}$') { return $null }
+    if ($id -notmatch '^[0-9a-fA-F]{12,64}$') {
+      $shown = if ($id.Length -gt 60) { $id.Substring(0, 60) + '...' } else { $id }
+      $script:ServiceLookupReason = "compose ps printed a line that is not a container id: $shown"
+      return $null
+    }
+    $short = $id.Substring(0, 12)
     # No double quote inside a native argument: Windows PowerShell 5.1 drops it, and
     # `{{index .Config.Labels "com.docker.compose.project"}}` reached docker as `... com.docker...`
     # (T71). The labels come whole as JSON, read here.
-    $details = ((& { $ErrorActionPreference = 'Continue'; & docker inspect --type container $id --format '{{.State.Running}}|{{json .Config.Labels}}' 2>$null } | Select-Object -First 1) -as [string])
-    if (-not $details) { return $null }
-    $cut = $details.IndexOf('|')
-    if ($cut -lt 0) { return $null }
+    # All the lines, then the first: Select-Object -First 1 stops the native command, and then
+    # $LASTEXITCODE is still the one of the native command before it (T79).
+    $detailLines = @(& { $ErrorActionPreference = 'Continue'; & docker inspect --type container $id --format '{{.State.Running}}|{{json .Config.Labels}}' 2>$null })
+    $inspectCode = $LASTEXITCODE
+    $details = if ($detailLines.Count) { [string]$detailLines[0] } else { '' }
+    $cut = if ($details) { $details.IndexOf('|') } else { -1 }
+    if ($cut -lt 0) { $notes += "inspect of $short gave nothing readable (exit $inspectCode)"; continue }
     $running = $details.Substring(0, $cut).Trim()
-    $labels = $null
-    try { $labels = ConvertFrom-Json -InputObject $details.Substring($cut + 1) } catch { return $null }
-    if (-not $labels) { return $null }
-    $project = [string]$labels.'com.docker.compose.project'
-    $serviceName = [string]$labels.'com.docker.compose.service'
-    if ($project -ne $expectedProject) { return $null }
-    if ($serviceName -ne $Service) {
-      if ($ContainerRuntime -eq 'podman' -and $serviceName -in @($Container, $BrokerContainer, $TelegramContainer)) { continue }
+    $labelsJson = $details.Substring($cut + 1)
+    $project = Get-ComposeLabel $labelsJson 'com.docker.compose.project'
+    $serviceName = Get-ComposeLabel $labelsJson 'com.docker.compose.service'
+    if ($project -ne $expectedProject) { $notes += "$short is of project '$project', not $expectedProject"; continue }
+    if ($serviceName -ne $Service) { continue }
+    if ($running -ne 'true') { $notes += "$short of $Service is not running ($running)"; continue }
+    if ($found) {
+      $script:ServiceLookupReason = "two running containers of $Service ($($found.Substring(0, 12)), $short)"
       return $null
     }
-    if ($running -ne 'true' -or $found) { return $null }
     $found = $id
+  }
+  if (-not $found) {
+    $script:ServiceLookupReason = "no running container of $Service among $($ids.Count) listed by compose ps"
+    if ($notes.Count) { $script:ServiceLookupReason += ': ' + ($notes -join '; ') }
   }
   return $found
 }
@@ -884,16 +923,26 @@ function Write-InactiveOnboardingSnapshot {
 # starts Docker, Compose, the container or the team, and always emits exactly
 # the eight protocol lines so a strict parser cannot inherit incidental host
 # output.
+# Why a snapshot says the container is not running, on stderr: stdout stays the eight lines a strict
+# parser reads, and the desktop puts stderr in its runtime log (T79: containerRunning=0 with jht
+# running, and nothing anywhere said why).
+function Write-OnboardingSnapshotReason {
+  param([string]$Reason)
+  [Console]::Error.WriteLine("onboarding_snapshot: $Reason")
+}
+
 function Write-OnboardingSnapshot {
   $runtimeInstalled = 0
   try {
     if (-not (Test-RuntimeBundleTrusted)) {
+      Write-OnboardingSnapshotReason 'runtime_untrusted: the host runtime did not pass its path, owner, reparse point and SHA-256 checks'
       Write-InactiveOnboardingSnapshot 0
       return
     }
     $runtimeInstalled = 1
     $containerId = Get-RunningComposeServiceId $Container
     if (-not $containerId) {
+      Write-OnboardingSnapshotReason "container_not_found: $script:ServiceLookupReason"
       Write-InactiveOnboardingSnapshot 1
       return
     }
@@ -908,8 +957,10 @@ const configured=["claude","anthropic","codex","openai","kimi","moonshot"].inclu
 const markers={claude:"/jht_home/.claude/.credentials.json",anthropic:"/jht_home/.claude/.credentials.json",codex:"/jht_home/.codex/auth.json",openai:"/jht_home/.codex/auth.json",kimi:"/jht_home/.kimi/credentials/kimi-code.json",moonshot:"/jht_home/.kimi/credentials/kimi-code.json"};
 process.stdout.write(`${configured?1:0} ${markers[provider]&&fs.existsSync(markers[provider])?1:0} ${fs.existsSync("/jht_home/profile/welcomed.flag")?1:0}`);
 '@
-    $metadata = ((& { $ErrorActionPreference = 'Continue'; & docker exec $containerId node -e $metadataScript 2>$null } | Select-Object -First 1) -as [string])
+    # Every native output here is read whole and then cut: see Get-RunningComposeServiceId (T79).
+    $metadataLines = @(& { $ErrorActionPreference = 'Continue'; & docker exec $containerId node -e $metadataScript 2>$null })
     $metadataCode = $LASTEXITCODE
+    $metadata = if ($metadataLines.Count) { [string]$metadataLines[0] } else { '' }
     $values = if ($metadata) { @($metadata.Trim() -split '\s+') } else { @() }
     if ($metadataCode -ne 0 -or $values.Count -ne 3 -or @($values | Where-Object { $_ -notin @('0', '1') }).Count -gt 0) {
       $values = @('0', '0', '0')
@@ -924,9 +975,11 @@ process.stdout.write(`${configured?1:0} ${markers[provider]&&fs.existsSync(marke
       $null = & { $ErrorActionPreference = 'Continue'; & docker exec $containerId node $NodeEntry profile validate --strict --json 2>$null }
       if ($LASTEXITCODE -eq 0) { 1 } else { 0 }
     }
-    $finalRunning = ((& { $ErrorActionPreference = 'Continue'; & docker inspect $containerId --format '{{.State.Running}}' 2>$null } | Select-Object -First 1) -as [string])
+    $finalLines = @(& { $ErrorActionPreference = 'Continue'; & docker inspect $containerId --format '{{.State.Running}}' 2>$null })
     $finalInspectCode = $LASTEXITCODE
+    $finalRunning = if ($finalLines.Count) { [string]$finalLines[0] } else { '' }
     if ($finalInspectCode -ne 0 -or -not $finalRunning -or $finalRunning.Trim() -ne 'true') {
+      Write-OnboardingSnapshotReason "container_stopped: inspect of $($containerId.Substring(0, 12)) at the end said '$finalRunning' (exit $finalInspectCode)"
       Write-InactiveOnboardingSnapshot 1
       return
     }
@@ -942,6 +995,7 @@ process.stdout.write(`${configured?1:0} ${markers[provider]&&fs.existsSync(marke
       "profileReady=$profileReady"
     )) { [Console]::Out.WriteLine($line) }
   } catch {
+    Write-OnboardingSnapshotReason "error: $($_.Exception.Message)"
     Write-InactiveOnboardingSnapshot $runtimeInstalled
   }
 }
