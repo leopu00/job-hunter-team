@@ -1382,7 +1382,7 @@ fn file_digest(path: &Path) -> Option<String> {
 }
 
 #[cfg(target_os = "macos")]
-fn runtime_bundle_manifest_valid(runtime_dir: &Path, wrapper: &Path) -> bool {
+pub(crate) fn runtime_bundle_manifest_valid(runtime_dir: &Path, wrapper: &Path) -> bool {
     use std::collections::BTreeMap;
 
     let manifest = runtime_dir.join(".runtime-integrity");

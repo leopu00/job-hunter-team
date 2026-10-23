@@ -7,6 +7,10 @@ use crate::runtime_host::{
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
+#[cfg(all(unix, not(target_os = "macos")))]
+use sha2::{Digest, Sha256};
+#[cfg(all(unix, not(target_os = "macos")))]
+use std::collections::BTreeMap;
 use std::{
     ffi::OsString,
     fs::{self, OpenOptions},
@@ -1064,13 +1068,33 @@ fn local_runtime_dir(app: &tauri::AppHandle) -> Result<PathBuf, DirectChatError>
 
 struct LocalChatEngine {
     program: PathBuf,
-    compose_files: Vec<PathBuf>,
     podman: bool,
 }
 
-/// The JHT-private Podman shim is the only engine selected from the runtime. Docker is the
-/// operating system's Docker CLI, as it was for the verified wrapper. Nothing here comes from the
-/// page or from a shell string.
+/// Resolve Docker before starting it. The Finder-launched macOS app does not necessarily inherit
+/// the user's shell PATH, while the wrapper deliberately adds these same locations.
+fn local_docker_cli() -> Result<PathBuf, &'static str> {
+    let mut candidates = Vec::new();
+    #[cfg(target_os = "macos")]
+    candidates.extend([
+        PathBuf::from("/opt/homebrew/bin/docker"),
+        PathBuf::from("/usr/local/bin/docker"),
+        PathBuf::from("/opt/podman/bin/docker"),
+        PathBuf::from("/Applications/Docker.app/Contents/Resources/bin/docker"),
+    ]);
+    if let Some(path) = std::env::var_os("PATH") {
+        candidates.extend(std::env::split_paths(&path).map(|dir| {
+            dir.join(if cfg!(windows) { "docker.exe" } else { "docker" })
+        }));
+    }
+    candidates
+        .into_iter()
+        .find(|candidate| fs::metadata(candidate).is_ok_and(|metadata| metadata.is_file()))
+        .ok_or("runtime_missing")
+}
+
+/// The JHT-private Podman shim is the only Podman engine selected from the runtime. Docker is
+/// resolved once to an executable path, never assembled from page input or a shell string.
 fn local_chat_engine(runtime: &Path) -> Result<LocalChatEngine, &'static str> {
     let selection =
         fs::read_to_string(runtime.join("container-runtime")).map_err(|_| "runtime_missing")?;
@@ -1087,20 +1111,11 @@ fn local_chat_engine(runtime: &Path) -> Result<LocalChatEngine, &'static str> {
             }
             Ok(LocalChatEngine {
                 program: shim,
-                compose_files: vec![
-                    runtime.join("docker-compose.yml"),
-                    runtime.join("docker-compose.podman.yml"),
-                ],
                 podman: true,
             })
         }
         "docker" => Ok(LocalChatEngine {
-            program: PathBuf::from(if cfg!(windows) {
-                "docker.exe"
-            } else {
-                "docker"
-            }),
-            compose_files: vec![runtime.join("docker-compose.yml")],
+            program: local_docker_cli()?,
             podman: false,
         }),
         _ => Err("runtime_missing"),
@@ -1111,22 +1126,227 @@ fn container_id(value: &str) -> bool {
     (12..=64).contains(&value.len()) && value.bytes().all(|byte| byte.is_ascii_hexdigit())
 }
 
+#[cfg(all(unix, not(target_os = "macos")))]
+fn digest_file(path: &Path) -> Option<String> {
+    let metadata = fs::symlink_metadata(path).ok()?;
+    if !metadata.file_type().is_file() || metadata.len() == 0 {
+        return None;
+    }
+    Some(format!("{:x}", Sha256::digest(fs::read(path).ok()?)))
+}
+
+#[cfg(unix)]
+fn unix_runtime_node_is_safe(path: &Path, directory: bool) -> bool {
+    use std::os::unix::fs::{MetadataExt, PermissionsExt};
+
+    let Ok(metadata) = fs::symlink_metadata(path) else { return false };
+    (if directory { metadata.file_type().is_dir() } else { metadata.file_type().is_file() })
+        && metadata.uid() == unsafe { libc::geteuid() }
+        && metadata.permissions().mode() & 0o022 == 0
+}
+
+#[cfg(unix)]
+fn unix_runtime_path_is_safe(runtime: &Path, wrapper: &Path) -> bool {
+    let Ok(runtime_real) = fs::canonicalize(runtime) else { return false };
+    let Ok(wrapper_real) = fs::canonicalize(wrapper) else { return false };
+    if runtime_real != runtime || wrapper_real != wrapper {
+        return false;
+    }
+    let Some(home) = std::env::var_os("HOME").map(PathBuf::from) else { return false };
+    !runtime.starts_with(home.join(".jht"))
+        && !runtime.starts_with(home.join("Documents").join("Job Hunter Team"))
+        && !wrapper.starts_with(home.join(".jht"))
+        && !wrapper.starts_with(home.join("Documents").join("Job Hunter Team"))
+}
+
+/// Linux's protected host bundle, ported from jht-wrapper.sh. It has no engine side effect: a
+/// malformed path, owner, manifest or selected engine is rejected before any native command.
+#[cfg(all(unix, not(target_os = "macos")))]
+fn unix_runtime_bundle_valid(wrapper: &Path, runtime: &Path) -> bool {
+    if !unix_runtime_path_is_safe(runtime, wrapper) || !unix_runtime_node_is_safe(runtime, true) {
+        return false;
+    }
+    let manifest = runtime.join(".runtime-integrity");
+    let compose = runtime.join("docker-compose.yml");
+    let setup = runtime.join("host-setup.sh");
+    if ![&manifest, &compose, &setup, wrapper]
+        .into_iter()
+        .all(|path| unix_runtime_node_is_safe(path, false))
+    {
+        return false;
+    }
+    let Ok(source) = fs::read_to_string(&manifest) else { return false };
+    let mut entries = BTreeMap::new();
+    for line in source.lines() {
+        let Some((key, value)) = line.split_once('=') else { return false };
+        if (key == "version" && value != "1")
+            || (key != "version"
+                && (value.len() != 64 || !value.bytes().all(|byte| byte.is_ascii_hexdigit())))
+            || entries.insert(key, value).is_some()
+        {
+            return false;
+        }
+    }
+    if entries.get("version").copied() != Some("1")
+        || entries.get("docker-compose.yml").copied() != digest_file(&compose).as_deref()
+        || entries.get("host-setup.sh").copied() != digest_file(&setup).as_deref()
+        || entries.get("jht-wrapper.sh").copied() != digest_file(wrapper).as_deref()
+    {
+        return false;
+    }
+    let selection = runtime.join("container-runtime");
+    let selected = match fs::symlink_metadata(&selection) {
+        Ok(_) if unix_runtime_node_is_safe(&selection, false) => match fs::read_to_string(&selection) {
+            Ok(value) if matches!(value.trim(), "docker" | "podman")
+                && entries.get("container-runtime").copied() == digest_file(&selection).as_deref() => value.trim().to_owned(),
+            _ => return false,
+        },
+        Err(_) if !entries.contains_key("container-runtime") => "docker".to_owned(),
+        _ => return false,
+    };
+    let shim = runtime.join("bin").join("docker");
+    if selected == "podman"
+        && (!unix_runtime_node_is_safe(&shim, false)
+            || fs::canonicalize(&shim).map_or(true, |real| real != shim)
+            || entries.get("docker-shim").copied() != digest_file(&shim).as_deref()
+            || !fs::read_to_string(&shim).is_ok_and(|source| source.lines().any(|line| line == "# JHT_PODMAN_DOCKER_SHIM=1")))
+    {
+        return false;
+    }
+    let image_pin = runtime.join("runtime-image");
+    let mut expected_keys = vec!["version", "docker-compose.yml", "host-setup.sh", "jht-wrapper.sh"];
+    if fs::symlink_metadata(&selection).is_ok() {
+        expected_keys.push("container-runtime");
+    }
+    if selected == "podman" {
+        expected_keys.push("docker-shim");
+    }
+    if fs::symlink_metadata(&image_pin).is_ok() {
+        expected_keys.push("runtime-image");
+    }
+    expected_keys.sort_unstable();
+    if entries.keys().copied().collect::<Vec<_>>() != expected_keys {
+        return false;
+    }
+    match (entries.get("runtime-image"), fs::symlink_metadata(&image_pin)) {
+        (None, Err(_)) => true,
+        (Some(expected), Ok(_)) if unix_runtime_node_is_safe(&image_pin, false) => {
+            digest_file(&image_pin).as_deref() == Some(*expected)
+                && fs::read_to_string(&image_pin).is_ok_and(|pin| {
+                    pin.strip_suffix('\n').is_some_and(|value| value.len() == 91
+                        && value.starts_with("ghcr.io/leopu00/jht@sha256:")
+                        && value[27..].bytes().all(|byte| byte.is_ascii_hexdigit()))
+                })
+        }
+        _ => false,
+    }
+}
+
+/// The desktop's local trust root. This is intentionally separate from process launch: all
+/// platforms reject an untrusted runtime before discovering a container or starting `exec -i`.
+fn local_chat_runtime_valid(wrapper: &Path, runtime: &Path) -> bool {
+    #[cfg(windows)]
+    {
+        return crate::windows_runtime::wrapper_bundle_valid(wrapper, runtime);
+    }
+    #[cfg(target_os = "macos")]
+    {
+        return crate::onboarding::runtime_bundle_manifest_valid(runtime, wrapper)
+            && unix_runtime_path_is_safe(runtime, wrapper)
+            && unix_runtime_node_is_safe(runtime, true)
+            && unix_runtime_node_is_safe(wrapper, false)
+            && unix_runtime_node_is_safe(&runtime.join("bin/docker"), false)
+            && fs::canonicalize(runtime.join("bin/docker")).is_ok_and(|real| real == runtime.join("bin/docker"));
+    }
+    #[cfg(all(unix, not(target_os = "macos")))]
+    {
+        unix_runtime_bundle_valid(wrapper, runtime)
+    }
+    #[cfg(not(any(unix, windows)))]
+    {
+        false
+    }
+}
+
 fn local_compose_args(engine: &LocalChatEngine, runtime: &Path) -> Vec<OsString> {
+    // The runtime's private shim is `podman --connection <attested machine>`.
+    // `podman compose` may delegate to an arbitrary host provider, so it is not the runtime's
+    // authenticated Compose path. Enumerate only the fixed JHT project and prove its labels below.
+    // Docker retains the historical Compose lookup, whose project is path based.
+    if engine.podman && !cfg!(windows) {
+        return vec![
+            OsString::from("ps"),
+            OsString::from("-q"),
+            OsString::from("--filter"),
+            OsString::from("label=com.docker.compose.project=jht"),
+        ];
+    }
     let mut args = vec![OsString::from("compose")];
-    for compose in &engine.compose_files {
+    args.push(OsString::from("-f"));
+    args.push(runtime.join("docker-compose.yml").into_os_string());
+    if engine.podman {
         args.push(OsString::from("-f"));
-        args.push(compose.as_os_str().to_owned());
+        args.push(runtime.join("docker-compose.podman.yml").into_os_string());
     }
     args.push(OsString::from("--project-directory"));
     args.push(runtime.as_os_str().to_owned());
     args.push(OsString::from("ps"));
     args.push(OsString::from("-q"));
-    // Podman Compose has historically ignored the service filter, so inspect its closed result
-    // below. Docker accepts it and avoids listing the isolated broker services in the first place.
-    if !engine.podman {
-        args.push(OsString::from("jht"));
-    }
+    args.push(OsString::from("jht"));
     args
+}
+
+fn label<'a>(labels: &'a Value, key: &str) -> Option<&'a str> {
+    labels.get(key).and_then(Value::as_str)
+}
+
+fn podman_systemd_unit() -> String {
+    ["podman-compose", "jht.service"].join("@")
+}
+
+fn podman_container_labels_are_attested(labels: &Value, runtime: &Path) -> bool {
+    let runtime_text = runtime.to_string_lossy();
+    let systemd_unit = podman_systemd_unit();
+    if label(labels, "com.docker.compose.project") != Some("jht")
+        || label(labels, "io.podman.compose.project") != Some("jht")
+        || label(labels, "com.docker.compose.service") != Some("jht")
+        || label(labels, "io.podman.compose.service") != Some("jht")
+        || label(labels, "com.docker.compose.container-number") != Some("1")
+        || label(labels, "com.docker.compose.project.working_dir") != Some(runtime_text.as_ref())
+        || !label(labels, "io.podman.compose.config-hash")
+            .is_some_and(|hash| hash.len() == 64 && hash.bytes().all(|byte| byte.is_ascii_hexdigit()))
+    {
+        return false;
+    }
+    #[cfg(target_os = "macos")]
+    {
+        return label(labels, "com.docker.compose.project.config_files")
+            == Some(runtime.join("docker-compose.yml").to_string_lossy().as_ref())
+            && label(labels, "io.podman.compose.version") == Some("1.6.0")
+            && label(labels, "PODMAN_SYSTEMD_UNIT") == Some(systemd_unit.as_str());
+    }
+    #[cfg(all(unix, not(target_os = "macos")))]
+    {
+        let expected_files = format!("{}/docker-compose.yml,{}/docker-compose.podman-linux.yml", runtime_text, runtime_text);
+        return label(labels, "com.docker.compose.project.config_files") == Some(expected_files.as_str())
+            && label(labels, "io.podman.compose.version").is_some_and(|version| {
+                let mut parts = version.split('.');
+                matches!((parts.next(), parts.next()), (Some(major), Some(minor))
+                    if major.parse::<u16>().is_ok_and(|major| major > 1)
+                    || (major == "1" && minor.parse::<u16>().is_ok_and(|minor| minor >= 1)))
+            })
+            && label(labels, "PODMAN_SYSTEMD_UNIT") == Some(systemd_unit.as_str());
+    }
+    #[cfg(windows)]
+    {
+        // Windows' pinned Compose provider has no portable podman-compose labels beyond the
+        // ownership tuple above; its files, shim and selection are authenticated by the manifest.
+        true
+    }
+    #[cfg(not(any(unix, windows)))]
+    {
+        false
+    }
 }
 
 /// One and only one currently-running Compose service named `jht` is the chat target. The compose
@@ -1175,10 +1395,9 @@ fn local_chat_container(
         let Ok(labels) = serde_json::from_str::<Value>(labels) else {
             continue;
         };
-        let service = labels
-            .get("com.docker.compose.service")
-            .and_then(Value::as_str);
-        if running != "true" || service != Some("jht") {
+        let service = label(&labels, "com.docker.compose.service");
+        let podman_labels_are_jht = !engine.podman || podman_container_labels_are_attested(&labels, runtime);
+        if running != "true" || service != Some("jht") || !podman_labels_are_jht {
             continue;
         }
         if found.replace(id).is_some() {
@@ -1211,14 +1430,18 @@ fn local_chat_exec_args(
     Ok(args)
 }
 
-/// The local implementation of read/send/answer/enter. Unlike all other local runtime operations,
-/// this deliberately bypasses jht-wrapper: Windows PowerShell cannot faithfully relay chat stdin.
+/// The local implementation of read/send/answer/enter executes no wrapper action. Its protected
+/// runtime, selected engine and single running container are verified in Rust before native exec.
 fn run_local_chat(
+    wrapper: &Path,
     runtime: &Path,
     operation: ChatOperation<'_>,
     input: Option<&[u8]>,
     timeout: Duration,
 ) -> Result<ProcessResult, &'static str> {
+    if !local_chat_runtime_valid(wrapper, runtime) {
+        return Err("runtime_missing");
+    }
     let engine = local_chat_engine(runtime)?;
     let program = engine.program.to_str().ok_or("runtime_missing")?;
     let container = local_chat_container(&engine, runtime, timeout)?;
@@ -1253,19 +1476,17 @@ fn run_connection(
                             .local_runtime
                             .as_deref()
                             .ok_or_else(|| failure("runtime_missing"))?;
-                        // The direct Windows engine is the shim whose hash the local runtime
-                        // manifest attests. Recheck before every exec, as the old wrapper did.
-                        #[cfg(windows)]
-                        if !crate::windows_runtime::wrapper_bundle_valid(
+                        run_local_chat(
                             connection
                                 .local_wrapper
                                 .as_deref()
                                 .ok_or_else(|| failure("runtime_missing"))?,
                             runtime,
-                        ) {
-                            return Err(failure("runtime_missing"));
-                        }
-                        run_local_chat(runtime, operation, input, timeout).map_err(failure)
+                            operation,
+                            input,
+                            timeout,
+                        )
+                        .map_err(failure)
                     }
                 _ => crate::onboarding::run_verified_local_wrapper(
                     connection
@@ -2323,12 +2544,35 @@ mod tests {
         control_path_fits, remove_tunnel_socket, tunnel_dir_name, tunnel_socket_bases, tunnel_socket_path,
         SOCKET_PATH_MAX, SSH_SOCKET_SUFFIX,
         open_vps_link, ready_status, small_read, vps_link_for, VpsLink, VPS_LINK_CHECK, SMALL_READ_OVERLAP,
-        SMALL_READ_SIZE_PROBE, SMALL_READ_TAIL, DirectChatError, local_chat_exec_args, run_local_chat,
+        SMALL_READ_SIZE_PROBE, SMALL_READ_TAIL, DirectChatError, local_chat_exec_args, podman_systemd_unit,
+        run_connection, run_local_chat, RemoteOperation,
         master_to_lend,
     };
     use crate::existing_team_runtime::ActivatedTarget;
     use crate::runtime_host::{ExecutionHost, ValidatedHost};
     use std::{fs, path::{Path, PathBuf}, process::Command, time::Duration};
+
+    #[cfg(unix)]
+    fn write_valid_local_podman_manifest(runtime: &Path, wrapper: &Path) {
+        use sha2::{Digest, Sha256};
+
+        let digest = |path: &Path| format!("{:x}", Sha256::digest(fs::read(path).unwrap()));
+        fs::write(runtime.join("host-setup.sh"), "#!/bin/sh\nexit 0\n").unwrap();
+        let mut lines = vec![
+            "version=1".to_owned(),
+            format!("docker-compose.yml={}", digest(&runtime.join("docker-compose.yml"))),
+            format!("host-setup.sh={}", digest(&runtime.join("host-setup.sh"))),
+            format!("jht-wrapper.sh={}", digest(wrapper)),
+            format!("container-runtime={}", digest(&runtime.join("container-runtime"))),
+            format!("docker-shim={}", digest(&runtime.join("bin/docker"))),
+        ];
+        #[cfg(target_os = "macos")]
+        {
+            fs::write(runtime.join("podman-machine"), "jht-podman\n").unwrap();
+            lines.push(format!("podman-machine={}", digest(&runtime.join("podman-machine"))));
+        }
+        fs::write(runtime.join(".runtime-integrity"), format!("{}\n", lines.join("\n"))).unwrap();
+    }
 
     /// The shape and length of macOS's per-user temporary folder (getconf DARWIN_USER_TEMP_DIR):
     /// /var/folders/<2>/<30>/T/, 49 characters. Placeholders, not a real one.
@@ -2889,7 +3133,7 @@ mod tests {
         use std::os::unix::fs::PermissionsExt;
 
         static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
-        let root = std::env::temp_dir().join(format!(
+        let root = std::env::temp_dir().canonicalize().unwrap().join(format!(
             "jht-local-chat-{}-{}",
             std::process::id(),
             NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
@@ -2899,20 +3143,50 @@ mod tests {
         fs::create_dir_all(&bin).unwrap();
         fs::write(runtime.join("container-runtime"), "podman\n").unwrap();
         fs::write(runtime.join("docker-compose.yml"), "services: {}\n").unwrap();
-        fs::write(runtime.join("docker-compose.podman.yml"), "services: {}\n").unwrap();
+        let wrapper = root.join("jht-wrapper.sh");
+        fs::write(
+            &wrapper,
+            "#!/bin/sh\nJHT_HOST_RUNTIME_PROTOCOL=1\nJHT_DESKTOP_CHAT_PROTOCOL=1\nJHT_ONBOARDING_SNAPSHOT_PROTOCOL=1\n[ \"$1:$2\" = desktop-chat:probe ] || exit 9\nprintf 'true\\n'\n",
+        )
+        .unwrap();
+        fs::set_permissions(&wrapper, fs::Permissions::from_mode(0o700)).unwrap();
         let engine = bin.join("docker");
         let id = "a".repeat(64);
+        let mut labels = serde_json::json!({
+            "com.docker.compose.project": "jht",
+            "io.podman.compose.project": "jht",
+            "com.docker.compose.service": "jht",
+            "io.podman.compose.service": "jht",
+            "com.docker.compose.container-number": "1",
+            "com.docker.compose.project.working_dir": runtime.to_string_lossy(),
+            "io.podman.compose.config-hash": "a".repeat(64),
+        });
+        #[cfg(target_os = "macos")]
+        labels.as_object_mut().unwrap().extend([
+            ("com.docker.compose.project.config_files".to_owned(), serde_json::json!(runtime.join("docker-compose.yml"))),
+            ("io.podman.compose.version".to_owned(), serde_json::json!("1.6.0")),
+            ("PODMAN_SYSTEMD_UNIT".to_owned(), serde_json::json!(podman_systemd_unit())),
+        ]);
+        #[cfg(all(unix, not(target_os = "macos")))]
+        labels.as_object_mut().unwrap().extend([
+            ("com.docker.compose.project.config_files".to_owned(), serde_json::json!(format!("{}/docker-compose.yml,{}/docker-compose.podman-linux.yml", runtime.display(), runtime.display()))),
+            ("io.podman.compose.version".to_owned(), serde_json::json!("1.6.0")),
+            ("PODMAN_SYSTEMD_UNIT".to_owned(), serde_json::json!(podman_systemd_unit())),
+        ]);
         fs::write(
             &engine,
             format!(
-                "#!/bin/sh\ncase \"$1\" in\n  compose) printf '{id}\\n' ;;\n  inspect) printf 'true|{{\\\"com.docker.compose.service\\\":\\\"jht\\\"}}\\n' ;;\n  exec) printf '%s\\n' \"$*\"; cat ;;\n  *) exit 9 ;;\nesac\n"
+                "#!/bin/sh\n# JHT_PODMAN_DOCKER_SHIM=1\ncase \"$1\" in\n  ps) printf '{id}\\n' ;;\n  inspect) printf 'true|{}\\n' ;;\n  exec) printf '%s\\n' \"$*\"; cat ;;\n  *) exit 9 ;;\nesac\n",
+                labels
             ),
         )
         .unwrap();
         fs::set_permissions(&engine, fs::Permissions::from_mode(0o700)).unwrap();
+        write_valid_local_podman_manifest(&runtime, &wrapper);
 
         let words = "àèé € 🧭";
         let result = run_local_chat(
+            &wrapper,
             &runtime,
             ChatOperation::Send {
                 agent: "assistente",
@@ -2925,6 +3199,142 @@ mod tests {
         assert_eq!(
             String::from_utf8(result.stdout).unwrap(),
             format!("exec -i {id} python3 -I /app/shared/skills/agent_chat.py send assistente id-1\n{words}")
+        );
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn local_chat_never_runs_the_engine_when_the_runtime_bundle_is_untrusted() {
+        use crate::existing_team_runtime::ChatOperation;
+        use std::os::unix::fs::PermissionsExt;
+
+        static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+        let root = std::env::temp_dir().canonicalize().unwrap().join(format!(
+            "jht-local-chat-attestation-{}-{}",
+            std::process::id(),
+            NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+        ));
+        let runtime = root.join("host-runtime");
+        let bin = runtime.join("bin");
+        fs::create_dir_all(&bin).unwrap();
+        fs::write(runtime.join("container-runtime"), "podman\n").unwrap();
+        fs::write(runtime.join("docker-compose.yml"), "services: {}\n").unwrap();
+        let started = root.join("engine-was-called");
+        let engine = bin.join("docker");
+        fs::write(&engine, format!("#!/bin/sh\n# JHT_PODMAN_DOCKER_SHIM=1\ntouch '{}'\n", started.display())).unwrap();
+        fs::set_permissions(&engine, fs::Permissions::from_mode(0o700)).unwrap();
+        let wrapper = root.join("jht-wrapper.sh");
+        fs::write(
+            &wrapper,
+            "#!/bin/sh\nJHT_HOST_RUNTIME_PROTOCOL=1\nJHT_DESKTOP_CHAT_PROTOCOL=1\nJHT_ONBOARDING_SNAPSHOT_PROTOCOL=1\nexit 1\n",
+        )
+        .unwrap();
+        fs::set_permissions(&wrapper, fs::Permissions::from_mode(0o700)).unwrap();
+        write_valid_local_podman_manifest(&runtime, &wrapper);
+        fs::write(&wrapper, "changed after the manifest\n").unwrap();
+
+        assert_eq!(
+            run_local_chat(
+                &wrapper,
+                &runtime,
+                ChatOperation::Read { agent: "capitano", cursor: None },
+                None,
+                Duration::from_secs(2),
+            )
+            .unwrap_err(),
+            "runtime_missing"
+        );
+        assert!(!started.exists());
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn local_chat_never_execs_when_the_discovered_container_is_not_attested() {
+        use crate::existing_team_runtime::ChatOperation;
+        use std::os::unix::fs::PermissionsExt;
+
+        static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+        let root = std::env::temp_dir().canonicalize().unwrap().join(format!(
+            "jht-local-chat-container-{}-{}",
+            std::process::id(),
+            NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+        ));
+        let runtime = root.join("host-runtime");
+        let bin = runtime.join("bin");
+        fs::create_dir_all(&bin).unwrap();
+        fs::write(runtime.join("container-runtime"), "podman\n").unwrap();
+        fs::write(runtime.join("docker-compose.yml"), "services: {}\n").unwrap();
+        let wrapper = root.join("jht-wrapper.sh");
+        fs::write(&wrapper, "#!/bin/sh\nJHT_HOST_RUNTIME_PROTOCOL=1\nJHT_DESKTOP_CHAT_PROTOCOL=1\nJHT_ONBOARDING_SNAPSHOT_PROTOCOL=1\n").unwrap();
+        fs::set_permissions(&wrapper, fs::Permissions::from_mode(0o700)).unwrap();
+        let executed = root.join("exec-was-called");
+        let engine = bin.join("docker");
+        fs::write(
+            &engine,
+            format!(
+                "#!/bin/sh\n# JHT_PODMAN_DOCKER_SHIM=1\ncase \"$1\" in\n  ps) printf '{}\\n' ;;\n  inspect) printf 'true|{{}}\\n' ;;\n  exec) touch '{}' ;;\n  *) exit 9 ;;\nesac\n",
+                "a".repeat(64),
+                executed.display(),
+            ),
+        )
+        .unwrap();
+        fs::set_permissions(&engine, fs::Permissions::from_mode(0o700)).unwrap();
+        write_valid_local_podman_manifest(&runtime, &wrapper);
+
+        assert_eq!(
+            run_local_chat(
+                &wrapper,
+                &runtime,
+                ChatOperation::Read { agent: "capitano", cursor: None },
+                None,
+                Duration::from_secs(2),
+            )
+            .unwrap_err(),
+            "container_unavailable"
+        );
+        assert!(!executed.exists());
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn local_chat_rejects_another_accounts_runtime_before_any_engine_lookup() {
+        use crate::existing_team_runtime::ChatOperation;
+
+        let root = std::env::temp_dir().canonicalize().unwrap().join(format!(
+            "jht-local-chat-owner-{}",
+            std::process::id(),
+        ));
+        fs::create_dir_all(&root).unwrap();
+        let owner = root.join(".desktop-account-scope");
+        fs::write(&owner, "different-account\n").unwrap();
+        let scope = crate::account_scope::AccountScope::synthetic(b"local-chat-owner");
+        let connection = Connection {
+            app: None,
+            scope,
+            host: ExecutionHost::Local,
+            validated: ValidatedHost::Local,
+            runtime: None,
+            local_wrapper: None,
+            local_runtime: None,
+            local_owner_marker: Some(owner),
+            control_path: None,
+            tunnel: None,
+            link: VpsLink::PerCommand,
+        };
+        assert_eq!(
+            run_connection(
+                &connection,
+                &[],
+                RemoteOperation::Chat(ChatOperation::Read { agent: "capitano", cursor: None }),
+                None,
+                Duration::from_secs(2),
+            )
+            .unwrap_err()
+            .code,
+            "local_account_owner_mismatch"
         );
         fs::remove_dir_all(root).unwrap();
     }
