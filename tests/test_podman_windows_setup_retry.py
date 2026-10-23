@@ -360,8 +360,9 @@ def test_already_installed_for_another_user_is_installed_for_this_one_or_its_own
     find = enabler[enabler.index("function Find-Podman {") :]
     find = find[: find.index("\n}\n")]
     # the MSI's two folders and the folder it registers, after PATH
-    for where in ("'HKCU:\\SOFTWARE\\Podman', 'HKLM:\\SOFTWARE\\Podman'", "-Name 'InstallDir'",
-                  "Join-Path $env:ProgramFiles 'Podman\\podman.exe'"):
+    defaults = enabler[enabler.index("$PodmanRegistryPaths = ") :].split("\n", 1)[0]
+    assert "'HKCU:\\SOFTWARE\\Podman', 'HKLM:\\SOFTWARE\\Podman'" in defaults
+    for where in ("foreach ($key in $RegistryPaths)", "-Name 'InstallDir'", "Join-Path $ProgramFilesPath 'Podman\\podman.exe'"):
         assert find.index("Get-Application 'podman.exe'") < find.index(where), where
     # still one winget command (inside the consent guard), its second pass for this user only
     assert block.count("& winget install") == 1
@@ -386,7 +387,8 @@ def test_already_installed_for_another_user_is_installed_for_this_one_or_its_own
 
 def _enabler_functions() -> str:
     source = ENABLER.read_text(encoding="utf-8")
-    return "".join(
+    registry_paths = source[source.index("$PodmanRegistryPaths = ") :].split("\n", 1)[0] + "\n"
+    return registry_paths + "".join(
         source[source.index(f"function {name} {{") :].split("\n}\n", 1)[0] + "\n}\n"
         for name in ("Update-ProcessPath", "Get-Application", "Find-Podman", "Get-PodmanVersion")
     )

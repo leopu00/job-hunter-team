@@ -23,6 +23,7 @@ $RuntimeDir = if ($env:JHT_RUNTIME_DIR) { $env:JHT_RUNTIME_DIR } else { Join-Pat
 $BinDir = if ($env:JHT_BIN_DIR) { $env:JHT_BIN_DIR } else { Join-Path $env:USERPROFILE '.local\bin' }
 $RuntimeShimDir = Join-Path $RuntimeDir 'bin'
 $JhtHome = Join-Path $env:USERPROFILE '.jht'
+$PodmanRegistryPaths = @('HKCU:\SOFTWARE\Podman', 'HKLM:\SOFTWARE\Podman')
 $PodmanCliVersion = '6.0.2'
 $ComposeProviderVersion = '5.1.2'
 # JHT's own docker-compose.exe, private to the runtime: never one found in
@@ -439,7 +440,7 @@ function Find-Podman {
     [string]$UserPath = [Environment]::GetEnvironmentVariable('Path', 'User'),
     [string]$ProcessPath = $env:PATH,
     [string]$LocalAppDataPath = $LocalAppData,
-    [string[]]$RegistryPaths = @('HKCU:\SOFTWARE\Podman', 'HKLM:\SOFTWARE\Podman'),
+    [string[]]$RegistryPaths = $PodmanRegistryPaths,
     [string]$ProgramFilesPath = $env:ProgramFiles
   )
   Update-ProcessPath -MachinePath $MachinePath -UserPath $UserPath -ProcessPath $ProcessPath
