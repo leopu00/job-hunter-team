@@ -52,6 +52,10 @@ HOSTILE_COMPANY = (r"'Acme' || E'\n' || 'Corp' || U&'\+0E0049\+0E0047\+0E004E\+0
 HOSTILE_SUMMARY = "'Platform LeadX Engineer @ Acme Corp Srl'"
 
 # A name written with the letters that are invisible but belong to its writing.
+# For the counter-check: only an override. A line separator would stay in the summary of 102 and cut the
+# JSON line the helper reads from psql (str.splitlines breaks on U+2028).
+OVERRIDE_TITLE = r"'Platform' || U&'\202E' || ' Lead'"
+
 WRITTEN_TITLE = r"'Ra' || U&'\200C' || 'ha' || U&'\200D' || 'n' || U&'\200E' || U&'\200F' || U&'\061C'"
 
 
@@ -175,9 +179,9 @@ def test_counter_check_the_family_of_102_keeps_the_override_and_104_stops_on_it(
     try:
         cluster(file=switch.M102)
         who = door.Browser(cluster)
-        _position_with(cluster, who, 65, HOSTILE_TITLE, HOSTILE_COMPANY)
+        _position_with(cluster, who, 65, OVERRIDE_TITLE)
         first = who.act("position.apply_authorize", {"legacy_id": 65})
-        assert not _summary_is(cluster, first["id"], HOSTILE_SUMMARY)
+        assert not _summary_is(cluster, first["id"], "'Platform Lead @ Acme'")
         kept = door._scalar(cluster, rf"SELECT summary ~ '\u202E' FROM public.web_action_log WHERE id = '{first['id']}'")
         assert kept == "t", "the family of 102 should keep the override: the test would prove nothing"
         stopped = cluster("DO $$" + final_block, check=False)
