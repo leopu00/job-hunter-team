@@ -1379,13 +1379,32 @@ fn mac_config_hash(runtime: &Path, timeout: Duration) -> Option<String> {
     };
     let podman = search("podman")?;
     let compose = search("podman-compose")?;
-    let version = |path: &Path, expected: &str| path.to_str().is_some_and(|program| run_program(program, ["--version"], None, timeout).is_ok_and(|result| result.success() && std::str::from_utf8(&result.stdout).is_ok_and(|value| value.trim() == expected)));
-    if !version(&podman, "podman version 6.1.3") || !version(&compose, "podman-compose version 1.6.0") { return None; }
+    let podman_version = podman.to_str().is_some_and(|program| run_program(program, ["--version"], None, timeout).is_ok_and(|result| result.success() && std::str::from_utf8(&result.stdout).is_ok_and(|value| value.trim() == "podman version 6.1.3")));
     let machine = fs::read_to_string(runtime.join("podman-machine")).ok()?;
     let machine = machine.strip_suffix('\n')?;
     if machine.is_empty() || !machine.bytes().all(|b| b.is_ascii_alphanumeric() || matches!(b, b'.' | b'_' | b'-')) { return None; }
+    let compose_version = compose.to_str().is_some_and(|program| {
+        let (result, stderr) = run_program_keeping_stderr_with_environment(program, ["--version"], None, timeout, runtime, &["CONTAINER_HOST", "CONTAINER_CONNECTION"], &[("CONTAINER_CONNECTION", machine)]);
+        let mut output = match result { Ok(result) if result.success() => result.stdout, _ => return false };
+        output.extend_from_slice(&stderr);
+        std::str::from_utf8(&output).is_ok_and(|output| output.lines().any(|line| line == "podman-compose version 1.6.0"))
+    });
+    if !podman_version || !compose_version { return None; }
+    let image = match fs::symlink_metadata(runtime.join("runtime-image")) {
+        Ok(_) => {
+            let image = fs::read_to_string(runtime.join("runtime-image")).ok()?;
+            let image = image.strip_suffix('\n')?.to_owned();
+            let digest = image.strip_prefix("ghcr.io/leopu00/jht@sha256:")?;
+            if digest.len() != 64 || !digest.bytes().all(|b| b.is_ascii_lowercase() || b.is_ascii_digit()) { return None; }
+            Some(image)
+        }
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => None,
+        Err(_) => return None,
+    };
     let args = vec![OsString::from("--verbose"), OsString::from("--dry-run"), OsString::from("--project-name"), OsString::from("jht"), OsString::from("--podman-path"), podman.into_os_string(), OsString::from("-f"), runtime.join("docker-compose.yml").into_os_string(), OsString::from("up"), OsString::from("-d"), OsString::from("--force-recreate"), OsString::from("jht")];
-    let (result, stderr) = run_program_keeping_stderr_with_environment(compose.to_str()?, args, None, timeout, runtime, &["CONTAINER_HOST", "CONTAINER_CONNECTION"], &[("CONTAINER_CONNECTION", machine), ("PODMAN_COMPOSE_WARNING_LOGS", "false")]);
+    let mut environment = vec![("CONTAINER_CONNECTION", machine), ("PODMAN_COMPOSE_WARNING_LOGS", "false")];
+    if let Some(image) = image.as_deref() { environment.push(("JHT_IMAGE", image)); }
+    let (result, stderr) = run_program_keeping_stderr_with_environment(compose.to_str()?, args, None, timeout, runtime, &["CONTAINER_HOST", "CONTAINER_CONNECTION", "JHT_IMAGE"], &environment);
     let mut output = result.ok().filter(ProcessResult::success)?.stdout;
     output.extend_from_slice(&stderr);
     let output = std::str::from_utf8(&output).ok()?;
@@ -3344,7 +3363,7 @@ mod tests {
         #[cfg(target_os = "macos")]
         {
             fs::write(bin.join("podman"), "#!/bin/sh\n[ \"${1:-}\" = --version ] && { echo 'podman version 6.1.3'; exit 0; }\nexit 91\n").unwrap();
-            fs::write(bin.join("podman-compose"), format!("#!/bin/sh\n[ \"${{1:-}}\" = --version ] && {{ echo 'podman-compose version 1.6.0'; exit 0; }}\nprintf 'io.podman.compose.config-hash={}\\n' >&2\n", "a".repeat(64))).unwrap();
+            fs::write(bin.join("podman-compose"), format!("#!/bin/sh\n[ \"${{1:-}}\" = --version ] && {{ echo 'provider banner'; echo 'podman-compose version 1.6.0'; exit 0; }}\n[ -z \"${{JHT_IMAGE+x}}\" ] || exit 92\nprintf 'io.podman.compose.config-hash={}\\n' >&2\n", "a".repeat(64))).unwrap();
             for helper in [bin.join("podman"), bin.join("podman-compose")] { fs::set_permissions(helper, fs::Permissions::from_mode(0o700)).unwrap(); }
         }
         write_valid_local_podman_manifest(&runtime, &wrapper);
