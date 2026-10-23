@@ -22,11 +22,12 @@ import shutil
 import sqlite3
 import subprocess
 import sys
-import tempfile
 import time
 from pathlib import Path
 
 import pytest
+
+import private_tmux
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 SKILLS = REPO_ROOT / "shared" / "skills"
@@ -382,7 +383,7 @@ def test_a_tmux_with_agent_panes_does_not_make_the_persons_command_an_agent(box)
     same command started inside an agent's pane is refused: the check is not vacuous. A private tmux
     server, in a short folder (the socket path has a length limit), always killed at the end."""
     home, env = box
-    sockets = tempfile.mkdtemp(prefix="jt", dir="/tmp")
+    sockets = str(private_tmux.private_dir("apply"))
     env = {**env, "TMUX_TMPDIR": sockets}
     # -f /dev/null: the server reads no tmux.conf of the machine (hooks, default-command).
     tmux = lambda *args: subprocess.run(
@@ -415,5 +416,4 @@ def test_a_tmux_with_agent_panes_does_not_make_the_persons_command_an_agent(box)
         assert json.loads(text.strip().splitlines()[-1])["reason"] == "agent_caller", text
         assert row(box, 2) == before
     finally:
-        tmux("kill-server")
-        shutil.rmtree(sockets, ignore_errors=True)
+        private_tmux.close_dir(Path(sockets))
