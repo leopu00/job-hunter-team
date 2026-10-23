@@ -279,12 +279,14 @@ def test_the_repair_dispatch_is_the_same_in_the_script_and_the_wrapper():
 
 def test_every_up_of_the_windows_wrapper_repairs_first():
     lines = PS1.read_text(encoding="utf-8").splitlines()
+    # On Podman each service gets its own up first (T85): inside its function, called on the line
+    # before a whole up; here the calls of that function are checked, not its body.
     ups = [
         i for i, line in enumerate(lines)
-        if re.search(r"Invoke-Compose 'up'|Invoke-UpgradeCompose \$newCompose 'up'", line)
-        and "$TelegramContainer" not in line
+        if re.search(r"Invoke-Compose 'up'|Invoke-UpgradeCompose \$newCompose 'up'|\(Invoke-PodmanServicesUpInTurn\)", line)
+        and "$TelegramContainer" not in line and "$service" not in line
     ]
-    assert len(ups) == 4
+    assert len(ups) == 7
     for i in ups:
         window = "\n".join(lines[max(0, i - 9): i])
         assert "Repair-MountOwnership" in window, lines[i]

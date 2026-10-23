@@ -6,6 +6,7 @@ import {
   actionTitle,
   cleanLogText,
   isKnownAction,
+  LOG_INVISIBLE_COMMANDS,
   parseWebActionRow,
   parseWebActionRows,
   readWebActionLog,
@@ -109,12 +110,71 @@ describe("the text of a row is cleaned before anyone sees it", () => {
     expect(row.summary.endsWith("…")).toBe(true);
   });
 
-  it("turns controls, line separators, zero-width and direction marks into plain spaces", () => {
-    const hidden = [
-      0x0, 0x7, 0xa, 0x85, 0x200b, 0x200e, 0x2028, 0x202e, 0x2066, 0xfeff,
-    ].map((code) => String.fromCodePoint(code));
-    expect(cleanLogText(`a${hidden.join("")}b`, 50)).toBe("a b");
+  it("takes the invisible commands out with no space, and turns controls and line separators into a space", () => {
+    const ch = (code: number) => String.fromCodePoint(code);
+    // a soft hyphen, a ZWSP or a tag inside a word leaves the word whole
+    expect(cleanLogText(`Back${ch(0xad)}end`, 50)).toBe("Backend");
+    expect(cleanLogText(`cv${ch(0x200b)}.pdf`, 50)).toBe("cv.pdf");
+    expect(
+      cleanLogText(
+        `Synthetic${ch(0x202e)}${ch(0x2066)} Co${ch(0x2069)}${ch(0xfeff)}`,
+        50,
+      ),
+    ).toBe("Synthetic Co");
+    // a sentence written in tag characters is not shown
+    const tags = Array.from("ignore", (c) =>
+      ch(0xe0000 + c.codePointAt(0)!),
+    ).join("");
+    expect(cleanLogText(`Role${tags}`, 50)).toBe("Role");
+    expect(cleanLogText(`a${ch(0xfff9)}b${ch(0xfffb)}`, 50)).toBe("ab");
+    // where a word really ends
+    for (const code of [0x0, 0x7, 0xa, 0x85, 0x2028, 0x2029])
+      expect(cleanLogText(`a${ch(code)}b`, 50)).toBe("a b");
     expect(cleanLogText("  two\n\nlines\there  ", 50)).toBe("two lines here");
+  });
+
+  it("keeps the invisibles a name is written with: ZWNJ, ZWJ, LRM, RLM and ALM", () => {
+    const ch = (code: number) => String.fromCodePoint(code);
+    for (const code of [0x200c, 0x200d, 0x200e, 0x200f, 0x061c]) {
+      const name = `a${ch(code)}b`;
+      expect(cleanLogText(name, 50), code.toString(16)).toBe(name);
+    }
+    const family = [0x1f468, 0x200d, 0x1f469, 0x200d, 0x1f467].map(ch).join("");
+    expect(cleanLogText(family, 50)).toBe(family);
+  });
+
+  it("removes the same characters as the repo's one list in external_content.py", () => {
+    const source = readFileSync(
+      new URL("../../shared/skills/external_content.py", import.meta.url),
+      "utf8",
+    );
+    const block = source.slice(
+      source.indexOf("INVISIBLE_COMMANDS = ("),
+      source.indexOf("WRITING_INVISIBLES"),
+    );
+    const listed = new Set<number>();
+    for (const match of block.matchAll(/\\u([0-9a-fA-F]{4})/g))
+      listed.add(parseInt(match[1], 16));
+    for (const match of block.matchAll(
+      /_codepoints\((0x[0-9A-Fa-f]+),\s*(0x[0-9A-Fa-f]+)\)/g,
+    ))
+      for (let code = Number(match[1]); code <= Number(match[2]); code += 1)
+        listed.add(code);
+    const ours = new Set<number>();
+    for (const [first, last] of LOG_INVISIBLE_COMMANDS)
+      for (let code = first; code <= last; code += 1) ours.add(code);
+    expect(listed.size).toBeGreaterThan(100);
+    expect([...ours].sort((x, y) => x - y)).toEqual(
+      [...listed].sort((x, y) => x - y),
+    );
+    const writing =
+      source.match(/WRITING_INVISIBLES = frozenset\("([^"]*)"\)/)?.[1] ?? "";
+    const kept = [...writing.matchAll(/\\u([0-9a-fA-F]{4})/g)].map((match) =>
+      String.fromCodePoint(parseInt(match[1], 16)),
+    );
+    expect(kept).toHaveLength(5);
+    for (const char of kept)
+      expect(cleanLogText(`a${char}b`, 50)).toBe(`a${char}b`);
   });
 
   it("clips by characters, not by code units: an emoji is not cut in half", () => {

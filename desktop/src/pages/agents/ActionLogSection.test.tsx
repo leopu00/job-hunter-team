@@ -140,7 +140,7 @@ describe("the action log in the agents panel", () => {
     open();
     const item = await screen.findByTestId("action-log-row-r1");
     expect(container.querySelector("img")).toBeNull();
-    expect(item).toHaveTextContent("<img src=x onerror=alert(1)> evil");
+    expect(item).toHaveTextContent("<img src=x onerror=alert(1)>evil");
     expect(item.textContent).not.toContain(RLO);
     expect(item).toHaveTextContent("Altra azione (make.coffee)");
     expect(item).toHaveTextContent("Stato non noto");

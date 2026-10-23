@@ -251,13 +251,15 @@ pub(crate) fn installer_outcome(result: Result<i32, &'static str>) -> Result<(),
 /// install.ps1's phases, in the order they run, with the key of what the
 /// onboarding shows while each one lasts (desktop/src/lib/onboarding-progress.i18n.ts,
 /// 7 languages).
-pub(crate) const INSTALL_PHASES: [(&str, &str); 6] = [
+pub(crate) const INSTALL_PHASES: [(&str, &str); 7] = [
     ("wsl_check", "ui_phase_wsl_check"),
     ("podman_install", "ui_phase_podman_install"),
     ("podman_machine_init", "ui_phase_podman_machine_init"),
     ("podman_machine_start", "ui_phase_podman_machine_start"),
     ("runtime_download", "ui_phase_runtime_download"),
     ("image_pull", "ui_phase_image_pull"),
+    // A team that ran on another image restarts on the one just pulled (enable-podman-windows-runtime.ps1).
+    ("team_restart", "ui_phase_team_restart"),
 ];
 
 /// The key of a `JHT_PHASE <id>` line of install.ps1's stdout, exactly, with a
@@ -625,11 +627,13 @@ mod tests {
                 "podman_machine_init",
                 "podman_machine_start",
                 "runtime_download",
-                "image_pull"
+                "image_pull",
+                "team_restart"
             ]
         );
         assert_eq!(phase_message("JHT_PHASE wsl_check"), Some("ui_phase_wsl_check"));
-        assert_eq!(phase_message("JHT_PHASE image_pull\r\n"), INSTALL_PHASES.last().map(|(_, m)| *m));
+        assert_eq!(phase_message("JHT_PHASE image_pull\r\n"), Some("ui_phase_image_pull"));
+        assert_eq!(phase_message("JHT_PHASE team_restart\r\n"), INSTALL_PHASES.last().map(|(_, m)| *m));
         for other in [
             "",
             "JHT_PHASE",

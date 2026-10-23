@@ -718,6 +718,18 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
     "The action was not confirmed.",
     "Repeat the action and confirm it in the dialog that opens.",
   ),
+  window_not_allowed: copy(
+    "Questa azione si può fare solo dalla finestra principale dell’app.",
+    "Torna alla finestra principale e riprova.",
+    "This can be done only from the app’s main window.",
+    "Go back to the main window and try again.",
+  ),
+  existing_team_reconfirm_setup: copy(
+    "Il collegamento salvato non corrisponde più a questa squadra.",
+    "Rifai il collegamento dal setup: ti chiederà di nuovo di confermare la VPS.",
+    "The saved connection no longer matches this team.",
+    "Connect the team again from the setup: it will ask you to confirm the VPS again.",
+  ),
   agent_control_read_only: copy(
     "La squadra è aperta in sola lettura: da qui non si comandano gli agenti.",
     "Per comandarli collega la squadra con «Conferma e collega».",

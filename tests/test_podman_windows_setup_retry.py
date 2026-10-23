@@ -224,7 +224,8 @@ def _network_check_block() -> str:
     source = NETWORK.read_text(encoding="utf-8")
     trap = source[source.index("trap {") :]
     trap = trap[: trap.index("\n}\n") + 3]
-    check = source[source.index("$proxyCheck = @'") : source.index("Invoke-Checked $Podman '--connection'")]
+    # up to the check of the cgroup manager that follows it (T87), which needs `podman info`
+    check = source[source.index("$proxyCheck = @'") : source.index("$hostInfo = ")]
     return trap + check
 
 

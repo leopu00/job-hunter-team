@@ -572,7 +572,7 @@ function Register-ScheduledTask {
 }
 function Get-ScheduledTask { param($TaskName, $ErrorAction) $script:Registered }
 Install-JhtStartupTask -PodmanPath 'C:\Program Files\RedHat\Podman\podman.exe' `
-  -MachineName 'jht-podman' -UserId 'S-1-5-21-test'
+  -MachineName 'jht-podman' -UserId 'S-1-5-21-1111-2222-3333-1001'
 [Console]::Out.WriteLine("TASK=$($script:Registered.TaskName)")
 [Console]::Out.WriteLine("EXEC=$($script:Registered.Actions[0].Execute)")
 [Console]::Out.WriteLine("ARGS=$($script:Registered.Actions[0].Arguments)")
@@ -599,7 +599,7 @@ def test_logon_task_is_visible_named_and_described_in_task_scheduler():
 
 def test_logon_task_starts_only_the_named_jht_machine_as_the_current_user(tmp_path):
     result, calls = _run(
-        tmp_path, ENABLER, ["Install-JhtStartupTask"], STARTUP_TASK_BODY,
+        tmp_path, ENABLER, ["ConvertTo-JhtSid", "Install-JhtStartupTask"], STARTUP_TASK_BODY,
         {"REGISTER_FAIL": "0"},
     )
     assert result.returncode == 0, result.stderr
@@ -607,7 +607,7 @@ def test_logon_task_starts_only_the_named_jht_machine_as_the_current_user(tmp_pa
     assert "TASK=Job Hunter Team - Start runtime" in result.stdout
     assert "EXEC=C:\\Program Files\\RedHat\\Podman\\podman.exe" in result.stdout
     assert "ARGS=machine start --update-connection=false jht-podman" in result.stdout
-    assert "USER=S-1-5-21-test" in result.stdout
+    assert "USER=S-1-5-21-1111-2222-3333-1001" in result.stdout
     assert "HIDDEN=False" in result.stdout
     assert (
         "DESCRIPTION=Starts the dedicated Job Hunter Team Podman machine at sign-in "
@@ -617,7 +617,7 @@ def test_logon_task_starts_only_the_named_jht_machine_as_the_current_user(tmp_pa
 
 def test_install_fails_if_the_logon_task_cannot_be_published(tmp_path):
     result, _ = _run(
-        tmp_path, ENABLER, ["Install-JhtStartupTask"], STARTUP_TASK_BODY,
+        tmp_path, ENABLER, ["ConvertTo-JhtSid", "Install-JhtStartupTask"], STARTUP_TASK_BODY,
         {"REGISTER_FAIL": "1"},
     )
     assert result.returncode != 0
@@ -751,3 +751,136 @@ def test_only_the_enabler_and_the_opt_in_probe_compile_a_docker_shim():
     compilers = sorted(path.name for path in SCRIPTS.glob("*.ps1")
                        if re.search(r"(?m)^\s*New-DockerShim\b", path.read_text(encoding="utf-8")))
     assert compilers == ["enable-podman-windows-runtime.ps1", "podman-windows-probe.ps1"]
+
+
+# jht-wrapper.ps1: the folders the compose binds, before every up (T83)
+# ---------------------------------------------------------------------------
+
+# Like Podman: a bind whose source folder is missing is refused, the container is not created.
+COMPOSE_UP_CASES = """  "compose "*" up -d") [ "$FAKE_FAIL" = up ] && { echo 'Error: compose up failed' >&2; exit 3; }; [ -d "$HOME/.jht" ] && [ -d "$HOME/Documents/Job Hunter Team" ] || { echo 'Error response from daemon: container create: statfs /mnt/c/Users/x/Documents/Job Hunter Team: no such file or directory' >&2; exit 1; } ;;"""
+
+UP_FOLDERS_BODY = r"""
+function Test-PrivateJhtHomeAcl { $true }
+function Assert-TrustedRuntime {}
+$ContainerRuntime = $env:RUNTIME
+$ComposeFile = 'docker-compose.yml'; $PodmanComposeFile = 'docker-compose.podman.yml'; $RuntimeDir = '.'
+if (-not (Repair-MountOwnership)) { Add-Content -LiteralPath $env:FAKE_LOG -Value 'repair-refused'; exit 1 }
+Invoke-Compose 'up' '-d'
+Add-Content -LiteralPath $env:FAKE_LOG -Value "up-exit=$LASTEXITCODE"
+Stop-OnFailedComposeUp $LASTEXITCODE
+Add-Content -LiteralPath $env:FAKE_LOG -Value 'after-up'
+"""
+
+
+def _up_with_folders(tmp_path, *, documents: bool, fail: str = ""):
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    _fake(bin_dir, "docker", COMPOSE_UP_CASES)
+    if documents:
+        (tmp_path / "Documents" / "Job Hunter Team").mkdir(parents=True)
+        (tmp_path / "Documents" / "Job Hunter Team" / "cv.pdf").write_bytes(b"keep me")
+    return _run(
+        tmp_path, WRAPPER, ["Repair-MountOwnership", "Invoke-Compose", "Stop-OnFailedComposeUp", "Write-Err"], UP_FOLDERS_BODY,
+        {"RUNTIME": "podman", "FAKE_FAIL": fail},
+    )
+
+
+def test_with_podman_up_creates_the_folders_the_compose_binds_on_a_new_machine(tmp_path):
+    # a new user: neither ~/.jht nor ~/Documents/Job Hunter Team yet, and Podman does not create them
+    result, calls = _up_with_folders(tmp_path, documents=False)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert (tmp_path / ".jht").is_dir() and (tmp_path / "Documents" / "Job Hunter Team").is_dir()
+    assert calls[-2:] == ["up-exit=0", "after-up"], calls
+
+
+def test_with_podman_up_leaves_an_existing_documents_folder_as_it_is(tmp_path):
+    result, calls = _up_with_folders(tmp_path, documents=True)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert (tmp_path / "Documents" / "Job Hunter Team" / "cv.pdf").read_bytes() == b"keep me"
+    assert calls[-2:] == ["up-exit=0", "after-up"], calls
+
+
+def test_a_failed_compose_up_stops_jht_with_its_code_and_nothing_after_it_runs(tmp_path):
+    # before, the broker's migration ran after it and its own exit code said the start went well
+    result, calls = _up_with_folders(tmp_path, documents=True, fail="up")
+    assert result.returncode == 3, result.stdout + result.stderr
+    assert "compose_up_failed" in result.stdout + result.stderr
+    assert calls[-1] == "up-exit=3" and "after-up" not in calls, calls
+
+
+def test_every_compose_up_of_the_wrapper_is_followed_by_its_exit_code_check():
+    lines = WRAPPER.read_text(encoding="utf-8").splitlines()
+    ups = [i for i, line in enumerate(lines) if line.strip() == "Invoke-Compose 'up' '-d'"]
+    assert len(ups) == 3
+    for i in ups:
+        assert lines[i + 1].strip() == "Stop-OnFailedComposeUp $LASTEXITCODE", lines[i + 1]
+
+
+# ---------------------------------------------------------------------------
+# jht-wrapper.ps1: on Podman the broker and the Telegram service are created one at a time (T85)
+# ---------------------------------------------------------------------------
+
+# Compose creates the services in parallel, and Podman 6.0.2's API service loses the keep-id map of
+# one of two creates at once (libsubid is not thread safe, podman #29848): the Telegram service had
+# the user alone and never started. Each gets its own up, before the whole one.
+COMPOSE_TURN_CASES = """  "compose "*" up -d jht-broker") [ "$FAKE_FAIL" = broker ] && { echo 'Error: broker create failed' >&2; exit 4; } ;;
+  "compose "*" up -d jht-telegram") ;;
+  "compose "*" up -d") [ "$FAKE_FAIL" = up ] && { echo 'Error: compose up failed' >&2; exit 3; } ;;"""
+
+UP_IN_TURN_BODY = r"""
+function Test-PrivateJhtHomeAcl { $true }
+function Assert-TrustedRuntime {}
+$ContainerRuntime = $env:RUNTIME
+$ComposeFile = $env:COMPOSE_UNDER_TEST; $PodmanComposeFile = 'docker-compose.podman.yml'; $RuntimeDir = '.'
+$BrokerContainer = 'jht-broker'; $TelegramContainer = 'jht-telegram'
+Stop-OnFailedComposeUp (Invoke-PodmanServicesUpInTurn)
+Invoke-Compose 'up' '-d'
+Stop-OnFailedComposeUp $LASTEXITCODE
+Add-Content -LiteralPath $env:FAKE_LOG -Value 'after-up'
+"""
+
+
+def _up_in_turn(tmp_path, *, runtime: str = "podman", fail: str = "", compose: Path = ROOT / "docker-compose.yml"):
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    _fake(bin_dir, "docker", COMPOSE_TURN_CASES)
+    result, calls = _run(
+        tmp_path, WRAPPER, ["Invoke-PodmanServicesUpInTurn", "Invoke-Compose", "Stop-OnFailedComposeUp", "Write-Err"], UP_IN_TURN_BODY,
+        {"RUNTIME": runtime, "FAKE_FAIL": fail, "COMPOSE_UNDER_TEST": str(compose)},
+    )
+    return result, [call[call.index(" up ") + 1:] if " up " in call else call for call in calls]
+
+
+def test_with_podman_the_broker_and_the_telegram_service_are_created_one_at_a_time(tmp_path):
+    result, calls = _up_in_turn(tmp_path)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert calls == ["up -d jht-broker", "up -d jht-telegram", "up -d", "after-up"]
+
+
+def test_with_docker_the_up_is_the_whole_one_as_before(tmp_path):
+    result, calls = _up_in_turn(tmp_path, runtime="docker")
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert calls == ["up -d", "after-up"]
+
+
+def test_a_service_whose_up_fails_stops_jht_with_its_code_before_the_others(tmp_path):
+    result, calls = _up_in_turn(tmp_path, fail="broker")
+    assert result.returncode == 4, result.stdout + result.stderr
+    assert "compose_up_failed" in result.stdout + result.stderr
+    assert calls == ["up -d jht-broker"]
+
+
+def test_a_compose_file_without_the_services_gets_the_whole_up_alone(tmp_path):
+    old = tmp_path / "docker-compose.yml"
+    old.write_text("services:\n  jht:\n    image: x\n", encoding="utf-8")
+    result, calls = _up_in_turn(tmp_path, compose=old)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert calls == ["up -d", "after-up"]
+
+
+def test_every_whole_compose_up_of_the_wrapper_comes_after_the_services_in_turn():
+    lines = WRAPPER.read_text(encoding="utf-8").splitlines()
+    ups = [i for i, line in enumerate(lines) if line.strip() == "Invoke-Compose 'up' '-d'"]
+    assert len(ups) == 3
+    for i in ups:
+        assert lines[i - 1].strip() == "Stop-OnFailedComposeUp (Invoke-PodmanServicesUpInTurn)", lines[i - 1]

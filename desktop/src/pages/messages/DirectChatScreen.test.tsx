@@ -395,6 +395,29 @@ describe("DirectChatScreen", () => {
     expect(reads()).toBe(4);
   });
 
+  it("on a slow link gives the next read the cursor of the last one, and only there", async () => {
+    const { mock, after } = await slowLinkPage();
+    vi.mocked(mock.read).mockResolvedValueOnce({ messages: [], cursor: "51200" });
+    await after(10_000);
+    expect(vi.mocked(mock.read).mock.calls[0][0]).toEqual({ agentId: "assistente" });
+    expect(vi.mocked(mock.read).mock.calls[1][0]).toEqual({ agentId: "assistente", cursor: "opaque-cursor" });
+    await after(10_000);
+    expect(vi.mocked(mock.read).mock.calls[2][0]).toEqual({ agentId: "assistente", cursor: "51200" });
+    vi.useRealTimers();
+  });
+
+  it("through the ssh master reads without a cursor, as before", async () => {
+    const { mock, after } = await slowLinkPage({ state: "ready" });
+    await after(1_500);
+    await after(1_500);
+    expect(vi.mocked(mock.read).mock.calls.map(([request]) => request)).toEqual([
+      { agentId: "assistente" },
+      { agentId: "assistente" },
+      { agentId: "assistente" },
+    ]);
+    vi.useRealTimers();
+  });
+
   it("speaks the language of the app, and dictates in it", async () => {
     viewport(1280, 800);
     document.cookie = "NEXT_LOCALE=en; path=/";
@@ -437,7 +460,7 @@ describe("DirectChatScreen: where the text goes, and when it is delivered", () =
     expect(screen.getByTestId("direct-chat-keys")).toHaveTextContent("Invio manda · Ctrl+Invio va a capo");
   });
 
-  it("says «Consegnato» only once the receipt is back, and «Invio…» until then", async () => {
+  it("says «Inviato» only once the receipt is back, and «Invio…» until then", async () => {
     viewport(1280, 800);
     const { mock } = client();
     let deliver: (receipt: DirectChatReceipt) => void = () => undefined;
@@ -450,13 +473,13 @@ describe("DirectChatScreen: where the text goes, and when it is delivered", () =
     await user.type(screen.getByRole("textbox", { name: "Scrivi a Capitano" }), "Ci sei?{Enter}");
     const mine = (await screen.findByText("Ci sei?")).closest("article")!;
     expect(within(mine).getByTestId("direct-chat-in-flight")).toHaveTextContent("Invio…");
-    expect(screen.queryByTestId("direct-chat-delivered")).toBeNull();
+    expect(screen.queryByTestId("direct-chat-sent")).toBeNull();
     await act(async () => deliver({ clientMessageId: "", accepted: true, messageId: "remote-9", at: 3 }));
-    await waitFor(() => expect(within(screen.getByText("Ci sei?").closest("article")!).getByTestId("direct-chat-delivered")).toHaveTextContent("Consegnato"));
+    await waitFor(() => expect(within(screen.getByText("Ci sei?").closest("article")!).getByTestId("direct-chat-sent")).toHaveTextContent("Inviato"));
     expect(screen.queryByTestId("direct-chat-in-flight")).toBeNull();
   });
 
-  it("a turn that waits in the agent's mailbox is «In coda», never «Consegnato»", async () => {
+  it("a turn that waits in the agent's mailbox is «In coda», never «Inviato»", async () => {
     viewport(1280, 800);
     const { mock } = client();
     mock.send = vi.fn(async ({ clientMessageId }): Promise<DirectChatReceipt> => ({
@@ -472,12 +495,12 @@ describe("DirectChatScreen: where the text goes, and when it is delivered", () =
     await user.type(screen.getByRole("textbox", { name: "Scrivi a Capitano" }), "Mi senti?{Enter}");
     const mine = (await screen.findByText("Mi senti?")).closest("article")!;
     await waitFor(() => expect(within(mine).getByTestId("direct-chat-queued")).toHaveTextContent("In coda"));
-    expect(within(mine).queryByTestId("direct-chat-delivered")).toBeNull();
-    expect(mine).not.toHaveTextContent("Consegnato");
+    expect(within(mine).queryByTestId("direct-chat-sent")).toBeNull();
+    expect(mine).not.toHaveTextContent("Inviato");
     expect(screen.queryByTestId("direct-chat-in-flight")).toBeNull();
   });
 
-  it("a receipt that carries no state is the typed turn: «Consegnato», as before", async () => {
+  it("a receipt that carries no state is the typed turn: «Inviato»", async () => {
     viewport(1280, 800);
     const { mock } = client();
     const user = userEvent.setup();
@@ -485,7 +508,7 @@ describe("DirectChatScreen: where the text goes, and when it is delivered", () =
     await screen.findByText("Messaggio dalla VPS");
     await user.type(screen.getByRole("textbox", { name: "Scrivi a Capitano" }), "Ci sei?{Enter}");
     const mine = (await screen.findByText("Ci sei?")).closest("article")!;
-    await waitFor(() => expect(within(mine).getByTestId("direct-chat-delivered")).toHaveTextContent("Consegnato"));
+    await waitFor(() => expect(within(mine).getByTestId("direct-chat-sent")).toHaveTextContent("Inviato"));
     expect(within(mine).queryByTestId("direct-chat-queued")).toBeNull();
   });
 
@@ -569,7 +592,7 @@ describe("DirectChatScreen: where the text goes, and when it is delivered", () =
     );
     expect(screen.getByTestId("direct-chat-status")).not.toHaveTextContent("agent_not_at_prompt");
     expect(screen.getByRole("textbox", { name: "Scrivi a Capitano" })).toHaveValue("1");
-    expect(screen.queryByTestId("direct-chat-delivered")).toBeNull();
+    expect(screen.queryByTestId("direct-chat-sent")).toBeNull();
     // the message the composer showed for a moment is gone from the transcript: it was never delivered
     expect(within(screen.getByTestId("direct-chat-transcript")).queryByText("Tu")).toBeNull();
   });

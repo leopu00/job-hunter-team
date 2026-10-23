@@ -57,7 +57,14 @@ LEVEL_OF = {"team.start": "L2", "team.stop": "L2", "team.restart": "L2", "team.e
 APPLY_RULE = json.loads((ROOT / "shared" / "cloud" / "apply-request-rule.json").read_text())
 PSQL_FLAGS = ["-X", "-q", "-A", "-t", "-v", "ON_ERROR_STOP=1"]
 
-BOOTSTRAP = """
+# The roles belong to the whole cluster, not to the test's database. With -n 2 on one server two workers
+# bootstrap at once, both see no `anon` and both create it: the second fails on pg_authid's unique index.
+# So the roles are made in a transaction of their own that first takes pg_authid, a catalog shared by all
+# the databases of the cluster: the bootstraps take turns (an advisory lock would not do: its keys are
+# per database).
+ROLES = """
+BEGIN;
+LOCK TABLE pg_catalog.pg_authid IN SHARE ROW EXCLUSIVE MODE;
 DO $$
 DECLARE r TEXT;
 BEGIN
@@ -68,7 +75,10 @@ BEGIN
   END LOOP;
 END $$;
 ALTER ROLE service_role BYPASSRLS;       -- as on the project: the box is not held back by the row policies
+COMMIT;
+"""
 
+BOOTSTRAP = ROLES + """
 CREATE SCHEMA auth;
 CREATE TABLE auth.users (id uuid PRIMARY KEY);
 CREATE TABLE auth.sessions (
@@ -220,7 +230,14 @@ def _runner(psql_argv: list[str], env: dict | None):
         args = [*psql_argv, *(["-f", str(file)] if file else ["-c", sql])]
         return subprocess.run(args, capture_output=True, text=True, env=env, timeout=120, check=check)
 
+    psql.argv, psql.env = psql_argv, env
     return psql
+
+
+def json_lines(stdout: str) -> list[str]:
+    """The JSON rows psql printed. Only "\\n" ends a row: str.splitlines() also cuts at U+2028, U+2029 and
+    U+0085, which a summary carries raw inside a JSON string, and the row comes back in two halves."""
+    return [line for line in stdout.split("\n") if line.startswith("{")]
 
 
 @pytest.fixture(scope="module")
@@ -322,7 +339,7 @@ class Browser:
         done = self.script(f"SELECT public.request_action({', '.join(args)});",
                            claims=self.claims(**claims_kw) if claims_kw else None)
         assert done.returncode == 0, done.stderr
-        lines = [line for line in done.stdout.splitlines() if line.startswith("{")]
+        lines = json_lines(done.stdout)
         assert len(lines) == 1, done.stdout
         return json.loads(lines[0])
 
@@ -344,6 +361,60 @@ def _position(db, user: str, legacy_id: int, *, status="ready", title="Platform 
     if applied:
         db(f"INSERT INTO public.applications (user_id, position_id, applied) VALUES ('{user}', {pid}, true)")
     return int(pid)
+
+
+# --------------------------------------------------------------------------------------------------
+# the test's own plumbing: psql's rows and the roles of the cluster
+# --------------------------------------------------------------------------------------------------
+
+def test_a_row_with_a_unicode_line_break_inside_comes_back_whole(cluster):
+    # A summary is the user's text: U+2028, U+2029 and U+0085 are printed raw inside the JSON string,
+    # and only a newline ends psql's row.
+    text = "Platform\u2028Lead\u2029Engineer\x85Acme"
+    done = cluster("SELECT json_build_object('summary', 'Platform' || chr(8232) || 'Lead' || chr(8233) || "
+                   "'Engineer' || chr(133) || 'Acme'); SELECT json_build_object('summary', 'second');")
+    assert text in done.stdout
+    assert [json.loads(line) for line in json_lines(done.stdout)] == [{"summary": text}, {"summary": "second"}]
+
+
+def test_two_bootstraps_take_turns_on_the_roles_of_the_cluster(cluster):
+    # While another session holds pg_authid, a bootstrap waits on that same lock, before it looks for the
+    # roles. Without it, it would look, find nothing and create: the wait would come only at its first
+    # write (CREATE or ALTER ROLE, a RowExclusiveLock), when the other one may have created them already.
+    def session(sql: str, tag: str) -> subprocess.Popen:
+        return subprocess.Popen([*cluster.argv, "-c", sql], env={**(cluster.env or os.environ), "PGAPPNAME": tag},
+                                stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True)
+
+    def lock_of(tag: str, granted: bool) -> str:
+        return _scalar(cluster, "SELECT l.pid || ' ' || l.mode FROM pg_locks l JOIN pg_stat_activity a USING (pid) "
+                                "WHERE l.relation = 'pg_catalog.pg_authid'::regclass "
+                                f"AND l.granted = {str(granted).lower()} AND a.application_name = '{tag}'")
+
+    def wait_for(tag: str, granted: bool) -> str:
+        deadline = time.monotonic() + 20
+        while not (found := lock_of(tag, granted)):
+            assert time.monotonic() < deadline, f"{tag}: no {'granted' if granted else 'waiting'} lock on pg_authid"
+            time.sleep(0.05)
+        return found
+
+    suffix = uuid.uuid4().hex[:8]
+    holder_tag, bootstrap_tag = f"jht-authid-holder-{suffix}", f"jht-authid-bootstrap-{suffix}"
+    holder = session("BEGIN; LOCK TABLE pg_catalog.pg_authid IN SHARE ROW EXCLUSIVE MODE; SELECT pg_sleep(30); COMMIT;",
+                     holder_tag)
+    bootstrap = None
+    holder_pid = ""
+    try:
+        holder_pid = wait_for(holder_tag, granted=True).split()[0]
+        bootstrap = session(ROLES, bootstrap_tag)
+        assert wait_for(bootstrap_tag, granted=False).split(" ", 1)[1] == "ShareRowExclusiveLock"
+    finally:
+        # by its pid, which is only ours: the server sees a killed psql only when pg_sleep ends
+        if holder_pid:
+            cluster(f"SELECT pg_terminate_backend({int(holder_pid)})", check=False)
+        holder.terminate()
+        holder.wait(timeout=30)
+    assert bootstrap.wait(timeout=60) == 0, bootstrap.stderr.read()    # then it goes through
+    cluster(ROLES)          # and again: it is idempotent
 
 
 # --------------------------------------------------------------------------------------------------
@@ -741,7 +812,7 @@ def test_confirmations_left_open_are_bounded_and_the_log_is_not_a_place_to_dump_
     who = Browser(cluster)
     calls = "\n".join("SELECT public.request_action('team.start', '{}'::jsonb, NULL, 'L2');" for _ in range(31))
     done = who.script(calls)
-    answers = [json.loads(line) for line in done.stdout.splitlines() if line.startswith("{")]
+    answers = [json.loads(line) for line in json_lines(done.stdout)]
     assert len(answers) == 31
     assert sum(a["ok"] for a in answers) == 30 and answers[-1] == {"ok": False, "error": "rate_limited", "retry_after_s": 60}
     assert _scalar(cluster, f"SELECT count(*) FROM public.web_action_log WHERE user_id = '{who.user}'") == "30"

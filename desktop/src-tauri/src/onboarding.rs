@@ -224,6 +224,62 @@ pub(crate) struct OnboardingSubmission {
 pub(crate) struct ExistingTeamConnectRequest {
     team_id: String,
     host: ExecutionHost,
+    /// The chat's «Collega il team»: the same confirmation, allowed only for the host and team this
+    /// profile already saved (with their pinned key). Anything else goes back to the setup.
+    #[serde(default)]
+    reconfirm: bool,
+}
+
+/// What the chat's confirmation shows, all of it from what this profile saved: the host, the team
+/// selected on it and the fingerprint of the key pinned in known_hosts (never read from the server).
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct ExistingTeamReconfirmSummary {
+    team_id: String,
+    host: ExecutionHost,
+    fingerprint: String,
+}
+
+/// The saved existing team of this profile: its VPS host, the team selected on it and the pinned
+/// fingerprint. Any piece missing is «go to the setup».
+fn saved_existing_team(app: &tauri::AppHandle, scope: &AccountScope) -> Result<ExistingTeamReconfirmSummary, &'static str> {
+    const SETUP: &str = "existing_team_reconfirm_setup";
+    let host = crate::direct_chat::load_persisted_host(app, scope).map_err(|_| SETUP)?;
+    if !matches!(host, ExecutionHost::Vps { .. }) {
+        return Err(SETUP);
+    }
+    let validated = crate::runtime_host::validate_host_for_scope(app, &host, scope).map_err(|_| SETUP)?;
+    let fingerprint = crate::runtime_host::pinned_host_fingerprint(&validated).map_err(|_| SETUP)?;
+    let target = crate::existing_team_runtime::selected(app, scope, &host).map_err(|_| SETUP)?.ok_or(SETUP)?;
+    Ok(ExistingTeamReconfirmSummary { team_id: target.team_id, host, fingerprint })
+}
+
+/// A reconfirmation is allowed only for exactly the saved host and team.
+fn reconfirm_matches(saved: &ExistingTeamReconfirmSummary, host: &ExecutionHost, team_id: &str) -> bool {
+    saved.host == *host && saved.team_id == team_id
+}
+
+/// The chat's confirmation reads what it will show: nothing is written, nothing is granted.
+#[tauri::command]
+pub(crate) async fn existing_team_reconfirm_summary(
+    window: tauri::Window,
+    app: tauri::AppHandle,
+    scopes: State<'_, AccountScopeState>,
+) -> Result<ExistingTeamReconfirmSummary, OnboardingError> {
+    if !crate::direct_chat::window_may_write(window.label()) {
+        return Err(failure("window_not_allowed"));
+    }
+    let expected = scopes.active().map_err(failure)?;
+    let scope_state = scopes.inner().clone();
+    let worker_expected = expected.clone();
+    let result = tauri::async_runtime::spawn_blocking(move || {
+        let _scope = scope_state.lock_expected(&worker_expected).map_err(failure)?;
+        saved_existing_team(&app, &worker_expected).map_err(failure)
+    })
+    .await
+    .unwrap_or_else(|_| Err(failure("existing_team_reconfirm_setup")));
+    let _scope = scopes.lock_expected(&expected).map_err(failure)?;
+    result
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -2970,6 +3026,7 @@ pub(crate) async fn onboarding_existing_team_reopen(
     scopes: State<'_, AccountScopeState>,
 ) -> Result<ExistingTeamReadiness, OnboardingError> {
     let expected = scopes.active().map_err(failure)?;
+    let diagnostic = RuntimeLog::new(&app);
     let scope_state = scopes.inner().clone();
     let worker_expected = expected.clone();
     let result = tauri::async_runtime::spawn_blocking(move || {
@@ -2986,6 +3043,10 @@ pub(crate) async fn onboarding_existing_team_reopen(
     .await
     .unwrap_or_else(|_| Err(failure("existing_team_unavailable")));
     let _scope = scopes.lock_expected(&expected).map_err(failure)?;
+    // The opening at start-up is read-only: the log says so, so a chat that cannot write is not a mystery.
+    if let Some(log) = &diagnostic {
+        log.record_existing_team_status(ExistingTeamPhase::ReadOnlyOpen, result.as_ref().map(|_| 0).map_err(|error| error.code));
+    }
     result
 }
 
@@ -3170,12 +3231,18 @@ pub(crate) async fn existing_team_assistant_start(
 
 #[tauri::command]
 pub(crate) async fn onboarding_existing_team_connect(
+    window: tauri::Window,
     app: tauri::AppHandle,
     state: State<'_, OnboardingNativeState>,
     scopes: State<'_, AccountScopeState>,
     request: ExistingTeamConnectRequest,
     on_progress: Channel<OnboardingProgress>,
 ) -> Result<OnboardingSnapshot, OnboardingError> {
+    // The full connection gives the permission to write: only the app's own window may ask for it,
+    // and a refusal here leaves the permission of this run as it was.
+    if !crate::direct_chat::window_may_write(window.label()) {
+        return Err(failure("window_not_allowed"));
+    }
     let diagnostic = RuntimeLog::new(&app);
     let result: Result<OnboardingSnapshot, OnboardingError> = async {
     // A new confirmation starts from nothing: one that fails must not leave the old connection standing.
@@ -3208,6 +3275,15 @@ pub(crate) async fn onboarding_existing_team_connect(
                 if let Some(log) = &worker_diagnostic { log.record_existing_team_status(ExistingTeamPhase::Scope, Err(code)); }
                 failure(code)
             })?;
+        if request.reconfirm {
+            let matches = saved_existing_team(&app, &worker_expected)
+                .map(|saved| reconfirm_matches(&saved, &request.host, &request.team_id))
+                .unwrap_or(false);
+            if !matches {
+                if let Some(log) = &worker_diagnostic { log.record_existing_team_status(ExistingTeamPhase::Candidate, Err("existing_team_reconfirm_setup")); }
+                return Err(failure("existing_team_reconfirm_setup"));
+            }
+        }
         let reporter = ProgressReporter::new(on_progress);
         let validated = reporter.run(
             OnboardingProgressStage::Runtime,
@@ -7456,5 +7532,65 @@ mod existing_team_assistant_tests {
             let body = onboarding.split(name).nth(1).and_then(|rest| rest.split("\n}\n").next()).expect(name);
             assert!(!body.contains("mark_own_vps"), "{name}");
         }
+    }
+}
+
+#[cfg(test)]
+mod existing_team_reconfirm_tests {
+    use super::*;
+
+    fn vps(address: &str, port: u16) -> ExecutionHost {
+        ExecutionHost::Vps { address: address.to_owned(), user: "jht".to_owned(), port, key_path: "/k/id_ed25519".to_owned() }
+    }
+
+    fn body<'a>(source: &'a str, name: &str, next: &str) -> &'a str {
+        source.split(name).nth(1).and_then(|rest| rest.split(next).next()).expect(name)
+    }
+
+    #[test]
+    fn a_reconfirmation_is_only_for_the_saved_host_and_team() {
+        let saved = ExistingTeamReconfirmSummary { team_id: "t".repeat(16), host: vps("203.0.113.7", 22), fingerprint: "SHA256:x".to_owned() };
+        assert!(reconfirm_matches(&saved, &vps("203.0.113.7", 22), &"t".repeat(16)));
+        assert!(!reconfirm_matches(&saved, &vps("203.0.113.8", 22), &"t".repeat(16)), "another host");
+        assert!(!reconfirm_matches(&saved, &vps("203.0.113.7", 2222), &"t".repeat(16)), "another port");
+        assert!(!reconfirm_matches(&saved, &vps("203.0.113.7", 22), &"u".repeat(16)), "another team");
+        assert!(!reconfirm_matches(&saved, &ExecutionHost::Local, &"t".repeat(16)), "this computer");
+    }
+
+    #[test]
+    fn the_full_connection_refuses_another_window_before_it_touches_the_permission() {
+        let source = include_str!("onboarding.rs").split("mod existing_team_reconfirm_tests").next().unwrap();
+        let connect = body(source, "pub(crate) async fn onboarding_existing_team_connect(", "\n}\n");
+        let window = connect.find("window_may_write(window.label())").expect("the window is checked");
+        let revoke = connect.find("revoke_full_link()").expect("the permission starts from nothing");
+        assert!(window < revoke, "a refused window leaves the permission of this run as it was");
+        // A reconfirmation is checked against what was saved before anything runs, and long before the grant.
+        let reconfirm = connect.find("if request.reconfirm").expect("the reconfirmation is checked");
+        let validate = connect.find("validate_host_for_scope(&app, &request.host").expect("the host is validated");
+        let grant = connect.find("grant_full_link(").expect("the grant is the last step");
+        assert!(revoke < reconfirm && reconfirm < validate && validate < grant);
+        assert_eq!(connect.matches("grant_full_link(").count(), 1);
+    }
+
+    #[test]
+    fn the_chats_confirmation_reads_and_never_grants() {
+        let source = include_str!("onboarding.rs").split("mod existing_team_reconfirm_tests").next().unwrap();
+        let summary = body(source, "pub(crate) async fn existing_team_reconfirm_summary(", "\n}\n");
+        assert!(summary.find("window_may_write(window.label())").expect("main window only") < summary.find("scopes.active()").unwrap());
+        for forbidden in ["grant_full_link", "revoke_full_link", "activate_or_keep", "persist_onboarding_host", "run_ssh_command"] {
+            assert!(!summary.contains(forbidden), "{forbidden}");
+        }
+        let saved = body(source, "fn saved_existing_team(", "\n}\n");
+        assert!(saved.contains("pinned_host_fingerprint(&validated)"), "the fingerprint is the pinned one");
+        for forbidden in ["run_ssh_command", "probe", "keyscan"] {
+            assert!(!saved.contains(forbidden), "the key is never read from the server: {forbidden}");
+        }
+    }
+
+    #[test]
+    fn the_reopening_at_start_up_is_written_in_the_log() {
+        let source = include_str!("onboarding.rs").split("mod existing_team_reconfirm_tests").next().unwrap();
+        let reopen = body(source, "pub(crate) async fn onboarding_existing_team_reopen(", "\n}\n");
+        assert!(reopen.contains("ExistingTeamPhase::ReadOnlyOpen"));
     }
 }

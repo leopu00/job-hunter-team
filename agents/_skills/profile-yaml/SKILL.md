@@ -236,6 +236,13 @@ And tell the user: "I've put the button back on hold — let's review this point
 - these are missing: name, target role, city, years of experience, email;
 - these are missing: skills (≥2), languages (≥1), experiences (≥1), degrees (≥1).
 
+## 🎓 `has_degree` — from the education, never as a placeholder
+
+`has_degree` is mandatory for the validator, but it is a fact about the candidate, not a default:
+- `true` when `education` (CV or chat) lists a degree: bachelor's, master's, PhD or an equivalent.
+- `false` only after the user has told you they have no degree.
+- While you are still asking, do not write it. If the only `ERROR:` of the validation is `has_degree`, your next message IS that question: ask it, wait for the answer, then write the field. Never write `false` to silence the validator: the Scorer reads it against the degree requirements of every position.
+
 ## ⚠️ Anti-hallucination — the critical rule
 
 **NEVER read `docs/examples/candidate_profile.yml.example` or `docs/examples/candidate_profile.hr.yml.example` as a source of values.** Those files document the *structure*, not the candidate. If you read them you risk writing "Mario Rossi" / "mario.rossi@example.com" into the real profile.

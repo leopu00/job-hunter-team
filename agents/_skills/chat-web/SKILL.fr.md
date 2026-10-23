@@ -84,6 +84,16 @@ Règles :
 - **Guillemets** : passez le corps comme un seul argument positionnel. Les guillemets simples préservent `$`, `"`, emoji, accents verbatim. Pour un corps contenant un `'` littéral, utilisez des guillemets doubles (`jht-send "pas de problème"`) — mais à l'intérieur de `"..."` le shell développera `$var`, donc attention.
 - **Multi-ligne** : bash `$'ligne1\nligne2'`, ou utilisez `\n` dans la chaîne et laissez Python le préserver.
 
+## Type de message (`--kind`)
+
+`jht-send --kind <type> '...'` étiquette le message (par défaut `info`, qui n'écrit rien de plus). Le type, c'est toi qui le déclares : l'outil le prend et l'écrit tel quel, personne ne le vérifie. Il ne vaut que sur un message final : pas avec `--partial` ni avec `--role system`.
+- `urgent` — il faut l'utilisateur tout de suite ;
+- `blocked` — tu es bloqué et tu ne peux pas avancer sans lui ;
+- `completed` — un travail est terminé ;
+- `info` — tout le reste.
+
+Les questions avec choix ne sont pas un type : utilise `jht-notify-user --option id="Libellé"` ; `--kind question` est refusé. Dans le doute entre question et `blocked` : si tu peux faire autre chose en attendant, c'est une question. Après une question, ne t'arrête pas : continue avec ce que tu peux faire jusqu'à l'arrivée de la réponse.
+
 ## Quand utiliser `--partial`
 
 Utilisez-le chaque fois qu'une opération destinée à l'utilisateur prendra plus de ~3 secondes et que vous n'avez pas encore la réponse. Sans `--partial` entre le message utilisateur et la réponse finale, le frontend masque les points de saisie et le chat semble mort.

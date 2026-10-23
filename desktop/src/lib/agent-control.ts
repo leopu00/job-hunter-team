@@ -202,13 +202,18 @@ export async function readPanelHistory(): Promise<Outcome<PanelHistory>> {
   return history ? { ok: true, at: read.at, value: history } : { ok: false, at: read.at, code: "desktop_bad_reply" };
 }
 
-export async function readPanelScreen(session: string): Promise<Outcome<{ up: boolean; text: string | null }>> {
+/** The terminal of an agent, and how soon to read it again (`refreshMs`, the native side's pace; absent from an older one). */
+export async function readPanelScreen(
+  session: string,
+): Promise<Outcome<{ up: boolean; text: string | null; refreshMs: unknown }>> {
   const read = await call({ op: "screen", session });
   if (!read.ok) return read;
   const data = read.value;
   if (data.name !== session || typeof data.up !== "boolean") return { ok: false, at: read.at, code: "desktop_bad_reply" };
-  if (data.up && typeof data.text === "string") return { ok: true, at: read.at, value: { up: true, text: data.text } };
-  if (!data.up && data.text === null) return { ok: true, at: read.at, value: { up: false, text: null } };
+  if (data.up && typeof data.text === "string") {
+    return { ok: true, at: read.at, value: { up: true, text: data.text, refreshMs: data.refreshMs } };
+  }
+  if (!data.up && data.text === null) return { ok: true, at: read.at, value: { up: false, text: null, refreshMs: data.refreshMs } };
   return { ok: false, at: read.at, code: "desktop_bad_reply" };
 }
 

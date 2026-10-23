@@ -36,7 +36,7 @@ $ComposeProvider = Join-Path $RuntimeShimDir 'docker-compose.exe'
 function Write-JhtPhase {
   param([Parameter(Mandatory)][ValidateSet(
     'wsl_check', 'podman_install', 'podman_machine_init',
-    'podman_machine_start', 'runtime_download', 'image_pull'
+    'podman_machine_start', 'runtime_download', 'image_pull', 'team_restart'
   )][string]$Id)
   [Console]::Out.WriteLine("JHT_PHASE $Id")
 }
@@ -128,6 +128,36 @@ function Quote-Sh {
   return "'$Value'"
 }
 
+# $true when $Id falls in one of the "container:host:size" ranges of a Podman ID map. An empty map
+# is the host's own IDs, and a form not known here is not judged: both count as mapped.
+function Test-IdInMap {
+  param($Entries, $Id)
+  if ($null -eq $Id) { return $true }
+  $list = @(foreach ($entry in @($Entries)) { if ($entry) { [string]$entry } })
+  if ($list.Count -eq 0) { return $true }
+  foreach ($entry in $list) {
+    if ($entry -notmatch '^(\d+):(\d+):(\d+)$') { return $true }
+    $start = [long]$Matches[1]
+    if ($Id -ge $start -and $Id -lt ($start + [long]$Matches[3])) { return $true }
+  }
+  return $false
+}
+
+# $Details is "<Config.User>|<json HostConfig.IDMappings>" of a container. $false only when the user
+# is numeric and its user namespace leaves out its uid or its gid: such a container never starts.
+function Test-ContainerMapsItsUser {
+  param([Parameter(Mandatory)][string]$Details)
+  $cut = $Details.IndexOf('|')
+  if ($cut -lt 0) { return $true }
+  if ($Details.Substring(0, $cut).Trim() -notmatch '^(\d+)(?::(\d+))?$') { return $true }
+  $uid = [long]$Matches[1]
+  $gid = if ($Matches[2]) { [long]$Matches[2] } else { $null }
+  $mappings = $null
+  try { $mappings = ConvertFrom-Json -InputObject $Details.Substring($cut + 1) } catch { return $true }
+  if (-not $mappings) { return $true }
+  return (Test-IdInMap -Entries $mappings.UidMap -Id $uid) -and (Test-IdInMap -Entries $mappings.GidMap -Id $gid)
+}
+
 function New-DockerShim {
   param(
     [Parameter(Mandatory)][string]$Destination,
@@ -217,6 +247,43 @@ function Copy-NodeWithoutWslMetadata {
   }
 }
 
+# A file of the bundle belongs to the user who installs it (T103). An elevated process of an
+# administrator creates files owned by BUILTIN\Administrators, and the wrapper trusts only files of
+# the current user (Test-ProtectedRuntimeNode): the first `jht up` of this script refused the whole
+# bundle, "untrusted host runtime path, owner, reparse point or SHA-256". install.ps1 gives the files
+# to the user too, but only after this script has returned. The owner changes only where it is not the
+# user already, so an install that is not elevated writes nothing; and only the owner section is
+# written (Set-JhtAccessControl), never the SACL that Set-Acl would need SeSecurityPrivilege for.
+function Set-JhtOwnerToCurrentUser {
+  param([Parameter(Mandatory)][string]$Path)
+  # Elevated, on paths in the user's own folders: a file, or a folder above it, replaced by a link
+  # would carry the change of owner outside the bundle. Refused before anything is read or written,
+  # as install.ps1 refuses a reparse-point ancestor of the runtime folder.
+  $node = Get-Item -LiteralPath $Path -Force -ErrorAction Stop
+  while ($node) {
+    if (($node.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) { throw "A runtime file or a folder above it is a reparse point: $Path" }
+    $parent = if ($node.PSIsContainer) { $node.Parent } else { $node.Directory }
+    if (-not $parent -or $parent.FullName -eq $node.FullName) { break }
+    $node = $parent
+  }
+  $user = [Security.Principal.WindowsIdentity]::GetCurrent().User
+  $acl = Get-Acl -LiteralPath $Path -ErrorAction Stop
+  # Not only a write saved: a user who is not elevated may not write an owner at all, not even itself
+  # ("unauthorized operation", measured under 5.1 and 7), so this return is what lets a normal setup go on.
+  $owner = $acl.Owner
+  if (([Security.Principal.NTAccount]$owner).Translate([Security.Principal.SecurityIdentifier]).Value -eq $user.Value) { return }
+  $acl.SetOwner($user)
+  try {
+    Set-JhtAccessControl -Path $Path -Acl $acl
+  } catch {
+    throw "Cannot make a runtime file owned by the current user (it is owned by $owner): $Path. $($_.Exception.Message)"
+  }
+  $after = (Get-Acl -LiteralPath $Path -ErrorAction Stop).Owner
+  if (([Security.Principal.NTAccount]$after).Translate([Security.Principal.SecurityIdentifier]).Value -ne $user.Value) {
+    throw "The owner is not the current user: $Path"
+  }
+}
+
 function Protect-OwnerOnlyDirectory {
   param([Parameter(Mandatory)][string]$Path)
   $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
@@ -290,6 +357,22 @@ function Install-JhtContainerService {
   Invoke-Checked $PodmanPath 'machine' 'ssh' $MachineName $install
 }
 
+# The SID of a Windows account given as a SID or as a name ("COMPUTER\user", "user"); '' when it
+# cannot be resolved. Get-ScheduledTask gives the task's user back as a name, not as the SID it was
+# registered with (T100): the identities are compared, not the strings.
+function ConvertTo-JhtSid {
+  param([string]$Identity)
+  $value = ([string]$Identity).Trim()
+  if (-not $value) { return '' }
+  try {
+    # A SID is already the identity (and needs no Windows API, so the tests read it anywhere).
+    if ($value -match '^[Ss]-1-\d+(-\d+)+$') { return $value.ToUpperInvariant() }
+    return ([Security.Principal.NTAccount]::new($value)).Translate([Security.Principal.SecurityIdentifier]).Value
+  } catch {
+    return ''
+  }
+}
+
 function Install-JhtStartupTask {
   param(
     [Parameter(Mandatory)][string]$PodmanPath,
@@ -314,6 +397,9 @@ function Install-JhtStartupTask {
   # Registration is part of the reboot contract, not a best-effort hint. Check
   # the exact executable, machine and user before publishing a successful install.
   $registered = Get-ScheduledTask -TaskName $taskName -ErrorAction Stop
+  # On a Windows 10 with a local account the trigger reads "COMPUTER\user" and the principal "user":
+  # both are compared as SIDs, and a user that does not resolve is not the same user.
+  $expectedSid = ConvertTo-JhtSid $UserId
   $registeredActions = @($registered.Actions)
   $registeredTriggers = @($registered.Triggers)
   $sameExecutable = $registeredActions.Count -eq 1 -and
@@ -322,8 +408,9 @@ function Install-JhtStartupTask {
   if (-not $sameExecutable -or
       ([string]$registeredActions[0].Arguments) -cne $arguments -or
       $registeredTriggers.Count -ne 1 -or
-      ([string]$registeredTriggers[0].UserId) -cne $UserId -or
-      ([string]$registered.Principal.UserId) -cne $UserId -or
+      -not $expectedSid -or
+      (ConvertTo-JhtSid ([string]$registeredTriggers[0].UserId)) -ne $expectedSid -or
+      (ConvertTo-JhtSid ([string]$registered.Principal.UserId)) -ne $expectedSid -or
       ([string]$registered.Principal.LogonType) -notmatch '^Interactive' -or
       ([string]$registered.Principal.RunLevel) -cne 'Limited' -or
       [bool]$registered.Settings.Hidden -or
@@ -577,6 +664,10 @@ $selectionFile = Join-Path $RuntimeDir 'container-runtime'
 $machineFile = Join-Path $RuntimeDir 'podman-machine'
 [IO.File]::WriteAllText($machineFile, "$MachineName`n", [Text.UTF8Encoding]::new($false))
 $containerUnitFile = Join-Path $RuntimeDir 'jht-container.service'
+# Environment=CONTAINERS_CGROUP_MANAGER in this unit sets nothing: it is not a Podman setting, and
+# these are `podman --remote` calls, where the cgroup manager is the service's. The service gets it
+# as its own flag, --cgroup-manager=cgroupfs (configure-podman-windows-network.ps1, T87). The line
+# stays so the installed unit does not change.
 $containerUnit = @'
 [Unit]
 Description=Job Hunter Team container
@@ -626,6 +717,20 @@ if ($PersistImagePin) {
 }
 $manifest = "version=1`ndocker-compose.yml=$composeHash`njht-wrapper.ps1=$wrapperHash`ndocker-compose.podman.yml=$podmanHash`ndocker.exe=$shimHash`ncontainer-runtime=$selectionHash`npodman-machine=$machineHash`njht-container.service=$containerUnitHash`nwindows-private-acl.ps1=$helperHash`n$runtimeImageManifest"
 [IO.File]::WriteAllText((Join-Path $RuntimeDir '.runtime-integrity'), $manifest, [Text.UTF8Encoding]::new($false))
+# Every file the wrapper checks the owner of (Test-RuntimeBundleTrusted), before the wrapper runs (T103).
+$bundleFiles = @(
+  (Join-Path $RuntimeDir 'docker-compose.yml'),
+  (Join-Path $RuntimeDir 'docker-compose.podman.yml'),
+  $selectionFile,
+  $machineFile,
+  $containerUnitFile,
+  (Join-Path $RuntimeDir '.runtime-integrity'),
+  (Join-Path $BinDir 'jht.ps1'),
+  (Join-Path $BinDir 'windows-private-acl.ps1'),
+  $shim
+)
+if (Test-Path -LiteralPath $runtimeImageFile -PathType Leaf) { $bundleFiles += $runtimeImageFile }
+foreach ($bundleFile in $bundleFiles) { Set-JhtOwnerToCurrentUser -Path $bundleFile }
 if ($legacyShimOwned) {
   Remove-Item -LiteralPath $legacyShim -Force -ErrorAction Stop
 }
@@ -662,10 +767,58 @@ if ($containerNeedsMigration) {
   Write-Host "  Migrated existing JHT container (project='$existingProject', cgroups='$existingCgroupManager'); volumes retained." -ForegroundColor Yellow
 }
 
-if ($metadataRepaired -or -not (& $Podman --connection $MachineName ps --format '{{.Names}}' | Where-Object { $_ -eq 'jht' })) {
-  & (Join-Path $BinDir 'jht.ps1') up
-  if ($LASTEXITCODE -ne 0) { throw 'The migrated JHT container did not start.' }
+# A service whose user namespace does not map its own user never starts: Podman refuses it at every
+# start, "container uses ID mappings ... but doesn't map UID 1003" (T85, jht-telegram with the map
+# 1001:0:1 alone). Compose does not recreate a service whose configuration did not change, so a
+# container created so stayed so at every setup. The same for one created under another cgroup
+# manager than cgroupfs: under systemd it has a pids limit, and in Podman's WSL machine no cgroup has
+# the pids controller, so it never starts either (T87; the service runs under cgroupfs, see
+# configure-podman-windows-network.ps1). As jht above: it is removed, its volumes stay, and
+# `jht up` creates it again.
+$sidecarRemoved = $false
+foreach ($sidecar in @('jht-broker', 'jht-telegram')) {
+  # No double quote inside a native argument (T71). A container that is not there: empty, and skipped.
+  [string]$sidecarDetails = (& { $ErrorActionPreference = 'Continue'; & $Podman --connection $MachineName inspect --type container $sidecar --format '{{.Config.User}}|{{json .HostConfig.IDMappings}}' 2>$null } | Select-Object -First 1)
+  if (-not $sidecarDetails.Trim()) { continue }
+  [string]$sidecarCgroups = (& { $ErrorActionPreference = 'Continue'; & $Podman --connection $MachineName inspect --type container $sidecar --format '{{.HostConfig.CgroupManager}}' 2>$null } | Select-Object -First 1)
+  $sidecarCgroups = $sidecarCgroups.Trim()
+  $sidecarReason = ''
+  if (-not (Test-ContainerMapsItsUser -Details $sidecarDetails)) {
+    $sidecarReason = 'its user namespace did not map its own user'
+  } elseif ($sidecarCgroups -and $sidecarCgroups -ne 'cgroupfs') {
+    $sidecarReason = "it was created under the $sidecarCgroups cgroup manager, not cgroupfs"
+  }
+  if (-not $sidecarReason) { continue }
+  # Only a container of our compose project: one with the same name made by something else is not ours
+  # to remove. The labels come whole as JSON, read here (T71).
+  [string]$sidecarLabelsJson = (& { $ErrorActionPreference = 'Continue'; & $Podman --connection $MachineName inspect --type container $sidecar --format '{{json .Config.Labels}}' 2>$null } | Select-Object -First 1)
+  $sidecarProject = ''
+  try { $sidecarProject = [string](ConvertFrom-Json -InputObject $sidecarLabelsJson).'com.docker.compose.project' } catch { $sidecarProject = '' }
+  if ($sidecarProject.Trim() -ne 'jht') {
+    Write-Host "  ${sidecar}: $sidecarReason, but it is not of the jht project: left as it is." -ForegroundColor Yellow
+    continue
+  }
+  [string]$sidecarRunning = (& { $ErrorActionPreference = 'Continue'; & $Podman --connection $MachineName inspect --type container $sidecar --format '{{.State.Running}}' 2>$null } | Select-Object -First 1)
+  if ($sidecarRunning.Trim() -eq 'true') { Invoke-Checked $Podman '--connection' $MachineName 'stop' '--time' '30' $sidecar | Out-Null }
+  Invoke-Checked $Podman '--connection' $MachineName 'rm' $sidecar | Out-Null
+  $sidecarRemoved = $true
+  Write-Host "  Recreating ${sidecar}: $sidecarReason; volumes retained." -ForegroundColor Yellow
 }
+
+# The setup always runs jht up (T102). Compose leaves what did not change as it is (same image, same
+# containers: a second setup on a Windows computer kept the very same jht) and recreates what did, a
+# new image above all, and the team restarts on it: what running the setup asks for. Before, jht up
+# ran only when jht was not running, so the image the setup had just pulled waited, unused, for a
+# later setup that found jht stopped (the desktop app never runs `jht upgrade`).
+# A team running on another image is told it restarts, in the log and in the app (JHT_PHASE).
+[string]$runningImage = (& { $ErrorActionPreference = 'Continue'; & $Podman --connection $MachineName inspect --type container jht --format '{{.ImageName}}' 2>$null } | Select-Object -First 1)
+$runningImage = $runningImage.Trim()
+if ($runningImage -and $runningImage -ne $canonicalImage) {
+  Write-JhtPhase team_restart
+  Write-Host "  The team restarts on the new runtime image: $canonicalImage (it ran on $runningImage)." -ForegroundColor Yellow
+}
+& (Join-Path $BinDir 'jht.ps1') up
+if ($LASTEXITCODE -ne 0) { throw 'The migrated JHT container did not start.' }
 
 Install-JhtContainerService -PodmanPath $Podman -UnitPath $containerUnitFile
 $currentUserSid = [Security.Principal.WindowsIdentity]::GetCurrent().User.Value

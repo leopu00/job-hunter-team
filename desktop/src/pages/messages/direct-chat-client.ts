@@ -1,5 +1,7 @@
 import {
+  answerDirectChat,
   closeDirectChat,
+  enterDirectChat,
   directChatStatus,
   readDirectChat,
   reconnectDirectChat,
@@ -16,5 +18,7 @@ export const directChatClient: DirectChatClient = {
   read: ({ agentId, cursor }) => readDirectChat(agentId, cursor),
   send: ({ agentId, text, clientMessageId }) =>
     sendDirectChat(agentId, text, clientMessageId),
+  answer: ({ agentId, questionId, choices, text }) => answerDirectChat(agentId, questionId, choices, text),
+  enter: ({ agentId, messageId }) => enterDirectChat(agentId, messageId),
   close: closeDirectChat,
 };

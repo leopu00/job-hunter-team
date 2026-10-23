@@ -649,6 +649,35 @@ function Invoke-Compose {
   & docker compose @files --project-directory $RuntimeDir @Args
 }
 
+# A failed `docker compose up` is the failure of the command that asked for it. What runs after it
+# (the broker's migration) calls native programs too, and $LASTEXITCODE would then say the start
+# went well: the setup went on to systemctl after "statfs ... no such file or directory" (T83).
+function Stop-OnFailedComposeUp {
+  param([int]$Code)
+  if ($Code -eq 0) { return }
+  Write-Err "compose_up_failed: il team non si e' avviato (docker compose up, codice $Code). Controlla 'jht logs'."
+  exit $Code
+}
+
+# Podman only: the broker and the Telegram service get a compose up each, one after the other, before
+# the whole one. Compose creates the services in parallel (COMPOSE_PARALLEL_LIMIT and --parallel do not
+# change that), and Podman's API service, 6.0.2 included, reads the subordinate ranges through
+# libsubid, which is not thread safe: of two creates at once one finds no range, Podman ignores the
+# error, and that container's keep-id map is the user alone. The Telegram service was created so, 0.4
+# ms after the broker, and never started: "doesn't map UID 1003" (T85; podman #29848, fixed in
+# containers/storage on 02/10/2026). A service already there and unchanged is left as it is.
+# The exit code of the first up that fails, 0 otherwise.
+function Invoke-PodmanServicesUpInTurn {
+  if ($ContainerRuntime -ne 'podman') { return 0 }
+  $definition = Get-Content -LiteralPath $ComposeFile -Raw
+  foreach ($service in @($BrokerContainer, $TelegramContainer)) {
+    if ($definition -notmatch "(?m)^  $([regex]::Escape($service)):") { continue }
+    Invoke-Compose 'up' '-d' $service | Out-Host
+    if ($LASTEXITCODE -ne 0) { return $LASTEXITCODE }
+  }
+  return 0
+}
+
 function Test-DockerReachable {
   # Docker c'e' ED e' raggiungibile? A differenza di Require-Docker NON esce:
   # serve a DECIDERE, non a pretendere.
@@ -747,16 +776,23 @@ function Get-ComposeImage {
 
 function Repair-MountOwnership {
   param([string]$Image)
-  # Podman con keep-id mappa gia' i mount sull'utente: niente da riparare.
-  if ($ContainerRuntime -ne 'docker') { return $true }
-  if (-not $Image) { $Image = Get-ComposeImage $ComposeFile }
-  # Le stesse cartelle del compose (${HOME}/.jht e ${HOME}/Documents/...),
-  # create qui prima che le crei il daemon, che le farebbe di root.
+  # Le stesse cartelle del compose (${HOME}/.jht e ${HOME}/Documents/...), create qui prima di ogni
+  # up e con ogni motore, senza toccarle se ci sono: Docker le creerebbe da solo (e di root), Podman
+  # no, e il container non si crea ("statfs ... no such file or directory", T83).
   $homeMount = Join-Path $env:HOME '.jht'
   $userMount = Join-Path $env:HOME 'Documents\Job Hunter Team'
   foreach ($dir in @($homeMount, $userMount)) {
-    if (-not (Test-Path -LiteralPath $dir -PathType Container)) { New-Item -ItemType Directory -Path $dir -Force | Out-Null }
+    if (-not (Test-Path -LiteralPath $dir -PathType Container)) {
+      try { New-Item -ItemType Directory -Path $dir -Force -ErrorAction Stop | Out-Null }
+      catch {
+        Write-Err "user_dir_unavailable: non riesco a creare la cartella $dir, che il team usa."
+        return $false
+      }
+    }
   }
+  # Podman con keep-id mappa gia' i mount sull'utente: niente da riparare.
+  if ($ContainerRuntime -ne 'docker') { return $true }
+  if (-not $Image) { $Image = Get-ComposeImage $ComposeFile }
   $out = @(& { $ErrorActionPreference = 'Continue'; & docker run --rm --user '0:0' --cap-drop ALL --cap-add CHOWN --network none `
       --security-opt no-new-privileges `
       -v "${homeMount}:/jht_home" -v "${userMount}:/jht_user" `
@@ -1352,6 +1388,10 @@ function Invoke-BrokerMigrateLegacyOnce {
   }
   # Come nel wrapper sh, un errore della migrazione non fa fallire `up`: il
   # marker resta assente e il tentativo verra' ripetuto al prossimo avvio.
+  # Nemmeno il codice dei suoi comandi: `legacy.py exists` esce 1 quando un
+  # segreto vecchio non c'e', il caso di ogni installazione nuova, e
+  # $LASTEXITCODE resterebbe 1 per chi viene dopo (T89).
+  $global:LASTEXITCODE = 0
   return 0
 }
 
@@ -1763,7 +1803,9 @@ function Ensure-Up {
       Write-Err 'legacy_inventory_failed: il team resta fermo perché l''inventario Telegram host non è stato conservato.'
       exit 1
     }
+    Stop-OnFailedComposeUp (Invoke-PodmanServicesUpInTurn)
     Invoke-Compose 'up' '-d'
+    Stop-OnFailedComposeUp $LASTEXITCODE
     # Attendi che il container sia in stato running.
     $tries = 20
     while (-not (Test-ContainerUp)) {
@@ -2887,9 +2929,13 @@ switch ($Sub) {
       Write-Err 'legacy_inventory_failed: il team resta fermo perché l''inventario Telegram host non è stato conservato.'
       exit 1
     }
+    Stop-OnFailedComposeUp (Invoke-PodmanServicesUpInTurn)
     Invoke-Compose 'up' '-d'
+    Stop-OnFailedComposeUp $LASTEXITCODE
     $null = Invoke-BrokerMigrateLegacyOnce
-    break
+    # The up went well (a failed one has already stopped jht with its code): 0, not the code of
+    # whichever native ran last. The setup reads it (enable-podman-windows-runtime.ps1, T89).
+    exit 0
   }
 
   { $_ -in @('down', 'stop-container') } {
@@ -2915,9 +2961,13 @@ switch ($Sub) {
       Write-Err 'legacy_inventory_failed: il team resta fermo perché l''inventario Telegram host non è stato conservato.'
       exit 1
     }
+    Stop-OnFailedComposeUp (Invoke-PodmanServicesUpInTurn)
     Invoke-Compose 'up' '-d'
+    Stop-OnFailedComposeUp $LASTEXITCODE
     $null = Invoke-BrokerMigrateLegacyOnce
-    break
+    # The up went well (a failed one has already stopped jht with its code): 0, not the code of
+    # whichever native ran last. The setup reads it (enable-podman-windows-runtime.ps1, T89).
+    exit 0
   }
 
   'upgrade' {

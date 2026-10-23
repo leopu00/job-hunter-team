@@ -33,7 +33,19 @@ const NOT_ERRORS: Record<string, string> = {
   // chat page from its own catalog (direct-chat.i18n.ts), and the name of the serde function that lets only
   // that list through. Neither is an error the person is told.
   mail_not_taken: "closed code of a system line of the chat, not an error",
+  message_too_long: "closed code of a system line of the chat, not an error",
   closed_code: "name of a serde function in direct_chat.rs, not a code",
+  closed_reason: "name of a serde function in direct_chat.rs, not a code",
+  message_kind: "name of a serde function in direct_chat.rs, not a code",
+  taken_flag: "name of a serde function in direct_chat.rs, not a code",
+  // The answer to an agent's question (direct_chat.rs, direct_chat_answer): the refusals the chat page
+  // says next to the question, from its own catalog (direct-chat.i18n.ts, answerErrors).
+  question_closed: "refusal of an answer, said by the chat page next to the question",
+  invalid_choice: "refusal of an answer, said by the chat page next to the question",
+  // Why the team does not know whether the agent's CLI took a text (TAKEN_REASONS): said by the chat page
+  // next to the message, from its own catalog, never as an error.
+  not_ours: "reason of a receipt with taken null, said by the chat page",
+  empty_unseen: "reason of a receipt with taken null, said by the chat page",
   // Candidate profile fields validated by profile import and migration.
   birth_year: "profile field",
   candidate_profile: "profile artifact id",
@@ -188,12 +200,14 @@ const NOT_ERRORS: Record<string, string> = {
   podman_machine_start: "install.ps1 phase id",
   runtime_download: "install.ps1 phase id",
   image_pull: "install.ps1 phase id",
+  team_restart: "enable-podman-windows-runtime.ps1 phase id",
   // runtime_log.rs: a log that cannot be written never stops the step it describes (RuntimeLog::record drops it).
   runtime_log_failed: "runtime log write, never surfaced",
   runtime_log_invalid: "runtime log write, never surfaced",
   // runtime_log.rs: an existing-team connection's phases and outcomes, written only to the private log.
   scope: "runtime log phase name",
   validate_host: "runtime log phase name",
+  read_only_open: "runtime log phase name",
   candidate: "runtime log phase name",
   ssh: "runtime log phase name",
   activation: "runtime log phase name",
