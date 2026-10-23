@@ -247,6 +247,9 @@ export default function DirectChatScreen({
     if (status.state !== "ready") return;
     let active = true;
     let reading = false;
+    // Slow link only: where the last read ended. The native side reads from a little before it, so
+    // a read carries the new lines and not the whole tail of the chat at every connection.
+    let cursor: string | undefined;
 
     // The failure code of the read, null when it got through, undefined when it did not run.
     async function readHistory(initial: boolean): Promise<string | null | undefined> {
@@ -255,9 +258,11 @@ export default function DirectChatScreen({
       if (initial) setLoading(true);
       try {
         // The native bridge returns the latest bounded page. Re-read it in full
-        // and merge by id: its historical cursor skips the first appended line.
-        const page = await client.read({ agentId });
+        // and merge by id: its historical cursor skips the first appended line. On a slow
+        // link the cursor goes back, and the native side reads from before it.
+        const page = await client.read(slowLink && cursor ? { agentId, cursor } : { agentId });
         if (!active) return undefined;
+        if (slowLink) cursor = page.cursor;
         setMessages((current) => mergeMessages(current, page));
         setOperationError(null);
         return null;

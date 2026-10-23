@@ -395,6 +395,29 @@ describe("DirectChatScreen", () => {
     expect(reads()).toBe(4);
   });
 
+  it("on a slow link gives the next read the cursor of the last one, and only there", async () => {
+    const { mock, after } = await slowLinkPage();
+    vi.mocked(mock.read).mockResolvedValueOnce({ messages: [], cursor: "51200" });
+    await after(10_000);
+    expect(vi.mocked(mock.read).mock.calls[0][0]).toEqual({ agentId: "assistente" });
+    expect(vi.mocked(mock.read).mock.calls[1][0]).toEqual({ agentId: "assistente", cursor: "opaque-cursor" });
+    await after(10_000);
+    expect(vi.mocked(mock.read).mock.calls[2][0]).toEqual({ agentId: "assistente", cursor: "51200" });
+    vi.useRealTimers();
+  });
+
+  it("through the ssh master reads without a cursor, as before", async () => {
+    const { mock, after } = await slowLinkPage({ state: "ready" });
+    await after(1_500);
+    await after(1_500);
+    expect(vi.mocked(mock.read).mock.calls.map(([request]) => request)).toEqual([
+      { agentId: "assistente" },
+      { agentId: "assistente" },
+      { agentId: "assistente" },
+    ]);
+    vi.useRealTimers();
+  });
+
   it("speaks the language of the app, and dictates in it", async () => {
     viewport(1280, 800);
     document.cookie = "NEXT_LOCALE=en; path=/";
