@@ -22,7 +22,7 @@ A failure is a fixed code; the state never holds a text that came from a request
 from __future__ import annotations
 
 import re
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from urllib.parse import urlsplit
 
 import tldextract
@@ -53,6 +53,10 @@ _PSL = tldextract.TLDExtract(
 )
 MAX_POSITION_ID = 2_147_483_647
 MAX_POSITIONS = 20_000
+# A desktop/host record carries its local click instant so the sync can later
+# withdraw that same state. It may be slightly ahead of the broker clock, but
+# never far enough ahead to make a later withdrawal ineffective.
+MAX_FUTURE_INSTANT = timedelta(minutes=5)
 
 
 class NotaryRefusal(Exception):
@@ -62,8 +66,17 @@ class NotaryRefusal(Exception):
 
 
 def _now() -> str:
-    now = datetime.now(timezone.utc)
+    now = _broker_now()
     return now.strftime("%Y-%m-%dT%H:%M:%S.") + f"{now.microsecond // 1000:03d}Z"
+
+
+def _broker_now() -> datetime:
+    """The broker's clock, factored for the future-instant security boundary."""
+    return datetime.now(timezone.utc)
+
+
+def _instant_time(value: str) -> datetime:
+    return datetime.strptime(value, "%Y-%m-%dT%H:%M:%S.%fZ").replace(tzinfo=timezone.utc)
 
 
 def registrable(host: str) -> str | None:
@@ -174,7 +187,7 @@ def valid_instant(value: object) -> str:
     if not isinstance(value, str) or not INSTANT.fullmatch(value):
         raise NotaryRefusal("instant_invalid")
     try:
-        datetime.strptime(value, "%Y-%m-%dT%H:%M:%S.%fZ")
+        _instant_time(value)
     except ValueError:
         raise NotaryRefusal("instant_invalid") from None
     return value
@@ -202,6 +215,8 @@ def record(position_id: object, instant: object, origin: object, to: object) -> 
     """The person authorised `position_id` at `instant`, on the channel `origin`, to `to`."""
     pid = valid_position(position_id)
     at = valid_instant(instant)
+    if _instant_time(at) > _broker_now() + MAX_FUTURE_INSTANT:
+        raise NotaryRefusal("instant_too_future")
     if origin not in ORIGINS:
         raise NotaryRefusal("origin_invalid")
     where = destination(to)

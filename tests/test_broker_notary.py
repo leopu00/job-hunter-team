@@ -13,6 +13,7 @@ import importlib
 import io
 import json
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
@@ -139,6 +140,20 @@ def test_never_back(broker):
     # a new click is a new authorisation
     assert admin(broker, "apply", "record", "42", T2, WEB)[0] == 0
     assert claim(broker)["claimed"] is True
+
+
+def test_a_desktop_record_cannot_get_ahead_of_the_broker_clock(broker, monkeypatch):
+    now = datetime(2026, 10, 23, 18, 0, tzinfo=timezone.utc)
+    monkeypatch.setattr(broker.notary, "_broker_now", lambda: now)
+    assert admin(broker, "apply", "record", "42", "2026-10-23T18:05:00.000Z", WEB)[0] == 0
+    assert admin(broker, "apply", "record", "43", "2026-10-24T18:00:00.000Z", WEB) == (
+        1, {"ok": False, "reason": "instant_too_future"},
+    )
+    # A later withdrawal is still after a valid desktop record, so it spends
+    # the authorisation instead of leaving it valid for the CLOSER to claim.
+    assert ask(broker, "apply.revoke", role="", position_id=42,
+               instant="2026-10-23T18:05:00.001Z") == {"ok": True, "status": "revoked"}
+    assert claim(broker, pid=42)["claimed"] is False
 
 
 def test_a_withdrawal_wins_and_moves_the_floor(broker):
