@@ -84,6 +84,16 @@ Reglas:
 - **Comillas**: pasa el cuerpo como un solo argumento posicional. Las comillas simples preservan `$`, `"`, emoji, acentos literalmente. Para un cuerpo que contiene una `'` literal, usa comillas dobles (`jht-send "non c'è problema"`) — pero dentro de `"..."` el shell expandirá `$var`, así que ten cuidado.
 - **Multi-línea**: bash `$'linea1\nlinea2'`, o usa `\n` dentro de la cadena y deja que Python lo preserve.
 
+## Tipo de mensaje (`--kind`)
+
+`jht-send --kind <tipo> '...'` etiqueta el mensaje (por defecto `info`, que no escribe nada extra). El tipo lo declaras tú: la herramienta lo toma y lo escribe tal cual, nadie lo verifica. Solo vale en un mensaje final: no con `--partial` ni con `--role system`.
+- `urgent` — hace falta al usuario ya;
+- `blocked` — estás parado y no puedes seguir sin él;
+- `completed` — un trabajo ha terminado;
+- `info` — todo lo demás.
+
+Las preguntas con opciones no son un tipo: usa `jht-notify-user --option id="Etiqueta"`; `--kind question` se rechaza. En la duda entre pregunta y `blocked`: si mientras tanto puedes hacer otra cosa, es una pregunta. Tras una pregunta no te detengas: sigue con lo que puedas hacer hasta que llegue la respuesta.
+
 ## Cuándo usar `--partial`
 
 Úsalo cuando una operación orientada al usuario tomará más de ~3 segundos y aún no tienes la respuesta. Sin `--partial` entre el mensaje del usuario y la respuesta final, el frontend oculta los puntos de escritura y el chat parece muerto.

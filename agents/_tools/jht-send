@@ -6,6 +6,7 @@ Usage:
     jht-send "Testo del messaggio"
     jht-send --agent alfa "Testo per un altro agente"
     jht-send --role assistant "..."   # default: assistant
+    jht-send --kind blocked "..."     # urgent | blocked | completed | info (default)
 
 Perché esiste:
     In passato gli agenti scrivevano su chat.jsonl con costrutti bash fragili
@@ -28,6 +29,20 @@ import time
 
 
 ESCAPES = {"n": "\n", "t": "\t", "r": "", "\\": "\\"}
+
+# Il tipo del messaggio, scelto da chi lo scrive. Lista chiusa: «info» è il caso
+# normale e non si scrive nella riga. Le domande NON sono un tipo: una domanda
+# con scelte passa da `jht-notify-user --option`, che sa mostrarle all'utente.
+KINDS = ("urgent", "blocked", "completed", "info")
+DEFAULT_KIND = "info"
+
+# Tetto del testo (byte UTF-8): `agent_chat.py read` salta in silenzio le righe oltre
+# MAX_LINE, quindi un messaggio piu' lungo non comparirebbe mai nell'app. Oltre il
+# tetto non si scrive il testo: si scrive una riga di sistema con un codice chiuso e un
+# testo fisso (mai il contenuto del messaggio), e si esce con un errore.
+MAX_TEXT_BYTES = 16 * 1024
+TOO_LONG_CODE = "message_too_long"
+TOO_LONG_TEXT = "The agent's message was too long and was not delivered."
 
 
 def unescape(text: str) -> str:
@@ -91,7 +106,33 @@ def main() -> int:
             "Omettilo sull'ultimo messaggio del turno per chiudere lo stato busy."
         ),
     )
+    parser.add_argument(
+        "--kind",
+        default=DEFAULT_KIND,
+        help=(
+            "Tipo del messaggio: urgent (serve l'utente subito), blocked (sei fermo), "
+            "completed (un lavoro finito), info (il resto, default). "
+            "Una domanda NON e' un tipo: usa jht-notify-user --option. "
+            "Il tipo lo dichiari tu e lo strumento lo scrive cosi' com'e', senza verificarlo. "
+            "Vale solo per i messaggi finali dell'assistente: non con --partial ne' con --role system."
+        ),
+    )
     args = parser.parse_args()
+
+    if args.kind not in KINDS:
+        print(
+            f"jht-send: --kind {args.kind!r} non ammesso (valori: {', '.join(KINDS)}). "
+            "Le domande con scelte passano da jht-notify-user --option.",
+            file=sys.stderr,
+        )
+        return 2
+    if args.kind != DEFAULT_KIND and (args.role != "assistant" or args.partial):
+        print(
+            f"jht-send: --kind {args.kind} vale solo per un messaggio finale dell'assistente: "
+            "non con --partial ne' con --role system. Non ho scritto niente.",
+            file=sys.stderr,
+        )
+        return 2
 
     chat_file = resolve_chat_file(args.agent)
     chat_file.parent.mkdir(parents=True, exist_ok=True)
@@ -99,12 +140,30 @@ def main() -> int:
     # `done` = True  → messaggio finale di turno, spegni i puntini
     # `done` = False → checkpoint intermedio, tieni i puntini accesi
     message = args.message if args.raw else unescape(args.message)
+    if len(message.encode("utf-8")) > MAX_TEXT_BYTES:
+        notice = {
+            "role": "system",
+            "text": TOO_LONG_TEXT,
+            "code": TOO_LONG_CODE,
+            "ts": time.time(),
+            "done": True,
+        }
+        with chat_file.open("a", encoding="utf-8") as f:
+            f.write(json.dumps(notice, ensure_ascii=False) + "\n")
+        print(
+            f"jht-send: il testo supera {MAX_TEXT_BYTES} byte: non l'ho scritto. "
+            "Accorcialo o dividilo in piu' messaggi.",
+            file=sys.stderr,
+        )
+        return 2
     entry = {
         "role": args.role,
         "text": message,
         "ts": time.time(),
         "done": not args.partial,
     }
+    if args.kind != DEFAULT_KIND:
+        entry["kind"] = args.kind
     line = json.dumps(entry, ensure_ascii=False) + "\n"
     with chat_file.open("a", encoding="utf-8") as f:
         f.write(line)

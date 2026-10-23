@@ -84,6 +84,16 @@ Szabályok:
 - **Idézőjelek**: add meg a törzset egyetlen pozicionális argumentumként. Szimpla idézőjelek megőrzik a `$`, `"`, emoji, ékezetes karaktereket szó szerint. Ha a törzs literális `'`-t tartalmaz, használj dupla idézőjelet (`jht-send "non c'è problema"`) — de `"..."`-n belül a shell kiértékeli a `$var`-t, tehát légy óvatos.
 - **Többsoros**: bash `$'sor1\nsor2'`, vagy használj `\n`-t a stringen belül és hagyd, hogy a Python megőrizze.
 
+## Az üzenet típusa (`--kind`)
+
+`jht-send --kind <típus> '...'` megjelöli az üzenetet (alapértelmezett `info`, ilyenkor semmi extra nem íródik). A típust te jelented ki: az eszköz úgy veszi át és írja le, ahogy megadod, senki sem ellenőrzi. Csak záró üzenetnél érvényes: nem használható a `--partial` és a `--role system` mellett.
+- `urgent` — a felhasználóra azonnal szükség van;
+- `blocked` — elakadtál, nélküle nem tudsz tovább haladni;
+- `completed` — egy munka elkészült;
+- `info` — minden más.
+
+A választási lehetőségekkel feltett kérdés nem típus: használd a `jht-notify-user --option id="Címke"` parancsot; a `--kind question` elutasításra kerül. Ha kérdés és `blocked` között kétséges: ha közben mást is tudsz csinálni, akkor kérdés. Kérdés után ne állj meg: folytasd azt, amit tudsz, amíg meg nem érkezik a válasz.
+
 ## Mikor használd a `--partial`-t
 
 Használd, ha egy felhasználó felé irányuló művelet ~3 másodpercnél tovább tart, és még nincs válaszod. `--partial` nélkül a felhasználói üzenet és a végső válasz között a frontend elrejti a gépelési pontokat és a csevegés halottnak tűnik.
