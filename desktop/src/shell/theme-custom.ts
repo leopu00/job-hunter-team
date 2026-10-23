@@ -283,26 +283,30 @@ export function suggestFix(
   failure: Failure,
   touched?: SeedKey,
 ): Seeds | null {
-  let best: { seeds: Seeds; distance: number } | null = null;
-  for (const seed of culprits(failure, touched)) {
-    const origin = toOklch(seeds[seed]);
-    // lighter and darker are tried at each distance, nearest first: the first distance that cures wins
-    search: for (let k = 1; k <= 1 / STEP; k += 1) {
-      if (best && k * STEP >= best.distance) break;
-      for (const sign of [1, -1]) {
-        const l = origin.l + sign * k * STEP;
-        if (l < 0 || l > 1) continue;
-        const candidate = { ...seeds, [seed]: fromOklch({ ...origin, l } as Oklch) };
-        if (candidate[seed] === seeds[seed]) continue;
-        const { failures } = checkSeeds(candidate, context);
-        if (!failures.some((f) => sameFailure(f, failure))) {
-          best = { seeds: candidate, distance: k * STEP };
-          break search;
+  const search = (candidates: SeedKey[]): Seeds | null => {
+    let best: { seeds: Seeds; distance: number } | null = null;
+    for (const seed of candidates) {
+      const origin = toOklch(seeds[seed]);
+      // lighter and darker are tried at each distance, nearest first: the first distance that cures wins
+      search: for (let k = 1; k <= 1 / STEP; k += 1) {
+        if (best && k * STEP >= best.distance) break;
+        for (const sign of [1, -1]) {
+          const l = origin.l + sign * k * STEP;
+          if (l < 0 || l > 1) continue;
+          const candidate = { ...seeds, [seed]: fromOklch({ ...origin, l } as Oklch) };
+          if (candidate[seed] === seeds[seed]) continue;
+          const { failures } = checkSeeds(candidate, context);
+          if (!failures.some((f) => sameFailure(f, failure))) {
+            best = { seeds: candidate, distance: k * STEP };
+            break search;
+          }
         }
       }
     }
-  }
-  return best?.seeds ?? null;
+    return best?.seeds ?? null;
+  };
+  // the colour the person touched last first; when it cannot cure this fault alone, the others may
+  return search(culprits(failure, touched)) ?? (touched ? search(culprits(failure)) : null);
 }
 
 /**

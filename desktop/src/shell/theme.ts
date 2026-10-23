@@ -218,6 +218,23 @@ export function saveCustomTheme(
 }
 
 /**
+ * Deletes the person's palette. If it was the one in force, the system's comes back; if another palette was
+ * chosen, that one stays.
+ */
+export function deleteCustomTheme(
+  storage: ThemeStorage & Pick<Storage, "removeItem"> = window.localStorage,
+  root: HTMLElement = document.documentElement,
+): AppliedTheme {
+  const wasChosen = readStoredPreference(storage) === CUSTOM_THEME;
+  try {
+    storage.removeItem(CUSTOM_STORAGE_KEY);
+  } catch {
+    // A blocked storage keeps it: nothing else to do.
+  }
+  return wasChosen ? persistTheme(SYSTEM_THEME, storage, root) : readStoredTheme(storage);
+}
+
+/**
  * While «follow the system» is the choice, a change of the system's light/dark applies at once. Returns the
  * function that stops listening.
  */
