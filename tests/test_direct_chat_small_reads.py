@@ -67,11 +67,14 @@ class Server:
             page = self.module.read(AGENT, cursor)
             raw = json.dumps(page, ensure_ascii=False)
         else:
-            script = CHAT_READ_PY.replace("/jht_home/", str(self.home) + "/")
+            # Forward slashes: the path goes into the script's source, where a Windows "C:\Users"
+            # would read as a \U escape and the script would not compile.
+            script = CHAT_READ_PY.replace("/jht_home/", self.home.as_posix() + "/")
             done = subprocess.run(
                 [sys.executable, "-I", "-c", script], input=json.dumps({"agent": AGENT, "cursor": cursor}) + "\n",
-                capture_output=True, text=True, timeout=30, check=True,
+                capture_output=True, text=True, timeout=30,
             )
+            assert done.returncode == 0, done.stderr
             raw = done.stdout.strip()
             page = json.loads(raw)
         self.sizes.append(len(raw.encode("utf-8")))
