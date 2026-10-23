@@ -247,6 +247,43 @@ function Copy-NodeWithoutWslMetadata {
   }
 }
 
+# A file of the bundle belongs to the user who installs it (T103). An elevated process of an
+# administrator creates files owned by BUILTIN\Administrators, and the wrapper trusts only files of
+# the current user (Test-ProtectedRuntimeNode): the first `jht up` of this script refused the whole
+# bundle, "untrusted host runtime path, owner, reparse point or SHA-256". install.ps1 gives the files
+# to the user too, but only after this script has returned. The owner changes only where it is not the
+# user already, so an install that is not elevated writes nothing; and only the owner section is
+# written (Set-JhtAccessControl), never the SACL that Set-Acl would need SeSecurityPrivilege for.
+function Set-JhtOwnerToCurrentUser {
+  param([Parameter(Mandatory)][string]$Path)
+  # Elevated, on paths in the user's own folders: a file, or a folder above it, replaced by a link
+  # would carry the change of owner outside the bundle. Refused before anything is read or written,
+  # as install.ps1 refuses a reparse-point ancestor of the runtime folder.
+  $node = Get-Item -LiteralPath $Path -Force -ErrorAction Stop
+  while ($node) {
+    if (($node.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) { throw "A runtime file or a folder above it is a reparse point: $Path" }
+    $parent = if ($node.PSIsContainer) { $node.Parent } else { $node.Directory }
+    if (-not $parent -or $parent.FullName -eq $node.FullName) { break }
+    $node = $parent
+  }
+  $user = [Security.Principal.WindowsIdentity]::GetCurrent().User
+  $acl = Get-Acl -LiteralPath $Path -ErrorAction Stop
+  # Not only a write saved: a user who is not elevated may not write an owner at all, not even itself
+  # ("unauthorized operation", measured under 5.1 and 7), so this return is what lets a normal setup go on.
+  $owner = $acl.Owner
+  if (([Security.Principal.NTAccount]$owner).Translate([Security.Principal.SecurityIdentifier]).Value -eq $user.Value) { return }
+  $acl.SetOwner($user)
+  try {
+    Set-JhtAccessControl -Path $Path -Acl $acl
+  } catch {
+    throw "Cannot make a runtime file owned by the current user (it is owned by $owner): $Path. $($_.Exception.Message)"
+  }
+  $after = (Get-Acl -LiteralPath $Path -ErrorAction Stop).Owner
+  if (([Security.Principal.NTAccount]$after).Translate([Security.Principal.SecurityIdentifier]).Value -ne $user.Value) {
+    throw "The owner is not the current user: $Path"
+  }
+}
+
 function Protect-OwnerOnlyDirectory {
   param([Parameter(Mandatory)][string]$Path)
   $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
@@ -680,6 +717,20 @@ if ($PersistImagePin) {
 }
 $manifest = "version=1`ndocker-compose.yml=$composeHash`njht-wrapper.ps1=$wrapperHash`ndocker-compose.podman.yml=$podmanHash`ndocker.exe=$shimHash`ncontainer-runtime=$selectionHash`npodman-machine=$machineHash`njht-container.service=$containerUnitHash`nwindows-private-acl.ps1=$helperHash`n$runtimeImageManifest"
 [IO.File]::WriteAllText((Join-Path $RuntimeDir '.runtime-integrity'), $manifest, [Text.UTF8Encoding]::new($false))
+# Every file the wrapper checks the owner of (Test-RuntimeBundleTrusted), before the wrapper runs (T103).
+$bundleFiles = @(
+  (Join-Path $RuntimeDir 'docker-compose.yml'),
+  (Join-Path $RuntimeDir 'docker-compose.podman.yml'),
+  $selectionFile,
+  $machineFile,
+  $containerUnitFile,
+  (Join-Path $RuntimeDir '.runtime-integrity'),
+  (Join-Path $BinDir 'jht.ps1'),
+  (Join-Path $BinDir 'windows-private-acl.ps1'),
+  $shim
+)
+if (Test-Path -LiteralPath $runtimeImageFile -PathType Leaf) { $bundleFiles += $runtimeImageFile }
+foreach ($bundleFile in $bundleFiles) { Set-JhtOwnerToCurrentUser -Path $bundleFile }
 if ($legacyShimOwned) {
   Remove-Item -LiteralPath $legacyShim -Force -ErrorAction Stop
 }
