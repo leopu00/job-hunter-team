@@ -34,12 +34,13 @@ import pytest
 
 ROOT = Path(__file__).resolve().parent.parent
 SCRIPTS = ROOT / "scripts"
-# The scripts the app runs under 'Stop'. The wrapper joins when its 34 calls are done.
+# The scripts the app runs under 'Stop'.
 COVERED = [
     SCRIPTS / "enable-podman-windows-runtime.ps1",
     SCRIPTS / "configure-podman-windows-network.ps1",
     SCRIPTS / "podman-windows-probe.ps1",
     SCRIPTS / "install.ps1",
+    SCRIPTS / "jht-wrapper.ps1",
 ]
 
 GATE = r"""
