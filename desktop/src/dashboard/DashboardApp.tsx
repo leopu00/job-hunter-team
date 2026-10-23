@@ -86,6 +86,7 @@ import { signOut, supabase, supabaseConfig, useSession } from "../lib/supabase";
 import { OnboardingFlow } from "../onboarding";
 import ExistingTeamConnectModal from "../onboarding/ExistingTeamConnectModal";
 import { ReconfirmExistingTeamContext } from "../lib/reconfirm-existing-team";
+import { ConnectTeamContext, type ConnectTeamEntry } from "../lib/connect-team";
 import MessagesPage from "../pages/messages";
 import { NewPositionNotifier } from "../lib/notify/NewPositionNotifier";
 import Shell from "../shell/Shell";
@@ -382,6 +383,12 @@ export default function DashboardApp() {
   const [existingTeamDismissedIdentityKey, setExistingTeamDismissedIdentityKey] = useState<string | null>(null);
   // Why the saved existing team did not open at start-up, for the «existing team» window that the
   // account's registered team opens on top of everything: without it the person sees an empty form.
+  // The setup's existing-team dialog, opened from inside the app: «Reconnect the team» on the saved-team failure
+  // screen (a team whose runtime changed after an update), or «Connect a team» in a Shell with no team linked.
+  // It starts from what this profile saved (team and host), if anything readable is saved.
+  const [connectDialog, setConnectDialog] = useState<
+    { identityKey: string; teamId?: string; host?: ExistingTeamVpsHost } | null
+  >(null);
   const [savedTeamNotice, setSavedTeamNotice] = useState<
     { identityKey: string; title: string; message: string; action?: string } | null
   >(null);
@@ -1452,6 +1459,46 @@ export default function DashboardApp() {
       </main>
     );
   }
+  const openConnectDialog = useCallback(async () => {
+    if (!identityKey) return;
+    let seed: { teamId?: string; host?: ExistingTeamVpsHost } = {};
+    try {
+      const summary = await existingTeamBridge.reconfirmSummary();
+      seed = { teamId: summary.teamId, host: summary.host };
+    } catch {
+      // Nothing readable is saved: the dialog asks for the host and the team, as in the setup.
+    }
+    if (activeIdentityKeyRef.current === identityKey) setConnectDialog({ identityKey, ...seed });
+  }, [identityKey]);
+  const connectTeamEntry = useMemo<ConnectTeamEntry>(() => ({
+    open: () => void openConnectDialog(),
+    reopen: async () => (await reopenExistingTeam()) === "opened",
+    unlinked: () => {
+      leaveExistingTeamReadOnly();
+      setReadOnlyExistingTeamKey(null);
+      setConnectDialog(null);
+      if (identityKey) setSavedTeamOpening({ identityKey, phase: "done" });
+    },
+  }), [identityKey, openConnectDialog, reopenExistingTeam]);
+  const connectDialogElement = connectDialog && connectDialog.identityKey === identityKey ? (
+    <ExistingTeamConnectModal
+      key={`${identityKey}:connect`}
+      teamId={connectDialog.teamId}
+      initialHost={connectDialog.host}
+      savedTeamNotice={savedTeamNotice?.identityKey === identityKey ? savedTeamNotice : undefined}
+      onCancel={() => setConnectDialog(null)}
+      onConnected={async (snapshot) => {
+        await connectExistingTeam(snapshot);
+        setConnectDialog(null);
+        setSavedTeamOpening({ identityKey, phase: "done" });
+      }}
+      onReadOnlyConnected={(result) => {
+        openReadOnlyExistingTeam(result);
+        setConnectDialog(null);
+        setSavedTeamOpening({ identityKey, phase: "done" });
+      }}
+    />
+  ) : null;
   if (gate.phase === "loading" || (gate.phase === "required" && platform === null)) {
     return <DashboardSkeleton label={stateText().loadingDashboard} />;
   }
@@ -1478,9 +1525,12 @@ export default function DashboardApp() {
     return (
       <>
         {/* Nothing to confirm once the connection is full. */}
-        {linkedView?.full ? shell : (
-          <ReconfirmExistingTeamContext.Provider value={reconfirmExistingTeam}>{shell}</ReconfirmExistingTeamContext.Provider>
-        )}
+        <ConnectTeamContext.Provider value={connectTeamEntry}>
+          {linkedView?.full ? shell : (
+            <ReconfirmExistingTeamContext.Provider value={reconfirmExistingTeam}>{shell}</ReconfirmExistingTeamContext.Provider>
+          )}
+        </ConnectTeamContext.Provider>
+        {connectDialogElement}
         <NewPositionNotifier key={`notify:${identityKey}`} />
       </>
     );
@@ -1489,22 +1539,34 @@ export default function DashboardApp() {
     if (savedTeamOpening?.identityKey !== identityKey || savedTeamOpening.phase === "pending") {
       return <DashboardSkeleton label={stateText().loadingDashboard} />;
     }
+    if (savedTeamOpening.phase === "failed" && savedTeamOpening.failure?.status === "failed" && connectDialogElement) {
+      return connectDialogElement;
+    }
     if (savedTeamOpening.phase === "failed" && savedTeamOpening.failure?.status === "failed") {
       const failure = savedTeamOpening.failure;
+      // The saved connection is the one of the team before an update: the dialog can rebind it.
+      const mayRebind = failure.code === "existing_team_runtime_changed" || failure.code === "existing_team_unavailable";
       return (
-        <main role="alert">
-          <p>{failure.title}</p>
-          <p>{failure.message}</p>
-          {failure.action && <p>{failure.action}</p>}
-          <button type="button" onClick={() => setSavedTeamOpening(null)}>{stateText().retry}</button>
-          {/* A team that stays down must not lock the person out: they can leave the account, or go on without it. */}
-          <button type="button" onClick={() => setSavedTeamOpening({ identityKey, phase: "done" })}>
-            {stateText().continueWithoutTeam}
-          </button>
-          <button type="button" onClick={() => void Promise.resolve((logout ?? signOut)()).catch(() => undefined)}>
-            {stateText().signOut}
-          </button>
-        </main>
+        <div className="existing-team-modal__backdrop">
+          <main className="existing-team-modal" role="alert">
+            <header className="existing-team-modal__header">
+              <h2>{failure.title}</h2>
+              <p>{failure.message}</p>
+              {failure.action && <p>{failure.action}</p>}
+            </header>
+            <div className="existing-team-modal__actions">
+              {mayRebind && <button type="button" className="existing-team-modal__primary" onClick={() => void openConnectDialog()}>{stateText().rebindTeam}</button>}
+              <button type="button" className={mayRebind ? "existing-team-modal__secondary" : "existing-team-modal__primary"} onClick={() => setSavedTeamOpening(null)}>{stateText().retry}</button>
+              {/* A team that stays down must not lock the person out: they can leave the account, or go on without it. */}
+              <button type="button" className="existing-team-modal__secondary" onClick={() => setSavedTeamOpening({ identityKey, phase: "done" })}>
+                {stateText().continueWithoutTeam}
+              </button>
+              <button type="button" className="existing-team-modal__secondary" onClick={() => void Promise.resolve((logout ?? signOut)()).catch(() => undefined)}>
+                {stateText().signOut}
+              </button>
+            </div>
+          </main>
+        </div>
       );
     }
   }
@@ -1570,7 +1632,10 @@ export default function DashboardApp() {
   }
   return (
     <>
-      <Shell key={identityKey} onLogout={logout} />
+      <ConnectTeamContext.Provider value={connectTeamEntry}>
+        <Shell key={identityKey} onLogout={logout} />
+      </ConnectTeamContext.Provider>
+      {connectDialogElement}
       <NewPositionNotifier key={`notify:${identityKey}`} />
     </>
   );
