@@ -1892,7 +1892,9 @@ fn chat_token(value: &str, max: usize, digits_only: bool) -> bool {
 /// The arguments of a chat operation, every one checked against its closed list or alphabet:
 /// the operation word, the agent, then the cursor or the client id. Whatever builds a command
 /// for the chat takes them from here, so there is one place that says what may enter one.
-fn chat_arguments(operation: &ChatOperation<'_>) -> Result<Vec<String>, &'static str> {
+/// The fixed tokens sent to `agent_chat.py`, validated before they become process arguments.
+/// Local and pinned runtimes use this same list, so neither has a wider command surface.
+pub(crate) fn chat_arguments(operation: &ChatOperation<'_>) -> Result<Vec<String>, &'static str> {
     match operation {
         ChatOperation::Read { agent, cursor } => {
             if !CHAT_AGENTS.contains(agent) {

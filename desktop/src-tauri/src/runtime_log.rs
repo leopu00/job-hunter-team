@@ -342,8 +342,8 @@ fn chat_failure_code(code: &str) -> &str {
     match code {
         "read_failed" | "send_failed" | "persist_failed" | "disconnected" | "state_failed"
         | "account_scope_mismatch" | "invalid_request" | "read_only_link" | "own_vps_claim_required"
-        | "own_vps_key_changed" | "own_vps_claim_refused" | "chat_runtime_outdated"
-        | "existing_team_runtime_target_changed" | "agent_not_at_prompt" | "team_not_running"
+        | "own_vps_key_changed" | "own_vps_claim_refused" | "chat_runtime_outdated" | "local_chat_wrapper_outdated"
+        | "existing_team_runtime_target_changed" | "agent_not_at_prompt" | "composer_has_text" | "team_not_running"
         | "agent_not_running" | "agent_unavailable" | "agent_busy" | "agent_stuck" | "tunnel_unavailable"
         | "tunnel_start_failed" | "tunnel_verify_failed" | "ssh_unavailable" | "ssh_auth_failed"
         | "ssh_rate_limited" | "process_timeout" | "host_key_changed" | "host_key_mismatch" => code,

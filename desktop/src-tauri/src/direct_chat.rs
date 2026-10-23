@@ -1,12 +1,14 @@
 use crate::account_scope::{AccountScope, AccountScopeState};
 use crate::existing_team_runtime::{self, ActivatedTarget, ChatOperation};
 use crate::runtime_host::{
-    run_program, run_ssh, run_ssh_command, run_ssh_command_without_pipes, set_private_dir_permissions, set_private_permissions, ssh_base_args,
-    validate_host, ExecutionHost, ProcessResult, ValidatedHost,
+    run_program, run_ssh, run_ssh_command, run_ssh_command_without_pipes,
+    set_private_dir_permissions, set_private_permissions, ssh_base_args, validate_host,
+    ExecutionHost, ProcessResult, ValidatedHost,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::{
+    ffi::OsString,
     fs::{self, OpenOptions},
     io::{Read, Write},
     path::{Path, PathBuf},
@@ -110,6 +112,7 @@ struct Connection {
     validated: ValidatedHost,
     runtime: Option<ActivatedTarget>,
     local_wrapper: Option<PathBuf>,
+    local_runtime: Option<PathBuf>,
     local_owner_marker: Option<PathBuf>,
     control_path: Option<PathBuf>,
     tunnel: Option<Child>,
@@ -1023,6 +1026,210 @@ fn close_connection(connection: &mut Connection) {
     }
 }
 
+/// The installed runtime directory, not a renderer value. The wrapper is still verified when the
+/// connection opens; chat actions themselves intentionally do not invoke it.
+fn local_runtime_dir(app: &tauri::AppHandle) -> Result<PathBuf, DirectChatError> {
+    #[cfg(windows)]
+    {
+        crate::windows_runtime::runtime_dir(std::env::var_os("LOCALAPPDATA"))
+            .ok_or_else(|| failure("runtime_missing"))
+    }
+    #[cfg(target_os = "macos")]
+    {
+        app.path()
+            .home_dir()
+            .map(|home| {
+                home.join("Library")
+                    .join("Application Support")
+                    .join("Job Hunter Team")
+                    .join("host-runtime")
+            })
+            .map_err(|_| failure("runtime_missing"))
+    }
+    #[cfg(all(unix, not(target_os = "macos")))]
+    {
+        let data = std::env::var_os("XDG_DATA_HOME")
+            .filter(|value| !value.is_empty())
+            .map(PathBuf::from)
+            .or_else(|| {
+                app.path()
+                    .home_dir()
+                    .ok()
+                    .map(|home| home.join(".local").join("share"))
+            })
+            .ok_or_else(|| failure("runtime_missing"))?;
+        Ok(data.join("job-hunter-team").join("host-runtime"))
+    }
+}
+
+struct LocalChatEngine {
+    program: PathBuf,
+    compose_files: Vec<PathBuf>,
+    podman: bool,
+}
+
+/// The JHT-private Podman shim is the only engine selected from the runtime. Docker is the
+/// operating system's Docker CLI, as it was for the verified wrapper. Nothing here comes from the
+/// page or from a shell string.
+fn local_chat_engine(runtime: &Path) -> Result<LocalChatEngine, &'static str> {
+    let selection =
+        fs::read_to_string(runtime.join("container-runtime")).map_err(|_| "runtime_missing")?;
+    match selection.trim() {
+        "podman" => {
+            let shim = runtime.join("bin").join(if cfg!(windows) {
+                "docker.exe"
+            } else {
+                "docker"
+            });
+            let metadata = fs::symlink_metadata(&shim).map_err(|_| "runtime_missing")?;
+            if !metadata.file_type().is_file() || metadata.file_type().is_symlink() {
+                return Err("runtime_missing");
+            }
+            Ok(LocalChatEngine {
+                program: shim,
+                compose_files: vec![
+                    runtime.join("docker-compose.yml"),
+                    runtime.join("docker-compose.podman.yml"),
+                ],
+                podman: true,
+            })
+        }
+        "docker" => Ok(LocalChatEngine {
+            program: PathBuf::from(if cfg!(windows) {
+                "docker.exe"
+            } else {
+                "docker"
+            }),
+            compose_files: vec![runtime.join("docker-compose.yml")],
+            podman: false,
+        }),
+        _ => Err("runtime_missing"),
+    }
+}
+
+fn container_id(value: &str) -> bool {
+    (12..=64).contains(&value.len()) && value.bytes().all(|byte| byte.is_ascii_hexdigit())
+}
+
+fn local_compose_args(engine: &LocalChatEngine, runtime: &Path) -> Vec<OsString> {
+    let mut args = vec![OsString::from("compose")];
+    for compose in &engine.compose_files {
+        args.push(OsString::from("-f"));
+        args.push(compose.as_os_str().to_owned());
+    }
+    args.push(OsString::from("--project-directory"));
+    args.push(runtime.as_os_str().to_owned());
+    args.push(OsString::from("ps"));
+    args.push(OsString::from("-q"));
+    // Podman Compose has historically ignored the service filter, so inspect its closed result
+    // below. Docker accepts it and avoids listing the isolated broker services in the first place.
+    if !engine.podman {
+        args.push(OsString::from("jht"));
+    }
+    args
+}
+
+/// One and only one currently-running Compose service named `jht` is the chat target. The compose
+/// invocation is rooted in the attested runtime directory; `inspect` checks the service label again
+/// before its id is accepted for exec.
+fn local_chat_container(
+    engine: &LocalChatEngine,
+    runtime: &Path,
+    timeout: Duration,
+) -> Result<String, &'static str> {
+    let program = engine.program.to_str().ok_or("runtime_missing")?;
+    let listed = run_program(program, local_compose_args(engine, runtime), None, timeout)?;
+    let ids: Vec<&str> = std::str::from_utf8(&listed.stdout)
+        .map_err(|_| "container_unavailable")?
+        .lines()
+        .map(str::trim)
+        .filter(|id| !id.is_empty())
+        .collect();
+    if ids.len() > 16 || ids.iter().any(|id| !container_id(id)) {
+        return Err("container_unavailable");
+    }
+    let mut found = None;
+    for id in ids {
+        let inspected = run_program(
+            program,
+            [
+                "inspect",
+                "--type",
+                "container",
+                id,
+                "--format",
+                "{{.State.Running}}|{{json .Config.Labels}}",
+            ],
+            None,
+            timeout,
+        )?;
+        if !inspected.success() {
+            continue;
+        }
+        let Ok(line) = std::str::from_utf8(&inspected.stdout).map(str::trim) else {
+            continue;
+        };
+        let Some((running, labels)) = line.split_once('|') else {
+            continue;
+        };
+        let Ok(labels) = serde_json::from_str::<Value>(labels) else {
+            continue;
+        };
+        let service = labels
+            .get("com.docker.compose.service")
+            .and_then(Value::as_str);
+        if running != "true" || service != Some("jht") {
+            continue;
+        }
+        if found.replace(id).is_some() {
+            return Err("container_unavailable");
+        }
+    }
+    found.map(str::to_owned).ok_or("container_unavailable")
+}
+
+fn local_chat_exec_args(
+    container: &str,
+    operation: &ChatOperation<'_>,
+) -> Result<Vec<OsString>, &'static str> {
+    if !container_id(container) {
+        return Err("container_unavailable");
+    }
+    let mut args = vec![
+        OsString::from("exec"),
+        OsString::from("-i"),
+        OsString::from(container),
+        OsString::from("python3"),
+        OsString::from("-I"),
+        OsString::from("/app/shared/skills/agent_chat.py"),
+    ];
+    args.extend(
+        existing_team_runtime::chat_arguments(operation)?
+            .into_iter()
+            .map(OsString::from),
+    );
+    Ok(args)
+}
+
+/// The local implementation of read/send/answer/enter. Unlike all other local runtime operations,
+/// this deliberately bypasses jht-wrapper: Windows PowerShell cannot faithfully relay chat stdin.
+fn run_local_chat(
+    runtime: &Path,
+    operation: ChatOperation<'_>,
+    input: Option<&[u8]>,
+    timeout: Duration,
+) -> Result<ProcessResult, &'static str> {
+    let engine = local_chat_engine(runtime)?;
+    let program = engine.program.to_str().ok_or("runtime_missing")?;
+    let container = local_chat_container(&engine, runtime, timeout)?;
+    run_program(
+        program,
+        local_chat_exec_args(&container, &operation)?,
+        input,
+        timeout,
+    )
+}
+
 fn run_connection(
     connection: &Connection,
     local_args: &[&str],
@@ -1032,16 +1239,35 @@ fn run_connection(
 ) -> Result<ProcessResult, DirectChatError> {
     match &connection.validated {
         ValidatedHost::Local => {
-            {
-                crate::account_scope::verify_local_runtime_owner(
-                    connection
-                        .local_owner_marker
-                        .as_deref()
-                        .ok_or_else(|| failure("local_account_owner_unavailable"))?,
-                    &connection.scope,
-                )
-                .map_err(failure)?;
-                crate::onboarding::run_verified_local_wrapper(
+            crate::account_scope::verify_local_runtime_owner(
+                connection
+                    .local_owner_marker
+                    .as_deref()
+                    .ok_or_else(|| failure("local_account_owner_unavailable"))?,
+                &connection.scope,
+            )
+            .map_err(failure)?;
+            match remote_operation {
+                    RemoteOperation::Chat(operation) => {
+                        let runtime = connection
+                            .local_runtime
+                            .as_deref()
+                            .ok_or_else(|| failure("runtime_missing"))?;
+                        // The direct Windows engine is the shim whose hash the local runtime
+                        // manifest attests. Recheck before every exec, as the old wrapper did.
+                        #[cfg(windows)]
+                        if !crate::windows_runtime::wrapper_bundle_valid(
+                            connection
+                                .local_wrapper
+                                .as_deref()
+                                .ok_or_else(|| failure("runtime_missing"))?,
+                            runtime,
+                        ) {
+                            return Err(failure("runtime_missing"));
+                        }
+                        run_local_chat(runtime, operation, input, timeout).map_err(failure)
+                    }
+                _ => crate::onboarding::run_verified_local_wrapper(
                     connection
                         .local_wrapper
                         .as_deref()
@@ -1109,23 +1335,28 @@ fn connect_impl(
     scope: AccountScope,
     host: ExecutionHost,
 ) -> Result<Connection, DirectChatError> {
-    let validated = crate::runtime_host::validate_host_for_scope(app, &host, &scope).map_err(failure)?;
+    let validated =
+        crate::runtime_host::validate_host_for_scope(app, &host, &scope).map_err(failure)?;
     let runtime = if matches!(validated, ValidatedHost::Vps { .. }) {
         existing_team_runtime::selected_or_own(app, &scope, &host).map_err(failure)?
-    } else { None };
+    } else {
+        None
+    };
     let link = vps_link_for(std::env::consts::OS);
-    let (local_wrapper, local_owner_marker, control_path, tunnel) = match &validated {
+    let (local_wrapper, local_runtime, local_owner_marker, control_path, tunnel) = match &validated
+    {
         ValidatedHost::Local => (
-                Some(crate::onboarding::verified_local_wrapper_path(app).map_err(failure)?),
-                Some(crate::account_scope::local_owner_marker_path(app).map_err(failure)?),
-                None,
-                None,
-            ),
+            Some(crate::onboarding::verified_local_wrapper_path(app).map_err(failure)?),
+            Some(local_runtime_dir(app)?),
+            Some(crate::account_scope::local_owner_marker_path(app).map_err(failure)?),
+            None,
+            None,
+        ),
         ValidatedHost::Vps { .. } => {
             let (path, child) = open_vps_link(&validated, link, |host| {
                 run_ssh_command_without_pipes(host, VPS_LINK_CHECK, None, CONNECT_TIMEOUT)
             })?;
-            (None, None, path, child)
+            (None, None, None, path, child)
         }
     };
     let mut connection = Connection {
@@ -1135,6 +1366,7 @@ fn connect_impl(
         validated,
         runtime,
         local_wrapper,
+        local_runtime,
         local_owner_marker,
         control_path,
         tunnel,
@@ -1346,9 +1578,8 @@ fn remote_wrapper_command(arguments: &[String], answer_actions: bool) -> String 
 /// The exit that says «the host's wrapper does not have the chat actions».
 const UNKNOWN_ACTION: i32 = 64;
 
-/// A pinned team's chat goes through the fixed script of the container; a local team and a VPS
-/// that was never pinned go through the host's wrapper, which runs the same script (and answers 2,
-/// as to any action it does not know, when it is older than the chat actions).
+/// A pinned team's chat goes through the fixed script of the container. A local team reaches that
+/// same script directly from Rust; only an unpinned VPS goes through its host wrapper.
 fn uses_pinned_chat(connection: &Connection) -> bool {
     matches!(connection.validated, ValidatedHost::Vps { .. }) && connection.runtime.is_some()
 }
@@ -1383,13 +1614,16 @@ fn chat_failure(code: i32, default: &'static str) -> &'static str {
         116 => "not_found",
         117 => "invalid_choice",
         118 => "question_closed",
+        // The person's words were never pasted over text already in the agent's composer.
+        130 => "composer_has_text",
         255 => "tunnel_unavailable",
         _ => default,
     }
 }
 
-/// The chat through the host's wrapper. `None`: the wrapper has no chat marker (exit 64), so it is
-/// older than the chat actions, and the caller keeps the older path (the app and a VPS are updated apart).
+/// Chat without a pinned container. For a local runtime `run_connection` executes the container
+/// script directly; for an unpinned VPS it uses the host wrapper. `None` is only the VPS wrapper's
+/// exit 64: it has no chat marker, so the caller keeps the older path while app and VPS update apart.
 fn run_wrapper_chat(
     connection: &Connection,
     operation: ChatOperation<'_>,
@@ -1399,16 +1633,32 @@ fn run_wrapper_chat(
 ) -> Result<Option<ProcessResult>, DirectChatError> {
     let arguments = existing_team_runtime::chat_wrapper_arguments(&operation).map_err(failure)?;
     let references: Vec<&str> = arguments.iter().map(String::as_str).collect();
-    let result = run_connection(connection, &references, RemoteOperation::Chat(operation), input, timeout)?;
-    wrapper_outcome(result, default)
+    let result = run_connection(
+        connection,
+        &references,
+        RemoteOperation::Chat(operation),
+        input,
+        timeout,
+    )?;
+    wrapper_outcome(
+        result,
+        default,
+        matches!(&connection.validated, ValidatedHost::Local),
+    )
 }
 
 /// What the wrapper's exit says: done, «this wrapper has no chat actions» (64, and only 64), or a
-/// failure of the script behind it. A 2 is python3's for a missing file, an image older than the chat.
-fn wrapper_outcome(result: ProcessResult, default: &'static str) -> Result<Option<ProcessResult>, DirectChatError> {
+/// failure of the script behind it. On this computer the four actions bypass that wrapper; a 2 or
+/// 64 therefore says the local runtime cannot provide this chat, never that the team is old.
+fn wrapper_outcome(
+    result: ProcessResult,
+    default: &'static str,
+    local: bool,
+) -> Result<Option<ProcessResult>, DirectChatError> {
     match result.code {
         0 => Ok(Some(result)),
-        UNKNOWN_ACTION => Ok(None),
+        UNKNOWN_ACTION if !local => Ok(None),
+        2 | UNKNOWN_ACTION if local => Err(failure("local_chat_wrapper_outdated")),
         code => Err(failure(chat_failure(code, default))),
     }
 }
@@ -1571,7 +1821,7 @@ fn local_delivery_args(session: &str) -> [&str; 3] {
 }
 
 /// One page of an agent's chat, from `cursor` (the server's tail of 128 KB without one), by the
-/// path the host has: the pinned chat, the host's wrapper, or the older Python one.
+/// fixed container script (local or pinned), the VPS host wrapper, or the older Python fallback.
 fn read_page(connection: &Connection, agent_id: &str, cursor: Option<&str>) -> Result<DirectChatPage, DirectChatError> {
     if uses_pinned_chat(connection) {
         let result = run_chat(connection, ChatOperation::Read { agent: agent_id, cursor }, None, READ_TIMEOUT, "read_failed")?;
@@ -1850,8 +2100,8 @@ fn refuse_writing(connection: &Connection) -> Result<(), DirectChatError> {
     Err(failure(code))
 }
 
-/// Answer and Enter, in a pinned container or through the host's wrapper. They have no older path:
-/// a wrapper without them (64 on a VPS, 2 on this computer) is a team to update.
+/// Answer and Enter, in the fixed local/pinned container or through a VPS host wrapper. They have
+/// no older path: a VPS wrapper without them (64) is a team to update.
 fn run_answer_action(
     connection: &Connection,
     operation: ChatOperation<'_>,
@@ -2073,12 +2323,12 @@ mod tests {
         control_path_fits, remove_tunnel_socket, tunnel_dir_name, tunnel_socket_bases, tunnel_socket_path,
         SOCKET_PATH_MAX, SSH_SOCKET_SUFFIX,
         open_vps_link, ready_status, small_read, vps_link_for, VpsLink, VPS_LINK_CHECK, SMALL_READ_OVERLAP,
-        SMALL_READ_SIZE_PROBE, SMALL_READ_TAIL, DirectChatError,
+        SMALL_READ_SIZE_PROBE, SMALL_READ_TAIL, DirectChatError, local_chat_exec_args, run_local_chat,
         master_to_lend,
     };
     use crate::existing_team_runtime::ActivatedTarget;
     use crate::runtime_host::{ExecutionHost, ValidatedHost};
-    use std::{fs, path::{Path, PathBuf}, process::Command};
+    use std::{fs, path::{Path, PathBuf}, process::Command, time::Duration};
 
     /// The shape and length of macOS's per-user temporary folder (getconf DARWIN_USER_TEMP_DIR):
     /// /var/folders/<2>/<30>/T/, 49 characters. Placeholders, not a real one.
@@ -2255,63 +2505,148 @@ mod tests {
         let other_scope = crate::account_scope::AccountScope::synthetic(b"synthetic-account-other");
         let socket = PathBuf::from("/nonexistent-jht-test/master.sock");
         let team = ActivatedTarget::synthetic_for_tests();
-        let chat = |runtime: Option<ActivatedTarget>, link: VpsLink, validated: ValidatedHost| Connection {
-            app: None,
-            scope: scope.clone(),
-            host: ExecutionHost::Local,
-            validated,
-            runtime,
-            local_wrapper: None,
-            local_owner_marker: None,
-            control_path: Some(socket.clone()),
-            tunnel: None,
-            link,
+        let chat = |runtime: Option<ActivatedTarget>, link: VpsLink, validated: ValidatedHost| {
+            Connection {
+                app: None,
+                scope: scope.clone(),
+                host: ExecutionHost::Local,
+                validated,
+                runtime,
+                local_wrapper: None,
+                local_runtime: None,
+                local_owner_marker: None,
+                control_path: Some(socket.clone()),
+                tunnel: None,
+                link,
+            }
         };
         let same_team = Some((team.team_id.as_str(), &team.runtime));
         let mut connections = Vec::new();
 
         // the VPS the app set up: no pinned team on either side
         let own = chat(None, VpsLink::Master, synthetic_vps());
-        assert_eq!(master_to_lend(Some(&own), &scope, &synthetic_vps(), None), Some(socket.clone()));
-        assert_eq!(master_to_lend(Some(&own), &other_scope, &synthetic_vps(), None), None, "another account");
-        assert_eq!(master_to_lend(Some(&own), &scope, &synthetic_vps(), same_team), None, "the chat is not on that team");
-        assert_eq!(master_to_lend(None, &scope, &synthetic_vps(), None), None, "no chat");
-        assert_eq!(master_to_lend(Some(&own), &scope, &ValidatedHost::Local, None), None, "this computer");
-        let changed = |edit: &dyn Fn(&mut String, &mut String, &mut u16, &mut PathBuf, &mut PathBuf)| {
-            let ValidatedHost::Vps { mut address, mut user, mut port, mut key_path, mut known_hosts } = synthetic_vps() else { unreachable!() };
-            edit(&mut address, &mut user, &mut port, &mut key_path, &mut known_hosts);
-            ValidatedHost::Vps { address, user, port, key_path, known_hosts }
-        };
+        assert_eq!(
+            master_to_lend(Some(&own), &scope, &synthetic_vps(), None),
+            Some(socket.clone())
+        );
+        assert_eq!(
+            master_to_lend(Some(&own), &other_scope, &synthetic_vps(), None),
+            None,
+            "another account"
+        );
+        assert_eq!(
+            master_to_lend(Some(&own), &scope, &synthetic_vps(), same_team),
+            None,
+            "the chat is not on that team"
+        );
+        assert_eq!(
+            master_to_lend(None, &scope, &synthetic_vps(), None),
+            None,
+            "no chat"
+        );
+        assert_eq!(
+            master_to_lend(Some(&own), &scope, &ValidatedHost::Local, None),
+            None,
+            "this computer"
+        );
+        let changed =
+            |edit: &dyn Fn(&mut String, &mut String, &mut u16, &mut PathBuf, &mut PathBuf)| {
+                let ValidatedHost::Vps {
+                    mut address,
+                    mut user,
+                    mut port,
+                    mut key_path,
+                    mut known_hosts,
+                } = synthetic_vps()
+                else {
+                    unreachable!()
+                };
+                edit(
+                    &mut address,
+                    &mut user,
+                    &mut port,
+                    &mut key_path,
+                    &mut known_hosts,
+                );
+                ValidatedHost::Vps {
+                    address,
+                    user,
+                    port,
+                    key_path,
+                    known_hosts,
+                }
+            };
         for (what, host) in [
-            ("address", changed(&|a, _, _, _, _| *a = "other-host".into())),
+            (
+                "address",
+                changed(&|a, _, _, _, _| *a = "other-host".into()),
+            ),
             ("user", changed(&|_, u, _, _, _| *u = "root".into())),
             ("port", changed(&|_, _, p, _, _| *p = 2222)),
-            ("key", changed(&|_, _, _, k, _| *k = "/private/other-key".into())),
-            ("pinned host key", changed(&|_, _, _, _, h| *h = "/private/other-known-hosts".into())),
+            (
+                "key",
+                changed(&|_, _, _, k, _| *k = "/private/other-key".into()),
+            ),
+            (
+                "pinned host key",
+                changed(&|_, _, _, _, h| *h = "/private/other-known-hosts".into()),
+            ),
         ] {
-            assert_eq!(master_to_lend(Some(&own), &scope, &host, None), None, "another {what}");
+            assert_eq!(
+                master_to_lend(Some(&own), &scope, &host, None),
+                None,
+                "another {what}"
+            );
         }
         connections.push(own);
 
         // an existing team: the same pinned container, or nothing
         let existing = chat(Some(team.clone()), VpsLink::Master, synthetic_vps());
-        assert_eq!(master_to_lend(Some(&existing), &scope, &synthetic_vps(), same_team), Some(socket.clone()));
-        assert_eq!(master_to_lend(Some(&existing), &scope, &synthetic_vps(), None), None);
+        assert_eq!(
+            master_to_lend(Some(&existing), &scope, &synthetic_vps(), same_team),
+            Some(socket.clone())
+        );
+        assert_eq!(
+            master_to_lend(Some(&existing), &scope, &synthetic_vps(), None),
+            None
+        );
         let other_id = "u".repeat(16);
-        assert_eq!(master_to_lend(Some(&existing), &scope, &synthetic_vps(), Some((other_id.as_str(), &team.runtime))), None);
+        assert_eq!(
+            master_to_lend(
+                Some(&existing),
+                &scope,
+                &synthetic_vps(),
+                Some((other_id.as_str(), &team.runtime))
+            ),
+            None
+        );
         let mut other_runtime = team.runtime.clone();
         other_runtime.container_id = "9".repeat(64);
-        assert_eq!(master_to_lend(Some(&existing), &scope, &synthetic_vps(), Some((team.team_id.as_str(), &other_runtime))), None);
+        assert_eq!(
+            master_to_lend(
+                Some(&existing),
+                &scope,
+                &synthetic_vps(),
+                Some((team.team_id.as_str(), &other_runtime))
+            ),
+            None
+        );
         connections.push(existing);
 
         // Windows: no master to lend
         let per_command = chat(None, VpsLink::PerCommand, synthetic_vps());
-        assert_eq!(master_to_lend(Some(&per_command), &scope, &synthetic_vps(), None), None);
+        assert_eq!(
+            master_to_lend(Some(&per_command), &scope, &synthetic_vps(), None),
+            None
+        );
         connections.push(per_command);
         // a chat without its socket lends nothing
         let mut no_socket = chat(None, VpsLink::Master, synthetic_vps());
         no_socket.control_path = None;
-        assert_eq!(master_to_lend(Some(&no_socket), &scope, &synthetic_vps(), None), None);
+        assert_eq!(
+            master_to_lend(Some(&no_socket), &scope, &synthetic_vps(), None),
+            None
+        );
         connections.push(no_socket);
 
         // nothing to close: these masters never existed
@@ -2419,6 +2754,7 @@ mod tests {
             (116, "not_found"),
             (117, "invalid_choice"),
             (118, "question_closed"),
+            (130, "composer_has_text"),
             (255, "tunnel_unavailable"),
             (1, "the_default"),
             (137, "the_default"),
@@ -2429,18 +2765,175 @@ mod tests {
 
     #[test]
     fn an_older_wrapper_that_does_not_know_the_chat_actions_keeps_the_older_path() {
-        let answered = |code: i32| ProcessResult { code, stdout: b"{}".to_vec() };
-        assert!(matches!(wrapper_outcome(answered(0), "read_failed"), Ok(Some(_))), "the script ran");
-        assert!(matches!(wrapper_outcome(answered(64), "read_failed"), Ok(None)), "64: no chat actions, keep the older path");
-        for (code, expected) in [(2, "chat_runtime_outdated"), (124, "agent_busy"), (122, "agent_not_running"), (119, "agent_not_at_prompt"), (129, "chat_runtime_outdated"), (1, "read_failed"), (255, "tunnel_unavailable")] {
-            assert_eq!(wrapper_outcome(answered(code), "read_failed").err().map(|error| error.code), Some(expected), "exit {code}");
+        let answered = |code: i32| ProcessResult {
+            code,
+            stdout: b"{}".to_vec(),
+        };
+        assert!(
+            matches!(
+                wrapper_outcome(answered(0), "read_failed", false),
+                Ok(Some(_))
+            ),
+            "the script ran"
+        );
+        assert!(
+            matches!(
+                wrapper_outcome(answered(64), "read_failed", false),
+                Ok(None)
+            ),
+            "64: no chat actions, keep the older path"
+        );
+        for (code, expected) in [
+            (2, "chat_runtime_outdated"),
+            (124, "agent_busy"),
+            (122, "agent_not_running"),
+            (119, "agent_not_at_prompt"),
+            (129, "chat_runtime_outdated"),
+            (1, "read_failed"),
+            (255, "tunnel_unavailable"),
+        ] {
+            assert_eq!(
+                wrapper_outcome(answered(code), "read_failed", false)
+                    .err()
+                    .map(|error| error.code),
+                Some(expected),
+                "exit {code}"
+            );
         }
+        for code in [2, 64] {
+            assert_eq!(
+                wrapper_outcome(answered(code), "read_failed", true)
+                    .err()
+                    .map(|error| error.code),
+                Some("local_chat_wrapper_outdated"),
+                "local exit {code}"
+            );
+        }
+    }
+
+    #[test]
+    fn local_chat_builds_all_four_checked_python_commands_without_a_wrapper() {
+        use crate::existing_team_runtime::ChatOperation;
+
+        let container = "a".repeat(64);
+        let command = |operation| {
+            local_chat_exec_args(&container, &operation)
+                .unwrap()
+                .into_iter()
+                .map(|part| part.to_string_lossy().into_owned())
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(
+            command(ChatOperation::Read {
+                agent: "capitano",
+                cursor: Some("12")
+            }),
+            [
+                "exec",
+                "-i",
+                container.as_str(),
+                "python3",
+                "-I",
+                "/app/shared/skills/agent_chat.py",
+                "read",
+                "capitano",
+                "12"
+            ]
+        );
+        assert_eq!(
+            command(ChatOperation::Send {
+                agent: "assistente",
+                client_message_id: "id-1"
+            })[6..],
+            ["send", "assistente", "id-1"]
+        );
+        assert_eq!(
+            command(ChatOperation::Answer {
+                agent: "mentor",
+                question_id: "aq:mentor:1-a"
+            })[6..],
+            ["answer", "mentor", "aq:mentor:1-a"]
+        );
+        assert_eq!(
+            command(ChatOperation::Enter {
+                agent: "critico",
+                message_id: "message-1"
+            })[6..],
+            ["enter", "critico", "message-1"]
+        );
+        assert!(local_chat_exec_args(
+            &container,
+            &ChatOperation::Send {
+                agent: "root",
+                client_message_id: "id"
+            }
+        )
+        .is_err());
+        assert!(local_chat_exec_args(
+            &container,
+            &ChatOperation::Read {
+                agent: "capitano",
+                cursor: Some("12x")
+            }
+        )
+        .is_err());
+    }
+
+    // The direct local path is a normal native process on both systems where this test runs. The
+    // fake private Podman shim proves the container discovery, exact exec argv, and non-ASCII stdin
+    // all survive without asking a shell or a PowerShell wrapper to reconstruct the text.
+    #[cfg(unix)]
+    #[test]
+    fn local_chat_executes_the_attested_engines_python_with_raw_unicode_stdin() {
+        use crate::existing_team_runtime::ChatOperation;
+        use std::os::unix::fs::PermissionsExt;
+
+        static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+        let root = std::env::temp_dir().join(format!(
+            "jht-local-chat-{}-{}",
+            std::process::id(),
+            NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+        ));
+        let runtime = root.join("host-runtime");
+        let bin = runtime.join("bin");
+        fs::create_dir_all(&bin).unwrap();
+        fs::write(runtime.join("container-runtime"), "podman\n").unwrap();
+        fs::write(runtime.join("docker-compose.yml"), "services: {}\n").unwrap();
+        fs::write(runtime.join("docker-compose.podman.yml"), "services: {}\n").unwrap();
+        let engine = bin.join("docker");
+        let id = "a".repeat(64);
+        fs::write(
+            &engine,
+            format!(
+                "#!/bin/sh\ncase \"$1\" in\n  compose) printf '{id}\\n' ;;\n  inspect) printf 'true|{{\\\"com.docker.compose.service\\\":\\\"jht\\\"}}\\n' ;;\n  exec) printf '%s\\n' \"$*\"; cat ;;\n  *) exit 9 ;;\nesac\n"
+            ),
+        )
+        .unwrap();
+        fs::set_permissions(&engine, fs::Permissions::from_mode(0o700)).unwrap();
+
+        let words = "àèé € 🧭";
+        let result = run_local_chat(
+            &runtime,
+            ChatOperation::Send {
+                agent: "assistente",
+                client_message_id: "id-1",
+            },
+            Some(words.as_bytes()),
+            Duration::from_secs(2),
+        )
+        .unwrap();
+        assert_eq!(
+            String::from_utf8(result.stdout).unwrap(),
+            format!("exec -i {id} python3 -I /app/shared/skills/agent_chat.py send assistente id-1\n{words}")
+        );
+        fs::remove_dir_all(root).unwrap();
     }
 
     // The preamble runs on the VPS (a POSIX shell) and the test drives it with `sh` and a mode bit.
     #[cfg(unix)]
     #[test]
-    fn the_remote_preamble_tells_a_wrapper_without_the_chat_marker_by_name_and_never_by_the_scripts_exit() {
+    fn the_remote_preamble_tells_a_wrapper_without_the_chat_marker_by_name_and_never_by_the_scripts_exit(
+    ) {
         use std::os::unix::fs::PermissionsExt;
         static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
         let dir = std::env::temp_dir().join(format!(
@@ -2518,19 +3011,46 @@ mod tests {
             validated: ValidatedHost::Local,
             runtime: Some(crate::existing_team_runtime::ActivatedTarget::synthetic_for_tests()),
             local_wrapper: None,
+            local_runtime: None,
             local_owner_marker: None,
             control_path: None,
             tunnel: None,
             link: VpsLink::PerCommand,
         });
         // the gate answers before any command: a command would have failed with its own code
-        assert_eq!(answer_impl(&inner, "capitano", "aq:capitano:1-a1", br#"{"choices":["yes"],"text":null}"#).unwrap_err().code, "read_only_link");
-        assert_eq!(enter_impl(&inner, "capitano", "0b1c2d3e").unwrap_err().code, "read_only_link");
+        assert_eq!(
+            answer_impl(
+                &inner,
+                "capitano",
+                "aq:capitano:1-a1",
+                br#"{"choices":["yes"],"text":null}"#
+            )
+            .unwrap_err()
+            .code,
+            "read_only_link"
+        );
+        assert_eq!(
+            enter_impl(&inner, "capitano", "0b1c2d3e").unwrap_err().code,
+            "read_only_link"
+        );
         // the same connection with no pinned target is this computer's own team: the gate lets it by,
         // and what stops it is the next step (here, no wrapper of the person's own)
         inner.connection.lock().unwrap().as_mut().unwrap().runtime = None;
-        assert_ne!(answer_impl(&inner, "capitano", "aq:capitano:1-a1", br#"{"choices":["yes"],"text":null}"#).unwrap_err().code, "read_only_link");
-        assert_ne!(enter_impl(&inner, "capitano", "0b1c2d3e").unwrap_err().code, "read_only_link");
+        assert_ne!(
+            answer_impl(
+                &inner,
+                "capitano",
+                "aq:capitano:1-a1",
+                br#"{"choices":["yes"],"text":null}"#
+            )
+            .unwrap_err()
+            .code,
+            "read_only_link"
+        );
+        assert_ne!(
+            enter_impl(&inner, "capitano", "0b1c2d3e").unwrap_err().code,
+            "read_only_link"
+        );
     }
 
     #[test]
@@ -2880,6 +3400,7 @@ mod tests {
             validated: ValidatedHost::Local,
             runtime: None,
             local_wrapper: Some(wrapper.clone()),
+            local_runtime: None,
             local_owner_marker: Some(owner),
             control_path: None,
             tunnel: None,
