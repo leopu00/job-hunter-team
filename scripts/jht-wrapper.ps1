@@ -1388,6 +1388,10 @@ function Invoke-BrokerMigrateLegacyOnce {
   }
   # Come nel wrapper sh, un errore della migrazione non fa fallire `up`: il
   # marker resta assente e il tentativo verra' ripetuto al prossimo avvio.
+  # Nemmeno il codice dei suoi comandi: `legacy.py exists` esce 1 quando un
+  # segreto vecchio non c'e', il caso di ogni installazione nuova, e
+  # $LASTEXITCODE resterebbe 1 per chi viene dopo (T89).
+  $global:LASTEXITCODE = 0
   return 0
 }
 
@@ -2929,7 +2933,9 @@ switch ($Sub) {
     Invoke-Compose 'up' '-d'
     Stop-OnFailedComposeUp $LASTEXITCODE
     $null = Invoke-BrokerMigrateLegacyOnce
-    break
+    # The up went well (a failed one has already stopped jht with its code): 0, not the code of
+    # whichever native ran last. The setup reads it (enable-podman-windows-runtime.ps1, T89).
+    exit 0
   }
 
   { $_ -in @('down', 'stop-container') } {
@@ -2959,7 +2965,9 @@ switch ($Sub) {
     Invoke-Compose 'up' '-d'
     Stop-OnFailedComposeUp $LASTEXITCODE
     $null = Invoke-BrokerMigrateLegacyOnce
-    break
+    # The up went well (a failed one has already stopped jht with its code): 0, not the code of
+    # whichever native ran last. The setup reads it (enable-podman-windows-runtime.ps1, T89).
+    exit 0
   }
 
   'upgrade' {
