@@ -143,15 +143,17 @@ def test_powershell_migration_has_the_shell_markers_errors_and_compose_attestati
     assert "if ($code -eq 0) { New-Item -ItemType File -Path $BrokerLegacyMarker" in source
     assert "return $code" in source
     # The running service is ours only when its compose project is the expected one: the
-    # labels come whole as JSON (no double quote in a native argument under 5.1, T71).
+    # labels come whole as JSON (no double quote in a native argument under 5.1, T71). A
+    # container of another project is skipped, not taken and not a reason to give up (T79).
     service_id = re.search(r"function Get-RunningComposeServiceId \{\n(.*?)\n\}", source, re.S)
     assert service_id
     body = service_id.group(1)
     assert "$expectedProject = Get-ComposeProjectName" in body
     assert "{{json .Config.Labels}}" in body
-    assert "$project = [string]$labels.'com.docker.compose.project'" in body
-    assert "$serviceName = [string]$labels.'com.docker.compose.service'" in body
-    assert "if ($project -ne $expectedProject) { return $null }" in body
+    assert "$project = Get-ComposeLabel $labelsJson 'com.docker.compose.project'" in body
+    assert "$serviceName = Get-ComposeLabel $labelsJson 'com.docker.compose.service'" in body
+    assert "if ($project -ne $expectedProject) {" in body and "is of project" in body
+    assert "if ($serviceName -ne $Service) { continue }" in body
     broker_up = re.search(r"function Test-BrokerUp \{\n(.*?)\n\}", source, re.S)
     assert broker_up
     assert "Get-RunningComposeServiceId $BrokerContainer" in broker_up.group(1)
