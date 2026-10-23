@@ -90,9 +90,9 @@ describe("LoginScreen", () => {
     expect(LOGIN_TEXT[locale].nameMissing.trim()).not.toBe("");
   });
 
-  it("reactivates a saved local profile without asking for its name again", async () => {
+  it("selects a saved local profile before the dashboard activates its scope", async () => {
     const user = userEvent.setup();
-    const activateLocal = vi.fn(async () => ({
+    const selectLocal = vi.fn(() => ({
       profileId: "opaque-local-profile",
       displayName: "Ada Locale",
     }));
@@ -102,13 +102,13 @@ describe("LoginScreen", () => {
         loadBrowsers={noBrowsers}
         configured
         readLocal={() => ({ profileId: "opaque-local-profile", displayName: "Ada Locale" })}
-        activateLocal={activateLocal}
+        selectLocal={selectLocal}
         onLocalReady={onLocalReady}
       />,
     );
 
     await user.click(screen.getByRole("button", { name: "Usa in locale" }));
-    expect(activateLocal).toHaveBeenCalledWith();
+    expect(selectLocal).toHaveBeenCalledWith();
     expect(screen.queryByRole("textbox", { name: "Nome visualizzato" })).not.toBeInTheDocument();
     expect(onLocalReady).toHaveBeenCalledOnce();
   });
