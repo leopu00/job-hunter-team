@@ -871,11 +871,16 @@ fn receipt_view(request: &ExistingTeamDiscoverRequest, found: &Found) -> Existin
 /// except an in-memory receipt.
 #[tauri::command]
 pub(crate) async fn onboarding_existing_team_discover(
+    window: tauri::Window,
     app: tauri::AppHandle,
     state: State<'_, OnboardingNativeState>,
     scopes: State<'_, AccountScopeState>,
     request: ExistingTeamDiscoverRequest,
 ) -> Result<ExistingTeamReceipt, OnboardingError> {
+    // Reading is the first half of a write (a rebind replaces the saved connection): the app's own window only.
+    if !crate::direct_chat::window_may_write(window.label()) {
+        return Err(failure("window_not_allowed"));
+    }
     let expected = scopes.active().map_err(failure)?;
     if !matches!(&request.host, ExecutionHost::Vps { .. }) {
         return Err(failure("existing_team_vps_required"));
@@ -942,11 +947,15 @@ pub(crate) async fn onboarding_existing_team_discover(
 /// control, not a defence against a hostile renderer.
 #[tauri::command]
 pub(crate) async fn onboarding_existing_team_register(
+    window: tauri::Window,
     app: tauri::AppHandle,
     state: State<'_, OnboardingNativeState>,
     scopes: State<'_, AccountScopeState>,
     request: ExistingTeamRegisterRequest,
 ) -> Result<ExistingTeamRegisterReply, OnboardingError> {
+    if !crate::direct_chat::window_may_write(window.label()) {
+        return Err(failure("window_not_allowed"));
+    }
     let expected = scopes.active().map_err(failure)?;
     if !request.confirmed {
         return Err(failure("existing_team_register_not_confirmed"));

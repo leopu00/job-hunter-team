@@ -2124,3 +2124,36 @@ fn t30_the_rebind_removes_the_selection_before_the_candidate() {
     );
     assert_eq!(runtime::registration_gate_at(&sandbox.root, &sandbox.scope), Ok(runtime::RegistrationGate::Fresh));
 }
+
+fn window_gate_of(name: &str) {
+    let source = include_str!("existing_team_register.rs");
+    let body = source.split(name).nth(1).expect(name).split("\n}\n").next().unwrap();
+    let window = body.find("window_may_write(window.label())").unwrap_or_else(|| panic!("{name}: the window is checked"));
+    assert!(body.contains("window_not_allowed"), "{name}");
+    for later in ["scopes.active()", "state.try_begin()", "runtime::root("] {
+        if let Some(at) = body.find(later) {
+            assert!(window < at, "{name}: the window comes before {later}");
+        }
+    }
+    assert!(body.find("scopes.active()").is_some(), "{name}: the scope is still read after the gate");
+}
+
+// `register` removes and writes the saved connection and `discover` is its first half: both are writes, and
+// the permission file grants the commands to windows that must never write.
+#[test]
+fn t31_discover_refuses_every_window_but_the_apps_own_before_anything_else() {
+    window_gate_of("pub(crate) async fn onboarding_existing_team_discover(");
+}
+
+#[test]
+fn t31_register_refuses_every_window_but_the_apps_own_before_anything_else() {
+    window_gate_of("pub(crate) async fn onboarding_existing_team_register(");
+}
+
+#[test]
+fn t31_only_the_apps_own_window_is_one_that_writes() {
+    assert!(crate::direct_chat::window_may_write("main"));
+    for label in ["live-screen", "broker-login", "other"] {
+        assert!(!crate::direct_chat::window_may_write(label), "{label}");
+    }
+}
