@@ -269,6 +269,10 @@ describe("«Agenti», the agents' control panel", () => {
     expect(tabs.map((tab) => tab.textContent)).toEqual(["Terminale", "Chat"]);
     fireEvent.click(tabs[1]);
     expect(await screen.findByTestId("direct-chat-destination")).toHaveTextContent("Destinazione: la chat di Capitano.");
+    const pane = screen.getByTestId("panel-chat-pane");
+    expect(pane.className).toMatch(/overflow-hidden/);
+    expect(pane.style.minHeight).toBe("28rem");
+    expect(pane.style.height).toBe("min(46rem, calc(100svh / var(--zoom, 1) - 12rem))");
     expect(screen.queryByTestId("panel-terminal-CAPITANO")).toBeNull();
   });
 

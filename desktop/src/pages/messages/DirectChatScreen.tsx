@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { appLocale } from "../../lib/app-locale";
 import { describeError } from "../../lib/error-catalog";
 import OwnVpsClaim from "../../components/OwnVpsClaim";
@@ -93,6 +93,51 @@ export function systemLineText(message: DirectChatMessage, codes: Record<string,
     return codes[code];
   }
   return message.text;
+}
+
+/**
+ * The team can send plain text that happens to contain an old HTML emphasis
+ * tag. Never insert that HTML: preserve the two harmless emphasis tags as
+ * React nodes and discard every other tag, so the chat does not show markup
+ * or give incoming text an HTML execution path.
+ */
+export function renderChatText(text: string): ReactNode[] {
+  const nodes: ReactNode[] = [];
+  const tag = /<(i|em)>([^<]*)<\/\1>|<[^>]*>/gi;
+  let end = 0;
+  let match: RegExpExecArray | null;
+  while ((match = tag.exec(text))) {
+    if (match.index > end) nodes.push(text.slice(end, match.index));
+    if (match[1]) nodes.push(<em key={`em-${match.index}`}>{match[2]}</em>);
+    end = tag.lastIndex;
+  }
+  if (end < text.length) nodes.push(text.slice(end));
+  return nodes;
+}
+
+type ConversationItem = ReturnType<typeof conversationItems>[number];
+type GroupedConversationItem = ConversationItem & { repeated?: number };
+
+/** A run of identical automatic updates is one readable bubble with its count. */
+export function groupRepeatedMessages(items: ConversationItem[]): GroupedConversationItem[] {
+  const grouped: GroupedConversationItem[] = [];
+  for (const item of items) {
+    const previous = grouped.at(-1);
+    const sameMessage =
+      item.type === "message" &&
+      previous?.type === "message" &&
+      item.message.role !== "user" &&
+      previous.message.role === item.message.role &&
+      item.message.text === previous.message.text &&
+      item.message.kind === previous.message.kind &&
+      dayKey(item.at) === dayKey(previous.at);
+    if (sameMessage) {
+      grouped[grouped.length - 1] = { ...item, repeated: (previous.repeated ?? 1) + 1 };
+    } else {
+      grouped.push(item);
+    }
+  }
+  return grouped;
 }
 
 function clientMessageId(): string {
@@ -553,7 +598,7 @@ export default function DirectChatScreen({
     const local = question.state === "open" ? answersInFlight.get(question.id) : undefined;
     return local ? { ...question, state: "answered" as const, answer: local } : question;
   });
-  const items = conversationItems(messages, shownQuestions);
+  const items = groupRepeatedMessages(conversationItems(messages, shownQuestions));
 
   // What the composer replies to now: gone from the view, it is nothing; an open question that
   // takes words is answered with them; a closed one, or a message, is quoted.
@@ -588,7 +633,7 @@ export default function DirectChatScreen({
   const lastItem = items.length > 0 ? items[items.length - 1].key : null;
   const bottom = useStickToBottom({ conversation: agentId, last: lastItem, count: items.length });
 
-  function renderMessage(message: DirectChatMessage, key: string) {
+  function renderMessage(message: DirectChatMessage, key: string, repeated?: number) {
     return (
       <article
         key={key}
@@ -616,13 +661,14 @@ export default function DirectChatScreen({
       >
         <div className="mb-1 flex items-center gap-2 text-[8px] font-semibold uppercase tracking-wider text-[var(--color-dim)]">
           <span>{message.role === "user" ? t.you : message.role === "system" ? t.system : selected.label}</span>
+          {repeated && repeated > 1 && <span data-testid="direct-chat-repeat">×{repeated}</span>}
           {message.role === "agent" && (
             <span data-testid="direct-chat-kind" data-kind={message.kind ?? "info"} style={{ color: KIND_COLOR[message.kind ?? "info"] ?? "var(--color-muted)" }}>
               {t.kinds[message.kind ?? "info"]}
             </span>
           )}
         </div>
-        {systemLineText(message, t.codes)}
+        {renderChatText(systemLineText(message, t.codes))}
         {message.role === "agent" && message.suggestions && (
           <div role="group" aria-label={t.suggestionsLabel} className="mt-2 flex flex-wrap gap-1.5 whitespace-normal">
             {message.suggestions.map((line) => (
@@ -793,7 +839,7 @@ export default function DirectChatScreen({
                       onMenu={writeLocked ? undefined : (event) => openMenu("question", item.question.id, event)}
                     />
                   ) : (
-                    renderMessage(item.message, item.key)
+                    renderMessage(item.message, item.key, item.repeated)
                   )}
                 </Fragment>
               );
