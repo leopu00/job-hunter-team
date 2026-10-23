@@ -14,6 +14,9 @@ What must hold:
 - the summary is at most 200 characters;
 - the withdrawal of 102 is unchanged: nothing to withdraw writes nothing;
 - the door is still the one of 103 (porta_103): team.start is refused with action_disabled;
+- web_door.one_line, run for real, removes exactly the characters of external_content.INVISIBLE_COMMANDS
+  among every format, separator and tag character (counter-check: a one_line without the soft hyphen is
+  seen);
 - counter-check: with the family of 102 applied again the summary keeps the override, and the final
   block of 104 stops.
 """
@@ -24,12 +27,14 @@ import os
 import shutil
 import subprocess
 import tempfile
+import unicodedata
 import uuid
 from pathlib import Path
 from urllib.parse import urlparse, urlunparse
 
 import pytest
 
+import test_invisible_commands_copies as copies
 import test_web_action_door_postgres as door
 import test_web_door_action_switch_postgres as switch
 
@@ -165,7 +170,7 @@ def test_the_door_is_still_closed_for_the_team_commands(cluster):
 
 
 def test_counter_check_the_family_of_102_keeps_the_override_and_104_stops_on_it(cluster):
-    """Run last in the module: 102 is applied again, then 104 puts its family back."""
+    """102 is applied again, then 104 puts its family back (in finally: the other tests see 104)."""
     final_block = M104.read_text(encoding="utf-8").rsplit("DO $$", 1)[1]
     try:
         cluster(file=switch.M102)
@@ -179,3 +184,38 @@ def test_counter_check_the_family_of_102_keeps_the_override_and_104_stops_on_it(
         assert stopped.returncode != 0 and "does not go through web_door.one_line" in stopped.stderr, stopped.stderr
     finally:
         cluster(file=M104)
+
+
+def _removed_by_one_line(db) -> frozenset[str]:
+    """Every format (Cf), line or paragraph separator and tag character, plus the Python list: the ones
+    one_line takes away between two letters, without leaving a space."""
+    universe = {chr(code) for code in range(0x80, 0x110000)
+                if unicodedata.category(chr(code)) in ("Cf", "Zl", "Zp")}
+    universe |= copies._python_list() | {chr(code) for code in range(0xE0000, 0xE0080)}
+    codes = ",".join(str(ord(c)) for c in sorted(universe))
+    found = door._scalar(db, f"""SELECT COALESCE(string_agg(c::text, ',' ORDER BY c), '')
+        FROM unnest(ARRAY[{codes}]) AS c WHERE web_door.one_line('a' || chr(c) || 'b', 10) = 'ab'""")
+    return frozenset(chr(int(code)) for code in found.split(",") if code)
+
+
+def test_one_line_removes_exactly_the_python_list(cluster):
+    python = copies._python_list()
+    removed = _removed_by_one_line(cluster)
+    assert removed == python, (f"web_door.one_line diverges from external_content.INVISIBLE_COMMANDS: "
+                               f"missing {copies._names(python - removed)}, extra {copies._names(removed - python)}")
+
+
+def test_counter_check_a_one_line_without_the_soft_hyphen_is_seen(cluster):
+    """Run after the comparison: one_line is replaced by itself without U+00AD, then put back as it was."""
+    original = door._scalar(cluster, "SELECT pg_get_functiondef(to_regprocedure('web_door.one_line(text, integer)'))")
+    soft_hyphen = copies.BSL + "u00AD"
+    assert original.count(soft_hyphen) == 1, "the counter-check must change the function for real"
+    changed, restore = cluster.work / "one_line_without_shy.sql", cluster.work / "one_line_as_it_was.sql"
+    changed.write_text(original.replace(soft_hyphen, "", 1) + ";\n", encoding="utf-8")
+    restore.write_text(original + ";\n", encoding="utf-8")
+    try:
+        cluster(file=changed)
+        assert copies._python_list() - _removed_by_one_line(cluster) == {chr(0x00AD)}
+    finally:
+        cluster(file=restore)
+    assert _removed_by_one_line(cluster) == copies._python_list()
