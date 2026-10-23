@@ -60,7 +60,7 @@ fn xml_section<'a>(xml: &'a str, name: &str) -> Option<&'a str> {
     Some(&xml[start..end])
 }
 
-fn xml_text(xml: &str, name: &str) -> Option<&str> {
+fn xml_text<'a>(xml: &'a str, name: &str) -> Option<&'a str> {
     xml_section(xml, name).filter(|value| !value.contains('<'))
 }
 
