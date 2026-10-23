@@ -48,6 +48,36 @@ def pytest_testnodedown(node, error):
         reporter.stats.setdefault("deselected", []).extend([None] * count)
 
 
+# ── Nessun server tmux sopravvive alla sessione (T74) ────────────────────
+#
+# I test con un tmux vero prendono la cartella da private_tmux.private_dir().
+# All'avvio si chiudono i server dei giri uccisi (cartelle il cui processo non
+# c'è più); alla fine della sessione ogni server ancora acceso sotto le nostre
+# cartelle viene chiuso e la sessione FALLISCE con l'elenco: un test che
+# lascia un server è un difetto del test, anche se è verde. Con xdist ogni
+# worker controlla le sue cartelle, e l'errore arriva al controller come
+# errore di teardown.
+def pytest_sessionstart(session):
+    import private_tmux
+
+    stale = private_tmux.sweep_stale()
+    if stale:
+        print(f"\nchiusi {len(stale)} server tmux lasciati da giri interrotti: {', '.join(stale)}")
+
+
+@pytest.fixture(scope="session", autouse=True)
+def no_tmux_server_outlives_the_session():
+    import private_tmux
+
+    yield
+    left = private_tmux.leftovers(private_tmux.made_dirs())
+    if left:
+        pytest.fail(
+            f"{len(left)} server tmux ancora accesi a fine sessione (chiusi ora): " + ", ".join(left),
+            pytrace=False,
+        )
+
+
 # ── Un bash che ESEGUE davvero, non solo che esiste ─────────────────────
 #
 # Perché serve: su un host Windows con WSL installato, il primo `bash` del PATH

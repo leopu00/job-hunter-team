@@ -25,13 +25,14 @@ import os
 import re
 import shutil
 import signal
-import tempfile
 import subprocess
 import sys
 import time
 from pathlib import Path
 
 import pytest
+
+import private_tmux
 
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -336,7 +337,7 @@ class _Tmux:
         self.calls = tmp_path / "calls.txt"
         # Il path di un socket unix ha un tetto di ~104 byte e la tmp di pytest
         # su macOS lo supera: il socket vive in una dir corta a parte.
-        self.sockdir = Path(tempfile.mkdtemp(prefix="jt-", dir="/tmp" if os.path.isdir("/tmp") else None))
+        self.sockdir = private_tmux.private_dir("launcher")
         self.socket = self.sockdir / "s"
         wrapper = self.bin / "tmux"
         guard = _tmux_guard(self.calls)
@@ -425,12 +426,8 @@ class _Tmux:
         return sorted(line for line in out.splitlines() if line.strip())
 
     def close(self):
-        if self.kind == "real":
-            subprocess.run(
-                [_real_tmux() or "tmux", "-S", str(self.socket), "kill-server"],
-                capture_output=True, timeout=10,
-            )
-        shutil.rmtree(self.sockdir, ignore_errors=True)
+        # The server (if real) goes, then the folder: private_tmux does both, in that order.
+        private_tmux.close_dir(self.sockdir)
         loop = self.calls.with_name(self.calls.name + ".loop")
         overcap = self.calls.with_name(self.calls.name + ".overcap")
         assert not loop.exists(), "il tmux finto si e' richiamato da solo (un altro tmux nel PATH?)"
