@@ -3183,17 +3183,33 @@ fn existing_team_assistant_start_with(
     Err(failure("assistant_verify_timeout"))
 }
 
+/// The read-only view selects the team too, and never holds the full link: it starts nothing. The
+/// same refusal as the agents' panel (agent_control_read_only). No selection is the start's own
+/// error (existing_team_runtime_required), said by `existing_team_assistant_start_with`.
+fn assistant_start_link_refusal(
+    scope: &AccountScope,
+    target: Option<&crate::existing_team_runtime::ActivatedTarget>,
+) -> Option<&'static str> {
+    let target = target?;
+    (!crate::existing_team_runtime::full_link_granted(scope, target)).then_some("agent_control_read_only")
+}
+
 /// «Attiva assistente» on an existing VPS team: only on the person's explicit, confirmed request.
 /// The host is the account's persisted one and the target the verified selection (the same
 /// binding the reads use); there is no fallback to another container, and nothing here runs at
 /// connect, refresh or retry. It starts the one session and probes again; it stops nothing.
 #[tauri::command]
 pub(crate) async fn existing_team_assistant_start(
+    window: tauri::Window,
     app: tauri::AppHandle,
     state: State<'_, OnboardingNativeState>,
     scopes: State<'_, AccountScopeState>,
     request: ExistingTeamAssistantStartRequest,
 ) -> Result<ExistingTeamAssistantStartReply, OnboardingError> {
+    // A start is a write to the team: the app's own window only, like the agents' panel.
+    if let Some(code) = crate::agent_control::window_refusal(window.label()) {
+        return Err(failure(code));
+    }
     if !request.confirmed {
         return Err(failure("assistant_start_not_confirmed"));
     }
@@ -3212,6 +3228,9 @@ pub(crate) async fn existing_team_assistant_start(
         let validated =
             crate::runtime_host::validate_host_for_scope(&app, &host, &worker_expected).map_err(failure)?;
         let target = crate::existing_team_runtime::selected(&app, &worker_expected, &host).map_err(failure)?;
+        if let Some(code) = assistant_start_link_refusal(&worker_expected, target.as_ref()) {
+            return Err(failure(code));
+        }
         existing_team_assistant_start_with(
             true,
             target.as_ref().map(|target| (target.team_id.as_str(), &target.runtime)),
@@ -7384,6 +7403,43 @@ mod existing_team_assistant_tests {
         let reply = script.run(true, true).expect("started with the captain off");
         assert_eq!((reply.outcome, reply.captain_running, reply.assistant_running), ("started", false, true));
         assert_eq!(script.starts(), 1);
+    }
+
+    #[test]
+    fn the_read_only_view_starts_nothing_only_the_full_link_does() {
+        use crate::existing_team_runtime::{grant_full_link, revoke_full_link, ActivatedTarget, FULL_LINK_TEST_LOCK};
+        let _serial = FULL_LINK_TEST_LOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+        let scope = crate::account_scope::AccountScope::synthetic(b"synthetic-assistant-start");
+        let team = ActivatedTarget::synthetic_for_tests();
+        // the read-only view selected the team and holds no full link: refused, as on the agents' panel
+        revoke_full_link();
+        assert_eq!(super::assistant_start_link_refusal(&scope, Some(&team)), Some("agent_control_read_only"));
+        // «Conferma e collega» on this team, for this account: it may start
+        grant_full_link(&scope, &team);
+        assert_eq!(super::assistant_start_link_refusal(&scope, Some(&team)), None);
+        // another account's grant is not this one's
+        let other = crate::account_scope::AccountScope::synthetic(b"synthetic-assistant-start-other");
+        assert_eq!(super::assistant_start_link_refusal(&other, Some(&team)), Some("agent_control_read_only"));
+        revoke_full_link();
+        // no selection is the start's own refusal, before any command
+        assert_eq!(super::assistant_start_link_refusal(&scope, None), None);
+    }
+
+    #[test]
+    fn a_start_is_asked_only_from_the_apps_own_window_and_checked_before_anything_else() {
+        let source = include_str!("onboarding.rs");
+        let function = source
+            .split("pub(crate) async fn existing_team_assistant_start(")
+            .nth(1)
+            .and_then(|rest| rest.split("\n}\n").next())
+            .expect("the command");
+        let window = function.find("window_refusal(window.label())").expect("the window is checked");
+        let confirmed = function.find("request.confirmed").expect("the confirmation is checked");
+        let link = function.find("assistant_start_link_refusal(").expect("the full link is checked");
+        let start = function.find("existing_team_assistant_start_with(").expect("the start");
+        assert!(window < confirmed && confirmed < link && link < start, "window, confirmation, link, then the start");
+        assert_eq!(crate::agent_control::window_refusal("live-screen"), Some("agent_control_window"));
+        assert_eq!(crate::agent_control::window_refusal("main"), None);
     }
 
     #[test]
