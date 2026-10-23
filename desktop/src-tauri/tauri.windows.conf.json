@@ -1,0 +1,7 @@
+{
+  "bundle": {
+    "resources": {
+      "../../scripts/jht-uninstall-windows.ps1": "jht-uninstall-windows.ps1"
+    }
+  }
+}

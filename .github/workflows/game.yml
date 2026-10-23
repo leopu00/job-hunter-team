@@ -233,6 +233,113 @@ jobs:
           while ((Test-Path -LiteralPath $key) -and (Get-Date) -lt $deadline) { Start-Sleep -Seconds 2 }
           if (Test-Path -LiteralPath $key) { throw 'the uninstaller left its entry in App e funzionalità' }
 
+      # The app's uninstaller and the team (T72): installer-hooks.nsi runs
+      # scripts/jht-uninstall-windows.ps1, shipped next to the app. For one user
+      # Tauri installs the app in %LOCALAPPDATA%\Job Hunter Team, the folder that
+      # also holds the team's host-runtime. Here, with the real setup:
+      # - /S /UPDATE (the updater): nothing of the team touched, no report;
+      # - /S with a host-runtime: the data and host-runtime stay (the template
+      #   removes only its own files), the report is next to host-runtime;
+      # - /S without one: the folder goes with the app, the report is in %TEMP%;
+      # - what a Yes runs (-Mode Remove), then /S: the data goes, the documents
+      #   stay, and the uninstaller still removes the app and its folder.
+      - name: Uninstall with /UPDATE, /S and after a Yes, next to the team's data
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $setup = Get-ChildItem desktop/src-tauri/target/release/bundle/nsis -Filter '*-setup.exe' | Select-Object -First 1
+          $key = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\Job Hunter Team'
+          $jhtHome = Join-Path $env:USERPROFILE '.jht'
+          $documents = Join-Path $env:USERPROFILE 'Documents\Job Hunter Team'
+          $appData = @((Join-Path $env:APPDATA 'ai.jobhunterteam.desktop'), (Join-Path $env:LOCALAPPDATA 'ai.jobhunterteam.desktop'))
+          $folders = @($jhtHome, $documents) + $appData
+          $runtimeRoot = Join-Path $env:LOCALAPPDATA 'Job Hunter Team'
+          $runtime = Join-Path $runtimeRoot 'host-runtime'
+          $keepReport = Join-Path $runtimeRoot 'disinstallazione.txt'
+          $tempReport = Join-Path ([IO.Path]::GetTempPath()) 'Job Hunter Team - disinstallazione.txt'
+          foreach ($folder in $folders) {
+            if (Test-Path -LiteralPath $folder) { throw "already there before the test: $folder" }
+          }
+          function New-PersonData {
+            foreach ($folder in $folders) {
+              New-Item -ItemType Directory -Force -Path $folder | Out-Null
+              Set-Content -LiteralPath (Join-Path $folder 'data.txt') -Value 'the person''s data' -NoNewline
+            }
+          }
+          function Assert-DataKept([string]$When, [string[]]$Which) {
+            foreach ($folder in $Which) {
+              $file = Join-Path $folder 'data.txt'
+              if (-not (Test-Path -LiteralPath $file) -or (Get-Content -LiteralPath $file -Raw) -ne 'the person''s data') {
+                throw "${When}: $file was touched"
+              }
+            }
+          }
+          function Install-App {
+            Remove-Item -LiteralPath $tempReport -Force -ErrorAction SilentlyContinue
+            $installed = Start-Process -FilePath $setup.FullName -ArgumentList '/S' -Wait -PassThru
+            if ($installed.ExitCode -ne 0) { throw "setup exited $($installed.ExitCode)" }
+            $location = (Get-ItemProperty -LiteralPath $key).InstallLocation
+            Write-Host "InstallLocation: $location"
+            if (-not (Test-Path -LiteralPath (Join-Path $location 'jht-uninstall-windows.ps1') -PathType Leaf)) {
+              throw "jht-uninstall-windows.ps1 is not next to the app: $location"
+            }
+            return $location
+          }
+          function Uninstall-App([string]$Arguments) {
+            $location = (Get-ItemProperty -LiteralPath $key).InstallLocation
+            Start-Process -FilePath (Join-Path $location 'uninstall.exe') -ArgumentList $Arguments -Wait | Out-Null
+            # The uninstaller copies itself and returns: wait for its entry to go.
+            $deadline = (Get-Date).AddSeconds(90)
+            while ((Test-Path -LiteralPath $key) -and (Get-Date) -lt $deadline) { Start-Sleep -Seconds 2 }
+            if (Test-Path -LiteralPath $key) { throw "the uninstaller ($Arguments) left its entry" }
+            if (@(Get-ChildItem -LiteralPath $location -Filter '*.exe' -ErrorAction SilentlyContinue).Count -gt 0) {
+              throw "the uninstaller ($Arguments) left the app in $location"
+            }
+          }
+
+          New-PersonData
+          $location = Install-App
+          Uninstall-App '/S /UPDATE'
+          Assert-DataKept '/UPDATE' $folders
+          if ((Test-Path -LiteralPath $tempReport) -or (Test-Path -LiteralPath $keepReport)) { throw '/UPDATE wrote the uninstall report' }
+
+          $location = Install-App
+          New-Item -ItemType Directory -Force -Path $runtime | Out-Null
+          Set-Content -LiteralPath (Join-Path $runtime 'sentinel.txt') -Value 'host-runtime' -NoNewline
+          Uninstall-App '/S'
+          Assert-DataKept '/S with host-runtime' $folders
+          if ((Get-Content -LiteralPath (Join-Path $runtime 'sentinel.txt') -Raw) -ne 'host-runtime') { throw '/S removed host-runtime' }
+          if (-not (Test-Path -LiteralPath $keepReport)) { throw '/S with host-runtime wrote no report next to it' }
+          $text = [IO.File]::ReadAllText($keepReport)
+          Write-Host $text
+          foreach ($named in @($runtime, $documents, $jhtHome)) {
+            if (-not $text.Contains($named)) { throw "the report does not name $named" }
+          }
+          Remove-Item -LiteralPath $runtimeRoot -Recurse -Force
+
+          $location = Install-App
+          Uninstall-App '/S'
+          Assert-DataKept '/S without host-runtime' $folders
+          if (Test-Path -LiteralPath $runtimeRoot) { throw "/S left $runtimeRoot without a runtime in it" }
+          if (Test-Path -LiteralPath $location) { throw "/S left the app's folder $location" }
+          if (-not (Test-Path -LiteralPath $tempReport)) { throw '/S without host-runtime wrote no report in %TEMP%' }
+
+          # What the hook runs after a Yes, with the shell it uses, then the uninstaller.
+          $location = Install-App
+          $powershell = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
+          & $powershell -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File (Join-Path $location 'jht-uninstall-windows.ps1') -Mode Remove -Language en
+          if ($LASTEXITCODE -ne 0) { throw "-Mode Remove exited $LASTEXITCODE" }
+          foreach ($gone in @($jhtHome) + $appData) {
+            if (Test-Path -LiteralPath $gone) { throw "-Mode Remove left $gone" }
+          }
+          Assert-DataKept '-Mode Remove' @($documents)
+          if (-not (Test-Path -LiteralPath (Join-Path $location 'uninstall.exe'))) { throw '-Mode Remove took the app''s own files' }
+          Uninstall-App '/S'
+          if (Test-Path -LiteralPath $location) { throw "after a Yes the uninstaller left $location" }
+          Remove-Item -LiteralPath $documents -Recurse -Force
+          Remove-Item -LiteralPath $tempReport -Force -ErrorAction SilentlyContinue
+
       # Next to the v0.3.9 game (a stand-in with its uninstall entry, folder and
       # desktop shortcut): silent, the setup keeps it untouched and names its
       # own shortcuts «Job Hunter Team App»; its uninstaller removes only those.
