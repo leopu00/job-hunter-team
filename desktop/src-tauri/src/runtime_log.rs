@@ -140,6 +140,36 @@ impl RuntimeLog {
             Err(error) => self.record(step, Err(error), &[], stderr, elapsed),
         }
     }
+
+    /// Interactive provider login has sensitive output and input, so its log
+    /// keeps only the closed outcome and elapsed time. This still makes the
+    /// gap between the Provider step and the team start observable.
+    pub(crate) fn record_onboarding_status(
+        &self,
+        step: &str,
+        ended: Result<i32, &str>,
+        elapsed: Duration,
+    ) {
+        let step = match step {
+            "provider_login" => "provider_login",
+            _ => return,
+        };
+        let ended = match ended {
+            Ok(code) => format!("exit {code}"),
+            Err(code) => match code {
+                "provider_login_start_failed" | "provider_login_pipe_failed"
+                | "provider_login_failed" | "state_failed" => code,
+                _ => "io_error_other",
+            }
+            .to_owned(),
+        };
+        let entry = format!(
+            "=== {} onboarding.{step}: {ended} after {:.1} s\n",
+            utc(SystemTime::now()),
+            elapsed.as_secs_f64(),
+        );
+        let _ = append(&self.path, &entry, LOG_MAX_BYTES);
+    }
 }
 
 /// Longest cause shown on the error screen; the log has the rest.
@@ -523,6 +553,22 @@ mod tests {
             assert_eq!(fs::metadata(log.path()).unwrap().permissions().mode() & 0o777, 0o600);
             assert_eq!(fs::metadata(root.join("logs")).unwrap().permissions().mode() & 0o777, 0o700);
         }
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn provider_login_keeps_only_its_closed_outcome() {
+        let root = dir("provider-login");
+        let log = RuntimeLog::in_dir(&root.join("logs"));
+        log.record_onboarding_status("provider_login", Ok(0), Duration::from_millis(1_500));
+        log.record_onboarding_status("provider_login", Err("provider_login_failed"), Duration::ZERO);
+        log.record_onboarding_status("provider_login", Err("token-from-provider"), Duration::ZERO);
+        log.record_onboarding_status("anything-else", Ok(0), Duration::ZERO);
+        let text = fs::read_to_string(log.path()).unwrap();
+        assert!(text.contains(" onboarding.provider_login: exit 0 after 1.5 s\n"), "{text}");
+        assert!(text.contains(" onboarding.provider_login: provider_login_failed after 0.0 s\n"), "{text}");
+        assert!(text.contains(" onboarding.provider_login: io_error_other after 0.0 s\n"), "{text}");
+        assert!(!text.contains("token-from-provider") && !text.contains("anything-else"), "{text}");
         let _ = fs::remove_dir_all(&root);
     }
 
