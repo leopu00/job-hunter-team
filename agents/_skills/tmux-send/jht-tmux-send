@@ -671,42 +671,15 @@ else
   fi
 fi
 
-# ── C7 · --enter: solo l'Invio, solo sulla firma di quel messaggio ────────────────
+# ── C7 · --enter: chiuso finché non può attestare il testo intero ────────────────
 if [ "$enter_mode" -eq 1 ]; then
-  pane=$(_pane)
-  placeholder_before=1
-  occ_tail_before=$(_occurrences "$pane" "$signature_tail")
-  # Un menu di scelta disegna «❯ 1. Yes» con lo stesso marcatore della casella: non e' una casella.
-  if [ -z "$(_composer_line "$pane")" ] \
-    || printf '%s\n' "$(_composer_line "$pane")" | head -n 1 | grep -qE '(❯|›|>|▌)[[:space:]]*[0-9]+[.)][[:space:]]'; then
-    echo "JHT_REASON menu"
-    echo "jht-tmux-send: $session: no composer on screen (a menu, a question or a sign-in): nothing pressed (rc=9)" >&2
-    exit 9
-  fi
-  if ! _in_composer "$pane"; then
-    if _composer_empty "$pane"; then echo "JHT_REASON empty_unseen"; else echo "JHT_REASON not_ours"; fi
-    echo "jht-tmux-send: $session: that message is no longer in the composer: nothing pressed (rc=9)" >&2
-    exit 9
-  fi
-  busy_pre=0
-  _pane_busy "$pane" && busy_pre=1
-  _tmux send-keys -t "$session" Enter
-  if [ "$provider" = "kimi" ]; then
-    sleep 0.2
-    _tmux send-keys -t "$session" C-s
-  fi
-  sleep 1.2
-  pane=$(_pane)
-  if _submitted "$pane"; then
-    echo "jht-tmux-send: Enter to $session (taken)"
-    exit 0
-  fi
-  if _text_pending "$pane"; then
-    echo "jht-tmux-send: $session: Enter was not taken, the text is still in the composer (rc=5)" >&2
-    exit 5
-  fi
-  echo "jht-tmux-send: $session: the text left the composer but there is no proof it was taken (rc=7)" >&2
-  exit 7
+  # A signature is merely a suffix.  It cannot prove that no other draft was
+  # prepended or appended after a pending delivery.  Until this protocol can
+  # attest the complete text, retry is deliberately closed rather than
+  # risking an Enter that submits someone else's words too.
+  echo "JHT_REASON retry_unattested"
+  echo "jht-tmux-send: $session: retry cannot attest the complete composer: nothing pressed (rc=9)" >&2
+  exit 9
 fi
 
 # Com'era lo schermo PRIMA: serve a provare, dopo, che qualcosa e' cambiato per merito nostro.

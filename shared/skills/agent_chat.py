@@ -104,10 +104,10 @@ DELIVERY_EXIT = {2: "agent_not_running", 3: "agent_unavailable", 4: "agent_busy"
 # the CLI took it. Both are delivered, and never typed again with the same id; the second says «not sure».
 DELIVERY_UNCONFIRMED = 7
 # 5 is the text left in the composer (taken false): the transport prints the signature of THAT text,
-# with which «enter» later presses only Enter on it. 9 (only with --enter): that text is not there.
+# with which an older transport may press Enter on it. 9 (only with --enter): no safe retry.
 DELIVERY_PENDING = 5
 DELIVERY_NOT_THERE = 9
-ENTER_REASONS = frozenset({"menu", "empty_unseen", "not_ours"})
+ENTER_REASONS = frozenset({"menu", "empty_unseen", "not_ours", "retry_unattested"})
 SIGNATURE = re.compile(r"^JHT_SIGNATURE ((?:[0-9a-f]{2}){1,64})$", re.M)
 ENTER_REASON = re.compile(r"^JHT_REASON ([a-z_]{1,20})$", re.M)
 MESSAGE_ID = re.compile(r"^[A-Za-z0-9-]{1,64}$")
@@ -824,11 +824,10 @@ def send(agent: str, client_id: str, raw_text: str) -> dict:
 
 
 def enter(agent: str, message_id: str) -> dict:
-    """«Send again»: only Enter, once, and only on THAT message still in the agent's composer.
+    """Return the retry receipt without risking an Enter on an unattested draft.
 
-    The transport looks for the signature of that text (its tail, with the fence's nonce) in the
-    composer; anything else there (a menu, another text, an empty composer) and it presses nothing.
-    The text is never typed again. A message already taken, or not sure, answers what was recorded.
+    New transports refuse a signature-only retry: a suffix cannot prove the composer contains no
+    other words. Older transports may retain their closed answer, but a new receipt never retries.
     """
     if not MESSAGE_ID.match(message_id or ""):
         raise Refusal("chat_invalid")
