@@ -257,29 +257,28 @@ describe("«Agenti», the agents' control panel", () => {
     expect(ops().filter((r) => r.op === "screen")).toEqual([{ op: "screen", session: "SCOUT-1" }]);
   });
 
-  it("two channels: the terminal says it is only watched, and the chat tab says where the text goes", async () => {
+  it("keeps the watched terminal and the chat visible together for a chat agent", async () => {
     show("agent=CAPITANO");
     await screen.findByTestId("panel-terminal-CAPITANO");
     expect(screen.getByTestId("panel-terminal-destination")).toHaveTextContent(
-      "Nel terminale non si scrive: è solo da guardare. Per scrivere a Capitano usa la scheda Chat.",
+      "Nel terminale non si scrive: è solo da guardare. Per scrivere a Capitano usa la chat qui sotto.",
     );
-    // the terminal has no field to write in: writing is the chat's
-    expect(screen.queryByRole("textbox")).toBeNull();
-    const tabs = screen.getAllByRole("tab");
-    expect(tabs.map((tab) => tab.textContent)).toEqual(["Terminale", "Chat"]);
-    fireEvent.click(tabs[1]);
+    // The terminal remains watched while the composer stays available below it.
     expect(await screen.findByTestId("direct-chat-destination")).toHaveTextContent("Destinazione: la chat di Capitano.");
     const pane = screen.getByTestId("panel-chat-pane");
     expect(pane.className).toMatch(/overflow-hidden/);
-    expect(pane.style.minHeight).toBe("28rem");
-    expect(pane.style.height).toBe("min(46rem, calc(100svh / var(--zoom, 1) - 12rem))");
-    expect(screen.queryByTestId("panel-terminal-CAPITANO")).toBeNull();
+    expect(pane.style.minHeight).toBe("26rem");
+    expect(pane.style.height).toBe("min(40rem, calc(100svh / var(--zoom, 1) - 16rem))");
+    expect(screen.getByTestId("panel-terminal-CAPITANO")).toBeInTheDocument();
+    expect(screen.getByRole("textbox", { name: "Scrivi a Capitano" })).toBeInTheDocument();
+    expect(screen.queryByRole("tab")).toBeNull();
   });
 
-  it("an agent with no chat has the terminal alone, and is not sent to a chat tab", async () => {
+  it("an agent with no chat has the terminal alone", async () => {
     show("agent=SCOUT-1");
     await screen.findByTestId("panel-terminal-SCOUT-1");
-    expect(screen.getAllByRole("tab").map((tab) => tab.textContent)).toEqual(["Terminale"]);
+    expect(screen.queryByRole("tab")).toBeNull();
+    expect(screen.queryByTestId("panel-chat-pane")).toBeNull();
     expect(screen.getByTestId("panel-terminal-destination")).toHaveTextContent(
       "Nel terminale non si scrive: è solo da guardare.",
     );

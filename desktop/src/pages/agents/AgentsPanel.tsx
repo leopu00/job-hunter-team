@@ -468,7 +468,6 @@ export default function AgentsPanel({ search }: PageProps) {
   const [team, setTeam] = useState<TeamControlState | null>(null);
   const [busy, setBusy] = useState(false);
   const [selected, setSelected] = useState<string | null>(search.get("agent")?.toUpperCase() ?? null);
-  const [tab, setTab] = useState<"terminal" | "chat">("terminal");
   const [pending, setPending] = useState<Pending | null>(null);
   const [acting, setActing] = useState(false);
   const [notices, setNotices] = useState<Record<string, Notice>>({});
@@ -723,8 +722,8 @@ export default function AgentsPanel({ search }: PageProps) {
 
           {view === "lanes" && <Lanes t={t} history={history} roles={list.value.roles.map((item) => item.role)} nowS={Math.floor(now / 1000)} />}
           {view === "list" && (
-            <div className="flex flex-col md:flex-row gap-3 min-h-0">
-              <ul aria-label={t.title} className="md:w-[260px] shrink-0 flex flex-col gap-px rounded border overflow-hidden" style={{ borderColor: "var(--color-border)", opacity: busy ? 0.6 : 1 }}>
+            <div className="flex flex-col lg:flex-row gap-3 min-h-0">
+              <ul aria-label={t.title} className="lg:w-[280px] shrink-0 flex flex-col gap-px rounded border overflow-hidden lg:sticky lg:top-3" style={{ borderColor: "var(--color-border)", opacity: busy ? 0.6 : 1 }}>
                 {rows.map((row) => {
                   const active = current?.session === row.session;
                   return (
@@ -737,7 +736,6 @@ export default function AgentsPanel({ search }: PageProps) {
                         aria-current={active ? "true" : undefined}
                         onClick={() => {
                           setSelected(row.session);
-                          setTab("terminal");
                         }}
                         className="w-full text-left px-3 py-1.5 flex items-center gap-2"
                         style={{ background: active ? "var(--color-card)" : "transparent" }}
@@ -763,7 +761,8 @@ export default function AgentsPanel({ search }: PageProps) {
               </ul>
 
               {current && (
-                <section className="flex-1 min-w-0 rounded border p-3" style={{ borderColor: "var(--color-border)" }} aria-label={current.session}>
+                <section className="flex-1 min-w-0 overflow-hidden rounded border" style={{ borderColor: "var(--color-border)" }} aria-label={current.session}>
+                  <div className="p-3" style={{ background: "var(--color-panel)" }}>
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div className="min-w-0">
                       <div className="flex items-center gap-2">
@@ -846,45 +845,43 @@ export default function AgentsPanel({ search }: PageProps) {
                       {notices[current.session].text}
                     </p>
                   )}
-
-                  <div role="tablist" className="flex gap-3 mt-3 mb-2 border-b" style={{ borderColor: "var(--color-border)" }}>
-                    {(["terminal", ...(hasChat(current) ? ["chat"] : [])] as const).map((name) => (
-                      <button
-                        key={name}
-                        role="tab"
-                        type="button"
-                        aria-selected={tab === name}
-                        onClick={() => setTab(name as "terminal" | "chat")}
-                        className="text-[11px] font-semibold uppercase tracking-widest pb-1"
-                        style={{ color: tab === name ? "var(--color-white)" : "var(--color-muted)", borderBottom: tab === name ? "2px solid var(--color-white)" : "2px solid transparent" }}
-                      >
-                        {name === "terminal" ? t.tabTerminal : t.tabChat}
-                      </button>
-                    ))}
                   </div>
-                  {tab === "chat" && CHAT_ROLES.has(current.role) ? (
-                    AgentChatPane ? (
-                      <div
-                        data-testid="panel-chat-pane"
-                        className="mt-2 min-w-0 overflow-hidden rounded-md border"
-                        style={{
-                          height: "min(46rem, calc(100svh / var(--zoom, 1) - 12rem))",
-                          minHeight: "28rem",
-                          background: "var(--color-void)",
-                          borderColor: "var(--color-border)",
-                        }}
-                      >
-                        <AgentChatPane role={current.role as ChatRole} />
-                      </div>
-                    ) : (
-                      <p className="text-[11px] text-[var(--color-muted)]">{fill(t.chatSoon, { name: displayName(current.session) })}</p>
-                    )
-                  ) : current.agent ? (
-                    <Terminal key={current.session} row={current} t={t} chat={hasChat(current) && AgentChatPane !== null} />
-                  ) : (
-                    <p className="text-[11px] text-[var(--color-muted)]">{t.screenDown}</p>
+
+                  <section className="border-t p-3" style={{ borderColor: "var(--color-border)" }} aria-label={t.tabTerminal}>
+                    <h2 className="m-0 mb-2 text-[10px] font-semibold uppercase tracking-widest text-[var(--color-muted)]">{t.tabTerminal}</h2>
+                    <div className="max-h-[22rem] overflow-y-auto pr-1">
+                      {current.agent ? (
+                        <Terminal key={current.session} row={current} t={t} chat={hasChat(current) && AgentChatPane !== null} />
+                      ) : (
+                        <p className="text-[11px] text-[var(--color-muted)]">{t.screenDown}</p>
+                      )}
+                    </div>
+                    <SessionHistory t={t} history={history} session={current.session} nowS={Math.floor(now / 1000)} />
+                  </section>
+
+                  {hasChat(current) && (
+                    <section className="border-t" style={{ borderColor: "var(--color-border)" }} aria-label={t.tabChat}>
+                      <h2 className="m-0 px-3 py-2 text-[10px] font-semibold uppercase tracking-widest text-[var(--color-muted)]" style={{ background: "var(--color-panel)" }}>
+                        {t.tabChat}
+                      </h2>
+                      {AgentChatPane ? (
+                        <div
+                          data-testid="panel-chat-pane"
+                          className="min-w-0 overflow-hidden border-t"
+                          style={{
+                            height: "min(40rem, calc(100svh / var(--zoom, 1) - 16rem))",
+                            minHeight: "26rem",
+                            background: "var(--color-void)",
+                            borderColor: "var(--color-border)",
+                          }}
+                        >
+                          <AgentChatPane role={current.role as ChatRole} />
+                        </div>
+                      ) : (
+                        <p className="px-3 pb-3 text-[11px] text-[var(--color-muted)]">{fill(t.chatSoon, { name: displayName(current.session) })}</p>
+                      )}
+                    </section>
                   )}
-                  <SessionHistory t={t} history={history} session={current.session} nowS={Math.floor(now / 1000)} />
                 </section>
               )}
             </div>
