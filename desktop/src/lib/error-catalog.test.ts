@@ -173,6 +173,7 @@ const NOT_ERRORS: Record<string, string> = {
   not_ready: "debug trace event",
   start_failed: "debug trace event",
   snapshot_not_ready: "debug trace event",
+  snapshot_not_configured: "debug trace event",
   // Written only to the local diagnostics file, never returned.
   diagnostic_encode_failed: "diagnostics file only",
   diagnostic_path_invalid: "diagnostics file only",
