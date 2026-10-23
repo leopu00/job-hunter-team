@@ -958,11 +958,14 @@ const markers={claude:"/jht_home/.claude/.credentials.json",anthropic:"/jht_home
 process.stdout.write(`${configured?1:0} ${markers[provider]&&fs.existsSync(markers[provider])?1:0} ${fs.existsSync("/jht_home/profile/welcomed.flag")?1:0}`);
 '@
     # Every native output here is read whole and then cut: see Get-RunningComposeServiceId (T79).
-    $metadataLines = @(& { $ErrorActionPreference = 'Continue'; & docker exec $containerId node -e $metadataScript 2>$null })
+    # The script goes on stdin, never as an argument: Windows PowerShell 5.1 drops the double quotes
+    # inside a native argument, and node then fails on it (T106).
+    $metadataLines = @(& { $ErrorActionPreference = 'Continue'; $metadataScript | & docker exec -i $containerId node - 2>$null })
     $metadataCode = $LASTEXITCODE
     $metadata = if ($metadataLines.Count) { [string]$metadataLines[0] } else { '' }
     $values = if ($metadata) { @($metadata.Trim() -split '\s+') } else { @() }
     if ($metadataCode -ne 0 -or $values.Count -ne 3 -or @($values | Where-Object { $_ -notin @('0', '1') }).Count -gt 0) {
+      Write-OnboardingSnapshotReason "provider_unreadable: the provider check in the container exited $metadataCode"
       $values = @('0', '0', '0')
     }
 
@@ -1603,13 +1606,14 @@ function Get-RuntimeMigrationVolumeManifest {
   $arguments = @(
     'run', '--rm', '--network', 'none', '--read-only', '--cap-drop', 'ALL',
     '--security-opt', 'no-new-privileges', '--volume', "${Volume}:/volume:ro",
-    '--entrypoint', '/usr/bin/python3', $Image, '-I', '-c',
-    $script:RuntimeVolumeManifestPython, '/volume'
+    '--interactive', '--entrypoint', '/usr/bin/python3', $Image, '-I', '-', '/volume'
   )
+  # The script goes on stdin, never as an argument: Windows PowerShell 5.1 drops the double quotes
+  # inside a native argument, and python then fails on it (T106).
   if ($Engine -eq 'docker') {
-    $result = ((& { $ErrorActionPreference = 'Continue'; & $DockerPath @arguments 2>$null }) -join '').Trim()
+    $result = ((& { $ErrorActionPreference = 'Continue'; $script:RuntimeVolumeManifestPython | & $DockerPath @arguments 2>$null }) -join '').Trim()
   } else {
-    $result = ((& { $ErrorActionPreference = 'Continue'; & $PodmanPath @(Get-RuntimeMigrationPodmanArgs $Machine $arguments) 2>$null }) -join '').Trim()
+    $result = ((& { $ErrorActionPreference = 'Continue'; $script:RuntimeVolumeManifestPython | & $PodmanPath @(Get-RuntimeMigrationPodmanArgs $Machine $arguments) 2>$null }) -join '').Trim()
   }
   if ($LASTEXITCODE -ne 0 -or $result -notmatch '^\d+ [0-9a-f]{64}$') {
     throw "volume_manifest_failed:${Engine}:$Volume"

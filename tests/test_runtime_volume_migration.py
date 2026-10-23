@@ -79,6 +79,11 @@ logical = volume.removeprefix("host-runtime_").removeprefix("jht_")
 path = directory(volume)
 entrypoint = args[args.index("--entrypoint") + 1]
 if entrypoint == "/usr/bin/python3":
+    # the manifest script, whole: on stdin from PowerShell (as an argument 5.1 dropped its double
+    # quotes, T106), as the -c argument from sh
+    script = sys.stdin.read() if args[-2:] == ["-", "/volume"] else args[args.index("-c") + 1] if "-c" in args else ""
+    if 'format(stat.S_IMODE(mode),"o")' not in script:
+        raise SystemExit(43)
     count = 0
     aggregate = hashlib.sha256()
     root_stat = path.stat()
@@ -254,6 +259,9 @@ def test_powershell_uses_a_binary_stream_and_the_same_volume_contract():
     assert "source=docker:host-runtime" in source
     assert "target=podman:jht" in source
     assert SECRETS_LEFT_NOTICE in source
+    # the manifest script goes on stdin, never as a native argument (T106)
+    assert source.count("$script:RuntimeVolumeManifestPython | & ") == 2
+    assert "'-I', '-', '/volume'" in source
 
 
 @pytest.mark.skipif(POWERSHELL is None, reason="PowerShell unavailable")
