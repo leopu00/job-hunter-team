@@ -751,6 +751,10 @@ pub(crate) struct OnboardingError {
     /// runtime_log::failure_cause), when it said so.
     #[serde(skip_serializing_if = "Option::is_none")]
     detail: Option<String>,
+    /// The containers the team answers from, only for `existing_team_ambiguous`
+    /// when they could be listed (existing_team_register::choice_failure).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) choices: Option<Box<[crate::existing_team_register::ContainerChoice]>>,
 }
 
 #[derive(Serialize)]
@@ -879,6 +883,7 @@ pub(crate) fn failure(code: &'static str) -> OnboardingError {
         resets_at: None,
         machine: None,
         detail: None,
+        choices: None,
     }
 }
 

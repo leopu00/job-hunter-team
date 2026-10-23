@@ -184,6 +184,142 @@ done
 printf 'END|%s|%s|%s\n' "$NP" "$NI" "$ND"
 "#;
 
+/// The container the person picked was not among the team's containers of the
+/// new discovery (stopped, removed or replaced meanwhile).
+pub(crate) const CHOICE_GONE: &str = "existing_team_choice_gone";
+const MAX_DETAILS_BYTES: usize = 4096;
+
+/// ONE constant, run only when the team answers from more than one container:
+/// what the person needs to tell them apart (name and start time), for the ids
+/// on stdin, one per line (at most four, the ones already validated). It is
+/// display only: nothing here decides which container may be picked, and a
+/// reply that is not exactly right is shown as no details at all.
+pub(crate) const DETAILS_SCRIPT: &str = r#"set -u
+set -f
+if command -v docker >/dev/null 2>&1 && ! docker --version 2>/dev/null | grep -qi podman; then JHT_ENGINE=docker
+elif command -v podman >/dev/null 2>&1; then JHT_ENGINE=podman
+else exit 71; fi
+if [ "$JHT_ENGINE" = podman ]; then JHT_FORMAT='{{.Name}}|{{.State.StartedAt.Format "2006-01-02T15:04:05Z07:00"}}'
+else JHT_FORMAT='{{.Name}}|{{.State.StartedAt}}'; fi
+N=0
+while IFS= read -r JHT_ID; do
+  case "$JHT_ID" in ""|*[!0-9a-f]*) exit 71 ;; esac
+  [ "${#JHT_ID}" -eq 64 ] || exit 71
+  N=$((N + 1))
+  [ "$N" -le 4 ] || exit 71
+  JHT_ROW="$("$JHT_ENGINE" inspect --type container --format "$JHT_FORMAT" "$JHT_ID" 2>/dev/null)" || JHT_ROW="-|-"
+  JHT_NAME="${JHT_ROW%%|*}"; JHT_NAME="${JHT_NAME#/}"; JHT_STARTED="${JHT_ROW#*|}"
+  case "$JHT_NAME" in ""|*[!A-Za-z0-9_.-]*) JHT_NAME=- ;; esac
+  [ "${#JHT_NAME}" -le 64 ] || JHT_NAME=-
+  case "$JHT_STARTED" in ""|*[!0-9TZ:.+-]*) JHT_STARTED=- ;; esac
+  [ "${#JHT_STARTED}" -le 40 ] || JHT_STARTED=-
+  printf 'C|%s|%s|%s\n' "$JHT_ID" "$JHT_NAME" "$JHT_STARTED"
+done
+printf 'END|%s\n' "$N"
+"#;
+
+/// One container the team answers from, as shown when there is more than one.
+/// Only `container_id` goes back to the app, and only one of these may be picked.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct ContainerChoice {
+    pub(crate) container_id: String,
+    /// Docker or Podman name, when it was read and valid.
+    pub(crate) name: Option<String>,
+    /// RFC 3339, when it was read and valid.
+    pub(crate) started_at: Option<String>,
+    pub(crate) oci_revision: String,
+    pub(crate) digest: String,
+    /// Whether the assistant session is up there; informative.
+    pub(crate) readiness: bool,
+}
+
+fn container_name(value: &str) -> bool {
+    (1..=64).contains(&value.len())
+        && value.as_bytes()[0].is_ascii_alphanumeric()
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'.' | b'-'))
+}
+
+/// `YYYY-MM-DDTHH:MM:SS`, optional `.` and 1-9 digits, then `Z` or `+HH:MM`/`-HH:MM`.
+fn rfc3339(value: &str) -> bool {
+    let b = value.as_bytes();
+    let digits_at = |range: std::ops::Range<usize>| b.get(range).is_some_and(|s| s.iter().all(u8::is_ascii_digit));
+    if b.len() < 20
+        || b.len() > 35
+        || !digits_at(0..4)
+        || b[4] != b'-'
+        || !digits_at(5..7)
+        || b[7] != b'-'
+        || !digits_at(8..10)
+        || b[10] != b'T'
+        || !digits_at(11..13)
+        || b[13] != b':'
+        || !digits_at(14..16)
+        || b[16] != b':'
+        || !digits_at(17..19)
+    {
+        return false;
+    }
+    let mut rest = &value[19..];
+    if let Some(fraction) = rest.strip_prefix('.') {
+        let n = fraction.bytes().take_while(u8::is_ascii_digit).count();
+        if !(1..=9).contains(&n) {
+            return false;
+        }
+        rest = &fraction[n..];
+    }
+    rest == "Z"
+        || (rest.len() == 6
+            && matches!(rest.as_bytes()[0], b'+' | b'-')
+            && rest.as_bytes()[1..3].iter().all(u8::is_ascii_digit)
+            && rest.as_bytes()[3] == b':'
+            && rest.as_bytes()[4..6].iter().all(u8::is_ascii_digit))
+}
+
+/// Name and start time for each of `ids`, or nothing at all: a reply that is not
+/// exactly one record per id and the count is dropped whole.
+/// Name and start time of a container, each when it was read and valid.
+pub(crate) type Details = BTreeMap<String, (Option<String>, Option<String>)>;
+
+pub(crate) fn parse_details(reply: &ProcessResult, ids: &[&str]) -> Details {
+    let parsed = || -> Option<Details> {
+        if !reply.success() || reply.stdout.len() > MAX_DETAILS_BYTES {
+            return None;
+        }
+        let body = std::str::from_utf8(&reply.stdout).ok()?.strip_suffix('\n')?;
+        let lines: Vec<&str> = body.split('\n').collect();
+        let (last, records) = lines.split_last()?;
+        if *last != format!("END|{}", ids.len()) || records.len() != ids.len() {
+            return None;
+        }
+        let mut out = BTreeMap::new();
+        for line in records {
+            let fields: Vec<&str> = line.split('|').collect();
+            let [tag, id, name, started] = fields[..] else {
+                return None;
+            };
+            if tag != "C" || !ids.contains(&id) || out.contains_key(id) {
+                return None;
+            }
+            let name = match name {
+                "-" => None,
+                value if container_name(value) => Some(value.to_owned()),
+                _ => return None,
+            };
+            let started = match started {
+                "-" => None,
+                value if rfc3339(value) => Some(value.to_owned()),
+                _ => return None,
+            };
+            out.insert(id.to_owned(), (name, started));
+        }
+        Some(out)
+    };
+    parsed().unwrap_or_default()
+}
+
 type Runner<'a> =
     dyn FnMut(&ValidatedHost, &str, Option<&[u8]>, Duration) -> Result<ProcessResult, &'static str>
         + 'a;
@@ -565,6 +701,7 @@ fn run_call(
 /// that need no network come first and write nothing; then one SSH call lists
 /// the containers and at most four calls run the existing team probe on the
 /// validated JHT targets. Exactly one target may answer for the team.
+#[cfg(test)]
 pub(crate) fn discover_with(
     root: &Path,
     scope: &AccountScope,
@@ -574,6 +711,29 @@ pub(crate) fn discover_with(
     run: &mut Runner<'_>,
     budget: &Budget<'_>,
 ) -> Result<Found, &'static str> {
+    discover_choosing(root, scope, host, team_id, None, validate_host, run, budget, &mut Vec::new())
+}
+
+/// As `discover_with`. When the team answers from more than one container and
+/// `chosen` is `None`, the error is still `existing_team_ambiguous` and `choices`
+/// lists them. With `chosen`, the result is that container, and only if it is one
+/// of those the team answers from in THIS discovery (`existing_team_choice_gone`
+/// otherwise): a picked id never widens what may be found, it only narrows it.
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn discover_choosing(
+    root: &Path,
+    scope: &AccountScope,
+    host: &ExecutionHost,
+    team_id: &str,
+    chosen: Option<&str>,
+    validate_host: &mut dyn FnMut() -> Result<ValidatedHost, &'static str>,
+    run: &mut Runner<'_>,
+    budget: &Budget<'_>,
+    choices: &mut Vec<ContainerChoice>,
+) -> Result<Found, &'static str> {
+    if chosen.is_some_and(|id| !runtime::hex(id, 64)) {
+        return Err("invalid_container_choice");
+    }
     if !matches!(host, ExecutionHost::Vps { .. }) {
         return Err("existing_team_vps_required");
     }
@@ -633,11 +793,18 @@ pub(crate) fn discover_with(
             },
         }
     }
-    if matches.len() > 1 {
-        return Err("existing_team_ambiguous");
-    }
-    let Some((target, readiness)) = matches.pop() else {
-        return Err("existing_team_not_found");
+    let (target, readiness) = match chosen {
+        Some(id) => {
+            let Some(index) = matches.iter().position(|(target, _)| target.container_id == id) else {
+                return Err(if matches.is_empty() { "existing_team_not_found" } else { CHOICE_GONE });
+            };
+            matches.swap_remove(index)
+        }
+        None if matches.len() > 1 => {
+            *choices = describe(run, &validated, &matches, budget);
+            return Err("existing_team_ambiguous");
+        }
+        None => matches.pop().ok_or("existing_team_not_found")?,
     };
     let (candidate, candidate_sha256) = runtime::candidate_bytes(host, team_id, &target)?;
     if restoring.as_ref().is_some_and(|attested| *attested != candidate_sha256) {
@@ -657,6 +824,41 @@ pub(crate) fn discover_with(
         restores: restoring.is_some(),
         replaces: rebinding,
     })
+}
+
+/// The containers the team answers from, with name and start time when one
+/// more read-only call gives them in time. Without them the choice is still
+/// offered: the ids, images and sessions come from the checks already made.
+fn describe(
+    run: &mut Runner<'_>,
+    host: &ValidatedHost,
+    matches: &[(RuntimeTarget, bool)],
+    budget: &Budget<'_>,
+) -> Vec<ContainerChoice> {
+    let ids: Vec<&str> = matches.iter().map(|(target, _)| target.container_id.as_str()).collect();
+    let details = budget
+        .call(PROBE_CALL)
+        .ok()
+        .and_then(|timeout| {
+            let input = ids.iter().map(|id| format!("{id}\n")).collect::<String>();
+            run(host, DETAILS_SCRIPT, Some(input.as_bytes()), timeout).ok()
+        })
+        .map(|reply| parse_details(&reply, &ids))
+        .unwrap_or_default();
+    matches
+        .iter()
+        .map(|(target, readiness)| {
+            let (name, started_at) = details.get(&target.container_id).cloned().unwrap_or((None, None));
+            ContainerChoice {
+                container_id: target.container_id.clone(),
+                name,
+                started_at,
+                oci_revision: target.oci_revision.clone(),
+                digest: target.digest.clone(),
+                readiness: *readiness,
+            }
+        })
+        .collect()
 }
 
 /// What `register` did.
@@ -697,14 +899,16 @@ pub(crate) fn register_hooked(
     budget: &Budget<'_>,
     before_link: &mut dyn FnMut(),
 ) -> Result<Registered, &'static str> {
-    let found = discover_with(
+    let found = discover_choosing(
         root,
         scope,
         &receipt.host,
         &receipt.team_id,
+        receipt.chosen.as_deref(),
         validate_host,
         run,
         budget,
+        &mut Vec::new(),
     )?;
     if found.candidate_sha256 != receipt.candidate_sha256
         || found.replaces.as_ref().map(|base| &base.candidate_sha256) != receipt.replaces_sha256.as_ref()
@@ -745,6 +949,8 @@ pub(crate) struct Receipt {
     pub(crate) candidate_sha256: String,
     /// The SHA-256 of the saved candidate the person was shown being replaced, if any.
     pub(crate) replaces_sha256: Option<String>,
+    /// The container the person picked among several, if they had to.
+    pub(crate) chosen: Option<String>,
     pub(crate) at: Instant,
 }
 
@@ -788,6 +994,10 @@ pub(crate) fn receipt_for(
 pub(crate) struct ExistingTeamDiscoverRequest {
     team_id: String,
     host: ExecutionHost,
+    /// Set only after an `existing_team_ambiguous` listed the team's containers:
+    /// the one the person picked and confirmed.
+    #[serde(default)]
+    container_id: Option<String>,
 }
 
 /// Only what `register` is allowed to take from the renderer: the hash it was
@@ -866,6 +1076,15 @@ fn receipt_view(request: &ExistingTeamDiscoverRequest, found: &Found) -> Existin
     }
 }
 
+/// The error of a discovery; `existing_team_ambiguous` also lists the containers.
+pub(crate) fn choice_failure(code: &'static str, choices: Vec<ContainerChoice>) -> OnboardingError {
+    let mut error = failure(code);
+    if code == "existing_team_ambiguous" && !choices.is_empty() {
+        error.choices = Some(choices.into_boxed_slice());
+    }
+    error
+}
+
 /// Read-only: finds the container of the team on a VPS whose SSH key is
 /// already pinned, and shows what the server says about it. Writes nothing
 /// except an in-memory receipt.
@@ -895,36 +1114,41 @@ pub(crate) async fn onboarding_existing_team_discover(
     let worker_expected = expected.clone();
     let worker_host = request.host.clone();
     let worker_team = request.team_id.clone();
+    let worker_chosen = request.container_id.clone();
     let result = tauri::async_runtime::spawn_blocking(move || {
         let _scope = scope_state
             .lock_expected(&worker_expected)
-            .map_err(|code| code)?;
-        let root = runtime::root(&app)?;
+            .map_err(|code| (code, Vec::new()))?;
+        let root = runtime::root(&app).map_err(|code| (code, Vec::new()))?;
         let started = Instant::now();
         let elapsed = || started.elapsed();
         let budget = Budget {
             total: DISCOVER_BUDGET,
             elapsed: &elapsed,
         };
-        discover_with(
+        let mut choices = Vec::new();
+        discover_choosing(
             &root,
             &worker_expected,
             &worker_host,
             &worker_team,
+            worker_chosen.as_deref(),
             &mut || validate_host_for_scope(&app, &worker_host, &worker_expected),
             &mut |host, command, input, timeout| run_ssh_command(host, command, input, timeout, None),
             &budget,
+            &mut choices,
         )
+        .map_err(|code| (code, choices))
     })
     .await
-    .unwrap_or(Err(UNAVAILABLE));
+    .unwrap_or(Err((UNAVAILABLE, Vec::new())));
     state.finish();
     let _scope = scopes.lock_expected(&expected).map_err(failure)?;
-    if result.as_ref().is_err_and(|code| *code == SELECTION_MISMATCH) {
+    if result.as_ref().is_err_and(|(code, _)| *code == SELECTION_MISMATCH) {
         // As for a changed target: a new attempt needs a new discovery.
         receipt_clear(&state.receipt);
     }
-    let found = result.map_err(failure)?;
+    let found = result.map_err(|(code, choices)| choice_failure(code, choices))?;
     receipt_store(
         &state.receipt,
         Receipt {
@@ -933,6 +1157,7 @@ pub(crate) async fn onboarding_existing_team_discover(
             team_id: request.team_id.clone(),
             candidate_sha256: found.candidate_sha256.clone(),
             replaces_sha256: found.replaces.as_ref().map(|base| base.candidate_sha256.clone()),
+            chosen: request.container_id.clone(),
             at: Instant::now(),
         },
     );
@@ -1019,7 +1244,12 @@ pub(crate) fn settle_register(
                 outcome: register_outcome(&registered),
             })
         }
-        Err(code @ ("existing_team_target_changed" | SELECTION_MISMATCH | "existing_team_runtime_target_changed")) => {
+        Err(
+            code @ ("existing_team_target_changed"
+            | SELECTION_MISMATCH
+            | "existing_team_runtime_target_changed"
+            | CHOICE_GONE),
+        ) => {
             receipt_clear(slot);
             Err(failure(code))
         }

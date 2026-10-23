@@ -4,11 +4,14 @@ import { appLocale } from "../lib/app-locale";
 import { describeError } from "../lib/error-catalog";
 import { ONBOARDING_TEXT } from "./onboarding.i18n";
 import {
+  ambiguousContainerChoices,
+  containerStartTime,
   existingTeamBridge,
   existingTeamErrorCode,
   isTerminalExistingTeamError,
   type ExistingTeamBridge,
   type ExistingTeamConnectionResult,
+  type ExistingTeamContainerChoice,
   type ExistingTeamReadOnlyConnectionResult,
   type ExistingTeamProgress,
   type ExistingTeamReceipt,
@@ -18,10 +21,11 @@ import {
 } from "../lib/existing-team";
 import { EXISTING_TEAM_ID_TEXT } from "./existing-team-id.i18n";
 import { EXISTING_TEAM_RECEIPT_TEXT } from "./existing-team-receipt.i18n";
+import { EXISTING_TEAM_CHOICE_TEXT } from "./existing-team-choice.i18n";
 import { OnboardingArtwork } from "./OnboardingArtwork";
 import "./existing-team-connect.css";
 
-type ModalStage = "fields" | "probing" | "confirm" | "attaching" | "discovering" | "receipt" | "registering" | "failed";
+type ModalStage = "fields" | "probing" | "confirm" | "attaching" | "discovering" | "choose" | "receipt" | "registering" | "failed";
 type FailedOperation = "probe" | "attach" | "notify";
 
 export interface ExistingTeamConnectModalProps {
@@ -63,6 +67,13 @@ function shortId(value: string): string {
   return value.replace(/^sha256:/, "").slice(0, 12);
 }
 
+/** When the container was started, in the person's language, or null when it was not read. */
+function startedLabel(choice: ExistingTeamContainerChoice): string | null {
+  const at = containerStartTime(choice);
+  if (at === null) return null;
+  return new Intl.DateTimeFormat(appLocale(), { dateStyle: "medium", timeStyle: "short" }).format(at);
+}
+
 function cleanHost(host: ExistingTeamVpsHost): ExistingTeamVpsHost {
   return {
     ...host,
@@ -94,6 +105,7 @@ export default function ExistingTeamConnectModal({
 }: ExistingTeamConnectModalProps) {
   const t = ONBOARDING_TEXT[appLocale()];
   const r = EXISTING_TEAM_RECEIPT_TEXT[appLocale()];
+  const c = EXISTING_TEAM_CHOICE_TEXT[appLocale()];
   const titleId = useId();
   const descriptionId = useId();
   const dialogRef = useRef<HTMLElement>(null);
@@ -116,6 +128,8 @@ export default function ExistingTeamConnectModal({
   const [failedOperation, setFailedOperation] = useState<FailedOperation | null>(null);
   const [readOnlyRequested, setReadOnlyRequested] = useState(false);
   const [receipt, setReceipt] = useState<ExistingTeamReceipt | null>(null);
+  const [choices, setChoices] = useState<ExistingTeamContainerChoice[] | null>(null);
+  const [picked, setPicked] = useState<string | null>(null);
   const [attachProgress, setAttachProgress] = useState<ExistingTeamProgress["stage"]>("runtime");
   const terminal = errorCode ? isTerminalExistingTeamError(errorCode) : false;
 
@@ -126,6 +140,8 @@ export default function ExistingTeamConnectModal({
   function backToFields() {
     resultRef.current = null;
     setReceipt(null);
+    setChoices(null);
+    setPicked(null);
     setProbe(null);
     setErrorCode(null);
     setFailedOperation(null);
@@ -135,7 +151,7 @@ export default function ExistingTeamConnectModal({
   function keyDown(event: KeyboardEvent<HTMLElement>) {
     if (event.key === "Escape") {
       event.preventDefault();
-      if (stage === "confirm" || stage === "receipt" || stage === "failed") backToFields();
+      if (stage === "confirm" || stage === "choose" || stage === "receipt" || stage === "failed") backToFields();
       else if (stage === "fields") onCancel();
       return;
     }
@@ -208,6 +224,7 @@ export default function ExistingTeamConnectModal({
     try {
       setReceipt(await bridge.discover(request));
     } catch (error) {
+      if (offerChoice(error)) return;
       if (!targetAlreadySaved(error)) throw error;
       await openSavedTarget(request);
       return;
@@ -226,11 +243,41 @@ export default function ExistingTeamConnectModal({
       const found = await bridge.discover(request);
       if (!found.previous) return false;
       setReceipt(found);
-    } catch {
-      return false;
+    } catch (error) {
+      // the updated team answers from more than one container: the pick decides what it is rebound to
+      return offerChoice(error);
     }
     setStage("receipt");
     return true;
+  }
+
+  /**
+   * More than one running container answers as the team: list them and let the person pick one.
+   * Nothing is preselected; the pick is only a narrower discovery, confirmed on the usual receipt.
+   */
+  function offerChoice(error: unknown): boolean {
+    const list = ambiguousContainerChoices(error);
+    if (!list) return false;
+    setChoices(list);
+    setPicked(null);
+    setStage("choose");
+    return true;
+  }
+
+  async function discoverPicked() {
+    if (!picked || stage !== "choose") return;
+    const request = { teamId: expectedTeamId, host: cleanHost(host) };
+    setStage("discovering");
+    setErrorCode(null);
+    setFailedOperation(null);
+    try {
+      setReceipt(await bridge.discover({ ...request, containerId: picked }));
+      setStage("receipt");
+    } catch (error) {
+      setErrorCode(existingTeamErrorCode(error));
+      setFailedOperation("attach");
+      setStage("failed");
+    }
   }
 
   /** The full connection («Confirm and connect»), with the target this profile has saved. */
@@ -260,6 +307,7 @@ export default function ExistingTeamConnectModal({
     try {
       setReceipt(await bridge.discover(request));
     } catch (error) {
+      if (offerChoice(error)) return;
       if (!targetAlreadySaved(error)) throw error;
       await connectFull(request);
       return;
@@ -332,6 +380,9 @@ export default function ExistingTeamConnectModal({
 
   const busy = stage === "probing" || stage === "attaching" || stage === "discovering" || stage === "registering";
   const activeStep = stage === "fields" || stage === "probing" ? 0 : stage === "confirm" ? 1 : 2;
+  const newestId = choices && choices.filter((choice) => containerStartTime(choice) !== null).length > 1
+    ? choices[0].containerId
+    : null;
   const progressCopy: Record<ExistingTeamProgress["stage"], string> = t.existingTeam.progress;
 
   return (
@@ -409,6 +460,42 @@ export default function ExistingTeamConnectModal({
         {stage === "discovering" && (
           <section className="existing-team-modal__status" role="status" aria-live="polite">
             <span aria-hidden="true">••</span><div><strong>{r.discovering}</strong><p>{r.discoveringDetail}</p></div>
+          </section>
+        )}
+
+        {stage === "choose" && choices && (
+          <section className="existing-team-modal__confirm" aria-live="polite">
+            <p className="existing-team-modal__eyebrow">{c.eyebrow}</p>
+            <p>{c.intro.replace("{count}", String(choices.length))}</p>
+            <p>{c.cause}</p>
+            <p>{c.todo}</p>
+            <div className="existing-team-modal__choices" role="radiogroup" aria-label={c.listLabel}>
+              {choices.map((choice) => {
+                const since = startedLabel(choice);
+                return (
+                  <label key={choice.containerId} className={`existing-team-modal__choice${picked === choice.containerId ? " is-picked" : ""}`}>
+                    <input
+                      type="radio"
+                      name="existing-team-container"
+                      value={choice.containerId}
+                      checked={picked === choice.containerId}
+                      onChange={() => setPicked(choice.containerId)}
+                    />
+                    <dl>
+                      <div><dt>{c.name}</dt><dd>{choice.name ?? c.noName}{newestId === choice.containerId && <em> · {c.newest}</em>}</dd></div>
+                      <div><dt>{c.state}</dt><dd>{since ? c.runningSince.replace("{date}", since) : c.running}</dd></div>
+                      <div><dt>{c.image}</dt><dd>{shortId(choice.ociRevision)} · {shortId(choice.digest)}</dd></div>
+                      <div><dt>{c.container}</dt><dd>{shortId(choice.containerId)}</dd></div>
+                      <div><dt>{c.assistant}</dt><dd>{choice.readiness ? c.assistantUp : c.assistantDown}</dd></div>
+                    </dl>
+                  </label>
+                );
+              })}
+            </div>
+            <div className="existing-team-modal__actions">
+              <button type="button" className="existing-team-modal__secondary" onClick={backToFields}>{c.cancel}</button>
+              <button type="button" className="existing-team-modal__primary" disabled={!picked} onClick={() => void discoverPicked()}>{c.pick}</button>
+            </div>
           </section>
         )}
 

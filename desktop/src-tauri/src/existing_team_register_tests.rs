@@ -6,9 +6,10 @@
 use crate::{
     account_scope::AccountScope,
     existing_team_register::{
-        classify, discover_with, parse_discovery, receipt_clear, receipt_for, receipt_store,
+        choice_failure, classify, discover_choosing, discover_with, parse_details, parse_discovery, receipt_clear, receipt_for, receipt_store,
         register_hooked, register_outcome, register_with, settle_register, Budget,
-        ExistingTeamRegisterRequest, Found, Receipt, Registered, DISCOVERY_SCRIPT, SELECTION_MISMATCH,
+        ExistingTeamRegisterRequest, Found, Receipt, Registered, CHOICE_GONE, DETAILS_SCRIPT, DISCOVERY_SCRIPT,
+        SELECTION_MISMATCH,
     },
     existing_team_runtime::{self as runtime, CandidateWrite, RuntimeTarget},
     onboarding::{existing_team_readonly_connect_with, existing_team_reopen_with, OnboardingNativeState, SNAPSHOT_TIMEOUT},
@@ -227,6 +228,8 @@ struct Server {
     clock: Cell<Duration>,
     discovery: RefCell<Result<ProcessResult, &'static str>>,
     probes: RefCell<HashMap<String, Result<ProcessResult, &'static str>>>,
+    /// What the details script answers; by default what a VPS without it would (exit 71).
+    details: RefCell<Result<ProcessResult, &'static str>>,
     discovery_cost: Duration,
     probe_cost: Duration,
 }
@@ -238,6 +241,7 @@ impl Server {
             clock: Cell::new(Duration::ZERO),
             discovery: RefCell::new(Ok(world.reply())),
             probes: RefCell::new(HashMap::new()),
+            details: RefCell::new(Ok(exit(71))),
             discovery_cost: Duration::from_millis(300),
             probe_cost: Duration::from_millis(300),
         }
@@ -262,6 +266,12 @@ impl Server {
             };
         }
         self.clock.set(self.clock.get() + self.probe_cost);
+        if command == DETAILS_SCRIPT {
+            return match &*self.details.borrow() {
+                Ok(result) => Ok(clone_result(result)),
+                Err(error) => Err(*error),
+            };
+        }
         let id = command
             .split("JHT_CID='")
             .nth(1)
@@ -390,6 +400,7 @@ fn receipt_of(sandbox: &Sandbox, found: &Found) -> Receipt {
         team_id: TEAM.to_owned(),
         candidate_sha256: found.candidate_sha256.clone(),
         replaces_sha256: found.replaces.as_ref().map(|base| base.candidate_sha256.clone()),
+        chosen: None,
         at: Instant::now(),
     }
 }
@@ -979,6 +990,7 @@ fn t10_the_receipt_in_memory_is_the_only_authority_for_register() {
         team_id: TEAM.to_owned(),
         candidate_sha256: sha.to_owned(),
         replaces_sha256: None,
+        chosen: None,
         at,
     };
     let now = Instant::now();
@@ -1251,6 +1263,85 @@ esac
         assert_eq!(String::from_utf8_lossy(&reply.stdout).lines().filter(|l| l.starts_with("P|")).count(), 4);
     }
 
+    /// The details script against a fake engine: `rows` maps a container id to what
+    /// `inspect --format` prints for it (none: the inspect fails).
+    fn run_details(engine: &str, rows: &[(String, Option<&str>)], stdin: &str) -> (ProcessResult, String) {
+        let n = SANDBOXES.fetch_add(1, Ordering::SeqCst);
+        let dir = std::env::temp_dir().join(format!("jht-t123-stub-{}-{n}", std::process::id()));
+        fs::create_dir_all(&dir).unwrap();
+        let stub = dir.join(engine);
+        fs::write(
+            &stub,
+            r#"#!/bin/sh
+D="$STUB_DIR"
+case "$1" in
+  --version) echo "$0 version 1" ;;
+  inspect) printf '%s\n' "$5" > "$D/format"; [ -f "$D/c-$6" ] || exit 1; cat "$D/c-$6" ;;
+  *) exit 99 ;;
+esac
+"#,
+        )
+        .unwrap();
+        fs::set_permissions(&stub, fs::Permissions::from_mode(0o755)).unwrap();
+        for (id, row) in rows {
+            if let Some(row) = row {
+                fs::write(dir.join(format!("c-{id}")), row).unwrap();
+            }
+        }
+        let mut child = Command::new("/bin/sh")
+            .arg("-c")
+            .arg(DETAILS_SCRIPT)
+            .env("PATH", format!("{}:/usr/bin:/bin", dir.display()))
+            .env("STUB_DIR", &dir)
+            .stdin(std::process::Stdio::piped())
+            .stdout(std::process::Stdio::piped())
+            .spawn()
+            .expect("a shell");
+        use std::io::Write as _;
+        child.stdin.take().unwrap().write_all(stdin.as_bytes()).unwrap();
+        let output = child.wait_with_output().unwrap();
+        let format = fs::read_to_string(dir.join("format")).unwrap_or_default();
+        let _ = fs::remove_dir_all(&dir);
+        (ProcessResult { code: output.status.code().unwrap_or(-1), stdout: output.stdout }, format)
+    }
+
+    #[test]
+    fn t123_the_details_script_prints_what_parse_details_reads_and_marks_what_it_cannot() {
+        let (one, two, three) = (container_id(1), container_id(2), container_id(3));
+        let rows = [
+            (one.clone(), Some("/jht|2026-10-20T08:00:00.123456789Z")),
+            (two.clone(), Some("/jht old|2026-10-20T08:00:00Z")),
+            (three.clone(), None),
+        ];
+        let (reply, format) = run_details("docker", &rows, &format!("{one}\n{two}\n{three}\n"));
+        assert_eq!(reply.code, 0);
+        assert_eq!(
+            String::from_utf8_lossy(&reply.stdout),
+            format!("C|{one}|jht|2026-10-20T08:00:00.123456789Z\nC|{two}|-|2026-10-20T08:00:00Z\nC|{three}|-|-\nEND|3\n")
+        );
+        assert_eq!(format.trim_end(), "{{.Name}}|{{.State.StartedAt}}");
+        let details = parse_details(&reply, &[one.as_str(), two.as_str(), three.as_str()]);
+        assert_eq!(details[&one], (Some("jht".to_owned()), Some("2026-10-20T08:00:00.123456789Z".to_owned())));
+        assert_eq!(details[&two], (None, Some("2026-10-20T08:00:00Z".to_owned())));
+        assert_eq!(details[&three], (None, None));
+        // a name that tries to add fields, and a start time that is not one, are marked, never passed on
+        let rows = [(one.clone(), Some("/a|b|c\nC|x"))];
+        let (reply, _) = run_details("docker", &rows, &format!("{one}\n"));
+        assert_eq!(String::from_utf8_lossy(&reply.stdout), format!("C|{one}|a|-\nEND|1\n"));
+        // Podman: its own format, the same record
+        let rows = [(one.clone(), Some("jht|2026-10-20T08:00:00+02:00"))];
+        let (reply, format) = run_details("podman", &rows, &format!("{one}\n"));
+        assert_eq!(String::from_utf8_lossy(&reply.stdout), format!("C|{one}|jht|2026-10-20T08:00:00+02:00\nEND|1\n"));
+        assert!(format.contains(".State.StartedAt.Format"), "{format}");
+        // more than four ids, or one that is not an id: no END, a failing exit
+        let five: String = (1..=5).map(|n| format!("{}\n", container_id(n))).collect();
+        for stdin in [five, format!("{one}\nnot-an-id\n"), format!("{one};id\n")] {
+            let (reply, _) = run_details("docker", &rows, &stdin);
+            assert_eq!(reply.code, 71, "{stdin:?}");
+            assert!(!String::from_utf8_lossy(&reply.stdout).contains("END|"));
+        }
+    }
+
     #[test]
     fn no_container_is_a_complete_empty_listing() {
         let reply = Stub::new(&World::default()).run();
@@ -1360,6 +1451,7 @@ fn t11_the_commands_share_one_gate_and_teardown_empties_the_receipt() {
             team_id: TEAM.to_owned(),
             candidate_sha256: "a".repeat(64),
             replaces_sha256: None,
+            chosen: None,
             at: Instant::now(),
         },
     );
@@ -1819,6 +1911,7 @@ fn t16_the_outcomes_and_the_receipt_after_a_mismatch() {
         team_id: TEAM.to_owned(),
         candidate_sha256: "a".repeat(64),
         replaces_sha256: None,
+        chosen: None,
         at: Instant::now(),
     };
     for (label, result, clears) in [
@@ -2156,4 +2249,246 @@ fn t31_only_the_apps_own_window_is_one_that_writes() {
     for label in ["live-screen", "broker-login", "other"] {
         assert!(!crate::direct_chat::window_may_write(label), "{label}");
     }
+}
+
+// ------------------------------------------- T123: more than one container of the team
+
+fn discover_picking(
+    sandbox: &Sandbox,
+    server: &Server,
+    chosen: Option<&str>,
+) -> (Result<Found, &'static str>, Vec<crate::existing_team_register::ContainerChoice>) {
+    let clock = || server.clock.get();
+    let mut choices = Vec::new();
+    let result = discover_choosing(
+        &sandbox.root,
+        &sandbox.scope,
+        &host(),
+        TEAM,
+        chosen,
+        &mut || Ok(validated(sandbox)),
+        &mut |_, command, input, timeout| server.answer(command, input, timeout),
+        &budget_of(Duration::from_secs(40), &clock),
+        &mut choices,
+    );
+    (result, choices)
+}
+
+/// Containers 1 and 2 both answer as the team; 3 is another team's, 4 someone else's image.
+fn two_of_the_team() -> (World, Server) {
+    let world = World::default()
+        .jht(1)
+        .jht(2)
+        .jht(3)
+        .other(4, &["docker.io/library/redis@sha256:aaaa"]);
+    let server = Server::new(&world).probe(1, probe_ok(true, true)).probe(2, probe_ok(false, false));
+    (world, server)
+}
+
+fn details_reply(lines: &[String]) -> ProcessResult {
+    text(lines)
+}
+
+#[test]
+fn t123_two_containers_of_the_team_are_listed_with_name_and_start_and_none_is_picked() {
+    let sandbox = Sandbox::new();
+    write_pin(&sandbox);
+    let (_, server) = two_of_the_team();
+    *server.details.borrow_mut() = Ok(details_reply(&[
+        format!("C|{}|jht|2026-10-20T08:00:00.123456789Z", container_id(1)),
+        format!("C|{}|jht-old|2026-09-01T10:00:00+02:00", container_id(2)),
+        "END|2".to_owned(),
+    ]));
+    let (result, choices) = discover_picking(&sandbox, &server, None);
+    assert_eq!(result.expect_err("still ambiguous"), "existing_team_ambiguous");
+    let ids: Vec<&str> = choices.iter().map(|c| c.container_id.as_str()).collect();
+    assert_eq!(ids, [container_id(1), container_id(2)]);
+    assert_eq!(choices[0].name.as_deref(), Some("jht"));
+    assert_eq!(choices[0].started_at.as_deref(), Some("2026-10-20T08:00:00.123456789Z"));
+    assert_eq!(choices[1].name.as_deref(), Some("jht-old"));
+    assert_eq!(choices[0].oci_revision, revision(1));
+    assert_eq!(choices[1].digest, format!("sha256:{}", hexs(0x9d, 2)));
+    assert!(choices[0].readiness && !choices[1].readiness);
+    // the details call is the fixed script, with only the team's two ids on stdin
+    let calls = server.calls.borrow();
+    let details: Vec<&Call> = calls.iter().filter(|c| c.command == DETAILS_SCRIPT).collect();
+    assert_eq!(details.len(), 1);
+    assert_eq!(
+        details[0].input.as_deref(),
+        Some(format!("{}\n{}\n", container_id(1), container_id(2)).as_bytes())
+    );
+    assert!(!DETAILS_SCRIPT.contains(TEAM));
+    for verb in [" start ", " stop ", " restart ", " run ", " rm ", " kill ", " cp ", " pull ", " exec ", "tmux", " create "] {
+        assert!(!DETAILS_SCRIPT.contains(verb), "{verb}");
+    }
+    // nothing is written by a discovery
+    assert!(!sandbox.candidate().exists() && !sandbox.selection().exists());
+    // what reaches the app: the same code, with the list
+    let error = serde_json::to_value(choice_failure("existing_team_ambiguous", choices)).expect("json");
+    assert_eq!(error["code"], "existing_team_ambiguous");
+    assert_eq!(error["choices"].as_array().expect("choices").len(), 2);
+    assert_eq!(error["choices"][0]["containerId"], container_id(1));
+    assert_eq!(error["choices"][0]["startedAt"], "2026-10-20T08:00:00.123456789Z");
+    // and no list for any other code
+    let other = serde_json::to_value(choice_failure("existing_team_not_found", Vec::new())).expect("json");
+    assert!(other.get("choices").is_none());
+}
+
+#[test]
+fn t123_details_that_are_not_exactly_right_are_dropped_and_the_choice_stays() {
+    let sandbox = Sandbox::new();
+    write_pin(&sandbox);
+    let one = container_id(1);
+    let two = container_id(2);
+    let bad: Vec<Result<ProcessResult, &'static str>> = vec![
+        Ok(exit(71)),
+        Err("process_timeout"),
+        Ok(details_reply(&[format!("C|{one}|jht|2026-10-20T08:00:00Z"), "END|1".to_owned()])),
+        Ok(details_reply(&[format!("C|{one}|jht|2026-10-20T08:00:00Z"), format!("C|{one}|jht|2026-10-20T08:00:00Z"), "END|2".to_owned()])),
+        Ok(details_reply(&[format!("C|{one}|jht|2026-10-20T08:00:00Z"), format!("C|{}|x|-", container_id(3)), "END|2".to_owned()])),
+        Ok(details_reply(&[format!("C|{one}|<b>jht</b>|-"), format!("C|{two}|-|-"), "END|2".to_owned()])),
+        Ok(details_reply(&[format!("C|{one}|jht|yesterday"), format!("C|{two}|-|-"), "END|2".to_owned()])),
+        Ok(details_reply(&[format!("C|{one}|jht|-|extra"), format!("C|{two}|-|-"), "END|2".to_owned()])),
+        Ok(details_reply(&[format!("C|{one}|-|-"), format!("C|{two}|-|-")])),
+    ];
+    for (n, answer) in bad.into_iter().enumerate() {
+        let (_, server) = two_of_the_team();
+        *server.details.borrow_mut() = answer;
+        let (result, choices) = discover_picking(&sandbox, &server, None);
+        assert_eq!(result.expect_err("ambiguous"), "existing_team_ambiguous", "case {n}");
+        assert_eq!(choices.len(), 2, "case {n}");
+        assert!(choices.iter().all(|c| c.name.is_none() && c.started_at.is_none()), "case {n}");
+    }
+    // a valid reply where one container could not be read keeps the other's details
+    let reply = details_reply(&[format!("C|{one}|jht|2026-10-20T08:00:00Z"), format!("C|{two}|-|-"), "END|2".to_owned()]);
+    let details = parse_details(&reply, &[one.as_str(), two.as_str()]);
+    assert_eq!(details[&one], (Some("jht".to_owned()), Some("2026-10-20T08:00:00Z".to_owned())));
+    assert_eq!(details[&two], (None, None));
+}
+
+#[test]
+fn t123_one_container_of_the_team_needs_no_details_call() {
+    let sandbox = Sandbox::new();
+    write_pin(&sandbox);
+    let world = team_world();
+    let server = team_server(&world);
+    let (result, choices) = discover_picking(&sandbox, &server, None);
+    assert_eq!(result.expect("found").runtime.container_id, container_id(1));
+    assert!(choices.is_empty());
+    assert!(!server.commands().iter().any(|c| c == DETAILS_SCRIPT));
+}
+
+#[test]
+fn t123_the_pick_only_narrows_to_a_container_that_answers_as_the_team_now() {
+    let sandbox = Sandbox::new();
+    write_pin(&sandbox);
+    // the picked one of the two
+    let (world, server) = two_of_the_team();
+    let (result, _) = discover_picking(&sandbox, &server, Some(&container_id(2)));
+    let found = result.expect("picked");
+    assert_eq!(found.runtime, target_of(&world, 2));
+    assert!(!found.readiness);
+    assert!(!server.commands().iter().any(|c| c == DETAILS_SCRIPT));
+    // another team's container, someone else's image, an id the VPS does not have: never
+    for id in [container_id(3), container_id(4), container_id(9)] {
+        let (_, server) = two_of_the_team();
+        let (result, _) = discover_picking(&sandbox, &server, Some(&id));
+        assert_eq!(result.expect_err("not the team's"), CHOICE_GONE);
+    }
+    // the picked one stopped meanwhile: only container 1 is listed now
+    let world = World::default().jht(1).jht(3);
+    let server = Server::new(&world).probe(1, probe_ok(true, true));
+    let (result, _) = discover_picking(&sandbox, &server, Some(&container_id(2)));
+    assert_eq!(result.expect_err("gone"), CHOICE_GONE);
+    // and with no container of the team left at all, it is not found
+    let world = World::default().jht(3);
+    let server = Server::new(&world);
+    let (result, _) = discover_picking(&sandbox, &server, Some(&container_id(2)));
+    assert_eq!(result.expect_err("none"), "existing_team_not_found");
+    // a malformed id is refused before any call
+    for id in ["", "zz", "C0C0", &"c0".repeat(33), &format!("{}\n", container_id(1))] {
+        let (_, server) = two_of_the_team();
+        let (result, _) = discover_picking(&sandbox, &server, Some(id));
+        assert_eq!(result.expect_err("malformed"), "invalid_container_choice", "{id:?}");
+        assert_eq!(server.count(), 0);
+    }
+}
+
+#[test]
+fn t123_register_rediscovers_with_the_same_pick_and_writes_that_container() {
+    let sandbox = Sandbox::new();
+    write_pin(&sandbox);
+    let (world, server) = two_of_the_team();
+    let (result, _) = discover_picking(&sandbox, &server, Some(&container_id(2)));
+    let found = result.expect("picked");
+    let mut receipt = receipt_of(&sandbox, &found);
+    // without the pick the same receipt cannot register: the team is still ambiguous
+    let (_, server) = two_of_the_team();
+    assert_eq!(register(&sandbox, &server, &receipt).expect_err("no pick"), "existing_team_ambiguous");
+    assert!(!sandbox.candidate().exists());
+    // with it, the candidate is the picked container
+    receipt.chosen = Some(container_id(2));
+    let (_, server) = two_of_the_team();
+    assert!(matches!(register(&sandbox, &server, &receipt).expect("registered"), Registered::New(CandidateWrite::Written)));
+    let (candidate, _) = runtime::candidate_bytes(&host(), TEAM, &target_of(&world, 2)).expect("bytes");
+    assert_eq!(fs::read(sandbox.candidate()).expect("candidate"), candidate);
+}
+
+#[test]
+fn t123_a_pick_that_is_gone_at_register_writes_nothing_and_drops_the_receipt() {
+    let sandbox = Sandbox::new();
+    write_pin(&sandbox);
+    let (_, server) = two_of_the_team();
+    let (result, _) = discover_picking(&sandbox, &server, Some(&container_id(2)));
+    let mut receipt = receipt_of(&sandbox, &result.expect("picked"));
+    receipt.chosen = Some(container_id(2));
+    let world = World::default().jht(1).jht(3);
+    let server = Server::new(&world).probe(1, probe_ok(true, true));
+    let gone = register(&sandbox, &server, &receipt);
+    assert_eq!(*gone.as_ref().map(|_| ()).expect_err("gone"), CHOICE_GONE);
+    assert!(!sandbox.candidate().exists());
+    let slot = Mutex::new(Some(receipt));
+    assert!(settle_register(&slot, gone).is_err());
+    assert!(slot.lock().expect("slot").is_none(), "a new discovery is needed");
+}
+
+#[test]
+fn t123_an_updated_team_that_answers_from_two_containers_is_rebound_only_to_the_one_picked() {
+    let sandbox = Sandbox::new();
+    let (old_world, _) = connected_once(&sandbox);
+    let (candidate, selection) = pair_of(&sandbox);
+    // after the update both the new container (5) and another one (6) answer as the team
+    let world = updated_world().jht(6);
+    let server = || Server::new(&world).probe(5, probe_ok(true, true)).probe(6, probe_ok(false, false));
+    let (result, choices) = discover_picking(&sandbox, &server(), None);
+    assert_eq!(result.expect_err("two of the team"), "existing_team_ambiguous");
+    let ids: Vec<&str> = choices.iter().map(|c| c.container_id.as_str()).collect();
+    assert_eq!(ids, [container_id(5), container_id(6)]);
+    // the pick: a rebind of the saved candidate to that container, still nothing written
+    let (result, _) = discover_picking(&sandbox, &server(), Some(&container_id(6)));
+    let found = result.expect("picked");
+    assert_eq!(found.runtime, target_of(&world, 6));
+    let base = found.replaces.as_ref().expect("it says what it replaces");
+    assert_eq!(base.runtime, target_of(&old_world, 1));
+    assert_eq!(base.candidate_sha256, runtime::sha256(&candidate));
+    assert_eq!(pair_of(&sandbox), (candidate, selection));
+    // register keeps both: the same pick, the same saved candidate replaced
+    let mut receipt = receipt_of(&sandbox, &found);
+    receipt.chosen = Some(container_id(6));
+    assert_eq!(register(&sandbox, &server(), &receipt), Ok(Registered::Rebound(CandidateWrite::Written)));
+    assert_eq!(fs::read(sandbox.candidate()).unwrap(), found.candidate);
+    assert!(!sandbox.selection().exists());
+}
+
+#[test]
+fn t123_picking_the_container_already_saved_is_no_rebind() {
+    let sandbox = Sandbox::new();
+    connected_once(&sandbox);
+    let before = pair_of(&sandbox);
+    // the old container (1) still answers next to the new one (5)
+    let world = updated_world().jht(1);
+    let server = Server::new(&world).probe(5, probe_ok(true, true)).probe(1, probe_ok(true, false));
+    let (result, _) = discover_picking(&sandbox, &server, Some(&container_id(1)));
+    assert_eq!(result.expect_err("same runtime"), "existing_team_runtime_candidate_exists");
+    assert_eq!(pair_of(&sandbox), before);
 }

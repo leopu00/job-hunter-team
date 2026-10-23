@@ -16,6 +16,22 @@ export interface ExistingTeamRequest {
    * the host and team this profile saved (`existing_team_reconfirm_setup` otherwise).
    */
   reconfirm?: boolean;
+  /**
+   * Only for `discover`, after an `existing_team_ambiguous` that listed the team's containers: the
+   * one the person picked. The native side accepts it only if it still answers as the team.
+   */
+  containerId?: string;
+}
+
+/** One running container that answers as the team, when more than one does. */
+export interface ExistingTeamContainerChoice {
+  containerId: string;
+  name: string | null;
+  /** RFC 3339, as the VPS reported it. */
+  startedAt: string | null;
+  ociRevision: string;
+  digest: string;
+  readiness: boolean;
 }
 
 /** What the chat's confirmation shows: the saved host and team and the key pinned for that host. */
@@ -173,6 +189,8 @@ export const EXISTING_TEAM_ERROR_CODES: ReadonlySet<string> = new Set([
   "existing_team_container_not_found",
   "existing_team_not_found",
   "existing_team_ambiguous",
+  "existing_team_choice_gone",
+  "invalid_container_choice",
   "existing_team_image_unattested",
   "existing_team_too_many_containers",
   "existing_team_discovery_timeout",
@@ -210,4 +228,52 @@ export function isTerminalExistingTeamError(code: string): boolean {
     code === "existing_team_identity_mismatch" || code === "account_team_mismatch" ||
     code === "existing_team_ambiguous" || code === "existing_team_image_unattested" ||
     code === "existing_team_too_many_containers" || code === "existing_team_saved_selection_mismatch";
+}
+
+const CHOICE_ID = /^[0-9a-f]{64}$/;
+const CHOICE_NAME = /^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$/;
+const CHOICE_STARTED = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,9})?(Z|[+-]\d{2}:\d{2})$/;
+const CHOICE_REVISION = /^[0-9a-f]{40}$/;
+const CHOICE_DIGEST = /^sha256:[0-9a-f]{64}$/;
+
+function containerChoice(value: unknown): ExistingTeamContainerChoice | null {
+  if (!value || typeof value !== "object") return null;
+  const v = value as Record<string, unknown>;
+  const name = v.name ?? null;
+  const startedAt = v.startedAt ?? null;
+  if (typeof v.containerId !== "string" || !CHOICE_ID.test(v.containerId)) return null;
+  if (name !== null && (typeof name !== "string" || !CHOICE_NAME.test(name))) return null;
+  if (startedAt !== null && (typeof startedAt !== "string" || !CHOICE_STARTED.test(startedAt))) return null;
+  if (typeof v.ociRevision !== "string" || !CHOICE_REVISION.test(v.ociRevision)) return null;
+  if (typeof v.digest !== "string" || !CHOICE_DIGEST.test(v.digest)) return null;
+  if (typeof v.readiness !== "boolean") return null;
+  return { containerId: v.containerId, name, startedAt, ociRevision: v.ociRevision, digest: v.digest, readiness: v.readiness };
+}
+
+/**
+ * When the container was started, in ms, or null: not read, or Docker's never-started time (year 1).
+ * Those sort last and show no date.
+ */
+export function containerStartTime(choice: ExistingTeamContainerChoice): number | null {
+  const at = choice.startedAt ? Date.parse(choice.startedAt) : Number.NaN;
+  return Number.isFinite(at) && at > Date.UTC(2000, 0, 1) ? at : null;
+}
+
+/**
+ * The containers an `existing_team_ambiguous` listed, newest first, or null: any other error, or a
+ * list that is not two to four valid and distinct containers (then the dialog shows the refusal).
+ */
+export function ambiguousContainerChoices(error: unknown): ExistingTeamContainerChoice[] | null {
+  if (existingTeamErrorCode(error) !== "existing_team_ambiguous") return null;
+  const raw = (error as { choices?: unknown }).choices;
+  if (!Array.isArray(raw) || raw.length < 2 || raw.length > 4) return null;
+  const choices = raw.map(containerChoice);
+  if (choices.some((choice) => choice === null)) return null;
+  const valid = choices as ExistingTeamContainerChoice[];
+  if (new Set(valid.map((choice) => choice.containerId)).size !== valid.length) return null;
+  return [...valid].sort((a, b) => {
+    const [ta, tb] = [containerStartTime(a), containerStartTime(b)];
+    if (ta === null || tb === null) return ta === tb ? 0 : ta === null ? 1 : -1;
+    return tb - ta;
+  });
 }
