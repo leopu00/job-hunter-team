@@ -94,7 +94,11 @@ EXIT = {
 
 # jht-tmux-send's own exits: 2 no session, 3 the terminal never took the text,
 # 4 busy (alive: try again), 5 text taken but never submitted (alive, stuck).
-DELIVERY_EXIT = {2: "agent_not_running", 3: "agent_unavailable", 4: "agent_busy", 5: "agent_stuck"}
+DELIVERY_EXIT = {2: "agent_not_running", 3: "agent_unavailable", 4: "agent_busy", 5: "agent_stuck",
+                 8: "agent_busy"}   # 8: another writer held the terminal too long; nothing was typed
+# 0: the transport saw the CLI take the text (a proof). 7: the text left the composer but nothing proves
+# the CLI took it. Both are delivered, and never typed again with the same id; the second says «not sure».
+DELIVERY_UNCONFIRMED = 7
 
 # The ids are the roles' keys; the value is the tmux session.
 AGENTS = {
@@ -373,10 +377,15 @@ def _found(path: Path, client_id: str) -> dict | None:
     return None
 
 
-def _receipt(client_id: str, message_id, at, state: str | None = None) -> dict:
+def _receipt(client_id: str, message_id, at, state: str | None = None, taken: str | None = None) -> dict:
     out = {"accepted": True, "clientMessageId": client_id, "messageId": message_id, "at": at}
     if state:
         out["state"] = state        # "queued": the turn is in the agent's mailbox, not yet taken
+    if taken == "taken":
+        out["taken"] = True         # the transport saw the CLI take it
+    elif taken == "unconfirmed":
+        out["taken"] = None         # typed once, gone from the composer, no proof it was taken
+        out["reason"] = "unconfirmed"
     return out
 
 
@@ -402,10 +411,12 @@ def persist(agent: str, client_id: str, text: str) -> dict:
     return row
 
 
-def mark_delivered(agent: str, row: dict) -> None:
+def mark_delivered(agent: str, row: dict, taken: str | None = None) -> None:
     """The id is delivered. A failure to say so is not a failure to deliver: the text is already typed."""
     line = {"client_message_id": row.get("client_message_id"), "message_id": row.get("message_id"),
             "at": row.get("ts"), "delivered_at": time.time()}
+    if taken:
+        line["taken"] = taken
     try:
         fd = os.open(chat_path(agent).parent / DELIVERED_FILE, os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o600)
         try:
@@ -478,7 +489,7 @@ def require_fence(agent: str, text: str) -> str:
     return binary
 
 
-def deliver(agent: str, session: str, text: str) -> None:
+def deliver(agent: str, session: str, text: str) -> str:
     binary = require_fence(agent, text)
     envelope = envelope_of(agent, text)
     try:
@@ -486,8 +497,11 @@ def deliver(agent: str, session: str, text: str) -> None:
                               timeout=DELIVERY_TIMEOUT_S, check=False)
     except (OSError, subprocess.SubprocessError):
         raise Refusal("send_failed")
-    if done.returncode != 0:
-        raise Refusal(DELIVERY_EXIT.get(done.returncode, "send_failed"))
+    if done.returncode == 0:
+        return "taken"
+    if done.returncode == DELIVERY_UNCONFIRMED:
+        return "unconfirmed"
+    raise Refusal(DELIVERY_EXIT.get(done.returncode, "send_failed"))
 
 
 def _mail_module():
@@ -578,7 +592,7 @@ def send(agent: str, client_id: str, raw_text: str) -> dict:
     delivered = chat_path(agent).parent / DELIVERED_FILE
     done = _found(delivered, client_id)
     if done is not None:
-        return _receipt(client_id, done.get("message_id"), done.get("at"))
+        return _receipt(client_id, done.get("message_id"), done.get("at"), taken=done.get("taken"))
     # The checks come before anything is created, the lock's folder included: a refusal leaves nothing behind.
     check_session(session)
     # A receiver of the mailbox is sent the turn as a file, whatever its terminal shows: nothing is typed
@@ -593,18 +607,19 @@ def send(agent: str, client_id: str, raw_text: str) -> dict:
     with _AgentLock(agent):
         done = _found(delivered, client_id)         # another ask with this id may have finished while we waited
         if done is not None:
-            return _receipt(client_id, done.get("message_id"), done.get("at"))
+            return _receipt(client_id, done.get("message_id"), done.get("at"), taken=done.get("taken"))
         if mail is None:
             # Another send may have started a turn while this one waited for the lock: look again.
             require_prompt(session)
         row = persist(agent, client_id, text)
         if mail is None:
             # A line already there is what the agent is sent, not this ask's text: the id is the message.
-            deliver(agent, session, str(row.get("text") or text))
+            taken = deliver(agent, session, str(row.get("text") or text))
         else:
             deliver_by_mail(mail, agent, session, row, text)
-        mark_delivered(agent, row)
-        return _receipt(client_id, row.get("message_id"), row.get("ts"), "queued" if mail is not None else None)
+            taken = None
+        mark_delivered(agent, row, taken)
+        return _receipt(client_id, row.get("message_id"), row.get("ts"), "queued" if mail is not None else None, taken)
 
 
 # ── entry ───────────────────────────────────────────────────────────────────

@@ -198,3 +198,29 @@ def test_the_contract_table_is_the_one_of_agent_questions():
         assert code in chat_module.EXIT
     exits = list(chat_module.EXIT.values())
     assert len(exits) == len(set(exits)), "every closed code has its own exit"
+
+
+@pytest.mark.parametrize("rc, receipt", [
+    ("0", {"taken": True}),                                   # the transport saw the CLI take it
+    ("7", {"taken": None, "reason": "unconfirmed"}),          # gone from the composer, no proof
+])
+def test_a_send_says_whether_the_transport_has_a_proof_and_never_types_twice(box, rc, receipt):
+    env = {**box.env, "FAKE_DELIVERY_RC": rc}
+    done = subprocess.run([sys.executable, "-I", str(SCRIPT), "send", "capitano", "c-1"], input="ciao",
+                          capture_output=True, text=True, env=env, timeout=60)
+    assert done.returncode == 0, done.stdout + done.stderr
+    first = json.loads(done.stdout)
+    assert {k: first[k] for k in receipt} == receipt
+    again = subprocess.run([sys.executable, "-I", str(SCRIPT), "send", "capitano", "c-1"], input="ciao",
+                           capture_output=True, text=True, env=env, timeout=60)
+    assert json.loads(again.stdout) == first, "the same id answers what was recorded"
+    sessions = (box.state / "delivered.sessions").read_text(encoding="utf-8").split()
+    assert sessions == ["CAPITANO"], "typed once"
+
+
+def test_a_terminal_held_by_another_writer_is_busy_and_nothing_is_recorded_as_delivered(box):
+    env = {**box.env, "FAKE_DELIVERY_RC": "8"}
+    done = subprocess.run([sys.executable, "-I", str(SCRIPT), "send", "capitano", "c-2"], input="ciao",
+                          capture_output=True, text=True, env=env, timeout=60)
+    assert (done.returncode, json.loads(done.stdout)) == (124, {"error": "agent_busy"})
+    assert not (box.home / "agents" / "capitano" / "chat-delivered.jsonl").exists()

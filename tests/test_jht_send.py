@@ -60,12 +60,15 @@ def test_real_newlines_survive_the_round_trip(tmp_path: Path) -> None:
     assert len((tmp_path / "chat.jsonl").read_text().strip().split("\n")) == 1
 
 
-def test_tmux_sender_queues_busy_without_wait_drop() -> None:
+def test_tmux_sender_does_not_wait_on_a_busy_pane_and_busy_alone_is_not_a_proof() -> None:
+    """Un pane occupato non blocca la digitazione e non dichiara niente (23/10): 'occupato' da solo non e' una
+    prova di consegna, e l'exit 6 resta la sola impersonazione."""
     src = (ROOT / "agents/_skills/tmux-send/jht-tmux-send").read_text()
-    assert 'queued/delivery unverified' in src
-    assert 'exit 6' in src
     assert 'while [ "$waited" -lt "$busy_budget" ]' not in src
-    assert 'busy_typed=1' in src
+    assert "queued/delivery unverified" not in src
+    assert src.count("exit 6") == 1, "the only exit 6 is the impersonation"
+    assert "busy_pre" in src, "the busy state before the Enter is what makes a started turn a proof"
+
 
 def _run(tmp_path: Path, *args: str) -> subprocess.CompletedProcess:
     env = os.environ.copy()
