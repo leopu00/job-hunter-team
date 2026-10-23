@@ -633,6 +633,10 @@ pub(crate) fn answer(request: &ControlRequest, output: &ProcessResult, target: &
         // invalid is one older than the action (JHT-T54): «update the team», not «invalid request».
         ControlRequest::StopTeam { .. } if output.code == 100 => failure("team_stop_unsupported"),
         _ => {
+            // The same exit, told for this computer's team: its action is not «on the VPS».
+            if output.code == 122 && label.is_none() {
+                return failure("provider_not_configured_local");
+            }
             if output.code != 0 {
                 return failure(code_of(output.code));
             }
@@ -850,7 +854,10 @@ mod tests {
         let action = req(json!({"op":"stop","session":"SCOUT-1","target":"t","confirmed":true})).unwrap();
         let out = |code: i32, stdout: &str| ProcessResult { code, stdout: stdout.as_bytes().to_vec() };
         for (exit, code) in EXITS {
-            assert_eq!(answer(&action, &out(*exit, ""), "t", None), failure(code));
+            // on this computer the no-provider exit has its own wording (an action that is not «on the VPS»)
+            let local = if *exit == 122 { "provider_not_configured_local" } else { code };
+            assert_eq!(answer(&action, &out(*exit, ""), "t", None), failure(local));
+            assert_eq!(answer(&action, &out(*exit, ""), "t", Some("vps.example")), failure(code));
         }
         assert_eq!(answer(&action, &out(1, ""), "t", None), failure("agent_control_unanswered"));
         assert_eq!(
@@ -872,6 +879,22 @@ mod tests {
         // never «done» without the script saying so
         assert_eq!(answer(&action, &out(0, ""), "t", None), failure("agent_control_unanswered"));
         assert_eq!(answer(&action, &out(0, "{\"ok\":true,\"result\":\"exploded\"}"), "t", None), failure("agent_control_unanswered"));
+    }
+
+    #[test]
+    fn a_team_without_provider_is_told_for_this_computer_or_for_the_vps() {
+        let out = ProcessResult { code: 122, stdout: Vec::new() };
+        for op in ["start", "restart"] {
+            let action = req(json!({"op": op, "session": "SCOUT-1", "target": "t", "confirmed": true})).unwrap();
+            // the team on this computer: its action is not «on the VPS»
+            assert_eq!(answer(&action, &out, "t", None), failure("provider_not_configured_local"), "{op}");
+            // a team on a VPS keeps the code it always had
+            assert_eq!(answer(&action, &out, "t", Some("vps.example")), failure("provider_not_configured"), "{op}");
+        }
+        // every other exit keeps its code on this computer too
+        let action = req(json!({"op": "start", "session": "SCOUT-1", "target": "t", "confirmed": true})).unwrap();
+        assert_eq!(answer(&action, &ProcessResult { code: 105, stdout: Vec::new() }, "t", None), failure("agent_start_failed"));
+        assert_eq!(code_of(122), "provider_not_configured");
     }
 
     #[test]
