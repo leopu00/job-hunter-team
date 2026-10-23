@@ -83,7 +83,7 @@ function Get-JhtPodmanMachineState {
   )
   if ($PodmanPath) {
     try {
-      $raw = ((& $PodmanPath machine list --format json 2>$null) -join '')
+      $raw = ((& { $ErrorActionPreference = 'Continue'; & $PodmanPath machine list --format json 2>$null }) -join '')
       if ($LASTEXITCODE -eq 0 -and $raw) {
         # Windows PowerShell 5.1 gives a JSON array to the pipeline as ONE object: with two
         # machines `[string]$_.Name` joined both names and the JHT one was «absent».
@@ -96,7 +96,7 @@ function Get-JhtPodmanMachineState {
   }
   if ($WslPath) {
     try {
-      $distros = @(& $WslPath --list --quiet 2>$null | ForEach-Object { ([string]$_).Replace([char]0, '').Trim() })
+      $distros = @(& { $ErrorActionPreference = 'Continue'; & $WslPath --list --quiet 2>$null } | ForEach-Object { ([string]$_).Replace([char]0, '').Trim() })
       if ($LASTEXITCODE -eq 0) {
         if ($distros -ccontains "podman-machine-$MachineName") { return 'present' }
         return 'absent'
@@ -206,14 +206,14 @@ function Invoke-JhtWindowsUninstall {
       if (@($knownCommands | Where-Object { Test-Path -LiteralPath $_ }).Count -gt 0) { Write-JhtUninstallLeft commands }
       return 24
     }
-    & $WslPath --status *> $null
+    & { $ErrorActionPreference = 'Continue'; & $WslPath --status *> $null }
     if ($LASTEXITCODE -ne 0) {
       Write-JhtUninstallMachineLeft
       if (Test-Path -LiteralPath $runtimePath) { Write-JhtUninstallLeft runtime }
       if (@($knownCommands | Where-Object { Test-Path -LiteralPath $_ }).Count -gt 0) { Write-JhtUninstallLeft commands }
       return 24
     }
-    & $PodmanPath machine rm --force $machineName *> $null
+    & { $ErrorActionPreference = 'Continue'; & $PodmanPath machine rm --force $machineName *> $null }
     if ($LASTEXITCODE -ne 0 -or
         (Get-JhtPodmanMachineState -PodmanPath $PodmanPath -WslPath $WslPath -MachineName $machineName) -ne 'absent') {
       Write-JhtUninstallMachineLeft
@@ -610,7 +610,7 @@ function Require-Docker {
     Write-Err "client Podman JHT non trovato nel PATH. Reinstalla il runtime locale."
     exit 127
   }
-  $null = docker info 2>&1
+  $null = & { $ErrorActionPreference = 'Continue'; & docker info 2>&1 }
   if ($LASTEXITCODE -ne 0) {
     Write-Err "La macchina Podman JHT non risponde. Esegui 'jht up'."
     exit 1
@@ -625,7 +625,7 @@ function Start-PodmanMachineForUp {
   if (Test-DockerReachable) { return }
   $podman = Get-Command podman.exe -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
   if (-not $podman) { Write-Err 'podman_not_installable: podman.exe non disponibile.'; exit 21 }
-  & $podman.Source machine start --update-connection=false $env:CONTAINER_CONNECTION 2>$null
+  & { $ErrorActionPreference = 'Continue'; & $podman.Source machine start --update-connection=false $env:CONTAINER_CONNECTION 2>$null }
   if ($LASTEXITCODE -ne 0 -or -not (Test-DockerReachable)) {
     Write-Err 'podman_machine_unavailable: la macchina Podman JHT non si avvia.'
     exit 22
@@ -653,7 +653,7 @@ function Test-DockerReachable {
   # Docker c'e' ED e' raggiungibile? A differenza di Require-Docker NON esce:
   # serve a DECIDERE, non a pretendere.
   if (-not (Get-Command docker -ErrorAction SilentlyContinue)) { return $false }
-  $null = docker info 2>&1
+  $null = & { $ErrorActionPreference = 'Continue'; & docker info 2>&1 }
   return ($LASTEXITCODE -eq 0)
 }
 
@@ -721,7 +721,7 @@ function Test-HostCommandUsesLocalHelp {
 }
 
 function Test-ContainerUp {
-  $running = & docker ps --format '{{.Names}}' 2>$null
+  $running = & { $ErrorActionPreference = 'Continue'; & docker ps --format '{{.Names}}' 2>$null }
   return ($running -split "`n") -contains $Container
 }
 
@@ -739,7 +739,7 @@ function Get-ComposeImage {
   param([string]$File)
   $files = @('-f', $File)
   if ($ContainerRuntime -eq 'podman') { $files += @('-f', $PodmanComposeFile) }
-  $ref = ((& docker compose @files --project-directory $RuntimeDir config --images 2>$null | Select-Object -First 1) -as [string])
+  $ref = ((& { $ErrorActionPreference = 'Continue'; & docker compose @files --project-directory $RuntimeDir config --images 2>$null } | Select-Object -First 1) -as [string])
   if ($ref) { $ref = $ref.Trim() }
   if (-not $ref) { $ref = if ($env:JHT_IMAGE) { $env:JHT_IMAGE } else { $DefaultRuntimeImage } }
   return $ref
@@ -757,10 +757,10 @@ function Repair-MountOwnership {
   foreach ($dir in @($homeMount, $userMount)) {
     if (-not (Test-Path -LiteralPath $dir -PathType Container)) { New-Item -ItemType Directory -Path $dir -Force | Out-Null }
   }
-  $out = @(& docker run --rm --user '0:0' --cap-drop ALL --cap-add CHOWN --network none `
+  $out = @(& { $ErrorActionPreference = 'Continue'; & docker run --rm --user '0:0' --cap-drop ALL --cap-add CHOWN --network none `
       --security-opt no-new-privileges `
       -v "${homeMount}:/jht_home" -v "${userMount}:/jht_user" `
-      --entrypoint /bin/sh $Image -c $MountRepairDispatch 2>$null)
+      --entrypoint /bin/sh $Image -c $MountRepairDispatch 2>$null })
   $code = $LASTEXITCODE
   $receipts = @($out | ForEach-Object { "$($_)".Trim() } | Where-Object { $_ })
   $expected = @('/jht_home', '/jht_user')
@@ -785,7 +785,7 @@ function Repair-MountOwnership {
 
 function Get-ComposeProjectName {
   if ($ContainerRuntime -eq 'podman') { return 'jht' }
-  $json = ((& docker compose -f $ComposeFile --project-directory $RuntimeDir config --format json 2>$null) -join "`n")
+  $json = ((& { $ErrorActionPreference = 'Continue'; & docker compose -f $ComposeFile --project-directory $RuntimeDir config --format json 2>$null }) -join "`n")
   if ($LASTEXITCODE -ne 0 -or -not $json) { return $null }
   try {
     $name = [string](($json | ConvertFrom-Json -ErrorAction Stop).name)
@@ -802,14 +802,14 @@ function Get-RunningComposeServiceId {
   if ($ContainerRuntime -eq 'podman') { $files += @('-f', $PodmanComposeFile) }
   $composeArgs = @('compose') + $files + @('--project-directory', $RuntimeDir, 'ps', '-q')
   if ($ContainerRuntime -ne 'podman') { $composeArgs += $Service }
-  $ids = @(& docker @composeArgs 2>$null | ForEach-Object { "$($_)".Trim() } | Where-Object { $_ })
+  $ids = @(& { $ErrorActionPreference = 'Continue'; & docker @composeArgs 2>$null } | ForEach-Object { "$($_)".Trim() } | Where-Object { $_ })
   $found = $null
   foreach ($id in $ids) {
     if ($id -notmatch '^[0-9a-fA-F]{12,64}$') { return $null }
     # No double quote inside a native argument: Windows PowerShell 5.1 drops it, and
     # `{{index .Config.Labels "com.docker.compose.project"}}` reached docker as `... com.docker...`
     # (T71). The labels come whole as JSON, read here.
-    $details = ((& docker inspect --type container $id --format '{{.State.Running}}|{{json .Config.Labels}}' 2>$null | Select-Object -First 1) -as [string])
+    $details = ((& { $ErrorActionPreference = 'Continue'; & docker inspect --type container $id --format '{{.State.Running}}|{{json .Config.Labels}}' 2>$null } | Select-Object -First 1) -as [string])
     if (-not $details) { return $null }
     $cut = $details.IndexOf('|')
     if ($cut -lt 0) { return $null }
@@ -872,23 +872,23 @@ const configured=["claude","anthropic","codex","openai","kimi","moonshot"].inclu
 const markers={claude:"/jht_home/.claude/.credentials.json",anthropic:"/jht_home/.claude/.credentials.json",codex:"/jht_home/.codex/auth.json",openai:"/jht_home/.codex/auth.json",kimi:"/jht_home/.kimi/credentials/kimi-code.json",moonshot:"/jht_home/.kimi/credentials/kimi-code.json"};
 process.stdout.write(`${configured?1:0} ${markers[provider]&&fs.existsSync(markers[provider])?1:0} ${fs.existsSync("/jht_home/profile/welcomed.flag")?1:0}`);
 '@
-    $metadata = ((& docker exec $containerId node -e $metadataScript 2>$null | Select-Object -First 1) -as [string])
+    $metadata = ((& { $ErrorActionPreference = 'Continue'; & docker exec $containerId node -e $metadataScript 2>$null } | Select-Object -First 1) -as [string])
     $metadataCode = $LASTEXITCODE
     $values = if ($metadata) { @($metadata.Trim() -split '\s+') } else { @() }
     if ($metadataCode -ne 0 -or $values.Count -ne 3 -or @($values | Where-Object { $_ -notin @('0', '1') }).Count -gt 0) {
       $values = @('0', '0', '0')
     }
 
-    $null = & docker exec $containerId tmux has-session -t ASSISTENTE 2>$null
+    $null = & { $ErrorActionPreference = 'Continue'; & docker exec $containerId tmux has-session -t ASSISTENTE 2>$null }
     $assistantRunning = if ($LASTEXITCODE -eq 0) { 1 } else { 0 }
-    $null = & docker exec $containerId tmux has-session -t CAPITANO 2>$null
+    $null = & { $ErrorActionPreference = 'Continue'; & docker exec $containerId tmux has-session -t CAPITANO 2>$null }
     $captainRunning = if ($LASTEXITCODE -eq 0) { 1 } else { 0 }
-    $null = & docker exec $containerId test -f /jht_home/profile/ready.flag 2>$null
+    $null = & { $ErrorActionPreference = 'Continue'; & docker exec $containerId test -f /jht_home/profile/ready.flag 2>$null }
     $profileReady = if ($LASTEXITCODE -eq 0) { 1 } else {
-      $null = & docker exec $containerId node $NodeEntry profile validate --strict --json 2>$null
+      $null = & { $ErrorActionPreference = 'Continue'; & docker exec $containerId node $NodeEntry profile validate --strict --json 2>$null }
       if ($LASTEXITCODE -eq 0) { 1 } else { 0 }
     }
-    $finalRunning = ((& docker inspect $containerId --format '{{.State.Running}}' 2>$null | Select-Object -First 1) -as [string])
+    $finalRunning = ((& { $ErrorActionPreference = 'Continue'; & docker inspect $containerId --format '{{.State.Running}}' 2>$null } | Select-Object -First 1) -as [string])
     $finalInspectCode = $LASTEXITCODE
     if ($finalInspectCode -ne 0 -or -not $finalRunning -or $finalRunning.Trim() -ne 'true') {
       Write-InactiveOnboardingSnapshot 1
@@ -1080,7 +1080,7 @@ function Initialize-TelegramLegacyInventory {
     if ($LASTEXITCODE -ne 0) { return $false }
   }
   foreach ($role in @('assistente', 'capitano', 'mentor')) {
-    $digests = @(Invoke-TelegramLegacy inventory $role 2>$null)
+    $digests = @(& { $ErrorActionPreference = 'Continue'; Invoke-TelegramLegacy inventory $role 2>$null })
     if ($LASTEXITCODE -ne 0 -or @($digests | Where-Object { $_ -notmatch '^[0-9a-f]{64}$' }).Count -gt 0) {
       return $false
     }
@@ -1095,7 +1095,7 @@ function Initialize-TelegramLegacyInventory {
 # @{ Ok; Digests } per il successivo `bots pair`; gli agenti li ferma il chiamante.
 function Get-TelegramPairInventory {
   param([string]$Role)
-  $digests = @(Invoke-TelegramLegacy inventory $Role 2>$null)
+  $digests = @(& { $ErrorActionPreference = 'Continue'; Invoke-TelegramLegacy inventory $Role 2>$null })
   if ($LASTEXITCODE -ne 0 -or @($digests | Where-Object { $_ -notmatch '^[0-9a-f]{64}$' }).Count -gt 0) {
     Write-Err 'legacy_inventory_failed: migrazione Telegram interrotta.'
     return @{ Ok = $false; Digests = @() }
@@ -1174,7 +1174,7 @@ function Invoke-TelegramPair {
   if (-not $telegramId) { Write-Err 'telegram_unavailable: esegui jht up'; return 1 }
   # Gli altri ruoli con un token legacy: finche' ne resta uno il servizio non si
   # accende e il ruolo appena abbinato resta muto. Serve solo ad avvisare.
-  $remainingOut = @(Invoke-TelegramLegacy remaining 2>$null)
+  $remainingOut = @(& { $ErrorActionPreference = 'Continue'; Invoke-TelegramLegacy remaining 2>$null })
   if ($LASTEXITCODE -eq 1) {
     $others = @(($remainingOut -join ' ') -split '\s+' | Where-Object { $_ -in @('assistente', 'capitano', 'mentor') -and $_ -ne $Role })
     if ($others.Count -gt 0) {
@@ -1202,7 +1202,7 @@ function Invoke-TelegramPair {
     }
   }
   if (-not $inventory.Ok) { return 1 }
-  $status = ((& docker exec $telegramId jht-telegram-admin cutover status 2>$null) -join "`n")
+  $status = ((& { $ErrorActionPreference = 'Continue'; & docker exec $telegramId jht-telegram-admin cutover status 2>$null }) -join "`n")
   $wasEnabled = $status -match '"enabled"\s*:\s*true'
   # Anche quando l'inventario non trova niente: un agente di una versione
   # precedente puo' aver tolto il token dalla config prima dell'aggiornamento.
@@ -1227,7 +1227,7 @@ function Invoke-TelegramPairAll {
   }
   $telegramId = Get-RunningComposeServiceId $TelegramContainer
   if (-not $telegramId) { Write-Err 'telegram_unavailable: esegui jht up'; return 1 }
-  $remainingOut = @(Invoke-TelegramLegacy remaining 2>$null)
+  $remainingOut = @(& { $ErrorActionPreference = 'Continue'; Invoke-TelegramLegacy remaining 2>$null })
   $remainingCode = $LASTEXITCODE
   if ($remainingCode -eq 0) { Write-Info 'Nessun ruolo ha un token legacy: per un bot nuovo usa jht telegram pair <ruolo>.'; return 0 }
   if ($remainingCode -ne 1) { Write-Err 'legacy_inventory_failed: non riesco a leggere i token legacy in ~/.jht.'; return 1 }
@@ -1258,9 +1258,9 @@ function Invoke-TelegramPairAll {
       return 1
     }
   }
-  $status = ((& docker exec $telegramId jht-telegram-admin cutover status 2>$null) -join "`n")
+  $status = ((& { $ErrorActionPreference = 'Continue'; & docker exec $telegramId jht-telegram-admin cutover status 2>$null }) -join "`n")
   $wasEnabled = $status -match '"enabled"\s*:\s*true'
-  $bots = ((& docker exec $telegramId jht-telegram-admin bots status 2>$null) -join "`n")
+  $bots = ((& { $ErrorActionPreference = 'Continue'; & docker exec $telegramId jht-telegram-admin bots status 2>$null }) -join "`n")
   Write-Info 'Usa sempre un token appena generato in BotFather (/revoke sul bot, oppure un bot nuovo): un token gia'' esistente puo'' essere stato letto dagli agenti anche se oggi non compare in ~/.jht.'
   foreach ($role in $roles) {
     if ($bots -match ('"' + $role + '"\s*:\s*"present"')) {
@@ -1317,17 +1317,17 @@ function Invoke-BrokerMigrateLegacy {
   $migrated = $false
   $failed = $false
   foreach ($name in $LegacySecretNames) {
-    & docker exec -u 1001 $agentId /usr/bin/python3 -I /app/shared/broker/legacy.py exists $name *> $null
+    & { $ErrorActionPreference = 'Continue'; & docker exec -u 1001 $agentId /usr/bin/python3 -I /app/shared/broker/legacy.py exists $name *> $null }
     if ($LASTEXITCODE -ne 0) { continue }
-    $envelope = (& docker exec -u 1001 $agentId /usr/bin/python3 -I /app/shared/broker/legacy.py read $name 2>$null | Select-Object -First 1)
+    $envelope = (& { $ErrorActionPreference = 'Continue'; & docker exec -u 1001 $agentId /usr/bin/python3 -I /app/shared/broker/legacy.py read $name 2>$null } | Select-Object -First 1)
     $answer = ''
-    if ($envelope) { $answer = ($envelope | & docker exec -i $brokerId jht-broker-admin secrets import-legacy $name 2>$null) -join '' }
+    if ($envelope) { $answer = ($envelope | & { $ErrorActionPreference = 'Continue'; $input | & docker exec -i $brokerId jht-broker-admin secrets import-legacy $name 2>$null }) -join '' }
     if ($answer -match '"ok": true' -and $answer -match '"state": "imported"') {
-      & docker exec -u 1001 $agentId /usr/bin/python3 -I /app/shared/broker/legacy.py remove $name *> $null
+      & { $ErrorActionPreference = 'Continue'; & docker exec -u 1001 $agentId /usr/bin/python3 -I /app/shared/broker/legacy.py remove $name *> $null }
       if ($LASTEXITCODE -ne 0) { Write-Warn "legacy_remove_failed: $name e' nel broker ma la copia in ~/.jht/credentials e' rimasta." }
       $migrated = $true
     } elseif ($answer -match '"ok": true' -and $answer -match '"state": "already_migrated"') {
-      & docker exec -u 1001 $agentId /usr/bin/python3 -I /app/shared/broker/legacy.py remove $name *> $null
+      & { $ErrorActionPreference = 'Continue'; & docker exec -u 1001 $agentId /usr/bin/python3 -I /app/shared/broker/legacy.py remove $name *> $null }
       Write-Warn "legacy_secret_reappeared: ~/.jht/credentials/$name.json e' ricomparso dopo la migrazione; rimosso senza importarlo."
     } else {
       Write-Warn "legacy_migration_failed: $name resta in ~/.jht/credentials."
@@ -1372,14 +1372,14 @@ function Remove-BrokerResetData {
       # podman-compose 1.6 omette la label col nome logico del volume. La
       # label progetto piu' il nome esatto prodotto da Compose confinano la
       # cancellazione al solo volume richiesto.
-      $ids = @(& docker volume ls -q `
-        --filter "label=com.docker.compose.project=$project" 2>$null |
+      $ids = @(& { $ErrorActionPreference = 'Continue'; & docker volume ls -q `
+        --filter "label=com.docker.compose.project=$project" 2>$null } |
         ForEach-Object { "$($_)".Trim() } |
         Where-Object { $_ -eq "${project}_${logical}" })
     } else {
-      $ids = @(& docker volume ls -q `
+      $ids = @(& { $ErrorActionPreference = 'Continue'; & docker volume ls -q `
         --filter "label=com.docker.compose.project=$project" `
-        --filter "label=com.docker.compose.volume=$logical" 2>$null |
+        --filter "label=com.docker.compose.volume=$logical" 2>$null } |
         ForEach-Object { "$($_)".Trim() } | Where-Object { $_ })
     }
     if ($LASTEXITCODE -ne 0) {
@@ -1397,7 +1397,7 @@ function Remove-BrokerResetData {
         $failed = $true
         continue
       }
-      & docker volume rm $id *> $null
+      & { $ErrorActionPreference = 'Continue'; & docker volume rm $id *> $null }
       if ($LASTEXITCODE -eq 0) {
         Write-Info "Cancellato: volume broker $logical ($id)"
       } else {
@@ -1486,9 +1486,9 @@ function Get-RuntimeMigrationVolumeId {
   )
   $arguments = @('volume', 'ls', '-q', '--filter', "label=com.docker.compose.project=$Project", '--filter', "label=com.docker.compose.volume=$Logical")
   if ($Engine -eq 'docker') {
-    $ids = @(& $DockerPath @arguments 2>$null)
+    $ids = @(& { $ErrorActionPreference = 'Continue'; & $DockerPath @arguments 2>$null })
   } else {
-    $ids = @(& $PodmanPath @(Get-RuntimeMigrationPodmanArgs $Machine $arguments) 2>$null)
+    $ids = @(& { $ErrorActionPreference = 'Continue'; & $PodmanPath @(Get-RuntimeMigrationPodmanArgs $Machine $arguments) 2>$null })
   }
   if ($LASTEXITCODE -ne 0) { throw "volume_list_failed:${Engine}:$Logical" }
   $ids = @($ids | ForEach-Object { ([string]$_).Trim() } | Where-Object { $_ })
@@ -1513,9 +1513,9 @@ function Get-RuntimeMigrationVolumeManifest {
     $script:RuntimeVolumeManifestPython, '/volume'
   )
   if ($Engine -eq 'docker') {
-    $result = ((& $DockerPath @arguments 2>$null) -join '').Trim()
+    $result = ((& { $ErrorActionPreference = 'Continue'; & $DockerPath @arguments 2>$null }) -join '').Trim()
   } else {
-    $result = ((& $PodmanPath @(Get-RuntimeMigrationPodmanArgs $Machine $arguments) 2>$null) -join '').Trim()
+    $result = ((& { $ErrorActionPreference = 'Continue'; & $PodmanPath @(Get-RuntimeMigrationPodmanArgs $Machine $arguments) 2>$null }) -join '').Trim()
   }
   if ($LASTEXITCODE -ne 0 -or $result -notmatch '^\d+ [0-9a-f]{64}$') {
     throw "volume_manifest_failed:${Engine}:$Volume"
@@ -1601,16 +1601,16 @@ function Invoke-RuntimeMigrationPodman {
     Write-Err 'runtime_migration_image_invalid: serve l''immagine JHT fissata per digest.'
     Write-RuntimeMigrationLeft $verified; return 24
   }
-  & $DockerPath image inspect $Image *> $null
+  & { $ErrorActionPreference = 'Continue'; & $DockerPath image inspect $Image *> $null }
   if ($LASTEXITCODE -ne 0) { Write-RuntimeMigrationLeft $verified; return 24 }
-  & $PodmanPath @(Get-RuntimeMigrationPodmanArgs $Machine @('image', 'inspect', $Image)) *> $null
+  & { $ErrorActionPreference = 'Continue'; & $PodmanPath @(Get-RuntimeMigrationPodmanArgs $Machine @('image', 'inspect', $Image)) *> $null }
   if ($LASTEXITCODE -ne 0) { Write-RuntimeMigrationLeft $verified; return 24 }
-  $running = @(& $DockerPath ps -q --filter 'label=com.docker.compose.project=host-runtime' 2>$null)
+  $running = @(& { $ErrorActionPreference = 'Continue'; & $DockerPath ps -q --filter 'label=com.docker.compose.project=host-runtime' 2>$null })
   if ($LASTEXITCODE -ne 0 -or @($running | Where-Object { $_ }).Count -gt 0) {
     Write-Err 'runtime_migration_team_running: ferma prima il team Docker.'
     Write-RuntimeMigrationLeft $verified; return 24
   }
-  $running = @(& $PodmanPath @(Get-RuntimeMigrationPodmanArgs $Machine @('ps', '-q', '--filter', 'label=com.docker.compose.project=jht')) 2>$null)
+  $running = @(& { $ErrorActionPreference = 'Continue'; & $PodmanPath @(Get-RuntimeMigrationPodmanArgs $Machine @('ps', '-q', '--filter', 'label=com.docker.compose.project=jht')) 2>$null })
   if ($LASTEXITCODE -ne 0 -or @($running | Where-Object { $_ }).Count -gt 0) {
     Write-Err 'runtime_migration_team_running: ferma prima il team Podman.'
     Write-RuntimeMigrationLeft $verified; return 24
@@ -1641,16 +1641,16 @@ function Invoke-RuntimeMigrationPodman {
         continue
       }
       if ($target) {
-        & $PodmanPath @(Get-RuntimeMigrationPodmanArgs $Machine @('volume', 'rm', '-f', $target)) *> $null
+        & { $ErrorActionPreference = 'Continue'; & $PodmanPath @(Get-RuntimeMigrationPodmanArgs $Machine @('volume', 'rm', '-f', $target)) *> $null }
         if ($LASTEXITCODE -ne 0) { throw "volume_remove_failed:$logical" }
       }
       $target = "jht_$logical"
-      & $PodmanPath @(Get-RuntimeMigrationPodmanArgs $Machine @(
+      & { $ErrorActionPreference = 'Continue'; & $PodmanPath @(Get-RuntimeMigrationPodmanArgs $Machine @(
         'volume', 'create', '--label', 'com.docker.compose.project=jht',
         '--label', "com.docker.compose.volume=$logical", '--label',
         'io.podman.compose.project=jht', '--label',
         "io.podman.compose.volume=$logical", $target
-      )) *> $null
+      )) *> $null }
       if ($LASTEXITCODE -ne 0) { throw "volume_create_failed:$logical" }
       if (-not (Copy-RuntimeMigrationVolume $DockerPath $PodmanPath $Machine $Image $source $target)) {
         throw "runtime_migration_interrupted:$logical"
@@ -2474,15 +2474,15 @@ function Remove-OldJhtImages {
   # La corrente deve essere davvero quella del container che gira adesso.
   if ((Get-PlainImageId (Get-UpgradeImage)) -ne $currentId) { $script:UpgradePrune = New-UpgradePrune 'current-not-running'; return }
   # Immagini di TUTTI i container, anche fermi. Se non si leggono: niente.
-  $containers = @(& docker container ls -a -q --no-trunc 2>$null)
+  $containers = @(& { $ErrorActionPreference = 'Continue'; & docker container ls -a -q --no-trunc 2>$null })
   if ($LASTEXITCODE -ne 0) { $script:UpgradePrune = New-UpgradePrune 'containers-unreadable'; return }
   $inUse = @()
   if ($containers.Count -gt 0) {
-    $used = @(& docker inspect --format '{{.Image}}' @containers 2>$null)
+    $used = @(& { $ErrorActionPreference = 'Continue'; & docker inspect --format '{{.Image}}' @containers 2>$null })
     if ($LASTEXITCODE -ne 0) { $script:UpgradePrune = New-UpgradePrune 'containers-unreadable'; return }
     $inUse = @($used | ForEach-Object { Get-PlainImageId $_ })
   }
-  $listing = @(& docker image ls --no-trunc --format '{{.ID}} {{.Repository}}' 2>$null)
+  $listing = @(& { $ErrorActionPreference = 'Continue'; & docker image ls --no-trunc --format '{{.ID}} {{.Repository}}' 2>$null })
   if ($LASTEXITCODE -ne 0) { $script:UpgradePrune = New-UpgradePrune 'images-unreadable'; return }
   $removed = 0; $freed = [long]0; $refused = 0; $busy = 0; $seen = @{}
   foreach ($line in $listing) {
@@ -2493,9 +2493,9 @@ function Remove-OldJhtImages {
     $seen[$plain] = $true
     if ($inUse -contains $plain) { $busy++; continue }
     $size = [long]0
-    $sizeText = ((& docker image inspect --format '{{.Size}}' $parts[0] 2>$null | Select-Object -First 1) -as [string])
+    $sizeText = ((& { $ErrorActionPreference = 'Continue'; & docker image inspect --format '{{.Size}}' $parts[0] 2>$null } | Select-Object -First 1) -as [string])
     if ($sizeText -and $sizeText.Trim() -match '^\d+$') { $size = [long]$sizeText.Trim() }
-    & docker image rm $parts[0] *> $null
+    & { $ErrorActionPreference = 'Continue'; & docker image rm $parts[0] *> $null }
     if ($LASTEXITCODE -eq 0) { $removed++; $freed += $size } else { $refused++ }
   }
   $script:UpgradePrune = New-UpgradePrune '' $removed $freed $refused $busy
@@ -2521,24 +2521,24 @@ function Invoke-UpgradeCompose {
   $all = @('compose', '-f', $File)
   if ($ContainerRuntime -eq 'podman') { $all += @('-f', $PodmanComposeFile) }
   $all += @('--project-directory', $RuntimeDir) + $ComposeArgs
-  if ($script:UpgradeJson) { & docker @all *> $null } else { & docker @all }
+  if ($script:UpgradeJson) { & { $ErrorActionPreference = 'Continue'; & docker @all *> $null } } else { & docker @all }
   return $LASTEXITCODE -eq 0
 }
 
 function Test-UpgradeDockerReady {
   if (-not (Get-Command docker -ErrorAction SilentlyContinue)) { return $false }
-  & docker info *> $null
+  & { $ErrorActionPreference = 'Continue'; & docker info *> $null }
   return $LASTEXITCODE -eq 0
 }
 
 function Get-UpgradeImage {
-  $value = (& docker inspect $Container --format '{{.Image}}' 2>$null | Select-Object -First 1)
+  $value = (& { $ErrorActionPreference = 'Continue'; & docker inspect $Container --format '{{.Image}}' 2>$null } | Select-Object -First 1)
   if ($LASTEXITCODE -ne 0) { return '' }
   return ([string]$value).Trim()
 }
 
 function Get-UpgradeVersion {
-  $value = (& docker exec $Container node $NodeEntry --version 2>$null | Select-Object -First 1)
+  $value = (& { $ErrorActionPreference = 'Continue'; & docker exec $Container node $NodeEntry --version 2>$null } | Select-Object -First 1)
   if ($LASTEXITCODE -ne 0) { return '' }
   return ([string]$value).Trim()
 }
@@ -2633,7 +2633,7 @@ function Restore-UpgradePrevious {
     # Verifica l'immagine immutabile prima della prima sostituzione metadata:
     # un digest solo formalmente valido non deve lasciare compose/wrapper in
     # uno stato diverso se il rollback non puo' ricreare il container.
-    & docker image inspect ([string]$journal.old_image) *> $null
+    & { $ErrorActionPreference = 'Continue'; & docker image inspect ([string]$journal.old_image) *> $null }
     if ($LASTEXITCODE -ne 0) { return $false }
   } elseif ([string]$journal.old_image -ne 'none') { return $false }
   if (-not (Replace-UpgradeFile $composeSnapshot.FullName $ComposeFile)) { return $false }
@@ -2743,9 +2743,9 @@ function Invoke-RuntimeUpgrade {
     if (-not (Invoke-UpgradeCompose $newCompose 'pull' $Container)) { Remove-UpgradeTransaction; Write-UpgradeResult $false $false 'pull' $oldVersion $oldImage $oldVersion $oldImage $false 'Download immagine non riuscito' $false; return 1 }
     $candidateFiles = @('-f', $newCompose)
     if ($ContainerRuntime -eq 'podman') { $candidateFiles += @('-f', $PodmanComposeFile) }
-    $candidateRef = ((& docker compose @candidateFiles --project-directory $RuntimeDir config --images 2>$null | Select-Object -First 1) -as [string]).Trim()
+    $candidateRef = ((& { $ErrorActionPreference = 'Continue'; & docker compose @candidateFiles --project-directory $RuntimeDir config --images 2>$null } | Select-Object -First 1) -as [string]).Trim()
     if (-not $candidateRef) { $candidateRef = if ($env:JHT_IMAGE) { $env:JHT_IMAGE } else { $DefaultRuntimeImage } }
-    $candidateImage = ((& docker image inspect $candidateRef --format '{{.Id}}' 2>$null | Select-Object -First 1) -as [string]).Trim()
+    $candidateImage = ((& { $ErrorActionPreference = 'Continue'; & docker image inspect $candidateRef --format '{{.Id}}' 2>$null } | Select-Object -First 1) -as [string]).Trim()
     if (-not $candidateImage) { $candidateImage = 'sconosciuta' }
     if (-not (Write-UpgradeJournal 'pulled' $oldImage $wasRunning)) { Write-UpgradeResult $false $false 'pull' $oldVersion $oldImage $oldVersion $oldImage $false 'Impossibile aggiornare il journal' $false; return 1 }
     if ($checkOnly) { Remove-UpgradeTransaction; $changed = ($candidateImage -ne $oldImage) -or $metadataChanged; Write-UpgradeResult $true $changed 'check' $oldVersion $oldImage $oldVersion $candidateImage $changed 'Controllo completato; nessuna modifica al runtime' $false; return 0 }
@@ -2991,7 +2991,7 @@ switch ($Sub) {
     Require-ComposeFile
     Require-Docker
     Ensure-Up
-    $Provider = (& docker exec $Container node -e "try{const c=require('/jht_home/jht.config.json');process.stdout.write(String(c.active_provider||''))}catch{}" 2>$null)
+    $Provider = (& { $ErrorActionPreference = 'Continue'; & docker exec $Container node -e "try{const c=require('/jht_home/jht.config.json');process.stdout.write(String(c.active_provider||''))}catch{}" 2>$null })
     switch (($Provider | Out-String).Trim().ToLowerInvariant()) {
       { $_ -in @('openai', 'codex') } { & docker exec @ExecFlags $Container codex login --device-auth; break }
       { $_ -in @('kimi', 'moonshot') } { & docker exec @ExecFlags $Container kimi --yolo; break }
