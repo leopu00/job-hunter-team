@@ -40,6 +40,14 @@ afterEach(() => {
 });
 
 describe("VPS connection settings", () => {
+  it("shows a whole SSH fingerprint: it is what the person compares", async () => {
+    const whole = "SHA256:" + "AbCdEfGhIjKlMnOpQrStUvWxYz0123456789+/AbCdE".slice(0, 43);
+    vi.mocked(vpsLinkStatusBridge.status).mockResolvedValue({ ...status, fingerprint: whole });
+    renderPage();
+    expect(await screen.findByTestId("vps-connection-fingerprint")).toHaveTextContent(whole);
+    expect(whole.length).toBe(50);
+  });
+
   it("shows the declared connection status without exposing a whole address", async () => {
     const { container } = renderPage();
     expect(await screen.findByTestId("vps-connection-address")).toHaveTextContent("203.0.xxx.xxx");

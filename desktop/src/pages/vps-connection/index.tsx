@@ -21,10 +21,10 @@ export function maskAddress(value: string): string {
 }
 
 /** A declaration is useful for identification, not as a place to echo arbitrary long values. */
-export function shortDeclaration(value: string | null): string | null {
+export function shortDeclaration(value: string | null, limit = 48): string | null {
   if (!value) return null;
   const plain = value.replace(/[\u0000-\u001f\u007f]/g, " ").trim();
-  return plain ? (plain.length > 48 ? `${plain.slice(0, 47)}…` : plain) : null;
+  return plain ? (plain.length > limit ? `${plain.slice(0, limit - 1)}…` : plain) : null;
 }
 
 function when(at: number | null, locale: string, never: string): string {
@@ -127,7 +127,7 @@ export function VpsConnectionScreen() {
           <dl className="mt-5 grid gap-4 rounded border border-[var(--color-border)] p-4 sm:grid-cols-2">
             {item(t.address, maskAddress(status.addressMasked), "vps-connection-address")}
             {item(t.user, shortDeclaration(status.user), "vps-connection-user")}
-            {item(t.fingerprint, shortDeclaration(status.fingerprint) ?? t.noFingerprint, "vps-connection-fingerprint")}
+            {item(t.fingerprint, shortDeclaration(status.fingerprint, 64) ?? t.noFingerprint, "vps-connection-fingerprint")}
             {item(t.state, state, "vps-connection-state")}
             {item(t.lastOk, when(status.lastOkAt, locale, t.never), "vps-connection-last-ok")}
             {item(t.mode, status.mode === "read" ? t.read : t.full, "vps-connection-mode")}
