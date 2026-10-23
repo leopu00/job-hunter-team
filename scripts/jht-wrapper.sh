@@ -1167,7 +1167,7 @@ container_down() {
   local status=0 errors
   errors="$(mktemp "${TMPDIR:-/tmp}/jht-down.XXXXXX")" || { compose down; return $?; }
   compose down 2>"$errors" || status=$?
-  local shown gone=0
+  local shown left
   shown="$(rootless_netns_noise_filter <"$errors")"
   [ -z "$shown" ] || printf '%s\n' "$shown" >&2
   rm -f "$errors"
@@ -1176,8 +1176,9 @@ container_down() {
   if [ "$status" -ne 0 ] && [ "$(printf '%s\n' "$shown" | wc -l)" -eq 1 ]; then
     case "$shown" in
       "nota: il processo di rete del team era gia' chiuso"*)
-        read_only_service_id "$CONTAINER_SERVICE" any-config >/dev/null 2>&1 || gone=$?
-        if [ "$gone" -eq 3 ]; then return 0; fi
+        # podman-compose lists every container of the project (broker and telegram too):
+        # an empty answer, and not a failed one, is «nothing left».
+        left="$(compose ps -q 2>/dev/null)" && [ -z "$left" ] && return 0
         ;;
     esac
   fi
