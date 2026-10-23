@@ -70,9 +70,11 @@ class Server:
             # Forward slashes: the path goes into the script's source, where a Windows "C:\Users"
             # would read as a \U escape and the script would not compile.
             script = CHAT_READ_PY.replace("/jht_home/", self.home.as_posix() + "/")
+            # UTF-8 on both pipes, as on the VPS: on Windows they would be cp1252, and a message of 4000
+            # emoji could not be printed. -X utf8, because -I ignores the PYTHON* variables.
             done = subprocess.run(
-                [sys.executable, "-I", "-c", script], input=json.dumps({"agent": AGENT, "cursor": cursor}) + "\n",
-                capture_output=True, text=True, timeout=30,
+                [sys.executable, "-I", "-X", "utf8", "-c", script], input=json.dumps({"agent": AGENT, "cursor": cursor}) + "\n",
+                capture_output=True, encoding="utf-8", timeout=30,
             )
             assert done.returncode == 0, done.stderr
             raw = done.stdout.strip()
