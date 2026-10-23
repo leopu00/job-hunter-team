@@ -1,4 +1,5 @@
 import type {
+  DirectChatAnswerReceipt,
   DirectChatEvent,
   DirectChatPage,
   DirectChatReceipt,
@@ -6,9 +7,15 @@ import type {
 } from "../../lib/direct-chat";
 
 export type {
+  ChatKind,
+  MessageKind,
+  DirectChatAnswer,
+  DirectChatAnswerReceipt,
   DirectChatEvent,
   DirectChatMessage,
   DirectChatPage,
+  DirectChatQuestion,
+  DirectChatQuestionOption,
   DirectChatReceipt,
   DirectChatStatus,
 } from "../../lib/direct-chat";
@@ -26,5 +33,14 @@ export type DirectChatClient = {
     text: string;
     clientMessageId: string;
   }): Promise<DirectChatReceipt>;
+  /** Enter once more on a text the agent's CLI did not take; absent on an older bridge. */
+  enter?(args: { agentId: string; messageId: string }): Promise<DirectChatReceipt>;
+  /** Absent on a client that cannot answer (an older bridge): the questions are then only shown. */
+  answer?(args: {
+    agentId: string;
+    questionId: string;
+    choices: string[];
+    text: string | null;
+  }): Promise<DirectChatAnswerReceipt>;
   close(): MaybePromise<void>;
 };

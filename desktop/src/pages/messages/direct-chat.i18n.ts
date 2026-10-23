@@ -37,12 +37,57 @@ export interface DirectChatText {
   /** Over the composer: where the text goes. The chat, never the keys of the agent's terminal. */
   destination: string; // {name}
   /** Under a message of the person's: the agent's CLI took it (seen in its composer, then sent). */
-  delivered: string;
+  /** Under a message of the person's the team sent: «sent», never «taken», until the delivery proves it. */
+  sent: string;
   /** Under a message of the person's that waits in the agent's mailbox: sent, not yet taken. */
   queued: string;
   /** What a system line with a closed code says, by code (the backend's English text is the fallback). */
   codes: Record<string, string>;
   keysHint: string;
+  /** The label of each kind of message, on every message of the agent and on its questions. */
+  kinds: Record<"urgent" | "blocked" | "question" | "completed" | "info", string>;
+  answerSend: string;
+  /** Under an answered question: the agent's tool picked the answer up (not yet that the agent acted on it). */
+  answerSeen: string;
+  /** Under an answered question the agent's tool has not picked up yet. */
+  answerWaiting: string;
+  /** A question nobody answered in time: its safe option was taken. */
+  answerExpired: string;
+  /** Under a message of the person's still in the agent's composer: pasted, Enter did not take it. */
+  notSent: string;
+  /** The button beside it: presses Enter once more, never pastes the text again. */
+  sendEnterAgain: string;
+  /** Under a message of the person's when nobody can say whether the agent took it. */
+  takenUnknown: string;
+  /** Beside «not known», why: by the team's closed code; a code outside the list says nothing. */
+  takenReasons: Record<"menu" | "permission" | "login" | "busy" | "not_ours" | "empty_unseen" | "unreadable" | "unconfirmed", string>;
+  /** Why an answer did not go, by the code the team gives; `answer_failed` for any other. */
+  answerErrors: Record<"question_closed" | "invalid_choice" | "not_found" | "answer_failed", string>;
+  /** The group of replies the agent suggests under a message: a click sends one. */
+  suggestionsLabel: string;
+  /** The separators between the days of the conversation. */
+  today: string;
+  yesterday: string;
+  /** The item of the right-click menu on a message or a question. */
+  replyAction: string;
+  /** Over the composer, before the excerpt of the message the person replies to. */
+  replyingTo: string;
+  /** The same, when what is written is the answer to an open question. */
+  replyingToQuestion: string;
+  /** The × beside it: back to a normal message. */
+  replyClear: string;
+  /** Opens the quote put before a reply: `↩ <this>: "excerpt"`. The agent reads it. */
+  quotePrefix: string;
+  /** Under a question that takes words: puts it over the composer, where the words are written. */
+  answerInWords: string;
+  /** After an answer from the composer was refused: the words stay in the box. */
+  answerTextKept: string;
+  /** The round button that brings the conversation back to its latest line. */
+  jumpToLatest: string;
+  /** The same, with new lines that came while the person read above; `{count}` is their number. */
+  jumpToNew: string;
+  /** Said before sending, when the answer is not one the team would take. */
+  answerInvalid: Record<"choice_unknown" | "single_choice_only" | "free_text_not_allowed" | "empty_answer" | "text_too_long", string>;
 }
 
 export const DIRECT_CHAT_TEXT: Record<Locale, DirectChatText> = {
@@ -73,10 +118,33 @@ export const DIRECT_CHAT_TEXT: Record<Locale, DirectChatText> = {
     sending: "Invio…",
     send: "Invia",
     destination: "Destinazione: la chat di {name}. Il testo gli arriva come messaggio, non come tasti nel suo terminale.",
-    delivered: "Consegnato",
+    sent: "Inviato",
     queued: "In coda",
-    codes: { mail_not_taken: "L'agente non ha ancora preso il messaggio." },
+    codes: { mail_not_taken: "L'agente non ha ancora preso il messaggio.", message_too_long: "Un messaggio dell'agente era troppo lungo per essere mostrato qui." },
     keysHint: "Invio manda · Ctrl+Invio va a capo",
+    kinds: { urgent: "urgente", blocked: "bloccato", question: "domanda", completed: "completato", info: "comunicazione" },
+    answerSend: "Rispondi",
+    answerSeen: "Presa dallo strumento dell'agente",
+    answerWaiting: "Inviata: lo strumento dell'agente non l'ha ancora presa",
+    answerExpired: "Scaduta: è stata presa la risposta di riserva",
+    notSent: "Incollato ma non inviato",
+    sendEnterAgain: "Invia di nuovo (Invio)",
+    takenUnknown: "Non so se è stato preso",
+    takenReasons: { menu: "c'è un menu aperto", permission: "c'è una domanda di permesso", login: "c'è un accesso da fare", busy: "l'agente stava lavorando", not_ours: "nella casella c'è un altro testo", empty_unseen: "il testo non si è mai visto nella casella", unreadable: "lo schermo non si legge", unconfirmed: "il testo è uscito dalla casella, ma senza prova che l'abbia preso: guarda il suo terminale prima di riscrivere" },
+    answerErrors: { question_closed: "A questa domanda è già stata data una risposta.", invalid_choice: "Questa scelta non è fra quelle della domanda.", not_found: "L'agente non ha più questa domanda.", answer_failed: "Risposta non inviata: riprova." },
+    suggestionsLabel: "Risposte suggerite dall'agente",
+    today: "oggi",
+    yesterday: "ieri",
+    replyAction: "↩ Rispondi",
+    replyingTo: "rispondi a:",
+    replyingToQuestion: "rispondi alla domanda:",
+    replyClear: "Scrivi un messaggio normale",
+    quotePrefix: "in risposta a",
+    answerInWords: "Rispondi a parole",
+    answerTextKept: "Il testo è ancora nella casella.",
+    jumpToLatest: "Vai all'ultimo messaggio",
+    jumpToNew: "{count} nuovi: vai all'ultimo",
+    answerInvalid: { choice_unknown: "Questa scelta non è fra quelle della domanda.", single_choice_only: "Qui si sceglie una voce sola.", free_text_not_allowed: "Questa domanda non accetta risposte scritte: scegli una voce.", empty_answer: "Scegli una voce o scrivi la risposta.", text_too_long: "La risposta è troppo lunga: al massimo 1000 caratteri." },
   },
   en: {
     agents: { capitano: "Captain", assistente: "Assistant", mentor: "Mentor", scout: "Scout", analista: "Analyst", scorer: "Scorer", scrittore: "Writer", critico: "Critic" },
@@ -105,10 +173,33 @@ export const DIRECT_CHAT_TEXT: Record<Locale, DirectChatText> = {
     sending: "Sending…",
     send: "Send",
     destination: "Goes to: the chat with {name}. The text reaches it as a message, not as keys in its terminal.",
-    delivered: "Delivered",
+    sent: "Sent",
     queued: "Queued",
-    codes: { mail_not_taken: "The agent has not taken your message yet." },
+    codes: { mail_not_taken: "The agent has not taken your message yet.", message_too_long: "A message from the agent was too long to be shown here." },
     keysHint: "Enter sends · Ctrl+Enter starts a new line",
+    kinds: { urgent: "urgent", blocked: "blocked", question: "question", completed: "done", info: "update" },
+    answerSend: "Answer",
+    answerSeen: "Picked up by the agent's tool",
+    answerWaiting: "Sent: the agent's tool has not picked it up yet",
+    answerExpired: "Expired: the fallback answer was taken",
+    notSent: "Pasted but not sent",
+    sendEnterAgain: "Send again (Enter)",
+    takenUnknown: "Not known whether it was taken",
+    takenReasons: { menu: "a menu is open", permission: "a permission question is open", login: "a sign-in is waiting", busy: "the agent was working", not_ours: "another text is in its input box", empty_unseen: "the text never showed in its input box", unreadable: "the screen cannot be read", unconfirmed: "the text left its input box, but with no proof it was taken: look at its terminal before writing again" },
+    answerErrors: { question_closed: "This question already has an answer.", invalid_choice: "This choice is not one of the question's.", not_found: "The agent no longer has this question.", answer_failed: "Answer not sent: try again." },
+    suggestionsLabel: "Replies the agent suggests",
+    today: "today",
+    yesterday: "yesterday",
+    replyAction: "↩ Reply",
+    replyingTo: "reply to:",
+    replyingToQuestion: "answer the question:",
+    replyClear: "Write a normal message",
+    quotePrefix: "in reply to",
+    answerInWords: "Answer in words",
+    answerTextKept: "The text is still in the box.",
+    jumpToLatest: "Go to the latest message",
+    jumpToNew: "{count} new: go to the latest",
+    answerInvalid: { choice_unknown: "This choice is not one of the question's.", single_choice_only: "Only one choice here.", free_text_not_allowed: "This question takes no written answer: pick a choice.", empty_answer: "Pick a choice or write the answer.", text_too_long: "The answer is too long: 1000 characters at most." },
   },
   de: {
     agents: { capitano: "Kapitän", assistente: "Assistent", mentor: "Mentor", scout: "Scout", analista: "Analyst", scorer: "Scorer", scrittore: "Schreiber", critico: "Kritiker" },
@@ -137,10 +228,33 @@ export const DIRECT_CHAT_TEXT: Record<Locale, DirectChatText> = {
     sending: "Senden…",
     send: "Senden",
     destination: "Ziel: der Chat mit {name}. Der Text kommt als Nachricht an, nicht als Tasten in seinem Terminal.",
-    delivered: "Zugestellt",
+    sent: "Gesendet",
     queued: "In der Warteschlange",
-    codes: { mail_not_taken: "Der Agent hat deine Nachricht noch nicht abgeholt." },
+    codes: { mail_not_taken: "Der Agent hat deine Nachricht noch nicht abgeholt.", message_too_long: "Eine Nachricht des Agenten war zu lang, um hier angezeigt zu werden." },
     keysHint: "Enter sendet · Strg+Enter für eine neue Zeile",
+    kinds: { urgent: "dringend", blocked: "blockiert", question: "Frage", completed: "erledigt", info: "Mitteilung" },
+    answerSend: "Antworten",
+    answerSeen: "Vom Werkzeug des Agenten abgeholt",
+    answerWaiting: "Gesendet: das Werkzeug des Agenten hat sie noch nicht abgeholt",
+    answerExpired: "Abgelaufen: die Ersatzantwort wurde genommen",
+    notSent: "Eingefügt, aber nicht gesendet",
+    sendEnterAgain: "Erneut senden (Enter)",
+    takenUnknown: "Unklar, ob die Nachricht angenommen wurde",
+    takenReasons: { menu: "ein Menü ist offen", permission: "eine Berechtigungsfrage ist offen", login: "eine Anmeldung steht aus", busy: "der Agent hat gerade gearbeitet", not_ours: "im Eingabefeld steht ein anderer Text", empty_unseen: "der Text war im Eingabefeld nie zu sehen", unreadable: "der Bildschirm ist nicht lesbar", unconfirmed: "der Text hat das Eingabefeld verlassen, aber ohne Beweis, dass er angenommen wurde: schau in sein Terminal, bevor du erneut schreibst" },
+    answerErrors: { question_closed: "Diese Frage wurde schon beantwortet.", invalid_choice: "Diese Wahl gehört nicht zu den Antworten der Frage.", not_found: "Der Agent hat diese Frage nicht mehr.", answer_failed: "Antwort nicht gesendet: versuche es erneut." },
+    suggestionsLabel: "Vom Agenten vorgeschlagene Antworten",
+    today: "heute",
+    yesterday: "gestern",
+    replyAction: "↩ Antworten",
+    replyingTo: "Antwort auf:",
+    replyingToQuestion: "Antwort auf die Frage:",
+    replyClear: "Normale Nachricht schreiben",
+    quotePrefix: "als Antwort auf",
+    answerInWords: "Schriftlich antworten",
+    answerTextKept: "Der Text steht noch im Eingabefeld.",
+    jumpToLatest: "Zur neuesten Nachricht",
+    jumpToNew: "{count} neu: zur neuesten",
+    answerInvalid: { choice_unknown: "Diese Auswahl gehört nicht zur Frage.", single_choice_only: "Hier gibt es nur eine Auswahl.", free_text_not_allowed: "Diese Frage erlaubt keine freie Antwort: wähle eine Option.", empty_answer: "Wähle eine Option oder schreibe die Antwort.", text_too_long: "Die Antwort ist zu lang: höchstens 1000 Zeichen." },
   },
   fr: {
     agents: { capitano: "Capitaine", assistente: "Assistant", mentor: "Mentor", scout: "Scout", analista: "Analyste", scorer: "Scorer", scrittore: "Rédacteur", critico: "Critique" },
@@ -169,10 +283,33 @@ export const DIRECT_CHAT_TEXT: Record<Locale, DirectChatText> = {
     sending: "Envoi…",
     send: "Envoyer",
     destination: "Destination : la discussion avec {name}. Le texte lui arrive comme un message, pas comme des touches dans son terminal.",
-    delivered: "Remis",
+    sent: "Envoyé",
     queued: "En attente",
-    codes: { mail_not_taken: "L'agent n'a pas encore pris ton message." },
+    codes: { mail_not_taken: "L'agent n'a pas encore pris ton message.", message_too_long: "Un message de l'agent était trop long pour être affiché ici." },
     keysHint: "Entrée envoie · Ctrl+Entrée pour aller à la ligne",
+    kinds: { urgent: "urgent", blocked: "bloqué", question: "question", completed: "terminé", info: "info" },
+    answerSend: "Répondre",
+    answerSeen: "Prise par l'outil de l'agent",
+    answerWaiting: "Envoyée : l'outil de l'agent ne l'a pas encore prise",
+    answerExpired: "Expirée : la réponse de repli a été prise",
+    notSent: "Collé mais non envoyé",
+    sendEnterAgain: "Renvoyer (Entrée)",
+    takenUnknown: "On ne sait pas s'il a été pris",
+    takenReasons: { menu: "un menu est ouvert", permission: "une demande d'autorisation est ouverte", login: "une connexion est en attente", busy: "l'agent était en train de travailler", not_ours: "un autre texte est dans sa zone de saisie", empty_unseen: "le texte n'est jamais apparu dans sa zone de saisie", unreadable: "l'écran est illisible", unconfirmed: "le texte a quitté sa zone de saisie, mais sans preuve qu'il a été pris : regarde son terminal avant de réécrire" },
+    answerErrors: { question_closed: "Cette question a déjà une réponse.", invalid_choice: "Ce choix ne fait pas partie de ceux de la question.", not_found: "L'agent n'a plus cette question.", answer_failed: "Réponse non envoyée : réessaie." },
+    suggestionsLabel: "Réponses proposées par l'agent",
+    today: "aujourd'hui",
+    yesterday: "hier",
+    replyAction: "↩ Répondre",
+    replyingTo: "répondre à :",
+    replyingToQuestion: "répondre à la question :",
+    replyClear: "Écrire un message normal",
+    quotePrefix: "en réponse à",
+    answerInWords: "Répondre par écrit",
+    answerTextKept: "Le texte est toujours dans la zone de saisie.",
+    jumpToLatest: "Aller au dernier message",
+    jumpToNew: "{count} nouveaux : aller au dernier",
+    answerInvalid: { choice_unknown: "Ce choix ne fait pas partie de la question.", single_choice_only: "Un seul choix ici.", free_text_not_allowed: "Cette question n'accepte pas de réponse écrite : choisis une option.", empty_answer: "Choisis une option ou écris la réponse.", text_too_long: "La réponse est trop longue : 1000 caractères au maximum." },
   },
   es: {
     agents: { capitano: "Capitán", assistente: "Asistente", mentor: "Mentor", scout: "Scout", analista: "Analista", scorer: "Scorer", scrittore: "Redactor", critico: "Crítico" },
@@ -201,10 +338,33 @@ export const DIRECT_CHAT_TEXT: Record<Locale, DirectChatText> = {
     sending: "Enviando…",
     send: "Enviar",
     destination: "Destino: el chat con {name}. El texto le llega como mensaje, no como teclas en su terminal.",
-    delivered: "Entregado",
+    sent: "Enviado",
     queued: "En cola",
-    codes: { mail_not_taken: "El agente aún no ha tomado tu mensaje." },
+    codes: { mail_not_taken: "El agente aún no ha tomado tu mensaje.", message_too_long: "Un mensaje del agente era demasiado largo para mostrarse aquí." },
     keysHint: "Intro envía · Ctrl+Intro salta de línea",
+    kinds: { urgent: "urgente", blocked: "bloqueado", question: "pregunta", completed: "hecho", info: "aviso" },
+    answerSend: "Responder",
+    answerSeen: "Recogida por la herramienta del agente",
+    answerWaiting: "Enviada: la herramienta del agente aún no la ha recogido",
+    answerExpired: "Caducada: se tomó la respuesta de reserva",
+    notSent: "Pegado pero no enviado",
+    sendEnterAgain: "Enviar de nuevo (Intro)",
+    takenUnknown: "No se sabe si lo ha recibido",
+    takenReasons: { menu: "hay un menú abierto", permission: "hay una pregunta de permiso abierta", login: "hay un inicio de sesión pendiente", busy: "el agente estaba trabajando", not_ours: "hay otro texto en su cuadro de entrada", empty_unseen: "el texto nunca apareció en su cuadro de entrada", unreadable: "la pantalla no se puede leer", unconfirmed: "el texto salió de su cuadro de entrada, pero sin prueba de que lo haya recibido: mira su terminal antes de volver a escribir" },
+    answerErrors: { question_closed: "Esta pregunta ya tiene respuesta.", invalid_choice: "Esta opción no está entre las de la pregunta.", not_found: "El agente ya no tiene esta pregunta.", answer_failed: "Respuesta no enviada: inténtalo de nuevo." },
+    suggestionsLabel: "Respuestas sugeridas por el agente",
+    today: "hoy",
+    yesterday: "ayer",
+    replyAction: "↩ Responder",
+    replyingTo: "responder a:",
+    replyingToQuestion: "responder a la pregunta:",
+    replyClear: "Escribir un mensaje normal",
+    quotePrefix: "en respuesta a",
+    answerInWords: "Responder por escrito",
+    answerTextKept: "El texto sigue en el cuadro.",
+    jumpToLatest: "Ir al último mensaje",
+    jumpToNew: "{count} nuevos: ir al último",
+    answerInvalid: { choice_unknown: "Esta opción no es de la pregunta.", single_choice_only: "Aquí solo se elige una opción.", free_text_not_allowed: "Esta pregunta no admite respuesta escrita: elige una opción.", empty_answer: "Elige una opción o escribe la respuesta.", text_too_long: "La respuesta es demasiado larga: 1000 caracteres como máximo." },
   },
   pt: {
     agents: { capitano: "Capitão", assistente: "Assistente", mentor: "Mentor", scout: "Scout", analista: "Analista", scorer: "Scorer", scrittore: "Redator", critico: "Crítico" },
@@ -233,10 +393,33 @@ export const DIRECT_CHAT_TEXT: Record<Locale, DirectChatText> = {
     sending: "A enviar…",
     send: "Enviar",
     destination: "Destino: o chat com {name}. O texto chega-lhe como mensagem, não como teclas no terminal.",
-    delivered: "Entregue",
+    sent: "Enviado",
     queued: "Em fila",
-    codes: { mail_not_taken: "O agente ainda não apanhou a tua mensagem." },
+    codes: { mail_not_taken: "O agente ainda não apanhou a tua mensagem.", message_too_long: "Uma mensagem do agente era demasiado longa para ser mostrada aqui." },
     keysHint: "Enter envia · Ctrl+Enter muda de linha",
+    kinds: { urgent: "urgente", blocked: "bloqueado", question: "pergunta", completed: "concluído", info: "aviso" },
+    answerSend: "Responder",
+    answerSeen: "Recolhida pela ferramenta do agente",
+    answerWaiting: "Enviada: a ferramenta do agente ainda não a recolheu",
+    answerExpired: "Expirada: foi tomada a resposta de reserva",
+    notSent: "Colado mas não enviado",
+    sendEnterAgain: "Enviar de novo (Enter)",
+    takenUnknown: "Não se sabe se foi recebido",
+    takenReasons: { menu: "há um menu aberto", permission: "há um pedido de permissão aberto", login: "há um início de sessão pendente", busy: "o agente estava a trabalhar", not_ours: "há outro texto na sua caixa de escrita", empty_unseen: "o texto nunca apareceu na sua caixa de escrita", unreadable: "o ecrã não se consegue ler", unconfirmed: "o texto saiu da sua caixa de escrita, mas sem prova de que foi recebido: vê o seu terminal antes de voltar a escrever" },
+    answerErrors: { question_closed: "Esta pergunta já tem resposta.", invalid_choice: "Esta escolha não é uma das da pergunta.", not_found: "O agente já não tem esta pergunta.", answer_failed: "Resposta não enviada: tenta de novo." },
+    suggestionsLabel: "Respostas sugeridas pelo agente",
+    today: "hoje",
+    yesterday: "ontem",
+    replyAction: "↩ Responder",
+    replyingTo: "responder a:",
+    replyingToQuestion: "responder à pergunta:",
+    replyClear: "Escrever uma mensagem normal",
+    quotePrefix: "em resposta a",
+    answerInWords: "Responder por escrito",
+    answerTextKept: "O texto continua na caixa.",
+    jumpToLatest: "Ir para a última mensagem",
+    jumpToNew: "{count} novas: ir para a última",
+    answerInvalid: { choice_unknown: "Esta opção não é da pergunta.", single_choice_only: "Aqui escolhe-se só uma opção.", free_text_not_allowed: "Esta pergunta não aceita resposta escrita: escolhe uma opção.", empty_answer: "Escolhe uma opção ou escreve a resposta.", text_too_long: "A resposta é demasiado longa: no máximo 1000 caracteres." },
   },
   hu: {
     agents: { capitano: "Kapitány", assistente: "Asszisztens", mentor: "Mentor", scout: "Felderítő", analista: "Elemző", scorer: "Pontozó", scrittore: "Író", critico: "Kritikus" },
@@ -265,10 +448,33 @@ export const DIRECT_CHAT_TEXT: Record<Locale, DirectChatText> = {
     sending: "Küldés…",
     send: "Küldés",
     destination: "Cél: a csevegés vele: {name}. A szöveg üzenetként érkezik, nem billentyűként a termináljában.",
-    delivered: "Kézbesítve",
+    sent: "Elküldve",
     queued: "Sorban",
-    codes: { mail_not_taken: "Az ügynök még nem vette át az üzenetedet." },
+    codes: { mail_not_taken: "Az ügynök még nem vette át az üzenetedet.", message_too_long: "Az ügynök egyik üzenete túl hosszú volt ahhoz, hogy itt megjelenjen." },
     keysHint: "Enter: küldés · Ctrl+Enter: új sor",
+    kinds: { urgent: "sürgős", blocked: "elakadt", question: "kérdés", completed: "kész", info: "tájékoztatás" },
+    answerSend: "Válasz",
+    answerSeen: "Az ügynök eszköze átvette",
+    answerWaiting: "Elküldve: az ügynök eszköze még nem vette át",
+    answerExpired: "Lejárt: a tartalék válasz lett kiválasztva",
+    notSent: "Beillesztve, de nincs elküldve",
+    sendEnterAgain: "Küldés újra (Enter)",
+    takenUnknown: "Nem tudni, hogy megkapta-e",
+    takenReasons: { menu: "egy menü van nyitva", permission: "egy engedélykérés van nyitva", login: "bejelentkezésre vár", busy: "az ügynök éppen dolgozott", not_ours: "a beviteli mezőben más szöveg van", empty_unseen: "a szöveg sosem jelent meg a beviteli mezőben", unreadable: "a képernyő nem olvasható", unconfirmed: "a szöveg kikerült a beviteli mezőből, de nincs bizonyíték arra, hogy átvette: nézd meg a terminálját, mielőtt újra írsz" },
+    answerErrors: { question_closed: "Erre a kérdésre már érkezett válasz.", invalid_choice: "Ez a választás nincs a kérdés lehetőségei között.", not_found: "Az ügynöknél már nincs meg ez a kérdés.", answer_failed: "A válasz nem ment el: próbáld újra." },
+    suggestionsLabel: "Az ügynök által javasolt válaszok",
+    today: "ma",
+    yesterday: "tegnap",
+    replyAction: "↩ Válasz",
+    replyingTo: "válasz erre:",
+    replyingToQuestion: "válasz a kérdésre:",
+    replyClear: "Normál üzenet írása",
+    quotePrefix: "válaszul erre",
+    answerInWords: "Válasz saját szavakkal",
+    answerTextKept: "A szöveg még a mezőben van.",
+    jumpToLatest: "Ugrás a legutóbbi üzenethez",
+    jumpToNew: "{count} új: ugrás a legutóbbihoz",
+    answerInvalid: { choice_unknown: "Ez a választás nem tartozik a kérdéshez.", single_choice_only: "Itt csak egyet lehet választani.", free_text_not_allowed: "Erre a kérdésre nem lehet szöveges választ adni: válassz egy lehetőséget.", empty_answer: "Válassz egy lehetőséget, vagy írd meg a választ.", text_too_long: "A válasz túl hosszú: legfeljebb 1000 karakter." },
   },
 };
 

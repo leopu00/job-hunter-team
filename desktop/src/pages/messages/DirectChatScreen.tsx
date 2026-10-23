@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { appLocale } from "../../lib/app-locale";
 import { describeError } from "../../lib/error-catalog";
 import OwnVpsClaim from "../../components/OwnVpsClaim";
@@ -6,13 +6,31 @@ import { isOwnVpsClaimCode } from "../../lib/own-vps-claim";
 import type { VoiceInputBridge } from "../../lib/voice-input";
 import { VoiceInputControl } from "../../voice-input";
 import type {
+  DirectChatAnswer,
   DirectChatClient,
   DirectChatEvent,
   DirectChatMessage,
   DirectChatPage,
+  DirectChatQuestion,
   DirectChatStatus,
 } from "./direct-chat-contract";
 import { DICTATION_LOCALE, DIRECT_CHAT_TEXT, withName } from "./direct-chat.i18n";
+import ChatQuestion from "./ChatQuestion";
+import {
+  cleanMessage,
+  dayKey,
+  dayLabel,
+  ENTER_AGAIN_MAX,
+  excerpt,
+  KIND_COLOR,
+  outcomeOf,
+  questionsOf,
+  quoteLine,
+  transcript as conversationItems,
+  type Outcome,
+} from "./chat-kinds";
+import { sameAsBefore } from "./same-as-before";
+import { JumpToLatest, useStickToBottom } from "./stick-to-bottom";
 
 // The ids are the roles' keys on the VPS; the names come from the dictionary.
 const AGENT_IDS = ["capitano", "assistente", "mentor", "scout", "analista", "scorer", "scrittore", "critico"] as const;
@@ -52,7 +70,7 @@ function mergeMessages(
   page: DirectChatPage,
 ): DirectChatMessage[] {
   const byId = new Map(current.map((message) => [message.id, message]));
-  for (const message of page.messages) byId.set(message.id, message);
+  for (const message of page.messages) byId.set(message.id, cleanMessage(message));
   return [...byId.values()].sort((left, right) => left.at - right.at);
 }
 
@@ -154,16 +172,30 @@ export default function DirectChatScreen({
   const [agentId, setAgentId] = useState<DirectChatAgentId>(initialAgentId);
   const [status, setStatus] = useState<DirectChatStatus>(INITIAL_STATUS);
   const [messages, setMessages] = useState<DirectChatMessage[]>([]);
+  // The agent's questions: each read brings the open ones and the latest closed ones, whole.
+  const [questions, setQuestions] = useState<DirectChatQuestion[]>([]);
+  // Whether the team's image brings the questions at all: an older one cannot take an answer either.
+  const [questionsHere, setQuestionsHere] = useState(false);
+  // Answers that went and that no read has shown closed yet: the question stays closed meanwhile,
+  // so a read that comes in between does not offer the buttons again.
+  const [answersInFlight, setAnswersInFlight] = useState<ReadonlyMap<string, DirectChatAnswer>>(() => new Map());
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
   const [loading, setLoading] = useState(false);
   const [reconnecting, setReconnecting] = useState(false);
   const [operationError, setOperationError] = useState<string | null>(null);
-  // The person's messages of this view that the agent's CLI took: only a receipt says so.
-  const [delivered, setDelivered] = useState<ReadonlySet<string>>(() => new Set());
-  // A receipt that says `queued`: the turn is in the agent's mailbox, and nobody has said it was taken.
-  const [queued, setQueued] = useState<ReadonlySet<string>>(() => new Set());
+  // Why an answer written in the composer did not go: it stays in the box.
+  const [answerRefusal, setAnswerRefusal] = useState<string | null>(null);
+  // What the receipt said of each message of the person's in this view; only a receipt says it.
+  const [outcomes, setOutcomes] = useState<ReadonlyMap<string, Outcome>>(() => new Map());
+  // A message whose Enter is being pressed again.
+  const [pressing, setPressing] = useState<string | null>(null);
   const [inFlight, setInFlight] = useState<string | null>(null);
+  // What the composer replies to, chosen by the person (right-click → Reply): nothing until then.
+  // An open question that takes words: what is written is its answer. Anything else: a quote.
+  const [replyTo, setReplyTo] = useState<{ kind: "message" | "question"; id: string } | null>(null);
+  // The right-click menu of a message or a question: where, and for which.
+  const [menu, setMenu] = useState<{ kind: "message" | "question"; id: string; x: number; y: number } | null>(null);
   const composer = useRef<HTMLTextAreaElement>(null);
   const slowLink = status.state === "ready" && status.link === "per-command";
   const lastSentAt = useRef(0);
@@ -178,7 +210,6 @@ export default function DirectChatScreen({
     cursorAfterNewLine.current = null;
     composer.current?.setSelectionRange(cursor, cursor);
   }, [text]);
-  const transcript = useRef<HTMLDivElement>(null);
   const currentAgent = useRef(agentId);
   currentAgent.current = agentId;
   const locale = appLocale();
@@ -198,7 +229,11 @@ export default function DirectChatScreen({
         setStatus(event.status);
         if (event.status.state === "ready") setOperationError(null);
       } else if (event.kind === "messages" && event.agentId === currentAgent.current) {
-        setMessages((current) => mergeMessages(current, event.page));
+        setMessages((current) => sameAsBefore(current, mergeMessages(current, event.page)));
+        if (Array.isArray(event.page.questions)) {
+          setQuestionsHere(true);
+          setQuestions((current) => sameAsBefore(current, questionsOf(event.page)));
+        }
       } else if (event.kind === "error") {
         setOperationError(safeCode(event.code) ?? "unknown");
       }
@@ -240,8 +275,13 @@ export default function DirectChatScreen({
 
   useEffect(() => {
     setMessages([]);
-    setDelivered(new Set());
-    setQueued(new Set());
+    setQuestions([]);
+    setQuestionsHere(false);
+    setAnswersInFlight(new Map());
+    setReplyTo(null);
+    setMenu(null);
+    setOutcomes(new Map());
+    setPressing(null);
     setOperationError(null);
     setLoading(false);
     if (status.state !== "ready") return;
@@ -263,7 +303,13 @@ export default function DirectChatScreen({
         const page = await client.read(slowLink && cursor ? { agentId, cursor } : { agentId });
         if (!active) return undefined;
         if (slowLink) cursor = page.cursor;
-        setMessages((current) => mergeMessages(current, page));
+        setMessages((current) => sameAsBefore(current, mergeMessages(current, page)));
+        // a page that brings the questions replaces them; one without the field (an older image)
+        // leaves the chat without answers
+        if (Array.isArray(page.questions)) {
+          setQuestionsHere(true);
+          setQuestions((current) => sameAsBefore(current, questionsOf(page)));
+        }
         setOperationError(null);
         return null;
       } catch (error) {
@@ -342,10 +388,31 @@ export default function DirectChatScreen({
     };
   }, [agentId, client, status.state, slowLink]);
 
+  // a read closed a question the person answered here: its own account replaces the local one
   useEffect(() => {
-    const node = transcript.current;
-    if (node) node.scrollTop = node.scrollHeight;
-  }, [messages.length, agentId]);
+    setAnswersInFlight((current) => {
+      if (current.size === 0) return current;
+      const next = new Map(current);
+      for (const question of questions) if (question.state !== "open") next.delete(question.id);
+      return next.size === current.size ? current : next;
+    });
+  }, [questions]);
+
+  useEffect(() => {
+    if (!menu) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setMenu(null);
+    };
+    const close = () => setMenu(null);
+    window.addEventListener("keydown", onKey);
+    window.addEventListener("pointerdown", close);
+    window.addEventListener("blur", close);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      window.removeEventListener("pointerdown", close);
+      window.removeEventListener("blur", close);
+    };
+  }, [menu]);
 
   async function retry() {
     setReconnecting(true);
@@ -360,12 +427,32 @@ export default function DirectChatScreen({
     }
   }
 
-  async function send() {
-    const body = text.trim();
-    if (!body || sending || writeLocked || status.state !== "ready") return;
+  // `suggested`: a reply the agent suggested, sent as it is (the composer keeps what was typed).
+  async function send(suggested?: string) {
+    const typed = (suggested ?? text).trim();
+    if (!typed || sending || writeLocked || status.state !== "ready") return;
+    const target = suggested === undefined ? replyTarget() : null;
+    if (target?.kind === "question" && target.words) {
+      // the words are the answer to the open question, not a message in the agent's terminal
+      setSending(true);
+      setOperationError(null);
+      const refusal = await answer(target.question.id, [], typed);
+      setSending(false);
+      if (refusal === null) {
+        setText("");
+        setReplyTo(null);
+      } else {
+        setAnswerRefusal(`${refusal} ${t.answerTextKept}`);
+      }
+      return;
+    }
+    const body = target ? `${quoteLine(t.quotePrefix, target.text)}\n${typed}` : typed;
+    if (suggested === undefined) setReplyTo(null);
+    setAnswerRefusal(null);
     const id = clientMessageId();
-    const optimistic: DirectChatMessage = { id, role: "user", text: body, at: Date.now() };
-    setText("");
+    // in seconds, as the team's times: the receipt's time replaces it
+    const optimistic: DirectChatMessage = { id, role: "user", text: body, at: Date.now() / 1000 };
+    if (suggested === undefined) setText("");
     setSending(true);
     setInFlight(id);
     lastSentAt.current = Date.now();
@@ -381,17 +468,201 @@ export default function DirectChatScreen({
             : message,
         ),
       );
-      if (receipt.state === "queued") setQueued((current) => new Set(current).add(receipt.messageId));
-      else setDelivered((current) => new Set(current).add(receipt.messageId));
+      setOutcomes((current) => new Map(current).set(receipt.messageId, outcomeOf(receipt, 0)));
     } catch (error) {
       // Not delivered: the words go back to the composer, and the status bar says why.
       setMessages((current) => current.filter((message) => message.id !== id));
-      setText(body);
+      // what was typed goes back to the composer; a suggestion leaves the composer as it is
+      if (suggested === undefined) setText(typed);
       setOperationError(errorCode(error) ?? "send_failed");
     } finally {
       setSending(false);
       setInFlight(null);
     }
+  }
+
+  // Enter once more on a text left in the agent's composer: never the text, and only a few times.
+  async function enterAgain(messageId: string) {
+    const before = outcomes.get(messageId);
+    if (!client.enter || pressing || before?.kind !== "notSent" || before.presses >= ENTER_AGAIN_MAX) return;
+    if (writeLocked || status.state !== "ready") return;
+    setPressing(messageId);
+    setOperationError(null);
+    try {
+      const receipt = await client.enter({ agentId, messageId });
+      setOutcomes((current) => new Map(current).set(messageId, outcomeOf(receipt, before.presses + 1)));
+    } catch (error) {
+      setOperationError(errorCode(error) ?? "send_failed");
+    } finally {
+      setPressing(null);
+    }
+  }
+
+  // The answer to one of the agent's questions: the question closes with the choice as soon as the
+  // team took it; the next read brings the team's own account of it.
+  async function answer(questionId: string, choices: string[], words: string | null): Promise<string | null> {
+    if (!canAnswer || !client.answer) return t.answerErrors.answer_failed;
+    try {
+      const receipt = await client.answer({ agentId, questionId, choices, text: words });
+      setAnswersInFlight((current) =>
+        new Map(current).set(questionId, { choices, ...(words ? { text: words } : {}), at: receipt.at, origin: "user", seenAt: null }),
+      );
+      readSoon.current?.();
+      return null;
+    } catch (error) {
+      const code = errorCode(error);
+      // answered elsewhere: the next read brings the team's account of it
+      if (code === "question_closed") readSoon.current?.();
+      if (code && Object.prototype.hasOwnProperty.call(t.answerErrors, code)) {
+        return t.answerErrors[code as keyof typeof t.answerErrors];
+      }
+      // why the chat could not take it (an older image, the read-only link, a fallen connection): the
+      // status bar says it with the app's sentence, the card that the answer did not go
+      if (code) setOperationError(code);
+      return t.answerErrors.answer_failed;
+    }
+  }
+
+
+  const canAnswer = status.state === "ready" && !writeLocked && questionsHere && typeof client.answer === "function";
+  const shownQuestions = questions.map((question) => {
+    const local = question.state === "open" ? answersInFlight.get(question.id) : undefined;
+    return local ? { ...question, state: "answered" as const, answer: local } : question;
+  });
+  const items = conversationItems(messages, shownQuestions);
+
+  // What the composer replies to now: gone from the view, it is nothing; an open question that
+  // takes words is answered with them; a closed one, or a message, is quoted.
+  function replyTarget():
+    | { kind: "question"; question: DirectChatQuestion; words: boolean; text: string }
+    | { kind: "message"; text: string }
+    | null {
+    if (!replyTo) return null;
+    if (replyTo.kind === "question") {
+      const question = shownQuestions.find((q) => q.id === replyTo.id);
+      if (!question) return null;
+      return { kind: "question", question, words: question.state === "open" && question.free && canAnswer, text: question.subject || question.text };
+    }
+    const message = messages.find((m) => m.id === replyTo.id);
+    return message ? { kind: "message", text: message.text } : null;
+  }
+  const target = replyTarget();
+
+  function openMenu(kind: "message" | "question", id: string, event: { preventDefault(): void; clientX: number; clientY: number }) {
+    if (writeLocked) return;
+    event.preventDefault();
+    setMenu({ kind, id, x: event.clientX, y: event.clientY });
+  }
+
+  function replyFromMenu(kind: "message" | "question", id: string) {
+    setMenu(null);
+    setReplyTo({ kind, id });
+    setAnswerRefusal(null);
+    // the person writes next: the cursor goes in the box
+    composer.current?.focus();
+  }
+  const lastItem = items.length > 0 ? items[items.length - 1].key : null;
+  const bottom = useStickToBottom({ conversation: agentId, last: lastItem, count: items.length });
+
+  function renderMessage(message: DirectChatMessage, key: string) {
+    return (
+      <article
+        key={key}
+        className={`max-w-[86%] rounded-lg px-4 py-3 text-[12px] leading-relaxed whitespace-pre-wrap break-words ${
+          message.role === "user" ? "self-end rounded-br-sm" : "self-start rounded-bl-sm"
+        }`}
+        style={{
+          color: "var(--color-base)",
+          background:
+            message.role === "user"
+              ? "color-mix(in srgb, var(--color-green) 10%, var(--color-card))"
+              : "var(--color-card)",
+          border: `1px solid ${
+            message.role === "system"
+              ? "var(--color-yellow)"
+              : replyTo?.kind === "message" && replyTo.id === message.id
+                ? "var(--color-border-glow)"
+                : "var(--color-border)"
+          }`,
+          // urgent and blocked: a bar on the left, not the whole border
+          boxShadow: message.role === "agent" && KIND_COLOR[message.kind ?? "info"] ? `inset 3px 0 0 ${KIND_COLOR[message.kind ?? "info"]}` : undefined,
+        }}
+        data-quoted={replyTo?.kind === "message" && replyTo.id === message.id ? "true" : undefined}
+        onContextMenu={message.role === "system" ? undefined : (event) => openMenu("message", message.id, event)}
+      >
+        <div className="mb-1 flex items-center gap-2 text-[8px] font-semibold uppercase tracking-wider text-[var(--color-dim)]">
+          <span>{message.role === "user" ? t.you : message.role === "system" ? t.system : selected.label}</span>
+          {message.role === "agent" && (
+            <span data-testid="direct-chat-kind" data-kind={message.kind ?? "info"} style={{ color: KIND_COLOR[message.kind ?? "info"] ?? "var(--color-muted)" }}>
+              {t.kinds[message.kind ?? "info"]}
+            </span>
+          )}
+        </div>
+        {systemLineText(message, t.codes)}
+        {message.role === "agent" && message.suggestions && (
+          <div role="group" aria-label={t.suggestionsLabel} className="mt-2 flex flex-wrap gap-1.5 whitespace-normal">
+            {message.suggestions.map((line) => (
+              <button
+                key={line}
+                type="button"
+                data-testid="direct-chat-suggestion"
+                disabled={status.state !== "ready" || writeLocked || sending}
+                onClick={() => void send(line)}
+                className="rounded-full border border-[var(--color-border)] px-2.5 py-0.5 text-left text-[11px] text-[var(--color-bright)] disabled:opacity-40"
+              >
+                {line}
+              </button>
+            ))}
+          </div>
+        )}
+        {message.role === "user" && message.id === inFlight && (
+          <div data-testid="direct-chat-in-flight" className="mt-1 text-right text-[11px] text-[var(--color-muted)]">
+            {t.sending}
+          </div>
+        )}
+        {message.role === "user" && message.id !== inFlight && outcomes.has(message.id) && renderOutcome(message.id, outcomes.get(message.id)!)}
+      </article>
+    );
+  }
+
+  function renderOutcome(messageId: string, outcome: Outcome) {
+    if (outcome.kind === "notSent") {
+      const canPress =
+        typeof client.enter === "function" && outcome.presses < ENTER_AGAIN_MAX && status.state === "ready" && !writeLocked;
+      return (
+        <div data-testid="direct-chat-not-sent" className="mt-1 flex items-center justify-end gap-2 text-[11px] text-[var(--color-yellow)]">
+          <span>{t.notSent}</span>
+          {canPress && (
+            <button
+              type="button"
+              data-testid="direct-chat-enter-again"
+              disabled={pressing !== null}
+              onClick={() => void enterAgain(messageId)}
+              className="rounded border border-[var(--color-border)] px-2 py-0.5 font-semibold text-[var(--color-bright)] disabled:opacity-40"
+            >
+              {pressing === messageId ? t.sending : t.sendEnterAgain}
+            </button>
+          )}
+        </div>
+      );
+    }
+    if (outcome.kind === "unknown") {
+      // No button: a key pressed now could choose something on the agent's screen in the person's place.
+      return (
+        <div data-testid="direct-chat-taken-unknown" className="mt-1 text-right text-[11px] text-[var(--color-muted)]">
+          {t.takenUnknown}
+          {outcome.reason && <span data-testid="direct-chat-taken-reason">{`: ${t.takenReasons[outcome.reason]}`}</span>}
+        </div>
+      );
+    }
+    return (
+      <div
+        data-testid={outcome.kind === "queued" ? "direct-chat-queued" : "direct-chat-sent"}
+        className="mt-1 text-right text-[11px] text-[var(--color-muted)]"
+      >
+        {outcome.kind === "queued" ? t.queued : t.sent}
+      </div>
+    );
   }
 
   const canSend = status.state === "ready" && !writeLocked && !sending && text.trim().length > 0;
@@ -457,7 +728,8 @@ export default function DirectChatScreen({
         )}
 
         <div
-          ref={transcript}
+          ref={bottom.ref}
+          onScroll={bottom.onScroll}
           role="log"
           aria-label={withName(t.messagesWith, selected.label)}
           aria-live="polite"
@@ -465,49 +737,73 @@ export default function DirectChatScreen({
           data-testid="direct-chat-transcript"
         >
           <div className="mx-auto max-w-4xl flex flex-col gap-3">
-            {loading && messages.length === 0 && (
+            {loading && items.length === 0 && (
               <p role="status" className="m-0 py-8 text-center text-[11px] text-[var(--color-muted)]">{t.loadingConversation}</p>
             )}
-            {!loading && messages.length === 0 && (
+            {!loading && items.length === 0 && (
               <p className="m-0 py-8 text-center text-[11px] text-[var(--color-muted)]">{t.empty}</p>
             )}
-            {messages.map((message) => (
-              <article
-                key={message.id}
-                className={`max-w-[86%] rounded-lg px-4 py-3 text-[12px] leading-relaxed whitespace-pre-wrap break-words ${
-                  message.role === "user" ? "self-end rounded-br-sm" : "self-start rounded-bl-sm"
-                }`}
-                style={{
-                  color: "var(--color-base)",
-                  background:
-                    message.role === "user"
-                      ? "color-mix(in srgb, var(--color-green) 10%, var(--color-card))"
-                      : "var(--color-card)",
-                  border: `1px solid ${message.role === "system" ? "var(--color-yellow)" : "var(--color-border)"}`,
-                }}
-              >
-                <div className="mb-1 text-[8px] font-semibold uppercase tracking-wider text-[var(--color-dim)]">
-                  {message.role === "user" ? t.you : message.role === "system" ? t.system : selected.label}
-                </div>
-                {systemLineText(message, t.codes)}
-                {message.role === "user" && (message.id === inFlight || queued.has(message.id) || delivered.has(message.id)) && (
-                  <div
-                    data-testid={
-                      message.id === inFlight
-                        ? "direct-chat-in-flight"
-                        : queued.has(message.id)
-                          ? "direct-chat-queued"
-                          : "direct-chat-delivered"
-                    }
-                    className="mt-1 text-right text-[11px] text-[var(--color-muted)]"
-                  >
-                    {message.id === inFlight ? t.sending : queued.has(message.id) ? t.queued : t.delivered}
-                  </div>
-                )}
-              </article>
-            ))}
+            {items.map((item, index) => {
+              const day = dayKey(item.at);
+              const newDay = index === 0 || dayKey(items[index - 1].at) !== day;
+              return (
+                <Fragment key={item.key}>
+                  {newDay && (
+                    <div
+                      role="separator"
+                      data-testid="direct-chat-day"
+                      className="self-center py-1 text-[10px] font-semibold uppercase tracking-wider text-[var(--color-dim)]"
+                    >
+                      {dayLabel(item.at, t, DICTATION_LOCALE[locale])}
+                    </div>
+                  )}
+                  {item.type === "question" ? (
+                    <ChatQuestion
+                      question={item.question}
+                      agentName={selected.label}
+                      t={t}
+                      canAnswer={canAnswer}
+                      quoted={replyTo?.kind === "question" && replyTo.id === item.question.id}
+                      onAnswer={(choices, words) => answer(item.question.id, choices, words)}
+                      onAnswerInWords={writeLocked ? undefined : () => replyFromMenu("question", item.question.id)}
+                      onMenu={writeLocked ? undefined : (event) => openMenu("question", item.question.id, event)}
+                    />
+                  ) : (
+                    renderMessage(item.message, item.key)
+                  )}
+                </Fragment>
+              );
+            })}
           </div>
+          <JumpToLatest
+            atBottom={bottom.atBottom}
+            unseen={bottom.unseen}
+            label={bottom.unseen > 0 ? t.jumpToNew.replace("{count}", String(bottom.unseen)) : t.jumpToLatest}
+            onClick={bottom.jump}
+          />
         </div>
+        {menu && (
+          <div
+            role="menu"
+            aria-label={t.replyAction}
+            data-testid="direct-chat-menu"
+            className="fixed z-50 min-w-32 rounded-md border border-[var(--color-border)] bg-[var(--color-panel)] py-1 shadow-lg"
+            style={{ left: menu.x, top: menu.y }}
+            // a pointerdown inside the menu must not close it before the click
+            onPointerDown={(event) => event.stopPropagation()}
+          >
+            <button
+              type="button"
+              role="menuitem"
+              autoFocus
+              data-testid="direct-chat-menu-reply"
+              onClick={() => replyFromMenu(menu.kind, menu.id)}
+              className="block w-full px-3 py-1.5 text-left text-[11px] text-[var(--color-bright)] hover:bg-[var(--color-card)]"
+            >
+              {t.replyAction}
+            </button>
+          </div>
+        )}
 
         {writeLocked && (
           <p
@@ -541,6 +837,38 @@ export default function DirectChatScreen({
           >
             {withName(t.destination, selected.label)}
           </p>
+          {target && (
+            <div
+              data-testid="direct-chat-reply-to"
+              data-answer={target.kind === "question" && target.words ? "true" : undefined}
+              className="mx-auto max-w-4xl mb-1.5 flex items-center gap-2 rounded-md border border-[var(--color-border)] bg-[var(--color-card)] px-2 py-1 text-[11px]"
+            >
+              <span className="shrink-0 text-[var(--color-muted)]">
+                {target.kind === "question" && target.words ? t.replyingToQuestion : t.replyingTo}
+              </span>
+              <b className="min-w-0 flex-1 truncate font-semibold text-[var(--color-base)]" title={target.text}>
+                {excerpt(target.text)}
+              </b>
+              <button
+                type="button"
+                data-testid="direct-chat-reply-clear"
+                aria-label={t.replyClear}
+                title={t.replyClear}
+                onClick={() => {
+                  setReplyTo(null);
+                  setAnswerRefusal(null);
+                }}
+                className="shrink-0 px-1 text-[13px] leading-none text-[var(--color-muted)]"
+              >
+                ×
+              </button>
+            </div>
+          )}
+          {answerRefusal && (
+            <p role="alert" data-testid="direct-chat-answer-refused" className="mx-auto max-w-4xl m-0 mb-1.5 text-[11px] text-[var(--color-red)]">
+              {answerRefusal}
+            </p>
+          )}
           <div
             className="mx-auto max-w-4xl flex flex-wrap items-end gap-2 rounded-xl border border-[var(--color-border)] bg-[var(--color-card)] px-3 py-2 focus-within:border-[var(--color-border-glow)]"
             data-testid="direct-chat-composer-row"
