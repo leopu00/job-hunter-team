@@ -431,7 +431,26 @@ class Runtime:
             store.write_state(AUTH_QUESTION_STATE, questions)
         return {"ok": True, "status": "asked", "question_id": question_id}
 
-    def _apply_callback(self, role: str, callback: dict, secret: dict[str, str], api: BotAPI) -> bool:
+    def _enqueue_apply_authorisation(self, update_id: int, position_id: int, instant: str) -> None:
+        """Make the broker-recorded click available to the read-only inbox."""
+        event_id = f"telegram:assistente:{update_id}"
+        event = {
+            "event_id": event_id,
+            "agent": "assistente",
+            "kind": "apply_authorisation",
+            "position_id": position_id,
+            "instant": instant,
+            "created_at": _now_iso(),
+        }
+        with store.locked("events-assistente"):
+            events = store.read_state("events-assistente", [])
+            if not any(item.get("event_id") == event_id for item in events):
+                if len(events) >= MAX_EVENTS:
+                    raise TransportRefusal("inbox_full")
+                events.append(event)
+                store.write_state("events-assistente", events)
+
+    def _apply_callback(self, role: str, update_id: int, callback: dict, secret: dict[str, str], api: BotAPI) -> bool:
         callback_id = callback.get("id")
         message = callback.get("message")
         chat = message.get("chat") if isinstance(message, dict) else None
@@ -453,10 +472,12 @@ class Runtime:
             ):
                 api.answer_callback_query(callback_id, "Questa autorizzazione non è più disponibile.")
                 return True
-            response = telegram_client.record(question["position_id"], _notary_instant(), question["destination"])
+            instant = _notary_instant()
+            response = telegram_client.record(question["position_id"], instant, question["destination"])
             if not response.get("ok"):
                 api.answer_callback_query(callback_id, "Autorizzazione non verificata: candidatura non inviata.")
                 return True
+            self._enqueue_apply_authorisation(update_id, question["position_id"], instant)
             questions[question_id] = {**question, "state": "used", "used_at": now}
             store.write_state(AUTH_QUESTION_STATE, questions)
         api.answer_callback_query(callback_id, "Autorizzazione registrata.")
@@ -556,7 +577,7 @@ class Runtime:
     def process_update(self, role: str, update: dict, secret: dict[str, str], api: BotAPI) -> None:
         update_id = update.get("update_id")
         callback = update.get("callback_query")
-        if isinstance(callback, dict) and self._apply_callback(role, callback, secret, api):
+        if isinstance(callback, dict) and isinstance(update_id, int) and not isinstance(update_id, bool) and self._apply_callback(role, update_id, callback, secret, api):
             return
         message = update.get("message") or update.get("edited_message")
         if not isinstance(update_id, int) or isinstance(update_id, bool) or not isinstance(message, dict):

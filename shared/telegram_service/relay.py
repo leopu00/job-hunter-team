@@ -113,11 +113,50 @@ def _body(event: dict) -> str:
     return text
 
 
+def _record_apply_authorisation(database: sqlite3.Connection, event: dict) -> None:
+    """Reflect a broker-recorded Telegram click in the local UI flag.
+
+    The inbox is written only by jht-telegram. This row resumes checkpoints,
+    but is deliberately not evidence for sending: the CLOSER verifies the
+    broker immediately before the send.
+    """
+    position_id = event.get("position_id")
+    instant = event.get("instant")
+    if isinstance(position_id, bool) or not isinstance(position_id, int) or not isinstance(instant, str):
+        raise ValueError("apply_authorisation_event_invalid")
+    skills = Path(__file__).resolve().parents[1] / "skills"
+    if str(skills) not in sys.path:
+        sys.path.insert(0, str(skills))
+    import apply_gate  # noqa: PLC0415
+    import apply_request  # noqa: PLC0415
+
+    current = database.execute(
+        "SELECT apply_requested, apply_requested_at, apply_requested_by FROM positions WHERE id = ?", (position_id,)
+    ).fetchone()
+    if current is None:
+        raise ValueError("position_not_found")
+    if current == (1, instant, "user_telegram"):
+        return
+    verdict = apply_gate.toggle_verdict(position_id, True, database)
+    if not verdict.allowed:
+        raise ValueError(f"authorisation_refused:{verdict.reason}")
+    apply_request.write_authorisation(database, position_id, True, "user_telegram", instant=instant)
+    observed = database.execute(
+        "SELECT apply_requested, apply_requested_at, apply_requested_by FROM positions WHERE id = ?", (position_id,)
+    ).fetchone()
+    if observed != (1, instant, "user_telegram"):
+        raise ValueError("authorisation_write_not_observed")
+
+
 def insert_event(event: dict) -> None:
     target = db_path()
     if not target.is_file():
         raise FileNotFoundError(target)
     with sqlite3.connect(target, timeout=10) as database:
+        if event.get("kind") == "apply_authorisation":
+            _record_apply_authorisation(database, event)
+            database.commit()
+            return
         columns = {row[1] for row in database.execute("PRAGMA table_info(pending_user_messages)")}
         if not columns:
             raise sqlite3.DatabaseError("pending_user_messages_missing")

@@ -400,6 +400,11 @@ def test_apply_question_is_fixed_clean_and_records_only_its_button(
     }, {"bot_token": "unused", "chat_id": "42"}, api)
     assert recorded and recorded[0][0] == 77 and recorded[0][2] == "web:example.co.uk"
     assert api.callbacks[-1] == ("callback-1", "Autorizzazione registrata.")
+    events = store.read_state("events-assistente", [])
+    assert events == [{
+        "event_id": "telegram:assistente:71", "agent": "assistente", "kind": "apply_authorisation",
+        "position_id": 77, "instant": recorded[0][1], "created_at": events[0]["created_at"],
+    }]
     transport.process_update("assistente", {
         "update_id": 72,
         "callback_query": {"id": "callback-2", "data": f"jhta:{'a' * 32}:yes", "message": {
@@ -437,6 +442,54 @@ def test_apply_question_fails_closed_when_the_broker_does_not_answer(
     assert api.callbacks[-1] == ("callback-3", "Autorizzazione non verificata: candidatura non inviata.")
     question = store.read_state(runtime.AUTH_QUESTION_STATE, {})["b" * 32]
     assert question["state"] == "pending"
+    assert store.read_state("events-assistente", []) == []
+
+
+def test_apply_authorisation_event_sets_only_the_local_ui_flag(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    skills = ROOT / "shared" / "skills"
+    sys.path.insert(0, str(skills))
+    try:
+        import _db
+
+        database_path = tmp_path / "jobs.db"
+        with sqlite3.connect(database_path) as database:
+            database.row_factory = sqlite3.Row
+            _db.ensure_schema(database)
+            database.execute(
+                "INSERT INTO positions (id, title, company, url, status) VALUES (77, 'Role', 'Example', ?, 'ready')",
+                ("https://example.org/jobs",),
+            )
+            database.commit()
+        monkeypatch.setenv("JHT_DB", str(database_path))
+        instant = "2026-10-23T18:04:05.123Z"
+        relay.insert_event({
+            "event_id": "telegram:assistente:71", "agent": "assistente", "kind": "apply_authorisation",
+            "position_id": 77, "instant": instant, "created_at": "2026-10-23 18:04:05",
+        })
+        with sqlite3.connect(database_path) as database:
+            observed = database.execute(
+                "SELECT apply_requested, apply_requested_at, apply_requested_by FROM positions WHERE id = 77"
+            ).fetchone()
+        assert observed == (1, instant, "user_telegram")
+    finally:
+        sys.path.remove(str(skills))
+
+
+def test_service_imports_from_its_entrypoint_path_outside_the_repo(tmp_path: Path) -> None:
+    entry = ROOT / "shared" / "telegram_service" / "bin" / "jht-telegram-service.py"
+    script = (
+        "import os, sys\n"
+        "entry = sys.argv[1]\n"
+        "cwd = sys.argv[2]\n"
+        "os.chdir(cwd)\n"
+        "sys.path.insert(0, os.path.normpath(os.path.join(os.path.dirname(entry), '..', '..', '..')))\n"
+        "from shared.telegram_service import runtime\n"
+        "assert runtime.telegram_client.socket_path().name == 'broker.sock'\n"
+        "print('imports-ok')\n"
+    )
+    done = subprocess.run([sys.executable, "-c", script, str(entry), str(tmp_path)], capture_output=True, text=True)
+    assert done.returncode == 0, done.stderr
+    assert done.stdout == "imports-ok\n"
 
 
 def test_unprompted_otp_is_consumed_without_entering_inbox(
