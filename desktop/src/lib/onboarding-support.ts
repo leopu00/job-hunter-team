@@ -152,11 +152,15 @@ export async function deliverSetupSupportReport(report: SetupSupportReport): Pro
   const direct = mailtoForSetupSupport(report);
   if (direct) return { kind: "mailto", href: direct, savedReport: null };
   const savedReport = await saveLongReport(report.preview);
+  // The mail client gets a compact, redacted summary. The complete redacted
+  // report remains in the private attachment folder instead of overflowing a
+  // mailto URL.
+  const summary = report.preview.split("\n## Last runtime-log lines", 1)[0].trim();
   const fallback = `mailto:${SETUP_SUPPORT_MAILBOX}?${new URLSearchParams({
     subject: "Job Hunter Team desktop setup report",
-    body: savedReport
-      ? `The redacted report is ready to attach from: ${savedReport}`
-      : "The report could not be attached automatically. Please retry the support report.",
+    body: `${summary}\n\n${savedReport
+      ? `The complete redacted report is ready to attach from: ${savedReport}`
+      : "The complete report could not be saved automatically. Please retry the support report."}`,
   })}`;
   return { kind: "mailto", href: fallback, savedReport };
 }

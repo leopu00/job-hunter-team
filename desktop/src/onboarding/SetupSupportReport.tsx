@@ -36,7 +36,12 @@ export function SetupSupportReport({ stage, code, locale }: { stage: Operational
     const next = await deliverSetupSupportReport(report);
     setBusy(false);
     if (next.kind === "sent") { setOutcome({ message: `${t.sent}: ${next.ticket}` }); setReport(null); return; }
-    if (next.kind === "mailto") { setOutcome({ message: t.mail, href: next.href, saved: next.savedReport }); setReport(null); return; }
+    if (next.kind === "mailto") {
+      // Confirmation is the person's single action: do not make them click a
+      // second link merely to hand the already-prepared message to their mail app.
+      window.location.assign(next.href);
+      setOutcome({ message: t.mail, saved: next.savedReport }); setReport(null); return;
+    }
     setOutcome({ message: t.failed });
   }
   if (report) return <section className="onboarding-support" aria-label={t.title}>

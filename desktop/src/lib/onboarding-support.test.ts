@@ -3,6 +3,7 @@ import {
   createSetupSupportReport,
   deliverSetupSupportReport,
   mailtoForSetupSupport,
+  SETUP_SUPPORT_MAILTO_MAX,
 } from "./onboarding-support";
 
 const sensitiveLog = [
@@ -51,6 +52,20 @@ describe("desktop setup support report", () => {
   it("does not put a long report into a mailto URL", () => {
     const value = report(`token=${"x".repeat(32)}\n${"log line\n".repeat(5_000)}`);
     expect(mailtoForSetupSupport(value)).toBeNull();
+  });
+
+  it("uses a short redacted summary, not log contents, in the long-report mail fallback", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("offline")));
+    const value = report(`token=${"x".repeat(32)}\n${"log line\n".repeat(5_000)}`);
+    const result = await deliverSetupSupportReport(value);
+    expect(result.kind).toBe("mailto");
+    if (result.kind !== "mailto") return;
+    const body = new URL(result.href).searchParams.get("body") ?? "";
+    expect(body).toContain("Step: runtime");
+    expect(body).toContain("Code: runtime_install_failed");
+    expect(body).not.toContain("log line");
+    expect(body).not.toContain("x".repeat(32));
+    expect(result.href.length).toBeLessThanOrEqual(SETUP_SUPPORT_MAILTO_MAX);
   });
 
   it("posts only redacted data after the person confirms", async () => {
