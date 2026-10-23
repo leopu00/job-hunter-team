@@ -9,6 +9,7 @@ import {
 const sensitiveLog = [
   "failed to reach 203.0.113.70",
   "token=super-secret-token-value",
+  "host=customer-vps.example.invalid account_id=person-123",
   "at C:\\Users\\ada\\.jht\\runtime.log",
   "at /Users/ada/.jht/runtime.log",
 ].join("\n");
@@ -28,10 +29,14 @@ describe("desktop setup support report", () => {
     const outgoing = `${value.preview}\n${JSON.stringify(value.payload)}`;
     expect(outgoing).not.toContain("203.0.113.70");
     expect(outgoing).not.toContain("super-secret-token-value");
+    expect(outgoing).not.toContain("customer-vps.example.invalid");
+    expect(outgoing).not.toContain("person-123");
     expect(outgoing).not.toContain("Users\\ada");
     expect(outgoing).not.toContain("/Users/ada");
     expect(outgoing).toContain("[ip]");
     expect(outgoing).toContain("[secret]");
+    expect(outgoing).toContain("[host]");
+    expect(outgoing).toContain("[id]");
     expect(outgoing).toContain("[user]");
   });
 
@@ -47,6 +52,8 @@ describe("desktop setup support report", () => {
     expect(decoded).not.toContain("203.0.113.70");
     expect(decoded).not.toContain("super-secret-token-value");
     expect(decoded).not.toContain("Users\\ada");
+    expect(decoded).not.toContain("customer-vps.example.invalid");
+    expect(decoded).not.toContain("person-123");
   });
 
   it("does not put a long report into a mailto URL", () => {
@@ -77,5 +84,7 @@ describe("desktop setup support report", () => {
     expect(body).not.toContain("203.0.113.70");
     expect(body).not.toContain("super-secret-token-value");
     expect(body).not.toContain("Users\\ada");
+    expect(body).not.toContain("customer-vps.example.invalid");
+    expect(body).not.toContain("person-123");
   });
 });

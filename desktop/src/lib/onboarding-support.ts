@@ -34,6 +34,19 @@ function safeLocale(value: unknown): string {
   return /^[a-z]{2,3}(?:-[A-Z]{2})?$/.test(locale) ? locale : "en";
 }
 
+// The shared rules cover credentials, IPs and user-home paths. Setup logs can
+// also label a machine or account directly, so keep those identifiers out of
+// every support rendering as well.
+function redactSetupSupportText(text: string) {
+  const shared = redactWithReport(text);
+  return {
+    ...shared,
+    text: shared.text
+      .replace(/\b(host|hostname|server|address)\s*[:=]\s*[^\s,;]+/gi, "$1: [host]")
+      .replace(/\b(?:user[_-]?id|account[_-]?id|team[_-]?id|profile[_-]?id|client[_-]?id|id)\s*[:=]\s*[^\s,;]+/gi, "id: [id]"),
+  };
+}
+
 /** The UA is only used for its OS release; it is redacted before it can leave the app. */
 export function operatingSystem(userAgent = navigator.userAgent): string {
   const windows = /Windows NT ([0-9.]+)/.exec(userAgent);
@@ -70,13 +83,13 @@ export function createSetupSupportReport(input: {
     "Last runtime-log lines:",
     safeText(input.logTail, 16_000) || "(no runtime log was available)",
   ].join("\n");
-  const cleaned = redactWithReport(rawDiagnostics);
+  const cleaned = redactSetupSupportText(rawDiagnostics);
   const happened = `Desktop setup stopped at ${stage} (${code}).`;
   const payload = {
     client: "tauri-desktop",
     app_version: appVersion,
     locale,
-    platform: redactWithReport(platform).text,
+    platform: redactSetupSupportText(platform).text,
     doing: `Desktop setup: ${stage}`,
     happened,
     expected: "The desktop setup should complete.",
@@ -96,7 +109,7 @@ export function createSetupSupportReport(input: {
   ].join("\n");
   // Redact a second time after the report frame was produced: future changes
   // to a field above cannot bypass the same outgoing boundary.
-  const final = redactWithReport(preview);
+  const final = redactSetupSupportText(preview);
   return { preview: final.text, payload: { ...payload, diagnostics: final.text }, redactions: mergeCounts(cleaned.counts, final.counts) };
 }
 

@@ -5,6 +5,7 @@
 //! is private to the user and rotated (runtime.log, .1, .2).
 
 use crate::runtime_host::{set_private_dir_permissions, set_private_permissions, ProcessResult};
+use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::{
     fs,
@@ -436,7 +437,24 @@ pub(crate) fn onboarding_support_report_save(
         return None;
     }
     let root = app.path().app_local_data_dir().ok()?;
-    save_onboarding_support_draft(&root.join("support-reports"), &draft.markdown)
+    save_onboarding_support_draft(&root.join("support-reports"), &redact_support_draft(draft.markdown))
+}
+
+/// The renderer's preview is redacted too, but a Tauri command is an IPC
+/// boundary: never treat its markdown argument as trusted when persisting a
+/// report that the UI presents as ready to attach.
+fn redact_support_draft(markdown: String) -> String {
+    let text = crate::onboarding::redact(markdown);
+    let public_ip = Regex::new(r"\b(?:\d{1,3}\.){3}\d{1,3}\b").expect("constant public IP pattern");
+    let windows_home = Regex::new(r#"(?i)((?:[A-Z]:[\\/]|\\)Users[\\/])[^/\\\r\n\t"':;,)\]]+"#).expect("constant Windows home pattern");
+    let posix_home = Regex::new(r#"(?i)((?:/Users|/home)/)[^/\s"':;,)\]]+"#).expect("constant POSIX home pattern");
+    let labelled_host = Regex::new(r"(?i)\b(host|hostname|server|address)\s*[:=]\s*[^\s,;]+").expect("constant host pattern");
+    let labelled_id = Regex::new(r"(?i)\b(?:user[_-]?id|account[_-]?id|team[_-]?id|profile[_-]?id|client[_-]?id|id)\s*[:=]\s*[^\s,;]+").expect("constant id pattern");
+    let text = public_ip.replace_all(&text, "[ip]");
+    let text = windows_home.replace_all(&text, "$1[user]");
+    let text = posix_home.replace_all(&text, "$1[user]");
+    let text = labelled_host.replace_all(&text, "$1: [host]");
+    labelled_id.replace_all(&text, "id: [id]").into_owned()
 }
 
 fn save_onboarding_support_draft(directory: &Path, markdown: &str) -> Option<String> {
@@ -447,20 +465,27 @@ fn save_onboarding_support_draft(directory: &Path, markdown: &str) -> Option<Str
         Err(_) => return None,
     }
     set_private_dir_permissions(&directory).ok()?;
-    let file_name = format!("desktop-setup-{}.md", SUPPORT_REPORT_SEQUENCE.fetch_add(1, Ordering::Relaxed));
-    let path = directory.join(&file_name);
-    let mut options = fs::OpenOptions::new();
-    options.write(true).create_new(true);
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::OpenOptionsExt;
-        options.mode(0o600);
+    for _ in 0..128 {
+        let file_name = format!("desktop-setup-{}.md", SUPPORT_REPORT_SEQUENCE.fetch_add(1, Ordering::Relaxed));
+        let path = directory.join(&file_name);
+        let mut options = fs::OpenOptions::new();
+        options.write(true).create_new(true);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::OpenOptionsExt;
+            options.mode(0o600);
+        }
+        let mut file = match options.open(&path) {
+            Ok(file) => file,
+            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => continue,
+            Err(_) => return None,
+        };
+        file.write_all(markdown.as_bytes()).ok()?;
+        file.sync_all().ok()?;
+        set_private_permissions(&path).ok()?;
+        return Some(format!("Job Hunter Team/Support reports/{file_name}"));
     }
-    let mut file = options.open(&path).ok()?;
-    file.write_all(markdown.as_bytes()).ok()?;
-    file.sync_all().ok()?;
-    set_private_permissions(&path).ok()?;
-    Some(format!("Job Hunter Team/Support reports/{file_name}"))
+    None
 }
 
 #[cfg(windows)]
@@ -484,7 +509,7 @@ pub(crate) fn reveal(path: &Path) -> std::io::Result<()> {
 
 #[cfg(test)]
 mod tests {
-    use super::{append, entry, failure_cause, save_onboarding_support_draft, utc, RuntimeLog};
+    use super::{append, entry, failure_cause, redact_support_draft, save_onboarding_support_draft, utc, RuntimeLog, SUPPORT_REPORT_SEQUENCE};
     use std::{
         fs,
         time::{Duration, UNIX_EPOCH},
@@ -790,11 +815,19 @@ mod tests {
     fn a_long_support_report_is_saved_privately_but_returns_only_a_logical_path() {
         let root = dir("support-draft");
         let actual = root.join("Ada").join("support-reports");
-        let logical = save_onboarding_support_draft(&actual, "# redacted report\n[ip] [secret]\n").unwrap();
-        assert!(logical.starts_with("Job Hunter Team/Support reports/desktop-setup-") && logical.ends_with(".md"));
+        fs::create_dir_all(&actual).unwrap();
+        SUPPORT_REPORT_SEQUENCE.store(42, std::sync::atomic::Ordering::Relaxed);
+        fs::write(actual.join("desktop-setup-42.md"), "older report").unwrap();
+        let raw = "# report\nfailed 203.0.113.70 token=synthetic-secret-value at /Users/ada/.jht/runtime.log host=customer-vps.example.invalid account_id=person-123\n";
+        let logical = save_onboarding_support_draft(&actual, &redact_support_draft(raw.into())).unwrap();
+        assert_eq!(logical, "Job Hunter Team/Support reports/desktop-setup-43.md");
         assert!(!logical.contains("Ada") && !logical.contains(&actual.display().to_string()));
-        let file = fs::read_dir(&actual).unwrap().next().unwrap().unwrap().path();
-        assert_eq!(fs::read_to_string(&file).unwrap(), "# redacted report\n[ip] [secret]\n");
+        let file = actual.join("desktop-setup-43.md");
+        let saved = fs::read_to_string(&file).unwrap();
+        for sensitive in ["203.0.113.70", "synthetic-secret-value", "/Users/ada", "customer-vps.example.invalid", "person-123"] {
+            assert!(!saved.contains(sensitive), "saved draft exposed {sensitive}");
+        }
+        assert!(saved.contains("[ip]") && saved.contains("[REDACTED]") && saved.contains("/Users/[user]") && saved.contains("[host]") && saved.contains("[id]"));
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
