@@ -1224,35 +1224,10 @@ pub(crate) async fn direct_chat_read(
         if &connection.scope != scope.scope() {
             return Err(failure("account_scope_mismatch"));
         }
-        if uses_pinned_chat(connection) {
-            let result = run_chat(
-                connection,
-                ChatOperation::Read { agent: &agent_id, cursor: cursor.as_deref() },
-                None,
-                READ_TIMEOUT,
-                "read_failed",
-            )?;
-            return parse_json::<DirectChatPage>(result, "read_failed");
+        if connection.link == VpsLink::PerCommand && matches!(connection.validated, ValidatedHost::Vps { .. }) {
+            return small_read(cursor.as_deref(), &mut |cursor| read_page(connection, &agent_id, cursor));
         }
-        if let Some(result) = run_wrapper_chat(
-            connection,
-            ChatOperation::Read { agent: &agent_id, cursor: cursor.as_deref() },
-            None,
-            READ_TIMEOUT,
-            "read_failed",
-        )? {
-            return parse_json::<DirectChatPage>(result, "read_failed");
-        }
-        // The host's wrapper is older than the chat actions: the older path.
-        parse_json::<DirectChatPage>(
-            run_python(
-                connection,
-                CHAT_READ_PY,
-                &json!({"agent":agent_id,"cursor":cursor}),
-                READ_TIMEOUT,
-            )?,
-            "read_failed",
-        )
+        read_page(connection, &agent_id, cursor.as_deref())
     })
     .await
     .map_err(|_| failure("read_failed"))?;
@@ -1313,6 +1288,59 @@ fn delivery_command(agent: &str) -> Option<&'static str> {
 
 fn local_delivery_args(session: &str) -> [&str; 3] {
     ["desktop-chat", "send", session]
+}
+
+/// One page of an agent's chat, from `cursor` (the server's tail of 128 KB without one), by the
+/// path the host has: the pinned chat, the host's wrapper, or the older Python one.
+fn read_page(connection: &Connection, agent_id: &str, cursor: Option<&str>) -> Result<DirectChatPage, DirectChatError> {
+    if uses_pinned_chat(connection) {
+        let result = run_chat(connection, ChatOperation::Read { agent: agent_id, cursor }, None, READ_TIMEOUT, "read_failed")?;
+        return parse_json::<DirectChatPage>(result, "read_failed");
+    }
+    if let Some(result) =
+        run_wrapper_chat(connection, ChatOperation::Read { agent: agent_id, cursor }, None, READ_TIMEOUT, "read_failed")?
+    {
+        return parse_json::<DirectChatPage>(result, "read_failed");
+    }
+    // The host's wrapper is older than the chat actions: the older path.
+    parse_json::<DirectChatPage>(
+        run_python(connection, CHAT_READ_PY, &json!({"agent":agent_id,"cursor":cursor}), READ_TIMEOUT)?,
+        "read_failed",
+    )
+}
+
+/// The tail a first small read asks for: the last 32 KiB of the chat, not the server's 128 KiB.
+const SMALL_READ_TAIL: u64 = 32 * 1024;
+/// How far before the cursor a later read starts: more than a whole line of the largest message
+/// (4000 characters, 16 KB of UTF-8, plus its JSON).
+const SMALL_READ_OVERLAP: u64 = 20 * 1024;
+/// A cursor past any chat (12 digits, the most the server takes): the server answers with no line
+/// and its size as the cursor.
+const SMALL_READ_SIZE_PROBE: &str = "999999999999";
+
+/// A read on the per-command link (Windows to a VPS), where every read is an ssh connection: what
+/// passes stays small, about 50 KB at most, instead of the server's whole tail of 128 KiB at every
+/// read. Nothing changes on the server, so the VPS already installed answer the same way.
+/// - Without a cursor (the page's first read of an agent): the size, then the last 32 KiB.
+/// - With the page's cursor: from 20 KiB before it. The server drops the line it lands inside, so
+///   a cursor right at the start of a line would lose that line, and a line still being written at
+///   the end would come back cut: the overlap reads them again whole, with the same ids (an absolute
+///   offset or the message's own id), and the page merges them.
+/// - A cursor the server answers with a smaller one (the chat got shorter): read again from the tail.
+fn small_read(
+    cursor: Option<&str>,
+    read: &mut dyn FnMut(Option<&str>) -> Result<DirectChatPage, DirectChatError>,
+) -> Result<DirectChatPage, DirectChatError> {
+    let at = |page: &DirectChatPage| page.cursor.as_deref().and_then(|cursor| cursor.parse::<u64>().ok());
+    if let Some(kept) = cursor.and_then(|cursor| cursor.parse::<u64>().ok()) {
+        let sent = kept.saturating_sub(SMALL_READ_OVERLAP);
+        let page = read(Some(&sent.to_string()))?;
+        if at(&page).is_some_and(|back| back >= sent) {
+            return Ok(page);
+        }
+    }
+    let size = at(&read(Some(SMALL_READ_SIZE_PROBE))?).ok_or_else(|| failure("read_failed"))?;
+    read(Some(&size.saturating_sub(SMALL_READ_TAIL).to_string()))
 }
 
 /// One command does what the two used to: the turn is written once for its client id and goes to
@@ -1564,7 +1592,8 @@ mod tests {
         Connection, DirectChatPage, ProcessResult, REMOTE_CONTAINER_PROBE, REMOTE_PYTHON_STDIN, UNKNOWN_ACTION,
         control_path_fits, remove_tunnel_socket, tunnel_dir_name, tunnel_socket_bases, tunnel_socket_path,
         SOCKET_PATH_MAX, SSH_SOCKET_SUFFIX,
-        open_vps_link, ready_status, vps_link_for, VpsLink, VPS_LINK_CHECK,
+        open_vps_link, ready_status, small_read, vps_link_for, VpsLink, VPS_LINK_CHECK, SMALL_READ_OVERLAP,
+        SMALL_READ_SIZE_PROBE, SMALL_READ_TAIL, DirectChatError,
         master_to_lend,
     };
     use crate::existing_team_runtime::ActivatedTarget;
@@ -1826,6 +1855,48 @@ mod tests {
         // the status of a ready connection is this one
         let source = include_str!("direct_chat.rs").split("mod tests {").next().unwrap();
         assert!(source.contains("fn ready_for(connection: &Connection) -> DirectChatStatus {\n    ready_status(&connection.validated, connection.link)\n}"));
+    }
+
+    /// What a small read asks the server, and in what order.
+    fn small_reads(cursor: Option<&str>, answers: &[Option<&str>]) -> (Result<Option<String>, &'static str>, Vec<String>) {
+        let mut asked = Vec::new();
+        let mut answers = answers.iter();
+        let result = small_read(cursor, &mut |sent: Option<&str>| -> Result<DirectChatPage, DirectChatError> {
+            asked.push(sent.unwrap_or("none").to_owned());
+            Ok(DirectChatPage { messages: Vec::new(), cursor: answers.next().expect("one answer per read").map(str::to_owned) })
+        });
+        (result.map(|page| page.cursor).map_err(|error| error.code), asked)
+    }
+
+    #[test]
+    fn a_first_small_read_asks_the_size_then_the_last_32_kib() {
+        assert_eq!((SMALL_READ_TAIL, SMALL_READ_OVERLAP, SMALL_READ_SIZE_PROBE), (32_768, 20_480, "999999999999"));
+        assert_eq!(small_reads(None, &[Some("500000"), Some("500000")]), (Ok(Some("500000".into())), vec!["999999999999".into(), "467232".into()]));
+        // a chat shorter than the tail is read whole, from 0
+        assert_eq!(small_reads(None, &[Some("1200"), Some("1200")]).1, ["999999999999", "0"]);
+        // a size the server does not give is a failed read, not a read from 0
+        assert_eq!(small_reads(None, &[None]).0, Err("read_failed"));
+    }
+
+    #[test]
+    fn a_later_small_read_starts_20_kib_before_the_cursor_and_a_shorter_chat_starts_again() {
+        assert_eq!(small_reads(Some("500000"), &[Some("501000")]), (Ok(Some("501000".into())), vec!["479520".into()]));
+        assert_eq!(small_reads(Some("9000"), &[Some("9000")]).1, ["0"], "never below 0");
+        // the chat got shorter than where the read started: the size, then the tail
+        assert_eq!(
+            small_reads(Some("500000"), &[Some("4000"), Some("4000"), Some("4000")]).1,
+            ["479520", "999999999999", "0"]
+        );
+        // a cursor that is not a number is a first read
+        assert_eq!(small_reads(Some("x"), &[Some("10"), Some("10")]).1, ["999999999999", "0"]);
+    }
+
+    #[test]
+    fn only_the_per_command_link_to_a_vps_reads_small() {
+        let source = include_str!("direct_chat.rs").split("mod tests {").next().unwrap();
+        let read = source.split("pub(crate) async fn direct_chat_read(").nth(1).unwrap().split("\n}\n").next().unwrap();
+        assert!(read.contains("if connection.link == VpsLink::PerCommand && matches!(connection.validated, ValidatedHost::Vps { .. }) {\n            return small_read(cursor.as_deref(), &mut |cursor| read_page(connection, &agent_id, cursor));"));
+        assert!(read.contains("read_page(connection, &agent_id, cursor.as_deref())"), "every other link reads as before");
     }
 
     /// A test that builds a `Connection` drops it, and with it its `Option<AppHandle>`: that drop glue
