@@ -38,6 +38,17 @@ const NOT_ERRORS: Record<string, string> = {
   // The Windows autostart's nonfatal notice id in windows_runtime.rs; it is
   // interpreted there, never shown through the error catalog.
   autostart_inactive: "id of the nonfatal Windows autostart notice",
+  // The rule a node of the installed runtime broke, for the runtime log only (windows_runtime.rs).
+  acl_inherited: "closed word of the runtime log for the runtime attestation",
+  acl_user_missing: "closed word of the runtime log for the runtime attestation",
+  acl_other_account: "closed word of the runtime log for the runtime attestation",
+  acl_unreadable: "closed word of the runtime log for the runtime attestation",
+  user_unreadable: "closed word of the runtime log for the runtime attestation",
+  ancestor_reparse: "closed word of the runtime log for the runtime attestation",
+  kind: "closed word of the runtime log for the runtime attestation",
+  missing: "closed word of the runtime log for the runtime attestation",
+  owner: "closed word of the runtime log for the runtime attestation",
+  reparse: "closed word of the runtime log for the runtime attestation",
   // How a step of the autostart registration ended, for the runtime log only (windows_runtime.rs).
   autostart_sid_unreadable: "closed word of the runtime log for the autostart registration",
   autostart_stage_failed: "closed word of the runtime log for the autostart registration",

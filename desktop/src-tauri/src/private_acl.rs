@@ -32,7 +32,6 @@ use windows_sys::{
 };
 
 const LOCAL_SYSTEM_SID: &str = "S-1-5-18";
-const BUILTIN_ADMINS_SID: &str = "S-1-5-32-544";
 // winnt.h ACE types: an allow ACE is checked against the owner-only policy, a
 // deny ACE can only take access away. Every other type (object, callback,
 // audit) is unexpected in a DACL written here and fails the check.
@@ -171,17 +170,6 @@ pub(crate) fn grants_only_owner(report: &AclReport, user_sid: &str) -> bool {
             .allowed_sids
             .iter()
             .all(|sid| sid == user_sid || sid == LOCAL_SYSTEM_SID)
-}
-
-/// The runtime installer deliberately permits local Administrators in addition
-/// to its owner and SYSTEM. This is the exact read-only check used when an
-/// installed runtime is later trusted; it never repairs an open ACL.
-pub(crate) fn is_runtime_owner_only(report: &AclReport, user_sid: &str) -> bool {
-    report.inheritance_disabled
-        && report.allowed_sids.iter().any(|sid| sid == user_sid)
-        && report.allowed_sids.iter().all(|sid| {
-            sid == user_sid || sid == LOCAL_SYSTEM_SID || sid == BUILTIN_ADMINS_SID
-        })
 }
 
 /// The manifest's hashes establish bytes, while ownership establishes whose
@@ -561,25 +549,6 @@ mod tests {
             let mut open = ok.clone();
             open.allowed_sids.push(broad.into());
             assert!(!is_owner_only(&open, &user), "{broad}");
-        }
-    }
-
-    /// The runtime check of an installed bundle: protected, the owner allowed,
-    /// SYSTEM and local Administrators tolerated (install.ps1 grants them),
-    /// anyone else, or inherited entries, refused.
-    #[test]
-    fn the_runtime_acl_check_tolerates_system_and_admins_and_nobody_else() {
-        let user = "S-1-5-21-1-2-3-1001";
-        let report = |inheritance_disabled: bool, sids: &[&str]| AclReport {
-            inheritance_disabled,
-            allowed_sids: sids.iter().map(|sid| (*sid).to_owned()).collect(),
-        };
-        assert!(is_runtime_owner_only(&report(true, &[user, LOCAL_SYSTEM_SID, BUILTIN_ADMINS_SID]), user));
-        assert!(is_runtime_owner_only(&report(true, &[user]), user));
-        assert!(!is_runtime_owner_only(&report(false, &[user, LOCAL_SYSTEM_SID]), user), "inherited");
-        assert!(!is_runtime_owner_only(&report(true, &[LOCAL_SYSTEM_SID, BUILTIN_ADMINS_SID]), user), "owner missing");
-        for broad in [EVERYONE, USERS, AUTHENTICATED_USERS, "S-1-5-21-1-2-3-1002"] {
-            assert!(!is_runtime_owner_only(&report(true, &[user, broad]), user), "{broad}");
         }
     }
 }
