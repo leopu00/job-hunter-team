@@ -38,13 +38,24 @@ def profile_path():
 
 def ensure_profile_dir(path=None):
     """Crea la cartella del profilo con permessi 0700 (anche `secrets/` sopra) e
-    verifica che ci si possa scrivere. Alza OSError con un messaggio chiaro."""
+    verifica che ci si possa scrivere. Alza OSError con un messaggio chiaro.
+
+    Con il percorso di default la cartella padre e' `$JHT_HOME/secrets`: la si
+    crea chiusa e, se esisteva gia' piu' aperta, la si restringe a 0700. Con un
+    percorso esplicito (LINKEDIN_PROFILE_PATH) il padre e' di chi l'ha scelto e
+    non si tocca: si chiude solo la cartella del profilo."""
+    default = path is None and not os.environ.get("LINKEDIN_PROFILE_PATH")
     path = Path(path or profile_path())
     try:
         # `makedirs(mode=)` vale solo per l'ultimo livello: la cartella padre
         # (`secrets/`) la creiamo a parte, già chiusa.
         if not path.parent.exists():
             os.makedirs(path.parent, mode=0o700, exist_ok=True)
+        if default:
+            try:
+                os.chmod(path.parent, 0o700)
+            except OSError:
+                pass  # non e' nostra: il profilo qui sotto resta comunque 0700
         os.makedirs(path, mode=0o700, exist_ok=True)
         os.chmod(path, 0o700)
         if not os.access(path, os.W_OK | os.X_OK):

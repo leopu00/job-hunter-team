@@ -66,6 +66,10 @@ WORKTREES = [
 def _write_token(creds):
     """Scrive il token sotto $JHT_HOME/secrets (cartella 0700, file 0600)."""
     os.makedirs(SECRETS_DIR, mode=0o700, exist_ok=True)
+    try:
+        os.chmod(SECRETS_DIR, 0o700)  # una secrets/ gia' esistente e piu' aperta si restringe
+    except OSError:
+        pass
     fd = os.open(OAUTH_TOKEN_PATH, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
     with os.fdopen(fd, 'w') as f:
         f.write(creds.to_json())
