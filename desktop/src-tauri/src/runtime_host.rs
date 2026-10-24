@@ -1188,7 +1188,24 @@ where
     I: IntoIterator<Item = S>,
     S: AsRef<OsStr>,
 {
-    run_program_keeping_stderr(program, args, input, timeout).0
+    run_program_keeping_stderr_with_removed_env(program, args, input, timeout, &[]).0
+}
+
+/// Starts a native helper with named inherited environment variables removed.
+/// The local Podman shim must not be redirected by a user's remote connection
+/// settings: its runtime bundle identifies the only engine it may address.
+pub(crate) fn run_program_without_env<I, S>(
+    program: &str,
+    args: I,
+    input: Option<&[u8]>,
+    timeout: Duration,
+    removed_env: &[&str],
+) -> Result<ProcessResult, &'static str>
+where
+    I: IntoIterator<Item = S>,
+    S: AsRef<OsStr>,
+{
+    run_program_keeping_stderr_with_removed_env(program, args, input, timeout, removed_env).0
 }
 
 /// run_program that also returns what the program printed on stderr. Only
@@ -1205,11 +1222,42 @@ where
     I: IntoIterator<Item = S>,
     S: AsRef<OsStr>,
 {
+    run_program_keeping_stderr_with_removed_env(program, args, input, timeout, &[])
+}
+
+pub(crate) fn run_program_keeping_stderr_with_environment<I, S>(program: &str, args: I, input: Option<&[u8]>, timeout: Duration, current_dir: &Path, removed_env: &[&str], environment: &[(&str, &str)]) -> (Result<ProcessResult, &'static str>, Vec<u8>)
+where I: IntoIterator<Item = S>, S: AsRef<OsStr>,
+{
+    run_program_keeping_stderr_with_options(program, args, input, timeout, Some(current_dir), removed_env, environment)
+}
+
+fn run_program_keeping_stderr_with_removed_env<I, S>(
+    program: &str,
+    args: I,
+    input: Option<&[u8]>,
+    timeout: Duration,
+    removed_env: &[&str],
+) -> (Result<ProcessResult, &'static str>, Vec<u8>)
+where
+    I: IntoIterator<Item = S>,
+    S: AsRef<OsStr>,
+{
+    run_program_keeping_stderr_with_options(program, args, input, timeout, None, removed_env, &[])
+}
+
+fn run_program_keeping_stderr_with_options<I, S>(program: &str, args: I, input: Option<&[u8]>, timeout: Duration, current_dir: Option<&Path>, removed_env: &[&str], environment: &[(&str, &str)]) -> (Result<ProcessResult, &'static str>, Vec<u8>)
+where I: IntoIterator<Item = S>, S: AsRef<OsStr>,
+{
     let mut command = Command::new(program);
     command
         .args(args)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
+    for name in removed_env {
+        command.env_remove(name);
+    }
+    for (name, value) in environment { command.env(name, value); }
+    if let Some(current_dir) = current_dir { command.current_dir(current_dir); }
     hide_console(&mut command);
     if input.is_some() {
         command.stdin(Stdio::piped());

@@ -32,6 +32,9 @@ const NOT_ERRORS: Record<string, string> = {
   // through the error catalog.
   autostart_inactive: "id of the nonfatal Windows autostart notice",
   true: "Task Scheduler XML enabled value",
+  // The direct local chat selects only this Compose service; it is an internal service name,
+  // never a code shown to the person.
+  jht: "local chat Compose service name",
   // What ssh prints when the server turns an address away; read to pick ssh_rate_limited.
   kex_exchange_identification: "text of ssh stderr, not a code",
   // The reader's op cloud_sync and the fields of its reply (existing_team_runtime.rs): the page

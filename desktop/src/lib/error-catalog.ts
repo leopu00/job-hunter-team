@@ -1443,6 +1443,18 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
     "The team does not have this chat yet.",
     "Update the team to the latest version, then try again.",
   ),
+  local_chat_wrapper_outdated: copy(
+    "Il runtime dell’app su questo computer è più vecchio della chat.",
+    "Aggiorna l’app e rifai il passo del runtime: la squadra non va toccata.",
+    "The app runtime on this computer is older than the chat.",
+    "Update the app and repeat the runtime step: leave the team untouched.",
+  ),
+  composer_has_text: copy(
+    "Nella casella dell’agente c’è un testo non inviato.",
+    "Invialo o cancellalo nel terminale dell’agente, poi rimanda il messaggio.",
+    "There is unsent text in the agent’s composer.",
+    "Send or clear it in the agent’s terminal, then send your message again.",
+  ),
   agent_unavailable: AGENT_NOT_READY,
   // The chat never types over a running turn and keeps no queue: the person sends again.
   agent_busy: copy(
