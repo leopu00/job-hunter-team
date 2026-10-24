@@ -163,3 +163,12 @@ describe("the provider step calls Codex recommended", () => {
     expect(ONBOARDING_TEXT[locale].providerRecommended).toBe(WORD[locale]);
   });
 });
+
+describe("the «Resume» note on a failed setup", () => {
+  it("names the button by its whole label, in every language", () => {
+    for (const locale of locales) {
+      const text = ONBOARDING_TEXT[locale];
+      expect(text.resumeNote, locale).toContain(text.resumeSetup);
+    }
+  });
+});
