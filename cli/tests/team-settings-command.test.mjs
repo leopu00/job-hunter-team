@@ -143,3 +143,24 @@ test('the command is on the real program: get prints one JSON line, apply reads 
 });
 
 test.after(() => rmSync(home, { recursive: true, force: true }));
+
+test('the panel door: `agent-control settings get|apply` gives the same answers, as {ok,error}, and takes nothing else', async () => {
+  const { runSettings } = await import('../src/commands/agent-control.js');
+  const run = (args, stdin = '') => {
+    let printed = '';
+    const exit = runSettings(args, { write: (s) => { printed += s; }, readStdin: () => stdin });
+    return { exit, out: JSON.parse(printed.trim()) };
+  };
+  put(base());
+  assert.equal(run(['get']).out.ok, true);
+  const applied = run(['apply'], `${request({ role_models: { scout: { model: 'terra' } } })}\n`);
+  assert.equal(applied.exit, 0);
+  assert.equal(applied.out.role_models.scout.model, 'terra');
+  assert.deepEqual(run(['apply'], request({ role_models: { scout: { model: 'gpt' } } })), { exit: 1, out: { ok: false, error: 'value_invalid' } });
+  assert.deepEqual(run(['apply'], 'nope'), { exit: 2, out: { ok: false, error: 'request_invalid' } });
+  for (const args of [[], ['wipe'], ['get', 'x'], ['apply', '--force']]) {
+    assert.deepEqual(run(args), { exit: 100, out: { ok: false, error: 'agent_control_invalid' } }, JSON.stringify(args));
+  }
+  rmSync(CONFIG, { force: true });
+  assert.equal(run(['get']).out.error, 'config_missing');
+});
