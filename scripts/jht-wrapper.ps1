@@ -1564,6 +1564,25 @@ function Invoke-BrokerMigrateLegacyOnce {
   return 0
 }
 
+# One field of the box's cloud.json, read by node inside the container. The script goes on stdin
+# (`node -`): Windows PowerShell 5.1 strips the double quotes of an argument handed to a native
+# program, so `node -e '...require("fs")...'` reached node as `require(fs)`, a syntax error, and
+# its stderr stopped the script (T106). The native call runs in a block of its own with 'Continue'
+# because, under 'Stop', 5.1 turns any stderr line into an error even with 2>$null.
+function Get-AgentCloudField {
+  param([Parameter(Mandatory)][string]$AgentId, [Parameter(Mandatory)][ValidateSet('token', 'user_id')][string]$Field)
+  $script = if ($Field -eq 'token') {
+    @'
+const fs=require('fs');try{const c=JSON.parse(fs.readFileSync('/jht_home/cloud.json','utf8'));if(typeof c.token==='string')process.stdout.write(c.token)}catch{}
+'@
+  } else {
+    @'
+const fs=require('fs');try{const c=JSON.parse(fs.readFileSync('/jht_home/cloud.json','utf8'));if(typeof c.user_id==='string'&&/^[0-9a-f-]{36}$/i.test(c.user_id))process.stdout.write(c.user_id)}catch{}
+'@
+  }
+  return ((& { $ErrorActionPreference = 'Continue'; $script | & docker exec -i -u 1001 $AgentId node - 2>$null }) -join '')
+}
+
 # First pairing may take user_id from cloud.json in the box, a box-writable
 # file.  This is a bootstrap residual only: once the broker has an account,
 # normal starts refresh its token but never replace that account automatically;
@@ -1572,21 +1591,25 @@ function Initialize-BrokerWebAuthorisations {
   $agentId = Get-RunningComposeServiceId 'jht'
   $brokerId = Get-RunningComposeServiceId $BrokerContainer
   if (-not $agentId -or -not $brokerId) { return }
-  $state = (& docker exec $brokerId jht-broker-admin apply web-status 2>$null) -join "`n"
-  $token = (& docker exec -u 1001 $agentId node -e 'const fs=require("fs");try{const c=JSON.parse(fs.readFileSync("/jht_home/cloud.json","utf8"));if(typeof c.token==="string")process.stdout.write(c.token)}catch{}' 2>$null) -join ''
-  if ($token) { $null = Invoke-BrokerAdmin -InputText $token apply web-token }
+  # Under 'Stop' Windows PowerShell 5.1 turns a native program's stderr line into an error that stops
+  # the script even with 2>$null (T106: the first `jht up` of a standard-user install ended there),
+  # so each of these native calls runs in a block of its own with 'Continue'.
+  $state = ((& { $ErrorActionPreference = 'Continue'; & docker exec $brokerId jht-broker-admin apply web-status 2>$null }) -join "`n")
+  $token = Get-AgentCloudField -AgentId $agentId -Field 'token'
+  if ($token) { $null = Invoke-BrokerAdmin -InputText $token -AdminArgs @('apply', 'web-token') }
   if ($state -match '"account_id": null') {
-    $account = (& docker exec -u 1001 $agentId node -e 'const fs=require("fs");try{const c=JSON.parse(fs.readFileSync("/jht_home/cloud.json","utf8"));if(typeof c.user_id==="string"&&/^[0-9a-f-]{36}$/i.test(c.user_id))process.stdout.write(c.user_id)}catch{}' 2>$null) -join ''
-    if ($account) { $null = Invoke-BrokerAdmin apply account $account }
+    $account = Get-AgentCloudField -AgentId $agentId -Field 'user_id'
+    # -AdminArgs by name: the first positional word would bind to InputText and be piped as stdin
+    if ($account) { $null = Invoke-BrokerAdmin -AdminArgs @('apply', 'account', $account) }
   }
 }
 
 function Reset-BrokerWebAccount {
   $agentId = Get-RunningComposeServiceId 'jht'
   if (-not $agentId) { Write-Err 'apply relink-account: container non attivo.'; return 1 }
-  $account = (& docker exec -u 1001 $agentId node -e 'const fs=require("fs");try{const c=JSON.parse(fs.readFileSync("/jht_home/cloud.json","utf8"));if(typeof c.user_id==="string"&&/^[0-9a-f-]{36}$/i.test(c.user_id))process.stdout.write(c.user_id)}catch{}' 2>$null) -join ''
+  $account = Get-AgentCloudField -AgentId $agentId -Field 'user_id'
   if (-not $account) { Write-Err 'apply relink-account: cloud account non disponibile. Esegui prima jht cloud pair.'; return 1 }
-  return Invoke-BrokerAdmin apply account $account
+  return Invoke-BrokerAdmin -AdminArgs @('apply', 'account', $account)
 }
 
 function Remove-BrokerResetData {
@@ -2568,7 +2591,7 @@ function Invoke-HostDownload {
   } catch {
     Write-Err "pubblicazione del download sull host non riuscita: $($_.Exception.Message)"
   } finally {
-    & docker exec $Container rm -f $containerTemp *> $null
+    & { $ErrorActionPreference = 'Continue'; & docker exec $Container rm -f $containerTemp *> $null }
     if (Test-Path -LiteralPath $hostTemp) {
       Remove-Item -LiteralPath $hostTemp -Force -ErrorAction SilentlyContinue
     }

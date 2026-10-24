@@ -1960,12 +1960,17 @@ fn install_local_windows(
             let shell = powershell_path(std::env::var_os("SystemRoot"));
             let started = Instant::now();
             let mut stdout = Vec::new();
+            let mut marks: Vec<(&'static str, Duration)> = Vec::new();
             let (ended, stderr) = crate::runtime_host::run_program_lines_keeping_stderr(
                 shell.to_str().ok_or_else(|| failure("runtime_install_failed"))?,
                 installer_invocation(&script, &channel_args),
                 PREPARE_TIMEOUT,
                 |line| {
-                    if let Some(message) = phase_message(line).or_else(|| notice_message(line)) {
+                    let announced = phase_message(line);
+                    if let Some(key) = announced {
+                        marks.push((key, started.elapsed()));
+                    }
+                    if let Some(message) = announced.or_else(|| notice_message(line)) {
                         phase(message);
                     }
                     if stdout.len() < INSTALL_STDOUT_KEPT {
@@ -1974,6 +1979,14 @@ fn install_local_windows(
                 },
             );
             if let Some(log) = log {
+                // Where the minutes went: each phase it announced, with its own time.
+                for (name, took) in crate::windows_runtime::phase_durations(&marks, started.elapsed()) {
+                    let step = match name {
+                        Some(key) => format!("install.ps1 phase {key}"),
+                        None => "install.ps1 before the first phase".to_owned(),
+                    };
+                    log.record(&step, Ok(0), &[], &[], took);
+                }
                 log.record("install.ps1", ended, &stdout, &stderr, started.elapsed());
             }
             installer_outcome(ended).map_err(failure)

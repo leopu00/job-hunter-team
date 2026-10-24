@@ -24,6 +24,7 @@
 use std::{
     ffi::OsString,
     path::{Path, PathBuf},
+    time::Duration,
 };
 
 pub(crate) const INSTALL_PS1_SHA256: &str = include_str!("../installer-windows.sha256");
@@ -642,6 +643,27 @@ pub(crate) fn phase_message(line: &str) -> Option<&'static str> {
         .map(|(_, message)| *message)
 }
 
+/// How long each phase of install.ps1 took: from the offsets, since its start, at which each phase
+/// announced itself, and the total. The first entry (no phase) is the time before the first
+/// announcement. The durations add up to the total; a phase that announces itself twice counts twice.
+#[cfg_attr(not(windows), allow(dead_code))]
+pub(crate) fn phase_durations(
+    marks: &[(&'static str, Duration)],
+    total: Duration,
+) -> Vec<(Option<&'static str>, Duration)> {
+    let mut out = Vec::with_capacity(marks.len() + 1);
+    let mut name = None;
+    let mut since = Duration::ZERO;
+    for (next, at) in marks {
+        let at = (*at).clamp(since, total);
+        out.push((name, at - since));
+        name = Some(*next);
+        since = at;
+    }
+    out.push((name, total.saturating_sub(since)));
+    out
+}
+
 /// install.ps1's notices (`JHT_NOTICE <id>`), with the key of what the
 /// onboarding keeps on screen for the rest of the setup. A notice is not a
 /// failure: the install goes on.
@@ -902,6 +924,26 @@ mod tests {
         );
         assert_eq!(result, Err(AutostartFailure { step: "stage", exit: None }));
         assert!(!programs.iter().any(|program| program == "schtasks.exe"));
+    }
+
+    #[test]
+    fn the_phases_of_the_installer_add_up_to_its_total() {
+        let secs = Duration::from_secs;
+        let marks = [("ui_phase_wsl_check", secs(2)), ("ui_phase_podman_machine_start", secs(40)), ("ui_phase_image_pull", secs(95))];
+        let spent = phase_durations(&marks, secs(783));
+        assert_eq!(
+            spent,
+            [
+                (None, secs(2)),
+                (Some("ui_phase_wsl_check"), secs(38)),
+                (Some("ui_phase_podman_machine_start"), secs(55)),
+                (Some("ui_phase_image_pull"), secs(688)),
+            ]
+        );
+        assert_eq!(spent.iter().map(|(_, took)| *took).sum::<Duration>(), secs(783));
+        // No phase at all: the whole time is the lead-in. A mark past the total cannot make a negative time.
+        assert_eq!(phase_durations(&[], secs(5)), [(None, secs(5))]);
+        assert_eq!(phase_durations(&[("ui_phase_image_pull", secs(9))], secs(5)), [(None, secs(5)), (Some("ui_phase_image_pull"), secs(0))]);
     }
 
     /// A SystemRoot with a space (not the usual C:\Windows): the program is the whole path and

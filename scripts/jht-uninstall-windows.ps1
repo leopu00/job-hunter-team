@@ -376,7 +376,7 @@ function Get-JhtMachineState {
   param([string]$Podman, [string]$Name)
   if (-not $Podman) { return 'unknown' }
   try {
-    $raw = ((& $Podman machine list --format json 2>$null) -join '')
+    $raw = ((& { $ErrorActionPreference = 'Continue'; & $Podman machine list --format json 2>$null }) -join '')
     if ($LASTEXITCODE -ne 0 -or -not $raw) { return 'unknown' }
     $parsed = ConvertFrom-Json -InputObject $raw
     # Windows PowerShell 5.1 hands a JSON array over as one object: enumerate it.
