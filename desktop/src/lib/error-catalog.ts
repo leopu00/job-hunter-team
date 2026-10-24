@@ -1268,6 +1268,44 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
     "Check that the app's data folder is accessible and has free space, then try again.",
   ),
 
+  // ── Export of the person's data ─────────────────────────────────────────
+  export_source_invalid: copy(
+    "Questa sorgente di dati non si può esportare.",
+    "Scegli una delle sorgenti dell’elenco e riprova.",
+    "This data source cannot be exported.",
+    "Choose one of the sources in the list and try again.",
+  ),
+  export_range_invalid: copy(
+    "Le date dell’intervallo non sono valide.",
+    "Scrivi le date come anno-mese-giorno, con la data iniziale non dopo quella finale, e riprova.",
+    "The dates of the range are not valid.",
+    "Write the dates as year-month-day, with the start date not after the end date, and try again.",
+  ),
+  export_too_large: copy(
+    "I dati sono troppo grandi per un solo file.",
+    "Restringi l’intervallo di date, o esporta una sorgente alla volta, e riprova.",
+    "The data is too large for a single file.",
+    "Narrow the date range, or export one source at a time, and try again.",
+  ),
+  export_save_failed: copy(
+    "Il file dell’esportazione non è stato salvato.",
+    "Scegli una cartella in cui puoi scrivere e con spazio libero, poi riprova.",
+    "The export file was not saved.",
+    "Choose a folder you can write to and that has free space, then try again.",
+  ),
+  export_incomplete: copy(
+    "Non è stato possibile leggere tutti i dati, quindi non ho salvato nessun file: un file incompleto sembrerebbe completo.",
+    "Riprova fra un minuto.",
+    "Not all the data could be read, so no file was saved: an incomplete file would look complete.",
+    "Try again in a minute.",
+  ),
+  not_cloud: copy(
+    "Questo account non è collegato al cloud: non ci sono dati dell’account da esportare.",
+    "Accedi con un account cloud, oppure esporta i dati della squadra.",
+    "This account is not connected to the cloud: there is no account data to export.",
+    "Sign in with a cloud account, or export the team’s data.",
+  ),
+
   // ── VPS access details and SSH identity ──────────────────────────────────
   invalid_host: SSH_FIELD,
   invalid_user: SSH_FIELD,

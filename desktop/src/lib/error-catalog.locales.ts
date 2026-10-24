@@ -22,6 +22,48 @@ function tr(
 }
 
 const COPY_BY_ENGLISH_TEXT: Readonly<Record<string, ErrorTranslations>> = {
+  "This data source cannot be exported.": {
+    de: ["Diese Datenquelle lässt sich nicht exportieren.", "Wähle eine der Quellen aus der Liste und versuche es erneut."],
+    es: ["Esta fuente de datos no se puede exportar.", "Elige una de las fuentes de la lista y vuelve a intentarlo."],
+    fr: ["Cette source de données ne peut pas être exportée.", "Choisis l’une des sources de la liste, puis réessaie."],
+    hu: ["Ez az adatforrás nem exportálható.", "Válassz a lista egyik forrását, majd próbáld újra."],
+    pt: ["Esta fonte de dados não pode ser exportada.", "Escolhe uma das fontes da lista e tenta novamente."],
+  },
+  "The dates of the range are not valid.": {
+    de: ["Die Daten des Zeitraums sind ungültig.", "Schreibe die Daten als Jahr-Monat-Tag, mit dem Anfangsdatum nicht nach dem Enddatum, und versuche es erneut."],
+    es: ["Las fechas del intervalo no son válidas.", "Escribe las fechas como año-mes-día, con la fecha inicial no posterior a la final, y vuelve a intentarlo."],
+    fr: ["Les dates de la période ne sont pas valides.", "Écris les dates sous la forme année-mois-jour, avec la date de début pas après celle de fin, puis réessaie."],
+    hu: ["Az időszak dátumai érvénytelenek.", "Írd a dátumokat év-hónap-nap alakban úgy, hogy a kezdő dátum ne legyen a záró után, majd próbáld újra."],
+    pt: ["As datas do intervalo não são válidas.", "Escreve as datas como ano-mês-dia, com a data inicial não depois da final, e tenta novamente."],
+  },
+  "The data is too large for a single file.": {
+    de: ["Die Daten sind für eine einzelne Datei zu groß.", "Grenze den Zeitraum ein oder exportiere eine Quelle nach der anderen und versuche es erneut."],
+    es: ["Los datos son demasiado grandes para un solo archivo.", "Reduce el intervalo de fechas, o exporta una fuente cada vez, y vuelve a intentarlo."],
+    fr: ["Les données sont trop volumineuses pour un seul fichier.", "Réduis la période, ou exporte une source à la fois, puis réessaie."],
+    hu: ["Az adatok túl nagyok egyetlen fájlhoz.", "Szűkítsd az időszakot, vagy egyszerre csak egy forrást exportálj, majd próbáld újra."],
+    pt: ["Os dados são demasiado grandes para um só ficheiro.", "Reduz o intervalo de datas, ou exporta uma fonte de cada vez, e tenta novamente."],
+  },
+  "The export file was not saved.": {
+    de: ["Die Datei wurde nicht gespeichert.", "Wähle einen Ordner, in den du schreiben kannst und der freien Platz hat, und versuche es erneut."],
+    es: ["El archivo no se ha guardado.", "Elige una carpeta en la que puedas escribir y que tenga espacio libre, y vuelve a intentarlo."],
+    fr: ["Le fichier n’a pas été enregistré.", "Choisis un dossier où tu peux écrire et qui a de la place, puis réessaie."],
+    hu: ["A fájl nem lett mentve.", "Válassz egy mappát, amelybe írhatsz és van benne szabad hely, majd próbáld újra."],
+    pt: ["O ficheiro não foi guardado.", "Escolhe uma pasta onde possas escrever e que tenha espaço livre e tenta novamente."],
+  },
+  "Not all the data could be read, so no file was saved: an incomplete file would look complete.": {
+    de: ["Nicht alle Daten konnten gelesen werden, deshalb wurde keine Datei gespeichert: Eine unvollständige Datei würde vollständig aussehen.", "Versuche es in einer Minute erneut."],
+    es: ["No se pudieron leer todos los datos, así que no se ha guardado ningún archivo: un archivo incompleto parecería completo.", "Vuelve a intentarlo dentro de un minuto."],
+    fr: ["Toutes les données n’ont pas pu être lues, donc aucun fichier n’a été enregistré : un fichier incomplet paraîtrait complet.", "Réessaie dans une minute."],
+    hu: ["Nem sikerült minden adatot beolvasni, ezért nem lett fájl mentve: egy hiányos fájl teljesnek látszana.", "Próbáld újra egy perc múlva."],
+    pt: ["Não foi possível ler todos os dados, por isso nenhum ficheiro foi guardado: um ficheiro incompleto pareceria completo.", "Tenta novamente dentro de um minuto."],
+  },
+  "This account is not connected to the cloud: there is no account data to export.": {
+    de: ["Dieses Konto ist nicht mit der Cloud verbunden: Es gibt keine Kontodaten zum Exportieren.", "Melde dich mit einem Cloud-Konto an oder exportiere die Daten des Teams."],
+    es: ["Esta cuenta no está conectada a la nube: no hay datos de la cuenta que exportar.", "Inicia sesión con una cuenta de la nube, o exporta los datos del equipo."],
+    fr: ["Ce compte n’est pas relié au cloud : il n’y a pas de données de compte à exporter.", "Connecte-toi avec un compte cloud, ou exporte les données de l’équipe."],
+    hu: ["Ez a fiók nincs a felhőhöz kapcsolva: nincs exportálható fiókadat.", "Jelentkezz be egy felhős fiókkal, vagy exportáld a csapat adatait."],
+    pt: ["Esta conta não está ligada à nuvem: não há dados da conta para exportar.", "Inicia sessão com uma conta na nuvem, ou exporta os dados da equipa."],
+  },
   "The details of this VPS are incomplete or not valid, so they were not saved.": {
     de: ["Die Angaben zu diesem VPS sind unvollständig oder ungültig und wurden deshalb nicht gespeichert.", "Prüfe Name, Adresse, Benutzer und Speicherort des Schlüssels und versuche es erneut."],
     es: ["Los datos de este VPS están incompletos o no son válidos, así que no se han guardado.", "Revisa el nombre, la dirección, el usuario y la ubicación de la clave, y vuelve a intentarlo."],
@@ -1667,6 +1709,12 @@ export const ERROR_CATALOG_LOCALES: Readonly<Record<string, ErrorTranslations>> 
   ssh_rate_limited: translated("The server is refusing connections from this computer for a few minutes after too many attempts."),
   ssh_client_missing: translated("This computer has no SSH client (OpenSSH), which is needed to connect to the VPS."),
   ssh_auth_failed: translated("SSH access to the VPS did not succeed."),
+  export_source_invalid: translated("This data source cannot be exported."),
+  export_range_invalid: translated("The dates of the range are not valid."),
+  export_too_large: translated("The data is too large for a single file."),
+  export_save_failed: translated("The export file was not saved."),
+  export_incomplete: translated("Not all the data could be read, so no file was saved: an incomplete file would look complete."),
+  not_cloud: translated("This account is not connected to the cloud: there is no account data to export."),
   saved_vps_invalid: translated("The details of this VPS are incomplete or not valid, so they were not saved."),
   saved_vps_duplicate: translated("This VPS is already in the saved list."),
   saved_vps_not_found: translated("This saved VPS is no longer in the list."),

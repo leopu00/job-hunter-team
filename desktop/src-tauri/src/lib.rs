@@ -34,6 +34,7 @@ mod runtime_host;
 mod runtime_log;
 mod saved_vps;
 mod team_control;
+mod team_export;
 mod text_file_export;
 mod voice_input;
 mod vps_link;
@@ -151,6 +152,8 @@ pub fn run() {
             podman::check_podman,
             profile_import::profile_import_vps_to_local,
             text_file_export::save_text_file,
+            team_export::export_team_data,
+            team_export::export_account_save,
             voice_input::voice_input_cancel,
             voice_input::voice_input_start,
             voice_input::voice_input_status,
