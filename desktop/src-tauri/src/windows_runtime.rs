@@ -843,6 +843,39 @@ mod tests {
         assert!(!check(&read_back.replace("<Principal id=\"Author\">", "<Principal id=\"Author\"><Principal>")));
     }
 
+    /// The task's user is compared as an identity. Windows gives the account back in more than one form
+    /// (the Task Scheduler writes the trigger's account with the domain in capitals and the principal as
+    /// the SID, never as a bare name): the current account in any of those forms is the same user, and no
+    /// other account is, nor an account that does not resolve. (This took the place of the PowerShell
+    /// test of the enabler's name-to-SID function, removed when the desktop took over the registration.)
+    #[test]
+    fn the_task_user_is_the_current_account_in_any_form_windows_gives_back_and_no_other() {
+        let shell = Path::new(r"C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe");
+        let wrapper = Path::new(r"C:\Users\someone\.local\bin\jht.ps1");
+        let (user, sid) = (r"jhtpc\someone", "S-1-5-21-1-2-3-1001");
+        let task = |trigger: &str, principal: &str| format!(
+            "<LogonTrigger><UserId>{trigger}</UserId></LogonTrigger><Principal><UserId>{principal}</UserId><LogonType>InteractiveToken</LogonType></Principal><Exec><Command>{}</Command><Arguments>{}</Arguments></Exec>",
+            shell.to_str().unwrap(),
+            xml_escape(&autostart_arguments(wrapper)),
+        );
+        let same = |trigger: &str, principal: &str| autostart_contract(&task(trigger, principal), user, sid, shell, wrapper);
+        for form in [sid, r"jhtpc\someone", r"JHTPC\someone", r"JhtPc\SOMEONE"] {
+            assert!(same(form, form), "{form}");
+            assert!(same(form, sid), "{form} as the trigger, the SID as the principal");
+        }
+        for other in [
+            "S-1-5-21-1-2-3-1002",
+            r"JHTPC\other",
+            r"OTHERPC\someone",
+            "someone",
+            r"jhtpc\jht-no-such-user-0123456789ab",
+            "",
+        ] {
+            assert!(!same(other, sid), "{other:?} as the trigger");
+            assert!(!same(sid, other), "{other:?} as the principal");
+        }
+    }
+
     /// The registration says which step stopped and, when a program refused,
     /// its exit code: what the runtime log keeps (a standard user's create was
     /// refused without a trace until now).
