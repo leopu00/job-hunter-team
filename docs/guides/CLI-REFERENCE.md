@@ -297,7 +297,7 @@ concentrates the same budget into fewer hours rather than saving it.
 | `jht reset creds`                    | Node  | Wipe provider credentials only.                               |
 | `jht reset config`                   | Node  | Wipe `jht.config.json` only.                                  |
 | `jht reset full`                     | Node  | Wipe both + jobs.db. Asks for confirmation.                   |
-| `jht export <source>`                | Node  | Export one JSON store. `<source>` is `sessions` \| `tasks` \| `config` \| `analytics` — **not** positions/applications/jobs.db. See below. |
+| `jht export <source>`                | Node  | Export one table of `jobs.db` (read only) or the config. `<source>` is `positions` \| `scores` \| `applications` \| `companies` \| `feedback` \| `notes` \| `config`. See below. |
 | `jht import <file> -t <target>`      | Node  | Import a previously-exported file. `-t/--target` is **required**: `sessions` \| `tasks` \| `config`. |
 | `jht migrate`                        | Node  | Apply pending config migrations.                              |
 | `jht positions list`                 | Node  | List positions in the local DB. `--json` for machine output.  |
@@ -306,27 +306,34 @@ concentrates the same budget into fewer hours rather than saving it.
 
 ### `export` / `import` — what they actually move
 
-Both work on the **JSON stores under `$JHT_HOME`**, one file at a time. They do
-not touch `jobs.db`, so they are not the way to move positions, scores or
-applications — for those, use `jht positions list --json` or `jht cloud push` /
-`jht cloud restore`.
+`export` reads the live tables of `jobs.db` (read only, one table per file, with
+an explicit list of columns: no internal paths, drive ids or credentials) — the
+same sources and columns as the website's `/export` page and the desktop app's
+export. `import` still moves the **JSON stores under `$JHT_HOME`**, one file at a
+time, and does not touch `jobs.db`.
 
 ```bash
-jht export config -o /tmp/cfg.json     # sources: sessions | tasks | config | analytics
-jht export analytics --csv --from 2026-07-01 --to 2026-07-31
+jht export positions --csv --from 2026-07-01 --to 2026-07-31   # sources: positions | scores | applications | companies | feedback | notes | config
+jht export config -o /tmp/cfg.json
 jht import /tmp/cfg.json -t config     # targets: sessions | tasks | config  (no analytics)
 ```
+
+`--from`/`--to` (`YYYY-MM-DD`, `to` included) filter on the date of each source
+(`found_at` for positions, `scored_at` for scores, `updated_at` for notes,
+`created_at` for the others). A source with no rows gives a valid file with
+`count: 0`; a team that never ran (no `jobs.db`) is an error, not an empty file.
 
 `-t/--target` is a **required** option on `import`: without it the command
 exits immediately with `error: required option '-t, --target <target>' not
 specified`. `--replace` swaps the whole store (default is a merge that skips
 duplicates by id); `--dry-run` validates without writing.
 
-> ⚠️ Three of the four sources — `sessions`, `tasks`, `analytics` — have had no
-> writer since the text UI was removed (2026-07-25). Exporting them today gives
-> you whatever was left behind, not current activity; the live picture is in
-> `jht positions`, `jht agents`, `jht status`. The same caveat applies to
-> `jht sessions`, `jht stats` and `jht report`, which read those files.
+> ⚠️ `sessions`, `tasks` and `analytics` (and the website's old `jobs`, `contacts`
+> and `interviews` files) have had no writer since the text UI was removed
+> (2026-07-25): `jht export` and `/export` say so instead of writing an empty
+> file; the live picture is in `jht positions`, `jht agents`, `jht status`. The
+> same caveat applies to `jht sessions`, `jht stats` and `jht report`, which read
+> those files.
 
 ### `--json` — machine-readable output
 

@@ -1,81 +1,26 @@
 import { NextRequest, NextResponse } from "next/server";
-import * as path from "node:path";
-import { JHT_HOME } from "@/lib/jht-paths";
-import { readJsonSafe } from "@/lib/json-files";
+import { getDb } from "@/lib/db";
+import { isCloudDeploy } from "@/lib/deploy-mode";
 import { requireAuth } from "@/lib/auth";
 // Titoli e nomi azienda arrivano dagli annunci: chi li pubblica sceglie il
 // primo carattere, e in un CSV il primo carattere decide se la cella è un
 // dato o una formula. Il neutralizzatore sta in `shared/` perché il comando
 // `jht export` ha lo stesso problema e non deve avere una risposta diversa.
 import { toCsv } from "../../../../shared/export/csv.js";
+// Le sorgenti sono le tabelle vive di jobs.db, le stesse del comando
+// `jht export` e dell'esportazione dell'app: una sola lista in `shared/`.
+import {
+  EXPORT_SOURCES,
+  exportRange,
+  isExportSource,
+  isRetiredExportSource,
+  readExportRows,
+  retiredExportNotice,
+} from "../../../../shared/export/sources.js";
 
 export const dynamic = "force-dynamic";
 
-const JHT_DIR = JHT_HOME;
-
-type DataSource =
-  | "sessions"
-  | "tasks"
-  | "analytics"
-  | "jobs"
-  | "applications"
-  | "contacts"
-  | "companies"
-  | "interviews";
 type ExportFormat = "json" | "csv";
-
-const DATE_FIELDS = [
-  "createdAt",
-  "createdAtMs",
-  "appliedAt",
-  "date",
-  "timestamp",
-  "closedAt",
-  "lastContact",
-];
-
-function filterByDate(
-  items: Record<string, unknown>[],
-  since: number,
-  until: number,
-): Record<string, unknown>[] {
-  return items.filter((item) => {
-    for (const f of DATE_FIELDS) {
-      const val = item[f];
-      if (typeof val === "number" && val >= since && val <= until) return true;
-    }
-    return since === 0 && until >= Date.now();
-  });
-}
-
-function loadWrapped(
-  file: string,
-  key?: string,
-): (since: number, until: number) => Record<string, unknown>[] {
-  return (since, until) => {
-    const raw = readJsonSafe<Record<string, unknown>>(path.join(JHT_DIR, file));
-    const items = key
-      ? ((raw as any)?.[key] ?? [])
-      : Array.isArray(raw)
-        ? raw
-        : [];
-    return filterByDate(items, since, until);
-  };
-}
-
-const LOADERS: Record<
-  DataSource,
-  (since: number, until: number) => Record<string, unknown>[]
-> = {
-  sessions: loadWrapped("sessions/sessions.json", "sessions"),
-  tasks: loadWrapped("tasks/tasks.json", "tasks"),
-  analytics: loadWrapped("analytics/analytics.json", "entries"),
-  jobs: loadWrapped("jobs.json"),
-  applications: loadWrapped("applications.json"),
-  contacts: loadWrapped("contacts.json"),
-  companies: loadWrapped("companies.json"),
-  interviews: loadWrapped("interviews.json"),
-};
 
 /** GET /api/export?source=tasks&format=csv&from=2026-01-01&to=2026-12-31 */
 export async function GET(req: NextRequest) {
@@ -84,14 +29,22 @@ export async function GET(req: NextRequest) {
   const denied = await requireAuth();
   if (denied) return denied;
   const sp = req.nextUrl.searchParams;
-  const source = sp.get("source") as DataSource | null;
+  const source = sp.get("source");
   const format = (sp.get("format") ?? "json") as ExportFormat;
 
-  if (!source || !LOADERS[source]) {
+  // Una sorgente che non esiste più lo dice: un file vuoto sarebbe uno zero
+  // indistinguibile da una squadra che non ha fatto niente.
+  if (source && isRetiredExportSource(source)) {
+    return NextResponse.json(
+      { ok: false, error: retiredExportNotice(source), code: "source_retired" },
+      { status: 410 },
+    );
+  }
+  if (!source || !isExportSource(source)) {
     return NextResponse.json(
       {
         ok: false,
-        error: `source obbligatorio: ${Object.keys(LOADERS).join(" | ")}`,
+        error: `source obbligatorio: ${Object.keys(EXPORT_SOURCES).join(" | ")}`,
       },
       { status: 400 },
     );
@@ -103,19 +56,39 @@ export async function GET(req: NextRequest) {
     );
   }
 
-  const fromStr = sp.get("from");
-  const toStr = sp.get("to");
-  const since = fromStr ? new Date(fromStr).getTime() : 0;
-  const until = toStr ? new Date(toStr + "T23:59:59").getTime() : Date.now();
-
-  if (isNaN(since) || isNaN(until)) {
+  const range = exportRange(sp.get("from"), sp.get("to"));
+  if (!range) {
     return NextResponse.json(
-      { ok: false, error: "date non valide (formato YYYY-MM-DD)" },
+      { ok: false, error: "date non valide (formato YYYY-MM-DD, from <= to)" },
       { status: 400 },
     );
   }
 
-  const rows = LOADERS[source](since, until);
+  // I dati stanno nel jobs.db del box: un sito nel cloud non li ha, e non deve
+  // rispondere con un file vuoto (per i dati dell'account c'è /api/account/export).
+  if (isCloudDeploy()) {
+    return NextResponse.json(
+      { ok: false, error: "export_local_only", code: "export_local_only" },
+      { status: 409 },
+    );
+  }
+  let rows: Record<string, unknown>[];
+  try {
+    rows = readExportRows(getDb(), source, range).rows;
+  } catch (error) {
+    // Nessun jobs.db = una squadra che non ha mai girato: lo si dice, non è un file vuoto.
+    const missing =
+      error instanceof Error &&
+      error.message.startsWith("Database non trovato");
+    return NextResponse.json(
+      {
+        ok: false,
+        error: missing ? "export_no_database" : "read_failed",
+        code: missing ? "export_no_database" : "read_failed",
+      },
+      { status: missing ? 404 : 500 },
+    );
+  }
   const filename = `jht-${source}-${new Date().toISOString().slice(0, 10)}.${format}`;
 
   if (format === "csv") {
