@@ -51,8 +51,10 @@ export default function RuntimePhaseDetail({
     setSince(Date.now());
   }, [phaseKey]);
   const pull = info.phase === "image_pull" ? info.pull ?? null : null;
-  const hasBytes = !!pull && pull.bytesTotal !== null && pull.bytesTotal > 0 && pull.bytesDone !== null;
-  const percent = hasBytes ? Math.min(100, Math.round((pull.bytesDone! / pull.bytesTotal!) * 100)) : null;
+  // a bar and a percentage only from two real counts: a negative or not-a-number count shows no bar
+  const hasBytes =
+    !!pull && pull.bytesDone !== null && pull.bytesTotal !== null && Number.isFinite(pull.bytesDone) && Number.isFinite(pull.bytesTotal) && pull.bytesDone >= 0 && pull.bytesTotal > 0;
+  const percent = hasBytes ? Math.max(0, Math.min(100, Math.round((pull.bytesDone! / pull.bytesTotal!) * 100))) : null;
   return (
     <div className="onboarding-runtime-phase" data-testid="onboarding-phase-detail">
       <small data-testid="onboarding-phase-clock">

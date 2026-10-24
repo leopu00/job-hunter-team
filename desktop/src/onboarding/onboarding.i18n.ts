@@ -1645,7 +1645,7 @@ const pt: OnboardingCopy = {
   phaseSince: (time) => `Nesta fase há ${time}`,
   pullLayersCount: (n) => (n === 1 ? "1 camada transferida" : `${n} camadas transferidas`),
   pullBytes: (done, total) => `${done} de ${total}`,
-  pullLong: "A transferência da imagem da equipe pode demorar vários minutos: deixa a aplicação aberta.",
+  pullLong: "A transferência da imagem da equipa pode demorar vários minutos: deixa a aplicação aberta.",
   stepsCompletedAria: "Passos concluídos",
   stepOf: (n, total) => `Passo ${n} de ${total}`,
   completedCount: (n) => `${n} concluídos`,

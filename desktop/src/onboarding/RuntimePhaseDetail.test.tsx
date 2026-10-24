@@ -69,6 +69,16 @@ describe("the phase detail under the step's heading", () => {
     expect(screen.getByTestId("onboarding-pull-bytes").querySelector("progress")).toHaveAttribute("value", "100");
   });
 
+  it("shows no bar for a count that is negative or not a number, and keeps the layers", () => {
+    render(detail({ phase: "image_pull", pull: { blobsDone: 2, bytesDone: -5, bytesTotal: GIB } }, "image_pull"));
+    expect(screen.queryByTestId("onboarding-pull-bytes")).toBeNull();
+    expect(screen.getByTestId("onboarding-pull-layers")).toHaveTextContent("2 layers downloaded");
+    cleanup();
+    render(detail({ phase: "image_pull", pull: { blobsDone: 2, bytesDone: Number.NaN, bytesTotal: GIB } }, "image_pull"));
+    expect(screen.queryByTestId("onboarding-pull-bytes")).toBeNull();
+    expect(document.body).not.toHaveTextContent("NaN");
+  });
+
   it("writes sizes with the biggest unit that keeps them above one", () => {
     expect(bytesText(0, "en")).toBe("0 B");
     expect(bytesText(1536, "en")).toBe("1.5 KiB");
