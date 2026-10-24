@@ -138,12 +138,12 @@ describe("the Windows consent says where JHT is removed", () => {
 });
 
 describe("the Windows consent names the scheduled task the setup registers", () => {
-  // The task's name as Windows shows it, read from the script that registers it.
-  const enabler = readFileSync("../scripts/enable-podman-windows-runtime.ps1", "utf8");
-  const taskName = /^\s*\$taskName = '([^']+)'/m.exec(enabler)?.[1];
+  // The desktop Rust, not install.ps1, owns this current-user task.
+  const runtime = readFileSync("src-tauri/src/windows_runtime.rs", "utf8");
+  const taskName = /AUTOSTART_TASK_NAME:\s*&str\s*=\s*"([^"]+)"/.exec(runtime)?.[1];
   const TASK = { it: "attività pianificata", en: "scheduled task", de: "geplante Aufgabe", es: "tarea programada", fr: "tâche planifiée", hu: "ütemezett feladat", pt: "tarefa agendada" };
 
-  it("finds the task's name in the script", () => {
+  it("finds the task's name in the desktop authority", () => {
     expect(taskName).toBe("Job Hunter Team - Start runtime");
   });
 
