@@ -578,6 +578,58 @@ describe("DirectChatScreen: where the text goes, and when it is delivered", () =
     expect(screen.queryByTestId("direct-chat-in-flight")).toBeNull();
   });
 
+  it("a turn the team holds back while its agent works is «In coda», then «Inviato» once the page stops listing it", async () => {
+    viewport(1280, 800);
+    const { mock } = client();
+    let held = true;
+    mock.send = vi.fn(async ({ clientMessageId }): Promise<DirectChatReceipt> => ({
+      clientMessageId,
+      accepted: true,
+      messageId: "remote-queued-2",
+      at: 3,
+      state: "queued",
+      queue: "terminal",
+    }));
+    mock.read = vi.fn(async (): Promise<DirectChatPage> => ({
+      messages: [{ id: "a1", role: "agent", text: "Messaggio dalla VPS", at: 1 }],
+      cursor: "opaque-cursor",
+      queued: held ? ["remote-queued-2"] : [],
+    }));
+    const user = userEvent.setup();
+    render(<DirectChatScreen client={mock} />);
+    await screen.findByText("Messaggio dalla VPS");
+    await user.type(screen.getByRole("textbox", { name: "Scrivi a Capitano" }), "Sei occupato?{Enter}");
+    const mine = (await screen.findByText("Sei occupato?")).closest("article")!;
+    await waitFor(() => expect(within(mine).getByTestId("direct-chat-queued")).toHaveTextContent("In coda"));
+    held = false;
+    await waitFor(
+      () => expect(within(screen.getByText("Sei occupato?").closest("article")!).getByTestId("direct-chat-sent")).toHaveTextContent("Inviato"),
+      { timeout: 4_000 },
+    );
+    expect(within(screen.getByText("Sei occupato?").closest("article")!).queryByTestId("direct-chat-queued")).toBeNull();
+  });
+
+  it("a queued mailbox turn nobody watches stays «In coda» whatever the page says of the queue", async () => {
+    viewport(1280, 800);
+    const { mock } = client();
+    mock.send = vi.fn(async ({ clientMessageId }): Promise<DirectChatReceipt> => ({
+      clientMessageId, accepted: true, messageId: "remote-queued-3", at: 3, state: "queued",
+    }));
+    mock.read = vi.fn(async (): Promise<DirectChatPage> => ({
+      messages: [{ id: "a1", role: "agent", text: "Messaggio dalla VPS", at: 1 }],
+      cursor: "opaque-cursor",
+      queued: [],
+    }));
+    const user = userEvent.setup();
+    render(<DirectChatScreen client={mock} />);
+    await screen.findByText("Messaggio dalla VPS");
+    await user.type(screen.getByRole("textbox", { name: "Scrivi a Capitano" }), "Nella mailbox{Enter}");
+    const mine = (await screen.findByText("Nella mailbox")).closest("article")!;
+    await waitFor(() => expect(within(mine).getByTestId("direct-chat-queued")).toBeInTheDocument());
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 2_000)); });
+    expect(within(screen.getByText("Nella mailbox").closest("article")!).getByTestId("direct-chat-queued")).toBeInTheDocument();
+  });
+
   it("a receipt that carries no state is the typed turn: «Inviato»", async () => {
     viewport(1280, 800);
     const { mock } = client();

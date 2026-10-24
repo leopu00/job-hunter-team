@@ -204,18 +204,40 @@ export type TakenReason = (typeof TAKEN_REASONS)[number];
  */
 export type Outcome =
   | { kind: "sent" }
-  | { kind: "queued" }
+  | { kind: "queued"; watched?: true }
   | { kind: "notSent"; presses: number }
   | { kind: "unknown"; reason?: TakenReason };
 
-export function outcomeOf(receipt: { state?: unknown; taken?: unknown; reason?: unknown }, presses: number): Outcome {
+export function outcomeOf(receipt: { state?: unknown; taken?: unknown; reason?: unknown; queue?: unknown }, presses: number): Outcome {
   if (receipt.taken === false) return { kind: "notSent", presses };
   if (receipt.taken === null) {
     const reason = (TAKEN_REASONS as readonly unknown[]).includes(receipt.reason) ? (receipt.reason as TakenReason) : undefined;
     return reason ? { kind: "unknown", reason } : { kind: "unknown" };
   }
-  if (receipt.taken !== true && receipt.state === "queued") return { kind: "queued" };
+  if (receipt.taken !== true && receipt.state === "queued") {
+    return receipt.queue === "terminal" ? { kind: "queued", watched: true } : { kind: "queued" };
+  }
   return { kind: "sent" };
+}
+
+/**
+ * The turns the team holds back while its agent works (`queued: true` outcomes) turn «sent» once their
+ * id is no longer in the page's queue. A queued turn nobody watches (the mailbox) stays as it is, and
+ * so does every outcome when the page says nothing about a queue (an older image).
+ */
+export function settleQueued(
+  outcomes: ReadonlyMap<string, Outcome>,
+  queued: readonly string[] | undefined,
+): ReadonlyMap<string, Outcome> {
+  if (!Array.isArray(queued)) return outcomes;
+  let next: Map<string, Outcome> | null = null;
+  for (const [id, outcome] of outcomes) {
+    if (outcome.kind === "queued" && outcome.watched && !queued.includes(id)) {
+      next ??= new Map(outcomes);
+      next.set(id, { kind: "sent" });
+    }
+  }
+  return next ?? outcomes;
 }
 
 // ── days and quotes ─────────────────────────────────────────────────────────

@@ -12,6 +12,7 @@ import {
   answerableHere,
   answerProblem,
   outcomeOf,
+  settleQueued,
   TAKEN_REASONS,
   cleanMessage,
   cleanQuestion,
@@ -186,6 +187,19 @@ describe("what a receipt says of the person's message", () => {
     expect(outcomeOf({ state: "queued", taken: true }, 0)).toEqual({ kind: "sent" });
     expect(outcomeOf({ taken: false }, 2)).toEqual({ kind: "notSent", presses: 2 });
     expect(outcomeOf({ taken: null }, 0)).toEqual({ kind: "unknown" });
+  });
+
+  it("a turn queued by the team is watched; a mailbox turn is not; only a queue the page lists settles it", () => {
+    const watched = outcomeOf({ state: "queued", queue: "terminal" }, 0);
+    expect(watched).toEqual({ kind: "queued", watched: true });
+    expect(outcomeOf({ state: "queued", queue: "mailbox" }, 0)).toEqual({ kind: "queued" });
+    expect(outcomeOf({ queue: "terminal" }, 0)).toEqual({ kind: "sent" });
+    const outcomes = new Map<string, ReturnType<typeof outcomeOf>>([["m1", watched], ["m2", watched], ["m3", { kind: "queued" }]]);
+    expect(settleQueued(outcomes, undefined)).toBe(outcomes);
+    expect(settleQueued(outcomes, ["m1", "m2"])).toBe(outcomes);
+    const settled = settleQueued(outcomes, ["m2"]);
+    expect([...settled.entries()]).toEqual([["m1", { kind: "sent" }], ["m2", watched], ["m3", { kind: "queued" }]]);
+    expect(settleQueued(outcomes, [])?.get("m3")).toEqual({ kind: "queued" });
   });
 
   it("the reason is kept only from the closed list", () => {
