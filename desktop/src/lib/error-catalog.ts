@@ -1595,6 +1595,19 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
     "The app runtime on this computer is older than the chat.",
     "Update the app and repeat the runtime step: leave the team untouched.",
   ),
+  // The chat of this computer's own team (G7): the generic "computer or VPS off" sentence was wrong for it.
+  local_team_not_running: copy(
+    "Il team di questo computer non è acceso.",
+    "Avvia la squadra e riprova.",
+    "The team on this computer is not running.",
+    "Start the team and try again.",
+  ),
+  local_container_not_attested: copy(
+    "Il container acceso non è quello installato da Job Hunter Team.",
+    "Per sicurezza non lo uso: rifai il passo Runtime della configurazione.",
+    "The running container is not the one Job Hunter Team installed.",
+    "It is not used, for safety: repeat the Runtime step of the setup.",
+  ),
   agent_unavailable: AGENT_NOT_READY,
   // The chat never types over a running turn and keeps no queue: the person sends again.
   agent_busy: copy(

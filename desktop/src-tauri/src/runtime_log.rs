@@ -391,7 +391,13 @@ fn chat_failure_code(code: &str) -> &str {
         | "existing_team_runtime_target_changed" | "agent_not_at_prompt" | "composer_has_text" | "team_not_running"
         | "agent_not_running" | "agent_unavailable" | "agent_busy" | "agent_stuck" | "tunnel_unavailable"
         | "tunnel_start_failed" | "tunnel_verify_failed" | "ssh_unavailable" | "ssh_auth_failed"
-        | "ssh_rate_limited" | "process_timeout" | "host_key_changed" | "host_key_mismatch" => code,
+        | "ssh_rate_limited" | "process_timeout" | "host_key_changed" | "host_key_mismatch"
+        // why this computer's own team could not be reached: the runtime, the container, the engine
+        | "runtime_missing" | "container_unavailable" | "local_team_not_running" | "local_container_not_attested"
+        | "local_account_owner_unavailable" | "process_start_failed" | "process_write_failed"
+        | "process_wait_failed" | "process_output_unavailable" | "storage_unavailable"
+        | "send_verify_failed" | "invalid_agent" | "connect_failed" | "tunnel_path_unavailable"
+        | "ssh_client_missing" | "answer_failed" | "not_found" | "invalid_choice" | "question_closed" => code,
         _ => "io_error_other",
     }
 }
@@ -608,6 +614,10 @@ mod tests {
         log.record_chat_failure("send", "agent_not_at_prompt");
         log.record_chat_failure("send", "composer_has_text");
         log.record_chat_failure("read", "mentor at 203.0.113.7 said no");
+        // this computer's own team: the reason is named, not io_error_other (G7)
+        log.record_chat_failure("read", "local_container_not_attested");
+        log.record_chat_failure("read", "local_team_not_running");
+        log.record_chat_failure("send", "runtime_missing");
         log.record_chat_failure("delete everything", "send_failed");
         // why the saved team did not open at start-up: its own code, never io_error_other
         for code in [
@@ -628,6 +638,10 @@ mod tests {
         assert!(text.contains(" direct_chat.send: agent_not_at_prompt\n"));
         assert!(text.contains(" direct_chat.send: composer_has_text\n"));
         assert!(text.contains(" direct_chat.read: io_error_other\n"));
+        for code in ["local_container_not_attested", "local_team_not_running"] {
+            assert!(text.contains(&format!(" direct_chat.read: {code}\n")), "{code}");
+        }
+        assert!(text.contains(" direct_chat.send: runtime_missing\n"));
         assert!(text.contains(" direct_chat.read: send_failed\n"), "an unknown operation is a read");
         assert!(!text.contains("mentor") && !text.contains("delete"));
         assert!(text.contains(" existing_team.candidate: existing_team_reconfirm_setup\n"));
