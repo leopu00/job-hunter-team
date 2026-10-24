@@ -3,6 +3,7 @@ import { Command } from 'commander';
 import { registerSetupCommand } from './commands/setup.js';
 import { registerConfigCommand } from './commands/config.js';
 import { registerWorkingHoursCommand } from './commands/working-hours.js';
+import { registerTeamSettingsCommand } from './commands/team-settings.js';
 import { registerBurnCommand } from './commands/burn.js';
 import { registerStandbyCommand } from './commands/standby.js';
 import { registerAgentControlCommand } from './commands/agent-control.js';
@@ -99,6 +100,7 @@ export function buildProgram() {
   registerSetupCommand(program);
   registerConfigCommand(program);
   registerWorkingHoursCommand(program);
+  registerTeamSettingsCommand(program);
   registerBurnCommand(program);
   registerStandbyCommand(program);
   registerAgentControlCommand(program);
