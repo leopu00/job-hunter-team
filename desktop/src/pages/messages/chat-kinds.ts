@@ -249,6 +249,21 @@ export function settleQueued(
   return next ?? outcomes;
 }
 
+/**
+ * Where the person's last turn stands, in the steps the page tells: `queued` (in the agent's mailbox, not
+ * yet typed), `taken` (the agent's CLI took it, with proof) and `working` (taken, and the agent shows a
+ * running turn now). «Sent» is the page's own in-flight state. The other outcomes (`notSent`, `unknown`,
+ * `expired`) have their own words and buttons, so they have no step. Only the page's `activity` can say
+ * `working`: absent is not known and stays `taken`, never a guess.
+ */
+export type DeliveryStage = "queued" | "taken" | "working";
+
+export function deliveryStage(outcome: Outcome, activity?: "working" | "idle"): DeliveryStage | null {
+  if (outcome.kind === "queued") return "queued";
+  if (outcome.kind !== "sent") return null;
+  return activity === "working" ? "working" : "taken";
+}
+
 // ── days and quotes ─────────────────────────────────────────────────────────
 
 /** How long a quote of a message is: an excerpt, not the whole of it. */

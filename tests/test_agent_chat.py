@@ -23,6 +23,7 @@ import json
 import os
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 import pytest
@@ -49,6 +50,7 @@ case "$cmd" in
   list-panes) exit 0 ;;
   capture-pane)
     [ "${FAKE_TMUX_CAPTURE_FAILS:-0}" = 1 ] && exit 1
+    [ -n "${FAKE_TMUX_CAPTURE_SLEEP:-}" ] && sleep "$FAKE_TMUX_CAPTURE_SLEEP"
     # A screen chosen by the test: the agent is somewhere other than its prompt.
     if [ -f "$S/screen" ]; then cat "$S/screen"; exit 0; fi
     [ -f "$S/transcript" ] && cat "$S/transcript"
@@ -194,6 +196,56 @@ def test_the_history_and_the_answer_are_read_from_the_chat_file(box):
     assert answer["messages"][2]["role"] == "system" and len(answer["messages"]) == 3, "an empty row is not a message"
     assert answer["cursor"] == str((box.home / "agents" / "capitano" / "chat.jsonl").stat().st_size)
     assert box.calls() == [], "reading never touches the terminal"
+
+
+def _waiting_chat(box, *, age=5.0, answered=False):
+    now = time.time()
+    rows = [{"role": "user", "text": "ci sei?", "ts": now - age, "message_id": "u9"}]
+    if answered:
+        rows.append({"role": "assistant", "text": "sì", "ts": now - age + 1, "message_id": "a9"})
+    _write_chat(box, "capitano", rows)
+
+
+def test_a_read_while_the_person_waits_says_whether_the_agent_is_working_or_idle(box):
+    _waiting_chat(box)
+    screen = box.state / "screen"
+    screen.write_text(RUNNING_CODEX, encoding="utf-8")
+    assert box.run("read", "capitano")[1]["activity"] == "working"
+    screen.write_text(READY_CODEX, encoding="utf-8")
+    assert box.run("read", "capitano")[1]["activity"] == "idle"
+
+
+def test_the_activity_is_absent_when_the_screen_cannot_say_never_idle(box):
+    _waiting_chat(box)
+    screen = box.state / "screen"
+    for blocked in (TEXT_ALREADY_TYPED, CLAUDE_PERMISSION):
+        screen.write_text(blocked, encoding="utf-8")
+        code, page = box.run("read", "capitano")
+        assert code == 0 and "activity" not in page
+    screen.unlink()
+    code, page = box.run("read", "capitano", FAKE_TMUX_CAPTURE_FAILS="1")
+    assert code == 0 and "activity" not in page
+
+
+def test_a_stuck_tmux_does_not_hold_a_read_and_leaves_the_activity_out(box):
+    _waiting_chat(box)
+    started = time.monotonic()
+    code, page = box.run("read", "capitano", FAKE_TMUX_CAPTURE_SLEEP="8")
+    assert code == 0 and "activity" not in page
+    assert time.monotonic() - started < 6, "the capture for the activity has its own short limit"
+
+
+def test_a_read_touches_the_terminal_only_while_the_last_turn_of_the_person_waits(box):
+    # answered by the agent, or too old to be what the agent works on now: the terminal is never looked at
+    _waiting_chat(box, answered=True)
+    code, page = box.run("read", "capitano")
+    assert code == 0 and "activity" not in page and box.calls() == []
+    (box.home / "agents" / "capitano" / "chat.jsonl").unlink()
+    (box.home / "agents" / "capitano").rmdir()
+    (box.home / "agents").rmdir()
+    _waiting_chat(box, age=3600.0)
+    code, page = box.run("read", "capitano")
+    assert code == 0 and "activity" not in page and box.calls() == []
 
 
 def test_a_chat_that_does_not_exist_yet_is_empty_not_an_error(box):
