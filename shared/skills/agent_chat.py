@@ -487,17 +487,26 @@ def composer_state(pane: str) -> str:
     return composer_snapshot(pane)[0]
 
 
-def _contiguous_neighbours(raw_lines: list[str], index: int, reach: int) -> list[int]:
+def _contiguous_neighbours(raw_lines: list[str], index: int, reach: int, gap: bool = False) -> list[int]:
     """Rows within ``reach`` of ``index`` that no blank row separates from it.
 
     A menu draws its choices together.  A cursor row with a footer or a hint
-    behind a blank row is chrome around a composer, not two choices.
+    behind a blank row is chrome around a composer, not two choices.  With
+    ``gap`` one blank row between two rows is crossed (a spaced list); two in
+    a row end the walk.
     """
     found: list[int] = []
     for step in (-1, 1):
+        blanks = 0
         for at in range(index + step, index + step * (reach + 1), step):
-            if not 0 <= at < len(raw_lines) or not raw_lines[at].strip():
+            if not 0 <= at < len(raw_lines):
                 break
+            if not raw_lines[at].strip():
+                blanks += 1
+                if not gap or blanks > 1:
+                    break
+                continue
+            blanks = 0
             found.append(at)
     return found
 
@@ -569,18 +578,26 @@ def _certain_interlock(pane: str) -> bool:
         selected = choice_body(raw)
         if not re.match(r"^[›❯]\s+\S", selected):
             continue
-        for sibling_index in _contiguous_neighbours(raw_lines, index, 3):
-            if sibling_index in composer_rows or sibling_index in footer_rows:
-                continue
-            sibling_raw = raw_lines[sibling_index]
-            sibling = choice_body(sibling_raw)
-            if not sibling or sibling == selected or sibling.startswith(("›", "❯", "╭", "╰", "─")):
-                continue
-            # A true localized menu has two option rows of the same form.  A
-            # recognised composer/footer pair is excluded above before this
-            # structural check can make it a false menu.
-            if len(sibling) <= 80 and option_shape(sibling_raw) == option_shape(raw):
-                return True
+        def sibling_rows(reach: int, gap: bool) -> list[int]:
+            rows_found = []
+            for sibling_index in _contiguous_neighbours(raw_lines, index, reach, gap):
+                if sibling_index in composer_rows or sibling_index in footer_rows:
+                    continue
+                sibling_raw = raw_lines[sibling_index]
+                sibling = choice_body(sibling_raw)
+                if not sibling or sibling == selected or sibling.startswith(("›", "❯", "╭", "╰", "─")):
+                    continue
+                # A true localized menu has two option rows of the same form.  A
+                # recognised composer/footer pair is excluded above before this
+                # structural check can make it a false menu.
+                if len(sibling) <= 80 and option_shape(sibling_raw) == option_shape(raw):
+                    rows_found.append(sibling_index)
+            return rows_found
+
+        # Choices drawn together: one sibling is enough.  A spaced list (a blank row between choices) needs
+        # two, so that a cursor row, a blank row and one footer hint stay what they are: a composer.
+        if sibling_rows(3, False) or len(sibling_rows(6, True)) >= 2:
+            return True
 
     # Transcript prose is never an interlock.  A completed permission or
     # login can remain visible above a fresh composer; only controls whose

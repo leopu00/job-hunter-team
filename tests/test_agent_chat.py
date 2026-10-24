@@ -835,6 +835,19 @@ def test_a_cursor_row_and_a_footer_behind_a_blank_row_are_not_a_menu(box):
     assert module.delivery_gate(menu) == "blocked"
 
 
+def test_an_unnumbered_menu_with_a_blank_row_between_its_choices_stays_closed(box):
+    module = _module()
+    spaced = " How was this session?\n\n › Send feedback\n\n   Skip\n\n   Not now\n"
+    assert module.delivery_gate(spaced) == "blocked", "cursor row plus two spaced choices"
+    box.stub_delivery()
+    (box.state / "screen").write_text(spaced, encoding="utf-8")
+    code, answer = box.run("send", "capitano", "id-spaced-menu", stdin="1")
+    assert (code, answer) == (119, {"error": "agent_not_at_prompt"})
+    _nothing_happened(box)
+    # A cursor row, a blank row and ONE footer hint is still a composer, not a menu.
+    assert module.delivery_gate(CODEX_0147_IDLE_UNKNOWN_FOOTER) == "none"
+
+
 def test_dim_codex_suggestion_is_empty_but_rgb_colour_is_not_dim():
     module = _module()
     dim = "› \x1b[2mexample prompt\x1b[0m\n\n  gpt-5.6-sol · ~/capitano\n"
