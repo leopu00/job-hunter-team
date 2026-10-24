@@ -641,6 +641,25 @@ P27_HISTORIC_ECHO_FAR_ABOVE_NO_COMPOSER = "\n".join(
 ) + "\n"
 
 
+# A Codex composer holding a long WRAPPED draft, captured as row length + SGR
+# only (no text): marker row, two nearly full rows, a short last row, then the
+# blank row and the Codex footer.  No pane text is present.
+_CODEX_FOOTER_ROW = "\x1b[0m\x1b[39m\x1b[49m\x1b[38;2;246;226;183m\x1b[2m " + "□" * 17 + "·" + "□" * 17 + "\x1b[39m\x1b[0m"
+
+
+def _wrapped_composer(marker_sgr: str, row_sgr: str, end: str = "\x1b[0m") -> str:
+    return "\n".join((
+        "□" * 36, "", "─" * 220, "", "□" * 51, "", "\x1b[2m" + "─" * 220 + "\x1b[0m", "", "",
+        "\x1b[0;1m› \x1b[0m" + marker_sgr + "□" * 213 + end,
+        row_sgr + "□" * 214 + end, row_sgr + "□" * 212 + end, row_sgr + "□" * 24 + end,
+        "", _CODEX_FOOTER_ROW,
+    )) + "\n"
+
+
+WRAPPED_DRAFT = _wrapped_composer("", "")
+WRAPPED_DIM_SUGGESTION = _wrapped_composer("\x1b[2m", "\x1b[2m")
+
+
 def _module():
     spec = importlib.util.spec_from_file_location("t39_agent_chat", SCRIPT)
     module = importlib.util.module_from_spec(spec)
@@ -759,6 +778,36 @@ def test_a_tall_numbered_selector_with_its_cursor_above_the_tail_stays_closed(bo
     code, answer = box.run("send", "capitano", "id-tall-selector", stdin="1")
     assert (code, answer) == (119, {"error": "agent_not_at_prompt"})
     _nothing_happened(box)
+
+
+def test_a_wrapped_multi_row_draft_is_a_real_draft_with_its_own_closed_code(box):
+    module = _module()
+    assert module.composer_snapshot(WRAPPED_DRAFT) == ("text", False)
+    assert module.delivery_gate(WRAPPED_DRAFT) == "text", "not a menu: a draft"
+    box.stub_delivery()
+    (box.state / "screen").write_text(WRAPPED_DRAFT, encoding="utf-8")
+    code, answer = box.run("send", "capitano", "id-wrapped-draft", stdin="1")
+    assert (code, answer) == (130, {"error": "composer_has_text"})
+    _nothing_happened(box)
+
+
+def test_a_long_dim_suggestion_that_wraps_stays_an_empty_writable_composer(box):
+    module = _module()
+    assert module.composer_snapshot(WRAPPED_DIM_SUGGESTION) == ("empty", False)
+    assert module.delivery_gate(WRAPPED_DIM_SUGGESTION) == "empty"
+    box.stub_delivery()
+    (box.state / "screen").write_text(WRAPPED_DIM_SUGGESTION, encoding="utf-8")
+    code, receipt = box.run("send", "capitano", "id-wrapped-dim", stdin="riprendi la coda")
+    assert code == 0 and receipt["taken"] is True
+
+
+def test_short_rows_under_a_short_marker_are_never_read_as_wrapped_text():
+    module = _module()
+    menu = "› Yes, continue\n  No\n\n  enter to confirm · esc to cancel\n"
+    assert module.composer_snapshot(menu)[0] == "none"
+    assert module.delivery_gate(menu) == "blocked", "a menu stays closed, never a draft"
+    long_marker = "› " + "□" * 150 + "\n" + "□" * 40 + "\n" + "□" * 30 + "\n\n  enter to confirm · esc to cancel\n"
+    assert module.composer_snapshot(long_marker)[0] == "none", "a mid row far shorter than the marker is not a wrap"
 
 
 def test_dim_codex_suggestion_is_empty_but_rgb_colour_is_not_dim():

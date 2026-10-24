@@ -379,9 +379,21 @@ def _only_faint_content(raw: str, plain: str, marker_at: int, boxed: bool) -> bo
 
 
 def _codex_footer(lines: list[tuple[str, str]], index: int) -> bool:
-    """Codex puts an indented model/path or a recognised hint below ``›``."""
+    """Codex puts an indented model/path or a recognised hint below ``›``.
+
+    A long draft wraps: its continuation rows sit between the marker and that
+    footer.  They are skipped only when they look like wrapped text (see
+    ``_wrapped_continuation``), never for a short menu row.
+    """
+    below = lines[index + 1:]
+    if _footer_follows(below):
+        return True
+    return _footer_follows(below[_wrapped_continuation(lines, index):])
+
+
+def _footer_follows(below: list[tuple[str, str]]) -> bool:
     footers: list[str] = []
-    for _raw, plain in lines[index + 1:]:
+    for _raw, plain in below:
         if not plain.strip():
             continue
         footers.append(plain)
@@ -391,6 +403,36 @@ def _codex_footer(lines: list[tuple[str, str]], index: int) -> bool:
         return False
     first = footers[0]
     return bool(_CODEX_DOT_FOOTER.match(first) or _CODEX_HINT.search(first))
+
+
+_WRAPPED_MARKER_MIN = 100
+_WRAPPED_ROWS_MAX = 12
+_WRAPPED_FULL_RATIO = 0.85
+
+
+def _wrapped_continuation(lines: list[tuple[str, str]], index: int) -> int:
+    """How many rows right under a long ``›`` row continue its wrapped text.
+
+    The rows must be contiguous (a blank row ends them), and every one but the
+    last nearly as long as the marker row, which is what a terminal wrap draws.
+    Menu choices are short and never have this shape.
+    """
+    width = len(lines[index][1].strip())
+    if width < _WRAPPED_MARKER_MIN:
+        return 0
+    run: list[str] = []
+    for _raw, plain in lines[index + 1:]:
+        if not plain.strip():
+            break
+        run.append(plain)
+    if not run or len(run) > _WRAPPED_ROWS_MAX:
+        return 0
+    if any(_composer_match(row) or _BORDER.match(row) or _status_line_busy(row)
+           or _NUMBERED_OPTION.match(row) for row in run):
+        return 0
+    if any(len(row.strip()) < _WRAPPED_FULL_RATIO * width for row in run[:-1]):
+        return 0
+    return len(run)
 
 
 def _claude_box(lines: list[tuple[str, str]], index: int, boxed: bool) -> bool:
