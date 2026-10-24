@@ -384,6 +384,73 @@ impl DirectChatAnswer {
     }
 }
 
+/// How many queued message ids a page may carry, and how long one may be.
+const MAX_QUEUED_IDS: usize = 64;
+const MAX_QUEUED_ID_LEN: usize = 128;
+
+fn queued_ids<'de, D>(deserializer: D) -> Result<Option<Vec<String>>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    // Absent (an older image, or a chat that never queued): none. A list: the ids of the turns still
+    // held back, each a short plain word; anything else in it is left out.
+    let raw = Option::<Value>::deserialize(deserializer)?;
+    Ok(match raw {
+        Some(Value::Array(items)) => Some(
+            items
+                .iter()
+                .filter_map(Value::as_str)
+                .filter(|id| !id.is_empty() && id.len() <= MAX_QUEUED_ID_LEN && id.chars().all(|c| c.is_ascii_alphanumeric() || "-_.:".contains(c)))
+                .take(MAX_QUEUED_IDS)
+                .map(str::to_owned)
+                .collect(),
+        ),
+        _ => None,
+    })
+}
+
+/// How a queued turn ended, as the team says it: typed and taken, typed and still in the composer,
+/// typed with no proof, or never typed because it waited too long.
+const QUEUE_ENDINGS: [&str; 4] = ["taken", "pending", "unconfirmed", "expired"];
+
+#[derive(Clone, Debug, Serialize, PartialEq)]
+pub(crate) struct DirectChatQueueEnding {
+    id: String,
+    how: String,
+}
+
+fn queue_endings<'de, D>(deserializer: D) -> Result<Option<Vec<DirectChatQueueEnding>>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    // Absent (an older image, or a chat that never queued): none. A list: the endings in their shape,
+    // each id a short plain word and each `how` of the closed list; the others are left out.
+    let raw = Option::<Value>::deserialize(deserializer)?;
+    Ok(match raw {
+        Some(Value::Array(items)) => Some(
+            items
+                .iter()
+                .filter_map(|item| {
+                    let id = item.get("id")?.as_str()?;
+                    let how = string_in(item.get("how"), &QUEUE_ENDINGS)?;
+                    let plain = !id.is_empty() && id.len() <= MAX_QUEUED_ID_LEN && id.chars().all(|c| c.is_ascii_alphanumeric() || "-_.:".contains(c));
+                    plain.then(|| DirectChatQueueEnding { id: id.to_owned(), how: how.to_owned() })
+                })
+                .take(MAX_QUEUED_IDS)
+                .collect(),
+        ),
+        _ => None,
+    })
+}
+
+fn closed_queue<'de, D>(deserializer: D) -> Result<Option<String>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let raw = Option::<Value>::deserialize(deserializer)?;
+    Ok(string_in(raw.as_ref(), &["terminal"]).map(str::to_owned))
+}
+
 fn questions<'de, D>(deserializer: D) -> Result<Option<Vec<DirectChatQuestion>>, D::Error>
 where
     D: serde::Deserializer<'de>,
@@ -405,6 +472,15 @@ pub(crate) struct DirectChatPage {
     /// The agent's open questions and its latest closed ones; absent from an older image.
     #[serde(default, deserialize_with = "questions", skip_serializing_if = "Option::is_none")]
     questions: Option<Vec<DirectChatQuestion>>,
+    /// The ids of the turns the team holds back while its agent works, each typed when the agent is idle;
+    /// absent from an older image or a chat that never queued. A sent turn that was queued is delivered
+    /// once its id is no longer here.
+    #[serde(default, deserialize_with = "queued_ids", skip_serializing_if = "Option::is_none")]
+    queued: Option<Vec<String>>,
+    /// How the turns that left the queue ended, for the last day: the page settles a queued turn only
+    /// from here, never from its absence in `queued`.
+    #[serde(default, deserialize_with = "queue_endings", skip_serializing_if = "Option::is_none")]
+    settled: Option<Vec<DirectChatQueueEnding>>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
@@ -426,6 +502,10 @@ pub(crate) struct DirectChatReceipt {
     /// With `taken: null`, why it is not known: one of TAKEN_REASONS, or none.
     #[serde(skip_serializing_if = "Option::is_none")]
     reason: Option<String>,
+    /// `terminal` with `state: queued`: the turn waits in the team for its agent to be idle, and the next
+    /// pages say when it is gone; absent for a mailbox turn, which nothing watches.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    queue: Option<String>,
 }
 
 /// A receipt as the team wrote it, before the one rule that ties two of its fields: a reason is said
@@ -443,11 +523,14 @@ struct ReceiptAsWritten {
     taken: Option<Option<bool>>,
     #[serde(default, deserialize_with = "closed_reason")]
     reason: Option<String>,
+    #[serde(default, deserialize_with = "closed_queue")]
+    queue: Option<String>,
 }
 
 impl From<ReceiptAsWritten> for DirectChatReceipt {
     fn from(raw: ReceiptAsWritten) -> Self {
         let reason = if raw.taken == Some(None) { raw.reason } else { None };
+        let queue = if raw.state.as_deref() == Some("queued") { raw.queue } else { None };
         DirectChatReceipt {
             client_message_id: raw.client_message_id,
             accepted: raw.accepted,
@@ -456,6 +539,7 @@ impl From<ReceiptAsWritten> for DirectChatReceipt {
             state: raw.state,
             taken: raw.taken,
             reason,
+            queue,
         }
     }
 }
@@ -2235,21 +2319,17 @@ fn send_fixed(
     }
     let input = Zeroizing::new(text.as_bytes().to_vec());
     let pinned = uses_pinned_chat(connection);
-    let mut attempt = 0;
-    loop {
-        attempt += 1;
-        let operation = ChatOperation::Send { agent, client_message_id: client_id };
-        let outcome = if pinned {
-            run_chat(connection, operation, Some(&input), SEND_TIMEOUT, "send_failed").map(Some)
-        } else {
-            run_wrapper_chat(connection, operation, Some(&input), SEND_TIMEOUT, "send_failed")
-        };
-        match outcome {
-            Ok(Some(result)) => return parse_json(result, "send_verify_failed").map(Some),
-            Ok(None) => return Ok(None),
-            Err(error) if error.code == "agent_busy" && attempt < 3 => continue,
-            Err(error) => return Err(error),
-        }
+    // One ask. A working agent is not retried here: the team queues the turn and answers `queued`.
+    let operation = ChatOperation::Send { agent, client_message_id: client_id };
+    let outcome = if pinned {
+        run_chat(connection, operation, Some(&input), SEND_TIMEOUT, "send_failed").map(Some)
+    } else {
+        run_wrapper_chat(connection, operation, Some(&input), SEND_TIMEOUT, "send_failed")
+    };
+    match outcome {
+        Ok(Some(result)) => parse_json(result, "send_verify_failed").map(Some),
+        Ok(None) => Ok(None),
+        Err(error) => Err(error),
     }
 }
 
@@ -2666,7 +2746,7 @@ mod tests {
     use super::{
         answer_input, answer_request, enter_request, chat_failure, connection_config_path_at, remote_wrapper_command, wrapper_outcome, delivery_command, hex_encode, link_allows_writing,
         parse_json, probe, session_for, status, valid_agent, verify_migration_local_host_at, window_may_write,
-        Connection, DirectChatPage, ProcessResult, REMOTE_CONTAINER_PROBE, REMOTE_PYTHON_STDIN, UNKNOWN_ACTION,
+        Connection, DirectChatPage, DirectChatReceipt, ProcessResult, REMOTE_CONTAINER_PROBE, REMOTE_PYTHON_STDIN, UNKNOWN_ACTION,
         control_path_fits, remove_tunnel_socket, tunnel_dir_name, tunnel_socket_bases, tunnel_socket_path,
         SOCKET_PATH_MAX, SSH_SOCKET_SUFFIX,
         open_vps_link, ready_status, small_read, vps_link_for, VpsLink, VPS_LINK_CHECK, SMALL_READ_OVERLAP,
@@ -3054,7 +3134,7 @@ mod tests {
         let mut answers = answers.iter();
         let result = small_read(cursor, &mut |sent: Option<&str>| -> Result<DirectChatPage, DirectChatError> {
             asked.push(sent.unwrap_or("none").to_owned());
-            Ok(DirectChatPage { messages: Vec::new(), cursor: answers.next().expect("one answer per read").map(str::to_owned), questions: None })
+            Ok(DirectChatPage { messages: Vec::new(), cursor: answers.next().expect("one answer per read").map(str::to_owned), questions: None, queued: None, settled: None })
         });
         (result.map(|page| page.cursor).map_err(|error| error.code), asked)
     }
@@ -3737,6 +3817,47 @@ mod tests {
         )
         .unwrap();
         assert!(serde_json::to_value(&typed).unwrap().get("state").is_none());
+    }
+
+    #[test]
+    fn a_queued_turn_is_watched_only_when_the_team_says_terminal_and_the_page_keeps_plain_ids() {
+        let queued: DirectChatReceipt = serde_json::from_str(
+            r#"{"accepted":true,"clientMessageId":"c1","messageId":"m1","at":1.0,"state":"queued","queue":"terminal"}"#,
+        )
+        .unwrap();
+        assert_eq!(serde_json::to_value(&queued).unwrap()["queue"], "terminal");
+        // a mailbox turn has no queue to watch; a word outside the list, or a queue on a typed turn, is dropped
+        for written in [
+            r#"{"accepted":true,"clientMessageId":"c1","messageId":"m1","at":1.0,"state":"queued"}"#,
+            r#"{"accepted":true,"clientMessageId":"c1","messageId":"m1","at":1.0,"state":"queued","queue":"mailbox"}"#,
+            r#"{"accepted":true,"clientMessageId":"c1","messageId":"m1","at":1.0,"taken":true,"queue":"terminal"}"#,
+            r#"{"accepted":true,"clientMessageId":"c1","messageId":"m1","at":1.0,"state":"queued","queue":7}"#,
+        ] {
+            let receipt: DirectChatReceipt = serde_json::from_str(written).unwrap();
+            assert!(serde_json::to_value(&receipt).unwrap().get("queue").is_none(), "{written}");
+        }
+        let page: DirectChatPage = serde_json::from_str(
+            r#"{"messages":[],"queued":["m1","a b",7,"","<b>x</b>","m2"]}"#,
+        )
+        .unwrap();
+        assert_eq!(page.queued.as_deref(), Some(&["m1".to_owned(), "m2".to_owned()][..]));
+        let ended: DirectChatPage = serde_json::from_str(
+            r#"{"messages":[],"queued":[],"settled":[{"id":"m1","how":"taken"},{"id":"m2","how":"pending"},{"id":"m3","how":"unconfirmed"},{"id":"m4","how":"expired"},{"id":"m5","how":"sent"},{"id":"a b","how":"taken"},{"id":"m6"},7,{"id":"m7","how":7}]}"#,
+        )
+        .unwrap();
+        let shown = serde_json::to_value(&ended).unwrap();
+        assert_eq!(
+            shown["settled"],
+            serde_json::json!([{"id":"m1","how":"taken"},{"id":"m2","how":"pending"},{"id":"m3","how":"unconfirmed"},{"id":"m4","how":"expired"}])
+        );
+        let none: DirectChatPage = serde_json::from_str(r#"{"messages":[],"queued":[],"settled":"taken"}"#).unwrap();
+        assert!(serde_json::to_value(&none).unwrap().get("settled").is_none());
+        let empty: DirectChatPage = serde_json::from_str(r#"{"messages":[],"queued":[]}"#).unwrap();
+        assert_eq!(serde_json::to_value(&empty).unwrap()["queued"], serde_json::json!([]));
+        let older: DirectChatPage = serde_json::from_str(r#"{"messages":[]}"#).unwrap();
+        assert!(serde_json::to_value(&older).unwrap().get("queued").is_none(), "an older image says nothing");
+        let not_a_list: DirectChatPage = serde_json::from_str(r#"{"messages":[],"queued":"m1"}"#).unwrap();
+        assert!(serde_json::to_value(&not_a_list).unwrap().get("queued").is_none());
     }
 
     #[test]

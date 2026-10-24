@@ -26,8 +26,11 @@ screen of the terminal.
      nothing started (this file never starts an agent);
   4. the agent's terminal must show an empty composer. A menu, sign-in,
      permission question or text already typed there is a closed code; a turn
-     with an empty composer may receive the message in its queue. NOTHING is
-     typed over something that could take it as a choice or overwrite a draft;
+     in progress is waited out for a few seconds (JHT_CHAT_BUSY_WAIT) and, past
+     that, the turn is QUEUED (written to chat-queue.jsonl, not typed): the
+     next read or send that finds the agent idle delivers it, oldest first;
+     nothing is pasted while the agent works. NOTHING is typed over something
+     that could take it as a choice or overwrite a draft;
   5. the turn is written once per client id (a repeat is not a second line),
      and one that was written but never delivered is delivered again from the
      line already there, with no new line;
@@ -145,6 +148,17 @@ PROMPT_TAIL = 15
 DELIVERY_TIMEOUT_S = 100
 PROMPT_WAIT_S = float(os.environ.get("JHT_CHAT_PROMPT_WAIT", "100"))
 PROMPT_POLL_S = float(os.environ.get("JHT_CHAT_PROMPT_POLL", "2"))
+# A turn in progress is waited out for a few seconds before anything is pasted: the layout of a working CLI
+# changes under the paste, and text that cannot be attested would stay in its composer.  Past the wait the
+# turn is QUEUED (written, not typed) and delivered by the next read or send that finds the agent idle.
+BUSY_WAIT_S = float(os.environ.get("JHT_CHAT_BUSY_WAIT", "3"))
+QUEUE_FILE = "chat-queue.jsonl"
+# A queued turn is typed only while it is fresh: past this it is NOT sent (never typed, whatever the agent
+# does later) and the page says so.  Delivery and expiry are reported for a day, then forgotten.
+QUEUE_TTL_S = float(os.environ.get("JHT_CHAT_QUEUE_TTL", "1200"))
+QUEUE_REPORT_S = 86400.0
+# Reads deliver the queue (the chat page reads every second or two).  "0": only a send does.
+FLUSH_ON_READ = os.environ.get("JHT_CHAT_FLUSH_ON_READ", "1") != "0"
 
 # Direction marks and zero-width characters read as nothing and rewrite what
 # is around them. ZWNJ/ZWJ (U+200C/D) stay: Persian and emoji need them.
@@ -197,6 +211,17 @@ def clean_text(raw: str) -> str:
 def read(agent: str, cursor_text: str | None) -> dict:
     if cursor_text not in (None, "") and not CURSOR.match(cursor_text):
         raise Refusal("chat_invalid")
+    if FLUSH_ON_READ:
+        flush_queue(agent, AGENTS[agent])
+    page = _read_page(agent, cursor_text)
+    if _queue_path(agent).is_file():
+        waiting, settled = _queue_state(agent)
+        page["queued"] = [str(held.get("message_id")) for held in waiting]
+        page["settled"] = settled       # how each turn that left the queue ended, for the page to say
+    return page
+
+
+def _read_page(agent: str, cursor_text: str | None) -> dict:
     path = chat_path(agent)
     if not path.is_file():
         page = {"messages": [], "cursor": "0"}
@@ -483,17 +508,26 @@ def composer_state(pane: str) -> str:
     return composer_snapshot(pane)[0]
 
 
-def _contiguous_neighbours(raw_lines: list[str], index: int, reach: int) -> list[int]:
+def _contiguous_neighbours(raw_lines: list[str], index: int, reach: int, gap: bool = False) -> list[int]:
     """Rows within ``reach`` of ``index`` that no blank row separates from it.
 
     A menu draws its choices together.  A cursor row with a footer or a hint
-    behind a blank row is chrome around a composer, not two choices.
+    behind a blank row is chrome around a composer, not two choices.  With
+    ``gap`` one blank row between two rows is crossed (a spaced list); two in
+    a row end the walk.
     """
     found: list[int] = []
     for step in (-1, 1):
+        blanks = 0
         for at in range(index + step, index + step * (reach + 1), step):
-            if not 0 <= at < len(raw_lines) or not raw_lines[at].strip():
+            if not 0 <= at < len(raw_lines):
                 break
+            if not raw_lines[at].strip():
+                blanks += 1
+                if not gap or blanks > 1:
+                    break
+                continue
+            blanks = 0
             found.append(at)
     return found
 
@@ -565,18 +599,26 @@ def _certain_interlock(pane: str) -> bool:
         selected = choice_body(raw)
         if not re.match(r"^[›❯]\s+\S", selected):
             continue
-        for sibling_index in _contiguous_neighbours(raw_lines, index, 3):
-            if sibling_index in composer_rows or sibling_index in footer_rows:
-                continue
-            sibling_raw = raw_lines[sibling_index]
-            sibling = choice_body(sibling_raw)
-            if not sibling or sibling == selected or sibling.startswith(("›", "❯", "╭", "╰", "─")):
-                continue
-            # A true localized menu has two option rows of the same form.  A
-            # recognised composer/footer pair is excluded above before this
-            # structural check can make it a false menu.
-            if len(sibling) <= 80 and option_shape(sibling_raw) == option_shape(raw):
-                return True
+        def sibling_rows(reach: int, gap: bool) -> list[int]:
+            rows_found = []
+            for sibling_index in _contiguous_neighbours(raw_lines, index, reach, gap):
+                if sibling_index in composer_rows or sibling_index in footer_rows:
+                    continue
+                sibling_raw = raw_lines[sibling_index]
+                sibling = choice_body(sibling_raw)
+                if not sibling or sibling == selected or sibling.startswith(("›", "❯", "╭", "╰", "─")):
+                    continue
+                # A true localized menu has two option rows of the same form.  A
+                # recognised composer/footer pair is excluded above before this
+                # structural check can make it a false menu.
+                if len(sibling) <= 80 and option_shape(sibling_raw) == option_shape(raw):
+                    rows_found.append(sibling_index)
+            return rows_found
+
+        # Choices drawn together: one sibling is enough.  A spaced list (a blank row between choices) needs
+        # two, so that a cursor row, a blank row and one footer hint stay what they are: a composer.
+        if sibling_rows(3, False) or len(sibling_rows(6, True)) >= 2:
+            return True
 
     # Transcript prose is never an interlock.  A completed permission or
     # login can remain visible above a fresh composer; only controls whose
@@ -688,6 +730,19 @@ def require_prompt(session: str, *, wait: bool = True) -> None:
             raise Refusal("agent_not_at_prompt")
         if not wait or time.monotonic() >= deadline:
             raise Refusal("agent_busy" if saw_busy else "agent_not_at_prompt")
+        time.sleep(PROMPT_POLL_S)
+
+
+def require_idle(session: str, deadline: float) -> None:
+    """Nothing is pasted while the agent works: wait for its turn to end, up to ``deadline``."""
+    while True:
+        pane = capture_pane(session)
+        if pane is None:
+            raise Refusal("agent_unavailable")
+        if not composer_snapshot(pane)[1]:
+            return
+        if time.monotonic() >= deadline:
+            raise Refusal("agent_busy")
         time.sleep(PROMPT_POLL_S)
 
 
@@ -901,6 +956,117 @@ def deliver_by_mail(mail, agent: str, session: str, row: dict, text: str) -> dic
     return queued
 
 
+def _queue_path(agent: str) -> Path:
+    return chat_path(agent).parent / QUEUE_FILE
+
+
+def _queue_lines(agent: str) -> list[dict]:
+    path = _queue_path(agent)
+    if not path.is_file():
+        return []
+    lines = []
+    try:
+        for raw in path.read_text(encoding="utf-8").splitlines():
+            try:
+                row = json.loads(raw)
+            except Exception:
+                continue
+            if isinstance(row, dict) and CLIENT_ID.match(str(row.get("client_message_id") or "")):
+                lines.append(row)
+    except OSError:
+        return []
+    return lines
+
+
+def _queue_state(agent: str) -> tuple[list[dict], list[dict]]:
+    """``(waiting, settled)`` for the queued turns of the last day, oldest first.
+
+    ``waiting``: fresh and not delivered, the turns a flush may type.  ``settled``: what became of the others,
+    ``{"id": message_id, "how": taken|pending|unconfirmed|expired}``; a turn past QUEUE_TTL_S and never
+    delivered is ``expired``, whatever the agent shows now.
+    """
+    delivered = chat_path(agent).parent / DELIVERED_FILE
+    now = time.time()
+    seen: set[str] = set()
+    waiting: list[dict] = []
+    settled: list[dict] = []
+    for row in _queue_lines(agent):
+        client_id = row["client_message_id"]
+        if client_id in seen:
+            continue
+        seen.add(client_id)
+        try:
+            age = now - float(row.get("queued_at") or 0)
+        except (TypeError, ValueError):
+            age = QUEUE_REPORT_S + 1
+        record = _found(delivered, client_id)
+        if record is not None:
+            if age <= QUEUE_REPORT_S:
+                how = record.get("taken") if record.get("taken") in ("taken", "pending") else "unconfirmed"
+                settled.append({"id": str(row.get("message_id")), "how": how})
+        elif age > QUEUE_TTL_S:
+            if age <= QUEUE_REPORT_S:
+                settled.append({"id": str(row.get("message_id")), "how": "expired"})
+        else:
+            waiting.append(row)
+    return waiting, settled[-64:]
+
+
+def queued_turns(agent: str) -> list[dict]:
+    """The turns written but held back because the agent was working: fresh, not delivered, oldest first."""
+    return _queue_state(agent)[0]
+
+
+def _queue_locked(agent: str, client_id: str, text: str) -> dict:
+    """Write the turn and queue it (once per client id). The caller holds the agent's lock."""
+    row = persist(agent, client_id, text)
+    if not any(held["client_message_id"] == client_id for held in _queue_lines(agent)):
+        line = {"client_message_id": client_id, "message_id": row.get("message_id"), "queued_at": time.time()}
+        try:
+            fd = os.open(_queue_path(agent), os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o600)
+            try:
+                os.write(fd, (json.dumps(line, separators=(",", ":")) + "\n").encode("utf-8"))
+                os.fsync(fd)
+            finally:
+                os.close(fd)
+        except OSError:
+            raise Refusal("persist_failed")
+    out = _receipt(client_id, row.get("message_id"), row.get("ts"), "queued")
+    out["queue"] = "terminal"       # held here until the agent is idle, then typed: the page watches it
+    return out
+
+
+def flush_queue(agent: str, session: str) -> None:
+    """Deliver the queued turns in order while the agent is idle; stop at the first that cannot go now.
+
+    Never waits for the agent: the same gate as a send (a draft, a menu or a working turn leaves the
+    turn queued) and the same guarded transport.  Called by every send and, unless FLUSH_ON_READ is off,
+    every read, under the agent's lock.  An expired turn is never typed.
+    """
+    if not queued_turns(agent):
+        return
+    try:
+        check_session(session)
+        with _AgentLock(agent):
+            for held in queued_turns(agent):
+                row = _found(chat_path(agent), held["client_message_id"])
+                if row is None:
+                    continue
+                pane = capture_pane(session)
+                if pane is None or composer_snapshot(pane)[1] or delivery_gate(pane) not in {"empty", "none"}:
+                    return
+                try:
+                    taken, signature = deliver(agent, session, str(row.get("text") or ""))
+                except Refusal as refusal:
+                    if refusal.code in {"send_failed", "agent_stuck"}:
+                        # The text may be typed: say «not confirmed» so no later flush types it twice.
+                        mark_delivered(agent, row, "unconfirmed")
+                    return
+                mark_delivered(agent, row, taken, signature)
+    except Refusal:
+        return
+
+
 class _AgentLock:
     """One send at a time per agent: two asks with the same id cannot both deliver."""
 
@@ -960,8 +1126,24 @@ def send(agent: str, client_id: str, raw_text: str) -> dict:
     # The potentially long wait happens before acquiring the writer lock.  If
     # another writer changes the pane while we waited, release and start that
     # wait again instead of holding every other sender behind a busy terminal.
+    # An older queued turn goes first: order is kept, so a new turn waits behind it.
+    flush_queue(agent, session)
+    if queued_turns(agent):
+        with _AgentLock(agent):
+            return _queue_locked(agent, client_id, text)
+    busy_deadline = time.monotonic() + BUSY_WAIT_S
     while True:
         require_prompt(session)
+        try:
+            require_idle(session, busy_deadline)
+        except Refusal as refusal:
+            if refusal.code != "agent_busy":
+                raise
+            with _AgentLock(agent):
+                done = _found(delivered, client_id)
+                if done is not None:
+                    return _receipt(client_id, done.get("message_id"), done.get("at"), taken=done.get("taken"))
+                return _queue_locked(agent, client_id, text)
         retry_outside_lock = False
         with _AgentLock(agent):
             done = _found(delivered, client_id)
@@ -976,6 +1158,11 @@ def send(agent: str, client_id: str, raw_text: str) -> dict:
             if gate == "blocked":
                 raise Refusal("agent_not_at_prompt")
             if gate not in {"empty", "none"}:
+                retry_outside_lock = True
+            elif composer_snapshot(pane)[1]:
+                # The turn started while we waited for the lock: not now, and not past the deadline.
+                if time.monotonic() >= busy_deadline:
+                    return _queue_locked(agent, client_id, text)
                 retry_outside_lock = True
             else:
                 row = persist(agent, client_id, text)

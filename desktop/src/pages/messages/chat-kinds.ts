@@ -204,18 +204,49 @@ export type TakenReason = (typeof TAKEN_REASONS)[number];
  */
 export type Outcome =
   | { kind: "sent" }
-  | { kind: "queued" }
+  | { kind: "queued"; watched?: true }
+  | { kind: "expired" }
   | { kind: "notSent"; presses: number }
   | { kind: "unknown"; reason?: TakenReason };
 
-export function outcomeOf(receipt: { state?: unknown; taken?: unknown; reason?: unknown }, presses: number): Outcome {
+export function outcomeOf(receipt: { state?: unknown; taken?: unknown; reason?: unknown; queue?: unknown }, presses: number): Outcome {
   if (receipt.taken === false) return { kind: "notSent", presses };
   if (receipt.taken === null) {
     const reason = (TAKEN_REASONS as readonly unknown[]).includes(receipt.reason) ? (receipt.reason as TakenReason) : undefined;
     return reason ? { kind: "unknown", reason } : { kind: "unknown" };
   }
-  if (receipt.taken !== true && receipt.state === "queued") return { kind: "queued" };
+  if (receipt.taken !== true && receipt.state === "queued") {
+    return receipt.queue === "terminal" ? { kind: "queued", watched: true } : { kind: "queued" };
+  }
   return { kind: "sent" };
+}
+
+/**
+ * A turn the team holds back while its agent works (a `watched` queued outcome) is settled only by what
+ * the page says of it: how it ended (`settled`), mapped as the direct send maps a receipt, never by its
+ * absence from `queued`. A queued turn nobody watches (the mailbox) stays as it is, and so does every
+ * outcome when the page has no word for it (an older image).
+ */
+export function settleQueued(
+  outcomes: ReadonlyMap<string, Outcome>,
+  settled: readonly { id: string; how: string }[] | undefined,
+): ReadonlyMap<string, Outcome> {
+  if (!Array.isArray(settled) || settled.length === 0) return outcomes;
+  let next: Map<string, Outcome> | null = null;
+  for (const ending of settled) {
+    const outcome = outcomes.get(ending.id);
+    if (!outcome || outcome.kind !== "queued" || !outcome.watched) continue;
+    const became: Outcome | null =
+      ending.how === "taken" ? { kind: "sent" }
+      : ending.how === "pending" ? outcomeOf({ taken: false }, 0)
+      : ending.how === "unconfirmed" ? outcomeOf({ taken: null, reason: "unconfirmed" }, 0)
+      : ending.how === "expired" ? { kind: "expired" }
+      : null;
+    if (!became) continue;
+    next ??= new Map(outcomes);
+    next.set(ending.id, became);
+  }
+  return next ?? outcomes;
 }
 
 // ── days and quotes ─────────────────────────────────────────────────────────

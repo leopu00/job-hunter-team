@@ -12,6 +12,7 @@ import {
   answerableHere,
   answerProblem,
   outcomeOf,
+  settleQueued,
   TAKEN_REASONS,
   cleanMessage,
   cleanQuestion,
@@ -186,6 +187,31 @@ describe("what a receipt says of the person's message", () => {
     expect(outcomeOf({ state: "queued", taken: true }, 0)).toEqual({ kind: "sent" });
     expect(outcomeOf({ taken: false }, 2)).toEqual({ kind: "notSent", presses: 2 });
     expect(outcomeOf({ taken: null }, 0)).toEqual({ kind: "unknown" });
+  });
+
+  it("a turn queued by the team is watched; a mailbox turn is not; only an ending the page reports settles it", () => {
+    const watched = outcomeOf({ state: "queued", queue: "terminal" }, 0);
+    expect(watched).toEqual({ kind: "queued", watched: true });
+    expect(outcomeOf({ state: "queued", queue: "mailbox" }, 0)).toEqual({ kind: "queued" });
+    expect(outcomeOf({ queue: "terminal" }, 0)).toEqual({ kind: "sent" });
+    const outcomes = new Map<string, ReturnType<typeof outcomeOf>>([
+      ["m1", watched], ["m2", watched], ["m3", { kind: "queued" }], ["m4", watched], ["m5", watched],
+    ]);
+    // no word from the page, or no ending for it: nothing changes (absence from the queue says nothing)
+    expect(settleQueued(outcomes, undefined)).toBe(outcomes);
+    expect(settleQueued(outcomes, [])).toBe(outcomes);
+    expect(settleQueued(outcomes, [{ id: "zz", how: "taken" }, { id: "m1", how: "sent" }])).toBe(outcomes);
+    const settled = settleQueued(outcomes, [
+      { id: "m1", how: "taken" }, { id: "m2", how: "pending" }, { id: "m3", how: "taken" },
+      { id: "m4", how: "unconfirmed" }, { id: "m5", how: "expired" },
+    ]);
+    // the same mapping as the direct send: taken = sent, still in the composer = Enter may be pressed,
+    // no proof = not known, and a turn that waited too long was never typed
+    expect(settled.get("m1")).toEqual({ kind: "sent" });
+    expect(settled.get("m2")).toEqual({ kind: "notSent", presses: 0 });
+    expect(settled.get("m3")).toEqual({ kind: "queued" });
+    expect(settled.get("m4")).toEqual({ kind: "unknown", reason: "unconfirmed" });
+    expect(settled.get("m5")).toEqual({ kind: "expired" });
   });
 
   it("the reason is kept only from the closed list", () => {

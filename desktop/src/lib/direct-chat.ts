@@ -52,8 +52,16 @@ export interface DirectChatQuestion {
   state: "open" | "answered" | "expired";
   answer?: DirectChatAnswer;
 }
-/** `questions`: the agent's open questions and its latest closed ones; absent from an older image. */
-export interface DirectChatPage { messages: DirectChatMessage[]; cursor?: string; questions?: DirectChatQuestion[] }
+/**
+ * `questions`: the agent's open questions and its latest closed ones; absent from an older image.
+ * `queued`: the ids of the turns the team holds back while its agent works; a queued turn is delivered
+ * once its id is no longer here. Absent from an older image or a chat that never queued.
+ */
+export interface DirectChatPage {
+  messages: DirectChatMessage[]; cursor?: string; questions?: DirectChatQuestion[]; queued?: string[];
+  /** How the turns that left the queue ended (last day): typed and taken, still in the composer, no proof, or never typed. */
+  settled?: { id: string; how: "taken" | "pending" | "unconfirmed" | "expired" }[];
+}
 export interface DirectChatAnswerReceipt { questionId: string; accepted: true; at: number }
 export interface DirectChatReceipt {
   clientMessageId: string;
@@ -71,6 +79,8 @@ export interface DirectChatReceipt {
   taken?: boolean | null;
   /** With `taken: null`: why it is not known, a closed code of the team's (TAKEN_REASONS); any other is not shown. */
   reason?: string;
+  /** With `state: "queued"`: `terminal` when the team holds the turn until its agent is idle (the pages say when it goes). */
+  queue?: "terminal";
 }
 export type DirectChatEvent =
   | { kind: "status"; status: DirectChatStatus }
