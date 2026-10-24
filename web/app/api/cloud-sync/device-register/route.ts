@@ -37,11 +37,13 @@ function pairingSessionId(accessToken: unknown): string | null {
   if (!payload) return null;
   try {
     const decoded = JSON.parse(
-      Buffer.from(payload.replace(/-/g, "+").replace(/_/g, "/"), "base64").toString(
-        "utf8",
-      ),
+      Buffer.from(
+        payload.replace(/-/g, "+").replace(/_/g, "/"),
+        "base64",
+      ).toString("utf8"),
     ) as { session_id?: unknown };
-    const value = typeof decoded.session_id === "string" ? decoded.session_id : "";
+    const value =
+      typeof decoded.session_id === "string" ? decoded.session_id : "";
     return USER_ID_RE.test(value) ? value : null;
   } catch {
     return null;

@@ -63,12 +63,17 @@ export async function GET(req: NextRequest) {
       publicMessage: "query_failed",
     });
   }
-  const activeDeviceRows = ((deviceRows ?? []) as Array<{
-    pairing_session_id?: unknown;
-    expires_at?: unknown;
-  }>).filter((row) => {
+  const activeDeviceRows = (
+    (deviceRows ?? []) as Array<{
+      pairing_session_id?: unknown;
+      expires_at?: unknown;
+    }>
+  ).filter((row) => {
     if (row.expires_at === null || row.expires_at === undefined) return true;
-    return typeof row.expires_at === "string" && Date.parse(row.expires_at) > Date.now();
+    return (
+      typeof row.expires_at === "string" &&
+      Date.parse(row.expires_at) > Date.now()
+    );
   });
   // Tokens created before pairing_session_id existed cannot be tied to a
   // browser session. Do not hand a box any L3 receipt until it pairs again.
@@ -114,9 +119,9 @@ export async function GET(req: NextRequest) {
       (legacyId as number) < 1 ||
       typeof row.created_at !== "string" ||
       Number.isNaN(Date.parse(row.created_at)) ||
-      typeof row.summary !== "string"
-      || (row.action === "position.apply_authorize" && typeof host !== "string")
-      || (typeof row.session_id === "string" && deviceSessions.has(row.session_id))
+      typeof row.summary !== "string" ||
+      (row.action === "position.apply_authorize" && typeof host !== "string") ||
+      (typeof row.session_id === "string" && deviceSessions.has(row.session_id))
     ) {
       return [];
     }
