@@ -12,18 +12,28 @@
  * niente. Se una delle due tornasse a farsi la sua, qui diventa rosso.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { DatabaseSync } from "node:sqlite";
 import { csvCell, neutralizeFormula, toCsv } from "../../../shared/export/csv.js";
 
 const mocks = vi.hoisted(() => ({
   requireAuth: vi.fn(),
-  readJsonSafe: vi.fn(),
+  getDb: vi.fn(),
 }));
 
 vi.mock("@/lib/auth", () => ({ requireAuth: mocks.requireAuth }));
-vi.mock("@/lib/json-files", () => ({ readJsonSafe: mocks.readJsonSafe }));
+vi.mock("@/lib/db", () => ({ getDb: mocks.getDb }));
+
+/** Un jobs.db con la tabella delle posizioni e i titoli dati, uno per riga. */
+function positionsDb(path: string, titles: string[]): DatabaseSync {
+  const db = new DatabaseSync(path);
+  db.exec("CREATE TABLE positions (id INTEGER PRIMARY KEY, title TEXT, company TEXT, found_at TEXT, cv_path TEXT)");
+  const insert = db.prepare("INSERT INTO positions (title, company, found_at, cv_path) VALUES (?, ?, ?, ?)");
+  for (const title of titles) insert.run(title, "=1+1", "2026-03-02", "/jht_home/cv.pdf");
+  return db;
+}
 
 /** I sei modi di aprire una formula, con l'aria di un titolo vero. */
 const POISONED_TITLES = {
@@ -182,25 +192,26 @@ describe("GET /api/export?format=csv — la strada del sito", () => {
       ...Object.values(POISONED_TITLES),
       ...Object.values(SPLIT_TITLES),
     ];
-    const rows = titles.map((title, index) => ({
-      title,
-      company: "=1+1",
-      createdAt: Date.now() - 1000 * (index + 1),
-    }));
-    mocks.readJsonSafe.mockReturnValue(rows);
+    const home = mkdtempSync(join(tmpdir(), "jht-export-route-"));
+    const db = positionsDb(join(home, "jobs.db"), titles);
+    mocks.getDb.mockReturnValue(db);
     const { GET } = await import("@/app/api/export/route");
 
     const response = await GET({
-      nextUrl: new URL("http://localhost/api/export?source=jobs&format=csv"),
+      nextUrl: new URL("http://localhost/api/export?source=positions&format=csv"),
     } as never);
     const csv = await response.text();
+    db.close();
+    rmSync(home, { recursive: true, force: true });
 
     const parsed = parseCsv(csv);
     // Intestazione più una riga per annuncio: nessun campo ha aperto righe
     // che nessuno ha esportato.
-    expect(parsed).toHaveLength(rows.length + 1);
+    expect(parsed).toHaveLength(titles.length + 1);
     expect(parsed.flat()).toContain(`'${POISONED_TITLES["="]}`);
     expect(parsed.flat().filter(reachesFormulaEngine)).toEqual([]);
+    // Colonne a elenco: il percorso del CV non esce.
+    expect(parsed[0]).not.toContain("cv_path");
   });
 });
 
@@ -225,26 +236,18 @@ describe("jht export --csv — la strada del terminale", () => {
   });
 
   it("un valore che apre una formula esce inerte anche da qui", async () => {
-    // Le sorgenti del comando oggi sono interne (sessioni, task, config,
-    // analytics), ma il file lo apre lo stesso foglio di calcolo e la
-    // funzione è la stessa: la copia CLI è quella che usa chi lavora dal
-    // terminale.
+    // Il file lo apre lo stesso foglio di calcolo e la funzione e' la stessa:
+    // la copia CLI e' quella che usa chi lavora dal terminale.
     const titles = [
       ...Object.values(POISONED_TITLES),
       ...Object.values(SPLIT_TITLES),
     ];
-    mkdirSync(join(home, "tasks"), { recursive: true });
-    writeFileSync(
-      join(home, "tasks/tasks.json"),
-      JSON.stringify({
-        tasks: titles.map((title) => ({ title, note: "Acme, Inc." })),
-      }),
-    );
+    positionsDb(join(home, "jobs.db"), titles).close();
     vi.spyOn(console, "log").mockImplementation(() => {});
     const output = join(home, "export.csv");
     const { handleExport } = await import("../../../cli/src/commands/export.js");
 
-    await handleExport("tasks", { csv: true, output });
+    await handleExport("positions", { csv: true, output });
     const csv = readFileSync(output, "utf-8");
 
     const parsed = parseCsv(csv);

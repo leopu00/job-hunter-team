@@ -7,17 +7,18 @@ import { makeT } from "@/lib/i18n-dict";
 import { T } from "./page.i18n";
 import { writeFailureReason } from "@/lib/write-failure";
 
+// Le sorgenti sono le tabelle vive di jobs.db, le stesse di `jht export` e
+// dell'esportazione dell'app (shared/export/sources.js): un test confronta
+// questa lista con quella. Quelle che nessuno scrive piu' non si offrono.
 type DataSource =
-  | "sessions"
-  | "tasks"
-  | "analytics"
-  | "jobs"
+  | "positions"
+  | "scores"
   | "applications"
-  | "contacts"
   | "companies"
-  | "interviews";
+  | "feedback"
+  | "notes";
 type ExportFormat = "json" | "csv";
-type SourceGroup = "jobhunting" | "system";
+type SourceGroup = "jobhunting";
 
 const SOURCES: {
   id: DataSource;
@@ -27,10 +28,17 @@ const SOURCES: {
   group: SourceGroup;
 }[] = [
   {
-    id: "jobs",
-    labelKey: "src_jobs",
-    descKey: "src_jobs_desc",
+    id: "positions",
+    labelKey: "src_positions",
+    descKey: "src_positions_desc",
     color: "#61affe",
+    group: "jobhunting",
+  },
+  {
+    id: "scores",
+    labelKey: "src_scores",
+    descKey: "src_scores_desc",
+    color: "var(--color-yellow)",
     group: "jobhunting",
   },
   {
@@ -41,13 +49,6 @@ const SOURCES: {
     group: "jobhunting",
   },
   {
-    id: "contacts",
-    labelKey: "src_contacts",
-    descKey: "src_contacts_desc",
-    color: "#9b59b6",
-    group: "jobhunting",
-  },
-  {
     id: "companies",
     labelKey: "src_companies",
     descKey: "src_companies_desc",
@@ -55,32 +56,18 @@ const SOURCES: {
     group: "jobhunting",
   },
   {
-    id: "interviews",
-    labelKey: "src_interviews",
-    descKey: "src_interviews_desc",
-    color: "#50e3c2",
+    id: "feedback",
+    labelKey: "src_feedback",
+    descKey: "src_feedback_desc",
+    color: "#9b59b6",
     group: "jobhunting",
   },
   {
-    id: "sessions",
-    labelKey: "src_sessions",
-    descKey: "src_sessions_desc",
-    color: "var(--color-green)",
-    group: "system",
-  },
-  {
-    id: "tasks",
-    labelKey: "src_tasks",
-    descKey: "src_tasks_desc",
-    color: "var(--color-blue)",
-    group: "system",
-  },
-  {
-    id: "analytics",
-    labelKey: "src_analytics",
-    descKey: "src_analytics_desc",
-    color: "var(--color-yellow)",
-    group: "system",
+    id: "notes",
+    labelKey: "src_notes",
+    descKey: "src_notes_desc",
+    color: "#50e3c2",
+    group: "jobhunting",
   },
 ];
 
@@ -94,7 +81,7 @@ function daysAgo(n: number): string {
 export default function ExportPage() {
   const locale = useLocale();
   const tr = makeT(T, locale);
-  const [source, setSource] = useState<DataSource>("tasks");
+  const [source, setSource] = useState<DataSource>("positions");
   const [format, setFormat] = useState<ExportFormat>("json");
   const [from, setFrom] = useState(daysAgo(30));
   const [to, setTo] = useState(today());
@@ -179,14 +166,10 @@ export default function ExportPage() {
               {tr("label_source")}
             </p>
             <div className="space-y-3">
-              {(["jobhunting", "system"] as SourceGroup[]).map((group) => (
+              {(["jobhunting"] as SourceGroup[]).map((group) => (
                 <div key={group}>
                   <p className="text-[8px] font-bold tracking-widest text-[var(--color-dim)] mb-1">
-                    {tr(
-                      group === "jobhunting"
-                        ? "group_jobhunting"
-                        : "group_system",
-                    ).toUpperCase()}
+                    {tr("group_jobhunting").toUpperCase()}
                   </p>
                   <div className="space-y-1">
                     {SOURCES.filter((s) => s.group === group).map((s) => (

@@ -1,11 +1,22 @@
 import { readFile, writeFile, mkdir, access } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
-import { JHT_HOME } from '../jht-paths.js';
-import { isRetiredStore, retiredStoreNotice } from './_retired-stores.js';
+import { JHT_DB_PATH, JHT_HOME } from '../jht-paths.js';
 // Stesso neutralizzatore della route web: il file esportato qui finisce
 // nello stesso Excel, e una cella che comincia per `=` viene valutata
 // all'apertura. Vedi shared/export/csv.js.
 import { toCsv } from '../../../shared/export/csv.js';
+// Le sorgenti sono le tabelle vive di jobs.db, le stesse del sito e dell'app
+// (shared/export/sources.js): quelle che nessuno scrive piu' si dicono, non si
+// esportano vuote.
+import {
+  EXPORT_SOURCES,
+  exportRange,
+  isExportSource,
+  isRetiredExportSource,
+  readExportRows,
+  redactSecrets,
+  retiredExportNotice,
+} from '../../../shared/export/sources.js';
 
 const JHT_DIR = JHT_HOME;
 
@@ -16,11 +27,9 @@ const JHT_DIR = JHT_HOME;
 // quando la posizione giusta è vuota: qui dentro non si scrive più.
 const LEGACY_JHT_DIR = join(JHT_DIR, '.jht');
 
-const SOURCES = {
-  sessions:  { rel: ['sessions', 'sessions.json'],   key: 'sessions' },
-  tasks:     { rel: ['tasks', 'tasks.json'],         key: 'tasks' },
-  config:    { rel: ['jht.config.json'],             key: null },
-  analytics: { rel: ['analytics', 'analytics.json'], key: 'entries' },
+// Oltre alle tabelle di jobs.db, il file di configurazione dell'utente.
+const FILE_SOURCES = {
+  config: { rel: ['jht.config.json'] },
 };
 
 async function fileExists(p) {
@@ -41,25 +50,23 @@ async function resolveSourcePath(rel) {
 }
 
 export async function handleExport(source, options) {
-  const src = SOURCES[source];
+  if (isRetiredExportSource(source)) {
+    console.error(`  ${retiredExportNotice(source)}`);
+    process.exitCode = 1;
+    return;
+  }
+  if (isExportSource(source)) return exportTable(source, options);
+  const src = FILE_SOURCES[source];
   if (!src) {
     console.error(`  Invalid source: ${source}`);
-    console.error(`  Sources available: ${Object.keys(SOURCES).join(', ')}`);
+    console.error(`  Sources available: ${[...Object.keys(EXPORT_SOURCES), ...Object.keys(FILE_SOURCES)].join(', ')}`);
     process.exitCode = 1;
     return;
   }
 
   const found = await resolveSourcePath(src.rel);
   if (found.missing) {
-    // Tre delle quattro sorgenti non hanno più nessuno che le scriva: dire
-    // "file non trovato" e basta manda l'utente a cercare un file che non
-    // arriverà mai.
-    if (isRetiredStore(source)) {
-      console.error(retiredStoreNotice([source]));
-      console.error('');
-    } else {
-      console.error(`  File not found: ${found.path}`);
-    }
+    console.error(`  File not found: ${found.path}`);
     process.exitCode = 1;
     return;
   }
@@ -68,23 +75,40 @@ export async function handleExport(source, options) {
   }
 
   const raw = await readFile(found.path, 'utf-8');
-  const data = JSON.parse(raw);
-  const items = src.key ? (data[src.key] ?? []) : data;
+  // The config holds the provider keys and the bot tokens: they leave as null, as in the app's backup.
+  const data = redactSecrets(JSON.parse(raw));
+  console.log('  Keys, tokens and passwords in the config are exported empty.');
+  await writeOutput(Array.isArray(data) ? data : [data], source, options);
+}
 
-  // Filtro date
-  if (options.from || options.to) {
-    const since = options.from ? new Date(options.from).getTime() : 0;
-    const until = options.to ? new Date(options.to + 'T23:59:59').getTime() : Date.now();
-    const tsField = source === 'sessions' ? 'createdAtMs' : source === 'analytics' ? 'timestamp' : 'createdAt';
-    if (Array.isArray(items)) {
-      const before = items.length;
-      const filtered = items.filter(r => { const t = r[tsField] ?? 0; return t >= since && t <= until; });
-      console.log(`  Date filter: ${filtered.length}/${before} records`);
-      return await writeOutput(filtered, source, options);
-    }
+/** Una tabella viva di jobs.db, in sola lettura, con lo stesso periodo del sito (`to` incluso). */
+async function exportTable(source, options) {
+  const range = exportRange(options.from, options.to);
+  if (!range) {
+    console.error('  Invalid date range (use YYYY-MM-DD, from <= to)');
+    process.exitCode = 1;
+    return;
   }
-
-  await writeOutput(Array.isArray(items) ? items : [items], source, options);
+  if (!(await fileExists(JHT_DB_PATH))) {
+    // Nessun jobs.db = una squadra che non ha mai girato: non e' un file vuoto.
+    console.error(`  No database at ${JHT_DB_PATH}: the team has not run yet, so there is nothing to export.`);
+    process.exitCode = 1;
+    return;
+  }
+  const { DatabaseSync } = await import('node:sqlite');
+  const db = new DatabaseSync(JHT_DB_PATH, { readOnly: true });
+  let rows;
+  try {
+    rows = readExportRows(db, source, range).rows;
+  } catch (error) {
+    console.error(`  Could not read ${source} from the database: ${error instanceof Error ? error.message : error}`);
+    process.exitCode = 1;
+    return;
+  } finally {
+    db.close();
+  }
+  if (options.from || options.to) console.log(`  Date filter: ${rows.length} records`);
+  await writeOutput(rows, source, options);
 }
 
 async function writeOutput(items, source, options) {
@@ -101,7 +125,7 @@ async function writeOutput(items, source, options) {
 export function registerExportCommand(program) {
   program
     .command('export <source>')
-    .description('Export data to JSON or CSV (source: sessions, tasks, config, analytics)')
+    .description('Export data to JSON or CSV (source: positions, scores, applications, companies, feedback, notes, config; the config goes out without keys and tokens)')
     .option('-o, --output <path>', 'output file path')
     .option('--csv', 'export to CSV format')
     .option('--from <date>', 'filter start date (YYYY-MM-DD)')
