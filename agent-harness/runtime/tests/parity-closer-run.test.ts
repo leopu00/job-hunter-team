@@ -29,7 +29,7 @@
 import { execFile } from "node:child_process";
 import { cp, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { delimiter, join } from "node:path";
 import { promisify } from "node:util";
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -37,6 +37,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { openJobsDb, type Database } from "../src/db/jobs-db.ts";
 import { onPath } from "../src/parity/jht-tools.ts";
 import { CLI_RUN_TIMEOUT_MS } from "./helpers/cli.ts";
+import { fakeBroker } from "./helpers/fake-broker.ts";
 import { passingCv } from "./helpers/pdf-fixtures.ts";
 import { RUNTIME } from "./helpers/python-skills.ts";
 
@@ -92,7 +93,8 @@ describe("npm run role -- --role closer (T39)", () => {
       {
         cwd: RUNTIME,
         env: {
-          PATH: process.env["PATH"] ?? "",
+          // The broker's client holds the position the person authorised: the gate asks it before it looks at the CV.
+          PATH: `${fakeBroker(join(root, "broker"))}${delimiter}${process.env["PATH"] ?? ""}`,
           HOME: root,
           JHT_API_HOME: join(root, "api"),
           JHT_HOME: join(root, "jht"),

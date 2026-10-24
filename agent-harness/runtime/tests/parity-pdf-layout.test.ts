@@ -18,7 +18,7 @@
 
 import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { delimiter, join } from "node:path";
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
@@ -28,6 +28,7 @@ import { onPath } from "../src/parity/jht-tools.ts";
 import { applyGate, createCvLayoutHold, type CloserOptions } from "../src/parity/skills/closer.ts";
 import { createSkillTools } from "../src/parity/skills/index.ts";
 import { analyze, CheckError, reportJson } from "../src/parity/skills/pdf-layout.ts";
+import { fakeBroker, PROVEN } from "./helpers/fake-broker.ts";
 import { column, FULL_LINE, LEFT, passingCv, writePdf } from "./helpers/pdf-fixtures.ts";
 import { pythonSkills, RUNTIME, runPython } from "./helpers/python-skills.ts";
 
@@ -229,6 +230,8 @@ describe("the CV path the database names", () => {
       jhtHome: home,
       profileDir: join(home, "profile"),
       cvRoots: [join(home, "cv"), join(root, "out")],
+      // The broker holds the authorisation: what these cases vary is the CV, which is checked after it.
+      notary: () => PROVEN,
       cvLayout: (cv) => {
         measured.push(cv);
         return "";
@@ -310,6 +313,17 @@ describe("the CV path the database names", () => {
 });
 
 describe("the gate as the runtime builds it: poppler measures the CV", () => {
+  // The runtime asks the broker through `jht-broker` on PATH: here, one that holds every position.
+  let pathBefore: string | undefined;
+  beforeEach(() => {
+    pathBefore = process.env["PATH"];
+    process.env["PATH"] = `${fakeBroker(join(root, "broker"))}${delimiter}${pathBefore ?? ""}`;
+  });
+  afterEach(() => {
+    if (pathBefore === undefined) delete process.env["PATH"];
+    else process.env["PATH"] = pathBefore;
+  });
+
   const build = (home: string, userDir: string, dbPath: string) => {
     const tools = createSkillTools({ skills: ["apply-authorization"], agent: "closer-1", jobsDb: { open: () => openJobsDb(dbPath), path: dbPath }, jhtHome: home, userDir });
     const gate = tools.find((t) => t.spec.name === "apply_gate")!;
@@ -400,7 +414,8 @@ describe("the gate as the runtime builds it: poppler measures the CV", () => {
     // Poppler gone from PATH: unmeasured, held — and the next read, with it back, measures.
     writeFileSync(cv, passingCv());
     const path = process.env["PATH"];
-    process.env["PATH"] = join(root, "no-bin");
+    // A PATH with the broker's client alone: poppler is gone, the broker still answers.
+    process.env["PATH"] = fakeBroker(join(root, "no-bin"));
     try {
       expect((await read()).held).toEqual([{ position_id: 1, reason: "cv_pdf_check_unavailable" }]);
     } finally {
@@ -411,5 +426,45 @@ describe("the gate as the runtime builds it: poppler measures the CV", () => {
     // Rendered again, badly: the new content is measured and holds.
     writeFileSync(cv, writePdf([column(40)], { helvetica: true }));
     expect(await read()).toMatchObject({ ready: false, held: [{ position_id: 1, reason: "cv_pdf_layout_bad" }] });
+  });
+
+  // The order is the point (T68): the broker's register comes before the CV. A position it does not
+  // hold is held for that, and its CV is neither measured nor judged — whatever the file is, and
+  // wherever the path points. Were the CV first, a flag the agents can write would make the gate
+  // open and read files for a position nobody authorised.
+  it("the broker before the CV: a position it does not hold is held as unproven, never for its CV", async () => {
+    const home = join(root, "jht");
+    const userDir = join(root, "out");
+    mkdirSync(join(userDir, "cv"), { recursive: true });
+    mkdirSync(home, { recursive: true });
+    writeFileSync(join(home, "jht.config.json"), JSON.stringify({ applications: { auto_apply: { enabled: true } } }));
+    const dbPath = join(root, "jobs.db");
+    const db = openJobsDb(dbPath);
+    db.prepare(
+      "INSERT INTO positions (id, title, company, url, status, found_by, apply_requested, apply_requested_at, apply_requested_by) " +
+        "VALUES (1, 'T', 'Acme', 'https://x.example/1', 'ready', 'scout-1', 1, '2026-09-20 10:00:00', 'user_web')",
+    ).run();
+    const cv = join(userDir, "cv", "CV.pdf");
+    writeFileSync(cv, passingCv());
+    db.prepare("INSERT INTO applications (position_id, status, written_by, cv_pdf_path) VALUES (1, 'ready', 'scrittore-1', ?)").run(cv);
+    db.close();
+    const read = build(home, userDir, dbPath);
+    const answers = [{ ok: true, proven: false }, { ok: false, reason: "broker_unavailable" }];
+    for (const answer of answers) {
+      fakeBroker(join(root, "broker"), answer);
+      // A CV that would pass, and one that points outside: the same reason.
+      for (const path of [cv, join(root, "elsewhere", "secret.pdf")]) {
+        const again = openJobsDb(dbPath);
+        again.prepare("UPDATE applications SET cv_pdf_path = ? WHERE position_id = 1").run(path);
+        again.close();
+        expect(await read()).toMatchObject({ ready: false, held: [{ position_id: 1, reason: "authorisation_unproven" }] });
+      }
+    }
+    // The broker holds it: the same rows are now judged by their CV.
+    fakeBroker(join(root, "broker"), PROVEN);
+    const again = openJobsDb(dbPath);
+    again.prepare("UPDATE applications SET cv_pdf_path = ? WHERE position_id = 1").run(join(root, "elsewhere", "secret.pdf"));
+    again.close();
+    expect(await read()).toMatchObject({ ready: false, held: [{ position_id: 1, reason: "cv_pdf_path_outside" }] });
   });
 });
