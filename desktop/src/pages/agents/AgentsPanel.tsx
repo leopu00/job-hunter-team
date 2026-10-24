@@ -454,6 +454,25 @@ function readView(): "list" | "lanes" {
   }
 }
 
+const TERMINAL_KEY = "jht.agents.terminal";
+
+/** Whether the person left the terminal open under a chat, a convenience only: without storage it is folded away. */
+function readTerminalOpen(): boolean {
+  try {
+    return window.localStorage.getItem(TERMINAL_KEY) === "open";
+  } catch {
+    return false;
+  }
+}
+
+function rememberTerminalOpen(open: boolean): void {
+  try {
+    window.localStorage.setItem(TERMINAL_KEY, open ? "open" : "closed");
+  } catch {
+    // Not remembered: the next time starts folded.
+  }
+}
+
 function rememberView(view: "list" | "lanes"): void {
   try {
     window.localStorage.setItem(VIEW_KEY, view);
@@ -482,6 +501,11 @@ export default function AgentsPanel({ search }: PageProps) {
   // The previous sessions and the last day's lanes: read with the list, and never a reason to fail it.
   const [history, setHistory] = useState<Outcome<PanelHistory> | null>(null);
   const [view, setView] = useState<"list" | "lanes">(readView);
+  const [terminalOpen, setTerminalOpen] = useState<boolean>(readTerminalOpen);
+  const toggleTerminal = (open: boolean) => {
+    setTerminalOpen(open);
+    rememberTerminalOpen(open);
+  };
   const latest = useRef(0);
 
   const read = useCallback(async () => {
@@ -862,41 +886,59 @@ export default function AgentsPanel({ search }: PageProps) {
                     />
                   )}
 
-                  <section className="flex min-h-[10rem] flex-1 flex-col border-t p-3 lg:min-h-0" style={{ borderColor: "var(--color-border)" }} aria-label={t.tabTerminal}>
-                    <h2 className="m-0 mb-2 shrink-0 text-[11px] font-semibold uppercase tracking-widest text-[var(--color-muted)]">{t.tabTerminal}</h2>
-                    <div className="min-h-0 flex-1 pr-1 lg:overflow-y-auto">
-                      {current.agent ? (
-                        <Terminal key={current.session} row={current} t={t} chat={hasChat(current) && AgentChatPane !== null} />
-                      ) : (
-                        <p className="text-[11px] text-[var(--color-muted)]">{t.screenDown}</p>
-                      )}
-                      <SessionHistory t={t} history={history} session={current.session} nowS={Math.floor(now / 1000)} />
-                    </div>
-                  </section>
-
                   {hasChat(current) && (
-                    // The chat is docked under the terminal: it keeps its own height and never grows over the page.
-                    <section className="shrink-0 border-t" style={{ borderColor: "var(--color-border)" }} aria-label={t.tabChat}>
-                      <h2 className="m-0 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-widest text-[var(--color-muted)]" style={{ background: "var(--color-panel)" }}>
+                    // The chat takes the height the header leaves: it is what the person reads, so it is not a box under the terminal.
+                    <section className="flex min-h-0 flex-col border-t lg:flex-1" style={{ borderColor: "var(--color-border)" }} aria-label={t.tabChat}>
+                      <h2 className="m-0 shrink-0 px-3 py-1.5 text-[12px] font-semibold uppercase tracking-widest text-[var(--color-muted)]" style={{ background: "var(--color-panel)" }}>
                         {t.tabChat}
                       </h2>
                       {AgentChatPane ? (
                         <div
                           data-testid="panel-chat-pane"
-                          className="min-w-0 overflow-hidden border-t"
-                          style={{
-                            height: "clamp(17rem, calc(38svh / var(--zoom, 1)), 28rem)",
-                            background: "var(--color-void)",
-                            borderColor: "var(--color-border)",
-                          }}
+                          className="min-w-0 h-[34rem] overflow-hidden border-t lg:h-auto lg:min-h-0 lg:flex-1"
+                          style={{ background: "var(--color-void)", borderColor: "var(--color-border)" }}
                         >
                           <AgentChatPane role={current.role as ChatRole} />
                         </div>
                       ) : (
-                        <p className="px-3 pb-3 text-[11px] text-[var(--color-muted)]">{fill(t.chatSoon, { name: displayName(current.session) })}</p>
+                        <p className="px-3 pb-3 text-[13px] text-[var(--color-muted)]">{fill(t.chatSoon, { name: displayName(current.session) })}</p>
                       )}
                     </section>
                   )}
+
+                  {/* With a chat the terminal is folded away until asked for (and then it stops reading the screen while folded); without one it is the page. */}
+                  <section
+                    data-testid="panel-terminal-section"
+                    className={`flex flex-col border-t ${hasChat(current) ? "shrink-0" : "min-h-[10rem] flex-1 p-3 lg:min-h-0"}`}
+                    style={{ borderColor: "var(--color-border)" }}
+                    aria-label={t.tabTerminal}
+                  >
+                    {hasChat(current) ? (
+                      <button
+                        type="button"
+                        data-testid="panel-terminal-toggle"
+                        aria-expanded={terminalOpen}
+                        onClick={() => toggleTerminal(!terminalOpen)}
+                        className="m-0 flex w-full shrink-0 items-center gap-2 px-3 py-1.5 text-left text-[12px] font-semibold uppercase tracking-widest text-[var(--color-muted)]"
+                        style={{ background: "var(--color-panel)" }}
+                      >
+                        <span aria-hidden="true">{terminalOpen ? "▾" : "▸"}</span>
+                        {terminalOpen ? t.terminalHide : t.terminalShow}
+                      </button>
+                    ) : (
+                      <h2 className="m-0 mb-2 shrink-0 text-[12px] font-semibold uppercase tracking-widest text-[var(--color-muted)]">{t.tabTerminal}</h2>
+                    )}
+                    {(!hasChat(current) || terminalOpen) && (
+                      <div className={hasChat(current) ? "max-h-[min(16rem,32svh)] overflow-y-auto p-3" : "min-h-0 flex-1 pr-1 lg:overflow-y-auto"}>
+                        {current.agent ? (
+                          <Terminal key={current.session} row={current} t={t} chat={hasChat(current) && AgentChatPane !== null} />
+                        ) : (
+                          <p className="text-[13px] text-[var(--color-muted)]">{t.screenDown}</p>
+                        )}
+                        <SessionHistory t={t} history={history} session={current.session} nowS={Math.floor(now / 1000)} />
+                      </div>
+                    )}
+                  </section>
                 </section>
               )}
             </div>
