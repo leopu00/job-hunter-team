@@ -78,8 +78,9 @@ it("tells a failure with the catalog, in the page's language", async () => {
 
 it.each(locales)("%s: lists among what is deleted the scheduled task the removal unregisters, by its name in the script", (locale) => {
   const wrapper = readFileSync("../scripts/jht-wrapper.ps1", "utf8");
-  const task = /function Remove-JhtStartupTask \{\s*param\(\[string\]\$TaskName = '([^']+)'\)/.exec(wrapper)?.[1];
-  expect(task, "Remove-JhtStartupTask and its task name in jht-wrapper.ps1").toBe("Job Hunter Team - Start runtime");
+  const task = /function Get-JhtScopedStartupTaskName \{[\s\S]*?return "([^"\[]+?) \[\$sid\]"/.exec(wrapper)?.[1];
+  expect(task, "the scoped task name in jht-wrapper.ps1").toBe("Job Hunter Team - Start runtime");
+  expect(wrapper).toMatch(/function Remove-JhtStartupTask \{\s*param\(\[string\]\$TaskName = \(Get-JhtScopedStartupTaskName\)\)/);
   // The removal calls it: the function is not just defined.
   expect(wrapper.split("Remove-JhtStartupTask").length - 1).toBeGreaterThan(1);
   expect(COMPUTER_TEXT[locale].removes.filter((item) => item.includes(task!))).toHaveLength(1);

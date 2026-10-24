@@ -57,7 +57,7 @@ fn current_user_sid(output: &[u8]) -> Option<String> {
     String::from_utf8_lossy(output)
         .split(|value: char| !(value.is_ascii_alphanumeric() || value == '-'))
         .find(|value| value.strip_prefix("S-1-").is_some_and(|parts| {
-            let segments = parts.split('-');
+            let mut segments = parts.split('-');
             segments.clone().nth(1).is_some()
                 && segments.all(|part| !part.is_empty() && part.chars().all(|digit| digit.is_ascii_digit()))
         }))
