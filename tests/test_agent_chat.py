@@ -864,22 +864,102 @@ def test_composer_text_is_only_the_box_contents_and_never_the_border_or_hint():
     assert module.composer_text(codex) == "first line"
 
 
-@pytest.mark.parametrize("screen", [
+BUSY_FORMS = pytest.mark.parametrize("screen", [
     "✻ Pondering… (12s · esc to interrupt)\n", RUNNING, RUNNING_CODEX,
 ], ids=["unrecognised-form", "claude-empty-composer", "codex-empty-composer"])
-def test_nothing_is_pasted_while_the_agent_works_and_nothing_is_left_behind(box, screen):
+
+
+def _queue_lines(box, agent="capitano"):
+    path = box.home / "agents" / agent / "chat-queue.jsonl"
+    return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()] if path.exists() else []
+
+
+def _delivered_ids(box, agent="capitano"):
+    path = box.home / "agents" / agent / "chat-delivered.jsonl"
+    return [json.loads(line)["client_message_id"] for line in path.read_text(encoding="utf-8").splitlines()] if path.exists() else []
+
+
+@BUSY_FORMS
+def test_a_working_agent_gets_the_turn_queued_and_nothing_is_pasted(box, screen):
     box.stub_delivery()
     (box.state / "screen").write_text(screen, encoding="utf-8")
-    code, answer = box.run("send", "capitano", "id-working", stdin="ci sei?")
-    assert (code, answer) == (124, {"error": "agent_busy"})
-    _nothing_happened(box)
+    code, receipt = box.run("send", "capitano", "id-working", stdin="ci sei?")
+    assert code == 0 and receipt["accepted"] is True
+    assert receipt["state"] == "queued" and receipt["queue"] == "terminal" and "taken" not in receipt
+    assert box.envelopes() == [] and not any(c.startswith("send-keys") for c in box.calls()), "nothing typed"
     assert "composer" not in {p.name for p in box.state.iterdir()}, "no text of ours in the composer"
+    assert [row["client_message_id"] for row in box.chat("capitano")] == ["id-working"], "written once"
+    assert [row["client_message_id"] for row in _queue_lines(box)] == ["id-working"]
+    assert _delivered_ids(box) == []
+    code, page = box.run("read", "capitano")
+    assert code == 0 and page["queued"] == [receipt["messageId"]], "the page says which turns still wait"
 
 
-def test_the_busy_wait_keeps_the_longest_answer_under_a_minute_even_when_the_app_asks_three_times():
+def test_the_queued_turn_is_delivered_by_the_first_read_that_finds_the_agent_idle(box):
+    box.stub_delivery()
+    screen = box.state / "screen"
+    screen.write_text(RUNNING_CODEX, encoding="utf-8")
+    _code, receipt = box.run("send", "capitano", "id-q1", stdin="ci sei?")
+    assert box.run("read", "capitano")[1]["queued"] == [receipt["messageId"]]
+    assert box.envelopes() == [], "still working: a read delivers nothing"
+    screen.write_text(READY_CODEX, encoding="utf-8")
+    code, page = box.run("read", "capitano")
+    assert code == 0 and page["queued"] == []
+    assert box.envelopes() == ["[@utente -> @capitano] [CHAT] ci sei?"]
+    assert _delivered_ids(box) == ["id-q1"]
+    box.run("read", "capitano")
+    assert len(box.envelopes()) == 1, "delivered once, never again"
+
+
+def test_a_queued_turn_stays_queued_behind_a_draft_a_menu_or_a_missing_session(box):
+    box.stub_delivery()
+    screen = box.state / "screen"
+    screen.write_text(RUNNING_CODEX, encoding="utf-8")
+    box.run("send", "capitano", "id-q2", stdin="uno")
+    for blocked in (TEXT_ALREADY_TYPED, CLAUDE_PERMISSION):
+        screen.write_text(blocked, encoding="utf-8")
+        assert box.run("read", "capitano")[1]["queued"] != []
+        assert box.envelopes() == []
+    screen.write_text(READY_CODEX, encoding="utf-8")
+    code, page = box.run("read", "capitano", FAKE_TMUX_SESSIONS="ASSISTENTE MENTOR")
+    assert code == 0 and page["queued"] != [] and box.envelopes() == [], "no session: nothing started"
+
+
+def test_queued_turns_are_delivered_in_order_and_a_new_one_waits_behind_them(box):
+    box.stub_delivery()
+    screen = box.state / "screen"
+    screen.write_text(RUNNING_CODEX, encoding="utf-8")
+    box.run("send", "capitano", "id-a", stdin="primo")
+    screen.write_text(READY_CODEX, encoding="utf-8")
+    code, receipt = box.run("send", "capitano", "id-b", stdin="secondo")
+    assert code == 0 and receipt["clientMessageId"] == "id-b"
+    assert box.envelopes() == ["[@utente -> @capitano] [CHAT] primo", "[@utente -> @capitano] [CHAT] secondo"]
+    assert _delivered_ids(box) == ["id-a", "id-b"]
+
+
+def test_the_same_id_sent_again_while_queued_is_not_a_second_turn(box):
+    box.stub_delivery()
+    (box.state / "screen").write_text(RUNNING_CODEX, encoding="utf-8")
+    first = box.run("send", "capitano", "id-same", stdin="uno")[1]
+    again = box.run("send", "capitano", "id-same", stdin="uno")[1]
+    assert again["messageId"] == first["messageId"] and again["state"] == "queued"
+    assert len(box.chat("capitano")) == 1 and len(_queue_lines(box)) == 1
+
+
+def test_a_send_to_a_working_agent_answers_in_a_few_seconds(box):
+    import time as _time
+    box.stub_delivery()
+    (box.state / "screen").write_text(RUNNING_CODEX, encoding="utf-8")
+    started = _time.monotonic()
+    code, receipt = box.run("send", "capitano", "id-fast", stdin="ci sei?",
+                            JHT_CHAT_BUSY_WAIT="2", JHT_CHAT_PROMPT_POLL="0.2")
+    assert code == 0 and receipt["state"] == "queued"
+    assert _time.monotonic() - started < 6, "the app is never held for minutes"
+
+
+def test_the_default_busy_wait_is_a_few_seconds():
     module = _module()
-    assert module.BUSY_WAIT_S <= 20, "the app retries agent_busy up to 3 times, one send at a time"
-    assert 3 * (module.BUSY_WAIT_S + module.PROMPT_POLL_S) < 70
+    assert module.BUSY_WAIT_S <= 5 and module.BUSY_WAIT_S + module.PROMPT_POLL_S <= 8
 
 
 def test_a_turn_that_ends_within_the_wait_is_delivered_once_the_agent_is_idle(box):

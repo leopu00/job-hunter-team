@@ -355,19 +355,16 @@ def test_an_agent_that_is_not_a_receiver_is_not_pasted_into_while_its_turn_is_ru
     enable(jht_home, "assistente")
     monkeypatch.setenv("FAKE_SCREEN", BUSY_SCREEN)
     monkeypatch.setattr(chat, "BUSY_WAIT_S", 0)
-    with pytest.raises(chat.Refusal) as caught:
-        chat.send("scout", "client-4", "hello")
-    assert caught.value.code == "agent_busy"
+    receipt = chat.send("scout", "client-4", "hello")
+    assert receipt["state"] == "queued" and receipt["queue"] == "terminal" and "taken" not in receipt
     assert not terminal(), "nothing is pasted while the agent works"
-    assert not (jht_home / "agents").exists()
 
 
-def test_with_nobody_listed_a_working_agent_is_not_pasted_into_either(jht_home, terminal, monkeypatch):
+def test_with_nobody_listed_a_working_agent_is_queued_not_pasted_into_either(jht_home, terminal, monkeypatch):
     monkeypatch.setenv("FAKE_SCREEN", BUSY_SCREEN)
     monkeypatch.setattr(chat, "BUSY_WAIT_S", 0)
-    with pytest.raises(chat.Refusal) as caught:
-        chat.send("assistente", "client-5", "hello")
-    assert caught.value.code == "agent_busy"
+    receipt = chat.send("assistente", "client-5", "hello")
+    assert receipt["state"] == "queued" and receipt["queue"] == "terminal"
     assert not terminal() and not (jht_home / "mailbox").exists()
 
 

@@ -26,9 +26,11 @@ screen of the terminal.
      nothing started (this file never starts an agent);
   4. the agent's terminal must show an empty composer. A menu, sign-in,
      permission question or text already typed there is a closed code; a turn
-     in progress is waited out (JHT_CHAT_BUSY_WAIT, 20 s) and, past that, answers
-     agent_busy: nothing is pasted while the agent works. NOTHING is typed
-     over something that could take it as a choice or overwrite a draft;
+     in progress is waited out for a few seconds (JHT_CHAT_BUSY_WAIT) and, past
+     that, the turn is QUEUED (written to chat-queue.jsonl, not typed): the
+     next read or send that finds the agent idle delivers it, oldest first;
+     nothing is pasted while the agent works. NOTHING is typed over something
+     that could take it as a choice or overwrite a draft;
   5. the turn is written once per client id (a repeat is not a second line),
      and one that was written but never delivered is delivered again from the
      line already there, with no new line;
@@ -146,10 +148,11 @@ PROMPT_TAIL = 15
 DELIVERY_TIMEOUT_S = 100
 PROMPT_WAIT_S = float(os.environ.get("JHT_CHAT_PROMPT_WAIT", "100"))
 PROMPT_POLL_S = float(os.environ.get("JHT_CHAT_PROMPT_POLL", "2"))
-# A turn in progress is waited out before anything is pasted: the layout of a working CLI changes under
-# the paste, and text that cannot be attested would stay in its composer.  The app asks again after an
-# agent_busy (up to 3 times in a row, one send at a time), so the whole answer stays under a minute.
-BUSY_WAIT_S = float(os.environ.get("JHT_CHAT_BUSY_WAIT", "20"))
+# A turn in progress is waited out for a few seconds before anything is pasted: the layout of a working CLI
+# changes under the paste, and text that cannot be attested would stay in its composer.  Past the wait the
+# turn is QUEUED (written, not typed) and delivered by the next read or send that finds the agent idle.
+BUSY_WAIT_S = float(os.environ.get("JHT_CHAT_BUSY_WAIT", "3"))
+QUEUE_FILE = "chat-queue.jsonl"
 
 # Direction marks and zero-width characters read as nothing and rewrite what
 # is around them. ZWNJ/ZWJ (U+200C/D) stay: Persian and emoji need them.
@@ -202,6 +205,14 @@ def clean_text(raw: str) -> str:
 def read(agent: str, cursor_text: str | None) -> dict:
     if cursor_text not in (None, "") and not CURSOR.match(cursor_text):
         raise Refusal("chat_invalid")
+    flush_queue(agent, AGENTS[agent])
+    page = _read_page(agent, cursor_text)
+    if _queue_path(agent).is_file():
+        page["queued"] = [str(held.get("message_id")) for held in queued_turns(agent)]
+    return page
+
+
+def _read_page(agent: str, cursor_text: str | None) -> dict:
     path = chat_path(agent)
     if not path.is_file():
         page = {"messages": [], "cursor": "0"}
@@ -936,6 +947,86 @@ def deliver_by_mail(mail, agent: str, session: str, row: dict, text: str) -> dic
     return queued
 
 
+def _queue_path(agent: str) -> Path:
+    return chat_path(agent).parent / QUEUE_FILE
+
+
+def _queue_lines(agent: str) -> list[dict]:
+    path = _queue_path(agent)
+    if not path.is_file():
+        return []
+    lines = []
+    try:
+        for raw in path.read_text(encoding="utf-8").splitlines():
+            try:
+                row = json.loads(raw)
+            except Exception:
+                continue
+            if isinstance(row, dict) and CLIENT_ID.match(str(row.get("client_message_id") or "")):
+                lines.append(row)
+    except OSError:
+        return []
+    return lines
+
+
+def queued_turns(agent: str) -> list[dict]:
+    """The turns written but held back because the agent was working, oldest first, not yet delivered."""
+    delivered = chat_path(agent).parent / DELIVERED_FILE
+    seen: set[str] = set()
+    waiting = []
+    for row in _queue_lines(agent):
+        client_id = row["client_message_id"]
+        if client_id in seen:
+            continue
+        seen.add(client_id)
+        if _found(delivered, client_id) is None:
+            waiting.append(row)
+    return waiting
+
+
+def _queue_locked(agent: str, client_id: str, text: str) -> dict:
+    """Write the turn and queue it (once per client id). The caller holds the agent's lock."""
+    row = persist(agent, client_id, text)
+    if not any(held["client_message_id"] == client_id for held in _queue_lines(agent)):
+        line = {"client_message_id": client_id, "message_id": row.get("message_id"), "queued_at": time.time()}
+        try:
+            fd = os.open(_queue_path(agent), os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o600)
+            try:
+                os.write(fd, (json.dumps(line, separators=(",", ":")) + "\n").encode("utf-8"))
+                os.fsync(fd)
+            finally:
+                os.close(fd)
+        except OSError:
+            raise Refusal("persist_failed")
+    out = _receipt(client_id, row.get("message_id"), row.get("ts"), "queued")
+    out["queue"] = "terminal"       # held here until the agent is idle, then typed: the page watches it
+    return out
+
+
+def flush_queue(agent: str, session: str) -> None:
+    """Deliver the queued turns in order while the agent is idle; stop at the first that cannot go now.
+
+    Never waits for the agent: the same gate as a send (a draft, a menu or a working turn leaves the
+    turn queued) and the same guarded transport.  Called by every read and send, under the agent's lock.
+    """
+    if not queued_turns(agent):
+        return
+    try:
+        check_session(session)
+        with _AgentLock(agent):
+            for held in queued_turns(agent):
+                row = _found(chat_path(agent), held["client_message_id"])
+                if row is None:
+                    continue
+                pane = capture_pane(session)
+                if pane is None or composer_snapshot(pane)[1] or delivery_gate(pane) not in {"empty", "none"}:
+                    return
+                taken, signature = deliver(agent, session, str(row.get("text") or ""))
+                mark_delivered(agent, row, taken, signature)
+    except Refusal:
+        return
+
+
 class _AgentLock:
     """One send at a time per agent: two asks with the same id cannot both deliver."""
 
@@ -995,10 +1086,24 @@ def send(agent: str, client_id: str, raw_text: str) -> dict:
     # The potentially long wait happens before acquiring the writer lock.  If
     # another writer changes the pane while we waited, release and start that
     # wait again instead of holding every other sender behind a busy terminal.
+    # An older queued turn goes first: order is kept, so a new turn waits behind it.
+    flush_queue(agent, session)
+    if queued_turns(agent):
+        with _AgentLock(agent):
+            return _queue_locked(agent, client_id, text)
     busy_deadline = time.monotonic() + BUSY_WAIT_S
     while True:
         require_prompt(session)
-        require_idle(session, busy_deadline)
+        try:
+            require_idle(session, busy_deadline)
+        except Refusal as refusal:
+            if refusal.code != "agent_busy":
+                raise
+            with _AgentLock(agent):
+                done = _found(delivered, client_id)
+                if done is not None:
+                    return _receipt(client_id, done.get("message_id"), done.get("at"), taken=done.get("taken"))
+                return _queue_locked(agent, client_id, text)
         retry_outside_lock = False
         with _AgentLock(agent):
             done = _found(delivered, client_id)
@@ -1017,7 +1122,7 @@ def send(agent: str, client_id: str, raw_text: str) -> dict:
             elif composer_snapshot(pane)[1]:
                 # The turn started while we waited for the lock: not now, and not past the deadline.
                 if time.monotonic() >= busy_deadline:
-                    raise Refusal("agent_busy")
+                    return _queue_locked(agent, client_id, text)
                 retry_outside_lock = True
             else:
                 row = persist(agent, client_id, text)
