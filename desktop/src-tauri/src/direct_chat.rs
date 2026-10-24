@@ -1559,7 +1559,8 @@ fn mac_config_hash(runtime: &Path, timeout: Duration) -> Option<String> {
 fn windows_path_key(path: &str) -> String {
     let path = path.replace('/', "\\");
     let path = path.strip_prefix("\\\\?\\").unwrap_or(&path);
-    path.trim_end_matches('\\').to_ascii_lowercase()
+    // Unicode lower case, not ASCII: a profile name with accents is the same name in capitals.
+    path.trim_end_matches('\\').to_lowercase()
 }
 
 /// The Windows team's container. Its Compose provider is the runtime's own `docker-compose.exe`
@@ -1568,17 +1569,54 @@ fn windows_path_key(path: &str) -> String {
 /// directory. Asking for podman-compose's labels rejected every Windows container (G7).
 #[cfg_attr(not(windows), allow(dead_code))]
 fn windows_container_labels_are_attested(labels: &Value, runtime: &Path) -> bool {
-    let runtime_key = windows_path_key(&runtime.to_string_lossy());
-    let files = [runtime.join("docker-compose.yml"), runtime.join("docker-compose.podman.yml")]
-        .map(|file| windows_path_key(&file.to_string_lossy()));
+    if label(labels, "com.docker.compose.project") != Some("jht")
+        || label(labels, "com.docker.compose.service") != Some("jht")
+        || label(labels, "com.docker.compose.container-number") != Some("1")
+    {
+        return false;
+    }
+    let working_dir = label(labels, "com.docker.compose.project.working_dir").map(windows_path_key);
     let listed: Vec<String> = label(labels, "com.docker.compose.project.config_files")
         .map(|value| value.split(',').map(windows_path_key).collect())
         .unwrap_or_default();
-    label(labels, "com.docker.compose.project") == Some("jht")
-        && label(labels, "com.docker.compose.service") == Some("jht")
-        && label(labels, "com.docker.compose.container-number") == Some("1")
-        && label(labels, "com.docker.compose.project.working_dir").map(windows_path_key).as_deref() == Some(runtime_key.as_str())
-        && listed == files
+    // The directory as the app names it, or as the system resolves it (a short 8.3 name or a link
+    // in the app's path against the long one in the labels): either way, one directory.
+    std::iter::once(runtime.to_path_buf()).chain(fs::canonicalize(runtime).ok()).any(|root| {
+        let files = [root.join("docker-compose.yml"), root.join("docker-compose.podman.yml")]
+            .map(|file| windows_path_key(&file.to_string_lossy()));
+        working_dir.as_deref() == Some(windows_path_key(&root.to_string_lossy()).as_str()) && listed == files
+    })
+}
+
+/// 64 lower-case hex digits after `ghcr.io/leopu00/jht@sha256:`: the only reference the runtime pins.
+fn is_pinned_image_reference(value: &str) -> bool {
+    value
+        .strip_prefix("ghcr.io/leopu00/jht@sha256:")
+        .is_some_and(|digest| digest.len() == 64 && digest.bytes().all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte)))
+}
+
+/// The image the container was made from is the runtime's pinned one: the digest in its
+/// `runtime-image`, which the manifest already attests. Without a pin file the runtime's default is
+/// a digest of the same repository.
+#[cfg_attr(not(windows), allow(dead_code))]
+fn windows_container_image_is_the_runtimes(image: &str, runtime: &Path) -> bool {
+    match fs::read_to_string(runtime.join("runtime-image")) {
+        Ok(pin) => pin.strip_suffix('\n').is_some_and(|pin| is_pinned_image_reference(pin) && pin == image),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => is_pinned_image_reference(image),
+        Err(_) => false,
+    }
+}
+
+/// `running|labels` as the engine's inspect prints it, plus `|image` where the image is asked for.
+#[cfg_attr(not(windows), allow(dead_code))]
+fn split_inspected(line: &str, with_image: bool) -> Option<(&str, &str, Option<&str>)> {
+    let (running, rest) = line.split_once('|')?;
+    if !with_image {
+        return Some((running, rest, None));
+    }
+    // the image is the last field: a label's text may hold a `|`, an image reference never does
+    let (labels, image) = rest.rsplit_once('|')?;
+    Some((running, labels, Some(image.trim())))
 }
 
 fn podman_container_labels_are_attested(labels: &Value, runtime: &Path, expected_config_hash: Option<&str>) -> bool {
@@ -1665,7 +1703,8 @@ fn local_chat_container(
                 "container",
                 id,
                 "--format",
-                "{{.State.Running}}|{{json .Config.Labels}}",
+                // On Windows the image too: the labels alone are not an identity there.
+                if cfg!(windows) { "{{.State.Running}}|{{json .Config.Labels}}|{{.Config.Image}}" } else { "{{.State.Running}}|{{json .Config.Labels}}" },
             ],
             None,
             timeout,
@@ -1676,7 +1715,7 @@ fn local_chat_container(
         let Ok(line) = std::str::from_utf8(&inspected.stdout).map(str::trim) else {
             continue;
         };
-        let Some((running, labels)) = line.split_once('|') else {
+        let Some((running, labels, image)) = split_inspected(line, cfg!(windows)) else {
             continue;
         };
         let Ok(labels) = serde_json::from_str::<Value>(labels) else {
@@ -1686,7 +1725,8 @@ fn local_chat_container(
         if running != "true" || service != Some("jht") {
             continue;
         }
-        if engine.podman && !podman_container_labels_are_attested(&labels, runtime, expected_config_hash.as_deref()) {
+        let image_is_the_runtimes = !cfg!(windows) || image.is_some_and(|image| windows_container_image_is_the_runtimes(image, runtime));
+        if engine.podman && !(podman_container_labels_are_attested(&labels, runtime, expected_config_hash.as_deref()) && image_is_the_runtimes) {
             refused = true;
             continue;
         }
@@ -1744,12 +1784,13 @@ fn run_local_chat(
     result
 }
 
-/// The engine could not run the exec, or answered that the container is gone (exit 125, Podman's
+/// The engine could not run the exec (not a timeout), or answered that the container is gone (exit 125, Podman's
 /// "no such container"; also an exit the chat script never uses): the container found a moment ago
 /// is no longer the one, so the next call finds it again instead of failing for five more seconds.
 fn engine_lost_the_container(result: &Result<ProcessResult, &'static str>) -> bool {
     match result {
-        Err(_) => true,
+        // A slow engine is not a lost container: emptying the kept one at every timeout would make each call pay the lookup.
+        Err(code) => *code != "process_timeout",
         Ok(done) => done.code != 0 && (done.code == 125 || chat_failure(done.code, "").is_empty()),
     }
 }
@@ -3011,7 +3052,7 @@ mod tests {
         SOCKET_PATH_MAX, SSH_SOCKET_SUFFIX,
         open_vps_link, ready_status, small_read, vps_link_for, VpsLink, VPS_LINK_CHECK, SMALL_READ_OVERLAP,
         SMALL_READ_SIZE_PROBE, SMALL_READ_TAIL, DirectChatError, local_chat_exec_args,
-        local_compose_args, local_engine_removed_environment, LocalChatEngine, podman_systemd_unit, windows_container_labels_are_attested, engine_lost_the_container,
+        local_compose_args, local_engine_removed_environment, LocalChatEngine, podman_systemd_unit, windows_container_labels_are_attested, engine_lost_the_container, windows_container_image_is_the_runtimes, split_inspected, windows_path_key,
         run_connection, run_local_chat, RemoteOperation,
         master_to_lend,
     };
@@ -3629,6 +3670,66 @@ mod tests {
     }
 
     #[test]
+    fn a_windows_profile_name_with_accents_is_the_same_in_capitals() {
+        let dir = r"C:\Users\Élodie Müller\AppData\Local\Job Hunter Team\host-runtime";
+        let runtime = PathBuf::from(dir);
+        assert_eq!(windows_path_key(dir), windows_path_key(&dir.to_uppercase()));
+        assert!(windows_container_labels_are_attested(&windows_labels(&dir.to_uppercase()), &runtime));
+        assert!(windows_container_labels_are_attested(&windows_labels(&dir.to_lowercase()), &runtime));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_runtime_reached_by_another_name_is_the_same_directory_for_the_labels() {
+        // On Windows a short 8.3 name and the long one; here a link: the labels hold the resolved one.
+        let base = std::env::temp_dir().canonicalize().unwrap().join(format!("jht-runtime-alias-{}", std::process::id()));
+        let real = base.join("long-name");
+        fs::create_dir_all(&real).unwrap();
+        let alias = base.join("SHORT~1");
+        std::os::unix::fs::symlink(&real, &alias).unwrap();
+        let labels = windows_labels(&real.to_string_lossy());
+        // the labels' separators are backslashes in the helper: build them with the real path's own
+        let mut labels = labels;
+        labels["com.docker.compose.project.config_files"] =
+            format!("{}/docker-compose.yml,{}/docker-compose.podman.yml", real.display(), real.display()).into();
+        assert!(windows_container_labels_are_attested(&labels, &alias));
+        assert!(!windows_container_labels_are_attested(&labels, &base.join("elsewhere")));
+        fs::remove_dir_all(base).unwrap();
+    }
+
+    #[test]
+    fn the_windows_container_must_come_from_the_image_the_runtime_pins() {
+        let pin = format!("ghcr.io/leopu00/jht@sha256:{}", "a".repeat(64));
+        let other = format!("ghcr.io/leopu00/jht@sha256:{}", "b".repeat(64));
+        let root = std::env::temp_dir().canonicalize().unwrap().join(format!("jht-image-pin-{}", std::process::id()));
+        fs::create_dir_all(&root).unwrap();
+        // no pin file: any digest of the repository, nothing else
+        assert!(windows_container_image_is_the_runtimes(&pin, &root));
+        for image in ["ghcr.io/leopu00/jht:dev-1", "docker.io/library/alpine@sha256:aaaa", "sha256:aaaa", "", &format!("ghcr.io/leopu00/jht@sha256:{}", "A".repeat(64))] {
+            assert!(!windows_container_image_is_the_runtimes(image, &root), "{image}");
+        }
+        // a pin file: exactly its reference
+        fs::write(root.join("runtime-image"), format!("{pin}\n")).unwrap();
+        assert!(windows_container_image_is_the_runtimes(&pin, &root));
+        assert!(!windows_container_image_is_the_runtimes(&other, &root));
+        // a pin that is not a reference, or without its line end, is not a pin: nothing matches it
+        fs::write(root.join("runtime-image"), "ghcr.io/leopu00/jht:dev-1\n").unwrap();
+        assert!(!windows_container_image_is_the_runtimes("ghcr.io/leopu00/jht:dev-1", &root));
+        fs::write(root.join("runtime-image"), &pin).unwrap();
+        assert!(!windows_container_image_is_the_runtimes(&pin, &root));
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn the_inspect_line_is_split_with_the_image_only_where_it_is_asked_for() {
+        assert_eq!(split_inspected("true|{\"a\":\"b\"}", false), Some(("true", "{\"a\":\"b\"}", None)));
+        assert_eq!(split_inspected("true|{\"a\":\"x|y\"}|ghcr.io/leopu00/jht@sha256:00", true), Some(("true", "{\"a\":\"x|y\"}", Some("ghcr.io/leopu00/jht@sha256:00"))));
+        // asked for the image and not given one: not a line to trust
+        assert_eq!(split_inspected("true|{}", true), None);
+        assert_eq!(split_inspected("no separator", false), None);
+    }
+
+    #[test]
     fn a_windows_container_that_the_runtime_did_not_start_is_not_attested() {
         let dir = r"C:\Users\someone\AppData\Local\Job Hunter Team\host-runtime";
         let runtime = PathBuf::from(dir);
@@ -3858,7 +3959,9 @@ mod tests {
         for code in [1, 3, 125] {
             assert!(engine_lost_the_container(&done(code)), "{code}");
         }
-        assert!(engine_lost_the_container(&Err("process_timeout")));
+        // a slow engine is not a lost container; one that did not start is
+        assert!(!engine_lost_the_container(&Err("process_timeout")));
+        assert!(engine_lost_the_container(&Err("process_start_failed")));
     }
 
     #[test]
