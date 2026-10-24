@@ -103,6 +103,8 @@ pub fn run() {
             direct_chat::direct_chat_read,
             direct_chat::direct_chat_reconnect,
             direct_chat::direct_chat_send,
+            direct_chat::direct_chat_team_language,
+            direct_chat::direct_chat_team_language_set,
             direct_chat::direct_chat_status,
             direct_chat::direct_chat_subscribe,
             desktop_platform::desktop_platform,
