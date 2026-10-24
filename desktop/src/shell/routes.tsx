@@ -5,6 +5,7 @@ import ExistingTeamProfilePage from "../pages/existing-team/profile";
 import ExistingTeamOfficePage from "../pages/office/readonly";
 import DashboardPage from "../pages/dashboard";
 import MailPage from "../pages/mail";
+import BackupPage from "../pages/backup";
 import ComputerPage from "../pages/computer";
 import ExportPage from "../pages/export";
 import MapPage from "../pages/map";
@@ -76,6 +77,8 @@ export const ROUTES: Route[] = [
   { path: "/settings/team", page: TeamSettingsPage },
   // The team's data and the account's in a file (the web's /export): only reads, so the read-only view has it too.
   { path: "/export", page: ExportPage },
+  // A backup of the team's data on this computer (the web's /backup): making one only reads, so the read-only view has it too.
+  { path: "/backup", page: BackupPage },
   { path: "/help", page: HelpPage },
   // «Remove JHT from this computer» (Windows): linked only where it can run.
   { path: "/computer", page: ComputerPage },
@@ -84,7 +87,7 @@ export const ROUTES: Route[] = [
 export const READ_ONLY_ROUTES: Route[] = [
   // The map reads the team's positions from its VPS when this view is on. The office is not
   // in this list: the full shell's one reads the cloud (see the route below).
-  ...ROUTES.filter((route) => ["/dashboard", "/map", "/positions", "/positions/:id", "/export"].includes(route.path)),
+  ...ROUTES.filter((route) => ["/dashboard", "/map", "/positions", "/positions/:id", "/export", "/backup"].includes(route.path)),
   // Not the web's cloud Team page: the state the existing team's VPS reports about itself.
   { path: "/team", page: ExistingTeamStatusPage },
   // Not the web's cloud Profile page: the profile the existing team's VPS holds.
