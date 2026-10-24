@@ -2695,7 +2695,7 @@ mod tests {
     use super::{
         answer_input, answer_request, enter_request, chat_failure, connection_config_path_at, remote_wrapper_command, wrapper_outcome, delivery_command, hex_encode, link_allows_writing,
         parse_json, probe, session_for, status, valid_agent, verify_migration_local_host_at, window_may_write,
-        Connection, DirectChatPage, ProcessResult, REMOTE_CONTAINER_PROBE, REMOTE_PYTHON_STDIN, UNKNOWN_ACTION,
+        Connection, DirectChatPage, DirectChatReceipt, ProcessResult, REMOTE_CONTAINER_PROBE, REMOTE_PYTHON_STDIN, UNKNOWN_ACTION,
         control_path_fits, remove_tunnel_socket, tunnel_dir_name, tunnel_socket_bases, tunnel_socket_path,
         SOCKET_PATH_MAX, SSH_SOCKET_SUFFIX,
         open_vps_link, ready_status, small_read, vps_link_for, VpsLink, VPS_LINK_CHECK, SMALL_READ_OVERLAP,
