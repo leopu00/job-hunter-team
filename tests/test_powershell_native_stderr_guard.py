@@ -23,9 +23,7 @@ NATIVE = re.compile(r"&\s+(?:docker|podman|wsl|schtasks)\b|&\s+\$[A-Za-z]*(?:Doc
 REDIRECT = re.compile(r"(?<![\w/])(?:2>\s*(?:\$null|&1)|\*>\s*\$null)")
 GUARD = "ErrorActionPreference = 'Continue'"
 WINDOW = 4  # the guard may sit a few lines above a continued command, or in the enclosing block
-# Fixed in another branch (Invoke-ApplySkill, the `apply_request.py` call): one site, taken out here
-# so that the two branches never touch the same line. Remove this entry once that fix is in.
-PENDING_ELSEWHERE = ("apply_request.py",)
+
 
 
 def _unguarded(name):
@@ -33,7 +31,7 @@ def _unguarded(name):
     found = []
     for index, line in enumerate(lines):
         code = line.split("#", 1)[0] if line.lstrip().startswith("#") else line
-        if not (NATIVE.search(code) and REDIRECT.search(code)) or any(mark in code for mark in PENDING_ELSEWHERE):
+        if not (NATIVE.search(code) and REDIRECT.search(code)):
             continue
         context = lines[max(0, index - WINDOW): index + 1]
         if not any(GUARD in text or "$previousPreference" in text for text in context):

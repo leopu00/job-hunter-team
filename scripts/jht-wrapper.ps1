@@ -1078,6 +1078,9 @@ function Test-BrokerUp {
 
 # L'host amministra il broker con exec di jht-broker-admin; un segreto passa
 # solo su stdin ($InputText), mai negli argomenti.
+# I chiamanti passano SEMPRE -AdminArgs per nome (come Invoke-TelegramAdmin): InputText e' il primo
+# parametro posizionale, e `Invoke-BrokerAdmin secrets status` gli darebbe 'secrets' lasciando al
+# broker il solo 'status'.
 function Invoke-BrokerAdmin {
   param([string]$InputText = $null, [Parameter(ValueFromRemainingArguments)] [string[]]$AdminArgs)
   $brokerId = Get-RunningComposeServiceId $BrokerContainer
@@ -1088,7 +1091,10 @@ function Invoke-BrokerAdmin {
   }
   # Out-Host: la risposta JSON va a chi ha lanciato jht, non nel valore di
   # ritorno della funzione (che e' solo il codice d'uscita).
-  if ($null -ne $InputText) {
+  # [string] trasforma $null in "": senza ContainsKey ogni chiamata, anche `apply account` o
+  # `secrets status`, aprirebbe lo stdin con una riga vuota. Solo un -InputText passato davvero
+  # (anche vuoto, come in `apply record`) lo apre.
+  if ($PSBoundParameters.ContainsKey('InputText')) {
     # Una password con caratteri non ASCII arriverebbe come '?' con la
     # codifica di default di Windows PowerShell 5.1.
     $previousEncoding = $OutputEncoding
@@ -1126,7 +1132,9 @@ function Invoke-ApplySkill {
   try {
     # Tutte le righe, poi l'ultima: con `| Select-Object -First 1` $LASTEXITCODE
     # non e' piu' quello di docker.
-    $lines = @(& docker exec $ContainerId python3 /app/shared/skills/apply_request.py @SkillArgs --host 2>$null)
+    # Under 'Stop' Windows PowerShell 5.1 turns the first line of a redirected stderr into an error:
+    # the redirection lives inside a scope where the preference is 'Continue'.
+    $lines = @(& { $ErrorActionPreference = 'Continue'; & docker exec $ContainerId python3 /app/shared/skills/apply_request.py @SkillArgs --host 2>$null })
   } finally {
     [Console]::OutputEncoding = $previous
   }
@@ -1197,7 +1205,7 @@ function Invoke-ApplyHostCommand {
     Write-Err "Risposta del container non valida: autorizzazione ritirata, niente partira'."
     return 1
   }
-  $recorded = Invoke-BrokerAdmin -InputText '' apply record $id $instant $destination
+  $recorded = Invoke-BrokerAdmin -InputText '' -AdminArgs @('apply', 'record', $id, $instant, $destination)
   if ($recorded -ne 0) {
     $null = Invoke-ApplySkill $containerId @('cancel', $id)
     Write-Err "Il broker non ha registrato l'autorizzazione: ritirata, niente partira'."
@@ -1983,7 +1991,7 @@ function Invoke-MailSetup {
   $adminArgs = @('mailbox', 'setup', '--user', $user, '--admission', $admission)
   if ($imapHost) { $adminArgs += @('--imap-host', $imapHost) }
   if ($smtpHost) { $adminArgs += @('--smtp-host', $smtpHost) }
-  $code = Invoke-BrokerAdmin -InputText $password @adminArgs
+  $code = Invoke-BrokerAdmin -InputText $password -AdminArgs $adminArgs
   $password = $null
   return $code
 }
@@ -1994,13 +2002,13 @@ function Invoke-MailCommand {
   $rest = if ($MailArgs.Count -gt 1) { $MailArgs[1..($MailArgs.Count - 1)] } else { @() }
   switch ($action) {
     'setup' { return Invoke-MailSetup $rest }
-    'status' { $c = Invoke-BrokerAdmin secrets status; if ($c -ne 0) { return $c }; return Invoke-BrokerAdmin mailbox show }
-    'admission' { return Invoke-BrokerAdmin mailbox admission @rest }
-    'allow' { return Invoke-BrokerAdmin mailbox allow @rest }
-    'drafts' { return Invoke-BrokerAdmin mail drafts }
-    { $_ -in @('approve', 'discard') } { return Invoke-BrokerAdmin mail $action @rest }
-    'journal' { return Invoke-BrokerAdmin mail journal @rest }
-    'delete' { return Invoke-BrokerAdmin secrets delete email_monitor }
+    'status' { $c = Invoke-BrokerAdmin -AdminArgs @('secrets', 'status'); if ($c -ne 0) { return $c }; return Invoke-BrokerAdmin -AdminArgs @('mailbox', 'show') }
+    'admission' { return Invoke-BrokerAdmin -AdminArgs (@('mailbox', 'admission') + @($rest)) }
+    'allow' { return Invoke-BrokerAdmin -AdminArgs (@('mailbox', 'allow') + @($rest)) }
+    'drafts' { return Invoke-BrokerAdmin -AdminArgs @('mail', 'drafts') }
+    { $_ -in @('approve', 'discard') } { return Invoke-BrokerAdmin -AdminArgs (@('mail', $action) + @($rest)) }
+    'journal' { return Invoke-BrokerAdmin -AdminArgs (@('mail', 'journal') + @($rest)) }
+    'delete' { return Invoke-BrokerAdmin -AdminArgs @('secrets', 'delete', 'email_monitor') }
     'migrate' {
       $code = Invoke-BrokerMigrateLegacy
       if ($code -eq 0) { New-Item -ItemType File -Path $BrokerLegacyMarker -Force -ErrorAction SilentlyContinue | Out-Null }
