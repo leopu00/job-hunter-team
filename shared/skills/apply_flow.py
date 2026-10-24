@@ -1104,6 +1104,23 @@ def _default_cap_reserver(*, position_id: int, db_path: str | Path | None):
         return _DeniedVerdict("cap_unreadable", f"the daily cap could not be reserved ({type(exc).__name__})")
 
 
+def _default_authorisation_claimer(*, position_id: int, url: str):
+    """The broker's authorisation for this send, spent once, for the page's destination."""
+    try:
+        from apply_gate import claim_verdict
+    except ImportError:
+        try:
+            from shared.skills.apply_gate import claim_verdict
+        except ImportError:
+            return _DeniedVerdict("gate_missing", "shared/skills/apply_gate.py is unavailable; submission is closed")
+    try:
+        return claim_verdict(position_id, url=url)
+    except Exception as exc:
+        return _DeniedVerdict(
+            "authorisation_unproven", f"the broker could not give the authorisation ({type(exc).__name__})"
+        )
+
+
 def _resolve_db_path(db_path: str | Path | None) -> Path:
     if db_path:
         return Path(db_path)
@@ -3288,6 +3305,7 @@ class ApplicationFlow:
         applied_recorder: Callable[..., None] | None = None,
         essentials_checker: Callable[..., list[str]] | None = None,
         cap_reserver: Callable[..., Any] | None = None,
+        authorisation_claimer: Callable[..., Any] | None = None,
         cv_checker: Callable[[Path], Mapping[str, Any]] | None = None,
         cv_previewer: Callable[[Path, Path], None] | None = None,
         code_notifier: Callable[..., str] | None = None,
@@ -3316,6 +3334,7 @@ class ApplicationFlow:
         self.applied_recorder = applied_recorder or _default_applied_recorder
         self.essentials_checker = essentials_checker or _default_essentials_checker
         self.cap_reserver = cap_reserver or _default_cap_reserver
+        self.authorisation_claimer = authorisation_claimer or _default_authorisation_claimer
         self.cv_checker = cv_checker or _default_cv_checker
         self.cv_previewer = cv_previewer or _default_cv_previewer
         # LinkedIn's login code request; None = the module's own jht-notify-user call.
@@ -5214,6 +5233,19 @@ class ApplicationFlow:
                     slot = _DeniedVerdict("cap_unreadable", f"the daily cap could not be reserved ({type(exc).__name__})")
                 if getattr(slot, "allowed", None) is not True:
                     return self._deny(checkpoint, slot, page=active_page)
+
+                # The broker gives the person's authorisation once, for the site the page is on
+                # now, after every redirect: the click goes only where the person saw it would go.
+                try:
+                    claim = self.authorisation_claimer(position_id=self.position_id, url=active_page.url)
+                except Exception as exc:
+                    claim = _DeniedVerdict(
+                        "authorisation_unproven",
+                        f"the broker could not give the authorisation ({type(exc).__name__})",
+                    )
+                if getattr(claim, "allowed", None) is not True:
+                    self._release_cap_slot(slot)
+                    return self._deny(checkpoint, claim, page=active_page)
 
                 checkpoint.state = "submit"
                 checkpoint.submit_started = True

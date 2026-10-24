@@ -26,10 +26,13 @@ refused (`reason` says why), 2 = usage or database error.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import sys
+import unicodedata
 from datetime import datetime, timedelta, timezone
+from urllib.parse import urlsplit
 
 from _db import ensure_schema, get_db
 from apply_gate import USER_REQUEST_ORIGINS, _parse_instant, application_queue, toggle_verdict
@@ -60,6 +63,37 @@ def _describe(row) -> dict:
     }
 
 
+SHOWN_FIELD_MAX = 80
+
+
+def _shown(value, limit: int = SHOWN_FIELD_MAX) -> str:
+    """A field as the person is shown it: no control, hiding or reordering characters, one
+    line, at most `limit` characters. The text comes from the agents' database."""
+    from external_content import INVISIBLE_COMMANDS, WRITING_INVISIBLES
+
+    text = "".join(
+        " " if ch.isspace() else ch for ch in str(value or "")
+        if ch.isspace() or ch not in INVISIBLE_COMMANDS
+        and (unicodedata.category(ch) not in ("Cc", "Cf", "Cs", "Co", "Zl", "Zp") or ch in WRITING_INVISIBLES)
+    )
+    text = " ".join(text.split())
+    return text if len(text) <= limit else text[: limit - 1] + "…"
+
+
+def preview(row) -> dict:
+    """What the person confirms: «title @ company · host», the destination the broker will bind
+    the authorisation to, and `confirm`, the digest of exactly that. A confirmation carries the
+    digest back: if the position changed in between, it confirms nothing."""
+    import apply_notary
+
+    url = str(row["url"] or "")
+    destination = apply_notary.destination_of_url(url)
+    host = (urlsplit(url).hostname or "") if destination else ""
+    summary = f"{_shown(row['title'])} @ {_shown(row['company'])} · {host}"
+    digest = hashlib.sha256(json.dumps([row["id"], url, summary], ensure_ascii=False).encode("utf-8")).hexdigest()
+    return {"summary": summary, "destination": destination, "confirm": digest}
+
+
 def _next_instant(previous) -> str:
     """Now in UTC, and strictly after the previous authorisation.
 
@@ -75,7 +109,7 @@ def _next_instant(previous) -> str:
     return now.strftime("%Y-%m-%dT%H:%M:%S.") + f"{now.microsecond // 1000:03d}Z"
 
 
-def write_authorisation(conn, pid: int, requested: bool, origin: str) -> str:
+def write_authorisation(conn, pid: int, requested: bool, origin: str, *, instant: str | None = None) -> str:
     """Write the flag, its instant and its author. The caller holds the transaction
     and has already asked `toggle_verdict`.
 
@@ -88,7 +122,14 @@ def write_authorisation(conn, pid: int, requested: bool, origin: str) -> str:
     previous = conn.execute(
         "SELECT apply_requested_at FROM positions WHERE id = ?", (pid,)
     ).fetchone()
-    at = _next_instant(previous[0] if previous else None)
+    if instant is None:
+        at = _next_instant(previous[0] if previous else None)
+    else:
+        parsed = _parse_instant(instant)
+        previous_at = _parse_instant(previous[0] if previous else None)
+        if parsed is None or (previous_at is not None and parsed <= previous_at):
+            raise ValueError("authorisation instant is not newer")
+        at = instant
     conn.execute(
         "UPDATE positions "
         "   SET apply_requested = ?, "
@@ -166,11 +207,18 @@ def show(pid: int) -> tuple[dict, int]:
         "reason": verdict.reason,
         "detail": verdict.detail,
         **_describe(row),
+        **(preview(row) if row is not None else {}),
     }
+    if out["ok"] and row is not None and out.get("destination") is None:
+        out.update(ok=False, reason="destination_invalid",
+                   detail="the position's URL names no place an authorisation can be bound to")
     return out, 0 if row is not None else 1
 
 
-def toggle(pid: int, requested: bool) -> tuple[dict, int]:
+def toggle(pid: int, requested: bool, expect: str | None = None) -> tuple[dict, int]:
+    """Write the flag. Authorising needs `expect`, the `confirm` of the preview the person saw:
+    the flag is what the pages show, and the broker records the authorisation from the
+    person's own channel with the destination of that same preview."""
     action = "request" if requested else "cancel"
     conn = get_db()
     try:
@@ -178,6 +226,17 @@ def toggle(pid: int, requested: bool) -> tuple[dict, int]:
         conn.execute("BEGIN IMMEDIATE")
         verdict = toggle_verdict(pid, requested, conn)
         row = _position(conn, pid)
+        if verdict.allowed and requested and row is not None:
+            shown = preview(row)
+            if shown["destination"] is None:
+                verdict = type(verdict)(False, "destination_invalid",
+                                        "the position's URL names no place an authorisation can be bound to")
+            elif expect is None:
+                verdict = type(verdict)(False, "confirmation_required",
+                                        "authorising needs the confirmation of the preview the person saw")
+            elif expect != shown["confirm"]:
+                verdict = type(verdict)(False, "position_changed",
+                                        "the position is not the one the confirmation was given for")
         if not verdict.allowed:
             conn.rollback()
             return {
@@ -221,6 +280,15 @@ def toggle(pid: int, requested: bool) -> tuple[dict, int]:
         **_describe(after),
     }
     if requested:
+        out["destination"] = preview(after)["destination"]
+    else:
+        # The broker's register narrows too, from here: withdrawing needs no proof.
+        import apply_notary
+
+        instant = after["apply_requested_at"] if previous else _next_instant(after["apply_requested_at"])
+        done, status = apply_notary.revoke(pid, instant)
+        out["broker"] = status if done else f"unreachable:{status}"
+    if requested:
         out["queue"] = _queue_summary()
         out["closer_woken"] = _wake_closer() if out["queue"].get("ready") else False
     return out, 0
@@ -263,6 +331,9 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Authorise or withdraw one application (user_local).")
     parser.add_argument("action", choices=("show", "request", "cancel"))
     parser.add_argument("position_id", type=int)
+    parser.add_argument("--expect", help="the `confirm` of the preview the person confirmed (request)")
+    parser.add_argument("--host", action="store_true",
+                        help="one tab-separated line of closed fields, for the host's `jht apply`")
     args = parser.parse_args(argv)
     if args.action != "show":
         agent = _agent_caller()
@@ -279,11 +350,31 @@ def main(argv: list[str] | None = None) -> int:
         if args.action == "show":
             out, code = show(args.position_id)
         else:
-            out, code = toggle(args.position_id, args.action == "request")
+            out, code = toggle(args.position_id, args.action == "request", args.expect)
     except Exception as err:
         out, code = {"ok": False, "action": args.action, "reason": "db_error", "detail": str(err)}, 2
-    print(json.dumps(out, ensure_ascii=False))
+    print(_host_line(out) if args.host else json.dumps(out, ensure_ascii=False))
     return code
+
+
+def _host_line(out: dict) -> str:
+    """ok, reason, confirm, destination, instant, summary: tab-separated, every field closed
+    (a code, a digest, a closed destination, the box's instant) or already shown-safe (the
+    summary, one line with no control characters). The host's shell reads it with no parser."""
+    def closed(value, allowed: str) -> str:
+        text = str(value or "")
+        return text if text and all(ch in allowed for ch in text) and len(text) <= 300 else "-"
+
+    code = "abcdefghijklmnopqrstuvwxyz0123456789_"
+    fields = [
+        "1" if out.get("ok") else "0",
+        closed(out.get("reason"), code),
+        closed(out.get("confirm"), "0123456789abcdef"),
+        closed(out.get("destination"), code + ".-:"),
+        closed(out.get("apply_requested_at") if out.get("action") == "request" else "", "0123456789-T:.Z"),
+        _shown(out.get("summary"), 200).replace("\t", " ") or "-",
+    ]
+    return "\t".join(fields)
 
 
 if __name__ == "__main__":

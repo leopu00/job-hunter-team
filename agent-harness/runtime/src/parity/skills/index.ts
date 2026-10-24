@@ -14,7 +14,7 @@ import type { Database } from "../../db/jobs-db.ts";
 import { dbPolicyFor, roleOf } from "../../db/role-policy.ts";
 import { createDbTools } from "../../db/tools.ts";
 import type { ToolHandler } from "../../tools/registry.ts";
-import { createApplicationAnswersTool, createApplyGateTool, createCvLayoutHold } from "./closer.ts";
+import { createApplicationAnswersTool, createApplyGateTool, createBrokerNotary, createCvLayoutHold } from "./closer.ts";
 import { createEmailMonitorTool } from "./email-monitor.ts";
 import { createFeedbackQueryTool } from "./feedback-query.ts";
 import { createCaptainTools } from "./captain.ts";
@@ -202,7 +202,7 @@ export function createSkillTools(options: SkillToolsOptions): ToolHandler[] {
     // The CV folders only: the deliverables' `cv/`, where the SCRITTORE renders,
     // and the hub's own (the JHT home holds the person's credentials).
     const cvRoots = [...(options.userDir ? [join(options.userDir, "cv")] : []), ...(options.cvDirs ?? [])];
-    const closer = { db: db.open, jhtHome, profileDir: options.profileDir ?? join(jhtHome, "profile"), cvRoots, cvLayout: createCvLayoutHold() };
+    const closer = { db: db.open, jhtHome, profileDir: options.profileDir ?? join(jhtHome, "profile"), cvRoots, cvLayout: createCvLayoutHold(), notary: createBrokerNotary() };
     if (listed.has("apply-authorization") || scripts.has("apply_gate")) tools.push(createApplyGateTool(closer));
     if (listed.has("apply-flow")) tools.push(createApplicationAnswersTool(closer));
   }

@@ -34,6 +34,7 @@
  * are refused, not ignored.
  */
 
+import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -91,7 +92,51 @@ export interface CloserOptions {
    * see `resolveFile`.
    */
   cvRoots?: readonly string[];
+  /**
+   * The broker's register of authorisations (`apply_notary.call`): the flag in the database is
+   * written where the agents can write too, so a position is authorised only if the broker holds
+   * it. The runtime passes `createBrokerNotary()`. The default answers `broker_unavailable` for
+   * every position, so a gate built without the broker can never wave one through.
+   */
+  notary?: NotaryCall;
   now?: () => Date;
+}
+
+/** One request to the broker: its answer as `json.loads` gives it, or a fixed code. */
+export type NotaryCall = (op: string, args: Dict) => unknown;
+
+const NO_BROKER: NotaryCall = () => ({ ok: false, reason: "broker_unavailable" });
+const NOTARY_CODE = /^[a-z][a-z0-9_]{0,63}$/;
+
+/** `apply_notary.call` through the broker's own client (`jht-broker <op> <json>`). */
+export function createBrokerNotary(command = "jht-broker"): NotaryCall {
+  return (op, args) => {
+    const run = spawnSync(command, [op, JSON.stringify(args)], { encoding: "utf8", timeout: 15_000 });
+    if (run.error !== undefined) return { ok: false, reason: (run.error as NodeJS.ErrnoException).code === "ENOENT" ? "broker_client_missing" : "broker_unreachable" };
+    const line = (run.stdout ?? "").split("\n")[0] ?? "";
+    try {
+      return JSON.parse(line) as unknown;
+    } catch {
+      return { ok: false, reason: "broker_bad_answer" };
+    }
+  };
+}
+
+/** `apply_notary.check`: (proven, reason, what the broker holds). Read only. */
+function notaryCheck(notary: NotaryCall, pid: number): { proven: boolean; why: string; destination: unknown } {
+  let answer: unknown;
+  try {
+    answer = notary("apply.check", { position_id: pid });
+  } catch {
+    answer = { ok: false, reason: "broker_unreachable" };
+  }
+  const dict = isDict(answer) ? answer : {};
+  if (dict["ok"] !== true) {
+    const reason = dict["reason"];
+    return { proven: false, why: typeof reason === "string" && NOTARY_CODE.test(reason) ? reason : "broker_bad_answer", destination: null };
+  }
+  if (dict["proven"] !== true) return { proven: false, why: "not_authorised", destination: null };
+  return { proven: true, why: "proven", destination: typeof dict["destination"] === "string" ? dict["destination"] : null };
 }
 
 const RULE_COPY = fileURLToPath(new URL("./apply-request-rule.json", import.meta.url));
@@ -479,7 +524,7 @@ interface PositionRow {
  * comes first, and the order is the point: the flag stays on after a send, so
  * a flag is not evidence that another letter was asked for.
  */
-function positionVerdict(db: Database, rule: Rule, rulePath: string, pid: number): Verdict {
+function positionVerdict(db: Database, rule: Rule, rulePath: string, pid: number, notary: NotaryCall): Verdict {
   if (pid <= 0) return verdict(false, "position_id_invalid", "position id is not a positive integer", { position_id: pid });
   if (rule.error) {
     return verdict(false, "rule_unavailable", `the authorisation rule cannot be read: ${rule.error}`, { position_id: pid, path: rulePath });
@@ -531,7 +576,16 @@ function positionVerdict(db: Database, rule: Rule, rulePath: string, pid: number
       { position_id: pid, by: pyReprValue(by) },
     );
   }
-  return verdict(true, "position_authorised", "the user authorised this position", { position_id: pid, status, by, at });
+  const held = notaryCheck(notary, pid);
+  if (!held.proven) {
+    return verdict(
+      false,
+      "authorisation_unproven",
+      `the broker does not hold an authorisation for this position (${held.why}): the flag alone is not one, so nothing goes out`,
+      { position_id: pid, broker: held.why },
+    );
+  }
+  return verdict(true, "position_authorised", "the user authorised this position", { position_id: pid, status, by, at, destination: held.destination });
 }
 
 /** `apply_verdict`: consent AND authorisation, in that order. */
@@ -539,7 +593,7 @@ export function applyVerdict(options: CloserOptions, pid: number): Verdict {
   const consent = consentVerdict(options);
   if (!consent.allowed) return verdict(false, consent.reason, consent.detail, { ...consent.context, position_id: pid });
   const rulePath = options.rulePath ?? RULE_COPY;
-  const p = positionVerdict(options.db(), loadRule(rulePath), rulePath, pid);
+  const p = positionVerdict(options.db(), loadRule(rulePath), rulePath, pid, options.notary ?? NO_BROKER);
   if (!p.allowed) return p;
   return verdict(true, "apply_allowed", "consent granted and position authorised by the user", {
     ...p.context,
@@ -801,7 +855,7 @@ export function applicationQueue(options: CloserOptions): { queue: Queue; stderr
   const webCap = out.max_web_per_day as number | null;
   let webTaken = 0;
   for (const { id: pid, url, apply_requested_at: askedAt, cv_pdf_path: cvPdf, apply_requested_by: origin } of rows) {
-    const v = positionVerdict(db, rule, rulePath, pid);
+    const v = positionVerdict(db, rule, rulePath, pid, options.notary ?? NO_BROKER);
     if (!v.allowed) {
       held.push({ position_id: pid, reason: v.reason });
       continue;
@@ -940,6 +994,7 @@ function emit(v: Verdict, asJson: boolean): ScriptResult {
 }
 
 const WEB_CAP_NOTICE_MARKER = "apply-web-cap-notified";
+const AUTHORISATION_UNPROVEN_NOTICE_MARKER = "apply-authorisation-unproven-notified.json";
 
 /**
  * `web_cap_notice`: the one notice a day that applications authorised from the
@@ -969,6 +1024,49 @@ export function webCapNotice(q: Queue, options: CloserOptions, today?: string): 
   return { waiting, max_web_per_day: q.max_web_per_day as number | null };
 }
 
+/**
+ * `authorisation_unproven_notices`: each (position, flag instant) that the
+ * broker does not hold is announced once.  The marker is written before the
+ * queue hands the notice over, so a polling CLOSER cannot repeat it forever;
+ * a newer flag instant is a new choice and earns one new notice.
+ */
+export function authorisationUnprovenNotices(q: Queue, options: CloserOptions): Array<{ position_id: number; apply_requested_at: string }> {
+  const ids = q.held.filter((h) => h.reason === "authorisation_unproven").map((h) => h.position_id).filter((id) => Number.isInteger(id) && id > 0);
+  if (ids.length === 0) return [];
+  let rows: Array<{ id: unknown; apply_requested_at: unknown }>;
+  try {
+    rows = options.db().prepare(`SELECT id, apply_requested_at FROM positions WHERE id IN (${ids.map(() => "?").join(",")})`).all(...ids) as typeof rows;
+  } catch {
+    return [];
+  }
+  const instants = new Map(rows.map((row) => [Number(row.id), pyStrValue(row.apply_requested_at ?? "")]));
+  const candidates = ids.flatMap((position_id) => {
+    const apply_requested_at = instants.get(position_id) ?? "";
+    return apply_requested_at ? [{ position_id, apply_requested_at }] : [];
+  });
+  if (candidates.length === 0) return [];
+  const marker = pyPath(options.jhtHome, "state", AUTHORISATION_UNPROVEN_NOTICE_MARKER);
+  let recorded: string[];
+  try {
+    const parsed: unknown = JSON.parse(readFileSync(marker, "utf8"));
+    if (!Array.isArray(parsed) || parsed.some((key) => typeof key !== "string")) return [];
+    recorded = parsed;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") return [];
+    recorded = [];
+  }
+  const known = new Set(recorded);
+  const fresh = candidates.filter((item) => !known.has(`${item.position_id}:${item.apply_requested_at}`));
+  if (fresh.length === 0) return [];
+  try {
+    mkdirSync(pyPath(options.jhtHome, "state"), { recursive: true });
+    writeFileSync(marker, JSON.stringify([...recorded, ...fresh.map((item) => `${item.position_id}:${item.apply_requested_at}`)]), "utf8");
+  } catch {
+    return [];
+  }
+  return fresh;
+}
+
 /** `apply_gate.py {consent,position,queue} [position_id] [--json]`. */
 export function applyGate(args: string[], options: CloserOptions): ScriptResult {
   const refusal = pathFlagRefusal("apply_gate", args, ["--db", "--config"], ["--json"]);
@@ -984,7 +1082,15 @@ export function applyGate(args: string[], options: CloserOptions): ScriptResult 
     const { queue: q, stderr } = applicationQueue(options);
     const code = q.ready ? 0 : 1;
     const notice = webCapNotice(q, options);
-    if (asJson) return { stdout: `${pyJson(notice ? { ...q, web_cap_notice: notice } : q, { ensureAscii: false })}\n`, stderr, exitCode: code };
+    const unproven = authorisationUnprovenNotices(q, options);
+    if (asJson) {
+      const withNotices = {
+        ...q,
+        ...(notice ? { web_cap_notice: notice } : {}),
+        ...(unproven.length ? { authorisation_unproven_notices: unproven } : {}),
+      };
+      return { stdout: `${pyJson(withNotices, { ensureAscii: false })}\n`, stderr, exitCode: code };
+    }
     if (q.ready) return { stdout: `[apply-gate] QUEUE ${q.reason} — ${q.detail} (remaining_today=${pyStrValue(q.remaining_today)})\n`, stderr, exitCode: 0 };
     return { stdout: "", stderr: `${stderr}[apply-gate] QUEUE ${q.reason} — ${q.detail}\n`, exitCode: 1 };
   }

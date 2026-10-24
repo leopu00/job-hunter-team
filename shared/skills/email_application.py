@@ -1241,6 +1241,17 @@ class EmailApplication:
                 context = {k: v for k, v in slot.context.items() if k in ("max_per_day", "sent_today", "remaining_today")}
                 raise _denied(slot.reason, slot.detail, gate_reason=slot.reason, **context)
             token = str(slot.context["token"])
+            # The broker gives the person's authorisation once, for the mailbox domain the
+            # letter goes to: every recipient must be at that one place.
+            places = {apply_gate._notary().destination_of_address(r) for r in draft["recipients"]}
+            claim = (
+                apply_gate.claim_verdict(self.position_id, address=draft["recipients"][0])
+                if len(places) == 1 and None not in places
+                else apply_gate.Verdict(False, "destination_invalid", "the recipients are not at one closed destination")
+            )
+            if not claim.allowed:
+                apply_gate.release_daily_slot(token, db_path=str(self.db_path))
+                raise _denied(claim.reason, claim.detail, gate_reason=claim.reason)
             try:
                 self._mark_send_started(draft["idempotency_key"])
             except BaseException:

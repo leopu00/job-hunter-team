@@ -422,10 +422,15 @@ def test_a_forged_runtime_caller_learns_nothing_from_the_content_of_a_file(broke
     assert answers == [{"ok": False, "reason": "unknown_operation"}] * 3
 
 
-def test_the_broker_takes_no_descriptor_and_has_no_exposure_operation():
+def test_the_broker_takes_no_descriptor_or_exposure_operation():
     from broker import client, protocol, server
 
-    assert set(protocol.OPERATIONS) == {"mail.status", "mail.count", "mail.poll", "mail.send"}
+    assert set(protocol.OPERATIONS) == {
+        "mail.status", "mail.count", "mail.poll", "mail.send",
+        # The application notary can only read or narrow a record.  Its
+        # authorising write remains the host-only broker-admin operation.
+        "apply.check", "apply.claim", "apply.revoke",
+    }
     for module in (protocol, server, client):
         source = Path(module.__file__).read_text(encoding="utf-8")
         assert "legacy_exposed" not in source and "recv_fds" not in source and "send_fds" not in source

@@ -156,6 +156,8 @@ export function refusalText(t: Translate, error: string | null): string | null {
   if (error === "position_not_ready") return t("refused_position_not_ready");
   if (error === "reauth_required") return t("refused_reauth_required");
   if (error === "rate_limited") return t("refused_rate_limited");
+  if (error === "apply_authorisation_unrecorded") return t("refused_unrecorded");
+  if (error === "position_changed" || error === "confirmation_required") return t("refused_position_changed");
   if (
     error === "confirm_expired" ||
     error === "confirm_used" ||

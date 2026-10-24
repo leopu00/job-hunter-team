@@ -88,19 +88,39 @@ describe("the six judgement routes go to the VPS of a team connected in full", (
     expect(none).toEqual([]);
   });
 
-  it("apply-request: only with the dialog's confirmation; withdrawing needs none", async () => {
-    const { call, writes } = setup();
-    const unconfirmed = await call("/api/positions/5/apply-request", "POST");
-    expect(unconfirmed).toEqual({ status: 400, body: { error: "position_write_not_confirmed" } });
-    expect(writes).toEqual([]);
-    const authorised = await call("/api/positions/5/apply-request", "POST", { confirmed: true });
-    expect(authorised.body).toMatchObject({ apply_requested: true, source: "vps" });
+  it("apply-request: the preview first, then the confirmation of exactly that; withdrawing needs none", async () => {
+    const DIGEST = "ab".repeat(32);
+    const { call, writes } = setup({
+      reply: (request) =>
+        request.op === "apply_preview"
+          ? { ok: true, summary: "Synthetic role @ Synthetic company · jobs.example.com", confirm: DIGEST, destination: "web:example.com" }
+          : { ok: true, op: request.op, id: Number(request.id) },
+    });
+    // the dialog's first step: what the team would apply to, and nothing is written
+    const preview = await call("/api/positions/5/apply-request", "POST", {});
+    expect(preview.body).toEqual({
+      ok: true, state: "awaiting_confirm", id: DIGEST, summary: "Synthetic role @ Synthetic company · jobs.example.com", expiresAt: null, source: "vps",
+    });
+    // the old one-step body, and a confirmation that is not a digest, are not asked of the VPS
+    for (const body of [{ confirmed: true }, { confirmId: "x'; reboot" }, { confirmId: DIGEST.toUpperCase() }]) {
+      expect(await call("/api/positions/5/apply-request", "POST", body)).toEqual({ status: 400, body: { error: "position_write_not_confirmed" } });
+    }
+    const authorised = await call("/api/positions/5/apply-request", "POST", { confirmId: DIGEST });
+    expect(authorised.body).toMatchObject({ ok: true, state: "queued", apply_requested: true, source: "vps" });
     const withdrawn = await call("/api/positions/5/apply-request", "DELETE");
-    expect(withdrawn.body).toMatchObject({ apply_requested: false });
+    expect(withdrawn.body).toMatchObject({ ok: true, state: "queued", apply_requested: false });
     expect(writes).toEqual([
-      { op: "apply_request", id: "5", on: true, confirmed: true, connectionKey: KEY },
+      { op: "apply_preview", id: "5", connectionKey: KEY },
+      { op: "apply_request", id: "5", on: true, confirmed: true, confirm: DIGEST, connectionKey: KEY },
       { op: "apply_request", id: "5", on: false, confirmed: false, connectionKey: KEY },
     ]);
+  });
+
+  it("apply-request: a preview the dialog could not show is no confirmation to give", async () => {
+    for (const reply of [{ ok: true, summary: "", confirm: "ab".repeat(32) }, { ok: true, summary: "x", confirm: "short" }]) {
+      const { call } = setup({ reply: () => reply });
+      expect((await call("/api/positions/5/apply-request", "POST", {})).body).toEqual({ ok: false, source: "vps" });
+    }
   });
 
   it("recheck-request: ask for a new analysis, and withdraw it", async () => {
@@ -132,7 +152,7 @@ describe("what the link does not do", () => {
 
   it("a refusal of the VPS keeps its code; one that is not a code is not shown", async () => {
     const { call } = setup({ reply: () => ({ ok: false, error: "already_submitted" }) });
-    expect(await call("/api/positions/1/apply-request", "POST", { confirmed: true })).toEqual({
+    expect(await call("/api/positions/1/apply-request", "POST", { confirmId: "ab".repeat(32) })).toEqual({
       status: 409, body: { error: "already_submitted" },
     });
     const { call: odd } = setup({ reply: () => ({ ok: false, error: "<b>no</b>" }) });

@@ -229,6 +229,10 @@ describe("the button's two steps", () => {
     [409, "confirm_used", "refused_confirm_stale"],
     [409, "already_submitted", "refused_already_submitted"],
     [409, "position_not_ready", "refused_position_not_ready"],
+    // the desktop's road to a team on a VPS: the broker did not record it, the position changed
+    [409, "apply_authorisation_unrecorded", "refused_unrecorded"],
+    [409, "position_changed", "refused_position_changed"],
+    [400, "confirmation_required", "refused_position_changed"],
   ])(
     "the refusal %s %s is said with its own sentence",
     async (status, code, key) => {

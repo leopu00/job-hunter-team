@@ -30,6 +30,24 @@ const REFRESH_TOKEN_RE = /^[A-Za-z0-9_\-.]{8,2048}$/;
 const USER_ID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+/** The authenticated refresh exchange returns this JWT; only its session id is retained. */
+function pairingSessionId(accessToken: unknown): string | null {
+  if (typeof accessToken !== "string") return null;
+  const payload = accessToken.split(".")[1];
+  if (!payload) return null;
+  try {
+    const decoded = JSON.parse(
+      Buffer.from(payload.replace(/-/g, "+").replace(/_/g, "/"), "base64").toString(
+        "utf8",
+      ),
+    ) as { session_id?: unknown };
+    const value = typeof decoded.session_id === "string" ? decoded.session_id : "";
+    return USER_ID_RE.test(value) ? value : null;
+  } catch {
+    return null;
+  }
+}
+
 /**
  * POST /api/cloud-sync/device-register
  *
@@ -121,7 +139,11 @@ export async function POST(req: NextRequest) {
       { status: 500 },
     );
   }
-  let refreshed: { user?: { id?: string }; error?: { message?: string } } = {};
+  let refreshed: {
+    user?: { id?: string };
+    access_token?: string;
+    error?: { message?: string };
+  } = {};
   try {
     const res = await fetch(
       `${supa.url}/auth/v1/token?grant_type=refresh_token`,
@@ -166,6 +188,13 @@ export async function POST(req: NextRequest) {
       { status: 403 },
     );
   }
+  const sessionId = pairingSessionId(refreshed.access_token);
+  if (!sessionId) {
+    return NextResponse.json(
+      { error: "Risposta Supabase malformata (session_id mancante)" },
+      { status: 502 },
+    );
+  }
 
   let admin;
   try {
@@ -199,6 +228,7 @@ export async function POST(req: NextRequest) {
     token_prefix: prefix,
     token_hash: hash,
     expires_at: null,
+    pairing_session_id: sessionId,
   };
   const register = (row: Record<string, unknown>) =>
     admin
