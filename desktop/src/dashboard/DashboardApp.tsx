@@ -293,6 +293,17 @@ function pairingToken(session: Session | null, submission: OnboardingSubmission)
   }));
 }
 
+/**
+ * The runtime of THIS computer is installed and nothing of the team runs (the Podman machine is off
+ * after a restart): not a failure of the saved setup. The snapshot only reads, so the provider is
+ * unknown too; the person starts the team and the app wakes the runtime first
+ * (onboarding_resume_team_start). A VPS or a saved team is not woken from here: it keeps the refusal.
+ */
+function resumedRuntimeStopped(snapshot: OnboardingRuntimeSnapshot): OnboardingRuntimeState | null {
+  if (!snapshot.runtimeInstalled || snapshot.containerRunning || snapshot.localHost !== true) return null;
+  return { status: "action-required", stage: "team-start", message: stateText().runtimeStopped };
+}
+
 function resumedPrerequisiteFailure(
   snapshot: OnboardingRuntimeSnapshot,
 ): OnboardingRuntimeState | null {
@@ -1143,6 +1154,11 @@ export default function DashboardApp() {
       }
       const nativeSnapshot = await resumeOnboardingSnapshot();
       if (activeIdentityKeyRef.current !== identityKey) throw new Error("account-changed");
+      const stopped = resumedRuntimeStopped(nativeSnapshot);
+      if (stopped) {
+        setRuntime(stopped);
+        return;
+      }
       const prerequisiteFailure = resumedPrerequisiteFailure(nativeSnapshot);
       if (prerequisiteFailure) {
         setRuntime(prerequisiteFailure);
@@ -1211,6 +1227,11 @@ export default function DashboardApp() {
     try {
       const nativeSnapshot = await resumeOnboardingSnapshot();
       if (activeIdentityKeyRef.current !== identityKey) throw new Error("account-changed");
+      const stopped = resumedRuntimeStopped(nativeSnapshot);
+      if (stopped) {
+        setRuntime(stopped);
+        return;
+      }
       const prerequisiteFailure = resumedPrerequisiteFailure(nativeSnapshot);
       if (prerequisiteFailure) {
         setRuntime(prerequisiteFailure);

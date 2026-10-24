@@ -75,6 +75,16 @@ describe("readTeamStatus", () => {
     expect(reading).toEqual({ kind: "read", at: 1_000, fields: { ...ALL_NO, containerRunning: true } });
   });
 
+  it("a stopped container of a host that is not this computer stays a reading, whatever else the snapshot says", async () => {
+    // the resume snapshot carries localHost only for this computer; without it, and with it, the read
+    // is the same six fields and the stopped container is shown as a reading, never turned into an error
+    for (const extra of [{}, { localHost: true }]) {
+      const read = vi.fn().mockResolvedValue({ ...ALL_NO, runtimeInstalled: true, containerRunning: false, ...extra });
+      const reading = await readTeamStatus(read, () => 5_000);
+      expect(reading).toEqual({ kind: "read", at: 5_000, fields: { ...ALL_NO, runtimeInstalled: true, containerRunning: false } });
+    }
+  });
+
   it("answers the code of a failed read, with the moment it failed", async () => {
     const reading = await readTeamStatus(vi.fn().mockRejectedValue({ code: "snapshot_failed" }), () => 2_000);
     expect(reading).toEqual({ kind: "error", at: 2_000, code: "snapshot_failed" });

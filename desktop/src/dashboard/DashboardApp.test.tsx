@@ -1917,6 +1917,68 @@ describe("DashboardApp onboarding router", () => {
     expect(screen.queryByTestId("assistant-chat")).not.toBeInTheDocument();
   });
 
+  it("a resume that finds the runtime stopped is a team to start, not a failure, and the start wakes it", async () => {
+    vi.mocked(useSession).mockReturnValue(signedInAs("stopped-runtime-account"));
+    vi.mocked(loadOnboardingGate).mockResolvedValue({
+      phase: "required",
+      account: { displayName: "Stopped Runtime" },
+      resumeAvailable: true,
+      runtime: { status: "collecting", stage: "host" },
+    });
+    // the Podman machine is off after a restart: the read-only snapshot sees an installed runtime and
+    // nothing running, the provider unknown with it
+    vi.mocked(resumeOnboardingSnapshot).mockResolvedValue({
+      ...TEAM_READY,
+      containerRunning: false,
+      providerConfigured: false,
+      providerAuthenticated: false,
+      assistantRunning: false,
+      captainRunning: false,
+      localHost: true,
+    });
+
+    const user = userEvent.setup();
+    render(<DashboardApp />);
+
+    expect(await screen.findByText("action-required:team-start")).toBeInTheDocument();
+    expect(screen.getByText(/riaccendo io il runtime/i)).toBeInTheDocument();
+    expect(screen.queryByText(/container salvato non risulta attivo/i)).not.toBeInTheDocument();
+    expect(resumeOnboardingTeamStart).not.toHaveBeenCalled();
+    expect(prepareOnboardingRuntime).not.toHaveBeenCalled();
+
+    // the person starts it: the native resume wakes the runtime and starts the team
+    await user.click(screen.getByRole("button", { name: "continue-runtime" }));
+    await waitFor(() => expect(resumeOnboardingTeamStart).toHaveBeenCalledOnce());
+  });
+
+  it("a resume of a VPS or a saved team whose container is stopped keeps the refusal: nothing here can wake it", async () => {
+    vi.mocked(useSession).mockReturnValue(signedInAs("stopped-remote-account"));
+    vi.mocked(loadOnboardingGate).mockResolvedValue({
+      phase: "required",
+      account: { displayName: "Stopped Remote" },
+      resumeAvailable: true,
+      runtime: { status: "collecting", stage: "host" },
+    });
+    // the same facts as above for a host that is not this computer: the snapshot carries no localHost
+    vi.mocked(resumeOnboardingSnapshot).mockResolvedValue({
+      ...TEAM_READY,
+      containerRunning: false,
+      providerConfigured: false,
+      providerAuthenticated: false,
+      assistantRunning: false,
+      captainRunning: false,
+    });
+
+    render(<DashboardApp />);
+
+    expect(await screen.findByText("failed:container")).toBeInTheDocument();
+    expect(screen.getByText(/container salvato non risulta attivo/i)).toBeInTheDocument();
+    expect(screen.queryByText(/riaccendo io il runtime/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "continue-runtime" })).not.toBeInTheDocument();
+    expect(resumeOnboardingTeamStart).not.toHaveBeenCalled();
+    expect(prepareOnboardingRuntime).not.toHaveBeenCalled();
+  });
+
   it("keeps a local-profile resume probe-only until an explicit team action", async () => {
     vi.mocked(useSession).mockReturnValue({ session: null, loading: false });
     vi.mocked(localIdentitySelected).mockReturnValue(true);
