@@ -56,6 +56,17 @@ describe("the team's hours and models page", () => {
     expect(await screen.findByTestId("team-settings-intro")).toHaveTextContent("for the team on the VPS");
   });
 
+  it("does not tell the person the preview needs an active container, which is not true here", async () => {
+    // the picker says it only when the team has hours set and no preview came
+    native.invoke.mockImplementation(async () =>
+      reply({ working_hours: { timezone: "Europe/Rome", windows: [{ days: ["mon", "tue", "wed", "thu", "fri"], start: "09:00", end: "18:00" }] } }),
+    );
+    render(<TeamSettingsPage {...props} />);
+    // the picker has read the hours (its weekly distribution is drawn) before the note could show
+    await waitFor(() => expect(screen.getAllByText("Mon").length).toBeGreaterThan(0));
+    expect(screen.queryByText(/Preview available only/)).toBeNull();
+  });
+
   it("sends only the role that changed with the key the read gave, and shows what the team answers", async () => {
     const user = userEvent.setup();
     native.invoke.mockImplementation(async (_command: string, args: { request: Record<string, unknown> }) =>

@@ -94,6 +94,8 @@ function TeamSettings() {
               workingHours: loaded.settings.workingHours,
               save: (next) => save({ workingHours: next }),
               sentMessage: t.saved,
+              // the picker's note says the preview needs a container; here the preview is not offered yet
+              hidePreviewNote: true,
             }}
           />
           {/* mounted again with what the team answered, so the form always shows the values read back */}

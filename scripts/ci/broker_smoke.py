@@ -74,7 +74,8 @@ def main(argv: list[str]) -> int:
         return 2
     image = argv[0]
     tag = uuid.uuid4().hex[:8]
-    vols = {"secrets": f"jhtbs-sec-{tag}", "state": f"jhtbs-st-{tag}", "sock": f"jhtbs-sock-{tag}"}
+    vols = {"secrets": f"jhtbs-sec-{tag}", "state": f"jhtbs-st-{tag}", "sock": f"jhtbs-sock-{tag}",
+            "telegram_sock": f"jhtbs-tgsock-{tag}"}
     broker = f"jhtbs-broker-{tag}"
     fails = 0
 
@@ -88,6 +89,8 @@ def main(argv: list[str]) -> int:
                "--network", "none",
                "-v", f"{vols['secrets']}:/jht_secrets", "-v", f"{vols['state']}:/jht_broker_state",
                "-v", f"{vols['sock']}:/run/jht-broker",
+               # The Telegram channel's socket lives on its own volume, as in docker-compose.yml.
+               "-v", f"{vols['telegram_sock']}:/run/jht-broker-telegram",
                "--entrypoint", "/usr/bin/tini", image, "-g", "--", "/usr/local/bin/jht-broker", "serve")
         for _ in range(60):
             logs = docker("logs", broker, check=False)
