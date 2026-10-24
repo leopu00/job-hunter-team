@@ -126,6 +126,7 @@ def box(tmp_path):
         "JHT_HOME": str(home),
         "JHT_EXTERNAL_CONTENT_NONCE": NONCE,
         "JHT_CHAT_PROMPT_WAIT": "0",
+        "JHT_CHAT_BUSY_WAIT": "0",
         "PYTHONDONTWRITEBYTECODE": "1",
     }
     env.pop("TMUX", None)
@@ -850,18 +851,31 @@ def test_composer_text_is_only_the_box_contents_and_never_the_border_or_hint():
     assert module.composer_text(codex) == "first line"
 
 
-def test_an_unrecognised_running_turn_is_still_writable(box):
+@pytest.mark.parametrize("screen", [
+    "✻ Pondering… (12s · esc to interrupt)\n", RUNNING, RUNNING_CODEX,
+], ids=["unrecognised-form", "claude-empty-composer", "codex-empty-composer"])
+def test_nothing_is_pasted_while_the_agent_works_and_nothing_is_left_behind(box, screen):
     box.stub_delivery()
-    (box.state / "screen").write_text("✻ Pondering… (12s · esc to interrupt)\n", encoding="utf-8")
-    code, receipt = box.run("send", "capitano", "id-21", stdin="ci sei?")
+    (box.state / "screen").write_text(screen, encoding="utf-8")
+    code, answer = box.run("send", "capitano", "id-working", stdin="ci sei?")
+    assert (code, answer) == (124, {"error": "agent_busy"})
+    _nothing_happened(box)
+    assert "composer" not in {p.name for p in box.state.iterdir()}, "no text of ours in the composer"
+
+
+def test_a_turn_that_ends_within_the_wait_is_delivered_once_the_agent_is_idle(box):
+    import threading
+    import time as _time
+    box.stub_delivery()
+    screen = box.state / "screen"
+    screen.write_text(RUNNING_CODEX, encoding="utf-8")
+    threading.Timer(1.5, lambda: screen.write_text(READY_CODEX, encoding="utf-8")).start()
+    started = _time.monotonic()
+    code, receipt = box.run("send", "capitano", "id-wait-idle", stdin="ci sei?",
+                            JHT_CHAT_BUSY_WAIT="20", JHT_CHAT_PROMPT_POLL="0.2")
     assert code == 0 and receipt["taken"] is True
-
-
-def test_a_running_turn_with_an_empty_composer_is_delivered(box):
-    box.stub_delivery()
-    (box.state / "screen").write_text(RUNNING, encoding="utf-8")
-    code, receipt = box.run("send", "capitano", "id-running", stdin="ci sei?")
-    assert code == 0 and receipt["accepted"] is True
+    assert 1.0 < _time.monotonic() - started < 15, "it waited for the end of the turn, not the whole cap"
+    assert box.envelopes() == ["[@utente -> @capitano] [CHAT] ci sei?"]
 
 
 def test_a_pane_that_cannot_be_read_is_agent_unavailable_with_nothing_written(box):

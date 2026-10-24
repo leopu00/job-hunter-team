@@ -26,8 +26,9 @@ screen of the terminal.
      nothing started (this file never starts an agent);
   4. the agent's terminal must show an empty composer. A menu, sign-in,
      permission question or text already typed there is a closed code; a turn
-     with an empty composer may receive the message in its queue. NOTHING is
-     typed over something that could take it as a choice or overwrite a draft;
+     in progress is waited out (JHT_CHAT_BUSY_WAIT) and, past that, answers
+     agent_busy: nothing is pasted while the agent works. NOTHING is typed
+     over something that could take it as a choice or overwrite a draft;
   5. the turn is written once per client id (a repeat is not a second line),
      and one that was written but never delivered is delivered again from the
      line already there, with no new line;
@@ -145,6 +146,9 @@ PROMPT_TAIL = 15
 DELIVERY_TIMEOUT_S = 100
 PROMPT_WAIT_S = float(os.environ.get("JHT_CHAT_PROMPT_WAIT", "100"))
 PROMPT_POLL_S = float(os.environ.get("JHT_CHAT_PROMPT_POLL", "2"))
+# A turn in progress is waited out before anything is pasted: the layout of a working CLI changes under
+# the paste, and text that cannot be attested would stay in its composer.  Short of the app's own limit.
+BUSY_WAIT_S = float(os.environ.get("JHT_CHAT_BUSY_WAIT", "45"))
 
 # Direction marks and zero-width characters read as nothing and rewrite what
 # is around them. ZWNJ/ZWJ (U+200C/D) stay: Persian and emoji need them.
@@ -691,6 +695,19 @@ def require_prompt(session: str, *, wait: bool = True) -> None:
         time.sleep(PROMPT_POLL_S)
 
 
+def require_idle(session: str, deadline: float) -> None:
+    """Nothing is pasted while the agent works: wait for its turn to end, up to ``deadline``."""
+    while True:
+        pane = capture_pane(session)
+        if pane is None:
+            raise Refusal("agent_unavailable")
+        if not composer_snapshot(pane)[1]:
+            return
+        if time.monotonic() >= deadline:
+            raise Refusal("agent_busy")
+        time.sleep(PROMPT_POLL_S)
+
+
 def _found(path: Path, client_id: str) -> dict | None:
     if not path.is_file():
         return None
@@ -960,8 +977,10 @@ def send(agent: str, client_id: str, raw_text: str) -> dict:
     # The potentially long wait happens before acquiring the writer lock.  If
     # another writer changes the pane while we waited, release and start that
     # wait again instead of holding every other sender behind a busy terminal.
+    busy_deadline = time.monotonic() + BUSY_WAIT_S
     while True:
         require_prompt(session)
+        require_idle(session, busy_deadline)
         retry_outside_lock = False
         with _AgentLock(agent):
             done = _found(delivered, client_id)
@@ -976,6 +995,11 @@ def send(agent: str, client_id: str, raw_text: str) -> dict:
             if gate == "blocked":
                 raise Refusal("agent_not_at_prompt")
             if gate not in {"empty", "none"}:
+                retry_outside_lock = True
+            elif composer_snapshot(pane)[1]:
+                # The turn started while we waited for the lock: not now, and not past the deadline.
+                if time.monotonic() >= busy_deadline:
+                    raise Refusal("agent_busy")
                 retry_outside_lock = True
             else:
                 row = persist(agent, client_id, text)
