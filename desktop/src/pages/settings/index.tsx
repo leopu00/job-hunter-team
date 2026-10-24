@@ -4,6 +4,7 @@ import { navigate } from "../../shell/router";
 import { useExistingTeamReadOnly } from "../../lib/existing-team-readonly";
 import { useProviderSetup } from "../../lib/provider-setup";
 import type { PageProps } from "../types";
+import { BACKUP_TEXT } from "../backup/backup.i18n";
 import { EXPORT_TEXT } from "../export/export.i18n";
 import { TEAM_SETTINGS_TEXT } from "../team-settings/team-settings.i18n";
 import NotifyCard from "./NotifyCard";
@@ -25,6 +26,7 @@ export default function SettingsPage(_props: PageProps) {
   const readOnly = useExistingTeamReadOnly() !== null;
   const team = TEAM_SETTINGS_TEXT[appLocale()];
   const exportText = EXPORT_TEXT[appLocale()];
+  const backupText = BACKUP_TEXT[appLocale()];
   return (
     <section className="max-w-3xl mx-auto px-5 py-8 flex flex-col gap-4" aria-labelledby="settings-title">
       <h1 id="settings-title" className="text-[15px] font-semibold text-[var(--color-bright)]">{t.title}</h1>
@@ -60,6 +62,16 @@ export default function SettingsPage(_props: PageProps) {
       >
         <span className="block text-[13px] font-semibold text-[var(--color-bright)]">{exportText.link}</span>
         <span className="mt-1 block text-[11px] text-[var(--color-muted)]">{exportText.linkNote}</span>
+      </button>
+      {/* making a backup only reads the team: offered in the read-only view too */}
+      <button
+        type="button"
+        data-testid="settings-backup-link"
+        onClick={() => navigate("/backup")}
+        className="text-left rounded border border-[var(--color-border)] px-4 py-3 hover:border-[var(--color-border-glow)]"
+      >
+        <span className="block text-[13px] font-semibold text-[var(--color-bright)]">{backupText.link}</span>
+        <span className="mt-1 block text-[11px] text-[var(--color-muted)]">{backupText.linkNote}</span>
       </button>
       {providerSetup && (
         <section

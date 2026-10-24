@@ -156,4 +156,20 @@ describe("the settings page", () => {
       leaveExistingTeamReadOnly();
     }
   });
+
+  it("opens the backup page, in the read-only view too", async () => {
+    Object.defineProperty(window, "location", { configurable: true, value: realLocation });
+    const user = userEvent.setup();
+    const view = render(<SettingsPage {...props} />);
+    await user.click(screen.getByTestId("settings-backup-link"));
+    expect(window.location.hash).toBe("#/backup");
+    view.unmount();
+    enterExistingTeamReadOnly(false);
+    try {
+      render(<SettingsPage {...props} />);
+      expect(screen.getByTestId("settings-backup-link")).toBeInTheDocument();
+    } finally {
+      leaveExistingTeamReadOnly();
+    }
+  });
 });
