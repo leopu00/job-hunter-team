@@ -1,13 +1,9 @@
 import { useEffect, useState } from "react";
+import type { OnboardingActivityEntry } from "../lib/onboarding";
 import type { OnboardingCopy } from "./onboarding.i18n";
 
-/** What a progress event may say beyond its message (optional: absent means «as before»). */
-export interface PhaseInfo {
-  /** the install phase the event belongs to (install.ps1's JHT_PHASE): wsl_check, image_pull, … */
-  phase?: string | null;
-  /** only for `image_pull`: layers done, and bytes when the pull prints them */
-  pull?: { blobsDone: number; bytesDone: number | null; bytesTotal: number | null } | null;
-}
+/** What a progress event says beyond its message: its install phase and the image pull's progress (both optional). */
+export type PhaseInfo = Pick<OnboardingActivityEntry, "phase" | "pull">;
 
 function clock(milliseconds: number): string {
   const seconds = Math.max(0, Math.floor(milliseconds / 1_000));

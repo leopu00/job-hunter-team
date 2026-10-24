@@ -26,7 +26,7 @@ import { ONBOARDING_TEXT, type OnboardingCopy } from "./onboarding.i18n";
 import { WINDOWS_SETUP } from "./windows-setup";
 import { savedVpsBridge, type SavedVps } from "../lib/saved-vps";
 import { SetupSupportReport } from "./SetupSupportReport";
-import RuntimePhaseDetail, { type PhaseInfo } from "./RuntimePhaseDetail";
+import RuntimePhaseDetail from "./RuntimePhaseDetail";
 import "./onboarding.css";
 
 function emptyVpsHost(): ExecutionHost {
@@ -320,8 +320,8 @@ function RuntimeView({ host, platform, t, locale, runtime, activity, onRetry, on
               <RuntimePhaseDetail
                 t={t}
                 locale={locale}
-                info={currentActivity as PhaseInfo}
-                phaseKey={(currentActivity as PhaseInfo).phase ?? currentActivity.description}
+                info={currentActivity}
+                phaseKey={currentActivity.phase ?? currentActivity.description}
                 now={now}
               />
             )}
