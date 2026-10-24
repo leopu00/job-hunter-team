@@ -257,29 +257,29 @@ describe("«Agenti», the agents' control panel", () => {
     expect(ops().filter((r) => r.op === "screen")).toEqual([{ op: "screen", session: "SCOUT-1" }]);
   });
 
-  it("two channels: the terminal says it is only watched, and the chat tab says where the text goes", async () => {
+  it("keeps the watched terminal and the chat visible together for a chat agent", async () => {
     show("agent=CAPITANO");
     await screen.findByTestId("panel-terminal-CAPITANO");
     expect(screen.getByTestId("panel-terminal-destination")).toHaveTextContent(
-      "Nel terminale non si scrive: è solo da guardare. Per scrivere a Capitano usa la scheda Chat.",
+      "Nel terminale non si scrive: è solo da guardare. Per scrivere a Capitano usa la chat qui sotto.",
     );
-    // the terminal has no field to write in: writing is the chat's
-    expect(screen.queryByRole("textbox")).toBeNull();
-    const tabs = screen.getAllByRole("tab");
-    expect(tabs.map((tab) => tab.textContent)).toEqual(["Terminale", "Chat"]);
-    fireEvent.click(tabs[1]);
+    // The terminal remains watched while the composer stays available below it.
     expect(await screen.findByTestId("direct-chat-destination")).toHaveTextContent("Destinazione: la chat di Capitano.");
     const pane = screen.getByTestId("panel-chat-pane");
     expect(pane.className).toMatch(/overflow-hidden/);
-    expect(pane.style.minHeight).toBe("28rem");
-    expect(pane.style.height).toBe("min(46rem, calc(100svh / var(--zoom, 1) - 12rem))");
-    expect(screen.queryByTestId("panel-terminal-CAPITANO")).toBeNull();
+    // docked under the terminal with its own bounded height: it never grows over the page
+    expect(pane.style.height).toBe("clamp(17rem, calc(38svh / var(--zoom, 1)), 28rem)");
+    expect(screen.getByTestId("panel-detail")).toContainElement(pane);
+    expect(screen.getByTestId("panel-terminal-CAPITANO")).toBeInTheDocument();
+    expect(screen.getByRole("textbox", { name: "Scrivi a Capitano" })).toBeInTheDocument();
+    expect(screen.queryByRole("tab")).toBeNull();
   });
 
-  it("an agent with no chat has the terminal alone, and is not sent to a chat tab", async () => {
+  it("an agent with no chat has the terminal alone", async () => {
     show("agent=SCOUT-1");
     await screen.findByTestId("panel-terminal-SCOUT-1");
-    expect(screen.getAllByRole("tab").map((tab) => tab.textContent)).toEqual(["Terminale"]);
+    expect(screen.queryByRole("tab")).toBeNull();
+    expect(screen.queryByTestId("panel-chat-pane")).toBeNull();
     expect(screen.getByTestId("panel-terminal-destination")).toHaveTextContent(
       "Nel terminale non si scrive: è solo da guardare.",
     );
@@ -468,12 +468,17 @@ describe("«Agenti», each agent's health in small", () => {
 
   it("says the whole sentences in the detail of the agent", async () => {
     show("agent=CAPITANO");
-    expect(await screen.findByTestId("panel-usage")).toHaveTextContent(
-      /^contesto usato 43% \(109\.820 token su 258\.400\) \(letto alle .+\) · 12\.345 token nell'ultima ora \(contati dalla Sentinella alle .+\)$/,
+    // the bar says it in small, and the whole sentences are on hover
+    expect(await screen.findByTestId("panel-bar-context")).toHaveTextContent("Contesto43%");
+    expect(screen.getByTestId("panel-bar-usage")).toHaveTextContent("Consumo12,3K/h");
+    expect(screen.getByTestId("panel-bar-context").title).toMatch(
+      /^contesto usato 43% \(109\.820 token su 258\.400\) \(letto alle .+\)\n12\.345 token nell'ultima ora \(contati dalla Sentinella alle .+\)/,
     );
     cleanup();
     show("agent=SCOUT-1");
-    expect(await screen.findByTestId("panel-usage")).toHaveTextContent(/^contesto: non so · 0 token nell'ultima ora/);
+    expect(await screen.findByTestId("panel-bar-context")).toHaveTextContent("Contesto?");
+    expect(screen.getByTestId("panel-bar-usage")).toHaveTextContent("Consumo0/h");
+    expect(screen.getByTestId("panel-bar-usage").title).toMatch(/^contesto: non so\n0 token nell'ultima ora/);
   });
 
   it("has the same sentences, with their numbers, in every language", () => {
@@ -588,9 +593,11 @@ describe("«Agenti», who an agent is", () => {
     await screen.findByTestId("panel-summary");
     expect(screen.getByTestId("panel-row-CAPITANO")).toHaveAttribute("title", "Codex · gpt-5.6-sol · effort alto · sulla VPS vps.example");
     fireEvent.click(screen.getByTestId("panel-row-CAPITANO"));
-    expect(await screen.findByTestId("panel-identity")).toHaveTextContent("Codex · gpt-5.6-sol · effort alto · sulla VPS vps.example");
+    expect(await screen.findByTestId("panel-bar-provider")).toHaveTextContent("ProviderCodex");
+    expect(screen.getByTestId("panel-bar-model")).toHaveTextContent("Modellogpt-5.6-sol · effort alto");
+    expect(screen.getByTestId("panel-bar-model")).toHaveAttribute("title", "Codex · gpt-5.6-sol · effort alto · sulla VPS vps.example");
     fireEvent.click(screen.getByTestId("panel-row-SCOUT-1"));
-    await waitFor(() => expect(screen.getByTestId("panel-identity")).toHaveTextContent(it_.identityUnknown));
+    await waitFor(() => expect(screen.getByTestId("panel-bar-model")).toHaveTextContent(it_.identityUnknown));
   });
 
   it("has every language's words for it", () => {
@@ -606,7 +613,7 @@ describe("«Agenti», who an agent is", () => {
     // the agent can rewrite its session's options; actions, counts and order never look at them
     const source = readFileSync("src/pages/agents/AgentsPanel.tsx", "utf-8");
     const lines = source.split("\n").filter((line) => /identity/i.test(line));
-    const allowed = [/AgentIdentity/, /identityLine\(/, /data-testid="panel-identity"/, /identity\.(cli|model|effort)/, /if \(!identity\) return t\.identityUnknown/, /identity: AgentIdentity/];
+    const allowed = [/AgentIdentity/, /IdentityParts/, /identityLine\(/, /identityParts\(/, /identity\.(cli|model|effort)/, /if \(!identity\) return null/, /if \(!parts\) return t\.identityUnknown/, /identity: AgentIdentity/];
     for (const line of lines) expect(allowed.some((re) => re.test(line)), line).toBe(true);
     expect(source.match(/identityLine\(t, /g)).toHaveLength(2);
   });
