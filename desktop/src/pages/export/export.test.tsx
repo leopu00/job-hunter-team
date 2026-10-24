@@ -2,6 +2,7 @@ import { cleanup, render, screen, waitFor, within } from "@testing-library/react
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Locale } from "@/i18n/config";
+import { describeError } from "../../lib/error-catalog";
 import ExportPage from "./index";
 import { EXPORT_TEXT } from "./export.i18n";
 
@@ -27,6 +28,27 @@ afterEach(() => {
   cleanup();
   localStorage.removeItem("jht-lang");
   document.cookie = "NEXT_LOCALE=; path=/; max-age=0";
+});
+
+describe("the export page: before saving", () => {
+  it("says, before anything is saved, that the file is not encrypted and holds personal data", () => {
+    render(<ExportPage {...props} />);
+    expect(screen.getByTestId("export-personal-data")).toHaveTextContent("not encrypted and contains personal data");
+    // above both buttons: read before pressing either
+    const note = screen.getByTestId("export-personal-data");
+    expect(note.compareDocumentPosition(screen.getByTestId("export-team-button")) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(note.compareDocumentPosition(screen.getByTestId("export-account-button")) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("tells a missing database apart from an empty file", async () => {
+    const user = userEvent.setup();
+    team.exportTeamData.mockResolvedValueOnce({ ok: false, error: "export_no_database" });
+    render(<ExportPage {...props} />);
+    await user.click(screen.getByTestId("export-team-button"));
+    const say = await screen.findByTestId("export-team-say");
+    expect(say).toHaveAttribute("role", "alert");
+    expect(say).toHaveTextContent(describeError("export_no_database", { locale: "en" }).text);
+  });
 });
 
 describe("the export page: team data", () => {

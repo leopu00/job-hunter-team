@@ -93,6 +93,10 @@ export default function ExportPage(_props: PageProps) {
         {t.title}
       </h1>
       <p className="text-[12px] text-[var(--color-muted)]">{t.intro}</p>
+      {/* said before anything is saved: the file is plain and holds the person's data */}
+      <p role="note" data-testid="export-personal-data" className="text-[12px] text-[var(--color-yellow)]">
+        {t.personalData}
+      </p>
 
       <section data-testid="export-team" aria-labelledby="export-team-title" className="rounded-lg border border-[var(--color-border)] bg-[var(--color-card)] p-4 flex flex-col gap-3">
         <h2 id="export-team-title" className="text-[13px] font-semibold text-[var(--color-bright)]">
