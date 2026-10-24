@@ -44,3 +44,12 @@ def test_install_keeps_running_when_the_desktop_cannot_register_autostart():
     assert 'phase("ui_notice_autostart_inactive")' in ONBOARDING
     assert "Install-JhtStartupTask" not in ENABLER
     assert "Register-ScheduledTask" not in ENABLER
+
+
+def test_the_runtime_attestation_checks_the_wrappers_folder_as_a_node():
+    # whoever may create or rename a file in the folder the wrapper and its helper sit in may swap
+    # them after the check: the folder follows the same account rule as the files (its ACL is the
+    # profile's, so it does not have to cut its inheritance, unlike the runtime directory)
+    attest = RUNTIME[RUNTIME.index("fn attest_paths"):RUNTIME.index("/// `%SystemRoot%")]
+    assert 'fail("bin-dir", node_rule(bin, true, false))?;' in attest
+    assert 'fail("runtime-dir", node_rule(runtime_dir, true, true))?;' in attest

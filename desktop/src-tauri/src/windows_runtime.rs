@@ -474,18 +474,19 @@ const LOCAL_SYSTEM_SID: &str = "S-1-5-18";
 const BUILTIN_ADMINS_SID: &str = "S-1-5-32-544";
 
 /// The rule an ACL breaks, if it breaks one. The runtime directory must have its inheritance
-/// cut. Every node, file or directory, must give access to the user and to nobody else but
-/// SYSTEM and the local Administrators: for a file that is the ACL it really has, which in
-/// the protected directory is the one it inherits. A file does not have to cut its own
-/// inheritance (the checked wrapper never asks it: it asks the owner, and the directory).
+/// cut (`must_cut`). Every node, file or directory, must give access to the user and to nobody
+/// else but SYSTEM and the local Administrators: for a file that is the ACL it really has,
+/// which in the protected directory is the one it inherits. A file does not have to cut its
+/// own inheritance (the checked wrapper never asks it: it asks the owner, and the directory),
+/// nor does the folder the wrapper sits in, which has the user profile's.
 #[cfg_attr(not(windows), allow(dead_code))]
 pub(crate) fn node_acl_rule(
     inheritance_disabled: bool,
     allowed_sids: &[String],
     user_sid: &str,
-    directory: bool,
+    must_cut: bool,
 ) -> Option<&'static str> {
-    if directory && !inheritance_disabled {
+    if must_cut && !inheritance_disabled {
         return Some("acl_inherited");
     }
     if !allowed_sids.iter().any(|sid| sid == user_sid) {
@@ -509,7 +510,7 @@ fn attest_paths(wrapper: &Path, runtime_dir: &Path) -> Result<(), BundleFailure>
     use std::os::windows::fs::MetadataExt;
 
     const FILE_ATTRIBUTE_REPARSE_POINT: u32 = 0x0400;
-    let node_rule = |path: &Path, directory: bool| -> Option<&'static str> {
+    let node_rule = |path: &Path, directory: bool, must_cut: bool| -> Option<&'static str> {
         let Ok(metadata) = std::fs::symlink_metadata(path) else { return Some("missing") };
         let kind = metadata.file_type();
         if !(if directory { kind.is_dir() } else { kind.is_file() }) {
@@ -523,7 +524,7 @@ fn attest_paths(wrapper: &Path, runtime_dir: &Path) -> Result<(), BundleFailure>
         }
         let Ok(user) = crate::private_acl::current_user_sid() else { return Some("user_unreadable") };
         let Ok(acl) = crate::private_acl::read_acl(path) else { return Some("acl_unreadable") };
-        node_acl_rule(acl.inheritance_disabled, &acl.allowed_sids, &user, directory)
+        node_acl_rule(acl.inheritance_disabled, &acl.allowed_sids, &user, must_cut)
     };
     let ancestors_rule = |path: &Path| -> Option<&'static str> {
         let mut current = Some(path);
@@ -545,19 +546,22 @@ fn attest_paths(wrapper: &Path, runtime_dir: &Path) -> Result<(), BundleFailure>
     };
     fail("runtime-dir", ancestors_rule(runtime_dir))?;
     fail("jht-wrapper.ps1", ancestors_rule(wrapper))?;
-    fail("runtime-dir", node_rule(runtime_dir, true))?;
-    fail("manifest", node_rule(&runtime_dir.join(".runtime-integrity"), false))?;
+    fail("runtime-dir", node_rule(runtime_dir, true, true))?;
+    // The folder the wrapper and its helper sit in: whoever may create or rename a file there
+    // may swap them after the check. Its ACL is the profile's (inherited): the same accounts only.
+    fail("bin-dir", node_rule(bin, true, false))?;
+    fail("manifest", node_rule(&runtime_dir.join(".runtime-integrity"), false, false))?;
     for (key, place, file) in MANIFEST_FILES.iter() {
         let path = match place {
             Place::Runtime => runtime_dir.join(file),
             Place::Bin if *key == "jht-wrapper.ps1" => wrapper.to_path_buf(),
             Place::Bin => bin.join(file),
         };
-        fail(*key, node_rule(&path, false))?;
+        fail(*key, node_rule(&path, false, false))?;
     }
     let pin = runtime_dir.join(IMAGE_PIN);
     if std::fs::symlink_metadata(&pin).is_ok() {
-        fail("runtime-image", node_rule(&pin, false))?;
+        fail("runtime-image", node_rule(&pin, false, false))?;
     }
     Ok(())
 }
@@ -1068,7 +1072,7 @@ mod tests {
         let sids = |list: &[&str]| list.iter().map(|sid| (*sid).to_owned()).collect::<Vec<_>>();
         let usual = sids(&[user, "S-1-5-18", "S-1-5-32-544"]);
         // A file with the ACL it inherits (inheritance not cut), a directory with it cut.
-        assert_eq!(node_acl_rule(false, &usual, user, false), None, "an inheriting file");
+        assert_eq!(node_acl_rule(false, &usual, user, false), None, "an inheriting file, or the wrapper's folder with the profile's ACL");
         assert_eq!(node_acl_rule(true, &usual, user, false), None);
         assert_eq!(node_acl_rule(true, &usual, user, true), None);
         assert_eq!(node_acl_rule(true, &sids(&[user]), user, true), None);
@@ -1081,7 +1085,7 @@ mod tests {
             let mut open = usual.clone();
             open.push(other.to_owned());
             assert_eq!(node_acl_rule(true, &open, user, true), Some("acl_other_account"), "{other} on the directory");
-            assert_eq!(node_acl_rule(false, &open, user, false), Some("acl_other_account"), "{other} on a file");
+            assert_eq!(node_acl_rule(false, &open, user, false), Some("acl_other_account"), "{other} on a file, or on the folder the wrapper sits in");
         }
     }
 
