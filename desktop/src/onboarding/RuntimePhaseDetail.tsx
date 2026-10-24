@@ -24,9 +24,10 @@ export function bytesText(bytes: number, locale: string): string {
 
 /**
  * Under the step's heading while a long install phase runs: how long this phase has lasted (the
- * clock restarts when the phase changes), and, for the image download, how far it is. A bar and a
- * percentage appear only when the pull said both byte counts; with the layers alone it says how many
- * are done and no percentage is made up. A phase that says nothing more shows only its clock.
+ * clock restarts when the phase changes), and, for the image download, what has come so far. There
+ * is no percentage and no bar: podman finds the layers as it goes, so the total grows while it
+ * downloads and a percentage would go backwards. It says the bytes downloaded when podman said them,
+ * and how many layers are done; a phase that says nothing more shows only its clock.
  */
 export default function RuntimePhaseDetail({
   t,
@@ -47,25 +48,20 @@ export default function RuntimePhaseDetail({
     setSince(Date.now());
   }, [phaseKey]);
   const pull = info.phase === "image_pull" ? info.pull ?? null : null;
-  // a bar and a percentage only from two real counts: a negative or not-a-number count shows no bar
-  const hasBytes =
-    !!pull && pull.bytesDone !== null && pull.bytesTotal !== null && Number.isFinite(pull.bytesDone) && Number.isFinite(pull.bytesTotal) && pull.bytesDone >= 0 && pull.bytesTotal > 0;
-  const percent = hasBytes ? Math.max(0, Math.min(100, Math.round((pull.bytesDone! / pull.bytesTotal!) * 100))) : null;
+  const bytes = pull && pull.bytesDone !== null && Number.isFinite(pull.bytesDone) && pull.bytesDone >= 0 ? pull.bytesDone : null;
+  const layers = pull && pull.blobsDone > 0 ? pull.blobsDone : null;
   return (
     <div className="onboarding-runtime-phase" data-testid="onboarding-phase-detail">
-      <small data-testid="onboarding-phase-clock">
-        {t.phaseSince(clock(now - since))}
-      </small>
+      <small data-testid="onboarding-phase-clock">{t.phaseSince(clock(now - since))}</small>
       {info.phase === "image_pull" && <small data-testid="onboarding-pull-long">{t.pullLong}</small>}
-      {hasBytes && percent !== null && (
-        <div data-testid="onboarding-pull-bytes" className="onboarding-runtime-phase__pull">
-          <progress max={100} value={percent} aria-label={t.pullBytes(bytesText(pull!.bytesDone!, locale), bytesText(pull!.bytesTotal!, locale))} />
-          <small>
-            {t.pullBytes(bytesText(pull!.bytesDone!, locale), bytesText(pull!.bytesTotal!, locale))} · {percent}%
-          </small>
-        </div>
+      {/* the bytes with the layers, or the layers alone: never a made-up share of an unknown total */}
+      {bytes !== null && (
+        <small data-testid="onboarding-pull-bytes">
+          {t.pullBytesDone(bytesText(bytes, locale))}
+          {layers !== null && ` · ${t.pullLayersShort(layers)}`}
+        </small>
       )}
-      {pull && !hasBytes && pull.blobsDone > 0 && <small data-testid="onboarding-pull-layers">{t.pullLayersCount(pull.blobsDone)}</small>}
+      {bytes === null && layers !== null && <small data-testid="onboarding-pull-layers">{t.pullLayersCount(layers)}</small>}
     </div>
   );
 }

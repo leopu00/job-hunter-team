@@ -39,37 +39,37 @@ describe("the phase detail under the step's heading", () => {
     expect(screen.queryByTestId("onboarding-pull-layers")).toBeNull();
   });
 
-  it("says the image download is long, and shows a bar and a percentage only when it said both byte counts", () => {
-    render(detail({ phase: "image_pull", pull: { blobsDone: 4, bytesDone: 512 * MIB, bytesTotal: GIB } }, "image_pull"));
+  it("says the image download is long, and what has come so far: bytes and layers, with no bar and no percentage", () => {
+    render(detail({ phase: "image_pull", pull: { blobsDone: 4, bytesDone: 1.5 * GIB, bytesTotal: 3.4 * GIB } }, "image_pull"));
     expect(screen.getByTestId("onboarding-pull-long")).toHaveTextContent("can take several minutes");
-    const bytes = screen.getByTestId("onboarding-pull-bytes");
-    expect(bytes).toHaveTextContent("512 MiB of 1 GiB · 50%");
-    expect(bytes.querySelector("progress")).toHaveAttribute("value", "50");
-    // with the bytes the layers are not repeated
+    // the total grows while podman finds the layers: it is never shown, nor turned into a percentage
+    expect(screen.getByTestId("onboarding-pull-bytes")).toHaveTextContent("1.5 GiB downloaded · 4 layers");
+    expect(screen.queryByRole("progressbar")).toBeNull();
+    expect(document.body).not.toHaveTextContent("%");
+    expect(document.body).not.toHaveTextContent("3.4 GiB");
     expect(screen.queryByTestId("onboarding-pull-layers")).toBeNull();
   });
 
-  it("says only how many layers are done when the bytes are not known, and makes up no percentage", () => {
+  it("says only how many layers are done when the bytes are not known", () => {
     render(detail({ phase: "image_pull", pull: { blobsDone: 3, bytesDone: null, bytesTotal: null } }, "image_pull"));
     expect(screen.getByTestId("onboarding-pull-layers")).toHaveTextContent("3 layers downloaded");
     expect(screen.queryByTestId("onboarding-pull-bytes")).toBeNull();
     expect(document.body).not.toHaveTextContent("%");
     cleanup();
-    render(detail({ phase: "image_pull", pull: { blobsDone: 1, bytesDone: 10, bytesTotal: null } }, "image_pull"));
+    render(detail({ phase: "image_pull", pull: { blobsDone: 1, bytesDone: null, bytesTotal: null } }, "image_pull"));
     expect(screen.getByTestId("onboarding-pull-layers")).toHaveTextContent("1 layer downloaded");
-    expect(screen.queryByTestId("onboarding-pull-bytes")).toBeNull();
   });
 
-  it("ignores a pull that does not belong to the image download, and never goes past 100%", () => {
+  it("says the bytes alone before a first layer is done, and ignores a pull that is not the image download", () => {
+    render(detail({ phase: "image_pull", pull: { blobsDone: 0, bytesDone: 20 * MIB, bytesTotal: 100 * MIB } }, "image_pull"));
+    expect(screen.getByTestId("onboarding-pull-bytes")).toHaveTextContent(/^20 MiB downloaded$/);
+    cleanup();
     render(detail({ phase: "podman_machine_start", pull: { blobsDone: 9, bytesDone: 5, bytesTotal: 10 } }, "podman_machine_start"));
     expect(screen.queryByTestId("onboarding-pull-bytes")).toBeNull();
     expect(screen.queryByTestId("onboarding-pull-layers")).toBeNull();
-    cleanup();
-    render(detail({ phase: "image_pull", pull: { blobsDone: 9, bytesDone: 2 * GIB, bytesTotal: GIB } }, "image_pull"));
-    expect(screen.getByTestId("onboarding-pull-bytes").querySelector("progress")).toHaveAttribute("value", "100");
   });
 
-  it("shows no bar for a count that is negative or not a number, and keeps the layers", () => {
+  it("shows no bytes for a count that is negative or not a number, and keeps the layers", () => {
     render(detail({ phase: "image_pull", pull: { blobsDone: 2, bytesDone: -5, bytesTotal: GIB } }, "image_pull"));
     expect(screen.queryByTestId("onboarding-pull-bytes")).toBeNull();
     expect(screen.getByTestId("onboarding-pull-layers")).toHaveTextContent("2 layers downloaded");
@@ -89,7 +89,9 @@ describe("the phase detail under the step's heading", () => {
     for (const locale of ["it", "en", "de", "es", "fr", "hu", "pt"] as const) {
       const text = ONBOARDING_TEXT[locale];
       expect(text.phaseSince("01:05"), locale).toContain("01:05");
-      expect(text.pullBytes("12 MiB", "1 GiB"), locale).toContain("12 MiB");
+      expect(text.pullBytesDone("12 MiB"), locale).toContain("12 MiB");
+      expect(text.pullLayersShort(3), locale).toContain("3");
+      expect(text.pullLayersShort(1), locale).not.toBe(text.pullLayersShort(3));
       expect(text.pullLayersCount(3), locale).toContain("3");
       expect(text.pullLayersCount(1), locale).not.toBe(text.pullLayersCount(3));
       expect(text.pullLong.length, locale).toBeGreaterThan(20);
@@ -121,7 +123,7 @@ describe("in the setup card while a step works", () => {
   it("shows the phase's clock and the download's progress from the current event", () => {
     renderWorking(entry({ phase: "image_pull", pull: { blobsDone: 2, bytesDone: 256 * MIB, bytesTotal: GIB } }));
     expect(screen.getByTestId("onboarding-phase-detail")).toBeInTheDocument();
-    expect(screen.getByTestId("onboarding-pull-bytes")).toHaveTextContent("256 MiB of 1 GiB · 25%");
+    expect(screen.getByTestId("onboarding-pull-bytes")).toHaveTextContent("256 MiB downloaded · 2 layers");
     act(() => {
       vi.advanceTimersByTime(5_000);
     });
