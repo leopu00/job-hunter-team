@@ -163,6 +163,32 @@ sys.exit(0 if actual is not None and squash(actual) == squash(expected) else 1)
 ' "$CHAT_SKILLS"
 }
 
+# Come sta la casella rispetto al NOSTRO testo, senza spazi (una riga a capo li perde):
+#   ours     e' esattamente il nostro testo;
+#   partial  e' l'INIZIO del nostro testo: la TUI sta ancora disegnando l'incolla (un agente
+#            occupato lo disegna in piu' riprese, e per un attimo la casella ne ha meta');
+#   other    qualcosa d'altro, o il nostro testo con altro accanto.
+# Stampa lo stato e le due lunghezze (mai il testo): il log di un 130 mostra la FORMA.
+_composer_vs_ours() {
+  printf '%s\0%s' "$1" "$message" | python3 -I -c '
+import sys
+sys.path.insert(0, sys.argv[1])
+import agent_chat
+pane, expected = sys.stdin.buffer.read().decode("utf-8", "replace").split("\0", 1)
+actual = agent_chat.composer_text(pane)
+squash = lambda text: "".join(text.split())
+a, e = (squash(actual) if actual is not None else None), squash(expected)
+if a is None:
+    print("other none/%d" % len(e))
+elif a == e:
+    print("ours %d/%d" % (len(a), len(e)))
+elif a and e.startswith(a):
+    print("partial %d/%d" % (len(a), len(e)))
+else:
+    print("other %d/%d" % (len(a), len(e)))
+' "$CHAT_SKILLS"
+}
+
 sender_trust="unverified"
 sender_claimed=""
 sender_origin=""
@@ -827,6 +853,9 @@ else
   render_polls=$(( settle_polls + 30 ))  # the calculated pause plus 1.5 s
   seen=0
   poll=0
+  partial_since=-1
+  partial_wait_s=${JHT_TMUX_PARTIAL_WAIT:-8}
+  partial_polls=$(( partial_wait_s * 20 ))
   while :; do
     pane=$(_pane)
     gate=$(_delivery_gate "$pane")
@@ -843,9 +872,24 @@ else
         break
       fi
     elif _text_pending "$pane"; then
-      if _composer_is_only_ours "$pane"; then seen=1; break; fi
-      echo "jht-tmux-send: $session changed while the paste rendered: no Enter (rc=130)" >&2
-      exit 130
+      shape=$(_composer_vs_ours "$pane")
+      case "$shape" in
+        ours*) seen=1; break ;;
+        partial*)
+          # Il nostro testo e' arrivato a meta': si aspetta che finisca, senza premere niente.
+          if [ "$partial_since" -lt 0 ]; then partial_since=$poll; fi
+          partial_shape=$shape
+          if [ $(( poll - partial_since )) -ge "$partial_polls" ]; then
+            echo "jht-tmux-send: $session: the paste stayed half drawn (${partial_shape#partial }): no Enter (rc=130)" >&2
+            exit 130
+          fi
+          poll=$(( poll + 1 ))
+          sleep 0.05
+          continue ;;
+        *)
+          echo "jht-tmux-send: $session changed while the paste rendered, the composer is not exactly our text (${shape#other }): no Enter (rc=130)" >&2
+          exit 130 ;;
+      esac
     fi
     [ "$poll" -lt "$render_polls" ] || break
     poll=$(( poll + 1 ))

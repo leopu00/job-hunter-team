@@ -57,6 +57,16 @@ case "$cmd" in
     [ -f "$S/menu_on_paste" ] && { printf 'menu\n' > "$S/mode"; exit 0; }
     [ -f "$S/draft_on_paste" ] && cat "$S/draft_on_paste" >> "$S/composer"
     [ -f "$S/mute" ] && exit 0
+    # A paste the TUI draws in two goes: the first half now, the rest after the delay in `split`.
+    if [ -f "$S/split" ]; then
+      text=$(cat "$S/buffer.$name"); half=$(( ${#text} / 2 ))
+      printf '%s' "${text:0:half}" >> "$S/composer"
+      (sleep "$(cat "$S/split")"; printf '%s' "${text:half}" >> "$S/composer") >/dev/null 2>&1 &
+      rm -f "$S/buffer.$name"; exit 0
+    fi
+    # The agent starts a turn while the paste renders: the screen above the composer changes,
+    # the composer keeps the whole text.
+    [ -f "$S/turn_on_paste" ] && { printf 'busy\n' > "$S/mode"; printf '• Mittente non verificato: nessuna risposta inviata.\n' >> "$S/transcript"; }
     if [ -f "$S/lag" ]; then (sleep "$(cat "$S/lag")"; cat "$S/buffer.$name" >> "$S/composer") & exit 0; fi
     cat "$S/buffer.$name" > "$S/pasted.$name"
     [ -f "$S/echo_on_paste" ] && { cat "$S/buffer.$name" >> "$S/transcript"; echo >> "$S/transcript"; }
@@ -134,6 +144,32 @@ def test_a_slow_render_is_waited_for_not_typed_again(box):
     assert done.returncode == 0, done.stderr
     assert len(box.typed()) == 1, "the text appeared late: it is not typed a second time"
     assert box.keys("Escape") == []
+
+
+def test_a_paste_still_being_drawn_is_waited_for_not_refused(box):
+    # The TUI of a busy agent draws the paste in more than one go: for a moment the composer holds
+    # the first half of OUR text.  That is a render in progress, not someone else's words.
+    box.put("split", "0.6")
+    done = box.run()
+    assert done.returncode == 0, done.stderr
+    assert len(box.typed()) == 1 and len(box.keys("Enter")) == 1
+    # the whole text, once: the transport's sender mark is part of what was pasted
+    assert (box.state / "transcript").read_text(encoding="utf-8").count("prova di consegna con una frase abbastanza lunga da avere testa e coda diverse") == 1
+
+
+def test_a_paste_that_stops_half_drawn_is_refused_without_enter_and_the_log_says_why(box):
+    box.put("split", "5")
+    done = box.run(JHT_TMUX_PARTIAL_WAIT="1")
+    assert done.returncode == 130, done.stderr
+    assert box.keys("Enter") == [] and box.keys("Escape") == []
+    assert "half drawn" in done.stderr
+
+
+def test_a_turn_starting_while_the_paste_renders_does_not_stop_the_delivery(box):
+    box.put("turn_on_paste")
+    done = box.run()
+    assert done.returncode == 0, done.stderr
+    assert len(box.typed()) == 1 and len(box.keys("Enter")) == 1
 
 
 def test_a_text_that_never_shows_is_typed_once_and_nothing_is_pressed(box):
