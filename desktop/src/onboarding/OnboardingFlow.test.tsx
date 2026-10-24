@@ -237,6 +237,8 @@ describe("OnboardingFlow technical setup", () => {
     const { unmount } = renderFlow({ platform: "windows", runtime: failed, runtimeLogPath: path, onOpenRuntimeLog: open });
     const status = screen.getByRole("alert");
     expect(status).toHaveTextContent(`Il registro di ogni passo, con l’errore completo, è in: ${path}`);
+    // the path may break after each separator, so a folder name stays whole on a narrow line
+    expect(status.querySelectorAll("code wbr")).toHaveLength(path.split("\\").length - 1);
     await userEvent.click(within(status).getByRole("button", { name: "Mostra il file del registro" }));
     expect(open).toHaveBeenCalledOnce();
     unmount();

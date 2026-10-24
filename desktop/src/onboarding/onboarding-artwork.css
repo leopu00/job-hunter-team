@@ -34,3 +34,11 @@
     margin-block: 4px 8px;
   }
 }
+
+/* 125 and 150 % scaling on that laptop leaves 440-530 CSS px: the figure shrinks again. */
+@media (max-height: 560px) {
+  .onboarding-artwork {
+    width: min(96px, 100%);
+    margin-block: 0 6px;
+  }
+}
