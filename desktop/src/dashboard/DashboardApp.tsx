@@ -91,6 +91,7 @@ import { ConnectTeamContext, type ConnectTeamEntry } from "../lib/connect-team";
 import { ProviderSetupContext } from "../lib/provider-setup";
 import MessagesPage from "../pages/messages";
 import { NewPositionNotifier } from "../lib/notify/NewPositionNotifier";
+import TeamLanguagePrompt from "../components/TeamLanguagePrompt";
 import Shell from "../shell/Shell";
 import { navigate } from "../shell/router";
 import { describeError, errorCodeOf, errorMachineOf, errorResetsAt } from "../lib/error-catalog";
@@ -1590,6 +1591,8 @@ export default function DashboardApp() {
         </ConnectTeamContext.Provider>
         {connectDialogElement}
         <NewPositionNotifier key={`notify:${identityKey}`} />
+        {/* The team of the person who linked it in full is the one whose language is asked; a read-only view never writes. */}
+        {linkedView?.full && <TeamLanguagePrompt key={`language:${identityKey}`} identityKey={identityKey} />}
       </>
     );
   }
@@ -1702,6 +1705,7 @@ export default function DashboardApp() {
       </ProviderSetupContext.Provider>
       {connectDialogElement}
       <NewPositionNotifier key={`notify:${identityKey}`} />
+      <TeamLanguagePrompt key={`language:${identityKey}`} identityKey={identityKey} />
     </>
   );
 }

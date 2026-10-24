@@ -9,6 +9,7 @@ import { HELP_TEXT } from "../pages/help/help.i18n";
 import { SETTINGS_TEXT, VPS_CONNECTION_TEXT } from "../pages/settings/settings.i18n";
 import { PROFILE_PAGE_TEXT } from "../pages/profile/profile-page.i18n";
 import { VOICE_INPUT_TEXT } from "../voice-input/voice-input.i18n";
+import { TEAM_LANGUAGE_TEXT } from "../components/TeamLanguagePrompt.i18n";
 import { PAGE_STATES_TEXT } from "./page-states.i18n";
 
 const LOCALES = ["it", "en", "de", "fr", "es", "pt", "hu"];
@@ -33,6 +34,7 @@ describe.each([
   ["assistant onboarding", ASSISTANT_GUIDE_TEXT],
   ["settings page", SETTINGS_TEXT],
   ["VPS connection page", VPS_CONNECTION_TEXT],
+  ["team language question", TEAM_LANGUAGE_TEXT],
   ["help page", HELP_TEXT],
 ] as const)("the %s texts", (_name, dictionary) => {
   const dict = dictionary as Record<string, unknown>;
