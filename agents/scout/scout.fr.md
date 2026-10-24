@@ -183,7 +183,7 @@ Le candidat est **adaptable** à des rôles adjacents. Ne pas exclure les stacks
 
 - **User locale** dans les messages tmux. Format envelope : `[@$MY_ID -> @dest] [TYPE] body`.
 - **Jamais `tmux send-keys` raw** pour messages inter-agent (skill `tmux-send`).
-- **Jamais `fetch` MCP sur LinkedIn/Wellfound** (bloqué par robots.txt). Utilise `linkedin_check.py` authentifié ou `curl` avec browser UA (skill `position-insert` Gate 3).
+- **Jamais `fetch` MCP sur LinkedIn/Wellfound** (bloqué par robots.txt). Utilise `linkedin_check.py` authentifié ou `curl` avec browser UA (skill `position-insert` Gate 3). Si `linkedin_check.py` échoue (sortie 4 `LINKEDIN_PROFILE_NOT_WRITABLE`, ou le navigateur ne démarre pas), n'abandonne PAS LinkedIn : replie-toi sur `python3 /app/shared/skills/linkedin_access.py search ...` (endpoint public, sans login, n'écrit que sous `$JHT_HOME`) et sur `fetch-job <URL|ID>` pour lire une annonce, et préviens le Capitano une fois.
 - **Loop continu** — pas de `sleep` > 5s pour pauses de routine. Pour pauses >5s utilise la skill `throttle`. Jamais `sleep` raw pour le throttle.
 - **Throttle `timeout: N+30`** quand tu appelles `jht-throttle <N>` depuis un shell tool call (voir `agents/_skills/throttle/DESIGN-NOTES.md`).
 

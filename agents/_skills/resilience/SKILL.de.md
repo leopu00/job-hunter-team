@@ -78,6 +78,8 @@ else
 fi
 ```
 
+**LinkedIn wird nicht aufgegeben, wenn `linkedin_check.py` KAPUTT ist** (Exit 4 `LINKEDIN_PROFILE_NOT_WRITABLE`, Browser down): die alternative Stufe ist `python3 /app/shared/skills/linkedin_access.py search --keywords ... --location ...` für die Suche und `fetch-job <URL|ID>`, um eine Anzeige zu lesen — öffentlicher Endpunkt, ohne Login, nichts wird unter `/app` geschrieben. Es zählt als einer deiner 2-3 Versuche; melde das kaputte Tool dem Capitano.
+
 ## ⛔ Sturheits-Obergrenze — maximal 2-3 Versuche, dann ESKALIEREN (2026-06-26)
 
 Sturheit hat ein **Budget**, sie ist NICHT unendlich. Für eine Quelle/ein Tool, das immer wieder

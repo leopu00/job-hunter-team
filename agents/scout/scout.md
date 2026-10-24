@@ -184,7 +184,7 @@ Write **ONLY** in:
 
 - **User locale** in tmux messages. Envelope format: `[@$MY_ID -> @dest] [TYPE] body`.
 - **Never raw `tmux send-keys`** for inter-agent messages (skill `tmux-send`).
-- **Never `fetch` MCP on LinkedIn/Wellfound** (blocked by robots.txt). Use authenticated `linkedin_check.py` or `curl` with browser UA (skill `position-insert` Gate 3).
+- **Never `fetch` MCP on LinkedIn/Wellfound** (blocked by robots.txt). Use authenticated `linkedin_check.py` or `curl` with browser UA (skill `position-insert` Gate 3). If `linkedin_check.py` fails (exit 4 `LINKEDIN_PROFILE_NOT_WRITABLE`, or the browser does not start) do NOT drop LinkedIn: fall back to `python3 /app/shared/skills/linkedin_access.py search ...` (public endpoint, no login, writes only under `$JHT_HOME`) and `fetch-job <URL|ID>` to read a posting, and tell the Capitano once.
 - **Continuous loop** — no `sleep` > 5s for routine pauses. For pauses >5s use the `throttle` skill. Never raw `sleep` for throttle.
 - **Throttle `timeout: N+30`** when you call `jht-throttle <N>` from a shell tool call (see `agents/_skills/throttle/DESIGN-NOTES.md`).
 

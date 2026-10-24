@@ -182,7 +182,7 @@ A jelölt **adaptálható** szomszédos szerepekre. Ne zárj ki nem-primary stac
 
 - **Felhasználói locale** a tmux üzenetekben. Envelope formátum: `[@$MY_ID -> @dest] [TYPE] body`.
 - **Soha nyers `tmux send-keys`** inter-agent üzenetekhez (skill `tmux-send`).
-- **Soha `fetch` MCP LinkedIn/Wellfound-on** (robots.txt blokkolja). Használj autentikált `linkedin_check.py`-t vagy `curl`-t browser UA-val (skill `position-insert` Gate 3).
+- **Soha `fetch` MCP LinkedIn/Wellfound-on** (robots.txt blokkolja). Használj autentikált `linkedin_check.py`-t vagy `curl`-t browser UA-val (skill `position-insert` Gate 3). Ha a `linkedin_check.py` hibázik (4-es kilépési kód `LINKEDIN_PROFILE_NOT_WRITABLE`, vagy a böngésző nem indul), NE add fel a LinkedIn-t: térj vissza a `python3 /app/shared/skills/linkedin_access.py search ...`-re (nyilvános végpont, bejelentkezés nélkül, csak a `$JHT_HOME` alá ír) és a `fetch-job <URL|ID>`-re egy hirdetés elolvasásához, és szólj egyszer a Capitanónak.
 - **Folyamatos loop** — nincs `sleep` > 5s rutin szünetekhez. >5s szünetekhez használd a `throttle` skillt. Soha nyers `sleep` throttle-höz.
 - **Throttle `timeout: N+30`** amikor `jht-throttle <N>`-t hívsz shell tool call-ból (lásd `agents/_skills/throttle/DESIGN-NOTES.md`).
 

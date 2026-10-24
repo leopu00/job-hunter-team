@@ -77,6 +77,8 @@ else
 fi
 ```
 
+**LinkedIn no se abandona cuando `linkedin_check.py` está ROTO** (salida 4 `LINKEDIN_PROFILE_NOT_WRITABLE`, navegador caído): el escalón alternativo es `python3 /app/shared/skills/linkedin_access.py search --keywords ... --location ...` para descubrir y `fetch-job <URL|ID>` para leer una oferta — endpoint público, sin login, nada escrito bajo `/app`. Cuenta como uno de tus 2-3 intentos; informa de la herramienta rota al Capitano.
+
 ## ⛔ Techo de terquedad — máximo 2-3 intentos, luego ESCALAR (2026-06-26)
 
 La terquedad tiene **presupuesto**, NO es infinita. Para una fuente/herramienta que sigue fallando
