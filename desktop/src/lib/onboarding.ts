@@ -154,6 +154,8 @@ export interface OnboardingRuntimeSnapshot {
   directChatReady: boolean;
   /** Only after a team start: false when the provider limits could not be read first. */
   limitsVerified?: boolean;
+  /** Only in the resume snapshot, and true only for this computer: the host whose stopped runtime the resume start wakes. */
+  localHost?: boolean;
 }
 
 /** UI boundary: no Supabase, IPC, secrets or routing enter the component. */

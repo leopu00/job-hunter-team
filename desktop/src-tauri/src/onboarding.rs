@@ -847,6 +847,10 @@ pub(crate) struct OnboardingSnapshot {
     /// be read before starting, so the app says the start was unverified.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     limits_verified: Option<bool>,
+    /// Set only by the resume snapshot, and only when the host is this computer: the one host whose
+    /// stopped runtime the resume start can wake. A VPS or a saved team leaves it out.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    local_host: Option<bool>,
 }
 
 #[derive(Debug, Serialize)]
@@ -3008,6 +3012,7 @@ fn parse_snapshot(text: &str) -> OnboardingSnapshot {
         assistant_welcomed: has("assistantWelcomed"),
         direct_chat_ready: false,
         limits_verified: None,
+        local_host: None,
     }
 }
 
@@ -3043,6 +3048,7 @@ fn parse_verified_snapshot(text: &str) -> Option<OnboardingSnapshot> {
         assistant_welcomed: values["assistantWelcomed"],
         direct_chat_ready: false,
         limits_verified: None,
+        local_host: None,
     })
 }
 
@@ -3117,6 +3123,7 @@ fn native_team_snapshot_with(
         profile_ready: false,
         direct_chat_ready: false,
         limits_verified: None,
+        local_host: None,
     };
     const METADATA: &[u8] = br#"const fs=require('fs');let config={};try{config=JSON.parse(fs.readFileSync('/jht_home/jht.config.json','utf8'))}catch{}const provider=String(config.active_provider||'').toLowerCase();const providers=config.providers||{};const entry=providers[provider]||{};const configured=['claude','anthropic','codex','openai','kimi','moonshot'].includes(provider)&&(entry.auth_method||'subscription')==='subscription';const markers={claude:'/jht_home/.claude/.credentials.json',anthropic:'/jht_home/.claude/.credentials.json',codex:'/jht_home/.codex/auth.json',openai:'/jht_home/.codex/auth.json',kimi:'/jht_home/.kimi/credentials/kimi-code.json',moonshot:'/jht_home/.kimi/credentials/kimi-code.json'};process.stdout.write(`${configured?1:0} ${markers[provider]&&fs.existsSync(markers[provider])?1:0} ${fs.existsSync('/jht_home/profile/welcomed.flag')?1:0}`);"#;
 
@@ -3219,6 +3226,7 @@ fn native_team_snapshot_with(
             profile_ready,
             direct_chat_ready: false,
             limits_verified: None,
+            local_host: None,
         },
         (!provider_configured && metadata.is_none())
             .then_some("provider_unreadable: the provider check did not return facts".to_owned()),
@@ -3366,15 +3374,16 @@ pub(crate) async fn onboarding_resume_snapshot(
         let host =
             crate::direct_chat::load_persisted_host(&app, &worker_expected).map_err(failure)?;
         let validated = crate::runtime_host::validate_host_for_scope(&app, &host, &worker_expected).map_err(failure)?;
-        match crate::existing_team_runtime::selected_or_own(&app, &worker_expected, &host).map_err(failure)? {
+        let snapshot = match crate::existing_team_runtime::selected_or_own(&app, &worker_expected, &host).map_err(failure)? {
             Some(target) => {
                 let command = crate::existing_team_runtime::snapshot_command(&target.runtime).map_err(failure)?;
                 let result = run_ssh_command(&validated, &command, None, SNAPSHOT_TIMEOUT, None).map_err(failure)?;
                 if !result.success() { return Err(failure("snapshot_failed")); }
-                Ok(parse_snapshot(&result.stdout_text()))
+                parse_snapshot(&result.stdout_text())
             }
-            None => snapshot_impl(&app, &worker_expected, &validated),
-        }
+            None => snapshot_impl(&app, &worker_expected, &validated)?,
+        };
+        Ok(with_local_host(snapshot, matches!(validated, ValidatedHost::Local)))
     })
     .await
     .unwrap_or_else(|_| Err(failure("snapshot_failed")));
@@ -4872,6 +4881,13 @@ pub(crate) fn onboarding_provider_login_close(
     Ok(())
 }
 
+/// The resume snapshot says whether its host is this computer, the only one whose stopped runtime the
+/// resume start can wake: the screen offers that start for it and for no other host.
+fn with_local_host(mut snapshot: OnboardingSnapshot, local: bool) -> OnboardingSnapshot {
+    snapshot.local_host = local.then_some(true);
+    snapshot
+}
+
 /// The resume finds the local runtime stopped (the Podman machine is off after a restart, so nothing of
 /// the team runs): it wakes it with `jht up` and reads the snapshot again, as the setup does, instead of
 /// refusing with «the container is not running». What is not local is not woken: a VPS keeps the refusal
@@ -5664,7 +5680,7 @@ mod tests {
         assistant_reached, existing_team_probe_with, existing_team_readonly_probe_with, expected_installer_digest, failure,
         parse_snapshot, parse_start_limits, parse_verified_snapshot, provider_bootstrap_input,
         native_team_snapshot_with, redact, resume_team_prerequisite, start_and_verify_local_container_with, start_limits_gate,
-        woken_before_resume,
+        with_local_host, woken_before_resume,
         valid_interactive_request_id, valid_pairing_token, valid_provider_login_input,
         valid_wrapper_file, with_start_limits, write_provider_input, ExistingTeamConnectRequest,
         InteractiveStateDetector, LocalCliOperation, OnboardingDiagnosticHostKind,
@@ -7804,6 +7820,12 @@ exit 0
         assert_eq!((woken, read), (0, 0));
         assert_eq!(resume_team_prerequisite(&unchanged).unwrap_err().code, "resume_container_not_ready");
 
+        // the resume snapshot names the host that can be woken: this computer, and no other
+        assert_eq!(with_local_host(stopped(), true).local_host, Some(true));
+        assert_eq!(with_local_host(stopped(), false).local_host, None);
+        assert!(serde_json::to_string(&with_local_host(stopped(), true)).unwrap().contains("\"localHost\":true"));
+        assert!(!serde_json::to_string(&with_local_host(stopped(), false)).unwrap().contains("localHost"));
+
         // no runtime installed: nothing to wake, the prerequisite says so
         let (result, woken, read) = calls(super::OnboardingSnapshot::default(), true, false);
         assert_eq!(resume_team_prerequisite(&result.unwrap()).unwrap_err().code, "resume_runtime_not_ready");
@@ -7823,6 +7845,7 @@ exit 0
             assistant_welcomed: false,
             direct_chat_ready: false,
             limits_verified: None,
+            local_host: None,
         };
         assert!(resume_team_prerequisite(&snapshot).is_ok());
 
