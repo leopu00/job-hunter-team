@@ -277,6 +277,15 @@ pub(crate) fn wrapper_bundle_valid(wrapper: &Path, runtime_dir: &Path) -> bool {
     if !runtime_paths_are_attested(wrapper, runtime_dir) {
         return false;
     }
+    bundle_bytes_valid(wrapper, runtime_dir)
+}
+
+/// The bytes of the bundle against the manifest, the selected engine and the
+/// image pin: what `wrapper_bundle_valid` checks once the paths are attested.
+/// Apart so that the bytes are tested on every host, whatever the ACLs and the
+/// owner of the folder a test creates (a CI runner's temp dir is neither).
+#[cfg_attr(not(windows), allow(dead_code))]
+fn bundle_bytes_valid(wrapper: &Path, runtime_dir: &Path) -> bool {
     let Some(bin) = wrapper.parent() else {
         return false;
     };
@@ -726,24 +735,24 @@ mod tests {
         }
         let manifest_path = runtime.join(".runtime-integrity");
         fs::write(&manifest_path, &manifest).unwrap();
-        assert!(wrapper_bundle_valid(&wrapper, &runtime));
+        assert!(bundle_bytes_valid(&wrapper, &runtime));
 
         // Each file changed after the install is refused.
         for (key, path, content) in &files {
             fs::write(path, format!("{content}changed")).unwrap();
-            assert!(!wrapper_bundle_valid(&wrapper, &runtime), "{key}");
+            assert!(!bundle_bytes_valid(&wrapper, &runtime), "{key}");
             fs::write(path, content).unwrap();
         }
-        assert!(wrapper_bundle_valid(&wrapper, &runtime));
+        assert!(bundle_bytes_valid(&wrapper, &runtime));
 
         // The test channel's image pin counts only with its manifest line.
         let pin = runtime.join("runtime-image");
         fs::write(&pin, "ghcr.io/leopu00/jht@sha256:aa\n").unwrap();
-        assert!(!wrapper_bundle_valid(&wrapper, &runtime));
+        assert!(!bundle_bytes_valid(&wrapper, &runtime));
         fs::write(&manifest_path, format!("{manifest}runtime-image={}\n", digest(&pin))).unwrap();
-        assert!(wrapper_bundle_valid(&wrapper, &runtime));
+        assert!(bundle_bytes_valid(&wrapper, &runtime));
         fs::remove_file(&pin).unwrap();
-        assert!(!wrapper_bundle_valid(&wrapper, &runtime));
+        assert!(!bundle_bytes_valid(&wrapper, &runtime));
         fs::write(&manifest_path, &manifest).unwrap();
 
         // A bundle that selects another engine is not this bundle, even with
@@ -756,7 +765,7 @@ mod tests {
             manifest.replace(&podman_line, &format!("container-runtime={}", digest(&selection))),
         )
         .unwrap();
-        assert!(!wrapper_bundle_valid(&wrapper, &runtime));
+        assert!(!bundle_bytes_valid(&wrapper, &runtime));
         let _ = fs::remove_dir_all(&root);
     }
 
