@@ -616,10 +616,11 @@ _pane() { _tmux capture-pane -e -t "=$session:" -p 2>/dev/null || true; }
 # Dopo un incolla che non ha avuto la prova del submit (exit 5, 3...) il testo resta nella casella
 # e per ogni consegna successiva e' una «bozza altrui»: rc=130 per sempre, e un messaggio interno
 # ([URG], [BRIDGE]) resta incastrato. Qui si ricorda l'impronta di QUELLO che abbiamo incollato
-# (mai il testo): se la casella contiene ESATTAMENTE quel testo, e da meno di mezz'ora, e' nostro, e
+# (mai il testo): se la casella contiene ESATTAMENTE quel testo, e da meno di due ore, e' nostro, e
 # gli si preme solo l'Invio (verificando che la casella si svuoti), poi si consegna il nuovo. Una
-# bozza diversa, o piu' vecchia, resta di un altro: nulla incollato, nulla premuto.
-pending_ttl_s=1800
+# bozza diversa resta di un altro: nulla incollato, nulla premuto. Quella nostra ma piu' vecchia di
+# due ore NON parte (un [URG] vecchio non deve arrivare in ritardo): resta 130 e il log lo dice.
+pending_ttl_s=7200
 _pending_file() {
   printf '%s/tmux-send-pending-%s.sha' "$lock_dir" "$(printf '%s' "$session" | tr -c 'A-Za-z0-9_.-' '_')"
 }
@@ -632,26 +633,40 @@ text = "".join(sys.stdin.buffer.read().decode("utf-8", "replace").split())
 print(int(time.time()), hashlib.sha256(text.encode()).hexdigest())' > "$(_pending_file)" 2>/dev/null || true
 }
 _pending_clear() { rm -f "$(_pending_file)" 2>/dev/null || true; }
-_pending_is_ours() {
+# 0 = nostro e fresco, 3 = e' il testo che abbiamo lasciato ma e' piu' vecchio della finestra, 1 = altro.
+_pending_state() {
   [ -f "$(_pending_file)" ] || return 1
   printf '%s' "$1" | python3 -I -c '
 import hashlib, sys, time
 sys.path.insert(0, sys.argv[1])
 import agent_chat
 record = open(sys.argv[2]).read().split()
-if len(record) != 2 or time.time() - int(record[0]) > int(sys.argv[3]):
+if len(record) != 2:
     sys.exit(1)
 actual = agent_chat.composer_text(sys.stdin.read())
 text = "".join((actual or "").split())
-sys.exit(0 if actual is not None and hashlib.sha256(text.encode()).hexdigest() == record[1] else 1)
+if actual is None or hashlib.sha256(text.encode()).hexdigest() != record[1]:
+    sys.exit(1)
+sys.exit(0 if time.time() - int(record[0]) <= int(sys.argv[3]) else 3)
 ' "$CHAT_SKILLS" "$(_pending_file)" "$pending_ttl_s" 2>/dev/null
+}
+_pending_is_ours() { _pending_state "$1"; }
+# The refusal for a draft that is not ours; the one of ours that is too old says so.
+_say_foreign_text() {
+  local state=0
+  _pending_state "$1" || state=$?
+  if [ "$state" -eq 3 ]; then
+    echo "jht-tmux-send: $session holds a text of ours older than $(( pending_ttl_s / 3600 )) h: not submitted, nothing pasted or pressed (rc=130)" >&2
+  else
+    echo "jht-tmux-send: $session has text in its composer: nothing pasted or pressed (rc=130)" >&2
+  fi
 }
 # Premi l'Invio sul NOSTRO testo rimasto, fino a 3 volte, solo finche' la casella contiene esattamente
 # quello. 0 = non e' piu' nella casella (preso o cambiato), 1 = gli Invio sono stati ingoiati.
 _submit_pending() {
   local attempt poll pane
   for attempt in 1 2 3; do
-    _tmux send-keys -t "$session" Enter
+    _tmux send-keys -t "=$session:" Enter
     for poll in 1 2 3 4 5 6 7; do
       sleep 0.3
       pane=$(_pane)
@@ -677,7 +692,7 @@ _wait_for_empty_composer() {
         fi
         # Text of an earlier delivery of ours: the lock below is where it gets its Enter.
         if _pending_is_ours "$pane"; then return 0; fi
-        echo "jht-tmux-send: $session has text in its composer: nothing pasted or pressed (rc=130)" >&2
+        _say_foreign_text "$pane"
         return 130 ;;
       blocked)
         echo "jht-tmux-send: $session shows a menu, login, or permission request: nothing pasted or pressed (rc=3)" >&2
@@ -752,7 +767,7 @@ if [ "$enter_mode" -eq 0 ]; then
           echo "jht-tmux-send: an earlier text of ours is still stuck in $session after 3 Enter: nothing pasted (rc=130)" >&2
           exit 130
         fi
-        echo "jht-tmux-send: $session has text in its composer: nothing pasted or pressed (rc=130)" >&2
+        _say_foreign_text "$pane"
         exit 130 ;;
       blocked)
         echo "jht-tmux-send: $session shows a menu, login, or permission request: nothing pasted or pressed (rc=3)" >&2
@@ -887,12 +902,12 @@ for s_try in $(seq 1 "$submit_tries"); do
   occ_tail_before_enter=$(_occurrences "$pane" "$signature_tail")
   busy_pre=0
   _pane_busy "$pane" && busy_pre=1
-  _tmux send-keys -t "$session" Enter
+  _tmux send-keys -t "=$session:" Enter
   # Kimi: con solo Enter il messaggio puo' restare accodato in pending input fino a fine batch di
   # tool calls; Ctrl-S forza il submit immediato. Innocuo se la TUI ha gia' processato Enter.
   if [ "$provider" = "kimi" ]; then
     sleep 0.2
-    _tmux send-keys -t "$session" C-s
+    _tmux send-keys -t "=$session:" C-s
   fi
   # Finestra di due secondi, a 300 ms: una casella dim/vuota prova il
   # submit solo perche' il nostro testo era stato visto prima dell'Invio.

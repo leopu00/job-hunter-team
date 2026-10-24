@@ -496,16 +496,41 @@ def test_a_draft_that_is_not_the_text_we_left_stays_untouched(box):
     assert (box.state / "composer").read_text(encoding="utf-8") == "una bozza scritta da una persona"
 
 
-def test_a_text_of_ours_older_than_half_an_hour_is_no_longer_ours(box):
+def _age_the_pending(box, seconds):
+    stamp, digest = _pending(box).read_text(encoding="utf-8").split()
+    _pending(box).write_text(f"{int(stamp) - seconds} {digest}\n", encoding="utf-8")
+
+
+def test_a_text_of_ours_an_hour_old_still_gets_its_enter(box):
     box.put("enter_ignored")
     assert box.run().returncode == 5
     (box.state / "enter_ignored").unlink()
-    stamp, digest = _pending(box).read_text(encoding="utf-8").split()
-    _pending(box).write_text(f"{int(stamp) - 3600} {digest}\n", encoding="utf-8")
+    _age_the_pending(box, 3600)                                # inside the two hours
+    second = box.run(MESSAGE_2)
+    assert second.returncode == 0, second.stderr
+    assert _body(box, "transcript") == [BODY_1, BODY_2]
+
+
+def test_a_text_of_ours_older_than_two_hours_does_not_go_late_and_the_log_says_so(box):
+    box.put("enter_ignored")
+    assert box.run().returncode == 5
+    (box.state / "enter_ignored").unlink()
+    _age_the_pending(box, 7300)                                # past the two hours
     calls_before = len(box.calls())
     second = box.run(MESSAGE_2)
     assert second.returncode == 130, second.stderr
+    assert "older than 2 h" in second.stderr and "not submitted" in second.stderr
     assert not any(c.startswith(("paste-buffer", "send-keys")) for c in box.calls()[calls_before:])
+    assert _body(box, "composer") == [BODY_1], "still there, never submitted late"
+
+
+def test_every_enter_the_transport_presses_names_its_session_exactly(box):
+    box.put("enter_ignored")
+    assert box.run().returncode == 5
+    (box.state / "enter_ignored").unlink()
+    assert box.run(MESSAGE_2).returncode == 0
+    enters = [line for line in box.calls() if line.startswith("send-keys") and line.endswith("Enter")]
+    assert enters and all("-t =CAPITANO:" in line for line in enters), enters
 
 
 def test_a_text_of_ours_that_keeps_ignoring_the_enter_blocks_the_next_one_without_pasting(box):

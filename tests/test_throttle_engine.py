@@ -428,8 +428,8 @@ def test_5b_un_prompt_con_testo_pendente_riceve_comunque_la_sveglia(tmp_path,
 
     calls = tmux.calls_text()
     assert "load-buffer" in calls and "paste-buffer" in calls
-    assert "send-keys -t SCOUT-3 Enter" in calls
-    assert calls.count("send-keys -t SCOUT-3 Enter") >= 2
+    assert "send-keys -t =SCOUT-3: Enter" in calls, "the Enter names its session exactly, like paste and capture"
+    assert calls.count("send-keys -t =SCOUT-3: Enter") >= 2
     assert "Space" not in calls, "un retry non deve cambiare il draft con un carattere estraneo"
     assert res.returncode == 0, (
         "la sveglia va consegnata comunque: rc=%d\n%s"

@@ -291,8 +291,13 @@ class FakeTmux:
         for call in self.read()["calls"]:
             if cmd and (not call or call[0] != cmd):
                 continue
-            if session and ("-t" not in call or call[call.index("-t") + 1] != session):
-                continue
+            if session:
+                # like tmux: `=NAME` and `=NAME:` are the exact name
+                target = call[call.index("-t") + 1] if "-t" in call else None
+                if target is not None and target.startswith("="):
+                    target = target[1:].split(":", 1)[0]
+                if target != session:
+                    continue
             out.append(call)
         return out
 
