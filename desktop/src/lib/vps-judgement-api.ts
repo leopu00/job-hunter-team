@@ -22,7 +22,9 @@ import { apiPath, json, type ApiFetch } from "../shell/api-bridge";
  * code: a page of an existing team never falls back to writing the cloud.
  */
 
-const TARGET = "existing_team_position_write_target";
+/** Also asked by the renewal of the cloud token (existing-team-cloud-token.ts): one key, one gate. */
+export const WRITE_TARGET_COMMAND = "existing_team_position_write_target";
+const TARGET = WRITE_TARGET_COMMAND;
 const WRITE = "existing_team_position_write";
 
 /** The native target says there is no existing team here: the page writes as it always did. */
