@@ -50,6 +50,8 @@ from pathlib import Path
 
 import pytest
 
+from fake_tmux import FakeTmux
+
 REPO_ROOT = Path(__file__).resolve().parent.parent
 SKILLS_DIR = REPO_ROOT / "shared" / "skills"
 LAUNCHER = REPO_ROOT / ".launcher" / "agent-watchdog.sh"
@@ -76,200 +78,14 @@ def _iso(dt):
 
 # ── tmux finto ───────────────────────────────────────────────────────────────
 #
-# Rende osservabili i due stati che il ticket dichiara indistinguibili a occhio:
+# Il finto è quello comune (tests/fake_tmux.py). Rende osservabili i due stati
+# che il ticket dichiara indistinguibili a occhio:
 #   submit="ok"          la TUI processa l'Enter normalmente
 #   submit="needs_space" l'Enter "a freddo" viene ignorato, Space+Enter funziona
 #                        (= TESTO PENDENTE)
 #   submit="frozen"      non accetta nulla (= TUI CONGELATA)
 
-FAKE_TMUX = r'''#!/usr/bin/env python3
-import json, os, sys
-
-STATE = os.path.join(os.environ["FAKE_TMUX_STATE"], "state.json")
-
-
-def load():
-    with open(STATE) as f:
-        return json.load(f)
-
-
-def save(s):
-    with open(STATE, "w") as f:
-        json.dump(s, f)
-
-
-def target(a):
-    # Come tmux: `=NOME` (sessione) e `=NOME:` (finestra/pane) sono il nome
-    # ESATTO. Il doppio non riproduce il prefix matching del nome nudo.
-    t = a[a.index("-t") + 1] if "-t" in a else ""
-    if t.startswith("="):
-        t = t[1:].split(":", 1)[0]
-    return t
-
-
-def render(sess):
-    if sess.get("busy"):
-        return "Working… (esc to interrupt)\n" + "\n".join(sess.get("transcript", []))
-    lines = list(sess.get("transcript", []))
-    if sess.get("style") == "codex":
-        # OpenAI Codex: composer aperto da "›"; oltre `width` colonne il testo
-        # va a capo su una riga di continuazione rientrata, cosi' la coda del
-        # messaggio (la probe del mittente) sta lontana dal marker qualunque
-        # sia la lunghezza. Riga del modello in fondo al pane.
-        draft = sess.get("draft", "")
-        width = sess.get("width", 200)
-        lines += ["› " + draft[:width]] + (["  " + draft[width:]] if len(draft) > width else [])
-        lines += ["", "  gpt-5.6-sol high · ~/agents/capitano"]
-        return "\n".join(lines)
-    lines += ["╭" + "─" * 40 + "╮", "│ > " + sess.get("draft", ""), "╰" + "─" * 40 + "╯"]
-    return "\n".join(lines)
-
-
-args = sys.argv[1:]
-s = load()
-s.setdefault("calls", []).append(args)
-cmd = args[0] if args else ""
-t = target(args)
-sess = s["sessions"].get(t)
-
-if cmd == "has-session":
-    save(s); sys.exit(0 if sess is not None else 1)
-
-if cmd == "list-sessions":
-    fmt = args[args.index("-F") + 1] if "-F" in args else "#{session_name}"
-    out = []
-    for name, v in s["sessions"].items():
-        out.append(fmt.replace("#{session_name}", name)
-                      .replace("#{session_created}", str(v.get("created", 0)))
-                      .replace("#{pane_current_command}", v.get("cmd", "claude")))
-    save(s); print("\n".join(out)); sys.exit(0)
-
-if cmd == "list-panes":
-    if sess is None:
-        save(s); sys.exit(1)
-    fmt = args[args.index("-F") + 1] if "-F" in args else ""
-    save(s); print(fmt.replace("#{pane_current_command}", sess.get("cmd", "claude"))); sys.exit(0)
-
-if cmd == "display-message":
-    if sess is None:
-        save(s); sys.exit(1)
-    fmt = args[-1]
-    save(s)
-    print(fmt.replace("#{session_created}", str(sess.get("created", 0)))
-             .replace("#{pane_current_command}", sess.get("cmd", "claude")))
-    sys.exit(0)
-
-if cmd == "capture-pane":
-    if sess is None:
-        save(s); sys.exit(1)
-    save(s); print(render(sess)); sys.exit(0)
-
-if cmd == "load-buffer":
-    # The transport pastes through a tmux buffer, rather than exposing a
-    # message in send-keys' argv.  Keep this fake on that public tmux contract
-    # so its delivery assertions exercise the real path.
-    name = args[args.index("-b") + 1]
-    s.setdefault("buffers", {})[name] = sys.stdin.read()
-    save(s); sys.exit(0)
-
-if cmd == "paste-buffer":
-    if sess is None:
-        save(s); sys.exit(1)
-    name = args[args.index("-b") + 1]
-    content = s.setdefault("buffers", {}).get(name, "")
-    sess["draft"] = sess.get("draft", "") + content
-    if "-d" in args:
-        s["buffers"].pop(name, None)
-    s["sessions"][t] = sess
-    save(s); sys.exit(0)
-
-if cmd == "kill-session":
-    s["sessions"].pop(t, None); save(s); sys.exit(0)
-
-if cmd == "send-keys":
-    if sess is None:
-        save(s); sys.exit(1)
-    # The buffered path is the contract: accept no inline regression as a
-    # delivery, or this fake would hide a return to send-keys -l.
-    if "-l" in args:
-        save(s); sys.exit(86)
-    if sess.get("submit") == "frozen" and sess.get("draft"):
-        # Congelata: non registra nulla — ne' Enter, ne' Space, ne' testo.
-        save(s); sys.exit(0)
-    key = args[-1]
-    if key == "Space":
-        sess["draft"] = sess.get("draft", "") + " "
-        sess["last_key"] = "Space"
-    elif key == "Enter":
-        mode = sess.get("submit", "ok")
-        sess["enter_count"] = sess.get("enter_count", 0) + 1
-        ok = (mode == "ok"
-              or (mode == "needs_space" and sess.get("last_key") == "Space")
-              or (mode == "needs_retry" and sess["enter_count"] >= 2))
-        if ok and sess.get("draft"):
-            prefix = "› " if sess.get("style") == "codex" else "> "
-            sess.setdefault("transcript", []).append(prefix + sess["draft"])
-            sess["draft"] = ""
-        sess["last_key"] = "Enter"
-    elif key == "C-u":
-        sess["draft"] = ""
-        sess["last_key"] = "C-u"
-    else:
-        sess["last_key"] = key
-    s["sessions"][t] = sess
-    save(s); sys.exit(0)
-
-save(s); sys.exit(0)
-'''
-
-
-class Tmux:
-    """Handle sul tmux finto: sessioni, chiamate registrate, pane."""
-
-    def __init__(self, root: Path, sessions: dict):
-        self.root = root
-        self.bin = root / "bin"
-        self.bin.mkdir(parents=True, exist_ok=True)
-        self.state_dir = root / "tmuxstate"
-        self.state_dir.mkdir(parents=True, exist_ok=True)
-        exe = self.bin / "tmux"
-        exe.write_text(FAKE_TMUX)
-        exe.chmod(0o755)
-        self.write({"sessions": sessions, "calls": []})
-
-    @property
-    def state_file(self):
-        return self.state_dir / "state.json"
-
-    def write(self, s):
-        self.state_file.write_text(json.dumps(s))
-
-    def read(self):
-        return json.loads(self.state_file.read_text())
-
-    def sessions(self):
-        return self.read()["sessions"]
-
-    def draft(self, name):
-        return self.read()["sessions"][name].get("draft", "")
-
-    def calls(self, cmd=None, session=None):
-        out = []
-        for c in self.read()["calls"]:
-            if cmd and (not c or c[0] != cmd):
-                continue
-            if session and (("-t" not in c) or c[c.index("-t") + 1] != session):
-                continue
-            out.append(c)
-        return out
-
-    def env(self, home: Path, **extra):
-        e = os.environ.copy()
-        e["PATH"] = f"{self.bin}:{e['PATH']}"
-        e["FAKE_TMUX_STATE"] = str(self.state_dir)
-        e["JHT_HOME"] = str(home)
-        e.update({k: str(v) for k, v in extra.items()})
-        return e
+Tmux = FakeTmux
 
 
 def _hours_ago(h):
@@ -953,12 +769,8 @@ def test_sender_refuses_a_long_message_when_the_whole_draft_is_not_attestable(tm
     a escludere che davanti ci sia un draft umano. Il risultato deve restare il
     rifiuto sicuro 130, senza un submit su contenuto non attestabile.
     """
-    tmux = tmux_factory({"SCOUT-1": {"created": _hours_ago(1), "submit": "ok"}})
-    exe = tmux.bin / "tmux"
-    exe.write_text(FAKE_TMUX.replace(
-        'save(s); print(render(sess)); sys.exit(0)',
-        'save(s); print(render(sess)[-120:]); sys.exit(0)'))
-    exe.chmod(0o755)
+    # il pane mostra solo la coda: la testa del draft non si vede piu'
+    tmux = tmux_factory({"SCOUT-1": {"created": _hours_ago(1), "submit": "ok", "tail": 120}})
     msg = "[@capitano -> @scout-1] [MSG] " + ("batch molto lungo " * 80) + "CODA-UNIVOCA"
 
     r = _send(tmux, home, "SCOUT-1", msg)
@@ -1061,13 +873,8 @@ def test_sender_still_delivers_to_a_healthy_codex_pane(tmux_factory, home):
 
 def test_sender_still_reports_a_dead_pane_as_three(tmux_factory, home):
     """Un pane che non eco-a nemmeno il testo resta exit 3 (possibile morto)."""
-    tmux = tmux_factory({"SCOUT-1": {"created": _hours_ago(1), "submit": "ok"}})
-    # pane che scarta il typing: simulato togliendo la sessione dopo il primo giro
-    exe = tmux.bin / "tmux"
-    exe.write_text(FAKE_TMUX.replace(
-        'sess["draft"] = sess.get("draft", "") + content',
-        'sess["draft"] = sess.get("draft", "")'))
-    exe.chmod(0o755)
+    # pane che scarta il typing: l'incolla risponde 0 e il testo non compare
+    tmux = tmux_factory({"SCOUT-1": {"created": _hours_ago(1), "submit": "ok", "lost_paste": True}})
     r = _send(tmux, home, "SCOUT-1", "[@capitano -> @scout-1] [MSG] x")
     assert r.returncode == 3, (r.returncode, r.stderr)
 

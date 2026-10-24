@@ -30,13 +30,14 @@ Eseguire:
 import importlib.util
 import json
 import os
-import stat
 import subprocess
 import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
+
+from fake_tmux import FakeTmux
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 SKILLS_DIR = REPO_ROOT / "shared" / "skills"
@@ -417,50 +418,15 @@ def test_5b_un_prompt_con_testo_pendente_riceve_comunque_la_sveglia(tmp_path,
     e il composer di una TUI reale: senza il secondo submit la sveglia resta
     pendente, senza un falso verde del vecchio send-keys inline.
     """
-    bindir = tmp_path / "bin"
-    bindir.mkdir()
-    log = tmp_path / "tmux-calls.log"
-    fake = bindir / "tmux"
-    fake.write_text(
-        "#!/usr/bin/env bash\n"
-        'echo "$@" >> "%s"\n'
-        'state="%s"\n'
-        'case "$1" in\n'
-        '  has-session) exit 0 ;;\n'
-        '  capture-pane)\n'
-        '    draft=$(cat "$state.draft" 2>/dev/null || true)\n'
-        '    printf "╭──────────────────────────────────────────────╮\\n│ ❯ %%s │\\n╰──────────────────────────────────────────────╯\\n" "$draft"\n'
-        '    exit 0 ;;\n'
-        '  load-buffer)\n'
-        '    while [ "$1" != "-b" ] && [ $# -gt 0 ]; do shift; done\n'
-        '    [ "$1" = "-b" ] && shift\n'
-        '    cat > "$state.buffer"\n'
-        '    exit 0 ;;\n'
-        '  paste-buffer)\n'
-        '    cat "$state.buffer" > "$state.draft"; rm -f "$state.buffer"\n'
-        '    exit 0 ;;\n'
-        '  send-keys)\n'
-        '    for a in "$@"; do\n'
-        '      if [ "$a" = "Enter" ]; then\n'
-        '        n=$(cat "$state.enters" 2>/dev/null || echo 0); n=$((n + 1)); echo "$n" > "$state.enters"\n'
-        '        if [ "$n" -ge 2 ]; then : > "$state"; : > "$state.draft"; fi\n'
-        '      fi\n'
-        '    done\n'
-        '    exit 0 ;;\n'
-        'esac\n'
-        'exit 0\n' % (log, tmp_path / "submitted"),
-        encoding="utf-8")
-    fake.chmod(fake.stat().st_mode | stat.S_IEXEC)
-
-    env = dict(os.environ)
-    env["PATH"] = "%s:%s" % (bindir, env.get("PATH", ""))
-    env["JHT_HOME"] = str(tmp_path)
+    # il primo Enter non viene processato, il secondo si
+    tmux = FakeTmux(tmp_path / "fake", {"SCOUT-3": {"submit": "needs_retry"}})
+    env = tmux.env(tmp_path)
     message = ("[DA @SISTEMA A @SCOUT-3] [RIPRENDI] La tua pausa è finita. "
                "PRIMO comando: `throttle-ack scout-3`.")
     res = subprocess.run([str(SENDER), "SCOUT-3", message], env=env,
                          capture_output=True, text=True, timeout=180)
 
-    calls = log.read_text(encoding="utf-8")
+    calls = tmux.calls_text()
     assert "load-buffer" in calls and "paste-buffer" in calls
     assert "send-keys -t SCOUT-3 Enter" in calls
     assert calls.count("send-keys -t SCOUT-3 Enter") >= 2

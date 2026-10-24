@@ -42,6 +42,8 @@ from pathlib import Path
 
 import pytest
 
+from fake_tmux import FakeTmux
+
 ROOT = Path(__file__).resolve().parents[1]
 SKILLS = ROOT / "shared" / "skills"
 TRANSPORT = ROOT / "agents" / "_skills" / "tmux-send" / "jht-tmux-send"
@@ -189,77 +191,20 @@ def test_if_the_fence_cannot_run_the_text_says_so(monkeypatch):
 
 # ── 2. the real transport against a fake tmux ────────────────────────────────
 
-FAKE_TMUX = r"""#!/bin/sh
-# Records what would be typed into the pane; shows it in a composer like a TUI would.
-S="$FAKE_TMUX_STATE"
-cmd="$1"; shift
-case "$cmd" in
-  has-session|list-panes) exit 0 ;;
-  capture-pane)
-    [ -f "$S/transcript" ] && cat "$S/transcript"
-    printf '╭──────────────────────────────────────────────╮\n'
-    if [ -s "$S/composer" ]; then
-      # The visible row is soft-wrapped by the TUI. `typed.*` retains the
-      # original bytes, including line breaks, for the behavioural assertion.
-      draft=$(tr -d '\n' < "$S/composer")
-      printf '│ ❯ %s │\n' "$draft"
-    else
-      printf '│ ❯ │\n'
-    fi
-    printf '╰──────────────────────────────────────────────╯\n  ? for shortcuts\n' ;;
-  load-buffer)
-    while [ "$1" != "-b" ] && [ $# -gt 0 ]; do shift; done
-    [ "$1" = "-b" ] && shift
-    name="$1"; shift
-    cat > "$S/buffer.$name" ;;
-  paste-buffer)
-    while [ $# -gt 0 ]; do
-      if [ "$1" = "-b" ]; then name="$2"; shift 2; continue; fi
-      shift
-    done
-    cat "$S/buffer.$name" > "$S/typed.$name"
-    cat "$S/buffer.$name" >> "$S/composer"
-    rm -f "$S/buffer.$name" ;;
-  send-keys)
-    [ "$1" = "-t" ] && shift 2
-    case "$1" in
-      -l)
-        # Reject the retired inline path: otherwise fence tests false-green.
-        exit 86 ;;
-      Enter)
-        cat "$S/composer" >> "$S/transcript"; echo >> "$S/transcript"; : > "$S/composer" ;;
-    esac ;;
-esac
-exit 0
-"""
-
-
 @pytest.fixture()
 def pane(tmp_path):
-    bin_dir = tmp_path / "bin"
-    bin_dir.mkdir()
-    (bin_dir / "tmux").write_text(FAKE_TMUX, encoding="utf-8")
-    (bin_dir / "tmux").chmod(0o755)
+    tmux = FakeTmux(tmp_path / "fake", any_session=True)
+    bin_dir = tmux.bin
     # A wrapper, not a symlink: the tool finds shared/skills from its own real path.
     (bin_dir / "jht-tmux-send").write_text(f'#!/bin/sh\nexec "{TRANSPORT}" "$@"\n', encoding="utf-8")
     (bin_dir / "jht-tmux-send").chmod(0o755)
-    state = tmp_path / "pane"
-    state.mkdir()
-    env = {
-        **os.environ,
-        "PATH": f"{bin_dir}:{os.environ.get('PATH', '')}",
-        "FAKE_TMUX_STATE": str(state),
-        "JHT_HOME": str(tmp_path / "home"),
-        "JHT_EXTERNAL_CONTENT_NONCE": NONCE,
-        "PYTHONDONTWRITEBYTECODE": "1",
-    }
+    env = tmux.env(tmp_path / "home", JHT_EXTERNAL_CONTENT_NONCE=NONCE, PYTHONDONTWRITEBYTECODE="1")
     env.pop("TMUX", None)
-    return type("Pane", (), {"state": state, "env": env, "bin": bin_dir, "tmp": tmp_path})
+    return type("Pane", (), {"tmux": tmux, "env": env, "bin": bin_dir, "tmp": tmp_path})
 
 
 def typed(pane):
-    files = sorted(pane.state.glob("typed.*"), key=lambda p: p.stat().st_mtime_ns)
-    return [f.read_bytes().decode("utf-8") for f in files]
+    return pane.tmux.typed()
 
 
 def send(pane, message, extra_env=None):

@@ -35,6 +35,7 @@ from pathlib import Path
 
 import pytest
 
+from fake_tmux import FakeTmux
 from test_agent_model_override import _bash, _function
 
 
@@ -420,49 +421,21 @@ def test_stepcap_sends_ctrl_s_only_to_kimi_s_cli(tmp_path: Path, monkeypatch,
 
 
 def _tmux_send(tmp_path: Path, harness: str) -> str:
-    """Run the real jht-tmux-send against a fake tmux; return the tmux calls."""
-    bindir = tmp_path / "bin"
-    bindir.mkdir()
-    log = tmp_path / "tmux-calls.log"
-    fake = bindir / "tmux"
-    fake.write_text(
-        "#!/usr/bin/env bash\n"
-        f'echo "$@" >> "{log}"\n'
-        f'state="{tmp_path / "submitted"}"\n'
-        'case "$1" in\n'
-        '  has-session) exit 0 ;;\n'
-        f'  show-options) printf "%s\\n" "{harness}"; exit 0 ;;\n'
-        '  capture-pane)\n'
-        '    draft=$(cat "$state.draft" 2>/dev/null || true)\n'
-        '    printf "› %s\\n\\n  gpt-5.6-sol high · ~/agents/scout-3\\n" "$draft"\n'
-        '    exit 0 ;;\n'
-        '  load-buffer)\n'
-        '    while [ "$1" != "-b" ] && [ $# -gt 0 ]; do shift; done\n'
-        '    [ "$1" = "-b" ] && shift\n'
-        '    cat > "$state.buffer"\n'
-        '    exit 0 ;;\n'
-        '  paste-buffer)\n'
-        '    cat "$state.buffer" > "$state.draft"; rm -f "$state.buffer"\n'
-        '    exit 0 ;;\n'
-        '  send-keys)\n'
-        '    for a in "$@"; do [ "$a" = "Enter" ] && { : > "$state"; : > "$state.draft"; }; done\n'
-        '    exit 0 ;;\n'
-        'esac\n'
-        'exit 0\n',
-        encoding="utf-8",
-    )
-    fake.chmod(0o755)
+    """Run the real jht-tmux-send against a fake tmux; return the tmux calls, one per line."""
+    tmux = FakeTmux(tmp_path / "fake", {"SCOUT-3": {"style": "codex", "options": {"@jht_harness": harness}}})
     home = tmp_path / "home"
     home.mkdir()
     (home / "jht.config.json").write_text(json.dumps({"active_provider": "kimi"}),
                                           encoding="utf-8")
-    env = _clean_env(PATH=f"{bindir}:{os.environ.get('PATH', '')}", JHT_HOME=str(home))
+    env = tmux.env(home)
+    for key in [k for k in env if k.startswith("JHT_AGENT_HARNESS_")]:
+        del env[key]
     result = subprocess.run(
         [str(SENDER), "SCOUT-3", "[DA @SISTEMA A @SCOUT-3] [RIPRENDI] Riprendi"],
         env=env, capture_output=True, text=True, timeout=180,
     )
     assert result.returncode == 0, result.stderr
-    return log.read_text(encoding="utf-8")
+    return tmux.calls_text()
 
 
 @pytest.mark.parametrize(("harness", "ctrl_s"), [("pi", False), ("", True)])

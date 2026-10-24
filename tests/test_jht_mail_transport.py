@@ -19,6 +19,8 @@ from pathlib import Path
 
 import pytest
 
+from fake_tmux import FakeTmux
+
 ROOT = Path(__file__).resolve().parent.parent
 MODULE = ROOT / "shared" / "skills" / "jht_mail.py"
 TRANSPORT = ROOT / "agents" / "_skills" / "tmux-send" / "jht-tmux-send"
@@ -196,17 +198,18 @@ def test_the_sessions_of_the_agents_that_run_once_have_a_bare_name():
         "CAPITANO", "SCOUT-2", "SENTINELLA", "ANALISTA-1"]
 
 
-def fake_tmux_env(home, **extra):
-    """A fake `tmux` first in the PATH, whose pane is a prompt waiting empty unless `extra` says otherwise."""
-    bin_dir = home / "fake-bin"
-    state = home / "fake-state"
-    bin_dir.mkdir(exist_ok=True)
-    state.mkdir(exist_ok=True)
-    (bin_dir / "tmux").write_text(FAKE_TMUX, encoding="utf-8")
-    (bin_dir / "tmux").chmod(0o755)
-    return {**os.environ, "JHT_HOME": str(home), "FAKE_TMUX_STATE": str(state),
-            "FAKE_PANE_PID": str(os.getpid()), "FAKE_PANE_SESSION": "scout-1", "TMUX": "fake",
-            "PATH": f"{bin_dir}:{Path(sys.executable).parent}:/usr/bin:/bin", **extra}
+def mail_tmux(root, *, pane_pid=None):
+    """A fake tmux whose panes are prompts waiting empty, and whose process table has this process as `scout-1`."""
+    return FakeTmux(root, any_session=True,
+                    panes=[(os.getpid() if pane_pid is None else pane_pid, "scout-1"), (99999, "capitano"), (99998, "analista-1")])
+
+
+def fake_tmux_env(home, **pane):
+    """The environment with that fake tmux first in the PATH; `pane` says what the CAPITANO pane shows."""
+    tmux = mail_tmux(home / "fake-tmux")
+    if pane:
+        tmux.configure("CAPITANO", **pane)
+    return tmux.env(home, restricted_path=True, TMUX="fake")
 
 
 def test_the_command_tick_prints_session_tab_text_and_nothing_else(jht_home):
@@ -266,7 +269,7 @@ def test_the_command_tick_types_nothing_while_the_terminal_is_busy(jht_home):
     past = datetime.now(timezone.utc) - timedelta(seconds=90)
     first_nudge(route(now=past), now=past)
     done = subprocess.run([sys.executable, str(MODULE), "tick"], capture_output=True, text=True,
-                          env=fake_tmux_env(jht_home, FAKE_SCREEN="✻ Working… (12s · esc to interrupt)"))
+                          env=fake_tmux_env(jht_home, screen="✻ Working… (12s · esc to interrupt)"))
     assert done.returncode == 0, done.stderr
     assert done.stdout == ""
 
@@ -300,68 +303,22 @@ def test_a_receipt_appended_while_the_file_is_rewritten_is_not_lost():
 
 # -- the transport, for real, with a fake tmux ---------------------------------------------------------------------------
 
-FAKE_TMUX = r"""#!/bin/sh
-S="$FAKE_TMUX_STATE"
-cmd="$1"; shift
-case "$cmd" in
-  has-session) exit 0 ;;
-  list-panes) printf '%s %s\n' "$FAKE_PANE_PID" "$FAKE_PANE_SESSION"; printf '99999 capitano\n99998 analista-1\n'; exit 0 ;;
-  show-options) exit 0 ;;
-  capture-pane)
-    printf '%s\n' "${FAKE_SCREEN:-}"
-    printf '╭──────────────────────────────────────────────╮\n│ ❯ %s%s │\n╰──────────────────────────────────────────────╯\n' "$(cat "$S/composer" 2>/dev/null)" "${FAKE_COMPOSER_EXTRA:-}"
-    exit 0 ;;
-  load-buffer)
-    while [ "$1" != "-b" ] && [ $# -gt 0 ]; do shift; done
-    [ "$1" = "-b" ] && shift
-    name="$1"; shift
-    cat > "$S/buffer.$name"
-    exit 0 ;;
-  paste-buffer)
-    while [ $# -gt 0 ]; do
-      if [ "$1" = "-b" ]; then name="$2"; shift 2; continue; fi
-      shift
-    done
-    [ "${FAKE_MUTE:-0}" = 1 ] && exit 0
-    cat "$S/buffer.$name" >> "$S/composer"
-    cat "$S/buffer.$name" >> "$S/typed"; printf '\0' >> "$S/typed"
-    rm -f "$S/buffer.$name"
-    exit 0 ;;
-  send-keys)
-    while [ "$1" = "-t" ]; do shift 2; done
-    if [ "$1" = "-l" ]; then
-      # The old inline transport must make the test red, never look delivered.
-      exit 86
-    fi
-    if [ "$1" = "Enter" ]; then
-      [ "${FAKE_ENTER_IGNORED:-0}" = 1 ] && exit 0
-      cat "$S/composer" >> "$S/submitted" 2>/dev/null; printf '\0' >> "$S/submitted"; : > "$S/composer"; exit 0
-    fi
-    exit 0 ;;
-esac
-exit 0
-"""
-
-
 @pytest.fixture
 def wire(tmp_path, jht_home):
     """The transport run as `scout-1`, whose pane is this test process, towards fake sessions."""
-    bin_dir = tmp_path / "fake-bin"
-    state = tmp_path / "fake-state"
-    bin_dir.mkdir()
-    state.mkdir()
-    (bin_dir / "tmux").write_text(FAKE_TMUX, encoding="utf-8")
-    (bin_dir / "tmux").chmod(0o755)
+    tmux = mail_tmux(tmp_path / "fake-tmux")
 
-    def run(session, message, *, pane_session="scout-1", **extra):
-        env = {**os.environ, "JHT_HOME": str(jht_home), "FAKE_TMUX_STATE": str(state),
-               "FAKE_PANE_PID": str(os.getpid()), "FAKE_PANE_SESSION": pane_session,
-               "PATH": f"{bin_dir}:{Path(sys.executable).parent}:/usr/bin:/bin", "TMUX": "fake", **extra}
+    def run(session, message, *, pane_pid=None, **pane):
+        """`pane_pid`: whose process tree the sender pane is; `pane`: what the receiving pane does."""
+        if pane_pid is not None:
+            tmux.set_panes([(pane_pid, "scout-1"), (99999, "capitano"), (99998, "analista-1")])
+        if pane:
+            tmux.configure(session, **pane)
+        env = tmux.env(jht_home, restricted_path=True, TMUX="fake")
         return subprocess.run([str(TRANSPORT), session, message], capture_output=True, text=True, timeout=120, env=env)
 
     def typed():
-        raw = (state / "typed").read_text(encoding="utf-8") if (state / "typed").exists() else ""
-        return [part for part in raw.split("\0") if part]
+        return tmux.typed()
 
     def messages():
         path = jht_home / "logs" / "messages.jsonl"
@@ -418,7 +375,7 @@ def test_only_a_verified_agent_to_agent_envelope_is_routed(wire, jht_home, messa
 def test_a_sender_that_tmux_cannot_place_is_never_routed(wire, jht_home):
     run, typed, _ = wire
     enable(jht_home, "capitano")
-    done = run("CAPITANO", envelope(), FAKE_PANE_PID="1")  # the pane is somebody else's process tree
+    done = run("CAPITANO", envelope(), pane_pid=1)  # the pane is somebody else's process tree
     assert done.returncode == 0, done.stderr
     assert queued_files(jht_home) == [] and typed() and "UNVERIFIED" in typed()[0]
 
@@ -435,7 +392,7 @@ def test_impersonation_is_refused_before_the_router_and_leaves_no_mail(wire, jht
 def test_a_nudge_that_is_not_confirmed_still_leaves_the_message_queued_and_exits_zero(wire, jht_home):
     run, typed, _ = wire
     enable(jht_home, "capitano")
-    done = run("CAPITANO", envelope(), FAKE_ENTER_IGNORED="1")
+    done = run("CAPITANO", envelope(), submit="frozen")
     assert done.returncode == 0, done.stderr
     assert "nudge unconfirmed" in done.stderr
     assert len(queued_files(jht_home)) == 1, "the message is safe, whatever happened to the nudge"
@@ -444,7 +401,7 @@ def test_a_nudge_that_is_not_confirmed_still_leaves_the_message_queued_and_exits
 def test_a_terminal_that_does_not_respond_keeps_its_exit_code_three(wire, jht_home):
     run, _, _ = wire
     enable(jht_home, "capitano")
-    done = run("CAPITANO", envelope(), FAKE_MUTE="1")
+    done = run("CAPITANO", envelope(), lost_paste=True)
     assert done.returncode == 3, done.stderr
     assert len(queued_files(jht_home)) == 1 and "queued" in done.stderr
 
@@ -513,15 +470,7 @@ def test_a_nudge_receipt_that_cannot_be_written_does_not_make_the_route_fail(mon
 def test_the_command_route_exits_zero_when_the_file_is_there(jht_home, monkeypatch):
     """The transport types the text itself whenever `route` exits with anything else: a second copy."""
     enable(jht_home, "capitano")
-    env = {**os.environ, "JHT_HOME": str(jht_home), "TMUX": "fake"}
-    bin_dir = jht_home / "bin"
-    bin_dir.mkdir()
-    (bin_dir / "tmux").write_text(FAKE_TMUX, encoding="utf-8")
-    (bin_dir / "tmux").chmod(0o755)
-    state = jht_home / "state"
-    state.mkdir()
-    env.update(PATH=f"{bin_dir}:{Path(sys.executable).parent}:/usr/bin:/bin", FAKE_TMUX_STATE=str(state),
-               FAKE_PANE_PID=str(os.getpid()), FAKE_PANE_SESSION="scout-1")
+    env = fake_tmux_env(jht_home)
     wrapper = jht_home / "wrap.py"
     wrapper.write_text(
         "import importlib.util, sys\n"
@@ -539,8 +488,8 @@ def test_the_command_route_exits_zero_when_the_file_is_there(jht_home, monkeypat
 # -- phase 3b through the real script ----------------------------------------------------------------------------------------
 
 @pytest.mark.parametrize("name,extra", [
-    ("busy", {"FAKE_SCREEN": "✻ Working… (12s · esc to interrupt)"}),
-    ("a menu", {"FAKE_SCREEN": "Do you want to proceed?", "FAKE_COMPOSER_EXTRA": "1. Yes"}),
+    ("busy", {"screen": "✻ Working… (12s · esc to interrupt)"}),
+    ("a menu", {"screen": "Do you want to proceed?", "composer_extra": "1. Yes"}),
 ])
 def test_the_transport_queues_but_types_nothing_when_the_terminal_is_not_at_its_prompt(wire, jht_home, name, extra):
     run, typed, _ = wire
