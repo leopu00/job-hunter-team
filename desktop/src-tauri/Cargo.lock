@@ -2005,7 +2005,9 @@ dependencies = [
 name = "jht-desktop"
 version = "0.4.0"
 dependencies = [
+ "base64 0.22.1",
  "chacha20poly1305",
+ "flate2",
  "keyring",
  "libc",
  "open",
