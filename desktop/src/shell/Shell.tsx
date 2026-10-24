@@ -99,9 +99,10 @@ function Navbar({
 
   return (
     <header className="sticky top-0 z-30 border-b border-[var(--color-border)] bg-[var(--color-panel)]">
+      {/* overflow-x-clip, not overflow-hidden: hidden clips the «More ▾» menu too, which hangs below the 56 px bar. The bar still never grows past the window; only the horizontal axis is cut. */}
       <nav
         aria-label={shellText.navAria}
-        className="max-w-full min-w-0 overflow-hidden px-2 sm:px-4 lg:px-6 h-14 flex items-center gap-2 sm:gap-4"
+        className="max-w-full min-w-0 overflow-x-clip px-2 sm:px-4 lg:px-6 h-14 flex items-center gap-2 sm:gap-4"
       >
         <div className="flex items-center flex-shrink-0">
           <Link href={readOnly ? READ_ONLY_HOME : HOME} className="flex items-center no-underline group">

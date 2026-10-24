@@ -171,7 +171,9 @@ describe("Shell", () => {
       const links = screen.getByTestId("navbar-links-scroll");
       const actions = screen.getByTestId("navbar-actions");
       expect(nav.className).toMatch(/min-w-0/);
-      expect(nav.className).toMatch(/overflow-hidden/);
+      // Only the horizontal axis is cut: `overflow-hidden` would clip the «More ▾» menu hanging under the bar.
+      expect(nav.className).toMatch(/overflow-x-clip/);
+      expect(nav.className).not.toMatch(/overflow-hidden|overflow-y-/);
       expect(links.className).toMatch(/min-w-0/);
       expect(links.className).toMatch(/flex-1/);
       expect(links.className).toMatch(/overflow-x-auto/);
