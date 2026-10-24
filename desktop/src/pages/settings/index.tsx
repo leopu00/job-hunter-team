@@ -3,6 +3,7 @@ import { appLocale } from "../../lib/app-locale";
 import { navigate } from "../../shell/router";
 import { useProviderSetup } from "../../lib/provider-setup";
 import type { PageProps } from "../types";
+import NotifyCard from "./NotifyCard";
 import { SETTINGS_TEXT, VPS_CONNECTION_TEXT } from "./settings.i18n";
 
 /**
@@ -23,6 +24,7 @@ export default function SettingsPage(_props: PageProps) {
       <p className="text-[12px] text-[var(--color-muted)]">{t.intro}</p>
       <LanguageCard />
       <CurrencyCard />
+      <NotifyCard />
       <button
         type="button"
         onClick={() => navigate("/settings/vps-connection")}

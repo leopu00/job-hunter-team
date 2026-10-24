@@ -17,6 +17,9 @@ export interface NotifyText {
   lockScreen: string;
   /** the settings' choice that adds the title and the company */
   withDetails: string;
+  /** the settings card's title, and the switch's own words */
+  switchTitle: string;
+  switchLabel: string;
 }
 
 export const NOTIFY_TEXT: Record<Locale, NotifyText> = {
@@ -27,6 +30,8 @@ export const NOTIFY_TEXT: Record<Locale, NotifyText> = {
     lockScreen:
       "Le notifiche compaiono nel centro notifiche del sistema, sullo schermo bloccato e in uno schermo condiviso: chiunque lo guardi le legge.",
     withDetails: "Mostra titolo e azienda della posizione",
+    switchTitle: "Notifiche",
+    switchLabel: "Avvisami quando arriva una nuova posizione",
   },
   en: {
     appName: "Job Hunter Team",
@@ -35,6 +40,8 @@ export const NOTIFY_TEXT: Record<Locale, NotifyText> = {
     lockScreen:
       "Notifications show in the system's notification centre, on the locked screen and on a shared screen: anyone looking at it can read them.",
     withDetails: "Show the position's title and company",
+    switchTitle: "Notifications",
+    switchLabel: "Notify me when a new position arrives",
   },
   de: {
     appName: "Job Hunter Team",
@@ -43,6 +50,8 @@ export const NOTIFY_TEXT: Record<Locale, NotifyText> = {
     lockScreen:
       "Benachrichtigungen erscheinen in der Mitteilungszentrale des Systems, auf dem Sperrbildschirm und auf einem geteilten Bildschirm: Wer hinschaut, kann sie lesen.",
     withDetails: "Titel und Unternehmen der Stelle anzeigen",
+    switchTitle: "Benachrichtigungen",
+    switchLabel: "Benachrichtige mich, wenn eine neue Stelle eintrifft",
   },
   fr: {
     appName: "Job Hunter Team",
@@ -51,6 +60,8 @@ export const NOTIFY_TEXT: Record<Locale, NotifyText> = {
     lockScreen:
       "Les notifications s’affichent dans le centre de notifications du système, sur l’écran verrouillé et sur un écran partagé : toute personne qui le regarde peut les lire.",
     withDetails: "Afficher l’intitulé et l’entreprise de l’offre",
+    switchTitle: "Notifications",
+    switchLabel: "Me prévenir quand une nouvelle offre arrive",
   },
   es: {
     appName: "Job Hunter Team",
@@ -59,6 +70,8 @@ export const NOTIFY_TEXT: Record<Locale, NotifyText> = {
     lockScreen:
       "Las notificaciones aparecen en el centro de notificaciones del sistema, en la pantalla bloqueada y en una pantalla compartida: quien la mire puede leerlas.",
     withDetails: "Mostrar el título y la empresa de la oferta",
+    switchTitle: "Notificaciones",
+    switchLabel: "Avisarme cuando llegue una oferta nueva",
   },
   pt: {
     appName: "Job Hunter Team",
@@ -67,6 +80,8 @@ export const NOTIFY_TEXT: Record<Locale, NotifyText> = {
     lockScreen:
       "As notificações aparecem no centro de notificações do sistema, no ecrã bloqueado e num ecrã partilhado: quem olhar pode lê-las.",
     withDetails: "Mostrar o título e a empresa da vaga",
+    switchTitle: "Notificações",
+    switchLabel: "Avisar-me quando chegar uma vaga nova",
   },
   hu: {
     appName: "Job Hunter Team",
@@ -75,5 +90,7 @@ export const NOTIFY_TEXT: Record<Locale, NotifyText> = {
     lockScreen:
       "Az értesítések megjelennek a rendszer értesítési központjában, a zárolt képernyőn és a megosztott képernyőn is: aki ránéz, elolvashatja őket.",
     withDetails: "Az állás címének és cégének megjelenítése",
+    switchTitle: "Értesítések",
+    switchLabel: "Értesítsen, amikor új állás érkezik",
   },
 };

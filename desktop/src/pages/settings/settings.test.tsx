@@ -1,8 +1,9 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { DISPLAY_CURRENCY_COOKIE } from "@/lib/display-currency";
 import { installApiBridge, notInDesktop, shellApi } from "../../shell/api-bridge";
+import { NOTIFY_PREFS_KEY, readNotifyPrefs, writeNotifyPrefs } from "../../lib/notify/prefs";
 import { ProviderSetupContext } from "../../lib/provider-setup";
 import SettingsPage from "./index";
 
@@ -22,6 +23,7 @@ afterEach(() => {
   reload.mockReset();
   Object.defineProperty(window, "location", { configurable: true, value: realLocation });
   localStorage.removeItem("jht-lang");
+  localStorage.removeItem(NOTIFY_PREFS_KEY);
   document.cookie = "NEXT_LOCALE=; path=/; max-age=0";
   document.cookie = `${DISPLAY_CURRENCY_COOKIE}=; path=/; max-age=0`;
 });
@@ -90,5 +92,35 @@ describe("the settings page", () => {
     render(<SettingsPage {...props} />);
     await user.click(screen.getByRole("button", { name: /VPS connection/ }));
     expect(window.location.hash).toBe("#/settings/vps-connection");
+  });
+
+  it("turns the new-position notifications on and off, with the details only when asked", async () => {
+    const user = userEvent.setup();
+    render(<SettingsPage {...props} />);
+    const card = screen.getByTestId("settings-notify");
+    expect(card).toHaveTextContent("Notifications");
+    // off until the person turns it on, and it says where the notification shows
+    expect(screen.getByTestId("settings-notify-enabled")).not.toBeChecked();
+    expect(screen.queryByTestId("settings-notify-details")).not.toBeInTheDocument();
+    expect(card).toHaveTextContent(/locked screen/);
+    await user.click(screen.getByTestId("settings-notify-enabled"));
+    expect(readNotifyPrefs()).toEqual({ enabled: true, details: false });
+    expect(screen.getByTestId("settings-notify-details")).not.toBeChecked();
+    await user.click(screen.getByTestId("settings-notify-details"));
+    expect(readNotifyPrefs()).toEqual({ enabled: true, details: true });
+    // off forgets the details
+    await user.click(screen.getByTestId("settings-notify-enabled"));
+    expect(readNotifyPrefs()).toEqual({ enabled: false, details: false });
+    expect(screen.queryByTestId("settings-notify-details")).not.toBeInTheDocument();
+  });
+
+  it("follows the switch when something else changes it", async () => {
+    render(<SettingsPage {...props} />);
+    expect(screen.getByTestId("settings-notify-enabled")).not.toBeChecked();
+    act(() => {
+      writeNotifyPrefs({ enabled: true, details: true });
+    });
+    expect(screen.getByTestId("settings-notify-enabled")).toBeChecked();
+    expect(screen.getByTestId("settings-notify-details")).toBeChecked();
   });
 });
