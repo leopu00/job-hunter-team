@@ -182,10 +182,29 @@ def test_a_localized_pondering_form_is_queued_and_proven_after_enter(box):
 
 
 def test_any_real_text_already_in_the_box_is_never_typed_over_or_submitted(box):
-    box.put("composer", MESSAGE)
+    box.put("composer", "a human draft")
     done = box.run()
     assert done.returncode == 130, done.stderr
     assert box.typed() == [] and box.keys("Enter") == []
+
+
+def test_an_exact_pending_envelope_is_submitted_without_a_second_paste(box):
+    # First attempt leaves the exact, post-fence envelope in the composer.
+    # The second transport invocation must attest and reuse it, not paste.
+    box.put("enter_ignored")
+    assert box.run().returncode == 5
+    (box.state / "enter_ignored").unlink()
+    done = box.run()
+    assert done.returncode == 0, done.stderr
+    assert len(box.typed()) == 1 and len(box.keys("Enter")) == 4
+
+
+def test_an_exact_pending_envelope_retries_enter_only_then_stays_queued(box):
+    box.put("enter_ignored")
+    assert box.run().returncode == 5
+    done = box.run()
+    assert done.returncode == 5, done.stderr
+    assert len(box.typed()) == 1 and len(box.keys("Enter")) == 6
 
 
 @pytest.mark.parametrize(("switch", "content"), [

@@ -620,6 +620,11 @@ _wait_for_empty_composer() {
     case "$gate" in
       empty|none) return 0 ;;
       text)
+        if _composer_is_only_ours "$pane"; then
+          # A prior paste of THIS envelope won the small hand-off race.  It
+          # is safe to continue with Enter only; never paste it a second time.
+          return 0
+        fi
         echo "jht-tmux-send: $session has text in its composer: nothing pasted or pressed (rc=130)" >&2
         return 130 ;;
       blocked)
@@ -679,6 +684,12 @@ if [ "$enter_mode" -eq 0 ]; then
     case "$preflight_gate" in
       empty|none) break ;;
       text)
+        if _composer_is_only_ours "$pane"; then
+          # Exact complete equality is the attestation that this pending
+          # composer is ours, not a human draft.  Reuse it; no second paste.
+          preflight_gate=empty
+          break
+        fi
         echo "jht-tmux-send: $session has text in its composer: nothing pasted or pressed (rc=130)" >&2
         exit 130 ;;
       blocked)
