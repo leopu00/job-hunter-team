@@ -1078,6 +1078,9 @@ function Test-BrokerUp {
 
 # L'host amministra il broker con exec di jht-broker-admin; un segreto passa
 # solo su stdin ($InputText), mai negli argomenti.
+# I chiamanti passano SEMPRE -AdminArgs per nome (come Invoke-TelegramAdmin): InputText e' il primo
+# parametro posizionale, e `Invoke-BrokerAdmin secrets status` gli darebbe 'secrets' lasciando al
+# broker il solo 'status'.
 function Invoke-BrokerAdmin {
   param([string]$InputText = $null, [Parameter(ValueFromRemainingArguments)] [string[]]$AdminArgs)
   $brokerId = Get-RunningComposeServiceId $BrokerContainer
@@ -1088,7 +1091,10 @@ function Invoke-BrokerAdmin {
   }
   # Out-Host: la risposta JSON va a chi ha lanciato jht, non nel valore di
   # ritorno della funzione (che e' solo il codice d'uscita).
-  if ($null -ne $InputText) {
+  # [string] trasforma $null in "": senza ContainsKey ogni chiamata, anche `apply account` o
+  # `secrets status`, aprirebbe lo stdin con una riga vuota. Solo un -InputText passato davvero
+  # (anche vuoto, come in `apply record`) lo apre.
+  if ($PSBoundParameters.ContainsKey('InputText')) {
     # Una password con caratteri non ASCII arriverebbe come '?' con la
     # codifica di default di Windows PowerShell 5.1.
     $previousEncoding = $OutputEncoding
@@ -1126,7 +1132,9 @@ function Invoke-ApplySkill {
   try {
     # Tutte le righe, poi l'ultima: con `| Select-Object -First 1` $LASTEXITCODE
     # non e' piu' quello di docker.
-    $lines = @(& docker exec $ContainerId python3 /app/shared/skills/apply_request.py @SkillArgs --host 2>$null)
+    # Under 'Stop' Windows PowerShell 5.1 turns the first line of a redirected stderr into an error:
+    # the redirection lives inside a scope where the preference is 'Continue'.
+    $lines = @(& { $ErrorActionPreference = 'Continue'; & docker exec $ContainerId python3 /app/shared/skills/apply_request.py @SkillArgs --host 2>$null })
   } finally {
     [Console]::OutputEncoding = $previous
   }
@@ -1197,7 +1205,7 @@ function Invoke-ApplyHostCommand {
     Write-Err "Risposta del container non valida: autorizzazione ritirata, niente partira'."
     return 1
   }
-  $recorded = Invoke-BrokerAdmin -InputText '' apply record $id $instant $destination
+  $recorded = Invoke-BrokerAdmin -InputText '' -AdminArgs @('apply', 'record', $id, $instant, $destination)
   if ($recorded -ne 0) {
     $null = Invoke-ApplySkill $containerId @('cancel', $id)
     Write-Err "Il broker non ha registrato l'autorizzazione: ritirata, niente partira'."
@@ -1564,6 +1572,25 @@ function Invoke-BrokerMigrateLegacyOnce {
   return 0
 }
 
+# One field of the box's cloud.json, read by node inside the container. The script goes on stdin
+# (`node -`): Windows PowerShell 5.1 strips the double quotes of an argument handed to a native
+# program, so `node -e '...require("fs")...'` reached node as `require(fs)`, a syntax error, and
+# its stderr stopped the script (T106). The native call runs in a block of its own with 'Continue'
+# because, under 'Stop', 5.1 turns any stderr line into an error even with 2>$null.
+function Get-AgentCloudField {
+  param([Parameter(Mandatory)][string]$AgentId, [Parameter(Mandatory)][ValidateSet('token', 'user_id')][string]$Field)
+  $script = if ($Field -eq 'token') {
+    @'
+const fs=require('fs');try{const c=JSON.parse(fs.readFileSync('/jht_home/cloud.json','utf8'));if(typeof c.token==='string')process.stdout.write(c.token)}catch{}
+'@
+  } else {
+    @'
+const fs=require('fs');try{const c=JSON.parse(fs.readFileSync('/jht_home/cloud.json','utf8'));if(typeof c.user_id==='string'&&/^[0-9a-f-]{36}$/i.test(c.user_id))process.stdout.write(c.user_id)}catch{}
+'@
+  }
+  return ((& { $ErrorActionPreference = 'Continue'; $script | & docker exec -i -u 1001 $AgentId node - 2>$null }) -join '')
+}
+
 # First pairing may take user_id from cloud.json in the box, a box-writable
 # file.  This is a bootstrap residual only: once the broker has an account,
 # normal starts refresh its token but never replace that account automatically;
@@ -1572,21 +1599,25 @@ function Initialize-BrokerWebAuthorisations {
   $agentId = Get-RunningComposeServiceId 'jht'
   $brokerId = Get-RunningComposeServiceId $BrokerContainer
   if (-not $agentId -or -not $brokerId) { return }
-  $state = (& docker exec $brokerId jht-broker-admin apply web-status 2>$null) -join "`n"
-  $token = (& docker exec -u 1001 $agentId node -e 'const fs=require("fs");try{const c=JSON.parse(fs.readFileSync("/jht_home/cloud.json","utf8"));if(typeof c.token==="string")process.stdout.write(c.token)}catch{}' 2>$null) -join ''
-  if ($token) { $null = Invoke-BrokerAdmin -InputText $token apply web-token }
+  # Under 'Stop' Windows PowerShell 5.1 turns a native program's stderr line into an error that stops
+  # the script even with 2>$null (T106: the first `jht up` of a standard-user install ended there),
+  # so each of these native calls runs in a block of its own with 'Continue'.
+  $state = ((& { $ErrorActionPreference = 'Continue'; & docker exec $brokerId jht-broker-admin apply web-status 2>$null }) -join "`n")
+  $token = Get-AgentCloudField -AgentId $agentId -Field 'token'
+  if ($token) { $null = Invoke-BrokerAdmin -InputText $token -AdminArgs @('apply', 'web-token') }
   if ($state -match '"account_id": null') {
-    $account = (& docker exec -u 1001 $agentId node -e 'const fs=require("fs");try{const c=JSON.parse(fs.readFileSync("/jht_home/cloud.json","utf8"));if(typeof c.user_id==="string"&&/^[0-9a-f-]{36}$/i.test(c.user_id))process.stdout.write(c.user_id)}catch{}' 2>$null) -join ''
-    if ($account) { $null = Invoke-BrokerAdmin apply account $account }
+    $account = Get-AgentCloudField -AgentId $agentId -Field 'user_id'
+    # -AdminArgs by name: the first positional word would bind to InputText and be piped as stdin
+    if ($account) { $null = Invoke-BrokerAdmin -AdminArgs @('apply', 'account', $account) }
   }
 }
 
 function Reset-BrokerWebAccount {
   $agentId = Get-RunningComposeServiceId 'jht'
   if (-not $agentId) { Write-Err 'apply relink-account: container non attivo.'; return 1 }
-  $account = (& docker exec -u 1001 $agentId node -e 'const fs=require("fs");try{const c=JSON.parse(fs.readFileSync("/jht_home/cloud.json","utf8"));if(typeof c.user_id==="string"&&/^[0-9a-f-]{36}$/i.test(c.user_id))process.stdout.write(c.user_id)}catch{}' 2>$null) -join ''
+  $account = Get-AgentCloudField -AgentId $agentId -Field 'user_id'
   if (-not $account) { Write-Err 'apply relink-account: cloud account non disponibile. Esegui prima jht cloud pair.'; return 1 }
-  return Invoke-BrokerAdmin apply account $account
+  return Invoke-BrokerAdmin -AdminArgs @('apply', 'account', $account)
 }
 
 function Remove-BrokerResetData {
@@ -1960,7 +1991,7 @@ function Invoke-MailSetup {
   $adminArgs = @('mailbox', 'setup', '--user', $user, '--admission', $admission)
   if ($imapHost) { $adminArgs += @('--imap-host', $imapHost) }
   if ($smtpHost) { $adminArgs += @('--smtp-host', $smtpHost) }
-  $code = Invoke-BrokerAdmin -InputText $password @adminArgs
+  $code = Invoke-BrokerAdmin -InputText $password -AdminArgs $adminArgs
   $password = $null
   return $code
 }
@@ -1971,13 +2002,13 @@ function Invoke-MailCommand {
   $rest = if ($MailArgs.Count -gt 1) { $MailArgs[1..($MailArgs.Count - 1)] } else { @() }
   switch ($action) {
     'setup' { return Invoke-MailSetup $rest }
-    'status' { $c = Invoke-BrokerAdmin secrets status; if ($c -ne 0) { return $c }; return Invoke-BrokerAdmin mailbox show }
-    'admission' { return Invoke-BrokerAdmin mailbox admission @rest }
-    'allow' { return Invoke-BrokerAdmin mailbox allow @rest }
-    'drafts' { return Invoke-BrokerAdmin mail drafts }
-    { $_ -in @('approve', 'discard') } { return Invoke-BrokerAdmin mail $action @rest }
-    'journal' { return Invoke-BrokerAdmin mail journal @rest }
-    'delete' { return Invoke-BrokerAdmin secrets delete email_monitor }
+    'status' { $c = Invoke-BrokerAdmin -AdminArgs @('secrets', 'status'); if ($c -ne 0) { return $c }; return Invoke-BrokerAdmin -AdminArgs @('mailbox', 'show') }
+    'admission' { return Invoke-BrokerAdmin -AdminArgs (@('mailbox', 'admission') + @($rest)) }
+    'allow' { return Invoke-BrokerAdmin -AdminArgs (@('mailbox', 'allow') + @($rest)) }
+    'drafts' { return Invoke-BrokerAdmin -AdminArgs @('mail', 'drafts') }
+    { $_ -in @('approve', 'discard') } { return Invoke-BrokerAdmin -AdminArgs (@('mail', $action) + @($rest)) }
+    'journal' { return Invoke-BrokerAdmin -AdminArgs (@('mail', 'journal') + @($rest)) }
+    'delete' { return Invoke-BrokerAdmin -AdminArgs @('secrets', 'delete', 'email_monitor') }
     'migrate' {
       $code = Invoke-BrokerMigrateLegacy
       if ($code -eq 0) { New-Item -ItemType File -Path $BrokerLegacyMarker -Force -ErrorAction SilentlyContinue | Out-Null }
@@ -2568,7 +2599,7 @@ function Invoke-HostDownload {
   } catch {
     Write-Err "pubblicazione del download sull host non riuscita: $($_.Exception.Message)"
   } finally {
-    & docker exec $Container rm -f $containerTemp *> $null
+    & { $ErrorActionPreference = 'Continue'; & docker exec $Container rm -f $containerTemp *> $null }
     if (Test-Path -LiteralPath $hostTemp) {
       Remove-Item -LiteralPath $hostTemp -Force -ErrorAction SilentlyContinue
     }
