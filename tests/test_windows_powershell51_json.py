@@ -183,7 +183,7 @@ def _canonical(stdout: str):
 def _digest_case(tmp_path, shell, *, expected: str, old_parse: bool = False):
     image = f"{IMAGE}@{expected}" if expected else f"{IMAGE}:test"
     return _run(
-        tmp_path, shell, ENABLER, ["Invoke-Checked", "Write-JhtPhase"], DIGEST_BLOCK,
+        tmp_path, shell, ENABLER, ["Invoke-Checked", "Write-JhtPhase", "ConvertTo-JhtPullLine", "Invoke-PodmanPull"], DIGEST_BLOCK,
         {
             "FAKE_REPO_DIGESTS": PODMAN6_REPO_DIGESTS,
             "JHT_RUNTIME_IMAGE": image,

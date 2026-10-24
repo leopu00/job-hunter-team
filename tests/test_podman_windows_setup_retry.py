@@ -686,6 +686,7 @@ def test_the_pulled_image_is_found_by_its_digest_among_all_its_digests(tmp_path,
         + (WINDOWS_POWERSHELL_JSON if imitate else "")
         + "function Write-JhtPhase { }\n"
         "function Invoke-Checked { $global:LASTEXITCODE = 0 }\n"
+        "function Invoke-PodmanPull { $global:LASTEXITCODE = 0 }\n"
         f"function fake-podman {{ $global:LASTEXITCODE = 0; '{inspect}' }}\n"
         "$Podman = 'fake-podman'; $MachineName = 'jht-podman'\n"
         f"$RuntimeImage = 'ghcr.io/leopu00/jht@{INDEX}'; $ExpectedImageDigest = '{INDEX}'\n"
