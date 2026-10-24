@@ -13,6 +13,7 @@ import {
   finalizeLocalProfileMigration,
   localIdentitySelected,
   readLocalProfile,
+  renameLocalProfile,
   resetPlaygroundLocalProfile,
   selectSavedLocalProfile,
 } from "./local-profile";
@@ -33,6 +34,14 @@ beforeEach(() => {
 });
 
 describe("local identity persistence", () => {
+  it("renames only the local display label and keeps the profile capability stable", async () => {
+    vi.mocked(createDesktopLocalProfile).mockResolvedValue({ profileId: "opaque-profile-a" });
+    await createAndActivateLocalProfile("Ada Locale");
+
+    expect(renameLocalProfile("  Bea   Locale ")).toEqual({ profileId: "opaque-profile-a", displayName: "Bea Locale" });
+    expect(readLocalProfile()).toEqual({ profileId: "opaque-profile-a", displayName: "Bea Locale" });
+    expect(activateDesktopLocalScope).toHaveBeenCalledTimes(1);
+  });
   it("keeps the display name on-device and passes only the backend profile ID to scope activation", async () => {
     vi.mocked(createDesktopLocalProfile).mockResolvedValue({ profileId: "opaque-profile-a" });
 

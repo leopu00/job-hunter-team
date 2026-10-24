@@ -81,4 +81,14 @@ describe("the settings page", () => {
     await user.selectOptions(screen.getByRole("combobox"), "USD");
     expect(document.cookie).toContain(`${DISPLAY_CURRENCY_COOKIE}=USD`);
   });
+
+  it("opens the VPS connection details from settings", async () => {
+    // The language tests replace location to make reload observable. Restore the
+    // browser location here: the shell router updates its hash through History.
+    Object.defineProperty(window, "location", { configurable: true, value: realLocation });
+    const user = userEvent.setup();
+    render(<SettingsPage {...props} />);
+    await user.click(screen.getByRole("button", { name: /VPS connection/ }));
+    expect(window.location.hash).toBe("#/settings/vps-connection");
+  });
 });

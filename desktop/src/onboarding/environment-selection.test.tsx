@@ -8,6 +8,8 @@ import type { OnboardingFlowProps } from "../lib/onboarding";
 
 const native = vi.hoisted(() => ({ invoke: vi.fn(), isTauri: () => true, Channel: class {} }));
 vi.mock("@tauri-apps/api/core", () => native);
+// The saved-VPS list is a read of a local file, not what these tests count among the native calls.
+vi.mock("../lib/saved-vps", () => ({ savedVpsBridge: { list: async () => [], add: vi.fn(), rename: vi.fn(), remove: vi.fn() } }));
 vi.mock("@tauri-apps/plugin-dialog", () => ({ open: async () => "/synthetic/key" }));
 vi.mock("@tauri-apps/api/path", () => ({ homeDir: async () => "/synthetic" }));
 const t = ONBOARDING_TEXT.en;

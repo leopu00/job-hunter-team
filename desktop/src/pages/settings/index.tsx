@@ -1,8 +1,9 @@
 import { CurrencyCard, LanguageCard } from "@/app/components/SettingsCloudSections";
 import { appLocale } from "../../lib/app-locale";
+import { navigate } from "../../shell/router";
 import { useProviderSetup } from "../../lib/provider-setup";
 import type { PageProps } from "../types";
-import { SETTINGS_TEXT } from "./settings.i18n";
+import { SETTINGS_TEXT, VPS_CONNECTION_TEXT } from "./settings.i18n";
 
 /**
  * /settings: the app's language and the salary currency, the web's two cards
@@ -22,6 +23,14 @@ export default function SettingsPage(_props: PageProps) {
       <p className="text-[12px] text-[var(--color-muted)]">{t.intro}</p>
       <LanguageCard />
       <CurrencyCard />
+      <button
+        type="button"
+        onClick={() => navigate("/settings/vps-connection")}
+        className="text-left rounded border border-[var(--color-border)] px-4 py-3 hover:border-[var(--color-border-glow)]"
+      >
+        <span className="block text-[13px] font-semibold text-[var(--color-bright)]">{VPS_CONNECTION_TEXT[appLocale()].link}</span>
+        <span className="mt-1 block text-[11px] text-[var(--color-muted)]">{VPS_CONNECTION_TEXT[appLocale()].linkNote}</span>
+      </button>
       {providerSetup && (
         <section
           data-testid="settings-provider"

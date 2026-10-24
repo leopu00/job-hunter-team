@@ -22,6 +22,34 @@ function tr(
 }
 
 const COPY_BY_ENGLISH_TEXT: Readonly<Record<string, ErrorTranslations>> = {
+  "The details of this VPS are incomplete or not valid, so they were not saved.": {
+    de: ["Die Angaben zu diesem VPS sind unvollständig oder ungültig und wurden deshalb nicht gespeichert.", "Prüfe Name, Adresse, Benutzer und Speicherort des Schlüssels und versuche es erneut."],
+    es: ["Los datos de este VPS están incompletos o no son válidos, así que no se han guardado.", "Revisa el nombre, la dirección, el usuario y la ubicación de la clave, y vuelve a intentarlo."],
+    fr: ["Les informations de ce VPS sont incomplètes ou invalides, elles n’ont donc pas été enregistrées.", "Vérifie le nom, l’adresse, l’utilisateur et l’emplacement de la clé, puis réessaie."],
+    hu: ["Ennek a VPS-nek az adatai hiányosak vagy érvénytelenek, ezért nem lettek mentve.", "Ellenőrizd a nevet, a címet, a felhasználót és a kulcs helyét, majd próbáld újra."],
+    pt: ["Os dados deste VPS estão incompletos ou não são válidos, por isso não foram guardados.", "Confirma o nome, o endereço, o utilizador e a localização da chave e tenta novamente."],
+  },
+  "This VPS is already in the saved list.": {
+    de: ["Dieser VPS steht bereits in der Liste der gespeicherten VPS.", "Nutze den gespeicherten Eintrag oder ändere Adresse oder Benutzer, falls es ein anderer VPS ist."],
+    es: ["Este VPS ya está en la lista de los guardados.", "Usa el que ya está guardado, o cambia la dirección o el usuario si es otro VPS."],
+    fr: ["Ce VPS figure déjà dans la liste des VPS enregistrés.", "Utilise celui qui est déjà enregistré, ou change l’adresse ou l’utilisateur s’il s’agit d’un autre VPS."],
+    hu: ["Ez a VPS már szerepel a mentett listában.", "Használd a már mentettet, vagy módosítsd a címet vagy a felhasználót, ha másik VPS-ről van szó."],
+    pt: ["Este VPS já está na lista dos guardados.", "Usa o que já está guardado, ou altera o endereço ou o utilizador se for outro VPS."],
+  },
+  "This saved VPS is no longer in the list.": {
+    de: ["Dieser gespeicherte VPS ist nicht mehr in der Liste.", "Öffne die Liste der gespeicherten VPS erneut und wähle noch einmal aus."],
+    es: ["Este VPS guardado ya no está en la lista.", "Vuelve a abrir la lista de VPS guardados y elige de nuevo."],
+    fr: ["Ce VPS enregistré n’est plus dans la liste.", "Rouvre la liste des VPS enregistrés et choisis à nouveau."],
+    hu: ["Ez a mentett VPS már nincs a listában.", "Nyisd meg újra a mentett VPS-ek listáját, és válassz újra."],
+    pt: ["Este VPS guardado já não está na lista.", "Abre novamente a lista de VPS guardados e escolhe de novo."],
+  },
+  "The saved VPS list cannot be read or written on this computer.": {
+    de: ["Die Liste der gespeicherten VPS lässt sich auf diesem Computer nicht lesen oder schreiben.", "Prüfe, ob der Datenordner der App zugänglich ist und freien Speicherplatz hat, und versuche es erneut."],
+    es: ["La lista de VPS guardados no se puede leer ni escribir en este ordenador.", "Comprueba que la carpeta de datos de la app sea accesible y tenga espacio libre, y vuelve a intentarlo."],
+    fr: ["La liste des VPS enregistrés ne peut pas être lue ni écrite sur cet ordinateur.", "Vérifie que le dossier de données de l’app est accessible et qu’il reste de la place, puis réessaie."],
+    hu: ["A mentett VPS-ek listája nem olvasható és nem írható ezen a számítógépen.", "Ellenőrizd, hogy az app adatmappája elérhető-e és van-e benne szabad hely, majd próbáld újra."],
+    pt: ["A lista de VPS guardados não pode ser lida nem escrita neste computador.", "Confirma que a pasta de dados da app está acessível e tem espaço livre e tenta novamente."],
+  },
   "There is unsent text in the agent’s composer.": {
     de: ["Im Eingabefeld des Agenten steht noch nicht gesendeter Text.", "Entscheide zuerst im Terminal des Agenten, ob du ihn senden oder löschen möchtest; deine Nachricht wurde nicht gesendet."],
     es: ["Hay texto sin enviar en el cuadro de redacción del agente.", "Decide primero en el terminal del agente si enviarlo o borrarlo; tu mensaje no se ha enviado."],
@@ -1613,6 +1641,10 @@ export const ERROR_CATALOG_LOCALES: Readonly<Record<string, ErrorTranslations>> 
   ssh_rate_limited: translated("The server is refusing connections from this computer for a few minutes after too many attempts."),
   ssh_client_missing: translated("This computer has no SSH client (OpenSSH), which is needed to connect to the VPS."),
   ssh_auth_failed: translated("SSH access to the VPS did not succeed."),
+  saved_vps_invalid: translated("The details of this VPS are incomplete or not valid, so they were not saved."),
+  saved_vps_duplicate: translated("This VPS is already in the saved list."),
+  saved_vps_not_found: translated("This saved VPS is no longer in the list."),
+  saved_vps_storage_unavailable: translated("The saved VPS list cannot be read or written on this computer."),
   invalid_host: translated("One of the VPS access details is not valid."),
   invalid_user: translated("One of the VPS access details is not valid."),
   invalid_port: translated("One of the VPS access details is not valid."),

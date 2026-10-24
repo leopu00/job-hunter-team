@@ -9,8 +9,10 @@ import DashboardScreen from "./DashboardScreen";
 import { appLocale } from "../../lib/app-locale";
 import { describeError } from "../../lib/error-catalog";
 import { ExistingTeamDashboardError, loadExistingTeamDashboard } from "../../lib/existing-team-dashboard";
+import { useConnectTeam } from "../../lib/connect-team";
 import { useExistingTeamView } from "../../lib/existing-team-readonly";
 import { PAGE_STATES_TEXT } from "../../lib/page-states.i18n";
+import { CONNECT_TEAM_PROMPT_TEXT } from "./connect-team.i18n";
 import { loadDashboard, type DashboardData } from "./load-dashboard";
 
 type Load =
@@ -25,6 +27,8 @@ export default function DashboardPage(_props: PageProps) {
   const request = useRef(0);
   // An existing team that is only read: its own VPS answers, the cloud is not asked.
   const existingTeam = useExistingTeamView() !== null;
+  // A set-up profile with no team linked: the way to link the one that is already on a VPS.
+  const connectTeam = useConnectTeam();
 
   const read = useCallback(() => {
     const mine = ++request.current;
@@ -61,5 +65,24 @@ export default function DashboardPage(_props: PageProps) {
       </p>
     );
   }
-  return <DashboardScreen data={load.data} locale={locale} />;
+  const prompt = connectTeam && !existingTeam ? CONNECT_TEAM_PROMPT_TEXT[appLocale()] : null;
+  return (
+    <>
+      {prompt && (
+        <section
+          className="max-w-6xl mx-auto px-5 pt-6 flex flex-wrap items-center justify-between gap-3 text-[12px]"
+          aria-label={prompt.title}
+        >
+          <div>
+            <strong className="text-[var(--color-bright)]">{prompt.title}</strong>
+            <p className="text-[var(--color-muted)]">{prompt.body}</p>
+          </div>
+          <button type="button" className="border border-[var(--color-border)] rounded px-3 py-1.5" onClick={() => connectTeam?.open()}>
+            {prompt.button}
+          </button>
+        </section>
+      )}
+      <DashboardScreen data={load.data} locale={locale} />
+    </>
+  );
 }

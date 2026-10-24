@@ -14,6 +14,7 @@ import PositionsPage from "../pages/positions";
 import ProfilePage from "../pages/profile";
 import HelpPage from "../pages/help";
 import SettingsPage from "../pages/settings";
+import VpsConnectionPage from "../pages/vps-connection";
 import SwipePage from "../pages/swipe";
 import TeamPage from "../pages/team";
 import {
@@ -68,6 +69,7 @@ export const ROUTES: Route[] = [
   { path: "/office", page: OfficePage, fullBleed: true },
   { path: "/mail", page: MailPage },
   { path: "/settings", page: SettingsPage },
+  { path: "/settings/vps-connection", page: VpsConnectionPage },
   { path: "/help", page: HelpPage },
   // «Remove JHT from this computer» (Windows): linked only where it can run.
   { path: "/computer", page: ComputerPage },
@@ -87,6 +89,7 @@ export const READ_ONLY_ROUTES: Route[] = [
   { path: "/agents", page: AgentsPanel },
   // The app's own language and currency: local choices, nothing reaches the team.
   { path: "/settings", page: SettingsPage },
+  { path: "/settings/vps-connection", page: VpsConnectionPage },
   // What the read-only view does: it says only that.
   { path: "/help", page: HelpPage },
 ];
