@@ -42,6 +42,37 @@ function Write-JhtPhase {
   [Console]::Out.WriteLine("JHT_PHASE $Id")
 }
 
+# Podman's pull progress for the app: the layers it says it copies, one JHT_PULL line each (a redrawn
+# bar is its last drawing), with anything private taken out. Nothing else of podman's output goes on.
+function ConvertTo-JhtPullLine {
+  param([AllowNull()][string]$Text)
+  if ($null -eq $Text) { return $null }
+  $last = ($Text -split "`r")[-1]
+  $last = [regex]::Replace($last, '[\x00-\x1f\x7f]', ' ').Trim()
+  if ($last -notmatch '^Copying (blob|config) ') { return $null }
+  $last = [regex]::Replace($last, '[A-Za-z]:\\\S*', '<path>')
+  foreach ($private in @($env:USERPROFILE, $env:LOCALAPPDATA, $env:APPDATA, $env:USERNAME)) {
+    if ($private) { $last = $last.Replace($private, '<private>') }
+  }
+  if ($last.Length -gt 160) { $last = $last.Substring(0, 160) }
+  return $last
+}
+
+# The image pull, with its progress on stdout for the app. Under 'Stop' Windows PowerShell 5.1 turns the
+# first byte of a redirected stderr into an error: the redirection lives in a 'Continue' scope, and the
+# exit code is read right after the pipeline that consumed all of it.
+function Invoke-PodmanPull {
+  param([Parameter(Mandatory)][string]$PodmanPath, [Parameter(Mandatory)][string]$Machine, [Parameter(Mandatory)][string]$Image)
+  & { $ErrorActionPreference = 'Continue'
+    & $PodmanPath '--connection' $Machine 'pull' $Image 2>&1 | ForEach-Object {
+      $line = ConvertTo-JhtPullLine ([string]$_)
+      if ($line) { [Console]::Out.WriteLine("JHT_PULL $line") }
+    }
+  }
+  $code = $LASTEXITCODE
+  if ($code -ne 0) { throw "Command failed ($code): $PodmanPath --connection $Machine pull $Image" }
+}
+
 function Update-ProcessPath {
   param(
     [string]$MachinePath = [Environment]::GetEnvironmentVariable('Path', 'Machine'),
@@ -599,7 +630,7 @@ if ($RuntimeImage -match '@(sha256:[0-9a-f]{64})$' -and $Matches[1] -ne $Expecte
   throw 'Runtime image reference and expected digest disagree.'
 }
 Write-JhtPhase image_pull
-Invoke-Checked $Podman '--connection' $MachineName 'pull' $RuntimeImage | Out-Null
+Invoke-PodmanPull -PodmanPath $Podman -Machine $MachineName -Image $RuntimeImage
 $repoDigestsJson = ((& { $ErrorActionPreference = 'Continue'; & $Podman --connection $MachineName image inspect $RuntimeImage --format '{{json .RepoDigests}}' 2>$null }) -join '')
 if ($LASTEXITCODE -ne 0 -or -not $repoDigestsJson) { throw 'Cannot inspect the pulled runtime image digest.' }
 # Windows PowerShell 5.1, the shell the app runs, does not enumerate a JSON

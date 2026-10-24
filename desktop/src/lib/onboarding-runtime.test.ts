@@ -436,6 +436,32 @@ describe("what the native side reports is told in the app's language", () => {
     }
   });
 
+  it("carries the installer phase and the image pull, and only in their closed shapes (T-runtime-phase)", () => {
+    const base = progress("ui_phase_image_pull");
+    const pull = { blobsDone: 2, bytesDone: 3_145_728, bytesTotal: 29_360_128 };
+    expect(parseOnboardingNativeProgress({ ...base, phase: "image_pull", pull })).toMatchObject({ phase: "image_pull", pull });
+    expect(parseOnboardingNativeProgress({ ...base, phase: "image_pull", pull: { blobsDone: 1, bytesDone: null, bytesTotal: null } }))
+      .toMatchObject({ pull: { blobsDone: 1, bytesDone: null, bytesTotal: null } });
+    // an event without them is as it was
+    const plain = parseOnboardingNativeProgress(base);
+    expect(plain && "phase" in plain).toBe(false);
+    expect(plain && "pull" in plain).toBe(false);
+    // the phase is one of the installer's, the pull belongs to image_pull alone, and a pull off the shape is dropped, not the event
+    expect(parseOnboardingNativeProgress({ ...base, phase: "wsl_check", pull })).toMatchObject({ phase: "wsl_check" });
+    expect(parseOnboardingNativeProgress({ ...base, phase: "wsl_check", pull })?.pull).toBeUndefined();
+    expect(parseOnboardingNativeProgress({ ...base, phase: "made_up" })?.phase).toBeUndefined();
+    for (const broken of [
+      null, [], "x", {}, { blobsDone: -1, bytesDone: null, bytesTotal: null }, { blobsDone: 1.5, bytesDone: null, bytesTotal: null },
+      { blobsDone: 1, bytesDone: 5, bytesTotal: null }, { blobsDone: 1, bytesDone: null, bytesTotal: 5 },
+      { blobsDone: 1, bytesDone: 9, bytesTotal: 5 }, { blobsDone: 1, bytesDone: 0, bytesTotal: 0 },
+      { blobsDone: 1, bytesDone: null, bytesTotal: null, extra: 1 }, { blobsDone: "1", bytesDone: null, bytesTotal: null },
+    ]) {
+      const parsed = parseOnboardingNativeProgress({ ...base, phase: "image_pull", pull: broken });
+      expect(parsed, JSON.stringify(broken)).not.toBeNull();
+      expect(parsed?.pull, JSON.stringify(broken)).toBeUndefined();
+    }
+  });
+
   it("tells the provider login's instructions from their keys", () => {
     localStorage.setItem("jht-lang", "en");
     try {

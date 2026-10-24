@@ -34,6 +34,8 @@ const TEAM_START_ATTEMPTS: usize = 2;
 const LOCAL_CONTAINER_VERIFY_TIMEOUT: Duration = Duration::from_secs(10);
 const LOCAL_CONTAINER_VERIFY_ATTEMPTS: usize = 6;
 const LOCAL_CONTAINER_VERIFY_INTERVAL: Duration = Duration::from_secs(2);
+/// The pull's progress reaches the screen at most this often, a finished layer aside.
+const PULL_EVENT_INTERVAL: Duration = Duration::from_millis(250);
 const PROGRESS_HEARTBEAT_INTERVAL: Duration = Duration::from_secs(2);
 const DIAGNOSTIC_SCHEMA_VERSION: u8 = 1;
 const DIAGNOSTIC_MAX_RECORDS: usize = 128;
@@ -404,6 +406,13 @@ pub(crate) struct OnboardingProgress {
     elapsed_ms: u64,
     code: Option<&'static str>,
     retryable: Option<bool>,
+    /// The installer phase this message belongs to (`image_pull`, ...), the one install.ps1 announces
+    /// as JHT_PHASE; absent for any other message.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    phase: Option<&'static str>,
+    /// While the runtime image is pulled: the layers finished and the bytes podman printed.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pull: Option<crate::windows_runtime::PullProgress>,
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq, Serialize)]
@@ -1043,6 +1052,9 @@ struct ProgressReporter {
     /// JHT_PHASE): the heartbeat repeats the phase instead of its generic
     /// message, so the screen keeps saying what is happening.
     current: Arc<Mutex<Option<(OnboardingProgressStage, Instant, &'static str)>>>,
+    /// The pull of the runtime image as last reported, and when it was last sent: an event carries it
+    /// while the phase is `image_pull`, at most four times a second.
+    pull: Arc<Mutex<(Option<crate::windows_runtime::PullProgress>, Option<Instant>)>>,
 }
 
 impl ProgressReporter {
@@ -1057,6 +1069,7 @@ impl ProgressReporter {
             emit: Arc::new(emit),
             sequence: Arc::new(AtomicU64::new(1)),
             current: Arc::new(Mutex::new(None)),
+            pull: Arc::new(Mutex::new((None, None))),
         }
     }
 
@@ -1075,6 +1088,9 @@ impl ProgressReporter {
                 (*stage, *started)
             })
         };
+        if !notice {
+            *self.pull.lock().unwrap_or_else(|e| e.into_inner()) = (None, None);
+        }
         if let Some((stage, started)) = running {
             let status = if notice {
                 OnboardingProgressStatus::Notice
@@ -1082,6 +1098,32 @@ impl ProgressReporter {
                 OnboardingProgressStatus::Progress
             };
             self.send(stage, status, message, started, None);
+        }
+    }
+
+    /// How the runtime image's pull stands, from install.ps1's reader. Shown at once when a layer
+    /// finishes, otherwise at most four times a second; dropped outside a step or the `image_pull` phase.
+    fn pull(&self, update: crate::windows_runtime::PullProgress) {
+        let running = {
+            let current = self.current.lock().unwrap_or_else(|e| e.into_inner());
+            current.as_ref().map(|(stage, started, shown)| (*stage, *started, *shown))
+        };
+        let Some((stage, started, shown)) = running else { return };
+        if crate::windows_runtime::phase_id(shown) != Some("image_pull") {
+            return;
+        }
+        let due = {
+            let mut state = self.pull.lock().unwrap_or_else(|e| e.into_inner());
+            let finished_layer = state.0.as_ref().map_or(true, |last| last.blobs_done != update.blobs_done);
+            let due = finished_layer || state.1.map_or(true, |sent| sent.elapsed() >= PULL_EVENT_INTERVAL);
+            state.0 = Some(update);
+            if due {
+                state.1 = Some(Instant::now());
+            }
+            due
+        };
+        if due {
+            self.send(stage, OnboardingProgressStatus::Progress, shown, started, None);
         }
     }
 
@@ -1094,6 +1136,12 @@ impl ProgressReporter {
         error: Option<&OnboardingError>,
     ) {
         let elapsed_ms = started.elapsed().as_millis().min(u64::MAX as u128) as u64;
+        let phase = crate::windows_runtime::phase_id(message);
+        let pull = if phase == Some("image_pull") {
+            self.pull.lock().unwrap_or_else(|e| e.into_inner()).0.clone()
+        } else {
+            None
+        };
         (self.emit)(OnboardingProgress {
             stage,
             status,
@@ -1102,6 +1150,8 @@ impl ProgressReporter {
             elapsed_ms,
             code: error.map(|value| value.code),
             retryable: error.map(|value| value.retryable),
+            phase,
+            pull,
         });
     }
 
@@ -1961,6 +2011,7 @@ fn install_local_windows(
             let started = Instant::now();
             let mut stdout = Vec::new();
             let mut marks: Vec<(&'static str, Duration)> = Vec::new();
+            let mut pull = crate::windows_runtime::PullTracker::default();
             let (ended, stderr) = crate::runtime_host::run_program_lines_keeping_stderr(
                 shell.to_str().ok_or_else(|| failure("runtime_install_failed"))?,
                 installer_invocation(&script, &channel_args),
@@ -1972,6 +2023,9 @@ fn install_local_windows(
                     }
                     if let Some(message) = announced.or_else(|| notice_message(line)) {
                         phase(message);
+                    }
+                    if let Some(update) = pull.observe(line) {
+                        crate::windows_runtime::report_pull(update);
                     }
                     if stdout.len() < INSTALL_STDOUT_KEPT {
                         stdout.extend_from_slice(line.as_bytes());
@@ -2771,15 +2825,22 @@ fn prepare_impl(
         || {
             let validated = validate_host(&app, &submission.host).map_err(failure)?;
             let wrapper = match &validated {
-                ValidatedHost::Local => Some(
-                    install_local(
-                        &app,
-                        diagnostics.as_ref(),
-                        runtime_log.as_ref(),
-                        &|message| reporter.phase(message),
+                ValidatedHost::Local => Some({
+                    // The pull of the runtime image reports its progress through the reporter while install_local runs.
+                    let pull_reporter = reporter.clone();
+                    crate::windows_runtime::with_pull_sink(
+                        Arc::new(move |update| pull_reporter.pull(update)),
+                        || {
+                            install_local(
+                                &app,
+                                diagnostics.as_ref(),
+                                runtime_log.as_ref(),
+                                &|message| reporter.phase(message),
+                            )
+                        },
                     )
-                    .map_err(|error| with_cause(error, runtime_log.as_ref()))?,
-                ),
+                    .map_err(|error| with_cause(error, runtime_log.as_ref()))?
+                }),
                 ValidatedHost::Vps { .. } => {
                     let token = pairing
                         .as_ref()
@@ -6098,6 +6159,65 @@ mod tests {
     }
 
     #[test]
+    fn the_image_pull_reports_its_phase_and_progress_without_flooding_the_screen() {
+        use crate::windows_runtime::PullProgress;
+        let events = Arc::new(Mutex::new(Vec::<OnboardingProgress>::new()));
+        let captured = Arc::clone(&events);
+        let reporter = ProgressReporter::with_emitter(move |event| {
+            captured.lock().unwrap().push(event);
+        });
+        // outside a step nothing is sent
+        reporter.pull(PullProgress { blobs_done: 1, ..PullProgress::default() });
+        assert!(events.lock().unwrap().is_empty());
+        let mib = 1_048_576u64;
+        reporter
+            .run_with_interval(
+                OnboardingProgressStage::Runtime,
+                "start",
+                "heartbeat",
+                "done",
+                Duration::from_secs(60),
+                || {
+                    // not the pull's phase yet: dropped
+                    reporter.pull(PullProgress { blobs_done: 9, ..PullProgress::default() });
+                    reporter.phase("ui_phase_runtime_download");
+                    reporter.pull(PullProgress { blobs_done: 9, ..PullProgress::default() });
+                    reporter.phase("ui_phase_image_pull");
+                    // a burst of bar updates: the first goes, the rest wait for the interval
+                    for done in 1..=10u64 {
+                        reporter.pull(PullProgress { blobs_done: 0, bytes_done: Some(done * mib), bytes_total: Some(28 * mib) });
+                    }
+                    // a finished layer goes at once
+                    reporter.pull(PullProgress { blobs_done: 1, bytes_done: Some(28 * mib), bytes_total: Some(28 * mib) });
+                    reporter.phase("ui_phase_team_restart");
+                    reporter.pull(PullProgress { blobs_done: 2, ..PullProgress::default() });
+                    Ok::<(), super::OnboardingError>(())
+                },
+            )
+            .unwrap();
+        let events = events.lock().unwrap();
+        let by_phase = |id: &str| events.iter().filter(|event| event.phase == Some(id)).count();
+        assert_eq!(by_phase("runtime_download"), 1, "the phase is named, and the dropped pull sent nothing");
+        assert!(events.iter().filter(|event| event.phase == Some("runtime_download")).all(|event| event.pull.is_none()));
+        let pulls: Vec<&OnboardingProgress> = events.iter().filter(|event| event.phase == Some("image_pull")).collect();
+        // the phase announcement, the first bar, the finished layer: not one event for each of the ten updates
+        assert_eq!(pulls.len(), 3, "{:?}", pulls.iter().map(|event| event.pull.clone()).collect::<Vec<_>>());
+        assert!(pulls[0].pull.is_none());
+        assert_eq!(pulls[1].pull, Some(PullProgress { blobs_done: 0, bytes_done: Some(mib), bytes_total: Some(28 * mib) }));
+        assert_eq!(pulls[2].pull.as_ref().map(|pull| pull.blobs_done), Some(1));
+        // a phase that follows forgets the pull, and the pull of a past phase is not shown again
+        let after: Vec<&OnboardingProgress> = events.iter().filter(|event| event.phase == Some("team_restart")).collect();
+        assert_eq!(after.len(), 1);
+        assert!(after[0].pull.is_none());
+        // on the wire: camelCase, and only the events that have them carry the fields
+        let wire = serde_json::to_value(pulls[1]).unwrap();
+        assert_eq!(wire["phase"], "image_pull");
+        assert_eq!(wire["pull"], serde_json::json!({"blobsDone": 0, "bytesDone": mib, "bytesTotal": 28 * mib}));
+        let plain = serde_json::to_value(events.iter().find(|event| event.phase.is_none()).unwrap()).unwrap();
+        assert!(plain.get("phase").is_none() && plain.get("pull").is_none());
+    }
+
+    #[test]
     fn progress_sequence_heartbeats_and_errors_are_terminal_and_sanitized() {
         let events = Arc::new(Mutex::new(Vec::<OnboardingProgress>::new()));
         let captured = Arc::clone(&events);
@@ -6297,6 +6417,8 @@ mod tests {
                 elapsed_ms: sequence,
                 code: None,
                 retryable: None,
+                phase: None,
+                pull: None,
             });
         }
         let failed_process = outcome(false);
@@ -6409,6 +6531,8 @@ mod tests {
             elapsed_ms: 0,
             code: None,
             retryable: None,
+            phase: None,
+            pull: None,
         });
         assert!(fs::read_to_string(&vps_sink.path)
             .unwrap()
@@ -6445,6 +6569,8 @@ mod tests {
             elapsed_ms: 1,
             code: Some("container_not_ready"),
             retryable: Some(true),
+            phase: None,
+            pull: None,
         });
         assert_eq!(fs::read(&sentinel).unwrap(), b"unchanged");
         assert!(fs::symlink_metadata(&sink.path)

@@ -90,6 +90,9 @@ export function applyOnboardingProgress(
     stageElapsedMs: progress.elapsedMs,
     updatedAt: now,
     status,
+    // the last message's phase and pull: a message that names none clears them
+    phase: progress.phase,
+    pull: progress.pull,
   };
   const events = existingIndex >= 0
     ? initial.events.map((event, index) => index === existingIndex ? entry : event)
