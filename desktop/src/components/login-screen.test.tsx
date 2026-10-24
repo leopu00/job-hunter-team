@@ -107,7 +107,7 @@ describe("LoginScreen", () => {
       />,
     );
 
-    await user.click(screen.getByRole("button", { name: "Usa in locale" }));
+    await user.click(screen.getByRole("button", { name: "Continua come Ada Locale" }));
     expect(selectLocal).toHaveBeenCalledWith();
     expect(screen.queryByRole("textbox", { name: "Nome visualizzato" })).not.toBeInTheDocument();
     expect(onLocalReady).toHaveBeenCalledOnce();
