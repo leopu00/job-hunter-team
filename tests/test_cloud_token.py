@@ -160,6 +160,16 @@ def test_apply_writes_the_verified_token_and_keeps_every_other_key(box, capsys):
     assert sorted(p.name for p in box.parent.iterdir()) == ["cloud.json"]  # no temp file left
 
 
+def test_a_sync_the_user_turned_off_stays_off(box, capsys):
+    config = json.loads(box.read_text())
+    config["enabled"] = False
+    box.write_text(json.dumps(config))
+    code, out, _ = run("apply", stdin=line(NEW), website=Website({NEW: body()}), capsys=capsys)
+    assert code == 0
+    written = json.loads(box.read_text())
+    assert written["token"] == NEW and written["enabled"] is False
+
+
 def test_a_token_the_website_refuses_is_not_written(box, capsys):
     before = box.read_text()
     code, out, _ = run("apply", stdin=line(NEW), website=Website({OLD: body()}), capsys=capsys)
@@ -216,3 +226,55 @@ def test_the_script_never_names_the_secret_in_a_log_or_an_environment():
     source = (REPO / "shared" / "skills" / "cloud_token.py").read_text(encoding="utf-8")
     assert "logging" not in source and "os.environ[" not in source
     assert "print(" in source and source.count("print(") == 2  # the two JSON lines of main()
+
+
+# ---- redirects ------------------------------------------------------------------------------
+
+
+@pytest.fixture
+def two_servers():
+    """A first server that redirects to a second one, which keeps what it is sent. Local, synthetic."""
+    import http.server
+    import threading
+
+    seen = []
+
+    class Second(http.server.BaseHTTPRequestHandler):
+        def do_GET(self):
+            seen.append(self.headers.get("Authorization"))
+            self.send_response(200)
+            self.end_headers()
+            self.wfile.write(b"{}")
+
+        def log_message(self, *args):
+            pass
+
+    second = http.server.HTTPServer(("127.0.0.1", 0), Second)
+
+    class First(http.server.BaseHTTPRequestHandler):
+        def do_GET(self):
+            self.send_response(302)
+            self.send_header("Location", f"http://127.0.0.1:{second.server_port}/elsewhere")
+            self.end_headers()
+
+        def log_message(self, *args):
+            pass
+
+    first = http.server.HTTPServer(("127.0.0.1", 0), First)
+    threads = [threading.Thread(target=server.serve_forever, daemon=True) for server in (first, second)]
+    for thread in threads:
+        thread.start()
+    try:
+        yield f"http://127.0.0.1:{first.server_port}", seen
+    finally:
+        for server in (first, second):
+            server.shutdown()
+            server.server_close()
+
+
+def test_a_redirect_never_carries_the_token_anywhere(two_servers):
+    first, seen = two_servers
+    with pytest.raises(ct.Refused) as refused:
+        ct.ping(first, NEW)  # the real opener, against a real redirect
+    assert refused.value.code == "cloud_unreachable"
+    assert seen == []  # the second server was never asked, so it never saw the Bearer token

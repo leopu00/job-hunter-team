@@ -52,6 +52,21 @@ WARNING_DAYS = 14
 DAY_S = 86400
 
 
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    """Never follows a redirect: urllib copies the headers, the Bearer token among them, to wherever it leads."""
+
+    def redirect_request(self, *args, **kwargs):
+        return None
+
+
+_OPENER = urllib.request.build_opener(_NoRedirect)
+
+
+def open_url(request, timeout=None):
+    """The one way this script reaches the website: a 3xx is an HTTPError, never a second request."""
+    return _OPENER.open(request, timeout=timeout)
+
+
 class Refused(Exception):
     def __init__(self, code: str):
         super().__init__(code)
@@ -94,7 +109,7 @@ def base_url_of(config: dict) -> str:
     return url.strip().rstrip("/")
 
 
-def ping(base_url: str, token: str, opener=urllib.request.urlopen) -> dict:
+def ping(base_url: str, token: str, opener=open_url) -> dict:
     """The website's answer to the token: its body when accepted. 401/403 is `token_rejected`."""
     request = urllib.request.Request(
         f"{base_url}/api/cloud-sync/ping",
@@ -146,7 +161,7 @@ def describe(body: dict, now: float) -> dict:
     return {"state": "expiring" if days <= WARNING_DAYS else "active", "expires_at": expires_at, "days_left": days}
 
 
-def check(now: float, opener=urllib.request.urlopen) -> dict:
+def check(now: float, opener=open_url) -> dict:
     config = read_cloud()
     token = config.get("token")
     if not isinstance(token, str) or not TOKEN.match(token):
@@ -198,7 +213,7 @@ def write_cloud(config: dict) -> None:
                 pass
 
 
-def apply(token: str, now: float, opener=urllib.request.urlopen) -> dict:
+def apply(token: str, now: float, opener=open_url) -> dict:
     config = read_cloud()
     owner = config.get("user_id")
     if not isinstance(owner, str) or not owner:
@@ -208,8 +223,8 @@ def apply(token: str, now: float, opener=urllib.request.urlopen) -> dict:
         raise Refused("token_other_account")
     named = body.get("token")
     name = named.get("name") if isinstance(named, dict) and isinstance(named.get("name"), str) else None
+    # Only the token and its name change: a sync the user turned off stays off.
     config["token"] = token
-    config["enabled"] = True
     if name is not None:
         config["token_name"] = name[:120]
     write_cloud(config)
@@ -217,7 +232,7 @@ def apply(token: str, now: float, opener=urllib.request.urlopen) -> dict:
     return {"ok": True, "op": "apply", "expires_at": state["expires_at"], "days_left": state["days_left"]}
 
 
-def main(argv=None, stdin=None, opener=urllib.request.urlopen, now=None) -> int:
+def main(argv=None, stdin=None, opener=open_url, now=None) -> int:
     parser = argparse.ArgumentParser(prog="cloud_token", description="Check or renew the box's website sync token.")
     parser.add_argument("op", choices=("check", "apply"))
     args = parser.parse_args(argv)
