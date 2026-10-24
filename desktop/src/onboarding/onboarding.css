@@ -962,7 +962,7 @@
 
 /* Windows 125 and 150 % scaling turns the ~660 px app window of a 1366x768 laptop into 440-530 CSS px,
    under what the 800 px block above was written for: the title, the figure and the paddings leave the
-   first action under the edge. Shorter still, the side title shrinks, its text goes, and the cards tighten. */
+   first action under the edge. Shorter still, the side title shrinks, its intro goes, and the cards tighten. */
 @media (max-height: 560px) {
   .onboarding-shell {
     padding-block: 12px 18px;
@@ -975,9 +975,20 @@
   .onboarding-progress h1 {
     font-size: 30px;
   }
-  .onboarding-progress__intro,
-  .onboarding-progress__privacy {
+  .onboarding-progress__intro {
     display: none;
+  }
+  /* the line saying no API key is asked is hidden to the eye but kept for a screen reader */
+  .onboarding-progress__privacy {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+    border: 0;
   }
   .onboarding-card,
   .onboarding-runtime-card {

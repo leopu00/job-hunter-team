@@ -106,7 +106,7 @@ function SetupNotices({ notices }: { notices: readonly string[] | undefined }) {
 
 // A Windows path has no spaces: the line may break after a separator instead of in the middle of a folder name.
 function PathWithBreaks({ path }: { path: string }) {
-  return <>{path.split(/(?<=[\\/])/).map((part, index) => <Fragment key={index}>{index > 0 && <wbr />}{part}</Fragment>)}</>;
+  return <>{(path.match(/[^\\/]*[\\/]?/g)?.filter(Boolean) ?? [path]).map((part, index) => <Fragment key={index}>{index > 0 && <wbr />}{part}</Fragment>)}</>;
 }
 
 function RuntimeView({ host, platform, t, locale, runtime, activity, onRetry, onRestart, onExitFailure, onRuntimeAction, providerLogin, sshHostKey, onConfirmHostKey, onCancelHostKey, onProviderInput, onProviderClose, onProviderRestart, onRecreatePodmanMachine, onFreeDiskSpace, runtimeLogPath, onOpenRuntimeLog }: Pick<OnboardingFlowProps, "platform" | "runtime" | "activity" | "onRetry" | "onRestart" | "onExitFailure" | "onRuntimeAction" | "providerLogin" | "sshHostKey" | "onConfirmHostKey" | "onCancelHostKey" | "onProviderInput" | "onProviderClose" | "onProviderRestart" | "onRecreatePodmanMachine" | "onFreeDiskSpace" | "runtimeLogPath" | "onOpenRuntimeLog"> & { host: ExecutionHost; t: OnboardingCopy; locale: Locale }) {

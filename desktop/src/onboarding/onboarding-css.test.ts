@@ -147,7 +147,10 @@ describe("the onboarding's error frames", () => {
     const css = source.replace(/\r\n?/g, "\n");
     const block = css.match(/@media \(max-height: 560px\) \{([\s\S]*?)\n\}\n/)?.[1];
     expect(block, "missing the 560 px height block").toBeDefined();
-    expect(block).toMatch(/\.onboarding-progress__intro,\n\s*\.onboarding-progress__privacy \{\s*display: none;/);
+    expect(block).toMatch(/\.onboarding-progress__intro \{\s*display: none;/);
+    // hidden to the eye, still read by a screen reader: never display: none
+    expect(block).toMatch(/\.onboarding-progress__privacy \{[^}]*clip: rect\(0 0 0 0\);/);
+    expect(block).not.toMatch(/\.onboarding-progress__privacy \{[^}]*display: none/);
     expect(block).toMatch(/\.onboarding-progress h1 \{\s*font-size: 30px;/);
     expect(block).toMatch(/\.onboarding-panel h2,\n\s*\.onboarding-runtime-card h2 \{\s*font-size: 26px;/);
     expect(rule(source, ".onboarding-shell [tabindex=\"-1\"]:focus")).toMatch(/outline:\s*none/);
