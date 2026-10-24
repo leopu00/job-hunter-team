@@ -60,7 +60,7 @@ describe("notificationsFor", () => {
   it("every sentence exists in every language, with no slot left", () => {
     for (const locale of locales) {
       const t = NOTIFY_TEXT[locale];
-      for (const s of [t.appName, t.newOne, t.lockScreen, t.withDetails, t.newMany.one, t.newMany.other]) expect(s.length, locale).toBeGreaterThan(3);
+      for (const s of [t.appName, t.newOne, t.lockScreen, t.withDetails, t.switchTitle, t.switchLabel, t.newMany.one, t.newMany.other]) expect(s.length, locale).toBeGreaterThan(3);
       expect(notificationsFor([row("1"), row("2")], { enabled: true, details: false }, locale)[0]!.body, locale).not.toMatch(/\{/);
     }
   });
