@@ -748,6 +748,19 @@ def test_a_historic_message_echo_far_above_the_bottom_is_not_a_menu_on_operator_
     assert code == 0 and receipt["taken"] is True
 
 
+def test_a_tall_numbered_selector_with_its_cursor_above_the_tail_stays_closed(box):
+    module = _module()
+    entries = [row for n in range(1, 11) for row in (f"{'❯' if n == 1 else ' '} {n}. entry", "     detail line")]
+    tall = "\n".join(["Pick one", ""] + entries + ["", "  enter to select"]) + "\n"
+    assert len(tall.splitlines()) > module.PROMPT_TAIL + 5
+    assert module.delivery_gate(tall) == "blocked", "an Enter inside a selector would choose an entry"
+    box.stub_delivery()
+    (box.state / "screen").write_text(tall, encoding="utf-8")
+    code, answer = box.run("send", "capitano", "id-tall-selector", stdin="1")
+    assert (code, answer) == (119, {"error": "agent_not_at_prompt"})
+    _nothing_happened(box)
+
+
 def test_dim_codex_suggestion_is_empty_but_rgb_colour_is_not_dim():
     module = _module()
     dim = "› \x1b[2mexample prompt\x1b[0m\n\n  gpt-5.6-sol · ~/capitano\n"

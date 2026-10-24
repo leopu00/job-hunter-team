@@ -452,12 +452,14 @@ def _certain_interlock(pane: str) -> bool:
     permission prompts.
     """
     raw_lines = [strip_terminal_codes(line).rstrip().casefold() for line in (pane or "").splitlines()]
-    # A live control is the last thing drawn: look only where the composer
-    # snapshot looks.  A historic ``›`` echo of a past message, far up the
-    # screen, with a short line near it, is transcript and never a menu.
     while raw_lines and not raw_lines[-1].strip():
         raw_lines.pop()
-    raw_lines = raw_lines[-PROMPT_TAIL:]
+    # The unnumbered geometric rule below only looks where the composer
+    # snapshot looks: a historic ``›`` echo of a past message, far up the
+    # screen, with a short line near it, is transcript and never a menu.  The
+    # numbered rule keeps the whole screen: a tall selector (two rows per
+    # entry) can have its cursor above that tail, and Enter would pick it.
+    tail_start = max(0, len(raw_lines) - PROMPT_TAIL)
     lines = [line.strip() for line in raw_lines]
     rows = list(zip(raw_lines, raw_lines))
 
@@ -501,7 +503,7 @@ def _certain_interlock(pane: str) -> bool:
         return "boxed" if raw.strip().startswith(("│", "┃", "╎", "|")) else "plain"
 
     for index, raw in enumerate(raw_lines):
-        if index in composer_rows or index in footer_rows:
+        if index < tail_start or index in composer_rows or index in footer_rows:
             continue
         selected = choice_body(raw)
         if not re.match(r"^[›❯]\s+\S", selected):
