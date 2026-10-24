@@ -43,6 +43,10 @@ function fake-podman {
   Write-Error 'Copying blob sha256:aaaaaaaaaaaa1111 done   |' -ErrorAction Continue
   Write-Error ('Copying config sha256:cccccccccccc3333 from ' + $env:USERPROFILE + '\x\y done') -ErrorAction Continue
   Write-Error ('Copying config sha256:dddddddddddd4444 for ' + $env:USERNAME + ' done') -ErrorAction Continue
+  if ([int]$env:FAKE_PODMAN_CODE -ne 0) {
+    Write-Error ('Error: unauthorized: authentication required for ' + $env:USERPROFILE + '\x') -ErrorAction Continue
+    Write-Error ('Error: the pull of ' + $env:USERNAME + ' stopped') -ErrorAction Continue
+  }
   'sha256:deadbeefdeadbeef'
   $global:LASTEXITCODE = [int]$env:FAKE_PODMAN_CODE
 }
@@ -51,14 +55,14 @@ Invoke-PodmanPull -PodmanPath 'fake-podman' -Machine 'jht-podman' -Image 'ghcr.i
 """
 
 
-def _run(tmp_path: Path, code: str = "0"):
+def _run(tmp_path: Path, code: str = "0", username: str = "someone-private"):
     harness = tmp_path / "harness.ps1"
     engine = tmp_path / "engine.txt"
     harness.write_text(ENGINE_CHECK + HARNESS, encoding="utf-8")
     env = {
         **(windows_env(tmp_path) if WINDOWS else os.environ),
         "JHT_ENGINE_FILE": str(engine), "JHT_UNDER_TEST": str(ENABLER), "FAKE_PODMAN_CODE": code,
-        "USERPROFILE": r"C:\Users\someone-private", "USERNAME": "someone-private",
+        "USERPROFILE": r"C:\Users\someone-private", "USERNAME": username,
     }
     done = subprocess.run([*powershell_argv(), "-File", str(harness)], env=env, capture_output=True, text=True, timeout=120)
     assert_engine(engine, done.stderr)
@@ -83,6 +87,29 @@ def test_the_layers_go_to_stdout_cleaned_and_the_rest_of_podmans_output_stays_ou
     for private in ("someone-private", "Trying to pull", "Getting image source", "deadbeefdeadbeef"):
         assert private not in text, private
     assert "ARGS=--connection|jht-podman|pull|ghcr.io/leopu00/jht@sha256:abc" in text
+
+
+@needs_powershell
+def test_a_failed_pull_leaves_the_last_non_progress_lines_on_stderr_cleaned(tmp_path):
+    done = _run(tmp_path, "125")
+    assert done.returncode != 0
+    # what podman said about why, with the path and the name taken out, on stderr and never as progress
+    assert "podman pull: Error: unauthorized: authentication required for <path>" in done.stderr
+    assert "podman pull: Error: the pull of <private> stopped" in done.stderr
+    assert "someone-private" not in done.stdout + done.stderr
+    assert "JHT_PULL Error" not in done.stdout and "JHT_PULL Trying" not in done.stdout
+    # a pull that went well leaves nothing on stderr
+    assert "podman pull:" not in _run(tmp_path).stderr
+
+
+@needs_powershell
+def test_a_user_name_of_one_or_two_characters_is_not_replaced_inside_other_words(tmp_path):
+    done = _run(tmp_path, "0", username="ab")
+    assert done.returncode == 0, done.stdout + done.stderr
+    lines = done.stdout.replace("\r\n", "\n").split("\n")
+    # «ab» stays where it stands: replacing it would cut words like «aaaa…» or «abc»
+    assert "JHT_PULL Copying config sha256:dddddddddddd4444 for ab done" in lines
+    assert "<private>" not in done.stdout
 
 
 @needs_powershell

@@ -759,7 +759,10 @@ impl PullTracker {
         let (bytes_done, bytes_total) = if self.bars.is_empty() {
             (None, None)
         } else {
-            (Some(self.bars.values().map(|b| b.0).sum()), Some(self.bars.values().map(|b| b.1).sum()))
+            (
+                Some(self.bars.values().fold(0u64, |sum, bar| sum.saturating_add(bar.0))),
+                Some(self.bars.values().fold(0u64, |sum, bar| sum.saturating_add(bar.1))),
+            )
         };
         let next = PullProgress {
             blobs_done: u32::try_from(self.finished.len()).unwrap_or(u32::MAX),
