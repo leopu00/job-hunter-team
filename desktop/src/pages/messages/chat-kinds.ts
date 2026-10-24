@@ -290,3 +290,13 @@ export function dayLabel(at: number, words: { today: string; yesterday: string }
   if (days === 1) return words.yesterday;
   return d.toLocaleDateString(dateLocale, { day: "2-digit", month: "2-digit", year: "numeric" });
 }
+
+/** The time of a message, to the minute, in the person's locale: «14:05». */
+export function timeLabel(at: number, dateLocale: string): string {
+  return new Date(at * 1000).toLocaleTimeString(dateLocale, { hour: "2-digit", minute: "2-digit" });
+}
+
+/** The whole date and time of a message, for the tooltip. */
+export function fullStamp(at: number, dateLocale: string): string {
+  return new Date(at * 1000).toLocaleString(dateLocale, { dateStyle: "full", timeStyle: "medium" });
+}
