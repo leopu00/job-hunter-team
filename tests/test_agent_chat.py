@@ -660,6 +660,16 @@ WRAPPED_DRAFT = _wrapped_composer("", "")
 WRAPPED_DIM_SUGGESTION = _wrapped_composer("\x1b[2m", "\x1b[2m")
 
 
+# The idle CAPITANO composer on the operator P28 shape, as row length + SGR
+# only: a dim suggestion on the marker row, a blank row, then an indented
+# footer hint with no middle dot (a form the footer matcher does not know).
+CODEX_0147_IDLE_UNKNOWN_FOOTER = "\n".join((
+    "", "\x1b[1m" + "□" * 220 + "\x1b[0m", "\x1b[2m" + "□" * 163 + "\x1b[0m", "\x1b[2m" + "□" * 38 + "\x1b[0m", "",
+    "─" * 220, "", "□" * 136, "", "\x1b[2m" + "─" * 220 + "\x1b[0m", "", "",
+    "\x1b[0;1m› \x1b[0m\x1b[2m" + "□" * 24 + "\x1b[0m", "", "  " + "□" * 32,
+)) + "\n"
+
+
 def _module():
     spec = importlib.util.spec_from_file_location("t39_agent_chat", SCRIPT)
     module = importlib.util.module_from_spec(spec)
@@ -808,6 +818,20 @@ def test_short_rows_under_a_short_marker_are_never_read_as_wrapped_text():
     assert module.delivery_gate(menu) == "blocked", "a menu stays closed, never a draft"
     long_marker = "› " + "□" * 150 + "\n" + "□" * 40 + "\n" + "□" * 30 + "\n\n  enter to confirm · esc to cancel\n"
     assert module.composer_snapshot(long_marker)[0] == "none", "a mid row far shorter than the marker is not a wrap"
+
+
+def test_a_cursor_row_and_a_footer_behind_a_blank_row_are_not_a_menu(box):
+    module = _module()
+    screen = CODEX_0147_IDLE_UNKNOWN_FOOTER
+    assert module.composer_snapshot(screen)[0] == "none", "the footer form is unknown"
+    assert module.delivery_gate(screen) == "none", "chrome behind a blank row is not a second choice"
+    box.stub_delivery()
+    (box.state / "screen").write_text(screen, encoding="utf-8")
+    code, receipt = box.run("send", "capitano", "id-idle-unknown-footer", stdin="riprendi la coda")
+    assert code == 0 and receipt["taken"] is True
+    # The same two rows with no blank between them are a real choice list.
+    menu = "\n".join(screen.splitlines()[:-2]) + "\n  " + "□" * 32 + "\n"
+    assert module.delivery_gate(menu) == "blocked"
 
 
 def test_dim_codex_suggestion_is_empty_but_rgb_colour_is_not_dim():
