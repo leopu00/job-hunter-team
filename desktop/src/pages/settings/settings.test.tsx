@@ -140,4 +140,20 @@ describe("the settings page", () => {
       leaveExistingTeamReadOnly();
     }
   });
+
+  it("opens the export page, in the read-only view too", async () => {
+    Object.defineProperty(window, "location", { configurable: true, value: realLocation });
+    const user = userEvent.setup();
+    const view = render(<SettingsPage {...props} />);
+    await user.click(screen.getByTestId("settings-export-link"));
+    expect(window.location.hash).toBe("#/export");
+    view.unmount();
+    enterExistingTeamReadOnly(false);
+    try {
+      render(<SettingsPage {...props} />);
+      expect(screen.getByTestId("settings-export-link")).toBeInTheDocument();
+    } finally {
+      leaveExistingTeamReadOnly();
+    }
+  });
 });
