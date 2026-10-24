@@ -137,7 +137,20 @@ describe("the onboarding's error frames", () => {
     expect(rule(source, ".onboarding-runtime-status")).toMatch(/grid-template-columns:\s*38px\s+minmax\(0,\s*1fr\)/);
     expect(rule(source, ".onboarding-runtime-status > div")).toMatch(/min-width:\s*0/);
     expect(rule(source, ".onboarding-runtime-status strong,\n.onboarding-runtime-status small")).toMatch(/overflow-wrap:\s*anywhere/);
-    expect(rule(source, ".onboarding-runtime-status code")).toMatch(/word-break:\s*break-all/);
+    // a path breaks at its separators (wbr), not through the middle of «logs»
+    expect(rule(source, ".onboarding-runtime-status code")).toMatch(/overflow-wrap:\s*anywhere/);
+    expect(rule(source, ".onboarding-runtime-status code")).not.toMatch(/break-all/);
     expect(rule(source, ".onboarding-error")).toMatch(/overflow-wrap:\s*anywhere/);
+  });
+
+  it.each(checkouts)("keeps the first action on screen at Windows 125 and 150 percent scaling, and no ring on a heading (%s)", (_, source) => {
+    const css = source.replace(/\r\n?/g, "\n");
+    const block = css.match(/@media \(max-height: 560px\) \{([\s\S]*?)\n\}\n/)?.[1];
+    expect(block, "missing the 560 px height block").toBeDefined();
+    expect(block).toMatch(/\.onboarding-progress__intro,\n\s*\.onboarding-progress__privacy \{\s*display: none;/);
+    expect(block).toMatch(/\.onboarding-progress h1 \{\s*font-size: 30px;/);
+    expect(block).toMatch(/\.onboarding-panel h2,\n\s*\.onboarding-runtime-card h2 \{\s*font-size: 26px;/);
+    expect(rule(source, ".onboarding-shell [tabindex=\"-1\"]:focus")).toMatch(/outline:\s*none/);
+    expect(rule(source, ".onboarding-runtime-status__log button")).toMatch(/display:\s*flex/);
   });
 });

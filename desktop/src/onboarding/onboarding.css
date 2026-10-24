@@ -745,9 +745,16 @@
   overflow-wrap: anywhere;
 }
 
+/* a path breaks after a separator (the <wbr> in the markup), and only inside a folder name when one is wider than the line */
 .onboarding-runtime-status code {
   overflow-wrap: anywhere;
-  word-break: break-all;
+}
+
+/* the button that opens the log is a line of its own, not a word glued to the end of the path */
+.onboarding-runtime-status__log button {
+  width: fit-content;
+  margin-top: 10px;
+  display: flex;
 }
 
 .onboarding-runtime-status strong {
@@ -951,6 +958,51 @@
   .onboarding-account-mark {
     display: none;
   }
+}
+
+/* Windows 125 and 150 % scaling turns the ~660 px app window of a 1366x768 laptop into 440-530 CSS px,
+   under what the 800 px block above was written for: the title, the figure and the paddings leave the
+   first action under the edge. Shorter still, the side title shrinks, its text goes, and the cards tighten. */
+@media (max-height: 560px) {
+  .onboarding-shell {
+    padding-block: 12px 18px;
+  }
+  .onboarding-layout {
+    min-height: 0;
+    align-items: start;
+    padding-block: 4px 12px;
+  }
+  .onboarding-progress h1 {
+    font-size: 30px;
+  }
+  .onboarding-progress__intro,
+  .onboarding-progress__privacy {
+    display: none;
+  }
+  .onboarding-card,
+  .onboarding-runtime-card {
+    padding: 18px 24px;
+  }
+  .onboarding-panel {
+    min-height: 0;
+  }
+  .onboarding-panel h2,
+  .onboarding-runtime-card h2 {
+    font-size: 26px;
+  }
+  .onboarding-lede {
+    margin-block: 8px 14px;
+  }
+  .onboarding-runtime-status {
+    margin-block: 12px;
+    padding: 12px;
+  }
+}
+
+/* A heading takes focus when a step opens so a screen reader announces it: it is not a control,
+   and the keyboard ring Windows drew around it read as a frame on the title. */
+.onboarding-shell [tabindex="-1"]:focus {
+  outline: none;
 }
 
 .onboarding-provider-console {

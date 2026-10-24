@@ -1,4 +1,4 @@
-import { FormEvent, KeyboardEvent, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { Fragment, FormEvent, KeyboardEvent, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { Locale } from "@/i18n/config";
 import SshKeyPicker from "../components/SshKeyPicker";
 import type {
@@ -102,6 +102,11 @@ function SetupNotices({ notices }: { notices: readonly string[] | undefined }) {
       <div>{notices.map((notice) => <p key={notice}>{notice}</p>)}</div>
     </div>
   );
+}
+
+// A Windows path has no spaces: the line may break after a separator instead of in the middle of a folder name.
+function PathWithBreaks({ path }: { path: string }) {
+  return <>{path.split(/(?<=[\\/])/).map((part, index) => <Fragment key={index}>{index > 0 && <wbr />}{part}</Fragment>)}</>;
 }
 
 function RuntimeView({ host, platform, t, locale, runtime, activity, onRetry, onRestart, onExitFailure, onRuntimeAction, providerLogin, sshHostKey, onConfirmHostKey, onCancelHostKey, onProviderInput, onProviderClose, onProviderRestart, onRecreatePodmanMachine, onFreeDiskSpace, runtimeLogPath, onOpenRuntimeLog }: Pick<OnboardingFlowProps, "platform" | "runtime" | "activity" | "onRetry" | "onRestart" | "onExitFailure" | "onRuntimeAction" | "providerLogin" | "sshHostKey" | "onConfirmHostKey" | "onCancelHostKey" | "onProviderInput" | "onProviderClose" | "onProviderRestart" | "onRecreatePodmanMachine" | "onFreeDiskSpace" | "runtimeLogPath" | "onOpenRuntimeLog"> & { host: ExecutionHost; t: OnboardingCopy; locale: Locale }) {
@@ -282,7 +287,7 @@ function RuntimeView({ host, platform, t, locale, runtime, activity, onRetry, on
         {failed && runtime.action && <small className="onboarding-runtime-status__action">{t.whatToDo(runtime.action)}</small>}
         {failed && host.kind === "local" && runtimeLogPath && (
           <small className="onboarding-runtime-status__log">
-            {t.runtimeLogAt} <code>{runtimeLogPath}</code>{" "}
+            {t.runtimeLogAt} <code><PathWithBreaks path={runtimeLogPath} /></code>{" "}
             {onOpenRuntimeLog && <button className="onboarding-secondary" type="button" onClick={() => void onOpenRuntimeLog()}>{t.openRuntimeLog}</button>}
           </small>
         )}
