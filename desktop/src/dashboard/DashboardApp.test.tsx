@@ -791,9 +791,13 @@ describe("DashboardApp onboarding router", () => {
   describe("a set-up account whose saved team was updated on its VPS", () => {
     const SAVED_HOST = { kind: "vps" as const, address: "host.example.invalid", user: "ubuntu", port: 22, keyPath: "/synthetic/key" };
 
-    it.each(["existing_team_runtime_changed", "existing_team_unavailable"])(
+    // The pinned container is no longer the one on the VPS: said as an update to connect again, with the way out
+    // written in the screen; any other refusal stays «not reachable right now».
+    const UNREACHABLE = "Squadra esistente salvata: non raggiungibile ora";
+    const UPDATED = "La squadra sulla VPS è cambiata: va ricollegata";
+    it.each([["existing_team_runtime_changed", UPDATED], ["existing_team_unavailable", UNREACHABLE]])(
       "%s offers «Ricollega la squadra»: the dialog opens on the saved team and host, and the team opens again from it",
-      async (code) => {
+      async (code, title) => {
         vi.mocked(useSession).mockReturnValue(signedInAs("set-up-updated-team"));
         vi.mocked(loadOnboardingGate).mockResolvedValue({ phase: "ready" });
         vi.mocked(existingTeamBridge.reopen).mockRejectedValue({ code });
@@ -804,7 +808,11 @@ describe("DashboardApp onboarding router", () => {
         const alert = await screen.findByRole("alert");
         // styled like the dialog it leads to, not a bare page
         expect(alert).toHaveClass("existing-team-modal");
-        expect(alert).toHaveTextContent("Squadra esistente salvata: non raggiungibile ora");
+        expect(alert).toHaveTextContent(title);
+        if (code === "existing_team_runtime_changed") {
+          expect(alert).toHaveTextContent("Premi «Ricollega la squadra»");
+          expect(alert).not.toHaveTextContent("non raggiungibile");
+        }
         expect(screen.getByRole("button", { name: "Riprova" })).toBeInTheDocument();
         expect(screen.getByRole("button", { name: "Continua senza la squadra" })).toBeInTheDocument();
         fireEvent.click(screen.getByRole("button", { name: "Ricollega la squadra" }));
@@ -812,7 +820,7 @@ describe("DashboardApp onboarding router", () => {
         const modal = await screen.findByTestId("existing-team-modal");
         expect(modal).toHaveTextContent("team:team-saved-0001");
         // the failure that brought the person here is said above the form
-        expect(modal).toHaveTextContent("notice:Squadra esistente salvata: non raggiungibile ora");
+        expect(modal).toHaveTextContent(`notice:${title}`);
         expect(existingTeamBridge.reopen).toHaveBeenCalledOnce();
 
         fireEvent.click(screen.getByRole("button", { name: "connect-existing-team-read-only" }));

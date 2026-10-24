@@ -1610,6 +1610,18 @@ fn t15_a_replaced_team_or_a_missing_pin_is_an_error_not_a_start() {
     let persisted = Cell::new(0);
     assert_eq!(reopen(&sandbox, &server, &persisted).expect_err("identity").code, "existing_team_identity_mismatch");
     assert_eq!(persisted.get(), 0);
+    // the VPS was updated: its container is not the pinned one any more (the shell's pin check, exit 70).
+    // It is said as that, never as «not reachable», and nothing saved is touched or replaced.
+    let candidate_before = fs::read(sandbox.candidate()).unwrap();
+    let selection_before = fs::read(sandbox.selection()).unwrap();
+    let updated = Server::new(&world).probe(1, exit(70));
+    assert_eq!(reopen(&sandbox, &updated, &persisted).expect_err("updated").code, "existing_team_runtime_changed");
+    assert_eq!(persisted.get(), 0);
+    assert_eq!(fs::read(sandbox.candidate()).unwrap(), candidate_before, "the saved candidate is never replaced");
+    assert_eq!(fs::read(sandbox.selection()).unwrap(), selection_before, "the saved selection is never replaced");
+    // a link that fails for any other reason is still «not reachable»
+    let down = Server::new(&world).probe(1, exit(1));
+    assert_eq!(reopen(&sandbox, &down, &persisted).expect_err("down").code, "existing_team_unavailable");
     // the pin is gone
     let server = Server::new(&world).probe(1, probe_ok(true, false));
     let result = existing_team_reopen_with(

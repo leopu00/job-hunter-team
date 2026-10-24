@@ -1121,18 +1121,22 @@ export default function DashboardApp() {
       }
       savedTeamFailureRef.current = true;
       const described = describeError(code, { locale: appLocale() });
+      // The pinned container is no longer the one on the VPS (the team was updated, or it is off): said as
+      // that, with the way out in the person's hands («Reconnect the team»), never as «not reachable».
+      const replaced = code === "existing_team_runtime_changed";
       const title = code === "existing_team_saved_incomplete"
         ? stateText().savedTeamIncompleteTitle
-        : stateText().savedTeamUnreachableTitle;
+        : replaced ? stateText().savedTeamUpdatedTitle : stateText().savedTeamUnreachableTitle;
+      const action = replaced ? stateText().savedTeamUpdatedHint : described.action;
       if (identityKey) {
-        setSavedTeamNotice({ identityKey, title, message: described.text, ...(described.action ? { action: described.action } : {}) });
+        setSavedTeamNotice({ identityKey, title, message: described.text, ...(action ? { action } : {}) });
       }
       return {
         status: "failed",
         stage: "runtime",
         title,
         message: described.text,
-        action: described.action,
+        action,
         ...(code ? { code } : {}),
         retryable: true,
       };

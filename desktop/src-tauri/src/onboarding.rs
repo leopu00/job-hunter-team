@@ -3483,6 +3483,10 @@ pub(crate) fn existing_team_readonly_probe_with(
     if !result.success() {
         return Err(failure(match result.code {
             64 => "invalid_team_id",
+            // The shell's own pin check (container, image, platform, revision, digest): the team on the VPS
+            // is not the one that was connected (it was updated, or it is off). Said as that, not as «not
+            // reachable»: the person can connect the same team again.
+            70 => "existing_team_runtime_changed",
             72 => "existing_team_identity_mismatch",
             73 => "existing_team_not_active",
             _ => "existing_team_unavailable",
@@ -8535,7 +8539,7 @@ mod existing_team_assistant_tests {
     #[test]
     fn a_target_that_is_not_the_pinned_one_or_not_the_team_is_refused_before_any_start() {
         // exit 70 is the shell's own pin check (container, image, platform, digest); 72 the team identity
-        for (code_out, expected) in [(70, "existing_team_unavailable"), (72, "existing_team_identity_mismatch"), (64, "invalid_team_id")] {
+        for (code_out, expected) in [(70, "existing_team_runtime_changed"), (72, "existing_team_identity_mismatch"), (64, "invalid_team_id")] {
             let script = Script::new(vec![exit(code_out)], exit(0));
             assert_eq!(code(script.run(true, true)), expected);
             assert_eq!(script.calls.borrow().len(), 1);
