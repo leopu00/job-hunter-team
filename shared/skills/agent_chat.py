@@ -453,7 +453,6 @@ def _certain_interlock(pane: str) -> bool:
     """
     raw_lines = [strip_terminal_codes(line).rstrip().casefold() for line in (pane or "").splitlines()]
     lines = [line.strip() for line in raw_lines]
-    text = "\n".join(line for line in lines if line)
     rows = list(zip(raw_lines, raw_lines))
 
     # A recognised composer and its Codex footer are UI chrome, never menu
@@ -462,7 +461,8 @@ def _certain_interlock(pane: str) -> bool:
     composer_rows: set[int] = set()
     footer_rows: set[int] = set()
     for index, (_raw, plain) in enumerate(rows):
-        if _CODEX_DOT_FOOTER.match(plain) or _CODEX_HINT.search(plain):
+        numbered_option = bool(re.match(r"^\s*[›❯]?\s*\d+[.)]\s+\S", plain))
+        if not numbered_option and (_CODEX_DOT_FOOTER.match(plain) or _CODEX_HINT.search(plain)):
             footer_rows.add(index)
         match = _composer_match(plain)
         if not match or _NUMBERED_OPTION.match(match.group(2)):
@@ -513,22 +513,10 @@ def _certain_interlock(pane: str) -> bool:
             if len(sibling) <= 80 and option_shape(sibling_raw) == option_shape(raw):
                 return True
 
-    # These are controls with no reliable numbered second row in the capture.
-    # They are deliberately pairs/complete prompts rather than broad words in
-    # the transcript: an agent may discuss "login" or "permission" normally.
-    if any(marker in text for marker in (
-        "do you want to proceed?",
-        "allow command?",
-        "select login method:",
-        "paste code here if prompted",
-        "do you trust the files in this folder?",
-    )):
-        return True
-    # Short action menus can insert a line between the heading and the
-    # highlighted choice, so match both indispensable parts rather than their
-    # adjacency.
-    return (("login failed." in text and "try again" in text and "cancel" in text)
-            or ("how was this session?" in text and "send feedback" in text))
+    # Transcript prose is never an interlock.  A completed permission or
+    # login can remain visible above a fresh composer; only controls whose
+    # CURRENT geometry is attestable may stop a chat send.
+    return False
 
 
 def delivery_gate(pane: str) -> str:
