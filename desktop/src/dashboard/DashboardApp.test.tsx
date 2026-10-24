@@ -823,6 +823,49 @@ describe("DashboardApp onboarding router", () => {
       expect(startOnboardingTeam).not.toHaveBeenCalled();
     });
 
+    it("«Restart» inside it starts the step over and never touches the marker: the team that works is not set up again", async () => {
+      const user = await readyShell();
+      await user.click(await screen.findByRole("button", { name: "open-provider-setup" }));
+      vi.mocked(prepareOnboardingRuntime).mockReturnValue(new Promise(() => undefined));
+      await user.click(await screen.findByRole("button", { name: "submit-codex" }));
+      await user.click(await screen.findByRole("button", { name: "restart-onboarding" }));
+
+      expect(resetOnboardingMarker).not.toHaveBeenCalled();
+      expect(await screen.findByText("collecting:host")).toBeInTheDocument();
+      expect(screen.getByTestId("onboarding")).toHaveTextContent("provider-only");
+    });
+
+    it("leaving it clears the interruption a failed attempt left, and the team goes on as it was", async () => {
+      const user = await readyShell();
+      await user.click(await screen.findByRole("button", { name: "open-provider-setup" }));
+      // what a failed attempt of this step leaves behind (the real record of lib/onboarding)
+      localStorage.setItem(
+        "jht.desktop.onboarding.interrupted.set-up-local-team",
+        JSON.stringify({ stage: "provider", code: null, at: Date.now(), provider: "codex" }),
+      );
+      await user.click(await screen.findByRole("button", { name: "cancel-provider-only" }));
+      expect(await screen.findByTestId("shell")).toBeInTheDocument();
+      expect(localStorage.getItem("jht.desktop.onboarding.interrupted.set-up-local-team")).toBe("");
+    });
+
+    it("is not offered after a first setup on a VPS in this session: that team is not the one of this computer", async () => {
+      vi.mocked(useSession).mockReturnValue(signedInAs("first-setup-on-vps"));
+      requireOnboarding();
+      vi.mocked(probeOnboardingSshHostKey).mockResolvedValue({ status: "trusted" } as never);
+      vi.mocked(prepareOnboardingRuntime).mockResolvedValue({ ...PREPARED, providerAuthenticated: true });
+      vi.mocked(startOnboardingTeam).mockResolvedValue(TEAM_READY);
+      vi.mocked(openOnboardingAssistant).mockResolvedValue({ ...TEAM_READY, assistantWelcomed: false });
+      vi.mocked(readOnboardingSnapshot).mockResolvedValue({ ...TEAM_READY, assistantWelcomed: true, profileReady: true });
+      const user = userEvent.setup();
+      render(<DashboardApp />);
+      await user.click(await screen.findByRole("button", { name: "submit-vps" }));
+      await user.click(await screen.findByRole("button", { name: "continue-runtime" }));
+
+      await waitFor(() => expect(markOnboardingReady).toHaveBeenCalled(), { timeout: 3_500 });
+      expect(await screen.findByTestId("shell")).toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: "open-provider-setup" })).not.toBeInTheDocument();
+    });
+
     it("is not offered where there is no team of this computer: the read-only team on a VPS, a platform that runs none", async () => {
       vi.mocked(useSession).mockReturnValue(signedInAs("existing-no-provider-card"));
       vi.mocked(loadOnboardingGate).mockResolvedValue({

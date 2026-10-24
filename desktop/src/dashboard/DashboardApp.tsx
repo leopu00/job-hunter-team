@@ -418,6 +418,8 @@ export default function DashboardApp() {
   // Settings › Provider: the setup reopened at the «Provider» step on the team that already runs on this computer.
   const [providerSetupKey, setProviderSetupKey] = useState<string | null>(null);
   const providerSetupKeyRef = useRef<string | null>(null);
+  // A first setup of this session that went to a VPS: the team is not the one of this computer, whatever the Shell shows.
+  const [vpsSetupKey, setVpsSetupKey] = useState<string | null>(null);
   // The screen shows a saved existing team that could not be reopened: «Riprova» asks again to reopen it.
   const savedTeamFailureRef = useRef(false);
   // The account whose existing team was connected in full in this run, and the function that opens
@@ -683,6 +685,8 @@ export default function DashboardApp() {
 
   // Back to the app from the reopened Provider step, cancelled or done: the team is as it was or as chosen.
   const closeProviderSetup = useCallback(() => {
+    // A failed attempt left its interruption record: this step is not a setup left half-done.
+    if (markerId) clearOnboardingInterruption(markerId);
     providerSetupKeyRef.current = null;
     setProviderSetupKey(null);
     submissionRef.current = null;
@@ -691,7 +695,7 @@ export default function DashboardApp() {
     setSshHostKey(null);
     setGate({ phase: "ready" });
     navigate("/settings", { replace: true });
-  }, []);
+  }, [markerId]);
 
   const startTeam = useCallback(async (submission: OnboardingSubmission) => {
     try {
@@ -738,6 +742,7 @@ export default function DashboardApp() {
   const submit = useCallback(async (submission: OnboardingSubmission) => {
     if (!identityKey || !markerId) throw new Error("identity-missing");
     submissionRef.current = submission;
+    if (submission.host.kind === "vps") setVpsSetupKey(identityKey);
     setActivity((current) => current ?? createOnboardingActivity());
     try {
       markOnboardingStarted(markerId);
@@ -988,7 +993,9 @@ export default function DashboardApp() {
     providerExitRejectRef.current?.reject(new Error("onboarding-restarted"));
     providerExitRejectRef.current = null;
     if (providerSession) await closeOnboardingProviderLogin(providerSession).catch(() => undefined);
-    resetOnboardingMarker(markerId);
+    // The reopened Provider step is not a first setup: «Restart» there starts that step over and leaves the
+    // marker alone, or the team that works would be set up again from scratch at the next start.
+    if (providerSetupKeyRef.current !== identityKey) resetOnboardingMarker(markerId);
     submissionRef.current = null;
     savedTeamFailureRef.current = false;
     resumeAttemptedIdentityRef.current = identityKey;
@@ -1429,8 +1436,8 @@ export default function DashboardApp() {
     });
   }, [gate.phase, identityKey, localProfile?.displayName]);
   const providerSetup = useMemo(
-    () => (localTeamPlatform && gate.phase === "ready" ? { open: openProviderSetup } : null),
-    [gate.phase, localTeamPlatform, openProviderSetup],
+    () => (localTeamPlatform && gate.phase === "ready" && vpsSetupKey !== identityKey ? { open: openProviderSetup } : null),
+    [gate.phase, identityKey, localTeamPlatform, openProviderSetup, vpsSetupKey],
   );
 
   const logout = localProfile ? async () => {
