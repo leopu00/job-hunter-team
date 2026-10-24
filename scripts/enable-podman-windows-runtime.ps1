@@ -363,68 +363,6 @@ function Install-JhtContainerService {
   Invoke-Checked $PodmanPath 'machine' 'ssh' $MachineName $install
 }
 
-# The SID of a Windows account given as a SID or as a name ("COMPUTER\user", "user"); '' when it
-# cannot be resolved. Get-ScheduledTask gives the task's user back as a name, not as the SID it was
-# registered with (T100): the identities are compared, not the strings.
-function ConvertTo-JhtSid {
-  param([string]$Identity)
-  $value = ([string]$Identity).Trim()
-  if (-not $value) { return '' }
-  try {
-    # A SID is already the identity (and needs no Windows API, so the tests read it anywhere).
-    if ($value -match '^[Ss]-1-\d+(-\d+)+$') { return $value.ToUpperInvariant() }
-    return ([Security.Principal.NTAccount]::new($value)).Translate([Security.Principal.SecurityIdentifier]).Value
-  } catch {
-    return ''
-  }
-}
-
-function Install-JhtStartupTask {
-  param(
-    [Parameter(Mandatory)][string]$PodmanPath,
-    [Parameter(Mandatory)][string]$MachineName,
-    [Parameter(Mandatory)][string]$UserId
-  )
-  $taskName = 'Job Hunter Team - Start runtime'
-  $description = 'Starts the dedicated Job Hunter Team Podman machine at sign-in so the local team can resume after Windows restarts. It never starts or stops other Podman machines.'
-  $arguments = "machine start --update-connection=false $MachineName"
-  $action = New-ScheduledTaskAction -Execute $PodmanPath -Argument $arguments
-  $trigger = New-ScheduledTaskTrigger -AtLogOn -User $UserId
-  $principal = New-ScheduledTaskPrincipal -UserId $UserId -LogonType Interactive -RunLevel Limited
-  # Keep the task visible in Task Scheduler: hiding a persistent logon action
-  # makes inspection and manual removal needlessly difficult. Visibility is
-  # unrelated to whether the command opens a console window.
-  $settings = New-ScheduledTaskSettingsSet -StartWhenAvailable `
-    -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -MultipleInstances IgnoreNew `
-    -ExecutionTimeLimit ([TimeSpan]::FromMinutes(10))
-  Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $trigger `
-    -Principal $principal -Settings $settings -Description $description -Force | Out-Null
-
-  # Registration is part of the reboot contract, not a best-effort hint. Check
-  # the exact executable, machine and user before publishing a successful install.
-  $registered = Get-ScheduledTask -TaskName $taskName -ErrorAction Stop
-  # On a Windows 10 with a local account the trigger reads "COMPUTER\user" and the principal "user":
-  # both are compared as SIDs, and a user that does not resolve is not the same user.
-  $expectedSid = ConvertTo-JhtSid $UserId
-  $registeredActions = @($registered.Actions)
-  $registeredTriggers = @($registered.Triggers)
-  $sameExecutable = $registeredActions.Count -eq 1 -and
-    ([IO.Path]::GetFullPath([string]$registeredActions[0].Execute)).Equals(
-      [IO.Path]::GetFullPath($PodmanPath), [StringComparison]::OrdinalIgnoreCase)
-  if (-not $sameExecutable -or
-      ([string]$registeredActions[0].Arguments) -cne $arguments -or
-      $registeredTriggers.Count -ne 1 -or
-      -not $expectedSid -or
-      (ConvertTo-JhtSid ([string]$registeredTriggers[0].UserId)) -ne $expectedSid -or
-      (ConvertTo-JhtSid ([string]$registered.Principal.UserId)) -ne $expectedSid -or
-      ([string]$registered.Principal.LogonType) -notmatch '^Interactive' -or
-      ([string]$registered.Principal.RunLevel) -cne 'Limited' -or
-      [bool]$registered.Settings.Hidden -or
-      ([string]$registered.Description) -cne $description) {
-    throw "JHT startup task verification failed: $taskName"
-  }
-}
-
 # Where Podman is: PATH as the system and the user have it NOW (a winget install
 # of an earlier run is not in this process's PATH), then the folders of Podman's
 # MSI, which installs for this user (%LocalAppData%\Programs\Podman) or for the
@@ -838,8 +776,5 @@ if ($runningImage -and $runningImage -ne $canonicalImage) {
 if ($LASTEXITCODE -ne 0) { throw 'The migrated JHT container did not start.' }
 
 Install-JhtContainerService -PodmanPath $Podman -UnitPath $containerUnitFile
-$currentUserSid = [Security.Principal.WindowsIdentity]::GetCurrent().User.Value
-if (-not $currentUserSid) { throw 'Cannot identify the Windows user for runtime startup.' }
-Install-JhtStartupTask -PodmanPath $Podman -MachineName $MachineName -UserId $currentUserSid
 
 Write-Host "PODMAN JHT RUNTIME ENABLED (machine=$MachineName, wrapper=$(Join-Path $BinDir 'jht.ps1'))" -ForegroundColor Green

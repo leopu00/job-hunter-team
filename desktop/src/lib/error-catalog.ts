@@ -811,9 +811,9 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
   ),
   provider_not_configured_local: copy(
     "Sulla squadra di questo computer non è configurato nessun provider (Claude, Codex o Kimi): gli agenti non possono partire.",
-    "Riapri la configurazione dell’app, scegli il provider al passo «Provider» e riprova.",
+    "Apri Impostazioni › Provider, scegli il provider e riprova.",
     "No provider (Claude, Codex or Kimi) is set up on this computer's team: its agents cannot start.",
-    "Reopen the app’s setup, choose the provider at the «Provider» step, then try again.",
+    "Open Settings › Provider, choose the provider, then try again.",
   ),
   agent_stop_failed: copy(
     "L’agente è ancora acceso dopo lo spegnimento.",
@@ -1110,6 +1110,30 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
     "This can be done only from the app’s main window.",
     "Go back to the main window and try again.",
   ),
+  cloud_token_read_only: copy(
+    "Per rinnovare il token la squadra deve essere collegata in modo completo.",
+    "Collega la squadra con «Conferma e collega» e riprova.",
+    "To renew the token the team must be connected in full.",
+    "Connect the team with “Confirm and connect” and try again.",
+  ),
+  cloud_token_request_invalid: copy(
+    "La richiesta non è valida e non è stata mandata alla squadra.",
+    "Ricarica la pagina e riprova.",
+    "The request is not valid and was not sent to the team.",
+    "Reload the page and try again.",
+  ),
+  cloud_token_window_refused: copy(
+    "Questa azione si può fare solo dalla finestra principale dell’app.",
+    "Torna alla finestra principale e riprova.",
+    "This can be done only from the app’s main window.",
+    "Go back to the main window and try again.",
+  ),
+  token_malformed: copy(
+    "Questo non è un token di sincronizzazione.",
+    "Copia il token intero dal sito, senza spazi.",
+    "That is not a sync token.",
+    "Copy the whole token from the website, with no spaces.",
+  ),
   reason_invalid: copy(
     "Il motivo scelto non è tra quelli previsti.",
     "Scegli un motivo dall’elenco e riprova.",
@@ -1190,6 +1214,31 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
     "Controlla utente e chiave SSH, poi riprova.",
     "SSH access to the VPS did not succeed.",
     "Check the user and SSH key, then try again.",
+  ),
+
+  saved_vps_invalid: copy(
+    "I dati di questa VPS non sono completi o non sono validi, quindi non sono stati salvati.",
+    "Controlla nome, indirizzo, utente e posizione della chiave, poi riprova.",
+    "The details of this VPS are incomplete or not valid, so they were not saved.",
+    "Check the name, address, user and key location, then try again.",
+  ),
+  saved_vps_duplicate: copy(
+    "Questa VPS è già nell’elenco di quelle salvate.",
+    "Usa quella già salvata, oppure cambia indirizzo o utente se è un’altra VPS.",
+    "This VPS is already in the saved list.",
+    "Use the saved one, or change the address or user if it is a different VPS.",
+  ),
+  saved_vps_not_found: copy(
+    "Questa VPS salvata non c’è più nell’elenco.",
+    "Riapri l’elenco delle VPS salvate e scegli di nuovo.",
+    "This saved VPS is no longer in the list.",
+    "Reopen the saved VPS list and choose again.",
+  ),
+  saved_vps_storage_unavailable: copy(
+    "L’elenco delle VPS salvate non si può leggere o scrivere su questo computer.",
+    "Controlla che la cartella dei dati dell’app sia accessibile e abbia spazio libero, poi riprova.",
+    "The saved VPS list cannot be read or written on this computer.",
+    "Check that the app's data folder is accessible and has free space, then try again.",
   ),
 
   // ── VPS access details and SSH identity ──────────────────────────────────
@@ -1418,6 +1467,12 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
     "Aggiorna il team all’ultima versione, poi riprova.",
     "The team does not have this chat yet.",
     "Update the team to the latest version, then try again.",
+  ),
+  local_chat_wrapper_outdated: copy(
+    "Il runtime dell’app su questo computer è più vecchio della chat.",
+    "Aggiorna l’app e rifai il passo del runtime: la squadra non va toccata.",
+    "The app runtime on this computer is older than the chat.",
+    "Update the app and repeat the runtime step: leave the team untouched.",
   ),
   agent_unavailable: AGENT_NOT_READY,
   // The chat never types over a running turn and keeps no queue: the person sends again.

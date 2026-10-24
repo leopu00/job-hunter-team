@@ -551,6 +551,12 @@ MENU_MARK_ON_LAST = """\
    Skip
  › Send feedback
 """
+MENU_ITALIANO = """\
+╭──────────────────────────────────────────────╮
+│ › Continua                                   │
+│   Annulla                                    │
+╰──────────────────────────────────────────────╯
+"""
 NUMBERED_TRY_AGAIN = """\
  ❯ 1. Try again
 """
@@ -567,6 +573,101 @@ Type ".help" for more information.
 UNKNOWN_PLACEHOLDER = """\
 › Plan a trip to the moon
 """
+# Captured on CAPITANO after Codex 0.147: the text was redacted before it
+# left Leone, retaining only the form's line lengths and ANSI colour classes.
+# It has no recognised composer marker, and is not a choice/login/permission
+# control.  A new Codex form must not make the chat mute.
+CODEX_0147_REDACTED_FORM = """\
+\x1b[2m□□□□□□□□□□□□□□□□□□□□□□\x1b[0m
+\x1b[38;2;137;180;250m□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□\x1b[0m
+\x1b[38;2;205;214;244m□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□\x1b[0m
+\x1b[2m□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□\x1b[0m
+"""
+
+
+def _p24_redacted_line(chars: int, *sgr: str) -> str:
+    return "".join(f"\x1b[{params}m" for params in sgr) + "□" * chars + "\x1b[0m"
+
+
+# The current CAPITANO form on Leone P24, captured as row length + SGR only.
+# The only retained glyphs are the composer marker and Codex's structural dot
+# in its footer; no pane text is present in this fixture.
+P24_CODEX_0147_FORM = "\n".join((
+    _p24_redacted_line(1, "0", "39", "49", "2"),
+    "",
+    _p24_redacted_line(52, "0;1", "38;5;2", "49", "0", "39", "49", "1", "0", "39", "49", "38;2;137;180;250", "38;2;205;214;244"),
+    _p24_redacted_line(58, "2", "39", "0", "38;2;137;180;250", "49", "38;2;205;214;244", "38;2;166;227;161"),
+    _p24_redacted_line(51, "2", "39"),
+    "",
+    _p24_redacted_line(10, "0", "39", "49", "1"),
+    _p24_redacted_line(20, "0;2", "39", "49", "0", "38;5;6", "49", "39"),
+    "",
+    _p24_redacted_line(126, "38;5;1"),
+    "",
+    "",
+    "\x1b[1m\x1b[39m› \x1b[0m\x1b[39m\x1b[49m\x1b[2m" + "□" * 24 + "\x1b[0m",
+    "",
+    "\x1b[0m\x1b[39m\x1b[49m\x1b[38;2;246;226;183m\x1b[2m " + "□" * 17 + "·" + "□" * 18 + "\x1b[39m\x1b[0m\x1b[38;2;171;223;167m\x1b[49m",
+)) + "\n"
+P24_HISTORY_WITH_ENGLISH_INTERLOCK_WORDS = """\
+Do you want to proceed?
+Allow command?
+Select login method:
+Paste code here if prompted
+Do you trust the files in this folder?
+""" + P24_CODEX_0147_FORM
+
+
+# CAPITANO on the operator P27 shape, 50 rows, captured as row length + SGR only (no text).
+# The one ``›`` row is a historic message echo 46 rows above the bottom, with a
+# short plain row two lines under it; the bottom 15 rows hold no composer and
+# no control.  The old whole-screen scan read that pair as a menu.
+_P27_ROW_LENGTHS = {0: 219, 3: 217, 4: 81, 6: 35, 8: 216, 11: 215, 26: 216, 28: 216}
+_P27_NUMBERED = {8, 11, 26, 28}
+_P27_TAIL = (20, 213, 217, 49, 85, 3, 0, 42, 0, 216, 118, 0, 220, 52, 71)
+
+
+def _p27_row(index: int, chars: int) -> str:
+    if index == 3:
+        return "\x1b[1m› \x1b[0m" + "□" * (chars - 2)
+    if index in _P27_NUMBERED:
+        return f"{index}. " + "□" * (chars - 3)
+    return "□" * chars
+
+
+P27_HISTORIC_ECHO_FAR_ABOVE_NO_COMPOSER = "\n".join(
+    [_p27_row(i, _P27_ROW_LENGTHS.get(i, 120)) for i in range(35)]
+    + ["\x1b[2m" + "□" * n + "\x1b[0m" if n == 220 else "□" * n for n in _P27_TAIL]
+) + "\n"
+
+
+# A Codex composer holding a long WRAPPED draft, captured as row length + SGR
+# only (no text): marker row, two nearly full rows, a short last row, then the
+# blank row and the Codex footer.  No pane text is present.
+_CODEX_FOOTER_ROW = "\x1b[0m\x1b[39m\x1b[49m\x1b[38;2;246;226;183m\x1b[2m " + "□" * 17 + "·" + "□" * 17 + "\x1b[39m\x1b[0m"
+
+
+def _wrapped_composer(marker_sgr: str, row_sgr: str, end: str = "\x1b[0m") -> str:
+    return "\n".join((
+        "□" * 36, "", "─" * 220, "", "□" * 51, "", "\x1b[2m" + "─" * 220 + "\x1b[0m", "", "",
+        "\x1b[0;1m› \x1b[0m" + marker_sgr + "□" * 213 + end,
+        row_sgr + "□" * 214 + end, row_sgr + "□" * 212 + end, row_sgr + "□" * 24 + end,
+        "", _CODEX_FOOTER_ROW,
+    )) + "\n"
+
+
+WRAPPED_DRAFT = _wrapped_composer("", "")
+WRAPPED_DIM_SUGGESTION = _wrapped_composer("\x1b[2m", "\x1b[2m")
+
+
+# The idle CAPITANO composer on the operator P28 shape, as row length + SGR
+# only: a dim suggestion on the marker row, a blank row, then an indented
+# footer hint with no middle dot (a form the footer matcher does not know).
+CODEX_0147_IDLE_UNKNOWN_FOOTER = "\n".join((
+    "", "\x1b[1m" + "□" * 220 + "\x1b[0m", "\x1b[2m" + "□" * 163 + "\x1b[0m", "\x1b[2m" + "□" * 38 + "\x1b[0m", "",
+    "─" * 220, "", "□" * 136, "", "\x1b[2m" + "─" * 220 + "\x1b[0m", "", "",
+    "\x1b[0;1m› \x1b[0m\x1b[2m" + "□" * 24 + "\x1b[0m", "", "  " + "□" * 32,
+)) + "\n"
 
 
 def _module():
@@ -609,11 +710,11 @@ def _nothing_happened(box, agent="capitano"):
 
 
 @pytest.mark.parametrize("screen", [
-    CLAUDE_PERMISSION, CODEX_APPROVAL, LOGIN_METHOD, PASTE_CODE, A_SHELL, QUOTE_THEN_SHELL, MENU_TRY_AGAIN,
-    BASH_CONTINUATION,
-], ids=["permission", "approval", "login", "paste-code", "shell", "quote-then-shell", "menu-try-again",
-        "bash-continuation"])
-def test_a_screen_that_is_not_the_prompt_is_a_closed_code_with_nothing_written_or_typed(box, screen):
+    CLAUDE_PERMISSION, CODEX_APPROVAL, LOGIN_METHOD, TRUST_FOLDER, MENU_TRY_AGAIN,
+    MENU_SEND_FEEDBACK, MENU_MARK_ON_LAST, MENU_ITALIANO,
+], ids=["permission", "approval", "login", "trust-folder", "menu-try-again",
+        "menu-send-feedback", "menu-mark-on-last", "menu-italiano"])
+def test_a_certain_interlock_is_a_closed_code_with_nothing_written_or_typed(box, screen):
     box.stub_delivery()
     (box.state / "screen").write_text(screen, encoding="utf-8")
     # «1» would choose «Yes» on a menu: it must never reach the terminal.
@@ -629,6 +730,108 @@ def test_a_real_draft_gets_its_own_closed_code_and_is_not_touched(box):
     code, answer = box.run("send", "capitano", "id-draft", stdin="1")
     assert (code, answer) == (130, {"error": "composer_has_text"})
     _nothing_happened(box)
+
+
+def test_an_unrecognised_codex_0147_form_is_delivered_and_the_transport_must_prove_it(box):
+    box.stub_delivery()
+    (box.state / "screen").write_text(CODEX_0147_REDACTED_FORM, encoding="utf-8")
+    code, receipt = box.run("send", "capitano", "id-codex-0147", stdin="verifica la coda")
+    assert code == 0 and receipt["taken"] is True
+    assert box.envelopes() == ["[@utente -> @capitano] [CHAT] verifica la coda"]
+
+
+def test_the_exact_redacted_p24_codex_composer_and_footer_are_writable(box):
+    module = _module()
+    assert module.composer_snapshot(P24_CODEX_0147_FORM) == ("empty", False)
+    assert module.delivery_gate(P24_CODEX_0147_FORM) == "empty"
+    assert module.delivery_gate(CODEX_APPROVAL) == "blocked", "a real Codex choice stays closed"
+    box.stub_delivery()
+    (box.state / "screen").write_text(P24_CODEX_0147_FORM, encoding="utf-8")
+    code, receipt = box.run("send", "capitano", "id-p24-codex-form", stdin="riprendi la coda")
+    assert code == 0 and receipt["taken"] is True
+
+
+def test_historic_english_permission_and_login_prose_never_blocks_the_p24_composer(box):
+    module = _module()
+    assert module.composer_snapshot(P24_HISTORY_WITH_ENGLISH_INTERLOCK_WORDS) == ("empty", False)
+    assert module.delivery_gate(P24_HISTORY_WITH_ENGLISH_INTERLOCK_WORDS) == "empty"
+    assert module.delivery_gate(CODEX_APPROVAL) == "blocked", "current structural Codex permission remains closed"
+    box.stub_delivery()
+    (box.state / "screen").write_text(P24_HISTORY_WITH_ENGLISH_INTERLOCK_WORDS, encoding="utf-8")
+    code, receipt = box.run("send", "capitano", "id-p24-history", stdin="riprendi la coda")
+    assert code == 0 and receipt["taken"] is True
+
+
+def test_a_historic_message_echo_far_above_the_bottom_is_not_a_menu_on_operator_p27_shape(box):
+    module = _module()
+    screen = P27_HISTORIC_ECHO_FAR_ABOVE_NO_COMPOSER
+    assert len(screen.splitlines()) == 50
+    assert module.composer_snapshot(screen) == ("none", False)
+    assert module.delivery_gate(screen) == "none", "transcript geometry far above the tail never closes the chat"
+    # The same pair at the bottom IS a live menu and stays closed.
+    live = "\n".join(screen.splitlines()[:7]) + "\n"
+    assert module.delivery_gate(live) == "blocked"
+    box.stub_delivery()
+    (box.state / "screen").write_text(screen, encoding="utf-8")
+    code, receipt = box.run("send", "capitano", "id-p27-echo", stdin="riprendi la coda")
+    assert code == 0 and receipt["taken"] is True
+
+
+def test_a_tall_numbered_selector_with_its_cursor_above_the_tail_stays_closed(box):
+    module = _module()
+    entries = [row for n in range(1, 11) for row in (f"{'❯' if n == 1 else ' '} {n}. entry", "     detail line")]
+    tall = "\n".join(["Pick one", ""] + entries + ["", "  enter to select"]) + "\n"
+    assert len(tall.splitlines()) > module.PROMPT_TAIL + 5
+    assert module.delivery_gate(tall) == "blocked", "an Enter inside a selector would choose an entry"
+    box.stub_delivery()
+    (box.state / "screen").write_text(tall, encoding="utf-8")
+    code, answer = box.run("send", "capitano", "id-tall-selector", stdin="1")
+    assert (code, answer) == (119, {"error": "agent_not_at_prompt"})
+    _nothing_happened(box)
+
+
+def test_a_wrapped_multi_row_draft_is_a_real_draft_with_its_own_closed_code(box):
+    module = _module()
+    assert module.composer_snapshot(WRAPPED_DRAFT) == ("text", False)
+    assert module.delivery_gate(WRAPPED_DRAFT) == "text", "not a menu: a draft"
+    box.stub_delivery()
+    (box.state / "screen").write_text(WRAPPED_DRAFT, encoding="utf-8")
+    code, answer = box.run("send", "capitano", "id-wrapped-draft", stdin="1")
+    assert (code, answer) == (130, {"error": "composer_has_text"})
+    _nothing_happened(box)
+
+
+def test_a_long_dim_suggestion_that_wraps_stays_an_empty_writable_composer(box):
+    module = _module()
+    assert module.composer_snapshot(WRAPPED_DIM_SUGGESTION) == ("empty", False)
+    assert module.delivery_gate(WRAPPED_DIM_SUGGESTION) == "empty"
+    box.stub_delivery()
+    (box.state / "screen").write_text(WRAPPED_DIM_SUGGESTION, encoding="utf-8")
+    code, receipt = box.run("send", "capitano", "id-wrapped-dim", stdin="riprendi la coda")
+    assert code == 0 and receipt["taken"] is True
+
+
+def test_short_rows_under_a_short_marker_are_never_read_as_wrapped_text():
+    module = _module()
+    menu = "› Yes, continue\n  No\n\n  enter to confirm · esc to cancel\n"
+    assert module.composer_snapshot(menu)[0] == "none"
+    assert module.delivery_gate(menu) == "blocked", "a menu stays closed, never a draft"
+    long_marker = "› " + "□" * 150 + "\n" + "□" * 40 + "\n" + "□" * 30 + "\n\n  enter to confirm · esc to cancel\n"
+    assert module.composer_snapshot(long_marker)[0] == "none", "a mid row far shorter than the marker is not a wrap"
+
+
+def test_a_cursor_row_and_a_footer_behind_a_blank_row_are_not_a_menu(box):
+    module = _module()
+    screen = CODEX_0147_IDLE_UNKNOWN_FOOTER
+    assert module.composer_snapshot(screen)[0] == "none", "the footer form is unknown"
+    assert module.delivery_gate(screen) == "none", "chrome behind a blank row is not a second choice"
+    box.stub_delivery()
+    (box.state / "screen").write_text(screen, encoding="utf-8")
+    code, receipt = box.run("send", "capitano", "id-idle-unknown-footer", stdin="riprendi la coda")
+    assert code == 0 and receipt["taken"] is True
+    # The same two rows with no blank between them are a real choice list.
+    menu = "\n".join(screen.splitlines()[:-2]) + "\n  " + "□" * 32 + "\n"
+    assert module.delivery_gate(menu) == "blocked"
 
 
 def test_dim_codex_suggestion_is_empty_but_rgb_colour_is_not_dim():
@@ -647,12 +850,11 @@ def test_composer_text_is_only_the_box_contents_and_never_the_border_or_hint():
     assert module.composer_text(codex) == "first line"
 
 
-def test_a_running_turn_is_agent_busy_with_nothing_written_or_typed(box):
+def test_an_unrecognised_running_turn_is_still_writable(box):
     box.stub_delivery()
     (box.state / "screen").write_text("✻ Pondering… (12s · esc to interrupt)\n", encoding="utf-8")
-    code, answer = box.run("send", "capitano", "id-21", stdin="ci sei?")
-    assert (code, answer) == (124, {"error": "agent_busy"})
-    _nothing_happened(box)
+    code, receipt = box.run("send", "capitano", "id-21", stdin="ci sei?")
+    assert code == 0 and receipt["taken"] is True
 
 
 def test_a_running_turn_with_an_empty_composer_is_delivered(box):

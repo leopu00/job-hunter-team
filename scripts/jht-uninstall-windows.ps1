@@ -30,7 +30,15 @@ param(
 )
 
 $JhtMachineName = 'jht-podman'
-$JhtStartupTaskName = 'Job Hunter Team - Start runtime'
+$JhtStartupTaskLabel = 'Job Hunter Team - Start runtime'
+function Get-JhtScopedStartupTaskName {
+  try {
+    $sid = [Security.Principal.WindowsIdentity]::GetCurrent().User.Value
+    if ($sid -match '^S-1-\d+(-\d+)+$') { return "$JhtStartupTaskLabel [$sid]" }
+  } catch {}
+  return ''
+}
+$JhtStartupTaskName = Get-JhtScopedStartupTaskName
 $JhtAppIdentifier = 'ai.jobhunterteam.desktop'
 $JhtGameUninstallKey = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\JobHunterTeam'
 $JhtMachineStopSeconds = 90
@@ -399,6 +407,7 @@ function Invoke-JhtPodmanWithin {
 # ── Scheduled task and the user's environment ─────────────────────────────
 
 function Test-JhtStartupTaskPresent {
+  if (-not $JhtStartupTaskName) { return $false }
   try { return [bool](Get-ScheduledTask -TaskName $JhtStartupTaskName -ErrorAction SilentlyContinue) } catch { return $false }
 }
 

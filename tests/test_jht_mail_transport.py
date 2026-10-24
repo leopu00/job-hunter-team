@@ -84,7 +84,7 @@ def route(session="CAPITANO", message=None, identity=VERIFIED, receivers=frozens
     return mail.route(session, message or envelope(), identity=identity, receivers=receivers, now=now)
 
 
-READY = "some output\n❯ \n"
+READY = "some output\n╭──────────────────────────────────────────────╮\n│ ❯ │\n╰──────────────────────────────────────────────╯\n"
 ALWAYS = lambda session: True
 
 
@@ -307,12 +307,31 @@ case "$cmd" in
   has-session) exit 0 ;;
   list-panes) printf '%s %s\n' "$FAKE_PANE_PID" "$FAKE_PANE_SESSION"; printf '99999 capitano\n99998 analista-1\n'; exit 0 ;;
   show-options) exit 0 ;;
-  capture-pane) printf '%s\n' "${FAKE_SCREEN:-}"; printf '❯ %s%s\n' "$(cat "$S/composer" 2>/dev/null)" "${FAKE_COMPOSER_EXTRA:-}"; exit 0 ;;
+  capture-pane)
+    printf '%s\n' "${FAKE_SCREEN:-}"
+    printf '╭──────────────────────────────────────────────╮\n│ ❯ %s%s │\n╰──────────────────────────────────────────────╯\n' "$(cat "$S/composer" 2>/dev/null)" "${FAKE_COMPOSER_EXTRA:-}"
+    exit 0 ;;
+  load-buffer)
+    while [ "$1" != "-b" ] && [ $# -gt 0 ]; do shift; done
+    [ "$1" = "-b" ] && shift
+    name="$1"; shift
+    cat > "$S/buffer.$name"
+    exit 0 ;;
+  paste-buffer)
+    while [ $# -gt 0 ]; do
+      if [ "$1" = "-b" ]; then name="$2"; shift 2; continue; fi
+      shift
+    done
+    [ "${FAKE_MUTE:-0}" = 1 ] && exit 0
+    cat "$S/buffer.$name" >> "$S/composer"
+    cat "$S/buffer.$name" >> "$S/typed"; printf '\0' >> "$S/typed"
+    rm -f "$S/buffer.$name"
+    exit 0 ;;
   send-keys)
     while [ "$1" = "-t" ]; do shift 2; done
     if [ "$1" = "-l" ]; then
-      [ "${FAKE_MUTE:-0}" = 1 ] && exit 0
-      printf '%s' "$2" >> "$S/composer"; printf '%s\0' "$2" >> "$S/typed"; exit 0
+      # The old inline transport must make the test red, never look delivered.
+      exit 86
     fi
     if [ "$1" = "Enter" ]; then
       [ "${FAKE_ENTER_IGNORED:-0}" = 1 ] && exit 0

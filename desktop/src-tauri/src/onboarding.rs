@@ -1498,10 +1498,21 @@ fn file_digest(path: &Path) -> Option<String> {
 }
 
 #[cfg(target_os = "macos")]
-fn runtime_bundle_manifest_valid(runtime_dir: &Path, wrapper: &Path) -> bool {
+fn protected_runtime_node(path: &Path, directory: bool) -> bool {
+    use std::os::unix::fs::{MetadataExt, PermissionsExt};
+    let Ok(metadata) = fs::symlink_metadata(path) else { return false };
+    (if directory { metadata.file_type().is_dir() } else { metadata.file_type().is_file() })
+        && !metadata.file_type().is_symlink()
+        && metadata.uid() == unsafe { libc::geteuid() }
+        && metadata.permissions().mode() & 0o022 == 0
+}
+
+#[cfg(target_os = "macos")]
+pub(crate) fn runtime_bundle_manifest_valid(runtime_dir: &Path, wrapper: &Path) -> bool {
     use std::collections::BTreeMap;
 
     let manifest = runtime_dir.join(".runtime-integrity");
+    if !protected_runtime_node(runtime_dir, true) || ![&manifest, &runtime_dir.join("docker-compose.yml"), &runtime_dir.join("host-setup.sh"), wrapper, &runtime_dir.join("container-runtime"), &runtime_dir.join("podman-machine"), &runtime_dir.join("bin/docker")].into_iter().all(|path| protected_runtime_node(path, false)) || !protected_runtime_node(&runtime_dir.join("bin"), true) { return false; }
     let Ok(source) = fs::read_to_string(manifest) else {
         return false;
     };
@@ -1553,9 +1564,7 @@ fn runtime_bundle_manifest_valid(runtime_dir: &Path, wrapper: &Path) -> bool {
     {
         return false;
     }
-    artifacts
-        .into_iter()
-        .all(|(key, path)| file_digest(&path).is_some_and(|digest| digest == entries[key]))
+    artifacts.into_iter().all(|(key, path)| protected_runtime_node(&path, false) && file_digest(&path).is_some_and(|digest| digest == entries[key]))
 }
 
 #[cfg(target_os = "macos")]
@@ -1922,6 +1931,9 @@ fn install_local_windows(
             .is_some_and(|dir| release_channel::installed_runtime_reusable(channel.as_ref(), &dir))
         {
             show_windows_support_notice_for_reused_runtime(phase);
+            if !crate::windows_runtime::register_autostart(&wrapper) {
+                phase("ui_notice_autostart_inactive");
+            }
             trace_local_runtime("runtime", "install_reused");
             return Ok(wrapper);
         }
@@ -1971,7 +1983,11 @@ fn install_local_windows(
         let _ = fs::remove_dir_all(&dir);
         result
     })?;
-    wrapper_path(app).ok_or_else(|| failure("runtime_missing"))
+    let wrapper = wrapper_path(app).ok_or_else(|| failure("runtime_missing"))?;
+    if !crate::windows_runtime::register_autostart(&wrapper) {
+        phase("ui_notice_autostart_inactive");
+    }
+    Ok(wrapper)
 }
 
 /// A file from `url`, at most MAX_INSTALLER_BYTES, refused before the network
@@ -3009,9 +3025,197 @@ fn snapshot_reason(stderr: &[u8]) -> Option<String> {
     (!clean.is_empty()).then_some(clean)
 }
 
-/// The snapshot, and on this computer also its command, exit, lines and stderr in the runtime log
-/// when a log is given (the setup's own snapshot is a step of the setup), with the wrapper's
-/// reason when it gave one.
+/// The read-only facts which `onboarding-snapshot` used to collect in the
+/// host wrapper. The runner is injected so its contract is exercised on macOS
+/// and Linux too; the Windows caller below supplies only the attested
+/// `docker.exe` which install.ps1 recorded in the runtime manifest.
+///
+/// Nothing in this probe can create, start, stop, or wake a runtime. A failed
+/// read is an inactive snapshot, like the former wrapper protocol, not a
+/// reason to try `up`.
+///
+/// The team container is found by the labels compose puts on it
+/// (`docker ps -a -q --filter label=…`), never by running compose: compose
+/// would need the project name and provider the wrapper sets in its own
+/// environment, and `docker-compose.exe` is not in the attested manifest.
+///
+/// The whole read has one deadline, `budget`: each command gets what is left
+/// of it, and once it is spent no further command runs. A stuck engine costs
+/// one budget, not one timeout per command.
+#[cfg_attr(not(windows), allow(dead_code))]
+fn native_team_snapshot_with(
+    budget: Duration,
+    mut run: impl FnMut(Vec<OsString>, Option<&[u8]>, Duration) -> Result<ProcessResult, &'static str>,
+) -> (OnboardingSnapshot, Option<String>) {
+    const INACTIVE: OnboardingSnapshot = OnboardingSnapshot {
+        runtime_installed: true,
+        container_running: false,
+        provider_configured: false,
+        provider_authenticated: false,
+        assistant_welcomed: false,
+        assistant_running: false,
+        captain_running: false,
+        profile_ready: false,
+        direct_chat_ready: false,
+        limits_verified: None,
+    };
+    const METADATA: &[u8] = br#"const fs=require('fs');let config={};try{config=JSON.parse(fs.readFileSync('/jht_home/jht.config.json','utf8'))}catch{}const provider=String(config.active_provider||'').toLowerCase();const providers=config.providers||{};const entry=providers[provider]||{};const configured=['claude','anthropic','codex','openai','kimi','moonshot'].includes(provider)&&(entry.auth_method||'subscription')==='subscription';const markers={claude:'/jht_home/.claude/.credentials.json',anthropic:'/jht_home/.claude/.credentials.json',codex:'/jht_home/.codex/auth.json',openai:'/jht_home/.codex/auth.json',kimi:'/jht_home/.kimi/credentials/kimi-code.json',moonshot:'/jht_home/.kimi/credentials/kimi-code.json'};process.stdout.write(`${configured?1:0} ${markers[provider]&&fs.existsSync(markers[provider])?1:0} ${fs.existsSync('/jht_home/profile/welcomed.flag')?1:0}`);"#;
+
+    let command = |words: &[&str]| words.iter().map(OsString::from).collect::<Vec<_>>();
+    let started = Instant::now();
+    let mut run = |args: Vec<OsString>, input: Option<&[u8]>| {
+        let left = budget.saturating_sub(started.elapsed());
+        if left.is_zero() {
+            return Err("timeout");
+        }
+        run(args, input, left)
+    };
+    // Docker Compose's labels first; Podman Compose's only when there is nothing under the first.
+    let mut ids = String::new();
+    for (project, service) in [
+        ("com.docker.compose.project", "com.docker.compose.service"),
+        ("io.podman.compose.project", "io.podman.compose.service"),
+    ] {
+        let listing = command(&[
+            "ps", "-a", "-q",
+            "--filter", &format!("label={project}=jht"),
+            "--filter", &format!("label={service}=jht"),
+        ]);
+        match run(listing, None) {
+            Ok(result) if result.success() => ids = result.stdout_text(),
+            _ => return (INACTIVE, Some("container_not_found: container listing unavailable".to_owned())),
+        }
+        if ids.lines().any(|line| !line.trim().is_empty()) {
+            break;
+        }
+    }
+    let mut found = None;
+    for id in ids.lines().map(str::trim).filter(|line| !line.is_empty()) {
+        if !(12..=64).contains(&id.len()) || !id.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+            return (INACTIVE, Some("container_not_found: the listing returned an invalid id".to_owned()));
+        }
+        let details = match run(command(&["inspect", "--type", "container", id, "--format", "{{.State.Running}}|{{json .Config.Labels}}"]), None) {
+            Ok(result) if result.success() => result.stdout_text(),
+            _ => return (INACTIVE, Some("container_not_found: inspect failed".to_owned())),
+        };
+        let Some((running, labels)) = details.trim().split_once('|') else {
+            return (INACTIVE, Some("container_not_found: inspect was unreadable".to_owned()));
+        };
+        let Ok(labels) = serde_json::from_str::<serde_json::Value>(labels) else {
+            return (INACTIVE, Some("container_not_found: labels were unreadable".to_owned()));
+        };
+        let label = |key| labels.get(key).and_then(serde_json::Value::as_str);
+        let compose_labels = |project, service| label(project) == Some("jht") && label(service) == Some("jht");
+        if !compose_labels("com.docker.compose.project", "com.docker.compose.service")
+            && !compose_labels("io.podman.compose.project", "io.podman.compose.service")
+        {
+            continue;
+        }
+        if running.trim() != "true" {
+            return (INACTIVE, Some("container_not_found: the team container is stopped".to_owned()));
+        }
+        if found.replace(id.to_owned()).is_some() {
+            return (INACTIVE, Some("container_not_found: two team containers are running".to_owned()));
+        }
+    }
+    let Some(id) = found else {
+        return (INACTIVE, Some("container_not_found: no running team container".to_owned()));
+    };
+    let metadata = run(command(&["exec", "-i", &id, "node", "-"]), Some(METADATA))
+        .ok()
+        .filter(ProcessResult::success)
+        .map(|result| result.stdout_text());
+    let (provider_configured, provider_authenticated, assistant_welcomed) = metadata
+        .as_deref()
+        .and_then(|text| {
+            let values = text.split_whitespace().collect::<Vec<_>>();
+            (values.len() == 3 && values.iter().all(|value| matches!(*value, "0" | "1")))
+                .then(|| (values[0] == "1", values[1] == "1", values[2] == "1"))
+        })
+        .unwrap_or((false, false, false));
+    let assistant_running = run(command(&["exec", &id, "tmux", "has-session", "-t", "ASSISTENTE"]), None)
+        .is_ok_and(|result| result.success());
+    let captain_running = run(command(&["exec", &id, "tmux", "has-session", "-t", "CAPITANO"]), None)
+        .is_ok_and(|result| result.success());
+    let profile_ready = run(command(&["exec", &id, "test", "-f", "/jht_home/profile/ready.flag"]), None)
+        .is_ok_and(|result| result.success())
+        || run(command(&["exec", &id, "node", "/app/cli/bin/jht.js", "profile", "validate", "--strict", "--json"]), None)
+            .is_ok_and(|result| result.success());
+    let final_running = run(command(&["inspect", &id, "--format", "{{.State.Running}}"]), None)
+        .ok()
+        .filter(ProcessResult::success)
+        .is_some_and(|result| result.stdout_text().trim() == "true");
+    if !final_running {
+        return (INACTIVE, Some("container_stopped: the team stopped during the read".to_owned()));
+    }
+    (
+        OnboardingSnapshot {
+            runtime_installed: true,
+            container_running: true,
+            provider_configured,
+            provider_authenticated,
+            assistant_welcomed,
+            assistant_running,
+            captain_running,
+            profile_ready,
+            direct_chat_ready: false,
+            limits_verified: None,
+        },
+        (!provider_configured && metadata.is_none())
+            .then_some("provider_unreadable: the provider check did not return facts".to_owned()),
+    )
+}
+
+/// Windows has an attested `docker.exe` shim in the runtime bundle. Read the
+/// team through that executable directly: invoking jht.ps1 again would put the
+/// state probe back across the PowerShell boundary which this migration removes.
+#[cfg(windows)]
+fn native_windows_team_snapshot(
+    app: &tauri::AppHandle,
+    scope: &AccountScope,
+    log: Option<&RuntimeLog>,
+) -> Result<(OnboardingSnapshot, Option<String>), OnboardingError> {
+    crate::account_scope::validate_local_runtime(app, scope).map_err(failure)?;
+    // `wrapper_path` is the runtime attestation on Windows: it checks the
+    // wrapper, compose files, ACL helper and docker.exe against the manifest.
+    if wrapper_path(app).is_none() {
+        return Ok((OnboardingSnapshot::default(), Some("runtime_untrusted".to_owned())));
+    }
+    let runtime = crate::windows_runtime::runtime_dir(std::env::var_os("LOCALAPPDATA"))
+        .ok_or_else(|| failure("runtime_missing"))?;
+    let engine = runtime.join("bin").join("docker.exe");
+    if !engine.is_file() {
+        return Ok((OnboardingSnapshot::default(), Some("runtime_untrusted".to_owned())));
+    }
+    let selected = fs::read_to_string(runtime.join("container-runtime")).unwrap_or_default();
+    if selected.trim() != "podman" {
+        return Ok((OnboardingSnapshot::default(), Some("runtime_untrusted".to_owned())));
+    }
+    let (snapshot, reason) = native_team_snapshot_with(SNAPSHOT_TIMEOUT, |args, input, timeout| {
+        let started = Instant::now();
+        let (result, _stderr) = run_program_keeping_stderr(
+            engine.to_str().ok_or("runtime_missing")?,
+            args,
+            input,
+            timeout,
+        );
+        if let Some(log) = log {
+            // A profile validation can have private details on stdout. Keep
+            // the state probe observable without retaining either stream or
+            // the metadata program sent on stdin.
+            log.record_onboarding_status(
+                "team_state",
+                result.as_ref().map(|value| value.code).map_err(|error| *error),
+                started.elapsed(),
+            );
+        }
+        result
+    });
+    Ok((snapshot, reason))
+}
+
+/// The snapshot. Windows records every native state probe as a closed outcome;
+/// other local platforms retain the established wrapper logging and reason.
 fn snapshot_logged(
     app: &tauri::AppHandle,
     scope: &AccountScope,
@@ -3028,6 +3232,12 @@ fn snapshot_logged(
             Ok((parse_snapshot(&result.stdout_text()), None))
         }
         ValidatedHost::Local => {
+            #[cfg(windows)]
+            {
+                return native_windows_team_snapshot(app, scope, log);
+            }
+            #[cfg(not(windows))]
+            {
             let Some(wrapper) = wrapper_path(app) else {
                 return Ok((OnboardingSnapshot::default(), None));
             };
@@ -3047,6 +3257,7 @@ fn snapshot_logged(
                 return Err(failure("snapshot_failed"));
             }
             Ok((parse_snapshot(&result.stdout_text()), reason))
+            }
         }
     }
 }
@@ -5337,7 +5548,7 @@ mod tests {
     use super::{
         assistant_reached, existing_team_probe_with, existing_team_readonly_probe_with, expected_installer_digest, failure,
         parse_snapshot, parse_start_limits, parse_verified_snapshot, provider_bootstrap_input,
-        redact, resume_team_prerequisite, start_and_verify_local_container_with, start_limits_gate,
+        native_team_snapshot_with, redact, resume_team_prerequisite, start_and_verify_local_container_with, start_limits_gate,
         valid_interactive_request_id, valid_pairing_token, valid_provider_login_input,
         valid_wrapper_file, with_start_limits, write_provider_input, ExistingTeamConnectRequest,
         InteractiveStateDetector, LocalCliOperation, OnboardingDiagnosticHostKind,
@@ -5365,10 +5576,142 @@ mod tests {
     use sha2::{Digest, Sha256};
     use std::{
         collections::VecDeque,
+        ffi::OsString,
         sync::{Arc, Mutex},
         thread,
         time::{Duration, Instant},
     };
+
+    const DOCKER_LABELS: &str = r#"{"com.docker.compose.project":"jht","com.docker.compose.service":"jht"}"#;
+    const PODMAN_LABELS: &str = r#"{"io.podman.compose.project":"jht","io.podman.compose.service":"jht"}"#;
+    const WHOLE_READ: Duration = Duration::from_secs(25);
+
+    fn reply(stdout: &str) -> ProcessResult {
+        ProcessResult { code: 0, stdout: stdout.as_bytes().to_vec() }
+    }
+
+    fn words_of(commands: &[(Vec<OsString>, Option<Vec<u8>>)]) -> Vec<String> {
+        commands
+            .iter()
+            .flat_map(|(args, _)| args.iter())
+            .map(|word| word.to_string_lossy().into_owned())
+            .collect()
+    }
+
+    #[test]
+    fn native_team_snapshot_reads_only_the_attested_team_without_waking_it() {
+        let id = "a".repeat(64);
+        let mut replies = VecDeque::from([
+            reply(&format!("{id}\n")),
+            reply(&format!("true|{PODMAN_LABELS}\n")),
+            reply("1 1 1"),
+            reply(""),
+            reply(""),
+            reply(""),
+            reply("true\n"),
+        ]);
+        let mut commands = Vec::new();
+        let (snapshot, reason) = native_team_snapshot_with(WHOLE_READ, |args, input, _| {
+            commands.push((args, input.map(ToOwned::to_owned)));
+            Ok(replies.pop_front().expect("one reply per read"))
+        });
+        assert!(snapshot.runtime_installed && snapshot.container_running);
+        assert!(snapshot.provider_configured && snapshot.provider_authenticated && snapshot.assistant_welcomed);
+        assert!(snapshot.assistant_running && snapshot.captain_running && snapshot.profile_ready);
+        assert_eq!(reason, None);
+        assert!(replies.is_empty());
+        let words = words_of(&commands);
+        // The team is listed by its labels, never through compose: no project name, no provider, no
+        // `docker-compose.exe` (it is not in the attested manifest) and no environment to set.
+        assert_eq!(
+            commands[0].0.iter().map(|word| word.to_string_lossy().into_owned()).collect::<Vec<_>>(),
+            [
+                "ps", "-a", "-q",
+                "--filter", "label=com.docker.compose.project=jht",
+                "--filter", "label=com.docker.compose.service=jht",
+            ]
+        );
+        assert!(words.iter().all(|word| word != "compose" && !word.ends_with(".yml") && word != "--project-directory"));
+        assert!(words.iter().all(|word| !matches!(word.as_str(), "up" | "start" | "restart" | "stop")));
+        assert!(commands.iter().any(|(args, input)| {
+            args.iter().map(OsString::as_os_str).any(|word| word == "node") && input.is_some()
+        }));
+    }
+
+    #[test]
+    fn native_team_snapshot_looks_for_podman_compose_labels_only_when_docker_ones_find_nothing() {
+        let id = "b".repeat(64);
+        let mut replies = VecDeque::from([
+            reply(""),
+            reply(&format!("{id}\n")),
+            reply(&format!("true|{PODMAN_LABELS}\n")),
+            reply("1 1 1"),
+            reply(""),
+            reply(""),
+            reply(""),
+            reply("true\n"),
+        ]);
+        let mut commands = Vec::new();
+        let (snapshot, _) = native_team_snapshot_with(WHOLE_READ, |args, input, _| {
+            commands.push((args, input.map(ToOwned::to_owned)));
+            Ok(replies.pop_front().expect("one reply per read"))
+        });
+        assert!(snapshot.container_running);
+        assert!(replies.is_empty());
+        let second = commands[1].0.iter().map(|word| word.to_string_lossy().into_owned()).collect::<Vec<_>>();
+        assert_eq!(second[3..], ["--filter", "label=io.podman.compose.project=jht", "--filter", "label=io.podman.compose.service=jht"]);
+        // nothing to list under either family: no team, and nothing else is run
+        let mut calls = 0;
+        let (snapshot, reason) = native_team_snapshot_with(WHOLE_READ, |_, _, _| {
+            calls += 1;
+            Ok(reply(""))
+        });
+        assert!(!snapshot.container_running);
+        assert_eq!(reason, Some("container_not_found: no running team container".to_owned()));
+        assert_eq!(calls, 2);
+    }
+
+    #[test]
+    fn native_team_snapshot_rejects_mixed_compose_label_families() {
+        let id = "a".repeat(64);
+        let labels = r#"{"com.docker.compose.project":"jht","io.podman.compose.service":"jht"}"#;
+        let mut replies = VecDeque::from([
+            reply(&format!("{id}\n")),
+            reply(&format!("true|{labels}\n")),
+        ]);
+        let (snapshot, reason) = native_team_snapshot_with(WHOLE_READ, |_, _, _| {
+            Ok(replies.pop_front().expect("only the listing and inspect run"))
+        });
+        assert!(!snapshot.container_running);
+        assert_eq!(reason, Some("container_not_found: no running team container".to_owned()));
+        assert!(replies.is_empty());
+    }
+
+    #[test]
+    fn native_team_snapshot_has_one_deadline_for_the_whole_read() {
+        // A stuck engine: every command takes 60 ms of a 100 ms budget. Each one is given only what is
+        // left, and once the budget is spent none runs: the read costs one budget, not one timeout each.
+        let id = "c".repeat(64);
+        let mut replies = VecDeque::from([reply(&format!("{id}\n")), reply(&format!("true|{DOCKER_LABELS}\n"))]);
+        let mut given = Vec::new();
+        let (snapshot, _) = native_team_snapshot_with(Duration::from_millis(100), |_, _, timeout| {
+            given.push(timeout);
+            thread::sleep(Duration::from_millis(60));
+            Ok(replies.pop_front().unwrap_or_else(|| reply("")))
+        });
+        assert!(!snapshot.container_running, "the read did not finish in its budget");
+        assert!(!given.is_empty() && given.len() <= 2, "{given:?}");
+        assert!(given.iter().all(|timeout| *timeout <= Duration::from_millis(100)));
+        assert!(given.windows(2).all(|pair| pair[1] < pair[0]), "each command gets less than the one before: {given:?}");
+        // with no budget at all, no command is run
+        let mut calls = 0;
+        let (snapshot, _) = native_team_snapshot_with(Duration::ZERO, |_, _, _| {
+            calls += 1;
+            Ok(reply(""))
+        });
+        assert!(!snapshot.container_running);
+        assert_eq!(calls, 0);
+    }
 
     #[test]
     fn embedded_installer_digest_matches_the_release_source() {

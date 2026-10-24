@@ -1,4 +1,5 @@
 import { FormEvent, KeyboardEvent, useEffect, useLayoutEffect, useRef, useState } from "react";
+import type { Locale } from "@/i18n/config";
 import SshKeyPicker from "../components/SshKeyPicker";
 import type {
   ExecutionHost,
@@ -24,6 +25,7 @@ import { fill } from "../lib/text-slots";
 import { ONBOARDING_TEXT, type OnboardingCopy } from "./onboarding.i18n";
 import { WINDOWS_SETUP } from "./windows-setup";
 import { savedVpsBridge, type SavedVps } from "../lib/saved-vps";
+import { SetupSupportReport } from "./SetupSupportReport";
 import "./onboarding.css";
 
 function emptyVpsHost(): ExecutionHost {
@@ -90,7 +92,7 @@ function formatElapsed(milliseconds: number): string {
   return `${String(minutes).padStart(2, "0")}:${String(seconds % 60).padStart(2, "0")}`;
 }
 
-function RuntimeView({ host, platform, t, locale, runtime, activity, onRetry, onRestart, onExitFailure, onRuntimeAction, providerLogin, sshHostKey, onConfirmHostKey, onCancelHostKey, onProviderInput, onProviderClose, onProviderRestart, onRecreatePodmanMachine, onFreeDiskSpace, runtimeLogPath, onOpenRuntimeLog }: Pick<OnboardingFlowProps, "platform" | "runtime" | "activity" | "onRetry" | "onRestart" | "onExitFailure" | "onRuntimeAction" | "providerLogin" | "sshHostKey" | "onConfirmHostKey" | "onCancelHostKey" | "onProviderInput" | "onProviderClose" | "onProviderRestart" | "onRecreatePodmanMachine" | "onFreeDiskSpace" | "runtimeLogPath" | "onOpenRuntimeLog"> & { host: ExecutionHost; t: OnboardingCopy; locale: string }) {
+function RuntimeView({ host, platform, t, locale, runtime, activity, onRetry, onRestart, onExitFailure, onRuntimeAction, providerLogin, sshHostKey, onConfirmHostKey, onCancelHostKey, onProviderInput, onProviderClose, onProviderRestart, onRecreatePodmanMachine, onFreeDiskSpace, runtimeLogPath, onOpenRuntimeLog }: Pick<OnboardingFlowProps, "platform" | "runtime" | "activity" | "onRetry" | "onRestart" | "onExitFailure" | "onRuntimeAction" | "providerLogin" | "sshHostKey" | "onConfirmHostKey" | "onCancelHostKey" | "onProviderInput" | "onProviderClose" | "onProviderRestart" | "onRecreatePodmanMachine" | "onFreeDiskSpace" | "runtimeLogPath" | "onOpenRuntimeLog"> & { host: ExecutionHost; t: OnboardingCopy; locale: Locale }) {
   const [pending, setPending] = useState(false);
   const [confirmingRecreate, setConfirmingRecreate] = useState(false);
   const [confirmingFreeSpace, setConfirmingFreeSpace] = useState(false);
@@ -343,6 +345,7 @@ function RuntimeView({ host, platform, t, locale, runtime, activity, onRetry, on
               </dl>
             </details>
           )}
+          {failed && <SetupSupportReport stage={runtime.stage} code={runtime.code} locale={locale} />}
           {runtime.stage === "ssh-host-key" && sshHostKey && (
             <section className="onboarding-provider-console" aria-label={t.hostKeyAria}>
               <div className="onboarding-provider-console__heading"><div><strong>{t.hostKeyTitle}</strong><small>{t.hostKeyText}</small></div></div>
@@ -415,7 +418,7 @@ function RuntimeView({ host, platform, t, locale, runtime, activity, onRetry, on
   );
 }
 
-export function OnboardingFlow({ account, onRenameLocalProfile, platform, runtime, activity, onSubmit, onConnectExistingTeam, onSignInWithGoogle, onRetry, onRestart, onExitFailure, onRuntimeAction, providerLogin, sshHostKey, onConfirmHostKey, onCancelHostKey, onProviderInput, onProviderClose, onProviderRestart, onRecreatePodmanMachine, onFreeDiskSpace, runtimeLogPath, onOpenRuntimeLog, previousLocalData = false, interruption, onResumeInterrupted, onDiscardInterruption, locale: localeOverride }: OnboardingFlowProps) {
+export function OnboardingFlow({ account, onRenameLocalProfile, platform, runtime, activity, onSubmit, onConnectExistingTeam, onSignInWithGoogle, onRetry, onRestart, onExitFailure, onRuntimeAction, providerLogin, sshHostKey, onConfirmHostKey, onCancelHostKey, onProviderInput, onProviderClose, onProviderRestart, onRecreatePodmanMachine, onFreeDiskSpace, runtimeLogPath, onOpenRuntimeLog, previousLocalData = false, interruption, onResumeInterrupted, onDiscardInterruption, providerOnly, locale: localeOverride }: OnboardingFlowProps) {
   const locale = localeOverride ?? appLocale();
   const t = ONBOARDING_TEXT[locale];
   const providerChoices = providers(t);
@@ -426,9 +429,9 @@ export function OnboardingFlow({ account, onRenameLocalProfile, platform, runtim
   const interruptionReason = interruptionCause?.known ? interruptionCause.text : t.interruptedUnknown;
   // Windows runs the team locally too, with Podman inside WSL.
   const localRuntimeSupported = platform === "macos" || platform === "linux" || platform === "windows";
-  const [step, setStep] = useState(0);
+  const [step, setStep] = useState(providerOnly ? 2 : 0);
   const [host, setHost] = useState<ExecutionHost>(() => localRuntimeSupported ? { kind: "local" } : emptyVpsHost());
-  const [provider, setProvider] = useState<SubscriptionProvider | null>(PROPOSED_PROVIDER);
+  const [provider, setProvider] = useState<SubscriptionProvider | null>(providerOnly ? null : PROPOSED_PROVIDER);
   const [submitting, setSubmitting] = useState(false);
   const [assistanceOpen, setAssistanceOpen] = useState(false);
   const [submitError, setSubmitError] = useState(false);
@@ -439,7 +442,7 @@ export function OnboardingFlow({ account, onRenameLocalProfile, platform, runtim
   const shellRef = useRef<HTMLElement>(null);
 
   useEffect(() => { setProfileName(account.displayName ?? ""); }, [account.displayName]);
-  useEffect(() => { void savedVpsBridge.list().then(setSavedVps).catch(() => setSavedVps([])); }, []);
+  useEffect(() => { void Promise.resolve().then(() => savedVpsBridge.list()).then((list) => setSavedVps(Array.isArray(list) ? list : [])).catch(() => setSavedVps([])); }, []);
 
   useEffect(() => {
     if (!localRuntimeSupported) {
@@ -512,7 +515,7 @@ export function OnboardingFlow({ account, onRenameLocalProfile, platform, runtim
   }
 
   function exitFailure() {
-    setStep(1);
+    setStep(providerOnly ? 2 : 1);
     setSubmitError(false);
     onExitFailure();
   }
@@ -606,7 +609,7 @@ export function OnboardingFlow({ account, onRenameLocalProfile, platform, runtim
             </div>
             {kimiReason && <p className="onboarding-subscription-note" id="onboarding-provider-unavailable">{kimiReason.text} {kimiReason.action}</p>}
             <p className="onboarding-subscription-note"><strong>{t.subscriptionStrong}</strong> {t.subscriptionText}</p>
-            <div className="onboarding-actions"><button className="onboarding-secondary" type="button" onClick={() => setStep(1)}>{t.back}</button><button className="onboarding-primary" type="submit" disabled={!provider || unavailable.has(provider)}>{t.reviewSetup} <span aria-hidden="true">→</span></button></div>
+            <div className="onboarding-actions"><button className="onboarding-secondary" type="button" onClick={() => providerOnly ? providerOnly.onCancel() : setStep(1)}>{providerOnly ? t.cancel : t.back}</button><button className="onboarding-primary" type="submit" disabled={!provider || unavailable.has(provider)}>{t.reviewSetup} <span aria-hidden="true">→</span></button></div>
           </form>}
 
           {step === 3 && provider && <form onSubmit={finish} className="onboarding-panel">
@@ -615,12 +618,12 @@ export function OnboardingFlow({ account, onRenameLocalProfile, platform, runtim
             <dl className="onboarding-review">
               <div><dt>{t.environment}</dt><dd>{hostName(host, t)}</dd></div><div><dt>{t.provider}</dt><dd>{providerName(provider, t)}<small>{t.viaSubscription}</small></dd></div>
             </dl>
-            {host.kind === "local" && platform === "windows" && <div className="onboarding-review-note" role="note" aria-label={t.installsAria}>
+            {!providerOnly && host.kind === "local" && platform === "windows" && <div className="onboarding-review-note" role="note" aria-label={t.installsAria}>
               <p>{t.installsIntro}</p>
               <ul>{t.installs(WINDOWS_SETUP).map((item) => <li key={item}>{item}</li>)}</ul>
               <p>{t.installsRemoval}</p>
             </div>}
-            {host.kind === "local" && previousLocalData && <p className="onboarding-review-note" role="note" aria-label={t.previousAria}>{account.identity === "local"
+            {!providerOnly && host.kind === "local" && previousLocalData && <p className="onboarding-review-note" role="note" aria-label={t.previousAria}>{account.identity === "local"
               ? t.previousLocal
               : t.previousAccount}</p>}
             {submitError && <p className="onboarding-error" role="alert">{t.submitError}</p>}

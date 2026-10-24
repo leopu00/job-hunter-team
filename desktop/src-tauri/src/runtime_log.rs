@@ -5,10 +5,13 @@
 //! is private to the user and rotated (runtime.log, .1, .2).
 
 use crate::runtime_host::{set_private_dir_permissions, set_private_permissions, ProcessResult};
+use regex::Regex;
+use serde::{Deserialize, Serialize};
 use std::{
     fs,
     io::Write,
     path::{Path, PathBuf},
+    sync::atomic::{AtomicU64, Ordering},
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
 use tauri::Manager;
@@ -19,6 +22,9 @@ const LOG_MAX_BYTES: u64 = 256 * 1024;
 const LOG_KEPT: u32 = 2;
 /// What is kept of each stream of a step: its end, where the error is.
 const STREAM_TAIL_BYTES: usize = 16 * 1024;
+const SUPPORT_LOG_TAIL_LINES: usize = 120;
+const SUPPORT_REPORT_MAX_BYTES: usize = 128 * 1024;
+static SUPPORT_REPORT_SEQUENCE: AtomicU64 = AtomicU64::new(1);
 
 #[derive(Clone)]
 pub(crate) struct RuntimeLog {
@@ -141,9 +147,10 @@ impl RuntimeLog {
         }
     }
 
-    /// Interactive provider login has sensitive output and input, so its log
-    /// keeps only the closed outcome and elapsed time. This still makes the
-    /// gap between the Provider step and the team start observable.
+    /// Sensitive or internal onboarding commands keep only their closed
+    /// outcome and elapsed time. This makes the gap between the Provider
+    /// step, the state reads and the team start observable without keeping
+    /// interactive traffic or profile facts.
     pub(crate) fn record_onboarding_status(
         &self,
         step: &str,
@@ -152,13 +159,21 @@ impl RuntimeLog {
     ) {
         let step = match step {
             "provider_login" => "provider_login",
+            "team_state" => "team_state",
             _ => return,
         };
         let ended = match ended {
             Ok(code) => format!("exit {code}"),
-            Err(code) => match code {
+            Err(code) if step == "provider_login" => match code {
                 "provider_login_start_failed" | "provider_login_pipe_failed"
                 | "provider_login_failed" | "state_failed" => code,
+                _ => "io_error_other",
+            }
+            .to_owned(),
+            Err(code) => match code {
+                "runtime_missing" | "process_start_failed" | "process_timeout"
+                | "process_write_failed" | "process_wait_failed" | "process_output_unavailable"
+                | "process_input_failed" | "process_pipe_failed" => code,
                 _ => "io_error_other",
             }
             .to_owned(),
@@ -372,7 +387,7 @@ fn chat_failure_code(code: &str) -> &str {
     match code {
         "read_failed" | "send_failed" | "persist_failed" | "disconnected" | "state_failed"
         | "account_scope_mismatch" | "invalid_request" | "read_only_link" | "own_vps_claim_required"
-        | "own_vps_key_changed" | "own_vps_claim_refused" | "chat_runtime_outdated"
+        | "own_vps_key_changed" | "own_vps_claim_refused" | "chat_runtime_outdated" | "local_chat_wrapper_outdated"
         | "existing_team_runtime_target_changed" | "agent_not_at_prompt" | "composer_has_text" | "team_not_running"
         | "agent_not_running" | "agent_unavailable" | "agent_busy" | "agent_stuck" | "tunnel_unavailable"
         | "tunnel_start_failed" | "tunnel_verify_failed" | "ssh_unavailable" | "ssh_auth_failed"
@@ -422,6 +437,98 @@ pub(crate) fn onboarding_runtime_log_open(app: tauri::AppHandle) -> bool {
     reveal(log.path()).is_ok()
 }
 
+/// The renderer receives a bounded in-memory log tail and the package version,
+/// then applies the shared JS redactor before it can preview or transmit it.
+/// No absolute path crosses this command.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct OnboardingSupportContext {
+    app_version: &'static str,
+    log_tail: String,
+}
+
+#[tauri::command]
+pub(crate) fn onboarding_support_context(app: tauri::AppHandle) -> OnboardingSupportContext {
+    let log_tail = RuntimeLog::new(&app)
+        .and_then(|log| fs::read_to_string(log.path()).ok())
+        .map(|contents| {
+            let tail = contents.lines().rev().take(SUPPORT_LOG_TAIL_LINES).collect::<Vec<_>>();
+            crate::onboarding::redact(tail.into_iter().rev().collect::<Vec<_>>().join("\n"))
+        })
+        .unwrap_or_default();
+    OnboardingSupportContext { app_version: env!("CARGO_PKG_VERSION"), log_tail }
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub(crate) struct OnboardingSupportDraft {
+    markdown: String,
+}
+
+/// Saves the already-redacted long report for a manual mail attachment. The
+/// UI gets only this logical path, never the user-specific filesystem path.
+#[tauri::command]
+pub(crate) fn onboarding_support_report_save(
+    app: tauri::AppHandle,
+    draft: OnboardingSupportDraft,
+) -> Option<String> {
+    if draft.markdown.is_empty() || draft.markdown.len() > SUPPORT_REPORT_MAX_BYTES || draft.markdown.contains('\0') {
+        return None;
+    }
+    let root = app.path().app_local_data_dir().ok()?;
+    save_onboarding_support_draft(&root.join("support-reports"), &redact_support_draft(draft.markdown))
+}
+
+/// The renderer's preview is redacted too, but a Tauri command is an IPC
+/// boundary: never treat its markdown argument as trusted when persisting a
+/// report that the UI presents as ready to attach.
+fn redact_support_draft(markdown: String) -> String {
+    let text = crate::onboarding::redact(markdown);
+    let labelled_secret = Regex::new(r#"(?i)\b(token|api[_-]?key|apikey|secret|password|passwd|pwd|credential|bearer)s?\b\s*[:=]\s*["']?([^\s"',;}\]]{6,})"#).expect("constant secret pattern");
+    let public_ip = Regex::new(r"\b(?:\d{1,3}\.){3}\d{1,3}\b").expect("constant public IP pattern");
+    let windows_home = Regex::new(r#"(?i)((?:[A-Z]:[\\/]|\\)Users[\\/])[^/\\\r\n\t"':;,)\]]+"#).expect("constant Windows home pattern");
+    let posix_home = Regex::new(r#"(?i)((?:/Users|/home)/)[^/\s"':;,)\]]+"#).expect("constant POSIX home pattern");
+    let labelled_host = Regex::new(r"(?i)\b(host|hostname|server|address)\s*[:=]\s*[^\s,;]+").expect("constant host pattern");
+    let labelled_id = Regex::new(r"(?i)\b(?:user[_-]?id|account[_-]?id|team[_-]?id|profile[_-]?id|client[_-]?id|id)\s*[:=]\s*[^\s,;]+").expect("constant id pattern");
+    let text = labelled_secret.replace_all(&text, "$1: [secret]");
+    let text = public_ip.replace_all(&text, "[ip]");
+    let text = windows_home.replace_all(&text, "$1[user]");
+    let text = posix_home.replace_all(&text, "$1[user]");
+    let text = labelled_host.replace_all(&text, "$1: [host]");
+    labelled_id.replace_all(&text, "id: [id]").into_owned()
+}
+
+fn save_onboarding_support_draft(directory: &Path, markdown: &str) -> Option<String> {
+    match fs::symlink_metadata(&directory) {
+        Ok(metadata) if metadata.file_type().is_dir() => {}
+        Ok(_) => return None,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => fs::create_dir_all(&directory).ok()?,
+        Err(_) => return None,
+    }
+    set_private_dir_permissions(&directory).ok()?;
+    for _ in 0..128 {
+        let file_name = format!("desktop-setup-{}.md", SUPPORT_REPORT_SEQUENCE.fetch_add(1, Ordering::Relaxed));
+        let path = directory.join(&file_name);
+        let mut options = fs::OpenOptions::new();
+        options.write(true).create_new(true);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::OpenOptionsExt;
+            options.mode(0o600);
+        }
+        let mut file = match options.open(&path) {
+            Ok(file) => file,
+            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => continue,
+            Err(_) => return None,
+        };
+        file.write_all(markdown.as_bytes()).ok()?;
+        file.sync_all().ok()?;
+        set_private_permissions(&path).ok()?;
+        return Some(format!("Job Hunter Team/Support reports/{file_name}"));
+    }
+    None
+}
+
 #[cfg(windows)]
 pub(crate) fn reveal(path: &Path) -> std::io::Result<()> {
     let root = std::env::var_os("SystemRoot").map(PathBuf::from).unwrap_or_else(|| PathBuf::from(r"C:\Windows"));
@@ -443,7 +550,7 @@ pub(crate) fn reveal(path: &Path) -> std::io::Result<()> {
 
 #[cfg(test)]
 mod tests {
-    use super::{append, entry, failure_cause, utc, RuntimeLog};
+    use super::{append, entry, failure_cause, redact_support_draft, save_onboarding_support_draft, utc, RuntimeLog, SUPPORT_REPORT_SEQUENCE};
     use std::{
         fs,
         time::{Duration, UNIX_EPOCH},
@@ -570,7 +677,13 @@ mod tests {
         assert!(text.contains(" onboarding.provider_login: exit 0 after 1.5 s\n"), "{text}");
         assert!(text.contains(" onboarding.provider_login: provider_login_failed after 0.0 s\n"), "{text}");
         assert!(text.contains(" onboarding.provider_login: io_error_other after 0.0 s\n"), "{text}");
-        assert!(!text.contains("token-from-provider") && !text.contains("anything-else"), "{text}");
+        log.record_onboarding_status("team_state", Ok(0), Duration::from_millis(250));
+        log.record_onboarding_status("team_state", Err("process_timeout"), Duration::ZERO);
+        log.record_onboarding_status("team_state", Err("profile-json"), Duration::ZERO);
+        let text = fs::read_to_string(log.path()).unwrap();
+        assert!(text.contains(" onboarding.team_state: exit 0 after 0.2 s\n"), "{text}");
+        assert!(text.contains(" onboarding.team_state: process_timeout after 0.0 s\n"), "{text}");
+        assert!(!text.contains("token-from-provider") && !text.contains("anything-else") && !text.contains("profile-json"), "{text}");
         let _ = fs::remove_dir_all(&root);
     }
 
@@ -760,6 +873,31 @@ mod tests {
         assert_eq!(log.take_cause(), None, "a later step that worked clears it");
         log.record("jht up", Err("process_timeout"), b"", b"still pulling the image\n", Duration::ZERO);
         assert_eq!(log.take_cause().as_deref(), Some("still pulling the image"));
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn a_long_support_report_is_saved_privately_but_returns_only_a_logical_path() {
+        let root = dir("support-draft");
+        let actual = root.join("Ada").join("support-reports");
+        fs::create_dir_all(&actual).unwrap();
+        SUPPORT_REPORT_SEQUENCE.store(42, std::sync::atomic::Ordering::Relaxed);
+        fs::write(actual.join("desktop-setup-42.md"), "older report").unwrap();
+        let raw = "# report\nfailed 203.0.113.70 token=synthetic-secret-value at /Users/ada/.jht/runtime.log host=customer-vps.example.invalid account_id=person-123\n";
+        let logical = save_onboarding_support_draft(&actual, &redact_support_draft(raw.into())).unwrap();
+        assert_eq!(logical, "Job Hunter Team/Support reports/desktop-setup-43.md");
+        assert!(!logical.contains("Ada") && !logical.contains(&actual.display().to_string()));
+        let file = actual.join("desktop-setup-43.md");
+        let saved = fs::read_to_string(&file).unwrap();
+        for sensitive in ["203.0.113.70", "synthetic-secret-value", "/Users/ada", "customer-vps.example.invalid", "person-123"] {
+            assert!(!saved.contains(sensitive), "saved draft exposed {sensitive}");
+        }
+        assert!(saved.contains("[ip]") && saved.contains("[secret]") && saved.contains("/Users/[user]") && saved.contains("[host]") && saved.contains("[id]"));
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            assert_eq!(fs::metadata(file).unwrap().permissions().mode() & 0o777, 0o600);
+        }
         let _ = fs::remove_dir_all(&root);
     }
 

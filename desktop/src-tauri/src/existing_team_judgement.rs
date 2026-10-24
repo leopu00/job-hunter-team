@@ -265,7 +265,7 @@ pub(crate) fn judgement_command(target: &RuntimeTarget, request: &JudgementReque
     command(target, &format!("exec \"$JHT_ENGINE\" exec -i \"$JHT_CID\" python3 {SCRIPT} {}", args.join(" ")))
 }
 
-fn failure(code: &'static str) -> Value {
+pub(crate) fn failure(code: &'static str) -> Value {
     json!({ "ok": false, "error": code })
 }
 
@@ -312,7 +312,7 @@ pub(crate) fn reply(result: Result<ProcessResult, &'static str>) -> Value {
 /// written only when «Connect and confirm» succeeds, bound to the account scope and
 /// the candidate (the connection key), for this session only: the read-only view,
 /// a reopen and a restart of the app never hold it, so they stay read-only.
-fn full_connection(scope: &AccountScope, target: &ActivatedTarget) -> Result<(), &'static str> {
+pub(crate) fn full_connection(scope: &AccountScope, target: &ActivatedTarget) -> Result<(), &'static str> {
     if full_link_granted(scope, target) {
         Ok(())
     } else {

@@ -88,6 +88,7 @@ import { OnboardingFlow } from "../onboarding";
 import ExistingTeamConnectModal from "../onboarding/ExistingTeamConnectModal";
 import { ReconfirmExistingTeamContext } from "../lib/reconfirm-existing-team";
 import { ConnectTeamContext, type ConnectTeamEntry } from "../lib/connect-team";
+import { ProviderSetupContext } from "../lib/provider-setup";
 import MessagesPage from "../pages/messages";
 import { NewPositionNotifier } from "../lib/notify/NewPositionNotifier";
 import Shell from "../shell/Shell";
@@ -423,6 +424,11 @@ export default function DashboardApp() {
   const providerStoppingAttemptRef = useRef<number | null>(null);
   const providerAttemptRef = useRef(0);
   const resumeAttemptedIdentityRef = useRef<string | null>(null);
+  // Settings › Provider: the setup reopened at the «Provider» step on the team that already runs on this computer.
+  const [providerSetupKey, setProviderSetupKey] = useState<string | null>(null);
+  const providerSetupKeyRef = useRef<string | null>(null);
+  // A first setup of this session that went to a VPS: the team is not the one of this computer, whatever the Shell shows.
+  const [vpsSetupKey, setVpsSetupKey] = useState<string | null>(null);
   // The screen shows a saved existing team that could not be reopened: «Riprova» asks again to reopen it.
   const savedTeamFailureRef = useRef(false);
   // The account whose existing team was connected in full in this run, and the function that opens
@@ -686,16 +692,37 @@ export default function DashboardApp() {
     throw error;
   }, [setRuntime]);
 
+  // Back to the app from the reopened Provider step, cancelled or done: the team is as it was or as chosen.
+  const closeProviderSetup = useCallback(() => {
+    // A failed attempt left its interruption record: this step is not a setup left half-done.
+    if (markerId) clearOnboardingInterruption(markerId);
+    providerSetupKeyRef.current = null;
+    setProviderSetupKey(null);
+    submissionRef.current = null;
+    setProviderLogin(null);
+    setActivity(null);
+    setSshHostKey(null);
+    setGate({ phase: "ready" });
+    navigate("/settings", { replace: true });
+  }, [markerId]);
+
   const startTeam = useCallback(async (submission: OnboardingSubmission) => {
     try {
       setRuntime({ status: "working", stage: "team-start", message: stateText().startingContainerAndAgents });
       beginActivityInvocation();
       const snapshot = await startOnboardingTeam(submission.host, recordActivityProgress);
+      // The team already ran: with its provider signed in and its agents up there is nothing left to
+      // set up (no assistant to open, no profile to collect), and the person goes back to the app.
+      if (providerSetupKeyRef.current === identityKey && snapshot.containerRunning && snapshot.providerConfigured &&
+          snapshot.providerAuthenticated && snapshot.assistantRunning && snapshot.captainRunning) {
+        closeProviderSetup();
+        return;
+      }
       setRuntime(withLimitsNotice(runtimeStateFromSnapshot(snapshot), snapshot));
     } catch (error) {
       fail("team-start", error);
     }
-  }, [beginActivityInvocation, fail, recordActivityProgress, setRuntime]);
+  }, [beginActivityInvocation, closeProviderSetup, fail, identityKey, recordActivityProgress, setRuntime]);
 
   const prepareTechnicalSetup = useCallback(async (submission: OnboardingSubmission) => {
     if (!identityKey) throw new Error("identity-missing");
@@ -724,6 +751,7 @@ export default function DashboardApp() {
   const submit = useCallback(async (submission: OnboardingSubmission) => {
     if (!identityKey || !markerId) throw new Error("identity-missing");
     submissionRef.current = submission;
+    if (submission.host.kind === "vps") setVpsSetupKey(identityKey);
     setActivity((current) => current ?? createOnboardingActivity());
     try {
       markOnboardingStarted(markerId);
@@ -974,7 +1002,9 @@ export default function DashboardApp() {
     providerExitRejectRef.current?.reject(new Error("onboarding-restarted"));
     providerExitRejectRef.current = null;
     if (providerSession) await closeOnboardingProviderLogin(providerSession).catch(() => undefined);
-    resetOnboardingMarker(markerId);
+    // The reopened Provider step is not a first setup: «Restart» there starts that step over and leaves the
+    // marker alone, or the team that works would be set up again from scratch at the next start.
+    if (providerSetupKeyRef.current !== identityKey) resetOnboardingMarker(markerId);
     submissionRef.current = null;
     savedTeamFailureRef.current = false;
     resumeAttemptedIdentityRef.current = identityKey;
@@ -1394,6 +1424,31 @@ export default function DashboardApp() {
     return submit(submission);
   }, [connectResumedAssistant, fail, finishAssistant, gate, loginProvider, resumeAssistant, resumeTeam, setRuntime, startTeam, startupReopen, submit]);
 
+  // Offered only to the team of this computer, on a platform that runs one, once the setup is done.
+  const localTeamPlatform = platform === "macos" || platform === "linux" || platform === "windows";
+  const openProviderSetup = useCallback(() => {
+    if (!identityKey || gate.phase !== "ready") return;
+    providerSetupKeyRef.current = identityKey;
+    setProviderSetupKey(identityKey);
+    // The reopening of a saved team and the usual resume belong to the first setup, not to this step.
+    resumeAttemptedIdentityRef.current = identityKey;
+    setAssistantChatIdentityKey(null);
+    submissionRef.current = null;
+    setProviderLogin(null);
+    setActivity(null);
+    setSshHostKey(null);
+    setGate({
+      phase: "required",
+      account: localProfile ? { displayName: localProfile.displayName, identity: "local" } : { displayName: null, identity: "google" },
+      resumeAvailable: false,
+      runtime: { status: "collecting", stage: "host" },
+    });
+  }, [gate.phase, identityKey, localProfile?.displayName]);
+  const providerSetup = useMemo(
+    () => (localTeamPlatform && gate.phase === "ready" && vpsSetupKey !== identityKey ? { open: openProviderSetup } : null),
+    [gate.phase, identityKey, localTeamPlatform, openProviderSetup, vpsSetupKey],
+  );
+
   const logout = localProfile ? async () => {
     leaveExistingTeamReadOnly();
     await clearDesktopAccountScope();
@@ -1634,14 +1689,17 @@ export default function DashboardApp() {
         onDiscardInterruption={interruption ? discardInterruption : undefined}
         onRestart={restartOnboarding}
         onExitFailure={exitTechnicalFailure}
+        providerOnly={providerSetupKey === identityKey ? { onCancel: closeProviderSetup } : undefined}
       />
     );
   }
   return (
     <>
-      <ConnectTeamContext.Provider value={connectTeamEntry}>
-        <Shell key={identityKey} onLogout={logout} />
-      </ConnectTeamContext.Provider>
+      <ProviderSetupContext.Provider value={providerSetup}>
+        <ConnectTeamContext.Provider value={connectTeamEntry}>
+          <Shell key={identityKey} onLogout={logout} />
+        </ConnectTeamContext.Provider>
+      </ProviderSetupContext.Provider>
       {connectDialogElement}
       <NewPositionNotifier key={`notify:${identityKey}`} />
     </>

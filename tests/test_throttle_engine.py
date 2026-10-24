@@ -411,10 +411,11 @@ def test_5a2_il_testo_della_sveglia_chiede_lack_come_primo_comando(home):
 @pytest.mark.skipif(os.name != "posix", reason="lo sender è uno script bash")
 def test_5b_un_prompt_con_testo_pendente_riceve_comunque_la_sveglia(tmp_path,
                                                                    monkeypatch):
-    """Il caso del ticket, sul codice VERO: un Enter a freddo non viene
-    processato e il testo resta nel composer. Il sender lo rileva e recupera con
-    `Space`+`Enter`. Qui `tmux` è finto e il pane si svuota solo al secondo
-    submit: se il recupero non ci fosse, la sveglia sarebbe persa in silenzio.
+    """Il caso del ticket, sul codice VERO: il primo Enter non viene
+    processato e il testo resta nel composer. Il sender lo rileva e ritenta
+    solo Enter, senza alterare il draft. Il finto emula load-buffer/paste-buffer
+    e il composer di una TUI reale: senza il secondo submit la sveglia resta
+    pendente, senza un falso verde del vecchio send-keys inline.
     """
     bindir = tmp_path / "bin"
     bindir.mkdir()
@@ -427,18 +428,23 @@ def test_5b_un_prompt_con_testo_pendente_riceve_comunque_la_sveglia(tmp_path,
         'case "$1" in\n'
         '  has-session) exit 0 ;;\n'
         '  capture-pane)\n'
-        '    if [ -f "$state" ]; then\n'
-        # Submit avvenuto: il composer è vuoto (nessuna signature nella riga
-        # di prompt) e la TUI non è occupata.
-        '      printf "> lavoro precedente\\n%%s\\n" "> "\n'
-        '    else\n'
-        # Testo digitato ma NON submittato: resta appeso nella riga di prompt.
-        '      printf "> lavoro precedente\\n> [DA @SISTEMA A @SCOUT-3] [RIPRENDI] La tua\\n"\n'
-        '    fi\n'
+        '    draft=$(cat "$state.draft" 2>/dev/null || true)\n'
+        '    printf "╭──────────────────────────────────────────────╮\\n│ ❯ %%s │\\n╰──────────────────────────────────────────────╯\\n" "$draft"\n'
+        '    exit 0 ;;\n'
+        '  load-buffer)\n'
+        '    while [ "$1" != "-b" ] && [ $# -gt 0 ]; do shift; done\n'
+        '    [ "$1" = "-b" ] && shift\n'
+        '    cat > "$state.buffer"\n'
+        '    exit 0 ;;\n'
+        '  paste-buffer)\n'
+        '    cat "$state.buffer" > "$state.draft"; rm -f "$state.buffer"\n'
         '    exit 0 ;;\n'
         '  send-keys)\n'
         '    for a in "$@"; do\n'
-        '      if [ "$a" = "Space" ]; then : > "$state"; fi\n'
+        '      if [ "$a" = "Enter" ]; then\n'
+        '        n=$(cat "$state.enters" 2>/dev/null || echo 0); n=$((n + 1)); echo "$n" > "$state.enters"\n'
+        '        if [ "$n" -ge 2 ]; then : > "$state"; : > "$state.draft"; fi\n'
+        '      fi\n'
         '    done\n'
         '    exit 0 ;;\n'
         'esac\n'
@@ -455,16 +461,19 @@ def test_5b_un_prompt_con_testo_pendente_riceve_comunque_la_sveglia(tmp_path,
                          capture_output=True, text=True, timeout=180)
 
     calls = log.read_text(encoding="utf-8")
-    assert "Space" in calls, \
-        "senza il carattere di sveglia l'Enter a freddo resta non processato"
+    assert "load-buffer" in calls and "paste-buffer" in calls
+    assert "send-keys -t SCOUT-3 Enter" in calls
+    assert calls.count("send-keys -t SCOUT-3 Enter") >= 2
+    assert "Space" not in calls, "un retry non deve cambiare il draft con un carattere estraneo"
     assert res.returncode == 0, (
         "la sveglia va consegnata comunque: rc=%d\n%s"
         % (res.returncode, res.stderr))
-    # Il testo non è MAI passato da send-keys inline (solo `-l "$message"`, che
-    # è il typing, e i tasti nudi Enter/Space).
+    # Controprova del contratto P23: il testo passa solo dal buffer e i tasti
+    # nudi restano Enter (eventualmente C-s per Kimi), mai send-keys inline.
     for line in calls.splitlines():
-        if line.startswith("send-keys") and "-l" not in line:
-            assert line.split()[-1] in ("Enter", "Space", "C-s", "Escape"), line
+        if line.startswith("send-keys"):
+            assert "-l" not in line
+            assert line.split()[-1] in ("Enter", "C-s"), line
 
 
 def test_5c_un_pane_occupato_non_fa_perdere_la_sveglia(home, monkeypatch):

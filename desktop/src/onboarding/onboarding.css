@@ -204,6 +204,19 @@
   color: var(--color-ready);
 }
 
+.onboarding-support {
+  margin-top: 16px;
+  padding: 14px;
+  border: 1px solid color-mix(in srgb, var(--color-green) 34%, var(--color-border));
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--color-green) 4%, var(--color-panel));
+}
+.onboarding-support h3 { margin: 0 0 7px; font-size: 13px; }
+.onboarding-support p, .onboarding-support label { display: block; margin: 0 0 10px; color: var(--color-muted); font-size: 11px; line-height: 1.5; }
+.onboarding-support textarea { width: 100%; min-height: 180px; margin-top: 6px; padding: 9px; resize: vertical; border: 1px solid var(--color-border); border-radius: 6px; color: var(--color-bright); background: var(--color-void); font: 10px/1.45 ui-monospace, SFMono-Regular, Consolas, monospace; }
+.onboarding-support > div { display: flex; flex-wrap: wrap; gap: 8px; }
+.onboarding-support a { color: var(--color-green); }
+
 .onboarding-card {
   min-height: 610px;
   padding: clamp(30px, 4vw, 48px);

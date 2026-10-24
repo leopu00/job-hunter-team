@@ -4,8 +4,7 @@ import type { AgentsPanelText } from "./AgentsPanel.i18n";
 
 /**
  * An agent's health in small: how full its context is and its tokens of the
- * last hour. Short numbers in the list, the whole sentence in the detail and
- * on hover. What the team does not say is «?» / «non so», never 0: a zero is
+ * last hour. Short numbers in the list and in the bar, the whole sentences on hover. What the team does not say is «?» / «non so», never 0: a zero is
  * shown only when it was read.
  */
 
@@ -67,34 +66,25 @@ export function usageLong(t: AgentsPanelText, usage: AgentUsage): [string, strin
   return [context, hour];
 }
 
-function tooltip(t: AgentsPanelText, usage: AgentUsage): string {
+/** The whole sentences, one per line, for a tooltip and a screen reader. */
+export function usageTooltip(t: AgentsPanelText, usage: AgentUsage): string {
   const lines = usageLong(t, usage);
   const unknown = usage.contextPct === null || usage.tokensHour === null;
   return [...lines, ...(usage.tokensHour !== null ? [t.usageHowCounted] : []), ...(unknown ? [t.usageUnknownWhy] : [])].join("\n");
 }
 
-const high = (usage: AgentUsage) => usage.contextPct !== null && usage.contextPct >= CONTEXT_HIGH_PCT;
+export const contextHigh = (usage: AgentUsage) => usage.contextPct !== null && usage.contextPct >= CONTEXT_HIGH_PCT;
 
 /** Under the state, in the list's row. */
 export function UsageShort({ t, usage }: { t: AgentsPanelText; usage: AgentUsage }) {
   const [context, hour] = usageShort(t, usage);
   return (
     // each piece stays whole: a narrow row breaks between the two, never inside a number
-    <span data-testid="panel-usage-short" className="block tabular-nums" title={tooltip(t, usage)}>
+    <span data-testid="panel-usage-short" className="block tabular-nums" title={usageTooltip(t, usage)}>
       <span className="whitespace-nowrap">
-        <span style={{ color: high(usage) ? "var(--color-yellow)" : undefined }}>{context}</span> ·
+        <span style={{ color: contextHigh(usage) ? "var(--color-yellow)" : undefined }}>{context}</span> ·
       </span>{" "}
       <span className="whitespace-nowrap">{hour}</span>
     </span>
-  );
-}
-
-/** In the detail, under the times. */
-export function UsageLine({ t, usage }: { t: AgentsPanelText; usage: AgentUsage }) {
-  const [context, hour] = usageLong(t, usage);
-  return (
-    <p data-testid="panel-usage" className="text-[11px] mt-0.5 text-[var(--color-muted)]" title={tooltip(t, usage)}>
-      <span style={{ color: high(usage) ? "var(--color-yellow)" : undefined }}>{context}</span> · {hour}
-    </p>
   );
 }

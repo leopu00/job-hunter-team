@@ -91,7 +91,7 @@ def _write_batch(path: Path, source: str) -> None:
     path.write_text(source.replace("\n", "\r\n"), encoding="ascii")
 
 
-STARTUP_TASK = "Job Hunter Team - Start runtime"
+STARTUP_TASK_LABEL = "Job Hunter Team - Start runtime"
 
 
 def _scheduled_task_fakes(state: Path, log: Path, unregister_fails: bool) -> str:
@@ -107,16 +107,22 @@ def _scheduled_task_fakes(state: Path, log: Path, unregister_fails: bool) -> str
     return f"""
 $script:FakeTaskState = {_ps_literal(state)}
 $script:FakeTaskLog = {_ps_literal(log)}
+$script:ScopedTask = Get-JhtScopedStartupTaskName
+$script:LegacyTask = '{STARTUP_TASK_LABEL}'
+if (-not $script:ScopedTask) {{ throw 'current user SID unavailable for scoped task test' }}
 function Get-ScheduledTask {{
   [CmdletBinding()] param([string]$TaskName)
   Add-Content -LiteralPath $script:FakeTaskLog -Value "task get $TaskName" -Encoding ascii
-  if ($TaskName -ceq '{STARTUP_TASK}' -and (Test-Path -LiteralPath $script:FakeTaskState)) {{
+  if ($TaskName -ceq $script:ScopedTask -and (Test-Path -LiteralPath $script:FakeTaskState)) {{
     return [pscustomobject]@{{ TaskName = $TaskName }}
   }}
+  if ($TaskName -ceq $script:LegacyTask) {{ return [pscustomobject]@{{ TaskName = $TaskName }} }}
 }}
 function Unregister-ScheduledTask {{
   [CmdletBinding(SupportsShouldProcess = $true)] param([string]$TaskName)
   Add-Content -LiteralPath $script:FakeTaskLog -Value "task unregister $TaskName" -Encoding ascii
+  if ($TaskName -ceq $script:LegacyTask) {{ throw 'legacy P23 task must stay untouched' }}
+  if ($TaskName -cne $script:ScopedTask) {{ throw 'wrong task' }}
   {unregister}
 }}
 foreach ($fake in 'Get-ScheduledTask', 'Unregister-ScheduledTask') {{

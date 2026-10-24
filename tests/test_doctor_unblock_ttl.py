@@ -164,38 +164,58 @@ if cmd == "capture-pane":
         save(s); sys.exit(1)
     save(s); print(render(sess)); sys.exit(0)
 
+if cmd == "load-buffer":
+    # The transport pastes through a tmux buffer, rather than exposing a
+    # message in send-keys' argv.  Keep this fake on that public tmux contract
+    # so its delivery assertions exercise the real path.
+    name = args[args.index("-b") + 1]
+    s.setdefault("buffers", {})[name] = sys.stdin.read()
+    save(s); sys.exit(0)
+
+if cmd == "paste-buffer":
+    if sess is None:
+        save(s); sys.exit(1)
+    name = args[args.index("-b") + 1]
+    content = s.setdefault("buffers", {}).get(name, "")
+    sess["draft"] = sess.get("draft", "") + content
+    if "-d" in args:
+        s["buffers"].pop(name, None)
+    s["sessions"][t] = sess
+    save(s); sys.exit(0)
+
 if cmd == "kill-session":
     s["sessions"].pop(t, None); save(s); sys.exit(0)
 
 if cmd == "send-keys":
     if sess is None:
         save(s); sys.exit(1)
+    # The buffered path is the contract: accept no inline regression as a
+    # delivery, or this fake would hide a return to send-keys -l.
+    if "-l" in args:
+        save(s); sys.exit(86)
     if sess.get("submit") == "frozen" and sess.get("draft"):
         # Congelata: non registra nulla — ne' Enter, ne' Space, ne' testo.
-        # (Il typing iniziale resta possibile: e' cosi' che il testo ci finisce.)
-        if "-l" not in args:
-            save(s); sys.exit(0)
-    if "-l" in args:
-        sess["draft"] = sess.get("draft", "") + args[args.index("-l") + 1]
-        sess["last_key"] = "literal"
-    else:
-        key = args[-1]
-        if key == "Space":
-            sess["draft"] = sess.get("draft", "") + " "
-            sess["last_key"] = "Space"
-        elif key == "Enter":
-            mode = sess.get("submit", "ok")
-            ok = mode == "ok" or (mode == "needs_space" and sess.get("last_key") == "Space")
-            if ok and sess.get("draft"):
-                prefix = "› " if sess.get("style") == "codex" else "> "
-                sess.setdefault("transcript", []).append(prefix + sess["draft"])
-                sess["draft"] = ""
-            sess["last_key"] = "Enter"
-        elif key == "C-u":
+        save(s); sys.exit(0)
+    key = args[-1]
+    if key == "Space":
+        sess["draft"] = sess.get("draft", "") + " "
+        sess["last_key"] = "Space"
+    elif key == "Enter":
+        mode = sess.get("submit", "ok")
+        sess["enter_count"] = sess.get("enter_count", 0) + 1
+        ok = (mode == "ok"
+              or (mode == "needs_space" and sess.get("last_key") == "Space")
+              or (mode == "needs_retry" and sess["enter_count"] >= 2))
+        if ok and sess.get("draft"):
+            prefix = "› " if sess.get("style") == "codex" else "> "
+            sess.setdefault("transcript", []).append(prefix + sess["draft"])
             sess["draft"] = ""
-            sess["last_key"] = "C-u"
-        else:
-            sess["last_key"] = key
+        sess["last_key"] = "Enter"
+    elif key == "C-u":
+        sess["draft"] = ""
+        sess["last_key"] = "C-u"
+    else:
+        sess["last_key"] = key
     s["sessions"][t] = sess
     save(s); sys.exit(0)
 
@@ -926,11 +946,12 @@ def test_sender_survives_a_message_larger_than_a_pipe_buffer(tmux_factory, home)
     assert r.returncode == 0, (r.returncode, r.stdout[-300:], r.stderr[-300:])
 
 
-def test_sender_verifies_a_long_message_from_the_visible_tail(tmux_factory, home):
-    """La testa di un prompt lungo può essere già fuori dal pane.
+def test_sender_refuses_a_long_message_when_the_whole_draft_is_not_attestable(tmux_factory, home):
+    """Una coda visibile non autorizza Enter se la testa del draft è sparita.
 
-    Il sender deve riconoscere la coda ancora visibile, inviare Enter una sola
-    volta e non concatenare tre copie dello stesso ordine nel composer.
+    P23 confronta il testo intero dopo il paste: una signature in coda non basta
+    a escludere che davanti ci sia un draft umano. Il risultato deve restare il
+    rifiuto sicuro 130, senza un submit su contenuto non attestabile.
     """
     tmux = tmux_factory({"SCOUT-1": {"created": _hours_ago(1), "submit": "ok"}})
     exe = tmux.bin / "tmux"
@@ -942,24 +963,23 @@ def test_sender_verifies_a_long_message_from_the_visible_tail(tmux_factory, home
 
     r = _send(tmux, home, "SCOUT-1", msg)
 
-    assert r.returncode == 0, (r.returncode, r.stdout, r.stderr)
-    literal = [c for c in tmux.calls("send-keys", session="SCOUT-1") if "-l" in c]
-    assert len(literal) == 1, "il messaggio non deve essere ridigitato e duplicato"
-    assert tmux.draft("SCOUT-1") == ""
+    assert r.returncode == 130, (r.returncode, r.stdout, r.stderr)
+    keys = [c[-1] for c in tmux.calls("send-keys", session="SCOUT-1")]
+    assert "Enter" not in keys, keys
 
 
 def test_sender_recovers_a_lost_enter_on_a_claude_pane(tmux_factory, home):
-    """Il pane ignora l'Enter a freddo: Space+Enter recupera, e vale su Claude.
+    """Il pane ignora il primo Enter: il retry solo-Enter recupera su Claude.
 
     Nessuna jht.config.json → provider vuoto (NON kimi): se il rinforzo fosse
     ancora dietro `if provider = kimi`, questo test fallirebbe.
     """
-    tmux = tmux_factory({"SCOUT-1": {"created": _hours_ago(1), "submit": "needs_space"}})
+    tmux = tmux_factory({"SCOUT-1": {"created": _hours_ago(1), "submit": "needs_retry"}})
     assert not (home / "jht.config.json").exists()
     r = _send(tmux, home, "SCOUT-1", "[@capitano -> @scout-1] [MSG] riprendi la coda")
     assert r.returncode == 0, (r.stdout, r.stderr)
     # Il recupero si dichiara col numero di submit: "submit 2" = il primo Enter
-    # è andato perso e il secondo (preceduto da Space) è passato. La verifica è
+    # è andato perso e il secondo è passato. La verifica è
     # sul FATTO, non sulla frase: la formulazione è cambiata fondendo le due
     # implementazioni concorrenti di questa correzione (dev1/dev7, 30/07).
     assert "submit 2" in r.stdout, r.stdout
@@ -1001,7 +1021,7 @@ def test_sender_retries_are_bounded_on_a_frozen_tui(tmux_factory, home):
     assert r.returncode == 5
     keys = [c[-1] for c in tmux.calls("send-keys", session="SCOUT-1") if "-l" not in c]
     assert keys.count("Enter") == 3, keys
-    assert keys.count("Space") == 2, keys
+    assert keys.count("Space") == 0, keys
 
 
 def test_sender_does_not_claim_success_on_a_codex_composer(tmux_factory, home):
@@ -1017,21 +1037,21 @@ def test_sender_does_not_claim_success_on_a_codex_composer(tmux_factory, home):
     assert "assegna la coda" in tmux.draft("CAPITANO")
 
 
-def test_sender_reads_the_whole_codex_composer_not_its_first_line(tmux_factory, home):
-    """Codex va a capo: la coda del messaggio sta sulle righe di continuazione.
+def test_sender_refuses_a_wrapped_codex_draft_that_it_cannot_attest(tmux_factory, home):
+    """Codex va a capo: senza il draft intero niente Enter.
 
-    Cercare la probe nella sola riga del marker direbbe "submittato" anche con
-    il testo ancora nel composer.
+    Cercare solo la probe in coda direbbe "submittato" anche con testo estraneo
+    davanti; P23 chiude quel percorso con 130.
     """
     tmux = tmux_factory({"CAPITANO": {"created": _hours_ago(1), "submit": "frozen", "style": "codex", "width": 60}})
     msg = "[@utente -> @capitano] [CHAT] " + ("riepilogo lungo " * 12) + "CODA-UNIVOCA"
     r = _send(tmux, home, "CAPITANO", msg)
-    assert r.returncode == 5, (r.returncode, r.stdout, r.stderr)
+    assert r.returncode == 130, (r.returncode, r.stdout, r.stderr)
 
 
 def test_sender_still_delivers_to_a_healthy_codex_pane(tmux_factory, home):
     """Nessuna regressione su Codex sano: il messaggio parte e resta solo nel transcript."""
-    tmux = tmux_factory({"CAPITANO": {"created": _hours_ago(1), "submit": "ok", "style": "codex", "width": 30}})
+    tmux = tmux_factory({"CAPITANO": {"created": _hours_ago(1), "submit": "ok", "style": "codex", "width": 1000}})
     msg = "[@utente -> @capitano] [CHAT] " + ("riepilogo lungo " * 12) + "CODA-UNIVOCA"
     r = _send(tmux, home, "CAPITANO", msg)
     assert r.returncode == 0, (r.returncode, r.stdout, r.stderr)
@@ -1045,7 +1065,7 @@ def test_sender_still_reports_a_dead_pane_as_three(tmux_factory, home):
     # pane che scarta il typing: simulato togliendo la sessione dopo il primo giro
     exe = tmux.bin / "tmux"
     exe.write_text(FAKE_TMUX.replace(
-        'sess["draft"] = sess.get("draft", "") + args[args.index("-l") + 1]',
+        'sess["draft"] = sess.get("draft", "") + content',
         'sess["draft"] = sess.get("draft", "")'))
     exe.chmod(0o755)
     r = _send(tmux, home, "SCOUT-1", "[@capitano -> @scout-1] [MSG] x")

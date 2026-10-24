@@ -45,6 +45,112 @@ const POWERSHELL_FLAGS: [&str; 6] = [
     "-File",
 ];
 
+pub(crate) const AUTOSTART_TASK_LABEL: &str = "Job Hunter Team - Start runtime";
+
+/// A per-user name keeps a desktop task away from legacy/global JHT tasks
+/// (including P23). The SID is also the identity the registration attests.
+pub(crate) fn autostart_task_name(sid: &str) -> String {
+    format!("{AUTOSTART_TASK_LABEL} [{sid}]")
+}
+
+fn current_user_sid(output: &[u8]) -> Option<String> {
+    String::from_utf8_lossy(output)
+        .split(|value: char| !(value.is_ascii_alphanumeric() || value == '-'))
+        .find(|value| value.strip_prefix("S-1-").is_some_and(|parts| {
+            let mut segments = parts.split('-');
+            segments.clone().nth(1).is_some()
+                && segments.all(|part| !part.is_empty() && part.chars().all(|digit| digit.is_ascii_digit()))
+        }))
+        .map(str::to_owned)
+}
+
+fn xml_section<'a>(xml: &'a str, name: &str) -> Option<&'a str> {
+    let open = format!("<{name}");
+    let close = format!("</{name}>");
+    let openings: Vec<usize> = xml.match_indices(&open)
+        .filter_map(|(at, _)| matches!(xml.as_bytes().get(at + open.len()), Some(b'>') | Some(b' ') | Some(b'\t') | Some(b'\r') | Some(b'\n')).then_some(at))
+        .collect();
+    if openings.len() != 1 || xml.matches(&close).count() != 1 { return None; }
+    let open_end = xml[openings[0]..].find('>')? + openings[0];
+    let start = open_end + 1;
+    let end = xml[start..].find(&close)? + start;
+    Some(&xml[start..end])
+}
+
+fn xml_text<'a>(xml: &'a str, name: &str) -> Option<&'a str> {
+    xml_section(xml, name).filter(|value| !value.contains('<'))
+}
+
+fn autostart_action(shell: &Path, wrapper: &Path) -> String {
+    format!(
+        "\"{}\" -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File \"{}\" up",
+        shell.display(), wrapper.display(),
+    )
+}
+
+/// The task is created by the non-elevated desktop process, explicitly bound
+/// to its current interactive user. `/IT` refuses a password-backed task.
+pub(crate) fn autostart_create_args(wrapper: &Path, system_root: Option<OsString>, user: &str, sid: &str) -> Vec<OsString> {
+    let shell = powershell_path(system_root);
+    let action = autostart_action(&shell, wrapper);
+    let task = autostart_task_name(sid);
+    ["/Create", "/TN", &task, "/SC", "ONLOGON", "/TR", &action, "/RL", "LIMITED", "/RU", user, "/IT", "/F"]
+        .into_iter().map(OsString::from).collect()
+}
+
+fn autostart_query_args(sid: &str) -> Vec<OsString> {
+    let task = autostart_task_name(sid);
+    ["/Query", "/TN", &task, "/XML"].into_iter().map(OsString::from).collect()
+}
+
+fn autostart_contract(xml: &str, user: &str, shell: &Path, wrapper: &Path) -> bool {
+    let no_other_triggers = ["BootTrigger", "CalendarTrigger", "EventTrigger", "IdleTrigger", "RegistrationTrigger", "SessionStateChangeTrigger", "TimeTrigger"]
+        .iter().all(|tag| !xml.contains(&format!("<{tag}")));
+    let no_other_actions = ["ComHandler", "SendEmail", "ShowMessage"]
+        .iter().all(|tag| !xml.contains(&format!("<{tag}")));
+    let expected_arguments = autostart_action(shell, wrapper)
+        .split_once(' ').map(|(_, args)| args.replace('"', "&quot;"));
+    no_other_triggers && no_other_actions
+        && xml_section(xml, "LogonTrigger").is_some()
+        && xml_section(xml, "Exec").is_some()
+        && xml_section(xml, "LogonTrigger").and_then(|part| xml_text(part, "UserId")) == Some(user)
+        && xml_section(xml, "Principal").and_then(|part| xml_text(part, "UserId")) == Some(user)
+        && xml_section(xml, "Principal").and_then(|part| xml_text(part, "LogonType")) == Some("InteractiveToken")
+        && xml_section(xml, "Principal").and_then(|part| xml_text(part, "RunLevel")) == Some("LeastPrivilege")
+        && xml_section(xml, "Settings").and_then(|part| xml_text(part, "Enabled")) == Some("true")
+        && xml_section(xml, "Exec").and_then(|part| xml_text(part, "Command")) == shell.to_str()
+        && xml_section(xml, "Exec").and_then(|part| xml_text(part, "Arguments")) == expected_arguments.as_deref()
+}
+
+#[cfg(windows)]
+pub(crate) fn register_autostart(wrapper: &Path) -> bool {
+    let root = std::env::var_os("SystemRoot").unwrap_or_else(|| OsString::from(r"C:\Windows"));
+    let schtasks = PathBuf::from(root.clone()).join("System32").join("schtasks.exe");
+    let whoami = PathBuf::from(&root).join("System32").join("whoami.exe");
+    let user = match crate::runtime_host::run_program(whoami.to_string_lossy().as_ref(), std::iter::empty::<&str>(), None, std::time::Duration::from_secs(10)) {
+        Ok(result) if result.success() => String::from_utf8_lossy(&result.stdout).trim().to_owned(),
+        _ => return false,
+    };
+    if user.is_empty() { return false; }
+    let sid = match crate::runtime_host::run_program(whoami.to_string_lossy().as_ref(), ["/user", "/fo", "csv", "/nh"], None, std::time::Duration::from_secs(10)) {
+        Ok(result) if result.success() => current_user_sid(&result.stdout),
+        _ => None,
+    };
+    let Some(sid) = sid else { return false; };
+    let create = autostart_create_args(wrapper, Some(root.clone()), &user, &sid);
+    let created = crate::runtime_host::run_program(
+        schtasks.to_string_lossy().as_ref(), create, None, std::time::Duration::from_secs(15),
+    );
+    if !created.is_ok_and(|result| result.success()) { return false; }
+    let queried = crate::runtime_host::run_program(
+        schtasks.to_string_lossy().as_ref(), autostart_query_args(&sid), None, std::time::Duration::from_secs(15),
+    );
+    let Ok(result) = queried else { return false; };
+    result.success() && autostart_contract(
+        &String::from_utf8_lossy(&result.stdout), &user, &powershell_path(Some(root)), wrapper,
+    )
+}
+
 /// Windows PowerShell 5.1, which every Windows 10/11 has, by absolute path:
 /// never whatever `powershell` the PATH resolves first.
 pub(crate) fn powershell_path(system_root: Option<OsString>) -> PathBuf {
@@ -167,6 +273,10 @@ fn file_digest(path: &Path) -> Option<String> {
 /// install.ps1 recorded it, on the Podman runtime.
 #[cfg_attr(not(windows), allow(dead_code))]
 pub(crate) fn wrapper_bundle_valid(wrapper: &Path, runtime_dir: &Path) -> bool {
+    #[cfg(windows)]
+    if !runtime_paths_are_attested(wrapper, runtime_dir) {
+        return false;
+    }
     let Some(bin) = wrapper.parent() else {
         return false;
     };
@@ -194,6 +304,57 @@ pub(crate) fn wrapper_bundle_valid(wrapper: &Path, runtime_dir: &Path) -> bool {
         return false;
     }
     manifest_matches(&manifest, &required, (IMAGE_PIN, file_digest(&pin)))
+}
+
+/// The byte manifest is not an authority when an untrusted account can replace
+/// its directory or lead us through a reparse point. This mirrors the checked
+/// Windows wrapper before the Rust chat path selects its private engine.
+#[cfg(windows)]
+fn runtime_paths_are_attested(wrapper: &Path, runtime_dir: &Path) -> bool {
+    use std::os::windows::fs::MetadataExt;
+
+    const FILE_ATTRIBUTE_REPARSE_POINT: u32 = 0x0400;
+    let protected_node = |path: &Path, directory: bool| {
+        let Ok(metadata) = std::fs::symlink_metadata(path) else { return false };
+        let kind = metadata.file_type();
+        let expected_kind = if directory { kind.is_dir() } else { kind.is_file() };
+        expected_kind
+            && !kind.is_symlink()
+            && metadata.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT == 0
+            && crate::private_acl::owned_by_current_user(path)
+            && crate::private_acl::current_user_sid().ok().is_some_and(|user| {
+                crate::private_acl::read_acl(path)
+                    .is_ok_and(|acl| crate::private_acl::is_runtime_owner_only(&acl, &user))
+            })
+    };
+    let ancestors_are_plain = |path: &Path| {
+        let mut current = Some(path);
+        while let Some(node) = current {
+            let Ok(metadata) = std::fs::symlink_metadata(node) else { return false };
+            if metadata.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT != 0 {
+                return false;
+            }
+            current = node.parent();
+        }
+        true
+    };
+    let Some(bin) = wrapper.parent() else { return false };
+    let manifest = runtime_dir.join(".runtime-integrity");
+    let all_manifest_nodes_are_protected = MANIFEST_FILES.iter().all(|(key, place, file)| {
+        let path = match place {
+            Place::Runtime => runtime_dir.join(file),
+            Place::Bin if *key == "jht-wrapper.ps1" => wrapper.to_path_buf(),
+            Place::Bin => bin.join(file),
+        };
+        protected_node(&path, false)
+    });
+    let pin = runtime_dir.join(IMAGE_PIN);
+    ancestors_are_plain(runtime_dir)
+        && ancestors_are_plain(wrapper)
+        && protected_node(runtime_dir, true)
+        && protected_node(&manifest, false)
+        && all_manifest_nodes_are_protected
+        && (!std::fs::symlink_metadata(&pin).is_ok() || protected_node(&pin, false))
 }
 
 /// `%SystemRoot%\System32\wsl.exe`, by absolute path like PowerShell.
@@ -275,8 +436,10 @@ pub(crate) fn phase_message(line: &str) -> Option<&'static str> {
 /// install.ps1's notices (`JHT_NOTICE <id>`), with the key of what the
 /// onboarding keeps on screen for the rest of the setup. A notice is not a
 /// failure: the install goes on.
-pub(crate) const INSTALL_NOTICES: [(&str, &str); 1] =
-    [("windows10_unsupported", "ui_notice_windows10_unsupported")];
+pub(crate) const INSTALL_NOTICES: [(&str, &str); 2] = [
+    ("windows10_unsupported", "ui_notice_windows10_unsupported"),
+    ("autostart_inactive", "ui_notice_autostart_inactive"),
+];
 
 /// The key of a `JHT_NOTICE <id>` line of install.ps1's stdout, exactly, with
 /// a known id.
@@ -371,6 +534,39 @@ pub(crate) fn uninstall_outcome(
 mod tests {
     use super::*;
     use crate::runtime_host::ProcessResult;
+
+    #[test]
+    fn autostart_task_is_a_limited_current_user_logon_task() {
+        let args: Vec<String> = autostart_create_args(
+            Path::new(r"C:\Users\someone\.local\bin\jht.ps1"),
+            Some(OsString::from(r"D:\Win")),
+            r"JHTPC\someone",
+            "S-1-5-21-1111-2222-3333-1001",
+        ).into_iter().map(|arg| arg.to_string_lossy().into_owned()).collect();
+        assert!(args.windows(2).any(|pair| pair == ["/TN", "Job Hunter Team - Start runtime [S-1-5-21-1111-2222-3333-1001]"]));
+        assert!(args.windows(2).any(|pair| pair == ["/SC", "ONLOGON"]));
+        assert!(args.windows(2).any(|pair| pair == ["/RL", "LIMITED"]));
+        assert!(args.windows(2).any(|pair| pair == ["/RU", r"JHTPC\someone"]));
+        assert!(args.iter().any(|arg| arg.eq_ignore_ascii_case("/IT")));
+        assert!(!args.iter().any(|arg| arg.eq_ignore_ascii_case("HIGHEST")));
+        assert!(args.iter().any(|arg| arg.contains("jht.ps1") && arg.ends_with(" up")));
+        assert_eq!(current_user_sid(b"\"JHTPC\\someone\",\"S-1-5-21-1111-2222-3333-1001\"\r\n"), Some("S-1-5-21-1111-2222-3333-1001".into()));
+        assert_eq!(current_user_sid(b"S-1-"), None);
+        assert_eq!(current_user_sid(b"S-1-5"), None);
+        assert_eq!(current_user_sid(b"S-1-5--1001"), None);
+        assert_eq!(current_user_sid(b"no SID"), None);
+    }
+
+    #[test]
+    fn autostart_read_back_requires_the_current_interactive_user_and_exact_action() {
+        let shell = Path::new(r"C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe");
+        let wrapper = Path::new(r"C:\Users\someone\.local\bin\jht.ps1");
+        let xml = r#"<LogonTrigger><Enabled>true</Enabled><UserId>JHTPC\someone</UserId></LogonTrigger><Principal><UserId>JHTPC\someone</UserId><LogonType>InteractiveToken</LogonType><RunLevel>LeastPrivilege</RunLevel></Principal><Settings><Enabled>true</Enabled></Settings><Exec><Command>C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe</Command><Arguments>-NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File &quot;C:\Users\someone\.local\bin\jht.ps1&quot; up</Arguments></Exec>"#;
+        assert!(autostart_contract(xml, r"JHTPC\someone", shell, wrapper));
+        assert!(!autostart_contract(xml, r"JHTPC\other", shell, wrapper));
+        assert!(!autostart_contract(&xml.replace("InteractiveToken", "Password"), r"JHTPC\someone", shell, wrapper));
+        assert!(!autostart_contract(&format!("{xml}<Exec></Exec>"), r"JHTPC\someone", shell, wrapper));
+    }
 
     #[test]
     fn powershell_runs_by_absolute_path_non_interactive_without_profile() {
@@ -704,9 +900,7 @@ mod tests {
             .filter_map(|line| line.trim().strip_prefix("Write-JhtNotice "))
             .map(|id| id.trim().to_owned())
             .collect();
-        let known: std::collections::BTreeSet<String> =
-            INSTALL_NOTICES.iter().map(|(id, _)| (*id).to_owned()).collect();
-        assert_eq!(printed, known);
+        assert_eq!(printed, ["windows10_unsupported"].into_iter().map(str::to_owned).collect());
     }
 
     #[test]

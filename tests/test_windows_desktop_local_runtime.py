@@ -17,6 +17,7 @@ SECURE_CONFIG_IO = ROOT / "cli" / "src" / "lib" / "secure-config-io.js"
 ONBOARDING = ROOT / "desktop" / "src-tauri" / "src" / "onboarding.rs"
 WINDOWS_RUNTIME = ROOT / "desktop" / "src-tauri" / "src" / "windows_runtime.rs"
 RUNTIME_HOST = ROOT / "desktop" / "src-tauri" / "src" / "runtime_host.rs"
+DIRECT_CHAT = ROOT / "desktop" / "src-tauri" / "src" / "direct_chat.rs"
 ERROR_CATALOG = ROOT / "desktop" / "src" / "lib" / "error-catalog.ts"
 ERROR_LOCALES = ROOT / "desktop" / "src" / "lib" / "error-catalog.locales.ts"
 
@@ -73,6 +74,32 @@ def test_desktop_chat_uses_stdin_and_a_closed_session_allowlist():
     for session in ("CAPITANO", "ASSISTENTE", "MENTOR", "SCOUT-1", "ANALISTA-1", "SCORER-1", "SCRITTORE-1", "CRITICO"):
         assert f"'{session}'" in chat
     assert "$script:DesktopChatExitCode = 2" in chat
+
+
+def test_windows_rust_chat_calls_the_attested_container_and_keeps_exit_130():
+    """The Windows app must not reconstruct a chat message in PowerShell.
+
+    The native route identifies the attested local container and invokes the
+    fixed Python delivery script with process arguments.  Its exit 130 is the
+    same fail-closed ``composer_has_text`` result used by the Mac path.
+    """
+    source = DIRECT_CHAT.read_text(encoding="utf-8")
+    failure = source[source.index("fn chat_failure(") : source.index("fn run_wrapper_chat", source.index("fn chat_failure("))]
+    assert '130 => "composer_has_text"' in failure
+
+    exec_args = source[source.index("fn local_chat_exec_args(") : source.index("fn run_local_chat(", source.index("fn local_chat_exec_args("))]
+    assert '"/app/shared/skills/agent_chat.py"' in exec_args
+    assert "existing_team_runtime::chat_arguments(operation)" in exec_args
+
+    local = source[source.index("fn run_local_chat(") : source.index("fn run_connection(", source.index("fn run_local_chat("))]
+    assert "local_chat_runtime_valid(wrapper, runtime)" in local
+    assert "ChatOperation" in local
+    assert "powershell" not in local.lower()
+    assert "jht-wrapper.ps1" not in local
+
+    connection = source[source.index("fn run_connection(") : source.index("fn remote_wrapper_command(", source.index("fn run_connection("))]
+    assert "run_local_chat(" in connection
+    assert "RemoteOperation::Chat(operation)" in connection
 
 
 def test_redirected_oauth_never_requests_a_tty():
@@ -251,11 +278,7 @@ def test_windows_logon_starts_machine_then_systemd_restores_the_whole_team():
     enabler = ENABLER.read_text(encoding="utf-8")
     network = PODMAN_NETWORK.read_text(encoding="utf-8")
     install_service = enabler.index("Install-JhtContainerService -PodmanPath")
-    install_task = enabler.index("Install-JhtStartupTask -PodmanPath", install_service)
-    assert install_service < install_task
-    assert "New-ScheduledTaskTrigger -AtLogOn -User $UserId" in enabler
-    assert "New-ScheduledTaskPrincipal -UserId $UserId -LogonType Interactive -RunLevel Limited" in enabler
-    assert '"machine start --update-connection=false $MachineName"' in enabler
+    assert "Install-JhtStartupTask" not in enabler
     assert "start --sig-proxy=false jht-broker jht-telegram jht" in enabler
     assert "stop --time 30 jht jht-telegram jht-broker" in enabler
     assert "systemctl enable --no-reload $runtimeServices" in network

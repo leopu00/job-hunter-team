@@ -49,6 +49,53 @@ async function reachProviderLocal(user: ReturnType<typeof userEvent.setup>) {
   await screen.findByRole("heading", { name: /scegli il provider/i });
 }
 
+describe("OnboardingFlow reopened for the provider only (T128)", () => {
+  const reopened = (overrides: Partial<OnboardingFlowProps> = {}) => {
+    const onCancel = vi.fn();
+    const view = renderFlow({ account: { displayName: "Ada Locale", identity: "local" }, providerOnly: { onCancel }, ...overrides });
+    return { ...view, onCancel };
+  };
+
+  it("starts on the Provider step, with nothing chosen for the person, and no way back to the environment", async () => {
+    reopened();
+    expect(await screen.findByRole("heading", { name: /scegli il provider/i })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: /scegli l’ambiente/i })).not.toBeInTheDocument();
+    for (const radio of screen.getAllByRole("radio")) expect(radio).toHaveAttribute("aria-checked", "false");
+    expect(screen.getByRole("button", { name: /rivedi il setup/i })).toBeDisabled();
+    expect(screen.queryByRole("button", { name: /^indietro/i })).not.toBeInTheDocument();
+  });
+
+  it("cancel leaves it without preparing anything", async () => {
+    const user = userEvent.setup();
+    const { onCancel, props } = reopened();
+    await user.click(await screen.findByRole("button", { name: /^annulla/i }));
+    expect(onCancel).toHaveBeenCalledOnce();
+    expect(props.onSubmit).not.toHaveBeenCalled();
+  });
+
+  it("prepares on this computer with the provider chosen, and says nothing of installs or of an earlier install", async () => {
+    const user = userEvent.setup();
+    const { props } = reopened({ platform: "windows", previousLocalData: true });
+    await user.click(await screen.findByRole("radio", { name: /claude code/i }));
+    await user.click(screen.getByRole("button", { name: /rivedi il setup/i }));
+    expect(screen.getByText("Questo computer")).toBeInTheDocument();
+    expect(screen.queryByText(/l’app installa, se mancano/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole("note")).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /prepara la squadra/i }));
+    await waitFor(() => expect(props.onSubmit).toHaveBeenCalledWith({ host: { kind: "local" }, provider: "claude" }));
+  });
+
+  it("the first setup is as it was: it starts on the greeting, with the proposed provider, and the notes of a first install", async () => {
+    const user = userEvent.setup();
+    renderFlow({ account: { displayName: "Ada Locale", identity: "local" }, platform: "windows", previousLocalData: true });
+    expect(screen.getByRole("heading", { name: "Ciao, Ada Locale." })).toBeInTheDocument();
+    await reachProviderLocal(user);
+    expect(screen.getByRole("radio", { name: /codex/i })).toHaveAttribute("aria-checked", "true");
+    await user.click(screen.getByRole("button", { name: /rivedi il setup/i }));
+    expect(screen.getByText(/l’app installa, se mancano/i)).toBeInTheDocument();
+  });
+});
+
 describe("OnboardingFlow technical setup", () => {
   it("lets a local profile change its on-device label before setup", async () => {
     const user = userEvent.setup();

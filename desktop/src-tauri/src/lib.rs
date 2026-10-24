@@ -9,6 +9,7 @@ mod desktop_platform;
 mod direct_chat;
 mod agent_control;
 mod existing_team_agents;
+mod existing_team_cloud_token;
 mod existing_team_judgement;
 mod export_file;
 mod existing_team_register;
@@ -89,6 +90,8 @@ pub fn run() {
             existing_team_runtime::existing_team_positions_read,
             existing_team_judgement::existing_team_position_write,
             existing_team_judgement::existing_team_position_write_target,
+            existing_team_cloud_token::existing_team_cloud_token,
+            existing_team_cloud_token::existing_team_cloud_token_open_site,
             existing_team_runtime::existing_team_link_identity,
             existing_team_agents::existing_team_agents_read,
             agent_control::agent_control,
@@ -128,6 +131,8 @@ pub fn run() {
             saved_vps::saved_vps_add,
             saved_vps::saved_vps_rename,
             saved_vps::saved_vps_remove,
+            runtime_log::onboarding_support_context,
+            runtime_log::onboarding_support_report_save,
             onboarding::onboarding_prepare,
             onboarding::onboarding_provider_login,
             onboarding::onboarding_provider_login_close,

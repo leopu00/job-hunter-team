@@ -466,6 +466,7 @@ def test_up_does_not_replace_the_users_default_connection(tmp_path):
 
 
 UNINSTALL_BODY = r"""
+function Get-JhtScopedStartupTaskName { return 'Job Hunter Team - Start runtime [S-1-5-21-1111-2222-3333-1001]' }
 function Get-ScheduledTask { param($TaskName, $ErrorAction) return $null }
 $code = Invoke-JhtWindowsUninstall -UninstallArgs @('--confirm') `
   -ProfilePath $env:TEST_PROFILE -LocalAppDataPath $env:TEST_LOCAL `
@@ -584,44 +585,15 @@ Install-JhtStartupTask -PodmanPath 'C:\Program Files\RedHat\Podman\podman.exe' `
 
 def test_logon_task_is_visible_named_and_described_in_task_scheduler():
     source = ENABLER.read_text(encoding="utf-8")
-    task = source[
-        source.index("function Install-JhtStartupTask") : source.index(
-            "if ($InstallDependencies)"
-        )
-    ]
-
-    assert "$taskName = 'Job Hunter Team - Start runtime'" in task
-    assert "New-ScheduledTaskSettingsSet -Hidden" not in task
-    assert "-Description $description -Force" in task
-    assert "[bool]$registered.Settings.Hidden -or" in task
-    assert "([string]$registered.Description) -cne $description" in task
+    assert "Install-JhtStartupTask" not in source
+    assert "Register-ScheduledTask" not in source
 
 
 def test_logon_task_starts_only_the_named_jht_machine_as_the_current_user(tmp_path):
-    result, calls = _run(
-        tmp_path, ENABLER, ["ConvertTo-JhtSid", "Install-JhtStartupTask"], STARTUP_TASK_BODY,
-        {"REGISTER_FAIL": "0"},
-    )
-    assert result.returncode == 0, result.stderr
-    assert calls == []
-    assert "TASK=Job Hunter Team - Start runtime" in result.stdout
-    assert "EXEC=C:\\Program Files\\RedHat\\Podman\\podman.exe" in result.stdout
-    assert "ARGS=machine start --update-connection=false jht-podman" in result.stdout
-    assert "USER=S-1-5-21-1111-2222-3333-1001" in result.stdout
-    assert "HIDDEN=False" in result.stdout
-    assert (
-        "DESCRIPTION=Starts the dedicated Job Hunter Team Podman machine at sign-in "
-        "so the local team can resume after Windows restarts. It never starts or stops "
-        "other Podman machines."
-    ) in result.stdout
+    assert "Install-JhtStartupTask" not in ENABLER.read_text(encoding="utf-8")
 
 def test_install_fails_if_the_logon_task_cannot_be_published(tmp_path):
-    result, _ = _run(
-        tmp_path, ENABLER, ["ConvertTo-JhtSid", "Install-JhtStartupTask"], STARTUP_TASK_BODY,
-        {"REGISTER_FAIL": "1"},
-    )
-    assert result.returncode != 0
-    assert "registration failed" in result.stderr
+    assert "Register-ScheduledTask" not in ENABLER.read_text(encoding="utf-8")
 
 
 LEGACY_SHIM_BODY = r"""
@@ -656,18 +628,24 @@ def test_only_an_attested_legacy_path_shim_is_owned_by_jht(tmp_path):
 
 REMOVE_STARTUP_TASK_BODY = r"""
 $script:Present = $true
+function Get-JhtScopedStartupTaskName { return 'Job Hunter Team - Start runtime [S-1-5-21-1111-2222-3333-1001]' }
+$script:LegacyTask = 'Job Hunter Team - Start runtime'
+$script:ScopedTask = Get-JhtScopedStartupTaskName
 function Get-ScheduledTask {
   param($TaskName, $ErrorAction)
-  if ($script:Present) { [pscustomobject]@{ TaskName = $TaskName } }
+  if ($script:Present -and $TaskName -ceq $script:ScopedTask) { [pscustomobject]@{ TaskName = $TaskName } }
+  if ($TaskName -ceq $script:LegacyTask) { [pscustomobject]@{ TaskName = $TaskName } }
 }
 function Unregister-ScheduledTask {
   param($TaskName, [switch]$Confirm, $ErrorAction)
-  if ($TaskName -cne 'Job Hunter Team - Start runtime') { throw 'wrong task' }
+  if ($TaskName -ceq $script:LegacyTask) { throw 'legacy P23 task must stay untouched' }
+  if ($TaskName -cne $script:ScopedTask) { throw 'wrong task' }
   if ($Confirm) { throw 'interactive confirmation requested' }
   if ($env:UNREGISTER_FAIL -eq '1') { throw 'cannot unregister' }
   $script:Present = $false
 }
 if ((Remove-JhtStartupTask) -ne ($env:UNREGISTER_FAIL -ne '1')) { throw 'wrong removal result' }
+if (-not (Get-ScheduledTask -TaskName $script:LegacyTask)) { throw 'legacy P23 task was changed' }
 """
 
 

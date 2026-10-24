@@ -379,9 +379,21 @@ def _only_faint_content(raw: str, plain: str, marker_at: int, boxed: bool) -> bo
 
 
 def _codex_footer(lines: list[tuple[str, str]], index: int) -> bool:
-    """Codex puts an indented model/path or a recognised hint below ``›``."""
+    """Codex puts an indented model/path or a recognised hint below ``›``.
+
+    A long draft wraps: its continuation rows sit between the marker and that
+    footer.  They are skipped only when they look like wrapped text (see
+    ``_wrapped_continuation``), never for a short menu row.
+    """
+    below = lines[index + 1:]
+    if _footer_follows(below):
+        return True
+    return _footer_follows(below[_wrapped_continuation(lines, index):])
+
+
+def _footer_follows(below: list[tuple[str, str]]) -> bool:
     footers: list[str] = []
-    for _raw, plain in lines[index + 1:]:
+    for _raw, plain in below:
         if not plain.strip():
             continue
         footers.append(plain)
@@ -391,6 +403,36 @@ def _codex_footer(lines: list[tuple[str, str]], index: int) -> bool:
         return False
     first = footers[0]
     return bool(_CODEX_DOT_FOOTER.match(first) or _CODEX_HINT.search(first))
+
+
+_WRAPPED_MARKER_MIN = 100
+_WRAPPED_ROWS_MAX = 12
+_WRAPPED_FULL_RATIO = 0.85
+
+
+def _wrapped_continuation(lines: list[tuple[str, str]], index: int) -> int:
+    """How many rows right under a long ``›`` row continue its wrapped text.
+
+    The rows must be contiguous (a blank row ends them), and every one but the
+    last nearly as long as the marker row, which is what a terminal wrap draws.
+    Menu choices are short and never have this shape.
+    """
+    width = len(lines[index][1].strip())
+    if width < _WRAPPED_MARKER_MIN:
+        return 0
+    run: list[str] = []
+    for _raw, plain in lines[index + 1:]:
+        if not plain.strip():
+            break
+        run.append(plain)
+    if not run or len(run) > _WRAPPED_ROWS_MAX:
+        return 0
+    if any(_composer_match(row) or _BORDER.match(row) or _status_line_busy(row)
+           or _NUMBERED_OPTION.match(row) for row in run):
+        return 0
+    if any(len(row.strip()) < _WRAPPED_FULL_RATIO * width for row in run[:-1]):
+        return 0
+    return len(run)
 
 
 def _claude_box(lines: list[tuple[str, str]], index: int, boxed: bool) -> bool:
@@ -439,6 +481,122 @@ def composer_snapshot(pane: str) -> tuple[str, bool]:
 def composer_state(pane: str) -> str:
     """The guarded send gate: ``empty``, ``text`` or ``none``."""
     return composer_snapshot(pane)[0]
+
+
+def _contiguous_neighbours(raw_lines: list[str], index: int, reach: int) -> list[int]:
+    """Rows within ``reach`` of ``index`` that no blank row separates from it.
+
+    A menu draws its choices together.  A cursor row with a footer or a hint
+    behind a blank row is chrome around a composer, not two choices.
+    """
+    found: list[int] = []
+    for step in (-1, 1):
+        for at in range(index + step, index + step * (reach + 1), step):
+            if not 0 <= at < len(raw_lines) or not raw_lines[at].strip():
+                break
+            found.append(at)
+    return found
+
+
+def _certain_interlock(pane: str) -> bool:
+    """True only for a UI that is certainly asking the human to choose or sign in.
+
+    The composer is presentation, not an authority.  A new Codex layout can
+    legitimately have no marker that this parser knows; treating that as a
+    refusal made chat unavailable every time the CLI changed its chrome.  We
+    retain a closed gate for controls on which a paste or Enter has a meaning
+    other than writing to the conversation: numbered choices, sign-in, and
+    permission prompts.
+    """
+    raw_lines = [strip_terminal_codes(line).rstrip().casefold() for line in (pane or "").splitlines()]
+    while raw_lines and not raw_lines[-1].strip():
+        raw_lines.pop()
+    # The unnumbered geometric rule below only looks where the composer
+    # snapshot looks: a historic ``›`` echo of a past message, far up the
+    # screen, with a short line near it, is transcript and never a menu.  The
+    # numbered rule keeps the whole screen: a tall selector (two rows per
+    # entry) can have its cursor above that tail, and Enter would pick it.
+    tail_start = max(0, len(raw_lines) - PROMPT_TAIL)
+    lines = [line.strip() for line in raw_lines]
+    rows = list(zip(raw_lines, raw_lines))
+
+    # A recognised composer and its Codex footer are UI chrome, never menu
+    # choices.  In particular, a freshly changed Codex footer can be short
+    # and adjacent to ``›``: counting it as a sibling would silence chat.
+    composer_rows: set[int] = set()
+    footer_rows: set[int] = set()
+    for index, (_raw, plain) in enumerate(rows):
+        numbered_option = bool(re.match(r"^\s*[›❯]?\s*\d+[.)]\s+\S", plain))
+        if not numbered_option and (_CODEX_DOT_FOOTER.match(plain) or _CODEX_HINT.search(plain)):
+            footer_rows.add(index)
+        match = _composer_match(plain)
+        if not match or _NUMBERED_OPTION.match(match.group(2)):
+            continue
+        marker = match.group(1)
+        boxed = bool(_BOXED_COMPOSER.match(plain))
+        if ((marker == "›" and _codex_footer(rows, index))
+                or (marker != "›" and _claude_box(rows, index, boxed))):
+            composer_rows.add(index)
+
+    # A selected numbered row plus another numbered row is a choice list even
+    # when its wording is new or localized.  Do not mistake ordinary numbered
+    # prose for one: it needs the live selection mark as well.
+    numbered = [line for index, line in enumerate(lines)
+                if index not in composer_rows and index not in footer_rows
+                and re.match(r"^(?:[›❯]\s*)?\d+[.)]\s+\S", line)]
+    selected_numbered = any(index not in composer_rows and index not in footer_rows
+                            and re.match(r"^[›❯]\s*\d+[.)]\s+\S", line)
+                            for index, line in enumerate(lines))
+    if selected_numbered and len(numbered) >= 2:
+        return True
+
+    # Localized action lists are often unnumbered, but their geometry is
+    # still stable: one cursor row and another short sibling row, commonly
+    # inside a box.  Inspect that structure, never the translated labels.
+    def choice_body(line: str) -> str:
+        return line.strip().strip("│┃╎|").strip()
+
+    def option_shape(raw: str) -> str:
+        return "boxed" if raw.strip().startswith(("│", "┃", "╎", "|")) else "plain"
+
+    for index, raw in enumerate(raw_lines):
+        if index < tail_start or index in composer_rows or index in footer_rows:
+            continue
+        selected = choice_body(raw)
+        if not re.match(r"^[›❯]\s+\S", selected):
+            continue
+        for sibling_index in _contiguous_neighbours(raw_lines, index, 3):
+            if sibling_index in composer_rows or sibling_index in footer_rows:
+                continue
+            sibling_raw = raw_lines[sibling_index]
+            sibling = choice_body(sibling_raw)
+            if not sibling or sibling == selected or sibling.startswith(("›", "❯", "╭", "╰", "─")):
+                continue
+            # A true localized menu has two option rows of the same form.  A
+            # recognised composer/footer pair is excluded above before this
+            # structural check can make it a false menu.
+            if len(sibling) <= 80 and option_shape(sibling_raw) == option_shape(raw):
+                return True
+
+    # Transcript prose is never an interlock.  A completed permission or
+    # login can remain visible above a fresh composer; only controls whose
+    # CURRENT geometry is attestable may stop a chat send.
+    return False
+
+
+def delivery_gate(pane: str) -> str:
+    """Return ``empty``, ``none``, ``text`` or ``blocked`` for a chat send.
+
+    ``none`` intentionally stays writable: after paste the transport must
+    prove the submit, but an unknown Codex form is not itself a menu.  A real
+    draft still wins over all other states and is never overwritten.
+    """
+    state, _busy = composer_snapshot(pane)
+    if state == "text":
+        return "text"
+    if _certain_interlock(pane):
+        return "blocked"
+    return state
 
 
 def composer_text(pane: str) -> str | None:
@@ -512,7 +670,7 @@ def capture_pane(session: str) -> str | None:
 
 
 def require_prompt(session: str, *, wait: bool = True) -> None:
-    """Wait outside the writer lock for an empty composer; never overwrite a draft."""
+    """Wait only for a known transient control; unknown Codex forms are writable."""
     deadline = time.monotonic() + (PROMPT_WAIT_S if wait else 0)
     saw_busy = False
     while True:
@@ -520,11 +678,14 @@ def require_prompt(session: str, *, wait: bool = True) -> None:
         if pane is None:
             raise Refusal("agent_unavailable")
         state, busy = composer_snapshot(pane)
+        gate = delivery_gate(pane)
         saw_busy = saw_busy or busy
-        if state == "empty":
+        if gate in {"empty", "none"}:
             return
-        if state == "text":
+        if gate == "text":
             raise Refusal("composer_has_text")
+        if gate == "blocked":
+            raise Refusal("agent_not_at_prompt")
         if not wait or time.monotonic() >= deadline:
             raise Refusal("agent_busy" if saw_busy else "agent_not_at_prompt")
         time.sleep(PROMPT_POLL_S)
@@ -809,10 +970,12 @@ def send(agent: str, client_id: str, raw_text: str) -> dict:
             pane = capture_pane(session)
             if pane is None:
                 raise Refusal("agent_unavailable")
-            state, _busy = composer_snapshot(pane)
-            if state == "text":
+            gate = delivery_gate(pane)
+            if gate == "text":
                 raise Refusal("composer_has_text")
-            if state != "empty":
+            if gate == "blocked":
+                raise Refusal("agent_not_at_prompt")
+            if gate not in {"empty", "none"}:
                 retry_outside_lock = True
             else:
                 row = persist(agent, client_id, text)

@@ -331,15 +331,17 @@ function Office({ ready, source }: { ready: Ready; source: OfficeSource }) {
           {note}
         </p>
       )}
-      <div className="relative min-h-0 flex-1" data-testid="office-stage">
-        <div ref={host} className="absolute inset-0" data-testid="office-canvas" />
-        <OfficeKeyboard
-          targets={targets}
-          label={label}
-          onFocusTarget={focusTarget}
-          onOpen={(t, button) => openPanel(t, button)}
-        />
-        {tag && !panel && <OfficeTooltip target={tag.target} at={tag.at} layout={assets.layout} snapshot={snapshot} statuses={statuses} />}
+      <div className="relative flex min-h-0 flex-1 flex-col lg:flex-row" data-testid="office-workspace">
+        <div className="relative min-h-0 flex-1" data-testid="office-stage">
+          <div ref={host} className="absolute inset-0" data-testid="office-canvas" />
+          <OfficeKeyboard
+            targets={targets}
+            label={label}
+            onFocusTarget={focusTarget}
+            onOpen={(t, button) => openPanel(t, button)}
+          />
+          {tag && !panel && <OfficeTooltip target={tag.target} at={tag.at} layout={assets.layout} snapshot={snapshot} statuses={statuses} />}
+        </div>
         {panel && (
           <OfficePanel
             target={panel}

@@ -1,7 +1,7 @@
 """JHT-T21 — the text the user writes enters the agent's pane fenced.
 
 The chat delivers `[@utente -> @agente] [CHAT] <text>` (or `[TG]`) to the agent's
-tmux pane with `jht-tmux-send`, which TYPES it (`tmux send-keys -l`). Before this
+tmux pane with `jht-tmux-send`, through `load-buffer`/`paste-buffer`. Before this
 fix the text went in as written:
 
 - a line break followed by `[@capitano -> @assistente] [DELEGA] …` read as a line
@@ -197,14 +197,35 @@ case "$cmd" in
   has-session|list-panes) exit 0 ;;
   capture-pane)
     [ -f "$S/transcript" ] && cat "$S/transcript"
-    printf '❯ %s\n' "$(cat "$S/composer" 2>/dev/null)" ;;
+    printf '╭──────────────────────────────────────────────╮\n'
+    if [ -s "$S/composer" ]; then
+      # The visible row is soft-wrapped by the TUI. `typed.*` retains the
+      # original bytes, including line breaks, for the behavioural assertion.
+      draft=$(tr -d '\n' < "$S/composer")
+      printf '│ ❯ %s │\n' "$draft"
+    else
+      printf '│ ❯ │\n'
+    fi
+    printf '╰──────────────────────────────────────────────╯\n  ? for shortcuts\n' ;;
+  load-buffer)
+    while [ "$1" != "-b" ] && [ $# -gt 0 ]; do shift; done
+    [ "$1" = "-b" ] && shift
+    name="$1"; shift
+    cat > "$S/buffer.$name" ;;
+  paste-buffer)
+    while [ $# -gt 0 ]; do
+      if [ "$1" = "-b" ]; then name="$2"; shift 2; continue; fi
+      shift
+    done
+    cat "$S/buffer.$name" > "$S/typed.$name"
+    cat "$S/buffer.$name" >> "$S/composer"
+    rm -f "$S/buffer.$name" ;;
   send-keys)
     [ "$1" = "-t" ] && shift 2
     case "$1" in
       -l)
-        n=$(ls "$S" | grep -c '^typed\.')
-        printf '%s' "$2" > "$S/typed.$((n + 1))"
-        printf '%s' "$2" >> "$S/composer" ;;
+        # Reject the retired inline path: otherwise fence tests false-green.
+        exit 86 ;;
       Enter)
         cat "$S/composer" >> "$S/transcript"; echo >> "$S/transcript"; : > "$S/composer" ;;
     esac ;;
@@ -237,7 +258,7 @@ def pane(tmp_path):
 
 
 def typed(pane):
-    files = sorted(pane.state.glob("typed.*"), key=lambda p: int(p.suffix[1:]))
+    files = sorted(pane.state.glob("typed.*"), key=lambda p: p.stat().st_mtime_ns)
     return [f.read_bytes().decode("utf-8") for f in files]
 
 
@@ -455,9 +476,10 @@ def test_a_plain_console_line_is_typed_as_it_was(pane):
 
 
 def test_without_the_console_request_a_raw_message_is_not_touched(pane):
+    raw = "riga uno con un prefisso abbastanza lungo per l'attestazione\nriga due con un suffisso abbastanza lungo per l'attestazione"
     for source in ({}, {"JHT_TMUX_SEND_FROM": "user-chat"}, {"JHT_TMUX_SEND_FROM": "agente"}):
-        send(pane, "riga uno\nriga due", extra_env=source)
-    assert typed(pane) == ["riga uno\nriga due"] * 3, "messages between agents keep their line breaks"
+        send(pane, raw, extra_env=source)
+    assert typed(pane) == [raw] * 3, "messages between agents keep their line breaks"
 
 
 def test_a_console_message_that_looks_like_an_envelope_is_still_judged_by_its_claim(pane):

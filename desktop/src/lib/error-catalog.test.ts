@@ -27,6 +27,13 @@ const RUST = fileURLToPath(new URL("../../src-tauri/src/", import.meta.url));
 
 /** Literals that look like codes but never reach the person, and why. */
 const NOT_ERRORS: Record<string, string> = {
+  // The Windows autostart's nonfatal notice id and the Task Scheduler XML
+  // boolean in windows_runtime.rs; both are interpreted there, never shown
+  // through the error catalog.
+  autostart_inactive: "id of the nonfatal Windows autostart notice",
+  true: "Task Scheduler XML enabled value",
+  // The container engine executable the app resolves and spawns (direct_chat.rs, onboarding.rs).
+  docker: "name of the container engine program, not a code",
   // What ssh prints when the server turns an address away; read to pick ssh_rate_limited.
   kex_exchange_identification: "text of ssh stderr, not a code",
   // The reader's op cloud_sync and the fields of its reply (existing_team_runtime.rs): the page
@@ -160,7 +167,10 @@ const NOT_ERRORS: Record<string, string> = {
   // Names, attributes and non-error states.
   snake_case: "serde attribute",
   known_hosts: "file name",
+  jht: "compose project and service name",
   jht_voice_input: "native library name",
+  runtime_untrusted: "detail of the generic container-not-ready diagnostic, not its error code",
+  team_state: "runtime log step label",
   confirmation_required: "SSH host key probe status, not a failure",
   // Debug-only trace events (trace_local_runtime / trace_auth_store).
   cache_initialized: "debug trace event",
