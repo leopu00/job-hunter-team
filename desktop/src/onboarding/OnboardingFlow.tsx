@@ -92,6 +92,17 @@ function formatElapsed(milliseconds: number): string {
   return `${String(minutes).padStart(2, "0")}:${String(seconds % 60).padStart(2, "0")}`;
 }
 
+/** What the setup said and the person should know (install.ps1's notices, the autostart that did not hold): shown in every view of the setup, not only while a step runs. */
+function SetupNotices({ notices }: { notices: readonly string[] | undefined }) {
+  if (!notices?.length) return null;
+  return (
+    <div className="onboarding-runtime-notice" role="note">
+      <span className="onboarding-runtime-notice__mark" aria-hidden="true">!</span>
+      <div>{notices.map((notice) => <p key={notice}>{notice}</p>)}</div>
+    </div>
+  );
+}
+
 function RuntimeView({ host, platform, t, locale, runtime, activity, onRetry, onRestart, onExitFailure, onRuntimeAction, providerLogin, sshHostKey, onConfirmHostKey, onCancelHostKey, onProviderInput, onProviderClose, onProviderRestart, onRecreatePodmanMachine, onFreeDiskSpace, runtimeLogPath, onOpenRuntimeLog }: Pick<OnboardingFlowProps, "platform" | "runtime" | "activity" | "onRetry" | "onRestart" | "onExitFailure" | "onRuntimeAction" | "providerLogin" | "sshHostKey" | "onConfirmHostKey" | "onCancelHostKey" | "onProviderInput" | "onProviderClose" | "onProviderRestart" | "onRecreatePodmanMachine" | "onFreeDiskSpace" | "runtimeLogPath" | "onOpenRuntimeLog"> & { host: ExecutionHost; t: OnboardingCopy; locale: Locale }) {
   const [pending, setPending] = useState(false);
   const [confirmingRecreate, setConfirmingRecreate] = useState(false);
@@ -151,6 +162,7 @@ function RuntimeView({ host, platform, t, locale, runtime, activity, onRetry, on
           <div className="onboarding-ready-team" aria-label={t.readyAgentsAria}>
             {t.agents.map((agent) => <span key={agent}>{agent}</span>)}
           </div>
+          <SetupNotices notices={activity?.notices} />
         </section>
       </main>
     );
@@ -181,6 +193,7 @@ function RuntimeView({ host, platform, t, locale, runtime, activity, onRetry, on
             <h1>{t.providerLoginTitle}</h1>
             <p className="onboarding-progress__intro">{t.providerLoginIntro}</p>
             <p className="onboarding-progress__privacy">{t.noApiKey}</p>
+            <SetupNotices notices={activity?.notices} />
           </aside>
           <OAuthLoginTakeover
             provider={providerLogin.provider}
@@ -286,13 +299,7 @@ function RuntimeView({ host, platform, t, locale, runtime, activity, onRetry, on
             tabIndex={failed ? -1 : undefined}
           >{failed ? failureTitle : actionRequired ? activeLabel : t.preparing(activeLabel)}</h2>
           {failed && status}
-          {activity?.notices?.length ? (
-            // What install.ps1 said and the person should know (Windows 10): kept for the whole setup.
-            <div className="onboarding-runtime-notice" role="note">
-              <span className="onboarding-runtime-notice__mark" aria-hidden="true">!</span>
-              <div>{activity.notices.map((notice) => <p key={notice}>{notice}</p>)}</div>
-            </div>
-          ) : null}
+          <SetupNotices notices={activity?.notices} />
           <OnboardingArtwork name={runtimeArtwork(runtime)} />
           <section className="onboarding-runtime-progress" aria-label={t.progressAria}>
             <div className="onboarding-runtime-progress__heading">
