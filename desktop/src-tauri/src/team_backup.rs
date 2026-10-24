@@ -5,7 +5,9 @@
 //!   of the open file), `profile/`, `i18n-prefs.json`, `jht.config.json` with every secret key emptied, the
 //!   agents' `chat.jsonl` and the documents the applications point to when they sit in the team's home. Never:
 //!   `cloud.json`, `.pairing-token`, `credentials/`, the providers' sign-ins (`.claude`, `.codex`, `.kimi`),
-//!   `host.env`, `runtime/`, `logs/`, caches and packages.
+//!   `host.env`, `runtime/`, `logs/`, `secrets/`, caches and packages. A document an application points to goes in
+//!   only as a document (pdf, docx, doc, odt, txt, md, tex, rtf): the path is written by agents that read other
+//!   people's ads, so it is never trusted to name just anything under the home.
 //! - It goes where the person says, on THIS computer (the «Save as» window of the system; never inside the
 //!   team: the same disk is no safety net). It is one `.tar.gz` with a `manifest.json` that lists every file with its
 //!   size and sha256 and what was left out.
@@ -30,7 +32,7 @@ use serde::Serialize;
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     fs::{self, File, OpenOptions},
     io::{self, Read, Write},
     path::Path,
@@ -53,6 +55,8 @@ const CLEANUP_TIMEOUT: Duration = Duration::from_secs(60);
 const INSPECT_MAX_ENTRIES: usize = 50_000;
 const INSPECT_MAX_BYTES: u64 = 16 * 1024 * 1024 * 1024;
 const MANIFEST_MAX_BYTES: u64 = 8 * 1024 * 1024;
+/// What may follow the last member of the tar: its padding to a whole record.
+const DRAIN_MAX_BYTES: u64 = 1024 * 1024;
 
 static RUNNING: AtomicBool = AtomicBool::new(false);
 static CANCEL: AtomicBool = AtomicBool::new(false);
@@ -66,9 +70,10 @@ HOME='/jht_home'
 MAX_RAW=4*1024**3
 MAX_FILE=64*1024*1024
 MAX_ARCHIVE=2*1024**3
+DOC_EXT=('pdf','docx','doc','odt','txt','md','tex','rtf')
 BLOCK=524288
 SLACK=64*1024*1024
-DENY=('cloud.json','credentials','runtime','logs','host.env','suid','.claude','.codex','.kimi','.npm-global','.local','.cache','.config','.pairing-token','jobs.db')
+DENY=('cloud.json','credentials','secrets','runtime','logs','host.env','suid','.claude','.codex','.kimi','.npm-global','.local','.cache','.config','.pairing-token','jobs.db')
 SECRET=re.compile(r'(api[_-]?key|token|secret|passw|credential|authorization|bearer|private[_-]?key)',re.I)
 def emit(value): print(json.dumps(value,separators=(',',':'))); raise SystemExit(0)
 def fail(code): emit({'ok':False,'error':code})
@@ -157,6 +162,7 @@ def documents(db,found):
    if rel in known or any(p.startswith('.') for p in parts) or parts[0] in DENY:
     if rel not in known: excluded.append({'path':rel[:200],'reason':'not_allowed'})
     continue
+   if '.' not in parts[-1] or parts[-1].rsplit('.',1)[-1].lower() not in DOC_EXT: excluded.append({'path':rel[:200],'reason':'not_a_document'}); continue
    if os.path.islink(absolute) or os.path.realpath(absolute)!=os.path.join(home,rel) or not regular(absolute): excluded.append({'path':rel[:200],'reason':'not_a_plain_file'}); continue
    try: size=os.lstat(absolute).st_size
    except OSError: continue
@@ -569,19 +575,23 @@ fn inspect_archive(source: impl Read) -> Result<Inspection, DirectChatError> {
         }
     }
     // the rest of the stream, so that the gzip trailer (its CRC and its length) is checked too
-    io::copy(&mut reader, &mut io::sink()).map_err(|_| not())?;
+    // (a tar ends in a few blocks of zeros; much more behind it is not one)
+    io::copy(&mut (&mut reader).take(DRAIN_MAX_BYTES), &mut io::sink()).map_err(|_| not())?;
+    if reader.read(&mut [0u8; 1]).map_err(|_| not())? != 0 {
+        return Err(not());
+    }
     let manifest: Value = serde_json::from_slice(&manifest_bytes.ok_or_else(not)?).map_err(|_| not())?;
     if manifest.get("format").and_then(Value::as_u64) != Some(1) {
         return Err(not());
     }
     let listed = manifest.get("files").and_then(Value::as_array).ok_or_else(not)?;
     let mut files = Vec::new();
-    let mut seen: Vec<&str> = Vec::new();
+    let mut seen: HashSet<&str> = HashSet::new();
     for entry in listed {
         let path = entry.get("path").and_then(Value::as_str).ok_or_else(not)?;
         let bytes = entry.get("bytes").and_then(Value::as_u64).ok_or_else(not)?;
         let sha256 = entry.get("sha256").and_then(Value::as_str).filter(|s| hex64(s)).ok_or_else(not)?;
-        seen.push(path);
+        seen.insert(path);
         match members.get(path) {
             None => problems.push(format!("missing:{path}")),
             Some(member) if member.bytes != bytes || member.sha256 != sha256 => problems.push(format!("changed:{path}")),
@@ -589,7 +599,7 @@ fn inspect_archive(source: impl Read) -> Result<Inspection, DirectChatError> {
         }
         files.push(json!({"path": path, "bytes": bytes}));
     }
-    let mut unlisted: Vec<&String> = members.keys().filter(|name| !seen.contains(&name.as_str())).collect();
+    let mut unlisted: Vec<&String> = members.keys().filter(|name| !seen.contains(name.as_str())).collect();
     unlisted.sort();
     problems.extend(unlisted.into_iter().map(|name| format!("unlisted:{name}")));
     problems.truncate(20);
@@ -835,6 +845,9 @@ put('agents/capitano/diary.md','not in the backup')
 put('documents/cv-1.md','CV for position 1')
 put('documents/cl-1.md','CL for position 1')
 put('documents/.hidden.md','HIDDEN-CONTENT')
+put('secrets/x.json','SECRET-DRIVE')
+put('documents/data.json','JSON-DOC')
+put('documents/noext','NOEXT-DOC')
 put('credentials/doc.md','must not go')
 os.symlink(os.path.join(home,'cloud.json'),os.path.join(home,'documents/link.md'))
 db=sqlite3.connect(os.path.join(home,'jobs.db'))
@@ -845,7 +858,8 @@ INSERT INTO positions(title) VALUES ('Dev'),('Ops');
 """)
 for row in [(1,home+'/documents/cv-1.md',home+'/documents/cl-1.md',None,None),
             (2,'/etc/passwd',home+'/documents/.hidden.md',home+'/credentials/doc.md',home+'/documents/link.md'),
-            (3,home+'/profile/cv/cv.md',home+'/documents/missing.md',home+'/documents/../cloud.json',None)]:
+            (3,home+'/profile/cv/cv.md',home+'/documents/missing.md',home+'/documents/../cloud.json',None),
+            (4,home+'/secrets/x.json',home+'/documents/data.json',home+'/documents/noext',None)]:
     db.execute('INSERT INTO applications(position_id,cv_path,cl_path,cv_pdf_path,cl_pdf_path) VALUES(?,?,?,?,?)',row)
 db.commit()
 "#;
@@ -903,7 +917,7 @@ db.commit()
         );
         // no secret anywhere in the archive, nor a file that was never on the list
         let everything = String::from_utf8_lossy(&python(&["-c", "import sys,tarfile,io\nt=tarfile.open(fileobj=io.BytesIO(sys.stdin.buffer.read()),mode='r:gz')\nfor m in t.getmembers():\n  sys.stdout.write(t.extractfile(m).read().decode('utf-8','replace'))"], &archive, None).1).into_owned();
-        for secret in ["SECRET-KEY-1", "SECRET-TOKEN-2", "SECRET-PASS-3", "SECRET-CLOUD", "SECRET-PAIR", "SECRET-CRED", "SECRET-CLAUDE", "SECRET-CODEX", "a log line", "must not go", "not in the backup", "HIDDEN-CONTENT"] {
+        for secret in ["SECRET-KEY-1", "SECRET-TOKEN-2", "SECRET-PASS-3", "SECRET-CLOUD", "SECRET-PAIR", "SECRET-CRED", "SECRET-CLAUDE", "SECRET-CODEX", "SECRET-DRIVE", "JSON-DOC", "NOEXT-DOC", "a log line", "must not go", "not in the backup", "HIDDEN-CONTENT"] {
             assert!(!everything.contains(secret), "{secret} is in the backup");
         }
         assert!(everything.contains("\"model\": \"m\"") && everything.contains("\"api_key\": null") && everything.contains("\"refresh_token\": null") && everything.contains("\"password\": null"), "the config keeps its shape, with the secrets emptied");
@@ -916,10 +930,11 @@ db.commit()
         assert_eq!(inspection.manifest["format"], 1);
         assert_eq!(inspection.manifest["files"].as_array().unwrap().len() as u64, snapshot["files"].as_u64().unwrap());
         let excluded: Vec<String> = inspection.manifest["excluded"].as_array().unwrap().iter().map(|item| format!("{}:{}", item["path"].as_str().unwrap(), item["reason"].as_str().unwrap())).collect();
-        for expected in ["/etc/passwd:outside_home", "documents/.hidden.md:not_allowed", "credentials/doc.md:not_allowed", "documents/link.md:not_a_plain_file"] {
+        for expected in ["/etc/passwd:outside_home", "documents/.hidden.md:not_allowed", "credentials/doc.md:not_allowed", "documents/link.md:not_a_plain_file", "secrets/x.json:not_allowed", "documents/data.json:not_a_document", "documents/noext:not_a_document"] {
             assert!(excluded.contains(&expected.to_owned()), "{expected} not in {excluded:?}");
         }
         assert!(inspection.manifest["alwaysExcluded"].as_array().unwrap().iter().any(|name| name == "cloud.json"));
+        assert!(inspection.manifest["alwaysExcluded"].as_array().unwrap().iter().any(|name| name == "secrets"));
         // the team's home was only read
         assert_eq!(fs::read_to_string(home.join("i18n-prefs.json")).unwrap(), "{\"locale\":\"it\"}");
         let _ = fs::remove_dir_all(&home);
@@ -1041,6 +1056,13 @@ sys.stdout.buffer.write(out.getvalue())
         assert_eq!(nope(&tar_gz(files, Some(json!({"format": 2, "files": []})))), "backup_not_a_backup");
         assert_eq!(nope(&tar_gz(files, Some(json!({"format": 1})))), "backup_not_a_backup");
         assert_eq!(nope(&tar_gz(files, Some(json!({"format": 1, "files": [{"path": "a", "bytes": 1, "sha256": "zz"}]})))), "backup_not_a_backup");
+        // a backup with a megabyte and more behind its last member is not one (and is not read to the end)
+        let mut padded = Vec::new();
+        {
+            let program = "import gzip,io,json,sys,tarfile\nout=io.BytesIO()\nt=tarfile.open(fileobj=out,mode='w:gz',format=tarfile.USTAR_FORMAT)\nfor n,d in (('jobs.db',b'x'),):\n  i=tarfile.TarInfo(n);i.size=len(d);t.addfile(i,io.BytesIO(d))\nm=json.dumps({'format':1,'files':[],'excluded':[],'alwaysExcluded':[]}).encode()\ni=tarfile.TarInfo('manifest.json');i.size=len(m);t.addfile(i,io.BytesIO(m));t.close()\nraw=gzip.decompress(out.getvalue())+b'\\0'*(3*1024*1024)\nsys.stdout.buffer.write(gzip.compress(raw))";
+            padded.extend(python(&["-c", program], b"", None).1);
+        }
+        assert_eq!(nope(&padded), "backup_not_a_backup");
         // a GNU tar with long names (not what this app writes) is refused, not half read
         let gnu = python(&["-c", "import gzip,io,sys,tarfile\nout=io.BytesIO()\nt=tarfile.open(fileobj=out,mode='w:gz',format=tarfile.PAX_FORMAT)\ni=tarfile.TarInfo('a'*150);i.size=1;t.addfile(i,io.BytesIO(b'x'));t.close();sys.stdout.buffer.write(out.getvalue())"], b"", None).1;
         assert_eq!(nope(&gnu), "backup_not_a_backup");
