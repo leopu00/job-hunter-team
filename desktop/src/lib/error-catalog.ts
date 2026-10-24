@@ -1113,6 +1113,30 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
     "This can be done only from the app’s main window.",
     "Go back to the main window and try again.",
   ),
+  team_settings_request_invalid: copy(
+    "La richiesta non è valida e non è stata mandata alla squadra.",
+    "Ricarica la pagina e riprova.",
+    "The request is not valid and was not sent to the team.",
+    "Reload the page and try again.",
+  ),
+  team_settings_value_invalid: copy(
+    "Un valore scelto non è tra quelli previsti: non è stato salvato niente.",
+    "Controlla orari e modelli e riprova.",
+    "A chosen value is not one of the allowed ones: nothing was saved.",
+    "Check the hours and the models, then try again.",
+  ),
+  team_settings_read_only: copy(
+    "Questa squadra è collegata in sola lettura: orari e modelli non si cambiano da qui.",
+    "Collega la squadra con «Conferma e collega» e riprova.",
+    "This team is connected read only: hours and models cannot be changed from here.",
+    "Connect the team with “Confirm and connect” and try again.",
+  ),
+  team_settings_unavailable: copy(
+    "Gli orari e i modelli della squadra non si sono potuti leggere o salvare.",
+    "Riprova tra poco.",
+    "The team's hours and models could not be read or saved.",
+    "Try again in a moment.",
+  ),
   cloud_token_read_only: copy(
     "Per rinnovare il token la squadra deve essere collegata in modo completo.",
     "Collega la squadra con «Conferma e collega» e riprova.",

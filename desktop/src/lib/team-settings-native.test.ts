@@ -1,0 +1,71 @@
+import { describe, expect, it, vi } from "vitest";
+import { pickTeamSettings, readTeamSettings, writeTeamSettings } from "./team-settings-native";
+
+// The page's door to the team's hours and role models (T-gap voce 2). Synthetic values only.
+const LISTS = {
+  roles: ["capitano", "scout", "analista", "scorer", "scrittore", "critico", "sentinella", "assistente", "mentor", "closer"],
+  models: ["sol", "terra", "luna"],
+  efforts: ["low", "medium", "high"],
+  weekdays: ["mon", "tue", "wed", "thu", "fri", "sat", "sun"],
+  min_window_hours: 4,
+};
+const HOURS = { timezone: "Europe/Rome", windows: [{ days: ["mon", "tue"], start: "09:00", end: "18:00" }] };
+const reply = (extra: Record<string, unknown> = {}) => ({
+  ok: true, target: "local", connectionKey: "k1", working_hours: HOURS, role_models: { scout: { model: "luna", effort: "low" } }, lists: LISTS, ...extra,
+});
+
+describe("the reply of the native command", () => {
+  it("is read into the shape the page uses", () => {
+    expect(pickTeamSettings(reply())).toEqual({
+      ok: true,
+      settings: { target: "local", connectionKey: "k1", workingHours: HOURS, roleModels: { scout: { model: "luna", effort: "low" } } },
+    });
+    expect(pickTeamSettings(reply({ working_hours: null, role_models: {}, target: "vps" }))).toEqual({
+      ok: true, settings: { target: "vps", connectionKey: "k1", workingHours: null, roleModels: {} },
+    });
+  });
+
+  it("is an error, never a default, when anything is off the closed shape", () => {
+    for (const broken of [
+      null, [], "x", {}, reply({ ok: undefined }), reply({ target: "cloud" }), reply({ connectionKey: "" }), reply({ connectionKey: 4 }),
+      reply({ working_hours: 5 }), reply({ working_hours: { timezone: "UTC" } }), reply({ working_hours: { timezone: "UTC", windows: [{ days: [], start: "09:00", end: "18:00" }] } }),
+      reply({ working_hours: { timezone: "UTC", windows: [{ days: ["mon"], start: "9:00", end: "18:00" }] } }),
+      reply({ working_hours: { timezone: "UTC", windows: [], extra: 1 } }),
+      reply({ role_models: { cuoco: { model: "luna" } } }), reply({ role_models: { scout: { model: "gpt" } } }), reply({ role_models: { scout: { effort: "max" } } }),
+      reply({ role_models: { scout: { model: "luna", temperature: 1 } } }), reply({ role_models: [] }),
+      reply({ lists: { ...LISTS, roles: ["capitano"] } }), reply({ lists: { ...LISTS, models: ["luna", "terra", "sol"] } }), reply({ lists: { ...LISTS, min_window_hours: 2 } }), reply({ lists: null }),
+    ]) {
+      expect(pickTeamSettings(broken), JSON.stringify(broken)).toEqual({ ok: false, error: "team_settings_unavailable" });
+    }
+  });
+
+  it("keeps the native refusals the page can say, and calls any other one `other`", () => {
+    for (const error of ["team_settings_read_only", "team_settings_value_invalid", "existing_team_runtime_outdated", "existing_team_runtime_target_changed", "own_vps_claim_required", "ssh_unavailable"]) {
+      expect(pickTeamSettings({ ok: false, error })).toEqual({ ok: false, error });
+    }
+    expect(pickTeamSettings({ ok: false, error: "<b>something_new</b>" })).toEqual({ ok: false, error: "other" });
+    expect(pickTeamSettings({ ok: false })).toEqual({ ok: false, error: "other" });
+  });
+});
+
+describe("read and write", () => {
+  it("read asks the closed op and nothing else; a throw is unavailable", async () => {
+    const call = vi.fn(async () => reply());
+    expect((await readTeamSettings(call)).ok).toBe(true);
+    expect(call).toHaveBeenCalledWith({ op: "read" });
+    expect(await readTeamSettings(async () => { throw new Error("ssh"); })).toEqual({ ok: false, error: "team_settings_unavailable" });
+  });
+
+  it("write sends only what changes, with the key, and shows what the box answers", async () => {
+    const call = vi.fn(async () => reply({ role_models: { scout: { model: "terra" } } }));
+    const result = await writeTeamSettings({ roleModels: { scout: { model: "sol" } } }, "k1", call);
+    expect(call).toHaveBeenCalledWith({ op: "write", settings: { role_models: { scout: { model: "sol" } } }, connectionKey: "k1" });
+    // what the box holds, not what was sent
+    expect(result).toMatchObject({ ok: true, settings: { roleModels: { scout: { model: "terra" } } } });
+    await writeTeamSettings({ workingHours: null }, "k2", call);
+    expect(call).toHaveBeenLastCalledWith({ op: "write", settings: { working_hours: null }, connectionKey: "k2" });
+    await writeTeamSettings({ workingHours: HOURS as never, roleModels: { mentor: {} } }, "k3", call);
+    expect(call).toHaveBeenLastCalledWith({ op: "write", settings: { working_hours: HOURS, role_models: { mentor: {} } }, connectionKey: "k3" });
+    expect(await writeTeamSettings({}, "k", async () => { throw new Error("x"); })).toEqual({ ok: false, error: "team_settings_unavailable" });
+  });
+});

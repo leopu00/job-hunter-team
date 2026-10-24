@@ -27,6 +27,14 @@ const RUST = fileURLToPath(new URL("../../src-tauri/src/", import.meta.url));
 
 /** Literals that look like codes but never reach the person, and why. */
 const NOT_ERRORS: Record<string, string> = {
+  // team_settings.rs: the verbs of `jht team-settings`, the keys of the settings the page edits, and the
+  // box's own word for a refused value, which is mapped to team_settings_value_invalid before the person sees it.
+  apply: "verb of the team-settings command, not an error",
+  get: "verb of the team-settings command, not an error",
+  role_models: "key of the team settings JSON, not an error",
+  working_hours: "key of the team settings JSON, not an error",
+  min_window_hours: "key of the lists the team settings answer with, not an error",
+  value_invalid: "the box's word for a refused value (team_settings.rs), mapped to team_settings_value_invalid",
   // The Windows autostart's nonfatal notice id in windows_runtime.rs; it is
   // interpreted there, never shown through the error catalog.
   autostart_inactive: "id of the nonfatal Windows autostart notice",
