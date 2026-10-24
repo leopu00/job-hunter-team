@@ -72,7 +72,7 @@ describe("team export", () => {
   });
 
   it("every code the export can answer has a sentence in the error catalog", () => {
-    for (const code of ["export_source_invalid", "export_range_invalid", "export_too_large", "export_save_failed", "export_incomplete", "not_cloud", "disconnected", "tunnel_unavailable", "read_failed", "invalid_request"]) {
+    for (const code of ["export_source_invalid", "export_range_invalid", "export_no_database", "export_too_large", "export_save_failed", "export_incomplete", "not_cloud", "disconnected", "tunnel_unavailable", "read_failed", "invalid_request"]) {
       expect(code in ERROR_CATALOG, code).toBe(true);
     }
   });

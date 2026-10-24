@@ -1293,6 +1293,12 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
     "The export file was not saved.",
     "Choose a folder you can write to and that has free space, then try again.",
   ),
+  export_no_database: copy(
+    "Non trovo il database della squadra dove l’app lo cerca, quindi non ho salvato nessun file: un file vuoto sembrerebbe una squadra senza dati.",
+    "Controlla che la squadra sia stata avviata almeno una volta e che il suo database sia nella posizione predefinita, poi riprova.",
+    "The team’s database is not where the app looks for it, so no file was saved: an empty file would look like a team with no data.",
+    "Check that the team has been started at least once and that its database is in the default place, then try again.",
+  ),
   export_incomplete: copy(
     "Non è stato possibile leggere tutti i dati, quindi non ho salvato nessun file: un file incompleto sembrerebbe completo.",
     "Riprova fra un minuto.",
