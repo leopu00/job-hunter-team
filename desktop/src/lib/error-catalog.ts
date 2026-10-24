@@ -1216,6 +1216,31 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
     "Check the user and SSH key, then try again.",
   ),
 
+  saved_vps_invalid: copy(
+    "I dati di questa VPS non sono completi o non sono validi, quindi non sono stati salvati.",
+    "Controlla nome, indirizzo, utente e posizione della chiave, poi riprova.",
+    "The details of this VPS are incomplete or not valid, so they were not saved.",
+    "Check the name, address, user and key location, then try again.",
+  ),
+  saved_vps_duplicate: copy(
+    "Questa VPS è già nell’elenco di quelle salvate.",
+    "Usa quella già salvata, oppure cambia indirizzo o utente se è un’altra VPS.",
+    "This VPS is already in the saved list.",
+    "Use the saved one, or change the address or user if it is a different VPS.",
+  ),
+  saved_vps_not_found: copy(
+    "Questa VPS salvata non c’è più nell’elenco.",
+    "Riapri l’elenco delle VPS salvate e scegli di nuovo.",
+    "This saved VPS is no longer in the list.",
+    "Reopen the saved VPS list and choose again.",
+  ),
+  saved_vps_storage_unavailable: copy(
+    "L’elenco delle VPS salvate non si può leggere o scrivere su questo computer.",
+    "Controlla che la cartella dei dati dell’app sia accessibile e abbia spazio libero, poi riprova.",
+    "The saved VPS list cannot be read or written on this computer.",
+    "Check that the app's data folder is accessible and has free space, then try again.",
+  ),
+
   // ── VPS access details and SSH identity ──────────────────────────────────
   invalid_host: SSH_FIELD,
   invalid_user: SSH_FIELD,

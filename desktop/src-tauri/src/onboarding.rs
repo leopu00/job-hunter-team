@@ -4,7 +4,7 @@ use crate::windows_runtime::exit_failure;
 use crate::runtime_log::{ExistingTeamPhase, RuntimeLog};
 use crate::runtime_host::{
     run_program, run_program_keeping_stderr, run_ssh, run_ssh_command, set_private_dir_permissions, set_private_permissions, ssh_base_args,
-    validate_host, ExecutionHost, ProcessResult, ValidatedHost,
+    pinned_host_fingerprint, validate_host, validate_host_for_scope, ExecutionHost, ProcessResult, ValidatedHost,
 };
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -279,6 +279,117 @@ pub(crate) async fn existing_team_reconfirm_summary(
     })
     .await
     .unwrap_or_else(|_| Err(failure("existing_team_reconfirm_setup")));
+    let _scope = scopes.lock_expected(&expected).map_err(failure)?;
+    result
+}
+
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct ExistingTeamLinkStatus {
+    address_masked: String,
+    user: String,
+    fingerprint: Option<String>,
+    state: &'static str,
+    last_ok_at: Option<u64>,
+    last_error_code: Option<&'static str>,
+    mode: &'static str,
+    container: Option<String>,
+    image: Option<String>,
+    revision: Option<String>,
+    chat_ready: bool,
+}
+
+fn short(value: &str, limit: usize) -> String {
+    value.chars().take(limit).collect()
+}
+
+fn masked_address(host: &ExecutionHost) -> Result<String, &'static str> {
+    let ExecutionHost::Vps { address, .. } = host else {
+        return Err("existing_team_vps_required");
+    };
+    let parts: Vec<_> = address.split('.').collect();
+    if parts.len() == 4 && parts.iter().all(|part| part.parse::<u8>().is_ok()) {
+        return Ok(format!("{}.{}.xxx.xxx", parts[0], parts[1]));
+    }
+    Ok(format!("{}…", short(address, 3)))
+}
+
+fn existing_team_link_status_with(
+    app: &tauri::AppHandle,
+    scope: &AccountScope,
+) -> Result<ExistingTeamLinkStatus, &'static str> {
+    let saved = saved_existing_team(app, scope)?;
+    let target = crate::existing_team_runtime::selected(app, scope, &saved.host)?
+        .ok_or("existing_team_runtime_selection_required")?;
+    let validated = validate_host_for_scope(app, &saved.host, scope)?;
+    let fingerprint = pinned_host_fingerprint(&validated).ok();
+    Ok(ExistingTeamLinkStatus {
+        address_masked: masked_address(&saved.host)?,
+        user: match saved.host {
+            ExecutionHost::Vps { user, .. } => short(&user, 32),
+            ExecutionHost::Local => return Err("existing_team_vps_required"),
+        },
+        fingerprint,
+        state: "linked",
+        last_ok_at: None,
+        last_error_code: None,
+        mode: if crate::existing_team_runtime::full_link_granted(scope, &target) { "full" } else { "read" },
+        container: Some(short(&target.runtime.container_id, 12)),
+        image: Some(short(&target.runtime.image_id, 19)),
+        revision: Some(short(&target.runtime.oci_revision, 12)),
+        chat_ready: false,
+    })
+}
+
+/// Reads the saved existing-team link only. It performs no SSH operation and
+/// returns only masked or bounded connection fields.
+#[tauri::command]
+pub(crate) async fn existing_team_link_status(
+    window: tauri::Window,
+    app: tauri::AppHandle,
+    scopes: State<'_, AccountScopeState>,
+) -> Result<ExistingTeamLinkStatus, OnboardingError> {
+    if !crate::direct_chat::window_may_write(window.label()) {
+        return Err(failure("window_not_allowed"));
+    }
+    let expected = scopes.active().map_err(failure)?;
+    let scope_state = scopes.inner().clone();
+    let worker_expected = expected.clone();
+    let result = tauri::async_runtime::spawn_blocking(move || {
+        let _scope = scope_state.lock_expected(&worker_expected).map_err(failure)?;
+        existing_team_link_status_with(&app, &worker_expected).map_err(failure)
+    })
+    .await
+    .unwrap_or_else(|_| Err(failure("existing_team_runtime_unavailable")));
+    let _scope = scopes.lock_expected(&expected).map_err(failure)?;
+    result
+}
+
+/// Explicitly forgets a saved existing-team link from this computer. The VPS
+/// is untouched: selection, candidate and host configuration are removed in
+/// that order under the account lock.
+#[tauri::command]
+pub(crate) async fn existing_team_unlink(
+    window: tauri::Window,
+    app: tauri::AppHandle,
+    scopes: State<'_, AccountScopeState>,
+) -> Result<(), OnboardingError> {
+    if !crate::direct_chat::window_may_write(window.label()) {
+        return Err(failure("window_not_allowed"));
+    }
+    let expected = scopes.active().map_err(failure)?;
+    let scope_state = scopes.inner().clone();
+    let worker_expected = expected.clone();
+    let result = tauri::async_runtime::spawn_blocking(move || {
+        let _scope = scope_state.lock_expected(&worker_expected).map_err(failure)?;
+        let root = crate::existing_team_runtime::root(&app).map_err(failure)?;
+        crate::existing_team_runtime::clear_link_at(&root, &worker_expected).map_err(failure)?;
+        crate::direct_chat::clear_persisted_host_at(&root, &worker_expected).map_err(failure)?;
+        crate::existing_team_runtime::revoke_full_link();
+        Ok(())
+    })
+    .await
+    .unwrap_or_else(|_| Err(failure("existing_team_runtime_unavailable")));
     let _scope = scopes.lock_expected(&expected).map_err(failure)?;
     result
 }
@@ -1820,9 +1931,7 @@ fn install_local_windows(
             .is_some_and(|dir| release_channel::installed_runtime_reusable(channel.as_ref(), &dir))
         {
             show_windows_support_notice_for_reused_runtime(phase);
-            if !crate::windows_runtime::register_autostart(&wrapper) {
-                phase("ui_notice_autostart_inactive");
-            }
+            register_autostart_noted(&wrapper, log, phase);
             trace_local_runtime("runtime", "install_reused");
             return Ok(wrapper);
         }
@@ -1873,10 +1982,30 @@ fn install_local_windows(
         result
     })?;
     let wrapper = wrapper_path(app).ok_or_else(|| failure("runtime_missing"))?;
-    if !crate::windows_runtime::register_autostart(&wrapper) {
+    register_autostart_noted(&wrapper, log, phase);
+    Ok(wrapper)
+}
+
+/// The logon task of this user, registered after an install or a reuse. How it
+/// ended goes to the runtime log by its closed step and exit code; when it did
+/// not, the person is told (`autostart_inactive`) and the setup goes on.
+#[cfg(windows)]
+fn register_autostart_noted(wrapper: &Path, log: Option<&RuntimeLog>, phase: &dyn Fn(&'static str)) {
+    let started = Instant::now();
+    let result = crate::windows_runtime::register_autostart(wrapper);
+    if let Some(log) = log {
+        let (step, ended) = match &result {
+            Ok(()) => ("autostart registered".to_owned(), Ok(0)),
+            Err(failure) => (
+                format!("autostart {}", failure.step),
+                failure.exit.map_or(Err("process_start_failed"), Ok),
+            ),
+        };
+        log.record(&step, ended, &[], &[], started.elapsed());
+    }
+    if result.is_err() {
         phase("ui_notice_autostart_inactive");
     }
-    Ok(wrapper)
 }
 
 /// A file from `url`, at most MAX_INSTALLER_BYTES, refused before the network
@@ -8352,6 +8481,34 @@ mod existing_team_reconfirm_tests {
         assert!(saved.contains("pinned_host_fingerprint(&validated)"), "the fingerprint is the pinned one");
         for forbidden in ["run_ssh_command", "probe", "keyscan"] {
             assert!(!saved.contains(forbidden), "the key is never read from the server: {forbidden}");
+        }
+    }
+
+    #[test]
+    fn link_status_and_unlink_are_the_registered_main_window_bridge() {
+        let source = include_str!("onboarding.rs").split("mod existing_team_reconfirm_tests").next().unwrap();
+        let status = body(source, "pub(crate) async fn existing_team_link_status(", "\n}\n");
+        let unlink = body(source, "pub(crate) async fn existing_team_unlink(", "\n}\n");
+        let status_window = status.find("window_may_write(window.label())").expect("status is main-window only");
+        let status_scope = status.find("scopes.active()").expect("status locks an account");
+        assert!(status_window < status_scope);
+        for forbidden in ["run_ssh", "run_ssh_command", "keyscan"] {
+            assert!(!status.contains(forbidden), "the status command must stay local: {forbidden}");
+        }
+        let unlink_window = unlink.find("window_may_write(window.label())").expect("unlink is main-window only");
+        let unlink_scope = unlink.find("scopes.active()").expect("unlink locks an account");
+        let selection = unlink.find("clear_link_at").expect("selection then candidate are removed");
+        let host = unlink.find("clear_persisted_host_at").expect("host configuration is removed last");
+        assert!(unlink_window < unlink_scope && selection < host);
+
+        let commands = include_str!("lib.rs");
+        for name in ["onboarding::existing_team_link_status", "onboarding::existing_team_unlink"] {
+            assert!(commands.contains(name), "native command registered: {name}");
+        }
+        let bridge = include_str!("../../src/lib/vps-link-status.ts");
+        for name in ["existing_team_link_status", "existing_team_unlink"] {
+            assert!(bridge.contains(&format!("invoke<",)), "the bridge invokes native commands");
+            assert!(bridge.contains(name), "bridge command name matches native command: {name}");
         }
     }
 

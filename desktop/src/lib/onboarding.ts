@@ -159,6 +159,8 @@ export interface OnboardingRuntimeSnapshot {
 /** UI boundary: no Supabase, IPC, secrets or routing enter the component. */
 export interface OnboardingFlowProps {
   account: OnboardingAccount;
+  /** Local labels stay in renderer storage; profileId and native scope do not change. */
+  onRenameLocalProfile?: (displayName: string) => void;
   platform: DesktopPlatform;
   runtime: OnboardingRuntimeState;
   activity?: OnboardingActivityState | null;

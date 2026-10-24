@@ -87,7 +87,7 @@ vi.mock("../lib/onboarding-runtime", () => ({
 }));
 vi.mock("../lib/existing-team", async (importOriginal) => {
   const original = await importOriginal<typeof import("../lib/existing-team")>();
-  return { ...original, existingTeamBridge: { ...original.existingTeamBridge, reopen: vi.fn() } };
+  return { ...original, existingTeamBridge: { ...original.existingTeamBridge, reopen: vi.fn(), reconfirmSummary: vi.fn() } };
 });
 vi.mock("../lib/direct-chat", () => ({
   connectDirectChat: vi.fn(),
@@ -120,6 +120,7 @@ vi.mock("../lib/runtime-log", () => ({
 vi.mock("../lib/desktop-platform", () => ({ readDesktopPlatform: vi.fn() }));
 vi.mock("../shell/Shell", async () => {
   const { useReconfirmExistingTeam } = await import("../lib/reconfirm-existing-team");
+  const { useConnectTeam } = await import("../lib/connect-team");
   const { useProviderSetup } = await import("../lib/provider-setup");
   const ready = (profileReady: boolean) => ({
     runtimeInstalled: true, containerRunning: true, providerConfigured: true, providerAuthenticated: true,
@@ -128,6 +129,8 @@ vi.mock("../shell/Shell", async () => {
   function MockShell({ onLogout, onCloseReadOnly }: { onLogout?: () => Promise<void>; onCloseReadOnly?: () => void }) {
     // What the chat's «Collega il team» reaches in the read-only view (AgentChatPane uses the same context).
     const reconfirm = useReconfirmExistingTeam();
+    // What the dashboard's «Collega un team» reaches in a Shell with no team linked.
+    const connectTeam = useConnectTeam();
     // What Settings › Provider reaches: only the Shell of the team of this computer has it.
     const providerSetup = useProviderSetup();
     return (
@@ -135,6 +138,7 @@ vi.mock("../shell/Shell", async () => {
         Shell
         {onLogout && <button type="button" onClick={() => void onLogout()}>local-logout</button>}
         {onCloseReadOnly && <button type="button" onClick={onCloseReadOnly}>close-read-only</button>}
+        {connectTeam && <button type="button" onClick={connectTeam.open}>connect-a-team</button>}
         {reconfirm && <p>reconfirm-account:{reconfirm.accountLabel}</p>}
         {reconfirm && <button type="button" onClick={() => void reconfirm.onConnected(ready(true))}>reconfirm-connected</button>}
         {reconfirm && <button type="button" onClick={reconfirm.onSetup}>reconfirm-setup</button>}
@@ -745,6 +749,96 @@ describe("DashboardApp onboarding router", () => {
     expect(existingTeamReadOnly()).not.toBeNull();
     expect(existingTeamView()?.full).toBeUndefined();
     expect(screen.queryByRole("button", { name: "close-read-only" })).not.toBeInTheDocument();
+  });
+
+  describe("a set-up account whose saved team was updated on its VPS", () => {
+    const SAVED_HOST = { kind: "vps" as const, address: "host.example.invalid", user: "ubuntu", port: 22, keyPath: "/synthetic/key" };
+
+    it.each(["existing_team_runtime_changed", "existing_team_unavailable"])(
+      "%s offers «Ricollega la squadra»: the dialog opens on the saved team and host, and the team opens again from it",
+      async (code) => {
+        vi.mocked(useSession).mockReturnValue(signedInAs("set-up-updated-team"));
+        vi.mocked(loadOnboardingGate).mockResolvedValue({ phase: "ready" });
+        vi.mocked(existingTeamBridge.reopen).mockRejectedValue({ code });
+        vi.mocked(existingTeamBridge.reconfirmSummary).mockResolvedValue({ teamId: "team-saved-0001", host: SAVED_HOST, fingerprint: "SHA256:synthetic" });
+
+        render(<DashboardApp />);
+
+        const alert = await screen.findByRole("alert");
+        // styled like the dialog it leads to, not a bare page
+        expect(alert).toHaveClass("existing-team-modal");
+        expect(alert).toHaveTextContent("Squadra esistente salvata: non raggiungibile ora");
+        expect(screen.getByRole("button", { name: "Riprova" })).toBeInTheDocument();
+        expect(screen.getByRole("button", { name: "Continua senza la squadra" })).toBeInTheDocument();
+        fireEvent.click(screen.getByRole("button", { name: "Ricollega la squadra" }));
+
+        const modal = await screen.findByTestId("existing-team-modal");
+        expect(modal).toHaveTextContent("team:team-saved-0001");
+        // the failure that brought the person here is said above the form
+        expect(modal).toHaveTextContent("notice:Squadra esistente salvata: non raggiungibile ora");
+        expect(existingTeamBridge.reopen).toHaveBeenCalledOnce();
+
+        fireEvent.click(screen.getByRole("button", { name: "connect-existing-team-read-only" }));
+        expect(await screen.findByTestId("shell")).toBeInTheDocument();
+        expect(screen.queryByTestId("existing-team-modal")).not.toBeInTheDocument();
+      },
+    );
+
+    it("when nothing readable is saved the dialog still opens and asks for the team, and Annulla comes back to the failure", async () => {
+      vi.mocked(useSession).mockReturnValue(signedInAs("set-up-updated-team-2"));
+      vi.mocked(loadOnboardingGate).mockResolvedValue({ phase: "ready" });
+      vi.mocked(existingTeamBridge.reopen).mockRejectedValue({ code: "existing_team_runtime_changed" });
+      vi.mocked(existingTeamBridge.reconfirmSummary).mockRejectedValue({ code: "existing_team_reconfirm_setup" });
+
+      render(<DashboardApp />);
+      fireEvent.click(await screen.findByRole("button", { name: "Ricollega la squadra" }));
+      const modal = await screen.findByTestId("existing-team-modal");
+      expect(modal).not.toHaveTextContent("team:team-");
+      fireEvent.click(screen.getByRole("button", { name: "cancel-existing-team" }));
+      expect(await screen.findByRole("button", { name: "Ricollega la squadra" })).toBeInTheDocument();
+      expect(screen.queryByTestId("existing-team-modal")).not.toBeInTheDocument();
+    });
+
+    it("a profile that the cloud calls set up and that has NO saved team goes to the Shell, and «Collega un team» opens the dialog from there", async () => {
+      // the gate is ready from the cloud (profile and first run), the scope has no candidate: nothing in the
+      // app's data says a team was ever linked, so the setup's dialog is never reached by itself
+      vi.mocked(useSession).mockReturnValue(signedInAs("set-up-from-the-cloud"));
+      vi.mocked(loadOnboardingGate).mockResolvedValue({ phase: "ready" });
+      vi.mocked(existingTeamBridge.reopen).mockRejectedValue({ code: "existing_team_runtime_candidate_required" });
+      vi.mocked(existingTeamBridge.reconfirmSummary).mockRejectedValue({ code: "existing_team_reconfirm_setup" });
+
+      render(<DashboardApp />);
+
+      expect(await screen.findByTestId("shell")).toBeInTheDocument();
+      expect(screen.queryByTestId("existing-team-modal")).not.toBeInTheDocument();
+      fireEvent.click(screen.getByRole("button", { name: "connect-a-team" }));
+
+      // the dialog of the setup, with nothing prefilled: the team and the host are asked
+      const modal = await screen.findByTestId("existing-team-modal");
+      expect(modal).not.toHaveTextContent("team:team-");
+      expect(screen.getByTestId("shell")).toBeInTheDocument();
+      // Annulla leaves the Shell as it was
+      fireEvent.click(screen.getByRole("button", { name: "cancel-existing-team" }));
+      await waitFor(() => expect(screen.queryByTestId("existing-team-modal")).not.toBeInTheDocument());
+      // and the same dialog connects the team read only
+      fireEvent.click(screen.getByRole("button", { name: "connect-a-team" }));
+      await screen.findByTestId("existing-team-modal");
+      fireEvent.click(screen.getByRole("button", { name: "connect-existing-team-read-only" }));
+      await waitFor(() => expect(screen.queryByTestId("existing-team-modal")).not.toBeInTheDocument());
+      expect(await screen.findByTestId("shell")).toBeInTheDocument();
+      expect(existingTeamReadOnly()).not.toBeNull();
+    });
+
+    it("another failure of the saved team offers no rebind", async () => {
+      vi.mocked(useSession).mockReturnValue(signedInAs("set-up-other-failure"));
+      vi.mocked(loadOnboardingGate).mockResolvedValue({ phase: "ready" });
+      vi.mocked(existingTeamBridge.reopen).mockRejectedValue({ code: "host_key_mismatch" });
+
+      render(<DashboardApp />);
+      expect(await screen.findByRole("alert")).toHaveTextContent("Squadra esistente salvata: non raggiungibile ora");
+      expect(screen.queryByRole("button", { name: "Ricollega la squadra" })).not.toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Riprova" })).toBeInTheDocument();
+    });
   });
 
   it("a set-up account with no saved team opens the usual Shell on the cloud", async () => {

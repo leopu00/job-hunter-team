@@ -124,3 +124,57 @@ describe("the Windows 10 notice reaches the setup screen", () => {
     expect(parseOnboardingNativeProgress(native(1, "notice", KEY, { code: "x", retryable: true }))).toBeNull();
   });
 });
+
+/**
+ * The autostart that did not hold (a standard user cannot register the logon task) is told by
+ * the same notice, sent at the end of the engine step. The setup goes on to the provider login
+ * and to the ready screen within seconds: the sentence must still be there, not only on the
+ * screens of a running step.
+ */
+describe("the autostart notice outlives the engine step", () => {
+  const AUTOSTART = "ui_notice_autostart_inactive";
+  const played = () => play([
+    native(1, "start", "ui_engine_start"),
+    native(2, "notice", AUTOSTART),
+    native(3, "done", "ui_engine_done"),
+  ]);
+
+  it("is on the provider login screen", () => {
+    localStorage.setItem("jht-lang", "it");
+    const activity = played();
+    expect(activity.notices).toEqual([RUNTIME_TEXT.it[AUTOSTART]]);
+    const props: OnboardingFlowProps = {
+      account: { displayName: "Ada" },
+      platform: "windows",
+      runtime: { status: "action-required", stage: "provider-login", message: "Accedi." },
+      activity,
+      onSubmit: vi.fn().mockResolvedValue(undefined),
+      onRuntimeAction: vi.fn().mockResolvedValue(undefined),
+      providerLogin: { provider: "claude", status: "needs_user_action", actions: [], connectionState: "connected", startedAt: 0 },
+      sshHostKey: null,
+      onConfirmHostKey: vi.fn().mockResolvedValue(undefined),
+      onCancelHostKey: vi.fn(),
+      onProviderInput: vi.fn().mockResolvedValue(undefined),
+      onProviderClose: vi.fn().mockResolvedValue(undefined),
+      onProviderRestart: vi.fn().mockResolvedValue(undefined),
+      onRetry: vi.fn().mockResolvedValue(undefined),
+      onRestart: vi.fn().mockResolvedValue(undefined),
+      onExitFailure: vi.fn(),
+      locale: "it",
+    };
+    render(<OnboardingFlow {...props} />);
+    expect(screen.getByRole("note")).toHaveTextContent(RUNTIME_TEXT.it[AUTOSTART]);
+  });
+
+  it("is on the ready screen", () => {
+    localStorage.setItem("jht-lang", "it");
+    renderSetup(played(), { status: "ready" });
+    expect(screen.getByRole("note")).toHaveTextContent(RUNTIME_TEXT.it[AUTOSTART]);
+  });
+
+  it("is not there when nothing was said", () => {
+    localStorage.setItem("jht-lang", "it");
+    renderSetup(play([native(1, "start", "ui_engine_start"), native(2, "done", "ui_engine_done")]), { status: "ready" });
+    expect(screen.queryByRole("note")).not.toBeInTheDocument();
+  });
+});

@@ -27,11 +27,9 @@ const RUST = fileURLToPath(new URL("../../src-tauri/src/", import.meta.url));
 
 /** Literals that look like codes but never reach the person, and why. */
 const NOT_ERRORS: Record<string, string> = {
-  // The Windows autostart's nonfatal notice id and the Task Scheduler XML
-  // boolean in windows_runtime.rs; both are interpreted there, never shown
-  // through the error catalog.
+  // The Windows autostart's nonfatal notice id in windows_runtime.rs; it is
+  // interpreted there, never shown through the error catalog.
   autostart_inactive: "id of the nonfatal Windows autostart notice",
-  true: "Task Scheduler XML enabled value",
   // The container engine executable the app resolves and spawns (direct_chat.rs, onboarding.rs).
   docker: "name of the container engine program, not a code",
   // What ssh prints when the server turns an address away; read to pick ssh_rate_limited.

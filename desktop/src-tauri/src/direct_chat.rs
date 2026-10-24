@@ -809,6 +809,19 @@ pub(crate) fn persist_onboarding_host(
     persist_host(app, scope, host).map_err(|error| error.code)
 }
 
+/// Removes only this account's persisted connection configuration. It is used
+/// after the existing-team selection and candidate have been cleared.
+pub(crate) fn clear_persisted_host_at(
+    root: &Path,
+    scope: &AccountScope,
+) -> Result<(), &'static str> {
+    match fs::remove_file(connection_config_path_at(root, scope)) {
+        Ok(()) => Ok(()),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(_) => Err("storage_unavailable"),
+    }
+}
+
 fn load_host(
     app: &tauri::AppHandle,
     scope: &AccountScope,
@@ -3343,6 +3356,13 @@ mod tests {
         fs::remove_dir_all(root).unwrap();
     }
 
+    /// What the local chat steps (container lookup, exec) may take in a test:
+    /// the fake engine is a few `sh` runs, and a loaded CI runner or the turn's
+    /// parallel builds stretch them past two seconds. A refusal under test
+    /// never waits this long: it fails before any engine runs.
+    #[cfg(unix)]
+    const LOCAL_TEST_TIMEOUT: Duration = Duration::from_secs(30);
+
     // The direct local path is a normal native process on both systems where this test runs. The
     // fake private Podman shim proves the container discovery, exact exec argv, and non-ASCII stdin
     // all survive without asking a shell or a PowerShell wrapper to reconstruct the text.
@@ -3419,7 +3439,7 @@ mod tests {
                 client_message_id: "id-1",
             },
             Some(words.as_bytes()),
-            Duration::from_secs(2),
+            LOCAL_TEST_TIMEOUT,
         )
         .unwrap();
         assert_eq!(
@@ -3466,7 +3486,7 @@ mod tests {
                 &runtime,
                 ChatOperation::Read { agent: "capitano", cursor: None },
                 None,
-                Duration::from_secs(2),
+                LOCAL_TEST_TIMEOUT,
             )
             .unwrap_err(),
             "runtime_missing"
@@ -3515,7 +3535,7 @@ mod tests {
                 &runtime,
                 ChatOperation::Read { agent: "capitano", cursor: None },
                 None,
-                Duration::from_secs(2),
+                LOCAL_TEST_TIMEOUT,
             )
             .unwrap_err(),
             "container_unavailable"

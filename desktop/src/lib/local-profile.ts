@@ -44,6 +44,20 @@ export function readLocalProfile(store: LocalProfileStore = localStorage): Local
   }
 }
 
+/** Changes only the renderer-owned label; the native profile capability is immutable. */
+export function renameLocalProfile(
+  displayName: string,
+  store: LocalProfileStore = localStorage,
+): LocalProfile {
+  const current = readLocalProfile(store);
+  const name = cleanName(displayName);
+  if (!current) throw new Error("local-profile-missing");
+  if (!name) throw new Error("local-display-name-required");
+  const renamed = { ...current, displayName: name };
+  saveLocalProfile(renamed, store);
+  return renamed;
+}
+
 export function localIdentitySelected(store: LocalProfileStore = localStorage): boolean {
   try { return store.getItem(ACTIVE_KEY) === ACTIVE_LOCAL && readLocalProfile(store) !== null; }
   catch { return false; }

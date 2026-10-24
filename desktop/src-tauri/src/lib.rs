@@ -31,6 +31,7 @@ mod release_channel;
 mod release_channel_rules;
 mod runtime_host;
 mod runtime_log;
+mod saved_vps;
 mod text_file_export;
 mod voice_input;
 mod vps_link;
@@ -116,6 +117,8 @@ pub fn run() {
             onboarding::existing_team_assistant_start,
             onboarding::onboarding_existing_team_connect,
             onboarding::existing_team_reconfirm_summary,
+            onboarding::existing_team_link_status,
+            onboarding::existing_team_unlink,
             onboarding::onboarding_existing_team_readonly_connect,
             onboarding::onboarding_existing_team_reopen,
             onboarding::onboarding_podman_machine_recreate,
@@ -124,6 +127,10 @@ pub fn run() {
             onboarding::onboarding_local_uninstall,
             runtime_log::onboarding_runtime_log,
             runtime_log::onboarding_runtime_log_open,
+            saved_vps::saved_vps_list,
+            saved_vps::saved_vps_add,
+            saved_vps::saved_vps_rename,
+            saved_vps::saved_vps_remove,
             runtime_log::onboarding_support_context,
             runtime_log::onboarding_support_report_save,
             onboarding::onboarding_prepare,

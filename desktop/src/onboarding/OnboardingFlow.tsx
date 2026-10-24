@@ -24,6 +24,7 @@ import { LOGIN_TEXT } from "../components/login-screen.i18n";
 import { fill } from "../lib/text-slots";
 import { ONBOARDING_TEXT, type OnboardingCopy } from "./onboarding.i18n";
 import { WINDOWS_SETUP } from "./windows-setup";
+import { savedVpsBridge, type SavedVps } from "../lib/saved-vps";
 import { SetupSupportReport } from "./SetupSupportReport";
 import "./onboarding.css";
 
@@ -91,6 +92,17 @@ function formatElapsed(milliseconds: number): string {
   return `${String(minutes).padStart(2, "0")}:${String(seconds % 60).padStart(2, "0")}`;
 }
 
+/** What the setup said and the person should know (install.ps1's notices, the autostart that did not hold): shown in every view of the setup, not only while a step runs. */
+function SetupNotices({ notices }: { notices: readonly string[] | undefined }) {
+  if (!notices?.length) return null;
+  return (
+    <div className="onboarding-runtime-notice" role="note">
+      <span className="onboarding-runtime-notice__mark" aria-hidden="true">!</span>
+      <div>{notices.map((notice) => <p key={notice}>{notice}</p>)}</div>
+    </div>
+  );
+}
+
 function RuntimeView({ host, platform, t, locale, runtime, activity, onRetry, onRestart, onExitFailure, onRuntimeAction, providerLogin, sshHostKey, onConfirmHostKey, onCancelHostKey, onProviderInput, onProviderClose, onProviderRestart, onRecreatePodmanMachine, onFreeDiskSpace, runtimeLogPath, onOpenRuntimeLog }: Pick<OnboardingFlowProps, "platform" | "runtime" | "activity" | "onRetry" | "onRestart" | "onExitFailure" | "onRuntimeAction" | "providerLogin" | "sshHostKey" | "onConfirmHostKey" | "onCancelHostKey" | "onProviderInput" | "onProviderClose" | "onProviderRestart" | "onRecreatePodmanMachine" | "onFreeDiskSpace" | "runtimeLogPath" | "onOpenRuntimeLog"> & { host: ExecutionHost; t: OnboardingCopy; locale: Locale }) {
   const [pending, setPending] = useState(false);
   const [confirmingRecreate, setConfirmingRecreate] = useState(false);
@@ -150,6 +162,7 @@ function RuntimeView({ host, platform, t, locale, runtime, activity, onRetry, on
           <div className="onboarding-ready-team" aria-label={t.readyAgentsAria}>
             {t.agents.map((agent) => <span key={agent}>{agent}</span>)}
           </div>
+          <SetupNotices notices={activity?.notices} />
         </section>
       </main>
     );
@@ -180,6 +193,7 @@ function RuntimeView({ host, platform, t, locale, runtime, activity, onRetry, on
             <h1>{t.providerLoginTitle}</h1>
             <p className="onboarding-progress__intro">{t.providerLoginIntro}</p>
             <p className="onboarding-progress__privacy">{t.noApiKey}</p>
+            <SetupNotices notices={activity?.notices} />
           </aside>
           <OAuthLoginTakeover
             provider={providerLogin.provider}
@@ -285,13 +299,7 @@ function RuntimeView({ host, platform, t, locale, runtime, activity, onRetry, on
             tabIndex={failed ? -1 : undefined}
           >{failed ? failureTitle : actionRequired ? activeLabel : t.preparing(activeLabel)}</h2>
           {failed && status}
-          {activity?.notices?.length ? (
-            // What install.ps1 said and the person should know (Windows 10): kept for the whole setup.
-            <div className="onboarding-runtime-notice" role="note">
-              <span className="onboarding-runtime-notice__mark" aria-hidden="true">!</span>
-              <div>{activity.notices.map((notice) => <p key={notice}>{notice}</p>)}</div>
-            </div>
-          ) : null}
+          <SetupNotices notices={activity?.notices} />
           <OnboardingArtwork name={runtimeArtwork(runtime)} />
           <section className="onboarding-runtime-progress" aria-label={t.progressAria}>
             <div className="onboarding-runtime-progress__heading">
@@ -417,7 +425,7 @@ function RuntimeView({ host, platform, t, locale, runtime, activity, onRetry, on
   );
 }
 
-export function OnboardingFlow({ account, platform, runtime, activity, onSubmit, onConnectExistingTeam, onSignInWithGoogle, onRetry, onRestart, onExitFailure, onRuntimeAction, providerLogin, sshHostKey, onConfirmHostKey, onCancelHostKey, onProviderInput, onProviderClose, onProviderRestart, onRecreatePodmanMachine, onFreeDiskSpace, runtimeLogPath, onOpenRuntimeLog, previousLocalData = false, interruption, onResumeInterrupted, onDiscardInterruption, providerOnly, locale: localeOverride }: OnboardingFlowProps) {
+export function OnboardingFlow({ account, onRenameLocalProfile, platform, runtime, activity, onSubmit, onConnectExistingTeam, onSignInWithGoogle, onRetry, onRestart, onExitFailure, onRuntimeAction, providerLogin, sshHostKey, onConfirmHostKey, onCancelHostKey, onProviderInput, onProviderClose, onProviderRestart, onRecreatePodmanMachine, onFreeDiskSpace, runtimeLogPath, onOpenRuntimeLog, previousLocalData = false, interruption, onResumeInterrupted, onDiscardInterruption, providerOnly, locale: localeOverride }: OnboardingFlowProps) {
   const locale = localeOverride ?? appLocale();
   const t = ONBOARDING_TEXT[locale];
   const providerChoices = providers(t);
@@ -434,8 +442,14 @@ export function OnboardingFlow({ account, platform, runtime, activity, onSubmit,
   const [submitting, setSubmitting] = useState(false);
   const [assistanceOpen, setAssistanceOpen] = useState(false);
   const [submitError, setSubmitError] = useState(false);
+  const [profileName, setProfileName] = useState(account.displayName ?? "");
+  const [savedVps, setSavedVps] = useState<SavedVps[]>([]);
+  const [savingVps, setSavingVps] = useState(false);
   const headingRef = useRef<HTMLHeadingElement>(null);
   const shellRef = useRef<HTMLElement>(null);
+
+  useEffect(() => { setProfileName(account.displayName ?? ""); }, [account.displayName]);
+  useEffect(() => { void Promise.resolve().then(() => savedVpsBridge.list()).then((list) => setSavedVps(Array.isArray(list) ? list : [])).catch(() => setSavedVps([])); }, []);
 
   useEffect(() => {
     if (!localRuntimeSupported) {
@@ -481,9 +495,19 @@ export function OnboardingFlow({ account, platform, runtime, activity, onSubmit,
   function selectHost(kind: ExecutionHost["kind"]) {
     setHost((current) => current.kind === kind ? current : kind === "local" ? { kind } : emptyVpsHost());
   }
+  async function saveVps() {
+    if (host.kind !== "vps" || savingVps || !host.address.trim() || !host.user.trim() || !host.keyPath.trim()) return;
+    setSavingVps(true);
+    try {
+      const saved = await savedVpsBridge.add({ name: host.address.trim(), address: host.address.trim(), user: host.user.trim(), port: host.port, keyPath: host.keyPath.trim() });
+      setSavedVps((current) => [...current, saved]);
+    } finally { setSavingVps(false); }
+  }
 
   function next(event: FormEvent) {
-    event.preventDefault(); setSubmitError(false); setStep((current) => Math.min(current + 1, COLLECTION_STEP_COUNT - 1));
+    event.preventDefault();
+    if (step === 0 && account.identity === "local" && onRenameLocalProfile && profileName.trim() && profileName.trim() !== account.displayName) onRenameLocalProfile(profileName);
+    setSubmitError(false); setStep((current) => Math.min(current + 1, COLLECTION_STEP_COUNT - 1));
   }
   async function finish(event: FormEvent) {
     event.preventDefault();
@@ -526,6 +550,9 @@ export function OnboardingFlow({ account, platform, runtime, activity, onSubmit,
             <div className="onboarding-account-mark" aria-hidden="true">{(account.displayName || "J").trim().charAt(0).toUpperCase() || "J"}</div>
             <p className="onboarding-eyebrow">{account.identity === "local" ? t.welcomeEyebrowLocal : t.welcomeEyebrowAccount}</p><h2 ref={headingRef} tabIndex={-1}>{t.hello(account.displayName ?? "")}</h2>
             <p className="onboarding-lede">{account.identity === "local" ? t.welcomeLedeLocal : t.welcomeLedeAccount}</p>
+            {account.identity === "local" && onRenameLocalProfile && <label className="onboarding-field onboarding-field--full"><span>{t.profileName}</span><input aria-label={t.profileName} value={profileName} maxLength={80} onChange={(event) => setProfileName(event.target.value)} onBlur={() => {
+              if (profileName.trim() && profileName.trim() !== account.displayName) onRenameLocalProfile(profileName);
+            }} required /><small className="onboarding-hint">{t.profileNameHint}</small></label>}
             {interruption && onResumeInterrupted && <div className="onboarding-aside" role="note" data-testid="onboarding-interrupted">
               <strong>{t.interruptedTitle}</strong>
               <p>{fill(t.interruptedText, {
@@ -553,10 +580,15 @@ export function OnboardingFlow({ account, platform, runtime, activity, onSubmit,
               <button data-radio-value="vps" tabIndex={host.kind === "vps" || !localRuntimeSupported ? 0 : -1} className={`onboarding-choice${host.kind === "vps" ? " is-selected" : ""}`} type="button" role="radio" aria-checked={host.kind === "vps"} onKeyDown={(event) => moveRadio(event, localRuntimeSupported ? ["local", "vps"] as const : ["vps"] as const, host.kind, selectHost)} onClick={() => selectHost("vps")}><span className="onboarding-choice__icon">VPS</span><strong>{t.vpsServer}</strong><small>{t.vpsDetail}</small><span className="onboarding-choice__check">✓</span></button>
             </div>
             {host.kind === "vps" && <div className="onboarding-fields onboarding-vps-fields">
+              {savedVps.length > 0 && <label className="onboarding-field onboarding-field--full"><span>{t.savedVps}</span><select aria-label={t.savedVps} defaultValue="" onChange={(event) => {
+                const saved = savedVps.find((row) => row.id === event.target.value);
+                if (saved) setHost({ kind: "vps", address: saved.address, user: saved.user, port: saved.port, keyPath: saved.keyPath });
+              }}><option value="">{t.chooseSavedVps}</option>{savedVps.map((saved) => <option key={saved.id} value={saved.id}>{saved.name}</option>)}</select></label>}
               <label className="onboarding-field onboarding-field--full"><span>{t.vpsAddress}</span><input value={host.address} onChange={(event) => setHost({ ...host, address: event.target.value })} placeholder={t.vpsAddressPlaceholder} required /></label>
               <label className="onboarding-field"><span>{t.sshUser}</span><input placeholder={t.sshUserPlaceholder} autoCapitalize="off" autoCorrect="off" spellCheck={false} value={host.user} onChange={(event) => setHost({ ...host, user: event.target.value })} required /></label>
               <label className="onboarding-field"><span>{t.sshPort}</span><input type="number" min="1" max="65535" value={host.port} onChange={(event) => setHost({ ...host, port: Number(event.target.value) })} required /></label>
               <div className="onboarding-field onboarding-field--full"><span>{t.sshKey}</span><SshKeyPicker value={host.keyPath} onChange={(keyPath) => setHost({ ...host, keyPath })} disabled={submitting} /><small className="onboarding-hint">{t.sshKeyHint}</small></div>
+              <button type="button" className="onboarding-secondary" onClick={() => void saveVps()} disabled={savingVps || !host.address.trim() || !host.user.trim() || !host.keyPath.trim()}>{t.saveVps}</button>
             </div>}
             {missingVps.length > 0 && <p className="onboarding-hint" id="onboarding-vps-missing" role="status">
               {fill(t.vpsMissing, { list: new Intl.ListFormat(locale, { style: "long", type: "conjunction" }).format(missingVps) })}

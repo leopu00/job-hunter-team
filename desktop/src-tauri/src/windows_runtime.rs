@@ -88,14 +88,55 @@ fn autostart_action(shell: &Path, wrapper: &Path) -> String {
     )
 }
 
-/// The task is created by the non-elevated desktop process, explicitly bound
-/// to its current interactive user. `/IT` refuses a password-backed task.
-pub(crate) fn autostart_create_args(wrapper: &Path, system_root: Option<OsString>, user: &str, sid: &str) -> Vec<OsString> {
-    let shell = powershell_path(system_root);
-    let action = autostart_action(&shell, wrapper);
+/// The task is registered by the non-elevated desktop process from an XML
+/// definition, bound to its current interactive user. `schtasks /Create /SC
+/// ONLOGON`, with or without /RU and /IT, is refused ("Access is denied") to a
+/// standard user: only a logon trigger of their own account can be registered,
+/// and only the XML says so.
+pub(crate) fn autostart_create_args(sid: &str, definition: &Path) -> Vec<OsString> {
     let task = autostart_task_name(sid);
-    ["/Create", "/TN", &task, "/SC", "ONLOGON", "/TR", &action, "/RL", "LIMITED", "/RU", user, "/IT", "/F"]
-        .into_iter().map(OsString::from).collect()
+    let mut args: Vec<OsString> = ["/Create", "/TN"].map(OsString::from).into();
+    args.push(OsString::from(task));
+    args.push(OsString::from("/XML"));
+    args.push(definition.as_os_str().to_owned());
+    args.push(OsString::from("/F"));
+    args
+}
+
+/// The characters XML text must not carry bare.
+fn xml_escape(text: &str) -> String {
+    text.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;").replace('"', "&quot;")
+}
+
+/// What `xml_escape` and the Task Scheduler's own read-back write for a text node.
+fn xml_unescape(text: &str) -> String {
+    text.replace("&quot;", "\"").replace("&apos;", "'").replace("&lt;", "<").replace("&gt;", ">").replace("&amp;", "&")
+}
+
+/// The definition of the logon task: this user's logon only (the trigger names
+/// the user), the interactive token, the limited level, one action. The two
+/// battery settings are off so that a laptop that logs on unplugged still
+/// starts the runtime.
+fn autostart_task_xml(user: &str, shell: &Path, wrapper: &Path) -> String {
+    let user = xml_escape(user);
+    let command = xml_escape(&shell.to_string_lossy());
+    let arguments = xml_escape(autostart_action(shell, wrapper).split_once(' ').map_or("", |(_, args)| args));
+    format!(
+        "<?xml version=\"1.0\" encoding=\"UTF-16\"?>\
+<Task version=\"1.2\" xmlns=\"http://schemas.microsoft.com/windows/2004/02/mit/task\">\
+<Triggers><LogonTrigger><Enabled>true</Enabled><UserId>{user}</UserId></LogonTrigger></Triggers>\
+<Principals><Principal id=\"Author\"><UserId>{user}</UserId><LogonType>InteractiveToken</LogonType><RunLevel>LeastPrivilege</RunLevel></Principal></Principals>\
+<Settings><Enabled>true</Enabled><DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries><StopIfGoingOnBatteries>false</StopIfGoingOnBatteries></Settings>\
+<Actions Context=\"Author\"><Exec><Command>{command}</Command><Arguments>{arguments}</Arguments></Exec></Actions></Task>"
+    )
+}
+
+/// UTF-16 little endian with its byte order mark, which is what `schtasks
+/// /XML` reads whatever the declaration says.
+fn utf16_with_bom(text: &str) -> Vec<u8> {
+    let mut bytes = vec![0xff, 0xfe];
+    bytes.extend(text.encode_utf16().flat_map(u16::to_le_bytes));
+    bytes
 }
 
 fn autostart_query_args(sid: &str) -> Vec<OsString> {
@@ -103,52 +144,124 @@ fn autostart_query_args(sid: &str) -> Vec<OsString> {
     ["/Query", "/TN", &task, "/XML"].into_iter().map(OsString::from).collect()
 }
 
-fn autostart_contract(xml: &str, user: &str, shell: &Path, wrapper: &Path) -> bool {
+/// The task as the Task Scheduler reads it back must be exactly ours. What the
+/// service leaves out because it is the default (the limited level, the enabled
+/// flag) counts as that default; what it states must match: the user (the name
+/// or the SID of the current user, never another), the interactive token, one
+/// logon trigger, one action with the exact program and arguments.
+fn autostart_contract(xml: &str, user: &str, sid: &str, shell: &Path, wrapper: &Path) -> bool {
     let no_other_triggers = ["BootTrigger", "CalendarTrigger", "EventTrigger", "IdleTrigger", "RegistrationTrigger", "SessionStateChangeTrigger", "TimeTrigger"]
         .iter().all(|tag| !xml.contains(&format!("<{tag}")));
     let no_other_actions = ["ComHandler", "SendEmail", "ShowMessage"]
         .iter().all(|tag| !xml.contains(&format!("<{tag}")));
-    let expected_arguments = autostart_action(shell, wrapper)
-        .split_once(' ').map(|(_, args)| args.replace('"', "&quot;"));
+    let expected_arguments = autostart_action(shell, wrapper).split_once(' ').map(|(_, args)| args.to_owned());
+    let is_user = |value: Option<&str>| value.map(xml_unescape).is_some_and(|value| value == user || value == sid);
+    let principal = xml_section(xml, "Principal");
+    // Left out is the default; present, it must say the right thing.
+    let absent_or = |part: &str, name: &str, allowed: &[&str]| {
+        !part.contains(&format!("<{name}")) || xml_text(part, name).is_some_and(|value| allowed.contains(&value))
+    };
     no_other_triggers && no_other_actions
         && xml_section(xml, "LogonTrigger").is_some()
         && xml_section(xml, "Exec").is_some()
-        && xml_section(xml, "LogonTrigger").and_then(|part| xml_text(part, "UserId")) == Some(user)
-        && xml_section(xml, "Principal").and_then(|part| xml_text(part, "UserId")) == Some(user)
-        && xml_section(xml, "Principal").and_then(|part| xml_text(part, "LogonType")) == Some("InteractiveToken")
-        && xml_section(xml, "Principal").and_then(|part| xml_text(part, "RunLevel")) == Some("LeastPrivilege")
-        && xml_section(xml, "Settings").and_then(|part| xml_text(part, "Enabled")) == Some("true")
-        && xml_section(xml, "Exec").and_then(|part| xml_text(part, "Command")) == shell.to_str()
-        && xml_section(xml, "Exec").and_then(|part| xml_text(part, "Arguments")) == expected_arguments.as_deref()
+        && is_user(xml_section(xml, "LogonTrigger").and_then(|part| xml_text(part, "UserId")))
+        && is_user(principal.and_then(|part| xml_text(part, "UserId")))
+        && principal.and_then(|part| xml_text(part, "LogonType")) == Some("InteractiveToken")
+        && principal.is_some_and(|part| absent_or(part, "RunLevel", &["LeastPrivilege"]))
+        && (!xml.contains("<Settings") || xml_section(xml, "Settings").is_some_and(|part| absent_or(part, "Enabled", &["true"])))
+        && xml_section(xml, "Exec").and_then(|part| xml_text(part, "Command")).map(xml_unescape).as_deref() == shell.to_str()
+        && xml_section(xml, "Exec").and_then(|part| xml_text(part, "Arguments")).map(xml_unescape) == expected_arguments
+}
+
+/// Which step of the registration stopped, and the exit code of the program that
+/// refused when there was one. Closed names only: the runtime log keeps them,
+/// never the programs' own words (they carry the account name).
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) struct AutostartFailure {
+    pub(crate) step: &'static str,
+    pub(crate) exit: Option<i32>,
+}
+
+/// Runs one program of the registration: path, arguments, time allowed.
+pub(crate) type AutostartRun<'a> =
+    dyn FnMut(&Path, Vec<OsString>, std::time::Duration) -> Result<crate::runtime_host::ProcessResult, &'static str> + 'a;
+
+/// Writes the task definition where `schtasks` will read it and says the path.
+pub(crate) type AutostartStage<'a> = dyn FnMut(&[u8]) -> Result<PathBuf, ()> + 'a;
+
+/// The registration of the current user's logon task, step by step, through
+/// `run` (the real programs on Windows, a fake in the tests) and `stage` (the
+/// private file the definition goes through): who the user is, the task, and
+/// the read-back that must match the contract. A step that fails says which,
+/// and the exit code when a program refused.
+#[cfg_attr(not(windows), allow(dead_code))]
+pub(crate) fn register_autostart_with(
+    wrapper: &Path,
+    system_root: OsString,
+    run: &mut AutostartRun<'_>,
+    stage: &mut AutostartStage<'_>,
+) -> Result<(), AutostartFailure> {
+    let schtasks = PathBuf::from(&system_root).join("System32").join("schtasks.exe");
+    let whoami = PathBuf::from(&system_root).join("System32").join("whoami.exe");
+    let short = std::time::Duration::from_secs(10);
+    let long = std::time::Duration::from_secs(15);
+    let ran = |step: &'static str, result: Result<crate::runtime_host::ProcessResult, &'static str>| match result {
+        Ok(done) if done.success() => Ok(done),
+        Ok(done) => Err(AutostartFailure { step, exit: Some(done.code) }),
+        Err(_) => Err(AutostartFailure { step, exit: None }),
+    };
+    let user = String::from_utf8_lossy(&ran("whoami", run(&whoami, Vec::new(), short))?.stdout)
+        .trim()
+        .to_owned();
+    if user.is_empty() {
+        return Err(AutostartFailure { step: "whoami", exit: None });
+    }
+    let listed = ran(
+        "sid",
+        run(&whoami, ["/user", "/fo", "csv", "/nh"].map(OsString::from).to_vec(), short),
+    )?;
+    let sid = current_user_sid(&listed.stdout).ok_or(AutostartFailure { step: "sid", exit: None })?;
+    let shell = powershell_path(Some(system_root));
+    let definition = utf16_with_bom(&autostart_task_xml(&user, &shell, wrapper));
+    let file = stage(&definition).map_err(|()| AutostartFailure { step: "stage", exit: None })?;
+    ran("create", run(&schtasks, autostart_create_args(&sid, &file), long))?;
+    let queried = ran("query", run(&schtasks, autostart_query_args(&sid), long))?;
+    if autostart_contract(&String::from_utf8_lossy(&queried.stdout), &user, &sid, &shell, wrapper) {
+        Ok(())
+    } else {
+        Err(AutostartFailure { step: "contract", exit: None })
+    }
 }
 
 #[cfg(windows)]
-pub(crate) fn register_autostart(wrapper: &Path) -> bool {
+pub(crate) fn register_autostart(wrapper: &Path) -> Result<(), AutostartFailure> {
     let root = std::env::var_os("SystemRoot").unwrap_or_else(|| OsString::from(r"C:\Windows"));
-    let schtasks = PathBuf::from(root.clone()).join("System32").join("schtasks.exe");
-    let whoami = PathBuf::from(&root).join("System32").join("whoami.exe");
-    let user = match crate::runtime_host::run_program(whoami.to_string_lossy().as_ref(), std::iter::empty::<&str>(), None, std::time::Duration::from_secs(10)) {
-        Ok(result) if result.success() => String::from_utf8_lossy(&result.stdout).trim().to_owned(),
-        _ => return false,
-    };
-    if user.is_empty() { return false; }
-    let sid = match crate::runtime_host::run_program(whoami.to_string_lossy().as_ref(), ["/user", "/fo", "csv", "/nh"], None, std::time::Duration::from_secs(10)) {
-        Ok(result) if result.success() => current_user_sid(&result.stdout),
-        _ => None,
-    };
-    let Some(sid) = sid else { return false; };
-    let create = autostart_create_args(wrapper, Some(root.clone()), &user, &sid);
-    let created = crate::runtime_host::run_program(
-        schtasks.to_string_lossy().as_ref(), create, None, std::time::Duration::from_secs(15),
+    // The definition passes through a folder only this user can read or write:
+    // another account must not be able to swap it between the write and the read.
+    let dir = std::env::temp_dir().join(format!(
+        "jht-autostart-{}-{}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_or(0, |elapsed| elapsed.as_nanos())
+    ));
+    let result = register_autostart_with(
+        wrapper,
+        root,
+        &mut |program, args, timeout| {
+            crate::runtime_host::run_program(program.to_string_lossy().as_ref(), args, None, timeout)
+        },
+        &mut |definition| {
+            std::fs::create_dir(&dir).map_err(|_| ())?;
+            crate::private_acl::protect_dir(&dir).map_err(|_| ())?;
+            let file = dir.join("task.xml");
+            std::fs::write(&file, definition).map_err(|_| ())?;
+            crate::private_acl::protect_file(&file).map_err(|_| ())?;
+            Ok(file)
+        },
     );
-    if !created.is_ok_and(|result| result.success()) { return false; }
-    let queried = crate::runtime_host::run_program(
-        schtasks.to_string_lossy().as_ref(), autostart_query_args(&sid), None, std::time::Duration::from_secs(15),
-    );
-    let Ok(result) = queried else { return false; };
-    result.success() && autostart_contract(
-        &String::from_utf8_lossy(&result.stdout), &user, &powershell_path(Some(root)), wrapper,
-    )
+    let _ = std::fs::remove_dir_all(&dir);
+    result
 }
 
 /// Windows PowerShell 5.1, which every Windows 10/11 has, by absolute path:
@@ -277,6 +390,15 @@ pub(crate) fn wrapper_bundle_valid(wrapper: &Path, runtime_dir: &Path) -> bool {
     if !runtime_paths_are_attested(wrapper, runtime_dir) {
         return false;
     }
+    bundle_bytes_valid(wrapper, runtime_dir)
+}
+
+/// The bytes of the bundle against the manifest, the selected engine and the
+/// image pin: what `wrapper_bundle_valid` checks once the paths are attested.
+/// Apart so that the bytes are tested on every host, whatever the ACLs and the
+/// owner of the folder a test creates (a CI runner's temp dir is neither).
+#[cfg_attr(not(windows), allow(dead_code))]
+fn bundle_bytes_valid(wrapper: &Path, runtime_dir: &Path) -> bool {
     let Some(bin) = wrapper.parent() else {
         return false;
     };
@@ -537,19 +659,33 @@ mod tests {
 
     #[test]
     fn autostart_task_is_a_limited_current_user_logon_task() {
-        let args: Vec<String> = autostart_create_args(
-            Path::new(r"C:\Users\someone\.local\bin\jht.ps1"),
-            Some(OsString::from(r"D:\Win")),
-            r"JHTPC\someone",
-            "S-1-5-21-1111-2222-3333-1001",
-        ).into_iter().map(|arg| arg.to_string_lossy().into_owned()).collect();
-        assert!(args.windows(2).any(|pair| pair == ["/TN", "Job Hunter Team - Start runtime [S-1-5-21-1111-2222-3333-1001]"]));
-        assert!(args.windows(2).any(|pair| pair == ["/SC", "ONLOGON"]));
-        assert!(args.windows(2).any(|pair| pair == ["/RL", "LIMITED"]));
-        assert!(args.windows(2).any(|pair| pair == ["/RU", r"JHTPC\someone"]));
-        assert!(args.iter().any(|arg| arg.eq_ignore_ascii_case("/IT")));
-        assert!(!args.iter().any(|arg| arg.eq_ignore_ascii_case("HIGHEST")));
-        assert!(args.iter().any(|arg| arg.contains("jht.ps1") && arg.ends_with(" up")));
+        let sid = "S-1-5-21-1111-2222-3333-1001";
+        let args: Vec<String> = autostart_create_args(sid, Path::new(r"C:\Temp\jht\task.xml"))
+            .into_iter().map(|arg| arg.to_string_lossy().into_owned()).collect();
+        assert_eq!(args[..2], ["/Create", "/TN"]);
+        assert_eq!(args[2], "Job Hunter Team - Start runtime [S-1-5-21-1111-2222-3333-1001]");
+        assert_eq!(args[3..], ["/XML", r"C:\Temp\jht\task.xml", "/F"]);
+        // The command-line forms a standard user is refused ("Access is denied") are gone.
+        for refused in ["/SC", "ONLOGON", "/RU", "/IT", "/RL"] {
+            assert!(!args.iter().any(|arg| arg == refused), "{refused}");
+        }
+
+        let shell = Path::new(r"C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe");
+        let wrapper = Path::new(r"C:\Users\some&one\.local\bin\jht.ps1");
+        let xml = autostart_task_xml(r"JHTPC\some&one", shell, wrapper);
+        // The trigger and the principal name the user; nothing runs at any other account's logon.
+        assert_eq!(xml.matches("<UserId>JHTPC\\some&amp;one</UserId>").count(), 2);
+        assert!(xml.contains("<LogonTrigger><Enabled>true</Enabled><UserId>"));
+        assert!(xml.contains("<LogonType>InteractiveToken</LogonType><RunLevel>LeastPrivilege</RunLevel>"));
+        assert!(!xml.contains("HighestAvailable") && !xml.contains("<Password"));
+        assert!(xml.contains("<DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries>"));
+        assert!(xml.contains("<Command>C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe</Command>"));
+        assert!(xml.contains("-File &quot;C:\\Users\\some&amp;one\\.local\\bin\\jht.ps1&quot; up</Arguments>"));
+        // The file schtasks reads: UTF-16 little endian with its mark.
+        let bytes = utf16_with_bom("<a>é</a>");
+        assert_eq!(bytes[..2], [0xff, 0xfe]);
+        assert_eq!(bytes[2..], [b'<', 0, b'a', 0, b'>', 0, 0xe9, 0, b'<', 0, b'/', 0, b'a', 0, b'>', 0]);
+        assert_eq!(xml_unescape(&xml_escape("a&b<c>\"d\"")), "a&b<c>\"d\"");
         assert_eq!(current_user_sid(b"\"JHTPC\\someone\",\"S-1-5-21-1111-2222-3333-1001\"\r\n"), Some("S-1-5-21-1111-2222-3333-1001".into()));
         assert_eq!(current_user_sid(b"S-1-"), None);
         assert_eq!(current_user_sid(b"S-1-5"), None);
@@ -561,11 +697,124 @@ mod tests {
     fn autostart_read_back_requires_the_current_interactive_user_and_exact_action() {
         let shell = Path::new(r"C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe");
         let wrapper = Path::new(r"C:\Users\someone\.local\bin\jht.ps1");
+        let (user, sid) = (r"JHTPC\someone", "S-1-5-21-1-2-3-1001");
         let xml = r#"<LogonTrigger><Enabled>true</Enabled><UserId>JHTPC\someone</UserId></LogonTrigger><Principal><UserId>JHTPC\someone</UserId><LogonType>InteractiveToken</LogonType><RunLevel>LeastPrivilege</RunLevel></Principal><Settings><Enabled>true</Enabled></Settings><Exec><Command>C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe</Command><Arguments>-NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File &quot;C:\Users\someone\.local\bin\jht.ps1&quot; up</Arguments></Exec>"#;
-        assert!(autostart_contract(xml, r"JHTPC\someone", shell, wrapper));
-        assert!(!autostart_contract(xml, r"JHTPC\other", shell, wrapper));
-        assert!(!autostart_contract(&xml.replace("InteractiveToken", "Password"), r"JHTPC\someone", shell, wrapper));
-        assert!(!autostart_contract(&format!("{xml}<Exec></Exec>"), r"JHTPC\someone", shell, wrapper));
+        let check = |xml: &str| autostart_contract(xml, user, sid, shell, wrapper);
+        assert!(check(xml));
+        assert!(!autostart_contract(xml, r"JHTPC\other", sid, shell, wrapper));
+        assert!(!check(&xml.replace("InteractiveToken", "Password")));
+        assert!(!check(&format!("{xml}<Exec></Exec>")));
+
+        // What the Task Scheduler really returned for a standard user's XML task (the P1 on a
+        // standard-user machine): the principal as a SID, no RunLevel, no Enabled in Settings,
+        // raw quotes. Those are the defaults and the same identity: accepted.
+        let read_back = r#"<LogonTrigger><Enabled>true</Enabled><UserId>JHTPC\someone</UserId></LogonTrigger><Principal id="Author"><UserId>S-1-5-21-1-2-3-1001</UserId><LogonType>InteractiveToken</LogonType></Principal><Settings><DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries></Settings><Exec><Command>C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe</Command><Arguments>-NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "C:\Users\someone\.local\bin\jht.ps1" up</Arguments></Exec>"#;
+        assert!(check(read_back));
+        // What it states still has to match.
+        assert!(!check(&read_back.replace("S-1-5-21-1-2-3-1001", "S-1-5-21-1-2-3-1002")), "another account's SID");
+        assert!(!check(&read_back.replace("<LogonType>", "<RunLevel>HighestAvailable</RunLevel><LogonType>")));
+        assert!(!check(&read_back.replace("<DisallowStartIfOnBatteries>", "<Enabled>false</Enabled><DisallowStartIfOnBatteries>")));
+        assert!(!check(&read_back.replace("<Settings>", "<Settings><Enabled>true</Enabled><Enabled>true</Enabled>")), "an ambiguous flag is not the default");
+        assert!(!check(&read_back.replace("jht.ps1\" up", "jht.ps1\" up --evil")));
+        assert!(!check(&read_back.replace("powershell.exe</Command>", "cmd.exe</Command>")));
+        assert!(!check(&read_back.replace("<Principal id=\"Author\">", "<Principal id=\"Author\"><Principal>")));
+    }
+
+    /// The registration says which step stopped and, when a program refused,
+    /// its exit code: what the runtime log keeps (a standard user's create was
+    /// refused without a trace until now).
+    #[test]
+    fn the_registration_names_the_step_that_stopped() {
+        use crate::runtime_host::ProcessResult;
+        let wrapper = Path::new(r"C:\Users\someone\.local\bin\jht.ps1");
+        let root = OsString::from(r"C:\Windows");
+        let shell = powershell_path(Some(root.clone()));
+        let user = r"JHTPC\someone";
+        let sid = "S-1-5-21-1-2-3-1001";
+        // As the Task Scheduler reads back a standard user's XML task: SID principal, defaults left out.
+        let contract = format!(
+            "<LogonTrigger><Enabled>true</Enabled><UserId>{user}</UserId></LogonTrigger><Principal id=\"Author\"><UserId>{sid}</UserId><LogonType>InteractiveToken</LogonType></Principal><Settings><DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries></Settings><Exec><Command>{}</Command><Arguments>{}</Arguments></Exec>",
+            shell.to_str().unwrap(),
+            autostart_action(&shell, wrapper).split_once(' ').unwrap().1,
+        );
+        let ok = |text: &str| Ok(ProcessResult { code: 0, stdout: text.as_bytes().to_vec() });
+        let staged: std::cell::RefCell<Vec<Vec<u8>>> = Default::default();
+        let create_args: std::cell::RefCell<Vec<String>> = Default::default();
+        // `broken` is the step (by its program and first argument) that answers `answer`.
+        let register = |broken: Option<(&str, Result<ProcessResult, &'static str>)>| {
+            let mut broken = broken;
+            let mut seen: Vec<String> = Vec::new();
+            let result = register_autostart_with(wrapper, root.clone(), &mut |program, args, _| {
+                let name = program.file_name().unwrap().to_string_lossy().into_owned();
+                let first = args.first().map(|arg| arg.to_string_lossy().into_owned()).unwrap_or_default();
+                let key = format!("{name} {first}");
+                seen.push(key.clone());
+                if key == "schtasks.exe /Create" {
+                    *create_args.borrow_mut() = args.iter().map(|arg| arg.to_string_lossy().into_owned()).collect();
+                }
+                if let Some((step, _)) = &broken {
+                    if key.starts_with(step) {
+                        return broken.take().unwrap().1;
+                    }
+                }
+                match key.as_str() {
+                    "whoami.exe " => ok(&format!("{user}\r\n")),
+                    "whoami.exe /user" => ok(&format!("\"{user}\",\"{sid}\"\r\n")),
+                    "schtasks.exe /Create" => ok("SUCCESS"),
+                    "schtasks.exe /Query" => ok(&contract),
+                    other => panic!("unexpected {other}"),
+                }
+            }, &mut |definition| {
+                staged.borrow_mut().push(definition.to_vec());
+                Ok(PathBuf::from(r"C:\Temp\jht\task.xml"))
+            });
+            (result, seen)
+        };
+        let (result, seen) = register(None);
+        assert_eq!(result, Ok(()));
+        assert_eq!(seen, ["whoami.exe ", "whoami.exe /user", "schtasks.exe /Create", "schtasks.exe /Query"]);
+        // The definition went through the stage once, as UTF-16 with its mark, naming the user;
+        // and `schtasks` was told to read that file, with no command-line logon trigger.
+        let written = staged.borrow();
+        assert_eq!(written.len(), 1);
+        assert_eq!(written[0][..2], [0xff, 0xfe]);
+        let text = String::from_utf16(&written[0][2..].chunks(2).map(|pair| u16::from_le_bytes([pair[0], pair[1]])).collect::<Vec<_>>()).unwrap();
+        assert!(text.contains(&format!("<UserId>{user}</UserId>")) && text.contains("<LogonTrigger>"));
+        let args = create_args.borrow();
+        assert_eq!(args[args.len() - 3..], ["/XML", r"C:\Temp\jht\task.xml", "/F"]);
+        assert!(!args.iter().any(|arg| arg == "ONLOGON"));
+        drop((written, args));
+
+        let refused = |code| Ok(ProcessResult { code, stdout: Vec::new() });
+        let (result, seen) = register(Some(("whoami.exe ", refused(1))));
+        assert_eq!(result, Err(AutostartFailure { step: "whoami", exit: Some(1) }));
+        assert_eq!(seen.len(), 1);
+        let (result, _) = register(Some(("whoami.exe ", ok("  \r\n"))));
+        assert_eq!(result, Err(AutostartFailure { step: "whoami", exit: None }));
+        let (result, _) = register(Some(("whoami.exe /user", ok("nothing here"))));
+        assert_eq!(result, Err(AutostartFailure { step: "sid", exit: None }));
+        let (result, seen) = register(Some(("schtasks.exe /Create", refused(1))));
+        assert_eq!(result, Err(AutostartFailure { step: "create", exit: Some(1) }));
+        assert!(!seen.iter().any(|call| call == "schtasks.exe /Query"), "no read-back of a task that was refused");
+        let (result, _) = register(Some(("schtasks.exe /Create", Err("process_timeout"))));
+        assert_eq!(result, Err(AutostartFailure { step: "create", exit: None }));
+        let (result, _) = register(Some(("schtasks.exe /Query", refused(1))));
+        assert_eq!(result, Err(AutostartFailure { step: "query", exit: Some(1) }));
+        let (result, _) = register(Some(("schtasks.exe /Query", ok("<Task/>"))));
+        assert_eq!(result, Err(AutostartFailure { step: "contract", exit: None }));
+        // A definition that cannot be staged stops before any task is asked for.
+        let mut programs = Vec::new();
+        let result = register_autostart_with(
+            wrapper,
+            root.clone(),
+            &mut |program, args, _| {
+                programs.push(program.file_name().unwrap().to_string_lossy().into_owned());
+                if args.is_empty() { ok(&format!("{user}\r\n")) } else { ok(&format!("\"{user}\",\"{sid}\"\r\n")) }
+            },
+            &mut |_| Err(()),
+        );
+        assert_eq!(result, Err(AutostartFailure { step: "stage", exit: None }));
+        assert!(!programs.iter().any(|program| program == "schtasks.exe"));
     }
 
     #[test]
@@ -726,24 +975,24 @@ mod tests {
         }
         let manifest_path = runtime.join(".runtime-integrity");
         fs::write(&manifest_path, &manifest).unwrap();
-        assert!(wrapper_bundle_valid(&wrapper, &runtime));
+        assert!(bundle_bytes_valid(&wrapper, &runtime));
 
         // Each file changed after the install is refused.
         for (key, path, content) in &files {
             fs::write(path, format!("{content}changed")).unwrap();
-            assert!(!wrapper_bundle_valid(&wrapper, &runtime), "{key}");
+            assert!(!bundle_bytes_valid(&wrapper, &runtime), "{key}");
             fs::write(path, content).unwrap();
         }
-        assert!(wrapper_bundle_valid(&wrapper, &runtime));
+        assert!(bundle_bytes_valid(&wrapper, &runtime));
 
         // The test channel's image pin counts only with its manifest line.
         let pin = runtime.join("runtime-image");
         fs::write(&pin, "ghcr.io/leopu00/jht@sha256:aa\n").unwrap();
-        assert!(!wrapper_bundle_valid(&wrapper, &runtime));
+        assert!(!bundle_bytes_valid(&wrapper, &runtime));
         fs::write(&manifest_path, format!("{manifest}runtime-image={}\n", digest(&pin))).unwrap();
-        assert!(wrapper_bundle_valid(&wrapper, &runtime));
+        assert!(bundle_bytes_valid(&wrapper, &runtime));
         fs::remove_file(&pin).unwrap();
-        assert!(!wrapper_bundle_valid(&wrapper, &runtime));
+        assert!(!bundle_bytes_valid(&wrapper, &runtime));
         fs::write(&manifest_path, &manifest).unwrap();
 
         // A bundle that selects another engine is not this bundle, even with
@@ -756,7 +1005,7 @@ mod tests {
             manifest.replace(&podman_line, &format!("container-runtime={}", digest(&selection))),
         )
         .unwrap();
-        assert!(!wrapper_bundle_valid(&wrapper, &runtime));
+        assert!(!bundle_bytes_valid(&wrapper, &runtime));
         let _ = fs::remove_dir_all(&root);
     }
 
