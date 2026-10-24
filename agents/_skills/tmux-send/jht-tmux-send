@@ -855,6 +855,7 @@ else
   poll=0
   partial_since=-1
   partial_wait_s=${JHT_TMUX_PARTIAL_WAIT:-8}
+  case "$partial_wait_s" in ''|*[!0-9]*) partial_wait_s=8 ;; esac
   partial_polls=$(( partial_wait_s * 20 ))
   while :; do
     pane=$(_pane)
@@ -912,8 +913,10 @@ fi
 for s_try in $(seq 1 "$submit_tries"); do
   # Prima di ogni Invio ripetuto si guarda che nella casella ci sia ancora il
   # NOSTRO testo: menu, login e un altro draft non ricevono mai un tasto.
+  # La schermata si rilegge FRESCA a ogni tentativo, anche il primo: dopo l'assestamento
+  # una persona puo' aver digitato accanto al nostro testo, e l'Invio sarebbe partito lo stesso.
+  pane=$(_pane)
   if [ "$s_try" -gt 1 ]; then
-    pane=$(_pane)
     if _submitted_from_unknown_form "$pane"; then
       echo "jht-tmux-send: ${#message} chars to $session (submit $((s_try - 1)), confirmed after the wait)"
       _pending_clear

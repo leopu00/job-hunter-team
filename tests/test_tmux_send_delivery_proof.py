@@ -57,6 +57,10 @@ case "$cmd" in
     [ -f "$S/menu_on_paste" ] && { printf 'menu\n' > "$S/mode"; exit 0; }
     [ -f "$S/draft_on_paste" ] && cat "$S/draft_on_paste" >> "$S/composer"
     [ -f "$S/mute" ] && exit 0
+    # A person types next to our text a moment after it rendered (during the settle pause).
+    if [ -f "$S/typing_after" ]; then
+      (sleep "$(cat "$S/typing_after")"; printf '%s' ' tipo io' >> "$S/composer") >/dev/null 2>&1 &
+    fi
     # A paste the TUI draws in two goes: the first half now, the rest after the delay in `split`.
     if [ -f "$S/split" ]; then
       text=$(cat "$S/buffer.$name"); half=$(( ${#text} / 2 ))
@@ -163,6 +167,21 @@ def test_a_paste_that_stops_half_drawn_is_refused_without_enter_and_the_log_says
     assert done.returncode == 130, done.stderr
     assert box.keys("Enter") == [] and box.keys("Escape") == []
     assert "half drawn" in done.stderr
+
+
+def test_a_person_typing_next_to_our_text_before_the_first_enter_gets_no_enter(box):
+    # The pause after the paste renders is up to 1.5 s: the screen read before it is stale.
+    box.put("typing_after", "0.15")
+    done = box.run(message=MESSAGE + MESSAGE)
+    assert done.returncode == 130, done.stderr
+    assert box.keys("Enter") == [] and box.keys("Escape") == []
+
+
+def test_a_non_numeric_partial_wait_falls_back_to_the_default(box):
+    box.put("split", "0.6")
+    done = box.run(JHT_TMUX_PARTIAL_WAIT="soon")
+    assert done.returncode == 0, done.stderr
+    assert "syntax error" not in done.stderr and "unbound" not in done.stderr
 
 
 def test_a_turn_starting_while_the_paste_renders_does_not_stop_the_delivery(box):
