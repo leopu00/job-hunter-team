@@ -42,6 +42,7 @@ function fake-podman {
   Write-Error ("Copying blob sha256:bbbbbbbbbbbb2222 [>------] 1.0MiB / 5.0MiB`rCopying blob sha256:bbbbbbbbbbbb2222 [==>----] 2.0MiB / 5.0MiB") -ErrorAction Continue
   Write-Error 'Copying blob sha256:aaaaaaaaaaaa1111 done   |' -ErrorAction Continue
   Write-Error ('Copying config sha256:cccccccccccc3333 from ' + $env:USERPROFILE + '\x\y done') -ErrorAction Continue
+  Write-Error ('Copying config sha256:dddddddddddd4444 for ' + $env:USERNAME + ' done') -ErrorAction Continue
   'sha256:deadbeefdeadbeef'
   $global:LASTEXITCODE = [int]$env:FAKE_PODMAN_CODE
 }
@@ -74,8 +75,9 @@ def test_the_layers_go_to_stdout_cleaned_and_the_rest_of_podmans_output_stays_ou
         # a bar redrawn with carriage returns: its last drawing
         "JHT_PULL Copying blob sha256:bbbbbbbbbbbb2222 [==>----] 2.0MiB / 5.0MiB",
         "JHT_PULL Copying blob sha256:aaaaaaaaaaaa1111 done   |",
-        # the user's name and path are taken out
-        "JHT_PULL Copying config sha256:cccccccccccc3333 from <private>\\x\\y done",
+        # a drive path is taken out whole, and the user's name wherever else it appears
+        "JHT_PULL Copying config sha256:cccccccccccc3333 from <path> done",
+        "JHT_PULL Copying config sha256:dddddddddddd4444 for <private> done",
     ]
     text = done.stdout
     for private in ("someone-private", "Trying to pull", "Getting image source", "deadbeefdeadbeef"):
