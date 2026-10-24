@@ -451,8 +451,43 @@ describe("OnboardingFlow technical setup", () => {
     });
     expect(screen.getByRole("alert")).toHaveTextContent("Podman è attivo ma il container non risponde.");
     expect(screen.getAllByText("Container")).not.toHaveLength(0);
-    await userEvent.click(screen.getByRole("button", { name: /riprova la preparazione/i }));
+    await userEvent.click(screen.getByRole("button", { name: /riprendi la preparazione/i }));
     expect(onRetry).toHaveBeenCalledOnce();
+  });
+
+  it("offers «Resume» only when part of the preparation was done, and «Retry» when nothing was", async () => {
+    const onRetry = vi.fn().mockResolvedValue(undefined);
+    const failedAtTheFirstStep = { status: "failed", stage: "runtime", message: "La preparazione si è fermata.", retryable: true, code: "runtime_install_failed" } as const;
+    // nothing done yet: the same preparation is tried again
+    const first = renderFlow({ runtime: failedAtTheFirstStep, onRetry });
+    expect(screen.getByRole("button", { name: "Riprova la preparazione" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Riprendi la preparazione" })).not.toBeInTheDocument();
+    expect(screen.queryByTestId("onboarding-resume-note")).not.toBeInTheDocument();
+    first.unmount();
+    // the engine step was done and the next one failed: «Resume» says so and runs the same retry
+    renderFlow({
+      runtime: failedAtTheFirstStep,
+      activity: {
+        startedAt: Date.now() - 10_000, invocation: 1, lastSequence: 2, current: null,
+        events: [{
+          id: "1:engine:2", invocation: 1, nativeStage: "engine", sequence: 2, stage: "runtime", name: "Verifica ambiente",
+          description: "Podman è pronto.", elapsedMs: 3_000, stageElapsedMs: 3_000, updatedAt: Date.now(), status: "completed",
+        }],
+      },
+      onRetry,
+    });
+    expect(screen.getByTestId("onboarding-resume-note")).toHaveTextContent("Una parte è già pronta su questo computer");
+    expect(screen.queryByRole("button", { name: "Riprova la preparazione" })).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Riprendi la preparazione" }));
+    expect(onRetry).toHaveBeenCalledOnce();
+  });
+
+  it("offers neither when the failure cannot be retried", () => {
+    renderFlow({
+      runtime: { status: "failed", stage: "container", message: "Versione non compatibile.", retryable: false, code: "container_version_incompatible" },
+    });
+    expect(screen.queryByRole("button", { name: /riprendi|riprova/i })).not.toBeInTheDocument();
+    expect(screen.queryByTestId("onboarding-resume-note")).not.toBeInTheDocument();
   });
 
   it("shows what to do next under a failure that carries an action", () => {
@@ -631,7 +666,7 @@ describe("OnboardingFlow technical setup", () => {
     });
     const user = userEvent.setup();
 
-    await user.dblClick(screen.getByRole("button", { name: "Riprova la preparazione" }));
+    await user.dblClick(screen.getByRole("button", { name: "Riprendi la preparazione" }));
     expect(onRetry).toHaveBeenCalledOnce();
     expect(screen.getByRole("button", { name: "Verifica in corso…" })).toBeDisabled();
     expect(screen.getByRole("region", { name: /avanzamento configurazione/i }).closest(".onboarding-runtime-card")).toHaveAttribute("aria-busy", "true");
@@ -678,7 +713,7 @@ describe("OnboardingFlow technical setup", () => {
       onRetry,
     });
     const user = userEvent.setup();
-    const retry = screen.getByRole("button", { name: "Riprova la preparazione" });
+    const retry = screen.getByRole("button", { name: "Riprendi la preparazione" });
 
     await user.click(retry);
     await waitFor(() => expect(retry).toBeEnabled());

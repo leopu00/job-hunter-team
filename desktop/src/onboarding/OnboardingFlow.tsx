@@ -176,6 +176,10 @@ function RuntimeView({ host, platform, t, locale, runtime, activity, onRetry, on
   const activeLabel = visibleRuntimeStages[activeIndex]?.label ?? t.configuration;
   const failureTitle = failed && runtime.title ? runtime.title : t.configureAgain(activeLabel);
   const completedSteps = Math.max(0, activeIndex);
+  // A preparation that failed after part of it was done: trying again runs the same preparation, which
+  // checks what is already there, so it is offered as «Resume» and says what is already in place.
+  const resumable = failed && runtime.retryable !== false &&
+    (completedSteps > 0 || !!activity?.events.some((event) => event.status === "completed"));
   const currentActivity = !failed && activity?.current?.stage === runtime.stage ? activity.current : undefined;
   const currentActivityName = currentActivity ? t.activityStages[currentActivity.nativeStage] : undefined;
   const elapsed = activity ? formatElapsed(now - activity.startedAt) : "00:00";
@@ -375,6 +379,7 @@ function RuntimeView({ host, platform, t, locale, runtime, activity, onRetry, on
           {freeSpaceResult && <p className="onboarding-free-space" role="status">{freeSpaceResult.text} {freeSpaceResult.action}</p>}
           {actionFailed && <p className="onboarding-error" role="alert">{t.actionFailed}</p>}
           {failed && runtime.retryable === false && !runtime.action && runtime.code !== "container_version_incompatible" && <p className="onboarding-error">{t.fixData}</p>}
+          {resumable && <p className="onboarding-hint" data-testid="onboarding-resume-note">{t.resumeNote}</p>}
           <div className="onboarding-runtime-actions" ref={actionsRef}>
             {!failed && <button className="onboarding-secondary" type="button" onClick={() => invoke(onRestart)} disabled={pending}>
               {t.restart}
@@ -414,7 +419,7 @@ function RuntimeView({ host, platform, t, locale, runtime, activity, onRetry, on
               <>
               {runtime.stage === "ssh-host-key" && !failed && <button className="onboarding-secondary" type="button" onClick={onCancelHostKey} disabled={pending}>{t.cancel}</button>}
               <button className="onboarding-primary" type="button" onClick={() => invoke(action, !failed)} disabled={pending}>
-                {pending ? failed ? t.verifying : t.wait : failed ? t.retryPrepare : actionLabel}<span aria-hidden="true">→</span>
+                {pending ? failed ? t.verifying : t.wait : failed ? resumable ? t.resumeSetup : t.retryPrepare : actionLabel}<span aria-hidden="true">→</span>
               </button>
               </>
             )}
