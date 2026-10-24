@@ -5,16 +5,28 @@ import type { ReactNode } from "react";
  * code, lists, headings) and, from older automatic reports, a few HTML tags. It is rendered as React
  * nodes and nothing else: no HTML is ever inserted, no link is made clickable (a link in a reply is
  * shown as its words and its address), the two harmless HTML emphasis tags still count as emphasis and
- * every other tag is dropped. A text with none of these marks comes out unchanged.
+ * every other HTML tag is dropped (a `<` that is not a tag, as in `RAL < 50k`, stays). A text with none of these marks comes out unchanged.
  */
 
 // One pass over a line: `**bold**`, `*italic*` (the stars touch the words: `2 * 3 * 4` stays as it is),
 // `code`, a `[words](address)` link, the old <i>/<em> tags, and any other tag.
-const INLINE =
-  /\*\*([^*\n]*[^*\s][^*\n]*)\*\*|\*([^*\s][^*\n]*[^*\s]|[^*\s])\*|`([^`\n]+)`|\[([^\]\n]+)\]\(([^)\s]+)\)|<(i|em)>([^<]*)<\/\6>|<[^>]*>/gi;
+// A tag is dropped only when it is an HTML element's: `RAL < 50k e > 40k`, `Vec<String>` and `<name@example.com>`
+// are text and stay (React shows them as text anyway: nothing here can become markup).
+const HTML_TAGS =
+  "a|abbr|address|article|aside|audio|b|base|blockquote|body|br|button|canvas|code|dd|details|div|dl|dt|em|embed|figure|font|footer|form|frame|frameset|h[1-6]|head|header|hr|html|i|iframe|img|input|label|li|link|main|map|meta|nav|noscript|object|ol|option|p|picture|pre|script|section|select|small|source|span|strong|style|sub|summary|sup|svg|table|tbody|td|template|textarea|tfoot|th|thead|title|tr|u|ul|video";
+const INLINE = new RegExp(
+  "\\*\\*([^*\\n]*[^*\\s][^*\\n]*)\\*\\*|\\*([^*\\s][^*\\n]*[^*\\s]|[^*\\s])\\*|`([^`\\n]+)`|\\[([^\\]\\n]+)\\]\\(([^)\\s]+)\\)|<(i|em)>([^<]*)<\\/\\6>|<\\/?(?:" +
+    HTML_TAGS +
+    ")(?:\\s[^<>\\n]*)?\\/?>",
+  "gi",
+);
 
-/** The inline marks of one piece of text, as nodes. */
-export function renderChatText(text: string, keyPrefix = "t"): ReactNode[] {
+/** A line longer than this is shown as plain text: the marks of such a line are not worth a pass over it. */
+const MAX_MARKED_LINE = 2000;
+
+/** The inline marks of one line, as nodes; a very long line is plain text (the pass over it is not linear). */
+function renderLine(text: string, keyPrefix: string): ReactNode[] {
+  if (text.length > MAX_MARKED_LINE) return [text];
   const nodes: ReactNode[] = [];
   let end = 0;
   let match: RegExpExecArray | null;
@@ -32,10 +44,20 @@ export function renderChatText(text: string, keyPrefix = "t"): ReactNode[] {
       );
     } else if (match[4] !== undefined) nodes.push(`${match[4]} (${match[5]})`);
     else if (match[6] !== undefined) nodes.push(<em key={key}>{match[7]}</em>);
-    // any other tag: dropped
+    // any other HTML tag: dropped
     end = INLINE.lastIndex;
   }
   if (end < text.length) nodes.push(text.slice(end));
+  return nodes;
+}
+
+/** The inline marks of one piece of text, as nodes, line by line (the line breaks stay). */
+export function renderChatText(text: string, keyPrefix = "t"): ReactNode[] {
+  const nodes: ReactNode[] = [];
+  text.split("\n").forEach((line, index) => {
+    if (index > 0) nodes.push("\n");
+    nodes.push(...renderLine(line, `${keyPrefix}${index}`));
+  });
   return nodes;
 }
 

@@ -54,6 +54,28 @@ describe("the marks of the agent's text", () => {
     expect(container.textContent).not.toContain("<");
   });
 
+  it("a `<` that is not a tag stays as it is: only an HTML element's tag is dropped", () => {
+    const kept = render(<p>{renderChatText("RAL < 50k e > 40k, Vec<String>, <mario@example.com>")}</p>);
+    expect(kept.container.textContent).toBe("RAL < 50k e > 40k, Vec<String>, <mario@example.com>");
+    // an HTML element's tag is dropped even when glued to a word:
+    const dropped = render(<p>{renderChatText('a<b>c</b> <script src="x">y</script> <img src=x onerror=alert(1)> <div class="k">d</div>')}</p>);
+    expect(dropped.container.querySelector("script,img,div,b")).toBeNull();
+    expect(dropped.container.textContent).toBe("ac y  d");
+  });
+
+  it("a very long line is plain text, and shown in a blink (no pass quadratic in its length)", () => {
+    for (const line of ["**" + "a".repeat(100_000), "*" + "a ".repeat(50_000), "<" + "a".repeat(100_000), "[" + "a".repeat(100_000)]) {
+      const started = performance.now();
+      const { container } = render(<div>{renderChatMarkdown(line)}</div>);
+      expect(performance.now() - started).toBeLessThan(100);
+      expect(container.textContent).toBe(line); // no mark is drawn on it
+    }
+    // a normal line next to a long one keeps its marks
+    const mixed = render(<div>{renderChatMarkdown(["**forte**", "x".repeat(2500), "*dolce*"].join("\n"))}</div>);
+    expect(mixed.container.querySelector("strong")).toHaveTextContent("forte");
+    expect(mixed.container.querySelector("em")).toHaveTextContent("dolce");
+  });
+
   it("lists, headings and code fences keep their shape; a text of lines keeps its breaks", () => {
     const { container } = render(
       <div>
