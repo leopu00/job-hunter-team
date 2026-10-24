@@ -619,7 +619,7 @@ pub(crate) enum DirectChatEvent {
 pub(crate) struct DirectChatError {
     code: &'static str,
 }
-fn failure(code: &'static str) -> DirectChatError {
+pub(crate) fn failure(code: &'static str) -> DirectChatError {
     DirectChatError { code }
 }
 fn status(state: &'static str, code: Option<&'static str>) -> DirectChatStatus {
@@ -2686,6 +2686,36 @@ fn enter_impl(inner: &DirectChatInner, agent: &str, message_id: &str) -> Result<
         return Err(failure("send_verify_failed"));
     }
     Ok(receipt)
+}
+
+/// The most a fixed script of the app may answer in one go: pages are about a megabyte, so this is far past one.
+const TEAM_SCRIPT_REPLY_MAX: usize = 4 * 1024 * 1024;
+
+/// One read of the team through the chat's Python channel (this computer's team, an existing team's pinned
+/// container, the VPS the app made): a fixed script of the app, one JSON request, one JSON reply. It is a
+/// read, so it asks for no write gate and works in the read-only view; it needs the chat connected.
+pub(crate) async fn team_script_read(
+    state: &State<'_, DirectChatState>,
+    scopes: &State<'_, AccountScopeState>,
+    script: &'static str,
+    request: Value,
+    timeout: Duration,
+) -> Result<Value, DirectChatError> {
+    chat_write(
+        state,
+        scopes,
+        move |inner| {
+            let slot = inner.connection.lock().map_err(|_| failure("state_failed"))?;
+            let connection = slot.as_ref().ok_or_else(|| failure("disconnected"))?;
+            let result = run_python(connection, script, &request, timeout)?;
+            if result.stdout.len() > TEAM_SCRIPT_REPLY_MAX {
+                return Err(failure("read_failed"));
+            }
+            parse_json(result, "read_failed")
+        },
+        "read_failed",
+    )
+    .await
 }
 
 /// Runs a write of the chat on the worker, in the account scope the page asked it in.

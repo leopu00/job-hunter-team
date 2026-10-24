@@ -312,7 +312,6 @@ const NOT_ERRORS: Record<string, string> = {
   // itself never reaches the person.
   export_dir_unavailable: "CSV export failure, said by the page as export_failed",
   export_name_invalid: "CSV export failure, said by the page as export_failed",
-  export_too_large: "CSV export failure, said by the page as export_failed",
   export_window: "CSV export failure, said by the page as export_failed",
   export_write_failed: "CSV export failure, said by the page as export_failed",
   // install.ps1's notice id (windows_runtime.rs, INSTALL_NOTICES): not a failure, the setup
