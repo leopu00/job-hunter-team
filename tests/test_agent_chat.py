@@ -609,6 +609,13 @@ P24_CODEX_0147_FORM = "\n".join((
     "",
     "\x1b[0m\x1b[39m\x1b[49m\x1b[38;2;246;226;183m\x1b[2m " + "□" * 17 + "·" + "□" * 18 + "\x1b[39m\x1b[0m\x1b[38;2;171;223;167m\x1b[49m",
 )) + "\n"
+P24_HISTORY_WITH_ENGLISH_INTERLOCK_WORDS = """\
+Do you want to proceed?
+Allow command?
+Select login method:
+Paste code here if prompted
+Do you trust the files in this folder?
+""" + P24_CODEX_0147_FORM
 
 
 def _module():
@@ -651,9 +658,9 @@ def _nothing_happened(box, agent="capitano"):
 
 
 @pytest.mark.parametrize("screen", [
-    CLAUDE_PERMISSION, CODEX_APPROVAL, LOGIN_METHOD, PASTE_CODE, TRUST_FOLDER, MENU_TRY_AGAIN,
+    CLAUDE_PERMISSION, CODEX_APPROVAL, LOGIN_METHOD, TRUST_FOLDER, MENU_TRY_AGAIN,
     MENU_SEND_FEEDBACK, MENU_MARK_ON_LAST, MENU_ITALIANO,
-], ids=["permission", "approval", "login", "paste-code", "trust-folder", "menu-try-again",
+], ids=["permission", "approval", "login", "trust-folder", "menu-try-again",
         "menu-send-feedback", "menu-mark-on-last", "menu-italiano"])
 def test_a_certain_interlock_is_a_closed_code_with_nothing_written_or_typed(box, screen):
     box.stub_delivery()
@@ -689,6 +696,17 @@ def test_the_exact_redacted_p24_codex_composer_and_footer_are_writable(box):
     box.stub_delivery()
     (box.state / "screen").write_text(P24_CODEX_0147_FORM, encoding="utf-8")
     code, receipt = box.run("send", "capitano", "id-p24-codex-form", stdin="riprendi la coda")
+    assert code == 0 and receipt["taken"] is True
+
+
+def test_historic_english_permission_and_login_prose_never_blocks_the_p24_composer(box):
+    module = _module()
+    assert module.composer_snapshot(P24_HISTORY_WITH_ENGLISH_INTERLOCK_WORDS) == ("empty", False)
+    assert module.delivery_gate(P24_HISTORY_WITH_ENGLISH_INTERLOCK_WORDS) == "empty"
+    assert module.delivery_gate(CODEX_APPROVAL) == "blocked", "current structural Codex permission remains closed"
+    box.stub_delivery()
+    (box.state / "screen").write_text(P24_HISTORY_WITH_ENGLISH_INTERLOCK_WORDS, encoding="utf-8")
+    code, receipt = box.run("send", "capitano", "id-p24-history", stdin="riprendi la coda")
     assert code == 0 and receipt["taken"] is True
 
 
