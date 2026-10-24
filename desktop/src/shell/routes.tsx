@@ -14,6 +14,7 @@ import PositionsPage from "../pages/positions";
 import ProfilePage from "../pages/profile";
 import HelpPage from "../pages/help";
 import SettingsPage from "../pages/settings";
+import TeamSettingsPage from "../pages/team-settings";
 import VpsConnectionPage from "../pages/vps-connection";
 import SwipePage from "../pages/swipe";
 import TeamPage from "../pages/team";
@@ -70,6 +71,8 @@ export const ROUTES: Route[] = [
   { path: "/mail", page: MailPage },
   { path: "/settings", page: SettingsPage },
   { path: "/settings/vps-connection", page: VpsConnectionPage },
+  // When the agents work and the model and effort of each role (the web's /settings/team).
+  { path: "/settings/team", page: TeamSettingsPage },
   { path: "/help", page: HelpPage },
   // «Remove JHT from this computer» (Windows): linked only where it can run.
   { path: "/computer", page: ComputerPage },

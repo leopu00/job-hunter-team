@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { DISPLAY_CURRENCY_COOKIE } from "@/lib/display-currency";
 import { installApiBridge, notInDesktop, shellApi } from "../../shell/api-bridge";
+import { enterExistingTeamReadOnly, leaveExistingTeamReadOnly } from "../../lib/existing-team-readonly";
 import { NOTIFY_PREFS_KEY, readNotifyPrefs, writeNotifyPrefs } from "../../lib/notify/prefs";
 import { ProviderSetupContext } from "../../lib/provider-setup";
 import SettingsPage from "./index";
@@ -122,5 +123,21 @@ describe("the settings page", () => {
     });
     expect(screen.getByTestId("settings-notify-enabled")).toBeChecked();
     expect(screen.getByTestId("settings-notify-details")).toBeChecked();
+  });
+
+  it("opens the team's hours and models, except in the read-only view", async () => {
+    Object.defineProperty(window, "location", { configurable: true, value: realLocation });
+    const user = userEvent.setup();
+    const view = render(<SettingsPage {...props} />);
+    await user.click(screen.getByTestId("settings-team-link"));
+    expect(window.location.hash).toBe("#/settings/team");
+    view.unmount();
+    enterExistingTeamReadOnly(false);
+    try {
+      render(<SettingsPage {...props} />);
+      expect(screen.queryByTestId("settings-team-link")).not.toBeInTheDocument();
+    } finally {
+      leaveExistingTeamReadOnly();
+    }
   });
 });
