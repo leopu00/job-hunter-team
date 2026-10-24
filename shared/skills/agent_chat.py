@@ -218,7 +218,56 @@ def read(agent: str, cursor_text: str | None) -> dict:
         waiting, settled = _queue_state(agent)
         page["queued"] = [str(held.get("message_id")) for held in waiting]
         page["settled"] = settled       # how each turn that left the queue ended, for the page to say
+    if _awaiting_reply(agent):
+        activity = activity_of(agent)
+        if activity:
+            page["activity"] = activity     # absent = not known; never read as idle
     return page
+
+
+# The person's last turn is waiting for an answer: nothing from the agent after it, and young enough
+# that what the agent does now is about it.  Only then does a read look at the terminal at all.
+ACTIVITY_WINDOW_S = 1800.0
+
+
+def _awaiting_reply(agent: str) -> bool:
+    path = chat_path(agent)
+    last_user = last_agent = None
+    try:
+        size = path.stat().st_size
+        with open(path, "rb") as handle:
+            handle.seek(max(0, size - HISTORY_TAIL))
+            for raw in handle:
+                if len(raw) > MAX_LINE:
+                    continue
+                try:
+                    row = json.loads(raw.decode("utf-8"))
+                except Exception:
+                    continue
+                at = row.get("ts") if isinstance(row, dict) else None
+                if isinstance(at, bool) or not isinstance(at, (int, float)):
+                    continue
+                if row.get("role") == "user":
+                    last_user = at
+                elif row.get("role") == "assistant" and str(row.get("text") or "").strip():
+                    last_agent = at
+    except OSError:
+        return False
+    if last_user is None or (last_agent is not None and last_agent >= last_user):
+        return False
+    return 0 <= time.time() - last_user <= ACTIVITY_WINDOW_S
+
+
+def activity_of(agent: str) -> str | None:
+    """`working` while the agent's CLI shows a running turn, `idle` at an empty prompt, None when
+    the screen cannot say (no session, a menu, a draft, a form this reader does not know)."""
+    pane = capture_pane(AGENTS[agent])
+    if pane is None:
+        return None
+    state, busy = composer_snapshot(pane)
+    if busy:
+        return "working"
+    return "idle" if state == "empty" else None
 
 
 def _read_page(agent: str, cursor_text: str | None) -> dict:

@@ -493,6 +493,16 @@ where
     Ok(string_in(raw.as_ref(), &["terminal"]).map(str::to_owned))
 }
 
+/// What the agent's terminal shows while the person waits for an answer: a running turn, or an empty
+/// prompt. Any other word is left out: absent is «not known» and is never shown as idle.
+fn closed_activity<'de, D>(deserializer: D) -> Result<Option<String>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let raw = Option::<Value>::deserialize(deserializer)?;
+    Ok(string_in(raw.as_ref(), &["working", "idle"]).map(str::to_owned))
+}
+
 fn questions<'de, D>(deserializer: D) -> Result<Option<Vec<DirectChatQuestion>>, D::Error>
 where
     D: serde::Deserializer<'de>,
@@ -523,6 +533,10 @@ pub(crate) struct DirectChatPage {
     /// from here, never from its absence in `queued`.
     #[serde(default, deserialize_with = "queue_endings", skip_serializing_if = "Option::is_none")]
     settled: Option<Vec<DirectChatQueueEnding>>,
+    /// `working` or `idle`, only while the person's last turn waits for an answer; absent when the team
+    /// does not say (an older image, a screen it cannot read): the page never reads absent as idle.
+    #[serde(default, deserialize_with = "closed_activity", skip_serializing_if = "Option::is_none")]
+    activity: Option<String>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
@@ -3325,7 +3339,7 @@ mod tests {
         let mut answers = answers.iter();
         let result = small_read(cursor, &mut |sent: Option<&str>| -> Result<DirectChatPage, DirectChatError> {
             asked.push(sent.unwrap_or("none").to_owned());
-            Ok(DirectChatPage { messages: Vec::new(), cursor: answers.next().expect("one answer per read").map(str::to_owned), questions: None, queued: None, settled: None })
+            Ok(DirectChatPage { messages: Vec::new(), cursor: answers.next().expect("one answer per read").map(str::to_owned), questions: None, queued: None, settled: None, activity: None })
         });
         (result.map(|page| page.cursor).map_err(|error| error.code), asked)
     }
@@ -4050,6 +4064,18 @@ mod tests {
         )
         .unwrap();
         assert!(serde_json::to_value(&typed).unwrap().get("state").is_none());
+    }
+
+    #[test]
+    fn the_activity_of_the_agent_is_working_or_idle_and_anything_else_is_not_known() {
+        let shown = |raw: &str| serde_json::to_value(serde_json::from_str::<DirectChatPage>(raw).unwrap()).unwrap();
+        assert_eq!(shown(r#"{"messages":[],"activity":"working"}"#)["activity"], "working");
+        assert_eq!(shown(r#"{"messages":[],"activity":"idle"}"#)["activity"], "idle");
+        for odd in [r#""busy""#, r#""<b>x</b>""#, r#""WORKING""#, "7", "true", "null", r#"["working"]"#, r#""""#] {
+            let page = shown(&format!(r#"{{"messages":[],"activity":{odd}}}"#));
+            assert!(page.get("activity").is_none(), "{odd} is not known, never idle");
+        }
+        assert!(shown(r#"{"messages":[]}"#).get("activity").is_none(), "an older image says nothing");
     }
 
     #[test]

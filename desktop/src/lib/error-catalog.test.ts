@@ -80,6 +80,7 @@ const NOT_ERRORS: Record<string, string> = {
   message_kind: "name of a serde function in direct_chat.rs, not a code",
   taken_flag: "name of a serde function in direct_chat.rs, not a code",
   closed_queue: "name of a serde function in direct_chat.rs, not a code",
+  closed_activity: "name of a serde function in direct_chat.rs, not a code",
   queued_ids: "name of a serde function in direct_chat.rs, not a code",
   queue_endings: "name of a serde function in direct_chat.rs, not a code",
   queued: "state of a receipt (the team holds the turn), said as «In coda» by the chat page, not an error",

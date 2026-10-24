@@ -13,6 +13,7 @@ import {
   answerProblem,
   outcomeOf,
   settleQueued,
+  deliveryStage,
   TAKEN_REASONS,
   cleanMessage,
   cleanQuestion,
@@ -221,6 +222,25 @@ describe("what a receipt says of the person's message", () => {
     }
     // a reason beside a taken that is not null says nothing
     expect(outcomeOf({ taken: false, reason: "menu" }, 0)).toEqual({ kind: "notSent", presses: 0 });
+  });
+});
+
+describe("where the person's last turn stands: queued, taken, working", () => {
+  it("says working only when the page says the agent is working, and never guesses it", () => {
+    const sent = outcomeOf({ taken: true }, 0);
+    expect(deliveryStage(sent, "working")).toBe("working");
+    expect(deliveryStage(sent, "idle")).toBe("taken");
+    expect(deliveryStage(sent)).toBe("taken");
+    expect(deliveryStage(outcomeOf({}, 0))).toBe("taken");
+  });
+
+  it("a turn in the mailbox is queued whatever the agent does, and the other outcomes have no step", () => {
+    const queued = outcomeOf({ state: "queued", queue: "terminal" }, 0);
+    expect(deliveryStage(queued, "working")).toBe("queued");
+    expect(deliveryStage(queued)).toBe("queued");
+    expect(deliveryStage(outcomeOf({ taken: false }, 1), "working")).toBeNull();
+    expect(deliveryStage(outcomeOf({ taken: null, reason: "menu" }, 0), "working")).toBeNull();
+    expect(deliveryStage({ kind: "expired" }, "working")).toBeNull();
   });
 });
 
