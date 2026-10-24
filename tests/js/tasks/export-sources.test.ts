@@ -12,15 +12,17 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, readdirSync, readFileSync, rmSync, statSync } from "node:fs";
+import { mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import {
   EXPORT_SOURCES,
   RETIRED_EXPORT_SOURCES,
+  SECRET_KEY,
   exportRange,
   readExportRows,
+  redactSecrets,
 } from "../../../shared/export/sources.js";
 
 const ROOT = resolve(__dirname, "../../..");
@@ -154,6 +156,63 @@ describe("le sorgenti ritirate si dicono, non si esportano vuote", () => {
   });
 });
 
+describe("jht export config: i segreti escono vuoti, come nel backup dell'app", () => {
+  it("la regola e' quella di team_backup.rs", () => {
+    const rust = text("desktop/src-tauri/src/team_backup.rs");
+    const rule = /SECRET=re\.compile\(r'(.+?)',re\.I\)/.exec(rust);
+    expect(rule, "la regola SECRET non e' piu' nello script del backup").not.toBeNull();
+    expect(SECRET_KEY.source).toBe(rule![1]);
+    expect(SECRET_KEY.flags).toBe("i");
+  });
+
+  it("api_key, session_token, bot_token, anche annidati o in liste, vanno a null; il resto resta", () => {
+    const config = {
+      active_provider: "claude",
+      providers: { claude: { api_key: "K-1", model: "m", nested: { refresh_token: "T-2", Session_Token: "T-3" } } },
+      telegram: { bot_token: "B-4", chat_id: "42" },
+      list: [{ password: "P-5", ok: 1 }, { authorization: "Bearer x", name: "n" }],
+    };
+    const clean = redactSecrets(config);
+    expect(clean).toEqual({
+      active_provider: "claude",
+      providers: { claude: { api_key: null, model: "m", nested: { refresh_token: null, Session_Token: null } } },
+      telegram: { bot_token: null, chat_id: "42" },
+      list: [{ password: null, ok: 1 }, { authorization: null, name: "n" }],
+    });
+    expect(JSON.stringify(clean)).not.toMatch(/K-1|T-2|T-3|B-4|P-5|Bearer/);
+    // L'originale non si tocca.
+    expect(config.providers.claude.api_key).toBe("K-1");
+  });
+
+  it("il comando scrive il file senza i segreti e lo dice", async () => {
+    const home = mkdtempSync(join(tmpdir(), "jht-export-config-"));
+    const previous = process.env.JHT_HOME;
+    process.env.JHT_HOME = home;
+    writeFileSync(
+      join(home, "jht.config.json"),
+      JSON.stringify({ active_provider: "claude", providers: { claude: { api_key: "SECRET-KEY" } }, telegram: { bot_token: "SECRET-BOT" } }),
+    );
+    const log = vi.spyOn(console, "log").mockImplementation(() => {});
+    process.exitCode = undefined;
+    try {
+      vi.resetModules();
+      const { handleExport } = await import("../../../cli/src/commands/export.js");
+      await handleExport("config", { output: join(home, "out.json") });
+      const written = readFileSync(join(home, "out.json"), "utf8");
+      expect(written).not.toMatch(/SECRET-KEY|SECRET-BOT/);
+      expect(JSON.parse(written).data).toEqual([
+        { active_provider: "claude", providers: { claude: { api_key: null } }, telegram: { bot_token: null } },
+      ]);
+      expect(log.mock.calls.flat().join("\n")).toMatch(/exported empty/);
+    } finally {
+      if (previous === undefined) delete process.env.JHT_HOME;
+      else process.env.JHT_HOME = previous;
+      rmSync(home, { recursive: true, force: true });
+      process.exitCode = undefined;
+    }
+  });
+});
+
 describe("readExportRows e il periodo", () => {
   function db(): DatabaseSync {
     const handle = new DatabaseSync(":memory:");
@@ -179,6 +238,12 @@ describe("readExportRows e il periodo", () => {
     expect(rows[0]).toEqual({ id: 1, title: "A", found_at: "2026-03-01" });
     const empty = new DatabaseSync(":memory:");
     expect(readExportRows(empty, "scores").rows).toEqual([]);
+  });
+
+  it("«__proto__» e simili non sono sorgenti", () => {
+    for (const name of ["__proto__", "constructor", "toString", "hasOwnProperty"]) {
+      expect(() => readExportRows(db(), name)).toThrow("export_source_invalid");
+    }
   });
 
   it("un periodo non valido non arriva mai al DB", () => {

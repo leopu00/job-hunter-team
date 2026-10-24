@@ -320,7 +320,8 @@ jht import /tmp/cfg.json -t config     # targets: sessions | tasks | config  (no
 
 `--from`/`--to` (`YYYY-MM-DD`, `to` included) filter on the date of each source
 (`found_at` for positions, `scored_at` for scores, `updated_at` for notes,
-`created_at` for the others). A source with no rows gives a valid file with
+`created_at` for the others). `config` goes out without its keys, tokens and passwords
+(set to `null`, at any depth: the same rule as the app's backup). A source with no rows gives a valid file with
 `count: 0`; a team that never ran (no `jobs.db`) is an error, not an empty file.
 
 `-t/--target` is a **required** option on `import`: without it the command

@@ -14,6 +14,7 @@ import {
   isExportSource,
   isRetiredExportSource,
   readExportRows,
+  redactSecrets,
   retiredExportNotice,
 } from '../../../shared/export/sources.js';
 
@@ -74,7 +75,9 @@ export async function handleExport(source, options) {
   }
 
   const raw = await readFile(found.path, 'utf-8');
-  const data = JSON.parse(raw);
+  // The config holds the provider keys and the bot tokens: they leave as null, as in the app's backup.
+  const data = redactSecrets(JSON.parse(raw));
+  console.log('  Keys, tokens and passwords in the config are exported empty.');
   await writeOutput(Array.isArray(data) ? data : [data], source, options);
 }
 
@@ -122,7 +125,7 @@ async function writeOutput(items, source, options) {
 export function registerExportCommand(program) {
   program
     .command('export <source>')
-    .description('Export data to JSON or CSV (source: positions, scores, applications, companies, feedback, notes, config)')
+    .description('Export data to JSON or CSV (source: positions, scores, applications, companies, feedback, notes, config; the config goes out without keys and tokens)')
     .option('-o, --output <path>', 'output file path')
     .option('--csv', 'export to CSV format')
     .option('--from <date>', 'filter start date (YYYY-MM-DD)')

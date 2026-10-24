@@ -111,7 +111,8 @@ function clean(value) {
  * @returns {{ columns: string[], rows: Record<string, unknown>[] }}
  */
 export function readExportRows(db, source, range = { since: null, until: null }) {
-  const spec = EXPORT_SOURCES[source];
+  // `Object.hasOwn`: `__proto__` e simili non sono sorgenti, qualunque cosa chiami.
+  const spec = isExportSource(source) ? EXPORT_SOURCES[source] : undefined;
   if (!spec) throw new Error('export_source_invalid');
   const have = db.prepare(`PRAGMA table_info(${spec.table})`).all().map((row) => row.name);
   const columns = spec.columns.filter((name) => have.includes(name));
@@ -127,4 +128,21 @@ export function readExportRows(db, source, range = { since: null, until: null })
   const found = db.prepare(`SELECT ${list} FROM ${spec.table} WHERE ${where} ORDER BY rowid`).all(...args);
   const rows = found.map((row) => Object.fromEntries(columns.map((name) => [name, clean(row[name])])));
   return { columns, rows };
+}
+
+/**
+ * Le chiavi i cui valori non escono mai: la stessa regola del backup dell'app
+ * (`team_backup.rs`, `SECRET`), che un test confronta con questa. Case-insensitive.
+ */
+export const SECRET_KEY = /(api[_-]?key|token|secret|passw|credential|authorization|bearer|private[_-]?key)/i;
+
+/** Una copia del valore con a `null` ogni valore la cui chiave e' un segreto, a qualunque profondita'. */
+export function redactSecrets(value) {
+  if (Array.isArray(value)) return value.map(redactSecrets);
+  if (value !== null && typeof value === 'object') {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, item]) => [key, SECRET_KEY.test(key) ? null : redactSecrets(item)]),
+    );
+  }
+  return value;
 }
