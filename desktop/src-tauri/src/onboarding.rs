@@ -4872,6 +4872,23 @@ pub(crate) fn onboarding_provider_login_close(
     Ok(())
 }
 
+/// The resume finds the local runtime stopped (the Podman machine is off after a restart, so nothing of
+/// the team runs): it wakes it with `jht up` and reads the snapshot again, as the setup does, instead of
+/// refusing with «the container is not running». What is not local is not woken: a VPS keeps the refusal
+/// of `resume_team_prerequisite`, and so does a runtime that is not installed.
+fn woken_before_resume(
+    before: OnboardingSnapshot,
+    local: bool,
+    wake: impl FnOnce() -> Result<(), OnboardingError>,
+    read: impl FnOnce() -> Result<OnboardingSnapshot, OnboardingError>,
+) -> Result<OnboardingSnapshot, OnboardingError> {
+    if !(local && before.runtime_installed && !before.container_running) {
+        return Ok(before);
+    }
+    wake()?;
+    read()
+}
+
 fn resume_team_prerequisite(snapshot: &OnboardingSnapshot) -> Result<(), OnboardingError> {
     let missing = if !snapshot.runtime_installed {
         Some("resume_runtime_not_ready")
@@ -5518,10 +5535,26 @@ pub(crate) async fn onboarding_resume_team_start(
                     .map_err(failure)?;
                 let validated = validate_host(&app, &host).map_err(failure)?;
                 let before = snapshot_impl(&app, &worker_expected, &validated)?;
+                let runtime_log = RuntimeLog::new(&app);
+                let before = woken_before_resume(
+                    before,
+                    matches!(validated, ValidatedHost::Local),
+                    || {
+                        let wrapper = wrapper_path(&app).ok_or_else(|| failure("runtime_missing"))?;
+                        start_and_verify_local_container_with(
+                            |operation, timeout| {
+                                run_scoped_local_logged(&app, &worker_expected, &wrapper, operation, timeout, runtime_log.as_ref())
+                            },
+                            thread::sleep,
+                            LOCAL_CONTAINER_VERIFY_ATTEMPTS,
+                        )
+                        .map_err(|error| with_cause(error, runtime_log.as_ref()))
+                    },
+                    || snapshot_impl(&app, &worker_expected, &validated),
+                )?;
                 resume_team_prerequisite(&before)?;
                 let limits =
                     start_limits_gate(read_start_limits(&app, &worker_expected, &validated))?;
-                let runtime_log = RuntimeLog::new(&app);
                 start_team_impl(&app, &worker_expected, &validated, runtime_log.as_ref())?;
                 let snapshot = verified_team_snapshot(&app, &worker_expected, &validated, runtime_log.as_ref())?;
                 Ok(with_start_limits(snapshot, limits))
@@ -5631,6 +5664,7 @@ mod tests {
         assistant_reached, existing_team_probe_with, existing_team_readonly_probe_with, expected_installer_digest, failure,
         parse_snapshot, parse_start_limits, parse_verified_snapshot, provider_bootstrap_input,
         native_team_snapshot_with, redact, resume_team_prerequisite, start_and_verify_local_container_with, start_limits_gate,
+        woken_before_resume,
         valid_interactive_request_id, valid_pairing_token, valid_provider_login_input,
         valid_wrapper_file, with_start_limits, write_provider_input, ExistingTeamConnectRequest,
         InteractiveStateDetector, LocalCliOperation, OnboardingDiagnosticHostKind,
@@ -7715,6 +7749,65 @@ exit 0
         assert!(!snapshot.assistant_running);
         assert!(!snapshot.captain_running);
         fs::remove_dir_all(root).unwrap();
+    }
+
+    /// A stopped local runtime is woken before the resume asks for its prerequisites, and read again;
+    /// a VPS, a runtime that is not installed and a container that runs are left as they are.
+    #[test]
+    fn the_resume_wakes_a_stopped_local_runtime_and_nothing_else() {
+        use std::cell::Cell;
+        let stopped = || super::OnboardingSnapshot { runtime_installed: true, ..super::OnboardingSnapshot::default() };
+        let active = || super::OnboardingSnapshot {
+            runtime_installed: true,
+            container_running: true,
+            provider_configured: true,
+            provider_authenticated: true,
+            ..super::OnboardingSnapshot::default()
+        };
+        let calls = |before: super::OnboardingSnapshot, local: bool, wake_fails: bool| {
+            let (woken, read) = (Cell::new(0), Cell::new(0));
+            let result = woken_before_resume(
+                before,
+                local,
+                || {
+                    woken.set(woken.get() + 1);
+                    if wake_fails { Err(failure("container_not_ready")) } else { Ok(()) }
+                },
+                || {
+                    read.set(read.get() + 1);
+                    Ok(active())
+                },
+            );
+            (result, woken.get(), read.get())
+        };
+
+        // the machine is off: `jht up`, then the snapshot is the new one
+        let (result, woken, read) = calls(stopped(), true, false);
+        assert!(result.unwrap().container_running);
+        assert_eq!((woken, read), (1, 1));
+        resume_team_prerequisite(&active()).unwrap();
+
+        // `jht up` did not bring it up: its own error, and no second read
+        let (result, woken, read) = calls(stopped(), true, true);
+        assert_eq!(result.unwrap_err().code, "container_not_ready");
+        assert_eq!((woken, read), (1, 0));
+
+        // a running container is not touched
+        let (result, woken, read) = calls(active(), true, false);
+        assert!(result.unwrap().container_running);
+        assert_eq!((woken, read), (0, 0));
+
+        // a VPS keeps the refusal of the prerequisite, which says the container is not running
+        let (result, woken, read) = calls(stopped(), false, false);
+        let unchanged = result.unwrap();
+        assert!(!unchanged.container_running);
+        assert_eq!((woken, read), (0, 0));
+        assert_eq!(resume_team_prerequisite(&unchanged).unwrap_err().code, "resume_container_not_ready");
+
+        // no runtime installed: nothing to wake, the prerequisite says so
+        let (result, woken, read) = calls(super::OnboardingSnapshot::default(), true, false);
+        assert_eq!(resume_team_prerequisite(&result.unwrap()).unwrap_err().code, "resume_runtime_not_ready");
+        assert_eq!((woken, read), (0, 0));
     }
 
     #[test]

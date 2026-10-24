@@ -1917,6 +1917,39 @@ describe("DashboardApp onboarding router", () => {
     expect(screen.queryByTestId("assistant-chat")).not.toBeInTheDocument();
   });
 
+  it("a resume that finds the runtime stopped is a team to start, not a failure, and the start wakes it", async () => {
+    vi.mocked(useSession).mockReturnValue(signedInAs("stopped-runtime-account"));
+    vi.mocked(loadOnboardingGate).mockResolvedValue({
+      phase: "required",
+      account: { displayName: "Stopped Runtime" },
+      resumeAvailable: true,
+      runtime: { status: "collecting", stage: "host" },
+    });
+    // the Podman machine is off after a restart: the read-only snapshot sees an installed runtime and
+    // nothing running, the provider unknown with it
+    vi.mocked(resumeOnboardingSnapshot).mockResolvedValue({
+      ...TEAM_READY,
+      containerRunning: false,
+      providerConfigured: false,
+      providerAuthenticated: false,
+      assistantRunning: false,
+      captainRunning: false,
+    });
+
+    const user = userEvent.setup();
+    render(<DashboardApp />);
+
+    expect(await screen.findByText("action-required:team-start")).toBeInTheDocument();
+    expect(screen.getByText(/riaccendo io il runtime/i)).toBeInTheDocument();
+    expect(screen.queryByText(/container salvato non risulta attivo/i)).not.toBeInTheDocument();
+    expect(resumeOnboardingTeamStart).not.toHaveBeenCalled();
+    expect(prepareOnboardingRuntime).not.toHaveBeenCalled();
+
+    // the person starts it: the native resume wakes the runtime and starts the team
+    await user.click(screen.getByRole("button", { name: "continue-runtime" }));
+    await waitFor(() => expect(resumeOnboardingTeamStart).toHaveBeenCalledOnce());
+  });
+
   it("keeps a local-profile resume probe-only until an explicit team action", async () => {
     vi.mocked(useSession).mockReturnValue({ session: null, loading: false });
     vi.mocked(localIdentitySelected).mockReturnValue(true);
