@@ -91,6 +91,7 @@ import { ConnectTeamContext, type ConnectTeamEntry } from "../lib/connect-team";
 import { ProviderSetupContext } from "../lib/provider-setup";
 import MessagesPage from "../pages/messages";
 import { NewPositionNotifier } from "../lib/notify/NewPositionNotifier";
+import TeamLanguagePrompt from "../components/TeamLanguagePrompt";
 import Shell from "../shell/Shell";
 import { navigate } from "../shell/router";
 import { describeError, errorCodeOf, errorMachineOf, errorResetsAt } from "../lib/error-catalog";
@@ -1702,6 +1703,7 @@ export default function DashboardApp() {
       </ProviderSetupContext.Provider>
       {connectDialogElement}
       <NewPositionNotifier key={`notify:${identityKey}`} />
+      {!(linkedView && !linkedView.full) && <TeamLanguagePrompt key={`language:${identityKey}`} identityKey={identityKey} />}
     </>
   );
 }
