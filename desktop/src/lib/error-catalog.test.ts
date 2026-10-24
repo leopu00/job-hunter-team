@@ -32,6 +32,8 @@ const NOT_ERRORS: Record<string, string> = {
   // through the error catalog.
   autostart_inactive: "id of the nonfatal Windows autostart notice",
   true: "Task Scheduler XML enabled value",
+  // The container engine executable the app resolves and spawns (direct_chat.rs, onboarding.rs).
+  docker: "name of the container engine program, not a code",
   // What ssh prints when the server turns an address away; read to pick ssh_rate_limited.
   kex_exchange_identification: "text of ssh stderr, not a code",
   // The reader's op cloud_sync and the fields of its reply (existing_team_runtime.rs): the page
