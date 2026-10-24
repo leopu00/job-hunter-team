@@ -147,9 +147,10 @@ impl RuntimeLog {
         }
     }
 
-    /// Interactive provider login has sensitive output and input, so its log
-    /// keeps only the closed outcome and elapsed time. This still makes the
-    /// gap between the Provider step and the team start observable.
+    /// Sensitive or internal onboarding commands keep only their closed
+    /// outcome and elapsed time. This makes the gap between the Provider
+    /// step, the state reads and the team start observable without keeping
+    /// interactive traffic or profile facts.
     pub(crate) fn record_onboarding_status(
         &self,
         step: &str,
@@ -158,13 +159,21 @@ impl RuntimeLog {
     ) {
         let step = match step {
             "provider_login" => "provider_login",
+            "team_state" => "team_state",
             _ => return,
         };
         let ended = match ended {
             Ok(code) => format!("exit {code}"),
-            Err(code) => match code {
+            Err(code) if step == "provider_login" => match code {
                 "provider_login_start_failed" | "provider_login_pipe_failed"
                 | "provider_login_failed" | "state_failed" => code,
+                _ => "io_error_other",
+            }
+            .to_owned(),
+            Err(code) => match code {
+                "runtime_missing" | "process_start_failed" | "process_timeout"
+                | "process_write_failed" | "process_wait_failed" | "process_output_unavailable"
+                | "process_input_failed" | "process_pipe_failed" => code,
                 _ => "io_error_other",
             }
             .to_owned(),
@@ -668,7 +677,13 @@ mod tests {
         assert!(text.contains(" onboarding.provider_login: exit 0 after 1.5 s\n"), "{text}");
         assert!(text.contains(" onboarding.provider_login: provider_login_failed after 0.0 s\n"), "{text}");
         assert!(text.contains(" onboarding.provider_login: io_error_other after 0.0 s\n"), "{text}");
-        assert!(!text.contains("token-from-provider") && !text.contains("anything-else"), "{text}");
+        log.record_onboarding_status("team_state", Ok(0), Duration::from_millis(250));
+        log.record_onboarding_status("team_state", Err("process_timeout"), Duration::ZERO);
+        log.record_onboarding_status("team_state", Err("profile-json"), Duration::ZERO);
+        let text = fs::read_to_string(log.path()).unwrap();
+        assert!(text.contains(" onboarding.team_state: exit 0 after 0.2 s\n"), "{text}");
+        assert!(text.contains(" onboarding.team_state: process_timeout after 0.0 s\n"), "{text}");
+        assert!(!text.contains("token-from-provider") && !text.contains("anything-else") && !text.contains("profile-json"), "{text}");
         let _ = fs::remove_dir_all(&root);
     }
 
