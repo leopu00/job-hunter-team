@@ -20,7 +20,6 @@ type ProviderConfig = {
   name: string;
   auth_method?: AuthMethod;
   api_key?: string;
-  model?: string;
   subscription?: Record<string, unknown>;
 };
 
@@ -30,50 +29,51 @@ type JhtConfig = {
   providers?: Record<string, ProviderConfig>;
 };
 
-function normalizeProviderId(value: string | undefined): string | null {
-  const normalized = (value ?? "").trim().toLowerCase();
-  if (!normalized) return null;
-  if (normalized === "claude") return "anthropic";
-  if (
-    normalized === "anthropic" ||
-    normalized === "openai" ||
-    normalized === "kimi" ||
-    normalized === "kimi"
-  )
-    return normalized;
-  return null;
-}
-
+// Gli id sono quelli della squadra: claude, codex, kimi, gli stessi del pin in
+// shared/config/provider-versions.json e di `@jht-cli` nelle sessioni. La
+// config accetta anche i nomi vecchi (anthropic, openai, moonshot): si
+// riconoscono, ma la pagina ne mostra sempre uno solo.
 const KNOWN_PROVIDERS = [
   {
-    id: "anthropic",
-    label: "Anthropic",
-    models: [
-      "claude-sonnet-4-20250514",
-      "claude-opus-4-6",
-      "claude-haiku-4-5-20251001",
-    ],
+    id: "claude",
+    label: "Claude",
+    aliases: ["anthropic"],
     envKey: "ANTHROPIC_API_KEY",
   },
   {
-    id: "openai",
-    label: "OpenAI",
-    models: ["gpt-4o-mini", "gpt-4o", "o1", "o1-mini"],
+    id: "codex",
+    label: "Codex",
+    aliases: ["openai"],
     envKey: "OPENAI_API_KEY",
   },
   {
     id: "kimi",
-    label: "Kimi K2",
-    models: ["kimi-k2-0711-preview"],
-    envKey: "MOONSHOT_API_KEY",
-  },
-  {
-    id: "kimi",
     label: "Kimi",
-    models: ["abab6.5s-chat", "abab5.5-chat"],
+    aliases: ["moonshot"],
     envKey: "MOONSHOT_API_KEY",
   },
 ];
+
+function normalizeProviderId(value: string | undefined): string | null {
+  const normalized = (value ?? "").trim().toLowerCase();
+  if (!normalized) return null;
+  const known = KNOWN_PROVIDERS.find(
+    (p) => p.id === normalized || p.aliases.includes(normalized),
+  );
+  return known?.id ?? null;
+}
+
+/** La sezione di config del provider, sotto il suo id o sotto un nome vecchio. */
+function providerConfigFor(
+  config: JhtConfig,
+  provider: (typeof KNOWN_PROVIDERS)[number],
+): ProviderConfig | undefined {
+  for (const key of [provider.id, ...provider.aliases]) {
+    const found = config.providers?.[key];
+    if (found) return found;
+  }
+  return undefined;
+}
 
 const loadConfig = () => loadJhtConfig<JhtConfig>();
 
@@ -132,12 +132,10 @@ const KIMI_SITE_PACKAGES = path.join(
 type Pin = { kind: string; package: string; version: string };
 const PINS = providerVersions.pins as Record<string, Pin>;
 
-// Gli id del web (anthropic/openai/kimi) non sono le chiavi del manifest
-// (claude/codex/kimi): la mappa è qui, esplicita, come `resolveUpdateTarget`
-// nella CLI.
+// Gli id del web sono le chiavi del manifest dei pin.
 const PIN_KEY: Record<string, string> = {
-  anthropic: "claude",
-  openai: "codex",
+  claude: "claude",
+  codex: "codex",
   kimi: "kimi",
 };
 
@@ -164,7 +162,7 @@ function installSpecFor(providerId: string): string | null {
 }
 
 const CLI_SPECS: Record<string, CliSpec> = {
-  anthropic: {
+  claude: {
     kind: "npm",
     npmPkg: "@anthropic-ai/claude-code",
     installedPkgJson: path.join(
@@ -174,7 +172,7 @@ const CLI_SPECS: Record<string, CliSpec> = {
       "package.json",
     ),
   },
-  openai: {
+  codex: {
     kind: "npm",
     npmPkg: "@openai/codex",
     installedPkgJson: path.join(NPM_GLOBAL, "@openai", "codex", "package.json"),
@@ -275,23 +273,61 @@ function activeSessionsForProvider(providerId: string): string[] {
   );
 }
 
+// Cosa gira davvero: ogni sessione del team porta `@jht-cli` (claude, codex,
+// kimi) e `@jht-model`, scritti da start-agent.sh quando la accende. È l'unico
+// posto che dice quale modello usa un agente: nessun elenco fisso e nessun
+// campo di jht.config.json lo dice (non lo legge nessuno).
+const MODEL_ID = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,39}$/;
+
+type ModelInUse = { model: string | null; agents: number };
+
+function modelsInUseByProvider(): Record<string, ModelInUse[]> {
+  const counts = new Map<string, Map<string | null, number>>();
+  try {
+    const out = execSync(
+      'tmux list-sessions -F "#{session_name}\t#{@jht-cli}\t#{@jht-model}" 2>/dev/null || true',
+      { encoding: "utf-8" },
+    );
+    for (const line of out.split("\n")) {
+      const [session = "", cli = "", model = ""] = line.split("\t");
+      const team = ALL_AGENT_SESSION_PREFIXES.some(
+        (prefix) => session === prefix || session.startsWith(prefix + "-"),
+      );
+      if (!team || !KNOWN_PROVIDERS.some((p) => p.id === cli)) continue;
+      const byModel = counts.get(cli) ?? new Map<string | null, number>();
+      const key = MODEL_ID.test(model) ? model : null;
+      byModel.set(key, (byModel.get(key) ?? 0) + 1);
+      counts.set(cli, byModel);
+    }
+  } catch {
+    /* tmux assente: nessun agente acceso che si veda */
+  }
+  const out: Record<string, ModelInUse[]> = {};
+  for (const [cli, byModel] of counts) {
+    out[cli] = [...byModel.entries()]
+      .map(([model, agents]) => ({ model, agents }))
+      .sort((a, b) => b.agents - a.agents);
+  }
+  return out;
+}
+
 export async function GET() {
   const denied = await requireAuth();
   if (denied) return denied;
   const config = loadConfig();
+  // Quello che la squadra usa è `active_provider` (lo leggono spawn-lib e i
+  // watchdog); se manca o non è uno dei tre, la squadra non parte e la pagina
+  // non ne inventa uno.
   const activeProvider =
     normalizeProviderId(config.active_provider) ??
-    normalizeProviderId(process.env.JHT_LLM_PROVIDER) ??
-    "anthropic";
+    normalizeProviderId(process.env.JHT_LLM_PROVIDER);
+  const inUse = modelsInUseByProvider();
 
   const providers = KNOWN_PROVIDERS.map((p) => {
-    const providerCfg =
-      config.providers?.[p.id] ??
-      (p.id === "anthropic" ? config.providers?.claude : undefined);
+    const providerCfg = providerConfigFor(config, p);
     const hasEnvKey = !!process.env[p.envKey];
     const hasConfigKey = !!(providerCfg?.api_key || providerCfg?.subscription);
     const available = hasEnvKey || hasConfigKey;
-    const activeModel = providerCfg?.model ?? p.models[0];
 
     const { installedVersion, targetVersion } = readVersionInfo(p.id);
     // Si propone l'aggiornamento solo se il bersaglio è più NUOVO
@@ -312,8 +348,7 @@ export async function GET() {
       available,
       active: p.id === activeProvider,
       authMethod: providerCfg?.auth_method ?? (hasEnvKey ? "api_key" : "none"),
-      models: p.models,
-      activeModel,
+      modelsInUse: inUse[p.id] ?? [],
       keySource: hasConfigKey ? "config" : hasEnvKey ? "env" : null,
       installedVersion,
       targetVersion,
@@ -364,7 +399,7 @@ export async function POST(req: Request) {
   // aggiornando un provider non attivo, nessuna sessione lo tiene aperto →
   // skip del preflight anche se ci sono agenti up.
   const config = loadConfig();
-  const active = normalizeProviderId(config.active_provider) ?? "anthropic";
+  const active = normalizeProviderId(config.active_provider);
   const shouldCheck = providerId === active;
   const stopped: string[] = [];
 

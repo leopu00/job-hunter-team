@@ -16,8 +16,8 @@ const T: Record<
     notConfigured: string;
     updateBadge: string;
     auth: string;
-    activeModel: string;
-    models: string;
+    modelsInUse: string;
+    noModelsInUse: string;
     apiKeyWarnPre: string;
     apiKeyWarnPost: string;
     checkUpdate: string;
@@ -43,8 +43,8 @@ const T: Record<
     notConfigured: "non configurato",
     updateBadge: "update",
     auth: "Autenticazione",
-    activeModel: "Modello attivo",
-    models: "Modelli",
+    modelsInUse: "Modelli in uso ora",
+    noModelsInUse: "nessun agente acceso con questo provider",
     apiKeyWarnPre: "Aggiungi la chiave API in",
     apiKeyWarnPost: "o nella variabile d'ambiente corrispondente.",
     checkUpdate: "Check / Update",
@@ -70,8 +70,8 @@ const T: Record<
     notConfigured: "not configured",
     updateBadge: "update",
     auth: "Authentication",
-    activeModel: "Active model",
-    models: "Models",
+    modelsInUse: "Models in use now",
+    noModelsInUse: "no agent running on this provider",
     apiKeyWarnPre: "Add the API Key in",
     apiKeyWarnPost: "or in the matching environment variable.",
     checkUpdate: "Check / Update",
@@ -97,8 +97,8 @@ const T: Record<
     notConfigured: "no configurado",
     updateBadge: "update",
     auth: "Autenticación",
-    activeModel: "Modelo activo",
-    models: "Modelos",
+    modelsInUse: "Modelos en uso ahora",
+    noModelsInUse: "ningún agente en marcha con este proveedor",
     apiKeyWarnPre: "Añade la API Key en",
     apiKeyWarnPost: "o en la variable de entorno correspondiente.",
     checkUpdate: "Check / Update",
@@ -124,8 +124,8 @@ const T: Record<
     notConfigured: "non configuré",
     updateBadge: "update",
     auth: "Authentification",
-    activeModel: "Modèle actif",
-    models: "Modèles",
+    modelsInUse: "Modèles utilisés maintenant",
+    noModelsInUse: "aucun agent allumé avec ce fournisseur",
     apiKeyWarnPre: "Ajoutez l'API Key dans",
     apiKeyWarnPost: "ou dans la variable d'environnement correspondante.",
     checkUpdate: "Check / Update",
@@ -151,8 +151,8 @@ const T: Record<
     notConfigured: "nicht konfiguriert",
     updateBadge: "update",
     auth: "Authentifizierung",
-    activeModel: "Aktives Modell",
-    models: "Modelle",
+    modelsInUse: "Modelle derzeit im Einsatz",
+    noModelsInUse: "kein Agent mit diesem Anbieter aktiv",
     apiKeyWarnPre: "Füge den API Key in",
     apiKeyWarnPost: "oder in die entsprechende Umgebungsvariable ein.",
     checkUpdate: "Check / Update",
@@ -178,8 +178,8 @@ const T: Record<
     notConfigured: "nincs beállítva",
     updateBadge: "update",
     auth: "Hitelesítés",
-    activeModel: "Aktív modell",
-    models: "Modellek",
+    modelsInUse: "Most használt modellek",
+    noModelsInUse: "nincs ezzel a szolgáltatóval futó ügynök",
     apiKeyWarnPre: "Add meg az API Key-t itt:",
     apiKeyWarnPost: "vagy a megfelelő környezeti változóban.",
     checkUpdate: "Check / Update",
@@ -205,8 +205,8 @@ const T: Record<
     notConfigured: "não configurado",
     updateBadge: "update",
     auth: "Autenticação",
-    activeModel: "Modelo ativo",
-    models: "Modelos",
+    modelsInUse: "Modelos em uso agora",
+    noModelsInUse: "nenhum agente ligado com este provedor",
     apiKeyWarnPre: "Adicione a API Key em",
     apiKeyWarnPost: "ou na variável de ambiente correspondente.",
     checkUpdate: "Check / Update",
@@ -231,8 +231,7 @@ type ProviderInfo = {
   available: boolean;
   active: boolean;
   authMethod: string;
-  models: string[];
-  activeModel?: string;
+  modelsInUse?: { model: string | null; agents: number }[];
   keySource: "config" | "env" | null;
   installedVersion?: string | null;
   // Versione che il bottone installerà davvero: il pin della release, non
@@ -245,14 +244,13 @@ type ProviderInfo = {
 
 type ProvidersData = {
   providers: ProviderInfo[];
-  activeProvider: string;
+  activeProvider: string | null;
   configLoaded: boolean;
 };
 
 const PROVIDER_ICONS: Record<string, string> = {
-  anthropic: "🟠",
   claude: "🟠",
-  openai: "🟢",
+  codex: "🟢",
   kimi: "🌙",
 };
 
@@ -404,42 +402,32 @@ function ProviderCard({
           </span>
         </div>
 
-        {/* Modello attivo */}
-        {provider.activeModel && (
-          <div className="flex items-center justify-between text-[11px]">
-            <span className="text-[var(--color-dim)]">{t.activeModel}</span>
-            <span className="font-mono text-[var(--color-bright)]">
-              {provider.activeModel}
-            </span>
-          </div>
-        )}
-
-        {/* Modelli disponibili */}
+        {/* Modelli che girano adesso: quelli delle sessioni accese, non un elenco */}
         <div>
           <p className="text-[10px] text-[var(--color-dim)] mb-1.5">
-            {t.models}
+            {t.modelsInUse}
           </p>
-          <div className="flex flex-wrap gap-1">
-            {provider.models.map((m) => (
-              <span
-                key={m}
-                className="px-2 py-0.5 rounded text-[9px] font-mono"
-                style={{
-                  background:
-                    m === provider.activeModel
-                      ? "rgba(0,232,122,0.12)"
-                      : "var(--color-card)",
-                  color:
-                    m === provider.activeModel
-                      ? "var(--color-green)"
-                      : "var(--color-dim)",
-                  border: `1px solid ${m === provider.activeModel ? "rgba(0,232,122,0.25)" : "var(--color-border)"}`,
-                }}
-              >
-                {m}
-              </span>
-            ))}
-          </div>
+          {(provider.modelsInUse ?? []).length === 0 ? (
+            <p className="text-[10px] text-[var(--color-dim)]">
+              {t.noModelsInUse}
+            </p>
+          ) : (
+            <div className="flex flex-wrap gap-1">
+              {(provider.modelsInUse ?? []).map((m) => (
+                <span
+                  key={m.model ?? "?"}
+                  className="px-2 py-0.5 rounded text-[9px] font-mono"
+                  style={{
+                    background: "rgba(0,232,122,0.12)",
+                    color: "var(--color-green)",
+                    border: "1px solid rgba(0,232,122,0.25)",
+                  }}
+                >
+                  {m.model ?? "?"} × {m.agents}
+                </span>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Warning se non configurato */}
@@ -615,7 +603,7 @@ export default function ProvidersPage() {
                 ? t.subtitle(
                     available,
                     data.providers.length,
-                    data.activeProvider,
+                    data.activeProvider ?? "—",
                   )
                 : t.loading}
               {data && !data.configLoaded && (
