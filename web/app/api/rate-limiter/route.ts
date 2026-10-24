@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import path from "node:path";
 import { JHT_HOME } from "@/lib/jht-paths";
-import { readJsonSafe } from "@/lib/json-files";
+import { readJsonSafe, SMALL_JSON_MAX_BYTES } from "@/lib/json-files";
 import { requireAuth } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
@@ -89,7 +89,9 @@ export async function GET() {
   const denied = await requireAuth();
   if (denied) return denied;
 
-  const raw = record(readJsonSafe<RawUsage>(usageFile())) as RawUsage | null;
+  const raw = record(
+    readJsonSafe<RawUsage>(usageFile(), SMALL_JSON_MAX_BYTES),
+  ) as RawUsage | null;
   const generatedMs =
     raw && typeof raw.generated_at === "string"
       ? Date.parse(raw.generated_at)

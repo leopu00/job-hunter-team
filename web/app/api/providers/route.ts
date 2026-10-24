@@ -3,7 +3,11 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { execSync, spawnSync } from "node:child_process";
 import { JHT_HOME } from "@/lib/jht-paths";
-import { loadJhtConfig, readJsonSafe } from "@/lib/json-files";
+import {
+  loadJhtConfig,
+  readJsonSafe,
+  SMALL_JSON_MAX_BYTES,
+} from "@/lib/json-files";
 import { requireAuth, requireLocalWrite } from "@/lib/auth";
 // Le versioni dei CLI provider le dichiara la release, non il registry
 // (issue #130). Il JSON viene inlinato a build time — nessun path da
@@ -229,16 +233,20 @@ function readVersionInfo(providerId: string): {
   if (!spec) return { installedVersion: null, targetVersion: null };
   const installedVersion =
     spec.kind === "npm"
-      ? (readJsonSafe<{ version?: string }>(spec.installedPkgJson)?.version ??
-        null)
+      ? (readJsonSafe<{ version?: string }>(
+          spec.installedPkgJson,
+          SMALL_JSON_MAX_BYTES,
+        )?.version ?? null)
       : readUvToolVersion(spec.distInfoParent, spec.distInfoGlob);
   // Il registry serve solo come ripiego, e solo dove il pin manca: è
   // esattamente il caso in cui `installSpecFor` cade su `@latest`, quindi
   // l'etichetta continua a descrivere ciò che il bottone farebbe.
   const registryLatest =
     spec.kind === "npm" && spec.latestSource
-      ? (readJsonSafe<{ latest_version?: string }>(spec.latestSource)
-          ?.latest_version ?? null)
+      ? (readJsonSafe<{ latest_version?: string }>(
+          spec.latestSource,
+          SMALL_JSON_MAX_BYTES,
+        )?.latest_version ?? null)
       : null;
   const { targetVersion } = resolveUpdateTarget({
     pinnedVersion: pinnedVersionFor(providerId),
@@ -417,7 +425,9 @@ export async function POST(req: Request) {
   if (shouldCheck && running.length > 0 && body.force) {
     for (const sess of running) {
       try {
-        execSync(`tmux kill-session -t "${sess}" 2>/dev/null || true`, {
+        // Nessuna shell: il nome viene da fuori (list-sessions), e `=` lo
+        // vuole ESATTO (senza, SCOUT-1 prenderebbe anche SCOUT-10).
+        spawnSync("tmux", ["kill-session", "-t", `=${sess}`], {
           encoding: "utf-8",
         });
         stopped.push(sess);

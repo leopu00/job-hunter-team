@@ -34,6 +34,10 @@ const state = vi.hoisted(() => ({
     require("node:path").join(require("node:os").tmpdir(), "jht-t151-"),
   ) as string,
   tmux: "",
+  /** Le sessioni che `tmux list-sessions` (solo nomi) trova accese. */
+  sessions: "",
+  shell: [] as string[],
+  spawned: [] as string[][],
 }));
 
 vi.mock("@/lib/jht-paths", async (importOriginal) => ({
@@ -64,14 +68,25 @@ vi.mock("node:child_process", async (importOriginal) => {
   const real = await importOriginal<typeof import("node:child_process")>();
   return {
     ...real,
-    execSync: (command: string) =>
-      command.includes("@jht-cli") ? state.tmux : "",
-    spawnSync: () => ({ status: 0, stdout: "", stderr: "" }),
+    execSync: (command: string) => {
+      state.shell.push(command);
+      if (command.includes("@jht-cli")) return state.tmux;
+      if (command.includes("list-sessions")) return state.sessions;
+      return "";
+    },
+    spawnSync: (command: string, args: string[]) => {
+      state.spawned.push([command, ...(Array.isArray(args) ? args : [])]);
+      return { status: 0, stdout: "", stderr: "" };
+    },
   };
 });
 
 import { GET as readUsage } from "@/app/api/rate-limiter/route";
-import { GET as readProviders } from "@/app/api/providers/route";
+import {
+  GET as readProviders,
+  POST as updateProvider,
+} from "@/app/api/providers/route";
+import { readJsonSafe } from "@/lib/json-files";
 
 const ENV = process.env.JHT_LLM_PROVIDER;
 const written: string[] = [];
@@ -86,6 +101,9 @@ function put(file: string, body: unknown) {
 beforeEach(() => {
   delete process.env.JHT_LLM_PROVIDER;
   state.tmux = "";
+  state.sessions = "";
+  state.shell = [];
+  state.spawned = [];
 });
 afterEach(() => {
   for (const f of written.splice(0)) rmSync(f, { force: true });
@@ -196,6 +214,15 @@ describe("/api/rate-limiter: il consumo vero della sentinella, in sola lettura",
     ).not.toContain("../etc");
   });
 
+  it("un file enorme non si legge: come un file assente", async () => {
+    const raw = usage(10);
+    (raw as Record<string, unknown>).padding = "x".repeat(1024 * 1024 + 10);
+    put("logs/role-usage.json", raw);
+    const body = await (await readUsage()).json();
+    expect(body.available).toBe(false);
+    expect(body.windows).toEqual([]);
+  });
+
   it("un file illeggibile è come un file assente", async () => {
     put("logs/role-usage.json", "{non json");
     const body = await (await readUsage()).json();
@@ -287,5 +314,44 @@ describe("/api/providers: gli id veri e i modelli che girano", () => {
     );
     expect(claude.modelsInUse).toEqual([{ model: null, agents: 1 }]);
     expect(JSON.stringify(body)).not.toContain("onerror");
+  });
+});
+
+describe("readJsonSafe: il tetto di dimensione", () => {
+  it("con il tetto rifiuta il file grande, senza tetto lo legge come sempre", () => {
+    put("big.json", JSON.stringify({ padding: "x".repeat(2048) }));
+    const file = path.join(state.home, "big.json");
+    expect(readJsonSafe(file, 1024)).toBeNull();
+    expect(readJsonSafe<{ padding: string }>(file)?.padding.length).toBe(2048);
+    expect(readJsonSafe<{ padding: string }>(file, 4096)?.padding.length).toBe(
+      2048,
+    );
+    expect(readJsonSafe(path.join(state.home, "manca.json"), 1024)).toBeNull();
+  });
+});
+
+describe("POST /api/providers con force: nessuna shell per fermare le sessioni", () => {
+  it("ferma ogni sessione con tmux e il nome ESATTO, senza comporre una stringa di shell", async () => {
+    put("jht.config.json", { active_provider: "claude" });
+    state.sessions = ["SCOUT-1", "SCOUT-10", 'SCOUT-2"; touch pwned; "'].join(
+      "\n",
+    );
+    const res = await updateProvider(
+      new Request("http://localhost:3001/api/providers", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", host: "localhost:3001" },
+        body: JSON.stringify({ providerId: "anthropic", force: true }),
+      }),
+    );
+    expect(res.status).toBe(200);
+    const kills = state.spawned.filter(
+      (c) => c[0] === "tmux" && c[1] === "kill-session",
+    );
+    expect(kills.map((c) => c.slice(2))).toEqual([
+      ["-t", "=SCOUT-1"],
+      ["-t", "=SCOUT-10"],
+      ["-t", '=SCOUT-2"; touch pwned; "'],
+    ]);
+    expect(state.shell.filter((c) => c.includes("kill-session"))).toEqual([]);
   });
 });

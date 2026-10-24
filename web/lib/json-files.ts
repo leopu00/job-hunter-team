@@ -10,17 +10,26 @@ import path from "node:path";
 import { JHT_HOME } from "@/lib/jht-paths";
 
 /**
- * Legge e deserializza un JSON, `null` se il file manca o è illeggibile.
+ * Legge e deserializza un JSON, `null` se il file manca, è illeggibile o
+ * supera `maxBytes` (se dato).
  * Il chiamante dichiara la forma attesa: nessuna validazione a runtime,
  * esattamente come le copie che sostituisce.
  */
-export function readJsonSafe<T>(filePath: string): T | null {
+export function readJsonSafe<T>(filePath: string, maxBytes?: number): T | null {
   try {
+    // Un file che scrive chi non è il web (un agente, lo stesso utente) può
+    // essere enorme: con un tetto lo si rifiuta prima di leggerlo tutto. Senza
+    // tetto la lettura è quella di sempre (l'export ha file grandi per natura).
+    if (maxBytes !== undefined && fs.statSync(filePath).size > maxBytes)
+      return null;
     return JSON.parse(fs.readFileSync(filePath, "utf-8")) as T;
   } catch {
     return null;
   }
 }
+
+/** Il tetto dei file di misura e di versione, piccoli per natura. */
+export const SMALL_JSON_MAX_BYTES = 1024 * 1024;
 
 /**
  * Posizioni in cui può trovarsi `jht.config.json`, in ordine di
