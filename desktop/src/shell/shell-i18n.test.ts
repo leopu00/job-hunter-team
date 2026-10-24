@@ -8,7 +8,7 @@ describe("the shell's own words", () => {
     expect(Object.keys(SHELL_TEXT).sort()).toEqual([...LOCALES].sort());
     for (const locale of LOCALES) {
       const t = SHELL_TEXT[locale];
-      for (const word of [t.navAria, t.refresh, t.signOut, t.signingOut, t.signOutFailed]) {
+      for (const word of [t.navAria, t.refresh, t.signOut, t.signingOut, t.signOutFailed, t.signOutNote]) {
         expect(word.trim().length, `${locale}`).toBeGreaterThan(0);
       }
     }

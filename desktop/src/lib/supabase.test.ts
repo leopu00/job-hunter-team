@@ -479,19 +479,42 @@ describe("signOut", () => {
     });
     const clearAccountScope = vi.fn(async () => { order.push("scope"); });
 
-    await signOut(client, clearAccountScope);
+    const clearSessionStore = vi.fn(async () => { order.push("store"); });
+
+    await signOut(client, clearAccountScope, clearSessionStore);
 
     expect(clearAccountScope).toHaveBeenCalledOnce();
     expect(client.auth.signOut).toHaveBeenCalledWith({ scope: "local" });
-    expect(order).toEqual(["scope", "session"]);
+    expect(order).toEqual(["scope", "session", "store"]);
+  });
+
+  it("deletes the encrypted session on disk whatever Supabase answers", async () => {
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    for (const failure of [
+      { signOut: vi.fn(async () => ({ error: new Error("offline") })) },
+      { signOut: vi.fn().mockRejectedValue(new Error("network")) },
+    ]) {
+      const client = fakeClient(failure);
+      const clearSessionStore = vi.fn(async () => undefined);
+      await signOut(client, vi.fn(async () => undefined), clearSessionStore).catch(() => undefined);
+      expect(clearSessionStore).toHaveBeenCalledOnce();
+    }
+  });
+
+  it("is not a sign out if the session on disk cannot be deleted: the error reaches the person", async () => {
+    const client = fakeClient();
+    const clearSessionStore = vi.fn().mockRejectedValue({ code: "remove_failed" });
+    await expect(signOut(client, vi.fn(async () => undefined), clearSessionStore)).rejects.toEqual({ code: "remove_failed" });
   });
 
   it("keeps the authenticated session when scoped teardown cannot be verified", async () => {
     const client = fakeClient();
     const clearAccountScope = vi.fn().mockRejectedValue({ code: "account_scope_reset_failed" });
 
-    await expect(signOut(client, clearAccountScope)).rejects.toEqual({ code: "account_scope_reset_failed" });
+    const clearSessionStore = vi.fn(async () => undefined);
+    await expect(signOut(client, clearAccountScope, clearSessionStore)).rejects.toEqual({ code: "account_scope_reset_failed" });
     expect(client.auth.signOut).not.toHaveBeenCalled();
+    expect(clearSessionStore).not.toHaveBeenCalled();
   });
 });
 

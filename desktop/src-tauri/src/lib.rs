@@ -80,6 +80,7 @@ pub fn run() {
             auth_login::auth_callback_url,
             auth_login::auth_cancel_login,
             auth_login::auth_google_login,
+            auth_store::auth_store_clear,
             auth_store::auth_store_get,
             auth_store::auth_store_prepare,
             auth_store::auth_store_remove,

@@ -145,7 +145,7 @@ function Navbar({
               {readOnlyText.back}
             </button>
           )}
-          <button type="button" className={button} onClick={() => void logout()} disabled={signingOut}>
+          <button type="button" className={button} onClick={() => void logout()} disabled={signingOut} title={shellText.signOutNote}>
             {signingOut ? shellText.signingOut : shellText.signOut}
           </button>
         </div>
