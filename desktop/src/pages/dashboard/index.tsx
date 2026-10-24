@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import DashboardSkeleton from "@/app/(protected)/_components/DashboardSkeleton";
 import type { Locale } from "@/i18n/config";
 import { readLocaleCookie } from "@/lib/use-locale";
@@ -22,14 +22,18 @@ type Load =
 export default function DashboardPage(_props: PageProps) {
   const [locale] = useState<Locale>(readLocaleCookie);
   const [load, setLoad] = useState<Load>({ state: "loading" });
+  const request = useRef(0);
   // An existing team that is only read: its own VPS answers, the cloud is not asked.
   const existingTeam = useExistingTeamView() !== null;
 
   const read = useCallback(() => {
+    const mine = ++request.current;
     (existingTeam ? loadExistingTeamDashboard() : loadDashboard(supabase))
-      .then((data) => setLoad({ state: "ready", data }))
+      .then((data) => {
+        if (request.current === mine) setLoad({ state: "ready", data });
+      })
       .catch((error: unknown) =>
-        setLoad((prev) =>
+        request.current === mine && setLoad((prev) =>
           prev.state === "ready"
             ? prev
             : { state: "failed", code: error instanceof ExistingTeamDashboardError ? error.code : null },
@@ -37,7 +41,10 @@ export default function DashboardPage(_props: PageProps) {
       );
   }, [existingTeam]);
 
-  useEffect(read, [read]);
+  useEffect(() => {
+    read();
+    return () => { request.current++; };
+  }, [read]);
   useRefresh(read);
 
   if (load.state === "loading") return <DashboardSkeleton label={PAGE_STATES_TEXT[appLocale()].loadingDashboard} />;
