@@ -316,14 +316,30 @@ export async function cancelGoogleSignIn(): Promise<void> {
 export async function signOut(
   client: SupabaseClient = supabase,
   clearAccountScope: () => Promise<void> = clearDesktopAccountScope,
+  clearSessionStore: () => Promise<void> = clearDesktopSessionStore,
 ): Promise<void> {
   // The backend closes chat/tunnels and forgets the active runtime ownership
   // boundary before Supabase can expose a different account to the webview.
   await clearAccountScope();
-  const { error } = await client.auth.signOut({ scope: "local" });
-  clearGoogleIdentitySelection();
-  // Anche se la revoca in rete non riesce, la sessione locale è già cancellata.
-  if (error) console.warn("[auth] sign-out revoke failed");
+  try {
+    const { error } = await client.auth.signOut({ scope: "local" });
+    // Anche se la revoca in rete non riesce, la sessione locale è già cancellata.
+    if (error) console.warn("[auth] sign-out revoke failed");
+  } finally {
+    // The encrypted session on disk goes whatever Supabase said: from a local profile, or after a
+    // restart, no key is loaded and the client's own removal does nothing, so the session of an
+    // earlier Google sign-in stayed and «Continue with Google» reopened it without the browser.
+    try {
+      await clearSessionStore();
+    } finally {
+      clearGoogleIdentitySelection();
+    }
+  }
+}
+
+/** Deletes every encrypted session entry of this app on disk, with or without the key (never the Keychain). */
+async function clearDesktopSessionStore(): Promise<void> {
+  if (isTauri()) await invoke("auth_store_clear");
 }
 
 export interface SessionState {

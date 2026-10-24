@@ -237,6 +237,19 @@ pub(crate) fn auth_store_remove(
     remove_value(&store_dir(&app)?, &keys, &name)
 }
 
+/// «Esci»: cancella OGNI voce cifrata della sessione, con la chiave o senza.
+/// `auth_store_remove` non basta: prima di un accesso esplicito la chiave non e'
+/// caricata e quella rimozione, voluta per la pulizia del mount, non fa niente.
+/// Cosi' un «Esci» dato da un profilo locale, o dopo un riavvio, lasciava sul
+/// disco la sessione di un accesso Google precedente, e il «Continua con Google»
+/// dopo lo riapriva senza browser. Cancellare un file cifrato non vuole la
+/// chiave: il portachiavi non si apre, e non si tocca (tiene la chiave, non la
+/// sessione).
+#[tauri::command]
+pub(crate) fn auth_store_clear(app: tauri::AppHandle) -> Result<(), AuthStoreError> {
+    clear_entries(&store_dir(&app)?)
+}
+
 /// Prima di aprire il browser: la chiave c'è (o si crea) e il portachiavi la
 /// dà. È l'unico punto che può chiedere accesso. Un rifiuto resta definitivo
 /// per questo processo: solo un nuovo avvio può tentare di nuovo.
@@ -583,6 +596,50 @@ fn remove_entry(dir: &Path, name: &str) -> Result<(), AuthStoreError> {
     }
 }
 
+/// Ogni `sb-….bin` della cartella (i nomi che `valid_supabase_storage_name`
+/// ammette), come file o come collegamento: un collegamento si toglie, il suo
+/// bersaglio no. Le cartelle e i file con altri nomi restano dove sono. Prova
+/// tutte le voci anche se una non si toglie, poi dice se qualcuna e' rimasta.
+fn clear_entries(dir: &Path) -> Result<(), AuthStoreError> {
+    let listing = match fs::read_dir(dir) {
+        Ok(listing) => listing,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+        Err(_) => return Err(failure("remove_failed")),
+    };
+    let mut left = false;
+    for entry in listing {
+        let Ok(entry) = entry else {
+            left = true;
+            continue;
+        };
+        let file_name = entry.file_name();
+        let Some(stem) = file_name.to_str().and_then(|name| name.strip_suffix(".bin")) else {
+            continue;
+        };
+        if !valid_supabase_storage_name(stem) {
+            continue;
+        }
+        let path = entry.path();
+        match fs::symlink_metadata(&path) {
+            Ok(meta) if meta.is_dir() => continue,
+            Ok(_) => {}
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => continue,
+            Err(_) => {
+                left = true;
+                continue;
+            }
+        }
+        if fs::remove_file(&path).is_err() {
+            left = true;
+        }
+    }
+    if left {
+        Err(failure("remove_failed"))
+    } else {
+        Ok(())
+    }
+}
+
 #[cfg(unix)]
 fn create_private_dir(dir: &Path) -> Result<(), AuthStoreError> {
     use std::os::unix::fs::{DirBuilderExt, PermissionsExt};
@@ -627,7 +684,7 @@ fn private_file(path: &Path) -> Result<fs::File, AuthStoreError> {
 #[cfg(test)]
 mod tests {
     use super::{
-        entry_path, get_value, read_entry, remove_entry, remove_value, set_value,
+        clear_entries, entry_path, get_value, read_entry, remove_entry, remove_value, set_value,
         stored_access_token, validate_name, verify_access_token, write_entry, KeyCache, KeySource,
         KEYRING_SERVICE, KEY_LEN, MAX_NAME_LEN,
     };
@@ -1052,6 +1109,74 @@ mod tests {
             read_entry(&other, "sb-abc-auth-token-code-verifier", &KEY).unwrap(),
             None
         );
+        fs::remove_dir_all(dir).unwrap();
+    }
+
+    /// Il difetto del collaudo Mac (c5de82358): «Esci» da un profilo locale non toglieva `auth/*.bin`.
+    /// Un processo nuovo non ha caricato la chiave (nessun accesso esplicito ancora): la rimozione
+    /// dell'archivio, quella del mount, non fa niente; «Esci» deve cancellare lo stesso.
+    #[test]
+    fn sign_out_deletes_the_session_even_when_the_key_was_never_loaded() {
+        let dir = scratch_dir("signout");
+        let keychain = Arc::new(CountingKeychain::with_key(KEY));
+        // Un accesso Google di un'altra volta: la sessione, il suo utente, il code verifier, uno slot PKCE.
+        let names = [
+            "sb-abc-auth-token",
+            "sb-abc-auth-token-user",
+            "sb-abc-auth-token-code-verifier",
+            "sb-abc-auth-token-flow-0123456789abcdef-code-verifier",
+        ];
+        for name in names {
+            write_entry(&dir, name, "SESSION-SECRET", &KEY).unwrap();
+        }
+        // Un file che non e' una voce della sessione, una cartella che ne porta il nome.
+        fs::write(dir.join("notes.txt"), "mine").unwrap();
+        fs::create_dir_all(dir.join("sb-dir-auth-token.bin")).unwrap();
+
+        // Processo nuovo: la chiave non e' caricata.
+        let fresh = KeyCache::new(keychain.clone());
+        remove_value(&dir, &fresh, "sb-abc-auth-token").unwrap();
+        assert!(
+            entry_path(&dir, "sb-abc-auth-token").exists(),
+            "la rimozione del mount e' un no-op senza chiave: e' per questo che «Esci» non puo' usarla"
+        );
+
+        clear_entries(&dir).unwrap();
+
+        for name in names {
+            assert!(!entry_path(&dir, name).exists(), "{name} e' rimasto sul disco");
+            assert_eq!(get_value(&dir, &fresh, name).unwrap(), None);
+        }
+        assert!(dir.join("notes.txt").exists(), "un file che non e' una voce resta");
+        assert!(dir.join("sb-dir-auth-token.bin").is_dir(), "una cartella resta");
+        assert_eq!(
+            keychain.asked(),
+            (0, 0),
+            "cancellare non apre il portachiavi: ne' per leggere ne' per scrivere"
+        );
+        // Il portachiavi tiene solo la chiave: il testo della sessione non e' mai stato li'.
+        let stored = keychain.stored.lock().unwrap().clone().unwrap();
+        assert_eq!(stored, KEY.to_vec());
+        assert!(!String::from_utf8_lossy(&stored).contains("SESSION-SECRET"));
+        // Ripetuto, o senza cartella: non e' un errore.
+        clear_entries(&dir).unwrap();
+        fs::remove_dir_all(&dir).unwrap();
+        clear_entries(&dir).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn clearing_a_symlinked_entry_removes_the_link_and_never_the_target() {
+        let dir = scratch_dir("clear-link");
+        fs::create_dir_all(&dir).unwrap();
+        let target = dir.join("elsewhere");
+        fs::write(&target, "outside").unwrap();
+        std::os::unix::fs::symlink(&target, entry_path(&dir, NAME)).unwrap();
+
+        clear_entries(&dir).unwrap();
+
+        assert!(fs::symlink_metadata(entry_path(&dir, NAME)).is_err(), "il collegamento e' rimasto");
+        assert_eq!(fs::read_to_string(&target).unwrap(), "outside");
         fs::remove_dir_all(dir).unwrap();
     }
 
