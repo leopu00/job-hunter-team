@@ -1088,7 +1088,10 @@ function Invoke-BrokerAdmin {
   }
   # Out-Host: la risposta JSON va a chi ha lanciato jht, non nel valore di
   # ritorno della funzione (che e' solo il codice d'uscita).
-  if ($null -ne $InputText) {
+  # [string] trasforma $null in "": senza ContainsKey ogni chiamata, anche `apply account` o
+  # `secrets status`, aprirebbe lo stdin con una riga vuota. Solo un -InputText passato davvero
+  # (anche vuoto, come in `apply record`) lo apre.
+  if ($PSBoundParameters.ContainsKey('InputText')) {
     # Una password con caratteri non ASCII arriverebbe come '?' con la
     # codifica di default di Windows PowerShell 5.1.
     $previousEncoding = $OutputEncoding
@@ -1126,7 +1129,9 @@ function Invoke-ApplySkill {
   try {
     # Tutte le righe, poi l'ultima: con `| Select-Object -First 1` $LASTEXITCODE
     # non e' piu' quello di docker.
-    $lines = @(& docker exec $ContainerId python3 /app/shared/skills/apply_request.py @SkillArgs --host 2>$null)
+    # Under 'Stop' Windows PowerShell 5.1 turns the first line of a redirected stderr into an error:
+    # the redirection lives inside a scope where the preference is 'Continue'.
+    $lines = @(& { $ErrorActionPreference = 'Continue'; & docker exec $ContainerId python3 /app/shared/skills/apply_request.py @SkillArgs --host 2>$null })
   } finally {
     [Console]::OutputEncoding = $previous
   }
