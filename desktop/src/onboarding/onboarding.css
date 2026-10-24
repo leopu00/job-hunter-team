@@ -868,6 +868,20 @@
   background: var(--color-ready);
 }
 
+/* A step of a stopped runtime (the Podman machine is off): neither ticked nor waiting, in the warning colour. */
+.onboarding-runtime-track li.is-stopped {
+  color: var(--color-muted);
+}
+
+.onboarding-runtime-track li.is-stopped > span:first-child {
+  color: var(--color-void);
+  background: var(--color-yellow);
+}
+
+.onboarding-runtime-track li.is-stopped > em {
+  color: var(--color-yellow);
+}
+
 .onboarding-runtime-track li.is-active {
   color: var(--color-bright);
 }
