@@ -811,6 +811,7 @@ describe("DashboardApp onboarding router", () => {
         expect(alert).toHaveTextContent(title);
         if (code === "existing_team_runtime_changed") {
           expect(alert).toHaveTextContent("Premi «Ricollega la squadra»");
+          expect(alert).toHaveTextContent("Se non l’hai aggiornata tu, controlla la VPS prima di ricollegare.");
           expect(alert).not.toHaveTextContent("non raggiungibile");
         }
         expect(screen.getByRole("button", { name: "Riprova" })).toBeInTheDocument();
