@@ -420,6 +420,8 @@ function Set-JhtUserEnvironmentValue {
 function Remove-JhtUserEnvironmentValue { param([string]$Name) $global:FakeEnv.Remove($Name) }
 function Send-JhtEnvironmentChanged { $global:FakeBroadcasts++ }
 
+# The script derives the name from the Windows SID: without a Windows identity (Linux pwsh) it is empty.
+if (-not $JhtStartupTaskName) { $JhtStartupTaskName = 'Job Hunter Team - Start runtime [S-1-5-21-1111-2222-3333-1001]' }
 $global:ScopedTaskName = $JhtStartupTaskName
 $global:LegacyTask = $true
 $global:FakeTask = ($env:T_TASK -eq '1')

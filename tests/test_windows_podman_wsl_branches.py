@@ -466,6 +466,7 @@ def test_up_does_not_replace_the_users_default_connection(tmp_path):
 
 
 UNINSTALL_BODY = r"""
+function Get-JhtScopedStartupTaskName { return 'Job Hunter Team - Start runtime [S-1-5-21-1111-2222-3333-1001]' }
 function Get-ScheduledTask { param($TaskName, $ErrorAction) return $null }
 $code = Invoke-JhtWindowsUninstall -UninstallArgs @('--confirm') `
   -ProfilePath $env:TEST_PROFILE -LocalAppDataPath $env:TEST_LOCAL `
