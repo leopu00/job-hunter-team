@@ -296,6 +296,30 @@ def test_an_explicit_profile_path_still_wins(read_only_app, tmp_path):
 
 
 @pytest.mark.skipif(not NOT_ROOT, reason="needs POSIX permissions and a non-root user")
+def test_an_existing_wider_secrets_directory_is_narrowed_but_an_explicit_parent_is_left_alone(read_only_app, tmp_path):
+    home = tmp_path / "jht_home"
+    (home / "secrets").mkdir(parents=True)
+    (home / "secrets").chmod(0o755)
+
+    r = _run_check(read_only_app, _env(tmp_path, home), "https://www.linkedin.com/jobs/view/1", str(tmp_path / "o.png"))
+
+    assert r.returncode == 0, r.stderr
+    assert stat.S_IMODE((home / "secrets").stat().st_mode) == 0o700
+
+    # percorso esplicito: il padre e' di chi l'ha scelto, si chiude solo il profilo
+    theirs = tmp_path / "theirs"
+    theirs.mkdir()
+    theirs.chmod(0o755)
+    r = _run_check(
+        read_only_app, _env(tmp_path, home, LINKEDIN_PROFILE_PATH=str(theirs / "profile")),
+        "https://www.linkedin.com/jobs/view/1", str(tmp_path / "o2.png"),
+    )
+    assert r.returncode == 0, r.stderr
+    assert stat.S_IMODE(theirs.stat().st_mode) == 0o755
+    assert stat.S_IMODE((theirs / "profile").stat().st_mode) == 0o700
+
+
+@pytest.mark.skipif(not NOT_ROOT, reason="needs POSIX permissions and a non-root user")
 @pytest.mark.parametrize("argv", [("--batch",), ("https://www.linkedin.com/jobs/view/1",)])
 def test_an_unwritable_data_directory_is_one_clear_error_with_its_own_exit_code(read_only_app, tmp_path, argv):
     home = tmp_path / "jht_home"
@@ -365,6 +389,9 @@ def test_db_to_drive_keeps_credentials_and_token_under_jht_home(tmp_path, monkey
         def to_json():
             return '{"token": "synthetic"}'
 
+    if POSIX_PERMS:  # una secrets/ gia' esistente e piu' aperta viene ristretta
+        (home / "secrets").mkdir(parents=True)
+        (home / "secrets").chmod(0o755)
     mod._write_token(Creds())
     token = Path(mod.OAUTH_TOKEN_PATH)
     assert token.read_text() == '{"token": "synthetic"}'

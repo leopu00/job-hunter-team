@@ -31,7 +31,8 @@ TOOL_DIRS_LINE = next(line for line in SOURCE.splitlines() if line.startswith("U
 MAC_RUNTIME = Path("Library/Application Support/Job Hunter Team/host-runtime")
 LINUX_RUNTIME = Path(".local/share/job-hunter-team/host-runtime")
 RC_BLOCK = '\n# Added by JHT install.sh\nexport PATH="$PATH:{bin}"\n'
-LOSS = "la password della posta, la sessione LinkedIn e i token di Telegram"
+LOSS = "la password della posta e i token di Telegram"
+STAYS = "la sessione LinkedIn salvata (secrets/linkedin-profile e .cache/linkedin): si toglie con jht reset --scope creds"
 
 pytestmark = pytest.mark.skipif(os.name == "nt", reason="the wrapper is a POSIX script")
 
@@ -212,6 +213,7 @@ def test_without_exactly_one_confirmation_nothing_moves(tmp_path: Path, args: tu
     assert result.returncode == 2
     assert "uso: jht uninstall --confirm" in result.stderr
     assert LOSS in result.stderr
+    assert STAYS in result.stderr  # il testo dice dove resta la sessione e come si toglie
     assert box.calls() == []
     assert box.runtime.is_dir() and box.wrapper.is_file()
 
