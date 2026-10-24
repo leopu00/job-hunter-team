@@ -1,8 +1,8 @@
 /**
  * `jht reset` e la sessione LinkedIn salvata sul disco.
  *
- * Il profilo del browser per LinkedIn sta in `$JHT_HOME/secrets/linkedin-profile` e contiene la
- * sessione della persona. Il reset `creds` ("config + credentials + sessions") non lo toccava:
+ * Il profilo del browser per LinkedIn sta in `$JHT_HOME/secrets/linkedin-profile` (controllo delle
+ * posizioni) e in `$JHT_HOME/.cache/linkedin/` (candidature) e contiene la sessione della persona. Il reset `creds` ("config + credentials + sessions") non lo toccava:
  * chi azzerava le credenziali si ritrovava la sessione sul disco. Ora `secrets/` e' nello
  * scope `creds` (e `full` cancella tutto `~/.jht`); lo scope `config` resta solo il config.
  *
@@ -22,6 +22,9 @@ function homeWithProfile() {
   fs.mkdirSync(path.join(home, "credentials"));
   fs.mkdirSync(path.join(home, "secrets", "linkedin-profile"), { recursive: true });
   fs.writeFileSync(path.join(home, "secrets", "linkedin-profile", "Cookies"), "synthetic");
+  fs.mkdirSync(path.join(home, ".cache", "linkedin", "profile"), { recursive: true });
+  fs.writeFileSync(path.join(home, ".cache", "linkedin", "profile", "Cookies"), "synthetic");
+  fs.mkdirSync(path.join(home, ".cache", "playwright"), { recursive: true });
   fs.mkdirSync(path.join(home, "workspace"));
   fs.writeFileSync(path.join(home, "workspace", "keep.txt"), "mine");
   return home;
@@ -45,6 +48,8 @@ describe("jht reset e secrets/linkedin-profile", () => {
       const run = reset(home, "creds");
       expect(run.status).toBe(0);
       expect(fs.existsSync(path.join(home, "secrets"))).toBe(false);
+      expect(fs.existsSync(path.join(home, ".cache", "linkedin"))).toBe(false);
+      expect(fs.existsSync(path.join(home, ".cache", "playwright"))).toBe(true); // il resto della cache non e' sessione LinkedIn
       expect(fs.existsSync(path.join(home, "credentials"))).toBe(false);
       expect(fs.existsSync(path.join(home, "jht.config.json"))).toBe(false);
       expect(fs.readFileSync(path.join(home, "workspace", "keep.txt"), "utf-8")).toBe("mine");
@@ -61,6 +66,7 @@ describe("jht reset e secrets/linkedin-profile", () => {
       expect(run.status).toBe(0);
       expect(fs.existsSync(path.join(home, "jht.config.json"))).toBe(false);
       expect(fs.existsSync(path.join(home, "secrets", "linkedin-profile", "Cookies"))).toBe(true);
+      expect(fs.existsSync(path.join(home, ".cache", "linkedin", "profile", "Cookies"))).toBe(true);
     } finally {
       fs.rmSync(home, { recursive: true, force: true });
     }
@@ -72,6 +78,7 @@ describe("jht reset e secrets/linkedin-profile", () => {
       const run = reset(home, "full");
       expect(run.status).toBe(0);
       expect(fs.existsSync(path.join(home, "secrets"))).toBe(false);
+      expect(fs.existsSync(path.join(home, ".cache"))).toBe(false);
     } finally {
       fs.rmSync(home, { recursive: true, force: true });
     }

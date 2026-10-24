@@ -45,8 +45,9 @@ def test_uninstall_is_an_early_fixed_scope_protocol():
 def test_uninstall_requires_one_explicit_confirmation_and_has_stable_output():
     uninstall = _uninstall_source()
     notice = (
-        "Vengono cancellati anche la password della posta, la sessione LinkedIn "
-        "e i token di Telegram salvati; ~/.jht e Documenti restano."
+        "Vengono cancellati anche la password della posta e i token di Telegram "
+        "salvati; ~/.jht e Documenti restano, e con loro la sessione LinkedIn salvata "
+        "(secrets/linkedin-profile e .cache/linkedin): si toglie con jht reset --scope creds."
     )
 
     assert (

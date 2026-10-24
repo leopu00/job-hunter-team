@@ -43,7 +43,7 @@ $JHT_ONBOARDING_SNAPSHOT_PROTOCOL = 1
 # avvia il container.
 $JHT_AGENT_CONTROL_PROTOCOL = 1
 $JHT_UNINSTALL_PROTOCOL = 1
-$JhtUninstallRemovalNotice = 'Vengono cancellati anche la password della posta, la sessione LinkedIn e i token di Telegram salvati; ~/.jht e Documenti restano.'
+$JhtUninstallRemovalNotice = 'Vengono cancellati anche la password della posta e i token di Telegram salvati; ~/.jht e Documenti restano, e con loro la sessione LinkedIn salvata (secrets/linkedin-profile e .cache/linkedin): si toglie con jht reset --scope creds.'
 
 # `uninstall` deve funzionare anche quando il runtime e' gia' parzialmente
 # rimosso, quindi viene gestito prima di caricare manifest, helper ACL o shim.

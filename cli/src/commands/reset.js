@@ -30,6 +30,8 @@ const SESSIONS_DIR = join(JHT_DIR, 'sessions')
 // stanno in secrets/: un reset delle credenziali che li lasciasse sul disco non
 // avrebbe cancellato la sessione.
 const SECRETS_DIR  = join(JHT_DIR, 'secrets')
+// La sessione del browser di linkedin_apply (profilo + lock) sta in .cache/linkedin.
+const LINKEDIN_SESSION_DIR = join(JHT_DIR, '.cache', 'linkedin')
 // The host wrapper owns the container volumes. Exit 20 is an internal
 // handshake: the CLI reached the end only after the existing confirmation,
 // so the wrapper may now stop Compose and remove the broker data.
@@ -46,12 +48,13 @@ const SCOPES = {
     warn:    'The configuration will be deleted. You will need to run jht setup.',
   },
   creds: {
-    label:   'creds — config + credentials + sessions + secrets',
+    label:   'creds — config + credentials + sessions + secrets + LinkedIn session',
     targets: [
       { path: CONFIG_PATH,  label: '~/.jht/jht.config.json', file: true },
       { path: CREDS_DIR,    label: '~/.jht/credentials/',    dir: true },
       { path: SESSIONS_DIR, label: '~/.jht/sessions/',       dir: true },
       { path: SECRETS_DIR,  label: '~/.jht/secrets/',        dir: true },
+      { path: LINKEDIN_SESSION_DIR, label: '~/.jht/.cache/linkedin/', dir: true },
     ],
     warn:    'Configuration, credentials and saved browser sessions (secrets/) will be deleted. The workspace will be preserved.',
   },
