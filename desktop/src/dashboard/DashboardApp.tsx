@@ -301,7 +301,7 @@ function pairingToken(session: Session | null, submission: OnboardingSubmission)
  */
 function resumedRuntimeStopped(snapshot: OnboardingRuntimeSnapshot): OnboardingRuntimeState | null {
   if (!snapshot.runtimeInstalled || snapshot.containerRunning || snapshot.localHost !== true) return null;
-  return { status: "action-required", stage: "team-start", message: stateText().runtimeStopped };
+  return { status: "action-required", stage: "team-start", message: stateText().runtimeStopped, runtimeStopped: true };
 }
 
 function resumedPrerequisiteFailure(

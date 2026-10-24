@@ -176,7 +176,11 @@ function RuntimeView({ host, platform, t, locale, runtime, activity, onRetry, on
   const activeIndex = visibleRuntimeStages.findIndex((stage) => stage.value === runtime.stage);
   const activeLabel = visibleRuntimeStages[activeIndex]?.label ?? t.configuration;
   const failureTitle = failed && runtime.title ? runtime.title : t.configureAgain(activeLabel);
-  const completedSteps = Math.max(0, activeIndex);
+  // A stopped runtime is not «ready»: the Runtime and Container steps say so until the start wakes them.
+  const runtimeStopped = runtime.status === "action-required" && runtime.runtimeStopped === true;
+  const isStoppedStep = (value: string) => runtimeStopped && (value === "runtime" || value === "container");
+  const stoppedBefore = visibleRuntimeStages.slice(0, Math.max(0, activeIndex)).filter((stage) => isStoppedStep(stage.value)).length;
+  const completedSteps = Math.max(0, activeIndex) - stoppedBefore;
   // A preparation that failed after part of it was done: trying again runs the same preparation, which
   // checks what is already there, so it is offered as «Resume» and says what is already in place.
   const resumable = failed && runtime.retryable !== false &&
@@ -336,12 +340,15 @@ function RuntimeView({ host, platform, t, locale, runtime, activity, onRetry, on
           </section>
           {!failed && status}
           <ol className="onboarding-runtime-track">
-            {visibleRuntimeStages.map((stage, index) => (
-              <li key={stage.value} className={index < activeIndex ? "is-complete" : index === activeIndex ? "is-active" : undefined}>
-                <span>{index < activeIndex ? "✓" : index + 1}</span><div><strong>{stage.label}</strong><small>{stage.detail}</small></div>
-                <em>{index < activeIndex ? t.trackReady : index === activeIndex ? failed ? t.trackRetry : actionRequired ? t.trackWaiting : t.trackRunning : t.trackQueued}</em>
-              </li>
-            ))}
+            {visibleRuntimeStages.map((stage, index) => {
+              const stopped = index < activeIndex && isStoppedStep(stage.value);
+              return (
+                <li key={stage.value} className={stopped ? "is-stopped" : index < activeIndex ? "is-complete" : index === activeIndex ? "is-active" : undefined}>
+                  <span>{index < activeIndex && !stopped ? "✓" : index + 1}</span><div><strong>{stage.label}</strong><small>{stage.detail}</small></div>
+                  <em>{stopped ? t.trackStopped : index < activeIndex ? t.trackReady : index === activeIndex ? failed ? t.trackRetry : actionRequired ? t.trackWaiting : t.trackRunning : t.trackQueued}</em>
+                </li>
+              );
+            })}
           </ol>
           <details className="onboarding-activity-details">
             <summary>{t.activityDetails} <span>{activity?.events.length ?? 0}</span></summary>

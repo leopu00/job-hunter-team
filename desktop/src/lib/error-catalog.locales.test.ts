@@ -123,4 +123,17 @@ describe("localized desktop error catalog", () => {
       expect(described.action, locale).toContain(day);
     }
   });
+
+  it("says in every language that the runtime may have been left on when the limit refuses a team start", () => {
+    // the resume wakes the runtime before it reads the limits: a refusal leaves it running
+    const words = { it: /runtime può essere rimasto acceso/, en: /runtime may have been left running/, de: /Laufzeit kann eingeschaltet geblieben sein/,
+      es: /entorno de ejecución puede haber quedado encendido/, fr: /environnement d’exécution peut être resté allumé/,
+      hu: /futtatókörnyezet bekapcsolva maradhatott/, pt: /ambiente de execução pode ter ficado ligado/ } as const;
+    for (const locale of ERROR_LOCALES) {
+      const now = new Date(2026, 9, 8, 10, 0);
+      const { action } = describeError("provider_limits_exhausted", { locale, resetsAt: Math.floor(now.getTime() / 1000) + 3600, now: now.getTime() });
+      expect(action, locale).toMatch(words[locale]);
+      expect(action, locale).not.toMatch(/niente|Nothing|nichts|nada|Rien|Semmi|Nada/i);
+    }
+  });
 });
