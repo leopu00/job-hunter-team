@@ -30,6 +30,10 @@ const NOT_ERRORS: Record<string, string> = {
   // The Windows autostart's nonfatal notice id in windows_runtime.rs; it is
   // interpreted there, never shown through the error catalog.
   autostart_inactive: "id of the nonfatal Windows autostart notice",
+  // How a step of the autostart registration ended, for the runtime log only (windows_runtime.rs).
+  autostart_sid_unreadable: "closed word of the runtime log for the autostart registration",
+  autostart_stage_failed: "closed word of the runtime log for the autostart registration",
+  autostart_contract_mismatch: "closed word of the runtime log for the autostart registration",
   // The container engine executable the app resolves and spawns (direct_chat.rs, onboarding.rs).
   docker: "name of the container engine program, not a code",
   // What ssh prints when the server turns an address away; read to pick ssh_rate_limited.

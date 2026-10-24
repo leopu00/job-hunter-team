@@ -1998,7 +1998,7 @@ fn register_autostart_noted(wrapper: &Path, log: Option<&RuntimeLog>, phase: &dy
             Ok(()) => ("autostart registered".to_owned(), Ok(0)),
             Err(failure) => (
                 format!("autostart {}", failure.step),
-                failure.exit.map_or(Err("process_start_failed"), Ok),
+                failure.exit.map_or(Err(failure.log_code()), Ok),
             ),
         };
         log.record(&step, ended, &[], &[], started.elapsed());
