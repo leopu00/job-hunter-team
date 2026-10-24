@@ -444,3 +444,77 @@ def test_enter_refuses_a_signature_that_is_not_hex_and_touches_nothing(box, bad)
     done = _enter(box, bad)
     assert done.returncode == 1
     assert [c for c in box.calls() if c.startswith("send-keys")] == []
+
+
+# -- il testo NOSTRO rimasto nella casella: l'Invio, poi la consegna nuova -------------------------------------------
+
+MESSAGE_2 = "[@watchdog -> @capitano] [MSG] il secondo messaggio, che non deve restare incastrato dietro il primo"
+
+
+BODY_1 = MESSAGE.rsplit("[MSG] ", 1)[1]
+BODY_2 = MESSAGE_2.rsplit("[MSG] ", 1)[1]
+
+
+def _body(box, name):
+    """What the pane holds, without the sender mark the transport adds."""
+    lines = (box.state / name).read_text(encoding="utf-8").splitlines()
+    return [line.rsplit("[MSG] ", 1)[1] if "[MSG] " in line else line for line in lines]
+
+
+def _pending(box):
+    return box.home / "locks" / "tmux-send-pending-CAPITANO.sha"
+
+
+def test_a_text_of_ours_left_in_the_composer_gets_its_enter_before_the_next_delivery(box):
+    box.put("enter_ignored")
+    first = box.run()
+    assert first.returncode == 5, first.stderr
+    assert _body(box, "composer") == [BODY_1] and _pending(box).exists()
+    (box.state / "enter_ignored").unlink()
+    second = box.run(MESSAGE_2)
+    assert second.returncode == 0, second.stderr
+    assert _body(box, "transcript") == [BODY_1, BODY_2], "the first got its Enter, then the second was delivered"
+    assert len(box.typed()) == 2, "the first text was not pasted a second time"
+    assert not _pending(box).exists(), "nothing of ours is left in the composer"
+
+
+def test_a_confirmed_delivery_leaves_nothing_remembered(box):
+    assert box.run().returncode == 0
+    assert not _pending(box).exists()
+
+
+def test_a_draft_that_is_not_the_text_we_left_stays_untouched(box):
+    box.put("enter_ignored")
+    assert box.run().returncode == 5
+    (box.state / "enter_ignored").unlink()
+    box.put("composer", "una bozza scritta da una persona")
+    calls_before = len(box.calls())
+    second = box.run(MESSAGE_2)
+    assert second.returncode == 130, second.stderr
+    new_calls = box.calls()[calls_before:]
+    assert not any(c.startswith(("paste-buffer", "send-keys")) for c in new_calls), "nothing pasted or pressed"
+    assert (box.state / "composer").read_text(encoding="utf-8") == "una bozza scritta da una persona"
+
+
+def test_a_text_of_ours_older_than_half_an_hour_is_no_longer_ours(box):
+    box.put("enter_ignored")
+    assert box.run().returncode == 5
+    (box.state / "enter_ignored").unlink()
+    stamp, digest = _pending(box).read_text(encoding="utf-8").split()
+    _pending(box).write_text(f"{int(stamp) - 3600} {digest}\n", encoding="utf-8")
+    calls_before = len(box.calls())
+    second = box.run(MESSAGE_2)
+    assert second.returncode == 130, second.stderr
+    assert not any(c.startswith(("paste-buffer", "send-keys")) for c in box.calls()[calls_before:])
+
+
+def test_a_text_of_ours_that_keeps_ignoring_the_enter_blocks_the_next_one_without_pasting(box):
+    box.put("enter_ignored")
+    assert box.run().returncode == 5
+    calls_before = len(box.calls())
+    second = box.run(MESSAGE_2)
+    assert second.returncode == 130, second.stderr
+    new_calls = box.calls()[calls_before:]
+    assert len([c for c in new_calls if c.startswith("send-keys") and c.endswith("Enter")]) == 3, "Enter only, three times"
+    assert not any(c.startswith("paste-buffer") for c in new_calls), "the second was never pasted"
+    assert _body(box, "composer") == [BODY_1]
