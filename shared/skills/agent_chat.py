@@ -452,6 +452,12 @@ def _certain_interlock(pane: str) -> bool:
     permission prompts.
     """
     raw_lines = [strip_terminal_codes(line).rstrip().casefold() for line in (pane or "").splitlines()]
+    # A live control is the last thing drawn: look only where the composer
+    # snapshot looks.  A historic ``›`` echo of a past message, far up the
+    # screen, with a short line near it, is transcript and never a menu.
+    while raw_lines and not raw_lines[-1].strip():
+        raw_lines.pop()
+    raw_lines = raw_lines[-PROMPT_TAIL:]
     lines = [line.strip() for line in raw_lines]
     rows = list(zip(raw_lines, raw_lines))
 

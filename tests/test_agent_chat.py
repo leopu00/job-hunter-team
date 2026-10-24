@@ -618,6 +618,29 @@ Do you trust the files in this folder?
 """ + P24_CODEX_0147_FORM
 
 
+# CAPITANO on the operator P27 shape, 50 rows, captured as row length + SGR only (no text).
+# The one ``›`` row is a historic message echo 46 rows above the bottom, with a
+# short plain row two lines under it; the bottom 15 rows hold no composer and
+# no control.  The old whole-screen scan read that pair as a menu.
+_P27_ROW_LENGTHS = {0: 219, 3: 217, 4: 81, 6: 35, 8: 216, 11: 215, 26: 216, 28: 216}
+_P27_NUMBERED = {8, 11, 26, 28}
+_P27_TAIL = (20, 213, 217, 49, 85, 3, 0, 42, 0, 216, 118, 0, 220, 52, 71)
+
+
+def _p27_row(index: int, chars: int) -> str:
+    if index == 3:
+        return "\x1b[1m› \x1b[0m" + "□" * (chars - 2)
+    if index in _P27_NUMBERED:
+        return f"{index}. " + "□" * (chars - 3)
+    return "□" * chars
+
+
+P27_HISTORIC_ECHO_FAR_ABOVE_NO_COMPOSER = "\n".join(
+    [_p27_row(i, _P27_ROW_LENGTHS.get(i, 120)) for i in range(35)]
+    + ["\x1b[2m" + "□" * n + "\x1b[0m" if n == 220 else "□" * n for n in _P27_TAIL]
+) + "\n"
+
+
 def _module():
     spec = importlib.util.spec_from_file_location("t39_agent_chat", SCRIPT)
     module = importlib.util.module_from_spec(spec)
@@ -707,6 +730,21 @@ def test_historic_english_permission_and_login_prose_never_blocks_the_p24_compos
     box.stub_delivery()
     (box.state / "screen").write_text(P24_HISTORY_WITH_ENGLISH_INTERLOCK_WORDS, encoding="utf-8")
     code, receipt = box.run("send", "capitano", "id-p24-history", stdin="riprendi la coda")
+    assert code == 0 and receipt["taken"] is True
+
+
+def test_a_historic_message_echo_far_above_the_bottom_is_not_a_menu_on_operator_p27_shape(box):
+    module = _module()
+    screen = P27_HISTORIC_ECHO_FAR_ABOVE_NO_COMPOSER
+    assert len(screen.splitlines()) == 50
+    assert module.composer_snapshot(screen) == ("none", False)
+    assert module.delivery_gate(screen) == "none", "transcript geometry far above the tail never closes the chat"
+    # The same pair at the bottom IS a live menu and stays closed.
+    live = "\n".join(screen.splitlines()[:7]) + "\n"
+    assert module.delivery_gate(live) == "blocked"
+    box.stub_delivery()
+    (box.state / "screen").write_text(screen, encoding="utf-8")
+    code, receipt = box.run("send", "capitano", "id-p27-echo", stdin="riprendi la coda")
     assert code == 0 and receipt["taken"] is True
 
 
