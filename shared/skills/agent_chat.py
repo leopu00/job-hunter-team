@@ -379,9 +379,21 @@ def _only_faint_content(raw: str, plain: str, marker_at: int, boxed: bool) -> bo
 
 
 def _codex_footer(lines: list[tuple[str, str]], index: int) -> bool:
-    """Codex puts an indented model/path or a recognised hint below ``›``."""
+    """Codex puts an indented model/path or a recognised hint below ``›``.
+
+    A long draft wraps: its continuation rows sit between the marker and that
+    footer.  They are skipped only when they look like wrapped text (see
+    ``_wrapped_continuation``), never for a short menu row.
+    """
+    below = lines[index + 1:]
+    if _footer_follows(below):
+        return True
+    return _footer_follows(below[_wrapped_continuation(lines, index):])
+
+
+def _footer_follows(below: list[tuple[str, str]]) -> bool:
     footers: list[str] = []
-    for _raw, plain in lines[index + 1:]:
+    for _raw, plain in below:
         if not plain.strip():
             continue
         footers.append(plain)
@@ -391,6 +403,36 @@ def _codex_footer(lines: list[tuple[str, str]], index: int) -> bool:
         return False
     first = footers[0]
     return bool(_CODEX_DOT_FOOTER.match(first) or _CODEX_HINT.search(first))
+
+
+_WRAPPED_MARKER_MIN = 100
+_WRAPPED_ROWS_MAX = 12
+_WRAPPED_FULL_RATIO = 0.85
+
+
+def _wrapped_continuation(lines: list[tuple[str, str]], index: int) -> int:
+    """How many rows right under a long ``›`` row continue its wrapped text.
+
+    The rows must be contiguous (a blank row ends them), and every one but the
+    last nearly as long as the marker row, which is what a terminal wrap draws.
+    Menu choices are short and never have this shape.
+    """
+    width = len(lines[index][1].strip())
+    if width < _WRAPPED_MARKER_MIN:
+        return 0
+    run: list[str] = []
+    for _raw, plain in lines[index + 1:]:
+        if not plain.strip():
+            break
+        run.append(plain)
+    if not run or len(run) > _WRAPPED_ROWS_MAX:
+        return 0
+    if any(_composer_match(row) or _BORDER.match(row) or _status_line_busy(row)
+           or _NUMBERED_OPTION.match(row) for row in run):
+        return 0
+    if any(len(row.strip()) < _WRAPPED_FULL_RATIO * width for row in run[:-1]):
+        return 0
+    return len(run)
 
 
 def _claude_box(lines: list[tuple[str, str]], index: int, boxed: bool) -> bool:
@@ -439,6 +481,21 @@ def composer_snapshot(pane: str) -> tuple[str, bool]:
 def composer_state(pane: str) -> str:
     """The guarded send gate: ``empty``, ``text`` or ``none``."""
     return composer_snapshot(pane)[0]
+
+
+def _contiguous_neighbours(raw_lines: list[str], index: int, reach: int) -> list[int]:
+    """Rows within ``reach`` of ``index`` that no blank row separates from it.
+
+    A menu draws its choices together.  A cursor row with a footer or a hint
+    behind a blank row is chrome around a composer, not two choices.
+    """
+    found: list[int] = []
+    for step in (-1, 1):
+        for at in range(index + step, index + step * (reach + 1), step):
+            if not 0 <= at < len(raw_lines) or not raw_lines[at].strip():
+                break
+            found.append(at)
+    return found
 
 
 def _certain_interlock(pane: str) -> bool:
@@ -508,7 +565,7 @@ def _certain_interlock(pane: str) -> bool:
         selected = choice_body(raw)
         if not re.match(r"^[›❯]\s+\S", selected):
             continue
-        for sibling_index in range(max(0, index - 3), min(len(raw_lines), index + 4)):
+        for sibling_index in _contiguous_neighbours(raw_lines, index, 3):
             if sibling_index in composer_rows or sibling_index in footer_rows:
                 continue
             sibling_raw = raw_lines[sibling_index]
