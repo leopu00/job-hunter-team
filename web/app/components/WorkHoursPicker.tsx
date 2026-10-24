@@ -272,6 +272,8 @@ export type WorkHoursCloud = {
   save: (next: WorkingHoursConfig | null) => Promise<string | null>;
   /** La frase quando la porta prende la richiesta: è chiesta, non ancora applicata. */
   sentMessage: string;
+  /** Toglie la nota «anteprima solo con un container attivo»: l'app desktop non ha l'anteprima ma il container c'è. */
+  hidePreviewNote?: boolean;
 };
 
 export default function WorkHoursPicker({
@@ -759,7 +761,7 @@ export default function WorkHoursPicker({
         </div>
       )}
 
-      {!preview && cfg && (
+      {!preview && cfg && !cloud?.hidePreviewNote && (
         <p className="mt-4 text-xs opacity-50">{tr("preview_hint")}</p>
       )}
     </div>
