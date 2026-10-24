@@ -18,13 +18,64 @@
 
 use crate::runtime_host::ProcessResult;
 use std::path::Path;
-use std::time::Duration;
+use std::sync::{Arc, Mutex};
+use std::time::{Duration, Instant};
 
 /// The CLI the wrapper runs inside the container (`JHT_NODE_ENTRY` default).
 const NODE_ENTRY: &str = "/app/cli/bin/jht.js";
 
 /// How long the container may take to be found and attested.
 const RESOLVE_TIMEOUT: Duration = Duration::from_secs(20);
+
+/// How long a container found for a read is reused by the next read. The page reads the
+/// terminal of an agent several times a second; finding the container takes two engine
+/// calls. A start or an action never reuses it: it finds the container again first.
+const RESOLVED_FOR: Duration = Duration::from_secs(5);
+
+/// The last value found, for one key, and when.
+pub(crate) struct ResolveCache<T> {
+    slot: Mutex<Option<(Instant, String, Arc<T>)>>,
+}
+
+impl<T> ResolveCache<T> {
+    pub(crate) const fn new() -> Self {
+        Self { slot: Mutex::new(None) }
+    }
+
+    /// The value for `key`: the kept one when `reuse` and it is younger than `keep`,
+    /// otherwise a fresh one, which replaces it. A resolution that fails keeps nothing.
+    /// One resolution at a time: a second caller waits for it instead of repeating it.
+    pub(crate) fn get(
+        &self,
+        key: &str,
+        now: Instant,
+        keep: Duration,
+        reuse: bool,
+        resolve: impl FnOnce() -> Result<T, &'static str>,
+    ) -> Result<Arc<T>, &'static str> {
+        let mut slot = self.slot.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+        if reuse {
+            if let Some((at, kept, value)) = slot.as_ref() {
+                if kept == key && now.saturating_duration_since(*at) < keep {
+                    return Ok(Arc::clone(value));
+                }
+            }
+        }
+        match resolve() {
+            Ok(value) => {
+                let value = Arc::new(value);
+                *slot = Some((now, key.to_owned(), Arc::clone(&value)));
+                Ok(value)
+            }
+            Err(error) => {
+                *slot = None;
+                Err(error)
+            }
+        }
+    }
+}
+
+static LOCAL_TEAM: ResolveCache<crate::direct_chat::AttestedLocalTeam> = ResolveCache::new();
 
 /// One command for the team's container: an argument vector with no shell and
 /// the bytes for its standard input. `JHT_HOST_TYPE`, which the wrapper passes to
@@ -105,12 +156,18 @@ pub(crate) fn native_or_wrapper(
 }
 
 /// The chat's attested container, as a team engine.
-pub(crate) struct AttestedTeamEngine(crate::direct_chat::AttestedLocalTeam);
+pub(crate) struct AttestedTeamEngine(Arc<crate::direct_chat::AttestedLocalTeam>);
 
 impl AttestedTeamEngine {
-    pub(crate) fn resolve(wrapper: &Path, runtime: Option<&Path>) -> Result<Self, &'static str> {
+    /// `fresh`: find the container again (a start, an action); otherwise one found a moment ago may do (a read).
+    pub(crate) fn resolve(wrapper: &Path, runtime: Option<&Path>, fresh: bool) -> Result<Self, &'static str> {
         let runtime = runtime.ok_or("runtime_missing")?;
-        crate::direct_chat::AttestedLocalTeam::resolve(wrapper, runtime, RESOLVE_TIMEOUT).map(Self)
+        let key = format!("{}\n{}", wrapper.display(), runtime.display());
+        LOCAL_TEAM
+            .get(&key, Instant::now(), RESOLVED_FOR, !fresh, || {
+                crate::direct_chat::AttestedLocalTeam::resolve(wrapper, runtime, RESOLVE_TIMEOUT)
+            })
+            .map(Self)
     }
 }
 
@@ -122,15 +179,17 @@ impl TeamEngine for AttestedTeamEngine {
 
 /// `command` on this computer's team: in the attested container, or through
 /// `wrapper` when the container could not be found. The caller has already
-/// checked the account's runtime.
+/// checked the account's runtime. `fresh`: a command that changes something finds
+/// the container again; a read may use the one found a few seconds ago.
 pub(crate) fn run_local(
     wrapper_path: &Path,
     runtime: Option<&Path>,
     command: &TeamCommand<'_>,
     timeout: Duration,
+    fresh: bool,
     wrapper: impl FnOnce() -> Result<ProcessResult, &'static str>,
 ) -> Result<ProcessResult, &'static str> {
-    let engine = AttestedTeamEngine::resolve(wrapper_path, runtime);
+    let engine = AttestedTeamEngine::resolve(wrapper_path, runtime, fresh);
     native_or_wrapper(engine.as_ref().map(|engine| engine as &dyn TeamEngine).map_err(|error| *error), command, timeout, wrapper)
 }
 
@@ -237,6 +296,31 @@ mod tests {
     }
 
     #[test]
+    fn a_container_found_for_a_read_is_reused_for_a_few_seconds_and_never_for_a_write() {
+        let cache: ResolveCache<u32> = ResolveCache::new();
+        let start = Instant::now();
+        let keep = Duration::from_secs(5);
+        let calls = Cell::new(0);
+        let resolve = || {
+            calls.set(calls.get() + 1);
+            Ok(calls.get())
+        };
+        // A read finds it; the next reads, within the time, reuse it.
+        assert_eq!(*cache.get("a", start, keep, true, resolve).unwrap(), 1);
+        assert_eq!(*cache.get("a", start + Duration::from_secs(4), keep, true, resolve).unwrap(), 1);
+        assert_eq!(calls.get(), 1);
+        // After the time, another key, or a write (fresh): found again.
+        assert_eq!(*cache.get("a", start + Duration::from_secs(5), keep, true, resolve).unwrap(), 2);
+        assert_eq!(*cache.get("b", start + Duration::from_secs(5), keep, true, resolve).unwrap(), 3);
+        assert_eq!(*cache.get("b", start + Duration::from_secs(5), keep, false, resolve).unwrap(), 4);
+        // A write's fresh find is what the next read reuses.
+        assert_eq!(*cache.get("b", start + Duration::from_secs(6), keep, true, resolve).unwrap(), 4);
+        // A resolution that fails keeps nothing: the next read finds it again, not the old one.
+        assert_eq!(cache.get("b", start + Duration::from_secs(7), keep, false, || Err("container_unavailable")).err(), Some("container_unavailable"));
+        assert_eq!(*cache.get("b", start + Duration::from_secs(7), keep, true, resolve).unwrap(), 5);
+    }
+
+    #[test]
     fn a_container_that_cannot_be_found_leaves_the_wrapper_to_bring_it_up() {
         for reason in ["container_unavailable", "runtime_missing"] {
             let wrapper_ran = Cell::new(0);
@@ -250,7 +334,7 @@ mod tests {
         }
         // And no runtime directory at all is the same answer, before any engine is looked for.
         assert_eq!(
-            AttestedTeamEngine::resolve(Path::new("/nonexistent/jht-wrapper"), None).err(),
+            AttestedTeamEngine::resolve(Path::new("/nonexistent/jht-wrapper"), None, true).err(),
             Some("runtime_missing")
         );
     }

@@ -1470,8 +1470,10 @@ fn local_compose_args(engine: &LocalChatEngine, runtime: &Path) -> Vec<OsString>
     // The runtime's private shim is `podman --connection <attested machine>`.
     // `podman compose` may delegate to an arbitrary host provider, so it is not the runtime's
     // authenticated Compose path. Enumerate only the fixed JHT project and prove its labels below.
-    // Docker retains the historical Compose lookup, whose project is path based.
-    if engine.podman && !cfg!(windows) {
+    // Docker retains the historical Compose lookup, whose project is path based. On Windows too:
+    // compose would need the project name and the provider the wrapper sets in its own environment,
+    // which the app does not have, so the container is listed by its labels there as well.
+    if engine.podman {
         return vec![
             OsString::from("ps"),
             OsString::from("-q"),
@@ -2908,7 +2910,7 @@ mod tests {
         SOCKET_PATH_MAX, SSH_SOCKET_SUFFIX,
         open_vps_link, ready_status, small_read, vps_link_for, VpsLink, VPS_LINK_CHECK, SMALL_READ_OVERLAP,
         SMALL_READ_SIZE_PROBE, SMALL_READ_TAIL, DirectChatError, local_chat_exec_args,
-        local_chat_runtime_valid, local_engine_removed_environment, LocalChatEngine, podman_systemd_unit,
+        local_chat_runtime_valid, local_compose_args, local_engine_removed_environment, LocalChatEngine, podman_systemd_unit,
         run_connection, run_local_chat, RemoteOperation,
         master_to_lend,
     };
@@ -3653,6 +3655,20 @@ mod tests {
             format!("exec -i {id} python3 -I /app/shared/skills/agent_chat.py send assistente id-1\n{words}")
         );
         fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn a_podman_runtime_is_listed_by_label_on_every_system_and_never_through_compose() {
+        let words = |podman| {
+            local_compose_args(&LocalChatEngine { program: PathBuf::from("docker"), podman }, Path::new("/rt"))
+                .into_iter()
+                .map(|word| word.to_string_lossy().into_owned())
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(words(true), ["ps", "-q", "--filter", "label=com.docker.compose.project=jht"]);
+        let docker = words(false);
+        assert_eq!(docker[0], "compose");
+        assert!(docker.iter().any(|word| word == "--project-directory"));
     }
 
     #[cfg(unix)]

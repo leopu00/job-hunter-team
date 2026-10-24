@@ -4864,6 +4864,7 @@ fn start_team_impl(
                 runtime.as_deref(),
                 &crate::team_control::start_command(crate::team_control::StartKind::Team),
                 PREPARE_TIMEOUT,
+                true,
                 || {
                     through_wrapper.set(true);
                     run_scoped_local_logged(app, scope, &wrapper, LocalCliOperation::TeamStart, PREPARE_TIMEOUT, log)
@@ -5536,6 +5537,7 @@ pub(crate) async fn onboarding_assistant_open(
                                 runtime.as_deref(),
                                 &crate::team_control::start_command(crate::team_control::StartKind::Assistant),
                                 COMMAND_TIMEOUT,
+                                true,
                                 || {
                                     run_scoped_local(
                                         &app,

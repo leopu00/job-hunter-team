@@ -367,7 +367,8 @@ fn run(destination: &Destination, request: &ControlRequest, argv: &[String], sha
             let words: Vec<&str> = argv.iter().map(String::as_str).collect();
             let command = crate::team_control::agent_control_command(&words, None)?;
             // In the team's attested container; the wrapper only when that container cannot be found.
-            crate::team_control::run_local(wrapper, runtime.as_deref(), &command, timeout, || {
+            // A read may use the container found a moment ago; an action finds it again first.
+            crate::team_control::run_local(wrapper, runtime.as_deref(), &command, timeout, !read, || {
                 let mut args = vec!["agent-control"];
                 args.extend(words.iter().copied());
                 crate::onboarding::run_verified_local_wrapper(wrapper, &args, None, timeout)
