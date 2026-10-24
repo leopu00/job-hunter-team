@@ -76,6 +76,8 @@ else
 fi
 ```
 
+**LinkedIn non si abbandona quando `linkedin_check.py` è ROTTO** (uscita 4 `LINKEDIN_PROFILE_NOT_WRITABLE`, browser giù): il gradino alternativo è `python3 /app/shared/skills/linkedin_access.py search --keywords ... --location ...` per la scoperta e `fetch-job <URL|ID>` per leggere un annuncio — endpoint pubblico, senza login, niente scritto sotto `/app`. Conta come uno dei tuoi 2-3 tentativi; segnala lo strumento rotto al Capitano.
+
 ## ⛔ Tetto alla testardaggine — massimo 2-3 tentativi, poi ESCALATION (2026-06-26)
 
 La testardaggine ha un **budget**, NON è infinita. Per una fonte/strumento che continua a fallire fai

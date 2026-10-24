@@ -76,6 +76,8 @@ else
 fi
 ```
 
+**O LinkedIn não se abandona quando `linkedin_check.py` está AVARIADO** (saída 4 `LINKEDIN_PROFILE_NOT_WRITABLE`, navegador em baixo): o degrau alternativo é `python3 /app/shared/skills/linkedin_access.py search --keywords ... --location ...` para descobrir e `fetch-job <URL|ID>` para ler um anúncio — endpoint público, sem login, nada escrito em `/app`. Conta como uma das tuas 2-3 tentativas; reporta a ferramenta avariada ao Capitano.
+
 ## ⛔ Teto de teimosia — máximo 2-3 tentativas, depois ESCALAR (2026-06-26)
 
 A teimosia tem **orçamento**, NÃO é infinita. Para uma fonte/ferramenta que continua a falhar faz

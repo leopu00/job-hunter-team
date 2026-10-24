@@ -71,6 +71,8 @@ else
 fi
 ```
 
+**LinkedIn is not abandoned when `linkedin_check.py` is BROKEN** (exit 4 `LINKEDIN_PROFILE_NOT_WRITABLE`, browser down): the alternative rung is `python3 /app/shared/skills/linkedin_access.py search --keywords ... --location ...` for discovery and `fetch-job <URL|ID>` to read a posting — public endpoint, no login, nothing written under `/app`. It counts as one of your 2-3 attempts; report the broken tool to the Capitano.
+
 ## ⛔ Stubbornness ceiling — max 2-3 attempts, then ESCALATE (2026-06-26)
 
 Stubbornness has a **budget**, it is NOT infinite. For a source/tool that keeps failing make **at
