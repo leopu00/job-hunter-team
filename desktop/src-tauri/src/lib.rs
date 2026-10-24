@@ -9,6 +9,7 @@ mod desktop_platform;
 mod direct_chat;
 mod agent_control;
 mod existing_team_agents;
+mod existing_team_cloud_token;
 mod existing_team_judgement;
 mod export_file;
 mod existing_team_register;
@@ -88,6 +89,8 @@ pub fn run() {
             existing_team_runtime::existing_team_positions_read,
             existing_team_judgement::existing_team_position_write,
             existing_team_judgement::existing_team_position_write_target,
+            existing_team_cloud_token::existing_team_cloud_token,
+            existing_team_cloud_token::existing_team_cloud_token_open_site,
             existing_team_runtime::existing_team_link_identity,
             existing_team_agents::existing_team_agents_read,
             agent_control::agent_control,

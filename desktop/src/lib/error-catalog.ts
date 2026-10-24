@@ -1110,6 +1110,30 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
     "This can be done only from the app’s main window.",
     "Go back to the main window and try again.",
   ),
+  cloud_token_read_only: copy(
+    "Per rinnovare il token la squadra deve essere collegata in modo completo.",
+    "Collega la squadra con «Conferma e collega» e riprova.",
+    "To renew the token the team must be connected in full.",
+    "Connect the team with “Confirm and connect” and try again.",
+  ),
+  cloud_token_request_invalid: copy(
+    "La richiesta non è valida e non è stata mandata alla squadra.",
+    "Ricarica la pagina e riprova.",
+    "The request is not valid and was not sent to the team.",
+    "Reload the page and try again.",
+  ),
+  cloud_token_window_refused: copy(
+    "Questa azione si può fare solo dalla finestra principale dell’app.",
+    "Torna alla finestra principale e riprova.",
+    "This can be done only from the app’s main window.",
+    "Go back to the main window and try again.",
+  ),
+  token_malformed: copy(
+    "Questo non è un token di sincronizzazione.",
+    "Copia il token intero dal sito, senza spazi.",
+    "That is not a sync token.",
+    "Copy the whole token from the website, with no spaces.",
+  ),
   reason_invalid: copy(
     "Il motivo scelto non è tra quelli previsti.",
     "Scegli un motivo dall’elenco e riprova.",
