@@ -3052,7 +3052,7 @@ mod tests {
         SOCKET_PATH_MAX, SSH_SOCKET_SUFFIX,
         open_vps_link, ready_status, small_read, vps_link_for, VpsLink, VPS_LINK_CHECK, SMALL_READ_OVERLAP,
         SMALL_READ_SIZE_PROBE, SMALL_READ_TAIL, DirectChatError, local_chat_exec_args,
-        local_compose_args, local_engine_removed_environment, LocalChatEngine, podman_systemd_unit, windows_container_labels_are_attested, engine_lost_the_container, windows_container_image_is_the_runtimes, split_inspected, windows_path_key,
+        local_chat_runtime_valid, local_compose_args, local_engine_removed_environment, LocalChatEngine, podman_systemd_unit, windows_container_labels_are_attested, engine_lost_the_container, windows_container_image_is_the_runtimes, split_inspected, windows_path_key,
         run_connection, run_local_chat, RemoteOperation,
         master_to_lend,
     };
