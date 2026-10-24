@@ -94,6 +94,11 @@ describe("login and wizard locale policy", () => {
     // «Use locally» promises a new profile: with one saved, that is not what the button does.
     for (const [, local] of entries) expect(screen.queryByRole("button", { name: local })).toBeNull();
   });
+  it("a saved name is put in the label as it is: «$&» and «$1» are letters, not replacement patterns", () => {
+    system("en-US");
+    render(<LoginScreen configured loadBrowsers={noBrowsers} readLocal={() => ({ profileId: "p-1", displayName: "A$&B $1 $$" })} />);
+    expect(screen.getByRole("button", { name: "Continue as A$&B $1 $$" })).toBeInTheDocument();
+  });
   it("uses the same locale for login error text and login actions", () => {
     system("en-US");
     render(<LoginScreen configured={false} loadBrowsers={noBrowsers} readLocal={noLocal} />);

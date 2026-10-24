@@ -11,7 +11,7 @@ export interface ShellText {
   signingOut: string;
   /** Read by a screen reader only: the sign-out did not go through. */
   signOutFailed: string;
-  /** What «Sign out» does and does not remove: the person, not the data. Shown as the button's tooltip. */
+  /** What «Sign out» does and does not remove: the person, not the data. True for a team on this computer and on a VPS alike. Shown as the button's tooltip. */
   signOutNote: string;
   /** What a page says when it could not be read; `refresh` is the label of the navbar's button. */
   pageReadFailed: (refresh: string) => string;
@@ -25,7 +25,7 @@ export const SHELL_TEXT: Record<Locale, ShellText> = {
     signOut: "Esci",
     signingOut: "Uscita…",
     signOutFailed: "Disconnessione non riuscita. Il runtime resta bloccato su questo account.",
-    signOutNote: "Esci da questo account. Il team collegato e i tuoi dati restano su questo computer.",
+    signOutNote: "Esci da questo account. Il team collegato e i tuoi dati non vengono cancellati.",
     pageReadFailed: (refresh) => `Non riesco a leggere questa pagina. Controlla la connessione e premi «${refresh}».`,
   },
   en: {
@@ -35,7 +35,7 @@ export const SHELL_TEXT: Record<Locale, ShellText> = {
     signOut: "Sign out",
     signingOut: "Signing out…",
     signOutFailed: "Sign-out failed. The runtime stays locked to this account.",
-    signOutNote: "Sign out of this account. The linked team and your data stay on this computer.",
+    signOutNote: "Sign out of this account. The linked team and your data are not deleted.",
     pageReadFailed: (refresh) => `This page could not be read. Check the connection and press “${refresh}”.`,
   },
   de: {
@@ -45,7 +45,7 @@ export const SHELL_TEXT: Record<Locale, ShellText> = {
     signOut: "Abmelden",
     signingOut: "Abmelden…",
     signOutFailed: "Abmeldung fehlgeschlagen. Die Laufzeit bleibt an dieses Konto gebunden.",
-    signOutNote: "Von diesem Konto abmelden. Das verbundene Team und deine Daten bleiben auf diesem Computer.",
+    signOutNote: "Von diesem Konto abmelden. Das verbundene Team und deine Daten werden nicht gelöscht.",
     pageReadFailed: (refresh) => `Diese Seite konnte nicht gelesen werden. Prüfe die Verbindung und drücke „${refresh}“.`,
   },
   hu: {
@@ -55,7 +55,7 @@ export const SHELL_TEXT: Record<Locale, ShellText> = {
     signOut: "Kilépés",
     signingOut: "Kilépés…",
     signOutFailed: "A kijelentkezés nem sikerült. A futtatókörnyezet ehhez a fiókhoz kötve marad.",
-    signOutNote: "Kilépés ebből a fiókból. A csatolt csapat és az adataid ezen a számítógépen maradnak.",
+    signOutNote: "Kilépés ebből a fiókból. A csatolt csapat és az adataid nem törlődnek.",
     pageReadFailed: (refresh) => `Az oldal nem olvasható. Ellenőrizd a kapcsolatot, és nyomd meg a(z) „${refresh}” gombot.`,
   },
   es: {
@@ -65,7 +65,7 @@ export const SHELL_TEXT: Record<Locale, ShellText> = {
     signOut: "Salir",
     signingOut: "Saliendo…",
     signOutFailed: "No se pudo cerrar la sesión. El entorno de ejecución sigue bloqueado en esta cuenta.",
-    signOutNote: "Sal de esta cuenta. El equipo vinculado y tus datos se quedan en este ordenador.",
+    signOutNote: "Sal de esta cuenta. El equipo vinculado y tus datos no se borran.",
     pageReadFailed: (refresh) => `No se pudo leer esta página. Revisa la conexión y pulsa «${refresh}».`,
   },
   fr: {
@@ -75,7 +75,7 @@ export const SHELL_TEXT: Record<Locale, ShellText> = {
     signOut: "Quitter",
     signingOut: "Déconnexion…",
     signOutFailed: "La déconnexion a échoué. L’environnement d’exécution reste verrouillé sur ce compte.",
-    signOutNote: "Déconnecte-toi de ce compte. L’équipe liée et tes données restent sur cet ordinateur.",
+    signOutNote: "Déconnecte-toi de ce compte. L’équipe liée et tes données ne sont pas supprimées.",
     pageReadFailed: (refresh) => `Cette page n’a pas pu être lue. Vérifie la connexion et appuie sur « ${refresh} ».`,
   },
   pt: {
@@ -85,7 +85,7 @@ export const SHELL_TEXT: Record<Locale, ShellText> = {
     signOut: "Sair",
     signingOut: "A sair…",
     signOutFailed: "Não foi possível terminar a sessão. O ambiente de execução continua bloqueado nesta conta.",
-    signOutNote: "Termina a sessão desta conta. A equipa ligada e os teus dados ficam neste computador.",
+    signOutNote: "Termina a sessão desta conta. A equipa ligada e os teus dados não são apagados.",
     pageReadFailed: (refresh) => `Não foi possível ler esta página. Verifica a ligação e prime «${refresh}».`,
   },
 };

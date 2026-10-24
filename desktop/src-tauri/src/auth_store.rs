@@ -596,8 +596,8 @@ fn remove_entry(dir: &Path, name: &str) -> Result<(), AuthStoreError> {
     }
 }
 
-/// Ogni `sb-….bin` della cartella (i nomi che `valid_supabase_storage_name`
-/// ammette), come file o come collegamento: un collegamento si toglie, il suo
+/// Ogni `sb-….bin` della cartella, e ogni `.sb-….tmp` lasciato da una scrittura
+/// interrotta (i nomi che `valid_supabase_storage_name` ammette), come file o come collegamento: un collegamento si toglie, il suo
 /// bersaglio no. Le cartelle e i file con altri nomi restano dove sono. Prova
 /// tutte le voci anche se una non si toglie, poi dice se qualcuna e' rimasta.
 fn clear_entries(dir: &Path) -> Result<(), AuthStoreError> {
@@ -613,7 +613,11 @@ fn clear_entries(dir: &Path) -> Result<(), AuthStoreError> {
             continue;
         };
         let file_name = entry.file_name();
-        let Some(stem) = file_name.to_str().and_then(|name| name.strip_suffix(".bin")) else {
+        // A finished entry (`<name>.bin`) or the leftover of an interrupted write (`.<name>.tmp`, see `write_entry`).
+        let Some(stem) = file_name.to_str().and_then(|name| {
+            name.strip_suffix(".bin")
+                .or_else(|| name.strip_prefix('.').and_then(|rest| rest.strip_suffix(".tmp")))
+        }) else {
             continue;
         };
         if !valid_supabase_storage_name(stem) {
@@ -1131,6 +1135,9 @@ mod tests {
         }
         // Un file che non e' una voce della sessione, una cartella che ne porta il nome.
         fs::write(dir.join("notes.txt"), "mine").unwrap();
+        // Il temporaneo di una scrittura interrotta (cifrato) va; un temporaneo con un altro nome no.
+        fs::write(dir.join(".sb-abc-auth-token.tmp"), "half-written").unwrap();
+        fs::write(dir.join(".other.tmp"), "not ours").unwrap();
         fs::create_dir_all(dir.join("sb-dir-auth-token.bin")).unwrap();
 
         // Processo nuovo: la chiave non e' caricata.
@@ -1147,6 +1154,8 @@ mod tests {
             assert!(!entry_path(&dir, name).exists(), "{name} e' rimasto sul disco");
             assert_eq!(get_value(&dir, &fresh, name).unwrap(), None);
         }
+        assert!(!dir.join(".sb-abc-auth-token.tmp").exists(), "il temporaneo di una scrittura interrotta e' rimasto");
+        assert!(dir.join(".other.tmp").exists(), "un temporaneo con un altro nome resta");
         assert!(dir.join("notes.txt").exists(), "un file che non e' una voce resta");
         assert!(dir.join("sb-dir-auth-token.bin").is_dir(), "una cartella resta");
         assert_eq!(

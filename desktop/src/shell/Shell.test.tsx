@@ -139,7 +139,9 @@ describe("Shell", () => {
 
     const button = screen.getByRole("button", { name: "Esci" });
     expect(button).toHaveAttribute("title", SHELL_TEXT.it.signOutNote);
-    expect(SHELL_TEXT.it.signOutNote).toMatch(/restano su questo computer/);
+    // True for a team on this computer and on a VPS alike: it says what is not deleted, not where it is.
+    expect(SHELL_TEXT.it.signOutNote).toMatch(/non vengono cancellati/);
+    expect(SHELL_TEXT.it.signOutNote).not.toMatch(/questo computer/);
   });
 
   it("keeps the signed-in shell mounted when scoped logout teardown fails", async () => {

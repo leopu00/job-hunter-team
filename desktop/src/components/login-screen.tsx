@@ -304,7 +304,7 @@ export function LoginScreen({
               disabled={localBusy}
             >
               {/* a saved profile is reopened, not created: the button says whose it is */}
-              {localBusy ? t.preparing : savedLocalProfile ? t.useLocalAs.replace("{name}", savedLocalProfile.displayName) : t.useLocal}
+              {localBusy ? t.preparing : savedLocalProfile ? t.useLocalAs.replace("{name}", () => savedLocalProfile.displayName) : t.useLocal}
             </button>
             {onResetLocalPlayground && hasSavedLocalProfile && (
               <button
