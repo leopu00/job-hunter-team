@@ -89,6 +89,7 @@ sleep "${FAKE_DELIVERY_SLEEP:-0}"
 printf '%s\\n' "$1" >> "$FAKE_TMUX_STATE/delivered.sessions"
 printf '%s' "$2" >> "$FAKE_TMUX_STATE/delivered.envelopes"
 printf '\\0' >> "$FAKE_TMUX_STATE/delivered.envelopes"
+[ -z "$FAKE_DELIVERY_OUT" ] || printf '%s\\n' "$FAKE_DELIVERY_OUT"
 exit "${FAKE_DELIVERY_RC:-0}"
 """
 
@@ -126,6 +127,7 @@ def box(tmp_path):
         "JHT_HOME": str(home),
         "JHT_EXTERNAL_CONTENT_NONCE": NONCE,
         "JHT_CHAT_PROMPT_WAIT": "0",
+        "JHT_CHAT_BUSY_WAIT": "0",
         "PYTHONDONTWRITEBYTECODE": "1",
     }
     env.pop("TMUX", None)
@@ -834,6 +836,19 @@ def test_a_cursor_row_and_a_footer_behind_a_blank_row_are_not_a_menu(box):
     assert module.delivery_gate(menu) == "blocked"
 
 
+def test_an_unnumbered_menu_with_a_blank_row_between_its_choices_stays_closed(box):
+    module = _module()
+    spaced = " How was this session?\n\n › Send feedback\n\n   Skip\n\n   Not now\n"
+    assert module.delivery_gate(spaced) == "blocked", "cursor row plus two spaced choices"
+    box.stub_delivery()
+    (box.state / "screen").write_text(spaced, encoding="utf-8")
+    code, answer = box.run("send", "capitano", "id-spaced-menu", stdin="1")
+    assert (code, answer) == (119, {"error": "agent_not_at_prompt"})
+    _nothing_happened(box)
+    # A cursor row, a blank row and ONE footer hint is still a composer, not a menu.
+    assert module.delivery_gate(CODEX_0147_IDLE_UNKNOWN_FOOTER) == "none"
+
+
 def test_dim_codex_suggestion_is_empty_but_rgb_colour_is_not_dim():
     module = _module()
     dim = "› \x1b[2mexample prompt\x1b[0m\n\n  gpt-5.6-sol · ~/capitano\n"
@@ -850,18 +865,188 @@ def test_composer_text_is_only_the_box_contents_and_never_the_border_or_hint():
     assert module.composer_text(codex) == "first line"
 
 
-def test_an_unrecognised_running_turn_is_still_writable(box):
-    box.stub_delivery()
-    (box.state / "screen").write_text("✻ Pondering… (12s · esc to interrupt)\n", encoding="utf-8")
-    code, receipt = box.run("send", "capitano", "id-21", stdin="ci sei?")
-    assert code == 0 and receipt["taken"] is True
+BUSY_FORMS = pytest.mark.parametrize("screen", [
+    "✻ Pondering… (12s · esc to interrupt)\n", RUNNING, RUNNING_CODEX,
+], ids=["unrecognised-form", "claude-empty-composer", "codex-empty-composer"])
 
 
-def test_a_running_turn_with_an_empty_composer_is_delivered(box):
+def _queue_lines(box, agent="capitano"):
+    path = box.home / "agents" / agent / "chat-queue.jsonl"
+    return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()] if path.exists() else []
+
+
+def _delivered_ids(box, agent="capitano"):
+    path = box.home / "agents" / agent / "chat-delivered.jsonl"
+    return [json.loads(line)["client_message_id"] for line in path.read_text(encoding="utf-8").splitlines()] if path.exists() else []
+
+
+@BUSY_FORMS
+def test_a_working_agent_gets_the_turn_queued_and_nothing_is_pasted(box, screen):
     box.stub_delivery()
-    (box.state / "screen").write_text(RUNNING, encoding="utf-8")
-    code, receipt = box.run("send", "capitano", "id-running", stdin="ci sei?")
+    (box.state / "screen").write_text(screen, encoding="utf-8")
+    code, receipt = box.run("send", "capitano", "id-working", stdin="ci sei?")
     assert code == 0 and receipt["accepted"] is True
+    assert receipt["state"] == "queued" and receipt["queue"] == "terminal" and "taken" not in receipt
+    assert box.envelopes() == [] and not any(c.startswith("send-keys") for c in box.calls()), "nothing typed"
+    assert "composer" not in {p.name for p in box.state.iterdir()}, "no text of ours in the composer"
+    assert [row["client_message_id"] for row in box.chat("capitano")] == ["id-working"], "written once"
+    assert [row["client_message_id"] for row in _queue_lines(box)] == ["id-working"]
+    assert _delivered_ids(box) == []
+    code, page = box.run("read", "capitano")
+    assert code == 0 and page["queued"] == [receipt["messageId"]], "the page says which turns still wait"
+
+
+def test_the_queued_turn_is_delivered_by_the_first_read_that_finds_the_agent_idle(box):
+    box.stub_delivery()
+    screen = box.state / "screen"
+    screen.write_text(RUNNING_CODEX, encoding="utf-8")
+    _code, receipt = box.run("send", "capitano", "id-q1", stdin="ci sei?")
+    assert box.run("read", "capitano")[1]["queued"] == [receipt["messageId"]]
+    assert box.envelopes() == [], "still working: a read delivers nothing"
+    screen.write_text(READY_CODEX, encoding="utf-8")
+    code, page = box.run("read", "capitano")
+    assert code == 0 and page["queued"] == []
+    assert page["settled"] == [{"id": receipt["messageId"], "how": "taken"}], "the page says how it ended"
+    assert box.envelopes() == ["[@utente -> @capitano] [CHAT] ci sei?"]
+    assert _delivered_ids(box) == ["id-q1"]
+    box.run("read", "capitano")
+    assert len(box.envelopes()) == 1, "delivered once, never again"
+
+
+def test_a_queued_turn_stays_queued_behind_a_draft_a_menu_or_a_missing_session(box):
+    box.stub_delivery()
+    screen = box.state / "screen"
+    screen.write_text(RUNNING_CODEX, encoding="utf-8")
+    box.run("send", "capitano", "id-q2", stdin="uno")
+    for blocked in (TEXT_ALREADY_TYPED, CLAUDE_PERMISSION):
+        screen.write_text(blocked, encoding="utf-8")
+        assert box.run("read", "capitano")[1]["queued"] != []
+        assert box.envelopes() == []
+    screen.write_text(READY_CODEX, encoding="utf-8")
+    code, page = box.run("read", "capitano", FAKE_TMUX_SESSIONS="ASSISTENTE MENTOR")
+    assert code == 0 and page["queued"] != [] and box.envelopes() == [], "no session: nothing started"
+
+
+def test_queued_turns_are_delivered_in_order_and_a_new_one_waits_behind_them(box):
+    box.stub_delivery()
+    screen = box.state / "screen"
+    screen.write_text(RUNNING_CODEX, encoding="utf-8")
+    box.run("send", "capitano", "id-a", stdin="primo")
+    screen.write_text(READY_CODEX, encoding="utf-8")
+    code, receipt = box.run("send", "capitano", "id-b", stdin="secondo")
+    assert code == 0 and receipt["clientMessageId"] == "id-b"
+    assert box.envelopes() == ["[@utente -> @capitano] [CHAT] primo", "[@utente -> @capitano] [CHAT] secondo"]
+    assert _delivered_ids(box) == ["id-a", "id-b"]
+
+
+def test_the_same_id_sent_again_while_queued_is_not_a_second_turn(box):
+    box.stub_delivery()
+    (box.state / "screen").write_text(RUNNING_CODEX, encoding="utf-8")
+    first = box.run("send", "capitano", "id-same", stdin="uno")[1]
+    again = box.run("send", "capitano", "id-same", stdin="uno")[1]
+    assert again["messageId"] == first["messageId"] and again["state"] == "queued"
+    assert len(box.chat("capitano")) == 1 and len(_queue_lines(box)) == 1
+
+
+def _age_the_queue(box, seconds, agent="capitano"):
+    path = box.home / "agents" / agent / "chat-queue.jsonl"
+    rows = [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()]
+    for row in rows:
+        row["queued_at"] -= seconds
+    path.write_text("".join(json.dumps(row) + "\n" for row in rows), encoding="utf-8")
+
+
+def test_a_queued_turn_past_its_time_is_never_typed_and_the_page_says_not_sent(box):
+    box.stub_delivery()
+    screen = box.state / "screen"
+    screen.write_text(RUNNING_CODEX, encoding="utf-8")
+    _code, receipt = box.run("send", "capitano", "id-old", stdin="vecchio")
+    _age_the_queue(box, 1300)                                  # 20 minutes and a bit
+    screen.write_text(READY_CODEX, encoding="utf-8")
+    code, page = box.run("read", "capitano")
+    assert code == 0 and page["queued"] == []
+    assert page["settled"] == [{"id": receipt["messageId"], "how": "expired"}]
+    assert box.envelopes() == [] and _delivered_ids(box) == [], "never typed, whatever the agent shows now"
+    code, again = box.run("send", "capitano", "id-new", stdin="nuovo")
+    assert code == 0 and box.envelopes() == ["[@utente -> @capitano] [CHAT] nuovo"], "a new turn does not wait behind an expired one"
+    _age_the_queue(box, 90_000)                                # more than a day: forgotten
+    assert [item for item in box.run("read", "capitano")[1]["settled"] if item["how"] == "expired"] == []
+
+
+def test_a_fresh_queued_turn_inside_its_time_is_still_delivered(box):
+    box.stub_delivery()
+    screen = box.state / "screen"
+    screen.write_text(RUNNING_CODEX, encoding="utf-8")
+    box.run("send", "capitano", "id-fresh", stdin="ancora buono")
+    _age_the_queue(box, 1100)                                  # inside the 20 minutes
+    screen.write_text(READY_CODEX, encoding="utf-8")
+    assert box.run("read", "capitano")[1]["queued"] == []
+    assert box.envelopes() == ["[@utente -> @capitano] [CHAT] ancora buono"]
+
+
+def test_with_flush_on_read_off_only_a_send_delivers_the_queue(box):
+    box.stub_delivery()
+    screen = box.state / "screen"
+    screen.write_text(RUNNING_CODEX, encoding="utf-8")
+    _code, receipt = box.run("send", "capitano", "id-w1", stdin="primo")
+    screen.write_text(READY_CODEX, encoding="utf-8")
+    page = box.run("read", "capitano", JHT_CHAT_FLUSH_ON_READ="0")[1]
+    assert page["queued"] == [receipt["messageId"]] and box.envelopes() == [], "a read types nothing"
+    box.run("send", "capitano", "id-w2", stdin="secondo", JHT_CHAT_FLUSH_ON_READ="0")
+    assert [e.rsplit("] ", 1)[1] for e in box.envelopes()] == ["primo", "secondo"]
+
+
+def test_a_flush_that_fails_after_typing_is_marked_unconfirmed_and_never_typed_twice(box):
+    box.stub_delivery()
+    screen = box.state / "screen"
+    screen.write_text(RUNNING_CODEX, encoding="utf-8")
+    _code, receipt = box.run("send", "capitano", "id-u1", stdin="forse digitato")
+    screen.write_text(READY_CODEX, encoding="utf-8")
+    page = box.run("read", "capitano", FAKE_DELIVERY_RC="99")[1]        # the transport died after typing
+    assert page["queued"] == [] and page["settled"] == [{"id": receipt["messageId"], "how": "unconfirmed"}]
+    box.run("read", "capitano")
+    assert len(box.envelopes()) == 1, "a later flush does not type it again"
+
+
+def test_a_flush_whose_composer_keeps_the_text_is_pending_for_the_page(box):
+    box.stub_delivery()
+    screen = box.state / "screen"
+    screen.write_text(RUNNING_CODEX, encoding="utf-8")
+    _code, receipt = box.run("send", "capitano", "id-p1", stdin="resta nella casella")
+    screen.write_text(READY_CODEX, encoding="utf-8")
+    page = box.run("read", "capitano", FAKE_DELIVERY_RC="5", FAKE_DELIVERY_OUT="JHT_SIGNATURE 0a1b2c")[1]
+    assert page["settled"] == [{"id": receipt["messageId"], "how": "pending"}]
+
+
+def test_a_send_to_a_working_agent_answers_in_a_few_seconds(box):
+    import time as _time
+    box.stub_delivery()
+    (box.state / "screen").write_text(RUNNING_CODEX, encoding="utf-8")
+    started = _time.monotonic()
+    code, receipt = box.run("send", "capitano", "id-fast", stdin="ci sei?",
+                            JHT_CHAT_BUSY_WAIT="2", JHT_CHAT_PROMPT_POLL="0.2")
+    assert code == 0 and receipt["state"] == "queued"
+    assert _time.monotonic() - started < 6, "the app is never held for minutes"
+
+
+def test_the_default_busy_wait_is_a_few_seconds():
+    module = _module()
+    assert module.BUSY_WAIT_S <= 5 and module.BUSY_WAIT_S + module.PROMPT_POLL_S <= 8
+
+
+def test_a_turn_that_ends_within_the_wait_is_delivered_once_the_agent_is_idle(box):
+    import threading
+    import time as _time
+    box.stub_delivery()
+    screen = box.state / "screen"
+    screen.write_text(RUNNING_CODEX, encoding="utf-8")
+    threading.Timer(1.5, lambda: screen.write_text(READY_CODEX, encoding="utf-8")).start()
+    started = _time.monotonic()
+    code, receipt = box.run("send", "capitano", "id-wait-idle", stdin="ci sei?",
+                            JHT_CHAT_BUSY_WAIT="20", JHT_CHAT_PROMPT_POLL="0.2")
+    assert code == 0 and receipt["taken"] is True
+    assert 1.0 < _time.monotonic() - started < 15, "it waited for the end of the turn, not the whole cap"
+    assert box.envelopes() == ["[@utente -> @capitano] [CHAT] ci sei?"]
 
 
 def test_a_pane_that_cannot_be_read_is_agent_unavailable_with_nothing_written(box):

@@ -53,6 +53,10 @@ const NOT_ERRORS: Record<string, string> = {
   closed_reason: "name of a serde function in direct_chat.rs, not a code",
   message_kind: "name of a serde function in direct_chat.rs, not a code",
   taken_flag: "name of a serde function in direct_chat.rs, not a code",
+  closed_queue: "name of a serde function in direct_chat.rs, not a code",
+  queued_ids: "name of a serde function in direct_chat.rs, not a code",
+  queue_endings: "name of a serde function in direct_chat.rs, not a code",
+  queued: "state of a receipt (the team holds the turn), said as «In coda» by the chat page, not an error",
   // The answer to an agent's question (direct_chat.rs, direct_chat_answer): the refusals the chat page
   // says next to the question, from its own catalog (direct-chat.i18n.ts, answerErrors).
   question_closed: "refusal of an answer, said by the chat page next to the question",

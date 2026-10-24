@@ -26,6 +26,7 @@ import {
   outcomeOf,
   questionsOf,
   quoteLine,
+  settleQueued,
   transcript as conversationItems,
   type Outcome,
 } from "./chat-kinds";
@@ -381,6 +382,8 @@ export default function DirectChatScreen({
         if (!active) return undefined;
         if (slowLink) cursor = page.cursor;
         setMessages((current) => sameAsBefore(current, mergeMessages(current, page)));
+        // a turn the team held back while its agent worked takes the ending the page reports for it
+        if (Array.isArray(page.settled)) setOutcomes((current) => settleQueued(current, page.settled));
         // a page that brings the questions replaces them; one without the field (an older image)
         // leaves the chat without answers
         if (Array.isArray(page.questions)) {
@@ -721,6 +724,13 @@ export default function DirectChatScreen({
               {pressing === messageId ? t.sending : t.sendEnterAgain}
             </button>
           )}
+        </div>
+      );
+    }
+    if (outcome.kind === "expired") {
+      return (
+        <div data-testid="direct-chat-queue-expired" className="mt-1 text-right text-[11px] text-[var(--color-yellow)]">
+          {t.queueExpired}
         </div>
       );
     }
