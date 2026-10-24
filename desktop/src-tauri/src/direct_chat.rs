@@ -19,7 +19,7 @@ use std::{
     process::{Child, Command, Stdio},
     sync::{Arc, Mutex},
     thread,
-    time::{Duration, SystemTime, UNIX_EPOCH},
+    time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
 use tauri::{ipc::Channel, Manager, State};
 use zeroize::{Zeroize, Zeroizing};
@@ -1554,7 +1554,45 @@ fn mac_config_hash(runtime: &Path, timeout: Duration) -> Option<String> {
     hash
 }
 
+/// A Windows path as the compose labels spell it, to compare with another: forward slashes as
+/// backslashes, no `\\?\` prefix, no trailing separator, and case ignored (the file system does).
+fn windows_path_key(path: &str) -> String {
+    let path = path.replace('/', "\\");
+    let path = path.strip_prefix("\\\\?\\").unwrap_or(&path);
+    path.trim_end_matches('\\').to_ascii_lowercase()
+}
+
+/// The Windows team's container. Its Compose provider is the runtime's own `docker-compose.exe`
+/// (Compose v2 over the Podman socket), which writes the `com.docker.compose.*` labels and none of
+/// `io.podman.compose.*`: the container is the one the runtime's two files started in the runtime
+/// directory. Asking for podman-compose's labels rejected every Windows container (G7).
+#[cfg_attr(not(windows), allow(dead_code))]
+fn windows_container_labels_are_attested(labels: &Value, runtime: &Path) -> bool {
+    let runtime_key = windows_path_key(&runtime.to_string_lossy());
+    let files = [runtime.join("docker-compose.yml"), runtime.join("docker-compose.podman.yml")]
+        .map(|file| windows_path_key(&file.to_string_lossy()));
+    let listed: Vec<String> = label(labels, "com.docker.compose.project.config_files")
+        .map(|value| value.split(',').map(windows_path_key).collect())
+        .unwrap_or_default();
+    label(labels, "com.docker.compose.project") == Some("jht")
+        && label(labels, "com.docker.compose.service") == Some("jht")
+        && label(labels, "com.docker.compose.container-number") == Some("1")
+        && label(labels, "com.docker.compose.project.working_dir").map(windows_path_key).as_deref() == Some(runtime_key.as_str())
+        && listed == files
+}
+
 fn podman_container_labels_are_attested(labels: &Value, runtime: &Path, expected_config_hash: Option<&str>) -> bool {
+    #[cfg(windows)]
+    {
+        let _ = expected_config_hash;
+        return windows_container_labels_are_attested(labels, runtime);
+    }
+    #[cfg(not(windows))]
+    podman_compose_labels_are_attested(labels, runtime, expected_config_hash)
+}
+
+#[cfg(not(windows))]
+fn podman_compose_labels_are_attested(labels: &Value, runtime: &Path, expected_config_hash: Option<&str>) -> bool {
     let runtime_text = runtime.to_string_lossy();
     let systemd_unit = podman_systemd_unit();
     if label(labels, "com.docker.compose.project") != Some("jht")
@@ -1588,13 +1626,7 @@ fn podman_container_labels_are_attested(labels: &Value, runtime: &Path, expected
             })
             && label(labels, "PODMAN_SYSTEMD_UNIT") == Some(systemd_unit.as_str());
     }
-    #[cfg(windows)]
-    {
-        // Windows' pinned Compose provider has no portable podman-compose labels beyond the
-        // ownership tuple above; its files, shim and selection are authenticated by the manifest.
-        true
-    }
-    #[cfg(not(any(unix, windows)))]
+    #[cfg(not(unix))]
     {
         false
     }
@@ -1623,6 +1655,7 @@ fn local_chat_container(
         return Err("container_unavailable");
     }
     let mut found = None;
+    let mut refused = false;
     for id in ids {
         let inspected = run_local_engine(
             engine,
@@ -1650,15 +1683,20 @@ fn local_chat_container(
             continue;
         };
         let service = label(&labels, "com.docker.compose.service");
-        let podman_labels_are_jht = !engine.podman || podman_container_labels_are_attested(&labels, runtime, expected_config_hash.as_deref());
-        if running != "true" || service != Some("jht") || !podman_labels_are_jht {
+        if running != "true" || service != Some("jht") {
+            continue;
+        }
+        if engine.podman && !podman_container_labels_are_attested(&labels, runtime, expected_config_hash.as_deref()) {
+            refused = true;
             continue;
         }
         if found.replace(id).is_some() {
             return Err("container_unavailable");
         }
     }
-    found.map(str::to_owned).ok_or("container_unavailable")
+    // Why there is none, said apart: the team is not up, or what is up is not the one the app's
+    // runtime started (it is never used for the chat).
+    found.map(str::to_owned).ok_or(if refused { "local_container_not_attested" } else { "local_team_not_running" })
 }
 
 fn local_chat_exec_args(
@@ -1693,17 +1731,50 @@ fn run_local_chat(
     input: Option<&[u8]>,
     timeout: Duration,
 ) -> Result<ProcessResult, &'static str> {
-    if !local_chat_runtime_valid(wrapper, runtime) {
-        return Err("runtime_missing");
-    }
-    let engine = local_chat_engine(runtime)?;
-    let container = local_chat_container(&engine, runtime, timeout)?;
-    run_local_engine(
-        &engine,
-        local_chat_exec_args(&container, &operation)?,
+    let team = local_chat_team(wrapper, runtime, timeout)?;
+    let result = run_local_engine(
+        &team.engine,
+        local_chat_exec_args(&team.container, &operation)?,
         input,
         timeout,
-    )
+    );
+    if engine_lost_the_container(&result) {
+        forget_local_chat_team(wrapper, runtime);
+    }
+    result
+}
+
+/// The engine could not run the exec, or answered that the container is gone (exit 125, Podman's
+/// "no such container"; also an exit the chat script never uses): the container found a moment ago
+/// is no longer the one, so the next call finds it again instead of failing for five more seconds.
+fn engine_lost_the_container(result: &Result<ProcessResult, &'static str>) -> bool {
+    match result {
+        Err(_) => true,
+        Ok(done) => done.code != 0 && (done.code == 125 || chat_failure(done.code, "").is_empty()),
+    }
+}
+
+/// How long the container found for one chat call serves the next ones.
+const LOCAL_CHAT_TEAM_KEPT: Duration = Duration::from_secs(5);
+
+static LOCAL_CHAT_TEAM: crate::team_control::ResolveCache<AttestedLocalTeam> = crate::team_control::ResolveCache::new();
+
+/// The attested container of this computer's team for a chat call. The page reads an agent's chat
+/// several times a second and sends from it: finding the container is the runtime check plus two
+/// engine calls (5 to 10 s on Windows), so one found a moment ago is reused, and a lookup that
+/// fails keeps nothing.
+fn local_chat_team(wrapper: &Path, runtime: &Path, timeout: Duration) -> Result<Arc<AttestedLocalTeam>, &'static str> {
+    LOCAL_CHAT_TEAM.get(&local_chat_team_key(wrapper, runtime), Instant::now(), LOCAL_CHAT_TEAM_KEPT, true, || AttestedLocalTeam::resolve(wrapper, runtime, timeout))
+}
+
+fn local_chat_team_key(wrapper: &Path, runtime: &Path) -> String {
+    format!("{}\n{}", wrapper.display(), runtime.display())
+}
+
+/// Drops the kept container: a lookup that fails keeps nothing, so asking for a fresh one that fails
+/// empties the slot.
+fn forget_local_chat_team(wrapper: &Path, runtime: &Path) {
+    let _ = LOCAL_CHAT_TEAM.get(&local_chat_team_key(wrapper, runtime), Instant::now(), LOCAL_CHAT_TEAM_KEPT, false, || Err("container_unavailable"));
 }
 
 /// The attested local runtime directory, for the commands that run in the team's container without
@@ -2940,7 +3011,7 @@ mod tests {
         SOCKET_PATH_MAX, SSH_SOCKET_SUFFIX,
         open_vps_link, ready_status, small_read, vps_link_for, VpsLink, VPS_LINK_CHECK, SMALL_READ_OVERLAP,
         SMALL_READ_SIZE_PROBE, SMALL_READ_TAIL, DirectChatError, local_chat_exec_args,
-        local_chat_runtime_valid, local_compose_args, local_engine_removed_environment, LocalChatEngine, podman_systemd_unit,
+        local_compose_args, local_engine_removed_environment, LocalChatEngine, podman_systemd_unit, windows_container_labels_are_attested, engine_lost_the_container,
         run_connection, run_local_chat, RemoteOperation,
         master_to_lend,
     };
@@ -3528,6 +3599,69 @@ mod tests {
         .is_err());
     }
 
+    /// The labels of the Windows team's container as Compose v2 over the Podman socket writes them
+    /// (a real container of the test machine, user name replaced): no `io.podman.compose.*` at all.
+    fn windows_labels(dir: &str) -> serde_json::Value {
+        serde_json::json!({
+            "com.docker.compose.config-hash": "0e323430cfa29d71530d1c29a09cd8e167306d7a4e019eb2bd2f1c06b88db07f",
+            "com.docker.compose.container-number": "1",
+            "com.docker.compose.oneoff": "False",
+            "com.docker.compose.project": "jht",
+            "com.docker.compose.project.config_files": format!("{dir}\\docker-compose.yml,{dir}\\docker-compose.podman.yml"),
+            "com.docker.compose.project.working_dir": dir,
+            "com.docker.compose.service": "jht",
+            "com.docker.compose.version": "5.1.2",
+        })
+    }
+
+    #[test]
+    fn the_windows_container_is_attested_by_the_compose_labels_it_really_has() {
+        let dir = r"C:\Users\someone\AppData\Local\Job Hunter Team\host-runtime";
+        let runtime = PathBuf::from(dir);
+        assert!(windows_container_labels_are_attested(&windows_labels(dir), &runtime));
+        // the spelling of the path does not matter: case, slashes, a `\\?\` prefix, a trailing separator
+        let spelled = r"c:/users/SOMEONE/appdata/local/job hunter team/host-runtime";
+        let mut trailing = windows_labels(spelled);
+        trailing["com.docker.compose.project.working_dir"] = format!("{spelled}/").into();
+        assert!(windows_container_labels_are_attested(&trailing, &runtime));
+        assert!(windows_container_labels_are_attested(&windows_labels(spelled), &runtime));
+        assert!(windows_container_labels_are_attested(&windows_labels(&format!(r"\\?\{dir}")), &runtime));
+    }
+
+    #[test]
+    fn a_windows_container_that_the_runtime_did_not_start_is_not_attested() {
+        let dir = r"C:\Users\someone\AppData\Local\Job Hunter Team\host-runtime";
+        let runtime = PathBuf::from(dir);
+        let other = r"C:\Users\someone\Documents\host-runtime";
+        let with = |key: &str, value: serde_json::Value| {
+            let mut labels = windows_labels(dir);
+            labels[key] = value;
+            labels
+        };
+        for (what, labels) in [
+            ("another project", with("com.docker.compose.project", "other".into())),
+            ("another service", with("com.docker.compose.service", "jht-broker".into())),
+            ("a second replica", with("com.docker.compose.container-number", "2".into())),
+            ("another working directory", with("com.docker.compose.project.working_dir", other.into())),
+            ("other compose files", windows_labels(other)),
+            (
+                "one more compose file",
+                with(
+                    "com.docker.compose.project.config_files",
+                    format!("{dir}\\docker-compose.yml,{dir}\\docker-compose.podman.yml,{other}\\x.yml").into(),
+                ),
+            ),
+            ("only the first compose file", with("com.docker.compose.project.config_files", format!("{dir}\\docker-compose.yml").into())),
+            ("no working directory", {
+                let mut labels = windows_labels(dir);
+                labels.as_object_mut().unwrap().remove("com.docker.compose.project.working_dir");
+                labels
+            }),
+        ] {
+            assert!(!windows_container_labels_are_attested(&labels, &runtime), "{what}");
+        }
+    }
+
     #[test]
     fn only_native_linux_podman_drops_remote_connection_selectors() {
         let podman = LocalChatEngine { program: PathBuf::from("private-engine"), podman: true };
@@ -3687,6 +3821,46 @@ mod tests {
         fs::remove_dir_all(root).unwrap();
     }
 
+    #[cfg(unix)]
+    #[test]
+    fn a_container_the_engine_lost_is_found_again_by_the_next_chat_call() {
+        use crate::existing_team_runtime::ChatOperation;
+        use std::os::unix::fs::PermissionsExt;
+
+        let (root, runtime, wrapper, _id) = attested_local_fixture();
+        let read = || {
+            run_local_chat(&wrapper, &runtime, ChatOperation::Read { agent: "capitano", cursor: None }, None, LOCAL_TEST_TIMEOUT)
+        };
+        assert_eq!(read().unwrap().code, 0);
+        // The container is gone: the engine answers 125 to the exec. The kept container is dropped.
+        let engine = runtime.join("bin").join("docker");
+        fs::write(&engine, "#!/bin/sh\n# JHT_PODMAN_DOCKER_SHIM=1\nexit 125\n").unwrap();
+        fs::set_permissions(&engine, fs::Permissions::from_mode(0o700)).unwrap();
+        // This call uses the kept container (or, if another test took the one slot, finds it again and
+        // is refused: the engine is no longer the attested one).
+        match read() {
+            Ok(done) => assert_eq!(done.code, 125),
+            Err(code) => assert_eq!(code, "runtime_missing"),
+        }
+        // The next call looks again (and is refused) instead of failing on the old id for five seconds.
+        assert!(read().is_err(), "the lost container was not forgotten");
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn only_an_engine_failure_or_a_vanished_container_empties_the_kept_one() {
+        let done = |code| Ok(ProcessResult { code, stdout: Vec::new() });
+        assert!(!engine_lost_the_container(&done(0)));
+        // the chat script's own answers: the container is there
+        for code in [2, 70, 119, 124, 126, 127, 130, 255] {
+            assert!(!engine_lost_the_container(&done(code)), "{code}");
+        }
+        for code in [1, 3, 125] {
+            assert!(engine_lost_the_container(&done(code)), "{code}");
+        }
+        assert!(engine_lost_the_container(&Err("process_timeout")));
+    }
+
     #[test]
     fn a_podman_runtime_is_listed_by_label_on_every_system_and_never_through_compose() {
         let words = |podman| {
@@ -3809,7 +3983,56 @@ mod tests {
                 LOCAL_TEST_TIMEOUT,
             )
             .unwrap_err(),
-            "container_unavailable"
+            "local_team_not_running"
+        );
+        assert!(!executed.exists());
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn local_chat_names_a_running_container_the_runtime_did_not_start_as_not_attested() {
+        use crate::existing_team_runtime::ChatOperation;
+        use std::os::unix::fs::PermissionsExt;
+
+        static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+        let root = std::env::temp_dir().canonicalize().unwrap().join(format!(
+            "jht-local-chat-unattested-{}-{}",
+            std::process::id(),
+            NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+        ));
+        let runtime = root.join("host-runtime");
+        let bin = runtime.join("bin");
+        fs::create_dir_all(&bin).unwrap();
+        fs::write(runtime.join("container-runtime"), "podman\n").unwrap();
+        fs::write(runtime.join("docker-compose.yml"), "services:\n  jht:\n    volumes:\n      - jht-runtime-mask:/jht_home/runtime\n").unwrap();
+        let wrapper = root.join("jht-wrapper.sh");
+        fs::write(&wrapper, "#!/bin/sh\nJHT_HOST_RUNTIME_PROTOCOL=1\nJHT_DESKTOP_CHAT_PROTOCOL=1\nJHT_ONBOARDING_SNAPSHOT_PROTOCOL=1\n").unwrap();
+        fs::set_permissions(&wrapper, fs::Permissions::from_mode(0o700)).unwrap();
+        let executed = root.join("exec-was-called");
+        let engine = bin.join("docker");
+        fs::write(
+            &engine,
+            format!(
+                "#!/bin/sh\n# JHT_PODMAN_DOCKER_SHIM=1\ncase \"$1\" in\n  ps) printf '{}\\n' ;;\n  inspect) printf 'true|{{\"com.docker.compose.service\":\"jht\"}}\\n' ;;\n  exec) touch '{}' ;;\n  *) exit 9 ;;\nesac\n",
+                "a".repeat(64),
+                executed.display(),
+            ),
+        )
+        .unwrap();
+        fs::set_permissions(&engine, fs::Permissions::from_mode(0o700)).unwrap();
+        write_valid_local_podman_manifest(&runtime, &wrapper);
+
+        assert_eq!(
+            run_local_chat(
+                &wrapper,
+                &runtime,
+                ChatOperation::Read { agent: "capitano", cursor: None },
+                None,
+                LOCAL_TEST_TIMEOUT,
+            )
+            .unwrap_err(),
+            "local_container_not_attested"
         );
         assert!(!executed.exists());
         fs::remove_dir_all(root).unwrap();
