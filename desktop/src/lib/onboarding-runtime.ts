@@ -14,6 +14,24 @@ export type OnboardingNativeProgressStage = "engine" | "runtime" | "container" |
 /** `notice`: a sentence the setup keeps on screen (install.ps1's JHT_NOTICE); the step goes on. */
 export type OnboardingNativeProgressStatus = "start" | "progress" | "done" | "error" | "notice";
 
+/** The phases of the Windows installer, the ids of install.ps1's JHT_PHASE lines. */
+export const INSTALL_PHASES = [
+  "wsl_check", "podman_install", "podman_machine_init", "podman_machine_start", "runtime_download", "image_pull", "team_restart",
+] as const;
+export type OnboardingInstallPhase = (typeof INSTALL_PHASES)[number];
+
+/**
+ * How far the pull of the runtime image has got, as podman says it. `blobsDone` is the layers it reported
+ * finished. The bytes are the sums over the layers podman drew a progress bar for, and null when it drew
+ * none: the number of layers is not known up front, so never make a percentage from the layers alone, and
+ * a bar is honest only with both bytes (done / total).
+ */
+export interface OnboardingImagePull {
+  blobsDone: number;
+  bytesDone: number | null;
+  bytesTotal: number | null;
+}
+
 export interface OnboardingNativeProgress {
   stage: OnboardingNativeProgressStage;
   status: OnboardingNativeProgressStatus;
@@ -22,6 +40,10 @@ export interface OnboardingNativeProgress {
   elapsedMs: number;
   code: string | null;
   retryable: boolean | null;
+  /** The installer phase the message belongs to, when it is one. */
+  phase?: OnboardingInstallPhase;
+  /** Only during `image_pull`, and only once podman has said something about the layers. */
+  pull?: OnboardingImagePull;
 }
 
 export type OnboardingInteractiveEvent =
@@ -86,7 +108,26 @@ export function parseOnboardingNativeProgress(value: unknown): OnboardingNativeP
   const retryable = row.retryable === null || typeof row.retryable === "boolean" ? row.retryable : undefined;
   if (code === undefined || retryable === undefined) return null;
   if (status === "error" ? code === null || typeof retryable !== "boolean" : code !== null || retryable !== null) return null;
-  return { stage, status, message, sequence: row.sequence as number, elapsedMs: row.elapsedMs as number, code, retryable };
+  const phase = INSTALL_PHASES.find((known) => known === row.phase);
+  const pull = phase === "image_pull" ? parseImagePull(row.pull) : undefined;
+  return {
+    stage, status, message, sequence: row.sequence as number, elapsedMs: row.elapsedMs as number, code, retryable,
+    ...(phase ? { phase } : {}),
+    ...(pull ? { pull } : {}),
+  };
+}
+
+/** The pull as the page uses it, or undefined for anything off the closed shape (the event is kept without it). */
+export function parseImagePull(value: unknown): OnboardingImagePull | undefined {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
+  const row = value as Record<string, unknown>;
+  const count = (item: unknown): item is number => Number.isSafeInteger(item) && (item as number) >= 0;
+  const bytes = (item: unknown): item is number | null => item === null || count(item);
+  if (Object.keys(row).length !== 3 || !count(row.blobsDone) || !bytes(row.bytesDone) || !bytes(row.bytesTotal)) return undefined;
+  // both or neither, and never more done than total
+  if ((row.bytesDone === null) !== (row.bytesTotal === null)) return undefined;
+  if (row.bytesDone !== null && row.bytesTotal !== null && (row.bytesTotal === 0 || row.bytesDone > row.bytesTotal)) return undefined;
+  return { blobsDone: row.blobsDone, bytesDone: row.bytesDone, bytesTotal: row.bytesTotal };
 }
 
 function safeInteractiveText(value: unknown, maximum: number): string | null {

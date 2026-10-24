@@ -649,6 +649,160 @@ pub(crate) fn phase_message(line: &str) -> Option<&'static str> {
         .map(|(_, message)| *message)
 }
 
+/// The id of the phase a progress message belongs to (`image_pull` for `ui_phase_image_pull`), or None
+/// for any other message. The screen gets it next to the message, so it can tell the phases apart
+/// without reading the wording.
+pub(crate) fn phase_id(message: &str) -> Option<&'static str> {
+    INSTALL_PHASES.iter().find(|(_, known)| *known == message).map(|(id, _)| *id)
+}
+
+/// How far the pull of the runtime image has got, as podman says it. `blobs_done` counts the layers
+/// podman reported finished. The bytes are the sums over the layers podman has printed a progress
+/// bar for ("12.3MiB / 28.0MiB"), and None when it printed none: the total of the layers is not
+/// known up front, so there is never a percentage made up from the layers alone.
+#[derive(Clone, Debug, Default, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct PullProgress {
+    pub(crate) blobs_done: u32,
+    pub(crate) bytes_done: Option<u64>,
+    pub(crate) bytes_total: Option<u64>,
+}
+
+/// A size as podman writes it: a number and B, kB, KB, KiB, MB, MiB, GB or GiB. None for anything else.
+fn parse_size(number: &str, unit: &str) -> Option<u64> {
+    let value: f64 = number.parse().ok()?;
+    let factor: f64 = match unit {
+        "B" => 1.0,
+        "kB" | "KB" => 1_000.0,
+        "KiB" => 1_024.0,
+        "MB" => 1_000_000.0,
+        "MiB" => 1_048_576.0,
+        "GB" => 1_000_000_000.0,
+        "GiB" => 1_073_741_824.0,
+        _ => return None,
+    };
+    (value.is_finite() && value >= 0.0).then(|| (value * factor).round() as u64)
+}
+
+/// `done / total` out of a podman progress line ("3.2MiB / 28.0MiB"): the last such pair on the line,
+/// which is the one a redrawn bar ends with. Only if done <= total.
+fn parse_byte_pair(text: &str) -> Option<(u64, u64)> {
+    let words: Vec<&str> = text.split_whitespace().collect();
+    let mut found = None;
+    for index in 0..words.len() {
+        if words[index] != "/" || index == 0 || index + 1 >= words.len() {
+            continue;
+        }
+        let split = |word: &str| {
+            let at = word.find(|c: char| c.is_ascii_alphabetic())?;
+            Some((word[..at].to_owned(), word[at..].trim_end_matches(['|', ']', ')']).to_owned()))
+        };
+        // "3.2MiB / 28.0MiB" or "3.2 MiB / 28.0 MiB"
+        let left = if let Some((n, u)) = split(words[index - 1]).filter(|(n, _)| !n.is_empty()) {
+            parse_size(&n, &u)
+        } else if index >= 2 {
+            parse_size(words[index - 2], words[index - 1])
+        } else {
+            None
+        };
+        let right = match split(words[index + 1]).filter(|(n, _)| !n.is_empty()) {
+            Some((n, u)) => parse_size(&n, &u),
+            None if index + 2 < words.len() => parse_size(words[index + 1], words[index + 2].trim_end_matches(['|', ']', ')'])),
+            None => None,
+        };
+        if let (Some(done), Some(total)) = (left, right) {
+            if total > 0 && done <= total {
+                found = Some((done, total));
+            }
+        }
+    }
+    found
+}
+
+/// The layer a podman line is about: the first `sha256:<hex>` on it, cut to 12 characters.
+fn blob_of(text: &str) -> Option<String> {
+    let at = text.find("sha256:")? + "sha256:".len();
+    let hex: String = text[at..].chars().take_while(char::is_ascii_hexdigit).take(12).collect();
+    (hex.len() >= 6).then_some(hex)
+}
+
+/// Follows the `JHT_PULL <podman's line>` lines of install.ps1's stdout (the pull's stderr, one
+/// line each, the last redraw of a progress bar only). Podman's own wording is the contract:
+/// «Copying blob sha256:… done» finishes a layer, and a progress bar carries «done / total».
+#[derive(Debug, Default)]
+pub(crate) struct PullTracker {
+    finished: std::collections::BTreeSet<String>,
+    /// per layer: bytes done and bytes total, as last printed
+    bars: std::collections::BTreeMap<String, (u64, u64)>,
+    last: PullProgress,
+}
+
+impl PullTracker {
+    /// The progress after this line when it changed it; None for any other line.
+    pub(crate) fn observe(&mut self, line: &str) -> Option<PullProgress> {
+        let text = line.trim_end_matches(['\r', '\n']).strip_prefix("JHT_PULL ")?;
+        // a progress bar redraws with carriage returns: only the last drawing counts
+        let text = text.rsplit('\r').next().unwrap_or(text);
+        let blob = blob_of(text);
+        let mut changed = false;
+        if let Some(blob) = &blob {
+            if text.contains("Copying blob") && text.split_whitespace().any(|word| word == "done") {
+                changed |= self.finished.insert(blob.clone());
+                // a finished layer is a whole one
+                if let Some(bar) = self.bars.get_mut(blob) {
+                    bar.0 = bar.1;
+                }
+            } else if let Some((done, total)) = parse_byte_pair(text) {
+                changed |= self.bars.insert(blob.clone(), (done, total)) != Some((done, total));
+            }
+        }
+        let (bytes_done, bytes_total) = if self.bars.is_empty() {
+            (None, None)
+        } else {
+            (
+                Some(self.bars.values().fold(0u64, |sum, bar| sum.saturating_add(bar.0))),
+                Some(self.bars.values().fold(0u64, |sum, bar| sum.saturating_add(bar.1))),
+            )
+        };
+        let next = PullProgress {
+            blobs_done: u32::try_from(self.finished.len()).unwrap_or(u32::MAX),
+            bytes_done,
+            bytes_total,
+        };
+        (changed && next != self.last).then(|| {
+            self.last = next.clone();
+            next
+        })
+    }
+}
+
+type PullSink = std::sync::Arc<dyn Fn(PullProgress) + Send + Sync>;
+static PULL_SINK: std::sync::Mutex<Option<PullSink>> = std::sync::Mutex::new(None);
+
+/// Runs `operation` with `sink` receiving the pull progress that the installer's reader reports
+/// (`report_pull`), and takes it away afterwards, also when `operation` panics. One operation at a time:
+/// the setup holds the preparing flag.
+pub(crate) fn with_pull_sink<T>(sink: PullSink, operation: impl FnOnce() -> T) -> T {
+    struct Clear;
+    impl Drop for Clear {
+        fn drop(&mut self) {
+            *PULL_SINK.lock().unwrap_or_else(|e| e.into_inner()) = None;
+        }
+    }
+    *PULL_SINK.lock().unwrap_or_else(|e| e.into_inner()) = Some(sink);
+    let _clear = Clear;
+    operation()
+}
+
+/// Hands a pull update to whoever asked for it, if anyone did.
+#[cfg_attr(not(windows), allow(dead_code))]
+pub(crate) fn report_pull(update: PullProgress) {
+    let sink = PULL_SINK.lock().unwrap_or_else(|e| e.into_inner()).clone();
+    if let Some(sink) = sink {
+        sink(update);
+    }
+}
+
 /// How long each phase of install.ps1 took: from the offsets, since its start, at which each phase
 /// announced itself, and the total. The first entry (no phase) is the time before the first
 /// announcement. The durations add up to the total; a phase that announces itself twice counts twice.
@@ -1461,5 +1615,97 @@ mod tests {
         assert_eq!(uninstall_outcome(Ok(1), vec![]), Err("uninstall_failed"));
         assert_eq!(uninstall_outcome(Err("process_timeout"), vec![]), Err("timeout"));
         assert_eq!(uninstall_outcome(Err("process_start_failed"), vec![]), Err("uninstall_failed"));
+    }
+
+    fn pull(tracker: &mut PullTracker, text: &str) -> Option<PullProgress> {
+        tracker.observe(&format!("JHT_PULL {text}\r\n"))
+    }
+
+    #[test]
+    fn a_progress_message_names_its_phase() {
+        for (id, message) in INSTALL_PHASES {
+            assert_eq!(phase_id(message), Some(id));
+        }
+        for other in ["", "ui_team_wait", "ui_notice_windows10_unsupported", "image_pull"] {
+            assert_eq!(phase_id(other), None, "{other:?}");
+        }
+    }
+
+    #[test]
+    fn the_pull_counts_the_layers_podman_says_are_done_and_nothing_else() {
+        let mut tracker = PullTracker::default();
+        assert_eq!(pull(&mut tracker, "Trying to pull ghcr.io/example/jht:1..."), None);
+        assert_eq!(pull(&mut tracker, "Getting image source signatures"), None);
+        assert_eq!(
+            pull(&mut tracker, "Copying blob sha256:aaaaaaaaaaaa1111 done   |"),
+            Some(PullProgress { blobs_done: 1, bytes_done: None, bytes_total: None })
+        );
+        // the same layer said twice is one layer; a line that is not podman's is not shown
+        assert_eq!(pull(&mut tracker, "Copying blob sha256:aaaaaaaaaaaa1111 done   |"), None);
+        assert_eq!(tracker.observe("Copying blob sha256:bbbbbbbbbbbb2222 done"), None);
+        assert_eq!(tracker.observe("JHT_PHASE image_pull"), None);
+        assert_eq!(pull(&mut tracker, ""), None);
+        assert_eq!(
+            pull(&mut tracker, "Copying blob sha256:bbbbbbbbbbbb2222 done"),
+            Some(PullProgress { blobs_done: 2, bytes_done: None, bytes_total: None })
+        );
+    }
+
+    #[test]
+    fn the_bytes_are_the_sums_of_the_bars_podman_drew_and_a_finished_layer_is_a_whole_one() {
+        let mut tracker = PullTracker::default();
+        let mib = 1_048_576u64;
+        assert_eq!(
+            pull(&mut tracker, "Copying blob sha256:cccccccccccc3333 [==>-----] 3.0MiB / 28.0MiB"),
+            Some(PullProgress { blobs_done: 0, bytes_done: Some(3 * mib), bytes_total: Some(28 * mib) })
+        );
+        assert_eq!(
+            pull(&mut tracker, "Copying blob sha256:dddddddddddd4444 [>-------] 1.0 MiB / 5.0 MiB"),
+            Some(PullProgress { blobs_done: 0, bytes_done: Some(4 * mib), bytes_total: Some(33 * mib) })
+        );
+        // a bar redrawn with carriage returns: only the last drawing counts
+        assert_eq!(
+            pull(&mut tracker, "Copying blob sha256:cccccccccccc3333 [=>------] 5.0MiB / 28.0MiB\rCopying blob sha256:cccccccccccc3333 [===>----] 9.0MiB / 28.0MiB"),
+            Some(PullProgress { blobs_done: 0, bytes_done: Some(10 * mib), bytes_total: Some(33 * mib) })
+        );
+        // the same bar again changes nothing
+        assert_eq!(pull(&mut tracker, "Copying blob sha256:cccccccccccc3333 [===>----] 9.0MiB / 28.0MiB"), None);
+        assert_eq!(
+            pull(&mut tracker, "Copying blob sha256:cccccccccccc3333 done   |"),
+            Some(PullProgress { blobs_done: 1, bytes_done: Some(29 * mib), bytes_total: Some(33 * mib) })
+        );
+    }
+
+    #[test]
+    fn what_is_not_a_size_pair_is_not_bytes() {
+        let mut tracker = PullTracker::default();
+        for text in [
+            "Copying blob sha256:eeeeeeeeeeee5555 [=>--] 5.0XB / 6.0XB",
+            "Copying blob sha256:eeeeeeeeeeee5555 [=>--] 30.0MiB / 28.0MiB",
+            "Copying blob sha256:eeeeeeeeeeee5555 [=>--] 3.0MiB / 0B",
+            "Copying blob sha256:eeeeeeeeeeee5555 [=>--] NaNMiB / 1MiB",
+            "Copying blob sha256:eeeeeeeeeeee5555 [=>--]",
+            "Copying blob not-a-layer 3.0MiB / 28.0MiB",
+            "/ /",
+        ] {
+            assert_eq!(pull(&mut tracker, text), None, "{text:?}");
+        }
+    }
+
+    #[test]
+    fn the_pull_sink_gets_updates_only_while_the_operation_runs() {
+        let got = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+        report_pull(PullProgress::default()); // nobody asked: dropped
+        let sink = {
+            let got = std::sync::Arc::clone(&got);
+            std::sync::Arc::new(move |update: PullProgress| got.lock().unwrap().push(update))
+        };
+        let out = with_pull_sink(sink, || {
+            report_pull(PullProgress { blobs_done: 3, ..PullProgress::default() });
+            7
+        });
+        assert_eq!(out, 7);
+        report_pull(PullProgress { blobs_done: 4, ..PullProgress::default() });
+        assert_eq!(*got.lock().unwrap(), vec![PullProgress { blobs_done: 3, ..PullProgress::default() }]);
     }
 }

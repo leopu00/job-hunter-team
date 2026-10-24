@@ -3,6 +3,7 @@ import type { Locale } from "@/i18n/config";
 import { stateText } from "./onboarding-state.i18n";
 import type { SupabaseClient, User } from "@supabase/supabase-js";
 import type { DesktopPlatform } from "./desktop-platform";
+import type { OnboardingImagePull, OnboardingInstallPhase } from "./onboarding-runtime";
 
 export interface OnboardingAccount {
   displayName: string | null;
@@ -129,6 +130,9 @@ export interface OnboardingActivityEntry {
   stageElapsedMs: number;
   updatedAt: number;
   status: "active" | "completed" | "failed";
+  /** The installer phase the entry's last message belongs to (Windows), and the image pull's progress in it. */
+  phase?: OnboardingInstallPhase;
+  pull?: OnboardingImagePull;
 }
 
 export interface OnboardingActivityState {

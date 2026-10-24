@@ -133,4 +133,18 @@ describe("onboarding activity timeline", () => {
     ]);
     expect(JSON.stringify(state.events)).not.toMatch(/token|password|secret|https?:\/\//i);
   });
+
+  it("keeps the installer phase and the image pull of the last message, and drops them when a message names none", () => {
+    let state = beginOnboardingActivityInvocation(createOnboardingActivity(1_000), 1_000);
+    state = applyOnboardingProgress(state, progress(), 1_000);
+    const pull = { blobsDone: 1, bytesDone: 1_048_576, bytesTotal: 5_242_880 };
+    state = applyOnboardingProgress(state, progress({ status: "progress", sequence: 2, elapsedMs: 5_000, phase: "image_pull", pull }), 6_000);
+    expect(state.current).toMatchObject({ phase: "image_pull", pull });
+    expect(state.events).toHaveLength(1);
+    state = applyOnboardingProgress(state, progress({ status: "progress", sequence: 3, elapsedMs: 7_000, phase: "image_pull" }), 8_000);
+    expect(state.current?.phase).toBe("image_pull");
+    expect(state.current?.pull).toBeUndefined();
+    state = applyOnboardingProgress(state, progress({ status: "progress", sequence: 4, elapsedMs: 9_000, message: "Altro." }), 10_000);
+    expect(state.current?.phase).toBeUndefined();
+  });
 });
