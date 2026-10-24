@@ -11,15 +11,21 @@ ENABLER = (ROOT / "scripts/enable-podman-windows-runtime.ps1").read_text(encodin
 
 def test_desktop_creates_a_limited_current_user_logon_task():
     assert 'AUTOSTART_TASK_LABEL: &str = "Job Hunter Team - Start runtime"' in RUNTIME
-    assert '"/SC", "ONLOGON"' in RUNTIME
-    assert '"/RL", "LIMITED"' in RUNTIME
-    create = RUNTIME[RUNTIME.index("pub(crate) fn autostart_create_args"):RUNTIME.index("fn autostart_query_args")]
-    assert '"/RU", user, "/IT"' in create
+    # A standard user is refused `schtasks /Create /SC ONLOGON` (with or without /RU /IT): the task
+    # comes from an XML whose logon trigger names the user, read from a private folder.
+    create = RUNTIME[RUNTIME.index("pub(crate) fn autostart_create_args"):RUNTIME.index("/// The characters XML text must not carry bare.")]
+    assert '"/XML"' in create and '"/F"' in create
+    assert '"ONLOGON"' not in create and '"/RU"' not in create and '"/SC"' not in create
     assert "autostart_task_name(sid)" in create
+    xml = RUNTIME[RUNTIME.index("fn autostart_task_xml"):RUNTIME.index("fn utf16_with_bom")]
+    assert "<LogonTrigger><Enabled>true</Enabled><UserId>{user}</UserId></LogonTrigger>" in xml
+    assert "<LogonType>InteractiveToken</LogonType><RunLevel>LeastPrivilege</RunLevel>" in xml
+    assert "HighestAvailable" not in xml
     assert 'format!("{AUTOSTART_TASK_LABEL} [{sid}]")' in RUNTIME
     assert '"/Query", "/TN", &task, "/XML"' in RUNTIME
     assert '["/user", "/fo", "csv", "/nh"]' in RUNTIME
     assert 'autostart_query_args(&sid)' in RUNTIME
+    assert "crate::private_acl::protect_dir(&dir)" in RUNTIME
 
 
 def test_p0_never_targets_the_legacy_global_task():
@@ -31,7 +37,10 @@ def test_p0_never_targets_the_legacy_global_task():
 
 
 def test_install_keeps_running_when_the_desktop_cannot_register_autostart():
-    assert 'if !crate::windows_runtime::register_autostart(&wrapper)' in ONBOARDING
+    # Both the reuse and the post-install branch go through the one helper, which logs the step
+    # and tells the person when the registration did not hold.
+    assert ONBOARDING.count("register_autostart_noted(&wrapper, log, phase);") == 2
+    assert "crate::windows_runtime::register_autostart(wrapper)" in ONBOARDING
     assert 'phase("ui_notice_autostart_inactive")' in ONBOARDING
     assert "Install-JhtStartupTask" not in ENABLER
     assert "Register-ScheduledTask" not in ENABLER
