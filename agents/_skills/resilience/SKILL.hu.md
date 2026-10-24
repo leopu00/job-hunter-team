@@ -77,6 +77,8 @@ else
 fi
 ```
 
+**A LinkedIn-t nem adjuk fel, ha a `linkedin_check.py` ELROMLOTT** (4-es kilépési kód `LINKEDIN_PROFILE_NOT_WRITABLE`, böngésző nem működik): az alternatív lépcsőfok a `python3 /app/shared/skills/linkedin_access.py search --keywords ... --location ...` a kereséshez és a `fetch-job <URL|ID>` egy hirdetés elolvasásához — nyilvános végpont, bejelentkezés nélkül, semmi sem íródik az `/app` alá. A 2-3 próbálkozásod egyikének számít; jelezd a hibás eszközt a Capitanónak.
+
 ## ⛔ Makacssági plafon — legfeljebb 2-3 próbálkozás, aztán ESZKALÁCIÓ (2026-06-26)
 
 A makacsságnak **kerete** van, NEM végtelen. Egy folyamatosan hibázó forrásra/eszközre **legfeljebb

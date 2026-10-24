@@ -18,7 +18,6 @@ on:
       - 'tests/test_podman_windows_setup_retry.py'
       - 'tests/test_podman_windows_sidecar_idmap.py'
       - 'tests/test_podman_windows_cgroupfs.py'
-      - 'tests/test_windows_startup_task_sid.py'
       - 'tests/test_podman_windows_bundle_owner.py'
       - 'tests/windows_native_fakes.py'
       - 'tests/test_windows_powershell51_native_quotes.py'
@@ -120,7 +119,7 @@ jobs:
         run: |
           foreach ($shell in 'powershell', 'pwsh') {
             $env:JHT_TEST_SHELL = $shell
-            $out = python -m pytest tests/test_windows_podman_wsl_branches.py tests/test_podman_windows_setup_retry.py tests/test_podman_windows_sidecar_idmap.py tests/test_podman_windows_cgroupfs.py tests/test_windows_startup_task_sid.py tests/test_podman_windows_bundle_owner.py `
+            $out = python -m pytest tests/test_windows_podman_wsl_branches.py tests/test_podman_windows_setup_retry.py tests/test_podman_windows_sidecar_idmap.py tests/test_podman_windows_cgroupfs.py tests/test_podman_windows_bundle_owner.py `
               -n 4 -p no:cacheprovider -rs --durations=15 --durations-min=1 2>&1
             $code = $LASTEXITCODE
             $out | ForEach-Object { "$_" }

@@ -4195,7 +4195,7 @@ JHT_UNINSTALL_PROTOCOL=1
 UNINSTALL_MACHINE_NAME="jht-podman"
 UNINSTALL_PROJECT="jht"
 UNINSTALL_RC_MARKER="# Added by JHT install.sh"
-UNINSTALL_LOSS="Vengono cancellati anche la password della posta, la sessione LinkedIn e i token di Telegram salvati; ~/.jht e Documenti restano."
+UNINSTALL_LOSS="Vengono cancellati anche la password della posta e i token di Telegram salvati; ~/.jht e Documenti restano, e con loro la sessione LinkedIn salvata (secrets/linkedin-profile e .cache/linkedin): si toglie con jht reset --scope creds."
 
 uninstall_usage() {
   err "uso: jht uninstall --confirm"

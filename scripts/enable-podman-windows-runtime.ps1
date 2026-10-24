@@ -61,6 +61,47 @@ function Invoke-Checked {
   if ($LASTEXITCODE -ne 0) { throw "Command failed ($LASTEXITCODE): $FilePath $($Arguments -join ' ')" }
 }
 
+# `jht up` says the containers were created, not that they stay up: with a runtime image that lacks the
+# broker's or the Telegram service's binary, the broker restarts in a loop and the Telegram service exits
+# 127, and the setup still went on to "Installation complete!" with exit 0. A container is up when it has
+# been running, under one single start, for $SettleSeconds. What is not so at the deadline comes back, one
+# line per container with its state and exit code (the logs stay in `jht logs`); nothing comes back when
+# every container is up.
+function Get-UnsettledJhtContainers {
+  param(
+    [Parameter(Mandatory)][string]$Podman,
+    [Parameter(Mandatory)][string]$MachineName,
+    [Parameter(Mandatory)][string[]]$Names,
+    [int]$TimeoutSeconds = 60,
+    [int]$SettleSeconds = 10,
+    [int]$SampleSeconds = 2
+  )
+  $watch = [Diagnostics.Stopwatch]::StartNew()
+  $runningSince = @{}
+  while ($true) {
+    $unsettled = @()
+    foreach ($name in $Names) {
+      # No double quote inside a native argument, and the stderr of a container that is not there is dropped (T71, T82).
+      $out = @(& { $ErrorActionPreference = 'Continue'; & $Podman --connection $MachineName inspect --type container $name --format '{{.State.Status}}|{{.State.ExitCode}}|{{.State.StartedAt}}' 2>$null })
+      $line = if ($out.Count -gt 0) { ([string]$out[0]).Trim() } else { '' }
+      $parts = $line.Split('|')
+      if ($parts.Count -lt 3) { $runningSince.Remove($name); $unsettled += "$name is not there"; continue }
+      if ($parts[0] -ne 'running') {
+        $runningSince.Remove($name)
+        $unsettled += "$name is $($parts[0]) (exit $($parts[1]))"
+        continue
+      }
+      if (-not $runningSince.ContainsKey($name) -or $runningSince[$name].Start -ne $parts[2]) {
+        $runningSince[$name] = @{ Start = $parts[2]; Clock = $watch.Elapsed.TotalSeconds }
+      }
+      if (($watch.Elapsed.TotalSeconds - $runningSince[$name].Clock) -lt $SettleSeconds) { $unsettled += "$name keeps restarting" }
+    }
+    if ($unsettled.Count -eq 0) { return @() }
+    if ($watch.Elapsed.TotalSeconds -ge $TimeoutSeconds) { return $unsettled }
+    Start-Sleep -Seconds $SampleSeconds
+  }
+}
+
 function Install-PrivateComposeProvider {
   param([Parameter(Mandatory)][string]$Destination)
   if ((Test-Path -LiteralPath $Destination -PathType Leaf) -and
@@ -774,6 +815,11 @@ if ($runningImage -and $runningImage -ne $canonicalImage) {
 }
 & (Join-Path $BinDir 'jht.ps1') up
 if ($LASTEXITCODE -ne 0) { throw 'The migrated JHT container did not start.' }
+# The team is up when each container of the compose file is running and stays so (a crash loop or an exit is the failure).
+$composeDefinition = Get-Content -LiteralPath (Join-Path $RuntimeDir 'docker-compose.yml') -Raw
+$expectedContainers = @(@('jht', 'jht-broker', 'jht-telegram') | Where-Object { $composeDefinition -match "(?m)^  $([regex]::Escape($_)):" })
+$unsettledContainers = @(Get-UnsettledJhtContainers -Podman $Podman -MachineName $MachineName -Names $expectedContainers)
+if ($unsettledContainers.Count -gt 0) { throw "runtime_containers_unhealthy: $($unsettledContainers -join '; '). Run 'jht logs' to see why." }
 
 Install-JhtContainerService -PodmanPath $Podman -UnitPath $containerUnitFile
 

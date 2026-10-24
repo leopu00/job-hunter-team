@@ -80,6 +80,8 @@ else
 fi
 ```
 
+**On n'abandonne pas LinkedIn quand `linkedin_check.py` est CASSÉ** (sortie 4 `LINKEDIN_PROFILE_NOT_WRITABLE`, navigateur en panne) : l'échelon alternatif est `python3 /app/shared/skills/linkedin_access.py search --keywords ... --location ...` pour la découverte et `fetch-job <URL|ID>` pour lire une annonce — endpoint public, sans login, rien d'écrit sous `/app`. Cela compte comme l'un de tes 2-3 essais ; signale l'outil cassé au Capitano.
+
 ## ⛔ Plafond d'acharnement — 2-3 tentatives maximum, puis ESCALADE (2026-06-26)
 
 L'acharnement a un **budget**, il n'est PAS infini. Pour une source/un outil qui échoue en boucle,

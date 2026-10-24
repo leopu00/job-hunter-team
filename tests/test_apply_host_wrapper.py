@@ -255,7 +255,7 @@ def test_the_windows_wrapper_closes_the_same_fields_in_the_same_order():
         "Read-Host",
         "@('request', $id, '--expect', $confirm)",
         "$destination -cne $shownDestination",
-        "Invoke-BrokerAdmin -InputText '' apply record $id $instant $destination",
+        "Invoke-BrokerAdmin -InputText '' -AdminArgs @('apply', 'record', $id, $instant, $destination)",
     ]
     positions = [body.index(piece) for piece in order]
     assert positions == sorted(positions)

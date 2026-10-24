@@ -358,8 +358,11 @@ try {
 
   Write-ProbeStep 'Restarting the workload and checking that it returns running'
   Invoke-ProbeCompose 'restart'
-  $running = ([string](& { $ErrorActionPreference = 'Continue'; & docker inspect jht --format '{{.State.Running}}' 2>$null } | Select-Object -First 1)).Trim()
-  if ($LASTEXITCODE -ne 0 -or $running -ne 'true') {
+  # All the lines, then the first: `| Select-Object -First 1` stops docker early and $LASTEXITCODE is no longer its.
+  $stateLines = @(& { $ErrorActionPreference = 'Continue'; & docker inspect jht --format '{{.State.Running}}' 2>$null })
+  $inspectCode = $LASTEXITCODE
+  $running = ([string]($stateLines | Select-Object -First 1)).Trim()
+  if ($inspectCode -ne 0 -or $running -ne 'true') {
     throw "Container did not return running after compose restart (state: '$running')."
   }
 

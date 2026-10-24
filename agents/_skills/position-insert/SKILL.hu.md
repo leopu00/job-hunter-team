@@ -74,7 +74,7 @@ python3 /app/shared/skills/safe_fetch.py '<URL>' > $JHT_AGENT_DIR/tmp/jd-raw.htm
 Nyerd ki a **teljes szovegtorzset** (nem csak a cimet) es a **kovetelmenyek reszt** (keszsegek, tapasztalati evek, nyelvek). Ha az oldalnak van egyertelmu "Requirements" / "Must have" / "What you'll bring" szekcioja, maskold le szo szerint a `--requirements`-be.
 
 Blokkolt oldalak (NE hasznald a `fetch` MCP-t, a robots.txt blokkolja):
-- `linkedin.com` → hasznald a `linkedin_check.py`-t (hitelesitett) vagy `safe_fetch.py`-t
+- `linkedin.com` → hasznald a `linkedin_check.py`-t (hitelesitett) vagy `safe_fetch.py`-t — ha hibázik (4-es kilépési kód `LINKEDIN_PROFILE_NOT_WRITABLE`, vagy a böngésző nem működik), használd a `linkedin_access.py fetch-job <URL|ID>`-t (nyilvános végpont, bejelentkezés nélkül) a LinkedIn kihagyása helyett
 - `wellfound.com` → hasznald a `playwright`-ot vagy a `safe_fetch.py`-t
 
 ## Gate 4 — Megenged Scout-szintu szurok

@@ -12,7 +12,9 @@ Usage:
 Initial setup:
   1. Go to https://console.cloud.google.com/apis/credentials
   2. Create an "OAuth 2.0 Client ID" → type "Desktop app"
-  3. Download the JSON → save it as shared/secrets/google-oauth-client.json
+  3. Download the JSON → save it as $JHT_HOME/secrets/google-oauth-client.json
+     (shared/secrets/ is still read if the file is only there; nothing is ever
+     written under shared/: in the image it belongs to root)
   4. python3 db_to_drive.py auth
 """
 
@@ -33,9 +35,16 @@ def _require_drive_folder():
         print("Error: JH_DRIVE_FOLDER_ID is not configured. Add it to your .env.")
         sys.exit(1)
 
-SECRETS_DIR = os.path.join(os.path.dirname(__file__), '..', 'secrets')
+# Le credenziali e il token vivono sotto $JHT_HOME: nell'immagine `shared/` e'
+# di root, e il token si RISCRIVE a ogni refresh. `shared/secrets`
+# resta solo come posto da cui LEGGERE un file messo li' a mano in passato.
+SECRETS_DIR = os.path.join(
+    os.environ.get("JHT_HOME") or os.path.join(os.path.expanduser("~"), ".jht"), 'secrets')
+_LEGACY_SECRETS_DIR = os.path.join(os.path.dirname(__file__), '..', 'secrets')
 OAUTH_CLIENT_PATH = os.path.join(SECRETS_DIR, 'google-oauth-client.json')
 OAUTH_TOKEN_PATH = os.path.join(SECRETS_DIR, 'google-oauth-token.json')
+_LEGACY_CLIENT_PATH = os.path.join(_LEGACY_SECRETS_DIR, 'google-oauth-client.json')
+_LEGACY_TOKEN_PATH = os.path.join(_LEGACY_SECRETS_DIR, 'google-oauth-token.json')
 
 SCOPES = ['https://www.googleapis.com/auth/drive']
 
@@ -54,22 +63,37 @@ WORKTREES = [
 ]
 
 
+def _write_token(creds):
+    """Scrive il token sotto $JHT_HOME/secrets (cartella 0700, file 0600)."""
+    os.makedirs(SECRETS_DIR, mode=0o700, exist_ok=True)
+    try:
+        os.chmod(SECRETS_DIR, 0o700)  # una secrets/ gia' esistente e piu' aperta si restringe
+    except OSError:
+        pass
+    fd = os.open(OAUTH_TOKEN_PATH, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, 'w') as f:
+        f.write(creds.to_json())
+    os.chmod(OAUTH_TOKEN_PATH, 0o600)
+
+
 def get_oauth_creds():
     """Carica credenziali OAuth2, refreshando il token se necessario."""
     from google.oauth2.credentials import Credentials
     from google.auth.transport.requests import Request
 
-    if not os.path.exists(OAUTH_TOKEN_PATH):
+    token_path = OAUTH_TOKEN_PATH
+    if not os.path.exists(token_path) and os.path.exists(_LEGACY_TOKEN_PATH):
+        token_path = _LEGACY_TOKEN_PATH  # solo lettura: il refresh scrive in OAUTH_TOKEN_PATH
+    if not os.path.exists(token_path):
         print("Token not found. Run this first: python3 db_to_drive.py auth")
         sys.exit(1)
 
-    creds = Credentials.from_authorized_user_file(OAUTH_TOKEN_PATH, SCOPES)
+    creds = Credentials.from_authorized_user_file(token_path, SCOPES)
 
     if creds.expired and creds.refresh_token:
         creds.refresh(Request())
         # Salva token aggiornato
-        with open(OAUTH_TOKEN_PATH, 'w') as f:
-            f.write(creds.to_json())
+        _write_token(creds)
 
     return creds
 
@@ -85,20 +109,22 @@ def cmd_auth():
     """Esegue il flusso OAuth2: apre il browser per autorizzare."""
     from google_auth_oauthlib.flow import InstalledAppFlow
 
-    if not os.path.exists(OAUTH_CLIENT_PATH):
+    client_path = OAUTH_CLIENT_PATH
+    if not os.path.exists(client_path) and os.path.exists(_LEGACY_CLIENT_PATH):
+        client_path = _LEGACY_CLIENT_PATH
+    if not os.path.exists(client_path):
         print(f"OAuth client file not found: {OAUTH_CLIENT_PATH}")
         print()
         print("Setup:")
         print("  1. Go to https://console.cloud.google.com/apis/credentials")
         print("  2. Create an 'OAuth 2.0 Client ID' -> type 'Desktop app'")
-        print("  3. Download the JSON -> save it as shared/secrets/google-oauth-client.json")
+        print("  3. Download the JSON -> save it as $JHT_HOME/secrets/google-oauth-client.json")
         sys.exit(1)
 
-    flow = InstalledAppFlow.from_client_secrets_file(OAUTH_CLIENT_PATH, SCOPES)
+    flow = InstalledAppFlow.from_client_secrets_file(client_path, SCOPES)
     creds = flow.run_local_server(port=0)
 
-    with open(OAUTH_TOKEN_PATH, 'w') as f:
-        f.write(creds.to_json())
+    _write_token(creds)
 
     print("Authorization complete! Token saved.")
     print(f"Token: {OAUTH_TOKEN_PATH}")

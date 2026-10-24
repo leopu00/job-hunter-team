@@ -24,6 +24,7 @@
 use std::{
     ffi::OsString,
     path::{Path, PathBuf},
+    time::Duration,
 };
 
 pub(crate) const INSTALL_PS1_SHA256: &str = include_str!("../installer-windows.sha256");
@@ -158,7 +159,13 @@ fn autostart_contract(xml: &str, user: &str, sid: &str, shell: &Path, wrapper: &
     let no_other_actions = ["ComHandler", "SendEmail", "ShowMessage"]
         .iter().all(|tag| !xml.contains(&format!("<{tag}")));
     let expected_arguments = Some(autostart_arguments(wrapper));
-    let is_user = |value: Option<&str>| value.map(xml_unescape).is_some_and(|value| value == user || value == sid);
+    // Account names are not case-sensitive on Windows, and the Task Scheduler writes the domain in
+    // capitals where `whoami` wrote it in lower case (measured on a real standard-user account).
+    let is_user = |value: Option<&str>| {
+        value.map(xml_unescape).is_some_and(|value| {
+            value.to_lowercase() == user.to_lowercase() || value.to_lowercase() == sid.to_lowercase()
+        })
+    };
     let principal = xml_section(xml, "Principal");
     // Left out is the default; present, it must say the right thing.
     let absent_or = |part: &str, name: &str, allowed: &[&str]| {
@@ -642,6 +649,27 @@ pub(crate) fn phase_message(line: &str) -> Option<&'static str> {
         .map(|(_, message)| *message)
 }
 
+/// How long each phase of install.ps1 took: from the offsets, since its start, at which each phase
+/// announced itself, and the total. The first entry (no phase) is the time before the first
+/// announcement. The durations add up to the total; a phase that announces itself twice counts twice.
+#[cfg_attr(not(windows), allow(dead_code))]
+pub(crate) fn phase_durations(
+    marks: &[(&'static str, Duration)],
+    total: Duration,
+) -> Vec<(Option<&'static str>, Duration)> {
+    let mut out = Vec::with_capacity(marks.len() + 1);
+    let mut name = None;
+    let mut since = Duration::ZERO;
+    for (next, at) in marks {
+        let at = (*at).clamp(since, total);
+        out.push((name, at - since));
+        name = Some(*next);
+        since = at;
+    }
+    out.push((name, total.saturating_sub(since)));
+    out
+}
+
 /// install.ps1's notices (`JHT_NOTICE <id>`), with the key of what the
 /// onboarding keeps on screen for the rest of the setup. A notice is not a
 /// failure: the install goes on.
@@ -797,6 +825,14 @@ mod tests {
         // raw quotes. Those are the defaults and the same identity: accepted.
         let read_back = r#"<LogonTrigger><Enabled>true</Enabled><UserId>JHTPC\someone</UserId></LogonTrigger><Principal id="Author"><UserId>S-1-5-21-1-2-3-1001</UserId><LogonType>InteractiveToken</LogonType></Principal><Settings><DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries></Settings><Exec><Command>C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe</Command><Arguments>-NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "C:\Users\someone\.local\bin\jht.ps1" up</Arguments></Exec>"#;
         assert!(check(read_back));
+        // The whole read-back of a real standard-user account, as `schtasks /Query /XML` printed it over a
+        // pipe (only the names changed): indented over several lines, the trigger's account with the
+        // domain in capitals where `whoami` had it in lower case, the principal as a SID, no RunLevel,
+        // no Enabled, an IdleSettings inside Settings, the raw quotes.
+        let printed = "<?xml version=\"1.0\" encoding=\"UTF-16\"?>\r\n<Task version=\"1.2\" xmlns=\"http://schemas.microsoft.com/windows/2004/02/mit/task\">\r\n  <RegistrationInfo>\r\n    <URI>\\Name</URI>\r\n  </RegistrationInfo>\r\n  <Principals>\r\n    <Principal id=\"Author\">\r\n      <UserId>S-1-5-21-1-2-3-1001</UserId>\r\n      <LogonType>InteractiveToken</LogonType>\r\n    </Principal>\r\n  </Principals>\r\n  <Settings>\r\n    <DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries>\r\n    <StopIfGoingOnBatteries>false</StopIfGoingOnBatteries>\r\n    <MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy>\r\n    <IdleSettings>\r\n      <StopOnIdleEnd>true</StopOnIdleEnd>\r\n      <RestartOnIdle>false</RestartOnIdle>\r\n    </IdleSettings>\r\n  </Settings>\r\n  <Triggers>\r\n    <LogonTrigger>\r\n      <UserId>JHTPC\\someone</UserId>\r\n    </LogonTrigger>\r\n  </Triggers>\r\n  <Actions Context=\"Author\">\r\n    <Exec>\r\n      <Command>C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe</Command>\r\n      <Arguments>-NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File \"C:\\Users\\someone\\.local\\bin\\jht.ps1\" up</Arguments>\r\n    </Exec>\r\n  </Actions>\r\n</Task>";
+        assert!(autostart_contract(printed, r"jhtpc\someone", sid, shell, wrapper), "the account in capitals is the same account");
+        assert!(!autostart_contract(&printed.replace(r"JHTPC\someone", r"JHTPC\other"), r"jhtpc\someone", sid, shell, wrapper));
+        assert!(!autostart_contract(&printed.replace("S-1-5-21-1-2-3-1001", "S-1-5-21-1-2-3-1002"), r"jhtpc\someone", sid, shell, wrapper));
         // What it states still has to match.
         assert!(!check(&read_back.replace("S-1-5-21-1-2-3-1001", "S-1-5-21-1-2-3-1002")), "another account's SID");
         assert!(!check(&read_back.replace("<LogonType>", "<RunLevel>HighestAvailable</RunLevel><LogonType>")));
@@ -805,6 +841,39 @@ mod tests {
         assert!(!check(&read_back.replace("jht.ps1\" up", "jht.ps1\" up --evil")));
         assert!(!check(&read_back.replace("powershell.exe</Command>", "cmd.exe</Command>")));
         assert!(!check(&read_back.replace("<Principal id=\"Author\">", "<Principal id=\"Author\"><Principal>")));
+    }
+
+    /// The task's user is compared as an identity. Windows gives the account back in more than one form
+    /// (the Task Scheduler writes the trigger's account with the domain in capitals and the principal as
+    /// the SID, never as a bare name): the current account in any of those forms is the same user, and no
+    /// other account is, nor an account that does not resolve. (This took the place of the PowerShell
+    /// test of the enabler's name-to-SID function, removed when the desktop took over the registration.)
+    #[test]
+    fn the_task_user_is_the_current_account_in_any_form_windows_gives_back_and_no_other() {
+        let shell = Path::new(r"C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe");
+        let wrapper = Path::new(r"C:\Users\someone\.local\bin\jht.ps1");
+        let (user, sid) = (r"jhtpc\someone", "S-1-5-21-1-2-3-1001");
+        let task = |trigger: &str, principal: &str| format!(
+            "<LogonTrigger><UserId>{trigger}</UserId></LogonTrigger><Principal><UserId>{principal}</UserId><LogonType>InteractiveToken</LogonType></Principal><Exec><Command>{}</Command><Arguments>{}</Arguments></Exec>",
+            shell.to_str().unwrap(),
+            xml_escape(&autostart_arguments(wrapper)),
+        );
+        let same = |trigger: &str, principal: &str| autostart_contract(&task(trigger, principal), user, sid, shell, wrapper);
+        for form in [sid, r"jhtpc\someone", r"JHTPC\someone", r"JhtPc\SOMEONE"] {
+            assert!(same(form, form), "{form}");
+            assert!(same(form, sid), "{form} as the trigger, the SID as the principal");
+        }
+        for other in [
+            "S-1-5-21-1-2-3-1002",
+            r"JHTPC\other",
+            r"OTHERPC\someone",
+            "someone",
+            r"jhtpc\jht-no-such-user-0123456789ab",
+            "",
+        ] {
+            assert!(!same(other, sid), "{other:?} as the trigger");
+            assert!(!same(sid, other), "{other:?} as the principal");
+        }
     }
 
     /// The registration says which step stopped and, when a program refused,
@@ -902,6 +971,26 @@ mod tests {
         );
         assert_eq!(result, Err(AutostartFailure { step: "stage", exit: None }));
         assert!(!programs.iter().any(|program| program == "schtasks.exe"));
+    }
+
+    #[test]
+    fn the_phases_of_the_installer_add_up_to_its_total() {
+        let secs = Duration::from_secs;
+        let marks = [("ui_phase_wsl_check", secs(2)), ("ui_phase_podman_machine_start", secs(40)), ("ui_phase_image_pull", secs(95))];
+        let spent = phase_durations(&marks, secs(783));
+        assert_eq!(
+            spent,
+            [
+                (None, secs(2)),
+                (Some("ui_phase_wsl_check"), secs(38)),
+                (Some("ui_phase_podman_machine_start"), secs(55)),
+                (Some("ui_phase_image_pull"), secs(688)),
+            ]
+        );
+        assert_eq!(spent.iter().map(|(_, took)| *took).sum::<Duration>(), secs(783));
+        // No phase at all: the whole time is the lead-in. A mark past the total cannot make a negative time.
+        assert_eq!(phase_durations(&[], secs(5)), [(None, secs(5))]);
+        assert_eq!(phase_durations(&[("ui_phase_image_pull", secs(9))], secs(5)), [(None, secs(5)), (Some("ui_phase_image_pull"), secs(0))]);
     }
 
     /// A SystemRoot with a space (not the usual C:\Windows): the program is the whole path and

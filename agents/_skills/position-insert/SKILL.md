@@ -117,7 +117,7 @@ markers — sees one line.
 field inherits the decision instead of the omission.
 
 Blocked sites (do NOT use `fetch` MCP, blocked by robots.txt):
-- `linkedin.com` → use `linkedin_check.py` (authenticated) or `safe_fetch.py`
+- `linkedin.com` → use `linkedin_check.py` (authenticated) or `safe_fetch.py` — if it fails (exit 4 `LINKEDIN_PROFILE_NOT_WRITABLE`, or the browser is down) use `linkedin_access.py fetch-job <URL|ID>` (public endpoint, no login) instead of skipping LinkedIn
 - `wellfound.com` → use `playwright` or `safe_fetch.py`
 
 ## Gate 4 — Permissive Scout-level filters

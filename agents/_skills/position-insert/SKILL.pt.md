@@ -74,7 +74,7 @@ python3 /app/shared/skills/safe_fetch.py '<URL>' > $JHT_AGENT_DIR/tmp/jd-raw.htm
 Extrair o **corpo completo do texto** (não apenas o título) e a **secção de requisitos** (competências, anos de experiência, idiomas). Se a página tem uma secção clara "Requirements" / "Must have" / "What you'll bring", copiar verbatim para `--requirements`.
 
 Sites bloqueados (NÃO usar `fetch` MCP, bloqueado por robots.txt):
-- `linkedin.com` → usar `linkedin_check.py` (autenticado) ou `safe_fetch.py`
+- `linkedin.com` → usar `linkedin_check.py` (autenticado) ou `safe_fetch.py` — se falhar (saída 4 `LINKEDIN_PROFILE_NOT_WRITABLE`, ou o navegador está em baixo) usa `linkedin_access.py fetch-job <URL|ID>` (endpoint público, sem login) em vez de saltar o LinkedIn
 - `wellfound.com` → usar `playwright` ou `safe_fetch.py`
 
 ## Porta 4 — Filtros permissivos ao nível do Scout

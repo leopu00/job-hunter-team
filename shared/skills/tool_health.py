@@ -113,7 +113,12 @@ def check_linkedin_check():
     batch vuoto fa importare playwright, parsare gli args ed uscire 0 senza
     navigare. Il launch REALE del browser (il bug libatk) è già coperto da
     check_playwright_browser, quindi qui basta che lo script applicativo si
-    avvii e carichi le sue dipendenze."""
+    avvii e carichi le sue dipendenze.
+
+    Lo stesso `--batch` vuoto controlla anche che la cartella del profilo del
+    browser (sotto $JHT_HOME) si possa creare e scrivere: se no esce con 4 e la
+    sigla LINKEDIN_PROFILE_NOT_WRITABLE, e qui diventa BROKEN (sotto
+    `/app` il profilo dava EACCES e nessun canary lo vedeva)."""
     path = os.path.join(APP, "shared", "skills", "linkedin_check.py")
     if not os.path.exists(path):
         return "UNKNOWN", "linkedin_check.py not found at %s" % path
@@ -122,6 +127,8 @@ def check_linkedin_check():
     # importa o manca una .so → rc!=0 con traccia dell'import.
     if rc == 0:
         return "OK", "linkedin_check starts successfully (Playwright loaded, empty batch OK)"
+    if rc == 4 or "LINKEDIN_PROFILE_NOT_WRITABLE" in out:
+        return "BROKEN", "linkedin_check browser profile directory not writable: %s" % out.strip()[:160]
     if "libatk" in out or "playwright" in out.lower() or rc == 127:
         return "BROKEN", "linkedin_check cannot start (browser dependency): %s" % out.strip()[:160]
     return "UNKNOWN", "linkedin_check --batch rc=%d: %s" % (rc, out.strip()[:120])
