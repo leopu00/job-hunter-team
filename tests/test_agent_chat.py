@@ -876,6 +876,12 @@ def test_nothing_is_pasted_while_the_agent_works_and_nothing_is_left_behind(box,
     assert "composer" not in {p.name for p in box.state.iterdir()}, "no text of ours in the composer"
 
 
+def test_the_busy_wait_keeps_the_longest_answer_under_a_minute_even_when_the_app_asks_three_times():
+    module = _module()
+    assert module.BUSY_WAIT_S <= 20, "the app retries agent_busy up to 3 times, one send at a time"
+    assert 3 * (module.BUSY_WAIT_S + module.PROMPT_POLL_S) < 70
+
+
 def test_a_turn_that_ends_within_the_wait_is_delivered_once_the_agent_is_idle(box):
     import threading
     import time as _time

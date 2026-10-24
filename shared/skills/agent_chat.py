@@ -26,7 +26,7 @@ screen of the terminal.
      nothing started (this file never starts an agent);
   4. the agent's terminal must show an empty composer. A menu, sign-in,
      permission question or text already typed there is a closed code; a turn
-     in progress is waited out (JHT_CHAT_BUSY_WAIT) and, past that, answers
+     in progress is waited out (JHT_CHAT_BUSY_WAIT, 20 s) and, past that, answers
      agent_busy: nothing is pasted while the agent works. NOTHING is typed
      over something that could take it as a choice or overwrite a draft;
   5. the turn is written once per client id (a repeat is not a second line),
@@ -147,8 +147,9 @@ DELIVERY_TIMEOUT_S = 100
 PROMPT_WAIT_S = float(os.environ.get("JHT_CHAT_PROMPT_WAIT", "100"))
 PROMPT_POLL_S = float(os.environ.get("JHT_CHAT_PROMPT_POLL", "2"))
 # A turn in progress is waited out before anything is pasted: the layout of a working CLI changes under
-# the paste, and text that cannot be attested would stay in its composer.  Short of the app's own limit.
-BUSY_WAIT_S = float(os.environ.get("JHT_CHAT_BUSY_WAIT", "45"))
+# the paste, and text that cannot be attested would stay in its composer.  The app asks again after an
+# agent_busy (up to 3 times in a row, one send at a time), so the whole answer stays under a minute.
+BUSY_WAIT_S = float(os.environ.get("JHT_CHAT_BUSY_WAIT", "20"))
 
 # Direction marks and zero-width characters read as nothing and rewrite what
 # is around them. ZWNJ/ZWJ (U+200C/D) stay: Persian and emoji need them.
