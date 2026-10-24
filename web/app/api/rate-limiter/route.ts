@@ -1,112 +1,132 @@
 import { NextResponse } from "next/server";
-import { loadJhtConfig } from "@/lib/json-files";
+import path from "node:path";
+import { JHT_HOME } from "@/lib/jht-paths";
+import { readJsonSafe, SMALL_JSON_MAX_BYTES } from "@/lib/json-files";
 import { requireAuth } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
-type RetryConfig = {
-  attempts: number;
-  minDelayMs: number;
-  maxDelayMs: number;
-  jitter: number;
-};
-type WindowConfig = { maxRequests: number; windowMs: number };
+// Il consumo che frena davvero la squadra è quello che la sentinella misura:
+// il bridge scrive `logs/role-usage.json` a ogni lettura (ogni 5 minuti) con i
+// token pesati per ruolo nella finestra 5 ore e nella settimana del provider, e
+// per agente nell'ultima ora. Questa route lo rilegge, in sola lettura. I
+// limiti di richieste non sono configurabili: nessun codice legge una chiave
+// `rate_limiter` di jht.config.json, quindi qui non se ne mostra nessuna.
+const usageFile = () => path.join(JHT_HOME, "logs", "role-usage.json");
+// Oltre questa età non è più «l'ultima ora»: lo stesso tetto del desktop e di
+// agent_control.py.
+const FRESH_MAX_AGE_S = 15 * 60;
+const WINDOWS = ["5h", "week"] as const;
+const MAX_ROLES = 20;
+const MAX_AGENTS = 50;
+const NAME = /^[A-Za-z0-9][A-Za-z0-9._-]{0,39}$/;
 
-type ProviderLimit = {
-  id: string;
-  label: string;
-  window: WindowConfig;
-  retry: RetryConfig;
-  backoffSteps: number[];
+type RawRole = {
+  kt?: unknown;
+  share_pct?: unknown;
+  agents?: unknown;
+  events?: unknown;
+};
+type RawWindow = {
+  since?: unknown;
+  total_kt?: unknown;
+  unattributed_kt?: unknown;
+  roles?: unknown;
+};
+type RawUsage = {
+  generated_at?: unknown;
+  provider?: unknown;
+  windows?: unknown;
+  agents_1h?: unknown;
 };
 
-type JhtConfig = {
-  rate_limiter?: {
-    global?: Partial<WindowConfig>;
-    providers?: Record<string, Partial<WindowConfig & RetryConfig>>;
+function record(value: unknown): Record<string, unknown> | null {
+  return value !== null && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
+}
+
+// Un numero che il bridge non ha scritto è «non so», mai zero.
+function count(value: unknown): number | null {
+  return typeof value === "number" && Number.isFinite(value) && value >= 0
+    ? value
+    : null;
+}
+
+function name(value: unknown): string | null {
+  return typeof value === "string" && NAME.test(value) ? value : null;
+}
+
+function shapeWindow(id: string, raw: unknown) {
+  const w = record(raw) as RawWindow | null;
+  if (!w) return null;
+  const roles = Object.entries(record(w.roles) ?? {})
+    .flatMap(([role, value]) => {
+      const r = record(value) as RawRole | null;
+      const label = name(role);
+      if (!r || !label) return [];
+      return [
+        {
+          role: label,
+          kt: count(r.kt),
+          sharePct: count(r.share_pct),
+          agents: Array.isArray(r.agents) ? r.agents.length : null,
+          events: count(r.events),
+        },
+      ];
+    })
+    .slice(0, MAX_ROLES);
+  return {
+    id,
+    since: typeof w.since === "string" ? w.since.slice(0, 40) : null,
+    totalKt: count(w.total_kt),
+    unattributedKt: count(w.unattributed_kt),
+    roles,
   };
-};
-
-const API_RETRY_DEFAULTS: RetryConfig = {
-  attempts: 3,
-  minDelayMs: 500,
-  maxDelayMs: 60_000,
-  jitter: 0.1,
-};
-const DEFAULT_WINDOW: WindowConfig = { maxRequests: 60, windowMs: 60_000 };
-
-const KNOWN_PROVIDERS: Array<{
-  id: string;
-  label: string;
-  window: WindowConfig;
-}> = [
-  {
-    id: "claude",
-    label: "Claude (Anthropic)",
-    window: { maxRequests: 50, windowMs: 60_000 },
-  },
-  {
-    id: "openai",
-    label: "OpenAI",
-    window: { maxRequests: 60, windowMs: 60_000 },
-  },
-  { id: "kimi", label: "Kimi", window: { maxRequests: 40, windowMs: 60_000 } },
-];
-
-const loadConfig = () => loadJhtConfig<JhtConfig>();
-
-function calcBackoff(retry: RetryConfig): number[] {
-  return Array.from({ length: retry.attempts }, (_, i) => {
-    const base = retry.minDelayMs * Math.pow(2, i);
-    const clamped = Math.min(base, retry.maxDelayMs);
-    return Math.round(clamped * (1 + retry.jitter * 0.5));
-  });
 }
 
 export async function GET() {
   const denied = await requireAuth();
   if (denied) return denied;
-  const config = loadConfig();
-  const rlCfg = config.rate_limiter ?? {};
-  const globalWindow: WindowConfig = {
-    ...DEFAULT_WINDOW,
-    ...(rlCfg.global ?? {}),
-  };
 
-  const providers: ProviderLimit[] = KNOWN_PROVIDERS.map((p) => {
-    const override = rlCfg.providers?.[p.id] ?? {};
-    const window: WindowConfig = {
-      ...p.window,
-      ...{
-        maxRequests: override.maxRequests ?? p.window.maxRequests,
-        windowMs: override.windowMs ?? p.window.windowMs,
-      },
-    };
-    const retry: RetryConfig = {
-      ...API_RETRY_DEFAULTS,
-      ...(override.attempts != null ? { attempts: override.attempts } : {}),
-      ...(override.minDelayMs != null
-        ? { minDelayMs: override.minDelayMs }
-        : {}),
-      ...(override.maxDelayMs != null
-        ? { maxDelayMs: override.maxDelayMs }
-        : {}),
-      ...(override.jitter != null ? { jitter: override.jitter } : {}),
-    };
-    return {
-      id: p.id,
-      label: p.label,
-      window,
-      retry,
-      backoffSteps: calcBackoff(retry),
-    };
+  const raw = record(
+    readJsonSafe<RawUsage>(usageFile(), SMALL_JSON_MAX_BYTES),
+  ) as RawUsage | null;
+  const generatedMs =
+    raw && typeof raw.generated_at === "string"
+      ? Date.parse(raw.generated_at)
+      : NaN;
+  const now = Date.now();
+  const ageSec = Number.isFinite(generatedMs)
+    ? Math.round((now - generatedMs) / 1000)
+    : null;
+  const readings = record(raw?.windows);
+  const windows = WINDOWS.flatMap((id) => {
+    const shaped = readings ? shapeWindow(id, readings[id]) : null;
+    return shaped ? [shaped] : [];
   });
+  const agents1h = Object.entries(record(raw?.agents_1h) ?? {})
+    .flatMap(([agent, tokens]) => {
+      const label = name(agent);
+      const value = count(tokens);
+      return label && value !== null ? [{ agent: label, tokens: value }] : [];
+    })
+    .sort((a, b) => b.tokens - a.tokens)
+    .slice(0, MAX_AGENTS);
 
   return NextResponse.json({
-    globalWindow,
-    providers,
-    defaults: { window: DEFAULT_WINDOW, retry: API_RETRY_DEFAULTS },
-    configLoaded: Object.keys(config).length > 0,
-    ts: Date.now(),
+    // Nessun limite si imposta da qui: la pagina lo dice apertamente.
+    limitsConfigurable: false,
+    available: ageSec !== null && windows.length > 0,
+    generatedAt: ageSec !== null ? new Date(generatedMs).toISOString() : null,
+    ageSec,
+    fresh: ageSec !== null && ageSec >= -60 && ageSec <= FRESH_MAX_AGE_S,
+    provider:
+      raw && typeof raw.provider === "string" && NAME.test(raw.provider)
+        ? raw.provider
+        : null,
+    windows,
+    agents1h,
+    ts: now,
   });
 }
