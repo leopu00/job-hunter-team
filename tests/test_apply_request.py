@@ -457,7 +457,7 @@ def test_a_position_that_changed_after_the_preview_is_not_the_one_confirmed(box)
     assert shown["summary"] == "Synthetic role @ Synthetic company · jobs.ashbyhq.com"
     assert shown["destination"] == "portal:ashby"
     conn = sqlite3.connect(box[0] / "jobs.db")
-    conn.execute("UPDATE positions SET url = 'https://elsewhere.example/apply' WHERE id = 1")
+    conn.execute("UPDATE positions SET url = 'https://elsewhere.example.com/apply' WHERE id = 1")
     conn.commit()
     conn.close()
     code, out = run(box, "request", 1, "--expect", shown["confirm"])

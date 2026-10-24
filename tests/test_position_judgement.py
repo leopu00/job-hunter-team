@@ -37,7 +37,7 @@ from _db import get_db, ensure_schema
 c = get_db(); ensure_schema(c)
 for title, status in (("Backend", "scored"), ("Data", "ready"), ("Ops", "checked")):
     c.execute("INSERT INTO positions (title, company, status, url) VALUES (?, 'Acme', ?, ?)",
-              (title, status, "https://jobs.example.invalid/" + title))
+              (title, status, "https://jobs.example.com/" + title))
 c.commit(); c.close()
 """], capture_output=True, text=True, env=env)
     assert seed.returncode == 0, seed.stderr
