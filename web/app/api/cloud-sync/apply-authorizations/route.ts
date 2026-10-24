@@ -120,10 +120,11 @@ export async function GET(req: NextRequest) {
     ) {
       return [];
     }
+    const closedLegacyId = legacyId as number;
     return [
       {
         id: row.id,
-        legacy_id: legacyId,
+        legacy_id: closedLegacyId,
         created_at: row.created_at,
         summary: row.summary,
         ...(row.action === "position.apply_authorize" ? { host } : {}),
