@@ -31,7 +31,8 @@ import { useRefresh } from "../../shell/router";
 import { nextScreenWait, SCREEN_SLOW_MS, screenPace } from "./terminal-pace";
 import type { PageProps } from "../types";
 import { AGENTS_PANEL_TEXT, type AgentsPanelText } from "./AgentsPanel.i18n";
-import { UsageLine, UsageShort } from "./AgentUsage";
+import { UsageShort } from "./AgentUsage";
+import AgentStatusBar, { type IdentityParts } from "./AgentStatusBar";
 import { QuestionList, QuestionMarks, questionsSummary } from "./AgentQuestions";
 import { Lanes, SessionHistory } from "./AgentHistory";
 import ActionLogSection from "./ActionLogSection";
@@ -225,21 +226,27 @@ function Led({ row }: { row: PanelRow }) {
 const CLI_NAME: Record<AgentIdentity["cli"], string> = { claude: "Claude", codex: "Codex", kimi: "Kimi", pi: "pi", local: "" };
 
 /**
- * Who the agent is: «Codex · gpt-5.6-terra · effort alto · su questo computer».
+ * Who the agent is, in pieces: «Codex», «gpt-5.6-terra», «effort alto».
  * Only shown, never decided on (the agent can rewrite its session's options).
  * A part the session does not say is «non so»; Kimi gets no model nor effort
  * from the launcher (its own default), the local scorer neither.
  */
-export function identityLine(t: AgentsPanelText, identity: AgentIdentity | null, where: string): string {
-  if (!identity) return t.identityUnknown;
+export function identityParts(t: AgentsPanelText, identity: AgentIdentity | null): IdentityParts | null {
+  if (!identity) return null;
+  if (identity.cli === "local") return { provider: t.identityLocal, model: null, effort: null };
   const effortName = { low: t.effortLow, medium: t.effortMedium, high: t.effortHigh };
-  const parts: string[] = [identity.cli === "local" ? t.identityLocal : CLI_NAME[identity.cli]];
-  if (identity.cli !== "local") {
-    parts.push(identity.model ?? (identity.cli === "kimi" ? t.identityModelDefault : t.identityModelUnknown));
-    if (identity.cli !== "kimi") parts.push(identity.effort ? fill(t.identityEffort, { effort: effortName[identity.effort] }) : t.identityEffortUnknown);
-  }
-  if (where) parts.push(where);
-  return parts.join(" · ");
+  return {
+    provider: CLI_NAME[identity.cli],
+    model: identity.model ?? (identity.cli === "kimi" ? t.identityModelDefault : t.identityModelUnknown),
+    effort: identity.cli === "kimi" ? null : identity.effort ? fill(t.identityEffort, { effort: effortName[identity.effort] }) : t.identityEffortUnknown,
+  };
+}
+
+/** The same, as one line: «Codex · gpt-5.6-terra · effort alto · su questo computer». */
+export function identityLine(t: AgentsPanelText, identity: AgentIdentity | null, where: string): string {
+  const parts = identityParts(t, identity);
+  if (!parts) return t.identityUnknown;
+  return [parts.provider, parts.model, parts.effort, where].filter(Boolean).join(" · ");
 }
 
 function stateLine(t: AgentsPanelText, row: PanelRow): string {
@@ -317,7 +324,7 @@ export const TerminalText = memo(function TerminalText({ session, text }: { sess
     // Text only: React escapes it, nothing in it is ever HTML.
     <pre
       data-testid={`panel-terminal-${session}`}
-      className="text-[11px] leading-snug whitespace-pre-wrap break-words max-h-[55vh] overflow-auto rounded p-2"
+      className="text-[11px] leading-snug whitespace-pre-wrap break-words max-h-[55vh] overflow-auto rounded p-2 lg:max-h-none"
       style={{ background: "var(--color-deep)", color: "var(--color-bright)" }}
     >
       {text}
@@ -723,7 +730,7 @@ export default function AgentsPanel({ search }: PageProps) {
           {view === "lanes" && <Lanes t={t} history={history} roles={list.value.roles.map((item) => item.role)} nowS={Math.floor(now / 1000)} />}
           {view === "list" && (
             <div className="flex flex-col lg:flex-row gap-3 min-h-0">
-              <ul aria-label={t.title} className="lg:w-[280px] shrink-0 flex flex-col gap-px rounded border overflow-hidden lg:sticky lg:top-3" style={{ borderColor: "var(--color-border)", opacity: busy ? 0.6 : 1 }}>
+              <ul aria-label={t.title} className="lg:w-[280px] shrink-0 flex flex-col gap-px rounded border overflow-y-auto lg:sticky lg:top-[4.25rem] lg:max-h-[calc(100svh/var(--zoom,1)-5rem)]" style={{ borderColor: "var(--color-border)", opacity: busy ? 0.6 : 1 }}>
                 {rows.map((row) => {
                   const active = current?.session === row.session;
                   return (
@@ -761,8 +768,13 @@ export default function AgentsPanel({ search }: PageProps) {
               </ul>
 
               {current && (
-                <section className="flex-1 min-w-0 overflow-hidden rounded border" style={{ borderColor: "var(--color-border)" }} aria-label={current.session}>
-                  <div className="p-3" style={{ background: "var(--color-panel)" }}>
+                <section
+                  data-testid="panel-detail"
+                  className="flex-1 min-w-0 flex flex-col overflow-hidden rounded border lg:sticky lg:top-[4.25rem] lg:h-[calc(100svh/var(--zoom,1)-5rem)] lg:min-h-[30rem]"
+                  style={{ borderColor: "var(--color-border)" }}
+                  aria-label={current.session}
+                >
+                  <div className="shrink-0 max-h-[45%] overflow-y-auto p-3" style={{ background: "var(--color-panel)" }}>
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div className="min-w-0">
                       <div className="flex items-center gap-2">
@@ -782,11 +794,6 @@ export default function AgentsPanel({ search }: PageProps) {
                         {stateLine(t, current)}
                       </p>
                       {current.agent && (
-                        <p data-testid="panel-identity" className="text-[11px] mt-0.5 text-[var(--color-muted)]">
-                          {identityLine(t, current.agent.identity, where)}
-                        </p>
-                      )}
-                      {current.agent && (
                         <p
                           data-testid="panel-times"
                           className="text-[11px] mt-0.5 text-[var(--color-muted)]"
@@ -800,7 +807,6 @@ export default function AgentsPanel({ search }: PageProps) {
                             )}
                         </p>
                       )}
-                      {isUp(current) && <UsageLine t={t} usage={current.agent!.usage} />}
                       {isUp(current) && (
                         <QuestionList
                           t={t}
@@ -847,21 +853,31 @@ export default function AgentsPanel({ search }: PageProps) {
                   )}
                   </div>
 
-                  <section className="border-t p-3" style={{ borderColor: "var(--color-border)" }} aria-label={t.tabTerminal}>
-                    <h2 className="m-0 mb-2 text-[10px] font-semibold uppercase tracking-widest text-[var(--color-muted)]">{t.tabTerminal}</h2>
-                    <div className="max-h-[22rem] overflow-y-auto pr-1">
+                  {current.agent && (
+                    <AgentStatusBar
+                      t={t}
+                      identity={identityParts(t, current.agent.identity)}
+                      identityText={identityLine(t, current.agent.identity, where)}
+                      usage={isUp(current) ? current.agent.usage : null}
+                    />
+                  )}
+
+                  <section className="flex min-h-[10rem] flex-1 flex-col border-t p-3 lg:min-h-0" style={{ borderColor: "var(--color-border)" }} aria-label={t.tabTerminal}>
+                    <h2 className="m-0 mb-2 shrink-0 text-[11px] font-semibold uppercase tracking-widest text-[var(--color-muted)]">{t.tabTerminal}</h2>
+                    <div className="min-h-0 flex-1 overflow-y-auto pr-1 max-lg:max-h-[22rem]">
                       {current.agent ? (
                         <Terminal key={current.session} row={current} t={t} chat={hasChat(current) && AgentChatPane !== null} />
                       ) : (
                         <p className="text-[11px] text-[var(--color-muted)]">{t.screenDown}</p>
                       )}
+                      <SessionHistory t={t} history={history} session={current.session} nowS={Math.floor(now / 1000)} />
                     </div>
-                    <SessionHistory t={t} history={history} session={current.session} nowS={Math.floor(now / 1000)} />
                   </section>
 
                   {hasChat(current) && (
-                    <section className="border-t" style={{ borderColor: "var(--color-border)" }} aria-label={t.tabChat}>
-                      <h2 className="m-0 px-3 py-2 text-[10px] font-semibold uppercase tracking-widest text-[var(--color-muted)]" style={{ background: "var(--color-panel)" }}>
+                    // The chat is docked under the terminal: it keeps its own height and never grows over the page.
+                    <section className="shrink-0 border-t" style={{ borderColor: "var(--color-border)" }} aria-label={t.tabChat}>
+                      <h2 className="m-0 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-widest text-[var(--color-muted)]" style={{ background: "var(--color-panel)" }}>
                         {t.tabChat}
                       </h2>
                       {AgentChatPane ? (
@@ -869,8 +885,7 @@ export default function AgentsPanel({ search }: PageProps) {
                           data-testid="panel-chat-pane"
                           className="min-w-0 overflow-hidden border-t"
                           style={{
-                            height: "min(40rem, calc(100svh / var(--zoom, 1) - 16rem))",
-                            minHeight: "26rem",
+                            height: "clamp(17rem, calc(38svh / var(--zoom, 1)), 28rem)",
                             background: "var(--color-void)",
                             borderColor: "var(--color-border)",
                           }}

@@ -41,6 +41,12 @@ export interface AgentsPanelText {
   statesUnknown: string;
   tabTerminal: string;
   tabChat: string;
+  // the bar over the terminal: who the agent is and what it uses, in labelled pieces
+  barLabel: string;
+  barProvider: string;
+  barModel: string;
+  barContext: string;
+  barUsage: string;
   chatSoon: string; // {name}
   screenReading: string;
   screenAt: string; // {time}
@@ -210,6 +216,11 @@ const it: AgentsPanelText = {
     "La squadra non pubblica ancora lo stato degli agenti: si vedrà dopo un suo aggiornamento. Fino ad allora lo stato è «sconosciuto».",
   tabTerminal: "Terminale",
   tabChat: "Chat",
+  barLabel: "Dati dell’agente",
+  barProvider: "Provider",
+  barModel: "Modello",
+  barContext: "Contesto",
+  barUsage: "Consumo",
   chatSoon: "La chat con {name} arriva con il prossimo aggiornamento dell’app.",
   screenReading: "Leggo il terminale…",
   screenAt: "Ultime righe, lette alle {time}. Si aggiornano da sole finché il terminale è aperto.",
@@ -374,6 +385,11 @@ const en: AgentsPanelText = {
     "The team does not publish the agents' state yet: it will show after the team is updated. Until then the state is “unknown”.",
   tabTerminal: "Terminal",
   tabChat: "Chat",
+  barLabel: "Agent details",
+  barProvider: "Provider",
+  barModel: "Model",
+  barContext: "Context",
+  barUsage: "Usage",
   chatSoon: "The chat with {name} comes with the next update of the app.",
   screenReading: "Reading the terminal…",
   screenAt: "Last lines, read at {time}. They refresh by themselves while the terminal is open.",
@@ -537,6 +553,11 @@ const de: AgentsPanelText = {
     "Das Team veröffentlicht den Status der Agenten noch nicht: Er erscheint nach einem Update des Teams. Bis dahin ist der Status „unbekannt“.",
   tabTerminal: "Terminal",
   tabChat: "Chat",
+  barLabel: "Daten des Agenten",
+  barProvider: "Anbieter",
+  barModel: "Modell",
+  barContext: "Kontext",
+  barUsage: "Verbrauch",
   chatSoon: "Der Chat mit {name} kommt mit dem nächsten Update der App.",
   screenReading: "Ich lese das Terminal…",
   screenAt: "Letzte Zeilen, gelesen um {time}. Sie aktualisieren sich von selbst, solange das Terminal offen ist.",
@@ -701,6 +722,11 @@ const es: AgentsPanelText = {
     "El equipo todavía no publica el estado de los agentes: se verá tras una actualización del equipo. Hasta entonces el estado es «desconocido».",
   tabTerminal: "Terminal",
   tabChat: "Chat",
+  barLabel: "Datos del agente",
+  barProvider: "Proveedor",
+  barModel: "Modelo",
+  barContext: "Contexto",
+  barUsage: "Consumo",
   chatSoon: "El chat con {name} llega con la próxima actualización de la app.",
   screenReading: "Leyendo el terminal…",
   screenAt: "Últimas líneas, leídas a las {time}. Se actualizan solas mientras el terminal está abierto.",
@@ -865,6 +891,11 @@ const fr: AgentsPanelText = {
     "L’équipe ne publie pas encore l’état des agents : il apparaîtra après une mise à jour de l’équipe. D’ici là, l’état est « inconnu ».",
   tabTerminal: "Terminal",
   tabChat: "Chat",
+  barLabel: "Données de l’agent",
+  barProvider: "Fournisseur",
+  barModel: "Modèle",
+  barContext: "Contexte",
+  barUsage: "Consommation",
   chatSoon: "Le chat avec {name} arrive avec la prochaine mise à jour de l’app.",
   screenReading: "Je lis le terminal…",
   screenAt: "Dernières lignes, lues à {time}. Elles se mettent à jour toutes seules tant que le terminal est ouvert.",
@@ -1029,6 +1060,11 @@ const hu: AgentsPanelText = {
     "A csapat még nem teszi közzé az ügynökök állapotát: a csapat frissítése után látszik majd. Addig az állapot „ismeretlen”.",
   tabTerminal: "Terminál",
   tabChat: "Csevegés",
+  barLabel: "Az ügynök adatai",
+  barProvider: "Szolgáltató",
+  barModel: "Modell",
+  barContext: "Kontextus",
+  barUsage: "Fogyasztás",
   chatSoon: "A(z) {name} ügynökkel való csevegés az alkalmazás következő frissítésével érkezik.",
   screenReading: "Beolvasom a terminált…",
   screenAt: "Utolsó sorok, beolvasva: {time}. Amíg a terminál nyitva van, maguktól frissülnek.",
@@ -1193,6 +1229,11 @@ const pt: AgentsPanelText = {
     "A equipa ainda não publica o estado dos agentes: aparecerá depois de uma atualização da equipa. Até lá, o estado é «desconhecido».",
   tabTerminal: "Terminal",
   tabChat: "Chat",
+  barLabel: "Dados do agente",
+  barProvider: "Fornecedor",
+  barModel: "Modelo",
+  barContext: "Contexto",
+  barUsage: "Consumo",
   chatSoon: "O chat com {name} chega com a próxima atualização da app.",
   screenReading: "A ler o terminal…",
   screenAt: "Últimas linhas, lidas às {time}. Atualizam-se sozinhas enquanto o terminal estiver aberto.",
