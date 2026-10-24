@@ -420,15 +420,19 @@ function Set-JhtUserEnvironmentValue {
 function Remove-JhtUserEnvironmentValue { param([string]$Name) $global:FakeEnv.Remove($Name) }
 function Send-JhtEnvironmentChanged { $global:FakeBroadcasts++ }
 
+$global:ScopedTaskName = $JhtStartupTaskName
+$global:LegacyTask = $true
 $global:FakeTask = ($env:T_TASK -eq '1')
 function Get-ScheduledTask {
   param([string]$TaskName)
-  if ($global:FakeTask -and $TaskName -ceq 'Job Hunter Team - Start runtime') { return [pscustomobject]@{ TaskName = $TaskName } }
+  if ($global:FakeTask -and $TaskName -ceq $global:ScopedTaskName) { return [pscustomobject]@{ TaskName = $TaskName } }
+  if ($global:LegacyTask -and $TaskName -ceq 'Job Hunter Team - Start runtime') { return [pscustomobject]@{ TaskName = $TaskName } }
 }
 function Unregister-ScheduledTask {
   param([string]$TaskName, [switch]$Confirm)
   [IO.File]::AppendAllText($env:FAKE_LOG, "unregister $TaskName`n")
-  if ($env:T_TASK_STUCK -ne '1' -and $TaskName -ceq 'Job Hunter Team - Start runtime') { $global:FakeTask = $false }
+  if ($TaskName -ceq 'Job Hunter Team - Start runtime') { throw 'legacy P23 task must stay untouched' }
+  if ($env:T_TASK_STUCK -ne '1' -and $TaskName -ceq $global:ScopedTaskName) { $global:FakeTask = $false }
 }
 
 $roots = @{ Profile = $env:R_PROFILE; LocalAppData = $env:R_LOCAL; AppData = $env:R_ROAMING; Temp = $env:R_TEMP }
@@ -436,7 +440,7 @@ $code = Invoke-JhtAppUninstall -Mode $env:T_MODE -Language $env:T_LANG -Roots $r
   -Podman $env:T_PODMAN -Update ($env:T_UPDATE -eq '1')
 [Console]::Out.WriteLine("EXIT=$code TYPE=$($code.GetType().Name)")
 [Console]::Out.WriteLine('ENV=' + (ConvertTo-Json -Compress -Depth 4 -InputObject $global:FakeEnv))
-[Console]::Out.WriteLine("SETS=$global:FakeSets BROADCASTS=$global:FakeBroadcasts TASK=$global:FakeTask")
+[Console]::Out.WriteLine("SETS=$global:FakeSets BROADCASTS=$global:FakeBroadcasts TASK=$global:FakeTask LEGACY=$global:LegacyTask SCOPED=$global:ScopedTaskName")
 """
 
 WRAPPER_TEXT = "# the wrapper, as install.ps1 publishes it\n"
@@ -535,8 +539,9 @@ class Run:
         assert found.group(2) == "Int32", f"Invoke-JhtAppUninstall must return one int: {found.group(2)}\n{done.stdout}"
         self.code = int(found.group(1))
         self.env = json.loads(re.search(r"^ENV=(.*)$", done.stdout, re.M).group(1))
-        counters = re.search(r"^SETS=(\d+) BROADCASTS=(\d+) TASK=(\w+)$", done.stdout, re.M)
+        counters = re.search(r"^SETS=(\d+) BROADCASTS=(\d+) TASK=(\w+) LEGACY=(\w+) SCOPED=(.+)$", done.stdout, re.M)
         self.sets, self.broadcasts, self.task = int(counters.group(1)), int(counters.group(2)), counters.group(3)
+        self.legacy_task, self.scoped_task = counters.group(4), counters.group(5)
         self.items = re.findall(r"^JHT_ITEM (\S+) (\S+)$", done.stdout, re.M)
 
     def podman_calls(self) -> list[str]:
@@ -672,8 +677,10 @@ def test_remove_takes_the_closed_list_and_nothing_else(tmp_path, two_users):
     run = _run(tmp_path, user, mode="Remove", machine_state="jht-podman stopped", task=True)
     assert run.code == 0, run.stdout + run.stderr
     assert run.podman_calls() == ["machine list --format json", "machine rm --force jht-podman", "machine list --format json"]
-    assert run.calls.index("unregister Job Hunter Team - Start runtime") < run.calls.index("machine rm --force jht-podman")
+    assert run.calls.index(f"unregister {run.scoped_task}") < run.calls.index("machine rm --force jht-podman")
+    assert run.scoped_task.startswith("Job Hunter Team - Start runtime [S-1-")
     assert run.task == "False"
+    assert run.legacy_task == "True"
     for gone in (user.runtime, user.jht, *user.appdata, user.bin / "jht.ps1", user.bin / "jht.cmd",
                  user.bin / "windows-private-acl.ps1"):
         assert not gone.exists() and not gone.is_symlink(), gone
