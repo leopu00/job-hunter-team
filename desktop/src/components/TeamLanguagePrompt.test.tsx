@@ -161,6 +161,50 @@ describe("TeamLanguagePrompt", () => {
     expect(native.invoke.mock.calls.length).toBeLessThanOrEqual(calls + 1);
   });
 
+  it("Escape puts the question off without writing and without remembering it: it comes back at the next start", async () => {
+    team("en", "en");
+    const { unmount } = render(<TeamLanguagePrompt identityKey="a" />);
+    const select = await screen.findByLabelText(TEAM_LANGUAGE_TEXT.it.selectLabel);
+    expect(select).toHaveFocus();
+    fireEvent.keyDown(select, { key: "Escape" });
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(sets()).toEqual([]);
+    expect(teamLanguageAsked("a")).toBe(false);
+    unmount();
+    render(<TeamLanguagePrompt identityKey="a" />);
+    expect(await screen.findByRole("dialog")).toBeInTheDocument();
+  });
+
+  it("Escape does nothing while the language is being written", async () => {
+    let finish: (reply: unknown) => void = () => {};
+    team("en", "en", () => new Promise((resolve) => { finish = resolve; }));
+    render(<TeamLanguagePrompt identityKey="a" />);
+    const select = await screen.findByLabelText(TEAM_LANGUAGE_TEXT.it.selectLabel);
+    fireEvent.click(screen.getByTestId("team-language-confirm"));
+    await waitFor(() => expect(screen.getByTestId("team-language-confirm")).toBeDisabled());
+    fireEvent.keyDown(select, { key: "Escape" });
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    finish({ locale: "it", stored: "it", changed: true });
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+  });
+
+  it("Tab and Shift+Tab go round the three controls and never out of the dialog", async () => {
+    team("en", "en");
+    render(<TeamLanguagePrompt identityKey="a" />);
+    const select = await screen.findByLabelText(TEAM_LANGUAGE_TEXT.it.selectLabel);
+    const keep = screen.getByTestId("team-language-keep");
+    const confirm = screen.getByTestId("team-language-confirm");
+    confirm.focus();
+    expect(fireEvent.keyDown(confirm, { key: "Tab" })).toBe(false);
+    expect(select).toHaveFocus();
+    expect(fireEvent.keyDown(select, { key: "Tab", shiftKey: true })).toBe(false);
+    expect(confirm).toHaveFocus();
+    // inside the ring the browser's own order is left alone
+    keep.focus();
+    expect(fireEvent.keyDown(keep, { key: "Tab" })).toBe(true);
+    expect(fireEvent.keyDown(keep, { key: "Tab", shiftKey: true })).toBe(true);
+  });
+
   it("outside the desktop it asks nothing and calls nothing", async () => {
     native.isTauri.mockReturnValue(false);
     render(<TeamLanguagePrompt identityKey="a" retryMs={1} />);

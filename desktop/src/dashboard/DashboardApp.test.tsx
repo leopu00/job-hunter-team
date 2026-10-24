@@ -2,6 +2,7 @@ import { act, fireEvent, render, screen, waitFor } from "@testing-library/react"
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { connectDirectChat, directChatStatus, reconnectDirectChat } from "../lib/direct-chat";
+import { readTeamLanguage } from "../lib/team-language";
 import {
   activateDesktopAccountScope,
   activateDesktopLocalScope,
@@ -89,6 +90,10 @@ vi.mock("../lib/existing-team", async (importOriginal) => {
   const original = await importOriginal<typeof import("../lib/existing-team")>();
   return { ...original, existingTeamBridge: { ...original.existingTeamBridge, reopen: vi.fn(), reconfirmSummary: vi.fn() } };
 });
+vi.mock("../lib/team-language", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../lib/team-language")>()),
+  readTeamLanguage: vi.fn(),
+}));
 vi.mock("../lib/direct-chat", () => ({
   connectDirectChat: vi.fn(),
   directChatStatus: vi.fn(),
@@ -730,6 +735,38 @@ describe("DashboardApp onboarding router", () => {
     expect(existingTeamView()).toMatchObject({ full: true, assistantActive: true });
     expect(existingTeamReadOnly()).toBeNull();
     expect(screen.queryByRole("button", { name: "close-read-only" })).not.toBeInTheDocument();
+  });
+
+  it("asks the language of an existing team connected in full, the operator's case, and of no team that is only read", async () => {
+    document.cookie = "NEXT_LOCALE=it; path=/";
+    vi.mocked(readTeamLanguage).mockResolvedValue({ locale: "en", stored: "en" });
+    vi.mocked(useSession).mockReturnValue(signedInAs("existing-full-language"));
+    vi.mocked(loadOnboardingGate).mockResolvedValue({
+      phase: "required",
+      account: { displayName: "Ready Person" },
+      resumeAvailable: false,
+      existingTeam: { teamId: "team-opaque-0003", status: "available" },
+      runtime: { status: "collecting", stage: "host" },
+    });
+    const user = userEvent.setup();
+    const { unmount } = render(<DashboardApp />);
+    await user.click(await screen.findByRole("button", { name: "connect-existing-team-ready" }));
+    expect(await screen.findByTestId("shell")).toBeInTheDocument();
+    expect(existingTeamView()).toMatchObject({ full: true });
+    expect(await screen.findByRole("dialog", { name: "Lingua della squadra: Italiano?" })).toBeInTheDocument();
+    unmount();
+
+    // the same team only read (a reopening before «Collega il team»): the question is not even asked
+    vi.mocked(readTeamLanguage).mockClear();
+    vi.mocked(useSession).mockReturnValue(signedInAs("set-up-read-only-language"));
+    vi.mocked(loadOnboardingGate).mockResolvedValue({ phase: "ready" });
+    vi.mocked(existingTeamBridge.reopen).mockResolvedValue({ readiness: true, snapshot: TEAM_READY, connectionKey: "k".repeat(16) });
+    render(<DashboardApp />);
+    expect(await screen.findByTestId("shell")).toBeInTheDocument();
+    expect(existingTeamView()?.full).toBeUndefined();
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    expect(readTeamLanguage).not.toHaveBeenCalled();
+    expect(screen.queryByTestId("team-language-prompt")).not.toBeInTheDocument();
   });
 
   it("a set-up account with a saved existing team opens on that team's VPS, never on the cloud Shell", async () => {

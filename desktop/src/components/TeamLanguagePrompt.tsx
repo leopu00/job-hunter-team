@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { localeLabels, locales, type Locale } from "@/i18n/config";
 import { appLocale } from "../lib/app-locale";
 import { describeError } from "../lib/error-catalog";
@@ -77,9 +77,30 @@ export default function TeamLanguagePrompt({
     setFailure(`${copy.text} ${copy.action}`);
   };
 
+  // Escape puts the question off to the next start (it is not an answer, so it is not remembered); Tab stays inside.
+  const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (event.key === "Escape") {
+      if (!busy) setAsking(null);
+      return;
+    }
+    if (event.key !== "Tab") return;
+    const items = Array.from(event.currentTarget.querySelectorAll<HTMLElement>("select:not([disabled]), button:not([disabled])"));
+    const first = items[0];
+    const last = items[items.length - 1];
+    if (!first || !last) return event.preventDefault();
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first.focus();
+    }
+  };
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4" data-testid="team-language-prompt">
       <div
+        onKeyDown={onKeyDown}
         role="dialog"
         aria-modal="true"
         aria-labelledby="team-language-title"

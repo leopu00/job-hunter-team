@@ -1591,6 +1591,8 @@ export default function DashboardApp() {
         </ConnectTeamContext.Provider>
         {connectDialogElement}
         <NewPositionNotifier key={`notify:${identityKey}`} />
+        {/* The team of the person who linked it in full is the one whose language is asked; a read-only view never writes. */}
+        {linkedView?.full && <TeamLanguagePrompt key={`language:${identityKey}`} identityKey={identityKey} />}
       </>
     );
   }
@@ -1703,7 +1705,7 @@ export default function DashboardApp() {
       </ProviderSetupContext.Provider>
       {connectDialogElement}
       <NewPositionNotifier key={`notify:${identityKey}`} />
-      {!(linkedView && !linkedView.full) && <TeamLanguagePrompt key={`language:${identityKey}`} identityKey={identityKey} />}
+      <TeamLanguagePrompt key={`language:${identityKey}`} identityKey={identityKey} />
     </>
   );
 }
