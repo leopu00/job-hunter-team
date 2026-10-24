@@ -168,6 +168,10 @@ export/import`) e attribuiva al backup proprietà che non ha. Il codice corrente
 offre `jht backup create/list/restore`: copia una piccola allowlist di file di
 configurazione sotto `~/.jht/backups/`, **non cifra l'archivio, non include DB,
 SSH key o `credentials/`, e non esegue un round-trip su un nuovo PC**.
+Dal 24/10 ogni chiave che nel nome indica un segreto (`api_key`, token, password…) è
+salvata come `null`, a ogni profondità; `jht backup scrub` toglie le chiavi dai backup
+fatti prima e `restore` lascia le chiavi in uso. Il backup vero della squadra è quello del
+desktop.
 
 | Scenario | Cosa funziona oggi | Gap/rischio |
 |---|---|---|

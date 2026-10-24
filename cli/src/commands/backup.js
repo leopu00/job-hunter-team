@@ -1,7 +1,9 @@
-import { readFile, writeFile, mkdir, readdir, access, cp } from 'node:fs/promises';
+import { readFile, readdir, access } from 'node:fs/promises';
 import { join } from 'node:path';
 import { JHT_HOME } from '../jht-paths.js';
 import { RETIRED_SINCE, retiredStoreFile } from './_retired-stores.js';
+import { ensurePrivateDir, writePrivateJson } from '../lib/secure-config-io.js';
+import { redactSecrets, countPlainSecrets, mergeLiveSecrets } from '../lib/backup-secrets.js';
 
 const JHT_DIR    = JHT_HOME;
 const BACKUP_DIR = join(JHT_DIR, 'backups');
@@ -39,16 +41,66 @@ async function fileExists(p) {
   try { await access(p); return true; } catch { return false; }
 }
 
+async function readJson(path) {
+  try { return JSON.parse(await readFile(path, 'utf-8')); } catch { return undefined; }
+}
+
 async function handleBackup(action, options) {
-  await mkdir(BACKUP_DIR, { recursive: true });
+  ensurePrivateDir(BACKUP_DIR);
 
   if (!action || action === 'create') return await createBackup(options);
   if (action === 'list' || action === 'ls') return await listBackups();
   if (action === 'restore') return await restoreBackup(options);
+  if (action === 'scrub') return await scrubBackups();
 
   console.error(`  Invalid action: ${action}`);
-  console.error('  Actions: create, list, restore');
+  console.error('  Actions: create, list, restore, scrub');
   process.exitCode = 1;
+}
+
+// Backups made before secrets were left out hold the providers' keys in clear.
+async function backupsWithPlainSecrets() {
+  const entries = await readdir(BACKUP_DIR).catch(() => []);
+  const found = [];
+  for (const name of entries.filter(e => e.startsWith('backup-')).sort()) {
+    const files = [];
+    for (const rel of BACKUP_FILES) {
+      const value = await readJson(join(BACKUP_DIR, name, rel));
+      const secrets = value === undefined ? 0 : countPlainSecrets(value);
+      if (secrets > 0) files.push({ rel, secrets });
+    }
+    if (files.length > 0) found.push({ name, files });
+  }
+  return found;
+}
+
+function warnPlainSecrets(found) {
+  if (found.length === 0) return;
+  const keys = found.reduce((n, b) => n + b.files.reduce((m, f) => m + f.secrets, 0), 0);
+  console.log(`  Warning: ${found.length} older ${found.length > 1 ? 'backups hold' : 'backup holds'} ${keys} key${keys > 1 ? 's' : ''} (API keys, tokens, passwords) in clear:`);
+  for (const b of found) console.log(`    ${b.name}`);
+  console.log('  They sit in the same folder as your data. Run: jht backup scrub');
+  console.log('');
+}
+
+async function scrubBackups() {
+  const found = await backupsWithPlainSecrets();
+  if (found.length === 0) {
+    console.log('\n  No backup holds keys in clear.\n');
+    return;
+  }
+  let keys = 0;
+  for (const b of found) {
+    ensurePrivateDir(join(BACKUP_DIR, b.name));
+    for (const f of b.files) {
+      const path = join(BACKUP_DIR, b.name, f.rel);
+      const value = await readJson(path);
+      writePrivateJson(path, redactSecrets(value));
+      keys += f.secrets;
+    }
+  }
+  console.log(`\n  Cleaned ${found.length} ${found.length > 1 ? 'backups' : 'backup'}: ${keys} key${keys > 1 ? 's' : ''} removed (saved as null).`);
+  console.log('  Restoring one of them keeps the keys you use now.\n');
 }
 
 async function createBackup(options) {
@@ -56,31 +108,41 @@ async function createBackup(options) {
   const label = options.label ? `-${options.label.replace(/[^a-zA-Z0-9_-]/g, '')}` : '';
   const name = `backup-${ts}${label}`;
   const dir = join(BACKUP_DIR, name);
-  await mkdir(dir, { recursive: true });
+  ensurePrivateDir(dir);
 
   let count = 0;
+  let secrets = 0;
   const retiredMancanti = [];
+  const unreadable = [];
   for (const rel of BACKUP_FILES) {
     const src = join(JHT_DIR, rel);
     if (!(await fileExists(src))) {
       if (RETIRED_ENTRIES[rel]) retiredMancanti.push(rel);
       continue;
     }
-    const dest = join(dir, rel);
-    await mkdir(join(dest, '..'), { recursive: true }).catch(() => {});
-    await cp(src, dest);
+    // Never a raw copy: a file that cannot be read as JSON cannot be cleaned,
+    // so it is left out and said.
+    const value = await readJson(src);
+    if (value === undefined) { unreadable.push(rel); continue; }
+    secrets += countPlainSecrets(value);
+    writePrivateJson(join(dir, rel), redactSecrets(value));
     count++;
   }
 
   // Manifest
-  const manifest = { name, createdAt: new Date().toISOString(), files: count };
-  await writeFile(join(dir, 'manifest.json'), JSON.stringify(manifest, null, 2), 'utf-8');
+  const manifest = { name, createdAt: new Date().toISOString(), files: count, secrets: 'left-out' };
+  writePrivateJson(join(dir, 'manifest.json'), manifest);
 
   console.log(`\n  Backup created: ${name}`);
   console.log(`  Files saved: ${count}`);
-  console.log(`  Path: ${dir}\n`);
+  console.log(`  Path: ${dir}`);
+  console.log(`  Keys left out: ${secrets} (API keys, tokens and passwords are saved as null, never in clear)\n`);
+  if (unreadable.length > 0) {
+    console.log(`  Not saved (not readable as JSON): ${unreadable.join(', ')}\n`);
+  }
   reportRetired(retiredMancanti);
   if (retiredMancanti.length > 0) console.log('');
+  warnPlainSecrets(await backupsWithPlainSecrets());
 }
 
 async function listBackups() {
@@ -105,6 +167,7 @@ async function listBackups() {
     console.log(`    ${b}${detail}`);
   }
   console.log('');
+  warnPlainSecrets(await backupsWithPlainSecrets());
 }
 
 async function restoreBackup(options) {
@@ -124,19 +187,30 @@ async function restoreBackup(options) {
   }
 
   let count = 0;
+  let kept = 0;
   const retiredRipristinati = [];
+  const unreadable = [];
   for (const rel of BACKUP_FILES) {
     const src = join(dir, rel);
     if (!(await fileExists(src))) continue;
-    const dest = join(JHT_DIR, rel);
-    await mkdir(join(dest, '..'), { recursive: true }).catch(() => {});
-    await cp(src, dest);
+    const saved = await readJson(src);
+    if (saved === undefined) { unreadable.push(rel); continue; }
+    // The copy has no keys: the ones in use now stay where they are.
+    const live = await readJson(join(JHT_DIR, rel));
+    const merged = mergeLiveSecrets(saved, live);
+    kept += countPlainSecrets(merged) - countPlainSecrets(saved);
+    writePrivateJson(join(JHT_DIR, rel), merged);
     if (RETIRED_ENTRIES[rel]) retiredRipristinati.push(rel);
     count++;
   }
 
   console.log(`\n  Backup restored: ${name}`);
-  console.log(`  Files restored: ${count}\n`);
+  console.log(`  Files restored: ${count}`);
+  if (kept > 0) console.log(`  Keys kept from the current files: ${kept}`);
+  console.log('');
+  if (unreadable.length > 0) {
+    console.log(`  Not restored (not readable as JSON): ${unreadable.join(', ')}\n`);
+  }
 
   // Rimessi al loro posto, ma non rimessi in circolo: dirlo qui evita che
   // l'utente aspetti di rivederli comparire da qualche parte.
@@ -150,7 +224,7 @@ async function restoreBackup(options) {
 export function registerBackupCommand(program) {
   program
     .command('backup [action]')
-    .description('Manage backups (actions: create, list, restore)')
+    .description('Manage backups (actions: create, list, restore, scrub)')
     .option('-l, --label <label>', 'label for backup')
     .option('-n, --name <name>', 'backup name to restore')
     .action(handleBackup);

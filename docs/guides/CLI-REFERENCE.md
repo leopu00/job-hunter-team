@@ -291,9 +291,10 @@ concentrates the same budget into fewer hours rather than saving it.
 
 | Command                              | Layer | What it does                                                  |
 |--------------------------------------|-------|---------------------------------------------------------------|
-| `jht backup create`                  | Node  | Snapshot of `~/.jht/` to a tar.gz.                            |
-| `jht backup list`                    | Node  | List available backups.                                       |
-| `jht backup restore <name>`          | Node  | Restore a backup. Stops the team first.                       |
+| `jht backup create`                  | Node  | Copy a short list of settings files to `~/.jht/backups/`, with every key, token and password saved as null. Not a copy of your data. |
+| `jht backup list`                    | Node  | List available backups; warns about older ones that still hold keys in clear. |
+| `jht backup restore <name>`          | Node  | Restore a backup; the keys now in use are kept.               |
+| `jht backup scrub`                   | Node  | Remove the keys from backups made before they were left out.  |
 | `jht reset creds`                    | Node  | Wipe provider credentials only.                               |
 | `jht reset config`                   | Node  | Wipe `jht.config.json` only.                                  |
 | `jht reset full`                     | Node  | Wipe both + jobs.db. Asks for confirmation.                   |
