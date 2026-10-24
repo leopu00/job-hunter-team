@@ -50,6 +50,7 @@ case "$cmd" in
   list-panes) exit 0 ;;
   capture-pane)
     [ "${FAKE_TMUX_CAPTURE_FAILS:-0}" = 1 ] && exit 1
+    [ -n "${FAKE_TMUX_CAPTURE_SLEEP:-}" ] && sleep "$FAKE_TMUX_CAPTURE_SLEEP"
     # A screen chosen by the test: the agent is somewhere other than its prompt.
     if [ -f "$S/screen" ]; then cat "$S/screen"; exit 0; fi
     [ -f "$S/transcript" ] && cat "$S/transcript"
@@ -224,6 +225,14 @@ def test_the_activity_is_absent_when_the_screen_cannot_say_never_idle(box):
     screen.unlink()
     code, page = box.run("read", "capitano", FAKE_TMUX_CAPTURE_FAILS="1")
     assert code == 0 and "activity" not in page
+
+
+def test_a_stuck_tmux_does_not_hold_a_read_and_leaves_the_activity_out(box):
+    _waiting_chat(box)
+    started = time.monotonic()
+    code, page = box.run("read", "capitano", FAKE_TMUX_CAPTURE_SLEEP="8")
+    assert code == 0 and "activity" not in page
+    assert time.monotonic() - started < 6, "the capture for the activity has its own short limit"
 
 
 def test_a_read_touches_the_terminal_only_while_the_last_turn_of_the_person_waits(box):

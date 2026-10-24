@@ -228,6 +228,7 @@ def read(agent: str, cursor_text: str | None) -> dict:
 # The person's last turn is waiting for an answer: nothing from the agent after it, and young enough
 # that what the agent does now is about it.  Only then does a read look at the terminal at all.
 ACTIVITY_WINDOW_S = 1800.0
+ACTIVITY_CAPTURE_TIMEOUT_S = 2.0
 
 
 def _awaiting_reply(agent: str) -> bool:
@@ -261,7 +262,8 @@ def _awaiting_reply(agent: str) -> bool:
 def activity_of(agent: str) -> str | None:
     """`working` while the agent's CLI shows a running turn, `idle` at an empty prompt, None when
     the screen cannot say (no session, a menu, a draft, a form this reader does not know)."""
-    pane = capture_pane(AGENTS[agent])
+    # A stuck tmux must not hold every read: the page reads every second or two.
+    pane = capture_pane(AGENTS[agent], ACTIVITY_CAPTURE_TIMEOUT_S)
     if pane is None:
         return None
     state, busy = composer_snapshot(pane)
@@ -749,10 +751,10 @@ def prompt_state(pane: str) -> str:
     return "ready" if state == "empty" else "not_at_prompt"
 
 
-def capture_pane(session: str) -> str | None:
+def capture_pane(session: str, timeout: float = TMUX_TIMEOUT_S) -> str | None:
     try:
         done = subprocess.run(["tmux", "capture-pane", "-e", "-p", "-t", "=" + session + ":"],
-                              capture_output=True, timeout=TMUX_TIMEOUT_S, check=False)
+                              capture_output=True, timeout=timeout, check=False)
     except (OSError, subprocess.SubprocessError):
         return None
     if done.returncode != 0:
