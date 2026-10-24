@@ -126,7 +126,7 @@ fn today_parts(at: SystemTime) -> (i64, u32, u32, u32, u32, u32, u32) {
 }
 
 /// `2026-10-24`
-fn iso_day(at: SystemTime) -> String {
+pub(crate) fn iso_day(at: SystemTime) -> String {
     let (year, month, day, ..) = today_parts(at);
     format!("{year:04}-{month:02}-{day:02}")
 }
@@ -380,13 +380,13 @@ fn save_name(source: &str, format: Format, at: SystemTime) -> String {
 }
 
 /// Where the file is written until it is whole: beside its final place, hidden, never the final name.
-fn part_path(target: &Path) -> PathBuf {
+pub(crate) fn part_path(target: &Path) -> PathBuf {
     let name = target.file_name().map(|name| name.to_string_lossy().into_owned()).unwrap_or_default();
     target.with_file_name(format!(".{name}.{}.part", std::process::id()))
 }
 
 /// Opens the system's «Save as» window and says the place the person chose; `None` when they closed it.
-async fn ask_where(app: tauri::AppHandle, window: tauri::Window, name: String, label: &'static str, extension: &'static str) -> Result<Option<PathBuf>, DirectChatError> {
+pub(crate) async fn ask_where(app: tauri::AppHandle, window: tauri::Window, name: String, label: &'static str, extension: &'static str) -> Result<Option<PathBuf>, DirectChatError> {
     // The system's window is modal and waits for the person: never on the main thread.
     let chosen = tauri::async_runtime::spawn_blocking(move || {
         app.dialog().file().set_parent(&window).add_filter(label, &[extension]).set_file_name(name).blocking_save_file()
@@ -399,7 +399,7 @@ async fn ask_where(app: tauri::AppHandle, window: tauri::Window, name: String, l
     }
 }
 
-fn window_may_export(label: &str) -> bool {
+pub(crate) fn window_may_export(label: &str) -> bool {
     label == "main"
 }
 

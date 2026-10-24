@@ -1312,6 +1312,56 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
     "Sign in with a cloud account, or export the team’s data.",
   ),
 
+  // ── Backup of the person's data ─────────────────────────────────────────
+  backup_snapshot_failed: copy(
+    "Non è stato possibile preparare il backup dei dati della squadra.",
+    "Controlla che la squadra sia accesa e abbia spazio libero, poi riprova.",
+    "The backup of the team’s data could not be prepared.",
+    "Check that the team is running and has free space, then try again.",
+  ),
+  backup_too_large: copy(
+    "I dati sono troppo grandi per un backup.",
+    "Libera spazio togliendo i documenti che non servono più, poi riprova.",
+    "The data is too large for a backup.",
+    "Free up space by removing documents you no longer need, then try again.",
+  ),
+  backup_verify_failed: copy(
+    "Il file del backup non coincide con quello preparato, quindi l’ho scartato.",
+    "Riprova; se succede ancora, controlla il disco su cui salvi.",
+    "The backup file does not match the one that was prepared, so it was discarded.",
+    "Try again; if it happens again, check the disk you are saving to.",
+  ),
+  backup_save_failed: copy(
+    "Il backup non è stato salvato.",
+    "Scegli una cartella in cui puoi scrivere e con spazio libero, poi riprova.",
+    "The backup was not saved.",
+    "Choose a folder you can write to and that has free space, then try again.",
+  ),
+  backup_not_a_backup: copy(
+    "Questo file non è un backup di Job Hunter Team, oppure è danneggiato.",
+    "Scegli un file creato dall’app con «Crea backup».",
+    "This file is not a Job Hunter Team backup, or it is damaged.",
+    "Choose a file made by the app with “Create backup”.",
+  ),
+  backup_no_database: copy(
+    "Non trovo il database della squadra, quindi non c’è niente da salvare nel backup.",
+    "Controlla che la squadra sia stata avviata almeno una volta, poi riprova.",
+    "The team’s database cannot be found, so there is nothing to put in the backup.",
+    "Check that the team has been started at least once, then try again.",
+  ),
+  backup_no_space: copy(
+    "Nella squadra non c’è abbastanza spazio libero per preparare il backup.",
+    "Libera spazio sul computer o sulla VPS della squadra, poi riprova.",
+    "The team does not have enough free space to prepare the backup.",
+    "Free up space on the team’s computer or VPS, then try again.",
+  ),
+  backup_busy: copy(
+    "Un backup è già in corso.",
+    "Aspetta che finisca, oppure annullalo, poi riprova.",
+    "A backup is already running.",
+    "Wait for it to finish, or cancel it, then try again.",
+  ),
+
   // ── VPS access details and SSH identity ──────────────────────────────────
   invalid_host: SSH_FIELD,
   invalid_user: SSH_FIELD,
