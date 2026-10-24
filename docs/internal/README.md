@@ -160,6 +160,7 @@ Simulazioni, studi comparativi, playbook e case study.
 
 | Data | File | Topic |
 |---|---|---|
+| 2026-10-25 | [`2026-10-25-model-comparison-test-team.md`](experiments/2026-10-25-model-comparison-test-team.md) | Claude on the API against Codex on a subscription, per-role models and same-input verdicts on a test team: cost, summary text quality (in progress) |
 | 2026-08-03 | [`2026-08-03-m4-entry-tier-evidence-protocol.md`](experiments/2026-08-03-m4-entry-tier-evidence-protocol.md) | M4: strumenti e bundle versionato per varianza Kimi/costi PAYG-subscription; hash, provenance e boundary fixture/live senza sostituire gli input esterni |
 | 2026-08-03 | [`2026-08-03-regia-video-campagna.md`](experiments/2026-08-03-regia-video-campagna.md) | Regia del video di campagna «The Night Shift»: una posizione che attraversa l'ufficio di notte, il puntatore come spettatore |
 | 2026-06-13 | [`2026-06-13-kimi-quota-tiers-discovery.md`](experiments/2026-06-13-kimi-quota-tiers-discovery.md) | Kimi: i 3 tier di quota + il buco `totalQuota` |
