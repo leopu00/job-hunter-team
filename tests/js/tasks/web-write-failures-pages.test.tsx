@@ -177,6 +177,8 @@ describe("channels", () => {
   });
 });
 
+const NO_RUNNER = "this page cannot do it in this version. Use the desktop app's backup, or “jht backup create” in a terminal.";
+
 describe("backup", () => {
   const backup = { id: "bk-20261009-0800", createdAt: Date.now(), sizeBytes: 2048, sources: ["db"], compressed: true };
 
@@ -189,6 +191,8 @@ describe("backup", () => {
     ["create", /create backup/, "POST /api/backup", json({ error: "ENOSPC: no space left" }, 500), `Backup NOT created: ${SERVER}`],
     ["create, a 200 without the backup", /create backup/, "POST /api/backup", json({}), `Backup NOT created: ${SERVER}`],
     ["restore", /^restore$/, "PATCH /api/backup", json({ error: "restore: tar exited 2" }, 404), "Backup NOT restored: Item not found: reload the page."],
+    ["create, the site has no backup runner", /create backup/, "POST /api/backup", json({ error: "runner missing", code: "backup_unavailable" }, 501), `Backup NOT created: ${NO_RUNNER}`],
+    ["restore, the site has no backup runner", /^restore$/, "PATCH /api/backup", json({ error: "runner missing", code: "backup_unavailable" }, 501), `Backup NOT restored: ${NO_RUNNER}`],
     ["delete", /^delete$/, "DELETE /api/backup", json({ error: "Backup non trovato" }, 403), `Backup NOT deleted: ${READ_ONLY}`],
   ])("%s: NOT done, with the reason and never the route's text", async (_case, label, key, answer, said) => {
     await openBackup();
@@ -196,7 +200,7 @@ describe("backup", () => {
     await click(button(label));
     expect(calls.map((c) => c.key)).toContain(key);
     expect(alerts()).toContain(said);
-    expect(container.textContent).not.toMatch(/ENOSPC|tar exited|non trovato/);
+    expect(container.textContent).not.toMatch(/ENOSPC|tar exited|non trovato|runner missing/);
   });
 
   it("a delete the route confirms says deleted", async () => {

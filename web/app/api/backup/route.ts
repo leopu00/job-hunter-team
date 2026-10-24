@@ -54,15 +54,32 @@ const DEFAULT_SOURCES = [
   path.join(JHT_DIR, "notifications"),
 ];
 
+const RUNNER_PATH = path.join(
+  process.cwd(),
+  "..",
+  "shared",
+  "backup",
+  "runner.ts",
+);
+
 async function loadBackupRunner() {
-  const modulePath = path.join(
-    process.cwd(),
-    "..",
-    "shared",
-    "backup",
-    "runner.ts",
+  return import(pathToFileURL(RUNNER_PATH).href);
+}
+
+// The runner is not in the repository: creating and restoring here cannot
+// work, and saying so is better than a 500 (or, with the default sources,
+// a 400 about sources that were never going to be saved). The page shows its
+// own translated sentence for a 501 and never this text.
+function unavailable() {
+  if (fs.existsSync(RUNNER_PATH)) return null;
+  return NextResponse.json(
+    {
+      error:
+        "Backup from the site is not available in this version: use the desktop app's backup, or `jht backup create` on the machine.",
+      code: "backup_unavailable",
+    },
+    { status: 501 },
   );
-  return import(pathToFileURL(modulePath).href);
 }
 
 // GET — lista backup
@@ -91,6 +108,8 @@ export async function POST(req: Request) {
     "Backup richiede filesystem locale (tar+gzip). Crea il backup dall'app desktop o via `jht backup create` su SSH alla VPS.",
   );
   if (blocked) return blocked;
+  const missing = unavailable();
+  if (missing) return missing;
   try {
     const body = await req.json().catch(() => ({}));
     const sources: string[] = body.sources?.length
@@ -143,6 +162,8 @@ export async function PATCH(req: Request) {
     "Restore richiede filesystem locale. Usa l'app desktop o `jht backup restore <id>` via SSH alla VPS.",
   );
   if (blocked) return blocked;
+  const missing = unavailable();
+  if (missing) return missing;
   const { searchParams } = new URL(req.url);
   const id = searchParams.get("id");
   if (!id)

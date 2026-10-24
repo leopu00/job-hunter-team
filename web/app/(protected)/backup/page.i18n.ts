@@ -153,4 +153,15 @@ export const T = {
     fr: "Aucune sauvegarde trouvée.",
     pt: "Nenhum backup encontrado.",
   },
+  // After err_create / err_restore: what this page cannot do in this version,
+  // and where the backup is.
+  unavailable: {
+    it: "da questa pagina non si può, in questa versione. Usa il backup dell'app desktop, oppure «jht backup create» dal terminale.",
+    en: "this page cannot do it in this version. Use the desktop app's backup, or “jht backup create” in a terminal.",
+    hu: "ez az oldal ebben a verzióban nem tudja megtenni. Használd az asztali alkalmazás biztonsági mentését, vagy a „jht backup create” parancsot a terminálban.",
+    es: "esta página no puede hacerlo en esta versión. Usa la copia de la aplicación de escritorio, o «jht backup create» en una terminal.",
+    de: "diese Seite kann das in dieser Version nicht. Nutze das Backup der Desktop-App oder „jht backup create“ im Terminal.",
+    fr: "cette page ne peut pas le faire dans cette version. Utilisez la sauvegarde de l'application de bureau, ou « jht backup create » dans un terminal.",
+    pt: "esta página não consegue fazer isso nesta versão. Use o backup do aplicativo de desktop, ou «jht backup create» no terminal.",
+  },
 } satisfies Dictionary;

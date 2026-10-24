@@ -111,7 +111,13 @@ export default function BackupPage() {
     key: "err_create" | "err_restore" | "err_delete",
     result: Awaited<ReturnType<typeof attemptWrite>>,
   ) =>
-    `${tr(key)} ${result.ok ? writeFailureReason(locale, 500) : result.reason}`;
+    `${tr(key)} ${
+      result.ok
+        ? writeFailureReason(locale, 500)
+        : result.status === 501
+          ? tr("unavailable")
+          : result.reason
+    }`;
   const [backups, setBackups] = useState<Backup[]>([]);
   const [totalSize, setTotalSize] = useState(0);
   const [creating, setCreating] = useState(false);
