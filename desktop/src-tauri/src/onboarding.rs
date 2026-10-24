@@ -1981,9 +1981,37 @@ fn install_local_windows(
         let _ = fs::remove_dir_all(&dir);
         result
     })?;
-    let wrapper = wrapper_path(app).ok_or_else(|| failure("runtime_missing"))?;
+    let Some(wrapper) = wrapper_path(app) else {
+        note_runtime_attestation(app, log);
+        return Err(failure("runtime_missing"));
+    };
     register_autostart_noted(&wrapper, log, phase);
     Ok(wrapper)
+}
+
+/// install.ps1 said it was done and the app does not accept what it installed: the runtime
+/// log keeps which check refused it, by the fixed name of the node and of the rule (never a path).
+#[cfg(windows)]
+fn note_runtime_attestation(app: &tauri::AppHandle, log: Option<&RuntimeLog>) {
+    let Some(log) = log else { return };
+    let refused = (|| -> Option<(String, String)> {
+        let home = app.path().home_dir().ok()?;
+        let runtime = crate::windows_runtime::runtime_dir(std::env::var_os("LOCALAPPDATA"))?;
+        let candidate = wrapper_candidates(&home).into_iter().next()?;
+        let Some(source) = wrapper_source(&candidate) else {
+            return Some(("jht-wrapper.ps1".to_owned(), "unreadable".to_owned()));
+        };
+        if !crate::windows_runtime::wrapper_has_protocols(&source) {
+            return Some(("jht-wrapper.ps1".to_owned(), "protocols".to_owned()));
+        }
+        let failure = crate::windows_runtime::bundle_failure(&candidate, &runtime)?;
+        Some((failure.node.to_owned(), failure.rule.to_owned()))
+    })();
+    let step = match refused {
+        Some((node, rule)) => format!("runtime attestation {node} {rule}"),
+        None => "runtime attestation not reproduced".to_owned(),
+    };
+    log.record(&step, Err("runtime_missing"), &[], &[], Duration::ZERO);
 }
 
 /// The logon task of this user, registered after an install or a reuse. How it

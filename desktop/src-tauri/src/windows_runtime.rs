@@ -405,11 +405,30 @@ fn file_digest(path: &Path) -> Option<String> {
 /// install.ps1 recorded it, on the Podman runtime.
 #[cfg_attr(not(windows), allow(dead_code))]
 pub(crate) fn wrapper_bundle_valid(wrapper: &Path, runtime_dir: &Path) -> bool {
+    bundle_failure(wrapper, runtime_dir).is_none()
+}
+
+/// The check that stopped the bundle, by the fixed name of the node and of the rule, or None
+/// when it holds. The names are the manifest's keys and a short word for the rule, never a path:
+/// the runtime log keeps them to say which check refused a runtime the installer said was ready.
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) struct BundleFailure {
+    pub(crate) node: &'static str,
+    pub(crate) rule: &'static str,
+}
+
+#[cfg_attr(not(windows), allow(dead_code))]
+pub(crate) fn bundle_failure(wrapper: &Path, runtime_dir: &Path) -> Option<BundleFailure> {
     #[cfg(windows)]
-    if !runtime_paths_are_attested(wrapper, runtime_dir) {
-        return false;
+    if let Err(failure) = attest_paths(wrapper, runtime_dir) {
+        return Some(failure);
     }
-    bundle_bytes_valid(wrapper, runtime_dir)
+    #[cfg(not(windows))]
+    let _ = (wrapper, runtime_dir);
+    #[cfg(not(windows))]
+    return None;
+    #[cfg(windows)]
+    (!bundle_bytes_valid(wrapper, runtime_dir)).then_some(BundleFailure { node: "bundle", rule: "bytes" })
 }
 
 /// The bytes of the bundle against the manifest, the selected engine and the
@@ -447,55 +466,104 @@ fn bundle_bytes_valid(wrapper: &Path, runtime_dir: &Path) -> bool {
     manifest_matches(&manifest, &required, (IMAGE_PIN, file_digest(&pin)))
 }
 
+/// The accounts that may hold access to the runtime: the user, SYSTEM and the local
+/// Administrators (what install.ps1 grants, and what the checked wrapper tolerates).
+#[cfg_attr(not(windows), allow(dead_code))]
+const LOCAL_SYSTEM_SID: &str = "S-1-5-18";
+#[cfg_attr(not(windows), allow(dead_code))]
+const BUILTIN_ADMINS_SID: &str = "S-1-5-32-544";
+
+/// The rule an ACL breaks, if it breaks one. The runtime directory must have its inheritance
+/// cut (`must_cut`). Every node, file or directory, must give access to the user and to nobody
+/// else but SYSTEM and the local Administrators: for a file that is the ACL it really has,
+/// which in the protected directory is the one it inherits. A file does not have to cut its
+/// own inheritance (the checked wrapper never asks it: it asks the owner, and the directory),
+/// nor does the folder the wrapper sits in, which has the user profile's.
+#[cfg_attr(not(windows), allow(dead_code))]
+pub(crate) fn node_acl_rule(
+    inheritance_disabled: bool,
+    allowed_sids: &[String],
+    user_sid: &str,
+    must_cut: bool,
+) -> Option<&'static str> {
+    if must_cut && !inheritance_disabled {
+        return Some("acl_inherited");
+    }
+    if !allowed_sids.iter().any(|sid| sid == user_sid) {
+        return Some("acl_user_missing");
+    }
+    if allowed_sids
+        .iter()
+        .any(|sid| sid != user_sid && sid != LOCAL_SYSTEM_SID && sid != BUILTIN_ADMINS_SID)
+    {
+        return Some("acl_other_account");
+    }
+    None
+}
+
 /// The byte manifest is not an authority when an untrusted account can replace
 /// its directory or lead us through a reparse point. This mirrors the checked
-/// Windows wrapper before the Rust chat path selects its private engine.
+/// Windows wrapper (Test-RuntimeBundleTrusted) before the Rust chat path selects
+/// its private engine; the first check that fails says which node and which rule.
 #[cfg(windows)]
-fn runtime_paths_are_attested(wrapper: &Path, runtime_dir: &Path) -> bool {
+fn attest_paths(wrapper: &Path, runtime_dir: &Path) -> Result<(), BundleFailure> {
     use std::os::windows::fs::MetadataExt;
 
     const FILE_ATTRIBUTE_REPARSE_POINT: u32 = 0x0400;
-    let protected_node = |path: &Path, directory: bool| {
-        let Ok(metadata) = std::fs::symlink_metadata(path) else { return false };
+    let node_rule = |path: &Path, directory: bool, must_cut: bool| -> Option<&'static str> {
+        let Ok(metadata) = std::fs::symlink_metadata(path) else { return Some("missing") };
         let kind = metadata.file_type();
-        let expected_kind = if directory { kind.is_dir() } else { kind.is_file() };
-        expected_kind
-            && !kind.is_symlink()
-            && metadata.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT == 0
-            && crate::private_acl::owned_by_current_user(path)
-            && crate::private_acl::current_user_sid().ok().is_some_and(|user| {
-                crate::private_acl::read_acl(path)
-                    .is_ok_and(|acl| crate::private_acl::is_runtime_owner_only(&acl, &user))
-            })
+        if !(if directory { kind.is_dir() } else { kind.is_file() }) {
+            return Some("kind");
+        }
+        if kind.is_symlink() || metadata.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT != 0 {
+            return Some("reparse");
+        }
+        if !crate::private_acl::owned_by_current_user(path) {
+            return Some("owner");
+        }
+        let Ok(user) = crate::private_acl::current_user_sid() else { return Some("user_unreadable") };
+        let Ok(acl) = crate::private_acl::read_acl(path) else { return Some("acl_unreadable") };
+        node_acl_rule(acl.inheritance_disabled, &acl.allowed_sids, &user, must_cut)
     };
-    let ancestors_are_plain = |path: &Path| {
+    let ancestors_rule = |path: &Path| -> Option<&'static str> {
         let mut current = Some(path);
         while let Some(node) = current {
-            let Ok(metadata) = std::fs::symlink_metadata(node) else { return false };
+            let Ok(metadata) = std::fs::symlink_metadata(node) else { return Some("missing") };
             if metadata.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT != 0 {
-                return false;
+                return Some("ancestor_reparse");
             }
             current = node.parent();
         }
-        true
+        None
     };
-    let Some(bin) = wrapper.parent() else { return false };
-    let manifest = runtime_dir.join(".runtime-integrity");
-    let all_manifest_nodes_are_protected = MANIFEST_FILES.iter().all(|(key, place, file)| {
+    let fail = |node: &'static str, rule: Option<&'static str>| match rule {
+        Some(rule) => Err(BundleFailure { node, rule }),
+        None => Ok(()),
+    };
+    let Some(bin) = wrapper.parent() else {
+        return Err(BundleFailure { node: "jht-wrapper.ps1", rule: "missing" });
+    };
+    fail("runtime-dir", ancestors_rule(runtime_dir))?;
+    fail("jht-wrapper.ps1", ancestors_rule(wrapper))?;
+    fail("runtime-dir", node_rule(runtime_dir, true, true))?;
+    // The folder the wrapper and its helper sit in: whoever may create or rename a file there
+    // may swap them after the check. Its ACL is the profile's (inherited): the same accounts only.
+    fail("bin-dir", node_rule(bin, true, false))?;
+    fail("manifest", node_rule(&runtime_dir.join(".runtime-integrity"), false, false))?;
+    for (key, place, file) in MANIFEST_FILES.iter() {
         let path = match place {
             Place::Runtime => runtime_dir.join(file),
             Place::Bin if *key == "jht-wrapper.ps1" => wrapper.to_path_buf(),
             Place::Bin => bin.join(file),
         };
-        protected_node(&path, false)
-    });
+        fail(*key, node_rule(&path, false, false))?;
+    }
     let pin = runtime_dir.join(IMAGE_PIN);
-    ancestors_are_plain(runtime_dir)
-        && ancestors_are_plain(wrapper)
-        && protected_node(runtime_dir, true)
-        && protected_node(&manifest, false)
-        && all_manifest_nodes_are_protected
-        && (!std::fs::symlink_metadata(&pin).is_ok() || protected_node(&pin, false))
+    if std::fs::symlink_metadata(&pin).is_ok() {
+        fail("runtime-image", node_rule(&pin, false, false))?;
+    }
+    Ok(())
 }
 
 /// `%SystemRoot%\System32\wsl.exe`, by absolute path like PowerShell.
@@ -993,6 +1061,32 @@ mod tests {
         assert!(manifest_matches(&pinned, &digests("bb"), pin.clone()));
         assert!(!manifest_matches(manifest, &digests("bb"), pin));
         assert!(!manifest_matches(&pinned, &digests("bb"), ("runtime-image", Some("ff".to_owned()))));
+    }
+
+    /// The ACL rules of the runtime check. The installed bundle's wrapper and helper sit in the
+    /// user's own folder and the runtime's files in the protected directory: none of them cuts
+    /// its own inheritance, and none has to. The directory does.
+    #[test]
+    fn a_node_may_inherit_its_acl_but_gives_access_to_nobody_besides_the_user_system_and_admins() {
+        let user = "S-1-5-21-1-2-3-1001";
+        let sids = |list: &[&str]| list.iter().map(|sid| (*sid).to_owned()).collect::<Vec<_>>();
+        let usual = sids(&[user, "S-1-5-18", "S-1-5-32-544"]);
+        // A file with the ACL it inherits (inheritance not cut), a directory with it cut.
+        assert_eq!(node_acl_rule(false, &usual, user, false), None, "an inheriting file, or the wrapper's folder with the profile's ACL");
+        assert_eq!(node_acl_rule(true, &usual, user, false), None);
+        assert_eq!(node_acl_rule(true, &usual, user, true), None);
+        assert_eq!(node_acl_rule(true, &sids(&[user]), user, true), None);
+        // The directory must have cut it.
+        assert_eq!(node_acl_rule(false, &usual, user, true), Some("acl_inherited"));
+        // The user must have access, and nobody else beyond SYSTEM and the Administrators.
+        assert_eq!(node_acl_rule(true, &sids(&["S-1-5-18", "S-1-5-32-544"]), user, true), Some("acl_user_missing"));
+        assert_eq!(node_acl_rule(false, &sids(&[]), user, false), Some("acl_user_missing"));
+        for other in ["S-1-1-0", "S-1-5-32-545", "S-1-5-11", "S-1-5-21-1-2-3-1002"] {
+            let mut open = usual.clone();
+            open.push(other.to_owned());
+            assert_eq!(node_acl_rule(true, &open, user, true), Some("acl_other_account"), "{other} on the directory");
+            assert_eq!(node_acl_rule(false, &open, user, false), Some("acl_other_account"), "{other} on a file, or on the folder the wrapper sits in");
+        }
     }
 
     /// The layout install.ps1 writes on the Podman runtime, on disk: the
