@@ -25,6 +25,9 @@ AGENT_PREFIX = "💬 Agente:"
 # agent text is always prefixed, but refusing the canonical markers as well
 # prevents a copied challenge from looking genuine inside that envelope.
 RESERVED_CHALLENGE_MARKERS = (
+    "🔐 jht · application authorisation",
+    "yes, apply",
+    # The Italian copy the challenge had until T132: still refused, so a copy of it stays an imitation.
     "🔐 jht · autorizzazione candidatura",
     "[jht-auth]",
     "sì, candidati",

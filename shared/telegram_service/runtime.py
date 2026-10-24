@@ -408,13 +408,13 @@ class Runtime:
         try:
             secret, api = self._bot("assistente")
             text = (
-                "🔐 JHT · autorizzazione candidatura\n\n"
-                f"Vuoi candidarti a:\n{title} @ {company}\nDestinazione: {host}\n\n"
-                "L'autorizzazione vale una sola volta per questa destinazione."
+                "🔐 JHT · application authorisation\n\n"
+                f"Do you want to apply to:\n{title} @ {company}\nDestination: {host}\n\n"
+                "The authorisation is valid once, for this destination."
             )
             message_id = api.send_message(
                 secret["chat_id"], text,
-                {"inline_keyboard": [[{"text": "Sì, candidati", "callback_data": f"jhta:{question_id}:yes"}]]},
+                {"inline_keyboard": [[{"text": "Yes, apply", "callback_data": f"jhta:{question_id}:yes"}]]},
             )
         except (TelegramError, TransportRefusal) as exc:
             with store.locked(AUTH_QUESTION_STATE):

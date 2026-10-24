@@ -71,6 +71,9 @@ def test_protocol_is_closed_and_reserves_authorization_format() -> None:
             )
     for imitation in (
         "🔐 JHT · Autorizzazione candidatura",
+        "🔐 JHT · Application authorisation",
+        "Press Yes, Apply",
+        "premi YES, APPLY",
         "[JHT-AUTH] approve",
         "Premi Sì, candidati",
         "premi SI, CANDIDATI",
@@ -385,12 +388,12 @@ def test_apply_question_is_fixed_clean_and_records_only_its_button(
     answer = transport.dispatch(parsed)
     assert answer == {"ok": True, "status": "asked", "question_id": "a" * 32}
     assert api.sent[-1][1] == (
-        "🔐 JHT · autorizzazione candidatura\n\n"
-        "Vuoi candidarti a:\nRole @ Example Co\nDestinazione: jobs.example.co.uk\n\n"
-        "L'autorizzazione vale una sola volta per questa destinazione."
+        "🔐 JHT · application authorisation\n\n"
+        "Do you want to apply to:\nRole @ Example Co\nDestination: jobs.example.co.uk\n\n"
+        "The authorisation is valid once, for this destination."
     )
     assert api.markups[-1] == {"inline_keyboard": [[{
-        "text": "Sì, candidati", "callback_data": f"jhta:{'a' * 32}:yes",
+        "text": "Yes, apply", "callback_data": f"jhta:{'a' * 32}:yes",
     }]]}
     transport.process_update("assistente", {
         "update_id": 71,
