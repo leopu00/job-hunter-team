@@ -123,6 +123,18 @@ describe("the export page: account data", () => {
     expect(team.saveAccountExport).not.toHaveBeenCalled();
   });
 
+  it("does not say there is no cloud account when the account could not be read", async () => {
+    const user = userEvent.setup();
+    account.buildAccountExport.mockResolvedValue({ ok: false, error: "read_failed" });
+    render(<ExportPage {...props} />);
+    await user.click(screen.getByTestId("export-account-button"));
+    const say = await screen.findByTestId("export-account-say");
+    expect(say).toHaveAttribute("role", "alert");
+    expect(say).not.toHaveTextContent("A cloud account is needed");
+    expect(say).toHaveTextContent("I cannot read your account right now: try again in a moment.");
+    expect(team.saveAccountExport).not.toHaveBeenCalled();
+  });
+
   it("says a cloud account is needed when there is none", async () => {
     const user = userEvent.setup();
     cloud.supabaseConfigured = false;

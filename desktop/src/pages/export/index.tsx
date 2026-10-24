@@ -72,7 +72,12 @@ export default function ExportPage(_props: PageProps) {
     if (!built.ok) {
       setAccountSay({
         ok: false,
-        text: built.error === "export_incomplete" ? fill(t.accountIncomplete, { tables: built.tables.join(", ") }) : t.accountNotCloud,
+        text:
+          built.error === "export_incomplete"
+            ? fill(t.accountIncomplete, { tables: built.tables.join(", ") })
+            : built.error === "not_cloud"
+              ? t.accountNotCloud
+              : t.accountUnreadable,
       });
     } else {
       setAccountSay(outcomeText(t, await saveAccountExport(built.text)));

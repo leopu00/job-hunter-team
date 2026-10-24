@@ -36,6 +36,7 @@ const it = {
   accountIntro: "I dati del tuo account cloud in un file JSON. I dati che restano solo su questo computer si esportano qui sopra.",
   accountButton: "Esporta i dati dell’account",
   accountNotCloud: "Serve un account cloud: su questo computer non ce n’è uno collegato.",
+  accountUnreadable: "Non riesco a leggere il tuo account ora: riprova tra poco.",
   accountIncomplete: "Alcune tabelle non si sono lette ({tables}). Non è stato salvato nessun file: riprova.",
 };
 
@@ -71,6 +72,7 @@ const en: ExportText = {
   accountIntro: "Your cloud account's data in one JSON file. Data that stays only on this computer is exported above.",
   accountButton: "Export the account's data",
   accountNotCloud: "A cloud account is needed: this computer has none linked.",
+  accountUnreadable: "I cannot read your account right now: try again in a moment.",
   accountIncomplete: "Some tables could not be read ({tables}). No file was saved: try again.",
 };
 
@@ -104,6 +106,7 @@ const de: ExportText = {
   accountIntro: "Die Daten deines Cloud-Kontos in einer JSON-Datei. Daten, die nur auf diesem Computer bleiben, exportierst du oben.",
   accountButton: "Kontodaten exportieren",
   accountNotCloud: "Ein Cloud-Konto ist nötig: Auf diesem Computer ist keines verbunden.",
+  accountUnreadable: "Ich kann dein Konto gerade nicht lesen: Versuche es gleich noch einmal.",
   accountIncomplete: "Einige Tabellen ließen sich nicht lesen ({tables}). Es wurde keine Datei gespeichert: Versuche es erneut.",
 };
 
@@ -137,6 +140,7 @@ const fr: ExportText = {
   accountIntro: "Les données de ton compte cloud dans un fichier JSON. Les données qui restent seulement sur cet ordinateur s’exportent ci-dessus.",
   accountButton: "Exporter les données du compte",
   accountNotCloud: "Un compte cloud est nécessaire : cet ordinateur n’en a aucun de lié.",
+  accountUnreadable: "Je n’arrive pas à lire ton compte pour le moment : réessaie dans un instant.",
   accountIncomplete: "Certaines tables n’ont pas pu être lues ({tables}). Aucun fichier enregistré : réessaie.",
 };
 
@@ -170,6 +174,7 @@ const es: ExportText = {
   accountIntro: "Los datos de tu cuenta en la nube en un archivo JSON. Los datos que solo quedan en este ordenador se exportan arriba.",
   accountButton: "Exportar los datos de la cuenta",
   accountNotCloud: "Hace falta una cuenta en la nube: este ordenador no tiene ninguna vinculada.",
+  accountUnreadable: "Ahora no puedo leer tu cuenta: inténtalo de nuevo en un momento.",
   accountIncomplete: "No se pudieron leer algunas tablas ({tables}). No se guardó ningún archivo: inténtalo de nuevo.",
 };
 
@@ -203,6 +208,7 @@ const pt: ExportText = {
   accountIntro: "Os dados da tua conta na nuvem num ficheiro JSON. Os dados que ficam só neste computador exportam-se acima.",
   accountButton: "Exportar os dados da conta",
   accountNotCloud: "É preciso uma conta na nuvem: este computador não tem nenhuma ligada.",
+  accountUnreadable: "Neste momento não consigo ler a tua conta: tenta de novo daqui a pouco.",
   accountIncomplete: "Algumas tabelas não puderam ser lidas ({tables}). Nenhum ficheiro guardado: tenta de novo.",
 };
 
@@ -236,6 +242,7 @@ const hu: ExportText = {
   accountIntro: "A felhőfiókod adatai egy JSON-fájlban. Az adatokat, amelyek csak ezen a számítógépen maradnak, fent exportálhatod.",
   accountButton: "A fiók adatainak exportálása",
   accountNotCloud: "Felhőfiók kell: ehhez a számítógéphez nincs kapcsolva egy sem.",
+  accountUnreadable: "Most nem tudom beolvasni a fiókodat: próbáld újra egy perc múlva.",
   accountIncomplete: "Néhány táblát nem sikerült beolvasni ({tables}). Nem mentett fájlt: próbáld újra.",
 };
 

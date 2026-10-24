@@ -4,7 +4,7 @@ import { EXPORT_COLUMNS } from "@/lib/account-export-columns";
 import { buildAccountExport } from "./account-export";
 
 // A stand-in for the cloud client: every table answers its rows; `broken` tables answer an error.
-function fakeClient(options: { user?: { id: string; email?: string } | null; rows?: Record<string, unknown[]>; broken?: string[] } = {}) {
+function fakeClient(options: { user?: { id: string; email?: string } | null; rows?: Record<string, unknown[]>; broken?: string[]; getUser?: () => Promise<unknown> } = {}) {
   const user = options.user === undefined ? { id: "u-1", email: "person@example.com" } : options.user;
   const selects: Record<string, string> = {};
   const from = (table: string) => {
@@ -19,7 +19,7 @@ function fakeClient(options: { user?: { id: string; email?: string } | null; row
     builder.limit = async () => answer();
     return builder;
   };
-  const client = { auth: { getUser: vi.fn(async () => ({ data: { user } })) }, from: vi.fn(from) };
+  const client = { auth: { getUser: vi.fn(options.getUser ?? (async () => ({ data: { user }, error: null }))) }, from: vi.fn(from) };
   return { client: client as never, selects };
 }
 
@@ -51,6 +51,16 @@ describe("the cloud account's export, built in the app", () => {
     expect(await buildAccountExport(null)).toEqual({ ok: false, error: "not_cloud" });
     const { client } = fakeClient({ user: null });
     expect(await buildAccountExport(client)).toEqual({ ok: false, error: "not_cloud" });
+    const noSession = fakeClient({ getUser: async () => ({ data: { user: null }, error: { name: "AuthSessionMissingError" } }) });
+    expect(await buildAccountExport(noSession.client)).toEqual({ ok: false, error: "not_cloud" });
     expect((client as unknown as { from: ReturnType<typeof vi.fn> }).from).not.toHaveBeenCalled();
+  });
+
+  it("does not say «not cloud» when the account cannot be read right now (network down, token expired)", async () => {
+    const down = fakeClient({ getUser: async () => { throw new Error("offline"); } });
+    expect(await buildAccountExport(down.client)).toEqual({ ok: false, error: "read_failed" });
+    const expired = fakeClient({ getUser: async () => ({ data: { user: null }, error: { name: "AuthApiError" } }) });
+    expect(await buildAccountExport(expired.client)).toEqual({ ok: false, error: "read_failed" });
+    expect((expired.client as unknown as { from: ReturnType<typeof vi.fn> }).from).not.toHaveBeenCalled();
   });
 });

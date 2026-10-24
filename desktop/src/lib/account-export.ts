@@ -15,15 +15,19 @@ import { fetchPostgrestRows, fetchPostgrestRowsByKey } from "@/lib/postgrest-pag
 export type AccountExportBuilt =
   | { ok: true; text: string }
   | { ok: false; error: "not_cloud" }
+  | { ok: false; error: "read_failed" }
   | { ok: false; error: "export_incomplete"; tables: string[] };
 
 export async function buildAccountExport(client: SupabaseClient | null, now: Date = new Date()): Promise<AccountExportBuilt> {
   if (!client) return { ok: false, error: "not_cloud" };
   let user: { id: string; email?: string | null } | null = null;
   try {
-    user = (await client.auth.getUser()).data.user;
+    const answer = await client.auth.getUser();
+    // no session is «no cloud account»; any other failure (network down, token expired) is not that
+    if (answer.error && answer.error.name !== "AuthSessionMissingError") return { ok: false, error: "read_failed" };
+    user = answer.data.user;
   } catch {
-    user = null;
+    return { ok: false, error: "read_failed" };
   }
   if (!user) return { ok: false, error: "not_cloud" };
 
