@@ -1732,12 +1732,26 @@ fn run_local_chat(
     timeout: Duration,
 ) -> Result<ProcessResult, &'static str> {
     let team = local_chat_team(wrapper, runtime, timeout)?;
-    run_local_engine(
+    let result = run_local_engine(
         &team.engine,
         local_chat_exec_args(&team.container, &operation)?,
         input,
         timeout,
-    )
+    );
+    if engine_lost_the_container(&result) {
+        forget_local_chat_team(wrapper, runtime);
+    }
+    result
+}
+
+/// The engine could not run the exec, or answered that the container is gone (exit 125, Podman's
+/// "no such container"; also an exit the chat script never uses): the container found a moment ago
+/// is no longer the one, so the next call finds it again instead of failing for five more seconds.
+fn engine_lost_the_container(result: &Result<ProcessResult, &'static str>) -> bool {
+    match result {
+        Err(_) => true,
+        Ok(done) => done.code != 0 && (done.code == 125 || chat_failure(done.code, "").is_empty()),
+    }
 }
 
 /// How long the container found for one chat call serves the next ones.
@@ -1750,8 +1764,17 @@ static LOCAL_CHAT_TEAM: crate::team_control::ResolveCache<AttestedLocalTeam> = c
 /// engine calls (5 to 10 s on Windows), so one found a moment ago is reused, and a lookup that
 /// fails keeps nothing.
 fn local_chat_team(wrapper: &Path, runtime: &Path, timeout: Duration) -> Result<Arc<AttestedLocalTeam>, &'static str> {
-    let key = format!("{}\n{}", wrapper.display(), runtime.display());
-    LOCAL_CHAT_TEAM.get(&key, Instant::now(), LOCAL_CHAT_TEAM_KEPT, true, || AttestedLocalTeam::resolve(wrapper, runtime, timeout))
+    LOCAL_CHAT_TEAM.get(&local_chat_team_key(wrapper, runtime), Instant::now(), LOCAL_CHAT_TEAM_KEPT, true, || AttestedLocalTeam::resolve(wrapper, runtime, timeout))
+}
+
+fn local_chat_team_key(wrapper: &Path, runtime: &Path) -> String {
+    format!("{}\n{}", wrapper.display(), runtime.display())
+}
+
+/// Drops the kept container: a lookup that fails keeps nothing, so asking for a fresh one that fails
+/// empties the slot.
+fn forget_local_chat_team(wrapper: &Path, runtime: &Path) {
+    let _ = LOCAL_CHAT_TEAM.get(&local_chat_team_key(wrapper, runtime), Instant::now(), LOCAL_CHAT_TEAM_KEPT, false, || Err("container_unavailable"));
 }
 
 /// The attested local runtime directory, for the commands that run in the team's container without
@@ -2988,7 +3011,7 @@ mod tests {
         SOCKET_PATH_MAX, SSH_SOCKET_SUFFIX,
         open_vps_link, ready_status, small_read, vps_link_for, VpsLink, VPS_LINK_CHECK, SMALL_READ_OVERLAP,
         SMALL_READ_SIZE_PROBE, SMALL_READ_TAIL, DirectChatError, local_chat_exec_args,
-        local_compose_args, local_engine_removed_environment, LocalChatEngine, podman_systemd_unit, windows_container_labels_are_attested,
+        local_compose_args, local_engine_removed_environment, LocalChatEngine, podman_systemd_unit, windows_container_labels_are_attested, engine_lost_the_container,
         run_connection, run_local_chat, RemoteOperation,
         master_to_lend,
     };
@@ -3796,6 +3819,46 @@ mod tests {
             format!("exec -i {id} python3 -I /app/shared/skills/agent_chat.py send assistente id-1\n{words}")
         );
         fs::remove_dir_all(root).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_container_the_engine_lost_is_found_again_by_the_next_chat_call() {
+        use crate::existing_team_runtime::ChatOperation;
+        use std::os::unix::fs::PermissionsExt;
+
+        let (root, runtime, wrapper, _id) = attested_local_fixture();
+        let read = || {
+            run_local_chat(&wrapper, &runtime, ChatOperation::Read { agent: "capitano", cursor: None }, None, LOCAL_TEST_TIMEOUT)
+        };
+        assert_eq!(read().unwrap().code, 0);
+        // The container is gone: the engine answers 125 to the exec. The kept container is dropped.
+        let engine = runtime.join("bin").join("docker");
+        fs::write(&engine, "#!/bin/sh\n# JHT_PODMAN_DOCKER_SHIM=1\nexit 125\n").unwrap();
+        fs::set_permissions(&engine, fs::Permissions::from_mode(0o700)).unwrap();
+        // This call uses the kept container (or, if another test took the one slot, finds it again and
+        // is refused: the engine is no longer the attested one).
+        match read() {
+            Ok(done) => assert_eq!(done.code, 125),
+            Err(code) => assert_eq!(code, "runtime_missing"),
+        }
+        // The next call looks again (and is refused) instead of failing on the old id for five seconds.
+        assert!(read().is_err(), "the lost container was not forgotten");
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn only_an_engine_failure_or_a_vanished_container_empties_the_kept_one() {
+        let done = |code| Ok(ProcessResult { code, stdout: Vec::new() });
+        assert!(!engine_lost_the_container(&done(0)));
+        // the chat script's own answers: the container is there
+        for code in [2, 70, 119, 124, 126, 127, 130, 255] {
+            assert!(!engine_lost_the_container(&done(code)), "{code}");
+        }
+        for code in [1, 3, 125] {
+            assert!(engine_lost_the_container(&done(code)), "{code}");
+        }
+        assert!(engine_lost_the_container(&Err("process_timeout")));
     }
 
     #[test]
