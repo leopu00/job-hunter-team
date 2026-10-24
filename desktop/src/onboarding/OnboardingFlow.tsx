@@ -26,6 +26,7 @@ import { ONBOARDING_TEXT, type OnboardingCopy } from "./onboarding.i18n";
 import { WINDOWS_SETUP } from "./windows-setup";
 import { savedVpsBridge, type SavedVps } from "../lib/saved-vps";
 import { SetupSupportReport } from "./SetupSupportReport";
+import RuntimePhaseDetail, { type PhaseInfo } from "./RuntimePhaseDetail";
 import "./onboarding.css";
 
 function emptyVpsHost(): ExecutionHost {
@@ -315,6 +316,15 @@ function RuntimeView({ host, platform, t, locale, runtime, activity, onRetry, on
             </div>
             <progress aria-label={t.stepsCompletedAria} max={visibleRuntimeStages.length} value={completedSteps} />
             <div className="onboarding-runtime-progress__meta"><span>{t.stepOf(Math.max(1, activeIndex + 1), visibleRuntimeStages.length)}</span><span>{t.completedCount(completedSteps)}</span></div>
+            {runtime.status === "working" && currentActivity && (
+              <RuntimePhaseDetail
+                t={t}
+                locale={locale}
+                info={currentActivity as PhaseInfo}
+                phaseKey={(currentActivity as PhaseInfo).phase ?? currentActivity.description}
+                now={now}
+              />
+            )}
             {runtime.status === "working" && (
               <div
                 className="onboarding-runtime-progress__indeterminate"

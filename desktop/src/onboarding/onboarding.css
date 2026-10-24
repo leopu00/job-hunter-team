@@ -1218,3 +1218,8 @@
   display: block;
   margin-top: 6px;
 }
+
+.onboarding-runtime-phase { display: grid; gap: 6px; margin-top: 10px; }
+.onboarding-runtime-phase small { color: var(--color-muted); font-size: 11px; line-height: 1.45; }
+.onboarding-runtime-phase__pull { display: grid; gap: 4px; }
+.onboarding-runtime-phase__pull progress { width: 100%; height: 6px; accent-color: var(--color-green); }
