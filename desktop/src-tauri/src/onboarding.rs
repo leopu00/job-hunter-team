@@ -2906,16 +2906,19 @@ fn snapshot_reason(stderr: &[u8]) -> Option<String> {
 /// Nothing in this probe can create, start, stop, or wake a runtime. A failed
 /// read is an inactive snapshot, like the former wrapper protocol, not a
 /// reason to try `up`.
-struct LocalTeamStatusPaths {
-    runtime: PathBuf,
-    compose: PathBuf,
-    podman_compose: Option<PathBuf>,
-}
-
+///
+/// The team container is found by the labels compose puts on it
+/// (`docker ps -a -q --filter label=…`), never by running compose: compose
+/// would need the project name and provider the wrapper sets in its own
+/// environment, and `docker-compose.exe` is not in the attested manifest.
+///
+/// The whole read has one deadline, `budget`: each command gets what is left
+/// of it, and once it is spent no further command runs. A stuck engine costs
+/// one budget, not one timeout per command.
+#[cfg_attr(not(windows), allow(dead_code))]
 fn native_team_snapshot_with(
-    paths: &LocalTeamStatusPaths,
-    podman: bool,
-    mut run: impl FnMut(Vec<OsString>, Option<&[u8]>) -> Result<ProcessResult, &'static str>,
+    budget: Duration,
+    mut run: impl FnMut(Vec<OsString>, Option<&[u8]>, Duration) -> Result<ProcessResult, &'static str>,
 ) -> (OnboardingSnapshot, Option<String>) {
     const INACTIVE: OnboardingSnapshot = OnboardingSnapshot {
         runtime_installed: true,
@@ -2932,25 +2935,37 @@ fn native_team_snapshot_with(
     const METADATA: &[u8] = br#"const fs=require('fs');let config={};try{config=JSON.parse(fs.readFileSync('/jht_home/jht.config.json','utf8'))}catch{}const provider=String(config.active_provider||'').toLowerCase();const providers=config.providers||{};const entry=providers[provider]||{};const configured=['claude','anthropic','codex','openai','kimi','moonshot'].includes(provider)&&(entry.auth_method||'subscription')==='subscription';const markers={claude:'/jht_home/.claude/.credentials.json',anthropic:'/jht_home/.claude/.credentials.json',codex:'/jht_home/.codex/auth.json',openai:'/jht_home/.codex/auth.json',kimi:'/jht_home/.kimi/credentials/kimi-code.json',moonshot:'/jht_home/.kimi/credentials/kimi-code.json'};process.stdout.write(`${configured?1:0} ${markers[provider]&&fs.existsSync(markers[provider])?1:0} ${fs.existsSync('/jht_home/profile/welcomed.flag')?1:0}`);"#;
 
     let command = |words: &[&str]| words.iter().map(OsString::from).collect::<Vec<_>>();
-    let mut compose = vec![OsString::from("compose"), OsString::from("-f"), paths.compose.as_os_str().to_owned()];
-    if podman {
-        let Some(override_file) = paths.podman_compose.as_ref() else {
-            return (INACTIVE, Some("runtime_untrusted: missing Podman compose file".to_owned()));
-        };
-        compose.extend([OsString::from("-f"), override_file.as_os_str().to_owned()]);
-    }
-    compose.extend([OsString::from("--project-directory"), paths.runtime.as_os_str().to_owned(), OsString::from("ps"), OsString::from("-q")]);
-    if !podman {
-        compose.push(OsString::from("jht"));
-    }
-    let ids = match run(compose, None) {
-        Ok(result) if result.success() => result.stdout_text(),
-        _ => return (INACTIVE, Some("container_not_found: compose listing unavailable".to_owned())),
+    let started = Instant::now();
+    let mut run = |args: Vec<OsString>, input: Option<&[u8]>| {
+        let left = budget.saturating_sub(started.elapsed());
+        if left.is_zero() {
+            return Err("timeout");
+        }
+        run(args, input, left)
     };
+    // Docker Compose's labels first; Podman Compose's only when there is nothing under the first.
+    let mut ids = String::new();
+    for (project, service) in [
+        ("com.docker.compose.project", "com.docker.compose.service"),
+        ("io.podman.compose.project", "io.podman.compose.service"),
+    ] {
+        let listing = command(&[
+            "ps", "-a", "-q",
+            "--filter", &format!("label={project}=jht"),
+            "--filter", &format!("label={service}=jht"),
+        ]);
+        match run(listing, None) {
+            Ok(result) if result.success() => ids = result.stdout_text(),
+            _ => return (INACTIVE, Some("container_not_found: container listing unavailable".to_owned())),
+        }
+        if ids.lines().any(|line| !line.trim().is_empty()) {
+            break;
+        }
+    }
     let mut found = None;
     for id in ids.lines().map(str::trim).filter(|line| !line.is_empty()) {
         if !(12..=64).contains(&id.len()) || !id.bytes().all(|byte| byte.is_ascii_hexdigit()) {
-            return (INACTIVE, Some("container_not_found: compose listed an invalid id".to_owned()));
+            return (INACTIVE, Some("container_not_found: the listing returned an invalid id".to_owned()));
         }
         let details = match run(command(&["inspect", "--type", "container", id, "--format", "{{.State.Running}}|{{json .Config.Labels}}"]), None) {
             Ok(result) if result.success() => result.stdout_text(),
@@ -3049,18 +3064,13 @@ fn native_windows_team_snapshot(
     if selected.trim() != "podman" {
         return Ok((OnboardingSnapshot::default(), Some("runtime_untrusted".to_owned())));
     }
-    let paths = LocalTeamStatusPaths {
-        runtime: runtime.clone(),
-        compose: runtime.join("docker-compose.yml"),
-        podman_compose: Some(runtime.join("docker-compose.podman.yml")),
-    };
-    let (snapshot, reason) = native_team_snapshot_with(&paths, true, |args, input| {
+    let (snapshot, reason) = native_team_snapshot_with(SNAPSHOT_TIMEOUT, |args, input, timeout| {
         let started = Instant::now();
-        let (result, stderr) = run_program_keeping_stderr(
+        let (result, _stderr) = run_program_keeping_stderr(
             engine.to_str().ok_or("runtime_missing")?,
             args,
             input,
-            SNAPSHOT_TIMEOUT,
+            timeout,
         );
         if let Some(log) = log {
             // A profile validation can have private details on stdout. Keep
@@ -5417,7 +5427,7 @@ mod tests {
         InteractiveStateDetector, LocalCliOperation, OnboardingDiagnosticHostKind,
         OnboardingDiagnosticSink, OnboardingProgress, OnboardingProgressStage,
         OnboardingProgressStatus, OnboardingSubmission, ProgressReporter, StartLimits,
-        StreamRedactor, SubscriptionProvider, LocalTeamStatusPaths, DIAGNOSTIC_MAX_BYTES, DIAGNOSTIC_MAX_RECORDS,
+        StreamRedactor, SubscriptionProvider, DIAGNOSTIC_MAX_BYTES, DIAGNOSTIC_MAX_RECORDS,
         INSTALL_SHA256, REMOTE_INSTALL, REMOTE_SNAPSHOT,
     };
     use super::{
@@ -5440,32 +5450,41 @@ mod tests {
     use std::{
         collections::VecDeque,
         ffi::OsString,
-        path::PathBuf,
         sync::{Arc, Mutex},
         thread,
         time::{Duration, Instant},
     };
 
+    const DOCKER_LABELS: &str = r#"{"com.docker.compose.project":"jht","com.docker.compose.service":"jht"}"#;
+    const PODMAN_LABELS: &str = r#"{"io.podman.compose.project":"jht","io.podman.compose.service":"jht"}"#;
+    const WHOLE_READ: Duration = Duration::from_secs(25);
+
+    fn reply(stdout: &str) -> ProcessResult {
+        ProcessResult { code: 0, stdout: stdout.as_bytes().to_vec() }
+    }
+
+    fn words_of(commands: &[(Vec<OsString>, Option<Vec<u8>>)]) -> Vec<String> {
+        commands
+            .iter()
+            .flat_map(|(args, _)| args.iter())
+            .map(|word| word.to_string_lossy().into_owned())
+            .collect()
+    }
+
     #[test]
     fn native_team_snapshot_reads_only_the_attested_team_without_waking_it() {
-        let paths = LocalTeamStatusPaths {
-            runtime: PathBuf::from("/trusted/runtime"),
-            compose: PathBuf::from("/trusted/runtime/docker-compose.yml"),
-            podman_compose: Some(PathBuf::from("/trusted/runtime/docker-compose.podman.yml")),
-        };
         let id = "a".repeat(64);
-        let labels = r#"{"io.podman.compose.project":"jht","io.podman.compose.service":"jht"}"#;
         let mut replies = VecDeque::from([
-            ProcessResult { code: 0, stdout: format!("{id}\n").into_bytes() },
-            ProcessResult { code: 0, stdout: format!("true|{labels}\n").into_bytes() },
-            ProcessResult { code: 0, stdout: b"1 1 1".to_vec() },
-            ProcessResult { code: 0, stdout: Vec::new() },
-            ProcessResult { code: 0, stdout: Vec::new() },
-            ProcessResult { code: 0, stdout: Vec::new() },
-            ProcessResult { code: 0, stdout: b"true\n".to_vec() },
+            reply(&format!("{id}\n")),
+            reply(&format!("true|{PODMAN_LABELS}\n")),
+            reply("1 1 1"),
+            reply(""),
+            reply(""),
+            reply(""),
+            reply("true\n"),
         ]);
         let mut commands = Vec::new();
-        let (snapshot, reason) = native_team_snapshot_with(&paths, true, |args, input| {
+        let (snapshot, reason) = native_team_snapshot_with(WHOLE_READ, |args, input, _| {
             commands.push((args, input.map(ToOwned::to_owned)));
             Ok(replies.pop_front().expect("one reply per read"))
         });
@@ -5474,12 +5493,18 @@ mod tests {
         assert!(snapshot.assistant_running && snapshot.captain_running && snapshot.profile_ready);
         assert_eq!(reason, None);
         assert!(replies.is_empty());
-        let words = commands
-            .iter()
-            .flat_map(|(args, _)| args.iter())
-            .map(|word| word.to_string_lossy().into_owned())
-            .collect::<Vec<_>>();
-        assert!(words.windows(2).any(|pair| pair == ["compose", "-f"]));
+        let words = words_of(&commands);
+        // The team is listed by its labels, never through compose: no project name, no provider, no
+        // `docker-compose.exe` (it is not in the attested manifest) and no environment to set.
+        assert_eq!(
+            commands[0].0.iter().map(|word| word.to_string_lossy().into_owned()).collect::<Vec<_>>(),
+            [
+                "ps", "-a", "-q",
+                "--filter", "label=com.docker.compose.project=jht",
+                "--filter", "label=com.docker.compose.service=jht",
+            ]
+        );
+        assert!(words.iter().all(|word| word != "compose" && !word.ends_with(".yml") && word != "--project-directory"));
         assert!(words.iter().all(|word| !matches!(word.as_str(), "up" | "start" | "restart" | "stop")));
         assert!(commands.iter().any(|(args, input)| {
             args.iter().map(OsString::as_os_str).any(|word| word == "node") && input.is_some()
@@ -5487,24 +5512,78 @@ mod tests {
     }
 
     #[test]
+    fn native_team_snapshot_looks_for_podman_compose_labels_only_when_docker_ones_find_nothing() {
+        let id = "b".repeat(64);
+        let mut replies = VecDeque::from([
+            reply(""),
+            reply(&format!("{id}\n")),
+            reply(&format!("true|{PODMAN_LABELS}\n")),
+            reply("1 1 1"),
+            reply(""),
+            reply(""),
+            reply(""),
+            reply("true\n"),
+        ]);
+        let mut commands = Vec::new();
+        let (snapshot, _) = native_team_snapshot_with(WHOLE_READ, |args, input, _| {
+            commands.push((args, input.map(ToOwned::to_owned)));
+            Ok(replies.pop_front().expect("one reply per read"))
+        });
+        assert!(snapshot.container_running);
+        assert!(replies.is_empty());
+        let second = commands[1].0.iter().map(|word| word.to_string_lossy().into_owned()).collect::<Vec<_>>();
+        assert_eq!(second[3..], ["--filter", "label=io.podman.compose.project=jht", "--filter", "label=io.podman.compose.service=jht"]);
+        // nothing to list under either family: no team, and nothing else is run
+        let mut calls = 0;
+        let (snapshot, reason) = native_team_snapshot_with(WHOLE_READ, |_, _, _| {
+            calls += 1;
+            Ok(reply(""))
+        });
+        assert!(!snapshot.container_running);
+        assert_eq!(reason, Some("container_not_found: no running team container".to_owned()));
+        assert_eq!(calls, 2);
+    }
+
+    #[test]
     fn native_team_snapshot_rejects_mixed_compose_label_families() {
-        let paths = LocalTeamStatusPaths {
-            runtime: PathBuf::from("/trusted/runtime"),
-            compose: PathBuf::from("/trusted/runtime/docker-compose.yml"),
-            podman_compose: Some(PathBuf::from("/trusted/runtime/docker-compose.podman.yml")),
-        };
         let id = "a".repeat(64);
         let labels = r#"{"com.docker.compose.project":"jht","io.podman.compose.service":"jht"}"#;
         let mut replies = VecDeque::from([
-            ProcessResult { code: 0, stdout: format!("{id}\n").into_bytes() },
-            ProcessResult { code: 0, stdout: format!("true|{labels}\n").into_bytes() },
+            reply(&format!("{id}\n")),
+            reply(&format!("true|{labels}\n")),
         ]);
-        let (snapshot, reason) = native_team_snapshot_with(&paths, true, |_, _| {
-            Ok(replies.pop_front().expect("only compose and inspect run"))
+        let (snapshot, reason) = native_team_snapshot_with(WHOLE_READ, |_, _, _| {
+            Ok(replies.pop_front().expect("only the listing and inspect run"))
         });
         assert!(!snapshot.container_running);
         assert_eq!(reason, Some("container_not_found: no running team container".to_owned()));
         assert!(replies.is_empty());
+    }
+
+    #[test]
+    fn native_team_snapshot_has_one_deadline_for_the_whole_read() {
+        // A stuck engine: every command takes 60 ms of a 100 ms budget. Each one is given only what is
+        // left, and once the budget is spent none runs: the read costs one budget, not one timeout each.
+        let id = "c".repeat(64);
+        let mut replies = VecDeque::from([reply(&format!("{id}\n")), reply(&format!("true|{DOCKER_LABELS}\n"))]);
+        let mut given = Vec::new();
+        let (snapshot, _) = native_team_snapshot_with(Duration::from_millis(100), |_, _, timeout| {
+            given.push(timeout);
+            thread::sleep(Duration::from_millis(60));
+            Ok(replies.pop_front().unwrap_or_else(|| reply("")))
+        });
+        assert!(!snapshot.container_running, "the read did not finish in its budget");
+        assert!(!given.is_empty() && given.len() <= 2, "{given:?}");
+        assert!(given.iter().all(|timeout| *timeout <= Duration::from_millis(100)));
+        assert!(given.windows(2).all(|pair| pair[1] < pair[0]), "each command gets less than the one before: {given:?}");
+        // with no budget at all, no command is run
+        let mut calls = 0;
+        let (snapshot, _) = native_team_snapshot_with(Duration::ZERO, |_, _, _| {
+            calls += 1;
+            Ok(reply(""))
+        });
+        assert!(!snapshot.container_running);
+        assert_eq!(calls, 0);
     }
 
     #[test]
