@@ -110,6 +110,7 @@ export default function BackupPage(_props: PageProps) {
     setInspecting(false);
   }
 
+  const showBar = progress?.phase === "copy" && progress.total > 0;
   const percent = progress && progress.total > 0 ? Math.min(100, Math.round((progress.done / progress.total) * 100)) : null;
   const manifest = opened?.manifest;
   const total = manifest ? manifest.files.reduce((sum, file) => sum + file.bytes, 0) : 0;
@@ -151,10 +152,10 @@ export default function BackupPage(_props: PageProps) {
           <div data-testid="backup-progress" className="flex flex-col gap-1">
             <span className="text-[11px] text-[var(--color-bright)]">
               {t[PHASE_KEY[progress.phase]]}
-              {progress.total > 0 && ` · ${sizeText(progress.done, locale)} / ${sizeText(progress.total, locale)}`}
+              {showBar && ` · ${sizeText(progress.done, locale)} / ${sizeText(progress.total, locale)}`}
             </span>
-            {/* a size is shown only when the phase has one: no invented percentage while planning */}
-            {percent !== null && <progress aria-label={t[PHASE_KEY[progress.phase]]} max={100} value={percent} className="w-full" />}
+            {/* sizes and bar only while files are copied: the other phases have a total but no count of their own, and a bar stuck at zero looks like a block */}
+            {showBar && percent !== null && <progress aria-label={t[PHASE_KEY[progress.phase]]} max={100} value={percent} className="w-full" />}
           </div>
         )}
         {createSay && (

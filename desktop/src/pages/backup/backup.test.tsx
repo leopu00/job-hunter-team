@@ -56,7 +56,10 @@ describe("the backup page: before saving", () => {
     render(<BackupPage {...props} />);
     const note = screen.getByTestId("backup-personal-data");
     expect(note).toHaveTextContent("not encrypted and contains personal data");
-    expect(note).toHaveTextContent(/secrets, provider sign-ins, cloud tokens or logs/);
+    // it says what stays out and what goes in as it is, so nobody takes a pasted password for protected
+    expect(note).toHaveTextContent("Provider keys, sign-ins, cloud tokens and logs are not included.");
+    expect(note).toHaveTextContent("Chats and documents are copied as they are: if you wrote a password in them, it is in the file.");
+    expect(note).not.toHaveTextContent(/never contains/i);
     expect(note.compareDocumentPosition(screen.getByTestId("backup-create-button")) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(note.compareDocumentPosition(screen.getByTestId("backup-inspect-button")) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
@@ -109,6 +112,13 @@ describe("the backup page: making one", () => {
     act(() => emit({ phase: "plan", done: 0, total: 0 }));
     const progress = screen.getByTestId("backup-progress");
     expect(progress).toHaveTextContent("Preparing the copy");
+    expect(within(progress).queryByRole("progressbar")).toBeNull();
+    // a phase with a total but no count of its own shows no bar and no «0 B»: it would look stuck
+    act(() => emit({ phase: "snapshot", done: 0, total: 2_097_152 }));
+    expect(progress).toHaveTextContent("Consistent copy of the database");
+    expect(progress).not.toHaveTextContent("0 B");
+    expect(within(progress).queryByRole("progressbar")).toBeNull();
+    act(() => emit({ phase: "verify", done: 0, total: 2_097_152 }));
     expect(within(progress).queryByRole("progressbar")).toBeNull();
     act(() => emit({ phase: "copy", done: 524_288, total: 2_097_152 }));
     expect(progress).toHaveTextContent("Transferring the files · 512 kB / 2 MB");
