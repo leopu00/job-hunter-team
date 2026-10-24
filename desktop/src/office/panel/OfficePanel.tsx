@@ -73,10 +73,11 @@ export default function OfficePanel(props: OfficePanelProps) {
     <aside
       ref={self}
       tabIndex={-1}
+      data-testid="office-panel"
       // its keys are its own: the arrows scroll the list, the camera stays (controls.ts)
       {...{ [OWN_KEYS_ATTR]: "" }}
       aria-label={t.detailsAria}
-      className="absolute right-3 top-3 bottom-3 z-20 flex w-[380px] focus:outline-none max-w-[calc(100%-24px)] flex-col overflow-hidden rounded border border-[var(--color-border)] bg-[var(--color-panel)] shadow-2xl"
+      className="absolute inset-x-3 bottom-3 top-3 z-20 flex max-w-[calc(100%-24px)] flex-col overflow-hidden rounded border border-[var(--color-border)] bg-[var(--color-panel)] shadow-2xl focus:outline-none lg:static lg:my-3 lg:mr-3 lg:w-[380px] lg:max-w-[380px]"
       onPointerDown={(e) => e.stopPropagation()}
     >
       <button

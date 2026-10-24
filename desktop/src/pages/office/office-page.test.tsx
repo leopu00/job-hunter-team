@@ -200,7 +200,11 @@ describe("the office page", () => {
     const panel = await screen.findByRole("complementary", { name: "Dettagli dell'ufficio" });
     expect(within(panel).getByRole("heading", { name: "SCOUT-1" })).toBeInTheDocument();
     expect(currentLocation()).toEqual({ path: "/office", search: "" });
-    // the scene stays mounted under the panel
+    // The inspector stays in the office workspace. On desktop it takes its own
+    // column; on a narrow screen its absolute layout still keeps the scene usable.
+    expect(screen.getByTestId("office-workspace")).toContainElement(screen.getByTestId("office-panel"));
+    expect(screen.getByTestId("office-panel").className).toContain("lg:static");
+    // The scene stays mounted while its inspector is open.
     expect(screen.getByTestId("office-canvas")).toBeInTheDocument();
 
     act(() => scene.options!.onClick(null));
