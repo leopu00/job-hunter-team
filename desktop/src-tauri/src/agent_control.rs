@@ -230,7 +230,7 @@ impl ControlRequest {
 }
 
 // ── where the team is ───────────────────────────────────────────────────────
-enum Destination {
+pub(crate) enum Destination {
     /// An existing team, linked: its pinned container.
     Vps { validated: ValidatedHost, team_id: String, runtime: RuntimeTarget, mode: VpsMode, label: String },
     /// The VPS the app set up itself (no existing team registered): its host's jht wrapper.
@@ -240,7 +240,7 @@ enum Destination {
 
 /// The jht wrapper of the person's own VPS, as the setup installed it, and only when it carries
 /// the protocol line of what is asked (2 otherwise: «update the team»).
-fn own_vps_wrapper(protocol: &str, operation: &str) -> String {
+pub(crate) fn own_vps_wrapper(protocol: &str, operation: &str) -> String {
     format!(
         r#"set -eu; JHT_BIN="$(command -v jht 2>/dev/null || true)"; [ -n "$JHT_BIN" ] || JHT_BIN="$HOME/.local/bin/jht"; [ -f "$JHT_BIN" ] && [ -x "$JHT_BIN" ] && [ ! -L "$JHT_BIN" ] || exit 2; grep -Fqx '{protocol}' "$JHT_BIN" || exit 2; exec "$JHT_BIN" {operation}"#
     )
@@ -268,7 +268,7 @@ fn fingerprint(parts: &[&str]) -> String {
     format!("{:x}", hasher.finalize())[..32].to_owned()
 }
 
-fn destination(app: &tauri::AppHandle, scope: &AccountScope) -> Result<(Destination, String), &'static str> {
+pub(crate) fn destination(app: &tauri::AppHandle, scope: &AccountScope) -> Result<(Destination, String), &'static str> {
     // The team is where the app keeps it: a persisted VPS host, or this computer.
     if let Ok(host @ ExecutionHost::Vps { .. }) = direct_chat::load_persisted_host(app, scope) {
         // the host key is pinned, or nothing goes there
@@ -653,7 +653,7 @@ pub(crate) fn answer(request: &ControlRequest, output: &ProcessResult, target: &
 
 /// How a destination may be controlled: an existing team by its link, the person's own VPS
 /// as a full link, this computer always (None).
-fn destination_mode(destination: &Destination) -> Option<VpsMode> {
+pub(crate) fn destination_mode(destination: &Destination) -> Option<VpsMode> {
     match destination {
         Destination::Vps { mode, .. } => Some(*mode),
         Destination::OwnVps { state, .. } => Some(if *state == OwnVpsState::Marked { VpsMode::Full } else { VpsMode::ReadOnly }),
