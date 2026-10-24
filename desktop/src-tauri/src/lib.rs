@@ -121,6 +121,8 @@ pub fn run() {
             onboarding::onboarding_local_uninstall,
             runtime_log::onboarding_runtime_log,
             runtime_log::onboarding_runtime_log_open,
+            runtime_log::onboarding_support_context,
+            runtime_log::onboarding_support_report_save,
             onboarding::onboarding_prepare,
             onboarding::onboarding_provider_login,
             onboarding::onboarding_provider_login_close,

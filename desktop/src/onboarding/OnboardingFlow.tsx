@@ -1,4 +1,5 @@
 import { FormEvent, KeyboardEvent, useEffect, useLayoutEffect, useRef, useState } from "react";
+import type { Locale } from "@/i18n/config";
 import SshKeyPicker from "../components/SshKeyPicker";
 import type {
   ExecutionHost,
@@ -23,6 +24,7 @@ import { LOGIN_TEXT } from "../components/login-screen.i18n";
 import { fill } from "../lib/text-slots";
 import { ONBOARDING_TEXT, type OnboardingCopy } from "./onboarding.i18n";
 import { WINDOWS_SETUP } from "./windows-setup";
+import { SetupSupportReport } from "./SetupSupportReport";
 import "./onboarding.css";
 
 function emptyVpsHost(): ExecutionHost {
@@ -89,7 +91,7 @@ function formatElapsed(milliseconds: number): string {
   return `${String(minutes).padStart(2, "0")}:${String(seconds % 60).padStart(2, "0")}`;
 }
 
-function RuntimeView({ host, platform, t, locale, runtime, activity, onRetry, onRestart, onExitFailure, onRuntimeAction, providerLogin, sshHostKey, onConfirmHostKey, onCancelHostKey, onProviderInput, onProviderClose, onProviderRestart, onRecreatePodmanMachine, onFreeDiskSpace, runtimeLogPath, onOpenRuntimeLog }: Pick<OnboardingFlowProps, "platform" | "runtime" | "activity" | "onRetry" | "onRestart" | "onExitFailure" | "onRuntimeAction" | "providerLogin" | "sshHostKey" | "onConfirmHostKey" | "onCancelHostKey" | "onProviderInput" | "onProviderClose" | "onProviderRestart" | "onRecreatePodmanMachine" | "onFreeDiskSpace" | "runtimeLogPath" | "onOpenRuntimeLog"> & { host: ExecutionHost; t: OnboardingCopy; locale: string }) {
+function RuntimeView({ host, platform, t, locale, runtime, activity, onRetry, onRestart, onExitFailure, onRuntimeAction, providerLogin, sshHostKey, onConfirmHostKey, onCancelHostKey, onProviderInput, onProviderClose, onProviderRestart, onRecreatePodmanMachine, onFreeDiskSpace, runtimeLogPath, onOpenRuntimeLog }: Pick<OnboardingFlowProps, "platform" | "runtime" | "activity" | "onRetry" | "onRestart" | "onExitFailure" | "onRuntimeAction" | "providerLogin" | "sshHostKey" | "onConfirmHostKey" | "onCancelHostKey" | "onProviderInput" | "onProviderClose" | "onProviderRestart" | "onRecreatePodmanMachine" | "onFreeDiskSpace" | "runtimeLogPath" | "onOpenRuntimeLog"> & { host: ExecutionHost; t: OnboardingCopy; locale: Locale }) {
   const [pending, setPending] = useState(false);
   const [confirmingRecreate, setConfirmingRecreate] = useState(false);
   const [confirmingFreeSpace, setConfirmingFreeSpace] = useState(false);
@@ -342,6 +344,7 @@ function RuntimeView({ host, platform, t, locale, runtime, activity, onRetry, on
               </dl>
             </details>
           )}
+          {failed && <SetupSupportReport stage={runtime.stage} code={runtime.code} locale={locale} />}
           {runtime.stage === "ssh-host-key" && sshHostKey && (
             <section className="onboarding-provider-console" aria-label={t.hostKeyAria}>
               <div className="onboarding-provider-console__heading"><div><strong>{t.hostKeyTitle}</strong><small>{t.hostKeyText}</small></div></div>

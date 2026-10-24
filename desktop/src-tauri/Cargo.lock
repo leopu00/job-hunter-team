@@ -2009,6 +2009,7 @@ dependencies = [
  "keyring",
  "libc",
  "open",
+ "regex",
  "reqwest",
  "rustix",
  "serde",
