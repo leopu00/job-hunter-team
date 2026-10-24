@@ -1931,9 +1931,7 @@ fn install_local_windows(
             .is_some_and(|dir| release_channel::installed_runtime_reusable(channel.as_ref(), &dir))
         {
             show_windows_support_notice_for_reused_runtime(phase);
-            if !crate::windows_runtime::register_autostart(&wrapper) {
-                phase("ui_notice_autostart_inactive");
-            }
+            register_autostart_noted(&wrapper, log, phase);
             trace_local_runtime("runtime", "install_reused");
             return Ok(wrapper);
         }
@@ -1984,10 +1982,30 @@ fn install_local_windows(
         result
     })?;
     let wrapper = wrapper_path(app).ok_or_else(|| failure("runtime_missing"))?;
-    if !crate::windows_runtime::register_autostart(&wrapper) {
+    register_autostart_noted(&wrapper, log, phase);
+    Ok(wrapper)
+}
+
+/// The logon task of this user, registered after an install or a reuse. How it
+/// ended goes to the runtime log by its closed step and exit code; when it did
+/// not, the person is told (`autostart_inactive`) and the setup goes on.
+#[cfg(windows)]
+fn register_autostart_noted(wrapper: &Path, log: Option<&RuntimeLog>, phase: &dyn Fn(&'static str)) {
+    let started = Instant::now();
+    let result = crate::windows_runtime::register_autostart(wrapper);
+    if let Some(log) = log {
+        let (step, ended) = match &result {
+            Ok(()) => ("autostart registered".to_owned(), Ok(0)),
+            Err(failure) => (
+                format!("autostart {}", failure.step),
+                failure.exit.map_or(Err("process_start_failed"), Ok),
+            ),
+        };
+        log.record(&step, ended, &[], &[], started.elapsed());
+    }
+    if result.is_err() {
         phase("ui_notice_autostart_inactive");
     }
-    Ok(wrapper)
 }
 
 /// A file from `url`, at most MAX_INSTALLER_BYTES, refused before the network
