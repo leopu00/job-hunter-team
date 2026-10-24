@@ -164,7 +164,7 @@ fn run(destination: &Destination, request: &Request) -> Result<ProcessResult, &'
             let remote = own_vps_wrapper("JHT_AGENT_CONTROL_PROTOCOL=1", &format!("agent-control settings {verb}"));
             run_ssh_command(validated, &remote, input.as_deref(), RUN_TIMEOUT, None)
         }
-        Destination::Local { wrapper } => {
+        Destination::Local { wrapper, .. } => {
             crate::onboarding::run_verified_local_wrapper(wrapper, &["agent-control", "settings", verb], input.as_deref(), RUN_TIMEOUT)
         }
     }
