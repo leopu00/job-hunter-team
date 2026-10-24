@@ -207,7 +207,8 @@ export function LoginScreen({
     }
   }, [localBusy, onRecoverLocalPlayground]);
 
-  const hasSavedLocalProfile = Boolean(readLocal());
+  const savedLocalProfile = readLocal();
+  const hasSavedLocalProfile = Boolean(savedLocalProfile);
 
   return (
     <main className="page login-screen" lang={locale}>
@@ -302,7 +303,8 @@ export function LoginScreen({
               onClick={() => void useLocal()}
               disabled={localBusy}
             >
-              {localBusy ? t.preparing : t.useLocal}
+              {/* a saved profile is reopened, not created: the button says whose it is */}
+              {localBusy ? t.preparing : savedLocalProfile ? t.useLocalAs.replace("{name}", savedLocalProfile.displayName) : t.useLocal}
             </button>
             {onResetLocalPlayground && hasSavedLocalProfile && (
               <button

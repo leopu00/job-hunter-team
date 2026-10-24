@@ -63,6 +63,9 @@ describe("login and wizard locale policy", () => {
     await user.type(screen.getByRole("textbox", { name }), "Synthetic");
     await user.click(screen.getByRole("button", { name: next }));
     expect(screen.getByRole("heading", { name: ONBOARDING_TEXT[locale].hello("Synthetic") })).toBeInTheDocument();
+    // Backup and export need a team: the first setup says when they open, in the person's language.
+    expect(screen.getByTestId("backup-export-note")).toHaveTextContent(ONBOARDING_TEXT[locale].backupExportNote);
+    expect(ONBOARDING_TEXT[locale].backupExportNote.length).toBeGreaterThan(20);
     expect(localStorage.getItem("jht-lang")).toBeNull();
     expect(document.cookie).not.toContain("NEXT_LOCALE=");
   });
@@ -78,6 +81,18 @@ describe("login and wizard locale policy", () => {
   it("uses English rather than forced Italian for an unsupported system language", () => {
     system("ja-JP"); render(<Transition />);
     expect(screen.getByRole("button", { name: "Use locally" })).toBeInTheDocument();
+  });
+  const savedLabels: Array<[Locale, string]> = [
+    ["it", "Continua come Synthetic"], ["en", "Continue as Synthetic"], ["de", "Weiter als Synthetic"],
+    ["fr", "Continuer en tant que Synthetic"], ["es", "Continuar como Synthetic"],
+    ["pt", "Continuar como Synthetic"], ["hu", "Folytatás mint Synthetic"],
+  ];
+  it.each(savedLabels)("with a saved local profile the button says whose it is, in %s", (locale, label) => {
+    system(`${locale}-${locale.toUpperCase()}`);
+    render(<LoginScreen configured loadBrowsers={noBrowsers} readLocal={() => ({ profileId: "p-1", displayName: "Synthetic" })} />);
+    expect(screen.getByRole("button", { name: label })).toBeInTheDocument();
+    // «Use locally» promises a new profile: with one saved, that is not what the button does.
+    for (const [, local] of entries) expect(screen.queryByRole("button", { name: local })).toBeNull();
   });
   it("uses the same locale for login error text and login actions", () => {
     system("en-US");

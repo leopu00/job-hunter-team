@@ -565,6 +565,8 @@ export function OnboardingFlow({ account, onRenameLocalProfile, platform, runtim
             <div className="onboarding-account-mark" aria-hidden="true">{(account.displayName || "J").trim().charAt(0).toUpperCase() || "J"}</div>
             <p className="onboarding-eyebrow">{account.identity === "local" ? t.welcomeEyebrowLocal : t.welcomeEyebrowAccount}</p><h2 ref={headingRef} tabIndex={-1}>{t.hello(account.displayName ?? "")}</h2>
             <p className="onboarding-lede">{account.identity === "local" ? t.welcomeLedeLocal : t.welcomeLedeAccount}</p>
+            {/* no Settings bar yet: backup and export work on the team's database, so say when they open */}
+            <small className="onboarding-hint" data-testid="backup-export-note">{t.backupExportNote}</small>
             {account.identity === "local" && onRenameLocalProfile && <label className="onboarding-field onboarding-field--full"><span>{t.profileName}</span><input aria-label={t.profileName} value={profileName} maxLength={80} onChange={(event) => setProfileName(event.target.value)} onBlur={() => {
               if (profileName.trim() && profileName.trim() !== account.displayName) onRenameLocalProfile(profileName);
             }} required /><small className="onboarding-hint">{t.profileNameHint}</small></label>}
