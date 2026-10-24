@@ -18,3 +18,15 @@ def call(op, args):
     if op == "apply.revoke":
         return {"ok": True, "status": "revoked"}
     return {"ok": False, "reason": "unknown_operation"}
+
+
+# A browser test often fills a page with `page.set_content(...)`: its URL is `about:blank`, and the
+# flow asks the broker for the destination of the PAGE it is about to submit, so it ended
+# `destination_invalid` (a page with no host has no closed destination, as it must in production).
+# In the suite such a page stands for a company's own site.
+STAND_IN_PAGE_URL = "https://careers.example.com/"
+
+
+def claim_page_url(url):
+    """The URL the suite claims for: the page's own when it is a web page, else the stand-in."""
+    return url if isinstance(url, str) and url.startswith(("http://", "https://")) else STAND_IN_PAGE_URL
