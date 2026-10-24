@@ -21,7 +21,7 @@ use regex::Regex;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::{
-    fs::{self, File, OpenOptions},
+    fs::{self, OpenOptions},
     io::{self, BufWriter, Write},
     path::{Path, PathBuf},
     sync::OnceLock,
@@ -43,7 +43,7 @@ const SOURCES: [&str; 6] = ["positions", "scores", "applications", "companies", 
 
 /// One page of a source: at most PAGE_BUDGET bytes of rows (and 200 rows), in the order of the table's own
 /// row id, after the last one seen. A column missing from an older database is left out, not an error; a
-/// database or a table that is not there yet is no rows. The columns of each source are the closed list below:
+/// table that is not there yet is no rows; a database that is not there is `export_no_database`. The columns of each source are the closed list below:
 /// what a person owns about a position, an application or a company, and nothing that points inside the team.
 const TEAM_EXPORT_PY: &str = r#"import json,math,os,re,sqlite3,sys
 PAGE_BUDGET=900000
@@ -75,7 +75,9 @@ def page(columns,rows,last,done): emit({'ok':True,'columns':list(columns),'rows'
 try:
  try: os.lstat('/jht_home/jobs.db'); absent=False
  except FileNotFoundError: absent=os.path.isdir('/jht_home')
- if absent: page(allowed,[],None,True)
+ # No jobs.db where the app reads it (a team that never ran, or one that keeps it elsewhere): saying so, never an
+ # empty file that looks like a team with no data.
+ if absent: fail('export_no_database')
  db=sqlite3.connect('file:/jht_home/jobs.db?mode=ro',uri=True); db.execute('PRAGMA query_only=ON')
  db.text_factory=lambda raw: raw.decode('utf-8','replace')
  have=[row[1] for row in db.execute('PRAGMA table_info('+table+')')]
@@ -338,6 +340,7 @@ fn parse_page(reply: &Value) -> Result<Page, DirectChatError> {
         return Err(failure(match reply.get("error").and_then(Value::as_str) {
             Some("export_source_invalid") => "export_source_invalid",
             Some("export_range_invalid") => "export_range_invalid",
+            Some("export_no_database") => "export_no_database",
             Some("invalid_request") => "invalid_request",
             _ => "read_failed",
         }));
@@ -488,6 +491,21 @@ where
     sink.finish().map_err(saving)
 }
 
+/// Writes `bytes` to `part` (which must not be there: `create_new` neither follows a link nor truncates a file
+/// that someone put at that name) and renames it to `target` when whole. A failure takes the part away.
+fn write_whole(part: &Path, target: &Path, bytes: &[u8]) -> io::Result<()> {
+    let written = OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(part)
+        .and_then(|mut file| file.write_all(bytes).and_then(|()| file.flush()))
+        .and_then(|()| fs::rename(part, target));
+    if written.is_err() && !matches!(&written, Err(error) if error.kind() == io::ErrorKind::AlreadyExists) {
+        let _ = fs::remove_file(part);
+    }
+    written
+}
+
 /// Saves the account's data the page read from the cloud, in the place the person picks. The page gives
 /// the text; this checks it is one JSON object of a size an account can have, and writes nothing else.
 #[tauri::command]
@@ -505,13 +523,9 @@ pub(crate) async fn export_account_save(app: tauri::AppHandle, window: tauri::Wi
         return Ok(ExportOutcome { outcome: "cancelled", count: None });
     };
     let part = part_path(&target);
-    let saved = File::create(&part).and_then(|mut file| file.write_all(text.as_bytes()).and_then(|()| file.flush())).and_then(|()| fs::rename(&part, &target));
-    match saved {
+    match write_whole(&part, &target, text.as_bytes()) {
         Ok(()) => Ok(ExportOutcome { outcome: "saved", count: None }),
-        Err(_) => {
-            let _ = fs::remove_file(&part);
-            Err(failure("export_save_failed"))
-        }
+        Err(_) => Err(failure("export_save_failed")),
     }
 }
 
@@ -824,10 +838,12 @@ mod tests {
     #[test]
     fn a_team_with_no_database_or_an_older_one_exports_what_it_has_and_does_not_fail() {
         let home = team_home("older");
-        // no jobs.db yet: a team that never ran, no rows
-        let reply = ask(&home, None, json!({"source": "positions"}));
-        assert_eq!((reply["ok"].clone(), reply["done"].clone(), reply["rows"].clone()), (json!(true), json!(true), json!([])));
-        assert!(!columns_of(&reply).is_empty(), "the header is there for a file with no rows");
+        // no jobs.db where the app reads it: told, never an empty file that looks like a team with no data
+        for source in SOURCES {
+            let reply = ask(&home, None, json!({"source": source}));
+            assert_eq!((reply["ok"].clone(), reply["error"].clone()), (json!(false), json!("export_no_database")), "{source}");
+        }
+        assert_eq!(serde_json::to_value(parse_page(&json!({"ok": false, "error": "export_no_database"})).unwrap_err()).unwrap()["code"], "export_no_database");
         // a database from before some columns and some tables
         make_db(&home, "CREATE TABLE applications(id INTEGER PRIMARY KEY, position_id INTEGER, status TEXT, cv_path TEXT); INSERT INTO applications(position_id,status,cv_path) VALUES(1,'draft','/x');", "");
         let reply = ask(&home, None, json!({"source": "applications"}));
@@ -939,6 +955,34 @@ mod tests {
         let error = block_on(write_pages(&part, &checked(Format::Csv), &cols(), UNIX_EPOCH, &mut first, pages(vec![]))).unwrap_err();
         assert_eq!(serde_json::to_value(error).unwrap()["code"], "export_save_failed");
         assert_eq!(fs::read_to_string(&part).unwrap(), "someone else's", "create_new: nothing is replaced");
+        let _ = fs::remove_dir_all(&home);
+    }
+
+    #[test]
+    fn the_accounts_file_is_written_whole_and_never_over_a_name_someone_else_put_there() {
+        let home = team_home("account");
+        let (part, target) = (home.join(".a.json.1.part"), home.join("a.json"));
+        fs::write(&target, "the file the person agreed to replace").unwrap();
+        write_whole(&part, &target, b"{\"data\":{}}").unwrap();
+        assert_eq!(fs::read_to_string(&target).unwrap(), "{\"data\":{}}");
+        assert!(!part.exists(), "renamed, not copied");
+        // a name already there at the part's place (a file, or a link to the person's own file) is not written through
+        let victim = home.join("victim.txt");
+        fs::write(&victim, "precious").unwrap();
+        #[cfg(unix)]
+        std::os::unix::fs::symlink(&victim, &part).unwrap();
+        #[cfg(not(unix))]
+        fs::write(&part, "precious").unwrap();
+        let error = write_whole(&part, &target, b"x").unwrap_err();
+        assert_eq!(error.kind(), io::ErrorKind::AlreadyExists);
+        assert_eq!(fs::read_to_string(&victim).unwrap(), "precious");
+        assert_eq!(fs::read_to_string(&target).unwrap(), "{\"data\":{}}", "the final file was not touched");
+        assert!(part.symlink_metadata().is_ok(), "what was there is left there");
+        // a target that cannot be written leaves no part behind
+        let missing = home.join("no-such-folder").join("b.json");
+        let part_b = home.join(".b.json.1.part");
+        assert!(write_whole(&part_b, &missing, b"x").is_err());
+        assert!(!part_b.exists());
         let _ = fs::remove_dir_all(&home);
     }
 

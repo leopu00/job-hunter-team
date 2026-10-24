@@ -22,6 +22,13 @@ function tr(
 }
 
 const COPY_BY_ENGLISH_TEXT: Readonly<Record<string, ErrorTranslations>> = {
+  "The team’s database is not where the app looks for it, so no file was saved: an empty file would look like a team with no data.": {
+    de: ["Die Datenbank des Teams ist nicht dort, wo die App sie sucht, deshalb wurde keine Datei gespeichert: Eine leere Datei würde wie ein Team ohne Daten aussehen.", "Prüfe, ob das Team mindestens einmal gestartet wurde und seine Datenbank am Standardort liegt, und versuche es erneut."],
+    es: ["La base de datos del equipo no está donde la app la busca, así que no se ha guardado ningún archivo: un archivo vacío parecería un equipo sin datos.", "Comprueba que el equipo se haya iniciado al menos una vez y que su base de datos esté en el lugar predeterminado, y vuelve a intentarlo."],
+    fr: ["La base de données de l’équipe n’est pas là où l’app la cherche, donc aucun fichier n’a été enregistré : un fichier vide ressemblerait à une équipe sans données.", "Vérifie que l’équipe a été démarrée au moins une fois et que sa base de données est à l’emplacement par défaut, puis réessaie."],
+    hu: ["A csapat adatbázisa nincs ott, ahol az app keresi, ezért nem lett fájl mentve: egy üres fájl úgy látszana, mintha a csapatnak nem lennének adatai.", "Ellenőrizd, hogy a csapatot elindították-e legalább egyszer, és az adatbázisa az alapértelmezett helyen van-e, majd próbáld újra."],
+    pt: ["A base de dados da equipa não está onde a app a procura, por isso nenhum ficheiro foi guardado: um ficheiro vazio pareceria uma equipa sem dados.", "Confirma que a equipa foi iniciada pelo menos uma vez e que a sua base de dados está no sítio predefinido e tenta novamente."],
+  },
   "This data source cannot be exported.": {
     de: ["Diese Datenquelle lässt sich nicht exportieren.", "Wähle eine der Quellen aus der Liste und versuche es erneut."],
     es: ["Esta fuente de datos no se puede exportar.", "Elige una de las fuentes de la lista y vuelve a intentarlo."],
@@ -1713,6 +1720,7 @@ export const ERROR_CATALOG_LOCALES: Readonly<Record<string, ErrorTranslations>> 
   export_range_invalid: translated("The dates of the range are not valid."),
   export_too_large: translated("The data is too large for a single file."),
   export_save_failed: translated("The export file was not saved."),
+  export_no_database: translated("The team’s database is not where the app looks for it, so no file was saved: an empty file would look like a team with no data."),
   export_incomplete: translated("Not all the data could be read, so no file was saved: an incomplete file would look complete."),
   not_cloud: translated("This account is not connected to the cloud: there is no account data to export."),
   saved_vps_invalid: translated("The details of this VPS are incomplete or not valid, so they were not saved."),
