@@ -184,6 +184,22 @@ def test_a_non_numeric_partial_wait_falls_back_to_the_default(box):
     assert "syntax error" not in done.stderr and "unbound" not in done.stderr
 
 
+@pytest.mark.parametrize("wait", ["08", "09", "99999999999999999999"])
+def test_a_partial_wait_with_a_leading_zero_or_a_huge_number_is_tamed(box, wait):
+    box.put("split", "0.6")
+    done = box.run(JHT_TMUX_PARTIAL_WAIT=wait)
+    assert done.returncode == 0, done.stderr
+    assert "too great" not in done.stderr and "syntax error" not in done.stderr
+
+
+def test_a_huge_partial_wait_does_not_wait_forever_on_a_half_drawn_paste(box):
+    box.put("split", "30")
+    started = time.monotonic()
+    done = box.run(JHT_TMUX_PARTIAL_WAIT="99999999999999999999")
+    assert done.returncode == 130, done.stderr
+    assert time.monotonic() - started < 25, "a huge wait falls back to the default of eight seconds"
+
+
 def test_a_turn_starting_while_the_paste_renders_does_not_stop_the_delivery(box):
     box.put("turn_on_paste")
     done = box.run()

@@ -856,7 +856,8 @@ else
   partial_since=-1
   partial_wait_s=${JHT_TMUX_PARTIAL_WAIT:-8}
   case "$partial_wait_s" in ''|*[!0-9]*) partial_wait_s=8 ;; esac
-  partial_polls=$(( partial_wait_s * 20 ))
+  [ "${#partial_wait_s}" -le 3 ] || partial_wait_s=8
+  partial_wait_s=$((10#$partial_wait_s))   # 08 and 09 are not octal numbers
   while :; do
     pane=$(_pane)
     gate=$(_delivery_gate "$pane")
@@ -878,9 +879,9 @@ else
         ours*) seen=1; break ;;
         partial*)
           # Il nostro testo e' arrivato a meta': si aspetta che finisca, senza premere niente.
-          if [ "$partial_since" -lt 0 ]; then partial_since=$poll; fi
+          if [ "$partial_since" -lt 0 ]; then partial_since=$SECONDS; fi
           partial_shape=$shape
-          if [ $(( poll - partial_since )) -ge "$partial_polls" ]; then
+          if [ $(( SECONDS - partial_since )) -ge "$partial_wait_s" ]; then
             echo "jht-tmux-send: $session: the paste stayed half drawn (${partial_shape#partial }): no Enter (rc=130)" >&2
             exit 130
           fi
