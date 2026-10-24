@@ -73,7 +73,13 @@ export type OnboardingRuntimeStage = CollectionStage | OperationalStage;
 export type OnboardingRuntimeState =
   | { status: "collecting"; stage: CollectionStage }
   | { status: "working"; stage: OperationalStage; message: string }
-  | { status: "action-required"; stage: "ssh-host-key" | "provider-login" | "team-start" | "assistant"; message: string }
+  | {
+      status: "action-required";
+      stage: "ssh-host-key" | "provider-login" | "team-start" | "assistant";
+      message: string;
+      /** The runtime of this computer is stopped: the steps before the team start are not «ready». */
+      runtimeStopped?: true;
+    }
   | {
       status: "failed";
       stage: OnboardingRuntimeStage;

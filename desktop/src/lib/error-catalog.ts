@@ -579,9 +579,9 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
   session_closed: PROVIDER_SESSION,
   provider_limits_exhausted: copy(
     "I limiti del tuo abbonamento sono esauriti fino alle {time}: se la squadra partisse adesso si fermerebbe subito.",
-    "Riprova dopo le {time}. Non è stato avviato niente e nessun dato è andato perso.",
+    "Riprova dopo le {time}. Nessun agente è stato avviato e nessun dato è andato perso; il runtime può essere rimasto acceso.",
     "Your subscription limits are used up until {time}: if the team started now it would stop right away.",
-    "Try again after {time}. Nothing was started and no data was lost.",
+    "Try again after {time}. No agent was started and no data was lost; the runtime may have been left running.",
   ),
   provider_limits_unverified: copy(
     "Limiti del provider non verificati: la squadra è partita senza sapere quanto resta del tuo abbonamento.",

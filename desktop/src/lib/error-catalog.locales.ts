@@ -702,11 +702,11 @@ const COPY_BY_ENGLISH_TEXT: Readonly<Record<string, ErrorTranslations>> = {
     pt: ["O pedido do fornecedor não é válido.", "Reinicia o acesso ao fornecedor."],
   },
   "Your subscription limits are used up until {time}: if the team started now it would stop right away.": {
-    de: ["Die Limits deines Abonnements sind bis {time} aufgebraucht: Wenn das Team jetzt starten würde, würde es sofort wieder anhalten.", "Versuche es nach {time} erneut. Es wurde nichts gestartet und es gingen keine Daten verloren."],
-    es: ["Los límites de tu suscripción están agotados hasta {time}: si el equipo se iniciara ahora, se detendría de inmediato.", "Vuelve a intentarlo después de {time}. No se ha iniciado nada ni se ha perdido ningún dato."],
-    fr: ["Les limites de ton abonnement sont épuisées jusqu’à {time} : si l’équipe démarrait maintenant, elle s’arrêterait aussitôt.", "Réessaie après {time}. Rien n’a été démarré et aucune donnée n’a été perdue."],
-    hu: ["Az előfizetésed kerete {time} időpontig elfogyott: ha a csapat most elindulna, azonnal leállna.", "Próbáld újra {time} után. Semmi nem indult el, és nem veszett el adat."],
-    pt: ["Os limites da tua subscrição estão esgotados até {time}: se a equipa iniciasse agora, pararia de imediato.", "Tenta novamente depois de {time}. Nada foi iniciado e não se perdeu nenhum dado."],
+    de: ["Die Limits deines Abonnements sind bis {time} aufgebraucht: Wenn das Team jetzt starten würde, würde es sofort wieder anhalten.", "Versuche es nach {time} erneut. Es wurde kein Agent gestartet und es gingen keine Daten verloren; die Laufzeit kann eingeschaltet geblieben sein."],
+    es: ["Los límites de tu suscripción están agotados hasta {time}: si el equipo se iniciara ahora, se detendría de inmediato.", "Vuelve a intentarlo después de {time}. No se ha iniciado ningún agente ni se ha perdido ningún dato; el entorno de ejecución puede haber quedado encendido."],
+    fr: ["Les limites de ton abonnement sont épuisées jusqu’à {time} : si l’équipe démarrait maintenant, elle s’arrêterait aussitôt.", "Réessaie après {time}. Aucun agent n’a été démarré et aucune donnée n’a été perdue ; l’environnement d’exécution peut être resté allumé."],
+    hu: ["Az előfizetésed kerete {time} időpontig elfogyott: ha a csapat most elindulna, azonnal leállna.", "Próbáld újra {time} után. Egy ügynök sem indult el, és nem veszett el adat; a futtatókörnyezet bekapcsolva maradhatott."],
+    pt: ["Os limites da tua subscrição estão esgotados até {time}: se a equipa iniciasse agora, pararia de imediato.", "Tenta novamente depois de {time}. Nenhum agente foi iniciado e não se perdeu nenhum dado; o ambiente de execução pode ter ficado ligado."],
   },
   "Provider limits not verified: the team started without knowing how much of your subscription is left.": {
     de: ["Anbieterlimits nicht geprüft: Das Team wurde gestartet, ohne zu wissen, wie viel von deinem Abonnement noch verfügbar ist.", "Wenn das Team früh anhält, prüfe die Limits auf der Seite des Anbieters."],
