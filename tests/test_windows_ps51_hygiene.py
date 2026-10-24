@@ -9,6 +9,9 @@ These are the others:
     it is -1 in 5.1 and stale in 7. Read all the lines, then take the first.
  2. `[string]$X = $null` is "": `$null -ne $X` is always true. Ask `$PSBoundParameters`.
  3. `"$name: text"` is a drive-qualified variable, not `$name` and a colon: `${name}`.
+ 4. `Invoke-BrokerAdmin` and `Invoke-TelegramAdmin` have `$InputText` as their first positional
+    parameter: `Invoke-BrokerAdmin secrets status` would bind 'secrets' to it and hand the broker
+    only 'status'. Every caller names `-AdminArgs`.
 
 This reads the source, so it needs no PowerShell; it normalises CRLF first (the files are published
 with either ending). A real run on Windows is the V1.
@@ -102,3 +105,26 @@ def test_the_fixed_shapes_stay_fixed():
     assert re.search(r"@\(& \{ \$ErrorActionPreference = 'Continue'; & docker exec \$ContainerId python3 /app/shared/skills/apply_request\.py", wrapper)
     # the probe reads the exit code of docker, then takes the first line
     assert "$inspectCode = $LASTEXITCODE" in probe and "$inspectCode -ne 0 -or $running" in probe
+
+
+# Callers that another branch rewrites (the cloud-field readers of the broker's web authorisation);
+# a line that no longer exists is simply not found, so an entry here can only ever go stale quietly.
+PENDING_ELSEWHERE = {
+    "if ($account) { $null = Invoke-BrokerAdmin apply account $account }",
+    "return Invoke-BrokerAdmin apply account $account",
+}
+
+
+def test_every_caller_of_the_admin_helpers_names_its_admin_args():
+    """The first positional parameter of both is `$InputText`: a caller that does not name -AdminArgs
+    loses the first word of its command to it (and the broker gets one verb fewer). A caller that
+    names -InputText is safe too: the words that follow all go to the remaining arguments."""
+    offenders = []
+    for number, raw, text in code_lines("jht-wrapper.ps1"):
+        for match in re.finditer(r"\b(Invoke-BrokerAdmin|Invoke-TelegramAdmin)\b(?!\s*\{)", text):
+            if raw.lstrip().startswith("function "):
+                continue
+            rest = raw[raw.index(match.group(1)) :]
+            if "-AdminArgs" not in rest and "-InputText" not in rest and not any(pending in raw for pending in PENDING_ELSEWHERE):
+                offenders.append(f"{number}: {raw.strip()}")
+    assert offenders == []

@@ -1078,6 +1078,9 @@ function Test-BrokerUp {
 
 # L'host amministra il broker con exec di jht-broker-admin; un segreto passa
 # solo su stdin ($InputText), mai negli argomenti.
+# I chiamanti passano SEMPRE -AdminArgs per nome (come Invoke-TelegramAdmin): InputText e' il primo
+# parametro posizionale, e `Invoke-BrokerAdmin secrets status` gli darebbe 'secrets' lasciando al
+# broker il solo 'status'.
 function Invoke-BrokerAdmin {
   param([string]$InputText = $null, [Parameter(ValueFromRemainingArguments)] [string[]]$AdminArgs)
   $brokerId = Get-RunningComposeServiceId $BrokerContainer
@@ -1202,7 +1205,7 @@ function Invoke-ApplyHostCommand {
     Write-Err "Risposta del container non valida: autorizzazione ritirata, niente partira'."
     return 1
   }
-  $recorded = Invoke-BrokerAdmin -InputText '' apply record $id $instant $destination
+  $recorded = Invoke-BrokerAdmin -InputText '' -AdminArgs @('apply', 'record', $id, $instant, $destination)
   if ($recorded -ne 0) {
     $null = Invoke-ApplySkill $containerId @('cancel', $id)
     Write-Err "Il broker non ha registrato l'autorizzazione: ritirata, niente partira'."
@@ -1965,7 +1968,7 @@ function Invoke-MailSetup {
   $adminArgs = @('mailbox', 'setup', '--user', $user, '--admission', $admission)
   if ($imapHost) { $adminArgs += @('--imap-host', $imapHost) }
   if ($smtpHost) { $adminArgs += @('--smtp-host', $smtpHost) }
-  $code = Invoke-BrokerAdmin -InputText $password @adminArgs
+  $code = Invoke-BrokerAdmin -InputText $password -AdminArgs $adminArgs
   $password = $null
   return $code
 }
@@ -1976,13 +1979,13 @@ function Invoke-MailCommand {
   $rest = if ($MailArgs.Count -gt 1) { $MailArgs[1..($MailArgs.Count - 1)] } else { @() }
   switch ($action) {
     'setup' { return Invoke-MailSetup $rest }
-    'status' { $c = Invoke-BrokerAdmin secrets status; if ($c -ne 0) { return $c }; return Invoke-BrokerAdmin mailbox show }
-    'admission' { return Invoke-BrokerAdmin mailbox admission @rest }
-    'allow' { return Invoke-BrokerAdmin mailbox allow @rest }
-    'drafts' { return Invoke-BrokerAdmin mail drafts }
-    { $_ -in @('approve', 'discard') } { return Invoke-BrokerAdmin mail $action @rest }
-    'journal' { return Invoke-BrokerAdmin mail journal @rest }
-    'delete' { return Invoke-BrokerAdmin secrets delete email_monitor }
+    'status' { $c = Invoke-BrokerAdmin -AdminArgs @('secrets', 'status'); if ($c -ne 0) { return $c }; return Invoke-BrokerAdmin -AdminArgs @('mailbox', 'show') }
+    'admission' { return Invoke-BrokerAdmin -AdminArgs (@('mailbox', 'admission') + @($rest)) }
+    'allow' { return Invoke-BrokerAdmin -AdminArgs (@('mailbox', 'allow') + @($rest)) }
+    'drafts' { return Invoke-BrokerAdmin -AdminArgs @('mail', 'drafts') }
+    { $_ -in @('approve', 'discard') } { return Invoke-BrokerAdmin -AdminArgs (@('mail', $action) + @($rest)) }
+    'journal' { return Invoke-BrokerAdmin -AdminArgs (@('mail', 'journal') + @($rest)) }
+    'delete' { return Invoke-BrokerAdmin -AdminArgs @('secrets', 'delete', 'email_monitor') }
     'migrate' {
       $code = Invoke-BrokerMigrateLegacy
       if ($code -eq 0) { New-Item -ItemType File -Path $BrokerLegacyMarker -Force -ErrorAction SilentlyContinue | Out-Null }
