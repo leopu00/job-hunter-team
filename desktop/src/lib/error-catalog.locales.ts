@@ -1501,13 +1501,6 @@ export const ERROR_CATALOG_LOCALES: Readonly<Record<string, ErrorTranslations>> 
     ["Az alkalmazás futtatókörnyezete ezen a számítógépen régebbi, mint a chat.", "Frissítsd az alkalmazást, majd ismételd meg a futtatókörnyezeti lépést: a csapathoz ne nyúlj."],
     ["O ambiente de execução da aplicação neste computador é mais antigo do que a conversa.", "Atualiza a aplicação e repete o passo do ambiente de execução: não alteres a equipa."],
   ),
-  composer_has_text: tr(
-    ["Im Eingabefeld des Agenten steht noch nicht gesendeter Text.", "Sende ihn ab oder lösche ihn im Terminal des Agenten und sende dann deine Nachricht erneut."],
-    ["Hay texto sin enviar en el cuadro de redacción del agente.", "Envíalo o bórralo en el terminal del agente y vuelve a enviar tu mensaje."],
-    ["Il y a du texte non envoyé dans la zone de saisie de l’agent.", "Envoie-le ou efface-le dans le terminal de l’agent, puis renvoie ton message."],
-    ["Az ügynök beviteli mezőjében elküldetlen szöveg van.", "Küldd el vagy töröld az ügynök termináljában, majd küldd el újra az üzenetedet."],
-    ["Há texto não enviado na caixa de escrita do agente.", "Envia-o ou apaga-o no terminal do agente e volta a enviar a tua mensagem."],
-  ),
   agent_unavailable: translated("The agent cannot receive the message right now."),
   agent_busy: translated("The agent is working: the message was not sent."),
   agent_not_at_prompt: translated("The agent is not at its prompt: its terminal shows a menu, a sign-in, a permission question or text already typed."),

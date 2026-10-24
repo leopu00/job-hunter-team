@@ -112,7 +112,7 @@ describe("the renewal, in the app", () => {
     const apply = vi.fn(() => ({ ok: true, op: "apply", expires_at: null, days_left: null }));
     team({
       existing_team_positions_read: synced(okState("auth_failed", 45012)),
-      existing_team_cloud_token: (args) => ((args?.request as { op: string }).op === "check" ? checkReply("expired") : apply()),
+      existing_team_cloud_token: (args?: Record<string, unknown>) => ((args?.request as { op: string }).op === "check" ? checkReply("expired") : apply()),
       existing_team_position_write_target: IN_FULL,
     });
     render(<CloudSyncCard />);
@@ -190,7 +190,7 @@ describe("the renewal, in the app", () => {
     for (const [target, applied, text] of cases) {
       team({
         existing_team_positions_read: synced(okState("auth_failed", 3)),
-        existing_team_cloud_token: (args) => ((args?.request as { op: string }).op === "check" ? checkReply("expired") : applied),
+        existing_team_cloud_token: (args?: Record<string, unknown>) => ((args?.request as { op: string }).op === "check" ? checkReply("expired") : applied),
         ...target,
       });
       const view = render(<CloudSyncCard />);
