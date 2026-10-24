@@ -11,6 +11,7 @@ import { desktopLinks } from "./desktop-links";
 import { THEME_STORAGE_KEY } from "./theme";
 import { enterExistingTeamReadOnly, leaveExistingTeamReadOnly } from "../lib/existing-team-readonly";
 import Shell from "./Shell";
+import { SHELL_TEXT } from "./shell.i18n";
 
 vi.mock("../lib/supabase", () => ({ supabase: { from: vi.fn() }, supabaseConfigured: true, signOut: vi.fn() }));
 // The real map needs WebGL, which jsdom has not: the shell only has to route to it.
@@ -129,6 +130,16 @@ describe("Shell", () => {
     } finally {
       document.cookie = "NEXT_LOCALE=; path=/; max-age=0";
     }
+  });
+
+  it("says what «Esci» does and does not remove: the person, not the data", async () => {
+    navigate("/dashboard", { replace: true });
+    render(<Shell />);
+    await screen.findByRole("heading", { name: "Dashboard" });
+
+    const button = screen.getByRole("button", { name: "Esci" });
+    expect(button).toHaveAttribute("title", SHELL_TEXT.it.signOutNote);
+    expect(SHELL_TEXT.it.signOutNote).toMatch(/restano su questo computer/);
   });
 
   it("keeps the signed-in shell mounted when scoped logout teardown fails", async () => {
