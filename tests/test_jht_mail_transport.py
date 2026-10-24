@@ -330,8 +330,8 @@ case "$cmd" in
   send-keys)
     while [ "$1" = "-t" ]; do shift 2; done
     if [ "$1" = "-l" ]; then
-      [ "${FAKE_MUTE:-0}" = 1 ] && exit 0
-      printf '%s' "$2" >> "$S/composer"; printf '%s\0' "$2" >> "$S/typed"; exit 0
+      # The old inline transport must make the test red, never look delivered.
+      exit 86
     fi
     if [ "$1" = "Enter" ]; then
       [ "${FAKE_ENTER_IGNORED:-0}" = 1 ] && exit 0

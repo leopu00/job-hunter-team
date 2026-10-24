@@ -1,7 +1,7 @@
 """JHT-T21 — the text the user writes enters the agent's pane fenced.
 
 The chat delivers `[@utente -> @agente] [CHAT] <text>` (or `[TG]`) to the agent's
-tmux pane with `jht-tmux-send`, which TYPES it (`tmux send-keys -l`). Before this
+tmux pane with `jht-tmux-send`, through `load-buffer`/`paste-buffer`. Before this
 fix the text went in as written:
 
 - a line break followed by `[@capitano -> @assistente] [DELEGA] …` read as a line
@@ -224,9 +224,8 @@ case "$cmd" in
     [ "$1" = "-t" ] && shift 2
     case "$1" in
       -l)
-        n=$(ls "$S" | grep -c '^typed\.')
-        printf '%s' "$2" > "$S/typed.$((n + 1))"
-        printf '%s' "$2" >> "$S/composer" ;;
+        # Reject the retired inline path: otherwise fence tests false-green.
+        exit 86 ;;
       Enter)
         cat "$S/composer" >> "$S/transcript"; echo >> "$S/transcript"; : > "$S/composer" ;;
     esac ;;

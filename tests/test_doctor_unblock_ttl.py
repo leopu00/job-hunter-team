@@ -189,35 +189,33 @@ if cmd == "kill-session":
 if cmd == "send-keys":
     if sess is None:
         save(s); sys.exit(1)
+    # The buffered path is the contract: accept no inline regression as a
+    # delivery, or this fake would hide a return to send-keys -l.
+    if "-l" in args:
+        save(s); sys.exit(86)
     if sess.get("submit") == "frozen" and sess.get("draft"):
         # Congelata: non registra nulla — ne' Enter, ne' Space, ne' testo.
-        # (Il typing iniziale resta possibile: e' cosi' che il testo ci finisce.)
-        if "-l" not in args:
-            save(s); sys.exit(0)
-    if "-l" in args:
-        sess["draft"] = sess.get("draft", "") + args[args.index("-l") + 1]
-        sess["last_key"] = "literal"
-    else:
-        key = args[-1]
-        if key == "Space":
-            sess["draft"] = sess.get("draft", "") + " "
-            sess["last_key"] = "Space"
-        elif key == "Enter":
-            mode = sess.get("submit", "ok")
-            sess["enter_count"] = sess.get("enter_count", 0) + 1
-            ok = (mode == "ok"
-                  or (mode == "needs_space" and sess.get("last_key") == "Space")
-                  or (mode == "needs_retry" and sess["enter_count"] >= 2))
-            if ok and sess.get("draft"):
-                prefix = "› " if sess.get("style") == "codex" else "> "
-                sess.setdefault("transcript", []).append(prefix + sess["draft"])
-                sess["draft"] = ""
-            sess["last_key"] = "Enter"
-        elif key == "C-u":
+        save(s); sys.exit(0)
+    key = args[-1]
+    if key == "Space":
+        sess["draft"] = sess.get("draft", "") + " "
+        sess["last_key"] = "Space"
+    elif key == "Enter":
+        mode = sess.get("submit", "ok")
+        sess["enter_count"] = sess.get("enter_count", 0) + 1
+        ok = (mode == "ok"
+              or (mode == "needs_space" and sess.get("last_key") == "Space")
+              or (mode == "needs_retry" and sess["enter_count"] >= 2))
+        if ok and sess.get("draft"):
+            prefix = "› " if sess.get("style") == "codex" else "> "
+            sess.setdefault("transcript", []).append(prefix + sess["draft"])
             sess["draft"] = ""
-            sess["last_key"] = "C-u"
-        else:
-            sess["last_key"] = key
+        sess["last_key"] = "Enter"
+    elif key == "C-u":
+        sess["draft"] = ""
+        sess["last_key"] = "C-u"
+    else:
+        sess["last_key"] = key
     s["sessions"][t] = sess
     save(s); sys.exit(0)
 
