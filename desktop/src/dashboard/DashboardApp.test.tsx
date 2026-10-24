@@ -120,6 +120,7 @@ vi.mock("../lib/runtime-log", () => ({
 vi.mock("../lib/desktop-platform", () => ({ readDesktopPlatform: vi.fn() }));
 vi.mock("../shell/Shell", async () => {
   const { useReconfirmExistingTeam } = await import("../lib/reconfirm-existing-team");
+  const { useProviderSetup } = await import("../lib/provider-setup");
   const ready = (profileReady: boolean) => ({
     runtimeInstalled: true, containerRunning: true, providerConfigured: true, providerAuthenticated: true,
     assistantRunning: true, captainRunning: true, profileReady, assistantWelcomed: false, directChatReady: false,
@@ -127,6 +128,8 @@ vi.mock("../shell/Shell", async () => {
   function MockShell({ onLogout, onCloseReadOnly }: { onLogout?: () => Promise<void>; onCloseReadOnly?: () => void }) {
     // What the chat's «Collega il team» reaches in the read-only view (AgentChatPane uses the same context).
     const reconfirm = useReconfirmExistingTeam();
+    // What Settings › Provider reaches: only the Shell of the team of this computer has it.
+    const providerSetup = useProviderSetup();
     return (
       <main data-testid="shell">
         Shell
@@ -135,6 +138,7 @@ vi.mock("../shell/Shell", async () => {
         {reconfirm && <p>reconfirm-account:{reconfirm.accountLabel}</p>}
         {reconfirm && <button type="button" onClick={() => void reconfirm.onConnected(ready(true))}>reconfirm-connected</button>}
         {reconfirm && <button type="button" onClick={reconfirm.onSetup}>reconfirm-setup</button>}
+        {providerSetup && <button type="button" onClick={providerSetup.open}>open-provider-setup</button>}
       </main>
     );
   }
@@ -148,6 +152,8 @@ vi.mock("../onboarding", () => ({
     return (
       <section data-testid="onboarding">
         <p>platform:{props.platform}</p>
+        {props.providerOnly && <p>provider-only</p>}
+        {props.providerOnly && <button type="button" onClick={props.providerOnly.onCancel}>cancel-provider-only</button>}
         <p>previous-local-data:{String(props.previousLocalData ?? false)}</p>
         <p>{props.runtime.status}{stage}</p>
         {"message" in props.runtime && <p>{props.runtime.message}</p>}
@@ -750,6 +756,140 @@ describe("DashboardApp onboarding router", () => {
     expect(await screen.findByTestId("shell")).toBeInTheDocument();
     expect(existingTeamBridge.reopen).toHaveBeenCalledOnce();
     expect(existingTeamView()).toBeNull();
+  });
+
+  describe("Settings › Provider on the team of this computer (T128)", () => {
+    async function readyShell() {
+      vi.mocked(useSession).mockReturnValue(signedInAs("set-up-local-team"));
+      vi.mocked(loadOnboardingGate).mockResolvedValue({ phase: "ready" });
+      const user = userEvent.setup();
+      render(<DashboardApp />);
+      expect(await screen.findByTestId("shell")).toBeInTheDocument();
+      return user;
+    }
+
+    it("reopens the setup at the Provider step, with no assistant chat and no resume, and cancel gives back the app", async () => {
+      const user = await readyShell();
+      await waitFor(() => expect(readDesktopPlatform).toHaveBeenCalled());
+      vi.mocked(existingTeamBridge.reopen).mockClear();
+      await user.click(await screen.findByRole("button", { name: "open-provider-setup" }));
+
+      expect(await screen.findByTestId("onboarding")).toHaveTextContent("provider-only");
+      expect(screen.getByTestId("onboarding")).toHaveTextContent("collecting:host");
+      expect(screen.queryByTestId("shell")).not.toBeInTheDocument();
+      expect(screen.queryByTestId("assistant-chat")).not.toBeInTheDocument();
+      // the first setup's own start-up (reopening a saved team, the usual resume) does not run again
+      expect(existingTeamBridge.reopen).not.toHaveBeenCalled();
+      expect(resumeOnboardingSnapshot).not.toHaveBeenCalled();
+      expect(markOnboardingReady).not.toHaveBeenCalled();
+
+      await user.click(screen.getByRole("button", { name: "cancel-provider-only" }));
+      expect(await screen.findByTestId("shell")).toBeInTheDocument();
+      expect(screen.queryByTestId("onboarding")).not.toBeInTheDocument();
+      expect(navigate).toHaveBeenCalledWith("/settings", { replace: true });
+      expect(prepareOnboardingRuntime).not.toHaveBeenCalled();
+      expect(startOnboardingTeam).not.toHaveBeenCalled();
+    });
+
+    it("runs the same preparation and team start with the chosen provider, and goes back to the app when the team is up", async () => {
+      const user = await readyShell();
+      await user.click(await screen.findByRole("button", { name: "open-provider-setup" }));
+      vi.mocked(prepareOnboardingRuntime).mockResolvedValue({ ...PREPARED, providerAuthenticated: true });
+      vi.mocked(startOnboardingTeam).mockResolvedValue(TEAM_READY);
+
+      await user.click(await screen.findByRole("button", { name: "submit-claude" }));
+
+      expect(await screen.findByTestId("shell")).toBeInTheDocument();
+      expect(prepareOnboardingRuntime).toHaveBeenCalledWith(
+        expect.objectContaining({ host: { kind: "local" }, provider: "claude" }), null, expect.any(Function),
+      );
+      expect(startOnboardingTeam).toHaveBeenCalledOnce();
+      // no assistant to open, no profile to collect: the app was already set up
+      expect(openOnboardingAssistant).not.toHaveBeenCalled();
+      expect(screen.queryByTestId("assistant-chat")).not.toBeInTheDocument();
+      expect(screen.queryByTestId("onboarding")).not.toBeInTheDocument();
+    });
+
+    it("keeps the person in the setup when the provider is not signed in yet, as the first setup does", async () => {
+      const user = await readyShell();
+      await user.click(await screen.findByRole("button", { name: "open-provider-setup" }));
+      vi.mocked(prepareOnboardingRuntime).mockResolvedValue(PREPARED);
+
+      await user.click(await screen.findByRole("button", { name: "submit-codex" }));
+
+      expect(await screen.findByText("action-required:provider-login")).toBeInTheDocument();
+      expect(screen.getByTestId("onboarding")).toHaveTextContent("provider-only");
+      expect(screen.queryByTestId("shell")).not.toBeInTheDocument();
+      expect(startOnboardingTeam).not.toHaveBeenCalled();
+    });
+
+    it("«Restart» inside it starts the step over and never touches the marker: the team that works is not set up again", async () => {
+      const user = await readyShell();
+      await user.click(await screen.findByRole("button", { name: "open-provider-setup" }));
+      vi.mocked(prepareOnboardingRuntime).mockReturnValue(new Promise(() => undefined));
+      await user.click(await screen.findByRole("button", { name: "submit-codex" }));
+      await user.click(await screen.findByRole("button", { name: "restart-onboarding" }));
+
+      expect(resetOnboardingMarker).not.toHaveBeenCalled();
+      expect(await screen.findByText("collecting:host")).toBeInTheDocument();
+      expect(screen.getByTestId("onboarding")).toHaveTextContent("provider-only");
+    });
+
+    it("leaving it clears the interruption a failed attempt left, and the team goes on as it was", async () => {
+      const user = await readyShell();
+      await user.click(await screen.findByRole("button", { name: "open-provider-setup" }));
+      // what a failed attempt of this step leaves behind (the real record of lib/onboarding)
+      localStorage.setItem(
+        "jht.desktop.onboarding.interrupted.set-up-local-team",
+        JSON.stringify({ stage: "provider", code: null, at: Date.now(), provider: "codex" }),
+      );
+      await user.click(await screen.findByRole("button", { name: "cancel-provider-only" }));
+      expect(await screen.findByTestId("shell")).toBeInTheDocument();
+      expect(localStorage.getItem("jht.desktop.onboarding.interrupted.set-up-local-team")).toBe("");
+    });
+
+    it("is not offered after a first setup on a VPS in this session: that team is not the one of this computer", async () => {
+      vi.mocked(useSession).mockReturnValue(signedInAs("first-setup-on-vps"));
+      requireOnboarding();
+      vi.mocked(probeOnboardingSshHostKey).mockResolvedValue({ status: "trusted" } as never);
+      vi.mocked(prepareOnboardingRuntime).mockResolvedValue({ ...PREPARED, providerAuthenticated: true });
+      vi.mocked(startOnboardingTeam).mockResolvedValue(TEAM_READY);
+      vi.mocked(openOnboardingAssistant).mockResolvedValue({ ...TEAM_READY, assistantWelcomed: false });
+      vi.mocked(readOnboardingSnapshot).mockResolvedValue({ ...TEAM_READY, assistantWelcomed: true, profileReady: true });
+      const user = userEvent.setup();
+      render(<DashboardApp />);
+      await user.click(await screen.findByRole("button", { name: "submit-vps" }));
+      await user.click(await screen.findByRole("button", { name: "continue-runtime" }));
+
+      await waitFor(() => expect(markOnboardingReady).toHaveBeenCalled(), { timeout: 3_500 });
+      expect(await screen.findByTestId("shell")).toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: "open-provider-setup" })).not.toBeInTheDocument();
+    });
+
+    it("is not offered where there is no team of this computer: the read-only team on a VPS, a platform that runs none", async () => {
+      vi.mocked(useSession).mockReturnValue(signedInAs("existing-no-provider-card"));
+      vi.mocked(loadOnboardingGate).mockResolvedValue({
+        phase: "required",
+        account: { displayName: "Reader Person" },
+        resumeAvailable: false,
+        existingTeam: { teamId: "team-opaque-0005", status: "available" },
+        runtime: { status: "collecting", stage: "host" },
+      });
+      const user = userEvent.setup();
+      const view = render(<DashboardApp />);
+      await user.click(await screen.findByRole("button", { name: "connect-existing-team-read-only" }));
+      expect(await screen.findByTestId("shell")).toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: "open-provider-setup" })).not.toBeInTheDocument();
+      view.unmount();
+
+      vi.mocked(readDesktopPlatform).mockResolvedValue("other");
+      vi.mocked(useSession).mockReturnValue(signedInAs("set-up-other-platform"));
+      vi.mocked(loadOnboardingGate).mockResolvedValue({ phase: "ready" });
+      render(<DashboardApp />);
+      expect(await screen.findByTestId("shell")).toBeInTheDocument();
+      await waitFor(() => expect(readDesktopPlatform).toHaveBeenCalledTimes(2));
+      expect(screen.queryByRole("button", { name: "open-provider-setup" })).not.toBeInTheDocument();
+    });
   });
 
   it("a set-up account whose saved team cannot be reached says so and retries, and never falls back to the cloud Shell", async () => {

@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { DISPLAY_CURRENCY_COOKIE } from "@/lib/display-currency";
 import { installApiBridge, notInDesktop, shellApi } from "../../shell/api-bridge";
+import { ProviderSetupContext } from "../../lib/provider-setup";
 import SettingsPage from "./index";
 
 const props = { params: {}, search: new URLSearchParams() };
@@ -26,6 +27,25 @@ afterEach(() => {
 });
 
 describe("the settings page", () => {
+  it("offers the provider only where the dashboard provides it, and opens the setup's Provider step", async () => {
+    const user = userEvent.setup();
+    const view = render(<SettingsPage {...props} />);
+    expect(screen.queryByTestId("settings-provider")).not.toBeInTheDocument();
+    view.unmount();
+
+    const open = vi.fn();
+    render(
+      <ProviderSetupContext.Provider value={{ open }}>
+        <SettingsPage {...props} />
+      </ProviderSetupContext.Provider>,
+    );
+    const card = screen.getByTestId("settings-provider");
+    expect(card).toHaveTextContent("Provider");
+    expect(card).toHaveTextContent(/Claude, Codex or Kimi/);
+    await user.click(screen.getByRole("button", { name: "Set up the provider" }));
+    expect(open).toHaveBeenCalledOnce();
+  });
+
   it("says what it keeps and where, in the app's language", () => {
     render(<SettingsPage {...props} />);
     expect(screen.getByRole("heading", { name: "Settings" })).toBeInTheDocument();
