@@ -4855,14 +4855,25 @@ fn start_team_impl(
     match validated {
         ValidatedHost::Local => {
             let wrapper = wrapper_path(app).ok_or_else(|| failure("runtime_missing"))?;
-            ensure_team_started(run_scoped_local_logged(
-                app,
-                scope,
+            crate::account_scope::validate_local_runtime(app, scope).map_err(failure)?;
+            let runtime = crate::direct_chat::local_runtime_path(app).ok();
+            let started = Instant::now();
+            let through_wrapper = std::cell::Cell::new(false);
+            let result = crate::team_control::run_local(
                 &wrapper,
-                LocalCliOperation::TeamStart,
+                runtime.as_deref(),
+                &crate::team_control::start_command(crate::team_control::StartKind::Team),
                 PREPARE_TIMEOUT,
-                log,
-            ))
+                true,
+                || {
+                    through_wrapper.set(true);
+                    run_scoped_local_logged(app, scope, &wrapper, LocalCliOperation::TeamStart, PREPARE_TIMEOUT, log)
+                },
+            );
+            if let (false, Some(log)) = (through_wrapper.get(), log) {
+                log.record_result("jht team start (attested container)", &result, &[], started.elapsed());
+            }
+            ensure_team_started(result)
         }
         ValidatedHost::Vps { .. } => ensure_team_started(run_ssh(
             validated,
@@ -5517,13 +5528,25 @@ pub(crate) async fn onboarding_assistant_open(
                     ValidatedHost::Local => {
                         let wrapper =
                             wrapper_path(&app).ok_or_else(|| failure("runtime_missing"))?;
+                        crate::account_scope::validate_local_runtime(&app, &worker_expected)
+                            .map_err(failure)?;
+                        let runtime = crate::direct_chat::local_runtime_path(&app).ok();
                         ensure_success(
-                            run_scoped_local(
-                                &app,
-                                &worker_expected,
+                            crate::team_control::run_local(
                                 &wrapper,
-                                LocalCliOperation::AssistantStart,
+                                runtime.as_deref(),
+                                &crate::team_control::start_command(crate::team_control::StartKind::Assistant),
                                 COMMAND_TIMEOUT,
+                                true,
+                                || {
+                                    run_scoped_local(
+                                        &app,
+                                        &worker_expected,
+                                        &wrapper,
+                                        LocalCliOperation::AssistantStart,
+                                        COMMAND_TIMEOUT,
+                                    )
+                                },
                             ),
                             "assistant_start_failed",
                         )?;

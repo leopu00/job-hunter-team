@@ -32,6 +32,7 @@ mod release_channel_rules;
 mod runtime_host;
 mod runtime_log;
 mod saved_vps;
+mod team_control;
 mod text_file_export;
 mod voice_input;
 mod vps_link;

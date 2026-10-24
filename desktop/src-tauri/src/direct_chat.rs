@@ -1470,8 +1470,10 @@ fn local_compose_args(engine: &LocalChatEngine, runtime: &Path) -> Vec<OsString>
     // The runtime's private shim is `podman --connection <attested machine>`.
     // `podman compose` may delegate to an arbitrary host provider, so it is not the runtime's
     // authenticated Compose path. Enumerate only the fixed JHT project and prove its labels below.
-    // Docker retains the historical Compose lookup, whose project is path based.
-    if engine.podman && !cfg!(windows) {
+    // Docker retains the historical Compose lookup, whose project is path based. On Windows too:
+    // compose would need the project name and the provider the wrapper sets in its own environment,
+    // which the app does not have, so the container is listed by its labels there as well.
+    if engine.podman {
         return vec![
             OsString::from("ps"),
             OsString::from("-q"),
@@ -1702,6 +1704,49 @@ fn run_local_chat(
         input,
         timeout,
     )
+}
+
+/// The attested local runtime directory, for the commands that run in the team's container without
+/// the wrapper (team_control).
+pub(crate) fn local_runtime_path(app: &tauri::AppHandle) -> Result<PathBuf, &'static str> {
+    local_runtime_dir(app).map_err(|_| "runtime_missing")
+}
+
+/// The local team's container as the chat finds it: the runtime bundle attested, the private engine
+/// selected, and the one running `jht` service whose labels match. Resolved once; every command
+/// then runs in it as `exec <id> <argv>`, with no shell and no wrapper in between.
+pub(crate) struct AttestedLocalTeam {
+    engine: LocalChatEngine,
+    container: String,
+}
+
+impl AttestedLocalTeam {
+    pub(crate) fn resolve(wrapper: &Path, runtime: &Path, timeout: Duration) -> Result<Self, &'static str> {
+        if !local_chat_runtime_valid(wrapper, runtime) {
+            return Err("runtime_missing");
+        }
+        let engine = local_chat_engine(runtime)?;
+        let container = local_chat_container(&engine, runtime, timeout)?;
+        Ok(Self { engine, container })
+    }
+
+    /// `exec [-i] <container> <argv>`: `-i` only when there is stdin to give.
+    pub(crate) fn exec(&self, argv: &[&str], input: Option<&[u8]>, timeout: Duration) -> Result<ProcessResult, &'static str> {
+        run_local_engine(&self.engine, attested_exec_args(&self.container, argv, input.is_some())?, input, timeout)
+    }
+}
+
+fn attested_exec_args(container: &str, argv: &[&str], with_input: bool) -> Result<Vec<OsString>, &'static str> {
+    if !container_id(container) || argv.is_empty() {
+        return Err("container_unavailable");
+    }
+    let mut args = vec![OsString::from("exec")];
+    if with_input {
+        args.push(OsString::from("-i"));
+    }
+    args.push(OsString::from(container));
+    args.extend(argv.iter().map(OsString::from));
+    Ok(args)
 }
 
 fn run_connection(
@@ -2865,10 +2910,12 @@ mod tests {
         SOCKET_PATH_MAX, SSH_SOCKET_SUFFIX,
         open_vps_link, ready_status, small_read, vps_link_for, VpsLink, VPS_LINK_CHECK, SMALL_READ_OVERLAP,
         SMALL_READ_SIZE_PROBE, SMALL_READ_TAIL, DirectChatError, local_chat_exec_args,
-        local_chat_runtime_valid, local_engine_removed_environment, LocalChatEngine, podman_systemd_unit,
+        local_chat_runtime_valid, local_compose_args, local_engine_removed_environment, LocalChatEngine, podman_systemd_unit,
         run_connection, run_local_chat, RemoteOperation,
         master_to_lend,
     };
+    #[cfg(unix)]
+    use super::{attested_exec_args, AttestedLocalTeam};
     use crate::existing_team_runtime::ActivatedTarget;
     use crate::runtime_host::{ExecutionHost, ValidatedHost};
     use std::{fs, path::{Path, PathBuf}, process::Command, time::Duration};
@@ -3515,13 +3562,10 @@ mod tests {
     #[cfg(unix)]
     const LOCAL_TEST_TIMEOUT: Duration = Duration::from_secs(30);
 
-    // The direct local path is a normal native process on both systems where this test runs. The
-    // fake private Podman shim proves the container discovery, exact exec argv, and non-ASCII stdin
-    // all survive without asking a shell or a PowerShell wrapper to reconstruct the text.
+    /// A runtime the attestation accepts, with a fake private Podman shim whose `exec` echoes its
+    /// arguments and stdin: (root, runtime dir, wrapper, container id). The caller removes `root`.
     #[cfg(unix)]
-    #[test]
-    fn local_chat_executes_the_attested_engines_python_with_raw_unicode_stdin() {
-        use crate::existing_team_runtime::ChatOperation;
+    fn attested_local_fixture() -> (PathBuf, PathBuf, PathBuf, String) {
         use std::os::unix::fs::PermissionsExt;
 
         static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
@@ -3581,6 +3625,18 @@ mod tests {
             for helper in [bin.join("podman"), bin.join("podman-compose")] { fs::set_permissions(helper, fs::Permissions::from_mode(0o700)).unwrap(); }
         }
         write_valid_local_podman_manifest(&runtime, &wrapper);
+        (root, runtime, wrapper, id)
+    }
+
+    // The direct local path is a normal native process on both systems where this test runs. The
+    // fake private Podman shim proves the container discovery, exact exec argv, and non-ASCII stdin
+    // all survive without asking a shell or a PowerShell wrapper to reconstruct the text.
+    #[cfg(unix)]
+    #[test]
+    fn local_chat_executes_the_attested_engines_python_with_raw_unicode_stdin() {
+        use crate::existing_team_runtime::ChatOperation;
+
+        let (root, runtime, wrapper, id) = attested_local_fixture();
 
         let words = "àèé € 🧭";
         let result = run_local_chat(
@@ -3598,6 +3654,39 @@ mod tests {
             String::from_utf8(result.stdout).unwrap(),
             format!("exec -i {id} python3 -I /app/shared/skills/agent_chat.py send assistente id-1\n{words}")
         );
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn a_podman_runtime_is_listed_by_label_on_every_system_and_never_through_compose() {
+        let words = |podman| {
+            local_compose_args(&LocalChatEngine { program: PathBuf::from("docker"), podman }, Path::new("/rt"))
+                .into_iter()
+                .map(|word| word.to_string_lossy().into_owned())
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(words(true), ["ps", "-q", "--filter", "label=com.docker.compose.project=jht"]);
+        let docker = words(false);
+        assert_eq!(docker[0], "compose");
+        assert!(docker.iter().any(|word| word == "--project-directory"));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn the_attested_team_runs_commands_in_the_one_container_without_a_wrapper() {
+        let (root, runtime, wrapper, id) = attested_local_fixture();
+        let team = AttestedLocalTeam::resolve(&wrapper, &runtime, LOCAL_TEST_TIMEOUT).unwrap();
+        // The fake engine echoes `exec`'s arguments, then its stdin: no -i without input.
+        let started = team.exec(&["node", "/app/cli/bin/jht.js", "team", "start"], None, LOCAL_TEST_TIMEOUT).unwrap();
+        assert_eq!(String::from_utf8(started.stdout).unwrap(), format!("exec {id} node /app/cli/bin/jht.js team start\n"));
+        let fed = team.exec(&["cat"], Some("àè".as_bytes()), LOCAL_TEST_TIMEOUT).unwrap();
+        assert_eq!(String::from_utf8(fed.stdout).unwrap(), format!("exec -i {id} cat\nàè"));
+        assert_eq!(attested_exec_args("not-an-id", &["x"], false).unwrap_err(), "container_unavailable");
+        assert_eq!(attested_exec_args(&id, &[], false).unwrap_err(), "container_unavailable");
+
+        // The same refusals as the chat: a bundle changed after the manifest never reaches the engine.
+        fs::write(&wrapper, "changed after the manifest\n").unwrap();
+        assert_eq!(AttestedLocalTeam::resolve(&wrapper, &runtime, LOCAL_TEST_TIMEOUT).err(), Some("runtime_missing"));
         fs::remove_dir_all(root).unwrap();
     }
 

@@ -235,7 +235,8 @@ enum Destination {
     Vps { validated: ValidatedHost, team_id: String, runtime: RuntimeTarget, mode: VpsMode, label: String },
     /// The VPS the app set up itself (no existing team registered): its host's jht wrapper.
     OwnVps { validated: ValidatedHost, label: String, state: OwnVpsState },
-    Local { wrapper: PathBuf },
+    /// This computer: its wrapper (the way back) and the runtime directory the attested container is looked for from.
+    Local { wrapper: PathBuf, runtime: Option<PathBuf> },
 }
 
 /// The jht wrapper of the person's own VPS, as the setup installed it, and only when it carries
@@ -297,7 +298,8 @@ fn destination(app: &tauri::AppHandle, scope: &AccountScope) -> Result<(Destinat
         return Err("agent_control_unsupported");
     }
     let print = fingerprint(&["local", &wrapper.to_string_lossy()]);
-    Ok((Destination::Local { wrapper }, print))
+    let runtime = direct_chat::local_runtime_path(app).ok();
+    Ok((Destination::Local { wrapper, runtime }, print))
 }
 
 /// A word of the closed argv, quoted for the VPS shell (the grammar already
@@ -361,10 +363,16 @@ fn run(destination: &Destination, request: &ControlRequest, argv: &[String], sha
                 run_ssh_command(validated, &own_vps_action_command(argv)?, None, timeout, None)
             }
         }
-        Destination::Local { wrapper } => {
-            let mut args = vec!["agent-control"];
-            args.extend(argv.iter().map(String::as_str));
-            crate::onboarding::run_verified_local_wrapper(wrapper, &args, None, timeout)
+        Destination::Local { wrapper, runtime } => {
+            let words: Vec<&str> = argv.iter().map(String::as_str).collect();
+            let command = crate::team_control::agent_control_command(&words, None)?;
+            // In the team's attested container; the wrapper only when that container cannot be found.
+            // A read may use the container found a moment ago; an action finds it again first.
+            crate::team_control::run_local(wrapper, runtime.as_deref(), &command, timeout, !read, || {
+                let mut args = vec!["agent-control"];
+                args.extend(words.iter().copied());
+                crate::onboarding::run_verified_local_wrapper(wrapper, &args, None, timeout)
+            })
         }
     }
 }
