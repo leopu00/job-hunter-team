@@ -1389,6 +1389,7 @@ function translated(englishText: string): ErrorTranslations {
  */
 export const ERROR_CATALOG_LOCALES: Readonly<Record<string, ErrorTranslations>> = {
   unknown: translated("The operation did not succeed."),
+  apply_authorisation_unrecorded: translated("The operation did not succeed."),
   desktop_only: translated("This feature is only available in the desktop app."),
   state_failed: translated("The app cannot read its own internal state."),
   state_unavailable: translated("The app cannot read its own internal state."),

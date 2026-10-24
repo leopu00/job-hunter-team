@@ -6,9 +6,11 @@ before anything runs. There is no field for a script, a selector, a URL or a
 path: the broker decides where to go from its own state (the authorisation
 register), never from the request.
 
-The admin operations (secrets, authorise, approve, allow, admission) are not
-here at all: they exist only in `jht-broker-admin`, which the host reaches by
-`exec` into the broker container.
+The admin operations (secrets, authorise, approve, allow, admission, and the
+recording of an authorisation to apply) are not here at all: they exist only in
+`jht-broker-admin`, which the host reaches by `exec` into the broker container.
+From this socket an authorisation can only be checked, claimed once or withdrawn:
+operations that narrow, never one that widens (notary.py).
 """
 
 from __future__ import annotations
@@ -22,7 +24,9 @@ SOCKET_NAME = "broker.sock"
 
 # op -> (required fields, optional fields, roles that may call it)
 # Roles are a reinforcement, not a boundary: every agent has the same uid, so
-# the declared role can be forged (design §4.7).
+# the declared role can be forged (design §4.7). ANY_ROLE: whoever calls, also
+# the person's CLI and the runtime, for operations that only read or narrow.
+ANY_ROLE = ("*",)
 OPERATIONS: dict[str, tuple[dict[str, type], dict[str, type], tuple[str, ...]]] = {
     # `runtime` is pid1's guard of the legacy files (audit G1): read-only.
     "mail.status": ({}, {}, ("scout", "capitano", "assistente", "mentor", "closer", "runtime")),
@@ -33,6 +37,9 @@ OPERATIONS: dict[str, tuple[dict[str, type], dict[str, type], tuple[str, ...]]] 
         {"to": list, "position_id": int},
         ("closer", "capitano", "assistente", "mentor"),
     ),
+    "apply.check": ({"position_id": int}, {}, ANY_ROLE),
+    "apply.claim": ({"position_id": int, "destination": str}, {}, ANY_ROLE),
+    "apply.revoke": ({"position_id": int, "instant": str}, {}, ANY_ROLE),
 }
 SEND_KINDS = {"application": ("closer",), "chat": ("capitano", "assistente", "mentor")}
 MAX_SUBJECT = 300
@@ -87,7 +94,7 @@ def parse_request(raw: bytes) -> dict[str, Any]:
         if kind is not int and not isinstance(value, kind):
             raise ProtocolError("field_type")
     role = role_of(req.get("role", "")) if isinstance(req.get("role", ""), str) else ""
-    if role not in roles:
+    if roles != ANY_ROLE and role not in roles:
         raise ProtocolError("role_not_allowed")
     if op in ("mail.count", "mail.poll"):
         days = args.get("since_days", 3 if op == "mail.poll" else 1)

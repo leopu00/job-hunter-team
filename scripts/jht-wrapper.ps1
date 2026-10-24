@@ -1104,6 +1104,109 @@ function Invoke-BrokerAdmin {
   return $LASTEXITCODE
 }
 
+# Autorizzare una candidatura dall'host (T68). Il CLOSER invia solo cio' che il
+# broker ha registrato, e il broker registra solo da canali che gli agenti non
+# hanno: questo terminale dell'host e' uno. Il container mostra l'anteprima
+# («titolo @ azienda · host») con il suo digest, la persona conferma qui, il
+# container scrive il flag solo se la posizione e' ancora quella vista, e
+# l'host registra nel broker istante e destinazione. Ogni campo del container
+# e' chiuso e ricontrollato qui prima di finire in una riga di comando.
+function Read-ApplyFields {
+  param([AllowNull()] [string]$Line)
+  if ([string]::IsNullOrEmpty($Line)) { return $null }
+  $fields = $Line -split "`t"
+  if ($fields.Count -ne 6) { return $null }
+  return ,$fields
+}
+
+function Invoke-ApplySkill {
+  param([string]$ContainerId, [string[]]$SkillArgs)
+  $previous = [Console]::OutputEncoding
+  [Console]::OutputEncoding = [Text.UTF8Encoding]::new($false)
+  try {
+    # Tutte le righe, poi l'ultima: con `| Select-Object -First 1` $LASTEXITCODE
+    # non e' piu' quello di docker.
+    $lines = @(& docker exec $ContainerId python3 /app/shared/skills/apply_request.py @SkillArgs --host 2>$null)
+  } finally {
+    [Console]::OutputEncoding = $previous
+  }
+  if ($lines.Count -eq 0) { return $null }
+  return Read-ApplyFields ([string]$lines[$lines.Count - 1])
+}
+
+function Get-ApplyReason {
+  param($Fields)
+  if ($null -eq $Fields) { return 'nessuna risposta dal container' }
+  return [string]$Fields[1]
+}
+
+function Invoke-ApplyHostCommand {
+  param([string[]]$ApplyArgs)
+  $action = [string]$ApplyArgs[0]
+  $id = ''
+  if ($ApplyArgs.Count -ge 2) { $id = [string]$ApplyArgs[1] }
+  if ($id -cnotmatch '^[1-9][0-9]{0,9}$') { Write-Err 'uso: jht apply request|cancel <id>'; return 2 }
+  $containerId = Get-RunningComposeServiceId $Container
+  if (-not $containerId) { Write-Err 'Container JHT non attestabile.'; return 1 }
+
+  if ($action -ceq 'cancel') {
+    $withdrawn = Invoke-ApplySkill $containerId @('cancel', $id)
+    if ($null -eq $withdrawn -or $withdrawn[0] -cne '1') {
+      Write-Err "Ritiro non riuscito: $(Get-ApplyReason $withdrawn)."
+      return 1
+    }
+    Write-Info "Ritirata #${id}: non verra' inviata."
+    return 0
+  }
+
+  $shown = Invoke-ApplySkill $containerId @('show', $id)
+  if ($null -eq $shown -or $shown[0] -cne '1') {
+    Write-Err "Non autorizzabile: $(Get-ApplyReason $shown)."
+    return 1
+  }
+  $confirm = [string]$shown[2]
+  $shownDestination = [string]$shown[3]
+  if ($confirm -cnotmatch '^[0-9a-f]{64}$' -or $shownDestination -cnotmatch '^((web|email):[a-z0-9.-]{3,253}|portal:[a-z]{2,20})$') {
+    Write-Err 'Anteprima non valida: niente autorizzato.'
+    return 1
+  }
+  if ([Console]::IsInputRedirected -or -not [Environment]::UserInteractive) {
+    Write-Err "Serve un terminale: l'autorizzazione si conferma a mano."
+    return 1
+  }
+  Write-Host ''
+  Write-Host "  #${id}  $([string]$shown[5])"
+  Write-Host ''
+  Write-Host "  Con l'invio automatico acceso il team compila e INVIA la candidatura,"
+  Write-Host "  senza un'altra conferma. Una volta partita non si richiama."
+  $answer = Read-Host '  Autorizzi questa candidatura? [s/N]'
+  if (@('s', 'si', 'sì', 'y', 'yes') -notcontains ([string]$answer).Trim().ToLowerInvariant()) {
+    Write-Info 'Annullato: niente autorizzato.'
+    return 1
+  }
+
+  $written = Invoke-ApplySkill $containerId @('request', $id, '--expect', $confirm)
+  if ($null -eq $written -or $written[0] -cne '1') {
+    Write-Err "Non autorizzata: $(Get-ApplyReason $written)."
+    return 1
+  }
+  $destination = [string]$written[3]
+  $instant = [string]$written[4]
+  if ($destination -cne $shownDestination -or $instant -cnotmatch '^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\.[0-9]{3}Z$') {
+    $null = Invoke-ApplySkill $containerId @('cancel', $id)
+    Write-Err "Risposta del container non valida: autorizzazione ritirata, niente partira'."
+    return 1
+  }
+  $recorded = Invoke-BrokerAdmin -InputText '' apply record $id $instant $destination
+  if ($recorded -ne 0) {
+    $null = Invoke-ApplySkill $containerId @('cancel', $id)
+    Write-Err "Il broker non ha registrato l'autorizzazione: ritirata, niente partira'."
+    return 1
+  }
+  Write-Info "Autorizzata #${id}, verso ${destination}: il CLOSER la prendera' al prossimo giro."
+  return 0
+}
+
 function Invoke-TelegramAdmin {
   param([string]$InputText = $null, [Parameter(ValueFromRemainingArguments)] [string[]]$AdminArgs)
   $telegramId = Get-RunningComposeServiceId $TelegramContainer
@@ -1459,6 +1562,31 @@ function Invoke-BrokerMigrateLegacyOnce {
   # $LASTEXITCODE resterebbe 1 per chi viene dopo (T89).
   $global:LASTEXITCODE = 0
   return 0
+}
+
+# First pairing may take user_id from cloud.json in the box, a box-writable
+# file.  This is a bootstrap residual only: once the broker has an account,
+# normal starts refresh its token but never replace that account automatically;
+# replacement requires the explicit host command `jht apply relink-account`.
+function Initialize-BrokerWebAuthorisations {
+  $agentId = Get-RunningComposeServiceId 'jht'
+  $brokerId = Get-RunningComposeServiceId $BrokerContainer
+  if (-not $agentId -or -not $brokerId) { return }
+  $state = (& docker exec $brokerId jht-broker-admin apply web-status 2>$null) -join "`n"
+  $token = (& docker exec -u 1001 $agentId node -e 'const fs=require("fs");try{const c=JSON.parse(fs.readFileSync("/jht_home/cloud.json","utf8"));if(typeof c.token==="string")process.stdout.write(c.token)}catch{}' 2>$null) -join ''
+  if ($token) { $null = Invoke-BrokerAdmin -InputText $token apply web-token }
+  if ($state -match '"account_id": null') {
+    $account = (& docker exec -u 1001 $agentId node -e 'const fs=require("fs");try{const c=JSON.parse(fs.readFileSync("/jht_home/cloud.json","utf8"));if(typeof c.user_id==="string"&&/^[0-9a-f-]{36}$/i.test(c.user_id))process.stdout.write(c.user_id)}catch{}' 2>$null) -join ''
+    if ($account) { $null = Invoke-BrokerAdmin apply account $account }
+  }
+}
+
+function Reset-BrokerWebAccount {
+  $agentId = Get-RunningComposeServiceId 'jht'
+  if (-not $agentId) { Write-Err 'apply relink-account: container non attivo.'; return 1 }
+  $account = (& docker exec -u 1001 $agentId node -e 'const fs=require("fs");try{const c=JSON.parse(fs.readFileSync("/jht_home/cloud.json","utf8"));if(typeof c.user_id==="string"&&/^[0-9a-f-]{36}$/i.test(c.user_id))process.stdout.write(c.user_id)}catch{}' 2>$null) -join ''
+  if (-not $account) { Write-Err 'apply relink-account: cloud account non disponibile. Esegui prima jht cloud pair.'; return 1 }
+  return Invoke-BrokerAdmin apply account $account
 }
 
 function Remove-BrokerResetData {
@@ -3002,6 +3130,7 @@ switch ($Sub) {
     Invoke-Compose 'up' '-d'
     Stop-OnFailedComposeUp $LASTEXITCODE
     $null = Invoke-BrokerMigrateLegacyOnce
+    Initialize-BrokerWebAuthorisations
     # The up went well (a failed one has already stopped jht with its code): 0, not the code of
     # whichever native ran last. The setup reads it (enable-podman-windows-runtime.ps1, T89).
     exit 0
@@ -3034,6 +3163,7 @@ switch ($Sub) {
     Invoke-Compose 'up' '-d'
     Stop-OnFailedComposeUp $LASTEXITCODE
     $null = Invoke-BrokerMigrateLegacyOnce
+    Initialize-BrokerWebAuthorisations
     # The up went well (a failed one has already stopped jht with its code): 0, not the code of
     # whichever native ran last. The setup reads it (enable-podman-windows-runtime.ps1, T89).
     exit 0
@@ -3048,6 +3178,21 @@ switch ($Sub) {
     Require-ComposeFile
     Require-Docker
     exit (Invoke-MailCommand $Rest)
+  }
+
+  'apply' {
+    Require-ComposeFile
+    Require-Docker
+    Ensure-Up
+    if ($Rest.Count -gt 0 -and $Rest[0] -eq 'relink-account') {
+      if ($Rest.Count -ne 1) { Write-Err 'uso: jht apply relink-account'; exit 2 }
+      exit (Reset-BrokerWebAccount)
+    }
+    if ($Rest.Count -ge 1 -and @('request', 'cancel') -ccontains [string]$Rest[0]) {
+      exit (Invoke-ApplyHostCommand $Rest)
+    }
+    & docker exec @ExecFlags -e "JHT_HOST_TYPE=$env:JHT_HOST_TYPE" $Container node $NodeEntry $Sub @Rest
+    exit $LASTEXITCODE
   }
 
   'telegram' {
@@ -3144,6 +3289,9 @@ switch ($Sub) {
     Require-Docker
     Ensure-Up
     & docker exec @ExecFlags -e "JHT_HOST_TYPE=$env:JHT_HOST_TYPE" $Container node $NodeEntry $Sub @Rest
+    $code = $LASTEXITCODE
+    if ($Sub -eq 'cloud' -and $Rest.Count -gt 0 -and $Rest[0] -eq 'pair' -and $code -eq 0) { Initialize-BrokerWebAuthorisations }
+    exit $code
     break
   }
 }

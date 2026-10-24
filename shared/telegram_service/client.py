@@ -56,6 +56,11 @@ def main(argv: list[str]) -> int:
     send.add_argument("--kind", choices=MESSAGE_KINDS, default="notification")
     send.add_argument("--source-id", default="")
     send.add_argument("text")
+    apply = sub.add_parser("apply-request")
+    apply.add_argument("--position-id", type=int, required=True)
+    apply.add_argument("--title", required=True)
+    apply.add_argument("--company", required=True)
+    apply.add_argument("--url", required=True)
     pull = sub.add_parser("pull")
     pull.add_argument("--bot-role", choices=BOT_ROLES, required=True)
     pull.add_argument("--limit", type=int, default=10)
@@ -72,6 +77,10 @@ def main(argv: list[str]) -> int:
             "telegram.send",
             {"bot_role": args.bot_role, "text": args.text, "source_id": source_id, "kind": args.kind},
         )
+    elif args.command == "apply-request":
+        response = call("telegram.apply.request", {
+            "position_id": args.position_id, "title": args.title, "company": args.company, "url": args.url,
+        })
     elif args.command == "pull":
         response = call("telegram.inbox.pull", {"bot_role": args.bot_role, "limit": args.limit})
     else:

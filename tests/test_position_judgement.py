@@ -37,7 +37,7 @@ from _db import get_db, ensure_schema
 c = get_db(); ensure_schema(c)
 for title, status in (("Backend", "scored"), ("Data", "ready"), ("Ops", "checked")):
     c.execute("INSERT INTO positions (title, company, status, url) VALUES (?, 'Acme', ?, ?)",
-              (title, status, "https://jobs.example.invalid/" + title))
+              (title, status, "https://jobs.example.com/" + title))
 c.commit(); c.close()
 """], capture_output=True, text=True, env=env)
     assert seed.returncode == 0, seed.stderr
@@ -139,11 +139,21 @@ def test_without_consent_an_application_is_not_authorised_and_nothing_is_written
     assert row(db, "SELECT apply_requested FROM positions WHERE id = 2") == (0,)
 
 
+def preview_digest(env, pid):
+    code, out = run(env, "apply-preview", pid)
+    assert code == 0, out
+    return out["confirm"]
+
+
 def test_with_consent_the_gate_still_decides(home):
     db, env, tmp_path = home
     consent(tmp_path, True)
     code, out = run(env, "apply-request", "2", "--on")
+    assert (code, out["code"]) == (1, "confirmation_required")
+    code, out = run(env, "apply-request", "2", "--on", "--expect", preview_digest(env, "2"))
     assert code == 0, out
+    # what the app records in the broker: this write's instant and the preview's destination
+    assert out["destination"].startswith(("web:", "portal:")) and out["instant"].endswith("Z")
     assert row(db, "SELECT apply_requested FROM positions WHERE id = 2") == (1,)
     code, out = run(env, "apply-request", "1", "--on")  # scored, not ready: the gate refuses
     assert code == 1 and out["code"] not in ("consent_absent", "consent_disabled")
@@ -158,8 +168,9 @@ def test_an_agent_can_neither_authorise_nor_withdraw_an_application(home):
         code, out = run(agent, "apply-request", "2", switch)
         assert code == 1 and out["code"] == "agent_caller", switch
     assert row(db, "SELECT apply_requested, apply_requested_by FROM positions WHERE id = 2") == (0, None)
+    assert run(agent, "apply-preview", "2")[1]["code"] == "agent_caller"
     # the person's own request still goes through
-    assert run(env, "apply-request", "2", "--on")[0] == 0
+    assert run(env, "apply-request", "2", "--on", "--expect", preview_digest(env, "2"))[0] == 0
 
 
 # ── closed arguments, the note only on stdin ──
@@ -237,3 +248,14 @@ def test_the_three_notes_written_here_reach_no_agent_reader(home):
         assert SENTINEL not in done.stdout + done.stderr, f"{name} {args}"
     # and the user still has all three
     assert row(db, "SELECT body FROM position_user_notes WHERE position_id = 3") == (SENTINEL,)
+
+
+def test_the_preview_says_what_is_confirmed_and_writes_nothing(home):
+    db, env, tmp_path = home
+    consent(tmp_path, True)
+    code, out = run(env, "apply-preview", "2")
+    assert code == 0 and " @ " in out["summary"] and " · " in out["summary"]
+    assert len(out["confirm"]) == 64
+    assert row(db, "SELECT apply_requested FROM positions WHERE id = 2") == (0,)
+    for bad in ("zz", "0" * 63, "A" * 64):
+        assert run(env, "apply-request", "2", "--on", "--expect", bad)[1]["code"] == "request_invalid"

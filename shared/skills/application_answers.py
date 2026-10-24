@@ -25,8 +25,9 @@ short code, or — only when exactly one request is open and it was delivered
 on Telegram — the next message. Two open requests and no code resolve
 nothing. The reply is validated by the same rule as the dashboard
 (`validate_reply`, pinned against `web/lib/application-answer-request.ts` by
-`shared/cloud/application-answer-cases.json`), and a valid one renews the
-position's authorisation as `user_telegram`.
+`shared/cloud/application-answer-cases.json`). A valid reply renews the local
+UI flag as `user_telegram` so the stopped checkpoint can resume; the broker is
+still the proof used by the CLOSER before sending.
 
 Commands (one JSON line on stdout)::
 
@@ -852,8 +853,9 @@ def resolve_telegram_reply(
     ).rowcount
     if changed != 1:
         return Resolution("not_an_answer")
-    # An answer renews an authorisation that is on; it never turns a withdrawn
-    # one back on. The answer is still kept for the next time the user asks.
+    # The answer renews the UI flag only after the normal local gate permits
+    # it, so a stopped checkpoint sees a newer instant. It cannot prove an
+    # authorisation: the CLOSER asks the broker immediately before sending.
     flag = conn.execute("SELECT apply_requested FROM positions WHERE id = ?", (position_id,)).fetchone()
     withdrawn = not (flag and flag[0] == 1)
     if verdict.allowed and not withdrawn:

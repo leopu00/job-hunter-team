@@ -77,6 +77,12 @@ def box(tmp_path):
 
 
 def run(box, *args):
+    """The script as the person's channels run it: a `request` carries the confirmation of the
+    preview `show` gave, as `jht apply request` on the host and the app do."""
+    if args[:1] == ("request",) and "--expect" not in args:
+        code, shown = run(box, "show", args[1])
+        if shown.get("confirm"):
+            args = (*args, "--expect", shown["confirm"])
     home, env = box
     r = subprocess.run(
         [sys.executable, str(SKILLS / "apply_request.py"), *map(str, args)],
@@ -85,6 +91,19 @@ def run(box, *args):
         env=env,
     )
     return r.returncode, json.loads(r.stdout.strip().splitlines()[-1])
+
+
+def confirm(pid):
+    """The `confirm` of the preview of `pid`, read in process (the box's JHT_DB)."""
+    import apply_request
+    from _db import get_db
+
+    conn = get_db()
+    conn.row_factory = sqlite3.Row
+    try:
+        return apply_request.preview(apply_request._position(conn, pid))["confirm"]
+    finally:
+        conn.close()
 
 
 def row(box, pid):
@@ -310,7 +329,7 @@ def _now_iso(**delta):
 def test_una_request_sveglia_il_closer_vivo_una_volta_sola(box, live):
     import apply_request
 
-    out, code = apply_request.toggle(1, True)
+    out, code = apply_request.toggle(1, True, confirm(1))
     assert code == 0 and out["closer_woken"] is True
     assert len(live["sent"]) == 1
     session, text = live["sent"][0]
@@ -320,7 +339,7 @@ def test_una_request_sveglia_il_closer_vivo_una_volta_sola(box, live):
     assert _poll(box) == [] and len(live["sent"]) == 1
     # A new authorisation is a new wake.
     apply_request.toggle(1, False)
-    apply_request.toggle(1, True)
+    apply_request.toggle(1, True, confirm(1))
     assert len(live["sent"]) == 2
 
 
@@ -328,7 +347,7 @@ def test_senza_closer_vivo_niente_claim_e_il_poll_lo_sveglia_dopo(box, live):
     import apply_request
 
     live["sessions"] = []
-    out, _ = apply_request.toggle(1, True)
+    out, _ = apply_request.toggle(1, True, confirm(1))
     assert out["closer_woken"] is False and live["sent"] == []
     live["sessions"] = ["CLOSER-1"]
     woken = _poll(box)
@@ -395,7 +414,9 @@ def test_a_tmux_with_agent_panes_does_not_make_the_persons_command_an_agent(box)
         assert tmux("new-session", "-d", "-s", "CAPITANO", "sleep 120").returncode == 0
         # the server has an agent's pane to be asked about
         assert "CAPITANO" in tmux("list-panes", "-a", "-F", "#{session_name}").stdout
-        r = subprocess.run([sys.executable, script, "request", "1"], capture_output=True, text=True, env=env, timeout=60)
+        _, shown = run(box, "show", 1)
+        r = subprocess.run([sys.executable, script, "request", "1", "--expect", shown["confirm"]],
+                           capture_output=True, text=True, env=env, timeout=60)
         out = json.loads(r.stdout.strip().splitlines()[-1])
         # passing means the authorisation is written, not only «not refused as an agent»
         assert r.returncode == 0 and out["ok"] and out["reason"] == "authorised", (out, r.stderr)
@@ -417,3 +438,51 @@ def test_a_tmux_with_agent_panes_does_not_make_the_persons_command_an_agent(box)
         assert row(box, 2) == before
     finally:
         private_tmux.close_dir(Path(sockets))
+
+
+# ── The preview the person confirms ──────────────────────────────────────────
+
+
+def test_a_request_without_the_previews_confirmation_writes_nothing(box):
+    code, out = run(box, "request", 1, "--expect", "")
+    assert (code, out["reason"]) == (1, "position_changed")
+    r = subprocess.run([sys.executable, str(SKILLS / "apply_request.py"), "request", "1"],
+                       capture_output=True, text=True, env=box[1])
+    assert json.loads(r.stdout.strip().splitlines()[-1])["reason"] == "confirmation_required"
+    assert row(box, 1)[0] in (0, None)
+
+
+def test_a_position_that_changed_after_the_preview_is_not_the_one_confirmed(box):
+    _, shown = run(box, "show", 1)
+    assert shown["summary"] == "Synthetic role @ Synthetic company · jobs.ashbyhq.com"
+    assert shown["destination"] == "portal:ashby"
+    conn = sqlite3.connect(box[0] / "jobs.db")
+    conn.execute("UPDATE positions SET url = 'https://elsewhere.example.com/apply' WHERE id = 1")
+    conn.commit()
+    conn.close()
+    code, out = run(box, "request", 1, "--expect", shown["confirm"])
+    assert (code, out["reason"]) == (1, "position_changed")
+    assert row(box, 1)[0] in (0, None)
+
+
+def test_the_preview_shows_no_hidden_or_control_characters(box):
+    conn = sqlite3.connect(box[0] / "jobs.db")
+    conn.execute("UPDATE positions SET title = ?, company = ? WHERE id = 1",
+                 ("Role\x1b[2J‮" + "x" * 200, "Synthetic\ncompany​"))
+    conn.commit()
+    conn.close()
+    _, shown = run(box, "show", 1)
+    title, _, rest = shown["summary"].partition(" @ ")
+    assert title.startswith("Role[2J") and len(title) == 80 and title.endswith("…")
+    assert rest == "Synthetic company · jobs.ashbyhq.com"
+    assert all(ch.isprintable() for ch in shown["summary"])
+
+
+def test_a_url_with_no_closed_destination_cannot_be_authorised(box):
+    conn = sqlite3.connect(box[0] / "jobs.db")
+    conn.execute("UPDATE positions SET url = 'http://10.0.0.1/apply' WHERE id = 1")
+    conn.commit()
+    conn.close()
+    code, out = run(box, "show", 1)
+    assert out["ok"] is False and out["reason"] == "destination_invalid"
+    assert run(box, "request", 1, "--expect", "0" * 64)[1]["reason"] == "destination_invalid"

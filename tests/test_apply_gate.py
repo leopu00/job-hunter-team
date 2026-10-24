@@ -1168,3 +1168,30 @@ def test_la_cli_queue_porta_l_avviso_una_volta_sola(tmp_path):
     assert len(first["positions"]) == 5
     second = json.loads(run_cli("queue", "--json", "--config", str(cfg), "--db", db, env=env).stdout)
     assert "web_cap_notice" not in second and len(second["held"]) == 2
+
+
+def test_l_avviso_del_notaio_mancante_e_una_volta_per_posizione_e_istante(tmp_path):
+    from apply_gate import authorisation_unproven_notices
+
+    db = tmp_path / "jobs.db"
+    with sqlite3.connect(db) as conn:
+        conn.execute("CREATE TABLE positions (id INTEGER PRIMARY KEY, apply_requested_at TEXT)")
+        conn.executemany("INSERT INTO positions VALUES (?, ?)", [
+            (7, "2026-10-23T18:00:00.000Z"),
+            (8, "2026-10-23T18:01:00.000Z"),
+        ])
+    queue = {"held": [
+        {"position_id": 7, "reason": "authorisation_unproven"},
+        {"position_id": 8, "reason": "authorisation_unproven"},
+        {"position_id": 9, "reason": "url_missing"},
+    ]}
+    assert authorisation_unproven_notices(queue, tmp_path, str(db)) == [
+        {"position_id": 7, "apply_requested_at": "2026-10-23T18:00:00.000Z"},
+        {"position_id": 8, "apply_requested_at": "2026-10-23T18:01:00.000Z"},
+    ]
+    assert authorisation_unproven_notices(queue, tmp_path, str(db)) == []
+    with sqlite3.connect(db) as conn:
+        conn.execute("UPDATE positions SET apply_requested_at = ? WHERE id = 7", ("2026-10-23T19:00:00.000Z",))
+    assert authorisation_unproven_notices(queue, tmp_path, str(db)) == [
+        {"position_id": 7, "apply_requested_at": "2026-10-23T19:00:00.000Z"},
+    ]

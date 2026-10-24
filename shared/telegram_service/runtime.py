@@ -6,6 +6,7 @@ import hashlib
 import json
 import os
 import re
+import secrets
 import subprocess
 import sys
 import threading
@@ -14,10 +15,13 @@ import unicodedata
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable
+from urllib.parse import urlsplit
 
 from . import store
 from .api import BotAPI, TelegramError
 from .protocol import AGENT_PREFIX, BOT_ROLES
+from shared.broker import notary, telegram_client
+from shared.skills.external_content import INVISIBLE_COMMANDS, WRITING_INVISIBLES
 
 BURST_LIMIT = 10
 DAILY_LIMIT = 300
@@ -28,6 +32,10 @@ LEASE_SECONDS = 30
 MAX_EVENTS = 1_000
 MAX_DISCARDED_UPDATES = 500
 MAX_TELEGRAM_UTF16 = 4_096
+MAX_AUTH_TITLE = 180
+MAX_AUTH_COMPANY = 180
+AUTH_QUESTION_STATE = "apply-authorisation-questions"
+AUTH_CALLBACK = re.compile(r"jhta:([0-9a-f]{32}):yes\Z")
 OTP_NUMERIC = re.compile(r"[0-9]{4,8}\Z")
 OTP_SHORT_TOKEN = re.compile(r"(?=.*[A-Za-z])(?=.*[0-9])[A-Za-z0-9_-]{6,12}\Z")
 ALLOWED_ATTACHMENT_MIME = frozenset({
@@ -57,6 +65,48 @@ class TransportRefusal(Exception):
 def _now_iso(unix: int | float | None = None) -> str:
     stamp = unix if isinstance(unix, (int, float)) and not isinstance(unix, bool) else time.time()
     return datetime.fromtimestamp(stamp, timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+
+
+def _notary_instant(unix: int | float | None = None) -> str:
+    stamp = unix if isinstance(unix, (int, float)) and not isinstance(unix, bool) else time.time()
+    now = datetime.fromtimestamp(stamp, timezone.utc)
+    return now.strftime("%Y-%m-%dT%H:%M:%S.") + f"{now.microsecond // 1000:03d}Z"
+
+
+def _display_field(value: object, limit: int) -> str:
+    """Reject hidden/control text before it can reach the fixed question."""
+    if not isinstance(value, str):
+        raise TransportRefusal("apply_question_invalid")
+    normalized = unicodedata.normalize("NFKC", value)
+    if any(
+        char in INVISIBLE_COMMANDS
+        or char in WRITING_INVISIBLES
+        or unicodedata.category(char) in {"Cc", "Cf", "Zl", "Zp"}
+        for char in normalized
+    ):
+        raise TransportRefusal("apply_question_invalid")
+    cleaned = " ".join(normalized.split())
+    if not cleaned or len(cleaned) > limit:
+        raise TransportRefusal("apply_question_invalid")
+    return cleaned
+
+
+def _question_destination(value: object) -> tuple[str, str]:
+    if not isinstance(value, str) or len(value) > 2_000:
+        raise TransportRefusal("apply_question_invalid")
+    try:
+        parsed = urlsplit(value)
+    except ValueError:
+        raise TransportRefusal("apply_question_invalid") from None
+    if parsed.scheme not in {"http", "https"} or parsed.username or parsed.password or not parsed.hostname:
+        raise TransportRefusal("apply_question_invalid")
+    host = parsed.hostname.lower()
+    if any(unicodedata.category(char) in {"Cc", "Cf", "Zl", "Zp"} for char in host):
+        raise TransportRefusal("apply_question_invalid")
+    try:
+        return host, notary.destination(f"web:{host}")
+    except notary.NotaryRefusal:
+        raise TransportRefusal("apply_question_invalid") from None
 
 
 def _utf16_units(text: str) -> int:
@@ -320,7 +370,118 @@ class Runtime:
             return self.pull(request["args"])
         if op == "telegram.inbox.ack":
             return self.ack(request["args"])
+        if op == "telegram.apply.request":
+            return self.request_apply_authorisation(request["args"])
         raise TransportRefusal("unknown_operation")
+
+    def request_apply_authorisation(self, args: dict) -> dict:
+        """Ask from a service-owned template, with a service-owned callback.
+
+        Fields from the agents' socket are untrusted data.  The service cleans
+        them, selects the bot, creates the question identifier and calculates
+        the closed destination. A pending question is reused to avoid turning
+        agent retries into a stream of prompts.
+        """
+        title = _display_field(args.get("title"), MAX_AUTH_TITLE).replace("·", " ")
+        company = _display_field(args.get("company"), MAX_AUTH_COMPANY).replace("·", " ")
+        host, destination = _question_destination(args.get("url"))
+        position_id = args["position_id"]
+        now = int(time.time())
+        with store.locked(AUTH_QUESTION_STATE):
+            questions = store.read_state(AUTH_QUESTION_STATE, {})
+            questions = {
+                key: value for key, value in questions.items()
+                if isinstance(value, dict) and value.get("expires_at", 0) > now and value.get("state") in {"sending", "pending"}
+            }
+            for question_id, value in questions.items():
+                if value.get("position_id") == position_id:
+                    store.write_state(AUTH_QUESTION_STATE, questions)
+                    return {"ok": True, "status": "already_pending", "question_id": question_id}
+            question_id = secrets.token_hex(16)
+            questions[question_id] = {
+                "position_id": position_id,
+                "destination": destination,
+                "expires_at": now + QUESTION_TTL_SECONDS,
+                "state": "sending",
+            }
+            store.write_state(AUTH_QUESTION_STATE, questions)
+        try:
+            secret, api = self._bot("assistente")
+            text = (
+                "🔐 JHT · autorizzazione candidatura\n\n"
+                f"Vuoi candidarti a:\n{title} @ {company}\nDestinazione: {host}\n\n"
+                "L'autorizzazione vale una sola volta per questa destinazione."
+            )
+            message_id = api.send_message(
+                secret["chat_id"], text,
+                {"inline_keyboard": [[{"text": "Sì, candidati", "callback_data": f"jhta:{question_id}:yes"}]]},
+            )
+        except (TelegramError, TransportRefusal) as exc:
+            with store.locked(AUTH_QUESTION_STATE):
+                questions = store.read_state(AUTH_QUESTION_STATE, {})
+                questions.pop(question_id, None)
+                store.write_state(AUTH_QUESTION_STATE, questions)
+            raise TransportRefusal(exc.code) from None
+        with store.locked(AUTH_QUESTION_STATE):
+            questions = store.read_state(AUTH_QUESTION_STATE, {})
+            current = questions.get(question_id)
+            if not isinstance(current, dict):
+                raise TransportRefusal("apply_question_unavailable")
+            questions[question_id] = {**current, "state": "pending", "message_id": message_id}
+            store.write_state(AUTH_QUESTION_STATE, questions)
+        return {"ok": True, "status": "asked", "question_id": question_id}
+
+    def _enqueue_apply_authorisation(self, update_id: int, position_id: int, instant: str) -> None:
+        """Make the broker-recorded click available to the read-only inbox."""
+        event_id = f"telegram:assistente:{update_id}"
+        event = {
+            "event_id": event_id,
+            "agent": "assistente",
+            "kind": "apply_authorisation",
+            "position_id": position_id,
+            "instant": instant,
+            "created_at": _now_iso(),
+        }
+        with store.locked("events-assistente"):
+            events = store.read_state("events-assistente", [])
+            if not any(item.get("event_id") == event_id for item in events):
+                if len(events) >= MAX_EVENTS:
+                    raise TransportRefusal("inbox_full")
+                events.append(event)
+                store.write_state("events-assistente", events)
+
+    def _apply_callback(self, role: str, update_id: int, callback: dict, secret: dict[str, str], api: BotAPI) -> bool:
+        callback_id = callback.get("id")
+        message = callback.get("message")
+        chat = message.get("chat") if isinstance(message, dict) else None
+        matched = AUTH_CALLBACK.fullmatch(str(callback.get("data") or ""))
+        if not isinstance(callback_id, str) or not isinstance(chat, dict) or str(chat.get("id")) != secret["chat_id"] or not matched:
+            return False
+        question_id = matched.group(1)
+        now = int(time.time())
+        with store.locked(AUTH_QUESTION_STATE):
+            questions = store.read_state(AUTH_QUESTION_STATE, {})
+            question = questions.get(question_id)
+            if (
+                not isinstance(question, dict)
+                or question.get("state") != "pending"
+                or question.get("expires_at", 0) <= now
+                or role != "assistente"
+                or not isinstance(message, dict)
+                or message.get("message_id") != question.get("message_id")
+            ):
+                api.answer_callback_query(callback_id, "Questa autorizzazione non è più disponibile.")
+                return True
+            instant = _notary_instant()
+            response = telegram_client.record(question["position_id"], instant, question["destination"])
+            if not response.get("ok"):
+                api.answer_callback_query(callback_id, "Autorizzazione non verificata: candidatura non inviata.")
+                return True
+            self._enqueue_apply_authorisation(update_id, question["position_id"], instant)
+            questions[question_id] = {**question, "state": "used", "used_at": now}
+            store.write_state(AUTH_QUESTION_STATE, questions)
+        api.answer_callback_query(callback_id, "Autorizzazione registrata.")
+        return True
 
     @staticmethod
     def _is_open_question(role: str, reply_id: object, now: int) -> bool:
@@ -415,6 +576,9 @@ class Runtime:
 
     def process_update(self, role: str, update: dict, secret: dict[str, str], api: BotAPI) -> None:
         update_id = update.get("update_id")
+        callback = update.get("callback_query")
+        if isinstance(callback, dict) and isinstance(update_id, int) and not isinstance(update_id, bool) and self._apply_callback(role, update_id, callback, secret, api):
+            return
         message = update.get("message") or update.get("edited_message")
         if not isinstance(update_id, int) or isinstance(update_id, bool) or not isinstance(message, dict):
             return

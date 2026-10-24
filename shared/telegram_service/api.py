@@ -68,15 +68,21 @@ class BotAPI:
         result = value.get("result")
         return result if isinstance(result, dict) else {"value": result}
 
-    def send_message(self, chat_id: str, text: str) -> int:
+    def send_message(self, chat_id: str, text: str, reply_markup: dict | None = None) -> int:
+        payload = {"chat_id": chat_id, "text": text, "disable_web_page_preview": True}
+        if reply_markup is not None:
+            payload["reply_markup"] = reply_markup
         result = self.call(
             "sendMessage",
-            {"chat_id": chat_id, "text": text, "disable_web_page_preview": True},
+            payload,
         )
         message_id = result.get("message_id")
         if not isinstance(message_id, int) or isinstance(message_id, bool):
             raise TelegramError("telegram_bad_response")
         return message_id
+
+    def answer_callback_query(self, callback_id: str, text: str) -> None:
+        self.call("answerCallbackQuery", {"callback_query_id": callback_id, "text": text[:200]})
 
     def get_me(self) -> str:
         """The bot's username, to tell the person where to send the code."""
@@ -88,7 +94,8 @@ class BotAPI:
     def get_updates(self, offset: int, timeout: int = 25) -> list[dict]:
         result = self.call(
             "getUpdates",
-            {"offset": offset, "timeout": timeout, "allowed_updates": ["message", "edited_message"]},
+            {"offset": offset, "timeout": timeout,
+             "allowed_updates": ["message", "edited_message", "callback_query"]},
         )
         value = result.get("value")
         if not isinstance(value, list):
