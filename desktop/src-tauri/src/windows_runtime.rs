@@ -45,7 +45,24 @@ const POWERSHELL_FLAGS: [&str; 6] = [
     "-File",
 ];
 
-pub(crate) const AUTOSTART_TASK_NAME: &str = "Job Hunter Team - Start runtime";
+pub(crate) const AUTOSTART_TASK_LABEL: &str = "Job Hunter Team - Start runtime";
+
+/// A per-user name keeps a desktop task away from legacy/global JHT tasks
+/// (including P23). The SID is also the identity the registration attests.
+pub(crate) fn autostart_task_name(sid: &str) -> String {
+    format!("{AUTOSTART_TASK_LABEL} [{sid}]")
+}
+
+fn current_user_sid(output: &[u8]) -> Option<String> {
+    String::from_utf8_lossy(output)
+        .split(|value: char| !(value.is_ascii_alphanumeric() || value == '-'))
+        .find(|value| value.strip_prefix("S-1-").is_some_and(|parts| {
+            let segments = parts.split('-');
+            segments.clone().nth(1).is_some()
+                && segments.all(|part| !part.is_empty() && part.chars().all(|digit| digit.is_ascii_digit()))
+        }))
+        .map(str::to_owned)
+}
 
 fn xml_section<'a>(xml: &'a str, name: &str) -> Option<&'a str> {
     let open = format!("<{name}");
@@ -73,15 +90,17 @@ fn autostart_action(shell: &Path, wrapper: &Path) -> String {
 
 /// The task is created by the non-elevated desktop process, explicitly bound
 /// to its current interactive user. `/IT` refuses a password-backed task.
-pub(crate) fn autostart_create_args(wrapper: &Path, system_root: Option<OsString>, user: &str) -> Vec<OsString> {
+pub(crate) fn autostart_create_args(wrapper: &Path, system_root: Option<OsString>, user: &str, sid: &str) -> Vec<OsString> {
     let shell = powershell_path(system_root);
     let action = autostart_action(&shell, wrapper);
-    ["/Create", "/TN", AUTOSTART_TASK_NAME, "/SC", "ONLOGON", "/TR", &action, "/RL", "LIMITED", "/RU", user, "/IT", "/F"]
+    let task = autostart_task_name(sid);
+    ["/Create", "/TN", &task, "/SC", "ONLOGON", "/TR", &action, "/RL", "LIMITED", "/RU", user, "/IT", "/F"]
         .into_iter().map(OsString::from).collect()
 }
 
-fn autostart_query_args() -> Vec<OsString> {
-    ["/Query", "/TN", AUTOSTART_TASK_NAME, "/XML"].into_iter().map(OsString::from).collect()
+fn autostart_query_args(sid: &str) -> Vec<OsString> {
+    let task = autostart_task_name(sid);
+    ["/Query", "/TN", &task, "/XML"].into_iter().map(OsString::from).collect()
 }
 
 fn autostart_contract(xml: &str, user: &str, shell: &Path, wrapper: &Path) -> bool {
@@ -113,13 +132,18 @@ pub(crate) fn register_autostart(wrapper: &Path) -> bool {
         _ => return false,
     };
     if user.is_empty() { return false; }
-    let create = autostart_create_args(wrapper, Some(root.clone()), &user);
+    let sid = match crate::runtime_host::run_program(whoami.to_string_lossy().as_ref(), ["/user", "/fo", "csv", "/nh"], None, std::time::Duration::from_secs(10)) {
+        Ok(result) if result.success() => current_user_sid(&result.stdout),
+        _ => None,
+    };
+    let Some(sid) = sid else { return false; };
+    let create = autostart_create_args(wrapper, Some(root.clone()), &user, &sid);
     let created = crate::runtime_host::run_program(
         schtasks.to_string_lossy().as_ref(), create, None, std::time::Duration::from_secs(15),
     );
     if !created.is_ok_and(|result| result.success()) { return false; }
     let queried = crate::runtime_host::run_program(
-        schtasks.to_string_lossy().as_ref(), autostart_query_args(), None, std::time::Duration::from_secs(15),
+        schtasks.to_string_lossy().as_ref(), autostart_query_args(&sid), None, std::time::Duration::from_secs(15),
     );
     let Ok(result) = queried else { return false; };
     result.success() && autostart_contract(
@@ -462,13 +486,20 @@ mod tests {
             Path::new(r"C:\Users\someone\.local\bin\jht.ps1"),
             Some(OsString::from(r"D:\Win")),
             r"JHTPC\someone",
+            "S-1-5-21-1111-2222-3333-1001",
         ).into_iter().map(|arg| arg.to_string_lossy().into_owned()).collect();
+        assert!(args.windows(2).any(|pair| pair == ["/TN", "Job Hunter Team - Start runtime [S-1-5-21-1111-2222-3333-1001]"]));
         assert!(args.windows(2).any(|pair| pair == ["/SC", "ONLOGON"]));
         assert!(args.windows(2).any(|pair| pair == ["/RL", "LIMITED"]));
         assert!(args.windows(2).any(|pair| pair == ["/RU", r"JHTPC\someone"]));
         assert!(args.iter().any(|arg| arg.eq_ignore_ascii_case("/IT")));
         assert!(!args.iter().any(|arg| arg.eq_ignore_ascii_case("HIGHEST")));
         assert!(args.iter().any(|arg| arg.contains("jht.ps1") && arg.ends_with(" up")));
+        assert_eq!(current_user_sid(b"\"JHTPC\\someone\",\"S-1-5-21-1111-2222-3333-1001\"\r\n"), Some("S-1-5-21-1111-2222-3333-1001".into()));
+        assert_eq!(current_user_sid(b"S-1-"), None);
+        assert_eq!(current_user_sid(b"S-1-5"), None);
+        assert_eq!(current_user_sid(b"S-1-5--1001"), None);
+        assert_eq!(current_user_sid(b"no SID"), None);
     }
 
     #[test]

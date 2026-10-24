@@ -627,18 +627,24 @@ def test_only_an_attested_legacy_path_shim_is_owned_by_jht(tmp_path):
 
 REMOVE_STARTUP_TASK_BODY = r"""
 $script:Present = $true
+function Get-JhtScopedStartupTaskName { return 'Job Hunter Team - Start runtime [S-1-5-21-1111-2222-3333-1001]' }
+$script:LegacyTask = 'Job Hunter Team - Start runtime'
+$script:ScopedTask = Get-JhtScopedStartupTaskName
 function Get-ScheduledTask {
   param($TaskName, $ErrorAction)
-  if ($script:Present) { [pscustomobject]@{ TaskName = $TaskName } }
+  if ($script:Present -and $TaskName -ceq $script:ScopedTask) { [pscustomobject]@{ TaskName = $TaskName } }
+  if ($TaskName -ceq $script:LegacyTask) { [pscustomobject]@{ TaskName = $TaskName } }
 }
 function Unregister-ScheduledTask {
   param($TaskName, [switch]$Confirm, $ErrorAction)
-  if ($TaskName -cne 'Job Hunter Team - Start runtime') { throw 'wrong task' }
+  if ($TaskName -ceq $script:LegacyTask) { throw 'legacy P23 task must stay untouched' }
+  if ($TaskName -cne $script:ScopedTask) { throw 'wrong task' }
   if ($Confirm) { throw 'interactive confirmation requested' }
   if ($env:UNREGISTER_FAIL -eq '1') { throw 'cannot unregister' }
   $script:Present = $false
 }
 if ((Remove-JhtStartupTask) -ne ($env:UNREGISTER_FAIL -ne '1')) { throw 'wrong removal result' }
+if (-not (Get-ScheduledTask -TaskName $script:LegacyTask)) { throw 'legacy P23 task was changed' }
 """
 
 

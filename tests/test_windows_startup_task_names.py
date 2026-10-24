@@ -10,11 +10,24 @@ ENABLER = (ROOT / "scripts/enable-podman-windows-runtime.ps1").read_text(encodin
 
 
 def test_desktop_creates_a_limited_current_user_logon_task():
-    assert 'AUTOSTART_TASK_NAME: &str = "Job Hunter Team - Start runtime"' in RUNTIME
+    assert 'AUTOSTART_TASK_LABEL: &str = "Job Hunter Team - Start runtime"' in RUNTIME
     assert '"/SC", "ONLOGON"' in RUNTIME
     assert '"/RL", "LIMITED"' in RUNTIME
     create = RUNTIME[RUNTIME.index("pub(crate) fn autostart_create_args"):RUNTIME.index("fn autostart_query_args")]
     assert '"/RU", user, "/IT"' in create
+    assert "autostart_task_name(sid)" in create
+    assert 'format!("{AUTOSTART_TASK_LABEL} [{sid}]")' in RUNTIME
+    assert '"/Query", "/TN", &task, "/XML"' in RUNTIME
+    assert '["/user", "/fo", "csv", "/nh"]' in RUNTIME
+    assert 'autostart_query_args(&sid)' in RUNTIME
+
+
+def test_p0_never_targets_the_legacy_global_task():
+    uninstall = (ROOT / "scripts/jht-uninstall-windows.ps1").read_text(encoding="utf-8")
+    wrapper = (ROOT / "scripts/jht-wrapper.ps1").read_text(encoding="utf-8")
+    assert "$JhtStartupTaskName = Get-JhtScopedStartupTaskName" in uninstall
+    assert "Job Hunter Team - Start runtime [$sid]" in wrapper
+    assert "param([string]$TaskName = 'Job Hunter Team - Start runtime')" not in wrapper
 
 
 def test_install_keeps_running_when_the_desktop_cannot_register_autostart():

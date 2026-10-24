@@ -134,8 +134,17 @@ function Remove-JhtUserEnvironment {
   } catch { return $false }
 }
 
+function Get-JhtScopedStartupTaskName {
+  try {
+    $sid = [Security.Principal.WindowsIdentity]::GetCurrent().User.Value
+    if ($sid -match '^S-1-\d+(-\d+)+$') { return "Job Hunter Team - Start runtime [$sid]" }
+  } catch {}
+  return ''
+}
+
 function Remove-JhtStartupTask {
-  param([string]$TaskName = 'Job Hunter Team - Start runtime')
+  param([string]$TaskName = (Get-JhtScopedStartupTaskName))
+  if (-not $TaskName) { return $true }
   try {
     $task = Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
     if (-not $task) { return $true }
