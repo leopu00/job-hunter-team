@@ -366,6 +366,9 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
   request_invalid: BAD_DATA,
   timeout: TIMEOUT,
   command_timeout: TIMEOUT,
+  // The native side has already withdrawn the request when its broker receipt
+  // cannot be recorded. The shared retry copy is available in every locale.
+  apply_authorisation_unrecorded: RETRY,
 
   // ── Account scope and local owner ────────────────────────────────────────
   account_scope_state_failed: ACCOUNT_SCOPE,

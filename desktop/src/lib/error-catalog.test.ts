@@ -27,6 +27,9 @@ const RUST = fileURLToPath(new URL("../../src-tauri/src/", import.meta.url));
 
 /** Literals that look like codes but never reach the person, and why. */
 const NOT_ERRORS: Record<string, string> = {
+  // A successful, idempotent broker receipt: the native side accepts it and
+  // does not return it as an error to the person.
+  already_recorded: "successful idempotent broker receipt",
   // What ssh prints when the server turns an address away; read to pick ssh_rate_limited.
   kex_exchange_identification: "text of ssh stderr, not a code",
   // The reader's op cloud_sync and the fields of its reply (existing_team_runtime.rs): the page
