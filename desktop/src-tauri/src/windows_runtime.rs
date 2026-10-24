@@ -81,10 +81,13 @@ fn xml_text<'a>(xml: &'a str, name: &str) -> Option<&'a str> {
     xml_section(xml, name).filter(|value| !value.contains('<'))
 }
 
-fn autostart_action(shell: &Path, wrapper: &Path) -> String {
+/// The arguments of the task's action, apart from the program: the program's path
+/// may hold a space (a SystemRoot elsewhere than C:\Windows), so the two are never
+/// cut from one string.
+fn autostart_arguments(wrapper: &Path) -> String {
     format!(
-        "\"{}\" -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File \"{}\" up",
-        shell.display(), wrapper.display(),
+        "-NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File \"{}\" up",
+        wrapper.display(),
     )
 }
 
@@ -120,7 +123,7 @@ fn xml_unescape(text: &str) -> String {
 fn autostart_task_xml(user: &str, shell: &Path, wrapper: &Path) -> String {
     let user = xml_escape(user);
     let command = xml_escape(&shell.to_string_lossy());
-    let arguments = xml_escape(autostart_action(shell, wrapper).split_once(' ').map_or("", |(_, args)| args));
+    let arguments = xml_escape(&autostart_arguments(wrapper));
     format!(
         "<?xml version=\"1.0\" encoding=\"UTF-16\"?>\
 <Task version=\"1.2\" xmlns=\"http://schemas.microsoft.com/windows/2004/02/mit/task\">\
@@ -154,7 +157,7 @@ fn autostart_contract(xml: &str, user: &str, sid: &str, shell: &Path, wrapper: &
         .iter().all(|tag| !xml.contains(&format!("<{tag}")));
     let no_other_actions = ["ComHandler", "SendEmail", "ShowMessage"]
         .iter().all(|tag| !xml.contains(&format!("<{tag}")));
-    let expected_arguments = autostart_action(shell, wrapper).split_once(' ').map(|(_, args)| args.to_owned());
+    let expected_arguments = Some(autostart_arguments(wrapper));
     let is_user = |value: Option<&str>| value.map(xml_unescape).is_some_and(|value| value == user || value == sid);
     let principal = xml_section(xml, "Principal");
     // Left out is the default; present, it must say the right thing.
@@ -180,6 +183,22 @@ fn autostart_contract(xml: &str, user: &str, sid: &str, shell: &Path, wrapper: &
 pub(crate) struct AutostartFailure {
     pub(crate) step: &'static str,
     pub(crate) exit: Option<i32>,
+}
+
+impl AutostartFailure {
+    /// How the step ended when no program gave an exit code, as a closed word for
+    /// the runtime log: the three steps that are not a program say what they are.
+    pub(crate) fn log_code(&self) -> &'static str {
+        if self.step == "sid" {
+            "autostart_sid_unreadable"
+        } else if self.step == "stage" {
+            "autostart_stage_failed"
+        } else if self.step == "contract" {
+            "autostart_contract_mismatch"
+        } else {
+            "process_start_failed"
+        }
+    }
 }
 
 /// Runs one program of the registration: path, arguments, time allowed.
@@ -735,7 +754,7 @@ mod tests {
         let contract = format!(
             "<LogonTrigger><Enabled>true</Enabled><UserId>{user}</UserId></LogonTrigger><Principal id=\"Author\"><UserId>{sid}</UserId><LogonType>InteractiveToken</LogonType></Principal><Settings><DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries></Settings><Exec><Command>{}</Command><Arguments>{}</Arguments></Exec>",
             shell.to_str().unwrap(),
-            autostart_action(&shell, wrapper).split_once(' ').unwrap().1,
+            autostart_arguments(wrapper),
         );
         let ok = |text: &str| Ok(ProcessResult { code: 0, stdout: text.as_bytes().to_vec() });
         let staged: std::cell::RefCell<Vec<Vec<u8>>> = Default::default();
@@ -815,6 +834,46 @@ mod tests {
         );
         assert_eq!(result, Err(AutostartFailure { step: "stage", exit: None }));
         assert!(!programs.iter().any(|program| program == "schtasks.exe"));
+    }
+
+    /// A SystemRoot with a space (not the usual C:\Windows): the program is the whole path and
+    /// the arguments start at -NoLogo, in the definition and in the read-back that checks it.
+    #[test]
+    fn a_program_path_with_a_space_stays_the_program_and_never_leaks_into_the_arguments() {
+        let wrapper = Path::new(r"C:\Users\someone\.local\bin\jht.ps1");
+        let shell = powershell_path(Some(OsString::from(r"D:\Program Files\Win")));
+        let user = r"JHTPC\someone";
+        let xml = autostart_task_xml(user, &shell, wrapper);
+        let command = shell.to_string_lossy();
+        assert!(command.contains("Program Files"));
+        assert!(xml.contains(&format!("<Command>{command}</Command><Arguments>-NoLogo ")), "{xml}");
+        let in_arguments = xml_text(&xml, "Arguments").expect("one Arguments text");
+        assert!(!in_arguments.contains("Program") && !in_arguments.contains("Win"), "no piece of the program path in the arguments");
+        let arguments = autostart_arguments(wrapper);
+        assert!(arguments.starts_with("-NoLogo ") && arguments.ends_with("jht.ps1\" up"));
+
+        let read_back = format!(
+            "<LogonTrigger><UserId>{user}</UserId></LogonTrigger><Principal id=\"Author\"><UserId>{user}</UserId><LogonType>InteractiveToken</LogonType></Principal><Exec><Command>{command}</Command><Arguments>{}</Arguments></Exec>",
+            xml_escape(&arguments),
+        );
+        assert!(autostart_contract(&read_back, user, "S-1-5-21-1-2-3-1001", &shell, wrapper));
+        // The old cut: the path's first piece as the program, the rest at the head of the arguments.
+        let (head, tail) = command.split_once(' ').unwrap();
+        let cut = read_back
+            .replace(&format!("<Command>{command}</Command>"), &format!("<Command>{head}</Command>"))
+            .replace("<Arguments>", &format!("<Arguments>{tail} "));
+        assert!(!autostart_contract(&cut, user, "S-1-5-21-1-2-3-1001", &shell, wrapper));
+    }
+
+    #[test]
+    fn a_step_that_ran_no_program_says_what_it_was_in_the_log() {
+        let failure = |step, exit| AutostartFailure { step, exit };
+        assert_eq!(failure("sid", None).log_code(), "autostart_sid_unreadable");
+        assert_eq!(failure("stage", None).log_code(), "autostart_stage_failed");
+        assert_eq!(failure("contract", None).log_code(), "autostart_contract_mismatch");
+        for program in ["whoami", "create", "query"] {
+            assert_eq!(failure(program, None).log_code(), "process_start_failed", "{program}");
+        }
     }
 
     #[test]
