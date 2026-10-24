@@ -414,7 +414,7 @@ function RuntimeView({ host, platform, t, locale, runtime, activity, onRetry, on
   );
 }
 
-export function OnboardingFlow({ account, platform, runtime, activity, onSubmit, onConnectExistingTeam, onSignInWithGoogle, onRetry, onRestart, onExitFailure, onRuntimeAction, providerLogin, sshHostKey, onConfirmHostKey, onCancelHostKey, onProviderInput, onProviderClose, onProviderRestart, onRecreatePodmanMachine, onFreeDiskSpace, runtimeLogPath, onOpenRuntimeLog, previousLocalData = false, interruption, onResumeInterrupted, onDiscardInterruption, locale: localeOverride }: OnboardingFlowProps) {
+export function OnboardingFlow({ account, platform, runtime, activity, onSubmit, onConnectExistingTeam, onSignInWithGoogle, onRetry, onRestart, onExitFailure, onRuntimeAction, providerLogin, sshHostKey, onConfirmHostKey, onCancelHostKey, onProviderInput, onProviderClose, onProviderRestart, onRecreatePodmanMachine, onFreeDiskSpace, runtimeLogPath, onOpenRuntimeLog, previousLocalData = false, interruption, onResumeInterrupted, onDiscardInterruption, providerOnly, locale: localeOverride }: OnboardingFlowProps) {
   const locale = localeOverride ?? appLocale();
   const t = ONBOARDING_TEXT[locale];
   const providerChoices = providers(t);
@@ -425,9 +425,9 @@ export function OnboardingFlow({ account, platform, runtime, activity, onSubmit,
   const interruptionReason = interruptionCause?.known ? interruptionCause.text : t.interruptedUnknown;
   // Windows runs the team locally too, with Podman inside WSL.
   const localRuntimeSupported = platform === "macos" || platform === "linux" || platform === "windows";
-  const [step, setStep] = useState(0);
+  const [step, setStep] = useState(providerOnly ? 2 : 0);
   const [host, setHost] = useState<ExecutionHost>(() => localRuntimeSupported ? { kind: "local" } : emptyVpsHost());
-  const [provider, setProvider] = useState<SubscriptionProvider | null>(PROPOSED_PROVIDER);
+  const [provider, setProvider] = useState<SubscriptionProvider | null>(providerOnly ? null : PROPOSED_PROVIDER);
   const [submitting, setSubmitting] = useState(false);
   const [assistanceOpen, setAssistanceOpen] = useState(false);
   const [submitError, setSubmitError] = useState(false);
@@ -495,7 +495,7 @@ export function OnboardingFlow({ account, platform, runtime, activity, onSubmit,
   }
 
   function exitFailure() {
-    setStep(1);
+    setStep(providerOnly ? 2 : 1);
     setSubmitError(false);
     onExitFailure();
   }
@@ -581,7 +581,7 @@ export function OnboardingFlow({ account, platform, runtime, activity, onSubmit,
             </div>
             {kimiReason && <p className="onboarding-subscription-note" id="onboarding-provider-unavailable">{kimiReason.text} {kimiReason.action}</p>}
             <p className="onboarding-subscription-note"><strong>{t.subscriptionStrong}</strong> {t.subscriptionText}</p>
-            <div className="onboarding-actions"><button className="onboarding-secondary" type="button" onClick={() => setStep(1)}>{t.back}</button><button className="onboarding-primary" type="submit" disabled={!provider || unavailable.has(provider)}>{t.reviewSetup} <span aria-hidden="true">→</span></button></div>
+            <div className="onboarding-actions"><button className="onboarding-secondary" type="button" onClick={() => providerOnly ? providerOnly.onCancel() : setStep(1)}>{providerOnly ? t.cancel : t.back}</button><button className="onboarding-primary" type="submit" disabled={!provider || unavailable.has(provider)}>{t.reviewSetup} <span aria-hidden="true">→</span></button></div>
           </form>}
 
           {step === 3 && provider && <form onSubmit={finish} className="onboarding-panel">
@@ -590,12 +590,12 @@ export function OnboardingFlow({ account, platform, runtime, activity, onSubmit,
             <dl className="onboarding-review">
               <div><dt>{t.environment}</dt><dd>{hostName(host, t)}</dd></div><div><dt>{t.provider}</dt><dd>{providerName(provider, t)}<small>{t.viaSubscription}</small></dd></div>
             </dl>
-            {host.kind === "local" && platform === "windows" && <div className="onboarding-review-note" role="note" aria-label={t.installsAria}>
+            {!providerOnly && host.kind === "local" && platform === "windows" && <div className="onboarding-review-note" role="note" aria-label={t.installsAria}>
               <p>{t.installsIntro}</p>
               <ul>{t.installs(WINDOWS_SETUP).map((item) => <li key={item}>{item}</li>)}</ul>
               <p>{t.installsRemoval}</p>
             </div>}
-            {host.kind === "local" && previousLocalData && <p className="onboarding-review-note" role="note" aria-label={t.previousAria}>{account.identity === "local"
+            {!providerOnly && host.kind === "local" && previousLocalData && <p className="onboarding-review-note" role="note" aria-label={t.previousAria}>{account.identity === "local"
               ? t.previousLocal
               : t.previousAccount}</p>}
             {submitError && <p className="onboarding-error" role="alert">{t.submitError}</p>}

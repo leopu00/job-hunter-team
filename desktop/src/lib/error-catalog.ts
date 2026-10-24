@@ -811,9 +811,9 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
   ),
   provider_not_configured_local: copy(
     "Sulla squadra di questo computer non è configurato nessun provider (Claude, Codex o Kimi): gli agenti non possono partire.",
-    "Riapri la configurazione dell’app, scegli il provider al passo «Provider» e riprova.",
+    "Apri Impostazioni › Provider, scegli il provider e riprova.",
     "No provider (Claude, Codex or Kimi) is set up on this computer's team: its agents cannot start.",
-    "Reopen the app’s setup, choose the provider at the «Provider» step, then try again.",
+    "Open Settings › Provider, choose the provider, then try again.",
   ),
   agent_stop_failed: copy(
     "L’agente è ancora acceso dopo lo spegnimento.",

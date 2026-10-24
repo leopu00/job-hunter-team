@@ -179,6 +179,12 @@ export interface OnboardingFlowProps {
   onRestart: () => Promise<void>;
   onExitFailure: () => void;
   /**
+   * The setup reopened on a team that already runs on this computer, to choose its provider again
+   * (Settings › Provider): it starts at the «Provider» step, on this computer, with no provider
+   * preselected, and «Cancel» leaves it.
+   */
+  providerOnly?: { onCancel: () => void };
+  /**
    * Deletes the JHT Podman machine and creates it again with only ~/.jht and
    * the JHT documents, then resumes the setup. Offered only on the
    * `podman_machine_mounts_home` error, after the person confirms it.
