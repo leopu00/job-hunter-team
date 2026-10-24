@@ -351,19 +351,24 @@ def test_when_the_agent_waits_at_its_prompt_it_is_woken_once_with_words_that_car
     assert len(box_files(jht_home)) == 1
 
 
-def test_an_agent_with_an_empty_composer_is_sent_even_while_its_turn_is_running(jht_home, terminal, monkeypatch):
+def test_an_agent_that_is_not_a_receiver_is_not_pasted_into_while_its_turn_is_running(jht_home, terminal, monkeypatch):
     enable(jht_home, "assistente")
     monkeypatch.setenv("FAKE_SCREEN", BUSY_SCREEN)
-    receipt = chat.send("scout", "client-4", "hello")
-    assert receipt["accepted"] is True and receipt["taken"] is True
-    assert terminal(), "the turn may be queued by the CLI"
+    monkeypatch.setattr(chat, "BUSY_WAIT_S", 0)
+    with pytest.raises(chat.Refusal) as caught:
+        chat.send("scout", "client-4", "hello")
+    assert caught.value.code == "agent_busy"
+    assert not terminal(), "nothing is pasted while the agent works"
+    assert not (jht_home / "agents").exists()
 
 
-def test_with_nobody_listed_the_empty_composer_rule_is_the_same(jht_home, terminal, monkeypatch):
+def test_with_nobody_listed_a_working_agent_is_not_pasted_into_either(jht_home, terminal, monkeypatch):
     monkeypatch.setenv("FAKE_SCREEN", BUSY_SCREEN)
-    receipt = chat.send("assistente", "client-5", "hello")
-    assert receipt["accepted"] is True and receipt["taken"] is True
-    assert not (jht_home / "mailbox").exists()
+    monkeypatch.setattr(chat, "BUSY_WAIT_S", 0)
+    with pytest.raises(chat.Refusal) as caught:
+        chat.send("assistente", "client-5", "hello")
+    assert caught.value.code == "agent_busy"
+    assert not terminal() and not (jht_home / "mailbox").exists()
 
 
 def test_a_session_that_is_not_there_refuses_before_anything_is_written(jht_home, terminal, monkeypatch):
