@@ -360,3 +360,12 @@ export async function readPreviousLocalData(): Promise<boolean> {
     return false;
   }
 }
+
+/**
+ * Turns the runtime of this computer on again, without starting the team (the machine and the container, as
+ * `jht up` does): the native command is the next commit; until then it answers after a moment, so the
+ * interface can be built on it. A failure is a rejection with the native error code.
+ */
+export async function wakeRuntime(): Promise<void> {
+  await new Promise<void>((resolve) => setTimeout(resolve, 600));
+}

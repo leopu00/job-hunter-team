@@ -71,6 +71,7 @@ import {
   recreateOnboardingPodmanMachine,
   resumeOnboardingSnapshot,
   resumeOnboardingTeamStart,
+  wakeRuntime,
   sendOnboardingProviderInput,
   startOnboardingProviderLogin,
   startOnboardingTeam,
@@ -89,6 +90,7 @@ import ExistingTeamConnectModal from "../onboarding/ExistingTeamConnectModal";
 import { ReconfirmExistingTeamContext } from "../lib/reconfirm-existing-team";
 import { ConnectTeamContext, type ConnectTeamEntry } from "../lib/connect-team";
 import { ProviderSetupContext } from "../lib/provider-setup";
+import { TeamOffContext, type TeamOff } from "../lib/team-off";
 import MessagesPage from "../pages/messages";
 import { NewPositionNotifier } from "../lib/notify/NewPositionNotifier";
 import TeamLanguagePrompt from "../components/TeamLanguagePrompt";
@@ -419,6 +421,9 @@ export default function DashboardApp() {
   const [savedTeamOpening, setSavedTeamOpening] = useState<
     { identityKey: string; phase: "pending" | "done" | "failed"; failure?: OnboardingRuntimeState } | null
   >(null);
+  // The app is open WITHOUT the team (the person chose it, or the team could not start): the identity it is open for.
+  // Never a finished setup: the marker stays «started» and the next launch offers the resume again.
+  const [teamOffKey, setTeamOffKey] = useState<string | null>(null);
   const linkedView = useExistingTeamView();
   const [onboardingUiVersion, setOnboardingUiVersion] = useState(0);
   const [accountScope, setAccountScope] = useState<{
@@ -1064,6 +1069,17 @@ export default function DashboardApp() {
       fail("assistant", error);
     }
   }, [beginActivityInvocation, fail, identityKey, recordActivityProgress, setRuntime]);
+
+  const openWithoutTeam = useCallback(() => {
+    if (!identityKey) return;
+    setTeamOffKey(identityKey);
+    setSavedTeamOpening({ identityKey, phase: "done" });
+    setGate({ phase: "ready" });
+  }, [identityKey]);
+  const teamOff = useMemo<TeamOff | null>(
+    () => (teamOffKey !== null && teamOffKey === identityKey ? { teamOff: true, wakeRuntime } : null),
+    [teamOffKey, identityKey],
+  );
 
   const openReadOnlyExistingTeam = useCallback((result: ExistingTeamReadOnlyConnectionResult) => {
     if (!identityKey || activeIdentityKeyRef.current !== identityKey) return;
@@ -1717,17 +1733,20 @@ export default function DashboardApp() {
         onDiscardInterruption={interruption ? discardInterruption : undefined}
         onRestart={restartOnboarding}
         onExitFailure={exitTechnicalFailure}
+        onOpenWithoutTeam={openWithoutTeam}
         providerOnly={providerSetupKey === identityKey ? { onCancel: closeProviderSetup } : undefined}
       />
     );
   }
   return (
     <>
-      <ProviderSetupContext.Provider value={providerSetup}>
-        <ConnectTeamContext.Provider value={connectTeamEntry}>
-          <Shell key={identityKey} onLogout={logout} />
-        </ConnectTeamContext.Provider>
-      </ProviderSetupContext.Provider>
+      <TeamOffContext.Provider value={teamOff}>
+        <ProviderSetupContext.Provider value={providerSetup}>
+          <ConnectTeamContext.Provider value={connectTeamEntry}>
+            <Shell key={identityKey} onLogout={logout} />
+          </ConnectTeamContext.Provider>
+        </ProviderSetupContext.Provider>
+      </TeamOffContext.Provider>
       {connectDialogElement}
       <NewPositionNotifier key={`notify:${identityKey}`} />
       <TeamLanguagePrompt key={`language:${identityKey}`} identityKey={identityKey} />

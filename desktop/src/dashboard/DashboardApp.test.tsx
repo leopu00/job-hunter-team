@@ -82,6 +82,7 @@ vi.mock("../lib/onboarding-runtime", () => ({
   recreateOnboardingPodmanMachine: vi.fn(),
   resumeOnboardingSnapshot: vi.fn(),
   resumeOnboardingTeamStart: vi.fn(),
+  wakeRuntime: vi.fn(),
   sendOnboardingProviderInput: vi.fn(),
   startOnboardingProviderLogin: vi.fn(),
   startOnboardingTeam: vi.fn(),
@@ -180,6 +181,7 @@ vi.mock("../onboarding", () => ({
         {props.runtime.status === "failed" && props.runtime.title && <p>title:{props.runtime.title}</p>}
         <button type="button" onClick={() => void props.onSubmit(SUBMISSION).catch(() => undefined)}>submit-onboarding</button>
         {props.interruption && <p>interrupted:{props.interruption.stage}:{props.interruption.provider}</p>}
+        {props.onOpenWithoutTeam && <button type="button" onClick={props.onOpenWithoutTeam}>open-without-team</button>}
         {props.onResumeInterrupted && <button type="button" onClick={() => void props.onResumeInterrupted?.().catch(() => undefined)}>resume-interrupted</button>}
         {props.onDiscardInterruption && <button type="button" onClick={() => props.onDiscardInterruption?.()}>discard-interruption</button>}
         <button type="button" onClick={() => void props.onSubmit(SUBMISSION_VPS).catch(() => undefined)}>submit-vps</button>
@@ -1958,6 +1960,40 @@ describe("DashboardApp onboarding router", () => {
     // the person starts it: the native resume wakes the runtime and starts the team
     await user.click(screen.getByRole("button", { name: "continue-runtime" }));
     await waitFor(() => expect(resumeOnboardingTeamStart).toHaveBeenCalledOnce());
+  });
+
+  it("opens the app without starting the team, and the setup is not finished by it", async () => {
+    vi.mocked(useSession).mockReturnValue(signedInAs("team-off-account"));
+    vi.mocked(loadOnboardingGate).mockResolvedValue({
+      phase: "required",
+      account: { displayName: "Team Off" },
+      resumeAvailable: true,
+      runtime: { status: "collecting", stage: "host" },
+    });
+    vi.mocked(resumeOnboardingSnapshot).mockResolvedValue({
+      ...TEAM_READY,
+      containerRunning: false,
+      providerConfigured: false,
+      providerAuthenticated: false,
+      assistantRunning: false,
+      captainRunning: false,
+      localHost: true,
+    });
+
+    const user = userEvent.setup();
+    render(<DashboardApp />);
+
+    // the team is off and cannot (or need not) be started: the way out of the setup is offered
+    expect(await screen.findByText("action-required:team-start")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "open-without-team" }));
+
+    // the app opens; nothing started, nothing declared finished
+    expect(await screen.findByTestId("shell")).toBeInTheDocument();
+    expect(screen.queryByTestId("onboarding")).not.toBeInTheDocument();
+    expect(resumeOnboardingTeamStart).not.toHaveBeenCalled();
+    expect(startOnboardingTeam).not.toHaveBeenCalled();
+    expect(prepareOnboardingRuntime).not.toHaveBeenCalled();
+    expect(markOnboardingReady).not.toHaveBeenCalled();
   });
 
   it("a resume of a VPS or a saved team whose container is stopped keeps the refusal: nothing here can wake it", async () => {

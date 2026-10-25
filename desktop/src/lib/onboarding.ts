@@ -193,6 +193,11 @@ export interface OnboardingFlowProps {
   onRestart: () => Promise<void>;
   onExitFailure: () => void;
   /**
+   * Opens the app without starting the team (the gate's «team off» mode): offered where the team is stopped or
+   * cannot start. The setup is not finished by it. Absent where the person has no such way.
+   */
+  onOpenWithoutTeam?: () => void;
+  /**
    * The setup reopened on a team that already runs on this computer, to choose its provider again
    * (Settings › Provider): it starts at the «Provider» step, on this computer, with no provider
    * preselected, and «Cancel» leaves it.
