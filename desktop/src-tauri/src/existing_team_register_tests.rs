@@ -1269,6 +1269,12 @@ esac
         let n = SANDBOXES.fetch_add(1, Ordering::SeqCst);
         let dir = std::env::temp_dir().join(format!("jht-t123-stub-{}-{n}", std::process::id()));
         fs::create_dir_all(&dir).unwrap();
+        // The script looks the engine up on PATH. A real `docker` on the machine (a CI runner and the test boxes have one) would win over
+        // the podman stub, so PATH holds only the stub and the two tools that run: grep (the script) and cat (the stub).
+        for tool in ["grep", "cat"] {
+            let real = [format!("/usr/bin/{tool}"), format!("/bin/{tool}")].into_iter().find(|p| std::path::Path::new(p).exists()).expect("a system tool");
+            std::os::unix::fs::symlink(real, dir.join(tool)).unwrap();
+        }
         let stub = dir.join(engine);
         fs::write(
             &stub,
@@ -1291,7 +1297,7 @@ esac
         let mut child = Command::new("/bin/sh")
             .arg("-c")
             .arg(DETAILS_SCRIPT)
-            .env("PATH", format!("{}:/usr/bin:/bin", dir.display()))
+            .env("PATH", dir.display().to_string())
             .env("STUB_DIR", &dir)
             .stdin(std::process::Stdio::piped())
             .stdout(std::process::Stdio::piped())
