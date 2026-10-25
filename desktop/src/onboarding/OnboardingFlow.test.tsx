@@ -959,6 +959,36 @@ describe("OnboardingFlow technical setup", () => {
     expect(onRuntimeAction).toHaveBeenCalledWith("team-start");
   });
 
+  it("offers to open the app without the team where the team waits or cannot start, and nowhere else", async () => {
+    const onOpenWithoutTeam = vi.fn();
+    const onRuntimeAction = vi.fn().mockResolvedValue(undefined);
+    const waiting = { status: "action-required" as const, stage: "team-start" as const, message: "Le sessioni del team sono ferme." };
+    const view = renderFlow({ runtime: waiting, onOpenWithoutTeam, onRuntimeAction });
+    await userEvent.click(screen.getByRole("button", { name: "Apri l’app senza avviare la squadra" }));
+    expect(onOpenWithoutTeam).toHaveBeenCalledOnce();
+    // opening the app starts nothing
+    expect(onRuntimeAction).not.toHaveBeenCalled();
+    view.unmount();
+
+    // a team that could not start (a provider limit) has the way out too
+    const limited = renderFlow({
+      runtime: { status: "failed", stage: "team-start", code: "team_start_failed", retryable: false, message: "I limiti sono esauriti." },
+      onOpenWithoutTeam,
+    });
+    expect(screen.getByTestId("open-without-team")).toBeInTheDocument();
+    limited.unmount();
+
+    // another step, or a person with no such way: no button
+    const other = renderFlow({
+      runtime: { status: "action-required", stage: "provider-login", message: "Accedi." },
+      onOpenWithoutTeam,
+    });
+    expect(screen.queryByTestId("open-without-team")).toBeNull();
+    other.unmount();
+    renderFlow({ runtime: waiting });
+    expect(screen.queryByTestId("open-without-team")).toBeNull();
+  });
+
   it("does not present the previous completed operation as the current manual action", () => {
     const now = Date.now();
     renderFlow({
