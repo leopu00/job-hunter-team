@@ -13,6 +13,11 @@ export interface TeamOff {
    * the provider is spent. Resolves when it is up; rejects with the native error code when it cannot.
    */
   wakeRuntime(): Promise<void>;
+  /**
+   * Leaves the mode and goes back to the setup's «start the team» screen (today's flow). Absent where the mode
+   * has no such step: the banner then offers only the wake.
+   */
+  startTeam?(): void;
 }
 
 export const TeamOffContext = createContext<TeamOff | null>(null);
