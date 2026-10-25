@@ -39,7 +39,7 @@
     "@lydell/node-pty-win32-x64": "^1.2.0-beta.12"
   },
   "devDependencies": {
-    "electron": "^41.10.3",
+    "electron": "^42.11.16",
     "electron-builder": "^26.15.3"
   },
   "build": {
