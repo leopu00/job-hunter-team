@@ -1076,9 +1076,16 @@ export default function DashboardApp() {
     setSavedTeamOpening({ identityKey, phase: "done" });
     setGate({ phase: "ready" });
   }, [identityKey]);
+  // Leaves the mode for today's flow: the account is initialised again and the resume offers «start the team».
+  const startTeamFromTeamOff = useCallback(() => {
+    setTeamOffKey(null);
+    setSavedTeamOpening(null);
+    resumeAttemptedIdentityRef.current = null;
+    void initializeAccount();
+  }, [initializeAccount]);
   const teamOff = useMemo<TeamOff | null>(
-    () => (teamOffKey !== null && teamOffKey === identityKey ? { teamOff: true, wakeRuntime } : null),
-    [teamOffKey, identityKey],
+    () => (teamOffKey !== null && teamOffKey === identityKey ? { teamOff: true, wakeRuntime, startTeam: startTeamFromTeamOff } : null),
+    [teamOffKey, identityKey, startTeamFromTeamOff],
   );
 
   const openReadOnlyExistingTeam = useCallback((result: ExistingTeamReadOnlyConnectionResult) => {
