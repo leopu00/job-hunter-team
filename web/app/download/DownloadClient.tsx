@@ -45,9 +45,9 @@ function BackLink() {
 // 2026-07-03 (docs/internal/2026-07-03-desktop-app-status-and-vision.md).
 type InstallMode = "terminal" | "desktop" | "prompt";
 
-const DOWNLOAD_SLUG: Record<PlatformId, DownloadSlug> = {
+// Windows has no slug: it is not part of 0.4.0 and the page shows it as "coming soon".
+const DOWNLOAD_SLUG: Partial<Record<PlatformId, DownloadSlug>> = {
   mac: "mac",
-  windows: "win-setup",
   linux: "linux",
 };
 
@@ -393,46 +393,85 @@ function DownloadContent({
                 {t("dl_desktop_beta_desc")}
               </p>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                {PLATFORMS.map((os) => (
-                  <a
-                    key={os.id}
-                    href={downloadHref(DOWNLOAD_SLUG[os.id], attribution)}
-                    className="border px-4 py-4 flex flex-col items-center gap-3 text-center transition-colors hover:border-[var(--color-green)]"
-                    style={{
-                      borderColor: "var(--color-border)",
-                      background: "var(--color-panel)",
-                    }}
-                  >
-                    <div
-                      className="w-10 h-10 flex items-center justify-center"
+                {PLATFORMS.map((os) => {
+                  const slug = DOWNLOAD_SLUG[os.id];
+                  const card = (
+                    <>
+                      <div
+                        className="w-10 h-10 flex items-center justify-center"
+                        style={{
+                          background: "var(--color-card)",
+                          border: "1px solid var(--color-border)",
+                        }}
+                      >
+                        <PlatformIcon id={os.id} />
+                      </div>
+                      <div className="text-[12px] font-bold text-[var(--color-white)]">
+                        {os.label}
+                      </div>
+                      {slug ? (
+                        <span className="text-[9px] font-semibold tracking-[0.15em] uppercase text-[var(--color-green)] border border-[var(--color-green)] px-2 py-0.5">
+                          {t("dl_desktop_beta_badge")}
+                        </span>
+                      ) : (
+                        <span
+                          data-windows-coming-soon
+                          className="text-[9px] font-semibold tracking-[0.15em] uppercase text-[var(--color-muted)] border border-[var(--color-border)] px-2 py-0.5"
+                        >
+                          {t("dl_windows_coming_soon")}
+                        </span>
+                      )}
+                      {/* La build Mac della 0.4 e' solo Apple silicon: va detto
+                          prima del clic, non scoperto all'apertura. */}
+                      {os.id === "mac" && (
+                        <span
+                          data-mac-apple-silicon-only
+                          className="text-[10px] leading-snug text-[var(--color-muted)]"
+                        >
+                          {t("dl_mac_apple_silicon_only")}
+                        </span>
+                      )}
+                      {/* Linux nella 0.4 e' sperimentale e nessuno l'ha provato a mano. */}
+                      {os.id === "linux" && (
+                        <span
+                          data-linux-experimental
+                          className="text-[10px] leading-snug text-[var(--color-muted)]"
+                        >
+                          {t("dl_linux_experimental")}
+                        </span>
+                      )}
+                    </>
+                  );
+                  // Windows: nessun link, nessun hover, non e' un pulsante.
+                  return slug ? (
+                    <a
+                      key={os.id}
+                      href={downloadHref(slug, attribution)}
+                      className="border px-4 py-4 flex flex-col items-center gap-3 text-center transition-colors hover:border-[var(--color-green)]"
                       style={{
-                        background: "var(--color-card)",
-                        border: "1px solid var(--color-border)",
+                        borderColor: "var(--color-border)",
+                        background: "var(--color-panel)",
                       }}
                     >
-                      <PlatformIcon id={os.id} />
+                      {card}
+                    </a>
+                  ) : (
+                    <div
+                      key={os.id}
+                      aria-disabled="true"
+                      className="border px-4 py-4 flex flex-col items-center gap-3 text-center opacity-60"
+                      style={{
+                        borderColor: "var(--color-border)",
+                        background: "var(--color-panel)",
+                      }}
+                    >
+                      {card}
                     </div>
-                    <div className="text-[12px] font-bold text-[var(--color-white)]">
-                      {os.label}
-                    </div>
-                    <span className="text-[9px] font-semibold tracking-[0.15em] uppercase text-[var(--color-green)] border border-[var(--color-green)] px-2 py-0.5">
-                      {t("dl_desktop_beta_badge")}
-                    </span>
-                    {/* La build Mac della 0.4 e' solo Apple silicon: va detto
-                        prima del clic, non scoperto all'apertura. */}
-                    {os.id === "mac" && (
-                      <span
-                        data-mac-apple-silicon-only
-                        className="text-[10px] leading-snug text-[var(--color-muted)]"
-                      >
-                        {t("dl_mac_apple_silicon_only")}
-                      </span>
-                    )}
-                  </a>
-                ))}
+                  );
+                })}
               </div>
-              {/* Windows e Linux non sono firmati: l'avviso del sistema va
-                  detto prima, così non sembra che il file sia guasto. */}
+              {/* Linux non e' firmato: l'avviso del sistema va detto prima,
+                  cosi' non sembra che il file sia guasto. */}
               <p className="text-[11px] text-[var(--color-muted)] leading-relaxed mt-4">
                 {t("dl_desktop_unsigned_note")}
               </p>

@@ -3,8 +3,8 @@ export const DOWNLOAD_RELEASE_TAG = "v0.4.0";
 export const DOWNLOAD_RELEASE_API = `https://api.github.com/repos/${RELEASE_REPO}/releases/tags/${DOWNLOAD_RELEASE_TAG}`;
 const RELEASE_BASE = `https://github.com/${RELEASE_REPO}/releases/download/${DOWNLOAD_RELEASE_TAG}`;
 
+// Windows is not part of 0.4.0: no slug, no link. The page shows it as "coming soon".
 export const DOWNLOAD_TARGETS = {
-  "win-setup": `${RELEASE_BASE}/job-hunter-team-windows-x64-setup.exe`,
   mac: `${RELEASE_BASE}/job-hunter-team-macos-universal.dmg`,
   linux: `${RELEASE_BASE}/job-hunter-team-linux-x64.AppImage`,
 } as const;
@@ -12,7 +12,6 @@ export const DOWNLOAD_TARGETS = {
 export type DownloadSlug = keyof typeof DOWNLOAD_TARGETS;
 
 const DOWNLOAD_ASSET_CANDIDATES: Record<DownloadSlug, readonly string[]> = {
-  "win-setup": ["job-hunter-team-windows-x64-setup.exe"],
   mac: ["job-hunter-team-macos-universal.dmg", "job-hunter-team.zip"],
   linux: [
     "job-hunter-team-linux-x64.AppImage",
