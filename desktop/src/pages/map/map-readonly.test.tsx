@@ -46,13 +46,13 @@ const ROWS = [
 ];
 
 let restoreBridge: () => void = () => undefined;
-const listReads = () => native.invoke.mock.calls.filter(([, args]) => (args as { request?: { op?: string } })?.request?.op === "list");
+const listReads = () => native.invoke.mock.calls.filter(([, args]) => (args as { request?: { op?: string } })?.request?.op === "map");
 
 beforeEach(() => {
   fake.current = createPermissiveSupabase();
   document.cookie = "NEXT_LOCALE=it; path=/";
   native.invoke.mockReset();
-  native.invoke.mockImplementation(async () => ({ ok: true, data: { items: ROWS, total: ROWS.length } }));
+  native.invoke.mockImplementation(async () => ({ ok: true, data: { items: ROWS, total: ROWS.length, next: null } }));
   cloud.coords.mockReset(); cloud.noCoords.mockReset(); cloud.locations.mockReset();
   resetMapVpsRead();
   restoreBridge = installApiBridge(shellApi(mapApi(notInDesktop)));
@@ -114,7 +114,7 @@ describe("the map on an existing team read only", () => {
     native.invoke.mockImplementation(async () => ({ ok: true, data: { items: [
       row("10", { loc_country: "Italy", loc_city: "Milano", office_lat: 45.4781, office_lon: 9.2275, office_address: "Synthetic street 10" }),
       row("11", { loc_country: "Italy", loc_city: "Milano", office_lat: null, office_lon: null, office_address: null }),
-    ], total: 2 } }));
+    ], total: 2, next: null } }));
     const coords = await get("/api/positions/coords");
     const office = coords.find((pin: { id: string }) => pin.id === "10");
     expect(office).toMatchObject({ lat: 45.4781, lon: 9.2275, office_address: "Synthetic street 10" });
@@ -137,7 +137,7 @@ describe("the map on an existing team read only", () => {
       row("20", { loc_country: "Italy", loc_city: "Milano", office_lat: 91, office_lon: 9.2 }),
       row("21", { loc_country: "Italy", loc_city: "Milano", office_lat: "45.1", office_lon: "9.1" }),
       row("22", { office_lat: 10, office_lon: 500 }),
-    ], total: 3 } }));
+    ], total: 3, next: null } }));
     const coords = await get("/api/positions/coords");
     expect(coords.map((pin: { id: string }) => pin.id).sort()).toEqual(["20", "21"]);
     for (const pin of coords) expect(Math.abs(pin.lat - 45.4642)).toBeLessThan(0.1);
@@ -150,7 +150,7 @@ describe("the map on an existing team read only", () => {
       row("30", { ...shared, company: "Synthetic A" }),
       row("31", { ...shared, company: "Synthetic B" }),
       row("32", { ...shared, company: "Synthetic C" }),
-    ], total: 3 } }));
+    ], total: 3, next: null } }));
     const coords = await get("/api/positions/coords");
     expect(coords).toHaveLength(3);
     expect(coords.filter((pin: { lat: number; lon: number }) => pin.lat === 45.5 && pin.lon === 9.3)).toHaveLength(0);

@@ -1,5 +1,7 @@
 import { invoke, isTauri } from "@tauri-apps/api/core";
-import { reportPositionsNotice } from "./existing-team-readonly";
+import { existingTeamConnectionKey, reportPositionsNotice } from "./existing-team-readonly";
+import { nativeReadStarted } from "./page-timing";
+import { REFRESH_EVENT } from "../shell/refresh-event";
 // The pages show an empty list for a list that could not be read, as the web does for a query
 // that fails; the header (shell/VpsLinkBar) is how the person is told it was not empty, and why.
 import { reportVpsRead } from "./vps-link";
@@ -32,7 +34,8 @@ type Request =
   | { op: "list"; filters?: PositionFilterOpts }
   | { op: "detail"; id: string }
   | { op: "facets" }
-  | { op: "stats" };
+  | { op: "stats" }
+  | { op: "map"; offset: number };
 
 function listRequest(opts?: PositionFilterOpts): Request {
   return opts === undefined ? { op: "list" } : { op: "list", filters: opts };
@@ -63,6 +66,7 @@ async function read<T>(request: Request): Promise<DesktopVpsRead<T>> {
   // desktop, absence or drift of the native binding fails closed below.
   if (!isTauri()) return { source: "not_desktop" };
   let result: DesktopVpsRead<T>;
+  const readEnded = nativeReadStarted();
   try {
     const answer = await invoke<unknown>(COMMAND, { request });
     result = reply<T>(answer);
@@ -73,6 +77,7 @@ async function read<T>(request: Request): Promise<DesktopVpsRead<T>> {
     reportVpsRead({ ok: false, error: "desktop_transport_unavailable" });
     result = { source: "unavailable", code: "desktop_transport_unavailable" };
   }
+  readEnded(result.source === "vps");
   return result;
 }
 
@@ -143,6 +148,43 @@ export async function readDesktopVpsPositions(
     if (page.data.length < size) break;
   }
   return { source: "vps", data: rows };
+}
+
+/** What the globe needs of a position: the core's `map` read gives these and nothing more. */
+export type DesktopVpsMapRow = Pick<PositionWithScore, "id" | "title" | "company" | "status" | "role_family" | "location" |
+  "remote_type" | "loc_country" | "loc_city"> & {
+  score?: number | null;
+  found_at?: string | null;
+  office_lat?: number | null;
+  office_lon?: number | null;
+  office_address?: string | null;
+};
+
+/** The most replies the globe's read follows: 600 KB each at the most, so far more positions than a team has. */
+const MAP_REPLIES_MAX = 40;
+
+/**
+ * Every position the globe draws (the excluded ones are left out by the core), in the list's order.
+ * One reply carries as many as fit in the core's byte budget (a team of a few thousand is one reply),
+ * and `next` says where the following one starts: the globe waits for one request, not for six.
+ */
+export async function readDesktopVpsMap(): Promise<DesktopVpsRead<DesktopVpsMapRow[]>> {
+  const rows: DesktopVpsMapRow[] = [];
+  let offset = 0;
+  for (let replies = 0; replies < MAP_REPLIES_MAX; replies += 1) {
+    const value = await read<unknown>({ op: "map", offset });
+    if (value.source !== "vps") return value;
+    const data = value.data;
+    if (!isRecord(data) || !Array.isArray(data.items) || !isCount(data.total) || !(data.next === null || isCount(data.next))) {
+      return { source: "unavailable", code: "desktop_bad_reply" };
+    }
+    rows.push(...(data.items as DesktopVpsMapRow[]));
+    if (data.next === null) return { source: "vps", data: rows };
+    // A reply that does not move forward would loop: the read is a failed one.
+    if (data.next <= offset) return { source: "unavailable", code: "desktop_bad_reply" };
+    offset = data.next;
+  }
+  return { source: "unavailable", code: "desktop_bad_reply" };
 }
 
 /**
@@ -223,11 +265,46 @@ function boundedPart(value: unknown): value is { rows: unknown[]; included: numb
 }
 
 /**
+ * The sidebar's facets and the dashboard's numbers weigh most of what a page of the linked team reads
+ * (all the positions, light; the counts), and several pages ask for them one after the other. They are
+ * kept for CACHED_READ_MS, for the connection they were read on (existingTeamConnectionKey: this opening
+ * of the view, its account, VPS and team) and nothing is kept with the view closed. A page asked to
+ * read again (Aggiorna, or router.refresh() after a change the person made) forgets them. A read that
+ * did not succeed is not kept.
+ */
+const CACHED_READ_MS = 30_000;
+const cached = new Map<string, { key: string; at: number; read: Promise<DesktopVpsRead<unknown>> }>();
+
+if (typeof window !== "undefined") window.addEventListener(REFRESH_EVENT, () => cached.clear());
+
+/** Forgets the kept reads (a test, or a new view). */
+export function resetCachedReads(): void {
+  cached.clear();
+}
+
+function readOnce<T>(request: Request): Promise<DesktopVpsRead<T>> {
+  const key = existingTeamConnectionKey();
+  if (key === null) return read<T>(request);
+  const now = Date.now();
+  const kept = cached.get(request.op);
+  if (kept && kept.key === key && now >= kept.at && now - kept.at < CACHED_READ_MS) return kept.read as Promise<DesktopVpsRead<T>>;
+  const fresh = read<T>(request).then((result) => {
+    // Not kept when it failed, or when the view moved to another connection while it was read.
+    if (result.source !== "vps" || existingTeamConnectionKey() !== key) {
+      if (cached.get(request.op)?.read === fresh) cached.delete(request.op);
+    }
+    return result;
+  });
+  cached.set(request.op, { key, at: now, read: fresh });
+  return fresh;
+}
+
+/**
  * The dashboard's numbers, as the core counts them on the team's VPS: one
  * reply, never rows downloaded to be counted here.
  */
 export async function readDesktopVpsStats(): Promise<DesktopVpsRead<DesktopVpsStats>> {
-  const value = await read<unknown>({ op: "stats" });
+  const value = await readOnce<unknown>({ op: "stats" });
   if (value.source !== "vps") return value;
   const data = value.data;
   if (
@@ -254,5 +331,5 @@ export function readDesktopVpsPosition(
 export function readDesktopVpsPositionFacets(): Promise<
   DesktopVpsRead<PositionFacet[]>
 > {
-  return read<unknown>({ op: "facets" }).then(arrayRead<PositionFacet>);
+  return readOnce<unknown>({ op: "facets" }).then(arrayRead<PositionFacet>);
 }

@@ -25,6 +25,7 @@ import { MailRotationBanner } from "./MailRotationBanner";
 import { SignOutContext } from "../lib/account-actions";
 import { NewVersionBanner } from "./NewVersionBanner";
 import NavStrip from "./NavStrip";
+import { beginPageLoad } from "../lib/page-timing";
 import { matchRoute, navigate, refresh, useLocation } from "./router";
 import { HOME, READ_ONLY_HOME, READ_ONLY_NAV, READ_ONLY_ROUTES, ROUTES } from "./routes";
 import ThemePicker from "./ThemePicker";
@@ -187,6 +188,11 @@ export default function Shell({ onLogout, onCloseReadOnly }: ShellProps) {
   useEffect(() => {
     if (!match) navigate(readOnly ? READ_ONLY_HOME : HOME, { replace: true });
   }, [match, readOnly]);
+
+  // How long the page of a linked team takes to show its data (the load-times log, on this computer).
+  useEffect(() => {
+    beginPageLoad(readOnly ? path : "");
+  }, [path, search, readOnly]);
 
   const Page = match?.route.page;
   const page = Page && (

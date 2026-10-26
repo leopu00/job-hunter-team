@@ -141,6 +141,7 @@ pub fn run() {
             onboarding::onboarding_local_uninstall_available,
             onboarding::onboarding_local_uninstall,
             runtime_log::onboarding_runtime_log,
+            runtime_log::page_load_metric,
             runtime_log::onboarding_runtime_log_open,
             saved_vps::saved_vps_list,
             saved_vps::saved_vps_add,

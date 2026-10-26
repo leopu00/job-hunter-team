@@ -20,8 +20,9 @@ use std::{
     fs::{self, File, OpenOptions},
     io::{Read, Write},
     path::{Path, PathBuf},
+    cell::Cell,
     sync::Mutex,
-    time::{Duration, SystemTime, UNIX_EPOCH},
+    time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
 use tauri::{Manager, State};
 
@@ -44,6 +45,10 @@ def one(sql,args=()):
 def many(sql,args=()):
  try: return [as_dict(row) for row in db.execute(sql,args).fetchall()]
  except sqlite3.Error: return []
+def first_by_position(table,names):
+ present=columns(table); found={}
+ for row in many('SELECT '+', '.join(['position_id']+[name for name in names if name in present])+' FROM '+table+' ORDER BY rowid'): found.setdefault(row['position_id'],row)
+ return found
 def columns(table):
  try: return {row[1] for row in db.execute('PRAGMA table_info('+table+')')}
  except sqlite3.Error: return set()
@@ -72,9 +77,6 @@ def state(status): return {'writing':'preparing','review':'preparing'}.get(statu
 def salary(row):
  declared=row.get('salary_declared_min') is not None or row.get('salary_declared_max') is not None
  return ((row.get('salary_declared_min'),row.get('salary_declared_max'),row.get('salary_declared_currency')) if declared else (row.get('salary_estimated_min'),row.get('salary_estimated_max'),row.get('salary_estimated_currency')))
-def ticket_count(pid):
- row=one("SELECT COUNT(*) AS n FROM position_tickets WHERE position_id=? AND status IN ('open','assigned')",(pid,))
- return int(row.get('n',0)) if row else 0
 def position_detail(pid):
  raw=one('SELECT * FROM positions WHERE id=?',(pid,))
  if raw is None: return None
@@ -154,9 +156,11 @@ LIST_KEYS=('id','legacy_id','title','company','location','remote_type','source',
 def light(item): return {key:item.get(key) for key in LIST_KEYS}
 try: req=json.loads(sys.stdin.readline())
 except Exception: fail('positions_request_invalid')
-if not isinstance(req,dict) or set(req)-{'op','filters','id'}: fail('positions_request_invalid')
+if not isinstance(req,dict) or set(req)-{'op','filters','id','offset'}: fail('positions_request_invalid')
 op=req.get('op')
-if op not in ('list','detail','facets','stats','profile','cloud_sync'): fail('positions_request_invalid')
+if op not in ('list','detail','facets','stats','profile','cloud_sync','map'): fail('positions_request_invalid')
+if op=='map' and (set(req)-{'op','offset'} or type(req.get('offset',0)) is not int or not 0<=req.get('offset',0)<=1000000): fail('positions_request_invalid')
+if op!='map' and 'offset' in req: fail('positions_request_invalid')
 if op=='detail' and (set(req)!={'op','id'} or not isinstance(req['id'],str) or not req['id'].isdigit() or len(req['id'])>20): fail('positions_request_invalid')
 if op in ('facets','stats','profile','cloud_sync') and set(req)!={'op'}: fail('positions_request_invalid')
 if op=='list' and (set(req)-{'op','filters'} or (req.get('filters') is not None and not isinstance(req.get('filters'),dict))): fail('positions_request_invalid')
@@ -260,10 +264,21 @@ def dash_row(raw,score,application):
   if stamp and (best is None or stamp>best[0]): best=(stamp,by,actor or by)
  at,by,actor=best or ('','scout','scout')
  return {'id':sid(raw.get('id')),'legacy_id':nullable(raw,'legacy_id'),'title':trunc(nullable(raw,'title'),120),'company':trunc(nullable(raw,'company'),80),'location':trunc(nullable(raw,'location'),80),'remote_type':nullable(raw,'remote_type'),'status':raw.get('status'),'score':number(nullable(score,'total_score')) if score else None,'role_family':trunc(nullable(raw,'role_family'),60),'loc_country':trunc(nullable(raw,'loc_country'),40),'loc_city':trunc(nullable(raw,'loc_city'),60),'source':trunc(nullable(raw,'source'),60),'salary_min':number(sal[0]),'salary_max':number(sal[1]),'salary_currency':sal[2] or 'EUR','found_at':nullable(raw,'found_at'),'scored_at':scored_at,'last_action_at':at or nullable(raw,'found_at') or '','last_action_by':by,'last_action_actor':actor,'critic_score':number(nullable(application,'critic_score')) if application else None,'critic_verdict':nullable(application,'critic_verdict') if application else None}
+# The columns the dashboard's rows are made of (not the job description, requirements or notes).
+DASH_COLUMNS=('id','legacy_id','title','company','location','remote_type','status','role_family','loc_country','loc_city','source','found_at','found_by','last_checked','salary_declared_min','salary_declared_max','salary_declared_currency','salary_estimated_min','salary_estimated_max','salary_estimated_currency')
+def dash_pick():
+ have=columns('positions'); return ', '.join('p.'+name for name in DASH_COLUMNS if name in have)
 def dash_rows(sql,args=()):
+ raws=many(sql,args)
+ # Many rows: the scores and applications are read once for all of them (only the columns a row uses), not one query each.
+ scores_by=first_by_position('scores',('total_score','scored_at','scored_by')) if len(raws)>50 else None
+ applications_by=first_by_position('applications',('critic_score','critic_verdict','written_at','written_by','critic_reviewed_at','applied_at','response_at')) if len(raws)>50 else None
  out=[]
- for raw in many(sql,args):
-  pid=raw.get('id'); out.append(dash_row(raw,one('SELECT * FROM scores WHERE position_id=?',(pid,)),one('SELECT * FROM applications WHERE position_id=?',(pid,))))
+ for raw in raws:
+  pid=raw.get('id')
+  score=scores_by.get(pid) if scores_by is not None else one('SELECT * FROM scores WHERE position_id=?',(pid,))
+  application=applications_by.get(pid) if applications_by is not None else one('SELECT * FROM applications WHERE position_id=?',(pid,))
+  out.append(dash_row(raw,score,application))
  return out
 if op=='stats':
  POINTS=2000; EVENTS=3000; live="(p.status IS NULL OR p.status!='excluded')"
@@ -281,7 +296,7 @@ if op=='stats':
   distribution={'active':active,'withScore':len(scored),'avgScore':int(sum(scored)/len(scored)+0.5) if scored else None,'buckets':[{'min':lo,'max':hi,'count':sum(1 for value in scored if lo<=value<=hi)} for lo,hi in bands]}
   sources=[{'source':row[0] if row[0] is not None else 'sconosciuta','count':row[1]} for row in db.execute('SELECT source,COUNT(*) AS n FROM positions p WHERE '+live+' GROUP BY source ORDER BY n DESC LIMIT 8')]
   types=[{'role_family':trunc(row[0],60),'count':row[1]} for row in db.execute('SELECT role_family,COUNT(*) AS n FROM positions p WHERE '+live+' GROUP BY role_family ORDER BY n DESC LIMIT 40')]
-  rows=dash_rows('SELECT p.* FROM positions p WHERE '+live+' ORDER BY p.found_at DESC,p.id ASC LIMIT '+str(POINTS))
+  rows=dash_rows('SELECT '+dash_pick()+' FROM positions p WHERE '+live+' ORDER BY p.found_at DESC,p.id ASC LIMIT '+str(POINTS))
   scols=columns('scores')
   recent=dash_rows('SELECT p.* FROM positions p JOIN scores s ON s.position_id=p.id WHERE '+live+' AND s.total_score IS NOT NULL AND s.scored_at IS NOT NULL ORDER BY s.scored_at DESC,p.id ASC LIMIT 8') if 'scored_at' in scols else []
   acols=columns('applications'); events=[]
@@ -310,15 +325,43 @@ if op=='facets':
    rows.append({'id':sid(row[0]),'status':row[1],'title':row[2],'company':row[3],'role_family':row[4],'loc_country':row[5],'loc_city':row[6],'score':row[7],'critic_score':row[8],'source':row[9]})
  except sqlite3.Error: fail('positions_unavailable')
  emit({'ok':True,'data':{'items':rows}})
+if op=='map':
+ # What the globe needs of every position that is not excluded, and nothing else, in the list's order
+ # (the pins of one city are laid out by that order). One reply carries as many as fit in the byte
+ # budget; `next` is where the following reply starts, null at the end.
+ MAP_BUDGET=1363148
+ try:
+  have=columns('positions')
+  pick=', '.join('p.'+name for name in ('id','title','company','status','role_family','location','remote_type','loc_country','loc_city','found_at','office_lat','office_lon','office_address') if name in have)
+  scores_by=first_by_position('scores',('total_score',))
+  everyone=[]
+  for raw in db.execute('SELECT '+pick+" FROM positions p WHERE (p.status IS NULL OR p.status!='excluded') ORDER BY p.found_at DESC,p.id ASC"):
+   row=as_dict(raw); score=scores_by.get(row.get('id'))
+   everyone.append({'id':sid(row.get('id')),'title':nullable(row,'title'),'company':nullable(row,'company'),'status':nullable(row,'status'),'role_family':nullable(row,'role_family'),'location':nullable(row,'location'),'remote_type':nullable(row,'remote_type'),'loc_country':nullable(row,'loc_country'),'loc_city':nullable(row,'loc_city'),'score':nullable(score,'total_score') if score else None,'found_at':nullable(row,'found_at') or '','office_lat':coord(row.get('office_lat'),90),'office_lon':coord(row.get('office_lon'),180),'office_address':text(row.get('office_address'),160)})
+ except sqlite3.Error: fail('positions_unavailable')
+ start=req.get('offset',0); items=[]; used=0
+ for item in everyone[start:]:
+  used+=len(json.dumps(item,separators=(',',':')))+1
+  if items and used>MAP_BUDGET: break
+  items.append(item)
+ reached=start+len(items)
+ emit({'ok':True,'data':{'items':items,'total':len(everyone),'next':reached if reached<len(everyone) else None}})
 filters=req.get('filters') or {}; allowed={'statuses','remoteTypes','sources','verdicts','families','countries','cities','scoreBands','unscored','criticBands','criticUnscored','writeRequested','scoredOnly','hideExcluded','scam','q','limit','offset','sort','dir'}
 if set(filters)-allowed: fail('positions_request_invalid')
 if not isinstance(filters,dict) or any(value is None for value in filters.values()): fail('positions_request_invalid')
 if matching({},filters) is None: fail('positions_request_invalid')
 try:
  rows=[]; section_total=0
- for raw in db.execute('SELECT p.* FROM positions p ORDER BY p.found_at DESC,p.id ASC'):
-  position=as_dict(raw); pid=position.get('id'); score=one('SELECT * FROM scores WHERE position_id=?',(pid,)); application=one('SELECT * FROM applications WHERE position_id=?',(pid,)); item=map_position(position,score,application)
-  declared=salary(position); pending=ticket_count(pid)>0; item.update({'salary_min':declared[0],'salary_max':declared[1],'salary_currency':declared[2] or 'EUR','applied_at':nullable(application,'applied_at') if application else None,'written_at':nullable(application,'written_at') if application else None,'has_open_ticket':pending,'ticket_indicator':'pending' if pending else 'none','public_state':state(position.get('status')),'office_lat':coord(position.get('office_lat'),90),'office_lon':coord(position.get('office_lon'),180),'office_address':text(position.get('office_address'),160)})
+ # Only the columns the list shows or filters on (not the job description, the requirements or the
+ # notes, which weigh most of a row), and the scores, applications and open tickets read once for all
+ # the positions instead of three queries for each one.
+ wanted=('id','legacy_id','title','company','location','remote_type','source','found_at','status','role_family','loc_country','loc_city','write_requested','scam_signals','salary_declared_min','salary_declared_max','salary_declared_currency','salary_estimated_min','salary_estimated_max','salary_estimated_currency','office_lat','office_lon','office_address')
+ have=columns('positions'); pick=', '.join('p.'+name for name in wanted if name in have)
+ scores_by=first_by_position('scores',('total_score',)); applications_by=first_by_position('applications',('critic_score','critic_verdict','applied_at','written_at'))
+ open_tickets={row['position_id'] for row in many("SELECT DISTINCT position_id FROM position_tickets WHERE status IN ('open','assigned')")}
+ for raw in db.execute('SELECT '+pick+' FROM positions p ORDER BY p.found_at DESC,p.id ASC'):
+  position=as_dict(raw); pid=position.get('id'); score=scores_by.get(pid); application=applications_by.get(pid); item=map_position(position,score,application)
+  declared=salary(position); pending=pid in open_tickets; item.update({'salary_min':declared[0],'salary_max':declared[1],'salary_currency':declared[2] or 'EUR','applied_at':nullable(application,'applied_at') if application else None,'written_at':nullable(application,'written_at') if application else None,'has_open_ticket':pending,'ticket_indicator':'pending' if pending else 'none','public_state':state(position.get('status')),'office_lat':coord(position.get('office_lat'),90),'office_lon':coord(position.get('office_lon'),180),'office_address':text(position.get('office_address'),160)})
   matched=matching(item,filters)
   if matched is None: fail('positions_request_invalid')
   if matched:
@@ -359,6 +402,11 @@ enum PositionsRequest {
     },
     Facets,
     Stats,
+    /// What the globe needs of every position, from `offset` on (see the script's `map`).
+    Map {
+        #[serde(default)]
+        offset: u32,
+    },
     Profile,
     /// How the box's push to the website is going (its periodic push's last outcome).
     #[serde(rename = "cloud_sync")]
@@ -486,12 +534,26 @@ impl PositionFilters {
 }
 
 impl PositionsRequest {
+    /// The kind of read, as the load-times log names it (one of `runtime_log::POSITIONS_READ_KINDS`).
+    fn op(&self) -> &'static str {
+        crate::runtime_log::POSITIONS_READ_KINDS[match self {
+            Self::List { .. } => 0,
+            Self::Detail { .. } => 1,
+            Self::Facets => 2,
+            Self::Stats => 3,
+            Self::Map { .. } => 4,
+            Self::Profile => 5,
+            Self::CloudSync => 6,
+        }]
+    }
+
     fn valid(&self) -> bool {
         match self {
             Self::List { filters } => filters.as_ref().map_or(true, PositionFilters::valid),
             Self::Detail { id } => {
                 (1..=20).contains(&id.len()) && id.bytes().all(|byte| byte.is_ascii_digit())
             }
+            Self::Map { offset } => *offset <= 1_000_000,
             Self::Facets | Self::Stats | Self::Profile | Self::CloudSync => true,
         }
     }
@@ -524,6 +586,13 @@ fn valid_positions_reply(request: &PositionsRequest, reply: &Value) -> bool {
                     .as_array()
                     .is_some_and(|items| items.iter().all(|item| item.is_object()))
             }),
+        PositionsRequest::Map { .. } => data.as_object().is_some_and(|data| {
+            data.len() == 3
+                && array(data.get("items"))
+                && data["items"].as_array().is_some_and(|items| items.iter().all(Value::is_object))
+                && data.get("total").is_some_and(Value::is_u64)
+                && data.get("next").is_some_and(|next| next.is_null() || next.is_u64())
+        }),
         PositionsRequest::Stats => data.as_object().is_some_and(|data| {
             data.len() == 7
                 && ["stats", "distribution"]
@@ -1837,8 +1906,133 @@ pub(crate) fn assistant_start_command(target: &RuntimeTarget) -> Result<String, 
     )
 }
 
+const PYTHON_STDIN_EXEC: &str = "exec \"$JHT_ENGINE\" exec -i \"$JHT_CID\" python3 -c 'import sys;exec(bytes.fromhex(sys.stdin.buffer.readline().decode()).decode())'";
+
 pub(crate) fn python_command(target: &RuntimeTarget) -> Result<String, &'static str> {
-    command(target, "exec \"$JHT_ENGINE\" exec -i \"$JHT_CID\" python3 -c 'import sys;exec(bytes.fromhex(sys.stdin.buffer.readline().decode()).decode())'")
+    command(target, PYTHON_STDIN_EXEC)
+}
+
+/// The same read WITHOUT the checks of `command`: only the engine and `exec` on the container's whole
+/// id (64 hex digits, checked here before it goes into the command). It is for a target whose checks
+/// passed a few seconds ago (see `read_amortising_checks`): a container that was replaced has another
+/// id, and `exec` on the old one fails closed.
+pub(crate) fn python_command_unchecked(target: &RuntimeTarget) -> Result<String, &'static str> {
+    if !valid_target(target) || !hex(&target.container_id, 64) {
+        return Err("existing_team_runtime_candidate_invalid");
+    }
+    Ok(format!(
+        "set -eu\nJHT_CID='{cid}'\n{engine}\n{operation}",
+        cid = target.container_id,
+        engine = engine_selection(70),
+        operation = PYTHON_STDIN_EXEC
+    ))
+}
+
+/// How long the checks of a pinned container are not repeated for reads of the positions.
+const CHECKS_KEPT_MS: u64 = 45_000;
+/// The targets whose checks passed, at most this many, in memory only.
+const CHECKS_KEPT_TARGETS: usize = 8;
+
+/// The targets whose checks (container, image, revision, digest) passed on a complete read, and
+/// when. Only in this process's memory, never on disk; the key is a hash of the whole identity of the
+/// connection (account, host, port, user, key, team and every value of the pinned target).
+pub(crate) struct VerifiedTargets {
+    entries: Mutex<Vec<(String, u64)>>,
+}
+
+impl VerifiedTargets {
+    pub(crate) const fn new() -> Self {
+        Self { entries: Mutex::new(Vec::new()) }
+    }
+
+    fn fresh(&self, key: &str, now_ms: u64) -> bool {
+        self.entries.lock().is_ok_and(|entries| {
+            entries.iter().any(|(kept, at)| kept == key && now_ms.saturating_sub(*at) < CHECKS_KEPT_MS && now_ms >= *at)
+        })
+    }
+
+    fn remember(&self, key: &str, now_ms: u64) {
+        if let Ok(mut entries) = self.entries.lock() {
+            entries.retain(|(kept, at)| kept != key && now_ms.saturating_sub(*at) < CHECKS_KEPT_MS);
+            entries.push((key.to_owned(), now_ms));
+            while entries.len() > CHECKS_KEPT_TARGETS {
+                entries.remove(0);
+            }
+        }
+    }
+
+    fn forget(&self, key: &str) {
+        if let Ok(mut entries) = self.entries.lock() {
+            entries.retain(|(kept, _)| kept != key);
+        }
+    }
+}
+
+static VERIFIED_TARGETS: VerifiedTargets = VerifiedTargets::new();
+
+fn clock_ms() -> u64 {
+    static START: std::sync::OnceLock<Instant> = std::sync::OnceLock::new();
+    START.get_or_init(Instant::now).elapsed().as_millis() as u64
+}
+
+/// The key of a pinned target's verified state; none for anything but a VPS with a whole pinned target.
+fn checks_key(scope: &AccountScope, host: &crate::runtime_host::ValidatedHost, team_id: &str, runtime: &RuntimeTarget) -> Option<String> {
+    let crate::runtime_host::ValidatedHost::Vps { address, user, port, key_path, known_hosts } = host else {
+        return None;
+    };
+    if !valid_target(runtime) {
+        return None;
+    }
+    Some(sha256(
+        format!(
+            "{}\n{address}\n{user}\n{port}\n{}\n{}\n{team_id}\n{}\n{}\n{}\n{}\n{}\n{}\n{}",
+            scope.digest(),
+            key_path.display(),
+            known_hosts.display(),
+            runtime.container_id,
+            runtime.image_id,
+            runtime.platform_image_id,
+            runtime.oci_revision,
+            runtime.digest,
+            runtime.os,
+            runtime.architecture,
+        )
+        .as_bytes(),
+    ))
+}
+
+/// One read of the positions, with the checks of the pinned container done on the first and then only
+/// every 45 s: `run(true)` is the complete command with its checks, `run(false)` the shortcut.
+/// - the entry is made only by a complete read that succeeded, and a shortcut that worked neither
+///   makes nor renews it: the checks come back at the latest 45 s after the last complete read;
+/// - any reply that is not a success (a refusal such as exit 70, a timeout, a reply that is not
+///   valid) deletes the entry, and a failed shortcut is followed at once by ONE complete read;
+/// - with no key (not a VPS with a pinned target) every read is complete.
+/// Returns the reply and whether the checks were skipped.
+fn read_amortising_checks(
+    memory: &VerifiedTargets,
+    key: Option<&str>,
+    now_ms: impl Fn() -> u64,
+    mut run: impl FnMut(bool) -> Value,
+) -> (Value, bool) {
+    let succeeded = |reply: &Value| reply.get("ok") == Some(&Value::Bool(true));
+    let Some(key) = key else {
+        return (run(true), false);
+    };
+    if memory.fresh(key, now_ms()) {
+        let reply = run(false);
+        if succeeded(&reply) {
+            return (reply, true);
+        }
+        memory.forget(key);
+    }
+    let reply = run(true);
+    if succeeded(&reply) {
+        memory.remember(key, now_ms());
+    } else {
+        memory.forget(key);
+    }
+    (reply, false)
 }
 
 pub(crate) fn delivery_command(
@@ -2201,10 +2395,20 @@ pub(crate) fn positions_read_for_scope(
         Ok(validated) => validated,
         Err(error) => return positions_failure(error),
     };
-    let command = match read_command(app, scope, &host) {
+    let selected = match selected_or_own(app, scope, &host) {
+        Ok(selected) => selected,
+        Err(error) => return positions_failure(error),
+    };
+    let team = selected.as_ref().map(|target| (target.team_id.clone(), target.runtime.clone()));
+    let command = match read_command_for(selected, &host) {
         Ok(command) => command,
         Err(error) => return positions_failure(error),
     };
+    // The chat's ssh connection, lent to this read when the chat is connected to the same VPS and team:
+    // a read of its own pays a new handshake (and the key exchange) every time.
+    let shared = app.try_state::<direct_chat::DirectChatState>().and_then(|chat| {
+        direct_chat::shared_master(chat.inner(), scope, &validated, team.as_ref().map(|(id, runtime)| (id.as_str(), runtime)))
+    });
     // A key found changed stays blocked for this scope and VPS until the person confirms it again: no `ssh`
     // that is refused and no `ssh-keyscan` per read (the memory is vps_link's).
     let (block_key, pinned) = match &validated {
@@ -2214,14 +2418,60 @@ pub(crate) fn positions_read_for_scope(
         ),
         crate::runtime_host::ValidatedHost::Local => (None, None),
     };
-    read_unless_blocked(block_key, pinned, || {
-        positions_read_with(
-            &request,
-            &request_bytes,
-            |input| run_ssh_command(&validated, &command, Some(input), READ_TIMEOUT, None),
-            || crate::runtime_host::host_key_matches_pin(&validated),
-        )
-    })
+    let started = Instant::now();
+    // ssh time, bytes out, bytes in and whether the chat's connection was lent, over every run of this read
+    let timing = Cell::new((Duration::ZERO, 0usize, 0usize, false));
+    let fast_command = team.as_ref().and_then(|(_, runtime)| python_command_unchecked(runtime).ok());
+    let key = team.as_ref().and_then(|(team_id, runtime)| checks_key(scope, &validated, team_id, runtime));
+    let key = key.filter(|_| fast_command.is_some());
+    let mut skipped = false;
+    let reply = read_unless_blocked(block_key, pinned, || {
+        let (reply, skipped_checks) = read_amortising_checks(&VERIFIED_TARGETS, key.as_deref(), clock_ms, |complete| {
+            let chosen = match (&fast_command, complete) {
+                (Some(fast), false) => fast,
+                _ => &command,
+            };
+            positions_read_with(
+                &request,
+                &request_bytes,
+                |input| {
+                    let ssh_started = Instant::now();
+                    let lent = shared.as_deref().filter(|socket| direct_chat::lent_socket_still_ours(socket));
+                    let mut result = None;
+                    if let Some(socket) = lent {
+                        // The master went away between the check and the read (255): one try on a connection of its own.
+                        match run_ssh_command(&validated, chosen, Some(input), READ_TIMEOUT, Some(socket)) {
+                            Ok(output) if output.code != 255 => result = Some(Ok(output)),
+                            _ => {}
+                        }
+                    }
+                    let used_lent = result.is_some();
+                    let result = result.unwrap_or_else(|| run_ssh_command(&validated, chosen, Some(input), READ_TIMEOUT, None));
+                    let received = result.as_ref().map_or(0, |output| output.stdout.len());
+                    let (ssh, out, _, was_lent) = timing.get();
+                    timing.set((ssh + ssh_started.elapsed(), out + input.len(), received, was_lent || used_lent));
+                    result
+                },
+                || crate::runtime_host::host_key_matches_pin(&validated),
+            )
+        });
+        skipped = skipped_checks;
+        reply
+    });
+    let (ssh, bytes_out, bytes_in, used_lent) = timing.get();
+    if let Some(log) = crate::runtime_log::RuntimeLog::new(app) {
+        log.record_positions_read(&crate::runtime_log::PositionsReadTiming {
+            op: request.op(),
+            shared: used_lent,
+            checks_skipped: skipped,
+            ok: reply.get("ok") == Some(&Value::Bool(true)),
+            total: started.elapsed(),
+            ssh,
+            bytes_out,
+            bytes_in,
+        });
+    }
+    reply
 }
 
 /// Runs the read unless this VPS's key is already known to have changed; remembers the block when the read
@@ -3077,6 +3327,204 @@ mod tests {
         // the Python reader serves this op and nothing else under it
         assert!(POSITIONS_READ_PY.contains("if op=='stats':"));
         assert!(POSITIONS_READ_PY.contains("mode=ro"));
+    }
+
+    // ---- the checks of the pinned container, not repeated for a few seconds ----
+
+    fn synthetic_runtime() -> RuntimeTarget {
+        ActivatedTarget::synthetic_for_tests().runtime
+    }
+
+    fn vps(key: &str) -> crate::runtime_host::ValidatedHost {
+        crate::runtime_host::ValidatedHost::Vps {
+            address: "synthetic.example.invalid".into(),
+            user: "synthetic".into(),
+            port: 22,
+            key_path: PathBuf::from(key),
+            known_hosts: PathBuf::from("/synthetic/known_hosts"),
+        }
+    }
+
+    fn ok_reply() -> Value {
+        json!({"ok": true, "data": {"items": []}})
+    }
+
+    fn refusal() -> Value {
+        json!({"ok": false, "error": "existing_team_runtime_changed"})
+    }
+
+    /// Runs `reads` reads one after the other at the given times, with a fake executor that answers
+    /// from `script` (true = ok), and says for each read whether it was the complete command.
+    fn drive_reads(memory: &VerifiedTargets, key: &str, clock: &std::cell::Cell<u64>, steps: &[(u64, &[bool])]) -> Vec<(Vec<bool>, bool, bool)> {
+        steps
+            .iter()
+            .map(|(at, answers)| {
+                clock.set(*at);
+                let mut asked = Vec::new();
+                let mut next = answers.iter();
+                let (reply, skipped) = read_amortising_checks(memory, Some(key), || clock.get(), |complete| {
+                    asked.push(complete);
+                    if *next.next().expect("a reply for every run") { ok_reply() } else { refusal() }
+                });
+                (asked, skipped, reply["ok"] == true)
+            })
+            .collect()
+    }
+
+    #[test]
+    fn the_checks_are_made_on_the_first_read_and_not_repeated_for_45_seconds() {
+        let memory = VerifiedTargets::new();
+        let clock = std::cell::Cell::new(0);
+        let seen = drive_reads(&memory, "target", &clock, &[(0, &[true]), (10_000, &[true]), (44_000, &[true]), (46_000, &[true]), (50_000, &[true])]);
+        // complete, shortcut, shortcut, and at 46 s (45 s after the last COMPLETE read, not after the
+        // last shortcut) complete again, then the shortcut
+        assert_eq!(seen[0], (vec![true], false, true));
+        assert_eq!(seen[1], (vec![false], true, true));
+        assert_eq!(seen[2], (vec![false], true, true));
+        assert_eq!(seen[3], (vec![true], false, true), "a shortcut that worked does not renew the entry");
+        assert_eq!(seen[4], (vec![false], true, true));
+    }
+
+    #[test]
+    fn a_container_that_was_replaced_is_never_read_on_the_shortcut_and_is_refused() {
+        let memory = VerifiedTargets::new();
+        let clock = std::cell::Cell::new(0);
+        // the shortcut fails (`exec` on the old id), the complete read answers exit 70's refusal: once each
+        let seen = drive_reads(&memory, "target", &clock, &[(0, &[true]), (5_000, &[false, false]), (6_000, &[true]), (7_000, &[true])]);
+        assert_eq!(seen[1], (vec![false, true], false, false), "one shortcut, then ONE complete read, then the refusal");
+        // the refusal deleted the entry: the next read is complete, and so makes it again
+        assert_eq!(seen[2], (vec![true], false, true));
+        assert_eq!(seen[3], (vec![false], true, true));
+    }
+
+    #[test]
+    fn a_failed_shortcut_falls_back_at_once_and_only_once() {
+        let memory = VerifiedTargets::new();
+        let clock = std::cell::Cell::new(0);
+        // the shortcut fails, the complete read works (a stopped and restarted container): the entry is made again
+        let seen = drive_reads(&memory, "target", &clock, &[(0, &[true]), (1_000, &[false, true]), (2_000, &[true])]);
+        assert_eq!(seen[1], (vec![false, true], false, true));
+        assert_eq!(seen[2], (vec![false], true, true));
+        // never a third run in one read
+        let memory = VerifiedTargets::new();
+        let runs = std::cell::Cell::new(0);
+        read_amortising_checks(&memory, Some("target"), || 0, |_| { runs.set(runs.get() + 1); ok_reply() });
+        read_amortising_checks(&memory, Some("target"), || 1, |_| { runs.set(runs.get() + 1); refusal() });
+        assert_eq!(runs.get(), 3, "one complete read, then a failed shortcut and ONE complete read");
+    }
+
+    #[test]
+    fn another_account_host_key_team_or_target_gets_no_shortcut() {
+        let scope = AccountScope::synthetic(b"scope-one");
+        let runtime = synthetic_runtime();
+        let key = checks_key(&scope, &vps("/k/one"), "team-one", &runtime).expect("a pinned target on a VPS");
+        let mut other_runtime = |edit: fn(&mut RuntimeTarget)| {
+            let mut changed = runtime.clone();
+            edit(&mut changed);
+            checks_key(&scope, &vps("/k/one"), "team-one", &changed).expect("still whole")
+        };
+        let keys = [
+            checks_key(&AccountScope::synthetic(b"scope-two"), &vps("/k/one"), "team-one", &runtime).unwrap(),
+            checks_key(&scope, &vps("/k/two"), "team-one", &runtime).unwrap(),
+            checks_key(&scope, &vps("/k/one"), "team-two", &runtime).unwrap(),
+            other_runtime(|target| target.container_id = "9".repeat(64)),
+            other_runtime(|target| target.image_id = format!("sha256:{}", "9".repeat(64))),
+            other_runtime(|target| target.platform_image_id = format!("sha256:{}", "9".repeat(64))),
+            other_runtime(|target| target.oci_revision = "9".repeat(40)),
+            other_runtime(|target| target.digest = format!("sha256:{}", "9".repeat(64))),
+        ];
+        for other in &keys {
+            assert_ne!(other, &key);
+        }
+        // and it holds in the memory: a read of the first target does not open a shortcut for the others
+        let memory = VerifiedTargets::new();
+        read_amortising_checks(&memory, Some(&key), || 0, |_| ok_reply());
+        for other in &keys {
+            let (_, skipped) = read_amortising_checks(&memory, Some(other), || 1_000, |_| ok_reply());
+            assert!(!skipped, "{other}");
+        }
+        // a target that is not whole, or not on a VPS, has no key and is read complete every time
+        let mut broken = runtime.clone();
+        broken.container_id = "abc".into();
+        assert!(checks_key(&scope, &vps("/k/one"), "team-one", &broken).is_none());
+        assert!(checks_key(&scope, &crate::runtime_host::ValidatedHost::Local, "team-one", &runtime).is_none());
+        let runs = std::cell::Cell::new(0);
+        for _ in 0..3 {
+            let (_, skipped) = read_amortising_checks(&memory, None, || 0, |complete| { assert!(complete); runs.set(runs.get() + 1); ok_reply() });
+            assert!(!skipped);
+        }
+        assert_eq!(runs.get(), 3);
+    }
+
+    #[test]
+    fn the_shortcut_has_no_checks_and_runs_only_on_a_whole_container_id() {
+        let runtime = synthetic_runtime();
+        let fast = python_command_unchecked(&runtime).unwrap();
+        let full = python_command(&runtime).unwrap();
+        assert_eq!(fast.matches("inspect").count(), 0);
+        assert!(full.contains("inspect"));
+        assert!(fast.contains(&format!("JHT_CID='{}'", runtime.container_id)));
+        assert!(fast.ends_with(PYTHON_STDIN_EXEC));
+        // the engine is still chosen, and the id is the only thing the command is made of
+        assert!(fast.contains("JHT_ENGINE=docker") && fast.contains("JHT_ENGINE=podman"));
+        for bad in ["", "abc", &"A".repeat(64), &format!("{}'; id #", "a".repeat(40)), &"g".repeat(64), &"a".repeat(65)] {
+            let mut target = runtime.clone();
+            target.container_id = bad.to_string();
+            assert_eq!(python_command_unchecked(&target), Err("existing_team_runtime_candidate_invalid"), "{bad:?}");
+        }
+    }
+
+    #[test]
+    fn the_checks_memory_forgets_after_the_time_and_stays_small() {
+        let memory = VerifiedTargets::new();
+        memory.remember("a", 0);
+        assert!(memory.fresh("a", 44_999) && !memory.fresh("a", 45_000));
+        // a clock that went back is no proof
+        memory.remember("b", 10_000);
+        assert!(!memory.fresh("b", 5_000));
+        for n in 0..20 {
+            memory.remember(&format!("t{n}"), 100_000 + n);
+        }
+        assert!(memory.entries.lock().unwrap().len() <= CHECKS_KEPT_TARGETS);
+        memory.forget("t19");
+        assert!(!memory.fresh("t19", 100_050));
+    }
+
+    #[test]
+    fn the_globes_read_is_a_closed_read_only_op_with_a_closed_reply() {
+        assert!(matches!(parse_positions_request(json!({"op": "map"})), Ok(PositionsRequest::Map { offset: 0 })));
+        let forwarded = parse_positions_request(json!({"op": "map", "offset": 5000}))
+            .map(|request| serde_json::to_value(request).expect("request serializes"));
+        assert_eq!(forwarded, Ok(json!({"op": "map", "offset": 5000})));
+        // what is not an offset, or comes with something else, never reaches the reader
+        for bad in [
+            json!({"op": "map", "offset": -1}),
+            json!({"op": "map", "offset": "0"}),
+            json!({"op": "map", "offset": 1_000_001}),
+            json!({"op": "map", "filters": {}}),
+            json!({"op": "map", "id": "1"}),
+            json!({"op": "list", "offset": 0}),
+        ] {
+            assert!(parse_positions_request(bad.clone()).is_err(), "{bad}");
+        }
+        let request = PositionsRequest::Map { offset: 0 };
+        let good = json!({"ok": true, "data": {"items": [{"id": "1"}], "total": 1, "next": null}});
+        assert!(valid_positions_reply(&request, &good));
+        assert!(valid_positions_reply(&request, &json!({"ok": true, "data": {"items": [], "total": 9, "next": 4}})));
+        for broken in [
+            json!({"ok": true, "data": {"items": [{"id": "1"}], "total": 1}}),
+            json!({"ok": true, "data": {"items": ["x"], "total": 1, "next": null}}),
+            json!({"ok": true, "data": {"items": [], "total": -1, "next": null}}),
+            json!({"ok": true, "data": {"items": [], "total": 1, "next": "2"}}),
+            json!({"ok": true, "data": {"items": [], "total": 1, "next": null, "extra": 1}}),
+            json!({"ok": true, "data": [] }),
+        ] {
+            assert!(!valid_positions_reply(&request, &broken), "{broken}");
+        }
+        assert!(POSITIONS_READ_PY.contains("if op=='map':"));
+        // it reads the positions' light columns, never the description
+        let reader = POSITIONS_READ_PY.split("if op=='map':").nth(1).unwrap().split("filters=req.get").next().unwrap();
+        assert!(!reader.contains("jd_text") && !reader.contains("p.*"));
     }
 
     /// The read of the team's positions says why it failed, in the kinds the header acts on.

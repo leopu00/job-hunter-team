@@ -1,4 +1,5 @@
 import { useEffect, useRef, useSyncExternalStore } from "react";
+import { REFRESH_EVENT } from "./refresh-event";
 
 /**
  * The shell's client router. Routes live in the URL hash (`#/positions/42`):
@@ -9,7 +10,7 @@ import { useEffect, useRef, useSyncExternalStore } from "react";
  */
 export type Location = { path: string; search: string };
 
-export const REFRESH_EVENT = "jht:refresh";
+export { REFRESH_EVENT } from "./refresh-event";
 
 export function parseHash(hash: string): Location {
   const raw = hash.replace(/^#/, "");

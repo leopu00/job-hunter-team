@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import { locales } from "@/i18n/config";
 import { readLocaleCookie } from "@/lib/use-locale";
 import { existingTeamReadOnly } from "../lib/existing-team-readonly";
+import { isRatesRequest, ratesFetch } from "./rates-fetch";
 
 /**
  * The web components call the web's Next routes (`fetch("/api/…")`), which do
@@ -93,7 +94,7 @@ export function shellApi(next: ApiFetch): ApiFetch {
 export function installApiBridge(answer: ApiFetch, target: typeof globalThis = globalThis): () => void {
   const realFetch = target.fetch.bind(target);
   target.fetch = (input: RequestInfo | URL, init?: RequestInit) =>
-    apiPath(input) ? answer(input, init) : realFetch(input, init);
+    apiPath(input) ? answer(input, init) : isRatesRequest(input, init) ? ratesFetch(realFetch, input, init) : realFetch(input, init);
   return () => {
     target.fetch = realFetch;
   };

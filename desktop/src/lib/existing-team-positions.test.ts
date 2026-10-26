@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   syntheticDetail as detail,
   syntheticFacets as facets,
@@ -7,18 +7,22 @@ import {
 import {
   readDesktopVpsPosition,
   readDesktopVpsPositionFacets,
+  readDesktopVpsMap,
   readDesktopVpsPositions,
+  resetCachedReads,
   readDesktopVpsPositionsWindow,
   readDesktopVpsStats,
 } from "./existing-team-positions";
 import { syntheticStats } from "../test-support/existing-team-stats-fixture";
 import { enterExistingTeamReadOnly, leaveExistingTeamReadOnly, existingTeamReadOnly } from "./existing-team-readonly";
 import { startVpsLink, stopVpsLink, vpsLinkState } from "./vps-link";
+import { REFRESH_EVENT } from "../shell/refresh-event";
 
 const native = vi.hoisted(() => ({ invoke: vi.fn(), isTauri: vi.fn() }));
 vi.mock("@tauri-apps/api/core", () => native);
 
 beforeEach(() => {
+  resetCachedReads();
   native.invoke.mockReset();
   native.isTauri.mockReturnValue(true);
 });
@@ -74,6 +78,41 @@ describe("existing-team positions bridge", () => {
       { q: "synthetic", sort: "score", limit: 600, offset: 600 },
       { q: "synthetic", sort: "score", limit: 100, offset: 1200 },
     ]);
+  });
+
+  it("reads what the globe draws in one request, and follows `next` for a team that does not fit in one reply", async () => {
+    const rows = (from: number, count: number) => Array.from({ length: count }, (_unused, index) => ({ id: String(from + index) }));
+    native.invoke.mockResolvedValueOnce({ ok: true, data: { items: rows(0, 2380), total: 2380, next: null } });
+    const one = await readDesktopVpsMap();
+    expect(one.source === "vps" && one.data).toHaveLength(2380);
+    expect(native.invoke).toHaveBeenCalledTimes(1);
+    expect(native.invoke).toHaveBeenCalledWith("existing_team_positions_read", { request: { op: "map", offset: 0 } });
+
+    native.invoke.mockReset();
+    native.invoke
+      .mockResolvedValueOnce({ ok: true, data: { items: rows(0, 5000), total: 7000, next: 5000 } })
+      .mockResolvedValueOnce({ ok: true, data: { items: rows(5000, 2000), total: 7000, next: null } });
+    const two = await readDesktopVpsMap();
+    expect(two.source === "vps" && two.data.map((row) => row.id)).toEqual(rows(0, 7000).map((row) => row.id));
+    expect(native.invoke.mock.calls.map(([, args]) => args.request)).toEqual([{ op: "map", offset: 0 }, { op: "map", offset: 5000 }]);
+  });
+
+  it("the globe's read is a failure, never a part of the map, when a reply fails, is odd or does not move forward", async () => {
+    const reply = (next: unknown) => ({ ok: true, data: { items: [{ id: "1" }], total: 5, next } });
+    native.invoke.mockResolvedValueOnce(reply(1)).mockResolvedValueOnce({ ok: false, error: "positions_unavailable" });
+    await expect(readDesktopVpsMap()).resolves.toEqual({ source: "unavailable", code: "positions_unavailable" });
+    for (const odd of [{ ok: true, data: { items: "x", total: 1, next: null } }, { ok: true, data: { items: [], total: -1, next: null } },
+      { ok: true, data: { items: [], total: 1, next: "2" } }, { ok: true, data: { items: [], total: 1 } }]) {
+      native.invoke.mockReset();
+      native.invoke.mockResolvedValueOnce(odd);
+      await expect(readDesktopVpsMap()).resolves.toEqual({ source: "unavailable", code: "desktop_bad_reply" });
+    }
+    native.invoke.mockReset();
+    native.invoke.mockResolvedValue(reply(0));
+    await expect(readDesktopVpsMap()).resolves.toEqual({ source: "unavailable", code: "desktop_bad_reply" });
+    expect(native.invoke).toHaveBeenCalledTimes(1);
+    native.isTauri.mockReturnValue(false);
+    await expect(readDesktopVpsMap()).resolves.toEqual({ source: "not_desktop" });
   });
 
   it("stops at the first short reply and keeps a requested offset", async () => {
@@ -258,5 +297,67 @@ describe("existing-team positions bridge", () => {
     native.isTauri.mockReturnValue(false);
     await expect(readDesktopVpsPositions()).resolves.toEqual({ source: "not_desktop" });
     expect(native.invoke).toHaveBeenCalledTimes(3);
+  });
+});
+
+
+describe("the facets and the dashboard's numbers kept between pages of a linked team", () => {
+  const FACETS = { ok: true, data: { items: [{ id: "1" }] } };
+  const asked = (op: string) => native.invoke.mock.calls.filter(([, args]) => args.request.op === op).length;
+
+  afterEach(() => {
+    leaveExistingTeamReadOnly();
+    vi.useRealTimers();
+  });
+
+  it("reads them once for 30 s on one connection, and again after that", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(1_000_000);
+    enterExistingTeamReadOnly(false, null, "account:synthetic|vps:a.example.invalid:22|team:one");
+    native.invoke.mockResolvedValue(FACETS);
+    await readDesktopVpsPositionFacets();
+    await readDesktopVpsPositionFacets();
+    expect(asked("facets")).toBe(1);
+    vi.setSystemTime(1_029_000);
+    await readDesktopVpsPositionFacets();
+    expect(asked("facets")).toBe(1);
+    vi.setSystemTime(1_031_000);
+    await readDesktopVpsPositionFacets();
+    expect(asked("facets")).toBe(2);
+  });
+
+  it("keeps the facets and the numbers apart, and the numbers the same way", async () => {
+    enterExistingTeamReadOnly(false, null, "account:synthetic|vps:a.example.invalid:22|team:one");
+    native.invoke.mockImplementation(async (_command, args) => (args.request.op === "stats" ? { ok: true, data: syntheticStats } : FACETS));
+    await readDesktopVpsPositionFacets();
+    await readDesktopVpsStats();
+    await readDesktopVpsStats();
+    await readDesktopVpsPositionFacets();
+    expect([asked("facets"), asked("stats")]).toEqual([1, 1]);
+  });
+
+  it("forgets them when a page is asked to read again, and on another connection", async () => {
+    enterExistingTeamReadOnly(false, null, "account:synthetic|vps:a.example.invalid:22|team:one");
+    native.invoke.mockResolvedValue(FACETS);
+    await readDesktopVpsPositionFacets();
+    window.dispatchEvent(new CustomEvent(REFRESH_EVENT));
+    await readDesktopVpsPositionFacets();
+    expect(asked("facets")).toBe(2);
+    enterExistingTeamReadOnly(false, null, "account:synthetic|vps:b.example.invalid:22|team:two");
+    await readDesktopVpsPositionFacets();
+    expect(asked("facets")).toBe(3);
+  });
+
+  it("keeps nothing with the view closed, and never a read that failed", async () => {
+    native.invoke.mockResolvedValue(FACETS);
+    await readDesktopVpsPositionFacets();
+    await readDesktopVpsPositionFacets();
+    expect(asked("facets")).toBe(2);
+    enterExistingTeamReadOnly(false, null, "account:synthetic|vps:a.example.invalid:22|team:one");
+    native.invoke.mockReset();
+    native.invoke.mockResolvedValueOnce({ ok: false, error: "positions_unavailable" }).mockResolvedValueOnce(FACETS);
+    await expect(readDesktopVpsPositionFacets()).resolves.toEqual({ source: "unavailable", code: "positions_unavailable" });
+    await expect(readDesktopVpsPositionFacets()).resolves.toEqual({ source: "vps", data: [{ id: "1" }] });
+    expect(asked("facets")).toBe(2);
   });
 });
