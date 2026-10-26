@@ -221,6 +221,11 @@ const translations = {
     en: "On macOS the DMG is signed and notarized. On Windows the installer is unsigned, so SmartScreen may show “Windows protected your PC”: continue only with the file from the official release. On Linux, make the AppImage executable before opening it.",
     hu: "macOS-en a DMG aláírt és notarizált. Windowson a telepítő nincs aláírva, ezért a SmartScreen figyelmeztethet; csak a hivatalos kiadásból származó fájllal folytasd. Linuxon megnyitás előtt tedd futtathatóvá az AppImage fájlt.",
   },
+  dl_mac_apple_silicon_only: {
+    it: "Solo Mac con Apple silicon (M1 e successivi). I Mac Intel non sono supportati nella 0.4.",
+    en: "Only Macs with Apple silicon (M1 and later). Intel Macs are not supported in 0.4.",
+    hu: "Csak Apple silicon-os Mac-ekhez (M1 és újabb). Az Intel-es Mac-ek a 0.4-ben nem támogatottak.",
+  },
   dl_help_text: {
     it: "Hai scaricato l'app?",
     en: "Downloaded the app?",

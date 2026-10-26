@@ -88,8 +88,8 @@ Kimi is not available in the Windows app yet.
 
 ### What you need
 
-- A supported desktop release: Linux x64, macOS (one universal build for Intel
-  and Apple silicon) or Windows x64.
+- A supported desktop release: Linux x64, macOS on Apple silicon (M1 and later; Intel
+  Macs are not supported in 0.4) or Windows x64.
 - On macOS, Homebrew: the app installs Podman with it. On Linux, Docker Engine
   and its Compose plugin installed before you start; the Linux release is
   built, but this setup has not been tested yet. On Windows, WSL enabled: the

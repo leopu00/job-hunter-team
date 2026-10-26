@@ -39,7 +39,7 @@ describe("the Account card", () => {
 
   it("names a local profile, says nobody when nobody is, and offers no sign out without the shell", async () => {
     const { unmount } = render(<AccountCard load={async () => ({ kind: "local", label: "Test" })} />);
-    expect(await screen.findByTestId("settings-account-who")).toHaveTextContent("Local profile “Test”");
+    expect(await screen.findByTestId("settings-account-who")).toHaveTextContent("Local profile “Test”, saved on this computer.");
     expect(screen.queryByRole("button", { name: "Sign out" })).toBeNull();
     unmount();
     render(<AccountCard load={async () => null} />);
@@ -73,7 +73,7 @@ describe("the Account card", () => {
 describe("the Team card", () => {
   it.each([
     ["running", state(), "The team is running."],
-    ["stopped by the person", state({ halted: true }), "The team is stopped"],
+    ["stopped", state({ halted: true }), "The team is stopped."],
     ["paused", state({ standby: { state: "active", until: null, weeklyReset: false } }), "The team is paused."],
   ])("says the team is %s", async (_name, value, text) => {
     render(<TeamCard readOnly={false} read={ok(value)} />);
@@ -93,7 +93,7 @@ describe("the Team card", () => {
     await userEvent.click(screen.getByTestId("settings-agents-link"));
     expect(window.location.hash).toBe("#/agents");
     await userEvent.click(screen.getByTestId("settings-budget-link"));
-    expect(window.location.hash).toBe("#/settings/team");
+    expect(window.location.hash).toBe("#/settings/hours");
     cleanup();
     render(<TeamCard readOnly read={ok(state())} />);
     expect(screen.getByTestId("settings-agents-link")).toBeInTheDocument();

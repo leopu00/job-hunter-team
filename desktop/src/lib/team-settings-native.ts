@@ -95,6 +95,26 @@ function pickHours(value: unknown): WorkingHours | null | undefined {
   return windows.every((window) => window !== null) ? { timezone: value.timezone, windows: windows as WorkWindow[] } : undefined;
 }
 
+/**
+ * Whether these hours are ones the native command accepts (team_settings.rs `valid_working_hours`), so
+ * the page can refuse a bad save itself and say why. A team whose hours file is malformed works 24/7
+ * (shared/skills/working_hours.py), so a value that is off the shape must never be sent. `null` is 24/7.
+ */
+export function workingHoursAreValid(hours: WorkingHours | null): boolean {
+  if (hours === null) return true;
+  if (!isRecord(hours) || typeof hours.timezone !== "string" || !Array.isArray(hours.windows)) return false;
+  if (!/^[A-Za-z0-9_+\-/]{1,64}$/.test(hours.timezone) || hours.windows.length > WEEKDAYS.length) return false;
+  const seen = new Set<string>();
+  return hours.windows.every((window) => {
+    if (!isRecord(window) || !Array.isArray(window.days) || window.days.length === 0) return false;
+    for (const day of window.days) {
+      if (!within(WEEKDAYS, day) || seen.has(day)) return false;
+      seen.add(day);
+    }
+    return typeof window.start === "string" && typeof window.end === "string" && TIME.test(window.start) && TIME.test(window.end) && window.start !== window.end;
+  });
+}
+
 function pickRoles(value: unknown): RoleModels | null {
   if (!isRecord(value)) return null;
   const roles: RoleModels = {};

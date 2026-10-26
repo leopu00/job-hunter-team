@@ -23,6 +23,7 @@ import { desktopLinks } from "./desktop-links";
 import { SHELL_TEXT } from "./shell.i18n";
 import { MailRotationBanner } from "./MailRotationBanner";
 import { SignOutContext } from "../lib/account-actions";
+import { NewVersionBanner } from "./NewVersionBanner";
 import NavStrip from "./NavStrip";
 import { matchRoute, navigate, refresh, useLocation } from "./router";
 import { HOME, READ_ONLY_HOME, READ_ONLY_NAV, READ_ONLY_ROUTES, ROUTES } from "./routes";
@@ -253,6 +254,7 @@ export default function Shell({ onLogout, onCloseReadOnly }: ShellProps) {
           <div style={FULL_BLEED_COLUMN}>
             <Navbar onLogout={onLogout} />
             <MailRotationBanner />
+            <NewVersionBanner />
             <main className="relative min-h-0 flex-1" data-testid="full-bleed">
               {page}
             </main>
@@ -267,6 +269,7 @@ export default function Shell({ onLogout, onCloseReadOnly }: ShellProps) {
         <div style={{ position: "relative", zIndex: 1 }}>
         <Navbar onLogout={onLogout} />
           <MailRotationBanner />
+          <NewVersionBanner />
           <MainChrome>{page}</MainChrome>
         </div>
       </DesktopWriteProvider>

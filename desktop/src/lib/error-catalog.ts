@@ -1113,6 +1113,24 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
     "This can be done only from the app’s main window.",
     "Go back to the main window and try again.",
   ),
+  stats_unreadable: copy(
+    "Non riesco a leggere le statistiche della squadra.",
+    "Riprova fra poco; se non cambia, controlla che la squadra sia in funzione.",
+    "The team's statistics cannot be read.",
+    "Try again in a moment; if it does not change, check that the team is running.",
+  ),
+  stats_unavailable: copy(
+    "La squadra non offre ancora le statistiche degli orari.",
+    "Aggiorna la squadra e riprova.",
+    "The team does not offer the working-hours statistics yet.",
+    "Update the team and try again.",
+  ),
+  stats_clear_failed: copy(
+    "Le statistiche non sono state cancellate.",
+    "Riprova; se non cambia, controlla che la squadra sia in funzione.",
+    "The statistics were not cleared.",
+    "Try again; if it does not change, check that the team is running.",
+  ),
   team_settings_request_invalid: copy(
     "La richiesta non è valida e non è stata mandata alla squadra.",
     "Ricarica la pagina e riprova.",
@@ -1304,6 +1322,36 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
     "Riprova fra un minuto.",
     "Not all the data could be read, so no file was saved: an incomplete file would look complete.",
     "Try again in a minute.",
+  ),
+  document_not_found: copy(
+    "Non trovo questo documento tra quelli della squadra: non è stato salvato nessun file.",
+    "Aggiorna la pagina della posizione e riprova; se non c’è più, chiedi alla squadra di prepararlo di nuovo.",
+    "This document is not among the team’s documents, so no file was saved.",
+    "Refresh the position page and try again; if it is gone, ask the team to prepare it again.",
+  ),
+  document_too_large: copy(
+    "Il documento è troppo grande per essere salvato dall’app.",
+    "Chiedi alla squadra di prepararne una versione più leggera.",
+    "The document is too large for the app to save.",
+    "Ask the team to prepare a lighter version.",
+  ),
+  document_not_pdf: copy(
+    "Il file non è un PDF valido, quindi non l’ho salvato.",
+    "Chiedi alla squadra di prepararlo di nuovo.",
+    "The file is not a valid PDF, so it was not saved.",
+    "Ask the team to prepare it again.",
+  ),
+  document_changed: copy(
+    "Il documento è cambiato mentre lo salvavo, quindi non ho tenuto nessun file: sarebbe stato incompleto.",
+    "Riprova fra un minuto, quando la squadra avrà finito di scriverlo.",
+    "The document changed while it was being saved, so no file was kept: it would have been incomplete.",
+    "Try again in a minute, when the team has finished writing it.",
+  ),
+  document_save_failed: copy(
+    "Il documento non è stato salvato.",
+    "Scegli una cartella in cui puoi scrivere e con spazio libero, poi riprova.",
+    "The document was not saved.",
+    "Choose a folder you can write to and that has free space, then try again.",
   ),
   not_cloud: copy(
     "Questo account non è collegato al cloud: non ci sono dati dell’account da esportare.",

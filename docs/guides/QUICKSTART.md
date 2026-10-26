@@ -25,7 +25,7 @@ For comfortable local use on macOS or Linux, keep about **8 GB of RAM available
 before starting the team**. This is a measured recommendation, not a universal
 minimum. No universal local disk minimum has been measured; leave room for the
 team's image and persistent data. The desktop releases support Windows x64,
-Linux x64 and macOS (one universal build for Intel and Apple silicon). On
+Linux x64 and macOS on Apple silicon (M1 and later; Intel Macs are not supported in 0.4). On
 Windows 0.4 the team runs on your computer in Podman inside WSL, installed by
 the app; Docker Desktop is not needed, but WSL must already be enabled.
 
@@ -61,7 +61,7 @@ Download the current release from
 | System      | Release asset                           | First launch |
 | ----------- | --------------------------------------- | ------------ |
 | Windows x64 | `job-hunter-team-windows-x64-setup.exe` | Run the per-user installer. It is unsigned, so Windows may show **Windows protected your PC**; use **More info → Run anyway** only for a file from this release that matches `SHA256SUMS`. |
-| macOS       | `job-hunter-team-macos-universal.dmg`   | Open the disk image and drag the app into Applications. It is signed with an Apple Developer ID and notarized by Apple. |
+| macOS       | `job-hunter-team-macos-universal.dmg`   | Open the disk image and drag the app into Applications. It is signed with an Apple Developer ID and notarized by Apple. Only Macs with Apple silicon (M1 and later). Intel Macs are not supported in 0.4. The file name says “universal”, but in 0.4 it holds only the Apple silicon build. |
 | Linux x64   | `job-hunter-team-linux-x64.AppImage` or `job-hunter-team-linux-x64.deb` | Make the AppImage executable (`chmod +x`) and open it, or install the `.deb` on Debian-based systems. |
 
 On first launch, choose **Continue with Google** or **Use locally**; setting up

@@ -1917,6 +1917,22 @@ def _write_role_usage(entry, now_ts):
         return None
 
 
+_WORK_STATS_MOD = None
+
+
+def _record_work_stats():
+    """Statistiche di lavoro (work_stats.py): una riga per ora (ore di orario, soglia, punti di budget). Solo conteggi,
+    in locale; mai al cloud. Non deve mai fermare il bridge."""
+    global _WORK_STATS_MOD
+    try:
+        if _WORK_STATS_MOD is None:
+            _WORK_STATS_MOD = _load_skill_module("work_stats", "work_stats.py")
+        if _WORK_STATS_MOD is not None:
+            _WORK_STATS_MOD.record(sentinel_path=DATA_JSONL, log=lambda line: print(line, flush=True))
+    except Exception as e:  # noqa: BLE001 — la statistica non ferma il sensore
+        print(f"[bridge] work-stats skipped: {type(e).__name__}", flush=True)
+
+
 def _atomic_write_json(path, data):
     """Scrive `path` con un file temporaneo PROPRIO (mkstemp nella stessa
     cartella) e os.replace: con più bridge vivi insieme ognuno scrive il suo
@@ -2985,6 +3001,7 @@ def main():
             # Consumo per RUOLO sulle finestre del provider: a ogni lettura,
             # anche fuori orario (il pacing-bridge salta i tick off-hours).
             _write_role_usage(entry, time.time())
+            _record_work_stats()
             # Il gate orario calcolato in testa al tick vale anche qui: il
             # consiglio di pacing sveglia il Capitano come qualunque altro
             # messaggio, e fuori finestra nessuna LLM va svegliata.

@@ -7,9 +7,11 @@ import type { PageProps } from "../types";
 import { BACKUP_TEXT } from "../backup/backup.i18n";
 import { EXPORT_TEXT } from "../export/export.i18n";
 import { TEAM_SETTINGS_TEXT } from "../team-settings/team-settings.i18n";
+import { WORK_HOURS_TEXT } from "../work-hours/work-hours.i18n";
 import AccountCard from "./AccountCard";
 import NotifyCard from "./NotifyCard";
 import TeamCard from "./TeamCard";
+import UpdateCheckCard from "./UpdateCheckCard";
 import { SETTINGS_TEXT, VPS_CONNECTION_TEXT } from "./settings.i18n";
 
 /**
@@ -27,6 +29,7 @@ export default function SettingsPage(_props: PageProps) {
   // the team's hours and models are written to the team: not in the read-only view
   const readOnly = useExistingTeamReadOnly() !== null;
   const team = TEAM_SETTINGS_TEXT[appLocale()];
+  const hours = WORK_HOURS_TEXT[appLocale()];
   const exportText = EXPORT_TEXT[appLocale()];
   const backupText = BACKUP_TEXT[appLocale()];
   return (
@@ -38,6 +41,7 @@ export default function SettingsPage(_props: PageProps) {
       <LanguageCard />
       <CurrencyCard />
       <NotifyCard />
+      <UpdateCheckCard />
       <button
         type="button"
         onClick={() => navigate("/settings/vps-connection")}
@@ -46,6 +50,23 @@ export default function SettingsPage(_props: PageProps) {
         <span className="block text-[13px] font-semibold text-[var(--color-bright)]">{VPS_CONNECTION_TEXT[appLocale()].link}</span>
         <span className="mt-1 block text-[11px] text-[var(--color-muted)]">{VPS_CONNECTION_TEXT[appLocale()].linkNote}</span>
       </button>
+      {/* the hours page is not in the read-only view, but what a hours file that cannot be read means is */}
+      {readOnly && (
+        <p className="text-[11px] text-[var(--color-yellow)]" data-testid="settings-hours-unreadable">
+          {hours.unreadable}
+        </p>
+      )}
+      {!readOnly && (
+        <button
+          type="button"
+          data-testid="settings-hours-link"
+          onClick={() => navigate("/settings/hours")}
+          className="text-left rounded border border-[var(--color-border)] px-4 py-3 hover:border-[var(--color-border-glow)]"
+        >
+          <span className="block text-[13px] font-semibold text-[var(--color-bright)]">{hours.link}</span>
+          <span className="mt-1 block text-[11px] text-[var(--color-muted)]">{hours.linkNote}</span>
+        </button>
+      )}
       {!readOnly && (
         <button
           type="button"

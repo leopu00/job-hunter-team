@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { createWriteStream } from 'node:fs';
 import { mkdir, rename, stat, unlink } from 'node:fs/promises';
@@ -31,6 +32,24 @@ function normalizePlatform(value) {
     );
   }
   return platform;
+}
+
+
+// The Mac build of 0.4 is Apple silicon only (the file name still says
+// "universal"; it is renamed in 0.4.1). On an Intel Mac it would download and
+// not open, so the download is refused before anything is fetched. Node run
+// under Rosetta on Apple silicon reports x64: the kernel says it is translated.
+// JHT_DOWNLOAD_HOST ("<platform>-<arch>") stands in for the machine, for tests.
+function hostIsIntelMac() {
+  const forced = process.env.JHT_DOWNLOAD_HOST;
+  if (forced) return forced === 'darwin-x64';
+  if (process.platform !== 'darwin' || process.arch !== 'x64') return false;
+  try {
+    const translated = execFileSync('/usr/sbin/sysctl', ['-in', 'sysctl.proc_translated'], { encoding: 'utf8' });
+    return translated.trim() !== '1';
+  } catch {
+    return true;
+  }
 }
 
 
@@ -141,6 +160,12 @@ export async function downloadRelease({ platform: requestedPlatform, version: re
   const version = normalizeVersion(requestedVersion);
   if (deb && platform !== 'linux') {
     throw new Error('The --deb option is available only for Linux.');
+  }
+  if (platform === 'macos' && hostIsIntelMac()) {
+    throw new Error(
+      'The macOS app of 0.4 runs only on Macs with Apple silicon (M1 and later); this is an Intel Mac, '
+      + 'which is not supported in 0.4. Nothing was downloaded.',
+    );
   }
 
   const asset = deb ? LINUX_DEB_ASSET : ASSETS[platform];

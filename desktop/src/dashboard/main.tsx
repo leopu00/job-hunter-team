@@ -10,6 +10,7 @@ import { positionsApi } from "../pages/positions/positions-api";
 import { teamApi } from "../pages/team/team-api";
 import { installCookieMirror } from "../lib/cookie-mirror";
 import { installCsvExport } from "../lib/export-csv";
+import { installDocumentSave } from "../lib/team-document";
 import { installApiBridge, shellApi } from "../shell/api-bridge";
 import { initializeTheme } from "../shell/theme";
 import { DashboardEntrypoint } from "./DashboardEntrypoint";
@@ -25,6 +26,7 @@ installCookieMirror();
 installApiBridge(shellApi(vpsJudgementApi(mapApi(positionsApi(messagesApi(teamApi(directExclusionsApi(createWebApiFetch(supabase), supabase))))))));
 initializeTheme();
 installCsvExport();
+installDocumentSave();
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>

@@ -37,7 +37,7 @@ export default function TeamCard({ readOnly, read = readTeamState }: { readOnly:
         <span className="mt-1 block text-[11px] text-[var(--color-muted)]">{t.agentsNote}</span>
       </button>
       {!readOnly && (
-        <button type="button" data-testid="settings-budget-link" onClick={() => navigate("/settings/team")} className={linkCls}>
+        <button type="button" data-testid="settings-budget-link" onClick={() => navigate("/settings/hours")} className={linkCls}>
           <span className="block text-[13px] font-semibold text-[var(--color-bright)]">{t.budgetLink}</span>
           <span className="mt-1 block text-[11px] text-[var(--color-muted)]">{t.budgetNote}</span>
         </button>
