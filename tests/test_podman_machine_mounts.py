@@ -187,7 +187,9 @@ def _wrapper(tmp_path: Path, sources: tuple[str, ...] | None = None):
     provider_source = provider.read_text(encoding="utf-8")
     provider_source = provider_source.replace(
         'case "$*" in\n',
-        'case "$*" in\n  *" config --images") printf \'%s\\n\' test-broker-image ;;\n',
+        # podman-compose 1.6.0 refuses Docker Compose's `config --images`; the image is in the normalized config
+        'case "$*" in\n  *" config --images") echo "podman-compose: error: unrecognized arguments: --images" >&2; exit 2 ;;\n'
+        '  *" config") printf \'%s\\n\' "services:" "  team:" "    image: test-broker-image" "  broker:" "    image: test-broker-image" ;;\n',
     )
     provider.write_text(
         provider_source.replace('  *" up -d")', '  *" down") exit 0 ;;\n  *" up -d")'),
