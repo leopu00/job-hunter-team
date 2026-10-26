@@ -28,7 +28,8 @@ Keep the app open while it works.
    `job-hunter-team-windows-x64-setup.exe`: it installs the app for your user.
    On macOS, open `job-hunter-team-macos-universal.dmg` and drag the app into
    Applications; it is signed with an Apple Developer ID and notarized by
-   Apple. On Linux, allow `job-hunter-team-linux-x64.AppImage` to run as a
+   Apple. Only Macs with Apple silicon (M1 and later). Intel Macs are not supported in 0.4.
+   The file name says “universal”, but in 0.4 it holds only the Apple silicon build. On Linux, allow `job-hunter-team-linux-x64.AppImage` to run as a
    program and open it, or install `job-hunter-team-linux-x64.deb` on
    Debian-based systems. Windows and Linux can display a platform warning:
    continue only when the download came from the official site or its linked

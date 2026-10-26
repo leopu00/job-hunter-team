@@ -75,6 +75,8 @@ export const fr: Record<string, string> = {
   dl_windows_portable_link: "Télécharger plutôt la version portable",
   dl_desktop_unsigned_note:
     "Sur macOS, le DMG est signé et notarié. Sous Windows, l'installeur n'est pas signé : après l'avertissement SmartScreen, continuez uniquement avec le fichier de la version officielle. Sous Linux, rendez l'AppImage exécutable avant de l'ouvrir.",
+  dl_mac_apple_silicon_only:
+    "Uniquement les Mac avec Apple silicon (M1 et suivants). Les Mac Intel ne sont pas pris en charge dans la 0.4.",
   dl_help_text: "Vous avez téléchargé l'app ?",
   dl_help_link: "Suivez la configuration pas à pas",
 
