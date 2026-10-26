@@ -49,8 +49,8 @@ jobs:
             args: --bundles nsis
             artifact_name: app-windows-release
           - os: macos-14
-            label: macOS Universal 2
-            args: --target universal-apple-darwin --bundles app,dmg --config src-tauri/tauri.macos-universal.conf.json
+            label: macOS arm64
+            args: --target aarch64-apple-darwin --bundles app,dmg
             artifact_name: app-macos-release
           - os: ubuntu-22.04
             label: Linux x64
@@ -88,7 +88,7 @@ jobs:
           rustc --version
           cargo --version
           if [ "${{ runner.os }}" = "macOS" ]; then
-            rustup target add aarch64-apple-darwin x86_64-apple-darwin
+            rustup target add aarch64-apple-darwin
           fi
 
       - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
@@ -165,33 +165,41 @@ jobs:
           cp "$source" release-assets/job-hunter-team-windows-x64-setup.exe
 
       # Quello che si distribuisce e' la .app e il dmg: in tutti e due devono
-      # esserci la shell e il compagno jht-existing-team, eseguibili, con le due
-      # fette e la firma che questo job produce. Developer ID e' certa: il passo
+      # esserci la shell e il compagno jht-existing-team, eseguibili, arm64 e con
+      # la firma che questo job produce. Developer ID e' certa: il passo
       # «Select the Developer ID signing identity» si ferma se l'identita' manca.
-      - name: Gate macOS universal bundle — shell and companion shipped
+      - name: Gate macOS bundle — shell and companion shipped
         if: runner.os == 'macOS'
-        run: python3 scripts/ci/verify_macos_universal_bundle.py desktop/src-tauri/target/universal-apple-darwin/release/bundle --signature developer-id --require-dmg
+        run: python3 scripts/ci/verify_macos_bundle.py desktop/src-tauri/target/aarch64-apple-darwin/release/bundle --signature developer-id --require-dmg
 
       - name: Collect and verify signed macOS installer
         if: runner.os == 'macOS'
         run: |
           mkdir -p release-assets
-          bundle_root=desktop/src-tauri/target/universal-apple-darwin/release/bundle
+          bundle_root=desktop/src-tauri/target/aarch64-apple-darwin/release/bundle
           source="$(find "$bundle_root/dmg" -type f -name '*.dmg' -print -quit)"
           app="$(find "$bundle_root/macos" -type d -name '*.app' -print -quit)"
           test -n "$source"
           test -n "$app"
-          # Universal 2 = entrambe le fette nell'eseguibile spedito: un oggetto
-          # nativo compilato per l'host verrebbe scartato dal link dell'altra.
+          # Solo Apple silicon: ogni eseguibile spedito e' arm64.
           for binary in "$app"/Contents/MacOS/*; do
             lipo -info "$binary"
-            lipo "$binary" -verify_arch x86_64 arm64
+            lipo "$binary" -verify_arch arm64
           done
           codesign --verify --deep --strict --verbose=2 "$app"
           spctl --assess --type execute --verbose=2 "$app"
           xcrun stapler validate "$source"
           hdiutil verify "$source"
+          # Il nome del file resta quello dei link gia' pubblicati (sito, CLI, guide).
           cp "$source" release-assets/job-hunter-team-macos-universal.dmg
+
+      # Niente tag senza questo verde (il job `release` aspetta build-desktop):
+      # il dmg firmato e notarizzato che sta per uscire si installa come lo
+      # installa una persona e l'app deve aprire la sua finestra. Il container
+      # non si prova sul runner (nessuna macchina virtuale): lo dichiara lo script.
+      - name: Install the signed DMG and open the app
+        if: runner.os == 'macOS'
+        run: python3 scripts/ci/smoke_macos_dmg.py release-assets/job-hunter-team-macos-universal.dmg --arch arm64 --timeout 120
 
       - name: Collect and inspect Linux packages
         if: runner.os == 'Linux'
