@@ -24,6 +24,11 @@ const it = {
   classSol: "Massima",
   classTerra: "Bilanciata",
   classLuna: "Economica",
+  effectiveHeader: "In uso",
+  effectiveUnavailable: "non disponibile su questa squadra",
+  effectiveDefault: "predefinito",
+  effectiveChosen: "scelto",
+  classNotApplied: "Con questo provider la classe è dichiarata ma non applicata: la squadra usa i modelli del provider.",
 };
 
 export type TeamSettingsText = typeof it;
@@ -45,6 +50,11 @@ const en: TeamSettingsText = {
   classSol: "Maximum",
   classTerra: "Balanced",
   classLuna: "Economy",
+  effectiveHeader: "In use",
+  effectiveUnavailable: "not available on this team",
+  effectiveDefault: "default",
+  effectiveChosen: "chosen",
+  classNotApplied: "With this provider the class is declared but not applied: the team uses the provider's own models.",
 };
 
 const de: TeamSettingsText = {
@@ -64,6 +74,11 @@ const de: TeamSettingsText = {
   classSol: "Maximal",
   classTerra: "Ausgewogen",
   classLuna: "Sparsam",
+  effectiveHeader: "In Gebrauch",
+  effectiveUnavailable: "für dieses Team nicht verfügbar",
+  effectiveDefault: "Standard",
+  effectiveChosen: "gewählt",
+  classNotApplied: "Bei diesem Anbieter wird die Klasse angegeben, aber nicht angewendet: Das Team nutzt die Modelle des Anbieters.",
 };
 
 const fr: TeamSettingsText = {
@@ -83,6 +98,11 @@ const fr: TeamSettingsText = {
   classSol: "Maximal",
   classTerra: "Équilibré",
   classLuna: "Économique",
+  effectiveHeader: "Utilisé",
+  effectiveUnavailable: "non disponible pour cette équipe",
+  effectiveDefault: "par défaut",
+  effectiveChosen: "choisi",
+  classNotApplied: "Avec ce fournisseur, la classe est déclarée mais non appliquée : l’équipe utilise les modèles du fournisseur.",
 };
 
 const es: TeamSettingsText = {
@@ -102,6 +122,11 @@ const es: TeamSettingsText = {
   classSol: "Máxima",
   classTerra: "Equilibrada",
   classLuna: "Económica",
+  effectiveHeader: "En uso",
+  effectiveUnavailable: "no disponible en este equipo",
+  effectiveDefault: "predeterminado",
+  effectiveChosen: "elegido",
+  classNotApplied: "Con este proveedor la clase se declara pero no se aplica: el equipo usa los modelos del proveedor.",
 };
 
 const pt: TeamSettingsText = {
@@ -121,6 +146,11 @@ const pt: TeamSettingsText = {
   classSol: "Máximo",
   classTerra: "Equilibrado",
   classLuna: "Económico",
+  effectiveHeader: "Em uso",
+  effectiveUnavailable: "não disponível nesta equipa",
+  effectiveDefault: "predefinido",
+  effectiveChosen: "escolhido",
+  classNotApplied: "Com este fornecedor a classe é declarada mas não aplicada: a equipa usa os modelos do fornecedor.",
 };
 
 const hu: TeamSettingsText = {
@@ -140,6 +170,11 @@ const hu: TeamSettingsText = {
   classSol: "Legnagyobb",
   classTerra: "Kiegyensúlyozott",
   classLuna: "Takarékos",
+  effectiveHeader: "Használatban",
+  effectiveUnavailable: "ennél a csapatnál nem elérhető",
+  effectiveDefault: "alapértelmezett",
+  effectiveChosen: "választott",
+  classNotApplied: "Ennél a szolgáltatónál az osztály csak meg van adva, de nem érvényesül: a csapat a szolgáltató saját modelljeit használja.",
 };
 
 export const TEAM_SETTINGS_TEXT: Record<Locale, TeamSettingsText> = { it, en, de, fr, es, pt, hu };
