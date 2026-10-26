@@ -69,7 +69,7 @@ fi
 # The new mirror has to serve the indexes `apt-get update` reads for this release (the release, -updates and
 # -backports), or nothing changes: a source apt cannot read is an update that exits 100 in the next step.
 # Without a release name there is nothing to check against, so nothing changes either.
-codename="${APT_RELEASE_CODENAME:-$(sed -n 's/^VERSION_CODENAME=//p' /etc/os-release 2>/dev/null | head -n 1)}"
+codename="${APT_RELEASE_CODENAME-$(sed -n 's/^VERSION_CODENAME=//p' /etc/os-release 2>/dev/null | head -n 1)}"
 if [ -z "$codename" ]; then
   echo "apt mirror: the release name is unknown, sources left as they are ($current)"
   exit 0
