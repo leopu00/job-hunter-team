@@ -16,6 +16,9 @@ import { useReadOnlyActions } from "@/lib/read-only-actions";
  */
 type ButtonState = "idle" | "loading" | "error";
 
+/** The desktop listens to this event and saves the PDF natively (desktop/src/lib/team-document.ts). */
+const SAVE_DOCUMENT_EVENT = "jht:save-document";
+
 // Scarica via <a> anchor invece di window.open: l'apertura del file avviene
 // DOPO il polling async (fuori dal gesto del click) e in quel contesto i
 // popup-blocker del browser fermano window.open. Un anchor senza target verso
@@ -43,6 +46,30 @@ export function CvDownloadButton({
 }) {
   const readOnly = useReadOnlyActions();
   const [state, setState] = useState<ButtonState>("idle");
+  const [reason, setReason] = useState<string | null>(null);
+
+  // In the desktop the PDF is read from the team and saved where the person picks (the bridge below needs a
+  // key the app does not have). Nobody listening (the web): false, and the button goes on as it did.
+  const saveInDesktop = useCallback(async (): Promise<boolean> => {
+    const detail: { name: string; result?: Promise<string> } = {
+      name: fileName,
+    };
+    const handled = !window.dispatchEvent(
+      new CustomEvent(SAVE_DOCUMENT_EVENT, { detail, cancelable: true }),
+    );
+    if (!handled || !detail.result) return false;
+    setState("loading");
+    setReason(null);
+    try {
+      await detail.result;
+      setState("idle");
+    } catch (error) {
+      const message = (error as { message?: unknown } | null)?.message;
+      setReason(typeof message === "string" ? message : null);
+      setState("error");
+    }
+    return true;
+  }, [fileName]);
 
   const openLocal = useCallback(() => {
     window.open(
@@ -87,7 +114,12 @@ export function CvDownloadButton({
     }
   }, [fileName]);
 
-  const onClick = cloudMode ? openViaBridge : openLocal;
+  const onClick = async () => {
+    if (await saveInDesktop()) return;
+    // Saving the PDF is a read, so it works on a team the desktop only reads; the bridge writes a request.
+    if (readOnly.readOnly) return;
+    await (cloudMode ? openViaBridge() : openLocal());
+  };
   const text =
     state === "loading"
       ? labels.preparing
@@ -97,36 +129,42 @@ export function CvDownloadButton({
   const isError = state === "error";
 
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={state === "loading" || readOnly.readOnly}
-      title={readOnly.readOnly ? readOnly.reason : undefined}
-      className="flex items-center gap-2 px-3 py-2 rounded-lg border text-[11px] font-semibold no-underline transition-colors hover:bg-[var(--color-row)] disabled:cursor-wait bg-transparent cursor-pointer"
-      style={{
-        borderColor: isError ? "var(--color-red)" : color,
-        color: isError ? "var(--color-red)" : color,
-      }}
-    >
-      <svg
-        aria-hidden="true"
-        width="14"
-        height="14"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.8"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        style={{ flexShrink: 0 }}
+    <>
+      <button
+        type="button"
+        onClick={() => void onClick()}
+        disabled={state === "loading"}
+        className="flex items-center gap-2 px-3 py-2 rounded-lg border text-[11px] font-semibold no-underline transition-colors hover:bg-[var(--color-row)] disabled:cursor-wait bg-transparent cursor-pointer"
+        style={{
+          borderColor: isError ? "var(--color-red)" : color,
+          color: isError ? "var(--color-red)" : color,
+        }}
       >
-        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-        <polyline points="7 10 12 15 17 10" />
-        <line x1="12" y1="15" x2="12" y2="3" />
-      </svg>
-      <span className={state === "loading" ? "animate-pulse" : undefined}>
-        {text}
-      </span>
-    </button>
+        <svg
+          aria-hidden="true"
+          width="14"
+          height="14"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.8"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          style={{ flexShrink: 0 }}
+        >
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+          <polyline points="7 10 12 15 17 10" />
+          <line x1="12" y1="15" x2="12" y2="3" />
+        </svg>
+        <span className={state === "loading" ? "animate-pulse" : undefined}>
+          {text}
+        </span>
+      </button>
+      {isError && reason && (
+        <p role="alert" className="w-full text-[10px] text-[var(--color-red)]">
+          {reason}
+        </p>
+      )}
+    </>
   );
 }

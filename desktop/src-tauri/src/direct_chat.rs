@@ -631,7 +631,7 @@ pub(crate) enum DirectChatEvent {
 
 #[derive(Debug, Serialize)]
 pub(crate) struct DirectChatError {
-    code: &'static str,
+    pub(crate) code: &'static str,
 }
 pub(crate) fn failure(code: &'static str) -> DirectChatError {
     DirectChatError { code }

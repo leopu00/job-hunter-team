@@ -22,6 +22,41 @@ function tr(
 }
 
 const COPY_BY_ENGLISH_TEXT: Readonly<Record<string, ErrorTranslations>> = {
+  "This document is not among the team’s documents, so no file was saved.": {
+    de: ["Dieses Dokument gehört nicht zu den Dokumenten des Teams, deshalb wurde keine Datei gespeichert.", "Aktualisiere die Positionsseite und versuche es erneut; ist es weg, bitte das Team, es neu zu erstellen."],
+    es: ["Este documento no está entre los documentos del equipo, así que no se guardó ningún archivo.", "Actualiza la página de la posición y vuelve a intentarlo; si ya no está, pide al equipo que lo prepare de nuevo."],
+    fr: ["Ce document ne fait pas partie des documents de l’équipe, aucun fichier n’a donc été enregistré.", "Actualise la page du poste et réessaie ; s’il a disparu, demande à l’équipe de le préparer à nouveau."],
+    hu: ["Ez a dokumentum nincs a csapat dokumentumai között, ezért nem lett fájl mentve.", "Frissítsd a pozíció oldalát, és próbáld újra; ha már nincs meg, kérd meg a csapatot, hogy készítse el újra."],
+    pt: ["Este documento não está entre os documentos da equipa, por isso não foi guardado nenhum ficheiro.", "Atualiza a página da posição e tenta novamente; se já não existir, pede à equipa que o prepare de novo."],
+  },
+  "The document is too large for the app to save.": {
+    de: ["Das Dokument ist zu groß, als dass die App es speichern könnte.", "Bitte das Team, eine leichtere Version zu erstellen."],
+    es: ["El documento es demasiado grande para que la app lo guarde.", "Pide al equipo que prepare una versión más ligera."],
+    fr: ["Le document est trop volumineux pour que l’app l’enregistre.", "Demande à l’équipe d’en préparer une version plus légère."],
+    hu: ["A dokumentum túl nagy ahhoz, hogy az app elmentse.", "Kérd meg a csapatot, hogy készítsen egy könnyebb változatot."],
+    pt: ["O documento é demasiado grande para a app o guardar.", "Pede à equipa que prepare uma versão mais leve."],
+  },
+  "The file is not a valid PDF, so it was not saved.": {
+    de: ["Die Datei ist kein gültiges PDF und wurde deshalb nicht gespeichert.", "Bitte das Team, es neu zu erstellen."],
+    es: ["El archivo no es un PDF válido, así que no se guardó.", "Pide al equipo que lo prepare de nuevo."],
+    fr: ["Le fichier n’est pas un PDF valide, il n’a donc pas été enregistré.", "Demande à l’équipe de le préparer à nouveau."],
+    hu: ["A fájl nem érvényes PDF, ezért nem lett elmentve.", "Kérd meg a csapatot, hogy készítse el újra."],
+    pt: ["O ficheiro não é um PDF válido, por isso não foi guardado.", "Pede à equipa que o prepare de novo."],
+  },
+  "The document changed while it was being saved, so no file was kept: it would have been incomplete.": {
+    de: ["Das Dokument hat sich beim Speichern geändert, deshalb wurde keine Datei behalten: sie wäre unvollständig gewesen.", "Versuche es in einer Minute erneut, wenn das Team es fertig geschrieben hat."],
+    es: ["El documento cambió mientras se guardaba, así que no se conservó ningún archivo: habría quedado incompleto.", "Vuelve a intentarlo dentro de un minuto, cuando el equipo haya terminado de escribirlo."],
+    fr: ["Le document a changé pendant l’enregistrement, aucun fichier n’a donc été conservé : il aurait été incomplet.", "Réessaie dans une minute, quand l’équipe aura fini de l’écrire."],
+    hu: ["A dokumentum mentés közben megváltozott, ezért nem maradt meg fájl: hiányos lett volna.", "Próbáld újra egy perc múlva, amikor a csapat befejezte az írását."],
+    pt: ["O documento mudou enquanto era guardado, por isso não ficou nenhum ficheiro: estaria incompleto.", "Tenta novamente dentro de um minuto, quando a equipa tiver acabado de o escrever."],
+  },
+  "The document was not saved.": {
+    de: ["Das Dokument wurde nicht gespeichert.", "Wähle einen Ordner, in den du schreiben kannst und der freien Platz hat, und versuche es erneut."],
+    es: ["El documento no se ha guardado.", "Elige una carpeta en la que puedas escribir y que tenga espacio libre, y vuelve a intentarlo."],
+    fr: ["Le document n’a pas été enregistré.", "Choisis un dossier où tu peux écrire et qui a de la place, puis réessaie."],
+    hu: ["A dokumentum nem lett elmentve.", "Válassz egy mappát, amelybe írhatsz és van benne szabad hely, majd próbáld újra."],
+    pt: ["O documento não foi guardado.", "Escolhe uma pasta onde possas escrever e que tenha espaço livre e tenta novamente."],
+  },
   "The backup of the team’s data could not be prepared.": {
     de: ["Die Sicherung der Teamdaten konnte nicht vorbereitet werden.", "Prüfe, ob das Team läuft und freien Platz hat, und versuche es erneut."],
     es: ["No se pudo preparar la copia de seguridad de los datos del equipo.", "Comprueba que el equipo esté en marcha y tenga espacio libre, y vuelve a intentarlo."],
@@ -1800,6 +1835,11 @@ export const ERROR_CATALOG_LOCALES: Readonly<Record<string, ErrorTranslations>> 
   export_save_failed: translated("The export file was not saved."),
   export_no_database: translated("The team’s database is not where the app looks for it, so no file was saved: an empty file would look like a team with no data."),
   export_incomplete: translated("Not all the data could be read, so no file was saved: an incomplete file would look complete."),
+  document_not_found: translated("This document is not among the team’s documents, so no file was saved."),
+  document_too_large: translated("The document is too large for the app to save."),
+  document_not_pdf: translated("The file is not a valid PDF, so it was not saved."),
+  document_changed: translated("The document changed while it was being saved, so no file was kept: it would have been incomplete."),
+  document_save_failed: translated("The document was not saved."),
   not_cloud: translated("This account is not connected to the cloud: there is no account data to export."),
   saved_vps_invalid: translated("The details of this VPS are incomplete or not valid, so they were not saved."),
   saved_vps_duplicate: translated("This VPS is already in the saved list."),
