@@ -41,6 +41,9 @@ export default defineConfig({
     },
   },
   test: {
+    // JHT_HOME in una cartella temporanea per ogni file, prima di qualunque import: i moduli del CLI ne ricavano i
+    // percorsi all'import e un test li ha scritti nella ~/.jht vera (helpers/sandbox-jht-home.ts).
+    setupFiles: ["./helpers/sandbox-jht-home.ts"],
     // Il primo pattern è il default di vitest (i test sotto tests/js). Il
     // secondo raccoglie i test che vivono accanto al sorgente in `web/lib`:
     // stavano lì da sempre ma nessun runner li includeva — verdi per
