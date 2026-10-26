@@ -30,7 +30,7 @@ def test_hq_master_receives_the_same_push_gates_as_master():
     for name in HQ_GATES:
         branches = _workflow(name)["on"]["push"]["branches"]
         if name in EVERY_BRANCH:
-            assert branches == ["**"], name
+            assert branches == ["**", "!dependabot/**"], name
         else:
             assert set(branches) == {"master", "hq-master"}, name
 

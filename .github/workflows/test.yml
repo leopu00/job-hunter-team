@@ -12,6 +12,8 @@ on:
       # ogni merge; una difesa che aspetta un dispatch ricordato a mano prima o
       # poi non gira.)
       - "**"
+      # Dependabot ha i suoi run (con segreti di sola lettura): qui no.
+      - "!dependabot/**"
   pull_request:
     branches:
       - master

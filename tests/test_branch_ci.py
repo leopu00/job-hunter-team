@@ -48,7 +48,7 @@ def _on_developer_branch(condition: str) -> bool:
 
 
 def test_tests_start_on_every_branch_push():
-    assert _workflow()["on"]["push"]["branches"] == ["**"]
+    assert _workflow()["on"]["push"]["branches"] == ["**", "!dependabot/**"]
 
 
 def test_a_developer_branch_gets_the_precheck_and_not_the_non_blocking_or_real_project_jobs():
