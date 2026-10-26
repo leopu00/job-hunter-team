@@ -39,7 +39,8 @@ const reply = (fields: Record<string, unknown> = {}) => ({
   lists: { roles: [...ROLES], models: [...MODEL_CLASSES], efforts: [...EFFORTS], weekdays: [...WEEKDAYS], min_window_hours: 4 },
   ...fields,
 });
-const requests = () => native.invoke.mock.calls.map(([, args]) => (args as { request: { op: string } }).request.op);
+const requests = () =>
+  native.invoke.mock.calls.filter(([command]) => command === "team_settings").map(([, args]) => (args as { request: { op: string } }).request.op);
 
 beforeEach(() => {
   document.cookie = "NEXT_LOCALE=en; path=/";

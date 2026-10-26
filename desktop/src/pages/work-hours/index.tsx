@@ -12,6 +12,7 @@ import {
 } from "../../lib/team-settings-native";
 import { navigate } from "../../shell/router";
 import type { PageProps } from "../types";
+import WorkStatsCard from "./WorkStatsCard";
 import { WORK_HOURS_TEXT } from "./work-hours.i18n";
 
 type Loaded = { kind: "loading" } | { kind: "failed"; code: string } | { kind: "ready"; settings: TeamSettings };
@@ -104,6 +105,7 @@ function WorkHours() {
               hidePreviewNote: true,
             }}
           />
+          <WorkStatsCard target={loaded.settings.target} hours={loaded.settings.workingHours} />
         </>
       )}
     </section>

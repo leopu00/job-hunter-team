@@ -1113,6 +1113,24 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
     "This can be done only from the app’s main window.",
     "Go back to the main window and try again.",
   ),
+  stats_unreadable: copy(
+    "Non riesco a leggere le statistiche della squadra.",
+    "Riprova fra poco; se non cambia, controlla che la squadra sia in funzione.",
+    "The team's statistics cannot be read.",
+    "Try again in a moment; if it does not change, check that the team is running.",
+  ),
+  stats_unavailable: copy(
+    "La squadra non offre ancora le statistiche degli orari.",
+    "Aggiorna la squadra e riprova.",
+    "The team does not offer the working-hours statistics yet.",
+    "Update the team and try again.",
+  ),
+  stats_clear_failed: copy(
+    "Le statistiche non sono state cancellate.",
+    "Riprova; se non cambia, controlla che la squadra sia in funzione.",
+    "The statistics were not cleared.",
+    "Try again; if it does not change, check that the team is running.",
+  ),
   team_settings_request_invalid: copy(
     "La richiesta non è valida e non è stata mandata alla squadra.",
     "Ricarica la pagina e riprova.",
@@ -2121,6 +2139,10 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
  * and then it leaves this list on purpose.
  */
 export const NOT_EMITTED: ReadonlySet<string> = new Set([
+  // The page of the working hours reads them; the native work_stats_* commands that say them come with the data side.
+  "stats_unreadable",
+  "stats_unavailable",
+  "stats_clear_failed",
   // Rust: only in the message table of onboarding::failure().
   "runtime_wrapper_install_failed",
   "command_timeout",
