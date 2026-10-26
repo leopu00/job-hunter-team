@@ -192,11 +192,22 @@ posixOnly("jht providers versions / update — attesa vs installata", () => {
   });
 
   it("un provider non installato non è un drift", () => {
-    // Sandbox con solo `codex` sul PATH: claude e kimi non esistono.
+    // Sandbox con solo `claude` sul PATH (una squadra vecchia): codex non esiste, e non e' un drift.
+    const sb = makeSandbox({ provider: "claude", version: PINS.claude.version });
+    const r = runCli(sb, ["providers", "versions"]);
+    expect(r.code).toBe(0);
+    expect(r.out).toMatch(/codex\s.*not installed yet/);
+    // l'archiviato installato si vede; quello non installato non compare
+    expect(r.out).toMatch(/claude\s.*matches the release/);
+    expect(r.out).not.toMatch(/kimi/);
+  });
+
+  it("un provider archiviato non installato non compare: nessuna squadra lo usa qui", () => {
     const sb = makeSandbox({ provider: "codex", version: PINS.codex.version });
     const r = runCli(sb, ["providers", "versions"]);
     expect(r.code).toBe(0);
-    expect(r.out).toContain("not installed yet");
+    expect(r.out).toMatch(/codex\s.*matches the release/);
+    expect(r.out).not.toMatch(/claude|kimi/);
   });
 
   it("update installa la versione della release, non l'ultima pubblicata", () => {

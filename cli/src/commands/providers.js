@@ -823,15 +823,18 @@ async function handleCheck() {
  * provider semplicemente non installato: non installato non è drift.
  */
 async function handleVersions(opts = {}) {
-  const rows = UPDATE_TARGETS.map((target) => {
-    const expected = pinnedVersion(target);
+  // Un provider archiviato (Claude, Kimi) compare solo se la sua CLI e' installata qui: una squadra
+  // che lo usa ancora vede attesa vs installata, le altre non vedono un provider che non offriamo.
+  const rows = ['codex', 'claude', 'kimi'].flatMap((target) => {
     const installed = detectInstalledVersion(target);
+    if (!UPDATE_TARGETS.includes(target) && !installed) return [];
+    const expected = pinnedVersion(target);
     let state;
     if (!expected) state = 'unpinned';
     else if (!installed) state = 'not-installed';
     else if (installed === expected) state = 'ok';
     else state = 'drift';
-    return { provider: target, package: pinnedPackage(target), expected, installed, state };
+    return [{ provider: target, package: pinnedPackage(target), expected, installed, state }];
   });
   const drifted = rows.filter((r) => r.state === 'drift');
 
