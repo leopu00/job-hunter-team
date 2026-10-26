@@ -49,6 +49,14 @@ describe("AgentChatPane", () => {
     expect(screen.queryByRole("heading")).toBeNull();
   });
 
+  it("has a button that opens the same chat with the same agent on the whole page", async () => {
+    window.location.hash = "";
+    render(<AgentChatPane role="assistente" client={client()} />);
+    await userEvent.click(await screen.findByTestId("agent-chat-open-full"));
+    expect(screen.getByTestId("agent-chat-open-full")).toHaveTextContent("Open full page");
+    expect(window.location.hash).toBe("#/messages?agent=assistente");
+  });
+
   it("writes to the agent it was mounted for", async () => {
     const chat = client();
     render(<AgentChatPane role="capitano" client={chat} />);
