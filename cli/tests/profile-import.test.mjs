@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { execFileSync, spawnSync } from 'node:child_process';
 import {
-  chmodSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, symlinkSync, writeFileSync,
+  chmodSync, existsSync, lstatSync, mkdirSync, utimesSync, mkdtempSync, readFileSync, readdirSync, symlinkSync, writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
@@ -105,6 +105,63 @@ test('an existing profile is kept unless the person asks to replace it', () => {
   assert.deepEqual(readFileSync(join(dir, 'candidate_profile.yml')), PROFILE);
 });
 
+test('--replace keeps the profile it replaces, private, and only the last one', () => {
+  const { dir } = folder();
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(join(dir, 'candidate_profile.yml'), 'name: First\n');
+  const first = deps(dir);
+  const done = importProfile({ ...first.args, replace: true });
+  assert.equal(done.previousKept, 'candidate_profile.yml.prev');
+  assert.equal(readFileSync(join(dir, 'candidate_profile.yml.prev'), 'utf8'), 'name: First\n');
+  assert.equal(lstatSync(join(dir, 'candidate_profile.yml.prev')).mode & 0o777, 0o600);
+  assert.deepEqual(readFileSync(join(dir, 'candidate_profile.yml')), PROFILE);
+  // a second replacement keeps the one it replaced, not the first
+  const second = deps(dir, { bytes: Buffer.from(`${PROFILE.toString('utf8')}# second\n`) });
+  assert.equal(importProfile({ ...second.args, replace: true }).previousKept, 'candidate_profile.yml.prev');
+  assert.deepEqual(readFileSync(join(dir, 'candidate_profile.yml.prev')), PROFILE);
+  assert.deepEqual(left(dir), ['candidate_profile.yml', 'candidate_profile.yml.prev', 'ready.flag']);
+});
+
+test('a first import and a refused one leave no copy', () => {
+  const { dir } = folder();
+  const fresh = deps(dir);
+  assert.equal('previousKept' in importProfile(fresh.args), false);
+  assert.ok(!existsSync(join(dir, 'candidate_profile.yml.prev')));
+  const bad = deps(dir, { validate: () => ({ ok: false, errors: ['x'] }) });
+  assert.equal(importProfile({ ...bad.args, replace: true }).code, 'profile_invalid');
+  assert.ok(!existsSync(join(dir, 'candidate_profile.yml.prev')), 'a refused profile does not touch the copy');
+});
+
+test('stages a dead process left are swept, and only those, and only the old ones', () => {
+  const { dir } = folder();
+  mkdirSync(dir, { recursive: true });
+  const long = new Date('2026-10-27T00:00:00Z');
+  const old = ['.candidate_profile.yml.4242-0123456789ab.stage', '.ready.flag.7-ba9876543210.stage'];
+  const kept = [
+    '.candidate_profile.yml.4242-0123456789ab.stage.bak', // not a name this module gives
+    '.candidate_profile.yml.x-0123456789ab.stage',
+    'notes.stage',
+    'candidate_profile.yml.prev',
+  ];
+  for (const name of [...old, ...kept]) {
+    writeFileSync(join(dir, name), 'x');
+    utimesSync(join(dir, name), long, long);
+  }
+  const young = '.candidate_profile.yml.9999-aaaaaaaaaaaa.stage'; // another import, in flight
+  writeFileSync(join(dir, young), 'x');
+  const outside = join(dir, 'outside.txt');
+  writeFileSync(outside, 'untouched');
+  symlinkSync(outside, join(dir, '.ready.flag.1-bbbbbbbbbbbb.stage'));
+  const { args } = deps(dir, { now: () => new Date('2026-10-27T01:00:00Z') });
+  // `young` was written now, in real time, while the clock of the import says an hour after `long`
+  utimesSync(join(dir, young), new Date('2026-10-27T00:58:00Z'), new Date('2026-10-27T00:58:00Z'));
+  assert.equal(importProfile(args).ok, true);
+  for (const name of old) assert.ok(!existsSync(join(dir, name)), `${name} is swept`);
+  for (const name of [...kept, young]) assert.ok(existsSync(join(dir, name)), `${name} stays`);
+  assert.equal(readFileSync(outside, 'utf8'), 'untouched');
+  assert.ok(lstatSync(join(dir, '.ready.flag.1-bbbbbbbbbbbb.stage')).isSymbolicLink(), 'a link is not followed nor removed');
+});
+
 test('a link or a pipe where the profile goes is never written through nor replaced', () => {
   const { root, dir } = folder();
   mkdirSync(dir, { recursive: true });
@@ -182,9 +239,10 @@ test('the Capitano out of reach does not undo the import, and the result says so
   assert.equal(importProfile(off.args).captain, 'team_off');
   const failed = deps(dir, { notify: () => ({ status: 'failed', detail: 'agent is busy' }) });
   assert.deepEqual(importProfile({ ...failed.args, replace: true }), {
-    ok: true, profileWritten: true, readyFlag: true, captain: 'failed', plan: 'unknown', detail: 'agent is busy',
+    ok: true, profileWritten: true, readyFlag: true, captain: 'failed', plan: 'unknown', previousKept: 'candidate_profile.yml.prev',
+    detail: 'agent is busy',
   });
-  assert.deepEqual(left(dir), ['candidate_profile.yml', 'ready.flag']);
+  assert.deepEqual(left(dir), ['candidate_profile.yml', 'candidate_profile.yml.prev', 'ready.flag']);
 });
 
 // The real command, with the real validator, in a home of its own.

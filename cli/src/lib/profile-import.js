@@ -12,10 +12,11 @@
 
 import {
   closeSync, constants, fsyncSync, lstatSync, mkdirSync, openSync,
-  renameSync, unlinkSync, writeSync,
+  readdirSync, renameSync, unlinkSync, writeSync,
 } from 'node:fs';
 import { randomBytes } from 'node:crypto';
 import { join } from 'node:path';
+import { readRegularFile } from './secure-config-io.js';
 
 // The most the app's own import reads (desktop/src-tauri/src/profile_import.rs).
 export const MAX_PROFILE_BYTES = 64 * 1024;
@@ -23,6 +24,12 @@ export const MAX_PROFILE_BYTES = 64 * 1024;
 const PROFILE_FILE = 'candidate_profile.yml';
 const READY_FLAG = 'ready.flag';
 const PRIVATE_FILE_MODE = 0o600;
+// --replace keeps the profile it replaces, once, next to it; a profile is not a large file.
+const PREVIOUS_FILE = 'candidate_profile.yml.prev';
+const MAX_PREVIOUS_BYTES = 4 * 1024 * 1024;
+// A stage lives for the length of one import. Older than this it was left by a process that died.
+const ORPHAN_STAGE_MS = 5 * 60 * 1000;
+const STAGE_NAME = /^\.(candidate_profile\.yml|ready\.flag)\.\d+-[0-9a-f]{12}\.stage$/;
 
 // Said to the Capitano as the person's console: the envelope of the Assistant is not
 // ours to wear (the transport refuses an envelope that is not the sender's).
@@ -65,6 +72,33 @@ function dropStage(path) {
   try { unlinkSync(path); } catch { /* already gone */ }
 }
 
+// The stages a dead process left (they hold a copy of the profile), and only those:
+// the names this module gives them, regular files, old enough not to be another import's.
+function dropOrphanStages(dir, now) {
+  let names;
+  try { names = readdirSync(dir); } catch { return; }
+  for (const name of names) {
+    if (!STAGE_NAME.test(name)) continue;
+    const path = join(dir, name);
+    try {
+      const info = lstatSync(path);
+      if (info.isFile() && now().getTime() - info.mtimeMs > ORPHAN_STAGE_MS) unlinkSync(path);
+    } catch { /* gone, or not ours to remove */ }
+  }
+}
+
+// The profile about to be replaced is kept as it is, private, replacing the one kept before.
+function keepPrevious(dir, target) {
+  const bytes = readRegularFile(target, { maxBytes: MAX_PREVIOUS_BYTES });
+  const copy = writeStage(dir, PROFILE_FILE, bytes); // a stage name the orphan sweep knows
+  try {
+    renameSync(copy, join(dir, PREVIOUS_FILE));
+  } catch (err) {
+    dropStage(copy);
+    throw err;
+  }
+}
+
 function utcStamp(now) {
   return `${now().toISOString().slice(0, 19)}Z\n`;
 }
@@ -91,6 +125,7 @@ export function importProfile({
   // written over by another source.
   if (reviewPending()) return refuse('profile_review_pending');
 
+  dropOrphanStages(profileDir, now);
   mkdirSync(profileDir, { recursive: true, mode: 0o700 });
   const target = join(profileDir, PROFILE_FILE);
   const present = lstatOrNull(target);
@@ -99,6 +134,7 @@ export function importProfile({
 
   // Validated where it will be read: the staged copy, not the file the person pointed at.
   const stage = writeStage(profileDir, PROFILE_FILE, bytes);
+  let replacedPrevious = false;
   try {
     const verdict = validate(stage);
     if (verdict.unavailable) return refuse('validator_unavailable');
@@ -109,6 +145,10 @@ export function importProfile({
     const late = lstatOrNull(target);
     if (late && (late.isSymbolicLink() || !late.isFile())) return refuse('profile_target_unsafe');
     if (late && !replace) return refuse('profile_exists');
+    if (late) {
+      keepPrevious(profileDir, target);
+      replacedPrevious = true;
+    }
     renameSync(stage, target);
   } finally {
     dropStage(stage); // gone already after the rename; this cleans a refused one
@@ -130,6 +170,7 @@ export function importProfile({
   const told = notify();
   return {
     ok: true, profileWritten: true, readyFlag: true, captain: told.status, plan: planDeclared(),
+    ...(replacedPrevious ? { previousKept: PREVIOUS_FILE } : {}),
     ...(told.detail ? { detail: told.detail } : {}),
   };
 }

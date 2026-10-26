@@ -94,7 +94,7 @@ const IMPORT_SAYS = {
   profile_too_large: `the profile file is larger than ${MAX_PROFILE_BYTES / 1024} KiB`,
   profile_invalid: 'the profile is not complete enough for the team to start (nothing was written)',
   profile_review_pending: 'a profile review is waiting for your confirmation in the app: confirm or discard it first',
-  profile_exists: 'a profile already exists: use --replace to replace it',
+  profile_exists: 'a profile already exists: use --replace to replace it (the one replaced is kept as candidate_profile.yml.prev)',
   profile_target_unsafe: 'the profile path is a link or not a regular file: nothing was written',
   validator_unavailable: 'the profile validator cannot run (python3 or its module): nothing was written',
   ready_flag_missing: 'the profile was written but ready.flag could not be created: run the import again with --replace',
@@ -138,6 +138,7 @@ function importAction(file, opts) {
     return;
   }
   console.log('Profile imported and ready.');
+  if (result.previousKept) console.log(`The profile it replaced was kept, private, as ${result.previousKept} next to it.`);
   if (result.captain === 'sent') console.log('The Capitano has been told: the team starts.');
   else if (result.captain === 'team_off') console.log('The team is not running: the Capitano will start it from this profile at its next wake. Start the team with: jht team start');
   else console.log(`The Capitano could not be told now (${result.detail ?? 'delivery failed'}): it finds the profile at its next wake.`);
@@ -162,7 +163,7 @@ export function registerProfileCommand(program) {
     .command('import [file]')
     .description('Give the team its candidate profile: validate it, write it privately and atomically, mark it ready and tell the Capitano')
     .option('--stdin', 'read the profile from standard input (the host wrapper uses it)')
-    .option('--replace', 'replace the profile that already exists')
+    .option('--replace', 'replace the profile that already exists (the one replaced is kept as candidate_profile.yml.prev)')
     .option('--json', 'output JSON {ok, code, …}')
     .action(importAction);
 
