@@ -230,7 +230,7 @@ import json, os, sys
 from datetime import datetime, timezone
 session, claimed, origin, msg = sys.argv[1:5]
 log_dir = os.path.join(os.environ.get("JHT_HOME") or os.path.expanduser("~/.jht"), "logs")
-os.makedirs(log_dir, exist_ok=True)
+os.makedirs(log_dir, mode=0o700, exist_ok=True)
 with open(os.path.join(log_dir, "messages.jsonl"), "a") as f:
     f.write(json.dumps({
         "ts": datetime.now(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z"),
@@ -343,7 +343,7 @@ else:
         else:
             from_, to_, kind = "", "", ""
 log_dir = os.path.join(os.environ.get("JHT_HOME") or os.path.expanduser("~/.jht"), "logs")
-os.makedirs(log_dir, exist_ok=True)
+os.makedirs(log_dir, mode=0o700, exist_ok=True)
 out = {
     "ts": datetime.now(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z"),
     "session": session,
@@ -613,39 +613,37 @@ _submitted_from_unknown_form() {
 # Best-effort per costruzione (`|| true`, python3 opzionale): questo canale
 # porta tutto il traffico fra agenti, e un logger che fallisce non deve MAI
 # impedire una consegna.
-_record_stuck() {
-  command -v python3 >/dev/null 2>&1 || return 0
-  python3 - "$session" "$message" "${1:-submit_unconfirmed}" <<'PYEOF' 2>/dev/null || true
-import json, os, sys
-from datetime import datetime, timezone
-session, msg, reason = sys.argv[1], sys.argv[2], sys.argv[3]
-d = os.path.join(os.environ.get("JHT_HOME") or os.path.expanduser("~/.jht"), "logs")
-os.makedirs(d, exist_ok=True)
-with open(os.path.join(d, "pending-input.jsonl"), "a") as f:
-    f.write(json.dumps({
-        "ts": datetime.now(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z"),
-        "session": session, "draft": msg[:4096], "owner": "agent",
-        "src": "jht-tmux-send", "reason": reason,
-    }, ensure_ascii=False) + "\n")
-PYEOF
-}
+_record_stuck() { _record_pending_input draft "${1:-submit_unconfirmed}"; }
 
 # Il messaggio che NON e' stato digitato (la casella era di un altro): senza questa riga resterebbe solo
 # nello stderr del chiamante. `unsent` e non `draft`: `draft` e' cio' che sta nella casella del pane.
 # Non per la posta (il sollecito si ripete da solo).
 _record_unsent() {
   [ -z "$mail_id" ] || return 0
+  _record_pending_input unsent "${1:-composer_foreign}"
+}
+
+# La riga di logs/pending-input.jsonl. Porta il TESTO di un messaggio: il file nasce 0600 (e la cartella 0700, se
+# la crea questo programma: una cartella dei log che c'e' gia' e' di tutti, non la si cambia). Il testo e' tagliato
+# a 64 KiB (la SKILL lo dice): un messaggio lungo e' proprio quello che finisce qui.
+_record_pending_input() {
   command -v python3 >/dev/null 2>&1 || return 0
-  python3 - "$session" "$message" "${1:-composer_foreign}" <<'PYEOF' 2>/dev/null || true
+  python3 - "$session" "$message" "$2" "$1" <<'PYEOF' 2>/dev/null || true
 import json, os, sys
 from datetime import datetime, timezone
-session, msg, reason = sys.argv[1], sys.argv[2], sys.argv[3]
+session, msg, reason, key = sys.argv[1:5]
 d = os.path.join(os.environ.get("JHT_HOME") or os.path.expanduser("~/.jht"), "logs")
-os.makedirs(d, exist_ok=True)
-with open(os.path.join(d, "pending-input.jsonl"), "a") as f:
+os.makedirs(d, mode=0o700, exist_ok=True)
+path = os.path.join(d, "pending-input.jsonl")
+fd = os.open(path, os.O_WRONLY | os.O_APPEND | os.O_CREAT, 0o600)
+try:
+    os.fchmod(fd, 0o600)   # a file an older version made world-readable
+except (AttributeError, OSError):
+    pass
+with os.fdopen(fd, "a") as f:
     f.write(json.dumps({
         "ts": datetime.now(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z"),
-        "session": session, "unsent": msg[:4096], "owner": "agent",
+        "session": session, key: msg[:65536], "owner": "agent",
         "src": "jht-tmux-send", "reason": reason,
     }, ensure_ascii=False) + "\n")
 PYEOF
@@ -713,8 +711,10 @@ if actual is None:
 text = "".join(actual.split())
 if hashlib.sha256(text.encode()).hexdigest() == record[1]:
     sys.exit(0)
-# the old two-field record has no length: a token cannot be proved ours with it
-if len(record) == 4 and tmux_send_composer.paste_placeholder_fits(actual, int(record[2]), int(record[3])):
+# the old two-field record has no length: a token cannot be proved ours with it. The token of Claude counts LINES,
+# which a person can paste too: from the registry only the token of Codex (characters) is proof; the one of Claude
+# is ours only when the composer was empty before our own paste (placeholder_ours).
+if len(record) == 4 and tmux_send_composer.paste_placeholder_fits(actual, int(record[2]), int(record[3]), claude=False):
     sys.exit(0)
 sys.exit(1)
 ' "$CHAT_SKILLS" "$(_pending_file)" 2>/dev/null

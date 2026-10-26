@@ -18,17 +18,18 @@ _CODEX_PASTE = re.compile(r"^\[Pasted Content (\d+) chars\]$")
 _CLAUDE_PASTE = re.compile(r"^\[Pasted text #\d+(?: \+(\d+) lines)?\]$")
 
 
-def paste_placeholder_fits(actual: str | None, chars: int, newlines: int) -> bool:
+def paste_placeholder_fits(actual: str | None, chars: int, newlines: int, *, claude: bool = True) -> bool:
     """True when ``actual`` (a composer's whole text) is ONE paste token that a paste of ``chars`` characters
     and ``newlines`` line breaks would leave: Codex's number is the character count; Claude's is the line count
-    (or nothing, for one line). Anything else, a token with other text beside it included, is False."""
+    (or nothing, for one line). Anything else, a token with other text beside it included, is False. With
+    ``claude=False`` a Claude token never fits: its number is a line count, which proves nothing about WHOSE paste it is."""
     text = (actual or "").strip()
     codex = _CODEX_PASTE.match(text)
     if codex:
         return int(codex.group(1)) in {chars, chars - newlines}
-    claude = _CLAUDE_PASTE.match(text)
-    if claude:
-        shown = claude.group(1)
+    claude_token = _CLAUDE_PASTE.match(text)
+    if claude_token and claude:
+        shown = claude_token.group(1)
         return (shown is None and newlines == 0) or (shown is not None and int(shown) in {newlines, newlines + 1})
     return False
 
