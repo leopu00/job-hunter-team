@@ -18,6 +18,8 @@ use tauri::Manager;
 
 /// Past this size the log moves to runtime.log.1 before the next entry.
 const LOG_MAX_BYTES: u64 = 256 * 1024;
+/// The page-load timings file is smaller: a line a read, rotated as the runtime log is.
+const LOAD_LOG_MAX_BYTES: u64 = 128 * 1024;
 /// Older files kept besides the current one.
 const LOG_KEPT: u32 = 2;
 /// What is kept of each stream of a step: its end, where the error is.
@@ -31,6 +33,17 @@ pub(crate) struct RuntimeLog {
     path: PathBuf,
     /// The cause read from the last step, when it failed (failure_cause).
     cause: std::sync::Arc<std::sync::Mutex<Option<String>>>,
+}
+
+/// What one read of the team's positions cost; see `RuntimeLog::record_positions_read`.
+pub(crate) struct PositionsReadTiming {
+    pub(crate) op: &'static str,
+    pub(crate) shared: bool,
+    pub(crate) ok: bool,
+    pub(crate) total: Duration,
+    pub(crate) ssh: Duration,
+    pub(crate) bytes_out: usize,
+    pub(crate) bytes_in: usize,
 }
 
 #[derive(Clone, Copy)]
@@ -122,6 +135,28 @@ impl RuntimeLog {
         let operation = if operation == "send" { "send" } else { "read" };
         let entry = format!("=== {} direct_chat.{operation}: {}\n", utc(SystemTime::now()), chat_failure_code(code));
         let _ = append(&self.path, &entry, LOG_MAX_BYTES);
+    }
+
+    /// How long one read of the team's positions took, for the page-load inventory. Local only, in a
+    /// file of its own (`load-times.log`, so it never pushes a failure out of the runtime log): the
+    /// kind of read, whether the chat's ssh connection was lent to it, the time it took end to end and
+    /// in ssh, and the bytes that crossed. No host, account, position, filter or row.
+    pub(crate) fn record_positions_read(&self, read: &PositionsReadTiming) {
+        let op = match read.op {
+            "list" | "detail" | "facets" | "stats" | "profile" | "cloud_sync" => read.op,
+            _ => "other",
+        };
+        let entry = format!(
+            "=== {} positions.read op={op} link={} ok={} total_ms={} ssh_ms={} bytes_out={} bytes_in={}\n",
+            utc(SystemTime::now()),
+            if read.shared { "shared" } else { "own" },
+            read.ok,
+            read.total.as_millis(),
+            read.ssh.as_millis(),
+            read.bytes_out,
+            read.bytes_in,
+        );
+        let _ = append(&self.path.with_file_name("load-times.log"), &entry, LOAD_LOG_MAX_BYTES);
     }
 
     /// One step: its name, how it ended, its output. A log that cannot be
@@ -566,6 +601,38 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("jht-runtime-log-{name}-{}", std::process::id()));
         let _ = fs::remove_dir_all(&dir);
         dir
+    }
+
+    #[test]
+    fn a_positions_read_leaves_only_its_kind_and_numbers_in_a_file_of_its_own() {
+        use super::{PositionsReadTiming, LOAD_LOG_MAX_BYTES};
+        let root = dir("positions-read");
+        let log = RuntimeLog::in_dir(&root.join("logs"));
+        let timing = |op| PositionsReadTiming {
+            op,
+            shared: true,
+            ok: true,
+            total: Duration::from_millis(812),
+            ssh: Duration::from_millis(790),
+            bytes_out: 57_000,
+            bytes_in: 384_000,
+        };
+        log.record_positions_read(&timing("list"));
+        // anything that is not one of the kinds (a name, a path, a user's word) is just «other»
+        log.record_positions_read(&timing("SELECT secret FROM positions"));
+        let text = fs::read_to_string(root.join("logs").join("load-times.log")).unwrap();
+        let lines: Vec<&str> = text.lines().collect();
+        assert_eq!(lines.len(), 2);
+        assert!(lines[0].ends_with("positions.read op=list link=shared ok=true total_ms=812 ssh_ms=790 bytes_out=57000 bytes_in=384000"), "{}", lines[0]);
+        assert!(lines[1].contains("op=other") && !text.contains("secret"));
+        // the runtime log (the failures of the steps) is not touched by it
+        assert!(!root.join("logs").join("runtime.log").exists());
+        // and its file stays small: it rotates like the runtime log
+        for _ in 0..(LOAD_LOG_MAX_BYTES / 100) {
+            log.record_positions_read(&timing("list"));
+        }
+        assert!(fs::metadata(root.join("logs").join("load-times.log")).unwrap().len() <= LOAD_LOG_MAX_BYTES);
+        let _ = fs::remove_dir_all(&root);
     }
 
     #[test]

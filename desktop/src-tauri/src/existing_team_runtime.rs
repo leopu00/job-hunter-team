@@ -20,8 +20,9 @@ use std::{
     fs::{self, File, OpenOptions},
     io::{Read, Write},
     path::{Path, PathBuf},
+    cell::Cell,
     sync::Mutex,
-    time::{Duration, SystemTime, UNIX_EPOCH},
+    time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
 use tauri::{Manager, State};
 
@@ -72,9 +73,6 @@ def state(status): return {'writing':'preparing','review':'preparing'}.get(statu
 def salary(row):
  declared=row.get('salary_declared_min') is not None or row.get('salary_declared_max') is not None
  return ((row.get('salary_declared_min'),row.get('salary_declared_max'),row.get('salary_declared_currency')) if declared else (row.get('salary_estimated_min'),row.get('salary_estimated_max'),row.get('salary_estimated_currency')))
-def ticket_count(pid):
- row=one("SELECT COUNT(*) AS n FROM position_tickets WHERE position_id=? AND status IN ('open','assigned')",(pid,))
- return int(row.get('n',0)) if row else 0
 def position_detail(pid):
  raw=one('SELECT * FROM positions WHERE id=?',(pid,))
  if raw is None: return None
@@ -260,10 +258,24 @@ def dash_row(raw,score,application):
   if stamp and (best is None or stamp>best[0]): best=(stamp,by,actor or by)
  at,by,actor=best or ('','scout','scout')
  return {'id':sid(raw.get('id')),'legacy_id':nullable(raw,'legacy_id'),'title':trunc(nullable(raw,'title'),120),'company':trunc(nullable(raw,'company'),80),'location':trunc(nullable(raw,'location'),80),'remote_type':nullable(raw,'remote_type'),'status':raw.get('status'),'score':number(nullable(score,'total_score')) if score else None,'role_family':trunc(nullable(raw,'role_family'),60),'loc_country':trunc(nullable(raw,'loc_country'),40),'loc_city':trunc(nullable(raw,'loc_city'),60),'source':trunc(nullable(raw,'source'),60),'salary_min':number(sal[0]),'salary_max':number(sal[1]),'salary_currency':sal[2] or 'EUR','found_at':nullable(raw,'found_at'),'scored_at':scored_at,'last_action_at':at or nullable(raw,'found_at') or '','last_action_by':by,'last_action_actor':actor,'critic_score':number(nullable(application,'critic_score')) if application else None,'critic_verdict':nullable(application,'critic_verdict') if application else None}
+# The columns the dashboard's rows are made of (not the job description, requirements or notes).
+DASH_COLUMNS=('id','legacy_id','title','company','location','remote_type','status','role_family','loc_country','loc_city','source','found_at','found_by','last_checked','salary_declared_min','salary_declared_max','salary_declared_currency','salary_estimated_min','salary_estimated_max','salary_estimated_currency')
+def dash_pick():
+ have=columns('positions'); return ', '.join('p.'+name for name in DASH_COLUMNS if name in have)
+def first_rows(table):
+ found={}
+ for row in many('SELECT * FROM '+table+' ORDER BY rowid'): found.setdefault(row.get('position_id'),row)
+ return found
 def dash_rows(sql,args=()):
+ raws=many(sql,args)
+ # Many rows: the scores and applications are read once for all of them, not one query each.
+ scores_by=first_rows('scores') if len(raws)>50 else None; applications_by=first_rows('applications') if len(raws)>50 else None
  out=[]
- for raw in many(sql,args):
-  pid=raw.get('id'); out.append(dash_row(raw,one('SELECT * FROM scores WHERE position_id=?',(pid,)),one('SELECT * FROM applications WHERE position_id=?',(pid,))))
+ for raw in raws:
+  pid=raw.get('id')
+  score=scores_by.get(pid) if scores_by is not None else one('SELECT * FROM scores WHERE position_id=?',(pid,))
+  application=applications_by.get(pid) if applications_by is not None else one('SELECT * FROM applications WHERE position_id=?',(pid,))
+  out.append(dash_row(raw,score,application))
  return out
 if op=='stats':
  POINTS=2000; EVENTS=3000; live="(p.status IS NULL OR p.status!='excluded')"
@@ -281,7 +293,7 @@ if op=='stats':
   distribution={'active':active,'withScore':len(scored),'avgScore':int(sum(scored)/len(scored)+0.5) if scored else None,'buckets':[{'min':lo,'max':hi,'count':sum(1 for value in scored if lo<=value<=hi)} for lo,hi in bands]}
   sources=[{'source':row[0] if row[0] is not None else 'sconosciuta','count':row[1]} for row in db.execute('SELECT source,COUNT(*) AS n FROM positions p WHERE '+live+' GROUP BY source ORDER BY n DESC LIMIT 8')]
   types=[{'role_family':trunc(row[0],60),'count':row[1]} for row in db.execute('SELECT role_family,COUNT(*) AS n FROM positions p WHERE '+live+' GROUP BY role_family ORDER BY n DESC LIMIT 40')]
-  rows=dash_rows('SELECT p.* FROM positions p WHERE '+live+' ORDER BY p.found_at DESC,p.id ASC LIMIT '+str(POINTS))
+  rows=dash_rows('SELECT '+dash_pick()+' FROM positions p WHERE '+live+' ORDER BY p.found_at DESC,p.id ASC LIMIT '+str(POINTS))
   scols=columns('scores')
   recent=dash_rows('SELECT p.* FROM positions p JOIN scores s ON s.position_id=p.id WHERE '+live+' AND s.total_score IS NOT NULL AND s.scored_at IS NOT NULL ORDER BY s.scored_at DESC,p.id ASC LIMIT 8') if 'scored_at' in scols else []
   acols=columns('applications'); events=[]
@@ -316,9 +328,20 @@ if not isinstance(filters,dict) or any(value is None for value in filters.values
 if matching({},filters) is None: fail('positions_request_invalid')
 try:
  rows=[]; section_total=0
- for raw in db.execute('SELECT p.* FROM positions p ORDER BY p.found_at DESC,p.id ASC'):
-  position=as_dict(raw); pid=position.get('id'); score=one('SELECT * FROM scores WHERE position_id=?',(pid,)); application=one('SELECT * FROM applications WHERE position_id=?',(pid,)); item=map_position(position,score,application)
-  declared=salary(position); pending=ticket_count(pid)>0; item.update({'salary_min':declared[0],'salary_max':declared[1],'salary_currency':declared[2] or 'EUR','applied_at':nullable(application,'applied_at') if application else None,'written_at':nullable(application,'written_at') if application else None,'has_open_ticket':pending,'ticket_indicator':'pending' if pending else 'none','public_state':state(position.get('status')),'office_lat':coord(position.get('office_lat'),90),'office_lon':coord(position.get('office_lon'),180),'office_address':text(position.get('office_address'),160)})
+ # Only the columns the list shows or filters on (not the job description, the requirements or the
+ # notes, which weigh most of a row), and the scores, applications and open tickets read once for all
+ # the positions instead of three queries for each one.
+ wanted=('id','legacy_id','title','company','location','remote_type','source','found_at','status','role_family','loc_country','loc_city','write_requested','scam_signals','salary_declared_min','salary_declared_max','salary_declared_currency','salary_estimated_min','salary_estimated_max','salary_estimated_currency','office_lat','office_lon','office_address')
+ have=columns('positions'); pick=', '.join('p.'+name for name in wanted if name in have)
+ def first_by_position(table,names):
+  present=columns(table); found={}
+  for row in many('SELECT '+', '.join(['position_id']+[name for name in names if name in present])+' FROM '+table+' ORDER BY rowid'): found.setdefault(row['position_id'],row)
+  return found
+ scores_by=first_by_position('scores',('total_score',)); applications_by=first_by_position('applications',('critic_score','critic_verdict','applied_at','written_at'))
+ open_tickets={row['position_id'] for row in many("SELECT DISTINCT position_id FROM position_tickets WHERE status IN ('open','assigned')")}
+ for raw in db.execute('SELECT '+pick+' FROM positions p ORDER BY p.found_at DESC,p.id ASC'):
+  position=as_dict(raw); pid=position.get('id'); score=scores_by.get(pid); application=applications_by.get(pid); item=map_position(position,score,application)
+  declared=salary(position); pending=pid in open_tickets; item.update({'salary_min':declared[0],'salary_max':declared[1],'salary_currency':declared[2] or 'EUR','applied_at':nullable(application,'applied_at') if application else None,'written_at':nullable(application,'written_at') if application else None,'has_open_ticket':pending,'ticket_indicator':'pending' if pending else 'none','public_state':state(position.get('status')),'office_lat':coord(position.get('office_lat'),90),'office_lon':coord(position.get('office_lon'),180),'office_address':text(position.get('office_address'),160)})
   matched=matching(item,filters)
   if matched is None: fail('positions_request_invalid')
   if matched:
@@ -486,6 +509,17 @@ impl PositionFilters {
 }
 
 impl PositionsRequest {
+    fn op(&self) -> &'static str {
+        match self {
+            Self::List { .. } => "list",
+            Self::Detail { .. } => "detail",
+            Self::Facets => "facets",
+            Self::Stats => "stats",
+            Self::Profile => "profile",
+            Self::CloudSync => "cloud_sync",
+        }
+    }
+
     fn valid(&self) -> bool {
         match self {
             Self::List { filters } => filters.as_ref().map_or(true, PositionFilters::valid),
@@ -2201,10 +2235,20 @@ pub(crate) fn positions_read_for_scope(
         Ok(validated) => validated,
         Err(error) => return positions_failure(error),
     };
-    let command = match read_command(app, scope, &host) {
+    let selected = match selected_or_own(app, scope, &host) {
+        Ok(selected) => selected,
+        Err(error) => return positions_failure(error),
+    };
+    let team = selected.as_ref().map(|target| (target.team_id.clone(), target.runtime.clone()));
+    let command = match read_command_for(selected, &host) {
         Ok(command) => command,
         Err(error) => return positions_failure(error),
     };
+    // The chat's ssh connection, lent to this read when the chat is connected to the same VPS and team:
+    // a read of its own pays a new handshake (and the key exchange) every time.
+    let shared = app.try_state::<direct_chat::DirectChatState>().and_then(|chat| {
+        direct_chat::shared_master(chat.inner(), scope, &validated, team.as_ref().map(|(id, runtime)| (id.as_str(), runtime)))
+    });
     // A key found changed stays blocked for this scope and VPS until the person confirms it again: no `ssh`
     // that is refused and no `ssh-keyscan` per read (the memory is vps_link's).
     let (block_key, pinned) = match &validated {
@@ -2214,14 +2258,45 @@ pub(crate) fn positions_read_for_scope(
         ),
         crate::runtime_host::ValidatedHost::Local => (None, None),
     };
-    read_unless_blocked(block_key, pinned, || {
+    let started = Instant::now();
+    let timing = Cell::new((Duration::ZERO, 0usize, 0usize, false));
+    let reply = read_unless_blocked(block_key, pinned, || {
         positions_read_with(
             &request,
             &request_bytes,
-            |input| run_ssh_command(&validated, &command, Some(input), READ_TIMEOUT, None),
+            |input| {
+                let ssh_started = Instant::now();
+                let lent = shared.as_deref().filter(|socket| direct_chat::lent_socket_still_ours(socket));
+                let mut result = None;
+                if let Some(socket) = lent {
+                    // The master went away between the check and the read (255): one try on a connection of its own.
+                    match run_ssh_command(&validated, &command, Some(input), READ_TIMEOUT, Some(socket)) {
+                        Ok(output) if output.code != 255 => result = Some(Ok(output)),
+                        _ => {}
+                    }
+                }
+                let used_lent = result.is_some();
+                let result = result.unwrap_or_else(|| run_ssh_command(&validated, &command, Some(input), READ_TIMEOUT, None));
+                let received = result.as_ref().map_or(0, |output| output.stdout.len());
+                timing.set((ssh_started.elapsed(), input.len(), received, used_lent));
+                result
+            },
             || crate::runtime_host::host_key_matches_pin(&validated),
         )
-    })
+    });
+    let (ssh, bytes_out, bytes_in, used_lent) = timing.get();
+    if let Some(log) = crate::runtime_log::RuntimeLog::new(app) {
+        log.record_positions_read(&crate::runtime_log::PositionsReadTiming {
+            op: request.op(),
+            shared: used_lent,
+            ok: reply.get("ok") == Some(&Value::Bool(true)),
+            total: started.elapsed(),
+            ssh,
+            bytes_out,
+            bytes_in,
+        });
+    }
+    reply
 }
 
 /// Runs the read unless this VPS's key is already known to have changed; remembers the block when the read
