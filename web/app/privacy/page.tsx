@@ -33,9 +33,9 @@ const T = {
     s6_title: "Open source",
     s6_body:
       "JHT e completamente open source. Puoi verificare in qualsiasi momento cosa fa il codice esaminando il repository su GitHub.",
-    s8_title: "Controllo della versione",
-    s8_body:
-      "All'avvio l'app desktop chiede a GitHub qual è l'ultima versione pubblica di JHT. Nessun account né dato tuo: GitHub vede l'indirizzo IP e la versione dell'app. Non scarica né installa niente e puoi spegnere il controllo in Impostazioni.",
+    s9_title: "Servizi pubblici usati dall'app",
+    s9_body:
+      "L'app desktop contatta alcuni servizi pubblici. Nessuno riceve le tue candidature, il profilo, i CV, le chat o l'account: vedono ciò che mostra qualsiasi richiesta web, cioè l'indirizzo IP, l'ora e lo user agent.\nGitHub: all'avvio l'app chiede qual è l'ultima versione pubblica di JHT (nella richiesta c'è la versione dell'app). Non scarica né installa niente e puoi spegnere il controllo in Impostazioni.\nFrankfurter (api.frankfurter.dev): quando apri una pagina che mostra gli stipendi in una sola valuta (dashboard, posizioni, swipe), l'app chiede i tassi di cambio pubblici in euro. Non invia nessuno stipendio né posizione.\nCARTO (basemaps.cartocdn.com): quando apri la mappa, o la mappa di una posizione, l'app scarica stile, tessere e caratteri della mappa. Le tessere richieste seguono la zona che guardi: CARTO può quindi sapere più o meno quale zona della mappa stai guardando, non quale posizione.\nInstallazione e aggiornamento del runtime della squadra: lo script di installazione si scarica da jobhunterteam.ai e da GitHub, l'immagine del container dal registro di GitHub (ghcr.io); lo script può scaricare anche gli strumenti che servono dai siti ufficiali dei loro produttori.\nAltri servizi, per esempio l'accesso con Google e l'invio di un feedback, vengono contattati solo quando li usi tu.",
     s7_title: "Contatti",
     s7_body: "Per domande sulla privacy, scrivi a support@jobhunterteam.ai.",
     nav_home: "Home",
@@ -65,9 +65,9 @@ const T = {
     s6_title: "Open source",
     s6_body:
       "JHT is fully open source. You can verify what the code does at any time by examining the repository on GitHub.",
-    s8_title: "Version check",
-    s8_body:
-      "At startup the desktop app asks GitHub which is the latest public version of JHT. No account or data of yours: GitHub sees the IP address and the app's version. It downloads and installs nothing, and you can turn the check off in Settings.",
+    s9_title: "Public services used by the app",
+    s9_body:
+      "The desktop app contacts a few public services. None of them receives your applications, profile, CVs, chats or account: they see what any web request shows, that is your IP address, the time and the user agent.\nGitHub: at startup the app asks which is the latest public version of JHT (the app's version is in the request). It downloads and installs nothing, and you can turn the check off in Settings.\nFrankfurter (api.frankfurter.dev): when you open a page that shows salaries in one currency (dashboard, positions, swipe), the app asks for the public euro exchange rates. No salary or position is sent.\nCARTO (basemaps.cartocdn.com): when you open the map, or the map of a position, the app downloads the map's style, tiles and fonts. The tiles requested follow the area you look at: CARTO can therefore tell roughly which area of the map you are viewing, not which position.\nInstalling and updating the team's runtime: the installer script is downloaded from jobhunterteam.ai and GitHub, the container image from GitHub's registry (ghcr.io); the script may also download the tools it needs from their publishers' official sites.\nOther services, for example signing in with Google and sending feedback, are contacted only when you use them.",
     s7_title: "Contact",
     s7_body: "For privacy questions, write to support@jobhunterteam.ai.",
     nav_home: "Home",
@@ -97,9 +97,9 @@ const T = {
     s6_title: "Nyílt forráskód",
     s6_body:
       "A JHT teljesen nyílt forráskódú. Bármikor ellenőrizheted, hogy mit csinál a kód, a GitHub-on található repository átvizsgálásával.",
-    s8_title: "Verzióellenőrzés",
-    s8_body:
-      "Indításkor a desktop app megkérdezi a GitHubtól, mi a JHT legfrissebb nyilvános verziója. Nincs fiók vagy saját adatod: a GitHub látja az IP-címet és az app verzióját. Semmit nem tölt le és nem telepít, az ellenőrzést a Beállításokban kikapcsolhatod.",
+    s9_title: "Az app által használt nyilvános szolgáltatások",
+    s9_body:
+      "A desktop app néhány nyilvános szolgáltatással kapcsolatba lép. Egyik sem kapja meg a jelentkezéseidet, a profilodat, az önéletrajzaidat, a csevegéseidet vagy a fiókodat: azt látják, amit bármely webes kérés megmutat, vagyis az IP-címet, az időpontot és a user agentet.\nGitHub: indításkor az app megkérdezi, melyik a JHT legfrissebb nyilvános verziója (a kérésben ott van az app verziója). Semmit nem tölt le és nem telepít, az ellenőrzést a Beállításokban kikapcsolhatod.\nFrankfurter (api.frankfurter.dev): amikor olyan oldalt nyitsz meg, amely a fizetéseket egyetlen pénznemben mutatja (irányítópult, pozíciók, swipe), az app lekéri a nyilvános euróárfolyamokat. Fizetést vagy pozíciót nem küld.\nCARTO (basemaps.cartocdn.com): amikor megnyitod a térképet vagy egy pozíció térképét, az app letölti a térkép stílusát, csempéit és betűtípusait. A kért csempék azt a területet követik, amelyet nézel: a CARTO tehát nagyjából láthatja, a térkép melyik részét nézed, de azt nem, hogy melyik pozíciót.\nA csapat futtatókörnyezetének telepítése és frissítése: a telepítőszkriptet a jobhunterteam.ai és a GitHub szolgáltatja, a konténerképet a GitHub regisztere (ghcr.io); a szkript a szükséges eszközöket a gyártóik hivatalos oldalairól is letöltheti.\nMás szolgáltatásokat, például a Google-lel való bejelentkezést és a visszajelzés küldését, csak akkor keresi meg az app, ha te használod őket.",
     s7_title: "Kapcsolat",
     s7_body:
       "Adatvédelmi kérdések esetén írj az support@jobhunterteam.ai címre.",
@@ -130,9 +130,9 @@ const T = {
     s6_title: "Código abierto",
     s6_body:
       "JHT es completamente de código abierto. Puedes verificar en cualquier momento lo que hace el código examinando el repositorio en GitHub.",
-    s8_title: "Comprobación de versión",
-    s8_body:
-      "Al iniciar, la app de escritorio pregunta a GitHub cuál es la última versión pública de JHT. Ninguna cuenta ni dato tuyo: GitHub ve la dirección IP y la versión de la app. No descarga ni instala nada, y puedes desactivar la comprobación en Ajustes.",
+    s9_title: "Servicios públicos que usa la app",
+    s9_body:
+      "La app de escritorio contacta con algunos servicios públicos. Ninguno recibe tus candidaturas, tu perfil, tus CV, tus chats ni tu cuenta: ven lo que muestra cualquier petición web, es decir, la dirección IP, la hora y el user agent.\nGitHub: al iniciar, la app pregunta cuál es la última versión pública de JHT (la petición incluye la versión de la app). No descarga ni instala nada, y puedes desactivar la comprobación en Ajustes.\nFrankfurter (api.frankfurter.dev): cuando abres una página que muestra salarios en una sola moneda (panel, posiciones, swipe), la app pide los tipos de cambio públicos en euros. No se envía ningún salario ni posición.\nCARTO (basemaps.cartocdn.com): cuando abres el mapa, o el mapa de una posición, la app descarga el estilo, las teselas y las fuentes del mapa. Las teselas solicitadas siguen la zona que miras: CARTO puede saber, por tanto, más o menos qué zona del mapa estás viendo, no qué posición.\nInstalación y actualización del runtime del equipo: el script de instalación se descarga de jobhunterteam.ai y de GitHub, la imagen del contenedor del registro de GitHub (ghcr.io); el script también puede descargar las herramientas que necesita de los sitios oficiales de sus editores.\nOtros servicios, por ejemplo el acceso con Google y el envío de un comentario, solo se contactan cuando los usas tú.",
     s7_title: "Contacto",
     s7_body:
       "Para cuestiones de privacidad, escribe a support@jobhunterteam.ai.",
@@ -163,9 +163,9 @@ const T = {
     s6_title: "Open Source",
     s6_body:
       "JHT ist vollständig Open Source. Du kannst jederzeit überprüfen, was der Code tut, indem du das Repository auf GitHub untersuchst.",
-    s8_title: "Versionsprüfung",
-    s8_body:
-      "Beim Start fragt die Desktop-App GitHub nach der neuesten öffentlichen Version von JHT. Kein Konto und keine Daten von dir: GitHub sieht die IP-Adresse und die Version der App. Es wird nichts heruntergeladen oder installiert, und du kannst die Prüfung in den Einstellungen abschalten.",
+    s9_title: "Öffentliche Dienste, die die App nutzt",
+    s9_body:
+      "Die Desktop-App kontaktiert einige öffentliche Dienste. Keiner davon erhält deine Bewerbungen, dein Profil, deine Lebensläufe, deine Chats oder dein Konto: Sie sehen, was jede Webanfrage zeigt, also die IP-Adresse, die Uhrzeit und den User-Agent.\nGitHub: Beim Start fragt die App, welche die neueste öffentliche Version von JHT ist (die Version der App steht in der Anfrage). Es wird nichts heruntergeladen oder installiert, und du kannst die Prüfung in den Einstellungen abschalten.\nFrankfurter (api.frankfurter.dev): Wenn du eine Seite öffnest, die Gehälter in einer einzigen Währung zeigt (Dashboard, Stellen, Swipe), fragt die App die öffentlichen Euro-Wechselkurse ab. Es wird kein Gehalt und keine Stelle gesendet.\nCARTO (basemaps.cartocdn.com): Wenn du die Karte oder die Karte einer Stelle öffnest, lädt die App Stil, Kacheln und Schriften der Karte herunter. Die angeforderten Kacheln folgen dem Bereich, den du ansiehst: CARTO kann also ungefähr erkennen, welchen Kartenbereich du betrachtest, nicht aber, welche Stelle.\nInstallation und Aktualisierung der Team-Laufzeit: Das Installationsskript wird von jobhunterteam.ai und GitHub geladen, das Container-Image aus der Registry von GitHub (ghcr.io); das Skript kann außerdem benötigte Werkzeuge von den offiziellen Seiten ihrer Hersteller herunterladen.\nWeitere Dienste, zum Beispiel die Anmeldung mit Google und das Senden von Feedback, werden nur kontaktiert, wenn du sie nutzt.",
     s7_title: "Kontakt",
     s7_body: "Bei Fragen zum Datenschutz schreibe an support@jobhunterteam.ai.",
     nav_home: "Startseite",
@@ -195,9 +195,9 @@ const T = {
     s6_title: "Open source",
     s6_body:
       "JHT est entièrement open source. Vous pouvez vérifier à tout moment ce que fait le code en examinant le dépôt sur GitHub.",
-    s8_title: "Vérification de version",
-    s8_body:
-      "Au démarrage, l'app de bureau demande à GitHub quelle est la dernière version publique de JHT. Aucun compte ni donnée de votre part : GitHub voit l'adresse IP et la version de l'app. Rien n'est téléchargé ni installé, et vous pouvez désactiver la vérification dans les Paramètres.",
+    s9_title: "Services publics utilisés par l'app",
+    s9_body:
+      "L'app de bureau contacte quelques services publics. Aucun ne reçoit vos candidatures, votre profil, vos CV, vos conversations ni votre compte : ils voient ce que montre n'importe quelle requête web, c'est-à-dire l'adresse IP, l'heure et le user agent.\nGitHub : au démarrage, l'app demande quelle est la dernière version publique de JHT (la version de l'app figure dans la requête). Rien n'est téléchargé ni installé, et vous pouvez désactiver la vérification dans les Paramètres.\nFrankfurter (api.frankfurter.dev) : quand vous ouvrez une page qui affiche des salaires dans une seule devise (tableau de bord, postes, swipe), l'app demande les taux de change publics en euros. Aucun salaire ni poste n'est envoyé.\nCARTO (basemaps.cartocdn.com) : quand vous ouvrez la carte, ou la carte d'un poste, l'app télécharge le style, les tuiles et les polices de la carte. Les tuiles demandées suivent la zone que vous regardez : CARTO peut donc savoir à peu près quelle zone de la carte vous consultez, pas de quel poste il s'agit.\nInstallation et mise à jour du runtime de l'équipe : le script d'installation est téléchargé depuis jobhunterteam.ai et GitHub, l'image du conteneur depuis le registre de GitHub (ghcr.io) ; le script peut aussi télécharger les outils dont il a besoin depuis les sites officiels de leurs éditeurs.\nD'autres services, par exemple la connexion avec Google et l'envoi d'un retour, ne sont contactés que lorsque vous les utilisez.",
     s7_title: "Contact",
     s7_body:
       "Pour toute question relative à la confidentialité, écrivez à support@jobhunterteam.ai.",
@@ -228,9 +228,9 @@ const T = {
     s6_title: "Código aberto",
     s6_body:
       "O JHT é totalmente de código aberto. Pode verificar a qualquer momento o que o código faz examinando o repositório no GitHub.",
-    s8_title: "Verificação de versão",
-    s8_body:
-      "No arranque, a app de secretária pergunta ao GitHub qual é a última versão pública do JHT. Nenhuma conta nem dado seu: o GitHub vê o endereço IP e a versão da app. Não transfere nem instala nada, e pode desligar a verificação nas Definições.",
+    s9_title: "Serviços públicos usados pela app",
+    s9_body:
+      "A app de secretária contacta alguns serviços públicos. Nenhum recebe as suas candidaturas, o perfil, os CV, as conversas ou a conta: veem o que mostra qualquer pedido web, ou seja, o endereço IP, a hora e o user agent.\nGitHub: no arranque, a app pergunta qual é a última versão pública do JHT (o pedido inclui a versão da app). Não transfere nem instala nada, e pode desligar a verificação nas Definições.\nFrankfurter (api.frankfurter.dev): quando abre uma página que mostra salários numa só moeda (painel, posições, swipe), a app pede as taxas de câmbio públicas em euros. Não é enviado nenhum salário nem posição.\nCARTO (basemaps.cartocdn.com): quando abre o mapa, ou o mapa de uma posição, a app transfere o estilo, os mosaicos e os tipos de letra do mapa. Os mosaicos pedidos seguem a zona que está a ver: a CARTO pode assim saber, aproximadamente, que zona do mapa está a ver, não qual posição.\nInstalação e atualização do runtime da equipa: o script de instalação é transferido de jobhunterteam.ai e do GitHub, a imagem do contentor do registo do GitHub (ghcr.io); o script pode também transferir as ferramentas de que precisa dos sites oficiais dos respetivos fabricantes.\nOutros serviços, por exemplo o início de sessão com Google e o envio de um comentário, só são contactados quando os usa.",
     s7_title: "Contacto",
     s7_body:
       "Para questões de privacidade, escreva para support@jobhunterteam.ai.",
@@ -248,7 +248,7 @@ function Section({ title, body }: { title: string; body: string }) {
       <h2 className="text-[14px] font-bold text-[var(--color-white)] mb-2">
         {title}
       </h2>
-      <p className="text-[12px] text-[var(--color-muted)] leading-relaxed">
+      <p className="text-[12px] text-[var(--color-muted)] leading-relaxed whitespace-pre-line">
         {body}
       </p>
     </div>
@@ -267,7 +267,7 @@ function PrivacyContent() {
     ["s4_title", "s4_body"],
     ["s5_title", "s5_body"],
     ["s6_title", "s6_body"],
-    ["s8_title", "s8_body"],
+    ["s9_title", "s9_body"],
     ["s7_title", "s7_body"],
   ];
 
