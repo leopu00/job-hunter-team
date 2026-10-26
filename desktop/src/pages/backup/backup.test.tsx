@@ -77,7 +77,7 @@ describe("the backup page: making one", () => {
     render(<BackupPage {...props} />);
     await user.click(screen.getByTestId("backup-create-button"));
     expect(native.backupCreate).toHaveBeenCalledOnce();
-    expect(await screen.findByTestId("backup-create-say")).toHaveTextContent("Saved: 3 files, 2.5 MB.");
+    expect(await screen.findByTestId("backup-create-say")).toHaveTextContent("Saved: 3 files, 2.5 MB (compressed archive).");
     expect(screen.queryByTestId("backup-cancel-button")).toBeNull();
   });
 
@@ -139,7 +139,7 @@ describe("the backup page: checking one", () => {
     render(<BackupPage {...props} />);
     await user.click(screen.getByTestId("backup-inspect-button"));
     expect(await screen.findByTestId("backup-verified")).toHaveTextContent("Verified: the contents match");
-    expect(screen.getByTestId("backup-opened")).toHaveTextContent("2 files, 2 MB");
+    expect(screen.getByTestId("backup-opened")).toHaveTextContent("2 files, 2 MB (uncompressed contents)");
     expect(screen.getByTestId("backup-opened")).toHaveTextContent(/Made on /);
     expect(screen.getByTestId("backup-always-excluded")).toHaveTextContent("Never in a backup: cloud token, provider sign-ins, logs");
     expect(screen.queryByTestId("backup-problems")).toBeNull();
@@ -183,6 +183,19 @@ describe("the backup page's words and sizes", () => {
       expect(text.createdAt, locale).toContain("{date}");
     }
     expect(Object.keys(BACKUP_TEXT).sort()).toEqual(["de", "en", "es", "fr", "hu", "it", "pt"]);
+  });
+
+  it("tells, in every language, that the saved size is the compressed archive and the checked one is the contents", () => {
+    const note = (form: string) => form.match(/\(([^)]+)\)/)?.[1];
+    for (const [locale, text] of Object.entries(BACKUP_TEXT) as [Locale, (typeof BACKUP_TEXT)[Locale]][]) {
+      for (const key of ["one", "other"] as const) {
+        const saved = note(text.saved[key]);
+        const contents = note(text.filesLine[key]);
+        expect(saved, `${locale} saved ${key}`).toBeTruthy();
+        expect(contents, `${locale} filesLine ${key}`).toBeTruthy();
+        expect(saved, locale).not.toBe(contents);
+      }
+    }
   });
 
   it("writes a size with the biggest unit that keeps it above one", () => {
