@@ -7,6 +7,7 @@ a WARNING and never a refusal: everything the user reads is written in the user'
 mixed text gives no answer (None), so a job title or a list of tools never raises it.
 
     python3 text_language.py lang                 # the user's language now (i18n-prefs.json, JHT_LANG)
+    python3 text_language.py line                 # the TEAM-LANGUAGE line the kickoff and resume messages carry
     python3 text_language.py guess "some text"    # the language the text looks to be in, or "unknown"
     python3 text_language.py check "some text"    # exit 0 if it fits the user's language or is unclear, 3 if not
 """
@@ -68,6 +69,30 @@ def user_language() -> str:
         sys.path.pop(0)
 
 
+LANGUAGE_NAMES = {
+    "en": "English", "it": "Italian", "hu": "Hungarian", "es": "Spanish", "de": "German", "fr": "French", "pt": "Portuguese",
+}
+
+
+def team_language_line(lang: str | None = None) -> str:
+    """The sentence that tells an agent, in a kickoff or a resume, which language the team writes in.
+
+    The rule (RULE-T14) says the user's language; the agents used to read it off the conversation, and a
+    message in Italian or an ad in Swedish moved a whole team. The language is the one the team has
+    chosen (`lang`, default: the user's now), said by name. The same words are in `jht_team_language_line`
+    (.launcher/spawn-lib.sh) and `teamLanguageLine` (agent-harness): a test holds the three together.
+    """
+    code = lang if lang in LANGUAGE_NAMES else user_language()
+    name = LANGUAGE_NAMES.get(code, LANGUAGE_NAMES["en"])
+    code = code if code in LANGUAGE_NAMES else "en"
+    return (
+        f"[TEAM-LANGUAGE] {name} ({code}). Write in {name} every text the user can see: chat, profile, summaries, "
+        "notes, scores, CVs, cover letters, the dashboard, and the messages you send to other agents. Quotes from a "
+        "job ad, names and URLs stay as they are. The team's language is this one: the language of the message or "
+        "the ad you are answering never changes it."
+    )
+
+
 def wrong_language(text: str, expected: str | None = None) -> str | None:
     """The language `text` is clearly written in when it is not `expected` (default: the user's), else None."""
     guess = guess_language(text)
@@ -80,6 +105,9 @@ def main(argv: list[str]) -> int:
     if len(argv) >= 1 and argv[0] == "lang":
         print(user_language())
         return 0
+    if len(argv) >= 1 and argv[0] == "line":
+        print(team_language_line())
+        return 0
     if len(argv) == 2 and argv[0] in ("guess", "check"):
         guess = guess_language(argv[1])
         if argv[0] == "guess":
@@ -91,7 +119,7 @@ def main(argv: list[str]) -> int:
             return 3
         print("OK")
         return 0
-    print("usage: text_language.py lang | guess TEXT | check TEXT", file=sys.stderr)
+    print("usage: text_language.py lang | line | guess TEXT | check TEXT", file=sys.stderr)
     return 2
 
 

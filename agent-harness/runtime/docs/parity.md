@@ -146,6 +146,15 @@ reads:
    (`allowedIndicesLine`, the same source). `roll_worker_number.py` in the
    rendered text no longer becomes `spawn_agent` — which read as a command that
    returns a number — but "nothing: the launcher picks the instance itself".
+9. **The team's language is named in the notes** (T140). The rule of every prompt
+   (RULE-T14) says "the user's language", and the agents used to read it off the
+   message they were answering. A TUI agent is told by name in the `[TEAM-LANGUAGE]`
+   line of its kickoff and resume messages (`jht_team_language_line`,
+   `.launcher/spawn-lib.sh`); an API agent has no kickoff to carry it, so the same
+   line, in the same words (`teamLanguageLine`), ends the notes it reads every
+   round, from the same cascade (`i18n-prefs.json`, `$JHT_LANG`, `host.env`, English).
+   The rule's own "`python3 text_language.py lang`" is rendered as "the
+   `[TEAM-LANGUAGE]` line of your notes", where the answer already is.
 
 ### How it was checked (2026-09-19)
 

@@ -588,6 +588,9 @@ export function rewritePythonSkills(
     // harness) -c 'import yaml…'", which tells the one role that writes the
     // profile to do nothing in particular. Here that validation has a tool.
     .replace(/python3(?:\.\d+)?\s+-c\s+(['"]).*?yaml\.safe_load.*?\1/gs, "the validate_profile tool")
+    // T140: the rule of every prompt names `python3 text_language.py lang` as the way to ask which language
+    // the team writes in. Here the answer is already in the notes the role reads every round.
+    .replace(/`python3(?:\.\d+)?\s+(?:[^\s`]*\/)?text_language\.py\s+lang`/g, "the `[TEAM-LANGUAGE]` line of your notes")
     .replace(PYTHON_SCRIPT_TEXT, (_whole, script: string) => {
       const tool = skills[script] ?? PYTHON_EQUIVALENTS[script];
       return tool ?? `${script} (not available in the API harness)`;
