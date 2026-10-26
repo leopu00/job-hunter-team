@@ -712,9 +712,17 @@ export function runLegacyCredentialsGuard({
   });
 }
 
+/**
+ * Only a VPS runs the cloud daemon, which carries the site's starts and stops of the team. A computer's own
+ * container (host.env missing, or any other type) never does, paired with the cloud or not.
+ */
+export function hostIsVps(hostType) {
+  return hostType === 'vps' || hostType === 'server' || hostType === 'remote';
+}
+
 async function dispatch() {
   const hostType = await readHostType();
-  const isVps = hostType === 'vps' || hostType === 'server' || hostType === 'remote';
+  const isVps = hostIsVps(hostType);
 
   // Migrate jht.config.json al volo (v1 → vN). Il wizard desktop scrive v1
   // e il container ha bisogno dei campi delle versioni successive per far

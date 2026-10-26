@@ -5016,9 +5016,14 @@ fn keep_team_halted(home: &Path) -> Result<(), OnboardingError> {
     #[cfg(unix)]
     std::os::unix::fs::OpenOptionsExt::mode(&mut open, 0o644);
     match open.open(&gate) {
-        Ok(mut file) => file
-            .write_all(b"halted_by=desktop-open-without-team\n")
-            .map_err(|_| failure("container_start_failed")),
+        Ok(mut file) => {
+            // the umask narrows the mode of a new file: 0644 is set again, so that the gate does not turn 0600
+            #[cfg(unix)]
+            file.set_permissions(std::os::unix::fs::PermissionsExt::from_mode(0o644))
+                .map_err(|_| failure("container_start_failed"))?;
+            file.write_all(b"halted_by=desktop-open-without-team\n")
+                .map_err(|_| failure("container_start_failed"))
+        }
         Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => Ok(()),
         Err(_) => Err(failure("container_start_failed")),
     }
@@ -8105,6 +8110,25 @@ exit 0
         let error = runtime_wake_for(true, || keep_team_halted(&missing), || { ran.set(true); Ok(()) }).unwrap_err();
         assert_eq!(error.code, "container_start_failed");
         assert!(!ran.get());
+        let _ = std::fs::remove_dir_all(&home);
+    }
+
+    /// A strict umask (077) narrows the mode of a new file to 0600: the gate is set to 0644 again, so that the
+    /// container, which is another user for the files of the home, can read and remove it.
+    #[cfg(unix)]
+    #[test]
+    fn the_halt_gate_is_0644_even_with_a_strict_umask() {
+        use std::os::unix::fs::PermissionsExt;
+        let home = std::env::temp_dir().join(format!("jht-wake-gate-umask-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&home);
+        std::fs::create_dir_all(&home).unwrap();
+        // SAFETY: umask only changes the mask of this process; it is put back right after the gate is written.
+        let before = unsafe { libc::umask(0o077) };
+        let written = keep_team_halted(&home);
+        unsafe { libc::umask(before) };
+        written.unwrap();
+        let mode = std::fs::metadata(home.join(".team-halted.flag")).unwrap().permissions().mode();
+        assert_eq!(mode & 0o777, 0o644);
         let _ = std::fs::remove_dir_all(&home);
     }
 
