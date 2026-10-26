@@ -142,7 +142,7 @@ const T = {
   },
   de: {
     title: "Datenschutzerklärung",
-    updated: "Letzte Aktualisierung: October 2026",
+    updated: "Letzte Aktualisierung: Oktober 2026",
     intro:
       "Job Hunter Team (JHT) respektiert deine Privatsphäre. Diese Seite erklärt, wie deine Daten verarbeitet werden.",
     s1_title: "Erhobene Daten",
