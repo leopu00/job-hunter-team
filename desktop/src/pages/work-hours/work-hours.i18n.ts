@@ -90,15 +90,15 @@ const pt: WorkHoursText = {
   title: "Horário de trabalho",
   link: "Horário de trabalho",
   linkNote: "Quando os agentes trabalham.",
-  introLocal: "Quando os agentes trabalham, para a equipe deste computador.",
-  introVps: "Quando os agentes trabalham, para a equipe da VPS.",
-  consequence: "O novo horário vale a partir da próxima verificação da equipe (em cerca de 15 minutos); não interrompe o trabalho em curso.",
-  unreadable: "Se o horário não puder ser lido, a equipe trabalha sem limite de horário até você salvá-lo de novo.",
+  introLocal: "Quando os agentes trabalham, para a equipa deste computador.",
+  introVps: "Quando os agentes trabalham, para a equipa da VPS.",
+  consequence: "O novo horário vale a partir da próxima verificação da equipa (em cerca de 15 minutos); não interrompe o trabalho em curso.",
+  unreadable: "Se o horário não puder ser lido, a equipa trabalha sem limite de horário até o guardares de novo.",
   back: "Configurações",
-  loading: "A ler o horário da equipe…",
+  loading: "A ler o horário da equipa…",
   retry: "Tentar de novo",
-  loadFailed: "Não é possível ler o horário da equipe.",
-  saved: "Guardado: é isto que a equipe tem agora.",
+  loadFailed: "Não é possível ler o horário da equipa.",
+  saved: "Guardado: é isto que a equipa tem agora.",
 };
 
 const hu: WorkHoursText = {
