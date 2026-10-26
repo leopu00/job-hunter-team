@@ -20,6 +20,7 @@ const reply = (fields: Record<string, unknown> = {}) => ({
   lastObservation: "2026-10-21T04:00:00Z",
   retentionDays: 90,
   threshold: 75,
+  scheduleState: "valid",
   ...fields,
 });
 
@@ -28,6 +29,12 @@ describe("pickWorkStats", () => {
     const picked = pickWorkStats(reply({ nights: [night({ aboveThreshold: null, scoreThreshold: null, consumptionPct: null })] }));
     expect(picked.ok).toBe(true);
     expect(pickWorkStats(reply({ nights: [], from: null, to: null, lastObservation: null, threshold: null })).ok).toBe(true);
+  });
+
+  it("takes a night with nothing counted as null, and the three states of the hours file", () => {
+    expect(pickWorkStats(reply({ nights: [night({ found: null })] })).ok).toBe(true);
+    for (const scheduleState of ["undeclared", "valid", "unreadable"]) expect(pickWorkStats(reply({ scheduleState })).ok, scheduleState).toBe(true);
+    expect(pickWorkStats(reply({ retentionDays: 366, nights: [night({ hoursActive: 200 })] })).ok).toBe(true);
   });
 
   it("refuses a field outside the list, a missing one, a value off its range or its type", () => {
@@ -40,6 +47,8 @@ describe("pickWorkStats", () => {
       reply({ nights: [night({ date: "20/10/2026" })] }),
       reply({ nights: [night({ consumptionPct: Number.POSITIVE_INFINITY })] }),
       reply({ extra: 1 }),
+      reply({ scheduleState: "stopped" }),
+      reply({ scheduleState: undefined }),
       reply({ retentionDays: 0 }),
       reply({ lastObservation: "not a date" }),
       reply({ nights: Array.from({ length: 401 }, () => night()) }),

@@ -31,6 +31,7 @@ const stats = (nights: unknown[], fields: Record<string, unknown> = {}) => ({
   lastObservation: "2026-10-26T08:00:00Z",
   retentionDays: 90,
   threshold: 75,
+  scheduleState: "valid",
   ...fields,
 });
 const days = (n: number) => Array.from({ length: n }, (_, i) => night(`2026-10-${String(10 + i).padStart(2, "0")}`));
@@ -81,6 +82,29 @@ describe("what happened", () => {
     serve(stats([...days(2), night("2026-10-20", { hoursActive: 0.5 })]));
     show();
     expect(await screen.findByTestId("work-stats-insufficient")).toHaveTextContent("2 of 3");
+  });
+
+  it("says «not available» for a night with nothing counted, and adds up only the nights that have a count", async () => {
+    serve(stats([night("2026-10-10", { found: null }), night("2026-10-11"), night("2026-10-12"), night("2026-10-13")]));
+    show();
+    const summary = await screen.findByTestId("work-stats-summary");
+    expect(screen.getByTestId("work-stats-found-total")).toHaveTextContent("15");
+    expect(within(summary).getAllByText("(from 3 nights)").length).toBeGreaterThanOrEqual(1);
+    expect(within(screen.getAllByTestId("work-stats-row")[0]).getAllByText("not available")).toHaveLength(1);
+  });
+
+  it("raises an alert when the team's hours file cannot be read, and only then", async () => {
+    serve(stats(days(3), { scheduleState: "unreadable" }));
+    show();
+    expect(await screen.findByTestId("work-stats-schedule-unreadable")).toHaveTextContent("the team works with no hours limit until you save them again");
+    cleanup();
+    for (const scheduleState of ["valid", "undeclared"]) {
+      serve(stats(days(3), { scheduleState }));
+      show();
+      await screen.findByTestId("work-stats-summary");
+      expect(screen.queryByTestId("work-stats-schedule-unreadable")).toBeNull();
+      cleanup();
+    }
   });
 
   it("says «not available» for a number the team does not have, never 0, and each total with its own sample", async () => {

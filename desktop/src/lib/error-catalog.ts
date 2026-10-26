@@ -2139,10 +2139,6 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
  * and then it leaves this list on purpose.
  */
 export const NOT_EMITTED: ReadonlySet<string> = new Set([
-  // The page of the working hours reads them; the native work_stats_* commands that say them come with the data side.
-  "stats_unreadable",
-  "stats_unavailable",
-  "stats_clear_failed",
   // Rust: only in the message table of onboarding::failure().
   "runtime_wrapper_install_failed",
   "command_timeout",

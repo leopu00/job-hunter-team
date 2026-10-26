@@ -3,6 +3,8 @@ import { appLocale } from "../../lib/app-locale";
 import { describeError } from "../../lib/error-catalog";
 import { clearWorkStats, readWorkStats, type WorkNight, type WorkStats } from "../../lib/work-stats-native";
 import type { WorkingHours } from "../../lib/team-settings-native";
+import type { Locale } from "@/i18n/config";
+import { WORK_HOURS_TEXT } from "./work-hours.i18n";
 import { WORK_STATS_TEXT, type WorkStatsText } from "./work-stats.i18n";
 
 /** Nights of data under which nothing is said about how the team did: the one place this number lives. */
@@ -160,6 +162,11 @@ function StatsBody({ stats, t, locale, unit, sample, now }: { stats: WorkStats; 
   const aboveWith = stats.threshold === null ? t.above : fill(t.aboveWith, { threshold: stats.threshold });
   return (
     <>
+      {stats.scheduleState === "unreadable" && (
+        <p role="alert" data-testid="work-stats-schedule-unreadable" className="m-0 text-[12px] text-[var(--color-yellow)]">
+          {WORK_HOURS_TEXT[locale as Locale].unreadable}
+        </p>
+      )}
       {idle > STALE_AFTER_DAYS && (
         <p role="status" data-testid="work-stats-stale" className="m-0 text-[12px] text-[var(--color-yellow)]">
           {fill(t.stale, { days: idle })}
@@ -175,7 +182,13 @@ function StatsBody({ stats, t, locale, unit, sample, now }: { stats: WorkStats; 
             <p className="m-0 text-[var(--color-muted)]">{fill(t.range, { from: localDay(stats.from, locale), to: localDay(stats.to, locale), sample: sample(counted.length) })}</p>
           )}
           <p className="m-0">
-            <span data-testid="work-stats-found-total">{found.total}</span> {t.found} <span className="text-[var(--color-muted)]">({sample(found.over)})</span>
+            {found.over === 0 ? (
+              <span className="text-[var(--color-muted)]">{t.found}: {t.unavailable}</span>
+            ) : (
+              <>
+                <span data-testid="work-stats-found-total">{found.total}</span> {t.found} <span className="text-[var(--color-muted)]">({sample(found.over)})</span>
+              </>
+            )}
           </p>
           <p className="m-0">
             {above.over === 0 ? (
@@ -221,7 +234,7 @@ function StatsBody({ stats, t, locale, unit, sample, now }: { stats: WorkStats; 
             <tr key={night.date} data-testid="work-stats-row">
               <th scope="row" className="font-normal">{localDay(night.date, locale)}</th>
               <td>{night.hoursActive}</td>
-              <td>{night.found}</td>
+              <td>{night.found ?? t.unavailable}</td>
               <td>{night.aboveThreshold === null ? t.unavailable : night.scoreThreshold === null ? night.aboveThreshold : `${night.aboveThreshold} (≥ ${night.scoreThreshold})`}</td>
               <td>{night.consumptionPct ?? t.unavailable}</td>
             </tr>
