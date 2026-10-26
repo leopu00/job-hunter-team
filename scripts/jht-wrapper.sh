@@ -4120,6 +4120,11 @@ handle_runtime_upgrade() {
     fi
     old_image=""
     old_version="non-installata"
+    # A team of ours that is there but stopped counts as absent for the upgrade (there is nothing running
+    # to put back), yet it is not "not installed": say so.
+    if [ "$CONTAINER_RUNTIME" = podman ] && read_only_service_id "$CONTAINER_SERVICE" any-config >/dev/null 2>&1; then
+      old_version="ferma"
+    fi
   fi
   old_image="${old_image:-none}"
   old_version="${old_version:-sconosciuta}"
