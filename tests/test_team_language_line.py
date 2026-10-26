@@ -174,11 +174,12 @@ def test_the_watchdog_resume_still_goes_without_the_library(tmp_path):
 
 
 def test_the_doctors_resume_template_asks_for_the_line_in_every_language():
+    # the line comes before the Capitano's mode section, which stays the end of the message (test_mode_injection)
     for path in sorted((ROOT / "agents" / "_skills" / "session-refresh").glob("SKILL*.md")):
         text = path.read_text(encoding="utf-8")
         assert "text_language.py line" in text, path.name
         send = [ln for ln in text.splitlines() if "[RESUME]" in ln and "jht-tmux-send" in ln]
-        assert len(send) == 1 and send[0].rstrip().endswith('$MODE$LANGUAGE"'), path.name
+        assert len(send) == 1 and send[0].rstrip().endswith('$LANGUAGE$MODE"'), path.name
 
 
 # --- the rule ----------------------------------------------------------------------------------------

@@ -161,7 +161,7 @@ sleep 8
 MODE=""
 if [ "$ROLE" = "capitano" ]; then MODE=" $(python3 /app/shared/skills/mode_banner.py line)"; fi
 LANGUAGE=" $(python3 /app/shared/skills/text_language.py line)"   # the team's language by name (RULE-T14): every role, not only the Capitano
-/app/agents/_skills/tmux-send/jht-tmux-send "$S" "[@dottore -> @${s_lower}] [RESUME] Contesto pre-refresh: stavi facendo <X>; avevi completato <Y> (analytics: produced=<...>); il prossimo passo era <Z>. Riprendi da li'. Coda: <next-for-role>.$MODE$LANGUAGE"
+/app/agents/_skills/tmux-send/jht-tmux-send "$S" "[@dottore -> @${s_lower}] [RESUME] Contesto pre-refresh: stavi facendo <X>; avevi completato <Y> (analytics: produced=<...>); il prossimo passo era <Z>. Riprendi da li'. Coda: <next-for-role>.$LANGUAGE$MODE"
 ```
 Imposta `resume_msg_sent=True` nella voce del giornale. Poi passa alla sessione successiva (ritmo ~15-20s tra un agente e l'altro).
 
