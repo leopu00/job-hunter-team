@@ -1159,6 +1159,17 @@ container_up() {
 # `read_only_container_id` distingue un progetto assente (3) da un risultato
 # ambiguo/non posseduto (1). Solo il primo puo' essere creato da un'azione che
 # ha gia' autorizzato esplicitamente una mutazione.
+# Any container of the project that runs (the broker, Telegram): `compose down` would stop it too.
+# A list that cannot be read counts as running.
+project_has_running_container() {
+  local ids id
+  ids="$(compose ps -q 2>/dev/null)" || return 0
+  for id in $ids; do
+    [ "$(docker inspect --type container "$id" --format '{{.State.Running}}' 2>/dev/null)" = false ] || return 0
+  done
+  return 1
+}
+
 container_mutation_preflight() {
   local status=0
   if read_only_container_id >/dev/null; then
@@ -1167,6 +1178,17 @@ container_mutation_preflight() {
     status=$?
   fi
   [ "$status" -eq 3 ] && return 0
+  # The containers of an earlier version (the compose changed, so its config hash did) that are
+  # STOPPED: nothing runs to interrupt. They are ours (project, service, unit, files, version all
+  # as expected, only the hash differs) and are recreated with the new configuration; `compose down`
+  # removes containers and the network, never the volumes: the team's data stays.
+  if [ "$status" -eq 1 ] && [ "$CONTAINER_RUNTIME" = podman ] \
+      && read_only_service_id "$CONTAINER_SERVICE" stopped-stale-config >/dev/null 2>&1 \
+      && ! project_has_running_container; then
+    warn "config_changed_stopped: i container del team, fermi, sono della versione di prima: li ricreo con la configurazione nuova (i volumi con i dati restano)."
+    compose down || { err "Non riesco a rimuovere i container fermi della versione di prima: «jht down», poi «jht up»."; return 1; }
+    return 0
+  fi
   err "Container JHT esistente non attestabile; operazione interrotta."
   stale_config_hint
   return 1
@@ -2357,9 +2379,10 @@ read_only_service_id() {
   if [ "$CONTAINER_RUNTIME" = podman ]; then
     expected_project="$(compose_project_name)" || return 1
     expected_unit="$(printf 'podman-compose\100%s.service' "$expected_project")"
-    if [ "$config_check" != any-config ]; then
-      expected_hash="$(podman_expected_config_hash "$COMPOSE_FILE" "$service")" || return 1
-    fi
+    case "$config_check" in
+      any-config|stopped-stale-config) ;;
+      *) expected_hash="$(podman_expected_config_hash "$COMPOSE_FILE" "$service")" || return 1 ;;
+    esac
     if [ "$PODMAN_RUNTIME_MODE" = "native" ]; then
       # Il provider installato (>= 1.1.0) e i due file passati a `up`.
       expected_version="$(podman_compose_version_number "$(podman_compose_binary)")" || return 1
@@ -2386,14 +2409,23 @@ read_only_service_id() {
       case "$details" in
         "$service|false|"*) stopped=1; details="$service|true|${details#"$service|false|"}" ;;
       esac
-      [ "$stopped" -eq 1 ] || [ -z "$found" ] || return 1
-      if [ "$config_check" = any-config ]; then
-        expected_hash="${details##*|}"
-        printf '%s' "$expected_hash" | grep -Eq '^[0-9a-f]{64}$' || return 1
-      fi
+      # `stopped-stale-config` (only for `up`): exactly one stopped container of ours whose labels
+      # are all right and only the hash is another one, made by the compose of an earlier version.
+      if [ "$stopped" -eq 1 ] && [ "$config_check" = exact ]; then :; else [ -z "$found" ] || return 1; fi
+      [ "$config_check" != stopped-stale-config ] || [ "$stopped" -eq 1 ] || return 1
+      case "$config_check" in
+        any-config|stopped-stale-config)
+          expected_hash="${details##*|}"
+          printf '%s' "$expected_hash" | grep -Eq '^[0-9a-f]{64}$' || return 1
+          ;;
+      esac
       [ "$details" = "$service|true|$expected_project|$expected_project|$service|$service|1|$RUNTIME_DIR|$expected_files|$expected_version|$expected_unit|$expected_hash" ] \
         || return 1
-      [ "$stopped" -eq 0 ] || continue
+      # A stopped container is not a running one, except for the checks that stop or recreate it.
+      case "$config_check" in
+        any-config|stopped-stale-config) ;;
+        *) [ "$stopped" -eq 0 ] || continue ;;
+      esac
     else
       [ -z "$found" ] || return 1
       # Conserva il contratto Docker/VPS preesistente: l'ownership stretta
