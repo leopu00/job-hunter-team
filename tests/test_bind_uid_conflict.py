@@ -151,3 +151,52 @@ def test_the_wrapper_stops_up_when_1001_is_another_account_and_changes_nothing(t
     assert "bind_uid_conflict" in result.stderr and "'alice'" in result.stderr
     assert "done" not in result.stdout
     assert chowns == ""
+
+
+# ── install.sh align_bind_ownership: the Mac does not chown (27/10) ─────────
+
+
+def run_align_bind_ownership(tmp_path, *, os_name: str, runtime: str, chown_fails: bool):
+    """The step that follows host-setup. chown logs, and fails like a normal user's does (EPERM)."""
+    bin_dir, log = stubs(tmp_path, owner_of_1001=None, self_uid="501")
+    if chown_fails:
+        (bin_dir / "chown").write_text(f'#!/bin/sh\necho "$@" >> {log}\nexit 1\n')
+    home = tmp_path / "home"
+    home.mkdir()
+    script = (
+        f'JHT_INSTALLER_SOURCE_ONLY=1 . "{INSTALL}"\n'
+        f'OS="{os_name}"; RUNTIME_CHOICE="{runtime}"\n'
+        "align_bind_ownership\n"
+    )
+    result = subprocess.run(["bash", "-c", script], env=env_for(bin_dir, home), capture_output=True, text=True, timeout=30)
+    return result, (log.read_text() if log.exists() else ""), home
+
+
+@pytest.mark.parametrize("runtime", ["podman", "docker", ""])
+def test_the_mac_neither_chowns_nor_warns(tmp_path, runtime):
+    result, chowns, home = run_align_bind_ownership(tmp_path, os_name="macos", runtime=runtime, chown_fails=True)
+    assert result.returncode == 0, result.stderr
+    assert chowns == ""
+    assert "failed" not in (result.stdout + result.stderr)
+    assert "stays with this user" in result.stdout + result.stderr
+    assert (home / "Documents" / "Job Hunter Team").is_dir()
+
+
+@pytest.mark.parametrize("os_name,runtime", [("linux", "docker"), ("linux", ""), ("wsl", "docker")])
+def test_linux_with_docker_still_aligns_to_1001(tmp_path, os_name, runtime):
+    result, chowns, _ = run_align_bind_ownership(tmp_path, os_name=os_name, runtime=runtime, chown_fails=False)
+    assert result.returncode == 0, result.stderr
+    assert chowns.count("-R 1001:1001") == 2
+    assert "1001:1001 (container UID)" in result.stdout + result.stderr
+
+
+def test_linux_with_docker_still_warns_when_the_chown_fails(tmp_path):
+    result, _, _ = run_align_bind_ownership(tmp_path, os_name="linux", runtime="docker", chown_fails=True)
+    out = result.stdout + result.stderr
+    assert "chown" in out and "failed" in out
+
+
+def test_native_podman_still_leaves_the_owner_alone(tmp_path):
+    result, chowns, _ = run_align_bind_ownership(tmp_path, os_name="linux", runtime="podman", chown_fails=True)
+    assert chowns == ""
+    assert "rootless Podman" in result.stdout + result.stderr

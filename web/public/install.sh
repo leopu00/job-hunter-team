@@ -2028,7 +2028,8 @@ save_pairing_token() {
   # The file is deleted by `jht cloud pair` right after consumption
   # (cli/src/commands/cloud.js handlePair), so the window is short either way.
   chmod 600 "$token_file" 2>/dev/null || true
-  podman_native_mode || chown 1001:1001 "$token_file" 2>/dev/null || true
+  # (Nor on the Mac: see align_bind_ownership.)
+  podman_native_mode || [ "${OS:-}" = "macos" ] || chown 1001:1001 "$token_file" 2>/dev/null || true
   ok "Pairing token saved to $token_file (mode 0600)"
 }
 
@@ -2059,6 +2060,38 @@ refuse_foreign_bind_uid() {
   podman_native_mode && return 0
   name="$(bind_uid_conflict 1001)" || return 0
   fail "uid 1001 on this computer is the account '$name'. The Job Hunter Team container runs as uid 1001, so that account would own ~/.jht (your data and the portal credentials). Nothing was changed. Run JHT from the account '$name', or give '$name' another uid, then try again."
+}
+
+# Align the ownership of ~/.jht and ~/Documents/Job Hunter Team with the
+# `jht` container UID (1001, see Dockerfile `useradd jht`). Without this,
+# the container starts as UID 1001 and fails at two distinct points:
+#   - pid1 → cloud pair → EACCES on /jht_home/cloud.json
+#   - jht team start → mkdir /jht_user/output → Permission denied
+# Both dirs are bind-mounted, so the host must be aligned.
+align_bind_ownership() {
+  local jht_home="$HOME/.jht"
+  local jht_user_dir="$HOME/Documents/Job Hunter Team"
+  if podman_native_mode; then
+    # Rootless Podman maps the host user onto the container's uid (keep-id):
+    # the user stays the owner, and a chown to 1001 would take it away.
+    mkdir -p "$jht_user_dir" 2>/dev/null
+    ok "Ownership of $jht_home and $jht_user_dir stays with this user (rootless Podman)"
+  elif [ "${OS:-}" = "macos" ]; then
+    # The Mac shares the two folders with the container's VM, which shows
+    # them as this user's and lets the container write: nothing needs
+    # aligning. A chown to 1001 cannot work for a normal user (EPERM, on every
+    # Mac) and, under sudo, would hand ~/.jht to a uid that is nobody here.
+    mkdir -p "$jht_user_dir" 2>/dev/null
+    ok "Ownership of $jht_home and $jht_user_dir stays with this user (macOS)"
+  elif command -v chown >/dev/null 2>&1; then
+    chown -R 1001:1001 "$jht_home" 2>/dev/null && \
+      ok "Ownership $jht_home → 1001:1001 (container UID)" || \
+      warn "chown $jht_home failed — pairing may require a manual fix"
+    mkdir -p "$jht_user_dir" 2>/dev/null
+    chown -R 1001:1001 "$jht_user_dir" 2>/dev/null && \
+      ok "Ownership $jht_user_dir → 1001:1001 (container UID)" || \
+      warn "chown $jht_user_dir failed — team start may fail on mkdir output/"
+  fi
 }
 
 run_host_setup() {
@@ -2096,28 +2129,7 @@ run_host_setup() {
       warn "host-setup exited with an error — continuing"
     fi
   fi
-  # Align the ownership of ~/.jht and ~/Documents/Job Hunter Team with the
-  # `jht` container UID (1001, see Dockerfile `useradd jht`). Without this,
-  # the container starts as UID 1001 and fails at two distinct points:
-  #   - pid1 → cloud pair → EACCES on /jht_home/cloud.json
-  #   - jht team start → mkdir /jht_user/output → Permission denied
-  # Both dirs are bind-mounted, so the host must be aligned.
-  local jht_home="$HOME/.jht"
-  local jht_user_dir="$HOME/Documents/Job Hunter Team"
-  if podman_native_mode; then
-    # Rootless Podman maps the host user onto the container's uid (keep-id):
-    # the user stays the owner, and a chown to 1001 would take it away.
-    mkdir -p "$jht_user_dir" 2>/dev/null
-    ok "Ownership of $jht_home and $jht_user_dir stays with this user (rootless Podman)"
-  elif command -v chown >/dev/null 2>&1; then
-    chown -R 1001:1001 "$jht_home" 2>/dev/null && \
-      ok "Ownership $jht_home → 1001:1001 (container UID)" || \
-      warn "chown $jht_home failed — pairing may require a manual fix"
-    mkdir -p "$jht_user_dir" 2>/dev/null
-    chown -R 1001:1001 "$jht_user_dir" 2>/dev/null && \
-      ok "Ownership $jht_user_dir → 1001:1001 (container UID)" || \
-      warn "chown $jht_user_dir failed — team start may fail on mkdir output/"
-  fi
+  align_bind_ownership
 }
 
 maybe_onboard() {
