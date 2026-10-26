@@ -74,6 +74,7 @@ vi.mock("../lib/onboarding", async (importOriginal) => ({
   resetOnboardingMarker: vi.fn(),
 }));
 vi.mock("../lib/onboarding-runtime", () => ({
+  adoptUnassignedLocalData: vi.fn(),
   closeOnboardingProviderLogin: vi.fn(),
   confirmOnboardingSshHostKey: vi.fn(),
   openOnboardingAssistant: vi.fn(),
@@ -84,6 +85,7 @@ vi.mock("../lib/onboarding-runtime", () => ({
   recreateOnboardingPodmanMachine: vi.fn(),
   resumeOnboardingSnapshot: vi.fn(),
   resumeOnboardingTeamStart: vi.fn(),
+  setAsideUnassignedLocalData: vi.fn(),
   wakeRuntime: vi.fn(),
   sendOnboardingProviderInput: vi.fn(),
   startOnboardingProviderLogin: vi.fn(),

@@ -1014,7 +1014,9 @@ podman_import_broker_state() {
     --label "io.podman.compose.project=$project" \
     --label "com.docker.compose.project=$project" \
     "$PODMAN_STATE_VOLUME" >/dev/null || return 1
-  "$podman_bin" --connection "$PODMAN_MACHINE_NAME" run --rm \
+  # -i: `podman run` forwards its stdin to the container only with it; without it the tar inside
+  # reads nothing («This does not look like a tar archive») and the saved state is not restored.
+  "$podman_bin" --connection "$PODMAN_MACHINE_NAME" run --rm -i \
     --userns keep-id:uid=1001,gid=1001 --user 1002:1002 \
     --network none --read-only --security-opt no-new-privileges --cap-drop ALL \
     --volume "$PODMAN_STATE_VOLUME:/jht_broker_state" \
@@ -1157,6 +1159,17 @@ container_up() {
 # `read_only_container_id` distingue un progetto assente (3) da un risultato
 # ambiguo/non posseduto (1). Solo il primo puo' essere creato da un'azione che
 # ha gia' autorizzato esplicitamente una mutazione.
+# Any container of the project that runs (the broker, Telegram): `compose down` would stop it too.
+# A list that cannot be read counts as running.
+project_has_running_container() {
+  local ids id
+  ids="$(compose ps -q 2>/dev/null)" || return 0
+  for id in $ids; do
+    [ "$(docker inspect --type container "$id" --format '{{.State.Running}}' 2>/dev/null)" = false ] || return 0
+  done
+  return 1
+}
+
 container_mutation_preflight() {
   local status=0
   if read_only_container_id >/dev/null; then
@@ -1165,6 +1178,17 @@ container_mutation_preflight() {
     status=$?
   fi
   [ "$status" -eq 3 ] && return 0
+  # The containers of an earlier version (the compose changed, so its config hash did) that are
+  # STOPPED: nothing runs to interrupt. They are ours (project, service, unit, files, version all
+  # as expected, only the hash differs) and are recreated with the new configuration; `compose down`
+  # removes containers and the network, never the volumes: the team's data stays.
+  if [ "$status" -eq 1 ] && [ "$CONTAINER_RUNTIME" = podman ] \
+      && read_only_service_id "$CONTAINER_SERVICE" stopped-stale-config >/dev/null 2>&1 \
+      && ! project_has_running_container; then
+    warn "config_changed_stopped: i container del team, fermi, sono della versione di prima: li ricreo con la configurazione nuova (i volumi con i dati restano)."
+    compose down || { err "Non riesco a rimuovere i container fermi della versione di prima: «jht down», poi «jht up»."; return 1; }
+    return 0
+  fi
   err "Container JHT esistente non attestabile; operazione interrotta."
   stale_config_hint
   return 1
@@ -2304,13 +2328,21 @@ podman_expected_config_hash() {
           --podman-path "$podman_bin" -f "$file" -f "$override" up -d --force-recreate "$service"
     } 2>&1)" || return 1
   fi
-  # La config-hash e' una per tutto il progetto (podman-compose la calcola dal compose
-  # unito): il dry-run di un servizio la stampa per lui e per ogni sua dipendenza
-  # (jht -> jht-telegram), cioe' piu' righe uguali. Due valori DIVERSI non sono una
-  # configurazione: si rifiuta.
-  hashes="$(printf '%s\n' "$resolved" \
-    | sed -n 's/.*io\.podman\.compose\.config-hash=\([0-9a-f]\{64\}\)\([[:space:]].*\)\{0,1\}$/\1/p' \
-    | LC_ALL=C sort -u)"
+  # podman-compose 1.6.0 calcola la config-hash PER SERVIZIO: il dry-run di `jht`
+  # stampa prima il create della sua dipendenza (jht-telegram, con la SUA hash) e poi
+  # il create di `jht`. Conta solo la hash del create del servizio chiesto (il suo
+  # container_name e' il nome del servizio): e' quella che l'etichetta del container
+  # porta. Due valori diversi per lo stesso servizio non sono una configurazione: si
+  # rifiuta, come l'assenza del suo create.
+  hashes="$(printf '%s\n' "$resolved" | awk -v name="$service" '
+    index($0, " create --name=" name " ") {
+      n = split($0, parts, "io.podman.compose.config-hash=")
+      for (i = 2; i <= n; i++) {
+        value = parts[i]
+        sub(/[^0-9a-f].*$/, "", value)
+        if (length(value) == 64) print value
+      }
+    }' | LC_ALL=C sort -u)"
   unset resolved
   case "$hashes" in ''|*$'\n'*) return 1 ;; esac
   hash="$hashes"
@@ -2329,7 +2361,7 @@ read_only_service_id() {
   local service="$1" config_check="${2:-exact}"
   runtime_bundle_trusted || return 1
   docker_reachable || return 1
-  local ids container_id details expected_hash expected_project expected_unit found="" seen_service
+  local ids container_id details expected_hash expected_project expected_unit found="" seen_service stopped
   if [ "$CONTAINER_RUNTIME" = podman ]; then
     # podman-compose 1.6.0 non accetta un operando service su `ps`: elenca
     # tutti i container del progetto, e il servizio lo dice l'inspect
@@ -2347,9 +2379,10 @@ read_only_service_id() {
   if [ "$CONTAINER_RUNTIME" = podman ]; then
     expected_project="$(compose_project_name)" || return 1
     expected_unit="$(printf 'podman-compose\100%s.service' "$expected_project")"
-    if [ "$config_check" != any-config ]; then
-      expected_hash="$(podman_expected_config_hash "$COMPOSE_FILE" "$service")" || return 1
-    fi
+    case "$config_check" in
+      any-config|stopped-stale-config) ;;
+      *) expected_hash="$(podman_expected_config_hash "$COMPOSE_FILE" "$service")" || return 1 ;;
+    esac
     if [ "$PODMAN_RUNTIME_MODE" = "native" ]; then
       # Il provider installato (>= 1.1.0) e i due file passati a `up`.
       expected_version="$(podman_compose_version_number "$(podman_compose_binary)")" || return 1
@@ -2368,13 +2401,31 @@ read_only_service_id() {
         case " $COMPOSE_SERVICES " in *" $seen_service "*) continue ;; esac
         return 1
       fi
-      [ -z "$found" ] || return 1
-      if [ "$config_check" = any-config ]; then
-        expected_hash="${details##*|}"
-        printf '%s' "$expected_hash" | grep -Eq '^[0-9a-f]{64}$' || return 1
-      fi
+      # podman-compose 1.6.0's `ps` lists the project's STOPPED containers too, as `podman ps -a`
+      # does (Docker Compose's lists the running ones): after the machine stopped (a restart of
+      # the Mac, an app update) the team's containers are there, Exited. They are attested by
+      # every label like a running one, and then they are simply not running: not a refusal.
+      stopped=0
+      case "$details" in
+        "$service|false|"*) stopped=1; details="$service|true|${details#"$service|false|"}" ;;
+      esac
+      # `stopped-stale-config` (only for `up`): exactly one stopped container of ours whose labels
+      # are all right and only the hash is another one, made by the compose of an earlier version.
+      if [ "$stopped" -eq 1 ] && [ "$config_check" = exact ]; then :; else [ -z "$found" ] || return 1; fi
+      [ "$config_check" != stopped-stale-config ] || [ "$stopped" -eq 1 ] || return 1
+      case "$config_check" in
+        any-config|stopped-stale-config)
+          expected_hash="${details##*|}"
+          printf '%s' "$expected_hash" | grep -Eq '^[0-9a-f]{64}$' || return 1
+          ;;
+      esac
       [ "$details" = "$service|true|$expected_project|$expected_project|$service|$service|1|$RUNTIME_DIR|$expected_files|$expected_version|$expected_unit|$expected_hash" ] \
         || return 1
+      # A stopped container is not a running one, except for the checks that stop or recreate it.
+      case "$config_check" in
+        any-config|stopped-stale-config) ;;
+        *) [ "$stopped" -eq 0 ] || continue ;;
+      esac
     else
       [ -z "$found" ] || return 1
       # Conserva il contratto Docker/VPS preesistente: l'ownership stretta
@@ -4882,11 +4933,17 @@ case "$SUB" in
       kimi|moonshot)
         docker exec $EXEC_FLAGS "$ATTESTED_CONTAINER_ID" kimi --yolo
         ;;
-      claude|anthropic|'')
+      claude|anthropic)
         docker exec $EXEC_FLAGS "$ATTESTED_CONTAINER_ID" claude --dangerously-skip-permissions
         ;;
+      '')
+        # Nessun provider scelto: nessuna CLI "di default", si sceglie prima.
+        err "nessun provider attivo: scegline uno con 'jht providers use openai'"
+        exit 1
+        ;;
       *)
-        die "provider attivo non riconosciuto: $provider"
+        err "provider attivo non riconosciuto: $provider"
+        exit 1
         ;;
     esac
     ;;

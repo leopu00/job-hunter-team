@@ -33,18 +33,24 @@ for f in "$APT_DIR"/sources.list "$APT_DIR"/sources.list.d/* "$APT_DIR"/apt-mirr
 done
 [ -n "$files" ] || { echo "apt mirror: no sources found in $APT_DIR, left as they are"; exit 0; }
 
-# the Ubuntu mirror the sources use now (the host, without a trailing slash)
+# The Ubuntu archive the sources use now, as written there (scheme and host, no trailing slash).  Only an
+# archive.ubuntu.com host counts (azure.archive.ubuntu.com, archive.ubuntu.com, <cc>.archive.ubuntu.com): the
+# runner also has other repositories whose path starts with /ubuntu (Microsoft's, PPAs), and those are not ours.
 # shellcheck disable=SC2086
-current=$(cat $files 2>/dev/null | grep -oE 'https?://[A-Za-z0-9.-]+/ubuntu' | head -n 1)
-[ -n "$current" ] || { echo "apt mirror: the sources name no Ubuntu mirror, left as they are"; exit 0; }
+current=$(cat $files 2>/dev/null | grep -oE 'https?://([A-Za-z0-9-]+\.)?archive\.ubuntu\.com/ubuntu' | head -n 1)
+[ -n "$current" ] || { echo "apt mirror: the sources name no Ubuntu archive mirror, left as they are"; exit 0; }
 
 speed() {  # bytes per second of the probe from $1, 0 when it cannot be fetched
   bps=$(curl -fsSL --connect-timeout 3 --max-time "$SECONDS_MAX" -o /dev/null -w '%{speed_download}' "$1/$PROBE" 2>/dev/null) || bps=0
   printf '%s' "${bps%%.*}"
 }
 
-chosen=""
-for mirror in $CANDIDATES; do
+# The mirror in use is measured first, exactly as apt reaches it (azure is served over http: an https probe of it
+# says nothing about the runner), then the candidates; a host already measured is not asked again.
+chosen=""; seen=""
+for mirror in "$current" $CANDIDATES; do
+  case " $seen " in *" ${mirror#*://} "*) continue;; esac
+  seen="$seen ${mirror#*://}"
   bps=$(speed "$mirror")
   [ -n "$bps" ] || bps=0
   echo "apt mirror: $mirror $((bps / 1000)) kB/s"
@@ -60,6 +66,20 @@ if [ "${chosen#*://}" = "${current#*://}" ]; then
   echo "apt mirror: keeping $current"
   exit 0
 fi
+# The new mirror has to serve the indexes `apt-get update` reads for this release (the release, -updates and
+# -backports), or nothing changes: a source apt cannot read is an update that exits 100 in the next step.
+# Without a release name there is nothing to check against, so nothing changes either.
+codename="${APT_RELEASE_CODENAME:-$(sed -n 's/^VERSION_CODENAME=//p' /etc/os-release 2>/dev/null | head -n 1)}"
+if [ -z "$codename" ]; then
+  echo "apt mirror: the release name is unknown, sources left as they are ($current)"
+  exit 0
+fi
+for suite in "$codename" "$codename-updates" "$codename-backports"; do
+  if ! curl -fsSL --connect-timeout 3 --max-time 10 -o /dev/null "$chosen/dists/$suite/InRelease" 2>/dev/null; then
+    echo "apt mirror: $chosen has no index for $suite, sources left as they are ($current)"
+    exit 0
+  fi
+done
 pattern=$(printf '%s' "$current" | sed 's/[][\.*^$#]/\\&/g')   # the host is text, not a regular expression
 for f in $files; do   # in place without `sed -i`, which differs between GNU and BSD
   sed "s#${pattern}#${chosen}#g" "$f" > "$f.new" && cat "$f.new" > "$f"
