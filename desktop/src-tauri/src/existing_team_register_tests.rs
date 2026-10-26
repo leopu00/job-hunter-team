@@ -2880,3 +2880,62 @@ fn t48_the_code_that_gives_and_takes_the_permission_is_where_it_must_be() {
     assert!(unlink.find("revoke_full_link()").unwrap() < unlink.find("clear_link_at(").unwrap());
     assert!(include_str!("lib.rs").contains("onboarding::existing_team_write_access_off"));
 }
+
+#[test]
+fn t49_leaving_the_account_takes_the_record_away_so_coming_back_is_read_only() {
+    let _serial = serial();
+    let sandbox = Sandbox::new();
+    let (world, _) = connected_once(&sandbox);
+    let target = confirmed_in_full(&sandbox, runtime::unix_now());
+    assert!(full_link_file(&sandbox).exists());
+    // the person signs out (or another account takes over); the saved team itself stays
+    crate::account_scope::forget_write_access_at(&sandbox.root, &sandbox.scope);
+    assert!(!full_link_file(&sandbox).exists());
+    assert!(sandbox.candidate().exists() && sandbox.selection().exists(), "only the permission goes");
+    // and signs in again within the 30 days: a new run of the app, the same team, the reopening passes: read only
+    let readiness = restart_and_reopen(&sandbox, &world);
+    assert!(!readiness.full_link && !runtime::full_link_granted(&sandbox.scope, &target));
+    assert_eq!(readiness.full_link_outcome, Some("not_restored"));
+    // a record that cannot be removed is neutralized on the way out (best effort, never an error that blocks leaving)
+    if unsafe { libc::geteuid() } != 0 {
+        runtime::remember_full_link_at(&sandbox.root, &sandbox.scope, &target, runtime::unix_now()).unwrap();
+        set_mode(&sandbox.account(), 0o500);
+        crate::account_scope::forget_write_access_at(&sandbox.root, &sandbox.scope);
+        set_mode(&sandbox.account(), 0o700);
+        assert!(!restart_and_reopen(&sandbox, &world).full_link, "an unremovable record is overwritten, never read again");
+    }
+    // another account's record is not touched
+    let (other, dir) = sandbox.other_scope();
+    fs::write(dir.join("existing-team-runtime-full-link.json"), b"x").unwrap();
+    crate::account_scope::forget_write_access_at(&sandbox.root, &sandbox.scope);
+    assert!(dir.join("existing-team-runtime-full-link.json").exists());
+    let _ = other;
+    runtime::revoke_full_link();
+}
+
+#[test]
+fn t50_the_sign_out_and_the_switch_of_account_call_it_and_leftover_temporary_files_are_swept() {
+    let source = include_str!("account_scope.rs").split("#[cfg(test)]").next().unwrap();
+    let reset = source.split("pub(crate) fn runtime_account_scope_reset(").nth(1).unwrap().split("\n}\n").next().unwrap();
+    assert!(reset.find("active.take()").unwrap() < reset.find("direct_chat::teardown").unwrap());
+    assert!(reset.find("direct_chat::teardown").unwrap() < reset.find("forget_write_access_of(").unwrap(), "after the handles are closed");
+    let switch = source.split("fn activate_scope(").nth(1).unwrap().split("\n}\n").next().unwrap();
+    assert!(switch.find("active.take()").unwrap() < switch.find("forget_write_access_of(").unwrap());
+    assert!(switch.find("forget_write_access_of(").unwrap() < switch.find("*active = Some(next)").unwrap());
+
+    let _serial = serial();
+    let sandbox = Sandbox::new();
+    let (_world, _) = connected_once(&sandbox);
+    let target = runtime::selected_at(&sandbox.root, &sandbox.scope, &host()).unwrap().unwrap();
+    let leftover = sandbox.account().join("existing-team-runtime-full-link.tmp-1-2");
+    let other_leftover = sandbox.account().join("existing-team-runtime-candidate.tmp-1-2");
+    fs::write(&leftover, b"half").unwrap();
+    fs::write(&other_leftover, b"not ours").unwrap();
+    runtime::remember_full_link_at(&sandbox.root, &sandbox.scope, &target, runtime::unix_now()).unwrap();
+    assert!(!leftover.exists(), "a write sweeps what an interrupted one left");
+    assert!(other_leftover.exists() && sandbox.candidate().exists() && sandbox.selection().exists(), "and only its own");
+    fs::write(&leftover, b"half").unwrap();
+    runtime::restore_full_link_at(&sandbox.root, &sandbox.scope, &target, runtime::unix_now());
+    assert!(!leftover.exists(), "so does the start-up reopening");
+    runtime::revoke_full_link();
+}

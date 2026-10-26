@@ -470,6 +470,21 @@ fn write_owner_marker(marker: &PathBuf, scope: &AccountScope) -> Result<(), &'st
     }
 }
 
+/// Leaving an account (signing out, or switching to another one) takes its permission to write away for
+/// good: the record of the full connection goes with the session in memory, so coming back within the
+/// 30 days it lasts is the read-only view until the person confirms again. Best effort: leaving must not
+/// fail because a file could not be removed (a file that cannot be removed is overwritten first, see
+/// `existing_team_runtime::forget_full_link_at`).
+pub(crate) fn forget_write_access_at(root: &Path, scope: &AccountScope) {
+    let _ = crate::existing_team_runtime::forget_full_link_at(root, scope);
+}
+
+fn forget_write_access_of(app: &tauri::AppHandle, scope: Option<&AccountScope>) {
+    if let (Some(scope), Ok(root)) = (scope, crate::existing_team_runtime::root(app)) {
+        forget_write_access_at(&root, scope);
+    }
+}
+
 fn activate_scope(
     app: &tauri::AppHandle,
     scopes: &AccountScopeState,
@@ -486,11 +501,12 @@ fn activate_scope(
     }
     // None is installed before cleanup: even a partial teardown cannot expose
     // the previous account to a new command.
-    *active = None;
+    let previous = active.take();
     direct_chat::teardown(chat);
     onboarding::teardown(onboarding);
     crate::live_screen::teardown(app);
     crate::broker_view::teardown(app);
+    forget_write_access_of(app, previous.as_ref());
     *active = Some(next);
     Ok(())
 }
@@ -676,11 +692,13 @@ pub(crate) fn runtime_account_scope_reset(
         .inner
         .write()
         .map_err(|_| failure("account_scope_state_failed"))?;
-    *active = None;
+    let previous = active.take();
     direct_chat::teardown(&chat);
     onboarding::teardown(&onboarding);
     crate::live_screen::teardown(&app);
     crate::broker_view::teardown(&app);
+    // Signing out: the permission to write does not wait for the person at the next sign-in.
+    forget_write_access_of(&app, previous.as_ref());
     Ok(())
 }
 

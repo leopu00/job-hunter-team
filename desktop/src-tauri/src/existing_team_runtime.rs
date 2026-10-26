@@ -2268,6 +2268,18 @@ pub(crate) fn unix_now() -> u64 {
     SystemTime::now().duration_since(UNIX_EPOCH).map(|elapsed| elapsed.as_secs()).unwrap_or(0)
 }
 
+/// Temporary files of an interrupted write of the record (the process died between creating one and the
+/// rename): harmless, swept at the next write and at every start-up reopening. Only names this module gives them.
+fn sweep_full_link_leftovers(root: &Path, scope: &AccountScope) {
+    let Ok(entries) = fs::read_dir(account_dir(root, scope)) else { return };
+    for entry in entries.flatten() {
+        let name = entry.file_name();
+        if name.to_string_lossy().starts_with("existing-team-runtime-full-link.tmp-") {
+            let _ = fs::remove_file(entry.path());
+        }
+    }
+}
+
 /// Writes the record of the full connection that was just granted: a private temporary file and a
 /// rename, so a reader sees the whole record or none. Where mode 0600 means nothing (not Unix) there
 /// is no record and the permission stays what it always was, for this run of the app only.
@@ -2279,6 +2291,7 @@ pub(crate) fn remember_full_link_at(
     now: u64,
 ) -> Result<(), &'static str> {
     let unavailable = "existing_team_runtime_unavailable";
+    sweep_full_link_leftovers(root, scope);
     let parent = account_dir(root, scope);
     let parent_meta = fs::symlink_metadata(&parent).map_err(|_| unavailable)?;
     {
@@ -2413,6 +2426,7 @@ pub(crate) fn restore_full_link_at(
     target: &ActivatedTarget,
     now: u64,
 ) -> FullLinkRestore {
+    sweep_full_link_leftovers(root, scope);
     let file = path(root, scope, FULL_LINK_FILE);
     let mark = match read_full_link_mark(&file) {
         Ok(None) => return FullLinkRestore::NotRestored,
