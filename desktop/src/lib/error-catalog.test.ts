@@ -40,6 +40,11 @@ const NOT_ERRORS: Record<string, string> = {
   public_page_unknown: "reply of open_public_page: the page only reads ok and says its own sentence",
   public_page_window_refused: "reply of open_public_page: the page only reads ok and says its own sentence",
   tag_name: "field of the public release list read in app_update.rs, not an error",
+  // What the start-up reopening did with the record of the full connection, for the runtime log only
+  // (runtime_log.rs record_full_link; "restored" is the fourth word): the person sees the fixed row, not these.
+  discarded: "closed word of the runtime log for the record of the full connection",
+  expired: "closed word of the runtime log for the record of the full connection",
+  not_restored: "closed word of the runtime log for the record of the full connection",
   // The Windows autostart's nonfatal notice id in windows_runtime.rs; it is
   // interpreted there, never shown through the error catalog.
   autostart_inactive: "id of the nonfatal Windows autostart notice",

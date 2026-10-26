@@ -143,11 +143,22 @@ impl RuntimeLog {
                 | "existing_team_ambiguous" | "existing_team_not_found" | "existing_team_container_not_found"
                 | "existing_team_choice_gone" | "invalid_container_choice"
                 | "existing_team_discovery_timeout" | "existing_team_receipt_required"
-                | "existing_team_register_not_confirmed" => code,
+                | "existing_team_register_not_confirmed" | "existing_team_full_link_not_removed" => code,
                 _ => "io_error_other",
             }.to_owned(),
         };
         let entry = format!("=== {} existing_team.{phase}: {ended}\n", utc(SystemTime::now()));
+        let _ = append(&self.path, &entry, LOG_MAX_BYTES);
+    }
+
+    /// What the reopening at start-up did with the record of the full connection: one of four words,
+    /// never the key, the candidate or the account.
+    pub(crate) fn record_full_link(&self, outcome: &str) {
+        let outcome = match outcome {
+            "restored" | "not_restored" | "expired" | "discarded" => outcome,
+            _ => "not_restored",
+        };
+        let entry = format!("=== {} existing_team.full_link={outcome}\n", utc(SystemTime::now()));
         let _ = append(&self.path, &entry, LOG_MAX_BYTES);
     }
 

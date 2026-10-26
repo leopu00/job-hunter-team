@@ -1123,6 +1123,13 @@ const COPY_BY_ENGLISH_TEXT: Readonly<Record<string, ErrorTranslations>> = {
     hu: ["A mentett csapat már nem egyezik a kiválasztott kapcsolattal.", "Ellenőrizd a VPS-t és a csapat azonosítóját, majd próbáld újra."],
     pt: ["A equipa guardada já não corresponde à ligação selecionada.", "Verifica a VPS e o identificador da equipa e tenta novamente."],
   },
+  "The saved write access could not be removed from this computer.": {
+    de: ["Der gespeicherte Schreibzugriff konnte auf diesem Computer nicht entfernt werden.", "Diese Sitzung bleibt auf Nur Lesen; beende die App und entferne die Zugriffsdatei von Hand, oder trenne das Team in den Einstellungen und verbinde es neu."],
+    es: ["No se pudo quitar de este ordenador el acceso de escritura guardado.", "Esta sesión sigue en solo lectura; cierra la aplicación y quita a mano el archivo del acceso, o desvincula el equipo en Ajustes y vuelve a conectarlo."],
+    fr: ["L’accès en écriture enregistré n’a pas pu être retiré de cet ordinateur.", "Cette session reste en lecture seule ; ferme l’application et supprime à la main le fichier de l’accès, ou déconnecte l’équipe dans les Paramètres puis reconnecte-la."],
+    hu: ["A mentett írási hozzáférést nem sikerült eltávolítani erről a számítógépről.", "Ez a munkamenet csak olvasható marad; zárd be az alkalmazást és told el kézzel a hozzáférés fájlját, vagy válaszd le a csapatot a Beállításokban, majd csatlakoztasd újra."],
+    pt: ["Não foi possível remover deste computador o acesso de escrita guardado.", "Esta sessão fica só de leitura; fecha a aplicação e remove à mão o ficheiro do acesso, ou desliga a equipa nas Definições e liga-a de novo."],
+  },
   "The saved selection for this team is not valid.": {
     de: ["Die gespeicherte Auswahl für dieses Team ist ungültig.", "Bitte die Person, die die VPS verwaltet, die Verbindung zu prüfen, und versuche es erneut."],
     es: ["La selección guardada para este equipo no es válida.", "Pide a quien gestiona el VPS que revise la conexión y vuelve a intentarlo."],
@@ -1824,6 +1831,7 @@ export const ERROR_CATALOG_LOCALES: Readonly<Record<string, ErrorTranslations>> 
   existing_team_runtime_changed: translated("The team on the VPS is off or is no longer the version that was connected."),
   vps_reconnecting: translated("The link to the VPS was lost: I try again by myself at {time}."),
   existing_team_runtime_target_changed: translated("The saved team no longer matches the selected connection."),
+  existing_team_full_link_not_removed: translated("The saved write access could not be removed from this computer."),
   existing_team_runtime_selection_invalid: translated("The saved selection for this team is not valid."),
   existing_team_runtime_unavailable: translated("The app cannot read the team's saved data on this computer."),
   existing_team_saved_incomplete: translated("The saved connection for the existing team is incomplete."),
