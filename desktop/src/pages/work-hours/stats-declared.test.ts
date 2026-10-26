@@ -25,17 +25,18 @@ describe("what the app says about the working-hours statistics, outside their pa
     }
   });
 
-  it("the page says they are never sent out, and the archive is only read by the statistics reader and the backup", () => {
+  it("the page says JHT sends them to no service, and the archive is only read by the statistics reader and the backup", () => {
     const never: Record<(typeof LOCALES)[number], RegExp> = {
-      it: /mai inviate fuori/, en: /never sent out/, de: /nie nach außen/, fr: /jamais envoyées à l’extérieur/,
-      es: /Nunca se envían fuera/, pt: /Nunca são enviadas para fora/, hu: /Soha nem küldjük ki/,
+      it: /non le invia ad alcun servizio/, en: /does not send them to any service/, de: /sendet sie an keinen Dienst/,
+      fr: /ne les envoie à aucun service/, es: /no las envía a ningún servicio/, pt: /não as envia a nenhum serviço/,
+      hu: /egyetlen szolgáltatásnak sem küldi el/,
     };
     for (const locale of LOCALES) {
       expect(WORK_STATS_TEXT[locale].whereLocal, locale).toMatch(never[locale]);
       expect(WORK_STATS_TEXT[locale].whereVps, locale).toMatch(never[locale]);
     }
     // the sentence is true only while this test of the data side stands
-    const python = readFileSync(resolve(process.cwd(), "../tests/test_work_stats.py"), "utf8");
+    const python = readFileSync(resolve(import.meta.dirname, "../../../../tests/test_work_stats.py"), "utf8");
     expect(python).toContain("def test_nothing_in_the_team_reads_the_archive_outside_work_stats_and_the_backup");
     expect(python).toContain("no cloud code touches the statistics");
   });
