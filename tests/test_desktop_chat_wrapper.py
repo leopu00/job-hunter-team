@@ -632,7 +632,9 @@ def test_explicit_up_allows_zero_ids_then_verifies_the_created_container(tmp_pat
     calls = log.read_text(encoding="utf-8").splitlines()
     ps_calls = [line for line in calls if line.startswith("podman-compose ") and " ps -q" in line]
     action_calls = [line for line in calls if line.startswith("podman-compose ") and line.endswith(" up -d")]
-    assert len(ps_calls) == 2
+    # The check before `up` and the one after it, then the agent and broker
+    # lookups that hand the broker its web authorisations.
+    assert len(ps_calls) == 4
     assert len(action_calls) == 1
     assert " -p jht " in action_calls[0]
     assert not any("machine start" in line or " create" in line for line in calls)
