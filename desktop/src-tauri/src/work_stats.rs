@@ -223,6 +223,24 @@ mod tests {
         assert_eq!(night, ["aboveThreshold", "consumptionPct", "date", "found", "hoursActive", "scoreThreshold", "turnMedianSec"]);
     }
 
+    /// The contract with the page: `work_stats_response.json` holds the answers as the page receives them (the
+    /// page's own test reads the same file with pickWorkStats); `work_stats_team_response.json` holds, under the
+    /// same names, what the team answers. Serialising the second must give the first, field for field.
+    #[test]
+    fn the_answer_handed_to_the_page_is_the_fixture_the_page_accepts() {
+        let page: Value = serde_json::from_str(include_str!("../tests/fixtures/work_stats_response.json")).unwrap();
+        let team: Value = serde_json::from_str(include_str!("../tests/fixtures/work_stats_team_response.json")).unwrap();
+        let mut names: Vec<_> = page.as_object().unwrap().keys().cloned().collect();
+        names.sort();
+        assert_eq!(names, ["found_null", "no_data", "with_numbers"], "one with numbers, one with found null, one empty");
+        for name in &names {
+            let statistics = shape(&team[name]).unwrap_or_else(|_| panic!("{name}: the team's answer is refused"));
+            let served = serde_json::to_value(StatsReply { ok: true, statistics: Some(statistics), error: None }).unwrap();
+            assert_eq!(served, page[name], "{name}: what the app serves is not what the page's test reads");
+        }
+        assert!(page["found_null"]["nights"][0]["found"].is_null() && page["with_numbers"]["nights"][0]["found"].is_u64());
+    }
+
     #[test]
     fn a_field_outside_the_closed_list_is_left_out_and_never_reaches_the_page() {
         let mut reply = good();
