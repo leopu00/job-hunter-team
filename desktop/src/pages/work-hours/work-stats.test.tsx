@@ -153,7 +153,7 @@ describe("what happened", () => {
   it("says the totals count only the nights with at least one hour of work", async () => {
     serve(stats(days(3)));
     show();
-    expect(await screen.findByTestId("work-stats-legend")).toHaveTextContent("The totals count only the nights with at least 1 hour of work.");
+    expect(await screen.findByTestId("work-stats-legend")).toHaveTextContent("The totals count only the nights with at least 1 hour of work. “Found” counts only the hours in which the team was at work.");
   });
 
   it("calls old data old, and still shows it", async () => {

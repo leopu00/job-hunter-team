@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { clearWorkStats, pickWorkStats, readWorkStats } from "./work-stats-native";
 
@@ -42,7 +43,7 @@ describe("pickWorkStats", () => {
       reply({ nights: [night({ note: "x" })] }),
       reply({ nights: [{ date: "2026-10-20" }] }),
       reply({ nights: [night({ found: -1 })] }),
-      reply({ nights: [night({ hoursActive: 99 })] }),
+      reply({ nights: [night({ hoursActive: 201 })] }),
       reply({ nights: [night({ found: "4" })] }),
       reply({ nights: [night({ date: "20/10/2026" })] }),
       reply({ nights: [night({ consumptionPct: Number.POSITIVE_INFINITY })] }),
@@ -85,5 +86,33 @@ describe("the two commands", () => {
     expect(await clearWorkStats(boom)).toEqual({ ok: false, error: "stats_clear_failed" });
     expect(await clearWorkStats(async () => ({ ok: true, removed: 3 }))).toEqual({ ok: false, error: "stats_clear_failed" });
     expect(await clearWorkStats(async () => ({ ok: false, error: "stats_clear_failed" }))).toEqual({ ok: false, error: "stats_clear_failed" });
+  });
+});
+
+describe("the answer the team's native side serialises", () => {
+  // The same file the Rust test compares the serialised answer with (work_stats.rs): one reply, or several by name.
+  // Add a field on the Rust side and the fixture changes with it, and this goes red until the reader knows it.
+  const FIXTURE = "src-tauri/tests/fixtures/work_stats_response.json";
+  const fixture = JSON.parse(readFileSync(FIXTURE, "utf8")) as Record<string, unknown>;
+  const replies = Object.entries("ok" in fixture ? { reply: fixture } : fixture);
+
+  it("is taken by the reader, every reply of the fixture", () => {
+    expect(replies.length).toBeGreaterThan(0);
+    for (const [name, value] of replies) expect(pickWorkStats(value), name).toMatchObject({ ok: true });
+  });
+
+  it("has a reply with numbers and one with nothing counted, so both are proved", () => {
+    const nights = replies.flatMap(([, value]) => (value as { nights: { found: number | null }[] }).nights);
+    expect(nights.some((night) => typeof night.found === "number")).toBe(true);
+    expect(nights.some((night) => night.found === null)).toBe(true);
+  });
+
+  it("is refused as soon as it carries a field the reader does not know", () => {
+    for (const [name, value] of replies) {
+      expect(pickWorkStats({ ...(value as object), added: 1 }), name).toEqual({ ok: false, error: "stats_unavailable" });
+      const withNight = { ...(value as { nights: object[] }) };
+      withNight.nights = withNight.nights.map((night) => ({ ...night, added: 1 }));
+      if (withNight.nights.length) expect(pickWorkStats(withNight), name).toEqual({ ok: false, error: "stats_unavailable" });
+    }
   });
 });

@@ -216,7 +216,7 @@ function StatsBody({ stats, t, locale, unit, sample, now }: { stats: WorkStats; 
         </div>
       )}
       <p data-testid="work-stats-legend" className="m-0 text-[11px] text-[var(--color-muted)]">
-        {fill(t.legend, { unit: unit(2) })}
+        {fill(t.legend, { unit: unit(2) })} {t.legendFound}
       </p>
       <table data-testid="work-stats-table" className="w-full text-left text-[11px] text-[var(--color-muted)]">
         <caption className="sr-only">{t.tableLabel}</caption>
