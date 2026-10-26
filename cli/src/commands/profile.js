@@ -45,14 +45,21 @@ function reviewPending() {
 }
 
 function validateStrict(path) {
-  const r = spawnSync('python3', [VALIDATOR, path, '--strict', '--json'], { encoding: 'utf8' });
+  const r = spawnSync('python3', [VALIDATOR, path, '--strict', '--json', '--minimum'], { encoding: 'utf8' });
   if (r.error || r.status === 2) return { ok: false, unavailable: true };
   try {
     const out = JSON.parse(r.stdout);
-    return { ok: out.ok === true, errors: [...(out.errors ?? []), ...(out.warnings ?? [])] };
+    return { ok: out.ok === true, errors: [...(out.errors ?? []), ...(out.warnings ?? [])], missing: out.missing ?? [] };
   } catch {
     return { ok: false, errors: ['the validator gave no answer'] };
   }
+}
+
+// The first run opens only on a declared plan (first_run.py begin-burst does not guess a roster).
+function planDeclared() {
+  const r = spawnSync('python3', ['-I', join(dirname(VALIDATOR), 'plan_registry.py'), 'get'], { stdio: 'ignore' });
+  if (r.error) return 'unknown';
+  return r.status === 0 ? 'declared' : r.status === 1 ? 'missing' : 'unknown';
 }
 
 function tellCaptain() {
@@ -85,7 +92,7 @@ function readStdin(maxBytes) {
 const IMPORT_SAYS = {
   profile_empty: 'the profile file is empty',
   profile_too_large: `the profile file is larger than ${MAX_PROFILE_BYTES / 1024} KiB`,
-  profile_invalid: 'the profile does not pass the validation (nothing was written)',
+  profile_invalid: 'the profile is not complete enough for the team to start (nothing was written)',
   profile_review_pending: 'a profile review is waiting for your confirmation in the app: confirm or discard it first',
   profile_exists: 'a profile already exists: use --replace to replace it',
   profile_target_unsafe: 'the profile path is a link or not a regular file: nothing was written',
@@ -118,7 +125,7 @@ function importAction(file, opts) {
   try {
     result = importProfile({
       bytes, replace: opts.replace === true, profileDir: JHT_PROFILE_DIR,
-      validate: validateStrict, reviewPending, notify: tellCaptain,
+      validate: validateStrict, reviewPending, notify: tellCaptain, planDeclared,
     });
   } catch (err) {
     console.error(`Error: the profile could not be written (${err?.code || 'error'})`);
@@ -134,6 +141,11 @@ function importAction(file, opts) {
   if (result.captain === 'sent') console.log('The Capitano has been told: the team starts.');
   else if (result.captain === 'team_off') console.log('The team is not running: the Capitano will start it from this profile at its next wake. Start the team with: jht team start');
   else console.log(`The Capitano could not be told now (${result.detail ?? 'delivery failed'}): it finds the profile at its next wake.`);
+  if (result.plan === 'missing') {
+    console.log('No subscription plan is declared, and the Capitano does not open the first run without one.');
+    console.log('Declare it (list the plans with: python3 /app/shared/skills/plan_registry.py list openai):');
+    console.log('  python3 /app/shared/skills/plan_registry.py set openai:<plan>');
+  }
 }
 
 export function registerProfileCommand(program) {

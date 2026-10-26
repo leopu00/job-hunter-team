@@ -46,7 +46,7 @@ test('a valid profile is written privately, marked ready, and the Capitano is to
     },
   });
   const result = importProfile(args);
-  assert.deepEqual(result, { ok: true, profileWritten: true, readyFlag: true, captain: 'sent' });
+  assert.deepEqual(result, { ok: true, profileWritten: true, readyFlag: true, captain: 'sent', plan: 'unknown' });
   assert.equal(asked.notify, 1);
   assert.deepEqual(readFileSync(join(dir, 'candidate_profile.yml')), PROFILE);
   assert.equal(readFileSync(join(dir, 'ready.flag'), 'utf8'), '2026-10-27T01:02:03Z\n');
@@ -63,6 +63,23 @@ test('a profile that does not validate writes nothing, marks nothing, tells nobo
   assert.deepEqual(importProfile(args), { ok: false, code: 'profile_invalid', errors: ['languages[0].level: required'] });
   assert.deepEqual(left(dir), []);
   assert.equal(asked.notify, 0);
+});
+
+test('what the team still lacks is carried in the refusal', () => {
+  const { dir } = folder();
+  const { args } = deps(dir, { validate: () => ({ ok: false, errors: ['missing for the team to start: email'], missing: ['email', 'education'] }) });
+  assert.deepEqual(importProfile(args), {
+    ok: false, code: 'profile_invalid', errors: ['missing for the team to start: email'], missing: ['email', 'education'],
+  });
+  assert.deepEqual(left(dir), []);
+});
+
+test('the plan the Capitano needs is reported as it is', () => {
+  const { dir } = folder();
+  for (const plan of ['declared', 'missing', 'unknown']) {
+    const { args } = deps(dir, { planDeclared: () => plan });
+    assert.equal(importProfile({ ...args, replace: true }).plan, plan);
+  }
 });
 
 test('a validator that cannot run is not a valid profile', () => {
@@ -165,7 +182,7 @@ test('the Capitano out of reach does not undo the import, and the result says so
   assert.equal(importProfile(off.args).captain, 'team_off');
   const failed = deps(dir, { notify: () => ({ status: 'failed', detail: 'agent is busy' }) });
   assert.deepEqual(importProfile({ ...failed.args, replace: true }), {
-    ok: true, profileWritten: true, readyFlag: true, captain: 'failed', detail: 'agent is busy',
+    ok: true, profileWritten: true, readyFlag: true, captain: 'failed', plan: 'unknown', detail: 'agent is busy',
   });
   assert.deepEqual(left(dir), ['candidate_profile.yml', 'ready.flag']);
 });
@@ -191,7 +208,7 @@ test('jht profile import: from a file and from stdin, with the real validator', 
   const fromFile = folder();
   const done = run(fromFile.root, ['profile', 'import', FIXTURE, '--json']);
   assert.equal(done.status, 0, done.stderr);
-  assert.deepEqual(JSON.parse(done.stdout), { ok: true, profileWritten: true, readyFlag: true, captain: 'team_off' });
+  assert.deepEqual(JSON.parse(done.stdout), { ok: true, profileWritten: true, readyFlag: true, captain: 'team_off', plan: 'missing' });
   const profile = join(fromFile.root, 'profile', 'candidate_profile.yml');
   assert.deepEqual(readFileSync(profile), PROFILE);
   assert.match(readFileSync(join(fromFile.root, 'profile', 'ready.flag'), 'utf8'), /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ\n$/);
@@ -214,6 +231,13 @@ test('jht profile import: an invalid profile, a link and a big file are refused 
   const verdict = JSON.parse(invalid.stdout);
   assert.equal(verdict.code, 'profile_invalid');
   assert.ok(verdict.errors.length > 0);
+  assert.ok(['email', 'experience', 'education', 'languages'].every((key) => verdict.missing.includes(key)), verdict.missing.join());
+
+  // What a hand-written profile lacked in a real try: the email and the education, though everything else is there.
+  const lacking = join(root, 'lacking.yml');
+  writeFileSync(lacking, readFileSync(FIXTURE, 'utf8').replace(/  contacts:\n    email: [^\n]*\n/, '').replace(/  education:[\s\S]*$/, ''));
+  const partial = JSON.parse(run(root, ['profile', 'import', lacking, '--json']).stdout);
+  assert.deepEqual([partial.code, partial.missing], ['profile_invalid', ['email', 'education']]);
 
   const link = join(root, 'link.yml');
   symlinkSync(FIXTURE, link);
@@ -259,6 +283,44 @@ test('jht profile import tells the Capitano through the transport, and says so w
     assert.ok(!PROFILE_READY_MESSAGE.startsWith('[@'));
     assert.ok(!/['"$`\\]/.test(PROFILE_READY_MESSAGE), 'nothing the transport quoting would have to escape');
   }
+});
+
+// The chain to the first run, with the real scripts: the import leaves what the Capitano's own step
+// (first_run.py begin-burst, the first-run-burst skill) needs, and only the Capitano's step moves the phase.
+const SKILLS = resolve(import.meta.dirname, '../../shared/skills');
+function python(home, script, ...args) {
+  return spawnSync('python3', ['-I', join(SKILLS, script), ...args], {
+    encoding: 'utf8', timeout: 30000, env: { ...process.env, JHT_HOME: home, PYTHONDONTWRITEBYTECODE: '1' },
+  });
+}
+
+test('after the import the first run opens on the Capitano\'s step, and not before it', { skip: spawnSync('python3', ['-c', 'import yaml']).status !== 0 }, () => {
+  const { root } = folder();
+  writeFileSync(join(root, 'jht.config.json'), JSON.stringify({ active_provider: 'openai', providers: { openai: { plan: 'plus' } } }));
+  assert.equal(JSON.parse(python(root, 'first_run.py', 'status').stdout).phase, 'awaiting_profile');
+
+  const done = run(root, ['profile', 'import', FIXTURE, '--json']);
+  assert.equal(done.status, 0, done.stderr);
+  assert.equal(JSON.parse(done.stdout).plan, 'declared');
+  assert.ok(existsSync(join(root, 'profile', 'ready.flag')));
+  // The import does not open the first run: spawning the roster is the Capitano's, told by the notice.
+  assert.equal(JSON.parse(python(root, 'first_run.py', 'status').stdout).phase, 'awaiting_profile');
+
+  const burst = JSON.parse(python(root, 'first_run.py', 'begin-burst').stdout);
+  assert.equal(burst.ok, true);
+  assert.equal(burst.phase, 'burst');
+  assert.ok(burst.roster.scout >= 1);
+});
+
+test('without a declared plan the import says so, because the Capitano could not open the first run', { skip: spawnSync('python3', ['-c', 'import yaml']).status !== 0 }, () => {
+  const { root } = folder();
+  const done = run(root, ['profile', 'import', FIXTURE]);
+  assert.equal(done.status, 0, done.stderr);
+  assert.match(done.stdout, /No subscription plan is declared/);
+  assert.match(done.stdout, /plan_registry\.py set openai:<plan>/);
+  const refused = JSON.parse(python(root, 'first_run.py', 'begin-burst').stdout);
+  assert.equal(refused.ok, false);
+  assert.equal(refused.phase, 'awaiting_profile');
 });
 
 test('the module is the only place that writes the profile and the flag', () => {

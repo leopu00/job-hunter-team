@@ -77,9 +77,13 @@ function utcStamp(now) {
  * @param {(path:string)=>{ok:boolean,errors?:string[],unavailable?:boolean}} o.validate  strict validation of a file
  * @param {()=>boolean} o.reviewPending  a profile review waits for the person's confirmation
  * @param {()=>{status:'sent'|'team_off'|'failed',detail?:string}} o.notify  tells the Capitano
+ * @param {()=>'declared'|'missing'|'unknown'} [o.planDeclared]  the subscription plan, which the Capitano's
+ *        first run cannot open without (first_run.py begin-burst refuses to guess a roster)
  * @param {()=>Date} [o.now]
  */
-export function importProfile({ bytes, replace = false, profileDir, validate, reviewPending, notify, now = () => new Date() }) {
+export function importProfile({
+  bytes, replace = false, profileDir, validate, reviewPending, notify, planDeclared = () => 'unknown', now = () => new Date(),
+}) {
   if (!Buffer.isBuffer(bytes) || bytes.length === 0) return refuse('profile_empty');
   if (bytes.length > MAX_PROFILE_BYTES) return refuse('profile_too_large');
   if (bytes.includes(0)) return refuse('profile_invalid', { errors: ['the file is not text'] });
@@ -98,7 +102,9 @@ export function importProfile({ bytes, replace = false, profileDir, validate, re
   try {
     const verdict = validate(stage);
     if (verdict.unavailable) return refuse('validator_unavailable');
-    if (!verdict.ok) return refuse('profile_invalid', { errors: verdict.errors ?? [] });
+    if (!verdict.ok) {
+      return refuse('profile_invalid', { errors: verdict.errors ?? [], ...(verdict.missing?.length ? { missing: verdict.missing } : {}) });
+    }
     // Looked at again at the last moment: a link or a pipe put there meanwhile is not replaced.
     const late = lstatOrNull(target);
     if (late && (late.isSymbolicLink() || !late.isFile())) return refuse('profile_target_unsafe');
@@ -122,5 +128,8 @@ export function importProfile({ bytes, replace = false, profileDir, validate, re
   if (!flag || !flag.isFile()) return refuse('ready_flag_missing', { profileWritten: true });
 
   const told = notify();
-  return { ok: true, profileWritten: true, readyFlag: true, captain: told.status, ...(told.detail ? { detail: told.detail } : {}) };
+  return {
+    ok: true, profileWritten: true, readyFlag: true, captain: told.status, plan: planDeclared(),
+    ...(told.detail ? { detail: told.detail } : {}),
+  };
 }

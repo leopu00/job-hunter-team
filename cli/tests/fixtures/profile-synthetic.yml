@@ -1,5 +1,4 @@
 name: Test Candidate
-email: candidate@example.invalid
 target_role: Backend Engineer
 location: Nowhere
 experience_years: 5
@@ -11,3 +10,17 @@ skills:
 languages:
   - language: English
     level: C1
+candidate:
+  name: Test Candidate
+  target_role: Backend Engineer
+  contacts:
+    email: candidate@example.invalid
+  experience:
+    - company: Example Co
+      role: Developer
+      years: "2021 - present"
+      summary: Built services.
+  education:
+    - institution: Example University
+      degree: BSc Computer Science
+      year: 2020

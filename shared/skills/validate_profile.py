@@ -16,11 +16,14 @@ posto di .language; skills come lista piatta) emettendo WARNING non bloccanti. G
 sono bloccanti.
 
 Uso:
-    python3 validate_profile.py <path/candidate_profile.yml> [--strict] [--json] [--lang XX]
+    python3 validate_profile.py <path/candidate_profile.yml> [--strict] [--json] [--minimum] [--lang XX]
 Output:
     VALID_PROFILE   (exit 0)   eventuali "WARN: ..." su stderr
     INVALID_PROFILE (exit 1)   "ERROR: ..." su stderr
 Con --strict anche i warning diventano errori (usato dopo la migrazione produttori).
+Con --minimum si aggiunge cio' che serve al team per partire (nome, email, ruolo, citta', anni,
+2+ competenze, 1+ lingua, 1+ esperienza, 1+ titolo di studio): i campi che mancano sono errori
+e, con --json, sotto "missing". Lo usa `jht profile import`.
 
 Lingua (RULE-T14): il testo libero che l'utente legge (narrative, key_points, timeline, summary)
 deve essere nella lingua dell'utente (i18n-prefs.json, poi JHT_LANG; `--lang XX` la forza). Un testo
@@ -240,6 +243,52 @@ def validate(profile) -> None:
     check_language(profile, _expected_language)
 
 
+def _items(*values) -> int:
+    """How many entries the first value that is a list has (0 for none)."""
+    for v in values:
+        if isinstance(v, list):
+            return len([x for x in v if x])
+    return 0
+
+
+def _skill_count(skills) -> int:
+    if isinstance(skills, dict):
+        return len([s for v in skills.values() if isinstance(v, list) for s in v if _is_str(s)])
+    if isinstance(skills, list):
+        return len([s for s in skills if _is_str(s)])
+    return 0
+
+
+def team_minimum_missing(profile) -> list:
+    """What the team needs before it can start, by the names the app uses.
+
+    The floor the Assistant checks before it creates ready.flag (skill profile-yaml) and
+    the app's required fields (web/lib/profile-completion.ts, PROFILE_REQUIREMENTS) both
+    read these places of the YAML: root, `candidate`, `personal`. Reading the same ones
+    here keeps a profile that passes this check from being "not ready" for the app.
+    """
+    if not isinstance(profile, dict):
+        return ["name"]
+    cand = profile.get("candidate") if isinstance(profile.get("candidate"), dict) else {}
+    pers = profile.get("personal") if isinstance(profile.get("personal"), dict) else {}
+    contacts = cand.get("contacts") if isinstance(cand.get("contacts"), dict) else {}
+    roles = profile.get("target_roles")
+    ey = profile.get("experience_years")
+    checks = (
+        ("name", _is_str(cand.get("name")) or _is_str(pers.get("name")) or _is_str(profile.get("name"))),
+        ("email", _is_str(contacts.get("email")) or _is_str(pers.get("email"))),
+        ("target_role", _is_str(cand.get("target_role")) or _is_str(profile.get("target_role"))
+            or (isinstance(roles, list) and bool(roles) and _is_str(roles[0]))),
+        ("location", _is_str(profile.get("location")) or _is_str(pers.get("location"))),
+        ("experience_years", ey is not None and not isinstance(ey, bool)),
+        ("skills", _skill_count(cand.get("skills") if cand.get("skills") is not None else profile.get("skills")) >= 2),
+        ("languages", _items(cand.get("languages"), profile.get("languages")) >= 1),
+        ("experience", _items(cand.get("experience"), profile.get("experience")) >= 1),
+        ("education", _items(cand.get("education"), profile.get("education")) >= 1),
+    )
+    return [key for key, ok in checks if not ok]
+
+
 _expected_language = None
 
 
@@ -255,6 +304,7 @@ def main() -> int:
         del args[i:i + 2]
     strict = "--strict" in args
     as_json = "--json" in args
+    minimum = "--minimum" in args
     paths = [a for a in args if not a.startswith("--")]
     if not paths:
         print("usage: validate_profile.py <candidate_profile.yml> [--strict] [--json]", file=sys.stderr)
@@ -275,11 +325,17 @@ def main() -> int:
         return 1
 
     validate(data)
+    missing = team_minimum_missing(data) if minimum else []
+    for key in missing:
+        err(f"missing for the team to start: {key}")
     blocking = errors + (warnings if strict else [])
 
     if as_json:
-        print(json.dumps({"ok": not blocking, "errors": errors, "warnings": warnings,
-                          "language_warnings": language_warnings}))
+        out = {"ok": not blocking, "errors": errors, "warnings": warnings,
+               "language_warnings": language_warnings}
+        if minimum:
+            out["missing"] = missing
+        print(json.dumps(out))
     else:
         for w in warnings:
             print(f"WARN: {w}", file=sys.stderr)
