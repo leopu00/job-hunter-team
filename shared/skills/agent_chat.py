@@ -652,8 +652,10 @@ def _certain_interlock(pane: str) -> bool:
             continue
         # The echo of a long input of the conversation (Codex 0.147 draws what it was sent
         # with the same ``›``, wrapped over two rows or more): the rows under it are its own
-        # continuation, not sibling choices.  A menu choice is short; this shape is not.
-        if _wrapped_continuation(rows, index):
+        # continuation, not sibling choices.  It sits in the transcript, ABOVE the composer: a
+        # live menu takes the composer's place, so a long first choice with one short sibling
+        # and no composer under it stays a menu.
+        if _wrapped_continuation(rows, index) and any(at > index for at in composer_rows):
             continue
         def sibling_rows(reach: int, gap: bool) -> list[int]:
             rows_found = []

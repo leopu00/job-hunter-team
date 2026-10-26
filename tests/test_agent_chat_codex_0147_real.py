@@ -95,3 +95,19 @@ def test_a_real_numbered_codex_permission_choice_above_the_composer_stays_closed
         "\x1b[0m\x1b[39m\x1b[49m  \x1b[38;2;246;226;183m" + "□" * 17 + "\x1b[2m\x1b[39m · \x1b[0m\x1b[38;2;171;223;167m\x1b[49m" + "□" * 17 + "\n"
     )
     assert module.delivery_gate(approval) == "blocked"
+
+def test_a_long_first_choice_with_one_short_sibling_and_no_composer_under_it_is_a_live_menu():
+    module = _module()
+    # the echo shape (long › row + a short tail) but nothing that is a composer below it: a menu took its place
+    menu = (
+        "\x1b[2m" + "─" * 220 + "\x1b[0m\n\n"
+        "\x1b[1m› \x1b[0m\x1b[39m\x1b[49m" + "□" * 214 + "\n"
+        "  " + "□" * 30 + "\n"
+    )
+    assert module.delivery_gate(menu) == "blocked"
+    # the very same two rows with the composer drawn under them are the transcript's echo
+    with_composer = menu + (
+        "\n\x1b[1m›\x1b[0m\x1b[39m\x1b[49m \x1b[2m" + "□" * 33 + "\n\n"
+        "\x1b[0m\x1b[39m\x1b[49m  \x1b[38;2;246;226;183m" + "□" * 17 + "\x1b[2m\x1b[39m · \x1b[0m\x1b[38;2;171;223;167m\x1b[49m" + "□" * 17 + "\n"
+    )
+    assert module.delivery_gate(with_composer) == "empty"
