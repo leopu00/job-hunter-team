@@ -2811,9 +2811,15 @@ fn t47_a_record_that_cannot_be_written_or_taken_away_is_said_not_swallowed() {
     // writing: a folder nobody may write into, and one that others may write into, are refused: no record
     set_mode(&account, 0o500);
     assert_eq!(runtime::remember_full_link_at(&sandbox.root, &sandbox.scope, &target, 1), unavailable);
+    // a folder that fails its checks is not swept either: its leftovers stay where they are
+    set_mode(&account, 0o700);
+    let stray = account.join("existing-team-runtime-full-link.tmp-9-9");
+    fs::write(&stray, b"half").unwrap();
     set_mode(&account, 0o770);
     assert_eq!(runtime::remember_full_link_at(&sandbox.root, &sandbox.scope, &target, 1), unavailable);
     set_mode(&account, 0o700);
+    assert!(stray.exists(), "no sweep before the folder has passed its checks");
+    fs::remove_file(&stray).unwrap();
     assert!(!full_link_file(&sandbox).exists());
     assert!(fs::read_dir(&account).unwrap().all(|entry| !entry.unwrap().file_name().to_string_lossy().contains("full-link.tmp")));
     assert_eq!(fs::metadata(&account).unwrap().uid(), unsafe { libc::geteuid() });

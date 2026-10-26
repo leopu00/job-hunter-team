@@ -2291,7 +2291,6 @@ pub(crate) fn remember_full_link_at(
     now: u64,
 ) -> Result<(), &'static str> {
     let unavailable = "existing_team_runtime_unavailable";
-    sweep_full_link_leftovers(root, scope);
     let parent = account_dir(root, scope);
     let parent_meta = fs::symlink_metadata(&parent).map_err(|_| unavailable)?;
     {
@@ -2304,6 +2303,8 @@ pub(crate) fn remember_full_link_at(
             return Err(unavailable);
         }
     }
+    // Only in a folder that passed the checks above: a link or a folder that is not ours is never swept.
+    sweep_full_link_leftovers(root, scope);
     let payload = serde_json::to_vec(&FullLinkMark {
         schema: 1,
         connection_key: connection_key(scope, target),
