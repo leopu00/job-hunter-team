@@ -499,7 +499,9 @@ mod tests {
 
     /// The script, run for real against a folder that stands in for /jht_user/cv.
     fn ask(root: &Path, request: Value) -> Value {
-        let source = TEAM_DOCUMENT_PY.replace("/jht_user/cv", &root.to_string_lossy());
+        // Forward slashes: on Windows the folder's backslashes would be escapes
+        // inside the script's Python string literal.
+        let source = TEAM_DOCUMENT_PY.replace("/jht_user/cv", &root.to_string_lossy().replace('\\', "/"));
         let mut child = Command::new("python3")
             .arg("-I")
             .arg("-c")
