@@ -83,6 +83,11 @@ jobs:
           mkdir -p "$RUNNER_TEMP/bin" && tar -xzf "$RUNNER_TEMP/gitleaks.tgz" -C "$RUNNER_TEMP/bin" gitleaks
           echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
 
+      # I due segreti NON esistono nel repo pubblico e non vanno creati qui: un push
+      # di ramo esegue questo workflow DEL RAMO e potrebbe stamparli in un log
+      # pubblico. Qui i controlli di autore e nomi risultano SKIPPED (li fa in
+      # locale chi integra, con lo stesso script, prima di ogni push); avrebbero
+      # senso solo in un mirror privato.
       - name: Precheck the range over master-arthur
         env:
           PRECHECK_NAMES: ${{ secrets.PRECHECK_NAMES }}
