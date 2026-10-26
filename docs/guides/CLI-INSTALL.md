@@ -23,7 +23,7 @@ For onboarding inside an already-cloned repo, see [legacy `setup.sh` / `setup.ps
 | Container runtime | Podman with `--runtime podman`: the path of the app and of 0.4, on macOS and on Linux. Without the flag, macOS uses Colima (or your running Docker) and Linux sets up Docker Engine, as earlier versions did |
 | Expert mode | `--no-docker` (clone + build from source) |
 | OS support | macOS (Apple silicon in the 0.4 app) · Linux (apt/dnf/pacman), experimental |
-| Windows | Windows is not supported in 0.4: these steps are untested and may not work. Windows is not in this version; [`install.ps1`](../../scripts/install.ps1) stays in the repository |
+| Windows | Windows is not in this version |
 
 ---
 
@@ -306,10 +306,7 @@ What `--dry-run` intentionally does **not** do:
   (rewrite to `raw.githubusercontent.com/.../<tag>/scripts/install.sh`,
   or generate `web/public/install.sh` from the latest release at build
   time).
-- **Windows is not in this version** — Windows is not supported in 0.4: these steps are untested and may not work. `install.ps1` installs Podman and the Compose
-  provider through winget and runs the team in a Podman machine inside WSL,
-  but it does not enable WSL or complete a reboot: when WSL is not usable it
-  stops with `wsl_not_ready`.
+- **Windows is not in this version** — there is no Windows installer in this release.
 
 ---
 

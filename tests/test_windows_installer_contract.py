@@ -38,7 +38,10 @@ def test_every_windows_install_instruction_says_it_is_unsupported_in_04() -> Non
     # the steps stay (the CLI of someone on Windows must not break), with one sentence above each
     guides = ROOT / "docs" / "guides"
     assert (guides / "QUICKSTART.md").read_text().count(SENTENCE) == 1
-    assert (guides / "CLI-INSTALL.md").read_text().count(SENTENCE) == 2
+    # the CLI install reference does not describe the Windows script any more: Windows is not in this version
+    cli_install = (guides / "CLI-INSTALL.md").read_text()
+    assert cli_install.count(SENTENCE) == 0 and "install.ps1" not in cli_install and "wsl_not_ready" not in cli_install
+    assert cli_install.count("Windows is not in this version") == 2
     assert (guides / "AI-AGENT-INTEGRATION.md").read_text().count(SENTENCE) == 1
     # the website's getting-started page has no Windows block: the page says Windows is not supported (path 2)
     page = (ROOT / "web/app/docs/guides/getting-started/page.i18n.ts").read_text()
