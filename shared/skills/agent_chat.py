@@ -650,6 +650,11 @@ def _certain_interlock(pane: str) -> bool:
         selected = choice_body(raw)
         if not re.match(r"^[›❯]\s+\S", selected):
             continue
+        # The echo of a long input of the conversation (Codex 0.147 draws what it was sent
+        # with the same ``›``, wrapped over two rows or more): the rows under it are its own
+        # continuation, not sibling choices.  A menu choice is short; this shape is not.
+        if _wrapped_continuation(rows, index):
+            continue
         def sibling_rows(reach: int, gap: bool) -> list[int]:
             rows_found = []
             for sibling_index in _contiguous_neighbours(raw_lines, index, reach, gap):
