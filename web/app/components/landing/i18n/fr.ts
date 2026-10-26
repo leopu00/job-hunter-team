@@ -116,7 +116,7 @@ export const fr: Record<string, string> = {
   home_setup_kicker: "Lancez-le",
   home_setup_title: "Comme vous voulez, où vous voulez",
   home_setup_body:
-    "Commencez sur votre PC local : c’est le parcours complet le plus simple, et l’équipe travaille tant que le PC, Docker et le réseau sont disponibles. Pour continuer lorsque ce PC est éteint, vous pouvez utiliser un VPS que vous fournissez et administrez. La synchronisation web est facultative et ne détermine pas où l’équipe s’exécute.",
+    "Commencez sur votre PC local : c’est le parcours complet le plus simple, et l’équipe travaille tant que le PC, le runtime de conteneurs et le réseau sont disponibles. Pour continuer lorsque ce PC est éteint, vous pouvez utiliser un VPS que vous fournissez et administrez. La synchronisation web est facultative et ne détermine pas où l’équipe s’exécute.",
   home_setup_cta: "Comment le lancer →",
   home_pricing_kicker: "Tarifs",
   home_pricing_title: "Open source. La plateforme est gratuite.",
