@@ -1,18 +1,18 @@
 import type { Locale } from "@/i18n/config";
 
 /**
- * The «Team: hours and models» page (/settings/team): when the agents work and the model and effort
- * of each role. 7 languages; Italian is the source and its shape is the type. The role and effort
+ * The «Team: models» page (/settings/team): the model and effort of each role (the working hours are
+ * the page /settings/hours). 7 languages; Italian is the source and its shape is the type. The role and effort
  * names, «Default» and the buttons are the web page's own words (settings/team/page.i18n.ts). The
  * model is a class (sol, terra, luna): the page says «Maximum / Balanced / Economy», and the exact
  * model is the team's provider's business.
  */
 const it = {
-  title: "Squadra: orari e modelli",
-  link: "Orari e modelli della squadra",
-  linkNote: "Quando lavorano gli agenti, e con quale modello e impegno.",
-  introLocal: "Quando lavorano gli agenti e con quale modello e impegno, per la squadra di questo computer.",
-  introVps: "Quando lavorano gli agenti e con quale modello e impegno, per la squadra della VPS.",
+  title: "Squadra: modelli",
+  link: "Modelli della squadra",
+  linkNote: "Con quale modello e impegno lavora ogni ruolo.",
+  introLocal: "Con quale modello e impegno lavora ogni ruolo, per la squadra di questo computer.",
+  introVps: "Con quale modello e impegno lavora ogni ruolo, per la squadra della VPS.",
   back: "Impostazioni",
   loading: "Leggo le impostazioni della squadra…",
   retry: "Riprova",
@@ -24,16 +24,21 @@ const it = {
   classSol: "Massima",
   classTerra: "Bilanciata",
   classLuna: "Economica",
+  effectiveHeader: "In uso",
+  effectiveUnavailable: "non disponibile su questa squadra",
+  effectiveDefault: "predefinito",
+  effectiveChosen: "scelto",
+  classNotApplied: "Con questo provider la classe è dichiarata ma non applicata: la squadra usa i modelli del provider.",
 };
 
 export type TeamSettingsText = typeof it;
 
 const en: TeamSettingsText = {
-  title: "Team: hours and models",
-  link: "Team hours and models",
-  linkNote: "When the agents work, and with which model and effort.",
-  introLocal: "When the agents work and with which model and effort, for the team on this computer.",
-  introVps: "When the agents work and with which model and effort, for the team on the VPS.",
+  title: "Team: models",
+  link: "Team models",
+  linkNote: "With which model and effort each role works.",
+  introLocal: "With which model and effort each role works, for the team on this computer.",
+  introVps: "With which model and effort each role works, for the team on the VPS.",
   back: "Settings",
   loading: "Reading the team's settings…",
   retry: "Try again",
@@ -45,14 +50,19 @@ const en: TeamSettingsText = {
   classSol: "Maximum",
   classTerra: "Balanced",
   classLuna: "Economy",
+  effectiveHeader: "In use",
+  effectiveUnavailable: "not available on this team",
+  effectiveDefault: "default",
+  effectiveChosen: "chosen",
+  classNotApplied: "With this provider the class is declared but not applied: the team uses the provider's own models.",
 };
 
 const de: TeamSettingsText = {
-  title: "Team: Zeiten und Modelle",
-  link: "Zeiten und Modelle des Teams",
-  linkNote: "Wann die Agenten arbeiten und mit welchem Modell und Aufwand.",
-  introLocal: "Wann die Agenten arbeiten und mit welchem Modell und Aufwand, für das Team auf diesem Computer.",
-  introVps: "Wann die Agenten arbeiten und mit welchem Modell und Aufwand, für das Team auf der VPS.",
+  title: "Team: Modelle",
+  link: "Modelle des Teams",
+  linkNote: "Mit welchem Modell und Aufwand jede Rolle arbeitet.",
+  introLocal: "Mit welchem Modell und Aufwand jede Rolle arbeitet, für das Team auf diesem Computer.",
+  introVps: "Mit welchem Modell und Aufwand jede Rolle arbeitet, für das Team auf der VPS.",
   back: "Einstellungen",
   loading: "Ich lese die Einstellungen des Teams…",
   retry: "Erneut versuchen",
@@ -64,14 +74,19 @@ const de: TeamSettingsText = {
   classSol: "Maximal",
   classTerra: "Ausgewogen",
   classLuna: "Sparsam",
+  effectiveHeader: "In Gebrauch",
+  effectiveUnavailable: "für dieses Team nicht verfügbar",
+  effectiveDefault: "Standard",
+  effectiveChosen: "gewählt",
+  classNotApplied: "Bei diesem Anbieter wird die Klasse angegeben, aber nicht angewendet: Das Team nutzt die Modelle des Anbieters.",
 };
 
 const fr: TeamSettingsText = {
-  title: "Équipe : horaires et modèles",
-  link: "Horaires et modèles de l’équipe",
-  linkNote: "Quand les agents travaillent, et avec quel modèle et quel effort.",
-  introLocal: "Quand les agents travaillent et avec quel modèle et quel effort, pour l’équipe de cet ordinateur.",
-  introVps: "Quand les agents travaillent et avec quel modèle et quel effort, pour l’équipe de la VPS.",
+  title: "Équipe : modèles",
+  link: "Modèles de l’équipe",
+  linkNote: "Avec quel modèle et quel effort chaque rôle travaille.",
+  introLocal: "Avec quel modèle et quel effort chaque rôle travaille, pour l’équipe de cet ordinateur.",
+  introVps: "Avec quel modèle et quel effort chaque rôle travaille, pour l’équipe de la VPS.",
   back: "Paramètres",
   loading: "Je lis les réglages de l’équipe…",
   retry: "Réessayer",
@@ -83,14 +98,19 @@ const fr: TeamSettingsText = {
   classSol: "Maximal",
   classTerra: "Équilibré",
   classLuna: "Économique",
+  effectiveHeader: "Utilisé",
+  effectiveUnavailable: "non disponible pour cette équipe",
+  effectiveDefault: "par défaut",
+  effectiveChosen: "choisi",
+  classNotApplied: "Avec ce fournisseur, la classe est déclarée mais non appliquée : l’équipe utilise les modèles du fournisseur.",
 };
 
 const es: TeamSettingsText = {
-  title: "Equipo: horarios y modelos",
-  link: "Horarios y modelos del equipo",
-  linkNote: "Cuándo trabajan los agentes, y con qué modelo y esfuerzo.",
-  introLocal: "Cuándo trabajan los agentes y con qué modelo y esfuerzo, para el equipo de este ordenador.",
-  introVps: "Cuándo trabajan los agentes y con qué modelo y esfuerzo, para el equipo de la VPS.",
+  title: "Equipo: modelos",
+  link: "Modelos del equipo",
+  linkNote: "Con qué modelo y esfuerzo trabaja cada rol.",
+  introLocal: "Con qué modelo y esfuerzo trabaja cada rol, para el equipo de este ordenador.",
+  introVps: "Con qué modelo y esfuerzo trabaja cada rol, para el equipo de la VPS.",
   back: "Ajustes",
   loading: "Leyendo los ajustes del equipo…",
   retry: "Reintentar",
@@ -102,14 +122,19 @@ const es: TeamSettingsText = {
   classSol: "Máxima",
   classTerra: "Equilibrada",
   classLuna: "Económica",
+  effectiveHeader: "En uso",
+  effectiveUnavailable: "no disponible en este equipo",
+  effectiveDefault: "predeterminado",
+  effectiveChosen: "elegido",
+  classNotApplied: "Con este proveedor la clase se declara pero no se aplica: el equipo usa los modelos del proveedor.",
 };
 
 const pt: TeamSettingsText = {
-  title: "Equipe: horários e modelos",
-  link: "Horários e modelos da equipe",
-  linkNote: "Quando os agentes trabalham, e com que modelo e esforço.",
-  introLocal: "Quando os agentes trabalham e com que modelo e esforço, para a equipe deste computador.",
-  introVps: "Quando os agentes trabalham e com que modelo e esforço, para a equipe da VPS.",
+  title: "Equipe: modelos",
+  link: "Modelos da equipe",
+  linkNote: "Com que modelo e esforço cada papel trabalha.",
+  introLocal: "Com que modelo e esforço cada papel trabalha, para a equipe deste computador.",
+  introVps: "Com que modelo e esforço cada papel trabalha, para a equipe da VPS.",
   back: "Configurações",
   loading: "A ler as configurações da equipe…",
   retry: "Tentar de novo",
@@ -121,14 +146,19 @@ const pt: TeamSettingsText = {
   classSol: "Máximo",
   classTerra: "Equilibrado",
   classLuna: "Económico",
+  effectiveHeader: "Em uso",
+  effectiveUnavailable: "não disponível nesta equipa",
+  effectiveDefault: "predefinido",
+  effectiveChosen: "escolhido",
+  classNotApplied: "Com este fornecedor a classe é declarada mas não aplicada: a equipa usa os modelos do fornecedor.",
 };
 
 const hu: TeamSettingsText = {
-  title: "Csapat: munkaidő és modellek",
-  link: "A csapat munkaideje és modelljei",
-  linkNote: "Mikor dolgoznak az ügynökök, és milyen modellel és erőfeszítéssel.",
-  introLocal: "Mikor dolgoznak az ügynökök, és milyen modellel és erőfeszítéssel, az ezen a számítógépen futó csapatnál.",
-  introVps: "Mikor dolgoznak az ügynökök, és milyen modellel és erőfeszítéssel, a VPS-en futó csapatnál.",
+  title: "Csapat: modellek",
+  link: "A csapat modelljei",
+  linkNote: "Milyen modellel és erőfeszítéssel dolgozik minden szerepkör.",
+  introLocal: "Milyen modellel és erőfeszítéssel dolgozik minden szerepkör, az ezen a számítógépen futó csapatnál.",
+  introVps: "Milyen modellel és erőfeszítéssel dolgozik minden szerepkör, a VPS-en futó csapatnál.",
   back: "Beállítások",
   loading: "A csapat beállításainak beolvasása…",
   retry: "Újra",
@@ -140,6 +170,11 @@ const hu: TeamSettingsText = {
   classSol: "Legnagyobb",
   classTerra: "Kiegyensúlyozott",
   classLuna: "Takarékos",
+  effectiveHeader: "Használatban",
+  effectiveUnavailable: "ennél a csapatnál nem elérhető",
+  effectiveDefault: "alapértelmezett",
+  effectiveChosen: "választott",
+  classNotApplied: "Ennél a szolgáltatónál az osztály csak meg van adva, de nem érvényesül: a csapat a szolgáltató saját modelljeit használja.",
 };
 
 export const TEAM_SETTINGS_TEXT: Record<Locale, TeamSettingsText> = { it, en, de, fr, es, pt, hu };

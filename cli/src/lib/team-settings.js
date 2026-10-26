@@ -90,6 +90,48 @@ export function validRoleModels(value) {
   );
 }
 
+/**
+ * What the launcher (.launcher/start-agent.sh) uses for a role that team.role_models says nothing about:
+ * the role map (get_agent_info: an empty alias is opus = sol, "sonnet" is terra; effort high for all).
+ * A test runs the launcher's own functions and compares, so the two cannot drift apart.
+ */
+export const ROLE_DEFAULT_CLASS = Object.freeze({
+  capitano: 'sol', scrittore: 'sol', critico: 'sol', mentor: 'sol',
+  scout: 'terra', analista: 'terra', scorer: 'terra', assistente: 'terra', sentinella: 'terra', closer: 'terra',
+});
+export const DEFAULT_EFFORT = 'high';
+const CODEX_MODEL = Object.freeze({ sol: 'gpt-5.6-sol', terra: 'gpt-5.6-terra', luna: 'gpt-5.6-luna' });
+const CLAUDE_ALIAS = Object.freeze({ sol: 'opus', terra: 'sonnet' });
+const PROVIDER_OF = Object.freeze({ codex: 'codex', openai: 'codex', claude: 'claude', anthropic: 'claude', kimi: 'kimi', moonshot: 'kimi' });
+
+/**
+ * The model and effort each role is started with, as the launcher decides them at every spawn:
+ * { provider, classApplies, effective }, where `effective` maps every role to
+ * { model, modelName, effort, from }. `from` is "config" when team.role_models holds a model or an
+ * effort for the role.
+ * The class (sol, terra, luna) counts only with Codex: with Claude the launcher keeps the role map
+ * (opus or sonnet) and takes the effort, so `model` is the role map's and `classApplies` is false.
+ * With Kimi (neither model nor effort reach the CLI) and with a provider the launcher does not know
+ * (it refuses to start) there is nothing to show: `effective` is null, never a default made up.
+ */
+export function effectiveSettings(config, roleModels) {
+  const provider = PROVIDER_OF[config && typeof config.active_provider === 'string' ? config.active_provider : ''] ?? null;
+  const classApplies = provider === 'codex';
+  if (provider !== 'codex' && provider !== 'claude') return { provider, classApplies, effective: null };
+  const effective = {};
+  for (const role of ROLES) {
+    const set = roleModels[role] ?? {};
+    const model = classApplies && set.model ? set.model : ROLE_DEFAULT_CLASS[role];
+    effective[role] = {
+      model,
+      modelName: classApplies ? CODEX_MODEL[model] : CLAUDE_ALIAS[model],
+      effort: set.effort ?? DEFAULT_EFFORT,
+      from: set.model || set.effort ? 'config' : 'default',
+    };
+  }
+  return { provider, classApplies, effective };
+}
+
 /** The desired settings, if every key and value is in the lists; null otherwise. */
 export function validSettings(desired) {
   if (!isPlainObject(desired)) return null;

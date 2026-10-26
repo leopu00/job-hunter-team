@@ -34,6 +34,10 @@ export interface WorkingHours { timezone: string; windows: WorkWindow[] }
 export interface RoleModel { model?: ModelClass; effort?: Effort }
 export type RoleModels = Partial<Record<Role, RoleModel>>;
 
+/** What the launcher would use for a role: the class and the provider's model name, the effort, and whether it comes from the team's config or from its default. */
+export interface EffectiveRole { model: ModelClass; modelName: string; effort: Effort; from: "config" | "default" }
+export type EffectiveModels = Record<Role, EffectiveRole>;
+
 export interface TeamSettings {
   /** Where the team is: this computer, or a VPS. */
   target: "local" | "vps";
@@ -41,6 +45,11 @@ export interface TeamSettings {
   connectionKey: string;
   workingHours: WorkingHours | null;
   roleModels: RoleModels;
+  /** Per role, what the launcher would use now; absent on a team whose image does not say (never a default made up here). */
+  effective?: EffectiveModels | null;
+  /** The team's provider; the class is applied only with Codex (`classApplies`). */
+  provider?: "codex" | "claude" | "kimi" | null;
+  classApplies?: boolean | null;
 }
 
 /** What a write changes: a role is changed by sending its entry, and `{}` puts it back on the default. */
@@ -86,6 +95,26 @@ function pickHours(value: unknown): WorkingHours | null | undefined {
   return windows.every((window) => window !== null) ? { timezone: value.timezone, windows: windows as WorkWindow[] } : undefined;
 }
 
+/**
+ * Whether these hours are ones the native command accepts (team_settings.rs `valid_working_hours`), so
+ * the page can refuse a bad save itself and say why. A team whose hours file is malformed works 24/7
+ * (shared/skills/working_hours.py), so a value that is off the shape must never be sent. `null` is 24/7.
+ */
+export function workingHoursAreValid(hours: WorkingHours | null): boolean {
+  if (hours === null) return true;
+  if (!isRecord(hours) || typeof hours.timezone !== "string" || !Array.isArray(hours.windows)) return false;
+  if (!/^[A-Za-z0-9_+\-/]{1,64}$/.test(hours.timezone) || hours.windows.length > WEEKDAYS.length) return false;
+  const seen = new Set<string>();
+  return hours.windows.every((window) => {
+    if (!isRecord(window) || !Array.isArray(window.days) || window.days.length === 0) return false;
+    for (const day of window.days) {
+      if (!within(WEEKDAYS, day) || seen.has(day)) return false;
+      seen.add(day);
+    }
+    return typeof window.start === "string" && typeof window.end === "string" && TIME.test(window.start) && TIME.test(window.end) && window.start !== window.end;
+  });
+}
+
 function pickRoles(value: unknown): RoleModels | null {
   if (!isRecord(value)) return null;
   const roles: RoleModels = {};
@@ -100,6 +129,23 @@ function pickRoles(value: unknown): RoleModels | null {
 
 function sameList(value: unknown, expected: readonly string[]): boolean {
   return Array.isArray(value) && value.length === expected.length && value.every((item, index) => item === expected[index]);
+}
+
+const MODEL_NAME = /^[A-Za-z0-9._-]{1,40}$/;
+
+/** The `effective` block of a read: all ten roles in the closed shape, or null («not available»). */
+function pickEffective(value: unknown): EffectiveModels | null {
+  if (!isRecord(value)) return null;
+  const out: Partial<EffectiveModels> = {};
+  for (const role of ROLES) {
+    const entry = value[role];
+    if (!isRecord(entry) || !within(MODEL_CLASSES, entry.model) || !within(EFFORTS, entry.effort) ||
+        typeof entry.modelName !== "string" || !MODEL_NAME.test(entry.modelName) || (entry.from !== "config" && entry.from !== "default")) {
+      return null;
+    }
+    out[role] = { model: entry.model, modelName: entry.modelName, effort: entry.effort, from: entry.from };
+  }
+  return out as EffectiveModels;
 }
 
 /** The reply of the native command as the page uses it; anything off the closed shape is `team_settings_unavailable`. */
@@ -118,7 +164,19 @@ export function pickTeamSettings(reply: unknown): TeamSettingsResult {
       !sameList(lists.weekdays, WEEKDAYS) || lists.min_window_hours !== MIN_WINDOW_HOURS) {
     return unavailable;
   }
-  return { ok: true, settings: { target: reply.target, connectionKey: reply.connectionKey, workingHours: hours, roleModels: roles } };
+  const provider = reply.provider === "codex" || reply.provider === "claude" || reply.provider === "kimi" ? reply.provider : null;
+  return {
+    ok: true,
+    settings: {
+      target: reply.target,
+      connectionKey: reply.connectionKey,
+      workingHours: hours,
+      roleModels: roles,
+      effective: pickEffective(reply.effective),
+      provider,
+      classApplies: typeof reply.classApplies === "boolean" ? reply.classApplies : null,
+    },
+  };
 }
 
 type Call = (request: Record<string, unknown>) => Promise<unknown>;

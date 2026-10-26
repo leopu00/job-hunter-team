@@ -169,8 +169,9 @@ All five must be present. If any is missing, the `macos-14` matrix entry stops i
 1. `HAS_MAC_SIGNING` checks that all five secrets are configured; if not, the job fails with an explicit error.
 2. `apple-actions/import-codesign-certs` imports the `.p12` into a temporary keychain.
 3. The workflow resolves the `Developer ID Application` identity and passes it to Tauri 2 together with the Apple notarization credentials.
-4. Tauri builds the universal `.app` and DMG, signs, notarizes and staples them.
+4. Tauri builds the Apple silicon (arm64) `.app` and DMG, signs, notarizes and staples them.
 5. The job verifies the app with `codesign` and `spctl`, then verifies the final DMG with `stapler` and `hdiutil`; that DMG is the published asset.
+6. The job installs that DMG as a person does (mounts it, copies the app out, starts it the way the Finder does) and the app must show its window (`scripts/ci/smoke_macos_dmg.py`); without it the release job does not run, so no tag publishes. The team's container is not tried there (the runner cannot run a virtual machine): try it on a real Mac before announcing.
 
 Hardened runtime is applied by the Tauri macOS bundler; no extra entitlement is currently required.
 

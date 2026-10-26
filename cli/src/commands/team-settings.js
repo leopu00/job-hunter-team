@@ -15,7 +15,7 @@ import { JHT_HOME } from '../jht-paths.js';
 import { writePrivateJson } from '../lib/secure-config-io.js';
 import {
   EFFORTS, MIN_WINDOW_HOURS, MODEL_CLASSES, ROLES, WEEKDAYS,
-  applySettings, validRoleModels, validSettings, validWorkingHours,
+  applySettings, effectiveSettings, validRoleModels, validSettings, validWorkingHours,
 } from '../lib/team-settings.js';
 
 const CONFIG_FILE = join(JHT_HOME, 'jht.config.json');
@@ -44,10 +44,16 @@ export function readSettings(path = CONFIG_FILE) {
   return { config, settings: { working_hours: workingHours, role_models: roleModels } };
 }
 
+/** provider, classApplies and effective, each only when there is something true to show. */
+function shown(config, roleModels) {
+  const { provider, classApplies, effective } = effectiveSettings(config, roleModels);
+  return { ...(provider ? { provider } : {}), classApplies, ...(effective ? { effective } : {}) };
+}
+
 export function getResult(path = CONFIG_FILE) {
   const read = readSettings(path);
   if (read.error) return read.error;
-  return { exit: 0, out: { ok: true, ...read.settings, lists: LISTS } };
+  return { exit: 0, out: { ok: true, ...read.settings, ...shown(read.config, read.settings.role_models), lists: LISTS } };
 }
 
 /** `raw` is the one JSON line of stdin: {"settings": {...}}. */

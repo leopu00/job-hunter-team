@@ -10,6 +10,9 @@ mod direct_chat;
 mod agent_control;
 mod existing_team_agents;
 mod existing_team_cloud_token;
+mod app_update;
+mod public_pages;
+mod team_document;
 mod existing_team_judgement;
 mod team_settings;
 mod export_file;
@@ -36,6 +39,7 @@ mod saved_vps;
 mod team_control;
 mod team_backup;
 mod team_export;
+mod work_stats;
 mod text_file_export;
 mod voice_input;
 mod vps_link;
@@ -97,6 +101,9 @@ pub fn run() {
             existing_team_judgement::existing_team_position_write_target,
             existing_team_cloud_token::existing_team_cloud_token,
             existing_team_cloud_token::existing_team_cloud_token_open_site,
+            app_update::latest_app_version,
+            public_pages::open_public_page,
+            team_document::team_document_save,
             existing_team_runtime::existing_team_link_identity,
             existing_team_agents::existing_team_agents_read,
             agent_control::agent_control,
@@ -160,6 +167,8 @@ pub fn run() {
             team_backup::backup_create,
             team_backup::backup_cancel,
             team_backup::backup_inspect,
+            work_stats::work_stats_read,
+            work_stats::work_stats_clear,
             voice_input::voice_input_cancel,
             voice_input::voice_input_start,
             voice_input::voice_input_status,

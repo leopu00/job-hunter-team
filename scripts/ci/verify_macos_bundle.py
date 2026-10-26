@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
-"""Gate the macOS universal bundle on what is really shipped.
+"""Gate the macOS bundle on what is really shipped.
 
 The universal binary next to the bundle is not the proof: what the person
 installs is the .app, and with `--bundles dmg` Tauri deletes the .app once the
 dmg is made. So every .app found under the bundle folder, and the one inside
 every dmg (mounted read-only), must carry both binaries of the desktop crate,
-jht-desktop and the jht-existing-team companion: present, executable, both
-slices arm64 and x86_64, and signed as the workflow expects (`codesign
+jht-desktop and the jht-existing-team companion: present, executable, built for
+Apple silicon only (arm64), and signed as the workflow expects (`codesign
 --verify --deep --strict`, plus the kind of signature).
 
-Usage: verify_macos_universal_bundle.py <bundle dir> --signature adhoc|developer-id [--require-dmg]
+Usage: verify_macos_bundle.py <bundle dir> --signature adhoc|developer-id [--require-dmg]
 """
 import argparse
 import os
@@ -19,7 +19,7 @@ import tempfile
 from pathlib import Path
 
 BINARIES = ("jht-desktop", "jht-existing-team")
-SLICES = {"arm64", "x86_64"}
+SLICES = {"arm64"}
 SIGNATURE = {"adhoc": "Signature=adhoc", "developer-id": "Authority=Developer ID Application"}
 
 
@@ -89,7 +89,7 @@ def main() -> int:
         print(f"FAIL {problem}", file=sys.stderr)
     if problems:
         return 1
-    print(f"OK: {', '.join(BINARIES)} universal ({' '.join(sorted(SLICES))}), signature {args.signature}")
+    print(f"OK: {', '.join(BINARIES)} ({' '.join(sorted(SLICES))} only), signature {args.signature}")
     return 0
 
 

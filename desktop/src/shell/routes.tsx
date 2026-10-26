@@ -17,6 +17,7 @@ import ProfilePage from "../pages/profile";
 import HelpPage from "../pages/help";
 import SettingsPage from "../pages/settings";
 import TeamSettingsPage from "../pages/team-settings";
+import WorkHoursPage from "../pages/work-hours";
 import VpsConnectionPage from "../pages/vps-connection";
 import SwipePage from "../pages/swipe";
 import TeamPage from "../pages/team";
@@ -73,7 +74,9 @@ export const ROUTES: Route[] = [
   { path: "/mail", page: MailPage },
   { path: "/settings", page: SettingsPage },
   { path: "/settings/vps-connection", page: VpsConnectionPage },
-  // When the agents work and the model and effort of each role (the web's /settings/team).
+  // When the agents work (the web's /settings/team, its hours half).
+  { path: "/settings/hours", page: WorkHoursPage },
+  // The model and effort of each role (the web's /settings/team, its roles half).
   { path: "/settings/team", page: TeamSettingsPage },
   // The team's data and the account's in a file (the web's /export): only reads, so the read-only view has it too.
   { path: "/export", page: ExportPage },

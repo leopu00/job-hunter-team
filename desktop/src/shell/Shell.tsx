@@ -22,6 +22,8 @@ import { COMPUTER_TEXT } from "../pages/computer/computer.i18n";
 import { desktopLinks } from "./desktop-links";
 import { SHELL_TEXT } from "./shell.i18n";
 import { MailRotationBanner } from "./MailRotationBanner";
+import { SignOutContext } from "../lib/account-actions";
+import { NewVersionBanner } from "./NewVersionBanner";
 import { TeamOffBanner } from "./TeamOffBanner";
 import NavStrip from "./NavStrip";
 import { matchRoute, navigate, refresh, useLocation } from "./router";
@@ -188,7 +190,11 @@ export default function Shell({ onLogout, onCloseReadOnly }: ShellProps) {
   }, [match, readOnly]);
 
   const Page = match?.route.page;
-  const page = Page && <Page key={path} params={match.params} search={params} />;
+  const page = Page && (
+    <SignOutContext.Provider value={onLogout ?? null}>
+      <Page key={path} params={match.params} search={params} />
+    </SignOutContext.Provider>
+  );
   if (linkedTeam) {
     const text = EXISTING_TEAM_READONLY_TEXT[appLocale()];
     const bars = (
@@ -249,6 +255,7 @@ export default function Shell({ onLogout, onCloseReadOnly }: ShellProps) {
           <div style={FULL_BLEED_COLUMN}>
             <Navbar onLogout={onLogout} />
             <MailRotationBanner />
+            <NewVersionBanner />
             <TeamOffBanner />
             <main className="relative min-h-0 flex-1" data-testid="full-bleed">
               {page}
@@ -264,7 +271,8 @@ export default function Shell({ onLogout, onCloseReadOnly }: ShellProps) {
         <div style={{ position: "relative", zIndex: 1 }}>
         <Navbar onLogout={onLogout} />
           <MailRotationBanner />
-            <TeamOffBanner />
+          <NewVersionBanner />
+          <TeamOffBanner />
           <MainChrome>{page}</MainChrome>
         </div>
       </DesktopWriteProvider>

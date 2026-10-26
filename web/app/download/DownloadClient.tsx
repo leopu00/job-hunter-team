@@ -418,6 +418,16 @@ function DownloadContent({
                     <span className="text-[9px] font-semibold tracking-[0.15em] uppercase text-[var(--color-green)] border border-[var(--color-green)] px-2 py-0.5">
                       {t("dl_desktop_beta_badge")}
                     </span>
+                    {/* La build Mac della 0.4 e' solo Apple silicon: va detto
+                        prima del clic, non scoperto all'apertura. */}
+                    {os.id === "mac" && (
+                      <span
+                        data-mac-apple-silicon-only
+                        className="text-[10px] leading-snug text-[var(--color-muted)]"
+                      >
+                        {t("dl_mac_apple_silicon_only")}
+                      </span>
+                    )}
                   </a>
                 ))}
               </div>

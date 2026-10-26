@@ -44,6 +44,8 @@ EXPECTED_EFFECTIVE_PERMISSIONS = {
     },
     "tag-production-release.yml": {"tag": {"contents": "write"}},
     "test.yml": {
+        # Mechanical checks of the range a developer branch adds (branch pushes only).
+        "precheck": READ_CONTENTS,
         "api-worker": READ_CONTENTS,
         "vitest": READ_CONTENTS,
         "desktop": READ_CONTENTS,

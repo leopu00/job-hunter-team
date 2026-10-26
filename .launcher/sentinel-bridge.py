@@ -218,14 +218,30 @@ EMERGENCY_VERDICT = "LOCKOUT-IMMINENTE"
 
 # ── Config + tmux helpers (libreria per le skill) ───────────────────────
 
+_PLAIN_FILE_MOD = None
+
+
+def _read_config_json():
+    """jht.config.json come dizionario, o solleva OSError/ValueError. Lo legge plain_file.read_json: una pipe o un
+    collegamento al suo posto (lo possono fare gli agenti) non appende il bridge, e' illeggibile."""
+    global _PLAIN_FILE_MOD
+    if _PLAIN_FILE_MOD is None:
+        _PLAIN_FILE_MOD = _load_skill_module("plain_file", "plain_file.py")
+    if _PLAIN_FILE_MOD is None:
+        raise OSError("plain_file not loadable")
+    try:
+        return _PLAIN_FILE_MOD.read_json(CONFIG_PATH)
+    except _PLAIN_FILE_MOD.NotPlain:
+        raise OSError("config is not a plain file")
+
+
 def read_config():
     """Ritorna (tick_override, provider). tick_override è il valore esplicito
     di sentinella_tick_minutes nel config (float, es. 0.5 = 30s) o None se
     non settato. Quando None, il bridge usa il tick adattivo in base allo
     stato dell'ultimo sample (vedi _choose_tick_interval)."""
     try:
-        with CONFIG_PATH.open(encoding="utf-8") as f:
-            cfg = json.load(f)
+        cfg = _read_config_json()
         provider = cfg.get("active_provider") or "openai"
         raw_tick = cfg.get("sentinella_tick_minutes")
         tick_override = float(raw_tick) if isinstance(raw_tick, (int, float)) and raw_tick > 0 else None
@@ -1917,6 +1933,22 @@ def _write_role_usage(entry, now_ts):
         return None
 
 
+_WORK_STATS_MOD = None
+
+
+def _record_work_stats():
+    """Statistiche di lavoro (work_stats.py): una riga per ora (ore di orario, soglia, punti di budget). Solo conteggi,
+    in locale; mai al cloud. Non deve mai fermare il bridge."""
+    global _WORK_STATS_MOD
+    try:
+        if _WORK_STATS_MOD is None:
+            _WORK_STATS_MOD = _load_skill_module("work_stats", "work_stats.py")
+        if _WORK_STATS_MOD is not None:
+            _WORK_STATS_MOD.record(sentinel_path=DATA_JSONL, log=lambda line: print(line, flush=True))
+    except Exception as e:  # noqa: BLE001 — la statistica non ferma il sensore
+        print(f"[bridge] work-stats skipped: {type(e).__name__}", flush=True)
+
+
 def _atomic_write_json(path, data):
     """Scrive `path` con un file temporaneo PROPRIO (mkstemp nella stessa
     cartella) e os.replace: con più bridge vivi insieme ognuno scrive il suo
@@ -2313,9 +2345,8 @@ def _weekly_pace_via_skill(entry, now_dt, now_ts):
         wht = _imp("work_hours_target")
         wp = _imp("weekly_pace")
         try:
-            with CONFIG_PATH.open(encoding="utf-8") as f:
-                cfg = json.load(f)
-        except (OSError, json.JSONDecodeError):
+            cfg = _read_config_json()
+        except (OSError, ValueError):
             cfg = None
         wreset_dt = datetime.fromtimestamp(wreset_unix, tz=timezone.utc)
         wah = wht.active_hours_in_range(now_dt, wreset_dt, cfg)
@@ -2350,9 +2381,8 @@ def _evening_release(now_dt):
         wht = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(wht)
         try:
-            with CONFIG_PATH.open(encoding="utf-8") as f:
-                cfg = json.load(f)
-        except (OSError, json.JSONDecodeError):
+            cfg = _read_config_json()
+        except (OSError, ValueError):
             cfg = None
         nph = wht.next_phase_transition(now_dt, cfg)
         if nph and nph[0] == "ON" and nph[1] is not None:
@@ -2497,9 +2527,8 @@ def _daily_pacing_via_skill(entry, now_dt, now_ts):
 
         wht = _imp("work_hours_target")
         try:
-            with CONFIG_PATH.open(encoding="utf-8") as f:
-                cfg = json.load(f)
-        except (OSError, json.JSONDecodeError):
+            cfg = _read_config_json()
+        except (OSError, ValueError):
             cfg = None
         wreset_dt = datetime.fromtimestamp(wreset_unix, tz=timezone.utc)
         wah = wht.active_hours_in_range(now_dt, wreset_dt, cfg)
@@ -2985,6 +3014,7 @@ def main():
             # Consumo per RUOLO sulle finestre del provider: a ogni lettura,
             # anche fuori orario (il pacing-bridge salta i tick off-hours).
             _write_role_usage(entry, time.time())
+            _record_work_stats()
             # Il gate orario calcolato in testa al tick vale anche qui: il
             # consiglio di pacing sveglia il Capitano come qualunque altro
             # messaggio, e fuori finestra nessuna LLM va svegliata.

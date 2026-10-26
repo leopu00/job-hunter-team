@@ -12,7 +12,7 @@ import ScrollToTop from "../components/landing/ScrollToTop";
 const T = {
   it: {
     title: "Privacy Policy",
-    updated: "Ultimo aggiornamento: Agosto 2026",
+    updated: "Ultimo aggiornamento: Ottobre 2026",
     intro:
       "Job Hunter Team (JHT) rispetta la tua privacy. Questa pagina spiega come vengono trattati i tuoi dati.",
     s1_title: "Dati raccolti",
@@ -33,6 +33,9 @@ const T = {
     s6_title: "Open source",
     s6_body:
       "JHT e completamente open source. Puoi verificare in qualsiasi momento cosa fa il codice esaminando il repository su GitHub.",
+    s8_title: "Controllo della versione",
+    s8_body:
+      "All'avvio l'app desktop chiede a GitHub qual è l'ultima versione pubblica di JHT. Nessun account né dato tuo: GitHub vede l'indirizzo IP e la versione dell'app. Non scarica né installa niente e puoi spegnere il controllo in Impostazioni.",
     s7_title: "Contatti",
     s7_body: "Per domande sulla privacy, scrivi a support@jobhunterteam.ai.",
     nav_home: "Home",
@@ -41,7 +44,7 @@ const T = {
   },
   en: {
     title: "Privacy Policy",
-    updated: "Last updated: August 2026",
+    updated: "Last updated: October 2026",
     intro:
       "Job Hunter Team (JHT) respects your privacy. This page explains how your data is handled.",
     s1_title: "Data collected",
@@ -62,6 +65,9 @@ const T = {
     s6_title: "Open source",
     s6_body:
       "JHT is fully open source. You can verify what the code does at any time by examining the repository on GitHub.",
+    s8_title: "Version check",
+    s8_body:
+      "At startup the desktop app asks GitHub which is the latest public version of JHT. No account or data of yours: GitHub sees the IP address and the app's version. It downloads and installs nothing, and you can turn the check off in Settings.",
     s7_title: "Contact",
     s7_body: "For privacy questions, write to support@jobhunterteam.ai.",
     nav_home: "Home",
@@ -70,7 +76,7 @@ const T = {
   },
   hu: {
     title: "Adatvédelmi irányelvek",
-    updated: "Utolsó frissítés: 2026 augusztus",
+    updated: "Utolsó frissítés: 2026 október",
     intro:
       "A Job Hunter Team (JHT) tiszteletben tartja a magánéletedet. Ez az oldal elmagyarázza, hogyan kezeljük az adataidat.",
     s1_title: "Gyűjtött adatok",
@@ -91,6 +97,9 @@ const T = {
     s6_title: "Nyílt forráskód",
     s6_body:
       "A JHT teljesen nyílt forráskódú. Bármikor ellenőrizheted, hogy mit csinál a kód, a GitHub-on található repository átvizsgálásával.",
+    s8_title: "Verzióellenőrzés",
+    s8_body:
+      "Indításkor a desktop app megkérdezi a GitHubtól, mi a JHT legfrissebb nyilvános verziója. Nincs fiók vagy saját adatod: a GitHub látja az IP-címet és az app verzióját. Semmit nem tölt le és nem telepít, az ellenőrzést a Beállításokban kikapcsolhatod.",
     s7_title: "Kapcsolat",
     s7_body:
       "Adatvédelmi kérdések esetén írj az support@jobhunterteam.ai címre.",
@@ -100,7 +109,7 @@ const T = {
   },
   es: {
     title: "Política de Privacidad",
-    updated: "Última actualización: Agosto de 2026",
+    updated: "Última actualización: Octubre de 2026",
     intro:
       "Job Hunter Team (JHT) respeta tu privacidad. Esta página explica cómo se tratan tus datos.",
     s1_title: "Datos recopilados",
@@ -121,6 +130,9 @@ const T = {
     s6_title: "Código abierto",
     s6_body:
       "JHT es completamente de código abierto. Puedes verificar en cualquier momento lo que hace el código examinando el repositorio en GitHub.",
+    s8_title: "Comprobación de versión",
+    s8_body:
+      "Al iniciar, la app de escritorio pregunta a GitHub cuál es la última versión pública de JHT. Ninguna cuenta ni dato tuyo: GitHub ve la dirección IP y la versión de la app. No descarga ni instala nada, y puedes desactivar la comprobación en Ajustes.",
     s7_title: "Contacto",
     s7_body:
       "Para cuestiones de privacidad, escribe a support@jobhunterteam.ai.",
@@ -130,7 +142,7 @@ const T = {
   },
   de: {
     title: "Datenschutzerklärung",
-    updated: "Letzte Aktualisierung: August 2026",
+    updated: "Letzte Aktualisierung: Oktober 2026",
     intro:
       "Job Hunter Team (JHT) respektiert deine Privatsphäre. Diese Seite erklärt, wie deine Daten verarbeitet werden.",
     s1_title: "Erhobene Daten",
@@ -151,6 +163,9 @@ const T = {
     s6_title: "Open Source",
     s6_body:
       "JHT ist vollständig Open Source. Du kannst jederzeit überprüfen, was der Code tut, indem du das Repository auf GitHub untersuchst.",
+    s8_title: "Versionsprüfung",
+    s8_body:
+      "Beim Start fragt die Desktop-App GitHub nach der neuesten öffentlichen Version von JHT. Kein Konto und keine Daten von dir: GitHub sieht die IP-Adresse und die Version der App. Es wird nichts heruntergeladen oder installiert, und du kannst die Prüfung in den Einstellungen abschalten.",
     s7_title: "Kontakt",
     s7_body: "Bei Fragen zum Datenschutz schreibe an support@jobhunterteam.ai.",
     nav_home: "Startseite",
@@ -159,7 +174,7 @@ const T = {
   },
   fr: {
     title: "Politique de Confidentialité",
-    updated: "Dernière mise à jour : août 2026",
+    updated: "Dernière mise à jour : octobre 2026",
     intro:
       "Job Hunter Team (JHT) respecte votre vie privée. Cette page explique comment vos données sont traitées.",
     s1_title: "Données collectées",
@@ -180,6 +195,9 @@ const T = {
     s6_title: "Open source",
     s6_body:
       "JHT est entièrement open source. Vous pouvez vérifier à tout moment ce que fait le code en examinant le dépôt sur GitHub.",
+    s8_title: "Vérification de version",
+    s8_body:
+      "Au démarrage, l'app de bureau demande à GitHub quelle est la dernière version publique de JHT. Aucun compte ni donnée de votre part : GitHub voit l'adresse IP et la version de l'app. Rien n'est téléchargé ni installé, et vous pouvez désactiver la vérification dans les Paramètres.",
     s7_title: "Contact",
     s7_body:
       "Pour toute question relative à la confidentialité, écrivez à support@jobhunterteam.ai.",
@@ -189,7 +207,7 @@ const T = {
   },
   pt: {
     title: "Política de Privacidade",
-    updated: "Última atualização: agosto de 2026",
+    updated: "Última atualização: outubro de 2026",
     intro:
       "A Job Hunter Team (JHT) respeita a sua privacidade. Esta página explica como os seus dados são tratados.",
     s1_title: "Dados recolhidos",
@@ -210,6 +228,9 @@ const T = {
     s6_title: "Código aberto",
     s6_body:
       "O JHT é totalmente de código aberto. Pode verificar a qualquer momento o que o código faz examinando o repositório no GitHub.",
+    s8_title: "Verificação de versão",
+    s8_body:
+      "No arranque, a app de secretária pergunta ao GitHub qual é a última versão pública do JHT. Nenhuma conta nem dado seu: o GitHub vê o endereço IP e a versão da app. Não transfere nem instala nada, e pode desligar a verificação nas Definições.",
     s7_title: "Contacto",
     s7_body:
       "Para questões de privacidade, escreva para support@jobhunterteam.ai.",
@@ -246,6 +267,7 @@ function PrivacyContent() {
     ["s4_title", "s4_body"],
     ["s5_title", "s5_body"],
     ["s6_title", "s6_body"],
+    ["s8_title", "s8_body"],
     ["s7_title", "s7_body"],
   ];
 

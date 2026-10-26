@@ -6,7 +6,7 @@ import { EFFORTS, MODEL_CLASSES, ROLES, WEEKDAYS } from "../../lib/team-settings
 import TeamSettingsPage from "./index";
 import { TEAM_SETTINGS_TEXT } from "./team-settings.i18n";
 
-// «Team: hours and models» against a stand-in native side (team_settings). Synthetic data only.
+// «Team: models» against a stand-in native side (team_settings). Synthetic data only.
 const native = vi.hoisted(() => ({ invoke: vi.fn(), isTauri: vi.fn(() => true) }));
 vi.mock("@tauri-apps/api/core", () => native);
 
@@ -35,7 +35,29 @@ afterEach(() => {
   document.cookie = "NEXT_LOCALE=; path=/; max-age=0";
 });
 
-describe("the team's hours and models page", () => {
+describe("the team's models page", () => {
+  it("shows what each role uses now, and says so when the team does not say", async () => {
+    const effective = Object.fromEntries(ROLES.map((role) => [role, { model: "terra", modelName: "gpt-5.6-terra", effort: "high", from: "default" }]));
+    effective.capitano = { model: "sol", modelName: "gpt-5.6-sol", effort: "medium", from: "config" };
+    native.invoke.mockImplementation(async () => reply({ effective, provider: "codex", classApplies: true }));
+    const view = render(<TeamSettingsPage {...props} />);
+    expect(await screen.findByTestId("team-settings-effective-capitano")).toHaveTextContent("gpt-5.6-sol");
+    expect(screen.getByTestId("team-settings-effective-capitano")).toHaveTextContent("chosen");
+    expect(screen.getByTestId("team-settings-effective-scout")).toHaveTextContent("gpt-5.6-terra");
+    expect(screen.getByTestId("team-settings-effective-scout")).toHaveTextContent("default");
+    expect(screen.queryByTestId("team-settings-class-not-applied")).toBeNull();
+    view.unmount();
+    native.invoke.mockImplementation(async () => reply());
+    render(<TeamSettingsPage {...props} />);
+    expect(await screen.findByTestId("team-settings-effective-scout")).toHaveTextContent("not available on this team");
+  });
+
+  it("says the class is not applied with a provider other than Codex", async () => {
+    native.invoke.mockImplementation(async () => reply({ provider: "claude", classApplies: false }));
+    render(<TeamSettingsPage {...props} />);
+    expect(await screen.findByTestId("team-settings-class-not-applied")).toHaveTextContent("declared but not applied");
+  });
+
   it("reads the team's settings and says whose they are", async () => {
     render(<TeamSettingsPage {...props} />);
     expect(await screen.findByTestId("team-settings-intro")).toHaveTextContent("for the team on this computer");
@@ -56,15 +78,10 @@ describe("the team's hours and models page", () => {
     expect(await screen.findByTestId("team-settings-intro")).toHaveTextContent("for the team on the VPS");
   });
 
-  it("does not tell the person the preview needs an active container, which is not true here", async () => {
-    // the picker says it only when the team has hours set and no preview came
-    native.invoke.mockImplementation(async () =>
-      reply({ working_hours: { timezone: "Europe/Rome", windows: [{ days: ["mon", "tue", "wed", "thu", "fri"], start: "09:00", end: "18:00" }] } }),
-    );
+  it("no longer holds the working hours: they are their own page", async () => {
     render(<TeamSettingsPage {...props} />);
-    // the picker has read the hours (its weekly distribution is drawn) before the note could show
-    await waitFor(() => expect(screen.getAllByText("Mon").length).toBeGreaterThan(0));
-    expect(screen.queryByText(/Preview available only/)).toBeNull();
+    await screen.findByTestId("team-settings-models");
+    expect(screen.queryByRole("button", { name: /Office \(Mon-Fri 9-18\)/ })).toBeNull();
   });
 
   it("sends only the role that changed with the key the read gave, and shows what the team answers", async () => {
@@ -115,21 +132,6 @@ describe("the team's hours and models page", () => {
     expect(await screen.findByTestId("team-settings-models-problem")).toBeInTheDocument();
     expect(screen.getAllByRole("combobox", { name: /Model/i })[1]).toHaveValue("luna");
     expect(screen.getByTestId("team-settings-models-save")).toBeEnabled();
-  });
-
-  it("asks the team for the hours of a preset, and shows the hours it answers", async () => {
-    const user = userEvent.setup();
-    native.invoke.mockImplementation(async (_command: string, args: { request: Record<string, unknown> }) =>
-      args.request.op === "read"
-        ? reply()
-        : reply({ working_hours: { timezone: "Europe/Rome", windows: [{ days: ["mon", "tue", "wed", "thu", "fri"], start: "09:00", end: "18:00" }] } }),
-    );
-    render(<TeamSettingsPage {...props} />);
-    await user.click(await screen.findByRole("button", { name: /Office \(Mon-Fri 9-18\)/ }));
-    await waitFor(() => expect(calls()).toHaveLength(2));
-    const write = calls()[1] as { settings: { working_hours: { windows: unknown } } };
-    expect(Object.keys(write.settings)).toEqual(["working_hours"]);
-    expect(write.settings.working_hours.windows).toEqual([{ days: ["mon", "tue", "wed", "thu", "fri"], start: "09:00", end: "18:00" }]);
   });
 
   it("says it cannot read the settings, and reads again on request", async () => {

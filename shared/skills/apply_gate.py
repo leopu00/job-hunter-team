@@ -67,6 +67,9 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from plain_file import JSON_MAX_BYTES as CONFIG_MAX_BYTES, NotPlain, read_plain  # noqa: E402
+
 __all__ = [
     "AUTO_APPLY_MODES",
     "DEFAULT_MAX_PER_DAY",
@@ -238,10 +241,12 @@ def _load_config(path: Path | None = None) -> tuple[dict | None, str]:
     """
     p = path or _config_path()
     try:
-        raw = p.read_text()
+        # read_plain: a pipe or a link an agent put in place of the file must not hold the gate (it is
+        # closed anyway when the file cannot be read): unreadable, not a wait
+        raw = read_plain(p, max_size=CONFIG_MAX_BYTES).decode("utf-8", "replace")
     except FileNotFoundError:
         return None, "config_missing"
-    except OSError:
+    except (OSError, NotPlain):
         return None, "config_unreadable"
     try:
         data = json.loads(raw)

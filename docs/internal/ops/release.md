@@ -50,7 +50,7 @@ source SHA, record its multi-architecture digest and OCI revision in
 | Platform | Tauri bundle | Stable asset |
 |---|---|---|
 | Windows x64 | NSIS | `job-hunter-team-windows-x64-setup.exe` |
-| macOS Universal 2 | DMG | `job-hunter-team-macos-universal.dmg` |
+| macOS Apple silicon (arm64) | DMG | `job-hunter-team-macos-universal.dmg` |
 | Linux x64 | AppImage | `job-hunter-team-linux-x64.AppImage` |
 | Linux x64 | Debian package | `job-hunter-team-linux-x64.deb` |
 

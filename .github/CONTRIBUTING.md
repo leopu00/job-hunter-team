@@ -149,7 +149,7 @@ Releases are published by pushing a `vX.Y.Z` tag at the tested commit on the
 `scripts/check-release-version.sh vX.Y.Z` checks (among them the `package.json`
 files and their locks, `desktop/src-tauri/tauri.conf.json` and `Cargo.toml`, a
 `CHANGELOG.md` section) and run it. The native desktop artifacts are the Tauri
-installers: the Windows `-setup.exe`, the macOS universal `.dmg`, and the Linux
+installers: the Windows `-setup.exe`, the macOS Apple silicon `.dmg`, and the Linux
 `.AppImage` and `.deb`. The full checklist lives
 in [`docs/internal/ops/release.md`](../docs/internal/ops/release.md).
 

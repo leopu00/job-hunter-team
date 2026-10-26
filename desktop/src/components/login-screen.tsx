@@ -20,6 +20,7 @@ import {
   selectSavedLocalProfile,
   type LocalProfile,
 } from "../lib/local-profile";
+import PublicPageLinks from "./PublicPageLinks";
 import { describeError } from "../lib/error-catalog";
 import { LOGIN_ERROR_CATALOG_CODE } from "../lib/login-error-codes";
 import { DASHBOARD_PAGE, goTo } from "../lib/pages";
@@ -337,6 +338,7 @@ export function LoginScreen({
           </p>
         )}
         {showCancelled && <p className="login-card__note">{loginErrorCopy("cancelled", locale).text}</p>}
+        <PublicPageLinks className="login-card__note" />
         {localError && (
           <p className="login-card__error" role="alert">
             {t.localError}
