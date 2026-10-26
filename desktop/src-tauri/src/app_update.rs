@@ -49,12 +49,19 @@ async fn fetch_latest() -> Option<Vec<u8>> {
         .user_agent(concat!("jht-desktop/", env!("CARGO_PKG_VERSION")))
         .build()
         .ok()?;
-    let response = client.get(LATEST_URL).header("Accept", "application/vnd.github+json").send().await.ok()?;
+    let mut response = client.get(LATEST_URL).header("Accept", "application/vnd.github+json").send().await.ok()?;
     if response.status().as_u16() != 200 || response.content_length().is_some_and(|length| length > MAX_ANSWER) {
         return None;
     }
-    let body = response.bytes().await.ok()?;
-    (body.len() as u64 <= MAX_ANSWER).then(|| body.to_vec())
+    // in pieces, with the cap on what has arrived: an answer without a length is not read to its end first
+    let mut body = Vec::new();
+    while let Some(chunk) = response.chunk().await.ok()? {
+        if (body.len() + chunk.len()) as u64 > MAX_ANSWER {
+            return None;
+        }
+        body.extend_from_slice(&chunk);
+    }
+    Some(body)
 }
 
 /// `{ "newer": "1.2.3" }` when a newer public release exists, `{ "newer": null }` in every other case.
@@ -107,6 +114,7 @@ mod tests {
         }
         assert_eq!(code.matches("https://").count(), 1, "one address, the one that is asked");
         assert!(LATEST_URL.starts_with("https://api.github.com/repos/leopu00/job-hunter-team/"));
+        assert!(!code.contains("response.bytes()"), "the answer is read in pieces under the cap, never whole first");
         for logging in ["println!", "eprintln!", "tracing::", "log::"] {
             assert!(!code.contains(logging), "{logging}");
         }

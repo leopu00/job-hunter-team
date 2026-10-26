@@ -1,7 +1,7 @@
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { forgetAskedVersion, newerVersion, UPDATE_TEXT } from "../lib/app-update";
+import { forgetAskedVersion, newerVersion, UPDATE_CHECK_TEXT, UPDATE_TEXT } from "../lib/app-update";
 import { locales } from "@/i18n/config";
 import { NewVersionBanner } from "./NewVersionBanner";
 
@@ -83,5 +83,29 @@ describe("asking the native side", () => {
     core.isTauri.mockReturnValue(false);
     expect(await newerVersion()).toBeNull();
     expect(core.invoke).not.toHaveBeenCalled();
+  });
+});
+
+describe("the switch of the check", () => {
+  it("is on by default, and when it is off the native side is not asked at all", async () => {
+    const { setUpdateCheckEnabled, updateCheckEnabled } = await import("../lib/app-update");
+    expect(updateCheckEnabled()).toBe(true);
+    setUpdateCheckEnabled(false);
+    expect(updateCheckEnabled()).toBe(false);
+    core.invoke.mockResolvedValue({ newer: "0.4.1" });
+    expect(await newerVersion()).toBeNull();
+    expect(core.invoke).not.toHaveBeenCalled();
+    setUpdateCheckEnabled(true);
+    expect(await newerVersion()).toBe("0.4.1");
+    expect(core.invoke).toHaveBeenCalledTimes(1);
+  });
+
+  it("says in every language what leaves the computer", () => {
+    for (const locale of locales) {
+      const text = UPDATE_CHECK_TEXT[locale];
+      expect(text.text).toContain("GitHub");
+      expect(text.on.length).toBeGreaterThan(5);
+      expect(text.off.length).toBeGreaterThan(5);
+    }
   });
 });

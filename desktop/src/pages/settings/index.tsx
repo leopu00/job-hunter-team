@@ -8,6 +8,7 @@ import { BACKUP_TEXT } from "../backup/backup.i18n";
 import { EXPORT_TEXT } from "../export/export.i18n";
 import { TEAM_SETTINGS_TEXT } from "../team-settings/team-settings.i18n";
 import NotifyCard from "./NotifyCard";
+import UpdateCheckCard from "./UpdateCheckCard";
 import { SETTINGS_TEXT, VPS_CONNECTION_TEXT } from "./settings.i18n";
 
 /**
@@ -34,6 +35,7 @@ export default function SettingsPage(_props: PageProps) {
       <LanguageCard />
       <CurrencyCard />
       <NotifyCard />
+      <UpdateCheckCard />
       <button
         type="button"
         onClick={() => navigate("/settings/vps-connection")}

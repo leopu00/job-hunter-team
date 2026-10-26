@@ -5,7 +5,6 @@
 
 use serde_json::{json, Value};
 
-const SITE: &str = "https://jobhunterteam.ai";
 const PRIVACY_URL: &str = "https://jobhunterteam.ai/privacy";
 const TERMS_URL: &str = "https://jobhunterteam.ai/terms";
 const DOWNLOAD_URL: &str = "https://github.com/leopu00/job-hunter-team/releases/latest";
@@ -41,6 +40,8 @@ pub(crate) fn open_public_page(window: tauri::Window, page: String) -> Value {
 mod tests {
     use super::*;
     use std::cell::RefCell;
+
+    const SITE: &str = "https://jobhunterteam.ai";
 
     #[test]
     fn three_words_open_three_https_addresses_of_ours_and_nothing_else_opens() {
