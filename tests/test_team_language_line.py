@@ -143,7 +143,7 @@ def test_the_watchdog_resume_after_a_respawn_carries_the_line(tmp_path):
     sent = tmp_path / "sent.txt"
     script = "\n".join(
         [
-            f"export JHT_SPAWN_LIB='{SPAWN_LIB}'",
+            f"export JHT_SPAWN_LIB_DIR='{SPAWN_LIB.parent}'",
             "sleep() { :; }",
             f'jht-tmux-send() {{ printf "%s" "$2" > "{sent}"; }}',
             _function(source, "worker_kickoff"),
@@ -161,7 +161,7 @@ def test_the_watchdog_resume_still_goes_without_the_library(tmp_path):
     sent = tmp_path / "sent.txt"
     script = "\n".join(
         [
-            f"export JHT_SPAWN_LIB='{tmp_path}/missing.sh'",
+            f"export JHT_SPAWN_LIB_DIR='{tmp_path}/no-library-here'",
             "sleep() { :; }",
             f'jht-tmux-send() {{ printf "%s" "$2" > "{sent}"; }}',
             _function(WATCHDOG.read_text(encoding="utf-8"), "worker_kickoff"),
