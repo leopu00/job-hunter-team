@@ -244,5 +244,7 @@ Derived from `provider-v2.webp` with no new generation, because the app now offe
 The two side medallions (Claude's asterisk and Kimi's mark), their cyan stems and the stem end dots were
 removed deterministically (OpenCV inpainting of the hair and the network, the transparent canvas restored
 around the hair), leaving the head, the network and the central stem with the OpenAI Blossom medallion,
-unchanged from `provider-v2.webp`. Same 1600×1200 sRGB WebP with alpha. `provider-v2.webp` stays in the
-folder as the history of the three-provider version and is no longer loaded by the app.
+unchanged from `provider-v2.webp`. Same 1600×1200 sRGB WebP with alpha. `provider-v2.webp` and `provider.webp` were
+removed from `public/`, so they no longer travel in the package (their history stays in git). The OpenAI mark
+is used as in the official brand guidelines, https://openai.com/brand/: unchanged, no colour added, on a plain
+dark medallion.

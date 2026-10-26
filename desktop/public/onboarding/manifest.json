@@ -18,6 +18,7 @@
     "provider_mark_sources": [
       {
         "provider": "OpenAI",
+        "brand_guidelines": "https://openai.com/brand/",
         "source": "https://cdn.openai.com/pdf/6a2631dc-783e-479b-b1a4-af0cfbd38630/how-openai-uses-codex.pdf",
         "asset": "Blossom vector path extracted unchanged from page 13 of the official OpenAI PDF",
         "sha256": "f9ebba57b25d4b3f8235904ed6becac152fbe8b4b237419198b94bec408e41e4"
@@ -55,8 +56,8 @@
     {
       "step": "provider",
       "states": ["provider-choice"],
-      "asset": "provider.webp",
-      "alt_it": "Tre moduli provider equivalenti alimentano lo stesso ufficio"
+      "asset": "provider-v3.webp",
+      "alt_it": "Una rete neurale è guidata da Codex"
     },
     {
       "step": "provider-auth",
@@ -100,7 +101,7 @@
     {
       "step": "provider",
       "version": 3,
-      "previous_asset": "provider-v2.webp",
+      "previous_asset": "provider-v2.webp (removed from the package: the three-provider picture; the history stays in git)",
       "asset": "provider-v3.webp",
       "alt_it": "Una rete neurale è guidata da Codex"
     }

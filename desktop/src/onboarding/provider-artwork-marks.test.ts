@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { createHash } from "node:crypto";
-import { readdirSync, readFileSync, statSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import { ONBOARDING_ARTWORK } from "./OnboardingArtwork";
@@ -20,7 +20,11 @@ describe("the provider step's illustration shows Codex's mark only", () => {
   it("loads the picture with the single mark, checked on 26/10/2026, at its pinned checksum", () => {
     expect(src).toBe("/onboarding/provider-v3.webp");
     expect(statSync(file).isFile()).toBe(true);
-    expect(sha256(file)).toBe("bf410e8491eee1a8653525b6291b0fef45bef800afdf97cbcc692ee116016ea6");
+    expect(sha256(file)).toBe("322e946ad66bec226f6a6aeeacfa37b52b8bcd511415a1b0facb8f11aa2b722a");
+  });
+
+  it("no longer ships the pictures that carry the marks of Claude and Kimi in the package", () => {
+    for (const name of ["provider-v2.webp", "provider.webp"]) expect(existsSync(join(desktop, "public/onboarding", name)), name).toBe(false);
   });
 
   it("does not load the picture that carries the marks of Claude and Kimi, anywhere in the desktop or the web", () => {
