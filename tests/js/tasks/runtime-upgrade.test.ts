@@ -350,7 +350,9 @@ function enableExactPodmanHarness(sb: Sandbox): PodmanHarness {
       'if [ "$dry" = 1 ]; then',
       '  [ "$command:$*" = "up:-d --force-recreate jht" ] || exit 117',
       '  "$podman_path" ps -a --filter label=io.podman.compose.project=jht --format "{{.ID}}"',
-      '  printf "INFO --label io.podman.compose.config-hash=%s --label next=value\\n" "$hash" >&2',
+      // podman-compose 1.6.0 hashes each service on its own: the plan of jht prints the create of its dependency first
+      '  printf "INFO podman create --name=jht-telegram --label io.podman.compose.config-hash=%s --label next=value\\n" "' + "7".repeat(64) + '" >&2',
+      '  printf "INFO podman create --name=jht --label io.podman.compose.config-hash=%s --label next=value\\n" "$hash" >&2',
       "  exit 0",
       "fi",
       'case "$command" in',

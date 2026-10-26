@@ -52,6 +52,15 @@ NAMED_EXCEPTIONS = {
 }
 
 
+def _statement(lines: list, index: int) -> str:
+    """The call with all its continuation lines (each one ending in a backslash): the machine's name
+    comes last, after however many options the call has."""
+    end = index
+    while end + 1 < len(lines) and lines[end].rstrip().endswith("\\"):
+        end += 1
+    return " ".join(lines[index:end + 1])
+
+
 def unnamed_calls(text: str) -> tuple:
     lines = text.splitlines()
     found, total, used = [], 0, []
@@ -63,7 +72,7 @@ def unnamed_calls(text: str) -> tuple:
             if rest.startswith(("\\", '"$compose_bin"')) or not re.match(r"[a-z-]", rest):
                 continue
             total += 1
-            ahead = " ".join(lines[index:index + 4])
+            ahead = _statement(lines, index)
             if rest.startswith('--connection "$PODMAN_MACHINE_NAME"') or rest.startswith("--version"):
                 continue
             if rest.startswith("system connection "):
@@ -144,3 +153,19 @@ def test_the_windows_docker_shim_falls_back_to_the_jht_connection():
     # The pwsh-compiled shim never reached podman through StartInfo's environment.
     assert "EnvironmentVariables" not in shim
     assert "New-DockerShim -Destination $shim -PodmanPath $Podman -MachineName $MachineName" in enabler
+
+
+def test_a_call_with_many_options_names_the_machine_after_them():
+    # machine init has the size and the two folders before the name: the whole statement counts
+    call = (
+        '    if ! "$podman_bin" machine init --now --update-connection=false \\\n'
+        '      --cpus "$C" \\\n'
+        '      --memory "$M" \\\n'
+        '      --disk-size "$D" \\\n'
+        '      --volume "$A:$A" \\\n'
+        '      --volume "$B:$B" \\\n'
+        '      "$PODMAN_MACHINE_NAME"; then\n'
+    )
+    assert unnamed_calls(call)[0] == []
+    # and without the name it is still found, however long
+    assert len(unnamed_calls(call.replace('      "$PODMAN_MACHINE_NAME"; then', '      true; then'))[0]) == 1
