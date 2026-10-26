@@ -35,7 +35,7 @@ export default function SetupPage() {
   const locale = useLocale();
   const [step, setStep] = useState<Step>("prereq");
   const [form, setForm] = useState<FormState>({
-    provider: "claude",
+    provider: "openai",
     model: "",
     apiKey: "",
   });

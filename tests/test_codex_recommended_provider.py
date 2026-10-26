@@ -94,3 +94,20 @@ def test_the_guides_and_the_changelog_say_codex_only():
     release = changelog[changelog.index("## [0.4.0]"):]
     assert "supported Codex subscription (ChatGPT's)" in release[:4000]
     assert "Codex is the only provider offered. Kimi and Claude Code are no longer among the" in release[:4000]
+
+
+def test_the_protected_setup_page_starts_on_codex_and_lists_only_it():
+    page = text("web/app/(protected)/setup/page.tsx")
+    assert 'provider: "openai",\n    model: "",' in page
+    providers = page[page.index("const PROVIDERS = ["):page.index("const MODELS")]
+    assert re.findall(r'v: "(\w+)"', providers) == ["openai"]
+    # the initial value is one of the options, so a confirm without touching the menu sends it
+    assert re.search(r'useState<FormState>\(\{\s*provider: "openai"', page)
+
+
+def test_the_faq_does_not_call_codex_the_most_complete():
+    faq = text("web/app/docs/guides/faq/page.i18n.ts")
+    answers = re.findall(r"\n    a6:\s*\"([^\"]+)\"", faq)
+    assert len(answers) == 7
+    for answer in answers:
+        assert not re.search(r"most complete|più completo|más completo|plus complet|umfassendsten|legteljesebb|mais completo", answer), answer
