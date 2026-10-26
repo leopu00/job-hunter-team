@@ -1875,6 +1875,24 @@ mod tests {
         let _ = fs::remove_dir_all(&root);
     }
 
+    #[cfg(unix)]
+    #[test]
+    fn a_home_that_is_a_link_is_refused_before_anything_is_looked_at_or_written() {
+        use std::{fs, os::unix::fs::symlink};
+        let root = leftovers_root("home-link");
+        // The link points to a folder of leftovers, which would be taken if it were the home.
+        let target = root.join("target");
+        fs::create_dir_all(target.join("logs")).unwrap();
+        let linked = root.join("linked");
+        symlink(&target, &linked).unwrap();
+        for scope in [derive_local_scope(b"local-profile-link"), derive_scope(b"00000000-0000-4000-8000-000000000001")] {
+            assert_eq!(super::validate_or_claim_local_owner(&linked, &scope), Err("local_account_owner_unavailable"));
+        }
+        assert!(!target.join(".desktop-account-scope").exists());
+        assert!(fs::symlink_metadata(&linked).unwrap().file_type().is_symlink());
+        let _ = fs::remove_dir_all(&root);
+    }
+
     #[test]
     fn real_data_not_assigned_waits_for_the_choice_and_leaving_changes_nothing() {
         let root = leftovers_root("choice");
