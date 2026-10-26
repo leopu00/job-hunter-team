@@ -29,8 +29,9 @@
 # ║                            Linux without the flag: Docker, reused if it  ║
 # ║                            runs, else Docker Engine + the Compose plugin ║
 # ║                            are installed (sudo). Linux --runtime podman: ║
-# ║                            rootless Podman, no sudo (packages put there  ║
-# ║                            first).                                       ║
+# ║                            rootless Podman for your user; what is        ║
+# ║                            missing is installed with sudo -n (no         ║
+# ║                            password prompt), never Docker.               ║
 # ║    --dry-run               Only show the actions that would be executed  ║
 # ║    --publish-runtime-bundle  Migrate one verified candidate installer,  ║
 # ║                              wrapper, compose and host-setup transaction;║
