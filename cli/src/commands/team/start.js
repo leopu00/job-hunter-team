@@ -1,7 +1,7 @@
 // Comando team start
 import { execSync, spawn } from 'node:child_process';
 import { join } from 'node:path';
-import { existsSync, mkdirSync, copyFileSync, readFileSync, unlinkSync } from 'node:fs';
+import { existsSync, mkdirSync, copyFileSync, unlinkSync } from 'node:fs';
 import {
   AGENTS, DEFAULT_TEAM, c,
   tmuxAvailable, providerCli, cliAvailable, isSessionActive,
@@ -10,6 +10,7 @@ import {
 } from './agents.js';
 import { execArgvInContainer, execInContainer, execScriptInContainer } from '../../utils/container-proxy.js';
 import { diskLowRefusal } from '../../lib/disk-guard.js';
+import { readRegularFileText } from '../../lib/secure-config-io.js';
 
 const CONTAINER_TEAM_HALTED_FLAG = '/jht_home/.team-halted.flag';
 const SPAWN_ERROR_TAIL_LINES = 5;
@@ -28,6 +29,12 @@ function shellEscape(value) {
   return String(value).replace(/'/g, "'\\''");
 }
 
+// La config che team start legge (provider, tick): solo un file regolare. Un link
+// o una pipe al suo posto non si aprono; senza config leggibile, null.
+export function readJhtConfig(path = JHT_CONFIG_PATH) {
+  try { return JSON.parse(readRegularFileText(path)); } catch { return null; }
+}
+
 // Tick idle (default 10 min, range 1-60): il bridge usa questo come
 // ceiling a riposo, ma adatta dinamicamente in alto (fino a 1 min)
 // quando status CRITICO / host saturo / team operativo attivo. Questo
@@ -35,7 +42,7 @@ function shellEscape(value) {
 // 2026-07-25 con la dashboard locale: ora il default vive solo qui.
 function readSentinellaTickMinutes() {
   try {
-    const cfg = JSON.parse(readFileSync(JHT_CONFIG_PATH, 'utf-8'));
+    const cfg = readJhtConfig();
     const n = Number(cfg?.sentinella_tick_minutes);
     if (Number.isFinite(n) && n >= 1 && n <= 60) return Math.round(n);
   } catch { /* fallback */ }
@@ -371,9 +378,7 @@ export async function startAction(agentArg, options) {
     process.exitCode = 1;
     return;
   }
-  let providerConfig = null;
-  try { providerConfig = JSON.parse(readFileSync(JHT_CONFIG_PATH, 'utf-8')); } catch { /* senza config: nessun provider */ }
-  const cliBin = providerCli(providerConfig);
+  const cliBin = providerCli(readJhtConfig());
   if (!cliBin) {
     console.error(c.red('Error: no active provider. Run: jht providers use openai'));
     process.exitCode = 1;
