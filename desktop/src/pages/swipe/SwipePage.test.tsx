@@ -49,8 +49,10 @@ function viewport(width: number, height: number, zoom = "1") {
 beforeEach(() => {
   // Niente rete nei test: i tassi di cambio ripiegano sui valori fissi del web.
   vi.stubGlobal("fetch", vi.fn(async () => new Response("", { status: 503 })));
+  localStorage.setItem("jht-lang", "it");
 });
 afterEach(() => {
+  localStorage.removeItem("jht-lang");
   vi.unstubAllGlobals();
   document.documentElement.style.removeProperty("--zoom");
 });
@@ -82,8 +84,22 @@ describe("SwipePage", () => {
   it("shows the web's deck with the first card to judge", async () => {
     const { client } = fakeSupabase(respond);
     render(<SwipePage client={client} />);
-    expect(screen.getByRole("status")).toHaveTextContent("Caricamento");
+    // the deck's shape, not a bare line of text, while the positions are read
+    expect(screen.getByTestId("swipe-skeleton")).toHaveAttribute("aria-label", "Caricamento del mazzo");
     expect(await screen.findByText("Sviluppatrice di prova")).toBeInTheDocument();
+    expect(screen.queryByTestId("swipe-skeleton")).toBeNull();
+  });
+
+  it("says the loading and the failure in the app's language, not only in Italian", async () => {
+    localStorage.setItem("jht-lang", "de");
+    const { client } = fakeSupabase(respond);
+    const view = render(<SwipePage client={client} />);
+    expect(screen.getByTestId("swipe-skeleton")).toHaveAttribute("aria-label", "Stapel wird geladen");
+    await screen.findByText("Sviluppatrice di prova");
+    view.unmount();
+    const failing = { ...client, from: () => { throw new Error("offline"); } } as unknown as typeof client;
+    render(<SwipePage client={failing} />);
+    expect(await screen.findByRole("alert")).toHaveTextContent("Die zu bewertenden Stellen lassen sich nicht lesen");
   });
 
   it("says so when the positions cannot be read", async () => {
