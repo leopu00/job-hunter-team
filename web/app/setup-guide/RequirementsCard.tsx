@@ -19,7 +19,7 @@ import Link from "next/link";
 
 import { DOCS_VPS } from "./guide-config";
 import {
-  REQUIREMENTS_CARD_EVIDENCE,
+  REQUIREMENTS_CARD_SYSTEMS,
   REQUIREMENTS_CARD_VALUES,
 } from "./requirements-card.i18n";
 import type { GuideText } from "./guide-types";
@@ -27,13 +27,13 @@ import type { Lang } from "../components/landing/LandingI18n";
 
 const LABELS: Record<string, GuideText> = {
   docker: {
-    en: "Docker",
-    it: "Docker",
-    es: "Docker",
-    fr: "Docker",
-    de: "Docker",
-    pt: "Docker",
-    hu: "Docker",
+    en: "Container engine",
+    it: "Motore dei container",
+    es: "Motor de contenedores",
+    fr: "Moteur de conteneurs",
+    de: "Container-Engine",
+    pt: "Motor de contentores",
+    hu: "Konténermotor",
   },
   memory: {
     en: "Memory",
@@ -134,7 +134,7 @@ export default function RequirementsCard({ lang }: { lang: Lang }) {
         )}
       </dl>
       <p className="mt-3 border-l-2 border-[var(--color-border)] pl-3 text-[11.5px] leading-relaxed text-[var(--color-muted)]">
-        {REQUIREMENTS_CARD_EVIDENCE[lang]}
+        {REQUIREMENTS_CARD_SYSTEMS[lang]}
       </p>
 
       <div className="mt-5 border-t border-[var(--color-border)] pt-4">

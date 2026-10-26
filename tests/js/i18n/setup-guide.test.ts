@@ -18,7 +18,7 @@ import { fileURLToPath } from "node:url";
 
 import { GUIDE_CHAPTERS } from "@/app/setup-guide/guide-content";
 import {
-  REQUIREMENTS_CARD_EVIDENCE,
+  REQUIREMENTS_CARD_SYSTEMS,
   REQUIREMENTS_CARD_VALUES,
 } from "@/app/setup-guide/requirements-card.i18n";
 import {
@@ -69,8 +69,8 @@ function everyText(): { where: string; text: GuideText }[] {
     out.push({ where: `requirements card · ${key}`, text });
   }
   out.push({
-    where: "requirements card · evidence",
-    text: REQUIREMENTS_CARD_EVIDENCE,
+    where: "requirements card · systems",
+    text: REQUIREMENTS_CARD_SYSTEMS,
   });
   return out;
 }
@@ -356,7 +356,7 @@ describe("guida di setup — contratto del team docs", () => {
   it("i sette testi misurati della scheda nativa sono tradotti davvero", () => {
     const texts = [
       ...Object.entries(REQUIREMENTS_CARD_VALUES),
-      ["evidence", REQUIREMENTS_CARD_EVIDENCE] as const,
+      ["systems", REQUIREMENTS_CARD_SYSTEMS] as const,
     ];
     const pending = texts
       .filter(([, text]) => isUntranslated(text))

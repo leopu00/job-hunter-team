@@ -35,37 +35,37 @@ const MODES: Mode[] = [
     it: {
       title: "Sul tuo PC",
       body: "Il modo più immediato per provarlo. Avvii e fermi la squadra con un clic dall'app desktop, e ogni dato resta sul tuo computer — nessun cloud, se non lo vuoi.",
-      req: "Unico requisito: Docker.",
+      req: "Un Mac con Apple silicon e Homebrew: l’app installa Podman e prepara da sola il runtime dei container.",
     },
     en: {
       title: "On your PC",
       body: "The most immediate way to try it. Start and stop the team with one click from the desktop app, and every piece of data stays on your computer — no cloud, unless you want it.",
-      req: "Only requirement: Docker.",
+      req: "A Mac with Apple silicon and Homebrew: the app installs Podman and sets up the container runtime by itself.",
     },
     es: {
       title: "En tu PC",
       body: "La forma más inmediata de probarlo. Inicias y detienes el equipo con un clic desde la app de escritorio, y cada dato permanece en tu ordenador — sin nube, si no la quieres.",
-      req: "Único requisito: Docker.",
+      req: "Un Mac con Apple silicon y Homebrew: la aplicación instala Podman y prepara sola el entorno de contenedores.",
     },
     fr: {
       title: "Sur votre PC",
       body: "La façon la plus immédiate de l'essayer. Vous démarrez et arrêtez l'équipe d'un clic depuis l'app de bureau, et chaque donnée reste sur votre ordinateur — aucun cloud, sauf si vous le voulez.",
-      req: "Seule exigence : Docker.",
+      req: "Un Mac Apple silicon avec Homebrew : l’application installe Podman et prépare elle-même l’environnement de conteneurs.",
     },
     de: {
       title: "Auf deinem PC",
       body: "Der unmittelbarste Weg, es auszuprobieren. Du startest und stoppst das Team mit einem Klick aus der Desktop-App, und alle Daten bleiben auf deinem Computer — keine Cloud, sofern du sie nicht willst.",
-      req: "Einzige Voraussetzung: Docker.",
+      req: "Ein Mac mit Apple Silicon und Homebrew: Die App installiert Podman und richtet die Container-Laufzeit selbst ein.",
     },
     pt: {
       title: "No teu PC",
       body: "A forma mais imediata de o experimentar. Inicias e paras a equipa com um clique a partir da app de ambiente de trabalho, e cada dado permanece no teu computador — sem nuvem, se não a quiseres.",
-      req: "Único requisito: Docker.",
+      req: "Um Mac com Apple silicon e Homebrew: a aplicação instala o Podman e prepara sozinha o ambiente de contentores.",
     },
     hu: {
       title: "A saját géped",
       body: "A legközvetlenebb módja a kipróbálásnak. Egy kattintással indítod és állítod le a csapatot az asztali appból, és minden adat a számítógépeden marad — felhő nélkül, ha nem akarod.",
-      req: "Egyetlen követelmény: Docker.",
+      req: "Apple silicon Mac Homebrew-val: az alkalmazás telepíti a Podmant, és magától előkészíti a konténer-futtatókörnyezetet.",
     },
   },
   {
@@ -83,37 +83,37 @@ const MODES: Mode[] = [
     it: {
       title: "Su un PC dedicato",
       body: "Un computer sempre acceso — anche un piccolo mini-PC — dedicato solo alla squadra. Il tuo portatile resta libero e il team lavora giorno e notte senza interruzioni.",
-      req: "Docker, e una rete stabile.",
+      req: "Un Mac con Apple silicon (Linux è sperimentale) e una rete stabile.",
     },
     en: {
       title: "On a dedicated PC",
       body: "An always-on computer — even a small mini-PC — devoted to the team alone. Your laptop stays free and the team works day and night without interruption.",
-      req: "Docker, and a stable network.",
+      req: "A Mac with Apple silicon (Linux is experimental), and a stable network.",
     },
     es: {
       title: "En un PC dedicado",
       body: "Un ordenador siempre encendido — incluso un pequeño mini-PC — dedicado solo al equipo. Tu portátil queda libre y el equipo trabaja día y noche sin interrupciones.",
-      req: "Docker y una red estable.",
+      req: "Un Mac con Apple silicon (Linux es experimental) y una red estable.",
     },
     fr: {
       title: "Sur un PC dédié",
       body: "Un ordinateur toujours allumé — même un petit mini-PC — consacré uniquement à l'équipe. Votre portable reste libre et l'équipe travaille jour et nuit sans interruption.",
-      req: "Docker, et un réseau stable.",
+      req: "Un Mac Apple silicon (Linux est expérimental) et un réseau stable.",
     },
     de: {
       title: "Auf einem dedizierten PC",
       body: "Ein stets eingeschalteter Computer — auch ein kleiner Mini-PC — der allein dem Team gewidmet ist. Dein Laptop bleibt frei und das Team arbeitet Tag und Nacht ohne Unterbrechung.",
-      req: "Docker und ein stabiles Netzwerk.",
+      req: "Ein Mac mit Apple Silicon (Linux ist experimentell) und ein stabiles Netzwerk.",
     },
     pt: {
       title: "Num PC dedicado",
       body: "Um computador sempre ligado — mesmo um pequeno mini-PC — dedicado apenas à equipa. O teu portátil fica livre e a equipa trabalha dia e noite sem interrupções.",
-      req: "Docker e uma rede estável.",
+      req: "Um Mac com Apple silicon (o Linux é experimental) e uma rede estável.",
     },
     hu: {
       title: "Egy dedikált gépen",
       body: "Egy mindig bekapcsolt számítógép — akár egy kis mini-PC — kizárólag a csapatnak szentelve. A laptopod szabad marad, a csapat pedig éjjel-nappal megszakítás nélkül dolgozik.",
-      req: "Docker és egy stabil hálózat.",
+      req: "Apple silicon Mac (a Linux kísérleti) és stabil hálózat.",
     },
   },
   {
@@ -179,7 +179,7 @@ const PAGE = {
       "Non sei legato a un solo strumento: gestisci la squadra dall'app desktop, dal terminale, o da entrambi insieme, con lo stesso runtime e le stesse funzioni. E se fai il login e sincronizzi i dati sul cloud, la ritrovi anche dal web: apri la dashboard e la consulti dal telefono o da qualsiasi browser, senza dover restare al computer su cui gira.",
     ctrlDesktopLabel: "App desktop",
     ctrlDesktopBody:
-      "Il telecomando con interfaccia grafica: installa Docker, avvia e ferma il team, ne mostra lo stato in tempo reale e collega anche una VPS.",
+      "Il telecomando con interfaccia grafica: prepara il runtime dei container (Podman), avvia e ferma il team, ne mostra lo stato in tempo reale e collega anche una VPS.",
     ctrlTerminalLabel: "Terminale (CLI / TUI)",
     ctrlTerminalBody:
       "Le stesse funzioni dalla riga di comando. Puoi anche affidarle al tuo assistente AI personale, come Claude Code o OpenClaw.",
@@ -203,7 +203,7 @@ const PAGE = {
       "You're not tied to one tool: manage the team from the desktop app, the terminal, or both together — same runtime, same features. And if you log in and sync your data to the cloud, you'll find it on the web too: open the dashboard and check it from your phone or any browser, without staying at the computer it runs on.",
     ctrlDesktopLabel: "Desktop app",
     ctrlDesktopBody:
-      "The graphical remote control: it installs Docker, starts and stops the team, shows its status in real time, and connects to a VPS too.",
+      "The graphical remote control: it sets up the container runtime (Podman), starts and stops the team, shows its status in real time, and connects to a VPS too.",
     ctrlTerminalLabel: "Terminal (CLI / TUI)",
     ctrlTerminalBody:
       "The same features from the command line. You can also hand them to your personal AI assistant, like Claude Code or OpenClaw.",
@@ -227,7 +227,7 @@ const PAGE = {
       "No estás atado a una sola herramienta: gestionas el equipo desde la app de escritorio, el terminal, o ambos a la vez, con el mismo runtime y las mismas funciones. Y si inicias sesión y sincronizas los datos en la nube, lo tienes también en la web: abres la dashboard y la consultas desde el móvil o cualquier navegador, sin tener que quedarte en el ordenador donde corre.",
     ctrlDesktopLabel: "App de escritorio",
     ctrlDesktopBody:
-      "El mando a distancia con interfaz gráfica: instala Docker, inicia y detiene el equipo, muestra su estado en tiempo real y también conecta una VPS.",
+      "El mando a distancia con interfaz gráfica: prepara el entorno de contenedores (Podman), inicia y detiene el equipo, muestra su estado en tiempo real y también conecta una VPS.",
     ctrlTerminalLabel: "Terminal (CLI / TUI)",
     ctrlTerminalBody:
       "Las mismas funciones desde la línea de comandos. También puedes confiárselas a tu asistente de IA personal, como Claude Code u OpenClaw.",
@@ -251,7 +251,7 @@ const PAGE = {
       "Vous n'êtes lié à aucun outil unique : vous gérez l'équipe depuis l'app de bureau, le terminal, ou les deux ensemble, avec le même runtime et les mêmes fonctions. Et si vous vous connectez et synchronisez vos données dans le cloud, vous la retrouvez aussi sur le web : ouvrez la dashboard et consultez-la depuis votre téléphone ou n'importe quel navigateur, sans rester à l'ordinateur où elle tourne.",
     ctrlDesktopLabel: "App de bureau",
     ctrlDesktopBody:
-      "La télécommande à interface graphique : elle installe Docker, démarre et arrête l'équipe, affiche son état en temps réel et connecte aussi un VPS.",
+      "La télécommande à interface graphique : elle prépare l'environnement de conteneurs (Podman), démarre et arrête l'équipe, affiche son état en temps réel et connecte aussi un VPS.",
     ctrlTerminalLabel: "Terminal (CLI / TUI)",
     ctrlTerminalBody:
       "Les mêmes fonctions depuis la ligne de commande. Vous pouvez aussi les confier à votre assistant d'IA personnel, comme Claude Code ou OpenClaw.",
@@ -275,7 +275,7 @@ const PAGE = {
       "Du bist an kein einzelnes Werkzeug gebunden: Du verwaltest das Team über die Desktop-App, das Terminal oder beides zusammen — gleiche Laufzeitumgebung, gleiche Funktionen. Und wenn du dich anmeldest und deine Daten in die Cloud synchronisierst, findest du es auch im Web: Öffne die Dashboard und sieh sie dir vom Handy oder jedem Browser aus an, ohne am Computer bleiben zu müssen, auf dem es läuft.",
     ctrlDesktopLabel: "Desktop-App",
     ctrlDesktopBody:
-      "Die Fernbedienung mit grafischer Oberfläche: Sie installiert Docker, startet und stoppt das Team, zeigt seinen Status in Echtzeit und verbindet auch einen VPS.",
+      "Die Fernbedienung mit grafischer Oberfläche: Sie richtet die Container-Laufzeit (Podman) ein, startet und stoppt das Team, zeigt seinen Status in Echtzeit und verbindet auch einen VPS.",
     ctrlTerminalLabel: "Terminal (CLI / TUI)",
     ctrlTerminalBody:
       "Dieselben Funktionen über die Kommandozeile. Du kannst sie auch deinem persönlichen KI-Assistenten überlassen, wie Claude Code oder OpenClaw.",
@@ -299,7 +299,7 @@ const PAGE = {
       "Nem vagy egyetlen eszközhöz kötve: az asztali appból, a terminálból, vagy a kettőből együtt kezeled a csapatot, ugyanazzal a futtatókörnyezettel és ugyanazokkal a funkciókkal. És ha bejelentkezel és a felhőbe szinkronizálod az adatokat, a weben is megtalálod: megnyitod a dashboardot, és a telefonodról vagy bármelyik böngészőből megnézed, anélkül hogy annál a gépnél kellene maradnod, amelyen fut.",
     ctrlDesktopLabel: "Asztali app",
     ctrlDesktopBody:
-      "A grafikus felületű távirányító: telepíti a Dockert, elindítja és leállítja a csapatot, valós időben mutatja az állapotát, és VPS-hez is csatlakozik.",
+      "A grafikus felületű távirányító: előkészíti a konténer-futtatókörnyezetet (Podman), elindítja és leállítja a csapatot, valós időben mutatja az állapotát, és VPS-hez is csatlakozik.",
     ctrlTerminalLabel: "Terminál (CLI / TUI)",
     ctrlTerminalBody:
       "Ugyanazok a funkciók a parancssorból. Rá is bízhatod őket a személyes AI-asszisztensedre, mint a Claude Code vagy az OpenClaw.",
@@ -323,7 +323,7 @@ const PAGE = {
       "Não estás preso a uma só ferramenta: geres a equipa a partir da app de ambiente de trabalho, do terminal, ou de ambos juntos, com o mesmo runtime e as mesmas funções. E se iniciares sessão e sincronizares os dados na nuvem, encontra-la também na web: abres a dashboard e consulta-la a partir do telemóvel ou de qualquer navegador, sem teres de ficar no computador onde corre.",
     ctrlDesktopLabel: "App de ambiente de trabalho",
     ctrlDesktopBody:
-      "O comando à distância com interface gráfica: instala o Docker, inicia e para a equipa, mostra o seu estado em tempo real e também liga um VPS.",
+      "O comando à distância com interface gráfica: prepara o ambiente de contentores (Podman), inicia e para a equipa, mostra o seu estado em tempo real e também liga um VPS.",
     ctrlTerminalLabel: "Terminal (CLI / TUI)",
     ctrlTerminalBody:
       "As mesmas funções a partir da linha de comandos. Também podes confiá-las ao teu assistente de IA pessoal, como o Claude Code ou o OpenClaw.",
