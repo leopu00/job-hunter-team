@@ -35,6 +35,12 @@ function normalizePlatform(value) {
 }
 
 
+// 0.4 ships no Windows installer: the release has nothing to download for it.
+function releaseHasNoWindows(version) {
+  const [major, minor] = String(version).split('.').map((part) => Number.parseInt(part, 10));
+  return major > 0 || minor >= 4;
+}
+
 // The Mac build of 0.4 is Apple silicon only (the file name still says
 // "universal"; it is renamed in 0.4.1). On an Intel Mac it would download and
 // not open, so the download is refused before anything is fetched. Node run
@@ -160,6 +166,13 @@ export async function downloadRelease({ platform: requestedPlatform, version: re
   const version = normalizeVersion(requestedVersion);
   if (deb && platform !== 'linux') {
     throw new Error('The --deb option is available only for Linux.');
+  }
+  // The 0.4 release has no Windows installer (coming soon); the older ones did.
+  if (platform === 'windows' && releaseHasNoWindows(version)) {
+    throw new Error(
+      'Windows is not part of 0.4.0: there is no Windows installer in this release (coming soon). '
+      + 'Nothing was downloaded.',
+    );
   }
   if (platform === 'macos' && hostIsIntelMac()) {
     throw new Error(

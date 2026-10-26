@@ -212,3 +212,18 @@ def test_an_intel_mac_may_still_download_the_other_systems(tmp_path, platform):
 
     assert result.returncode == 0, result.stderr
     assert (tmp_path / "user" / "downloads" / asset).read_bytes() == b"bytes"
+
+
+@pytest.mark.parametrize("version", ["0.4.0", "0.4.1", "1.0.0"])
+def test_windows_is_refused_for_a_release_that_has_no_installer(tmp_path, version):
+    asset = "job-hunter-team-windows-x64-setup.exe"
+    with release_server(release_files(asset, b"bytes")) as base_url:
+        result = run_jht(
+            "download", "--os", "windows", "--version", version,
+            env=isolated_env(tmp_path, base_url),
+        )
+
+    assert result.returncode != 0
+    assert "Windows is not part of 0.4.0" in result.stderr and "coming soon" in result.stderr
+    assert "Nothing was downloaded" in result.stderr
+    assert not (tmp_path / "user" / "downloads").exists()
