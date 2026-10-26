@@ -162,6 +162,44 @@ describe("il percorso di install non contiene riferimenti mutabili", () => {
 
 // ── Criteri 3 e 4: diagnostica e aggiornamento esplicito ────────────────
 
+posixOnly("jht providers (la lista) vede la CLI dove l'install la mette", () => {
+  // L'install scrive nel volume jht-deps (NPM_CONFIG_PREFIX), non in JHT_HOME/.npm-global: dopo la
+  // ricreazione della macchina la lista diceva «CLI: —» con la CLI al suo posto.
+  it("la trova dal binario sul PATH, anche se la cartella vecchia e' vuota", () => {
+    const sb = makeSandbox({ provider: "codex", version: PINS.codex.version });
+    const r = runCli(sb, ["providers"]);
+    expect(r.code).toBe(0);
+    expect(r.out).toContain(`CLI: ${PINS.codex.version}`);
+    expect(r.out).not.toContain("CLI: —");
+  });
+
+  it("la trova dal prefisso dell'install (volume) quando il binario non risponde", () => {
+    const sb = makeSandbox({ provider: "claude", version: PINS.claude.version });
+    const pkg = path.join(sb.root, "prefix", "lib", "node_modules", "@openai", "codex");
+    mkdirSync(pkg, { recursive: true });
+    writeFileSync(path.join(pkg, "package.json"), JSON.stringify({ name: "@openai/codex", version: PINS.codex.version }), "utf-8");
+    writeFileSync(
+      path.join(sb.home, "jht.config.json"),
+      JSON.stringify({ active_provider: "openai", providers: { openai: { auth_method: "subscription" } } }),
+      "utf-8",
+    );
+    const r = runCli(sb, ["providers"]);
+    expect(r.code).toBe(0);
+    expect(r.out).toContain(`CLI: ${PINS.codex.version}`);
+  });
+
+  it("con la CLI davvero assente dice «—», non una versione", () => {
+    const sb = makeSandbox({ provider: "claude", version: PINS.claude.version });
+    writeFileSync(
+      path.join(sb.home, "jht.config.json"),
+      JSON.stringify({ active_provider: "openai", providers: { openai: { auth_method: "subscription" } } }),
+      "utf-8",
+    );
+    const r = runCli(sb, ["providers"]);
+    expect(r.out).toContain("CLI: —");
+  });
+});
+
 posixOnly("jht providers versions / update — attesa vs installata", () => {
   it("dice attesa e installata, ed è verde quando coincidono", () => {
     const sb = makeSandbox({ provider: "codex", version: PINS.codex.version });

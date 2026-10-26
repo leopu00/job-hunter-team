@@ -14,7 +14,7 @@
  */
 import { describe, it, expect } from "vitest";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, chmodSync } from "node:fs";
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, chmodSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -143,6 +143,22 @@ posixOnly("jht providers autoupdate — aggiornamento al boot", () => {
     expect(r.code).toBe(0);
     expect(r.out).toContain(`2.1.220 → ${PINS.claude.version}`);
     expect(r.out).toContain("UPDATED");
+  });
+
+  it("dice INSTALLED, non «nothing to reinstall», quando la CLI non c'era (volume o macchina ricreati)", () => {
+    const sb = makeSandbox({
+      provider: "openai", version: "1.0.0", update: "bump", newVersion: PINS.codex.version,
+    });
+    rmSync(path.join(sb.root, "ver"));   // nessuna CLI: il finto binario non risponde con una versione
+    const r = runAutoUpdate(sb);
+    expect(r.code).toBe(0);
+    expect(r.out).toContain(`unknown → ${PINS.codex.version}`);
+    expect(r.out).toContain("INSTALLED");
+    expect(r.out).not.toContain("UNCHANGED");
+    expect(r.out).not.toContain("nothing to reinstall");
+    expect(sb.calls("npm").some((c) => c.startsWith("install "))).toBe(true);
+    // niente versione di prima: nessun finding «aggiornata da X a Y» al Capitano
+    expect(sb.mailbox()).toHaveLength(0);
   });
 
   it("dice ESPLICITAMENTE quando la versione non è cambiata (criterio 2 + 7)", () => {
