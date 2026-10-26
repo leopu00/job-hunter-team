@@ -16,7 +16,7 @@ import {
 import { syntheticStats } from "../test-support/existing-team-stats-fixture";
 import { enterExistingTeamReadOnly, leaveExistingTeamReadOnly, existingTeamReadOnly } from "./existing-team-readonly";
 import { startVpsLink, stopVpsLink, vpsLinkState } from "./vps-link";
-import { REFRESH_EVENT } from "../shell/router";
+import { REFRESH_EVENT } from "../shell/refresh-event";
 
 const native = vi.hoisted(() => ({ invoke: vi.fn(), isTauri: vi.fn() }));
 vi.mock("@tauri-apps/api/core", () => native);

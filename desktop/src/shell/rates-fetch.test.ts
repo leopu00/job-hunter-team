@@ -69,7 +69,7 @@ describe("the exchange rates", () => {
     expect(isRatesRequest("https://example.invalid/?u=https://api.frankfurter.dev/")).toBe(false);
 
     resetRatesKept();
-    const network = vi.fn(async () => answer(TABLE));
+    const network = vi.fn(async (_url: RequestInfo | URL) => answer(TABLE));
     const fake = { fetch: network } as unknown as typeof globalThis;
     const restore = installApiBridge(async () => answer("{}"), fake);
     await fake.fetch(URL_RATES);
