@@ -257,6 +257,12 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
+      # Before anything is installed from apt: see the script for why (a mirror that serves the
+      # packages at 25-50 kB/s cancelled this job at its ceiling on 22/10 and 26/10).
+      - name: Pick a fast apt mirror
+        if: runner.os == 'Linux'
+        run: sudo sh scripts/ci/apt-mirror.sh
+
       # Le librerie di sistema che Tauri 2 linka su Linux (WebKitGTK 4.1 e
       # compagnia); macOS e Windows usano la webview del sistema.
       - name: Install Tauri system libraries
@@ -382,6 +388,11 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           fetch-depth: 0
+
+      # Before anything is installed from apt: see the script for why (a mirror that serves the
+      # packages at 25-50 kB/s cancelled this job at its ceiling on 22/10 and 26/10).
+      - name: Pick a fast apt mirror
+        run: sudo sh scripts/ci/apt-mirror.sh
 
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
@@ -593,6 +604,11 @@ jobs:
       # spostato non cambia il job senza un commit.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
+      # Before anything is installed from apt: see the script for why (a mirror that serves the
+      # packages at 25-50 kB/s cancelled this job at its ceiling on 22/10 and 26/10).
+      - name: Pick a fast apt mirror
+        run: sudo sh scripts/ci/apt-mirror.sh
+
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
         with:
           python-version: "3.12"
@@ -799,6 +815,11 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
+      # Before anything is installed from apt: see the script for why (a mirror that serves the
+      # packages at 25-50 kB/s cancelled this job at its ceiling on 22/10 and 26/10).
+      - name: Pick a fast apt mirror
+        run: sudo sh scripts/ci/apt-mirror.sh
+
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
           node-version: "24"
@@ -1002,6 +1023,11 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
+      # Before anything is installed from apt: see the script for why (a mirror that serves the
+      # packages at 25-50 kB/s cancelled this job at its ceiling on 22/10 and 26/10).
+      - name: Pick a fast apt mirror
+        run: sudo sh scripts/ci/apt-mirror.sh
+
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
           node-version: "24"
@@ -1188,6 +1214,11 @@ jobs:
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      # Before anything is installed from apt: see the script for why (a mirror that serves the
+      # packages at 25-50 kB/s cancelled this job at its ceiling on 22/10 and 26/10).
+      - name: Pick a fast apt mirror
+        run: sudo sh scripts/ci/apt-mirror.sh
 
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
