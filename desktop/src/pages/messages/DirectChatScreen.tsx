@@ -633,7 +633,7 @@ export default function DirectChatScreen({
     return (
       <article
         key={key}
-        className={`max-w-[86%] rounded-lg px-4 py-3 text-[14px] leading-relaxed break-words ${
+        className={`max-w-[min(92%,72rem)] rounded-lg px-4 py-3 text-[15px] leading-[1.7] break-words ${
           message.role === "user" ? "self-end rounded-br-sm" : "self-start rounded-bl-sm"
         }`}
         style={{
@@ -682,7 +682,7 @@ export default function DirectChatScreen({
                 data-testid="direct-chat-suggestion"
                 disabled={status.state !== "ready" || writeLocked || sending}
                 onClick={() => void send(line)}
-                className="rounded-full border border-[var(--color-border)] px-2.5 py-0.5 text-left text-[14px] text-[var(--color-bright)] disabled:opacity-40"
+                className="rounded-full border border-[var(--color-border)] px-2.5 py-0.5 text-left text-[15px] text-[var(--color-bright)] disabled:opacity-40"
               >
                 {line}
               </button>
@@ -817,7 +817,7 @@ export default function DirectChatScreen({
           className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-4 sm:px-6 py-5"
           data-testid="direct-chat-transcript"
         >
-          <div className="mx-auto max-w-4xl flex flex-col gap-3">
+          <div className="w-full flex flex-col gap-3">
             {loading && items.length === 0 && (
               <p role="status" className="m-0 py-8 text-center text-[13px] text-[var(--color-muted)]">{t.loadingConversation}</p>
             )}
@@ -915,7 +915,7 @@ export default function DirectChatScreen({
         >
           <p
             data-testid="direct-chat-destination"
-            className="mx-auto max-w-4xl m-0 mb-1.5 text-[13px] text-[var(--color-muted)]"
+            className="w-full m-0 mb-1.5 text-[13px] text-[var(--color-muted)]"
           >
             {withName(t.destination, selected.label)}
           </p>
@@ -923,7 +923,7 @@ export default function DirectChatScreen({
             <div
               data-testid="direct-chat-reply-to"
               data-answer={target.kind === "question" && target.words ? "true" : undefined}
-              className="mx-auto max-w-4xl mb-1.5 flex items-center gap-2 rounded-md border border-[var(--color-border)] bg-[var(--color-card)] px-2 py-1 text-[13px]"
+              className="w-full mb-1.5 flex items-center gap-2 rounded-md border border-[var(--color-border)] bg-[var(--color-card)] px-2 py-1 text-[13px]"
             >
               <span className="shrink-0 text-[var(--color-muted)]">
                 {target.kind === "question" && target.words ? t.replyingToQuestion : t.replyingTo}
@@ -947,12 +947,12 @@ export default function DirectChatScreen({
             </div>
           )}
           {answerRefusal && (
-            <p role="alert" data-testid="direct-chat-answer-refused" className="mx-auto max-w-4xl m-0 mb-1.5 text-[13px] text-[var(--color-red)]">
+            <p role="alert" data-testid="direct-chat-answer-refused" className="w-full m-0 mb-1.5 text-[13px] text-[var(--color-red)]">
               {answerRefusal}
             </p>
           )}
           <div
-            className="mx-auto max-w-4xl flex flex-wrap items-end gap-2 rounded-xl border border-[var(--color-border)] bg-[var(--color-card)] px-3 py-2 focus-within:border-[var(--color-border-glow)]"
+            className="w-full flex flex-wrap items-end gap-2 rounded-xl border border-[var(--color-border)] bg-[var(--color-card)] px-3 py-2 focus-within:border-[var(--color-border-glow)]"
             data-testid="direct-chat-composer-row"
           >
             <textarea
@@ -982,7 +982,7 @@ export default function DirectChatScreen({
                   ? t.readOnlyInvite
                   : status.state === "ready" ? withName(t.writeToPlaceholder, selected.label) : t.connectToWrite
               }
-              className="max-h-28 min-h-8 w-full min-w-0 flex-[1_1_16rem] resize-none border-0 bg-transparent px-1 py-1.5 text-[14px] text-[var(--color-base)] outline-none disabled:opacity-50 sm:min-w-48"
+              className="max-h-28 min-h-8 w-full min-w-0 flex-[1_1_16rem] resize-none border-0 bg-transparent px-1 py-1.5 text-[15px] text-[var(--color-base)] outline-none disabled:opacity-50 sm:min-w-48"
             />
             <VoiceInputControl
               value={text}
@@ -1000,7 +1000,7 @@ export default function DirectChatScreen({
               {sending ? t.sending : t.send}
             </button>
           </div>
-          <p data-testid="direct-chat-keys" className="mx-auto max-w-4xl m-0 mt-1 text-[13px] text-[var(--color-dim)]">
+          <p data-testid="direct-chat-keys" className="w-full m-0 mt-1 text-[13px] text-[var(--color-dim)]">
             {t.keysHint}
           </p>
         </form>

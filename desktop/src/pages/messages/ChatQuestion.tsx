@@ -69,7 +69,7 @@ export default function ChatQuestion({
       data-kind={question.kind}
       data-quoted={quoted ? "true" : undefined}
       onContextMenu={onMenu}
-      className="self-start max-w-[86%] rounded-lg rounded-bl-sm px-4 py-3 text-[14px] leading-relaxed break-words"
+      className="self-start max-w-[min(92%,72rem)] rounded-lg rounded-bl-sm px-4 py-3 text-[15px] leading-[1.7] break-words"
       style={{
         color: "var(--color-base)",
         background: "var(--color-card)",
