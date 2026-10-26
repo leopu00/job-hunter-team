@@ -152,8 +152,12 @@ function StatsBody({ stats, t, locale, unit, sample, now }: { stats: WorkStats; 
   }
   const idle = stats.lastObservation === null ? 0 : Math.floor((now.getTime() - Date.parse(stats.lastObservation)) / 86_400_000);
   const found = sumOf(counted, (night) => night.found);
-  const above = sumOf(counted, (night) => night.aboveThreshold);
+  // «above the threshold» adds up only the nights counted with today's threshold: two thresholds are never mixed
+  const sameThreshold = counted.filter((night) => night.scoreThreshold === stats.threshold);
+  const otherThreshold = counted.filter((night) => night.aboveThreshold !== null && night.scoreThreshold !== stats.threshold);
+  const above = sumOf(sameThreshold, (night) => night.aboveThreshold);
   const use = sumOf(counted, (night) => night.consumptionPct);
+  const aboveWith = stats.threshold === null ? t.above : fill(t.aboveWith, { threshold: stats.threshold });
   return (
     <>
       {idle > STALE_AFTER_DAYS && (
@@ -175,13 +179,18 @@ function StatsBody({ stats, t, locale, unit, sample, now }: { stats: WorkStats; 
           </p>
           <p className="m-0">
             {above.over === 0 ? (
-              <span className="text-[var(--color-muted)]">{t.above}: {t.unavailable}</span>
+              <span className="text-[var(--color-muted)]">{aboveWith}: {t.unavailable}</span>
             ) : (
               <>
-                <span data-testid="work-stats-above-total">{above.total}</span> {t.above} <span className="text-[var(--color-muted)]">({sample(above.over)})</span>
+                <span data-testid="work-stats-above-total">{above.total}</span> {aboveWith} <span className="text-[var(--color-muted)]">({sample(above.over)})</span>
               </>
             )}
           </p>
+          {otherThreshold.length > 0 && (
+            <p data-testid="work-stats-other-threshold" className="m-0 text-[11px] text-[var(--color-yellow)]">
+              {fill(t.otherThreshold, { n: otherThreshold.length, unit: unit(otherThreshold.length) })}
+            </p>
+          )}
           <p className="m-0">
             {use.over === 0 ? (
               <span className="text-[var(--color-muted)]">{t.consumption}: {t.unavailable}</span>
@@ -193,6 +202,9 @@ function StatsBody({ stats, t, locale, unit, sample, now }: { stats: WorkStats; 
           </p>
         </div>
       )}
+      <p data-testid="work-stats-legend" className="m-0 text-[11px] text-[var(--color-muted)]">
+        {fill(t.legend, { unit: unit(2) })}
+      </p>
       <table data-testid="work-stats-table" className="w-full text-left text-[11px] text-[var(--color-muted)]">
         <caption className="sr-only">{t.tableLabel}</caption>
         <thead>
@@ -210,7 +222,7 @@ function StatsBody({ stats, t, locale, unit, sample, now }: { stats: WorkStats; 
               <th scope="row" className="font-normal">{localDay(night.date, locale)}</th>
               <td>{night.hoursActive}</td>
               <td>{night.found}</td>
-              <td>{night.aboveThreshold ?? t.unavailable}</td>
+              <td>{night.aboveThreshold === null ? t.unavailable : night.scoreThreshold === null ? night.aboveThreshold : `${night.aboveThreshold} (≥ ${night.scoreThreshold})`}</td>
               <td>{night.consumptionPct ?? t.unavailable}</td>
             </tr>
           ))}

@@ -99,7 +99,37 @@ describe("what happened", () => {
     await screen.findByTestId("work-stats-summary");
     expect(screen.queryByTestId("work-stats-above-total")).toBeNull();
     expect(screen.queryByTestId("work-stats-use-total")).toBeNull();
-    expect(screen.getByText(/above the score threshold: not available/)).toBeInTheDocument();
+    expect(screen.getByText(/above the score threshold \(75\): not available/)).toBeInTheDocument();
+  });
+
+  it("never adds up two score thresholds: «above» counts only the nights with today's, and says how many it left out", async () => {
+    const at = (threshold: number, from: number, count: number) =>
+      Array.from({ length: count }, (_, i) => night(`2026-10-${String(from + i).padStart(2, "0")}`, { scoreThreshold: threshold, aboveThreshold: 2 }));
+    serve(stats([...at(70, 10, 3), ...at(75, 13, 4)], { threshold: 75 }));
+    show();
+    const summary = await screen.findByTestId("work-stats-summary");
+    // 4 nights at 75 × 2 = 8; the 3 nights at 70 are not in it, and the total says which threshold it is
+    expect(screen.getByTestId("work-stats-above-total")).toHaveTextContent("8");
+    expect(summary).toHaveTextContent("above the score threshold (75)");
+    expect(within(summary).getAllByText("(from 4 nights)").length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByTestId("work-stats-other-threshold")).toHaveTextContent("3 nights with another score threshold are not in the «above threshold» total.");
+    // the found total still counts all seven nights: the threshold does not touch it
+    expect(screen.getByTestId("work-stats-found-total")).toHaveTextContent("35");
+    // each night shows the threshold its number was counted with
+    expect(within(screen.getAllByTestId("work-stats-row")[0]).getByText("2 (≥ 70)")).toBeInTheDocument();
+    expect(within(screen.getAllByTestId("work-stats-row")[6]).getByText("2 (≥ 75)")).toBeInTheDocument();
+    cleanup();
+    serve(stats(at(70, 10, 3), { threshold: 75 }));
+    show();
+    await screen.findByTestId("work-stats-summary");
+    expect(screen.queryByTestId("work-stats-above-total")).toBeNull();
+    expect(screen.getByText(/above the score threshold \(75\): not available/)).toBeInTheDocument();
+  });
+
+  it("says the totals count only the nights with at least one hour of work", async () => {
+    serve(stats(days(3)));
+    show();
+    expect(await screen.findByTestId("work-stats-legend")).toHaveTextContent("The totals count only the nights with at least 1 hour of work.");
   });
 
   it("calls old data old, and still shows it", async () => {
@@ -122,7 +152,7 @@ describe("what happened", () => {
   it("says where the statistics are kept, and for how long", async () => {
     serve(stats(days(3)));
     show(NIGHT_HOURS, "vps");
-    expect(await screen.findByTestId("work-stats-where")).toHaveTextContent("kept on the team's VPS and are never sent out; they are kept for 90 days at most");
+    expect(await screen.findByTestId("work-stats-where")).toHaveTextContent("kept on the team's VPS; they are kept for 90 days at most");
     cleanup();
     show(NIGHT_HOURS, "local");
     await waitFor(() => expect(screen.getByTestId("work-stats-where")).toHaveTextContent("kept on this computer"));

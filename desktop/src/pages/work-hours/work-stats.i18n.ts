@@ -5,12 +5,12 @@ import type { Locale } from "@/i18n/config";
  * statistics it keeps. 7 languages; Italian is the source and its shape is the type. A number is always
  * said with the sample it comes from («from 5 nights»), and the word for the sample is «nights» for hours
  * that reach into the night and «days» otherwise. Nothing here promises anything: these are things that
- * already happened. `{n}`, `{min}`, `{days}`, `{from}`, `{to}`, `{unit}` and `{sample}` are filled in by the page.
+ * already happened. `{n}`, `{min}`, `{days}`, `{threshold}`, `{from}`, `{to}`, `{unit}` and `{sample}` are filled in by the page.
  */
 const it = {
   title: "Cosa è successo",
-  whereLocal: "Le statistiche stanno su questo computer e non vengono mai inviate fuori; si conservano al massimo {days} giorni.",
-  whereVps: "Le statistiche stanno sulla VPS della squadra e non vengono mai inviate fuori; si conservano al massimo {days} giorni.",
+  whereLocal: "Le statistiche stanno su questo computer; si conservano al massimo {days} giorni.",
+  whereVps: "Le statistiche stanno sulla VPS della squadra; si conservano al massimo {days} giorni.",
   loading: "Leggo le statistiche…",
   retry: "Riprova",
   readFailed: "Non riesco a leggere le statistiche.",
@@ -25,6 +25,9 @@ const it = {
   dayMany: "giorni",
   found: "posizioni trovate",
   above: "sopra la soglia di punteggio",
+  aboveWith: "sopra la soglia di punteggio ({threshold})",
+  otherThreshold: "{n} {unit} con un’altra soglia di punteggio non sono nel totale di «sopra soglia».",
+  legend: "I totali contano solo le {unit} con almeno 1 ora di lavoro.",
   consumption: "punti del budget settimanale",
   colDate: "Data",
   colHours: "Ore attive",
@@ -44,8 +47,8 @@ export type WorkStatsText = typeof it;
 
 const en: WorkStatsText = {
   title: "What happened",
-  whereLocal: "The statistics are kept on this computer and are never sent out; they are kept for {days} days at most.",
-  whereVps: "The statistics are kept on the team's VPS and are never sent out; they are kept for {days} days at most.",
+  whereLocal: "The statistics are kept on this computer; they are kept for {days} days at most.",
+  whereVps: "The statistics are kept on the team's VPS; they are kept for {days} days at most.",
   loading: "Reading the statistics…",
   retry: "Try again",
   readFailed: "Cannot read the statistics.",
@@ -60,6 +63,9 @@ const en: WorkStatsText = {
   dayMany: "days",
   found: "positions found",
   above: "above the score threshold",
+  aboveWith: "above the score threshold ({threshold})",
+  otherThreshold: "{n} {unit} with another score threshold are not in the «above threshold» total.",
+  legend: "The totals count only the {unit} with at least 1 hour of work.",
   consumption: "points of the weekly budget",
   colDate: "Date",
   colHours: "Active hours",
@@ -77,8 +83,8 @@ const en: WorkStatsText = {
 
 const de: WorkStatsText = {
   title: "Was passiert ist",
-  whereLocal: "Die Statistiken liegen auf diesem Computer und werden nie nach außen gesendet; sie bleiben höchstens {days} Tage erhalten.",
-  whereVps: "Die Statistiken liegen auf der VPS des Teams und werden nie nach außen gesendet; sie bleiben höchstens {days} Tage erhalten.",
+  whereLocal: "Die Statistiken liegen auf diesem Computer; sie bleiben höchstens {days} Tage erhalten.",
+  whereVps: "Die Statistiken liegen auf der VPS des Teams; sie bleiben höchstens {days} Tage erhalten.",
   loading: "Ich lese die Statistiken…",
   retry: "Erneut versuchen",
   readFailed: "Die Statistiken lassen sich nicht lesen.",
@@ -93,6 +99,9 @@ const de: WorkStatsText = {
   dayMany: "Tage",
   found: "gefundene Stellen",
   above: "über der Punkteschwelle",
+  aboveWith: "über der Punkteschwelle ({threshold})",
+  otherThreshold: "{n} {unit} mit einer anderen Punkteschwelle sind nicht in der Summe „über Schwelle“.",
+  legend: "Die Summen zählen nur die {unit} mit mindestens 1 Stunde Arbeit.",
   consumption: "Punkte des Wochenbudgets",
   colDate: "Datum",
   colHours: "Aktive Stunden",
@@ -110,8 +119,8 @@ const de: WorkStatsText = {
 
 const fr: WorkStatsText = {
   title: "Ce qui s’est passé",
-  whereLocal: "Les statistiques sont gardées sur cet ordinateur et ne sont jamais envoyées ailleurs ; elles sont conservées {days} jours au plus.",
-  whereVps: "Les statistiques sont gardées sur la VPS de l’équipe et ne sont jamais envoyées ailleurs ; elles sont conservées {days} jours au plus.",
+  whereLocal: "Les statistiques sont gardées sur cet ordinateur ; elles sont conservées {days} jours au plus.",
+  whereVps: "Les statistiques sont gardées sur la VPS de l’équipe ; elles sont conservées {days} jours au plus.",
   loading: "Je lis les statistiques…",
   retry: "Réessayer",
   readFailed: "Impossible de lire les statistiques.",
@@ -126,6 +135,9 @@ const fr: WorkStatsText = {
   dayMany: "jours",
   found: "postes trouvés",
   above: "au-dessus du seuil de score",
+  aboveWith: "au-dessus du seuil de score ({threshold})",
+  otherThreshold: "{n} {unit} avec un autre seuil de score ne sont pas dans le total « au-dessus du seuil ».",
+  legend: "Les totaux ne comptent que les {unit} avec au moins 1 heure de travail.",
   consumption: "points du budget hebdomadaire",
   colDate: "Date",
   colHours: "Heures actives",
@@ -143,8 +155,8 @@ const fr: WorkStatsText = {
 
 const es: WorkStatsText = {
   title: "Qué ha pasado",
-  whereLocal: "Las estadísticas se guardan en este ordenador y nunca se envían fuera; se conservan {days} días como máximo.",
-  whereVps: "Las estadísticas se guardan en la VPS del equipo y nunca se envían fuera; se conservan {days} días como máximo.",
+  whereLocal: "Las estadísticas se guardan en este ordenador; se conservan {days} días como máximo.",
+  whereVps: "Las estadísticas se guardan en la VPS del equipo; se conservan {days} días como máximo.",
   loading: "Leyendo las estadísticas…",
   retry: "Reintentar",
   readFailed: "No se pueden leer las estadísticas.",
@@ -159,6 +171,9 @@ const es: WorkStatsText = {
   dayMany: "días",
   found: "puestos encontrados",
   above: "por encima del umbral de puntuación",
+  aboveWith: "por encima del umbral de puntuación ({threshold})",
+  otherThreshold: "{n} {unit} con otro umbral de puntuación no están en el total «sobre el umbral».",
+  legend: "Los totales cuentan solo las {unit} con al menos 1 hora de trabajo.",
   consumption: "puntos del presupuesto semanal",
   colDate: "Fecha",
   colHours: "Horas activas",
@@ -176,8 +191,8 @@ const es: WorkStatsText = {
 
 const pt: WorkStatsText = {
   title: "O que aconteceu",
-  whereLocal: "As estatísticas ficam neste computador e nunca são enviadas para fora; guardam-se no máximo {days} dias.",
-  whereVps: "As estatísticas ficam na VPS da equipe e nunca são enviadas para fora; guardam-se no máximo {days} dias.",
+  whereLocal: "As estatísticas ficam neste computador; guardam-se no máximo {days} dias.",
+  whereVps: "As estatísticas ficam na VPS da equipe; guardam-se no máximo {days} dias.",
   loading: "A ler as estatísticas…",
   retry: "Tentar de novo",
   readFailed: "Não é possível ler as estatísticas.",
@@ -192,6 +207,9 @@ const pt: WorkStatsText = {
   dayMany: "dias",
   found: "vagas encontradas",
   above: "acima do limiar de pontuação",
+  aboveWith: "acima do limiar de pontuação ({threshold})",
+  otherThreshold: "{n} {unit} com outro limiar de pontuação não estão no total «acima do limiar».",
+  legend: "Os totais contam só as {unit} com pelo menos 1 hora de trabalho.",
   consumption: "pontos do orçamento semanal",
   colDate: "Data",
   colHours: "Horas ativas",
@@ -209,8 +227,8 @@ const pt: WorkStatsText = {
 
 const hu: WorkStatsText = {
   title: "Mi történt",
-  whereLocal: "A statisztikák ezen a számítógépen vannak, és sosem kerülnek ki innen; legfeljebb {days} napig őrizzük meg őket.",
-  whereVps: "A statisztikák a csapat VPS-én vannak, és sosem kerülnek ki onnan; legfeljebb {days} napig őrizzük meg őket.",
+  whereLocal: "A statisztikák ezen a számítógépen vannak; legfeljebb {days} napig őrizzük meg őket.",
+  whereVps: "A statisztikák a csapat VPS-én vannak; legfeljebb {days} napig őrizzük meg őket.",
   loading: "A statisztikák beolvasása…",
   retry: "Újra",
   readFailed: "A statisztikák nem olvashatók.",
@@ -225,6 +243,9 @@ const hu: WorkStatsText = {
   dayMany: "nap",
   found: "megtalált állás",
   above: "a pontszámküszöb felett",
+  aboveWith: "a pontszámküszöb felett ({threshold})",
+  otherThreshold: "{n} {unit}, amely más pontszámküszöbbel készült, nincs benne a „küszöb felett” összegben.",
+  legend: "Az összegekben csak a legalább 1 órányi munkával járó {unit} számít.",
   consumption: "pont a heti keretből",
   colDate: "Dátum",
   colHours: "Aktív órák",
