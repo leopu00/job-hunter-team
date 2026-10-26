@@ -24,6 +24,7 @@ from pathlib import Path
 
 import pytest
 
+from broker_live_stack import requirements_text
 from live_engines import engine_argv, live_engines
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -31,14 +32,7 @@ IMAGE = "docker.io/library/python:3.11-slim-bookworm"
 
 
 ENGINES = live_engines()
-pytestmark = [
-    pytest.mark.skipif(not ENGINES, reason="needs Linux with Docker or Podman (runs in CI)"),
-    # Quarantined (JHT-T139), to be fixed before the 0.4.0 tag: since notary.py
-    # imports tldextract when it loads, the broker cannot start in the bare
-    # python image this test runs it in (no network, no tldextract), and every
-    # case errored at setup. The broker image has it; this test does not.
-    pytest.mark.skip(reason="quarantined, JHT-T139: the bare test image has no tldextract for the broker"),
-]
+pytestmark = pytest.mark.skipif(not ENGINES, reason="needs Linux with Docker or Podman (runs in CI)")
 
 
 def run(engine, *args, check=True, timeout=300, input=None):
@@ -48,29 +42,70 @@ def run(engine, *args, check=True, timeout=300, input=None):
     return result
 
 
+# The bare image has none of the broker's third-party imports (tldextract, since the notary).  They are installed
+# once per engine into a volume, with the pins and hashes the CI already uses, and mounted read-only into the
+# broker: the install is the only step with a network, like the pull; the broker and the agent have none.
+_DEPS: dict[str, str] = {}
+
+
+def _deps(engine, tmp_dir: Path) -> str:
+    if engine not in _DEPS:
+        volume = f"jhtbt-deps-{uuid.uuid4().hex[:8]}"
+        requirements = tmp_dir / "broker-requirements.txt"
+        requirements.write_text(requirements_text(), encoding="utf-8")
+        requirements.chmod(0o644)
+        run(engine, "volume", "create", volume)
+        _DEPS[engine] = volume
+        result = run(engine, "run", "--rm", "--user", "0:0", "-v", f"{volume}:/deps",
+                     "-v", f"{requirements}:/requirements.txt:ro", IMAGE,
+                     "pip", "install", "--no-cache-dir", "--disable-pip-version-check", "--require-hashes",
+                     "--no-deps", "--target", "/deps", "-r", "/requirements.txt", check=False, timeout=600)
+        if result.returncode != 0:
+            raise AssertionError("the broker's dependencies could not be installed into the test stack:\n"
+                                 + result.stdout[-1500:] + result.stderr[-1500:])
+        check = run(engine, "run", "--rm", "--network", "none", "-e", "PYTHONPATH=/srv/shared:/deps",
+                    "-v", f"{ROOT / 'shared'}:/srv/shared:ro", "-v", f"{volume}:/deps:ro", IMAGE,
+                    "python3", "-c", "from broker.server import serve", check=False)
+        if check.returncode != 0:
+            raise AssertionError("the broker's code cannot be imported in the test stack:\n" + check.stderr[-1500:])
+    return _DEPS[engine]
+
+
+@pytest.fixture(scope="module", autouse=True)
+def _drop_deps_volumes():
+    yield
+    for engine, volume in _DEPS.items():
+        run(engine, "volume", "rm", "-f", volume, check=False)
+    _DEPS.clear()
+
+
 @pytest.fixture(params=ENGINES)
-def stack(request):
+def stack(request, tmp_path_factory):
     engine = request.param
+    deps = _deps(engine, tmp_path_factory.mktemp("broker-deps"))
     tag = uuid.uuid4().hex[:8]
-    names = {k: f"jhtbt-{k}-{tag}" for k in ("secrets", "state", "sock")}
+    names = {k: f"jhtbt-{k}-{tag}" for k in ("secrets", "state", "sock", "tg")}
     broker = f"jhtbt-broker-{tag}"
     userns = ["--userns", "keep-id:uid=1001,gid=1001"] if engine == "podman" else []
     run(engine, "pull", IMAGE, timeout=600)
     for vol in names.values():
         run(engine, "volume", "create", vol)
-    # What the image does at build time: the three mount points belong to the
-    # broker, the socket directory is traversable but not listable.
+    # What the image does at build time: the mount points belong to the broker,
+    # the socket directories are traversable but not listable.  `tg` is the
+    # volume of the Telegram authorisation socket the broker also serves; the
+    # agent never gets it.
     run(engine, "run", "--rm", *userns, "--user", "0:0",
         "-v", f"{names['secrets']}:/s", "-v", f"{names['state']}:/t", "-v", f"{names['sock']}:/k",
-        IMAGE, "sh", "-c", "chown 1002:1002 /s /t /k && chmod 0700 /s /t && chmod 0711 /k")
+        "-v", f"{names['tg']}:/g",
+        IMAGE, "sh", "-c", "chown 1002:1002 /s /t /k /g && chmod 0700 /s /t && chmod 0711 /k /g")
     run(engine, "run", "-d", "--name", broker, *userns, "--user", "1002:1002",
         "--read-only", "--tmpfs", "/tmp", "--cap-drop", "ALL", "--security-opt", "no-new-privileges",
         "--network", "none",
-        "-e", "PYTHONPATH=/srv/shared", "-e", "PYTHONDONTWRITEBYTECODE=1",
+        "-e", "PYTHONPATH=/srv/shared:/deps", "-e", "PYTHONDONTWRITEBYTECODE=1",
         "-e", "JHT_BROKER_SECRETS=/jht_secrets", "-e", "JHT_BROKER_STATE=/jht_broker_state",
-        "-v", f"{ROOT / 'shared'}:/srv/shared:ro",
+        "-v", f"{ROOT / 'shared'}:/srv/shared:ro", "-v", f"{deps}:/deps:ro",
         "-v", f"{names['secrets']}:/jht_secrets", "-v", f"{names['state']}:/jht_broker_state",
-        "-v", f"{names['sock']}:/run/jht-broker",
+        "-v", f"{names['sock']}:/run/jht-broker", "-v", f"{names['tg']}:/run/jht-broker-telegram",
         IMAGE, "python3", "-c", "from broker.server import serve; serve()")
     for _ in range(60):
         logs = run(engine, "logs", broker, check=False)
