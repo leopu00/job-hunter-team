@@ -46,6 +46,7 @@ import {
   sendOnboardingProviderInput,
   startOnboardingProviderLogin,
   startOnboardingTeam,
+  wakeRuntime,
 } from "../lib/onboarding-runtime";
 import { DASHBOARD_PAGE, goTo, LOGIN_PAGE } from "../lib/pages";
 import { signOut, useSession } from "../lib/supabase";
@@ -153,6 +154,7 @@ vi.mock("../shell/Shell", async () => {
         {reconfirm && <button type="button" onClick={reconfirm.onSetup}>reconfirm-setup</button>}
         {providerSetup && <button type="button" onClick={providerSetup.open}>open-provider-setup</button>}
         {teamOff?.startTeam && <button type="button" onClick={teamOff.startTeam}>team-off-start</button>}
+        {teamOff && <button type="button" onClick={() => void teamOff.wakeRuntime().catch(() => undefined)}>team-off-wake</button>}
       </main>
     );
   }
@@ -1993,11 +1995,45 @@ describe("DashboardApp onboarding router", () => {
 
     // the app opens; nothing started, nothing declared finished
     expect(await screen.findByTestId("shell")).toBeInTheDocument();
+    // Backup and Export read through the chat's connection: it is opened without the team (the container is enough)
+    await waitFor(() => expect(reconnectDirectChat).toHaveBeenCalledOnce());
     expect(screen.queryByTestId("onboarding")).not.toBeInTheDocument();
     expect(resumeOnboardingTeamStart).not.toHaveBeenCalled();
     expect(startOnboardingTeam).not.toHaveBeenCalled();
     expect(prepareOnboardingRuntime).not.toHaveBeenCalled();
     expect(markOnboardingReady).not.toHaveBeenCalled();
+  });
+
+  it("the wake of the runtime in the app without the team connects the chat afterwards, and starts no team", async () => {
+    vi.mocked(useSession).mockReturnValue(signedInAs("team-off-wake-account"));
+    vi.mocked(loadOnboardingGate).mockResolvedValue({
+      phase: "required",
+      account: { displayName: "Team Off Wake" },
+      resumeAvailable: true,
+      runtime: { status: "collecting", stage: "host" },
+    });
+    vi.mocked(resumeOnboardingSnapshot).mockResolvedValue({
+      ...TEAM_READY, containerRunning: false, providerConfigured: false, providerAuthenticated: false,
+      assistantRunning: false, captainRunning: false, localHost: true,
+    });
+    vi.mocked(wakeRuntime).mockResolvedValue(undefined);
+    // the container is down when the app opens: the first connection fails, the one after the wake works
+    vi.mocked(reconnectDirectChat).mockRejectedValueOnce({ code: "container_unavailable" });
+
+    const user = userEvent.setup();
+    render(<DashboardApp />);
+    expect(await screen.findByText("action-required:team-start")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "open-without-team" }));
+    expect(await screen.findByTestId("shell")).toBeInTheDocument();
+    await waitFor(() => expect(reconnectDirectChat).toHaveBeenCalledOnce());
+
+    await user.click(screen.getByRole("button", { name: "team-off-wake" }));
+    await waitFor(() => expect(wakeRuntime).toHaveBeenCalledOnce());
+    await waitFor(() => expect(reconnectDirectChat).toHaveBeenCalledTimes(2));
+    expect(vi.mocked(wakeRuntime).mock.invocationCallOrder[0])
+      .toBeLessThan(vi.mocked(reconnectDirectChat).mock.invocationCallOrder[1]);
+    expect(resumeOnboardingTeamStart).not.toHaveBeenCalled();
+    expect(startOnboardingTeam).not.toHaveBeenCalled();
   });
 
   it("goes back from the app without the team to the start-the-team screen, and starts nothing by itself", async () => {

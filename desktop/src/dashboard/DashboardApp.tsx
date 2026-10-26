@@ -1070,12 +1070,27 @@ export default function DashboardApp() {
     }
   }, [beginActivityInvocation, fail, identityKey, recordActivityProgress, setRuntime]);
 
+  // Backup and Export read the team's data through the direct chat's connection: without the team the chat is not
+  // opened by the setup, so the mode connects it itself, as soon as the container is there (it needs the container,
+  // not the agents). A container that is not up leaves it disconnected; the wake connects it afterwards.
+  const connectChatWithoutTeam = useCallback(async () => {
+    try {
+      await reconnectDirectChat();
+    } catch {
+      // not connected: the pages that need it say so
+    }
+  }, []);
   const openWithoutTeam = useCallback(() => {
     if (!identityKey) return;
     setTeamOffKey(identityKey);
     setSavedTeamOpening({ identityKey, phase: "done" });
     setGate({ phase: "ready" });
-  }, [identityKey]);
+    void connectChatWithoutTeam();
+  }, [connectChatWithoutTeam, identityKey]);
+  const wakeRuntimeAndConnect = useCallback(async () => {
+    await wakeRuntime();
+    await connectChatWithoutTeam();
+  }, [connectChatWithoutTeam]);
   // Leaves the mode for today's flow: the account is initialised again and the resume offers «start the team».
   const startTeamFromTeamOff = useCallback(() => {
     setTeamOffKey(null);
@@ -1084,8 +1099,8 @@ export default function DashboardApp() {
     void initializeAccount();
   }, [initializeAccount]);
   const teamOff = useMemo<TeamOff | null>(
-    () => (teamOffKey !== null && teamOffKey === identityKey ? { teamOff: true, wakeRuntime, startTeam: startTeamFromTeamOff } : null),
-    [teamOffKey, identityKey, startTeamFromTeamOff],
+    () => (teamOffKey !== null && teamOffKey === identityKey ? { teamOff: true, wakeRuntime: wakeRuntimeAndConnect, startTeam: startTeamFromTeamOff } : null),
+    [teamOffKey, identityKey, startTeamFromTeamOff, wakeRuntimeAndConnect],
   );
 
   const openReadOnlyExistingTeam = useCallback((result: ExistingTeamReadOnlyConnectionResult) => {
