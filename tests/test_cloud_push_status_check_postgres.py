@@ -271,11 +271,12 @@ def test_a_refused_update_freezes_the_timestamp_too(postgres16):
     """
     _publish(postgres16, f"quarantined:{QUARANTINED}", check=False)
     read = postgres16(
-        f"SELECT cloud_push_status, cloud_push_checked_at FROM public.team_state"
+        f"SELECT cloud_push_status, cloud_push_checked_at AT TIME ZONE 'UTC' FROM public.team_state"
         f" WHERE user_id = '{USER_1}';"
     )
     status, checked_at = read.stdout.strip().split("|")
     assert status == "failed"
+    # asked in UTC: the server's own time zone is whatever the machine has, UTC only on the CI's service
     assert checked_at.startswith("2026-08-17 15:53:36")
 
 
