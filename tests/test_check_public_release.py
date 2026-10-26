@@ -148,10 +148,12 @@ def test_the_check_runs_with_no_credential(monkeypatch):
 WORKFLOW = (ROOT / ".github/workflows/public-release-check.yml").read_text(encoding="utf-8")
 
 
-def test_the_workflow_starts_on_publication_and_holds_no_credential():
+def test_the_workflow_starts_on_publication_and_keeps_no_credential():
     assert re.search(r"^on:\n  release:\n    types: \[published\]", WORKFLOW, re.M)
-    assert re.search(r"^permissions: \{\}$", WORKFLOW, re.M)
-    assert "secrets." not in WORKFLOW and "GITHUB_TOKEN" not in WORKFLOW and "token:" not in WORKFLOW
+    # the least the census allows: read this repository, nothing else; no write, no secret
+    assert re.search(r"^permissions:\n  contents: read$", WORKFLOW, re.M)
+    assert not re.search(r"^\s*[a-z-]+: write$", WORKFLOW, re.M) and "secrets." not in WORKFLOW
+    assert "GITHUB_TOKEN" not in WORKFLOW and "token:" not in WORKFLOW
     assert "persist-credentials: false" in WORKFLOW
     assert "scripts/ci/check_public_release.py" in WORKFLOW
     # the tag reaches the shell as an environment variable, never pasted into the script

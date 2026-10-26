@@ -11,7 +11,7 @@ ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW_DIR = ROOT / ".github" / "workflows"
 READ_CONTENTS = {"contents": "read"}
 
-# This is deliberately an exact 14/14 census. A new workflow or job must make
+# This is deliberately an exact 15/15 census. A new workflow or job must make
 # its token contract explicit here before it can enter the repository.
 EXPECTED_EFFECTIVE_PERMISSIONS = {
     "ci.yml": {
@@ -31,6 +31,8 @@ EXPECTED_EFFECTIVE_PERMISSIONS = {
         "review-log": READ_CONTENTS,
         "workflow-gates": READ_CONTENTS,
     },
+    # Reads this repository only to get its own script; the check it runs sends no credential.
+    "public-release-check.yml": {"anonymous-download": READ_CONTENTS},
     "release.yml": {
         "check-version": READ_CONTENTS,
         "build-desktop": READ_CONTENTS,
@@ -89,7 +91,7 @@ def test_all_workflows_have_only_the_minimum_explicit_permissions():
     workflow_paths = {path.name: path for path in WORKFLOW_DIR.glob("*.yml")}
 
     assert set(workflow_paths) == set(EXPECTED_EFFECTIVE_PERMISSIONS)
-    assert len(workflow_paths) == 14
+    assert len(workflow_paths) == 15
 
     for name, expected_jobs in EXPECTED_EFFECTIVE_PERMISSIONS.items():
         workflow = _load_workflow(workflow_paths[name])

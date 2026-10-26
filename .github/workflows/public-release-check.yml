@@ -1,8 +1,9 @@
 name: Public release check
 
 # Starts when a person (the operator) publishes the draft that Release made,
-# and asks for the files the way someone who is not logged in does: no token,
-# no secret, no permission. The download button of the site leads to this
+# and asks for the files the way someone who is not logged in does: the check
+# itself sends no credential at all (the job's token only reads this repository
+# to get the check's own script, and is not kept). The download button of the site leads to this
 # release; if one of its files cannot be fetched without a login, this is red
 # at once, not when the first person writes about it.
 on:
@@ -15,7 +16,8 @@ on:
         required: false
         type: string
 
-permissions: {}
+permissions:
+  contents: read
 
 jobs:
   anonymous-download:
