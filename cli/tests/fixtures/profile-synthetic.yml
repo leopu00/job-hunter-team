@@ -1,0 +1,13 @@
+name: Test Candidate
+email: candidate@example.invalid
+target_role: Backend Engineer
+location: Nowhere
+experience_years: 5
+has_degree: true
+seniority_target: mid
+skills:
+  primary: [Python, SQL]
+  secondary: [Docker]
+languages:
+  - language: English
+    level: C1
