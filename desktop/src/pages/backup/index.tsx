@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { appLocale } from "../../lib/app-locale";
 import { describeError } from "../../lib/error-catalog";
+import { useTeamOff, type TeamOff } from "../../lib/team-off";
+import { teamOffFailure } from "../../shell/team-off-failure";
 import { pluralText } from "../../lib/plural";
 import { fill } from "../../lib/text-slots";
 import {
@@ -26,7 +28,9 @@ const PHASE_KEY = {
 type Say = { ok: boolean; text: string };
 type Opened = Extract<BackupInspectOutcome, { outcome: "opened" }>;
 
-function failureText(code: string): string {
+function failureText(code: string, teamOff: TeamOff | null = null): string {
+  const needsRuntime = teamOffFailure(code, teamOff, appLocale());
+  if (needsRuntime) return needsRuntime;
   const copy = describeError(code, { fallback: "backup_save_failed", locale: appLocale() });
   return `${copy.text} ${copy.action}`;
 }
@@ -55,6 +59,7 @@ const secondaryCls =
  * reads the team, so it is offered in the read-only view too. There is no restore in this version.
  */
 export default function BackupPage(_props: PageProps) {
+  const teamOff = useTeamOff();
   const locale = appLocale();
   const t = BACKUP_TEXT[locale];
   const [running, setRunning] = useState(false);
@@ -86,7 +91,7 @@ export default function BackupPage(_props: PageProps) {
     setCreateSay(null);
     const done = await backupCreate();
     // a closed window is not an error: nothing to say
-    if (!done.ok) setCreateSay({ ok: false, text: failureText(done.error) });
+    if (!done.ok) setCreateSay({ ok: false, text: failureText(done.error, teamOff) });
     else if (done.outcome === "saved") setCreateSay({ ok: true, text: pluralText(locale, done.files, t.saved, { size: sizeText(done.bytes, locale) }) });
     setRunning(false);
     setProgress(null);
@@ -103,7 +108,7 @@ export default function BackupPage(_props: PageProps) {
     const done = await backupInspect();
     if (!done.ok) {
       setOpened(null);
-      setInspectSay({ ok: false, text: failureText(done.error) });
+      setInspectSay({ ok: false, text: failureText(done.error, teamOff) });
     } else if (done.outcome === "opened") {
       setOpened(done);
     }

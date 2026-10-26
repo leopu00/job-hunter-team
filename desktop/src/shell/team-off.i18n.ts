@@ -8,6 +8,8 @@ export interface TeamOffCopy {
   waking: string;
   woke: string;
   start: string;
+  /** Said by a page that needs the container while the app is open without the team. */
+  needsRuntime: string;
 }
 
 export const TEAM_OFF_TEXT: Record<Locale, TeamOffCopy> = {
@@ -18,6 +20,7 @@ export const TEAM_OFF_TEXT: Record<Locale, TeamOffCopy> = {
     waking: "Riaccendo il runtime…",
     woke: "Il runtime è acceso. La squadra resta spenta: nessun agente è partito.",
     start: "Avvia la squadra",
+    needsRuntime: "Questa pagina legge i dati dal container della squadra, che ora è spento. Riaccendi il runtime dalla barra in alto: la squadra resta spenta.",
   },
   en: {
     title: "The team is off",
@@ -26,6 +29,7 @@ export const TEAM_OFF_TEXT: Record<Locale, TeamOffCopy> = {
     waking: "Turning the runtime on…",
     woke: "The runtime is on. The team stays off: no agent has started.",
     start: "Start the team",
+    needsRuntime: "This page reads its data from the team's container, which is off now. Turn the runtime on from the bar above: the team stays off.",
   },
   de: {
     title: "Das Team ist aus",
@@ -34,6 +38,7 @@ export const TEAM_OFF_TEXT: Record<Locale, TeamOffCopy> = {
     waking: "Runtime wird eingeschaltet…",
     woke: "Die Runtime läuft. Das Team bleibt aus: Es wurde kein Agent gestartet.",
     start: "Team starten",
+    needsRuntime: "Diese Seite liest ihre Daten aus dem Container des Teams, der gerade aus ist. Schalte die Runtime in der Leiste oben ein: Das Team bleibt aus.",
   },
   es: {
     title: "El equipo está apagado",
@@ -42,6 +47,7 @@ export const TEAM_OFF_TEXT: Record<Locale, TeamOffCopy> = {
     waking: "Encendiendo el runtime…",
     woke: "El runtime está encendido. El equipo sigue apagado: no ha arrancado ningún agente.",
     start: "Iniciar el equipo",
+    needsRuntime: "Esta página lee sus datos del contenedor del equipo, que ahora está apagado. Enciende el runtime desde la barra de arriba: el equipo sigue apagado.",
   },
   fr: {
     title: "L’équipe est arrêtée",
@@ -50,6 +56,7 @@ export const TEAM_OFF_TEXT: Record<Locale, TeamOffCopy> = {
     waking: "Le runtime se rallume…",
     woke: "Le runtime est allumé. L’équipe reste arrêtée : aucun agent n’a démarré.",
     start: "Démarrer l’équipe",
+    needsRuntime: "Cette page lit ses données dans le conteneur de l’équipe, qui est arrêté. Rallume le runtime depuis la barre du haut : l’équipe reste arrêtée.",
   },
   hu: {
     title: "A csapat le van állítva",
@@ -58,6 +65,7 @@ export const TEAM_OFF_TEXT: Record<Locale, TeamOffCopy> = {
     waking: "A futtatókörnyezet bekapcsol…",
     woke: "A futtatókörnyezet be van kapcsolva. A csapat le marad állítva: egyetlen ügynök sem indult el.",
     start: "Csapat indítása",
+    needsRuntime: "Ez az oldal a csapat tárolójából olvassa az adatait, amely most le van állítva. Kapcsold be a futtatókörnyezetet a fenti sávból: a csapat le marad állítva.",
   },
   pt: {
     title: "A equipa está desligada",
@@ -66,5 +74,6 @@ export const TEAM_OFF_TEXT: Record<Locale, TeamOffCopy> = {
     waking: "A ligar o runtime…",
     woke: "O runtime está ligado. A equipa continua desligada: nenhum agente arrancou.",
     start: "Iniciar a equipa",
+    needsRuntime: "Esta página lê os dados do contentor da equipa, que está desligado. Liga o runtime na barra acima: a equipa continua desligada.",
   },
 };
