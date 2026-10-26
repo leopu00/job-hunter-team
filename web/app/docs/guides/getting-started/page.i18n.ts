@@ -19,7 +19,6 @@ export type Dict = {
   subIntroC: string;
   subEmphOne: string;
   subIntroD: string;
-  kimi: string;
   codex: string;
   claude: string;
   dedicateLabel: string;
@@ -73,7 +72,6 @@ export const T: Record<Locale, Dict> = {
       ", not pay-per-use API keys — it works around the clock and that would get expensive. You need an active plan with ",
     subEmphOne: "one",
     subIntroD: " of three providers:",
-    kimi: " (Moonshot) — the most affordable tier.",
     codex:
       " (OpenAI) — recommended: proven over a one-month autonomous run, with your ChatGPT Plus or Pro subscription.",
     claude:
@@ -131,7 +129,6 @@ export const T: Record<Locale, Dict> = {
       ", non con chiavi API a consumo — lavora 24 ore su 24 e ciò diventerebbe costoso. Ti serve un piano attivo con ",
     subEmphOne: "uno",
     subIntroD: " dei tre provider:",
-    kimi: " (Moonshot) — la fascia più economica.",
     codex:
       " (OpenAI) — consigliato: provato in un mese di lavoro autonomo, con il tuo abbonamento ChatGPT Plus o Pro.",
     claude:
@@ -190,7 +187,6 @@ export const T: Record<Locale, Dict> = {
       ", no con claves API de pago por uso — trabaja las 24 horas y eso resultaría caro. Necesitas un plan activo con ",
     subEmphOne: "uno",
     subIntroD: " de tres proveedores:",
-    kimi: " (Moonshot) — el nivel más económico.",
     codex:
       " (OpenAI) — recomendado: probado durante un mes de trabajo autónomo, con tu suscripción ChatGPT Plus o Pro.",
     claude:
@@ -249,7 +245,6 @@ export const T: Record<Locale, Dict> = {
       ", pas avec des clés API à l'usage — elle travaille 24 heures sur 24 et cela coûterait cher. Vous avez besoin d'un forfait actif chez ",
     subEmphOne: "l'un",
     subIntroD: " des trois fournisseurs :",
-    kimi: " (Moonshot) — la formule la plus abordable.",
     codex:
       " (OpenAI) — recommandé : éprouvé sur un mois de travail autonome, avec votre abonnement ChatGPT Plus ou Pro.",
     claude:
@@ -309,7 +304,6 @@ export const T: Record<Locale, Dict> = {
       ", nicht mit nutzungsbasierten API-Schlüsseln — es arbeitet rund um die Uhr, und das würde teuer werden. Du brauchst einen aktiven Plan bei ",
     subEmphOne: "einem",
     subIntroD: " von drei Anbietern:",
-    kimi: " (Moonshot) — die günstigste Stufe.",
     codex:
       " (OpenAI) — empfohlen: einen Monat lang im autonomen Betrieb erprobt, mit deinem ChatGPT-Plus- oder -Pro-Abo.",
     claude:
@@ -369,7 +363,6 @@ export const T: Record<Locale, Dict> = {
       " fut, nem használatalapú API-kulcsokon — a nap 24 órájában dolgozik, és az drága lenne. Aktív csomagra van szükséged az alábbi három szolgáltató ",
     subEmphOne: "egyikénél",
     subIntroD: ":",
-    kimi: " (Moonshot) — a legkedvezőbb árú szint.",
     codex:
       " (OpenAI) — ajánlott: egy hónapnyi önálló munkán bizonyított, a ChatGPT Plus vagy Pro előfizetéseddel.",
     claude:
@@ -430,7 +423,6 @@ export const T: Record<Locale, Dict> = {
       ", não com chaves de API pagas por utilização — trabalha 24 horas por dia e isso ficaria caro. Precisas de um plano ativo com ",
     subEmphOne: "um",
     subIntroD: " de três fornecedores:",
-    kimi: " (Moonshot) — o nível mais económico.",
     codex:
       " (OpenAI) — recomendado: provado durante um mês de trabalho autónomo, com a tua subscrição ChatGPT Plus ou Pro.",
     claude: " (Anthropic) — a máxima precisão, ideal para pontuar e escrever.",

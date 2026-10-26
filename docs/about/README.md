@@ -17,7 +17,7 @@ Then the two clusters below:
 
 | File | In one line |
 |---|---|
-| [💳 PROVIDERS](PROVIDERS.md) | Which subscription to pick (Claude Max / Kimi €40 / Codex €100) |
+| [💳 PROVIDERS](PROVIDERS.md) | Which subscription to pick (Claude Max / Codex €100) |
 | [📡 MONITORING](MONITORING.md) | The engineering proof: how Bridge + Sentinel keep spend within the window (+ work-hours config) |
 | [📊 RESULTS](RESULTS.md) | Real case studies — what the pipeline actually produced |
 | [🖼️ TUTORIAL GAME SCREENSHOTS](TUTORIAL-GAME-SCREENSHOTS.md) | Provenance, privacy attestation, and hashes for public game tutorial frames |

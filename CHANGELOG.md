@@ -24,10 +24,11 @@ account-backed onboarding and subscription-provider access.**
 - Desktop sign-in uses Google through a PKCE browser flow and restores the
   account session before opening protected application surfaces.
 - First-run setup collects the profile and environment, then connects a
-  supported Codex (recommended), Claude Code or Kimi subscription through that provider's
-  login flow (Kimi is not supported yet when the team runs on this computer on
-  Windows). Completion waits for the native snapshot and direct chat to be
+  supported Codex (recommended) or Claude Code subscription through that provider's
+  login flow. Completion waits for the native snapshot and direct chat to be
   ready instead of reporting success optimistically.
+- Kimi is no longer among the choices, on the site or in the app; teams already
+  configured on it continue to work.
 - The Assistant has a resumable guided introduction with tour, requirements
   and exploration paths, followed by an editable first message for the free
   chat. On macOS, on-device dictation can fill supported composers without
@@ -39,7 +40,7 @@ account-backed onboarding and subscription-provider access.**
   installs Podman and everything else it needs; Docker Desktop is not
   required. WSL must be enabled on Windows: if it is not ready, the app says
   what to do.
-- Not yet supported when the team runs on Windows: Kimi, sending applications
+- Not yet supported when the team runs on Windows: sending applications
   by email from the team, and the local scorer (Ollama).
 - **This computer › Remove JHT from this computer** takes the team off a
   Windows computer after a confirmation, without a terminal. It deletes the

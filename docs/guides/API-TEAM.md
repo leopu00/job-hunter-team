@@ -3,7 +3,7 @@
 Job Hunter Team's roles can run two ways:
 
 - **The TUI team** — the default. Each role is an interactive agent CLI
-  (Claude Code, Codex, Kimi) in its own `tmux` session inside the product
+  (Claude Code, Codex) in its own `tmux` session inside the product
   container, on a flat-rate subscription. Its skills are the Python scripts
   in `shared/skills/` and `agents/_tools/`.
 - **The API team** — the same roles, run headless by the Node.js runtime in

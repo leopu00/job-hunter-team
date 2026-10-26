@@ -21,7 +21,7 @@ export type ProviderRow = {
   price: number;
 };
 export type ProviderData = {
-  id: string; // "Kimi" | "Codex"
+  id: string; // "Codex"
   monthlyEur: number | null;
   nCases: number;
   rows: ProviderRow[];
@@ -152,7 +152,7 @@ const T: Record<
   it: {
     title: "Quanto rende il team, per provider",
     subtitle:
-      "Per un mese di abbonamento: quante posizioni il team produce a ogni livello di qualità e quanto costa ciascun risultato. Diviso per provider, perché Kimi e Codex costano diverso e non vanno mescolati.",
+      "Per un mese di abbonamento: quante posizioni il team produce a ogni livello di qualità e quanto costa ciascun risultato. Diviso per provider, perché i provider costano diverso e non vanno mescolati.",
     perMonth: "/mese",
     avgOver: "media su",
     caseOne: "caso",
@@ -171,7 +171,7 @@ const T: Record<
   en: {
     title: "What the team delivers, by provider",
     subtitle:
-      "Per month of subscription: how many positions the team produces at each quality level, and how much each result costs. Split by provider, because Kimi and Codex cost differently and shouldn't be mixed.",
+      "Per month of subscription: how many positions the team produces at each quality level, and how much each result costs. Split by provider, because providers cost differently and shouldn't be mixed.",
     perMonth: "/mo",
     avgOver: "averaged over",
     caseOne: "case",
@@ -190,7 +190,7 @@ const T: Record<
   es: {
     title: "Cuánto rinde el equipo, por proveedor",
     subtitle:
-      "Por un mes de suscripción: cuántas posiciones produce el equipo en cada nivel de calidad y cuánto cuesta cada resultado. Separado por proveedor, porque Kimi y Codex cuestan distinto y no deben mezclarse.",
+      "Por un mes de suscripción: cuántas posiciones produce el equipo en cada nivel de calidad y cuánto cuesta cada resultado. Separado por proveedor, porque los proveedores cuestan distinto y no deben mezclarse.",
     perMonth: "/mes",
     avgOver: "media sobre",
     caseOne: "caso",
@@ -209,7 +209,7 @@ const T: Record<
   fr: {
     title: "Ce que l'équipe produit, par fournisseur",
     subtitle:
-      "Par mois d'abonnement : combien de postes l'équipe produit à chaque niveau de qualité et combien coûte chaque résultat. Séparé par fournisseur, car Kimi et Codex n'ont pas le même prix et ne doivent pas être mélangés.",
+      "Par mois d'abonnement : combien de postes l'équipe produit à chaque niveau de qualité et combien coûte chaque résultat. Séparé par fournisseur, car les fournisseurs n'ont pas le même prix et ne doivent pas être mélangés.",
     perMonth: "/mois",
     avgOver: "moyenne sur",
     caseOne: "cas",
@@ -228,7 +228,7 @@ const T: Record<
   de: {
     title: "Was das Team liefert, nach Provider",
     subtitle:
-      "Pro Monat Abo: wie viele Stellen das Team je Qualitätsstufe produziert und was jedes Ergebnis kostet. Nach Provider getrennt, denn Kimi und Codex kosten unterschiedlich und dürfen nicht vermischt werden.",
+      "Pro Monat Abo: wie viele Stellen das Team je Qualitätsstufe produziert und was jedes Ergebnis kostet. Nach Provider getrennt, denn die Anbieter kosten unterschiedlich und dürfen nicht vermischt werden.",
     perMonth: "/Mon.",
     avgOver: "Ø über",
     caseOne: "Fall",
@@ -247,7 +247,7 @@ const T: Record<
   hu: {
     title: "Mennyit termel a csapat, providerenként",
     subtitle:
-      "Egy hónap előfizetésre: hány pozíciót termel a csapat az egyes minőségi szinteken, és mennyibe kerül egy-egy eredmény. Providerenként külön, mert a Kimi és a Codex ára eltér, és nem szabad összekeverni.",
+      "Egy hónap előfizetésre: hány pozíciót termel a csapat az egyes minőségi szinteken, és mennyibe kerül egy-egy eredmény. Providerenként külön, mert a szolgáltatók ára eltér, és nem szabad összekeverni.",
     perMonth: "/hó",
     avgOver: "átlag",
     caseOne: "eset",
@@ -266,7 +266,7 @@ const T: Record<
   pt: {
     title: "Quanto rende a equipa, por fornecedor",
     subtitle:
-      "Por um mês de subscrição: quantas posições a equipa produz em cada nível de qualidade e quanto custa cada resultado. Separado por fornecedor, porque Kimi e Codex custam de forma diferente e não se devem misturar.",
+      "Por um mês de subscrição: quantas posições a equipa produz em cada nível de qualidade e quanto custa cada resultado. Separado por fornecedor, porque os fornecedores custam de forma diferente e não se devem misturar.",
     perMonth: "/mês",
     avgOver: "média sobre",
     caseOne: "caso",

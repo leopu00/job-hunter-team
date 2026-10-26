@@ -39,17 +39,6 @@ export const AI_PROVIDERS = [
       { value: 'claude-haiku-4-5', label: 'Claude Haiku 4.5' },
     ],
   },
-  {
-    value: 'kimi',
-    label: 'Kimi',
-    keyPrefix: 'sk-',
-    keyPlaceholder: 'sk-...',
-    docsUrl: 'https://platform.moonshot.ai',
-    models: [
-      { value: 'kimi-k2-0905-preview', label: 'Kimi K2' },
-      { value: 'kimi-k2-turbo-preview', label: 'Kimi K2 turbo' },
-    ],
-  },
 ];
 
 // --- Config IO (compatibile con shared/config/io.ts) ---

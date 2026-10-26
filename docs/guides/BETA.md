@@ -33,9 +33,9 @@ Security vulnerabilities follow the private process in
 - The CLI, native office, web dashboard and Telegram share the same
   container-backed team.
 
-Provider status is not uniform. Kimi's lower-cost tier remains under
-observation because its usage projection varies more than Claude or Codex.
-That provider-specific limitation is documented in
+Provider status is not uniform. Kimi is archived since 0.4 and no longer
+offered; teams already configured on it keep working. The provider-specific
+limitations are documented in
 [`PROVIDERS.md`](../about/PROVIDERS.md) and
 [`MONITORING.md`](../about/MONITORING.md).
 

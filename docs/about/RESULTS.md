@@ -71,6 +71,8 @@ Raw data: SQLite snapshot, Sentinel logs, deliverables (PDF CVs, critic reviews)
 
 ## 🧪 Case study #3 — The junior developer profile × Kimi K2 Pro (75-hour run)
 
+> *History: Kimi is archived since 0.4 and no longer offered; this run is kept as it was.*
+
 ~75-hour run on a Hetzner CPX22 VPS validating Kimi K2 as the **mass-market jackpot tier** (€40/mo target). Profile: junior software developer in a saturated capital-city market — a deliberately hard cell.
 
 > **Profile summary**: junior software developer with ~1 year of experience and no formal degree, looking for a first or second professional position. Target geography is a single European capital metropolitan area. Target industries: technology and fintech.

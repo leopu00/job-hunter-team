@@ -66,7 +66,7 @@ Get-Content .\install.ps1
 On Windows the installer runs the team in Podman inside WSL: it installs the
 Podman CLI and the Compose provider through winget when they are missing, and
 Docker Desktop is not needed. WSL must already be enabled; the installer does
-not enable it. Kimi is not supported yet when the team runs on Windows. On
+not enable it. On
 macOS and Linux, the installer can prepare a supported runtime after user
 confirmation.
 

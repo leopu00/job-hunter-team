@@ -11,7 +11,7 @@ const it = {
   title: "Impostazioni",
   intro: "La lingua dell’app e la valuta in cui vedi gli stipendi. Le scelte restano su questo computer e non cambiano nulla nella tua squadra.",
   providerTitle: "Provider",
-  providerText: "Il provider (Claude, Codex o Kimi) con cui lavorano gli agenti della squadra di questo computer. Cambialo o accedi di nuovo: si riapre il passo «Provider» della configurazione e la squadra usa la tua scelta.",
+  providerText: "Il provider (Claude o Codex) con cui lavorano gli agenti della squadra di questo computer. Cambialo o accedi di nuovo: si riapre il passo «Provider» della configurazione e la squadra usa la tua scelta.",
   providerButton: "Configura il provider",
 };
 
@@ -66,7 +66,7 @@ export const SETTINGS_TEXT: Record<Locale, SettingsText> = {
     title: "Settings",
     intro: "The app’s language and the currency salaries are shown in. These choices stay on this computer and change nothing on your team.",
     providerTitle: "Provider",
-    providerText: "The provider (Claude, Codex or Kimi) the agents of this computer's team work with. Change it or sign in again: the setup's «Provider» step opens again and the team uses your choice.",
+    providerText: "The provider (Claude or Codex) the agents of this computer's team work with. Change it or sign in again: the setup's «Provider» step opens again and the team uses your choice.",
     providerButton: "Set up the provider",
   },
   de: {
@@ -74,7 +74,7 @@ export const SETTINGS_TEXT: Record<Locale, SettingsText> = {
     title: "Einstellungen",
     intro: "Sprache der App und Währung, in der Gehälter angezeigt werden. Diese Auswahl bleibt auf diesem Computer und ändert nichts an deinem Team.",
     providerTitle: "Anbieter",
-    providerText: "Der Anbieter (Claude, Codex oder Kimi), mit dem die Agenten des Teams auf diesem Computer arbeiten. Ändere ihn oder melde dich neu an: Der Schritt «Anbieter» der Einrichtung öffnet sich erneut und das Team verwendet deine Wahl.",
+    providerText: "Der Anbieter (Claude oder Codex), mit dem die Agenten des Teams auf diesem Computer arbeiten. Ändere ihn oder melde dich neu an: Der Schritt «Anbieter» der Einrichtung öffnet sich erneut und das Team verwendet deine Wahl.",
     providerButton: "Anbieter einrichten",
   },
   fr: {
@@ -82,7 +82,7 @@ export const SETTINGS_TEXT: Record<Locale, SettingsText> = {
     title: "Paramètres",
     intro: "La langue de l’app et la devise dans laquelle les salaires s’affichent. Ces choix restent sur cet ordinateur et ne changent rien à ton équipe.",
     providerTitle: "Fournisseur",
-    providerText: "Le fournisseur (Claude, Codex ou Kimi) avec lequel travaillent les agents de l’équipe de cet ordinateur. Change-le ou reconnecte-toi : l’étape « Fournisseur » de la configuration se rouvre et l’équipe utilise ton choix.",
+    providerText: "Le fournisseur (Claude ou Codex) avec lequel travaillent les agents de l’équipe de cet ordinateur. Change-le ou reconnecte-toi : l’étape « Fournisseur » de la configuration se rouvre et l’équipe utilise ton choix.",
     providerButton: "Configurer le fournisseur",
   },
   es: {
@@ -90,7 +90,7 @@ export const SETTINGS_TEXT: Record<Locale, SettingsText> = {
     title: "Ajustes",
     intro: "El idioma de la app y la moneda en la que se muestran los salarios. Estas opciones se quedan en este ordenador y no cambian nada en tu equipo.",
     providerTitle: "Proveedor",
-    providerText: "El proveedor (Claude, Codex o Kimi) con el que trabajan los agentes del equipo de este ordenador. Cámbialo o vuelve a iniciar sesión: se abre de nuevo el paso «Proveedor» de la configuración y el equipo usa tu elección.",
+    providerText: "El proveedor (Claude o Codex) con el que trabajan los agentes del equipo de este ordenador. Cámbialo o vuelve a iniciar sesión: se abre de nuevo el paso «Proveedor» de la configuración y el equipo usa tu elección.",
     providerButton: "Configurar el proveedor",
   },
   pt: {
@@ -98,7 +98,7 @@ export const SETTINGS_TEXT: Record<Locale, SettingsText> = {
     title: "Configurações",
     intro: "O idioma da app e a moeda em que os salários são mostrados. Estas escolhas ficam neste computador e não mudam nada na tua equipa.",
     providerTitle: "Fornecedor",
-    providerText: "O fornecedor (Claude, Codex ou Kimi) com que trabalham os agentes da equipa deste computador. Muda-o ou volta a iniciar sessão: o passo «Fornecedor» da configuração abre-se de novo e a equipa usa a tua escolha.",
+    providerText: "O fornecedor (Claude ou Codex) com que trabalham os agentes da equipa deste computador. Muda-o ou volta a iniciar sessão: o passo «Fornecedor» da configuração abre-se de novo e a equipa usa a tua escolha.",
     providerButton: "Configurar o fornecedor",
   },
   hu: {
@@ -106,7 +106,7 @@ export const SETTINGS_TEXT: Record<Locale, SettingsText> = {
     title: "Beállítások",
     intro: "Az app nyelve és a fizetések megjelenítési pénzneme. Ezek a beállítások ezen a számítógépen maradnak, és semmit sem változtatnak a csapatodon.",
     providerTitle: "Szolgáltató",
-    providerText: "A szolgáltató (Claude, Codex vagy Kimi), amellyel a számítógép csapatának ügynökei dolgoznak. Módosítsd, vagy jelentkezz be újra: a beállítás «Szolgáltató» lépése újra megnyílik, és a csapat az általad választottat használja.",
+    providerText: "A szolgáltató (Claude vagy Codex), amellyel a számítógép csapatának ügynökei dolgoznak. Módosítsd, vagy jelentkezz be újra: a beállítás «Szolgáltató» lépése újra megnyílik, és a csapat az általad választottat használja.",
     providerButton: "Szolgáltató beállítása",
   },
 };

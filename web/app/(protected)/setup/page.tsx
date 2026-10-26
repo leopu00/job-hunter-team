@@ -16,12 +16,10 @@ const STEP_LABEL_KEYS: Record<Step, string> = {
 const PROVIDERS = [
   { v: "claude", l: "Anthropic Claude" },
   { v: "openai", l: "OpenAI" },
-  { v: "kimi", l: "Kimi" },
 ];
 const MODELS: Record<string, string[]> = {
   claude: ["claude-opus-4-6", "claude-sonnet-4-6", "claude-haiku-4-5-20251001"],
   openai: ["gpt-4o", "gpt-4o-mini"],
-  kimi: ["abab6.5s-chat"],
 };
 
 interface Check {

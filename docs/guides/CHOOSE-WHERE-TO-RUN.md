@@ -83,8 +83,7 @@ desktop, container, SSH and optional-cloud boundaries.
 ## Path 1 — Local PC
 
 Choose this when you want the least infrastructure and can leave your computer
-awake while the agents work. On Windows 0.4 the team runs in Podman inside WSL;
-Kimi is not available in the Windows app yet.
+awake while the agents work. On Windows 0.4 the team runs in Podman inside WSL.
 
 ### What you need
 

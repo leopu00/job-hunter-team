@@ -1,7 +1,7 @@
 # Adding a provider without breaking the runtime contract
 
 Job Hunter Team does not have an open-ended provider plugin API. [ADR-0002](../adr/0002-three-supported-agent-clis.md)
-closes the supported runtime set to **Claude Code, Codex and Kimi**. This guide
+closed the supported runtime set to three CLIs; since 0.4 the supported set is **Claude Code and Codex**, and Kimi is archived (its code stays so that a team already on it keeps working, but it is no longer offered). This guide
 is therefore both an implementation checklist and a gate: a fourth CLI starts
 with a new ADR and field evidence, not with an enum edit.
 
@@ -9,13 +9,13 @@ with a new ADR and field evidence, not with an enum edit.
 
 | Change | Required path |
 |---|---|
-| New model, plan or vendor alias for Claude/Codex/Kimi | Stay inside the existing runtime; update only the affected plan/model/alias seams and their tests. |
+| New model, plan or vendor alias for Claude/Codex | Stay inside the existing runtime; update only the affected plan/model/alias seams and their tests. |
 | Different credential product for an existing CLI | Extend credential handling. Do **not** add that credential name to `active_provider`. |
 | A fourth executable agent CLI | Write a superseding ADR, prove config-file compatibility and long-running continuity, then follow the full checklist below. |
 
 The distinction matters in current code:
 
-- canonical active runtimes are `claude`, `openai` and `kimi`;
+- canonical active runtimes are `claude` and `openai` (`kimi` is archived: accepted for teams already configured on it, never offered);
 - `anthropic` and `codex` remain accepted legacy aliases at runtime boundaries;
 - `chatgpt_pro` and `claude_max` identify credential products, not executable
   runtimes;

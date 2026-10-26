@@ -39,3 +39,7 @@ The mechanism is **tmux**: each agent runs as an interactive CLI session (`claud
 
 - [ADR 0002](./0002-three-supported-agent-clis.md) — the three subscription CLIs we support (Claude Code, Codex, Kimi)
 - Onboarding flow (desktop): sets up Docker → container → tmux session; users `claude login` / equivalent inside the session, never type API keys into a form.
+
+## Note (0.4) — Kimi archived
+
+This record is history and is not rewritten. Since 0.4 the supported CLIs are Claude Code and Codex: Kimi is archived and no longer offered, on the site or in the app. The code that serves a team already configured on Kimi stays, so that team keeps working.

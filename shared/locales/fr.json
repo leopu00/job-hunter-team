@@ -65,7 +65,6 @@
   "wizard.telegram.intro": "Il faut 3 bots Telegram (Assistant, Capitaine, Mentor). Crée-les avec @BotFather et colle les tokens.",
   "wizard.provider.prompt": "Fournisseur IA",
   "wizard.provider.intro": "Choisis le fournisseur IA qui alimente l'équipe :",
-  "wizard.provider.kimi": "Kimi K2 (Moonshot)",
   "wizard.provider.claude": "Claude (Anthropic)",
   "wizard.provider.codex": "Codex (OpenAI) — recommandé, avec ton abonnement ChatGPT",
   "wizard.provider.install_cli": "Installation du CLI %s...",

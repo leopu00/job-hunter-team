@@ -426,14 +426,6 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
     "WSL is not ready: on Windows it runs the team’s Podman machine.",
     "Open the Microsoft Store, install or update “Windows Subsystem for Linux”, restart the computer and press Try again.",
   ),
-  // Not an error: why Kimi cannot be chosen at the setup on Windows (its CLI
-  // ignores the Windows proxy for login, usage, web and updates).
-  kimi_unavailable_windows: copy(
-    "Kimi non è ancora disponibile su Windows.",
-    "Scegli Codex o Claude.",
-    "Kimi is not available on Windows yet.",
-    "Choose Codex or Claude.",
-  ),
   // ── «Remove JHT from this computer» (Windows) ─────────────────────────────
   uninstall_unavailable: copy(
     "La rimozione da questo computer non è disponibile con il runtime installato.",
@@ -807,15 +799,15 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
     "Try again. If it keeps happening, look at its terminal and report the code shown next to it.",
   ),
   provider_not_configured: copy(
-    "Sulla squadra non è configurato nessun provider (Claude, Codex o Kimi): gli agenti non possono partire.",
+    "Sulla squadra non è configurato nessun provider (Claude o Codex): gli agenti non possono partire.",
     "Scegli il provider sulla VPS con «jht setup», poi riprova.",
-    "No provider (Claude, Codex or Kimi) is set up on the team: its agents cannot start.",
+    "No provider (Claude or Codex) is set up on the team: its agents cannot start.",
     "Choose the provider on the VPS with «jht setup», then try again.",
   ),
   provider_not_configured_local: copy(
-    "Sulla squadra di questo computer non è configurato nessun provider (Claude, Codex o Kimi): gli agenti non possono partire.",
+    "Sulla squadra di questo computer non è configurato nessun provider (Claude o Codex): gli agenti non possono partire.",
     "Apri Impostazioni › Provider, scegli il provider e riprova.",
-    "No provider (Claude, Codex or Kimi) is set up on this computer's team: its agents cannot start.",
+    "No provider (Claude or Codex) is set up on this computer's team: its agents cannot start.",
     "Open Settings › Provider, choose the provider, then try again.",
   ),
   agent_stop_failed: copy(

@@ -50,3 +50,7 @@ JHT acknowledges provider risk **explicitly** and ships a layered mitigation, no
 - [ADR 0004](./0004-subscription-only-no-api-keys.md) — subscription model that makes the agentic pattern affordable but TOS-exposed
 - [`docs/about/MONITORING.md`](../about/MONITORING.md) — Sentinel + Bridge governance
 - [`docs/about/PROVIDERS.md`](../about/PROVIDERS.md) — per-provider tier and status matrix
+
+## Note (0.4) — Kimi archived
+
+This record is history and is not rewritten. Since 0.4 the supported CLIs are Claude Code and Codex: Kimi is archived and no longer offered, on the site or in the app. The code that serves a team already configured on Kimi stays, so that team keeps working.

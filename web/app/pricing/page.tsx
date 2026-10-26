@@ -75,19 +75,6 @@ const PROVIDERS: Provider[] = [
     pt: "Um pouco menos de resultado que o Codex, mas o mais preciso e o mais inteligente: a melhor escolha para avaliar as ofertas e escrever os CV com cuidado.",
     hu: "Kicsivel kevesebb kimenet, mint a Codexé, de a legpontosabb és a legintelligensebb: a legjobb választás az ajánlatok értékeléséhez és az önéletrajzok gondos megírásához.",
   },
-  {
-    name: "Kimi",
-    vendor: "Moonshot",
-    tier: "base",
-    url: "https://www.kimi.com/code",
-    it: "Output paragonabile agli altri due e il piano più economico. Il modello è ancora in rifinitura sulla gestione del budget giornaliero.",
-    en: "Output comparable to the other two, and the most affordable plan. The model is still being refined on daily budget management.",
-    es: "Un resultado comparable a los otros dos y el plan más económico. El modelo aún se está afinando en la gestión del presupuesto diario.",
-    fr: "Un résultat comparable aux deux autres, et la formule la plus abordable. Le modèle est encore en cours d'affinage sur la gestion du budget quotidien.",
-    de: "Ein Ergebnis vergleichbar mit den anderen beiden und der günstigste Tarif. Das Modell wird bei der Verwaltung des Tagesbudgets noch verfeinert.",
-    pt: "Um resultado comparável aos outros dois e o plano mais económico. O modelo ainda está a ser afinado na gestão do orçamento diário.",
-    hu: "A másik kettővel összevethető eredmény, és a legkedvezőbb árú csomag. A modell finomítása a napi költségkeret kezelésén még folyamatban van.",
-  },
 ];
 
 const PAGE = {

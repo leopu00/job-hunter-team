@@ -44,7 +44,7 @@ describe("the settings page", () => {
     );
     const card = screen.getByTestId("settings-provider");
     expect(card).toHaveTextContent("Provider");
-    expect(card).toHaveTextContent(/Claude, Codex or Kimi/);
+    expect(card).toHaveTextContent(/Claude or Codex/);
     await user.click(screen.getByRole("button", { name: "Set up the provider" }));
     expect(open).toHaveBeenCalledOnce();
   });

@@ -13,7 +13,6 @@ export type Copy = {
   intro: string;
   whichProvider: string;
   whichProviderP: string;
-  kimi: string;
   codex: string;
   claude: string;
   dedicatedStrong: string;
@@ -45,7 +44,6 @@ export const T: Record<Locale, Copy> = {
     whichProvider: "🤔 Which provider?",
     whichProviderP:
       "Three are supported and tested. Pick one — you can switch later in a couple of commands.",
-    kimi: "(Moonshot) — validated on multi-day runs. The most affordable plan.",
     codex:
       "(OpenAI) — recommended: proven over a one-month autonomous run, with your ChatGPT Plus or Pro subscription.",
     claude: "(Anthropic) — top precision for scoring and CV writing.",
@@ -80,7 +78,6 @@ export const T: Record<Locale, Copy> = {
     whichProvider: "🤔 Quale provider?",
     whichProviderP:
       "Tre sono supportati e testati. Scegline uno — potrai cambiarlo più avanti con un paio di comandi.",
-    kimi: "(Moonshot) — validato su run di più giorni. Il piano più economico.",
     codex:
       "(OpenAI) — consigliato: provato in un mese di lavoro autonomo, con il tuo abbonamento ChatGPT Plus o Pro.",
     claude: "(Anthropic) — massima precisione per scoring e scrittura del CV.",
@@ -115,7 +112,6 @@ export const T: Record<Locale, Copy> = {
     whichProvider: "🤔 ¿Qué proveedor?",
     whichProviderP:
       "Tres están soportados y probados. Elige uno — puedes cambiarlo más adelante con un par de comandos.",
-    kimi: "(Moonshot) — validado en ejecuciones de varios días. El plan más económico.",
     codex:
       "(OpenAI) — recomendado: probado durante un mes de trabajo autónomo, con tu suscripción ChatGPT Plus o Pro.",
     claude:
@@ -153,7 +149,6 @@ export const T: Record<Locale, Copy> = {
     whichProvider: "🤔 Quel fournisseur ?",
     whichProviderP:
       "Trois sont pris en charge et testés. Choisissez-en un — vous pourrez en changer plus tard en quelques commandes.",
-    kimi: "(Moonshot) — validé sur des exécutions de plusieurs jours. La formule la plus abordable.",
     codex:
       "(OpenAI) — recommandé : éprouvé sur un mois de travail autonome, avec votre abonnement ChatGPT Plus ou Pro.",
     claude:
@@ -191,7 +186,6 @@ export const T: Record<Locale, Copy> = {
     whichProvider: "🤔 Welcher Anbieter?",
     whichProviderP:
       "Drei werden unterstützt und sind getestet. Wähle einen — du kannst später mit ein paar Befehlen wechseln.",
-    kimi: "(Moonshot) — validiert über mehrtägige Läufe. Der günstigste Tarif.",
     codex:
       "(OpenAI) — empfohlen: einen Monat lang im autonomen Betrieb erprobt, mit deinem ChatGPT-Plus- oder -Pro-Abo.",
     claude:
@@ -229,7 +223,6 @@ export const T: Record<Locale, Copy> = {
     whichProvider: "🤔 Melyik szolgáltató?",
     whichProviderP:
       "Három támogatott és tesztelt. Válassz egyet — később pár paranccsal válthatsz.",
-    kimi: "(Moonshot) — többnapos futtatásokon validálva. A legkedvezőbb árú csomag.",
     codex:
       "(OpenAI) — ajánlott: egy hónapnyi önálló munkán bizonyított, a ChatGPT Plus vagy Pro előfizetéseddel.",
     claude:
@@ -266,7 +259,6 @@ export const T: Record<Locale, Copy> = {
     whichProvider: "🤔 Qual provedor?",
     whichProviderP:
       "Três são suportados e testados. Escolha um — você pode trocar mais tarde com alguns comandos.",
-    kimi: "(Moonshot) — validado em execuções de vários dias. O plano mais econômico.",
     codex:
       "(OpenAI) — recomendado: provado durante um mês de trabalho autônomo, com sua assinatura ChatGPT Plus ou Pro.",
     claude: "(Anthropic) — precisão máxima para pontuação e redação de CV.",

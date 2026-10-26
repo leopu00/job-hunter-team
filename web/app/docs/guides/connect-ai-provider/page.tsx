@@ -34,9 +34,6 @@ export default async function ConnectAiProviderPage() {
         <LI>
           🟠 <strong>Claude</strong> {t.claude}
         </LI>
-        <LI>
-          🌙 <strong>Kimi</strong> {t.kimi}
-        </LI>
       </UL>
       <Callout>
         ⚠️ <strong>{t.dedicatedStrong}</strong> {t.dedicatedRest}{" "}
@@ -56,7 +53,7 @@ export default async function ConnectAiProviderPage() {
 
       <H3>{t.step1}</H3>
       <Pre>
-        {`jht providers list           # codex | claude | kimi
+        {`jht providers list           # codex | claude
 jht providers use codex      # set the active one
 jht providers update codex   # install its CLI inside the container`}
       </Pre>
