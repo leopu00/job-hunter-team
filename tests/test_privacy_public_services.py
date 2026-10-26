@@ -76,7 +76,10 @@ def test_every_language_has_the_public_services_section_and_no_old_version_check
     chunk = block(lang)
     assert "s9_title:" in chunk and "s9_body:" in chunk
     assert "s8_" not in chunk
-    assert len(services(lang).split("\\n")) == 5
+    paragraphs = services(lang).split("\\n")
+    assert len(paragraphs) == 6
+    # The last one: services the person starts themselves (Google sign-in, feedback) are contacted only then.
+    assert "Google" in paragraphs[-1]
 
 
 @pytest.mark.parametrize("lang", LANGS)
