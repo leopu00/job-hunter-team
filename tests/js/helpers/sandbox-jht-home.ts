@@ -11,9 +11,11 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll } from "vitest";
 
-const home = mkdtempSync(join(tmpdir(), "jht-home-sandbox-"));
-process.env.JHT_HOME = home;
+// The home is named like the real one (.jht) and does not exist yet, as on a person's computer: tests that look
+// for ".jht" in a path, or for a missing home, behave as they always did.
+const root = mkdtempSync(join(tmpdir(), "jht-home-sandbox-"));
+process.env.JHT_HOME = join(root, ".jht");
 
 afterAll(() => {
-  rmSync(home, { recursive: true, force: true });
+  rmSync(root, { recursive: true, force: true });
 });
