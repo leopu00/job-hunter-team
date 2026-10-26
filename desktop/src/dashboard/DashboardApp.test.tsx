@@ -21,7 +21,8 @@ import { clearGoogleIdentitySelection, googleIdentitySelected } from "../lib/ide
 import { readDesktopPlatform } from "../lib/desktop-platform";
 import { openRuntimeLog, runtimeLogPath } from "../lib/runtime-log";
 import { describeError, ERROR_CATALOG } from "../lib/error-catalog";
-import { existingTeamReadOnly, existingTeamView } from "../lib/existing-team-readonly";
+import { existingTeamReadOnly, existingTeamView, leaveExistingTeamReadOnly } from "../lib/existing-team-readonly";
+import { writeAccessNotice } from "../lib/write-access-restored";
 import type { ExistingTeamConnectModalProps } from "../onboarding/ExistingTeamConnectModal";
 import {
   loadOnboardingGate,
@@ -794,6 +795,44 @@ describe("DashboardApp onboarding router", () => {
     expect(existingTeamReadOnly()).not.toBeNull();
     expect(existingTeamView()?.full).toBeUndefined();
     expect(screen.queryByRole("button", { name: "close-read-only" })).not.toBeInTheDocument();
+  });
+
+  it("a start where the native side gave the full connection back opens in full and says so; any other start says nothing", async () => {
+    vi.mocked(useSession).mockReturnValue(signedInAs("set-up-full-link-restored"));
+    vi.mocked(loadOnboardingGate).mockResolvedValue({ phase: "ready" });
+    vi.mocked(existingTeamBridge.reopen).mockResolvedValue({
+      readiness: true,
+      snapshot: TEAM_READY,
+      connectionKey: "k".repeat(16),
+      fullLink: true,
+    });
+    const first = render(<DashboardApp />);
+    expect(await screen.findByTestId("shell")).toBeInTheDocument();
+    // the view is the one of a team connected in full, and the fixed row is on, at every such start
+    expect(existingTeamView()).toMatchObject({ full: true });
+    expect(existingTeamReadOnly()).toBeNull();
+    expect(writeAccessNotice()).toEqual({ kind: "restored" });
+    first.unmount();
+    leaveExistingTeamReadOnly();
+    expect(writeAccessNotice()).toBeNull();
+
+    // anything but `fullLink: true` is the read-only view as before, with no row: absent, false, or any other value
+    for (const reply of [{}, { fullLink: false }, { fullLink: "true" as unknown as boolean }]) {
+      vi.mocked(useSession).mockReturnValue(signedInAs("set-up-full-link-not-restored"));
+      vi.mocked(existingTeamBridge.reopen).mockResolvedValue({
+        readiness: true,
+        snapshot: TEAM_READY,
+        connectionKey: "k".repeat(16),
+        ...reply,
+      });
+      const again = render(<DashboardApp />);
+      expect(await screen.findByTestId("shell")).toBeInTheDocument();
+      expect(existingTeamView()?.full).toBeUndefined();
+      expect(existingTeamReadOnly()).not.toBeNull();
+      expect(writeAccessNotice()).toBeNull();
+      again.unmount();
+      leaveExistingTeamReadOnly();
+    }
   });
 
   describe("a set-up account whose saved team was updated on its VPS", () => {

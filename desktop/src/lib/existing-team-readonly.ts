@@ -2,6 +2,7 @@ import { useSyncExternalStore } from "react";
 import { appLocale } from "./app-locale";
 import { EXISTING_TEAM_READONLY_TEXT } from "./existing-team-readonly.i18n";
 import { startVpsLink, stopVpsLink } from "./vps-link";
+import { clearWriteAccessNotice } from "./write-access-restored";
 
 /**
  * The desktop is connected to an existing team's VPS only to read it. While
@@ -87,11 +88,23 @@ export function enterExistingTeamReadOnly(
 }
 
 export function leaveExistingTeamReadOnly(): void {
+  clearWriteAccessNotice();
   if (!current) return;
   current = null;
   connectionIdentity = "";
   readNotice = null;
   stopVpsLink();
+  emit();
+}
+
+/**
+ * The person took the permission to write away («Switch to read only»): the same opening, the same
+ * connection and probe, no longer in full. Nothing else about the view changes.
+ */
+export function downgradeExistingTeamToReadOnly(): void {
+  if (!current || !current.full) return;
+  current = { assistantActive: current.assistantActive, connection: current.connection };
+  readNotice = null;
   emit();
 }
 
