@@ -168,3 +168,47 @@ def test_the_one_reader_is_the_same_function_for_the_hours_and_the_statistics():
     assert working_hours.read_plain is plain_file.read_plain and work_stats.read_plain is plain_file.read_plain
     text = (SKILLS / "plain_file.py").read_text(encoding="utf-8")
     assert "O_NONBLOCK" in text and "O_NOFOLLOW" in text and "st_nlink" in text
+
+
+# ── the module is in the image next to the readers that need it ────────────────────────────────────
+
+def _ignored_by_dockerignore(relative: str) -> bool:
+    """Whether a path of the repo is kept out of the build context by .dockerignore (the last matching
+    pattern wins, `!` brings a path back).  `**/x`, `x/` and `*` as Docker reads them, no more."""
+    import re
+    ignored = False
+    for line in (ROOT / ".dockerignore").read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        negated = line.startswith("!")
+        pattern = line[1:] if negated else line
+        directory = pattern.endswith("/")
+        pattern = pattern.rstrip("/")
+        regex = re.escape(pattern).replace(r"\*\*/", "(?:.*/)?").replace(r"\*\*", ".*").replace(r"\*", "[^/]*")
+        if re.match(rf"^{regex}(?:/.*)?$", relative) and (not directory or "/" in relative):
+            ignored = not negated
+    return ignored
+
+
+def test_plain_file_is_in_the_image_beside_every_reader_that_imports_it():
+    import subprocess
+    tracked = subprocess.run(["git", "-C", str(ROOT), "ls-files"], capture_output=True, text=True, check=True).stdout.split("\n")
+    assert "shared/skills/plain_file.py" in tracked, "the module is not in git: the image would not have it"
+    dockerfile = (ROOT / "Dockerfile").read_text(encoding="utf-8")
+    assert "\nCOPY . .\n" in dockerfile, "the image is the whole build context: what .dockerignore leaves out is not in it"
+    users = [path for path in tracked
+             if path.endswith((".py",)) and path not in {"tests/test_config_readers_pipe.py", "shared/skills/plain_file.py"}
+             and (ROOT / path).is_file() and not path.startswith("tests/")
+             and "plain_file" in (ROOT / path).read_text(encoding="utf-8", errors="replace")]
+    # (the pacing bridge has its own small copy of the check and does not import the module)
+    assert {".launcher/sentinel-bridge.py", ".launcher/stepcap-watchdog.py", ".launcher/tg-bridge.py",
+            "shared/skills/working_hours.py", "shared/skills/apply_gate.py"} <= set(users), users
+    for path in ["shared/skills/plain_file.py", *users]:
+        assert not _ignored_by_dockerignore(path), f"{path} is kept out of the image by .dockerignore"
+
+
+def test_the_dockerignore_reader_is_not_blind(tmp_path):
+    """Counter-check: the reader above does say «ignored» for what the file really leaves out."""
+    assert _ignored_by_dockerignore("tests/test_work_stats.py") and _ignored_by_dockerignore("desktop/src/main.tsx")
+    assert not _ignored_by_dockerignore("shared/skills/working_hours.py")
