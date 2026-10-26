@@ -1692,6 +1692,48 @@ mod tests {
         }
     }
 
+    /// The stderr of a real `podman pull` of a seven-layer image (podman 5.7.0 on Linux, nginx:1.27-alpine-slim)
+    /// with stderr on a pipe, as the app runs the installer, both as a local pull and as a client against the
+    /// podman service (the path of a Mac or a Windows machine): the engine names each layer when it starts it and
+    /// prints no size, no bar and no «done». A pull that says nothing in bytes is shown in words, never as a
+    /// progress it does not have.
+    const PODMAN_PIPE_LOCAL: [&str; 11] = [
+        "Trying to pull docker.io/library/nginx:1.27-alpine-slim...",
+        "Getting image source signatures",
+        "Copying blob sha256:61ca4f733c802afd9e05a32f0de0361b6d713b8b53292dc15fb093229f648674",
+        "Copying blob sha256:d7e5070240863957ebb0b5a44a5729963c3462666baa2947d00628cb5f2d5773",
+        "Copying blob sha256:197eb75867ef4fcecd4724f17b0972ab0489436860a594a9445f8eaff8155053",
+        "Copying blob sha256:81bd8ed7ec6789b0cb7f1b47ee731c522f6dba83201ec73cd6bca1350f582948",
+        "Copying blob sha256:b464cfdf2a6319875aeb27359ec549790ce14d8214fcb16ef915e4530e5ed235",
+        "Copying blob sha256:f18232174bc91741fdf3da96d85011092101a032a93a388b79e99e69c2d5c870",
+        "Copying blob sha256:34a64644b756511a2e217f0508e11d1a572085d66cd6dc9a555a082ad49a3102",
+        "Copying config sha256:b05483cc4dbba3ead954021d8e11a1fed043c96c4d20924202f165ab065e9fb7",
+        "Writing manifest to image destination",
+    ];
+    const PODMAN_PIPE_REMOTE: [&str; 11] = [
+        "Trying to pull docker.io/library/nginx:1.27-alpine-slim...",
+        "Getting image source signatures",
+        "Copying blob sha256:197eb75867ef4fcecd4724f17b0972ab0489436860a594a9445f8eaff8155053",
+        "Copying blob sha256:d7e5070240863957ebb0b5a44a5729963c3462666baa2947d00628cb5f2d5773",
+        "Copying blob sha256:61ca4f733c802afd9e05a32f0de0361b6d713b8b53292dc15fb093229f648674",
+        "Copying blob sha256:b464cfdf2a6319875aeb27359ec549790ce14d8214fcb16ef915e4530e5ed235",
+        "Copying blob sha256:81bd8ed7ec6789b0cb7f1b47ee731c522f6dba83201ec73cd6bca1350f582948",
+        "Copying blob sha256:f18232174bc91741fdf3da96d85011092101a032a93a388b79e99e69c2d5c870",
+        "Copying blob sha256:34a64644b756511a2e217f0508e11d1a572085d66cd6dc9a555a082ad49a3102",
+        "Copying config sha256:b05483cc4dbba3ead954021d8e11a1fed043c96c4d20924202f165ab065e9fb7",
+        "Writing manifest to image destination",
+    ];
+
+    #[test]
+    fn a_recorded_pull_on_a_pipe_has_no_bytes_and_so_no_progress_to_show() {
+        for recorded in [PODMAN_PIPE_LOCAL, PODMAN_PIPE_REMOTE] {
+            let mut tracker = PullTracker::default();
+            for line in recorded {
+                assert_eq!(pull(&mut tracker, line), None, "{line:?}");
+            }
+        }
+    }
+
     #[test]
     fn the_pull_sink_gets_updates_only_while_the_operation_runs() {
         let got = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
