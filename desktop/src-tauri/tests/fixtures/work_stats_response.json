@@ -1,0 +1,61 @@
+{
+  "with_numbers": {
+    "ok": true,
+    "nights": [
+      {
+        "date": "2026-10-25",
+        "hoursActive": 10.0,
+        "found": 4,
+        "aboveThreshold": 1,
+        "scoreThreshold": 75,
+        "consumptionPct": 5,
+        "turnMedianSec": null
+      },
+      {
+        "date": "2026-10-26",
+        "hoursActive": 9.5,
+        "found": 0,
+        "aboveThreshold": null,
+        "scoreThreshold": 75,
+        "consumptionPct": null,
+        "turnMedianSec": null
+      }
+    ],
+    "from": "2026-10-25",
+    "to": "2026-10-26",
+    "lastObservation": "2026-10-26T18:00:00Z",
+    "retentionDays": 90,
+    "threshold": 75,
+    "scheduleState": "valid"
+  },
+  "found_null": {
+    "ok": true,
+    "nights": [
+      {
+        "date": "2026-10-26",
+        "hoursActive": 8.0,
+        "found": null,
+        "aboveThreshold": null,
+        "scoreThreshold": 75,
+        "consumptionPct": null,
+        "turnMedianSec": null
+      }
+    ],
+    "from": "2026-10-26",
+    "to": "2026-10-26",
+    "lastObservation": "2026-10-26T18:00:00Z",
+    "retentionDays": 90,
+    "threshold": 75,
+    "scheduleState": "unreadable"
+  },
+  "no_data": {
+    "ok": true,
+    "nights": [],
+    "from": null,
+    "to": null,
+    "lastObservation": null,
+    "retentionDays": 90,
+    "threshold": 75,
+    "scheduleState": "undeclared"
+  }
+}

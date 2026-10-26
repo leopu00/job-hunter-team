@@ -125,17 +125,22 @@ describe("the settings page", () => {
     expect(screen.getByTestId("settings-notify-details")).toBeChecked();
   });
 
-  it("opens the team's hours and models, except in the read-only view", async () => {
+  it("opens the team's working hours and its models, except in the read-only view", async () => {
     Object.defineProperty(window, "location", { configurable: true, value: realLocation });
     const user = userEvent.setup();
     const view = render(<SettingsPage {...props} />);
+    await user.click(screen.getByTestId("settings-hours-link"));
+    expect(window.location.hash).toBe("#/settings/hours");
     await user.click(screen.getByTestId("settings-team-link"));
     expect(window.location.hash).toBe("#/settings/team");
     view.unmount();
     enterExistingTeamReadOnly(false);
     try {
       render(<SettingsPage {...props} />);
+      expect(screen.queryByTestId("settings-hours-link")).not.toBeInTheDocument();
       expect(screen.queryByTestId("settings-team-link")).not.toBeInTheDocument();
+      // the read-only view has no hours page, and still says what a hours file that cannot be read means
+      expect(screen.getByTestId("settings-hours-unreadable")).toHaveTextContent("the team works with no hours limit until you save them again");
     } finally {
       leaveExistingTeamReadOnly();
     }
