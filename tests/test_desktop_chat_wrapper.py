@@ -135,7 +135,10 @@ if [ "$1" = --version ]; then printf '%s\n' 'podman-compose version 1.6.0'; exit
 printf 'podman-compose %s\n' "$*" >> "$JHT_TEST_DOCKER_LOG"
 case "$*" in
   *"--verbose --dry-run --project-name jht"*" up -d --force-recreate jht")
-    printf 'INFO --label io.podman.compose.config-hash=%s --label next=value\n' \
+    # podman-compose 1.6.0 prints the create of the dependency first (its own hash), then the service's
+    printf 'INFO:podman_compose:podman create --name=jht-telegram --label io.podman.compose.config-hash=%s --label next=value x\n' \
+      "$(printf '%064d' 7)" >&2
+    printf 'INFO:podman_compose:podman create --name=jht --label io.podman.compose.config-hash=%s --label next=value x\n' \
       "$JHT_TEST_CONFIG_HASH" >&2 ;;
   *" ps -q")
     if [ -n "${JHT_TEST_PS_STATE:-}" ]; then
@@ -242,7 +245,10 @@ if [ "$1" = --version ]; then printf '%s\n' 'podman-compose version 1.6.0'; exit
 printf 'podman-compose connection=%s argv=%s\n' "${CONTAINER_CONNECTION-}" "$*" >> "$JHT_TEST_DOCKER_LOG"
 case "$*" in
   *"--verbose --dry-run --project-name jht"*" up -d --force-recreate jht")
-    printf 'INFO --label io.podman.compose.config-hash=%s --label next=value\n' \
+    # podman-compose 1.6.0 prints the create of the dependency first (its own hash), then the service's
+    printf 'INFO:podman_compose:podman create --name=jht-telegram --label io.podman.compose.config-hash=%s --label next=value x\n' \
+      "$(printf '%064d' 7)" >&2
+    printf 'INFO:podman_compose:podman create --name=jht --label io.podman.compose.config-hash=%s --label next=value x\n' \
       "$JHT_TEST_CONFIG_HASH" >&2 ;;
   *" ps -q") printf '%s\n' aaaaaaaaaaaa ;;
   *" up -d") exit 0 ;;
@@ -670,7 +676,7 @@ if [ "$1" = --version ]; then printf '%s\n' 'podman-compose version 1.6.0'; exit
 printf 'podman-compose-1.6.0 connection=%s argv=%s\n' "$CONTAINER_CONNECTION" "$*" >> "$JHT_TEST_DOCKER_LOG"
 case "$*" in
   "--verbose --dry-run --project-name jht "*" up -d --force-recreate jht")
-    printf '%s\n' 'INFO --label io.podman.compose.config-hash=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa --label next=value' >&2
+    printf '%s\n' 'INFO:podman_compose:podman create --name=jht --label io.podman.compose.config-hash=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa --label next=value x' >&2
     exit 0 ;;
 esac
 [ "$1" = --podman-path ] || exit 120

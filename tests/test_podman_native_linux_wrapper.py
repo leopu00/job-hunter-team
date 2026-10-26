@@ -201,7 +201,7 @@ for arg in "$@"; do
   esac
 done
 case " $* " in
-  *" --dry-run "*) echo "podman create --label io.podman.compose.config-hash={hash} jht"; exit 0 ;;
+  *" --dry-run "*) echo "podman create --name=jht-telegram --label io.podman.compose.config-hash=$(printf '%064d' 7) x"; echo "podman create --name=jht --label io.podman.compose.config-hash={hash} jht"; exit 0 ;;
   *" up "*)
     if [ "$pod" -eq 1 ]; then
       echo "Error: --userns and --pod cannot be set together" >&2
@@ -310,8 +310,9 @@ hash="$(printf '%s' "${JHT_IMAGE:-default}" | shasum -a 256 2>/dev/null | cut -c
 [ -n "$hash" ] || hash="$(printf '%s' "${JHT_IMAGE:-default}" | sha256sum | cut -c1-64)"
 for line in {lines}; do
   case "$line" in
-    same) echo "podman create --name jht --label io.podman.compose.config-hash=$hash jht" ;;
-    other) echo "podman create --name jht-telegram --label io.podman.compose.config-hash={other} x" ;;
+    same) echo "podman create --name=jht --label io.podman.compose.config-hash=$hash jht" ;;
+    other) echo "podman create --name=jht-telegram --label io.podman.compose.config-hash={other} x" ;;
+    differ) echo "podman create --name=jht --label io.podman.compose.config-hash={other} jht" ;;
   esac
 done
 exit 0
@@ -342,8 +343,26 @@ def test_the_same_hash_printed_for_a_service_and_its_dependency_is_one_hash(box)
     assert done.stdout.strip() == _image_hash("default")
 
 
-def test_two_different_hashes_are_refused(box):
+def test_the_dependency_has_its_own_hash_and_it_is_not_the_services(box):
+    # podman-compose 1.6.0 hashes each service's own configuration: the dry-run of jht prints the
+    # create of jht-telegram (another hash) and then the create of jht; the label of jht's container
+    # is the second one
+    done = config_hash(box, "other same")
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.strip() == _image_hash("default")
     done = config_hash(box, "same other")
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.strip() == _image_hash("default")
+
+
+def test_two_different_hashes_for_the_service_are_refused(box):
+    done = config_hash(box, "same differ")
+    assert done.returncode == 1 and done.stdout.strip() == ""
+
+
+def test_a_plan_without_the_create_of_the_service_is_refused(box):
+    # a dependency's hash is never taken for the service's
+    done = config_hash(box, "other")
     assert done.returncode == 1 and done.stdout.strip() == ""
 
 

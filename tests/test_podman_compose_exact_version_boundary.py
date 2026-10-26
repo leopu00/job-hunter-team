@@ -392,8 +392,15 @@ if command == "up" and dry_run and rest and rest[0] == "-d":
         if "# candidate-release" in Path(compose_file).read_text(encoding="utf-8")
         else os.environ["JHT_FIXTURE_CONFIG_HASH"]
     )
+    # 1.6.0 hashes each service's own configuration: the dependency's create comes first, with its own
     print(
-        "INFO podman create --label io.podman.compose.config-hash="
+        "INFO podman create --name=jht-telegram --label io.podman.compose.config-hash="
+        + "7" * 64
+        + " --label next=value",
+        file=sys.stderr,
+    )
+    print(
+        "INFO podman create --name=jht --label io.podman.compose.config-hash="
         + config_hash
         + " --label next=value",
         file=sys.stderr,
