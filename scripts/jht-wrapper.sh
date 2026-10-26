@@ -4890,11 +4890,17 @@ case "$SUB" in
       kimi|moonshot)
         docker exec $EXEC_FLAGS "$ATTESTED_CONTAINER_ID" kimi --yolo
         ;;
-      claude|anthropic|'')
+      claude|anthropic)
         docker exec $EXEC_FLAGS "$ATTESTED_CONTAINER_ID" claude --dangerously-skip-permissions
         ;;
+      '')
+        # Nessun provider scelto: nessuna CLI "di default", si sceglie prima.
+        err "nessun provider attivo: scegline uno con 'jht providers use openai'"
+        exit 1
+        ;;
       *)
-        die "provider attivo non riconosciuto: $provider"
+        err "provider attivo non riconosciuto: $provider"
+        exit 1
         ;;
     esac
     ;;

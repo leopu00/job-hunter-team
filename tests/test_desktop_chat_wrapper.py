@@ -84,11 +84,14 @@ case "$1" in
     [ ! -f "$JHT_TEST_CONTAINER_STOPPED" ] || exit 96
     case "$1:$2" in
       node:-e)
+        # the active provider the wrapper reads from jht.config.json (set, possibly empty)
+        if [ -n "${JHT_TEST_ACTIVE_PROVIDER+x}" ]; then printf '%s' "$JHT_TEST_ACTIVE_PROVIDER"; exit 0; fi
         if [ -n "${JHT_TEST_EXPECTED_TEAM:-}" ]; then
           for value in "$@"; do last="$value"; done
           [ "$last" = "$JHT_TEST_EXPECTED_TEAM" ] || exit 72
         fi
         printf '1 1 1' ;;
+      codex:*|claude:*|kimi:*) exit 0 ;;   # the provider's own login, which the log records
       tmux:has-session) exit 0 ;;
       test:-f) exit 0 ;;
       node:*) exit 0 ;;

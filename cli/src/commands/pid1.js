@@ -212,7 +212,7 @@ function startSentinelBridges() {
 
 /**
  * Verifica se active_provider è configurato in jht.config.json. Senza
- * di esso, start-agent.sh cade nel default 'claude' (non installato) →
+ * di esso start-agent.sh non sceglie nessuna CLI (nessun default) →
  * exit 1, agenti non partono.
  */
 async function hasActiveProviderConfigured() {

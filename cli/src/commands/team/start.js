@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { existsSync, mkdirSync, copyFileSync, readFileSync, unlinkSync } from 'node:fs';
 import {
   AGENTS, DEFAULT_TEAM, c,
-  tmuxAvailable, claudeAvailable, isSessionActive,
+  tmuxAvailable, providerCli, cliAvailable, isSessionActive,
   sessionName, parseAgentArg, resolveConfig, getAgentDir, usingContainer,
   JHT_HOME, JHT_USER_DIR, JHT_DB_PATH, JHT_CONFIG_PATH,
 } from './agents.js';
@@ -371,8 +371,16 @@ export async function startAction(agentArg, options) {
     process.exitCode = 1;
     return;
   }
-  if (!claudeAvailable()) {
-    console.error(c.red('Error: Claude CLI not found.'));
+  let providerConfig = null;
+  try { providerConfig = JSON.parse(readFileSync(JHT_CONFIG_PATH, 'utf-8')); } catch { /* senza config: nessun provider */ }
+  const cliBin = providerCli(providerConfig);
+  if (!cliBin) {
+    console.error(c.red('Error: no active provider. Run: jht providers use openai'));
+    process.exitCode = 1;
+    return;
+  }
+  if (!cliAvailable(cliBin)) {
+    console.error(c.red(`Error: the ${cliBin} CLI of the active provider was not found.`));
     process.exitCode = 1;
     return;
   }
