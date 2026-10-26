@@ -77,6 +77,24 @@ SLACK=64*1024*1024
 DENY=('cloud.json','credentials','secrets','runtime','logs','host.env','suid','.claude','.codex','.kimi','.npm-global','.local','.cache','.config','.pairing-token','jobs.db')
 SECRET=re.compile(r'(api[_-]?key|token|secret|passw|credential|authorization|bearer|private[_-]?key)',re.I)
 def emit(value): print(json.dumps(value,separators=(',',':'))); raise SystemExit(0)
+STATS_HOUR=re.compile(r'^\d{4}-\d{2}-\d{2}T\d{2}:00:00Z$')
+def stats_int(v,lo,hi): return isinstance(v,int) and not isinstance(v,bool) and lo<=v<=hi
+def stats_ok(r):
+ if not isinstance(r,dict) or set(r)!={'hour','activeMinutes','scoreThreshold','weeklyDeltaPct'}: return False
+ h=r['hour']
+ if not isinstance(h,str) or not STATS_HOUR.match(h): return False
+ try: time.strptime(h,'%Y-%m-%dT%H:%M:%SZ')
+ except ValueError: return False
+ d=r['weeklyDeltaPct']
+ return stats_int(r['activeMinutes'],0,60) and stats_int(r['scoreThreshold'],0,100) and (d is None or stats_int(d,0,100))
+def stats_clean(data):
+ out=[]
+ for line in data.split(b'\n')[:5000]:
+  if not line.strip() or len(line)>512: continue
+  try: r=json.loads(line.decode('utf-8'))
+  except Exception: continue
+  if stats_ok(r): out.append(json.dumps({k:r[k] for k in ('hour','activeMinutes','scoreThreshold','weeklyDeltaPct')},separators=(',',':')).encode('ascii')+b'\n')
+ return b''.join(out)
 def fail(code): emit({'ok':False,'error':code})
 try: req=json.loads(sys.stdin.readline())
 except Exception: fail('invalid_request')
@@ -229,6 +247,7 @@ try:
     with open(path,'rb') as handle: data=handle.read(MAX_FILE+1)
    except OSError: excluded.append({'path':arc,'reason':'unreadable'}); continue
    if len(data)>MAX_FILE: excluded.append({'path':arc,'reason':'too_large'}); continue
+   if arc=='stats/work-hours.jsonl': data=stats_clean(data)
    try: put(arc,io.BytesIO(data),len(data),os.lstat(path).st_mtime)
    except ValueError: excluded.append({'path':arc[:200],'reason':'name_too_long'}); continue
    listed.append({'path':arc,'bytes':len(data),'sha256':hashlib.sha256(data).hexdigest()})
@@ -831,8 +850,8 @@ def put(rel,text,mode='w'):
 put('profile/candidate_profile.yml','name: Ada\n')
 put('profile/cv/cv.md','# Ada CV\n')
 put('i18n-prefs.json','{"locale":"it"}')
-put('stats/work-hours.jsonl','{"hour":"2026-10-26T10:00:00Z","activeMinutes":60,"scoreThreshold":75,"weeklyDeltaPct":1}\n')
 put('stats/other.txt','NOT-ON-THE-LIST')
+put('stats/work-hours.jsonl','{"hour":"2026-10-26T10:00:00Z","activeMinutes":60,"scoreThreshold":75,"weeklyDeltaPct":1}\nTEXT-LINE-OF-AN-AD at Acme\n{"hour":"2026-10-26T11:00:00Z","activeMinutes":60,"scoreThreshold":75,"weeklyDeltaPct":null,"title":"EXTRA-FIELD"}\n{"hour":"2026-10-26T12:00:00Z","activeMinutes":99,"scoreThreshold":75,"weeklyDeltaPct":null}\n')
 put('jht.config.json','{"active_provider":"claude","providers":{"claude":{"api_key":"SECRET-KEY-1","model":"m","nested":{"refresh_token":"SECRET-TOKEN-2"}}},"list":[{"password":"SECRET-PASS-3","ok":1}]}')
 put('cloud.json','{"user_id":"u","token":"SECRET-CLOUD"}')
 put('.pairing-token','SECRET-PAIR')
@@ -922,13 +941,20 @@ db.commit()
         );
         // no secret anywhere in the archive, nor a file that was never on the list
         let everything = String::from_utf8_lossy(&python(&["-c", "import sys,tarfile,io\nt=tarfile.open(fileobj=io.BytesIO(sys.stdin.buffer.read()),mode='r:gz')\nfor m in t.getmembers():\n  sys.stdout.write(t.extractfile(m).read().decode('utf-8','replace'))"], &archive, None).1).into_owned();
-        for secret in ["NOT-ON-THE-LIST", "SECRET-KEY-1", "SECRET-TOKEN-2", "SECRET-PASS-3", "SECRET-CLOUD", "SECRET-PAIR", "SECRET-CRED", "SECRET-CLAUDE", "SECRET-CODEX", "SECRET-DRIVE", "JSON-DOC", "NOEXT-DOC", "a log line", "must not go", "not in the backup", "HIDDEN-CONTENT"] {
+        for secret in ["TEXT-LINE-OF-AN-AD", "EXTRA-FIELD", "NOT-ON-THE-LIST", "SECRET-KEY-1", "SECRET-TOKEN-2", "SECRET-PASS-3", "SECRET-CLOUD", "SECRET-PAIR", "SECRET-CRED", "SECRET-CLAUDE", "SECRET-CODEX", "SECRET-DRIVE", "JSON-DOC", "NOEXT-DOC", "a log line", "must not go", "not in the backup", "HIDDEN-CONTENT"] {
             assert!(!everything.contains(secret), "{secret} is in the backup");
         }
         assert!(everything.contains("\"model\": \"m\"") && everything.contains("\"api_key\": null") && everything.contains("\"refresh_token\": null") && everything.contains("\"password\": null"), "the config keeps its shape, with the secrets emptied");
         // the database in it is a sound copy with the rows
         let check = "import sys,tarfile,io,sqlite3,tempfile,os\nt=tarfile.open(fileobj=io.BytesIO(sys.stdin.buffer.read()),mode='r:gz')\nd=tempfile.mkdtemp(); open(d+'/x.db','wb').write(t.extractfile('jobs.db').read())\nprint(sqlite3.connect(d+'/x.db').execute('select count(*) from positions').fetchone()[0])";
         assert_eq!(String::from_utf8(python(&["-c", check], &archive, None).1).unwrap().trim(), "2");
+        // the statistics in it are the rows that pass the team's own check, and nothing of the lines that do not
+        let stats = "import sys,tarfile,io\nt=tarfile.open(fileobj=io.BytesIO(sys.stdin.buffer.read()),mode='r:gz')\nsys.stdout.write(t.extractfile('stats/work-hours.jsonl').read().decode())";
+        assert_eq!(
+            String::from_utf8(python(&["-c", stats], &archive, None).1).unwrap(),
+            "{\"hour\":\"2026-10-26T10:00:00Z\",\"activeMinutes\":60,\"scoreThreshold\":75,\"weeklyDeltaPct\":1}\n",
+            "a text line, a row with an extra field and a row out of range are not backed up"
+        );
         // read back by the app: the manifest holds, and says what was left out
         let inspection = inspect_archive(&archive[..]).unwrap();
         assert!(inspection.verified, "{:?}", inspection.problems);

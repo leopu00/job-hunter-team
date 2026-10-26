@@ -460,3 +460,27 @@ def test_the_sentinel_bridge_records_after_each_reading_and_never_stops_on_a_fai
     body = source[source.index("def _record_work_stats"):source.index("def _atomic_write_json")]
     assert "except Exception" in body and "work_stats.py" in body
     assert "sentinel_path=DATA_JSONL" in body
+
+
+def test_a_link_in_place_of_the_archive_is_not_read_and_a_second_name_neither(home, tmp_path):
+    put_config(home, DAY)
+    outside = tmp_path / "elsewhere.jsonl"
+    outside.write_text(json.dumps(row("2026-10-25T10:00:00Z")) + "\n", encoding="utf-8")
+    directory = home / "stats"
+    directory.mkdir()
+    (directory / "work-hours.jsonl").symlink_to(outside)
+    assert work_stats.load_rows() == ([], True), "a link is not our archive"
+    (directory / "work-hours.jsonl").unlink()
+    os.link(outside, directory / "work-hours.jsonl")
+    assert work_stats.load_rows() == ([], True), "a file with two names is not ours"
+    (directory / "work-hours.jsonl").unlink()
+    (directory / "work-hours.jsonl").mkdir()
+    assert work_stats.load_rows() == ([], True), "a directory is not a file"
+
+
+def test_a_file_that_grows_past_the_cap_after_the_check_is_still_bounded(home, monkeypatch):
+    directory = home / "stats"
+    directory.mkdir()
+    (directory / "work-hours.jsonl").write_text(json.dumps(row("2026-10-25T10:00:00Z")) + "\n", encoding="utf-8")
+    monkeypatch.setattr(work_stats, "MAX_FILE_BYTES", 10)
+    assert work_stats.load_rows() == ([], True)

@@ -23,6 +23,7 @@ import json
 import os
 import re
 import sqlite3
+import stat
 import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -90,20 +91,30 @@ def valid_row(row) -> dict | None:
 
 
 def load_rows(home: Path | None = None) -> tuple[list[dict], bool]:
-    """(the valid rows, whether anything in the file was dropped).  A file over the byte cap is not read."""
+    """(the valid rows, whether anything in the file was dropped).
+
+    The file is opened without following a link and checked on the descriptor it was opened as (a plain
+    file, one name, within the byte cap) before a byte is read, and at most one byte over the cap is read:
+    what a path pointed at a moment ago is not what is read.  Anything else is not ours: no rows, dropped."""
     path = stats_file(home)
     try:
-        size = path.stat().st_size
+        fd = os.open(str(path), os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
     except FileNotFoundError:
         return [], False
     except OSError:
-        raise StatsError("stats_unreadable")
-    if size > MAX_FILE_BYTES:
-        return [], True
+        return [], True          # a link, or a name the team may not open: not our archive
     try:
-        raw = path.read_bytes()
+        info = os.fstat(fd)
+        if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1 or info.st_size > MAX_FILE_BYTES:
+            return [], True
+        with os.fdopen(fd, "rb", closefd=False) as handle:
+            raw = handle.read(MAX_FILE_BYTES + 1)
     except OSError:
         raise StatsError("stats_unreadable")
+    finally:
+        os.close(fd)
+    if len(raw) > MAX_FILE_BYTES:
+        return [], True
     rows: dict[str, dict] = {}
     dropped = False
     for line in raw.split(b"\n"):
