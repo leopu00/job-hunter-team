@@ -1,5 +1,6 @@
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { existingTeamConnectionKey, reportPositionsNotice } from "./existing-team-readonly";
+import { nativeReadStarted } from "./page-timing";
 import { REFRESH_EVENT } from "../shell/router";
 // The pages show an empty list for a list that could not be read, as the web does for a query
 // that fails; the header (shell/VpsLinkBar) is how the person is told it was not empty, and why.
@@ -65,6 +66,7 @@ async function read<T>(request: Request): Promise<DesktopVpsRead<T>> {
   // desktop, absence or drift of the native binding fails closed below.
   if (!isTauri()) return { source: "not_desktop" };
   let result: DesktopVpsRead<T>;
+  const readEnded = nativeReadStarted();
   try {
     const answer = await invoke<unknown>(COMMAND, { request });
     result = reply<T>(answer);
@@ -75,6 +77,7 @@ async function read<T>(request: Request): Promise<DesktopVpsRead<T>> {
     reportVpsRead({ ok: false, error: "desktop_transport_unavailable" });
     result = { source: "unavailable", code: "desktop_transport_unavailable" };
   }
+  readEnded(result.source === "vps");
   return result;
 }
 
