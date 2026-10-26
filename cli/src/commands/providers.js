@@ -215,12 +215,22 @@ async function handleUse(id) {
 }
 
 // jht providers plan [id]: the subscription plan, which the Capitano's first run cannot open without.
-function readConfigOrEmpty() {
-  try { return JSON.parse(readRegularFileText(CONFIG_PATH)); } catch { return {}; }
+// {} only for a configuration that is not there yet; one that is there and cannot be read stops the command.
+function readConfigForPlan() {
+  try {
+    return { config: JSON.parse(readRegularFileText(CONFIG_PATH)) };
+  } catch (err) {
+    return err?.code === 'ENOENT' ? { config: {} } : { unreadable: true };
+  }
 }
 
 function handlePlan(id) {
-  const config = readConfigOrEmpty();
+  const { config, unreadable } = readConfigForPlan();
+  if (unreadable || !config || typeof config !== 'object' || Array.isArray(config)) {
+    console.error(`${ERR}  ${CONFIG_PATH} cannot be read (damaged, or not a regular file): nothing was written`);
+    process.exitCode = 1;
+    return;
+  }
   const active = typeof config.active_provider === 'string' ? config.active_provider.trim() : '';
   if (!active) {
     console.error(`${ERR}  no active provider: choose one first with: jht providers use openai`);

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { lstatSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { lstatSync, mkdtempSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import test from 'node:test';
@@ -94,4 +94,27 @@ test('an id that is not a plan of the provider is refused and the file is left a
     assert.match(done.stderr, /is not one of the openai plans/);
     assert.equal(readFileSync(join(dir, 'jht.config.json'), 'utf8'), text);
   }
+});
+
+test('a configuration that is there and cannot be read stops the command: nothing is written, nothing is advised', { skip: !hasPython }, () => {
+  const broken = home('{ not json');
+  const link = home();
+  const real = join(link, 'real.json');
+  writeFileSync(real, JSON.stringify({ active_provider: 'openai' }));
+  symlinkSync(real, join(link, 'jht.config.json'));
+  const array = home('[]');
+  for (const [dir, before] of [[broken, '{ not json'], [array, '[]']]) {
+    for (const args of [[], ['plus']]) {
+      const done = plan(dir, ...args);
+      assert.equal(done.status, 1);
+      assert.match(done.stderr, /cannot be read/);
+      assert.ok(!/jht providers use/.test(done.stderr), 'no advice to start over');
+      assert.equal(readFileSync(join(dir, 'jht.config.json'), 'utf8'), before);
+    }
+  }
+  const done = plan(link, 'plus');
+  assert.equal(done.status, 1);
+  assert.match(done.stderr, /cannot be read/);
+  assert.equal(lstatSync(join(link, 'jht.config.json')).isSymbolicLink(), true);
+  assert.equal(readFileSync(real, 'utf8'), JSON.stringify({ active_provider: 'openai' }));
 });
