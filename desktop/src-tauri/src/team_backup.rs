@@ -2,7 +2,8 @@
 //!
 //! The contract is banda/piani/CONTRATTO-backup-20261024.md (approved). In short:
 //! - What goes in (a closed list): a consistent snapshot of `jobs.db` (sqlite's own backup API, never a copy
-//!   of the open file), `profile/`, `i18n-prefs.json`, `jht.config.json` with every secret key emptied, the
+//!   of the open file), `profile/`, `i18n-prefs.json`, `stats/work-hours.jsonl` (the counts of what the team did
+//!   while it worked, numbers only), `jht.config.json` with every secret key emptied, the
 //!   agents' `chat.jsonl` and the documents the applications point to when they sit in the team's home. Never:
 //!   `cloud.json`, `.pairing-token`, `credentials/`, the providers' sign-ins (`.claude`, `.codex`, `.kimi`),
 //!   `host.env`, `runtime/`, `logs/`, `secrets/`, caches and packages. A document an application points to goes in
@@ -118,6 +119,7 @@ def candidates():
   if size>MAX_FILE: excluded.append({'path':arc,'reason':'too_large'}); return
   found.append((arc,path,size))
  if regular(HOME+'/i18n-prefs.json'): add('i18n-prefs.json',HOME+'/i18n-prefs.json')
+ if regular(HOME+'/stats/work-hours.jsonl'): add('stats/work-hours.jsonl',HOME+'/stats/work-hours.jsonl')
  base=HOME+'/profile'
  for root,dirs,files in os.walk(base,followlinks=False):
   dirs[:]=sorted(d for d in dirs if isdir(os.path.join(root,d)))
@@ -829,6 +831,8 @@ def put(rel,text,mode='w'):
 put('profile/candidate_profile.yml','name: Ada\n')
 put('profile/cv/cv.md','# Ada CV\n')
 put('i18n-prefs.json','{"locale":"it"}')
+put('stats/work-hours.jsonl','{"hour":"2026-10-26T10:00:00Z","activeMinutes":60,"scoreThreshold":75,"weeklyDeltaPct":1}\n')
+put('stats/other.txt','NOT-ON-THE-LIST')
 put('jht.config.json','{"active_provider":"claude","providers":{"claude":{"api_key":"SECRET-KEY-1","model":"m","nested":{"refresh_token":"SECRET-TOKEN-2"}}},"list":[{"password":"SECRET-PASS-3","ok":1}]}')
 put('cloud.json','{"user_id":"u","token":"SECRET-CLOUD"}')
 put('.pairing-token','SECRET-PAIR')
@@ -913,11 +917,12 @@ db.commit()
                 "manifest.json",
                 "profile/candidate_profile.yml",
                 "profile/cv/cv.md",
+                "stats/work-hours.jsonl",
             ]
         );
         // no secret anywhere in the archive, nor a file that was never on the list
         let everything = String::from_utf8_lossy(&python(&["-c", "import sys,tarfile,io\nt=tarfile.open(fileobj=io.BytesIO(sys.stdin.buffer.read()),mode='r:gz')\nfor m in t.getmembers():\n  sys.stdout.write(t.extractfile(m).read().decode('utf-8','replace'))"], &archive, None).1).into_owned();
-        for secret in ["SECRET-KEY-1", "SECRET-TOKEN-2", "SECRET-PASS-3", "SECRET-CLOUD", "SECRET-PAIR", "SECRET-CRED", "SECRET-CLAUDE", "SECRET-CODEX", "SECRET-DRIVE", "JSON-DOC", "NOEXT-DOC", "a log line", "must not go", "not in the backup", "HIDDEN-CONTENT"] {
+        for secret in ["NOT-ON-THE-LIST", "SECRET-KEY-1", "SECRET-TOKEN-2", "SECRET-PASS-3", "SECRET-CLOUD", "SECRET-PAIR", "SECRET-CRED", "SECRET-CLAUDE", "SECRET-CODEX", "SECRET-DRIVE", "JSON-DOC", "NOEXT-DOC", "a log line", "must not go", "not in the backup", "HIDDEN-CONTENT"] {
             assert!(!everything.contains(secret), "{secret} is in the backup");
         }
         assert!(everything.contains("\"model\": \"m\"") && everything.contains("\"api_key\": null") && everything.contains("\"refresh_token\": null") && everything.contains("\"password\": null"), "the config keeps its shape, with the secrets emptied");

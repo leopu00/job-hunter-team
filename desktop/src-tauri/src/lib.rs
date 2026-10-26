@@ -36,6 +36,7 @@ mod saved_vps;
 mod team_control;
 mod team_backup;
 mod team_export;
+mod work_stats;
 mod text_file_export;
 mod voice_input;
 mod vps_link;
@@ -159,6 +160,8 @@ pub fn run() {
             team_backup::backup_create,
             team_backup::backup_cancel,
             team_backup::backup_inspect,
+            work_stats::work_stats_read,
+            work_stats::work_stats_clear,
             voice_input::voice_input_cancel,
             voice_input::voice_input_start,
             voice_input::voice_input_status,
