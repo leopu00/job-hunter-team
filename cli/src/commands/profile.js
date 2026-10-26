@@ -144,8 +144,7 @@ function importAction(file, opts) {
   else console.log(`The Capitano could not be told now (${result.detail ?? 'delivery failed'}): it finds the profile at its next wake.`);
   if (result.plan === 'missing') {
     console.log('No subscription plan is declared, and the Capitano does not open the first run without one.');
-    console.log('Declare it (list the plans with: python3 /app/shared/skills/plan_registry.py list openai):');
-    console.log('  python3 /app/shared/skills/plan_registry.py set openai:<plan>');
+    console.log('See the plans and declare yours with: jht providers plan   (then: jht providers plan <id>)');
   }
 }
 

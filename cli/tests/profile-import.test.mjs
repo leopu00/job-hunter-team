@@ -375,7 +375,7 @@ test('without a declared plan the import says so, because the Capitano could not
   const done = run(root, ['profile', 'import', FIXTURE]);
   assert.equal(done.status, 0, done.stderr);
   assert.match(done.stdout, /No subscription plan is declared/);
-  assert.match(done.stdout, /plan_registry\.py set openai:<plan>/);
+  assert.match(done.stdout, /jht providers plan/);
   const refused = JSON.parse(python(root, 'first_run.py', 'begin-burst').stdout);
   assert.equal(refused.ok, false);
   assert.equal(refused.phase, 'awaiting_profile');
