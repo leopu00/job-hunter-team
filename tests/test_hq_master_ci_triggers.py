@@ -9,10 +9,12 @@ import yaml
 ROOT = Path(__file__).resolve().parent.parent
 WORKFLOWS = ROOT / ".github" / "workflows"
 HQ_GATES = ("ci.yml", "lint.yml", "test.yml", "security.yml")
-# Rami in piu' voluti, gate per gate. Tests gira anche sul push di
-# master-arthur (07/10): senza, i test Rust del desktop non partivano da soli
-# su quel ramo. Un ramo che compare senza stare qui resta un rosso.
-EXTRA_PUSH_BRANCHES = {"test.yml": {"master-arthur"}}
+# Rami in piu' voluti, gate per gate. Tests gira su OGNI ramo (26/10): i rami
+# protetti hanno tutti i job, un ramo di sviluppo solo i bloccanti della 0.4 e
+# il precheck (vedi le condizioni `if` dei job), cosi' una merge request porta un
+# run suo prima di arrivare su master-arthur. Un ramo che compare senza stare qui
+# resta un rosso.
+EVERY_BRANCH = {"test.yml"}
 
 
 def _workflow(name: str):
@@ -27,7 +29,10 @@ def _workflow(name: str):
 def test_hq_master_receives_the_same_push_gates_as_master():
     for name in HQ_GATES:
         branches = _workflow(name)["on"]["push"]["branches"]
-        assert set(branches) == {"master", "hq-master"} | EXTRA_PUSH_BRANCHES.get(name, set()), name
+        if name in EVERY_BRANCH:
+            assert branches == ["**"], name
+        else:
+            assert set(branches) == {"master", "hq-master"}, name
 
 
 def test_deploy_remains_production_only():
@@ -86,11 +91,21 @@ def test_local_supabase_e2e_never_reads_the_production_test_account():
     assert job["env"]["E2E_EMAIL"].endswith("@example.com")
 
 
+DEVELOPER_BRANCH_PUSH = (
+    "github.event_name == 'push' && !contains(fromJSON("
+    "'[\"refs/heads/master\",\"refs/heads/hq-master\",\"refs/heads/master-arthur\"]'"
+    "), github.ref)"
+)
+
+
 def test_existing_e2e_gate_is_unchanged_by_the_draft():
+    # The gate of the draft did not move; the only addition is that a developer
+    # branch does not run it (it signs in with the test account of the real project).
     condition = " ".join(_workflow("test.yml")["jobs"]["e2e"]["if"].split())
     assert condition == (
         "github.repository == 'leopu00/job-hunter-team' && "
-        "github.event_name != 'schedule'"
+        "github.event_name != 'schedule' && "
+        f"!({DEVELOPER_BRANCH_PUSH})"
     )
 
 
