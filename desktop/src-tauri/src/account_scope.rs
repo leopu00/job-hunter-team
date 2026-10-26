@@ -338,7 +338,14 @@ fn validate_or_claim_local_owner(home: &Path, scope: &AccountScope) -> Result<()
             // once, but authenticated accounts and unrelated directories must
             // remain fail-closed. After the marker is written, every access is
             // subject to the normal exact-digest ownership check.
-            if !scope.is_local_profile() || !recognized_legacy_local_home(home)? {
+            //
+            // A home that holds only what a run leaves behind (see
+            // `home_holds_only_leftovers`) holds the data of nobody: it is
+            // claimed like a missing one, for any scope, and nothing in it is
+            // touched or cleaned.
+            if !home_holds_only_leftovers(home)?
+                && (!scope.is_local_profile() || !recognized_legacy_local_home(home)?)
+            {
                 return Err("local_account_owner_missing");
             }
         }
@@ -369,7 +376,231 @@ fn previous_local_data_at(home: &Path) -> bool {
     );
     unowned
         && fs::symlink_metadata(home).is_ok_and(|metadata| metadata.file_type().is_dir())
+        && home_holds_only_leftovers(home) == Ok(false)
         && recognized_legacy_local_home(home) == Ok(true)
+}
+
+/// The closed list of what a home may hold and still count as empty: a home
+/// of leftovers belongs to nobody, and the first profile takes it without a
+/// question. Every other entry is data, however small.
+///
+///   - folders with nothing in them, at any depth;
+///   - `logs/<name>.log` of zero bytes;
+///   - `.team-halted.flag` at the root, of zero bytes or exactly what the
+///     product writes (`halted_by=<word>` and an optional `at=<time>`).
+///
+/// Nothing is followed (lstat): a link, a socket, any other file or a file with
+/// other content makes it data, and so does a home too big to look at or a
+/// folder that cannot be read (never a guess).
+fn home_holds_only_leftovers(home: &Path) -> Result<bool, &'static str> {
+    const ENTRY_LIMIT: usize = 64;
+    const DEPTH_LIMIT: usize = 4;
+    let unavailable = |_| "local_account_owner_unavailable";
+    let logs = home.join("logs");
+    let mut pending = vec![(home.to_path_buf(), 0usize)];
+    let mut seen = 0usize;
+    while let Some((dir, depth)) = pending.pop() {
+        if depth > DEPTH_LIMIT {
+            return Ok(false);
+        }
+        for entry in fs::read_dir(&dir).map_err(unavailable)? {
+            let path = entry.map_err(unavailable)?.path();
+            seen += 1;
+            if seen > ENTRY_LIMIT {
+                return Ok(false);
+            }
+            let metadata = fs::symlink_metadata(&path).map_err(unavailable)?;
+            let kind = metadata.file_type();
+            if kind.is_symlink() {
+                return Ok(false);
+            }
+            if kind.is_dir() {
+                pending.push((path, depth + 1));
+                continue;
+            }
+            if !kind.is_file() {
+                return Ok(false);
+            }
+            let known = if path.parent() == Some(home) {
+                path.file_name().is_some_and(|name| name == ".team-halted.flag")
+                    && halt_flag_is_the_products(&path, metadata.len())?
+            } else {
+                path.parent() == Some(logs.as_path())
+                    && metadata.len() == 0
+                    && path.extension().is_some_and(|extension| extension == "log")
+            };
+            if !known {
+                return Ok(false);
+            }
+        }
+    }
+    Ok(true)
+}
+
+/// `halted_by=<lowercase word or hyphens>\n`, then optionally `at=<ISO time>\n`:
+/// the two shapes the product writes. Anything longer or different is data.
+fn halt_flag_is_the_products(path: &Path, length: u64) -> Result<bool, &'static str> {
+    if length == 0 {
+        return Ok(true);
+    }
+    if length > 96 {
+        return Ok(false);
+    }
+    let Ok(text) = fs::read_to_string(path) else {
+        return Ok(false);
+    };
+    let mut lines = text.split_inclusive('\n');
+    let first_ok = lines.next().is_some_and(|line| {
+        line.strip_prefix("halted_by=")
+            .and_then(|rest| rest.strip_suffix('\n'))
+            .is_some_and(|word| {
+                (1..=40).contains(&word.len())
+                    && word.bytes().all(|byte| byte.is_ascii_lowercase() || byte == b'-')
+            })
+    });
+    let second_ok = lines.next().map_or(true, |line| {
+        line.strip_prefix("at=")
+            .and_then(|rest| rest.strip_suffix('\n'))
+            .is_some_and(|time| {
+                (1..=32).contains(&time.len())
+                    && time.bytes().all(|byte| byte.is_ascii_digit() || b"-:.TZ".contains(&byte))
+            })
+    });
+    Ok(first_ok && second_ok && lines.next().is_none())
+}
+
+/// «Use this data»: the person confirmed that the home no profile has taken
+/// becomes the local profile's. Only a local profile can take it (an account
+/// never takes data it did not make), only a real folder of this user, only
+/// when nobody owns it yet: an existing marker, whoever's, is checked and
+/// never replaced. The marker is written by the same function as always.
+fn adopt_unassigned_local_home(home: &Path, scope: &AccountScope) -> Result<(), &'static str> {
+    if !scope.is_local_profile() {
+        return Err("local_account_owner_missing");
+    }
+    let marker = home.join(".desktop-account-scope");
+    match fs::symlink_metadata(&marker) {
+        Ok(_) => return verify_local_owner_marker(&marker, scope),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+        Err(_) => return Err("local_account_owner_unavailable"),
+    }
+    match fs::symlink_metadata(home) {
+        Ok(metadata) if metadata.file_type().is_dir() && is_ours(&metadata) => {}
+        Ok(_) => return Err("local_account_owner_unavailable"),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            return validate_or_claim_local_owner(home, scope);
+        }
+        Err(_) => return Err("local_account_owner_unavailable"),
+    }
+    write_owner_marker(&marker, scope)?;
+    verify_local_owner_marker(&marker, scope)
+}
+
+#[cfg(unix)]
+fn is_ours(metadata: &fs::Metadata) -> bool {
+    use std::os::unix::fs::MetadataExt;
+    // SAFETY: geteuid has no arguments and cannot fail.
+    metadata.uid() == unsafe { libc::geteuid() }
+}
+
+#[cfg(not(unix))]
+fn is_ours(_metadata: &fs::Metadata) -> bool {
+    true
+}
+
+/// «Set it aside and start again»: the home no profile has taken is MOVED, in
+/// the same folder, to a name with the date. Nothing is copied, merged or
+/// removed; an existing name is never overwritten; the data keep their
+/// content. If the move fails nothing was touched. Returns the new name (not
+/// the path) for the person to read.
+fn set_aside_unassigned_local_home(home: &Path, now_secs: u64) -> Result<String, &'static str> {
+    let marker = home.join(".desktop-account-scope");
+    match fs::symlink_metadata(&marker) {
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+        // Already someone's (or unreadable): not for this to move.
+        _ => return Err("local_account_owner_unavailable"),
+    }
+    match fs::symlink_metadata(home) {
+        Ok(metadata) if metadata.file_type().is_dir() && is_ours(&metadata) => {}
+        _ => return Err("local_account_owner_unavailable"),
+    }
+    let parent = home.parent().ok_or("local_data_set_aside_failed")?;
+    let stamp = civil_stamp(now_secs);
+    for attempt in 0..100u32 {
+        let name = if attempt == 0 {
+            format!("jht-data-set-aside-{stamp}")
+        } else {
+            format!("jht-data-set-aside-{stamp}-{attempt}")
+        };
+        let target = parent.join(&name);
+        // No overwrite: a name taken is skipped, never replaced.
+        match fs::symlink_metadata(&target) {
+            Ok(_) => continue,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(_) => return Err("local_data_set_aside_failed"),
+        }
+        // rename(2) is atomic inside one filesystem and fails across two: no
+        // copy and delete ever follows.
+        fs::rename(home, &target).map_err(|_| "local_data_set_aside_failed")?;
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let _ = fs::set_permissions(&target, fs::Permissions::from_mode(0o700));
+        }
+        return Ok(name);
+    }
+    Err("local_data_set_aside_failed")
+}
+
+/// `YYYYMMDD-HHMMSS` (UTC) of a Unix time, without a date library.
+fn civil_stamp(secs: u64) -> String {
+    let days = (secs / 86_400) as i64;
+    let rest = secs % 86_400;
+    // Days since 1970-01-01 to a civil date (H. Hinnant's algorithm).
+    let z = days + 719_468;
+    let era = z.div_euclid(146_097);
+    let day_of_era = z.rem_euclid(146_097);
+    let year_of_era = (day_of_era - day_of_era / 1_460 + day_of_era / 36_524 - day_of_era / 146_096) / 365;
+    let day_of_year = day_of_era - (365 * year_of_era + year_of_era / 4 - year_of_era / 100);
+    let month_index = (5 * day_of_year + 2) / 153;
+    let day = day_of_year - (153 * month_index + 2) / 5 + 1;
+    let month = if month_index < 10 { month_index + 3 } else { month_index - 9 };
+    let year = year_of_era + era * 400 + i64::from(month <= 2);
+    format!(
+        "{year:04}{month:02}{day:02}-{:02}{:02}{:02}",
+        rest / 3_600,
+        rest % 3_600 / 60,
+        rest % 60
+    )
+}
+
+/// The confirmation of «Use this data» (the person read that these data were
+/// another profile's and that using them makes them theirs).
+#[tauri::command]
+pub(crate) fn onboarding_local_data_adopt(
+    app: tauri::AppHandle,
+    scopes: State<'_, AccountScopeState>,
+) -> Result<(), onboarding::OnboardingError> {
+    let scope = scopes.lock_active().map_err(onboarding::failure)?;
+    let marker = local_owner_marker_path(&app).map_err(onboarding::failure)?;
+    let home = marker.parent().ok_or_else(|| onboarding::failure("local_account_owner_unavailable"))?;
+    adopt_unassigned_local_home(home, scope.scope()).map_err(onboarding::failure)
+}
+
+/// The confirmation of «Set it aside and start again»: the name of the folder
+/// the data were moved to, to tell the person where they are.
+#[tauri::command]
+pub(crate) fn onboarding_local_data_set_aside(
+    app: tauri::AppHandle,
+    scopes: State<'_, AccountScopeState>,
+) -> Result<String, onboarding::OnboardingError> {
+    let _scope = scopes.lock_active().map_err(onboarding::failure)?;
+    let marker = local_owner_marker_path(&app).map_err(onboarding::failure)?;
+    let home = marker.parent().ok_or_else(|| onboarding::failure("local_account_owner_unavailable"))?;
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |elapsed| elapsed.as_secs());
+    set_aside_unassigned_local_home(home, now).map_err(onboarding::failure)
 }
 
 fn recognized_legacy_local_home(home: &Path) -> Result<bool, &'static str> {
@@ -1475,5 +1706,303 @@ mod tests {
             Err("local_account_owner_mismatch")
         );
         let _ = fs::remove_dir_all(&root);
+    }
+
+    // ── A home of leftovers, «use this data», «set it aside» ────────────────
+
+    fn leftovers_root(label: &str) -> std::path::PathBuf {
+        let root = std::env::temp_dir().join(format!(
+            "jht-owner-{label}-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(root.join(".jht")).unwrap();
+        root
+    }
+
+    /// Every entry of a tree with its kind and bytes: what «nothing was touched» compares.
+    fn tree(root: &std::path::Path) -> std::collections::BTreeMap<String, Vec<u8>> {
+        let mut entries = std::collections::BTreeMap::new();
+        let mut pending = vec![root.to_path_buf()];
+        while let Some(dir) = pending.pop() {
+            for entry in std::fs::read_dir(&dir).unwrap() {
+                let path = entry.unwrap().path();
+                let name = path.strip_prefix(root).unwrap().to_string_lossy().replace('\\', "/");
+                let kind = std::fs::symlink_metadata(&path).unwrap().file_type();
+                if kind.is_symlink() {
+                    entries.insert(format!("{name}@"), Vec::new());
+                } else if kind.is_dir() {
+                    entries.insert(format!("{name}/"), Vec::new());
+                    pending.push(path);
+                } else {
+                    entries.insert(name, std::fs::read(&path).unwrap());
+                }
+            }
+        }
+        entries
+    }
+
+    fn leftovers_only(home: &std::path::Path) -> bool {
+        super::home_holds_only_leftovers(home).unwrap()
+    }
+
+    #[test]
+    fn a_home_of_leftovers_is_taken_by_any_scope_and_nothing_in_it_is_touched() {
+        // What the Mac of the 2.A had: the flag a test wrote, an empty logs folder,
+        // and empty folders besides.
+        let root = leftovers_root("leftovers");
+        let home = root.join(".jht");
+        std::fs::create_dir_all(home.join("logs")).unwrap();
+        std::fs::create_dir_all(home.join("a/b/c")).unwrap();
+        std::fs::write(home.join("logs/runtime.log"), "").unwrap();
+        std::fs::write(home.join(".team-halted.flag"), "halted_by=team-state-reconciler\nat=2026-10-26T10:00:00.000Z\n").unwrap();
+        let before = tree(&home);
+        assert!(leftovers_only(&home));
+        // It is not announced as an earlier version's data: there are none.
+        assert!(!super::previous_local_data_at(&home));
+
+        let local = derive_local_scope(b"local-profile-leftovers");
+        super::validate_or_claim_local_owner(&home, &local).unwrap();
+        // Only the owner marker was added; the flag, the logs and the folders are as they were.
+        let mut after = tree(&home);
+        assert_eq!(after.remove(".desktop-account-scope").map(|digest| digest.len() > 0), Some(true));
+        assert_eq!(after, before);
+        assert_eq!(
+            super::validate_or_claim_local_owner(&home, &derive_local_scope(b"another")),
+            Err("local_account_owner_mismatch")
+        );
+
+        // An account takes it too: there are no one's data in it.
+        let other = leftovers_root("leftovers-account");
+        std::fs::create_dir_all(other.join(".jht/logs")).unwrap();
+        let google = derive_scope(b"00000000-0000-4000-8000-000000000001");
+        super::validate_or_claim_local_owner(&other.join(".jht"), &google).unwrap();
+        let _ = std::fs::remove_dir_all(&root);
+        let _ = std::fs::remove_dir_all(&other);
+    }
+
+    #[test]
+    fn the_list_of_leftovers_is_closed_one_entry_at_a_time() {
+        use std::fs;
+        let root = leftovers_root("closed");
+        let home = root.join(".jht");
+        let fresh = |sub: &str| {
+            let dir = root.join(sub);
+            fs::create_dir_all(dir.join("logs")).unwrap();
+            dir
+        };
+
+        // In the list.
+        let ok = fresh("ok");
+        assert!(leftovers_only(&ok), "folders with nothing in them");
+        fs::write(ok.join(".team-halted.flag"), "").unwrap();
+        assert!(leftovers_only(&ok), "the flag, empty");
+        for flag in ["halted_by=stop\n", "halted_by=desktop-open-without-team\n", "halted_by=team-state-reconciler\nat=2026-10-26T10:00:00.000Z\n"] {
+            fs::write(ok.join(".team-halted.flag"), flag).unwrap();
+            assert!(leftovers_only(&ok), "the flag as the product writes it: {flag:?}");
+        }
+        fs::write(ok.join("logs/runtime.log"), "").unwrap();
+        assert!(leftovers_only(&ok), "a log of zero bytes in logs/");
+
+        // Out of the list: each one makes the home data on its own.
+        let data = |label: &str, setup: &dyn Fn(&std::path::Path)| {
+            let dir = fresh(label);
+            setup(&dir);
+            assert!(!leftovers_only(&dir), "{label} is data");
+        };
+        data("a file with content", &|d| fs::write(d.join("notes.txt"), "x").unwrap());
+        data("a file of zero bytes with another name", &|d| fs::write(d.join("empty.txt"), "").unwrap());
+        data("the database, empty", &|d| fs::write(d.join("jobs.db"), "").unwrap());
+        data("the configuration, empty", &|d| fs::write(d.join("jht.config.json"), "").unwrap());
+        data("a log with content", &|d| fs::write(d.join("logs/runtime.log"), "a line\n").unwrap());
+        data("a log outside logs/", &|d| fs::write(d.join("runtime.log"), "").unwrap());
+        data("a file in logs/ that is not a log", &|d| fs::write(d.join("logs/notes.txt"), "").unwrap());
+        data("a log in a folder inside logs/", &|d| {
+            fs::create_dir_all(d.join("logs/old")).unwrap();
+            fs::write(d.join("logs/old/runtime.log"), "").unwrap();
+        });
+        data("the flag in a folder", &|d| {
+            fs::create_dir_all(d.join("sub")).unwrap();
+            fs::write(d.join("sub/.team-halted.flag"), "").unwrap();
+        });
+        data("the flag with other content", &|d| fs::write(d.join(".team-halted.flag"), "do not start\n").unwrap());
+        data("the flag with a third line", &|d| fs::write(d.join(".team-halted.flag"), "halted_by=stop\nat=2026-10-26\nmore\n").unwrap());
+        data("the flag with a long name", &|d| fs::write(d.join(".team-halted.flag"), format!("halted_by={}\n", "a".repeat(60))).unwrap());
+        data("the flag with a path in it", &|d| fs::write(d.join(".team-halted.flag"), "halted_by=/Users/someone\n").unwrap());
+        data("the owner marker of another run", &|d| fs::write(d.join(".desktop-account-scope"), "").unwrap());
+        data("a folder too deep", &|d| fs::create_dir_all(d.join("a/b/c/d/e/f")).unwrap());
+        data("too many entries", &|d| {
+            for index in 0..70 {
+                fs::create_dir_all(d.join(format!("dir{index}"))).unwrap();
+            }
+        });
+        let _ = home;
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_link_in_place_of_a_folder_is_data_and_is_never_followed() {
+        use std::{fs, os::unix::fs::symlink};
+        let root = leftovers_root("links");
+        let home = root.join(".jht");
+        let outside = root.join("outside");
+        fs::create_dir_all(&outside).unwrap();
+        // The link points to a folder with nothing in it: still data.
+        symlink(&outside, home.join("profile")).unwrap();
+        assert!(!leftovers_only(&home));
+        let before = tree(&home);
+        assert_eq!(
+            super::validate_or_claim_local_owner(&home, &derive_scope(b"00000000-0000-4000-8000-000000000001")),
+            Err("local_account_owner_missing")
+        );
+        assert_eq!(tree(&home), before);
+        // A broken link too, and a link in place of the flag.
+        fs::remove_file(home.join("profile")).unwrap();
+        symlink(root.join("nowhere"), home.join(".team-halted.flag")).unwrap();
+        assert!(!leftovers_only(&home));
+        // And the home itself as a link is not a home to take.
+        let linked = root.join("linked");
+        symlink(&outside, &linked).unwrap();
+        let local = derive_local_scope(b"local-profile-link");
+        assert!(super::adopt_unassigned_local_home(&linked, &local).is_err());
+        assert!(!outside.join(".desktop-account-scope").exists());
+        assert!(super::set_aside_unassigned_local_home(&linked, 0).is_err());
+        assert!(fs::symlink_metadata(&linked).unwrap().file_type().is_symlink());
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn real_data_not_assigned_waits_for_the_choice_and_leaving_changes_nothing() {
+        let root = leftovers_root("choice");
+        let home = root.join(".jht");
+        std::fs::write(home.join("unrelated.txt"), "a note\n").unwrap();
+        std::fs::create_dir_all(home.join("logs")).unwrap();
+        let before = tree(&home);
+        let local = derive_local_scope(b"local-profile-choice");
+        // The setup stops, as before; no marker, nothing moved: leaving is free.
+        for _ in 0..2 {
+            assert_eq!(
+                super::validate_or_claim_local_owner(&home, &local),
+                Err("local_account_owner_missing")
+            );
+            assert_eq!(tree(&home), before);
+        }
+        assert!(!super::previous_local_data_at(&home));
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn use_this_data_takes_the_home_as_it_is_for_a_local_profile_only() {
+        let root = leftovers_root("adopt");
+        let home = root.join(".jht");
+        std::fs::write(home.join("unrelated.txt"), "a note\n").unwrap();
+        let before = tree(&home);
+        let google = derive_scope(b"00000000-0000-4000-8000-000000000001");
+        let local = derive_local_scope(b"local-profile-adopt");
+
+        // An account never takes data it did not make.
+        assert_eq!(super::adopt_unassigned_local_home(&home, &google), Err("local_account_owner_missing"));
+        assert_eq!(tree(&home), before);
+
+        super::adopt_unassigned_local_home(&home, &local).unwrap();
+        let mut after = tree(&home);
+        assert!(after.remove(".desktop-account-scope").is_some());
+        assert_eq!(after, before);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mode = std::fs::metadata(home.join(".desktop-account-scope")).unwrap().permissions().mode() & 0o777;
+            assert_eq!(mode, 0o600);
+        }
+        // Now it is the normal case: the same profile passes, another does not.
+        super::validate_or_claim_local_owner(&home, &local).unwrap();
+        let other = derive_local_scope(b"local-profile-other");
+        assert_eq!(super::validate_or_claim_local_owner(&home, &other), Err("local_account_owner_mismatch"));
+        // An owner that exists is checked and never replaced, «use» or not.
+        let mark = std::fs::read(home.join(".desktop-account-scope")).unwrap();
+        assert_eq!(super::adopt_unassigned_local_home(&home, &other), Err("local_account_owner_mismatch"));
+        assert_eq!(std::fs::read(home.join(".desktop-account-scope")).unwrap(), mark);
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn a_corrupt_owner_marker_is_not_repaired_by_use_this_data() {
+        let root = leftovers_root("corrupt");
+        let home = root.join(".jht");
+        std::fs::write(home.join(".desktop-account-scope"), "x".repeat(200)).unwrap();
+        let local = derive_local_scope(b"local-profile-corrupt");
+        assert_eq!(super::adopt_unassigned_local_home(&home, &local), Err("local_account_owner_invalid"));
+        assert_eq!(std::fs::read(home.join(".desktop-account-scope")).unwrap().len(), 200);
+        assert!(super::set_aside_unassigned_local_home(&home, 0).is_err());
+        assert!(home.join(".desktop-account-scope").exists());
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn set_it_aside_moves_the_home_under_a_dated_name_and_never_overwrites() {
+        let root = leftovers_root("aside");
+        let home = root.join(".jht");
+        std::fs::write(home.join("unrelated.txt"), "a note\n").unwrap();
+        std::fs::create_dir_all(home.join("logs")).unwrap();
+        let before = tree(&home);
+        // 2023-11-14 22:13:20 UTC.
+        let name = super::set_aside_unassigned_local_home(&home, 1_700_000_000).unwrap();
+        assert_eq!(name, "jht-data-set-aside-20231114-221320");
+        assert!(!home.exists());
+        // Moved, not copied: every file with its content under the new name.
+        assert_eq!(tree(&root.join(&name)), before);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            assert_eq!(std::fs::metadata(root.join(&name)).unwrap().permissions().mode() & 0o777, 0o700);
+        }
+        // The next setup starts from nothing: a new home is created and taken.
+        let local = derive_local_scope(b"local-profile-aside");
+        super::validate_or_claim_local_owner(&home, &local).unwrap();
+
+        // The same second again: the name is taken, so the next one is used and the first is untouched.
+        std::fs::write(home.join("second.txt"), "two\n").unwrap();
+        std::fs::remove_file(home.join(".desktop-account-scope")).unwrap();
+        let second = super::set_aside_unassigned_local_home(&home, 1_700_000_000).unwrap();
+        assert_eq!(second, "jht-data-set-aside-20231114-221320-1");
+        assert_eq!(tree(&root.join(&name)), before);
+        assert!(root.join(&second).join("second.txt").exists());
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn when_the_move_fails_nothing_was_touched() {
+        use std::os::unix::fs::PermissionsExt;
+        let root = leftovers_root("aside-fails");
+        let home = root.join(".jht");
+        std::fs::write(home.join("unrelated.txt"), "a note\n").unwrap();
+        let before = tree(&home);
+        // The folder the home lives in cannot be written: the rename fails.
+        std::fs::set_permissions(&root, std::fs::Permissions::from_mode(0o500)).unwrap();
+        let writable = std::fs::File::create(root.join("probe")).is_ok();
+        let result = super::set_aside_unassigned_local_home(&home, 1_700_000_000);
+        std::fs::set_permissions(&root, std::fs::Permissions::from_mode(0o700)).unwrap();
+        if !writable {
+            assert_eq!(result, Err("local_data_set_aside_failed"));
+            assert_eq!(tree(&home), before);
+            assert!(std::fs::read_dir(&root).unwrap().all(|entry| {
+                !entry.unwrap().file_name().to_string_lossy().starts_with("jht-data-set-aside")
+            }));
+        }
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn the_stamp_of_a_unix_time_is_the_utc_date() {
+        assert_eq!(super::civil_stamp(0), "19700101-000000");
+        assert_eq!(super::civil_stamp(1_700_000_000), "20231114-221320");
+        // A leap day, and the end of a year.
+        assert_eq!(super::civil_stamp(1_709_164_800 + 3_661), "20240229-010101");
+        assert_eq!(super::civil_stamp(1_798_761_599), "20261231-235959");
     }
 }
