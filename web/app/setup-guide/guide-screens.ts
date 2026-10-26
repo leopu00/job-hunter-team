@@ -103,15 +103,10 @@ const SCREEN_LIST: GuideScreen[] = [
         width: 1920,
         height: 1080,
       },
-      macos: {
-        src: "/setup-guide/S02-docker-download-macos.jpg",
-        width: 1512,
-        height: 828,
-      },
       // Niente variante Windows: lì il team gira in Podman dentro WSL, che
       // l'app installa da sé, e la fase Windows non mostra questa pagina.
     },
-    pending: "Completa su macOS e Linux.",
+    pending: "Su Linux consegnata. macOS: tolta con il passo «Docker Desktop», perché la 0.4 usa Podman. Windows: non serve (WSL e Podman).",
   },
   {
     id: "S03-artifact-download",
@@ -133,20 +128,8 @@ const SCREEN_LIST: GuideScreen[] = [
       pt: "No Windows o instalador é o caminho principal; a versão portátil é a alternativa.",
       hu: "Windowson a telepítő az elsődleges út; a hordozható változat az alternatíva.",
     },
-    assets: {
-      macos: {
-        src: "/setup-guide/S03-artifact-download-macos.jpg",
-        width: 1506,
-        height: 825,
-      },
-      windows: {
-        src: "/setup-guide/S03-artifact-download-windows.png",
-        width: 1366,
-        height: 768,
-      },
-    },
-    pending:
-      "Consegnate macOS e Windows. Linux revocata dall'audit; la ripresa macOS va rifatta dopo il rename della voce di menu.",
+    assets: {},
+    pending: "Windows: tolta, la 0.4 non ha Windows. Linux: revocata dall'audit. macOS: Da rifare con l'app 0.4, dati finti, build 2. File: web/public/setup-guide/S03-artifact-download-macos.jpg (1506×825 px), poi rimettere la voce in assets.",
   },
   {
     id: "S04-installation-macos",
@@ -168,13 +151,8 @@ const SCREEN_LIST: GuideScreen[] = [
       pt: "A versão macOS está assinada e notarizada: basta um duplo clique.",
       hu: "A macOS-változat aláírt és hitelesített: elég egy dupla kattintás.",
     },
-    assets: {
-      macos: {
-        src: "/setup-guide/S04-installation-macos.png",
-        width: 2064,
-        height: 1096,
-      },
-    },
+    assets: {},
+    pending: "Da rifare con l'app 0.4 su Mac, dati finti, build 2. File in web/public/setup-guide/: S04-installation-macos.png (2064×1096 px); poi rimettere le voci in assets.",
   },
   {
     id: "S04-installation-windows",
@@ -196,13 +174,8 @@ const SCREEN_LIST: GuideScreen[] = [
       pt: "Um aviso do SmartScreen é esperado: verifica a origem do ficheiro.",
       hu: "A SmartScreen-figyelmeztetés várható: ellenőrizd a fájl forrását.",
     },
-    assets: {
-      windows: {
-        src: "/setup-guide/S04-installation-windows.png",
-        width: 1366,
-        height: 768,
-      },
-    },
+    assets: {},
+    pending: "Tolta: la 0.4 non ha Windows. Nessuna ripresa da fare.",
   },
   {
     id: "S04-installation-linux",
@@ -257,19 +230,8 @@ const SCREEN_LIST: GuideScreen[] = [
       // perché il selettore lingua È la prima schermata di un avvio
       // pulito. Una voce in più nel registro, non un file in più sul
       // disco — che è esattamente a cosa serve il registro.
-      linux: {
-        src: "/setup-guide/S06-choose-language-linux.png",
-        width: 624,
-        height: 486,
-      },
-      macos: {
-        src: "/setup-guide/S06-choose-language-macos.png",
-        width: 3024,
-        height: 1898,
-      },
     },
-    pending:
-      "Consegnate Linux e macOS, entrambe riusando l'asset di S06. Resta Windows.",
+    pending: "Usa la stessa ripresa di S06 (S06-choose-language-macos.png e -linux.png): tolte entrambe, si rifanno con S06. Poi rimettere le voci in assets.",
   },
   {
     id: "S06-choose-language",
@@ -291,19 +253,8 @@ const SCREEN_LIST: GuideScreen[] = [
       pt: "Sete idiomas; confirmar guarda a escolha neste dispositivo.",
       hu: "Hét nyelv; a megerősítés elmenti a választást ezen az eszközön.",
     },
-    assets: {
-      linux: {
-        src: "/setup-guide/S06-choose-language-linux.png",
-        width: 624,
-        height: 486,
-      },
-      macos: {
-        src: "/setup-guide/S06-choose-language-macos.png",
-        width: 3024,
-        height: 1898,
-      },
-    },
-    pending: "Consegnate Linux e macOS. Resta Windows.",
+    assets: {},
+    pending: "Da rifare con l'app 0.4 su Mac, dati finti, build 2. File in web/public/setup-guide/: S06-choose-language-linux.png (624×486 px), S06-choose-language-macos.png (3024×1898 px); poi rimettere le voci in assets. Linux: da rifare quando c'è un collaudo Linux.",
   },
   {
     id: "S07-enter-office",
@@ -325,19 +276,8 @@ const SCREEN_LIST: GuideScreen[] = [
       pt: "Andar pelo escritório não arranca nenhuma equipa real.",
       hu: "Az irodában való körbenézés nem indít valódi csapatot.",
     },
-    assets: {
-      linux: {
-        src: "/setup-guide/S07-enter-office-linux.png",
-        width: 1920,
-        height: 1080,
-      },
-      macos: {
-        src: "/setup-guide/S07-enter-office-macos.png",
-        width: 3024,
-        height: 1898,
-      },
-    },
-    pending: "Consegnate Linux e macOS. Resta Windows.",
+    assets: {},
+    pending: "Da rifare con l'app 0.4 su Mac, dati finti, build 2. File in web/public/setup-guide/: S07-enter-office-linux.png (1920×1080 px), S07-enter-office-macos.png (3024×1898 px); poi rimettere le voci in assets. Linux: da rifare quando c'è un collaudo Linux.",
   },
   {
     id: "S08-setup-overview-empty",
@@ -359,14 +299,8 @@ const SCREEN_LIST: GuideScreen[] = [
       pt: "Contentor, provedor de AI, perfil e CV, horário: quatro verificações, por ordem.",
       hu: "Konténer, AI-szolgáltató, profil és önéletrajz, munkaidő: négy ellenőrzés, sorban.",
     },
-    assets: {
-      macos: {
-        src: "/setup-guide/S08-setup-overview-empty-macos.png",
-        width: 3024,
-        height: 1898,
-      },
-    },
-    pending: "Consegnata macOS. Restano Linux e Windows.",
+    assets: {},
+    pending: "Da rifare con l'app 0.4 su Mac, dati finti, build 2. File in web/public/setup-guide/: S08-setup-overview-empty-macos.png (3024×1898 px); poi rimettere le voci in assets.",
   },
   {
     id: "S09-start-container",
@@ -388,19 +322,8 @@ const SCREEN_LIST: GuideScreen[] = [
       pt: "A primeira transferência da imagem demora o que a tua máquina e ligação precisarem.",
       hu: "Az első képfájl-letöltés annyi ideig tart, amennyi a gépednek és a kapcsolatodnak kell.",
     },
-    assets: {
-      linux: {
-        src: "/setup-guide/S09-start-container-linux.png",
-        width: 1920,
-        height: 1080,
-      },
-      macos: {
-        src: "/setup-guide/S09-start-container-macos.png",
-        width: 3024,
-        height: 1898,
-      },
-    },
-    pending: "Consegnate Linux e macOS. Resta Windows.",
+    assets: {},
+    pending: "Da rifare con l'app 0.4 su Mac, dati finti, build 2. File in web/public/setup-guide/: S09-start-container-linux.png (1920×1080 px), S09-start-container-macos.png (3024×1898 px); poi rimettere le voci in assets. Linux: da rifare quando c'è un collaudo Linux.",
   },
   {
     id: "S10-choose-provider",
@@ -428,14 +351,8 @@ const SCREEN_LIST: GuideScreen[] = [
       pt: "Apenas início de sessão por subscrição: nunca é pedida uma chave de API. Aqui o fornecedor está escolhido mas ainda não autenticado, por isso a lista de planos aparece depois, ao iniciar sessão.",
       hu: "Csak előfizetéses bejelentkezés: API-kulcsot soha nem kérünk. Itt a szolgáltató ki van választva, de még nincs bejelentkezve, így a csomagok listája később, a belépés után jelenik meg.",
     },
-    assets: {
-      linux: {
-        src: "/setup-guide/S10-choose-provider-linux.png",
-        width: 1920,
-        height: 1080,
-      },
-    },
-    pending: "Consegnata per Linux. Restano macOS e Windows.",
+    assets: {},
+    pending: "Tolta la ripresa vecchia (elencava più provider). Da rifare con l'app 0.4, solo Codex, dati finti: web/public/setup-guide/S10-choose-provider-macos.png, 3024×1898 px, poi rimettere la voce in assets.",
   },
   {
     id: "S11-authorize-provider",
@@ -527,20 +444,8 @@ const SCREEN_LIST: GuideScreen[] = [
       pt: "Sem horário a equipa pode trabalhar a qualquer hora, com a tua subscrição.",
       hu: "Beosztás nélkül a csapat bármikor dolgozhat — a te előfizetéseden.",
     },
-    assets: {
-      linux: {
-        src: "/setup-guide/S14-working-hours-linux.png",
-        width: 1920,
-        height: 1080,
-      },
-      macos: {
-        src: "/setup-guide/S14-working-hours-macos.png",
-        width: 3024,
-        height: 1898,
-      },
-    },
-    pending:
-      "Consegnate Linux e macOS dopo il fix dei giorni della settimana: le iniziali ora sono quelle inglesi. Resta Windows. La vecchia versione con L M M G V S D e' conservata in guide-stills/rejected per documentare il difetto.",
+    assets: {},
+    pending: "Da rifare con l'app 0.4 su Mac, dati finti, build 2. File in web/public/setup-guide/: S14-working-hours-linux.png (1920×1080 px), S14-working-hours-macos.png (3024×1898 px); poi rimettere le voci in assets. Linux: da rifare quando c'è un collaudo Linux.",
   },
   {
     id: "S15-setup-complete",
@@ -632,15 +537,8 @@ const SCREEN_LIST: GuideScreen[] = [
       pt: "O comando de início de sessão fica indisponível até o contentor estar a correr.",
       hu: "A bejelentkezés gombja addig nem elérhető, amíg a konténer nem fut.",
     },
-    assets: {
-      macos: {
-        src: "/setup-guide/W01-local-account-entry-macos.png",
-        width: 3024,
-        height: 1898,
-      },
-    },
-    pending:
-      "Consegnata macOS. Restano Linux (revocata dall'audit per etichette italiane sullo sfondo) e Windows.",
+    assets: {},
+    pending: "Da rifare con l'app 0.4 su Mac, dati finti, build 2. File: web/public/setup-guide/W01-local-account-entry-macos.png (3024×1898 px); poi rimettere la voce in assets.",
   },
   {
     id: "W02-google-login",
@@ -662,15 +560,8 @@ const SCREEN_LIST: GuideScreen[] = [
       pt: "O link abre no navegador; o código de uso único fica aqui.",
       hu: "A hivatkozás a böngészőben nyílik; az egyszer használatos kód itt marad.",
     },
-    assets: {
-      windows: {
-        src: "/setup-guide/W02-google-login-windows.png",
-        width: 1366,
-        height: 768,
-      },
-    },
-    pending:
-      "Consegnata Windows: pagina di accesso del sito PRIMA dell'autenticazione, senza alcun account. Restano macOS e Linux, bloccate finche' il terminale integrato non e' inglese in una release pubblicata.",
+    assets: {},
+    pending: "Tolta: il login web è congelato e la 0.4 non ha Windows. Nessuna ripresa da fare.",
   },
   {
     id: "W03-permissions",

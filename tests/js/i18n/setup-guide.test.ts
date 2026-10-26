@@ -378,7 +378,6 @@ describe("guida di setup — contratto del team docs", () => {
     )!;
     const phaseIds = new Set([
       "choose-setup-path",
-      "install-docker-macos",
       "install-docker-windows",
       "install-docker-linux",
     ]);
