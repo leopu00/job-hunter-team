@@ -52,7 +52,7 @@ def _apt(tmp_path: Path) -> Path:
     return apt
 
 
-def _curl(tmp_path: Path, speeds: dict[str, int | None], no_index: bool = False) -> tuple[Path, Path]:
+def _curl(tmp_path: Path, speeds: dict[str, int | None], no_index: str = "") -> tuple[Path, Path]:
     """A curl that answers the speed of the mirror in the URL (None: the transfer fails) and logs what it was asked."""
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir()
@@ -63,7 +63,7 @@ def _curl(tmp_path: Path, speeds: dict[str, int | None], no_index: bool = False)
         "#!/bin/sh\n"
         'for last; do :; done\n'
         f'echo "$last" >> "{log}"\n'
-        f'case "$last" in */InRelease) {"exit 22" if no_index else "exit 0"};; esac\n'
+        f'case "$last" in */InRelease) case "$last" in *"{no_index}"*) exit 22;; esac; exit 0;; esac\n'
         f'while read -r mirror bps; do\n'
         '  case "$last" in "$mirror"/*) [ "$bps" = fail ] && exit 22; printf "%s.000" "$bps"; exit 0;; esac\n'
         f'done <<EOF\n{table}\nEOF\n'
@@ -74,10 +74,10 @@ def _curl(tmp_path: Path, speeds: dict[str, int | None], no_index: bool = False)
     return bin_dir, log
 
 
-def _run(tmp_path: Path, speeds: dict[str, int | None], apt: Path | None = None, no_index: bool = False):
+def _run(tmp_path: Path, speeds: dict[str, int | None], apt: Path | None = None, no_index: str = "", codename: str = "noble"):
     apt = apt or _apt(tmp_path)
-    bin_dir, log = _curl(tmp_path, speeds, no_index)
-    env = {**os.environ, "PATH": f"{bin_dir}:{os.environ['PATH']}", "APT_DIR": str(apt), "APT_RELEASE_CODENAME": "noble"}
+    bin_dir, log = _curl(tmp_path, speeds, no_index or "/dists/none-will-match/")
+    env = {**os.environ, "PATH": f"{bin_dir}:{os.environ['PATH']}", "APT_DIR": str(apt), "APT_RELEASE_CODENAME": codename}
     result = subprocess.run(["sh", str(SCRIPT)], capture_output=True, text=True, env=env)
     asked = log.read_text(encoding="utf-8").split() if log.exists() else []
     probes = [url.split("/pool/")[0] for url in asked if "/pool/" in url]
@@ -127,13 +127,23 @@ def test_a_mirror_that_fails_counts_as_slow(tmp_path):
     assert _others_untouched(apt)
 
 
-def test_a_mirror_without_the_release_index_is_undone(tmp_path):
+@pytest.mark.parametrize("missing", ["/dists/noble/", "/dists/noble-updates/", "/dists/noble-backports/"])
+def test_a_mirror_missing_an_index_apt_reads_changes_nothing(tmp_path, missing):
     apt = _apt(tmp_path)
     before = _text(apt)
-    result, apt, _ = _run(tmp_path, {AZURE_HTTP: SLOW, CANON: FAST}, apt=apt, no_index=True)
+    result, apt, _ = _run(tmp_path, {AZURE_HTTP: SLOW, CANON: FAST}, apt=apt, no_index=missing)
     assert result.returncode == 0, result.stderr
     assert _text(apt) == before, "an archive apt cannot read is an apt-get update that exits 100"
-    assert "restored" in result.stdout
+    assert "has no index" in result.stdout
+
+
+def test_without_the_release_name_nothing_changes(tmp_path):
+    apt = _apt(tmp_path)
+    before = _text(apt)
+    result, apt, _ = _run(tmp_path, {AZURE_HTTP: SLOW, CANON: FAST}, apt=apt, codename="")
+    assert result.returncode == 0, result.stderr
+    assert _text(apt) == before
+    assert "release name is unknown" in result.stdout
 
 
 def test_when_none_is_fast_the_sources_are_left_as_they_are(tmp_path):

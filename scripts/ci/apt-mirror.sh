@@ -66,22 +66,24 @@ if [ "${chosen#*://}" = "${current#*://}" ]; then
   echo "apt mirror: keeping $current"
   exit 0
 fi
+# The new mirror has to serve the indexes `apt-get update` reads for this release (the release, -updates and
+# -backports), or nothing changes: a source apt cannot read is an update that exits 100 in the next step.
+# Without a release name there is nothing to check against, so nothing changes either.
+codename="${APT_RELEASE_CODENAME:-$(sed -n 's/^VERSION_CODENAME=//p' /etc/os-release 2>/dev/null | head -n 1)}"
+if [ -z "$codename" ]; then
+  echo "apt mirror: the release name is unknown, sources left as they are ($current)"
+  exit 0
+fi
+for suite in "$codename" "$codename-updates" "$codename-backports"; do
+  if ! curl -fsSL --connect-timeout 3 --max-time 10 -o /dev/null "$chosen/dists/$suite/InRelease" 2>/dev/null; then
+    echo "apt mirror: $chosen has no index for $suite, sources left as they are ($current)"
+    exit 0
+  fi
+done
 pattern=$(printf '%s' "$current" | sed 's/[][\.*^$#]/\\&/g')   # the host is text, not a regular expression
-backup=$(mktemp -d) || { echo "apt mirror: no scratch folder, sources left as they are"; exit 0; }
-for f in $files; do cp -p "$f" "$backup/$(printf '%s' "$f" | tr '/' '_')"; done
 for f in $files; do   # in place without `sed -i`, which differs between GNU and BSD
   sed "s#${pattern}#${chosen}#g" "$f" > "$f.new" && cat "$f.new" > "$f"
   rm -f "$f.new"
 done
-# The new mirror has to serve this release's index, or the change is undone: a source apt cannot read
-# is an `apt-get update` that exits 100 in the next step.
-codename="${APT_RELEASE_CODENAME:-$(sed -n 's/^VERSION_CODENAME=//p' /etc/os-release 2>/dev/null | head -n 1)}"
-if [ -n "$codename" ] && ! curl -fsSL --connect-timeout 3 --max-time 10 -o /dev/null "$chosen/dists/$codename/InRelease" 2>/dev/null; then
-  for f in $files; do cp -p "$backup/$(printf '%s' "$f" | tr '/' '_')" "$f"; done
-  rm -rf "$backup"
-  echo "apt mirror: $chosen has no index for $codename, sources restored ($current)"
-  exit 0
-fi
-rm -rf "$backup"
 echo "apt mirror: switched $current -> $chosen"
 exit 0
