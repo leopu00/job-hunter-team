@@ -18,6 +18,7 @@ import HelpPage from "../pages/help";
 import SettingsPage from "../pages/settings";
 import TeamSettingsPage from "../pages/team-settings";
 import WorkHoursPage from "../pages/work-hours";
+import { linkedTeamGate } from "../pages/settings/LinkedTeamGate";
 import VpsConnectionPage from "../pages/vps-connection";
 import SwipePage from "../pages/swipe";
 import TeamPage from "../pages/team";
@@ -102,6 +103,9 @@ export const READ_ONLY_ROUTES: Route[] = [
   // The app's own language and currency: local choices, nothing reaches the team.
   { path: "/settings", page: SettingsPage },
   { path: "/settings/vps-connection", page: VpsConnectionPage },
+  // The hours and the models of the linked VPS's team: the pages on a team connected in full, the reason on the read-only link.
+  { path: "/settings/hours", page: linkedTeamGate(WorkHoursPage) },
+  { path: "/settings/team", page: linkedTeamGate(TeamSettingsPage) },
   // What the read-only view does: it says only that.
   { path: "/help", page: HelpPage },
 ];
