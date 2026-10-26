@@ -19,13 +19,13 @@ You need an active subscription to **one** of:
 
 > ⚠️ **The subscription must be dedicated to JHT** — not the same account you use for personal/work AI tasks. A shared account drains the same weekly quota twice and the team will hit rate limits unexpectedly.
 
-For comfortable local use on macOS or Linux, keep about **8 GB of RAM available
-before starting the team**. This is a measured recommendation, not a universal
-minimum. No universal local disk minimum has been measured; leave room for the
-team's image and persistent data. The desktop releases support Windows x64,
-Linux x64 and macOS on Apple silicon (M1 and later; Intel Macs are not supported in 0.4). On
-Windows 0.4 the team runs on your computer in Podman inside WSL, installed by
-the app; Docker Desktop is not needed, but WSL must already be enabled.
+The desktop app is for Macs with Apple silicon (M1 and later; Intel Macs are not
+supported in 0.4), and **Homebrew must already be installed** on the Mac, which
+needs macOS 15 or later. A Mac with at least **16 GB of RAM** is recommended.
+The container machine the app creates uses 2 CPUs and 4 GiB of memory, and a
+disk that grows up to 30 GiB. No minimum of free disk space has been measured;
+leave room for the team's image and persistent data. Linux x64 is experimental
+and was not tested by hand. Windows is not in this version.
 
 Before installing, use [Choose where to run Job Hunter Team](CHOOSE-WHERE-TO-RUN.md)
 to compare a local PC, dedicated Linux PC on the LAN and VPS. The team itself
@@ -58,7 +58,7 @@ Download the current release from
 
 | System      | Release asset                           | First launch |
 | ----------- | --------------------------------------- | ------------ |
-| Windows x64 | not in 0.4.0 | Windows is not part of 0.4.0: there is no Windows installer in this release. |
+| Windows x64 | not in this version | Windows is not part of 0.4.0: there is no Windows installer in this release. |
 | macOS       | `job-hunter-team-macos-universal.dmg`   | Open the disk image and drag the app into Applications. It is signed with an Apple Developer ID and notarized by Apple. Only Macs with Apple silicon (M1 and later). Intel Macs are not supported in 0.4. The file name says “universal”, but in 0.4 it holds only the Apple silicon build. |
 | Linux x64   | `job-hunter-team-linux-x64.AppImage` or `job-hunter-team-linux-x64.deb` | Experimental, not tested by hand in 0.4. Make the AppImage executable (`chmod +x`) and open it, or install the `.deb` on Debian-based systems. |
 
@@ -71,15 +71,14 @@ container, installs the provider's tool, asks you to sign in to the provider,
 starts the agents and opens the chat with the Assistant. How long it takes
 depends on your connection and your computer.
 
-- **Windows 0.4:** the team runs on your computer in Podman inside WSL,
-  installed by the app. WSL must already be enabled; Docker Desktop is not
-  needed. The **Confirm** step lists everything the app installs and how to
-  remove it.
+- **Windows:** not in this version.
 - **macOS:** the app installs Podman with Homebrew, which must already be
-  installed; without it, the app says so before installing anything.
-- **Linux:** the app uses Docker. Install Docker Engine and its Compose plugin
-  before you start, because installing them needs administrator rights. The
-  Linux release is built, but this setup has not been tested yet.
+  installed; without it, the app says so before installing anything. It creates
+  a Podman machine with 2 CPUs, 4 GiB of memory and a disk of up to 30 GiB.
+- **Linux:** the app uses rootless Podman (5.0 or later) with podman-compose,
+  installed with `sudo` for your user; sudo must work without asking for a
+  password. The Linux release is experimental and this setup has not been
+  tested by hand.
 
 If a step fails, the screen gives its cause with **Retry the preparation** and
 **Show the log file**. If the app closes halfway, the next launch offers
@@ -95,14 +94,13 @@ If a step fails, the screen gives its cause with **Retry the preparation** and
 Use this path for terminal-first setup, automation or remote administration.
 It installs the runtime and `jht` command, not the desktop app.
 
-**Recommended: download, inspect, and preview before running (macOS / Linux /
-WSL2):**
+**Recommended: download, inspect, and preview before running (macOS / Linux):**
 
 ```bash
 curl -fsSL https://jobhunterteam.ai/install.sh -o install.sh
 less install.sh
-bash install.sh --dry-run
-bash install.sh
+bash install.sh --runtime podman --dry-run
+bash install.sh --runtime podman
 ```
 
 The shorter form, after you have reviewed it, is:
@@ -117,16 +115,11 @@ curl -fsSL https://jobhunterteam.ai/install.sh | bash -s -- --runtime podman
 iwr -useb https://jobhunterteam.ai/install.ps1 | iex
 ```
 
-> On Windows the installer runs the team in a rootless Podman machine
-> (`jht-podman`) inside WSL. It installs the Podman CLI and the Compose provider
-> through winget when they are missing; Docker Desktop is not used. WSL itself
-> must already work: the installer stops and says so when it does not.
-
 The installer:
 
-1. Detects your OS (macOS / Linux apt+dnf+pacman / WSL2 / Windows PowerShell)
-2. Installs the **Docker runtime** (macOS: Colima by default or your Docker Desktop via `--runtime`; reuses any Docker already running. `docker.io` on Linux/WSL2). On Windows: installs Podman and Compose when missing and starts the `jht-podman` machine inside WSL.
-3. Downloads `docker-compose.yml`, the host wrapper and, on macOS/Linux, the host preflight helper.
+1. Detects your OS (macOS, or Linux with apt, dnf or pacman)
+2. Installs the **container runtime**. With `--runtime podman`, the path of the app: on macOS, Podman and its Compose provider through Homebrew (which must already be installed) and a dedicated rootless `jht-podman` machine with 2 CPUs, 4 GiB of memory and a disk of up to 30 GiB; on Linux, rootless Podman 5.0 or later and podman-compose for your user, with `sudo` that asks for no password for what is missing. Without the flag, on Linux, it sets up Docker Engine as earlier versions did, and on macOS it uses Colima (or your running Docker).
+3. Downloads `docker-compose.yml`, the host wrapper and the host preflight helper.
 4. Creates `~/.jht/host.env` and registers the wrapper directory on `PATH` when needed.
 
 The wrapper handles container lifecycle on the host and forwards operational
@@ -166,26 +159,19 @@ You'll end up with two folders:
 > container boundary and requires Node 22+, tmux, git and the provider CLI on
 > the host. Use it only on a dedicated machine or virtual machine.
 
-**macOS Podman preparation preview:** Colima remains the default and is never
-removed. From a reviewed checkout:
+**macOS and Podman.** The app runs the installer with `--runtime podman`, and so
+do the commands above. Homebrew must already be installed: without it the
+installer stops before installing anything and says how to get it. Colima and
+Docker Desktop (`--runtime=colima`, `--runtime=docker-desktop`) are still
+accepted by the installer, but they are not the 0.4 path and the figures on this
+page are Podman's. A computer that already runs the team on one engine does not
+switch to the other: the installer refuses, and nothing is moved or deleted.
+
+From a reviewed checkout of the repository, the same install is:
 
 ```bash
 bash scripts/install.sh --runtime=podman
 ```
-
-The preview installs the Podman CLI and Compose provider, uses a dedicated
-rootless `jht-podman` machine and publishes a JHT-scoped, integrity-attested
-`docker` compatibility shim inside the protected host runtime (never on the
-global `PATH`). Existing Colima data and binaries remain intact
-for rollback. This is not the public macOS default until lifecycle tests pass
-on clean Apple Silicon and Intel hosts.
-
-Re-running the installer normally, or with `--runtime=colima` or
-`--runtime=docker-desktop`, publishes an attested Docker selection fail-closed.
-The private JHT Podman adapter and machine marker remain inert; it never removes
-Colima, Podman, its machine, or a `docker` executable. Re-enable the preview by
-running the explicit
-Podman command above again.
 
 ---
 

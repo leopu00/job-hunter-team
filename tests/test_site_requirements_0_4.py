@@ -334,3 +334,49 @@ def test_the_choose_where_guide_names_docker_only_for_an_old_installation_or_to_
         if "Docker" in line:
             assert "Docker Desktop is not needed" in line or "earlier installation" in line, line
     assert "WSL" not in text("docs/guides/CHOOSE-WHERE-TO-RUN.md")
+
+
+# ── The install guides in docs/guides say what 0.4 is: Podman, no Windows, the installer's figures ──
+
+INSTALL_DOCS = ["docs/guides/QUICKSTART.md", "docs/guides/TUTORIALS.md", "docs/guides/CLI-INSTALL.md"]
+
+
+@pytest.mark.parametrize("path", INSTALL_DOCS + ["docs/guides/TUTORIALS-LOCALIZATIONS.md"])
+def test_no_install_guide_says_windows_runs_the_team_in_podman_inside_wsl_in_0_4(path):
+    body = text(path)
+    assert not re.search(r"Windows 0\.4|Windows 0\.4", body), path
+    assert not re.search(r"Podman\s+(inside|dentro|dans|in|dentro de|dentro do)\s+(de\s+|do\s+)?WSL", body, re.IGNORECASE), path
+    assert "WSL-en belül" not in body and "WSL-en belül futó Podman" not in body
+
+
+@pytest.mark.parametrize("path", INSTALL_DOCS)
+def test_the_install_guides_carry_the_figures_of_the_installer(path):
+    body = " ".join(text(path).split())
+    memory = f"{installer_constant('PODMAN_MACHINE_MEMORY_MIB') // 1024} GiB"
+    disk = f"{installer_constant('PODMAN_MACHINE_DISK_GIB')} GiB"
+    assert memory in body and disk in body and "16 GB" in body, path
+    assert f"{installer_constant('PODMAN_MACHINE_CPUS')} CPUs" in body, path
+    assert "macOS 15" in body and "Homebrew" in body, path
+    assert "8 GB" not in body, path
+
+
+def test_the_translated_tutorial_carries_the_same_figures_in_six_languages():
+    body = " ".join(text("docs/guides/TUTORIALS-LOCALIZATIONS.md").split())
+    assert body.count("4 GiB") >= 6 and body.count("30 GiB") >= 6
+    assert len(re.findall(r"16 G[BoB]", body)) >= 6 and body.count("macOS 15") >= 6
+
+
+@pytest.mark.parametrize("path", INSTALL_DOCS + ["docs/guides/TUTORIALS-LOCALIZATIONS.md"])
+def test_the_install_guides_do_not_send_the_app_to_docker(path):
+    body = text(path)
+    assert not re.search(r"(app|aplicaci[oó]n|application|App|aplica[cç][aã]o|alkalmaz[aá]s)\s+(uses|usa|utilise|verwendet|Dockert)\s+(el\s+|o\s+)?Docker", body), path
+    assert "Docker Engine and its Compose plugin" not in body and "Installs the **Docker runtime**" not in body
+    assert "Docker Desktop is not needed" not in body
+
+
+def test_the_quickstart_commands_name_podman_and_the_guides_do_not_call_it_a_preview():
+    quick = text("docs/guides/QUICKSTART.md")
+    for line in re.findall(r"^bash install\.sh[^\n]*$", quick, re.M):
+        assert "--runtime podman" in line, line
+    for path in INSTALL_DOCS:
+        assert not re.search(r"podman[^\n]{0,80}preview|preview[^\n]{0,80}podman|Podman preparation preview", text(path), re.IGNORECASE), path

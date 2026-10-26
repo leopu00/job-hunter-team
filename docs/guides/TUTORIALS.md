@@ -39,22 +39,20 @@ Keep the app open while it works.
    and select **Continue locally**. Setting up a new team on a VPS needs the
    Google sign-in.
 4. **Choose the environment.** Select **Start the setup**, then **This
-   computer** or **VPS server**. On Windows 0.4 the team runs on this computer
-   in Podman inside WSL, installed by the app: WSL must already be enabled, and
-   Docker Desktop is not needed. On macOS the app installs Podman with
-   Homebrew, which must already be installed; without it, the app says so
-   before installing anything. On Linux the app uses Docker: install Docker
-   Engine and its Compose plugin before you start, because installing them
-   needs administrator rights. The Linux release is built, but this setup has
-   not been tested yet. For a VPS, enter its address, the SSH user, the port
+   computer** or **VPS server**. On a Mac the app installs Podman with
+   Homebrew, which must already be installed (it needs macOS 15 or later);
+   without it, the app says so before installing anything. It creates a Podman
+   machine with 2 CPUs, 4 GiB of memory and a disk of up to 30 GiB, so a Mac with
+   at least 16 GB of RAM is recommended. On Linux the app uses rootless Podman
+   (5.0 or later) with podman-compose, installed with `sudo` for your user: sudo
+   must work without asking for a password. The Linux release is experimental
+   and this setup has not been tested by hand. For a VPS, enter its address, the SSH user, the port
    and the private key file, which stays on this computer.
 5. **Choose the provider.** Select Codex, then
    **Review the setup**. You sign in with your subscription later in the setup:
    no API key is needed.
 6. **Confirm and prepare the team.** The last screen sums up the environment
-   and the provider. When the team runs on this computer on Windows, it also
-   lists what the app installs and how to remove it later. Select **Prepare the
-   team** and keep the app open while it prepares the runtime, the container
+   and the provider. Select **Prepare the team** and keep the app open while it prepares the runtime, the container
    and the provider's tool. For a VPS, the app first shows the server's SSH
    fingerprint: confirm it only if it matches the one your VPS provider shows.
 7. **Sign in to the provider.** When the screen says it is your turn, follow
