@@ -109,7 +109,10 @@ case "$1" in
       codex:*|claude:*|kimi:*) exit 0 ;;   # the provider's own login, which the log records
       tmux:has-session) exit 0 ;;
       test:-f) exit 0 ;;
-      node:*) exit 0 ;;
+      node:*)
+        # `profile import --stdin`: the file the wrapper handed over, kept for the test that reads it
+        if [ "$3:$4:$5" = profile:import:--stdin ] && [ -n "${JHT_TEST_STDIN_COPY:-}" ]; then cat > "$JHT_TEST_STDIN_COPY"; fi
+        exit 0 ;;
       python3:-I) [ "${JHT_TEST_NO_SCRIPT:-0}" != 1 ] || exit 2; exit 0 ;;   # 2: python3's, no such file
       python3:-c|sh:-c|bash:) exit 0 ;;
       *) exit 97 ;;
