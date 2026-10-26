@@ -82,24 +82,36 @@ describe("the phase detail under the step's heading", () => {
     expect(pullBar({ phase: "image_pull", pull: { blobsDone: 1, bytesDone: MIB, bytesTotal: 2 * MIB } })).toEqual({ done: MIB, total: 2 * MIB });
   });
 
-  it("estimates the time left as a lower bound: in whole minutes rounded down, and not before it means anything", () => {
-    // 100 MiB in 60 s, 500 MiB found: 400 MiB left at 100 MiB/min = 4 min at least
-    expect(minutesLeftAtLeast(100 * MIB, 500 * MIB, 60_000)).toBe(4);
+  it("estimates the time left at the speed of a stretch, rounded down, and not before it means anything", () => {
+    const since = { at: 0, done: 100 * MIB };
+    // 20 MiB in 20 s = 1 MiB/s, 380 MiB left: 380 s = 6.3 min, said 6
+    expect(minutesLeftAtLeast(since, 20_000, 120 * MIB, 500 * MIB)).toBe(6);
     // 2.9 minutes left says 2, never 3
-    expect(minutesLeftAtLeast(100 * MIB, 390 * MIB, 60_000)).toBe(2);
+    expect(minutesLeftAtLeast(since, 20_000, 120 * MIB, 294 * MIB)).toBe(2);
     // under a minute left: nothing is said
-    expect(minutesLeftAtLeast(100 * MIB, 150 * MIB, 60_000)).toBeNull();
-    // too early, or too little downloaded to know the speed
-    expect(minutesLeftAtLeast(100 * MIB, 500 * MIB, 10_000)).toBeNull();
-    expect(minutesLeftAtLeast(2 * MIB, 500 * MIB, 60_000)).toBeNull();
+    expect(minutesLeftAtLeast(since, 20_000, 120 * MIB, 150 * MIB)).toBeNull();
+    // the stretch is too short, or nothing came in it
+    expect(minutesLeftAtLeast(since, 5_000, 120 * MIB, 500 * MIB)).toBeNull();
+    expect(minutesLeftAtLeast(since, 20_000, 100 * MIB + 1, 500 * MIB)).toBeNull();
   });
 
-  it("says the time left, as at least, only once the phase has a speed to go on", () => {
-    const pull = { blobsDone: 1, bytesDone: 100 * MIB, bytesTotal: 500 * MIB };
-    const view = render(detail({ phase: "image_pull", pull }, "image_pull", Date.now() + 5_000));
-    expect(screen.queryByTestId("onboarding-pull-estimate")).toBeNull();
-    view.rerender(detail({ phase: "image_pull", pull }, "image_pull", Date.now() + 60_000));
-    expect(screen.getByTestId("onboarding-pull-estimate")).toHaveTextContent("At this speed: at least 4 min to go");
+  it("says the time left as «about, or more», once the last seconds give a speed, and follows the speed as it changes", () => {
+    const base = Date.now();
+    const at = (seconds: number, done: number, total = 2000 * MIB) =>
+      detail({ phase: "image_pull", pull: { blobsDone: 1, bytesDone: done * MIB, bytesTotal: total } }, "image_pull", base + seconds * 1_000);
+    const estimate = () => screen.queryByTestId("onboarding-pull-estimate");
+    const view = render(at(0, 100));
+    expect(estimate()).toBeNull();
+    view.rerender(at(5, 105));
+    expect(estimate()).toBeNull();
+    // 1 MiB/s over the 20 s: 1880 MiB left, 31 min
+    view.rerender(at(20, 120));
+    expect(estimate()).toHaveTextContent("At this speed: about 31 min to go, or more");
+    // it speeds up: the 30 s window leaves the slow start behind. Over the whole phase (420 MiB in 60 s,
+    // 7 MiB/s) 1580 MiB would take 3 min; at the 12 MiB/s of the last 10 s it takes 2
+    view.rerender(at(50, 300));
+    view.rerender(at(60, 420));
+    expect(estimate()).toHaveTextContent("about 2 min to go, or more");
   });
 
   it("tells which phase of the installer it is", () => {
@@ -157,6 +169,7 @@ describe("the phase detail under the step's heading", () => {
       expect(text.pullLong.length, locale).toBeGreaterThan(20);
       expect(text.pullBytesOfAtLeast("12 MiB", "40 MiB"), locale).toMatch(/12 MiB.*40 MiB/);
       expect(text.pullEstimate(4), locale).toContain("4");
+      expect(text.pullEstimate(4), locale).not.toBe(text.pullEstimate(5));
       expect(text.phaseStep(6, 7), locale).toMatch(/6.*7/);
       expect(text.pullBarAria.length, locale).toBeGreaterThan(10);
     }

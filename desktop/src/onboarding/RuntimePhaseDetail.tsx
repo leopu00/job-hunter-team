@@ -34,18 +34,28 @@ export function pullBar(info: PhaseInfo): { done: number; total: number } | null
 
 /** The bar never shows more than this before the step itself says it is done. */
 const BAR_CEILING = 0.95;
-/** An estimate needs this much of the phase behind it, and this much downloaded, to mean anything. */
-const ESTIMATE_AFTER_MS = 15_000;
-const ESTIMATE_AFTER_BYTES = 5 * 1024 ** 2;
+/** The speed is read over the last stretch of samples, not over the whole phase: a slow start must not make the end look far. */
+const SPEED_WINDOW_MS = 30_000;
+/** An estimate needs a stretch at least this long behind it, and this much downloaded in it. */
+const ESTIMATE_AFTER_MS = 10_000;
+const ESTIMATE_AFTER_BYTES = 1024 ** 2;
+
+interface PullSample {
+  at: number;
+  done: number;
+}
 
 /**
- * At least this many whole minutes are left at the speed so far, or null when it is too early or
- * under a minute. The total only grows while podman finds the layers, so what is left can only be
- * more than this: it is rounded down, a lower bound, never a promise.
+ * About this many whole minutes are left, or null when the stretch since `since` is too short, too little
+ * came in it, or less than a minute is left. The speed is that of the stretch (the oldest sample of the
+ * moving window up to now), the total only grows while podman finds the layers, and the minutes are
+ * rounded down: the text says «or more», never a promise.
  */
-export function minutesLeftAtLeast(done: number, total: number, elapsedMs: number): number | null {
-  if (elapsedMs < ESTIMATE_AFTER_MS || done < ESTIMATE_AFTER_BYTES) return null;
-  const minutes = Math.floor((((total - done) / done) * elapsedMs) / 60_000);
+export function minutesLeftAtLeast(since: PullSample, now: number, done: number, total: number): number | null {
+  const span = now - since.at;
+  const gained = done - since.done;
+  if (span < ESTIMATE_AFTER_MS || gained < ESTIMATE_AFTER_BYTES) return null;
+  const minutes = Math.floor((((total - done) / gained) * span) / 60_000);
   return minutes >= 1 ? minutes : null;
 }
 
@@ -54,8 +64,8 @@ export function minutesLeftAtLeast(done: number, total: number, elapsedMs: numbe
  * how long it has lasted (the clock restarts when the phase changes), and, for the image download,
  * what has come so far. Podman finds the layers as it goes, so the total only grows: the bar is the
  * bytes done over the bytes found so far, it never goes back and stops short of the end, the text
- * says «of at least» and never a percentage, and the time left is a lower bound. A phase that says
- * nothing more shows only its clock.
+ * says «of at least» and never a percentage, and the time left is «about N min or more» at the speed
+ * of the last seconds. A phase that says nothing more shows only its clock.
  */
 export default function RuntimePhaseDetail({
   t,
@@ -72,17 +82,24 @@ export default function RuntimePhaseDetail({
   now: number;
 }) {
   const [since, setSince] = useState(() => Date.now());
-  const shown = useRef({ key: phaseKey, fraction: 0 });
+  const shown = useRef({ key: phaseKey, fraction: 0, samples: [] as PullSample[] });
   useEffect(() => {
     setSince(Date.now());
   }, [phaseKey]);
-  if (shown.current.key !== phaseKey) shown.current = { key: phaseKey, fraction: 0 };
+  if (shown.current.key !== phaseKey) shown.current = { key: phaseKey, fraction: 0, samples: [] };
   const pull = info.phase === "image_pull" ? info.pull ?? null : null;
   const bar = pullBar(info);
   const bytes = pull && pull.bytesDone !== null && Number.isFinite(pull.bytesDone) && pull.bytesDone >= 0 ? pull.bytesDone : null;
   const layers = pull && pull.blobsDone > 0 ? pull.blobsDone : null;
-  if (bar) shown.current.fraction = Math.max(shown.current.fraction, Math.min(BAR_CEILING, bar.done / bar.total));
-  const left = bar ? minutesLeftAtLeast(bar.done, bar.total, now - since) : null;
+  let left: number | null = null;
+  if (bar) {
+    const state = shown.current;
+    state.fraction = Math.max(state.fraction, Math.min(BAR_CEILING, bar.done / bar.total));
+    // one sample per tick, and none older than the window
+    if (state.samples[state.samples.length - 1]?.at !== now) state.samples.push({ at: now, done: bar.done });
+    state.samples = state.samples.filter((sample) => now - sample.at <= SPEED_WINDOW_MS);
+    left = minutesLeftAtLeast(state.samples[0], now, bar.done, bar.total);
+  }
   const phaseNumber = info.phase ? INSTALL_PHASES.indexOf(info.phase) + 1 : 0;
   return (
     <div className="onboarding-runtime-phase" data-testid="onboarding-phase-detail">
