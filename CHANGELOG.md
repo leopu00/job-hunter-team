@@ -37,23 +37,6 @@ account-backed onboarding and subscription-provider access.**
   chat. On macOS, on-device dictation can fill supported composers without
   sending automatically.
 
-### Windows: the team runs locally
-
-- On Windows the team now runs on your computer, in Podman inside WSL. The app
-  installs Podman and everything else it needs; Docker Desktop is not
-  required. WSL must be enabled on Windows: if it is not ready, the app says
-  what to do.
-- Not yet supported when the team runs on Windows: sending applications
-  by email from the team, and the local scorer (Ollama).
-- **This computer › Remove JHT from this computer** takes the team off a
-  Windows computer after a confirmation, without a terminal. It deletes the
-  JHT Podman machine in WSL with everything inside it (the team container, the
-  provider CLIs, and the mail password and portal logins kept by the broker),
-  the JHT runtime and the `jht` commands. Your `.jht` folder (settings,
-  profile, CV, provider login), `Documents\Job Hunter Team`, Podman, Docker
-  Compose and your other WSL distributions stay. Then the app goes back to its
-  first run.
-
 ### Explicit limits
 
 - Version 0.4.0 is subscription/provider-only. It does not expose the retired
@@ -64,6 +47,10 @@ account-backed onboarding and subscription-provider access.**
   transcribe.
 - Host and provider readiness are verified during onboarding, and missing
   external prerequisites remain actionable failures.
+
+### Not in this release
+
+- Windows: in progress, not supported in 0.4.
 
 ---
 
