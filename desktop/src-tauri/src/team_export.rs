@@ -385,9 +385,40 @@ pub(crate) fn part_path(target: &Path) -> PathBuf {
     target.with_file_name(format!(".{name}.{}.part", std::process::id()))
 }
 
+/// What `create_private` fails with when the place does not take private permissions (a network share, a
+/// folder on a file system without owner bits): not the same thing as a place that cannot be written.
+#[derive(Debug)]
+struct NotPrivate;
+
+impl std::fmt::Display for NotPrivate {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str("private permissions failed")
+    }
+}
+
+impl std::error::Error for NotPrivate {}
+
+/// The closed code for a file that could not be written: `private_unavailable` when the place does not
+/// allow private files, else the `fallback` of the caller.
+pub(crate) fn save_code(error: &io::Error, fallback: &'static str) -> &'static str {
+    if error.get_ref().is_some_and(|inner| inner.is::<NotPrivate>()) {
+        "private_unavailable"
+    } else {
+        fallback
+    }
+}
+
+fn save_failure(error: &io::Error, fallback: &'static str) -> DirectChatError {
+    failure(save_code(error, fallback))
+}
+
 /// Creates `path` (which must not be there) for the owner alone, before the first byte goes in: a backup or an
 /// export holds the person's data. A file that cannot be made private is not left behind.
 pub(crate) fn create_private(path: &Path) -> io::Result<File> {
+    create_private_with(path, crate::runtime_host::set_private_permissions)
+}
+
+fn create_private_with(path: &Path, protect: impl FnOnce(&Path) -> Result<(), &'static str>) -> io::Result<File> {
     let mut options = OpenOptions::new();
     options.write(true).create_new(true);
     #[cfg(unix)]
@@ -396,10 +427,10 @@ pub(crate) fn create_private(path: &Path) -> io::Result<File> {
         options.mode(0o600);
     }
     let file = options.open(path)?;
-    if crate::runtime_host::set_private_permissions(path).is_err() {
+    if protect(path).is_err() {
         drop(file);
         let _ = fs::remove_file(path);
-        return Err(io::Error::new(io::ErrorKind::PermissionDenied, "private permissions failed"));
+        return Err(io::Error::new(io::ErrorKind::PermissionDenied, NotPrivate));
     }
     Ok(file)
 }
@@ -494,7 +525,7 @@ where
     F: FnMut(u64) -> Fut,
     Fut: std::future::Future<Output = Result<Page, DirectChatError>>,
 {
-    let file = create_private(part).map_err(|_| failure("export_save_failed"))?;
+    let file = create_private(part).map_err(|error| save_failure(&error, "export_save_failed"))?;
     let mut sink = Sink::new(BufWriter::new(file), checked.format, columns.to_vec());
     let saving = |_: io::Error| failure("export_save_failed");
     sink.begin(checked.source, &iso_instant(now)).map_err(saving)?;
@@ -555,7 +586,7 @@ pub(crate) async fn export_account_save(app: tauri::AppHandle, window: tauri::Wi
     let part = part_path(&target);
     match write_whole(&part, &target, text.as_bytes()) {
         Ok(()) => Ok(ExportOutcome { outcome: "saved", count: None }),
-        Err(_) => Err(failure("export_save_failed")),
+        Err(error) => Err(save_failure(&error, "export_save_failed")),
     }
 }
 
@@ -1045,6 +1076,37 @@ mod tests {
         // a file that is there is not made private, nor written through
         assert!(create_private(&account).is_err());
         let _ = fs::remove_dir_all(&home);
+    }
+
+    #[test]
+    fn a_place_that_does_not_take_private_files_is_told_apart_and_leaves_no_file() {
+        let home = team_home("notprivate");
+        let file = home.join("a.part");
+        let error = create_private_with(&file, |_| Err("permissions_failed")).unwrap_err();
+        assert_eq!(save_code(&error, "export_save_failed"), "private_unavailable");
+        assert_eq!(save_code(&error, "backup_save_failed"), "private_unavailable");
+        assert!(!file.exists(), "a file that cannot be private is not left behind");
+        // a place that cannot be written, or a name already taken, keeps the caller's own code
+        create_private_with(&file, |_| Ok(())).unwrap();
+        let taken = create_private_with(&file, |_| Ok(())).unwrap_err();
+        assert_eq!(save_code(&taken, "export_save_failed"), "export_save_failed");
+        let missing = create_private_with(&home.join("no-folder").join("b"), |_| Ok(())).unwrap_err();
+        assert_eq!(save_code(&missing, "backup_save_failed"), "backup_save_failed");
+        let _ = fs::remove_dir_all(&home);
+    }
+
+    #[test]
+    fn every_writer_answers_private_unavailable_through_the_same_function() {
+        let code = |source: &'static str| source.split("#[cfg(test)]").next().unwrap();
+        let export = code(include_str!("team_export.rs"));
+        let pages = export.split("async fn write_pages<").nth(1).unwrap().split("\n}\n").next().unwrap();
+        let account = export.split("pub(crate) async fn export_account_save(").nth(1).unwrap().split("\n}\n").next().unwrap();
+        assert!(pages.contains("save_failure(&error, \"export_save_failed\")"));
+        assert!(account.contains("save_failure(&error, \"export_save_failed\")"));
+        let backup = code(include_str!("team_backup.rs"));
+        assert!(backup.contains("save_code(&error, \"backup_save_failed\")"));
+        let csv = code(include_str!("export_file.rs"));
+        assert!(csv.contains("save_code(&error, \"export_write_failed\")"));
     }
 
     #[test]

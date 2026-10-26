@@ -25,7 +25,7 @@
 use crate::{
     account_scope::AccountScopeState,
     direct_chat::{failure, team_script_read, DirectChatError, DirectChatState},
-    team_export::{ask_where, create_private, iso_day, part_path, window_may_export},
+    team_export::{ask_where, create_private, iso_day, part_path, save_code, window_may_export},
 };
 use base64::Engine;
 use flate2::read::GzDecoder;
@@ -386,7 +386,7 @@ where
     Fut: std::future::Future<Output = Result<Vec<u8>, DirectChatError>>,
 {
     let saving = |_: io::Error| failure("backup_save_failed");
-    let mut file = create_private(part).map_err(saving)?;
+    let mut file = create_private(part).map_err(|error| failure(save_code(&error, "backup_save_failed")))?;
     let outcome = async {
         let mut offset = 0u64;
         let mut blocks = 0u64;

@@ -76,7 +76,7 @@ pub(crate) fn export_csv_save(
     if !dir.is_dir() {
         return Err("export_dir_unavailable".into());
     }
-    let path = write_new_csv(&dir, &name, &content).map_err(|_| "export_write_failed".to_string())?;
+    let path = write_new_csv(&dir, &name, &content).map_err(|error| crate::team_export::save_code(&error, "export_write_failed").to_string())?;
     let _ = crate::runtime_log::reveal(&path);
     Ok(path.display().to_string())
 }

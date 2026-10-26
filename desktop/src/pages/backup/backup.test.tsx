@@ -101,6 +101,22 @@ describe("the backup page: making one", () => {
     expect(say).toHaveTextContent(describeError("backup_too_large", { locale: "en" }).text);
   });
 
+  it("tells a place that does not allow private files apart from a failed save, with the sentence of the catalog", async () => {
+    const user = userEvent.setup();
+    native.backupCreate.mockResolvedValue({ ok: false, error: "private_unavailable" });
+    render(<BackupPage {...props} />);
+    await user.click(screen.getByTestId("backup-create-button"));
+    const say = await screen.findByTestId("backup-create-say");
+    expect(say).toHaveTextContent("This place does not allow private files.");
+    expect(say).toHaveTextContent("Choose another one");
+    expect(say).not.toHaveTextContent(describeError("backup_save_failed", { locale: "en" }).text);
+    for (const locale of ["it", "de", "es", "fr", "hu", "pt"] as const) {
+      const copy = describeError("private_unavailable", { locale });
+      expect(copy.known, locale).toBe(true);
+      expect(copy.text, locale).not.toBe(describeError("private_unavailable", { locale: "en" }).text);
+    }
+  });
+
   it("shows the phase and, when it has a size, how far it is; cancelling asks the native side once", async () => {
     const user = userEvent.setup();
     let finish: (value: unknown) => void = () => {};
