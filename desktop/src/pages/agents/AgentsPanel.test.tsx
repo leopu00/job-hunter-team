@@ -257,22 +257,39 @@ describe("«Agenti», the agents' control panel", () => {
     expect(ops().filter((r) => r.op === "screen")).toEqual([{ op: "screen", session: "SCOUT-1" }]);
   });
 
-  it("keeps the watched terminal and the chat visible together for a chat agent", async () => {
+  it("gives the chat the page and folds the terminal away until it is asked for", async () => {
     show("agent=CAPITANO");
-    await screen.findByTestId("panel-terminal-CAPITANO");
-    expect(screen.getByTestId("panel-terminal-destination")).toHaveTextContent(
-      "Nel terminale non si scrive: è solo da guardare. Per scrivere a Capitano usa la chat qui sotto.",
-    );
-    // The terminal remains watched while the composer stays available below it.
+    // The chat is what the page is for: it comes first and takes the height the header leaves.
     expect(await screen.findByTestId("direct-chat-destination")).toHaveTextContent("Destinazione: la chat di Capitano.");
     const pane = screen.getByTestId("panel-chat-pane");
     expect(pane.className).toMatch(/overflow-hidden/);
-    // docked under the terminal with its own bounded height: it never grows over the page
-    expect(pane.style.height).toBe("clamp(17rem, calc(38svh / var(--zoom, 1)), 28rem)");
+    expect(pane.className).toMatch(/lg:flex-1/);
+    expect(pane.style.height).toBe(""); // no fixed box under the terminal any more
     expect(screen.getByTestId("panel-detail")).toContainElement(pane);
-    expect(screen.getByTestId("panel-terminal-CAPITANO")).toBeInTheDocument();
     expect(screen.getByRole("textbox", { name: "Scrivi a Capitano" })).toBeInTheDocument();
     expect(screen.queryByRole("tab")).toBeNull();
+
+    // Folded: no terminal, so no screen is read for it.
+    const toggle = screen.getByTestId("panel-terminal-toggle");
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+    expect(toggle).toHaveTextContent("Mostra il terminale");
+    expect(screen.queryByTestId("panel-terminal-CAPITANO")).toBeNull();
+    expect(ops().filter((r) => r.op === "screen")).toEqual([]);
+
+    // Opened: the watched terminal says where to write, and the choice is kept.
+    fireEvent.click(toggle);
+    await screen.findByTestId("panel-terminal-CAPITANO");
+    expect(screen.getByTestId("panel-terminal-destination")).toHaveTextContent(
+      "Nel terminale non si scrive: è solo da guardare. Per scrivere a Capitano usa la chat qui sopra.",
+    );
+    expect(screen.getByTestId("panel-terminal-toggle")).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByTestId("panel-terminal-toggle")).toHaveTextContent("Nascondi il terminale");
+    expect(window.localStorage.getItem("jht.agents.terminal")).toBe("open");
+    expect(screen.getByTestId("panel-chat-pane")).toBeInTheDocument(); // the chat stays while the terminal is open
+
+    fireEvent.click(screen.getByTestId("panel-terminal-toggle"));
+    expect(screen.queryByTestId("panel-terminal-CAPITANO")).toBeNull();
+    expect(window.localStorage.getItem("jht.agents.terminal")).toBe("closed");
   });
 
   it("an agent with no chat has the terminal alone", async () => {

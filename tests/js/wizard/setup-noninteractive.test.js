@@ -29,15 +29,31 @@ describe('runNonInteractiveSetup — Phase 1 health failure', () => {
 
   it('keeps the save-anyway warning in English', async () => {
     await runNonInteractiveSetup({
-      provider: 'claude',
+      provider: 'openai',
       authMethod: 'api_key',
       secretMode: 'plaintext',
-      apiKey: 'sk-ant-api-key-long-enough',
+      apiKey: 'sk-proj-api-key-long-enough',
     });
 
     expect(logSpy).toHaveBeenCalledWith(
       expect.stringContaining('Health check failed — configuration will still be saved.')
     );
     expect(writeConfigFile).toHaveBeenCalledOnce();
+  });
+
+  it('refuses a provider that is no longer offered and saves nothing', async () => {
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const before = process.exitCode;
+    for (const provider of ['claude', 'kimi']) {
+      process.exitCode = 0;
+      await runNonInteractiveSetup({
+        provider, authMethod: 'api_key', secretMode: 'plaintext', apiKey: 'sk-ant-api-key-long-enough',
+      });
+      expect(process.exitCode, provider).toBe(1);
+    }
+    expect(writeConfigFile).not.toHaveBeenCalled();
+    expect(errSpy).toHaveBeenCalledWith(expect.stringContaining('Invalid provider'));
+    process.exitCode = before;
+    errSpy.mockRestore();
   });
 });

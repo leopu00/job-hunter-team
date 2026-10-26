@@ -6,6 +6,7 @@ import hashlib
 import json
 import re
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -278,3 +279,199 @@ def test_release_workflow_is_the_only_semver_tag_publisher() -> None:
         0
     ]
     assert "- publish-runtime" in release_needs
+
+
+# --- the release moves EVERY pin at once, and a pin left behind is red -------
+
+NEW_DIGEST = "sha256:" + "ab" * 32
+NEW_REVISION = "c" * 40
+
+
+def _tree_copy(tmp_path: Path) -> Path:
+    """The files the pin contract names, copied at the same paths: a tree to update without touching the repo."""
+    tree = tmp_path / "tree"
+    for relative in (
+        *runtime_image_pin.PINNED_CONSUMERS,
+        runtime_image_pin.MANIFEST_PATH,
+        Path("package.json"),
+    ):
+        (tree / relative).parent.mkdir(parents=True, exist_ok=True)
+        (tree / relative).write_bytes((ROOT / relative).read_bytes())
+    return tree
+
+
+def test_the_contract_names_the_enabler_and_the_selftest_too() -> None:
+    # they held the August image while verify-tree was green: they were not listed
+    names = {str(path) for path in runtime_image_pin.PINNED_CONSUMERS}
+    assert {
+        "scripts/enable-podman-windows-runtime.ps1",
+        "scripts/windows-config-acl-selftest.ps1",
+    } <= names
+
+
+def test_update_moves_the_manifest_and_every_consumer(tmp_path: Path) -> None:
+    tree = _tree_copy(tmp_path)
+    old = _pin()
+    before = {p: (tree / p).read_bytes() for p in runtime_image_pin.PINNED_CONSUMERS}
+
+    done = runtime_image_pin.update_tree(tree, NEW_DIGEST, NEW_REVISION)
+
+    assert done.digest == NEW_DIGEST and done.source_revision == NEW_REVISION
+    assert runtime_image_pin.verify_tree(tree) == done
+    assert runtime_image_pin.load_manifest(tree / runtime_image_pin.MANIFEST_PATH) == done
+    for path in runtime_image_pin.PINNED_CONSUMERS:
+        after = (tree / path).read_bytes()
+        assert old.digest.encode() not in after, path
+        assert NEW_DIGEST.encode() in after, path
+        # nothing but the digest moved: same size apart from the digest, same line endings
+        assert after.replace(NEW_DIGEST.encode(), old.digest.encode()) == before[path], path
+
+
+def test_update_keeps_the_crlf_of_a_windows_checkout(tmp_path: Path) -> None:
+    tree = _tree_copy(tmp_path)
+    old = _pin()
+    target = tree / "scripts/enable-podman-windows-runtime.ps1"
+    target.write_bytes(target.read_bytes().replace(b"\r\n", b"\n").replace(b"\n", b"\r\n"))
+    runtime_image_pin.update_tree(tree, NEW_DIGEST, NEW_REVISION)
+    after = target.read_bytes()
+    assert after.count(b"\n") == after.count(b"\r\n") > 100
+    assert NEW_DIGEST.encode() in after and old.digest.encode() not in after
+    assert runtime_image_pin.verify_tree(tree).digest == NEW_DIGEST
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="no execute bit on Windows")
+def test_update_keeps_the_mode_of_the_installers(tmp_path: Path) -> None:
+    tree = _tree_copy(tmp_path)
+    for relative in ("scripts/install.sh", "web/public/install.sh"):
+        (tree / relative).chmod(0o755)
+    runtime_image_pin.update_tree(tree, NEW_DIGEST, NEW_REVISION)
+    for relative in ("scripts/install.sh", "web/public/install.sh"):
+        assert (tree / relative).stat().st_mode & 0o777 == 0o755, relative
+        assert NEW_DIGEST in (tree / relative).read_text()
+    assert (tree / "docker-compose.yml").stat().st_mode & 0o777 == (ROOT / "docker-compose.yml").stat().st_mode & 0o777
+
+
+def test_a_pin_left_behind_after_the_update_is_red(tmp_path: Path) -> None:
+    tree = _tree_copy(tmp_path)
+    runtime_image_pin.update_tree(tree, NEW_DIGEST, NEW_REVISION)
+    stale = tree / "scripts/enable-podman-windows-runtime.ps1"
+    stale.write_bytes(stale.read_bytes().replace(NEW_DIGEST.encode(), _pin().digest.encode()))
+    with pytest.raises(runtime_image_pin.RuntimeImagePinError) as raised:
+        runtime_image_pin.verify_tree(tree)
+    assert raised.value.code == "consumer_digest_drift"
+
+
+def test_an_update_that_cannot_write_changes_nothing(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    tree = _tree_copy(tmp_path)
+    snapshot = {p: (tree / p).read_bytes() for p in runtime_image_pin.PINNED_CONSUMERS}
+    manifest = (tree / runtime_image_pin.MANIFEST_PATH).read_bytes()
+    real_open = open
+    written = []
+
+    def failing_open(path, mode="r", *args, **kwargs):
+        if "w" in mode:
+            written.append(path)
+            if len(written) == 5:
+                raise OSError("disk full")
+        return real_open(path, mode, *args, **kwargs)
+
+    monkeypatch.setattr("builtins.open", failing_open)
+    with pytest.raises(runtime_image_pin.RuntimeImagePinError) as raised:
+        runtime_image_pin.update_tree(tree, NEW_DIGEST, NEW_REVISION)
+    monkeypatch.undo()
+    assert raised.value.code == "update_write_failed" and len(written) == 5
+    assert {p: (tree / p).read_bytes() for p in snapshot} == snapshot
+    assert (tree / runtime_image_pin.MANIFEST_PATH).read_bytes() == manifest
+    assert not list(tree.rglob("*.pin-new"))
+
+
+def test_an_update_that_misses_a_consumer_changes_nothing(tmp_path: Path) -> None:
+    tree = _tree_copy(tmp_path)
+    odd = tree / "scripts/jht-wrapper.sh"
+    odd.write_text(odd.read_text().replace("DEFAULT_RUNTIME_IMAGE=", "DEFAULT_RUNTIME_IMAGE_X=", 1))
+    snapshot = {p: (tree / p).read_bytes() for p in runtime_image_pin.PINNED_CONSUMERS}
+    manifest = (tree / runtime_image_pin.MANIFEST_PATH).read_bytes()
+    with pytest.raises(runtime_image_pin.RuntimeImagePinError) as raised:
+        runtime_image_pin.update_tree(tree, NEW_DIGEST, NEW_REVISION)
+    assert raised.value.code == "consumer_pattern_unmatched"
+    assert {p: (tree / p).read_bytes() for p in snapshot} == snapshot
+    assert (tree / runtime_image_pin.MANIFEST_PATH).read_bytes() == manifest
+
+
+@pytest.mark.parametrize(
+    ("digest", "revision", "version", "code"),
+    [
+        ("sha256:short", NEW_REVISION, None, "digest_invalid"),
+        (NEW_DIGEST, "main", None, "source_revision_invalid"),
+        (NEW_DIGEST, NEW_REVISION, "9.9.9", "release_version_mismatch"),
+    ],
+)
+def test_update_refuses_what_the_manifest_would_refuse(
+    tmp_path: Path, digest: str, revision: str, version: str | None, code: str
+) -> None:
+    tree = _tree_copy(tmp_path)
+    with pytest.raises(runtime_image_pin.RuntimeImagePinError) as raised:
+        runtime_image_pin.update_tree(tree, digest, revision, version)
+    assert raised.value.code == code
+    assert runtime_image_pin.verify_tree(tree) == _pin()
+
+
+def test_from_registry_takes_the_digest_of_master_and_the_commit_of_its_label(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    tree = _tree_copy(tmp_path)
+    asked: list[str] = []
+    monkeypatch.setattr(
+        runtime_image_pin, "registry_tag_digest", lambda _pin, tag: asked.append(tag) or NEW_DIGEST
+    )
+    monkeypatch.setattr(
+        runtime_image_pin,
+        "registry_source_revision",
+        lambda repository, digest: NEW_REVISION if digest == NEW_DIGEST else "0" * 40,
+    )
+    assert runtime_image_pin.main(["update", "--root", str(tree), "--from-registry"]) == 0
+    assert asked == ["master"]
+    pin = runtime_image_pin.verify_tree(tree)
+    assert (pin.digest, pin.source_revision) == (NEW_DIGEST, NEW_REVISION)
+    assert "tree_updated" in capsys.readouterr().out
+    # a commit given by hand that the image does not carry is refused
+    assert runtime_image_pin.main(
+        ["update", "--root", str(tree), "--from-registry", "--source-revision", "d" * 40]
+    ) == 1
+
+
+def test_update_wants_one_source_for_the_image(tmp_path: Path) -> None:
+    tree = _tree_copy(tmp_path)
+    assert runtime_image_pin.main(["update", "--root", str(tree)]) == 1
+    assert runtime_image_pin.main(["update", "--root", str(tree), "--digest", NEW_DIGEST]) == 1
+
+
+def _git_tree(tmp_path: Path, files: dict[str, str]) -> Path:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    for name, text in files.items():
+        (repo / name).parent.mkdir(parents=True, exist_ok=True)
+        (repo / name).write_text(text)
+    subprocess.run(["git", "init", "-q", str(repo)], check=True)
+    subprocess.run(["git", "-C", str(repo), "add", "-A"], check=True)
+    return repo
+
+
+def test_the_repository_names_no_image_but_the_manifests() -> None:
+    runtime_image_pin.find_stray_pins(ROOT, _pin())
+
+
+def test_a_copy_of_the_pin_outside_the_contract_is_red(tmp_path: Path) -> None:
+    pin = _pin()
+    stale = "ghcr.io/leopu00/jht@sha256:" + "e" * 64
+    repo = _git_tree(tmp_path, {"docs/new-guide.md": f"pull {stale}\n", "release/runtime-image.v1.json": "{}\n"})
+    with pytest.raises(runtime_image_pin.RuntimeImagePinError) as raised:
+        runtime_image_pin.find_stray_pins(repo, pin)
+    assert raised.value.code == "unlisted_stale_pin"
+    # the same file with the manifest's own digest is fine
+    (repo / "docs/new-guide.md").write_text(f"pull {pin.image_ref}\n")
+    runtime_image_pin.find_stray_pins(repo, pin)
+
+
+def test_the_cli_gate_runs_the_scan_too(tmp_path: Path) -> None:
+    assert runtime_image_pin.main(["verify-tree", "--root", str(ROOT)]) == 0

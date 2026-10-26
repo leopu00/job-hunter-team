@@ -6,7 +6,8 @@ import { AI_PROVIDERS, RECOMMENDED_PROVIDER } from '../../../cli/wizard/setup-he
 
 // Codex è il provider consigliato del prodotto open source (abbonamento
 // ChatGPT di ciascuno): primo nel wizard, default quando non si sceglie,
-// «consigliato» nell'etichetta in ogni lingua. Claude e Kimi restano.
+// «consigliato» nell'etichetta in ogni lingua. È l'unico offerto: Claude e Kimi sono
+// archiviati (0.4) e il codice resta solo per le squadre già configurate.
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
 const read = (p) => readFileSync(path.join(ROOT, p), 'utf8');
 const RECOMMENDED = {
@@ -15,18 +16,18 @@ const RECOMMENDED = {
 };
 
 describe('Codex consigliato nella CLI', () => {
-  it('è primo e default del wizard, con Claude e Kimi dopo', () => {
+  it('è l’unico e il default del wizard, senza Claude né Kimi', () => {
     expect(RECOMMENDED_PROVIDER).toBe('openai');
-    expect(AI_PROVIDERS.map((p) => p.value)).toEqual(['openai', 'claude', 'kimi']);
+    expect(AI_PROVIDERS.map((p) => p.value)).toEqual(['openai']);
     expect(AI_PROVIDERS[0].label).toContain('Codex');
   });
 
-  it('ha «consigliato» nell’etichetta di Codex in tutte e 7 le lingue, e Kimi non lo dice più', () => {
+  it('ha «consigliato» nell’etichetta di Codex in tutte e 7 le lingue, e nessuna lingua offre più Claude né Kimi', () => {
     for (const [lang, word] of Object.entries(RECOMMENDED)) {
       const locale = JSON.parse(read(`shared/locales/${lang}.json`));
       expect(locale['wizard.provider.codex'], lang).toContain(word);
-      expect(locale['wizard.provider.kimi'], lang).not.toContain(word);
-      expect(locale['wizard.provider.claude'], lang).toBe('Claude (Anthropic)');
+      expect(locale['wizard.provider.kimi'], lang).toBeUndefined();
+      expect(locale['wizard.provider.claude'], lang).toBeUndefined();
     }
   });
 
@@ -37,7 +38,7 @@ describe('Codex consigliato nella CLI', () => {
     const providers = read('cli/src/commands/providers.js');
     const known = providers.slice(providers.indexOf('const KNOWN_PROVIDERS = {'));
     expect(known.indexOf('openai:')).toBeLessThan(known.indexOf('anthropic:'));
-    expect(providers).toContain("const UPDATE_TARGETS = ['codex', 'claude', 'kimi'];");
+    expect(providers).toContain("const UPDATE_TARGETS = ['codex'];");
     expect(providers).toContain('Recommended: jht providers use codex');
   });
 });

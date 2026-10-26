@@ -76,13 +76,13 @@ describe("OnboardingFlow reopened for the provider only (T128)", () => {
   it("prepares on this computer with the provider chosen, and says nothing of installs or of an earlier install", async () => {
     const user = userEvent.setup();
     const { props } = reopened({ platform: "windows", previousLocalData: true });
-    await user.click(await screen.findByRole("radio", { name: /claude code/i }));
+    await user.click(await screen.findByRole("radio", { name: /codex/i }));
     await user.click(screen.getByRole("button", { name: /rivedi il setup/i }));
     expect(screen.getByText("Questo computer")).toBeInTheDocument();
     expect(screen.queryByText(/l’app installa, se mancano/i)).not.toBeInTheDocument();
     expect(screen.queryByRole("note")).not.toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: /prepara la squadra/i }));
-    await waitFor(() => expect(props.onSubmit).toHaveBeenCalledWith({ host: { kind: "local" }, provider: "claude" }));
+    await waitFor(() => expect(props.onSubmit).toHaveBeenCalledWith({ host: { kind: "local" }, provider: "codex" }));
   });
 
   it("the first setup is as it was: it starts on the greeting, with the proposed provider, and the notes of a first install", async () => {
@@ -119,9 +119,7 @@ describe("OnboardingFlow technical setup", () => {
   });
 
   it.each([
-    ["Claude Code", "claude"],
     ["Codex", "codex"],
-    ["Kimi", "kimi"],
   ] as const)("lets a local identity choose %s without exposing more personal fields", async (label, provider) => {
     const user = userEvent.setup();
     const { props } = renderFlow({ account: { displayName: "Ada Locale", identity: "local" } });
@@ -160,13 +158,10 @@ describe("OnboardingFlow technical setup", () => {
     await reachProviderLocal(user);
     const providers = screen.getAllByRole("radio");
     expect(providers[0]).toHaveTextContent("Codex");
-    // Only Codex carries the recommended label; Claude and Kimi stay choosable.
+    // Codex is the only choice (0.4: one subscription) and carries the recommended label.
+    expect(providers).toHaveLength(1);
     expect(providers[0]).toHaveTextContent("consigliato");
-    expect(providers.slice(1).map((radio) => radio.textContent)).toEqual([
-      expect.not.stringContaining("consigliato"), expect.not.stringContaining("consigliato"),
-    ]);
     expect(screen.getByRole("radio", { name: /Codex/i })).toHaveAttribute("aria-checked", "true");
-    expect(screen.getByRole("radio", { name: /Claude Code/i })).toHaveAttribute("aria-checked", "false");
     await user.click(screen.getByRole("button", { name: /rivedi il setup/i }));
     await user.click(screen.getByRole("button", { name: /prepara la squadra/i }));
 
@@ -302,60 +297,31 @@ describe("OnboardingFlow technical setup", () => {
     expect(screen.queryByRole("note")).not.toBeInTheDocument();
   });
 
-  it("keeps Kimi visible but not selectable on Windows, with the catalog's reason", async () => {
-    const user = userEvent.setup();
-    renderFlow({ platform: "windows" });
-    await reachProviderLocal(user);
-    const kimi = screen.getByRole("radio", { name: /Kimi/i });
-    expect(kimi).toBeDisabled();
-    await user.click(kimi);
-    expect(kimi).toHaveAttribute("aria-checked", "false");
-    expect(screen.getByRole("radio", { name: /Codex/i })).toHaveAttribute("aria-checked", "true");
-    const reason = describeError("kimi_unavailable_windows", { locale: "it" });
-    expect(reason.known).toBe(true);
-    expect(kimi).toHaveAccessibleDescription(`${reason.text} ${reason.action}`);
-    // The arrows skip it: from Claude Code they go back to Codex.
-    await user.click(screen.getByRole("radio", { name: /Claude Code/i }));
-    await user.keyboard("{ArrowRight}");
-    expect(screen.getByRole("radio", { name: /Codex/i })).toHaveAttribute("aria-checked", "true");
-    expect(kimi).toHaveAttribute("aria-checked", "false");
-  });
-
-  it("says why Kimi is not available on Windows in the language of the app", async () => {
-    const user = userEvent.setup();
-    renderFlow({ platform: "windows", locale: "en" });
-    for (let step = 0; step < 2; step += 1) {
-      const buttons = screen.getAllByRole("button").filter((button) => button.className.includes("onboarding-primary"));
-      await user.click(buttons[buttons.length - 1]);
+  it("offers only Codex, on any platform: neither Kimi nor Claude Code can be chosen", async () => {
+    // Kimi is archived (0.4): the code that reads a team already on it stays, but no choice leads there.
+    for (const platform of ["macos", "linux", "windows"] as const) {
+      const user = userEvent.setup();
+      const view = renderFlow({ platform });
+      await reachProviderLocal(user);
+      expect(screen.getAllByRole("radio").map((radio) => radio.textContent?.replace(/consigliato/i, "").trim())).toEqual([
+        expect.stringContaining("Codex"),
+      ]);
+      expect(screen.queryByText(/Kimi|Moonshot|Claude|Anthropic/i)).not.toBeInTheDocument();
+      expect(document.body.textContent).not.toMatch(/Kimi|Moonshot|Claude|Anthropic/i);
+      view.unmount();
     }
-    expect(screen.getByText("Kimi is not available on Windows yet. Choose Codex or Claude.")).toBeInTheDocument();
-  });
-
-  it("lets Kimi be chosen on a Mac", async () => {
-    const user = userEvent.setup();
-    const { props } = renderFlow({ platform: "macos" });
-    await reachProviderLocal(user);
-    const kimi = screen.getByRole("radio", { name: /Kimi/i });
-    expect(kimi).toBeEnabled();
-    expect(screen.queryByText(/Kimi non è ancora disponibile/)).not.toBeInTheDocument();
-    await user.click(kimi);
-    expect(kimi).toHaveAttribute("aria-checked", "true");
-    await user.click(screen.getByRole("button", { name: /rivedi il setup/i }));
-    await user.click(screen.getByRole("button", { name: /prepara la squadra/i }));
-    await waitFor(() => expect(props.onSubmit).toHaveBeenCalledWith({ host: { kind: "local" }, provider: "kimi" }));
   });
 
   it("submits only host and provider for the local path", async () => {
     const user = userEvent.setup();
     const { props } = renderFlow();
     await reachProviderLocal(user);
-    await user.click(screen.getByRole("radio", { name: /Claude Code/i }));
     await user.click(screen.getByRole("button", { name: /rivedi il setup/i }));
     await user.click(screen.getByRole("button", { name: /prepara la squadra/i }));
 
     await waitFor(() => expect(props.onSubmit).toHaveBeenCalledWith({
       host: { kind: "local" },
-      provider: "claude",
+      provider: "codex",
     }));
     expect(Object.keys(vi.mocked(props.onSubmit).mock.calls[0][0]).sort()).toEqual(["host", "provider"]);
   });
@@ -381,7 +347,8 @@ describe("OnboardingFlow technical setup", () => {
     await user.tab();
     expect(screen.getByRole("radio", { name: /Codex/i })).toHaveFocus();
     await user.keyboard("{ArrowRight}");
-    expect(screen.getByRole("radio", { name: /Claude Code/i })).toHaveAttribute("aria-checked", "true");
+    // with one choice the arrow stays on it
+    expect(screen.getByRole("radio", { name: /Codex/i })).toHaveAttribute("aria-checked", "true");
   });
 
   it("restores focus to the greeting when navigating back", async () => {
@@ -403,7 +370,6 @@ describe("OnboardingFlow technical setup", () => {
     expect(screen.getByText("id_ed25519")).toBeInTheDocument();
     expect(screen.queryByText("/synthetic/private/id_ed25519")).not.toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: /^continua/i }));
-    await user.click(screen.getByRole("radio", { name: /Kimi/i }));
     await user.click(screen.getByRole("button", { name: /rivedi il setup/i }));
     await user.click(screen.getByRole("button", { name: /prepara la squadra/i }));
 
@@ -415,7 +381,7 @@ describe("OnboardingFlow technical setup", () => {
         port: 22,
         keyPath: "/synthetic/private/id_ed25519",
       },
-      provider: "kimi",
+      provider: "codex",
     }));
   });
 
@@ -886,7 +852,7 @@ describe("OnboardingFlow technical setup", () => {
     await user.type(screen.getByLabelText(/utente ssh/i), "draft-user");
     await user.click(screen.getByRole("button", { name: /scegli chiave ssh/i }));
     await user.click(screen.getByRole("button", { name: /^continua/i }));
-    await user.click(screen.getByRole("radio", { name: /claude code/i }));
+    await user.click(screen.getByRole("radio", { name: /codex/i }));
 
     result.rerender(<OnboardingFlow {...result.props} runtime={{
       status: "failed", stage: "runtime", message: "Errore terminale.", retryable: true,
@@ -899,7 +865,7 @@ describe("OnboardingFlow technical setup", () => {
     expect(screen.getByLabelText(/utente ssh/i)).toHaveValue("draft-user");
     expect(screen.getByText("id_ed25519")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: /^continua/i }));
-    expect(screen.getByRole("radio", { name: /claude code/i })).toHaveAttribute("aria-checked", "true");
+    expect(screen.getByRole("radio", { name: /codex/i })).toHaveAttribute("aria-checked", "true");
   });
 
   it("does not offer a return to configuration while an operation is still working", () => {

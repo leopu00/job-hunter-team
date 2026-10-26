@@ -25,9 +25,9 @@ const RELEASE_BASE =
 
 /** Nome dell'asset di release per sistema operativo. Allineato a
  *  `app/download/DownloadClient.tsx`: se cambia lì, cambia qui. */
-const DESKTOP_ASSET: Record<OsId, string> = {
+const DESKTOP_ASSET: Partial<Record<OsId, string>> = {
   macos: "job-hunter-team-macos-universal.dmg",
-  windows: "job-hunter-team-windows-x64-setup.exe",
+  // Windows is not part of 0.4.0: no asset, so no download link for it.
   linux: "job-hunter-team-linux-x64.AppImage",
 };
 
@@ -39,8 +39,9 @@ export const ALT_ASSET = {
 
 /** URL di download diretto. Senza `asset` prende quello predefinito del
  *  sistema; con `asset` scarica quel file preciso dalla stessa release. */
-export function downloadUrlFor(os: OsId, asset?: string): string {
-  return `${RELEASE_BASE}/${asset ?? DESKTOP_ASSET[os]}`;
+export function downloadUrlFor(os: OsId, asset?: string): string | null {
+  const name = asset ?? DESKTOP_ASSET[os];
+  return name ? `${RELEASE_BASE}/${name}` : null;
 }
 
 /** La pagina Download del sito, per chi arriva qui da un link diretto. */

@@ -76,7 +76,7 @@ Live dashboards with real, anonymized field data: [jobhunterteam.ai/case-studies
                                                                      👨‍⚖️ Critic (3 blind rounds)
 ```
 
-Each agent is an autonomous AI session on one of the supported CLIs (Claude Code, Codex, Kimi); a shared SQLite database keeps state in sync. Monitoring details: [`docs/about/MONITORING.md`](docs/about/MONITORING.md).
+Each agent is an autonomous AI session on the supported CLI (Codex); a shared SQLite database keeps state in sync. Monitoring details: [`docs/about/MONITORING.md`](docs/about/MONITORING.md).
 
 ## Install
 
@@ -104,22 +104,19 @@ before installing.
 
 | Provider | Plan | Cost/mo | Status |
 |---|---|---|---|
-| **Claude** | Max x20 | ~€200 | Production-ready, best precision |
 | **Codex** | Plus / Pro | ~€100 | Proven — 1-month autonomous run |
-| **Kimi** | Pro | ~€40 | Beta — in observation |
 
 **Native office (recommended):** download the current build from
 [GitHub Releases](https://github.com/leopu00/job-hunter-team/releases/latest).
-The release contains `job-hunter-team-windows-x64-setup.exe` for Windows
-`job-hunter-team-macos-universal.dmg` for macOS, and both
+The release contains `job-hunter-team-macos-universal.dmg` for macOS, and both
 `job-hunter-team-linux-x64.AppImage` and `job-hunter-team-linux-x64.deb` for
-Linux. The macOS build is signed and notarized and holds only the Apple silicon
-build (M1 and later; Intel Macs are not supported in 0.4), even though the file
-name says “universal”; Windows and Linux builds are currently unsigned. Open the Tauri 2 office and
+Linux. Windows is not part of 0.4.0: it is coming soon. The macOS build is
+signed and notarized and holds only the Apple silicon build (M1 and later; Intel
+Macs are not supported in 0.4), even though the file name says “universal”;
+Linux is experimental, was not tested by hand, and is unsigned. Open the Tauri 2 office and
 select **Activate team**: the checklist requires all four gates — team runtime,
 provider login with a plan selected, candidate profile and working hours —
-before it starts the agents. On Windows 0.4, the runtime choice is a Linux VPS;
-the office does not offer or attempt a local Windows installation.
+before it starts the agents.
 
 **CLI:** inspect first, then run (macOS / Linux / WSL2). The installer is
 [versioned in this repo](scripts/install.sh) and previews every action:

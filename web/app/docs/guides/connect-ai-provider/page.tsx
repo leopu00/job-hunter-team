@@ -31,12 +31,6 @@ export default async function ConnectAiProviderPage() {
         <LI>
           🔵 <strong>Codex</strong> {t.codex}
         </LI>
-        <LI>
-          🟠 <strong>Claude</strong> {t.claude}
-        </LI>
-        <LI>
-          🌙 <strong>Kimi</strong> {t.kimi}
-        </LI>
       </UL>
       <Callout>
         ⚠️ <strong>{t.dedicatedStrong}</strong> {t.dedicatedRest}{" "}
@@ -56,7 +50,7 @@ export default async function ConnectAiProviderPage() {
 
       <H3>{t.step1}</H3>
       <Pre>
-        {`jht providers list           # codex | claude | kimi
+        {`jht providers list           # codex
 jht providers use codex      # set the active one
 jht providers update codex   # install its CLI inside the container`}
       </Pre>
@@ -81,7 +75,7 @@ jht doctor              # full health check — must exit 0`}
       <H2>{t.switching}</H2>
       <P>{t.switchingP}</P>
       <Pre>
-        {`jht providers use claude && jht providers update claude
+        {`jht providers use codex && jht providers update codex
 jht team stop --all && jht team start   # reload the team`}
       </Pre>
 

@@ -1,0 +1,53 @@
+name: Public release check
+
+# Starts when a person (the operator) publishes the draft that Release made,
+# and asks for the files the way someone who is not logged in does: the check
+# itself sends no credential at all (the job's token only reads this repository
+# to get the check's own script, and is not kept). The download button of the site leads to this
+# release; if one of its files cannot be fetched without a login, this is red
+# at once, not when the first person writes about it.
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to check (default: the tag the site links)"
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  anonymous-download:
+    name: Download the public release with no login
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: "3.12"
+
+      # The release has just been published: the storage behind the addresses
+      # can lag by a few seconds, so any failure is tried again, up to five
+      # times thirty seconds apart, and the last status is the job's. The
+      # anonymous API of GitHub can also refuse a shared runner (403): that is
+      # a red that a re-run of this workflow clears, and it says nothing about
+      # the release.
+      - name: Check every file the site links, bytes and SHA-256
+        env:
+          TAG: ${{ github.event.release.tag_name || inputs.tag }}
+        run: |
+          tag_arg=()
+          if [ -n "$TAG" ]; then tag_arg=(--tag "$TAG"); fi
+          for attempt in 1 2 3 4 5; do
+            status=0
+            python3 scripts/ci/check_public_release.py "${tag_arg[@]}" --repository "$GITHUB_REPOSITORY" || status=$?
+            if [ "$status" -eq 0 ]; then exit 0; fi
+            if [ "$attempt" -lt 5 ]; then sleep 30; fi
+          done
+          exit "$status"

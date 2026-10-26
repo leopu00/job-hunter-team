@@ -19,9 +19,7 @@ export type Dict = {
   subIntroC: string;
   subEmphOne: string;
   subIntroD: string;
-  kimi: string;
   codex: string;
-  claude: string;
   dedicateLabel: string;
   dedicateBody: string;
   pricingPage: string;
@@ -73,11 +71,8 @@ export const T: Record<Locale, Dict> = {
       ", not pay-per-use API keys — it works around the clock and that would get expensive. You need an active plan with ",
     subEmphOne: "one",
     subIntroD: " of three providers:",
-    kimi: " (Moonshot) — the most affordable tier.",
     codex:
       " (OpenAI) — recommended: proven over a one-month autonomous run, with your ChatGPT Plus or Pro subscription.",
-    claude:
-      " (Anthropic) — the highest precision, best for scoring and writing.",
     dedicateLabel: "Dedicate the subscription to the team.",
     dedicateBody:
       " Don't reuse the same account you use for personal AI — they share one weekly quota and the team will hit limits unexpectedly. More on the ",
@@ -95,7 +90,7 @@ export const T: Record<Locale, Dict> = {
     path2SoonB: ". In the meantime, use Path 1 or Path 3.",
     path3Title: "📦 Path 3 — One-liner installer",
     path3Mac: "macOS / Linux / WSL2:",
-    path3WinIntro: "Windows (PowerShell, WSL must already be enabled):",
+    path3WinIntro: "Windows is not supported in 0.4: these steps are untested and may not work. Windows (PowerShell, WSL must already be enabled):",
     path3WizardIntro: "Then bring the team up and run the wizard:",
     dockerReqA: "The one requirement is ",
     dockerReqB:
@@ -131,11 +126,8 @@ export const T: Record<Locale, Dict> = {
       ", non con chiavi API a consumo — lavora 24 ore su 24 e ciò diventerebbe costoso. Ti serve un piano attivo con ",
     subEmphOne: "uno",
     subIntroD: " dei tre provider:",
-    kimi: " (Moonshot) — la fascia più economica.",
     codex:
       " (OpenAI) — consigliato: provato in un mese di lavoro autonomo, con il tuo abbonamento ChatGPT Plus o Pro.",
-    claude:
-      " (Anthropic) — la massima precisione, ideale per scoring e scrittura.",
     dedicateLabel: "Dedica l'abbonamento al team.",
     dedicateBody:
       " Non riutilizzare lo stesso account che usi per l'AI personale — condividono un'unica quota settimanale e il team raggiungerà i limiti in modo imprevisto. Maggiori dettagli sulla ",
@@ -153,7 +145,7 @@ export const T: Record<Locale, Dict> = {
     path2SoonB: ". Nel frattempo usa il Percorso 1 o il Percorso 3.",
     path3Title: "📦 Percorso 3 — Installer one-liner",
     path3Mac: "macOS / Linux / WSL2:",
-    path3WinIntro: "Windows (PowerShell, WSL deve essere già attivo):",
+    path3WinIntro: "Windows non è supportato nella 0.4: questi passaggi non sono stati provati e potrebbero non funzionare. Windows (PowerShell, WSL deve essere già attivo):",
     path3WizardIntro: "Poi avvia il team ed esegui la procedura guidata:",
     dockerReqA: "L'unico requisito è ",
     dockerReqB:
@@ -190,11 +182,8 @@ export const T: Record<Locale, Dict> = {
       ", no con claves API de pago por uso — trabaja las 24 horas y eso resultaría caro. Necesitas un plan activo con ",
     subEmphOne: "uno",
     subIntroD: " de tres proveedores:",
-    kimi: " (Moonshot) — el nivel más económico.",
     codex:
       " (OpenAI) — recomendado: probado durante un mes de trabajo autónomo, con tu suscripción ChatGPT Plus o Pro.",
-    claude:
-      " (Anthropic) — la máxima precisión, ideal para puntuar y redactar.",
     dedicateLabel: "Dedica la suscripción al equipo.",
     dedicateBody:
       " No reutilices la misma cuenta que usas para tu IA personal — comparten una única cuota semanal y el equipo alcanzará los límites de forma inesperada. Más información en la ",
@@ -212,7 +201,7 @@ export const T: Record<Locale, Dict> = {
     path2SoonB: ". Mientras tanto, usa la Vía 1 o la Vía 3.",
     path3Title: "📦 Vía 3 — Instalador en una línea",
     path3Mac: "macOS / Linux / WSL2:",
-    path3WinIntro: "Windows (PowerShell, WSL ya debe estar activado):",
+    path3WinIntro: "Windows no es compatible con la 0.4: estos pasos no se han probado y pueden no funcionar. Windows (PowerShell, WSL ya debe estar activado):",
     path3WizardIntro: "Luego levanta el equipo y ejecuta el asistente:",
     dockerReqA: "El único requisito es ",
     dockerReqB:
@@ -249,11 +238,8 @@ export const T: Record<Locale, Dict> = {
       ", pas avec des clés API à l'usage — elle travaille 24 heures sur 24 et cela coûterait cher. Vous avez besoin d'un forfait actif chez ",
     subEmphOne: "l'un",
     subIntroD: " des trois fournisseurs :",
-    kimi: " (Moonshot) — la formule la plus abordable.",
     codex:
       " (OpenAI) — recommandé : éprouvé sur un mois de travail autonome, avec votre abonnement ChatGPT Plus ou Pro.",
-    claude:
-      " (Anthropic) — la plus haute précision, idéale pour la notation et la rédaction.",
     dedicateLabel: "Dédiez l'abonnement à l'équipe.",
     dedicateBody:
       " Ne réutilisez pas le même compte que pour votre IA personnelle — ils partagent un quota hebdomadaire unique et l'équipe atteindra les limites de façon imprévue. Plus d'informations sur la ",
@@ -272,7 +258,7 @@ export const T: Record<Locale, Dict> = {
     path2SoonB: ". En attendant, utilisez la Voie 1 ou la Voie 3.",
     path3Title: "📦 Voie 3 — Installateur en une ligne",
     path3Mac: "macOS / Linux / WSL2 :",
-    path3WinIntro: "Windows (PowerShell, WSL doit déjà être activé) :",
+    path3WinIntro: "Windows n'est pas pris en charge dans la 0.4 : ces étapes n'ont pas été testées et peuvent ne pas fonctionner. Windows (PowerShell, WSL doit déjà être activé) :",
     path3WizardIntro: "Puis démarrez l'équipe et lancez l'assistant :",
     dockerReqA: "La seule exigence est ",
     dockerReqB:
@@ -309,11 +295,8 @@ export const T: Record<Locale, Dict> = {
       ", nicht mit nutzungsbasierten API-Schlüsseln — es arbeitet rund um die Uhr, und das würde teuer werden. Du brauchst einen aktiven Plan bei ",
     subEmphOne: "einem",
     subIntroD: " von drei Anbietern:",
-    kimi: " (Moonshot) — die günstigste Stufe.",
     codex:
       " (OpenAI) — empfohlen: einen Monat lang im autonomen Betrieb erprobt, mit deinem ChatGPT-Plus- oder -Pro-Abo.",
-    claude:
-      " (Anthropic) — die höchste Präzision, ideal für Bewertung und Verfassen.",
     dedicateLabel: "Widme das Abonnement dem Team.",
     dedicateBody:
       " Verwende nicht dasselbe Konto wie für deine persönliche KI — sie teilen sich ein einziges wöchentliches Kontingent, und das Team stößt unerwartet an die Grenzen. Mehr dazu auf der ",
@@ -332,7 +315,7 @@ export const T: Record<Locale, Dict> = {
     path2SoonB: ". Nutze in der Zwischenzeit Weg 1 oder Weg 3.",
     path3Title: "📦 Weg 3 — Einzeiler-Installer",
     path3Mac: "macOS / Linux / WSL2:",
-    path3WinIntro: "Windows (PowerShell, WSL muss bereits aktiviert sein):",
+    path3WinIntro: "Windows wird in 0.4 nicht unterstützt: Diese Schritte sind ungetestet und funktionieren möglicherweise nicht. Windows (PowerShell, WSL muss bereits aktiviert sein):",
     path3WizardIntro: "Dann starte das Team und führe den Assistenten aus:",
     dockerReqA: "Die einzige Voraussetzung ist ",
     dockerReqB:
@@ -369,11 +352,8 @@ export const T: Record<Locale, Dict> = {
       " fut, nem használatalapú API-kulcsokon — a nap 24 órájában dolgozik, és az drága lenne. Aktív csomagra van szükséged az alábbi három szolgáltató ",
     subEmphOne: "egyikénél",
     subIntroD: ":",
-    kimi: " (Moonshot) — a legkedvezőbb árú szint.",
     codex:
       " (OpenAI) — ajánlott: egy hónapnyi önálló munkán bizonyított, a ChatGPT Plus vagy Pro előfizetéseddel.",
-    claude:
-      " (Anthropic) — a legnagyobb pontosság, ideális pontozáshoz és íráshoz.",
     dedicateLabel: "Szenteld az előfizetést a csapatnak.",
     dedicateBody:
       " Ne használd újra ugyanazt a fiókot, amit a személyes MI-hez használsz — egyetlen heti kvótán osztoznak, és a csapat váratlanul eléri a korlátokat. Bővebben az ",
@@ -393,7 +373,7 @@ export const T: Record<Locale, Dict> = {
     path3Title: "📦 3. út — Egysoros telepítő",
     path3Mac: "macOS / Linux / WSL2:",
     path3WinIntro:
-      "Windows (PowerShell, a WSL-nek már bekapcsolva kell lennie):",
+      "A Windows a 0.4-ben nem támogatott: ezeket a lépéseket nem tesztelték, és lehet, hogy nem működnek. Windows (PowerShell, a WSL-nek már bekapcsolva kell lennie):",
     path3WizardIntro: "Aztán indítsd el a csapatot, és futtasd a varázslót:",
     dockerReqA: "Az egyetlen követelmény a ",
     dockerReqB:
@@ -430,10 +410,8 @@ export const T: Record<Locale, Dict> = {
       ", não com chaves de API pagas por utilização — trabalha 24 horas por dia e isso ficaria caro. Precisas de um plano ativo com ",
     subEmphOne: "um",
     subIntroD: " de três fornecedores:",
-    kimi: " (Moonshot) — o nível mais económico.",
     codex:
       " (OpenAI) — recomendado: provado durante um mês de trabalho autónomo, com a tua subscrição ChatGPT Plus ou Pro.",
-    claude: " (Anthropic) — a máxima precisão, ideal para pontuar e escrever.",
     dedicateLabel: "Dedica a subscrição à equipa.",
     dedicateBody:
       " Não reutilizes a mesma conta que usas para a IA pessoal — partilham uma única quota semanal e a equipa atingirá os limites de forma inesperada. Mais informações na ",
@@ -451,7 +429,7 @@ export const T: Record<Locale, Dict> = {
     path2SoonB: ". Entretanto, usa a Via 1 ou a Via 3.",
     path3Title: "📦 Caminho 3 — Instalador numa só linha",
     path3Mac: "macOS / Linux / WSL2:",
-    path3WinIntro: "Windows (PowerShell, o WSL já tem de estar ativado):",
+    path3WinIntro: "O Windows não é suportado na 0.4: estes passos não foram testados e podem não funcionar. Windows (PowerShell, o WSL já tem de estar ativado):",
     path3WizardIntro: "Depois levanta a equipa e executa o assistente:",
     dockerReqA: "O único requisito é o ",
     dockerReqB:

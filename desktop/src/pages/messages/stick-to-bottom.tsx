@@ -155,7 +155,7 @@ export function JumpToLatest({ atBottom, unseen, label, onClick }: { atBottom: b
         {unseen > 0 && (
           <span
             data-testid="direct-chat-jump-count"
-            className="absolute -top-1.5 -right-1.5 min-w-[16px] rounded-full bg-[var(--color-green)] px-1 text-[9px] font-semibold leading-4 text-[var(--color-void)]"
+            className="absolute -top-1.5 -right-1.5 min-w-[16px] rounded-full bg-[var(--color-green)] px-1 text-[11px] font-semibold leading-4 text-[var(--color-void)]"
           >
             {unseen > 99 ? "99+" : unseen}
           </span>

@@ -1,7 +1,8 @@
 import { useState, type MouseEvent } from "react";
 import type { DirectChatQuestion } from "./direct-chat-contract";
 import type { DirectChatText } from "./direct-chat.i18n";
-import { answerableHere, answerProblem, KIND_COLOR } from "./chat-kinds";
+import { answerableHere, answerProblem, fullStamp, KIND_COLOR, timeLabel } from "./chat-kinds";
+import { renderChatMarkdown } from "./chat-text";
 
 /**
  * A question the agent asked, in its chat, with its options as buttons. A single choice answers
@@ -20,6 +21,7 @@ export default function ChatQuestion({
   onAnswer,
   onAnswerInWords,
   onMenu,
+  dateLocale,
 }: {
   question: DirectChatQuestion;
   agentName: string;
@@ -34,6 +36,8 @@ export default function ChatQuestion({
   onAnswerInWords?: () => void;
   /** right-click → Reply */
   onMenu?: (event: MouseEvent) => void;
+  /** the person's date locale, for the time of the question; without it no time is shown */
+  dateLocale?: string;
 }) {
   const [picked, setPicked] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
@@ -65,7 +69,7 @@ export default function ChatQuestion({
       data-kind={question.kind}
       data-quoted={quoted ? "true" : undefined}
       onContextMenu={onMenu}
-      className="self-start max-w-[86%] rounded-lg rounded-bl-sm px-4 py-3 text-[12px] leading-relaxed break-words"
+      className="self-start max-w-[min(92%,72rem)] rounded-lg rounded-bl-sm px-4 py-3 text-[15px] leading-[1.7] break-words"
       style={{
         color: "var(--color-base)",
         background: "var(--color-card)",
@@ -74,14 +78,24 @@ export default function ChatQuestion({
         boxShadow: colour ? `inset 3px 0 0 ${colour}` : undefined,
       }}
     >
-      <div className="mb-1 flex items-center gap-2 text-[8px] font-semibold uppercase tracking-wider text-[var(--color-dim)]">
+      <div className="mb-1 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wider text-[var(--color-dim)]">
         <span>{agentName}</span>
         <span data-testid="direct-chat-kind" style={{ color: colour ?? "var(--color-muted)" }}>
           {t.kinds[question.kind]}
         </span>
+        {dateLocale && (
+          <time
+            data-testid="direct-chat-time"
+            dateTime={new Date(question.at * 1000).toISOString()}
+            title={fullStamp(question.at, dateLocale)}
+            className="ml-auto font-normal normal-case tracking-normal"
+          >
+            {timeLabel(question.at, dateLocale)}
+          </time>
+        )}
       </div>
       {question.subject && <p className="m-0 mb-1 font-semibold text-[var(--color-white)]">{question.subject}</p>}
-      <p className="m-0 whitespace-pre-wrap">{question.text}</p>
+      <div>{renderChatMarkdown(question.text)}</div>
 
       <div role="group" aria-label={question.subject ?? question.text} className="mt-2 flex flex-wrap gap-1.5">
         {question.options.map((option) => {
@@ -98,7 +112,7 @@ export default function ChatQuestion({
                 if (!question.multiple) void answer([option.id]);
                 else setPicked(lit ? picked.filter((id) => id !== option.id) : [...picked, option.id]);
               }}
-              className="rounded border px-2.5 py-1 text-[11px] font-semibold disabled:cursor-default"
+              className="rounded border px-2.5 py-1 text-[14px] font-semibold disabled:cursor-default"
               style={{
                 borderColor: taken || lit ? "var(--color-green)" : "var(--color-border)",
                 color: taken || lit ? "var(--color-green)" : open ? "var(--color-bright)" : "var(--color-dim)",
@@ -118,7 +132,7 @@ export default function ChatQuestion({
               data-testid="direct-chat-answer-choices"
               disabled={!live || picked.length === 0}
               onClick={() => void answer(picked)}
-              className="rounded border border-[var(--color-border)] px-2.5 py-1 text-[11px] font-semibold text-[var(--color-bright)] disabled:opacity-40"
+              className="rounded border border-[var(--color-border)] px-2.5 py-1 text-[14px] font-semibold text-[var(--color-bright)] disabled:opacity-40"
             >
               {busy ? t.sending : t.answerSend}
             </button>
@@ -129,7 +143,7 @@ export default function ChatQuestion({
               data-testid="direct-chat-answer-in-words"
               disabled={!live}
               onClick={onAnswerInWords}
-              className="text-[11px] text-[var(--color-muted)] underline underline-offset-2 disabled:opacity-40 disabled:no-underline"
+              className="text-[13px] text-[var(--color-muted)] underline underline-offset-2 disabled:opacity-40 disabled:no-underline"
             >
               {t.answerInWords}
             </button>
@@ -143,17 +157,17 @@ export default function ChatQuestion({
         </p>
       )}
       {question.state === "expired" && (
-        <p data-testid="direct-chat-answer-expired" className="m-0 mt-1 text-[11px] text-[var(--color-muted)]">
+        <p data-testid="direct-chat-answer-expired" className="m-0 mt-1 text-[13px] text-[var(--color-muted)]">
           {t.answerExpired}
         </p>
       )}
       {question.state === "answered" && (
-        <p data-testid="direct-chat-answer-seen" className="m-0 mt-1 text-right text-[11px] text-[var(--color-muted)]">
+        <p data-testid="direct-chat-answer-seen" className="m-0 mt-1 text-right text-[13px] text-[var(--color-muted)]">
           {question.answer?.seenAt ? t.answerSeen : t.answerWaiting}
         </p>
       )}
       {error && (
-        <p role="alert" className="m-0 mt-1 text-[11px] text-[var(--color-red)]">
+        <p role="alert" className="m-0 mt-1 text-[13px] text-[var(--color-red)]">
           {error}
         </p>
       )}

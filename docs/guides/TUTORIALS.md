@@ -22,16 +22,15 @@ Keep the app open while it works.
 
 1. **Download the native desktop app.** Go to
    [jobhunterteam.ai/download](https://jobhunterteam.ai/download). **Desktop**
-   is already selected: click macOS, Windows, or Linux once to start the
+   is already selected: click macOS or Linux once (Windows is shown as “coming soon”) to start the
    current release download for that platform.
-2. **Open the download for your system.** On Windows, run
-   `job-hunter-team-windows-x64-setup.exe`: it installs the app for your user.
+2. **Open the download for your system.** Windows is not part of 0.4.0: there is no Windows installer yet (coming soon).
    On macOS, open `job-hunter-team-macos-universal.dmg` and drag the app into
    Applications; it is signed with an Apple Developer ID and notarized by
    Apple. Only Macs with Apple silicon (M1 and later). Intel Macs are not supported in 0.4.
    The file name says “universal”, but in 0.4 it holds only the Apple silicon build. On Linux, allow `job-hunter-team-linux-x64.AppImage` to run as a
    program and open it, or install `job-hunter-team-linux-x64.deb` on
-   Debian-based systems. Windows and Linux can display a platform warning:
+   Debian-based systems. Linux is experimental in 0.4 and was not tested by hand; it can display a platform warning:
    continue only when the download came from the official site or its linked
    release.
 3. **Choose how to start.** The app uses your system's language, or English
@@ -49,9 +48,9 @@ Keep the app open while it works.
    needs administrator rights. The Linux release is built, but this setup has
    not been tested yet. For a VPS, enter its address, the SSH user, the port
    and the private key file, which stays on this computer.
-5. **Choose the provider.** Select Codex (recommended), Claude or Kimi, then
+5. **Choose the provider.** Select Codex, then
    **Review the setup**. You sign in with your subscription later in the setup:
-   no API key is needed. Kimi is not available in the Windows app yet.
+   no API key is needed.
 6. **Confirm and prepare the team.** The last screen sums up the environment
    and the provider. When the team runs on this computer on Windows, it also
    lists what the app installs and how to remove it later. Select **Prepare the

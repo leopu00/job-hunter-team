@@ -23,7 +23,7 @@ For onboarding inside an already-cloned repo, see [legacy `setup.sh` / `setup.ps
 | Default mode | Docker (macOS: Colima by default or your Docker Desktop via `--runtime`; native Docker on Linux/WSL2) |
 | Expert mode | `--no-docker` (clone + build from source) |
 | OS support | macOS · Linux (apt/dnf/pacman) · WSL2 |
-| Windows | Use [`install.ps1`](../../scripts/install.ps1): the team runs in Podman inside WSL; Docker Desktop is not needed, WSL must be enabled |
+| Windows | Windows is not supported in 0.4: these steps are untested and may not work. Use [`install.ps1`](../../scripts/install.ps1): the team runs in Podman inside WSL; Docker Desktop is not needed, WSL must be enabled |
 
 ---
 
@@ -158,11 +158,10 @@ The script is `set -euo pipefail`, idempotent, and prints a step counter
    here is non-fatal (warns and continues).
 
    > 💡 **Native mode installs only Claude today.** If you plan to use
-   > Codex or Kimi instead, install the corresponding CLI manually after
+   > Codex instead, install the corresponding CLI manually after
    > the script finishes:
    > - 🟠 **Claude Code**: `npm install -g @anthropic-ai/claude-code` *(modern package)*
    > - 🔵 **Codex**: `npm install -g @openai/codex`
-   > - 🌙 **Kimi**: see [Moonshot docs](https://github.com/MoonshotAI/kimi-cli) — installed via Python `uv`, not npm
    >
    > See [`docs/about/PROVIDERS.md`](../about/PROVIDERS.md) for the full provider matrix.
 5. **Clone** — `git clone --depth 1 --branch $JHT_BRANCH $JHT_REPO_URL
@@ -297,11 +296,10 @@ What `--dry-run` intentionally does **not** do:
   (rewrite to `raw.githubusercontent.com/.../<tag>/scripts/install.sh`,
   or generate `web/public/install.sh` from the latest release at build
   time).
-- **Windows requires WSL** — `install.ps1` installs Podman and the Compose
+- **Windows requires WSL** — Windows is not supported in 0.4: these steps are untested and may not work. `install.ps1` installs Podman and the Compose
   provider through winget and runs the team in a Podman machine inside WSL,
   but it does not enable WSL or complete a reboot: when WSL is not usable it
-  stops with `wsl_not_ready`. Kimi is not supported yet when the team runs on
-  Windows.
+  stops with `wsl_not_ready`.
 
 ---
 

@@ -26,16 +26,15 @@ mentre lavora.
 
 1. **Scarica l'app desktop nativa.** Vai su
    [jobhunterteam.ai/download](https://jobhunterteam.ai/download). **Desktop**
-   è già selezionato: clicca una volta macOS, Windows o Linux per avviare il
+   è già selezionato: clicca una volta macOS o Linux (Windows è indicato «in arrivo») per avviare il
    download della release corrente per quella piattaforma.
-2. **Apri il download per il tuo sistema.** Su Windows avvia
-   `job-hunter-team-windows-x64-setup.exe`: installa l'app per il tuo utente.
+2. **Apri il download per il tuo sistema.** Windows non fa parte della 0.4.0: non c'è ancora un installer (in arrivo).
    Su macOS apri `job-hunter-team-macos-universal.dmg` e trascina l'app in
    Applicazioni; è firmata con un Developer ID Apple e notarizzata da Apple. Solo Mac con Apple silicon (M1 e successivi). I Mac Intel non sono supportati nella 0.4. Il nome del file dice «universal», ma nella 0.4 contiene solo la build per Apple silicon.
    Su
    Linux consenti a `job-hunter-team-linux-x64.AppImage` di essere eseguito
    come programma e aprilo, oppure installa `job-hunter-team-linux-x64.deb` sui
-   sistemi basati su Debian. Windows e Linux possono mostrare un avviso:
+   sistemi basati su Debian. Linux nella 0.4 è sperimentale e non è stato provato a mano; può mostrare un avviso:
    prosegui solo se il download viene dal sito ufficiale o dalla release
    collegata.
 3. **Scegli come iniziare.** L'app usa la lingua del sistema, oppure l'inglese
@@ -53,9 +52,9 @@ mentre lavora.
    di amministratore. La release per Linux è costruita, ma questo setup non è
    ancora stato collaudato. Per una VPS inserisci indirizzo, utente SSH, porta
    e file della chiave privata, che resta su questo computer.
-5. **Scegli il provider.** Seleziona Codex (consigliato), Claude o Kimi, poi
+5. **Scegli il provider.** Seleziona Codex, poi
    **Rivedi il setup**. Accedi con il tuo abbonamento più avanti nel setup: non
-   serve una chiave API. Kimi non è ancora disponibile nell'app per Windows.
+   serve una chiave API.
 6. **Conferma e prepara la squadra.** L'ultima schermata riassume ambiente e
    provider. Quando il team gira su questo computer con Windows, elenca anche
    cosa installa l'app e come rimuoverlo in seguito. Seleziona **Prepara la
@@ -213,17 +212,15 @@ trabaja.
 
 1. **Descarga la aplicación de escritorio nativa.** Ve a
    [jobhunterteam.ai/download](https://jobhunterteam.ai/download). **Desktop**
-   ya está seleccionado: haz clic una vez en macOS, Windows o Linux para iniciar
+   ya está seleccionado: haz clic una vez en macOS o Linux (Windows aparece como «próximamente») para iniciar
    la descarga de la versión actual para esa plataforma.
-2. **Abre la descarga para tu sistema.** En Windows ejecuta
-   `job-hunter-team-windows-x64-setup.exe`: instala la aplicación para tu
-   usuario. En macOS abre `job-hunter-team-macos-universal.dmg` y arrastra la
+2. **Abre la descarga para tu sistema.** Windows no forma parte de la 0.4.0: aún no hay instalador (próximamente). En macOS abre `job-hunter-team-macos-universal.dmg` y arrastra la
    aplicación a Aplicaciones; está firmada con un Developer ID de Apple y
    notarizada por Apple. Solo Mac con Apple silicon (M1 y posteriores). Los Mac con procesador Intel no son compatibles con la 0.4. El nombre del archivo dice «universal», pero en la 0.4 contiene solo la versión para Apple silicon.
    En Linux permite que
    `job-hunter-team-linux-x64.AppImage` se ejecute como programa y ábrelo, o
    instala `job-hunter-team-linux-x64.deb` en sistemas basados en Debian.
-   Windows y Linux pueden mostrar un aviso: continúa solo si descargaste desde
+   Linux es experimental en la 0.4 y no se ha probado a mano; puede mostrar un aviso: continúa solo si descargaste desde
    el sitio oficial o desde la versión enlazada.
 3. **Elige cómo empezar.** La aplicación usa el idioma de tu sistema, o el
    inglés si no tiene ese idioma. Selecciona **Continuar con Google**, o **Usar
@@ -241,10 +238,9 @@ trabaja.
    compilada, pero esta configuración todavía no se ha probado. Para un VPS,
    introduce su dirección, el usuario SSH, el puerto y el archivo de la clave
    privada, que se queda en este ordenador.
-5. **Elige el proveedor.** Selecciona Codex (recomendado), Claude o Kimi y
+5. **Elige el proveedor.** Selecciona Codex y
    luego **Revisar la configuración**. Inicias sesión con tu suscripción más
-   adelante en la configuración: no hace falta una clave API. Kimi todavía no
-   está disponible en la aplicación para Windows.
+   adelante en la configuración: no hace falta una clave API.
 6. **Confirma y prepara el equipo.** La última pantalla resume el entorno y el
    proveedor. Cuando el equipo se ejecuta en este ordenador con Windows,
    también enumera lo que instala la aplicación y cómo quitarlo después.
@@ -409,17 +405,15 @@ ordinateur. Gardez l'application ouverte pendant qu'elle travaille.
 
 1. **Téléchargez l'application de bureau native.** Allez sur
    [jobhunterteam.ai/download](https://jobhunterteam.ai/download). **Desktop**
-   est déjà sélectionné : cliquez une fois sur macOS, Windows ou Linux pour
+   est déjà sélectionné : cliquez une fois sur macOS ou Linux (Windows est indiqué « bientôt disponible ») pour
    lancer le téléchargement de la version actuelle pour cette plateforme.
-2. **Ouvrez le téléchargement pour votre système.** Sous Windows, lancez
-   `job-hunter-team-windows-x64-setup.exe` : il installe l'application pour
-   votre utilisateur. Sous macOS, ouvrez `job-hunter-team-macos-universal.dmg`
+2. **Ouvrez le téléchargement pour votre système.** Windows ne fait pas partie de la 0.4.0 : il n'y a pas encore d'installeur (bientôt disponible). Sous macOS, ouvrez `job-hunter-team-macos-universal.dmg`
    et faites glisser l'application dans Applications ; elle est signée avec un
    Developer ID Apple et notarisée par Apple. Uniquement les Mac avec Apple silicon (M1 et suivants). Les Mac Intel ne sont pas pris en charge dans la 0.4. Le nom du fichier dit « universal », mais dans la 0.4 il ne contient que la version pour Apple silicon.
    Sous Linux, autorisez
    `job-hunter-team-linux-x64.AppImage` à s'exécuter comme programme et
    ouvrez-le, ou installez `job-hunter-team-linux-x64.deb` sur les systèmes
-   basés sur Debian. Windows et Linux peuvent afficher un avertissement :
+   basés sur Debian. Linux est expérimental dans la 0.4 et n'a pas été testé à la main ; il peut afficher un avertissement :
    continuez uniquement si le téléchargement vient du site officiel ou de la
    version liée.
 3. **Choisissez comment commencer.** L'application utilise la langue de votre
@@ -440,11 +434,10 @@ ordinateur. Gardez l'application ouverte pendant qu'elle travaille.
    configuration n'a pas encore été testée. Pour un VPS, saisissez son adresse,
    l'utilisateur SSH, le port et le fichier de la clé privée, qui reste sur cet
    ordinateur.
-5. **Choisissez le fournisseur.** Sélectionnez Codex (recommandé), Claude ou
-   Kimi, puis **Vérifier la configuration**. Vous vous connectez avec votre
+5. **Choisissez le fournisseur.** Sélectionnez Codex,
+   puis **Vérifier la configuration**. Vous vous connectez avec votre
    abonnement plus tard dans la configuration : aucune clé API n'est
-   nécessaire. Kimi n'est pas encore disponible dans l'application pour
-   Windows.
+   nécessaire.
 6. **Confirmez et préparez l'équipe.** Le dernier écran résume l'environnement
    et le fournisseur. Quand l'équipe tourne sur cet ordinateur sous Windows, il
    liste aussi ce que l'application installe et comment le supprimer plus tard.
@@ -613,17 +606,15 @@ geöffnet, während sie arbeitet.
 
 1. **Lade die native Desktop-App herunter.** Gehe zu
    [jobhunterteam.ai/download](https://jobhunterteam.ai/download). **Desktop**
-   ist bereits ausgewählt: Klicke einmal auf macOS, Windows oder Linux, um den
+   ist bereits ausgewählt: Klicke einmal auf macOS oder Linux (Windows steht als „Demnächst“ da), um den
    Download der aktuellen Version für diese Plattform zu starten.
-2. **Öffne den Download für dein System.** Starte unter Windows
-   `job-hunter-team-windows-x64-setup.exe`: Es installiert die App für deinen
-   Benutzer. Öffne unter macOS `job-hunter-team-macos-universal.dmg` und ziehe
+2. **Öffne den Download für dein System.** Windows ist nicht Teil von 0.4.0: Es gibt noch keinen Installer (demnächst). Öffne unter macOS `job-hunter-team-macos-universal.dmg` und ziehe
    die App in den Ordner Programme; sie ist mit einer Apple Developer ID
    signiert und von Apple notarisiert. Nur Macs mit Apple Silicon (M1 und neuer). Intel-Macs werden in 0.4 nicht unterstützt. Der Dateiname sagt „universal“, enthält in 0.4 aber nur die Version für Apple Silicon.
    Erlaube unter Linux
    `job-hunter-team-linux-x64.AppImage`, als Programm ausgeführt zu werden, und
    öffne es, oder installiere `job-hunter-team-linux-x64.deb` auf
-   Debian-basierten Systemen. Windows und Linux können eine Warnung anzeigen:
+   Debian-basierten Systemen. Linux ist in 0.4 experimentell und wurde nicht von Hand getestet; es kann eine Warnung anzeigen:
    fahre nur fort, wenn der Download von der offiziellen Website oder der
    verlinkten Version stammt.
 3. **Wähle, wie du beginnst.** Die App verwendet die Sprache deines Systems,
@@ -642,10 +633,9 @@ geöffnet, während sie arbeitet.
    aber diese Einrichtung wurde noch nicht getestet. Für einen VPS gibst du
    seine Adresse, den SSH-Benutzer, den Port und die Datei des privaten
    Schlüssels ein, der auf diesem Computer bleibt.
-5. **Wähle den Anbieter.** Wähle Codex (empfohlen), Claude oder Kimi, dann
+5. **Wähle den Anbieter.** Wähle Codex, dann
    **Einrichtung prüfen**. Du meldest dich später in der Einrichtung mit deinem
-   Abo an: Ein API-Schlüssel ist nicht nötig. Kimi ist in der Windows-App noch
-   nicht verfügbar.
+   Abo an: Ein API-Schlüssel ist nicht nötig.
 6. **Bestätige und bereite das Team vor.** Der letzte Bildschirm fasst Umgebung
    und Anbieter zusammen. Wenn das Team unter Windows auf diesem Computer
    läuft, listet er auch auf, was die App installiert und wie du es später
@@ -816,17 +806,15 @@ trabalha.
 
 1. **Descarrega a aplicação de ambiente de trabalho nativa.** Vai a
    [jobhunterteam.ai/download](https://jobhunterteam.ai/download). **Desktop**
-   já está selecionado: clica uma vez em macOS, Windows ou Linux para iniciar
+   já está selecionado: clica uma vez em macOS ou Linux (o Windows aparece como «em breve») para iniciar
    a transferência da versão atual para essa plataforma.
-2. **Abre o download para o teu sistema.** No Windows executa
-   `job-hunter-team-windows-x64-setup.exe`: instala a aplicação para o teu
-   utilizador. No macOS abre `job-hunter-team-macos-universal.dmg` e arrasta a
+2. **Abre o download para o teu sistema.** O Windows não faz parte da 0.4.0: ainda não há instalador (em breve). No macOS abre `job-hunter-team-macos-universal.dmg` e arrasta a
    aplicação para Aplicações; está assinada com um Developer ID da Apple e
    notarizada pela Apple. Apenas Macs com Apple silicon (M1 e posteriores). Os Macs com processador Intel não são suportados na 0.4. O nome do ficheiro diz «universal», mas na 0.4 contém apenas a versão para Apple silicon.
    No Linux permite que
    `job-hunter-team-linux-x64.AppImage` seja executado como programa e abre-o,
    ou instala `job-hunter-team-linux-x64.deb` em sistemas baseados em Debian.
-   Windows e Linux podem mostrar um aviso: avança apenas se o download vier do
+   O Linux é experimental na 0.4 e não foi testado à mão; pode mostrar um aviso: avança apenas se o download vier do
    site oficial ou da versão ligada.
 3. **Escolhe como começar.** A aplicação usa o idioma do teu sistema, ou o
    inglês se não tiver esse idioma. Seleciona **Continuar com Google**, ou
@@ -844,10 +832,9 @@ trabalha.
    para Linux está compilada, mas esta configuração ainda não foi testada. Para
    uma VPS, introduz o endereço, o utilizador SSH, a porta e o ficheiro da
    chave privada, que fica neste computador.
-5. **Escolhe o fornecedor.** Seleciona Codex (recomendado), Claude ou Kimi e
+5. **Escolhe o fornecedor.** Seleciona Codex e
    depois **Rever a configuração**. Inicias sessão com a tua subscrição mais à
-   frente na configuração: não é precisa uma chave API. O Kimi ainda não está
-   disponível na aplicação para Windows.
+   frente na configuração: não é precisa uma chave API.
 6. **Confirma e prepara a equipa.** O último ecrã resume o ambiente e o
    fornecedor. Quando a equipa corre neste computador com Windows, também
    enumera o que a aplicação instala e como o remover mais tarde. Seleciona
@@ -1011,17 +998,14 @@ számítógépedtől függ. Hagyd nyitva az alkalmazást, amíg dolgozik.
 
 1. **Töltsd le a natív asztali alkalmazást.** Nyisd meg a
    [jobhunterteam.ai/download](https://jobhunterteam.ai/download) oldalt. A
-   **Desktop** már ki van jelölve: kattints egyszer a macOS, Windows vagy Linux
-   lehetőségre az adott platform aktuális kiadásának letöltéséhez.
-2. **Nyisd meg a rendszeredhez való letöltést.** Windowson futtasd a
-   `job-hunter-team-windows-x64-setup.exe` fájlt: a felhasználódnak telepíti az
-   alkalmazást. macOS-en nyisd meg a `job-hunter-team-macos-universal.dmg`
+   **Desktop** már ki van jelölve: kattints egyszer a macOS vagy Linux lehetőségre (a Windows „hamarosan” jelzéssel szerepel) az adott platform aktuális kiadásának letöltéséhez.
+2. **Nyisd meg a rendszeredhez való letöltést.** A Windows nem része a 0.4.0-nak: még nincs telepítő (hamarosan). macOS-en nyisd meg a `job-hunter-team-macos-universal.dmg`
    fájlt, és húzd az alkalmazást az Alkalmazások mappába; Apple Developer
    ID-val van aláírva, és az Apple hitelesítette. Csak Apple silicon-os Mac-ekhez (M1 és újabb). Az Intel-es Mac-ek a 0.4-ben nem támogatottak. A fájlnév „universal”, de a 0.4-ben csak az Apple silicon-os verziót tartalmazza.
    Linuxon engedélyezd, hogy a
    `job-hunter-team-linux-x64.AppImage` programként fusson, és nyisd meg, vagy
    Debian-alapú rendszeren telepítsd a `job-hunter-team-linux-x64.deb`
-   csomagot. Windows és Linux figyelmeztetést jeleníthet meg: csak akkor
+   csomagot. A Linux a 0.4-ben kísérleti, és kézzel nem tesztelték; figyelmeztetést jeleníthet meg: csak akkor
    folytasd, ha a letöltés a hivatalos oldalról vagy a hivatkozott kiadásból
    származik.
 3. **Válaszd ki, hogyan kezdesz.** Az alkalmazás a rendszered nyelvét
@@ -1042,10 +1026,9 @@ számítógépedtől függ. Hagyd nyitva az alkalmazást, amíg dolgozik.
    linuxos kiadás elkészült, de ezt a beállítást még nem tesztelték. VPS esetén
    add meg a címét, az SSH-felhasználót, a portot és a privát kulcs fájlját,
    amely ezen a számítógépen marad.
-5. **Válaszd ki a szolgáltatót.** Válaszd a Codexet (ajánlott), a Claude-ot
-   vagy a Kimit, majd **A beállítás áttekintése** gombot. Az előfizetéseddel a
-   beállítás egy későbbi lépésében jelentkezel be: API-kulcsra nincs szükség. A
-   Kimi a Windows-alkalmazásban még nem érhető el.
+5. **Válaszd ki a szolgáltatót.** Válaszd a Codexet,
+   majd **A beállítás áttekintése** gombot. Az előfizetéseddel a
+   beállítás egy későbbi lépésében jelentkezel be: API-kulcsra nincs szükség.
 6. **Erősítsd meg, és készítsd elő a csapatot.** Az utolsó képernyő
    összefoglalja a környezetet és a szolgáltatót. Ha a csapat Windowson ezen a
    számítógépen fut, azt is felsorolja, mit telepít az alkalmazás, és hogyan

@@ -128,11 +128,11 @@ describe("wizard step scroll and focus", () => {
     expect(screen.getByRole("heading", { name: t.hostTitle })).toHaveFocus();
     scrollDown(); await user.click(screen.getByRole("button", { name: new RegExp(`^${t.continue}`) })); expectTop();
     expect(screen.getByRole("heading", { name: t.providerTitle })).toHaveFocus();
-    await user.click(screen.getByRole("radio", { name: /Claude Code/ }));
+    await user.click(screen.getByRole("radio", { name: /Codex/ }));
     scrollDown(); await user.click(screen.getByRole("button", { name: new RegExp(t.reviewSetup) })); expectTop();
     scrollDown(); await user.click(screen.getByRole("button", { name: t.edit })); expectTop();
     expect(screen.getByRole("heading", { name: t.providerTitle })).toHaveFocus();
-    expect(screen.getByRole("radio", { name: /Claude Code/ })).toHaveAttribute("aria-checked", "true");
+    expect(screen.getByRole("radio", { name: /Codex/ })).toHaveAttribute("aria-checked", "true");
     scrollDown(); await user.click(screen.getByRole("button", { name: t.back })); expectTop();
   });
   it("does not reset scrolling or steal input focus on same-step state changes", async () => {

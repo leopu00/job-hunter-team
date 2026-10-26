@@ -551,8 +551,7 @@
   border-color: var(--color-border-glow);
 }
 
-/* A choice this platform cannot offer (Kimi on Windows): plainly off, with its
-   reason in the note right under the cards. */
+/* A choice this platform cannot offer: plainly off. */
 .onboarding-choice:disabled {
   opacity: 0.5;
   border-style: dashed;

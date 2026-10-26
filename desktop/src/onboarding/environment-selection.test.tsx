@@ -53,12 +53,12 @@ describe("environment selection is idempotent for the current environment", () =
     await user.click(screen.getByRole("button", { name: new RegExp(t.startSetup) }));
     await user.click(vps()); await fill(user); retained();
     await user.click(next());
-    await user.click(screen.getByRole("radio", { name: /Claude Code/ }));
+    await user.click(screen.getByRole("radio", { name: /Codex/ }));
     await user.click(screen.getByRole("button", { name: t.back }));
     for (let i = 0; i < 2; i++) { await user.click(vps()); retained(); expect(vps()).toHaveFocus(); }
     noOperation(props);
     await user.click(next());
-    expect(screen.getByRole("radio", { name: /Claude Code/ })).toHaveAttribute("aria-checked", "true");
+    expect(screen.getByRole("radio", { name: /Codex/ })).toHaveAttribute("aria-checked", "true");
   });
   it("retains the same VPS and focus for every arrow key on a VPS-only platform", async () => {
     const user = userEvent.setup(); const props = wizard("other");

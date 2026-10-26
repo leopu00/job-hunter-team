@@ -405,13 +405,13 @@ const SCREEN_LIST: GuideScreen[] = [
   {
     id: "S10-choose-provider",
     alt: {
-      en: "The provider choice: Codex (recommended), Claude or Kimi (not yet on Windows when the team runs locally), with the subscription plan.",
-      it: "La scelta del provider: Codex (consigliato), Claude o Kimi (non ancora su Windows col team in locale), con il piano di abbonamento.",
-      es: "La elección de proveedor: Codex (recomendado), Claude o Kimi (aún no en Windows con el equipo en local), con el plan de suscripción.",
-      fr: "Le choix du fournisseur : Codex (recommandé), Claude ou Kimi (pas encore sous Windows avec l'équipe en local), avec le plan d'abonnement.",
-      de: "Die Anbieterwahl: Codex (empfohlen), Claude oder Kimi (unter Windows mit lokalem Team noch nicht), mit dem Abo-Tarif.",
-      pt: "A escolha do provedor: Codex (recomendado), Claude ou Kimi (ainda não no Windows com a equipa local), com o plano de subscrição.",
-      hu: "A szolgáltató kiválasztása: Codex (ajánlott), Claude vagy Kimi (helyi csapattal Windowson még nem), az előfizetési csomaggal.",
+      en: "The provider choice: Codex, with the subscription plan.",
+      it: "La scelta del provider: Codex, con il piano di abbonamento.",
+      es: "La elección de proveedor: Codex, con el plan de suscripción.",
+      fr: "Le choix du fournisseur : Codex, avec le plan d'abonnement.",
+      de: "Die Anbieterwahl: Codex, mit dem Abo-Tarif.",
+      pt: "A escolha do provedor: Codex, com o plano de subscrição.",
+      hu: "A szolgáltató kiválasztása: Codex, az előfizetési csomaggal.",
     },
     // La didascalia dichiara ciò che l'inquadratura NON mostra. Su Linux il
     // provider è scelto ma non ancora autenticato, quindi al posto
