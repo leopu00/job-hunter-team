@@ -43,6 +43,8 @@ const POSITIONS_READ_OTHER: &str = "other";
 pub(crate) struct PositionsReadTiming {
     pub(crate) op: &'static str,
     pub(crate) shared: bool,
+    /// The checks of the pinned container were not repeated for this read (see existing_team_runtime).
+    pub(crate) checks_skipped: bool,
     pub(crate) ok: bool,
     pub(crate) total: Duration,
     pub(crate) ssh: Duration,
@@ -148,9 +150,10 @@ impl RuntimeLog {
     pub(crate) fn record_positions_read(&self, read: &PositionsReadTiming) {
         let op = if POSITIONS_READ_KINDS.contains(&read.op) { read.op } else { POSITIONS_READ_OTHER };
         let entry = format!(
-            "=== {} positions.read op={op} link={} ok={} total_ms={} ssh_ms={} bytes_out={} bytes_in={}\n",
+            "=== {} positions.read op={op} link={} inspects={} ok={} total_ms={} ssh_ms={} bytes_out={} bytes_in={}\n",
             utc(SystemTime::now()),
             if read.shared { "shared" } else { "own" },
+            if read.checks_skipped { "skipped" } else { "run" },
             read.ok,
             read.total.as_millis(),
             read.ssh.as_millis(),
@@ -612,6 +615,7 @@ mod tests {
         let timing = |op| PositionsReadTiming {
             op,
             shared: true,
+            checks_skipped: false,
             ok: true,
             total: Duration::from_millis(812),
             ssh: Duration::from_millis(790),
@@ -624,7 +628,7 @@ mod tests {
         let text = fs::read_to_string(root.join("logs").join("load-times.log")).unwrap();
         let lines: Vec<&str> = text.lines().collect();
         assert_eq!(lines.len(), 2);
-        assert!(lines[0].ends_with("positions.read op=list link=shared ok=true total_ms=812 ssh_ms=790 bytes_out=57000 bytes_in=384000"), "{}", lines[0]);
+        assert!(lines[0].ends_with("positions.read op=list link=shared inspects=run ok=true total_ms=812 ssh_ms=790 bytes_out=57000 bytes_in=384000"), "{}", lines[0]);
         assert!(lines[1].contains("op=other") && !text.contains("secret"));
         // the runtime log (the failures of the steps) is not touched by it
         assert!(!root.join("logs").join("runtime.log").exists());

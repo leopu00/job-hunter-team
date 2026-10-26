@@ -1906,8 +1906,133 @@ pub(crate) fn assistant_start_command(target: &RuntimeTarget) -> Result<String, 
     )
 }
 
+const PYTHON_STDIN_EXEC: &str = "exec \"$JHT_ENGINE\" exec -i \"$JHT_CID\" python3 -c 'import sys;exec(bytes.fromhex(sys.stdin.buffer.readline().decode()).decode())'";
+
 pub(crate) fn python_command(target: &RuntimeTarget) -> Result<String, &'static str> {
-    command(target, "exec \"$JHT_ENGINE\" exec -i \"$JHT_CID\" python3 -c 'import sys;exec(bytes.fromhex(sys.stdin.buffer.readline().decode()).decode())'")
+    command(target, PYTHON_STDIN_EXEC)
+}
+
+/// The same read WITHOUT the checks of `command`: only the engine and `exec` on the container's whole
+/// id (64 hex digits, checked here before it goes into the command). It is for a target whose checks
+/// passed a few seconds ago (see `read_amortising_checks`): a container that was replaced has another
+/// id, and `exec` on the old one fails closed.
+pub(crate) fn python_command_unchecked(target: &RuntimeTarget) -> Result<String, &'static str> {
+    if !valid_target(target) || !hex(&target.container_id, 64) {
+        return Err("existing_team_runtime_candidate_invalid");
+    }
+    Ok(format!(
+        "set -eu\nJHT_CID='{cid}'\n{engine}\n{operation}",
+        cid = target.container_id,
+        engine = engine_selection(70),
+        operation = PYTHON_STDIN_EXEC
+    ))
+}
+
+/// How long the checks of a pinned container are not repeated for reads of the positions.
+const CHECKS_KEPT_MS: u64 = 45_000;
+/// The targets whose checks passed, at most this many, in memory only.
+const CHECKS_KEPT_TARGETS: usize = 8;
+
+/// The targets whose checks (container, image, revision, digest) passed on a complete read, and
+/// when. Only in this process's memory, never on disk; the key is a hash of the whole identity of the
+/// connection (account, host, port, user, key, team and every value of the pinned target).
+pub(crate) struct VerifiedTargets {
+    entries: Mutex<Vec<(String, u64)>>,
+}
+
+impl VerifiedTargets {
+    pub(crate) const fn new() -> Self {
+        Self { entries: Mutex::new(Vec::new()) }
+    }
+
+    fn fresh(&self, key: &str, now_ms: u64) -> bool {
+        self.entries.lock().is_ok_and(|entries| {
+            entries.iter().any(|(kept, at)| kept == key && now_ms.saturating_sub(*at) < CHECKS_KEPT_MS && now_ms >= *at)
+        })
+    }
+
+    fn remember(&self, key: &str, now_ms: u64) {
+        if let Ok(mut entries) = self.entries.lock() {
+            entries.retain(|(kept, at)| kept != key && now_ms.saturating_sub(*at) < CHECKS_KEPT_MS);
+            entries.push((key.to_owned(), now_ms));
+            while entries.len() > CHECKS_KEPT_TARGETS {
+                entries.remove(0);
+            }
+        }
+    }
+
+    fn forget(&self, key: &str) {
+        if let Ok(mut entries) = self.entries.lock() {
+            entries.retain(|(kept, _)| kept != key);
+        }
+    }
+}
+
+static VERIFIED_TARGETS: VerifiedTargets = VerifiedTargets::new();
+
+fn clock_ms() -> u64 {
+    static START: std::sync::OnceLock<Instant> = std::sync::OnceLock::new();
+    START.get_or_init(Instant::now).elapsed().as_millis() as u64
+}
+
+/// The key of a pinned target's verified state; none for anything but a VPS with a whole pinned target.
+fn checks_key(scope: &AccountScope, host: &crate::runtime_host::ValidatedHost, team_id: &str, runtime: &RuntimeTarget) -> Option<String> {
+    let crate::runtime_host::ValidatedHost::Vps { address, user, port, key_path, known_hosts } = host else {
+        return None;
+    };
+    if !valid_target(runtime) {
+        return None;
+    }
+    Some(sha256(
+        format!(
+            "{}\n{address}\n{user}\n{port}\n{}\n{}\n{team_id}\n{}\n{}\n{}\n{}\n{}\n{}\n{}",
+            scope.digest(),
+            key_path.display(),
+            known_hosts.display(),
+            runtime.container_id,
+            runtime.image_id,
+            runtime.platform_image_id,
+            runtime.oci_revision,
+            runtime.digest,
+            runtime.os,
+            runtime.architecture,
+        )
+        .as_bytes(),
+    ))
+}
+
+/// One read of the positions, with the checks of the pinned container done on the first and then only
+/// every 45 s: `run(true)` is the complete command with its checks, `run(false)` the shortcut.
+/// - the entry is made only by a complete read that succeeded, and a shortcut that worked neither
+///   makes nor renews it: the checks come back at the latest 45 s after the last complete read;
+/// - any reply that is not a success (a refusal such as exit 70, a timeout, a reply that is not
+///   valid) deletes the entry, and a failed shortcut is followed at once by ONE complete read;
+/// - with no key (not a VPS with a pinned target) every read is complete.
+/// Returns the reply and whether the checks were skipped.
+fn read_amortising_checks(
+    memory: &VerifiedTargets,
+    key: Option<&str>,
+    now_ms: impl Fn() -> u64,
+    mut run: impl FnMut(bool) -> Value,
+) -> (Value, bool) {
+    let succeeded = |reply: &Value| reply.get("ok") == Some(&Value::Bool(true));
+    let Some(key) = key else {
+        return (run(true), false);
+    };
+    if memory.fresh(key, now_ms()) {
+        let reply = run(false);
+        if succeeded(&reply) {
+            return (reply, true);
+        }
+        memory.forget(key);
+    }
+    let reply = run(true);
+    if succeeded(&reply) {
+        memory.remember(key, now_ms());
+    } else {
+        memory.forget(key);
+    }
+    (reply, false)
 }
 
 pub(crate) fn delivery_command(
@@ -2294,36 +2419,51 @@ pub(crate) fn positions_read_for_scope(
         crate::runtime_host::ValidatedHost::Local => (None, None),
     };
     let started = Instant::now();
+    // ssh time, bytes out, bytes in and whether the chat's connection was lent, over every run of this read
     let timing = Cell::new((Duration::ZERO, 0usize, 0usize, false));
+    let fast_command = team.as_ref().and_then(|(_, runtime)| python_command_unchecked(runtime).ok());
+    let key = team.as_ref().and_then(|(team_id, runtime)| checks_key(scope, &validated, team_id, runtime));
+    let key = key.filter(|_| fast_command.is_some());
+    let mut skipped = false;
     let reply = read_unless_blocked(block_key, pinned, || {
-        positions_read_with(
-            &request,
-            &request_bytes,
-            |input| {
-                let ssh_started = Instant::now();
-                let lent = shared.as_deref().filter(|socket| direct_chat::lent_socket_still_ours(socket));
-                let mut result = None;
-                if let Some(socket) = lent {
-                    // The master went away between the check and the read (255): one try on a connection of its own.
-                    match run_ssh_command(&validated, &command, Some(input), READ_TIMEOUT, Some(socket)) {
-                        Ok(output) if output.code != 255 => result = Some(Ok(output)),
-                        _ => {}
+        let (reply, skipped_checks) = read_amortising_checks(&VERIFIED_TARGETS, key.as_deref(), clock_ms, |complete| {
+            let chosen = match (&fast_command, complete) {
+                (Some(fast), false) => fast,
+                _ => &command,
+            };
+            positions_read_with(
+                &request,
+                &request_bytes,
+                |input| {
+                    let ssh_started = Instant::now();
+                    let lent = shared.as_deref().filter(|socket| direct_chat::lent_socket_still_ours(socket));
+                    let mut result = None;
+                    if let Some(socket) = lent {
+                        // The master went away between the check and the read (255): one try on a connection of its own.
+                        match run_ssh_command(&validated, chosen, Some(input), READ_TIMEOUT, Some(socket)) {
+                            Ok(output) if output.code != 255 => result = Some(Ok(output)),
+                            _ => {}
+                        }
                     }
-                }
-                let used_lent = result.is_some();
-                let result = result.unwrap_or_else(|| run_ssh_command(&validated, &command, Some(input), READ_TIMEOUT, None));
-                let received = result.as_ref().map_or(0, |output| output.stdout.len());
-                timing.set((ssh_started.elapsed(), input.len(), received, used_lent));
-                result
-            },
-            || crate::runtime_host::host_key_matches_pin(&validated),
-        )
+                    let used_lent = result.is_some();
+                    let result = result.unwrap_or_else(|| run_ssh_command(&validated, chosen, Some(input), READ_TIMEOUT, None));
+                    let received = result.as_ref().map_or(0, |output| output.stdout.len());
+                    let (ssh, out, _, was_lent) = timing.get();
+                    timing.set((ssh + ssh_started.elapsed(), out + input.len(), received, was_lent || used_lent));
+                    result
+                },
+                || crate::runtime_host::host_key_matches_pin(&validated),
+            )
+        });
+        skipped = skipped_checks;
+        reply
     });
     let (ssh, bytes_out, bytes_in, used_lent) = timing.get();
     if let Some(log) = crate::runtime_log::RuntimeLog::new(app) {
         log.record_positions_read(&crate::runtime_log::PositionsReadTiming {
             op: request.op(),
             shared: used_lent,
+            checks_skipped: skipped,
             ok: reply.get("ok") == Some(&Value::Bool(true)),
             total: started.elapsed(),
             ssh,
@@ -3187,6 +3327,167 @@ mod tests {
         // the Python reader serves this op and nothing else under it
         assert!(POSITIONS_READ_PY.contains("if op=='stats':"));
         assert!(POSITIONS_READ_PY.contains("mode=ro"));
+    }
+
+    // ---- the checks of the pinned container, not repeated for a few seconds ----
+
+    fn synthetic_runtime() -> RuntimeTarget {
+        ActivatedTarget::synthetic_for_tests().runtime
+    }
+
+    fn vps(key: &str) -> crate::runtime_host::ValidatedHost {
+        crate::runtime_host::ValidatedHost::Vps {
+            address: "synthetic.example.invalid".into(),
+            user: "synthetic".into(),
+            port: 22,
+            key_path: PathBuf::from(key),
+            known_hosts: PathBuf::from("/synthetic/known_hosts"),
+        }
+    }
+
+    fn ok_reply() -> Value {
+        json!({"ok": true, "data": {"items": []}})
+    }
+
+    fn refusal() -> Value {
+        json!({"ok": false, "error": "existing_team_runtime_changed"})
+    }
+
+    /// Runs `reads` reads one after the other at the given times, with a fake executor that answers
+    /// from `script` (true = ok), and says for each read whether it was the complete command.
+    fn drive_reads(memory: &VerifiedTargets, key: &str, clock: &std::cell::Cell<u64>, steps: &[(u64, &[bool])]) -> Vec<(Vec<bool>, bool, bool)> {
+        steps
+            .iter()
+            .map(|(at, answers)| {
+                clock.set(*at);
+                let mut asked = Vec::new();
+                let mut next = answers.iter();
+                let (reply, skipped) = read_amortising_checks(memory, Some(key), || clock.get(), |complete| {
+                    asked.push(complete);
+                    if *next.next().expect("a reply for every run") { ok_reply() } else { refusal() }
+                });
+                (asked, skipped, reply["ok"] == true)
+            })
+            .collect()
+    }
+
+    #[test]
+    fn the_checks_are_made_on_the_first_read_and_not_repeated_for_45_seconds() {
+        let memory = VerifiedTargets::new();
+        let clock = std::cell::Cell::new(0);
+        let seen = drive_reads(&memory, "target", &clock, &[(0, &[true]), (10_000, &[true]), (44_000, &[true]), (46_000, &[true]), (50_000, &[true])]);
+        // complete, shortcut, shortcut, and at 46 s (45 s after the last COMPLETE read, not after the
+        // last shortcut) complete again, then the shortcut
+        assert_eq!(seen[0], (vec![true], false, true));
+        assert_eq!(seen[1], (vec![false], true, true));
+        assert_eq!(seen[2], (vec![false], true, true));
+        assert_eq!(seen[3], (vec![true], false, true), "a shortcut that worked does not renew the entry");
+        assert_eq!(seen[4], (vec![false], true, true));
+    }
+
+    #[test]
+    fn a_container_that_was_replaced_is_never_read_on_the_shortcut_and_is_refused() {
+        let memory = VerifiedTargets::new();
+        let clock = std::cell::Cell::new(0);
+        // the shortcut fails (`exec` on the old id), the complete read answers exit 70's refusal: once each
+        let seen = drive_reads(&memory, "target", &clock, &[(0, &[true]), (5_000, &[false, false]), (6_000, &[true]), (7_000, &[true])]);
+        assert_eq!(seen[1], (vec![false, true], false, false), "one shortcut, then ONE complete read, then the refusal");
+        // the refusal deleted the entry: the next read is complete, and so makes it again
+        assert_eq!(seen[2], (vec![true], false, true));
+        assert_eq!(seen[3], (vec![false], true, true));
+    }
+
+    #[test]
+    fn a_failed_shortcut_falls_back_at_once_and_only_once() {
+        let memory = VerifiedTargets::new();
+        let clock = std::cell::Cell::new(0);
+        // the shortcut fails, the complete read works (a stopped and restarted container): the entry is made again
+        let seen = drive_reads(&memory, "target", &clock, &[(0, &[true]), (1_000, &[false, true]), (2_000, &[true])]);
+        assert_eq!(seen[1], (vec![false, true], false, true));
+        assert_eq!(seen[2], (vec![false], true, true));
+        // never a third run in one read
+        let memory = VerifiedTargets::new();
+        let runs = std::cell::Cell::new(0);
+        read_amortising_checks(&memory, Some("target"), || 0, |_| { runs.set(runs.get() + 1); ok_reply() });
+        read_amortising_checks(&memory, Some("target"), || 1, |_| { runs.set(runs.get() + 1); refusal() });
+        assert_eq!(runs.get(), 3, "one complete read, then a failed shortcut and ONE complete read");
+    }
+
+    #[test]
+    fn another_account_host_key_team_or_target_gets_no_shortcut() {
+        let scope = AccountScope::synthetic(b"scope-one");
+        let runtime = synthetic_runtime();
+        let key = checks_key(&scope, &vps("/k/one"), "team-one", &runtime).expect("a pinned target on a VPS");
+        let mut other_runtime = |edit: fn(&mut RuntimeTarget)| {
+            let mut changed = runtime.clone();
+            edit(&mut changed);
+            checks_key(&scope, &vps("/k/one"), "team-one", &changed).expect("still whole")
+        };
+        let keys = [
+            checks_key(&AccountScope::synthetic(b"scope-two"), &vps("/k/one"), "team-one", &runtime).unwrap(),
+            checks_key(&scope, &vps("/k/two"), "team-one", &runtime).unwrap(),
+            checks_key(&scope, &vps("/k/one"), "team-two", &runtime).unwrap(),
+            other_runtime(|target| target.container_id = "9".repeat(64)),
+            other_runtime(|target| target.image_id = format!("sha256:{}", "9".repeat(64))),
+            other_runtime(|target| target.platform_image_id = format!("sha256:{}", "9".repeat(64))),
+            other_runtime(|target| target.oci_revision = "9".repeat(40)),
+            other_runtime(|target| target.digest = format!("sha256:{}", "9".repeat(64))),
+        ];
+        for other in &keys {
+            assert_ne!(other, &key);
+        }
+        // and it holds in the memory: a read of the first target does not open a shortcut for the others
+        let memory = VerifiedTargets::new();
+        read_amortising_checks(&memory, Some(&key), || 0, |_| ok_reply());
+        for other in &keys {
+            let (_, skipped) = read_amortising_checks(&memory, Some(other), || 1_000, |_| ok_reply());
+            assert!(!skipped, "{other}");
+        }
+        // a target that is not whole, or not on a VPS, has no key and is read complete every time
+        let mut broken = runtime.clone();
+        broken.container_id = "abc".into();
+        assert!(checks_key(&scope, &vps("/k/one"), "team-one", &broken).is_none());
+        assert!(checks_key(&scope, &crate::runtime_host::ValidatedHost::Local, "team-one", &runtime).is_none());
+        let runs = std::cell::Cell::new(0);
+        for _ in 0..3 {
+            let (_, skipped) = read_amortising_checks(&memory, None, || 0, |complete| { assert!(complete); runs.set(runs.get() + 1); ok_reply() });
+            assert!(!skipped);
+        }
+        assert_eq!(runs.get(), 3);
+    }
+
+    #[test]
+    fn the_shortcut_has_no_checks_and_runs_only_on_a_whole_container_id() {
+        let runtime = synthetic_runtime();
+        let fast = python_command_unchecked(&runtime).unwrap();
+        let full = python_command(&runtime).unwrap();
+        assert_eq!(fast.matches("inspect").count(), 0);
+        assert!(full.contains("inspect"));
+        assert!(fast.contains(&format!("JHT_CID='{}'", runtime.container_id)));
+        assert!(fast.ends_with(PYTHON_STDIN_EXEC));
+        // the engine is still chosen, and the id is the only thing the command is made of
+        assert!(fast.contains("JHT_ENGINE=docker") && fast.contains("JHT_ENGINE=podman"));
+        for bad in ["", "abc", &"A".repeat(64), &format!("{}'; id #", "a".repeat(40)), &"g".repeat(64), &"a".repeat(65)] {
+            let mut target = runtime.clone();
+            target.container_id = bad.to_string();
+            assert_eq!(python_command_unchecked(&target), Err("existing_team_runtime_candidate_invalid"), "{bad:?}");
+        }
+    }
+
+    #[test]
+    fn the_checks_memory_forgets_after_the_time_and_stays_small() {
+        let memory = VerifiedTargets::new();
+        memory.remember("a", 0);
+        assert!(memory.fresh("a", 44_999) && !memory.fresh("a", 45_000));
+        // a clock that went back is no proof
+        memory.remember("b", 10_000);
+        assert!(!memory.fresh("b", 5_000));
+        for n in 0..20 {
+            memory.remember(&format!("t{n}"), 100_000 + n);
+        }
+        assert!(memory.entries.lock().unwrap().len() <= CHECKS_KEPT_TARGETS);
+        memory.forget("t19");
+        assert!(!memory.fresh("t19", 100_050));
     }
 
     #[test]
