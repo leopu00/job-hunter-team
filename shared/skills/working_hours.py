@@ -198,7 +198,17 @@ def schedule_status(path: Path | None = None) -> str:
     """
     p = path or _config_path()
     try:
-        raw = p.read_text()
+        # opened without waiting and without following a link: a pipe put in its place must not hold the
+        # sentinel's bridge, which asks this at each reading
+        fd = os.open(str(p), os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0))
+        try:
+            import stat as _stat
+            if not _stat.S_ISREG(os.fstat(fd).st_mode):
+                return "unreadable"
+            with os.fdopen(fd, "rb", closefd=False) as handle:
+                raw = handle.read(1024 * 1024).decode("utf-8")
+        finally:
+            os.close(fd)
     except FileNotFoundError:
         return "undeclared"
     except Exception:

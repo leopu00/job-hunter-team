@@ -484,3 +484,73 @@ def test_a_file_that_grows_past_the_cap_after_the_check_is_still_bounded(home, m
     (directory / "work-hours.jsonl").write_text(json.dumps(row("2026-10-25T10:00:00Z")) + "\n", encoding="utf-8")
     monkeypatch.setattr(work_stats, "MAX_FILE_BYTES", 10)
     assert work_stats.load_rows() == ([], True)
+
+
+# ── a pipe where a file should be must not stall the sentinel ──────────────────────────────────────
+
+def _within(seconds, call):
+    """Run `call` in a thread; fail if it does not come back in time (the open of a pipe would not)."""
+    import threading
+    box = {}
+
+    def target():
+        try:
+            box["value"] = call()
+        except BaseException as error:      # noqa: BLE001
+            box["error"] = error
+
+    thread = threading.Thread(target=target, daemon=True)
+    thread.start()
+    thread.join(seconds)
+    assert not thread.is_alive(), "the call is stuck on a named pipe"
+    if "error" in box:
+        raise box["error"]
+    return box["value"]
+
+
+@pytest.mark.skipif(not hasattr(os, "mkfifo"), reason="no named pipes here")
+def test_a_named_pipe_in_place_of_the_archive_comes_back_at_once_with_no_rows(home):
+    directory = home / "stats"
+    directory.mkdir()
+    os.mkfifo(directory / "work-hours.jsonl")
+    assert _within(5, work_stats.load_rows) == ([], True)
+    lines: list[str] = []
+    put_config(home, DAY)
+    row_written = _within(5, lambda: work_stats.record(now=at("2026-10-26T10:30"), log=lines.append))
+    assert row_written["hour"] == "2026-10-26T10:00:00Z"
+    assert "[work_stats] work_stats_reset" in lines
+
+
+@pytest.mark.skipif(not hasattr(os, "mkfifo"), reason="no named pipes here")
+def test_a_named_pipe_in_place_of_the_sentinel_data_or_the_config_comes_back_at_once(home, tmp_path):
+    pipe = tmp_path / "sentinel-data.jsonl"
+    os.mkfifo(pipe)
+    assert _within(5, lambda: work_stats.weekly_delta(pipe, at("2026-10-26T10:00"), at("2026-10-26T10:55"))) is None
+    os.mkfifo(home / "jht.config.json")
+    assert _within(5, working_hours.schedule_status) == "unreadable"
+
+
+def test_the_pipe_check_is_what_keeps_the_open_from_waiting():
+    """Counter-check by reading the source: the flags of the open carry O_NONBLOCK in both readers."""
+    for name in ("work_stats.py", "working_hours.py"):
+        text = (SKILLS / name).read_text(encoding="utf-8")
+        assert "O_NONBLOCK" in text and "O_NOFOLLOW" in text, name
+
+
+# ── the two copies of the row check must agree ─────────────────────────────────────────────────────
+
+def test_the_backup_check_and_the_reader_check_give_the_same_verdict_on_the_same_rows():
+    import re
+    rust = (ROOT / "desktop" / "src-tauri" / "src" / "team_backup.rs").read_text(encoding="utf-8")
+    start = rust.index("STATS_HOUR=re.compile")
+    end = rust.index("def stats_clean")
+    namespace = {"re": re, "time": __import__("time")}
+    exec(rust[start:end], namespace)        # the script's own text, not a copy of it
+    good = row("2026-10-26T10:00:00Z", delta=3)
+    cases = [good, row("2026-10-26T10:00:00Z", delta=None), {**good, "extra": 1}, {k: v for k, v in good.items() if k != "hour"},
+             row("2026-10-26T10:00:00Z", minutes=61), row("2026-10-26T10:00:00Z", minutes=-1), row("2026-10-26T10:00:00Z", minutes=True),
+             row("2026-10-26T10:00:00Z", minutes=1.0), row("2026-10-26T10:00:00Z", threshold=101), row("2026-10-26T10:00:00Z", delta=101),
+             row("2026-10-26T10:00:00Z", delta=1.5), row("2026-10-26T10:30:00Z"), row("2026-13-45T10:00:00Z"), row("2026-10-26T24:00:00Z"),
+             row("2026-02-30T10:00:00Z"), row(5), [1], "text", None, row("2026-10-26T10:00:00Z", minutes=10 ** 30)]
+    for case in cases:
+        assert bool(namespace["stats_ok"](case)) == (work_stats.valid_row(case) is not None), case

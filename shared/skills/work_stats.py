@@ -90,31 +90,53 @@ def valid_row(row) -> dict | None:
     return {"hour": hour, "activeMinutes": active, "scoreThreshold": threshold, "weeklyDeltaPct": delta}
 
 
-def load_rows(home: Path | None = None) -> tuple[list[dict], bool]:
-    """(the valid rows, whether anything in the file was dropped).
+class NotPlain(Exception):
+    """What the path names is not a plain file of ours (a link, a pipe, a device, two names, too big)."""
 
-    The file is opened without following a link and checked on the descriptor it was opened as (a plain
-    file, one name, within the byte cap) before a byte is read, and at most one byte over the cap is read:
-    what a path pointed at a moment ago is not what is read.  Anything else is not ours: no rows, dropped."""
-    path = stats_file(home)
+
+def read_plain(path: Path, max_size: int | None = None, tail: int | None = None) -> bytes:
+    """Read a file the team's agents can write, without letting it stall or redirect the reader.
+
+    Opened without following a link and WITHOUT waiting (a named pipe in its place would otherwise hold the
+    open for ever, and with it the sentinel's bridge that calls this), then checked on the descriptor it was
+    opened as: a plain file with one name, within `max_size`.  At most `max_size` (or `tail`) bytes are read.
+    FileNotFoundError passes; anything else that is not ours is NotPlain."""
+    flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0)
     try:
-        fd = os.open(str(path), os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
+        fd = os.open(str(path), flags)
     except FileNotFoundError:
-        return [], False
+        raise
     except OSError:
-        return [], True          # a link, or a name the team may not open: not our archive
+        raise NotPlain()
     try:
         info = os.fstat(fd)
-        if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1 or info.st_size > MAX_FILE_BYTES:
-            return [], True
+        if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1:
+            raise NotPlain()
+        if max_size is not None and info.st_size > max_size:
+            raise NotPlain()
+        if tail is not None and info.st_size > tail:
+            os.lseek(fd, info.st_size - tail, os.SEEK_SET)
+        limit = max_size if max_size is not None else tail
         with os.fdopen(fd, "rb", closefd=False) as handle:
-            raw = handle.read(MAX_FILE_BYTES + 1)
-    except OSError:
-        raise StatsError("stats_unreadable")
+            data = handle.read((limit or 0) + 1) if max_size is not None else handle.read(limit)
     finally:
         os.close(fd)
-    if len(raw) > MAX_FILE_BYTES:
+    if max_size is not None and len(data) > max_size:
+        raise NotPlain()
+    return data
+
+
+def load_rows(home: Path | None = None) -> tuple[list[dict], bool]:
+    """(the valid rows, whether anything in the file was dropped).  What is not a plain file of ours gives
+    no rows; see read_plain.  Every row is checked and the ones that fail are dropped."""
+    try:
+        raw = read_plain(stats_file(home), max_size=MAX_FILE_BYTES)
+    except FileNotFoundError:
+        return [], False
+    except NotPlain:
         return [], True
+    except OSError:
+        raise StatsError("stats_unreadable")
     rows: dict[str, dict] = {}
     dropped = False
     for line in raw.split(b"\n"):
@@ -165,11 +187,8 @@ def score_threshold() -> int:
 def weekly_delta(sentinel_path: Path, hour_start: datetime, now: datetime):
     """Whole points of the weekly budget used inside this hour, or None (no sample, or a reset)."""
     try:
-        size = sentinel_path.stat().st_size
-        with open(sentinel_path, "rb") as handle:
-            handle.seek(max(0, size - 262144))
-            raw = handle.read().decode("utf-8", "replace")
-    except OSError:
+        raw = read_plain(sentinel_path, tail=262144).decode("utf-8", "replace")
+    except (OSError, NotPlain):
         return None
     before = None
     inside: list[float] = []
