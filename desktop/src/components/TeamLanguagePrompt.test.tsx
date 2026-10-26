@@ -165,7 +165,8 @@ describe("TeamLanguagePrompt", () => {
     team("en", "en");
     const { unmount } = render(<TeamLanguagePrompt identityKey="a" />);
     const select = await screen.findByLabelText(TEAM_LANGUAGE_TEXT.it.selectLabel);
-    expect(select).toHaveFocus();
+    // the focus is given by an effect that runs after the question is drawn: wait for it, do not race it
+    await waitFor(() => expect(select).toHaveFocus());
     fireEvent.keyDown(select, { key: "Escape" });
     expect(screen.queryByRole("dialog")).toBeNull();
     expect(sets()).toEqual([]);
@@ -194,6 +195,8 @@ describe("TeamLanguagePrompt", () => {
     const select = await screen.findByLabelText(TEAM_LANGUAGE_TEXT.it.selectLabel);
     const keep = screen.getByTestId("team-language-keep");
     const confirm = screen.getByTestId("team-language-confirm");
+    // the opening focus lands after the question is drawn: let it land before moving the focus by hand
+    await waitFor(() => expect(select).toHaveFocus());
     confirm.focus();
     expect(fireEvent.keyDown(confirm, { key: "Tab" })).toBe(false);
     expect(select).toHaveFocus();

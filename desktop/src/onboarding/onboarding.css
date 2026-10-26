@@ -1297,3 +1297,8 @@
 
 .onboarding-runtime-phase { display: grid; gap: 6px; margin-top: 10px; }
 .onboarding-runtime-phase small { color: var(--color-muted); font-size: 11px; line-height: 1.45; }
+
+/* The image download's bar: the bytes done over the bytes found so far. It only moves forward. */
+.onboarding-runtime-pullbar { height: 6px; overflow: hidden; border-radius: 99px; background: var(--color-row); }
+.onboarding-runtime-pullbar i { display: block; height: 100%; border-radius: inherit; background: var(--color-blue); transition: width 0.4s ease-out; }
+@media (prefers-reduced-motion: reduce) { .onboarding-runtime-pullbar i { transition: none; } }

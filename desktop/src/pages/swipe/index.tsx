@@ -1,10 +1,13 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { useCallback, useEffect, useState } from "react";
 import SwipeDeck from "@/app/(protected)/swipe/SwipeDeck";
+import { appLocale } from "../../lib/app-locale";
+import { PAGE_STATES_TEXT } from "../../lib/page-states.i18n";
 import { supabase } from "../../lib/supabase";
 import { useRefresh } from "../../shell/router";
 import type { PageProps } from "../types";
 import { loadSwipe, type SwipeDeckProps } from "./load-swipe";
+import SwipeSkeleton from "./SwipeSkeleton";
 import "./swipe.css";
 
 type Load = { state: "loading" } | { state: "ready"; deck: SwipeDeckProps } | { state: "failed" };
@@ -26,16 +29,12 @@ export function SwipePage({ client = supabase }: { client?: SupabaseClient }) {
   useEffect(read, [read]);
   useRefresh(read);
 
-  if (load.state === "loading")
-    return (
-      <p role="status" className="px-4 pt-8 text-center text-[12px] text-[var(--color-muted)]">
-        Caricamento del mazzo…
-      </p>
-    );
+  const text = PAGE_STATES_TEXT[appLocale()];
+  if (load.state === "loading") return <SwipeSkeleton label={text.loadingSwipe} />;
   if (load.state === "failed")
     return (
       <p role="alert" className="max-w-6xl mx-auto px-5 pt-8 text-[12px]" style={{ color: "var(--color-red)" }}>
-        Non riesco a leggere le posizioni da giudicare. Controlla la connessione e premi «Aggiorna».
+        {text.swipeFailed}
       </p>
     );
   const { pendingCards, reviewedCards, initialVerdicts, salaryAxisMaxK } = load.deck;

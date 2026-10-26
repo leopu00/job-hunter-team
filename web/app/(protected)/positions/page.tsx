@@ -369,6 +369,19 @@ export default async function PositionsPage({ searchParams }: PageProps) {
   const emptyText = filtersActive
     ? tr("no_positions_filtered")
     : tr("no_positions_yet");
+  // The empty list says why and offers the way on: the filters off, or the dashboard to see what the team does.
+  const emptyBlock = (
+    <>
+      <p className="m-0">{emptyText}</p>
+      <Link
+        href={filtersActive ? "/positions" : "/dashboard"}
+        data-testid="positions-empty-action"
+        className="mt-3 inline-block rounded border border-[var(--color-border)] px-3 py-1 text-[12px] text-[var(--color-text)] hover:border-[var(--color-blue)]"
+      >
+        {filtersActive ? tr("no_positions_clear") : tr("no_positions_dashboard")}
+      </Link>
+    </>
+  );
 
   // Pagination computed values
   const totalResults = windowedEmpty
@@ -627,8 +640,8 @@ export default async function PositionsPage({ searchParams }: PageProps) {
         )}
         <div className="md:hidden flex flex-col gap-2">
           {visiblePositions.length === 0 ? (
-            <div className="rounded-lg border border-[var(--color-border)] px-4 py-12 text-center text-[var(--color-dim)] text-[11px]">
-              {emptyText}
+            <div className="rounded-lg border border-[var(--color-border)] px-4 py-12 text-center text-[var(--color-muted)] text-[12px]">
+              {emptyBlock}
             </div>
           ) : (
             visiblePositions.map((p: PositionWithScore) => (
@@ -890,9 +903,9 @@ export default async function PositionsPage({ searchParams }: PageProps) {
                   <tr>
                     <td
                       colSpan={visibleCols.size}
-                      className="px-4 py-12 text-center text-[var(--color-dim)] text-[11px]"
+                      className="px-4 py-12 text-center text-[var(--color-muted)] text-[12px]"
                     >
-                      {emptyText}
+                      {emptyBlock}
                     </td>
                   </tr>
                 ) : (

@@ -353,6 +353,25 @@ export const T = {
     fr: "Rien à afficher pour l’instant : l’équipe n’a pas encore trouvé de postes avec un score.",
     pt: "Ainda não há nada para mostrar: a equipa ainda não encontrou vagas com pontuação.",
   },
+  // The action under the empty list: clear the filters when some are on, else look at the dashboard.
+  no_positions_clear: {
+    it: "Azzera i filtri",
+    en: "Clear the filters",
+    hu: "Szűrők törlése",
+    es: "Quitar los filtros",
+    de: "Filter zurücksetzen",
+    fr: "Effacer les filtres",
+    pt: "Limpar os filtros",
+  },
+  no_positions_dashboard: {
+    it: "Vai alla dashboard",
+    en: "Go to the dashboard",
+    hu: "Ugrás az irányítópultra",
+    es: "Ir al panel",
+    de: "Zum Dashboard",
+    fr: "Aller au tableau de bord",
+    pt: "Ir para o painel",
+  },
   prev: {
     it: "Precedenti",
     en: "Previous",

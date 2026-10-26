@@ -26,7 +26,7 @@ import { ONBOARDING_TEXT, type OnboardingCopy } from "./onboarding.i18n";
 import { WINDOWS_SETUP } from "./windows-setup";
 import { savedVpsBridge, type SavedVps } from "../lib/saved-vps";
 import { SetupSupportReport } from "./SetupSupportReport";
-import RuntimePhaseDetail from "./RuntimePhaseDetail";
+import RuntimePhaseDetail, { pullBar } from "./RuntimePhaseDetail";
 import "./onboarding.css";
 
 function emptyVpsHost(): ExecutionHost {
@@ -322,7 +322,7 @@ function RuntimeView({ host, platform, t, locale, runtime, activity, onRetry, on
                 now={now}
               />
             )}
-            {runtime.status === "working" && (
+            {runtime.status === "working" && !(currentActivity && pullBar(currentActivity)) && (
               <div
                 className="onboarding-runtime-progress__indeterminate"
                 role="progressbar"
