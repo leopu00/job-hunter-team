@@ -2915,7 +2915,7 @@ fn t49_leaving_the_account_takes_the_record_away_so_coming_back_is_read_only() {
 
 #[test]
 fn t50_the_sign_out_and_the_switch_of_account_call_it_and_leftover_temporary_files_are_swept() {
-    let source = include_str!("account_scope.rs").split("#[cfg(test)]").next().unwrap();
+    let source = include_str!("account_scope.rs").split("#[cfg(test)]\nmod tests").next().unwrap();
     let reset = source.split("pub(crate) fn runtime_account_scope_reset(").nth(1).unwrap().split("\n}\n").next().unwrap();
     assert!(reset.find("active.take()").unwrap() < reset.find("direct_chat::teardown").unwrap());
     assert!(reset.find("direct_chat::teardown").unwrap() < reset.find("forget_write_access_of(").unwrap(), "after the handles are closed");
