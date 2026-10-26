@@ -3290,7 +3290,8 @@ switch ($Sub) {
     switch (($Provider | Out-String).Trim().ToLowerInvariant()) {
       { $_ -in @('openai', 'codex') } { & docker exec @ExecFlags $Container codex login --device-auth; break }
       { $_ -in @('kimi', 'moonshot') } { & docker exec @ExecFlags $Container kimi --yolo; break }
-      { $_ -in @('', 'claude', 'anthropic') } { & docker exec @ExecFlags $Container claude --dangerously-skip-permissions; break }
+      { $_ -in @('claude', 'anthropic') } { & docker exec @ExecFlags $Container claude --dangerously-skip-permissions; break }
+      '' { throw "nessun provider attivo: scegline uno con 'jht providers use openai'" }
       default { throw "provider attivo non riconosciuto: $Provider" }
     }
     break

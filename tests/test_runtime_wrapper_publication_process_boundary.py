@@ -235,7 +235,12 @@ if command == "ps" and rest == ["-q"]:
     raise SystemExit(0)
 if command == "up" and dry_run:
     print(
-        "INFO podman create --label io.podman.compose.config-hash="
+        "INFO podman create --name=jht-telegram --label io.podman.compose.config-hash="
+        + "7" * 64,
+        file=sys.stderr,
+    )
+    print(
+        "INFO podman create --name=jht --label io.podman.compose.config-hash="
         + os.environ["JHT_EXECUTED_CONFIG_HASH"],
         file=sys.stderr,
     )

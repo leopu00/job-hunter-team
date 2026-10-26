@@ -59,6 +59,13 @@ case "$1" in
   info) [ "${JHT_TEST_RUNTIME_READY:-0}" = 1 ] || [ -f "$JHT_TEST_RUNTIME_STATE" ] ;;
   inspect)
     if [ "$2:$3" = --type:container ]; then inspect_id="$4"; else inspect_id="$2"; fi
+    if [ "$inspect_id" = bbbbbbbbbbbb ] && [ -n "${JHT_TEST_OTHER_RUNNING:-}" ]; then
+      # the broker of the same project, running
+      case "$*" in
+        *'.State.Running}}|{{index'*) printf 'jht-broker|true|jht|jht|jht-broker|jht-broker|1|%s|%s|1.6.0|x|%s\n' "$JHT_RUNTIME_DIR" "$JHT_RUNTIME_DIR/docker-compose.yml" "$JHT_TEST_CONFIG_HASH"; exit 0 ;;
+        *'{{.State.Running}}'*) printf 'true\n'; exit 0 ;;
+      esac
+    fi
     [ "$inspect_id" = aaaaaaaaaaaa ] || exit 91
     case "$*" in
       *'.State.Running}}|{{index'*)
@@ -67,8 +74,16 @@ case "$1" in
           printf '%s\n' "$JHT_TEST_INSPECT_DETAILS"
         else
           # config_files as podman-compose writes it: the files given to `-f`, joined by ",".
-          printf 'jht|true|jht|jht|jht|jht|1|%s|%s|1.6.0|podman-compose%sjht.service|%s\n' \
-            "$JHT_RUNTIME_DIR" "${JHT_TEST_CONFIG_FILES:-$JHT_RUNTIME_DIR/docker-compose.yml}" "$(printf '\\100')" "$JHT_TEST_CONFIG_HASH"
+          running=true
+          chash="$JHT_TEST_CONFIG_HASH"
+          # a container of an earlier `up` that stopped (the machine was stopped): Exited until `up` starts it again
+          if [ -n "${JHT_TEST_EXITED_STATE:-}" ] && [ ! -f "$JHT_TEST_EXITED_STATE" ]; then running=false; fi
+          # made by the compose of an earlier version: another config hash, until `up` creates it again
+          if [ -n "${JHT_TEST_CONTAINER_HASH:-}" ] && { [ -z "${JHT_TEST_EXITED_STATE:-}" ] || [ ! -f "$JHT_TEST_EXITED_STATE" ]; }; then
+            chash="$JHT_TEST_CONTAINER_HASH"
+          fi
+          printf 'jht|%s|jht|jht|jht|jht|1|%s|%s|1.6.0|podman-compose%sjht.service|%s\n' \
+            "$running" "$JHT_RUNTIME_DIR" "${JHT_TEST_CONFIG_FILES:-$JHT_RUNTIME_DIR/docker-compose.yml}" "$(printf '\\100')" "$chash"
         fi
         if [ "${JHT_TEST_STOP_AFTER_INSPECT:-0}" = 1 ]; then : > "$JHT_TEST_CONTAINER_STOPPED"; fi ;;
       *'.State.Running}}'*)
@@ -84,11 +99,14 @@ case "$1" in
     [ ! -f "$JHT_TEST_CONTAINER_STOPPED" ] || exit 96
     case "$1:$2" in
       node:-e)
+        # the active provider the wrapper reads from jht.config.json (set, possibly empty)
+        if [ -n "${JHT_TEST_ACTIVE_PROVIDER+x}" ]; then printf '%s' "$JHT_TEST_ACTIVE_PROVIDER"; exit 0; fi
         if [ -n "${JHT_TEST_EXPECTED_TEAM:-}" ]; then
           for value in "$@"; do last="$value"; done
           [ "$last" = "$JHT_TEST_EXPECTED_TEAM" ] || exit 72
         fi
         printf '1 1 1' ;;
+      codex:*|claude:*|kimi:*) exit 0 ;;   # the provider's own login, which the log records
       tmux:has-session) exit 0 ;;
       test:-f) exit 0 ;;
       node:*) exit 0 ;;
@@ -135,16 +153,27 @@ if [ "$1" = --version ]; then printf '%s\n' 'podman-compose version 1.6.0'; exit
 printf 'podman-compose %s\n' "$*" >> "$JHT_TEST_DOCKER_LOG"
 case "$*" in
   *"--verbose --dry-run --project-name jht"*" up -d --force-recreate jht")
-    printf 'INFO --label io.podman.compose.config-hash=%s --label next=value\n' \
+    # podman-compose 1.6.0 prints the create of the dependency first (its own hash), then the service's
+    printf 'INFO:podman_compose:podman create --name=jht-telegram --label io.podman.compose.config-hash=%s --label next=value x\n' \
+      "$(printf '%064d' 7)" >&2
+    printf 'INFO:podman_compose:podman create --name=jht --label io.podman.compose.config-hash=%s --label next=value x\n' \
       "$JHT_TEST_CONFIG_HASH" >&2 ;;
   *" ps -q")
-    if [ -n "${JHT_TEST_PS_STATE:-}" ]; then
+    # podman-compose 1.6.0 lists the project's stopped containers too, as `podman ps -a` does
+    if [ -n "${JHT_TEST_EXITED_STATE:-}" ]; then
+      # the stopped container is listed until `down` removes it; `up` creates it again
+      if [ -f "$JHT_TEST_EXITED_STATE" ] || [ ! -f "${JHT_TEST_DOWN_DONE:-/nonexistent}" ]; then printf '%s\n' aaaaaaaaaaaa; fi
+      [ -z "${JHT_TEST_OTHER_RUNNING:-}" ] || printf '%s\n' bbbbbbbbbbbb
+    elif [ -n "${JHT_TEST_PS_STATE:-}" ]; then
       [ ! -f "$JHT_TEST_PS_STATE" ] || printf '%s\n' aaaaaaaaaaaa
       true
     else
       printf '%s\n' "${JHT_TEST_PS_IDS-aaaaaaaaaaaa}"
     fi ;;
+  *" down")
+    [ -z "${JHT_TEST_DOWN_DONE:-}" ] || : > "$JHT_TEST_DOWN_DONE" ;;
   *" up -d")
+    [ -z "${JHT_TEST_EXITED_STATE:-}" ] || : > "$JHT_TEST_EXITED_STATE"
     [ -z "${JHT_TEST_PS_STATE:-}" ] || : > "$JHT_TEST_PS_STATE" ;;
   *) exit 90 ;;
 esac
@@ -242,7 +271,10 @@ if [ "$1" = --version ]; then printf '%s\n' 'podman-compose version 1.6.0'; exit
 printf 'podman-compose connection=%s argv=%s\n' "${CONTAINER_CONNECTION-}" "$*" >> "$JHT_TEST_DOCKER_LOG"
 case "$*" in
   *"--verbose --dry-run --project-name jht"*" up -d --force-recreate jht")
-    printf 'INFO --label io.podman.compose.config-hash=%s --label next=value\n' \
+    # podman-compose 1.6.0 prints the create of the dependency first (its own hash), then the service's
+    printf 'INFO:podman_compose:podman create --name=jht-telegram --label io.podman.compose.config-hash=%s --label next=value x\n' \
+      "$(printf '%064d' 7)" >&2
+    printf 'INFO:podman_compose:podman create --name=jht --label io.podman.compose.config-hash=%s --label next=value x\n' \
       "$JHT_TEST_CONFIG_HASH" >&2 ;;
   *" ps -q") printf '%s\n' aaaaaaaaaaaa ;;
   *" up -d") exit 0 ;;
@@ -614,6 +646,112 @@ def test_explicit_up_uses_the_same_named_podman_compose_adapter_idempotently(
     assert not any("machine start" in line or "machine init" in line for line in calls)
 
 
+def test_up_goes_on_when_the_container_of_an_earlier_up_is_there_but_stopped(tmp_path: Path):
+    # The machine was stopped (a restart of the Mac, an app update): podman-compose lists the team's
+    # containers as Exited. They are ours, attested by every label: `up` starts them, it does not refuse.
+    wrapper, env, log = _runtime(tmp_path)
+    env["JHT_TEST_RUNTIME_READY"] = "1"
+    env["JHT_TEST_EXITED_STATE"] = str(tmp_path / "container-started")
+
+    result = subprocess.run([str(wrapper), "up"], env=env, text=True, capture_output=True, timeout=20, check=False)
+
+    assert result.returncode == 0, result.stderr
+    assert "non attestabile" not in result.stderr
+    calls = log.read_text(encoding="utf-8").splitlines()
+    assert len([line for line in calls if line.startswith("podman-compose ") and line.endswith(" up -d")]) == 1
+
+
+def test_status_says_a_stopped_container_is_not_running_and_does_not_call_it_unattestable(tmp_path: Path):
+    wrapper, env, _ = _runtime(tmp_path)
+    env["JHT_TEST_RUNTIME_READY"] = "1"
+    env["JHT_TEST_EXITED_STATE"] = str(tmp_path / "container-never-started")
+
+    result = subprocess.run([str(wrapper), "status"], env=env, text=True, capture_output=True, timeout=20, check=False)
+
+    assert result.returncode == 1
+    assert "non attivo" in result.stdout + result.stderr and "non attestabile" not in result.stdout + result.stderr
+
+
+def _stale_stopped(tmp_path: Path):
+    wrapper, env, log = _runtime(tmp_path)
+    env["JHT_TEST_RUNTIME_READY"] = "1"
+    env["JHT_TEST_EXITED_STATE"] = str(tmp_path / "container-started")
+    env["JHT_TEST_DOWN_DONE"] = str(tmp_path / "down-done")
+    # the containers of the version before: stopped, ours, made by a compose whose hash was another one
+    env["JHT_TEST_CONTAINER_HASH"] = "b" * 64
+    # `ps` lists it, its Running is false: the plain inspect answers from this file
+    Path(env["JHT_TEST_CONTAINER_STOPPED"]).write_text("", encoding="utf-8")
+    return wrapper, env, log
+
+
+def test_up_recreates_the_stopped_containers_of_the_version_before_and_keeps_the_volumes(tmp_path: Path):
+    wrapper, env, log = _stale_stopped(tmp_path)
+
+    result = subprocess.run([str(wrapper), "up"], env=env, text=True, capture_output=True, timeout=20, check=False)
+
+    assert result.returncode == 0, result.stderr
+    assert "config_changed_stopped" in result.stderr and "i volumi con i dati restano" in result.stderr
+    calls = [line for line in log.read_text(encoding="utf-8").splitlines() if line.startswith("podman-compose ")]
+    down = next(i for i, line in enumerate(calls) if line.endswith(" down"))
+    up = next(i for i, line in enumerate(calls) if line.endswith(" up -d"))
+    assert down < up
+    # containers and network only: no option of `down` can remove the volumes
+    assert not any(" down " in line + " " and ("-v" in line.split() or "--volumes" in line.split()) for line in calls)
+
+
+def test_up_does_not_recreate_when_another_container_of_the_project_runs(tmp_path: Path):
+    wrapper, env, log = _stale_stopped(tmp_path)
+    env["JHT_TEST_OTHER_RUNNING"] = "1"   # the broker is up while the team's container is stopped
+
+    result = subprocess.run([str(wrapper), "up"], env=env, text=True, capture_output=True, timeout=20, check=False)
+
+    assert result.returncode == 1
+    assert "jht down" in result.stderr
+    calls = log.read_text(encoding="utf-8").splitlines()
+    assert not any(line.startswith("podman-compose ") and (line.endswith(" down") or line.endswith(" up -d")) for line in calls)
+
+
+def test_up_does_not_touch_a_running_container_of_the_version_before(tmp_path: Path):
+    wrapper, env, log = _runtime(tmp_path)
+    env["JHT_TEST_RUNTIME_READY"] = "1"
+    env["JHT_TEST_CONTAINER_HASH"] = "b" * 64   # running, with the hash of the earlier compose
+
+    result = subprocess.run([str(wrapper), "up"], env=env, text=True, capture_output=True, timeout=20, check=False)
+
+    assert result.returncode == 1
+    assert "non attestabile" in result.stderr and "jht down" in result.stderr
+    calls = log.read_text(encoding="utf-8").splitlines()
+    assert not any(line.startswith("podman-compose ") and (line.endswith(" down") or line.endswith(" up -d")) for line in calls)
+
+
+def test_down_removes_the_stopped_containers_of_the_version_before(tmp_path: Path):
+    wrapper, env, log = _stale_stopped(tmp_path)
+
+    result = subprocess.run([str(wrapper), "down"], env=env, text=True, capture_output=True, timeout=20, check=False)
+
+    assert result.returncode == 0, result.stderr
+    calls = log.read_text(encoding="utf-8").splitlines()
+    assert any(line.startswith("podman-compose ") and line.endswith(" down") for line in calls)
+
+
+def test_a_stopped_container_that_is_not_ours_still_stops_up(tmp_path: Path):
+    wrapper, env, log = _runtime(tmp_path)
+    env["JHT_TEST_RUNTIME_READY"] = "1"
+    env["JHT_TEST_EXITED_STATE"] = str(tmp_path / "container-started")
+    # another project's container under the same service name: not attested, not touched
+    env["JHT_TEST_INSPECT_DETAILS"] = (
+        f"jht|false|someone-else|someone-else|jht|jht|1|{env['JHT_RUNTIME_DIR']}|"
+        f"{env['JHT_RUNTIME_DIR']}/docker-compose.yml|1.6.0|podman-compose{chr(64)}someone-else.service|{'a' * 64}"
+    )
+
+    result = subprocess.run([str(wrapper), "up"], env=env, text=True, capture_output=True, timeout=20, check=False)
+
+    assert result.returncode == 1
+    assert "non attestabile" in result.stderr
+    calls = log.read_text(encoding="utf-8").splitlines()
+    assert not any(line.startswith("podman-compose ") and line.endswith(" up -d") for line in calls)
+
+
 def test_explicit_up_allows_zero_ids_then_verifies_the_created_container(tmp_path: Path):
     wrapper, env, log = _runtime(tmp_path)
     env["JHT_TEST_RUNTIME_READY"] = "1"
@@ -670,7 +808,7 @@ if [ "$1" = --version ]; then printf '%s\n' 'podman-compose version 1.6.0'; exit
 printf 'podman-compose-1.6.0 connection=%s argv=%s\n' "$CONTAINER_CONNECTION" "$*" >> "$JHT_TEST_DOCKER_LOG"
 case "$*" in
   "--verbose --dry-run --project-name jht "*" up -d --force-recreate jht")
-    printf '%s\n' 'INFO --label io.podman.compose.config-hash=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa --label next=value' >&2
+    printf '%s\n' 'INFO:podman_compose:podman create --name=jht --label io.podman.compose.config-hash=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa --label next=value x' >&2
     exit 0 ;;
 esac
 [ "$1" = --podman-path ] || exit 120

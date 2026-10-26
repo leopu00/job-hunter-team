@@ -1,6 +1,6 @@
 import {
   closeSync, chmodSync, constants, fchmodSync, fstatSync, ftruncateSync, fsyncSync, lstatSync,
-  mkdirSync, openSync, renameSync, unlinkSync, writeFileSync, writeSync,
+  mkdirSync, openSync, readFileSync, renameSync, unlinkSync, writeFileSync, writeSync,
 } from 'node:fs';
 import { dirname } from 'node:path';
 
@@ -135,6 +135,28 @@ function writeInPlace(path, body, cause) {
     `jht: ${path}: the folder refused the atomic replace (${cause.code}); `
     + 'the file was rewritten in place\n',
   );
+}
+
+// The reading twin of writeInPlace: only an existing regular file, never a link
+// and never a pipe or device (opening a FIFO would hang or run a producer the
+// folder's writer planted there). lstat refuses first, O_NOFOLLOW and
+// O_NONBLOCK close the window to the open, and the inode check catches a swap.
+export function readRegularFileText(path) {
+  const before = lstatSync(path);
+  if (before.isSymbolicLink() || !before.isFile()) {
+    throw Object.assign(new Error('not a regular file'),
+      { code: before.isSymbolicLink() ? 'ELOOP' : 'EINVAL' });
+  }
+  const fd = openSync(path, constants.O_RDONLY | (constants.O_NOFOLLOW || 0) | (constants.O_NONBLOCK || 0));
+  try {
+    const opened = fstatSync(fd);
+    if (!opened.isFile() || (before.ino && opened.ino && (opened.ino !== before.ino || opened.dev !== before.dev))) {
+      throw Object.assign(new Error('replaced while opening'), { code: 'ESTALE' });
+    }
+    return readFileSync(fd, 'utf8');
+  } finally {
+    closeSync(fd);
+  }
 }
 
 export function repairPrivatePath(path, { directory = false } = {}) {
