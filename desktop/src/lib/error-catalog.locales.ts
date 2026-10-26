@@ -148,6 +148,13 @@ const COPY_BY_ENGLISH_TEXT: Readonly<Record<string, ErrorTranslations>> = {
     hu: ["A fájl nem lett mentve.", "Válassz egy mappát, amelybe írhatsz és van benne szabad hely, majd próbáld újra."],
     pt: ["O ficheiro não foi guardado.", "Escolhe uma pasta onde possas escrever e que tenha espaço livre e tenta novamente."],
   },
+  "This place does not allow private files.": {
+    de: ["Dieser Ort erlaubt keine privaten Dateien.", "Wähle einen anderen, zum Beispiel einen Ordner auf diesem Computer."],
+    es: ["Este lugar no permite archivos privados.", "Elige otro, por ejemplo una carpeta de este ordenador."],
+    fr: ["Cet emplacement n’autorise pas les fichiers privés.", "Choisis-en un autre, par exemple un dossier de cet ordinateur."],
+    hu: ["Ez a hely nem engedi a privát fájlokat.", "Válassz másikat, például egy mappát ezen a számítógépen."],
+    pt: ["Este local não permite ficheiros privados.", "Escolhe outro, por exemplo uma pasta deste computador."],
+  },
   "Not all the data could be read, so no file was saved: an incomplete file would look complete.": {
     de: ["Nicht alle Daten konnten gelesen werden, deshalb wurde keine Datei gespeichert: Eine unvollständige Datei würde vollständig aussehen.", "Versuche es in einer Minute erneut."],
     es: ["No se pudieron leer todos los datos, así que no se ha guardado ningún archivo: un archivo incompleto parecería completo.", "Vuelve a intentarlo dentro de un minuto."],
@@ -1849,6 +1856,7 @@ export const ERROR_CATALOG_LOCALES: Readonly<Record<string, ErrorTranslations>> 
   export_range_invalid: translated("The dates of the range are not valid."),
   export_too_large: translated("The data is too large for a single file."),
   export_save_failed: translated("The export file was not saved."),
+  private_unavailable: translated("This place does not allow private files."),
   export_no_database: translated("The team’s database is not where the app looks for it, so no file was saved: an empty file would look like a team with no data."),
   export_incomplete: translated("Not all the data could be read, so no file was saved: an incomplete file would look complete."),
   document_not_found: translated("This document is not among the team’s documents, so no file was saved."),

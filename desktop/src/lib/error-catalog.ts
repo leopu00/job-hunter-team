@@ -1303,6 +1303,12 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
     "The export file was not saved.",
     "Choose a folder you can write to and that has free space, then try again.",
   ),
+  private_unavailable: copy(
+    "Questo posto non permette file privati.",
+    "Scegline un altro, per esempio una cartella di questo computer.",
+    "This place does not allow private files.",
+    "Choose another one, for example a folder on this computer.",
+  ),
   export_no_database: copy(
     "Non trovo il database della squadra dove l’app lo cerca, quindi non ho salvato nessun file: un file vuoto sembrerebbe una squadra senza dati.",
     "Controlla che la squadra sia stata avviata almeno una volta e che il suo database sia nella posizione predefinita, poi riprova.",
