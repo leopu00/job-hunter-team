@@ -9,8 +9,8 @@ import type { Locale } from "@/i18n/config";
  */
 const it = {
   title: "Cosa è successo",
-  whereLocal: "Le statistiche stanno su questo computer; si conservano al massimo {days} giorni.",
-  whereVps: "Le statistiche stanno sulla VPS della squadra; si conservano al massimo {days} giorni.",
+  whereLocal: "Le statistiche stanno su questo computer; si conservano al massimo {days} giorni. JHT non le invia ad alcun servizio.",
+  whereVps: "Le statistiche stanno sulla VPS della squadra; si conservano al massimo {days} giorni. JHT non le invia ad alcun servizio.",
   loading: "Leggo le statistiche…",
   retry: "Riprova",
   readFailed: "Non riesco a leggere le statistiche.",
@@ -48,8 +48,8 @@ export type WorkStatsText = typeof it;
 
 const en: WorkStatsText = {
   title: "What happened",
-  whereLocal: "The statistics are kept on this computer; they are kept for {days} days at most.",
-  whereVps: "The statistics are kept on the team's VPS; they are kept for {days} days at most.",
+  whereLocal: "The statistics are kept on this computer; they are kept for {days} days at most. JHT does not send them to any service.",
+  whereVps: "The statistics are kept on the team's VPS; they are kept for {days} days at most. JHT does not send them to any service.",
   loading: "Reading the statistics…",
   retry: "Try again",
   readFailed: "Cannot read the statistics.",
@@ -85,8 +85,8 @@ const en: WorkStatsText = {
 
 const de: WorkStatsText = {
   title: "Was passiert ist",
-  whereLocal: "Die Statistiken liegen auf diesem Computer; sie bleiben höchstens {days} Tage erhalten.",
-  whereVps: "Die Statistiken liegen auf der VPS des Teams; sie bleiben höchstens {days} Tage erhalten.",
+  whereLocal: "Die Statistiken liegen auf diesem Computer; sie bleiben höchstens {days} Tage erhalten. JHT sendet sie an keinen Dienst.",
+  whereVps: "Die Statistiken liegen auf der VPS des Teams; sie bleiben höchstens {days} Tage erhalten. JHT sendet sie an keinen Dienst.",
   loading: "Ich lese die Statistiken…",
   retry: "Erneut versuchen",
   readFailed: "Die Statistiken lassen sich nicht lesen.",
@@ -122,8 +122,8 @@ const de: WorkStatsText = {
 
 const fr: WorkStatsText = {
   title: "Ce qui s’est passé",
-  whereLocal: "Les statistiques sont gardées sur cet ordinateur ; elles sont conservées {days} jours au plus.",
-  whereVps: "Les statistiques sont gardées sur la VPS de l’équipe ; elles sont conservées {days} jours au plus.",
+  whereLocal: "Les statistiques sont gardées sur cet ordinateur ; elles sont conservées {days} jours au plus. JHT ne les envoie à aucun service.",
+  whereVps: "Les statistiques sont gardées sur la VPS de l’équipe ; elles sont conservées {days} jours au plus. JHT ne les envoie à aucun service.",
   loading: "Je lis les statistiques…",
   retry: "Réessayer",
   readFailed: "Impossible de lire les statistiques.",
@@ -159,8 +159,8 @@ const fr: WorkStatsText = {
 
 const es: WorkStatsText = {
   title: "Qué ha pasado",
-  whereLocal: "Las estadísticas se guardan en este ordenador; se conservan {days} días como máximo.",
-  whereVps: "Las estadísticas se guardan en la VPS del equipo; se conservan {days} días como máximo.",
+  whereLocal: "Las estadísticas se guardan en este ordenador; se conservan {days} días como máximo. JHT no las envía a ningún servicio.",
+  whereVps: "Las estadísticas se guardan en la VPS del equipo; se conservan {days} días como máximo. JHT no las envía a ningún servicio.",
   loading: "Leyendo las estadísticas…",
   retry: "Reintentar",
   readFailed: "No se pueden leer las estadísticas.",
@@ -196,8 +196,8 @@ const es: WorkStatsText = {
 
 const pt: WorkStatsText = {
   title: "O que aconteceu",
-  whereLocal: "As estatísticas ficam neste computador; guardam-se no máximo {days} dias.",
-  whereVps: "As estatísticas ficam na VPS da equipe; guardam-se no máximo {days} dias.",
+  whereLocal: "As estatísticas ficam neste computador; guardam-se no máximo {days} dias. O JHT não as envia a nenhum serviço.",
+  whereVps: "As estatísticas ficam na VPS da equipe; guardam-se no máximo {days} dias. O JHT não as envia a nenhum serviço.",
   loading: "A ler as estatísticas…",
   retry: "Tentar de novo",
   readFailed: "Não é possível ler as estatísticas.",
@@ -233,8 +233,8 @@ const pt: WorkStatsText = {
 
 const hu: WorkStatsText = {
   title: "Mi történt",
-  whereLocal: "A statisztikák ezen a számítógépen vannak; legfeljebb {days} napig őrizzük meg őket.",
-  whereVps: "A statisztikák a csapat VPS-én vannak; legfeljebb {days} napig őrizzük meg őket.",
+  whereLocal: "A statisztikák ezen a számítógépen vannak; legfeljebb {days} napig őrizzük meg őket. A JHT egyetlen szolgáltatásnak sem küldi el őket.",
+  whereVps: "A statisztikák a csapat VPS-én vannak; legfeljebb {days} napig őrizzük meg őket. A JHT egyetlen szolgáltatásnak sem küldi el őket.",
   loading: "A statisztikák beolvasása…",
   retry: "Újra",
   readFailed: "A statisztikák nem olvashatók.",

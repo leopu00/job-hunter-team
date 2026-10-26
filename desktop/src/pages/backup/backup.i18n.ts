@@ -12,7 +12,7 @@ const it = {
   intro: "Una copia dei dati della squadra in un file che salvi sul tuo computer, dove vuoi tu. Non cambia i dati della squadra: mentre lavora usa un po’ di spazio e di processore in una cartella temporanea, che toglie alla fine.",
   back: "Impostazioni",
   warning:
-    "Il backup non è cifrato e contiene dati personali (profilo, chat, documenti delle candidature): tienilo al sicuro. Le chiavi dei provider, gli accessi, i token del cloud e i registri non entrano. Le chat e i documenti sono copiati così come sono: se ci hai scritto una password, sta nel file.",
+    "Il backup non è cifrato e contiene dati personali (profilo, chat, documenti delle candidature): tienilo al sicuro. Le chiavi dei provider, gli accessi, i token del cloud e i registri non entrano. Le chat e i documenti sono copiati così come sono: se ci hai scritto una password, sta nel file. Contiene anche le statistiche degli orari di lavoro: numeri per ora, senza testi di annunci.",
   createTitle: "Crea un backup",
   createText: "Il database della squadra, il profilo, le chat e i documenti delle candidature. Ti chiedo dove salvare il file.",
   createButton: "Crea il backup",
@@ -47,7 +47,7 @@ const en: BackupText = {
   intro: "A copy of the team's data in a file you save on your computer, where you choose. It does not change the team's data: while it works it uses some space and processor time in a temporary folder, which it removes at the end.",
   back: "Settings",
   warning:
-    "The backup is not encrypted and contains personal data (profile, chats, application documents): keep it safe. Provider keys, sign-ins, cloud tokens and logs are not included. Chats and documents are copied as they are: if you wrote a password in them, it is in the file.",
+    "The backup is not encrypted and contains personal data (profile, chats, application documents): keep it safe. Provider keys, sign-ins, cloud tokens and logs are not included. Chats and documents are copied as they are: if you wrote a password in them, it is in the file. It also holds the working-hours statistics: numbers per hour, no ad text.",
   createTitle: "Make a backup",
   createText: "The team's database, the profile, the chats and the application documents. I ask where to save the file.",
   createButton: "Make the backup",
@@ -80,7 +80,7 @@ const de: BackupText = {
   intro: "Eine Kopie der Teamdaten in einer Datei, die du auf deinem Computer speicherst, wo du willst. Das ändert keine Daten des Teams: Während der Arbeit belegt es etwas Platz und Prozessorzeit in einem temporären Ordner, den es am Ende entfernt.",
   back: "Einstellungen",
   warning:
-    "Das Backup ist nicht verschlüsselt und enthält persönliche Daten (Profil, Chats, Bewerbungsunterlagen): Bewahre es sicher auf. Anbieter-Schlüssel, Anmeldungen, Cloud-Token und Protokolle sind nicht enthalten. Chats und Dokumente werden so kopiert, wie sie sind: Wenn du darin ein Passwort geschrieben hast, steht es in der Datei.",
+    "Das Backup ist nicht verschlüsselt und enthält persönliche Daten (Profil, Chats, Bewerbungsunterlagen): Bewahre es sicher auf. Anbieter-Schlüssel, Anmeldungen, Cloud-Token und Protokolle sind nicht enthalten. Chats und Dokumente werden so kopiert, wie sie sind: Wenn du darin ein Passwort geschrieben hast, steht es in der Datei. Es enthält auch die Statistiken der Arbeitszeiten: Zahlen pro Stunde, keine Anzeigentexte.",
   createTitle: "Backup erstellen",
   createText: "Die Datenbank des Teams, das Profil, die Chats und die Bewerbungsunterlagen. Ich frage, wo die Datei gespeichert wird.",
   createButton: "Backup erstellen",
@@ -113,7 +113,7 @@ const fr: BackupText = {
   intro: "Une copie des données de l’équipe dans un fichier que tu enregistres sur ton ordinateur, où tu veux. Cela ne change pas les données de l’équipe : pendant le travail, elle utilise un peu d’espace et de processeur dans un dossier temporaire, qu’elle supprime à la fin.",
   back: "Paramètres",
   warning:
-    "La sauvegarde n’est pas chiffrée et contient des données personnelles (profil, discussions, documents de candidature) : garde-la en lieu sûr. Les clés des fournisseurs, les connexions, les jetons cloud et les journaux n’y entrent pas. Les discussions et les documents sont copiés tels quels : si tu y as écrit un mot de passe, il est dans le fichier.",
+    "La sauvegarde n’est pas chiffrée et contient des données personnelles (profil, discussions, documents de candidature) : garde-la en lieu sûr. Les clés des fournisseurs, les connexions, les jetons cloud et les journaux n’y entrent pas. Les discussions et les documents sont copiés tels quels : si tu y as écrit un mot de passe, il est dans le fichier. Elle contient aussi les statistiques des horaires de travail : des chiffres par heure, aucun texte d’annonce.",
   createTitle: "Créer une sauvegarde",
   createText: "La base de données de l’équipe, le profil, les discussions et les documents de candidature. Je te demande où enregistrer le fichier.",
   createButton: "Créer la sauvegarde",
@@ -146,7 +146,7 @@ const es: BackupText = {
   intro: "Una copia de los datos del equipo en un archivo que guardas en tu ordenador, donde elijas. No cambia los datos del equipo: mientras trabaja usa algo de espacio y de procesador en una carpeta temporal, que borra al final.",
   back: "Ajustes",
   warning:
-    "La copia no está cifrada y contiene datos personales (perfil, chats, documentos de las candidaturas): guárdala en un lugar seguro. Las claves de los proveedores, los accesos, los tokens de la nube y los registros no entran. Los chats y los documentos se copian tal cual: si escribiste en ellos una contraseña, está en el archivo.",
+    "La copia no está cifrada y contiene datos personales (perfil, chats, documentos de las candidaturas): guárdala en un lugar seguro. Las claves de los proveedores, los accesos, los tokens de la nube y los registros no entran. Los chats y los documentos se copian tal cual: si escribiste en ellos una contraseña, está en el archivo. También incluye las estadísticas de los horarios de trabajo: números por hora, sin textos de anuncios.",
   createTitle: "Crear una copia",
   createText: "La base de datos del equipo, el perfil, los chats y los documentos de las candidaturas. Te pregunto dónde guardar el archivo.",
   createButton: "Crear la copia",
@@ -179,7 +179,7 @@ const pt: BackupText = {
   intro: "Uma cópia dos dados da equipa num ficheiro que guardas no teu computador, onde escolheres. Não altera os dados da equipa: enquanto trabalha usa algum espaço e processador numa pasta temporária, que remove no fim.",
   back: "Configurações",
   warning:
-    "A cópia não está cifrada e contém dados pessoais (perfil, conversas, documentos das candidaturas): guarda-a em segurança. As chaves dos fornecedores, os acessos, os tokens da nuvem e os registos não entram. As conversas e os documentos são copiados tal como estão: se escreveste lá uma palavra-passe, ela está no ficheiro.",
+    "A cópia não está cifrada e contém dados pessoais (perfil, conversas, documentos das candidaturas): guarda-a em segurança. As chaves dos fornecedores, os acessos, os tokens da nuvem e os registos não entram. As conversas e os documentos são copiados tal como estão: se escreveste lá uma palavra-passe, ela está no ficheiro. Inclui também as estatísticas dos horários de trabalho: números por hora, sem textos de anúncios.",
   createTitle: "Criar uma cópia",
   createText: "A base de dados da equipa, o perfil, as conversas e os documentos das candidaturas. Pergunto onde guardar o ficheiro.",
   createButton: "Criar a cópia",
@@ -212,7 +212,7 @@ const hu: BackupText = {
   intro: "A csapat adatainak másolata egy fájlban, amelyet a saját számítógépedre mentesz, ahová akarod. Nem változtatja meg a csapat adatait: munka közben egy kis helyet és processzoridőt használ egy ideiglenes mappában, amelyet a végén töröl.",
   back: "Beállítások",
   warning:
-    "A mentés nincs titkosítva, és személyes adatokat tartalmaz (profil, beszélgetések, jelentkezési dokumentumok): tartsd biztonságban. A szolgáltatói kulcsok, a bejelentkezések, a felhőtokenek és a naplók nem kerülnek bele. A beszélgetések és a dokumentumok úgy másolódnak, ahogy vannak: ha jelszót írtál beléjük, az benne lesz a fájlban.",
+    "A mentés nincs titkosítva, és személyes adatokat tartalmaz (profil, beszélgetések, jelentkezési dokumentumok): tartsd biztonságban. A szolgáltatói kulcsok, a bejelentkezések, a felhőtokenek és a naplók nem kerülnek bele. A beszélgetések és a dokumentumok úgy másolódnak, ahogy vannak: ha jelszót írtál beléjük, az benne lesz a fájlban. A munkaidő-statisztikákat is tartalmazza: óránkénti számok, hirdetésszövegek nélkül.",
   createTitle: "Mentés készítése",
   createText: "A csapat adatbázisa, a profil, a beszélgetések és a jelentkezési dokumentumok. Megkérdezem, hová mentsem a fájlt.",
   createButton: "Mentés készítése",
