@@ -1090,6 +1090,29 @@ def test_up_starts_a_stopped_container_of_ours_instead_of_refusing_it(tmp_path: 
     assert len(real_up) == 1
 
 
+def test_upgrade_with_a_stopped_team_of_ours_counts_it_as_absent_and_never_asks_for_volumes(tmp_path: Path):
+    # Decision: an upgrade with the team stopped takes the baseline as «absent» (nothing runs, nothing to put
+    # back) and goes on; the stopped container is not a reason to refuse. The app is told the team is «ferma»,
+    # not «non-installata», and a failed upgrade removes the new container without ever touching the volumes.
+    wrapper, env, podman_log, create_marker = _runtime(tmp_path)
+    env["JHT_FIXTURE_CONTAINER_CASE"] = "stale"
+
+    result = _run(wrapper, env, "upgrade", "--apply", "--json")
+
+    report = json.loads(result.stdout)
+    assert report["message"] != "Container esistente non attestabile"
+    assert report["phase"] != "preflight"
+    assert report["previous"] == {"version": "ferma", "image": "none"}
+    assert report["rolledBack"] is False
+    compose_calls = [args for _, args in _actual_compose_calls(env)]
+    assert any("up" in args and "--dry-run" not in args for args in compose_calls)
+    rollback = [args for args in compose_calls if "rm" in args]
+    assert rollback and all(args[-2:] == ["-sf", "jht"] for args in rollback)
+    assert not any(
+        flag in args for args in compose_calls for flag in ("-v", "--volumes", "-fsv", "-sfv")
+    )
+
+
 def test_up_creates_only_when_precheck_finds_no_existing_project_container(
     tmp_path: Path,
 ):
