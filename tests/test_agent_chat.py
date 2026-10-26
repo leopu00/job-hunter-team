@@ -91,6 +91,7 @@ if [ "$1" = --flush-ours ]; then
   # The transport's mode that submits a text of OURS left in the composer: recorded apart from the deliveries.
   printf '%s\\n' "$2" >> "$FAKE_TMUX_STATE/flush.sessions"
   if [ "${FAKE_FLUSH_CLEARS:-0}" = 1 ]; then rm -f "$FAKE_TMUX_STATE/screen"; : > "$FAKE_TMUX_STATE/composer"; fi
+  [ -z "$FAKE_FLUSH_ERR" ] || printf '%s\\n' "$FAKE_FLUSH_ERR" >&2
   exit "${FAKE_FLUSH_RC:-130}"
 fi
 sleep "${FAKE_DELIVERY_SLEEP:-0}"
@@ -829,6 +830,20 @@ def test_what_the_transport_cannot_flush_is_the_closed_code_the_chat_would_have_
     assert answer == {"error": closed}
     assert _flush_calls(box) == ["CAPITANO"]
     _nothing_happened(box)
+
+
+def test_an_old_transport_that_takes_the_flag_for_a_session_name_leaves_the_draft_a_draft(box):
+    box.stub_delivery()
+    (box.state / "screen").write_text(TEXT_ALREADY_TYPED, encoding="utf-8")
+    # what the transport of master-arthur really prints for `--flush-ours X`: rc 2, the flag as the session
+    old = "jht-tmux-send: sessione '--flush-ours' non esiste"
+    code, answer = box.run("send", "capitano", "id-old-transport", stdin="1", FAKE_FLUSH_RC="2", FAKE_FLUSH_ERR=old)
+    assert answer == {"error": "composer_has_text"}
+    _nothing_happened(box)
+    # the same rc 2 with an ordinary message is the agent's session being gone
+    gone = "jht-tmux-send: sessione 'CAPITANO' non esiste"
+    code, answer = box.run("send", "capitano", "id-gone", stdin="1", FAKE_FLUSH_RC="2", FAKE_FLUSH_ERR=gone)
+    assert answer == {"error": "agent_unavailable"}
 
 
 def test_the_flush_is_tried_once_and_only_for_text(box):

@@ -914,6 +914,10 @@ def flush_ours(session: str) -> None:
         raise Refusal("composer_has_text")
     if done.returncode == 0:
         return
+    if done.returncode == 2 and b"'--flush-ours'" in (done.stderr or b""):
+        # A transport without the mode takes the flag for a session name and answers «no such session»:
+        # that is not the agent being gone, it is an old transport; the draft stays a draft.
+        raise Refusal("composer_has_text")
     raise Refusal(FLUSH_EXIT.get(done.returncode, "composer_has_text"))
 
 
