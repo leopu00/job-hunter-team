@@ -4970,6 +4970,65 @@ fn woken_before_resume(
     read()
 }
 
+/// Turns the runtime of this computer on again (`jht up`: the Podman machine and the container, then the check
+/// the setup makes). It does not start the team itself, but the container's first process does at every boot unless
+/// the halt gate stands (`keep_team_halted` first, for the wake on its own). The scope is validated at every call
+/// of the wrapper.
+fn wake_local_runtime(
+    app: &tauri::AppHandle,
+    scope: &AccountScope,
+    log: Option<&RuntimeLog>,
+) -> Result<(), OnboardingError> {
+    let wrapper = wrapper_path(app).ok_or_else(|| failure("runtime_missing"))?;
+    start_and_verify_local_container_with(
+        |operation, timeout| run_scoped_local_logged(app, scope, &wrapper, operation, timeout, log),
+        thread::sleep,
+        LOCAL_CONTAINER_VERIFY_ATTEMPTS,
+    )
+    .map_err(|error| with_cause(error, log))
+}
+
+/// The wake on its own (the app open without the team): only this computer's runtime can be turned on from here;
+/// for a VPS or a saved team it is the refusal the resume start gives. The halt gate is put down first and the wake
+/// does not run without it: at every boot the container's first process starts the assistant, the captain, the
+/// mentor and the sentinel unless `.team-halted.flag` stands in the home, and a team that was running before the
+/// runtime went off has no gate.
+fn runtime_wake_for(
+    local: bool,
+    keep_halted: impl FnOnce() -> Result<(), OnboardingError>,
+    wake: impl FnOnce() -> Result<(), OnboardingError>,
+) -> Result<(), OnboardingError> {
+    if !local {
+        return Err(failure("resume_container_not_ready"));
+    }
+    keep_halted()?;
+    wake()
+}
+
+/// Puts the halt gate in the home of the runtime if it is not there (an existing one is left as it is). Only
+/// `jht team start` takes it away (the resume start of the team does), so the wake leaves the team off.
+fn keep_team_halted(home: &Path) -> Result<(), OnboardingError> {
+    use std::io::Write;
+    let gate = home.join(".team-halted.flag");
+    let mut open = std::fs::OpenOptions::new();
+    open.write(true).create_new(true);
+    // Like the file the container writes for a stop: the owner reads and writes, the others read.
+    #[cfg(unix)]
+    std::os::unix::fs::OpenOptionsExt::mode(&mut open, 0o644);
+    match open.open(&gate) {
+        Ok(mut file) => {
+            // the umask narrows the mode of a new file: 0644 is set again, so that the gate does not turn 0600
+            #[cfg(unix)]
+            file.set_permissions(std::os::unix::fs::PermissionsExt::from_mode(0o644))
+                .map_err(|_| failure("container_start_failed"))?;
+            file.write_all(b"halted_by=desktop-open-without-team\n")
+                .map_err(|_| failure("container_start_failed"))
+        }
+        Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => Ok(()),
+        Err(_) => Err(failure("container_start_failed")),
+    }
+}
+
 fn resume_team_prerequisite(snapshot: &OnboardingSnapshot) -> Result<(), OnboardingError> {
     let missing = if !snapshot.runtime_installed {
         Some("resume_runtime_not_ready")
@@ -5584,6 +5643,50 @@ fn uninstall_local(
     Err(failure("uninstall_unsupported"))
 }
 
+/// The app is open without the team and the person asks to turn the runtime on again: the machine and the container,
+/// with the halt gate down first so that the container does not start the team on its own. One operation at a
+/// time, like the setup.
+#[tauri::command]
+pub(crate) async fn onboarding_resume_runtime_wake(
+    app: tauri::AppHandle,
+    state: State<'_, OnboardingNativeState>,
+    scopes: State<'_, AccountScopeState>,
+) -> Result<(), OnboardingError> {
+    let expected = scopes.active().map_err(failure)?;
+    if state
+        .preparing
+        .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+        .is_err()
+    {
+        return Err(failure("operation_in_progress"));
+    }
+    let scope_state = scopes.inner().clone();
+    let worker_expected = expected.clone();
+    let result = tauri::async_runtime::spawn_blocking(move || {
+        let _scope = scope_state
+            .lock_expected(&worker_expected)
+            .map_err(failure)?;
+        let host = crate::direct_chat::load_persisted_host(&app, &worker_expected).map_err(failure)?;
+        let validated = validate_host(&app, &host).map_err(failure)?;
+        let runtime_log = RuntimeLog::new(&app);
+        runtime_wake_for(
+            matches!(validated, ValidatedHost::Local),
+            || {
+                crate::account_scope::validate_local_runtime(&app, &worker_expected).map_err(failure)?;
+                let marker = crate::account_scope::local_owner_marker_path(&app).map_err(failure)?;
+                let home = marker.parent().ok_or_else(|| failure("container_start_failed"))?;
+                keep_team_halted(home)
+            },
+            || wake_local_runtime(&app, &worker_expected, runtime_log.as_ref()),
+        )
+    })
+    .await
+    .unwrap_or_else(|_| Err(failure("container_start_failed")));
+    state.preparing.store(false, Ordering::Release);
+    let _scope = scopes.lock_expected(&expected).map_err(failure)?;
+    result
+}
+
 #[tauri::command]
 pub(crate) async fn onboarding_resume_team_start(
     app: tauri::AppHandle,
@@ -5620,17 +5723,7 @@ pub(crate) async fn onboarding_resume_team_start(
                 let before = woken_before_resume(
                     before,
                     matches!(validated, ValidatedHost::Local),
-                    || {
-                        let wrapper = wrapper_path(&app).ok_or_else(|| failure("runtime_missing"))?;
-                        start_and_verify_local_container_with(
-                            |operation, timeout| {
-                                run_scoped_local_logged(&app, &worker_expected, &wrapper, operation, timeout, runtime_log.as_ref())
-                            },
-                            thread::sleep,
-                            LOCAL_CONTAINER_VERIFY_ATTEMPTS,
-                        )
-                        .map_err(|error| with_cause(error, runtime_log.as_ref()))
-                    },
+                    || wake_local_runtime(&app, &worker_expected, runtime_log.as_ref()),
                     || snapshot_impl(&app, &worker_expected, &validated),
                 )?;
                 resume_team_prerequisite(&before)?;
@@ -5745,7 +5838,7 @@ mod tests {
         assistant_reached, existing_team_probe_with, existing_team_readonly_probe_with, expected_installer_digest, failure,
         parse_snapshot, parse_start_limits, parse_verified_snapshot, provider_bootstrap_input,
         native_team_snapshot_with, redact, resume_team_prerequisite, start_and_verify_local_container_with, start_limits_gate,
-        with_local_host, woken_before_resume,
+        with_local_host, woken_before_resume, runtime_wake_for, keep_team_halted,
         valid_interactive_request_id, valid_pairing_token, valid_provider_login_input,
         valid_wrapper_file, with_start_limits, write_provider_input, ExistingTeamConnectRequest,
         InteractiveStateDetector, LocalCliOperation, OnboardingDiagnosticHostKind,
@@ -7960,6 +8053,83 @@ exit 0
         let (result, woken, read) = calls(super::OnboardingSnapshot::default(), true, false);
         assert_eq!(resume_team_prerequisite(&result.unwrap()).unwrap_err().code, "resume_runtime_not_ready");
         assert_eq!((woken, read), (0, 0));
+    }
+
+    /// The wake on its own: this computer's runtime is turned on, a failure is its own error, and a VPS or a
+    /// saved team is refused without anything being run.
+    #[test]
+    fn the_runtime_wake_runs_only_for_this_computer() {
+        use std::cell::Cell;
+        let ran = Cell::new(0);
+        let gated = Cell::new(0);
+        let gate = || { gated.set(gated.get() + 1); Ok(()) };
+        runtime_wake_for(true, gate, || { ran.set(ran.get() + 1); Ok(()) }).unwrap();
+        assert_eq!((ran.get(), gated.get()), (1, 1));
+        let error = runtime_wake_for(true, gate, || Err(failure("container_not_ready"))).unwrap_err();
+        assert_eq!(error.code, "container_not_ready");
+        let refused = runtime_wake_for(false, gate, || { ran.set(ran.get() + 1); Ok(()) }).unwrap_err();
+        assert_eq!(refused.code, "resume_container_not_ready");
+        assert_eq!((ran.get(), gated.get()), (1, 2), "a VPS is never woken nor gated from here");
+    }
+
+    /// The container's first process starts four agents at every boot unless the halt gate stands: the gate is
+    /// down BEFORE the wake runs (the wake reads it, as the boot does), and a gate that cannot be put down
+    /// stops the wake.
+    #[test]
+    fn the_wake_puts_the_halt_gate_down_before_it_runs_and_not_without_it() {
+        let home = std::env::temp_dir().join(format!("jht-wake-gate-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&home);
+        std::fs::create_dir_all(&home).unwrap();
+        let gate = home.join(".team-halted.flag");
+        let at_boot = std::cell::Cell::new(None);
+        runtime_wake_for(true, || keep_team_halted(&home), || {
+            at_boot.set(Some(gate.exists()));
+            Ok(())
+        })
+        .unwrap();
+        assert_eq!(at_boot.get(), Some(true), "no gate at the boot = the four agents start");
+        // `jht team start` takes the gate away from inside the container, and removing a file is the permission of
+        // the home it stands in, which the container already writes: the gate must belong to the same owner as
+        // that home (the same mapping of the user on the Podman machine) and be a plain file.
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::{MetadataExt, PermissionsExt};
+            let (gate_meta, home_meta) = (std::fs::symlink_metadata(&gate).unwrap(), std::fs::metadata(&home).unwrap());
+            assert!(gate_meta.file_type().is_file());
+            assert_eq!(gate_meta.uid(), home_meta.uid());
+            assert_eq!(gate_meta.permissions().mode() & 0o777, 0o644);
+            assert_eq!(home_meta.permissions().mode() & 0o1000, 0, "a sticky home would keep the file from other owners");
+        }
+        // an existing gate is left as it is
+        std::fs::write(&gate, "halted_by=stop\n").unwrap();
+        keep_team_halted(&home).unwrap();
+        assert_eq!(std::fs::read_to_string(&gate).unwrap(), "halted_by=stop\n");
+        // a gate that cannot be written: the wake does not run
+        let missing = home.join("no-such-home");
+        let ran = std::cell::Cell::new(false);
+        let error = runtime_wake_for(true, || keep_team_halted(&missing), || { ran.set(true); Ok(()) }).unwrap_err();
+        assert_eq!(error.code, "container_start_failed");
+        assert!(!ran.get());
+        let _ = std::fs::remove_dir_all(&home);
+    }
+
+    /// A strict umask (077) narrows the mode of a new file to 0600: the gate is set to 0644 again, so that the
+    /// container, which is another user for the files of the home, can read and remove it.
+    #[cfg(unix)]
+    #[test]
+    fn the_halt_gate_is_0644_even_with_a_strict_umask() {
+        use std::os::unix::fs::PermissionsExt;
+        let home = std::env::temp_dir().join(format!("jht-wake-gate-umask-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&home);
+        std::fs::create_dir_all(&home).unwrap();
+        // SAFETY: umask only changes the mask of this process; it is put back right after the gate is written.
+        let before = unsafe { libc::umask(0o077) };
+        let written = keep_team_halted(&home);
+        unsafe { libc::umask(before) };
+        written.unwrap();
+        let mode = std::fs::metadata(home.join(".team-halted.flag")).unwrap().permissions().mode();
+        assert_eq!(mode & 0o777, 0o644);
+        let _ = std::fs::remove_dir_all(&home);
     }
 
     #[test]

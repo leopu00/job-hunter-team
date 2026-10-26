@@ -2,6 +2,8 @@ import { useState } from "react";
 import { appLocale } from "../../lib/app-locale";
 import { buildAccountExport } from "../../lib/account-export";
 import { describeError } from "../../lib/error-catalog";
+import { useTeamOff, type TeamOff } from "../../lib/team-off";
+import { teamOffFailure } from "../../shell/team-off-failure";
 import { pluralText } from "../../lib/plural";
 import { fill } from "../../lib/text-slots";
 import { EXPORT_FORMATS, EXPORT_SOURCES, exportTeamData, saveAccountExport, type ExportFormat, type ExportOutcome, type ExportSource } from "../../lib/team-export";
@@ -20,7 +22,9 @@ const SOURCE_KEY = {
 
 type Say = { ok: boolean; text: string };
 
-function failureText(code: string): string {
+function failureText(code: string, teamOff: TeamOff | null = null): string {
+  const needsRuntime = teamOffFailure(code, teamOff, appLocale());
+  if (needsRuntime) return needsRuntime;
   const copy = describeError(code, { fallback: "read_failed", locale: appLocale() });
   return `${copy.text} ${copy.action}`;
 }
@@ -31,8 +35,8 @@ const buttonCls =
   "text-[11px] font-semibold uppercase tracking-widest px-3 py-1.5 rounded border border-[var(--color-green)] text-[var(--color-green)] disabled:opacity-40 disabled:cursor-default";
 
 /** What the person is told of a save: a cancelled window is not an error. */
-function outcomeText(t: ExportText, done: ExportOutcome): Say {
-  if (!done.ok) return { ok: false, text: failureText(done.error) };
+function outcomeText(t: ExportText, done: ExportOutcome, teamOff: TeamOff | null = null): Say {
+  if (!done.ok) return { ok: false, text: failureText(done.error, teamOff) };
   if (done.outcome === "cancelled") return { ok: true, text: t.cancelled };
   return { ok: true, text: done.count === undefined ? t.savedNoCount : pluralText(appLocale(), done.count, t.saved) };
 }
@@ -43,6 +47,7 @@ function outcomeText(t: ExportText, done: ExportOutcome): Say {
  * Exporting only reads, so it is offered in the read-only view too.
  */
 export default function ExportPage(_props: PageProps) {
+  const teamOff = useTeamOff();
   const locale = appLocale();
   const t = EXPORT_TEXT[locale];
   const [source, setSource] = useState<ExportSource>("positions");
@@ -59,7 +64,7 @@ export default function ExportPage(_props: PageProps) {
     setBusy(true);
     setTeamSay(null);
     const done = await exportTeamData({ source, format, ...(from ? { from } : {}), ...(to ? { to } : {}) });
-    setTeamSay(outcomeText(t, done));
+    setTeamSay(outcomeText(t, done, teamOff));
     setBusy(false);
   }
 
@@ -80,7 +85,7 @@ export default function ExportPage(_props: PageProps) {
               : t.accountUnreadable,
       });
     } else {
-      setAccountSay(outcomeText(t, await saveAccountExport(built.text)));
+      setAccountSay(outcomeText(t, await saveAccountExport(built.text), teamOff));
     }
     setAccountBusy(false);
   }

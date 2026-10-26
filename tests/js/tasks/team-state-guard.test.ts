@@ -12,13 +12,26 @@
  * reconcile and reconcileEmergencyStop run for real, with a fake network and a
  * fake `jht`: the assertions are on what was run.
  */
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { mkdtempSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { existsSync, mkdtempSync, rmSync } from "node:fs";
+import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import { MAX_AGE_MS, createDoneStore } from "../../../cli/src/lib/team-command-guard.js";
 import { reconcile, reconcileEmergencyStop } from "../../../cli/src/lib/team-state-reconciler.js";
 import { readRendezvousState } from "../../../cli/src/commands/cloud.js";
+
+// The reconciler works out where the halt gate goes when it is imported: JHT_HOME is put in a temporary folder
+// before the imports run (vi.hoisted goes first), or a fake stop that works would write the real ~/.jht.
+const SANDBOX_HOME = await vi.hoisted(async () => {
+  const { mkdtempSync } = await import("node:fs");
+  const { tmpdir } = await import("node:os");
+  const { join } = await import("node:path");
+  const home = mkdtempSync(join(tmpdir(), "team-state-guard-home-"));
+  process.env.JHT_HOME = home;
+  return home;
+});
+
+afterAll(() => rmSync(SANDBOX_HOME, { recursive: true, force: true }));
 
 const OWNER = "11111111-1111-4111-8111-111111111111";
 const OTHER = "22222222-2222-4222-8222-222222222222";
@@ -141,6 +154,14 @@ describe("the box on team_state", () => {
   });
 
   // ── stop: the safe direction ──────────────────────────────────────────────
+  it("puts the halt gate of a stop in the sandbox home and never in the real one", async () => {
+    expect(process.env.JHT_HOME).toBe(SANDBOX_HOME);
+    expect(SANDBOX_HOME).not.toBe(join(homedir(), ".jht"));
+    rmSync(join(SANDBOX_HOME, ".team-halted.flag"), { force: true });
+    expect(await converge(state({ should_run: false, is_running: true }))).toBe("stopped");
+    expect(existsSync(join(SANDBOX_HOME, ".team-halted.flag"))).toBe(true);
+  });
+
   it("stops however old the desire, on its own user's row", async () => {
     const row = state({ should_run: false, is_running: true, desired_changed_at: undefined });
     expect(await converge(row)).toBe("stopped");

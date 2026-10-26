@@ -46,6 +46,7 @@ import {
   sendOnboardingProviderInput,
   startOnboardingProviderLogin,
   startOnboardingTeam,
+  wakeRuntime,
 } from "../lib/onboarding-runtime";
 import { DASHBOARD_PAGE, goTo, LOGIN_PAGE } from "../lib/pages";
 import { signOut, useSession } from "../lib/supabase";
@@ -82,6 +83,7 @@ vi.mock("../lib/onboarding-runtime", () => ({
   recreateOnboardingPodmanMachine: vi.fn(),
   resumeOnboardingSnapshot: vi.fn(),
   resumeOnboardingTeamStart: vi.fn(),
+  wakeRuntime: vi.fn(),
   sendOnboardingProviderInput: vi.fn(),
   startOnboardingProviderLogin: vi.fn(),
   startOnboardingTeam: vi.fn(),
@@ -127,6 +129,7 @@ vi.mock("../shell/Shell", async () => {
   const { useReconfirmExistingTeam } = await import("../lib/reconfirm-existing-team");
   const { useConnectTeam } = await import("../lib/connect-team");
   const { useProviderSetup } = await import("../lib/provider-setup");
+  const { useTeamOff } = await import("../lib/team-off");
   const ready = (profileReady: boolean) => ({
     runtimeInstalled: true, containerRunning: true, providerConfigured: true, providerAuthenticated: true,
     assistantRunning: true, captainRunning: true, profileReady, assistantWelcomed: false, directChatReady: false,
@@ -138,6 +141,8 @@ vi.mock("../shell/Shell", async () => {
     const connectTeam = useConnectTeam();
     // What Settings › Provider reaches: only the Shell of the team of this computer has it.
     const providerSetup = useProviderSetup();
+    // What the team-off banner reaches: the way back to «start the team».
+    const teamOff = useTeamOff();
     return (
       <main data-testid="shell">
         Shell
@@ -148,6 +153,8 @@ vi.mock("../shell/Shell", async () => {
         {reconfirm && <button type="button" onClick={() => void reconfirm.onConnected(ready(true))}>reconfirm-connected</button>}
         {reconfirm && <button type="button" onClick={reconfirm.onSetup}>reconfirm-setup</button>}
         {providerSetup && <button type="button" onClick={providerSetup.open}>open-provider-setup</button>}
+        {teamOff?.startTeam && <button type="button" onClick={teamOff.startTeam}>team-off-start</button>}
+        {teamOff && <button type="button" onClick={() => void teamOff.wakeRuntime().catch(() => undefined)}>team-off-wake</button>}
       </main>
     );
   }
@@ -180,6 +187,7 @@ vi.mock("../onboarding", () => ({
         {props.runtime.status === "failed" && props.runtime.title && <p>title:{props.runtime.title}</p>}
         <button type="button" onClick={() => void props.onSubmit(SUBMISSION).catch(() => undefined)}>submit-onboarding</button>
         {props.interruption && <p>interrupted:{props.interruption.stage}:{props.interruption.provider}</p>}
+        {props.onOpenWithoutTeam && <button type="button" onClick={props.onOpenWithoutTeam}>open-without-team</button>}
         {props.onResumeInterrupted && <button type="button" onClick={() => void props.onResumeInterrupted?.().catch(() => undefined)}>resume-interrupted</button>}
         {props.onDiscardInterruption && <button type="button" onClick={() => props.onDiscardInterruption?.()}>discard-interruption</button>}
         <button type="button" onClick={() => void props.onSubmit(SUBMISSION_VPS).catch(() => undefined)}>submit-vps</button>
@@ -1958,6 +1966,107 @@ describe("DashboardApp onboarding router", () => {
     // the person starts it: the native resume wakes the runtime and starts the team
     await user.click(screen.getByRole("button", { name: "continue-runtime" }));
     await waitFor(() => expect(resumeOnboardingTeamStart).toHaveBeenCalledOnce());
+  });
+
+  it("opens the app without starting the team, and the setup is not finished by it", async () => {
+    vi.mocked(useSession).mockReturnValue(signedInAs("team-off-account"));
+    vi.mocked(loadOnboardingGate).mockResolvedValue({
+      phase: "required",
+      account: { displayName: "Team Off" },
+      resumeAvailable: true,
+      runtime: { status: "collecting", stage: "host" },
+    });
+    vi.mocked(resumeOnboardingSnapshot).mockResolvedValue({
+      ...TEAM_READY,
+      containerRunning: false,
+      providerConfigured: false,
+      providerAuthenticated: false,
+      assistantRunning: false,
+      captainRunning: false,
+      localHost: true,
+    });
+
+    const user = userEvent.setup();
+    render(<DashboardApp />);
+
+    // the team is off and cannot (or need not) be started: the way out of the setup is offered
+    expect(await screen.findByText("action-required:team-start")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "open-without-team" }));
+
+    // the app opens; nothing started, nothing declared finished
+    expect(await screen.findByTestId("shell")).toBeInTheDocument();
+    // Backup and Export read through the chat's connection: it is opened without the team (the container is enough)
+    await waitFor(() => expect(reconnectDirectChat).toHaveBeenCalledOnce());
+    expect(screen.queryByTestId("onboarding")).not.toBeInTheDocument();
+    expect(resumeOnboardingTeamStart).not.toHaveBeenCalled();
+    expect(startOnboardingTeam).not.toHaveBeenCalled();
+    expect(prepareOnboardingRuntime).not.toHaveBeenCalled();
+    expect(markOnboardingReady).not.toHaveBeenCalled();
+  });
+
+  it("the wake of the runtime in the app without the team connects the chat afterwards, and starts no team", async () => {
+    vi.mocked(useSession).mockReturnValue(signedInAs("team-off-wake-account"));
+    vi.mocked(loadOnboardingGate).mockResolvedValue({
+      phase: "required",
+      account: { displayName: "Team Off Wake" },
+      resumeAvailable: true,
+      runtime: { status: "collecting", stage: "host" },
+    });
+    vi.mocked(resumeOnboardingSnapshot).mockResolvedValue({
+      ...TEAM_READY, containerRunning: false, providerConfigured: false, providerAuthenticated: false,
+      assistantRunning: false, captainRunning: false, localHost: true,
+    });
+    vi.mocked(wakeRuntime).mockResolvedValue(undefined);
+    // the container is down when the app opens: the first connection fails, the one after the wake works
+    vi.mocked(reconnectDirectChat).mockRejectedValueOnce({ code: "container_unavailable" });
+
+    const user = userEvent.setup();
+    render(<DashboardApp />);
+    expect(await screen.findByText("action-required:team-start")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "open-without-team" }));
+    expect(await screen.findByTestId("shell")).toBeInTheDocument();
+    await waitFor(() => expect(reconnectDirectChat).toHaveBeenCalledOnce());
+
+    await user.click(screen.getByRole("button", { name: "team-off-wake" }));
+    await waitFor(() => expect(wakeRuntime).toHaveBeenCalledOnce());
+    await waitFor(() => expect(reconnectDirectChat).toHaveBeenCalledTimes(2));
+    expect(vi.mocked(wakeRuntime).mock.invocationCallOrder[0])
+      .toBeLessThan(vi.mocked(reconnectDirectChat).mock.invocationCallOrder[1]);
+    expect(resumeOnboardingTeamStart).not.toHaveBeenCalled();
+    expect(startOnboardingTeam).not.toHaveBeenCalled();
+  });
+
+  it("goes back from the app without the team to the start-the-team screen, and starts nothing by itself", async () => {
+    vi.mocked(useSession).mockReturnValue(signedInAs("team-off-back-account"));
+    vi.mocked(loadOnboardingGate).mockResolvedValue({
+      phase: "required",
+      account: { displayName: "Team Off Back" },
+      resumeAvailable: true,
+      runtime: { status: "collecting", stage: "host" },
+    });
+    vi.mocked(resumeOnboardingSnapshot).mockResolvedValue({
+      ...TEAM_READY,
+      containerRunning: false,
+      providerConfigured: false,
+      providerAuthenticated: false,
+      assistantRunning: false,
+      captainRunning: false,
+      localHost: true,
+    });
+
+    const user = userEvent.setup();
+    render(<DashboardApp />);
+    expect(await screen.findByText("action-required:team-start")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "open-without-team" }));
+    expect(await screen.findByTestId("shell")).toBeInTheDocument();
+
+    // the banner's «start the team»: the setup's own screen again, the app closed again
+    await user.click(screen.getByRole("button", { name: "team-off-start" }));
+    expect(await screen.findByText("action-required:team-start")).toBeInTheDocument();
+    expect(screen.queryByTestId("shell")).not.toBeInTheDocument();
+    expect(resumeOnboardingTeamStart).not.toHaveBeenCalled();
+    expect(startOnboardingTeam).not.toHaveBeenCalled();
+    expect(markOnboardingReady).not.toHaveBeenCalled();
   });
 
   it("a resume of a VPS or a saved team whose container is stopped keeps the refusal: nothing here can wake it", async () => {

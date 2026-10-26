@@ -2,6 +2,8 @@ import { cleanup, render, screen, waitFor, within } from "@testing-library/react
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Locale } from "@/i18n/config";
+import { TeamOffContext } from "../../lib/team-off";
+import { TEAM_OFF_TEXT } from "../../shell/team-off.i18n";
 import { describeError } from "../../lib/error-catalog";
 import ExportPage from "./index";
 import { EXPORT_TEXT } from "./export.i18n";
@@ -158,5 +160,17 @@ describe("the export page's words", () => {
       expect(text.accountIncomplete, locale).toContain("{tables}");
     }
     expect(Object.keys(EXPORT_TEXT).sort()).toEqual(["de", "en", "es", "fr", "hu", "it", "pt"]);
+  });
+});
+
+describe("the export page in the app opened without the team", () => {
+  it("tells to turn the runtime on, not to start the team, when the container is off", async () => {
+    const user = userEvent.setup();
+    team.exportTeamData.mockResolvedValueOnce({ ok: false, error: "local_team_not_running" });
+    render(<TeamOffContext.Provider value={{ teamOff: true, wakeRuntime: vi.fn() }}><ExportPage {...props} /></TeamOffContext.Provider>);
+    await user.click(screen.getByTestId("export-team-button"));
+    const say = await screen.findByTestId("export-team-say");
+    expect(say).toHaveTextContent(TEAM_OFF_TEXT.en.needsRuntime);
+    expect(say).not.toHaveTextContent(/start the team/i);
   });
 });

@@ -155,6 +155,7 @@ pub fn run() {
             onboarding::onboarding_provider_login_input,
             onboarding::onboarding_resume_snapshot,
             onboarding::onboarding_resume_team_start,
+            onboarding::onboarding_resume_runtime_wake,
             runtime_host::onboarding_ssh_host_key_confirm,
             runtime_host::onboarding_ssh_host_key_probe,
             onboarding::onboarding_snapshot,

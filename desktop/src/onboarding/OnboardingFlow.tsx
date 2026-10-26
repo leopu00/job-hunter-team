@@ -97,7 +97,7 @@ function PathWithBreaks({ path }: { path: string }) {
   return <>{(path.match(/[^\\/]*[\\/]?/g)?.filter(Boolean) ?? [path]).map((part, index) => <Fragment key={index}>{index > 0 && <wbr />}{part}</Fragment>)}</>;
 }
 
-function RuntimeView({ host, platform, t, locale, runtime, activity, onRetry, onRestart, onExitFailure, onRuntimeAction, providerLogin, sshHostKey, onConfirmHostKey, onCancelHostKey, onProviderInput, onProviderClose, onProviderRestart, onRecreatePodmanMachine, onFreeDiskSpace, runtimeLogPath, onOpenRuntimeLog }: Pick<OnboardingFlowProps, "platform" | "runtime" | "activity" | "onRetry" | "onRestart" | "onExitFailure" | "onRuntimeAction" | "providerLogin" | "sshHostKey" | "onConfirmHostKey" | "onCancelHostKey" | "onProviderInput" | "onProviderClose" | "onProviderRestart" | "onRecreatePodmanMachine" | "onFreeDiskSpace" | "runtimeLogPath" | "onOpenRuntimeLog"> & { host: ExecutionHost; t: OnboardingCopy; locale: Locale }) {
+function RuntimeView({ host, platform, t, locale, runtime, activity, onRetry, onRestart, onExitFailure, onRuntimeAction, providerLogin, sshHostKey, onConfirmHostKey, onCancelHostKey, onProviderInput, onProviderClose, onProviderRestart, onRecreatePodmanMachine, onFreeDiskSpace, runtimeLogPath, onOpenRuntimeLog, onOpenWithoutTeam }: Pick<OnboardingFlowProps, "platform" | "runtime" | "activity" | "onRetry" | "onRestart" | "onExitFailure" | "onRuntimeAction" | "providerLogin" | "sshHostKey" | "onConfirmHostKey" | "onCancelHostKey" | "onProviderInput" | "onProviderClose" | "onProviderRestart" | "onRecreatePodmanMachine" | "onFreeDiskSpace" | "runtimeLogPath" | "onOpenRuntimeLog" | "onOpenWithoutTeam"> & { host: ExecutionHost; t: OnboardingCopy; locale: Locale }) {
   const [pending, setPending] = useState(false);
   const [confirmingRecreate, setConfirmingRecreate] = useState(false);
   const [confirmingFreeSpace, setConfirmingFreeSpace] = useState(false);
@@ -399,6 +399,12 @@ function RuntimeView({ host, platform, t, locale, runtime, activity, onRetry, on
                 {t.backToHost}
               </button>
             )}
+            {/* The team cannot start (a provider limit) or waits to be started: the app can open without it, the setup stays unfinished */}
+            {onOpenWithoutTeam && runtime.stage === "team-start" && (actionRequired || failed) && (
+              <button className="onboarding-secondary" type="button" data-testid="open-without-team" onClick={onOpenWithoutTeam} disabled={pending}>
+                {t.openWithoutTeam}
+              </button>
+            )}
             {recreatePodmanMachine && !confirmingRecreate && (
               <button className="onboarding-primary" type="button" onClick={() => setConfirmingRecreate(true)} disabled={pending}>
                 {t.recreate}<span aria-hidden="true">→</span>
@@ -440,7 +446,7 @@ function RuntimeView({ host, platform, t, locale, runtime, activity, onRetry, on
   );
 }
 
-export function OnboardingFlow({ account, onRenameLocalProfile, platform, runtime, activity, onSubmit, onConnectExistingTeam, onSignInWithGoogle, onRetry, onRestart, onExitFailure, onRuntimeAction, providerLogin, sshHostKey, onConfirmHostKey, onCancelHostKey, onProviderInput, onProviderClose, onProviderRestart, onRecreatePodmanMachine, onFreeDiskSpace, runtimeLogPath, onOpenRuntimeLog, previousLocalData = false, interruption, onResumeInterrupted, onDiscardInterruption, providerOnly, locale: localeOverride }: OnboardingFlowProps) {
+export function OnboardingFlow({ account, onRenameLocalProfile, platform, runtime, activity, onSubmit, onConnectExistingTeam, onSignInWithGoogle, onRetry, onRestart, onExitFailure, onRuntimeAction, providerLogin, sshHostKey, onConfirmHostKey, onCancelHostKey, onProviderInput, onProviderClose, onProviderRestart, onRecreatePodmanMachine, onFreeDiskSpace, runtimeLogPath, onOpenRuntimeLog, onOpenWithoutTeam, previousLocalData = false, interruption, onResumeInterrupted, onDiscardInterruption, providerOnly, locale: localeOverride }: OnboardingFlowProps) {
   const locale = localeOverride ?? appLocale();
   const t = ONBOARDING_TEXT[locale];
   const providerChoices = providers(t);
@@ -481,7 +487,7 @@ export function OnboardingFlow({ account, onRenameLocalProfile, platform, runtim
     window.scrollTo({ top: 0, left: 0, behavior: "instant" });
   }, [step, assistanceOpen]);
 
-  if (runtime.status !== "collecting") return <RuntimeView host={host} platform={platform} t={t} locale={locale} runtime={runtime} activity={activity} onRetry={onRetry} onRestart={onRestart} onExitFailure={exitFailure} onRuntimeAction={onRuntimeAction} providerLogin={providerLogin} sshHostKey={sshHostKey} onConfirmHostKey={onConfirmHostKey} onCancelHostKey={onCancelHostKey} onProviderInput={onProviderInput} onProviderClose={onProviderClose} onProviderRestart={onProviderRestart} onRecreatePodmanMachine={onRecreatePodmanMachine} onFreeDiskSpace={onFreeDiskSpace} runtimeLogPath={runtimeLogPath} onOpenRuntimeLog={onOpenRuntimeLog} />;
+  if (runtime.status !== "collecting") return <RuntimeView host={host} platform={platform} t={t} locale={locale} runtime={runtime} activity={activity} onRetry={onRetry} onRestart={onRestart} onExitFailure={exitFailure} onRuntimeAction={onRuntimeAction} providerLogin={providerLogin} sshHostKey={sshHostKey} onConfirmHostKey={onConfirmHostKey} onCancelHostKey={onCancelHostKey} onProviderInput={onProviderInput} onProviderClose={onProviderClose} onProviderRestart={onProviderRestart} onRecreatePodmanMachine={onRecreatePodmanMachine} onFreeDiskSpace={onFreeDiskSpace} runtimeLogPath={runtimeLogPath} onOpenRuntimeLog={onOpenRuntimeLog} onOpenWithoutTeam={onOpenWithoutTeam} />;
 
   if (assistanceOpen) return <main className="onboarding-shell" ref={shellRef} lang={locale}>
     <h1 ref={headingRef} tabIndex={-1}>{t.firstSetupTitle}</h1>

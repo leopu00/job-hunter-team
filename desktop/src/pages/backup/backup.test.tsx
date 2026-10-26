@@ -2,6 +2,8 @@ import { act, cleanup, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Locale } from "@/i18n/config";
+import { TeamOffContext } from "../../lib/team-off";
+import { TEAM_OFF_TEXT } from "../../shell/team-off.i18n";
 import { describeError } from "../../lib/error-catalog";
 import type { BackupProgress } from "../../lib/team-backup";
 import BackupPage, { sizeText } from "./index";
@@ -190,5 +192,33 @@ describe("the backup page's words and sizes", () => {
     expect(sizeText(1536, "en")).toBe("1.5 kB");
     expect(sizeText(2_621_440, "en")).toBe("2.5 MB");
     expect(sizeText(3 * 1024 ** 3, "en")).toBe("3 GB");
+  });
+});
+
+describe("the backup page in the app opened without the team", () => {
+  it("tells to turn the runtime on, not to start the team, when the container is off", async () => {
+    const user = userEvent.setup();
+    native.backupCreate.mockResolvedValueOnce({ ok: false, error: "local_team_not_running" });
+    render(<TeamOffContext.Provider value={{ teamOff: true, wakeRuntime: vi.fn() }}><BackupPage {...props} /></TeamOffContext.Provider>);
+    await user.click(screen.getByTestId("backup-create-button"));
+    const say = await screen.findByTestId("backup-create-say");
+    expect(say).toHaveTextContent(TEAM_OFF_TEXT.en.needsRuntime);
+    expect(say).not.toHaveTextContent(/start the team/i);
+  });
+
+  it.each(["disconnected", "container_unavailable"])("says the same for %s, the chat channel not being there", async (code) => {
+    const user = userEvent.setup();
+    native.backupInspect.mockResolvedValueOnce({ ok: false, error: code });
+    render(<TeamOffContext.Provider value={{ teamOff: true, wakeRuntime: vi.fn() }}><BackupPage {...props} /></TeamOffContext.Provider>);
+    await user.click(screen.getByTestId("backup-inspect-button"));
+    expect(await screen.findByTestId("backup-inspect-say")).toHaveTextContent(TEAM_OFF_TEXT.en.needsRuntime);
+  });
+
+  it("keeps the usual sentence in the usual app", async () => {
+    const user = userEvent.setup();
+    native.backupCreate.mockResolvedValueOnce({ ok: false, error: "local_team_not_running" });
+    render(<BackupPage {...props} />);
+    await user.click(screen.getByTestId("backup-create-button"));
+    expect(await screen.findByTestId("backup-create-say")).toHaveTextContent(describeError("local_team_not_running", { locale: "en" }).action);
   });
 });

@@ -360,3 +360,13 @@ export async function readPreviousLocalData(): Promise<boolean> {
     return false;
   }
 }
+
+/**
+ * Turns the runtime of this computer on again, without starting the team (the machine and the container, as
+ * `jht up` does and checks). A failure is a rejection with the native error code (the setup's container codes,
+ * `runtime_missing`, `resume_container_not_ready` for a host that is not this computer).
+ */
+export async function wakeRuntime(): Promise<void> {
+  if (!isTauri()) desktopOnly();
+  await invoke("onboarding_resume_runtime_wake");
+}
