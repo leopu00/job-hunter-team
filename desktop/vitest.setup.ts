@@ -1,4 +1,9 @@
 import "@testing-library/jest-dom/vitest";
+import { afterEach } from "vitest";
+import { resetRatesKept } from "./src/shell/rates-fetch";
+
+// The exchange rates are kept for a day (shell/rates-fetch): a test must not hand its rates to the next.
+afterEach(() => resetRatesKept());
 
 // jsdom has no ResizeObserver; the web components reused by the dashboard
 // measure their rows with it.
