@@ -237,3 +237,14 @@ All three candidates were normalized to a 1600×1200 sRGB WebP with alpha. Their
 content is fitted inside a 1120×840 safe box. Provider alpha was premultiplied
 before resampling to prevent transparent RGB artifacts from bleeding into the
 light and dark previews.
+
+### `provider-v3.webp`
+
+Derived from `provider-v2.webp` with no new generation, because the app now offers one provider: Codex.
+The two side medallions (Claude's asterisk and Kimi's mark), their cyan stems and the stem end dots were
+removed deterministically (OpenCV inpainting of the hair and the network, the transparent canvas restored
+around the hair), leaving the head, the network and the central stem with the OpenAI Blossom medallion,
+unchanged from `provider-v2.webp`. Same 1600×1200 sRGB WebP with alpha. `provider-v2.webp` and `provider.webp` were
+removed from `public/`, so they no longer travel in the package (their history stays in git). The OpenAI mark
+is used as in the official brand guidelines, https://openai.com/brand/: unchanged, no colour added, on a plain
+dark medallion.

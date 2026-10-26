@@ -176,18 +176,26 @@ describe("guida di setup — struttura", () => {
   it("una schermata riusata in più fasi resta un asset solo", () => {
     // È il requisito esplicito: la stessa schermata può comparire in due
     // fasi. Il registro lo garantisce per costruzione (le fasi puntano a un
-    // id), e questo test verifica che il riuso esista davvero — altrimenti
-    // nessuno si accorge se qualcuno torna a duplicare l'asset.
-    const uses = new Map<string, number>();
+    // id e non portano mai un file), e questo test verifica proprio quello —
+    // altrimenti nessuno si accorge se qualcuno torna a duplicare l'asset.
+    // Non conta un riuso presente oggi: con il passo Docker di macOS tolto
+    // (la 0.4 usa Podman) nessuna schermata compare due volte, ma il riuso
+    // resta possibile e non copia nulla.
+    const content = fs.readFileSync(
+      path.resolve(HERE, "../../../web/app/setup-guide/guide-content.ts"),
+      "utf8",
+    );
+    expect(content).not.toMatch(/\/setup-guide\/[^"']*\.(png|jpg|jpeg|webp)/);
     for (const chapter of GUIDE_CHAPTERS) {
       for (const phase of chapter.phases) {
         for (const screenRef of screensOf(phase)) {
-          uses.set(screenRef.screenId, (uses.get(screenRef.screenId) ?? 0) + 1);
+          expect(
+            SCREENS[screenRef.screenId],
+            `${phase.id}: la schermata ${screenRef.screenId} non è nel registro`,
+          ).toBeDefined();
         }
       }
     }
-    const reused = [...uses.entries()].filter(([, n]) => n > 1);
-    expect(reused.length).toBeGreaterThan(0);
   });
 
   it("i link ristretti a un sistema esistono per quel sistema", () => {
@@ -378,7 +386,6 @@ describe("guida di setup — contratto del team docs", () => {
     )!;
     const phaseIds = new Set([
       "choose-setup-path",
-      "install-docker-macos",
       "install-docker-windows",
       "install-docker-linux",
     ]);

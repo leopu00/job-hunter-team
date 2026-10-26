@@ -17,7 +17,7 @@ export const ONBOARDING_ARTWORK = {
     src: "/onboarding/environment-vps-v2.webp",
   },
   provider: {
-    src: "/onboarding/provider-v2.webp",
+    src: "/onboarding/provider-v3.webp",
   },
   providerAuth: {
     src: "/onboarding/provider-auth.webp",
