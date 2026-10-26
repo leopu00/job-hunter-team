@@ -111,7 +111,7 @@ The shorter form, after you have reviewed it, is:
 curl -fsSL https://jobhunterteam.ai/install.sh | bash
 ```
 
-**Windows (PowerShell; WSL must be enabled):**
+**Windows (PowerShell; WSL must be enabled):** Windows is not supported in 0.4: these steps are untested and may not work.
 
 ```powershell
 iwr -useb https://jobhunterteam.ai/install.ps1 | iex

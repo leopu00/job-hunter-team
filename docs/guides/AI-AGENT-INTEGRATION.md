@@ -55,7 +55,7 @@ bash install.sh --dry-run
 bash install.sh
 ```
 
-On native Windows PowerShell:
+On native Windows PowerShell (Windows is not supported in 0.4: these steps are untested and may not work.):
 
 ```powershell
 iwr -useb https://jobhunterteam.ai/install.ps1 -OutFile install.ps1

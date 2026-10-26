@@ -29,3 +29,21 @@ def test_download_page_links_no_windows_installer() -> None:
     # Linux says it is experimental where the button is
     assert "data-linux-experimental" in client
     assert 't("dl_linux_experimental")' in client
+
+
+SENTENCE = "Windows is not supported in 0.4: these steps are untested and may not work."
+
+
+def test_every_windows_install_instruction_says_it_is_unsupported_in_04() -> None:
+    # the steps stay (the CLI of someone on Windows must not break), with one sentence above each
+    guides = ROOT / "docs" / "guides"
+    assert (guides / "QUICKSTART.md").read_text().count(SENTENCE) == 1
+    assert (guides / "CLI-INSTALL.md").read_text().count(SENTENCE) == 2
+    assert (guides / "AI-AGENT-INTEGRATION.md").read_text().count(SENTENCE) == 1
+    page = (ROOT / "web/app/docs/guides/getting-started/page.i18n.ts").read_text()
+    intros = [chunk for chunk in page.split("path3WinIntro:")[2:]]
+    assert len(intros) == 7  # seven languages
+    assert SENTENCE in intros[0]
+    for chunk in intros:
+        assert chunk.lstrip().startswith('"') and "0.4" in chunk.split('",', 1)[0]
+        assert "WSL" in chunk.split('",', 1)[0]  # the old line is still there after the sentence
