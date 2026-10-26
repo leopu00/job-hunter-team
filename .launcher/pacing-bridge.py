@@ -1303,6 +1303,11 @@ def flush_ours(session: str) -> bool:
     return r.returncode == 0
 
 
+# Lo stesso tetto del sentinel-bridge: finche' c'e' la bozza l'avviso non si ripete a ogni giro.
+COMPOSER_NOTICE_EVERY_SEC = float(os.environ.get("JHT_COMPOSER_NOTICE_EVERY_SEC", "1800"))
+_composer_noticed_at = float("-inf")
+
+
 def escalate_composer_to_capitano(streak: int) -> bool:
     """rc=130: la casella del target tiene un testo che NON e' provato nostro, da `streak` tick.
 
@@ -1315,6 +1320,10 @@ def escalate_composer_to_capitano(streak: int) -> bool:
         print(f"[pacing-bridge] {TARGET_SESSION}: the composer held a text of ours; it got its Enter "
               f"(was refused for {streak} ticks)", flush=True)
         return True
+    global _composer_noticed_at
+    if time.time() - _composer_noticed_at < COMPOSER_NOTICE_EVERY_SEC:
+        return False
+    _composer_noticed_at = time.time()
     msg = (
         f"[BRIDGE] {TARGET_SESSION} has refused {streak} consecutive pacing ticks: its composer holds text that is "
         f"NOT provably ours (jht-tmux-send rc=130, nothing was pasted or pressed). The pane is ALIVE: do NOT respawn "

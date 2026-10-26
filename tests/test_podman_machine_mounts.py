@@ -401,6 +401,8 @@ def test_recreate_rebuilds_the_machine_with_only_the_two_folders_and_keeps_the_d
     assert not list(Path(env["JHT_RUNTIME_DIR"]).glob(".broker-state-recreate.*"))
     assert "Lo stato del broker e' stato conservato" in result.stderr
     assert "reinserisci la password della posta" in result.stderr
+    # the provider CLIs live in the machine and go with it: the message says they come back by themselves, and how to see it
+    assert "si reinstallano da sole al primo 'jht up' (circa un minuto, serve la rete" in result.stderr and "jht providers versions" in result.stderr
     assert "rifai il login LinkedIn" in result.stderr
     assert _run(wrapper, env, "status").returncode != 78
 

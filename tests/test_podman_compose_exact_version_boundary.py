@@ -372,7 +372,7 @@ if command == "config" and rest == ["--images"]:
     print("podman-compose: error: unrecognized arguments: --images", file=sys.stderr)
     raise SystemExit(2)
 if command == "config" and rest == []:
-    print("services:\n  jht:\n    image: example.invalid/jht@sha256:" + os.environ["JHT_FIXTURE_IMAGE_DIGEST"] + "\n")
+    print("services:\\n  jht:\\n    image: example.invalid/jht@sha256:" + os.environ["JHT_FIXTURE_IMAGE_DIGEST"] + "\\n")
     raise SystemExit(0)
 if command == "pull" and rest == ["jht"]:
     raise SystemExit(run_podman("pull", "jht").returncode)

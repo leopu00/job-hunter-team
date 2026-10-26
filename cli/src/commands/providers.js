@@ -101,12 +101,18 @@ function readUvToolVersion(parentDir, prefix) {
 function getVersionInfo(providerId) {
   const src = VERSION_SOURCES[providerId];
   if (!src) return { installed: null, latest: null };
+  // The CLIs are installed in the jht-deps volume (NPM_CONFIG_PREFIX, UV_TOOL_DIR), not in the old
+  // /jht_home/.npm-global the folders below name: the version is the one `jht providers versions`
+  // and the boot update see (the binary on the PATH, then the prefixes), and the old folders are
+  // only the fallback of an install that still lives there.
+  const target = resolveUpdateTarget(providerId);
+  const found = target ? detectInstalledVersion(target) : null;
   if (src.kind === 'npm') {
     const pkg = readJsonSafe(src.pkgJson);
     const latestJson = src.latestJson ? readJsonSafe(src.latestJson) : null;
-    return { installed: pkg?.version ?? null, latest: latestJson?.latest_version ?? null };
+    return { installed: found ?? pkg?.version ?? null, latest: latestJson?.latest_version ?? null };
   }
-  return { installed: readUvToolVersion(src.distInfoParent, src.distInfoPrefix), latest: null };
+  return { installed: found ?? readUvToolVersion(src.distInfoParent, src.distInfoPrefix), latest: null };
 }
 
 async function fileExists(p) {
@@ -701,11 +707,18 @@ async function autoUpdateOnce() {
   const b = before ?? 'unknown';
   const a = after ?? 'unknown';
   const changed = !!before && !!after && before !== after;
+  // No CLI before and one after: a first install (a machine or a volume that was recreated), not
+  // «nothing to reinstall». There is no earlier version to tell the Capitano about.
+  const installed = !before && !!after;
   let verdict;
   if (changed) {
     verdict = res.ok
       ? 'UPDATED'
       : 'UPDATED (the step reported an error, but the version changed)';
+  } else if (installed) {
+    verdict = res.ok
+      ? `INSTALLED — no CLI before; ${a} is there now`
+      : `INSTALLED (the step reported an error, but the CLI is there: ${a})`;
   } else if (res.ok) {
     verdict = expected
       ? `UNCHANGED — already at the pinned version ${expected}; nothing to reinstall`
