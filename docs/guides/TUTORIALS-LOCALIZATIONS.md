@@ -53,9 +53,9 @@ mentre lavora.
    di amministratore. La release per Linux è costruita, ma questo setup non è
    ancora stato collaudato. Per una VPS inserisci indirizzo, utente SSH, porta
    e file della chiave privata, che resta su questo computer.
-5. **Scegli il provider.** Seleziona Codex (consigliato), Claude o Kimi, poi
+5. **Scegli il provider.** Seleziona Codex, poi
    **Rivedi il setup**. Accedi con il tuo abbonamento più avanti nel setup: non
-   serve una chiave API. Kimi non è ancora disponibile nell'app per Windows.
+   serve una chiave API.
 6. **Conferma e prepara la squadra.** L'ultima schermata riassume ambiente e
    provider. Quando il team gira su questo computer con Windows, elenca anche
    cosa installa l'app e come rimuoverlo in seguito. Seleziona **Prepara la
@@ -241,10 +241,9 @@ trabaja.
    compilada, pero esta configuración todavía no se ha probado. Para un VPS,
    introduce su dirección, el usuario SSH, el puerto y el archivo de la clave
    privada, que se queda en este ordenador.
-5. **Elige el proveedor.** Selecciona Codex (recomendado), Claude o Kimi y
+5. **Elige el proveedor.** Selecciona Codex y
    luego **Revisar la configuración**. Inicias sesión con tu suscripción más
-   adelante en la configuración: no hace falta una clave API. Kimi todavía no
-   está disponible en la aplicación para Windows.
+   adelante en la configuración: no hace falta una clave API.
 6. **Confirma y prepara el equipo.** La última pantalla resume el entorno y el
    proveedor. Cuando el equipo se ejecuta en este ordenador con Windows,
    también enumera lo que instala la aplicación y cómo quitarlo después.
@@ -440,11 +439,10 @@ ordinateur. Gardez l'application ouverte pendant qu'elle travaille.
    configuration n'a pas encore été testée. Pour un VPS, saisissez son adresse,
    l'utilisateur SSH, le port et le fichier de la clé privée, qui reste sur cet
    ordinateur.
-5. **Choisissez le fournisseur.** Sélectionnez Codex (recommandé), Claude ou
-   Kimi, puis **Vérifier la configuration**. Vous vous connectez avec votre
+5. **Choisissez le fournisseur.** Sélectionnez Codex,
+   puis **Vérifier la configuration**. Vous vous connectez avec votre
    abonnement plus tard dans la configuration : aucune clé API n'est
-   nécessaire. Kimi n'est pas encore disponible dans l'application pour
-   Windows.
+   nécessaire.
 6. **Confirmez et préparez l'équipe.** Le dernier écran résume l'environnement
    et le fournisseur. Quand l'équipe tourne sur cet ordinateur sous Windows, il
    liste aussi ce que l'application installe et comment le supprimer plus tard.
@@ -642,10 +640,9 @@ geöffnet, während sie arbeitet.
    aber diese Einrichtung wurde noch nicht getestet. Für einen VPS gibst du
    seine Adresse, den SSH-Benutzer, den Port und die Datei des privaten
    Schlüssels ein, der auf diesem Computer bleibt.
-5. **Wähle den Anbieter.** Wähle Codex (empfohlen), Claude oder Kimi, dann
+5. **Wähle den Anbieter.** Wähle Codex, dann
    **Einrichtung prüfen**. Du meldest dich später in der Einrichtung mit deinem
-   Abo an: Ein API-Schlüssel ist nicht nötig. Kimi ist in der Windows-App noch
-   nicht verfügbar.
+   Abo an: Ein API-Schlüssel ist nicht nötig.
 6. **Bestätige und bereite das Team vor.** Der letzte Bildschirm fasst Umgebung
    und Anbieter zusammen. Wenn das Team unter Windows auf diesem Computer
    läuft, listet er auch auf, was die App installiert und wie du es später
@@ -844,10 +841,9 @@ trabalha.
    para Linux está compilada, mas esta configuração ainda não foi testada. Para
    uma VPS, introduz o endereço, o utilizador SSH, a porta e o ficheiro da
    chave privada, que fica neste computador.
-5. **Escolhe o fornecedor.** Seleciona Codex (recomendado), Claude ou Kimi e
+5. **Escolhe o fornecedor.** Seleciona Codex e
    depois **Rever a configuração**. Inicias sessão com a tua subscrição mais à
-   frente na configuração: não é precisa uma chave API. O Kimi ainda não está
-   disponível na aplicação para Windows.
+   frente na configuração: não é precisa uma chave API.
 6. **Confirma e prepara a equipa.** O último ecrã resume o ambiente e o
    fornecedor. Quando a equipa corre neste computador com Windows, também
    enumera o que a aplicação instala e como o remover mais tarde. Seleciona
@@ -1042,10 +1038,9 @@ számítógépedtől függ. Hagyd nyitva az alkalmazást, amíg dolgozik.
    linuxos kiadás elkészült, de ezt a beállítást még nem tesztelték. VPS esetén
    add meg a címét, az SSH-felhasználót, a portot és a privát kulcs fájlját,
    amely ezen a számítógépen marad.
-5. **Válaszd ki a szolgáltatót.** Válaszd a Codexet (ajánlott), a Claude-ot
-   vagy a Kimit, majd **A beállítás áttekintése** gombot. Az előfizetéseddel a
-   beállítás egy későbbi lépésében jelentkezel be: API-kulcsra nincs szükség. A
-   Kimi a Windows-alkalmazásban még nem érhető el.
+5. **Válaszd ki a szolgáltatót.** Válaszd a Codexet,
+   majd **A beállítás áttekintése** gombot. Az előfizetéseddel a
+   beállítás egy későbbi lépésében jelentkezel be: API-kulcsra nincs szükség.
 6. **Erősítsd meg, és készítsd elő a csapatot.** Az utolsó képernyő
    összefoglalja a környezetet és a szolgáltatót. Ha a csapat Windowson ezen a
    számítógépen fut, azt is felsorolja, mit telepít az alkalmazás, és hogyan

@@ -62,32 +62,6 @@ const PROVIDERS: Provider[] = [
     pt: "O mais completo: testado a fundo em todos os cenários, oferece o melhor resultado em qualidade e quantidade. É o fornecedor recomendado: a escolha mais sólida se queres o máximo da equipa.",
     hu: "A legteljesebb: minden helyzetben alaposan tesztelve, minőségben és mennyiségben a legjobb kimenetet nyújtja. Ez az ajánlott szolgáltató: a legszilárdabb választás, ha a maximumot szeretnéd a csapattól.",
   },
-  {
-    name: "Claude",
-    vendor: "Anthropic",
-    tier: "high",
-    url: "https://www.anthropic.com/pricing",
-    it: "Un po' meno output di Codex, ma il più preciso e il più intelligente: la scelta migliore per valutare le offerte e scrivere i CV con cura.",
-    en: "A bit less output than Codex, but the most precise and the most intelligent: the best choice for evaluating jobs and writing CVs with care.",
-    es: "Un poco menos de resultado que Codex, pero el más preciso y el más inteligente: la mejor opción para evaluar las ofertas y escribir los CV con cuidado.",
-    fr: "Un peu moins de résultat que Codex, mais le plus précis et le plus intelligent : le meilleur choix pour évaluer les offres et rédiger les CV avec soin.",
-    de: "Etwas weniger Output als Codex, aber am präzisesten und intelligentesten: die beste Wahl, um Stellen zu bewerten und Lebensläufe sorgfältig zu schreiben.",
-    pt: "Um pouco menos de resultado que o Codex, mas o mais preciso e o mais inteligente: a melhor escolha para avaliar as ofertas e escrever os CV com cuidado.",
-    hu: "Kicsivel kevesebb kimenet, mint a Codexé, de a legpontosabb és a legintelligensebb: a legjobb választás az ajánlatok értékeléséhez és az önéletrajzok gondos megírásához.",
-  },
-  {
-    name: "Kimi",
-    vendor: "Moonshot",
-    tier: "base",
-    url: "https://www.kimi.com/code",
-    it: "Output paragonabile agli altri due e il piano più economico. Il modello è ancora in rifinitura sulla gestione del budget giornaliero.",
-    en: "Output comparable to the other two, and the most affordable plan. The model is still being refined on daily budget management.",
-    es: "Un resultado comparable a los otros dos y el plan más económico. El modelo aún se está afinando en la gestión del presupuesto diario.",
-    fr: "Un résultat comparable aux deux autres, et la formule la plus abordable. Le modèle est encore en cours d'affinage sur la gestion du budget quotidien.",
-    de: "Ein Ergebnis vergleichbar mit den anderen beiden und der günstigste Tarif. Das Modell wird bei der Verwaltung des Tagesbudgets noch verfeinert.",
-    pt: "Um resultado comparável aos outros dois e o plano mais económico. O modelo ainda está a ser afinado na gestão do orçamento diário.",
-    hu: "A másik kettővel összevethető eredmény, és a legkedvezőbb árú csomag. A modell finomítása a napi költségkeret kezelésén még folyamatban van.",
-  },
 ];
 
 const PAGE = {

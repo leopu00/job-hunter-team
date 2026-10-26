@@ -76,7 +76,7 @@ Live dashboards with real, anonymized field data: [jobhunterteam.ai/case-studies
                                                                      👨‍⚖️ Critic (3 blind rounds)
 ```
 
-Each agent is an autonomous AI session on one of the supported CLIs (Claude Code, Codex, Kimi); a shared SQLite database keeps state in sync. Monitoring details: [`docs/about/MONITORING.md`](docs/about/MONITORING.md).
+Each agent is an autonomous AI session on the supported CLI (Codex); a shared SQLite database keeps state in sync. Monitoring details: [`docs/about/MONITORING.md`](docs/about/MONITORING.md).
 
 ## Install
 
@@ -104,9 +104,7 @@ before installing.
 
 | Provider | Plan | Cost/mo | Status |
 |---|---|---|---|
-| **Claude** | Max x20 | ~€200 | Production-ready, best precision |
 | **Codex** | Plus / Pro | ~€100 | Proven — 1-month autonomous run |
-| **Kimi** | Pro | ~€40 | Beta — in observation |
 
 **Native office (recommended):** download the current build from
 [GitHub Releases](https://github.com/leopu00/job-hunter-team/releases/latest).

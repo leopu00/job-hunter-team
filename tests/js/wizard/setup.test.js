@@ -59,7 +59,7 @@ describe('runSetupWizard — VPS senza account cloud', () => {
   it('salva il provider anche quando l’utente salta il pairing facoltativo', async () => {
     process.env.JHT_HOST_TYPE = 'vps';
     const prompter = createMockPrompter({
-      selects: ['claude'],
+      selects: ['openai'],
       // skip cloud; poi non proseguire oltre il provider update sintetico.
       confirms: [false, false],
     });
@@ -68,7 +68,7 @@ describe('runSetupWizard — VPS senza account cloud', () => {
 
     expect(writeConfigFile).toHaveBeenCalledOnce();
     const [savedConfig] = vi.mocked(writeConfigFile).mock.calls[0];
-    expect(savedConfig.active_provider).toBe('claude');
+    expect(savedConfig.active_provider).toBe('openai');
     expect(prompter.confirm).toHaveBeenNthCalledWith(1, expect.objectContaining({
       initialValue: true,
     }));
@@ -77,7 +77,7 @@ describe('runSetupWizard — VPS senza account cloud', () => {
   it('prosegue se il pairing facoltativo fallisce', async () => {
     process.env.JHT_HOST_TYPE = 'vps';
     const prompter = createMockPrompter({
-      selects: ['claude'],
+      selects: ['openai'],
       // prova il cloud (il comando sintetico fallisce); poi ferma il post-save.
       confirms: [true, false],
     });
@@ -103,27 +103,10 @@ describe('runSetupWizard — VPS senza account cloud', () => {
 
 // --- Flow base: nuovo config, un provider per volta ---
 
-describe('runSetupWizard — provider Claude (subscription)', () => {
-  it('salva config Claude con auth subscription', async () => {
-    const prompter = createMockPrompter({
-      selects: ['claude'],
-      confirms: [false], // exit dopo providers update fail
-    });
-
-    await runSetupWizard(prompter);
-
-    expect(writeConfigFile).toHaveBeenCalledOnce();
-    const [savedConfig] = vi.mocked(writeConfigFile).mock.calls[0];
-    expect(savedConfig.active_provider).toBe('claude');
-    expect(savedConfig.providers.claude.auth_method).toBe('subscription');
-    expect(savedConfig.providers.claude.name).toBe('claude');
-    expect(savedConfig.providers.claude.model).toBe('claude-sonnet-4-6');
-    expect(savedConfig.version).toBe(1);
-  });
-
+describe('runSetupWizard — intro e outro', () => {
   it('chiama intro e outro del prompter', async () => {
     const prompter = createMockPrompter({
-      selects: ['claude'],
+      selects: ['openai'],
       confirms: [false],
     });
 
@@ -147,22 +130,7 @@ describe('runSetupWizard — provider OpenAI (subscription)', () => {
     expect(savedConfig.active_provider).toBe('openai');
     expect(savedConfig.providers.openai.auth_method).toBe('subscription');
     expect(savedConfig.providers.openai.model).toBe('gpt-4o');
-  });
-});
-
-describe('runSetupWizard — provider Kimi (subscription)', () => {
-  it('salva config Kimi con auth subscription', async () => {
-    const prompter = createMockPrompter({
-      selects: ['kimi'],
-      confirms: [false],
-    });
-
-    await runSetupWizard(prompter);
-
-    const [savedConfig] = vi.mocked(writeConfigFile).mock.calls[0];
-    expect(savedConfig.active_provider).toBe('kimi');
-    expect(savedConfig.providers.kimi.auth_method).toBe('subscription');
-    expect(savedConfig.providers.kimi.model).toBe('kimi-k2-0905-preview');
+    expect(savedConfig.version).toBe(1);
   });
 });
 
@@ -205,7 +173,7 @@ describe('runSetupWizard — config esistente', () => {
     });
 
     const prompter = createMockPrompter({
-      selects: ['reset', 'kimi'],
+      selects: ['reset', 'openai'],
       confirms: [false],
     });
 
@@ -213,8 +181,10 @@ describe('runSetupWizard — config esistente', () => {
 
     expect(writeConfigFile).toHaveBeenCalledOnce();
     const [savedConfig] = vi.mocked(writeConfigFile).mock.calls[0];
-    expect(savedConfig.active_provider).toBe('kimi');
-    expect(savedConfig.providers.kimi.auth_method).toBe('subscription');
+    expect(savedConfig.active_provider).toBe('openai');
+    expect(savedConfig.providers.openai.auth_method).toBe('subscription');
+    // il reset toglie anche il provider archiviato della vecchia configurazione
+    expect(savedConfig.providers.claude).toBeUndefined();
   });
 
   it('preserva providers esistenti se utente sceglie "modify"', async () => {
@@ -239,13 +209,13 @@ describe('runSetupWizard — config esistente', () => {
 });
 
 describe('runSetupWizard — provider proposto', () => {
-  it('propone Codex per primo e già scelto; Claude e Kimi restano', async () => {
+  it('propone Codex da solo e già scelto: Claude e Kimi non si possono scegliere', async () => {
     const prompter = createMockPrompter({ selects: ['openai'], confirms: [false, false] });
 
     await runSetupWizard(prompter);
 
-    const [params] = prompter.select.mock.calls.find(([p]) => p?.options?.some((o) => o.value === 'kimi'));
-    expect(params.options.map((o) => o.value)).toEqual(['openai', 'claude', 'kimi']);
+    const [params] = prompter.select.mock.calls.find(([p]) => p?.options?.some((o) => o.value === 'openai'));
+    expect(params.options.map((o) => o.value)).toEqual(['openai']);
     expect(params.initialValue).toBe('openai');
   });
 });

@@ -13,8 +13,6 @@ import {
   type TeamActivityRole,
 } from "@/lib/team-activity";
 import betaCRun from "@/data/case-studies/betaC-codex-run.json";
-import betaBKimiRun from "@/data/case-studies/betaB-kimi-run.json";
-import betaDRun from "@/data/case-studies/betaD-kimi-run.json";
 import PROFILES_I18N from "@/data/case-studies/profiles-i18n.json";
 import type { Locale } from "@/i18n/config";
 import { intlTag } from "@/lib/locale-tag";
@@ -89,55 +87,9 @@ export interface CaseStudyMeta {
   run: CaseStudyRun;
 }
 
-// Profilo del beta tester 1 (technical writer). La sessione free-run Codex è
-// stata rimossa (~3 giorni senza monitor, sporcava le medie): resta la sessione
-// Kimi monitorata.
-const TW_PROFILE: CaseStudyProfile = {
-  badge: "B1",
-  headline: "Technical writer & traduttore tecnico — ponte industria e lingue",
-  summary:
-    "Candidato che punta a ruoli di technical writing, traduzione tecnica e localizzazione/LQA-UAT (ungherese/italiano/inglese). Porta un'esperienza cross-domain che unisce mestieri industriali e manifatturieri — manifattura, CAD/CAM/CNC, allestimenti fieristici — con traduzione e interpretariato multilingue: il suo punto di forza è proprio il ponte tra competenza hands-on di settore e competenza linguistica. Preferisce il full remote; ricerca multi-paese in Europa.",
-  facts: [
-    {
-      label: "Ruoli target",
-      value: "Technical writer · traduttore tecnico · localizzazione/LQA",
-    },
-    { label: "Esperienza", value: "Cross-domain · industria + lingue" },
-    {
-      label: "Background",
-      value:
-        "Manifattura · CAD/CAM/CNC · allestimenti · traduzione/interpretariato",
-    },
-    {
-      label: "Lingue",
-      value:
-        "Ungherese e Italiano (madrelingua) · Inglese (C1-C2) · Tedesco (base)",
-    },
-    {
-      label: "Mobilità",
-      value:
-        "Cittadino UE · full remote preferito · ricerca multi-paese in Europa",
-    },
-  ],
-  locationNote:
-    "Priorità al full remote; ricerca multi-paese in Europa, con apertura agli hub tech europei. Tra le città ricorrenti nella ricerca:",
-  targetCities: [
-    "Budapest",
-    "Milano",
-    "Dublino",
-    "Amsterdam",
-    "Madrid",
-    "Barcellona",
-    "Varsavia",
-    "Lisbona",
-  ],
-  why: "Ecco perché i numeri vengono così: il candidato punta a technical writing, traduzione tecnica e localizzazione, ma con un forte background industriale — perciò il team ha cercato soprattutto documentazione tecnica industriale e software, e le famiglie di ruolo dominanti sono technical writing hardware/manifatturiero, software/API docs e localizzazione (con qualche affaccio su CAD/CAM/CNC, riflesso del suo passato di settore). Quasi tutto arriva da LinkedIn e da job board specializzate; la distribuzione geografica rispecchia le lingue native e le priorità del candidato.",
-};
-
-// Tre beta tester. Apre il run Codex (beta-2): il più lungo (~1 mese
-// continuativo), l'unico MEASURED nel calcolo dei costi. La sessione free-run
-// Codex del technical writer è stata TOLTA: ~3 giorni senza monitor del
-// budget, sporcava tutte le medie. Resta la sua sessione Kimi (monitorata).
+// Un case study: il run Codex del beta tester 2, il più lungo (~1 mese continuativo) e l'unico MEASURED nel
+// calcolo dei costi. I case study su Kimi (archiviato dalla 0.4) non sono più mostrati; i loro dati restano
+// in data/case-studies/ come archivio.
 export const CASE_STUDIES: CaseStudyMeta[] = [
   // ── Beta tester 2 · finance, inizio carriera (Codex) ────────────────────
   {
@@ -192,106 +144,6 @@ export const CASE_STUDIES: CaseStudyMeta[] = [
       "Per questo lo considero il caso di riferimento: quando il mercato è favorevole e il modello è stabile, il team consegna un mese intero di lavoro autonomo con il miglior rapporto qualità/costo dell'intera serie.",
     ],
     run: betaCRun as unknown as CaseStudyRun,
-  },
-  // ── Beta tester 1 · technical writer (Kimi, run monitorato) ─────────────
-  {
-    id: "beta-1-kimi",
-    label: "Beta tester 1",
-    tagline: "Technical writing · traduzione · localizzazione",
-    category: "Technical Writing",
-    seniority: "Senior · cross-domain",
-    geos: ["Europa"],
-    model: "Kimi",
-    subscription: {
-      provider: "Moonshot Kimi",
-      plan: "Kimi Code",
-      price: "~€40/mese",
-      monthlyEur: 40,
-    },
-    profile: TW_PROFILE,
-    maintainerNote: [
-      "Questo profilo è stato **la sfida più impegnativa della serie**. Le competenze sono molto eterogenee — technical writing, traduzione tecnica e localizzazione, innestate su un solido background industriale — e il target geografico è volutamente ampio: ne deriva **un mercato frammentato**, con annunci difficili da ricondurre a categorie stabili e da valutare con un metro uniforme. È inoltre il profilo su cui ho messo alla prova **Kimi K2**, il modello più difficile da mantenere in esecuzione autonoma per periodi prolungati.",
-      "Nelle prime settimane Kimi **esauriva l'intero budget settimanale in un paio di giorni**. Per evitare che il team restasse fermo in attesa del reset ho distribuito il carico su più abbonamenti e, soprattutto, ho affinato progressivamente il pacing e il monitoraggio della spesa. Oggi **il budget viene dosato con rigore** e il tetto giornaliero non viene più superato; nel frattempo, però, il bacino di annunci realmente pertinenti per questo profilo ha iniziato a ridursi.",
-      "Per considerarlo un successo pieno manca un ultimo traguardo: che, **con un solo abbonamento, il team lavori in autonomia giorno dopo giorno per almeno un mese consecutivo**, senza interruzioni. Raggiunto quel punto, diventerà il caso di riferimento della serie.",
-    ],
-    // Run monitorato (Kimi), settimane intere: vista budget giornaliera.
-    phases: [
-      {
-        key: "kimi",
-        label: "Kimi",
-        price: "~€40/mese",
-        note: "run monitorato — budget settimanale dosato (pacing)",
-        from: "2026-06-13",
-        to: null,
-      },
-    ],
-    run: betaBKimiRun as unknown as CaseStudyRun,
-  },
-  // ── Beta tester 3 · luxury hospitality (Kimi) ───────────────────────────
-  {
-    id: "beta-3",
-    label: "Beta tester 3",
-    tagline: "Luxury hospitality · guest experience · cabin crew",
-    category: "Luxury Hospitality",
-    seniority: "Inizio-media carriera",
-    geos: ["Italia", "Europa", "Emirati"],
-    model: "Kimi",
-    subscription: {
-      provider: "Moonshot Kimi",
-      plan: "Kimi Code",
-      price: "~€40/mese",
-      monthlyEur: 40,
-    },
-    profile: {
-      badge: "B3",
-      headline: "Professionista luxury hospitality & guest experience",
-      summary:
-        "Profilo di inizio-media carriera nell'hospitality e nella ristorazione di lusso: accoglienza e guest relations per ospiti VIP in brand internazionali, con coordinamento eventi, gestione delle prenotazioni e problem solving in servizi ad alta affluenza. Punta a ruoli di guest experience, VIP relations e front office nel segmento luxury, con interesse per il cabin crew di compagnie aeree premium. Profilo multilingue.",
-      facts: [
-        {
-          label: "Ruoli target",
-          value:
-            "Luxury hospitality · guest experience · VIP relations · cabin crew",
-        },
-        { label: "Esperienza", value: "Inizio-media carriera" },
-        {
-          label: "Settore",
-          value: "Hôtellerie 5★ · ristorazione di lusso · eventi",
-        },
-        { label: "Formazione", value: "Ambito turistico-alberghiero" },
-        {
-          label: "Lingue",
-          value:
-            "Profilo multilingue (quattro lingue, incl. italiano e inglese)",
-        },
-        {
-          label: "Mobilità",
-          value:
-            "Lavora in Italia · per alcune mete estere serve verifica di visto/sponsorship",
-        },
-      ],
-      locationNote:
-        "L'hospitality di lusso si concentra in poche piazze: le grandi mete del turismo italiano e gli hub internazionali dell'accoglienza premium. Tra i mercati target:",
-      targetCities: [
-        "Milano",
-        "Roma",
-        "Venezia",
-        "Firenze",
-        "Dubai",
-        "Abu Dhabi",
-        "Doha",
-        "Madrid",
-      ],
-      why: "Ecco perché i numeri vengono così: il profilo punta a luxury hospitality e guest experience, con interesse per il cabin crew premium — perciò il team ha cercato soprattutto hôtellerie 5★, guest relations VIP ed eventi, con un ramo dedicato al cabin crew dei vettori del Golfo (Emirates, Wizz Air). Le famiglie di ruolo dominanti sono Luxury Hospitality Operations, hostess/eventi e cabin crew. Quasi tutto arriva da LinkedIn e da job board specializzate dell'hospitality (hosco, resortwork) e delle compagnie aeree; il mercato del lusso italiano fa da baricentro, mentre il requisito di lavorabilità spiega perché diverse posizioni fuori dall'Italia richiedono la verifica di visto/sponsorship.",
-    },
-    maintainerNote: [
-      "È il caso più recente della serie: il team ha iniziato a lavorarci da poco più di una settimana. Il profilo si muove in **un mercato di nicchia** — hôtellerie di lusso, guest experience e cabin crew per i vettori premium del Golfo — concentrato in poche piazze: le grandi mete del turismo italiano e gli hub internazionali dell'accoglienza di fascia alta.",
-      "Anche qui il team gira su **Kimi**, con l'abbonamento più economico. **È ancora presto per trarre conclusioni**: una settimana racconta l'avvio, non l'andamento di un mese. I primi segnali, però, sono incoraggianti — in pochi giorni il team ha già prodotto un nucleo di match forti ed eccellenti su un profilo tutt'altro che generalista.",
-      "La domanda aperta è la stessa del technical writing: se un mercato così specifico avrà **profondità sufficiente** per alimentare il team a lungo, e se Kimi reggerà l'esecuzione autonoma **per un mese intero** senza sforare il budget. Su questo profilo abbiamo ancora poche settimane di osservazione.",
-      "Per ora lo considero un caso da seguire: promettente nell'avvio, ma tutto da confermare sul lungo periodo. È il banco di prova più fresco della serie.",
-    ],
-    // Run mono-fase: solo Kimi (budget settimanale monitorato), ~1 settimana.
-    run: betaDRun as unknown as CaseStudyRun,
   },
 ];
 

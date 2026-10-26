@@ -45,7 +45,9 @@ This separation (clock-only Bridge + event-driven Sentinel) is the result of mul
 
 **Why it matters**: Codex's real constraint is the weekly cap, not the 5h window. The bridge distributes the weekly budget across the user's working hours and auto-adapts the burn rate to the residual budget — as the cap approaches, the team coasts (throttle, no new spawns) and lands *on* the cap instead of crossing it.
 
-### 🌙 Kimi €40 — works, optimization in progress
+### 🌙 Kimi €40 — archived (0.4), kept as history
+
+> Kimi is no longer offered; a team already configured on it keeps working. What follows is what was measured while it was a supported tier.
 
 | Metric | Value |
 |---|---|
@@ -84,11 +86,11 @@ Configure it three ways — `jht working-hours` (CLI), the desktop setup wizard,
 
 ## 📈 What we want to publish
 
-- 📈 **Time-series graphs** of token usage during real test sessions (Claude Max x20 + Kimi)
+- 📈 **Time-series graphs** of token usage during real test sessions (Claude Max x20 + Codex)
 - 📊 **Oscillation distribution** plots showing how tightly the projection tracks reality
 - 🎯 **Per-window summary**: target vs achieved, for ~20 consecutive sessions
 
-These graphs are interesting on their own and will be added to this page (and likely posted publicly) once the Kimi calibration converges.
+These graphs are interesting on their own and will be added to this page (and likely posted publicly) once the calibration converges.
 
 ## 🔗 Related
 

@@ -41,8 +41,6 @@ const PROVIDER_UPDATE_ID = {
 // porta la parola «consigliato» nella lingua dell'utente.
 const PROVIDER_LABEL_KEY = {
   openai: 'codex',
-  claude: 'claude',
-  kimi: 'kimi',
 };
 
 // Eseguibile del CLI provider per OAuth login. Tutti partono con un comando

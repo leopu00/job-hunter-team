@@ -15,31 +15,26 @@ beforeEach(() => vi.clearAllMocks());
 // --- validateApiKey ---
 
 describe('validateApiKey', () => {
-  const claude = AI_PROVIDERS.find((p) => p.value === 'claude');
-  const kimi = AI_PROVIDERS.find((p) => p.value === 'kimi');
+  const codex = AI_PROVIDERS.find((p) => p.value === 'openai');
+
+  it('offre solo Codex: Claude e Kimi non sono fra i provider da scegliere', () => {
+    expect(AI_PROVIDERS.map((p) => p.value)).toEqual(['openai']);
+  });
 
   it('rifiuta valore vuoto', () => {
-    expect(validateApiKey(claude, '')).toMatch(/cannot be empty/);
+    expect(validateApiKey(codex, '')).toMatch(/cannot be empty/);
   });
 
   it('rifiuta chiave troppo corta', () => {
-    expect(validateApiKey(claude, 'sk-ant')).toMatch(/too short/);
+    expect(validateApiKey(codex, 'sk-')).toMatch(/too short/);
   });
 
-  it('rifiuta chiave con prefisso errato per Claude', () => {
-    expect(validateApiKey(claude, 'wrongprefix-12345')).toMatch(/sk-ant-/);
+  it('rifiuta chiave con prefisso errato per Codex (richiesto sk-)', () => {
+    expect(validateApiKey(codex, 'eyJsomeLongToken1234')).toMatch(/sk-/);
   });
 
-  it('accetta chiave Claude valida', () => {
-    expect(validateApiKey(claude, 'sk-ant-apikey1234567')).toBeUndefined();
-  });
-
-  it('rifiuta chiave con prefisso errato per Kimi (richiesto sk-)', () => {
-    expect(validateApiKey(kimi, 'eyJsomeLongToken1234')).toMatch(/sk-/);
-  });
-
-  it('accetta chiave Kimi con prefisso sk-', () => {
-    expect(validateApiKey(kimi, 'sk-kimi-apikey1234567')).toBeUndefined();
+  it('accetta chiave Codex con prefisso sk-', () => {
+    expect(validateApiKey(codex, 'sk-proj-apikey1234567')).toBeUndefined();
   });
 });
 

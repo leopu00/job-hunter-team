@@ -49,7 +49,7 @@ export async function runNonInteractiveSetup(opts) {
   const providerName = opts.provider || RECOMMENDED_PROVIDER;
   const selectedProvider = AI_PROVIDERS.find((p) => p.value === providerName);
   if (!selectedProvider) {
-    console.error(pc.red(`Invalid provider "${providerName}". Use: openai (Codex, recommended), claude, kimi`));
+    console.error(pc.red(`Invalid provider "${providerName}". Use: openai (Codex)`));
     process.exitCode = 1;
     return;
   }

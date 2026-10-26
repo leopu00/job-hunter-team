@@ -97,7 +97,7 @@ interface DocText {
 }
 
 // Titoli + descrizioni per href, per lingua. Slug/href, comandi (jht),
-// brand (Codex, Claude, Kimi, VPS, GitHub, CLI, AI) restano invariati.
+// brand (Codex, VPS, GitHub, CLI, AI) restano invariati.
 const DOCS_I18N: Record<string, Record<DocLocale, DocText>> = {
   "/docs/guides/getting-started": {
     it: {
@@ -140,37 +140,37 @@ const DOCS_I18N: Record<string, Record<DocLocale, DocText>> = {
     it: {
       title: "Collega il tuo provider AI",
       description:
-        "Scegli e accedi a Codex, Claude o Kimi — il cervello del team.",
+        "Scegli e accedi a Codex — il cervello del team.",
     },
     en: {
       title: "Connect your AI provider",
       description:
-        "Choose and sign into Codex, Claude or Kimi — the team's brain.",
+        "Choose and sign into Codex — the team's brain.",
     },
     es: {
       title: "Conecta tu proveedor de AI",
       description:
-        "Elige e inicia sesión en Codex, Claude o Kimi — el cerebro del equipo.",
+        "Elige e inicia sesión en Codex — el cerebro del equipo.",
     },
     fr: {
       title: "Connectez votre fournisseur AI",
       description:
-        "Choisissez et connectez-vous à Codex, Claude ou Kimi — le cerveau de l'équipe.",
+        "Choisissez et connectez-vous à Codex — le cerveau de l'équipe.",
     },
     de: {
       title: "Verbinde deinen AI-Anbieter",
       description:
-        "Wähle Codex, Claude oder Kimi und melde dich an — das Gehirn des Teams.",
+        "Wähle Codex und melde dich an — das Gehirn des Teams.",
     },
     hu: {
       title: "Csatlakoztasd az AI-szolgáltatód",
       description:
-        "Válaszd ki és jelentkezz be a Codex, Claude vagy Kimi szolgáltatásba — a csapat agya.",
+        "Válaszd ki és jelentkezz be a Codex szolgáltatásba — a csapat agya.",
     },
     pt: {
       title: "Liga o teu provedor de AI",
       description:
-        "Escolhe e inicia sessão no Codex, Claude ou Kimi — o cérebro da equipa.",
+        "Escolhe e inicia sessão no Codex — o cérebro da equipa.",
     },
   },
   "/docs/guides/run-on-a-vps": {
