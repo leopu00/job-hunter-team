@@ -20,7 +20,7 @@
 #   APT_MIRROR_PROBE       path of the .deb to fetch, below the mirror
 #   APT_DIR                apt's configuration folder (default /etc/apt)
 # Exit 0 always: no answer is a reason to keep the sources as they are, never to stop the job.
-CANDIDATES="${APT_MIRROR_CANDIDATES:-http://azure.archive.ubuntu.com/ubuntu http://archive.ubuntu.com/ubuntu https://mirrors.edge.kernel.org/ubuntu}"
+CANDIDATES="${APT_MIRROR_CANDIDATES:-https://azure.archive.ubuntu.com/ubuntu https://archive.ubuntu.com/ubuntu https://mirrors.edge.kernel.org/ubuntu}"
 MIN="${APT_MIRROR_MIN_BPS:-1000000}"
 SECONDS_MAX="${APT_MIRROR_SECONDS:-6}"
 PROBE="${APT_MIRROR_PROBE:-pool/main/f/fonts-freefont/fonts-freefont-ttf_20211204+svn4273-2_all.deb}"
@@ -55,12 +55,14 @@ if [ -z "$chosen" ]; then
   echo "apt mirror: none reached $((MIN / 1000)) kB/s, sources left as they are ($current)"
   exit 0
 fi
-if [ "$chosen" = "$current" ]; then
+# the same host over http or https is the same mirror: the sources are not rewritten for a scheme
+if [ "${chosen#*://}" = "${current#*://}" ]; then
   echo "apt mirror: keeping $current"
   exit 0
 fi
+pattern=$(printf '%s' "$current" | sed 's/[][\.*^$#]/\\&/g')   # the host is text, not a regular expression
 for f in $files; do   # in place without `sed -i`, which differs between GNU and BSD
-  sed "s#${current}#${chosen}#g" "$f" > "$f.new" && cat "$f.new" > "$f"
+  sed "s#${pattern}#${chosen}#g" "$f" > "$f.new" && cat "$f.new" > "$f"
   rm -f "$f.new"
 done
 echo "apt mirror: switched $current -> $chosen"

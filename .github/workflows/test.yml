@@ -260,6 +260,7 @@ jobs:
       # Before anything is installed from apt: see the script for why (a mirror that serves the
       # packages at 25-50 kB/s cancelled this job at its ceiling on 22/10 and 26/10).
       - name: Pick a fast apt mirror
+        if: runner.os == 'Linux'
         run: sudo sh scripts/ci/apt-mirror.sh
 
       # Le librerie di sistema che Tauri 2 linka su Linux (WebKitGTK 4.1 e
