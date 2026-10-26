@@ -9,8 +9,8 @@ import type { Locale } from "@/i18n/config";
  */
 const it = {
   title: "Cosa è successo",
-  whereLocal: "Le statistiche stanno su questo computer; si conservano al massimo {days} giorni.",
-  whereVps: "Le statistiche stanno sulla VPS della squadra; si conservano al massimo {days} giorni.",
+  whereLocal: "Le statistiche stanno su questo computer; si conservano al massimo {days} giorni. Non vengono mai inviate fuori.",
+  whereVps: "Le statistiche stanno sulla VPS della squadra; si conservano al massimo {days} giorni. Non vengono mai inviate fuori.",
   loading: "Leggo le statistiche…",
   retry: "Riprova",
   readFailed: "Non riesco a leggere le statistiche.",
@@ -48,8 +48,8 @@ export type WorkStatsText = typeof it;
 
 const en: WorkStatsText = {
   title: "What happened",
-  whereLocal: "The statistics are kept on this computer; they are kept for {days} days at most.",
-  whereVps: "The statistics are kept on the team's VPS; they are kept for {days} days at most.",
+  whereLocal: "The statistics are kept on this computer; they are kept for {days} days at most. They are never sent out.",
+  whereVps: "The statistics are kept on the team's VPS; they are kept for {days} days at most. They are never sent out.",
   loading: "Reading the statistics…",
   retry: "Try again",
   readFailed: "Cannot read the statistics.",
@@ -85,8 +85,8 @@ const en: WorkStatsText = {
 
 const de: WorkStatsText = {
   title: "Was passiert ist",
-  whereLocal: "Die Statistiken liegen auf diesem Computer; sie bleiben höchstens {days} Tage erhalten.",
-  whereVps: "Die Statistiken liegen auf der VPS des Teams; sie bleiben höchstens {days} Tage erhalten.",
+  whereLocal: "Die Statistiken liegen auf diesem Computer; sie bleiben höchstens {days} Tage erhalten. Sie werden nie nach außen gesendet.",
+  whereVps: "Die Statistiken liegen auf der VPS des Teams; sie bleiben höchstens {days} Tage erhalten. Sie werden nie nach außen gesendet.",
   loading: "Ich lese die Statistiken…",
   retry: "Erneut versuchen",
   readFailed: "Die Statistiken lassen sich nicht lesen.",
@@ -122,8 +122,8 @@ const de: WorkStatsText = {
 
 const fr: WorkStatsText = {
   title: "Ce qui s’est passé",
-  whereLocal: "Les statistiques sont gardées sur cet ordinateur ; elles sont conservées {days} jours au plus.",
-  whereVps: "Les statistiques sont gardées sur la VPS de l’équipe ; elles sont conservées {days} jours au plus.",
+  whereLocal: "Les statistiques sont gardées sur cet ordinateur ; elles sont conservées {days} jours au plus. Elles ne sont jamais envoyées à l’extérieur.",
+  whereVps: "Les statistiques sont gardées sur la VPS de l’équipe ; elles sont conservées {days} jours au plus. Elles ne sont jamais envoyées à l’extérieur.",
   loading: "Je lis les statistiques…",
   retry: "Réessayer",
   readFailed: "Impossible de lire les statistiques.",
@@ -159,8 +159,8 @@ const fr: WorkStatsText = {
 
 const es: WorkStatsText = {
   title: "Qué ha pasado",
-  whereLocal: "Las estadísticas se guardan en este ordenador; se conservan {days} días como máximo.",
-  whereVps: "Las estadísticas se guardan en la VPS del equipo; se conservan {days} días como máximo.",
+  whereLocal: "Las estadísticas se guardan en este ordenador; se conservan {days} días como máximo. Nunca se envían fuera.",
+  whereVps: "Las estadísticas se guardan en la VPS del equipo; se conservan {days} días como máximo. Nunca se envían fuera.",
   loading: "Leyendo las estadísticas…",
   retry: "Reintentar",
   readFailed: "No se pueden leer las estadísticas.",
@@ -196,8 +196,8 @@ const es: WorkStatsText = {
 
 const pt: WorkStatsText = {
   title: "O que aconteceu",
-  whereLocal: "As estatísticas ficam neste computador; guardam-se no máximo {days} dias.",
-  whereVps: "As estatísticas ficam na VPS da equipe; guardam-se no máximo {days} dias.",
+  whereLocal: "As estatísticas ficam neste computador; guardam-se no máximo {days} dias. Nunca são enviadas para fora.",
+  whereVps: "As estatísticas ficam na VPS da equipe; guardam-se no máximo {days} dias. Nunca são enviadas para fora.",
   loading: "A ler as estatísticas…",
   retry: "Tentar de novo",
   readFailed: "Não é possível ler as estatísticas.",
@@ -233,8 +233,8 @@ const pt: WorkStatsText = {
 
 const hu: WorkStatsText = {
   title: "Mi történt",
-  whereLocal: "A statisztikák ezen a számítógépen vannak; legfeljebb {days} napig őrizzük meg őket.",
-  whereVps: "A statisztikák a csapat VPS-én vannak; legfeljebb {days} napig őrizzük meg őket.",
+  whereLocal: "A statisztikák ezen a számítógépen vannak; legfeljebb {days} napig őrizzük meg őket. Soha nem küldjük ki őket.",
+  whereVps: "A statisztikák a csapat VPS-én vannak; legfeljebb {days} napig őrizzük meg őket. Soha nem küldjük ki őket.",
   loading: "A statisztikák beolvasása…",
   retry: "Újra",
   readFailed: "A statisztikák nem olvashatók.",
