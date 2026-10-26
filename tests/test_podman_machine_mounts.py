@@ -120,7 +120,13 @@ if [ "$1:$2:$3" = --connection:jht-podman:pull ]; then exit 0; fi
 if [ "$1:$2:$3" = --connection:jht-podman:run ]; then
   case "$*" in
     *"jht_jht-broker-state:/jht_broker_state:ro"*) cat "$JHT_TEST_BROKER_STATE" ;;
-    *"jht_jht-broker-state:/jht_broker_state"*) cat > "$JHT_TEST_BROKER_STATE" ;;
+    *"jht_jht-broker-state:/jht_broker_state"*)
+      # `podman run` forwards its stdin to the container only with -i / --interactive; without it
+      # the process inside reads an empty input
+      case " $* " in
+        *" -i "*|*" -it "*|*" --interactive "*) cat > "$JHT_TEST_BROKER_STATE" ;;
+        *) : > "$JHT_TEST_BROKER_STATE" ;;
+      esac ;;
     *) exit 99 ;;
   esac
   exit 0
@@ -413,6 +419,21 @@ def test_recreate_starts_a_stopped_machine_before_exporting_state(tmp_path: Path
     remove = calls.index("podman machine rm -f jht-podman")
     assert start < export < remove
     assert Path(env["JHT_TEST_BROKER_STATE"]).read_bytes() == state_before
+
+
+def test_recreate_of_a_broker_without_state_ends_with_0_and_imports_nothing(tmp_path: Path):
+    wrapper, env, log, _, config = _wrapper(tmp_path, sources=MACOS_DEFAULT_SOURCES)
+    env["JHT_TEST_RUNTIME_READY"] = "1"
+    # the broker never saved anything: its volume is not on the machine
+    Path(env["JHT_TEST_BROKER_STATE_PRESENT"]).unlink()
+
+    result = _run(wrapper, env, "podman-machine-recreate", "--confirm")
+
+    assert result.returncode == 0, result.stderr
+    calls = _calls(log)
+    assert "podman machine rm -f jht-podman" in calls
+    assert not any("jht_jht-broker-state:/jht_broker_state" in line for line in calls)
+    assert not any("tar" in line for line in result.stderr.splitlines())
 
 
 def test_recreate_refuses_a_changed_state_archive_before_import_and_cleans_it(tmp_path: Path):

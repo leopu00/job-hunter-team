@@ -67,8 +67,11 @@ case "$1" in
           printf '%s\n' "$JHT_TEST_INSPECT_DETAILS"
         else
           # config_files as podman-compose writes it: the files given to `-f`, joined by ",".
-          printf 'jht|true|jht|jht|jht|jht|1|%s|%s|1.6.0|podman-compose%sjht.service|%s\n' \
-            "$JHT_RUNTIME_DIR" "${JHT_TEST_CONFIG_FILES:-$JHT_RUNTIME_DIR/docker-compose.yml}" "$(printf '\\100')" "$JHT_TEST_CONFIG_HASH"
+          running=true
+          # a container of an earlier `up` that stopped (the machine was stopped): Exited until `up` starts it again
+          if [ -n "${JHT_TEST_EXITED_STATE:-}" ] && [ ! -f "$JHT_TEST_EXITED_STATE" ]; then running=false; fi
+          printf 'jht|%s|jht|jht|jht|jht|1|%s|%s|1.6.0|podman-compose%sjht.service|%s\n' \
+            "$running" "$JHT_RUNTIME_DIR" "${JHT_TEST_CONFIG_FILES:-$JHT_RUNTIME_DIR/docker-compose.yml}" "$(printf '\\100')" "$JHT_TEST_CONFIG_HASH"
         fi
         if [ "${JHT_TEST_STOP_AFTER_INSPECT:-0}" = 1 ]; then : > "$JHT_TEST_CONTAINER_STOPPED"; fi ;;
       *'.State.Running}}'*)
@@ -141,13 +144,17 @@ case "$*" in
     printf 'INFO:podman_compose:podman create --name=jht --label io.podman.compose.config-hash=%s --label next=value x\n' \
       "$JHT_TEST_CONFIG_HASH" >&2 ;;
   *" ps -q")
-    if [ -n "${JHT_TEST_PS_STATE:-}" ]; then
+    # podman-compose 1.6.0 lists the project's stopped containers too, as `podman ps -a` does
+    if [ -n "${JHT_TEST_EXITED_STATE:-}" ]; then
+      printf '%s\n' aaaaaaaaaaaa
+    elif [ -n "${JHT_TEST_PS_STATE:-}" ]; then
       [ ! -f "$JHT_TEST_PS_STATE" ] || printf '%s\n' aaaaaaaaaaaa
       true
     else
       printf '%s\n' "${JHT_TEST_PS_IDS-aaaaaaaaaaaa}"
     fi ;;
   *" up -d")
+    [ -z "${JHT_TEST_EXITED_STATE:-}" ] || : > "$JHT_TEST_EXITED_STATE"
     [ -z "${JHT_TEST_PS_STATE:-}" ] || : > "$JHT_TEST_PS_STATE" ;;
   *) exit 90 ;;
 esac
@@ -618,6 +625,50 @@ def test_explicit_up_uses_the_same_named_podman_compose_adapter_idempotently(
     )
     assert all("--podman-args" not in line for line in compose_calls)
     assert not any("machine start" in line or "machine init" in line for line in calls)
+
+
+def test_up_goes_on_when_the_container_of_an_earlier_up_is_there_but_stopped(tmp_path: Path):
+    # The machine was stopped (a restart of the Mac, an app update): podman-compose lists the team's
+    # containers as Exited. They are ours, attested by every label: `up` starts them, it does not refuse.
+    wrapper, env, log = _runtime(tmp_path)
+    env["JHT_TEST_RUNTIME_READY"] = "1"
+    env["JHT_TEST_EXITED_STATE"] = str(tmp_path / "container-started")
+
+    result = subprocess.run([str(wrapper), "up"], env=env, text=True, capture_output=True, timeout=20, check=False)
+
+    assert result.returncode == 0, result.stderr
+    assert "non attestabile" not in result.stderr
+    calls = log.read_text(encoding="utf-8").splitlines()
+    assert len([line for line in calls if line.startswith("podman-compose ") and line.endswith(" up -d")]) == 1
+
+
+def test_status_says_a_stopped_container_is_not_running_and_does_not_call_it_unattestable(tmp_path: Path):
+    wrapper, env, _ = _runtime(tmp_path)
+    env["JHT_TEST_RUNTIME_READY"] = "1"
+    env["JHT_TEST_EXITED_STATE"] = str(tmp_path / "container-never-started")
+
+    result = subprocess.run([str(wrapper), "status"], env=env, text=True, capture_output=True, timeout=20, check=False)
+
+    assert result.returncode == 1
+    assert "non attivo" in result.stdout + result.stderr and "non attestabile" not in result.stdout + result.stderr
+
+
+def test_a_stopped_container_that_is_not_ours_still_stops_up(tmp_path: Path):
+    wrapper, env, log = _runtime(tmp_path)
+    env["JHT_TEST_RUNTIME_READY"] = "1"
+    env["JHT_TEST_EXITED_STATE"] = str(tmp_path / "container-started")
+    # another project's container under the same service name: not attested, not touched
+    env["JHT_TEST_INSPECT_DETAILS"] = (
+        f"jht|false|someone-else|someone-else|jht|jht|1|{env['JHT_RUNTIME_DIR']}|"
+        f"{env['JHT_RUNTIME_DIR']}/docker-compose.yml|1.6.0|podman-compose{chr(64)}someone-else.service|{'a' * 64}"
+    )
+
+    result = subprocess.run([str(wrapper), "up"], env=env, text=True, capture_output=True, timeout=20, check=False)
+
+    assert result.returncode == 1
+    assert "non attestabile" in result.stderr
+    calls = log.read_text(encoding="utf-8").splitlines()
+    assert not any(line.startswith("podman-compose ") and line.endswith(" up -d") for line in calls)
 
 
 def test_explicit_up_allows_zero_ids_then_verifies_the_created_container(tmp_path: Path):

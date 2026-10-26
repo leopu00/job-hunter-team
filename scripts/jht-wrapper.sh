@@ -1014,7 +1014,9 @@ podman_import_broker_state() {
     --label "io.podman.compose.project=$project" \
     --label "com.docker.compose.project=$project" \
     "$PODMAN_STATE_VOLUME" >/dev/null || return 1
-  "$podman_bin" --connection "$PODMAN_MACHINE_NAME" run --rm \
+  # -i: `podman run` forwards its stdin to the container only with it; without it the tar inside
+  # reads nothing («This does not look like a tar archive») and the saved state is not restored.
+  "$podman_bin" --connection "$PODMAN_MACHINE_NAME" run --rm -i \
     --userns keep-id:uid=1001,gid=1001 --user 1002:1002 \
     --network none --read-only --security-opt no-new-privileges --cap-drop ALL \
     --volume "$PODMAN_STATE_VOLUME:/jht_broker_state" \
@@ -2337,7 +2339,7 @@ read_only_service_id() {
   local service="$1" config_check="${2:-exact}"
   runtime_bundle_trusted || return 1
   docker_reachable || return 1
-  local ids container_id details expected_hash expected_project expected_unit found="" seen_service
+  local ids container_id details expected_hash expected_project expected_unit found="" seen_service stopped
   if [ "$CONTAINER_RUNTIME" = podman ]; then
     # podman-compose 1.6.0 non accetta un operando service su `ps`: elenca
     # tutti i container del progetto, e il servizio lo dice l'inspect
@@ -2376,13 +2378,22 @@ read_only_service_id() {
         case " $COMPOSE_SERVICES " in *" $seen_service "*) continue ;; esac
         return 1
       fi
-      [ -z "$found" ] || return 1
+      # podman-compose 1.6.0's `ps` lists the project's STOPPED containers too, as `podman ps -a`
+      # does (Docker Compose's lists the running ones): after the machine stopped (a restart of
+      # the Mac, an app update) the team's containers are there, Exited. They are attested by
+      # every label like a running one, and then they are simply not running: not a refusal.
+      stopped=0
+      case "$details" in
+        "$service|false|"*) stopped=1; details="$service|true|${details#"$service|false|"}" ;;
+      esac
+      [ "$stopped" -eq 1 ] || [ -z "$found" ] || return 1
       if [ "$config_check" = any-config ]; then
         expected_hash="${details##*|}"
         printf '%s' "$expected_hash" | grep -Eq '^[0-9a-f]{64}$' || return 1
       fi
       [ "$details" = "$service|true|$expected_project|$expected_project|$service|$service|1|$RUNTIME_DIR|$expected_files|$expected_version|$expected_unit|$expected_hash" ] \
         || return 1
+      [ "$stopped" -eq 0 ] || continue
     else
       [ -z "$found" ] || return 1
       # Conserva il contratto Docker/VPS preesistente: l'ownership stretta
