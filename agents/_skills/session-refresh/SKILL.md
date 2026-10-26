@@ -167,7 +167,8 @@ sleep 8
 # every hour. Workers do not get it — the mode is applied by the Capitano.
 MODE=""
 if [ "$ROLE" = "capitano" ]; then MODE=" $(python3 /app/shared/skills/mode_banner.py line)"; fi
-/app/agents/_skills/tmux-send/jht-tmux-send "$S" "[@dottore -> @${s_lower}] [RESUME] Contesto pre-refresh: stavi facendo <X>; avevi completato <Y> (analytics: produced=<...>); il prossimo passo era <Z>. Riprendi da li'. Coda: <next-for-role>.$MODE"
+LANGUAGE=" $(python3 /app/shared/skills/text_language.py line)"   # the team's language by name (RULE-T14): every role, not only the Capitano
+/app/agents/_skills/tmux-send/jht-tmux-send "$S" "[@dottore -> @${s_lower}] [RESUME] Contesto pre-refresh: stavi facendo <X>; avevi completato <Y> (analytics: produced=<...>); il prossimo passo era <Z>. Riprendi da li'. Coda: <next-for-role>.$MODE$LANGUAGE"
 ```
 Set `resume_msg_sent=True` in the journal entry. Then move to the next session (pace ~15-20s between agents).
 

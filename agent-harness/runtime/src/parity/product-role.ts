@@ -27,6 +27,7 @@ import { loadPauseRules, PausePolicy, watchInserts, WorkUnit } from "./pause-rul
 import { hasShell, noShellTool, NO_SHELL_NOTE } from "./shell-policy.ts";
 import { createSkillTools, scriptOverrides, type JobsDbHandle, type SkillToolsOptions } from "./skills/index.ts";
 import { PROFILE_FLAG_NOTE } from "./skills/profile-flag.ts";
+import { teamLanguageLine } from "./skills/text-language.ts";
 import {
   createJhtTools,
   FileMailbox,
@@ -189,7 +190,10 @@ export async function prepareProductRole(options: ProductRoleOptions): Promise<P
     : PARITY_NOTES;
   // The ASSISTENTE's flags: its shell is sandboxed off the person's profile, and the tool is the way in.
   const flagNote = roleOf(options.agent) === "assistente" ? `\n\n${PROFILE_FLAG_NOTE}` : "";
-  const roleNotes = `${shell ? notes : `${notes}\n\n${NO_SHELL_NOTE}`}${modelNote}${flagNote}`;
+  // T140: the team's language by name, in the notes the role reads every round. The rule in the prompt says
+  // "the user's language", and a role used to read that off the message it was answering.
+  const languageNote = `\n\n${teamLanguageLine(locale)}`;
+  const roleNotes = `${shell ? notes : `${notes}\n\n${NO_SHELL_NOTE}`}${modelNote}${flagNote}${languageNote}`;
   const systemPrompt = composeSystemPrompt(prompt, roleNotes, options.homeDir);
   // T43: with a home the executor prepared (and mounted read-only), the runtime
   // checks it instead of rebuilding it — rebuilding is exactly what makes the

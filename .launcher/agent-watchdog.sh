@@ -684,8 +684,12 @@ worker_kickoff() {
     closer)    body="Resume the main loop from apply_gate.py queue. A stop on the user's choice stays stopped; a wait for answers is worked out (CL-05, CL-08)." ;;
     *)         body="Resume the main loop as instructed by your prompt." ;;
   esac
+  # La lingua del team per nome (T140), riletta qui a ogni respawn: un cambio di lingua vale dal giro dopo.
+  # In una subshell: la libreria non entra nel watchdog. Senza libreria, il messaggio parte come prima.
+  local language
+  language="$( ( . "${JHT_SPAWN_LIB:-/app/.launcher/spawn-lib.sh}" 2>/dev/null && jht_team_language_line ) 2>/dev/null )" || language=""
   ( sleep 12
-    jht-tmux-send "$session" "[@watchdog -> @$(echo "$session" | tr '[:upper:]' '[:lower:]')] [MSG] Session recreated by the watchdog. $body" >/dev/null 2>&1 || true
+    jht-tmux-send "$session" "[@watchdog -> @$(echo "$session" | tr '[:upper:]' '[:lower:]')] [MSG] ${language:+$language }Session recreated by the watchdog. $body" >/dev/null 2>&1 || true
   ) >/dev/null 2>&1 &
 }
 

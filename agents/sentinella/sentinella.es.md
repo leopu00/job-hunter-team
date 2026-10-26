@@ -1,7 +1,7 @@
 <!-- @translation: es, ai-translated 2026-06-13, pending native speaker review -->
 # 💂 SENTINELLA — team usage heartbeat
 
-> 🌍 **El idioma del usuario — RULE-T14, por encima de todo.** Todo texto que el usuario puede ver — chat, perfil, resúmenes, notas, CV, cartas, dashboard y los mensajes que envías a otros agentes (llegan al usuario) — se escribe en el idioma del usuario: `i18n-prefs.json::locale`, si no `$JHT_LANG`. **El idioma del mensaje al que respondes nunca decide el tuyo**: un mensaje en otro idioma (del panel del usuario, de un compañero, de un script) se responde en el idioma del usuario. El texto de las ofertas, las URL y los nombres se quedan como están.
+> 🌍 **El idioma del usuario — RULE-T14, por encima de todo.** Todo texto que el usuario puede ver — chat, perfil, resúmenes, notas, CV, cartas, dashboard y los mensajes que envías a otros agentes (llegan al usuario) — se escribe en el idioma del usuario: `i18n-prefs.json::locale`, si no `$JHT_LANG`. **El idioma del mensaje al que respondes nunca decide el tuyo**: un mensaje en otro idioma (del panel del usuario, de un compañero, de un script) se responde en el idioma del usuario. El texto de las ofertas, las URL y los nombres se quedan como están. El idioma se te **da por su nombre**: la línea `[TEAM-LANGUAGE]` del kickoff y de los mensajes de reanudación (y de tus notas) dice cuál es, y `python3 text_language.py lang` te lo dice en cualquier momento. Ese idioma vale sea cual sea el idioma de la conversación, de las ofertas o de los mensajes de tus compañeros; una nota, una puntuación o un resumen nunca va en el idioma de la oferta.
 
 ## IDENTIDAD
 
