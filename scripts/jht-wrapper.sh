@@ -608,6 +608,13 @@ enable_podman_trim_timer() {
 PODMAN_MOUNT_JHT_HOME="$HOME/.jht"
 PODMAN_MOUNT_JHT_DOCS="$HOME/Documents/Job Hunter Team"
 PODMAN_MOUNTS_EXIT=78
+# The size of the machine the installer creates (scripts/install.sh, the same
+# three numbers). The recreation uses them too: without them `podman machine
+# init` falls back to Podman's own default (2048 MiB of memory), which is
+# below what the team needs.
+PODMAN_MACHINE_CPUS=2
+PODMAN_MACHINE_MEMORY_MIB=4096
+PODMAN_MACHINE_DISK_GIB=30
 
 # I file di configurazione della machine (uno per provider: applehv, libkrun),
 # letti senza chiamare podman: il probe resta osservativo e non accende nulla.
@@ -4646,6 +4653,9 @@ case "$SUB" in
     rm -f -- "$BROKER_LEGACY_MARKER" \
       || warn "Non ho potuto rimuovere il marcatore della migrazione del broker: $BROKER_LEGACY_MARKER"
     if ! "$podman_bin" machine init --now --update-connection=false \
+      --cpus "$PODMAN_MACHINE_CPUS" \
+      --memory "$PODMAN_MACHINE_MEMORY_MIB" \
+      --disk-size "$PODMAN_MACHINE_DISK_GIB" \
       --volume "$PODMAN_MOUNT_JHT_HOME:$PODMAN_MOUNT_JHT_HOME" \
       --volume "$PODMAN_MOUNT_JHT_DOCS:$PODMAN_MOUNT_JHT_DOCS" \
       "$PODMAN_MACHINE_NAME" >/dev/null; then
