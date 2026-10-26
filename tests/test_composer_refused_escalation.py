@@ -92,6 +92,23 @@ def test_pacing_notice_survives_a_captain_whose_own_composer_is_taken(world):
     assert [row["kind"] for row in world.mailbox()] == ["escalation"], "the Captain drains it at the next turn"
 
 
+def test_pacing_repeats_the_notice_at_most_once_every_30_minutes_like_the_sentinel(world, monkeypatch):
+    _fake_sender(world.bin, flush_rc=130, send_rc=0)
+    pacing = _load("pacing_bridge_under_test", "pacing-bridge.py", world.home, world.bin)
+    clock = [1000.0]
+    monkeypatch.setattr(pacing.time, "time", lambda: clock[0])
+    assert pacing.escalate_composer_to_capitano(2) is True
+    for _ in range(3):                                      # the next ticks, 15 minutes apart: nothing new
+        clock[0] += 900
+        if clock[0] - 1000.0 < 1800:
+            assert pacing.escalate_composer_to_capitano(2) is False
+    assert len([c for c in world.calls() if c.startswith(f"{pacing.ESCALATION_SESSION}|")]) == 1
+    assert len(world.mailbox()) == 1
+    clock[0] = 1000.0 + 1801
+    assert pacing.escalate_composer_to_capitano(2) is True
+    assert len([c for c in world.calls() if c.startswith(f"{pacing.ESCALATION_SESSION}|")]) == 2
+
+
 def test_pacing_loop_counts_the_130_and_never_mixes_it_with_the_respawn_streaks():
     source = (LAUNCHER / "pacing-bridge.py").read_text(encoding="utf-8")
     loop = source.split("composer_streak = 0\n", 1)[1]
