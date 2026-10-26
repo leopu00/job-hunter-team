@@ -1191,6 +1191,12 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
     "The team on the VPS is off or is no longer the version that was connected.",
     "Start it on the VPS and press Retry; if the problem stays, connect the team again from the setup.",
   ),
+  existing_team_full_link_not_removed: copy(
+    "L’accesso in scrittura salvato non si è potuto togliere da questo computer.",
+    "Questa sessione resta in sola lettura; chiudi l’app e togli a mano il file dell’accesso, oppure scollega la squadra dalle Impostazioni e ricollegala.",
+    "The saved write access could not be removed from this computer.",
+    "This session stays read only; close the app and remove the access file by hand, or unlink the team in Settings and connect it again.",
+  ),
   vps_reconnecting: copy(
     "Collegamento alla VPS perso: riprovo da solo alle {time}.",
     "Non serve fare niente: le azioni sulla squadra restano ferme finché il collegamento non torna.",

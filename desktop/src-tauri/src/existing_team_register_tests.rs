@@ -2510,3 +2510,438 @@ fn t123_picking_the_container_already_saved_is_no_rebind() {
     assert_eq!(result.expect_err("same runtime"), "existing_team_runtime_candidate_exists");
     assert_eq!(pair_of(&sandbox), before);
 }
+
+// ------------------------------------------- the full connection kept across a restart
+
+fn full_link_file(sandbox: &Sandbox) -> PathBuf {
+    sandbox.account().join("existing-team-runtime-full-link.json")
+}
+
+fn serial() -> std::sync::MutexGuard<'static, ()> {
+    runtime::FULL_LINK_TEST_LOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
+}
+
+/// What a successful «Connect with write access» leaves: the permission in memory and the record.
+fn confirmed_in_full(sandbox: &Sandbox, at: u64) -> runtime::ActivatedTarget {
+    let target = runtime::selected_at(&sandbox.root, &sandbox.scope, &host()).expect("selected").expect("a target");
+    runtime::grant_full_link(&sandbox.scope, &target);
+    runtime::remember_full_link_at(&sandbox.root, &sandbox.scope, &target, at).expect("remembered");
+    target
+}
+
+/// A new run of the app: the permission in memory is gone; the start-up reopening of the saved team.
+fn restart_and_reopen(sandbox: &Sandbox, world: &World) -> crate::onboarding::ExistingTeamReadiness {
+    runtime::revoke_full_link();
+    reopen(sandbox, &team_server(world), &Cell::new(0)).expect("reopened")
+}
+
+fn record_of(sandbox: &Sandbox, target: &runtime::ActivatedTarget, at: u64) -> String {
+    serde_json::json!({
+        "schema": 1,
+        "connection_key": runtime::connection_key(&sandbox.scope, target),
+        "granted_at": at,
+    })
+    .to_string()
+}
+
+fn mode_of(path: &Path) -> u32 {
+    use std::os::unix::fs::PermissionsExt;
+    fs::symlink_metadata(path).unwrap().permissions().mode() & 0o777
+}
+
+fn set_mode(path: &Path, mode: u32) {
+    use std::os::unix::fs::PermissionsExt;
+    fs::set_permissions(path, fs::Permissions::from_mode(mode)).unwrap();
+}
+
+#[test]
+fn t40_the_full_connection_comes_back_after_a_restart_when_the_whole_reopening_passes() {
+    let _serial = serial();
+    let sandbox = Sandbox::new();
+    let (world, _) = connected_once(&sandbox);
+    let target = confirmed_in_full(&sandbox, runtime::unix_now());
+    // the record: exact keys, private, and nothing of the host, the team or a fingerprint in it
+    let bytes = fs::read(full_link_file(&sandbox)).unwrap();
+    let value: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+    let mut keys: Vec<&str> = value.as_object().unwrap().keys().map(String::as_str).collect();
+    keys.sort_unstable();
+    assert_eq!(keys, ["connection_key", "granted_at", "schema"]);
+    assert_eq!(value["schema"], 1);
+    assert_eq!(value["connection_key"], runtime::connection_key(&sandbox.scope, &target));
+    assert_eq!(mode_of(&full_link_file(&sandbox)), 0o600);
+    let text = String::from_utf8(bytes).unwrap();
+    assert!(!text.contains("203.0.113") && !text.contains(TEAM) && !text.contains("SHA256") && !text.contains("synthetic-key"));
+
+    let readiness = restart_and_reopen(&sandbox, &world);
+    assert!(readiness.full_link, "the person confirmed it and nothing changed");
+    assert_eq!(readiness.full_link_outcome, Some("restored"));
+    assert!(runtime::full_link_granted(&sandbox.scope, &target));
+    assert!(full_link_file(&sandbox).exists(), "the record stays until it expires or is taken away");
+    // the reopening itself is still the read-only one: no start, nothing written, the connection key is the same
+    assert_eq!(readiness.connection_key.as_deref(), Some(runtime::connection_key(&sandbox.scope, &target).as_str()));
+    runtime::revoke_full_link();
+}
+
+#[test]
+fn t41_no_record_or_no_confirmation_is_the_read_only_view_as_before() {
+    let _serial = serial();
+    let sandbox = Sandbox::new();
+    let (world, _) = connected_once(&sandbox);
+    let target = runtime::selected_at(&sandbox.root, &sandbox.scope, &host()).unwrap().unwrap();
+    let readiness = restart_and_reopen(&sandbox, &world);
+    assert!(!readiness.full_link);
+    assert_eq!(readiness.full_link_outcome, Some("not_restored"));
+    assert!(!runtime::full_link_granted(&sandbox.scope, &target));
+    // the permission of this run only (no record: the write of it failed or was never made) is gone too
+    runtime::grant_full_link(&sandbox.scope, &target);
+    let again = restart_and_reopen(&sandbox, &world);
+    assert!(!again.full_link && !runtime::full_link_granted(&sandbox.scope, &target));
+    assert!(!full_link_file(&sandbox).exists());
+}
+
+#[test]
+fn t42_a_reopening_that_fails_gives_nothing_back_and_keeps_the_record_for_its_expiry() {
+    let _serial = serial();
+    let sandbox = Sandbox::new();
+    let (world, _) = connected_once(&sandbox);
+    let target = confirmed_in_full(&sandbox, runtime::unix_now());
+    let record = fs::read(full_link_file(&sandbox)).unwrap();
+    for (what, server) in [
+        ("the team does not answer", Server::new(&world).probe(1, exit(1))),
+        ("another team answers", Server::new(&world).probe(1, exit(72))),
+        ("the VPS was updated", Server::new(&world).probe(1, exit(70))),
+    ] {
+        runtime::revoke_full_link();
+        assert!(reopen(&sandbox, &server, &Cell::new(0)).is_err(), "{what}");
+        assert!(!runtime::full_link_granted(&sandbox.scope, &target), "{what}");
+        assert_eq!(fs::read(full_link_file(&sandbox)).unwrap(), record, "{what}: the record is not touched");
+    }
+    // the pin is gone: the reopening stops before any SSH call
+    runtime::revoke_full_link();
+    let server = Server::new(&world).probe(1, probe_ok(true, false));
+    let result = existing_team_reopen_with(
+        &sandbox.root, &sandbox.scope,
+        &mut |_| Err("host_key_changed"), &mut |_| Ok(()),
+        &mut |_, c, i, t| server.answer(c, i, t),
+    );
+    assert_eq!(result.expect_err("pin").code, "host_key_changed");
+    assert!(!runtime::full_link_granted(&sandbox.scope, &target));
+    assert!(full_link_file(&sandbox).exists());
+}
+
+#[test]
+fn t43_another_candidate_is_read_only_and_a_rebind_or_an_unlink_takes_the_record_away() {
+    let _serial = serial();
+    // the record names the connection of ANOTHER saved candidate (the VPS was updated and the team rebound)
+    let sandbox = Sandbox::new();
+    let (world, _) = connected_once(&sandbox);
+    let target = runtime::selected_at(&sandbox.root, &sandbox.scope, &host()).unwrap().unwrap();
+    let other = runtime::ActivatedTarget::synthetic_for_tests();
+    assert_ne!(runtime::connection_key(&sandbox.scope, &other), runtime::connection_key(&sandbox.scope, &target));
+    runtime::remember_full_link_at(&sandbox.root, &sandbox.scope, &other, runtime::unix_now()).unwrap();
+    let readiness = restart_and_reopen(&sandbox, &world);
+    assert!(!readiness.full_link && !runtime::full_link_granted(&sandbox.scope, &target));
+    assert_eq!(readiness.full_link_outcome, Some("discarded"));
+    assert!(!full_link_file(&sandbox).exists(), "a record of another candidate is removed");
+
+    // the first half of a rebind takes the record away BEFORE the candidate goes: a candidate that
+    // comes back byte for byte the same finds nothing to restore
+    let sandbox = Sandbox::new();
+    connected_once(&sandbox);
+    confirmed_in_full(&sandbox, runtime::unix_now());
+    let candidate = fs::read(sandbox.candidate()).unwrap();
+    runtime::clear_for_rebind_at(&sandbox.root, &sandbox.scope, &host(), TEAM, &runtime::sha256(&candidate)).expect("rebind");
+    assert!(!full_link_file(&sandbox).exists());
+    assert!(!sandbox.candidate().exists() && !sandbox.selection().exists());
+    // a refused rebind (the candidate is not the one shown) leaves everything, the record included
+    let sandbox = Sandbox::new();
+    connected_once(&sandbox);
+    confirmed_in_full(&sandbox, runtime::unix_now());
+    assert_eq!(
+        runtime::clear_for_rebind_at(&sandbox.root, &sandbox.scope, &host(), TEAM, &"0".repeat(64)),
+        Err("existing_team_runtime_target_changed")
+    );
+    assert!(full_link_file(&sandbox).exists() && sandbox.candidate().exists());
+    // «Unlink the team»
+    let sandbox = Sandbox::new();
+    connected_once(&sandbox);
+    confirmed_in_full(&sandbox, runtime::unix_now());
+    runtime::clear_link_at(&sandbox.root, &sandbox.scope).expect("unlink");
+    assert!(!full_link_file(&sandbox).exists());
+    assert!(!sandbox.candidate().exists() && !sandbox.selection().exists());
+    runtime::revoke_full_link();
+}
+
+#[test]
+fn t44_a_record_that_cannot_be_believed_is_ignored_and_removed() {
+    use std::os::unix::{ffi::OsStrExt, fs::symlink};
+    let _serial = serial();
+    let sandbox = Sandbox::new();
+    let (world, _) = connected_once(&sandbox);
+    let target = runtime::selected_at(&sandbox.root, &sandbox.scope, &host()).unwrap().unwrap();
+    let now = runtime::unix_now();
+    let good = record_of(&sandbox, &target, now);
+    let key = runtime::connection_key(&sandbox.scope, &target);
+    let write = |bytes: &str, mode: u32| {
+        let file = full_link_file(&sandbox);
+        let _ = fs::remove_file(&file);
+        fs::write(&file, bytes).unwrap();
+        set_mode(&file, mode);
+    };
+    let cases: Vec<(&str, Box<dyn Fn() + '_>)> = vec![
+        ("group-readable (0644)", Box::new(|| write(&good, 0o644))),
+        ("too open (0666)", Box::new(|| write(&good, 0o666))),
+        ("stricter than the writer makes it (0400)", Box::new(|| write(&good, 0o400))),
+        ("a symbolic link to a good record", Box::new(|| {
+            let real = sandbox.account().join("elsewhere.json");
+            fs::write(&real, &good).unwrap();
+            set_mode(&real, 0o600);
+            let _ = fs::remove_file(full_link_file(&sandbox));
+            symlink(&real, full_link_file(&sandbox)).unwrap();
+        })),
+        ("a dangling symbolic link", Box::new(|| {
+            let _ = fs::remove_file(full_link_file(&sandbox));
+            symlink("/nonexistent/synthetic", full_link_file(&sandbox)).unwrap();
+        })),
+        ("a FIFO", Box::new(|| {
+            let file = full_link_file(&sandbox);
+            let _ = fs::remove_file(&file);
+            let name = std::ffi::CString::new(file.as_os_str().as_bytes()).unwrap();
+            assert_eq!(unsafe { libc::mkfifo(name.as_ptr(), 0o600) }, 0);
+        })),
+        ("two names (a hard link)", Box::new(|| {
+            write(&good, 0o600);
+            fs::hard_link(full_link_file(&sandbox), sandbox.account().join("second-name")).unwrap();
+        })),
+        ("over 1 KiB", Box::new(|| write(&format!("{good}{}", " ".repeat(2000)), 0o600))),
+        ("empty", Box::new(|| write("", 0o600))),
+        ("not JSON", Box::new(|| write("granted", 0o600))),
+        ("an extra key", Box::new(|| write(&good.replace('}', ",\"host\":\"x\"}"), 0o600))),
+        ("another schema", Box::new(|| write(&good.replace("\"schema\":1", "\"schema\":2"), 0o600))),
+        ("a key that is not a whole hash", Box::new(|| write(&good.replace(&key, &key[..63]), 0o600))),
+        ("an upper-case hash", Box::new(|| write(&good.replace(&key, &key.to_uppercase()), 0o600))),
+        ("a date that is a float", Box::new(|| write(&good.replace(&now.to_string(), &format!("{now}.5")), 0o600))),
+        ("a date that is a string", Box::new(|| write(&good.replace(&now.to_string(), &format!("\"{now}\"")), 0o600))),
+        ("a negative date", Box::new(|| write(&good.replace(&now.to_string(), "-5"), 0o600))),
+        ("a missing date", Box::new(|| write(&format!("{{\"schema\":1,\"connection_key\":\"{key}\"}}"), 0o600))),
+    ];
+    for (what, prepare) in &cases {
+        runtime::revoke_full_link();
+        let _ = fs::remove_file(sandbox.account().join("second-name"));
+        prepare();
+        let readiness = restart_and_reopen(&sandbox, &world);
+        assert!(!readiness.full_link, "{what}");
+        assert!(!runtime::full_link_granted(&sandbox.scope, &target), "{what}");
+        assert_eq!(readiness.full_link_outcome, Some("discarded"), "{what}");
+        assert!(fs::symlink_metadata(full_link_file(&sandbox)).is_err(), "{what}: the record is removed");
+    }
+    // and the same record, written the way the app writes it, does come back: the cases above are the defense
+    write(&good, 0o600);
+    assert!(restart_and_reopen(&sandbox, &world).full_link);
+    runtime::revoke_full_link();
+}
+
+#[test]
+fn t45_a_record_older_than_thirty_days_or_from_the_future_is_removed() {
+    let _serial = serial();
+    let sandbox = Sandbox::new();
+    connected_once(&sandbox);
+    let target = runtime::selected_at(&sandbox.root, &sandbox.scope, &host()).unwrap().unwrap();
+    let given = 1_800_000_000u64;
+    let max = runtime::FULL_LINK_MAX_AGE_S;
+    assert_eq!(max, 30 * 24 * 3600);
+    for (now, restored, what) in [
+        (given, true, "the same second"),
+        (given + max, true, "the last second of the thirtieth day"),
+        (given + max + 1, false, "one second more"),
+        (given + 365 * 24 * 3600, false, "a year"),
+        (given - 1, false, "the clock went back by a second"),
+        (given - 10_000_000, false, "the clock went back a lot"),
+    ] {
+        runtime::revoke_full_link();
+        runtime::remember_full_link_at(&sandbox.root, &sandbox.scope, &target, given).unwrap();
+        let outcome = runtime::restore_full_link_at(&sandbox.root, &sandbox.scope, &target, now);
+        assert_eq!(runtime::full_link_granted(&sandbox.scope, &target), restored, "{what}");
+        assert_eq!(
+            outcome,
+            if restored { runtime::FullLinkRestore::Restored } else { runtime::FullLinkRestore::Expired },
+            "{what}"
+        );
+        assert_eq!(full_link_file(&sandbox).exists(), restored, "{what}: an expired record is removed");
+    }
+    runtime::revoke_full_link();
+}
+
+#[test]
+fn t46_another_account_never_gets_the_permission_from_a_record() {
+    let _serial = serial();
+    let sandbox = Sandbox::new();
+    connected_once(&sandbox);
+    let target = confirmed_in_full(&sandbox, runtime::unix_now());
+    runtime::revoke_full_link();
+    let (other, dir) = sandbox.other_scope();
+    fs::remove_file(dir.join("existing-team-runtime-candidate.json")).unwrap();
+    // the other account has no record at all
+    assert_eq!(
+        runtime::restore_full_link_at(&sandbox.root, &other, &target, runtime::unix_now()),
+        runtime::FullLinkRestore::NotRestored
+    );
+    // the record of this account copied into the other's folder is not the other's: its key is
+    fs::copy(full_link_file(&sandbox), dir.join("existing-team-runtime-full-link.json")).unwrap();
+    set_mode(&dir.join("existing-team-runtime-full-link.json"), 0o600);
+    assert_eq!(
+        runtime::restore_full_link_at(&sandbox.root, &other, &target, runtime::unix_now()),
+        runtime::FullLinkRestore::Discarded
+    );
+    assert!(!runtime::full_link_granted(&other, &target) && !runtime::full_link_granted(&sandbox.scope, &target));
+}
+
+#[test]
+fn t47_a_record_that_cannot_be_written_or_taken_away_is_said_not_swallowed() {
+    use std::os::unix::fs::MetadataExt;
+    let _serial = serial();
+    if unsafe { libc::geteuid() } == 0 {
+        return; // permissions mean nothing to root: the cases below cannot be built
+    }
+    let sandbox = Sandbox::new();
+    let (world, _) = connected_once(&sandbox);
+    let target = runtime::selected_at(&sandbox.root, &sandbox.scope, &host()).unwrap().unwrap();
+    let account = sandbox.account();
+    let unavailable: Result<(), &str> = Err("existing_team_runtime_unavailable");
+    // writing: a folder nobody may write into, and one that others may write into, are refused: no record
+    set_mode(&account, 0o500);
+    assert_eq!(runtime::remember_full_link_at(&sandbox.root, &sandbox.scope, &target, 1), unavailable);
+    // a folder that fails its checks is not swept either: its leftovers stay where they are
+    set_mode(&account, 0o700);
+    let stray = account.join("existing-team-runtime-full-link.tmp-9-9");
+    fs::write(&stray, b"half").unwrap();
+    set_mode(&account, 0o770);
+    assert_eq!(runtime::remember_full_link_at(&sandbox.root, &sandbox.scope, &target, 1), unavailable);
+    set_mode(&account, 0o700);
+    assert!(stray.exists(), "no sweep before the folder has passed its checks");
+    fs::remove_file(&stray).unwrap();
+    assert!(!full_link_file(&sandbox).exists());
+    assert!(fs::read_dir(&account).unwrap().all(|entry| !entry.unwrap().file_name().to_string_lossy().contains("full-link.tmp")));
+    assert_eq!(fs::metadata(&account).unwrap().uid(), unsafe { libc::geteuid() });
+
+    // removing: the folder does not let the file go, but the file can be overwritten: it is made unreadable as a record
+    runtime::remember_full_link_at(&sandbox.root, &sandbox.scope, &target, runtime::unix_now()).unwrap();
+    set_mode(&account, 0o500);
+    assert_eq!(runtime::forget_full_link_at(&sandbox.root, &sandbox.scope), Ok(runtime::FullLinkForgotten::Neutralized));
+    set_mode(&account, 0o700);
+    assert!(full_link_file(&sandbox).exists(), "it could not be removed");
+    let readiness = restart_and_reopen(&sandbox, &world);
+    assert!(!readiness.full_link, "a neutralized record gives nothing back");
+    assert_eq!(readiness.full_link_outcome, Some("discarded"));
+
+    // neither works: the file cannot be written and the folder does not let it go or move: an error, said by name
+    runtime::remember_full_link_at(&sandbox.root, &sandbox.scope, &target, runtime::unix_now()).unwrap();
+    set_mode(&full_link_file(&sandbox), 0o400);
+    set_mode(&account, 0o500);
+    assert_eq!(runtime::forget_full_link_at(&sandbox.root, &sandbox.scope), Err("existing_team_full_link_not_removed"));
+    set_mode(&account, 0o700);
+    // and the unlink, the rebind and a new confirmation stop there rather than go on with an armed record
+    set_mode(&account, 0o500);
+    assert_eq!(runtime::clear_link_at(&sandbox.root, &sandbox.scope), Err("existing_team_full_link_not_removed"));
+    set_mode(&account, 0o700);
+    assert!(sandbox.candidate().exists() && sandbox.selection().exists(), "nothing else was removed");
+    set_mode(&full_link_file(&sandbox), 0o600);
+    runtime::revoke_full_link();
+}
+
+#[test]
+fn t48_the_code_that_gives_and_takes_the_permission_is_where_it_must_be() {
+    let runtime_source = include_str!("existing_team_runtime.rs").split("#[cfg(test)]\nmod tests").next().unwrap();
+    // the permission in memory is set by ONE function, and the restore goes through it
+    assert_eq!(runtime_source.matches("*slot = Some(").count(), 1, "one place sets FULL_LINK");
+    let restore = runtime_source.split("pub(crate) fn restore_full_link_at(").nth(1).unwrap().split("\n}\n").next().unwrap();
+    assert_eq!(restore.matches("grant_full_link(scope, target)").count(), 1);
+    assert!(!restore.contains("FULL_LINK.") && !restore.contains("*slot"), "no shortcut that sets the static");
+    // the descriptor itself is read: no link followed, never blocking, the size capped before any parse
+    let read = runtime_source.split("fn read_full_link_mark(").nth(1).unwrap().split("\n}\n").next().unwrap();
+    for needed in ["O_NOFOLLOW", "O_NONBLOCK", "handle.metadata()", "geteuid()", "0o777 != 0o600", "nlink() != 1", "FULL_LINK_MAX_BYTES"] {
+        assert!(read.contains(needed), "{needed}");
+    }
+
+    let onboarding = include_str!("onboarding.rs").split("mod existing_team_assistant_tests").next().unwrap();
+    // only the start-up reopening gives it back: not the connection, not the explicit read-only opening, not the shared probe
+    assert_eq!(onboarding.matches("restore_full_link_at(").count(), 1);
+    let reopen = onboarding.split("pub(crate) fn existing_team_reopen_with(").nth(1).unwrap().split("\n}\n").next().unwrap();
+    assert!(reopen.find("existing_team_readonly_connect_with(").unwrap() < reopen.find("restore_full_link_at(").unwrap(), "after the checks");
+    assert!(reopen.find("revoke_full_link()").unwrap() < reopen.find("restore_full_link_at(").unwrap());
+    // «Connect with write access»: a new confirmation starts from nothing on disk, the record is written once, after the grant
+    let connect = onboarding.split("pub(crate) async fn onboarding_existing_team_connect(").nth(1).unwrap().split("\n}\n").next().unwrap();
+    let forget = connect.find("forget_full_link_at(").expect("it forgets first");
+    assert!(forget < connect.find("if request.reconfirm").unwrap());
+    assert_eq!(connect.matches("remember_full_link_at(").count(), 1);
+    assert!(connect.find("grant_full_link(").unwrap() < connect.find("remember_full_link_at(").unwrap());
+    // the explicit read-only opening takes the record away before it connects; «switch to read only» revokes first
+    let explicit = onboarding.split("pub(crate) async fn onboarding_existing_team_readonly_connect(").nth(1).unwrap().split("\n}\n").next().unwrap();
+    assert!(explicit.find("forget_full_link_at(").unwrap() < explicit.find("existing_team_readonly_connect_with(").unwrap());
+    let off = onboarding.split("pub(crate) async fn existing_team_write_access_off(").nth(1).unwrap().split("\n}\n").next().unwrap();
+    assert!(off.find("window_may_write(window.label())").unwrap() < off.find("revoke_full_link()").unwrap());
+    assert!(off.find("revoke_full_link()").unwrap() < off.find("forget_full_link_at(").unwrap());
+    // the unlink revokes in memory before anything that can fail
+    let unlink = onboarding.split("pub(crate) async fn existing_team_unlink(").nth(1).unwrap().split("\n}\n").next().unwrap();
+    assert!(unlink.find("revoke_full_link()").unwrap() < unlink.find("clear_link_at(").unwrap());
+    assert!(include_str!("lib.rs").contains("onboarding::existing_team_write_access_off"));
+}
+
+#[test]
+fn t49_leaving_the_account_takes_the_record_away_so_coming_back_is_read_only() {
+    let _serial = serial();
+    let sandbox = Sandbox::new();
+    let (world, _) = connected_once(&sandbox);
+    let target = confirmed_in_full(&sandbox, runtime::unix_now());
+    assert!(full_link_file(&sandbox).exists());
+    // the person signs out (or another account takes over); the saved team itself stays
+    crate::account_scope::forget_write_access_at(&sandbox.root, &sandbox.scope);
+    assert!(!full_link_file(&sandbox).exists());
+    assert!(sandbox.candidate().exists() && sandbox.selection().exists(), "only the permission goes");
+    // and signs in again within the 30 days: a new run of the app, the same team, the reopening passes: read only
+    let readiness = restart_and_reopen(&sandbox, &world);
+    assert!(!readiness.full_link && !runtime::full_link_granted(&sandbox.scope, &target));
+    assert_eq!(readiness.full_link_outcome, Some("not_restored"));
+    // a record that cannot be removed is neutralized on the way out (best effort, never an error that blocks leaving)
+    if unsafe { libc::geteuid() } != 0 {
+        runtime::remember_full_link_at(&sandbox.root, &sandbox.scope, &target, runtime::unix_now()).unwrap();
+        set_mode(&sandbox.account(), 0o500);
+        crate::account_scope::forget_write_access_at(&sandbox.root, &sandbox.scope);
+        set_mode(&sandbox.account(), 0o700);
+        assert!(!restart_and_reopen(&sandbox, &world).full_link, "an unremovable record is overwritten, never read again");
+    }
+    // another account's record is not touched
+    let (other, dir) = sandbox.other_scope();
+    fs::write(dir.join("existing-team-runtime-full-link.json"), b"x").unwrap();
+    crate::account_scope::forget_write_access_at(&sandbox.root, &sandbox.scope);
+    assert!(dir.join("existing-team-runtime-full-link.json").exists());
+    let _ = other;
+    runtime::revoke_full_link();
+}
+
+#[test]
+fn t50_the_sign_out_and_the_switch_of_account_call_it_and_leftover_temporary_files_are_swept() {
+    let source = include_str!("account_scope.rs").split("#[cfg(test)]\nmod tests").next().unwrap();
+    let reset = source.split("pub(crate) fn runtime_account_scope_reset(").nth(1).unwrap().split("\n}\n").next().unwrap();
+    assert!(reset.find("active.take()").unwrap() < reset.find("direct_chat::teardown").unwrap());
+    assert!(reset.find("direct_chat::teardown").unwrap() < reset.find("forget_write_access_of(").unwrap(), "after the handles are closed");
+    let switch = source.split("fn activate_scope(").nth(1).unwrap().split("\n}\n").next().unwrap();
+    assert!(switch.find("active.take()").unwrap() < switch.find("forget_write_access_of(").unwrap());
+    assert!(switch.find("forget_write_access_of(").unwrap() < switch.find("*active = Some(next)").unwrap());
+
+    let _serial = serial();
+    let sandbox = Sandbox::new();
+    let (_world, _) = connected_once(&sandbox);
+    let target = runtime::selected_at(&sandbox.root, &sandbox.scope, &host()).unwrap().unwrap();
+    let leftover = sandbox.account().join("existing-team-runtime-full-link.tmp-1-2");
+    let other_leftover = sandbox.account().join("existing-team-runtime-candidate.tmp-1-2");
+    fs::write(&leftover, b"half").unwrap();
+    fs::write(&other_leftover, b"not ours").unwrap();
+    runtime::remember_full_link_at(&sandbox.root, &sandbox.scope, &target, runtime::unix_now()).unwrap();
+    assert!(!leftover.exists(), "a write sweeps what an interrupted one left");
+    assert!(other_leftover.exists() && sandbox.candidate().exists() && sandbox.selection().exists(), "and only its own");
+    fs::write(&leftover, b"half").unwrap();
+    runtime::restore_full_link_at(&sandbox.root, &sandbox.scope, &target, runtime::unix_now());
+    assert!(!leftover.exists(), "so does the start-up reopening");
+    runtime::revoke_full_link();
+}

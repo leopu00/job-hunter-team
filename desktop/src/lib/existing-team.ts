@@ -55,6 +55,12 @@ export interface ExistingTeamReadOnlyConnectionResult {
    * and for a reopening alike.
    */
   connectionKey?: string | null;
+  /**
+   * The start-up reopening gave the full connection back: the person confirmed it in an earlier run, the
+   * native record is this very connection and recent, and every check of the reopening passed. Only the
+   * native side sets it; the view then opens in full and says so in a fixed row.
+   */
+  fullLink?: boolean;
 }
 
 export interface ExistingTeamProgress {

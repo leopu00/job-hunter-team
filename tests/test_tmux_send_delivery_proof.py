@@ -41,6 +41,10 @@ case "$cmd" in
     esac
     [ -f "$S/transcript" ] && cat "$S/transcript"
     [ "$mode" = busy ] && echo '◦ Working (3s • esc to interrupt)'
+    if [ -f "$S/layout" ] && [ "$(cat "$S/layout")" = codex ]; then
+      # Codex: the mark has no box and the model line sits under the composer.
+      printf '› %s\n  gpt-5.6-sol high · ~/agents/capitano\n' "$(cat "$S/composer" 2>/dev/null)"; exit 0
+    fi
     printf '╭──────────────────────────────────────────────╮\n│ ❯ %s │\n╰──────────────────────────────────────────────╯\n  ? for shortcuts\n' "$(cat "$S/composer" 2>/dev/null)" ;;
   load-buffer)
     while [ "$1" != "-b" ] && [ $# -gt 0 ]; do shift; done
@@ -73,6 +77,20 @@ case "$cmd" in
     [ -f "$S/turn_on_paste" ] && { printf 'busy\n' > "$S/mode"; printf '• Mittente non verificato: nessuna risposta inviata.\n' >> "$S/transcript"; }
     if [ -f "$S/lag" ]; then (sleep "$(cat "$S/lag")"; cat "$S/buffer.$name" >> "$S/composer") & exit 0; fi
     cat "$S/buffer.$name" > "$S/pasted.$name"
+    # A long paste is kept out of sight: the composer shows a token and the TUI keeps the text. `collapse` says
+    # which TUI: codex («[Pasted Content N chars]» past 1000 characters) or claude («[Pasted text #1 +N lines]»
+    # past 1000 characters); `collapse_n` overrides the number shown (a token that is not ours).
+    if [ -f "$S/collapse" ]; then
+      text=$(cat "$S/buffer.$name"); chars=${#text}
+      if [ "$chars" -gt 1000 ]; then
+        lines=$(printf '%s' "$text" | tr -cd '\n' | wc -c | tr -d ' ')
+        if [ "$(cat "$S/collapse")" = codex ]; then n=$(cat "$S/collapse_n" 2>/dev/null || echo "$chars"); token="[Pasted Content $n chars]"
+        else token="[Pasted text #1 +$(cat "$S/collapse_n" 2>/dev/null || echo "$lines") lines]"; fi
+        printf '%s' "$text" > "$S/collapsed"
+        [ -f "$S/token_beside" ] && token="$token $(cat "$S/token_beside")"
+        printf '%s' "$token" >> "$S/composer"; rm -f "$S/buffer.$name"; exit 0
+      fi
+    fi
     [ -f "$S/echo_on_paste" ] && { cat "$S/buffer.$name" >> "$S/transcript"; echo >> "$S/transcript"; }
     cat "$S/buffer.$name" >> "$S/composer"; rm -f "$S/buffer.$name" ;;
   send-keys)
@@ -83,7 +101,12 @@ case "$cmd" in
     fi
     if [ "$key" = "Enter" ]; then
       [ -f "$S/enter_ignored" ] && exit 0
-      if [ -s "$S/composer" ]; then cat "$S/composer" >> "$S/transcript"; echo >> "$S/transcript"; fi
+      if [ -s "$S/composer" ]; then
+        # a collapsed paste goes to the conversation as the text it stands for
+        if [ -f "$S/collapsed" ] && grep -q 'Pasted' "$S/composer"; then cat "$S/collapsed" >> "$S/transcript"; rm -f "$S/collapsed"
+        else cat "$S/composer" >> "$S/transcript"; fi
+        echo >> "$S/transcript"
+      fi
       : > "$S/composer"; exit 0
     fi
     exit 0 ;;
@@ -115,6 +138,7 @@ def box(tmp_path):
             "PATH": f"{bin_dir}:{Path(sys.executable).parent}:/usr/bin:/bin",
             "JHT_HOME": str(tmp_path / "home"),
             "JHT_TMUX_PROMPT_WAIT": "0",
+            "JHT_TMUX_TEXT_WAIT": "0",
             "PYTHONDONTWRITEBYTECODE": "1",
             **env,
         }
@@ -568,31 +592,28 @@ def test_a_draft_that_is_not_the_text_we_left_stays_untouched(box):
 
 
 def _age_the_pending(box, seconds):
-    stamp, digest = _pending(box).read_text(encoding="utf-8").split()
-    _pending(box).write_text(f"{int(stamp) - seconds} {digest}\n", encoding="utf-8")
+    stamp, *rest = _pending(box).read_text(encoding="utf-8").split()
+    _pending(box).write_text(" ".join([str(int(stamp) - seconds), *rest]) + "\n", encoding="utf-8")
 
 
 def test_a_text_of_ours_an_hour_old_still_gets_its_enter(box):
     box.put("enter_ignored")
     assert box.run().returncode == 5
     (box.state / "enter_ignored").unlink()
-    _age_the_pending(box, 3600)                                # inside the two hours
+    _age_the_pending(box, 3600)
     second = box.run(MESSAGE_2)
     assert second.returncode == 0, second.stderr
     assert _body(box, "transcript") == [BODY_1, BODY_2]
 
 
-def test_a_text_of_ours_older_than_two_hours_does_not_go_late_and_the_log_says_so(box):
+def test_a_text_of_ours_of_any_age_gets_its_enter_better_late_than_a_deaf_agent(box):
     box.put("enter_ignored")
     assert box.run().returncode == 5
     (box.state / "enter_ignored").unlink()
-    _age_the_pending(box, 7300)                                # past the two hours
-    calls_before = len(box.calls())
+    _age_the_pending(box, 5 * 3600)                            # the 5 hours a pane stayed deaf on a real team
     second = box.run(MESSAGE_2)
-    assert second.returncode == 130, second.stderr
-    assert "older than 2 h" in second.stderr and "not submitted" in second.stderr
-    assert not any(c.startswith(("paste-buffer", "send-keys")) for c in box.calls()[calls_before:])
-    assert _body(box, "composer") == [BODY_1], "still there, never submitted late"
+    assert second.returncode == 0, second.stderr
+    assert _body(box, "transcript") == [BODY_1, BODY_2]
 
 
 def test_every_enter_the_transport_presses_names_its_session_exactly(box):
@@ -614,3 +635,247 @@ def test_a_text_of_ours_that_keeps_ignoring_the_enter_blocks_the_next_one_withou
     assert len([c for c in new_calls if c.startswith("send-keys") and c.endswith("Enter")]) == 3, "Enter only, three times"
     assert not any(c.startswith("paste-buffer") for c in new_calls), "the second was never pasted"
     assert _body(box, "composer") == [BODY_1]
+
+
+# -- il segnaposto di incolla: un messaggio lungo non e' «una bozza altrui» ----------------------------------------------
+# Codex sopra 1000 caratteri disegna «[Pasted Content N chars]» e Claude «[Pasted text #1 +N lines]» al posto del testo:
+# il 26/10 un messaggio di 1024 caratteri e' diventato 130 e ha reso sordo un agente per ore.
+
+BIG = "[@watchdog -> @capitano] [MSG] " + " ".join(f"parola{n}" for n in range(1, 260))     # ~2000 characters
+BIG_BODY = BIG.rsplit("[MSG] ", 1)[1]
+BIG_LINES = "[@watchdog -> @capitano] [MSG] prima riga\n" + "\n".join(f"riga {n} " + "x" * 120 for n in range(1, 12))
+assert len(BIG) > 1000 and len(BIG_LINES) > 1000
+
+
+def _pending_input(box):
+    path = box.home / "logs" / "pending-input.jsonl"
+    import json
+    return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()] if path.exists() else []
+
+
+def _collapse(box, kind, **extra):
+    box.put("layout", "codex" if kind == "codex" else "claude")
+    box.put("collapse", kind)
+    for name, value in extra.items():
+        box.put(name, str(value))
+
+
+@pytest.mark.parametrize("kind", ["codex", "claude"])
+def test_a_long_paste_the_tui_keeps_out_of_sight_is_ours_and_gets_its_enter(box, kind):
+    _collapse(box, kind)
+    done = box.run(BIG)
+    assert done.returncode == 0, done.stderr
+    assert len(box.typed()) == 1 and len(box.keys("Enter")) == 1
+    assert BIG_BODY in (box.state / "transcript").read_text(encoding="utf-8")
+    assert _body(box, "composer") == [] and not _pending(box).exists()
+
+
+def test_a_long_message_with_line_breaks_is_ours_on_claude_too(box):
+    _collapse(box, "claude")
+    done = box.run(BIG_LINES)
+    assert done.returncode == 0, done.stderr
+    assert len(box.keys("Enter")) == 1
+
+
+@pytest.mark.parametrize("kind, extra", [("codex", {"collapse_n": 999}), ("claude", {"collapse_n": 99}),
+                                         ("codex", {"token_beside": "una bozza accanto"}),
+                                         ("claude", {"token_beside": "una bozza accanto"})])
+def test_a_paste_token_that_is_not_provably_ours_gets_no_enter_and_is_written_down(box, kind, extra):
+    _collapse(box, kind, **extra)
+    done = box.run(BIG)
+    assert done.returncode == 130, done.stderr
+    assert box.keys("Enter") == [] and len(box.typed()) == 1
+    rows = _pending_input(box)
+    assert rows and rows[-1]["reason"] == "composer_changed" and rows[-1]["session"] == "CAPITANO"
+    assert rows[-1]["draft"].endswith(BIG_BODY[-40:])
+
+
+def test_a_long_text_left_with_its_enter_swallowed_gets_it_with_the_next_delivery(box):
+    _collapse(box, "codex")
+    box.put("enter_ignored")
+    assert box.run(BIG).returncode == 5
+    assert "Pasted Content" in (box.state / "composer").read_text(encoding="utf-8")
+    (box.state / "enter_ignored").unlink()
+    second = box.run(MESSAGE_2)
+    assert second.returncode == 0, second.stderr
+    transcript = (box.state / "transcript").read_text(encoding="utf-8")
+    assert BIG_BODY in transcript and BODY_2 in transcript
+    assert len(box.typed()) == 2, "the long text was not pasted a second time"
+
+
+def test_the_token_of_the_real_team_gets_its_enter_with_no_new_delivery_needed(box):
+    # a 1024-character message, the way it was left on the 26/10
+    _collapse(box, "codex")
+    box.put("enter_ignored")
+    assert box.run("x" * 1024).returncode == 5
+    assert (box.state / "composer").read_text(encoding="utf-8") == "[Pasted Content 1024 chars]"
+    (box.state / "enter_ignored").unlink()
+    done = subprocess.run([str(TRANSPORT), "--flush-ours", "CAPITANO"], capture_output=True, text=True, timeout=60,
+                          env=_env(box))
+    assert done.returncode == 0, done.stderr
+    assert (box.state / "composer").read_text(encoding="utf-8") == "" and not _pending(box).exists()
+
+
+def test_a_token_the_registry_does_not_explain_is_left_alone_and_the_message_is_written_down(box):
+    _collapse(box, "codex")
+    box.put("composer", "[Pasted Content 1024 chars]")             # nobody of ours left it: no record
+    calls_before = len(box.calls())
+    done = box.run(MESSAGE_2)
+    assert done.returncode == 130, done.stderr
+    assert not any(c.startswith(("paste-buffer", "send-keys")) for c in box.calls()[calls_before:])
+    rows = _pending_input(box)
+    assert rows[-1]["reason"] == "composer_foreign" and rows[-1]["unsent"].endswith(BODY_2)
+
+
+def test_an_old_two_field_record_cannot_prove_a_token_ours(box):
+    _collapse(box, "codex")
+    box.put("enter_ignored")
+    assert box.run(BIG).returncode == 5
+    stamp, digest, *_ = _pending(box).read_text(encoding="utf-8").split()
+    _pending(box).write_text(f"{stamp} {digest}\n", encoding="utf-8")   # the record of the transport before this one
+    (box.state / "enter_ignored").unlink()
+    calls_before = len(box.calls())
+    done = box.run(MESSAGE_2)
+    assert done.returncode == 130, done.stderr
+    assert not any(c.startswith(("paste-buffer", "send-keys")) for c in box.calls()[calls_before:])
+
+
+@pytest.mark.parametrize("draft_after", ["half", "typing"])
+def test_every_130_after_the_paste_is_written_down(box, draft_after):
+    if draft_after == "half":
+        box.put("split", "30")
+        done = box.run(JHT_TMUX_PARTIAL_WAIT="1")
+        reason = "half_drawn"
+    else:
+        box.put("draft_on_paste", "bozza ")
+        done = box.run()
+        reason = "composer_changed"
+    assert done.returncode == 130, done.stderr
+    assert _pending_input(box)[-1]["reason"] == reason
+
+
+def test_a_message_not_typed_because_the_composer_is_somebody_elses_is_written_down(box):
+    box.put("composer", "una bozza scritta da una persona")
+    done = box.run()
+    assert done.returncode == 130 and "NOT delivered" in done.stderr
+    row = _pending_input(box)[-1]
+    assert row["reason"] == "composer_foreign" and row["unsent"].endswith(BODY_1) and "draft" not in row
+
+
+# -- --flush-ours: l'Invio sul testo PROVATO nostro, per chi non consegna (la chat dell'utente) -------------------------
+
+def _env(box):
+    return {**os.environ, "FT": str(box.state), "JHT_HOME": str(box.home), "JHT_TMUX_LOCK_WAIT": "1",
+            "PATH": f"{box.state.parent / 'bin'}:{Path(sys.executable).parent}:/usr/bin:/bin", "PYTHONDONTWRITEBYTECODE": "1"}
+
+
+def _flush(box):
+    return subprocess.run([str(TRANSPORT), "--flush-ours", "CAPITANO"], capture_output=True, text=True, timeout=60, env=_env(box))
+
+
+def test_flush_ours_presses_enter_on_the_text_we_left_and_writes_nothing(box):
+    box.put("enter_ignored")
+    assert box.run().returncode == 5
+    (box.state / "enter_ignored").unlink()
+    typed_before, rows_before = len(box.typed()), (box.home / "logs" / "messages.jsonl").read_text(encoding="utf-8")
+    done = _flush(box)
+    assert done.returncode == 0, done.stderr
+    assert _body(box, "transcript") == [BODY_1] and not _pending(box).exists()
+    assert len(box.typed()) == typed_before, "nothing pasted"
+    assert (box.home / "logs" / "messages.jsonl").read_text(encoding="utf-8") == rows_before, "no message logged"
+
+
+def test_flush_ours_does_nothing_on_a_free_composer_and_touches_no_key(box):
+    done = _flush(box)
+    assert done.returncode == 0, done.stderr
+    assert [c for c in box.calls() if c.startswith("send-keys")] == []
+
+
+def test_flush_ours_leaves_a_text_that_is_not_ours(box):
+    box.put("composer", "una bozza scritta da una persona")
+    done = _flush(box)
+    assert done.returncode == 130, done.stderr
+    assert [c for c in box.calls() if c.startswith("send-keys")] == []
+    assert (box.state / "composer").read_text(encoding="utf-8") == "una bozza scritta da una persona"
+
+
+def test_flush_ours_stays_out_of_a_menu_and_says_when_the_enter_is_swallowed(box):
+    box.put("mode", "menu")
+    assert _flush(box).returncode == 3
+    box.put("mode", "normal")
+    box.put("enter_ignored")
+    assert box.run().returncode == 5
+    done = _flush(box)
+    assert done.returncode == 5 and len(box.keys("Enter")) >= 6, done.stderr
+    assert _body(box, "composer") == [BODY_1]
+
+
+def test_flush_ours_refuses_a_wrong_call(box):
+    for args in (["--flush-ours"], ["--flush-ours", "A", "B"]):
+        done = subprocess.run([str(TRANSPORT), *args], capture_output=True, text=True, timeout=30, env=_env(box))
+        assert done.returncode == 1
+    assert [c for c in box.calls() if c.startswith("send-keys")] == []
+
+
+# -- review del primo commit: il segnaposto di Claude conta RIGHE, dal registro non prova niente --------------------------------
+
+def test_a_claude_token_left_by_us_is_not_proved_ours_by_the_registry_alone(box):
+    _collapse(box, "claude")
+    box.put("enter_ignored")
+    assert box.run(BIG_LINES).returncode == 5
+    token = (box.state / "composer").read_text(encoding="utf-8")
+    assert token.startswith("[Pasted text #1 +")
+    (box.state / "enter_ignored").unlink()
+    # a person pastes a text of the same number of lines: the same kind of token, the same number
+    box.put("composer", token.replace("#1", "#2"))
+    calls_before = len(box.calls())
+    done = box.run(MESSAGE_2)
+    assert done.returncode == 130, done.stderr
+    assert not any(c.startswith(("paste-buffer", "send-keys")) for c in box.calls()[calls_before:]), "no Enter on it"
+    assert _pending_input(box)[-1]["reason"] == "composer_foreign"
+
+
+def test_flush_ours_does_not_press_a_claude_token_either(box):
+    _collapse(box, "claude")
+    box.put("enter_ignored")
+    assert box.run(BIG_LINES).returncode == 5
+    (box.state / "enter_ignored").unlink()
+    done = _flush(box)
+    assert done.returncode == 130, done.stderr
+
+
+# -- pending-input.jsonl carries the text of messages: private, and long enough for the long ones ----------------------
+
+@pytest.mark.skipif(os.name == "nt", reason="mode bits")
+def test_pending_input_is_private_and_a_world_readable_file_of_an_older_version_is_tightened(box):
+    box.put("composer", "una bozza scritta da una persona")
+    logs = box.home / "logs"
+    assert box.run().returncode == 130
+    assert (logs / "pending-input.jsonl").stat().st_mode & 0o777 == 0o600
+    (logs / "pending-input.jsonl").chmod(0o644)
+    assert box.run().returncode == 130
+    assert (logs / "pending-input.jsonl").stat().st_mode & 0o777 == 0o600
+
+
+@pytest.mark.skipif(os.name == "nt", reason="mode bits")
+def test_the_folder_pending_input_creates_is_private_and_the_one_that_was_there_is_left_alone(box, tmp_path):
+    box.put("composer", "una bozza scritta da una persona")
+    fresh = tmp_path / "fresh-home"
+    assert box.run(JHT_HOME=str(fresh)).returncode == 130
+    assert (fresh / "logs").stat().st_mode & 0o777 == 0o700
+    old = tmp_path / "old-home"
+    (old / "logs").mkdir(parents=True)
+    (old / "logs").chmod(0o755)
+    assert box.run(JHT_HOME=str(old)).returncode == 130
+    assert (old / "logs").stat().st_mode & 0o777 == 0o755, "a logs folder shared with others is not changed"
+
+
+def test_a_long_message_is_recorded_up_to_64_kib_and_no_further(box):
+    box.put("composer", "una bozza scritta da una persona")
+    done = box.run("[@watchdog -> @capitano] [MSG] " + "x" * 70000)
+    assert done.returncode == 130
+    row = _pending_input(box)[-1]
+    assert len(row["unsent"]) == 65536
+    for locale in ("", ".it", ".de", ".es", ".fr", ".hu", ".pt"):
+        text = (TRANSPORT.parent / f"SKILL{locale}.md").read_text(encoding="utf-8")
+        assert "64 KiB" in text, locale

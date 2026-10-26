@@ -39,6 +39,7 @@ import {
   leaveExistingTeamReadOnly,
   useExistingTeamView,
 } from "../lib/existing-team-readonly";
+import { announceRestoredWriteAccess, clearWriteAccessNotice } from "../lib/write-access-restored";
 import {
   isOnboardingAssistantReachable,
   isOnboardingRuntimeReady,
@@ -1107,6 +1108,7 @@ export default function DashboardApp() {
 
   const openReadOnlyExistingTeam = useCallback((result: ExistingTeamReadOnlyConnectionResult) => {
     if (!identityKey || activeIdentityKeyRef.current !== identityKey) return;
+    clearWriteAccessNotice();
     // On before the Shell mounts: its pages read in effects that run first.
     enterExistingTeamReadOnly(result.readiness, {
       at: Date.now(),
@@ -1123,6 +1125,8 @@ export default function DashboardApp() {
    */
   const openFullExistingTeam = useCallback((snapshot: OnboardingRuntimeSnapshot) => {
     if (!identityKey || activeIdentityKeyRef.current !== identityKey) return;
+    // A confirmation made now is not the one kept from an earlier run: no row about that one.
+    clearWriteAccessNotice();
     enterExistingTeamReadOnly(snapshot.assistantRunning === true, {
       at: Date.now(),
       captainRunning: snapshot.captainRunning === true,
@@ -1148,7 +1152,14 @@ export default function DashboardApp() {
       setSavedTeamNotice(null);
       // Closing the read-only view goes back to the setup's first step, not to a spinner.
       setRuntime({ status: "collecting", stage: "host" });
-      openReadOnlyExistingTeam(result);
+      if (result.fullLink === true) {
+        // The permission the person gave in an earlier run came back (the native side checked it after
+        // the whole reopening passed): the view opens in full, and the fixed row says so and offers the way out.
+        openFullExistingTeam(result.snapshot);
+        announceRestoredWriteAccess();
+      } else {
+        openReadOnlyExistingTeam(result);
+      }
       return "opened";
     } catch (error) {
       const code = nativeErrorCode(error);
@@ -1181,7 +1192,7 @@ export default function DashboardApp() {
         retryable: true,
       };
     }
-  }, [identityKey, openReadOnlyExistingTeam, setRuntime]);
+  }, [identityKey, openFullExistingTeam, openReadOnlyExistingTeam, setRuntime]);
 
   const resumeAssistant = useCallback(async (options?: { reopened?: boolean }) => {
     if (!identityKey) throw new Error("identity-missing");

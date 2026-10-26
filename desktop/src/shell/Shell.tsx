@@ -25,6 +25,7 @@ import { MailRotationBanner } from "./MailRotationBanner";
 import { SignOutContext } from "../lib/account-actions";
 import { NewVersionBanner } from "./NewVersionBanner";
 import { TeamOffBanner } from "./TeamOffBanner";
+import { WriteAccessRestoredBanner } from "./WriteAccessRestoredBanner";
 import NavStrip from "./NavStrip";
 import { beginPageLoad } from "../lib/page-timing";
 import { matchRoute, navigate, refresh, useLocation } from "./router";
@@ -226,6 +227,7 @@ export default function Shell({ onLogout, onCloseReadOnly }: ShellProps) {
           </p>
         )}
         <VpsLinkBar onCloseReadOnly={onCloseReadOnly} />
+        <WriteAccessRestoredBanner />
       </>
     );
     return (
@@ -263,6 +265,7 @@ export default function Shell({ onLogout, onCloseReadOnly }: ShellProps) {
             <MailRotationBanner />
             <NewVersionBanner />
             <TeamOffBanner />
+            <WriteAccessRestoredBanner />
             <main className="relative min-h-0 flex-1" data-testid="full-bleed">
               {page}
             </main>
@@ -279,6 +282,7 @@ export default function Shell({ onLogout, onCloseReadOnly }: ShellProps) {
           <MailRotationBanner />
           <NewVersionBanner />
           <TeamOffBanner />
+            <WriteAccessRestoredBanner />
           <MainChrome>{page}</MainChrome>
         </div>
       </DesktopWriteProvider>
