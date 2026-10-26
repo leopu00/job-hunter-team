@@ -2400,7 +2400,12 @@ export default function JobsGlobe({
         )}
 
         {!loaded && (
-          <p className="absolute inset-0 grid place-items-center text-[11px] text-[var(--color-dim)] pointer-events-none">
+          <p
+            role="status"
+            data-testid="globe-loading"
+            className="absolute inset-x-0 bottom-24 flex items-center justify-center gap-2 text-[12px] text-[var(--color-muted)] pointer-events-none"
+          >
+            <span className="h-2 w-2 rounded-full bg-[var(--color-blue)] animate-pulse" aria-hidden="true" />
             {tr("loading")}
           </p>
         )}
@@ -2430,6 +2435,13 @@ export default function JobsGlobe({
               <p className="mt-1 text-[11px] leading-snug text-[var(--color-muted)]">
                 {tr("empty_hint")}
               </p>
+              <Link
+                href="/positions"
+                data-testid="map-empty-action"
+                className="mt-2 inline-block pointer-events-auto rounded border border-[var(--color-border)] px-3 py-1 text-[12px] text-[var(--color-text)] hover:border-[var(--color-blue)]"
+              >
+                {tr("empty_action")}
+              </Link>
             </div>
           </div>
         )}
