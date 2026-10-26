@@ -1159,6 +1159,17 @@ container_up() {
 # `read_only_container_id` distingue un progetto assente (3) da un risultato
 # ambiguo/non posseduto (1). Solo il primo puo' essere creato da un'azione che
 # ha gia' autorizzato esplicitamente una mutazione.
+# Any container of the project that runs (the broker, Telegram): `compose down` would stop it too.
+# A list that cannot be read counts as running.
+project_has_running_container() {
+  local ids id
+  ids="$(compose ps -q 2>/dev/null)" || return 0
+  for id in $ids; do
+    [ "$(docker inspect --type container "$id" --format '{{.State.Running}}' 2>/dev/null)" = false ] || return 0
+  done
+  return 1
+}
+
 container_mutation_preflight() {
   local status=0
   if read_only_container_id >/dev/null; then
@@ -1172,7 +1183,8 @@ container_mutation_preflight() {
   # as expected, only the hash differs) and are recreated with the new configuration; `compose down`
   # removes containers and the network, never the volumes: the team's data stays.
   if [ "$status" -eq 1 ] && [ "$CONTAINER_RUNTIME" = podman ] \
-      && read_only_service_id "$CONTAINER_SERVICE" stopped-stale-config >/dev/null 2>&1; then
+      && read_only_service_id "$CONTAINER_SERVICE" stopped-stale-config >/dev/null 2>&1 \
+      && ! project_has_running_container; then
     warn "config_changed_stopped: i container del team, fermi, sono della versione di prima: li ricreo con la configurazione nuova (i volumi con i dati restano)."
     compose down || { err "Non riesco a rimuovere i container fermi della versione di prima: «jht down», poi «jht up»."; return 1; }
     return 0

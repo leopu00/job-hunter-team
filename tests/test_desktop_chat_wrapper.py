@@ -59,6 +59,13 @@ case "$1" in
   info) [ "${JHT_TEST_RUNTIME_READY:-0}" = 1 ] || [ -f "$JHT_TEST_RUNTIME_STATE" ] ;;
   inspect)
     if [ "$2:$3" = --type:container ]; then inspect_id="$4"; else inspect_id="$2"; fi
+    if [ "$inspect_id" = bbbbbbbbbbbb ] && [ -n "${JHT_TEST_OTHER_RUNNING:-}" ]; then
+      # the broker of the same project, running
+      case "$*" in
+        *'.State.Running}}|{{index'*) printf 'jht-broker|true|jht|jht|jht-broker|jht-broker|1|%s|%s|1.6.0|x|%s\n' "$JHT_RUNTIME_DIR" "$JHT_RUNTIME_DIR/docker-compose.yml" "$JHT_TEST_CONFIG_HASH"; exit 0 ;;
+        *'{{.State.Running}}'*) printf 'true\n'; exit 0 ;;
+      esac
+    fi
     [ "$inspect_id" = aaaaaaaaaaaa ] || exit 91
     case "$*" in
       *'.State.Running}}|{{index'*)
@@ -153,6 +160,7 @@ case "$*" in
     if [ -n "${JHT_TEST_EXITED_STATE:-}" ]; then
       # the stopped container is listed until `down` removes it; `up` creates it again
       if [ -f "$JHT_TEST_EXITED_STATE" ] || [ ! -f "${JHT_TEST_DOWN_DONE:-/nonexistent}" ]; then printf '%s\n' aaaaaaaaaaaa; fi
+      [ -z "${JHT_TEST_OTHER_RUNNING:-}" ] || printf '%s\n' bbbbbbbbbbbb
     elif [ -n "${JHT_TEST_PS_STATE:-}" ]; then
       [ ! -f "$JHT_TEST_PS_STATE" ] || printf '%s\n' aaaaaaaaaaaa
       true
@@ -668,6 +676,8 @@ def _stale_stopped(tmp_path: Path):
     env["JHT_TEST_DOWN_DONE"] = str(tmp_path / "down-done")
     # the containers of the version before: stopped, ours, made by a compose whose hash was another one
     env["JHT_TEST_CONTAINER_HASH"] = "b" * 64
+    # `ps` lists it, its Running is false: the plain inspect answers from this file
+    Path(env["JHT_TEST_CONTAINER_STOPPED"]).write_text("", encoding="utf-8")
     return wrapper, env, log
 
 
@@ -684,6 +694,18 @@ def test_up_recreates_the_stopped_containers_of_the_version_before_and_keeps_the
     assert down < up
     # containers and network only: no option of `down` can remove the volumes
     assert not any(" down " in line + " " and ("-v" in line.split() or "--volumes" in line.split()) for line in calls)
+
+
+def test_up_does_not_recreate_when_another_container_of_the_project_runs(tmp_path: Path):
+    wrapper, env, log = _stale_stopped(tmp_path)
+    env["JHT_TEST_OTHER_RUNNING"] = "1"   # the broker is up while the team's container is stopped
+
+    result = subprocess.run([str(wrapper), "up"], env=env, text=True, capture_output=True, timeout=20, check=False)
+
+    assert result.returncode == 1
+    assert "jht down" in result.stderr
+    calls = log.read_text(encoding="utf-8").splitlines()
+    assert not any(line.startswith("podman-compose ") and (line.endswith(" down") or line.endswith(" up -d")) for line in calls)
 
 
 def test_up_does_not_touch_a_running_container_of_the_version_before(tmp_path: Path):
