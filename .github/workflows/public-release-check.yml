@@ -31,8 +31,11 @@ jobs:
           python-version: "3.12"
 
       # The release has just been published: the storage behind the addresses
-      # can lag by a few seconds, so only "could not run" (2) and "not there
-      # yet" are tried again; a file that arrives wrong (1) is red at once.
+      # can lag by a few seconds, so any failure is tried again, up to five
+      # times thirty seconds apart, and the last status is the job's. The
+      # anonymous API of GitHub can also refuse a shared runner (403): that is
+      # a red that a re-run of this workflow clears, and it says nothing about
+      # the release.
       - name: Check every file the site links, bytes and SHA-256
         env:
           TAG: ${{ github.event.release.tag_name || inputs.tag }}

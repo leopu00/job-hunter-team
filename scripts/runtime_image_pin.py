@@ -13,6 +13,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import re
 import subprocess
 import sys
@@ -297,11 +298,27 @@ def update_tree(
         "digest": digest,
         "source_revision": source_revision,
     }
-    # newline="" : the consumers keep the line endings they had
-    for relative, text in rewritten.items():
-        with open(root / relative, "w", encoding="utf-8", newline="") as handle:
-            handle.write(text)
-    manifest_path.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    # Every new content is written beside its file first: an I/O error there
+    # (disk full, a read-only file) leaves the tree as it was. Only then the
+    # files are put in place, the manifest last. newline="": the consumers keep
+    # the line endings they had.
+    staged: list[tuple[Path, Path]] = []
+    try:
+        for relative, text in rewritten.items():
+            target = root / relative
+            temporary = target.with_name(target.name + ".pin-new")
+            staged.append((temporary, target))
+            with open(temporary, "w", encoding="utf-8", newline="") as handle:
+                handle.write(text)
+        temporary = manifest_path.with_name(manifest_path.name + ".pin-new")
+        staged.append((temporary, manifest_path))
+        temporary.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    except OSError as exc:
+        for temporary, _ in staged:
+            temporary.unlink(missing_ok=True)
+        raise RuntimeImagePinError("update_write_failed") from exc
+    for temporary, target in staged:
+        os.replace(temporary, target)
     return verify_tree(root, version, manifest_path)
 
 

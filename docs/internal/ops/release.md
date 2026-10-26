@@ -141,7 +141,8 @@ gh release edit "$TAG" --draft=false --latest
    anyone who is not logged in, so until step 6 the site's `/download` button
    has nothing to lead to; only a green run says that it does. By hand:
    `python scripts/ci/check_public_release.py --tag "$TAG"` (`--no-bytes` only
-   asks that each address answers).
+   asks that each address answers). A 403 from the anonymous GitHub API on a shared
+   runner is not the release's fault: re-run the workflow.
 
 Never replace a published tag or asset. Fix forward with the next patch
 release.

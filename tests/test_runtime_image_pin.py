@@ -348,6 +348,30 @@ def test_a_pin_left_behind_after_the_update_is_red(tmp_path: Path) -> None:
     assert raised.value.code == "consumer_digest_drift"
 
 
+def test_an_update_that_cannot_write_changes_nothing(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    tree = _tree_copy(tmp_path)
+    snapshot = {p: (tree / p).read_bytes() for p in runtime_image_pin.PINNED_CONSUMERS}
+    manifest = (tree / runtime_image_pin.MANIFEST_PATH).read_bytes()
+    real_open = open
+    written = []
+
+    def failing_open(path, mode="r", *args, **kwargs):
+        if "w" in mode:
+            written.append(path)
+            if len(written) == 5:
+                raise OSError("disk full")
+        return real_open(path, mode, *args, **kwargs)
+
+    monkeypatch.setattr("builtins.open", failing_open)
+    with pytest.raises(runtime_image_pin.RuntimeImagePinError) as raised:
+        runtime_image_pin.update_tree(tree, NEW_DIGEST, NEW_REVISION)
+    monkeypatch.undo()
+    assert raised.value.code == "update_write_failed" and len(written) == 5
+    assert {p: (tree / p).read_bytes() for p in snapshot} == snapshot
+    assert (tree / runtime_image_pin.MANIFEST_PATH).read_bytes() == manifest
+    assert not list(tree.rglob("*.pin-new"))
+
+
 def test_an_update_that_misses_a_consumer_changes_nothing(tmp_path: Path) -> None:
     tree = _tree_copy(tmp_path)
     odd = tree / "scripts/jht-wrapper.sh"
