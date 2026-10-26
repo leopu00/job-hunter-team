@@ -2250,6 +2250,11 @@ fn install_local(
             if !snapshot.runtime_installed {
                 return Err(failure("runtime_wrapper_probe_failed"));
             }
+            // A machine that was there before the 4 GiB size is not resized: the person is told,
+            // with the same recreation as for the folders (the log has install.sh's own warning).
+            if crate::podman::jht_machine_memory_is_low(&home) {
+                phase("ui_notice_podman_machine_memory_low");
+            }
             return Ok(installed_wrapper);
         }
         #[cfg(not(target_os = "macos"))]

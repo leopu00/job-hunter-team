@@ -338,6 +338,17 @@ def test_the_recreated_machine_has_the_size_the_installer_gives_it():
     }
 
 
+def test_the_app_tells_a_machine_with_too_little_memory_when_it_prepares_the_mac():
+    # the Mac setup reads the machine's files and sends the notice; the person gets the recreation button with it
+    onboarding = (ROOT / "desktop" / "src-tauri" / "src" / "onboarding.rs").read_text(encoding="utf-8")
+    flow = onboarding[onboarding.index("fn install_local("):]
+    check = flow.index("if crate::podman::jht_machine_memory_is_low(&home) {")
+    assert 'phase("ui_notice_podman_machine_memory_low")' in flow[check : check + 160]
+    assert "return Ok(installed_wrapper)" in flow[check : check + 300]
+    runtime = (ROOT / "desktop" / "src-tauri" / "src" / "windows_runtime.rs").read_text(encoding="utf-8")
+    assert '"ui_notice_podman_machine_memory_low"' in runtime
+
+
 def test_recreate_rebuilds_the_machine_with_only_the_two_folders_and_keeps_the_default(tmp_path: Path):
     wrapper, env, log, home, config = _wrapper(tmp_path, sources=MACOS_DEFAULT_SOURCES)
     env["JHT_TEST_RUNTIME_READY"] = "1"

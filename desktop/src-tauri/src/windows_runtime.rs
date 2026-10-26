@@ -827,9 +827,11 @@ pub(crate) fn phase_durations(
 /// install.ps1's notices (`JHT_NOTICE <id>`), with the key of what the
 /// onboarding keeps on screen for the rest of the setup. A notice is not a
 /// failure: the install goes on.
-pub(crate) const INSTALL_NOTICES: [(&str, &str); 2] = [
+pub(crate) const INSTALL_NOTICES: [(&str, &str); 3] = [
     ("windows10_unsupported", "ui_notice_windows10_unsupported"),
     ("autostart_inactive", "ui_notice_autostart_inactive"),
+    // macOS: the machine already there has less memory than the team needs (the app reads it, not install.sh).
+    ("podman_machine_memory_low", "ui_notice_podman_machine_memory_low"),
 ];
 
 /// The key of a `JHT_NOTICE <id>` line of install.ps1's stdout, exactly, with

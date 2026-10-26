@@ -211,6 +211,39 @@ fn jht_machine() -> String {
         .unwrap_or_else(|| JHT_PODMAN_MACHINE.to_owned())
 }
 
+/// The memory install.sh gives the JHT machine when it creates it (and
+/// `jht podman-machine-recreate`): the team was measured at about 3.9 GB.
+/// A test keeps it equal to install.sh's.
+pub(crate) const MACHINE_MEMORY_MIB: u64 = 4096;
+
+/// Whether a machine's configuration file (`machine/<provider>/<name>.json`)
+/// says it has less memory than the team needs. A file that does not say, or
+/// cannot be read, is not reported: only a number below the size counts.
+pub(crate) fn machine_config_memory_is_low(config: &str) -> bool {
+    serde_json::from_str::<serde_json::Value>(config)
+        .ok()
+        .and_then(|value| value["Resources"]["Memory"].as_u64())
+        .is_some_and(|memory| memory < MACHINE_MEMORY_MIB)
+}
+
+/// Whether the machine the JHT team runs on already exists with less memory
+/// than it needs (created by an earlier installer, or by hand). Reads the
+/// configuration files only: nothing is started, nothing is changed.
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+pub(crate) fn jht_machine_memory_is_low(home: &std::path::Path) -> bool {
+    let config_home = std::env::var_os("XDG_CONFIG_HOME")
+        .map(std::path::PathBuf::from)
+        .filter(|path| path.is_absolute())
+        .unwrap_or_else(|| home.join(".config"));
+    let root = config_home.join("containers/podman/machine");
+    let file = format!("{}.json", jht_machine());
+    let Ok(providers) = std::fs::read_dir(root) else { return false };
+    providers
+        .flatten()
+        .filter_map(|provider| std::fs::read_to_string(provider.path().join(&file)).ok())
+        .any(|config| machine_config_memory_is_low(&config))
+}
+
 fn valid_machine_name(name: &str) -> bool {
     // A name that starts with '-' would be read as an option.
     name.len() <= 64
@@ -419,5 +452,57 @@ mod tests {
         );
 
         assert_eq!(*lines.lock().expect("line lock"), vec!["valid"]);
+    }
+
+    #[test]
+    fn a_machine_below_the_team_size_is_reported_and_one_at_it_is_not() {
+        use super::{machine_config_memory_is_low, MACHINE_MEMORY_MIB};
+        let config = |memory: &str| format!(r#"{{"Name":"jht-podman","Resources":{{"CPUs":5,"DiskSize":100,"Memory":{memory},"USBs":[]}}}}"#);
+        assert!(machine_config_memory_is_low(&config("2048")));
+        assert!(machine_config_memory_is_low(&config("3072")));
+        assert!(!machine_config_memory_is_low(&config(&MACHINE_MEMORY_MIB.to_string())));
+        assert!(!machine_config_memory_is_low(&config("8192")));
+        // what does not say a number is not reported: nothing is claimed about it
+        for unknown in ["{}", r#"{"Resources":{}}"#, r#"{"Resources":{"Memory":"2048"}}"#, "not json", ""] {
+            assert!(!machine_config_memory_is_low(unknown), "{unknown}");
+        }
+    }
+
+    #[test]
+    fn the_size_the_app_expects_is_the_one_install_sh_gives() {
+        let installer = include_str!("../../../scripts/install.sh");
+        let line = installer
+            .lines()
+            .find_map(|line| line.strip_prefix("PODMAN_MACHINE_MEMORY_MIB="))
+            .expect("install.sh sets the machine memory");
+        assert_eq!(line.trim(), super::MACHINE_MEMORY_MIB.to_string());
+    }
+
+    #[test]
+    fn the_machine_files_of_every_provider_are_read_and_nothing_is_written() {
+        use super::jht_machine_memory_is_low;
+        let home = std::env::temp_dir().join(format!("jht-machine-memory-{}", std::process::id()));
+        let machine = home.join(".config/containers/podman/machine/applehv");
+        std::fs::create_dir_all(&machine).unwrap();
+        let file = machine.join("jht-podman.json");
+        std::fs::write(&file, r#"{"Resources":{"Memory":2048}}"#).unwrap();
+        let other = machine.join("other-podman.json");
+        std::fs::write(&other, r#"{"Resources":{"Memory":1024}}"#).unwrap();
+        // XDG_CONFIG_HOME is the process's: the test only reads the home it passes
+        let saved = std::env::var_os("XDG_CONFIG_HOME");
+        std::env::remove_var("XDG_CONFIG_HOME");
+        let low = jht_machine_memory_is_low(&home);
+        std::fs::write(&file, r#"{"Resources":{"Memory":4096}}"#).unwrap();
+        let enough = jht_machine_memory_is_low(&home);
+        std::fs::remove_file(&file).unwrap();
+        let absent = jht_machine_memory_is_low(&home);
+        if let Some(value) = saved {
+            std::env::set_var("XDG_CONFIG_HOME", value);
+        }
+        std::fs::remove_file(&other).unwrap();
+        std::fs::remove_dir_all(&home).ok();
+        assert!(low, "2048 MiB is below the team size");
+        assert!(!enough, "4096 MiB is the team size");
+        assert!(!absent, "no machine file, nothing to report (another machine's file does not count)");
     }
 }
