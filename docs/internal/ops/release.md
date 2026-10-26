@@ -41,9 +41,22 @@ Tauri crate, displayed web payload versions, `CHANGELOG.md` and the immutable
 runtime manifest. Godot metadata is deliberately outside this release contract.
 
 Before the final version commit, wait for the green Docker build of the chosen
-source SHA, record its multi-architecture digest and OCI revision in
-`release/runtime-image.v1.json`, update its consumers, then run
-`python scripts/runtime_image_pin.py verify-source`.
+source SHA, then move the manifest and every consumer to that image in one step:
+
+```bash
+python scripts/runtime_image_pin.py update --from-registry   # digest of the `master` image + the commit it was built from
+# or, for an image that is not the current `master` one:
+python scripts/runtime_image_pin.py update --digest sha256:<index digest> --source-revision <commit>
+python scripts/runtime_image_pin.py verify-tree --root .      # contract + no other copy of the pin in the repository
+python scripts/runtime_image_pin.py verify-source             # the image carries that commit on both platforms
+```
+
+`update` rewrites the manifest and the consumers listed in
+`PINNED_CONSUMERS` (compose, installers, wrappers, the Windows enabler, the
+CLI, the guide) with the patterns `verify-tree` reads them with, and changes
+nothing if one of them is not found. `verify-tree` also fails if a tracked file
+that is not on that list names a JHT image by another digest: a new copy of the
+pin must be added to the list, or it is red at the next release.
 
 ## Release assets
 
@@ -101,6 +114,14 @@ python scripts/release_artifacts.py audit \
   --repository leopu00/job-hunter-team
 gh release edit "$TAG" --draft=false --latest
 ```
+
+7. Publishing starts **Public release check** (`public-release-check.yml`): with
+   no token it downloads the three files the site's button links, and
+   `SHA256SUMS`, and compares sizes and hashes. A draft cannot be downloaded by
+   anyone who is not logged in, so until step 6 the site's `/download` button
+   has nothing to lead to; only a green run says that it does. By hand:
+   `python scripts/ci/check_public_release.py --tag "$TAG"` (`--no-bytes` only
+   asks that each address answers).
 
 Never replace a published tag or asset. Fix forward with the next patch
 release.
