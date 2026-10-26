@@ -47,6 +47,10 @@ HASH_PROBE_CHILD = [
     "--format",
     "json",
 ]
+# After a successful `up` the wrapper hands the broker its web authorisations
+# (broker_configure_web_authorisations): it looks up the agent container and
+# the broker service, each one a read-only `compose ps -q` plus the hash probe.
+WEB_AUTHORISATION_LOOKUPS = [PS_Q_CHILD, HASH_PROBE_CHILD] * 2
 UNTRUSTED_CONTAINER_CASES = (
     ("zero", False),
     ("wrong-name", True),
@@ -821,6 +825,7 @@ def test_exact_supported_versions_use_named_connection_for_real_ps_and_up(
         ["create", "jht"],
         PS_Q_CHILD,
         HASH_PROBE_CHILD,
+        *WEB_AUTHORISATION_LOOKUPS,
     ]
     assert all(connection == MACHINE for connection, _ in calls)
     direct_calls = _direct_podman_calls(podman_log)
@@ -1068,6 +1073,7 @@ def test_up_creates_only_when_precheck_finds_no_existing_project_container(
         ["create", "jht"],
         PS_Q_CHILD,
         HASH_PROBE_CHILD,
+        *WEB_AUTHORISATION_LOOKUPS,
     ]
     inspect_calls = [
         args
