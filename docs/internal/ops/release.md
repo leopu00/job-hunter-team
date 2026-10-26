@@ -27,6 +27,26 @@ Do not promote, tag or publish until all of these are true for the exact SHA:
 The metered team API/OpenAI-key mode remains rehearsal-only and is not a 0.4
 product path.
 
+## Order of a release
+
+1. **Pin** — at the release candidate, on the attested image built from the
+   candidate's own SHA (green Docker build of that SHA): `runtime_image_pin.py
+   update`, then `verify-tree` and `verify-source` (see below). The pins are not
+   moved before: until then the repository keeps the previous image.
+2. **Version commit** — versions, `CHANGELOG.md`, the site's download tag, with
+   the pins of step 1 already in the tree. `release.yml` checks the tree of the
+   tagged commit and cannot change it.
+3. **Tag** — the production HEAD (Tag Production Release).
+4. **Draft** — `release.yml` builds the three desktop apps, promotes the image
+   and creates the draft Release. Nobody who is not logged in can download a
+   draft.
+5. **Publish** — the operator, after the audit of the draft bytes
+   (`gh release edit "$TAG" --draft=false --latest`, below).
+6. **Public release check** — started by publishing, green means anyone can
+   download the files the site's button links.
+
+Nothing is tagged on red, and the release is not published before the audit.
+
 ## Version contract
 
 Run:
@@ -88,7 +108,7 @@ provenance, so filenames and checksums have one authority.
       logs, and never supply a service-role/private/admin key.
 - [ ] Bump all checked versions and regenerate affected npm/Cargo locks.
 - [ ] Add `## [X.Y.Z] — YYYY-MM-DD` to `CHANGELOG.md` with user-visible notes.
-- [ ] Freeze and verify the runtime image manifest.
+- [ ] At the release candidate: move the runtime image pins with `runtime_image_pin.py update` (see the version contract) before the version commit.
 - [ ] Run `scripts/check-release-version.sh vX.Y.Z` locally.
 - [ ] Run the relevant local suites through the shared-machine build turn.
 - [ ] Push only the SHA approved by the publication review and follow all CI runs to green.
