@@ -351,6 +351,31 @@ function RuntimeView({ host, platform, t, locale, runtime, activity, onRetry, on
             tabIndex={failed ? -1 : undefined}
           >{failed ? failureTitle : actionRequired ? activeLabel : t.preparing(activeLabel)}</h2>
           {failed && status}
+          {/* The recreation of the machine is the way out of this error: it sits right under the reason, not below the step list. */}
+          {recreatePodmanMachine && (
+            <div className="onboarding-runtime-recreate" data-testid="recreate-podman-machine">
+              {confirmingRecreate && (
+                <section className="onboarding-provider-console" aria-label={t.recreateAria}>
+                  <div className="onboarding-provider-console__heading"><div><strong>{t.recreateTitle}</strong><small>{t.recreateText}</small><small>{recreateConfirm.text}</small><small>{recreateConfirm.action}</small></div></div>
+                </section>
+              )}
+              <div className="onboarding-runtime-actions">
+                {!confirmingRecreate && (
+                  <button className="onboarding-primary" type="button" onClick={() => setConfirmingRecreate(true)} disabled={pending}>
+                    {t.recreate}<span aria-hidden="true">→</span>
+                  </button>
+                )}
+                {confirmingRecreate && (
+                  <>
+                    <button className="onboarding-secondary" type="button" onClick={() => setConfirmingRecreate(false)} disabled={pending}>{t.cancel}</button>
+                    <button className="onboarding-primary" type="button" onClick={() => invoke(recreatePodmanMachine, false)} disabled={pending}>
+                      {pending ? t.recreating : t.recreateYes}<span aria-hidden="true">→</span>
+                    </button>
+                  </>
+                )}
+              </div>
+            </div>
+          )}
           <SetupNotices notices={activity?.notices} t={t} locale={locale} onRecreate={host.kind === "local" ? onRecreatePodmanMachine : undefined} locked={runtime.status === "working"} />
           <OnboardingArtwork name={runtimeArtwork(runtime)} />
           <section className="onboarding-runtime-progress" aria-label={t.progressAria}>
@@ -426,11 +451,6 @@ function RuntimeView({ host, platform, t, locale, runtime, activity, onRetry, on
               </dl>
             </section>
           )}
-          {recreatePodmanMachine && confirmingRecreate && (
-            <section className="onboarding-provider-console" aria-label={t.recreateAria}>
-              <div className="onboarding-provider-console__heading"><div><strong>{t.recreateTitle}</strong><small>{t.recreateText}</small><small>{recreateConfirm.text}</small><small>{recreateConfirm.action}</small></div></div>
-            </section>
-          )}
           {freeDiskSpace && confirmingFreeSpace && (
             <section className="onboarding-provider-console" aria-label={t.freeSpaceAria}>
               <div className="onboarding-provider-console__heading"><div><strong>{t.freeSpaceTitle}</strong><small>{freeSpaceConfirm.text}</small><small>{freeSpaceConfirm.action}</small></div></div>
@@ -454,19 +474,6 @@ function RuntimeView({ host, platform, t, locale, runtime, activity, onRetry, on
               <button className="onboarding-secondary" type="button" data-testid="open-without-team" onClick={onOpenWithoutTeam} disabled={pending}>
                 {t.openWithoutTeam}
               </button>
-            )}
-            {recreatePodmanMachine && !confirmingRecreate && (
-              <button className="onboarding-primary" type="button" onClick={() => setConfirmingRecreate(true)} disabled={pending}>
-                {t.recreate}<span aria-hidden="true">→</span>
-              </button>
-            )}
-            {recreatePodmanMachine && confirmingRecreate && (
-              <>
-              <button className="onboarding-secondary" type="button" onClick={() => setConfirmingRecreate(false)} disabled={pending}>{t.cancel}</button>
-              <button className="onboarding-primary" type="button" onClick={() => invoke(recreatePodmanMachine, false)} disabled={pending}>
-                {pending ? t.recreating : t.recreateYes}<span aria-hidden="true">→</span>
-              </button>
-              </>
             )}
             {freeDiskSpace && !confirmingFreeSpace && (
               <button className="onboarding-secondary" type="button" onClick={() => setConfirmingFreeSpace(true)} disabled={pending}>
