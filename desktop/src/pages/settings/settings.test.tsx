@@ -30,6 +30,20 @@ afterEach(() => {
 });
 
 describe("the settings page", () => {
+  it("lets the person turn the new-version check off and on again, and says what it sends", async () => {
+    const user = userEvent.setup();
+    render(<SettingsPage {...props} />);
+    const card = screen.getByTestId("settings-update-check");
+    expect(card).toHaveTextContent("GitHub sees the IP address");
+    expect(localStorage.getItem("jht-update-check")).toBeNull();
+    await user.click(screen.getByRole("button", { name: "Do not check" }));
+    expect(localStorage.getItem("jht-update-check")).toBe("off");
+    expect(screen.getByRole("button", { name: "Do not check" })).toHaveAttribute("aria-pressed", "true");
+    await user.click(screen.getByRole("button", { name: "Check at startup" }));
+    expect(localStorage.getItem("jht-update-check")).toBeNull();
+    localStorage.removeItem("jht-update-check");
+  });
+
   it("offers the provider only where the dashboard provides it, and opens the setup's Provider step", async () => {
     const user = userEvent.setup();
     const view = render(<SettingsPage {...props} />);
