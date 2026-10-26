@@ -1564,7 +1564,8 @@ fn mac_config_hash(runtime: &Path, timeout: Duration) -> Option<String> {
     output.extend_from_slice(&stderr);
     let output = std::str::from_utf8(&output).ok()?;
     let mut hash = None;
-    for line in output.lines() { for (at, _) in line.match_indices("io.podman.compose.config-hash=") { let value = &line[at + "io.podman.compose.config-hash=".len()..]; let value: String = value.chars().take_while(|b| b.is_ascii_hexdigit()).collect(); if value.len() != 64 || !value.bytes().all(|b| b.is_ascii_lowercase() || b.is_ascii_digit()) { return None; } match hash.as_deref() { None => hash = Some(value), Some(old) if old == value => {}, Some(_) => return None } } }
+    // podman-compose 1.6.0 hashes each service on its own: the plan of `jht` prints the create of its dependency first (with another hash); only the create of `jht` carries the hash its container is labelled with.
+    for line in output.lines().filter(|line| line.contains(" create --name=jht ")) { for (at, _) in line.match_indices("io.podman.compose.config-hash=") { let value = &line[at + "io.podman.compose.config-hash=".len()..]; let value: String = value.chars().take_while(|b| b.is_ascii_hexdigit()).collect(); if value.len() != 64 || !value.bytes().all(|b| b.is_ascii_lowercase() || b.is_ascii_digit()) { return None; } match hash.as_deref() { None => hash = Some(value), Some(old) if old == value => {}, Some(_) => return None } } }
     hash
 }
 
@@ -3929,7 +3930,7 @@ mod tests {
         #[cfg(target_os = "macos")]
         {
             fs::write(bin.join("podman"), "#!/bin/sh\n[ \"${1:-}\" = --version ] && { echo 'podman version 6.1.3'; exit 0; }\nexit 91\n").unwrap();
-            fs::write(bin.join("podman-compose"), format!("#!/bin/sh\n[ \"${{1:-}}\" = --version ] && {{ echo 'provider banner'; echo 'podman-compose version 1.6.0'; exit 0; }}\n[ -z \"${{JHT_IMAGE+x}}\" ] || exit 92\nprintf 'io.podman.compose.config-hash={}\\n' >&2\n", "a".repeat(64))).unwrap();
+            fs::write(bin.join("podman-compose"), format!("#!/bin/sh\n[ \"${{1:-}}\" = --version ] && {{ echo 'provider banner'; echo 'podman-compose version 1.6.0'; exit 0; }}\n[ -z \"${{JHT_IMAGE+x}}\" ] || exit 92\nprintf 'podman create --name=jht-telegram --label io.podman.compose.config-hash={} x\\n' >&2\nprintf 'podman create --name=jht --label io.podman.compose.config-hash={} x\\n' >&2\n", "7".repeat(64), "a".repeat(64))).unwrap();
             for helper in [bin.join("podman"), bin.join("podman-compose")] { fs::set_permissions(helper, fs::Permissions::from_mode(0o700)).unwrap(); }
         }
         write_valid_local_podman_manifest(&runtime, &wrapper);

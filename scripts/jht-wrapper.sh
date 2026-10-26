@@ -2304,13 +2304,21 @@ podman_expected_config_hash() {
           --podman-path "$podman_bin" -f "$file" -f "$override" up -d --force-recreate "$service"
     } 2>&1)" || return 1
   fi
-  # La config-hash e' una per tutto il progetto (podman-compose la calcola dal compose
-  # unito): il dry-run di un servizio la stampa per lui e per ogni sua dipendenza
-  # (jht -> jht-telegram), cioe' piu' righe uguali. Due valori DIVERSI non sono una
-  # configurazione: si rifiuta.
-  hashes="$(printf '%s\n' "$resolved" \
-    | sed -n 's/.*io\.podman\.compose\.config-hash=\([0-9a-f]\{64\}\)\([[:space:]].*\)\{0,1\}$/\1/p' \
-    | LC_ALL=C sort -u)"
+  # podman-compose 1.6.0 calcola la config-hash PER SERVIZIO: il dry-run di `jht`
+  # stampa prima il create della sua dipendenza (jht-telegram, con la SUA hash) e poi
+  # il create di `jht`. Conta solo la hash del create del servizio chiesto (il suo
+  # container_name e' il nome del servizio): e' quella che l'etichetta del container
+  # porta. Due valori diversi per lo stesso servizio non sono una configurazione: si
+  # rifiuta, come l'assenza del suo create.
+  hashes="$(printf '%s\n' "$resolved" | awk -v name="$service" '
+    index($0, " create --name=" name " ") {
+      n = split($0, parts, "io.podman.compose.config-hash=")
+      for (i = 2; i <= n; i++) {
+        value = parts[i]
+        sub(/[^0-9a-f].*$/, "", value)
+        if (length(value) == 64) print value
+      }
+    }' | LC_ALL=C sort -u)"
   unset resolved
   case "$hashes" in ''|*$'\n'*) return 1 ;; esac
   hash="$hashes"
