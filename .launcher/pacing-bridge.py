@@ -1290,6 +1290,56 @@ def escalate_mute_to_capitano(streak: int) -> bool:
     return True
 
 
+def flush_ours(session: str) -> bool:
+    """`jht-tmux-send --flush-ours`: preme l'Invio SOLO su un testo PROVATO nostro rimasto nella
+    casella (mai su una bozza altrui, mai cancella). True se la casella e' libera o il testo e' stato preso."""
+    cmd_path = _resolve_tmux_send()
+    if cmd_path is None:
+        return False
+    try:
+        r = subprocess.run([cmd_path, "--flush-ours", session], capture_output=True, text=True, timeout=60)
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        return False
+    return r.returncode == 0
+
+
+def escalate_composer_to_capitano(streak: int) -> bool:
+    """rc=130: la casella del target tiene un testo che NON e' provato nostro, da `streak` tick.
+
+    Prima si prova a liberarla (`--flush-ours`: succede quando e' un nostro incolla rimasto, come il segnaposto
+    di un tick lungo); se resta, si avvisa il CAPITANO e si lascia la stessa riga nella mailbox (se anche la
+    casella del Capitano e' occupata, la drena a inizio turno). Non e' rc=3: il pane e' vivo, MAI respawnare.
+    True se il target e' stato liberato o l'avviso e' partito.
+    """
+    if flush_ours(TARGET_SESSION):
+        print(f"[pacing-bridge] {TARGET_SESSION}: the composer held a text of ours; it got its Enter "
+              f"(was refused for {streak} ticks)", flush=True)
+        return True
+    msg = (
+        f"[BRIDGE] {TARGET_SESSION} has refused {streak} consecutive pacing ticks: its composer holds text that is "
+        f"NOT provably ours (jht-tmux-send rc=130, nothing was pasted or pressed). The pane is ALIVE: do NOT respawn "
+        f"it. The ticks are not lost: they are in the bridge mailbox (python3 /app/shared/skills/bridge_mailbox.py "
+        f"drain). Inspect the pane (tmux capture-pane -t {TARGET_SESSION} -p | tail -8): if the text is a person's "
+        f"draft leave it and tell the user; if it is a left-over paste, `jht-tmux-send --flush-ours {TARGET_SESSION}` "
+        f"presses its Enter. Log: {LOGS_DIR}/pacing-bridge.log"
+    )
+    append_to_mailbox(msg, delivered_via_tmux=False, kind="escalation")
+    cmd_path = _resolve_tmux_send()
+    if cmd_path is None:
+        return False
+    try:
+        r = subprocess.run([cmd_path, ESCALATION_SESSION, msg], capture_output=True, text=True, timeout=30)
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        return False
+    if r.returncode != 0:
+        print(f"[pacing-bridge] composer escalation to {ESCALATION_SESSION} failed rc={r.returncode} "
+              f"stderr={r.stderr.strip()} (left in the bridge mailbox)", file=sys.stderr)
+        return False
+    print(f"[pacing-bridge] COMPOSER ESCALATION → {ESCALATION_SESSION}: {TARGET_SESSION} refused {streak} ticks",
+          flush=True)
+    return True
+
+
 def escalate_unreceptive_to_capitano(streak: int) -> bool:
     """Notifica il CAPITANO che il target pacing è irricettivo da `streak` tick.
 
@@ -1549,6 +1599,9 @@ def loop():
     # Tick consecutivi con target "vivo ma muto" (rc=5) → soglia → escalation
     # SEPARATA: stessa invisibilità, cura opposta (sbloccare, non respawnare).
     mute_streak = 0
+    # Tick consecutivi con la casella del target occupata da un testo non provato nostro (rc=130): il pane
+    # e' vivo e NON si respawna; si prova `--flush-ours`, poi si avvisa il Capitano.
+    composer_streak = 0
 
     while True:
         nxt = next_quarter()
@@ -1642,6 +1695,13 @@ def loop():
                     mute_streak = 0
             elif rc != 5:
                 mute_streak = 0
+            if rc == 130 and TARGET_SESSION != ESCALATION_SESSION:
+                composer_streak += 1
+                if composer_streak >= UNRECEPTIVE_ESCALATE_AFTER:
+                    escalate_composer_to_capitano(composer_streak)
+                    composer_streak = 0
+            elif rc != 130:
+                composer_streak = 0
         except Exception as e:
             # Non vogliamo che un errore di un tick affossi il loop.
             print(f"[pacing-bridge] tick error {now.isoformat()}: {e}",
