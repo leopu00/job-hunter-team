@@ -1,5 +1,6 @@
 import { invoke, isTauri } from "@tauri-apps/api/core";
-import { reportPositionsNotice } from "./existing-team-readonly";
+import { existingTeamConnectionKey, reportPositionsNotice } from "./existing-team-readonly";
+import { REFRESH_EVENT } from "../shell/router";
 // The pages show an empty list for a list that could not be read, as the web does for a query
 // that fails; the header (shell/VpsLinkBar) is how the person is told it was not empty, and why.
 import { reportVpsRead } from "./vps-link";
@@ -261,11 +262,46 @@ function boundedPart(value: unknown): value is { rows: unknown[]; included: numb
 }
 
 /**
+ * The sidebar's facets and the dashboard's numbers weigh most of what a page of the linked team reads
+ * (all the positions, light; the counts), and several pages ask for them one after the other. They are
+ * kept for CACHED_READ_MS, for the connection they were read on (existingTeamConnectionKey: this opening
+ * of the view, its account, VPS and team) and nothing is kept with the view closed. A page asked to
+ * read again (Aggiorna, or router.refresh() after a change the person made) forgets them. A read that
+ * did not succeed is not kept.
+ */
+const CACHED_READ_MS = 30_000;
+const cached = new Map<string, { key: string; at: number; read: Promise<DesktopVpsRead<unknown>> }>();
+
+if (typeof window !== "undefined") window.addEventListener(REFRESH_EVENT, () => cached.clear());
+
+/** Forgets the kept reads (a test, or a new view). */
+export function resetCachedReads(): void {
+  cached.clear();
+}
+
+function readOnce<T>(request: Request): Promise<DesktopVpsRead<T>> {
+  const key = existingTeamConnectionKey();
+  if (key === null) return read<T>(request);
+  const now = Date.now();
+  const kept = cached.get(request.op);
+  if (kept && kept.key === key && now >= kept.at && now - kept.at < CACHED_READ_MS) return kept.read as Promise<DesktopVpsRead<T>>;
+  const fresh = read<T>(request).then((result) => {
+    // Not kept when it failed, or when the view moved to another connection while it was read.
+    if (result.source !== "vps" || existingTeamConnectionKey() !== key) {
+      if (cached.get(request.op)?.read === fresh) cached.delete(request.op);
+    }
+    return result;
+  });
+  cached.set(request.op, { key, at: now, read: fresh });
+  return fresh;
+}
+
+/**
  * The dashboard's numbers, as the core counts them on the team's VPS: one
  * reply, never rows downloaded to be counted here.
  */
 export async function readDesktopVpsStats(): Promise<DesktopVpsRead<DesktopVpsStats>> {
-  const value = await read<unknown>({ op: "stats" });
+  const value = await readOnce<unknown>({ op: "stats" });
   if (value.source !== "vps") return value;
   const data = value.data;
   if (
@@ -292,5 +328,5 @@ export function readDesktopVpsPosition(
 export function readDesktopVpsPositionFacets(): Promise<
   DesktopVpsRead<PositionFacet[]>
 > {
-  return read<unknown>({ op: "facets" }).then(arrayRead<PositionFacet>);
+  return readOnce<unknown>({ op: "facets" }).then(arrayRead<PositionFacet>);
 }
