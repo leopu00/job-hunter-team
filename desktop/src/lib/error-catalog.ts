@@ -799,15 +799,15 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
     "Try again. If it keeps happening, look at its terminal and report the code shown next to it.",
   ),
   provider_not_configured: copy(
-    "Sulla squadra non è configurato nessun provider (Claude o Codex): gli agenti non possono partire.",
+    "Sulla squadra non è configurato nessun provider (Codex): gli agenti non possono partire.",
     "Scegli il provider sulla VPS con «jht setup», poi riprova.",
-    "No provider (Claude or Codex) is set up on the team: its agents cannot start.",
+    "No provider (Codex) is set up on the team: its agents cannot start.",
     "Choose the provider on the VPS with «jht setup», then try again.",
   ),
   provider_not_configured_local: copy(
-    "Sulla squadra di questo computer non è configurato nessun provider (Claude o Codex): gli agenti non possono partire.",
+    "Sulla squadra di questo computer non è configurato nessun provider (Codex): gli agenti non possono partire.",
     "Apri Impostazioni › Provider, scegli il provider e riprova.",
-    "No provider (Claude or Codex) is set up on this computer's team: its agents cannot start.",
+    "No provider (Codex) is set up on this computer's team: its agents cannot start.",
     "Open Settings › Provider, choose the provider, then try again.",
   ),
   agent_stop_failed: copy(

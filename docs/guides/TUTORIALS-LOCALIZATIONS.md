@@ -52,7 +52,7 @@ mentre lavora.
    di amministratore. La release per Linux è costruita, ma questo setup non è
    ancora stato collaudato. Per una VPS inserisci indirizzo, utente SSH, porta
    e file della chiave privata, che resta su questo computer.
-5. **Scegli il provider.** Seleziona Codex (consigliato) o Claude, poi
+5. **Scegli il provider.** Seleziona Codex, poi
    **Rivedi il setup**. Accedi con il tuo abbonamento più avanti nel setup: non
    serve una chiave API.
 6. **Conferma e prepara la squadra.** L'ultima schermata riassume ambiente e
@@ -239,7 +239,7 @@ trabaja.
    compilada, pero esta configuración todavía no se ha probado. Para un VPS,
    introduce su dirección, el usuario SSH, el puerto y el archivo de la clave
    privada, que se queda en este ordenador.
-5. **Elige el proveedor.** Selecciona Codex (recomendado) o Claude y
+5. **Elige el proveedor.** Selecciona Codex y
    luego **Revisar la configuración**. Inicias sesión con tu suscripción más
    adelante en la configuración: no hace falta una clave API.
 6. **Confirma y prepara el equipo.** La última pantalla resume el entorno y el
@@ -436,7 +436,7 @@ ordinateur. Gardez l'application ouverte pendant qu'elle travaille.
    configuration n'a pas encore été testée. Pour un VPS, saisissez son adresse,
    l'utilisateur SSH, le port et le fichier de la clé privée, qui reste sur cet
    ordinateur.
-5. **Choisissez le fournisseur.** Sélectionnez Codex (recommandé) ou Claude,
+5. **Choisissez le fournisseur.** Sélectionnez Codex,
    puis **Vérifier la configuration**. Vous vous connectez avec votre
    abonnement plus tard dans la configuration : aucune clé API n'est
    nécessaire.
@@ -636,7 +636,7 @@ geöffnet, während sie arbeitet.
    aber diese Einrichtung wurde noch nicht getestet. Für einen VPS gibst du
    seine Adresse, den SSH-Benutzer, den Port und die Datei des privaten
    Schlüssels ein, der auf diesem Computer bleibt.
-5. **Wähle den Anbieter.** Wähle Codex (empfohlen) oder Claude, dann
+5. **Wähle den Anbieter.** Wähle Codex, dann
    **Einrichtung prüfen**. Du meldest dich später in der Einrichtung mit deinem
    Abo an: Ein API-Schlüssel ist nicht nötig.
 6. **Bestätige und bereite das Team vor.** Der letzte Bildschirm fasst Umgebung
@@ -836,7 +836,7 @@ trabalha.
    para Linux está compilada, mas esta configuração ainda não foi testada. Para
    uma VPS, introduz o endereço, o utilizador SSH, a porta e o ficheiro da
    chave privada, que fica neste computador.
-5. **Escolhe o fornecedor.** Seleciona Codex (recomendado) ou Claude e
+5. **Escolhe o fornecedor.** Seleciona Codex e
    depois **Rever a configuração**. Inicias sessão com a tua subscrição mais à
    frente na configuração: não é precisa uma chave API.
 6. **Confirma e prepara a equipa.** O último ecrã resume o ambiente e o
@@ -1032,7 +1032,7 @@ számítógépedtől függ. Hagyd nyitva az alkalmazást, amíg dolgozik.
    linuxos kiadás elkészült, de ezt a beállítást még nem tesztelték. VPS esetén
    add meg a címét, az SSH-felhasználót, a portot és a privát kulcs fájlját,
    amely ezen a számítógépen marad.
-5. **Válaszd ki a szolgáltatót.** Válaszd a Codexet (ajánlott) vagy a Claude-ot,
+5. **Válaszd ki a szolgáltatót.** Válaszd a Codexet,
    majd **A beállítás áttekintése** gombot. Az előfizetéseddel a
    beállítás egy későbbi lépésében jelentkezel be: API-kulcsra nincs szükség.
 6. **Erősítsd meg, és készítsd elő a csapatot.** Az utolsó képernyő

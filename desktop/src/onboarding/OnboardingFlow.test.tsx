@@ -76,13 +76,13 @@ describe("OnboardingFlow reopened for the provider only (T128)", () => {
   it("prepares on this computer with the provider chosen, and says nothing of installs or of an earlier install", async () => {
     const user = userEvent.setup();
     const { props } = reopened({ platform: "windows", previousLocalData: true });
-    await user.click(await screen.findByRole("radio", { name: /claude code/i }));
+    await screen.findByRole("radio", { name: /codex/i });
     await user.click(screen.getByRole("button", { name: /rivedi il setup/i }));
     expect(screen.getByText("Questo computer")).toBeInTheDocument();
     expect(screen.queryByText(/l’app installa, se mancano/i)).not.toBeInTheDocument();
     expect(screen.queryByRole("note")).not.toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: /prepara la squadra/i }));
-    await waitFor(() => expect(props.onSubmit).toHaveBeenCalledWith({ host: { kind: "local" }, provider: "claude" }));
+    await waitFor(() => expect(props.onSubmit).toHaveBeenCalledWith({ host: { kind: "local" }, provider: "codex" }));
   });
 
   it("the first setup is as it was: it starts on the greeting, with the proposed provider, and the notes of a first install", async () => {
@@ -119,7 +119,6 @@ describe("OnboardingFlow technical setup", () => {
   });
 
   it.each([
-    ["Claude Code", "claude"],
     ["Codex", "codex"],
   ] as const)("lets a local identity choose %s without exposing more personal fields", async (label, provider) => {
     const user = userEvent.setup();
@@ -159,11 +158,10 @@ describe("OnboardingFlow technical setup", () => {
     await reachProviderLocal(user);
     const providers = screen.getAllByRole("radio");
     expect(providers[0]).toHaveTextContent("Codex");
-    // Only Codex carries the recommended label; Claude stays choosable.
+    // Codex is the only choice (0.4: one subscription) and carries the recommended label.
+    expect(providers).toHaveLength(1);
     expect(providers[0]).toHaveTextContent("consigliato");
-    expect(providers.slice(1).map((radio) => radio.textContent)).toEqual([expect.not.stringContaining("consigliato")]);
     expect(screen.getByRole("radio", { name: /Codex/i })).toHaveAttribute("aria-checked", "true");
-    expect(screen.getByRole("radio", { name: /Claude Code/i })).toHaveAttribute("aria-checked", "false");
     await user.click(screen.getByRole("button", { name: /rivedi il setup/i }));
     await user.click(screen.getByRole("button", { name: /prepara la squadra/i }));
 
@@ -299,17 +297,17 @@ describe("OnboardingFlow technical setup", () => {
     expect(screen.queryByRole("note")).not.toBeInTheDocument();
   });
 
-  it("does not offer Kimi on any platform: only Codex and Claude Code can be chosen", async () => {
+  it("offers only Codex, on any platform: neither Kimi nor Claude Code can be chosen", async () => {
     // Kimi is archived (0.4): the code that reads a team already on it stays, but no choice leads there.
     for (const platform of ["macos", "linux", "windows"] as const) {
       const user = userEvent.setup();
       const view = renderFlow({ platform });
       await reachProviderLocal(user);
       expect(screen.getAllByRole("radio").map((radio) => radio.textContent?.replace(/consigliato/i, "").trim())).toEqual([
-        expect.stringContaining("Codex"), expect.stringContaining("Claude Code"),
+        expect.stringContaining("Codex"),
       ]);
-      expect(screen.queryByText(/Kimi|Moonshot/i)).not.toBeInTheDocument();
-      expect(document.body.textContent).not.toMatch(/Kimi|Moonshot/i);
+      expect(screen.queryByText(/Kimi|Moonshot|Claude|Anthropic/i)).not.toBeInTheDocument();
+      expect(document.body.textContent).not.toMatch(/Kimi|Moonshot|Claude|Anthropic/i);
       view.unmount();
     }
   });
@@ -318,13 +316,12 @@ describe("OnboardingFlow technical setup", () => {
     const user = userEvent.setup();
     const { props } = renderFlow();
     await reachProviderLocal(user);
-    await user.click(screen.getByRole("radio", { name: /Claude Code/i }));
     await user.click(screen.getByRole("button", { name: /rivedi il setup/i }));
     await user.click(screen.getByRole("button", { name: /prepara la squadra/i }));
 
     await waitFor(() => expect(props.onSubmit).toHaveBeenCalledWith({
       host: { kind: "local" },
-      provider: "claude",
+      provider: "codex",
     }));
     expect(Object.keys(vi.mocked(props.onSubmit).mock.calls[0][0]).sort()).toEqual(["host", "provider"]);
   });
@@ -350,7 +347,8 @@ describe("OnboardingFlow technical setup", () => {
     await user.tab();
     expect(screen.getByRole("radio", { name: /Codex/i })).toHaveFocus();
     await user.keyboard("{ArrowRight}");
-    expect(screen.getByRole("radio", { name: /Claude Code/i })).toHaveAttribute("aria-checked", "true");
+    // with one choice the arrow stays on it
+    expect(screen.getByRole("radio", { name: /Codex/i })).toHaveAttribute("aria-checked", "true");
   });
 
   it("restores focus to the greeting when navigating back", async () => {
@@ -372,7 +370,6 @@ describe("OnboardingFlow technical setup", () => {
     expect(screen.getByText("id_ed25519")).toBeInTheDocument();
     expect(screen.queryByText("/synthetic/private/id_ed25519")).not.toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: /^continua/i }));
-    await user.click(screen.getByRole("radio", { name: /Claude Code/i }));
     await user.click(screen.getByRole("button", { name: /rivedi il setup/i }));
     await user.click(screen.getByRole("button", { name: /prepara la squadra/i }));
 
@@ -384,7 +381,7 @@ describe("OnboardingFlow technical setup", () => {
         port: 22,
         keyPath: "/synthetic/private/id_ed25519",
       },
-      provider: "claude",
+      provider: "codex",
     }));
   });
 

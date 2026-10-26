@@ -25,7 +25,7 @@ Security vulnerabilities follow the private process in
 
 ## What is stable
 
-- The agent pipeline runs end to end on Claude and Codex subscriptions.
+- The agent pipeline runs end to end on a Codex subscription.
 - Codex has completed a one-month autonomous run; the data and method are in
   [`RESULTS.md`](../about/RESULTS.md).
 - The native office contains local and VPS setup, embedded provider login,
@@ -33,8 +33,8 @@ Security vulnerabilities follow the private process in
 - The CLI, native office, web dashboard and Telegram share the same
   container-backed team.
 
-Provider status is not uniform. Kimi is archived since 0.4 and no longer
-offered; teams already configured on it keep working. The provider-specific
+Since 0.4 one provider is offered: Codex. Kimi is archived and Claude Code is
+not offered; teams already configured on them keep working. The provider-specific
 limitations are documented in
 [`PROVIDERS.md`](../about/PROVIDERS.md) and
 [`MONITORING.md`](../about/MONITORING.md).

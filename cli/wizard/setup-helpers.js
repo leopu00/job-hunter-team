@@ -27,18 +27,6 @@ export const AI_PROVIDERS = [
       { value: 'o4-mini', label: 'o4-mini' },
     ],
   },
-  {
-    value: 'claude',
-    label: 'Claude',
-    keyPrefix: 'sk-ant-',
-    keyPlaceholder: 'sk-ant-api03-...',
-    docsUrl: 'https://console.anthropic.com/settings/keys',
-    models: [
-      { value: 'claude-sonnet-4-6', label: 'Claude Sonnet 4.6' },
-      { value: 'claude-opus-4-6', label: 'Claude Opus 4.6' },
-      { value: 'claude-haiku-4-5', label: 'Claude Haiku 4.5' },
-    ],
-  },
 ];
 
 // --- Config IO (compatibile con shared/config/io.ts) ---

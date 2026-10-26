@@ -75,8 +75,8 @@ const SCREENS = [
 ];
 // Text that is the same in every language: product names, marks, symbols.
 const SAME_IN_EVERY_LANGUAGE = new Set([
-  "Job Hunter Team", "Codex", "Claude Code", "OpenAI · ChatGPT Plus/Pro", "Anthropic · Claude Pro/Max",
-  "PC", "VPS", "CX", "CL", "J", "—", "✓", "→", "!", "••", "01", "/",
+  "Job Hunter Team", "Codex", "OpenAI · ChatGPT Plus/Pro",
+  "PC", "VPS", "CX", "J", "—", "✓", "→", "!", "••", "01", "/",
 ]);
 const TEXT_ATTRIBUTES = new Set(["aria-label", "aria-valuetext", "placeholder", "title", "alt", "label"]);
 

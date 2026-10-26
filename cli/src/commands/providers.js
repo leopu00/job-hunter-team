@@ -19,7 +19,9 @@ const CREDS_DIR   = join(JHT_DIR, 'credentials');
 const KNOWN_PROVIDERS = {
   // Codex is the recommended provider: listed first.
   openai:    { name: 'OpenAI (Codex)',     envKey: 'OPENAI_API_KEY',    aliases: ['codex'], recommended: true },
-  anthropic: { name: 'Anthropic (Claude)', envKey: 'ANTHROPIC_API_KEY', aliases: ['claude'] },
+  // Claude e' fuori dalle scelte della 0.4 (un solo abbonamento: Codex), come Kimi: una squadra gia' su
+  // Claude continua a funzionare, ma non si sceglie piu'.
+  anthropic: { name: 'Anthropic (Claude)', envKey: 'ANTHROPIC_API_KEY', aliases: ['claude'], archived: true },
   // Kimi e' archiviato (0.4): non si sceglie piu', ma una squadra gia' configurata su Kimi continua a
   // funzionare (si legge, si aggiorna, si avvia). `archived` lo toglie da elenco e scelta.
   kimi:      { name: 'Kimi K2 (Moonshot)', envKey: 'MOONSHOT_API_KEY',  aliases: ['moonshot'], archived: true },
@@ -45,7 +47,13 @@ function normalizeId(id) {
 
 /** Gli id che si possono scegliere: tutti tranne gli archiviati. */
 function offeredProviders() {
-  return Object.entries(KNOWN_PROVIDERS).filter(([, known]) => !known.archived).map(([id]) => id);
+  return Object.entries(KNOWN_PROVIDERS).filter(([, known]) => !known.archived).map(([id, known]) => known.aliases?.[0] ?? id);
+}
+
+/** Un id (o un suo alias) di un provider archiviato: si legge e si aggiorna, ma non si sceglie. */
+function isArchived(id) {
+  const lower = (id || '').trim().toLowerCase();
+  return Object.entries(KNOWN_PROVIDERS).some(([key, known]) => known.archived && [key, ...(known.aliases ?? [])].includes(lower));
 }
 
 const OK = c.green('●');
@@ -119,8 +127,8 @@ async function handleProviders() {
   for (const [id, known] of Object.entries(KNOWN_PROVIDERS)) {
     const provCfg = providers[id];
     const hasConfig = !!provCfg;
-    // Un provider archiviato compare solo se questa squadra lo usa ancora.
-    if (known.archived && !hasConfig && activeProvider !== id) continue;
+    // Un provider archiviato compare solo se questa squadra lo usa ancora (anche con il nome vecchio).
+    if (known.archived && ![id, ...(known.aliases ?? [])].some((name) => providers[name] || activeProvider === name)) continue;
     const hasEnv = !!process.env[known.envKey];
     const hasCred = await fileExists(join(CREDS_DIR, `${id}.enc`)) || await fileExists(join(CREDS_DIR, `${id}.json`));
     const isActive = activeProvider === id;
@@ -169,13 +177,13 @@ async function handleProviders() {
   }
 
   if (!activeProvider) {
-    console.log(`  ${DIM}No active providers. Recommended: jht providers use codex (or claude)${RESET}\n`);
+    console.log(`  ${DIM}No active providers. Recommended: jht providers use codex${RESET}\n`);
   }
 }
 
 async function handleUse(id) {
   const normalized = normalizeId(id);
-  if (normalized && KNOWN_PROVIDERS[normalized]?.archived) {
+  if (isArchived(id)) {
     console.error(`${ERR}  provider '${id}' is archived and can no longer be chosen. Supported: ${offeredProviders().join(', ')}`);
     process.exitCode = 1;
     return;
@@ -221,7 +229,7 @@ const NPM_PREFIX_ENV = { NPM_CONFIG_PREFIX: NPM_PREFIX };
 // il setup installa QUELLE, non `@latest`. `latest: true` è la deroga
 // esplicita dell'operatore (`jht providers update <id> --latest`) e resta una
 // scelta dichiarata a schermo, mai un default silenzioso.
-const UPDATE_TARGETS = ['codex', 'claude'];
+const UPDATE_TARGETS = ['codex'];
 
 function updateSteps(target, { latest = false } = {}) {
   const spec = installSpec(target, { latest });
@@ -312,7 +320,7 @@ async function handleUpdate(id, opts = {}) {
     : [...UPDATE_TARGETS]; // `jht providers update` senza arg → aggiorna tutti
 
   if (targets.length === 0) {
-    console.error(`${ERR}  provider '${id}' unrecognized. Supported: codex, claude`);
+    console.error(`${ERR}  provider '${id}' unrecognized. Supported: codex`);
     process.exitCode = 1;
     return;
   }
@@ -652,7 +660,7 @@ async function autoUpdateOnce() {
   }
   const target = resolveUpdateTarget(active.id);
   if (!target) {
-    console.log(`${AU} skip: active provider '${active.id}' has no update spec (supported: codex, claude)`);
+    console.log(`${AU} skip: active provider '${active.id}' has no update spec (supported: codex)`);
     return;
   }
 
@@ -949,7 +957,7 @@ export function registerProvidersCommand(program) {
 
   cmd
     .command('update [id]')
-    .description('Install the provider\'s CLI (codex/claude) at the version pinned by this release. Omitted id: all supported providers.')
+    .description('Install the provider\'s CLI (codex) at the version pinned by this release. Omitted id: all supported providers.')
     .option('--latest', 'install the latest published version instead of the release pin (explicit, temporary: the next boot restores the pin)')
     .action((id, opts) => handleUpdate(id, opts));
 

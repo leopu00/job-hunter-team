@@ -4,14 +4,13 @@ JHT runs on AI subscriptions **by default**, and that is the supported path. A t
 
 This page tells you which subscription to pick.
 
-> **Kimi is archived (0.4)**: it is no longer offered, on the site or in the app. A team already configured on Kimi keeps working. The Kimi runs below are kept as history.
+> **One subscription in 0.4: Codex.** Kimi is archived and Claude Code is not offered, on the site or in the app; a team already configured on either keeps working. What is measured below for them is kept as history.
 
 ## ⚡ TL;DR
 
 | Profile | Pick |
 |---|---|
 | 🎯 **Recommended** — best €/result balance, proven over a full month | 🔵 **Codex Plus / Pro €100** *(proven — 1-month autonomous run)* |
-| 💼 You can spend €200/month for the best result | 🟠 **Claude Max x20** |
 
 ## 💳 Supported subscriptions
 
@@ -23,7 +22,7 @@ This page tells you which subscription to pick.
 
 > **Note**: token counts are approximate and depend on the provider's current allowance. Always check the provider's pricing page before subscribing.
 
-> ⚖️ **Terms of service** — JHT drives each provider through its **official CLI** (Claude Code, Codex CLI): the same tools your subscription licenses, running on your machine under your account. No scraping, no reverse-engineered endpoints. That said, providers' terms evolve and automation policies differ between plans — **review your provider's current ToS** before running a team around the clock, and prefer a subscription dedicated to JHT (also required for budget reasons, see below).
+> ⚖️ **Terms of service** — JHT drives each provider through its **official CLI** (Codex CLI): the same tools your subscription licenses, running on your machine under your account. No scraping, no reverse-engineered endpoints. That said, providers' terms evolve and automation policies differ between plans — **review your provider's current ToS** before running a team around the clock, and prefer a subscription dedicated to JHT (also required for budget reasons, see below).
 
 ## 🎯 How JHT keeps you within the window
 

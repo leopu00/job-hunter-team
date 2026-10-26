@@ -79,7 +79,7 @@ via wipe + re-pair, not concurrent runs.
 | Command                          | Layer | What it does                                                                            |
 |----------------------------------|-------|-----------------------------------------------------------------------------------------|
 | `jht setup [flags]`              | Both  | Host pre-flight (swap on low-RAM VPS, lang picker) → Node interactive wizard inside the container. |
-| `jht oauth-login` (legacy alias `claude-login`) | Host  | Reads `active_provider` and opens the matching subscription flow: Claude TUI or Codex device code. |
+| `jht oauth-login` (legacy alias `claude-login`) | Host  | Reads `active_provider` and opens the matching subscription flow: Codex device code. |
 | `jht doctor`                     | Node  | Surfaces Docker, Node, auth, DB checks. **Must** exit 0 before declaring setup done.    |
 | `jht health`                     | Node  | Granular service health (Supabase pairing, provider creds, bridge).                     |
 
@@ -93,10 +93,10 @@ be copied with credential values into shell history, issues or logs.
 
 | Command                       | Layer | What it does                                                       |
 |-------------------------------|-------|--------------------------------------------------------------------|
-| `jht providers list`          | Node  | List supported providers (codex, claude).                         |
+| `jht providers list`          | Node  | List supported providers (codex).                                |
 | `jht providers current`       | Node  | Show the currently active provider + model.                        |
 | `jht providers use <id>`      | Node  | Set `active_provider` in `jht.config.json`.                        |
-| `jht providers update [id]`   | Node  | `npm install -g` inside the container. Without `id`, updates **every** supported provider. |
+| `jht providers update [id]`   | Node  | `npm install -g` inside the container. Without `id`, updates **every** offered provider (Codex); to update a team still on an archived one, name it (`jht providers update kimi`). |
 | `jht providers autoupdate`    | Node  | Boot step: updates the CLI of the **active** provider only, then re-checks the model pin. Fail-safe — never fails the boot. Disable with `JHT_PROVIDER_AUTOUPDATE=0`. |
 | `jht providers model-pin`     | Node  | Revisits the model the provider CLI pinned at login: picks among the aliases the config already lists (wider window), probes it, and only then writes it. `--dry-run` reports without writing; `JHT_MODEL_PIN=<alias>` freezes the choice. |
 | `jht providers check`         | Node  | List providers with an update available (scriptable, exit 1 if any). |

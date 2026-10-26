@@ -20,7 +20,6 @@ export type Dict = {
   subEmphOne: string;
   subIntroD: string;
   codex: string;
-  claude: string;
   dedicateLabel: string;
   dedicateBody: string;
   pricingPage: string;
@@ -74,8 +73,6 @@ export const T: Record<Locale, Dict> = {
     subIntroD: " of three providers:",
     codex:
       " (OpenAI) — recommended: proven over a one-month autonomous run, with your ChatGPT Plus or Pro subscription.",
-    claude:
-      " (Anthropic) — the highest precision, best for scoring and writing.",
     dedicateLabel: "Dedicate the subscription to the team.",
     dedicateBody:
       " Don't reuse the same account you use for personal AI — they share one weekly quota and the team will hit limits unexpectedly. More on the ",
@@ -131,8 +128,6 @@ export const T: Record<Locale, Dict> = {
     subIntroD: " dei tre provider:",
     codex:
       " (OpenAI) — consigliato: provato in un mese di lavoro autonomo, con il tuo abbonamento ChatGPT Plus o Pro.",
-    claude:
-      " (Anthropic) — la massima precisione, ideale per scoring e scrittura.",
     dedicateLabel: "Dedica l'abbonamento al team.",
     dedicateBody:
       " Non riutilizzare lo stesso account che usi per l'AI personale — condividono un'unica quota settimanale e il team raggiungerà i limiti in modo imprevisto. Maggiori dettagli sulla ",
@@ -189,8 +184,6 @@ export const T: Record<Locale, Dict> = {
     subIntroD: " de tres proveedores:",
     codex:
       " (OpenAI) — recomendado: probado durante un mes de trabajo autónomo, con tu suscripción ChatGPT Plus o Pro.",
-    claude:
-      " (Anthropic) — la máxima precisión, ideal para puntuar y redactar.",
     dedicateLabel: "Dedica la suscripción al equipo.",
     dedicateBody:
       " No reutilices la misma cuenta que usas para tu IA personal — comparten una única cuota semanal y el equipo alcanzará los límites de forma inesperada. Más información en la ",
@@ -247,8 +240,6 @@ export const T: Record<Locale, Dict> = {
     subIntroD: " des trois fournisseurs :",
     codex:
       " (OpenAI) — recommandé : éprouvé sur un mois de travail autonome, avec votre abonnement ChatGPT Plus ou Pro.",
-    claude:
-      " (Anthropic) — la plus haute précision, idéale pour la notation et la rédaction.",
     dedicateLabel: "Dédiez l'abonnement à l'équipe.",
     dedicateBody:
       " Ne réutilisez pas le même compte que pour votre IA personnelle — ils partagent un quota hebdomadaire unique et l'équipe atteindra les limites de façon imprévue. Plus d'informations sur la ",
@@ -306,8 +297,6 @@ export const T: Record<Locale, Dict> = {
     subIntroD: " von drei Anbietern:",
     codex:
       " (OpenAI) — empfohlen: einen Monat lang im autonomen Betrieb erprobt, mit deinem ChatGPT-Plus- oder -Pro-Abo.",
-    claude:
-      " (Anthropic) — die höchste Präzision, ideal für Bewertung und Verfassen.",
     dedicateLabel: "Widme das Abonnement dem Team.",
     dedicateBody:
       " Verwende nicht dasselbe Konto wie für deine persönliche KI — sie teilen sich ein einziges wöchentliches Kontingent, und das Team stößt unerwartet an die Grenzen. Mehr dazu auf der ",
@@ -365,8 +354,6 @@ export const T: Record<Locale, Dict> = {
     subIntroD: ":",
     codex:
       " (OpenAI) — ajánlott: egy hónapnyi önálló munkán bizonyított, a ChatGPT Plus vagy Pro előfizetéseddel.",
-    claude:
-      " (Anthropic) — a legnagyobb pontosság, ideális pontozáshoz és íráshoz.",
     dedicateLabel: "Szenteld az előfizetést a csapatnak.",
     dedicateBody:
       " Ne használd újra ugyanazt a fiókot, amit a személyes MI-hez használsz — egyetlen heti kvótán osztoznak, és a csapat váratlanul eléri a korlátokat. Bővebben az ",
@@ -425,7 +412,6 @@ export const T: Record<Locale, Dict> = {
     subIntroD: " de três fornecedores:",
     codex:
       " (OpenAI) — recomendado: provado durante um mês de trabalho autónomo, com a tua subscrição ChatGPT Plus ou Pro.",
-    claude: " (Anthropic) — a máxima precisão, ideal para pontuar e escrever.",
     dedicateLabel: "Dedica a subscrição à equipa.",
     dedicateBody:
       " Não reutilizes a mesma conta que usas para a IA pessoal — partilham uma única quota semanal e a equipa atingirá os limites de forma inesperada. Mais informações na ",

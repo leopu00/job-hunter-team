@@ -16,7 +16,6 @@ You need an active subscription to **one** of:
 |     | Provider   | Plan       | Cost/mo | Status                                                                                    |
 | --- | ---------- | ---------- | ------- | ----------------------------------------------------------------------------------------- |
 | 🔵  | **Codex**  | Plus / Pro | ~€100   | ✅ **Recommended** — proven by a 1-month autonomous run (658 positions, weekly budget self-managed at 99–100%) |
-| 🟠  | **Claude** | Max x20    | ~€200   | ✅ Production-ready, best precision                                                       |
 
 > ⚠️ **The subscription must be dedicated to JHT** — not the same account you use for personal/work AI tasks. A shared account drains the same weekly quota twice and the team will hit rate limits unexpectedly.
 
@@ -66,7 +65,7 @@ Download the current release from
 On first launch, choose **Continue with Google** or **Use locally**; setting up
 a new team on a VPS needs the Google sign-in. The setup then has four steps:
 **Welcome**, **Environment** (this computer or a VPS server), **Provider**
-(Codex or Claude, through your subscription) and **Confirm**. Select
+(Codex, through your ChatGPT subscription) and **Confirm**. Select
 **Prepare the team** and keep the app open: it prepares the runtime and the
 container, installs the provider's tool, asks you to sign in to the provider,
 starts the agents and opens the chat with the Assistant. How long it takes
@@ -149,7 +148,7 @@ Keep the wizard open when it reaches provider login. As instructed on screen,
 open a second terminal and run `jht oauth-login`; complete the provider's
 browser flow, then exit its terminal interface. The wizard detects the saved
 credentials and runs `jht team start`. To switch provider later:
-`jht providers use codex` (or `claude`), followed by
+`jht providers use codex`, followed by
 `jht providers update <id>` to install or update that CLI.
 
 > 📖 Full command list — including the host wrapper (`up`/`down`/`upgrade`/`logs`/`shell`/…) vs the Node CLI split, all subcommands and flags: see [`CLI-REFERENCE.md`](CLI-REFERENCE.md).
@@ -195,7 +194,7 @@ Podman command above again.
 If you already use a personal AI assistant (Claude Code, OpenClaw, Codex,
 Cursor), tell it:
 
-> _"Set up Job Hunter Team for me. I have a [Codex Plus or Pro / Claude Max x20]
+> _"Set up Job Hunter Team for me. I have a [Codex Plus or Pro]
 > subscription. Walk me through what you need."_
 
 The `jht` CLI is designed for this use. Follow
@@ -342,7 +341,7 @@ jht positions dashboard
 
 # Provider management
 jht providers list
-jht providers use claude    # switch active provider
+jht providers use codex     # set the active provider
 jht providers update        # update CLI versions
 ```
 

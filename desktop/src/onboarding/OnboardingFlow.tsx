@@ -34,14 +34,13 @@ function emptyVpsHost(): ExecutionHost {
 }
 const COLLECTION_STEP_COUNT = 4;
 
-// Codex is the provider the onboarding proposes: first, already chosen, and
-// labelled as recommended.
+// Codex is the only provider the onboarding offers (0.4: one subscription, ChatGPT's): already chosen, and
+// labelled as recommended. A team already on Claude Code keeps working; it is just not offered again.
 const PROPOSED_PROVIDER: SubscriptionProvider = "codex";
 // Product names and plans: the same in every language.
 function providers(t: OnboardingCopy): Array<{ value: SubscriptionProvider; label: string; vendor: string; mark: string; recommended?: string }> {
   return [
     { value: "codex", label: "Codex", vendor: "OpenAI · ChatGPT Plus/Pro", mark: "CX", recommended: t.providerRecommended },
-    { value: "claude", label: "Claude Code", vendor: "Anthropic · Claude Pro/Max", mark: "CL" },
   ];
 }
 const RUNTIME_STAGE_ORDER: OperationalStage[] = ["ssh-host-key", "runtime", "container", "provider", "provider-login", "team-start", "assistant"];

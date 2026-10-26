@@ -65,7 +65,6 @@
   "wizard.telegram.intro": "Necesitamos 3 bots de Telegram (Asistente, Capitán, Mentor). Créalos con @BotFather y pega los tokens.",
   "wizard.provider.prompt": "Proveedor de IA",
   "wizard.provider.intro": "Elige el proveedor de IA que mueve el equipo:",
-  "wizard.provider.claude": "Claude (Anthropic)",
   "wizard.provider.codex": "Codex (OpenAI) — recomendado, con tu suscripción a ChatGPT",
   "wizard.provider.install_cli": "Instalando la CLI de %s...",
   "wizard.provider.install_failed_continue": "Instalación de la CLI fallida. ¿Guardar la configuración igualmente y gestionarlo a mano?",

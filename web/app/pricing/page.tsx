@@ -62,19 +62,6 @@ const PROVIDERS: Provider[] = [
     pt: "O mais completo: testado a fundo em todos os cenários, oferece o melhor resultado em qualidade e quantidade. É o fornecedor recomendado: a escolha mais sólida se queres o máximo da equipa.",
     hu: "A legteljesebb: minden helyzetben alaposan tesztelve, minőségben és mennyiségben a legjobb kimenetet nyújtja. Ez az ajánlott szolgáltató: a legszilárdabb választás, ha a maximumot szeretnéd a csapattól.",
   },
-  {
-    name: "Claude",
-    vendor: "Anthropic",
-    tier: "high",
-    url: "https://www.anthropic.com/pricing",
-    it: "Un po' meno output di Codex, ma il più preciso e il più intelligente: la scelta migliore per valutare le offerte e scrivere i CV con cura.",
-    en: "A bit less output than Codex, but the most precise and the most intelligent: the best choice for evaluating jobs and writing CVs with care.",
-    es: "Un poco menos de resultado que Codex, pero el más preciso y el más inteligente: la mejor opción para evaluar las ofertas y escribir los CV con cuidado.",
-    fr: "Un peu moins de résultat que Codex, mais le plus précis et le plus intelligent : le meilleur choix pour évaluer les offres et rédiger les CV avec soin.",
-    de: "Etwas weniger Output als Codex, aber am präzisesten und intelligentesten: die beste Wahl, um Stellen zu bewerten und Lebensläufe sorgfältig zu schreiben.",
-    pt: "Um pouco menos de resultado que o Codex, mas o mais preciso e o mais inteligente: a melhor escolha para avaliar as ofertas e escrever os CV com cuidado.",
-    hu: "Kicsivel kevesebb kimenet, mint a Codexé, de a legpontosabb és a legintelligensebb: a legjobb választás az ajánlatok értékeléséhez és az önéletrajzok gondos megírásához.",
-  },
 ];
 
 const PAGE = {

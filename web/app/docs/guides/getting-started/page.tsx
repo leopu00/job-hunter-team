@@ -42,10 +42,6 @@ export default async function GettingStartedPage() {
           🔵 <strong>Codex</strong>
           {t.codex}
         </LI>
-        <LI>
-          🟠 <strong>Claude</strong>
-          {t.claude}
-        </LI>
       </UL>
       <Callout>
         ⚠️ <strong>{t.dedicateLabel}</strong>
@@ -66,7 +62,7 @@ export default async function GettingStartedPage() {
       <Pre>
         {`"Set up Job Hunter Team from
 github.com/leopu00/job-hunter-team for my profile.
-I have a [Codex / Claude Max] subscription.
+I have a [Codex] subscription.
 Walk me through what you need."`}
       </Pre>
       <P>

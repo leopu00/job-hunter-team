@@ -176,7 +176,7 @@ export async function POST(req: NextRequest) {
 
   const activeProvider =
     sanitize(body.active_provider) ??
-    String(existing.active_provider ?? "anthropic");
+    String(existing.active_provider ?? "openai");
   if (!(PROVIDERS as readonly string[]).includes(activeProvider)) {
     return NextResponse.json(
       { error: "active_provider non valido" },

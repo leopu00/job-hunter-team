@@ -1,11 +1,10 @@
-"""Codex is the recommended provider, everywhere the product lists providers.
+"""Codex is the only provider offered, everywhere the product lists providers.
 
 The open source product runs officially on Codex, with each person's own
-ChatGPT subscription; Claude stays supported, and Kimi is archived (0.4): no
-text offers it. The desktop onboarding proposes Codex first and already
-chosen: the web, the guides and the changelog say the same, in the same
-order (Codex, Claude), and say
-«recommended» in every language where they describe the choice.
+ChatGPT subscription. Kimi (archived) and Claude Code are not offered in 0.4:
+no text, no choice and no list names them as something to pick. The desktop
+onboarding proposes Codex already chosen, and the web, the guides and the
+changelog say the same in the languages where they describe the choice.
 """
 
 import re
@@ -24,30 +23,22 @@ def text(path: str) -> str:
     return (ROOT / path).read_text(encoding="utf-8")
 
 
-def order(source: str, names=("Codex", "Claude")) -> list[int]:
-    return [source.index(name) for name in names]
-
-
-def test_the_desktop_proposes_codex_first_and_already_chosen():
+def test_the_desktop_proposes_only_codex_and_already_chosen():
     flow = text("desktop/src/onboarding/OnboardingFlow.tsx")
     assert 'const PROPOSED_PROVIDER: SubscriptionProvider = "codex";' in flow
     listed = flow[flow.index("function providers("):]
-    assert order(listed, ('value: "codex"', 'value: "claude"')) == sorted(
-        order(listed, ('value: "codex"', 'value: "claude"')))
-    # Kimi is archived: the choices of the onboarding do not name it
-    assert 'value: "kimi"' not in listed
+    listed = listed[:listed.index("\n}\n")]
+    assert re.findall(r'value: "(\w+)"', listed) == ["codex"]
 
 
 @pytest.mark.parametrize("path", [
     "web/app/docs/guides/getting-started/page.tsx",
     "web/app/docs/guides/connect-ai-provider/page.tsx",
 ])
-def test_the_web_guides_list_codex_first(path):
+def test_the_web_guides_offer_codex_only(path):
     page = text(path)
-    marks = ["🔵 <strong>Codex</strong>", "🟠 <strong>Claude</strong>"]
-    positions = [page.index(mark) for mark in marks]
-    assert positions == sorted(positions)
-    assert "Kimi" not in page
+    assert "🔵 <strong>Codex</strong>" in page
+    assert "Kimi" not in page and "Claude" not in page
 
 
 @pytest.mark.parametrize("path,key", [
@@ -67,36 +58,39 @@ def test_the_web_guides_call_codex_recommended_in_every_language(path, key):
     "web/app/setup-guide/guide-content.ts",
     "web/app/setup-guide/guide-screens.ts",
     "web/app/docs/guides/faq/page.i18n.ts",
+    "web/app/privacy/page.tsx",
+    "web/app/terms/page.tsx",
+    "web/app/pricing/page.tsx",
 ])
-def test_the_setup_guide_and_faq_name_codex_recommended_first(path):
+def test_the_site_texts_do_not_offer_kimi_or_claude(path):
     source = text(path)
-    for lang, word in RECOMMENDED.items():
-        found = re.findall(rf"Codex \({re.escape(word)}\),? \w+ Claude", source)
-        assert found, (path, lang)
-        assert "Kimi" not in source, path
+    assert not re.search(r"kimi|claude", source, re.IGNORECASE), path
 
 
-def test_the_pricing_page_shows_codex_first_and_recommended():
+def test_the_setup_guide_and_faq_name_codex_as_the_provider():
+    assert len(re.findall(r"— Codex\.", text("web/app/docs/guides/faq/page.i18n.ts"))) == 7
+    assert text("web/app/setup-guide/guide-content.ts").count("Codex") >= 7
+
+
+def test_the_pricing_page_shows_codex_alone_and_recommended():
     page = text("web/app/pricing/page.tsx")
     providers = page[page.index("const PROVIDERS: Provider[] = ["):]
-    assert re.findall(r'name: "(\w+)"', providers)[:3] == ["Codex", "Claude"]
-    assert "Kimi" not in page
-    codex = providers[:providers.index('name: "Claude"')]
+    assert re.findall(r'name: "(\w+)"', providers) == ["Codex"]
+    codex = providers[:providers.index("\n];")]
     assert "recommended provider" in codex and "provider consigliato" in codex
 
 
-def test_the_guides_and_the_changelog_put_codex_first():
+def test_the_guides_and_the_changelog_say_codex_only():
     quickstart = text("docs/guides/QUICKSTART.md")
     table = quickstart[quickstart.index("| Provider   |"):]
-    assert order(table) == sorted(order(table))
     assert "| 🔵  | **Codex**  | Plus / Pro | ~€100   | ✅ **Recommended**" in table
-    assert "`jht providers use codex` (or `claude`)" in quickstart
+    assert "**Claude**" not in table[:table.index("\n\n")]
+    assert "`jht providers use codex`" in quickstart and "providers use claude" not in quickstart
     providers = text("docs/about/PROVIDERS.md")
     assert "| 🎯 **Recommended**" in providers and "🔵 **Codex Plus / Pro €100**" in providers
-    subscriptions = providers[providers.index("## 💳 Supported subscriptions"):]
-    assert subscriptions.index("**Codex / OpenAI**") < subscriptions.index("**Claude** | Max x20")
-    assert "A dedicated Codex (recommended) or Claude subscription." in text("docs/guides/VPS-SETUP-WIZARD.md")
+    assert "One subscription in 0.4: Codex." in providers
+    assert "A dedicated Codex (ChatGPT) subscription." in text("docs/guides/VPS-SETUP-WIZARD.md")
     changelog = text("CHANGELOG.md")
     release = changelog[changelog.index("## [0.4.0]"):]
-    assert "supported Codex (recommended) or Claude Code subscription" in release[:4000]
-    assert "Kimi is no longer among the choices" in release[:4000]
+    assert "supported Codex subscription (ChatGPT's)" in release[:4000]
+    assert "Codex is the only provider offered. Kimi and Claude Code are no longer among the" in release[:4000]

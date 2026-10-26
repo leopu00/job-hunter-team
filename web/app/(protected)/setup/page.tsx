@@ -14,11 +14,9 @@ const STEP_LABEL_KEYS: Record<Step, string> = {
   health: "step_health",
 };
 const PROVIDERS = [
-  { v: "claude", l: "Anthropic Claude" },
   { v: "openai", l: "OpenAI" },
 ];
 const MODELS: Record<string, string[]> = {
-  claude: ["claude-opus-4-6", "claude-sonnet-4-6", "claude-haiku-4-5-20251001"],
   openai: ["gpt-4o", "gpt-4o-mini"],
 };
 

@@ -37,6 +37,6 @@ The set is closed. Adding a fourth requires a new ADR.
 - **Any CLI / plugin system** — rejected. Too broad — forces us to maintain a generic adapter layer for runtimes we can't validate. "Support everything" means "supports nothing well".
 - **Custom JHT-native runtime** — rejected. Reinventing a stable agent CLI is out of scope; the existing ones are good enough.
 
-## Note (0.4) — Kimi archived
+## Note (0.4) — Kimi archived, Claude Code not offered
 
-This record is history and is not rewritten. Since 0.4 the supported CLIs are Claude Code and Codex: Kimi is archived and no longer offered, on the site or in the app. The code that serves a team already configured on Kimi stays, so that team keeps working.
+This record is history and is not rewritten. Since 0.4 the only CLI offered is Codex, with the person's ChatGPT subscription: Kimi is archived and Claude Code is not offered, on the site or in the app. The code that serves a team already configured on either stays, so that team keeps working.

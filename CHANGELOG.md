@@ -24,11 +24,12 @@ account-backed onboarding and subscription-provider access.**
 - Desktop sign-in uses Google through a PKCE browser flow and restores the
   account session before opening protected application surfaces.
 - First-run setup collects the profile and environment, then connects a
-  supported Codex (recommended) or Claude Code subscription through that provider's
+  supported Codex subscription (ChatGPT's) through that provider's
   login flow. Completion waits for the native snapshot and direct chat to be
   ready instead of reporting success optimistically.
-- Kimi is no longer among the choices, on the site or in the app; teams already
-  configured on it continue to work. `jht providers update` without an id no
+- Codex is the only provider offered. Kimi and Claude Code are no longer among the
+  choices, on the site or in the app; teams already configured on either continue
+  to work. `jht providers update` without an id no
   longer updates Kimi: name it (`jht providers update kimi`) to update a team that
   still uses it.
 - The Assistant has a resumable guided introduction with tour, requirements

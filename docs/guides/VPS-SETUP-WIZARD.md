@@ -23,7 +23,7 @@ with your infrastructure provider before you start.
 - A Google sign-in in the app. A new team on a VPS is paired with your
   account during the preparation; a local profile has no account to pair it
   with.
-- A dedicated Codex (recommended) or Claude subscription.
+- A dedicated Codex (ChatGPT) subscription.
 
 ## Guided path
 

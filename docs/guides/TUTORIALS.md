@@ -48,7 +48,7 @@ Keep the app open while it works.
    needs administrator rights. The Linux release is built, but this setup has
    not been tested yet. For a VPS, enter its address, the SSH user, the port
    and the private key file, which stays on this computer.
-5. **Choose the provider.** Select Codex (recommended) or Claude, then
+5. **Choose the provider.** Select Codex, then
    **Review the setup**. You sign in with your subscription later in the setup:
    no API key is needed.
 6. **Confirm and prepare the team.** The last screen sums up the environment
