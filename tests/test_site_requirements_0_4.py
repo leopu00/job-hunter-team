@@ -380,3 +380,17 @@ def test_the_quickstart_commands_name_podman_and_the_guides_do_not_call_it_a_pre
         assert "--runtime podman" in line, line
     for path in INSTALL_DOCS:
         assert not re.search(r"podman[^\n]{0,80}preview|preview[^\n]{0,80}podman|Podman preparation preview", text(path), re.IGNORECASE), path
+
+
+def test_no_page_of_the_site_names_docker_as_what_the_team_needs_or_runs_in():
+    # run, download, privacy, the landing and the docs guides say nothing of Docker; the setup guide names it only
+    # next to Podman ("no Docker Desktop to install", "Podman, not Docker")
+    folders = ["web/app/run", "web/app/download", "web/app/privacy", "web/app/components/landing", "web/app/docs"]
+    for folder in folders:
+        for path in sorted((ROOT / folder).rglob("*")):
+            if path.suffix in {".ts", ".tsx"} and ".test." not in path.name:
+                assert "Docker" not in path.read_text(encoding="utf-8"), path.relative_to(ROOT)
+    for line in GUIDE_STEPS.splitlines():
+        assert "Docker" not in line or "Podman" in line, line.strip()[:120]
+    for lang in ["pt", "fr", "es", "de"]:
+        assert "Docker" not in text(f"web/app/components/landing/i18n/{lang}.ts"), lang
