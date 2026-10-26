@@ -658,6 +658,45 @@ def _standby_step(parsed):
         print(f"[bridge V6] WARN standby step: {e}", file=sys.stderr)
 
 
+# rc=130: la casella del pane ha un testo che non e' provato nostro. Il pane e' vivo; N rifiuti di fila su una
+# sessione = prima si prova a liberarla (`--flush-ours`), poi si avvisa il Capitano e la mailbox, al piu'
+# una volta ogni COMPOSER_NOTICE_EVERY_SEC per sessione.
+COMPOSER_REFUSED_AFTER = int(os.environ.get("JHT_COMPOSER_REFUSED_AFTER", "3"))
+COMPOSER_NOTICE_EVERY_SEC = float(os.environ.get("JHT_COMPOSER_NOTICE_EVERY_SEC", "1800"))
+_composer_refusals = {}
+_composer_noticed_at = {}
+
+
+def _composer_refused(session):
+    """Conta i 130 di fila su `session`; alla soglia libera la casella o avvisa il Capitano."""
+    n = _composer_refusals.get(session, 0) + 1
+    _composer_refusals[session] = n
+    if n < COMPOSER_REFUSED_AFTER:
+        return
+    now = time.time()
+    if now - _composer_noticed_at.get(session, 0.0) < COMPOSER_NOTICE_EVERY_SEC:
+        return
+    _composer_noticed_at[session] = now
+    try:
+        freed = subprocess.run(["jht-tmux-send", "--flush-ours", session], capture_output=True,
+                               timeout=60).returncode == 0
+    except (subprocess.TimeoutExpired, OSError):
+        freed = False
+    if freed:
+        _composer_refusals[session] = 0
+        print(f"[bridge V6] {session}: its composer held a text of ours, it got its Enter "
+              f"(refused {n} times)", file=sys.stderr)
+        return
+    msg = (f"[BRIDGE] {session} has refused {n} consecutive messages: its composer holds text that is NOT provably "
+           f"ours (jht-tmux-send rc=130, nothing was pasted or pressed). The pane is ALIVE: do NOT respawn it. "
+           f"Inspect it (tmux capture-pane -t {session} -p | tail -8): a person's draft stays; a left-over paste of "
+           f"ours gets its Enter with `jht-tmux-send --flush-ours {session}`. What was refused is in "
+           f"logs/pending-input.jsonl (unsent).")
+    _append_pace_mailbox(msg, delivered=False, kind="composer-refused")
+    if session != CAPITANO_SESSION:
+        jht_tmux_send(CAPITANO_SESSION, msg)
+
+
 def jht_tmux_send(session, text):
     # Standby a spesa zero: in standby i bridge leggono e NON parlano. Il gate
     # sta qui, nel chokepoint unico di scrittura tmux, così ogni path (tick,
@@ -685,9 +724,14 @@ def jht_tmux_send(session, text):
         # ore di messaggi persi sono indistinguibili da un turno lungo.
         why = {3: "unresponsive (possibly dead/wedged)",
                4: "busy (turn in progress) → resolves on its own",
-               5: "ALIVE BUT SILENT (Enter was never processed) → requires manual recovery"}
+               5: "ALIVE BUT SILENT (Enter was never processed) → requires manual recovery",
+               130: "the composer holds text that is not provably ours → NOT delivered, the pane is alive"}
         print(f"[bridge V6] WARN jht_tmux_send({session}) rc={rc}: "
               f"{why.get(rc, 'error')}", file=sys.stderr)
+    if rc == 130:
+        _composer_refused(session)
+    else:
+        _composer_refusals.pop(session, None)
     return rc == 0
 
 

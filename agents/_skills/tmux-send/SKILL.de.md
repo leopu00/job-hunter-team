@@ -73,6 +73,10 @@ Standardtypen (siehe `agents/_manual/communication-rules.md` fuer die vollstaend
 - `3` — Text nie erschienen und Panel nicht beschaeftigt → TUI nicht empfangsbereit. **Der einzige Code, der tot/verklemmt nahelegt.**
 - `4` — Peer in einem langen Zug ueber das Wartebudget hinaus → **lebendig**. Spaeter erneut versuchen, niemals respawnen.
 - `5` — Text akzeptiert, aber nie abgeschickt ("lebendig, aber stumm") → **lebendig**. Spaeter erneut versuchen, niemals respawnen.
+- `7` — der Text hat den Composer verlassen, aber nichts beweist, dass die CLI ihn genommen hat: **unbekannt**. Schau das Panel an, bevor du erneut schreibst; niemals respawnen.
+- `8` — eine andere Zustellung an dieselbe Sitzung lief noch: nichts wurde getippt. Erneut versuchen.
+- `130` — der Composer ist nicht frei und die Nachricht ist **NICHT zugestellt**. Was darin steht, ist nicht nachweislich unseres (ein Entwurf einer Person oder ein Einfuege-Platzhalter, den niemand von uns erklaert): nichts wurde eingefuegt oder gedrueckt, und deine Nachricht steht in `logs/pending-input.jsonl` (`unsent`). Nicht in einer Schleife wiederholen: den Kapitaen informieren (`[BLOCKED]`). Derselbe Code **nach** dem Einfuegen heisst: der Composer ist nicht mehr nur unser Text: kein Enter, und der Text ist dort vermerkt (`draft`). Das Panel lebt: niemals respawnen. Der Text dort wird bei 64 KiB abgeschnitten.
+- Ein nachweislich UNSERER Text (von einer frueheren Zustellung von uns hinterlassen: identisch oder sein Einfuege-Platzhalter, `[Pasted Content N chars]` bei Codex / `[Pasted text #1 +N lines]` bei Claude, mit unserer Zahl) bekommt sein Enter bei der naechsten Zustellung, egal wie alt. `jht-tmux-send --flush-ours <SITZUNG>` macht nur das (0 = frei oder genommen, 130 = nicht unser, 5 = Enter verschluckt).
 
 > Nur `3` darf zu einem Liveness-Check und einem Respawn fuehren. `4` und `5` bedeuten beide, dass der Peer lebt: sie als Tod zu behandeln ist genau, wie Over-Spawning beginnt.
 
