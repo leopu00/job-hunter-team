@@ -3,14 +3,15 @@ name: Tests
 on:
   push:
     branches:
-      - master
-      - hq-master
-      # Il ramo di integrazione della squadra. Fino al 07/10 qui Tests partiva
-      # solo da un dispatch fatto a mano dopo ogni merge; tolto il cargo test
-      # da game.yml, era l'unico posto in cui girano i test Rust del desktop.
-      # Una difesa che aspetta un dispatch ricordato a mano prima o poi non
-      # gira.
-      - master-arthur
+      # Ogni ramo. master, hq-master e master-arthur sono i protetti (hanno
+      # anche i job Windows); ogni altro ramo e' di sviluppo e ha solo i job
+      # bloccanti della 0.4 (Python, Rust e vitest su Linux, Rust dell'app su
+      # macOS): cosi' una merge request porta un run verde suo prima di
+      # arrivare su master-arthur. Solo test: nessuna immagine, nessuna build.
+      # (Fino al 07/10 qui Tests partiva solo da un dispatch fatto a mano dopo
+      # ogni merge; una difesa che aspetta un dispatch ricordato a mano prima o
+      # poi non gira.)
+      - "**"
   pull_request:
     branches:
       - master
@@ -50,10 +51,42 @@ permissions:
 # cancellato da un push successivo. Il cron (solo il job `smoke`) ha un gruppo
 # suo, per non cancellare il run del codice sullo stesso SHA di master.
 concurrency:
-  group: tests-${{ github.ref }}-${{ github.event_name == 'schedule' && 'schedule' || github.sha }}
+  # Rami protetti: un run per commit, nessuno cancellato da un push successivo.
+  # Ramo di sviluppo: l'ultimo push sostituisce il run ancora in corso.
+  group: tests-${{ github.ref }}-${{ github.event_name == 'schedule' && 'schedule' || (github.event_name != 'push' || contains(fromJSON('["refs/heads/master","refs/heads/hq-master","refs/heads/master-arthur"]'), github.ref)) && github.sha || 'branch' }}
   cancel-in-progress: true
 
 jobs:
+  # I controlli meccanici di una merge request sul tratto che un ramo di
+  # sviluppo aggiunge a master-arthur: merge di prova, diff --check, gitleaks,
+  # autore e l'elenco dei nomi che non devono arrivare sul repo pubblico (i
+  # segreti PRECHECK_NAMES e PRECHECK_OWNER, mai scritti qui). Rosso = il tratto non e' pronto.
+  precheck:
+    name: precheck — merge, whitespace, secrets, names
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    if: github.event_name == 'push' && !contains(fromJSON('["refs/heads/master","refs/heads/hq-master","refs/heads/master-arthur"]'), github.ref)
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+
+      # Release e checksum fissati: il controllo non esegue un binario che non ha verificato.
+      - name: Install gitleaks
+        run: |
+          set -euo pipefail
+          v=8.30.1
+          curl -fsSL "https://github.com/gitleaks/gitleaks/releases/download/v$v/gitleaks_${v}_linux_x64.tar.gz" -o "$RUNNER_TEMP/gitleaks.tgz"
+          echo "551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb  $RUNNER_TEMP/gitleaks.tgz" | sha256sum -c -
+          mkdir -p "$RUNNER_TEMP/bin" && tar -xzf "$RUNNER_TEMP/gitleaks.tgz" -C "$RUNNER_TEMP/bin" gitleaks
+          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+
+      - name: Precheck the range over master-arthur
+        env:
+          PRECHECK_NAMES: ${{ secrets.PRECHECK_NAMES }}
+          PRECHECK_OWNER: ${{ secrets.PRECHECK_OWNER }}
+        run: sh scripts/ci/precheck-sha.sh "$GITHUB_SHA" origin/master-arthur
+
   api-worker:
     name: API worker — format, types, offline tests
     runs-on: ubuntu-latest
@@ -211,7 +244,8 @@ jobs:
       # e macOS a meta'.
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        # Windows solo fuori dai rami di sviluppo (vedi compose-provider-parity).
+        os: ${{ fromJSON((github.event_name == 'push' && !contains(fromJSON('["refs/heads/master","refs/heads/hq-master","refs/heads/master-arthur"]'), github.ref)) && '["ubuntu-latest","macos-latest"]' || '["ubuntu-latest","macos-latest","windows-latest"]') }}
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -260,7 +294,9 @@ jobs:
     name: Compose providers — merged-project parity
     runs-on: windows-2022
     timeout-minutes: 15
-    if: github.event_name != 'schedule'
+    # Windows non blocca la 0.4: gira sui rami protetti e sulle pull request,
+    # non su ogni ramo di sviluppo.
+    if: github.event_name != 'schedule' && !(github.event_name == 'push' && !contains(fromJSON('["refs/heads/master","refs/heads/hq-master","refs/heads/master-arthur"]'), github.ref))
     permissions:
       contents: read
 
@@ -750,7 +786,8 @@ jobs:
     timeout-minutes: 40
     # Senza i segreti dell'account di test l'area riservata non è raggiungibile
     # e i test si skipperebbero in silenzio: meglio non far partire il job.
-    if: github.repository == 'leopu00/job-hunter-team' && github.event_name != 'schedule'
+    # Non sui rami di sviluppo: entra con l'account di test del progetto vero.
+    if: github.repository == 'leopu00/job-hunter-team' && github.event_name != 'schedule' && !(github.event_name == 'push' && !contains(fromJSON('["refs/heads/master","refs/heads/hq-master","refs/heads/master-arthur"]'), github.ref))
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
