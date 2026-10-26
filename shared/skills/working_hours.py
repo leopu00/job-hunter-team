@@ -39,7 +39,6 @@ from __future__ import annotations
 
 import json
 import os
-import stat
 import sys
 from datetime import datetime, time, timedelta
 from pathlib import Path
@@ -56,40 +55,12 @@ _WEEKDAY_INDEX = {
 }
 
 
-class NotPlain(Exception):
-    """What the path names is not a plain file of ours (a link, a pipe, a device, two names, too big)."""
-
-
-def read_plain(path: Path, max_size: int | None = None, tail: int | None = None) -> bytes:
-    """Read a file the team's agents can write, without letting it stall or redirect the reader.
-
-    Opened without following a link and WITHOUT waiting (a named pipe in its place would otherwise hold the
-    open for ever, and with it the sentinel's bridge that calls this), then checked on the descriptor it was
-    opened as: a plain file with one name, within `max_size`.  At most `max_size` (or `tail`) bytes are read.
-    FileNotFoundError passes; anything else that is not ours is NotPlain."""
-    flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0)
-    try:
-        fd = os.open(str(path), flags)
-    except FileNotFoundError:
-        raise
-    except OSError:
-        raise NotPlain()
-    try:
-        info = os.fstat(fd)
-        if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1:
-            raise NotPlain()
-        if max_size is not None and info.st_size > max_size:
-            raise NotPlain()
-        if tail is not None and info.st_size > tail:
-            os.lseek(fd, info.st_size - tail, os.SEEK_SET)
-        limit = max_size if max_size is not None else tail
-        with os.fdopen(fd, "rb", closefd=False) as handle:
-            data = handle.read((limit or 0) + 1) if max_size is not None else handle.read(limit)
-    finally:
-        os.close(fd)
-    if max_size is not None and len(data) > max_size:
-        raise NotPlain()
-    return data
+# Imported both as `working_hours` and as `shared.skills.working_hours` (the watchdog): its own folder
+# must be on the path for the sibling module either way.
+_HERE = str(Path(__file__).resolve().parent)
+if _HERE not in sys.path:
+    sys.path.insert(0, _HERE)
+from plain_file import NotPlain, read_plain  # noqa: E402,F401  (the one reader of files the agents can write)
 
 
 def _config_path() -> Path:

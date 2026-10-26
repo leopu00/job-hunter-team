@@ -339,9 +339,13 @@ def is_worker_session(name: str) -> bool:
 
 
 def _active_provider() -> str:
+    plain = _load_shared("plain_file", "plain_file.py")
+    if plain is None:
+        return ""
     try:
-        cfg = json.loads((_home() / "jht.config.json").read_text(encoding="utf-8"))
-    except (OSError, ValueError):
+        # una pipe o un collegamento al posto del file non appende il watchdog: illeggibile
+        cfg = plain.read_json(_home() / "jht.config.json")
+    except (OSError, ValueError, plain.NotPlain):
         return ""
     return str(cfg.get("active_provider") or "").strip().lower()
 

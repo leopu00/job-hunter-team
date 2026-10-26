@@ -531,8 +531,8 @@ def test_a_named_pipe_in_place_of_the_sentinel_data_or_the_config_comes_back_at_
 
 
 def test_the_one_reader_of_files_the_agents_can_write_opens_without_waiting_and_without_following():
-    text = (SKILLS / "working_hours.py").read_text(encoding="utf-8")
-    body = text[text.index("def read_plain"):text.index("def _config_path")]
+    text = (SKILLS / "plain_file.py").read_text(encoding="utf-8")
+    body = text[text.index("def read_plain"):text.index("def read_json")]
     assert "O_NONBLOCK" in body and "O_NOFOLLOW" in body and "st_nlink" in body
     assert work_stats.read_plain is working_hours.read_plain, "one reader, not two copies"
 
