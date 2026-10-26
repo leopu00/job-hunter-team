@@ -191,7 +191,7 @@ The case studies above (and the ones we hope you'll add) are how we understand:
 - 📈 **Conversion rates** — Offer → CV → Interview, by industry and seniority
 - 💰 **Cost per result** — total LLM spend vs interviews obtained
 - 🌍 **Market coverage** — which job boards actually produce results, by region
-- 🧪 **Provider performance in the wild** — how Kimi, Claude Max, and the rest hold up beyond our test sessions
+- 🧪 **Provider performance in the wild** — how Codex, Claude Max, and the rest hold up beyond our test sessions (Kimi is archived since 0.4)
 
 We will publish aggregate results in this file periodically (anonymized, with consent).
 

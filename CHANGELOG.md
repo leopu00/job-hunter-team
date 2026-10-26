@@ -28,7 +28,9 @@ account-backed onboarding and subscription-provider access.**
   login flow. Completion waits for the native snapshot and direct chat to be
   ready instead of reporting success optimistically.
 - Kimi is no longer among the choices, on the site or in the app; teams already
-  configured on it continue to work.
+  configured on it continue to work. `jht providers update` without an id no
+  longer updates Kimi: name it (`jht providers update kimi`) to update a team that
+  still uses it.
 - The Assistant has a resumable guided introduction with tour, requirements
   and exploration paths, followed by an editable first message for the free
   chat. On macOS, on-device dictation can fill supported composers without

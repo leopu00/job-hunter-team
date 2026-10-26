@@ -113,7 +113,7 @@ they live in [`CHANGELOG.md`](../../CHANGELOG.md) rather than this future list.
 | # | Direction | Engineering focus | Size |
 |---|---------|----------|------|
 | **M3** | 🛡️ Harden security — prompt-injection fencing on ingested job descriptions, uniform auth gates across routes, sync-token lifecycle policy. | Security / Backend | 🔴 large |
-| **M4** | 💸 Run on entry tiers (~€20/mo) + add more providers ⭐ — reproducible [Kimi variance and cost tooling](../internal/experiments/2026-08-03-m4-entry-tier-evidence-protocol.md) now exists, but no live export in the repo validates 88→92 or a PAYG buying claim yet; any fourth CLI remains gated by [ADR-0002 and the provider checklist](../guides/ADDING-A-PROVIDER.md). | Integrations | 🟡 medium |
+| **M4** | 💸 Run on entry tiers (~€20/mo) + add more providers ⭐ — reproducible variance and cost tooling (built on Kimi, archived in 0.4) [exists](../internal/experiments/2026-08-03-m4-entry-tier-evidence-protocol.md), but no live export in the repo validates 88→92 or a PAYG buying claim yet; any fourth CLI remains gated by [ADR-0002 and the provider checklist](../guides/ADDING-A-PROVIDER.md). | Integrations | 🟡 medium |
 | **M5** | 🏠 Run the whole team on local models (zero cloud) ⭐ — a one-role Scorer spike exists with a machine-checked provider inventory and deterministic comparison harness. Whole-team support remains unavailable: paired quality, live URL/feedback parity, real hardware evidence and additional roles are still required. | LLM / infra | 🔴 large |
 
 > 🖥️ **Desktop app** — current Godot release safety and the staged Tauri migration
