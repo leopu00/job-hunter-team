@@ -55,9 +55,9 @@ jobs:
             args: --bundles nsis
             artifact: tauri-windows-x64
           - os: macos-14
-            label: macOS Universal 2
-            args: --target universal-apple-darwin --bundles dmg --config src-tauri/tauri.macos-universal.conf.json --verbose
-            artifact: tauri-macos-universal
+            label: macOS arm64
+            args: --target aarch64-apple-darwin --bundles dmg --verbose
+            artifact: tauri-macos-arm64
           - os: ubuntu-22.04
             label: Linux x64
             args: --bundles appimage,deb
@@ -88,7 +88,7 @@ jobs:
           rustc --version
           cargo --version
           if [ "${{ runner.os }}" = "macOS" ]; then
-            rustup target add aarch64-apple-darwin x86_64-apple-darwin
+            rustup target add aarch64-apple-darwin
           fi
 
       - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
@@ -183,25 +183,33 @@ jobs:
           VITE_SUPABASE_ANON_KEY: ${{ vars.VITE_SUPABASE_ANON_KEY }}
         run: npm run tauri:build -- ${{ matrix.args }}
 
-      # Il bundle Universal 2 deve contenere entrambe le fette: un oggetto
-      # nativo compilato per l'architettura dell'host viene scartato dal link
-      # dell'altra fetta. Con `--bundles dmg` Tauri cancella la .app dopo aver
-      # fatto il dmg, quindi si guarda il binario universale da cui la .app e'
-      # stata costruita (Tauri lo stampa come «Built application at»).
-      - name: Verify macOS universal binary slices
+      # La build Mac e' solo Apple silicon (arm64). Con `--bundles dmg` Tauri
+      # cancella la .app dopo aver fatto il dmg, quindi si guarda il binario da
+      # cui la .app e' stata costruita (Tauri lo stampa come «Built application at»).
+      - name: Verify macOS binary architecture
         if: runner.os == 'macOS'
         run: |
-          binary=desktop/src-tauri/target/universal-apple-darwin/release/jht-desktop
+          binary=desktop/src-tauri/target/aarch64-apple-darwin/release/jht-desktop
           lipo -info "$binary"
-          lipo "$binary" -verify_arch x86_64 arm64
+          lipo "$binary" -verify_arch arm64
 
       # Quello che si installa e' la .app dentro il dmg: li' devono esserci
       # tutti e due i binari del crate, la shell e il compagno jht-existing-team,
-      # eseguibili, con le due fette e la firma ad-hoc di questa matrice. Il
-      # compagno mancava nel target universale e il bundle si fermava.
-      - name: Gate macOS universal bundle — shell and companion shipped
+      # eseguibili, arm64 e con la firma ad-hoc di questa matrice.
+      - name: Gate macOS bundle — shell and companion shipped
         if: runner.os == 'macOS'
-        run: python3 scripts/ci/verify_macos_universal_bundle.py desktop/src-tauri/target/universal-apple-darwin/release/bundle --signature adhoc --require-dmg
+        run: python3 scripts/ci/verify_macos_bundle.py desktop/src-tauri/target/aarch64-apple-darwin/release/bundle --signature adhoc --require-dmg
+
+      # Il passo che la 0.3.9 non aveva: il dmg si monta, l'app si copia fuori
+      # come si trascina in Applicazioni, si avvia come la avvia il Finder e deve
+      # mostrare la sua finestra. Il container no: il runner non puo' avviare una
+      # macchina virtuale, e lo script lo dichiara (quello si prova su un Mac vero).
+      - name: Install the DMG and open the app
+        if: runner.os == 'macOS'
+        run: |
+          dmg="$(find desktop/src-tauri/target/aarch64-apple-darwin/release/bundle/dmg -type f -name '*.dmg' -print -quit)"
+          test -n "$dmg"
+          python3 scripts/ci/smoke_macos_dmg.py "$dmg" --arch arm64 --timeout 120
 
       - name: Gate bundled Google login configuration
         env:

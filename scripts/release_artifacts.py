@@ -320,7 +320,7 @@ Use `job-hunter-team-windows-x64-setup.exe` for the per-user Tauri 2 installatio
 
 ### macOS and Linux
 
-`job-hunter-team-macos-universal.dmg` is a universal Tauri 2 build signed with Developer ID, notarized by Apple and stapled. Linux provides the unsigned `job-hunter-team-linux-x64.AppImage` plus `job-hunter-team-linux-x64.deb` for Debian-based systems.
+`job-hunter-team-macos-universal.dmg` is a Tauri 2 build for Apple silicon (M1 and later) signed with Developer ID, notarized by Apple and stapled. Linux provides the unsigned `job-hunter-team-linux-x64.AppImage` plus `job-hunter-team-linux-x64.deb` for Debian-based systems.
 
 ### SHA-256 checksums
 
