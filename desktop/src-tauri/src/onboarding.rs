@@ -5010,7 +5010,12 @@ fn runtime_wake_for(
 fn keep_team_halted(home: &Path) -> Result<(), OnboardingError> {
     use std::io::Write;
     let gate = home.join(".team-halted.flag");
-    match std::fs::OpenOptions::new().write(true).create_new(true).open(&gate) {
+    let mut open = std::fs::OpenOptions::new();
+    open.write(true).create_new(true);
+    // Like the file the container writes for a stop: the owner reads and writes, the others read.
+    #[cfg(unix)]
+    std::os::unix::fs::OpenOptionsExt::mode(&mut open, 0o644);
+    match open.open(&gate) {
         Ok(mut file) => file
             .write_all(b"halted_by=desktop-open-without-team\n")
             .map_err(|_| failure("container_start_failed")),
@@ -5828,7 +5833,7 @@ mod tests {
         assistant_reached, existing_team_probe_with, existing_team_readonly_probe_with, expected_installer_digest, failure,
         parse_snapshot, parse_start_limits, parse_verified_snapshot, provider_bootstrap_input,
         native_team_snapshot_with, redact, resume_team_prerequisite, start_and_verify_local_container_with, start_limits_gate,
-        with_local_host, woken_before_resume, runtime_wake_for,
+        with_local_host, woken_before_resume, runtime_wake_for, keep_team_halted,
         valid_interactive_request_id, valid_pairing_token, valid_provider_login_input,
         valid_wrapper_file, with_start_limits, write_provider_input, ExistingTeamConnectRequest,
         InteractiveStateDetector, LocalCliOperation, OnboardingDiagnosticHostKind,
@@ -8078,6 +8083,18 @@ exit 0
         })
         .unwrap();
         assert_eq!(at_boot.get(), Some(true), "no gate at the boot = the four agents start");
+        // `jht team start` takes the gate away from inside the container, and removing a file is the permission of
+        // the home it stands in, which the container already writes: the gate must belong to the same owner as
+        // that home (the same mapping of the user on the Podman machine) and be a plain file.
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::{MetadataExt, PermissionsExt};
+            let (gate_meta, home_meta) = (std::fs::symlink_metadata(&gate).unwrap(), std::fs::metadata(&home).unwrap());
+            assert!(gate_meta.file_type().is_file());
+            assert_eq!(gate_meta.uid(), home_meta.uid());
+            assert_eq!(gate_meta.permissions().mode() & 0o777, 0o644);
+            assert_eq!(home_meta.permissions().mode() & 0o1000, 0, "a sticky home would keep the file from other owners");
+        }
         // an existing gate is left as it is
         std::fs::write(&gate, "halted_by=stop\n").unwrap();
         keep_team_halted(&home).unwrap();
