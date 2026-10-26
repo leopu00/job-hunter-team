@@ -209,7 +209,7 @@ function RuntimeView({ host, platform, t, locale, runtime, activity, onRetry, on
           <div className="onboarding-ready-team" aria-label={t.readyAgentsAria}>
             {t.agents.map((agent) => <span key={agent}>{agent}</span>)}
           </div>
-          <SetupNotices notices={activity?.notices} t={t} locale={locale} onRecreate={host.kind === "local" ? onRecreatePodmanMachine : undefined} locked={runtime.status === "working"} />
+          <SetupNotices notices={activity?.notices} t={t} locale={locale} onRecreate={host.kind === "local" ? onRecreatePodmanMachine : undefined} locked={false} />
         </section>
       </main>
     );
