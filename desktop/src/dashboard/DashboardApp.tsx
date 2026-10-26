@@ -1469,6 +1469,8 @@ export default function DashboardApp() {
     setRuntime({ status: "working", stage: "runtime", message: stateText().recreatingMachine });
     try {
       await recreateOnboardingPodmanMachine();
+      // The notices of the machine that is gone (too little memory) do not follow the new one.
+      setActivity(null);
     } catch (error) {
       failLocalRuntime(error);
     }

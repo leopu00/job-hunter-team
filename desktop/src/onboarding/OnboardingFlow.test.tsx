@@ -517,6 +517,23 @@ describe("OnboardingFlow technical setup", () => {
     expect(props.onRetry).not.toHaveBeenCalled();
   });
 
+  it("puts the Podman machine recreation right under the reason, above the step list", () => {
+    renderFlow({
+      runtime: {
+        status: "failed", stage: "runtime", code: "podman_machine_mounts_home", retryable: false,
+        title: "Macchina Podman da ricreare", message: "La macchina Podman di JHT vede più cartelle.",
+        action: "Ricrea la macchina Podman.",
+      },
+      onRecreatePodmanMachine: vi.fn().mockResolvedValue(undefined),
+    });
+    const reason = screen.getByRole("alert");
+    const button = screen.getByRole("button", { name: /^ricrea la macchina podman/i });
+    const stepList = screen.getByRole("progressbar");
+    const follows = (from: Element, to: Element) => Boolean(from.compareDocumentPosition(to) & Node.DOCUMENT_POSITION_FOLLOWING);
+    expect(follows(reason, button)).toBe(true);
+    expect(follows(button, stepList)).toBe(true);
+  });
+
   it("offers no Podman machine recreation for another error or a server setup", () => {
     const onRecreatePodmanMachine = vi.fn().mockResolvedValue(undefined);
     const { unmount } = renderFlow({

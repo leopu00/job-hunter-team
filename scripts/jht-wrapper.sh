@@ -608,6 +608,13 @@ enable_podman_trim_timer() {
 PODMAN_MOUNT_JHT_HOME="$HOME/.jht"
 PODMAN_MOUNT_JHT_DOCS="$HOME/Documents/Job Hunter Team"
 PODMAN_MOUNTS_EXIT=78
+# The size of the machine the installer creates (scripts/install.sh, the same
+# three numbers). The recreation uses them too: without them `podman machine
+# init` falls back to Podman's own default (2048 MiB of memory), which is
+# below what the team needs.
+PODMAN_MACHINE_CPUS=2
+PODMAN_MACHINE_MEMORY_MIB=4096
+PODMAN_MACHINE_DISK_GIB=30
 
 # I file di configurazione della machine (uno per provider: applehv, libkrun),
 # letti senza chiamare podman: il probe resta osservativo e non accende nulla.
@@ -1122,6 +1129,25 @@ compose() {
   compose_file "$COMPOSE_FILE" "$@"
 }
 
+# The image references of a compose file, one per line. Docker Compose answers
+# `config --images`; podman-compose 1.6.0 does not know the option (it exits 2
+# with its usage text), so there the normalized `config` is read for its
+# `image:` keys. Nothing is silenced here: a failure says why.
+compose_file_images() {
+  local file="$1" config
+  if [ "$CONTAINER_RUNTIME" != "podman" ]; then
+    compose_file "$file" config --images
+    return
+  fi
+  config="$(compose_file "$file" config)" || return 1
+  printf '%s\n' "$config" | sed -n 's/^[[:space:]]*image:[[:space:]]*//p' | tr -d "\"'" | sed 's/[[:space:]]*$//'
+}
+
+compose_images() {
+  require_trusted_runtime || return 1
+  compose_file_images "$COMPOSE_FILE"
+}
+
 container_up() {
   local container_id
   container_id="$(read_only_container_id)" || return $?
@@ -1302,7 +1328,7 @@ telegram_admin_input() {
 
 telegram_image() {
   local images
-  images="$(compose config --images 2>/dev/null | sort -u)" || return 1
+  images="$(compose_images 2>/dev/null | sort -u)" || return 1
   case "$images" in ''|*$'\n'*) return 1 ;; esac
   printf '%s\n' "$images"
 }
@@ -4075,7 +4101,7 @@ handle_runtime_upgrade() {
   fi
   # Il compose nuovo e' la fonte di verita': non assumere che l'immagine
   # resti per sempre latest o che un override JHT_IMAGE punti allo stesso ref.
-  candidate_ref="$(upgrade_compose "$candidate_compose" config --images 2>/dev/null | head -n 1)"
+  candidate_ref="$(compose_file_images "$candidate_compose" 2>/dev/null | head -n 1)"
   candidate_image="$(docker image inspect "${candidate_ref:-${JHT_IMAGE:-$DEFAULT_RUNTIME_IMAGE}}" --format '{{.Id}}' 2>/dev/null || true)"
   candidate_image="${candidate_image:-sconosciuta}"
   upgrade_write_journal pulled "$old_image" "$was_running" || {
@@ -4625,8 +4651,9 @@ case "$SUB" in
     ensure_podman_mount_dirs \
       || { err "Non riesco a creare ~/.jht o ~/Documents/Job Hunter Team per la macchina Podman."; exit 1; }
     start_podman_for_recreate "$podman_bin" || exit 1
-    broker_state_image="$(compose config --images 2>/dev/null | sort -u)" \
-      || { err "Non riesco a determinare l'immagine attestata del broker."; exit 1; }
+    broker_state_image="$(compose_images)" \
+      || { err "Non riesco a determinare l'immagine attestata del broker: il compose del runtime non ha risposto."; exit 1; }
+    broker_state_image="$(printf '%s\n' "$broker_state_image" | sort -u)"
     case "$broker_state_image" in ''|*$'\n'*)
       err "Il compose non indica una sola immagine condivisa per team e broker; preservazione negata."
       exit 1
@@ -4646,6 +4673,9 @@ case "$SUB" in
     rm -f -- "$BROKER_LEGACY_MARKER" \
       || warn "Non ho potuto rimuovere il marcatore della migrazione del broker: $BROKER_LEGACY_MARKER"
     if ! "$podman_bin" machine init --now --update-connection=false \
+      --cpus "$PODMAN_MACHINE_CPUS" \
+      --memory "$PODMAN_MACHINE_MEMORY_MIB" \
+      --disk-size "$PODMAN_MACHINE_DISK_GIB" \
       --volume "$PODMAN_MOUNT_JHT_HOME:$PODMAN_MOUNT_JHT_HOME" \
       --volume "$PODMAN_MOUNT_JHT_DOCS:$PODMAN_MOUNT_JHT_DOCS" \
       "$PODMAN_MACHINE_NAME" >/dev/null; then

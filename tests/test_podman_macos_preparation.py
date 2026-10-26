@@ -50,7 +50,7 @@ def test_macos_podman_setup_never_removes_or_stops_colima():
     assert "brew install podman-compose" in block
     assert '"$podman_bin" machine init --now --update-connection=false' in block
     assert "PODMAN_MACHINE_CPUS=2" in source
-    assert "PODMAN_MACHINE_MEMORY_MIB=3072" in source
+    assert "PODMAN_MACHINE_MEMORY_MIB=4096" in source
     assert "PODMAN_MACHINE_DISK_GIB=30" in source
     assert '--cpus "$PODMAN_MACHINE_CPUS"' in block
     assert '--memory "$PODMAN_MACHINE_MEMORY_MIB"' in block
