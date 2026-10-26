@@ -73,6 +73,10 @@ Tipos padrao (veja `agents/_manual/communication-rules.md` para a taxonomia comp
 - `3` — texto nunca apareceu e o painel nao esta ocupado → TUI nao receptiva. **O unico codigo que sugere morta/encravada.**
 - `4` — peer ocupado num turno longo alem do orcamento de espera → **vivo**. Tente mais tarde, nunca respawnar.
 - `5` — texto aceite mas nunca submetido ("vivo mas mudo") → **vivo**. Tente mais tarde, nunca respawnar.
+- `7` — o texto saiu do composer mas nada prova que a CLI o aceitou: **nao se sabe**. Veja o painel antes de escrever de novo; nunca respawnar.
+- `8` — outra entrega para a mesma sessao ainda estava em curso: nada foi digitado. Tente de novo.
+- `130` — o composer nao esta livre e a mensagem **NAO foi entregue**. O que la esta nao e comprovadamente nosso (um rascunho de uma pessoa, ou um marcador de colagem que ninguem nosso explica): nada foi colado nem premido, e a sua mensagem esta escrita em `logs/pending-input.jsonl` (`unsent`). Nao repita em ciclo: avise o Capitao (`[BLOCKED]`). O mesmo codigo **depois** da colagem significa que o composer ja nao e so o nosso texto: sem Enter, e o texto fica anotado la (`draft`). O painel esta vivo: nunca respawnar.
+- Um texto COMPROVADAMENTE nosso (deixado por uma entrega nossa anterior: identico, ou o seu marcador de colagem, `[Pasted Content N chars]` no Codex / `[Pasted text #1 +N lines]` no Claude, com o nosso numero) recebe o seu Enter na entrega seguinte, seja qual for a idade. `jht-tmux-send --flush-ours <SESSAO>` faz apenas isso (0 = livre ou aceite, 130 = nao nosso, 5 = Enter engolido).
 
 > So `3` pode levar a um liveness-check e a um respawn. `4` e `5` significam ambos que o peer esta vivo: trata-los como morte e exatamente como comecam os over-spawn.
 

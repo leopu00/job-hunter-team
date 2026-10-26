@@ -63,7 +63,19 @@
 #       secondi (12). Non e' stato digitato niente: si puo' ritentare.
 #   9 → (solo con --enter) nella casella NON c'e' la firma di quel messaggio: non e' stato premuto niente.
 #       Su stdout una riga «JHT_REASON <menu|empty_unseen|not_ours>».
-#   130 → nella casella c'e' un testo vero: non e' stato scritto ne' premuto niente.
+#   130 → la casella non e' libera e il messaggio NON e' consegnato. Due casi, lo dice lo stderr:
+#         - PRIMA dell'incolla: nella casella c'e' un testo che non e' PROVATO nostro: non e' stato scritto ne'
+#           premuto niente, il messaggio e' in logs/pending-input.jsonl (`unsent`);
+#         - DOPO l'incolla: la casella non e' (piu') solo il nostro testo: nessun Invio; il testo puo' essere ancora
+#           li', annotato in logs/pending-input.jsonl (`draft`, motivo composer_changed o half_drawn).
+#         Un testo PROVATO nostro (identico, o il suo segnaposto di incolla con il numero giusto) riceve il suo
+#         Invio alla consegna dopo, di qualunque eta'. Mai respawnare: il pane e' vivo.
+#
+# jht-tmux-send --flush-ours <session>: se nella casella c'e' un testo PROVATO nostro (quello che una consegna
+# nostra ha lasciato: testo identico, o il suo segnaposto di incolla con il numero di caratteri giusto, e il
+# registro del sospeso) preme l'Invio e verifica che la casella si svuoti, di qualunque eta'. Non scrive e non
+# cancella niente. Esiti: 0 casella libera o testo preso · 130 testo non provato nostro, nulla premuto ·
+# 5 Invio ingoiati · 3 menu/login · 8 lock occupato · 2 sessione assente · 1 argomenti.
 #
 # jht-tmux-send --enter <session> <firma-hex>: preme SOLO l'Invio, una volta, e solo se nella casella
 # c'e' ancora la firma di quel messaggio (la coda con il nonce, che un exit 5 stampa su stdout come
@@ -75,6 +87,18 @@ set -euo pipefail
 
 enter_mode=0
 enter_signature=""
+flush_mode=0
+if [ "${1:-}" = "--flush-ours" ]; then
+  # Solo l'Invio sul NOSTRO testo rimasto nella casella (la prova e' quella delle consegne: l'impronta del
+  # registro, vedi _pending_state). Niente da scrivere: ne' testo, ne' posta, ne' log del messaggio.
+  if [ $# -ne 2 ]; then
+    echo "Usage: jht-tmux-send --flush-ours <session>" >&2
+    exit 1
+  fi
+  flush_mode=1
+  enter_mode=1
+  set -- "$2" ""
+fi
 if [ "${1:-}" = "--enter" ]; then
   # Solo l'Invio sul testo rimasto nella casella: niente da recintare, niente posta, niente testo.
   if [ $# -ne 3 ] || ! printf '%s' "$3" | grep -Eq '^([0-9a-f]{2}){1,64}$'; then
@@ -151,20 +175,16 @@ _delivery_gate() { printf '%s' "$1" | _chat_parse gate; }
 # The complete expected message stays on stdin, never in argv. Seeing just a
 # signature is insufficient after paste: another draft might be immediately
 # before it, and Enter would submit both texts.
+# Paste token: when the composer was EMPTY before our paste (placeholder_ours=1, set right after the paste), a
+# composer that holds only the token a paste like ours leaves («[Pasted Content N chars]» on Codex, «[Pasted text
+# #1 +N lines]» on Claude, with our character / line count) is our text too: the TUI keeps a long paste out of sight.
+placeholder_ours=0
 _composer_is_only_ours() {
-  printf '%s\0%s' "$1" "$message" | python3 -I -c '
-import sys
-sys.path.insert(0, sys.argv[1])
-import agent_chat
-pane, expected = sys.stdin.buffer.read().decode("utf-8", "replace").split("\0", 1)
-actual = agent_chat.composer_text(pane)
-squash = lambda text: "".join(text.split())      # a wrapped row loses the space at the wrap
-sys.exit(0 if actual is not None and squash(actual) == squash(expected) else 1)
-' "$CHAT_SKILLS"
+  [ "$(_composer_vs_ours "$1" | cut -d' ' -f1)" = "ours" ]
 }
 
 # Come sta la casella rispetto al NOSTRO testo, senza spazi (una riga a capo li perde):
-#   ours     e' esattamente il nostro testo;
+#   ours     e' esattamente il nostro testo (o il suo segnaposto di incolla, vedi sopra);
 #   partial  e' l'INIZIO del nostro testo: la TUI sta ancora disegnando l'incolla (un agente
 #            occupato lo disegna in piu' riprese, e per un attimo la casella ne ha meta');
 #   other    qualcosa d'altro, o il nostro testo con altro accanto.
@@ -173,20 +193,11 @@ _composer_vs_ours() {
   printf '%s\0%s' "$1" "$message" | python3 -I -c '
 import sys
 sys.path.insert(0, sys.argv[1])
-import agent_chat
+import tmux_send_composer
 pane, expected = sys.stdin.buffer.read().decode("utf-8", "replace").split("\0", 1)
-actual = agent_chat.composer_text(pane)
-squash = lambda text: "".join(text.split())
-a, e = (squash(actual) if actual is not None else None), squash(expected)
-if a is None:
-    print("other none/%d" % len(e))
-elif a == e:
-    print("ours %d/%d" % (len(a), len(e)))
-elif a and e.startswith(a):
-    print("partial %d/%d" % (len(a), len(e)))
-else:
-    print("other %d/%d" % (len(a), len(e)))
-' "$CHAT_SKILLS"
+state, actual, wanted = tmux_send_composer.composer_relation(pane, expected, allow_placeholder=sys.argv[2] == "1")
+print("%s %d/%d" % (state, actual, wanted))
+' "$CHAT_SKILLS" "$placeholder_ours"
 }
 
 sender_trust="unverified"
@@ -302,7 +313,7 @@ fi
 # e appendix una riga JSONL in $JHT_HOME/logs/messages.jsonl. Il backend
 # Next legge questo file per animare il pallino tra i nodi del team chart.
 # Fallisce silenziosamente — il logging non deve mai bloccare l'invio.
-if command -v python3 >/dev/null 2>&1; then
+if [ "$flush_mode" -eq 0 ] && command -v python3 >/dev/null 2>&1; then
   JHT_MAIL_ID="$mail_id" python3 - "$session" "$message" "$sender_trust" "$sender_claimed" "$sender_origin" <<'PYEOF' 2>/dev/null || true
 import json, os, re, sys
 from datetime import datetime, timezone
@@ -592,8 +603,9 @@ _submitted_from_unknown_form() {
 }
 
 # Il testo e' rimasto appeso nel composer: annotalo dove il Dottore lo cerca,
-# cosi' la fase di sblocco (skill `agent-unblock`) sa gia' QUALE pane e'
-# ostaggio e di QUALE messaggio, invece di doverlo dedurre dal pane.
+# cosi' la fase di sblocco (skill `agent-unblock`) sa gia' QUALE pane e' ostaggio e di QUALE
+# messaggio, invece di doverlo dedurre dal pane. `reason`: submit_unconfirmed (l'Invio e' stato
+# ingoiato), composer_changed (la casella non e' piu' solo il nostro testo), half_drawn.
 # Recuperato dalla versione dev7 di questa correzione: senza, un exit 5 lascia
 # il Dottore a indovinare, ed e' l'unica traccia che resta di un messaggio che
 # non e' mai partito.
@@ -603,17 +615,38 @@ _submitted_from_unknown_form() {
 # impedire una consegna.
 _record_stuck() {
   command -v python3 >/dev/null 2>&1 || return 0
-  python3 - "$session" "$message" <<'PYEOF' 2>/dev/null || true
+  python3 - "$session" "$message" "${1:-submit_unconfirmed}" <<'PYEOF' 2>/dev/null || true
 import json, os, sys
 from datetime import datetime, timezone
-session, msg = sys.argv[1], sys.argv[2]
+session, msg, reason = sys.argv[1], sys.argv[2], sys.argv[3]
 d = os.path.join(os.environ.get("JHT_HOME") or os.path.expanduser("~/.jht"), "logs")
 os.makedirs(d, exist_ok=True)
 with open(os.path.join(d, "pending-input.jsonl"), "a") as f:
     f.write(json.dumps({
         "ts": datetime.now(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z"),
         "session": session, "draft": msg[:4096], "owner": "agent",
-        "src": "jht-tmux-send", "reason": "submit_unconfirmed",
+        "src": "jht-tmux-send", "reason": reason,
+    }, ensure_ascii=False) + "\n")
+PYEOF
+}
+
+# Il messaggio che NON e' stato digitato (la casella era di un altro): senza questa riga resterebbe solo
+# nello stderr del chiamante. `unsent` e non `draft`: `draft` e' cio' che sta nella casella del pane.
+# Non per la posta (il sollecito si ripete da solo).
+_record_unsent() {
+  [ -z "$mail_id" ] || return 0
+  command -v python3 >/dev/null 2>&1 || return 0
+  python3 - "$session" "$message" "${1:-composer_foreign}" <<'PYEOF' 2>/dev/null || true
+import json, os, sys
+from datetime import datetime, timezone
+session, msg, reason = sys.argv[1], sys.argv[2], sys.argv[3]
+d = os.path.join(os.environ.get("JHT_HOME") or os.path.expanduser("~/.jht"), "logs")
+os.makedirs(d, exist_ok=True)
+with open(os.path.join(d, "pending-input.jsonl"), "a") as f:
+    f.write(json.dumps({
+        "ts": datetime.now(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z"),
+        "session": session, "unsent": msg[:4096], "owner": "agent",
+        "src": "jht-tmux-send", "reason": reason,
     }, ensure_ascii=False) + "\n")
 PYEOF
 }
@@ -641,51 +674,57 @@ _pane() { _tmux capture-pane -e -t "=$session:" -p 2>/dev/null || true; }
 # ── Il testo NOSTRO rimasto nella casella ────────────────────────────────────
 # Dopo un incolla che non ha avuto la prova del submit (exit 5, 3...) il testo resta nella casella
 # e per ogni consegna successiva e' una «bozza altrui»: rc=130 per sempre, e un messaggio interno
-# ([URG], [BRIDGE]) resta incastrato. Qui si ricorda l'impronta di QUELLO che abbiamo incollato
-# (mai il testo): se la casella contiene ESATTAMENTE quel testo, e da meno di due ore, e' nostro, e
-# gli si preme solo l'Invio (verificando che la casella si svuoti), poi si consegna il nuovo. Una
-# bozza diversa resta di un altro: nulla incollato, nulla premuto. Quella nostra ma piu' vecchia di
-# due ore NON parte (un [URG] vecchio non deve arrivare in ritardo): resta 130 e il log lo dice.
-pending_ttl_s=7200
+# ([URG], [BRIDGE]) resta incastrato. Qui si ricorda QUELLO che abbiamo incollato (mai il testo: la sua
+# impronta, i caratteri e gli a capo): se la casella contiene ESATTAMENTE quel testo, oppure il suo
+# segnaposto di incolla con il numero di caratteri giusto, e' PROVATO nostro, e di qualunque eta' gli si
+# preme solo l'Invio (verificando che la casella si svuoti), poi si consegna il nuovo: meglio consegnato in
+# ritardo che un agente sordo. Una bozza diversa, o un segnaposto che il registro non spiega, resta di un
+# altro: nulla incollato, nulla premuto, e il messaggio non digitato va in pending-input.jsonl.
 _pending_file() {
   printf '%s/tmux-send-pending-%s.sha' "$lock_dir" "$(printf '%s' "$session" | tr -c 'A-Za-z0-9_.-' '_')"
 }
+# L'impronta del testo (senza spazi), il suo numero di caratteri e di a capo: la lunghezza serve a provare
+# che un segnaposto di incolla («[Pasted Content N chars]») e' QUELLO che abbiamo lasciato noi.
 _pending_set() {
   command -v python3 >/dev/null 2>&1 || return 0
   mkdir -p "$lock_dir" 2>/dev/null || return 0
   printf '%s' "$message" | python3 -I -c '
 import hashlib, sys, time
-text = "".join(sys.stdin.buffer.read().decode("utf-8", "replace").split())
-print(int(time.time()), hashlib.sha256(text.encode()).hexdigest())' > "$(_pending_file)" 2>/dev/null || true
+raw = sys.stdin.buffer.read().decode("utf-8", "replace")
+text = "".join(raw.split())
+print(int(time.time()), hashlib.sha256(text.encode()).hexdigest(), len(raw), raw.count("\n"))' > "$(_pending_file)" 2>/dev/null || true
 }
 _pending_clear() { rm -f "$(_pending_file)" 2>/dev/null || true; }
-# 0 = nostro e fresco, 3 = e' il testo che abbiamo lasciato ma e' piu' vecchio della finestra, 1 = altro.
+# 0 = e' il testo che abbiamo lasciato noi: identico, oppure il suo segnaposto di incolla con il numero giusto
+# (e il registro del messaggio in sospeso). Di qualunque eta': meglio consegnato in ritardo che un agente sordo.
+# 1 = altro, o niente nel registro: non si tocca.
 _pending_state() {
   [ -f "$(_pending_file)" ] || return 1
   printf '%s' "$1" | python3 -I -c '
-import hashlib, sys, time
+import hashlib, sys
 sys.path.insert(0, sys.argv[1])
-import agent_chat
+import agent_chat, tmux_send_composer
 record = open(sys.argv[2]).read().split()
-if len(record) != 2:
+if len(record) not in (2, 4):
     sys.exit(1)
 actual = agent_chat.composer_text(sys.stdin.read())
-text = "".join((actual or "").split())
-if actual is None or hashlib.sha256(text.encode()).hexdigest() != record[1]:
+if actual is None:
     sys.exit(1)
-sys.exit(0 if time.time() - int(record[0]) <= int(sys.argv[3]) else 3)
-' "$CHAT_SKILLS" "$(_pending_file)" "$pending_ttl_s" 2>/dev/null
+text = "".join(actual.split())
+if hashlib.sha256(text.encode()).hexdigest() == record[1]:
+    sys.exit(0)
+# the old two-field record has no length: a token cannot be proved ours with it
+if len(record) == 4 and tmux_send_composer.paste_placeholder_fits(actual, int(record[2]), int(record[3])):
+    sys.exit(0)
+sys.exit(1)
+' "$CHAT_SKILLS" "$(_pending_file)" 2>/dev/null
 }
 _pending_is_ours() { _pending_state "$1"; }
-# The refusal for a draft that is not ours; the one of ours that is too old says so.
+# The refusal for a draft that is not ours. Nothing was pasted: our message would exist nowhere but in the
+# caller's hands, so it is written down (pending-input.jsonl, `unsent`) for whoever unblocks the pane.
 _say_foreign_text() {
-  local state=0
-  _pending_state "$1" || state=$?
-  if [ "$state" -eq 3 ]; then
-    echo "jht-tmux-send: $session holds a text of ours older than $(( pending_ttl_s / 3600 )) h: not submitted, nothing pasted or pressed (rc=130)" >&2
-  else
-    echo "jht-tmux-send: $session has text in its composer: nothing pasted or pressed (rc=130)" >&2
-  fi
+  echo "jht-tmux-send: $session has text in its composer that is not provably ours: nothing pasted or pressed, the message is in pending-input.jsonl and NOT delivered (rc=130)" >&2
+  _record_unsent composer_foreign
 }
 # Premi l'Invio sul NOSTRO testo rimasto, fino a 3 volte, solo finche' la casella contiene esattamente
 # quello. 0 = non e' piu' nella casella (preso o cambiato), 1 = gli Invio sono stati ingoiati.
@@ -763,6 +802,34 @@ except BlockingIOError:
   done
 }
 
+if [ "$flush_mode" -eq 1 ]; then
+  # --flush-ours: se la casella tiene un testo PROVATO nostro (identico, o il suo segnaposto di incolla con il
+  # numero giusto, e il registro del sospeso), preme l'Invio e verifica che si svuoti. Non scrive e non cancella
+  # niente. 0 = niente da fare, o preso; 130 = un testo che non e' provato nostro (nulla premuto);
+  # 5 = gli Invio sono stati ingoiati; 3 = un menu / login; 8 = lock occupato; 2 = sessione assente.
+  if ! _acquire_session_lock; then
+    echo "jht-tmux-send: another delivery to $session is still running after ${lock_wait} s: nothing pressed (rc=8)" >&2
+    exit 8
+  fi
+  pane=$(_pane)
+  case "$(_delivery_gate "$pane")" in
+    empty|none) exit 0 ;;
+    blocked)
+      echo "jht-tmux-send: $session shows a menu, login, or permission request: nothing pressed (rc=3)" >&2
+      exit 3 ;;
+  esac
+  if _pending_is_ours "$pane"; then
+    if _submit_pending; then
+      echo "jht-tmux-send: the text of ours in $session got its Enter" >&2
+      exit 0
+    fi
+    echo "jht-tmux-send: the text of ours in $session ignored 3 Enter: still there (rc=5)" >&2
+    exit 5
+  fi
+  echo "jht-tmux-send: $session has text in its composer that is not provably ours: nothing pressed (rc=130)" >&2
+  exit 130
+fi
+
 if [ "$enter_mode" -eq 0 ]; then
   # Wait with no writer lock.  A writer that wins while we wait is harmless:
   # after acquiring the lock we inspect again and go back outside if needed.
@@ -790,7 +857,8 @@ if [ "$enter_mode" -eq 0 ]; then
             exec 9>&-
             continue
           fi
-          echo "jht-tmux-send: an earlier text of ours is still stuck in $session after 3 Enter: nothing pasted (rc=130)" >&2
+          echo "jht-tmux-send: an earlier text of ours is still stuck in $session after 3 Enter: nothing pasted, the message is in pending-input.jsonl and NOT delivered (rc=130)" >&2
+          _record_unsent pending_enter_swallowed
           exit 130
         fi
         _say_foreign_text "$pane"
@@ -846,6 +914,7 @@ else
     exit 3
   fi
   _pending_set
+  placeholder_ours=1   # the composer was empty before this paste: a paste token in it is ours
   message_bytes=$(printf '%s' "$message" | wc -c | tr -d ' ')
   settle_ms=$(( 250 + message_bytes / 50 ))
   [ "$settle_ms" -le 1500 ] || settle_ms=1500
@@ -882,14 +951,16 @@ else
           if [ "$partial_since" -lt 0 ]; then partial_since=$SECONDS; fi
           partial_shape=$shape
           if [ $(( SECONDS - partial_since )) -ge "$partial_wait_s" ]; then
-            echo "jht-tmux-send: $session: the paste stayed half drawn (${partial_shape#partial }): no Enter (rc=130)" >&2
+            echo "jht-tmux-send: $session: the paste stayed half drawn (${partial_shape#partial }): no Enter; it stays in the composer, recorded in pending-input.jsonl (rc=130)" >&2
+            _record_stuck half_drawn
             exit 130
           fi
           poll=$(( poll + 1 ))
           sleep 0.05
           continue ;;
         *)
-          echo "jht-tmux-send: $session changed while the paste rendered, the composer is not exactly our text (${shape#other }): no Enter (rc=130)" >&2
+          echo "jht-tmux-send: $session changed while the paste rendered, the composer is not exactly our text (${shape#other }): no Enter; our text may still be in the composer, recorded in pending-input.jsonl (rc=130)" >&2
+          _record_stuck composer_changed
           exit 130 ;;
       esac
     fi
@@ -929,7 +1000,8 @@ for s_try in $(seq 1 "$submit_tries"); do
       exit 7
     fi
     if ! _composer_is_only_ours "$pane"; then
-      echo "jht-tmux-send: $session changed while the paste was pending: no Enter (rc=130)" >&2
+      echo "jht-tmux-send: $session changed while the paste was pending: no Enter; recorded in pending-input.jsonl (rc=130)" >&2
+      _record_stuck composer_changed
       exit 130
     fi
   fi
@@ -940,11 +1012,13 @@ for s_try in $(seq 1 "$submit_tries"); do
       exit 3
     fi
     if [ "$gate" = "text" ]; then
-      echo "jht-tmux-send: $session changed to a typed composer before Enter: no Enter (rc=130)" >&2
+      echo "jht-tmux-send: $session changed to a typed composer before Enter: no Enter; recorded in pending-input.jsonl (rc=130)" >&2
+      _record_stuck composer_changed
       exit 130
     fi
   elif ! _composer_is_only_ours "$pane"; then
-    echo "jht-tmux-send: $session changed before Enter: no Enter (rc=130)" >&2
+    echo "jht-tmux-send: $session changed before Enter: no Enter; recorded in pending-input.jsonl (rc=130)" >&2
+    _record_stuck composer_changed
     exit 130
   fi
   occ_tail_before_enter=$(_occurrences "$pane" "$signature_tail")

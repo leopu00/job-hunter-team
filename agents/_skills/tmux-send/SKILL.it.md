@@ -73,6 +73,10 @@ Tipi standard (vedi `agents/_manual/communication-rules.md` per la tassonomia co
 - `3` — testo mai apparso e pane non occupato → TUI irricettiva. **L'unico codice che suggerisce morta/wedged.**
 - `4` — peer occupato su un turno lungo oltre il budget d'attesa → **vivo**. Riprova più tardi, mai respawnare.
 - `5` — testo accettato ma mai submittato ("vivo ma muto") → **vivo**. Riprova più tardi, mai respawnare.
+- `7` — il testo e' uscito dalla casella ma nulla prova che la CLI lo abbia preso: **non so**. Guarda il pane prima di riscrivere, mai respawnare.
+- `8` — un'altra consegna alla stessa sessione era ancora in corso: non e' stato digitato niente. Riprova.
+- `130` — la casella non e' libera e il messaggio **NON e' consegnato**. Quello che c'e' non e' provato nostro (una bozza di una persona, o un segnaposto di incolla che nessuno di nostro spiega): non e' stato incollato ne' premuto niente, e il tuo messaggio e' scritto in `logs/pending-input.jsonl` (`unsent`). Non ripetere in ciclo: avvisa il Capitano (`[BLOCKED]`). Lo stesso codice **dopo** l'incolla vuol dire che la casella non e' piu' solo il nostro testo: nessun Invio, e il testo e' annotato li' (`draft`). Il pane e' vivo: mai respawnare.
+- Un testo PROVATO nostro (lasciato da una consegna nostra: identico, o il suo segnaposto di incolla, `[Pasted Content N chars]` su Codex / `[Pasted text #1 +N lines]` su Claude, con il nostro numero) riceve il suo Invio alla consegna dopo, di qualunque eta'. `jht-tmux-send --flush-ours <SESSIONE>` fa solo questo (0 = libera o preso, 130 = non nostro, 5 = Invio ingoiato).
 
 > Solo `3` può portare a un liveness-check e a un respawn. `4` e `5` significano entrambi che il peer è vivo: trattarli come morte è esattamente come iniziano gli over-spawn.
 
