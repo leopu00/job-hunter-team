@@ -1,3 +1,7 @@
+// @vitest-environment node
+import { readdirSync, readFileSync, statSync } from "node:fs";
+import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { BACKUP_TEXT } from "./backup/backup.i18n";
 import { EXPORT_TEXT } from "./export/export.i18n";
@@ -18,5 +22,20 @@ describe("the Portuguese texts of the settings pages", () => {
     const text = JSON.stringify(texts.pt);
     expect(text).toMatch(/equipa/i);
     expect(text).not.toMatch(/equipe/i);
+  });
+});
+
+// The error catalog and the assistant guide keep their Portuguese in files of their own; a scan of the
+// app's sources covers them and whatever comes next (French writes «équipe», with its accent).
+describe("the app's sources", () => {
+  it("never write «equipe» without its accent", () => {
+    const root = fileURLToPath(new URL("../", import.meta.url));
+    const walk = (dir: string): string[] =>
+      readdirSync(dir).flatMap((name) => {
+        const path = join(dir, name);
+        return statSync(path).isDirectory() ? walk(path) : /\.tsx?$/.test(name) && !/\.test\.tsx?$/.test(name) ? [path] : [];
+      });
+    const offenders = walk(root).filter((file) => /\bequipe\b/i.test(readFileSync(file, "utf-8")));
+    expect(offenders).toEqual([]);
   });
 });

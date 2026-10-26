@@ -13,6 +13,7 @@
  */
 import type { Locale } from "@/i18n/config";
 import { makeT, type Dictionary } from "@/lib/i18n-dict";
+import { READ_ONLY_FAILURE } from "@/lib/write-failure-read-only";
 
 export const WRITE_FAILURE = {
   invalid: {
@@ -33,15 +34,7 @@ export const WRITE_FAILURE = {
     fr: "Session expirée : rechargez la page et reconnectez-vous.",
     pt: "Sessão expirada: recarrega a página e inicia sessão novamente.",
   },
-  readOnly: {
-    it: "Da qui non si può modificare: fallo dall'app sul computer dove gira il team.",
-    en: "This cannot be changed from here: do it from the app on the computer where the team runs.",
-    hu: "Innen nem módosítható: tedd meg az alkalmazásban azon a gépen, ahol a csapat fut.",
-    es: "Esto no se puede cambiar desde aquí: hazlo desde la app en el ordenador donde funciona el equipo.",
-    de: "Das lässt sich hier nicht ändern: Mach es in der App auf dem Computer, auf dem das Team läuft.",
-    fr: "Impossible de modifier ici : faites-le depuis l'app sur l'ordinateur où tourne l'équipe.",
-    pt: "Não é possível alterar daqui: faz isso na app no computador onde a equipa corre.",
-  },
+  readOnly: READ_ONLY_FAILURE,
   notFound: {
     it: "Elemento non trovato: ricarica la pagina.",
     en: "Item not found: reload the page.",
