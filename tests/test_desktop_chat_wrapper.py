@@ -68,10 +68,15 @@ case "$1" in
         else
           # config_files as podman-compose writes it: the files given to `-f`, joined by ",".
           running=true
+          chash="$JHT_TEST_CONFIG_HASH"
           # a container of an earlier `up` that stopped (the machine was stopped): Exited until `up` starts it again
           if [ -n "${JHT_TEST_EXITED_STATE:-}" ] && [ ! -f "$JHT_TEST_EXITED_STATE" ]; then running=false; fi
+          # made by the compose of an earlier version: another config hash, until `up` creates it again
+          if [ -n "${JHT_TEST_CONTAINER_HASH:-}" ] && { [ -z "${JHT_TEST_EXITED_STATE:-}" ] || [ ! -f "$JHT_TEST_EXITED_STATE" ]; }; then
+            chash="$JHT_TEST_CONTAINER_HASH"
+          fi
           printf 'jht|%s|jht|jht|jht|jht|1|%s|%s|1.6.0|podman-compose%sjht.service|%s\n' \
-            "$running" "$JHT_RUNTIME_DIR" "${JHT_TEST_CONFIG_FILES:-$JHT_RUNTIME_DIR/docker-compose.yml}" "$(printf '\\100')" "$JHT_TEST_CONFIG_HASH"
+            "$running" "$JHT_RUNTIME_DIR" "${JHT_TEST_CONFIG_FILES:-$JHT_RUNTIME_DIR/docker-compose.yml}" "$(printf '\\100')" "$chash"
         fi
         if [ "${JHT_TEST_STOP_AFTER_INSPECT:-0}" = 1 ]; then : > "$JHT_TEST_CONTAINER_STOPPED"; fi ;;
       *'.State.Running}}'*)
@@ -146,13 +151,16 @@ case "$*" in
   *" ps -q")
     # podman-compose 1.6.0 lists the project's stopped containers too, as `podman ps -a` does
     if [ -n "${JHT_TEST_EXITED_STATE:-}" ]; then
-      printf '%s\n' aaaaaaaaaaaa
+      # the stopped container is listed until `down` removes it; `up` creates it again
+      if [ -f "$JHT_TEST_EXITED_STATE" ] || [ ! -f "${JHT_TEST_DOWN_DONE:-/nonexistent}" ]; then printf '%s\n' aaaaaaaaaaaa; fi
     elif [ -n "${JHT_TEST_PS_STATE:-}" ]; then
       [ ! -f "$JHT_TEST_PS_STATE" ] || printf '%s\n' aaaaaaaaaaaa
       true
     else
       printf '%s\n' "${JHT_TEST_PS_IDS-aaaaaaaaaaaa}"
     fi ;;
+  *" down")
+    [ -z "${JHT_TEST_DOWN_DONE:-}" ] || : > "$JHT_TEST_DOWN_DONE" ;;
   *" up -d")
     [ -z "${JHT_TEST_EXITED_STATE:-}" ] || : > "$JHT_TEST_EXITED_STATE"
     [ -z "${JHT_TEST_PS_STATE:-}" ] || : > "$JHT_TEST_PS_STATE" ;;
@@ -651,6 +659,54 @@ def test_status_says_a_stopped_container_is_not_running_and_does_not_call_it_una
 
     assert result.returncode == 1
     assert "non attivo" in result.stdout + result.stderr and "non attestabile" not in result.stdout + result.stderr
+
+
+def _stale_stopped(tmp_path: Path):
+    wrapper, env, log = _runtime(tmp_path)
+    env["JHT_TEST_RUNTIME_READY"] = "1"
+    env["JHT_TEST_EXITED_STATE"] = str(tmp_path / "container-started")
+    env["JHT_TEST_DOWN_DONE"] = str(tmp_path / "down-done")
+    # the containers of the version before: stopped, ours, made by a compose whose hash was another one
+    env["JHT_TEST_CONTAINER_HASH"] = "b" * 64
+    return wrapper, env, log
+
+
+def test_up_recreates_the_stopped_containers_of_the_version_before_and_keeps_the_volumes(tmp_path: Path):
+    wrapper, env, log = _stale_stopped(tmp_path)
+
+    result = subprocess.run([str(wrapper), "up"], env=env, text=True, capture_output=True, timeout=20, check=False)
+
+    assert result.returncode == 0, result.stderr
+    assert "config_changed_stopped" in result.stderr and "i volumi con i dati restano" in result.stderr
+    calls = [line for line in log.read_text(encoding="utf-8").splitlines() if line.startswith("podman-compose ")]
+    down = next(i for i, line in enumerate(calls) if line.endswith(" down"))
+    up = next(i for i, line in enumerate(calls) if line.endswith(" up -d"))
+    assert down < up
+    # containers and network only: no option of `down` can remove the volumes
+    assert not any(" down " in line + " " and ("-v" in line.split() or "--volumes" in line.split()) for line in calls)
+
+
+def test_up_does_not_touch_a_running_container_of_the_version_before(tmp_path: Path):
+    wrapper, env, log = _runtime(tmp_path)
+    env["JHT_TEST_RUNTIME_READY"] = "1"
+    env["JHT_TEST_CONTAINER_HASH"] = "b" * 64   # running, with the hash of the earlier compose
+
+    result = subprocess.run([str(wrapper), "up"], env=env, text=True, capture_output=True, timeout=20, check=False)
+
+    assert result.returncode == 1
+    assert "non attestabile" in result.stderr and "jht down" in result.stderr
+    calls = log.read_text(encoding="utf-8").splitlines()
+    assert not any(line.startswith("podman-compose ") and (line.endswith(" down") or line.endswith(" up -d")) for line in calls)
+
+
+def test_down_removes_the_stopped_containers_of_the_version_before(tmp_path: Path):
+    wrapper, env, log = _stale_stopped(tmp_path)
+
+    result = subprocess.run([str(wrapper), "down"], env=env, text=True, capture_output=True, timeout=20, check=False)
+
+    assert result.returncode == 0, result.stderr
+    calls = log.read_text(encoding="utf-8").splitlines()
+    assert any(line.startswith("podman-compose ") and line.endswith(" down") for line in calls)
 
 
 def test_a_stopped_container_that_is_not_ours_still_stops_up(tmp_path: Path):
