@@ -27,7 +27,7 @@ def test_macos_podman_is_opt_in_while_colima_remains_the_default():
     assert 'podman) install_podman_macos ;;' in source
     assert '*) install_colima_macos ;;' in source
     assert 'RUNTIME_CHOICE" != "podman"' in source
-    assert "Container (Podman preview)" in source
+    assert "Container (Podman)" in source and "preview" not in source.lower()
 
 
 def test_public_podman_quickstart_uses_the_normal_release_path():

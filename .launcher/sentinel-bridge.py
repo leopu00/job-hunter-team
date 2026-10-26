@@ -1282,6 +1282,82 @@ def _window_minutes(window):
         return 0
 
 
+def _codex_parsed_from_rate_limits(best_rl, freshest_rl):
+    """Dal `rate_limits` di Codex (la forma dei rollout: used_percent / window_minutes / resets_at) al dict
+    che il bridge conosce. `best_rl` da' la finestra corta, `freshest_rl` la settimanale (vedi sotto).
+    Condivisa fra la lettura dei rollout e quella di `codex app-server`: stessa mappatura, stesso schema."""
+    primary = best_rl.get("primary") or {}
+    # FLAG dev3 (P7): il weekly va letto dalla sessione PIÙ FRESCA, non da
+    # best_rl (scelto per max primary used_percent). Al rinnovo del ciclo
+    # convivono per qualche secondo letture di sessioni diverse: scegliendo
+    # per primary si può agganciare un weekly/ reset STALE → era la causa
+    # dell'oscillazione reset 7giu↔11giu. recent[0] è la lettura più recente
+    # (all_rls ordinato desc per timestamp).
+    secondary = freshest_rl.get("secondary") or {}
+    # La finestra si riconosce dalla DURATA dichiarata, non dalla
+    # posizione: se il payload dà la settimanale come primary e la corta
+    # come secondary, vanno scambiate (altrimenti il 5h finirebbe sull'asse
+    # settimanale e viceversa). Senza window_minutes vale la posizione.
+    if (_window_minutes(primary) >= _WEEKLY_MIN_MINUTES
+            and 0 < _window_minutes(secondary) < _WEEKLY_MIN_MINUTES):
+        primary, secondary = secondary, primary
+    try:
+        usage = int(round(float(primary.get("used_percent", 0))))
+        weekly = (
+            int(round(float(secondary.get("used_percent", 0))))
+            if secondary.get("used_percent") is not None else None
+        )
+    except (TypeError, ValueError):
+        return None
+    reset_at = None
+    reset_at_unix = None
+    resets_unix = primary.get("resets_at")
+    if isinstance(resets_unix, (int, float)):
+        reset_at = _fmt_reset(resets_unix)  # DATA completa, mai ora-nuda
+        reset_at_unix = float(resets_unix)
+    # Weekly window reset (bug #19A): se il rate-limit secondary espone
+    # un proprio resets_at (rolling-7d Codex), lo registriamo. Capitano
+    # e Sentinella possono così rispondere "quanto manca al reset settimanale?"
+    # senza grep nei sorgenti.
+    weekly_reset_at = None
+    weekly_reset_at_unix = None
+    weekly_resets_unix = secondary.get("resets_at")
+    if isinstance(weekly_resets_unix, (int, float)):
+        weekly_reset_at = _fmt_reset(weekly_resets_unix)  # DATA completa
+        weekly_reset_at_unix = float(weekly_resets_unix)
+
+    # Piani a finestra UNICA settimanale (es. plan_type "prolite",
+    # 2026-07-30): primary ha window_minutes=10080 (7gg) e secondary è
+    # null. Con la mappatura classica il budget settimanale finirebbe in
+    # `usage` (che tutta la logica a valle tratta come finestra 5h, la cui
+    # saturazione vale "qualche ora di pausa" — qui invece vale GIORNI di
+    # silenzio) e ogni protezione weekly resterebbe cieca: weekly_usage
+    # None spegne SOPRA-PACE, proj_weekly e il freno weekly-halt. Il
+    # payload dichiara già la durata della finestra: se primary è ≥ 1
+    # giorno, primary È il weekly e va riportato su ENTRAMBI gli assi —
+    # su `usage` perché resta l'unico vincolo reale (il pacing 5h, che
+    # riempie al 100% entro reset_at, diventa di fatto un pacer
+    # settimanale corretto), e sui campi weekly perché è ciò che sono.
+    usage_is_weekly = False
+    if weekly is None and _window_minutes(primary) >= _WEEKLY_MIN_MINUTES:
+        weekly = usage
+        weekly_reset_at = reset_at
+        weekly_reset_at_unix = reset_at_unix
+        usage_is_weekly = True
+
+    return {
+        "usage": usage,
+        "reset_at": reset_at,
+        "reset_at_unix": reset_at_unix,
+        "weekly_usage": weekly,
+        "weekly_reset_at": weekly_reset_at,
+        "weekly_reset_at_unix": weekly_reset_at_unix,
+        # `usage` è la settimanale ricopiata (finestra unica): una finestra
+        # 5h non esiste, e chi la mostra non deve inventarla.
+        "usage_is_weekly": usage_is_weekly,
+    }
+
+
 def fetch_codex_rollout():
     """Legge il rollout JSONL più recente sotto ~/.codex/sessions/ e
     estrae rate_limits.primary.used_percent + resets_at."""
@@ -1360,79 +1436,102 @@ def fetch_codex_rollout():
             recent,
             key=lambda x: float((x[1].get("primary") or {}).get("used_percent") or 0),
         )[1]
-        primary = best_rl.get("primary") or {}
-        # FLAG dev3 (P7): il weekly va letto dalla sessione PIÙ FRESCA, non da
-        # best_rl (scelto per max primary used_percent). Al rinnovo del ciclo
-        # convivono per qualche secondo letture di sessioni diverse: scegliendo
-        # per primary si può agganciare un weekly/ reset STALE → era la causa
-        # dell'oscillazione reset 7giu↔11giu. recent[0] è la lettura più recente
-        # (all_rls ordinato desc per timestamp).
+        # la settimanale si legge dalla sessione PIU' fresca (vedi il commento nella funzione)
         freshest_rl = recent[0][1]
-        secondary = freshest_rl.get("secondary") or {}
-        # La finestra si riconosce dalla DURATA dichiarata, non dalla
-        # posizione: se il payload dà la settimanale come primary e la corta
-        # come secondary, vanno scambiate (altrimenti il 5h finirebbe sull'asse
-        # settimanale e viceversa). Senza window_minutes vale la posizione.
-        if (_window_minutes(primary) >= _WEEKLY_MIN_MINUTES
-                and 0 < _window_minutes(secondary) < _WEEKLY_MIN_MINUTES):
-            primary, secondary = secondary, primary
-        try:
-            usage = int(round(float(primary.get("used_percent", 0))))
-            weekly = (
-                int(round(float(secondary.get("used_percent", 0))))
-                if secondary.get("used_percent") is not None else None
-            )
-        except (TypeError, ValueError):
-            return None
-        reset_at = None
-        reset_at_unix = None
-        resets_unix = primary.get("resets_at")
-        if isinstance(resets_unix, (int, float)):
-            reset_at = _fmt_reset(resets_unix)  # DATA completa, mai ora-nuda
-            reset_at_unix = float(resets_unix)
-        # Weekly window reset (bug #19A): se il rate-limit secondary espone
-        # un proprio resets_at (rolling-7d Codex), lo registriamo. Capitano
-        # e Sentinella possono così rispondere "quanto manca al reset settimanale?"
-        # senza grep nei sorgenti.
-        weekly_reset_at = None
-        weekly_reset_at_unix = None
-        weekly_resets_unix = secondary.get("resets_at")
-        if isinstance(weekly_resets_unix, (int, float)):
-            weekly_reset_at = _fmt_reset(weekly_resets_unix)  # DATA completa
-            weekly_reset_at_unix = float(weekly_resets_unix)
-
-        # Piani a finestra UNICA settimanale (es. plan_type "prolite",
-        # 2026-07-30): primary ha window_minutes=10080 (7gg) e secondary è
-        # null. Con la mappatura classica il budget settimanale finirebbe in
-        # `usage` (che tutta la logica a valle tratta come finestra 5h, la cui
-        # saturazione vale "qualche ora di pausa" — qui invece vale GIORNI di
-        # silenzio) e ogni protezione weekly resterebbe cieca: weekly_usage
-        # None spegne SOPRA-PACE, proj_weekly e il freno weekly-halt. Il
-        # payload dichiara già la durata della finestra: se primary è ≥ 1
-        # giorno, primary È il weekly e va riportato su ENTRAMBI gli assi —
-        # su `usage` perché resta l'unico vincolo reale (il pacing 5h, che
-        # riempie al 100% entro reset_at, diventa di fatto un pacer
-        # settimanale corretto), e sui campi weekly perché è ciò che sono.
-        usage_is_weekly = False
-        if weekly is None and _window_minutes(primary) >= _WEEKLY_MIN_MINUTES:
-            weekly = usage
-            weekly_reset_at = reset_at
-            weekly_reset_at_unix = reset_at_unix
-            usage_is_weekly = True
-
-        return {
-            "usage": usage,
-            "reset_at": reset_at,
-            "reset_at_unix": reset_at_unix,
-            "weekly_usage": weekly,
-            "weekly_reset_at": weekly_reset_at,
-            "weekly_reset_at_unix": weekly_reset_at_unix,
-            # `usage` è la settimanale ricopiata (finestra unica): una finestra
-            # 5h non esiste, e chi la mostra non deve inventarla.
-            "usage_is_weekly": usage_is_weekly,
-        }
+        return _codex_parsed_from_rate_limits(best_rl, freshest_rl)
     except (OSError, json.JSONDecodeError):
         return None
+
+
+CODEX_APP_SERVER_TIMEOUT_S = 15
+
+
+def fetch_codex_app_server(timeout_s=None, executable=None):
+    """I limiti di Codex chiesti a Codex stesso (`codex app-server`, `account/rateLimits/read`): lo stesso dato
+    di /status, disponibile SUBITO dopo il login, prima che esista un rollout con `rate_limits` (che Codex scrive
+    solo dopo la risposta di un turno). Una lettura sola, con il login di JHT_HOME/.codex; esce con None, senza
+    dettagli, per qualunque cosa vada storta (nessun codex, nessun login, tempo scaduto, risposta strana).
+    Non esce MAI altro che percentuali e orari di reset."""
+    import queue
+    import shutil
+    import signal
+    import threading
+
+    timeout_s = CODEX_APP_SERVER_TIMEOUT_S if timeout_s is None else timeout_s
+    exe = executable or shutil.which("codex")
+    if not exe:
+        return None
+    env = {**os.environ, "CODEX_HOME": str(JHT_HOME / ".codex")}
+    try:
+        # Un gruppo di processi tutto suo: `codex` e' un lanciatore Node che avvia il binario nativo, e uccidere
+        # solo il lanciatore lascerebbe il figlio vivo fino all'EOF di stdin.
+        proc = subprocess.Popen([exe, "app-server"], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                                stderr=subprocess.DEVNULL, text=True, env=env, start_new_session=True)
+    except OSError:
+        return None
+    lines = queue.Queue()
+    threading.Thread(target=lambda: [lines.put(line) for line in proc.stdout], daemon=True).start()
+
+    def send(message):
+        proc.stdin.write(json.dumps(message) + "\n")
+        proc.stdin.flush()
+
+    def answer(request_id, deadline):
+        while True:
+            left = deadline - time.monotonic()
+            if left <= 0:
+                return None
+            try:
+                line = lines.get(timeout=left)
+            except queue.Empty:
+                return None
+            try:
+                message = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if isinstance(message, dict) and message.get("id") == request_id:
+                return message
+
+    try:
+        deadline = time.monotonic() + timeout_s
+        send({"id": 1, "method": "initialize",
+              "params": {"clientInfo": {"name": "jht-limits", "title": "jht", "version": "1"}}})
+        if answer(1, deadline) is None:
+            return None
+        send({"method": "initialized"})
+        send({"id": 2, "method": "account/rateLimits/read"})
+        reply = answer(2, deadline)
+        limits = ((reply or {}).get("result") or {}).get("rateLimits")
+        if not isinstance(limits, dict):
+            return None
+
+        def window(raw):
+            if not isinstance(raw, dict) or isinstance(raw.get("usedPercent"), bool):
+                return None
+            used, minutes, resets = raw.get("usedPercent"), raw.get("windowDurationMins"), raw.get("resetsAt")
+            if not isinstance(used, (int, float)) or not isinstance(resets, (int, float)):
+                return None
+            return {"used_percent": used, "window_minutes": minutes if isinstance(minutes, (int, float)) else 0,
+                    "resets_at": resets}
+
+        primary, secondary = window(limits.get("primary")), window(limits.get("secondary"))
+        if primary is None:
+            return None
+        rate_limits = {"primary": primary, "secondary": secondary}
+        return _codex_parsed_from_rate_limits(rate_limits, rate_limits)
+    except (OSError, ValueError):
+        return None
+    finally:
+        try:
+            os.killpg(proc.pid, signal.SIGKILL)
+        except (OSError, ProcessLookupError):
+            pass
+        try:
+            proc.kill()
+            proc.wait(timeout=5)
+        except (OSError, subprocess.SubprocessError):
+            pass
+
 
 
 # ── Claude: HTTP API + 429 cooldown ─────────────────────────────────────
@@ -2876,8 +2975,16 @@ def probe_limits(provider=None, now=None):
     try:
         if provider is None:
             _, provider = read_config()
-        parsed = _probe_fetch(str(provider).lower())
-        return limits_verdict(parsed, time.time() if now is None else now)
+        provider = str(provider).lower()
+        moment = time.time() if now is None else now
+        verdict = limits_verdict(_probe_fetch(provider), moment)
+        # I rollout di Codex nascono solo dopo il primo turno (e quelli vecchi hanno il reset gia' passato): subito
+        # dopo il login non c'e' niente da leggere. Allora si chiede a Codex stesso, che il dato lo ha.
+        if verdict["status"] == "unknown" and provider in ("openai", "codex"):
+            asked = fetch_codex_app_server()
+            if asked:
+                verdict = limits_verdict(asked, moment)
+        return verdict
     except Exception:  # noqa: BLE001 — un errore di lettura e' "unknown", mai dettagli
         return limits_verdict(None, 0)
 

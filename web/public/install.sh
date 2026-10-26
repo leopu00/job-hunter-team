@@ -22,7 +22,7 @@
 # ║                                                                          ║
 # ║  Options (env vars / flags):                                             ║
 # ║    --no-docker             Skip the container, install natively (expert) ║
-# ║    --runtime <r>           macOS: colima (default), podman (preview),     ║
+# ║    --runtime <r>           macOS: colima (default), podman,              ║
 # ║                            or docker-desktop (your Docker).              ║
 # ║                            Except for explicit Podman, a running Docker  ║
 # ║                            is reused (detect-first). Linux: only podman ║
@@ -66,7 +66,7 @@
 # ║  Design reference:                                                       ║
 # ║    docs/internal/ops/vps.md                      ║
 # ║                                                                          ║
-# ║  Supports: macOS (Colima, Podman preview, or Docker Desktop), Linux       ║
+# ║  Supports: macOS (Colima, Podman, or Docker Desktop), Linux              ║
 # ║  (Debian/Ubuntu/Fedora/                                                  ║
 # ║  Arch), WSL2.                                                             ║
 # ╚══════════════════════════════════════════════════════════════════════════╝
@@ -367,7 +367,7 @@ header() {
     if [ "$RUNTIME_CHOICE" = "podman" ] && [ "${OS:-}" = "linux" ]; then
       printf "  ${DIM}mode:    ${RESET}${BOLD}Container (Podman rootless)${RESET}\n"
     elif [ "$RUNTIME_CHOICE" = "podman" ]; then
-      printf "  ${DIM}mode:    ${RESET}${BOLD}Container (Podman preview)${RESET}\n"
+      printf "  ${DIM}mode:    ${RESET}${BOLD}Container (Podman)${RESET}\n"
     else
       printf "  ${DIM}mode:    ${RESET}${BOLD}Docker (isolated)${RESET}\n"
     fi
@@ -765,7 +765,7 @@ enable_podman_trim_timer() {
 }
 
 install_podman_macos() {
-  # Preview non distruttiva: non ferma e non rimuove Colima. La macchina e la
+  # Percorso non distruttivo: non ferma e non rimuove Colima. La macchina e la
   # connessione hanno un nome JHT dedicato; lo shim pubblicato piu' avanti usa
   # sempre quella connessione senza cambiare il default Podman dell'utente.
   unset CONTAINER_CONNECTION
@@ -773,7 +773,7 @@ install_podman_macos() {
   install_brew_if_missing
   if ! command -v podman &>/dev/null; then
     jht_phase podman_install
-    info "Installing Podman CLI (macOS preview)..."
+    info "Installing Podman CLI..."
     run brew install podman || fail "Podman installation failed"
   else
     ok "podman already installed"
@@ -1942,7 +1942,7 @@ final_message() {
   if [ "$USE_DOCKER" -eq 1 ]; then
     printf "  ${BOLD}Container mode active.${RESET}\n"
     if [ "$RUNTIME_CHOICE" = "podman" ]; then
-      podman_native_mode || printf "  ${DIM}Podman preview selected; Colima remains installed and untouched.${RESET}\n"
+      podman_native_mode || printf "  ${DIM}Podman selected; Colima remains installed and untouched.${RESET}\n"
     fi
     printf "  ${DIM}The agents can only see:${RESET}\n"
     printf "  ${DIM}  ~/.jht/                       → /jht_home (config, db, agents)${RESET}\n"
