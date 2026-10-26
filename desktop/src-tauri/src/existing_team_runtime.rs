@@ -45,6 +45,10 @@ def one(sql,args=()):
 def many(sql,args=()):
  try: return [as_dict(row) for row in db.execute(sql,args).fetchall()]
  except sqlite3.Error: return []
+def first_by_position(table,names):
+ present=columns(table); found={}
+ for row in many('SELECT '+', '.join(['position_id']+[name for name in names if name in present])+' FROM '+table+' ORDER BY rowid'): found.setdefault(row['position_id'],row)
+ return found
 def columns(table):
  try: return {row[1] for row in db.execute('PRAGMA table_info('+table+')')}
  except sqlite3.Error: return set()
@@ -152,9 +156,11 @@ LIST_KEYS=('id','legacy_id','title','company','location','remote_type','source',
 def light(item): return {key:item.get(key) for key in LIST_KEYS}
 try: req=json.loads(sys.stdin.readline())
 except Exception: fail('positions_request_invalid')
-if not isinstance(req,dict) or set(req)-{'op','filters','id'}: fail('positions_request_invalid')
+if not isinstance(req,dict) or set(req)-{'op','filters','id','offset'}: fail('positions_request_invalid')
 op=req.get('op')
-if op not in ('list','detail','facets','stats','profile','cloud_sync'): fail('positions_request_invalid')
+if op not in ('list','detail','facets','stats','profile','cloud_sync','map'): fail('positions_request_invalid')
+if op=='map' and (set(req)-{'op','offset'} or type(req.get('offset',0)) is not int or not 0<=req.get('offset',0)<=1000000): fail('positions_request_invalid')
+if op!='map' and 'offset' in req: fail('positions_request_invalid')
 if op=='detail' and (set(req)!={'op','id'} or not isinstance(req['id'],str) or not req['id'].isdigit() or len(req['id'])>20): fail('positions_request_invalid')
 if op in ('facets','stats','profile','cloud_sync') and set(req)!={'op'}: fail('positions_request_invalid')
 if op=='list' and (set(req)-{'op','filters'} or (req.get('filters') is not None and not isinstance(req.get('filters'),dict))): fail('positions_request_invalid')
@@ -322,6 +328,27 @@ if op=='facets':
    rows.append({'id':sid(row[0]),'status':row[1],'title':row[2],'company':row[3],'role_family':row[4],'loc_country':row[5],'loc_city':row[6],'score':row[7],'critic_score':row[8],'source':row[9]})
  except sqlite3.Error: fail('positions_unavailable')
  emit({'ok':True,'data':{'items':rows}})
+if op=='map':
+ # What the globe needs of every position that is not excluded, and nothing else, in the list's order
+ # (the pins of one city are laid out by that order). One reply carries as many as fit in the byte
+ # budget; `next` is where the following reply starts, null at the end.
+ MAP_BUDGET=1363148
+ try:
+  have=columns('positions')
+  pick=', '.join('p.'+name for name in ('id','title','company','status','role_family','location','remote_type','loc_country','loc_city','found_at','office_lat','office_lon','office_address') if name in have)
+  scores_by=first_by_position('scores',('total_score',))
+  everyone=[]
+  for raw in db.execute('SELECT '+pick+" FROM positions p WHERE (p.status IS NULL OR p.status!='excluded') ORDER BY p.found_at DESC,p.id ASC"):
+   row=as_dict(raw); score=scores_by.get(row.get('id'))
+   everyone.append({'id':sid(row.get('id')),'title':nullable(row,'title'),'company':nullable(row,'company'),'status':nullable(row,'status'),'role_family':nullable(row,'role_family'),'location':nullable(row,'location'),'remote_type':nullable(row,'remote_type'),'loc_country':nullable(row,'loc_country'),'loc_city':nullable(row,'loc_city'),'score':nullable(score,'total_score') if score else None,'found_at':nullable(row,'found_at') or '','office_lat':coord(row.get('office_lat'),90),'office_lon':coord(row.get('office_lon'),180),'office_address':text(row.get('office_address'),160)})
+ except sqlite3.Error: fail('positions_unavailable')
+ start=req.get('offset',0); items=[]; used=0
+ for item in everyone[start:]:
+  used+=len(json.dumps(item,separators=(',',':')))+1
+  if items and used>MAP_BUDGET: break
+  items.append(item)
+ reached=start+len(items)
+ emit({'ok':True,'data':{'items':items,'total':len(everyone),'next':reached if reached<len(everyone) else None}})
 filters=req.get('filters') or {}; allowed={'statuses','remoteTypes','sources','verdicts','families','countries','cities','scoreBands','unscored','criticBands','criticUnscored','writeRequested','scoredOnly','hideExcluded','scam','q','limit','offset','sort','dir'}
 if set(filters)-allowed: fail('positions_request_invalid')
 if not isinstance(filters,dict) or any(value is None for value in filters.values()): fail('positions_request_invalid')
@@ -333,10 +360,6 @@ try:
  # the positions instead of three queries for each one.
  wanted=('id','legacy_id','title','company','location','remote_type','source','found_at','status','role_family','loc_country','loc_city','write_requested','scam_signals','salary_declared_min','salary_declared_max','salary_declared_currency','salary_estimated_min','salary_estimated_max','salary_estimated_currency','office_lat','office_lon','office_address')
  have=columns('positions'); pick=', '.join('p.'+name for name in wanted if name in have)
- def first_by_position(table,names):
-  present=columns(table); found={}
-  for row in many('SELECT '+', '.join(['position_id']+[name for name in names if name in present])+' FROM '+table+' ORDER BY rowid'): found.setdefault(row['position_id'],row)
-  return found
  scores_by=first_by_position('scores',('total_score',)); applications_by=first_by_position('applications',('critic_score','critic_verdict','applied_at','written_at'))
  open_tickets={row['position_id'] for row in many("SELECT DISTINCT position_id FROM position_tickets WHERE status IN ('open','assigned')")}
  for raw in db.execute('SELECT '+pick+' FROM positions p ORDER BY p.found_at DESC,p.id ASC'):
@@ -382,6 +405,11 @@ enum PositionsRequest {
     },
     Facets,
     Stats,
+    /// What the globe needs of every position, from `offset` on (see the script's `map`).
+    Map {
+        #[serde(default)]
+        offset: u32,
+    },
     Profile,
     /// How the box's push to the website is going (its periodic push's last outcome).
     #[serde(rename = "cloud_sync")]
@@ -515,6 +543,7 @@ impl PositionsRequest {
             Self::Detail { .. } => "detail",
             Self::Facets => "facets",
             Self::Stats => "stats",
+            Self::Map { .. } => "map",
             Self::Profile => "profile",
             Self::CloudSync => "cloud_sync",
         }
@@ -526,6 +555,7 @@ impl PositionsRequest {
             Self::Detail { id } => {
                 (1..=20).contains(&id.len()) && id.bytes().all(|byte| byte.is_ascii_digit())
             }
+            Self::Map { offset } => *offset <= 1_000_000,
             Self::Facets | Self::Stats | Self::Profile | Self::CloudSync => true,
         }
     }
@@ -558,6 +588,13 @@ fn valid_positions_reply(request: &PositionsRequest, reply: &Value) -> bool {
                     .as_array()
                     .is_some_and(|items| items.iter().all(|item| item.is_object()))
             }),
+        PositionsRequest::Map { .. } => data.as_object().is_some_and(|data| {
+            data.len() == 3
+                && array(data.get("items"))
+                && data["items"].as_array().is_some_and(|items| items.iter().all(Value::is_object))
+                && data.get("total").is_some_and(Value::is_u64)
+                && data.get("next").is_some_and(|next| next.is_null() || next.is_u64())
+        }),
         PositionsRequest::Stats => data.as_object().is_some_and(|data| {
             data.len() == 7
                 && ["stats", "distribution"]
@@ -3152,6 +3189,43 @@ mod tests {
         // the Python reader serves this op and nothing else under it
         assert!(POSITIONS_READ_PY.contains("if op=='stats':"));
         assert!(POSITIONS_READ_PY.contains("mode=ro"));
+    }
+
+    #[test]
+    fn the_globes_read_is_a_closed_read_only_op_with_a_closed_reply() {
+        assert!(matches!(parse_positions_request(json!({"op": "map"})), Ok(PositionsRequest::Map { offset: 0 })));
+        let forwarded = parse_positions_request(json!({"op": "map", "offset": 5000}))
+            .map(|request| serde_json::to_value(request).expect("request serializes"));
+        assert_eq!(forwarded, Ok(json!({"op": "map", "offset": 5000})));
+        // what is not an offset, or comes with something else, never reaches the reader
+        for bad in [
+            json!({"op": "map", "offset": -1}),
+            json!({"op": "map", "offset": "0"}),
+            json!({"op": "map", "offset": 1_000_001}),
+            json!({"op": "map", "filters": {}}),
+            json!({"op": "map", "id": "1"}),
+            json!({"op": "list", "offset": 0}),
+        ] {
+            assert!(parse_positions_request(bad.clone()).is_err(), "{bad}");
+        }
+        let request = PositionsRequest::Map { offset: 0 };
+        let good = json!({"ok": true, "data": {"items": [{"id": "1"}], "total": 1, "next": null}});
+        assert!(valid_positions_reply(&request, &good));
+        assert!(valid_positions_reply(&request, &json!({"ok": true, "data": {"items": [], "total": 9, "next": 4}})));
+        for broken in [
+            json!({"ok": true, "data": {"items": [{"id": "1"}], "total": 1}}),
+            json!({"ok": true, "data": {"items": ["x"], "total": 1, "next": null}}),
+            json!({"ok": true, "data": {"items": [], "total": -1, "next": null}}),
+            json!({"ok": true, "data": {"items": [], "total": 1, "next": "2"}}),
+            json!({"ok": true, "data": {"items": [], "total": 1, "next": null, "extra": 1}}),
+            json!({"ok": true, "data": [] }),
+        ] {
+            assert!(!valid_positions_reply(&request, &broken), "{broken}");
+        }
+        assert!(POSITIONS_READ_PY.contains("if op=='map':"));
+        // it reads the positions' light columns, never the description
+        let reader = POSITIONS_READ_PY.split("if op=='map':").nth(1).unwrap().split("filters=req.get").next().unwrap();
+        assert!(!reader.contains("jd_text") && !reader.contains("p.*"));
     }
 
     /// The read of the team's positions says why it failed, in the kinds the header acts on.

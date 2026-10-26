@@ -1,5 +1,5 @@
 import type { PositionWithScore } from "../../../web/lib/types";
-import { readDesktopVpsPositions, type DesktopVpsRead } from "./existing-team-positions";
+import { readDesktopVpsMap, readDesktopVpsPositions, type DesktopVpsMapRow, type DesktopVpsRead } from "./existing-team-positions";
 import { existingTeamConnectionKey } from "./existing-team-readonly";
 
 /** All the team's positions in one bounded read per page (the native side pages by 600). */
@@ -39,7 +39,28 @@ export function readVpsPositionsShared(now = Date.now()): Promise<DesktopVpsRead
   return read;
 }
 
-/** Forgets the shared read (a test, or a new view). */
+let sharedMap: { at: number; key: string; read: Promise<DesktopVpsRead<DesktopVpsMapRow[]>> } | null = null;
+
+/**
+ * What the globe draws, read the way readVpsPositionsShared reads the list (one read for its three
+ * routes, kept for SHARED_READ_MS, only for the connection it was read on) but with the core's `map`
+ * read: the fields the globe uses and nothing else, in as few replies as the byte budget allows.
+ */
+export function readVpsMapShared(now = Date.now()): Promise<DesktopVpsRead<DesktopVpsMapRow[]>> {
+  const key = existingTeamConnectionKey();
+  if (key === null) {
+    sharedMap = null;
+    return readDesktopVpsMap();
+  }
+  if (sharedMap && sharedMap.key === key && now - sharedMap.at < SHARED_READ_MS) return sharedMap.read;
+  const read = readDesktopVpsMap().then((result): DesktopVpsRead<DesktopVpsMapRow[]> =>
+    existingTeamConnectionKey() === key ? result : { source: "unavailable", code: "existing_team_target_changed" });
+  sharedMap = { at: now, key, read };
+  return read;
+}
+
+/** Forgets the shared reads (a test, or a new view). */
 export function resetVpsPositionsShared(): void {
   shared = null;
+  sharedMap = null;
 }

@@ -142,3 +142,57 @@ def test_the_dashboard_numbers_do_not_cost_a_query_per_position(tmp_path: Path) 
             assert heavy not in text, heavy
         counts[size] = len(statements)
     assert counts[120] == counts[240], counts
+
+
+MAP_FIELDS = ("id", "title", "company", "status", "role_family", "location", "remote_type", "loc_country", "loc_city",
+              "score", "found_at", "office_lat", "office_lon", "office_address")
+
+
+def _list_everyone(home: Path) -> list[dict]:
+    items = _run(home, {"op": "list"})["data"]["items"]
+    return [{key: item[key] for key in MAP_FIELDS} for item in items if item["status"] != "excluded"]
+
+
+def test_the_globes_read_is_the_list_without_the_excluded_and_with_only_what_it_draws(tmp_path: Path) -> None:
+    _database(tmp_path, 60)
+    reply = _run(tmp_path, {"op": "map"})
+    assert reply["ok"] is True
+    data = reply["data"]
+    assert data["next"] is None and data["total"] == len(data["items"])
+    assert data["items"] == _list_everyone(tmp_path)
+    assert all(set(item) == set(MAP_FIELDS) for item in data["items"])
+
+
+def test_the_globes_read_comes_in_as_many_replies_as_the_byte_budget_asks(tmp_path: Path, monkeypatch) -> None:
+    _database(tmp_path, 60)
+    original = _script()
+    monkeypatch.setattr(sys.modules[__name__], "_script", lambda: original.replace("MAP_BUDGET=1363148", "MAP_BUDGET=3000"))
+    seen, offset, replies = [], 0, 0
+    while offset is not None:
+        data = _run(tmp_path, {"op": "map", "offset": offset})["data"]
+        seen += data["items"]
+        offset, replies = data["next"], replies + 1
+        assert replies < 100
+    assert replies > 3
+    monkeypatch.setattr(sys.modules[__name__], "_script", lambda: original)
+    assert seen == _list_everyone(tmp_path)
+
+
+def test_the_globes_read_asks_the_same_queries_for_few_positions_or_many(tmp_path: Path) -> None:
+    counts = {}
+    for size in (5, 80):
+        home = tmp_path / str(size)
+        _database(home, size)
+        statements: list[str] = []
+        _run(home, {"op": "map"}, statements)
+        text = "\n".join(statements)
+        for heavy in ("jd_text", "requirements", "jd_summary", "notes", "p.*"):
+            assert heavy not in text, heavy
+        counts[size] = len(statements)
+    assert counts[5] == counts[80], counts
+
+
+def test_the_globes_read_refuses_a_request_that_is_not_one(tmp_path: Path) -> None:
+    _database(tmp_path, 3)
+    for bad in ({"op": "map", "offset": -1}, {"op": "map", "offset": "0"}, {"op": "map", "filters": {}}, {"op": "facets", "offset": 0}):
+        assert _run(tmp_path, bad) == {"ok": False, "error": "positions_request_invalid"}, bad

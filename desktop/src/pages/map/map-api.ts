@@ -7,9 +7,9 @@ import {
   getPositionsWithoutCoords,
   type PositionNoCoord,
 } from "@/lib/queries";
-import type { PositionWithScore } from "@/lib/types";
 import { existingTeamView } from "../../lib/existing-team-readonly";
-import { readVpsPositionsShared, resetVpsPositionsShared } from "../../lib/existing-team-positions-shared";
+import { readVpsMapShared, resetVpsPositionsShared } from "../../lib/existing-team-positions-shared";
+import type { DesktopVpsMapRow } from "../../lib/existing-team-positions";
 import { apiPath, json, type ApiFetch } from "../../shell/api-bridge";
 
 /**
@@ -22,8 +22,9 @@ import { apiPath, json, type ApiFetch } from "../../shell/api-bridge";
  * the desktop shell only exists signed in, and has no demo.
  *
  * While an existing team's VPS is only being read (lib/existing-team-readonly.ts)
- * the same three answers are built from the team's own positions, the list the
- * Posizioni page reads, with the web's own placement: no cloud row is read. A
+ * the same three answers are built from the team's own positions, read once with
+ * the core's `map` read (the fields the globe draws, in one reply for a team of a
+ * few thousand), with the web's own placement: no cloud row is read. A
  * position is placed on its office when the list gives its coordinates, by its
  * city otherwise (the web's grid north of the city's centre; a jobs.db without
  * the office columns gives none), and one that cannot be placed goes to the
@@ -35,20 +36,12 @@ const ROUTES: Record<string, () => Promise<unknown>> = {
   "/api/positions/locations": getPositionLocations,
 };
 
-type VpsRow = Pick<PositionWithScore, "id" | "title" | "company" | "status" | "role_family" | "location" |
-  "remote_type" | "loc_country" | "loc_city"> & {
-  score?: number | null;
-  found_at?: string | null;
-  /** Absent from an older reply: the position is placed by its city. */
-  office_lat?: number | null;
-  office_lon?: number | null;
-  office_address?: string | null;
-};
+type VpsRow = DesktopVpsMapRow;
 
 /** The team's positions the web's map would show: not excluded. A failed read is an empty map. */
 function vpsRows(now = Date.now()): Promise<VpsRow[]> {
-  return readVpsPositionsShared(now).then((read) =>
-    read.source === "vps" ? (read.data as VpsRow[]).filter((row) => row.status !== "excluded") : []);
+  return readVpsMapShared(now).then((read) =>
+    read.source === "vps" ? read.data.filter((row) => row.status !== "excluded") : []);
 }
 
 /** Forgets the shared read (a test, or a new view). */

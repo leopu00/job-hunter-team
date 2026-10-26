@@ -32,7 +32,8 @@ type Request =
   | { op: "list"; filters?: PositionFilterOpts }
   | { op: "detail"; id: string }
   | { op: "facets" }
-  | { op: "stats" };
+  | { op: "stats" }
+  | { op: "map"; offset: number };
 
 function listRequest(opts?: PositionFilterOpts): Request {
   return opts === undefined ? { op: "list" } : { op: "list", filters: opts };
@@ -143,6 +144,43 @@ export async function readDesktopVpsPositions(
     if (page.data.length < size) break;
   }
   return { source: "vps", data: rows };
+}
+
+/** What the globe needs of a position: the core's `map` read gives these and nothing more. */
+export type DesktopVpsMapRow = Pick<PositionWithScore, "id" | "title" | "company" | "status" | "role_family" | "location" |
+  "remote_type" | "loc_country" | "loc_city"> & {
+  score?: number | null;
+  found_at?: string | null;
+  office_lat?: number | null;
+  office_lon?: number | null;
+  office_address?: string | null;
+};
+
+/** The most replies the globe's read follows: 600 KB each at the most, so far more positions than a team has. */
+const MAP_REPLIES_MAX = 40;
+
+/**
+ * Every position the globe draws (the excluded ones are left out by the core), in the list's order.
+ * One reply carries as many as fit in the core's byte budget (a team of a few thousand is one reply),
+ * and `next` says where the following one starts: the globe waits for one request, not for six.
+ */
+export async function readDesktopVpsMap(): Promise<DesktopVpsRead<DesktopVpsMapRow[]>> {
+  const rows: DesktopVpsMapRow[] = [];
+  let offset = 0;
+  for (let replies = 0; replies < MAP_REPLIES_MAX; replies += 1) {
+    const value = await read<unknown>({ op: "map", offset });
+    if (value.source !== "vps") return value;
+    const data = value.data;
+    if (!isRecord(data) || !Array.isArray(data.items) || !isCount(data.total) || !(data.next === null || isCount(data.next))) {
+      return { source: "unavailable", code: "desktop_bad_reply" };
+    }
+    rows.push(...(data.items as DesktopVpsMapRow[]));
+    if (data.next === null) return { source: "vps", data: rows };
+    // A reply that does not move forward would loop: the read is a failed one.
+    if (data.next <= offset) return { source: "unavailable", code: "desktop_bad_reply" };
+    offset = data.next;
+  }
+  return { source: "unavailable", code: "desktop_bad_reply" };
 }
 
 /**

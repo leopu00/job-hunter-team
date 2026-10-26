@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 // a few seconds, and only for the connection it was read on. Two fake VPS one after the other, well
 // inside those seconds: the second team's positions, never the first's. Synthetic data only.
 const native = vi.hoisted(() => ({ read: vi.fn() }));
-vi.mock("./existing-team-positions", () => ({ readDesktopVpsPositions: native.read }));
+vi.mock("./existing-team-positions", () => ({ readDesktopVpsPositions: native.read, readDesktopVpsMap: native.read }));
 
 import { enterExistingTeamReadOnly, leaveExistingTeamReadOnly } from "./existing-team-readonly";
 import { readVpsPositionsShared, resetVpsPositionsShared } from "./existing-team-positions-shared";
