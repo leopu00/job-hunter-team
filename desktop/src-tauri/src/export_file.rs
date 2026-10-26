@@ -1,4 +1,3 @@
-use std::fs::OpenOptions;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use tauri::Manager;
@@ -33,7 +32,7 @@ pub(crate) fn write_new_csv(dir: &Path, name: &str, content: &str) -> std::io::R
             format!("{stem} ({attempt}).csv")
         };
         let path = dir.join(file);
-        match OpenOptions::new().write(true).create_new(true).open(&path) {
+        match crate::team_export::create_private(&path) {
             Ok(mut handle) => {
                 handle.write_all(content.as_bytes())?;
                 return Ok(path);
@@ -114,6 +113,17 @@ mod tests {
         let check = command.find("window_may_export(window.label())").unwrap();
         let first_work = command.find("safe_csv_name(&name)").unwrap();
         assert!(check < first_work);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn the_csv_is_for_the_owner_alone() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = std::env::temp_dir().join(format!("jht-export-private-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let file = write_new_csv(&dir, "p.csv", "one").unwrap();
+        assert_eq!(std::fs::metadata(&file).unwrap().permissions().mode() & 0o777, 0o600);
+        std::fs::remove_dir_all(&dir).unwrap();
     }
 
     #[test]

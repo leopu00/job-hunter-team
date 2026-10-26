@@ -21,13 +21,13 @@ use regex::Regex;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::{
-    fs::{self, OpenOptions},
+    fs::{self, File, OpenOptions},
     io::{self, BufWriter, Write},
-    path::{Path, PathBuf},
+    path::{Component, Path, PathBuf},
     sync::OnceLock,
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
-use tauri::State;
+use tauri::{Manager, State};
 use tauri_plugin_dialog::DialogExt;
 
 /// The most a team export writes: past it the export stops and says so.
@@ -385,11 +385,44 @@ pub(crate) fn part_path(target: &Path) -> PathBuf {
     target.with_file_name(format!(".{name}.{}.part", std::process::id()))
 }
 
-/// Opens the system's «Save as» window and says the place the person chose; `None` when they closed it.
+/// Creates `path` (which must not be there) for the owner alone, before the first byte goes in: a backup or an
+/// export holds the person's data. A file that cannot be made private is not left behind.
+pub(crate) fn create_private(path: &Path) -> io::Result<File> {
+    let mut options = OpenOptions::new();
+    options.write(true).create_new(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.mode(0o600);
+    }
+    let file = options.open(path)?;
+    if crate::runtime_host::set_private_permissions(path).is_err() {
+        drop(file);
+        let _ = fs::remove_file(path);
+        return Err(io::Error::new(io::ErrorKind::PermissionDenied, "private permissions failed"));
+    }
+    Ok(file)
+}
+
+/// The folder the «Save as» window opens in: the first of `candidates` that is a folder and is not hidden
+/// (no part of its path starts with a dot). The system would otherwise open where the app last asked for a file,
+/// which may be a folder of keys.
+pub(crate) fn start_folder(candidates: impl IntoIterator<Item = Option<PathBuf>>) -> Option<PathBuf> {
+    let hidden = |dir: &Path| dir.components().any(|part| matches!(part, Component::Normal(name) if name.to_string_lossy().starts_with('.')));
+    candidates.into_iter().flatten().find(|dir| dir.is_dir() && !hidden(dir))
+}
+
+/// Opens the system's «Save as» window, in Documents (else Downloads), and says the place the person chose; `None` when they closed it.
 pub(crate) async fn ask_where(app: tauri::AppHandle, window: tauri::Window, name: String, label: &'static str, extension: &'static str) -> Result<Option<PathBuf>, DirectChatError> {
+    let start = start_folder([app.path().document_dir().ok(), app.path().download_dir().ok()]);
     // The system's window is modal and waits for the person: never on the main thread.
     let chosen = tauri::async_runtime::spawn_blocking(move || {
-        app.dialog().file().set_parent(&window).add_filter(label, &[extension]).set_file_name(name).blocking_save_file()
+        let dialog = app.dialog().file().set_parent(&window).add_filter(label, &[extension]).set_file_name(name);
+        match start {
+            Some(dir) => dialog.set_directory(dir),
+            None => dialog,
+        }
+        .blocking_save_file()
     })
     .await
     .map_err(|_| failure("export_save_failed"))?;
@@ -461,7 +494,7 @@ where
     F: FnMut(u64) -> Fut,
     Fut: std::future::Future<Output = Result<Page, DirectChatError>>,
 {
-    let file = OpenOptions::new().write(true).create_new(true).open(part).map_err(|_| failure("export_save_failed"))?;
+    let file = create_private(part).map_err(|_| failure("export_save_failed"))?;
     let mut sink = Sink::new(BufWriter::new(file), checked.format, columns.to_vec());
     let saving = |_: io::Error| failure("export_save_failed");
     sink.begin(checked.source, &iso_instant(now)).map_err(saving)?;
@@ -494,10 +527,7 @@ where
 /// Writes `bytes` to `part` (which must not be there: `create_new` neither follows a link nor truncates a file
 /// that someone put at that name) and renames it to `target` when whole. A failure takes the part away.
 fn write_whole(part: &Path, target: &Path, bytes: &[u8]) -> io::Result<()> {
-    let written = OpenOptions::new()
-        .write(true)
-        .create_new(true)
-        .open(part)
+    let written = create_private(part)
         .and_then(|mut file| file.write_all(bytes).and_then(|()| file.flush()))
         .and_then(|()| fs::rename(part, target));
     if written.is_err() && !matches!(&written, Err(error) if error.kind() == io::ErrorKind::AlreadyExists) {
@@ -984,6 +1014,74 @@ mod tests {
         assert!(write_whole(&part_b, &missing, b"x").is_err());
         assert!(!part_b.exists());
         let _ = fs::remove_dir_all(&home);
+    }
+
+    #[cfg(unix)]
+    fn mode_of(path: &Path) -> u32 {
+        use std::os::unix::fs::PermissionsExt;
+        fs::metadata(path).unwrap().permissions().mode() & 0o777
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn every_file_the_export_makes_is_for_the_owner_alone_from_its_first_byte() {
+        let home = team_home("private");
+        // empty: nothing has been written yet, and it is already private
+        let empty = home.join("empty");
+        drop(create_private(&empty).unwrap());
+        assert_eq!(mode_of(&empty), 0o600);
+        // a team export, through the part and the rename to the person's name
+        let target = home.join("jht-positions.csv");
+        let part = part_path(&target);
+        let mut first = page_of(1..=2, true);
+        block_on(write_pages(&part, &checked(Format::Csv), &cols(), UNIX_EPOCH, &mut first, pages(vec![]))).unwrap();
+        assert_eq!(mode_of(&part), 0o600);
+        fs::rename(&part, &target).unwrap();
+        assert_eq!(mode_of(&target), 0o600);
+        // the account's data
+        let account = home.join("jht-account-export.json");
+        write_whole(&part_path(&account), &account, b"{}").unwrap();
+        assert_eq!(mode_of(&account), 0o600);
+        // a file that is there is not made private, nor written through
+        assert!(create_private(&account).is_err());
+        let _ = fs::remove_dir_all(&home);
+    }
+
+    #[test]
+    fn the_save_window_starts_in_a_visible_folder_and_never_in_a_hidden_one() {
+        let home = team_home("start");
+        let documents = home.join("Documents");
+        let downloads = home.join("Downloads");
+        let keys = home.join(".ssh");
+        let nested = home.join(".config").join("Documents");
+        for dir in [&documents, &downloads, &keys, &nested] {
+            fs::create_dir_all(dir).unwrap();
+        }
+        assert_eq!(start_folder([Some(documents.clone()), Some(downloads.clone())]), Some(documents.clone()));
+        // Documents missing: Downloads
+        assert_eq!(start_folder([Some(home.join("nowhere")), Some(downloads.clone())]), Some(downloads.clone()));
+        assert_eq!(start_folder([None, Some(downloads.clone())]), Some(downloads.clone()));
+        // a hidden folder, or one inside a hidden folder, is skipped
+        assert_eq!(start_folder([Some(keys.clone()), Some(downloads.clone())]), Some(downloads.clone()));
+        assert_eq!(start_folder([Some(nested), Some(downloads.clone())]), Some(downloads));
+        // nothing that will do: the system's own choice, which the export cannot do better
+        assert_eq!(start_folder([Some(keys), Some(home.join("file-not-folder"))]), None);
+        assert_eq!(start_folder([]), None);
+        let _ = fs::remove_dir_all(&home);
+    }
+
+    #[test]
+    fn the_save_window_is_told_where_to_start_and_every_file_is_made_private() {
+        let source = include_str!("team_export.rs");
+        let code = source.split("#[cfg(test)]").next().unwrap();
+        let ask = code.split("pub(crate) async fn ask_where(").nth(1).unwrap().split("\n}\n").next().unwrap();
+        assert!(ask.contains("document_dir()") && ask.contains("download_dir()") && ask.contains(".set_directory("));
+        // the writers of this module open their file only through create_private
+        assert_eq!(code.matches("OpenOptions::new()").count(), 1, "only create_private opens a file");
+        for writer in ["async fn write_pages<", "fn write_whole("] {
+            let body = code.split(writer).nth(1).unwrap().split("\n}\n").next().unwrap();
+            assert!(body.contains("create_private(part)"), "{writer}");
+        }
     }
 
     #[test]
