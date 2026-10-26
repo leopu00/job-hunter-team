@@ -707,11 +707,18 @@ async function autoUpdateOnce() {
   const b = before ?? 'unknown';
   const a = after ?? 'unknown';
   const changed = !!before && !!after && before !== after;
+  // No CLI before and one after: a first install (a machine or a volume that was recreated), not
+  // «nothing to reinstall». There is no earlier version to tell the Capitano about.
+  const installed = !before && !!after;
   let verdict;
   if (changed) {
     verdict = res.ok
       ? 'UPDATED'
       : 'UPDATED (the step reported an error, but the version changed)';
+  } else if (installed) {
+    verdict = res.ok
+      ? `INSTALLED — no CLI before; ${a} is there now`
+      : `INSTALLED (the step reported an error, but the CLI is there: ${a})`;
   } else if (res.ok) {
     verdict = expected
       ? `UNCHANGED — already at the pinned version ${expected}; nothing to reinstall`
