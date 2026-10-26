@@ -7,8 +7,8 @@ import { TEAM_OFF_TEXT } from "./team-off.i18n";
 
 /**
  * The fixed warning while the app is open without the team: which pages need it, and the two ways on.
- * «Turn the runtime on» only wakes the machine and the container (no agent starts, nothing of the provider is
- * spent); «Start the team» goes back to the setup's start screen. Nothing shows in the usual app.
+ * «Turn the runtime on» only wakes the machine and the container (the halt gate is down first, so no agent
+ * starts); «Start the team» goes back to the setup's start screen. Nothing shows in the usual app.
  */
 export function TeamOffBanner({ locale: localeOverride }: { locale?: Locale }) {
   const teamOff = useTeamOff();

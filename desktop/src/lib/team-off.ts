@@ -9,8 +9,9 @@ import { createContext, useContext } from "react";
 export interface TeamOff {
   teamOff: true;
   /**
-   * Turns the runtime on again (the machine and the container), never the team: no agent starts, nothing of
-   * the provider is spent. Resolves when it is up; rejects with the native error code when it cannot.
+   * Turns the runtime on again (the machine and the container), never the team: the native side puts the halt
+   * gate down before the container boots, so that no agent starts; only the start of the team takes it away.
+   * Resolves when it is up; rejects with the native error code when it cannot.
    */
   wakeRuntime(): Promise<void>;
   /**

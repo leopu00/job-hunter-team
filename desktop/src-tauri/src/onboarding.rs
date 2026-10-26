@@ -4971,8 +4971,9 @@ fn woken_before_resume(
 }
 
 /// Turns the runtime of this computer on again (`jht up`: the Podman machine and the container, then the check
-/// the setup makes), never the team: no agent starts, nothing of the provider is spent. The scope is validated at
-/// every call of the wrapper.
+/// the setup makes). It does not start the team itself, but the container's first process does at every boot unless
+/// the halt gate stands (`keep_team_halted` first, for the wake on its own). The scope is validated at every call
+/// of the wrapper.
 fn wake_local_runtime(
     app: &tauri::AppHandle,
     scope: &AccountScope,
@@ -4988,15 +4989,34 @@ fn wake_local_runtime(
 }
 
 /// The wake on its own (the app open without the team): only this computer's runtime can be turned on from here;
-/// for a VPS or a saved team it is the refusal the resume start gives.
+/// for a VPS or a saved team it is the refusal the resume start gives. The halt gate is put down first and the wake
+/// does not run without it: at every boot the container's first process starts the assistant, the captain, the
+/// mentor and the sentinel unless `.team-halted.flag` stands in the home, and a team that was running before the
+/// runtime went off has no gate.
 fn runtime_wake_for(
     local: bool,
+    keep_halted: impl FnOnce() -> Result<(), OnboardingError>,
     wake: impl FnOnce() -> Result<(), OnboardingError>,
 ) -> Result<(), OnboardingError> {
     if !local {
         return Err(failure("resume_container_not_ready"));
     }
+    keep_halted()?;
     wake()
+}
+
+/// Puts the halt gate in the home of the runtime if it is not there (an existing one is left as it is). Only
+/// `jht team start` takes it away (the resume start of the team does), so the wake leaves the team off.
+fn keep_team_halted(home: &Path) -> Result<(), OnboardingError> {
+    use std::io::Write;
+    let gate = home.join(".team-halted.flag");
+    match std::fs::OpenOptions::new().write(true).create_new(true).open(&gate) {
+        Ok(mut file) => file
+            .write_all(b"halted_by=desktop-open-without-team\n")
+            .map_err(|_| failure("container_start_failed")),
+        Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => Ok(()),
+        Err(_) => Err(failure("container_start_failed")),
+    }
 }
 
 fn resume_team_prerequisite(snapshot: &OnboardingSnapshot) -> Result<(), OnboardingError> {
@@ -5614,7 +5634,8 @@ fn uninstall_local(
 }
 
 /// The app is open without the team and the person asks to turn the runtime on again: the machine and the container,
-/// never the team (no agent starts). One operation at a time, like the setup.
+/// with the halt gate down first so that the container does not start the team on its own. One operation at a
+/// time, like the setup.
 #[tauri::command]
 pub(crate) async fn onboarding_resume_runtime_wake(
     app: tauri::AppHandle,
@@ -5638,9 +5659,16 @@ pub(crate) async fn onboarding_resume_runtime_wake(
         let host = crate::direct_chat::load_persisted_host(&app, &worker_expected).map_err(failure)?;
         let validated = validate_host(&app, &host).map_err(failure)?;
         let runtime_log = RuntimeLog::new(&app);
-        runtime_wake_for(matches!(validated, ValidatedHost::Local), || {
-            wake_local_runtime(&app, &worker_expected, runtime_log.as_ref())
-        })
+        runtime_wake_for(
+            matches!(validated, ValidatedHost::Local),
+            || {
+                crate::account_scope::validate_local_runtime(&app, &worker_expected).map_err(failure)?;
+                let marker = crate::account_scope::local_owner_marker_path(&app).map_err(failure)?;
+                let home = marker.parent().ok_or_else(|| failure("container_start_failed"))?;
+                keep_team_halted(home)
+            },
+            || wake_local_runtime(&app, &worker_expected, runtime_log.as_ref()),
+        )
     })
     .await
     .unwrap_or_else(|_| Err(failure("container_start_failed")));
@@ -8023,13 +8051,44 @@ exit 0
     fn the_runtime_wake_runs_only_for_this_computer() {
         use std::cell::Cell;
         let ran = Cell::new(0);
-        runtime_wake_for(true, || { ran.set(ran.get() + 1); Ok(()) }).unwrap();
-        assert_eq!(ran.get(), 1);
-        let error = runtime_wake_for(true, || Err(failure("container_not_ready"))).unwrap_err();
+        let gated = Cell::new(0);
+        let gate = || { gated.set(gated.get() + 1); Ok(()) };
+        runtime_wake_for(true, gate, || { ran.set(ran.get() + 1); Ok(()) }).unwrap();
+        assert_eq!((ran.get(), gated.get()), (1, 1));
+        let error = runtime_wake_for(true, gate, || Err(failure("container_not_ready"))).unwrap_err();
         assert_eq!(error.code, "container_not_ready");
-        let refused = runtime_wake_for(false, || { ran.set(ran.get() + 1); Ok(()) }).unwrap_err();
+        let refused = runtime_wake_for(false, gate, || { ran.set(ran.get() + 1); Ok(()) }).unwrap_err();
         assert_eq!(refused.code, "resume_container_not_ready");
-        assert_eq!(ran.get(), 1, "a VPS is never woken from here");
+        assert_eq!((ran.get(), gated.get()), (1, 2), "a VPS is never woken nor gated from here");
+    }
+
+    /// The container's first process starts four agents at every boot unless the halt gate stands: the gate is
+    /// down BEFORE the wake runs (the wake reads it, as the boot does), and a gate that cannot be put down
+    /// stops the wake.
+    #[test]
+    fn the_wake_puts_the_halt_gate_down_before_it_runs_and_not_without_it() {
+        let home = std::env::temp_dir().join(format!("jht-wake-gate-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&home);
+        std::fs::create_dir_all(&home).unwrap();
+        let gate = home.join(".team-halted.flag");
+        let at_boot = std::cell::Cell::new(None);
+        runtime_wake_for(true, || keep_team_halted(&home), || {
+            at_boot.set(Some(gate.exists()));
+            Ok(())
+        })
+        .unwrap();
+        assert_eq!(at_boot.get(), Some(true), "no gate at the boot = the four agents start");
+        // an existing gate is left as it is
+        std::fs::write(&gate, "halted_by=stop\n").unwrap();
+        keep_team_halted(&home).unwrap();
+        assert_eq!(std::fs::read_to_string(&gate).unwrap(), "halted_by=stop\n");
+        // a gate that cannot be written: the wake does not run
+        let missing = home.join("no-such-home");
+        let ran = std::cell::Cell::new(false);
+        let error = runtime_wake_for(true, || keep_team_halted(&missing), || { ran.set(true); Ok(()) }).unwrap_err();
+        assert_eq!(error.code, "container_start_failed");
+        assert!(!ran.get());
+        let _ = std::fs::remove_dir_all(&home);
     }
 
     #[test]
