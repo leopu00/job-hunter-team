@@ -103,11 +103,13 @@ def cli_copy(tmp_path_factory):
 def run_start(cli_copy, tmp_path, pct, agent="scout:1", container=True, sessions=""):
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir(exist_ok=True)
-    for name, body in (("docker", FAKE_DOCKER), ("tmux", FAKE_TMUX), ("claude", "#!/bin/sh\nexit 0\n")):
+    for name, body in (("docker", FAKE_DOCKER), ("tmux", FAKE_TMUX), ("codex", "#!/bin/sh\nexit 0\n")):
         (bin_dir / name).write_text(body, encoding="utf-8")
         (bin_dir / name).chmod(0o755)
     home, engine = tmp_path / "home", tmp_path / "engine"
     home.mkdir(exist_ok=True)
+    # a host start needs the CLI of the provider the team chose: there is no default one
+    (home / "jht.config.json").write_text('{"active_provider": "openai"}', encoding="utf-8")
     engine.mkdir(exist_ok=True)
     log = tmp_path / "calls.log"
     env = {

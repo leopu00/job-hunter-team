@@ -31,6 +31,8 @@ function sandbox() {
   mkdirSync(bin, { recursive: true });
   mkdirSync(home, { recursive: true });
   mkdirSync(state, { recursive: true });
+  // a host start needs the CLI of the provider the team chose: there is no default one
+  writeFileSync(path.join(home, "jht.config.json"), '{"active_provider":"openai"}', "utf-8");
   writeExecutable(
     path.join(bin, "docker"),
     String.raw`
@@ -102,7 +104,7 @@ if (args[0] === "list-sessions") {
 process.exit(0);
 `,
   );
-  writeExecutable(path.join(bin, "claude"), "process.exit(0);");
+  writeExecutable(path.join(bin, "codex"), "process.exit(0);");
   return {
     nodeOptions: fakeDiskNodeOptions(root),
     root,
