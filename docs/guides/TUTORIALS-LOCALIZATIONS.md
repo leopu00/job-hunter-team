@@ -26,9 +26,9 @@ mentre lavora.
 
 1. **Scarica l'app desktop nativa.** Vai su
    [jobhunterteam.ai/download](https://jobhunterteam.ai/download). **Desktop**
-   è già selezionato: clicca una volta macOS o Linux (Windows è indicato «in arrivo») per avviare il
+   è già selezionato: clicca una volta macOS o Linux (Windows è indicato «Non in questa versione») per avviare il
    download della release corrente per quella piattaforma.
-2. **Apri il download per il tuo sistema.** Windows non fa parte della 0.4.0: non c'è ancora un installer (in arrivo).
+2. **Apri il download per il tuo sistema.** Windows non fa parte della 0.4.0: non c'è un installer in questa release.
    Su macOS apri `job-hunter-team-macos-universal.dmg` e trascina l'app in
    Applicazioni; è firmata con un Developer ID Apple e notarizzata da Apple. Solo Mac con Apple silicon (M1 e successivi). I Mac Intel non sono supportati nella 0.4. Il nome del file dice «universal», ma nella 0.4 contiene solo la build per Apple silicon.
    Su
@@ -43,21 +43,21 @@ mentre lavora.
    seleziona **Continua in locale**. Per preparare un nuovo team su una VPS
    serve l'accesso con Google.
 4. **Scegli l'ambiente.** Seleziona **Inizia la configurazione**, poi **Questo
-   computer** o **Server VPS**. Su Windows 0.4 il team gira su questo computer
-   in Podman dentro WSL, installato dall'app: WSL deve essere già attivo e
-   Docker Desktop non serve. Su macOS l'app installa Podman con Homebrew, che
-   deve essere già installato; se manca, l'app lo dice prima di installare
-   qualsiasi cosa. Su Linux l'app usa Docker: installa Docker Engine e il suo
-   plugin Compose prima di iniziare, perché per installarli servono i permessi
-   di amministratore. La release per Linux è costruita, ma questo setup non è
-   ancora stato collaudato. Per una VPS inserisci indirizzo, utente SSH, porta
+   computer** o **Server VPS**. Su un Mac l'app installa Podman con Homebrew,
+   che deve essere già installato (richiede macOS 15 o successivo); se manca,
+   l'app lo dice prima di installare qualsiasi cosa. Crea una macchina Podman
+   con 2 CPU, 4 GiB di memoria e un disco fino a 30 GiB, quindi si consiglia
+   un Mac con almeno 16 GB di RAM. Su Linux l'app usa Podman rootless (5.0 o
+   successivo) con podman-compose, installati con `sudo` per il tuo utente:
+   sudo deve funzionare senza chiedere la password. La release per Linux è
+   sperimentale e questo setup non è stato provato a mano.
+   Per una VPS inserisci indirizzo, utente SSH, porta
    e file della chiave privata, che resta su questo computer.
 5. **Scegli il provider.** Seleziona Codex, poi
    **Rivedi il setup**. Accedi con il tuo abbonamento più avanti nel setup: non
    serve una chiave API.
 6. **Conferma e prepara la squadra.** L'ultima schermata riassume ambiente e
-   provider. Quando il team gira su questo computer con Windows, elenca anche
-   cosa installa l'app e come rimuoverlo in seguito. Seleziona **Prepara la
+   provider. Seleziona **Prepara la
    squadra** e tieni l'app aperta mentre prepara runtime, container e strumento
    del provider. Per una VPS l'app mostra prima l'impronta SSH del server:
    confermala solo se è uguale a quella mostrata dal tuo provider VPS.
@@ -212,9 +212,9 @@ trabaja.
 
 1. **Descarga la aplicación de escritorio nativa.** Ve a
    [jobhunterteam.ai/download](https://jobhunterteam.ai/download). **Desktop**
-   ya está seleccionado: haz clic una vez en macOS o Linux (Windows aparece como «próximamente») para iniciar
+   ya está seleccionado: haz clic una vez en macOS o Linux (Windows aparece como «No en esta versión») para iniciar
    la descarga de la versión actual para esa plataforma.
-2. **Abre la descarga para tu sistema.** Windows no forma parte de la 0.4.0: aún no hay instalador (próximamente). En macOS abre `job-hunter-team-macos-universal.dmg` y arrastra la
+2. **Abre la descarga para tu sistema.** Windows no forma parte de la 0.4.0: esta versión no incluye instalador. En macOS abre `job-hunter-team-macos-universal.dmg` y arrastra la
    aplicación a Aplicaciones; está firmada con un Developer ID de Apple y
    notarizada por Apple. Solo Mac con Apple silicon (M1 y posteriores). Los Mac con procesador Intel no son compatibles con la 0.4. El nombre del archivo dice «universal», pero en la 0.4 contiene solo la versión para Apple silicon.
    En Linux permite que
@@ -228,23 +228,22 @@ trabaja.
    selecciona **Continuar en local**. Para preparar un equipo nuevo en un VPS
    hace falta iniciar sesión con Google.
 4. **Elige el entorno.** Selecciona **Empezar la configuración** y luego **Este
-   ordenador** o **Servidor VPS**. En Windows 0.4 el equipo se ejecuta en este
-   ordenador en Podman dentro de WSL, instalado por la aplicación: WSL ya debe
-   estar activado y Docker Desktop no hace falta. En macOS la aplicación
-   instala Podman con Homebrew, que ya debe estar instalado; si falta, la
-   aplicación lo dice antes de instalar nada. En Linux la aplicación usa
-   Docker: instala Docker Engine y su plugin Compose antes de empezar, porque
-   instalarlos requiere permisos de administrador. La versión para Linux está
-   compilada, pero esta configuración todavía no se ha probado. Para un VPS,
+   ordenador** o **Servidor VPS**. En un Mac, la aplicación instala Podman con
+   Homebrew, que ya debe estar instalado (requiere macOS 15 o posterior); si
+   falta, la aplicación lo dice antes de instalar nada. Crea una máquina
+   Podman con 2 CPU, 4 GiB de memoria y un disco de hasta 30 GiB, por lo que
+   se recomienda un Mac con al menos 16 GB de RAM. En Linux la aplicación usa
+   Podman sin root (5.0 o posterior) con podman-compose, instalados con `sudo`
+   para tu usuario: sudo debe funcionar sin pedir contraseña. La versión para
+   Linux es experimental y esta configuración no se ha probado a mano.
+   Para un VPS,
    introduce su dirección, el usuario SSH, el puerto y el archivo de la clave
    privada, que se queda en este ordenador.
 5. **Elige el proveedor.** Selecciona Codex y
    luego **Revisar la configuración**. Inicias sesión con tu suscripción más
    adelante en la configuración: no hace falta una clave API.
 6. **Confirma y prepara el equipo.** La última pantalla resume el entorno y el
-   proveedor. Cuando el equipo se ejecuta en este ordenador con Windows,
-   también enumera lo que instala la aplicación y cómo quitarlo después.
-   Selecciona **Preparar el equipo** y mantén la aplicación abierta mientras
+   proveedor. Selecciona **Preparar el equipo** y mantén la aplicación abierta mientras
    prepara el runtime, el contenedor y la herramienta del proveedor. Para un
    VPS, la aplicación muestra primero la huella SSH del servidor: confírmala
    solo si coincide con la que muestra tu proveedor de VPS.
@@ -405,9 +404,9 @@ ordinateur. Gardez l'application ouverte pendant qu'elle travaille.
 
 1. **Téléchargez l'application de bureau native.** Allez sur
    [jobhunterteam.ai/download](https://jobhunterteam.ai/download). **Desktop**
-   est déjà sélectionné : cliquez une fois sur macOS ou Linux (Windows est indiqué « bientôt disponible ») pour
+   est déjà sélectionné : cliquez une fois sur macOS ou Linux (Windows est indiqué « Pas dans cette version ») pour
    lancer le téléchargement de la version actuelle pour cette plateforme.
-2. **Ouvrez le téléchargement pour votre système.** Windows ne fait pas partie de la 0.4.0 : il n'y a pas encore d'installeur (bientôt disponible). Sous macOS, ouvrez `job-hunter-team-macos-universal.dmg`
+2. **Ouvrez le téléchargement pour votre système.** Windows ne fait pas partie de la 0.4.0 : cette version ne contient pas d'installeur. Sous macOS, ouvrez `job-hunter-team-macos-universal.dmg`
    et faites glisser l'application dans Applications ; elle est signée avec un
    Developer ID Apple et notarisée par Apple. Uniquement les Mac avec Apple silicon (M1 et suivants). Les Mac Intel ne sont pas pris en charge dans la 0.4. Le nom du fichier dit « universal », mais dans la 0.4 il ne contient que la version pour Apple silicon.
    Sous Linux, autorisez
@@ -423,15 +422,17 @@ ordinateur. Gardez l'application ouverte pendant qu'elle travaille.
    préparer une nouvelle équipe sur un VPS, la connexion avec Google est
    nécessaire.
 4. **Choisissez l'environnement.** Sélectionnez **Commencer la configuration**,
-   puis **Cet ordinateur** ou **Serveur VPS**. Sous Windows 0.4, l'équipe
-   tourne sur cet ordinateur dans Podman dans WSL, installé par l'application :
-   WSL doit déjà être activé et Docker Desktop n'est pas nécessaire. Sous
-   macOS, l'application installe Podman avec Homebrew, qui doit déjà être
-   installé ; s'il manque, l'application le dit avant d'installer quoi que ce
-   soit. Sous Linux, l'application utilise Docker : installez Docker Engine et
-   son plugin Compose avant de commencer, car leur installation demande des
-   droits d'administrateur. La version Linux est construite, mais cette
-   configuration n'a pas encore été testée. Pour un VPS, saisissez son adresse,
+   puis **Cet ordinateur** ou **Serveur VPS**. Sur un Mac, l'application
+   installe Podman avec Homebrew, qui doit déjà être installé (il demande
+   macOS 15 ou plus récent) ; s'il manque, l'application le dit avant
+   d'installer quoi que ce soit. Elle crée une machine Podman avec 2 CPU, 4
+   GiB de mémoire et un disque allant jusqu'à 30 GiB : un Mac avec au moins 16
+   Go de RAM est recommandé. Sous Linux, l'application utilise Podman sans
+   root (5.0 ou plus récent) avec podman-compose, installés avec `sudo` pour
+   votre utilisateur : sudo doit fonctionner sans demander de mot de passe. La
+   version Linux est expérimentale et cette configuration n'a pas été testée à
+   la main.
+   Pour un VPS, saisissez son adresse,
    l'utilisateur SSH, le port et le fichier de la clé privée, qui reste sur cet
    ordinateur.
 5. **Choisissez le fournisseur.** Sélectionnez Codex,
@@ -439,9 +440,7 @@ ordinateur. Gardez l'application ouverte pendant qu'elle travaille.
    abonnement plus tard dans la configuration : aucune clé API n'est
    nécessaire.
 6. **Confirmez et préparez l'équipe.** Le dernier écran résume l'environnement
-   et le fournisseur. Quand l'équipe tourne sur cet ordinateur sous Windows, il
-   liste aussi ce que l'application installe et comment le supprimer plus tard.
-   Sélectionnez **Préparer l’équipe** et gardez l'application ouverte pendant
+   et le fournisseur. Sélectionnez **Préparer l’équipe** et gardez l'application ouverte pendant
    qu'elle prépare le runtime, le conteneur et l'outil du fournisseur. Pour un
    VPS, l'application affiche d'abord l'empreinte SSH du serveur : confirmez-la
    seulement si elle est identique à celle qu'affiche votre fournisseur de VPS.
@@ -606,9 +605,9 @@ geöffnet, während sie arbeitet.
 
 1. **Lade die native Desktop-App herunter.** Gehe zu
    [jobhunterteam.ai/download](https://jobhunterteam.ai/download). **Desktop**
-   ist bereits ausgewählt: Klicke einmal auf macOS oder Linux (Windows steht als „Demnächst“ da), um den
+   ist bereits ausgewählt: Klicke einmal auf macOS oder Linux (Windows steht als „Nicht in dieser Version“ da), um den
    Download der aktuellen Version für diese Plattform zu starten.
-2. **Öffne den Download für dein System.** Windows ist nicht Teil von 0.4.0: Es gibt noch keinen Installer (demnächst). Öffne unter macOS `job-hunter-team-macos-universal.dmg` und ziehe
+2. **Öffne den Download für dein System.** Windows ist nicht Teil von 0.4.0: Dieses Release enthält keinen Installer. Öffne unter macOS `job-hunter-team-macos-universal.dmg` und ziehe
    die App in den Ordner Programme; sie ist mit einer Apple Developer ID
    signiert und von Apple notarisiert. Nur Macs mit Apple Silicon (M1 und neuer). Intel-Macs werden in 0.4 nicht unterstützt. Der Dateiname sagt „universal“, enthält in 0.4 aber nur die Version für Apple Silicon.
    Erlaube unter Linux
@@ -623,23 +622,23 @@ geöffnet, während sie arbeitet.
    diesem Gerät bleibt, und wähle **Lokal fortfahren**. Um ein neues Team auf
    einem VPS einzurichten, brauchst du die Anmeldung mit Google.
 4. **Wähle die Umgebung.** Wähle **Einrichtung starten**, dann **Dieser
-   Computer** oder **VPS-Server**. Unter Windows 0.4 läuft das Team auf diesem
-   Computer in Podman in WSL, das die App installiert: WSL muss bereits
-   aktiviert sein, Docker Desktop wird nicht gebraucht. Unter macOS installiert
-   die App Podman mit Homebrew, das bereits installiert sein muss; fehlt es,
-   sagt die App das, bevor sie etwas installiert. Unter Linux verwendet die App
-   Docker: Installiere Docker Engine und sein Compose-Plugin vor dem Start,
-   denn dafür sind Administratorrechte nötig. Die Linux-Version ist gebaut,
-   aber diese Einrichtung wurde noch nicht getestet. Für einen VPS gibst du
+   Computer** oder **VPS-Server**. Auf einem Mac installiert die App Podman
+   mit Homebrew, das bereits installiert sein muss (es braucht macOS 15 oder
+   neuer); fehlt es, sagt die App das, bevor sie etwas installiert. Sie legt
+   eine Podman-Maschine mit 2 CPUs, 4 GiB Arbeitsspeicher und einer Festplatte
+   bis 30 GiB an, deshalb wird ein Mac mit mindestens 16 GB RAM empfohlen.
+   Unter Linux verwendet die App Podman ohne Root (ab 5.0) mit podman-compose,
+   für deinen Benutzer mit `sudo` installiert: sudo muss ohne Passwortabfrage
+   funktionieren. Die Linux-Version ist experimentell, und diese Einrichtung
+   wurde nicht von Hand getestet.
+   Für einen VPS gibst du
    seine Adresse, den SSH-Benutzer, den Port und die Datei des privaten
    Schlüssels ein, der auf diesem Computer bleibt.
 5. **Wähle den Anbieter.** Wähle Codex, dann
    **Einrichtung prüfen**. Du meldest dich später in der Einrichtung mit deinem
    Abo an: Ein API-Schlüssel ist nicht nötig.
 6. **Bestätige und bereite das Team vor.** Der letzte Bildschirm fasst Umgebung
-   und Anbieter zusammen. Wenn das Team unter Windows auf diesem Computer
-   läuft, listet er auch auf, was die App installiert und wie du es später
-   entfernst. Wähle **Team vorbereiten** und lass die App geöffnet, während sie
+   und Anbieter zusammen. Wähle **Team vorbereiten** und lass die App geöffnet, während sie
    Runtime, Container und das Werkzeug des Anbieters vorbereitet. Bei einem VPS
    zeigt die App zuerst den SSH-Fingerabdruck des Servers: Bestätige ihn nur,
    wenn er mit dem übereinstimmt, den dein VPS-Anbieter anzeigt.
@@ -806,9 +805,9 @@ trabalha.
 
 1. **Descarrega a aplicação de ambiente de trabalho nativa.** Vai a
    [jobhunterteam.ai/download](https://jobhunterteam.ai/download). **Desktop**
-   já está selecionado: clica uma vez em macOS ou Linux (o Windows aparece como «em breve») para iniciar
+   já está selecionado: clica uma vez em macOS ou Linux (o Windows aparece como «Não nesta versão») para iniciar
    a transferência da versão atual para essa plataforma.
-2. **Abre o download para o teu sistema.** O Windows não faz parte da 0.4.0: ainda não há instalador (em breve). No macOS abre `job-hunter-team-macos-universal.dmg` e arrasta a
+2. **Abre o download para o teu sistema.** O Windows não faz parte da 0.4.0: esta versão não inclui instalador. No macOS abre `job-hunter-team-macos-universal.dmg` e arrasta a
    aplicação para Aplicações; está assinada com um Developer ID da Apple e
    notarizada pela Apple. Apenas Macs com Apple silicon (M1 e posteriores). Os Macs com processador Intel não são suportados na 0.4. O nome do ficheiro diz «universal», mas na 0.4 contém apenas a versão para Apple silicon.
    No Linux permite que
@@ -822,22 +821,23 @@ trabalha.
    dispositivo, e seleciona **Continuar localmente**. Para preparar uma equipa
    nova numa VPS é preciso iniciar sessão com Google.
 4. **Escolhe o ambiente.** Seleciona **Começar a configuração** e depois **Este
-   computador** ou **Servidor VPS**. No Windows 0.4 a equipa corre neste
-   computador em Podman dentro do WSL, instalado pela aplicação: o WSL já tem
-   de estar ativado e o Docker Desktop não é necessário. No macOS a aplicação
-   instala o Podman com o Homebrew, que já tem de estar instalado; se faltar, a
-   aplicação diz isso antes de instalar o que quer que seja. No Linux a
-   aplicação usa o Docker: instala o Docker Engine e o seu plugin Compose antes
-   de começar, porque instalá-los exige permissões de administrador. A versão
-   para Linux está compilada, mas esta configuração ainda não foi testada. Para
+   computador** ou **Servidor VPS**. Num Mac, a aplicação instala o Podman com
+   o Homebrew, que já tem de estar instalado (exige macOS 15 ou posterior); se
+   faltar, a aplicação diz isso antes de instalar o que quer que seja. Cria
+   uma máquina Podman com 2 CPU, 4 GiB de memória e um disco até 30 GiB, por
+   isso recomenda-se um Mac com pelo menos 16 GB de RAM. No Linux a aplicação
+   usa o Podman sem root (5.0 ou posterior) com podman-compose, instalados com
+   `sudo` para o teu utilizador: o sudo tem de funcionar sem pedir
+   palavra-passe. A versão para Linux é experimental e esta configuração não
+   foi testada à mão.
+   Para
    uma VPS, introduz o endereço, o utilizador SSH, a porta e o ficheiro da
    chave privada, que fica neste computador.
 5. **Escolhe o fornecedor.** Seleciona Codex e
    depois **Rever a configuração**. Inicias sessão com a tua subscrição mais à
    frente na configuração: não é precisa uma chave API.
 6. **Confirma e prepara a equipa.** O último ecrã resume o ambiente e o
-   fornecedor. Quando a equipa corre neste computador com Windows, também
-   enumera o que a aplicação instala e como o remover mais tarde. Seleciona
+   fornecedor. Seleciona
    **Preparar a equipa** e mantém a aplicação aberta enquanto prepara o
    runtime, o contentor e a ferramenta do fornecedor. Para uma VPS, a aplicação
    mostra primeiro a impressão digital SSH do servidor: confirma-a só se for
@@ -998,8 +998,8 @@ számítógépedtől függ. Hagyd nyitva az alkalmazást, amíg dolgozik.
 
 1. **Töltsd le a natív asztali alkalmazást.** Nyisd meg a
    [jobhunterteam.ai/download](https://jobhunterteam.ai/download) oldalt. A
-   **Desktop** már ki van jelölve: kattints egyszer a macOS vagy Linux lehetőségre (a Windows „hamarosan” jelzéssel szerepel) az adott platform aktuális kiadásának letöltéséhez.
-2. **Nyisd meg a rendszeredhez való letöltést.** A Windows nem része a 0.4.0-nak: még nincs telepítő (hamarosan). macOS-en nyisd meg a `job-hunter-team-macos-universal.dmg`
+   **Desktop** már ki van jelölve: kattints egyszer a macOS vagy Linux lehetőségre (a Windows „Nem ebben a verzióban” jelzéssel szerepel) az adott platform aktuális kiadásának letöltéséhez.
+2. **Nyisd meg a rendszeredhez való letöltést.** A Windows nem része a 0.4.0-nak: ebben a kiadásban nincs telepítő. macOS-en nyisd meg a `job-hunter-team-macos-universal.dmg`
    fájlt, és húzd az alkalmazást az Alkalmazások mappába; Apple Developer
    ID-val van aláírva, és az Apple hitelesítette. Csak Apple silicon-os Mac-ekhez (M1 és újabb). Az Intel-es Mac-ek a 0.4-ben nem támogatottak. A fájlnév „universal”, de a 0.4-ben csak az Apple silicon-os verziót tartalmazza.
    Linuxon engedélyezd, hogy a
@@ -1015,24 +1015,24 @@ számítógépedtől függ. Hagyd nyitva az alkalmazást, amíg dolgozik.
    majd válaszd a **Folytatás helyben** gombot. Új csapat VPS-en való
    beállításához Google-bejelentkezés kell.
 4. **Válaszd ki a környezetet.** Válaszd **A beállítás indítása** gombot, majd
-   az **Ez a számítógép** vagy a **VPS-szerver** lehetőséget. Windows 0.4 alatt
-   a csapat ezen a számítógépen fut, a WSL-en belül futó Podman alatt, amelyet
-   az alkalmazás telepít: a WSL-nek már engedélyezve kell lennie, a Docker
-   Desktopra nincs szükség. macOS-en az alkalmazás a Homebrew segítségével
-   telepíti a Podmant; a Homebrew-nak már telepítve kell lennie, és ha
-   hiányzik, az alkalmazás ezt még a telepítés előtt jelzi. Linuxon az
-   alkalmazás Dockert használ: kezdés előtt telepítsd a Docker Engine-t és a
-   Compose bővítményét, mert a telepítésükhöz rendszergazdai jogok kellenek. A
-   linuxos kiadás elkészült, de ezt a beállítást még nem tesztelték. VPS esetén
+   az **Ez a számítógép** vagy a **VPS-szerver** lehetőséget. Macen az
+   alkalmazás a Homebrew segítségével telepíti a Podmant; a Homebrew-nak már
+   telepítve kell lennie (macOS 15-öt vagy újabbat igényel), és ha hiányzik,
+   az alkalmazás ezt még a telepítés előtt jelzi. Létrehoz egy Podman-gépet 2
+   CPU-val, 4 GiB memóriával és legfeljebb 30 GiB-ra növekvő lemezzel, ezért
+   legalább 16 GB RAM-mal rendelkező Mac ajánlott. Linuxon az alkalmazás root
+   nélküli Podmant (5.0 vagy újabb) használ podman-compose-szal, amelyeket a
+   felhasználódnak `sudo`-val telepít: a sudónak jelszókérés nélkül kell
+   működnie. A linuxos kiadás kísérleti, és ezt a beállítást nem tesztelték
+   kézzel.
+   VPS esetén
    add meg a címét, az SSH-felhasználót, a portot és a privát kulcs fájlját,
    amely ezen a számítógépen marad.
 5. **Válaszd ki a szolgáltatót.** Válaszd a Codexet,
    majd **A beállítás áttekintése** gombot. Az előfizetéseddel a
    beállítás egy későbbi lépésében jelentkezel be: API-kulcsra nincs szükség.
 6. **Erősítsd meg, és készítsd elő a csapatot.** Az utolsó képernyő
-   összefoglalja a környezetet és a szolgáltatót. Ha a csapat Windowson ezen a
-   számítógépen fut, azt is felsorolja, mit telepít az alkalmazás, és hogyan
-   távolíthatod el később. Válaszd **A csapat előkészítése** gombot, és hagyd
+   összefoglalja a környezetet és a szolgáltatót. Válaszd **A csapat előkészítése** gombot, és hagyd
    nyitva az alkalmazást, amíg előkészíti a futtatókörnyezetet, a konténert és
    a szolgáltató eszközét. VPS esetén az alkalmazás először a szerver
    SSH-ujjlenyomatát mutatja: csak akkor erősítsd meg, ha megegyezik azzal,

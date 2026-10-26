@@ -13,8 +13,7 @@
 // Ogni schermata sta qui UNA volta, con la sua alt text e la sua didascalia.
 // Le fasi la richiamano per id: la stessa schermata può quindi comparire in
 // due fasi diverse — richiesta esplicita — senza duplicare né il file né la
-// traduzione. `S02-docker-download` compare tre volte (una per sistema),
-// `S06-choose-language` due.
+// traduzione. `S06-choose-language` compare due volte.
 //
 // Le schermate non ancora riprese esistono comunque come voce, con `assets`
 // vuoto e `pending` che dice cosa devono mostrare. `pending` non raggiunge mai
@@ -56,13 +55,13 @@ const SCREEN_LIST: GuideScreen[] = [
   {
     id: "S01-prerequisites",
     alt: {
-      en: "The requirement card: Docker, memory, internet and provider subscription.",
-      it: "La scheda dei requisiti: Docker, memoria, internet e abbonamento al provider.",
-      es: "La tarjeta de requisitos: Docker, memoria, internet y suscripción al proveedor.",
-      fr: "La fiche des prérequis : Docker, mémoire, internet et abonnement au fournisseur.",
-      de: "Die Voraussetzungskarte: Docker, Arbeitsspeicher, Internet und Anbieter-Abo.",
-      pt: "O cartão de requisitos: Docker, memória, internet e subscrição do provedor.",
-      hu: "A követelménykártya: Docker, memória, internet és szolgáltatói előfizetés.",
+      en: "The requirement card: container engine, memory, disk, internet and provider subscription.",
+      it: "La scheda dei requisiti: motore dei container, memoria, disco, internet e abbonamento al provider.",
+      es: "La tarjeta de requisitos: motor de contenedores, memoria, disco, internet y suscripción al proveedor.",
+      fr: "La fiche des prérequis : moteur de conteneurs, mémoire, disque, internet et abonnement au fournisseur.",
+      de: "Die Voraussetzungskarte: Container-Engine, Arbeitsspeicher, Festplatte, Internet und Anbieter-Abo.",
+      pt: "O cartão de requisitos: motor de contentores, memória, disco, internet e subscrição do provedor.",
+      hu: "A követelménykártya: konténermotor, memória, lemez, internet és szolgáltatói előfizetés.",
     },
     caption: {
       en: "Measured figures only: where nothing was measured, nothing is claimed.",
@@ -76,37 +75,6 @@ const SCREEN_LIST: GuideScreen[] = [
     assets: {},
     nativeSurface:
       "Superficie nativa: la scheda è `RequirementsCard`, costruita nella pagina. Il team docs ha cancellato la richiesta PNG il 7 agosto 2026 — resta la fase, non l'immagine. Nessuna ripresa da fare per E2E.",
-  },
-  {
-    id: "S02-docker-download",
-    alt: {
-      en: "The official Docker installation page for this system.",
-      it: "La pagina ufficiale di installazione di Docker per questo sistema.",
-      es: "La página oficial de instalación de Docker para este sistema.",
-      fr: "La page officielle d'installation de Docker pour ce système.",
-      de: "Die offizielle Docker-Installationsseite für dieses System.",
-      pt: "A página oficial de instalação do Docker para este sistema.",
-      hu: "A Docker hivatalos telepítési oldala ehhez a rendszerhez.",
-    },
-    caption: {
-      en: "Docker Desktop on macOS, Docker Engine on Linux.",
-      it: "Docker Desktop su macOS, Docker Engine su Linux.",
-      es: "Docker Desktop en macOS, Docker Engine en Linux.",
-      fr: "Docker Desktop sur macOS, Docker Engine sur Linux.",
-      de: "Docker Desktop unter macOS, Docker Engine unter Linux.",
-      pt: "Docker Desktop no macOS, Docker Engine no Linux.",
-      hu: "Docker Desktop macOS-en, Docker Engine Linuxon.",
-    },
-    assets: {
-      linux: {
-        src: "/setup-guide/S02-docker-missing-linux.png",
-        width: 1920,
-        height: 1080,
-      },
-      // Niente variante Windows: lì il team gira in Podman dentro WSL, che
-      // l'app installa da sé, e la fase Windows non mostra questa pagina.
-    },
-    pending: "Su Linux consegnata. macOS: tolta con il passo «Docker Desktop», perché la 0.4 usa Podman. Windows: non serve (WSL e Podman).",
   },
   {
     id: "S03-artifact-download",
@@ -305,13 +273,13 @@ const SCREEN_LIST: GuideScreen[] = [
   {
     id: "S09-start-container",
     alt: {
-      en: "The container starting: Docker check, image download, container up.",
-      it: "L'avvio del container: controllo Docker, scaricamento immagine, container attivo.",
-      es: "El arranque del contenedor: comprobación de Docker, descarga de imagen, contenedor activo.",
-      fr: "Le démarrage du conteneur : vérification Docker, téléchargement de l'image, conteneur actif.",
-      de: "Der Container-Start: Docker-Prüfung, Image-Download, Container läuft.",
-      pt: "O arranque do contentor: verificação do Docker, transferência da imagem, contentor ativo.",
-      hu: "A konténer indulása: Docker-ellenőrzés, képfájl letöltése, futó konténer.",
+      en: "The container starting: Podman setup, image download, container up.",
+      it: "L'avvio del container: installazione di Podman, scaricamento immagine, container attivo.",
+      es: "El arranque del contenedor: instalación de Podman, descarga de imagen, contenedor activo.",
+      fr: "Le démarrage du conteneur : installation de Podman, téléchargement de l'image, conteneur actif.",
+      de: "Der Container-Start: Podman-Einrichtung, Image-Download, Container läuft.",
+      pt: "O arranque do contentor: instalação do Podman, transferência da imagem, contentor ativo.",
+      hu: "A konténer indulása: a Podman telepítése, képfájl letöltése, futó konténer.",
     },
     caption: {
       en: "The first image download takes as long as your machine and connection need.",

@@ -4,7 +4,7 @@ This document describes the current CLI installer. It is the reference for
 **Path 2 (CLI installer)** in the [Quickstart](QUICKSTART.md):
 
 ```bash
-curl -fsSL https://jobhunterteam.ai/install.sh | bash
+curl -fsSL https://jobhunterteam.ai/install.sh | bash -s -- --runtime podman
 ```
 
 The visual path is the native Godot office in [`game/`](../../game/). This document remains the reference for CLI installation and recovery.
@@ -20,10 +20,10 @@ For onboarding inside an already-cloned repo, see [legacy `setup.sh` / `setup.ps
 | Served by | Vercel (Next.js project in `web/`) |
 | URL | `https://jobhunterteam.ai/install.sh` |
 | HTTP cache | `public, max-age=300, s-maxage=3600, stale-while-revalidate=86400` |
-| Default mode | Docker (macOS: Colima by default or your Docker Desktop via `--runtime`; native Docker on Linux/WSL2) |
+| Container runtime | Podman with `--runtime podman`: the path of the app and of 0.4, on macOS and on Linux. Without the flag, macOS uses Colima (or your running Docker) and Linux sets up Docker Engine, as earlier versions did |
 | Expert mode | `--no-docker` (clone + build from source) |
-| OS support | macOS · Linux (apt/dnf/pacman) · WSL2 |
-| Windows | Windows is not supported in 0.4: these steps are untested and may not work. Use [`install.ps1`](../../scripts/install.ps1): the team runs in Podman inside WSL; Docker Desktop is not needed, WSL must be enabled |
+| OS support | macOS (Apple silicon in the 0.4 app) · Linux (apt/dnf/pacman), experimental |
+| Windows | Windows is not in this version |
 
 ---
 
@@ -68,7 +68,7 @@ curl -fsSL https://jobhunterteam.ai/install.sh | head -5
 ## 🛠️ What `scripts/install.sh` does
 
 The script is `set -euo pipefail`, idempotent, and prints a step counter
-(`[N/TOTAL]`). It branches into two paths depending on `--no-docker`.
+(`[N/TOTAL]`). It branches into two paths depending on `--no-docker`: the container path (the default) and the expert native path.
 
 ### 🚩 Common arguments / env vars
 
@@ -77,7 +77,7 @@ The script is `set -euo pipefail`, idempotent, and prints a step counter
 | `--no-docker` | off | Skip the container, install natively (expert mode) |
 | `--with-docker` | on | Alias kept for retro-compat (Docker is already the default) |
 | `--dry-run` | off | Print every install/download/mutating action without executing any of them |
-| `--runtime <id>` | `colima` | macOS runtime: `colima`, preview `podman`, or the user's `docker-desktop` |
+| `--runtime <id>` | `colima` on macOS, Docker Engine on Linux | `podman` (macOS and Linux: the path of the app and of 0.4), or on macOS `colima` and the user's `docker-desktop` |
 | `--branch <name>` | `master` | Source branch for wrapper and Compose downloads |
 | `-h`, `--help` | — | Print the header banner and exit |
 | `JHT_REPO_URL` | `https://github.com/leopu00/job-hunter-team.git` | Repo cloned in native mode |
@@ -89,7 +89,7 @@ The script is `set -euo pipefail`, idempotent, and prints a step counter
 | `JHT_RAW_BASE` | `https://raw.githubusercontent.com/leopu00/job-hunter-team/$JHT_BRANCH` | Base URL for the runtime file downloads |
 | `JHT_SKIP_ONBOARD` | `0` | Skip the post-install `jht setup` wizard |
 
-### 🐳 Default path — Docker (4 steps)
+### 🐳 Container path (4 steps)
 
 > Since 2026-05-06 the Docker path follows the **host/container split**
 > design — see [`docs/internal/ops/vps.md`](../internal/ops/vps.md).
@@ -97,36 +97,45 @@ The script is `set -euo pipefail`, idempotent, and prints a step counter
 > it dispatches to `docker compose` (lifecycle) or `docker exec` (operativity)
 > against a long-running `jht` container.
 
-1. **Detect system** — `uname -s` → macOS / Linux / WSL (`grep microsoft
-   /proc/version`); on Linux/WSL also picks `apt` / `dnf` / `pacman`.
-2. **Install container runtime** — *detect-first: if a Docker daemon already
-   responds (Docker Desktop, an existing Colima, OrbStack, …) it is reused and
-   nothing is installed.*
-   - macOS: `--runtime=colima` (default) installs Homebrew if missing →
-     `brew install colima docker` → `colima start`. `--runtime=docker-desktop`
-     uses your own Docker Desktop (`open -a Docker`; never silent-installed).
-     `--runtime=podman` is an opt-in preparation path: it installs the Podman
-     CLI and Compose provider, creates/starts the dedicated rootless
-     `jht-podman` machine, and publishes an attested JHT-only `docker` shim in
-     `$JHT_RUNTIME_DIR/bin` rather than the user's global `PATH`.
-     It never stops, deletes, or uninstalls Colima. Colima remains the default
-     until bind mounts, Compose lifecycle, restart and clean-machine behavior
-     pass on both Apple Silicon and Intel Macs (the 0.4 desktop app is Apple silicon
-     only; this gate concerns the terminal installer).
-     This preview uses Homebrew to match the current unattended Colima path;
-     upstream recommends the official Podman installer for stable end-user
-     installation, so the final packaging choice remains a release gate.
-     A later default, `--runtime=colima`, or `--runtime=docker-desktop` run
-     publishes an attested `docker` selection fail-closed. The private JHT
-     Podman adapter and machine marker remain inert; no `docker` file is
-     removed or overwritten.
-     See [ADR-0006](../adr/0006-user-choice-container-runtime-macos.md).
-   - Linux/WSL: `apt-get install docker.io` (or dnf/pacman equivalent),
-     `systemctl enable --now docker` if available, `service docker start`
-     on WSL, and `usermod -aG docker $USER` so subsequent runs don't need
-     sudo.
-3. **Verify the runtime** — `docker info`, or the dedicated Podman connection
-   plus its Compose provider in the opt-in preview. On Linux the Docker path
+1. **Detect system** — `uname -s` → macOS / Linux (a WSL environment is
+   recognized with `grep microsoft /proc/version`, but Windows is not in this
+   version); on Linux also picks `apt` / `dnf` / `pacman`.
+2. **Install container runtime** — with `--runtime podman`, the path of the app
+   and of 0.4:
+   - macOS: **Homebrew must already be installed** (it needs macOS 15 or
+     later); without it the installer stops with `homebrew_missing` before
+     installing anything. It then installs the Podman CLI and the Compose
+     provider with Homebrew, creates/starts the dedicated rootless
+     `jht-podman` machine (2 CPUs, 4 GiB of memory, a disk of up to 30 GiB; a
+     Mac with at least 16 GB of RAM is recommended) and publishes an attested JHT-only `docker` shim in
+     `$JHT_RUNTIME_DIR/bin` rather than the user's global `PATH`. It never
+     stops, deletes, or uninstalls Colima.
+   - Linux: rootless Podman 5.0 or later and podman-compose 1.1 or later, for
+     your user (not root). What is missing (`podman`, `podman-compose`,
+     `uidmap` or its equivalent, the subuid/subgid range and linger) is set up
+     with `sudo -n`: sudo must work without asking for a password, or the
+     installer stops with `podman_sudo_required` and says what an administrator
+     has to do. It never installs Docker on this path.
+
+   A computer that already runs the team on one engine does not switch to the
+   other: an install that names the other engine is refused with
+   `runtime_change_requires_migration`, and nothing is moved or deleted. See
+   [ADR-0006](../adr/0006-user-choice-container-runtime-macos.md).
+
+   Without `--runtime podman` the older behaviour applies. *Detect-first: if a
+   Docker daemon already responds (Docker Desktop, an existing Colima,
+   OrbStack, …) it is reused and nothing is installed.*
+   - macOS: `--runtime=colima` (the default without the flag) installs Homebrew
+     if missing → `brew install colima docker` → `colima start`.
+     `--runtime=docker-desktop` uses your own Docker Desktop (`open -a Docker`;
+     never silent-installed).
+   - Linux: `apt-get install docker.io` (or dnf/pacman equivalent),
+     `systemctl enable --now docker` if available, and `usermod -aG docker
+     $USER` so subsequent runs don't need sudo. This is how a server that runs
+     the team on Docker was installed.
+3. **Verify the runtime** — with Podman, `podman info` on the dedicated
+   connection (the `jht-podman` machine on macOS, the rootless service on
+   Linux) plus its Compose provider; otherwise `docker info`, which on Linux
    falls back to `sudo docker info` if the user is not yet in the `docker`
    group.
 4. **Download runtime files and run host preflight** — `curl -fsSL` of:
@@ -187,7 +196,7 @@ The script is `set -euo pipefail`, idempotent, and prints a step counter
 | `~/Documents/Job Hunter Team/` (host) → `/jht_user` (container) | CVs, generated outputs |
 | `$JHT_BIN_DIR/jht` (default `~/.local/bin/jht`) | The wrapper (Docker) or symlink (native) |
 | `$JHT_RUNTIME_DIR/docker-compose.yml` (default `~/.jht/runtime/`, Docker only) | The compose file the wrapper drives |
-| `$JHT_RUNTIME_DIR/host-setup.sh` (Docker on macOS/Linux/WSL2) | Host-type, locale, timezone and VPS preflight helper |
+| `$JHT_RUNTIME_DIR/host-setup.sh` (container path, macOS and Linux) | Host-type, locale, timezone and VPS preflight helper |
 | `~/.jht/host.env` | Values read by the wrapper and passed into the container |
 | `$JHT_INSTALL_DIR` (default `~/.jht/src`, native only) | The cloned repo |
 
@@ -210,7 +219,7 @@ copy `docs/examples/candidate_profile.yml.example` → `candidate_profile.yml`, 
 `npm install` in `web/`, install the git pre-commit hook, init the
 SQLite DB, and print next steps.
 
-They do **not** install Docker, Node, or any system dependency — they
+They do **not** install a container runtime, Node, or any system dependency — they
 assume the developer already has Python ≥ 3.10, tmux, Node and npm.
 
 If you find yourself reaching for these, you probably want the one-liner
@@ -227,11 +236,12 @@ preview what the installer will do on a new machine, or to sanity-check
 a change to `install.sh` before running it for real.
 
 ```bash
-bash scripts/install.sh --dry-run                 # docker path
+bash scripts/install.sh --runtime podman --dry-run   # container path, Podman (0.4)
+bash scripts/install.sh --dry-run                 # container path, the older Colima / Docker default
 bash scripts/install.sh --no-docker --dry-run     # native path
 ```
 
-Example output (abridged; exact actions depend on the host):
+Example output of the older default on macOS (abridged; exact actions depend on the host, and with `--runtime podman` step 2 prepares Podman and the `jht-podman` machine instead):
 
 ```text
 ╔══════════════════════════════════════════╗
@@ -296,10 +306,7 @@ What `--dry-run` intentionally does **not** do:
   (rewrite to `raw.githubusercontent.com/.../<tag>/scripts/install.sh`,
   or generate `web/public/install.sh` from the latest release at build
   time).
-- **Windows requires WSL** — Windows is not supported in 0.4: these steps are untested and may not work. `install.ps1` installs Podman and the Compose
-  provider through winget and runs the team in a Podman machine inside WSL,
-  but it does not enable WSL or complete a reboot: when WSL is not usable it
-  stops with `wsl_not_ready`.
+- **Windows is not in this version** — there is no Windows installer in this release.
 
 ---
 

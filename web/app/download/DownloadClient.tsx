@@ -41,11 +41,10 @@ function BackLink() {
 // recente da un'allowlist statica e misura solo bucket anonimi aggregati.
 // macOS è firmato Developer ID e notarizzato (dalla 0.3.1), quindi si apre con
 // un doppio clic; Windows e Linux non sono firmati e l'avviso di SmartScreen
-// va detto prima, non lasciato scoprire. Sostituisce il "in arrivo" del
-// 2026-07-03 (docs/internal/2026-07-03-desktop-app-status-and-vision.md).
+// va detto prima, non lasciato scoprire.
 type InstallMode = "terminal" | "desktop" | "prompt";
 
-// Windows has no slug: it is not part of 0.4.0 and the page shows it as "coming soon".
+// Windows has no slug: it is not part of 0.4.0 and the page shows it as "not in this version".
 const DOWNLOAD_SLUG: Partial<Record<PlatformId, DownloadSlug>> = {
   mac: "mac",
   linux: "linux",
@@ -73,7 +72,7 @@ function PlatformIcon({ id }: { id: PlatformId }) {
   return null;
 }
 
-const CLI_SETUP_CMD = `curl -fsSL https://jobhunterteam.ai/install.sh | bash`;
+const CLI_SETUP_CMD = `curl -fsSL https://jobhunterteam.ai/install.sh | bash -s -- --runtime podman`;
 
 // Il prompt da consegnare a un assistente AI. Esisteva fino ad `a494c6259`
 // (3 lug 2026), ritirato allora perché «non ha convinto»; rimesso su richiesta
@@ -92,7 +91,7 @@ const CLI_SETUP_CMD = `curl -fsSL https://jobhunterteam.ai/install.sh | bash`;
 // l'utente si vede rispondere nella sua lingua. Restano invariati, perché non
 // si traducono: URL, nome del prodotto e il comando `curl`.
 const ASSISTANT_PROMPT: Record<Lang, string> = {
-  it: `Vorrei iniziare a usare Job Hunter Team, una squadra open source di agenti AI che cerca lavoro per me. Gira sul mio computer, dentro Docker.
+  it: `Vorrei iniziare a usare Job Hunter Team, una squadra open source di agenti AI che cerca lavoro per me. Gira sul mio computer, dentro un container.
 
 Repository: https://github.com/leopu00/job-hunter-team
 Sito: https://jobhunterteam.ai
@@ -102,10 +101,10 @@ Leggi prima il repository e la guida, poi guidami nell'installazione e nell'avvi
 
 Ci sono due strade supportate, che portano alla stessa squadra: scegli con me quella che mi conviene.
 1. L'app desktop, scaricabile da https://jobhunterteam.ai/download
-2. Il comando unico: curl -fsSL https://jobhunterteam.ai/install.sh | bash
+2. Il comando unico: curl -fsSL https://jobhunterteam.ai/install.sh | bash -s -- --runtime podman
 
-Due cose che dovrai verificare con me strada facendo: che Docker sia disponibile (Docker Desktop oppure Colima su macOS) e quale abbonamento AI dedicare alla squadra — le serve il suo, separato da quello che uso ogni giorno, perché lo consuma per intero. Chiedimi tutto il resto invece di tirare a indovinare.`,
-  en: `I'd like to start using Job Hunter Team, an open-source team of AI agents that searches for jobs on my behalf. It runs on my own machine, in Docker.
+Due cose che dovrai verificare con me strada facendo: che su Mac Homebrew sia già installato (l'app lo usa per installare Podman, il motore dei container) e quale abbonamento AI dedicare alla squadra — le serve il suo, separato da quello che uso ogni giorno, perché lo consuma per intero. Chiedimi tutto il resto invece di tirare a indovinare.`,
+  en: `I'd like to start using Job Hunter Team, an open-source team of AI agents that searches for jobs on my behalf. It runs on my own machine, in a container.
 
 Repository: https://github.com/leopu00/job-hunter-team
 Website: https://jobhunterteam.ai
@@ -115,10 +114,10 @@ Read the repository and the setup guide first, then walk me through installing a
 
 There are two supported ways in, and they lead to the same team — pick with me whichever suits me better:
 1. The desktop app, downloaded from https://jobhunterteam.ai/download
-2. The one-liner: curl -fsSL https://jobhunterteam.ai/install.sh | bash
+2. The one-liner: curl -fsSL https://jobhunterteam.ai/install.sh | bash -s -- --runtime podman
 
-Two things you will need to check with me along the way: that Docker is available (Docker Desktop or Colima on macOS), and which AI provider subscription I want the team to use — it needs one of its own, separate from the one I use day to day, because the team consumes the whole allowance. Ask me whatever else you need instead of guessing.`,
-  es: `Quiero empezar a usar Job Hunter Team, un equipo open source de agentes de IA que busca trabajo por mí. Funciona en mi propio ordenador, dentro de Docker.
+Two things you will need to check with me along the way: that on a Mac Homebrew is already installed (the app uses it to install Podman, the container engine), and which AI provider subscription I want the team to use — it needs one of its own, separate from the one I use day to day, because the team consumes the whole allowance. Ask me whatever else you need instead of guessing.`,
+  es: `Quiero empezar a usar Job Hunter Team, un equipo open source de agentes de IA que busca trabajo por mí. Funciona en mi propio ordenador, dentro de un contenedor.
 
 Repositorio: https://github.com/leopu00/job-hunter-team
 Sitio web: https://jobhunterteam.ai
@@ -128,10 +127,10 @@ Lee primero el repositorio y la guía, y después acompáñame en la instalació
 
 Hay dos caminos soportados, y llevan al mismo equipo: elige conmigo el que más me convenga.
 1. La app de escritorio, descargable desde https://jobhunterteam.ai/download
-2. El comando único: curl -fsSL https://jobhunterteam.ai/install.sh | bash
+2. El comando único: curl -fsSL https://jobhunterteam.ai/install.sh | bash -s -- --runtime podman
 
-Dos cosas que tendrás que comprobar conmigo por el camino: que Docker esté disponible (Docker Desktop o Colima en macOS) y qué suscripción de IA dedicar al equipo — necesita una propia, separada de la que uso a diario, porque la consume por completo. Pregúntame todo lo demás en lugar de suponerlo.`,
-  fr: `J'aimerais commencer à utiliser Job Hunter Team, une équipe open source d'agents IA qui cherche du travail pour moi. Elle tourne sur mon ordinateur, dans Docker.
+Dos cosas que tendrás que comprobar conmigo por el camino: que en Mac Homebrew esté ya instalado (la aplicación lo usa para instalar Podman, el motor de contenedores) y qué suscripción de IA dedicar al equipo — necesita una propia, separada de la que uso a diario, porque la consume por completo. Pregúntame todo lo demás en lugar de suponerlo.`,
+  fr: `J'aimerais commencer à utiliser Job Hunter Team, une équipe open source d'agents IA qui cherche du travail pour moi. Elle tourne sur mon ordinateur, dans un conteneur.
 
 Dépôt : https://github.com/leopu00/job-hunter-team
 Site : https://jobhunterteam.ai
@@ -141,10 +140,10 @@ Lis d'abord le dépôt et le guide, puis accompagne-moi pour l'installer et le d
 
 Il y a deux voies prises en charge, et elles mènent à la même équipe : choisis avec moi celle qui me convient.
 1. L'application de bureau, à télécharger sur https://jobhunterteam.ai/download
-2. La commande unique : curl -fsSL https://jobhunterteam.ai/install.sh | bash
+2. La commande unique : curl -fsSL https://jobhunterteam.ai/install.sh | bash -s -- --runtime podman
 
-Deux choses à vérifier avec moi en chemin : que Docker soit disponible (Docker Desktop ou Colima sur macOS) et quel abonnement IA dédier à l'équipe — il lui en faut un à elle, distinct de celui que j'utilise au quotidien, car elle le consomme entièrement. Demande-moi tout le reste au lieu de deviner.`,
-  de: `Ich möchte anfangen, Job Hunter Team zu nutzen — ein Open-Source-Team aus KI-Agenten, das für mich nach Stellen sucht. Es läuft auf meinem eigenen Rechner, in Docker.
+Deux choses à vérifier avec moi en chemin : que sur Mac Homebrew soit déjà installé (l'application s'en sert pour installer Podman, le moteur de conteneurs) et quel abonnement IA dédier à l'équipe — il lui en faut un à elle, distinct de celui que j'utilise au quotidien, car elle le consomme entièrement. Demande-moi tout le reste au lieu de deviner.`,
+  de: `Ich möchte anfangen, Job Hunter Team zu nutzen — ein Open-Source-Team aus KI-Agenten, das für mich nach Stellen sucht. Es läuft auf meinem eigenen Rechner, in einem Container.
 
 Repository: https://github.com/leopu00/job-hunter-team
 Website: https://jobhunterteam.ai
@@ -154,10 +153,10 @@ Lies zuerst das Repository und die Anleitung, und führe mich dann durch Install
 
 Es gibt zwei unterstützte Wege, die zum selben Team führen — wähle mit mir den passenden:
 1. Die Desktop-App, herunterzuladen unter https://jobhunterteam.ai/download
-2. Der Einzeiler: curl -fsSL https://jobhunterteam.ai/install.sh | bash
+2. Der Einzeiler: curl -fsSL https://jobhunterteam.ai/install.sh | bash -s -- --runtime podman
 
-Zwei Dinge, die du unterwegs mit mir klären musst: dass Docker verfügbar ist (Docker Desktop oder Colima auf macOS) und welches KI-Abo das Team bekommt — es braucht ein eigenes, getrennt von dem, das ich täglich nutze, weil es das Kontingent vollständig verbraucht. Frag mich alles Weitere, statt zu raten.`,
-  pt: `Gostaria de começar a usar o Job Hunter Team, uma equipa open source de agentes de IA que procura emprego por mim. Corre no meu próprio computador, dentro do Docker.
+Zwei Dinge, die du unterwegs mit mir klären musst: dass auf einem Mac Homebrew bereits installiert ist (die App nutzt es, um Podman, die Container-Engine, zu installieren) und welches KI-Abo das Team bekommt — es braucht ein eigenes, getrennt von dem, das ich täglich nutze, weil es das Kontingent vollständig verbraucht. Frag mich alles Weitere, statt zu raten.`,
+  pt: `Gostaria de começar a usar o Job Hunter Team, uma equipa open source de agentes de IA que procura emprego por mim. Corre no meu próprio computador, dentro de um contentor.
 
 Repositório: https://github.com/leopu00/job-hunter-team
 Site: https://jobhunterteam.ai
@@ -167,10 +166,10 @@ Lê primeiro o repositório e o guia, e depois acompanha-me na instalação e no
 
 Há dois caminhos suportados, e levam à mesma equipa: escolhe comigo o que me convém.
 1. A app de ambiente de trabalho, transferível em https://jobhunterteam.ai/download
-2. O comando único: curl -fsSL https://jobhunterteam.ai/install.sh | bash
+2. O comando único: curl -fsSL https://jobhunterteam.ai/install.sh | bash -s -- --runtime podman
 
-Duas coisas que terás de verificar comigo pelo caminho: que o Docker esteja disponível (Docker Desktop ou Colima no macOS) e qual a subscrição de IA a dedicar à equipa — precisa de uma própria, separada da que uso no dia a dia, porque a consome por inteiro. Pergunta-me tudo o resto em vez de adivinhar.`,
-  hu: `Szeretném elkezdeni használni a Job Hunter Teamet, egy nyílt forráskódú AI-ügynökcsapatot, amely helyettem keres állást. A saját gépemen fut, Dockerben.
+Duas coisas que terás de verificar comigo pelo caminho: que no Mac o Homebrew esteja já instalado (a aplicação usa-o para instalar o Podman, o motor de contentores) e qual a subscrição de IA a dedicar à equipa — precisa de uma própria, separada da que uso no dia a dia, porque a consome por inteiro. Pergunta-me tudo o resto em vez de adivinhar.`,
+  hu: `Szeretném elkezdeni használni a Job Hunter Teamet, egy nyílt forráskódú AI-ügynökcsapatot, amely helyettem keres állást. A saját gépemen fut, konténerben.
 
 Repository: https://github.com/leopu00/job-hunter-team
 Weboldal: https://jobhunterteam.ai
@@ -180,9 +179,9 @@ Először olvasd el a repositoryt és az útmutatót, majd vezess végig a telep
 
 Két támogatott út van, és ugyanahhoz a csapathoz vezetnek — válaszd ki velem, melyik illik hozzám jobban:
 1. Az asztali alkalmazás, letölthető innen: https://jobhunterteam.ai/download
-2. Az egysoros parancs: curl -fsSL https://jobhunterteam.ai/install.sh | bash
+2. Az egysoros parancs: curl -fsSL https://jobhunterteam.ai/install.sh | bash -s -- --runtime podman
 
-Két dolgot kell majd velem tisztáznod útközben: hogy elérhető-e a Docker (Docker Desktop vagy Colima macOS-en), és melyik AI-előfizetést szánom a csapatnak — sajátra van szüksége, elkülönítve attól, amit naponta használok, mert teljesen felhasználja. Minden mást kérdezz meg tőlem, ahelyett hogy találgatnál.`,
+Két dolgot kell majd velem tisztáznod útközben: hogy Macen a Homebrew már telepítve van-e (az alkalmazás ezzel telepíti a Podmant, a konténermotort), és melyik AI-előfizetést szánom a csapatnak — sajátra van szüksége, elkülönítve attól, amit naponta használok, mert teljesen felhasználja. Minden mást kérdezz meg tőlem, ahelyett hogy találgatnál.`,
 };
 
 type ReqOs = {
@@ -192,66 +191,66 @@ type ReqOs = {
 
 const REQ_OS: Record<Lang, ReqOs> = {
   it: {
-    reqTitle: "Requisiti minimi",
+    reqTitle: "Requisiti (Mac con Apple silicon)",
     reqRows: [
-      ["Docker", "Obbligatorio — l'unica vera dipendenza"],
-      ["RAM", "4 GB minimo · 8 GB consigliati"],
-      ["CPU", "2 core minimo · 4 consigliati"],
-      ["Disco", "~35 GB liberi"],
+      ["Homebrew", "Già installato — l'app lo usa per installare Podman"],
+      ["RAM", "Mac con almeno 16 GB consigliato · la macchina per i container usa 4 GiB"],
+      ["CPU", "2 per la macchina per i container"],
+      ["Disco", "La macchina per i container arriva fino a 30 GiB · nessun minimo misurato"],
     ],
   },
   en: {
-    reqTitle: "Minimum requirements",
+    reqTitle: "Requirements (Mac with Apple silicon)",
     reqRows: [
-      ["Docker", "Required — the only real dependency"],
-      ["RAM", "4 GB minimum · 8 GB recommended"],
-      ["CPU", "2 cores minimum · 4 recommended"],
-      ["Disk", "~35 GB free"],
+      ["Homebrew", "Already installed — the app uses it to install Podman"],
+      ["RAM", "A Mac with at least 16 GB is recommended · the container machine uses 4 GiB"],
+      ["CPU", "2 for the container machine"],
+      ["Disk", "The container machine grows up to 30 GiB · no minimum has been measured"],
     ],
   },
   es: {
-    reqTitle: "Requisitos mínimos",
+    reqTitle: "Requisitos (Mac con Apple silicon)",
     reqRows: [
-      ["Docker", "Obligatorio — la única dependencia real"],
-      ["RAM", "4 GB mínimo · 8 GB recomendado"],
-      ["CPU", "2 núcleos mínimo · 4 recomendado"],
-      ["Disco", "~35 GB libres"],
+      ["Homebrew", "Ya instalado — la aplicación lo usa para instalar Podman"],
+      ["RAM", "Se recomienda un Mac con al menos 16 GB · la máquina de contenedores usa 4 GiB"],
+      ["CPU", "2 para la máquina de contenedores"],
+      ["Disco", "La máquina de contenedores crece hasta 30 GiB · no se ha medido ningún mínimo"],
     ],
   },
   fr: {
-    reqTitle: "Configuration minimale",
+    reqTitle: "Prérequis (Mac Apple silicon)",
     reqRows: [
-      ["Docker", "Obligatoire — la seule vraie dépendance"],
-      ["RAM", "4 Go minimum · 8 Go recommandés"],
-      ["CPU", "2 cœurs minimum · 4 recommandés"],
-      ["Disque", "~35 Go libres"],
+      ["Homebrew", "Déjà installé — l'application s'en sert pour installer Podman"],
+      ["RAM", "Un Mac avec au moins 16 Go est recommandé · la machine de conteneurs utilise 4 GiB"],
+      ["CPU", "2 pour la machine de conteneurs"],
+      ["Disque", "La machine de conteneurs grandit jusqu'à 30 GiB · aucun minimum n'a été mesuré"],
     ],
   },
   de: {
-    reqTitle: "Mindestanforderungen",
+    reqTitle: "Voraussetzungen (Mac mit Apple Silicon)",
     reqRows: [
-      ["Docker", "Erforderlich — die einzige echte Abhängigkeit"],
-      ["RAM", "4 GB minimum · 8 GB empfohlen"],
-      ["CPU", "2 Kerne minimum · 4 empfohlen"],
-      ["Festplatte", "~35 GB frei"],
+      ["Homebrew", "Bereits installiert — die App nutzt es, um Podman zu installieren"],
+      ["RAM", "Empfohlen: ein Mac mit mindestens 16 GB · die Container-Maschine nutzt 4 GiB"],
+      ["CPU", "2 für die Container-Maschine"],
+      ["Festplatte", "Die Container-Maschine wächst bis auf 30 GiB · es wurde kein Minimum gemessen"],
     ],
   },
   pt: {
-    reqTitle: "Requisitos mínimos",
+    reqTitle: "Requisitos (Mac com Apple silicon)",
     reqRows: [
-      ["Docker", "Obrigatório — a única dependência real"],
-      ["RAM", "4 GB mínimo · 8 GB recomendado"],
-      ["CPU", "2 núcleos mínimo · 4 recomendado"],
-      ["Disco", "~35 GB livres"],
+      ["Homebrew", "Já instalado — a aplicação usa-o para instalar o Podman"],
+      ["RAM", "Recomenda-se um Mac com pelo menos 16 GB · a máquina de contentores usa 4 GiB"],
+      ["CPU", "2 para a máquina de contentores"],
+      ["Disco", "A máquina de contentores cresce até 30 GiB · não foi medido qualquer mínimo"],
     ],
   },
   hu: {
-    reqTitle: "Minimális követelmények",
+    reqTitle: "Követelmények (Apple silicon Mac)",
     reqRows: [
-      ["Docker", "Kötelező — az egyetlen valódi függőség"],
-      ["RAM", "4 GB minimum · 8 GB ajánlott"],
-      ["CPU", "2 mag minimum · 4 ajánlott"],
-      ["Lemez", "~35 GB szabad hely"],
+      ["Homebrew", "Már telepítve — az alkalmazás ezzel telepíti a Podmant"],
+      ["RAM", "Ajánlott egy legalább 16 GB-os Mac · a konténergép 4 GiB-ot használ"],
+      ["CPU", "2 a konténergépnek"],
+      ["Lemez", "A konténergép legfeljebb 30 GiB-ig nő · nem mértek minimumot"],
     ],
   },
 };
@@ -415,10 +414,10 @@ function DownloadContent({
                         </span>
                       ) : (
                         <span
-                          data-windows-coming-soon
+                          data-windows-not-in-version
                           className="text-[9px] font-semibold tracking-[0.15em] uppercase text-[var(--color-muted)] border border-[var(--color-border)] px-2 py-0.5"
                         >
-                          {t("dl_windows_coming_soon")}
+                          {t("dl_windows_not_in_version")}
                         </span>
                       )}
                       {/* La build Mac della 0.4 e' solo Apple silicon: va detto

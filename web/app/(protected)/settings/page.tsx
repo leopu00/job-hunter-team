@@ -610,7 +610,7 @@ export default function SettingsPage() {
 
           {tab === "security" && (
             <>
-              <Row label={tr("new_password")} hint={tr("next_version")}>
+              <Row label={tr("new_password")} hint={tr("not_in_this_version_hint")}>
                 <input
                   type="password"
                   style={{ ...inp, opacity: 0.4, cursor: "not-allowed" }}
@@ -633,7 +633,7 @@ export default function SettingsPage() {
                     border: "1px solid rgba(255,196,0,0.2)",
                   }}
                 >
-                  {tr("coming_soon")}
+                  {tr("not_in_this_version")}
                 </span>
                 <p
                   className="text-[10px]"

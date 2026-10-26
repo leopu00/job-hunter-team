@@ -29,15 +29,14 @@ export type Dict = {
   path1AfterA: string;
   path1AfterB: string;
   path2Title: string;
-  path2SoonA: string;
+  path2A: string;
   downloadPage: string;
-  path2SoonB: string;
+  path2B: string;
   path3Title: string;
   path3Mac: string;
-  path3WinIntro: string;
   path3WizardIntro: string;
-  dockerReqA: string;
-  dockerReqB: string;
+  requirementA: string;
+  requirementB: string;
   firstRunTitle: string;
   firstRunIntro: string;
   fr1A: string;
@@ -83,18 +82,17 @@ export const T: Record<Locale, Dict> = {
     path1AfterA: "It will read the docs, install the CLI, run ",
     path1AfterB:
       ", fix what's missing and start the team. This is a primary design goal, not a hack.",
-    path2Title: "🖥️ Path 2 — Desktop app (coming soon)",
-    path2SoonA:
-      "A graphical launcher for macOS, Windows and Linux is on its way: it will install everything and start the team with one click, no terminal needed. It's not downloadable yet — you can track it on ",
+    path2Title: "🖥️ Path 2 — Desktop app (macOS, Apple silicon)",
+    path2A:
+      "A graphical app for Macs with Apple silicon: with Homebrew already installed, it sets up Podman and starts the team with one click, no terminal needed. Download it from ",
     downloadPage: "the install page",
-    path2SoonB: ". In the meantime, use Path 1 or Path 3.",
+    path2B: ". Windows is not supported in 0.4 and Linux is experimental.",
     path3Title: "📦 Path 3 — One-liner installer",
-    path3Mac: "macOS / Linux / WSL2:",
-    path3WinIntro: "Windows is not supported in 0.4: these steps are untested and may not work. Windows (PowerShell, WSL must already be enabled):",
+    path3Mac: "macOS / Linux:",
     path3WizardIntro: "Then bring the team up and run the wizard:",
-    dockerReqA: "The one requirement is ",
-    dockerReqB:
-      " — the installer sets up the runtime on macOS and Linux for you (on Windows it installs Podman inside WSL; Docker Desktop is not needed). No Node, Python or tmux on your machine: everything lives inside the container.",
+    requirementA: "On a Mac the one requirement is ",
+    requirementB:
+      " — it must already be installed, and the installer then sets up the container runtime for you. Windows is not supported in 0.4 and Linux is experimental. No Node, Python or tmux on your machine: everything lives inside the container.",
     firstRunTitle: "🎬 Your first run",
     firstRunIntro: "Whichever path you took:",
     fr1A: "Set up your profile.",
@@ -138,18 +136,17 @@ export const T: Record<Locale, Dict> = {
     path1AfterA: "Leggerà la documentazione, installerà la CLI, eseguirà ",
     path1AfterB:
       ", sistemerà ciò che manca e avvierà il team. Questo è un obiettivo di progettazione primario, non un trucco.",
-    path2Title: "🖥️ Percorso 2 — App desktop (in arrivo)",
-    path2SoonA:
-      "Un launcher grafico per macOS, Windows e Linux è in arrivo: installerà tutto e avvierà il team con un clic, senza terminale. Non è ancora scaricabile — lo trovi segnalato sulla ",
+    path2Title: "🖥️ Percorso 2 — App desktop (macOS, Apple silicon)",
+    path2A:
+      "Un'app grafica per i Mac con Apple silicon: con Homebrew già installato, prepara Podman e avvia il team con un clic, senza terminale. La scarichi dalla ",
     downloadPage: "pagina di installazione",
-    path2SoonB: ". Nel frattempo usa il Percorso 1 o il Percorso 3.",
+    path2B: ". Windows non è supportato nella 0.4 e Linux è sperimentale.",
     path3Title: "📦 Percorso 3 — Installer one-liner",
-    path3Mac: "macOS / Linux / WSL2:",
-    path3WinIntro: "Windows non è supportato nella 0.4: questi passaggi non sono stati provati e potrebbero non funzionare. Windows (PowerShell, WSL deve essere già attivo):",
+    path3Mac: "macOS / Linux:",
     path3WizardIntro: "Poi avvia il team ed esegui la procedura guidata:",
-    dockerReqA: "L'unico requisito è ",
-    dockerReqB:
-      " — l'installer configura il runtime su macOS e Linux per te (su Windows installa Podman dentro WSL; Docker Desktop non serve). Niente Node, Python o tmux sulla tua macchina: tutto vive dentro il container.",
+    requirementA: "Su Mac l'unico requisito è ",
+    requirementB:
+      " — deve essere già installato, poi l'installer configura il runtime dei container per te. Windows non è supportato nella 0.4 e Linux è sperimentale. Niente Node, Python o tmux sulla tua macchina: tutto vive dentro il container.",
     firstRunTitle: "🎬 La tua prima esecuzione",
     firstRunIntro: "Qualunque percorso tu abbia scelto:",
     fr1A: "Configura il tuo profilo.",
@@ -194,18 +191,17 @@ export const T: Record<Locale, Dict> = {
     path1AfterA: "Leerá la documentación, instalará la CLI, ejecutará ",
     path1AfterB:
       ", arreglará lo que falte e iniciará el equipo. Este es un objetivo de diseño primordial, no un truco.",
-    path2Title: "🖥️ Vía 2 — App de escritorio (próximamente)",
-    path2SoonA:
-      "Un lanzador gráfico para macOS, Windows y Linux está en camino: instalará todo e iniciará el equipo con un clic, sin terminal. Aún no se puede descargar — puedes seguirlo en ",
+    path2Title: "🖥️ Vía 2 — App de escritorio (macOS, Apple silicon)",
+    path2A:
+      "Una app gráfica para Mac con Apple silicon: con Homebrew ya instalado, prepara Podman e inicia el equipo con un clic, sin terminal. Descárgala desde ",
     downloadPage: "la página de instalación",
-    path2SoonB: ". Mientras tanto, usa la Vía 1 o la Vía 3.",
+    path2B: ". Windows no es compatible con la 0.4 y Linux es experimental.",
     path3Title: "📦 Vía 3 — Instalador en una línea",
-    path3Mac: "macOS / Linux / WSL2:",
-    path3WinIntro: "Windows no es compatible con la 0.4: estos pasos no se han probado y pueden no funcionar. Windows (PowerShell, WSL ya debe estar activado):",
+    path3Mac: "macOS / Linux:",
     path3WizardIntro: "Luego levanta el equipo y ejecuta el asistente:",
-    dockerReqA: "El único requisito es ",
-    dockerReqB:
-      " — el instalador configura el runtime en macOS y Linux por ti (en Windows instala Podman dentro de WSL; no necesitas Docker Desktop). Sin Node, Python ni tmux en tu máquina: todo vive dentro del contenedor.",
+    requirementA: "En Mac el único requisito es ",
+    requirementB:
+      " — debe estar ya instalado, y después el instalador configura el runtime de contenedores por ti. Windows no es compatible en la 0.4 y Linux es experimental. Sin Node, Python ni tmux en tu máquina: todo vive dentro del contenedor.",
     firstRunTitle: "🎬 Tu primera ejecución",
     firstRunIntro: "Sea cual sea la vía que hayas elegido:",
     fr1A: "Configura tu perfil.",
@@ -251,18 +247,17 @@ export const T: Record<Locale, Dict> = {
     path1AfterA: "Il lira la documentation, installera la CLI, exécutera ",
     path1AfterB:
       ", corrigera ce qui manque et démarrera l'équipe. C'est un objectif de conception primordial, pas une bidouille.",
-    path2Title: "🖥️ Voie 2 — Application de bureau (bientôt disponible)",
-    path2SoonA:
-      "Un lanceur graphique pour macOS, Windows et Linux arrive : il installera tout et démarrera l'équipe en un clic, sans terminal. Il n'est pas encore téléchargeable — suivez-le sur ",
+    path2Title: "🖥️ Voie 2 — Application de bureau (macOS, Apple silicon)",
+    path2A:
+      "Une application graphique pour les Mac Apple silicon : avec Homebrew déjà installé, elle prépare Podman et démarre l'équipe en un clic, sans terminal. Téléchargez-la depuis ",
     downloadPage: "la page d'installation",
-    path2SoonB: ". En attendant, utilisez la Voie 1 ou la Voie 3.",
+    path2B: ". Windows n'est pas pris en charge dans la 0.4 et Linux est expérimental.",
     path3Title: "📦 Voie 3 — Installateur en une ligne",
-    path3Mac: "macOS / Linux / WSL2 :",
-    path3WinIntro: "Windows n'est pas pris en charge dans la 0.4 : ces étapes n'ont pas été testées et peuvent ne pas fonctionner. Windows (PowerShell, WSL doit déjà être activé) :",
+    path3Mac: "macOS / Linux :",
     path3WizardIntro: "Puis démarrez l'équipe et lancez l'assistant :",
-    dockerReqA: "La seule exigence est ",
-    dockerReqB:
-      " — l'installateur configure le runtime sur macOS et Linux pour vous (sous Windows, il installe Podman dans WSL ; Docker Desktop n'est pas nécessaire). Pas de Node, Python ni tmux sur votre machine : tout vit à l'intérieur du conteneur.",
+    requirementA: "Sur Mac, la seule exigence est ",
+    requirementB:
+      " — il doit déjà être installé, puis l'installateur configure l'environnement de conteneurs pour vous. Windows n'est pas pris en charge dans la 0.4 et Linux est expérimental. Pas de Node, Python ni tmux sur votre machine : tout vit à l'intérieur du conteneur.",
     firstRunTitle: "🎬 Votre première exécution",
     firstRunIntro: "Quelle que soit la voie choisie :",
     fr1A: "Configurez votre profil.",
@@ -308,18 +303,17 @@ export const T: Record<Locale, Dict> = {
     path1AfterA: "Er liest die Dokumentation, installiert die CLI, führt ",
     path1AfterB:
       " aus, behebt, was fehlt, und startet das Team. Das ist ein primäres Designziel, kein Trick.",
-    path2Title: "🖥️ Weg 2 — Desktop-App (demnächst)",
-    path2SoonA:
-      "Ein grafischer Launcher für macOS, Windows und Linux ist unterwegs: Er wird alles installieren und das Team mit einem Klick starten, ganz ohne Terminal. Er ist noch nicht herunterladbar — du findest ihn angekündigt auf ",
+    path2Title: "🖥️ Weg 2 — Desktop-App (macOS, Apple silicon)",
+    path2A:
+      "Eine grafische App für Macs mit Apple silicon: Ist Homebrew bereits installiert, richtet sie Podman ein und startet das Team mit einem Klick, ganz ohne Terminal. Lade sie von ",
     downloadPage: "der Installationsseite",
-    path2SoonB: ". Nutze in der Zwischenzeit Weg 1 oder Weg 3.",
+    path2B: " herunter. Windows wird in 0.4 nicht unterstützt und Linux ist experimentell.",
     path3Title: "📦 Weg 3 — Einzeiler-Installer",
-    path3Mac: "macOS / Linux / WSL2:",
-    path3WinIntro: "Windows wird in 0.4 nicht unterstützt: Diese Schritte sind ungetestet und funktionieren möglicherweise nicht. Windows (PowerShell, WSL muss bereits aktiviert sein):",
+    path3Mac: "macOS / Linux:",
     path3WizardIntro: "Dann starte das Team und führe den Assistenten aus:",
-    dockerReqA: "Die einzige Voraussetzung ist ",
-    dockerReqB:
-      " — der Installer richtet die Laufzeitumgebung auf macOS und Linux für dich ein (unter Windows installiert er Podman in WSL; Docker Desktop wird nicht benötigt). Kein Node, Python oder tmux auf deinem Rechner: alles lebt im Container.",
+    requirementA: "Auf einem Mac ist die einzige Voraussetzung ",
+    requirementB:
+      " — es muss bereits installiert sein, danach richtet der Installer die Container-Laufzeit für dich ein. Windows wird in 0.4 nicht unterstützt, und Linux ist experimentell. Kein Node, Python oder tmux auf deinem Rechner: alles lebt im Container.",
     firstRunTitle: "🎬 Dein erster Lauf",
     firstRunIntro: "Welchen Weg du auch gewählt hast:",
     fr1A: "Richte dein Profil ein.",
@@ -365,19 +359,17 @@ export const T: Record<Locale, Dict> = {
     path1AfterA: "Elolvassa a dokumentációt, telepíti a CLI-t, lefuttatja a ",
     path1AfterB:
       " parancsot, kijavítja, ami hiányzik, és elindítja a csapatot. Ez elsődleges tervezési cél, nem trükk.",
-    path2Title: "🖥️ 2. út — Asztali alkalmazás (hamarosan)",
-    path2SoonA:
-      "Úton van egy grafikus indító macOS-re, Windowsra és Linuxra: mindent telepít majd, és egy kattintással elindítja a csapatot, terminál nélkül. Egyelőre nem tölthető le — a ",
-    downloadPage: "telepítési oldalon",
-    path2SoonB: " követheted. Addig használd az 1. vagy a 3. utat.",
+    path2Title: "🖥️ 2. út — Asztali alkalmazás (macOS, Apple silicon)",
+    path2A:
+      "Grafikus alkalmazás Apple silicon Macekre: ha a Homebrew már telepítve van, beállítja a Podmant, és egy kattintással elindítja a csapatot, terminál nélkül. A ",
+    downloadPage: "telepítési oldalról",
+    path2B: " töltheted le. A Windows a 0.4-ben nem támogatott, a Linux pedig kísérleti.",
     path3Title: "📦 3. út — Egysoros telepítő",
-    path3Mac: "macOS / Linux / WSL2:",
-    path3WinIntro:
-      "A Windows a 0.4-ben nem támogatott: ezeket a lépéseket nem tesztelték, és lehet, hogy nem működnek. Windows (PowerShell, a WSL-nek már bekapcsolva kell lennie):",
+    path3Mac: "macOS / Linux:",
     path3WizardIntro: "Aztán indítsd el a csapatot, és futtasd a varázslót:",
-    dockerReqA: "Az egyetlen követelmény a ",
-    dockerReqB:
-      " — a telepítő beállítja helyetted a futtatókörnyezetet macOS-en és Linuxon (Windowson Podmant telepít a WSL-be; Docker Desktopra nincs szükség). Nincs Node, Python vagy tmux a gépeden: minden a konténeren belül él.",
+    requirementA: "Macen az egyetlen követelmény a ",
+    requirementB:
+      " — már telepítve kell lennie, utána a telepítő beállítja helyetted a konténer-futtatókörnyezetet. A Windows a 0.4-ben nem támogatott, a Linux pedig kísérleti. Nincs Node, Python vagy tmux a gépeden: minden a konténeren belül él.",
     firstRunTitle: "🎬 Az első futtatásod",
     firstRunIntro: "Bármelyik utat is választottad:",
     fr1A: "Állítsd be a profilodat.",
@@ -422,18 +414,17 @@ export const T: Record<Locale, Dict> = {
     path1AfterA: "Ele lerá a documentação, instalará a CLI, executará ",
     path1AfterB:
       ", corrigirá o que falta e iniciará a equipa. Este é um objetivo de design primordial, não um truque.",
-    path2Title: "🖥️ Via 2 — App de ambiente de trabalho (em breve)",
-    path2SoonA:
-      "Está a caminho um launcher gráfico para macOS, Windows e Linux: vai instalar tudo e arrancar a equipa com um clique, sem terminal. Ainda não pode ser descarregado — podes acompanhá-lo na ",
+    path2Title: "🖥️ Via 2 — App de ambiente de trabalho (macOS, Apple silicon)",
+    path2A:
+      "Uma app gráfica para Macs com Apple silicon: com o Homebrew já instalado, prepara o Podman e arranca a equipa com um clique, sem terminal. Descarrega-a na ",
     downloadPage: "página de instalação",
-    path2SoonB: ". Entretanto, usa a Via 1 ou a Via 3.",
+    path2B: ". O Windows não é suportado na 0.4 e o Linux é experimental.",
     path3Title: "📦 Caminho 3 — Instalador numa só linha",
-    path3Mac: "macOS / Linux / WSL2:",
-    path3WinIntro: "O Windows não é suportado na 0.4: estes passos não foram testados e podem não funcionar. Windows (PowerShell, o WSL já tem de estar ativado):",
+    path3Mac: "macOS / Linux:",
     path3WizardIntro: "Depois levanta a equipa e executa o assistente:",
-    dockerReqA: "O único requisito é o ",
-    dockerReqB:
-      " — o instalador configura o runtime no macOS e Linux por ti (no Windows instala o Podman dentro do WSL; o Docker Desktop não é necessário). Sem Node, Python ou tmux na tua máquina: tudo vive dentro do contentor.",
+    requirementA: "No Mac, o único requisito é o ",
+    requirementB:
+      " — tem de estar já instalado, e depois o instalador configura o runtime de contentores por ti. O Windows não é suportado na 0.4 e o Linux é experimental. Sem Node, Python ou tmux na tua máquina: tudo vive dentro do contentor.",
     firstRunTitle: "🎬 A tua primeira execução",
     firstRunIntro: "Seja qual for o caminho que escolheste:",
     fr1A: "Configura o teu perfil.",

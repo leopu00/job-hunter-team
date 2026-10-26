@@ -58,7 +58,7 @@ const T: Record<
     title: "Run 24/7 on a VPS",
     tagline: "A small cloud server so the team works while you sleep",
     intro:
-      "A Local PC is the simplest complete way to start. Choose a VPS when you want the team to keep running while that PC is off: it costs about €6–10/mo on top of your AI provider, and you administer the server, SSH access, Docker, network, and storage.",
+      "A Local PC is the simplest complete way to start. Choose a VPS when you want the team to keep running while that PC is off: it costs about €6–10/mo on top of your AI provider, and you administer the server, SSH access, Podman, network, and storage.",
     validatedLabel: "Validated end-to-end",
     validatedBody1: "on a Hetzner",
     validatedBody2:
@@ -104,7 +104,7 @@ const T: Record<
     title: "Esegui 24/7 su un VPS",
     tagline: "Un piccolo server cloud così il team lavora mentre dormi",
     intro:
-      "Il PC locale è il modo completo più semplice per iniziare. Scegli un VPS se vuoi che il team continui quando quel PC è spento: costa circa €6–10/mese oltre al provider AI e sei tu ad amministrare server, accesso SSH, Docker, rete e spazio di archiviazione.",
+      "Il PC locale è il modo completo più semplice per iniziare. Scegli un VPS se vuoi che il team continui quando quel PC è spento: costa circa €6–10/mese oltre al provider AI e sei tu ad amministrare server, accesso SSH, Podman, rete e spazio di archiviazione.",
     validatedLabel: "Validato end-to-end",
     validatedBody1: "su un Hetzner",
     validatedBody2:
@@ -152,7 +152,7 @@ const T: Record<
     tagline:
       "Un pequeño servidor en la nube para que el equipo trabaje mientras duermes",
     intro:
-      "El PC local es la forma completa más sencilla de empezar. Elige una VPS si quieres que el equipo continúe cuando ese PC esté apagado: cuesta unos €6–10/mes además del proveedor de IA y tú administras el servidor, el acceso SSH, Docker, la red y el almacenamiento.",
+      "El PC local es la forma completa más sencilla de empezar. Elige una VPS si quieres que el equipo continúe cuando ese PC esté apagado: cuesta unos €6–10/mes además del proveedor de IA y tú administras el servidor, el acceso SSH, Podman, la red y el almacenamiento.",
     validatedLabel: "Validado de extremo a extremo",
     validatedBody1: "en un Hetzner",
     validatedBody2:
@@ -201,7 +201,7 @@ const T: Record<
     tagline:
       "Un petit serveur cloud pour que l'équipe travaille pendant que vous dormez",
     intro:
-      "Le PC local est le moyen complet le plus simple de commencer. Choisissez un VPS si vous voulez que l'équipe continue lorsque ce PC est éteint : il coûte environ 6–10 €/mois en plus du fournisseur d'IA, et vous administrez le serveur, l'accès SSH, Docker, le réseau et le stockage.",
+      "Le PC local est le moyen complet le plus simple de commencer. Choisissez un VPS si vous voulez que l'équipe continue lorsque ce PC est éteint : il coûte environ 6–10 €/mois en plus du fournisseur d'IA, et vous administrez le serveur, l'accès SSH, Podman, le réseau et le stockage.",
     validatedLabel: "Validé de bout en bout",
     validatedBody1: "sur un Hetzner",
     validatedBody2:
@@ -250,7 +250,7 @@ const T: Record<
     tagline:
       "Ein kleiner Cloud-Server, damit das Team arbeitet, während du schläfst",
     intro:
-      "Der lokale PC ist der einfachste vollständige Einstieg. Wähle einen VPS, wenn das Team bei ausgeschaltetem PC weiterarbeiten soll: Er kostet etwa 6–10 €/Monat zusätzlich zum KI-Anbieter, und du verwaltest Server, SSH-Zugang, Docker, Netzwerk und Speicher.",
+      "Der lokale PC ist der einfachste vollständige Einstieg. Wähle einen VPS, wenn das Team bei ausgeschaltetem PC weiterarbeiten soll: Er kostet etwa 6–10 €/Monat zusätzlich zum KI-Anbieter, und du verwaltest Server, SSH-Zugang, Podman, Netzwerk und Speicher.",
     validatedLabel: "End-to-end validiert",
     validatedBody1: "auf einem Hetzner",
     validatedBody2:
@@ -299,7 +299,7 @@ const T: Record<
     tagline:
       "Egy kis felhőszerver, hogy a csapat akkor is dolgozzon, amikor alszol",
     intro:
-      "A helyi PC a legegyszerűbb teljes kiindulópont. Válassz VPS-t, ha azt szeretnéd, hogy a csapat a PC kikapcsolása után is működjön: ez havi körülbelül €6–10 az AI-szolgáltató díján felül, a szervert, az SSH-hozzáférést, a Dockert, a hálózatot és a tárhelyet pedig te kezeled.",
+      "A helyi PC a legegyszerűbb teljes kiindulópont. Válassz VPS-t, ha azt szeretnéd, hogy a csapat a PC kikapcsolása után is működjön: ez havi körülbelül €6–10 az AI-szolgáltató díján felül, a szervert, az SSH-hozzáférést, a Podmant, a hálózatot és a tárhelyet pedig te kezeled.",
     validatedLabel: "Végpontok közt validálva",
     validatedBody1: "egy Hetzner",
     validatedBody2:
@@ -347,7 +347,7 @@ const T: Record<
     tagline:
       "Um pequeno servidor na nuvem para a equipa trabalhar enquanto dormes",
     intro:
-      "O PC local é a forma completa mais simples de começar. Escolhe uma VPS se quiseres que a equipa continue quando esse PC estiver desligado: custa cerca de €6–10/mês além do fornecedor de IA e és tu que administras o servidor, o acesso SSH, o Docker, a rede e o armazenamento.",
+      "O PC local é a forma completa mais simples de começar. Escolhe uma VPS se quiseres que a equipa continue quando esse PC estiver desligado: custa cerca de €6–10/mês além do fornecedor de IA e és tu que administras o servidor, o acesso SSH, o Podman, a rede e o armazenamento.",
     validatedLabel: "Validado de ponta a ponta",
     validatedBody1: "num Hetzner",
     validatedBody2:

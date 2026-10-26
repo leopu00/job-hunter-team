@@ -32,7 +32,7 @@
 
 Job hunting is a second job on top of your job: scanning boards daily, qualifying listings, tailoring every application. JHT hands that grind to a team of AI agents running around the clock — Scout finds positions, Analyst verifies them, Scorer ranks them against your profile, Writer prepares tailored documents, Critic blind-reviews everything — orchestrated by a **Captain**. You only review applications that clear the quality bar.
 
-Everything runs **in your container** — on your macOS/Linux machine or your VPS, with your profile, your data and your provider account. The Windows 0.4 office uses the VPS path. JHT itself is **free (MIT)**; it runs on a **dedicated LLM subscription (~€40–200/mo)** — breakdown in [Install](#install). A local model can currently shadow or replace the Scorer only; running the whole team without a supported provider is not available.
+Everything runs **in your container** — on your Mac (Apple silicon) or on your VPS, with your profile, your data and your provider account. JHT itself is **free (MIT)**; it runs on a **dedicated LLM subscription (~€40–200/mo)** — breakdown in [Install](#install). A local model can currently shadow or replace the Scorer only; running the whole team without a supported provider is not available.
 
 I built JHT for my own job hunt — ~200 offers analyzed, ~20 tailored applications, **5 interview invites in a few weeks** ([story](docs/about/STORY.md)). Then I rebuilt it as open source. On the public stack, a Codex team ran **one month unattended**: 658 positions found, 520 scored, 307 strong matches, weekly budget self-managed at 99–100% ([results](docs/about/RESULTS.md)).
 
@@ -86,15 +86,16 @@ team.
 
 **Before you install:**
 
-- Windows x64, Linux x64, or macOS on Apple silicon (M1 and later, macOS 13+; Intel Macs are not supported in 0.4);
+- a Mac with Apple silicon (M1 and later, macOS 15 or later: Homebrew's requirement; Intel Macs are not supported in 0.4).
+  Windows is not in this version, and Linux is experimental;
 - a supported subscription dedicated to JHT (the provider login happens in
   your browser; the subscription path does not ask for an API key);
-- a Docker-compatible runtime for the team. On macOS and Linux, the office can
-  guide a local install. The Windows 0.4 office supports a Linux VPS only;
-  local Windows execution will arrive in a later version;
-- about 8 GB of RAM available before starting a local team on macOS or Linux
-  for comfortable use. This is a measured recommendation, not a universal
-  minimum.
+- Homebrew already installed on the Mac: the app installs Podman with it and
+  manages it, so there is no Docker Desktop to install. On a Linux VPS the team
+  runs in rootless Podman 5.0 or later with podman-compose;
+- a Mac with at least 16 GB of RAM is recommended. The container machine the app
+  creates uses 2 CPUs and 4 GiB of memory, and a disk that grows up to 30 GiB.
+  No minimum of free disk space has been measured.
 
 Not sure where the container should live? Compare a
 [local PC, dedicated Linux PC on the LAN and VPS](docs/guides/CHOOSE-WHERE-TO-RUN.md)
@@ -110,7 +111,7 @@ before installing.
 [GitHub Releases](https://github.com/leopu00/job-hunter-team/releases/latest).
 The release contains `job-hunter-team-macos-universal.dmg` for macOS, and both
 `job-hunter-team-linux-x64.AppImage` and `job-hunter-team-linux-x64.deb` for
-Linux. Windows is not part of 0.4.0: it is coming soon. The macOS build is
+Linux. Windows is not in this version. The macOS build is
 signed and notarized and holds only the Apple silicon build (M1 and later; Intel
 Macs are not supported in 0.4), even though the file name says “universal”;
 Linux is experimental, was not tested by hand, and is unsigned. Open the Tauri 2 office and
@@ -128,7 +129,7 @@ bash install.sh --dry-run    # preview every action — no changes to your syste
 bash install.sh
 ```
 
-Or the one-liner, if you've read it and trust it: `curl -fsSL https://jobhunterteam.ai/install.sh | bash`
+Or the one-liner, if you've read it and trust it: `curl -fsSL https://jobhunterteam.ai/install.sh | bash -s -- --runtime podman`
 
 The installer downloads the Compose file, the `jht` host wrapper and its host
 preflight helper. It also creates `~/.jht/host.env` and may add the wrapper
@@ -153,7 +154,7 @@ The `jht` CLI is designed to be driven by AI assistants, not just humans. Alread
 **Stack** — desktop: Tauri 2/Rust shell + React; the Godot tree is retained but
 is no longer distributed · Node.js/TypeScript + Python
 (the API-worker direction is Node/TypeScript; the shipped team is still
-Python/tmux during migration) · Next.js 16 + Supabase (cloud dashboard) · Docker
+Python/tmux during migration) · Next.js 16 + Supabase (cloud dashboard) · Podman
 · SQLite · GitHub Actions + Vercel.
 
 **Status** — team, CLI, web dashboard and native Tauri application are tested

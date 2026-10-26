@@ -73,21 +73,19 @@ Walk me through what you need."`}
 
       <H3>{t.path2Title}</H3>
       <P>
-        {t.path2SoonA}
+        {t.path2A}
         <Link
           href="/download"
           className="font-semibold text-[var(--color-green)] no-underline hover:opacity-80"
         >
           {t.downloadPage}
         </Link>
-        {t.path2SoonB}
+        {t.path2B}
       </P>
 
       <H3>{t.path3Title}</H3>
       <P>{t.path3Mac}</P>
-      <Pre>{`curl -fsSL https://jobhunterteam.ai/install.sh | bash`}</Pre>
-      <P>{t.path3WinIntro}</P>
-      <Pre>{`iwr -useb https://jobhunterteam.ai/install.ps1 | iex`}</Pre>
+      <Pre>{`curl -fsSL https://jobhunterteam.ai/install.sh | bash -s -- --runtime podman`}</Pre>
       <P>{t.path3WizardIntro}</P>
       <Pre>
         {`jht up            # start the container (pulls the image first run)
@@ -96,9 +94,9 @@ jht doctor        # check everything is healthy
 jht team status   # confirm it's running`}
       </Pre>
       <P>
-        {t.dockerReqA}
-        <strong>Docker</strong>
-        {t.dockerReqB}
+        {t.requirementA}
+        <strong>Homebrew</strong>
+        {t.requirementB}
       </P>
 
       <H2>{t.firstRunTitle}</H2>

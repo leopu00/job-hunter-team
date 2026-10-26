@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { getRequestLocale } from "@/lib/request-locale";
-import { DESKTOP_SOON, T } from "./page.i18n";
+import { DESKTOP_NOTE, T } from "./page.i18n";
 
 // Guida: creare la Gmail DEDICATA del team + app-password così il team può
 // leggerla via IMAP. Complementa /docs/guides/email-forwarding (il "perché" +
@@ -57,7 +57,7 @@ export default async function TeamGmailGuidePage() {
         </p>
       </div>
 
-      <Callout>{DESKTOP_SOON[locale] ?? DESKTOP_SOON.en}</Callout>
+      <Callout>{DESKTOP_NOTE[locale] ?? DESKTOP_NOTE.en}</Callout>
 
       <Callout>{t.calloutOptional}</Callout>
 

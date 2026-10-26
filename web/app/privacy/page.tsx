@@ -17,7 +17,7 @@ const T = {
       "Job Hunter Team (JHT) rispetta la tua privacy. Questa pagina spiega come vengono trattati i tuoi dati.",
     s1_title: "Dati raccolti",
     s1_body:
-      "JHT gira dentro un container Docker sull'host che scegli. Per impostazione predefinita profilo, CV, candidature e preferenze restano nella cartella di lavoro del team; solo se attivi la sincronizzazione cloud facoltativa vengono copiati i dati selezionati.",
+      "JHT gira dentro un container sull'host che scegli. Per impostazione predefinita profilo, CV, candidature e preferenze restano nella cartella di lavoro del team; solo se attivi la sincronizzazione cloud facoltativa vengono copiati i dati selezionati.",
     s2_title: "Provider AI",
     s2_body:
       "Gli agenti girano su una CLI supportata, Codex, che richiede un tuo abbonamento ChatGPT attivo con OpenAI. Quando un agente lavora, la CLI invia la richiesta al provider e il testo passa dai suoi server: vale la privacy policy del provider. JHT non intermedia quelle chiamate.",
@@ -49,7 +49,7 @@ const T = {
       "Job Hunter Team (JHT) respects your privacy. This page explains how your data is handled.",
     s1_title: "Data collected",
     s1_body:
-      "JHT runs inside a Docker container on the host you choose. By default, profile, CV, applications, and preferences stay in the team's workspace; selected data is copied only when you enable cloud sync.",
+      "JHT runs inside a container on the host you choose. By default, profile, CV, applications, and preferences stay in the team's workspace; selected data is copied only when you enable cloud sync.",
     s2_title: "AI providers",
     s2_body:
       "Agents run on one supported CLI, Codex, which requires your own active ChatGPT subscription with OpenAI. When an agent works, the CLI sends the request to the provider and the text passes through its servers: its privacy policy applies. JHT does not intermediate those calls.",
@@ -81,7 +81,7 @@ const T = {
       "A Job Hunter Team (JHT) tiszteletben tartja a magánéletedet. Ez az oldal elmagyarázza, hogyan kezeljük az adataidat.",
     s1_title: "Gyűjtött adatok",
     s1_body:
-      "A JHT Docker-konténerben fut az általad választott gazdagépen. Alapértelmezés szerint a profil, az önéletrajz, a jelentkezések és a beállítások a csapat munkamappájában maradnak; csak az opcionális felhőszinkronizálás bekapcsolásakor másoljuk át a kiválasztott adatokat.",
+      "A JHT konténerben fut az általad választott gazdagépen. Alapértelmezés szerint a profil, az önéletrajz, a jelentkezések és a beállítások a csapat munkamappájában maradnak; csak az opcionális felhőszinkronizálás bekapcsolásakor másoljuk át a kiválasztott adatokat.",
     s2_title: "AI szolgáltatók",
     s2_body:
       "Az ügynökök egy támogatott CLI-n, a Codexen futnak, amelyhez saját aktív ChatGPT-előfizetés kell az OpenAI-nál. Amikor egy ügynök dolgozik, a CLI a szolgáltatóhoz küldi a kérést, és a szöveg áthalad a szervereken: az ő adatvédelmi szabályzatuk érvényes. A JHT nem közvetíti ezeket a hívásokat.",
@@ -114,7 +114,7 @@ const T = {
       "Job Hunter Team (JHT) respeta tu privacidad. Esta página explica cómo se tratan tus datos.",
     s1_title: "Datos recopilados",
     s1_body:
-      "JHT se ejecuta dentro de un contenedor Docker en el host que elijas. Por defecto, el perfil, el CV, las candidaturas y las preferencias permanecen en el espacio de trabajo del equipo; los datos seleccionados solo se copian si activas la sincronización cloud opcional.",
+      "JHT se ejecuta dentro de un contenedor en el host que elijas. Por defecto, el perfil, el CV, las candidaturas y las preferencias permanecen en el espacio de trabajo del equipo; los datos seleccionados solo se copian si activas la sincronización cloud opcional.",
     s2_title: "Proveedores de IA",
     s2_body:
       "Los agentes se ejecutan en una CLI compatible, Codex, que requiere tu propia suscripción activa a ChatGPT con OpenAI. Cuando un agente trabaja, la CLI envía la solicitud al proveedor y el texto pasa por sus servidores: se aplica su política de privacidad. JHT no intermedia esas llamadas.",
@@ -147,7 +147,7 @@ const T = {
       "Job Hunter Team (JHT) respektiert deine Privatsphäre. Diese Seite erklärt, wie deine Daten verarbeitet werden.",
     s1_title: "Erhobene Daten",
     s1_body:
-      "JHT läuft in einem Docker-Container auf dem von dir gewählten Host. Standardmäßig bleiben Profil, Lebenslauf, Bewerbungen und Einstellungen im Arbeitsbereich des Teams; ausgewählte Daten werden nur kopiert, wenn du die optionale Cloud-Synchronisierung aktivierst.",
+      "JHT läuft in einem Container auf dem von dir gewählten Host. Standardmäßig bleiben Profil, Lebenslauf, Bewerbungen und Einstellungen im Arbeitsbereich des Teams; ausgewählte Daten werden nur kopiert, wenn du die optionale Cloud-Synchronisierung aktivierst.",
     s2_title: "KI-Anbieter",
     s2_body:
       "Die Agenten laufen über eine unterstützte CLI, Codex, die dein eigenes aktives ChatGPT-Abonnement bei OpenAI voraussetzt. Wenn ein Agent arbeitet, sendet die CLI die Anfrage an den Anbieter und der Text läuft über dessen Server: Es gilt dessen Datenschutzerklärung. JHT vermittelt diese Aufrufe nicht.",
@@ -179,7 +179,7 @@ const T = {
       "Job Hunter Team (JHT) respecte votre vie privée. Cette page explique comment vos données sont traitées.",
     s1_title: "Données collectées",
     s1_body:
-      "JHT s'exécute dans un conteneur Docker sur l'hôte que vous choisissez. Par défaut, le profil, le CV, les candidatures et les préférences restent dans l'espace de travail de l'équipe ; les données sélectionnées ne sont copiées que si vous activez la synchronisation cloud facultative.",
+      "JHT s'exécute dans un conteneur sur l'hôte que vous choisissez. Par défaut, le profil, le CV, les candidatures et les préférences restent dans l'espace de travail de l'équipe ; les données sélectionnées ne sont copiées que si vous activez la synchronisation cloud facultative.",
     s2_title: "Fournisseurs d'IA",
     s2_body:
       "Les agents fonctionnent sur une CLI prise en charge, Codex, qui nécessite votre propre abonnement ChatGPT actif auprès d'OpenAI. Lorsqu'un agent travaille, la CLI envoie la requête au fournisseur et le texte transite par ses serveurs : sa politique de confidentialité s'applique. JHT n'intermédie pas ces appels.",
@@ -212,7 +212,7 @@ const T = {
       "A Job Hunter Team (JHT) respeita a sua privacidade. Esta página explica como os seus dados são tratados.",
     s1_title: "Dados recolhidos",
     s1_body:
-      "O JHT é executado dentro de um contentor Docker no host que escolher. Por predefinição, perfil, CV, candidaturas e preferências permanecem no espaço de trabalho da equipa; os dados selecionados só são copiados se ativar a sincronização cloud opcional.",
+      "O JHT é executado dentro de um contentor no host que escolher. Por predefinição, perfil, CV, candidaturas e preferências permanecem no espaço de trabalho da equipa; os dados selecionados só são copiados se ativar a sincronização cloud opcional.",
     s2_title: "Fornecedores de IA",
     s2_body:
       "Os agentes funcionam numa CLI suportada, o Codex, que exige a sua própria subscrição ChatGPT ativa junto da OpenAI. Quando um agente trabalha, a CLI envia o pedido ao fornecedor e o texto passa pelos seus servidores: aplica-se a política de privacidade dele. O JHT não intermedeia essas chamadas.",

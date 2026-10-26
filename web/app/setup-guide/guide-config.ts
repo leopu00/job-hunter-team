@@ -47,21 +47,13 @@ export function downloadUrlFor(os: OsId, asset?: string): string | null {
 /** La pagina Download del sito, per chi arriva qui da un link diretto. */
 export const DOWNLOAD_PAGE = "/download";
 
-/** «Se non hai Docker, scaricalo da qui» — pagina ufficiale per sistema.
- *  Indirizzi presi dal contratto del team docs. */
-export const DOCKER_URL: Record<OsId, string> = {
-  macos: "https://docs.docker.com/desktop/setup/install/mac-install/",
-  windows: "https://docs.docker.com/desktop/setup/install/windows-install/",
-  linux: "https://docs.docker.com/engine/install/",
-};
-
-/** Su Windows il team gira in Podman dentro WSL: l'app installa Podman, non
- *  WSL. Se WSL manca, la pagina ufficiale di Microsoft dice come installarlo. */
-export const WSL_URL = "https://learn.microsoft.com/windows/wsl/install";
+/** Homebrew: su Mac l'app lo usa per installare Podman, quindi deve esserci già. La pagina ufficiale
+ *  dice come ottenerlo (il pacchetto .pkg). */
+export const HOMEBREW_URL = "https://brew.sh";
 
 /** Installazione da terminale, per chi preferisce la CLI all'app. */
 export const CLI_INSTALL_CMD =
-  "curl -fsSL https://jobhunterteam.ai/install.sh | bash";
+  "curl -fsSL https://jobhunterteam.ai/install.sh | bash -s -- --runtime podman";
 
 /** Pagine del sito citate dalle fasi. */
 export const DOCS_PROVIDER = "/docs/guides/connect-ai-provider";

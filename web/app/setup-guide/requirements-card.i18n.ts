@@ -1,4 +1,4 @@
-// Valori misurati della scheda requisiti nativa.
+// Valori della scheda requisiti nativa: i numeri sono misurati, i sistemi sono quelli della 0.4.
 //
 // Vivono in un catalogo puro invece che dentro il componente React: così la
 // rete i18n del web li importa davvero e una nuova riga inglese non può
@@ -9,31 +9,31 @@ import type { GuideText } from "./guide-types";
 
 export const REQUIREMENTS_CARD_VALUES: Record<string, GuideText> = {
   docker: {
-    en: "Required on macOS and Linux — on Windows the app installs Podman inside WSL",
-    it: "Obbligatorio su macOS e Linux — su Windows l’app installa Podman dentro WSL",
-    es: "Obligatorio en macOS y Linux — en Windows la aplicación instala Podman dentro de WSL",
-    fr: "Requis sous macOS et Linux — sous Windows, l’application installe Podman dans WSL",
-    de: "Unter macOS und Linux erforderlich — unter Windows installiert die App Podman in WSL",
-    pt: "Obrigatório no macOS e no Linux — no Windows a aplicação instala o Podman dentro do WSL",
-    hu: "macOS-en és Linuxon szükséges — Windowson az alkalmazás Podmant telepít a WSL-be",
+    en: "Podman, installed through Homebrew and managed by the app — Homebrew must already be on your Mac",
+    it: "Podman, installato tramite Homebrew e gestito dall’app — Homebrew deve essere già sul tuo Mac",
+    es: "Podman, instalado con Homebrew y gestionado por la aplicación — Homebrew debe estar ya en tu Mac",
+    fr: "Podman, installé via Homebrew et géré par l’application — Homebrew doit déjà être sur votre Mac",
+    de: "Podman, über Homebrew installiert und von der App verwaltet — Homebrew muss bereits auf deinem Mac sein",
+    pt: "Podman, instalado através do Homebrew e gerido pela aplicação — o Homebrew tem de estar já no teu Mac",
+    hu: "Podman, Homebrew-val telepítve és az alkalmazás által kezelve — a Homebrew-nak már a Macen kell lennie",
   },
   memory: {
-    en: "About 8 GB available before starting the team",
-    it: "Circa 8 GB disponibili prima di avviare il team",
-    es: "Unos 8 GB disponibles antes de iniciar el equipo",
-    fr: "Environ 8 Go disponibles avant de démarrer l’équipe",
-    de: "Vor dem Start des Teams etwa 8 GB verfügbar",
-    pt: "Cerca de 8 GB disponíveis antes de iniciar a equipa",
-    hu: "A csapat indítása előtt körülbelül 8 GB legyen szabad",
+    en: "A Mac with at least 16 GB of RAM is recommended; the container machine the app creates uses 2 CPUs and 4 GiB of memory",
+    it: "Consigliato un Mac con almeno 16 GB di RAM; la macchina per i container che l’app crea usa 2 CPU e 4 GiB di memoria",
+    es: "Se recomienda un Mac con al menos 16 GB de RAM; la máquina de contenedores que crea la aplicación usa 2 CPU y 4 GiB de memoria",
+    fr: "Un Mac avec au moins 16 Go de RAM est recommandé ; la machine de conteneurs créée par l’application utilise 2 CPU et 4 GiB de mémoire",
+    de: "Empfohlen wird ein Mac mit mindestens 16 GB RAM; die Container-Maschine, die die App anlegt, nutzt 2 CPUs und 4 GiB Arbeitsspeicher",
+    pt: "Recomenda-se um Mac com pelo menos 16 GB de RAM; a máquina de contentores que a aplicação cria usa 2 CPU e 4 GiB de memória",
+    hu: "Ajánlott egy legalább 16 GB RAM-os Mac; az alkalmazás által létrehozott konténergép 2 CPU-t és 4 GiB memóriát használ",
   },
   disk: {
-    en: "Room for the team image — no minimum has been measured",
-    it: "Spazio per l'immagine del team — non è stato misurato alcun minimo",
-    es: "Espacio para la imagen del equipo — no se ha medido ningún mínimo",
-    fr: "Espace pour l’image de l’équipe — aucun minimum n’a été mesuré",
-    de: "Platz für das Team-Image — es wurde kein Minimum gemessen",
-    pt: "Espaço para a imagem da equipa — não foi medido qualquer mínimo",
-    hu: "Hely a csapat Docker-image-éhez — nem mértek minimális tárhelyigényt",
+    en: "Room for the team image — no minimum has been measured; the machine’s disk grows as needed, up to 30 GiB",
+    it: "Spazio per l'immagine del team — non è stato misurato alcun minimo; il disco della macchina cresce secondo necessità, fino a 30 GiB",
+    es: "Espacio para la imagen del equipo — no se ha medido ningún mínimo; el disco de la máquina crece según haga falta, hasta 30 GiB",
+    fr: "Espace pour l’image de l’équipe — aucun minimum n’a été mesuré ; le disque de la machine grandit selon les besoins, jusqu’à 30 GiB",
+    de: "Platz für das Team-Image — es wurde kein Minimum gemessen; die Festplatte der Maschine wächst bei Bedarf bis auf 30 GiB",
+    pt: "Espaço para a imagem da equipa — não foi medido qualquer mínimo; o disco da máquina cresce conforme necessário, até 30 GiB",
+    hu: "Hely a csapat image-éhez — nem mértek minimális tárhelyigényt; a gép lemeze szükség szerint nő, legfeljebb 30 GiB-ig",
   },
   internet: {
     en: "Required",
@@ -64,12 +64,13 @@ export const REQUIREMENTS_CARD_VALUES: Record<string, GuideText> = {
   },
 };
 
-export const REQUIREMENTS_CARD_EVIDENCE: GuideText = {
-  en: "Measured over 30 minutes on Windows with Docker Desktop, in v0.3.9: a 12 GB machine kept more than 4 GB free with the team and Job Hunter Team Desktop running, on a 2013 2-core, 4-thread CPU, without saturation.",
-  it: "Misurato per 30 minuti su Windows con Docker Desktop, nella v0.3.9: una macchina con 12 GB ha mantenuto più di 4 GB liberi con il team e Job Hunter Team Desktop in esecuzione, su una CPU del 2013 con 2 core e 4 thread, senza saturarsi.",
-  es: "Medido durante 30 minutos en Windows con Docker Desktop, en la v0.3.9: una máquina con 12 GB mantuvo más de 4 GB libres con el equipo y Job Hunter Team Desktop en ejecución, en una CPU de 2013 con 2 núcleos y 4 hilos, sin saturarse.",
-  fr: "Mesuré pendant 30 minutes sous Windows avec Docker Desktop, dans la v0.3.9 : une machine équipée de 12 Go a conservé plus de 4 Go libres avec l’équipe et Job Hunter Team Desktop en fonctionnement, sur un processeur de 2013 à 2 cœurs et 4 threads, sans saturation.",
-  de: "Über 30 Minuten unter Windows mit Docker Desktop gemessen, in v0.3.9: Auf einem Rechner mit 12 GB blieben bei laufendem Team und Job Hunter Team Desktop mehr als 4 GB frei; die CPU aus dem Jahr 2013 mit 2 Kernen und 4 Threads wurde dabei nicht ausgelastet.",
-  pt: "Medido durante 30 minutos no Windows com o Docker Desktop, na v0.3.9: uma máquina com 12 GB manteve mais de 4 GB livres com a equipa e o Job Hunter Team Desktop em execução, num processador de 2013 com 2 núcleos e 4 threads, sem saturar.",
-  hu: "30 perces Windows-futtatásban mérve, Docker Desktoppal, a v0.3.9-ben: egy 12 GB-os gépen több mint 4 GB maradt szabadon a csapat és a Job Hunter Team Desktop futása közben; a 2013-as, 2 magos, 4 szálas processzor nem telítődött.",
+/** What this version supports, said plainly under the card: no measurement is claimed for a system. */
+export const REQUIREMENTS_CARD_SYSTEMS: GuideText = {
+  en: "Supported in this version: Macs with Apple silicon. Windows is not supported in 0.4. Linux is experimental and has not been tested by hand.",
+  it: "Supportati in questa versione: Mac con Apple silicon. Windows non è supportato nella 0.4. Linux è sperimentale e non è stato provato a mano.",
+  es: "Compatibles en esta versión: Mac con Apple silicon. Windows no es compatible en la 0.4. Linux es experimental y no se ha probado a mano.",
+  fr: "Pris en charge dans cette version : les Mac Apple silicon. Windows n’est pas pris en charge dans la 0.4. Linux est expérimental et n’a pas été testé à la main.",
+  de: "In dieser Version unterstützt: Macs mit Apple Silicon. Windows wird in 0.4 nicht unterstützt. Linux ist experimentell und wurde nicht von Hand getestet.",
+  pt: "Suportados nesta versão: Macs com Apple silicon. O Windows não é suportado na 0.4. O Linux é experimental e não foi testado à mão.",
+  hu: "Ebben a verzióban támogatott: az Apple silicon Macek. A Windows a 0.4-ben nem támogatott. A Linux kísérleti, és kézzel nem tesztelték.",
 };

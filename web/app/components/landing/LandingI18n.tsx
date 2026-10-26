@@ -226,10 +226,10 @@ const translations = {
     en: "Only Macs with Apple silicon (M1 and later). Intel Macs are not supported in 0.4.",
     hu: "Csak Apple silicon-os Mac-ekhez (M1 és újabb). Az Intel-es Mac-ek a 0.4-ben nem támogatottak.",
   },
-  dl_windows_coming_soon: {
-    it: "In arrivo",
-    en: "Coming soon",
-    hu: "Hamarosan",
+  dl_windows_not_in_version: {
+    it: "Non in questa versione",
+    en: "Not in this version",
+    hu: "Nem ebben a verzióban",
   },
   dl_linux_experimental: {
     it: "Sperimentale, non provato a mano.",
@@ -357,9 +357,9 @@ const translations = {
     hu: "Ahogy és ahol szeretnéd",
   },
   home_setup_body: {
-    it: "Inizia sul PC locale: è il percorso completo più semplice e il team lavora finché PC, Docker e rete sono disponibili. Se vuoi continuità anche a PC spento, puoi usare una VPS che fornisci e amministri tu. La sincronizzazione web è facoltativa e non decide dove gira il team.",
-    en: "Start on your Local PC: it is the simplest complete path, and the team works while the PC, Docker, and network are available. For continuity while that PC is off, you can use a VPS that you provide and administer. Web sync is optional and does not decide where the team runs.",
-    hu: "Kezdd a helyi PC-den: ez a legegyszerűbb teljes útvonal, és a csapat addig dolgozik, amíg a PC, a Docker és a hálózat elérhető. Ha kikapcsolt PC mellett is folytonosságot szeretnél, használhatsz egy általad biztosított és felügyelt VPS-t. A webes szinkronizálás opcionális, és nem határozza meg, hol fut a csapat.",
+    it: "Inizia sul PC locale: è il percorso completo più semplice e il team lavora finché PC, runtime dei container e rete sono disponibili. Se vuoi continuità anche a PC spento, puoi usare una VPS che fornisci e amministri tu. La sincronizzazione web è facoltativa e non decide dove gira il team.",
+    en: "Start on your Local PC: it is the simplest complete path, and the team works while the PC, the container runtime, and network are available. For continuity while that PC is off, you can use a VPS that you provide and administer. Web sync is optional and does not decide where the team runs.",
+    hu: "Kezdd a helyi PC-den: ez a legegyszerűbb teljes útvonal, és a csapat addig dolgozik, amíg a PC, a konténer-futtatókörnyezet és a hálózat elérhető. Ha kikapcsolt PC mellett is folytonosságot szeretnél, használhatsz egy általad biztosított és felügyelt VPS-t. A webes szinkronizálás opcionális, és nem határozza meg, hol fut a csapat.",
   },
   home_setup_cta: {
     it: "Come si avvia →",

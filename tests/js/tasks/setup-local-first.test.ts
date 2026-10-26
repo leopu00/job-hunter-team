@@ -262,7 +262,9 @@ describe("route pubbliche — il locale non e' una demo e il cloud non e' un hos
   });
 
   it("la guida setup resta locale completa con VPS separata", () => {
-    expect(setupGuide).toContain("Job Hunter Team runs the local team in Docker");
+    // the local path of 0.4: Homebrew first, then the app installs Podman on the Mac (no Docker step any more)
+    expect(setupGuide).toContain("Job Hunter Team uses Homebrew to install Podman");
+    expect(setupGuide).not.toContain("runs the local team in Docker");
     expect(setupGuide).toContain('href: DOCS_VPS');
     expect(setupGuide).not.toContain("local / guest mode");
   });
@@ -274,20 +276,19 @@ describe("route pubbliche — il locale non e' una demo e il cloud non e' un hos
   });
 
   // Fino al 09/10 questo test teneva la promessa opposta («Windows 0.4: solo
-  // VPS»). Con la catena Windows il team gira in locale in Podman dentro WSL,
-  // installato dall'app: le guide lo dicono, e nessuna torna a chiedere Docker
-  // Desktop o a rimandare l'esecuzione locale. Il README ha la sua frase vecchia
-  // ma resta fuori dal controllo positivo: il suo framing lo decide l'operatore.
-  it("la release 0.4 dice che su Windows il team gira in locale, in Podman dentro WSL", () => {
+  // VPS»); poi quella della catena Windows (locale in Podman dentro WSL). La 0.4.0
+  // non ha Windows: la guida «dove farlo girare» lo dice e non descrive più WSL.
+  // QUICKSTART e TUTORIALS hanno ancora la frase della catena Windows, da riscrivere
+  // a parte; qui restano controllati come prima.
+  it("la release 0.4 dice che Windows non c'e' in questa versione e nessuna guida torna a chiedere Docker Desktop", () => {
     for (const guide of nativeOfficeGuides) {
       expect(guide).not.toMatch(/Windows users must complete\s+Docker Desktop/i);
     }
+    expect(chooseWhere).toContain("Windows is not in this version");
+    expect(chooseWhere).not.toMatch(/WSL/);
+    expect(chooseWhere).not.toContain("use a Linux VPS instead");
     for (const guide of nativeOfficeGuides.slice(1)) {
-      expect(guide).toMatch(/Windows 0\.4/i);
-      expect(guide).toMatch(/Podman\s+(?:inside|dentro|dentro de|dans|in|dentro do)\s+(?:o\s+)?WSL|WSL-en belül futó Podman/i);
       expect(guide).not.toMatch(/local Windows execution is planned|does not offer local execution yet|offers only a Linux VPS/i);
     }
-    expect(chooseWhere).toContain("on Windows 0.4 it runs");
-    expect(chooseWhere).not.toContain("use a Linux VPS instead");
   });
 });

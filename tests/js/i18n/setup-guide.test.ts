@@ -18,7 +18,7 @@ import { fileURLToPath } from "node:url";
 
 import { GUIDE_CHAPTERS } from "@/app/setup-guide/guide-content";
 import {
-  REQUIREMENTS_CARD_EVIDENCE,
+  REQUIREMENTS_CARD_SYSTEMS,
   REQUIREMENTS_CARD_VALUES,
 } from "@/app/setup-guide/requirements-card.i18n";
 import {
@@ -69,8 +69,8 @@ function everyText(): { where: string; text: GuideText }[] {
     out.push({ where: `requirements card · ${key}`, text });
   }
   out.push({
-    where: "requirements card · evidence",
-    text: REQUIREMENTS_CARD_EVIDENCE,
+    where: "requirements card · systems",
+    text: REQUIREMENTS_CARD_SYSTEMS,
   });
   return out;
 }
@@ -356,7 +356,7 @@ describe("guida di setup — contratto del team docs", () => {
   it("i sette testi misurati della scheda nativa sono tradotti davvero", () => {
     const texts = [
       ...Object.entries(REQUIREMENTS_CARD_VALUES),
-      ["evidence", REQUIREMENTS_CARD_EVIDENCE] as const,
+      ["systems", REQUIREMENTS_CARD_SYSTEMS] as const,
     ];
     const pending = texts
       .filter(([, text]) => isUntranslated(text))
@@ -380,14 +380,15 @@ describe("guida di setup — contratto del team docs", () => {
     }
   });
 
-  it("indice, G00 e S02 sono tradotti davvero nelle sei lingue derivate", () => {
+  it("indice, G00 e i passi di Homebrew, Windows e Linux sono tradotti davvero nelle sei lingue derivate", () => {
     const chapter = GUIDE_CHAPTERS.find(
       (candidate) => candidate.id === "guide-index",
     )!;
     const phaseIds = new Set([
       "choose-setup-path",
-      "install-docker-windows",
-      "install-docker-linux",
+      "install-homebrew-macos",
+      "windows-not-supported",
+      "linux-needs-podman",
     ]);
     const phases = chapter.phases.filter((phase) => phaseIds.has(phase.id));
     expect(phases).toHaveLength(phaseIds.size);
