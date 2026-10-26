@@ -6,6 +6,7 @@ import hashlib
 import json
 import re
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -336,6 +337,18 @@ def test_update_keeps_the_crlf_of_a_windows_checkout(tmp_path: Path) -> None:
     assert after.count(b"\n") == after.count(b"\r\n") > 100
     assert NEW_DIGEST.encode() in after and old.digest.encode() not in after
     assert runtime_image_pin.verify_tree(tree).digest == NEW_DIGEST
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="no execute bit on Windows")
+def test_update_keeps_the_mode_of_the_installers(tmp_path: Path) -> None:
+    tree = _tree_copy(tmp_path)
+    for relative in ("scripts/install.sh", "web/public/install.sh"):
+        (tree / relative).chmod(0o755)
+    runtime_image_pin.update_tree(tree, NEW_DIGEST, NEW_REVISION)
+    for relative in ("scripts/install.sh", "web/public/install.sh"):
+        assert (tree / relative).stat().st_mode & 0o777 == 0o755, relative
+        assert NEW_DIGEST in (tree / relative).read_text()
+    assert (tree / "docker-compose.yml").stat().st_mode & 0o777 == (ROOT / "docker-compose.yml").stat().st_mode & 0o777
 
 
 def test_a_pin_left_behind_after_the_update_is_red(tmp_path: Path) -> None:

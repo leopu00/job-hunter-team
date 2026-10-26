@@ -15,6 +15,7 @@ import hashlib
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 import urllib.error
@@ -310,6 +311,8 @@ def update_tree(
             staged.append((temporary, target))
             with open(temporary, "w", encoding="utf-8", newline="") as handle:
                 handle.write(text)
+            # os.replace puts the new file's mode in place: the installers are 0755
+            shutil.copymode(target, temporary)
         temporary = manifest_path.with_name(manifest_path.name + ".pin-new")
         staged.append((temporary, manifest_path))
         temporary.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8")
