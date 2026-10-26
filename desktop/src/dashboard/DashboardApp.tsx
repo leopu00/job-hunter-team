@@ -70,6 +70,8 @@ import {
   readOnboardingSnapshot,
   readPreviousLocalData,
   recreateOnboardingPodmanMachine,
+  setAsideUnassignedLocalData,
+  adoptUnassignedLocalData,
   resumeOnboardingSnapshot,
   resumeOnboardingTeamStart,
   wakeRuntime,
@@ -1757,6 +1759,8 @@ export default function DashboardApp() {
         onProviderRestart={restartProviderLogin}
         onRetry={retry}
         onRecreatePodmanMachine={recreatePodmanMachine}
+        onUseLocalData={adoptUnassignedLocalData}
+        onSetAsideLocalData={setAsideUnassignedLocalData}
         onFreeDiskSpace={freeDiskSpace}
         runtimeLogPath={runtimeLog}
         onOpenRuntimeLog={openRuntimeLog}

@@ -351,6 +351,26 @@ export async function openOnboardingAssistant(
   return invoke("onboarding_assistant_open", { host, onProgress: progressChannel(onProgress) });
 }
 
+/**
+ * «Use this data», after the person confirmed it: the local profile takes the folder no profile
+ * had taken. Never run on its own.
+ */
+export async function adoptUnassignedLocalData(): Promise<void> {
+  if (!isTauri()) desktopOnly();
+  await invoke("onboarding_local_data_adopt");
+}
+
+/**
+ * «Set it aside and start again», after the person confirmed it: the folder is moved (never
+ * deleted) to one named with the date. Resolves with that folder's name, to tell the person.
+ */
+export async function setAsideUnassignedLocalData(): Promise<string> {
+  if (!isTauri()) desktopOnly();
+  const folder = await invoke<unknown>("onboarding_local_data_set_aside");
+  if (typeof folder !== "string" || !/^jht-data-set-aside-[0-9-]{15,20}$/.test(folder)) throw new Error("unexpected");
+  return folder;
+}
+
 /** Whether ~/.jht holds an earlier version's data no profile has taken yet. */
 export async function readPreviousLocalData(): Promise<boolean> {
   if (!isTauri()) return false;

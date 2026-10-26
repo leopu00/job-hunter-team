@@ -470,13 +470,21 @@ const COPY_BY_ENGLISH_TEXT: Readonly<Record<string, ErrorTranslations>> = {
     hu: ["Ez a funkció csak az asztali alkalmazásban érhető el.", "A használatához nyisd meg a Job Hunter Teamet a számítógépeden."],
     pt: ["Esta funcionalidade só está disponível na aplicação para computador.", "Abre o Job Hunter Team no computador para a utilizares."],
   },
-  "The local data on this computer is not assigned to any profile.": {
-    de: ["Die lokalen Daten auf diesem Computer sind keinem Profil zugeordnet.", "Beginne erneut mit der technischen Einrichtung des lokalen Teams."],
-    es: ["Los datos locales de este ordenador no están asignados a ningún perfil.", "Vuelve a empezar desde la configuración técnica del equipo local."],
-    fr: ["Les données locales de cet ordinateur ne sont attribuées à aucun profil.", "Reprends depuis la configuration technique de l’équipe locale."],
-    hu: ["A számítógépen lévő helyi adatok nincsenek profilhoz rendelve.", "Kezdd újra a helyi csapat műszaki beállításától."],
-    pt: ["Os dados locais deste computador não estão atribuídos a nenhum perfil.", "Recomeça a partir da configuração técnica da equipa local."],
+  "There is local data on this computer that does not belong to any profile.": {
+    de: ["Auf diesem Computer liegen lokale Daten, die keinem Profil gehören.", "Wähle unten, was damit geschehen soll."],
+    es: ["En este ordenador hay datos locales que no pertenecen a ningún perfil.", "Elige abajo qué hacer con ellos."],
+    fr: ["Cet ordinateur contient des données locales qui n’appartiennent à aucun profil.", "Choisis ci-dessous ce que tu veux en faire."],
+    hu: ["A számítógépen olyan helyi adatok vannak, amelyek egyetlen profilhoz sem tartoznak.", "Válassz lent, mi legyen velük."],
+    pt: ["Neste computador há dados locais que não pertencem a nenhum perfil.", "Escolhe abaixo o que fazer com eles."],
   },
+  "The local data was not set aside: nothing was touched.": {
+    de: ["Die lokalen Daten wurden nicht beiseitegelegt: Es wurde nichts verändert.", "Versuche es erneut. Wenn es wieder passiert, schließe die anderen Apps, die den Ordner ~/.jht verwenden."],
+    es: ["Los datos locales no se apartaron: no se ha tocado nada.", "Vuelve a intentarlo. Si se repite, cierra las otras apps que usan la carpeta ~/.jht."],
+    fr: ["Les données locales n’ont pas été mises de côté : rien n’a été touché.", "Réessaie. Si cela se reproduit, ferme les autres applications qui utilisent le dossier ~/.jht."],
+    hu: ["A helyi adatok nem kerültek félretételre: semmihez nem nyúltunk.", "Próbáld újra. Ha ismétlődik, zárd be a ~/.jht mappát használó többi alkalmazást."],
+    pt: ["Os dados locais não foram postos de parte: não foi tocado em nada.", "Tenta novamente. Se se repetir, fecha as outras apps que usam a pasta ~/.jht."],
+  },
+
   "The container engine (Podman) was not installed.": {
     de: ["Die Container-Engine (Podman) wurde nicht installiert.", "Versuche es erneut: Die App installiert sie selbst. Wenn es wieder passiert, prüfe deine Internetverbindung."],
     es: ["No se ha instalado el motor de contenedores (Podman).", "Inténtalo de nuevo: la aplicación lo instala automáticamente. Si vuelve a ocurrir, comprueba tu conexión a internet."],
@@ -1601,7 +1609,8 @@ export const ERROR_CATALOG_LOCALES: Readonly<Record<string, ErrorTranslations>> 
   account_scope_mismatch: translated("The active account changed during the operation."),
   local_runtime_unsupported: translated("Running the team on this computer is not available on this system."),
   local_account_owner_unavailable: translated("I cannot read which profile owns the local data."),
-  local_account_owner_missing: translated("The local data on this computer is not assigned to any profile."),
+  local_account_owner_missing: translated("There is local data on this computer that does not belong to any profile."),
+  local_data_set_aside_failed: translated("The local data was not set aside: nothing was touched."),
   local_account_owner_invalid: translated("The local data on this computer belongs to another profile."),
   local_account_owner_mismatch: translated("The local data on this computer belongs to another profile."),
 

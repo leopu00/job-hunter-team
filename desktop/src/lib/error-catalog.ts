@@ -378,11 +378,19 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
   account_scope_mismatch: ACCOUNT_CHANGED,
   local_runtime_unsupported: LOCAL_UNSUPPORTED,
   local_account_owner_unavailable: LOCAL_OWNER_UNAVAILABLE,
+  // The person is offered the way out under the message (OnboardingFlow: «Use this data» for a
+  // local profile, «Set it aside and start again» for both), never a dead end.
   local_account_owner_missing: copy(
-    "I dati locali di questo computer non sono intestati a nessun profilo.",
-    "Riparti dalla configurazione tecnica del team locale.",
-    "The local data on this computer is not assigned to any profile.",
-    "Start again from the local team’s technical setup.",
+    "Su questo computer ci sono dati locali che non appartengono a nessun profilo.",
+    "Scegli qui sotto cosa farne.",
+    "There is local data on this computer that does not belong to any profile.",
+    "Choose below what to do with it.",
+  ),
+  local_data_set_aside_failed: copy(
+    "I dati locali non sono stati messi da parte: non è stato toccato niente.",
+    "Riprova. Se si ripete, chiudi le altre app che usano la cartella ~/.jht.",
+    "The local data was not set aside: nothing was touched.",
+    "Try again. If it happens again, close the other apps that use the ~/.jht folder.",
   ),
   local_account_owner_invalid: LOCAL_OWNER,
   local_account_owner_mismatch: LOCAL_OWNER,

@@ -135,44 +135,6 @@ export const GUIDE_CHAPTERS: GuideChapter[] = [
         ],
       },
       {
-        id: "install-docker-macos",
-        os: ["macos"],
-        title: {
-          en: "Install Docker Desktop on macOS",
-          it: "Installa Docker Desktop su macOS",
-          es: "Instala Docker Desktop en macOS",
-          fr: "Installez Docker Desktop sous macOS",
-          de: "Docker Desktop unter macOS installieren",
-          pt: "Instala o Docker Desktop no macOS",
-          hu: "Telepítsd a Docker Desktopot macOS-re",
-        },
-        body: {
-          en: "Job Hunter Team runs the local team in Docker. If Docker is not installed, download Docker Desktop from the official macOS instructions, install it, and start it before continuing.",
-          it: "Job Hunter Team esegue il team locale in Docker. Se Docker non è installato, scarica Docker Desktop dalle istruzioni ufficiali per macOS, installalo e avvialo prima di continuare.",
-          es: "Job Hunter Team ejecuta el equipo local en Docker. Si Docker no está instalado, descarga Docker Desktop desde las instrucciones oficiales para macOS, instálalo e inícialo antes de continuar.",
-          fr: "Job Hunter Team exécute l’équipe locale dans Docker. Si Docker n’est pas installé, téléchargez Docker Desktop depuis les instructions officielles pour macOS, installez-le et démarrez-le avant de continuer.",
-          de: "Job Hunter Team führt das lokale Team in Docker aus. Wenn Docker nicht installiert ist, lade Docker Desktop über die offizielle macOS-Anleitung herunter, installiere und starte es, bevor du fortfährst.",
-          pt: "O Job Hunter Team executa a equipa local no Docker. Se o Docker não estiver instalado, transfere o Docker Desktop a partir das instruções oficiais para macOS, instala-o e inicia-o antes de continuares.",
-          hu: "A Job Hunter Team Dockerben futtatja a helyi csapatot. Ha a Docker nincs telepítve, töltsd le a Docker Desktopot a hivatalos macOS-útmutatóból, telepítsd és indítsd el, mielőtt folytatnád.",
-        },
-        screen: { screenId: "S02-docker-download" },
-        links: [
-          {
-            kind: "external",
-            href: DOCKER_URL.macos,
-            label: {
-              en: "Get Docker Desktop for Mac",
-              it: "Scarica Docker Desktop per Mac",
-              es: "Descarga Docker Desktop para Mac",
-              fr: "Télécharger Docker Desktop pour Mac",
-              de: "Docker Desktop für Mac herunterladen",
-              pt: "Transfere o Docker Desktop para Mac",
-              hu: "Docker Desktop letöltése Macre",
-            },
-          },
-        ],
-      },
-      {
         id: "install-docker-windows",
         os: ["windows"],
         title: {

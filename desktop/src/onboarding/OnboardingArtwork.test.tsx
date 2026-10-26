@@ -23,7 +23,7 @@ describe("onboarding artwork mapping", () => {
       keyPath: "/synthetic/key",
     })].src).toBe("/onboarding/environment-vps-v2.webp");
     expect(ONBOARDING_ARTWORK[collectionArtwork(2, { kind: "local" })].src)
-      .toBe("/onboarding/provider-v2.webp");
+      .toBe("/onboarding/provider-v3.webp");
     expect(ONBOARDING_ARTWORK[collectionArtwork(3, { kind: "local" })].src)
       .toBe("/onboarding/runtime.webp");
   });
