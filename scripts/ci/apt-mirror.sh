@@ -33,18 +33,24 @@ for f in "$APT_DIR"/sources.list "$APT_DIR"/sources.list.d/* "$APT_DIR"/apt-mirr
 done
 [ -n "$files" ] || { echo "apt mirror: no sources found in $APT_DIR, left as they are"; exit 0; }
 
-# the Ubuntu mirror the sources use now (the host, without a trailing slash)
+# The Ubuntu archive the sources use now, as written there (scheme and host, no trailing slash).  Only an
+# archive.ubuntu.com host counts (azure.archive.ubuntu.com, archive.ubuntu.com, <cc>.archive.ubuntu.com): the
+# runner also has other repositories whose path starts with /ubuntu (Microsoft's, PPAs), and those are not ours.
 # shellcheck disable=SC2086
-current=$(cat $files 2>/dev/null | grep -oE 'https?://[A-Za-z0-9.-]+/ubuntu' | head -n 1)
-[ -n "$current" ] || { echo "apt mirror: the sources name no Ubuntu mirror, left as they are"; exit 0; }
+current=$(cat $files 2>/dev/null | grep -oE 'https?://([A-Za-z0-9-]+\.)?archive\.ubuntu\.com/ubuntu' | head -n 1)
+[ -n "$current" ] || { echo "apt mirror: the sources name no Ubuntu archive mirror, left as they are"; exit 0; }
 
 speed() {  # bytes per second of the probe from $1, 0 when it cannot be fetched
   bps=$(curl -fsSL --connect-timeout 3 --max-time "$SECONDS_MAX" -o /dev/null -w '%{speed_download}' "$1/$PROBE" 2>/dev/null) || bps=0
   printf '%s' "${bps%%.*}"
 }
 
-chosen=""
-for mirror in $CANDIDATES; do
+# The mirror in use is measured first, exactly as apt reaches it (azure is served over http: an https probe of it
+# says nothing about the runner), then the candidates; a host already measured is not asked again.
+chosen=""; seen=""
+for mirror in "$current" $CANDIDATES; do
+  case " $seen " in *" ${mirror#*://} "*) continue;; esac
+  seen="$seen ${mirror#*://}"
   bps=$(speed "$mirror")
   [ -n "$bps" ] || bps=0
   echo "apt mirror: $mirror $((bps / 1000)) kB/s"
@@ -61,9 +67,21 @@ if [ "${chosen#*://}" = "${current#*://}" ]; then
   exit 0
 fi
 pattern=$(printf '%s' "$current" | sed 's/[][\.*^$#]/\\&/g')   # the host is text, not a regular expression
+backup=$(mktemp -d) || { echo "apt mirror: no scratch folder, sources left as they are"; exit 0; }
+for f in $files; do cp -p "$f" "$backup/$(printf '%s' "$f" | tr '/' '_')"; done
 for f in $files; do   # in place without `sed -i`, which differs between GNU and BSD
   sed "s#${pattern}#${chosen}#g" "$f" > "$f.new" && cat "$f.new" > "$f"
   rm -f "$f.new"
 done
+# The new mirror has to serve this release's index, or the change is undone: a source apt cannot read
+# is an `apt-get update` that exits 100 in the next step.
+codename="${APT_RELEASE_CODENAME:-$(sed -n 's/^VERSION_CODENAME=//p' /etc/os-release 2>/dev/null | head -n 1)}"
+if [ -n "$codename" ] && ! curl -fsSL --connect-timeout 3 --max-time 10 -o /dev/null "$chosen/dists/$codename/InRelease" 2>/dev/null; then
+  for f in $files; do cp -p "$backup/$(printf '%s' "$f" | tr '/' '_')" "$f"; done
+  rm -rf "$backup"
+  echo "apt mirror: $chosen has no index for $codename, sources restored ($current)"
+  exit 0
+fi
+rm -rf "$backup"
 echo "apt mirror: switched $current -> $chosen"
 exit 0

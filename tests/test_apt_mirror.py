@@ -24,17 +24,35 @@ CANON = "https://archive.ubuntu.com/ubuntu"
 KERNEL = "https://mirrors.edge.kernel.org/ubuntu"
 FAST, SLOW = 90_000_000, 40_000
 
+# What else the runner's apt reads: the repositories whose path starts with /ubuntu are not the Ubuntu archive.
+# microsoft-prod.list sorts BEFORE ubuntu.sources and the mirror list, as on the runner: the first run with
+# the script took Microsoft's host for the Ubuntu mirror, rewrote it, and apt-get update exited 100 in three jobs.
+OTHERS = {
+    "microsoft-prod.list": "deb [arch=amd64,arm64,armhf signed-by=/usr/share/keyrings/microsoft-prod.gpg] https://packages.microsoft.com/ubuntu/24.04/prod noble main\n",
+    "azure-cli.sources": "Types: deb\nURIs: https://packages.microsoft.com/repos/azure-cli/\nSuites: noble\nComponents: main\n",
+    "github-cli.list": "deb [arch=amd64 signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main\n",
+    "toolchain.list": "deb https://ppa.launchpadcontent.net/ubuntu-toolchain-r/test/ubuntu noble main\n",
+}
+
 
 def _apt(tmp_path: Path) -> Path:
+    """A copy of the runner's layout: deb822 Ubuntu sources that read the mirror list, the list, and other repositories."""
     apt = tmp_path / "apt"
     (apt / "sources.list.d").mkdir(parents=True)
-    (apt / "sources.list").write_text(f"deb {AZURE_HTTP}/ noble main\n", encoding="utf-8")
-    (apt / "sources.list.d" / "ubuntu.sources").write_text(f"URIs: {AZURE_HTTP}/\nSuites: noble\n", encoding="utf-8")
-    (apt / "apt-mirrors.txt").write_text(f"{AZURE_HTTP}/\tpriority:1\n", encoding="utf-8")
+    (apt / "sources.list").write_text("# see /etc/apt/sources.list.d/ubuntu.sources\n", encoding="utf-8")
+    (apt / "sources.list.d" / "ubuntu.sources").write_text(
+        "Types: deb\nURIs: mirror+file:/etc/apt/apt-mirrors.txt\nSuites: noble noble-updates noble-backports\nComponents: main universe\n",
+        encoding="utf-8",
+    )
+    for name, text in OTHERS.items():
+        (apt / "sources.list.d" / name).write_text(text, encoding="utf-8")
+    (apt / "apt-mirrors.txt").write_text(
+        f"{AZURE_HTTP}/\tpriority:1\n{CANON}/\tpriority:2\nhttps://security.ubuntu.com/ubuntu/\tpriority:3\n", encoding="utf-8"
+    )
     return apt
 
 
-def _curl(tmp_path: Path, speeds: dict[str, int | None]) -> tuple[Path, Path]:
+def _curl(tmp_path: Path, speeds: dict[str, int | None], no_index: bool = False) -> tuple[Path, Path]:
     """A curl that answers the speed of the mirror in the URL (None: the transfer fails) and logs what it was asked."""
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir()
@@ -45,6 +63,7 @@ def _curl(tmp_path: Path, speeds: dict[str, int | None]) -> tuple[Path, Path]:
         "#!/bin/sh\n"
         'for last; do :; done\n'
         f'echo "$last" >> "{log}"\n'
+        f'case "$last" in */InRelease) {"exit 22" if no_index else "exit 0"};; esac\n'
         f'while read -r mirror bps; do\n'
         '  case "$last" in "$mirror"/*) [ "$bps" = fail ] && exit 22; printf "%s.000" "$bps"; exit 0;; esac\n'
         f'done <<EOF\n{table}\nEOF\n'
@@ -55,64 +74,94 @@ def _curl(tmp_path: Path, speeds: dict[str, int | None]) -> tuple[Path, Path]:
     return bin_dir, log
 
 
-def _run(tmp_path: Path, speeds: dict[str, int | None], apt: Path | None = None):
+def _run(tmp_path: Path, speeds: dict[str, int | None], apt: Path | None = None, no_index: bool = False):
     apt = apt or _apt(tmp_path)
-    bin_dir, log = _curl(tmp_path, speeds)
-    env = {**os.environ, "PATH": f"{bin_dir}:{os.environ['PATH']}", "APT_DIR": str(apt)}
+    bin_dir, log = _curl(tmp_path, speeds, no_index)
+    env = {**os.environ, "PATH": f"{bin_dir}:{os.environ['PATH']}", "APT_DIR": str(apt), "APT_RELEASE_CODENAME": "noble"}
     result = subprocess.run(["sh", str(SCRIPT)], capture_output=True, text=True, env=env)
     asked = log.read_text(encoding="utf-8").split() if log.exists() else []
-    return result, apt, [url.split("/pool/")[0] for url in asked]
+    probes = [url.split("/pool/")[0] for url in asked if "/pool/" in url]
+    return result, apt, probes
 
 
-def _hosts(apt: Path) -> set[str]:
-    text = "".join(path.read_text(encoding="utf-8") for path in [apt / "sources.list", apt / "apt-mirrors.txt", *(apt / "sources.list.d").iterdir()])
-    return {mirror for mirror in (AZURE_HTTP, AZURE, CANON, KERNEL) if mirror in text}
+def _text(apt: Path) -> str:
+    return "".join(path.read_text(encoding="utf-8") for path in sorted(apt.rglob("*")) if path.is_file())
+
+
+def _others_untouched(apt: Path) -> bool:
+    return all((apt / "sources.list.d" / name).read_text(encoding="utf-8") == text for name, text in OTHERS.items())
 
 
 def test_a_fast_default_mirror_is_kept_and_nothing_else_is_asked(tmp_path):
-    result, apt, asked = _run(tmp_path, {AZURE: FAST, CANON: FAST, KERNEL: FAST})
+    apt = _apt(tmp_path)
+    before = _text(apt)
+    result, apt, probes = _run(tmp_path, {AZURE_HTTP: FAST, AZURE: 0, CANON: FAST, KERNEL: FAST}, apt=apt)
     assert result.returncode == 0, result.stderr
-    assert asked == [AZURE]
-    assert _hosts(apt) == {AZURE_HTTP}, "the same host over https is the same mirror: nothing is rewritten for a scheme"
+    assert probes == [AZURE_HTTP], "the mirror in use is measured as apt reaches it (http), and nothing else is asked"
+    assert _text(apt) == before
     assert "keeping" in result.stdout
 
 
-def test_a_slow_default_mirror_is_replaced_in_every_source_apt_reads(tmp_path):
-    apt = _apt(tmp_path)
-    # the host is text, not a regular expression: a lookalike with another character where the dots are stays
-    lookalike = "deb http://azureXarchiveXubuntuXcom/ubuntu/ noble main\n"
-    (apt / "sources.list.d" / "other.list").write_text(lookalike, encoding="utf-8")
-    result, apt, asked = _run(tmp_path, {AZURE: SLOW, CANON: FAST, KERNEL: FAST}, apt=apt)
-    assert (apt / "sources.list.d" / "other.list").read_text(encoding="utf-8") == lookalike
+def test_a_slow_default_mirror_is_replaced_and_only_the_ubuntu_archive_is_touched(tmp_path):
+    result, apt, probes = _run(tmp_path, {AZURE_HTTP: SLOW, CANON: FAST, KERNEL: FAST})
     assert result.returncode == 0, result.stderr
-    assert asked == [AZURE, CANON], "the first fast one wins; the rest is not asked"
-    assert _hosts(apt) == {CANON}
-    assert (apt / "sources.list").read_text(encoding="utf-8") == f"deb {CANON}/ noble main\n"
+    assert probes == [AZURE_HTTP, CANON], "azure over https is the same host: not asked again; the first fast one wins"
+    assert AZURE_HTTP not in _text(apt)
+    assert (apt / "apt-mirrors.txt").read_text(encoding="utf-8").startswith(f"{CANON}/\tpriority:1\n")
+    assert _others_untouched(apt), "Microsoft's, GitHub's and the PPA's repositories are not the Ubuntu archive"
     assert f"switched {AZURE_HTTP} -> {CANON}" in result.stdout
 
 
+def test_microsoft_repository_sorting_before_the_ubuntu_sources_is_never_taken_for_the_mirror(tmp_path):
+    """The run that broke three jobs: the first /ubuntu in the files was packages.microsoft.com."""
+    result, apt, probes = _run(tmp_path, {AZURE_HTTP: SLOW, CANON: FAST})
+    assert all("packages.microsoft.com" not in probe for probe in probes), probes
+    assert "packages.microsoft.com" not in result.stdout, result.stdout
+
+
 def test_a_mirror_that_fails_counts_as_slow(tmp_path):
-    result, apt, asked = _run(tmp_path, {AZURE: None, CANON: None, KERNEL: FAST})
-    assert asked == [AZURE, CANON, KERNEL]
-    assert _hosts(apt) == {KERNEL}
+    result, apt, probes = _run(tmp_path, {AZURE_HTTP: None, CANON: None, KERNEL: FAST})
+    assert probes == [AZURE_HTTP, CANON, KERNEL]
+    assert AZURE_HTTP not in _text(apt)
+    assert (apt / "apt-mirrors.txt").read_text(encoding="utf-8").startswith(f"{KERNEL}/\tpriority:1\n")
+    assert _others_untouched(apt)
+
+
+def test_a_mirror_without_the_release_index_is_undone(tmp_path):
+    apt = _apt(tmp_path)
+    before = _text(apt)
+    result, apt, _ = _run(tmp_path, {AZURE_HTTP: SLOW, CANON: FAST}, apt=apt, no_index=True)
+    assert result.returncode == 0, result.stderr
+    assert _text(apt) == before, "an archive apt cannot read is an apt-get update that exits 100"
+    assert "restored" in result.stdout
 
 
 def test_when_none_is_fast_the_sources_are_left_as_they_are(tmp_path):
     apt = _apt(tmp_path)
-    before = {path: path.read_text(encoding="utf-8") for path in [apt / "sources.list", apt / "apt-mirrors.txt"]}
-    result, _, asked = _run(tmp_path, {AZURE: SLOW, CANON: SLOW, KERNEL: None}, apt=apt)
+    before = _text(apt)
+    result, _, probes = _run(tmp_path, {AZURE_HTTP: SLOW, CANON: SLOW, KERNEL: None}, apt=apt)
     assert result.returncode == 0, result.stderr
-    assert len(asked) == 3
-    assert {path: path.read_text(encoding="utf-8") for path in before} == before
+    assert len(probes) == 3
+    assert _text(apt) == before
     assert "left as they are" in result.stdout
+
+
+def test_sources_that_name_no_ubuntu_archive_are_left_alone(tmp_path):
+    apt = tmp_path / "apt"
+    (apt / "sources.list.d").mkdir(parents=True)
+    (apt / "sources.list.d" / "microsoft-prod.list").write_text(OTHERS["microsoft-prod.list"], encoding="utf-8")
+    result, _, probes = _run(tmp_path, {AZURE_HTTP: SLOW, CANON: FAST}, apt=apt)
+    assert result.returncode == 0, result.stderr
+    assert probes == []
+    assert (apt / "sources.list.d" / "microsoft-prod.list").read_text(encoding="utf-8") == OTHERS["microsoft-prod.list"]
 
 
 def test_without_sources_the_script_does_nothing_and_does_not_fail(tmp_path):
     apt = tmp_path / "empty"
     apt.mkdir()
-    result, _, asked = _run(tmp_path, {AZURE: FAST}, apt=apt)
+    result, _, probes = _run(tmp_path, {AZURE_HTTP: FAST}, apt=apt)
     assert result.returncode == 0, result.stderr
-    assert asked == []
+    assert probes == []
 
 
 # ---- test.yml: every job that installs from apt runs the script first ---------
