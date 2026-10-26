@@ -78,7 +78,9 @@ def run(*argv):
 
 
 def test_the_names_are_the_ones_the_site_links():
-    assert TAG.startswith("v") and len(NAMES) == 3 and all(re.search(r"\.(exe|dmg|AppImage)$", n) for n in NAMES)
+    # D13: Mac and Linux; Windows is not in the release, so it is not asked for
+    assert TAG.startswith("v") and len(NAMES) == 2 and all(re.search(r"\.(dmg|AppImage)$", n) for n in NAMES)
+    assert not any(n.endswith(".exe") for n in NAMES)
 
 
 def test_a_public_release_that_holds_the_files_is_green(github, capsys):
