@@ -1410,6 +1410,7 @@ def fetch_codex_app_server(timeout_s=None, executable=None):
     Non esce MAI altro che percentuali e orari di reset."""
     import queue
     import shutil
+    import signal
     import threading
 
     timeout_s = CODEX_APP_SERVER_TIMEOUT_S if timeout_s is None else timeout_s
@@ -1418,8 +1419,10 @@ def fetch_codex_app_server(timeout_s=None, executable=None):
         return None
     env = {**os.environ, "CODEX_HOME": str(JHT_HOME / ".codex")}
     try:
+        # Un gruppo di processi tutto suo: `codex` e' un lanciatore Node che avvia il binario nativo, e uccidere
+        # solo il lanciatore lascerebbe il figlio vivo fino all'EOF di stdin.
         proc = subprocess.Popen([exe, "app-server"], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-                                stderr=subprocess.DEVNULL, text=True, env=env)
+                                stderr=subprocess.DEVNULL, text=True, env=env, start_new_session=True)
     except OSError:
         return None
     lines = queue.Queue()
@@ -1476,8 +1479,13 @@ def fetch_codex_app_server(timeout_s=None, executable=None):
         return None
     finally:
         try:
+            os.killpg(proc.pid, signal.SIGKILL)
+        except (OSError, ProcessLookupError):
+            pass
+        try:
             proc.kill()
-        except OSError:
+            proc.wait(timeout=5)
+        except (OSError, subprocess.SubprocessError):
             pass
 
 

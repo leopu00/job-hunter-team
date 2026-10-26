@@ -37,6 +37,11 @@ RATE = {
     "exhausted": {"primary": window(97, 10080, NOW + 2 * 86400), "secondary": None},
     "stale": {"primary": window(16, 10080, NOW - 10), "secondary": None},
 }
+if mode == "child":
+    import subprocess
+    child = subprocess.Popen(["sleep", "120"])
+    open(os.environ["FAKE_CHILD_FILE"], "w").write(str(child.pid))
+    mode = "weekly"
 for line in sys.stdin:
     message = json.loads(line)
     if message.get("method") == "initialize":
@@ -69,6 +74,7 @@ def world(tmp_path, monkeypatch):
     monkeypatch.setenv("PATH", f"{bin_dir}:{os.environ['PATH']}")
     monkeypatch.setenv("FAKE_MODE_FILE", str(mode_file))
     monkeypatch.setenv("FAKE_CALLS_FILE", str(calls_file))
+    monkeypatch.setenv("FAKE_CHILD_FILE", str(tmp_path / "child.pid"))
     monkeypatch.setenv("OPENAI_API_KEY", SECRET)
     monkeypatch.setenv("PYTHONDONTWRITEBYTECODE", "1")
 
@@ -167,3 +173,23 @@ def test_the_command_line_prints_only_percentages_and_resets_and_no_secret(world
     printed = json.loads(done.stdout)
     assert set(printed) == {"status", "resets_at", "five_hour", "weekly"} and printed["status"] in {"ok", "unknown"}
     assert SECRET not in done.stdout + done.stderr
+
+
+def _alive(pid):
+    try:
+        os.kill(pid, 0)
+    except OSError:
+        return False
+    return True
+
+
+def test_the_native_child_of_the_launcher_does_not_outlive_the_read(world, tmp_path):
+    world.mode("child")
+    verdict = world.bridge.probe_limits("codex", now=NOW)
+    assert verdict["status"] == "ok"
+    pid = int((tmp_path / "child.pid").read_text(encoding="utf-8"))
+    for _ in range(50):
+        if not _alive(pid):
+            break
+        time.sleep(0.1)
+    assert not _alive(pid), "the child of codex app-server was left running"
