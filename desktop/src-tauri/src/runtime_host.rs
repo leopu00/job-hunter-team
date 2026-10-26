@@ -1809,7 +1809,8 @@ mod tests {
              *fail*) exit 3;;\n\
              *hang*) exec sleep 30;;\n\
              esac\n\
-             echo no-pipe",
+             echo no-pipe\n\
+             cat > /dev/null",
         );
         let program = program.to_str().unwrap();
         let run = |command: &str, input: Option<&[u8]>, seconds: u64| {
@@ -1825,6 +1826,8 @@ mod tests {
         assert_eq!(run("hang", Some(secret), 1).err(), Some("process_timeout"));
         assert_eq!(pipe_free_files_left(), Vec::<PathBuf>::new(), "every file goes, on every path");
         // the same stand-in with the usual runner does see its pipes: the probe tells them apart
+        // (it reads its input to the end, like the stand-in must: one that exits first makes the
+        // runner's writer fail with a broken pipe, and a success with its input cut short is an error)
         let (piped, _) = super::run_program_keeping_stderr(program, ["-E", "/dev/null", "x"], Some(b"x".as_slice()), std::time::Duration::from_secs(20));
         assert_eq!(piped.unwrap().stdout_text().trim(), "pipe0 pipe1 pipe2 no-pipe");
         let _ = fs::remove_dir_all(dir);
