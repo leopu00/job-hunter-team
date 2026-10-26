@@ -892,6 +892,31 @@ def _delivery_binary() -> str:
     raise Refusal("send_failed")
 
 
+# What `jht-tmux-send --flush-ours` answers when a text sits in the composer: the transport presses Enter
+# ONLY on a text it can prove is its own (a delivery of ours that was not submitted, such as the bridge's
+# [HEARTBEAT]); it never writes and never deletes.  0: the box is free (nothing there, or ours was taken).
+FLUSH_TIMEOUT_S = 60
+FLUSH_EXIT = {3: "agent_not_at_prompt", 8: "agent_busy", 2: "agent_unavailable"}
+
+
+def flush_ours(session: str) -> None:
+    """Let the transport submit a text of OURS left in the composer, so that the user's turn can follow it.
+
+    Returns when the transport says the box is free; otherwise raises the closed code of the refusal the
+    chat would have given anyway.  An old transport without the mode answers a usage error: the draft
+    stays «a draft» (``composer_has_text``), as it always was.
+    """
+    try:
+        binary = _delivery_binary()
+        done = subprocess.run([binary, "--flush-ours", session], capture_output=True,
+                              timeout=FLUSH_TIMEOUT_S, check=False)
+    except (Refusal, OSError, subprocess.SubprocessError):
+        raise Refusal("composer_has_text")
+    if done.returncode == 0:
+        return
+    raise Refusal(FLUSH_EXIT.get(done.returncode, "composer_has_text"))
+
+
 def _origin_module():
     for candidate in (Path(__file__).resolve().parent / "message_origin.py", Path("/app/shared/skills/message_origin.py")):
         if candidate.is_file():
@@ -1190,8 +1215,18 @@ def send(agent: str, client_id: str, raw_text: str) -> dict:
         with _AgentLock(agent):
             return _queue_locked(agent, client_id, text)
     busy_deadline = time.monotonic() + BUSY_WAIT_S
+    flushed = False
     while True:
-        require_prompt(session)
+        try:
+            require_prompt(session)
+        except Refusal as refusal:
+            # A text of ours left in the composer (a [HEARTBEAT] nobody submitted) would shut the user's
+            # chat for ever: once, the transport submits it if it can prove it is its own.
+            if refusal.code != "composer_has_text" or flushed:
+                raise
+            flushed = True
+            flush_ours(session)
+            continue
         try:
             require_idle(session, busy_deadline)
         except Refusal as refusal:
@@ -1212,10 +1247,13 @@ def send(agent: str, client_id: str, raw_text: str) -> dict:
                 raise Refusal("agent_unavailable")
             gate = delivery_gate(pane)
             if gate == "text":
-                raise Refusal("composer_has_text")
-            if gate == "blocked":
+                # The text may have appeared while we waited: the same single try, outside the lock.
+                if flushed:
+                    raise Refusal("composer_has_text")
+                retry_outside_lock = True
+            elif gate == "blocked":
                 raise Refusal("agent_not_at_prompt")
-            if gate not in {"empty", "none"}:
+            elif gate not in {"empty", "none"}:
                 retry_outside_lock = True
             elif composer_snapshot(pane)[1]:
                 # The turn started while we waited for the lock: not now, and not past the deadline.
