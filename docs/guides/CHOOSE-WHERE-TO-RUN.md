@@ -5,7 +5,10 @@ run it. The desktop application stays on the computer you use, and the
 container can run on that same computer or on a Linux host reached over SSH.
 The desktop app runs the local container in Podman on macOS (installed with
 Homebrew) and in Docker on Linux; on Windows 0.4 it runs in Podman inside WSL,
-installed by the app.
+installed by the app. Windows is not part of the 0.4.0 release (there is no
+Windows installer to download yet; coming soon), and the Linux release is
+experimental and was not tested by hand: the Windows notes below describe the
+app as built, not a download.
 
 This guide compares three deployment paths. It does not compare the native
 application with the command-line interface (CLI): those are two ways to
@@ -87,8 +90,9 @@ awake while the agents work. On Windows 0.4 the team runs in Podman inside WSL.
 
 ### What you need
 
-- A supported desktop release: Linux x64, macOS on Apple silicon (M1 and later; Intel
-  Macs are not supported in 0.4) or Windows x64.
+- A desktop release for your system: macOS on Apple silicon (M1 and later; Intel
+  Macs are not supported in 0.4), or Linux x64 (experimental, not tested by
+  hand). Windows is not in 0.4.0 yet.
 - On macOS, Homebrew: the app installs Podman with it. On Linux, Docker Engine
   and its Compose plugin installed before you start; the Linux release is
   built, but this setup has not been tested yet. On Windows, WSL enabled: the

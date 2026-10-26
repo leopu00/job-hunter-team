@@ -44,10 +44,8 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: windows-2022
-            label: Windows x64
-            args: --bundles nsis
-            artifact_name: app-windows-release
+          # Windows is not part of 0.4.0: no installer is built or attached,
+          # and the site shows it as "coming soon" without a link.
           - os: macos-14
             label: macOS arm64
             args: --target aarch64-apple-darwin --bundles app,dmg
@@ -138,8 +136,8 @@ jobs:
           echo "APPLE_SIGNING_IDENTITY=$identity" >> "$GITHUB_ENV"
 
       # Tauri firma l'app con Developer ID e usa le credenziali Apple per
-      # notarizzare e fare staple del DMG. Windows e Linux restano unsigned e
-      # sono dichiarati tali nelle note e nelle pagine di download.
+      # notarizzare e fare staple del DMG. Linux resta unsigned, e dichiarato
+      # sperimentale e non provato a mano nelle note e nelle pagine di download.
       - name: Build Tauri bundles
         working-directory: desktop
         env:
@@ -155,14 +153,6 @@ jobs:
           VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
           VITE_SUPABASE_ANON_KEY: ${{ vars.VITE_SUPABASE_ANON_KEY }}
         run: python scripts/verify-tauri-login-bundle.py --path desktop/dist
-
-      - name: Collect Windows installer
-        if: runner.os == 'Windows'
-        run: |
-          mkdir -p release-assets
-          source="$(find desktop/src-tauri/target/release/bundle/nsis -type f -name '*-setup.exe' -print -quit)"
-          test -n "$source"
-          cp "$source" release-assets/job-hunter-team-windows-x64-setup.exe
 
       # Quello che si distribuisce e' la .app e il dmg: in tutti e due devono
       # esserci la shell e il compagno jht-existing-team, eseguibili, arm64 e con
@@ -225,9 +215,10 @@ jobs:
           assets = sorted(p for p in Path("release-assets").iterdir() if p.is_file())
           if not assets or any(p.stat().st_size == 0 for p in assets):
               raise SystemExit(f"missing or empty release assets: {assets}")
+          # Windows is out of 0.4.0: an installer that shows up is a mistake, not a bonus
           exe = next((p for p in assets if p.suffix == ".exe"), None)
-          if exe is not None and exe.read_bytes()[:2] != b"MZ":
-              raise SystemExit(f"not a Windows PE executable: {exe}")
+          if exe is not None:
+              raise SystemExit(f"Windows is not part of this release, remove {exe}")
           print("release assets:", ", ".join(p.name for p in assets))
           PY
 
@@ -411,7 +402,6 @@ jobs:
         run: |
           python scripts/release_artifacts.py verify \
             --directory release-assets \
-            --expected-asset job-hunter-team-windows-x64-setup.exe \
             --expected-asset job-hunter-team-macos-universal.dmg \
             --expected-asset job-hunter-team-linux-x64.AppImage \
             --expected-asset job-hunter-team-linux-x64.deb \
@@ -445,7 +435,6 @@ jobs:
           draft: true
           prerelease: ${{ contains(github.ref_name, '-') }}
           files: |
-            release-assets/*.exe
             release-assets/*.dmg
             release-assets/*.AppImage
             release-assets/*.deb

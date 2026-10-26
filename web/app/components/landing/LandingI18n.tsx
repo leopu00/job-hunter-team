@@ -217,14 +217,24 @@ const translations = {
     hu: "Helyette a hordozható verzió letöltése",
   },
   dl_desktop_unsigned_note: {
-    it: "Su macOS il DMG è firmato e notarizzato. Su Windows l'installer non è firmato, quindi SmartScreen può mostrare «Windows ha protetto il PC»: continua solo con il file della release ufficiale. Su Linux rendi eseguibile l'AppImage prima di aprirla.",
-    en: "On macOS the DMG is signed and notarized. On Windows the installer is unsigned, so SmartScreen may show “Windows protected your PC”: continue only with the file from the official release. On Linux, make the AppImage executable before opening it.",
-    hu: "macOS-en a DMG aláírt és notarizált. Windowson a telepítő nincs aláírva, ezért a SmartScreen figyelmeztethet; csak a hivatalos kiadásból származó fájllal folytasd. Linuxon megnyitás előtt tedd futtathatóvá az AppImage fájlt.",
+    it: "Su macOS il DMG è firmato e notarizzato. Su Linux il pacchetto non è firmato: rendi eseguibile l'AppImage prima di aprirla.",
+    en: "On macOS the DMG is signed and notarized. On Linux the package is unsigned: make the AppImage executable before opening it.",
+    hu: "macOS-en a DMG aláírt és notarizált. Linuxon a csomag nincs aláírva: megnyitás előtt tedd futtathatóvá az AppImage fájlt.",
   },
   dl_mac_apple_silicon_only: {
     it: "Solo Mac con Apple silicon (M1 e successivi). I Mac Intel non sono supportati nella 0.4.",
     en: "Only Macs with Apple silicon (M1 and later). Intel Macs are not supported in 0.4.",
     hu: "Csak Apple silicon-os Mac-ekhez (M1 és újabb). Az Intel-es Mac-ek a 0.4-ben nem támogatottak.",
+  },
+  dl_windows_coming_soon: {
+    it: "In arrivo",
+    en: "Coming soon",
+    hu: "Hamarosan",
+  },
+  dl_linux_experimental: {
+    it: "Sperimentale, non provato a mano.",
+    en: "Experimental, not tested by hand.",
+    hu: "Kísérleti, kézzel nem tesztelt.",
   },
   dl_help_text: {
     it: "Hai scaricato l'app?",

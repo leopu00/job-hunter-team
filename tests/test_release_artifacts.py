@@ -226,6 +226,11 @@ def test_release_notes_render_every_verified_asset_without_a_second_list(
 
     assert output.read_text(encoding="utf-8") == body
     assert "### SHA-256 checksums" in body
+    # D13: the notes say what the release really holds
+    assert "Windows is not part of 0.4.0" in body and "coming soon" in body
+    assert "Windows protected your PC" not in body and "windows-x64-setup" not in body
+    assert "Linux is experimental and was not tested by hand" in body
+    assert "holds only the Apple silicon build" in body
     assert "- Curated change" in body
     for asset in assets:
         line = f'{asset["sha256"]}  {asset["asset"]}'

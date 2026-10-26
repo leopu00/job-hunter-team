@@ -72,9 +72,11 @@ export const pt: Record<string, string> = {
   dl_windows_portable_label: "Windows: o instalador é a opção recomendada.",
   dl_windows_portable_link: "Descarrega antes a versão portátil",
   dl_desktop_unsigned_note:
-    "No macOS, o DMG está assinado e notarizado. No Windows, o instalador não está assinado; avança após o aviso do SmartScreen apenas com o ficheiro da versão oficial. No Linux, torna a AppImage executável antes de a abrir.",
+    "No macOS, o DMG está assinado e notarizado. No Linux, o pacote não está assinado: torna a AppImage executável antes de a abrir.",
   dl_mac_apple_silicon_only:
     "Apenas Macs com Apple silicon (M1 e posteriores). Os Macs com processador Intel não são suportados na 0.4.",
+  dl_windows_coming_soon: "Em breve",
+  dl_linux_experimental: "Experimental, não testado à mão.",
   dl_help_text: "Descarregaste a app?",
   dl_help_link: "Segue a configuração passo a passo",
 

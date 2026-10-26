@@ -72,8 +72,8 @@ function releaseFixture(
   };
 }
 
+// 0.4.0: no Windows installer in the release
 const PRIMARY_RELEASE = releaseFixture([
-  "job-hunter-team-windows-x64-setup.exe",
   "job-hunter-team-macos-universal.dmg",
   "job-hunter-team-linux-x64.AppImage",
 ]);
@@ -121,6 +121,51 @@ describe("B8 download funnel", () => {
         utm_medium: "none",
         utm_campaign: "none",
       });
+    }
+  });
+
+  it("D13 offers Mac and Linux only: Windows has no slug and no link", () => {
+    expect(Object.keys(DOWNLOAD_TARGETS)).toEqual(["mac", "linux"]);
+    expect(Object.values(DOWNLOAD_TARGETS).join(" ")).not.toMatch(/windows|\.exe/i);
+    // a link of the old page must not reach a file: unknown slug, 404, nothing recorded
+    const state = testDependencies();
+    const response = handleDownloadRedirect(
+      new Request("https://jobhunterteam.ai/go/win-setup"),
+      "win-setup",
+      state.dependencies,
+    );
+    expect(response.status).toBe(404);
+    expect(state.tasks).toHaveLength(0);
+    // and an installer that someone attaches to the release is never resolved for any slug
+    const withInstaller = releaseFixture([
+      "job-hunter-team-windows-x64-setup.exe",
+      "job-hunter-team-macos-universal.dmg",
+    ]);
+    expect(resolveDownloadTarget("win-setup", withInstaller)).toBeNull();
+    expect(resolveDownloadTarget("mac", withInstaller)).toBe(DOWNLOAD_TARGETS.mac);
+  });
+
+  it("D13 the page shows Windows as coming soon without a link, and Linux as experimental", () => {
+    expect(DOWNLOAD_PAGE).not.toContain("win-setup");
+    expect(DOWNLOAD_PAGE).toContain("data-windows-coming-soon");
+    expect(DOWNLOAD_PAGE).toContain('t("dl_windows_coming_soon")');
+    expect(DOWNLOAD_PAGE).toContain("data-linux-experimental");
+    expect(DOWNLOAD_PAGE).toContain('t("dl_linux_experimental")');
+    // the Windows card is not an anchor
+    expect(DOWNLOAD_PAGE).toMatch(/slug \? \(\s*<a[\s\S]*?\) : \(\s*<div[\s\S]*?aria-disabled="true"/);
+  });
+
+  it("D13 says it in all seven languages", () => {
+    const files = ["es", "fr", "de", "pt"].map((l) =>
+      readFileSync(path.join(REPO, `web/app/components/landing/i18n/${l}.ts`), "utf8"),
+    );
+    files.push(readFileSync(path.join(REPO, "web/app/components/landing/LandingI18n.tsx"), "utf8"));
+    for (const source of files) {
+      expect(source).toContain("dl_windows_coming_soon");
+      expect(source).toContain("dl_linux_experimental");
+      // the unsigned note no longer speaks of a Windows installer
+      const note = source.match(/dl_desktop_unsigned_note[\s\S]*?dl_mac_apple_silicon_only/)![0];
+      expect(note).not.toMatch(/Windows|SmartScreen/);
     }
   });
 
@@ -224,14 +269,12 @@ describe("B8 download funnel", () => {
   ])("T3 ignores redirect input: %s", (query) => {
     const state = testDependencies();
     const response = handleDownloadRedirect(
-      new Request(`https://jobhunterteam.ai/go/win-setup?${query}`),
-      "win-setup",
+      new Request(`https://jobhunterteam.ai/go/mac?${query}`),
+      "mac",
       state.dependencies,
     );
     expect(response.status).toBe(302);
-    expect(response.headers.get("location")).toBe(
-      DOWNLOAD_TARGETS["win-setup"],
-    );
+    expect(response.headers.get("location")).toBe(DOWNLOAD_TARGETS.mac);
   });
 
   it.each([
@@ -435,7 +478,7 @@ describe("B8 download funnel", () => {
     expect(MIGRATION).not.toMatch(/CREATE POLICY/i);
   });
 
-  it("T10 gives the three page CTAs local links with only valid current UTM", () => {
+  it("T10 gives the two page CTAs local links with only valid current UTM", () => {
     const attribution = attributionFromPage({
       utm_source: "reddit",
       utm_medium: "paid",
@@ -450,10 +493,9 @@ describe("B8 download funnel", () => {
         `/go/${slug}?utm_source=reddit&utm_medium=paid&utm_campaign=lancio-2026-08`,
       );
     }
-    expect(DOWNLOAD_PAGE).toContain('windows: "win-setup"');
-    expect(DOWNLOAD_PAGE).toContain(
-      "href={downloadHref(DOWNLOAD_SLUG[os.id], attribution)}",
-    );
+    expect(DOWNLOAD_PAGE).toContain('mac: "mac"');
+    expect(DOWNLOAD_PAGE).toContain('linux: "linux"');
+    expect(DOWNLOAD_PAGE).toContain("href={downloadHref(slug, attribution)}");
     expect(DOWNLOAD_PAGE).not.toContain("releases/latest/download");
 
     expect(

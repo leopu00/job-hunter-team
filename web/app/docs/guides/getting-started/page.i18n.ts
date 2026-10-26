@@ -90,7 +90,7 @@ export const T: Record<Locale, Dict> = {
     path2SoonB: ". In the meantime, use Path 1 or Path 3.",
     path3Title: "📦 Path 3 — One-liner installer",
     path3Mac: "macOS / Linux / WSL2:",
-    path3WinIntro: "Windows (PowerShell, WSL must already be enabled):",
+    path3WinIntro: "Windows is not supported in 0.4: these steps are untested and may not work. Windows (PowerShell, WSL must already be enabled):",
     path3WizardIntro: "Then bring the team up and run the wizard:",
     dockerReqA: "The one requirement is ",
     dockerReqB:
@@ -145,7 +145,7 @@ export const T: Record<Locale, Dict> = {
     path2SoonB: ". Nel frattempo usa il Percorso 1 o il Percorso 3.",
     path3Title: "📦 Percorso 3 — Installer one-liner",
     path3Mac: "macOS / Linux / WSL2:",
-    path3WinIntro: "Windows (PowerShell, WSL deve essere già attivo):",
+    path3WinIntro: "Windows non è supportato nella 0.4: questi passaggi non sono stati provati e potrebbero non funzionare. Windows (PowerShell, WSL deve essere già attivo):",
     path3WizardIntro: "Poi avvia il team ed esegui la procedura guidata:",
     dockerReqA: "L'unico requisito è ",
     dockerReqB:
@@ -201,7 +201,7 @@ export const T: Record<Locale, Dict> = {
     path2SoonB: ". Mientras tanto, usa la Vía 1 o la Vía 3.",
     path3Title: "📦 Vía 3 — Instalador en una línea",
     path3Mac: "macOS / Linux / WSL2:",
-    path3WinIntro: "Windows (PowerShell, WSL ya debe estar activado):",
+    path3WinIntro: "Windows no es compatible con la 0.4: estos pasos no se han probado y pueden no funcionar. Windows (PowerShell, WSL ya debe estar activado):",
     path3WizardIntro: "Luego levanta el equipo y ejecuta el asistente:",
     dockerReqA: "El único requisito es ",
     dockerReqB:
@@ -258,7 +258,7 @@ export const T: Record<Locale, Dict> = {
     path2SoonB: ". En attendant, utilisez la Voie 1 ou la Voie 3.",
     path3Title: "📦 Voie 3 — Installateur en une ligne",
     path3Mac: "macOS / Linux / WSL2 :",
-    path3WinIntro: "Windows (PowerShell, WSL doit déjà être activé) :",
+    path3WinIntro: "Windows n'est pas pris en charge dans la 0.4 : ces étapes n'ont pas été testées et peuvent ne pas fonctionner. Windows (PowerShell, WSL doit déjà être activé) :",
     path3WizardIntro: "Puis démarrez l'équipe et lancez l'assistant :",
     dockerReqA: "La seule exigence est ",
     dockerReqB:
@@ -315,7 +315,7 @@ export const T: Record<Locale, Dict> = {
     path2SoonB: ". Nutze in der Zwischenzeit Weg 1 oder Weg 3.",
     path3Title: "📦 Weg 3 — Einzeiler-Installer",
     path3Mac: "macOS / Linux / WSL2:",
-    path3WinIntro: "Windows (PowerShell, WSL muss bereits aktiviert sein):",
+    path3WinIntro: "Windows wird in 0.4 nicht unterstützt: Diese Schritte sind ungetestet und funktionieren möglicherweise nicht. Windows (PowerShell, WSL muss bereits aktiviert sein):",
     path3WizardIntro: "Dann starte das Team und führe den Assistenten aus:",
     dockerReqA: "Die einzige Voraussetzung ist ",
     dockerReqB:
@@ -373,7 +373,7 @@ export const T: Record<Locale, Dict> = {
     path3Title: "📦 3. út — Egysoros telepítő",
     path3Mac: "macOS / Linux / WSL2:",
     path3WinIntro:
-      "Windows (PowerShell, a WSL-nek már bekapcsolva kell lennie):",
+      "A Windows a 0.4-ben nem támogatott: ezeket a lépéseket nem tesztelték, és lehet, hogy nem működnek. Windows (PowerShell, a WSL-nek már bekapcsolva kell lennie):",
     path3WizardIntro: "Aztán indítsd el a csapatot, és futtasd a varázslót:",
     dockerReqA: "Az egyetlen követelmény a ",
     dockerReqB:
@@ -429,7 +429,7 @@ export const T: Record<Locale, Dict> = {
     path2SoonB: ". Entretanto, usa a Via 1 ou a Via 3.",
     path3Title: "📦 Caminho 3 — Instalador numa só linha",
     path3Mac: "macOS / Linux / WSL2:",
-    path3WinIntro: "Windows (PowerShell, o WSL já tem de estar ativado):",
+    path3WinIntro: "O Windows não é suportado na 0.4: estes passos não foram testados e podem não funcionar. Windows (PowerShell, o WSL já tem de estar ativado):",
     path3WizardIntro: "Depois levanta a equipa e executa o assistente:",
     dockerReqA: "O único requisito é o ",
     dockerReqB:
