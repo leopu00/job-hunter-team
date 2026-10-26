@@ -268,14 +268,11 @@ def dash_row(raw,score,application):
 DASH_COLUMNS=('id','legacy_id','title','company','location','remote_type','status','role_family','loc_country','loc_city','source','found_at','found_by','last_checked','salary_declared_min','salary_declared_max','salary_declared_currency','salary_estimated_min','salary_estimated_max','salary_estimated_currency')
 def dash_pick():
  have=columns('positions'); return ', '.join('p.'+name for name in DASH_COLUMNS if name in have)
-def first_rows(table):
- found={}
- for row in many('SELECT * FROM '+table+' ORDER BY rowid'): found.setdefault(row.get('position_id'),row)
- return found
 def dash_rows(sql,args=()):
  raws=many(sql,args)
- # Many rows: the scores and applications are read once for all of them, not one query each.
- scores_by=first_rows('scores') if len(raws)>50 else None; applications_by=first_rows('applications') if len(raws)>50 else None
+ # Many rows: the scores and applications are read once for all of them (only the columns a row uses), not one query each.
+ scores_by=first_by_position('scores',('total_score','scored_at','scored_by')) if len(raws)>50 else None
+ applications_by=first_by_position('applications',('critic_score','critic_verdict','written_at','written_by','critic_reviewed_at','applied_at','response_at')) if len(raws)>50 else None
  out=[]
  for raw in raws:
   pid=raw.get('id')
@@ -537,16 +534,17 @@ impl PositionFilters {
 }
 
 impl PositionsRequest {
+    /// The kind of read, as the load-times log names it (one of `runtime_log::POSITIONS_READ_KINDS`).
     fn op(&self) -> &'static str {
-        match self {
-            Self::List { .. } => "list",
-            Self::Detail { .. } => "detail",
-            Self::Facets => "facets",
-            Self::Stats => "stats",
-            Self::Map { .. } => "map",
-            Self::Profile => "profile",
-            Self::CloudSync => "cloud_sync",
-        }
+        crate::runtime_log::POSITIONS_READ_KINDS[match self {
+            Self::List { .. } => 0,
+            Self::Detail { .. } => 1,
+            Self::Facets => 2,
+            Self::Stats => 3,
+            Self::Map { .. } => 4,
+            Self::Profile => 5,
+            Self::CloudSync => 6,
+        }]
     }
 
     fn valid(&self) -> bool {

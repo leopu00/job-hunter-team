@@ -196,3 +196,17 @@ def test_the_globes_read_refuses_a_request_that_is_not_one(tmp_path: Path) -> No
     _database(tmp_path, 3)
     for bad in ({"op": "map", "offset": -1}, {"op": "map", "offset": "0"}, {"op": "map", "filters": {}}, {"op": "facets", "offset": 0}):
         assert _run(tmp_path, bad) == {"ok": False, "error": "positions_request_invalid"}, bad
+
+
+def test_an_office_coordinate_that_is_not_a_number_on_the_globe_is_none(tmp_path: Path) -> None:
+    _database(tmp_path, 4)
+    db = sqlite3.connect(tmp_path / "jobs.db")
+    db.execute("UPDATE positions SET office_lat='north', office_lon=500 WHERE id=1")
+    db.execute("UPDATE positions SET office_lat=45.5, office_lon=9.5 WHERE id=3")
+    db.commit()
+    db.close()
+    items = {item["id"]: item for item in _run(tmp_path, {"op": "map"})["data"]["items"]}
+    assert (items["1"]["office_lat"], items["1"]["office_lon"]) == (None, None)
+    assert (items["3"]["office_lat"], items["3"]["office_lon"]) == (45.5, 9.5)
+    listed = {item["id"]: item for item in _run(tmp_path, {"op": "list"})["data"]["items"]}
+    assert (listed["1"]["office_lat"], listed["1"]["office_lon"]) == (None, None)

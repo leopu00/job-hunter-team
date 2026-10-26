@@ -35,6 +35,10 @@ pub(crate) struct RuntimeLog {
     cause: std::sync::Arc<std::sync::Mutex<Option<String>>>,
 }
 
+/// The kinds of read the load-times log names, in the order of the core's operations.
+pub(crate) const POSITIONS_READ_KINDS: [&str; 7] = ["list", "detail", "facets", "stats", "map", "profile", "cloud_sync"];
+const POSITIONS_READ_OTHER: &str = "other";
+
 /// What one read of the team's positions cost; see `RuntimeLog::record_positions_read`.
 pub(crate) struct PositionsReadTiming {
     pub(crate) op: &'static str,
@@ -142,10 +146,7 @@ impl RuntimeLog {
     /// kind of read, whether the chat's ssh connection was lent to it, the time it took end to end and
     /// in ssh, and the bytes that crossed. No host, account, position, filter or row.
     pub(crate) fn record_positions_read(&self, read: &PositionsReadTiming) {
-        let op = match read.op {
-            "list" | "detail" | "facets" | "stats" | "profile" | "cloud_sync" => read.op,
-            _ => "other",
-        };
+        let op = if POSITIONS_READ_KINDS.contains(&read.op) { read.op } else { POSITIONS_READ_OTHER };
         let entry = format!(
             "=== {} positions.read op={op} link={} ok={} total_ms={} ssh_ms={} bytes_out={} bytes_in={}\n",
             utc(SystemTime::now()),
