@@ -97,10 +97,13 @@ function PathWithBreaks({ path }: { path: string }) {
   return <>{(path.match(/[^\\/]*[\\/]?/g)?.filter(Boolean) ?? [path]).map((part, index) => <Fragment key={index}>{index > 0 && <wbr />}{part}</Fragment>)}</>;
 }
 
-function RuntimeView({ host, platform, t, locale, runtime, activity, onRetry, onRestart, onExitFailure, onRuntimeAction, providerLogin, sshHostKey, onConfirmHostKey, onCancelHostKey, onProviderInput, onProviderClose, onProviderRestart, onRecreatePodmanMachine, onFreeDiskSpace, runtimeLogPath, onOpenRuntimeLog, onOpenWithoutTeam }: Pick<OnboardingFlowProps, "platform" | "runtime" | "activity" | "onRetry" | "onRestart" | "onExitFailure" | "onRuntimeAction" | "providerLogin" | "sshHostKey" | "onConfirmHostKey" | "onCancelHostKey" | "onProviderInput" | "onProviderClose" | "onProviderRestart" | "onRecreatePodmanMachine" | "onFreeDiskSpace" | "runtimeLogPath" | "onOpenRuntimeLog" | "onOpenWithoutTeam"> & { host: ExecutionHost; t: OnboardingCopy; locale: Locale }) {
+function RuntimeView({ host, platform, t, locale, runtime, activity, onRetry, onRestart, onExitFailure, onRuntimeAction, providerLogin, sshHostKey, onConfirmHostKey, onCancelHostKey, onProviderInput, onProviderClose, onProviderRestart, onRecreatePodmanMachine, onUseLocalData, onSetAsideLocalData, onFreeDiskSpace, runtimeLogPath, onOpenRuntimeLog, onOpenWithoutTeam }: Pick<OnboardingFlowProps, "platform" | "runtime" | "activity" | "onRetry" | "onRestart" | "onExitFailure" | "onRuntimeAction" | "providerLogin" | "sshHostKey" | "onConfirmHostKey" | "onCancelHostKey" | "onProviderInput" | "onProviderClose" | "onProviderRestart" | "onRecreatePodmanMachine" | "onUseLocalData" | "onSetAsideLocalData" | "onFreeDiskSpace" | "runtimeLogPath" | "onOpenRuntimeLog" | "onOpenWithoutTeam"> & { host: ExecutionHost; t: OnboardingCopy; locale: Locale }) {
   const [pending, setPending] = useState(false);
   const [confirmingRecreate, setConfirmingRecreate] = useState(false);
   const [confirmingFreeSpace, setConfirmingFreeSpace] = useState(false);
+  // The choice for data no profile has taken: which one is being confirmed, and what it said.
+  const [confirmingData, setConfirmingData] = useState<"use" | "aside" | null>(null);
+  const [dataResult, setDataResult] = useState<{ ok: boolean; text: string } | null>(null);
   const [freeSpaceResult, setFreeSpaceResult] = useState<DescribedError | null>(null);
   const [actionFailed, setActionFailed] = useState(false);
   const [now, setNow] = useState(() => Date.now());
@@ -241,6 +244,36 @@ function RuntimeView({ host, platform, t, locale, runtime, activity, onRetry, on
   const freeDiskSpace = failed && runtime.code === "disk_low" && !(platform === "windows" && host.kind === "local")
     ? onFreeDiskSpace
     : undefined;
+  // Data in ~/.jht that no profile has taken: never a dead end. «Use» only for a local profile
+  // (it makes the data theirs), «set aside» for both; each one only after a confirmation.
+  const dataChoice = failed && runtime.code === "local_account_owner_missing" && host.kind === "local";
+  const adoptLocalData = dataChoice ? onUseLocalData : undefined;
+  const setAsideLocalData = dataChoice ? onSetAsideLocalData : undefined;
+  async function chooseData(choice: "use" | "aside") {
+    if (pendingRef.current) return;
+    pendingRef.current = true;
+    setPending(true); setDataResult(null);
+    let done = false;
+    try {
+      if (choice === "use") {
+        await adoptLocalData?.();
+      } else {
+        const folder = await setAsideLocalData?.();
+        // Where the data went stays on screen while the setup starts again.
+        if (folder) setDataResult({ ok: true, text: t.dataAsideDone.replace("{folder}", folder) });
+      }
+      done = true;
+    } catch (error) {
+      const { text, action } = describeError(errorCodeOf(error), { locale, fallback: "local_data_set_aside_failed" });
+      setDataResult({ ok: false, text: `${text} ${action}` });
+    } finally {
+      setConfirmingData(null);
+      pendingRef.current = false;
+      setPending(false);
+    }
+    // The setup starts again; what it finds is its own to say.
+    if (done) await onRetry().catch(() => setActionFailed(true));
+  }
   const freeSpaceConfirm = describeError(
     platform === "macos" && host.kind === "local" ? "clean_images_confirm_vm" : "clean_images_confirm", { locale });
   async function freeSpace() {
@@ -381,6 +414,17 @@ function RuntimeView({ host, platform, t, locale, runtime, activity, onRetry, on
               <div className="onboarding-provider-console__heading"><div><strong>{t.recreateTitle}</strong><small>{t.recreateText}</small><small>{recreateConfirm.text}</small><small>{recreateConfirm.action}</small></div></div>
             </section>
           )}
+          {confirmingData === "use" && adoptLocalData && (
+            <section className="onboarding-provider-console" aria-label={t.dataUseAria}>
+              <div className="onboarding-provider-console__heading"><div><strong>{t.dataUseTitle}</strong><small>{t.dataUseText}</small></div></div>
+            </section>
+          )}
+          {confirmingData === "aside" && setAsideLocalData && (
+            <section className="onboarding-provider-console" aria-label={t.dataAsideAria}>
+              <div className="onboarding-provider-console__heading"><div><strong>{t.dataAsideTitle}</strong><small>{t.dataAsideText}</small></div></div>
+            </section>
+          )}
+          {dataResult && <p className={dataResult.ok ? "onboarding-free-space" : "onboarding-error"} role={dataResult.ok ? "status" : "alert"} data-testid="local-data-result">{dataResult.text}</p>}
           {freeDiskSpace && confirmingFreeSpace && (
             <section className="onboarding-provider-console" aria-label={t.freeSpaceAria}>
               <div className="onboarding-provider-console__heading"><div><strong>{t.freeSpaceTitle}</strong><small>{freeSpaceConfirm.text}</small><small>{freeSpaceConfirm.action}</small></div></div>
@@ -418,6 +462,20 @@ function RuntimeView({ host, platform, t, locale, runtime, activity, onRetry, on
               </button>
               </>
             )}
+            {(adoptLocalData || setAsideLocalData) && confirmingData === null && (
+              <>
+              {setAsideLocalData && <button className="onboarding-secondary" type="button" data-testid="local-data-aside" onClick={() => setConfirmingData("aside")} disabled={pending}>{t.dataAside}</button>}
+              {adoptLocalData && <button className="onboarding-primary" type="button" data-testid="local-data-use" onClick={() => setConfirmingData("use")} disabled={pending}>{t.dataUse}<span aria-hidden="true">→</span></button>}
+              </>
+            )}
+            {confirmingData !== null && (
+              <>
+              <button className="onboarding-secondary" type="button" data-testid="local-data-cancel" onClick={() => setConfirmingData(null)} disabled={pending}>{t.cancel}</button>
+              <button className="onboarding-primary" type="button" data-testid="local-data-confirm" onClick={() => void chooseData(confirmingData)} disabled={pending}>
+                {pending ? t.dataBusy : confirmingData === "use" ? t.dataUseYes : t.dataAsideYes}<span aria-hidden="true">→</span>
+              </button>
+              </>
+            )}
             {freeDiskSpace && !confirmingFreeSpace && (
               <button className="onboarding-secondary" type="button" onClick={() => setConfirmingFreeSpace(true)} disabled={pending}>
                 {pending ? t.freeSpacing : t.freeSpace}
@@ -446,7 +504,7 @@ function RuntimeView({ host, platform, t, locale, runtime, activity, onRetry, on
   );
 }
 
-export function OnboardingFlow({ account, onRenameLocalProfile, platform, runtime, activity, onSubmit, onConnectExistingTeam, onSignInWithGoogle, onRetry, onRestart, onExitFailure, onRuntimeAction, providerLogin, sshHostKey, onConfirmHostKey, onCancelHostKey, onProviderInput, onProviderClose, onProviderRestart, onRecreatePodmanMachine, onFreeDiskSpace, runtimeLogPath, onOpenRuntimeLog, onOpenWithoutTeam, previousLocalData = false, interruption, onResumeInterrupted, onDiscardInterruption, providerOnly, locale: localeOverride }: OnboardingFlowProps) {
+export function OnboardingFlow({ account, onRenameLocalProfile, platform, runtime, activity, onSubmit, onConnectExistingTeam, onSignInWithGoogle, onRetry, onRestart, onExitFailure, onRuntimeAction, providerLogin, sshHostKey, onConfirmHostKey, onCancelHostKey, onProviderInput, onProviderClose, onProviderRestart, onRecreatePodmanMachine, onUseLocalData, onSetAsideLocalData, onFreeDiskSpace, runtimeLogPath, onOpenRuntimeLog, onOpenWithoutTeam, previousLocalData = false, interruption, onResumeInterrupted, onDiscardInterruption, providerOnly, locale: localeOverride }: OnboardingFlowProps) {
   const locale = localeOverride ?? appLocale();
   const t = ONBOARDING_TEXT[locale];
   const providerChoices = providers(t);
@@ -487,7 +545,7 @@ export function OnboardingFlow({ account, onRenameLocalProfile, platform, runtim
     window.scrollTo({ top: 0, left: 0, behavior: "instant" });
   }, [step, assistanceOpen]);
 
-  if (runtime.status !== "collecting") return <RuntimeView host={host} platform={platform} t={t} locale={locale} runtime={runtime} activity={activity} onRetry={onRetry} onRestart={onRestart} onExitFailure={exitFailure} onRuntimeAction={onRuntimeAction} providerLogin={providerLogin} sshHostKey={sshHostKey} onConfirmHostKey={onConfirmHostKey} onCancelHostKey={onCancelHostKey} onProviderInput={onProviderInput} onProviderClose={onProviderClose} onProviderRestart={onProviderRestart} onRecreatePodmanMachine={onRecreatePodmanMachine} onFreeDiskSpace={onFreeDiskSpace} runtimeLogPath={runtimeLogPath} onOpenRuntimeLog={onOpenRuntimeLog} onOpenWithoutTeam={onOpenWithoutTeam} />;
+  if (runtime.status !== "collecting") return <RuntimeView host={host} platform={platform} t={t} locale={locale} runtime={runtime} activity={activity} onRetry={onRetry} onRestart={onRestart} onExitFailure={exitFailure} onRuntimeAction={onRuntimeAction} providerLogin={providerLogin} sshHostKey={sshHostKey} onConfirmHostKey={onConfirmHostKey} onCancelHostKey={onCancelHostKey} onProviderInput={onProviderInput} onProviderClose={onProviderClose} onProviderRestart={onProviderRestart} onRecreatePodmanMachine={onRecreatePodmanMachine} onUseLocalData={account.identity === "local" ? onUseLocalData : undefined} onSetAsideLocalData={onSetAsideLocalData} onFreeDiskSpace={onFreeDiskSpace} runtimeLogPath={runtimeLogPath} onOpenRuntimeLog={onOpenRuntimeLog} onOpenWithoutTeam={onOpenWithoutTeam} />;
 
   if (assistanceOpen) return <main className="onboarding-shell" ref={shellRef} lang={locale}>
     <h1 ref={headingRef} tabIndex={-1}>{t.firstSetupTitle}</h1>

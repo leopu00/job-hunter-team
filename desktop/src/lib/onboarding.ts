@@ -210,6 +210,13 @@ export interface OnboardingFlowProps {
    */
   onRecreatePodmanMachine?: () => Promise<void>;
   /**
+   * The `local_account_owner_missing` error: ~/.jht holds data no profile has taken. «Use this data»
+   * (a local profile only), after the person confirms it; the setup then tries again.
+   */
+  onUseLocalData?: () => Promise<void>;
+  /** The same error: «Set it aside and start again». Resolves with the name of the folder the data went to. */
+  onSetAsideLocalData?: () => Promise<string>;
+  /**
    * «Free up space» on the disk_low error, after the person confirms it:
    * `jht clean-images --json` on the team's host (lib/clean-images.ts).
    */
