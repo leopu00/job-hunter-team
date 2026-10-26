@@ -51,9 +51,14 @@ echo "$*" >> "$FAKE_LOG"
 case "$*" in
   "compose up -d"*) exit "${FAKE_COMPOSE_UP:-0}" ;;
   *"legacy.py exists "*) exit 1 ;;
+  *" apply web-status"|*" node -") exit 1 ;;
 esac
 exit 0
 """
+# After the migration the start hands the broker its web authorisations
+# (Initialize-BrokerWebAuthorisations); those native programs answer 1 too, so the
+# last one before the end of the script still leaves a 1 in $LASTEXITCODE.
+ANSWERED_ONE = ("legacy.py exists ", " apply web-status", " node -")
 
 
 def _wrapper_under_test(folder: Path) -> Path:
@@ -104,9 +109,11 @@ def _run(tmp_path: Path, command: str, compose_up: int = 0):
 @pytest.mark.parametrize("command", ["up", "recreate"])
 def test_a_start_that_went_well_exits_zero_after_a_migration_with_nothing_to_move(tmp_path, command):
     done, calls, marker = _run(tmp_path, command)
-    # the migration ran, and its last native program was an `exists` that answered 1
-    assert any("legacy.py exists" in call for call in calls), calls
-    assert calls[-1].endswith("legacy.py exists email_transport"), calls
+    # the migration ran, its last native program was an `exists` that answered 1,
+    # and the last native program of the whole start answered 1 as well
+    legacy = [call for call in calls if "legacy.py exists" in call]
+    assert legacy and legacy[-1].endswith("legacy.py exists email_transport"), calls
+    assert any(tail in calls[-1] for tail in ANSWERED_ONE), calls
     assert marker.exists(), "the migration with nothing to move did not end well"
     assert done.returncode == 0, (
         f"`jht {command}` went well and exited {done.returncode}: the setup reads it as a team that did "
