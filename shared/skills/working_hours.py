@@ -39,6 +39,7 @@ from __future__ import annotations
 
 import json
 import os
+import stat
 import sys
 from datetime import datetime, time, timedelta
 from pathlib import Path
@@ -55,15 +56,56 @@ _WEEKDAY_INDEX = {
 }
 
 
+class NotPlain(Exception):
+    """What the path names is not a plain file of ours (a link, a pipe, a device, two names, too big)."""
+
+
+def read_plain(path: Path, max_size: int | None = None, tail: int | None = None) -> bytes:
+    """Read a file the team's agents can write, without letting it stall or redirect the reader.
+
+    Opened without following a link and WITHOUT waiting (a named pipe in its place would otherwise hold the
+    open for ever, and with it the sentinel's bridge that calls this), then checked on the descriptor it was
+    opened as: a plain file with one name, within `max_size`.  At most `max_size` (or `tail`) bytes are read.
+    FileNotFoundError passes; anything else that is not ours is NotPlain."""
+    flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0)
+    try:
+        fd = os.open(str(path), flags)
+    except FileNotFoundError:
+        raise
+    except OSError:
+        raise NotPlain()
+    try:
+        info = os.fstat(fd)
+        if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1:
+            raise NotPlain()
+        if max_size is not None and info.st_size > max_size:
+            raise NotPlain()
+        if tail is not None and info.st_size > tail:
+            os.lseek(fd, info.st_size - tail, os.SEEK_SET)
+        limit = max_size if max_size is not None else tail
+        with os.fdopen(fd, "rb", closefd=False) as handle:
+            data = handle.read((limit or 0) + 1) if max_size is not None else handle.read(limit)
+    finally:
+        os.close(fd)
+    if max_size is not None and len(data) > max_size:
+        raise NotPlain()
+    return data
+
+
 def _config_path() -> Path:
     jht_home = os.environ.get("JHT_HOME") or str(Path.home() / ".jht")
     return Path(jht_home) / "jht.config.json"
 
 
+CONFIG_MAX_BYTES = 1024 * 1024
+
+
 def _load_config(path: Path | None = None) -> dict:
     p = path or _config_path()
     try:
-        return json.loads(p.read_text())
+        # read_plain: a pipe or a link made in place of the file by an agent must not hold the readers that
+        # protect the budget (pacing-bridge, watchdog): it reads as unreadable, and the fallback is the same.
+        return json.loads(read_plain(p, max_size=CONFIG_MAX_BYTES).decode("utf-8"))
     except FileNotFoundError:
         return {}
     except Exception:
@@ -198,17 +240,7 @@ def schedule_status(path: Path | None = None) -> str:
     """
     p = path or _config_path()
     try:
-        # opened without waiting and without following a link: a pipe put in its place must not hold the
-        # sentinel's bridge, which asks this at each reading
-        fd = os.open(str(p), os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0))
-        try:
-            import stat as _stat
-            if not _stat.S_ISREG(os.fstat(fd).st_mode):
-                return "unreadable"
-            with os.fdopen(fd, "rb", closefd=False) as handle:
-                raw = handle.read(1024 * 1024).decode("utf-8")
-        finally:
-            os.close(fd)
+        raw = read_plain(p, max_size=CONFIG_MAX_BYTES).decode("utf-8")
     except FileNotFoundError:
         return "undeclared"
     except Exception:
