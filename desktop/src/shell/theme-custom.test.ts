@@ -265,21 +265,31 @@ describe("the suggestion moves the colour at fault by the smallest step that cur
     expect(fixAll(dark.seeds, dark.context)).toEqual({ seeds: dark.seeds, failures: [] });
   });
 
-  it("never leaves an arbitrary palette worse than it found it, on both bases, and says what is left", () => {
+  // Eight arbitrary palettes, the same every run (a fixed generator), four on each base. Each one is its own test:
+  // one of them can search for 15 s on a slow box (it tries every candidate of every fault it cannot cure), and
+  // eight in a single test went past its 60 s bound on the Linux test machines while the file ran beside others.
+  const ARBITRARY = (() => {
     const pick = ["#000000", "#ffffff", "#808080", "#ff0000", "#00ff00", "#0000ff", "#ffff00", "#202040", "#e8e8f0", "#7a3fd0"];
     let seed = 7;
     const rnd = () => (seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648;
-    for (let i = 0; i < 8; i += 1) {
-      const seeds = Object.fromEntries(SEED_KEYS.map((k) => [k, pick[Math.floor(rnd() * pick.length)]])) as Seeds;
-      const context = i % 2 === 0 ? dark.context : light.context; // both bases, four palettes each
+    return Array.from({ length: 8 }, (_, i) => ({
+      i,
+      base: i % 2 === 0 ? "dark" : "light",
+      seeds: Object.fromEntries(SEED_KEYS.map((k) => [k, pick[Math.floor(rnd() * pick.length)]])) as Seeds,
+    }));
+  })();
+
+  it.each(ARBITRARY)(
+    "never leaves an arbitrary palette worse than it found it, on both bases, and says what is left (case $i, $base base)",
+    ({ seeds, base }) => {
+      const context = base === "dark" ? dark.context : light.context;
       const out = fixAll(seeds, context);
       const before = checkSeeds(seeds, context).failures.length;
       expect(out.failures.length, JSON.stringify(seeds)).toBeLessThanOrEqual(before);
       expect(out.failures).toEqual(checkSeeds(out.seeds, context).failures);
-    }
-    // Each case searches every candidate of every fault it cannot cure, and the whole file runs beside others
-    // under load: the default 5 s is not enough, so the bound is explicit.
-  }, 60_000);
+    },
+    60_000,
+  );
 });
 
 function moveL(hex: string, l: number) {

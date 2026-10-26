@@ -86,7 +86,7 @@ team.
 
 **Before you install:**
 
-- Windows x64, Linux x64, or macOS (Intel: 11+; Apple silicon: 13+);
+- Windows x64, Linux x64, or macOS on Apple silicon (M1 and later, macOS 13+; Intel Macs are not supported in 0.4);
 - a supported subscription dedicated to JHT (the provider login happens in
   your browser; the subscription path does not ask for an API key);
 - a Docker-compatible runtime for the team. On macOS and Linux, the office can
@@ -111,8 +111,9 @@ before installing.
 The release contains `job-hunter-team-windows-x64-setup.exe` for Windows
 `job-hunter-team-macos-universal.dmg` for macOS, and both
 `job-hunter-team-linux-x64.AppImage` and `job-hunter-team-linux-x64.deb` for
-Linux. The macOS build is signed and notarized; Windows and Linux builds are
-currently unsigned. Open the Tauri 2 office and
+Linux. The macOS build is signed and notarized and holds only the Apple silicon
+build (M1 and later; Intel Macs are not supported in 0.4), even though the file
+name says “universal”; Windows and Linux builds are currently unsigned. Open the Tauri 2 office and
 select **Activate team**: the checklist requires all four gates — team runtime,
 provider login with a plan selected, candidate profile and working hours —
 before it starts the agents. On Windows 0.4, the runtime choice is a Linux VPS;

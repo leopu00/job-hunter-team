@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { pickTeamSettings, readTeamSettings, writeTeamSettings } from "./team-settings-native";
+import { pickTeamSettings, readTeamSettings, workingHoursAreValid, writeTeamSettings } from "./team-settings-native";
 
 // The page's door to the team's hours and role models (T-gap voce 2). Synthetic values only.
 const LISTS = {
@@ -67,5 +67,36 @@ describe("read and write", () => {
     await writeTeamSettings({ workingHours: HOURS as never, roleModels: { mentor: {} } }, "k3", call);
     expect(call).toHaveBeenLastCalledWith({ op: "write", settings: { working_hours: HOURS, role_models: { mentor: {} } }, connectionKey: "k3" });
     expect(await writeTeamSettings({}, "k", async () => { throw new Error("x"); })).toEqual({ ok: false, error: "team_settings_unavailable" });
+  });
+});
+
+describe("workingHoursAreValid", () => {
+  const window = { days: ["mon", "tue"], start: "09:00", end: "18:00" };
+  it("takes what the native command takes", () => {
+    expect(workingHoursAreValid(null)).toBe(true);
+    expect(workingHoursAreValid({ timezone: "Europe/Rome", windows: [window as never] })).toBe(true);
+    expect(workingHoursAreValid({ timezone: "UTC", windows: [] })).toBe(true);
+    // across midnight is valid
+    expect(workingHoursAreValid({ timezone: "UTC", windows: [{ days: ["fri"], start: "22:00", end: "08:00" }] })).toBe(true);
+  });
+
+  it("refuses what it would not, the same cases team_settings.rs refuses", () => {
+    const bad = [
+      { timezone: "", windows: [] },
+      { timezone: "x y", windows: [] },
+      { timezone: "UTC", windows: [{ ...window, days: [] }] },
+      { timezone: "UTC", windows: [{ ...window, days: ["mon", "mon"] }] },
+      { timezone: "UTC", windows: [window, { ...window, days: ["mon"] }] },
+      { timezone: "UTC", windows: [{ ...window, days: ["funday"] }] },
+      { timezone: "UTC", windows: [{ ...window, start: "9:00" }] },
+      { timezone: "UTC", windows: [{ ...window, start: "25:00" }] },
+      { timezone: "UTC", windows: [{ ...window, end: "24:00" }] },
+      { timezone: "UTC", windows: [{ ...window, end: "09:00" }] },
+      { timezone: "UTC" },
+      { windows: [] },
+      [],
+      "24/7",
+    ];
+    for (const hours of bad) expect(workingHoursAreValid(hours as never), JSON.stringify(hours)).toBe(false);
   });
 });

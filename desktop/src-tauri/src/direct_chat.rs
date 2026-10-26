@@ -631,7 +631,7 @@ pub(crate) enum DirectChatEvent {
 
 #[derive(Debug, Serialize)]
 pub(crate) struct DirectChatError {
-    code: &'static str,
+    pub(crate) code: &'static str,
 }
 pub(crate) fn failure(code: &'static str) -> DirectChatError {
     DirectChatError { code }
@@ -2833,6 +2833,33 @@ pub(crate) async fn team_script_read(
         move |inner| {
             let slot = inner.connection.lock().map_err(|_| failure("state_failed"))?;
             let connection = slot.as_ref().ok_or_else(|| failure("disconnected"))?;
+            let result = run_python(connection, script, &request, timeout)?;
+            if result.stdout.len() > TEAM_SCRIPT_REPLY_MAX {
+                return Err(failure("read_failed"));
+            }
+            parse_json(result, "read_failed")
+        },
+        "read_failed",
+    )
+    .await
+}
+
+/// The same fixed-script channel for a change the person asked for (clearing their statistics): it is a write,
+/// so the read-only view and a link that cannot write are refused here, in the native side, before anything runs.
+pub(crate) async fn team_script_write(
+    state: &State<'_, DirectChatState>,
+    scopes: &State<'_, AccountScopeState>,
+    script: &'static str,
+    request: Value,
+    timeout: Duration,
+) -> Result<Value, DirectChatError> {
+    chat_write(
+        state,
+        scopes,
+        move |inner| {
+            let slot = inner.connection.lock().map_err(|_| failure("state_failed"))?;
+            let connection = slot.as_ref().ok_or_else(|| failure("disconnected"))?;
+            refuse_writing(connection)?;
             let result = run_python(connection, script, &request, timeout)?;
             if result.stdout.len() > TEAM_SCRIPT_REPLY_MAX {
                 return Err(failure("read_failed"));

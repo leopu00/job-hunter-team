@@ -51,6 +51,8 @@ HASH_PROBE_CHILD = [
 # (broker_configure_web_authorisations): it looks up the agent container and
 # the broker service, each one a read-only `compose ps -q` plus the hash probe.
 WEB_AUTHORISATION_LOOKUPS = [PS_Q_CHILD, HASH_PROBE_CHILD] * 2
+# ... and each lookup attests the container it found with one docker inspect.
+WEB_AUTHORISATION_INSPECTS = 2
 UNTRUSTED_CONTAINER_CASES = (
     ("zero", False),
     ("wrong-name", True),
@@ -844,7 +846,7 @@ def test_exact_supported_versions_use_named_connection_for_real_ps_and_up(
     assert any(args and args[0] == "inspect" for _, args in docker_calls)
     assert all(connection == "" for connection, _ in docker_calls)
     inspect = [args for _, args in docker_calls if args and args[0] == "inspect"]
-    assert len(inspect) == 3
+    assert len(inspect) == 3 + WEB_AUTHORISATION_INSPECTS
     for inspect_call in inspect:
         assert inspect_call[1:3] == ["--type", "container"]
         inspect_argv = " ".join(inspect_call)
@@ -1080,7 +1082,7 @@ def test_up_creates_only_when_precheck_finds_no_existing_project_container(
         for _, args in _docker_calls(env)
         if args and args[0] == "inspect"
     ]
-    assert len(inspect_calls) == 1
+    assert len(inspect_calls) == 1 + WEB_AUTHORISATION_INSPECTS
     assert ".Name" in " ".join(inspect_calls[0])
     _assert_hash_probes_are_read_only(env)
 

@@ -31,7 +31,8 @@ mentre lavora.
 2. **Apri il download per il tuo sistema.** Su Windows avvia
    `job-hunter-team-windows-x64-setup.exe`: installa l'app per il tuo utente.
    Su macOS apri `job-hunter-team-macos-universal.dmg` e trascina l'app in
-   Applicazioni; è firmata con un Developer ID Apple e notarizzata da Apple. Su
+   Applicazioni; è firmata con un Developer ID Apple e notarizzata da Apple. Solo Mac con Apple silicon (M1 e successivi). I Mac Intel non sono supportati nella 0.4. Il nome del file dice «universal», ma nella 0.4 contiene solo la build per Apple silicon.
+   Su
    Linux consenti a `job-hunter-team-linux-x64.AppImage` di essere eseguito
    come programma e aprilo, oppure installa `job-hunter-team-linux-x64.deb` sui
    sistemi basati su Debian. Windows e Linux possono mostrare un avviso:
@@ -218,7 +219,8 @@ trabaja.
    `job-hunter-team-windows-x64-setup.exe`: instala la aplicación para tu
    usuario. En macOS abre `job-hunter-team-macos-universal.dmg` y arrastra la
    aplicación a Aplicaciones; está firmada con un Developer ID de Apple y
-   notarizada por Apple. En Linux permite que
+   notarizada por Apple. Solo Mac con Apple silicon (M1 y posteriores). Los Mac con procesador Intel no son compatibles con la 0.4. El nombre del archivo dice «universal», pero en la 0.4 contiene solo la versión para Apple silicon.
+   En Linux permite que
    `job-hunter-team-linux-x64.AppImage` se ejecute como programa y ábrelo, o
    instala `job-hunter-team-linux-x64.deb` en sistemas basados en Debian.
    Windows y Linux pueden mostrar un aviso: continúa solo si descargaste desde
@@ -412,7 +414,8 @@ ordinateur. Gardez l'application ouverte pendant qu'elle travaille.
    `job-hunter-team-windows-x64-setup.exe` : il installe l'application pour
    votre utilisateur. Sous macOS, ouvrez `job-hunter-team-macos-universal.dmg`
    et faites glisser l'application dans Applications ; elle est signée avec un
-   Developer ID Apple et notarisée par Apple. Sous Linux, autorisez
+   Developer ID Apple et notarisée par Apple. Uniquement les Mac avec Apple silicon (M1 et suivants). Les Mac Intel ne sont pas pris en charge dans la 0.4. Le nom du fichier dit « universal », mais dans la 0.4 il ne contient que la version pour Apple silicon.
+   Sous Linux, autorisez
    `job-hunter-team-linux-x64.AppImage` à s'exécuter comme programme et
    ouvrez-le, ou installez `job-hunter-team-linux-x64.deb` sur les systèmes
    basés sur Debian. Windows et Linux peuvent afficher un avertissement :
@@ -614,7 +617,8 @@ geöffnet, während sie arbeitet.
    `job-hunter-team-windows-x64-setup.exe`: Es installiert die App für deinen
    Benutzer. Öffne unter macOS `job-hunter-team-macos-universal.dmg` und ziehe
    die App in den Ordner Programme; sie ist mit einer Apple Developer ID
-   signiert und von Apple notarisiert. Erlaube unter Linux
+   signiert und von Apple notarisiert. Nur Macs mit Apple Silicon (M1 und neuer). Intel-Macs werden in 0.4 nicht unterstützt. Der Dateiname sagt „universal“, enthält in 0.4 aber nur die Version für Apple Silicon.
+   Erlaube unter Linux
    `job-hunter-team-linux-x64.AppImage`, als Programm ausgeführt zu werden, und
    öffne es, oder installiere `job-hunter-team-linux-x64.deb` auf
    Debian-basierten Systemen. Windows und Linux können eine Warnung anzeigen:
@@ -815,7 +819,8 @@ trabalha.
    `job-hunter-team-windows-x64-setup.exe`: instala a aplicação para o teu
    utilizador. No macOS abre `job-hunter-team-macos-universal.dmg` e arrasta a
    aplicação para Aplicações; está assinada com um Developer ID da Apple e
-   notarizada pela Apple. No Linux permite que
+   notarizada pela Apple. Apenas Macs com Apple silicon (M1 e posteriores). Os Macs com processador Intel não são suportados na 0.4. O nome do ficheiro diz «universal», mas na 0.4 contém apenas a versão para Apple silicon.
+   No Linux permite que
    `job-hunter-team-linux-x64.AppImage` seja executado como programa e abre-o,
    ou instala `job-hunter-team-linux-x64.deb` em sistemas baseados em Debian.
    Windows e Linux podem mostrar um aviso: avança apenas se o download vier do
@@ -1008,7 +1013,8 @@ számítógépedtől függ. Hagyd nyitva az alkalmazást, amíg dolgozik.
    `job-hunter-team-windows-x64-setup.exe` fájlt: a felhasználódnak telepíti az
    alkalmazást. macOS-en nyisd meg a `job-hunter-team-macos-universal.dmg`
    fájlt, és húzd az alkalmazást az Alkalmazások mappába; Apple Developer
-   ID-val van aláírva, és az Apple hitelesítette. Linuxon engedélyezd, hogy a
+   ID-val van aláírva, és az Apple hitelesítette. Csak Apple silicon-os Mac-ekhez (M1 és újabb). Az Intel-es Mac-ek a 0.4-ben nem támogatottak. A fájlnév „universal”, de a 0.4-ben csak az Apple silicon-os verziót tartalmazza.
+   Linuxon engedélyezd, hogy a
    `job-hunter-team-linux-x64.AppImage` programként fusson, és nyisd meg, vagy
    Debian-alapú rendszeren telepítsd a `job-hunter-team-linux-x64.deb`
    csomagot. Windows és Linux figyelmeztetést jeleníthet meg: csak akkor

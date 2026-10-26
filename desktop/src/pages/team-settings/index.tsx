@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
 import { makeT } from "@/lib/i18n-dict";
-import WorkHoursPicker from "@/app/components/WorkHoursPicker";
 import { ToastProvider, useToast } from "@/app/components/Toast";
 import { T as WEB_TEXT } from "@/app/(protected)/settings/team/page.i18n";
 import { appLocale } from "../../lib/app-locale";
@@ -19,10 +18,10 @@ function failureText(code: string): string {
 }
 
 /**
- * /settings/team: when the agents work and the model and effort of each role, for the team of this
- * computer or of the linked VPS. The web's own hours picker, as it is, with the native `team_settings`
- * command behind it; the roles are a card of this app (the model is shown as Maximum / Balanced /
- * Economy). A save is the team's: what it answers, read back, is what the page shows.
+ * /settings/team: the model and effort of each role, for the team of this computer or of the linked
+ * VPS, with the native `team_settings` command behind it (the model is shown as Maximum / Balanced /
+ * Economy). A save is the team's: what it answers, read back, is what the page shows. The working
+ * hours are the page /settings/hours.
  */
 function TeamSettings() {
   const locale = appLocale();
@@ -47,8 +46,7 @@ function TeamSettings() {
       const done = await writeTeamSettings(patch, loaded.settings.connectionKey);
       if (!done.ok) return failureText(done.error);
       setLoaded({ kind: "ready", settings: done.settings });
-      // the hours picker says its own «saved»: only the roles are told here
-      if (patch.roleModels !== undefined) toast(t.saved, "success");
+      toast(t.saved, "success");
       return null;
     },
     [loaded, t.saved, toast],
@@ -89,15 +87,6 @@ function TeamSettings() {
           <p className="text-[12px] text-[var(--color-muted)]" data-testid="team-settings-intro">
             {loaded.settings.target === "vps" ? t.introVps : t.introLocal}
           </p>
-          <WorkHoursPicker
-            cloud={{
-              workingHours: loaded.settings.workingHours,
-              save: (next) => save({ workingHours: next }),
-              sentMessage: t.saved,
-              // the picker's note says the preview needs a container; here the preview is not offered yet
-              hidePreviewNote: true,
-            }}
-          />
           {/* mounted again with what the team answered, so the form always shows the values read back */}
           <RoleModelsCard
             key={JSON.stringify(loaded.settings.roleModels)}

@@ -66,6 +66,8 @@ def isolated_env(tmp_path: Path, base_url: str):
         "HOME": str(tmp_path / "home"),
         "JHT_USER_DIR": str(tmp_path / "user"),
         "JHT_RELEASE_BASE_URL": base_url,
+        # the machine the download runs on: an Apple silicon Mac, whatever runs the test
+        "JHT_DOWNLOAD_HOST": "darwin-arm64",
         "NO_COLOR": "1",
     }
 
@@ -183,3 +185,30 @@ def test_existing_wrong_file_is_not_overwritten(tmp_path):
     assert result.returncode != 0
     assert "already exists" in result.stderr
     assert output.read_bytes() == b"keep me"
+
+
+def test_an_intel_mac_is_refused_before_anything_is_downloaded(tmp_path):
+    asset = "job-hunter-team-macos-universal.dmg"
+    with release_server(release_files(asset, b"bytes")) as base_url:
+        result = run_jht(
+            "download", "--os", "macos", "--version", "0.3.5",
+            env={**isolated_env(tmp_path, base_url), "JHT_DOWNLOAD_HOST": "darwin-x64"},
+        )
+
+    assert result.returncode != 0
+    assert "Apple silicon" in result.stderr and "Intel Mac" in result.stderr and "not supported" in result.stderr
+    assert "Nothing was downloaded" in result.stderr
+    assert not (tmp_path / "user" / "downloads").exists()
+
+
+@pytest.mark.parametrize("platform", ["windows", "linux"])
+def test_an_intel_mac_may_still_download_the_other_systems(tmp_path, platform):
+    asset = {"windows": "job-hunter-team-windows-x64-setup.exe", "linux": "job-hunter-team-linux-x64.AppImage"}[platform]
+    with release_server(release_files(asset, b"bytes")) as base_url:
+        result = run_jht(
+            "download", "--os", platform, "--version", "0.3.5",
+            env={**isolated_env(tmp_path, base_url), "JHT_DOWNLOAD_HOST": "darwin-x64"},
+        )
+
+    assert result.returncode == 0, result.stderr
+    assert (tmp_path / "user" / "downloads" / asset).read_bytes() == b"bytes"

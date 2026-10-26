@@ -111,7 +111,8 @@ The script is `set -euo pipefail`, idempotent, and prints a step counter
      `$JHT_RUNTIME_DIR/bin` rather than the user's global `PATH`.
      It never stops, deletes, or uninstalls Colima. Colima remains the default
      until bind mounts, Compose lifecycle, restart and clean-machine behavior
-     pass on both Apple Silicon and Intel Macs.
+     pass on both Apple Silicon and Intel Macs (the 0.4 desktop app is Apple silicon
+     only; this gate concerns the terminal installer).
      This preview uses Homebrew to match the current unattended Colima path;
      upstream recommends the official Podman installer for stable end-user
      installation, so the final packaging choice remains a release gate.

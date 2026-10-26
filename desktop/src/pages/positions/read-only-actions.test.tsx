@@ -3,7 +3,6 @@ import type { ReactElement } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ReadOnlyActionsProvider } from "@/lib/read-only-actions";
 import { ApplyRequestView } from "@/app/(protected)/positions/[id]/ApplyRequestButton";
-import { CvDownloadButton } from "@/app/(protected)/positions/[id]/CvDownloadButton";
 import { CoverLetterRequestButton } from "@/app/(protected)/positions/[id]/CoverLetterRequestButton";
 import { ExcludeButton } from "@/app/(protected)/positions/[id]/ExcludeButton";
 import { FeedbackButtons } from "@/app/(protected)/positions/[id]/FeedbackButtons";
@@ -16,7 +15,8 @@ import { WriteRequestButton } from "@/app/(protected)/positions/[id]/WriteReques
 
 // Every web control that writes, one by one: under the read-only provider it is
 // on screen and disabled with the reason; without it, the web's own behaviour
-// is untouched. (The page-level run is existing-team-readonly.test.tsx.)
+// is untouched. (The page-level run is existing-team-readonly.test.tsx.) The CV download is not here: in the
+// desktop it saves the PDF, a read, and works on a team that is only read (save-document.test.tsx).
 vi.mock("../../lib/supabase", () => ({ supabase: {}, supabaseConfigured: true, signOut: vi.fn() }));
 
 const REASON = "Solo lettura: assistente non attivo";
@@ -25,10 +25,6 @@ const t = (key: string) => key;
 const CASES: Array<[string, () => ReactElement]> = [
   ["apply request (available)", () => <ApplyRequestView state={{ kind: "available" }} t={t} />],
   ["apply request (authorised, to withdraw)", () => <ApplyRequestView state={{ kind: "authorised", at: null }} t={t} />],
-  [
-    "CV download (asks the team for the file)",
-    () => <CvDownloadButton fileName="synthetic.pdf" cloudMode color="var(--color-green)" labels={{ idle: "CV", preparing: "…", error: "!" }} />,
-  ],
   ["user note", () => <UserNote legacyId={1} initialNote="synthetic note" />],
   ["geocode", () => <GeocodeRequestButton legacyId={1} initialRequested={false} alreadyGeocoded={false} />],
   ["recheck", () => <RecheckButton legacyId={1} initialRequested={false} lastOpenCheck={null} />],
