@@ -435,11 +435,19 @@ fn create_private_with(path: &Path, protect: impl FnOnce(&Path) -> Result<(), &'
     Ok(file)
 }
 
+/// A path with a part that starts with a dot: a hidden folder, or a folder inside one.
+fn has_hidden_part(path: &Path) -> bool {
+    path.components().any(|part| matches!(part, Component::Normal(name) if name.to_string_lossy().starts_with('.')))
+}
+
 /// The folder the «Save as» window opens in: the first of `candidates` that is a folder and is not hidden
 /// (no part of its path starts with a dot). The system would otherwise open where the app last asked for a file,
 /// which may be a folder of keys.
 pub(crate) fn start_folder(candidates: impl IntoIterator<Item = Option<PathBuf>>) -> Option<PathBuf> {
-    let hidden = |dir: &Path| dir.components().any(|part| matches!(part, Component::Normal(name) if name.to_string_lossy().starts_with('.')));
+    start_folder_judging(candidates, has_hidden_part)
+}
+
+fn start_folder_judging(candidates: impl IntoIterator<Item = Option<PathBuf>>, hidden: impl Fn(&Path) -> bool) -> Option<PathBuf> {
     candidates.into_iter().flatten().find(|dir| dir.is_dir() && !hidden(dir))
 }
 
@@ -1110,8 +1118,22 @@ mod tests {
     }
 
     #[test]
-    fn the_save_window_starts_in_a_visible_folder_and_never_in_a_hidden_one() {
+    fn a_hidden_part_is_one_that_starts_with_a_dot_wherever_it_is_in_the_path() {
+        for hidden in ["/home/u/.ssh", "/home/u/.config/Documents", "/home/.t/u/Documents", ".ssh"] {
+            assert!(has_hidden_part(Path::new(hidden)), "{hidden}");
+        }
+        for visible in ["/home/u/Documents", "/Users/u/Downloads", "/home/u/my.docs", "/home/u/a..b", ""] {
+            assert!(!has_hidden_part(Path::new(visible)), "{visible}");
+        }
+    }
+
+    // The fixtures live in the machine's temp folder, whose own path may have a hidden part (a test home
+    // such as `/home/x/.t/tmp`): the order and the folder checks look at the path from the fixture down.
+    #[test]
+    fn the_save_window_starts_in_the_first_folder_that_is_there_and_not_hidden() {
         let home = team_home("start");
+        let below = |dir: &Path| has_hidden_part(dir.strip_prefix(&home).unwrap());
+        let start = |candidates: Vec<Option<PathBuf>>| start_folder_judging(candidates, below);
         let documents = home.join("Documents");
         let downloads = home.join("Downloads");
         let keys = home.join(".ssh");
@@ -1119,16 +1141,18 @@ mod tests {
         for dir in [&documents, &downloads, &keys, &nested] {
             fs::create_dir_all(dir).unwrap();
         }
-        assert_eq!(start_folder([Some(documents.clone()), Some(downloads.clone())]), Some(documents.clone()));
+        assert_eq!(start(vec![Some(documents.clone()), Some(downloads.clone())]), Some(documents.clone()));
         // Documents missing: Downloads
-        assert_eq!(start_folder([Some(home.join("nowhere")), Some(downloads.clone())]), Some(downloads.clone()));
-        assert_eq!(start_folder([None, Some(downloads.clone())]), Some(downloads.clone()));
+        assert_eq!(start(vec![Some(home.join("nowhere")), Some(downloads.clone())]), Some(downloads.clone()));
+        assert_eq!(start(vec![None, Some(downloads.clone())]), Some(downloads.clone()));
         // a hidden folder, or one inside a hidden folder, is skipped
-        assert_eq!(start_folder([Some(keys.clone()), Some(downloads.clone())]), Some(downloads.clone()));
-        assert_eq!(start_folder([Some(nested), Some(downloads.clone())]), Some(downloads));
+        assert_eq!(start(vec![Some(keys.clone()), Some(downloads.clone())]), Some(downloads.clone()));
+        assert_eq!(start(vec![Some(nested.clone()), Some(downloads.clone())]), Some(downloads));
         // nothing that will do: the system's own choice, which the export cannot do better
-        assert_eq!(start_folder([Some(keys), Some(home.join("file-not-folder"))]), None);
-        assert_eq!(start_folder([]), None);
+        assert_eq!(start(vec![Some(keys.clone()), Some(home.join("file-not-folder"))]), None);
+        assert_eq!(start(vec![]), None);
+        // the real rule, whatever the machine's temp path: a hidden folder is never the start
+        assert_eq!(start_folder([Some(keys), Some(nested)]), None);
         let _ = fs::remove_dir_all(&home);
     }
 
