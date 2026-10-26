@@ -4749,7 +4749,7 @@ case "$SUB" in
     require_confined_podman_machine
     podman_state_backup_cleanup
     trap - EXIT INT TERM
-    info "Macchina Podman ricreata: vede solo ~/.jht e ~/Documents/Job Hunter Team. Lo stato del broker e' stato conservato; le CLI dei provider si reinstallano da sole al primo 'jht up' (pochi secondi, serve la rete: 'jht providers versions' lo conferma, 'jht providers update' le rimette a mano). Avvia il team con 'jht up', reinserisci la password della posta e rifai il login LinkedIn."
+    info "Macchina Podman ricreata: vede solo ~/.jht e ~/Documents/Job Hunter Team. Lo stato del broker e' stato conservato; le CLI dei provider si reinstallano da sole al primo 'jht up' (circa un minuto, serve la rete: 'jht providers versions' lo conferma, 'jht providers update' le rimette a mano). Avvia il team con 'jht up', reinserisci la password della posta e rifai il login LinkedIn."
     ;;
 
   # ── Lifecycle: parlano direttamente al daemon Docker ───────────────────
