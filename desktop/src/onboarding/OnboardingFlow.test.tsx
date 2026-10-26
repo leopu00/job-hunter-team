@@ -76,7 +76,7 @@ describe("OnboardingFlow reopened for the provider only (T128)", () => {
   it("prepares on this computer with the provider chosen, and says nothing of installs or of an earlier install", async () => {
     const user = userEvent.setup();
     const { props } = reopened({ platform: "windows", previousLocalData: true });
-    await screen.findByRole("radio", { name: /codex/i });
+    await user.click(await screen.findByRole("radio", { name: /codex/i }));
     await user.click(screen.getByRole("button", { name: /rivedi il setup/i }));
     expect(screen.getByText("Questo computer")).toBeInTheDocument();
     expect(screen.queryByText(/l’app installa, se mancano/i)).not.toBeInTheDocument();
@@ -852,7 +852,7 @@ describe("OnboardingFlow technical setup", () => {
     await user.type(screen.getByLabelText(/utente ssh/i), "draft-user");
     await user.click(screen.getByRole("button", { name: /scegli chiave ssh/i }));
     await user.click(screen.getByRole("button", { name: /^continua/i }));
-    await user.click(screen.getByRole("radio", { name: /claude code/i }));
+    await user.click(screen.getByRole("radio", { name: /codex/i }));
 
     result.rerender(<OnboardingFlow {...result.props} runtime={{
       status: "failed", stage: "runtime", message: "Errore terminale.", retryable: true,
@@ -865,7 +865,7 @@ describe("OnboardingFlow technical setup", () => {
     expect(screen.getByLabelText(/utente ssh/i)).toHaveValue("draft-user");
     expect(screen.getByText("id_ed25519")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: /^continua/i }));
-    expect(screen.getByRole("radio", { name: /claude code/i })).toHaveAttribute("aria-checked", "true");
+    expect(screen.getByRole("radio", { name: /codex/i })).toHaveAttribute("aria-checked", "true");
   });
 
   it("does not offer a return to configuration while an operation is still working", () => {
