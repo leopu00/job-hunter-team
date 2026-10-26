@@ -32,14 +32,7 @@ IMAGE = "docker.io/library/python:3.11-slim-bookworm"
 
 
 ENGINES = live_engines()
-pytestmark = [
-    pytest.mark.skipif(not ENGINES, reason="needs Linux with Docker or Podman (runs in CI)"),
-    # Quarantined (JHT-T139), to be fixed before the 0.4.0 tag: since notary.py
-    # imports tldextract when it loads, the broker cannot start in the bare
-    # python image this test runs it in (no network, no tldextract), and every
-    # case errored at setup. The broker image has it; this test does not.
-    pytest.mark.skip(reason="quarantined, JHT-T139: the bare test image has no tldextract for the broker"),
-]
+pytestmark = pytest.mark.skipif(not ENGINES, reason="needs Linux with Docker or Podman (runs in CI)")
 
 
 def run(engine, *args, check=True, timeout=300, input=None):
