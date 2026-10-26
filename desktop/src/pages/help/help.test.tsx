@@ -27,6 +27,17 @@ describe("the help page", () => {
     }
   });
 
+  it("links the privacy notice and the terms, as the website does", () => {
+    localStorage.setItem("jht-lang", "en");
+    render(
+      <DashboardI18nProvider>
+        <HelpPage {...props} />
+      </DashboardI18nProvider>,
+    );
+    expect(screen.getByRole("button", { name: "Privacy notice" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Terms of service" })).toBeInTheDocument();
+  });
+
   it("names the two navbar buttons its trouble paragraph points at, as the navbar does", () => {
     localStorage.setItem("jht-lang", "en");
     render(

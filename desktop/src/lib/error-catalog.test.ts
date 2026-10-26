@@ -35,6 +35,9 @@ const NOT_ERRORS: Record<string, string> = {
   working_hours: "key of the team settings JSON, not an error",
   min_window_hours: "key of the lists the team settings answer with, not an error",
   value_invalid: "the box's word for a refused value (team_settings.rs), mapped to team_settings_value_invalid",
+  // public_pages.rs: the page reads `ok` and says its own sentence (lib/public-pages.ts).
+  public_page_unknown: "reply of open_public_page: the page only reads ok and says its own sentence",
+  public_page_window_refused: "reply of open_public_page: the page only reads ok and says its own sentence",
   // The Windows autostart's nonfatal notice id in windows_runtime.rs; it is
   // interpreted there, never shown through the error catalog.
   autostart_inactive: "id of the nonfatal Windows autostart notice",
