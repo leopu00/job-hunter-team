@@ -115,13 +115,13 @@ def test_what_the_pages_say_about_the_container_machine_is_what_the_installer_cr
     memory_mib = installer_constant("PODMAN_MACHINE_MEMORY_MIB")
     disk_gib = installer_constant("PODMAN_MACHINE_DISK_GIB")
     assert memory_mib % 1024 == 0
-    memory_gb = memory_mib // 1024
+    memory_gib = memory_mib // 1024
     for lang in LANGS:
         body = guide_requirements(lang)
         memory_row = card_value("memory", lang)
         assert re.search(rf"\b{cpus} CPU", body) and re.search(rf"\b{cpus} CPU", memory_row), lang
-        assert re.search(rf"\b{memory_gb} G[Bo]\b", body) and re.search(rf"\b{memory_gb} G[Bo]\b", memory_row), lang
-        assert re.search(rf"\b{disk_gib} G[Bo]\b", body) and re.search(rf"\b{disk_gib} G[Bo]\b", card_value("disk", lang)), lang
+        assert re.search(rf"\b{memory_gib} GiB\b", body) and re.search(rf"\b{memory_gib} GiB\b", memory_row), lang
+        assert re.search(rf"\b{disk_gib} GiB\b", body) and re.search(rf"\b{disk_gib} GiB\b", card_value("disk", lang)), lang
         # the recommendation for the whole Mac is a separate, round figure: it is said in both places
         assert re.search(r"\b16 G[Bo]\b", body) and re.search(r"\b16 G[Bo]\b", memory_row), lang
 
@@ -200,8 +200,13 @@ def test_no_page_asks_for_docker_or_gives_the_old_unmeasured_figures():
     assert "docker" not in STARTED_I18N.lower()
     for stale in ["4 GB minimum", "8 GB recommended", "~35 GB", "Colima", "Docker Desktop"]:
         assert stale not in DOWNLOAD, stale
-    for lang_rows in re.findall(r"reqRows: \[(.*?)\]\n  \}", DOWNLOAD, re.S):
-        assert "Homebrew" in lang_rows and "16" in lang_rows and "30" in lang_rows
+    tables = re.findall(r"reqRows: \[(.*?)\n    \],\n  \}", DOWNLOAD, re.S)
+    assert len(tables) == 7
+    for lang_rows in tables:
+        assert "Homebrew" in lang_rows and re.search(r"\b16 G[Bo]\b", lang_rows)
+        # the machine's memory and disk are written in the installer's own unit
+        assert f"{installer_constant('PODMAN_MACHINE_MEMORY_MIB') // 1024} GiB" in lang_rows
+        assert f"{installer_constant('PODMAN_MACHINE_DISK_GIB')} GiB" in lang_rows
     assert DOWNLOAD.count("Homebrew") >= 14, "the requirements table and the assistant prompt, in seven languages"
     # the figures of the table are the installer's
     cpus = installer_constant("PODMAN_MACHINE_CPUS")
