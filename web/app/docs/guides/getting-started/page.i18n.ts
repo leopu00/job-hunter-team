@@ -36,8 +36,8 @@ export type Dict = {
   path3Mac: string;
   path3WinIntro: string;
   path3WizardIntro: string;
-  dockerReqA: string;
-  dockerReqB: string;
+  requirementA: string;
+  requirementB: string;
   firstRunTitle: string;
   firstRunIntro: string;
   fr1A: string;
@@ -92,9 +92,9 @@ export const T: Record<Locale, Dict> = {
     path3Mac: "macOS / Linux / WSL2:",
     path3WinIntro: "Windows is not supported in 0.4: these steps are untested and may not work. Windows (PowerShell, WSL must already be enabled):",
     path3WizardIntro: "Then bring the team up and run the wizard:",
-    dockerReqA: "The one requirement is ",
-    dockerReqB:
-      " — the installer sets up the runtime on macOS and Linux for you (on Windows it installs Podman inside WSL; Docker Desktop is not needed). No Node, Python or tmux on your machine: everything lives inside the container.",
+    requirementA: "On a Mac the one requirement is ",
+    requirementB:
+      " — it must already be installed, and the installer then sets up the container runtime for you. Windows is not supported in 0.4 and Linux is experimental. No Node, Python or tmux on your machine: everything lives inside the container.",
     firstRunTitle: "🎬 Your first run",
     firstRunIntro: "Whichever path you took:",
     fr1A: "Set up your profile.",
@@ -147,9 +147,9 @@ export const T: Record<Locale, Dict> = {
     path3Mac: "macOS / Linux / WSL2:",
     path3WinIntro: "Windows non è supportato nella 0.4: questi passaggi non sono stati provati e potrebbero non funzionare. Windows (PowerShell, WSL deve essere già attivo):",
     path3WizardIntro: "Poi avvia il team ed esegui la procedura guidata:",
-    dockerReqA: "L'unico requisito è ",
-    dockerReqB:
-      " — l'installer configura il runtime su macOS e Linux per te (su Windows installa Podman dentro WSL; Docker Desktop non serve). Niente Node, Python o tmux sulla tua macchina: tutto vive dentro il container.",
+    requirementA: "Su Mac l'unico requisito è ",
+    requirementB:
+      " — deve essere già installato, poi l'installer configura il runtime dei container per te. Windows non è supportato nella 0.4 e Linux è sperimentale. Niente Node, Python o tmux sulla tua macchina: tutto vive dentro il container.",
     firstRunTitle: "🎬 La tua prima esecuzione",
     firstRunIntro: "Qualunque percorso tu abbia scelto:",
     fr1A: "Configura il tuo profilo.",
@@ -203,9 +203,9 @@ export const T: Record<Locale, Dict> = {
     path3Mac: "macOS / Linux / WSL2:",
     path3WinIntro: "Windows no es compatible con la 0.4: estos pasos no se han probado y pueden no funcionar. Windows (PowerShell, WSL ya debe estar activado):",
     path3WizardIntro: "Luego levanta el equipo y ejecuta el asistente:",
-    dockerReqA: "El único requisito es ",
-    dockerReqB:
-      " — el instalador configura el runtime en macOS y Linux por ti (en Windows instala Podman dentro de WSL; no necesitas Docker Desktop). Sin Node, Python ni tmux en tu máquina: todo vive dentro del contenedor.",
+    requirementA: "En Mac el único requisito es ",
+    requirementB:
+      " — debe estar ya instalado, y después el instalador configura el runtime de contenedores por ti. Windows no es compatible en la 0.4 y Linux es experimental. Sin Node, Python ni tmux en tu máquina: todo vive dentro del contenedor.",
     firstRunTitle: "🎬 Tu primera ejecución",
     firstRunIntro: "Sea cual sea la vía que hayas elegido:",
     fr1A: "Configura tu perfil.",
@@ -260,9 +260,9 @@ export const T: Record<Locale, Dict> = {
     path3Mac: "macOS / Linux / WSL2 :",
     path3WinIntro: "Windows n'est pas pris en charge dans la 0.4 : ces étapes n'ont pas été testées et peuvent ne pas fonctionner. Windows (PowerShell, WSL doit déjà être activé) :",
     path3WizardIntro: "Puis démarrez l'équipe et lancez l'assistant :",
-    dockerReqA: "La seule exigence est ",
-    dockerReqB:
-      " — l'installateur configure le runtime sur macOS et Linux pour vous (sous Windows, il installe Podman dans WSL ; Docker Desktop n'est pas nécessaire). Pas de Node, Python ni tmux sur votre machine : tout vit à l'intérieur du conteneur.",
+    requirementA: "Sur Mac, la seule exigence est ",
+    requirementB:
+      " — il doit déjà être installé, puis l'installateur configure l'environnement de conteneurs pour vous. Windows n'est pas pris en charge dans la 0.4 et Linux est expérimental. Pas de Node, Python ni tmux sur votre machine : tout vit à l'intérieur du conteneur.",
     firstRunTitle: "🎬 Votre première exécution",
     firstRunIntro: "Quelle que soit la voie choisie :",
     fr1A: "Configurez votre profil.",
@@ -317,9 +317,9 @@ export const T: Record<Locale, Dict> = {
     path3Mac: "macOS / Linux / WSL2:",
     path3WinIntro: "Windows wird in 0.4 nicht unterstützt: Diese Schritte sind ungetestet und funktionieren möglicherweise nicht. Windows (PowerShell, WSL muss bereits aktiviert sein):",
     path3WizardIntro: "Dann starte das Team und führe den Assistenten aus:",
-    dockerReqA: "Die einzige Voraussetzung ist ",
-    dockerReqB:
-      " — der Installer richtet die Laufzeitumgebung auf macOS und Linux für dich ein (unter Windows installiert er Podman in WSL; Docker Desktop wird nicht benötigt). Kein Node, Python oder tmux auf deinem Rechner: alles lebt im Container.",
+    requirementA: "Auf einem Mac ist die einzige Voraussetzung ",
+    requirementB:
+      " — es muss bereits installiert sein, danach richtet der Installer die Container-Laufzeit für dich ein. Windows wird in 0.4 nicht unterstützt, und Linux ist experimentell. Kein Node, Python oder tmux auf deinem Rechner: alles lebt im Container.",
     firstRunTitle: "🎬 Dein erster Lauf",
     firstRunIntro: "Welchen Weg du auch gewählt hast:",
     fr1A: "Richte dein Profil ein.",
@@ -375,9 +375,9 @@ export const T: Record<Locale, Dict> = {
     path3WinIntro:
       "A Windows a 0.4-ben nem támogatott: ezeket a lépéseket nem tesztelték, és lehet, hogy nem működnek. Windows (PowerShell, a WSL-nek már bekapcsolva kell lennie):",
     path3WizardIntro: "Aztán indítsd el a csapatot, és futtasd a varázslót:",
-    dockerReqA: "Az egyetlen követelmény a ",
-    dockerReqB:
-      " — a telepítő beállítja helyetted a futtatókörnyezetet macOS-en és Linuxon (Windowson Podmant telepít a WSL-be; Docker Desktopra nincs szükség). Nincs Node, Python vagy tmux a gépeden: minden a konténeren belül él.",
+    requirementA: "Macen az egyetlen követelmény a ",
+    requirementB:
+      " — már telepítve kell lennie, utána a telepítő beállítja helyetted a konténer-futtatókörnyezetet. A Windows a 0.4-ben nem támogatott, a Linux pedig kísérleti. Nincs Node, Python vagy tmux a gépeden: minden a konténeren belül él.",
     firstRunTitle: "🎬 Az első futtatásod",
     firstRunIntro: "Bármelyik utat is választottad:",
     fr1A: "Állítsd be a profilodat.",
@@ -431,9 +431,9 @@ export const T: Record<Locale, Dict> = {
     path3Mac: "macOS / Linux / WSL2:",
     path3WinIntro: "O Windows não é suportado na 0.4: estes passos não foram testados e podem não funcionar. Windows (PowerShell, o WSL já tem de estar ativado):",
     path3WizardIntro: "Depois levanta a equipa e executa o assistente:",
-    dockerReqA: "O único requisito é o ",
-    dockerReqB:
-      " — o instalador configura o runtime no macOS e Linux por ti (no Windows instala o Podman dentro do WSL; o Docker Desktop não é necessário). Sem Node, Python ou tmux na tua máquina: tudo vive dentro do contentor.",
+    requirementA: "No Mac, o único requisito é o ",
+    requirementB:
+      " — tem de estar já instalado, e depois o instalador configura o runtime de contentores por ti. O Windows não é suportado na 0.4 e o Linux é experimental. Sem Node, Python ou tmux na tua máquina: tudo vive dentro do contentor.",
     firstRunTitle: "🎬 A tua primeira execução",
     firstRunIntro: "Seja qual for o caminho que escolheste:",
     fr1A: "Configura o teu perfil.",

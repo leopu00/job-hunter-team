@@ -380,14 +380,15 @@ describe("guida di setup — contratto del team docs", () => {
     }
   });
 
-  it("indice, G00 e S02 sono tradotti davvero nelle sei lingue derivate", () => {
+  it("indice, G00 e i passi di Homebrew, Windows e Linux sono tradotti davvero nelle sei lingue derivate", () => {
     const chapter = GUIDE_CHAPTERS.find(
       (candidate) => candidate.id === "guide-index",
     )!;
     const phaseIds = new Set([
       "choose-setup-path",
-      "install-docker-windows",
-      "install-docker-linux",
+      "install-homebrew-macos",
+      "windows-not-supported",
+      "linux-needs-podman",
     ]);
     const phases = chapter.phases.filter((phase) => phaseIds.has(phase.id));
     expect(phases).toHaveLength(phaseIds.size);

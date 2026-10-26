@@ -96,9 +96,9 @@ jht doctor        # check everything is healthy
 jht team status   # confirm it's running`}
       </Pre>
       <P>
-        {t.dockerReqA}
-        <strong>Docker</strong>
-        {t.dockerReqB}
+        {t.requirementA}
+        <strong>Homebrew</strong>
+        {t.requirementB}
       </P>
 
       <H2>{t.firstRunTitle}</H2>

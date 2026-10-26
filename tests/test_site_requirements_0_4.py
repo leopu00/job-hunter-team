@@ -134,3 +134,85 @@ def test_the_homebrew_requirement_is_the_one_the_app_enforces_and_the_app_runs_p
     # the installer's free-space check is not run on a Mac (the disk is inside the machine): no free-space claim on the pages
     assert "case \"$OS\" in linux|wsl) ;; *) return 0 ;; esac" in INSTALL
     assert RUN.count("Homebrew") >= 7, "the local mode says Homebrew in every language"
+
+
+# ---- the rest of the guide, the download page and the getting-started guide
+
+GUIDE_STEPS = text("web/app/setup-guide/guide-content.ts")
+SCREENS = text("web/app/setup-guide/guide-screens.ts")
+CONFIG = text("web/app/setup-guide/guide-config.ts")
+DOWNLOAD = text("web/app/download/DownloadClient.tsx")
+STARTED_I18N = text("web/app/docs/guides/getting-started/page.i18n.ts")
+STARTED_PAGE = text("web/app/docs/guides/getting-started/page.tsx")
+LANDING = text("web/app/components/landing/LandingI18n.tsx")
+
+
+def step(step_id: str) -> str:
+    start = GUIDE_STEPS.index(f'id: "{step_id}"')
+    end = GUIDE_STEPS.find('\n      {\n        id: "', start + 10)
+    return GUIDE_STEPS[start:end if end != -1 else len(GUIDE_STEPS)]
+
+
+def lang_line(block: str, lang: str, field: str) -> str:
+    inside = block[block.index(f"{field}: {{"):]
+    match = re.search(rf'\n          {lang}: "((?:[^"\\\n]|\\.)*)",', inside)
+    assert match, (field, lang)
+    return match.group(1)
+
+
+def test_the_guide_has_a_mac_step_for_homebrew_a_windows_banner_and_a_linux_step_with_podman():
+    assert 'os: ["macos"]' in step("install-homebrew-macos")
+    assert "HOMEBREW_URL" in step("install-homebrew-macos")
+    assert 'os: ["windows"]' in step("windows-not-supported")
+    assert 'os: ["linux"]' in step("linux-needs-podman")
+    for old in ["install-docker-windows", "install-docker-linux", "install-docker-macos"]:
+        assert f'id: "{old}"' not in GUIDE_STEPS, old
+    assert 'HOMEBREW_URL = "https://brew.sh"' in CONFIG
+    for gone in ["DOCKER_URL", "WSL_URL"]:
+        assert gone not in CONFIG and gone not in GUIDE_STEPS
+
+
+@pytest.mark.parametrize("lang", LANGS)
+def test_the_mac_windows_and_linux_steps_and_the_container_start_say_what_0_4_does(lang):
+    mac = lang_line(step("install-homebrew-macos"), lang, "body")
+    assert "Homebrew" in mac and "Podman" in mac and ".pkg" in mac
+    windows_step = step("windows-not-supported")
+    assert "0.4" in lang_line(windows_step, lang, "title") and "Windows" in lang_line(windows_step, lang, "title")
+    assert "WSL" not in windows_step and "links:" not in windows_step, "no link to set up something that is not supported"
+    linux = lang_line(step("linux-needs-podman"), lang, "body")
+    assert "Podman" in linux and "5.0" in linux and "sud" in linux.lower()
+    start = lang_line(step("start-container"), lang, "body")
+    assert "Podman" in start and "Homebrew" in start
+    for stale in ["WSL", "Docker Engine", "Colima"]:
+        assert stale not in start and stale not in linux and stale not in mac
+
+
+def test_the_linux_step_says_what_the_linux_installer_needs():
+    # rootless Podman at the versions the installer enforces, with a sudo that asks for no password
+    assert 'PODMAN_MIN_VERSION="5.0.0"' in INSTALL and 'PODMAN_COMPOSE_MIN_VERSION="1.1.0"' in INSTALL
+    assert "sudo -n" in INSTALL
+
+
+def test_no_page_asks_for_docker_or_gives_the_old_unmeasured_figures():
+    for name, source in {"download page": DOWNLOAD, "screens": SCREENS, "landing": LANDING, "started page": STARTED_PAGE}.items():
+        assert "Docker" not in source, name
+    # the key names carry no product name either
+    assert "docker" not in STARTED_I18N.lower()
+    for stale in ["4 GB minimum", "8 GB recommended", "~35 GB", "Colima", "Docker Desktop"]:
+        assert stale not in DOWNLOAD, stale
+    for lang_rows in re.findall(r"reqRows: \[(.*?)\]\n  \}", DOWNLOAD, re.S):
+        assert "Homebrew" in lang_rows and "16" in lang_rows and "30" in lang_rows
+    assert DOWNLOAD.count("Homebrew") >= 14, "the requirements table and the assistant prompt, in seven languages"
+    # the figures of the table are the installer's
+    cpus = installer_constant("PODMAN_MACHINE_CPUS")
+    assert re.search(rf'\["CPU", "{cpus} ', DOWNLOAD)
+    assert "S02-docker" not in SCREENS and not (ROOT / "web/public/setup-guide/S02-docker-missing-linux.png").exists()
+
+
+def test_the_getting_started_guide_names_homebrew_and_the_0_4_systems_in_every_language():
+    assert "<strong>Homebrew</strong>" in STARTED_PAGE
+    blocks = re.findall(r"requirementB:\s*\n?\s*\"((?:[^\"\\\n]|\\.)*)\"", STARTED_I18N)
+    assert len(blocks) == 7
+    for body in blocks:
+        assert "Windows" in body and "Linux" in body and "0.4" in body
+        assert "WSL" not in body and "Docker" not in body
