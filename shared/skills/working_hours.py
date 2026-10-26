@@ -185,6 +185,73 @@ def current_window_bounds(now: datetime | None = None, config: dict | None = Non
     return None
 
 
+def schedule_status(path: Path | None = None) -> str:
+    """Come sta il file degli orari, SENZA cambiare cosa fa il gate.
+
+    ``undeclared``  nessun orario dichiarato (file assente, ``working_hours`` assente o
+                    ``windows`` vuota): la squadra lavora 24/7, ed e' voluto.
+    ``valid``       orari dichiarati e leggibili (giorni noti, HH:MM in 00:00-23:59, fuso noto).
+    ``unreadable``  un orario dichiarato ma illeggibile o fuori intervallo (JSON rotto, file
+                    vuoto o non leggibile, ``working_hours`` non oggetto, ``windows`` non lista,
+                    giorno sconosciuto, ora fuori intervallo, fuso sconosciuto). Oggi il gate
+                    lo tratta come 24/7 (0.4); il ramo fail-closed e' della 0.4.1.
+    """
+    p = path or _config_path()
+    try:
+        raw = p.read_text()
+    except FileNotFoundError:
+        return "undeclared"
+    except Exception:
+        return "unreadable"
+    try:
+        cfg = json.loads(raw)
+    except Exception:
+        return "unreadable"
+    if not isinstance(cfg, dict):
+        return "unreadable"
+    team = cfg.get("team")
+    if team is None:
+        return "undeclared"
+    if not isinstance(team, dict):
+        return "unreadable"
+    wh = team.get("working_hours")
+    if wh is None:
+        return "undeclared"
+    if not isinstance(wh, dict):
+        return "unreadable"
+    windows = wh.get("windows")
+    if windows is None or windows == []:
+        return "undeclared"
+    if not isinstance(windows, list):
+        return "unreadable"
+    tz_name = wh.get("timezone", "UTC")
+    if not isinstance(tz_name, str):
+        return "unreadable"
+    try:
+        if ZoneInfo is None:
+            return "unreadable"
+        ZoneInfo((tz_name or "UTC").strip() or "UTC")
+    except Exception:
+        return "unreadable"
+    for w in windows:
+        if not isinstance(w, dict):
+            return "unreadable"
+        days = w.get("days")
+        if not isinstance(days, list) or not days or any(d not in _WEEKDAY_INDEX for d in days):
+            return "unreadable"
+        for key in ("start", "end"):
+            value = w.get(key)
+            if not isinstance(value, str):
+                return "unreadable"
+            try:
+                h, m = value.split(":", 1)
+                if not (0 <= int(h) <= 23 and 0 <= int(m) <= 59 and len(h) <= 2 and len(m) == 2):
+                    return "unreadable"
+            except Exception:
+                return "unreadable"
+    return "valid"
+
+
 def describe_status(now: datetime | None = None) -> str:
     """Stringa diagnostica utile per i log di pacing-bridge / notify-user."""
     cfg = _load_config()
