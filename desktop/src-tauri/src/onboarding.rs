@@ -285,6 +285,35 @@ pub(crate) async fn existing_team_reconfirm_summary(
     result
 }
 
+/// «Switch to read only»: the person takes the permission to write away. The permission in memory goes
+/// first and cannot fail; then the record that would give it back at the next start, and a record that
+/// cannot be taken away is an error the person sees (`existing_team_full_link_not_removed`). The saved
+/// team, its candidate and its selection stay as they are: only the permission goes.
+#[tauri::command]
+pub(crate) async fn existing_team_write_access_off(
+    window: tauri::Window,
+    app: tauri::AppHandle,
+    scopes: State<'_, AccountScopeState>,
+) -> Result<(), OnboardingError> {
+    if !crate::direct_chat::window_may_write(window.label()) {
+        return Err(failure("window_not_allowed"));
+    }
+    crate::existing_team_runtime::revoke_full_link();
+    let expected = scopes.active().map_err(failure)?;
+    let scope_state = scopes.inner().clone();
+    let worker_expected = expected.clone();
+    let result = tauri::async_runtime::spawn_blocking(move || {
+        let _scope = scope_state.lock_expected(&worker_expected).map_err(failure)?;
+        let root = crate::existing_team_runtime::root(&app).map_err(failure)?;
+        crate::existing_team_runtime::forget_full_link_at(&root, &worker_expected).map_err(failure)?;
+        Ok(())
+    })
+    .await
+    .unwrap_or_else(|_| Err(failure("existing_team_runtime_unavailable")));
+    let _scope = scopes.lock_expected(&expected).map_err(failure)?;
+    result
+}
+
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct ExistingTeamLinkStatus {
@@ -384,10 +413,12 @@ pub(crate) async fn existing_team_unlink(
     let worker_expected = expected.clone();
     let result = tauri::async_runtime::spawn_blocking(move || {
         let _scope = scope_state.lock_expected(&worker_expected).map_err(failure)?;
+        // The permission in memory goes first, whatever follows: a record that cannot be taken away is an
+        // error the person sees, and this run of the app does not write any more.
+        crate::existing_team_runtime::revoke_full_link();
         let root = crate::existing_team_runtime::root(&app).map_err(failure)?;
         crate::existing_team_runtime::clear_link_at(&root, &worker_expected).map_err(failure)?;
         crate::direct_chat::clear_persisted_host_at(&root, &worker_expected).map_err(failure)?;
-        crate::existing_team_runtime::revoke_full_link();
         Ok(())
     })
     .await
@@ -3465,6 +3496,13 @@ pub(crate) struct ExistingTeamReadiness {
     /// The connection the read-only view opened (existing_team_runtime::connection_key): the
     /// renderer keys what it keeps of the team's data with it. None where no target was activated.
     pub(crate) connection_key: Option<String>,
+    /// The full connection came back with this opening: the person confirmed it in an earlier run of
+    /// the app, the record is this very connection and recent, and every check of the reopening passed
+    /// (existing_team_runtime::restore_full_link_at). False for a read-only opening.
+    pub(crate) full_link: bool,
+    /// What the reopening did with the record, for the log only (never sent to the renderer).
+    #[serde(skip)]
+    pub(crate) full_link_outcome: Option<&'static str>,
 }
 
 /// Validates the immutable target and team identity, then reports which of its
@@ -3505,6 +3543,8 @@ pub(crate) fn existing_team_readonly_probe_with(
         readiness: snapshot.assistant_running,
         snapshot,
         connection_key: None,
+        full_link: false,
+        full_link_outcome: None,
     })
 }
 
@@ -3641,11 +3681,11 @@ pub(crate) fn existing_team_reopen_with(
     if !matches!(host, ExecutionHost::Vps { .. }) {
         return Err(failure("existing_team_vps_required"));
     }
-    match crate::existing_team_runtime::selected_at(root, scope, &host).map_err(failure)? {
-        Some(target) if target.team_id == team_id => {}
+    let target = match crate::existing_team_runtime::selected_at(root, scope, &host).map_err(failure)? {
+        Some(target) if target.team_id == team_id => target,
         _ => return Err(failure("existing_team_runtime_target_changed")),
-    }
-    existing_team_readonly_connect_with(
+    };
+    let mut readiness = existing_team_readonly_connect_with(
         root,
         scope,
         &host,
@@ -3653,7 +3693,19 @@ pub(crate) fn existing_team_reopen_with(
         &mut || validate_host(&host),
         &mut || persist_host(&host),
         run,
-    )
+    )?;
+    // Only here, with the pin, the identity probe and the selection all passed: the full connection the
+    // person confirmed in an earlier run comes back if its record says this very connection and is
+    // recent. A reopening that failed returned above and gave nothing back; its record stays (it expires).
+    let outcome = crate::existing_team_runtime::restore_full_link_at(
+        root,
+        scope,
+        &target,
+        crate::existing_team_runtime::unix_now(),
+    );
+    readiness.full_link = outcome == crate::existing_team_runtime::FullLinkRestore::Restored;
+    readiness.full_link_outcome = Some(outcome.word());
+    Ok(readiness)
 }
 
 #[tauri::command]
@@ -3682,6 +3734,9 @@ pub(crate) async fn onboarding_existing_team_reopen(
     // The opening at start-up is read-only: the log says so, so a chat that cannot write is not a mystery.
     if let Some(log) = &diagnostic {
         log.record_existing_team_status(ExistingTeamPhase::ReadOnlyOpen, result.as_ref().map(|_| 0).map_err(|error| error.code));
+        if let Some(outcome) = result.as_ref().ok().and_then(|readiness| readiness.full_link_outcome) {
+            log.record_full_link(outcome);
+        }
     }
     result
 }
@@ -3708,6 +3763,10 @@ pub(crate) async fn onboarding_existing_team_readonly_connect(
     let result = tauri::async_runtime::spawn_blocking(move || {
         let _scope = scope_state.lock_expected(&worker_expected).map_err(failure)?;
         let root = crate::existing_team_runtime::root(&app).map_err(failure)?;
+        // Choosing the read-only view takes the permission to write away for good: the record too, so a
+        // restart does not give back what the person just put down (a record that stays is an error).
+        crate::existing_team_runtime::revoke_full_link();
+        crate::existing_team_runtime::forget_full_link_at(&root, &worker_expected).map_err(failure)?;
         existing_team_readonly_connect_with(
             &root,
             &worker_expected,
@@ -3930,6 +3989,9 @@ pub(crate) async fn onboarding_existing_team_connect(
                 if let Some(log) = &worker_diagnostic { log.record_existing_team_status(ExistingTeamPhase::Scope, Err(code)); }
                 failure(code)
             })?;
+        // A new confirmation starts from nothing on disk too: the record is written again only if it succeeds.
+        let record_root = crate::existing_team_runtime::root(&app).map_err(failure)?;
+        crate::existing_team_runtime::forget_full_link_at(&record_root, &worker_expected).map_err(failure)?;
         if request.reconfirm {
             let matches = saved_existing_team(&app, &worker_expected)
                 .map(|saved| reconfirm_matches(&saved, &request.host, &request.team_id))
@@ -3988,6 +4050,14 @@ pub(crate) async fn onboarding_existing_team_connect(
                 // The full connection, confirmed by the person: the chat may write to this team
                 // in this run of the app. The read-only connection never gets here.
                 crate::existing_team_runtime::grant_full_link(&worker_expected, &target);
+                // Kept across a restart for 30 days at most (the record is only a memory of this very
+                // confirmation); a record that cannot be written leaves the permission in this run only.
+                let _ = crate::existing_team_runtime::remember_full_link_at(
+                    &record_root,
+                    &worker_expected,
+                    &target,
+                    crate::existing_team_runtime::unix_now(),
+                );
                 Ok(snapshot)
             },
         );

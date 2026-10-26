@@ -9,7 +9,8 @@ import { currentLocation, matchRoute, navigate } from "./router";
 import { READ_ONLY_NAV, READ_ONLY_ROUTES, ROUTES } from "./routes";
 import { desktopLinks } from "./desktop-links";
 import { THEME_STORAGE_KEY } from "./theme";
-import { enterExistingTeamReadOnly, leaveExistingTeamReadOnly } from "../lib/existing-team-readonly";
+import { downgradeExistingTeamToReadOnly, enterExistingTeamReadOnly, leaveExistingTeamReadOnly } from "../lib/existing-team-readonly";
+import { announceRestoredWriteAccess, reportWriteAccessRemovalFailed, writeAccessNotice } from "../lib/write-access-restored";
 import Shell from "./Shell";
 import { SHELL_TEXT } from "./shell.i18n";
 
@@ -309,6 +310,30 @@ describe("Shell", () => {
     } finally {
       leaveExistingTeamReadOnly();
     }
+  });
+
+  it("shows the fixed row of a restored full connection in the full shell, in the office's column and in the read-only view", async () => {
+    // a restored connection opens in full: the row is under the navbar, in the page's column and in the office's
+    enterExistingTeamReadOnly(true, null, "account:x|full", true);
+    announceRestoredWriteAccess();
+    try {
+      for (const path of ["/dashboard", "/office"]) {
+        navigate(path, { replace: true });
+        const view = render(<Shell />);
+        expect(await screen.findByTestId("write-access-restored")).toBeInTheDocument();
+        view.unmount();
+      }
+      // the person switched to read only and the saved record could not be taken away: the read-only view says so
+      downgradeExistingTeamToReadOnly();
+      reportWriteAccessRemovalFailed("existing_team_full_link_not_removed");
+      navigate("/dashboard", { replace: true });
+      render(<Shell />);
+      expect(await screen.findByTestId("write-access-removal-failed")).toBeInTheDocument();
+      expect(screen.getByTestId("existing-team-readonly-banner")).toBeInTheDocument();
+    } finally {
+      leaveExistingTeamReadOnly();
+    }
+    expect(writeAccessNotice()).toBeNull();
   });
 
   it("exports only its component, so an edit is Fast Refreshed instead of reloading the page", async () => {
