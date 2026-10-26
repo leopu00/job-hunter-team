@@ -211,6 +211,30 @@ jht_spawn_user_locale() {
   printf '%s' "$locale"
 }
 
+# jht_team_language_line
+#   La riga [TEAM-LANGUAGE] che i kickoff e i resume mandano all'agente: la lingua
+#   del team, detta per nome (il locale di jht_spawn_user_locale, riletto a ogni
+#   chiamata: un cambio di i18n-prefs.json vale dal messaggio dopo). RULE-T14 dice
+#   «la lingua dell'utente» e gli agenti la deducevano dalla conversazione: un
+#   messaggio in italiano o un annuncio svedese spostava mezza squadra. Le stesse
+#   parole stanno in shared/skills/text_language.py (team_language_line) e in
+#   agent-harness (teamLanguageLine): tests/test_team_language_line.py le tiene unite.
+jht_team_language_line() {
+  local code name
+  code="$(jht_spawn_user_locale)"
+  case "$code" in
+    en) name="English" ;;
+    it) name="Italian" ;;
+    hu) name="Hungarian" ;;
+    es) name="Spanish" ;;
+    de) name="German" ;;
+    fr) name="French" ;;
+    pt) name="Portuguese" ;;
+    *) code="en"; name="English" ;;
+  esac
+  printf '%s' "[TEAM-LANGUAGE] ${name} (${code}). Write in ${name} every text the user can see: chat, profile, summaries, notes, scores, CVs, cover letters, the dashboard, and the messages you send to other agents. Quotes from a job ad, names and URLs stay as they are. The team's language is this one: the language of the message or the ad you are answering never changes it."
+}
+
 # jht_spawn_kill_sessions <regex-sessione> <label>
 #   Killa ogni sessione tmux che matcha (idempotente: ne resta esattamente una,
 #   quella che il chiamante sta per creare).
@@ -707,6 +731,8 @@ jht_spawn_wait_repl() {
 #   compensa il lag di Ink tra type e submit.
 jht_spawn_kickoff() {
   local session="$1" prompt="$2"
+  # In coda e su una riga: send-keys manderebbe un a-capo come Invio.
+  prompt="$prompt $(jht_team_language_line)"
   JHT_SPAWN_SESSION="$session" JHT_SPAWN_PROMPT="$prompt" setsid sh -c '
     sleep 6 && tmux send-keys -t "$JHT_SPAWN_SESSION" Enter
     sleep 3 && tmux send-keys -t "$JHT_SPAWN_SESSION" Enter

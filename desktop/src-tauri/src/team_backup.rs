@@ -25,7 +25,7 @@
 use crate::{
     account_scope::AccountScopeState,
     direct_chat::{failure, team_script_read, DirectChatError, DirectChatState},
-    team_export::{ask_where, iso_day, part_path, window_may_export},
+    team_export::{ask_where, create_private, iso_day, part_path, save_code, window_may_export},
 };
 use base64::Engine;
 use flate2::read::GzDecoder;
@@ -34,7 +34,7 @@ use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use std::{
     collections::{HashMap, HashSet},
-    fs::{self, File, OpenOptions},
+    fs::{self, File},
     io::{self, Read, Write},
     path::Path,
     sync::atomic::{AtomicBool, Ordering},
@@ -386,7 +386,7 @@ where
     Fut: std::future::Future<Output = Result<Vec<u8>, DirectChatError>>,
 {
     let saving = |_: io::Error| failure("backup_save_failed");
-    let mut file = OpenOptions::new().write(true).create_new(true).open(part).map_err(saving)?;
+    let mut file = create_private(part).map_err(|error| failure(save_code(&error, "backup_save_failed")))?;
     let outcome = async {
         let mut offset = 0u64;
         let mut blocks = 0u64;
@@ -750,6 +750,26 @@ mod tests {
         assert_eq!(seen.first(), Some(&("copy", 7)));
         assert_eq!(seen.last(), Some(&("verify", 0)));
         let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn the_backup_is_for_the_owner_alone_whole_or_not() {
+        let dir = scratch("private");
+        let bytes: Vec<u8> = (0..100u8).collect();
+        let part = dir.join("a.part");
+        block_on(pull(&part, &snapshot_of(&bytes), serve(bytes.clone()), &|_, _, _| {}, &|| false)).unwrap();
+        use std::os::unix::fs::PermissionsExt;
+        assert_eq!(fs::metadata(&part).unwrap().permissions().mode() & 0o777, 0o600);
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn the_backup_opens_its_file_only_through_create_private() {
+        let source = include_str!("team_backup.rs");
+        let code = source.split("#[cfg(test)]").next().unwrap();
+        let pull = code.split("async fn pull<").nth(1).unwrap().split("\n}\n").next().unwrap();
+        assert!(pull.contains("create_private(part)") && !code.contains("OpenOptions"));
     }
 
     #[test]

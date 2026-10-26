@@ -82,6 +82,27 @@ export function userLanguage(jhtHome: string | undefined, env: Record<string, st
   return "en";
 }
 
+const LANGUAGE_NAMES: Record<TextLanguage, string> = {
+  en: "English", it: "Italian", hu: "Hungarian", es: "Spanish", de: "German", fr: "French", pt: "Portuguese",
+};
+
+/**
+ * The sentence that tells an agent which language the team writes in, by name. The rule (RULE-T14) says
+ * "the user's language" and the agents used to read it off the conversation, so a message in Italian or an
+ * ad in Swedish moved a whole team. The same words are in `team_language_line` (shared/skills/text_language.py)
+ * and `jht_team_language_line` (.launcher/spawn-lib.sh): a test holds the three together.
+ */
+export function teamLanguageLine(locale: string): string {
+  const code: TextLanguage = (TEXT_LANGUAGES as readonly string[]).includes(locale) ? (locale as TextLanguage) : "en";
+  const name = LANGUAGE_NAMES[code];
+  return (
+    `[TEAM-LANGUAGE] ${name} (${code}). Write in ${name} every text the user can see: chat, profile, summaries, ` +
+    "notes, scores, CVs, cover letters, the dashboard, and the messages you send to other agents. Quotes from a " +
+    "job ad, names and URLs stay as they are. The team's language is this one: the language of the message or " +
+    "the ad you are answering never changes it."
+  );
+}
+
 /** The language `text` is clearly written in when it is not `expected`, else null. */
 export function wrongLanguage(text: unknown, expected: string): TextLanguage | null {
   const guess = guessLanguage(text);

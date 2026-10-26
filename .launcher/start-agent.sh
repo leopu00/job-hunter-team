@@ -1946,6 +1946,13 @@ _kickoff() {
   local sess="$1"
   local msg="$2"
   local kickoff_log
+  # La lingua del team, detta per nome in testa a ogni kickoff (T140): la regola dei prompt dice
+  # «la lingua dell'utente» e gli agenti la deducevano dalla conversazione.
+  # Dopo l'intestazione «[@a -> @b] [TIPO]» se il messaggio ha piu' righe, in coda se ne ha una.
+  case "$msg" in
+    *$'\n'*) msg="${msg%%$'\n'*}"$'\n'"$(jht_team_language_line)"$'\n'"${msg#*$'\n'}" ;;
+    *) msg="$msg $(jht_team_language_line)" ;;
+  esac
   # Esportiamo via env var invece di interpolare nella stringa sh -c:
   # i messaggi contengono apostrofi e caratteri speciali che rompono
   # il quoting sh nested. Env var e' trasparente a qualsiasi charset.

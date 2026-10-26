@@ -326,8 +326,9 @@ pub(crate) async fn team_document_save(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(unix)]
+    use std::process::{Command, Stdio};
     use std::{
-        process::{Command, Stdio},
         sync::Mutex,
         time::{SystemTime, UNIX_EPOCH},
     };
@@ -498,6 +499,9 @@ mod tests {
     }
 
     /// The script, run for real against a folder that stands in for /jht_user/cv.
+    /// Only on Unix: the script runs in the Linux container (O_NOFOLLOW, hard
+    /// links, FIFOs), and a Windows host cannot stand in for it.
+    #[cfg(unix)]
     fn ask(root: &Path, request: Value) -> Value {
         // Forward slashes: on Windows the folder's backslashes would be escapes
         // inside the script's Python string literal.
@@ -517,16 +521,19 @@ mod tests {
         serde_json::from_slice(&output.stdout).unwrap_or_else(|_| panic!("not JSON: {}", String::from_utf8_lossy(&output.stdout)))
     }
 
+    #[cfg(unix)]
     fn error_of(reply: &Value) -> &str {
         assert_eq!(reply["ok"], false, "{reply}");
         reply["error"].as_str().unwrap()
     }
 
+    #[cfg(unix)]
     fn stat_error(root: &Path, name: &str) -> String {
         error_of(&ask(root, json!({"op": "stat", "name": name}))).to_owned()
     }
 
     #[test]
+    #[cfg(unix)]
     fn the_script_reads_one_folder_one_kind_of_file_and_nothing_else() {
         let base = scratch("script");
         let root = base.join("cv");
@@ -608,6 +615,7 @@ mod tests {
 
     /// A file rewritten between two pages is not the file the first call described: the stamp says so.
     #[test]
+    #[cfg(unix)]
     fn a_rewritten_file_has_another_stamp() {
         let base = scratch("stamp");
         fs::create_dir_all(&base).unwrap();
