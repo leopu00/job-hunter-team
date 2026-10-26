@@ -45,8 +45,18 @@ export function tmuxAvailable() {
   catch { return false; }
 }
 
-export function claudeAvailable() {
-  try { execSync('command -v claude', { stdio: 'ignore' }); return true; }
+// La CLI che guida gli agenti e' quella del provider attivo; senza provider non
+// ce n'e' una "di default": chi non ha scelto non ha la CLI di nessuno.
+const PROVIDER_CLI = Object.freeze({ openai: 'codex', codex: 'codex', anthropic: 'claude', claude: 'claude', kimi: 'kimi', moonshot: 'kimi' });
+
+export function providerCli(config) {
+  const id = typeof config?.active_provider === 'string' ? config.active_provider.trim().toLowerCase() : '';
+  return PROVIDER_CLI[id] ?? null;
+}
+
+export function cliAvailable(bin) {
+  if (!/^[a-z]+$/.test(bin)) return false;
+  try { execSync(`command -v ${bin}`, { stdio: 'ignore' }); return true; }
   catch { return false; }
 }
 
