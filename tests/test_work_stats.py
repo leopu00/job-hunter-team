@@ -530,11 +530,39 @@ def test_a_named_pipe_in_place_of_the_sentinel_data_or_the_config_comes_back_at_
     assert _within(5, working_hours.schedule_status) == "unreadable"
 
 
-def test_the_pipe_check_is_what_keeps_the_open_from_waiting():
-    """Counter-check by reading the source: the flags of the open carry O_NONBLOCK in both readers."""
-    for name in ("work_stats.py", "working_hours.py"):
-        text = (SKILLS / name).read_text(encoding="utf-8")
-        assert "O_NONBLOCK" in text and "O_NOFOLLOW" in text, name
+def test_the_one_reader_of_files_the_agents_can_write_opens_without_waiting_and_without_following():
+    text = (SKILLS / "plain_file.py").read_text(encoding="utf-8")
+    body = text[text.index("def read_plain"):text.index("def read_json")]
+    assert "O_NONBLOCK" in body and "O_NOFOLLOW" in body and "st_nlink" in body
+    assert work_stats.read_plain is working_hours.read_plain, "one reader, not two copies"
+
+
+# ── JHT-T137: the gate's own read of the configuration cannot be stalled either ────────────────────
+
+@pytest.mark.skipif(not hasattr(os, "mkfifo"), reason="no named pipes here")
+def test_a_named_pipe_in_place_of_the_configuration_does_not_hold_the_gate(home):
+    os.mkfifo(home / "jht.config.json")
+    assert _within(5, working_hours._load_config) == {}
+    assert _within(5, lambda: working_hours.is_within_working_hours(at("2026-10-26T03:00"))) is True, "the fallback is the same as before"
+    assert _within(5, working_hours.schedule_status) == "unreadable"
+    assert _within(5, working_hours.describe_status)
+
+
+def test_a_link_or_a_huge_file_in_place_of_the_configuration_reads_as_unreadable(home, tmp_path):
+    elsewhere = tmp_path / "elsewhere.json"
+    elsewhere.write_text(json.dumps(DAY), encoding="utf-8")
+    (home / "jht.config.json").symlink_to(elsewhere)
+    assert working_hours._load_config() == {} and working_hours.schedule_status() == "unreadable"
+    (home / "jht.config.json").unlink()
+    (home / "jht.config.json").write_text(json.dumps({**DAY, "pad": "x" * (working_hours.CONFIG_MAX_BYTES + 10)}), encoding="utf-8")
+    assert working_hours._load_config() == {} and working_hours.schedule_status() == "unreadable"
+
+
+def test_a_normal_configuration_is_read_as_before(home):
+    put_config(home, DAY)
+    assert working_hours._load_config() == DAY
+    assert working_hours.is_within_working_hours(at("2026-10-26T12:00")) is True
+    assert working_hours.is_within_working_hours(at("2026-10-26T03:00")) is False
 
 
 # ── the two copies of the row check must agree ─────────────────────────────────────────────────────

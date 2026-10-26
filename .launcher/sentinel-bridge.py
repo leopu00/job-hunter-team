@@ -218,14 +218,30 @@ EMERGENCY_VERDICT = "LOCKOUT-IMMINENTE"
 
 # ── Config + tmux helpers (libreria per le skill) ───────────────────────
 
+_PLAIN_FILE_MOD = None
+
+
+def _read_config_json():
+    """jht.config.json come dizionario, o solleva OSError/ValueError. Lo legge plain_file.read_json: una pipe o un
+    collegamento al suo posto (lo possono fare gli agenti) non appende il bridge, e' illeggibile."""
+    global _PLAIN_FILE_MOD
+    if _PLAIN_FILE_MOD is None:
+        _PLAIN_FILE_MOD = _load_skill_module("plain_file", "plain_file.py")
+    if _PLAIN_FILE_MOD is None:
+        raise OSError("plain_file not loadable")
+    try:
+        return _PLAIN_FILE_MOD.read_json(CONFIG_PATH)
+    except _PLAIN_FILE_MOD.NotPlain:
+        raise OSError("config is not a plain file")
+
+
 def read_config():
     """Ritorna (tick_override, provider). tick_override è il valore esplicito
     di sentinella_tick_minutes nel config (float, es. 0.5 = 30s) o None se
     non settato. Quando None, il bridge usa il tick adattivo in base allo
     stato dell'ultimo sample (vedi _choose_tick_interval)."""
     try:
-        with CONFIG_PATH.open(encoding="utf-8") as f:
-            cfg = json.load(f)
+        cfg = _read_config_json()
         provider = cfg.get("active_provider") or "openai"
         raw_tick = cfg.get("sentinella_tick_minutes")
         tick_override = float(raw_tick) if isinstance(raw_tick, (int, float)) and raw_tick > 0 else None
@@ -2329,9 +2345,8 @@ def _weekly_pace_via_skill(entry, now_dt, now_ts):
         wht = _imp("work_hours_target")
         wp = _imp("weekly_pace")
         try:
-            with CONFIG_PATH.open(encoding="utf-8") as f:
-                cfg = json.load(f)
-        except (OSError, json.JSONDecodeError):
+            cfg = _read_config_json()
+        except (OSError, ValueError):
             cfg = None
         wreset_dt = datetime.fromtimestamp(wreset_unix, tz=timezone.utc)
         wah = wht.active_hours_in_range(now_dt, wreset_dt, cfg)
@@ -2366,9 +2381,8 @@ def _evening_release(now_dt):
         wht = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(wht)
         try:
-            with CONFIG_PATH.open(encoding="utf-8") as f:
-                cfg = json.load(f)
-        except (OSError, json.JSONDecodeError):
+            cfg = _read_config_json()
+        except (OSError, ValueError):
             cfg = None
         nph = wht.next_phase_transition(now_dt, cfg)
         if nph and nph[0] == "ON" and nph[1] is not None:
@@ -2513,9 +2527,8 @@ def _daily_pacing_via_skill(entry, now_dt, now_ts):
 
         wht = _imp("work_hours_target")
         try:
-            with CONFIG_PATH.open(encoding="utf-8") as f:
-                cfg = json.load(f)
-        except (OSError, json.JSONDecodeError):
+            cfg = _read_config_json()
+        except (OSError, ValueError):
             cfg = None
         wreset_dt = datetime.fromtimestamp(wreset_unix, tz=timezone.utc)
         wah = wht.active_hours_in_range(now_dt, wreset_dt, cfg)

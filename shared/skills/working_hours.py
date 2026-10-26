@@ -55,15 +55,28 @@ _WEEKDAY_INDEX = {
 }
 
 
+# Imported both as `working_hours` and as `shared.skills.working_hours` (the watchdog): its own folder
+# must be on the path for the sibling module either way.
+_HERE = str(Path(__file__).resolve().parent)
+if _HERE not in sys.path:
+    sys.path.insert(0, _HERE)
+from plain_file import NotPlain, read_plain  # noqa: E402,F401  (the one reader of files the agents can write)
+
+
 def _config_path() -> Path:
     jht_home = os.environ.get("JHT_HOME") or str(Path.home() / ".jht")
     return Path(jht_home) / "jht.config.json"
 
 
+CONFIG_MAX_BYTES = 1024 * 1024
+
+
 def _load_config(path: Path | None = None) -> dict:
     p = path or _config_path()
     try:
-        return json.loads(p.read_text())
+        # read_plain: a pipe or a link made in place of the file by an agent must not hold the readers that
+        # protect the budget (pacing-bridge, watchdog): it reads as unreadable, and the fallback is the same.
+        return json.loads(read_plain(p, max_size=CONFIG_MAX_BYTES).decode("utf-8"))
     except FileNotFoundError:
         return {}
     except Exception:
@@ -198,17 +211,7 @@ def schedule_status(path: Path | None = None) -> str:
     """
     p = path or _config_path()
     try:
-        # opened without waiting and without following a link: a pipe put in its place must not hold the
-        # sentinel's bridge, which asks this at each reading
-        fd = os.open(str(p), os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0))
-        try:
-            import stat as _stat
-            if not _stat.S_ISREG(os.fstat(fd).st_mode):
-                return "unreadable"
-            with os.fdopen(fd, "rb", closefd=False) as handle:
-                raw = handle.read(1024 * 1024).decode("utf-8")
-        finally:
-            os.close(fd)
+        raw = read_plain(p, max_size=CONFIG_MAX_BYTES).decode("utf-8")
     except FileNotFoundError:
         return "undeclared"
     except Exception:

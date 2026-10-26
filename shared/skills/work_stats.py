@@ -23,7 +23,6 @@ import json
 import os
 import re
 import sqlite3
-import stat
 import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -31,6 +30,8 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 if str(HERE) not in sys.path:
     sys.path.insert(0, str(HERE))
+
+from working_hours import NotPlain, read_plain  # noqa: E402  (the one way the team reads a file its agents can write)
 
 RETENTION_DAYS = 90
 FILE_NAME = "work-hours.jsonl"
@@ -88,42 +89,6 @@ def valid_row(row) -> dict | None:
     if delta is not None and _int(delta, 0, 100) is None:
         return None
     return {"hour": hour, "activeMinutes": active, "scoreThreshold": threshold, "weeklyDeltaPct": delta}
-
-
-class NotPlain(Exception):
-    """What the path names is not a plain file of ours (a link, a pipe, a device, two names, too big)."""
-
-
-def read_plain(path: Path, max_size: int | None = None, tail: int | None = None) -> bytes:
-    """Read a file the team's agents can write, without letting it stall or redirect the reader.
-
-    Opened without following a link and WITHOUT waiting (a named pipe in its place would otherwise hold the
-    open for ever, and with it the sentinel's bridge that calls this), then checked on the descriptor it was
-    opened as: a plain file with one name, within `max_size`.  At most `max_size` (or `tail`) bytes are read.
-    FileNotFoundError passes; anything else that is not ours is NotPlain."""
-    flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0)
-    try:
-        fd = os.open(str(path), flags)
-    except FileNotFoundError:
-        raise
-    except OSError:
-        raise NotPlain()
-    try:
-        info = os.fstat(fd)
-        if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1:
-            raise NotPlain()
-        if max_size is not None and info.st_size > max_size:
-            raise NotPlain()
-        if tail is not None and info.st_size > tail:
-            os.lseek(fd, info.st_size - tail, os.SEEK_SET)
-        limit = max_size if max_size is not None else tail
-        with os.fdopen(fd, "rb", closefd=False) as handle:
-            data = handle.read((limit or 0) + 1) if max_size is not None else handle.read(limit)
-    finally:
-        os.close(fd)
-    if max_size is not None and len(data) > max_size:
-        raise NotPlain()
-    return data
 
 
 def load_rows(home: Path | None = None) -> tuple[list[dict], bool]:
