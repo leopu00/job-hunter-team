@@ -323,6 +323,9 @@ const NOT_ERRORS: Record<string, string> = {
   // install.ps1's notice id (windows_runtime.rs, INSTALL_NOTICES): not a failure, the setup
   // goes on; the person reads ui_notice_windows10_unsupported (onboarding-runtime.i18n.ts).
   windows10_unsupported: "id of install.ps1's JHT_NOTICE line, told as ui_notice_windows10_unsupported",
+  // The Mac setup's own notice (windows_runtime.rs, INSTALL_NOTICES): the machine that exists has less
+  // memory than the team needs; not a failure, told as ui_notice_podman_machine_memory_low.
+  podman_machine_memory_low: "id of the notice of a Podman machine with too little memory, told as ui_notice_podman_machine_memory_low",
 };
 
 function compiledRustModules(): string[] {
