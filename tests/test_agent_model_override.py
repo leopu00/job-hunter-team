@@ -215,8 +215,13 @@ def _spawn_command(
     role_models: object | None,
     provider: str = "openai",
     mode: str = "",
+    spawn_src: str = "",
 ) -> subprocess.CompletedProcess[str]:
-    """La catena vera fino al comando: mappa, override del config, ramo del provider."""
+    """La catena vera fino al comando: mappa, override del config, ramo del provider.
+
+    `spawn_src` e' JHT_SPAWN_SRC, la variabile con cui chi ricrea la sessione
+    (watchdog, pannello, app desktop) dice da dove arriva.
+    """
     source = START_AGENT.read_text(encoding="utf-8")
     branch = _codex_branch(source) if provider == "openai" else _claude_branch(source)
     script = "\n".join(
@@ -238,8 +243,9 @@ def _spawn_command(
             'printf "CMD %s %s\\n" "$CLI_BIN" "$CLI_ARGS"',
         ]
     )
+    env = {**os.environ, "JHT_SPAWN_SRC": spawn_src} if spawn_src else None
     return subprocess.run(
-        [_bash(), "-c", script], capture_output=True, text=True, check=False
+        [_bash(), "-c", script], capture_output=True, text=True, check=False, env=env
     )
 
 
@@ -345,3 +351,45 @@ def test_the_launcher_and_the_config_schema_allow_the_same_values() -> None:
         assert re.findall(r'"(\w+)"', in_launcher.group(1)) == re.findall(
             r'"(\w+)"', in_schema.group(1)
         ), key
+
+
+# ── JHT-T135: la scelta del ruolo resiste a ogni ricreazione della sessione ──
+#
+# Il modello scelto con `/model` dentro una sessione vive solo in quella
+# sessione. Quello scritto in team.role_models vive nel config, e il launcher
+# lo rilegge a OGNI avvio: il watchdog che ricrea una sessione morta, il
+# pannello e l'app che la riaccendono, il refresh del Dottore (che ricrea le
+# sessioni passando da start-agent.sh) ripartono tutti dalla stessa riga.
+
+SPAWN_SOURCES = ["", "agent-watchdog", "desktop-panel", "desktop-existing-team", "doctor-refresh"]
+
+
+@pytest.mark.parametrize("spawn_src", SPAWN_SOURCES)
+def test_a_role_with_a_chosen_model_restarts_on_the_same_model(
+    tmp_path: Path, spawn_src: str
+) -> None:
+    chosen = {"scout": {"model": "luna", "effort": "low"}}
+    first = _command(_spawn_command(tmp_path, "scout", chosen))
+    again = _command(_spawn_command(tmp_path, "scout", chosen, spawn_src=spawn_src))
+
+    assert "--model gpt-5.6-luna" in first
+    assert "-c model_reasoning_effort=low" in first
+    assert again == first
+    # gli altri ruoli non seguono la scelta dello scout
+    other = _command(_spawn_command(tmp_path, "analista", chosen, spawn_src=spawn_src))
+    assert "--model gpt-5.6-terra" in other and "model_reasoning_effort=high" in other
+
+
+def test_the_next_spawn_reads_the_config_as_it_is_then(tmp_path: Path) -> None:
+    """Niente copia fra un avvio e l'altro: cambiare la scelta vale dal prossimo."""
+    before = _command(_spawn_command(tmp_path, "scout", {"scout": {"model": "luna"}}))
+    after = _command(
+        _spawn_command(tmp_path, "scout", {"scout": {"model": "sol", "effort": "medium"}},
+                       spawn_src="agent-watchdog")
+    )
+    cleared = _command(_spawn_command(tmp_path, "scout", {}, spawn_src="agent-watchdog"))
+
+    assert "--model gpt-5.6-luna" in before
+    assert "--model gpt-5.6-sol" in after and "model_reasoning_effort=medium" in after
+    # {} rimette il ruolo sul suo predefinito: la mappa ruoli, terra e high
+    assert "--model gpt-5.6-terra" in cleared and "model_reasoning_effort=high" in cleared

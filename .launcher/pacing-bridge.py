@@ -174,6 +174,26 @@ _PROVIDER_TARGET_BAND = {
 }
 
 
+def _read_config_plain(path, cap=1024 * 1024) -> dict:
+    """jht.config.json senza poterlo aspettare: aperto senza attesa e senza seguire collegamenti, controllato
+    sul descrittore (file regolare, un solo nome, entro il tetto). Una pipe o un collegamento messi al suo
+    posto dagli agenti non appendono il bridge: OSError. Standalone di proposito (il resto di questo modulo
+    non e' ancora definito quando viene chiamata)."""
+    import stat as _stat
+    fd = os.open(str(path), os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0))
+    try:
+        info = os.fstat(fd)
+        if not _stat.S_ISREG(info.st_mode) or info.st_nlink != 1 or info.st_size > cap:
+            raise OSError("not a plain file of ours")
+        with os.fdopen(fd, "rb", closefd=False) as handle:
+            data = handle.read(cap + 1)
+    finally:
+        os.close(fd)
+    if len(data) > cap:
+        raise OSError("too big")
+    return json.loads(data.decode("utf-8"))
+
+
 def _read_active_provider_for_target() -> str:
     """Provider attivo da $JHT_HOME/jht.config.json. 'openai' default su fail.
 
@@ -183,10 +203,8 @@ def _read_active_provider_for_target() -> str:
     """
     try:
         jht_home = Path(os.environ.get("JHT_HOME") or str(Path.home() / ".jht"))
-        cfg_path = jht_home / "jht.config.json"
-        with cfg_path.open(encoding="utf-8") as f:
-            return (json.load(f).get("active_provider") or "openai").lower()
-    except (OSError, json.JSONDecodeError):
+        return (_read_config_plain(jht_home / "jht.config.json").get("active_provider") or "openai").lower()
+    except (OSError, ValueError, AttributeError):
         return "openai"
 
 

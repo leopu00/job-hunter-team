@@ -191,7 +191,44 @@ fn settings_of(out: &Map<String, Value>) -> Option<Value> {
     if lists.get("min_window_hours")?.as_u64()? != 4 {
         return None;
     }
-    Some(json!({ "working_hours": hours, "role_models": roles, "lists": lists }))
+    let mut settings = json!({ "working_hours": hours, "role_models": roles, "lists": lists });
+    // The model each role is really started with is optional: a box older than this field does not
+    // send it, and one that sends it out of shape is read as if it had not. Never a default made up.
+    if let Some((provider, class_applies, effective)) = effective_of(out) {
+        settings["provider"] = provider;
+        settings["classApplies"] = class_applies;
+        settings["effective"] = effective;
+    }
+    Some(settings)
+}
+
+fn name_ok(text: &str) -> bool {
+    (1..=40).contains(&text.len()) && text.bytes().all(|b| b.is_ascii_alphanumeric() || b".-_".contains(&b))
+}
+
+/// provider, classApplies and effective, only if all three are whole: the provider one of the three,
+/// and every role of the lists with its four closed fields.
+fn effective_of(out: &Map<String, Value>) -> Option<(Value, Value, Value)> {
+    let provider = out.get("provider")?;
+    let class_applies = out.get("classApplies")?;
+    let effective = out.get("effective")?.as_object()?;
+    if !provider.as_str().is_some_and(|p| ["codex", "claude", "kimi"].contains(&p)) || !class_applies.is_boolean() {
+        return None;
+    }
+    if effective.len() != ROLES.len() || !ROLES.iter().all(|role| effective.contains_key(*role)) {
+        return None;
+    }
+    let whole = effective.values().all(|entry| {
+        entry.as_object().is_some_and(|entry| {
+            let text = |key: &str| entry.get(key).and_then(Value::as_str);
+            entry.len() == 4
+                && text("model").is_some_and(|m| MODELS.contains(&m))
+                && text("modelName").is_some_and(name_ok)
+                && text("effort").is_some_and(|e| EFFORTS.contains(&e))
+                && text("from").is_some_and(|f| f == "config" || f == "default")
+        })
+    });
+    whole.then(|| (provider.clone(), class_applies.clone(), Value::Object(effective.clone())))
 }
 
 fn closed(code: &str) -> Option<&str> {
@@ -370,6 +407,65 @@ mod tests {
             assert_eq!(out["lists"], lists());
         }
         assert_eq!(ran.get(), 3);
+    }
+
+    fn effective_roles() -> Value {
+        let mut roles = Map::new();
+        for role in ROLES {
+            roles.insert(role.to_string(), json!({"model": "terra", "modelName": "gpt-5.6-terra", "effort": "high", "from": "default"}));
+        }
+        Value::Object(roles)
+    }
+
+    fn held_with(extra: Value) -> String {
+        let mut body: Value = serde_json::from_str(&held(Value::Null, json!({}))).unwrap();
+        for (key, value) in extra.as_object().unwrap() {
+            body[key] = value.clone();
+        }
+        body.to_string()
+    }
+
+    #[test]
+    fn the_model_each_role_is_started_with_passes_through_whole_or_not_at_all() {
+        let ran = Cell::new(0);
+        let read = |body: String| drive(json!({"op": "read"}), None, done(&body), &ran);
+        let whole = json!({"provider": "codex", "classApplies": true, "effective": effective_roles()});
+        let out = read(held_with(whole.clone()));
+        assert_eq!(out["ok"], true);
+        assert_eq!(out["provider"], "codex");
+        assert_eq!(out["classApplies"], true);
+        assert_eq!(out["effective"], effective_roles());
+        // a box older than the field, or a provider with nothing to show: still a reading, without it
+        for body in [held(Value::Null, json!({})), held_with(json!({"provider": "kimi", "classApplies": false}))] {
+            let out = read(body);
+            assert_eq!(out["ok"], true);
+            assert!(out.get("effective").is_none() && out.get("provider").is_none() && out.get("classApplies").is_none());
+        }
+        // out of shape: the reading stays, the field is dropped, nothing is made up
+        let mut one_role_short = effective_roles();
+        one_role_short.as_object_mut().unwrap().remove("closer");
+        let mut extra_key = effective_roles();
+        extra_key["scout"]["secret"] = json!("x");
+        let mut bad_name = effective_roles();
+        bad_name["scout"]["modelName"] = json!("gpt 5; rm");
+        let mut bad_class = effective_roles();
+        bad_class["scout"]["model"] = json!("gpt");
+        let mut bad_from = effective_roles();
+        bad_from["scout"]["from"] = json!("cache");
+        for broken in [
+            json!({"provider": "codex", "classApplies": true, "effective": one_role_short}),
+            json!({"provider": "codex", "classApplies": true, "effective": extra_key}),
+            json!({"provider": "codex", "classApplies": true, "effective": bad_name}),
+            json!({"provider": "codex", "classApplies": true, "effective": bad_class}),
+            json!({"provider": "codex", "classApplies": true, "effective": bad_from}),
+            json!({"provider": "gemini", "classApplies": true, "effective": effective_roles()}),
+            json!({"provider": "codex", "classApplies": "yes", "effective": effective_roles()}),
+            json!({"provider": "codex", "effective": effective_roles()}),
+        ] {
+            let out = read(held_with(broken.clone()));
+            assert_eq!(out["ok"], true, "{broken}");
+            assert!(out.get("effective").is_none() && out.get("provider").is_none(), "{broken}");
+        }
     }
 
     #[test]

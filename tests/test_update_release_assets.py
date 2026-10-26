@@ -27,3 +27,11 @@ def test_public_downloads_are_verified_release_assets() -> None:
 
 def test_release_has_linux_debian_alternative() -> None:
     assert "--expected-asset job-hunter-team-linux-x64.deb" in WORKFLOW
+
+
+def test_the_site_links_the_release_of_the_manifest() -> None:
+    # the button leads to the release the repository is about to publish, not to an older one
+    import json
+
+    manifest = json.loads((ROOT / "release/runtime-image.v1.json").read_text(encoding="utf-8"))
+    assert f'DOWNLOAD_RELEASE_TAG = "v{manifest["release_version"]}"' in DOWNLOADS

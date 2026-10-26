@@ -38,7 +38,11 @@ test('get: reads what the config holds, with the lists of allowed values', () =>
 
 test('get: no hours is 24/7 (null) and no roles is an empty map; no team section is not an error', () => {
   put({ active_provider: 'claude' });
-  assert.deepEqual(getResult().out, { ok: true, working_hours: null, role_models: {}, lists: JSON.parse(JSON.stringify(LISTS)) });
+  const { effective, classApplies, provider, ...rest } = getResult().out;
+  assert.deepEqual(rest, { ok: true, working_hours: null, role_models: {}, lists: JSON.parse(JSON.stringify(LISTS)) });
+  assert.equal(provider, 'claude');
+  assert.equal(classApplies, false);
+  assert.equal(Object.values(effective).every((r) => r.from === 'default'), true);
 });
 
 test('get: a config that is missing, unreadable or out of the lists is an error, never a made-up default', () => {
@@ -163,4 +167,77 @@ test('the panel door: `agent-control settings get|apply` gives the same answers,
   }
   rmSync(CONFIG, { force: true });
   assert.equal(run(['get']).out.error, 'config_missing');
+});
+
+// ---- the model each role is really started with (provider, classApplies, effective) ----
+
+const out = (provider, role_models = {}) => {
+  put({ ...(provider ? { active_provider: provider } : {}), team: { role_models } });
+  return getResult().out;
+};
+
+test('effective: with Codex the class in the config decides, and the model name follows it', () => {
+  const { provider, classApplies, effective } = out('openai', { scout: { model: 'luna', effort: 'low' }, capitano: { effort: 'medium' } });
+  assert.equal(provider, 'codex');
+  assert.equal(classApplies, true);
+  assert.deepEqual(Object.keys(effective), LISTS.roles);
+  assert.deepEqual(effective.scout, { model: 'luna', modelName: 'gpt-5.6-luna', effort: 'low', from: 'config' });
+  assert.deepEqual(effective.capitano, { model: 'sol', modelName: 'gpt-5.6-sol', effort: 'medium', from: 'config' });
+  assert.deepEqual(effective.analista, { model: 'terra', modelName: 'gpt-5.6-terra', effort: 'high', from: 'default' });
+});
+
+test('effective: "codex" and "openai" are the same provider, "claude" and "anthropic" too', () => {
+  for (const [name, provider] of [['codex', 'codex'], ['openai', 'codex'], ['claude', 'claude'], ['anthropic', 'claude'], ['kimi', 'kimi'], ['moonshot', 'kimi']]) {
+    assert.equal(out(name).provider, provider, name);
+  }
+});
+
+test('effective: with Claude the class is declared and not applied: the role map and the effort count', () => {
+  const r = out('claude', { scout: { model: 'luna', effort: 'low' } });
+  assert.equal(r.classApplies, false);
+  // the launcher keeps the role map (sonnet for the scout) and still takes the effort
+  assert.deepEqual(r.effective.scout, { model: 'terra', modelName: 'sonnet', effort: 'low', from: 'config' });
+  assert.equal(r.effective.capitano.modelName, 'opus');
+});
+
+test('effective: Kimi and a provider the launcher does not know have no effective settings, never made-up ones', () => {
+  const kimi = out('kimi', { scout: { model: 'luna' } });
+  assert.equal(kimi.provider, 'kimi');
+  assert.equal(kimi.classApplies, false);
+  assert.equal('effective' in kimi, false);
+  for (const unknown of [out('gemini'), out(null)]) {
+    assert.equal('provider' in unknown, false);
+    assert.equal('effective' in unknown, false);
+  }
+});
+
+test('effective: an apply answers with the effective settings read back, not the ones sent', () => {
+  put({ active_provider: 'codex' });
+  const res = applyResult(request({ role_models: { scorer: { model: 'luna' } } })).out;
+  assert.equal(res.effective.scorer.modelName, 'gpt-5.6-luna');
+  assert.equal(res.effective.scorer.from, 'config');
+});
+
+// The table of defaults is a copy of the launcher's role map: run the launcher's own functions and
+// compare, role by role, so a role added or moved there fails here.
+test('effective: the defaults are the ones the launcher uses (get_agent_info and resolve_codex_model, run for real)', (t) => {
+  const bash = spawnSync('bash', ['-c', 'echo ok'], { encoding: 'utf-8' });
+  if (bash.status !== 0) return t.skip('no bash');
+  const source = readFileSync(join(fileURLToPath(new URL('.', import.meta.url)), '..', '..', '.launcher', 'start-agent.sh'), 'utf-8');
+  const fn = (name) => {
+    const m = source.match(new RegExp(`^${name}\\(\\) \\{.*?^\\}`, 'ms'));
+    assert.ok(m, `${name} is no longer in start-agent.sh`);
+    return m[0];
+  };
+  const { effective } = out('codex');
+  for (const role of LISTS.roles) {
+    const script = `${fn('get_agent_info')}\n${fn('resolve_codex_model')}\n` +
+      `IFS='|' read -r _p effort alias <<< "$(get_agent_info ${role})"\n` +
+      'printf "%s|%s\\n" "$(resolve_codex_model "$alias")" "$effort"';
+    const run = spawnSync('bash', ['-c', script], { encoding: 'utf-8' });
+    assert.equal(run.status, 0, run.stderr);
+    const [modelName, effort] = run.stdout.trim().split('|');
+    assert.equal(effective[role].modelName, modelName, role);
+    assert.equal(effective[role].effort, effort, role);
+  }
 });

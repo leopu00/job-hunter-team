@@ -96,6 +96,7 @@ for _skills_candidate in (
 # Nessun fallback, a differenza di i18n: una traduzione mancante e' cosmetica,
 # una sanificazione che si spegne da sola no. Meglio un bridge che non parte.
 from external_content import flatten_to_one_line  # noqa: E402  (dopo sys.path)
+from plain_file import read_json  # noqa: E402  (una pipe al posto della config non appende il bridge)
 
 # [JHT-CLOSER-ANSWERS] Una risposta a una domanda del CLOSER va risolta qui,
 # nella stessa transazione che la scrive in cronologia. Senza il modulo il
@@ -281,7 +282,7 @@ def log(msg: str) -> None:
 def read_config() -> tuple[str, int]:
     """Token + chat_id whitelist per il ruolo corrente. Exit se mancanti."""
     try:
-        cfg = json.loads(CONFIG_PATH.read_text())
+        cfg = read_json(CONFIG_PATH)
         bots = cfg.get("channels", {}).get("telegram", {}).get("bots", {}) or {}
         bot = bots.get(BOT_ROLE) or {}
         token = (bot.get("bot_token") or "").strip()

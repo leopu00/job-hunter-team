@@ -22,6 +22,7 @@ import { COMPUTER_TEXT } from "../pages/computer/computer.i18n";
 import { desktopLinks } from "./desktop-links";
 import { SHELL_TEXT } from "./shell.i18n";
 import { MailRotationBanner } from "./MailRotationBanner";
+import { SignOutContext } from "../lib/account-actions";
 import { NewVersionBanner } from "./NewVersionBanner";
 import NavStrip from "./NavStrip";
 import { matchRoute, navigate, refresh, useLocation } from "./router";
@@ -188,7 +189,11 @@ export default function Shell({ onLogout, onCloseReadOnly }: ShellProps) {
   }, [match, readOnly]);
 
   const Page = match?.route.page;
-  const page = Page && <Page key={path} params={match.params} search={params} />;
+  const page = Page && (
+    <SignOutContext.Provider value={onLogout ?? null}>
+      <Page key={path} params={match.params} search={params} />
+    </SignOutContext.Provider>
+  );
   if (linkedTeam) {
     const text = EXISTING_TEAM_READONLY_TEXT[appLocale()];
     const bars = (
