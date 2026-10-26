@@ -7,7 +7,9 @@ import type { PageProps } from "../types";
 import { BACKUP_TEXT } from "../backup/backup.i18n";
 import { EXPORT_TEXT } from "../export/export.i18n";
 import { TEAM_SETTINGS_TEXT } from "../team-settings/team-settings.i18n";
+import AccountCard from "./AccountCard";
 import NotifyCard from "./NotifyCard";
+import TeamCard from "./TeamCard";
 import { SETTINGS_TEXT, VPS_CONNECTION_TEXT } from "./settings.i18n";
 
 /**
@@ -31,6 +33,8 @@ export default function SettingsPage(_props: PageProps) {
     <section className="max-w-3xl mx-auto px-5 py-8 flex flex-col gap-4" aria-labelledby="settings-title">
       <h1 id="settings-title" className="text-[15px] font-semibold text-[var(--color-bright)]">{t.title}</h1>
       <p className="text-[12px] text-[var(--color-muted)]">{t.intro}</p>
+      <AccountCard />
+      <TeamCard readOnly={readOnly} />
       <LanguageCard />
       <CurrencyCard />
       <NotifyCard />
