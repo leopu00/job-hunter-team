@@ -2250,6 +2250,11 @@ fn install_local(
             if !snapshot.runtime_installed {
                 return Err(failure("runtime_wrapper_probe_failed"));
             }
+            // A machine that was there before the 4 GiB size is not resized: the person is told,
+            // with the same recreation as for the folders (the log has install.sh's own warning).
+            if crate::podman::jht_machine_memory_is_low(&home) {
+                phase("ui_notice_podman_machine_memory_low");
+            }
             return Ok(installed_wrapper);
         }
         #[cfg(not(target_os = "macos"))]
@@ -5337,6 +5342,19 @@ fn recreate_podman_machine_with(
     }
 }
 
+/// The recreation of the machine as the person's confirmation starts it: how
+/// the wrapper ended and what it printed (exit code, stderr, redacted) go to
+/// the runtime log, and the failure carries the cause the wrapper gave.
+fn recreate_podman_machine_logged(
+    wrapper: &Path,
+    log: Option<&RuntimeLog>,
+) -> Result<(), OnboardingError> {
+    recreate_podman_machine_with(|operation, timeout| {
+        run_local_logged(wrapper, &operation.argv(), timeout, log)
+    })
+    .map_err(|error| with_cause(error, log))
+}
+
 #[tauri::command]
 pub(crate) async fn onboarding_podman_machine_recreate(
     app: tauri::AppHandle,
@@ -5358,9 +5376,10 @@ pub(crate) async fn onboarding_podman_machine_recreate(
             .lock_expected(&worker_expected)
             .map_err(failure)?;
         let wrapper = wrapper_path(&app).ok_or_else(|| failure("runtime_missing"))?;
-        recreate_podman_machine_with(|operation, timeout| {
-            run_scoped_local(&app, &worker_expected, &wrapper, operation, timeout)
-        })
+        if let Err(error) = crate::account_scope::validate_local_runtime(&app, &worker_expected) {
+            return Err(local_failure(error, "podman_machine_recreate_failed"));
+        }
+        recreate_podman_machine_logged(&wrapper, RuntimeLog::new(&app).as_ref())
     })
     .await
     .unwrap_or_else(|_| Err(failure("podman_machine_recreate_failed")));
@@ -7828,6 +7847,34 @@ esac
         super::start_and_verify_local_container(&wrapper).unwrap();
         assert!(dir.join("container-ready").is_file());
         fs::remove_dir_all(dir).unwrap();
+    }
+
+    /// The recreation of the Podman machine that fails (the machine is left as it was) says why in the
+    /// runtime log: the command, the exit code and the wrapper's own stderr.
+    #[cfg(unix)]
+    #[test]
+    fn a_failed_recreation_of_the_podman_machine_writes_the_runtime_log() {
+        use std::{fs, os::unix::fs::PermissionsExt};
+        let dir = std::env::temp_dir().join(format!("jht-runtime-log-recreate-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        let wrapper = dir.join("jht");
+        fs::write(
+            &wrapper,
+            "#!/bin/sh\nJHT_HOST_RUNTIME_PROTOCOL=1\nJHT_DESKTOP_CHAT_PROTOCOL=1\nJHT_ONBOARDING_SNAPSHOT_PROTOCOL=1\necho \"error: Non riesco a esportare in modo verificabile lo stato del broker; la macchina non e' stata cancellata.\" >&2\nexit 1\n",
+        )
+        .unwrap();
+        fs::set_permissions(&wrapper, fs::Permissions::from_mode(0o700)).unwrap();
+        let log = super::RuntimeLog::in_dir(&dir.join("logs"));
+        let error = super::recreate_podman_machine_logged(&wrapper, Some(&log)).unwrap_err();
+        assert_eq!(error.code, "podman_machine_recreate_failed");
+        let text = fs::read_to_string(log.path()).unwrap();
+        assert!(
+            text.contains(" jht podman-machine-recreate --confirm: exit 1 after ")
+                && text.contains("--- stderr\nerror: Non riesco a esportare in modo verificabile lo stato del broker"),
+            "{text}"
+        );
+        let _ = fs::remove_dir_all(&dir);
     }
 
     /// A local runtime step leaves how it ended and its stderr in the runtime

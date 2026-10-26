@@ -187,7 +187,9 @@ def _wrapper(tmp_path: Path, sources: tuple[str, ...] | None = None):
     provider_source = provider.read_text(encoding="utf-8")
     provider_source = provider_source.replace(
         'case "$*" in\n',
-        'case "$*" in\n  *" config --images") printf \'%s\\n\' test-broker-image ;;\n',
+        # podman-compose 1.6.0 refuses Docker Compose's `config --images`; the image is in the normalized config
+        'case "$*" in\n  *" config --images") echo "podman-compose: error: unrecognized arguments: --images" >&2; exit 2 ;;\n'
+        '  *" config") printf \'%s\\n\' "services:" "  team:" "    image: test-broker-image" "  broker:" "    image: test-broker-image" ;;\n',
     )
     provider.write_text(
         provider_source.replace('  *" up -d")', '  *" down") exit 0 ;;\n  *" up -d")'),
@@ -320,6 +322,35 @@ def test_recreate_without_confirmation_touches_nothing(tmp_path: Path):
     assert config.is_file()
 
 
+def test_the_recreated_machine_has_the_size_the_installer_gives_it():
+    import re
+
+    def sizes(path: Path) -> dict[str, str]:
+        text = path.read_text(encoding="utf-8")
+        return {
+            name: re.search(rf"^{name}=(\d+)$", text, re.MULTILINE).group(1)
+            for name in ("PODMAN_MACHINE_CPUS", "PODMAN_MACHINE_MEMORY_MIB", "PODMAN_MACHINE_DISK_GIB")
+        }
+
+    wrapper = ROOT / "scripts" / "jht-wrapper.sh"
+    assert sizes(wrapper) == sizes(INSTALLER) == {
+        "PODMAN_MACHINE_CPUS": "2",
+        "PODMAN_MACHINE_MEMORY_MIB": "4096",
+        "PODMAN_MACHINE_DISK_GIB": "30",
+    }
+
+
+def test_the_app_tells_a_machine_with_too_little_memory_when_it_prepares_the_mac():
+    # the Mac setup reads the machine's files and sends the notice; the person gets the recreation button with it
+    onboarding = (ROOT / "desktop" / "src-tauri" / "src" / "onboarding.rs").read_text(encoding="utf-8")
+    flow = onboarding[onboarding.index("fn install_local("):]
+    check = flow.index("if crate::podman::jht_machine_memory_is_low(&home) {")
+    assert 'phase("ui_notice_podman_machine_memory_low")' in flow[check : check + 160]
+    assert "return Ok(installed_wrapper)" in flow[check : check + 300]
+    runtime = (ROOT / "desktop" / "src-tauri" / "src" / "windows_runtime.rs").read_text(encoding="utf-8")
+    assert '"ui_notice_podman_machine_memory_low"' in runtime
+
+
 def test_recreate_rebuilds_the_machine_with_only_the_two_folders_and_keeps_the_default(tmp_path: Path):
     wrapper, env, log, home, config = _wrapper(tmp_path, sources=MACOS_DEFAULT_SOURCES)
     env["JHT_TEST_RUNTIME_READY"] = "1"
@@ -335,7 +366,8 @@ def test_recreate_rebuilds_the_machine_with_only_the_two_folders_and_keeps_the_d
     assert calls == [
         "podman machine stop jht-podman",
         "podman machine rm -f jht-podman",
-        f"podman machine init --now --update-connection=false --volume {jht_home}:{jht_home} "
+        f"podman machine init --now --update-connection=false --cpus 2 --memory 4096 "
+        f"--disk-size 30 --volume {jht_home}:{jht_home} "
         f"--volume {jht_docs}:{jht_docs} jht-podman",
         "podman machine ssh jht-podman sudo systemctl enable --now fstrim.timer",
     ]
@@ -466,7 +498,7 @@ def test_the_installer_creates_a_machine_with_only_the_two_folders(tmp_path: Pat
     init = [line for line in log.read_text(encoding="utf-8").splitlines() if line.startswith("podman machine init")]
     jht_home, jht_docs = jht_mount_sources(home)
     assert init == [
-        f"podman machine init --now --update-connection=false --cpus 2 --memory 3072 "
+        f"podman machine init --now --update-connection=false --cpus 2 --memory 4096 "
         f"--disk-size 30 --volume {jht_home}:{jht_home} "
         f"--volume {jht_docs}:{jht_docs} jht-podman"
     ]

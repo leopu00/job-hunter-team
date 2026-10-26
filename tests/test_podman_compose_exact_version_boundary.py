@@ -368,7 +368,11 @@ if command == "ps":
 if command == "config" and rest == ["-q"]:
     raise SystemExit(0)
 if command == "config" and rest == ["--images"]:
-    print("example.invalid/jht@sha256:" + os.environ["JHT_FIXTURE_IMAGE_DIGEST"])
+    # 1.6.0's `config` takes only --no-normalize, --services and -q: Docker Compose's --images is refused.
+    print("podman-compose: error: unrecognized arguments: --images", file=sys.stderr)
+    raise SystemExit(2)
+if command == "config" and rest == []:
+    print("services:\n  jht:\n    image: example.invalid/jht@sha256:" + os.environ["JHT_FIXTURE_IMAGE_DIGEST"] + "\n")
     raise SystemExit(0)
 if command == "pull" and rest == ["jht"]:
     raise SystemExit(run_podman("pull", "jht").returncode)
@@ -1281,7 +1285,8 @@ def test_upgrade_check_uses_the_same_exact_version_named_connection_contract(
     compose_calls = _actual_compose_calls(env)
     assert any(args[-2:] == ["config", "-q"] for _, args in compose_calls)
     assert any(args[-2:] == ["pull", "jht"] for _, args in compose_calls)
-    assert any(args[-2:] == ["config", "--images"] for _, args in compose_calls)
+    # the image comes from the normalized config: podman-compose 1.6.0 refuses `config --images`
+    assert any(args[-1:] == ["config"] for _, args in compose_calls)
     _assert_only_podman_path_option(compose_calls)
     _assert_literal_project(compose_calls)
     assert all(connection == MACHINE for connection, _ in _compose_calls(env))
