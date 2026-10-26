@@ -36,6 +36,28 @@ afterEach(() => {
 });
 
 describe("the team's hours and models page", () => {
+  it("shows what each role uses now, and says so when the team does not say", async () => {
+    const effective = Object.fromEntries(ROLES.map((role) => [role, { model: "terra", modelName: "gpt-5.6-terra", effort: "high", from: "default" }]));
+    effective.capitano = { model: "sol", modelName: "gpt-5.6-sol", effort: "medium", from: "config" };
+    native.invoke.mockImplementation(async () => reply({ effective, provider: "codex", classApplies: true }));
+    const view = render(<TeamSettingsPage {...props} />);
+    expect(await screen.findByTestId("team-settings-effective-capitano")).toHaveTextContent("gpt-5.6-sol");
+    expect(screen.getByTestId("team-settings-effective-capitano")).toHaveTextContent("chosen");
+    expect(screen.getByTestId("team-settings-effective-scout")).toHaveTextContent("gpt-5.6-terra");
+    expect(screen.getByTestId("team-settings-effective-scout")).toHaveTextContent("default");
+    expect(screen.queryByTestId("team-settings-class-not-applied")).toBeNull();
+    view.unmount();
+    native.invoke.mockImplementation(async () => reply());
+    render(<TeamSettingsPage {...props} />);
+    expect(await screen.findByTestId("team-settings-effective-scout")).toHaveTextContent("not available on this team");
+  });
+
+  it("says the class is not applied with a provider other than Codex", async () => {
+    native.invoke.mockImplementation(async () => reply({ provider: "claude", classApplies: false }));
+    render(<TeamSettingsPage {...props} />);
+    expect(await screen.findByTestId("team-settings-class-not-applied")).toHaveTextContent("declared but not applied");
+  });
+
   it("reads the team's settings and says whose they are", async () => {
     render(<TeamSettingsPage {...props} />);
     expect(await screen.findByTestId("team-settings-intro")).toHaveTextContent("for the team on this computer");

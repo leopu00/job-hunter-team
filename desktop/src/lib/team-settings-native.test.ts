@@ -18,11 +18,24 @@ describe("the reply of the native command", () => {
   it("is read into the shape the page uses", () => {
     expect(pickTeamSettings(reply())).toEqual({
       ok: true,
-      settings: { target: "local", connectionKey: "k1", workingHours: HOURS, roleModels: { scout: { model: "luna", effort: "low" } } },
+      settings: { target: "local", connectionKey: "k1", workingHours: HOURS, roleModels: { scout: { model: "luna", effort: "low" } }, effective: null, provider: null, classApplies: null },
     });
     expect(pickTeamSettings(reply({ working_hours: null, role_models: {}, target: "vps" }))).toEqual({
-      ok: true, settings: { target: "vps", connectionKey: "k1", workingHours: null, roleModels: {} },
+      ok: true, settings: { target: "vps", connectionKey: "k1", workingHours: null, roleModels: {}, effective: null, provider: null, classApplies: null },
     });
+  });
+
+  it("reads what the launcher would use per role, and says «not available» when the reply does not carry it whole", () => {
+    const roles = ["capitano", "scout", "analista", "scorer", "scrittore", "critico", "sentinella", "assistente", "mentor", "closer"];
+    const effective = Object.fromEntries(roles.map((role) => [role, { model: "terra", modelName: "gpt-5.6-terra", effort: "high", from: "default" }]));
+    effective.scout = { model: "luna", modelName: "gpt-5.6-luna", effort: "low", from: "config" };
+    const read = pickTeamSettings(reply({ effective, provider: "codex", classApplies: true }));
+    expect(read).toMatchObject({ ok: true, settings: { provider: "codex", classApplies: true, effective: { scout: { model: "luna", modelName: "gpt-5.6-luna", effort: "low", from: "config" } } } });
+    const without = (patch: Record<string, unknown>) => ({ ...effective, scout: { ...effective.scout, ...patch } });
+    for (const broken of [undefined, null, {}, [], { ...effective, closer: undefined }, without({ model: "sun" }), without({ effort: "max" }), without({ from: "guess" }), without({ modelName: "has space" }), without({ modelName: "x".repeat(41) }), without({ modelName: 5 })]) {
+      expect(pickTeamSettings(reply({ effective: broken })), JSON.stringify(broken)).toMatchObject({ ok: true, settings: { effective: null } });
+    }
+    expect(pickTeamSettings(reply({ provider: "other", classApplies: "yes" }))).toMatchObject({ ok: true, settings: { provider: null, classApplies: null } });
   });
 
   it("is an error, never a default, when anything is off the closed shape", () => {

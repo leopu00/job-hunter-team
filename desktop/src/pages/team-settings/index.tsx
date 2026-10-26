@@ -100,8 +100,10 @@ function TeamSettings() {
           />
           {/* mounted again with what the team answered, so the form always shows the values read back */}
           <RoleModelsCard
-            key={JSON.stringify(loaded.settings.roleModels)}
+            key={JSON.stringify([loaded.settings.roleModels, loaded.settings.effective])}
             saved={loaded.settings.roleModels}
+            effective={loaded.settings.effective}
+            classApplies={loaded.settings.classApplies}
             onSave={(roleModels) => save({ roleModels })}
             text={t}
             web={web}

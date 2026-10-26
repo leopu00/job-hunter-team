@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { EFFORTS, MODEL_CLASSES, SETTINGS_ROLES, roleModelsChanged, roleModelsToSend, type Effort, type ModelClass, type RoleModels, type SettingsRole } from "@/lib/team-settings";
+import type { EffectiveModels } from "../../lib/team-settings-native";
 import type { TeamSettingsText } from "./team-settings.i18n";
 
 const selectCls =
@@ -14,11 +15,17 @@ const CLASS_KEY = { sol: "classSol", terra: "classTerra", luna: "classLuna" } as
  */
 export default function RoleModelsCard({
   saved,
+  effective = null,
+  classApplies = null,
   onSave,
   text,
   web,
 }: {
   saved: RoleModels;
+  /** What the launcher would use for each role now; null on a team whose image does not say. */
+  effective?: EffectiveModels | null;
+  /** False with a provider other than Codex: the class is declared, not applied. */
+  classApplies?: boolean | null;
   /** Null when the team took it, else the sentence of the refusal. */
   onSave: (roleModels: RoleModels) => Promise<string | null>;
   text: TeamSettingsText;
@@ -57,16 +64,17 @@ export default function RoleModelsCard({
       <h2 className="text-[12px] font-bold tracking-[0.1em] uppercase text-[var(--color-bright)] m-0 mb-1">{text.modelsTitle}</h2>
       <p className="text-[11px] text-[var(--color-muted)] m-0 mb-4">{text.modelsDesc}</p>
       <div role="table" aria-label={text.modelsTitle} className="flex flex-col gap-2">
-        <div role="row" className="grid grid-cols-[1fr_1fr_1fr] gap-3 text-[11px] font-semibold tracking-[0.12em] uppercase text-[var(--color-dim)]">
+        <div role="row" className="grid grid-cols-[1fr_1fr_1fr_1.3fr] gap-3 text-[11px] font-semibold tracking-[0.12em] uppercase text-[var(--color-dim)]">
           <span role="columnheader">{web("col_role")}</span>
           <span role="columnheader">{web("col_model")}</span>
           <span role="columnheader">{web("col_effort")}</span>
+          <span role="columnheader">{text.effectiveHeader}</span>
         </div>
         {SETTINGS_ROLES.map((role) => {
           const entry = edited[role] ?? {};
           const label = web(`role_${role}`);
           return (
-            <div key={role} role="row" className="grid grid-cols-[1fr_1fr_1fr] gap-3 items-center">
+            <div key={role} role="row" className="grid grid-cols-[1fr_1fr_1fr_1.3fr] gap-3 items-center">
               <span role="rowheader" className="text-[12px] text-[var(--color-bright)]">
                 {label}
               </span>
@@ -98,10 +106,20 @@ export default function RoleModelsCard({
                   </option>
                 ))}
               </select>
+              <span data-testid={`team-settings-effective-${role}`} className="text-[11px] text-[var(--color-muted)]">
+                {effective
+                  ? `${effective[role].modelName} · ${web(`effort_${effective[role].effort}`)} · ${effective[role].from === "config" ? text.effectiveChosen : text.effectiveDefault}`
+                  : text.effectiveUnavailable}
+              </span>
             </div>
           );
         })}
       </div>
+      {classApplies === false && (
+        <p data-testid="team-settings-class-not-applied" className="m-0 mt-3 text-[11px] text-[var(--color-yellow)]">
+          {text.classNotApplied}
+        </p>
+      )}
       <div className="flex items-center gap-3 flex-wrap mt-4">
         <button
           type="button"
