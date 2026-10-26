@@ -75,7 +75,7 @@ export const pt: Record<string, string> = {
     "No macOS, o DMG está assinado e notarizado. No Linux, o pacote não está assinado: torna a AppImage executável antes de a abrir.",
   dl_mac_apple_silicon_only:
     "Apenas Macs com Apple silicon (M1 e posteriores). Os Macs com processador Intel não são suportados na 0.4.",
-  dl_windows_coming_soon: "Em breve",
+  dl_windows_not_in_version: "Não nesta versão",
   dl_linux_experimental: "Experimental, não testado à mão.",
   dl_help_text: "Descarregaste a app?",
   dl_help_link: "Segue a configuração passo a passo",

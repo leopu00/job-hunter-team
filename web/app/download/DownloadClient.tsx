@@ -41,11 +41,10 @@ function BackLink() {
 // recente da un'allowlist statica e misura solo bucket anonimi aggregati.
 // macOS è firmato Developer ID e notarizzato (dalla 0.3.1), quindi si apre con
 // un doppio clic; Windows e Linux non sono firmati e l'avviso di SmartScreen
-// va detto prima, non lasciato scoprire. Sostituisce il "in arrivo" del
-// 2026-07-03 (docs/internal/2026-07-03-desktop-app-status-and-vision.md).
+// va detto prima, non lasciato scoprire.
 type InstallMode = "terminal" | "desktop" | "prompt";
 
-// Windows has no slug: it is not part of 0.4.0 and the page shows it as "coming soon".
+// Windows has no slug: it is not part of 0.4.0 and the page shows it as "not in this version".
 const DOWNLOAD_SLUG: Partial<Record<PlatformId, DownloadSlug>> = {
   mac: "mac",
   linux: "linux",
@@ -73,7 +72,7 @@ function PlatformIcon({ id }: { id: PlatformId }) {
   return null;
 }
 
-const CLI_SETUP_CMD = `curl -fsSL https://jobhunterteam.ai/install.sh | bash`;
+const CLI_SETUP_CMD = `curl -fsSL https://jobhunterteam.ai/install.sh | bash -s -- --runtime podman`;
 
 // Il prompt da consegnare a un assistente AI. Esisteva fino ad `a494c6259`
 // (3 lug 2026), ritirato allora perché «non ha convinto»; rimesso su richiesta
@@ -102,7 +101,7 @@ Leggi prima il repository e la guida, poi guidami nell'installazione e nell'avvi
 
 Ci sono due strade supportate, che portano alla stessa squadra: scegli con me quella che mi conviene.
 1. L'app desktop, scaricabile da https://jobhunterteam.ai/download
-2. Il comando unico: curl -fsSL https://jobhunterteam.ai/install.sh | bash
+2. Il comando unico: curl -fsSL https://jobhunterteam.ai/install.sh | bash -s -- --runtime podman
 
 Due cose che dovrai verificare con me strada facendo: che su Mac Homebrew sia già installato (l'app lo usa per installare Podman, il motore dei container) e quale abbonamento AI dedicare alla squadra — le serve il suo, separato da quello che uso ogni giorno, perché lo consuma per intero. Chiedimi tutto il resto invece di tirare a indovinare.`,
   en: `I'd like to start using Job Hunter Team, an open-source team of AI agents that searches for jobs on my behalf. It runs on my own machine, in a container.
@@ -115,7 +114,7 @@ Read the repository and the setup guide first, then walk me through installing a
 
 There are two supported ways in, and they lead to the same team — pick with me whichever suits me better:
 1. The desktop app, downloaded from https://jobhunterteam.ai/download
-2. The one-liner: curl -fsSL https://jobhunterteam.ai/install.sh | bash
+2. The one-liner: curl -fsSL https://jobhunterteam.ai/install.sh | bash -s -- --runtime podman
 
 Two things you will need to check with me along the way: that on a Mac Homebrew is already installed (the app uses it to install Podman, the container engine), and which AI provider subscription I want the team to use — it needs one of its own, separate from the one I use day to day, because the team consumes the whole allowance. Ask me whatever else you need instead of guessing.`,
   es: `Quiero empezar a usar Job Hunter Team, un equipo open source de agentes de IA que busca trabajo por mí. Funciona en mi propio ordenador, dentro de un contenedor.
@@ -128,7 +127,7 @@ Lee primero el repositorio y la guía, y después acompáñame en la instalació
 
 Hay dos caminos soportados, y llevan al mismo equipo: elige conmigo el que más me convenga.
 1. La app de escritorio, descargable desde https://jobhunterteam.ai/download
-2. El comando único: curl -fsSL https://jobhunterteam.ai/install.sh | bash
+2. El comando único: curl -fsSL https://jobhunterteam.ai/install.sh | bash -s -- --runtime podman
 
 Dos cosas que tendrás que comprobar conmigo por el camino: que en Mac Homebrew esté ya instalado (la aplicación lo usa para instalar Podman, el motor de contenedores) y qué suscripción de IA dedicar al equipo — necesita una propia, separada de la que uso a diario, porque la consume por completo. Pregúntame todo lo demás en lugar de suponerlo.`,
   fr: `J'aimerais commencer à utiliser Job Hunter Team, une équipe open source d'agents IA qui cherche du travail pour moi. Elle tourne sur mon ordinateur, dans un conteneur.
@@ -141,7 +140,7 @@ Lis d'abord le dépôt et le guide, puis accompagne-moi pour l'installer et le d
 
 Il y a deux voies prises en charge, et elles mènent à la même équipe : choisis avec moi celle qui me convient.
 1. L'application de bureau, à télécharger sur https://jobhunterteam.ai/download
-2. La commande unique : curl -fsSL https://jobhunterteam.ai/install.sh | bash
+2. La commande unique : curl -fsSL https://jobhunterteam.ai/install.sh | bash -s -- --runtime podman
 
 Deux choses à vérifier avec moi en chemin : que sur Mac Homebrew soit déjà installé (l'application s'en sert pour installer Podman, le moteur de conteneurs) et quel abonnement IA dédier à l'équipe — il lui en faut un à elle, distinct de celui que j'utilise au quotidien, car elle le consomme entièrement. Demande-moi tout le reste au lieu de deviner.`,
   de: `Ich möchte anfangen, Job Hunter Team zu nutzen — ein Open-Source-Team aus KI-Agenten, das für mich nach Stellen sucht. Es läuft auf meinem eigenen Rechner, in einem Container.
@@ -154,7 +153,7 @@ Lies zuerst das Repository und die Anleitung, und führe mich dann durch Install
 
 Es gibt zwei unterstützte Wege, die zum selben Team führen — wähle mit mir den passenden:
 1. Die Desktop-App, herunterzuladen unter https://jobhunterteam.ai/download
-2. Der Einzeiler: curl -fsSL https://jobhunterteam.ai/install.sh | bash
+2. Der Einzeiler: curl -fsSL https://jobhunterteam.ai/install.sh | bash -s -- --runtime podman
 
 Zwei Dinge, die du unterwegs mit mir klären musst: dass auf einem Mac Homebrew bereits installiert ist (die App nutzt es, um Podman, die Container-Engine, zu installieren) und welches KI-Abo das Team bekommt — es braucht ein eigenes, getrennt von dem, das ich täglich nutze, weil es das Kontingent vollständig verbraucht. Frag mich alles Weitere, statt zu raten.`,
   pt: `Gostaria de começar a usar o Job Hunter Team, uma equipa open source de agentes de IA que procura emprego por mim. Corre no meu próprio computador, dentro de um contentor.
@@ -167,7 +166,7 @@ Lê primeiro o repositório e o guia, e depois acompanha-me na instalação e no
 
 Há dois caminhos suportados, e levam à mesma equipa: escolhe comigo o que me convém.
 1. A app de ambiente de trabalho, transferível em https://jobhunterteam.ai/download
-2. O comando único: curl -fsSL https://jobhunterteam.ai/install.sh | bash
+2. O comando único: curl -fsSL https://jobhunterteam.ai/install.sh | bash -s -- --runtime podman
 
 Duas coisas que terás de verificar comigo pelo caminho: que no Mac o Homebrew esteja já instalado (a aplicação usa-o para instalar o Podman, o motor de contentores) e qual a subscrição de IA a dedicar à equipa — precisa de uma própria, separada da que uso no dia a dia, porque a consome por inteiro. Pergunta-me tudo o resto em vez de adivinhar.`,
   hu: `Szeretném elkezdeni használni a Job Hunter Teamet, egy nyílt forráskódú AI-ügynökcsapatot, amely helyettem keres állást. A saját gépemen fut, konténerben.
@@ -180,7 +179,7 @@ Először olvasd el a repositoryt és az útmutatót, majd vezess végig a telep
 
 Két támogatott út van, és ugyanahhoz a csapathoz vezetnek — válaszd ki velem, melyik illik hozzám jobban:
 1. Az asztali alkalmazás, letölthető innen: https://jobhunterteam.ai/download
-2. Az egysoros parancs: curl -fsSL https://jobhunterteam.ai/install.sh | bash
+2. Az egysoros parancs: curl -fsSL https://jobhunterteam.ai/install.sh | bash -s -- --runtime podman
 
 Két dolgot kell majd velem tisztáznod útközben: hogy Macen a Homebrew már telepítve van-e (az alkalmazás ezzel telepíti a Podmant, a konténermotort), és melyik AI-előfizetést szánom a csapatnak — sajátra van szüksége, elkülönítve attól, amit naponta használok, mert teljesen felhasználja. Minden mást kérdezz meg tőlem, ahelyett hogy találgatnál.`,
 };
@@ -415,10 +414,10 @@ function DownloadContent({
                         </span>
                       ) : (
                         <span
-                          data-windows-coming-soon
+                          data-windows-not-in-version
                           className="text-[9px] font-semibold tracking-[0.15em] uppercase text-[var(--color-muted)] border border-[var(--color-border)] px-2 py-0.5"
                         >
-                          {t("dl_windows_coming_soon")}
+                          {t("dl_windows_not_in_version")}
                         </span>
                       )}
                       {/* La build Mac della 0.4 e' solo Apple silicon: va detto

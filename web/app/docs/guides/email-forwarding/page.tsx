@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { getRequestLocale } from "@/lib/request-locale";
-import { CODE_CLS, DESKTOP_SOON, T } from "./page.i18n";
+import { CODE_CLS, DESKTOP_NOTE, T } from "./page.i18n";
 
 const TITLE_CLS =
   "text-[15px] font-bold text-[var(--color-white)] mt-10 mb-3 flex items-center gap-2";
@@ -54,7 +54,7 @@ export default async function EmailForwardingGuidePage() {
         </p>
       </div>
 
-      <Callout>{DESKTOP_SOON[locale] ?? DESKTOP_SOON.en}</Callout>
+      <Callout>{DESKTOP_NOTE[locale] ?? DESKTOP_NOTE.en}</Callout>
 
       <Callout>{t.calloutOptional}</Callout>
 

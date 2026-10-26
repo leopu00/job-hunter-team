@@ -4,11 +4,9 @@ Job Hunter Team (JHT) has one containerized team and more than one place to
 run it. The desktop application stays on the computer you use, and the
 container can run on that same computer or on a Linux host reached over SSH.
 The desktop app runs the local container in Podman on macOS (installed with
-Homebrew) and in Docker on Linux; on Windows 0.4 it runs in Podman inside WSL,
-installed by the app. Windows is not part of the 0.4.0 release (there is no
-Windows installer to download yet; coming soon), and the Linux release is
-experimental and was not tested by hand: the Windows notes below describe the
-app as built, not a download.
+Homebrew), and on Linux the team runs in rootless Podman. Windows is not in this
+version (there is no Windows installer to download), and the Linux release is
+experimental and was not tested by hand.
 
 This guide compares three deployment paths. It does not compare the native
 application with the command-line interface (CLI): those are two ways to
@@ -18,8 +16,8 @@ host.
 ## Decision tree
 
 1. **Do you want the shortest path to a first working team?** Run it on your
-   **local PC**. On Windows 0.4 the app installs Podman inside WSL for it;
-   WSL must already be enabled.
+   **local PC** (a Mac with Apple silicon: the app installs Podman with
+   Homebrew, which must already be installed).
 2. **Do you already have a spare computer that can stay on, and will you use
    it mainly from the same trusted local network?** A **dedicated Linux PC on
    the LAN** can work through the existing SSH transport. This is an advanced
@@ -40,7 +38,7 @@ choosing.
 
 | | Local PC | Dedicated PC on the LAN | VPS |
 |---|---|---|---|
-| **Current product path** | Supported on macOS (Podman) and on Windows 0.4 (Podman inside WSL); Linux (Docker) is built but not tested yet | Existing SSH transport; advanced topology, not separately validated as a guided path | Supported remote runtime on every desktop platform |
+| **Current product path** | Supported on macOS with Apple silicon (Podman); Linux (Podman) is built but not tested yet; Windows is not in this version | Existing SSH transport; advanced topology, not separately validated as a guided path | Supported remote runtime on every desktop platform |
 | **Where the team runs** | Your everyday computer | A Linux computer you own or control | A Linux virtual server from an infrastructure provider |
 | **How the desktop reaches it** | The `jht` command of the local runtime | SSH over your network | SSH over the internet |
 | **Must your everyday PC stay on?** | Yes | No; only while you use the desktop | No; only while you use the desktop |
@@ -86,27 +84,26 @@ desktop, container, SSH and optional-cloud boundaries.
 ## Path 1 — Local PC
 
 Choose this when you want the least infrastructure and can leave your computer
-awake while the agents work. On Windows 0.4 the team runs in Podman inside WSL.
+awake while the agents work.
 
 ### What you need
 
 - A desktop release for your system: macOS on Apple silicon (M1 and later; Intel
   Macs are not supported in 0.4), or Linux x64 (experimental, not tested by
-  hand). Windows is not in 0.4.0 yet.
-- On macOS, Homebrew: the app installs Podman with it. On Linux, Docker Engine
-  and its Compose plugin installed before you start; the Linux release is
-  built, but this setup has not been tested yet. On Windows, WSL enabled: the
-  app installs Podman and the rest, and Docker Desktop is not needed.
-- About **8 GB of RAM available before starting the team** for comfortable
-  local use. This is a measured recommendation, not a universal minimum.
-- Enough unmeasured disk headroom for the image and your data.
+  hand). Windows is not in this version.
+- On macOS, **Homebrew already installed** (it needs macOS 15 or later): the app
+  installs Podman with it and manages it, and Docker Desktop is not needed. On
+  Linux, rootless Podman 5.0 or later with podman-compose, installed before you
+  start; the Linux release is built, but this setup has not been tested yet.
+- A Mac with at least **16 GB of RAM** is recommended. The container machine the
+  app creates uses 2 CPUs and 4 GiB of memory, and a disk that grows up to 30 GiB.
+- No minimum of free disk space has been measured: leave room for the image and
+  your data.
 
 ### Availability and operations
 
 The container uses `restart: unless-stopped`, so it can return after a normal
-host reboot once its container runtime is running. On Windows a scheduled task
-turns the JHT Podman machine back on when you sign in, and a service in that
-machine keeps the team running while the app is closed. The team cannot work
+host reboot once its container runtime is running. The team cannot work
 while the computer is powered off or asleep, while its runtime is stopped, or
 while its required network services are unavailable. Closing the desktop app
 or a CLI terminal does not stop the container; use the documented lifecycle

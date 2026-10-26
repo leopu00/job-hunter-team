@@ -221,3 +221,116 @@ def test_the_getting_started_guide_names_homebrew_and_the_0_4_systems_in_every_l
     for body in blocks:
         assert "Windows" in body and "Linux" in body and "0.4" in body
         assert "WSL" not in body and "Docker" not in body
+
+
+# ── What is not in 0.4.0 is written "not in this version", and the Mac pages match the app ──
+
+FUTURE_PROMISES = re.compile(
+    r"coming soon|\bin arrivo\b|Presto disponibile|Arriverà presto|próximamente|Llegará pronto|bientôt|"
+    r"demnächst|Er kommt bald|em breve|Chega em breve|Hamarosan érkezik|hamarosan érkező|hamarosan az asztali|"
+    r"\"Hamarosan\"|is on its way|ist unterwegs|está en camino|úton van|está a caminho|upcoming desktop|future version|prossima versione|"
+    r"A Windows nem része a 0\.4\.0-nak: ebben a kiadásban még nincs",
+    re.IGNORECASE,
+)
+PAGES_WITHOUT_PROMISES = [
+    "web/app/download/DownloadClient.tsx",
+    "web/lib/download-funnel.ts",
+    "web/app/components/landing/LandingI18n.tsx",
+    "web/app/components/landing/i18n/pt.ts",
+    "web/app/components/landing/i18n/fr.ts",
+    "web/app/components/landing/i18n/es.ts",
+    "web/app/components/landing/i18n/de.ts",
+    "web/app/docs/guides/getting-started/page.i18n.ts",
+    "web/app/docs/guides/getting-started/page.tsx",
+    "web/app/docs/guides/team-gmail/page.i18n.tsx",
+    "web/app/docs/guides/email-forwarding/page.i18n.tsx",
+    "web/app/docs/guides/faq/page.i18n.ts",
+    "web/app/docs/guides/beta/page.i18n.ts",
+    "web/app/docs/guides/cli/page.tsx",
+    "web/app/docs/guides/dashboard-and-results/page.tsx",
+    "web/app/(protected)/settings/page.i18n.ts",
+    "web/app/(protected)/settings/page.tsx",
+    "web/app/setup-guide/guide-content.ts",
+    "README.md",
+    "docs/guides/CHOOSE-WHERE-TO-RUN.md",
+    "docs/guides/QUICKSTART.md",
+    "docs/guides/TUTORIALS.md",
+    "docs/guides/TUTORIALS-LOCALIZATIONS.md",
+]
+
+
+@pytest.mark.parametrize("path", PAGES_WITHOUT_PROMISES)
+def test_no_page_promises_a_feature_that_is_not_in_this_version(path):
+    # A feature that is not in 0.4.0 is "not in this version": no date, no promise.
+    # (Windows and the sign-in with ChatGPT are in progress, and may say so.)
+    found = [m.group(0) for m in FUTURE_PROMISES.finditer(text(path))]
+    assert not found, f"{path}: {found}"
+
+
+@pytest.mark.parametrize("lang", ["pt", "fr", "es", "de"])
+def test_the_windows_card_says_not_in_this_version_in_the_split_dictionaries(lang):
+    source = text(f"web/app/components/landing/i18n/{lang}.ts")
+    assert re.search(r'dl_windows_not_in_version: "[^"]+"', source)
+    assert "dl_windows_coming_soon" not in source
+
+
+def test_the_windows_card_says_not_in_this_version_in_it_en_hu():
+    block = re.search(r"dl_windows_not_in_version: \{\n((?:    [a-z]{2}: .*\n){3})", LANDING)
+    assert block, "it, en and hu"
+    assert 'en: "Not in this version"' in block.group(1) and "dl_windows_coming_soon" not in LANDING
+    assert 't("dl_windows_not_in_version")' in DOWNLOAD and "data-windows-not-in-version" in DOWNLOAD
+
+
+@pytest.mark.parametrize("lang", LANGS)
+def test_the_getting_started_desktop_path_is_the_mac_app_with_a_link_to_the_download(lang):
+    start = re.search(rf"\n  {lang}: \{{", STARTED_I18N)
+    block = STARTED_I18N[start.end():STARTED_I18N.find("\n  },\n", start.end())]
+    title = re.search(r'path2Title: "([^"]*)"', block).group(1)
+    assert "Apple silicon" in title and "macOS" in title
+    body = re.search(r'path2A:\s*"([^"]*)"', block).group(1) + re.search(r'path2B: "([^"]*)"', block).group(1)
+    assert "Homebrew" in body and "Podman" in body and "Windows" in body and "Linux" in body
+    assert "path2Soon" not in block and "path3WinIntro" not in block
+    assert 'href="/download"' in STARTED_PAGE
+
+
+def test_the_getting_started_one_liner_has_no_windows_block_and_names_podman():
+    assert "install.ps1" not in STARTED_PAGE and "iwr " not in STARTED_PAGE
+    assert "path3WinIntro" not in STARTED_PAGE and "path3WinIntro" not in STARTED_I18N
+    assert "install.sh | bash -s -- --runtime podman" in STARTED_PAGE
+    for mac in re.findall(r'path3Mac: "([^"]*)"', STARTED_I18N):
+        assert "WSL" not in mac and "Linux" in mac
+
+
+@pytest.mark.parametrize("path", [
+    "web/app/setup-guide/guide-config.ts", "web/app/download/DownloadClient.tsx", "README.md",
+    "docs/guides/CLI-INSTALL.md", "docs/guides/QUICKSTART.md", "web/app/docs/guides/getting-started/page.tsx",
+])
+def test_the_mac_install_command_names_podman_so_it_does_not_land_on_colima(path):
+    # `curl | bash` with no flag picks Colima on a Mac; the app, and the figures of the pages, are Podman's
+    source = text(path)
+    commands = re.findall(r"install\.sh \| bash[^\n`\"]*", source)
+    assert commands, path
+    assert all("-s -- --runtime podman" in c for c in commands), (path, commands)
+    assert '--runtime) \n' not in INSTALL and "--runtime" in INSTALL and "colima|podman|docker-desktop" in INSTALL
+
+
+@pytest.mark.parametrize("lang", LANGS)
+def test_the_homebrew_step_says_it_needs_macos_15(lang):
+    body = lang_line(step("install-homebrew-macos"), lang, "body")
+    assert "macOS 15" in body or "macOS 15-" in body
+
+
+@pytest.mark.parametrize("path", [
+    "web/app/privacy/page.tsx", "web/app/docs/guides/run-on-a-vps/page.tsx", "web/app/docs/guides/cli/page.tsx", "README.md",
+])
+def test_no_page_of_the_site_or_the_readme_says_the_team_runs_in_docker(path):
+    for line in text(path).splitlines():
+        # the README says only that there is no Docker Desktop to install
+        assert "Docker" not in line or "no Docker Desktop to install" in line, (path, line)
+
+
+def test_the_choose_where_guide_names_docker_only_for_an_old_installation_or_to_say_it_is_not_needed():
+    for line in text("docs/guides/CHOOSE-WHERE-TO-RUN.md").splitlines():
+        if "Docker" in line:
+            assert "Docker Desktop is not needed" in line or "earlier installation" in line, line
+    assert "WSL" not in text("docs/guides/CHOOSE-WHERE-TO-RUN.md")

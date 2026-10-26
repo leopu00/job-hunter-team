@@ -53,7 +53,7 @@ export const HOMEBREW_URL = "https://brew.sh";
 
 /** Installazione da terminale, per chi preferisce la CLI all'app. */
 export const CLI_INSTALL_CMD =
-  "curl -fsSL https://jobhunterteam.ai/install.sh | bash";
+  "curl -fsSL https://jobhunterteam.ai/install.sh | bash -s -- --runtime podman";
 
 /** Pagine del sito citate dalle fasi. */
 export const DOCS_PROVIDER = "/docs/guides/connect-ai-provider";

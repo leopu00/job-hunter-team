@@ -60,7 +60,7 @@ const T: Record<
     title: "CLI — the jht command",
     tagline: "The essential commands to drive the team from a terminal",
     intro1:
-      "Everything the web — and the upcoming desktop app — does, you can do with",
+      "Everything the web — and the desktop app — does, you can do with",
     intro2:
       ". It's the single surface humans, power users and AI assistants share — self-sufficient for day-to-day operation. Here are the commands you'll actually use.",
     callout1: "💡 Every command supports",
@@ -75,7 +75,7 @@ const T: Record<
     lifecycleLogs: "follow the container logs",
     h2Setup: "🧩 Setup & health",
     setupSetup: "interactive wizard: provider, OAuth, team start",
-    setupDoctor: "check Docker / Node / auth / DB — must exit 0",
+    setupDoctor: "check config / Node / auth / DB — must exit 0",
     setupHealth: "granular service health",
     setupStatus: "container status",
     h2Providers: "🧠 Providers",
@@ -113,7 +113,7 @@ const T: Record<
     title: "CLI — il comando jht",
     tagline: "I comandi essenziali per guidare il team da terminale",
     intro1:
-      "Tutto ciò che fa il web — e che farà l'app desktop in arrivo — lo puoi fare con",
+      "Tutto ciò che fa il web — e l'app desktop — lo puoi fare con",
     intro2:
       ". È l'unica superficie condivisa da esseri umani, utenti esperti e assistenti AI — autosufficiente per l'uso quotidiano. Ecco i comandi che userai davvero.",
     callout1: "💡 Ogni comando supporta",
@@ -128,7 +128,7 @@ const T: Record<
     lifecycleLogs: "segui i log del container",
     h2Setup: "🧩 Setup e salute",
     setupSetup: "wizard interattivo: provider, OAuth, avvio del team",
-    setupDoctor: "controlla Docker / Node / auth / DB — deve uscire con 0",
+    setupDoctor: "controlla config / Node / auth / DB — deve uscire con 0",
     setupHealth: "salute granulare dei servizi",
     setupStatus: "stato del container",
     h2Providers: "🧠 Provider",
@@ -167,7 +167,7 @@ const T: Record<
     tagline:
       "Los comandos esenciales para dirigir el equipo desde una terminal",
     intro1:
-      "Todo lo que hace la web — y lo que hará la futura app de escritorio — lo puedes hacer con",
+      "Todo lo que hace la web — y la app de escritorio — lo puedes hacer con",
     intro2:
       ". Es la única superficie que comparten humanos, usuarios avanzados y asistentes de IA — autosuficiente para el uso diario. Estos son los comandos que realmente usarás.",
     callout1: "💡 Cada comando admite",
@@ -183,7 +183,7 @@ const T: Record<
     lifecycleLogs: "sigue los logs del contenedor",
     h2Setup: "🧩 Configuración y salud",
     setupSetup: "asistente interactivo: proveedor, OAuth, inicio del equipo",
-    setupDoctor: "comprueba Docker / Node / auth / DB — debe salir con 0",
+    setupDoctor: "comprueba la configuración / Node / auth / DB — debe salir con 0",
     setupHealth: "salud granular de los servicios",
     setupStatus: "estado del contenedor",
     h2Providers: "🧠 Proveedores",
@@ -224,7 +224,7 @@ const T: Record<
     tagline:
       "Les commandes essentielles pour piloter l'équipe depuis un terminal",
     intro1:
-      "Tout ce que fait le web — et ce que fera la future application de bureau — vous pouvez le faire avec",
+      "Tout ce que fait le web — et l'application de bureau — vous pouvez le faire avec",
     intro2:
       ". C'est la seule surface partagée par les humains, les utilisateurs avancés et les assistants IA — autosuffisante pour l'usage quotidien. Voici les commandes que vous utiliserez vraiment.",
     callout1: "💡 Chaque commande prend en charge",
@@ -240,7 +240,7 @@ const T: Record<
     lifecycleLogs: "suis les logs du conteneur",
     h2Setup: "🧩 Configuration et santé",
     setupSetup: "assistant interactif : provider, OAuth, démarrage de l'équipe",
-    setupDoctor: "vérifie Docker / Node / auth / DB — doit sortir avec 0",
+    setupDoctor: "vérifie la config / Node / auth / DB — doit sortir avec 0",
     setupHealth: "santé granulaire des services",
     setupStatus: "état du conteneur",
     h2Providers: "🧠 Providers",
@@ -280,7 +280,7 @@ const T: Record<
     tagline:
       "Die wesentlichen Befehle, um das Team vom Terminal aus zu steuern",
     intro1:
-      "Alles, was das Web tut — und was die kommende Desktop-App tun wird — kannst du mit",
+      "Alles, was das Web und die Desktop-App tun, kannst du mit",
     intro2:
       " erledigen. Es ist die einzige Oberfläche, die Menschen, Power-User und KI-Assistenten teilen — autark für den täglichen Betrieb. Hier sind die Befehle, die du tatsächlich nutzen wirst.",
     callout1: "💡 Jeder Befehl unterstützt",
@@ -295,7 +295,7 @@ const T: Record<
     lifecycleLogs: "den Container-Logs folgen",
     h2Setup: "🧩 Einrichtung & Zustand",
     setupSetup: "interaktiver Assistent: Provider, OAuth, Team-Start",
-    setupDoctor: "Docker / Node / Auth / DB prüfen — muss mit 0 beenden",
+    setupDoctor: "Konfiguration / Node / Auth / DB prüfen — muss mit 0 beenden",
     setupHealth: "granularer Service-Zustand",
     setupStatus: "Container-Status",
     h2Providers: "🧠 Provider",
@@ -334,7 +334,7 @@ const T: Record<
     tagline:
       "A csapat terminálból való irányításához szükséges alapvető parancsok",
     intro1:
-      "Mindent, amit a web csinál — és amit a hamarosan érkező asztali alkalmazás tud majd — megtehetsz a",
+      "Mindent, amit a web és az asztali alkalmazás csinál, megtehetsz a",
     intro2:
       " segítségével. Ez az egyetlen felület, amelyet emberek, haladó felhasználók és MI-asszisztensek megosztanak — önellátó a napi használathoz. Íme a parancsok, amelyeket valóban használni fogsz.",
     callout1: "💡 Minden parancs támogatja a",
@@ -349,7 +349,7 @@ const T: Record<
     lifecycleLogs: "a konténer naplóinak követése",
     h2Setup: "🧩 Beállítás és állapot",
     setupSetup: "interaktív varázsló: provider, OAuth, csapat indítása",
-    setupDoctor: "Docker / Node / auth / DB ellenőrzése — 0-val kell kilépnie",
+    setupDoctor: "konfiguráció / Node / auth / DB ellenőrzése — 0-val kell kilépnie",
     setupHealth: "részletes szolgáltatás-állapot",
     setupStatus: "konténer állapota",
     h2Providers: "🧠 Providerek",
@@ -388,7 +388,7 @@ const T: Record<
     tagline:
       "Os comandos essenciais para conduzir a equipe a partir de um terminal",
     intro1:
-      "Tudo o que a web faz — e o que a futura app de desktop fará — você pode fazer com",
+      "Tudo o que a web e a app de desktop fazem, você pode fazer com",
     intro2:
       ". É a única superfície partilhada por humanos, utilizadores avançados e assistentes de IA — autossuficiente para o uso diário. Aqui estão os comandos que você realmente vai usar.",
     callout1: "💡 Todos os comandos suportam",
@@ -403,7 +403,7 @@ const T: Record<
     lifecycleLogs: "segue os logs do container",
     h2Setup: "🧩 Configuração e saúde",
     setupSetup: "assistente interativo: provider, OAuth, início da equipe",
-    setupDoctor: "verifica Docker / Node / auth / DB — deve sair com 0",
+    setupDoctor: "verifica a configuração / Node / auth / DB — deve sair com 0",
     setupHealth: "saúde granular dos serviços",
     setupStatus: "estado do container",
     h2Providers: "🧠 Providers",

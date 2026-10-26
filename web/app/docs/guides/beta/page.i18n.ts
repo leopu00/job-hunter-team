@@ -63,7 +63,7 @@ export const T: Record<Locale, BetaCopy> = {
     who2: "You can afford at least one supported subscription.",
     who3: "You're willing to report back honestly — what worked, what didn't, what was confusing.",
     whoNoTech:
-      "No technical background required. One copy-pasted command in the terminal installs everything, and the team's Assistant walks you through anything you don't understand. A one-click desktop app is on its way. If you can follow on-screen steps, you can run it.",
+      "No technical background required. One copy-pasted command in the terminal installs everything, and the team's Assistant walks you through anything you don't understand. On a Mac with Apple silicon there is also a desktop app. If you can follow on-screen steps, you can run it.",
     getH: "What you get",
     get1: "Direct support from the maintainer.",
     get2: "Early access to features before they ship.",
@@ -88,7 +88,7 @@ export const T: Record<Locale, BetaCopy> = {
     applyNote: "We reply within a few days.",
     expectH: "What to expect today",
     expectLead: "Before you sign up, set your expectations honestly:",
-    exp1: "The team runs end to end — pipeline, dashboard, CLI and Telegram all work. The desktop app is on its way.",
+    exp1: "The team runs end to end — pipeline, dashboard, CLI, Telegram and the desktop app (Mac with Apple silicon) all work.",
     exp2: "The onboarding wizard still has rough edges — expect to ask for help once or twice.",
     exp3: "At first launch your operating system may warn about an “unverified app”. Job Hunter Team is open source — you can right-click → Open (macOS) or Run anyway (Windows), or build it from source.",
     expectClose:
@@ -109,7 +109,7 @@ export const T: Record<Locale, BetaCopy> = {
     who2: "Puoi permetterti almeno un abbonamento supportato.",
     who3: "Sei disposto a darci un riscontro onesto — cosa ha funzionato, cosa no, cosa era poco chiaro.",
     whoNoTech:
-      "Non serve alcuna competenza tecnica. Un comando copia-incollato nel terminale installa tutto, e l'Assistente del team ti guida in tutto ciò che non capisci. È in arrivo anche l'app desktop con installazione a un clic. Se sai seguire i passaggi a schermo, sai usarlo.",
+      "Non serve alcuna competenza tecnica. Un comando copia-incollato nel terminale installa tutto, e l'Assistente del team ti guida in tutto ciò che non capisci. Su un Mac con Apple silicon c'è anche l'app desktop. Se sai seguire i passaggi a schermo, sai usarlo.",
     getH: "Cosa ottieni",
     get1: "Supporto diretto dal maintainer.",
     get2: "Accesso in anteprima alle nuove funzioni.",
@@ -134,7 +134,7 @@ export const T: Record<Locale, BetaCopy> = {
     applyNote: "Rispondiamo entro qualche giorno.",
     expectH: "Cosa aspettarti oggi",
     expectLead: "Prima di iscriverti, mettiamo le aspettative in chiaro:",
-    exp1: "Il team funziona dall'inizio alla fine — pipeline, dashboard, CLI e Telegram funzionano tutti. L'app desktop è in arrivo.",
+    exp1: "Il team funziona dall'inizio alla fine — pipeline, dashboard, CLI, Telegram e app desktop (Mac con Apple silicon) funzionano tutti.",
     exp2: "Il wizard di onboarding ha ancora qualche spigolo — mettiti in conto di chiedere aiuto una o due volte.",
     exp3: "Al primo avvio il tuo sistema operativo potrebbe avvisarti di un'«app non verificata». Job Hunter Team è open source — puoi fare clic destro → Apri (macOS) o Esegui comunque (Windows), oppure compilarlo dai sorgenti.",
     expectClose:

@@ -145,10 +145,10 @@ describe("B8 download funnel", () => {
     expect(resolveDownloadTarget("mac", withInstaller)).toBe(DOWNLOAD_TARGETS.mac);
   });
 
-  it("D13 the page shows Windows as coming soon without a link, and Linux as experimental", () => {
+  it("D13 the page shows Windows as not in this version without a link, and Linux as experimental", () => {
     expect(DOWNLOAD_PAGE).not.toContain("win-setup");
-    expect(DOWNLOAD_PAGE).toContain("data-windows-coming-soon");
-    expect(DOWNLOAD_PAGE).toContain('t("dl_windows_coming_soon")');
+    expect(DOWNLOAD_PAGE).toContain("data-windows-not-in-version");
+    expect(DOWNLOAD_PAGE).toContain('t("dl_windows_not_in_version")');
     expect(DOWNLOAD_PAGE).toContain("data-linux-experimental");
     expect(DOWNLOAD_PAGE).toContain('t("dl_linux_experimental")');
     // the Windows card is not an anchor
@@ -161,7 +161,7 @@ describe("B8 download funnel", () => {
     );
     files.push(readFileSync(path.join(REPO, "web/app/components/landing/LandingI18n.tsx"), "utf8"));
     for (const source of files) {
-      expect(source).toContain("dl_windows_coming_soon");
+      expect(source).toContain("dl_windows_not_in_version");
       expect(source).toContain("dl_linux_experimental");
       // the unsigned note no longer speaks of a Windows installer
       const note = source.match(/dl_desktop_unsigned_note[\s\S]*?dl_mac_apple_silicon_only/)![0];

@@ -226,10 +226,10 @@ const translations = {
     en: "Only Macs with Apple silicon (M1 and later). Intel Macs are not supported in 0.4.",
     hu: "Csak Apple silicon-os Mac-ekhez (M1 és újabb). Az Intel-es Mac-ek a 0.4-ben nem támogatottak.",
   },
-  dl_windows_coming_soon: {
-    it: "In arrivo",
-    en: "Coming soon",
-    hu: "Hamarosan",
+  dl_windows_not_in_version: {
+    it: "Non in questa versione",
+    en: "Not in this version",
+    hu: "Nem ebben a verzióban",
   },
   dl_linux_experimental: {
     it: "Sperimentale, non provato a mano.",

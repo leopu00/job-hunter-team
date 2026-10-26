@@ -4,7 +4,7 @@ This document describes the current CLI installer. It is the reference for
 **Path 2 (CLI installer)** in the [Quickstart](QUICKSTART.md):
 
 ```bash
-curl -fsSL https://jobhunterteam.ai/install.sh | bash
+curl -fsSL https://jobhunterteam.ai/install.sh | bash -s -- --runtime podman
 ```
 
 The visual path is the native Godot office in [`game/`](../../game/). This document remains the reference for CLI installation and recovery.

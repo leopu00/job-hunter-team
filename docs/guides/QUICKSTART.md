@@ -58,7 +58,7 @@ Download the current release from
 
 | System      | Release asset                           | First launch |
 | ----------- | --------------------------------------- | ------------ |
-| Windows x64 | not in 0.4.0 | Windows is not part of 0.4.0: there is no Windows installer in this release (coming soon). |
+| Windows x64 | not in 0.4.0 | Windows is not part of 0.4.0: there is no Windows installer in this release. |
 | macOS       | `job-hunter-team-macos-universal.dmg`   | Open the disk image and drag the app into Applications. It is signed with an Apple Developer ID and notarized by Apple. Only Macs with Apple silicon (M1 and later). Intel Macs are not supported in 0.4. The file name says “universal”, but in 0.4 it holds only the Apple silicon build. |
 | Linux x64   | `job-hunter-team-linux-x64.AppImage` or `job-hunter-team-linux-x64.deb` | Experimental, not tested by hand in 0.4. Make the AppImage executable (`chmod +x`) and open it, or install the `.deb` on Debian-based systems. |
 
@@ -108,7 +108,7 @@ bash install.sh
 The shorter form, after you have reviewed it, is:
 
 ```bash
-curl -fsSL https://jobhunterteam.ai/install.sh | bash
+curl -fsSL https://jobhunterteam.ai/install.sh | bash -s -- --runtime podman
 ```
 
 **Windows (PowerShell; WSL must be enabled):** Windows is not supported in 0.4: these steps are untested and may not work.

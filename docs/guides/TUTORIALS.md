@@ -22,9 +22,9 @@ Keep the app open while it works.
 
 1. **Download the native desktop app.** Go to
    [jobhunterteam.ai/download](https://jobhunterteam.ai/download). **Desktop**
-   is already selected: click macOS or Linux once (Windows is shown as “coming soon”) to start the
+   is already selected: click macOS or Linux once (Windows is shown as “Not in this version”) to start the
    current release download for that platform.
-2. **Open the download for your system.** Windows is not part of 0.4.0: there is no Windows installer yet (coming soon).
+2. **Open the download for your system.** Windows is not part of 0.4.0: there is no Windows installer in this release.
    On macOS, open `job-hunter-team-macos-universal.dmg` and drag the app into
    Applications; it is signed with an Apple Developer ID and notarized by
    Apple. Only Macs with Apple silicon (M1 and later). Intel Macs are not supported in 0.4.

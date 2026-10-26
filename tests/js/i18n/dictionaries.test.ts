@@ -121,7 +121,7 @@ describe("dizionari estratti (*.i18n.ts)", () => {
             continue;
           }
           // Per lingua ha due sotto-forme. Piatta: `{ it: "…", en: "…" }`,
-          // una sola frase per lingua (il `DESKTOP_SOON` delle guide).
+          // una sola frase per lingua (il `DESKTOP_NOTE` delle guide).
           // Annidata: `{ it: { saluto, … } }`. Distinguerle serve, perché
           // `Object.keys()` su una stringa restituisce gli indici dei
           // caratteri: la forma piatta finirebbe a confrontare lunghezze
