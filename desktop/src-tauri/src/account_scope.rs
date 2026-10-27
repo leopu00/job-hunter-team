@@ -623,8 +623,11 @@ pub(crate) fn onboarding_local_data_set_aside(
 // An account never changes the owner, and an owner that no local record of
 // this app names (a Google account, a profile whose record is gone: the digest
 // does not say which) is never taken. The two kinds of scope digest have
-// separate domains (`DIGEST_DOMAIN`, `LOCAL_DIGEST_DOMAIN`): a local record
-// cannot match the digest of an account.
+// separate domains (`DIGEST_DOMAIN`, `LOCAL_DIGEST_DOMAIN`): a record this app
+// CREATES never matches the digest of an account. A record written into the
+// profiles folder by other means can carry any digest; that folder is private
+// to the user, like the owner marker itself, and what is written there is
+// outside what the separation promises.
 
 const OWNER_CHANGE_TTL: Duration = Duration::from_secs(120);
 /// How many profile records are looked at; one more and the owner is not known.
@@ -2585,7 +2588,9 @@ mod owner_change_tests {
     }
 
     #[test]
-    fn an_account_digest_never_matches_a_local_record_and_the_other_way_round() {
+    fn an_account_digest_never_matches_a_record_the_app_created_and_the_other_way_round() {
+        // The separation holds for the records the app creates (`create_local_profile_at`); a record written
+        // by hand is not something this checks.
         // The same bytes under the two domains give two digests.
         for seed in [&b"same"[..], b"00000000-0000-4000-8000-000000000001", &[7u8; 32][..]] {
             assert_ne!(derive_scope(seed).digest(), derive_local_scope(seed).digest());
