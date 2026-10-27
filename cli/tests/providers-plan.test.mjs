@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { lstatSync, mkdtempSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs';
+import { lstatSync, mkdirSync, mkdtempSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import test from 'node:test';
@@ -57,6 +57,22 @@ test('without an id it shows the plan now and the possible ones', { skip: !hasPy
   const after = plan(declared);
   assert.equal(after.status, 0, after.stderr);
   assert.match(after.stdout, /plan: Pro \(pro\), provider openai/);
+});
+
+test('it says what Codex reports and whether the plan has a 5-hour window, from the last reading', { skip: !hasPython }, () => {
+  const dir = home({ active_provider: 'openai', providers: { openai: { plan: 'pro' } } });
+  const none = plan(dir);
+  assert.doesNotMatch(none.stdout, /Codex reports/);
+  assert.match(none.stdout, /pro\s+Pro .*\[weekly cap, no 5-hour window\]/);
+
+  mkdirSync(join(dir, 'logs'));
+  writeFileSync(join(dir, 'logs', 'codex-plan-reading.json'),
+    JSON.stringify({ plan_type: 'prolite', single_weekly: false, observed_at: Date.now() / 1000 }));
+  const done = plan(dir);
+  assert.equal(done.status, 0, done.stderr);
+  assert.match(done.stdout, /Codex reports: prolite → Pro 100 \$/);
+  assert.match(done.stdout, /pro\s+Pro .*\[weekly cap, 5-hour window\]/);
+  assert.match(done.stdout, /plus\s+Plus .*\[weekly cap, no 5-hour window\]/);
 });
 
 test('an id is declared where the wizard declares it, with the rest of the configuration kept and private', { skip: !hasPython }, () => {

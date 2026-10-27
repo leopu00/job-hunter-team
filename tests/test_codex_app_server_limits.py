@@ -55,7 +55,7 @@ for line in sys.stdin:
             print("not json", flush=True)
             print(json.dumps({"id": message["id"], "result": {"rateLimits": "no"}}), flush=True)
         else:
-            print(json.dumps({"id": message["id"], "result": {"rateLimits": dict(RATE[mode], planType="x")}}), flush=True)
+            print(json.dumps({"id": message["id"], "result": {"rateLimits": dict(RATE[mode], planType=os.environ.get("FAKE_PLAN_TYPE", "x"))}}), flush=True)
 """
 
 

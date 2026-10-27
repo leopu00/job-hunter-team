@@ -30,6 +30,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import sys
 from pathlib import Path
 from typing import Optional
@@ -53,6 +54,8 @@ except ImportError:
         "plan.no_weekly_cap": "no weekly cap",
         "plan.window_5h": "5-hour window",
         "plan.no_window_5h": "no 5-hour window",
+        "plan.codex_reports": "Codex reports: %s \u2192 %s",
+        "plan.codex_reports_unlisted": "Codex reports: %s (not in this table)",
         "plan.usage_pair": "usage: plan_registry.py set <provider>:<plan> | <provider> <plan>",
         "plan.usage_single": "usage: plan_registry.py set <provider>:<plan>",
     }
@@ -134,6 +137,72 @@ PLANS: dict[str, list[dict]] = {
 }
 
 
+# ── Cosa dice Codex del piano ───────────────────────────────────────────
+#
+# Il bridge (sentinel-bridge.py, `_remember_codex_reading`) tiene l'ultima lettura di Codex in
+# logs/codex-plan-reading.json: {plan_type, single_weekly, observed_at}. Serve a due cose:
+#   - il nome: Codex dice `prolite`, la tabella ha plus / pro / pro-max. Qui sotto, quali coincidono;
+#   - la finestra 5h: `window_5h` della tabella e' un seme scritto a mano, la lettura e' il fatto. Se Codex
+#     ha mostrato UNA sola finestra settimanale (single_weekly) il piano non ha la 5h, se ne ha mostrate
+#     due si'. Senza lettura (o troppo vecchia) vale il seme.
+# Una lettura vale per il piano che l'account ha davvero, non per tutta la riga del provider.
+#
+# Where each name comes from: `prolite` is what `codex app-server` reported (planType) on the real account of the
+# 27/10 collaudo, whose plan is the 100 $ one; the public price list says that plan exists and costs 100 $. `plus`
+# is the table's own id. `pro` is ChatGPT Pro, the 200 $ plan (the public price list), the table's `pro-max`: this
+# pair is from the list, not yet from a reading of such an account.
+# The reading is per machine, not per account: the bridge refreshes it at least once a day while it runs, and it
+# is ignored after 30 days without one.
+_CODEX_PLAN_TYPE_TO_ID = {
+    "prolite": "pro",
+    "plus": "plus",
+    "pro": "pro-max",
+}
+_CODEX_READING_MAX_AGE_SEC = 30 * 86400
+_CODEX_READING_MAX_BYTES = 4096
+_CODEX_PLAN_TYPE = re.compile(r"[A-Za-z0-9_-]{1,32}")
+
+
+def _codex_reading() -> Optional[dict]:
+    """L'ultima lettura di Codex, o None se manca, e' illeggibile, e' vecchia o ha una forma strana."""
+    try:
+        with (_jht_home() / "logs" / "codex-plan-reading.json").open(encoding="utf-8") as f:
+            # a file the agents can write: three small fields, so anything bigger is not ours
+            raw = f.read(_CODEX_READING_MAX_BYTES + 1)
+        if len(raw) > _CODEX_READING_MAX_BYTES:
+            return None
+        data = json.loads(raw)
+    except (OSError, ValueError):
+        return None
+    if not isinstance(data, dict):
+        return None
+    plan_type, single, seen = data.get("plan_type"), data.get("single_weekly"), data.get("observed_at")
+    if not isinstance(single, bool) or isinstance(seen, bool) or not isinstance(seen, (int, float)):
+        return None
+    if plan_type is not None and not (isinstance(plan_type, str) and _CODEX_PLAN_TYPE.fullmatch(plan_type)):
+        return None
+    import time
+    if not 0 <= time.time() - seen <= _CODEX_READING_MAX_AGE_SEC:
+        return None
+    return {"plan_type": plan_type, "single_weekly": single}
+
+
+def _declared_plan_id(prov: str) -> Optional[str]:
+    cfg = _read_config()
+    entry = ((cfg.get("providers") or {}).get(prov) or {})
+    plan_id = entry.get("plan") if isinstance(entry, dict) else None
+    plan_id = plan_id or cfg.get("provider_plan")
+    return str(plan_id).strip().lower() if plan_id else None
+
+
+def _plan_the_reading_is_about(prov: str, reading: dict) -> Optional[str]:
+    """L'id della riga di tabella a cui la lettura si riferisce: il piano che Codex nomina se lo conosciamo,
+    altrimenti quello che l'utente ha dichiarato."""
+    if prov != "openai":
+        return None
+    return _CODEX_PLAN_TYPE_TO_ID.get(reading.get("plan_type") or "") or _declared_plan_id(prov)
+
+
 # ── Roster di primo avvio, per fascia di capacità ───────────────────────
 #
 # Non è il roster "a regime" (quello lo calibra il Capitano sui dati veri):
@@ -188,14 +257,21 @@ def list_plans(provider: str | None = None) -> dict[str, list[dict]]:
     """Piani disponibili. Senza `provider`: tutti."""
     if provider:
         prov = normalize_provider(provider)
-        return {prov: [_localized_plan(plan) for plan in PLANS.get(prov, [])]}
-    return {prov: [_localized_plan(plan) for plan in plans]
+        return {prov: [_localized_plan(plan, prov) for plan in PLANS.get(prov, [])]}
+    return {prov: [_localized_plan(plan, prov) for plan in plans]
             for prov, plans in PLANS.items()}
 
 
-def _localized_plan(plan: dict) -> dict:
-    """Return display-only localized fields without mutating the registry."""
+def _localized_plan(plan: dict, prov: str | None = None) -> dict:
+    """Return display-only localized fields without mutating the registry.
+
+    With `prov`, `window_5h` of the plan the account really has comes from the last Codex reading, not from the
+    table's seed (`window_5h_observed` says so)."""
     localized = dict(plan)
+    reading = _codex_reading() if prov == "openai" else None
+    if reading is not None and _plan_the_reading_is_about(prov, reading) == plan["id"]:
+        localized["window_5h"] = not reading["single_weekly"]
+        localized["window_5h_observed"] = True
     if plan["id"] == "adagio":
         localized["label"] = f"Adagio ({_t('plan.free')})"
     amount = str(plan["price"]).split(" ", 1)[0]
@@ -209,7 +285,7 @@ def find_plan(provider: str, plan_id: str) -> Optional[dict]:
     wanted = (plan_id or "").strip().lower()
     for p in PLANS.get(prov, []):
         if p["id"] == wanted:
-            return dict(_localized_plan(p), provider=prov)
+            return dict(_localized_plan(p, prov), provider=prov)
     return None
 
 
@@ -354,7 +430,23 @@ def _cmd_list(argv: list[str]) -> int:
                 else _t("plan.no_window_5h")
             print(f"  {p['id']:<12} {p['label']:<16} {p['price']:<12} "
                   f"{p['tier']:>4}x  [{weekly}, {win}]")
+        note = _codex_note(prov, plans)
+        if note:
+            print(f"  {note}")
     return 0
+
+
+def _codex_note(prov: str, plans: list[dict]) -> Optional[str]:
+    """«Codex reports: prolite → Pro 100 $»: the name Codex gives the plan, in the table's terms."""
+    reading = _codex_reading() if prov == "openai" else None
+    plan_type = reading.get("plan_type") if reading else None
+    if not plan_type:
+        return None
+    mapped = next((p for p in plans if p["id"] == _CODEX_PLAN_TYPE_TO_ID.get(plan_type)), None)
+    if mapped is None:
+        return _tf("plan.codex_reports_unlisted", plan_type)
+    amount = str(mapped["price"]).split(" ", 1)[0]
+    return _tf("plan.codex_reports", plan_type, f"{mapped['label']} {amount} $")
 
 
 def _cmd_get() -> int:
