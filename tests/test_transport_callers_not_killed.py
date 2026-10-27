@@ -140,3 +140,56 @@ def test_a_second_delivery_is_not_stacked_and_the_round_after_frees_the_composer
     assert sum(c.startswith("--flush-ours") for c in log) == 1, log
     assert log.index(next(c for c in log if c.startswith("--flush-ours"))) == 1, "the flush comes before the new delivery"
     assert len(log) == 3
+
+
+# -- a caller that exits after the deadline (standby, soft_pause_team, application_answers are short-lived) ----------
+
+CHATTY_SENDER = """#!/bin/bash
+set -euo pipefail
+sleep 1.0
+echo "jht-tmux-send: diagnostic line before the Enter" >&2
+touch "{dir}/pasted"
+sleep 0.3
+echo "jht-tmux-send: 20 chars to CAPITANO (submit 1)"
+touch "{dir}/entered"
+"""
+
+SHORT_LIVED = """
+import subprocess, sys
+sys.path.insert(0, {skills!r})
+sender = {sender!r}
+if {use_helper!r}:
+    import tmux_send_run
+    try:
+        tmux_send_run.run([sender, "CAPITANO", "x"], 0.3)
+    except subprocess.TimeoutExpired:
+        pass
+else:
+    proc = subprocess.Popen([sender, "CAPITANO", "x"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, start_new_session=True)
+    try:
+        proc.communicate(timeout=0.3)
+    except subprocess.TimeoutExpired:
+        pass
+"""
+
+
+def _short_lived_caller(tmp_path, use_helper):
+    sender = tmp_path / "chatty-send"
+    sender.write_text(CHATTY_SENDER.format(dir=tmp_path), encoding="utf-8")
+    sender.chmod(sender.stat().st_mode | stat.S_IEXEC)
+    code = SHORT_LIVED.format(skills=str(ROOT / "shared" / "skills"), sender=str(sender), use_helper=use_helper)
+    import subprocess
+    done = subprocess.run([sys.executable, "-I", "-c", code], capture_output=True, text=True, timeout=30)
+    assert done.returncode == 0, done.stderr
+
+
+def test_a_caller_that_exits_after_the_deadline_does_not_take_the_transport_with_it(tmp_path):
+    _short_lived_caller(tmp_path, use_helper=True)
+    assert _wait_for(lambda: (tmp_path / "entered").exists()), "its diagnostics had a place to go: it reached its Enter"
+
+
+def test_with_pipes_the_transport_of_a_caller_that_left_dies_on_its_first_diagnostic_line(tmp_path):
+    """The counter-proof: the same caller with the transport's output on pipes, which closed when it exited."""
+    _short_lived_caller(tmp_path, use_helper=False)
+    time.sleep(2.2)
+    assert (tmp_path / "pasted").exists() is False and (tmp_path / "entered").exists() is False
