@@ -25,6 +25,7 @@ echo "$*" >> "{dir}/calls.log"
 if [ "$1" = "--flush-ours" ]; then exit 0; fi
 sleep 1.0; touch "{dir}/pasted.$$"
 sleep 0.5; touch "{dir}/entered.$$"
+sleep 0.4
 exit 0
 """
 
@@ -66,10 +67,18 @@ def _wait_for(predicate, seconds=6.0):
     return False
 
 
+def _wait_for_exit(bridge):
+    """The transport touches `entered` and only then exits: a delivery started before it has exited is, rightly,
+    «still running». A test that wants the next round waits for the end of the process, not for its marker."""
+    assert _wait_for(lambda: all(proc.poll() is not None for proc in bridge.module._tmux_send_running.values())), \
+        "the transport finished"
+
+
 def test_a_transport_that_overruns_is_left_to_finish_and_still_presses_its_enter(bridge):
     assert bridge.module.jht_tmux_send("CAPITANO", "avviso") is False, "the tick goes on without waiting for it"
     assert bridge.entered() == [], "it was still pasting when the bridge stopped waiting"
     assert _wait_for(lambda: len(bridge.entered()) == 1), "nobody killed it: the paste got its Enter"
+    _wait_for_exit(bridge)
 
 
 def test_a_second_delivery_is_not_stacked_on_one_still_running(bridge):
@@ -77,11 +86,13 @@ def test_a_second_delivery_is_not_stacked_on_one_still_running(bridge):
     assert bridge.module.jht_tmux_send("CAPITANO", "secondo") is False
     assert [c for c in bridge.calls() if not c.startswith("--flush-ours")] == ["CAPITANO primo"]
     assert _wait_for(lambda: len(bridge.entered()) == 1)
+    _wait_for_exit(bridge)
 
 
 def test_the_round_after_an_overrun_first_asks_the_transport_to_free_the_composer(bridge):
     assert bridge.module.jht_tmux_send("CAPITANO", "primo") is False
     assert _wait_for(lambda: len(bridge.entered()) == 1)
+    _wait_for_exit(bridge)
     bridge.module.TMUX_SEND_WAIT_S = 5.0
     assert bridge.module.jht_tmux_send("CAPITANO", "secondo") is True
     assert bridge.calls() == ["CAPITANO primo", "--flush-ours CAPITANO", "CAPITANO secondo"]

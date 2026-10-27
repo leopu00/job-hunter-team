@@ -27,6 +27,7 @@ echo "$*" >> "{dir}/calls.log"
 if [ "$1" = "--flush-ours" ]; then exit 0; fi
 sleep 1.0; touch "{dir}/pasted.$$"
 sleep 0.5; touch "{dir}/entered.$$"
+sleep 0.4
 exit 0
 """
 
@@ -87,6 +88,13 @@ def _wait_for(predicate, seconds=6.0):
     return False
 
 
+def _wait_for_exit(module):
+    """The transport touches `entered` and only then exits: a delivery started before it has exited is, rightly,
+    «still running». A test that wants the next round waits for the end of the process, not for its marker."""
+    helper = module._tmux_send_run_module
+    assert _wait_for(lambda: all(proc.poll() is not None for proc in list(helper._running.values()))), "the transport finished"
+
+
 def _fresh_helper(module):
     """Make the module load the helper afresh, with no overrun or running delivery remembered."""
     module._tmux_send_run_module = None
@@ -107,6 +115,7 @@ def test_a_transport_that_overruns_is_left_to_finish_and_still_presses_its_enter
     assert time.monotonic() - started < 1.3, "it did not wait for the transport"
     assert world.entered() == [], "it was still pasting when the caller stopped waiting"
     assert _wait_for(lambda: len(world.entered()) == 1), "nobody killed it: the paste got its Enter"
+    _wait_for_exit(module)
 
 
 @pytest.mark.parametrize("name, relative, call", CALLERS, ids=IDS)
@@ -129,6 +138,7 @@ def test_a_second_delivery_is_not_stacked_and_the_round_after_frees_the_composer
     assert [c for c in world.calls() if not c.startswith("--flush-ours")] == [c for c in world.calls()[:1]], \
         "a single delivery was started"
     assert _wait_for(lambda: len(world.entered()) == 1)
+    _wait_for_exit(module)
     module_wait = 5.0
     os.environ["JHT_TMUX_SEND_WAIT_S"] = str(module_wait)
     setattr(module, "TMUX_SEND_WAIT_S", module_wait)
