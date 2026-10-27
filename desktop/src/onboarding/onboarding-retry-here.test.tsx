@@ -38,17 +38,18 @@ describe("the retry of a failed setup step", () => {
     render(<OnboardingFlow {...props({ onRetry })} />);
     const alert = screen.getByRole("alert");
     const here = within(alert).getByTestId("onboarding-retry-here");
-    expect(here).toHaveTextContent("Riprova");
+    expect(here).toHaveTextContent("Riprova la preparazione");
     expect(within(alert).getByRole("button", { name: /mostra il file del registro/i })).toBeInTheDocument();
     await userEvent.click(here);
     await waitFor(() => expect(onRetry).toHaveBeenCalledTimes(1));
   });
 
-  it("says «Try again» in every language", () => {
+  it("is told as the button under the steps is, in every language", () => {
     for (const locale of locales) {
       render(<OnboardingFlow {...props({ locale })} />);
-      expect(within(screen.getByRole("alert")).getByTestId("onboarding-retry-here"), locale).toHaveTextContent(ONBOARDING_TEXT[locale].retryNow);
-      expect(ONBOARDING_TEXT[locale].retryNow.length, locale).toBeGreaterThan(3);
+      const label = ONBOARDING_TEXT[locale].retryPrepare;
+      expect(within(screen.getByRole("alert")).getByTestId("onboarding-retry-here"), locale).toHaveTextContent(label);
+      expect(screen.getAllByRole("button", { name: label }), locale).toHaveLength(2);
       cleanup();
     }
   });

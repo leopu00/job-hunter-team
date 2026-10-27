@@ -340,6 +340,8 @@ function RuntimeView({ host, platform, t, locale, runtime, activity, onRetry, on
       setPending(false);
     }
   }
+  // the retry of a failed step is told the same wherever it is offered
+  const retryLabel = pending ? t.verifying : resumable ? t.resumeSetup : t.retryPrepare;
   const action = failed
     ? onRetry
     : runtime.stage === "ssh-host-key" ? onConfirmHostKey : () => onRuntimeAction(runtime.stage as "provider-login" | "team-start" | "assistant");
@@ -360,7 +362,7 @@ function RuntimeView({ host, platform, t, locale, runtime, activity, onRetry, on
         {failed && runtime.retryable !== false && (
           <small className="onboarding-runtime-status__retry">
             <button className="onboarding-secondary" type="button" data-testid="onboarding-retry-here" onClick={() => void invoke(onRetry, false)} disabled={pending}>
-              {t.retryNow}
+              {retryLabel}
             </button>
           </small>
         )}
