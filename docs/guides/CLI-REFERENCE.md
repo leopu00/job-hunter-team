@@ -100,6 +100,23 @@ be copied with credential values into shell history, issues or logs.
 | `jht providers autoupdate`    | Node  | Boot step: updates the CLI of the **active** provider only, then re-checks the model pin. Fail-safe — never fails the boot. Disable with `JHT_PROVIDER_AUTOUPDATE=0`. |
 | `jht providers model-pin`     | Node  | Revisits the model the provider CLI pinned at login: picks among the aliases the config already lists (wider window), probes it, and only then writes it. `--dry-run` reports without writing; `JHT_MODEL_PIN=<alias>` freezes the choice. |
 | `jht providers check`         | Node  | List providers with an update available (scriptable, exit 1 if any). |
+| `jht providers plan [id]`     | Node  | Show the subscription plan you declared and the plans of the active provider; with an `id`, declare it. The Capitano does not open the first run without a declared plan. |
+
+### Choosing your plan
+
+The team sizes its first run on your subscription plan, so declare the one you pay for:
+`jht providers plan` lists the plans of the active provider and `jht providers plan <id>`
+writes yours. Choose by what you pay for your ChatGPT subscription:
+
+| Id        | Plan    | List price     |
+|-----------|---------|----------------|
+| `plus`    | Plus    | 20 $/month     |
+| `pro`     | Pro     | 100 $/month    |
+| `pro-max` | Pro 20x | 200 $/month    |
+
+If Codex names your plan **ProLite**, it is the 100 $/month one: declare `pro`. The prices are list
+prices at the time of writing; they size the first run and are not billing. After the first run the
+team measures what your plan really allows and corrects itself.
 
 ## Team
 
@@ -255,7 +272,72 @@ All 19 subcommands, grouped by what you'd reach for them.
 |--------------------------------------|-------|-------------------------------------------------------------------------|
 | `jht config get [key]`               | Node  | Print one key (dot-notation) or the whole config when no key.           |
 | `jht config set <key> <value>`       | Node  | Write a key (dot-notation; creates intermediate objects automatically). |
-| `jht profile validate [file]`        | Node  | Validate the candidate profile against the canonical schema (defaults to `$JHT_HOME/profile/candidate_profile.yml`). `--strict` treats legacy-key warnings as errors; `--json` prints `{ok, errors, warnings}`. The Scorer refuses to score without a valid profile, so this is the first thing to run when scores stop appearing. |
+| `jht profile validate [file]`        | Node  | Check the candidate profile against the canonical schema (defaults to `$JHT_HOME/profile/candidate_profile.yml`). `--strict` treats legacy-key warnings as errors; `--json` prints `{ok, errors, warnings}`. It does not check what the team needs to start (see below). The Scorer refuses to score without a valid profile, so this is the first thing to run when scores stop appearing. |
+| `jht profile import <file>`          | Node  | Give the team a profile you already have: check it, write it privately, mark it ready and tell the Capitano. `--replace` replaces an existing one; `--json` prints the result. See below. |
+
+### The candidate profile: `jht profile import` and the minimum
+
+Normally the Assistant writes your profile by talking with you. If you already have one in a YAML
+file, run on the computer (or the VPS) where the team runs:
+
+```bash
+jht profile validate ./my-profile.yml        # the schema only
+jht profile import ./my-profile.yml          # schema + what the team needs, then writes it
+```
+
+`import` reads the file from that machine (a regular file, not a link, up to 64 KiB), checks it and
+writes it to `$JHT_HOME/profile/candidate_profile.yml` with private permissions, in one atomic step,
+then marks it ready and tells the Capitano. If the team is not running, the Capitano starts from it at
+its next wake (`jht team start`). If the profile is not complete enough, nothing is written and each
+missing field is named.
+
+- A profile already exists: `import` stops; `--replace` replaces it and keeps the replaced one,
+  private, as `candidate_profile.yml.prev` next to it (only the last one).
+- A profile review is waiting for your confirmation in the app: confirm or discard it first.
+- No subscription plan declared: the import works, and tells you to run `jht providers plan`.
+
+**The eight fields the team needs to start**
+
+| Field | What it is |
+|-------|------------|
+| `name` | Your name |
+| `email` | Your contact email |
+| `target_role` | The role you are looking for |
+| `location` | Where you are or want to work |
+| `experience_years` | Years of experience, a whole number (`0` is an answer) |
+| `seniority_target` | The seniority you aim for, for example `senior` |
+| `skills` | At least two |
+| `languages` | At least one, each with `language` and `level` |
+
+Experience and education entries are **recommended**, not required. To pass the schema check the
+file also needs `has_degree` (`true` or `false`), the skills under `skills.primary`, and the fields
+above at the top level of the file (`seniority_target` is not read from `positioning` by the schema).
+
+**Where the email goes.** Put it at the top level, as `email:` (or as `contacts: {email: …}`): that is
+where applications read it. The check also finds it in `candidate.contacts.email` (the shape the
+Assistant writes), in `personal.email` and in `positioning.contacts.email`, but a profile that keeps it
+only in one of those passes the import and an application may still ask you for the email.
+
+**A minimal profile that passes:**
+
+```yaml
+name: Alex Example
+email: alex@example.com
+target_role: Backend engineer
+location: Lisbon, Portugal
+experience_years: 6
+seniority_target: senior
+has_degree: true
+skills:
+  primary: [Python, PostgreSQL]
+  secondary: [Terraform]
+languages:
+  - language: English
+    level: C1
+# Recommended, not required:
+# experience: [...]
+# education: [...]
+```
 
 > ⚠️ `config set` bypasses the wizard's validation. For Telegram tokens,
 > prefer the interactive wizard so `getMe` + chat_id long-poll run.
