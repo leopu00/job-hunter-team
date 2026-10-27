@@ -218,7 +218,7 @@ export interface CandidateProfile {
   location: string | null;
   experience_years: number | null;
   experience_months: number | null;
-  has_degree: boolean;
+  has_degree: boolean | null; // null = not declared, never "no"
   skills: Record<string, string[]> | null;
   languages: Language[] | null;
   location_preferences: LocationPreference[] | null;

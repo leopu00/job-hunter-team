@@ -358,7 +358,7 @@ export function mapYamlToCanonical(
       str(arr(raw.target_roles)[0] as string),
     experience_years: num(raw.experience_years) ?? 0,
     experience_months: num(raw.experience_months),
-    has_degree: typeof raw.has_degree === "boolean" ? raw.has_degree : false,
+    has_degree: typeof raw.has_degree === "boolean" ? raw.has_degree : null,
     seniority_target: str(raw.seniority_target),
     nationality:
       str(raw.nationality) ?? str(arr(candidate.citizenship)[0] as string),

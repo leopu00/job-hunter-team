@@ -469,7 +469,7 @@ fn validate_profile_strict(raw: &[u8]) -> Result<(), &'static str> {
         .iter()
         .all(|name| string_field(&profile, name))
         || !matches!(key(&profile, "experience_years"), Some(Value::Number(value)) if value.as_i64().is_some_and(|years| years >= 0))
-        || !matches!(key(&profile, "has_degree"), Some(Value::Bool(_)))
+        || !matches!(key(&profile, "has_degree"), None | Some(Value::Bool(_)))
         || !["email", "timezone", "nationality", "industry"]
             .iter()
             .all(|name| optional_string(key(&profile, name), false))
@@ -1034,6 +1034,20 @@ blocks: []
             validate_profile_strict(legacy),
             Err("source_profile_invalid")
         );
+
+        // has_degree is optional: absent is "not declared"; a key that is there must be a boolean.
+        let text = std::str::from_utf8(VALID_PROFILE).unwrap();
+        assert!(text.contains("has_degree: true\n"));
+        assert_eq!(
+            validate_profile_strict(text.replace("has_degree: true\n", "").as_bytes()),
+            Ok(())
+        );
+        for wrong in ["has_degree: \"true\"\n", "has_degree:\n", "has_degree: maybe\n"] {
+            assert_eq!(
+                validate_profile_strict(text.replace("has_degree: true\n", wrong).as_bytes()),
+                Err("source_profile_invalid")
+            );
+        }
 
         let mut profile_with_unknown_key = VALID_PROFILE.to_vec();
         profile_with_unknown_key.extend_from_slice(b"private_unknown: forbidden\n");

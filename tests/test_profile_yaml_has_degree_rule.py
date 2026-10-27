@@ -43,7 +43,8 @@ def test_has_degree_comes_from_the_education_and_is_asked_not_filled(lang: str) 
         assert needed in section, f"SKILL{lang}.md: the rule lacks {needed!r}"
 
 
-def test_the_validator_still_requires_it() -> None:
-    """The rule exists because of this line: if it goes, the rule can go too."""
+def test_the_validator_still_checks_what_is_there() -> None:
+    """Absent is "not declared" (the eight fields of the app are enough), but a value that is
+    written must be a boolean: the rule above is about what the Assistente writes."""
     source = (ROOT / "shared" / "skills" / "validate_profile.py").read_text(encoding="utf-8")
-    assert 'err("has_degree: boolean required")' in source
+    assert 'err("has_degree: boolean required when present")' in source

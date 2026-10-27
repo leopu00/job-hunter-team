@@ -82,7 +82,8 @@ export function validateProfile(profile: unknown, expectedLanguage: () => string
   for (const key of ["name", "target_role", "location", "seniority_target"]) requireStr(profile, key, "(root)");
   const years = profile["experience_years"];
   if (!isInt(years) || Number(years) < 0) err("experience_years: integer >= 0 required");
-  if (typeof profile["has_degree"] !== "boolean") err("has_degree: boolean required");
+  // Optional: absent is "not declared", never "no"; a key that is there must hold a boolean.
+  if ("has_degree" in profile && typeof profile["has_degree"] !== "boolean") err("has_degree: boolean required when present");
 
   // skills: the canonical object, or the flat list of the transition.
   const skills = profile["skills"];
