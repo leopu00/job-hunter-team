@@ -4716,6 +4716,11 @@ async function runRealtimeLoop({ config, isRunning }) {
   // and tell the user once. Not awaited: the script takes seconds and the daemon must go on.
   const sessionLost = (e) => {
     console.error(pc.yellow('  The Supabase session of this device is gone: pair the device again from the app to bring Realtime back.'));
+    // The socket may still look connected for a while: without this the next round is the slow parachute
+    // (JHT_PARACHUTE_SEC, 5 minutes), not the 5-60 s of a box with no Realtime, which is what the notice says.
+    realtimeHealthy = false;
+    fallbackAttempt = 0;
+    scheduleFallback(500);
     void noticeLostSession(e, config?.token, { log: (msg) => log('warn', msg) });
   };
   try {

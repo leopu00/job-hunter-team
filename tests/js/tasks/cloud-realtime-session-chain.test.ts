@@ -216,6 +216,9 @@ describe("the daemon", () => {
     const catchBlock = source.slice(source.indexOf("cloud-realtime failed setup"));
     expect(catchBlock.slice(0, 300)).toMatch(/if \(e\?\.code === 'session_lost'\) sessionLost\(e\);/);
     expect(source).toMatch(/const sessionLost = \(e\) => \{[\s\S]*?void noticeLostSession\(e, config\?\.token/);
+    // the notice promises the checks of a box with no Realtime (5-60 s), so the round after it is that one,
+    // not the parachute of a socket that still looks connected
+    expect(source).toMatch(/const sessionLost = \(e\) => \{[\s\S]*?realtimeHealthy = false;\s*fallbackAttempt = 0;\s*scheduleFallback\(500\);/);
     expect(source).toMatch(/createRealtimeSync\(\{\s*config,\s*log,\s*onSessionLost: \(\) => sessionLost\(\{ code: 'session_lost' \}\),/);
   });
 
