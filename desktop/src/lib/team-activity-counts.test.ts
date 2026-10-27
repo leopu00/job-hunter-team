@@ -9,7 +9,7 @@ import {
   type TeamActivityEvent,
   type TeamActivityRole,
 } from "@/lib/team-activity";
-import { readDesktopVpsTeamActivity } from "./existing-team-positions";
+import { readDesktopVpsDirectives, readDesktopVpsTeamActivity } from "./existing-team-positions";
 import { setLocalTeamData } from "./local-team-data";
 
 const native = vi.hoisted(() => ({ invoke: vi.fn(), isTauri: vi.fn(() => true) }));
@@ -77,12 +77,11 @@ describe("the activity counted at the source is the activity counted from every 
     const events = history();
     const everyEvent: TeamActivityEvent[] = events.map((ev) => ({ role: ev.role, actor: normActor(ev.role, ev.actor), ts: ev.ts, pid: ev.pid }));
     const expected = buildTeamActivity(everyEvent, from, to);
+    // the feed is enriched with the position the event touched, as the web's local reader does: the feed's events
+    // are the first of the timeline's (the same objects), so they carry it there too
+    for (const ev of expected.recent) Object.assign(ev, { title: `Role ${ev.pid}`, company: `Co ${Number(ev.pid!) % 4}`, legacyId: 1000 + Number(ev.pid) });
     const got = buildTeamActivityFromCounts(countedAtTheSource(events, from, to), from, to);
-    expect(strip(got)).toEqual({
-      ...strip(expected),
-      // the feed is enriched with the position the event touched; the timeline is not
-      recent: expected.recent.map((ev) => ({ ...ev, title: `Role ${ev.pid}`, company: `Co ${Number(ev.pid!) % 4}`, legacyId: 1000 + Number(ev.pid) })),
-    });
+    expect(strip(got)).toEqual(strip(expected));
     // there is something to compare in the first three
     if (from === "2026-09-10") expect(got.totalAll).toBeGreaterThan(50);
     if (from === "2026-01-01") expect(got.totalAll).toBe(0);
@@ -128,5 +127,23 @@ describe("the bridge's read of the activity", () => {
     expect(await readDesktopVpsTeamActivity(...range)).toEqual({ source: "unavailable", code: "desktop_bad_reply" });
     native.invoke.mockResolvedValueOnce({ ok: false, error: "local_team_not_running", kind: "application" });
     expect(await readDesktopVpsTeamActivity(...range)).toEqual({ source: "unavailable", code: "local_team_not_running" });
+  });
+});
+
+describe("the bridge's read of the board of standing orders", () => {
+  it("is not asked outside the team of this computer", async () => {
+    expect(await readDesktopVpsDirectives()).toEqual({ source: "not_desktop" });
+    expect(native.invoke).not.toHaveBeenCalled();
+  });
+
+  it("asks for the board with no argument and takes only a list of rows", async () => {
+    setLocalTeamData("local:abc");
+    native.invoke.mockResolvedValueOnce({ ok: true, data: { items: [{ id: 1, body: "Ordine" }] } });
+    expect(await readDesktopVpsDirectives()).toEqual({ source: "vps", data: { items: [{ id: 1, body: "Ordine" }] } });
+    expect(native.invoke).toHaveBeenCalledWith("existing_team_positions_read", { request: { op: "directives" } });
+    native.invoke.mockResolvedValueOnce({ ok: true, data: { items: [1] } });
+    expect(await readDesktopVpsDirectives()).toEqual({ source: "unavailable", code: "desktop_bad_reply" });
+    native.invoke.mockResolvedValueOnce({ ok: false, error: "local_team_not_running", kind: "application" });
+    expect(await readDesktopVpsDirectives()).toEqual({ source: "unavailable", code: "local_team_not_running" });
   });
 });

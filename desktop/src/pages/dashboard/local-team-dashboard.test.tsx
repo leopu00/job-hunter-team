@@ -95,7 +95,9 @@ describe("Team page of a local profile", () => {
   it("shows the activity counted in the team's database, says the status and the standing orders are not shown yet, and asks the cloud for nothing", async () => {
     const today = new Date().toISOString().slice(0, 10);
     reply = (_command, request) =>
-      request.op === "team_activity"
+      request.op === "directives"
+        ? { ok: true, data: { items: [{ id: 9, body: "Candidati solo in remoto", kind: "order", status: "active", sort_order: 1, created_by: "user", created_at: "2026-10-01T10:00:00Z", updated_at: null, archived_at: null }] } }
+        : request.op === "team_activity"
         ? {
             ok: true,
             data: {
@@ -109,8 +111,11 @@ describe("Team page of a local profile", () => {
     navigate("/team", { replace: true });
     render(<Shell />);
     const note = await screen.findByTestId("team-local-profile");
-    expect(note).toHaveTextContent("lo stato della squadra e gli ordini permanenti sono dati del cloud");
+    expect(note).toHaveTextContent("lo stato della squadra è un dato del cloud");
     expect(await screen.findByText("Synthetic role five")).toBeInTheDocument();
+    // the board of standing orders, read from the team's database, with no control that writes
+    expect(await screen.findByText("Candidati solo in remoto")).toBeInTheDocument();
+    expect(screen.queryByPlaceholderText(/./, { selector: "textarea" })).toBeNull();
     const asked = native.invoke.mock.calls
       .filter(([command]) => command === "existing_team_positions_read")
       .map(([, args]) => args.request as { op: string; from?: string; to?: string });

@@ -1,5 +1,6 @@
 import { getTeamActivity } from "@/lib/queries";
 import ActivityCharts from "@/app/(protected)/team/ActivityCharts";
+import DirectivesPanel from "@/app/(protected)/team/DirectivesPanel";
 import { ActivityPageHeader } from "@/app/(protected)/team/ActivityHeader";
 import RangePicker from "@/app/(protected)/team/RangePicker";
 import { appLocale } from "../../lib/app-locale";
@@ -13,8 +14,8 @@ function fmt(date: string): string {
 
 /**
  * The web's /team for a profile with no cloud account: the activity of the team of this computer, counted in
- * its database (getTeamActivity), and, where the cloud's status card and standing orders would be, one line that
- * says they are not shown here yet.
+ * its database (getTeamActivity), and its board of standing orders, read from it; where the cloud's status card
+ * would be, one line that says it is not shown here yet.
  */
 export async function LocalTeamActivity({ searchParams }: { searchParams: Promise<{ from?: string; to?: string }> }) {
   const sp = await searchParams;
@@ -27,6 +28,10 @@ export async function LocalTeamActivity({ searchParams }: { searchParams: Promis
       </p>
       <RangePicker from={activity.from} to={activity.to} days={activity.days} />
       <ActivityCharts activity={activity} />
+      {/* the board of standing orders, read from the team's database; its controls are off (nothing writes here) */}
+      <section className="mx-auto w-full max-w-[900px] px-4 py-10">
+        <DirectivesPanel />
+      </section>
     </div>
   );
 }

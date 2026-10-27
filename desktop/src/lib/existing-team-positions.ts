@@ -38,7 +38,8 @@ type Request =
   | { op: "facets" }
   | { op: "stats" }
   | { op: "map"; offset: number }
-  | { op: "team_activity"; from: string; to: string };
+  | { op: "team_activity"; from: string; to: string }
+  | { op: "directives" };
 
 function listRequest(opts?: PositionFilterOpts): Request {
   return opts === undefined ? { op: "list" } : { op: "list", filters: opts };
@@ -348,6 +349,21 @@ export async function readDesktopVpsTeamActivity(
     return { source: "unavailable", code: "desktop_bad_reply" };
   }
   return { source: "vps", data: data as unknown as TeamActivityCounts };
+}
+
+/**
+ * The standing orders on the board of the team of this computer, read only (the Team page's panel asks for them
+ * through /api/team-directives). Only for the team of this computer, like the activity.
+ */
+export async function readDesktopVpsDirectives(): Promise<DesktopVpsRead<{ items: Record<string, unknown>[] }>> {
+  if (!localTeamData()) return { source: "not_desktop" };
+  const value = await read<unknown>({ op: "directives" });
+  if (value.source !== "vps") return value;
+  const data = value.data;
+  if (!isRecord(data) || !Array.isArray(data.items) || !data.items.every(isRecord)) {
+    return { source: "unavailable", code: "desktop_bad_reply" };
+  }
+  return { source: "vps", data: { items: data.items as Record<string, unknown>[] } };
 }
 
 export function readDesktopVpsPosition(

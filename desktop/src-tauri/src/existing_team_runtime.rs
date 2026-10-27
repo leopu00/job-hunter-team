@@ -158,14 +158,14 @@ try: req=json.loads(sys.stdin.readline())
 except Exception: fail('positions_request_invalid')
 if not isinstance(req,dict) or set(req)-{'op','filters','id','offset','from','to'}: fail('positions_request_invalid')
 op=req.get('op')
-if op not in ('list','detail','facets','stats','profile','cloud_sync','map','team_activity'): fail('positions_request_invalid')
+if op not in ('list','detail','facets','stats','profile','cloud_sync','map','team_activity','directives'): fail('positions_request_invalid')
 DAY=re.compile(r'^\d{4}-\d{2}-\d{2}$')
 if op=='team_activity' and (set(req)!={'op','from','to'} or not all(isinstance(req[key],str) and DAY.match(req[key]) for key in ('from','to')) or req['from']>req['to']): fail('positions_request_invalid')
 if op!='team_activity' and (('from' in req) or ('to' in req)): fail('positions_request_invalid')
 if op=='map' and (set(req)-{'op','offset'} or type(req.get('offset',0)) is not int or not 0<=req.get('offset',0)<=1000000): fail('positions_request_invalid')
 if op!='map' and 'offset' in req: fail('positions_request_invalid')
 if op=='detail' and (set(req)!={'op','id'} or not isinstance(req['id'],str) or not req['id'].isdigit() or len(req['id'])>20): fail('positions_request_invalid')
-if op in ('facets','stats','profile','cloud_sync') and set(req)!={'op'}: fail('positions_request_invalid')
+if op in ('facets','stats','profile','cloud_sync','directives') and set(req)!={'op'}: fail('positions_request_invalid')
 if op=='list' and (set(req)-{'op','filters'} or (req.get('filters') is not None and not isinstance(req.get('filters'),dict))): fail('positions_request_invalid')
 if op=='cloud_sync':
  # How the box's push to the website is going: its periodic push keeps the last outcome in
@@ -328,6 +328,23 @@ if op=='facets':
    rows.append({'id':sid(row[0]),'status':row[1],'title':row[2],'company':row[3],'role_family':row[4],'loc_country':row[5],'loc_city':row[6],'score':row[7],'critic_score':row[8],'source':row[9]})
  except sqlite3.Error: fail('positions_unavailable')
  emit({'ok':True,'data':{'items':rows}})
+if op=='directives':
+ # The standing orders the user gave the team (the board of the Team page), as the web's own local reader gives
+ # them: the columns it reads, in its order, at most LIMIT rows with each text bounded. A database without the
+ # table, or without its id or text, has none.
+ LIMIT=500
+ try:
+  have=columns('team_directives'); wanted=[name for name in ('id','body','kind','status','sort_order','created_by','created_at','updated_at','archived_at') if name in have]
+  order=', '.join(name+' ASC' for name in ('status','sort_order','created_at') if name in have)
+  items=[]
+  if 'id' in wanted and 'body' in wanted:
+   for raw in db.execute('SELECT '+', '.join(wanted)+' FROM team_directives'+(' ORDER BY '+order if order else '')+' LIMIT '+str(LIMIT)):
+    row=as_dict(raw); row['body']=trunc(row['body'],4000)
+    for name in ('kind','status','created_by','created_at','updated_at','archived_at'):
+     if name in row: row[name]=trunc(row[name],60)
+    items.append(row)
+ except sqlite3.Error: fail('positions_unavailable')
+ emit({'ok':True,'data':{'items':items}})
 if op=='team_activity':
  # What each role of the team did, per day and per instance, in the range asked (at most a year), and the
  # newest events with the position they touched. The columns are the ones the web's own local reader reads
@@ -457,6 +474,8 @@ enum PositionsRequest {
         from: String,
         to: String,
     },
+    /// The standing orders of the user's board (the script's `directives`), read only.
+    Directives,
     /// How the box's push to the website is going (its periodic push's last outcome).
     #[serde(rename = "cloud_sync")]
     CloudSync,
@@ -594,6 +613,7 @@ impl PositionsRequest {
             Self::Profile => 5,
             Self::CloudSync => 6,
             Self::TeamActivity { .. } => 7,
+            Self::Directives => 8,
         }]
     }
 
@@ -605,7 +625,7 @@ impl PositionsRequest {
             }
             Self::Map { offset } => *offset <= 1_000_000,
             Self::TeamActivity { from, to } => valid_day(from) && valid_day(to) && from <= to,
-            Self::Facets | Self::Stats | Self::Profile | Self::CloudSync => true,
+            Self::Facets | Self::Stats | Self::Profile | Self::CloudSync | Self::Directives => true,
         }
     }
 }
@@ -636,7 +656,7 @@ fn valid_positions_reply(request: &PositionsRequest, reply: &Value) -> bool {
         return false;
     };
     match request {
-        PositionsRequest::List { .. } | PositionsRequest::Facets => data
+        PositionsRequest::List { .. } | PositionsRequest::Facets | PositionsRequest::Directives => data
             .as_object()
             .and_then(|data| data.get("items"))
             .is_some_and(|items| {
@@ -3979,6 +3999,32 @@ mod tests {
         let reader = POSITIONS_READ_PY.split("if op=='team_activity':").nth(1).unwrap().split("if op=='map':").next().unwrap();
         assert!(!reader.contains("SELECT *") && !reader.contains("p.*"));
         assert!(reader.contains("(first,last)"));
+    }
+
+    #[test]
+    fn the_board_read_takes_no_argument_and_answers_a_list_of_rows() {
+        let parsed = parse_positions_request(json!({"op": "directives"})).unwrap();
+        assert_eq!(parsed.op(), "directives");
+        assert_eq!(serde_json::to_value(&parsed).unwrap(), json!({"op": "directives"}));
+        for bad in [
+            json!({"op": "directives", "id": "3"}),
+            json!({"op": "directives", "filters": {}}),
+            json!({"op": "directives", "from": "2026-10-01", "to": "2026-10-02"}),
+        ] {
+            assert!(parse_positions_request(bad.clone()).is_err(), "{bad}");
+        }
+        assert!(valid_positions_reply(&parsed, &json!({"ok": true, "data": {"items": [{"id": 1, "body": "x"}]}})));
+        for broken in [
+            json!({"ok": true, "data": {"items": [1]}}),
+            json!({"ok": true, "data": {"rows": []}}),
+            json!({"ok": true, "data": []}),
+        ] {
+            assert!(!valid_positions_reply(&parsed, &broken), "{broken}");
+        }
+        let reader = POSITIONS_READ_PY.split("if op=='directives':").nth(1).unwrap().split("if op=='team_activity':").next().unwrap();
+        assert!(!reader.contains("SELECT *") && reader.contains("LIMIT"));
+        // every kind of read has its name in the load-times log
+        assert_eq!(crate::runtime_log::POSITIONS_READ_KINDS[8], "directives");
     }
 
     #[test]

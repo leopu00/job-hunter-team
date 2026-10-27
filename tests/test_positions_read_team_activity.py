@@ -170,3 +170,61 @@ def test_it_reads_only_the_listed_columns_and_never_writes(tmp_path: Path) -> No
     # the range travels as parameters, never glued into the statement
     assert "(first,last)" in script
     assert "+first" not in script and "+last" not in script and "req['from']+" not in script and "req['to']+" not in script
+
+
+# ── The board of standing orders (op `directives`) ──────────────────────────
+def _board(home: Path, rows: int, *, with_table: bool = True) -> None:
+    home.mkdir(parents=True, exist_ok=True)
+    db = sqlite3.connect(home / "jobs.db")
+    db.execute("CREATE TABLE positions(id INTEGER PRIMARY KEY, title TEXT)")
+    if with_table:
+        db.execute(
+            "CREATE TABLE team_directives(id INTEGER PRIMARY KEY, body TEXT, kind TEXT, status TEXT, sort_order INTEGER,"
+            " created_by TEXT, created_at TEXT, updated_at TEXT, archived_at TEXT, secret_note TEXT)"
+        )
+        for n in range(1, rows + 1):
+            db.execute(
+                "INSERT INTO team_directives VALUES(?,?,?,?,?,?,?,?,?,?)",
+                (n, f"Ordine {n} " + "x" * (5000 if n == 1 else 5), ["order", "strategy"][n % 2], "archived" if n % 4 == 0 else "active",
+                 100 - n, "user", f"2026-10-{1 + n % 20:02d}T10:00:00Z", None, None, "must-not-leave"),
+            )
+    db.commit()
+    db.close()
+
+
+def test_the_board_comes_in_the_webs_order_with_only_its_columns(tmp_path: Path) -> None:
+    _board(tmp_path, 12)
+    reply = _run(tmp_path, {"op": "directives"})
+    assert reply["ok"] is True
+    items = reply["data"]["items"]
+    assert len(items) == 12
+    assert set(items[0]) == {"id", "body", "kind", "status", "sort_order", "created_by", "created_at", "updated_at", "archived_at"}
+    assert "must-not-leave" not in json.dumps(reply)
+    # active first, then by sort order, then by creation, as the web's local reader orders them
+    keys = [(row["status"], row["sort_order"], row["created_at"]) for row in items]
+    assert keys == sorted(keys)
+    assert len(items[[row["id"] for row in items].index(1)]["body"]) == 4000
+
+
+def test_the_board_is_bounded_and_a_team_without_the_table_has_none(tmp_path: Path) -> None:
+    _board(tmp_path / "many", 650)
+    assert len(_run(tmp_path / "many", {"op": "directives"})["data"]["items"]) == 500
+    _board(tmp_path / "none", 0, with_table=False)
+    assert _run(tmp_path / "none", {"op": "directives"}) == {"ok": True, "data": {"items": []}}
+
+
+@pytest.mark.parametrize("request_", [{"op": "directives", "id": "3"}, {"op": "directives", "from": "2026-10-01", "to": "2026-10-02"}, {"op": "directives", "filters": {}}])
+def test_the_board_takes_no_argument(tmp_path: Path, request_: dict) -> None:
+    _board(tmp_path, 3)
+    assert _run(tmp_path, request_) == {"ok": False, "error": "positions_request_invalid"}
+
+
+def test_the_board_reads_only_and_never_with_a_star(tmp_path: Path) -> None:
+    _board(tmp_path, 3)
+    statements: list[str] = []
+    assert _run(tmp_path, {"op": "directives"}, statements)["ok"] is True
+    text = "\n".join(statements)
+    for forbidden in ("SELECT *", "INSERT", "UPDATE", "DELETE", "secret_note"):
+        assert forbidden not in text, forbidden
+    script = _script().split("if op=='directives':")[1].split("if op=='team_activity':")[0]
+    assert "SELECT *" not in script
