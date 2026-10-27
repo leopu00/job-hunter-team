@@ -17,6 +17,7 @@ import json
 import os
 import re
 import statistics
+import stat
 import sys
 import time
 from collections import defaultdict
@@ -28,6 +29,9 @@ ROLES = frozenset({
     "scorer", "scrittore", "critico", "tesoriere", "closer",
 })
 CLAUDE_AGENT_PREFIX = "-jht-home-agents-"
+# The session folders are written by the agents themselves: a link planted there must not make this read a file
+# somewhere else, and a file of any size must not be read whole.
+MAX_SESSION_BYTES = 256 * 1024 * 1024
 
 
 def _jht_home() -> Path:
@@ -54,6 +58,15 @@ def role_of(agent: str | None) -> str | None:
 
 def _int(value) -> int:
     return int(value) if isinstance(value, (int, float)) and not isinstance(value, bool) else 0
+
+
+def _regular(path: Path, since_ts: float) -> bool:
+    """A regular file (not a link, not a pipe or device) touched since `since_ts`, of a size that can be read."""
+    try:
+        info = path.lstat()
+    except OSError:
+        return False
+    return stat.S_ISREG(info.st_mode) and info.st_mtime >= since_ts and info.st_size <= MAX_SESSION_BYTES
 
 
 def _calls_codex(path: Path):
@@ -103,24 +116,19 @@ def _calls_claude(path: Path, agent: str):
 
 
 def sessions(jht_home: Path, since_ts: float):
-    """Yield (role, calls) for every session file touched since `since_ts`."""
-    for rollout in (jht_home / ".codex" / "sessions").rglob("rollout-*.jsonl"):
-        try:
-            if rollout.stat().st_mtime >= since_ts:
-                yield _calls_codex(rollout)
-        except OSError:
-            continue
+    """Yield (role, calls) for every session file touched since `since_ts`. Links are not followed."""
+    codex = jht_home / ".codex" / "sessions"
+    for rollout in (codex.rglob("rollout-*.jsonl") if codex.is_dir() and not codex.is_symlink() else ()):
+        if _regular(rollout, since_ts):
+            yield _calls_codex(rollout)
     projects = jht_home / ".claude" / "projects"
-    if projects.is_dir():
+    if projects.is_dir() and not projects.is_symlink():
         for folder in projects.iterdir():
-            if not folder.name.startswith(CLAUDE_AGENT_PREFIX):
+            if folder.is_symlink() or not folder.is_dir() or not folder.name.startswith(CLAUDE_AGENT_PREFIX):
                 continue
             for jsonl in folder.glob("*.jsonl"):
-                try:
-                    if jsonl.stat().st_mtime >= since_ts:
-                        yield _calls_claude(jsonl, folder.name[len(CLAUDE_AGENT_PREFIX):])
-                except OSError:
-                    continue
+                if _regular(jsonl, since_ts):
+                    yield _calls_claude(jsonl, folder.name[len(CLAUDE_AGENT_PREFIX):])
 
 
 def measure(jht_home: Path, since_ts: float, minutes: float) -> dict:

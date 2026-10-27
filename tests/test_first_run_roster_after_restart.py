@@ -91,7 +91,29 @@ def test_the_skill_tells_the_capitano_to_start_only_the_missing_ones(lang: str):
     assert text.index("\n**2. ") < where < text.index("\n**3. ")  # inside the roster step, before the downstream
 
 
-def test_the_capitano_prompt_does_not_ask_for_the_whole_roster_at_a_restart():
-    prompt = (ROOT / "agents" / "capitano" / "capitano.md").read_text(encoding="utf-8")
+@pytest.mark.parametrize("lang", LANGS)
+def test_the_capitano_prompt_does_not_ask_for_the_whole_roster_at_a_restart(lang: str):
+    prompt = (ROOT / "agents" / "capitano" / f"capitano{SUFFIX[lang]}.md").read_text(encoding="utf-8")
     line = next(l for l in prompt.splitlines() if l.startswith("**C-22 —"))
-    assert "roster_missing" in line and "whole roster staggered" in line
+    assert "roster_missing" in line and "first-run-burst" in line and "`[PROFILO-PRONTO]`" in line
+    # the table of triggers sends the first run to the skill and to C-22, as in English
+    assert any(l.startswith("| ") and "first_run.py status" in l and "`first-run-burst` → **C-22**" in l
+               for l in prompt.splitlines())
+
+
+@pytest.mark.parametrize("roster, alive, missing", [
+    ({"scout": "three", "analista": 2}, {"analista": 0}, {"analista": 2}),
+    ({"scout": None, "analista": -1, "scorer": True}, {}, {}),
+    ({"scout": 2.5, "scorer": 1}, {"scorer": 0}, {"scorer": 1}),
+    ({"scout.*": 1}, {"scout.*": 0}, {"scout.*": 1}),  # a role is a name, not a pattern
+])
+def test_a_state_file_that_was_tampered_with_does_not_break_the_status(tmp_path: Path, roster, alive, missing):
+    _fake_tmux(tmp_path / "bin", sessions=[])
+    out = _status(tmp_path, roster=roster)
+    assert out["roster_alive"] == alive and out["roster_missing"] == missing
+
+
+def test_a_roster_that_is_not_a_table_says_nothing(tmp_path: Path):
+    _fake_tmux(tmp_path / "bin", sessions=[])
+    out = _status(tmp_path, roster=["scout", "scorer"])
+    assert not {"roster_alive", "roster_missing", "roster_check"} & set(out)

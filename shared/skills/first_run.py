@@ -198,9 +198,12 @@ def roster_gap(state: dict) -> dict:
     names = _live_sessions()
     if names is None:
         return {"roster_check": "unavailable"}
-    alive = {role: sum(1 for n in names if re.fullmatch(rf"{re.escape(role)}-\d+", n)) for role in roster}
-    return {"roster_alive": alive,
-            "roster_missing": {role: max(0, int(want) - alive[role]) for role, want in roster.items()}}
+    # The state file is a file on disk: a role or a count that is not what begin-burst wrote is left out, and the
+    # answer is about the roles that are well formed (nothing is guessed about the others).
+    wanted = {role: want for role, want in roster.items()
+              if isinstance(role, str) and isinstance(want, int) and not isinstance(want, bool) and want >= 0}
+    alive = {role: sum(1 for n in names if re.fullmatch(rf"{re.escape(role)}-\d+", n)) for role in wanted}
+    return {"roster_alive": alive, "roster_missing": {role: max(0, want - alive[role]) for role, want in wanted.items()}}
 
 
 def begin_burst() -> dict:

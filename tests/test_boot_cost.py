@@ -103,3 +103,26 @@ def test_it_prints_numbers_and_role_names_only(tmp_path: Path):
 def test_empty_home_is_an_empty_report_not_an_error(tmp_path: Path):
     assert boot_cost.measure(tmp_path, NOW - 7200, minutes=10) == {"minutes": 10, "roles": {}}
     assert "no session started" in boot_cost.render(boot_cost.measure(tmp_path, NOW - 7200, minutes=10))
+
+
+def test_a_link_in_the_session_folders_is_not_followed(tmp_path: Path):
+    outside = tmp_path / "outside"
+    _codex(outside, "s", "capitano", [(2, 5_000, 0, 1)])
+    target = next((outside / ".codex").rglob("rollout-s.jsonl"))
+    folder = tmp_path / "home" / ".codex" / "sessions" / "2026" / "10" / "27"
+    folder.mkdir(parents=True)
+    (folder / "rollout-link.jsonl").symlink_to(target)  # a file link
+    claude = tmp_path / "home" / ".claude" / "projects"
+    claude.mkdir(parents=True)
+    _claude(outside, "c", "scout", [(2, 1, 0, 0, 1)])
+    (claude / "-jht-home-agents-scout").symlink_to(outside / ".claude" / "projects" / "-jht-home-agents-scout")  # a folder link
+    assert boot_cost.measure(tmp_path / "home", NOW - 7200, minutes=10)["roles"] == {}
+    # the same files, there for real, are read
+    _codex(tmp_path / "home", "real", "capitano", [(2, 5_000, 0, 1)])
+    assert "capitano" in boot_cost.measure(tmp_path / "home", NOW - 7200, minutes=10)["roles"]
+
+
+def test_a_file_over_the_size_bound_is_not_read(tmp_path: Path, monkeypatch):
+    _codex(tmp_path, "big", "capitano", [(2, 5_000, 0, 1)])
+    monkeypatch.setattr(boot_cost, "MAX_SESSION_BYTES", 10)
+    assert boot_cost.measure(tmp_path, NOW - 7200, minutes=10)["roles"] == {}
