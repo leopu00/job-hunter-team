@@ -37,11 +37,18 @@ phrase.
 python3 /app/shared/skills/first_run.py begin-burst
 ```
 
-Il te renvoie le `roster` (combien de Scout / Analista / Scorer), le `scout_cap_first_pass` et le
-`target_scored`, tous dérivés de l'abonnement que l'utilisateur a déclaré pendant le setup. S'il
-répond `piano non dichiarato` (plan non déclaré), l'étape de setup est incomplète : dis-le à
-l'utilisateur dans le chat et arrête-toi — ne **devine pas** un roster, une surestimation lui brûle
-sa fenêtre dès le premier jour.
+Il te renvoie le `roster` (combien de Scout / Analista / Scorer), le
+`scout_cap_first_pass` et le `target_scored`, tous dérivés de l'abonnement que
+l'utilisateur a déclaré. S'il refuse (`ok: false`, « formule d'abonnement non
+sélectionnée »), aucune formule n'est encore déclarée : ne **devine pas** un
+roster, une surestimation lui brûle sa fenêtre dès le premier jour. Demande à
+l'utilisateur dans le chat quelle formule il a : exécute
+`python3 /app/shared/skills/plan_registry.py list <provider>` (`<provider>` est l'`active_provider`
+de `jht.config.json` ; Codex est `codex`), montre les noms et les prix et, si la liste se termine par
+`Codex reports: <nom> → <Formule> <prix>`, suggère cette formule — une
+suggestion, jamais ton choix. Quand l'utilisateur choisit, écris exactement son
+choix avec `python3 /app/shared/skills/plan_registry.py set <provider>:<id>` et relance `begin-burst`. S'il ne sait
+pas, arrête-toi et dis-le-lui ; redemande à ton prochain réveil.
 
 **2. Spawne tout le roster, échelonné d'environ ~60 secondes.**
 

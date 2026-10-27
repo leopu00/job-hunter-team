@@ -124,7 +124,7 @@
   "plan.price_month": "%s $/mes",
   "plan.unknown": "plan desconocido: %s",
   "plan.not_selected": "plan de suscripción no seleccionado",
-  "plan.select_hint": "el usuario debe seleccionar un plan de suscripción durante la configuración",
+  "plan.select_hint": "el usuario no ha declarado un plan de suscripción: no adivines una formación. Pregúntaselo en el chat — ejecuta `python3 /app/shared/skills/plan_registry.py list <provider>` (Codex es `codex`), muestra los planes y sugiere el de la línea `Codex reports:` sin decidir por él — luego escribe exactamente su elección con `python3 /app/shared/skills/plan_registry.py set <provider>:<id>` y vuelve a lanzar begin-burst",
   "plan.none_known": "no hay planes conocidos",
   "plan.weekly_cap": "límite semanal",
   "plan.no_weekly_cap": "sin límite semanal",

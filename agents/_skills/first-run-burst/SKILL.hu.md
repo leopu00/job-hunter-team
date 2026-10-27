@@ -37,10 +37,15 @@ python3 /app/shared/skills/first_run.py begin-burst
 ```
 
 Visszaadja a `roster`-t (hány Scout / Analista / Scorer), a `scout_cap_first_pass` és a
-`target_scored` értékét, mind abból az előfizetésből származtatva, amelyet a felhasználó a setup
-során megadott. Ha a válasz `piano non dichiarato` (nincs megadva előfizetés), a setup lépés hiányos:
-mondd meg a felhasználónak a chatben, és állj meg — **ne találgass** rostert, egy túlbecslés már az
-első napon elégeti az ablakát.
+`target_scored` értékét, mind abból az előfizetésből származtatva, amelyet a felhasználó megadott.
+Ha elutasít (`ok: false`, „nincs előfizetési csomag kiválasztva"), még nincs megadva csomag: **ne
+találgass** rostert, egy túlbecslés már az első napon elégeti az ablakát. Kérdezd meg a felhasználót a
+chatben, melyik csomagja van: futtasd a `python3 /app/shared/skills/plan_registry.py list <provider>` parancsot (a `<provider>` a
+`jht.config.json` `active_provider` értéke; a Codex `codex`), mutasd a neveket és az árakat, és ha a lista
+`Codex reports: <név> → <Csomag> <ár>` sorral végződik, azt a csomagot javasold — javaslat, soha nem a te
+döntésed. Amikor a felhasználó választ, pontosan az ő választását írd be a `python3 /app/shared/skills/plan_registry.py set <provider>:<id>`
+paranccsal, és futtasd újra a `begin-burst`-öt. Ha nem tudja, állj meg és mondd meg neki; a következő
+ébredésnél kérdezd meg újra.
 
 **2. Spawnold az egész rostert, ~60 másodperces eltolással.**
 

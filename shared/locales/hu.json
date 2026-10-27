@@ -125,7 +125,7 @@
   "plan.price_month": "%s $/hó",
   "plan.unknown": "ismeretlen csomag: %s",
   "plan.not_selected": "nincs előfizetési csomag kiválasztva",
-  "plan.select_hint": "a felhasználónak a beállítás során előfizetési csomagot kell választania",
+  "plan.select_hint": "a felhasználó nem adott meg előfizetési csomagot: ne találgass felállást. Kérdezd meg a chatben — futtasd a `python3 /app/shared/skills/plan_registry.py list <provider>` parancsot (a Codex `codex`), mutasd a csomagokat, és a `Codex reports:` sorban szereplőt javasold, anélkül hogy helyette döntenél — majd pontosan az ő választását írd be a `python3 /app/shared/skills/plan_registry.py set <provider>:<id>` paranccsal, és indítsd újra a begin-burstöt",
   "plan.none_known": "nincsenek ismert csomagok",
   "plan.weekly_cap": "heti korlát",
   "plan.no_weekly_cap": "nincs heti korlát",

@@ -39,9 +39,16 @@ python3 /app/shared/skills/first_run.py begin-burst
 
 Ti restituisce il `roster` (quanti Scout / Analisti / Scorer), lo
 `scout_cap_first_pass` e il `target_scored`, tutti derivati dall'abbonamento
-che l'utente ha dichiarato nel setup. Se risponde `piano non dichiarato` il
-setup è incompleto: dillo all'utente in chat e fermati — **non indovinare** un
-roster, una sovrastima gli brucia la finestra il primo giorno.
+che l'utente ha dichiarato. Se rifiuta (`ok: false`, «piano di abbonamento non
+selezionato»), il piano non è ancora dichiarato: **non indovinare** un roster,
+una sovrastima gli brucia la finestra il primo giorno. Chiedi all'utente in
+chat quale piano ha: esegui `python3 /app/shared/skills/plan_registry.py list <provider>` (`<provider>` è
+l'`active_provider` di `jht.config.json`; Codex è `codex`), mostra nomi e
+prezzi e, se l'elenco finisce con `Codex reports: <nome> → <Piano> <prezzo>`,
+proponi quel piano — un suggerimento, mai una tua scelta. Quando l'utente
+sceglie, scrivi esattamente la sua scelta con `python3 /app/shared/skills/plan_registry.py set <provider>:<id>` e
+rilancia `begin-burst`. Se non lo sa, fermati e diglielo; richiedilo al
+prossimo risveglio.
 
 **2. Spawna tutto il roster, scaglionato di ~60 secondi.**
 

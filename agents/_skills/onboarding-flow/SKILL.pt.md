@@ -1,7 +1,7 @@
 ---
 name: onboarding-flow
 description: Protocolo conversacional que o Assistente segue para integrar o utilizador — primeira mensagem, ritmo iterativo de uma-pergunta-por-turno, checklist de bloqueio (o piso que desbloqueia o dashboard) vs checklist rica (o que torna os Scrittori realmente úteis), estilo de perguntas agnóstico de setor (NUNCA assumir IT), e a sequência obrigatória de checkpoints quando o utilizador carrega ficheiros. Fortemente combinado com `profile-yaml` (cada resposta = um Write+validate) e `profile-summaries` (MDs narrativos após marcos-chave). Abrir esta skill no início de uma sessão de onboarding e em cada turno do utilizador que traga nova informação.
-allowed-tools: Bash(mkdir -p *), Bash(cp *)
+allowed-tools: Bash(mkdir -p *), Bash(cp *), Bash(python3 /app/shared/skills/plan_registry.py get), Bash(python3 /app/shared/skills/plan_registry.py list *), Bash(python3 /app/shared/skills/plan_registry.py set *)
 ---
 <!-- @translation: pt, ai-translated 2026-06-06 -->
 
@@ -105,6 +105,20 @@ preferences:
 ```
 
 **Tom:** uma pergunta natural, não um formulário burocrático. Ex.: *"Visto que olhas também para Londres e Zurique: já tens o direito de trabalhar lá, ou para essas seria preciso sponsor/visto? Assim evito propor-te papéis não acessíveis."* Explique sempre o **porquê** (= shortlist mais útil), não pergunte a frio.
+
+## Plano de subscrição — pergunta uma vez, nunca o escrevas pelo utilizador
+
+A equipa não pode abrir a primeira ronda enquanto o plano de subscrição do utilizador não estiver declarado (o Capitano não adivinha uma formação: um palpite errado queima a janela do utilizador no primeiro dia). A app não tem um ecrã para isto: **és tu** o sítio onde o utilizador o declara.
+
+**Quando:** uma vez, depois das primeiras duas ou três respostas (nunca na tua primeira mensagem), e o mais tardar antes de dizeres ao utilizador que o perfil está pronto.
+
+1. **Verifica.** `python3 /app/shared/skills/plan_registry.py get`. Se imprimir um plano (saída 0) está declarado: não digas nada e segue. `PLAN_MISSING` (saída 1) = não declarado.
+2. **Mostra as opções.** `python3 /app/shared/skills/plan_registry.py list codex` (o Codex é o fornecedor que a app liga). Dá ao utilizador os nomes e os preços dos planos numa lista curta e simples, na língua dele, não a tabela em bruto.
+3. **Sugere, não decidas.** Se a saída terminar com uma linha `Codex reports: <nome> → <Plano> <preço>`, propõe esse plano («O Codex diz-me que a tua conta parece Pro, 100 $/mês: é a tua?»). É uma sugestão: não se escreve nada até o utilizador dizer que sim. Uma linha que termina em `(not in this table)` não é uma sugestão: lista só os planos.
+4. **Escreve o que escolheu.** `python3 /app/shared/skills/plan_registry.py set codex:<id>`, com `<id>` da primeira coluna da lista. Confirma numa linha.
+5. **Não sabe?** Não escolhas tu. Diz-lhe que o plano aparece na página de subscrição do fornecedor, volta a perguntar uma vez antes de o perfil estar pronto e, se ainda não souber, diz-lhe que o Capitano lhe voltará a perguntar.
+
+Nunca escrevas um plano que o utilizador não escolheu, nunca o deduzas de outra coisa, nunca voltes a perguntar quando o `get` imprime um. Usa só `get`, `list` e `set` desse script.
 
 ## Agnóstico de setor — NUNCA padrão para IT
 

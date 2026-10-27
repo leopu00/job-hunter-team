@@ -1,7 +1,7 @@
 ---
 name: onboarding-flow
 description: Protocole conversationnel que l'Assistente suit pour intégrer l'utilisateur — premier message, rythme itératif une-question-par-tour, checklist bloquante (le plancher qui débloque le tableau de bord) vs checklist riche (ce qui rend les Scrittore vraiment utiles), style de question agnostique du secteur (JAMAIS supposer IT), et la séquence de checkpoint obligatoire quand l'utilisateur upload des fichiers. Étroitement couplé avec `profile-yaml` (chaque réponse = un Write+validate) et `profile-summaries` (MDs narratifs après les jalons clés). Ouvrir cette skill au début d'une session d'onboarding et à chaque tour utilisateur qui apporte une nouvelle info.
-allowed-tools: Bash(mkdir -p *), Bash(cp *)
+allowed-tools: Bash(mkdir -p *), Bash(cp *), Bash(python3 /app/shared/skills/plan_registry.py get), Bash(python3 /app/shared/skills/plan_registry.py list *), Bash(python3 /app/shared/skills/plan_registry.py set *)
 ---
 <!-- @translation: fr, ai-translated 2026-06-06 -->
 
@@ -105,6 +105,20 @@ preferences:
 ```
 
 **Ton :** une question naturelle, pas un formulaire bureaucratique. Ex. : *"Vu que vous regardez aussi Londres et Zurich : avez-vous déjà le droit de travailler là-bas, ou faudrait-il un sponsor/visa pour celles-là ? Comme ça j'évite de vous proposer des rôles inaccessibles."* Toujours expliquer le **pourquoi** (= liste courte plus utile), ne pas le demander à froid.
+
+## Formule d'abonnement — demande-la une fois, ne l'écris jamais à la place de l'utilisateur
+
+L'équipe ne peut pas ouvrir son premier tour tant que la formule d'abonnement de l'utilisateur n'est pas déclarée (le Capitano ne devine pas une formation : une supposition fausse brûle la fenêtre de l'utilisateur dès le premier jour). L'app n'a pas d'écran pour cela : **c'est toi** qui permets à l'utilisateur de la déclarer.
+
+**Quand :** une fois, après les deux ou trois premières réponses (jamais dans ton premier message), et au plus tard avant de dire à l'utilisateur que le profil est prêt.
+
+1. **Vérifie.** `python3 /app/shared/skills/plan_registry.py get`. Si une formule s'affiche (sortie 0), elle est déclarée : ne dis rien et continue. `PLAN_MISSING` (sortie 1) = non déclarée.
+2. **Montre les choix.** `python3 /app/shared/skills/plan_registry.py list codex` (Codex est le fournisseur que l'app connecte). Donne à l'utilisateur les noms et les prix des formules sous forme de courte liste simple dans sa langue, pas le tableau brut.
+3. **Suggère, ne décide pas.** Si la sortie se termine par une ligne `Codex reports: <nom> → <Formule> <prix>`, propose cette formule (« Codex m'indique que ton compte ressemble à Pro, 100 $/mois : est-ce la tienne ? »). C'est une suggestion : rien n'est écrit tant que l'utilisateur n'a pas dit oui. Une ligne qui se termine par `(not in this table)` n'est pas une suggestion : liste seulement les formules.
+4. **Écris ce qu'il a choisi.** `python3 /app/shared/skills/plan_registry.py set codex:<id>`, avec `<id>` pris dans la première colonne de la liste. Confirme en une ligne.
+5. **Il ne sait pas ?** N'en choisis pas une toi-même. Dis-lui que la formule figure sur la page d'abonnement du fournisseur, redemande une fois avant que le profil soit prêt et, s'il ne sait toujours pas, dis-lui que le Capitano le lui redemandera.
+
+N'écris jamais une formule que l'utilisateur n'a pas choisie, ne la déduis jamais d'autre chose, ne redemande jamais quand `get` en affiche une. N'utilise que `get`, `list` et `set` de ce script.
 
 ## Agnostique du secteur — NE JAMAIS supposer IT
 

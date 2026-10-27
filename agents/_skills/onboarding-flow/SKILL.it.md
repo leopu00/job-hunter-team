@@ -1,7 +1,7 @@
 ---
 name: onboarding-flow
 description: Protocollo conversazionale che l'Assistente segue per fare l'onboarding dell'utente — primo messaggio, pacing iterativo una-domanda-per-turno, checklist bloccante (il minimo che sblocca la dashboard) vs checklist ricca (ciò che rende gli Scrittori veramente utili), stile domande agnostico rispetto al settore (MAI assumere IT), e la sequenza checkpoint obbligatoria quando l'utente carica file. Strettamente abbinata con `profile-yaml` (ogni risposta = una Write+validate) e `profile-summaries` (MD narrativi dopo milestone chiave). Apri questa skill all'inizio di una sessione di onboarding e a ogni turno dell'utente che porta nuove informazioni.
-allowed-tools: Bash(mkdir -p *), Bash(cp *)
+allowed-tools: Bash(mkdir -p *), Bash(cp *), Bash(python3 /app/shared/skills/plan_registry.py get), Bash(python3 /app/shared/skills/plan_registry.py list *), Bash(python3 /app/shared/skills/plan_registry.py set *)
 ---
 <!-- @translation: it, ai-translated 2026-06-06 -->
 
@@ -108,6 +108,20 @@ preferences:
 ```
 
 **Tono:** una domanda naturale, non un form burocratico. Es.: *"Visto che guardi anche a Londra e Zurigo: hai già il diritto di lavorare lì, o per quelle servirebbe uno sponsor/visto? Così evito di proporti ruoli non accessibili."* Spiega sempre il **perché** (= shortlist più utile), non chiederlo a freddo.
+
+## Piano di abbonamento — chiedilo una volta, mai scriverlo al posto suo
+
+Il team non può aprire il primo giro finché il piano di abbonamento dell'utente non è dichiarato (il Capitano non indovina una formazione: un'ipotesi sbagliata brucia la finestra dell'utente il primo giorno). L'app non ha una schermata per questo: **sei tu** il punto in cui l'utente lo dichiara.
+
+**Quando:** una volta, dopo le prime due o tre risposte (mai nel primo messaggio), e al più tardi prima di dire all'utente che il profilo è pronto.
+
+1. **Controlla.** `python3 /app/shared/skills/plan_registry.py get`. Se stampa un piano (uscita 0) è dichiarato: non dire niente e prosegui. `PLAN_MISSING` (uscita 1) = non dichiarato.
+2. **Mostra le scelte.** `python3 /app/shared/skills/plan_registry.py list codex` (Codex è il provider che l'app collega). Dai all'utente nomi e prezzi dei piani come breve elenco semplice nella sua lingua, non la tabella grezza.
+3. **Suggerisci, non decidere.** Se l'output finisce con una riga `Codex reports: <nome> → <Piano> <prezzo>`, proponi quel piano («Codex mi dice che il tuo account sembra Pro, 100 $/mese: è il tuo?»). È un suggerimento: non si scrive niente finché l'utente non dice di sì. Una riga che finisce con `(not in this table)` non è un suggerimento: elenca solo i piani.
+4. **Scrivi ciò che ha scelto.** `python3 /app/shared/skills/plan_registry.py set codex:<id>`, con `<id>` dalla prima colonna dell'elenco. Conferma in una riga.
+5. **Non lo sa?** Non sceglierne uno tu. Digli che il piano si vede nella pagina di abbonamento del provider, richiedilo una volta prima che il profilo sia pronto e, se ancora non lo sa, digli che glielo richiederà il Capitano.
+
+Mai scrivere un piano che l'utente non ha scelto, mai dedurlo da altro, mai richiederlo quando `get` ne stampa uno. Usa solo `get`, `list` e `set` di quello script.
 
 ## Settore-agnostico — MAI default sull'IT
 
