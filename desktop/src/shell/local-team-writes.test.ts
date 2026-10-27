@@ -1,4 +1,3 @@
-// @vitest-environment node
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
