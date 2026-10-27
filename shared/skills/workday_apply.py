@@ -31,6 +31,7 @@ from typing import Mapping
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import ats_account  # noqa: E402
+from profile_email import profile_email  # noqa: E402
 from apply_flow import BlockedHuman, vacancy_closed_evidence  # noqa: E402
 
 RENDER_WAIT_MS = 15_000
@@ -214,9 +215,7 @@ class WorkdayRecipe:
         return control.first
 
     def _email(self) -> str:
-        contacts = self.profile.get("contacts") if isinstance(self.profile.get("contacts"), Mapping) else {}
-        email = (contacts or {}).get("email") or self.profile.get("email")
-        return str(email or "").strip()
+        return profile_email(self.profile) or ""
 
     def _sign_in(self, page, credentials):
         link = self._field(page, "sign_in_link", required=False)

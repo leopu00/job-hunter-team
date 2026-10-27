@@ -34,6 +34,10 @@ import os
 import sys
 import json
 
+# `python3 -I` (how the CLI runs this) leaves the script's own folder off sys.path.
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+from profile_email import profile_email  # noqa: E402
+
 BLOCK_KINDS = {"key_value", "tag_list", "timeline", "narrative", "key_points", "distribution"}
 TARGET_ROLE_CATEGORY_IDS = {"software", "data", "product", "design", "business", "security", "other"}
 TARGET_ROLE_SPECIALTIES = {
@@ -259,28 +263,6 @@ def _skill_count(skills) -> int:
     return 0
 
 
-def _has_email(profile: dict, cand: dict, pers: dict) -> bool:
-    """The email, wherever the schema or the app accepts it.
-
-    shared/config/profile-schema.ts takes `email` and `contacts.email` at the root;
-    web/lib/profile-completion.ts (hasEmail) reads the root `email` and
-    `positioning.contacts.email`; the Assistant has always written
-    `candidate.contacts.email` or `personal.email`. A profile with the email in any of
-    them is a profile with an email.
-    """
-    def contacts_email(holder) -> bool:
-        node = holder.get("contacts") if isinstance(holder, dict) else None
-        return isinstance(node, dict) and _is_str(node.get("email"))
-
-    return (
-        _is_str(profile.get("email"))
-        or contacts_email(profile)
-        or contacts_email(cand)
-        or _is_str(pers.get("email"))
-        or contacts_email(profile.get("positioning"))
-    )
-
-
 def team_minimum_missing(profile) -> list:
     """What the team needs before it can start, by the names the app uses.
 
@@ -294,7 +276,7 @@ def team_minimum_missing(profile) -> list:
         return ["name"]
     cand = profile.get("candidate") if isinstance(profile.get("candidate"), dict) else {}
     pers = profile.get("personal") if isinstance(profile.get("personal"), dict) else {}
-    has_email = _has_email(profile, cand, pers)
+    has_email = profile_email(profile) is not None
     roles = profile.get("target_roles")
     ey = profile.get("experience_years")
     checks = (

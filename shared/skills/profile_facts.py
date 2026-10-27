@@ -26,14 +26,16 @@ from typing import Any, Mapping
 
 try:
     from application_answers import normalise_label
+    from profile_email import EMAIL_PATHS
 except ImportError:  # pragma: no cover - package import
     from shared.skills.application_answers import normalise_label
+    from shared.skills.profile_email import EMAIL_PATHS
 
 CORE_ALIASES: dict[str, tuple[tuple[str, ...], ...]] = {
     "first name": (("first_name",), ("given_name",), ("firstName",), ("givenName",), ("contacts", "first_name")),
     "last name": (("last_name",), ("family_name",), ("surname",), ("lastName",), ("familyName",), ("contacts", "last_name")),
     "full name": (("name",), ("full_name",), ("fullName",), ("contacts", "name")),
-    "email": (("contacts", "email"), ("email",)),
+    "email": EMAIL_PATHS,
     "phone": (("contacts", "phone"), ("phone",)),
     "linkedin": (("contacts", "linkedin"), ("linkedin",)),
     "github": (("contacts", "github"), ("github",)),
