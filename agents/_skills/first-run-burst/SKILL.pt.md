@@ -45,6 +45,13 @@ dele: executa `python3 /app/shared/skills/plan_registry.py list <provider>` (`<p
 exatamente a escolha dele com `python3 /app/shared/skills/plan_registry.py set <provider>:<id>` e volta a lançar `begin-burst`. Se não souber,
 para e di-lo; volta a perguntar no teu próximo despertar.
 
+**Enquanto o burst corre, o plano pode desaparecer** (a configuração foi reposta, o fornecedor mudou, o
+ficheiro foi editado). `first_run.py status` e `begin-burst` trazem então `plan_missing: true` com um `hint`:
+não leias «burst already in progress» como «está tudo bem». O burst continua e o plano declara-se da mesma
+forma: pergunta ao utilizador no chat qual é o plano dele (`python3 /app/shared/skills/plan_registry.py list <provider>`), sugere o da linha
+`Codex reports:` sem escolher por ele e escreve exatamente a escolha dele com `python3 /app/shared/skills/plan_registry.py set <provider>:<id>`. O
+Assistente pergunta o mesmo quando o utilizador fala com ele.
+
 **2. Faz spawn de todo o roster, escalonado ~60 segundos.**
 
 Não um worker de dez em dez minutos: toda a formação, uma a seguir à outra, sempre através do

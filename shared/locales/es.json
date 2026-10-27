@@ -123,6 +123,7 @@
   "plan.free": "gratis",
   "plan.price_month": "%s $/mes",
   "plan.unknown": "plan desconocido: %s",
+  "plan.config_unreadable": "%s no se puede leer (dañado, o no es un objeto JSON): el plan no se ha escrito y el archivo se ha dejado como está",
   "plan.not_selected": "plan de suscripción no seleccionado",
   "plan.select_hint": "el usuario no ha declarado un plan de suscripción: no adivines una formación. Pregúntaselo en el chat — ejecuta `python3 /app/shared/skills/plan_registry.py list <provider>` (Codex es `codex`), muestra los planes y sugiere el de la línea `Codex reports:` sin decidir por él — luego escribe exactamente su elección con `python3 /app/shared/skills/plan_registry.py set <provider>:<id>` y vuelve a lanzar begin-burst",
   "plan.none_known": "no hay planes conocidos",

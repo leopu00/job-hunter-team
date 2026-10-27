@@ -50,6 +50,13 @@ sceglie, scrivi esattamente la sua scelta con `python3 /app/shared/skills/plan_r
 rilancia `begin-burst`. Se non lo sa, fermati e diglielo; richiedilo al
 prossimo risveglio.
 
+**Mentre il burst gira, il piano può sparire** (la configurazione è stata azzerata, il provider è cambiato, il
+file è stato modificato). `first_run.py status` e `begin-burst` portano allora `plan_missing: true` con un
+`hint`: non leggere «burst already in progress» come «tutto a posto». Il burst continua e il piano si dichiara
+allo stesso modo: chiedi all'utente in chat quale piano ha (`python3 /app/shared/skills/plan_registry.py list <provider>`), suggerisci quello della riga
+`Codex reports:` senza scegliere per lui e scrivi esattamente la sua scelta con
+`python3 /app/shared/skills/plan_registry.py set <provider>:<id>`. Lo chiede anche l'Assistente quando l'utente gli parla.
+
 **2. Spawna tutto il roster, scaglionato di ~60 secondi.**
 
 Non un worker ogni dieci minuti: tutta la formazione, di seguito, sempre

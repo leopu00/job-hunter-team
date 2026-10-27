@@ -48,6 +48,13 @@ mit `Codex reports: <Name> → <Abo> <Preis>` endet, dieses Abonnement vor — e
 Wählt der Nutzer, schreib genau seine Wahl mit `python3 /app/shared/skills/plan_registry.py set <provider>:<id>` und starte `begin-burst` erneut.
 Weiß er es nicht, halte an und sag es ihm; frag beim nächsten Aufwachen erneut.
 
+**Während der Burst läuft, kann das Abonnement verschwinden** (die Konfiguration wurde zurückgesetzt, der
+Anbieter gewechselt, die Datei bearbeitet). `first_run.py status` und `begin-burst` tragen dann `plan_missing: true`
+mit einem `hint`: Lies „burst already in progress" nicht als „alles in Ordnung". Der Burst läuft weiter und das
+Abonnement wird genauso angegeben: Frag den Nutzer im Chat, welches Abonnement er hat
+(`python3 /app/shared/skills/plan_registry.py list <provider>`), schlag das der Zeile `Codex reports:` vor, ohne für ihn zu wählen, und schreib genau
+seine Wahl mit `python3 /app/shared/skills/plan_registry.py set <provider>:<id>`. Der Assistent fragt es ebenfalls, wenn der Nutzer mit ihm spricht.
+
 **2. Spawne den gesamten Roster, um ~60 Sekunden versetzt.**
 
 Nicht ein Worker alle zehn Minuten: die ganze Aufstellung, direkt nacheinander, wie immer über
