@@ -103,7 +103,7 @@ function validateStdin(file, opts) {
   let bytes;
   try { bytes = readStdin(MAX_PROFILE_BYTES); } catch { bytes = null; }
   const refuse = (code) => {
-    if (opts.json) console.log(JSON.stringify({ ok: false, errors: [IMPORT_SAYS[code]] }));
+    if (opts.json) console.log(JSON.stringify({ ok: false, errors: [IMPORT_SAYS[code]], warnings: [] }));
     else console.error(`ERROR: ${IMPORT_SAYS[code]}`);
     process.exitCode = 1;
   };
@@ -114,7 +114,29 @@ function validateStdin(file, opts) {
   try {
     const copy = join(dir, 'candidate_profile.yml');
     writeFileSync(copy, bytes, { mode: 0o600 });
-    validateAction(copy, { strict: opts.strict, json: opts.json });
+    if (!existsSync(VALIDATOR)) {
+      console.error(`: validator not found: ${VALIDATOR}`);
+      process.exitCode = 2;
+      return;
+    }
+    const args = [VALIDATOR, copy];
+    if (opts.strict) args.push('--strict');
+    if (opts.json) args.push('--json');
+    const r = spawnSync('python3', args, { encoding: 'utf8' });
+    if (r.error) {
+      console.error(`: impossible to run python3: ${r.error.message}`);
+      process.exitCode = 2;
+      return;
+    }
+    // The validator names the file it read (a YAML error quotes it): that was a copy that is
+    // gone now, so the person is told it was the standard input.
+    const seen = (text) => [copy, dir].reduce(
+      (out, path) => out.split(path).join('<stdin>').split(JSON.stringify(path).slice(1, -1)).join('<stdin>'),
+      text ?? '',
+    );
+    process.stdout.write(seen(r.stdout));
+    process.stderr.write(seen(r.stderr));
+    process.exitCode = r.status ?? 0;
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

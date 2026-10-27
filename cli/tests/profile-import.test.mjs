@@ -335,6 +335,17 @@ test('jht profile validate --stdin: the file of the host, checked like a path, w
   assert.match(JSON.parse(big.stdout).errors[0], /larger than 64 KiB/);
   assert.match(validate(['--stdin'], '').stderr, /empty/);
   assert.equal(validate([FIXTURE, '--stdin'], PROFILE).status, 2);
+  assert.deepEqual(JSON.parse(big.stdout).warnings, [], 'a refusal has the same shape as the validator answer');
+
+  // A YAML that does not parse: the parser quotes the file it read, which was a private copy.
+  for (const args of [['--stdin'], ['--stdin', '--json']]) {
+    const broken = validate(args, 'name: [unclosed\nrole: x: y\n');
+    assert.equal(broken.status, 1);
+    const said = broken.stdout + broken.stderr;
+    assert.match(said, /YAML could not be parsed/);
+    assert.match(said, /<stdin>/);
+    assert.doesNotMatch(said, /jht-profile-validate-|candidate_profile\.yml/);
+  }
 
   assert.deepEqual(readdirSync(scratch), [], 'the private copy is removed, whatever the answer');
   assert.ok(!existsSync(join(root, 'profile', 'candidate_profile.yml')), 'validate writes nothing');
