@@ -64,10 +64,64 @@ def _int(value) -> int:
 
 _NAME = re.compile(r"[A-Za-z0-9_][A-Za-z0-9_.+-]{0,39}")
 _ENV = re.compile(r"[A-Za-z_][A-Za-z0-9_]*=")
+_DURATION = re.compile(r"[0-9]+(\.[0-9]+)?[smhd]?")
 _SHELLS = frozenset({"bash", "sh", "zsh"})
-_WRAPPERS = frozenset({"env", "sudo", "timeout", "nice", "command", "exec", "time", "xargs", "nohup", "setsid"})
+# Wrappers run the program that follows them; the options that take a value are skipped with their value, or the
+# value (a user, a file, a signal) would be read as the program.
+_WRAPPERS = {
+    "sudo": frozenset({"-u", "-g", "-h", "-p", "-C", "-D", "-R", "-T", "-U", "-r", "-t"}),
+    "timeout": frozenset({"-s", "-k", "--signal", "--kill-after"}),
+    "env": frozenset({"-u", "-C", "-S", "--unset", "--chdir", "--split-string"}),
+    "xargs": frozenset({"-a", "-d", "-E", "-I", "-L", "-n", "-P", "-s", "-l", "-i", "--arg-file", "--delimiter"}),
+    "nice": frozenset({"-n", "--adjustment"}),
+    "time": frozenset({"-f", "-o", "--format", "--output"}),
+    "nohup": frozenset(), "setsid": frozenset(), "exec": frozenset(),
+}
 _INTERPRETERS = frozenset({"python", "python3", "node", "nodejs", "uv", "uvx", "npx", "tsx"})
 _SCRIPT_SUFFIXES = (".py", ".js", ".mjs", ".cjs", ".ts", ".sh")
+# The closed vocabulary. What comes out of this module is one of these names, a script that is in the repo, or
+# "(other)": a name an agent or a person chose (a file, a user, a tool of theirs) is never printed.
+_UTILITIES = frozenset("""
+awk base64 basename cat cd chmod comm command cp curl cut date df diff dirname du echo egrep env false file find jht
+git grep head jq kill ls mkdir mv node npm pgrep pkill ps pwd readlink realpath rg rm sed sleep sort sqlite3 stat
+tail tar tee test tmux touch tr true uniq wc wget xxd yq
+""".split()) | _INTERPRETERS | _SHELLS
+_TOOLS = frozenset("""
+Bash Read Write Edit MultiEdit Grep Glob Task WebFetch WebSearch NotebookEdit TodoWrite
+exec wait shell apply_patch update_plan view_image local_shell
+""".split())
+_SCRIPT_DIRS = ("shared/skills", ".launcher", "cli/bin", "agents/_tools", "agents/_skills/tmux-send")
+_known_scripts: frozenset | None = None
+
+
+def _repo_scripts() -> frozenset:
+    """File names of the scripts the product ships (the image's /app, and the repo this file sits in)."""
+    global _known_scripts
+    if _known_scripts is None:
+        roots = [Path("/app")]
+        try:
+            roots.append(Path(__file__).resolve().parents[2])
+        except (NameError, IndexError):  # read from the standard input: no file
+            pass
+        names = set()
+        for root in roots:
+            for folder in _SCRIPT_DIRS:
+                try:
+                    names.update(entry.name for entry in (root / folder).iterdir() if entry.is_file())
+                except OSError:
+                    continue
+        _known_scripts = frozenset(names)
+    return _known_scripts
+
+
+def _vocabulary(name: str | None, is_script: bool) -> str | None:
+    if not name:
+        return None
+    if is_script:
+        return name if name in _repo_scripts() and _NAME.fullmatch(name) else "(script)"
+    if name in _UTILITIES or (name in _repo_scripts() and name.startswith("jht") and _NAME.fullmatch(name)):
+        return name
+    return "(other)"
 
 
 def _stages(command: str) -> list[str]:
@@ -102,28 +156,34 @@ def _stages(command: str) -> list[str]:
 
 
 def _program_of(words: list[str]) -> str | None:
-    """The program of one stage, and for an interpreter the script it runs. A name, never an argument: an
+    """The program of one stage, and for an interpreter the script it runs, through the closed vocabulary. An
     interpreter given inline code (`-c`, `-e`) is named by the interpreter alone."""
-    interpreter = None
+    interpreter, wrapper, skip = None, None, False
     for word in words:
+        if skip:
+            skip = False
+            continue
         if word.startswith("-") or not word:
             if interpreter and word in {"-c", "-e", "-p"}:
-                return interpreter
+                return _vocabulary(interpreter, False)
+            if wrapper and word in _WRAPPERS[wrapper]:
+                skip = True
             continue
-        if _ENV.match(word):
+        if _ENV.match(word) or (wrapper == "timeout" and _DURATION.fullmatch(word)) or word.isdigit():
             continue
         name = word.rsplit("/", 1)[-1]
-        if name in _WRAPPERS or name.isdigit():
+        if interpreter is None and name in _WRAPPERS:
+            wrapper = name
             continue
         if interpreter is None and name in _INTERPRETERS:
             interpreter = name
             continue
         if interpreter:
             if name.endswith(_SCRIPT_SUFFIXES):
-                return name if _NAME.fullmatch(name) else interpreter
+                return _vocabulary(name, True)
             continue
-        return name if _NAME.fullmatch(name) else None
-    return interpreter
+        return _vocabulary(name, False)
+    return _vocabulary(interpreter, False)
 
 
 def programs_in(command, _depth: int = 0) -> list[str]:
@@ -169,7 +229,7 @@ def _tool_programs(payload: dict) -> list[str]:
         return programs_in(action.get("command")) or ["(shell)"]
     # A free-text input (a tool that takes code, not a command) is named by the tool: its words are not programs.
     name = payload.get("name")
-    return [name] if isinstance(name, str) and _NAME.fullmatch(name) else ["(tool)"]
+    return [name] if name in _TOOLS else ["(tool)"]
 
 
 
@@ -226,7 +286,7 @@ def _claude_programs(message: dict) -> list[str]:
             names.extend(programs_in(command) or ["(shell)"])
         else:
             name = block.get("name")
-            names.append(name if isinstance(name, str) and _NAME.fullmatch(name) else "(tool)")
+            names.append(name if name in _TOOLS else "(tool)")
     return names
 
 

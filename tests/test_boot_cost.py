@@ -227,3 +227,51 @@ def test_a_tool_that_takes_code_is_named_by_the_tool_and_none_of_its_words_come_
     assert tool({"type": "function_call", "name": "x y z", "arguments": "not json"}) == ["(tool)"]
     assert tool({"type": "function_call", "name": "shell", "arguments": json.dumps({"cmd": "ls -la /secret"})}) == ["ls"]
     assert tool({"type": "local_shell_call", "action": {"command": ["git", "status"]}}) == ["git"]
+
+
+# ── the closed vocabulary: a name somebody chose is never printed ─────────────────────────────
+
+@pytest.mark.parametrize("command, secret", [
+    ("sudo -u maria_rossi psql", "maria_rossi"),
+    ("timeout -s KILL 5 make", "KILL"),
+    ("env -u HOMEVAR -C /home/maria/work ls", "HOMEVAR"),
+    ("xargs -a secret_names.txt rm", "secret_names"),
+    ("command -v my_private_tool", "my_private_tool"),
+])
+def test_the_value_of_a_wrappers_option_is_never_taken_for_the_program(command: str, secret: str):
+    names = boot_cost.programs_in(command)
+    assert names and secret not in " ".join(names) and all(n in boot_cost._UTILITIES or n.startswith("(") for n in names), names
+
+
+def test_wrappers_are_looked_through_to_the_program_they_run():
+    pin = boot_cost.programs_in
+    assert pin("env -u HOMEVAR -C /home/maria/work ls") == ["ls"]
+    assert pin("xargs -a secret_names.txt rm") == ["rm"]
+    assert pin("timeout -s KILL 5 make") == ["(other)"]      # make is not in the vocabulary
+    assert pin("sudo -u maria_rossi psql") == ["(other)"]
+    assert pin("timeout 30 python3 /app/shared/skills/first_run.py status") == ["first_run.py"]
+    assert pin("nohup setsid ls") == ["ls"] and pin("sudo -u maria env -u X ls") == ["ls"]  # wrappers chain
+
+
+def test_only_the_closed_vocabulary_comes_out():
+    pin = boot_cost.programs_in
+    assert pin("my-private-tool --token abc") == ["(other)"]
+    assert pin("./deploy.sh --token abc") == ["(other)"]
+    assert pin("python3 /home/maria/notes/mine.py") == ["(script)"]      # a script that is not the product's
+    assert pin("node /tmp/maria_rossi_script.js") == ["(script)"]
+    assert pin("python3 /app/shared/skills/first_run.py status") == ["first_run.py"]
+    assert pin("jht team status") == ["jht"]
+    assert boot_cost._tool_programs({"type": "function_call", "name": "maria_tool", "arguments": "{}"}) == ["(tool)"]
+    assert boot_cost._tool_programs({"type": "custom_tool_call", "name": "exec", "input": "x"}) == ["exec"]
+    assert boot_cost._claude_programs({"content": [{"type": "tool_use", "name": "mcp__maria__x", "input": {}}]}) == ["(tool)"]
+    assert boot_cost._claude_programs({"content": [{"type": "tool_use", "name": "Read", "input": {}}]}) == ["Read"]
+
+
+def test_read_from_the_standard_input_it_still_runs_and_names_only_the_vocabulary(tmp_path: Path):
+    _codex_calls(tmp_path, "c", "capitano", [
+        ("model", 2, 1_000, 0, 1), ("tool", _shell("sudo -u maria_rossi psql")), ("model", 4, 3_000, 1_000, 1)])
+    env = {"PATH": os.environ.get("PATH", ""), "JHT_HOME": str(tmp_path), "PYTHONDONTWRITEBYTECODE": "1"}
+    done = subprocess.run([sys.executable, "-I", "-", "--calls", "capitano", "--hours", "3"], input=SCRIPT.read_text(encoding="utf-8"),
+                          capture_output=True, text=True, env=env, timeout=60, check=False)
+    assert done.returncode == 0, done.stderr
+    assert "(other)" in done.stdout and "maria_rossi" not in done.stdout + done.stderr
