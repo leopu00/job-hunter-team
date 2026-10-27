@@ -58,7 +58,7 @@ import {
 } from '../lib/cloud-push-awaiting.js';
 import { ReceiptKeyInvalid } from '../../../shared/cloud/receipt-ids.js';
 import { instantKey, noticeWebAction, noticeWebActions } from '../lib/web-action-notice.js';
-import { noticeRefusedToken } from '../lib/cloud-sync-notice.js';
+import { noticeLostSession, noticeRefusedToken } from '../lib/cloud-sync-notice.js';
 import {
   createTeamCommandsExecutor,
   createTeamCommandsLane as createLane,
@@ -4712,9 +4712,19 @@ async function runRealtimeLoop({ config, isRunning }) {
       scheduleFallback(500);
     }
   };
+  // The session the daemon listens with is gone (refused at boot, or ended while it ran): say it in the log
+  // and tell the user once. Not awaited: the script takes seconds and the daemon must go on.
+  const sessionLost = (e) => {
+    console.error(pc.yellow('  The Supabase session of this device is gone: pair the device again from the app to bring Realtime back.'));
+    void noticeLostSession(e, config?.token, { log: (msg) => log('warn', msg) });
+  };
   try {
     const { createRealtimeSync } = await import('../lib/cloud-realtime.js');
-    rt = await createRealtimeSync({ config, log });
+    rt = await createRealtimeSync({
+      config,
+      log,
+      onSessionLost: () => sessionLost({ code: 'session_lost' }),
+    });
 
     // ── Tappa 2: sync-flag → Realtime ── UPDATE su team_state (sync_requested_at) → push.
     rt.subscribe('team-state', { table: 'team_state', event: 'UPDATE' }, (payload) => {
@@ -4741,6 +4751,7 @@ async function runRealtimeLoop({ config, isRunning }) {
     log('info', 'realtime ready (team_state + position_tickets + team_commands) — sync/ticket/commands via websocket + active parachute.');
   } catch (e) {
     console.error(pc.yellow(`  cloud-realtime failed setup (${e.message}) — degradation to parachute polls only.`));
+    if (e?.code === 'session_lost') sessionLost(e);
   }
 
   // Prima riconciliazione subito dopo la subscribe (o subito dopo il suo
