@@ -16,7 +16,8 @@ import { AGENTS_PANEL_TEXT, type AgentsPanelText } from "./AgentsPanel.i18n";
 
 // «Agenti»: the agents' control panel, against a stand-in native side
 // (agent_control). Synthetic data only.
-const native = vi.hoisted(() => ({ invoke: vi.fn(), isTauri: vi.fn(() => true) }));
+// Channel: the start button's progress channel (resumeOnboardingTeamStart) is made with it
+const native = vi.hoisted(() => ({ invoke: vi.fn(), isTauri: vi.fn(() => true), Channel: class { onmessage: unknown = null } }));
 const fake = vi.hoisted(() => ({ current: null as ReturnType<typeof createPermissiveSupabase> | null }));
 vi.mock("@tauri-apps/api/core", () => native);
 // The Chat tab mounts the chat's composer, whose dictation listens to native events: with

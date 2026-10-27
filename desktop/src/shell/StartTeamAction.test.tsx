@@ -31,6 +31,7 @@ describe("«Start the team» where a page says the team is stopped", () => {
   });
 
   it("a refusal is told with the catalog's sentence and the page is not told the team is up", async () => {
+    document.cookie = "NEXT_LOCALE=en; path=/";
     vi.mocked(resumeOnboardingTeamStart).mockRejectedValue({ code: "operation_in_progress" });
     const onStarted = vi.fn();
     render(<StartTeamAction onStarted={onStarted} />);
