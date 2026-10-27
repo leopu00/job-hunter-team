@@ -466,7 +466,7 @@ def test_interactive_pairing_restores_echo_after_ctrl_c(tmp_path: Path) -> None:
         os.close(master)
         os.close(slave)
         if process.poll() is None:
-            process.kill()
+            os.killpg(process.pid, signal.SIGKILL)       # the whole group: the script runs under its own session
 
 
 def test_both_wrappers_document_safe_interactive_and_noninteractive_pairing() -> None:
