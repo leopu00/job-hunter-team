@@ -28,6 +28,7 @@ import {
 } from "@/app/setup-guide/guide-screens";
 import {
   OS_IDS,
+  assetFor,
   isUntranslated,
   phasesFor,
   screensOf,
@@ -265,6 +266,39 @@ describe("guida di setup — schermate", () => {
       `[setup-guide] riprese: ${total - missing.length}/${total} consegnate, ${missing.length} mancanti`,
     );
     expect(missing.length).toBeLessThanOrEqual(total);
+  });
+
+  it("finché una schermata del percorso macOS non ha il suo file, l'indice descrive e non promette di mostrare", () => {
+    // Quando le riprese entrano, le frasi tornano a «shows» / «the screen you will actually see»
+    // e questo test non ha più nulla da dire (nessuna schermata mancante).
+    const missing = GUIDE_CHAPTERS.flatMap((chapter) =>
+      phasesFor(chapter, "macos").flatMap((phase) => screensOf(phase)),
+    ).filter(({ screenId }) => {
+      const screen = SCREENS[screenId];
+      return !screen.nativeSurface && !assetFor(screen, "macos");
+    });
+    if (missing.length === 0) return;
+    const promises = [
+      "shows the exact screen",
+      "mostra la schermata esatta",
+      "muestra la pantalla exacta",
+      "montre l’écran exact",
+      "zeigt genau den Bildschirm",
+      "mostra o ecrã exato",
+      "pontosan azt a képernyőt mutatja",
+      "with the screen you will actually see",
+      "con la schermata che vedrai davvero",
+      "con la pantalla que verás de verdad",
+      "avec l'écran que vous verrez vraiment",
+      "mit dem Bildschirm, den du wirklich siehst",
+      "com o ecrã que vais mesmo ver",
+      "azzal a képernyővel, amit tényleg látni fogsz",
+    ];
+    const sources = ["guide-content.ts", "guide-ui.i18n.ts"].map((file) =>
+      fs.readFileSync(path.resolve(HERE, "../../../web/app/setup-guide", file), "utf8"),
+    );
+    const found = promises.filter((phrase) => sources.some((text) => text.includes(phrase)));
+    expect(found).toEqual([]);
   });
 
   it("l'estensione di ogni file dice il formato vero", () => {
