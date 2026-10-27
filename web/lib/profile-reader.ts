@@ -176,7 +176,8 @@ export function mapYamlToProfile(raw: any): CandidateProfile {
     target_role:
       filled(candidate.target_role) ??
       filled(raw.target_role) ??
-      filled(raw.target_roles?.[0]) ??
+      // solo una lista ha un primo ruolo: una stringa non è la lista dei suoi caratteri
+      filled(Array.isArray(raw.target_roles) ? raw.target_roles[0] : null) ??
       null,
     location: filled(raw.location) ?? filled(personal.location) ?? null,
     experience_years: raw.experience_years ?? null,

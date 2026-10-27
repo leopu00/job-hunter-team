@@ -908,6 +908,32 @@
       "missing": [
         "target_role"
       ]
+    },
+    {
+      "name": "target_roles that is a text, not a list, has no first role",
+      "profile": {
+        "name": "Example Person",
+        "location": "Rome, Italy",
+        "experience_years": 4,
+        "seniority_target": "mid",
+        "email": "candidate@example.invalid",
+        "skills": {
+          "primary": [
+            "Python",
+            "SQL"
+          ]
+        },
+        "languages": [
+          {
+            "language": "Italian",
+            "level": "native"
+          }
+        ],
+        "target_roles": "Backend Engineer"
+      },
+      "missing": [
+        "target_role"
+      ]
     }
   ]
 }
