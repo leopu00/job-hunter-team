@@ -83,6 +83,82 @@ describe("AgentChatPane", () => {
     expect(await screen.findByText("Tre posizioni nuove.")).toBeTruthy();
   });
 
+  it("opens by itself when the team is not ready at the first attempt, with no Retry to press", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      const chat = client({ state: "disconnected" });
+      let failures = 1;
+      const open = chat.reconnect;
+      chat.reconnect = vi.fn(async () => {
+        if (failures-- > 0) throw { code: "local_container_not_attested" };
+        return open();
+      });
+      render(<AgentChatPane role="assistente" client={chat} />);
+      await waitFor(() => expect(chat.reconnect).toHaveBeenCalledTimes(1));
+      await act(async () => { await vi.advanceTimersByTimeAsync(1_600); });
+      await waitFor(() => expect(chat.reconnect).toHaveBeenCalledTimes(2));
+      expect(await screen.findByText("Tre posizioni nuove.")).toBeTruthy();
+      expect(screen.getByTestId("direct-chat-status")).toHaveTextContent("Team connected");
+      expect(screen.queryByRole("button", { name: "Retry" })).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("does not take someone else's connection down when it was opened meanwhile", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      const chat = client({ state: "disconnected" });
+      chat.reconnect = vi.fn(async () => {
+        // Another tab opens the chat while this attempt fails.
+        vi.mocked(chat.status).mockResolvedValue({ state: "ready" });
+        vi.mocked(chat.subscribe).mockResolvedValue({ state: "ready" });
+        throw { code: "local_container_not_attested" };
+      });
+      render(<AgentChatPane role="assistente" client={chat} />);
+      await act(async () => { await vi.advanceTimersByTimeAsync(1_600); });
+      expect(await screen.findByText("Tre posizioni nuove.")).toBeTruthy();
+      expect(chat.reconnect).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("says why it could not open, with Retry, instead of «Team not connected», when every attempt fails", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      // Like the native side: once the opening failed nothing is open, and the status it gives is «disconnected».
+      const chat = client({ state: "disconnected" });
+      chat.reconnect = vi.fn(async () => { throw { code: "local_container_not_attested" }; });
+      render(<AgentChatPane role="assistente" client={chat} />);
+      await act(async () => { await vi.advanceTimersByTimeAsync(5_000); });
+      const bar = await screen.findByTestId("direct-chat-status");
+      await waitFor(() => expect(bar).toHaveAttribute("role", "alert"));
+      expect(chat.reconnect).toHaveBeenCalledTimes(3);
+      expect(bar).not.toHaveTextContent("Team not connected");
+      expect(within(bar).getByRole("button", { name: "Retry" })).toBeTruthy();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it.each(["ssh_auth_failed", "ssh_rate_limited"])("does not ask again after %s: it says why at once, with Retry", async (code) => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      const chat = client({ state: "disconnected" });
+      chat.reconnect = vi.fn(async () => { throw { code }; });
+      render(<AgentChatPane role="assistente" client={chat} />);
+      await act(async () => { await vi.advanceTimersByTimeAsync(5_000); });
+      const bar = await screen.findByTestId("direct-chat-status");
+      await waitFor(() => expect(bar).toHaveAttribute("role", "alert"));
+      expect(chat.reconnect).toHaveBeenCalledTimes(1);
+      expect(bar).not.toHaveTextContent("Team not connected");
+      expect(within(bar).getByRole("button", { name: "Retry" })).toBeTruthy();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("in the read-only view shows the history and the answers, and no way to send", async () => {
     act(() => enterExistingTeamReadOnly(false));
     const chat = client();
