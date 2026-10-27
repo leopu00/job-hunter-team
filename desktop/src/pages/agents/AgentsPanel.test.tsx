@@ -384,6 +384,35 @@ describe("«Agenti», the agents' control panel", () => {
     const alert = await screen.findByTestId("panel-error");
     expect(alert).toHaveTextContent(describeError("agent_control_no_team", { locale: "it" }).text);
   });
+
+  it("with no team running it offers «Avvia la squadra», and reads again once the team is up", async () => {
+    let up = false;
+    native.invoke.mockImplementation(async (command: string, args: { request?: Record<string, unknown> }) => {
+      if (command === "onboarding_resume_team_start") {
+        up = true;
+        return {};
+      }
+      if (command !== COMMAND) return { ok: false, error: "not_in_test" };
+      if (!up) return { ok: false, error: "agent_control_no_team" };
+      const op = args.request?.op;
+      if (op === "list") return listReply();
+      if (op === "team") return { ok: true, data: { halted: false, standby, held } };
+      return { ok: false, error: "agent_control_unsupported" };
+    });
+    show();
+    await screen.findByTestId("panel-error");
+    fireEvent.click(await screen.findByTestId("start-team"));
+    await screen.findByTestId("panel-summary");
+    expect(screen.queryByTestId("panel-error")).toBeNull();
+    expect(native.invoke.mock.calls.filter(([c]) => c === "onboarding_resume_team_start")).toHaveLength(1);
+  });
+
+  it("offers the start only where the sentence says the team is stopped", async () => {
+    native.invoke.mockImplementation(async () => ({ ok: false, error: "agent_control_read_only" }));
+    show();
+    await screen.findByTestId("panel-error");
+    expect(screen.queryByTestId("start-team")).toBeNull();
+  });
 });
 
 describe("«until tomorrow at 8» is the person's own 8 o'clock (N1)", () => {
