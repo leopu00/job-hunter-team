@@ -46,7 +46,7 @@ jobs:
         include:
           # Windows is not part of 0.4.0: no installer is built or attached,
           # and the site shows it as "coming soon" without a link.
-          - os: macos-14
+          - os: macos-15
             label: macOS arm64
             args: --target aarch64-apple-darwin --bundles app,dmg
             artifact_name: app-macos-release

@@ -160,11 +160,11 @@ Two independent steps: **code signing** (Developer ID Application certificate) a
 | `APPLE_APP_SPECIFIC_PASSWORD` | App-specific password |
 | `APPLE_TEAM_ID` | 10-character Team ID |
 
-All five must be present. If any is missing, the `macos-14` matrix entry stops immediately with an `::error::` annotation — the Windows and Linux builds still run, but no release is published (the `release` job needs all three artifacts).
+All five must be present. If any is missing, the `macos-15` matrix entry stops immediately with an `::error::` annotation — the Windows and Linux builds still run, but no release is published (the `release` job needs all three artifacts).
 
 #### What the workflow does
 
-`.github/workflows/release.yml` job `build-desktop`, matrix entry `macos-14`, on tag push:
+`.github/workflows/release.yml` job `build-desktop`, matrix entry `macos-15`, on tag push:
 
 1. `HAS_MAC_SIGNING` checks that all five secrets are configured; if not, the job fails with an explicit error.
 2. `apple-actions/import-codesign-certs` imports the `.p12` into a temporary keychain.
