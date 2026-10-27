@@ -2280,10 +2280,43 @@ fn sweep_full_link_leftovers(root: &Path, scope: &AccountScope) {
     }
 }
 
-/// Writes the record of the full connection that was just granted: a private temporary file and a
-/// rename, so a reader sees the whole record or none. Where mode 0600 means nothing (not Unix) there
-/// is no record and the permission stays what it always was, for this run of the app only.
+/// The folder of the account may hold the record only if it is a real folder of the current user that
+/// nobody else may write into: on Unix a folder of ours without group or world write; on Windows a
+/// folder that is not a link or a junction (any reparse point), owned by the current user, whose ACL
+/// allows the current user and SYSTEM only (`write_selection_at` makes it so before anything is saved).
 #[cfg(unix)]
+fn full_link_folder_is_private(_folder: &Path, meta: &fs::Metadata) -> bool {
+    use std::os::unix::fs::{MetadataExt, PermissionsExt};
+    !(meta.file_type().is_symlink()
+        || !meta.is_dir()
+        || meta.uid() != unsafe { libc::geteuid() }
+        || meta.permissions().mode() & 0o022 != 0)
+}
+
+#[cfg(windows)]
+fn full_link_folder_is_private(folder: &Path, meta: &fs::Metadata) -> bool {
+    if meta.file_type().is_symlink() || !meta.is_dir() || is_reparse_point(meta) {
+        return false;
+    }
+    let Ok(user) = crate::private_acl::current_user_sid() else { return false };
+    crate::private_acl::owned_by_current_user(folder)
+        && crate::private_acl::read_acl(folder).is_ok_and(|acl| crate::private_acl::grants_only_owner(&acl, &user))
+}
+
+/// Any reparse point (symbolic link, junction, mount point...): the record is never one, and the folder
+/// that holds it is never one.
+#[cfg(windows)]
+fn is_reparse_point(meta: &fs::Metadata) -> bool {
+    use std::os::windows::fs::MetadataExt;
+    const FILE_ATTRIBUTE_REPARSE_POINT: u32 = 0x0400;
+    meta.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT != 0
+}
+
+/// Writes the record of the full connection that was just granted: a private temporary file and a
+/// rename, so a reader sees the whole record or none. Private is 0600 on Unix and, on Windows, the
+/// protected ACL of the current user and SYSTEM only (`set_private_permissions`, read back). Anywhere
+/// else there is no record and the permission stays what it always was, for this run of the app only.
+#[cfg(any(unix, windows))]
 pub(crate) fn remember_full_link_at(
     root: &Path,
     scope: &AccountScope,
@@ -2293,15 +2326,8 @@ pub(crate) fn remember_full_link_at(
     let unavailable = "existing_team_runtime_unavailable";
     let parent = account_dir(root, scope);
     let parent_meta = fs::symlink_metadata(&parent).map_err(|_| unavailable)?;
-    {
-        use std::os::unix::fs::{MetadataExt, PermissionsExt};
-        if parent_meta.file_type().is_symlink()
-            || !parent_meta.is_dir()
-            || parent_meta.uid() != unsafe { libc::geteuid() }
-            || parent_meta.permissions().mode() & 0o022 != 0
-        {
-            return Err(unavailable);
-        }
+    if !full_link_folder_is_private(&parent, &parent_meta) {
+        return Err(unavailable);
     }
     // Only in a folder that passed the checks above: a link or a folder that is not ours is never swept.
     sweep_full_link_leftovers(root, scope);
@@ -2334,7 +2360,7 @@ pub(crate) fn remember_full_link_at(
     written
 }
 
-#[cfg(not(unix))]
+#[cfg(not(any(unix, windows)))]
 pub(crate) fn remember_full_link_at(
     _root: &Path,
     _scope: &AccountScope,
@@ -2372,6 +2398,29 @@ pub(crate) fn forget_full_link_at(root: &Path, scope: &AccountScope) -> Result<F
             return Ok(FullLinkForgotten::Neutralized);
         }
     }
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::OpenOptionsExt;
+        // Overwritten only if it is a plain file: a link in its place is never written through, it is
+        // only moved away (below). FILE_FLAG_OPEN_REPARSE_POINT: the node itself, never its target.
+        const FILE_FLAG_OPEN_REPARSE_POINT: u32 = 0x0020_0000;
+        let plain = fs::symlink_metadata(&file).is_ok_and(|meta| meta.file_type().is_file() && !is_reparse_point(&meta));
+        let overwritten = plain
+            && OpenOptions::new()
+                .write(true)
+                .truncate(true)
+                .custom_flags(FILE_FLAG_OPEN_REPARSE_POINT)
+                .open(&file)
+                .and_then(|mut handle| handle.write_all(b"x").and_then(|_| handle.sync_all()))
+                .is_ok();
+        if overwritten {
+            return Ok(FullLinkForgotten::Neutralized);
+        }
+        let nonce = SystemTime::now().duration_since(UNIX_EPOCH).map(|elapsed| elapsed.as_nanos()).unwrap_or(0);
+        if fs::rename(&file, file.with_extension(format!("discarded-{nonce}"))).is_ok() {
+            return Ok(FullLinkForgotten::Neutralized);
+        }
+    }
     Err("existing_team_full_link_not_removed")
 }
 
@@ -2399,8 +2448,15 @@ fn read_full_link_mark(file: &Path) -> Result<Option<FullLinkMark>, ()> {
     {
         return Err(());
     }
+    read_full_link_record(&mut handle).map(Some)
+}
+
+/// The bytes of the record, read from the descriptor itself and capped before any parse, and the exact
+/// keys: schema 1 and a whole lower-case connection key, nothing else.
+#[cfg(any(unix, windows))]
+fn read_full_link_record(handle: &mut File) -> Result<FullLinkMark, ()> {
     let mut bytes = Vec::new();
-    Read::by_ref(&mut handle)
+    Read::by_ref(handle)
         .take((FULL_LINK_MAX_BYTES + 1) as u64)
         .read_to_end(&mut bytes)
         .map_err(|_| ())?;
@@ -2412,7 +2468,52 @@ fn read_full_link_mark(file: &Path) -> Result<Option<FullLinkMark>, ()> {
     if value != serde_json::to_value(&mark).map_err(|_| ())? || mark.schema != 1 || !hex(&mark.connection_key, 64) {
         return Err(());
     }
-    Ok(Some(mark))
+    Ok(mark)
+}
+
+/// The same record, believed on Windows only if it is what the Unix checks mean there: opened as the
+/// node itself (a link is not followed, and one is refused), a regular file with one name, at most 1 KiB,
+/// owned by the current user, with the protected ACL of the current user and SYSTEM only. The handle is
+/// opened sharing reads only, so nobody can replace or delete the file under it while the ACL and the
+/// bytes are read: the ACL read by name is the ACL of the file the handle holds.
+#[cfg(windows)]
+fn read_full_link_mark(file: &Path) -> Result<Option<FullLinkMark>, ()> {
+    use std::os::windows::{fs::OpenOptionsExt, io::AsRawHandle};
+    use windows_sys::Win32::Storage::FileSystem::{GetFileInformationByHandle, BY_HANDLE_FILE_INFORMATION};
+    const FILE_FLAG_OPEN_REPARSE_POINT: u32 = 0x0020_0000;
+    const FILE_SHARE_READ: u32 = 0x0000_0001;
+    let mut handle = match OpenOptions::new()
+        .read(true)
+        .share_mode(FILE_SHARE_READ)
+        .custom_flags(FILE_FLAG_OPEN_REPARSE_POINT)
+        .open(file)
+    {
+        Ok(handle) => handle,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(_) => return Err(()),
+    };
+    let meta = handle.metadata().map_err(|_| ())?;
+    if !meta.file_type().is_file()
+        || meta.file_type().is_symlink()
+        || is_reparse_point(&meta)
+        || meta.len() == 0
+        || meta.len() > FULL_LINK_MAX_BYTES as u64
+    {
+        return Err(());
+    }
+    // One name only (a hard link to the record is another name for the same bytes and ACL).
+    let mut info = BY_HANDLE_FILE_INFORMATION::default();
+    // SAFETY: the handle is open for the whole call and `info` is the structure the call fills in.
+    if unsafe { GetFileInformationByHandle(handle.as_raw_handle(), &mut info) } == 0 || info.nNumberOfLinks != 1 {
+        return Err(());
+    }
+    let user = crate::private_acl::current_user_sid().map_err(|_| ())?;
+    if !crate::private_acl::owned_by_current_user(file)
+        || !crate::private_acl::read_acl(file).is_ok_and(|acl| crate::private_acl::is_owner_only(&acl, &user))
+    {
+        return Err(());
+    }
+    read_full_link_record(&mut handle).map(Some)
 }
 
 /// At the end of a reopening that PASSED every check (the pin, the identity probe, the selection that
@@ -2420,7 +2521,7 @@ fn read_full_link_mark(file: &Path) -> Result<Option<FullLinkMark>, ()> {
 /// the record says this very connection (account and candidate bytes) and is not older than
 /// `FULL_LINK_MAX_AGE_S`. A record that is too old, from the future (the clock went back), of another
 /// candidate, or not believable is removed and the view stays read-only; no record is read-only too.
-#[cfg(unix)]
+#[cfg(any(unix, windows))]
 pub(crate) fn restore_full_link_at(
     root: &Path,
     scope: &AccountScope,
@@ -2449,7 +2550,7 @@ pub(crate) fn restore_full_link_at(
     FullLinkRestore::Restored
 }
 
-#[cfg(not(unix))]
+#[cfg(not(any(unix, windows)))]
 pub(crate) fn restore_full_link_at(
     _root: &Path,
     _scope: &AccountScope,
@@ -4040,5 +4141,295 @@ mod tests {
             &json!({"ok":true,"data":{"items":[{}]}})
         ));
         assert!(!valid_positions_reply(&list, &json!({"ok":true,"data":[]})));
+    }
+
+    /// The record is kept on Windows too, and what makes it believable there is written in the code
+    /// that reads it: this reads the source (any platform runs it), so a change that drops one of the
+    /// checks is red on the Mac and Linux gates as well, not only on a Windows runner.
+    #[test]
+    fn the_windows_record_is_read_as_the_node_itself_with_one_name_ours_and_private() {
+        let source = include_str!("existing_team_runtime.rs").replace("\r\n", "\n");
+        let source = source.split("#[cfg(test)]\nmod tests").next().unwrap();
+        let windows = source.split("#[cfg(windows)]\nfn read_full_link_mark(").nth(1).expect("the Windows reader");
+        let windows = windows.split("\n}\n").next().unwrap();
+        for needed in [
+            "FILE_FLAG_OPEN_REPARSE_POINT",
+            "FILE_SHARE_READ",
+            "handle.metadata()",
+            "is_reparse_point(&meta)",
+            "FULL_LINK_MAX_BYTES",
+            "GetFileInformationByHandle",
+            "nNumberOfLinks != 1",
+            "owned_by_current_user(file)",
+            "is_owner_only(&acl, &user)",
+            "read_full_link_record(&mut handle)",
+        ] {
+            assert!(windows.contains(needed), "{needed}");
+        }
+        // the write goes through the private-file helper (the protected ACL, read back) and the folder is checked first
+        let remember = source.split("pub(crate) fn remember_full_link_at(").nth(1).unwrap().split("\n}\n").next().unwrap();
+        assert!(remember.find("full_link_folder_is_private(&parent, &parent_meta)").unwrap() < remember.find("sweep_full_link_leftovers(").unwrap());
+        assert!(remember.find("set_private_permissions(&temporary)").unwrap() < remember.find("file.write_all(&payload)").unwrap());
+        let folder = source.split("#[cfg(windows)]\nfn full_link_folder_is_private(").nth(1).unwrap().split("\n}\n").next().unwrap();
+        for needed in ["is_reparse_point(meta)", "owned_by_current_user(folder)", "grants_only_owner("] {
+            assert!(folder.contains(needed), "{needed}");
+        }
+        // both platforms that keep a record keep the same 30 days, in one place, and one function reads the bytes
+        assert_eq!(source.matches("FULL_LINK_MAX_AGE_S: u64 = 30 * 24 * 60 * 60").count(), 1);
+        assert_eq!(source.matches("fn read_full_link_record(").count(), 1);
+    }
+
+    /// The registry on Windows, with the ACL of the current user only as the privacy that 0600 is on
+    /// Unix. Runs where the file system has ACLs; the same cases as the Unix ones (t40 to t47 of the
+    /// registration tests), each with what is different here.
+    #[cfg(windows)]
+    mod windows_full_link {
+        use super::*;
+        use crate::private_acl;
+        use std::os::windows::fs::OpenOptionsExt;
+        use std::sync::atomic::{AtomicUsize, Ordering};
+
+        static ROOTS: AtomicUsize = AtomicUsize::new(0);
+
+        struct Root {
+            root: PathBuf,
+            scope: AccountScope,
+        }
+
+        impl Root {
+            fn new() -> Self {
+                let n = ROOTS.fetch_add(1, Ordering::SeqCst);
+                let root = std::env::temp_dir().join(format!("jht-full-link-{}-{n}", std::process::id()));
+                let scope = AccountScope::synthetic_local(format!("full-link-{n}").as_bytes());
+                let made = Self { root, scope };
+                fs::create_dir_all(made.account()).expect("account folder");
+                private_acl::protect_dir(&made.account()).expect("private account folder");
+                made
+            }
+
+            fn account(&self) -> PathBuf {
+                account_dir(&self.root, &self.scope)
+            }
+
+            fn record(&self) -> PathBuf {
+                path(&self.root, &self.scope, FULL_LINK_FILE)
+            }
+        }
+
+        impl Drop for Root {
+            fn drop(&mut self) {
+                let _ = fs::remove_dir_all(&self.root);
+            }
+        }
+
+        fn serial() -> std::sync::MutexGuard<'static, ()> {
+            FULL_LINK_TEST_LOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
+        }
+
+        fn other_target() -> ActivatedTarget {
+            let mut other = ActivatedTarget::synthetic_for_tests();
+            other.candidate_sha256 = "0".repeat(64);
+            other
+        }
+
+        fn good_record(root: &Root, target: &ActivatedTarget, at: u64) -> String {
+            json!({"schema": 1, "connection_key": connection_key(&root.scope, target), "granted_at": at}).to_string()
+        }
+
+        /// A record put in place by hand, with the privacy of the app's own writes.
+        fn place(root: &Root, bytes: &str) {
+            let file = root.record();
+            let _ = fs::remove_file(&file);
+            fs::write(&file, bytes).unwrap();
+            private_acl::protect_file(&file).unwrap();
+        }
+
+        #[test]
+        fn it_is_written_private_with_the_exact_keys_and_comes_back_within_thirty_days() {
+            let _serial = serial();
+            let root = Root::new();
+            let target = ActivatedTarget::synthetic_for_tests();
+            let given = 1_800_000_000u64;
+            revoke_full_link();
+            remember_full_link_at(&root.root, &root.scope, &target, given).expect("remembered");
+            private_acl::assert_owner_only(&root.record());
+            let bytes = fs::read(root.record()).unwrap();
+            let value: Value = serde_json::from_slice(&bytes).unwrap();
+            let mut keys: Vec<&str> = value.as_object().unwrap().keys().map(String::as_str).collect();
+            keys.sort_unstable();
+            assert_eq!(keys, ["connection_key", "granted_at", "schema"]);
+            assert_eq!(value["connection_key"], connection_key(&root.scope, &target));
+            for (now, restored, what) in [
+                (given, true, "the same second"),
+                (given + FULL_LINK_MAX_AGE_S, true, "the last second of the thirtieth day"),
+                (given + FULL_LINK_MAX_AGE_S + 1, false, "one second more"),
+                (given - 1, false, "the clock went back"),
+            ] {
+                revoke_full_link();
+                remember_full_link_at(&root.root, &root.scope, &target, given).unwrap();
+                let outcome = restore_full_link_at(&root.root, &root.scope, &target, now);
+                assert_eq!(full_link_granted(&root.scope, &target), restored, "{what}");
+                assert_eq!(outcome, if restored { FullLinkRestore::Restored } else { FullLinkRestore::Expired }, "{what}");
+                assert_eq!(root.record().exists(), restored, "{what}: an expired record is removed");
+            }
+            revoke_full_link();
+        }
+
+        #[test]
+        fn another_candidate_or_another_account_never_gets_the_permission() {
+            let _serial = serial();
+            let root = Root::new();
+            let target = ActivatedTarget::synthetic_for_tests();
+            revoke_full_link();
+            remember_full_link_at(&root.root, &root.scope, &other_target(), unix_now()).unwrap();
+            assert_eq!(restore_full_link_at(&root.root, &root.scope, &target, unix_now()), FullLinkRestore::Discarded);
+            assert!(!full_link_granted(&root.scope, &target) && !root.record().exists());
+            // no record at all
+            assert_eq!(restore_full_link_at(&root.root, &root.scope, &target, unix_now()), FullLinkRestore::NotRestored);
+            // the record of this account copied into the folder of another is not the other's: its key is
+            remember_full_link_at(&root.root, &root.scope, &target, unix_now()).unwrap();
+            let other = AccountScope::synthetic_local(b"full-link-other-scope");
+            let dir = account_dir(&root.root, &other);
+            fs::create_dir_all(&dir).unwrap();
+            private_acl::protect_dir(&dir).unwrap();
+            let copy = path(&root.root, &other, FULL_LINK_FILE);
+            fs::copy(root.record(), &copy).unwrap();
+            private_acl::protect_file(&copy).unwrap();
+            assert_eq!(restore_full_link_at(&root.root, &other, &target, unix_now()), FullLinkRestore::Discarded);
+            assert!(!full_link_granted(&other, &target) && !full_link_granted(&root.scope, &target));
+            revoke_full_link();
+        }
+
+        #[test]
+        fn a_record_that_cannot_be_believed_is_ignored_and_removed() {
+            let _serial = serial();
+            let root = Root::new();
+            let target = ActivatedTarget::synthetic_for_tests();
+            let now = unix_now();
+            let good = good_record(&root, &target, now);
+            let key = connection_key(&root.scope, &target);
+            let cases: Vec<(&str, Box<dyn Fn() + '_>)> = vec![
+                ("open to Everyone and Users", Box::new(|| {
+                    place(&root, &good);
+                    private_acl::open_to_everyone_and_users(&root.record(), true);
+                })),
+                ("only the ACL it inherits from the folder, not protected on its own", Box::new(|| {
+                    let _ = fs::remove_file(root.record());
+                    fs::write(root.record(), &good).unwrap();
+                })),
+                ("two names (a hard link)", Box::new(|| {
+                    place(&root, &good);
+                    fs::hard_link(root.record(), root.account().join("second-name")).unwrap();
+                })),
+                ("a folder in its place", Box::new(|| {
+                    let _ = fs::remove_file(root.record());
+                    fs::create_dir(root.record()).unwrap();
+                })),
+                ("over 1 KiB", Box::new(|| place(&root, &format!("{good}{}", " ".repeat(2000))))),
+                ("empty", Box::new(|| place(&root, ""))),
+                ("not JSON", Box::new(|| place(&root, "granted"))),
+                ("an extra key", Box::new(|| place(&root, &good.replace('}', ",\"host\":\"x\"}")))),
+                ("another schema", Box::new(|| place(&root, &good.replace("\"schema\":1", "\"schema\":2")))),
+                ("a key that is not a whole hash", Box::new(|| place(&root, &good.replace(&key, &key[..63])))),
+                ("an upper-case hash", Box::new(|| place(&root, &good.replace(&key, &key.to_uppercase())))),
+                ("a date that is a float", Box::new(|| place(&root, &good.replace(&now.to_string(), &format!("{now}.5"))))),
+                ("a negative date", Box::new(|| place(&root, &good.replace(&now.to_string(), "-5")))),
+            ];
+            for (what, prepare) in &cases {
+                revoke_full_link();
+                let _ = fs::remove_file(root.account().join("second-name"));
+                let _ = fs::remove_dir(root.record());
+                prepare();
+                assert_eq!(restore_full_link_at(&root.root, &root.scope, &target, now), FullLinkRestore::Discarded, "{what}");
+                assert!(!full_link_granted(&root.scope, &target), "{what}");
+                assert!(fs::symlink_metadata(root.record()).is_err(), "{what}: the record is removed");
+            }
+            // and the same record, written the way the app writes it, does come back: the cases above are the defense
+            revoke_full_link();
+            let _ = fs::remove_file(root.account().join("second-name"));
+            place(&root, &good);
+            assert_eq!(restore_full_link_at(&root.root, &root.scope, &target, now), FullLinkRestore::Restored);
+            revoke_full_link();
+        }
+
+        #[test]
+        fn a_link_in_place_of_the_record_is_not_followed() {
+            let _serial = serial();
+            let root = Root::new();
+            let target = ActivatedTarget::synthetic_for_tests();
+            let now = unix_now();
+            let real = root.account().join("elsewhere.json");
+            fs::write(&real, good_record(&root, &target, now)).unwrap();
+            private_acl::protect_file(&real).unwrap();
+            // creating a symbolic link needs a privilege some accounts do not have: then there is nothing to try
+            if std::os::windows::fs::symlink_file(&real, root.record()).is_err() {
+                return;
+            }
+            revoke_full_link();
+            assert_eq!(restore_full_link_at(&root.root, &root.scope, &target, now), FullLinkRestore::Discarded);
+            assert!(!full_link_granted(&root.scope, &target));
+            assert!(real.exists(), "the target of the link is not touched");
+            assert!(fs::symlink_metadata(root.record()).is_err(), "the link itself is removed");
+        }
+
+        #[test]
+        fn a_folder_that_is_not_private_gets_no_record_and_no_sweep() {
+            let _serial = serial();
+            let root = Root::new();
+            let target = ActivatedTarget::synthetic_for_tests();
+            let unavailable: Result<(), &str> = Err("existing_team_runtime_unavailable");
+            let stray = root.account().join("existing-team-runtime-full-link.tmp-9-9");
+            fs::write(&stray, b"half").unwrap();
+            private_acl::open_to_everyone_and_users(&root.account(), true);
+            assert_eq!(remember_full_link_at(&root.root, &root.scope, &target, 1), unavailable);
+            assert!(stray.exists(), "no sweep before the folder has passed its checks");
+            assert!(!root.record().exists());
+            // and the folder, made private again, takes it and sweeps what an interrupted write left
+            private_acl::protect_dir(&root.account()).unwrap();
+            remember_full_link_at(&root.root, &root.scope, &target, unix_now()).unwrap();
+            assert!(!stray.exists() && root.record().exists());
+            // a file that is not a folder in its place is refused too
+            fs::remove_dir_all(root.account()).unwrap();
+            fs::write(root.account(), b"x").unwrap();
+            assert_eq!(remember_full_link_at(&root.root, &root.scope, &target, 1), unavailable);
+            revoke_full_link();
+        }
+
+        #[test]
+        fn taking_it_away_says_when_it_could_only_be_neutralized_and_when_it_could_not() {
+            let _serial = serial();
+            let root = Root::new();
+            let target = ActivatedTarget::synthetic_for_tests();
+            // a file nobody is holding goes
+            remember_full_link_at(&root.root, &root.scope, &target, unix_now()).unwrap();
+            assert_eq!(forget_full_link_at(&root.root, &root.scope), Ok(FullLinkForgotten::Removed));
+            assert!(!root.record().exists());
+            assert_eq!(forget_full_link_at(&root.root, &root.scope), Ok(FullLinkForgotten::Removed), "nothing to remove is removed");
+            // held open by someone who lets others read and write but not delete or rename: it cannot go,
+            // but it can be overwritten, and then it is no record
+            remember_full_link_at(&root.root, &root.scope, &target, unix_now()).unwrap();
+            let holder = OpenOptions::new().read(true).share_mode(0x1 | 0x2).open(root.record()).unwrap();
+            assert_eq!(forget_full_link_at(&root.root, &root.scope), Ok(FullLinkForgotten::Neutralized));
+            drop(holder);
+            revoke_full_link();
+            assert_eq!(restore_full_link_at(&root.root, &root.scope, &target, unix_now()), FullLinkRestore::Discarded);
+            assert!(!full_link_granted(&root.scope, &target));
+            // held open by someone who lets nobody in: neither works, and the error is said by name
+            remember_full_link_at(&root.root, &root.scope, &target, unix_now()).unwrap();
+            let holder = OpenOptions::new().read(true).share_mode(0).open(root.record()).unwrap();
+            assert_eq!(forget_full_link_at(&root.root, &root.scope), Err("existing_team_full_link_not_removed"));
+            drop(holder);
+            assert_eq!(forget_full_link_at(&root.root, &root.scope), Ok(FullLinkForgotten::Removed));
+            // leaving the account takes it the same way, and another account's record stays
+            remember_full_link_at(&root.root, &root.scope, &target, unix_now()).unwrap();
+            let other = AccountScope::synthetic_local(b"full-link-kept-scope");
+            let dir = account_dir(&root.root, &other);
+            fs::create_dir_all(&dir).unwrap();
+            fs::write(dir.join(FULL_LINK_FILE), b"x").unwrap();
+            crate::account_scope::forget_write_access_at(&root.root, &root.scope);
+            assert!(!root.record().exists());
+            assert!(dir.join(FULL_LINK_FILE).exists());
+            revoke_full_link();
+        }
     }
 }

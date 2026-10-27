@@ -172,8 +172,8 @@ connection (the account and the saved connection) and to confirm with **Confirm 
 connects to the team again, as it did the first time. If something fails after you confirm, the
 page stays read only and you can try again.
 
-**On a Mac the write access you confirmed survives a restart, for up to 30 days.** The app
-remembers it on this computer, and at every start where it is on a fixed row says so: **Write access
+**On a Mac, on Windows and on Linux the write access you confirmed survives a restart, for up to 30 days.** The app
+remembers it on this computer (on Windows in a file only your user and the system may open), and at every start where it is on a fixed row says so: **Write access
 is on for** your user and the server, with the button **Switch to read only**. The permission comes
 back only if the check at start passes (the saved server fingerprint, the team's identity and the same
 saved team). It ends when you switch to read only, when you unlink the team, when the team changes
