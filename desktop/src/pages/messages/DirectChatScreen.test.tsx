@@ -849,3 +849,48 @@ describe("DirectChatScreen: where the text goes, and when it is delivered", () =
     expect(newLineAt("", 0, 0)).toEqual({ value: "\n", cursor: 1 });
   });
 });
+
+describe("the Messages page opened with the connection closed", () => {
+  // Like the native side: nothing open reads «disconnected»; after an opening that worked it reads «ready».
+  function closedChat(opening: () => Promise<DirectChatStatus>) {
+    let current: DirectChatStatus = { state: "disconnected" };
+    const mock: DirectChatClient = {
+      subscribe: vi.fn(async () => current),
+      status: vi.fn(async () => current),
+      reconnect: vi.fn(async () => {
+        current = await opening();
+        return current;
+      }),
+      read: vi.fn(async (): Promise<DirectChatPage> => ({ messages: [{ id: "a1", role: "agent", text: "Messaggio dal team", at: 1 }] })),
+      send: vi.fn(),
+      close: vi.fn(),
+    };
+    return mock;
+  }
+
+  it("opens it by itself, with no Retry to press (the profile imported from the command line leaves nothing open)", async () => {
+    viewport(1000, 500);
+    const mock = closedChat(async () => ({ state: "ready" }));
+    render(<DirectChatScreen client={mock} />);
+    expect(await screen.findByText("Messaggio dal team")).toBeTruthy();
+    expect(mock.reconnect).toHaveBeenCalledTimes(1);
+    expect(screen.getByTestId("direct-chat-status")).toHaveTextContent("Team collegato");
+    expect(within(screen.getByTestId("direct-chat-status")).queryByRole("button", { name: "Riprova" })).toBeNull();
+  });
+
+  it("says why it could not open, with Retry, when there is no host saved, and does not ask again", async () => {
+    viewport(1000, 500);
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      const mock = closedChat(async () => { throw { code: "host_not_configured" }; });
+      render(<DirectChatScreen client={mock} />);
+      const bar = await screen.findByTestId("direct-chat-status");
+      await waitFor(() => expect(bar).toHaveAttribute("role", "alert"));
+      expect(mock.reconnect).toHaveBeenCalledTimes(1);
+      expect(within(bar).getByRole("button", { name: "Riprova" })).toBeTruthy();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
