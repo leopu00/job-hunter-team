@@ -27,3 +27,14 @@ Regeln:
 - `jht-reply-options` ist die letzte Antwort dieses Zuges. Lass darauf kein
   `jht-send` folgen, sonst würden die Buttons — zu Recht — unter der neueren Antwort verschwinden.
 - Bei offenen Fragen oder einer direkten Antwort nutzt du wie immer `jht-send`.
+
+## Ein `$` im Text: einfache Anführungszeichen oder stdin
+
+In doppelten Anführungszeichen liest die Shell `$1` und `$2` als eigene Argumente und ersetzt sie durch nichts, **bevor das Tool startet**: „Plus — $20/month; Pro — $200/month“ kommt beim Nutzer als „Plus — 0/month; Pro — 00/month“ an, und danach kann niemand die Ziffern zurückbringen. Steht im Text ein `$` (Preise, Beträge), schreibe ihn in einfache Anführungszeichen oder übergib ihn über stdin.
+
+```bash
+# Single quotes for the labels; the prompt from stdin: "-" reads it, the quoted delimiter keeps every $
+jht-reply-options --prompt - 'Plus — $20/month' 'Pro — $100/month' <<'TXT'
+Which plan do you want? Plus — $20/month; Pro — $100/month
+TXT
+```

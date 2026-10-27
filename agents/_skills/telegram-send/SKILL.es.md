@@ -70,6 +70,20 @@ jht-telegram-send --from mentor --html "<b>Step di crescita</b> della settimana:
 jht-telegram-send --html "<b>CV per Acme — Senior FE</b> pronto.\nLo trovi in <code>~/Documents/Job Hunter Team/output/2026-05-12/acme-senior-fe/</code>."
 ```
 
+## Un `$` en el texto: comillas simples o stdin
+
+Entre comillas dobles la shell lee `$1` y `$2` como argumentos suyos y los sustituye por nada **antes de que arranque la herramienta**: «Plus — $20/month; Pro — $200/month» llega al usuario como «Plus — 0/month; Pro — 00/month», y nadie más adelante puede devolver las cifras. Si el texto lleva un `$` (precios, importes), escríbelo entre comillas simples o pásalo por stdin.
+
+```bash
+# Single quotes: the shell leaves the $ alone
+jht-telegram-send 'Plus — $20/month; Pro — $100/month'
+
+# Or from stdin: "-" reads the text, the quoted delimiter keeps every $
+jht-telegram-send - <<'TXT'
+Plus — $20/month; Pro — $100/month
+TXT
+```
+
 ## Secuencias de escape (`\n`, `\t`, `\r`)
 
 El wrapper interpreta `\n`, `\t`, `\r` en tu mensaje como **saltos de línea/tabulaciones/retornos de carro reales** antes de enviar a Telegram. Así puedes escribir:

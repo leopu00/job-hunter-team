@@ -70,6 +70,20 @@ jht-telegram-send --from mentor --html "<b>Step di crescita</b> della settimana:
 jht-telegram-send --html "<b>CV per Acme — Senior FE</b> pronto.\nLo trovi in <code>~/Documents/Job Hunter Team/output/2026-05-12/acme-senior-fe/</code>."
 ```
 
+## `$` a szövegben: szimpla idézőjel vagy stdin
+
+Dupla idézőjelben a shell a `$1`-et és a `$2`-t a saját argumentumának olvassa, és semmire cseréli **mielőtt az eszköz elindulna**: a „Plus — $20/month; Pro — $200/month” a felhasználóhoz „Plus — 0/month; Pro — 00/month” alakban jut el, és később senki nem tudja visszaadni a számjegyeket. Ha a szövegben `$` van (árak, összegek), szimpla idézőjelben írd, vagy stdinen add át.
+
+```bash
+# Single quotes: the shell leaves the $ alone
+jht-telegram-send 'Plus — $20/month; Pro — $100/month'
+
+# Or from stdin: "-" reads the text, the quoted delimiter keeps every $
+jht-telegram-send - <<'TXT'
+Plus — $20/month; Pro — $100/month
+TXT
+```
+
 ## Escape szekvenciak (`\n`, `\t`, `\r`)
 
 A wrapper a `\n`, `\t`, `\r` karaktereket az uzenetedben **valos sortoresekre/tabokra/CR-ekre** ertelmezia Telegramra kuldes elott. Tehat irhatsz igy:

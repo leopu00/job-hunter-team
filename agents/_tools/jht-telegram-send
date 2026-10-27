@@ -16,12 +16,21 @@
 #   jht-telegram-send --from capitano "<testo>"       # bot Capitano
 #   jht-telegram-send --from mentor --html "<b>x</b>"
 #   jht-telegram-send --chat-id 123 "<testo>"         # override chat_id
+#   jht-telegram-send - <<'TXT'                       # il testo da stdin (vedi sotto)
+#       Plus — $20/mese; Pro — $100/mese
+#       TXT
 #   jht-telegram-send --inline-buttons '<json>' "<testo>"
 #       bottoni sotto il messaggio (solo `{"inline_keyboard":[[{"text":…,
 #       "callback_data":"jhtq:<4 esadecimali>:<n>"}]…]}`: i bottoni delle domande
 #       strutturate; li riceve tg-bridge.py come callback_query). Con il
 #       servizio Telegram isolato (dopo il cutover) i bottoni NON ci sono: parte
 #       il solo testo, con le opzioni numerate.
+#
+# Un `$` nel testo: tra virgolette doppie la shell legge `$1` e `$2` come suoi
+# argomenti e li sostituisce con niente PRIMA che parta questo script («$20»
+# arriva come «0»), e da qui non si può rimediare. Apici singoli, oppure `-` al
+# posto del testo: allora il testo si legge da stdin (heredoc con il
+# delimitatore tra apici, <<'TXT', che lascia ogni `$` com'è).
 #
 # Exit:
 #   0 → consegnato (HTTP 200, ok:true)
@@ -82,6 +91,9 @@ while [ $# -gt 0 ]; do
       photo_path="${2:-}"; shift 2 ;;
     --)
       shift; break ;;
+    -)
+      # Il testo da stdin (vedi in cima): non e' un flag.
+      break ;;
     -*)
       echo "jht-telegram-send: flag sconosciuto: $1" >&2
       exit 1 ;;
@@ -102,7 +114,16 @@ if [ $# -lt 1 ]; then
   exit 1
 fi
 
-text="$*"
+if [ $# -eq 1 ] && [ "$1" = "-" ]; then
+  # Il testo da stdin: `$(cat)` toglie da sé gli a capo finali. Un testo vuoto non parte.
+  text="$(cat)"
+  if [ -z "${text//[[:space:]]/}" ]; then
+    echo "jht-telegram-send: il testo su stdin è vuoto: non invio" >&2
+    exit 1
+  fi
+else
+  text="$*"
+fi
 # Gli agenti tendono a scrivere `\n\n` come separatore paragrafi (è la
 # convenzione naturale in stringhe singole), confidando che venga
 # interpretato come newline. In bash NON è automatico: senza

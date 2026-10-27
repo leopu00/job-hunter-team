@@ -84,6 +84,21 @@ Regras:
 - **Aspas**: passe o corpo como um único argumento posicional. Aspas simples preservam `$`, `"`, emoji, acentos literalmente. Para um corpo que contenha um `'` literal, use aspas duplas (`jht-send "não há problema"`) — mas dentro de `"..."` o shell vai expandir `$var`, por isso tenha cuidado.
 - **Multi-linha**: bash `$'linha1\nlinha2'`, ou use `\n` dentro da string e deixe o Python preservar.
 
+## Um `$` no texto: aspas simples ou stdin
+
+Entre aspas duplas a shell lê `$1` e `$2` como argumentos seus e substitui-os por nada **antes de a ferramenta arrancar**: «Plus — $20/month; Pro — $200/month» chega ao utilizador como «Plus — 0/month; Pro — 00/month», e mais adiante ninguém consegue devolver os dígitos. Se o texto tiver um `$` (preços, montantes), escreve-o entre aspas simples ou passa-o por stdin.
+
+```bash
+# Single quotes: the shell leaves the $ alone
+jht-send 'Plus — $20/month; Pro — $100/month'
+
+# A text with an apostrophe AND a $ cannot use single quotes: from stdin, "-" reads the text
+# and the quoted delimiter keeps every $
+jht-send - <<'TXT'
+It's $20/month, not $200
+TXT
+```
+
 ## Tipo de mensagem (`--kind`)
 
 `jht-send --kind <tipo> '...'` etiqueta a mensagem (por omissão `info`, que não escreve nada a mais). O tipo és tu que o declaras: a ferramenta recebe-o e escreve-o tal como está, ninguém o verifica. Só vale numa mensagem final: não com `--partial` nem com `--role system`.

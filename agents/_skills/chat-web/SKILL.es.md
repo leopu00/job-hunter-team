@@ -84,6 +84,21 @@ Reglas:
 - **Comillas**: pasa el cuerpo como un solo argumento posicional. Las comillas simples preservan `$`, `"`, emoji, acentos literalmente. Para un cuerpo que contiene una `'` literal, usa comillas dobles (`jht-send "non c'è problema"`) — pero dentro de `"..."` el shell expandirá `$var`, así que ten cuidado.
 - **Multi-línea**: bash `$'linea1\nlinea2'`, o usa `\n` dentro de la cadena y deja que Python lo preserve.
 
+## Un `$` en el texto: comillas simples o stdin
+
+Entre comillas dobles la shell lee `$1` y `$2` como argumentos suyos y los sustituye por nada **antes de que arranque la herramienta**: «Plus — $20/month; Pro — $200/month» llega al usuario como «Plus — 0/month; Pro — 00/month», y nadie más adelante puede devolver las cifras. Si el texto lleva un `$` (precios, importes), escríbelo entre comillas simples o pásalo por stdin.
+
+```bash
+# Single quotes: the shell leaves the $ alone
+jht-send 'Plus — $20/month; Pro — $100/month'
+
+# A text with an apostrophe AND a $ cannot use single quotes: from stdin, "-" reads the text
+# and the quoted delimiter keeps every $
+jht-send - <<'TXT'
+It's $20/month, not $200
+TXT
+```
+
 ## Tipo de mensaje (`--kind`)
 
 `jht-send --kind <tipo> '...'` etiqueta el mensaje (por defecto `info`, que no escribe nada extra). El tipo lo declaras tú: la herramienta lo toma y lo escribe tal cual, nadie lo verifica. Solo vale en un mensaje final: no con `--partial` ni con `--role system`.

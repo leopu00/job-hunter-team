@@ -83,6 +83,21 @@ Rules:
 - **Quotes**: pass the body as a single positional arg. Single quotes preserve `$`, `"`, emoji, accents verbatim. For a body containing a literal `'`, use double quotes (`jht-send "non c'è problema"`) — but inside `"..."` shell will expand `$var`, so be careful.
 - **Multi-line**: bash `$'riga1\nriga2'`, or use `\n` inside the string and let Python preserve it.
 
+## A `$` in the text: single quotes or stdin
+
+Inside double quotes the shell reads `$1` and `$2` as its own arguments and replaces them with nothing **before the tool runs**: "Plus — $20/month; Pro — $200/month" reaches the user as "Plus — 0/month; Pro — 00/month", and nothing downstream can bring the digits back. Whenever the text has a `$` (prices, amounts), write it between single quotes, or pass it on stdin.
+
+```bash
+# Single quotes: the shell leaves the $ alone
+jht-send 'Plus — $20/month; Pro — $100/month'
+
+# A text with an apostrophe AND a $ cannot use single quotes: from stdin, "-" reads the text
+# and the quoted delimiter keeps every $
+jht-send - <<'TXT'
+It's $20/month, not $200
+TXT
+```
+
 ## Message kind (`--kind`)
 
 `jht-send --kind <kind> '...'` tags the message (default `info`, which writes nothing extra). The kind is yours to declare: the tool takes it as you give it and writes it as is, nothing checks it. It only applies to a final message: not with `--partial` and not with `--role system`.

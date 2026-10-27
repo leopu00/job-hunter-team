@@ -84,6 +84,21 @@ Regole:
 - **Apici**: passa il corpo come singolo argomento posizionale. Gli apici singoli preservano `$`, `"`, emoji, accenti alla lettera. Per un corpo che contiene un apice singolo letterale, usa doppi apici (`jht-send "non c'è problema"`) — ma dentro `"..."` la shell espanderà `$var`, quindi attenzione.
 - **Multi-riga**: bash `$'riga1\nriga2'`, o usa `\n` dentro la stringa e lascia che Python li preservi.
 
+## Un `$` nel testo: apici singoli o stdin
+
+Tra virgolette doppie la shell legge `$1` e `$2` come suoi argomenti e li sostituisce con niente **prima che il tool parta**: «Plus — $20/month; Pro — $200/month» arriva all'utente come «Plus — 0/month; Pro — 00/month», e a valle nessuno può ridare le cifre. Se il testo ha un `$` (prezzi, importi), scrivilo tra apici singoli oppure passalo da stdin.
+
+```bash
+# Single quotes: the shell leaves the $ alone
+jht-send 'Plus — $20/month; Pro — $100/month'
+
+# A text with an apostrophe AND a $ cannot use single quotes: from stdin, "-" reads the text
+# and the quoted delimiter keeps every $
+jht-send - <<'TXT'
+It's $20/month, not $200
+TXT
+```
+
 ## Tipo del messaggio (`--kind`)
 
 `jht-send --kind <tipo> '...'` etichetta il messaggio (default `info`, che non scrive nulla in più). Il tipo lo dichiari tu: lo strumento lo prende e lo scrive così com'è, nessuno lo verifica. Vale solo su un messaggio finale: non con `--partial` né con `--role system`.

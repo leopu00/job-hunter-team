@@ -27,3 +27,14 @@ Szabályok:
 - A `jht-reply-options` az adott kör utolsó válasza. Ne küldj utána `jht-send`
   parancsot, különben a gombok — jogosan — eltűnnének az újabb válasz alatt.
 - Nyílt végű kérdésnél vagy közvetlen válasznál a szokásos módon a `jht-send` parancsot használd.
+
+## `$` a szövegben: szimpla idézőjel vagy stdin
+
+Dupla idézőjelben a shell a `$1`-et és a `$2`-t a saját argumentumának olvassa, és semmire cseréli **mielőtt az eszköz elindulna**: a „Plus — $20/month; Pro — $200/month” a felhasználóhoz „Plus — 0/month; Pro — 00/month” alakban jut el, és később senki nem tudja visszaadni a számjegyeket. Ha a szövegben `$` van (árak, összegek), szimpla idézőjelben írd, vagy stdinen add át.
+
+```bash
+# Single quotes for the labels; the prompt from stdin: "-" reads it, the quoted delimiter keeps every $
+jht-reply-options --prompt - 'Plus — $20/month' 'Pro — $100/month' <<'TXT'
+Which plan do you want? Plus — $20/month; Pro — $100/month
+TXT
+```

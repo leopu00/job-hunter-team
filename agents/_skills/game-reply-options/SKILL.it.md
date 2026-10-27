@@ -24,3 +24,14 @@ Regole:
 - `jht-reply-options` è la risposta finale del turno: non inviare poi `jht-send`,
   altrimenti una risposta più recente farà correttamente sparire i pulsanti.
 - Se la domanda è aperta o richiede una risposta diretta, usa `jht-send`.
+
+## Un `$` nel testo: apici singoli o stdin
+
+Tra virgolette doppie la shell legge `$1` e `$2` come suoi argomenti e li sostituisce con niente **prima che il tool parta**: «Plus — $20/month; Pro — $200/month» arriva all'utente come «Plus — 0/month; Pro — 00/month», e a valle nessuno può ridare le cifre. Se il testo ha un `$` (prezzi, importi), scrivilo tra apici singoli oppure passalo da stdin.
+
+```bash
+# Single quotes for the labels; the prompt from stdin: "-" reads it, the quoted delimiter keeps every $
+jht-reply-options --prompt - 'Plus — $20/month' 'Pro — $100/month' <<'TXT'
+Which plan do you want? Plus — $20/month; Pro — $100/month
+TXT
+```

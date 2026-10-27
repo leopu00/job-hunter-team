@@ -84,6 +84,21 @@ Regeln:
 - **Anführungszeichen**: Übergib den Body als einzelnes positionelles Argument. Einfache Anführungszeichen bewahren `$`, `"`, Emoji, Akzente wörtlich. Für einen Body, der ein wörtliches `'` enthält, verwende doppelte Anführungszeichen (`jht-send "non c'è problema"`) — aber innerhalb von `"..."` expandiert die Shell `$var`, also sei vorsichtig.
 - **Mehrzeilig**: Bash `$'Zeile1\nZeile2'`, oder verwende `\n` innerhalb des Strings und lass Python es bewahren.
 
+## Ein `$` im Text: einfache Anführungszeichen oder stdin
+
+In doppelten Anführungszeichen liest die Shell `$1` und `$2` als eigene Argumente und ersetzt sie durch nichts, **bevor das Tool startet**: „Plus — $20/month; Pro — $200/month“ kommt beim Nutzer als „Plus — 0/month; Pro — 00/month“ an, und danach kann niemand die Ziffern zurückbringen. Steht im Text ein `$` (Preise, Beträge), schreibe ihn in einfache Anführungszeichen oder übergib ihn über stdin.
+
+```bash
+# Single quotes: the shell leaves the $ alone
+jht-send 'Plus — $20/month; Pro — $100/month'
+
+# A text with an apostrophe AND a $ cannot use single quotes: from stdin, "-" reads the text
+# and the quoted delimiter keeps every $
+jht-send - <<'TXT'
+It's $20/month, not $200
+TXT
+```
+
 ## Nachrichtentyp (`--kind`)
 
 `jht-send --kind <Typ> '...'` markiert die Nachricht (Standard `info`, dabei wird nichts zusätzlich geschrieben). Den Typ erklärst du selbst: das Tool übernimmt ihn und schreibt ihn so, wie er ist, nichts prüft ihn. Er gilt nur für eine abschließende Nachricht: nicht mit `--partial` und nicht mit `--role system`.

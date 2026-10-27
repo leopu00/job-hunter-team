@@ -1,5 +1,11 @@
 #!/usr/bin/env python3
-"""Emit one final JHT chat reply with optional clickable answer choices."""
+"""Emit one final JHT chat reply with optional clickable answer choices.
+
+A `$` in the text: between double quotes the shell reads `$1` and `$2` as its own arguments and replaces
+them with nothing BEFORE this tool starts ("$20" reaches the user as "0"). Use single quotes, or
+`--prompt -` with a heredoc whose delimiter is quoted (<<'TXT'): the prompt then comes from stdin. The
+choices are short labels: single quotes are enough for them.
+"""
 from __future__ import annotations
 
 import argparse
@@ -23,11 +29,15 @@ def main() -> int:
     parser = argparse.ArgumentParser(
         description="Reply in JHT chat and offer 2-5 generated clickable answers."
     )
-    parser.add_argument("--prompt", required=True, help="Agent reply shown above choices")
+    parser.add_argument(
+        "--prompt",
+        required=True,
+        help="Agent reply shown above choices; `-` reads it from stdin (a quoted heredoc keeps every $)",
+    )
     parser.add_argument("--agent", help="Target agent id; normally inferred")
     parser.add_argument("choice", nargs="+", help="2-5 useful reply labels")
     args = parser.parse_args()
-    prompt = args.prompt.strip()
+    prompt = (sys.stdin.read() if args.prompt == "-" else args.prompt).strip()
     choices = [value.strip() for value in args.choice if value.strip()]
     if not prompt or not 2 <= len(choices) <= 5:
         parser.error("--prompt and between 2 and 5 non-empty choices are required")

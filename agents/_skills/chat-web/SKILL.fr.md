@@ -84,6 +84,21 @@ Règles :
 - **Guillemets** : passez le corps comme un seul argument positionnel. Les guillemets simples préservent `$`, `"`, emoji, accents verbatim. Pour un corps contenant un `'` littéral, utilisez des guillemets doubles (`jht-send "pas de problème"`) — mais à l'intérieur de `"..."` le shell développera `$var`, donc attention.
 - **Multi-ligne** : bash `$'ligne1\nligne2'`, ou utilisez `\n` dans la chaîne et laissez Python le préserver.
 
+## Un `$` dans le texte : apostrophes simples ou stdin
+
+Entre guillemets doubles, le shell lit `$1` et `$2` comme ses propres arguments et les remplace par rien **avant que l'outil ne démarre** : « Plus — $20/month ; Pro — $200/month » arrive chez l'utilisateur comme « Plus — 0/month ; Pro — 00/month », et personne en aval ne peut rendre les chiffres. Si le texte contient un `$` (prix, montants), écris-le entre apostrophes simples ou passe-le par stdin.
+
+```bash
+# Single quotes: the shell leaves the $ alone
+jht-send 'Plus — $20/month; Pro — $100/month'
+
+# A text with an apostrophe AND a $ cannot use single quotes: from stdin, "-" reads the text
+# and the quoted delimiter keeps every $
+jht-send - <<'TXT'
+It's $20/month, not $200
+TXT
+```
+
 ## Type de message (`--kind`)
 
 `jht-send --kind <type> '...'` étiquette le message (par défaut `info`, qui n'écrit rien de plus). Le type, c'est toi qui le déclares : l'outil le prend et l'écrit tel quel, personne ne le vérifie. Il ne vaut que sur un message final : pas avec `--partial` ni avec `--role system`.
