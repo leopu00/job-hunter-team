@@ -158,6 +158,8 @@ const REOPEN_NO_RETRY = new Set([
   "account_scope_mismatch",
   "read_only_link",
   "existing_team_runtime_target_changed",
+  "host_not_configured",
+  "host_config_invalid",
 ]);
 
 function StatusBar({
@@ -327,9 +329,10 @@ export default function DirectChatScreen({
       let openingFailed = false;
       try {
         let snapshot = await client.status();
-        // An embedded pane may open after the connection was closed (leaving the Messages page
-        // closes it): the saved host is enough to open it again, with no question to the person.
-        for (let attempt = 1; embedded && active && snapshot.state === "disconnected"; attempt += 1) {
+        // The chat may open with the connection closed: leaving the Messages page closes it, and a profile
+        // imported from the command line brings the person here with nothing opened. The saved host is
+        // enough to open it again, with no question to the person: the pane and the page alike.
+        for (let attempt = 1; active && snapshot.state === "disconnected"; attempt += 1) {
           setStatus({ state: "connecting" });
           try {
             snapshot = await client.reconnect();

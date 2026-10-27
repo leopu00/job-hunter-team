@@ -2226,7 +2226,7 @@ fn install_local(
                     if let Some(log) = log {
                         log.record_result("install.sh", &result, &stderr, started.elapsed());
                     }
-                    ensure_success(result, "runtime_install_failed")
+                    ensure_local_install_success(result)
                 });
                 if let Err(error) = installed {
                     trace_local_runtime("runtime", "install_failed");
@@ -2314,7 +2314,7 @@ fn install_local(
                     if let Some(log) = log {
                         log.record_result("install.sh", &result, &stderr, started.elapsed());
                     }
-                    ensure_success(result, "runtime_install_failed")
+                    ensure_local_install_success(result)
                 })?;
             }
             wrapper_path(app).ok_or_else(|| failure("runtime_missing"))
@@ -2412,6 +2412,15 @@ fn ensure_success(
     }
 }
 
+/// The install on this computer: exit 84 is install.sh refusing to change the configuration of a team that
+/// runs. It is not a failure of the preparation, so it must not be told as one («check your connection»).
+fn ensure_local_install_success(result: Result<ProcessResult, &'static str>) -> Result<(), OnboardingError> {
+    if matches!(&result, Ok(value) if value.code == REMOTE_INSTALL_TEAM_RUNNING_EXIT) {
+        return Err(failure(LOCAL_TEAM_RUNNING));
+    }
+    ensure_success(result, "runtime_install_failed")
+}
+
 fn ensure_success_with_timeout(
     result: Result<ProcessResult, &'static str>,
     code: &'static str,
@@ -2441,6 +2450,8 @@ const REMOTE_INSTALL_RUNTIME_CHANGE_EXIT: i32 = 85;
 /// configuration under it, so the install stopped before changing anything.
 const REMOTE_INSTALL_TEAM_RUNNING_EXIT: i32 = 84;
 const VPS_TEAM_RUNNING: &str = "vps_team_running";
+/// The same refusal of install.sh (exit 84) on this computer: the team was started by hand, with `jht up`.
+const LOCAL_TEAM_RUNNING: &str = "local_team_running";
 /// The runtime of every VPS: rootless Podman, a fixed choice.
 const REMOTE_INSTALL_RUNTIME: &str = " --runtime podman";
 /// What install.sh says, with its own exit, when the VPS cannot run rootless
@@ -7380,6 +7391,18 @@ mod tests {
 
     fn exited(code: i32) -> Result<ProcessResult, &'static str> {
         Ok(ProcessResult { code, stdout: Vec::new() })
+    }
+
+    #[test]
+    fn an_install_on_this_computer_with_the_team_running_says_so_and_not_that_the_preparation_failed() {
+        use super::ensure_local_install_success;
+        assert!(ensure_local_install_success(exited(0)).is_ok());
+        let refused = ensure_local_install_success(exited(84)).unwrap_err();
+        assert_eq!(refused.code, "local_team_running");
+        // once the team is stopped, asking again works
+        assert!(refused.retryable);
+        assert_eq!(ensure_local_install_success(exited(1)).unwrap_err().code, "runtime_install_failed");
+        assert_eq!(ensure_local_install_success(Err("process_timeout")).unwrap_err().code, "timeout");
     }
 
     #[test]

@@ -69,4 +69,23 @@ describe("the retry of a failed setup step", () => {
     render(<OnboardingFlow {...props({ runtime: { status: "working", stage: "runtime", message: "Preparo" } })} />);
     expect(screen.queryByTestId("onboarding-retry-here")).toBeNull();
   });
+  it("runs at the first click after the step failed again while the previous retry was still finishing", async () => {
+    // The retry promise outlives the screen: the step went working → failed again, the button is back, and the
+    // click on it must not be thrown away because the earlier retry has not returned yet.
+    let finishFirst: () => void = () => undefined;
+    const onRetry = vi.fn()
+      .mockImplementationOnce(() => new Promise<void>((resolve) => { finishFirst = resolve; }))
+      .mockResolvedValue(undefined);
+    const failed = { status: "failed", stage: "runtime", message: "Il team è acceso.", code: "local_team_running", retryable: true } as const;
+    const { rerender } = render(<OnboardingFlow {...props({ onRetry, runtime: failed })} />);
+    await userEvent.click(within(screen.getByRole("alert")).getByTestId("onboarding-retry-here"));
+    expect(onRetry).toHaveBeenCalledTimes(1);
+    rerender(<OnboardingFlow {...props({ onRetry, runtime: { status: "working", stage: "runtime", message: "Preparo" } })} />);
+    rerender(<OnboardingFlow {...props({ onRetry, runtime: { ...failed, code: "runtime_install_failed" } })} />);
+    const again = within(screen.getByRole("alert")).getByTestId("onboarding-retry-here");
+    expect(again).not.toBeDisabled();
+    await userEvent.click(again);
+    expect(onRetry).toHaveBeenCalledTimes(2);
+    finishFirst();
+  });
 });
