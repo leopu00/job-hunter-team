@@ -30,6 +30,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import sys
 from pathlib import Path
 from typing import Optional
@@ -145,17 +146,32 @@ PLANS: dict[str, list[dict]] = {
 #     ha mostrato UNA sola finestra settimanale (single_weekly) il piano non ha la 5h, se ne ha mostrate
 #     due si'. Senza lettura (o troppo vecchia) vale il seme.
 # Una lettura vale per il piano che l'account ha davvero, non per tutta la riga del provider.
+#
+# Where each name comes from: `prolite` is what `codex app-server` reported (planType) on the real account of the
+# 27/10 collaudo, whose plan is the 100 $ one; the public price list says that plan exists and costs 100 $. `plus`
+# is the table's own id. `pro` is ChatGPT Pro, the 200 $ plan (the public price list), the table's `pro-max`: this
+# pair is from the list, not yet from a reading of such an account.
+# The reading is per machine, not per account: the bridge refreshes it at least once a day while it runs, and it
+# is ignored after 30 days without one.
 _CODEX_PLAN_TYPE_TO_ID = {
     "prolite": "pro",
+    "plus": "plus",
+    "pro": "pro-max",
 }
 _CODEX_READING_MAX_AGE_SEC = 30 * 86400
+_CODEX_READING_MAX_BYTES = 4096
+_CODEX_PLAN_TYPE = re.compile(r"[A-Za-z0-9_-]{1,32}")
 
 
 def _codex_reading() -> Optional[dict]:
     """L'ultima lettura di Codex, o None se manca, e' illeggibile, e' vecchia o ha una forma strana."""
     try:
         with (_jht_home() / "logs" / "codex-plan-reading.json").open(encoding="utf-8") as f:
-            data = json.load(f)
+            # a file the agents can write: three small fields, so anything bigger is not ours
+            raw = f.read(_CODEX_READING_MAX_BYTES + 1)
+        if len(raw) > _CODEX_READING_MAX_BYTES:
+            return None
+        data = json.loads(raw)
     except (OSError, ValueError):
         return None
     if not isinstance(data, dict):
@@ -163,8 +179,7 @@ def _codex_reading() -> Optional[dict]:
     plan_type, single, seen = data.get("plan_type"), data.get("single_weekly"), data.get("observed_at")
     if not isinstance(single, bool) or isinstance(seen, bool) or not isinstance(seen, (int, float)):
         return None
-    if plan_type is not None and (not isinstance(plan_type, str) or not plan_type.isascii()
-                                  or not plan_type.replace("-", "").replace("_", "").isalnum()):
+    if plan_type is not None and not (isinstance(plan_type, str) and _CODEX_PLAN_TYPE.fullmatch(plan_type)):
         return None
     import time
     if not 0 <= time.time() - seen <= _CODEX_READING_MAX_AGE_SEC:

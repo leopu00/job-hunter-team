@@ -118,6 +118,34 @@ def test_a_reading_that_cannot_be_trusted_is_ignored(home, capsys, breakage):
     assert "Codex reports" not in listing(capsys)
 
 
+def test_a_plus_account_is_named_as_the_plus_row_not_as_unknown(home, capsys):
+    reading(home, "plus", single_weekly=False)
+    out = listing(capsys)
+    assert "  Codex reports: plus → Plus 20 $\n" in out
+    assert "not in this table" not in out
+
+
+def test_codex_pro_is_the_200_dollar_row(home, capsys):
+    reading(home, "pro", single_weekly=True)
+    out = listing(capsys)
+    assert "  Codex reports: pro → Pro 20x 200 $\n" in out
+    assert "not in this table" not in out
+    plans = openai_plans()
+    assert plans["pro-max"]["window_5h"] is False and plans["pro-max"]["window_5h_observed"] is True
+    assert "window_5h_observed" not in plans["pro"]
+
+
+def test_a_reading_file_that_is_too_big_or_has_a_long_name_is_ignored(home, capsys):
+    path = home / "logs" / "codex-plan-reading.json"
+    path.write_text(json.dumps({"plan_type": "prolite", "single_weekly": True, "observed_at": time.time(),
+                                "padding": "x" * 5000}), encoding="utf-8")
+    assert "Codex reports" not in listing(capsys)
+    reading(home, "a" * 33, True)
+    assert "Codex reports" not in listing(capsys)
+    reading(home, "a" * 32, True)
+    assert "Codex reports: " + "a" * 32 in listing(capsys)
+
+
 def test_a_plan_the_table_does_not_know_is_named_but_no_row_is_changed(home, capsys):
     reading(home, "team", single_weekly=False)
     assert "  Codex reports: team (not in this table)\n" in listing(capsys)
