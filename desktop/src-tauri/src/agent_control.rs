@@ -722,13 +722,16 @@ pub(crate) fn host_action_refusal(app: &tauri::AppHandle, label: &str, scope: &A
 }
 
 /// The same check for a command that acts on the saved host without naming one: the account's host. With
-/// no saved host there is nothing to act on, and the command says so in its own words.
+/// no saved host, or one that cannot be read, there is nothing safe to act on: closed.
 pub(crate) fn saved_host_action_refusal(app: &tauri::AppHandle, label: &str, scope: &AccountScope) -> Option<&'static str> {
     if let Some(code) = window_refusal(label) {
         return Some(code);
     }
-    let host = direct_chat::load_persisted_host(app, scope).ok()?;
-    host_action_refusal(app, label, scope, &host)
+    // A host that cannot be read is not a host to act on: closed, with the reason the reader gave.
+    match direct_chat::load_persisted_host(app, scope) {
+        Ok(host) => host_action_refusal(app, label, scope, &host),
+        Err(code) => Some(code),
+    }
 }
 
 pub(crate) fn control_for_scope(app: &tauri::AppHandle, scope: &AccountScope, request: Value) -> Value {

@@ -120,6 +120,8 @@ pub(crate) fn teardown(state: &OnboardingNativeState) {
 
 struct InteractiveSession {
     scope: AccountScope,
+    /// The host the login runs on: its input is judged against this one, not against what is saved now.
+    host: ExecutionHost,
     id: String,
     child: Arc<Mutex<Child>>,
     stdin: Mutex<Option<ChildStdin>>,
@@ -3058,6 +3060,7 @@ fn prepare_impl(
 
 #[tauri::command]
 pub(crate) async fn onboarding_prepare(
+    window: tauri::Window,
     app: tauri::AppHandle,
     state: State<'_, OnboardingNativeState>,
     scopes: State<'_, AccountScopeState>,
@@ -3066,6 +3069,11 @@ pub(crate) async fn onboarding_prepare(
     on_progress: Channel<OnboardingProgress>,
 ) -> Result<OnboardingSnapshot, OnboardingError> {
     let expected = scopes.active().map_err(failure)?;
+    // The setup installs, starts and configures the team on its host and saves it as the account's: on an
+    // existing team opened read only, that host is not the setup's to take, only the full link's.
+    if let Some(code) = crate::agent_control::host_action_refusal(&app, window.label(), &expected, &submission.host) {
+        return Err(failure(code));
+    }
     if state
         .preparing
         .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
@@ -4929,6 +4937,7 @@ pub(crate) fn onboarding_provider_login(
     });
     *slot = Some(InteractiveSession {
         scope: scope.scope().clone(),
+        host: host.clone(),
         id: id.clone(),
         child,
         stdin: Mutex::new(Some(stdin)),
@@ -4948,14 +4957,12 @@ pub(crate) fn onboarding_provider_login_input(
     request_id: String,
     input: String,
 ) -> Result<(), OnboardingError> {
-    let scope = scopes.lock_active().map_err(failure)?;
     let mut input = Zeroizing::new(input);
-    // The session writes to the team's host: a login opened with the full link that was taken away since
-    // (switched to read only) takes no more input.
-    if let Some(code) = crate::agent_control::saved_host_action_refusal(&app, window.label(), scope.scope()) {
+    if let Some(code) = crate::agent_control::window_refusal(window.label()) {
         input.zeroize();
         return Err(failure(code));
     }
+    let scope = scopes.lock_active().map_err(failure)?;
     let slot = state
         .interactive
         .lock()
@@ -4964,6 +4971,12 @@ pub(crate) fn onboarding_provider_login_input(
         .as_ref()
         .filter(|value| value.id == session_id && &value.scope == scope.scope())
         .ok_or_else(|| failure("session_not_found"))?;
+    // The session writes to the host it was opened on: a login opened with the full link that was taken
+    // away since (switched to read only) takes no more input.
+    if let Some(code) = crate::agent_control::host_action_refusal(&app, window.label(), scope.scope(), &session.host) {
+        input.zeroize();
+        return Err(failure(code));
+    }
     let mut stdin = session.stdin.lock().map_err(|_| failure("state_failed"))?;
     let writer = stdin.as_mut().ok_or_else(|| failure("session_closed"))?;
     write_provider_input(&session.pending_input, writer, &request_id, input.as_str())?;

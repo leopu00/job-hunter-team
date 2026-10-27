@@ -3025,6 +3025,32 @@ fn t54_a_team_half_saved_or_changed_is_closed_and_a_host_that_is_not_the_selecte
     runtime::revoke_full_link();
 }
 
+/// Every `#[tauri::command]` of the app, with its source (signature and body), read from the files of this crate.
+fn every_command() -> Vec<(String, String, String)> {
+    let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+    let mut found = Vec::new();
+    let mut files: Vec<_> = fs::read_dir(&dir).unwrap().map(|entry| entry.unwrap().path()).collect();
+    files.sort();
+    for file in files {
+        let name = file.file_name().unwrap().to_string_lossy().into_owned();
+        if !name.ends_with(".rs") || name.ends_with("_tests.rs") {
+            continue;
+        }
+        let source = fs::read_to_string(&file).unwrap().replace("\r\n", "\n");
+        // the production part: a test module is where the commands are only named
+        let source = source.split("\n#[cfg(test)]\nmod ").next().unwrap().to_owned();
+        let mut rest = source.as_str();
+        while let Some(at) = rest.find("#[tauri::command]\n") {
+            let from = &rest[at..];
+            let function = from.split("fn ").nth(1).unwrap().split('(').next().unwrap().trim().to_owned();
+            let text = from.split("\n}\n").next().unwrap().to_owned();
+            found.push((name.clone(), function, text));
+            rest = &from["#[tauri::command]\n".len()..];
+        }
+    }
+    found
+}
+
 #[test]
 fn t55_each_command_that_acts_on_the_host_asks_before_anything_else() {
     let onboarding = include_str!("onboarding.rs").split("mod existing_team_assistant_tests").next().unwrap().replace("\r\n", "\n");
@@ -3036,13 +3062,14 @@ fn t55_each_command_that_acts_on_the_host_asks_before_anything_else() {
         source[at..].split("\n}\n").next().unwrap().to_owned()
     };
     // (source, command, the refusal it must call, the first thing it does that has an effect or takes a slot)
-    let commands: [(&str, &str, &str, &[&str]); 8] = [
+    let commands: [(&str, &str, &str, &[&str]); 9] = [
+        (&onboarding, "onboarding_prepare", "host_action_refusal(", &["compare_exchange", "spawn_blocking", "prepare_impl("]),
         (&onboarding, "onboarding_team_start", "host_action_refusal(", &["compare_exchange", "spawn_blocking", "validate_host("]),
         (&onboarding, "onboarding_resume_team_start", "saved_host_action_refusal(", &["compare_exchange", "spawn_blocking", "load_persisted_host("]),
         (&onboarding, "onboarding_assistant_open", "host_action_refusal(", &["compare_exchange", "spawn_blocking", "validate_host("]),
         (&onboarding, "onboarding_clean_images", "host_action_refusal(", &["compare_exchange", "spawn_blocking", "validate_host("]),
         (&onboarding, "onboarding_provider_login", "host_action_refusal(", &["state\n        .interactive", "validate_host(", "spawn("]),
-        (&onboarding, "onboarding_provider_login_input", "saved_host_action_refusal(", &[".interactive", "write_provider_input("]),
+        (&onboarding, "onboarding_provider_login_input", "host_action_refusal(&app, window.label(), scope.scope(), &session.host)", &["write_provider_input("]),
         (&mail, "mail_save_password", "saved_host_action_refusal(", &["spawn_blocking", "active_host("]),
         (&broker, "broker_login_view_open", "saved_host_action_refusal(", &["get_webview_window", "compare_exchange", "spawn_blocking"]),
     ];
@@ -3059,14 +3086,67 @@ fn t55_each_command_that_acts_on_the_host_asks_before_anything_else() {
         }
         assert!(lib.contains(&format!("::{name},")) || lib.contains(&format!("::{name}\n")), "{name} stays registered");
     }
+    // the login's input is judged against the host of the session, and only the app's own window may send it
+    let input = body(&onboarding, "onboarding_provider_login_input");
+    assert!(input.find("window_refusal(window.label())").unwrap() < input.find(".interactive").unwrap());
+    assert!(!input.contains("saved_host_action_refusal"), "the session's host, not the one saved now");
+    assert!(onboarding.contains("host: host.clone(),"), "the session keeps the host it was opened on");
     // the password of the mailbox is wiped on a refusal too
     let save = body(&mail, "mail_save_password");
     assert!(save.matches("request.password.zeroize()").count() >= 3);
     // the closing of a login only kills the person's own process: it stays open to a read-only view
     assert!(!body(&onboarding, "onboarding_provider_login_close").contains("window"));
-    // what is left out acts on this computer only: no host is read in them
-    for local in ["onboarding_podman_machine_recreate", "onboarding_local_uninstall", "onboarding_resume_runtime_wake"] {
-        let text = body(&onboarding, local);
-        assert!(!text.contains("ExecutionHost::Vps"), "{local}");
+    // a host that cannot be read is closed
+    let saved = include_str!("agent_control.rs").split("pub(crate) fn saved_host_action_refusal(").nth(1).unwrap().split("\n}\n").next().unwrap().to_owned();
+    assert!(saved.contains("Err(code) => Some(code)") && !saved.contains(".ok()?"));
+
+    // EVERY command that names, loads or reaches a host is either guarded above or listed here with the reason it
+    // is not: a new command that takes a host and asks for nothing is red until someone decides which it is.
+    let reaches_a_host = |text: &str| {
+        ["ExecutionHost", "ValidatedHost", "OnboardingSubmission", "load_persisted_host(", "load_host(", "active_host(", "selected(", "selected_or_own(", "validate_host", "run_ssh", "ssh_base_args", "run_host_jht", "destination("]
+            .iter()
+            .any(|marker| text.contains(marker))
+    };
+    let not_guarded: &[(&str, &str)] = &[
+        ("broker_login_status", "a read of the login's state"),
+        ("mail_status", "a read of the mailbox's state"),
+        ("closer_desktop_register_host", "records a setting on this computer, reaches no host"),
+        ("direct_chat_connect", "opens the chat's connection; a send has its own link check (link_allows_writing)"),
+        ("direct_chat_reconnect", "same: the chat's connection, its writes have their own link check"),
+        ("direct_chat_read", "reads the chat"),
+        ("existing_team_cloud_token", "has its own full-link check (full_link_granted)"),
+        ("existing_team_position_write_target", "reads the target a judgement would reach; the write has its own check"),
+        ("existing_team_position_write", "has its own full-link check (full_link_granted)"),
+        ("onboarding_existing_team_discover", "read-only discovery, makes the read-only view possible"),
+        ("onboarding_existing_team_register", "saves the candidate on this computer after a read-only discovery"),
+        ("onboarding_snapshot", "a read of the team's state"),
+        ("onboarding_resume_snapshot", "a read of the team's state"),
+        ("onboarding_existing_team_reopen", "the read-only reopening"),
+        ("onboarding_existing_team_readonly_connect", "the read-only connection itself"),
+        ("existing_team_assistant_start", "has its own check (assistant_start_link_refusal) and the window's"),
+        ("onboarding_existing_team_connect", "the full connection itself: it is what grants the link"),
+        ("onboarding_resume_runtime_wake", "wakes this computer's runtime only (the host is read to say it is not this computer's)"),
+        ("profile_import_vps_to_local", "reads the VPS and writes on this computer"),
+        ("onboarding_ssh_host_key_probe", "a read of the host's key"),
+        ("onboarding_ssh_host_key_confirm", "pins the key on this computer"),
+        ("team_settings", "has its own read-only mode (destination_mode)"),
+    ];
+    let commands = every_command();
+    assert!(commands.len() > 80, "the scan finds the commands of the app: {}", commands.len());
+    let mut stale: Vec<&str> = not_guarded.iter().map(|(name, _)| *name).filter(|name| !commands.iter().any(|(_, function, _)| function == name)).collect();
+    stale.sort_unstable();
+    assert!(stale.is_empty(), "listed but not a command any more: {stale:?}");
+    let mut open = Vec::new();
+    for (file, function, text) in &commands {
+        if !reaches_a_host(text) {
+            continue;
+        }
+        let guarded = text.contains("host_action_refusal(");
+        let listed = not_guarded.iter().any(|(name, _)| name == function);
+        assert!(!(guarded && listed), "{function}: guarded AND listed as not guarded");
+        if !guarded && !listed {
+            open.push(format!("{file}:{function}"));
+        }
     }
+    assert!(open.is_empty(), "commands that reach a host and ask for nothing: {open:?}");
 }
