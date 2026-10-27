@@ -367,8 +367,7 @@ _CORE_PATH_FACTS = {
     ("name",): "full name",
     ("first_name",): "first name",
     ("last_name",): "last name",
-    ("contacts", "email"): "email",
-    ("email",): "email",
+    **{path: "email" for path in profile_facts.EMAIL_PATHS},
     ("contacts", "phone"): "phone",
     ("contacts", "linkedin"): "linkedin",
     ("contacts", "github"): "github",
@@ -1773,7 +1772,7 @@ class GreenhouseRecipe:
         "first_name": (("first_name",),),
         "last_name": (("last_name",),),
         "preferred_name": (("preferred_name",),),
-        "email": (("contacts", "email"), ("email",)),
+        "email": profile_facts.EMAIL_PATHS,
         # A telephone country, nationality, and current residence are not
         # interchangeable.  Country therefore needs an exact saved answer.
         "country": (),
@@ -2747,7 +2746,7 @@ class LeverRecipe:
     # Current company and "other" links are questions, not profile facts.
     _CORE_NAMES = {
         "name": (("name",),),
-        "email": (("contacts", "email"), ("email",)),
+        "email": profile_facts.EMAIL_PATHS,
         "phone": (("contacts", "phone"),),
         "location": (("location",),),
         "urls[LinkedIn]": (("contacts", "linkedin"),),

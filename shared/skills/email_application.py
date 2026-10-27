@@ -82,6 +82,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import apply_gate  # noqa: E402
 import application_answers  # noqa: E402
+from profile_email import profile_email  # noqa: E402
 
 __all__ = [
     "APPLIED_VIA",
@@ -833,7 +834,7 @@ class EmailApplication:
     def _identity(self, profile: Mapping[str, Any]) -> dict[str, str]:
         name = profile.get("name")
         contacts = profile.get("contacts") if isinstance(profile.get("contacts"), Mapping) else {}
-        email_address = contacts.get("email") or profile.get("email")
+        email_address = profile_email(profile)
         phone = contacts.get("phone")
         if not isinstance(name, str) or not name.strip():
             raise _blocked("required_fact_missing", "the candidate profile has no name", fact="name")
