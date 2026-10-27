@@ -126,7 +126,7 @@ describe("the words", () => {
 });
 
 describe("an action the door switched off", () => {
-  it("is read from the 403 of the contract and told as «not from the site yet, use the app», in the seven languages", () => {
+  it("is read from the 403 of the contract and told as «not available from the site in this version, use the app», in the seven languages", () => {
     const answer = readDoorAnswer(403, { ok: false, error: "action_disabled" });
     expect(answer).toEqual({ kind: "refused", code: "action_disabled" });
     const words = (T as Record<string, Record<string, string>>)[errorKey("action_disabled")];
@@ -135,7 +135,11 @@ describe("an action the door switched off", () => {
       expect(words[locale], locale).not.toBe(generic[locale]);
       expect(words[locale], locale).not.toMatch(/retry|riprova|reintent|réessaie|erneut|próbáld|tenta/i);
     }
-    expect(words.it).toBe("Dal sito non è ancora disponibile: usa l'app.");
+    expect(words.it).toBe("Non disponibile dal sito in questa versione: usa l'app.");
+    // it does not promise that it will come: no «not yet» in any language
+    for (const locale of ["it", "en", "es", "fr", "de", "hu", "pt"]) {
+      expect(words[locale], locale).not.toMatch(/ancora|\byet\b|todav[ií]a|encore|noch|m[eé]g |\bainda\b/i);
+    }
   });
 
   it("the page shows the refusal through errorKey, and the 403 code of the contract is the one of the door", () => {
