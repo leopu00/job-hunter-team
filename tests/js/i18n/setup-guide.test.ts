@@ -28,6 +28,7 @@ import {
 } from "@/app/setup-guide/guide-screens";
 import {
   OS_IDS,
+  assetFor,
   isUntranslated,
   phasesFor,
   screensOf,
@@ -267,6 +268,39 @@ describe("guida di setup — schermate", () => {
     expect(missing.length).toBeLessThanOrEqual(total);
   });
 
+  it("finché una schermata del percorso macOS non ha il suo file, l'indice descrive e non promette di mostrare", () => {
+    // Quando le riprese entrano, le frasi tornano a «shows» / «the screen you will actually see»
+    // e questo test non ha più nulla da dire (nessuna schermata mancante).
+    const missing = GUIDE_CHAPTERS.flatMap((chapter) =>
+      phasesFor(chapter, "macos").flatMap((phase) => screensOf(phase)),
+    ).filter(({ screenId }) => {
+      const screen = SCREENS[screenId];
+      return !screen.nativeSurface && !assetFor(screen, "macos");
+    });
+    if (missing.length === 0) return;
+    const promises = [
+      "shows the exact screen",
+      "mostra la schermata esatta",
+      "muestra la pantalla exacta",
+      "montre l’écran exact",
+      "zeigt genau den Bildschirm",
+      "mostra o ecrã exato",
+      "pontosan azt a képernyőt mutatja",
+      "with the screen you will actually see",
+      "con la schermata che vedrai davvero",
+      "con la pantalla que verás de verdad",
+      "avec l'écran que vous verrez vraiment",
+      "mit dem Bildschirm, den du wirklich siehst",
+      "com o ecrã que vais mesmo ver",
+      "azzal a képernyővel, amit tényleg látni fogsz",
+    ];
+    const sources = ["guide-content.ts", "guide-ui.i18n.ts"].map((file) =>
+      fs.readFileSync(path.resolve(HERE, "../../../web/app/setup-guide", file), "utf8"),
+    );
+    const found = promises.filter((phrase) => sources.some((text) => text.includes(phrase)));
+    expect(found).toEqual([]);
+  });
+
   it("l'estensione di ogni file dice il formato vero", () => {
     // Due catture macOS sono arrivate come JPEG con estensione .png: il
     // browser le mostra lo stesso, ma il nome mente e nessuno se ne accorge
@@ -434,16 +468,18 @@ describe("guida di setup — contratto del team docs", () => {
     }
   });
 
-  it("blocco Setup e S06-S10 sono tradotti davvero", () => {
+  it("blocco Setup e passi dall'accesso locale alla scelta del provider sono tradotti davvero", () => {
     const chapter = GUIDE_CHAPTERS.find(
       (candidate) => candidate.id === "setup-screen",
     )!;
     const phaseIds = new Set([
       "choose-language",
-      "enter-office",
-      "open-setup",
-      "start-container",
+      "start-locally",
+      "welcome",
+      "choose-environment",
       "choose-provider",
+      "confirm-setup",
+      "start-container",
     ]);
     const phases = GUIDE_CHAPTERS.flatMap((item) => item.phases).filter(
       (phase) => phaseIds.has(phase.id),
@@ -466,35 +502,52 @@ describe("guida di setup — contratto del team docs", () => {
     }
   });
 
-  it("S08 mantiene le etichette UI esatte in tutte le lingue", () => {
-    const phase = GUIDE_CHAPTERS.flatMap((chapter) => chapter.phases).find(
-      (candidate) => candidate.id === "open-setup",
+  it("il capitolo di setup segue i quattro passi del wizard e l'avvio a fasi, non i quattro controlli", () => {
+    const chapter = GUIDE_CHAPTERS.find(
+      (candidate) => candidate.id === "setup-screen",
     )!;
-    for (const locale of LOCALES) {
-      for (const label of [
-        "Team setup",
-        "Activate team",
-        "Container",
-        "AI provider",
-        "Profile and CV",
-        "Working hours",
-      ]) {
-        expect(phase.body[locale], `${locale}: ${label}`).toContain(label);
-      }
-    }
+    expect(chapter.phases.map((phase) => phase.id)).toEqual([
+      "welcome",
+      "choose-environment",
+      "choose-provider",
+      "confirm-setup",
+      "start-container",
+      "authorize-provider",
+    ]);
+    // Le etichette dell'app, lingua per lingua, sono verificate contro i
+    // file dell'app in tests/test_setup_guide_wizard_labels.py.
   });
 
-  it("blocchi finali e S11-S17/W01 sono tradotti davvero", () => {
+  it("nessuna fase descrive più il flusso vecchio (Activate team, quattro controlli, CV caricato, 8/8)", () => {
+    const stale = [
+      "Activate team",
+      "Activate the team",
+      "Team setup",
+      "Profile and CV",
+      "8/8 fields",
+      "Login detected",
+      "four checks",
+    ];
+    const found: string[] = [];
+    for (const { where, text } of everyText()) {
+      for (const locale of LOCALES) {
+        for (const label of stale) {
+          if (text[locale].includes(label)) found.push(`${where} → ${locale}: ${label}`);
+        }
+      }
+    }
+    expect(found).toEqual([]);
+  });
+
+  it("blocchi finali e passi dall'accesso al provider alla chat sono tradotti davvero", () => {
     const chapters = GUIDE_CHAPTERS.filter((chapter) =>
       ["start-screen", "local-web"].includes(chapter.id),
     );
     const phaseIds = new Set([
       "authorize-provider",
-      "upload-cv",
-      "complete-profile",
+      "team-starting",
+      "talk-to-the-assistant",
       "set-working-hours",
-      "review-setup",
-      "activate-team",
       "verify-team-working",
       "open-account-link",
     ]);
@@ -515,26 +568,16 @@ describe("guida di setup — contratto del team docs", () => {
     }
   });
 
-  it("S11-S17/W01 mantengono gli stati e le etichette UI esatte", () => {
+  it("W01 mantiene le etichette UI esatte", () => {
     const phases = Object.fromEntries(
       GUIDE_CHAPTERS.flatMap((chapter) => chapter.phases).map((phase) => [
         phase.id,
         phase,
       ]),
     );
+    // Le etichette del wizard stanno in tests/test_setup_guide_wizard_labels.py;
+    // qui restano quelle del collegamento web.
     const exactByPhase: Record<string, string[]> = {
-      "authorize-provider": ["Login detected"],
-      "upload-cv": ["Profile and CV", "Assistant"],
-      "complete-profile": ["8/8 fields"],
-      "review-setup": [
-        "Activate team",
-        "Container",
-        "AI provider",
-        "Profile and CV",
-        "Working hours",
-      ],
-      "activate-team": ["Activate the team"],
-      "verify-team-working": ["Team active", "Assistant"],
       "open-account-link": ["Settings", "Account and channels"],
     };
     for (const [phaseId, labels] of Object.entries(exactByPhase)) {

@@ -83,7 +83,7 @@ Il parser del frontend è rigoroso. Cinque regole che prevengono ogni problema c
 
 ## Schema minimo (il minimo)
 
-Il frontend ha un fallback che sblocca "Vai alla dashboard" quando questi sono presenti + non vuoti (così l'utente può procedere anche prima che tu crei `ready.flag`). Popolali tutti:
+Il frontend ha un fallback che sblocca "Vai alla dashboard" quando gli otto campi minimi sono presenti + non vuoti: nome, email, ruolo target, città, anni di esperienza, `seniority_target`, almeno 2 skill primarie, almeno 1 lingua (così l'utente può procedere anche prima che tu crei `ready.flag`). Popola prima quelli. Il resto dello schema qui sotto è consigliato, esperienze e titoli di studio compresi: chiedilo subito dopo lo sblocco, e non inventarlo mai per riempire lo schema.
 
 ```yaml
 name: <Nome Cognome>
@@ -93,7 +93,7 @@ target_roles_priority:        # 2-5 titoli di ruolo CONCRETI e cercabili, in pri
   - <es. "Private Equity Analyst">  # e su cui lo Scout cerca (NON la frase di target_role)
 location: <città o area>
 experience_years: <int>
-has_degree: <true|false>
+has_degree: <true|false>        # opzionale: assente = non dichiarato; se c'è, booleano
 seniority_target: <junior|mid|senior>
 industry: <settore>
 
@@ -113,13 +113,13 @@ candidate:
     phone: ...
     linkedin: ...
     github: ...
-  experience:                 # >= 1 voce, ognuna con company/role/years/summary
+  experience:                 # consigliato, non obbligatorio: se c'è, ogni voce con company/role/years/summary
     - company: ...
       role: ...
       years: ...              # es. "Mar 2022 - in corso" — usato per durata reale
       summary: |-
         ...
-  education:                  # >= 1 voce, ognuna con institution/degree/year
+  education:                  # consigliato, non obbligatorio: se c'è, ogni voce con institution/degree/year
     - institution: ...
       degree: ...
       year: ...
@@ -234,15 +234,16 @@ E avvisa l'utente: "ho rimesso il bottone in attesa — rivediamo questo punto p
 ### NON creare il flag se
 
 - l'ultima validazione del profilo ha stampato `INVALID_PROFILE` (anche una sola volta dopo l'ultimo Write);
-- mancano: nome, ruolo target, città, anni di esperienza, email;
-- mancano: skills (≥2), lingue (≥1), esperienze (≥1), titoli di studio (≥1).
+- mancano (gli otto campi minimi): nome, email, ruolo target, città, anni di esperienza, `seniority_target`, skills (≥2), lingue (≥1).
+
+Esperienze e titoli di studio sono consigliati: non bloccano il flag. Chiedili subito dopo averlo creato.
 
 ## 🎓 `has_degree` — dagli studi, mai come segnaposto
 
-`has_degree` è obbligatorio per il validatore, ma è un fatto del candidato, non un valore di default:
+`has_degree` è facoltativo: assente vuol dire «non dichiarato», mai «no». È un fatto del candidato, non un valore di default; puoi chiederlo (è fra gli opzionali), ma non blocca né il profilo né lo sblocco:
 - `true` quando `education` (dal CV o dalla chat) contiene una laurea: triennale, magistrale, dottorato o equivalente.
 - `false` solo dopo che l'utente ti ha detto di non averne.
-- Finché lo stai ancora chiedendo, non scriverlo. Se l'unico `ERROR:` della validazione è `has_degree`, il tuo prossimo messaggio È quella domanda: falla, aspetta la risposta, poi scrivi il campo. Mai `false` per zittire il validatore: lo Scorer lo confronta con i requisiti di titolo di ogni posizione.
+- Se non lo sai, lascia fuori la chiave: niente `false` per prudenza, niente valore vuoto, niente testo (`"sì"`): se la chiave c'è deve essere `true` o `false`. Mai `false` per riempire un vuoto: lo Scorer lo confronta con i requisiti di titolo di ogni posizione.
 
 ## ⚠️ Anti-allucinazione — la regola critica
 

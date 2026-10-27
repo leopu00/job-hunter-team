@@ -100,7 +100,7 @@ def cli_copy(tmp_path_factory):
     return pkg
 
 
-def run_start(cli_copy, tmp_path, pct, agent="scout:1", container=True, sessions=""):
+def run_start(cli_copy, tmp_path, pct, agent="scout:1", container=True, sessions="", config='{"active_provider": "openai"}'):
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir(exist_ok=True)
     for name, body in (("docker", FAKE_DOCKER), ("tmux", FAKE_TMUX), ("codex", "#!/bin/sh\nexit 0\n")):
@@ -109,7 +109,8 @@ def run_start(cli_copy, tmp_path, pct, agent="scout:1", container=True, sessions
     home, engine = tmp_path / "home", tmp_path / "engine"
     home.mkdir(exist_ok=True)
     # a host start needs the CLI of the provider the team chose: there is no default one
-    (home / "jht.config.json").write_text('{"active_provider": "openai"}', encoding="utf-8")
+    if config is not None:
+        (home / "jht.config.json").write_text(config, encoding="utf-8")
     engine.mkdir(exist_ok=True)
     log = tmp_path / "calls.log"
     env = {
@@ -199,3 +200,37 @@ def test_without_the_container_the_host_tmux_start_goes_on_at_15_percent(cli_cop
     done, calls = run_start(cli_copy, tmp_path, 15, container=False)
     assert done.returncode == 0, done.stdout + done.stderr
     assert any(call.startswith("tmux new-session") for call in calls), calls
+
+
+# ── the user's stop (.team-halted.flag) comes off only when the start can go ahead ──────────────────────
+
+
+def gate_calls(calls):
+    return [call for call in calls if ".team-halted.flag" in call]
+
+
+def test_at_2_percent_the_whole_team_start_leaves_the_users_stop_in_place(cli_copy, tmp_path):
+    done, calls = run_start(cli_copy, tmp_path, 2, agent="")
+    assert done.returncode == 1, done.stdout + done.stderr
+    assert gate_calls(calls) == [], calls
+
+
+@pytest.mark.parametrize("config", [None, "{}", '{"active_provider": ""}', '{"active_provider": "nobody"}'])
+def test_without_an_active_provider_the_whole_team_start_refuses_and_leaves_the_stop(cli_copy, tmp_path, config):
+    done, calls = run_start(cli_copy, tmp_path, 50, agent="", config=config)
+    assert done.returncode == 1, done.stdout + done.stderr
+    assert "no active provider" in done.stdout + done.stderr
+    assert gate_calls(calls) == [] and spawned(calls) == [], calls
+
+
+def test_a_whole_team_start_that_can_go_ahead_takes_the_stop_off_in_the_container(cli_copy, tmp_path):
+    done, calls = run_start(cli_copy, tmp_path, 15, agent="", sessions="ASSISTENTE\nSENTINELLA\nMENTOR\nCAPITANO\n")
+    assert done.returncode == 0, done.stdout + done.stderr
+    removal = [call for call in gate_calls(calls) if " rm " in f" {call} "]
+    assert removal, calls
+
+
+def test_the_start_of_one_agent_never_touches_the_stop(cli_copy, tmp_path):
+    done, calls = run_start(cli_copy, tmp_path, 15)
+    assert done.returncode == 0, done.stdout + done.stderr
+    assert gate_calls(calls) == [], calls

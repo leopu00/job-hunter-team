@@ -83,14 +83,14 @@ O parser do frontend e estrito. Cinco regras que previnem todos os problemas enc
 
 ## Esquema minimo (o piso)
 
-O frontend tem um fallback que desbloqueia "Vai alla dashboard" quando estes campos estao presentes + nao vazios (para que o utilizador possa prosseguir mesmo antes de voce criar `ready.flag`). Preencha todos:
+O frontend tem um fallback que desbloqueia "Vai alla dashboard" quando os oito campos minimos estao presentes + nao vazios: nome, email, cargo alvo, cidade, anos de experiencia, `seniority_target`, pelo menos 2 competencias principais, pelo menos 1 lingua (para que o utilizador possa prosseguir mesmo antes de voce criar `ready.flag`). Preencha primeiro esses. O resto do esquema abaixo e recomendado, experiencias e formacoes incluidas: peca-o logo a seguir ao desbloqueio, e nunca o invente so para preencher o esquema.
 
 ```yaml
 name: <Nome Apelido>
 target_role: <cargo alvo>
 location: <cidade ou area>
 experience_years: <int>
-has_degree: <true|false>
+has_degree: <true|false>        # opcional: ausente = não declarado; se existir, booleano
 seniority_target: <junior|mid|senior>
 industry: <setor>
 
@@ -110,13 +110,13 @@ candidate:
     phone: ...
     linkedin: ...
     github: ...
-  experience:                 # >= 1 entrada, cada uma com company/role/years/summary
+  experience:                 # recomendado, nao obrigatorio: se existir, cada uma com company/role/years/summary
     - company: ...
       role: ...
       years: ...              # ex. "Mar 2022 - em curso" — usado para duracao real
       summary: |-
         ...
-  education:                  # >= 1 entrada, cada uma com institution/degree/year
+  education:                  # recomendado, nao obrigatorio: se existir, cada uma com institution/degree/year
     - institution: ...
       degree: ...
       year: ...
@@ -228,15 +228,16 @@ E avise o utilizador: "voltei a colocar o botao em espera — vamos rever este p
 ### NAO criar o flag se
 
 - a ultima validacao do perfil mostrou `INVALID_PROFILE` (mesmo uma unica vez apos o ultimo Write);
-- faltam: nome, cargo alvo, cidade, anos de experiencia, email;
-- faltam: competencias (≥2), linguas (≥1), experiencias (≥1), formacoes (≥1).
+- faltam (os oito campos minimos): nome, email, cargo alvo, cidade, anos de experiencia, `seniority_target`, competencias (≥2), linguas (≥1).
+
+Experiencias e formacoes sao recomendadas: nao bloqueiam o flag. Pede-as logo a seguir a cria-lo.
 
 ## 🎓 `has_degree` — a partir da formacao, nunca como valor provisorio
 
-`has_degree` e obrigatorio para o validador, mas e um facto sobre o candidato, nao um valor por omissao:
+`has_degree` e opcional: ausente quer dizer «nao declarado», nunca «nao». E um facto sobre o candidato, nao um valor por omissao; podes perguntar (esta entre os opcionais), mas nao bloqueia nem o perfil nem o desbloqueio:
 - `true` quando `education` (CV ou chat) inclui um curso superior: licenciatura, mestrado, doutoramento ou equivalente.
 - `false` so depois de o utilizador te dizer que nao tem nenhum.
-- Enquanto ainda estas a perguntar, nao o escrevas. Se o unico `ERROR:` da validacao for `has_degree`, a tua proxima mensagem E essa pergunta: faz a pergunta, espera pela resposta e so depois escreve o campo. Nunca `false` para calar o validador: o Scorer compara-o com os requisitos de formacao de cada vaga.
+- Se nao sabes, deixa a chave de fora: nada de `false` por prudencia, nenhum valor vazio, nenhum texto (`"sim"`): se a chave la esta, tem de ser `true` ou `false`. Nunca `false` para preencher uma lacuna: o Scorer compara-o com os requisitos de formacao de cada vaga.
 
 ## ⚠️ Anti-alucinacao — a regra critica
 

@@ -36,7 +36,7 @@ name: <str>                 # obligatorisch
 target_role: <str>          # obligatorisch
 location: <str>             # obligatorisch
 experience_years: <int>     # obligatorisch (>= 0)
-has_degree: <true|false>    # obligatorisch
+has_degree: <true|false>    # optional: fehlt = nicht angegeben; wenn vorhanden, boolesch
 seniority_target: <str>     # obligatorisch (junior|mid|senior|…)
 email: <str>                # optional
 timezone: <str>             # optional

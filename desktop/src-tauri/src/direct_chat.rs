@@ -1569,6 +1569,33 @@ fn read_host_env() -> Option<String> {
     fs::read_to_string(path).ok()
 }
 
+/// Where Homebrew (Apple silicon, Intel) and the Podman installer keep their tools.
+#[cfg(unix)]
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+const TOOL_ROOTS: [&str; 3] = ["/opt/homebrew", "/usr/local", "/opt/podman"];
+
+/// `podman` and `podman-compose` are SYMLINKS on a Mac that has them from Homebrew (`/opt/homebrew/bin/podman` ->
+/// `../Cellar/podman/<version>/bin/podman-remote`), and a search that refused every symlink found neither: the hash the
+/// container has to carry was never computed, and the Mac's own container was «not the one Job Hunter Team installed»
+/// (Mac collaudo, TEST 6 of 27/10, after the `host.env` fix). A regular file is taken as it is; a symlink only when
+/// what it finally points to is a regular file inside one of the install `roots`, owned by the user or by root and not
+/// writable by group or others, so that a link planted in a `PATH` directory cannot send the app to another program.
+#[cfg(unix)]
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+fn tool_is_trusted(path: &Path, roots: &[&Path]) -> bool {
+    use std::os::unix::fs::MetadataExt;
+    let Ok(link) = fs::symlink_metadata(path) else { return false };
+    if !link.file_type().is_symlink() {
+        return link.file_type().is_file();
+    }
+    let Ok(real) = fs::canonicalize(path) else { return false };
+    if !roots.iter().any(|root| real.starts_with(fs::canonicalize(root).unwrap_or_else(|_| root.to_path_buf()))) {
+        return false;
+    }
+    let Ok(target) = fs::metadata(&real) else { return false };
+    target.file_type().is_file() && (target.uid() == unsafe { libc::geteuid() } || target.uid() == 0) && target.mode() & 0o022 == 0
+}
+
 #[cfg(target_os = "macos")]
 fn mac_config_hash(runtime: &Path, timeout: Duration) -> Option<String> {
     mac_config_hash_in(runtime, timeout, read_host_env().as_deref(), &|key| std::env::var(key).ok())
@@ -1587,7 +1614,7 @@ fn mac_config_hash_in(runtime: &Path, timeout: Duration, host_env: Option<&str>,
         }
         let mut candidates: Vec<PathBuf> = std::env::var_os("PATH").into_iter().flat_map(|path| std::env::split_paths(&path).collect::<Vec<_>>()).map(|dir| dir.join(name)).collect();
         candidates.extend([PathBuf::from("/opt/homebrew/bin").join(name), PathBuf::from("/usr/local/bin").join(name), PathBuf::from("/opt/podman/bin").join(name)]);
-        candidates.into_iter().find(|path| fs::symlink_metadata(path).is_ok_and(|m| m.file_type().is_file() && !m.file_type().is_symlink()))
+        candidates.into_iter().find(|path| tool_is_trusted(path, &TOOL_ROOTS.map(Path::new)))
     };
     let podman = search("podman")?;
     let compose = search("podman-compose")?;
@@ -3970,6 +3997,51 @@ mod tests {
         assert_eq!(value("JHT_USER_TZ=Europe/Rome; rm -rf\n", "JHT_USER_TZ"), "UTC");
         assert_eq!(value("JHT_USER_TZ=\n", "JHT_USER_TZ"), "UTC");
         assert_eq!(value("JHT_USER_TZ=Etc/GMT+1\n", "JHT_USER_TZ"), "Etc/GMT+1");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_homebrew_style_symlink_is_a_trusted_tool_and_a_link_out_of_the_install_roots_is_not() {
+        use super::tool_is_trusted;
+        use std::os::unix::fs::{symlink, PermissionsExt};
+        let root = std::env::temp_dir().canonicalize().unwrap().join(format!("jht-tool-trust-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        let (prefix, elsewhere) = (root.join("prefix"), root.join("elsewhere"));
+        for dir in [prefix.join("bin"), prefix.join("Cellar/podman/6.1.3/bin"), elsewhere.clone()] {
+            fs::create_dir_all(dir).unwrap();
+        }
+        let program = |path: &Path, mode: u32| {
+            fs::write(path, "#!/bin/sh\n").unwrap();
+            fs::set_permissions(path, fs::Permissions::from_mode(mode)).unwrap();
+        };
+        let roots = [prefix.as_path()];
+        // `bin/podman` -> `../Cellar/podman/6.1.3/bin/podman-remote`, as Homebrew lays it out
+        program(&prefix.join("Cellar/podman/6.1.3/bin/podman-remote"), 0o755);
+        symlink("../Cellar/podman/6.1.3/bin/podman-remote", prefix.join("bin/podman")).unwrap();
+        assert!(tool_is_trusted(&prefix.join("bin/podman"), &roots), "the link Homebrew makes");
+        // a regular file is taken as it always was
+        program(&prefix.join("bin/podman-compose"), 0o755);
+        assert!(tool_is_trusted(&prefix.join("bin/podman-compose"), &roots));
+        // a link to a program outside the install roots (a planted one) is not
+        program(&elsewhere.join("podman"), 0o755);
+        symlink(elsewhere.join("podman"), prefix.join("bin/planted")).unwrap();
+        assert!(!tool_is_trusted(&prefix.join("bin/planted"), &roots));
+        // inside the roots, but a program anyone in the group or on the machine can rewrite
+        program(&prefix.join("Cellar/podman/6.1.3/bin/open-to-all"), 0o757);
+        symlink("../Cellar/podman/6.1.3/bin/open-to-all", prefix.join("bin/open")).unwrap();
+        assert!(!tool_is_trusted(&prefix.join("bin/open"), &roots));
+        program(&prefix.join("Cellar/podman/6.1.3/bin/open-to-group"), 0o775);
+        symlink("../Cellar/podman/6.1.3/bin/open-to-group", prefix.join("bin/group")).unwrap();
+        assert!(!tool_is_trusted(&prefix.join("bin/group"), &roots));
+        // a link to nothing, to a directory, a missing name
+        symlink("../Cellar/gone", prefix.join("bin/dangling")).unwrap();
+        symlink("../Cellar", prefix.join("bin/directory")).unwrap();
+        for name in ["dangling", "directory", "missing"] {
+            assert!(!tool_is_trusted(&prefix.join("bin").join(name), &roots), "{name}");
+        }
+        // the same link with another root list is no longer trusted
+        assert!(!tool_is_trusted(&prefix.join("bin/podman"), &[elsewhere.as_path()]));
+        fs::remove_dir_all(root).unwrap();
     }
 
     #[cfg(target_os = "macos")]
