@@ -748,6 +748,18 @@ describe("what the CLOSER's tools refuse, and what they never write", () => {
     expect(db.prepare("SELECT count(*) AS n FROM application_answers").get()).toEqual({ n: 0 });
   });
 
+  it("`save --value -` is refused (no stdin here: it would save a dash), while a `$` in the value stays", () => {
+    const save = (value: string) =>
+      guarded(() => applicationAnswers(["save", "--key", "expected pay", "--value", value, "--field-type", "text", "--basis", "cv"], options));
+    const refused = save("-");
+    expect([refused.exitCode, refused.stdout]).toEqual([2, ""]);
+    expect(refused.stderr).toContain("Nothing was saved");
+    expect(db.prepare("SELECT count(*) AS n FROM application_answers").get()).toEqual({ n: 0 });
+
+    expect(save("$80,000 a year; $20/hour").exitCode).toBe(0);
+    expect(db.prepare("SELECT answer_json FROM application_answers").all()).toEqual([{ answer_json: '"$80,000 a year; $20/hour"' }]);
+  });
+
   it("takes no path from the model: --db, --config and --profile are refused, not ignored", () => {
     for (const args of [["queue", "--db", "/tmp/other.db"], ["consent", "--config=/tmp/c.json"], ["queue", "--conf", "x"], ["position", "1", "--d", "x"]]) {
       const r = guarded(() => applyGate(args, options));
