@@ -142,6 +142,23 @@ describe("AgentChatPane", () => {
     }
   });
 
+  it.each(["ssh_auth_failed", "ssh_rate_limited"])("does not ask again after %s: it says why at once, with Retry", async (code) => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      const chat = client({ state: "disconnected" });
+      chat.reconnect = vi.fn(async () => { throw { code }; });
+      render(<AgentChatPane role="assistente" client={chat} />);
+      await act(async () => { await vi.advanceTimersByTimeAsync(5_000); });
+      const bar = await screen.findByTestId("direct-chat-status");
+      await waitFor(() => expect(bar).toHaveAttribute("role", "alert"));
+      expect(chat.reconnect).toHaveBeenCalledTimes(1);
+      expect(bar).not.toHaveTextContent("Team not connected");
+      expect(within(bar).getByRole("button", { name: "Retry" })).toBeTruthy();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("in the read-only view shows the history and the answers, and no way to send", async () => {
     act(() => enterExistingTeamReadOnly(false));
     const chat = client();

@@ -145,6 +145,20 @@ const CONNECTING_SLOW_MS = 8_000;
 // it tells the person anything.
 const REOPEN_TRIES = 3;
 const REOPEN_WAIT_MS = 1_500;
+// What asking again cannot change, or makes worse (a server that counts failed sign-ins or turns the
+// computer away): these are told at once, with their Retry. Anything else is a team not ready yet.
+const REOPEN_NO_RETRY = new Set([
+  "ssh_auth_failed",
+  "ssh_rate_limited",
+  "host_key_changed",
+  "host_key_mismatch",
+  "ssh_client_missing",
+  "own_vps_key_changed",
+  "own_vps_claim_refused",
+  "account_scope_mismatch",
+  "read_only_link",
+  "existing_team_runtime_target_changed",
+]);
 
 function StatusBar({
   status,
@@ -321,7 +335,8 @@ export default function DirectChatScreen({
             snapshot = await client.reconnect();
             break;
           } catch (error) {
-            if (attempt >= REOPEN_TRIES) throw error;
+            const code = errorCode(error);
+            if (attempt >= REOPEN_TRIES || (code !== null && REOPEN_NO_RETRY.has(code))) throw error;
             await new Promise((resolve) => setTimeout(resolve, REOPEN_WAIT_MS * attempt));
             if (!active) return;
             // Someone else may have opened it meanwhile (another tab of the same chat).
