@@ -253,7 +253,7 @@ export default function ProfileView({
               />
               <ProfileField
                 label={t("f_degree")}
-                value={profile.has_degree ? t("f_yes") : t("f_no")}
+                value={profile.has_degree == null ? null : profile.has_degree ? t("f_yes") : t("f_no")}
               />
               <ProfileField label={t("f_email")} value={profile.email} />
             </ProfileSection>

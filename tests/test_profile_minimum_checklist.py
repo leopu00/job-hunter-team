@@ -165,3 +165,32 @@ def test_the_checklist_is_the_shared_list_and_the_apps_required_fields(tmp_path:
 def test_the_validator_gives_the_answer_the_shared_cases_expect(tmp_path: Path, case: dict):
     # web/lib/profile-minimum-parity.test.ts reads the same cases and asks the app the same
     assert _check(tmp_path, case["profile"], "--minimum")["missing"] == case["missing"]
+
+
+def _eight_fields() -> dict:
+    """Only the eight fields of the app, at the root: no degree, no experience, no education."""
+    return {
+        "name": "Example Person", "email": "candidate@example.invalid", "target_role": "Backend Engineer",
+        "location": "Rome, Italy", "experience_years": 4, "seniority_target": "mid",
+        "skills": {"primary": ["Python", "SQL"]}, "languages": [{"language": "Italian", "level": "native"}],
+    }
+
+
+def test_the_eight_fields_are_enough_without_has_degree(tmp_path: Path):
+    # the import runs the validator with exactly these flags
+    for flags in (("--strict", "--minimum"), ("--strict",), ()):
+        verdict = _check(tmp_path, _eight_fields(), *flags)
+        assert verdict["ok"] is True and verdict["errors"] == [], (flags, verdict)
+
+
+@pytest.mark.parametrize("declared", [True, False])
+def test_a_declared_has_degree_is_kept_as_it_is(tmp_path: Path, declared: bool):
+    verdict = _check(tmp_path, {**_eight_fields(), "has_degree": declared}, "--strict", "--minimum")
+    assert verdict["ok"] is True and verdict["errors"] == []
+
+
+@pytest.mark.parametrize("wrong", ["yes", "true", 1, 0, None, [], ["true"]], ids=repr)
+def test_has_degree_that_is_there_and_is_not_a_boolean_is_still_an_error(tmp_path: Path, wrong):
+    verdict = _check(tmp_path, {**_eight_fields(), "has_degree": wrong}, "--strict", "--minimum")
+    assert verdict["ok"] is False
+    assert any(line.startswith("has_degree:") for line in verdict["errors"]), verdict["errors"]

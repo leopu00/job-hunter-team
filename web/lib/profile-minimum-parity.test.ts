@@ -43,3 +43,22 @@ describe("minimo del profilo: parità con il validatore", () => {
     });
   }
 });
+
+describe("has_degree è facoltativo: assente è «non dichiarato», mai «no»", () => {
+  const eight = shared.cases[0].profile;
+
+  it("gli otto campi bastano e il titolo di studio resta non dichiarato", () => {
+    assert.equal("has_degree" in eight, false);
+    assert.equal(isTeamUnlocked(mapYamlToProfile(eight)), true);
+    assert.equal(mapYamlToProfile(eight).has_degree, null);
+  });
+
+  it("un valore dichiarato resta com'è, anche false", () => {
+    assert.equal(mapYamlToProfile({ ...eight, has_degree: false }).has_degree, false);
+    assert.equal(mapYamlToProfile({ ...eight, has_degree: true }).has_degree, true);
+  });
+
+  it("un valore che non è un booleano non diventa un «no»", () => {
+    assert.equal(mapYamlToProfile({ ...eight, has_degree: "no" }).has_degree, null);
+  });
+});

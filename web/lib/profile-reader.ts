@@ -182,7 +182,7 @@ export function mapYamlToProfile(raw: any): CandidateProfile {
     location: filled(raw.location) ?? filled(personal.location) ?? null,
     experience_years: raw.experience_years ?? null,
     experience_months: null,
-    has_degree: raw.has_degree ?? false,
+    has_degree: typeof raw.has_degree === "boolean" ? raw.has_degree : null,
     skills,
     languages,
     location_preferences,

@@ -280,6 +280,36 @@ test('jht profile import: from a file and from stdin, with the real validator', 
   assert.deepEqual(readFileSync(join(fromStdin.root, 'profile', 'candidate_profile.yml')), PROFILE);
 });
 
+// The eight fields of the app are what the team needs (the 2026-06-06 decision): has_degree is not one of them.
+test('jht profile import: the eight fields are enough, and a has_degree that is not a boolean is not', { skip: spawnSync('python3', ['-c', 'import yaml']).status !== 0 }, () => {
+  const eight = [
+    'name: Example Person', 'email: candidate@example.invalid', 'target_role: Backend Engineer',
+    'location: Rome, Italy', 'experience_years: 4', 'seniority_target: mid',
+    'skills:', '  primary: [Python, SQL]', 'languages:', '  - language: Italian', '    level: native', '',
+  ].join('\n');
+  const { root } = folder();
+  const file = join(root, 'eight.yml');
+  writeFileSync(file, eight);
+  const done = run(root, ['profile', 'import', file, '--json']);
+  assert.equal(done.status, 0, done.stdout + done.stderr);
+  assert.equal(JSON.parse(done.stdout).ok, true);
+  assert.equal(readFileSync(join(root, 'profile', 'candidate_profile.yml'), 'utf8'), eight, 'written as it is: no has_degree invented');
+
+  // Declared, it is kept as written; written as something else, it is refused.
+  for (const [value, status] of [['false', 0], ['true', 0], ['"no"', 1], ['', 1]]) {
+    const home = folder().root;
+    const withValue = join(home, 'declared.yml');
+    writeFileSync(withValue, `${eight}has_degree: ${value}\n`);
+    const answer = run(home, ['profile', 'import', withValue, '--json']);
+    assert.equal(answer.status, status, `has_degree: ${value} -> ${answer.stdout}`);
+    if (status === 1) {
+      const verdict = JSON.parse(answer.stdout);
+      assert.equal(verdict.code, 'profile_invalid');
+      assert.ok(verdict.errors.some((line) => line.startsWith('has_degree:')), verdict.errors.join());
+    }
+  }
+});
+
 test('jht profile import: an invalid profile, a link and a big file are refused with nothing written', { skip: spawnSync('python3', ['-c', 'import yaml']).status !== 0 }, () => {
   const { root } = folder();
   const bad = join(root, 'bad.yml');
