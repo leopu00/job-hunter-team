@@ -171,6 +171,10 @@ pub(crate) enum LocalCliOperation {
     LinkedinLoginStop,
     LinkedinStatus,
     CleanImages,
+    /// `jht providers plan --json`: the plans of the active provider, the declared one, the suggestion.
+    ProviderPlans,
+    /// `jht providers plan <id> --json`: declares the plan the person chose (an id of `KNOWN_PLAN_IDS`).
+    ProviderPlanSet(&'static str),
 }
 
 impl LocalCliOperation {
@@ -191,6 +195,8 @@ impl LocalCliOperation {
             Self::LinkedinLoginStop => vec!["linkedin", "login", "--stop"],
             Self::LinkedinStatus => vec!["linkedin", "status", "--json"],
             Self::CleanImages => vec!["clean-images", "--json"],
+            Self::ProviderPlans => vec!["providers", "plan", "--json"],
+            Self::ProviderPlanSet(id) => vec!["providers", "plan", id, "--json"],
         }
     }
 
@@ -211,6 +217,8 @@ impl LocalCliOperation {
             Self::LinkedinLoginStop => "linkedin-login-stop",
             Self::LinkedinStatus => "linkedin-status",
             Self::CleanImages => "clean-images",
+            Self::ProviderPlans => "provider-plans",
+            Self::ProviderPlanSet(_) => "provider-plan-set",
         }
     }
 }
@@ -2391,6 +2399,7 @@ const REMOTE_PROVIDER_CURRENT: &str = r#"set -eu; JHT_BIN="$(command -v jht 2>/d
 const REMOTE_PROVIDER_LIMITS: &str = r#"set -eu; JHT_BIN="$(command -v jht 2>/dev/null || true)"; [ -n "$JHT_BIN" ] || JHT_BIN="$HOME/.local/bin/jht"; exec "$JHT_BIN" providers limits --json"#;
 const REMOTE_TEAM_START: &str = r#"set -eu; JHT_BIN="$(command -v jht 2>/dev/null || true)"; [ -n "$JHT_BIN" ] || JHT_BIN="$HOME/.local/bin/jht"; exec "$JHT_BIN" team start"#;
 const REMOTE_CLEAN_IMAGES: &str = r#"set -eu; JHT_BIN="$(command -v jht 2>/dev/null || true)"; [ -n "$JHT_BIN" ] || JHT_BIN="$HOME/.local/bin/jht"; exec "$JHT_BIN" clean-images --json"#;
+const REMOTE_PROVIDER_PLANS: &str = r#"set -eu; JHT_BIN="$(command -v jht 2>/dev/null || true)"; [ -n "$JHT_BIN" ] || JHT_BIN="$HOME/.local/bin/jht"; exec "$JHT_BIN" providers plan --json"#;
 const REMOTE_ASSISTANT_START: &str = r#"set -eu; JHT_BIN="$(command -v jht 2>/dev/null || true)"; [ -n "$JHT_BIN" ] || JHT_BIN="$HOME/.local/bin/jht"; exec "$JHT_BIN" team start assistente"#;
 pub(crate) const REMOTE_LINKEDIN_LOGIN: &str = r#"set -eu; JHT_BIN="$(command -v jht 2>/dev/null || true)"; [ -n "$JHT_BIN" ] || JHT_BIN="$HOME/.local/bin/jht"; exec "$JHT_BIN" linkedin login"#;
 pub(crate) const REMOTE_LINKEDIN_LOGIN_STOP: &str = r#"set -eu; JHT_BIN="$(command -v jht 2>/dev/null || true)"; [ -n "$JHT_BIN" ] || JHT_BIN="$HOME/.local/bin/jht"; exec "$JHT_BIN" linkedin login --stop"#;
@@ -5617,6 +5626,236 @@ pub(crate) async fn onboarding_clean_images(
     result
 }
 
+// ── The subscription plan, chosen in the setup ──────────────────────────────────────────────
+//
+// The Capitano's first run does not open without a declared plan, and the plan is the person's to
+// declare: the setup asks after the provider's login and before the team starts. The table of plans
+// is the registry's (shared/skills/plan_registry.py), reached through `jht providers plan --json` on
+// the team's host, local wrapper or SSH, as the limits and the cleaning are. Reading writes nothing;
+// declaring writes exactly the plan the person chose, and only an id of the registry.
+
+/// Every plan id of the registry (`PLANS` of plan_registry.py): the only ids the app passes on to
+/// `jht providers plan <id>`, so the id that reaches the command line is one of these constants.
+const KNOWN_PLAN_IDS: &[&str] = &[
+    "adagio", "moderato", "allegretto", "allegro", "vivace", "pro", "max5", "max20", "plus", "pro-max",
+];
+
+fn known_plan_id(id: &str) -> Option<&'static str> {
+    KNOWN_PLAN_IDS.iter().find(|known| **known == id).copied()
+}
+
+/// One plan as the setup shows it: the registry's own name and price, in the registry's language.
+#[derive(Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct PlanOption {
+    id: String,
+    label: String,
+    price: String,
+}
+
+/// What the setup shows when the plan is not declared yet: the plans to choose from and, when the
+/// account's Codex reading names one the table has, the one to propose (the person confirms it).
+#[derive(Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct PlanChoice {
+    provider: String,
+    declared: Option<PlanOption>,
+    plans: Vec<PlanOption>,
+    suggested: Option<String>,
+}
+
+#[derive(Deserialize)]
+struct PlanReplyOption {
+    id: String,
+    label: String,
+    #[serde(default)]
+    price: String,
+}
+
+#[derive(Deserialize)]
+struct PlansReply {
+    ok: bool,
+    provider: Option<String>,
+    declared: Option<PlanReplyOption>,
+    #[serde(default, rename = "declaredUnreadable")]
+    declared_unreadable: bool,
+    #[serde(default)]
+    plans: Vec<PlanReplyOption>,
+    suggested: Option<String>,
+    plan: Option<PlanReplyOption>,
+}
+
+const PLAN_TEXT_MAX: usize = 48;
+const PLANS_MAX: usize = 12;
+
+fn plan_option(reply: PlanReplyOption) -> Option<PlanOption> {
+    let text_ok = |text: &str, empty: bool| {
+        (empty || !text.is_empty()) && text.chars().count() <= PLAN_TEXT_MAX && !text.chars().any(char::is_control)
+    };
+    let id = known_plan_id(&reply.id)?;
+    (text_ok(&reply.label, false) && text_ok(&reply.price, true)).then(|| PlanOption {
+        id: id.to_owned(),
+        label: reply.label,
+        price: reply.price,
+    })
+}
+
+/// The one JSON line of `jht providers plan --json` (the last one starting with `{`). An answer the
+/// app cannot rely on (a CLI that does not know `--json`, a plan the app does not know, no plans, a
+/// declared plan that cannot be read) is `plans_unavailable`: the setup then goes on without the
+/// choice and the Assistente asks in the chat.
+fn parse_plans(result: &ProcessResult) -> Result<PlanChoice, &'static str> {
+    let stdout = String::from_utf8_lossy(&result.stdout);
+    let line = stdout
+        .lines()
+        .map(str::trim)
+        .filter(|line| line.starts_with('{'))
+        .last()
+        .ok_or("plans_unavailable")?;
+    let reply: PlansReply = serde_json::from_str(line).map_err(|_| "plans_unavailable")?;
+    if !result.success() || !reply.ok || reply.declared_unreadable {
+        return Err("plans_unavailable");
+    }
+    let provider = reply.provider.filter(|name| !name.is_empty() && name.len() <= 16 && name.chars().all(|c| c.is_ascii_lowercase()));
+    let plans: Vec<PlanOption> = reply.plans.into_iter().map(plan_option).collect::<Option<_>>().ok_or("plans_unavailable")?;
+    let declared = match reply.declared {
+        Some(declared) => Some(plan_option(PlanReplyOption { price: String::new(), ..declared }).ok_or("plans_unavailable")?),
+        None => None,
+    };
+    if plans.is_empty() || plans.len() > PLANS_MAX {
+        return Err("plans_unavailable");
+    }
+    // A suggestion is one of the plans shown, never anything else.
+    let suggested = reply.suggested.filter(|id| plans.iter().any(|plan| plan.id == *id));
+    Ok(PlanChoice { provider: provider.ok_or("plans_unavailable")?, declared, plans, suggested })
+}
+
+/// The reply of `jht providers plan <id> --json`: it counts only if it declared the plan asked for.
+fn parse_plan_declared(result: &ProcessResult, asked: &str) -> Result<PlanOption, &'static str> {
+    let stdout = String::from_utf8_lossy(&result.stdout);
+    let line = stdout
+        .lines()
+        .map(str::trim)
+        .filter(|line| line.starts_with('{'))
+        .last()
+        .ok_or("plan_declare_failed")?;
+    let reply: PlansReply = serde_json::from_str(line).map_err(|_| "plan_declare_failed")?;
+    if !result.success() || !reply.ok {
+        return Err("plan_declare_failed");
+    }
+    reply
+        .plan
+        .and_then(plan_option)
+        .filter(|plan| plan.id == asked)
+        .ok_or("plan_declare_failed")
+}
+
+fn remote_provider_plan_set(id: &'static str) -> String {
+    format!(
+        r#"set -eu; JHT_BIN="$(command -v jht 2>/dev/null || true)"; [ -n "$JHT_BIN" ] || JHT_BIN="$HOME/.local/bin/jht"; exec "$JHT_BIN" providers plan {id} --json"#
+    )
+}
+
+fn plan_operation_on_host(
+    app: &tauri::AppHandle,
+    scope: &AccountScope,
+    validated: &ValidatedHost,
+    operation: LocalCliOperation,
+) -> Result<ProcessResult, &'static str> {
+    match validated {
+        ValidatedHost::Local => {
+            let wrapper = wrapper_path(app).ok_or("runtime_missing")?;
+            run_scoped_local(app, scope, &wrapper, operation, SNAPSHOT_TIMEOUT)
+        }
+        ValidatedHost::Vps { .. } => match operation {
+            LocalCliOperation::ProviderPlanSet(id) => {
+                run_ssh_command(validated, &remote_provider_plan_set(id), None, SNAPSHOT_TIMEOUT, None)
+            }
+            _ => run_ssh(validated, REMOTE_PROVIDER_PLANS, None, SNAPSHOT_TIMEOUT, None),
+        },
+    }
+}
+
+/// Reads the plans on the team's host. `host`: the one being set up; none = the saved one.
+#[tauri::command]
+pub(crate) async fn onboarding_plans(
+    app: tauri::AppHandle,
+    state: State<'_, OnboardingNativeState>,
+    scopes: State<'_, AccountScopeState>,
+    host: Option<ExecutionHost>,
+) -> Result<PlanChoice, OnboardingError> {
+    let expected = scopes.active().map_err(failure)?;
+    if state
+        .preparing
+        .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+        .is_err()
+    {
+        return Err(failure("operation_in_progress"));
+    }
+    let scope_state = scopes.inner().clone();
+    let worker_expected = expected.clone();
+    let result = tauri::async_runtime::spawn_blocking(move || {
+        let _scope = scope_state.lock_expected(&worker_expected).map_err(failure)?;
+        let host = match host {
+            Some(host) => host,
+            None => crate::direct_chat::load_persisted_host(&app, &worker_expected).map_err(failure)?,
+        };
+        let validated = validate_host(&app, &host).map_err(failure)?;
+        match plan_operation_on_host(&app, &worker_expected, &validated, LocalCliOperation::ProviderPlans) {
+            Ok(result) => parse_plans(&result).map_err(failure),
+            Err("process_timeout") => Err(failure("timeout")),
+            Err(error) => Err(local_failure(error, "plans_unavailable")),
+        }
+    })
+    .await
+    .unwrap_or_else(|_| Err(failure("plans_unavailable")));
+    state.preparing.store(false, Ordering::Release);
+    let _scope = scopes.lock_expected(&expected).map_err(failure)?;
+    result
+}
+
+/// Declares the plan the person chose: `jht providers plan <id> --json` on the team's host. The id is
+/// checked against the registry's ids before it reaches any command line; nothing else is written.
+#[tauri::command]
+pub(crate) async fn onboarding_plan_declare(
+    app: tauri::AppHandle,
+    state: State<'_, OnboardingNativeState>,
+    scopes: State<'_, AccountScopeState>,
+    host: Option<ExecutionHost>,
+    plan: String,
+) -> Result<PlanOption, OnboardingError> {
+    let id = known_plan_id(&plan).ok_or_else(|| failure("plan_declare_failed"))?;
+    let expected = scopes.active().map_err(failure)?;
+    if state
+        .preparing
+        .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+        .is_err()
+    {
+        return Err(failure("operation_in_progress"));
+    }
+    let scope_state = scopes.inner().clone();
+    let worker_expected = expected.clone();
+    let result = tauri::async_runtime::spawn_blocking(move || {
+        let _scope = scope_state.lock_expected(&worker_expected).map_err(failure)?;
+        let host = match host {
+            Some(host) => host,
+            None => crate::direct_chat::load_persisted_host(&app, &worker_expected).map_err(failure)?,
+        };
+        let validated = validate_host(&app, &host).map_err(failure)?;
+        match plan_operation_on_host(&app, &worker_expected, &validated, LocalCliOperation::ProviderPlanSet(id)) {
+            Ok(result) => parse_plan_declared(&result, id).map_err(failure),
+            Err("process_timeout") => Err(failure("timeout")),
+            Err(error) => Err(local_failure(error, "plan_declare_failed")),
+        }
+    })
+    .await
+    .unwrap_or_else(|_| Err(failure("plan_declare_failed")));
+    state.preparing.store(false, Ordering::Release);
+    let _scope = scopes.lock_expected(&expected).map_err(failure)?;
+    result
+}
+
+
 /// How long «Remove JHT from this computer» may take: the Podman machine's
 /// deletion is the slow part.
 #[cfg_attr(not(windows), allow(dead_code))]
@@ -5941,6 +6180,10 @@ mod tests {
     use super::{
         clean_images_with, ensure_team_started, parse_clean_images, CleanImagesOutcome,
         CLEAN_IMAGES_TIMEOUT, REMOTE_CLEAN_IMAGES,
+    };
+    use super::{
+        known_plan_id, parse_plan_declared, parse_plans, remote_provider_plan_set, KNOWN_PLAN_IDS,
+        REMOTE_PROVIDER_PLANS,
     };
     use super::{
         ensure_success, ensure_success_with_timeout, recreate_podman_machine_with,
@@ -7510,6 +7753,80 @@ mod tests {
             for forbidden in [" -f", "--force", "prune", "volume", "system"] {
                 assert!(!command.contains(forbidden), "{command} contains {forbidden}");
             }
+        }
+    }
+
+    fn plans_reply(extra: &str) -> String {
+        format!(
+            r#"{{"ok":true,"provider":"openai","declared":null,"plans":[{{"id":"plus","label":"Plus","price":"20 $/month"}},{{"id":"pro","label":"Pro","price":"100 $/month"}},{{"id":"pro-max","label":"Pro 20x","price":"200 $/month"}}]{extra}}}"#
+        )
+    }
+
+    #[test]
+    fn the_plans_are_read_from_the_json_line_of_the_wrapper() {
+        // A line printed before the JSON is ignored.
+        let reply = printed(0, &format!("note\n{}\n", plans_reply(r#","suggested":"pro""#)));
+        let choice = parse_plans(&reply).unwrap();
+        assert_eq!(choice.provider, "openai");
+        assert!(choice.declared.is_none());
+        assert_eq!(choice.plans.iter().map(|plan| plan.id.as_str()).collect::<Vec<_>>(), ["plus", "pro", "pro-max"]);
+        assert_eq!(choice.suggested.as_deref(), Some("pro"));
+        let json = serde_json::to_value(&choice).unwrap();
+        assert_eq!(json["plans"][1]["price"], "100 $/month");
+        assert_eq!(json["suggested"], "pro");
+        // No reading, no suggestion.
+        assert_eq!(parse_plans(&printed(0, &plans_reply(r#","suggested":null"#))).unwrap().suggested, None);
+        assert_eq!(parse_plans(&printed(0, &plans_reply(""))).unwrap().suggested, None);
+        // A plan already declared is told as it is.
+        let declared = plans_reply("").replace(r#""declared":null"#, r#""declared":{"id":"plus","label":"Plus"}"#);
+        assert_eq!(parse_plans(&printed(0, &declared)).unwrap().declared.unwrap().id, "plus");
+    }
+
+    #[test]
+    fn a_suggestion_outside_the_plans_shown_is_dropped_and_an_unreliable_answer_is_unavailable() {
+        assert_eq!(parse_plans(&printed(0, &plans_reply(r#","suggested":"max20""#))).unwrap().suggested, None);
+        for stdout in [
+            "".to_string(),
+            "not json".to_string(),
+            r#"{"ok":false,"code":"no_active_provider"}"#.to_string(),
+            plans_reply(r#","declaredUnreadable":true"#),
+            // a plan the app does not know, a text that is a control character, an empty list
+            plans_reply("").replace(r#""id":"plus""#, r#""id":"platinum""#),
+            plans_reply("").replace("Plus", "Pl\\u0007us"),
+            r#"{"ok":true,"provider":"openai","declared":null,"plans":[]}"#.to_string(),
+            r#"{"ok":true,"declared":null,"plans":[{"id":"plus","label":"Plus","price":""}]}"#.to_string(),
+        ] {
+            assert_eq!(parse_plans(&printed(0, &stdout)).unwrap_err(), "plans_unavailable", "{stdout}");
+        }
+        // The exit code counts: a CLI that failed is not an answer, whatever it printed.
+        assert_eq!(parse_plans(&printed(1, &plans_reply(""))).unwrap_err(), "plans_unavailable");
+    }
+
+    #[test]
+    fn a_plan_is_declared_only_when_the_wrapper_says_it_declared_the_one_asked() {
+        let said = |plan: &str| format!(r#"{{"ok":true,"provider":"openai","plan":{{"id":"{plan}","label":"Plus"}}}}"#);
+        assert_eq!(parse_plan_declared(&printed(0, &said("plus")), "plus").unwrap().id, "plus");
+        // Another plan than the one asked, a refusal, a failed exit: none of them is "declared".
+        assert_eq!(parse_plan_declared(&printed(0, &said("pro")), "plus").unwrap_err(), "plan_declare_failed");
+        assert_eq!(parse_plan_declared(&printed(1, r#"{"ok":false,"code":"unknown_plan"}"#), "plus").unwrap_err(), "plan_declare_failed");
+        assert_eq!(parse_plan_declared(&printed(1, &said("plus")), "plus").unwrap_err(), "plan_declare_failed");
+        assert_eq!(parse_plan_declared(&printed(0, ""), "plus").unwrap_err(), "plan_declare_failed");
+    }
+
+    #[test]
+    fn only_the_registrys_ids_reach_the_command_line_and_it_asks_for_json_only() {
+        assert_eq!(LocalCliOperation::ProviderPlans.argv(), ["providers", "plan", "--json"]);
+        assert_eq!(LocalCliOperation::ProviderPlanSet("pro-max").argv(), ["providers", "plan", "pro-max", "--json"]);
+        assert!(REMOTE_PROVIDER_PLANS.ends_with(r#"exec "$JHT_BIN" providers plan --json"#));
+        assert!(remote_provider_plan_set("plus").ends_with(r#"exec "$JHT_BIN" providers plan plus --json"#));
+        for id in ["plus", "pro", "pro-max", "adagio", "max20"] {
+            assert_eq!(known_plan_id(id), Some(id));
+        }
+        for refused in ["", "Plus", "plus --replace", "plus;reboot", "$(id)", "../plus", "plus\n", " plus", "platinum"] {
+            assert_eq!(known_plan_id(refused), None, "{refused:?}");
+        }
+        for id in KNOWN_PLAN_IDS {
+            assert!(id.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-'), "{id}");
         }
     }
 
