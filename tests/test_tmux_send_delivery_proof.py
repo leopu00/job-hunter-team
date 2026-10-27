@@ -248,6 +248,38 @@ def test_a_text_that_never_shows_is_typed_once_and_nothing_is_pressed(box):
     assert box.keys("Enter") == [] and box.keys("Escape") == [] and box.keys("Space") == []
 
 
+def _busy_codex(box, lag):
+    """The Capitano in the middle of a turn (TEST 8, 27/10): the footer is «tab to queue message», and the TUI
+    draws what is pasted into the composer `lag` seconds late."""
+    box.put("layout", "codex")
+    box.put("mode", "busy")
+    box.put("lag", str(lag))
+
+
+def test_a_busy_agent_that_draws_the_paste_late_is_waited_for_and_gets_its_enter(box):
+    """Before: the render window of an agent at rest (about 2 s) ended, the transport said rc=3 («never shown»,
+    the one answer that means «maybe dead») and pressed nothing; the text appeared a moment later and waited
+    for the next delivery's Enter. The user's chat showed «agent unavailable» for a message that arrived."""
+    _busy_codex(box, 9)                       # the window of an agent at rest is about 7 s here
+    done = box.run()
+    assert done.returncode == 0, done.stderr
+    assert len(box.typed()) == 1, "typed once"
+    assert len(box.keys("Enter")) == 1, "and it got its Enter"
+
+
+def test_a_busy_agent_that_never_draws_it_in_time_is_busy_not_dead_and_the_text_is_not_typed_again(box):
+    _busy_codex(box, 9)
+    done = box.run(JHT_TMUX_LATE_RENDER_WAIT="1")
+    assert done.returncode == 4, done.stderr          # alive, retry later: pacing does not count it as a death
+    assert len(box.typed()) == 1 and box.keys("Enter") == [] and box.keys("Escape") == []
+    # the retry finds the text, now drawn, as the pending text of ours: Enter only, never a second paste
+    import time as _time
+    _time.sleep(1.5)                          # the TUI draws it at 9 s; the first call gave up at about 8
+    again = box.run(JHT_TMUX_LATE_RENDER_WAIT="1")
+    assert again.returncode == 0, again.stderr
+    assert len(box.typed()) == 1 and len(box.keys("Enter")) == 1
+
+
 def test_a_certain_menu_on_screen_types_nothing_and_never_sends_escape(box):
     box.put("mode", "menu")
     done = box.run()
