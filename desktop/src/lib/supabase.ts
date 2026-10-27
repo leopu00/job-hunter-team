@@ -1,6 +1,7 @@
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { createClient, type Session, type SupabaseClient } from "@supabase/supabase-js";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { registerAuthStorageProbe } from "./auth-storage-lock";
 import { clearDesktopAccountScope } from "./desktop-account-scope";
 import { clearGoogleIdentitySelection } from "./identity-choice";
 
@@ -56,6 +57,8 @@ export interface AuthStorage {
 export interface DeferredAuthStorage {
   storage: AuthStorage;
   unlock: () => void;
+  /** True once `unlock` has run: until then every storage call waits. */
+  isUnlocked: () => boolean;
 }
 
 /**
@@ -79,6 +82,7 @@ export function deferAuthStorage(storage: AuthStorage): DeferredAuthStorage {
       unlocked = true;
       release();
     },
+    isUnlocked: () => unlocked,
   };
 }
 
@@ -99,6 +103,10 @@ const rawTauriAuthStorage: AuthStorage = {
 };
 const deferredTauriAuthStorage = deferAuthStorage(rawTauriAuthStorage);
 export const tauriAuthStorage: AuthStorage = deferredTauriAuthStorage.storage;
+
+// The pages ask this module (lib/auth-storage-lock.ts) whether the session's storage is open; it
+// lives apart so that what stands in for this one in a test needs nothing of it.
+if (isTauri()) registerAuthStorageProbe(deferredTauriAuthStorage.isUnlocked);
 
 /** Fuori da Tauri (vitest, `npm run dev` nel browser) la sessione vive in memoria. */
 export function memoryAuthStorage(): AuthStorage {

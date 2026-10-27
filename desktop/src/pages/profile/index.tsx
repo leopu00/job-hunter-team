@@ -7,8 +7,10 @@ import { getProfileT } from "@/lib/profile-i18n";
 import { readLocaleCookie } from "@/lib/use-locale";
 import { appLocale } from "../../lib/app-locale";
 import { pluralText } from "../../lib/plural";
-import { supabase } from "../../lib/supabase";
+import { cloudClient } from "../../lib/cloud-client";
+import { withReadDeadline } from "../../lib/read-deadline";
 import { useRefresh } from "../../shell/router";
+import { SHELL_TEXT } from "../../shell/shell.i18n";
 import type { PageProps } from "../types";
 import { LinkedinLoginCard } from "./LinkedinLoginCard";
 import { PROFILE_PAGE_TEXT } from "./profile-page.i18n";
@@ -25,12 +27,12 @@ type Load =
  * dati letti dalla sessione dell'utente. Come sul web cloud il profilo si
  * guarda e si esporta; la modifica passa dall'assistente, che qui non c'è.
  */
-export function ProfilePage({ client = supabase }: { client?: SupabaseClient }) {
+export function ProfilePage({ client = cloudClient() }: { client?: SupabaseClient }) {
   const [locale] = useState<Locale>(readLocaleCookie);
   const [load, setLoad] = useState<Load>({ state: "loading" });
 
   const read = useCallback(() => {
-    loadProfile(client)
+    withReadDeadline(loadProfile(client))
       .then((data) => setLoad(data ? { state: "ready", data } : { state: "signed-out" }))
       .catch(() => setLoad((prev) => (prev.state === "ready" ? prev : { state: "failed" })));
   }, [client]);
@@ -57,9 +59,18 @@ export function ProfilePage({ client = supabase }: { client?: SupabaseClient }) 
     return <div className="p-12 text-center text-[var(--color-muted)]">{t("session_expired")}</div>;
   if (load.state === "failed")
     return (
-      <p role="alert" className="max-w-6xl mx-auto px-5 pt-8 text-[12px]" style={{ color: "var(--color-red)" }}>
-        Non riesco a leggere il profilo. Controlla la connessione e premi «Aggiorna».
-      </p>
+      <div className="max-w-6xl mx-auto px-5 pt-8">
+        <p role="alert" className="text-[12px]" style={{ color: "var(--color-red)" }}>
+          Non riesco a leggere il profilo. Controlla la connessione e premi «Aggiorna».
+        </p>
+        <button
+          type="button"
+          className="mt-3 border border-[var(--color-border)] rounded px-3 py-1.5 text-[12px]"
+          onClick={() => { setLoad({ state: "loading" }); read(); }}
+        >
+          {SHELL_TEXT[appLocale()].refresh}
+        </button>
+      </div>
     );
   const { data } = load;
   return (

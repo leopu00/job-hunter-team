@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { appLocale } from "../lib/app-locale";
+import { withReadDeadline } from "../lib/read-deadline";
 import { SHELL_TEXT } from "./shell.i18n";
 import { useRefresh } from "./router";
 
@@ -12,7 +13,8 @@ import { useRefresh } from "./router";
  * router.refresh()), and when `runKey` changes (a page whose query string
  * holds its filters): the screen stays up until the new result replaces it,
  * as a Next soft navigation does, so the client components keep their state.
- * Until the first result, `fallback`.
+ * Until the first result, `fallback`; a page that gives none within the read deadline says it
+ * could not be read, with a button to try again, instead of staying a skeleton.
  */
 type Props = {
   render: () => Promise<ReactNode> | ReactNode;
@@ -31,8 +33,7 @@ export default function ServerPage({ render, fallback = null, failure, runKey }:
 
   const run = useCallback(() => {
     let live = true;
-    Promise.resolve()
-      .then(() => latest.current())
+    withReadDeadline(Promise.resolve().then(() => latest.current()))
       .then((node) => live && setResult({ state: "ready", node }))
       .catch((error: unknown) => {
         console.error("[desktop] server page failed:", error);
@@ -53,11 +54,18 @@ export default function ServerPage({ render, fallback = null, failure, runKey }:
   if (result.state === "ready") return <>{result.node}</>;
   if (result.state === "failed")
     return (
-      failure ?? (
-        <p role="alert" className="max-w-6xl mx-auto px-5 pt-8 text-[12px]" style={{ color: "var(--color-red)" }}>
-          {SHELL_TEXT[appLocale()].pageReadFailed(SHELL_TEXT[appLocale()].refresh)}
-        </p>
-      )
+      <>
+        {failure ?? (
+          <p role="alert" className="max-w-6xl mx-auto px-5 pt-8 text-[12px]" style={{ color: "var(--color-red)" }}>
+            {SHELL_TEXT[appLocale()].pageReadFailed(SHELL_TEXT[appLocale()].refresh)}
+          </p>
+        )}
+        <div className="max-w-6xl mx-auto px-5 pt-3">
+          <button type="button" className="border border-[var(--color-border)] rounded px-3 py-1.5 text-[12px]" onClick={() => { setResult({ state: "loading" }); run(); }}>
+            {SHELL_TEXT[appLocale()].refresh}
+          </button>
+        </div>
+      </>
     );
   return <>{fallback}</>;
 }

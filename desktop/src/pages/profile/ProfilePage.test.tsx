@@ -1,6 +1,7 @@
-import { render, screen } from "@testing-library/react";
+import { act, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { fakeSupabase, type FakeQuery } from "../../test-support/fake-supabase";
+import { PAGE_READ_DEADLINE_MS } from "../../lib/read-deadline";
 import { ProfilePage } from ".";
 import { loadProfile, openContacts, profileExport } from "./load-profile";
 import { getProfileT, languageLevelLabel } from "@/lib/profile-i18n";
@@ -96,6 +97,27 @@ describe("language levels", () => {
       }
       expect(languageLevelLabel("Professionale", t)).toBe("Professionale");
       expect(languageLevelLabel(undefined, t)).toBe("");
+    }
+  });
+});
+
+describe("ProfilePage, a session that never answers", () => {
+  it("says it could not read the profile after the deadline, and the button reads it again", async () => {
+    vi.useFakeTimers();
+    try {
+      const { client } = fakeSupabase(respond);
+      const getSession = vi.fn(client.auth.getSession.bind(client.auth));
+      getSession.mockReturnValueOnce(new Promise(() => undefined) as never);
+      (client.auth as { getSession: unknown }).getSession = getSession;
+      render(<ProfilePage client={client} />);
+      await act(async () => { await vi.advanceTimersByTimeAsync(PAGE_READ_DEADLINE_MS); });
+      expect(screen.getByRole("alert")).toHaveTextContent("Non riesco a leggere il profilo");
+      await act(async () => { screen.getByRole("button", { name: "Aggiorna" }).click(); });
+      await act(async () => undefined);
+      expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+      expect(getSession).toHaveBeenCalledTimes(2);
+    } finally {
+      vi.useRealTimers();
     }
   });
 });
